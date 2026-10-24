@@ -50,10 +50,10 @@
 | `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |
 | `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
-| `computer_click` | 确认卡 | Confirmation required: click a point in Mosael's OWN window. |
-| `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's OWN window — returns a PNG you can see. |
-| `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's OWN window (dy > 0 = down, one notch ≈ 3 lines). |
-| `computer_type` | 确认卡 | Confirmation required: type text into Mosael's OWN window (into the focused field). |
+| `computer_click` | 确认卡 | Confirmation required: click a point in Mosael's app window. |
+| `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
+| `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |
+| `computer_type` | 确认卡 | Confirmation required: type text into Mosael's app window (into the focused field). |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |

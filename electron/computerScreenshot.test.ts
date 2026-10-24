@@ -31,13 +31,6 @@ function sourceOf(name: string): string {
   return found;
 }
 
-/** 窗口名常量也在 main.cjs 里,和函数一起塞进沙箱,免得测试自己抄第二份名单。 */
-function windowNamesSource(): string {
-  const found = MAIN.match(/\nconst COMPUTER_WINDOW_NAMES = [^\n]+\n/)?.[0];
-  if (!found) throw new Error("COMPUTER_WINDOW_NAMES 没在 main.cjs 里找到");
-  return found;
-}
-
 type FakeImage = {
   isEmpty: () => boolean;
   getSize: () => { width: number; height: number };
@@ -92,20 +85,14 @@ function loadCapture() {
     Number,
     Promise,
     Buffer,
-    chooseComputerWindow: undefined as unknown as (
-      name: string,
-      windows: FakeWindow[],
-      roles: Record<string, FakeWindow | undefined>,
-    ) => FakeWindow | null,
+    computerUseWindow: undefined as unknown as (mainWindow?: FakeWindow) => FakeWindow | null,
     captureMosaelWindow: undefined as unknown as (
-      request: unknown,
-      windows: FakeWindow[],
-      roles: Record<string, FakeWindow | undefined>,
-    ) => Promise<{ window: string; width: number; height: number; image: string }>,
+      mainWindow?: FakeWindow,
+    ) => Promise<{ width: number; height: number; image: string }>,
   };
   vm.runInNewContext(
-    `${windowNamesSource()}\n${sourceOf("chooseComputerWindow")}\n${sourceOf("captureMosaelWindow")}\n` +
-      "this.chooseComputerWindow = chooseComputerWindow;\n" +
+    `${sourceOf("computerUseWindow")}\n${sourceOf("captureMosaelWindow")}\n` +
+      "this.computerUseWindow = computerUseWindow;\n" +
       "this.captureMosaelWindow = captureMosaelWindow;",
     context,
   );
@@ -113,31 +100,26 @@ function loadCapture() {
 }
 
 describe("computer_screenshot 的 IPC 契约", () => {
-  it("通道名是 computer:screenshot,缺省截主窗口,只认 main / publish", () => {
+  it("通道名是 computer:screenshot,载荷为空 —— 只有一个窗口,没有 window 可选", () => {
     expect(contract.IPC.invoke.computerScreenshot).toBe("computer:screenshot");
-    expect(contract.parseComputerScreenshot(undefined)).toEqual({ window: "main" });
-    expect(contract.parseComputerScreenshot({})).toEqual({ window: "main" });
-    expect(contract.parseComputerScreenshot({ window: "main" })).toEqual({ window: "main" });
-    expect(contract.parseComputerScreenshot({ window: " PUBLISH " })).toEqual({ window: "publish" });
-    expect(() => contract.parseComputerScreenshot({ window: "desktop" })).toThrow(/main.*publish/);
-    expect(() => contract.parseComputerScreenshot({ window: "main", scale: 0.5 })).toThrow(/unexpected/);
+    expect(contract.parseComputerScreenshot(undefined)).toEqual({});
+    expect(contract.parseComputerScreenshot({})).toEqual({});
+    //: 曾经还有 window="publish"(发布器窗口),那个窗口早就不存在了 —— 现在传它就是多了一个字段。
+    expect(() => contract.parseComputerScreenshot({ window: "publish" })).toThrow(/unexpected/);
+    expect(() => contract.parseComputerScreenshot({ scale: 0.5 })).toThrow(/unexpected/);
   });
 });
 
-describe("按 window 参数挑窗口", () => {
-  it("main 挑主窗口,publish 挑发布窗口 —— 不会退回到「随便哪个窗口」", () => {
+describe("只认主窗口", () => {
+  it("给主窗口就返回它;没建 / 已销毁就是 null(不回退到窗口列表里随便找一个)", () => {
     const main = fakeWindow("main");
     const publish = fakeWindow("publish");
-    const { chooseComputerWindow } = loadCapture();
+    const { computerUseWindow } = loadCapture();
 
-    expect(chooseComputerWindow("main", [publish, main], { main, publish })).toBe(main);
-    expect(chooseComputerWindow("publish", [main, publish], { main, publish })).toBe(publish);
-    expect(chooseComputerWindow("publish", [main], { main })).toBeNull();
-  });
-
-  it("不认识的窗口名是一句人话,不是一句 undefined", () => {
-    const { chooseComputerWindow } = loadCapture();
-    expect(() => chooseComputerWindow("desktop", [], {})).toThrow(/Unknown window "desktop".*"main".*"publish"/);
+    expect(computerUseWindow(main)).toBe(main);
+    expect(computerUseWindow(publish)).toBe(publish); // 只看"传进来的是谁",挑谁不在这里
+    expect(computerUseWindow(undefined)).toBeNull();
+    expect(computerUseWindow(fakeWindow("main", { destroyed: true }))).toBeNull();
   });
 });
 
@@ -156,7 +138,7 @@ describe("图上的像素 = 窗口的 CSS 像素(Retina 归一化)", () => {
     const main = fakeWindow("main", { image, contentSize: [800, 568] });
     const { captureMosaelWindow } = loadCapture();
 
-    const shot = await captureMosaelWindow({ window: "main" }, [main], { main });
+    const shot = await captureMosaelWindow(main);
 
     expect(shot.width).toBe(800);
     expect(shot.height).toBe(568);
@@ -165,34 +147,32 @@ describe("图上的像素 = 窗口的 CSS 像素(Retina 归一化)", () => {
 });
 
 describe("截的是 Mosael 自己的窗口", () => {
-  it("用被选中那个窗口的 webContents.capturePage(),别的窗口一下都不碰", async () => {
+  it("只拍传进来的那个窗口,别的窗口一下都不碰", async () => {
     const main = fakeWindow("main");
-    const publish = fakeWindow("publish", {
-      image: { isEmpty: () => false, getSize: () => ({ width: 1024, height: 768 }), toPNG: () => Buffer.from("pub") },
+    const other = fakeWindow("other", {
+      image: { isEmpty: () => false, getSize: () => ({ width: 1024, height: 768 }), toPNG: () => Buffer.from("other") },
     });
     const { captureMosaelWindow } = loadCapture();
 
-    const shot = await captureMosaelWindow({ window: "publish" }, [main, publish], { main, publish });
+    const shot = await captureMosaelWindow(other);
 
-    expect(publish.webContents.capturePage).toHaveBeenCalledTimes(1);
+    expect(other.webContents.capturePage).toHaveBeenCalledTimes(1);
     expect(main.webContents.capturePage).not.toHaveBeenCalled();
     expect(shot).toEqual({
-      window: "publish",
       width: 1024,
       height: 768,
-      image: Buffer.from("pub").toString("base64"),
+      image: Buffer.from("other").toString("base64"),
     });
   });
 
-  it("不给 window 就截主窗口,回来的是它的尺寸和 PNG(转 base64 由后端做)", async () => {
+  it("回来的是它的尺寸和 PNG(转 base64 由后端做)", async () => {
     const main = fakeWindow("main");
     const { captureMosaelWindow } = loadCapture();
 
-    const shot = await captureMosaelWindow(undefined, [main], { main });
+    const shot = await captureMosaelWindow(main);
 
     expect(main.webContents.capturePage).toHaveBeenCalledTimes(1);
     expect(shot).toEqual({
-      window: "main",
       width: 800,
       height: 600,
       image: Buffer.from("png:main").toString("base64"),
@@ -201,35 +181,32 @@ describe("截的是 Mosael 自己的窗口", () => {
 
   it("主窗口没开 / 已经销毁时回一条可读错误", async () => {
     const { captureMosaelWindow } = loadCapture();
-    await expect(captureMosaelWindow({ window: "main" }, [], {})).rejects.toThrow(/no main window/i);
+    await expect(captureMosaelWindow(undefined)).rejects.toThrow(/no Mosael window/i);
 
     const destroyed = fakeWindow("main", { destroyed: true });
-    await expect(captureMosaelWindow({ window: "main" }, [destroyed], { main: destroyed })).rejects.toThrow(
-      /no main window/i,
-    );
+    await expect(captureMosaelWindow(destroyed)).rejects.toThrow(/no Mosael window/i);
     expect(destroyed.webContents.capturePage).not.toHaveBeenCalled();
   });
 
   it("窗口最小化、或 capturePage 拿到空图时,也说清楚是怎么回事", async () => {
     const { captureMosaelWindow } = loadCapture();
     const minimized = fakeWindow("main", { minimized: true });
-    await expect(captureMosaelWindow({ window: "main" }, [minimized], { main: minimized })).rejects.toThrow(
+    await expect(captureMosaelWindow(minimized)).rejects.toThrow(
       /minimi[sz]ed/i,
     );
 
     const blank = fakeWindow("main", {
       image: { isEmpty: () => true, getSize: () => ({ width: 0, height: 0 }), toPNG: () => Buffer.alloc(0) },
     });
-    await expect(captureMosaelWindow({ window: "main" }, [blank], { main: blank })).rejects.toThrow(/empty/i);
+    await expect(captureMosaelWindow(blank)).rejects.toThrow(/empty/i);
   });
 });
 
 describe("接线:IPC + 回环桥都走同一个拍摄函数", () => {
   it("注册了 IPC 处理器,而且它拿的是 BrowserWindow 里的窗口和主窗口引用", () => {
     expect(MAIN).toMatch(/handle\(IPC\.invoke\.computerScreenshot,/);
-    expect(MAIN).toMatch(
-      /captureMosaelWindow\(\s*parseComputerScreenshot\([^)]*\),\s*BrowserWindow\.getAllWindows\(\),\s*\{\s*main: mainWindow\s*\}/,
-    );
+    //: 桥的截图 handler 直接把**主窗口**交给拍摄函数 —— 没有"按名字挑窗口"这一步了。
+    expect(MAIN).toMatch(/\[IPC\.invoke\.computerScreenshot\]: \(\) => captureMosaelWindow\(mainWindow\)/);
   });
 
   it("后端那条桥只认写死的那几条 computer 通道,并复用同一份解析器与动作函数", () => {
@@ -301,12 +278,11 @@ function bridgeSources(): string {
     return found;
   };
   return [
-    windowNamesSource(),
     constant("HOST_BRIDGE_FILE"),
     constant("HOST_BRIDGE_MAX_REQUEST"),
     "let hostBridge = null;\nlet hostBridgeStarting = null;\n",
     sourceOf("hostBridgeFile"),
-    sourceOf("chooseComputerWindow"),
+    sourceOf("computerUseWindow"),
     sourceOf("captureMosaelWindow"),
     sourceOf("hostBridgeTokenMatches"),
     sourceOf("replyHostBridge"),
@@ -473,7 +449,7 @@ describe("宿主桥的安全边界", () => {
     expect(fs.existsSync(file)).toBe(false);
   });
 
-  it("令牌对、通道对，才真的拍 —— 用的是被选中窗口的 capturePage", async () => {
+  it("令牌对、通道对，才真的拍 —— 拍的是主窗口", async () => {
     const main = fakeWindow("main");
     const publish = fakeWindow("publish");
     const bridge = await startBridge({ windows: [main, publish], main });
@@ -481,10 +457,10 @@ describe("宿主桥的安全边界", () => {
       const reply = await bridge.ask({
         token: bridge.bridge.token,
         channel: "computer:screenshot",
-        payload: { window: "main" },
+        payload: {},
       });
       expect(reply.ok).toBe(true);
-      expect(reply.result).toMatchObject({ window: "main", width: 800, height: 600 });
+      expect(reply.result).toMatchObject({ width: 800, height: 600 });
       expect(main.webContents.capturePage).toHaveBeenCalledTimes(1);
       expect(publish.webContents.capturePage).not.toHaveBeenCalled();
     } finally {
@@ -492,20 +468,5 @@ describe("宿主桥的安全边界", () => {
     }
   });
 
-  it("令牌对、参数不对（未知窗口）—— 回一句人话，不拍", async () => {
-    const main = fakeWindow("main");
-    const bridge = await startBridge({ windows: [main], main });
-    try {
-      const reply = await bridge.ask({
-        token: bridge.bridge.token,
-        channel: "computer:screenshot",
-        payload: { window: "desktop" },
-      });
-      expect(reply).toMatchObject({ ok: false, status: 400 });
-      expect(reply.error).toMatch(/"main".*"publish"/);
-      expect(main.webContents.capturePage).not.toHaveBeenCalled();
-    } finally {
-      bridge.close();
-    }
-  });
+
 });

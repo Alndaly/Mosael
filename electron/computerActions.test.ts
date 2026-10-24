@@ -19,20 +19,14 @@ const MAIN = fs.readFileSync(path.resolve(__dirname, "main.cjs"), "utf8");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const contract = require("./ipc-contract.cjs") as {
   IPC: { invoke: Record<string, string> };
-  parseComputerClick: (value: unknown) => { window: string; x: number; y: number; button: string; clickCount: number };
-  parseComputerType: (value: unknown) => { window: string; text: string };
-  parseComputerScroll: (value: unknown) => { window: string; dy: number; x: number | null; y: number | null };
+  parseComputerClick: (value: unknown) => { x: number; y: number; button: string; clickCount: number };
+  parseComputerType: (value: unknown) => { text: string };
+  parseComputerScroll: (value: unknown) => { dy: number; x: number | null; y: number | null };
 };
 
 function sourceOf(name: string): string {
   const found = MAIN.match(new RegExp(`\\n(?:async )?function ${name}\\([\\s\\S]*?\\n\\}\\n`))?.[0];
   if (!found) throw new Error(`${name} 没在 main.cjs 里找到`);
-  return found;
-}
-
-function windowNamesSource(): string {
-  const found = MAIN.match(/\nconst COMPUTER_WINDOW_NAMES = [^\n]+\n/)?.[0];
-  if (!found) throw new Error("COMPUTER_WINDOW_NAMES 没在 main.cjs 里找到");
   return found;
 }
 
@@ -72,15 +66,11 @@ function loadActions() {
     Math,
     //: main.cjs 模块级的那一枚「最近一次动作的位置」,函数会读它;沙箱里给一个同名变量。
     lastComputerUsePoint: null,
-    chooseComputerWindow: undefined as unknown as (
-      name: string,
-      windows: FakeWindow[],
-      roles: Record<string, FakeWindow | undefined>,
-    ) => FakeWindow | null,
+    computerUseWindow: undefined as unknown as (mainWindow?: FakeWindow) => FakeWindow | null,
   };
   vm.runInNewContext(
-    `${windowNamesSource()}\n${sourceOf("spinWait")}\n${sourceOf("chooseComputerWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
-      "this.chooseComputerWindow = chooseComputerWindow;\n" +
+    `${sourceOf("spinWait")}\n${sourceOf("computerUseWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
+      "this.computerUseWindow = computerUseWindow;\n" +
       "this.clickMosaelWindow = clickMosaelWindow;\n" +
       "this.typeIntoMosaelWindow = typeIntoMosaelWindow;\n" +
       "this.scrollMosaelWindow = scrollMosaelWindow;\n" +
@@ -88,11 +78,9 @@ function loadActions() {
     context,
   );
   return context as unknown as {
-    clickMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>) => Record<string, unknown>;
-    typeIntoMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>) => Record<string, unknown>;
-    scrollMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
-    clickMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
-    typeIntoMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+    clickMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+    typeIntoMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+    scrollMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
   };
 }
 
@@ -102,25 +90,22 @@ describe("computer_click / computer_type 的 IPC 契约", () => {
     expect(contract.IPC.invoke.computerType).toBe("computer:type");
 
     expect(contract.parseComputerClick({ x: 10, y: 20 })).toEqual({
-      window: "main", x: 10, y: 20, button: "left", clickCount: 1,
+      x: 10, y: 20, button: "left", clickCount: 1,
     });
-    expect(contract.parseComputerClick({ window: " PUBLISH ", x: 1, y: 2, button: "right", clickCount: 2 })).toEqual({
-      window: "publish", x: 1, y: 2, button: "right", clickCount: 2,
-    });
+    //: 没有 window 这一维了 —— 传它就是多了一个字段,直接拒。
+    expect(() => contract.parseComputerClick({ x: 1, y: 2, window: "publish" })).toThrow(/unexpected/);
     expect(() => contract.parseComputerClick({ x: -1, y: 0 })).toThrow(/x must be/);
     expect(() => contract.parseComputerClick({ x: 1, y: 0, button: "middle" })).toThrow(/button/);
     expect(() => contract.parseComputerClick({ x: 1, y: 0, clickCount: 3 })).toThrow(/clickCount/);
-    expect(() => contract.parseComputerClick({ x: 1, y: 0, window: "desktop" })).toThrow(/main.*publish/);
 
-    expect(contract.parseComputerType({ text: "hi" })).toEqual({ window: "main", text: "hi" });
+
+    expect(contract.parseComputerType({ text: "hi" })).toEqual({ text: "hi" });
     expect(() => contract.parseComputerType({ text: "" })).toThrow(/non-empty/);
     expect(() => contract.parseComputerType({ text: "x".repeat(2001) })).toThrow(/2000/);
 
     expect(contract.IPC.invoke.computerScroll).toBe("computer:scroll");
-    expect(contract.parseComputerScroll({ dy: 3 })).toEqual({ window: "main", dy: 3, x: null, y: null });
-    expect(contract.parseComputerScroll({ window: "publish", dy: -2, x: 10, y: 20 })).toEqual({
-      window: "publish", dy: -2, x: 10, y: 20,
-    });
+    expect(contract.parseComputerScroll({ dy: 3 })).toEqual({ dy: 3, x: null, y: null });
+    expect(contract.parseComputerScroll({ dy: -2, x: 10, y: 20 })).toEqual({ dy: -2, x: 10, y: 20 });
     expect(() => contract.parseComputerScroll({ dy: 0 })).toThrow(/non-zero/);
     expect(() => contract.parseComputerScroll({ dy: 31 })).toThrow(/30/);
     expect(() => contract.parseComputerScroll({ dy: 1, x: -1 })).toThrow(/non-negative/);
@@ -132,11 +117,7 @@ describe("点的是 Mosael 自己的窗口", () => {
     const main = fakeWindow();
     const { clickMosaelWindow } = loadActions();
 
-    const result = clickMosaelWindow(
-      { window: "main", x: 120, y: 80, button: "right", clickCount: 2 },
-      [main],
-      { main },
-    );
+    const result = clickMosaelWindow({ x: 120, y: 80, button: "right", clickCount: 2 }, main);
 
     const sent = main.webContents.sendInputEvent.mock.calls.map(([event]) => event);
     expect(sent).toEqual([
@@ -144,7 +125,7 @@ describe("点的是 Mosael 自己的窗口", () => {
       { type: "mouseDown", x: 120, y: 80, button: "right", clickCount: 2 },
       { type: "mouseUp", x: 120, y: 80, button: "right", clickCount: 2 },
     ]);
-    expect(result).toEqual({ window: "main", x: 120, y: 80, button: "right", clickCount: 2 });
+    expect(result).toEqual({ x: 120, y: 80, button: "right", clickCount: 2 });
     //: 点之前先聚焦窗口与页面 —— sendInputEvent 作用的对象是窗口里那个页面。
     expect(main.focus).toHaveBeenCalledTimes(1);
     expect(main.webContents.focus).toHaveBeenCalledTimes(1);
@@ -154,21 +135,18 @@ describe("点的是 Mosael 自己的窗口", () => {
     const main = fakeWindow({ size: [1440, 900] });
     const { clickMosaelWindow } = loadActions();
 
-    expect(() => clickMosaelWindow({ window: "main", x: 1440, y: 10 }, [main], { main })).toThrow(
-      /outside the main window.*1440×900/,
-    );
+    expect(() => clickMosaelWindow({ x: 1440, y: 10 }, main)).toThrow(/outside the Mosael window.*1440×900/);
     expect(main.webContents.sendInputEvent).not.toHaveBeenCalled();
   });
 
   it("窗口最小化 / 不在:什么都不点", () => {
     const minimized = fakeWindow({ minimized: true });
     const { clickMosaelWindow } = loadActions();
-    expect(() => clickMosaelWindow({ window: "main", x: 1, y: 1 }, [minimized], { main: minimized })).toThrow(
-      /minimized/,
-    );
+    expect(() => clickMosaelWindow({ x: 1, y: 1 }, minimized)).toThrow(/minimized/);
     expect(minimized.webContents.sendInputEvent).not.toHaveBeenCalled();
 
-    expect(() => clickMosaelWindow({ window: "publish", x: 1, y: 1 }, [], {})).toThrow(/no publish window/);
+    //: 没有主窗口引用(没建 / 已销毁):什么都不点。
+    expect(() => clickMosaelWindow({ x: 1, y: 1 }, undefined as unknown as FakeWindow)).toThrow(/no Mosael window/);
   });
 });
 
@@ -177,31 +155,31 @@ describe("输入到 Mosael 自己的窗口", () => {
     const main = fakeWindow();
     const { typeIntoMosaelWindow } = loadActions();
 
-    const result = typeIntoMosaelWindow({ window: "main", text: "你好" }, [main], { main });
+    const result = typeIntoMosaelWindow({ text: "你好" }, main);
 
     expect(main.focus).toHaveBeenCalledTimes(1);
     expect(main.webContents.focus).toHaveBeenCalledTimes(1);
     expect(main.webContents.insertText).toHaveBeenCalledWith("你好");
-    expect(result).toEqual({ window: "main", typed: 2 });
+    expect(result).toEqual({ typed: 2 });
   });
 
   it("动作发生时在窗口里那个点上亮一枚指针提示(屏幕坐标 = 窗口内容原点 + CSS 坐标)", () => {
     const main = fakeWindow({ size: [1000, 800] });
     const { clickMosaelWindow, scrollMosaelWindow, typeIntoMosaelWindow } = loadActions() as unknown as {
-      clickMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
-      scrollMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
-      typeIntoMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+      clickMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+      scrollMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+      typeIntoMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     };
     const cursor = { showAt: vi.fn() };
 
-    clickMosaelWindow({ window: "main", x: 120, y: 80 }, [main], { main }, cursor);
+    clickMosaelWindow({ x: 120, y: 80 }, main, cursor);
     expect(cursor.showAt).toHaveBeenCalledWith(1120, 280, "click");
 
-    scrollMosaelWindow({ window: "main", dy: -2, x: 30, y: 40 }, [main], { main }, cursor);
+    scrollMosaelWindow({ dy: -2, x: 30, y: 40 }, main, cursor);
     expect(cursor.showAt).toHaveBeenLastCalledWith(1030, 240, "scroll-up");
 
     // 输入没有坐标:接着上一次动作的位置亮一下。
-    typeIntoMosaelWindow({ window: "main", text: "hi" }, [main], { main }, cursor);
+    typeIntoMosaelWindow({ text: "hi" }, main, cursor);
     // 上一次动作是那一滚(1030, 240):输入接着它亮。
     expect(cursor.showAt).toHaveBeenLastCalledWith(1030, 240, "type");
   });
@@ -210,7 +188,7 @@ describe("输入到 Mosael 自己的窗口", () => {
     const main = fakeWindow({ size: [1000, 800] });
     const { scrollMosaelWindow } = loadActions();
 
-    const result = scrollMosaelWindow({ window: "main", dy: 3, x: null, y: null }, [main], { main });
+    const result = scrollMosaelWindow({ dy: 3, x: null, y: null }, main);
 
     //: 一格 ≈ 100 像素(3 行),而且**分成若干格来滚** —— 一次到底在页面上就是"跳"过去。
     const wheels = main.webContents.sendInputEvent.mock.calls
@@ -219,11 +197,11 @@ describe("输入到 Mosael 自己的窗口", () => {
     expect(wheels.length).toBeGreaterThan(1);
     expect(wheels.every((event) => event.x === 500 && event.y === 400)).toBe(true);
     expect(wheels.reduce((sum, event) => sum + event.deltaY, 0)).toBe(-300);
-    expect(result).toEqual({ window: "main", dy: 3, x: 500, y: 400 });
+    expect(result).toEqual({ dy: 3, x: 500, y: 400 });
 
     // 指到坐标上就照给的来;往上的 dy 是正的 deltaY。
     main.webContents.sendInputEvent.mockClear();
-    scrollMosaelWindow({ window: "main", dy: -2, x: 10, y: 20 }, [main], { main });
+    scrollMosaelWindow({ dy: -2, x: 10, y: 20 }, main);
     const upward = main.webContents.sendInputEvent.mock.calls
       .map(([event]) => event)
       .filter((event) => event.type === "mouseWheel");
@@ -234,13 +212,13 @@ describe("输入到 Mosael 自己的窗口", () => {
   it("滚动越界 / 最小化:一下都不发", () => {
     const main = fakeWindow({ size: [1000, 800] });
     const { scrollMosaelWindow } = loadActions();
-    expect(() => scrollMosaelWindow({ window: "main", dy: 1, x: 1000, y: 10 }, [main], { main })).toThrow(
-      /outside the main window/,
+    expect(() => scrollMosaelWindow({ dy: 1, x: 1000, y: 10 }, main)).toThrow(
+      /outside the Mosael window/,
     );
     expect(main.webContents.sendInputEvent).not.toHaveBeenCalled();
 
     const minimized = fakeWindow({ minimized: true });
-    expect(() => scrollMosaelWindow({ window: "main", dy: 1, x: null, y: null }, [minimized], { main: minimized })).toThrow(
+    expect(() => scrollMosaelWindow({ dy: 1, x: null, y: null }, minimized)).toThrow(
       /minimized/,
     );
     expect(minimized.webContents.sendInputEvent).not.toHaveBeenCalled();
@@ -249,10 +227,10 @@ describe("输入到 Mosael 自己的窗口", () => {
   it("窗口最小化 / 不在:什么都不输", () => {
     const minimized = fakeWindow({ minimized: true });
     const { typeIntoMosaelWindow } = loadActions();
-    expect(() => typeIntoMosaelWindow({ window: "main", text: "x" }, [minimized], { main: minimized })).toThrow(
+    expect(() => typeIntoMosaelWindow({ text: "x" }, minimized)).toThrow(
       /minimized/,
     );
     expect(minimized.webContents.insertText).not.toHaveBeenCalled();
-    expect(() => typeIntoMosaelWindow({ window: "publish", text: "x" }, [], {})).toThrow(/no publish window/);
+    expect(() => typeIntoMosaelWindow({ text: "x" }, undefined as unknown as FakeWindow)).toThrow(/no Mosael window/);
   });
 });

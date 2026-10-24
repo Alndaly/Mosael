@@ -617,11 +617,9 @@ function parseCaptureMode(value) {
   return { mode: oneOf(payload, "mode", ["visible", "full"], channel) };
 }
 
-/** 电脑使用能截的两个窗口。`publish` 是发布器自己的窗口,不是内嵌网页(见 ADR 0075 的 L1/L2 分层)。 */
-const COMPUTER_WINDOWS = ["main", "publish"];
-
 /**
- * 截 Mosael 自己的窗口:载荷可以整个不给(缺省 `main`),只认 `window`。
+ * 截 Mosael 自己的窗口:载荷可以整个不给 —— **没有窗口可选**,能截的只有应用主窗口。
+ * (曾经还有一个 `publish` 发布器窗口,但发布器早就不是独立窗口了,那一档是死分支。)
  *
  * `scale` 不在这里 —— 缩放是后端把图交给模型之前做的事(见 domain/agent/computer_use),
  * 主进程只负责拍一张原图。渲染层送不进来的字段(路径、分区、脚本)一律拒收。
@@ -629,13 +627,8 @@ const COMPUTER_WINDOWS = ["main", "publish"];
 function parseComputerScreenshot(value) {
   const channel = IPC.invoke.computerScreenshot;
   const payload = value === undefined || value === null ? {} : record(value, channel);
-  onlyKeys(payload, ["window"], channel);
-  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
-  if (!COMPUTER_WINDOWS.includes(name)) {
-    // 带上引号:这条消息会经宿主桥原样回到后端的错误里,模型读到的应是两个**值**,不是两个词。
-    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
-  }
-  return { window: name };
+  onlyKeys(payload, [], channel);
+  return {};
 }
 
 /**
@@ -645,11 +638,7 @@ function parseComputerScreenshot(value) {
 function parseComputerClick(value) {
   const channel = IPC.invoke.computerClick;
   const payload = record(value, channel);
-  onlyKeys(payload, ["window", "x", "y", "button", "clickCount"], channel);
-  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
-  if (!COMPUTER_WINDOWS.includes(name)) {
-    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
-  }
+  onlyKeys(payload, ["x", "y", "button", "clickCount"], channel);
   const coordinate = (key) => {
     const n = payload[key];
     if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
@@ -659,7 +648,7 @@ function parseComputerClick(value) {
   if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
   const clickCount = payload.clickCount === undefined ? 1 : payload.clickCount;
   if (clickCount !== 1 && clickCount !== 2) throw new TypeError(`${channel}: clickCount must be 1 or 2`);
-  return { window: name, x: coordinate("x"), y: coordinate("y"), button, clickCount };
+  return { x: coordinate("x"), y: coordinate("y"), button, clickCount };
 }
 
 /**
@@ -669,11 +658,7 @@ function parseComputerClick(value) {
 function parseComputerScroll(value) {
   const channel = IPC.invoke.computerScroll;
   const payload = record(value, channel);
-  onlyKeys(payload, ["window", "dy", "x", "y"], channel);
-  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
-  if (!COMPUTER_WINDOWS.includes(name)) {
-    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
-  }
+  onlyKeys(payload, ["dy", "x", "y"], channel);
   const dy = payload.dy;
   if (!Number.isInteger(dy) || dy === 0 || Math.abs(dy) > 30) {
     throw new TypeError(`${channel}: dy must be a non-zero integer between -30 and 30 (wheel notches)`);
@@ -684,22 +669,18 @@ function parseComputerScroll(value) {
     if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
     return n;
   };
-  return { window: name, dy, x: point("x"), y: point("y") };
+  return { dy, x: point("x"), y: point("y") };
 }
 
 /** 往 Mosael 自己的窗口里输入一段文字(输入到当前焦点,走 `webContents.insertText`)。 */
 function parseComputerType(value) {
   const channel = IPC.invoke.computerType;
   const payload = record(value, channel);
-  onlyKeys(payload, ["window", "text"], channel);
-  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
-  if (!COMPUTER_WINDOWS.includes(name)) {
-    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
-  }
+  onlyKeys(payload, ["text"], channel);
   const text = payload.text;
   if (typeof text !== "string" || !text) throw new TypeError(`${channel}: text must be a non-empty string`);
   if (text.length > 2000) throw new TypeError(`${channel}: text must be at most 2000 characters`);
-  return { window: name, text };
+  return { text };
 }
 
 /**

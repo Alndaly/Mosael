@@ -8,7 +8,7 @@
     工具(mcp_server) ── 这里 ──127.0.0.1 回环桥──→ Electron 主进程 ── capturePage()
 
 Electron 的 `ipcMain` 只服务渲染层,后端(Python,另一个进程)够不着它;这个仓库里后端与 Electron
-之间现有的跨进程执行全是**反向**的拉取式(browser/publish/job worker,Electron 轮询后端)。P0 要
+之间现有的跨进程执行全是**反向**的拉取式(browser / 发布 / job worker,Electron 轮询后端)。P0 要
 一次同步的「拍一张、马上看」,所以主进程在启动时额外开一条只绑回环、带每进程随机令牌、只认
 `computer:screenshot` 一条通道的一问一答桥。端口与令牌有两条路:壳拉起的后端拿
 `MOSAEL_HOST_BRIDGE_PORT` / `MOSAEL_HOST_BRIDGE_TOKEN` 两个环境变量;`pnpm dev:backend` 单独起的
@@ -29,10 +29,9 @@ import os
 import socket
 from typing import Any
 
-#: 能截的窗口。`main` 是应用主窗口;`publish` 是发布器自己的窗口(不是内嵌网页 —— 那是 L2,
-#: 见 ADR 0075,而且内嵌网页里是别人的站点和用户的登录态,P0 刻意不碰)。
-WINDOW_NAMES = ("main", "publish")
-DEFAULT_WINDOW = "main"
+#: 电脑使用**只有一个窗口**:应用主窗口。曾经还有 `publish`(发布器自己的 BrowserWindow),
+#: 但发布器后来成了应用里的页面与内嵌浏览器 —— 那个名字早就没有对应的窗口了(ADR 0075)。
+#: 所以这里不再有"选哪个窗口"这一维:少一维就少一个永远走不通的分支。
 
 #: 缩放范围:0.25 足够看清布局,1 是原样。别让模型把图缩成 1 像素。
 MIN_SCALE = 0.25
@@ -71,22 +70,20 @@ class ComputerUseError(ValueError):
     """给模型看的一句话。不是 traceback,也不是 HTTP 500 —— 模型据此改参数或告诉用户。"""
 
 
-def screenshot(window: str = DEFAULT_WINDOW, scale: float = DEFAULT_SCALE) -> dict[str, Any]:
-    """拍一张 Mosael 自己的窗口,返回 `{window, width, height, scale, image}`(`image` 是 PNG 的 base64)。
+def screenshot(scale: float = DEFAULT_SCALE) -> dict[str, Any]:
+    """拍一张 Mosael 主窗口,返回 `{width, height, scale, image}`(`image` 是 PNG 的 base64)。
 
     参数不对时抛 `ComputerUseError`(一句人话),不会走到 Electron。
     """
-    name = _window_name(window)
     factor = _scale(scale)
 
-    answer = _host_call(SCREENSHOT_CHANNEL, {"window": name})
+    answer = _host_call(SCREENSHOT_CHANNEL, {})
     if not isinstance(answer, dict):
         raise ComputerUseError("computer_screenshot got no answer from the Mosael window bridge.")
 
     raw = _image_bytes(answer)
     width, height, raw = _size_and_pixels(raw, factor)
     return {
-        "window": name,
         "width": width,
         "height": height,
         "scale": factor,
@@ -100,18 +97,16 @@ def _mark_touched() -> None:
 
 
 def click(
-    window: str = DEFAULT_WINDOW,
     x: object = 0,
     y: object = 0,
     button: str = "left",
     click_count: object = 1,
     scale: float = DEFAULT_SCALE,
 ) -> dict[str, Any]:
-    """点一下 Mosael 自己的窗口。`x`/`y` 是**图片上**的像素(=窗口 CSS 像素 × scale)。
+    """点一下 Mosael 主窗口。`x`/`y` 是**图片上**的像素(=窗口 CSS 像素 × scale)。
 
     返回实际点到的 CSS 坐标与缩放,模型据此核对「我刚才看的那张图」和这次动作是同一个坐标系。
     """
-    name = _window_name(window)
     factor = _scale(scale)
     css_x = _screenshot_coordinate(x, "x", factor)
     css_y = _screenshot_coordinate(y, "y", factor)
@@ -120,54 +115,49 @@ def click(
         raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
     count = _click_count(click_count)
     _mark_touched()
-    answer = _host_call(
-        CLICK_CHANNEL,
-        {"window": name, "x": css_x, "y": css_y, "button": kind, "clickCount": count},
-    )
-    if not isinstance(answer, dict) or not answer.get("window"):
+    answer = _host_call(CLICK_CHANNEL, {"x": css_x, "y": css_y, "button": kind, "clickCount": count})
+    if not isinstance(answer, dict) or answer.get("x") is None:
         raise ComputerUseError("The Mosael window bridge answered without confirming the click.")
-    return {"window": name, "x": css_x, "y": css_y, "scale": factor, "button": kind, "clickCount": count}
+    return {"x": css_x, "y": css_y, "scale": factor, "button": kind, "clickCount": count}
 
 
-def type_text(window: str = DEFAULT_WINDOW, text: object = "") -> dict[str, Any]:
-    """往 Mosael 自己的窗口里输入一段文字(输入到当前焦点)。"""
-    name = _window_name(window)
+def type_text(text: object = "") -> dict[str, Any]:
+    """往 Mosael 主窗口里输入一段文字(输入到当前焦点)。"""
+
     if not isinstance(text, str) or not text:
         raise ComputerUseError("text must be a non-empty string; nothing was typed.")
     if len(text) > MAX_TYPE_CHARS:
         raise ComputerUseError(f"text must be at most {MAX_TYPE_CHARS} characters (got {len(text)}); nothing was typed.")
     _mark_touched()
-    answer = _host_call(TYPE_CHANNEL, {"window": name, "text": text})
-    if not isinstance(answer, dict) or not answer.get("window"):
+    answer = _host_call(TYPE_CHANNEL, {"text": text})
+    if not isinstance(answer, dict) or answer.get("typed") != len(text):
         raise ComputerUseError("The Mosael window bridge answered without confirming the typing.")
-    return {"window": name, "typed": len(text)}
+    return {"typed": len(text)}
 
 
 def scroll(
-    window: str = DEFAULT_WINDOW,
     dy: object = 0,
     x: object = None,
     y: object = None,
     scale: float = DEFAULT_SCALE,
 ) -> dict[str, Any]:
-    """在 Mosael 自己的窗口里滚动。`dy` 是滚轮格数(正 = 往下);`x`/`y` 是在图片上的指针位置(可省)。"""
-    name = _window_name(window)
+    """在 Mosael 主窗口里滚动。`dy` 是滚轮格数(正 = 往下);`x`/`y` 是在图片上的指针位置(可省)。"""
     factor = _scale(scale)
     if isinstance(dy, bool) or not isinstance(dy, (int, float)):
         raise ComputerUseError(f"dy must be a number of wheel notches (got {dy!r}).")
     notches = int(dy)
     if notches == 0 or abs(notches) > MAX_SCROLL_NOTCHES:
         raise ComputerUseError(f"dy must be a non-zero integer between -{MAX_SCROLL_NOTCHES} and {MAX_SCROLL_NOTCHES}.")
-    payload: dict[str, Any] = {"window": name, "dy": notches}
+    payload: dict[str, Any] = {"dy": notches}
     if x is not None:
         payload["x"] = _screenshot_coordinate(x, "x", factor)
     if y is not None:
         payload["y"] = _screenshot_coordinate(y, "y", factor)
     _mark_touched()
     answer = _host_call(SCROLL_CHANNEL, payload)
-    if not isinstance(answer, dict) or not answer.get("window"):
+    if not isinstance(answer, dict) or answer.get("dy") != notches:
         raise ComputerUseError("The Mosael window bridge answered without confirming the scroll.")
-    return {"window": name, "dy": notches, "scale": factor, "x": payload.get("x"), "y": payload.get("y")}
+    return {"dy": notches, "scale": factor, "x": payload.get("x"), "y": payload.get("y")}
 
 
 def _screenshot_coordinate(value: object, axis: str, factor: float) -> int:
@@ -205,18 +195,6 @@ def end_turn() -> None:
         _host_call(END_CHANNEL, {})
     except ComputerUseError:
         pass
-
-
-def _window_name(value: object) -> str:
-    if value is None or (isinstance(value, str) and not value.strip()):
-        return DEFAULT_WINDOW
-    name = str(value).strip().lower()
-    if name not in WINDOW_NAMES:
-        raise ComputerUseError(
-            f'Unknown window "{name}". computer_screenshot can only capture Mosael\'s own windows: '
-            f'"main" (the app window) or "publish" (the publisher window).'
-        )
-    return name
 
 
 def _scale(value: object) -> float:
@@ -362,13 +340,11 @@ __all__ = [
     "ComputerUseError",
     "DEFAULT_SCALE",
     "END_CHANNEL",
-    "DEFAULT_WINDOW",
     "MAX_SCALE",
     "MIN_SCALE",
     "SCREENSHOT_CHANNEL",
     "SCROLL_CHANNEL",
     "TYPE_CHANNEL",
-    "WINDOW_NAMES",
     "click",
     "end_turn",
     "screenshot",

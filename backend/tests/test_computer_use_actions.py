@@ -24,7 +24,7 @@ from tests.util import fresh_client
 
 
 def _click_payload(**overrides) -> dict:
-    payload = {"window": "main", "x": 120, "y": 80, "button": "left", "click_count": 1, "scale": 1}
+    payload = {"x": 120, "y": 80, "button": "left", "click_count": 1, "scale": 1}
     payload.update(overrides)
     return payload
 
@@ -45,12 +45,12 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
         assert name not in mcp_server.READ_ONLY_TOOLS
 
     click_properties = tools["computer_click"]["parameters"]["properties"]
-    assert set(click_properties) == {"x", "y", "window", "button", "click_count", "scale"}
-    assert click_properties["window"]["default"] == "main"
+    #: 只有一个窗口可操作 —— 没有 window 这一维(publish 分支随窗口一起删了)。
+    assert set(click_properties) == {"x", "y", "button", "click_count", "scale"}
     assert click_properties["button"]["default"] == "left"
     assert click_properties["click_count"]["default"] == 1
-    assert set(tools["computer_type"]["parameters"]["properties"]) == {"text", "window"}
-    assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "x", "y", "window", "scale"}
+    assert set(tools["computer_type"]["parameters"]["properties"]) == {"text"}
+    assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "x", "y", "scale"}
 
 
 def test_the_actions_are_ordinary_edit_tier_tools() -> None:
@@ -112,7 +112,7 @@ def _card_after(client, workspace: str, session: str, card_id: str) -> dict:
 
 def test_bypass_approves_the_click(monkeypatch) -> None:
     #: 桥是替身:这条测的是「卡有没有被自动放行、执行了没有」,不是真的点在窗口上。
-    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"window": payload["window"]})
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"x": payload.get("x"), "y": payload.get("y"), "typed": len(payload.get("text", "")), "dy": payload.get("dy")})
     client = fresh_client()
     workspace, session = _session_client(client, mode="bypass")
 
@@ -125,7 +125,7 @@ def test_bypass_approves_the_click(monkeypatch) -> None:
 
 
 def test_auto_mode_approves_edit_tier_actions(monkeypatch) -> None:
-    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"window": payload["window"]})
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"x": payload.get("x"), "y": payload.get("y"), "typed": len(payload.get("text", "")), "dy": payload.get("dy")})
     client = fresh_client()
     workspace, session = _session_client(client, mode="auto")
 
@@ -139,7 +139,7 @@ def test_auto_mode_approves_edit_tier_actions(monkeypatch) -> None:
 
 def test_session_allowance_approves_later_clicks(monkeypatch) -> None:
     """在卡上点过「本会话始终允许」之后,同一段对话里的下一次点击不再问人。"""
-    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"window": payload["window"]})
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"x": payload.get("x"), "y": payload.get("y"), "typed": len(payload.get("text", "")), "dy": payload.get("dy")})
     client = fresh_client()
     workspace, session = _session_client(
         client, mode="manual", allowances=[{"tool": "computer_click", "permission": "edit"}]
@@ -161,17 +161,15 @@ def test_click_converts_screenshot_pixels_by_scale(monkeypatch) -> None:
 
     def fake_host_call(channel: str, payload: dict) -> dict:
         calls.append((channel, payload))
-        return {"window": payload["window"], "x": payload["x"], "y": payload["y"]}
+        return {"x": payload["x"], "y": payload["y"]}
 
     monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
 
-    result = computer_use.click(window="publish", x=200, y=100, scale=0.5)
+    result = computer_use.click(x=200, y=100, scale=0.5)
 
     # 图片是按 0.5 缩小的:图上的 (200, 100) 在窗口里是 (400, 200) 的 CSS 像素。
-    assert calls == [
-        ("computer:click", {"window": "publish", "x": 400, "y": 200, "button": "left", "clickCount": 1})
-    ]
-    assert result == {"window": "publish", "x": 400, "y": 200, "scale": 0.5, "button": "left", "clickCount": 1}
+    assert calls == [("computer:click", {"x": 400, "y": 200, "button": "left", "clickCount": 1})]
+    assert result == {"x": 400, "y": 200, "scale": 0.5, "button": "left", "clickCount": 1}
 
 
 def test_click_rejects_bad_coordinates_buttons_and_counts_without_calling_the_bridge(monkeypatch) -> None:
@@ -188,7 +186,8 @@ def test_click_rejects_bad_coordinates_buttons_and_counts_without_calling_the_br
         computer_use.click(button="middle")
     with pytest.raises(computer_use.ComputerUseError, match="click_count"):
         computer_use.click(click_count=3)
-    with pytest.raises(computer_use.ComputerUseError, match="window"):
+    #: 没有 window 这一维了:传一个不存在的窗口参数就是 TypeError(函数不接受该关键字)。
+    with pytest.raises(TypeError):
         computer_use.click(window="desktop")
 
 
@@ -197,12 +196,12 @@ def test_type_text_goes_through_the_bridge_and_caps_length(monkeypatch) -> None:
 
     def fake_host_call(channel: str, payload: dict) -> dict:
         calls.append((channel, payload))
-        return {"window": payload["window"]}
+        return {"typed": len(payload.get("text", ""))}
 
     monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
 
-    assert computer_use.type_text(text="你好") == {"window": "main", "typed": 2}
-    assert calls == [("computer:type", {"window": "main", "text": "你好"})]
+    assert computer_use.type_text(text="你好") == {"typed": 2}
+    assert calls == [("computer:type", {"text": "你好"})]
 
     with pytest.raises(computer_use.ComputerUseError, match="non-empty"):
         computer_use.type_text(text="")
@@ -218,19 +217,19 @@ def test_scroll_goes_through_the_bridge_with_the_pointer_position(monkeypatch) -
 
     def fake_host_call(channel: str, payload: dict) -> dict:
         calls.append((channel, payload))
-        return {"window": payload["window"]}
+        return {"dy": payload.get("dy")}
 
     monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
 
     result = computer_use.scroll(dy=3, x=100, y=40, scale=0.5)
 
     # 图上的 (100, 40) 在窗口里是 (200, 80) 的 CSS 像素;dy 不给位置就不带 x/y。
-    assert calls == [("computer:scroll", {"window": "main", "dy": 3, "x": 200, "y": 80})]
-    assert result == {"window": "main", "dy": 3, "scale": 0.5, "x": 200, "y": 80}
+    assert calls == [("computer:scroll", {"dy": 3, "x": 200, "y": 80})]
+    assert result == {"dy": 3, "scale": 0.5, "x": 200, "y": 80}
 
     calls.clear()
     computer_use.scroll(dy=-2)
-    assert calls == [("computer:scroll", {"window": "main", "dy": -2})]
+    assert calls == [("computer:scroll", {"dy": -2})]
 
 
 def test_scroll_rejects_zero_and_runaway_notches(monkeypatch) -> None:
@@ -250,7 +249,10 @@ def test_scroll_rejects_zero_and_runaway_notches(monkeypatch) -> None:
 def test_end_turn_tells_the_host_and_survives_a_missing_bridge(monkeypatch) -> None:
     """回合结束:告诉桌面壳熄灭「被控制中」;桥不在(独立后端)时静默跳过,绝不让收尾失败。"""
     calls: list[tuple[str, dict]] = []
-    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: calls.append((channel, payload)) or {})
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: calls.append((channel, payload)) or {"x": 0, "y": 0})
+    #: 收尾只在「这一轮真的动过手」时通知壳(否则每一轮都白发一条)。所以先点一下。
+    computer_use.click(x=1, y=2)
+    calls.clear()
     computer_use.end_turn()
     assert calls == [("computer:end", {})]
 
@@ -281,14 +283,14 @@ def test_the_card_checks_shape_before_opening() -> None:
                 spec.validate(db, "w1", _click_payload(**bad), None)
 
         type_spec = tool_spec("computer_type")
-        type_spec.validate(db, "w1", {"window": "main", "text": "hi"}, None)
+        type_spec.validate(db, "w1", {"text": "hi"}, None)
         with pytest.raises(ConfirmationError):
-            type_spec.validate(db, "w1", {"window": "main", "text": ""}, None)
+            type_spec.validate(db, "w1", {"text": ""}, None)
 
         scroll_spec = tool_spec("computer_scroll")
-        scroll_spec.validate(db, "w1", {"window": "main", "dy": 3}, None)
+        scroll_spec.validate(db, "w1", {"dy": 3}, None)
         with pytest.raises(ConfirmationError):
-            scroll_spec.validate(db, "w1", {"window": "main", "dy": 0}, None)
+            scroll_spec.validate(db, "w1", {"dy": 0}, None)
 
 
 def test_the_card_says_what_will_happen() -> None:
@@ -297,16 +299,16 @@ def test_the_card_says_what_will_happen() -> None:
     with SessionLocal() as db:
         assert tool_spec("computer_click").summarize(db, _click_payload()) == (
             "confirm_computerClick",
-            {"window": "main", "x": 120, "y": 80, "button": "left", "count": 1},
+            {"x": 120, "y": 80, "button": "left", "count": 1},
         )
-        key, params = tool_spec("computer_type").summarize(db, {"window": "main", "text": "你好"})
+        key, params = tool_spec("computer_type").summarize(db, {"text": "你好"})
         assert key == "confirm_computerType"
         assert params["text"] == "你好"
-        assert tool_spec("computer_scroll").summarize(db, {"window": "main", "dy": 3}) == (
+        assert tool_spec("computer_scroll").summarize(db, {"dy": 3}) == (
             "confirm_computerScrollDown",
             {"steps": 3},
         )
-        assert tool_spec("computer_scroll").summarize(db, {"window": "main", "dy": -2}) == (
+        assert tool_spec("computer_scroll").summarize(db, {"dy": -2}) == (
             "confirm_computerScrollUp",
             {"steps": 2},
         )
@@ -317,7 +319,7 @@ def test_approved_card_executes_through_the_bridge(monkeypatch) -> None:
 
     def fake_host_call(channel: str, payload: dict) -> dict:
         calls.append((channel, payload))
-        return {"window": payload["window"]}
+        return {"x": payload.get("x"), "y": payload.get("y")}
 
     monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
     from app.core.db import SessionLocal

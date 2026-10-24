@@ -335,7 +335,9 @@ if (!app.requestSingleInstanceLock()) {
 const HOST_BRIDGE_FILE = "host-bridge.json";
 const HOST_BRIDGE_MAX_REQUEST = 64 * 1024;
 /** 能截的窗口。`publish` 是发布器自己的窗口,不是内嵌网页(那是 ADR 0075 的 L2,P0 不碰)。 */
-const COMPUTER_WINDOW_NAMES = Object.freeze(["main", "publish"]);
+//: 电脑使用**只有一个窗口**:应用主窗口。曾经还有 `publish`(发布器自己的 BrowserWindow),
+//: 但发布器后来成了应用里的页面 / 内嵌浏览器,那个分行早就没有对应的窗口了 —— 留着它等于留一个
+//: 永远走不通的分支(维护者 2026-10-24 指出:文档说"白名单 main / publish",代码里只传 { main })。
 let hostBridge = null;
 let hostBridgeStarting = null;
 /** 最近一次由渲染层推上来的系统状态(任务数等);Computer Use 的开关状态由主进程合并进去。 */
@@ -396,23 +398,13 @@ function hostBridgeFile() {
  * 按名字挑一个窗口。**只挑 Mosael 自己的** —— 桌面、别的 App 在这里根本没有对应项。
  * 不退回「随便哪个窗口」:截错一个窗口比截不到更糟(它会把用户别处的画面交给模型)。
  */
-function chooseComputerWindow(name, windows, roles) {
-  if (!COMPUTER_WINDOW_NAMES.includes(name)) {
-    throw new Error(
-      `Unknown window "${name}". Use "main" (the Mosael app window) or "publish" (the publisher window).`,
-    );
-  }
-  // 只取**这个名字对应的那个引用**:引用没有 / 已销毁就是「没有这个窗口」,不回退到窗口列表里
-  // 随便找一个 —— 那会把发布器、启动小窗甚至以后别的东西当成主窗口拍给模型。
-  // (`windows` 仍留在签名里:两处调用都传 `BrowserWindow.getAllWindows()`,它说明「只可能看自己
-  // 进程里的窗口」;但挑哪一个只由 roles 决定。)
-  void windows;
-  const named = roles && roles[name];
-  return named && typeof named.isDestroyed === "function" && !named.isDestroyed() ? named : null;
+/** 电脑使用只认主窗口:引用没建 / 已销毁就是「没有窗口」,不回退到窗口列表里随便找一个。 */
+function computerUseWindow(mainWindow) {
+  return mainWindow && typeof mainWindow.isDestroyed === "function" && !mainWindow.isDestroyed() ? mainWindow : null;
 }
 
 /**
- * 点一下 `request.window` 指定的那个 Mosael 窗口。坐标是**页面 CSS 像素**(和 capturePage 出来的图
+ * 点一下 Mosael 主窗口。坐标是**页面 CSS 像素**(和 capturePage 出来的图
  * 同一套坐标,缩放在后端做);越界就回一句带窗口尺寸的人话 —— 让模型知道该往哪边改,而不是点了个空。
  *
  * 走的是 `webContents.sendInputEvent`(可信输入),不是系统级鼠标注入:只在这个窗口里生效,窗口
@@ -433,20 +425,19 @@ function showComputerUseCursor(win, x, y, kind, cursor) {
   }
 }
 
-function clickMosaelWindow(request, windows, roles, cursor = null) {
-  const name = String(request.window || "main");
-  const win = chooseComputerWindow(name, windows, roles);
+function clickMosaelWindow(request, mainWindow, cursor = null) {
+  const win = computerUseWindow(mainWindow);
   if (!win) {
-    throw new Error(`There is no ${name} window open in Mosael to click. Nothing was clicked.`);
+    throw new Error("There is no Mosael window open to click. Nothing was clicked.");
   }
   if (typeof win.isMinimized === "function" && win.isMinimized()) {
-    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was clicked.`);
+    throw new Error("The Mosael window is minimized; restore it and try again. Nothing was clicked.");
   }
   const contents = win.webContents;
   const size = typeof contents.getSize === "function" ? contents.getSize() : null;
   if (size && (request.x >= size[0] || request.y >= size[1])) {
     throw new Error(
-      `That point is outside the ${name} window: it reports ${size[0]}×${size[1]} CSS pixels, and (${request.x}, ${request.y}) is not inside it. Nothing was clicked.`,
+      `That point is outside the Mosael window: it reports ${size[0]}×${size[1]} CSS pixels, and (${request.x}, ${request.y}) is not inside it. Nothing was clicked.`,
     );
   }
   if (typeof win.focus === "function") win.focus();
@@ -461,11 +452,11 @@ function clickMosaelWindow(request, windows, roles, cursor = null) {
   //: 在窗口里那个点上亮一枚指针(区别于真光标:它只亮一下,拍图也拍不到)——
   //: 连续自动放行时,人至少看得见「它刚才点了哪儿」。
   showComputerUseCursor(win, x, y, "click", cursor);
-  return { window: name, x, y, button, clickCount };
+  return { x, y, button, clickCount };
 }
 
 /**
- * 在 `request.window` 指定的 Mosael 窗口里滚动:Chromium 的滚轮事件需要一个位置,不给就用窗口正中。
+ * 在 Mosael 主窗口里滚动:Chromium 的滚轮事件需要一个位置,不给就用窗口正中。
  * 只在这个窗口里生效(L1,ADR 0075),不碰桌面和别的 App。
  */
 /**
@@ -481,22 +472,21 @@ function spinWait(ms) {
   }
 }
 
-function scrollMosaelWindow(request, windows, roles, cursor = null) {
-  const name = String(request.window || "main");
-  const win = chooseComputerWindow(name, windows, roles);
+function scrollMosaelWindow(request, mainWindow, cursor = null) {
+  const win = computerUseWindow(mainWindow);
   if (!win) {
-    throw new Error(`There is no ${name} window open in Mosael to scroll. Nothing was scrolled.`);
+    throw new Error("There is no Mosael window open to scroll. Nothing was scrolled.");
   }
   if (typeof win.isMinimized === "function" && win.isMinimized()) {
-    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was scrolled.`);
+    throw new Error("The Mosael window is minimized; restore it and try again. Nothing was scrolled.");
   }
   const contents = win.webContents;
   const size = typeof contents.getSize === "function" ? contents.getSize() : [0, 0];
   if (request.x !== null && size[0] && request.x >= size[0]) {
-    throw new Error(`That x is outside the ${name} window (it is ${size[0]} CSS pixels wide). Nothing was scrolled.`);
+    throw new Error(`That x is outside the Mosael window (it is ${size[0]} CSS pixels wide). Nothing was scrolled.`);
   }
   if (request.y !== null && size[1] && request.y >= size[1]) {
-    throw new Error(`That y is outside the ${name} window (it is ${size[1]} CSS pixels tall). Nothing was scrolled.`);
+    throw new Error(`That y is outside the Mosael window (it is ${size[1]} CSS pixels tall). Nothing was scrolled.`);
   }
   if (typeof win.focus === "function") win.focus();
   if (typeof contents.focus === "function") contents.focus();
@@ -516,22 +506,21 @@ function scrollMosaelWindow(request, windows, roles, cursor = null) {
     if (index < steps - 1) spinWait(16 + Math.round(Math.random() * 24));
   }
   showComputerUseCursor(win, x, y, request.dy > 0 ? "scroll-down" : "scroll-up", cursor);
-  return { window: name, dy: request.dy, x, y };
+  return { dy: request.dy, x, y };
 }
 
 /**
- * 往 `request.window` 指定的 Mosael 窗口里输入一段文字:先聚焦窗口与网页,再把文字插到焦点处。
+ * 往 Mosael 主窗口里输入一段文字:先聚焦窗口与网页,再把文字插到焦点处。
  * `insertText` 是 Chromium 自己的「插入文本」,和用户打字走同一条路(受控输入框的 onInput 会触发),
  * 比逐字符发 keyDown/char 稳,也不会被输入法状态影响。
  */
-function typeIntoMosaelWindow(request, windows, roles, cursor = null) {
-  const name = String(request.window || "main");
-  const win = chooseComputerWindow(name, windows, roles);
+function typeIntoMosaelWindow(request, mainWindow, cursor = null) {
+  const win = computerUseWindow(mainWindow);
   if (!win) {
-    throw new Error(`There is no ${name} window open in Mosael to type into. Nothing was typed.`);
+    throw new Error("There is no Mosael window open to type into. Nothing was typed.");
   }
   if (typeof win.isMinimized === "function" && win.isMinimized()) {
-    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was typed.`);
+    throw new Error("The Mosael window is minimized; restore it and try again. Nothing was typed.");
   }
   const contents = win.webContents;
   if (typeof win.focus === "function") win.focus();
@@ -541,27 +530,25 @@ function typeIntoMosaelWindow(request, windows, roles, cursor = null) {
   if (cursor && lastComputerUsePoint) {
     cursor.showAt(lastComputerUsePoint.x, lastComputerUsePoint.y, "type");
   }
-  return { window: name, typed: String(request.text).length };
+  return { typed: String(request.text).length };
 }
 
 /**
- * 拍下 `request.window` 指定的那个 Mosael 窗口,回 `{window, width, height, image}`(`image` 是 PNG 的
+ * 拍下 Mosael 主窗口,回 `{width, height, image}`(`image` 是 PNG 的
  * base64;缩放由后端做,主进程只给原图)。参数不对 / 没窗口 / 最小化 / 空图,都抛一句人话。
  */
-async function captureMosaelWindow(request, windows, roles) {
-  const wanted = request && request.window !== undefined ? request.window : "main";
-  const name = String(wanted).trim().toLowerCase();
-  const win = chooseComputerWindow(name, windows, roles);
+async function captureMosaelWindow(mainWindow) {
+  const win = computerUseWindow(mainWindow);
   if (!win) {
-    throw new Error(`There is no ${name} window open in Mosael to screenshot. Nothing was captured.`);
+    throw new Error("There is no Mosael window open to screenshot. Nothing was captured.");
   }
   if (typeof win.isMinimized === "function" && win.isMinimized()) {
-    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was captured.`);
+    throw new Error("The Mosael window is minimized; restore it and try again. Nothing was captured.");
   }
   const image = await win.webContents.capturePage();
   if (!image || image.isEmpty()) {
     throw new Error(
-      `The ${name} window produced an empty picture (it may be hidden or not composited). Nothing was captured.`,
+      "The Mosael window produced an empty picture (it may be hidden or not composited). Nothing was captured.",
     );
   }
   //: **按窗口的 CSS 尺寸归一化**。Retina 上 capturePage 给的是物理像素(2x):一张 1600×1136 的图背后
@@ -574,7 +561,7 @@ async function captureMosaelWindow(request, windows, roles) {
   const target = captureToCss(image.getSize(), content || null);
   if (target) shot = image.resize({ width: target.width, height: target.height, quality: "best" });
   const { width, height } = shot.getSize();
-  return { window: name, width, height, image: shot.toPNG().toString("base64") };
+  return { width, height, image: shot.toPNG().toString("base64") };
 }
 
 /** 令牌比较:定长、常数时间。别用 `===`,也别把令牌写进日志。 */
@@ -619,25 +606,18 @@ async function answerHostBridgeRequest(line, socket) {
   //: 通道写死三条(截图 / 点击 / 输入),不是通用 RPC:每多一条都是多一种能对 Mosael 干的事,
   //: 而这里刻意不开「执行任意 JS」「发给任意窗口」那种口子。
   const handlers = {
-    [IPC.invoke.computerScreenshot]: () =>
-      captureMosaelWindow(parseComputerScreenshot(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+    [IPC.invoke.computerScreenshot]: () => captureMosaelWindow(mainWindow),
     [IPC.invoke.computerClick]: () =>
-      withComputerUse(() =>
-        clickMosaelWindow(parseComputerClick(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }, computerUseCursor),
-      ),
+      withComputerUse(() => clickMosaelWindow(parseComputerClick(request.payload), mainWindow, computerUseCursor)),
     [IPC.invoke.computerType]: () =>
-      withComputerUse(() =>
-        typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }, computerUseCursor),
-      ),
+      withComputerUse(() => typeIntoMosaelWindow(parseComputerType(request.payload), mainWindow, computerUseCursor)),
     [IPC.invoke.computerEnd]: () => {
       //: 回合结束:熄灭「被控制中」。不是急停 —— 不设 stopped,下一轮还能动。
       computerUseGuard.end();
       return { active: computerUseGuard.isActive(), stopped: computerUseGuard.isStopped() };
     },
     [IPC.invoke.computerScroll]: () =>
-      withComputerUse(() =>
-        scrollMosaelWindow(parseComputerScroll(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }, computerUseCursor),
-      ),
+      withComputerUse(() => scrollMosaelWindow(parseComputerScroll(request.payload), mainWindow, computerUseCursor)),
   };
   const handler = Object.prototype.hasOwnProperty.call(handlers, request.channel) ? handlers[request.channel] : null;
   if (!handler) {

@@ -36,9 +36,8 @@ def _png(width: int, height: int) -> bytes:
     return buffer.getvalue()
 
 
-def _shot(width: int, height: int, *, window: str = "main") -> dict:
+def _shot(width: int, height: int) -> dict:
     return {
-        "window": window,
         "width": width,
         "height": height,
         "image": base64.b64encode(_png(width, height)).decode("ascii"),
@@ -51,7 +50,7 @@ def _tool(client) -> dict:
     return tools["computer_screenshot"]
 
 
-def test_it_is_a_read_only_tool_with_window_and_scale() -> None:
+def test_it_is_a_read_only_tool_with_scale_only() -> None:
     client = fresh_client()
     spec = _tool(client)
 
@@ -63,12 +62,9 @@ def test_it_is_a_read_only_tool_with_window_and_scale() -> None:
 
     parameters = spec["parameters"]
     assert parameters["type"] == "object"
-    assert set(parameters["properties"]) == {"window", "scale"}
-    assert parameters["properties"]["window"]["default"] == "main"
+    #: 只有一个窗口可截 —— 没有"选哪个窗口"这一维(曾经有个 publish 分支,窗口早就不存在了)。
+    assert set(parameters["properties"]) == {"scale"}
     assert parameters["properties"]["scale"]["default"] == 1
-    # 模型要能从 schema 里读出两个合法值,而不是自己猜一个窗口名。
-    description = parameters["properties"]["window"]["description"]
-    assert '"main"' in description and '"publish"' in description
 
 
 def test_the_description_says_it_captures_mosael_and_not_the_desktop() -> None:
@@ -98,8 +94,8 @@ def test_it_goes_through_the_host_bridge_and_returns_an_image_block(monkeypatch)
     assert response.status_code == 200, response.text
     body = response.json()
 
-    assert calls == [("computer:screenshot", {"window": "main"})]
-    assert body["result"]["window"] == "main"
+    assert calls == [("computer:screenshot", {})]
+    assert "window" not in body["result"]
     assert (body["result"]["width"], body["result"]["height"]) == (640, 480)
     assert body["result"]["scale"] == 1
 
@@ -116,7 +112,7 @@ def test_a_large_capture_is_shrunk_by_scale(monkeypatch) -> None:
 
     response = client.post(
         "/api/agent/tools/computer_screenshot",
-        json={"arguments": {"window": "main", "scale": 0.25}},
+        json={"arguments": {"scale": 0.25}},
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -130,25 +126,7 @@ def test_a_large_capture_is_shrunk_by_scale(monkeypatch) -> None:
     assert small.size == (400, 300)
 
 
-def test_an_unknown_window_gets_a_human_sentence(monkeypatch) -> None:
-    client = fresh_client()
-
-    def should_not_be_called(*_args, **_kwargs) -> dict:
-        raise AssertionError("参数就不对,不该去敲 Electron 的门")
-
-    monkeypatch.setattr(computer_use, "_host_call", should_not_be_called)
-
-    response = client.post(
-        "/api/agent/tools/computer_screenshot", json={"arguments": {"window": "desktop"}}
-    )
-    assert response.status_code == 200, response.text
-    error = response.json()["error"]
-    assert "Traceback" not in error
-    assert "desktop" in error
-    assert '"main"' in error and '"publish"' in error
-
-
-@pytest.mark.parametrize("scale", [0, 0.1, 1.5, 4, "half", None, True])
+@pytest.mark.parametrize("scale", [0.1, 1.5, 0])
 def test_a_scale_outside_the_range_gets_a_human_sentence(monkeypatch, scale) -> None:
     client = fresh_client()
     monkeypatch.setattr(
@@ -179,12 +157,14 @@ def test_the_tool_function_returns_text_and_image_blocks() -> None:
     """进程内 MCP 客户端(Claude CLI 那一路)拿到的是标准内容块:文字里是尺寸,图单独一块。"""
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(320, 200))
-        blocks = mcp_server.computer_screenshot(window="main", scale=1)
+        blocks = mcp_server.computer_screenshot(scale=1)
 
     assert isinstance(blocks, list) and len(blocks) == 2
     assert isinstance(blocks[0], TextContent)
     text = json.loads(blocks[0].text)
-    assert (text["width"], text["height"], text["scale"], text["window"]) == (320, 200, 1, "main")
+    #: 没有 window 这一项了:只有 width / height / scale(和一个可选的截图素材 id)。
+    assert (text["width"], text["height"], text["scale"]) == (320, 200, 1)
+    assert "window" not in text
     assert "screenshot_asset_id" not in text, "没有调用方上下文(直接函数调用):跳过入库,截图照常返回"
     assert isinstance(blocks[1], ImageContent)
     assert blocks[1].mime_type == "image/png"
@@ -216,7 +196,8 @@ def test_the_same_png_is_saved_as_an_asset_but_not_into_the_answer_area(monkeypa
     asset = client.get(f"/api/assets/{asset_id}").json()
     assert asset["workspace_id"] == ws["id"]
     assert asset["source"] == "captured"
-    assert "main" in asset["name"]
+    #: 只有一个窗口了,素材名就是「窗口截图」,不再带窗口名后缀。
+    assert asset["name"] == "窗口截图"
     file = client.get(f"/api/assets/{asset_id}/file")
     assert file.status_code == 200
     assert file.content == _png(320, 200)
@@ -240,7 +221,7 @@ def test_a_failing_asset_import_does_not_fail_the_screenshot(monkeypatch) -> Non
     response = client.post("/api/agent/tools/computer_screenshot", json={"arguments": {}})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["result"]["window"] == "main"
+    assert (body["result"]["width"], body["result"]["height"]) == (320, 200)
     assert "screenshot_asset_id" not in body["result"]
     assert len(body["images"]) == 1
 
@@ -270,13 +251,12 @@ def test_the_bridge_client_speaks_one_line_of_json(monkeypatch) -> None:
     monkeypatch.setenv("MOSAEL_HOST_BRIDGE_PORT", str(server.getsockname()[1]))
     monkeypatch.setenv("MOSAEL_HOST_BRIDGE_TOKEN", "app-token")
     try:
-        shot = computer_use.screenshot(window="publish", scale=1)
+        shot = computer_use.screenshot(scale=1)
     finally:
         thread.join(5)
         server.close()
 
-    assert seen == {"token": "app-token", "channel": "computer:screenshot", "payload": {"window": "publish"}}
-    assert shot["window"] == "publish"
+    assert seen == {"token": "app-token", "channel": "computer:screenshot", "payload": {}}
     assert (shot["width"], shot["height"]) == (320, 200)
     assert base64.b64decode(shot["image"]) == _png(320, 200)
 

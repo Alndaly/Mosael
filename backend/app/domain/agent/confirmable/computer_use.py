@@ -54,7 +54,6 @@ def _validate_click(db: Session, workspace_id: str, payload: dict[str, Any], act
 
 def _summarize_click(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_computerClick", {
-        "window": str(payload.get("window") or "main"),
         "x": _coordinate(payload, "x"),
         "y": _coordinate(payload, "y"),
         "button": str(payload.get("button") or "left"),
@@ -66,7 +65,6 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
     payload = confirmation.payload
     try:
         return use_click(
-            window=str(payload.get("window") or "main"),
             x=payload.get("x", 0),
             y=payload.get("y", 0),
             button=str(payload.get("button") or "left"),
@@ -88,7 +86,6 @@ def _validate_type(db: Session, workspace_id: str, payload: dict[str, Any], acto
 def _summarize_type(db: Session, payload: dict[str, Any]) -> Summary:
     #: 卡上要把**要输入的字**原样给出来 —— 授权界面上看不到内容,等于没让人看清要干什么。
     return "confirm_computerType", {
-        "window": str(payload.get("window") or "main"),
         "text": str(payload.get("text") or "")[:400],
     }
 
@@ -96,7 +93,7 @@ def _summarize_type(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     try:
-        return use_type(window=str(payload.get("window") or "main"), text=payload.get("text", ""))
+        return use_type(text=payload.get("text", ""))
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None
 
@@ -131,7 +128,6 @@ def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[s
     payload = confirmation.payload
     try:
         return use_scroll(
-            window=str(payload.get("window") or "main"),
             dy=payload.get("dy", 0),
             x=payload.get("x"),
             y=payload.get("y"),

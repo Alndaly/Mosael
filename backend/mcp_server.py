@@ -303,16 +303,15 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
 def computer_click(
     x: Annotated[int, Field(description="X pixel in the picture computer_screenshot returned.")],
     y: Annotated[int, Field(description="Y pixel in the picture computer_screenshot returned.")],
-    window: Annotated[str, Field(description='"main" or "publish".')] = "main",
     button: Annotated[str, Field(description='"left" or "right".')] = "left",
     click_count: Annotated[int, Field(description="1 (single) or 2 (double).")] = 1,
     scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
 ) -> dict[str, Any]:
-    """Confirmation required: click a point in Mosael's OWN window.
+    """Confirmation required: click a point in Mosael's app window.
 
     Coordinates are pixels in the picture computer_screenshot returned — pass that call's scale.
     It only acts inside Mosael's own UI (never the desktop or other apps), and every click waits
-    for the user's approval: there is no "always allow".
+    for the user's approval — unless the session already allowed edit-tier cards.
     """
     confirmation = _open_card(
         {
@@ -320,7 +319,6 @@ def computer_click(
             "tool": "computer_click",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {
-                "window": window,
                 "x": x,
                 "y": y,
                 "button": button,
@@ -337,16 +335,15 @@ def computer_scroll(
     dy: Annotated[int, Field(description="Wheel notches: positive scrolls down, negative up (max 30).")],
     x: Annotated[int | None, Field(description="Pointer x in the screenshot pixels (omit for the middle).")] = None,
     y: Annotated[int | None, Field(description="Pointer y in the screenshot pixels (omit for the middle).")] = None,
-    window: Annotated[str, Field(description='"main" or "publish".')] = "main",
     scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
 ) -> dict[str, Any]:
-    """Confirmation required: scroll in Mosael's OWN window (dy > 0 = down, one notch ≈ 3 lines)."""
+    """Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines)."""
     confirmation = _open_card(
         {
             "workspace_id": _default_workspace_id(),
             "tool": "computer_scroll",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"window": window, "dy": dy, "x": x, "y": y, "scale": scale},
+            "payload": {"dy": dy, "x": x, "y": y, "scale": scale},
         },
     )
     return _confirmation_reply(confirmation)
@@ -355,19 +352,18 @@ def computer_scroll(
 @tool(effect="confirms")
 def computer_type(
     text: Annotated[str, Field(description="What to type (at most 2000 characters).")],
-    window: Annotated[str, Field(description='"main" or "publish".')] = "main",
 ) -> dict[str, Any]:
-    """Confirmation required: type text into Mosael's OWN window (into the focused field).
+    """Confirmation required: type text into Mosael's app window (into the focused field).
 
     It only types inside Mosael's own UI (never the desktop or other apps), and every input waits
-    for the user's approval: there is no "always allow".
+    for the user's approval — unless the session already allowed edit-tier cards.
     """
     confirmation = _open_card(
         {
             "workspace_id": _default_workspace_id(),
             "tool": "computer_type",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"window": window, "text": text},
+            "payload": {"text": text},
         },
     )
     return _confirmation_reply(confirmation)
@@ -375,27 +371,22 @@ def computer_type(
 
 @tool(effect="reads")
 def computer_screenshot(
-    window: Annotated[
-        str,
-        Field(description='"main" or "publish".'),
-    ] = "main",
     scale: Annotated[
         float,
         Field(description="0.25–1."),
     ] = 1,
 ) -> list[TextContent | ImageContent]:
-    """Read-only: LOOK at Mosael's OWN window — returns a PNG you can see.
+    """Read-only: LOOK at Mosael's app window — returns a PNG you can see.
 
-    window="main" (the app window, default) or "publish" (the publisher window). It does NOT
-    capture your desktop, other apps or the menu bar, needs no screen-recording permission, and
-    never clicks, types or scrolls. scale 0.25–1 (default 1) shrinks a large window; the
-    embedded page is browser_screenshot.
+    It does NOT capture your desktop, other apps or the menu bar, needs no screen-recording
+    permission, and never clicks, types or scrolls. scale 0.25–1 (default 1) shrinks a large
+    window; an embedded web page is browser_screenshot.
     """
     import base64
 
     from app.domain.agent.computer_use import screenshot
 
-    shot = screenshot(window=window, scale=scale)
+    shot = screenshot(scale=scale)
     # 同一份 PNG 落一份进素材库,id 用**单数键 `screenshot_asset_id`** 交回:
     # 它只进工具行明细(ToolCalls 的 collectAssetIds 按 /asset_?id/ 收「碰过的」素材,展开那一步才看得见),
     # **不进答案区**。截图是过程中的一眼,不是这一轮的产出 —— 以前用 produced_asset_ids 交给结果区,
@@ -416,17 +407,16 @@ def computer_screenshot(
                     workspace_id=workspace_id,
                     project_id=None,
                     data=base64.b64decode(shot["image"]),
-                    original=f"窗口截图-{shot['window']}.png",
+                    original="窗口截图.png",
                     content_type="image/png",
                     source="captured",
-                    name=f"窗口截图 · {shot['window']}",
+                    name="窗口截图",
                 )
                 asset_id = asset.id
         except Exception:  # noqa: BLE001 —— 入库失败不该让截图本身失败:模型还有 images 能看
             logger.warning("computer_screenshot asset import failed", exc_info=True)
     return _with_images(
         {
-            "window": shot["window"],
             "width": shot["width"],
             "height": shot["height"],
             "scale": shot["scale"],
