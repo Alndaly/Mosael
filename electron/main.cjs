@@ -55,6 +55,9 @@ const {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseComputerDesktopAccessibility,
+  parseComputerDesktopScreenshot,
+  parseComputerDesktopWindows,
   parseHostLayer,
   parseComputerScreenshot,
   parseComputerScroll,
@@ -317,21 +320,19 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-// ---------------- Computer Use(ADR 0075 P0):只读地截 Mosael 自己的窗口 ----------------
+// ---------------- Computer Use:应用内 L1 + 桌面只读 L3(ADR 0075 / 0081) ----------------
 //
-// P0 只有一件只读的事:把 Mosael 自己的窗口拍下来给模型看。没有鼠标、键盘、拖拽、滚动,
-// 也不申请屏幕录制权限 —— `webContents.capturePage()` 拍的是本进程自己的渲染,不是系统屏幕。
+// L1 用 `webContents.capturePage()` 截 Mosael 自己,不需要屏幕录制权限;L3 用 DesktopDriverMac
+// 枚举其他应用、截窗口、读 AX 树,权限由用户可见的原生引导处理。桌面输入仍未开放。
 //
 // 后端为什么需要一条桥:Electron 的 `ipcMain` 只服务渲染层,Python 后端是另一个进程,够不着。
-// 这个仓库里后端与 Electron 之间现有的跨进程执行全是反向拉取(Electron 轮询后端的 worker 队列),
-// 而 P0 要一次同步的「拍一张、马上看」。所以主进程在启动后端之前开一条**只绑回环、只认
-// `computer:screenshot` 一条通道、带每进程随机令牌**的一问一答 TCP 桥。端口和令牌有两条路给后端:
-// 壳拉起的那个走环境变量(`MOSAEL_HOST_BRIDGE_PORT` / `MOSAEL_HOST_BRIDGE_TOKEN`,环境变量优先),
-// `pnpm dev:backend` 单独起的那个按**同一个数据目录**读 `host-bridge.json`(0600)。远程团队服务器
-// 上两样都没有,于是工具会回一句人话(见 backend/app/domain/agent/computer_use.py)。
+// 主进程在启动后端之前开一条**只绑回环、通道写死、带每进程随机令牌**的一问一答 TCP 桥。
+// 端口和令牌有两条路给后端:壳拉起的那个走环境变量(`MOSAEL_HOST_BRIDGE_PORT` /
+// `MOSAEL_HOST_BRIDGE_TOKEN`),`pnpm dev:backend` 单独起的那个按同一个数据目录读
+// `host-bridge.json`(0600)。远程团队服务器上两样都没有,工具会回一句人话。
 //
-// 这不是一条通用 RPC:通道写死一条,参数过同一个契约解析器(parseComputerScreenshot),拿不到
-// 别的窗口、别的能力。令牌只在本进程内存和那份 0600 文件里,不写日志。
+// 这不是一条通用 RPC:参数过同一个契约解析器,不开放任意 JS、路径或脚本。令牌只在本进程
+// 内存和那份 0600 文件里,不写日志。
 const HOST_BRIDGE_FILE = "host-bridge.json";
 const HOST_BRIDGE_MAX_REQUEST = 64 * 1024;
 /** 能截的窗口。`publish` 是发布器自己的窗口,不是内嵌网页(那是 ADR 0075 的 L2,P0 不碰)。 */
@@ -355,6 +356,18 @@ const computerUseCursor = createComputerUseCursor({ BrowserWindow });
 
 const { OwnWindowDriver } = require("./computerUse/ownWindowDriver.cjs");
 const computerUseDriver = new OwnWindowDriver(() => mainWindow);
+
+const { createGuidedDesktopDriverMac } = require("./computerUse/desktopPermissionGuide.cjs");
+const desktopUseDriver = process.platform === "darwin" ? createGuidedDesktopDriverMac({ dialog, shell, t }) : null;
+
+function desktopObserve(target = {}) {
+  if (!desktopUseDriver) throw new Error("Desktop observation currently supports macOS only.");
+  return desktopUseDriver.observe(target);
+}
+
+async function desktopWindows(target = {}) {
+  return { windows: await desktopObserve(target) };
+}
 
 const computerUseGuard = createComputerUseGuard({
   //: 30 秒没有新动作就自动熄灭(写成乘法,别让「固定 30 秒」的旧判据误扫到)。
@@ -440,6 +453,9 @@ async function answerHostBridgeRequest(line, socket) {
   //: 而这里刻意不开「执行任意 JS」「发给任意窗口」那种口子。
   const handlers = {
     [IPC.invoke.computerScreenshot]: () => computerUseDriver.observe(),
+    [IPC.invoke.computerDesktopWindows]: () => desktopWindows(parseComputerDesktopWindows(request.payload)),
+    [IPC.invoke.computerDesktopScreenshot]: () => desktopObserve(parseComputerDesktopScreenshot(request.payload)),
+    [IPC.invoke.computerDesktopAccessibility]: () => desktopObserve(parseComputerDesktopAccessibility(request.payload)),
     [IPC.invoke.computerClick]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerType]: () =>
@@ -457,7 +473,7 @@ async function answerHostBridgeRequest(line, socket) {
     return replyHostBridge(socket, {
       ok: false,
       status: 405,
-      error: "The host bridge only serves computer:screenshot, computer:click and computer:type.",
+      error: "The host bridge only serves computer:screenshot, computer:click, computer:type and read-only desktop observation.",
     });
   }
   try {

@@ -1,10 +1,10 @@
 # ADR 0081 · 桌面级驱动（L3）与模型驱动网页（L2）：先立端口，再自研
 
-- 状态：**Accepted（P0 已完成）** — 2026-10-24 定方向，2026-10-25 完成 P0。维护者拍板：**L2 要做**（「任何网站上的任何事
-  都能做」）、**回放要做且记全量**、**L3 倾向自研**
+- 状态：**Accepted（P0 / P1 已完成）** — 2026-10-24 定方向，2026-10-25 完成 P0 与 macOS P1。
+  维护者拍板：**L2 要做**（「任何网站上的任何事都能做」）、**回放要做且记全量**、**L3 倾向自研**
 - 相关：[ADR 0075](0075-computer-use.md)（三层的边界与安全模型）、ADR 0044（确认卡）、
   ADR 0080（发布域的契约与判定原语 —— L2 确定性那一半）
-- 代码位置：`electron/computerUse/ownWindowDriver.cjs`（DesktopDriver 端口与 L1 实现）、`backend/app/domain/agent/computer_use.py`（工具层）
+- 代码位置：`electron/computerUse/ownWindowDriver.cjs`（L1）、`electron/computerUse/desktopDriverMac.cjs`（macOS L3）、`backend/app/domain/agent/computer_use.py` 与 `backend/mcp_server.py`（宿主桥客户端与工具层）
 
 ## 要解决什么
 
@@ -92,7 +92,7 @@ DesktopDriver
 | 阶段 | 内容 | 判定"做完了" |
 | --- | --- | --- |
 | P0 | `DesktopDriver` 端口 + `OwnWindowDriver`（把 L1 装进去） | ✅ 现有 CUA 测试全绿，行为零变化（2026-10-25） |
-| P1 | L3 只读：窗口枚举 + 窗口截图 + 可访问性树快照（**不注入**） | 能在 Finder / 预览里读出树并截图，权限引导可走通 |
+| P1 | L3 只读：窗口枚举 + 窗口截图 + 可访问性树快照（**不注入**） | ✅ Finder / 预览读树与截图、权限引导、MCP 工具接线通过（2026-10-25，macOS） |
 | P2 | L3 动作：点击 / 输入 / 滚动（令牌 + 像素兜底） | 三个真实 App 各完成一件小事（新建文件夹、翻页、关闭弹窗） |
 | P3 | 回放：时间线落盘 + 用户可见 | 一次 L3 会话能从时间线复现"第几步错" |
 | P4 | L2：`BrowserDriver` + 模型驱动兜底 | 一个没有契约的站点完成一次填写（提交动作仍走确认卡） |
@@ -105,10 +105,12 @@ P1 实现注记：先按原表尝试了 `SCScreenshotManager.captureImage`，但
 因此 P1 的实际截图走系统 `screencapture`（同一 `CGWindowListCreateImage` 路径），尺寸用 `sips` 读取。
 这不是静默降级：失败原样交回，且此处在 ADR 中留痕。后续若 SCK 命令行路径修好，可换回去。
 
-2026-10-25 实测：`DesktopDriverMac` + Swift 工具已落地，窗口枚举、Mosael 窗口截图与 Finder AX 均通过
-（Finder 返回 400 个元素）。`permissions` 只查询；`request-permission` 只在用户点击后调用；
-`desktopPermissionGuide.cjs` 提供主进程原生引导与正式装配入口，未授权时返回
-`desktop_permission_required`，授权成功后同一次观察继续执行。
+2026-10-25 实测：`DesktopDriverMac` + Swift 工具已落地；Finder 与预览的窗口截图、AX 树均通过
+（各返回 400 个元素）。`permissions` 只查询；`request-permission` 只在用户点击后调用；
+`desktopPermissionGuide.cjs` 提供主进程原生引导，未授权时返回 `desktop_permission_required`。
+宿主桥新增 `computer:desktop-{windows,screenshot,accessibility}`，MCP 对应新增
+`computer_desktop_{windows,screenshot,accessibility}`；后端到 Finder 的联合冒烟通过。
+桌面输入工具仍未暴露，AX 元素令牌不能冒充已有点击能力。
 
 ## 后果
 

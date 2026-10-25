@@ -77,6 +77,10 @@ const IPC = Object.freeze({
     // 也不走系统截屏 —— 主进程用 webContents.capturePage() 拍自己,不需要屏幕录制权限。
     // 后端够不着 ipcMain,它经 main.cjs 的回环桥以同一个通道名问(见 domain/agent/computer_use)。
     computerScreenshot: "computer:screenshot",
+    // ADR 0081 P1:只读观察其他桌面应用。窗口 id / pid 只能来自桌面窗口列表,不能传路径或脚本。
+    computerDesktopWindows: "computer:desktop-windows",
+    computerDesktopScreenshot: "computer:desktop-screenshot",
+    computerDesktopAccessibility: "computer:desktop-accessibility",
     computerClick: "computer:click",
     computerType: "computer:type",
     computerScroll: "computer:scroll",
@@ -631,6 +635,32 @@ function parseComputerScreenshot(value) {
   return {};
 }
 
+function parseComputerDesktopWindows(value) {
+  const channel = IPC.invoke.computerDesktopWindows;
+  const payload = value === undefined || value === null ? {} : record(value, channel);
+  onlyKeys(payload, [], channel);
+  return {};
+}
+
+function desktopId(value, key, channel) {
+  if (!Number.isInteger(value) || value <= 0) throw new TypeError(`${channel}: ${key} must be a positive integer`);
+  return value;
+}
+
+function parseComputerDesktopScreenshot(value) {
+  const channel = IPC.invoke.computerDesktopScreenshot;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["windowNumber"], channel);
+  return { windowNumber: desktopId(payload.windowNumber, "windowNumber", channel) };
+}
+
+function parseComputerDesktopAccessibility(value) {
+  const channel = IPC.invoke.computerDesktopAccessibility;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["pid"], channel);
+  return { pid: desktopId(payload.pid, "pid", channel) };
+}
+
 /**
  * 点一下 Mosael 自己的窗口:坐标是**页面 CSS 像素**(左上角为原点),和 `capturePage` 拍出来的
  * 图同一个坐标系(缩放在后端做,见 domain/agent/computer_use)。按钮只认左/右,连点只认 1/2。
@@ -1041,6 +1071,9 @@ module.exports = {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseComputerDesktopAccessibility,
+  parseComputerDesktopScreenshot,
+  parseComputerDesktopWindows,
   parseHostLayer,
   parseComputerScreenshot,
   parseComputerScroll,

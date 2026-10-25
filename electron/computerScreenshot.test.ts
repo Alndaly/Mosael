@@ -293,6 +293,8 @@ function bridgeSources(): string {
     sourceOf("hostBridgeTokenMatches"),
     sourceOf("replyHostBridge"),
     sourceOf("answerHostBridgeRequest"),
+    sourceOf("desktopObserve"),
+    sourceOf("desktopWindows"),
     sourceOf("startHostBridge"),
     sourceOf("startHostBridgeOnce"),
     sourceOf("stopHostBridge"),
@@ -337,7 +339,11 @@ function askBridge(port: number, message: unknown): Promise<BridgeReply> {
 }
 
 /** 起一个真的桥：数据目录用临时目录，窗口和 capturePage 是替身，其余原样。 */
-async function startBridge(options: { windows: FakeWindow[]; main?: FakeWindow | null }): Promise<BridgeHarness> {
+async function startBridge(options: {
+  windows: FakeWindow[];
+  main?: FakeWindow | null;
+  desktopDriver?: { observe: (target?: Record<string, unknown>) => Promise<unknown> } | null;
+}): Promise<BridgeHarness> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosael-host-bridge-"));
   const logs: string[] = [];
   const context = {
@@ -354,6 +360,10 @@ async function startBridge(options: { windows: FakeWindow[]; main?: FakeWindow |
     },
     IPC: contract.IPC,
     parseComputerScreenshot: contract.parseComputerScreenshot,
+    parseComputerDesktopAccessibility: contract.parseComputerDesktopAccessibility,
+    parseComputerDesktopScreenshot: contract.parseComputerDesktopScreenshot,
+    parseComputerDesktopWindows: contract.parseComputerDesktopWindows,
+    desktopUseDriver: options.desktopDriver ?? null,
     //: 归一化判断住在 publish/coords(Retina 上 capturePage 给物理像素):桥的沙箱里也递进去。
     captureToCss: require("./publish/coords.cjs").captureToCss,
     BrowserWindow: { getAllWindows: () => options.windows },
@@ -470,6 +480,48 @@ describe("宿主桥的安全边界", () => {
       expect(reply.result).toMatchObject({ width: 800, height: 600 });
       expect(main.webContents.capturePage).toHaveBeenCalledTimes(1);
       expect(publish.webContents.capturePage).not.toHaveBeenCalled();
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("桌面窗口、截图和 AX 三条只读通道都经过令牌与参数契约", async () => {
+    const main = fakeWindow("main");
+    const desktopDriver = {
+      observe: vi.fn(async (target?: Record<string, unknown>) => {
+        if (target?.windowNumber) return { image: "png", width: 800, height: 600, elements: [] };
+        if (target?.pid) return { elements: [{ id: "snap:0" }], meta: { snapshot_id: "snap" } };
+        return [{ id: 7, pid: 42, owner: "Finder", title: "Documents" }];
+      }),
+    };
+    const bridge = await startBridge({ windows: [main], main, desktopDriver });
+    try {
+      const token = bridge.bridge.token;
+      const windows = await bridge.ask({ token, channel: "computer:desktop-windows", payload: {} });
+      expect(windows).toMatchObject({ ok: true, result: { windows: [{ id: 7, pid: 42 }] } });
+      const shot = await bridge.ask({ token, channel: "computer:desktop-screenshot", payload: { windowNumber: 7 } });
+      expect(shot).toMatchObject({ ok: true, result: { image: "png", width: 800 } });
+      const ax = await bridge.ask({ token, channel: "computer:desktop-accessibility", payload: { pid: 42 } });
+      expect(ax).toMatchObject({ ok: true, result: { meta: { snapshot_id: "snap" } } });
+      expect(desktopDriver.observe.mock.calls).toEqual([[{}], [{ windowNumber: 7 }], [{ pid: 42 }]]);
+      expect(main.webContents.capturePage).not.toHaveBeenCalled();
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("桌面通道拒绝无效窗口 id,不会落到驱动", async () => {
+    const main = fakeWindow("main");
+    const desktopDriver = { observe: vi.fn() };
+    const bridge = await startBridge({ windows: [main], main, desktopDriver });
+    try {
+      const reply = await bridge.ask({
+        token: bridge.bridge.token,
+        channel: "computer:desktop-screenshot",
+        payload: { windowNumber: 0 },
+      });
+      expect(reply).toMatchObject({ ok: false, status: 400 });
+      expect(desktopDriver.observe).not.toHaveBeenCalled();
     } finally {
       bridge.close();
     }

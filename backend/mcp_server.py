@@ -369,33 +369,17 @@ def computer_type(
     return _confirmation_reply(confirmation)
 
 
-@tool(effect="reads")
-def computer_screenshot(
-    scale: Annotated[
-        float,
-        Field(description="0.25–1."),
-    ] = 1,
+def _computer_image_response(
+    shot: dict[str, Any], *, asset_name: str, extra: dict[str, Any] | None = None
 ) -> list[TextContent | ImageContent]:
-    """Read-only: LOOK at Mosael's app window — returns a PNG you can see.
-
-    It does NOT capture your desktop, other apps or the menu bar, needs no screen-recording
-    permission, and never clicks, types or scrolls. scale 0.25–1 (default 1) shrinks a large
-    window; an embedded web page is browser_screenshot.
-    """
+    """同一份截图给模型图片块、给工具行一份素材;不当作这一轮答案的产出。"""
     import base64
 
-    from app.domain.agent.computer_use import screenshot
-
-    shot = screenshot(scale=scale)
-    # 同一份 PNG 落一份进素材库,id 用**单数键 `screenshot_asset_id`** 交回:
-    # 它只进工具行明细(ToolCalls 的 collectAssetIds 按 /asset_?id/ 收「碰过的」素材,展开那一步才看得见),
-    # **不进答案区**。截图是过程中的一眼,不是这一轮的产出 —— 以前用 produced_asset_ids 交给结果区,
-    # 最后对话里每一步下面都挂着一张图(维护者指出:这不是答案)。
     asset_id: str | None = None
     try:
         workspace_id = _default_workspace_id()
     except (RuntimeError, ValueError):
-        workspace_id = ""  # 没有调用方上下文(直接函数调用/脚本):跳过入库,截图本身照常返回
+        workspace_id = ""
     if workspace_id:
         try:
             from app.core.db import SessionLocal
@@ -407,23 +391,87 @@ def computer_screenshot(
                     workspace_id=workspace_id,
                     project_id=None,
                     data=base64.b64decode(shot["image"]),
-                    original="窗口截图.png",
+                    original=f"{asset_name}.png",
                     content_type="image/png",
                     source="captured",
-                    name="窗口截图",
+                    name=asset_name,
                 )
                 asset_id = asset.id
-        except Exception:  # noqa: BLE001 —— 入库失败不该让截图本身失败:模型还有 images 能看
-            logger.warning("computer_screenshot asset import failed", exc_info=True)
-    return _with_images(
-        {
-            "width": shot["width"],
-            "height": shot["height"],
-            "scale": shot["scale"],
-            **({"screenshot_asset_id": asset_id} if asset_id else {}),
-            "images": [{"view": "computer", "mime_type": "image/png", "data": shot["image"]}],
-        }
-    )
+        except Exception:  # noqa: BLE001 —— 入库失败不该让模型也看不见这张图
+            logger.warning("computer screenshot asset import failed", exc_info=True)
+    return _with_images({
+        **(extra or {}),
+        "width": shot["width"],
+        "height": shot["height"],
+        "scale": shot["scale"],
+        **({"screenshot_asset_id": asset_id} if asset_id else {}),
+        "images": [{"view": "computer", "mime_type": "image/png", "data": shot["image"]}],
+    })
+
+
+@tool(effect="reads")
+def computer_screenshot(
+    scale: Annotated[
+        float,
+        Field(description="0.25–1."),
+    ] = 1,
+) -> list[TextContent | ImageContent]:
+    """Read-only: LOOK at Mosael's app window — returns a PNG you can see.
+
+    It does NOT capture other apps or the menu bar and needs no screen-recording permission.
+    For other apps, call computer_desktop_windows first, then computer_desktop_screenshot or
+    computer_desktop_accessibility. scale 0.25–1 shrinks a large window; an embedded web page
+    is browser_screenshot. It never clicks, types or scrolls.
+    """
+    from app.domain.agent.computer_use import screenshot
+
+
+    return _computer_image_response(screenshot(scale=scale), asset_name="窗口截图")
+
+
+@tool(effect="reads")
+def computer_desktop_windows() -> dict[str, Any]:
+    """Read-only: list visible desktop windows, including other apps.
+
+    Each row includes `id` for computer_desktop_screenshot and `pid` for
+    computer_desktop_accessibility, plus owner, title and geometry. This only observes;
+    no desktop click, type or scroll tool is currently exposed.
+    """
+    from app.domain.agent.computer_use import desktop_windows
+
+    return desktop_windows()
+
+
+@tool(effect="reads")
+def computer_desktop_screenshot(
+    window_id: Annotated[int, Field(description="The `id` returned by computer_desktop_windows.")],
+    scale: Annotated[float, Field(description="0.25–1.")] = 1,
+) -> list[TextContent | ImageContent]:
+    """Read-only: capture another app's visible desktop window by `window_id`.
+
+    Use computer_desktop_windows first. macOS asks for Screen Recording through the native
+    permission guide when needed. This never clicks, types or scrolls; Mosael's own window
+    remains computer_screenshot, and embedded web pages remain browser_screenshot.
+    """
+    from app.domain.agent.computer_use import desktop_screenshot
+
+    shot = desktop_screenshot(window_id=window_id, scale=scale)
+    return _computer_image_response(shot, asset_name="桌面窗口截图", extra={"window_id": shot["window_id"]})
+
+
+@tool(effect="reads")
+def computer_desktop_accessibility(
+    pid: Annotated[int, Field(description="The `pid` returned by computer_desktop_windows.")],
+) -> dict[str, Any]:
+    """Read-only: read another app's macOS accessibility tree by `pid`.
+
+    Use computer_desktop_windows first. Returns a one-time snapshot_id and element tokens.
+    macOS asks for Accessibility through the native permission guide when needed. Tokens are
+    observations only: desktop input is not exposed yet, so do not claim you can click them.
+    """
+    from app.domain.agent.computer_use import desktop_accessibility
+
+    return desktop_accessibility(pid=pid)
 
 
 @tool(effect="reads")

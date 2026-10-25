@@ -52,6 +52,9 @@ export const IPC: {
     pageToolsInset: "pageTools:inset";
     pageToolsSaveDownload: "pageTools:saveDownload";
     computerScreenshot: "computer:screenshot";
+    computerDesktopWindows: "computer:desktop-windows";
+    computerDesktopScreenshot: "computer:desktop-screenshot";
+    computerDesktopAccessibility: "computer:desktop-accessibility";
     computerClick: "computer:click";
     computerType: "computer:type";
     computerScroll: "computer:scroll";

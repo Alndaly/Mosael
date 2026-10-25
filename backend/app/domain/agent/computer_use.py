@@ -1,22 +1,18 @@
-"""截 Mosael 自己的窗口(Computer Use P0,ADR 0075)。
+"""Computer Use 的宿主桥:L1 操作 Mosael 自己,L3 只读观察桌面(ADR 0075 / 0081)。
 
-**只读、只截自己。** 这个模块不做任何输入注入,也不碰系统截屏:图由 Electron 主进程用
-`webContents.capturePage()` 从 Mosael 自己的渲染里拍,不需要 macOS 的屏幕录制权限。
+L1 图由 Electron 用 `webContents.capturePage()` 拍 Mosael 自己的渲染,不需要屏幕录制权限;
+L3 由 DesktopDriverMac 枚举其他应用窗口、截图和读取 AX 树,桌面输入尚未开放。
 
 线程模型和进程边界:
 
-    工具(mcp_server) ── 这里 ──127.0.0.1 回环桥──→ Electron 主进程 ── capturePage()
+    工具(mcp_server) ── 这里 ──127.0.0.1 回环桥──→ Electron 主进程 ── DesktopDriver
 
-Electron 的 `ipcMain` 只服务渲染层,后端(Python,另一个进程)够不着它;这个仓库里后端与 Electron
-之间现有的跨进程执行全是**反向**的拉取式(browser / 发布 / job worker,Electron 轮询后端)。P0 要
-一次同步的「拍一张、马上看」,所以主进程在启动时额外开一条只绑回环、带每进程随机令牌、只认
-`computer:screenshot` 一条通道的一问一答桥。端口与令牌有两条路:壳拉起的后端拿
-`MOSAEL_HOST_BRIDGE_PORT` / `MOSAEL_HOST_BRIDGE_TOKEN` 两个环境变量;`pnpm dev:backend` 单独起的
-后端读**同一个数据目录**里的 `host-bridge.json`(0600,见 main.cjs 的 `startHostBridge`)。
-后端自己不在桌面壳里跑(独立部署、远程团队服务器)时两样都没有,工具会回一句人话而不是假装截了张图。
+Electron 的 `ipcMain` 只服务渲染层,后端(Python,另一个进程)够不着它。主进程在启动时开一条
+只绑回环、带每进程随机令牌、通道写死的一问一答桥。壳拉起的后端拿
+`MOSAEL_HOST_BRIDGE_PORT` / `MOSAEL_HOST_BRIDGE_TOKEN`;`pnpm dev:backend` 单独起的
+后端读同一个数据目录里的 `host-bridge.json`(0600)。远程团队服务器没有这条桥,工具会回一句人话。
 
-缩放放在后端:Electron 只负责拍回原图,这里按 `scale` 缩小再交给模型 —— 模型看的是布局,
-不需要 5K 的像素。
+缩放放在后端:Electron 只负责拍回原图,这里按 `scale` 缩小再交给模型。
 """
 
 from __future__ import annotations
@@ -50,6 +46,9 @@ BRIDGE_TOKEN_ENV = "MOSAEL_HOST_BRIDGE_TOKEN"
 BRIDGE_FILE = "host-bridge.json"
 #: 桥上的通道名。和 `electron/ipc-contract.cjs` 的 `IPC.invoke.computerScreenshot` 等是同一批字符串。
 SCREENSHOT_CHANNEL = "computer:screenshot"
+DESKTOP_WINDOWS_CHANNEL = "computer:desktop-windows"
+DESKTOP_SCREENSHOT_CHANNEL = "computer:desktop-screenshot"
+DESKTOP_ACCESSIBILITY_CHANNEL = "computer:desktop-accessibility"
 #: 动手:L1 的点击与输入(ADR 0075 的 P1)。坐标是**看着的那张图**上的(缩放过的)像素,
 #: 这里除以 scale 换成窗口的 CSS 像素再交给主进程 —— 模型不需要知道缩放这回事。
 CLICK_CHANNEL = "computer:click"
@@ -89,6 +88,48 @@ def screenshot(scale: float = DEFAULT_SCALE) -> dict[str, Any]:
         "scale": factor,
         "image": base64.b64encode(raw).decode("ascii"),
     }
+
+
+def desktop_windows() -> dict[str, Any]:
+    """列出当前可见的桌面窗口;id 用于截图,pid 用于 AX 树。"""
+    answer = _host_call(DESKTOP_WINDOWS_CHANNEL, {})
+    windows = answer.get("windows")
+    if not isinstance(windows, list) or not all(isinstance(window, dict) for window in windows):
+        raise ComputerUseError("The desktop window bridge answered without a valid window list.")
+    return {"windows": windows}
+
+
+def desktop_screenshot(window_id: object, scale: float = DEFAULT_SCALE) -> dict[str, Any]:
+    """截一张其他应用的可见窗口;只读,不注入任何输入。"""
+    target = _desktop_id(window_id, "window_id")
+    factor = _scale(scale)
+    answer = _host_call(DESKTOP_SCREENSHOT_CHANNEL, {"windowNumber": target})
+    raw = _image_bytes(answer)
+    width, height, raw = _size_and_pixels(raw, factor)
+    return {
+        "window_id": target,
+        "width": width,
+        "height": height,
+        "scale": factor,
+        "image": base64.b64encode(raw).decode("ascii"),
+    }
+
+
+def desktop_accessibility(pid: object) -> dict[str, Any]:
+    """读一个桌面应用的 AX 树;返回一次性元素令牌,不代表已经能操作它。"""
+    target = _desktop_id(pid, "pid")
+    answer = _host_call(DESKTOP_ACCESSIBILITY_CHANNEL, {"pid": target})
+    elements = answer.get("elements")
+    meta = answer.get("meta")
+    if not isinstance(elements, list) or not isinstance(meta, dict):
+        raise ComputerUseError("The desktop accessibility bridge answered without a valid AX snapshot.")
+    return {"pid": target, "snapshot_id": str(meta.get("snapshot_id") or ""), "elements": elements}
+
+
+def _desktop_id(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ComputerUseError(f"{name} must be a positive integer from computer_desktop_windows.")
+    return value
 
 
 def _mark_touched() -> None:
@@ -343,10 +384,16 @@ __all__ = [
     "MAX_SCALE",
     "MIN_SCALE",
     "SCREENSHOT_CHANNEL",
+    "DESKTOP_ACCESSIBILITY_CHANNEL",
+    "DESKTOP_SCREENSHOT_CHANNEL",
+    "DESKTOP_WINDOWS_CHANNEL",
     "SCROLL_CHANNEL",
     "TYPE_CHANNEL",
     "click",
     "end_turn",
+    "desktop_accessibility",
+    "desktop_screenshot",
+    "desktop_windows",
     "screenshot",
     "scroll",
     "type_text",

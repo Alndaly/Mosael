@@ -28,6 +28,7 @@ func listWindows() -> [[String: Any]] {
         result.append([
             "id": number.uint32Value,
             "owner": item[kCGWindowOwnerName as String] as? String ?? "",
+            "pid": (item[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? 0,
             "title": item[kCGWindowName as String] as? String ?? "",
             "x": bounds["X"]?.doubleValue ?? 0,
             "y": bounds["Y"]?.doubleValue ?? 0,
