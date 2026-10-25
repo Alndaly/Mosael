@@ -37,11 +37,12 @@ backend/dist/
 release/
 
 # 根 build/ 既是构建暂存区(随包分发的 CPython 落在这里),又存着少数**必须入库**的打包输入。
-# 所以整体忽略、逐个放行——放行的这三个是源文件,不是产物:
+# 所以整体忽略、逐个放行——放行的都是源文件或打包输入,不是产物:
 #   icon.png   应用图标源 + 运行时托盘图标(见 electron/system/tray.ts,已在 package.json 的 files 里)
 #   icon.icns  macOS 图标
 #   installer.nsh  NSIS 定制脚本(卸载前 taskkill 后端进程)
 /build/*
+!/build/app-update.yml
 !/build/icon.png
 !/build/trayTemplate.png
 !/build/trayTemplate@2x.png

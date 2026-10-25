@@ -109,6 +109,7 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 
 - 公证完成的 macOS arm64 `.dmg`。
 - 应用内更新产物:macOS `Mosael-VERSION-mac-signed.zip`(同一份已签名/公证的 `.app` ZIP,不是 DMG)和 Windows NSIS 安装包。`latest-mac.yml` / `latest.yml` 由 `scripts/write-update-metadata.mjs` 从**最终二进制**生成并上传;缺了它们,`electron-updater` 找不到更新。
+  每个 `.app` / NSIS 包还必须内嵌 `resources/app-update.yml`（由 `build/app-update.yml` 经 `extraResources` 拷入），声明 GitHub owner/repo 和 updater 缓存目录；`test/bundle.smoke.mjs` 会在启动前检查它。只上传元数据而漏掉包内配置，会在下载开始时报 `ENOENT: …/app-update.yml`。
   手动交接时:macOS ZIP 用与公证相同的那份 ditto 产物,Windows 用同一次构建的 NSIS 安装包。`write-update-metadata.mjs` 会把 sha512 写进元数据;不要手抄或从旧版复制。
   本地最终发布目录 `dist/VERSION/` 也应包含 `latest-mac.yml` / `latest.yml`,Release 的下载地址才能被应用内更新读到。
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。

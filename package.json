@@ -64,6 +64,10 @@
     ],
     "extraResources": [
       {
+        "from": "build/app-update.yml",
+        "to": "app-update.yml"
+      },
+      {
         "from": "backend/dist/mosael-backend",
         "to": "backend/mosael-backend"
       },

@@ -1550,6 +1550,7 @@ app.whenReady().then(async () => {
     setTimeout,
     setInterval,
     getRunningJobs: () => lastSystemStatus.runningJobs,
+    onInstall: () => system?.markQuitting(),
     emit: (kind, payload) => {
       const channel = kind === "available" ? IPC.event.updateAvailable : IPC.event.updateProgress;
       for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);

@@ -48,6 +48,17 @@ async function freePort() {
 
 const executable = packagedExecutable();
 if (!executable) throw new Error("packaged Electron executable not found under release/");
+const updaterConfig = process.platform === "darwin"
+  ? resolve(executable, "../../Resources/app-update.yml")
+  : resolve(executable, "../resources/app-update.yml");
+if (!existsSync(updaterConfig)) {
+  throw new Error(`packaged updater configuration not found: ${updaterConfig}`);
+}
+const updaterConfigText = readFileSync(updaterConfig, "utf8");
+for (const required of ["provider: github", "owner: Alndaly", "repo: Mosael", "updaterCacheDirName:"]) {
+  if (!updaterConfigText.includes(required)) throw new Error(`incomplete updater configuration: missing ${required}`);
+}
+
 
 const scratch = mkdtempSync(join(tmpdir(), "mosael-bundle-smoke-"));
 const dataDir = join(scratch, "data");

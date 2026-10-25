@@ -19,7 +19,7 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout: later, setInterval: every, getRunningJobs = () => 0 }) {
+function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout: later, setInterval: every, getRunningJobs = () => 0, onInstall = () => {} }) {
   const enabled = !isDev && Boolean(autoUpdater);
   const current = app.getVersion();
   let latest = "";
@@ -134,7 +134,9 @@ function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout:
       emitProgress({ error: "update_jobsRunning" });
       return info({ error: "update_jobsRunning" });
     }
-    // 静默安装并强制重启。before-quit 里已有的后端/发布器收尾照常执行。
+    // macOS 的 Squirrel 可能在 before-quit 之前关窗;先退出常驻模式,
+    // 否则 residency 的 close 拦截会把这次安装改写成隐藏窗口。
+    onInstall();
     autoUpdater.quitAndInstall(true, true);
     return info({ phase: "installing" });
   }

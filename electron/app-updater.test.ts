@@ -40,6 +40,7 @@ function updater(): FakeUpdater {
 
 function setup({ dev = false, runningJobs = 0 }: { dev?: boolean; runningJobs?: number } = {}) {
   const events: Array<{ kind: string; info: Record<string, unknown> }> = [];
+  const onInstall = vi.fn();
   const updaterInstance = updater();
   const controller = createAppUpdater({
     app: { getVersion: () => "2.2.1" },
@@ -56,8 +57,9 @@ function setup({ dev = false, runningJobs = 0 }: { dev?: boolean; runningJobs?: 
     setTimeout: vi.fn(),
     setInterval: vi.fn(),
     getRunningJobs: () => runningJobs,
+    onInstall,
   });
-  return { controller, updater: updaterInstance, events };
+  return { controller, updater: updaterInstance, events, onInstall };
 }
 
 describe("应用内更新", () => {
@@ -68,7 +70,7 @@ describe("应用内更新", () => {
   });
 
   it("打包版:发现更新 → 下载进度 → 下载完成 → 静默安装并重启", async () => {
-    const { controller, updater, events } = setup();
+    const { controller, updater, events, onInstall } = setup();
     expect(updater.setFeedURL).toHaveBeenCalledWith({ provider: "github", owner: "Alndaly", repo: "Mosael" });
     expect(updater.autoDownload).toBe(false);
     expect(updater.autoInstallOnAppQuit).toBe(false);
@@ -88,6 +90,7 @@ describe("应用内更新", () => {
     const installing = controller.install();
     expect(installing.phase).toBe("installing");
     expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true);
+    expect(onInstall).toHaveBeenCalledTimes(1);
   });
 
   it("同一轮下载不重复发起", async () => {
@@ -109,11 +112,12 @@ describe("应用内更新", () => {
     expect(updater.quitAndInstall).not.toHaveBeenCalled();
   });
   it("有任务在跑时先不重启", async () => {
-    const { controller, updater } = setup({ runningJobs: 1 });
+    const { controller, updater, onInstall } = setup({ runningJobs: 1 });
     await controller.check();
     await controller.download();
     expect(controller.install()).toMatchObject({ phase: "deferred", error: "update_jobsRunning" });
     expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    expect(onInstall).not.toHaveBeenCalled();
   });
 
   it("开发模式只读检查,不给应用内安装", async () => {

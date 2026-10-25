@@ -22,7 +22,7 @@ export function isQuitting(): boolean {
   return quitting;
 }
 
-/** 供宿主在 before-quit 里调用。 */
+/** 供宿主在原生更新器 quitAndInstall 之前调用;它可能早于 before-quit 关窗。 */
 export function markQuitting(): void {
   quitting = true;
 }
@@ -51,6 +51,10 @@ export const residency: Capability = {
 
     return {
       dispose: () => {
+        // 宿主在 before-quit 里先注销能力;自己的 before-quit 监听随即被移除,
+        // 没机会再补记 quitting。注销本身就代表常驻行为停止,否则 app.quit()
+        // 会被下面的 close 拦截改写成 hide,更新安装也永远等不到进程退出。
+        quitting = true;
         app.off("before-quit", onBeforeQuit);
       },
     };

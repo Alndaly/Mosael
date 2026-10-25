@@ -80,6 +80,7 @@ node scripts/verify-mac-signing.cjs /path/to/Mosael.app
 
 必须收到 Apple 的 Accepted 结果，完成票据、Gatekeeper 与完整应用验证后，才能将应用封装成最终 DMG 并发布。最终分发容器也应提交公证并附加票据。此流程不使用关闭时间戳的本地 QA 包作为分发产物。
 应用内更新还要发布 `latest-mac.yml` / `latest.yml`:DMG 是首次安装包,Squirrel 更新读取的是同一个已签名、已公证 `.app` 的 ZIP 和对应 sha512 元数据。元数据由 `scripts/write-update-metadata.mjs` 从最终二进制生成,不从旧版本复制。
+包内 `Contents/Resources/app-update.yml` 同样不可缺：它声明更新源和缓存目录，由 `build/app-update.yml` 在打包时写入；打包冒烟会拒绝缺少这份配置的产物。
 
 ## Touch ID 的运行条件
 
