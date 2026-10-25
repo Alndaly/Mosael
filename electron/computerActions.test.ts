@@ -14,6 +14,7 @@ import vm from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
 const MAIN = fs.readFileSync(path.resolve(__dirname, "main.cjs"), "utf8");
+const DRIVER = fs.readFileSync(path.resolve(__dirname, "computerUse/ownWindowDriver.cjs"), "utf8");
 
 // CommonJS is intentional: main.cjs loads this exact runtime contract.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,9 +26,10 @@ const contract = require("./ipc-contract.cjs") as {
 };
 
 function sourceOf(name: string): string {
-  const found = MAIN.match(new RegExp(`\\n(?:async )?function ${name}\\([\\s\\S]*?\\n\\}\\n`))?.[0];
-  if (!found) throw new Error(`${name} 没在 main.cjs 里找到`);
-  return found;
+  const pattern = new RegExp(`\\n(?:async )?function ${name}\\([\\s\\S]*?\\n\\}\\n`);
+  const found = DRIVER.match(pattern) ?? MAIN.match(pattern);
+  if (!found) throw new Error(`${name} 没在 ownWindowDriver.cjs 里找到`);
+  return found[0];
 }
 
 type FakeWindow = {

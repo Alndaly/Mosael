@@ -5,7 +5,7 @@
 - 相关：ADR 0021 / 0044（确认卡与效果）、ADR 0032（宿主能力）、ADR 0038（工作台）
 - 代码位置：`backend/app/domain/agent/computer_use.py`、`backend/app/domain/agent/confirmable/computer_use.py`、
   `electron/main.cjs`（回环桥）、`electron/computerUseGuard.cjs`、`electron/computerUseOverlay.cjs`、
-  `electron/computerUseCursor.cjs`
+  `electron/computerUseCursor.cjs`、`electron/computerUse/ownWindowDriver.cjs`（ADR 0081 的驱动端口）
 
 > 这一份是**决定书**：写清现在是什么、为什么这么定。原来的「P0 计划」与 2026-10-22 的「修订」
 > 已经并入下面的决定里 —— 不再用一节后记去推翻正文（那种写法让人只看正文时拿到相反规则）。

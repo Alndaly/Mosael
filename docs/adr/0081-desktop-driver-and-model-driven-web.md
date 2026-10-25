@@ -1,10 +1,10 @@
 # ADR 0081 · 桌面级驱动（L3）与模型驱动网页（L2）：先立端口，再自研
 
-- 状态：**Accepted（方向已定，未开工）** — 2026-10-24。维护者拍板：**L2 要做**（「任何网站上的任何事
+- 状态：**Accepted（P0 已完成）** — 2026-10-24 定方向，2026-10-25 完成 P0。维护者拍板：**L2 要做**（「任何网站上的任何事
   都能做」）、**回放要做且记全量**、**L3 倾向自研**
 - 相关：[ADR 0075](0075-computer-use.md)（三层的边界与安全模型）、ADR 0044（确认卡）、
   ADR 0080（发布域的契约与判定原语 —— L2 确定性那一半）
-- 代码位置（将新增）：`electron/computerUse/`（驱动端口与实现）、`backend/app/domain/agent/computer_use.py`（工具层）
+- 代码位置：`electron/computerUse/ownWindowDriver.cjs`（DesktopDriver 端口与 L1 实现）、`backend/app/domain/agent/computer_use.py`（工具层）
 
 ## 要解决什么
 
@@ -27,9 +27,10 @@ DesktopDriver
   capabilities() → { tree, screenshots, input, platforms }        // 能力探测
 ```
 
-- 端口放在 `electron/computerUse/`，**不认识任何具体平台**（不认识抖音、不认识 Finder）；
+- 端口放在 `electron/computerUse/ownWindowDriver.cjs`，**不认识任何具体平台**（不认识抖音、不认识 Finder）；
 - 今天 L1 的实现包成 `OwnWindowDriver`（`capturePage` + `sendInputEvent`）—— 这一步是**纯重构**，
-  行为不变、测试仍跑在现有守卫/overlay/cursor 上；
+  行为不变、测试仍跑在现有守卫/overlay/cursor 上。`observe` 返回主窗口截图与空 `elements`（L1 没有可访问性树），
+  `act` 只认 click / type / scroll，`verify` 明确 `verify_not_supported`，不冒充已验证；
 - L2 / L3 各是这层端口的另两个实现（`BrowserDriver` / `DesktopDriver`），由开关决定挂不挂。
 
 ## 决定 2 · 感知：元素令牌优先，像素只做兜底
@@ -90,7 +91,7 @@ DesktopDriver
 
 | 阶段 | 内容 | 判定"做完了" |
 | --- | --- | --- |
-| P0 | `DesktopDriver` 端口 + `OwnWindowDriver`（把 L1 装进去） | 现有 CUA 测试全绿，行为零变化 |
+| P0 | `DesktopDriver` 端口 + `OwnWindowDriver`（把 L1 装进去） | ✅ 现有 CUA 测试全绿，行为零变化（2026-10-25） |
 | P1 | L3 只读：窗口枚举 + 窗口截图 + 可访问性树快照（**不注入**） | 能在 Finder / 预览里读出树并截图，权限引导可走通 |
 | P2 | L3 动作：点击 / 输入 / 滚动（令牌 + 像素兜底） | 三个真实 App 各完成一件小事（新建文件夹、翻页、关闭弹窗） |
 | P3 | 回放：时间线落盘 + 用户可见 | 一次 L3 会话能从时间线复现"第几步错" |

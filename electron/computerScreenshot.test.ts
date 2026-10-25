@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
 const MAIN = fs.readFileSync(path.resolve(__dirname, "main.cjs"), "utf8");
+const DRIVER = fs.readFileSync(path.resolve(__dirname, "computerUse/ownWindowDriver.cjs"), "utf8");
 
 // CommonJS is intentional: main.cjs and preload.cjs load this exact runtime contract.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -26,9 +27,10 @@ const contract = require("./ipc-contract.cjs") as {
 
 function sourceOf(name: string): string {
   // 顶层函数以列 0 的 `}` 收尾;内层块都是缩进的,所以非贪婪匹配不会截到半个函数。
-  const found = MAIN.match(new RegExp(`\\n(?:async )?function ${name}\\([\\s\\S]*?\\n\\}\\n`))?.[0];
-  if (!found) throw new Error(`${name} 没在 main.cjs 里找到`);
-  return found;
+  const pattern = new RegExp(`\\n(?:async )?function ${name}\\([\\s\\S]*?\\n\\}\\n`);
+  const found = DRIVER.match(pattern) ?? MAIN.match(pattern);
+  if (!found) throw new Error(`${name} 没在 ownWindowDriver.cjs 里找到`);
+  return found[0];
 }
 
 type FakeImage = {
@@ -207,10 +209,9 @@ describe("接线:IPC + 回环桥都走同一个拍摄函数", () => {
     //: 渲染层这条路和桥走**同一个**拍摄函数:参数只有主窗口。
     //: 此前重构漏了这一处,仍是旧签名 `captureMosaelWindow(parseComputerScreenshot(payload), …)`,
     //: 于是 `{}` 被当成窗口交给 `computerUseWindow`,永远回「没有 Mosael 窗口」。
-    expect(MAIN).toMatch(/handle\(IPC\.invoke\.computerScreenshot,[\s\S]{0,240}?captureMosaelWindow\(mainWindow\)/);
-    expect(MAIN).not.toMatch(/captureMosaelWindow\(\s*parseComputerScreenshot/);
-    //: 桥的截图 handler 直接把**主窗口**交给拍摄函数 —— 没有"按名字挑窗口"这一步了。
-    expect(MAIN).toMatch(/\[IPC\.invoke\.computerScreenshot\]: \(\) => captureMosaelWindow\(mainWindow\)/);
+    expect(MAIN).toMatch(/handle\(IPC\.invoke\.computerScreenshot,[\s\S]{0,240}?computerUseDriver\.observe\(\)/);
+    //: 桥的截图 handler 直接把**主窗口**交给驱动 —— 没有"按名字挑窗口"这一步了。
+    expect(MAIN).toMatch(/\[IPC\.invoke\.computerScreenshot\]: \(\) => computerUseDriver\.observe\(\)/);
   });
 
   it("后端那条桥只认写死的那几条 computer 通道,并复用同一份解析器与动作函数", () => {
@@ -285,6 +286,7 @@ function bridgeSources(): string {
     constant("HOST_BRIDGE_FILE"),
     constant("HOST_BRIDGE_MAX_REQUEST"),
     "let hostBridge = null;\nlet hostBridgeStarting = null;\n",
+    "const computerUseDriver = new OwnWindowDriver(() => mainWindow);\n",
     sourceOf("hostBridgeFile"),
     sourceOf("computerUseWindow"),
     sourceOf("captureMosaelWindow"),
@@ -344,6 +346,7 @@ async function startBridge(options: { windows: FakeWindow[]; main?: FakeWindow |
     fs,
     path,
     crypto,
+    OwnWindowDriver: require("./computerUse/ownWindowDriver.cjs").OwnWindowDriver,
     nodeNet: net,
     configuredDataDir: dataDir,
     appendMainLog: (scope: string, message: unknown) => {
