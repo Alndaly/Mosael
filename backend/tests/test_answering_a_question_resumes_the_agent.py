@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.db import SessionLocal
-from app.db.models import AgentMessage, AgentQuestion, AgentSession
+from app.db.models import AgentMessage, AgentQuestion, AgentSession, User
 from app.domain.agent import host
 from tests.util import fresh_client
 
@@ -180,6 +180,37 @@ def test_那一轮还在跑时答案插进去而不是排队(monkeypatch: pytest
     assert len(sent) == 1 and "告白场景" in sent[0], sent
     # 落库了(对话里读得到这句),但**不带 queued 标** —— 它不是待办,是已经说出去的话。
     assert _queued_flags(session_id) == [False]
+
+
+def test_重启后排队消息会重新_drain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """会话忙时排着的那条消息，重启后没有线程会接；启动对账必须把它捞起来。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        me = db.query(User).first()
+        session = host.get_or_create_external_session(
+            db,
+            workspace_id=workspace["id"],
+            origin="feishu",
+            external_key="feishu:bot-queue-test:oc_queue",
+            title="飞书 · 队列",
+        )
+        db.add(AgentMessage(
+            session_id=session.id,
+            role="user",
+            content="排队的一条",
+            payload={"queued": True, "queued_by": me.id},
+        ))
+        db.commit()
+        session_id = session.id
+
+    drained: list[str] = []
+    monkeypatch.setattr(host, "_drain_queue", lambda one: drained.append(one))
+    with SessionLocal() as db:
+        host.reconcile_orphaned_agent_sessions(db)
+        db.commit()
+
+    assert session_id in drained
 
 
 def test_插不进去就还是排队__答案不许掉进空里(monkeypatch: pytest.MonkeyPatch) -> None:

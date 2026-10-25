@@ -51,6 +51,41 @@ def test_seen_recently_dedupes() -> None:
     assert inbound.seen_recently(message_id) is True
 
 
+def test_feishu_inbound_messages_are_claimed_durably() -> None:
+    """进程内 seen 重启就没了;收件箱表按 (bot, message) 跨重启认领。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    bot = client.post(
+        "/api/feishu/bots",
+        json={"workspace_id": ws["id"], "app_id": "cli_claim", "app_secret": "s"},
+    ).json()
+    message_id = f"m-{time.time_ns()}"
+
+    assert inbound._claim_inbound(bot["id"], message_id) is True
+    assert inbound._claim_inbound(bot["id"], message_id) is False, "processing 不能被第二个线程抢走"
+    inbound._settle_inbound(bot["id"], message_id, "done")
+    assert inbound._claim_inbound(bot["id"], message_id) is False, "done 永远不再跑"
+
+    retry_id = f"m-{time.time_ns()}"
+    assert inbound._claim_inbound(bot["id"], retry_id) is True
+    inbound._settle_inbound(bot["id"], retry_id, "failed")
+    assert inbound._claim_inbound(bot["id"], retry_id) is True, "failed 允许飞书重投后再试"
+
+
+def test_inbound_thread_contains_unexpected_errors(monkeypatch) -> None:
+    """线程入口不能把异常放出去 —— 那会带着 thread 一起死,消息已 seen 就没人再处理。"""
+    from app.integrations.feishu import connections
+
+    class Connection:
+        bot_id = "bot-1"
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(inbound, "handle_incoming", explode)
+    connections._run_incoming(Connection(), {"message_id": "m-1", "chat_id": "oc"})
+
+
 def test_bot_crud_and_permissions() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

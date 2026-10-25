@@ -17,13 +17,25 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import replace
+from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.core.i18n import DEFAULT_LOCALE, t
-from app.db.models import AgentMessage, AgentSession, FeishuBot, Job, Workflow, WorkflowTrigger, WorkflowTriggerEvent
+from app.db.models import (
+    AgentMessage,
+    AgentSession,
+    FeishuBot,
+    FeishuInboundMessage,
+    Job,
+    Workflow,
+    WorkflowTrigger,
+    WorkflowTriggerEvent,
+    now,
+)
 from app.domain.agent import origins
 from app.domain.agent.host import get_or_create_external_session, post_user_message
 from app.domain.feishu import bindings
@@ -79,6 +91,62 @@ def seen_recently(message_id: str, window_seconds: float = 300) -> bool:
             return True
         _seen[message_id] = time.monotonic()
         return False
+
+
+#: `processing` 超过这么久还留着,说明进程死在半路;允许飞书重投时接管。
+INBOUND_CLAIM_STALE_SECONDS = 900
+
+
+def _claim_inbound(bot_id: str, message_id: str) -> bool:
+    """在持久收件箱里认领这条消息。False = 已经完成,或在另一个线程手里。
+
+    飞书事件是至少一次投递,进程内 `seen_recently` 重启就没了;这张表跨重启。`failed` 和
+    过期的 `processing` 允许重试,`done` 永远不再跑。
+    """
+    stamp = now()
+    with SessionLocal() as db:
+        try:
+            db.add(FeishuInboundMessage(bot_id=bot_id, message_id=message_id, status="processing", updated_at=stamp))
+            db.commit()
+            return True
+        except IntegrityError:
+            db.rollback()
+        row = db.get(FeishuInboundMessage, {"bot_id": bot_id, "message_id": message_id})
+        if row is None or row.status == "done":
+            return False
+        if row.status == "processing" and row.updated_at and row.updated_at >= stamp - timedelta(
+            seconds=INBOUND_CLAIM_STALE_SECONDS
+        ):
+            return False
+        claimed = db.execute(
+            update(FeishuInboundMessage)
+            .where(
+                FeishuInboundMessage.bot_id == bot_id,
+                FeishuInboundMessage.message_id == message_id,
+                FeishuInboundMessage.status == row.status,
+                FeishuInboundMessage.updated_at == row.updated_at,
+            )
+            .values(status="processing", updated_at=stamp)
+            .execution_options(synchronize_session=False)
+        )
+        db.commit()
+        return claimed.rowcount == 1
+
+
+def _settle_inbound(bot_id: str, message_id: str, status: str) -> None:
+    """把认领行收成 done / failed。只从 processing 收,不覆盖别人已经写下的终态。"""
+    with SessionLocal() as db:
+        db.execute(
+            update(FeishuInboundMessage)
+            .where(
+                FeishuInboundMessage.bot_id == bot_id,
+                FeishuInboundMessage.message_id == message_id,
+                FeishuInboundMessage.status == "processing",
+            )
+            .values(status=status, updated_at=now())
+            .execution_options(synchronize_session=False)
+        )
+        db.commit()
 
 
 CAPABILITY_NOTES = {
@@ -301,9 +369,15 @@ def handle_incoming(
         #: 一个字节都没变"),面板上那一行 `throttled` 照旧留痕。附件在上面已经为这次运行收过一遍,
         #: 下面接着用 —— 不再下载一次,也不再入库一份(入库自己 commit,多一份就是白得的)。
 
+    # 持久幂等闸:同一 (bot, message) 跨进程重启也只跑一次。放在触发器之后、附件下载之前 ——
+    # 重投的消息不该再下载/入库一遍素材;认领失败时也不会留下 Typing。
+    if not _claim_inbound(bot.id, message_id):
+        return
+
     if message_type not in SUPPORTED_MESSAGE_TYPES:
         #: 走到这里 = 文件 / 视频,**而没有任何触发器接它**:回到最开始那句话,行为和以前一模一样。
         client.send_text(bot, chat_id, _describe_unsupported(message_type))
+        _settle_inbound(bot.id, message_id, "done")
         return
 
     if image_keys:
@@ -312,6 +386,7 @@ def handle_incoming(
             asset_ids, _ = _ingest_attachments(bot, workspace_id, message_id, message_type, content_json)
         if not asset_ids:
             client.send_text(bot, chat_id, "图片没能取回来(飞书资源下载失败),换一张或稍后再试。")
+            _settle_inbound(bot.id, message_id, "failed")
             return
         # 图片先入素材库,再把素材 id 写进提示 —— 智能体靠 analyze_asset 看图,和桌面端
         # 回形针走的是同一条路(上传成素材 → 在提示里引用),不是给飞书单开一套。
@@ -321,32 +396,42 @@ def handle_incoming(
         )
         text = f"{text}\n{note}" if text else note
 
-    # 「码字中」指示:给用户那条消息贴 Typing 反应,飞书客户端渲染成动画输入指示。
-    # **先贴再交**:这一轮可能在 post_user_message 返回之前就跑完了,收尾时得找得到它。
-    typing_reaction = client.add_reaction(bot, message_id, client.REACTION_TYPING)
-    with SessionLocal() as db:
-        session = get_or_create_external_session(
-            db,
-            workspace_id=workspace_id,
-            origin="feishu",
-            external_key=f"feishu:{bot.id}:{chat_id}",
-            title=f"飞书 · {bot.name}",
-        )
-        user = bindings.resolve_sender(db, workspace_id, bot.id, sender_open_id)
-        if user is None:
-            if typing_reaction:
-                client.remove_reaction(bot, message_id, typing_reaction)
-            return
-        _awaiting(session.id, message_id, typing_reaction)
-        try:
+    # 先确保会话存在,再贴 Typing:反过来的话,会话创建失败(尤其是首条消息的并发唯一键)
+    # 会把一个没人收尾的反应留在用户消息上。会话认出人之后,整个交付段由一个 try 兜住。
+    session_id: str | None = None
+    typing_reaction: str | None = None
+    try:
+        with SessionLocal() as db:
+            session = get_or_create_external_session(
+                db,
+                workspace_id=workspace_id,
+                origin="feishu",
+                external_key=f"feishu:{bot.id}:{chat_id}",
+                title=f"飞书 · {bot.name}",
+            )
+            user = bindings.resolve_sender(db, workspace_id, bot.id, sender_open_id)
+            if user is None:
+                _settle_inbound(bot.id, message_id, "done")
+                return
+            session_id = session.id
+            # 「码字中」指示:给用户那条消息贴 Typing 反应,飞书客户端渲染成动画输入指示。
+            # 先贴再交:这一轮可能在 post_user_message 返回之前就跑完了,收尾时得找得到它。
+            typing_reaction = client.add_reaction(bot, message_id, client.REACTION_TYPING)
+            _awaiting(session_id, message_id, typing_reaction)
             post_user_message(db, session, text, user)
-        except Exception:
-            logger.exception("feishu message could not be handed to the agent bot=%s", bot_id)
-            _settle(session.id)
-            if typing_reaction:
-                client.remove_reaction(bot, message_id, typing_reaction)
-            client.add_reaction(bot, message_id, client.REACTION_FAILURE)
+        _settle_inbound(bot.id, message_id, "done")
+    except Exception:
+        logger.exception("feishu message could not be handed to the agent bot=%s", bot_id)
+        _settle_inbound(bot.id, message_id, "failed")
+        if session_id is not None:
+            _settle(session_id)
+        if typing_reaction:
+            client.remove_reaction(bot, message_id, typing_reaction)
+        client.add_reaction(bot, message_id, client.REACTION_FAILURE)
+        try:
             client.send_text(bot, chat_id, "消息没能交给智能体,请查看后端日志。")
+        except Exception:  # noqa: BLE001 —— 兜底本身失败也不能再抛
+            logger.warning("feishu handoff fallback message failed bot=%s", bot_id, exc_info=True)
 
 
 # ---------------- 触发器认领了这条消息(ADR 0065)----------------

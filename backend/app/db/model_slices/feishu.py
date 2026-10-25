@@ -62,3 +62,28 @@ class FeishuBindCode(Base):
     code: Mapped[str] = mapped_column(String(16), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class FeishuInboundMessage(Base):
+    """飞书入站消息的持久幂等收件箱。
+
+    飞书的事件投递是**至少一次**(重连、重放、ack 丢失都会重投);进程内的 `seen_recently`
+    重启就没了。这张表按 `(bot_id, message_id)` 认一条消息,让智能体路径和触发器路径一样
+    有跨重启的去重。
+
+    `status` 三态:
+    - `processing`:已被某个线程认领,正在交付;
+    - `done`:已经交给会话管线,不再重复跑;
+    - `failed`:交付失败,允许飞书重投时再试。
+
+    `processing` 超过 `INBOUND_CLAIM_STALE_SECONDS` 视为进程死在半路,后来的投递可以接管。
+    """
+
+    __tablename__ = "feishu_inbound_messages"
+
+    bot_id: Mapped[str] = mapped_column(
+        ForeignKey("feishu_bots.id", ondelete="CASCADE"), primary_key=True
+    )
+    message_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="processing")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

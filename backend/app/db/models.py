@@ -54,7 +54,7 @@ from app.db.model_slices.usage import ProviderPricingRule, ProviderUsageEvent  #
 from app.db.model_slices.runtime_config import AsrConfig, AiRuntimeConfig, DenoiseConfig, DeploymentConfig, MediaToolsConfig, NetworkConfig, TtsConfig, VoiceDefaultConfig  # noqa: E402,F401
 from app.db.model_slices.generation import GeneratedAsset, GenerationJob, GenerationSession  # noqa: E402,F401
 from app.db.model_slices.agent import SESSION_GROUP_KINDS, AgentMemory, AgentMessage, AgentSkill, AgentQuestion, AgentSession, SessionGroup, ToolConfirmation  # noqa: E402,F401
-from app.db.model_slices.feishu import FeishuBindCode, FeishuBinding, FeishuBot  # noqa: E402,F401
+from app.db.model_slices.feishu import FeishuBindCode, FeishuBinding, FeishuBot, FeishuInboundMessage  # noqa: E402,F401
 from app.db.model_slices.local_services import LocalService  # noqa: E402,F401
 from app.db.model_slices.plugins import ModelFileMark, PluginCapability, PluginCapabilityDefault, PluginCredential, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage, PluginPermissionGrant, PluginPublicLink  # noqa: E402,F401
 from app.db.model_slices.references import RecordReference, RecordReferenceIndex  # noqa: E402,F401

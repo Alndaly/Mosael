@@ -325,6 +325,12 @@
     "updated_at",
     "workspace_id"
   ],
+  "feishu_inbound_messages": [
+    "bot_id",
+    "message_id",
+    "status",
+    "updated_at"
+  ],
   "fonts": [
     "created_at",
     "family",

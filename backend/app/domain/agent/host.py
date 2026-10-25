@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from sqlalchemy import and_, exists, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ai.sidecar.pi_client import SidecarError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
@@ -262,9 +263,18 @@ def get_or_create_external_session(
     existing = db.scalar(select(AgentSession).where(AgentSession.external_key == external_key))
     if existing is not None:
         return existing
-    return create_session(
-        db, workspace_id=workspace_id, home=STUDIO_PLACE, origin=origin, external_key=external_key, title=title,
-    )
+    # 首条消息并发到达时两个线程都会看到“还不存在”。唯一键(见 AgentSession.external_key)
+    # 负责裁决;**输的那一方不能把线程带走** —— 用保存点接住 IntegrityError,重新读赢家写的行。
+    try:
+        with db.begin_nested():
+            return create_session(
+                db, workspace_id=workspace_id, home=STUDIO_PLACE, origin=origin, external_key=external_key, title=title,
+            )
+    except IntegrityError:
+        existing = db.scalar(select(AgentSession).where(AgentSession.external_key == external_key))
+        if existing is None:
+            raise
+        return existing
 
 
 class HostError(LocalizedError, RuntimeError):
@@ -1218,6 +1228,12 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
             )
             .values(status=card_expiry.EXPIRED, error=card_expiry.EXPIRY_BACKEND_RESTARTED, resolved_at=now())
         )
+    #: 被重启打断的不只是回执:会话忙时排队的那条用户消息也没有线程了。此前只有回执会
+    #: 重新 drain,排队的消息会永远躺着,而下一条新消息还会插到它前面。所有飞书会话在这里
+    #: 对一次账 —— 还在 pending 的 queued 消息就是该接着跑的那一轮。
+    for session in db.scalars(select(AgentSession).where(AgentSession.origin == "feishu")).all():
+        if session.id not in redeliver and _runnable_queued(db, session):
+            redeliver.append(session.id)
     if redeliver:
         #: 提交之后才 drain:它开自己的会话、起一轮,得读到刚提交的「待送」。
         after_commit(db, lambda: [_drain_queue(session_id) for session_id in redeliver])

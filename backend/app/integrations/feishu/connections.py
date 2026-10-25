@@ -68,18 +68,32 @@ def _is_current(connection: Connection) -> bool:
         return _processes.get(connection.bot_id) is connection
 
 
+def _run_incoming(connection: Connection, event: dict[str, Any]) -> None:
+    """一条入站消息的线程入口:任何异常都只能留日志,不能带着线程一起死。"""
+    try:
+        inbound.handle_incoming(
+            connection.bot_id,
+            str(event.get("chat_id") or ""),
+            str(event.get("message_id") or ""),
+            sender_open_id=str(event.get("open_id") or ""),
+            message_type=str(event.get("message_type") or ""),
+            content_json=str(event.get("content") or ""),
+        )
+    except Exception:  # noqa: BLE001 —— 线程入口:没有第二个地方能接住
+        logger.exception(
+            "feishu inbound crashed bot=%s message=%s",
+            connection.bot_id,
+            event.get("message_id"),
+        )
+
+
 def dispatch(connection: Connection, event: dict[str, Any]) -> None:
     """worker 转来的一条事件。慢活(一轮对话、一次批准)都丢给线程,读管道的循环不能停。"""
     kind = event.get("event")
     if kind == "message":
         threading.Thread(
-            target=inbound.handle_incoming,
-            args=(connection.bot_id, str(event.get("chat_id") or ""), str(event.get("message_id") or "")),
-            kwargs={
-                "sender_open_id": str(event.get("open_id") or ""),
-                "message_type": str(event.get("message_type") or ""),
-                "content_json": str(event.get("content") or ""),
-            },
+            target=_run_incoming,
+            args=(connection, event),
             daemon=True,
             name="feishu-inbound",
         ).start()
