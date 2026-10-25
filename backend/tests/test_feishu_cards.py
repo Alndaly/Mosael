@@ -1,5 +1,16 @@
 
 
+def _buttons(node):
+    if isinstance(node, dict):
+        if node.get("tag") == "button":
+            yield node
+        for value in node.values():
+            yield from _buttons(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _buttons(value)
+
+
 def test_有备注时按钮必须放在_form_里且是_form_submit():
     """飞书的卡片 schema 是硬校验:form 里没有提交按钮,**整张卡**会被拒。
 
@@ -17,9 +28,11 @@ def test_有备注时按钮必须放在_form_里且是_form_submit():
         timeout_hours=None,
     )
     form = next(element for element in card["elements"] if element.get("tag") == "form")
-    submits = [one for one in form["elements"] if one.get("action_type") == "form_submit"]
+    submits = list(_buttons(form))
     assert len(submits) == 2, "form 里必须有两个 form_submit(同意 / 拒绝),否则整张卡被飞书拒收"
     assert {one["value"]["action"] for one in submits} == {cards.ACTION_RUN_APPROVE, cards.ACTION_RUN_REJECT}
+    assert all(one.get("action_type") == "form_submit" for one in submits)
+    assert all(one.get("width") == "fill" for one in submits)
     #: **每个 form 按钮都要有 name** —— 缺了它整张卡仍被拒:
     #: `ErrCode: 200530, ErrPath: ROOT -> elements -> [3](tag: form) -> elements -> [1](tag: button),`
     #: `ErrMsg: name can not be empty string`
@@ -37,6 +50,8 @@ def test_没有备注时仍是普通按钮():
         timeout_hours=None,
     )
     assert not any(one.get("tag") == "form" for one in card["elements"]), "没备注就不该有 form"
-    action = next(one for one in card["elements"] if one.get("tag") == "action")
-    assert len(action["actions"]) == 2
-    assert action["actions"][0]["value"]["action"] == cards.ACTION_RUN_APPROVE
+    row = next(one for one in card["elements"] if one.get("tag") == "column_set")
+    buttons = list(_buttons(row))
+    assert len(buttons) == 2
+    assert buttons[0]["value"]["action"] == cards.ACTION_RUN_APPROVE
+    assert all(one.get("width") == "fill" for one in buttons)

@@ -204,11 +204,23 @@ def test_garbage_payloads_do_not_crash(ctx) -> None:
         assert "toast" in out, value
 
 
+def _card_buttons(node):
+    if isinstance(node, dict):
+        if node.get("tag") == "button":
+            yield node
+        for value in node.values():
+            yield from _card_buttons(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _card_buttons(value)
+
+
 def test_pending_card_has_both_buttons() -> None:
     card = cards.confirmation_card(confirmation_id="c1", tool="create_workflow", summary="建一条流", requested_by="pi")
-    actions = [e for e in card["elements"] if e.get("tag") == "action"][0]["actions"]
+    actions = list(_card_buttons(card))
     assert {a["value"]["action"] for a in actions} == {cards.ACTION_APPROVE, cards.ACTION_REJECT}
     assert all(a["value"]["confirmation_id"] == "c1" for a in actions)
+    assert all(a["width"] == "fill" for a in actions)
 
 
 def test_飞书卡片消息_id_会落库(ctx, monkeypatch) -> None:

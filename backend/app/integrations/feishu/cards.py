@@ -42,6 +42,29 @@ def _text(content: str) -> dict[str, Any]:
     return {"tag": "div", "text": {"tag": "lark_md", "content": content}}
 
 
+def _button_row(buttons: list[dict[str, Any]]) -> dict[str, Any]:
+    """同一行的按钮等宽铺满;按钮自身再 `fill`,不在右侧留空白。
+
+    `bisect` 让两个 column 等宽,`width: fill` 让按钮填满自己的 column。form 里的
+    `name` / `action_type` 原样保留,不改提交语义。
+    """
+    return {
+        "tag": "column_set",
+        "flex_mode": "bisect" if len(buttons) > 1 else "none",
+        "horizontal_spacing": "default",
+        "columns": [
+            {
+                "tag": "column",
+                "width": "weighted",
+                "weight": 1,
+                "vertical_align": "top",
+                "elements": [{**button, "width": "fill"}],
+            }
+            for button in buttons
+        ],
+    }
+
+
 def confirmation_card(*, confirmation_id: str, tool: str, summary: str, requested_by: str) -> dict[str, Any]:
     """待确认卡:说清「谁要动什么」,给同意/拒绝两个按钮。"""
     return {
@@ -50,23 +73,20 @@ def confirmation_card(*, confirmation_id: str, tool: str, summary: str, requeste
         "elements": [
             _text(f"**{summary or tool}**"),
             _text(f"工具:`{tool}`\n发起:{requested_by or '智能体'}"),
-            {
-                "tag": "action",
-                "actions": [
-                    {
-                        "tag": "button",
-                        "text": {"tag": "plain_text", "content": "同意"},
-                        "type": "primary",
-                        "value": {"action": ACTION_APPROVE, "confirmation_id": confirmation_id},
-                    },
-                    {
-                        "tag": "button",
-                        "text": {"tag": "plain_text", "content": "拒绝"},
-                        "type": "danger",
-                        "value": {"action": ACTION_REJECT, "confirmation_id": confirmation_id},
-                    },
-                ],
-            },
+            _button_row([
+                {
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "同意"},
+                    "type": "primary",
+                    "value": {"action": ACTION_APPROVE, "confirmation_id": confirmation_id},
+                },
+                {
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "拒绝"},
+                    "type": "danger",
+                    "value": {"action": ACTION_REJECT, "confirmation_id": confirmation_id},
+                },
+            ]),
         ],
     }
 
@@ -153,20 +173,21 @@ def approval_card(
                 {
                     "tag": "input",
                     "name": NOTE_FIELD,
+                    "width": "fill",
                     "placeholder": {"tag": "plain_text", "content": "备注(可留空)"},
                 },
-                #: **form 里的按钮必须有 `name`**：飞书表单提交靠它区分"点了哪一个" ——
-                #: 缺了它整张卡仍然被拒(实测 `ErrCode: 200530`,
-                #: `name can not be empty string`,路径指向 form -> button)。
-                *[{
-                    **button,
-                    "action_type": "form_submit",
-                    "name": button["value"]["action"].rsplit(".", 1)[-1],
-                } for button in buttons],
+                _button_row([
+                    {
+                        **button,
+                        "action_type": "form_submit",
+                        "name": button["value"]["action"].rsplit(".", 1)[-1],
+                    }
+                    for button in buttons
+                ]),
             ],
         })
     else:
-        elements.append({"tag": "action", "actions": buttons})
+        elements.append(_button_row(buttons))
     return {
         "config": {"wide_screen_mode": True},
         "header": {"template": "orange", "title": {"tag": "plain_text", "content": title or "需要你确认"}},

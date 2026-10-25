@@ -35,7 +35,7 @@ def message_card(spec: domain.CardSpec) -> dict[str, Any]:
             {
                 "tag": "action",
                 "actions": [
-                    {"tag": "button", "text": {"tag": "plain_text", "content": label}, "type": "primary", "url": link}
+                    {"tag": "button", "text": {"tag": "plain_text", "content": label}, "type": "primary", "width": "fill", "url": link}
                 ],
             }
         )
