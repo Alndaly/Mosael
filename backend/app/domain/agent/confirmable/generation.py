@@ -14,8 +14,12 @@ from app.domain.agent.errors import ConfirmationError
 
 def _asked_for(payload: dict[str, Any]) -> str:
     """卡上写出**要生成什么**。提示词/正文/选题三个键里哪个有就用哪个(四个工具各用一个);
-    不收提示词的模型(放大这类)什么字都没有,卡上就写用哪个模型。"""
-    return str(payload.get("prompt") or payload.get("text") or payload.get("topic") or payload.get("model") or "")[:80]
+    不收提示词的模型(放大这类)什么字都没有,卡上就写用哪个模型。
+
+    **不在这里截断。** 确认卡是批准前唯一能读到的原文;80 字切一半会让人以为那就是全部。
+    完整值进 `summary_params`,数据库里的 `summary` 只是默认语言快照,按列宽单独收口。
+    """
+    return str(payload.get("prompt") or payload.get("text") or payload.get("topic") or payload.get("model") or "")
 
 
 def _origin(confirmation: Any) -> Any:
@@ -120,7 +124,7 @@ def _validate_generate_sound(db: Session, workspace_id: str, payload: dict[str, 
     _check_generation_text(db, payload, actor, "audio")
 
 def _summarize_generate_sound(db: Session, payload: dict[str, Any]) -> Summary:
-    asked = _asked_for(payload) or str((payload.get("parameters") or {}).get("lyrics") or "")[:80]
+    asked = _asked_for(payload) or str((payload.get("parameters") or {}).get("lyrics") or "")
     return "confirm_generateSound", {"asked": asked}
 
 def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:

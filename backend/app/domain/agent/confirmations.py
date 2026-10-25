@@ -46,6 +46,14 @@ __all__ = [
 CARD_WARNING_PARAM = "warning"
 CARD_DETAIL_PARAMS = ("args",)
 
+#: `ToolConfirmation.summary` 列宽。完整事实在 `summary_params`;这里只保默认语言快照,
+#: 超长时带省略号收口,别让数据库静默切一半或写失败。
+_SUMMARY_STORAGE_CHARS = 500
+
+
+def _stored_summary(text: str) -> str:
+    return text if len(text) <= _SUMMARY_STORAGE_CHARS else text[: _SUMMARY_STORAGE_CHARS - 1].rstrip() + "…"
+
 
 def card_parts(summary_key: str, summary_params: dict[str, Any], locale: str) -> tuple[str, str]:
     """应用里那张卡的**标题**与**后果提示**,按读的人的语言。
@@ -115,7 +123,7 @@ def request_confirmation(
         workspace_id=workspace_id,
         tool=tool,
         permission=effective_permission(db, tool, payload),
-        summary=render_message(summary_key, DEFAULT_LOCALE, summary_params),
+        summary=_stored_summary(render_message(summary_key, DEFAULT_LOCALE, summary_params)),
         summary_key=summary_key,
         summary_params=summary_params,
         payload=payload,

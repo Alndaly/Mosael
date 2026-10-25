@@ -268,6 +268,36 @@ def test_generate_image_confirmation_carries_ai_cost_permission(monkeypatch) -> 
     assert job["status"] == "queued"
 
 
+def test_generate_image_confirmation_keeps_the_full_prompt() -> None:
+    """卡上那句话是批准前唯一能读到的原文,不能切在 80 字。全文同时进 summary_params。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    profile = client.post(
+        "/api/settings/providers",
+        json={"name": "百炼", "vendor": "alibaba", "config": {"api_key": "k"}},
+    ).json()
+    client.post(
+        f"/api/settings/providers/{profile['id']}/models",
+        json={"model_id": "qwen-image", "enabled": True, "capability_ids": ["image"]},
+    )
+    prompt = "真人实拍风格角色设定图," + "一位25岁左右的中国年轻女生," * 6
+    data = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws["id"],
+            "tool": "generate_image",
+            "payload": {
+                "prompt": prompt,
+                "provider": "alibaba",
+                "model": "qwen-image",
+                "parameters": {"size": "1024x1024"},
+            },
+        },
+    ).json()
+    assert prompt in data["summary"]
+    assert data["summary_params"]["asked"] == prompt
+
+
 def test_配音按音色认出配好了的云端引擎_不看语音合成默认模型(monkeypatch) -> None:
     """配音没有默认(引擎和音色成对选):此前留空引擎就去查「语音合成的默认模型」,把连接的 vendor(`openai`)
     当引擎 id 传下去 —— 合成那一步不认它,而界面上根本设不了那一格。现在按音色认:`nova` 是 OpenAI 的。

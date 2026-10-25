@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import FeishuBinding, FeishuBot, ToolConfirmation, User, WorkspaceMember
-from app.integrations.feishu import cards
+from app.integrations.feishu import approvals, cards
 from app.integrations.feishu.approvals import handle_card_action
 from tests.util import fresh_client
 
@@ -101,6 +103,29 @@ def ctx():
         me = db.scalars(__import__("sqlalchemy").select(User)).first()
         user_id, username = me.id, me.username
     return client, ws["id"], user_id, username
+
+
+def test_card_renders_the_full_prompt_not_the_stored_truncated_snapshot(monkeypatch) -> None:
+    """`summary` 是按列宽收口的快照;飞书卡必须按 summary_params 重渲染全文。"""
+    long_prompt = "真人实拍风格角色设定图," + "一位25岁左右的中国年轻女生," * 6
+    captured: dict = {}
+    monkeypatch.setattr(approvals, "_feishu_origin", lambda db, sid: (object(), "oc_chat"))
+    monkeypatch.setattr(cards, "confirmation_card", lambda **kwargs: captured.update(kwargs) or {"elements": []})
+    monkeypatch.setattr(approvals.client, "send_card", lambda *args, **kwargs: "om_sent")
+    confirmation = SimpleNamespace(
+        id="c1",
+        tool="generate_image",
+        session_id="s1",
+        summary="生成图片: 真人实拍风格角色设定图,一位25岁左右的中国年轻女生",
+        summary_key="confirm_generateImage",
+        summary_params={"asked": long_prompt},
+        requested_by="pi",
+    )
+
+    approvals.announce_confirmation(SimpleNamespace(), confirmation)
+
+    assert long_prompt in captured["summary"]
+    assert captured["summary"] != confirmation.summary
 
 
 def test_unbound_clicker_is_refused_and_card_stays_pending(ctx) -> None:
