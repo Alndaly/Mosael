@@ -428,12 +428,19 @@ def _left_for_the_agent(outcomes: list[Outcome], claimed: list[str]) -> bool:
 #: 每个会话里还在等回复的飞书消息(按到达顺序),收尾时摘掉它们的 Typing 反应。
 #: 一轮对应一条:会话正忙时后来的消息排队,host 按先来后到一条一轮地跑。
 _awaiting_replies: dict[str, list[tuple[str, str | None]]] = {}
+#: 智能体正在等用户操作(选择卡 / 确认卡)时,把当前消息的 Typing 反应先摘下来,存这里。
+#: 等完再把反应贴回去;回合收尾时连同这里一起清掉,避免超时后留下第二条。
+_paused_typing: dict[str, str] = {}
 _awaiting_lock = threading.Lock()
 
 
-def _awaiting(session_id: str, message_id: str, reaction_id: str | None) -> None:
+def _awaiting(session_id: str, message_id: str, reaction_id: str | None, *, front: bool = False) -> None:
     with _awaiting_lock:
-        _awaiting_replies.setdefault(session_id, []).append((message_id, reaction_id))
+        waiting = _awaiting_replies.setdefault(session_id, [])
+        if front:
+            waiting.insert(0, (message_id, reaction_id))
+        else:
+            waiting.append((message_id, reaction_id))
 
 
 def _settle(session_id: str) -> tuple[str, str | None] | None:
@@ -447,6 +454,58 @@ def _settle(session_id: str) -> tuple[str, str | None] | None:
         return first
 
 
+def _route_for_session(session_id: str) -> tuple[FeishuBot, str] | None:
+    with SessionLocal() as db:
+        session = db.get(AgentSession, session_id)
+        return _route(db, session) if session is not None else None
+
+
+def _pause_typing(session_id: str) -> None:
+    """智能体开始等用户操作:摘掉当前消息的 Typing,记下消息 id。"""
+    with _awaiting_lock:
+        if session_id in _paused_typing:
+            return
+        waiting = _awaiting_replies.get(session_id)
+        if not waiting:
+            return
+        message_id, reaction_id = waiting.pop(0)
+        if not waiting:
+            del _awaiting_replies[session_id]
+        _paused_typing[session_id] = message_id
+    if not reaction_id:
+        return
+    route = _route_for_session(session_id)
+    if route is None:
+        return
+    bot, _chat_id = route
+    try:
+        client.remove_reaction(bot, message_id, reaction_id)
+    except Exception:  # noqa: BLE001 —— 摘不掉只是多一个状态,不影响等待本身
+        logger.warning("feishu typing reaction remove failed session=%s", session_id, exc_info=True)
+
+
+def _resume_typing(session_id: str) -> None:
+    """等完(作答、跳过或超时):把 Typing 贴回原消息,收尾时仍由 `_settle` 摘。"""
+    with _awaiting_lock:
+        message_id = _paused_typing.pop(session_id, None)
+    if not message_id:
+        return
+    route = _route_for_session(session_id)
+    if route is None:
+        return
+    bot, _chat_id = route
+    reaction_id = client.add_reaction(bot, message_id, client.REACTION_TYPING)
+    if reaction_id:
+        _awaiting(session_id, message_id, reaction_id, front=True)
+
+
+def _waiting_for_user(session_id: str, waiting: bool) -> None:
+    if waiting:
+        _pause_typing(session_id)
+    else:
+        _resume_typing(session_id)
+
+
 def _route(db: Session, session: AgentSession) -> tuple[FeishuBot, str] | None:
     """external_key 形如 feishu:<bot_id>:<chat_id>;chat_id 里不含冒号。"""
     parts = (session.external_key or "").split(":", 2)
@@ -458,6 +517,8 @@ def _route(db: Session, session: AgentSession) -> tuple[FeishuBot, str] | None:
 
 def deliver_turn(session_id: str) -> None:
     """host 一轮收尾后调用:把最后一条助手消息发回原飞书会话,摘掉 Typing,失败的轮次贴个叉。"""
+    with _awaiting_lock:
+        _paused_typing.pop(session_id, None)
     waiting = _settle(session_id)
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
@@ -521,6 +582,7 @@ origins.register(
         turn_finished=deliver_turn,
         confirmation_opened=_announce,
         question_opened=_announce_question,
+        waiting_for_user=_waiting_for_user,
     ),
 )
 

@@ -117,3 +117,43 @@ def test_callback_answers_the_same_pending_question(monkeypatch) -> None:
     )
     assert "card" in out and "已提交" in str(out["card"]["data"])
     assert calls == [{"选一个风格": ["丰富"]}]
+
+
+def test_waiting_for_user_pauses_and_resumes_typing(monkeypatch) -> None:
+    from app.integrations.feishu import inbound
+
+    session_id = "feishu-typing-test"
+    inbound._paused_typing.pop(session_id, None)
+    inbound._awaiting_replies.pop(session_id, None)
+    inbound._awaiting(session_id, "om_1", "re_1")
+    calls: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(inbound, "_route_for_session", lambda sid: (object(), "oc_1"))
+    monkeypatch.setattr(
+        inbound.client,
+        "remove_reaction",
+        lambda bot, message, reaction: calls.append(("remove", message, reaction)),
+    )
+    monkeypatch.setattr(
+        inbound.client,
+        "add_reaction",
+        lambda bot, message, emoji: calls.append(("add", message, emoji)) or "re_2",
+    )
+
+    inbound._waiting_for_user(session_id, True)
+    assert calls == [("remove", "om_1", "re_1")]
+    assert session_id not in inbound._awaiting_replies
+    assert inbound._paused_typing[session_id] == "om_1"
+
+    inbound._waiting_for_user(session_id, False)
+    assert calls[-1] == ("add", "om_1", inbound.client.REACTION_TYPING)
+    assert inbound._awaiting_replies[session_id] == [("om_1", "re_2")]
+    assert inbound._settle(session_id) == ("om_1", "re_2")
+
+
+def test_waiting_finished_without_paused_typing_is_a_no_op(monkeypatch) -> None:
+    from app.integrations.feishu import inbound
+
+    called: list[str] = []
+    monkeypatch.setattr(inbound, "_route_for_session", lambda sid: called.append(sid) or None)
+    inbound._waiting_for_user("feishu-no-paused", False)
+    assert called == []

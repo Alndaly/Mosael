@@ -33,6 +33,9 @@ class ExternalOrigin:
     turn_finished: Callable[[str], None] | None = None
     confirmation_opened: Callable[[Session, ToolConfirmation], None] | None = None
     question_opened: Callable[[Session, AgentQuestion], None] | None = None
+    #: 智能体开始 / 结束等用户操作(确认卡、选择卡)。等待时它没有在生成,`Typing` 这类
+    #: “正在回复”的状态该摘;等完接着生成时要贴回去。参数是 `(session_id, waiting)`。
+    waiting_for_user: Callable[[str, bool], None] | None = None
 
 
 _origins: dict[str, ExternalOrigin] = {}
@@ -87,3 +90,14 @@ def question_opened(db: Session, question: AgentQuestion) -> None:
         handler.question_opened(db, question)
     except Exception:  # noqa: BLE001 —— 渠道那头出问题不该让问题本身消失
         logger.exception("announcing a question to %s failed question=%s", session.origin, getattr(question, "id", ""))
+
+
+def waiting_for_user(origin: str | None, session_id: str, waiting: bool) -> None:
+    """智能体开始 / 结束等用户操作时通知外部渠道。渠道只做状态展示,失败不影响运行。"""
+    handler = _origins.get(origin or "")
+    if handler is None or handler.waiting_for_user is None:
+        return
+    try:
+        handler.waiting_for_user(session_id, waiting)
+    except Exception:  # noqa: BLE001 —— 状态指示失败不该影响这一轮
+        logger.exception("updating %s waiting state failed session=%s waiting=%s", origin, session_id, waiting)

@@ -224,6 +224,7 @@ def run_turn(
     force_compact: bool = False,
     on_tool: "Callable[[dict], None] | None" = None,
     on_thinking: "Callable[[dict], None] | None" = None,
+    on_awaiting_user: "Callable[[bool], None] | None" = None,
     thinking_level: str = "off",
     images: list[dict[str, str]] | None = None,
 ) -> TurnResult:
@@ -244,6 +245,7 @@ def run_turn(
             force_compact=force_compact,
             thinking_level=thinking_level,
             images=images,
+            on_awaiting_user=on_awaiting_user,
         )
     raise SidecarError(f"Unknown agent adapter: {adapter}")
 
@@ -625,6 +627,7 @@ def _run_pi(
     on_delta: Callable[[str], None] | None,
     on_tool: Callable[[dict], None] | None = None,
     on_thinking: Callable[[dict], None] | None = None,
+    on_awaiting_user: Callable[[bool], None] | None = None,
     session_id: str = "",
     force_compact: bool = False,
     thinking_level: str = "off",
@@ -719,7 +722,13 @@ def _run_pi(
                 live.ack("aborted_ack", bool(event.get("accepted")))
             elif kind == "awaiting_user":
                 # 等人批卡 / 作答的这段不算进任何一把表(见 AWAITING_USER_PAUSE_CAP_SECONDS)。成对来,按计数停表。
-                if event.get("waiting"):
+                waiting = bool(event.get("waiting"))
+                if on_awaiting_user is not None:
+                    try:
+                        on_awaiting_user(waiting)
+                    except Exception:  # noqa: BLE001 —— 状态展示失败不影响这一轮
+                        logger.exception("awaiting_user callback failed")
+                if waiting:
                     watchdog.pause(AWAITING_USER_PAUSE_CAP_SECONDS)
                 else:
                     watchdog.resume()

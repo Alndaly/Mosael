@@ -849,6 +849,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 on_delta=_persist_delta,
                 on_tool=lambda event: _stream_tool_event(session_id, event),
                 on_thinking=lambda event: _stream_thinking(session_id, event),
+                on_awaiting_user=lambda waiting: origins.waiting_for_user(origin, session_id, waiting),
                 **turn_kwargs,
             )
         except Exception as exc:  # noqa: BLE001 —— 落库那一段按类型处理
