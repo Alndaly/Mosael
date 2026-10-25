@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.2.2": {
+    zh: [
+      "**应用内自动更新。** 新版本可以直接在「本机应用」里检查、下载、显示进度并重启安装；macOS 用已签名、公证的 ZIP，Windows 用 NSIS，不再要求手动下载安装包。",
+      "**更新不打断正在跑的任务。** 有生成、发布或转写任务时不强退，等任务结束再重启；后端、发布器和托盘照常完成退出收尾。",
+      "**发布产物带完整更新元数据。** `latest-mac.yml` / `latest.yml` 从最终二进制生成，sha512 与安装包逐一对应，开发模式仍可直接打开发布页。",
+    ],
+    en: [
+      "**In-app automatic updates.** Check for a new release in Local App, download it with progress and restart to install; macOS uses a signed, notarized ZIP and Windows uses NSIS — no manual download-and-reinstall.",
+      "**Updates do not interrupt running jobs.** Generation, publishing and transcription jobs finish before restart; the backend, publisher and tray shut down cleanly first.",
+      "**Complete update metadata in every release.** `latest-mac.yml` / `latest.yml` are generated from the final binaries, with sha512 matching each installer; development mode still offers the release page directly.",
+    ],
+  },
   "v2.2.1": {
     zh: [
       "**Computer Use 真正可用了。** 补齐 macOS 辅助功能 / 屏幕录制权限引导；点击、输入、滚动都走确认卡，按 AX 元素或截图像素操作，受保护应用直接拒绝；每次动作前后留证据图，可回放、可停止，主屏常驻急停提示。",

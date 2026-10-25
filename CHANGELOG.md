@@ -3,6 +3,14 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.2.2] - 2026-10-26
+
+### 应用内更新
+
+- **新版本可以在应用内下载、安装并自动重启。** 「设置 → 本机应用 → 检查更新」现在走「检查 → 下载进度 → 重启并安装」；下载完成后 `quitAndInstall` 静默替换并重启，不再要求用户手动下载安装包。macOS 使用已签名、公证的 ZIP，Windows 使用 NSIS，更新源仍为 GitHub Releases 的正式版本。
+- **更新不会打断正在跑的任务。** 有生成、发布、转写等任务在跑时不强退，提示等任务结束后再重启更新；后端、发布器和托盘沿用现有退出收尾。
+- **更新元数据进入发布产物。** `latest-mac.yml` / `latest.yml` 从最终签名 ZIP 和 NSIS 安装包生成并上传，sha512 与二进制逐一对应；开发模式保留原来的打开发布页方式。
+
 ## [2.2.1] - 2026-10-25
 
 ### Computer Use 落地;飞书卡片与入站链路收口
