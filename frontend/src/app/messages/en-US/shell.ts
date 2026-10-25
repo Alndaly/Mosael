@@ -51,6 +51,7 @@ export const shell = {
   computerReplayClear: "Clear conversation replay",
   computerReplayClearing: "Clearing…",
   computerReplayClearFailed: "Couldn't clear replay",
+  computerReplayFailed: "Replay failed",
   computerReplayClick: "{button} click × {count}",
   computerReplayType: "Typed: {text}",
   computerReplayScroll: "Scrolled {dy} steps",

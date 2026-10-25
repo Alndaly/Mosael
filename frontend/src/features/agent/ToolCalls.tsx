@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Truncate } from "@/components/ui/truncate";
+import { Hint } from "@/components/ui/tooltip";
 import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS, AGENT_TURN_BLOCKS_CLASS } from "@/features/agent/agentRow";
 import { decodeByteFallback } from "@/features/agent/byteFallback";
 import { NOISE_KEYS } from "@/features/agent/machineFields";
@@ -236,15 +237,16 @@ function DesktopReplay({ replay }: { replay: ReplayEvidence }) {
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("computerReplayTitle")}</span>
         {replay.session_id && replay.replay_id ? (
-          <Button
-            variant="inline"
-            className="shrink-0 text-ui-xs"
-            disabled={clear.isPending}
-            onClick={() => clear.mutate()}
-            title={clear.isError ? t("computerReplayClearFailed") : undefined}
-          >
-            {clear.isPending ? t("computerReplayClearing") : t("computerReplayClear")}
-          </Button>
+          <Hint label={clear.isError ? t("computerReplayClearFailed") : undefined}>
+            <Button
+              variant="inline"
+              className="shrink-0"
+              loading={clear.isPending}
+              onClick={() => clear.mutate()}
+            >
+              {clear.isPending ? t("computerReplayClearing") : t("computerReplayClear")}
+            </Button>
+          </Hint>
         ) : null}
       </div>
       <div className="grid min-w-0 grid-cols-2 gap-2">
@@ -261,7 +263,14 @@ function DesktopReplay({ replay }: { replay: ReplayEvidence }) {
         {replayActionText(replay, t)}
         {replay.at ? ` · ${new Date(replay.at).toLocaleTimeString()}` : ""}
       </span>
-      {replay.error ? <span className="text-ui-xs text-destructive">{replay.error}</span> : null}
+      {replay.error ? (
+        <FailureCard
+          size="inline"
+          status="failed"
+          title={t("computerReplayFailed")}
+          summary={replay.error}
+        />
+      ) : null}
     </div>
   );
 }

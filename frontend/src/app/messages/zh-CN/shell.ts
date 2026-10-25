@@ -53,6 +53,7 @@ export const shell = {
   computerReplayClear: "清空本会话回放",
   computerReplayClearing: "正在清空…",
   computerReplayClearFailed: "清空失败",
+  computerReplayFailed: "回放失败",
   computerReplayClick: "{button}键点击 × {count}",
   computerReplayType: "输入：{text}",
   computerReplayScroll: "滚动 {dy} 格",
