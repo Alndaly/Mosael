@@ -57,6 +57,11 @@ let lastUpdate = null;
 ipcRenderer.on(IPC.event.updateAvailable, (_event, info) => {
   lastUpdate = info;
 });
+/** @type {import("./preload-api").MosaelUpdateInfo | null} */
+let lastProgress = null;
+ipcRenderer.on(IPC.event.updateProgress, (_event, info) => {
+  lastProgress = info;
+});
 
 // 通知点击 → 主进程要求打开任务中心。TaskCenter 监听的是 window 事件,这里做转发。
 ipcRenderer.on(IPC.event.openTasks, () => {
@@ -129,6 +134,12 @@ const desktopBridge = {
   },
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
   checkUpdates: () => invoke(IPC.invoke.checkUpdates),
+  downloadUpdate: () => invoke(IPC.invoke.downloadUpdate),
+  installUpdate: () => invoke(IPC.invoke.installUpdate),
+  onUpdateProgress: (callback) => {
+    if (lastProgress) callback(lastProgress);
+    return onEvent(IPC.event.updateProgress, callback);
+  },
   // 开发时主进程过期:哪几份产物变了、能不能重启;变了推一次;要求重启(见 main.cjs 的 restartMain)。
   devMain: {
     status: () => invoke(IPC.invoke.mainStatus),

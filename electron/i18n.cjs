@@ -150,6 +150,14 @@ const MESSAGES = {
     zh: "GitHub 的返回里没有版本号(tag_name)",
     en: "GitHub's response has no version (tag_name)",
   },
+  update_installUnsupported: {
+    zh: "当前环境不支持应用内安装,请打开发布页",
+    en: "In-app install is unavailable here; open the release page",
+  },
+  update_notDownloaded: {
+    zh: "更新包还没下载完成",
+    en: "The update is still downloading",
+  },
   publisher_loadFailed: { zh: "发布执行器加载失败:{detail}", en: "The publisher failed to load: {detail}" },
   publisher_missing: {
     zh: "发布执行器不可用:electron/publish.bundle.cjs 缺失(先跑 pnpm build:publisher)",

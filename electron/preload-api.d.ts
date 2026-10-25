@@ -68,10 +68,17 @@ export interface MainStaleStatus {
   canRestart: boolean;
 }
 
+export type MosaelUpdatePhase = "idle" | "unsupported" | "available" | "up-to-date" | "downloading" | "downloaded" | "error" | "installing";
+
 export interface MosaelUpdateInfo {
   current?: string;
   latest?: string;
   hasUpdate?: boolean;
+  supportsAutoInstall?: boolean;
+  phase?: MosaelUpdatePhase;
+  percent?: number;
+  transferred?: number;
+  total?: number;
   url?: string;
   error?: string;
 }
@@ -360,6 +367,9 @@ export interface MosaelDesktopBridge {
   stopComputerUse(): Promise<{ active: boolean; stopped: boolean }>;
   resumeComputerUse(): Promise<{ active: boolean; stopped: boolean }>;
   checkUpdates(): Promise<MosaelUpdateInfo>;
+  downloadUpdate(): Promise<MosaelUpdateInfo>;
+  installUpdate(): Promise<MosaelUpdateInfo>;
+  onUpdateProgress(callback: (info: MosaelUpdateInfo) => void): () => void;
   onUpdateAvailable(callback: (info: MosaelUpdateInfo) => void): () => void;
   reportStatus(status: { runningJobs: number; progress?: number | null }): void;
   notifyTask(notice: { title: string; body?: string }): void;

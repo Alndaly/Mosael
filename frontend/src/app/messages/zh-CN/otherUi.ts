@@ -993,5 +993,9 @@ export const otherUi = {
   updateAvailable: "发现新版本 v{version}",
   updateView: "查看",
   updateUpToDate: "已是最新版本",
+  updateDownload: "下载并安装",
+  updateInstallNow: "重启并安装",
+  updateDownloading: "正在下载 {percent}%",
+  updateDownloadFailed: "更新下载失败",
   updateCheckFailed: "无法检查更新,请稍后再试",
 } as const;

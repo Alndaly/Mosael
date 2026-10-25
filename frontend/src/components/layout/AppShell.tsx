@@ -136,15 +136,39 @@ export function AppShell({
     try { localStorage.setItem("mosael.sidebar.collapsed", String(!compact)); } catch { /* memory only */ }
   };
 
-  // 桌面端启动静默更新检查的回报:有新版弹一条可点开发布页的提示(不打断)。
+  // 桌面端更新:发现新版本给「下载并安装」;下载完成后给「重启并安装」。
   React.useEffect(() => {
-    return window.mosaelDesktop?.onUpdateAvailable?.((info) => {
+    const offAvailable = window.mosaelDesktop?.onUpdateAvailable?.((info) => {
       if (!info?.hasUpdate) return;
+      const canInstall = info.supportsAutoInstall && window.mosaelDesktop?.downloadUpdate;
       toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
         duration: 12000,
-        action: { label: t("updateView"), onClick: () => window.open(info.url, "_blank") },
+        action: {
+          label: canInstall ? t("updateDownload") : t("updateView"),
+          onClick: () => {
+            if (canInstall) void window.mosaelDesktop?.downloadUpdate?.();
+            else window.open(info.url, "_blank");
+          },
+        },
       });
     });
+    const offProgress = window.mosaelDesktop?.onUpdateProgress?.((info) => {
+      if (info.phase === "downloaded") {
+        toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
+          duration: 12000,
+          action: {
+            label: t("updateInstallNow"),
+            onClick: () => void window.mosaelDesktop?.installUpdate?.(),
+          },
+        });
+      } else if (info.phase === "error") {
+        toast.error(t("updateDownloadFailed"), { description: info.error });
+      }
+    });
+    return () => {
+      offAvailable?.();
+      offProgress?.();
+    };
   }, [t]);
 
   const railItem = (item: NavItem) => {

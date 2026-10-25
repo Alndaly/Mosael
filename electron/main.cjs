@@ -92,6 +92,7 @@ const {
   parseToolsInset,
   parseUrlRequest,
 } = require("./ipc-contract.cjs");
+const { createAppUpdater } = require("./app-updater.cjs");
 const i18n = require("./i18n.cjs");
 const { t } = i18n;
 
@@ -918,42 +919,6 @@ async function startBackendOnLaunch() {
   }
 }
 
-// ---------------- 应用更新(检查-提示式) ----------------
-// 更新仍使用「检查 + 提示 + 打开发布页」:GitHub Releases 比对版本号。
-// Developer ID 签名不改变更新安装方式；静默安装需独立的更新器实现和验证。
-// 必须是 GitHub 上的规范仓库名(大小写一致)。写错大小写 API 会返回 301,虽然 fetch
-// 默认跟随重定向仍能work,但更新检查的失败是静默的——一旦重定向失效就再没人发现。
-const UPDATE_REPO = "Alndaly/Mosael";
-
-function compareVersions(a, b) {
-  const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);
-  const [pa, pb] = [parse(a), parse(b)];
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff) return diff > 0 ? 1 : -1;
-  }
-  return 0;
-}
-
-async function checkForUpdates() {
-  const res = await net.fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
-    headers: { Accept: "application/vnd.github+json", "User-Agent": "mosael-updater" },
-  });
-  if (!res.ok) throw new Error(`GitHub ${res.status}`);
-  const release = await res.json();
-  const latest = String(release.tag_name || "").replace(/^v/i, "");
-  // 解析不出版本号就报错,不要静默当成「已是最新」。原来是 `Boolean(latest) && ...`,
-  // 于是响应形状一变(字段缺失、返回了别的 JSON),用户看到的是一句让人安心的
-  // 「已是最新版本」——而实际上这次检查根本没成功。宁可说失败,也不要给假的安心。
-  if (!latest) throw new Error(t("update_noTag"));
-  const current = app.getVersion();
-  return {
-    current,
-    latest,
-    hasUpdate: compareVersions(latest, current) > 0,
-    url: release.html_url || `https://github.com/${UPDATE_REPO}/releases`,
-  };
-}
 
 /**
  * 界面语言:主进程(菜单、托盘、对话框、通知)和两个 bundle(发布器的失败原因、托盘)一起切。
@@ -1576,14 +1541,36 @@ app.whenReady().then(async () => {
   }
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
+  const updateController = createAppUpdater({
+    app,
+    autoUpdater: isDev ? null : require("electron-updater").autoUpdater,
+    net,
+    isDev,
+    log: appendMainLog,
+    setTimeout,
+    setInterval,
+    emit: (kind, payload) => {
+      const channel = kind === "available" ? IPC.event.updateAvailable : IPC.event.updateProgress;
+      for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
+    },
+  });
   handle(IPC.invoke.checkUpdates, async () => {
     try {
-      return await checkForUpdates();
+      return await updateController.check();
     } catch (error) {
       appendMainLog("update-check-failed", error);
       return { error: error.message };
     }
   });
+  handle(IPC.invoke.downloadUpdate, async () => {
+    try {
+      return await updateController.download();
+    } catch (error) {
+      appendMainLog("update-download-failed", error);
+      return { error: error.message };
+    }
+  });
+  handle(IPC.invoke.installUpdate, () => updateController.install());
   handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
   handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
   handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
@@ -1694,23 +1681,8 @@ app.whenReady().then(async () => {
   // 「暂时无法加载 · 重试」:后端连崩被认输了的话,这一下真的去重拉它(正跑着就什么都不做),等它就绪再回话。
   handle(IPC.invoke.backendRetry, async () => ({ status: (await backendSupervisor.retry()).status }));
   if (app.isPackaged && !isSmokeTest) {
-    // 启动 5 秒后查一次,之后每天查一次(常驻托盘的应用可能几周不重启)。同一个新版本只说一次。
-    let announced = "";
-    const checkAndAnnounce = async () => {
-      try {
-        const info = await checkForUpdates();
-        if (!info.hasUpdate || info.latest === announced) return;
-        announced = info.latest;
-        appendMainLog("update-available", `${info.current} -> ${info.latest}`);
-        for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.updateAvailable, info);
-      } catch (error) {
-        //: 对用户静默(后台检查失败不该弹窗),但对**日志**不静默 —— 代理挂了、限流撞上了,
-        //: 这种事只有写出来,下次「怎么很久没提示更新」才查得回来。
-        appendMainLog("update-check-failed", error);
-      }
-    };
-    setTimeout(checkAndAnnounce, 5000);
-    setInterval(checkAndAnnounce, 24 * 60 * 60 * 1000);
+    // 启动 5 秒后查一次,之后每天查一次;只有发现新版本才提示,下载由用户点「下载并安装」触发。
+    updateController.start();
   }
 
   buildAppMenu();

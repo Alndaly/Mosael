@@ -79,42 +79,111 @@ export function ExternalOpenRow() {
   );
 }
 
-/** 检查更新(仅桌面端渲染):查 GitHub Releases 比对版本,发现新版给「查看」入口。
- *  未签名的 mac 包装不了静默自动安装,这里是诚实的降级——提示 + 打开发布页。 */
-function UpdateCheckButton() {
+/** 检查更新:打包版支持下载并静默安装,开发模式仍提供发布页入口。
+ *  macOS 使用已签名/公证的 ZIP;Windows 使用 NSIS。安装前由主进程完成后端收尾。 */
+type UpdateInfo = {
+  current?: string;
+  latest?: string;
+  hasUpdate?: boolean;
+  supportsAutoInstall?: boolean;
+  phase?: string;
+  percent?: number;
+  url?: string;
+  error?: string;
+};
+
+export function UpdateCheckButton() {
   const t = useI18n();
-  const [checking, setChecking] = React.useState(false);
+  const [busy, setBusy] = React.useState<"check" | "download" | "install" | null>(null);
+  const [info, setInfo] = React.useState<UpdateInfo | null>(null);
   const check = window.mosaelDesktop?.checkUpdates;
+  const download = window.mosaelDesktop?.downloadUpdate;
+  const install = window.mosaelDesktop?.installUpdate;
+
+  React.useEffect(() => {
+    const offAvailable = window.mosaelDesktop?.onUpdateAvailable?.((next) => {
+      if (next.hasUpdate) setInfo(next);
+    });
+    const offProgress = window.mosaelDesktop?.onUpdateProgress?.((next) => setInfo(next));
+    return () => {
+      offAvailable?.();
+      offProgress?.();
+    };
+  }, []);
+
   if (!check) return null;
+
+  const canInstall = Boolean(download && install && info?.supportsAutoInstall);
+  const phase = info?.phase;
+  const label =
+    phase === "downloading"
+      ? t("updateDownloading").replace("{percent}", String(info?.percent ?? 0))
+      : phase === "downloaded"
+        ? t("updateInstallNow")
+        : info?.hasUpdate
+          ? canInstall
+            ? t("updateDownload")
+            : t("updateView")
+          : t("updateCheck");
+
   return (
     <Button
       size="xs"
       variant="outline"
-      disabled={checking}
+      loading={busy !== null || phase === "downloading"}
       onClick={async () => {
-        setChecking(true);
+        if (phase === "downloaded") {
+          setBusy("install");
+          try {
+            const next = await install!();
+            setInfo(next);
+            if (next.error) toast.error(next.error);
+          } finally {
+            setBusy(null);
+          }
+          return;
+        }
+        if (info?.hasUpdate && canInstall) {
+          setBusy("download");
+          try {
+            const next = await download!();
+            setInfo(next);
+            if (next.error) toast.error(t("updateDownloadFailed"), { description: String(next.error) });
+          } finally {
+            setBusy(null);
+          }
+          return;
+        }
+        if (info?.hasUpdate && !canInstall) {
+          window.open(info.url, "_blank");
+          return;
+        }
+        setBusy("check");
         try {
-          const info = await check();
-          // 主进程把真实原因放在 info.error 里(GitHub 状态码、解析失败、网络错误)——
-          // 带出来。光说「稍后再试」的话,代理挂了和真的没新版看上去一模一样。
-          if (info.error) toast.error(t("updateCheckFailed"), { description: String(info.error) });
-          else if (info.hasUpdate) {
-            toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
+          const next = await check();
+          setInfo(next);
+          if (next.error) toast.error(t("updateCheckFailed"), { description: String(next.error) });
+          else if (next.hasUpdate) {
+            toast(t("updateAvailable").replace("{version}", next.latest ?? ""), {
               duration: 12000,
-              action: { label: t("updateView"), onClick: () => window.open(info.url, "_blank") },
+              action: {
+                label: canInstall ? t("updateDownload") : t("updateView"),
+                onClick: () => {
+                  if (canInstall) void download!();
+                  else window.open(next.url, "_blank");
+                },
+              },
             });
           } else {
-            // 带上比对到的版本号:光说「已是最新」在版本号本身有问题时毫无信息量,
-            // 用户没法判断它到底比了什么。
-            toast.success(`${t("updateUpToDate")} · v${info.latest ?? info.current ?? ""}`);
+            toast.success(`${t("updateUpToDate")} · v${next.latest ?? next.current ?? ""}`);
           }
         } finally {
-          setChecking(false);
+          setBusy(null);
         }
       }}
     >
-      {checking ? <Loader2 size={13} className="animate-mosael-spin" /> : <RefreshCw size={13} />}
-      {t("updateCheck")}
+      {busy !== null || phase === "downloading" ? <Loader2 size={13} className="animate-mosael-spin" /> : <RefreshCw size={13} />}
+      {label}
     </Button>
   );
 }

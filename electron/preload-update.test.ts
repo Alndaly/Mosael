@@ -33,9 +33,11 @@ function loadPreload() {
     document, window, MutationObserver, CustomEvent, process,
   });
   const push = (info: unknown) => (listeners.get(IPC.event.updateAvailable) ?? []).forEach((listener) => listener({}, info));
+  const pushProgress = (info: unknown) => (listeners.get(IPC.event.updateProgress) ?? []).forEach((listener) => listener({}, info));
   const onUpdateAvailable = bridges.mosaelDesktop.onUpdateAvailable as (callback: (info: unknown) => void) => () => void;
+  const onUpdateProgress = bridges.mosaelDesktop.onUpdateProgress as (callback: (info: unknown) => void) => () => void;
   const desktop = bridges.mosaelDesktop as { backend: { retry: () => Promise<unknown> } };
-  return { push, onUpdateAvailable, electron, desktop };
+  return { push, pushProgress, onUpdateProgress, onUpdateAvailable, electron, desktop };
 }
 
 const INFO = { current: "1.9.3", latest: "1.9.4", hasUpdate: true, url: "https://github.com/Alndaly/Mosael/releases/tag/v1.9.4" };
@@ -46,6 +48,13 @@ it("消息早于订阅:订阅时补发最新的一条", () => {
   const seen: unknown[] = [];
   onUpdateAvailable((info) => seen.push(info));
   expect(seen).toEqual([INFO]);
+});
+it("下载进度早于订阅:订阅时补发最新的一条", () => {
+  const { pushProgress, onUpdateProgress } = loadPreload();
+  const seen: unknown[] = [];
+  pushProgress({ phase: "downloaded", percent: 100 });
+  onUpdateProgress((info) => seen.push(info));
+  expect(seen).toEqual([{ phase: "downloaded", percent: 100 }]);
 });
 
 it("没收到过就不补发", () => {

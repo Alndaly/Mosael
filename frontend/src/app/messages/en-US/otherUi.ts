@@ -997,5 +997,9 @@ export const otherUi = {
   updateAvailable: "New version v{version} available",
   updateView: "View",
   updateUpToDate: "You're up to date",
+  updateDownload: "Download and install",
+  updateInstallNow: "Restart and install",
+  updateDownloading: "Downloading {percent}%",
+  updateDownloadFailed: "Update download failed",
   updateCheckFailed: "Could not check for updates, try again later",
 } as const;

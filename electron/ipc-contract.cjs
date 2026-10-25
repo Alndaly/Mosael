@@ -9,6 +9,8 @@
 const IPC = Object.freeze({
   invoke: Object.freeze({
     checkUpdates: "mosael:check-updates",
+    downloadUpdate: "mosael:download-update",
+    installUpdate: "mosael:install-update",
     // 开发时主进程过期了没有、要求重启(见 dev-staleness.cjs / dev-loop.cjs)。
     mainStatus: "mosael:main-status",
     restartMain: "mosael:restart-main",
@@ -121,6 +123,7 @@ const IPC = Object.freeze({
     deepLink: "mosael:deep-link",
     openFiles: "mosael:open-files",
     updateAvailable: "mosael:update-available",
+    updateProgress: "mosael:update-progress",
     mainStale: "mosael:main-stale",
     customCss: "mosael:custom-css",
     publishView: "publish:view",

@@ -254,6 +254,18 @@ jobs:
           else
             pnpm exec electron-builder --win nsis --publish never
           fi
+      - name: Generate updater metadata
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # DMG 是首次安装包;Squirrel 更新要吃的是同一个签名 .app 的 ZIP。
+            if [ ! -f "release/Mosael-$version-mac-signed.zip" ]; then
+              ditto -c -k --sequesterRsrc --keepParent release/mac-arm64/Mosael.app "release/Mosael-$version-mac-signed.zip"
+            fi
+            node scripts/write-update-metadata.mjs --version "$version" --mac "release/Mosael-$version-mac-signed.zip" --out release
+          else
+            node scripts/write-update-metadata.mjs --version "$version" --windows "release/Mosael Setup $version.exe" --out release
+          fi
 
       - name: Smoke packaged Electron and database upgrade
         run: node test/bundle.smoke.mjs
@@ -262,14 +274,20 @@ jobs:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber ${{ matrix.asset_glob }}
+        run: |
+          files=(${{ matrix.asset_glob }})
+          if compgen -G "release/latest*.yml" > /dev/null; then files+=(release/latest*.yml); fi
+          if compgen -G "release/*-mac-signed.zip" > /dev/null; then files+=(release/*-mac-signed.zip); fi
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
 
       - name: Upload artifact (dry run)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: mosael-${{ runner.os }}
-          path: ${{ runner.os == 'macOS' && inputs.notarization == 'local' && 'release/*-mac-signed.zip' || matrix.asset_glob }}
+          path: |
+            ${{ runner.os == 'macOS' && inputs.notarization == 'local' && 'release/*-mac-signed.zip' || matrix.asset_glob }}
+            release/latest*.yml
           if-no-files-found: error
 
   publish:

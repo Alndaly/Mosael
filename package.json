@@ -159,6 +159,7 @@
     ]
   },
   "dependencies": {
+    "electron-updater": "^6.8.11",
     "fflate": "^0.8.3"
   }
 }

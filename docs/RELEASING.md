@@ -108,6 +108,9 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 ## 4. 整理发布附件
 
 - 公证完成的 macOS arm64 `.dmg`。
+- 应用内更新产物:macOS `Mosael-VERSION-mac-signed.zip`(同一份已签名/公证的 `.app` ZIP,不是 DMG)和 Windows NSIS 安装包。`latest-mac.yml` / `latest.yml` 由 `scripts/write-update-metadata.mjs` 从**最终二进制**生成并上传;缺了它们,`electron-updater` 找不到更新。
+  手动交接时:macOS ZIP 用与公证相同的那份 ditto 产物,Windows 用同一次构建的 NSIS 安装包。`write-update-metadata.mjs` 会把 sha512 写进元数据;不要手抄或从旧版复制。
+  本地最终发布目录 `dist/VERSION/` 也应包含 `latest-mac.yml` / `latest.yml`,Release 的下载地址才能被应用内更新读到。
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。
