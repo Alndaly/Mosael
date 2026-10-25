@@ -242,6 +242,30 @@ def test_卡片构造失败也降级成文字(monkeypatch, caplog) -> None:
     assert any("build failed" in record.getMessage() and "builder broke" in record.getMessage() for record in caplog.records)
 
 
+def test_某一张卡的文字降级也失败时后面的卡继续发(monkeypatch) -> None:
+    text = "\n\n".join(f"## 第 {index} 段\n" + ("长文字。" * 3000) for index in range(3))
+    chunks = client.markdown_chunks(text)
+    failed = 2
+    cards: list[str] = []
+
+    def card(bot, chat_id, payload, **kwargs):
+        title = payload["header"]["title"]["content"]
+        if title == f"（{failed}/{len(chunks)}）":
+            raise client.FeishuError("feishuErr_sendCard", detail="boom")
+        cards.append(title)
+        return "om_card"
+
+    def text_send(bot, chat_id, body, **kwargs):
+        raise client.FeishuError("feishuErr_sendText", detail="also boom")
+
+    monkeypatch.setattr(client, "send_card", card)
+    monkeypatch.setattr(client, "send_text", text_send)
+
+    client.send_markdown(_Bot("b-partial-fallback"), "oc_2d", text)
+
+    assert len(cards) == len(chunks) - 1, "失败的这一张后面的卡不能被一起带走"
+
+
 def test_分卡里某一张失败只把那一张降级(monkeypatch) -> None:
     """已发出去的卡不重发:哪一张失败就只把那一张换成文字,顺序不变。"""
     text = "\n\n".join(f"## 第 {index} 段\n" + ("长文字。" * 3000) for index in range(3))

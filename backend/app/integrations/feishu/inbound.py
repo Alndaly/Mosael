@@ -609,11 +609,19 @@ def _route(db: Session, session: AgentSession) -> tuple[FeishuBot, str] | None:
     return (bot, parts[2]) if bot is not None else None
 
 
-def deliver_turn(session_id: str) -> None:
-    """host 一轮收尾后调用:把最后一条助手消息发回原飞书会话,摘掉 Typing,失败的轮次贴个叉。"""
+def deliver_turn(session_id: str, message_id: str | None = None) -> None:
+    """host 一轮收尾后调用:把这一轮的助手消息发回原飞书会话,摘掉 Typing,失败的轮次贴个叉。
+
+    `message_id` 由 host 交来(这一轮刚落定的 assistant 行);没有时才退回“最新一条”。
+    不能永远查最新:会话已经拨回 idle 后,下一条消息可能抢先落了新草稿。
+    """
     with _awaiting_lock:
-        _paused_typing.pop(session_id, None)
-    waiting = _settle(session_id)
+        paused_message_id = _paused_typing.pop(session_id, None)
+    waiting = (
+        (paused_message_id, None)
+        if paused_message_id is not None
+        else _settle(session_id)
+    )
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
         if session is None:
@@ -622,12 +630,14 @@ def deliver_turn(session_id: str) -> None:
         if route is None:
             return
         bot, chat_id = route
-        reply = db.scalars(
-            select(AgentMessage)
-            .where(AgentMessage.session_id == session_id, AgentMessage.role == "assistant")
-            .order_by(AgentMessage.created_at.desc())
-            .limit(1)
-        ).first()
+        reply = db.get(AgentMessage, message_id) if message_id else None
+        if reply is None or reply.session_id != session_id:
+            reply = db.scalars(
+                select(AgentMessage)
+                .where(AgentMessage.session_id == session_id, AgentMessage.role == "assistant")
+                .order_by(AgentMessage.created_at.desc())
+                .limit(1)
+            ).first()
         text = (reply.content if reply is not None else "") or "(空回复)"
         failed = reply is None or bool(reply.error)
         if waiting is not None:

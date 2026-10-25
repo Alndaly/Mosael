@@ -207,8 +207,8 @@ def route_for_approval(db: Session, approval: WorkflowRunApproval) -> tuple[Feis
 
 def send_approval_card(
     db: Session, bot: FeishuBot, receive_id: str, receive_type: str, approval: WorkflowRunApproval
-) -> str:
-    """把确认卡推出去,**返回那条消息的 id**(取消 / 超时要照它把卡收回)。
+) -> Delivery:
+    """把确认卡推出去,**返回这次投递的结果**(发到没有、为什么、最早那条消息 id)。
 
     失败分两层降级,和工具确认卡同一套:先退成一段文字;**两层都没出去就抛出去** ——
     调用方(`announce_run_approval`)据此把这一次记成 `failed`,而不是当成发过了。

@@ -20,8 +20,8 @@ class FeishuBotUpdate(ApiModel):
     enabled: bool | None = None
     #: 飞书自建应用的凭据。**可以改** —— 换了应用、或者这台机器的主密钥换过之后旧密文解不开,
     #: 唯一的出路就是重填一次(2026-10-24:设置页此前没有这个入口,用户卡在「长连接进程退出」)。
-    app_id: str | None = Field(default=None, max_length=120)
-    app_secret: str | None = Field(default=None, max_length=400)
+    app_id: str | None = Field(default=None, min_length=1, max_length=120)
+    app_secret: str | None = Field(default=None, min_length=1, max_length=400)
 
 
 class FeishuBotOut(OrmModel):

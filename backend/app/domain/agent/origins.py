@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ExternalOrigin:
     system_note: Callable[[Session, AgentSession], str] | None = None
-    turn_finished: Callable[[str], None] | None = None
+    turn_finished: Callable[[str, str | None], None] | None = None
     confirmation_opened: Callable[[Session, ToolConfirmation], None] | None = None
     question_opened: Callable[[Session, AgentQuestion], None] | None = None
     #: 智能体开始 / 结束等用户操作(确认卡、选择卡)。等待时它没有在生成,`Typing` 这类
@@ -53,13 +53,14 @@ def system_note(db: Session, session: AgentSession) -> str:
     return handler.system_note(db, session)
 
 
-def turn_finished(origin: str | None, session_id: str) -> None:
-    """一轮收尾后调用。回送失败只记日志 —— 渠道那头出问题不该连累会话本身。"""
+def turn_finished(origin: str | None, session_id: str, message_id: str | None = None) -> None:
+    """一轮收尾后调用。`message_id` 是这一轮刚落定的 assistant 行 —— 渠道据此发**这一轮**的回复,
+    而不是再查“当前最新一条”(下一轮可能已经开始写草稿)。"""
     handler = _origins.get(origin or "")
     if handler is None or handler.turn_finished is None:
         return
     try:
-        handler.turn_finished(session_id)
+        handler.turn_finished(session_id, message_id)
     except Exception:  # noqa: BLE001 —— 见 docstring
         logger.exception("delivering a finished turn to %s failed session=%s", origin, session_id)
 

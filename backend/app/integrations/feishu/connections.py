@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -205,9 +206,14 @@ def start_connection(bot_id: str) -> None:
         if existing is not None and existing.process.poll() is None:
             return
         bots.write_status(bot_id, "connecting")
+        # 子进程只拿 stdin 里的这一份凭据。环境变量里的主密钥不能继承:环境变量部署时
+        # 全局 `MOSAEL_SECRET_KEY` 若留在子进程里,一个 SDK 漏洞就能解开库里所有密文。
+        env = {key: value for key, value in os.environ.items()
+               if key not in {"MOSAEL_SECRET_KEY", "MOSAEL_SECRET_KEY_STDIN"}}
         process = popen_text(
             worker_command(bot_id),
             cwd=backend_dir,
+            env=env,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
         )

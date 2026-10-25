@@ -146,9 +146,15 @@ def _network_failure(exc: httpx.RequestError) -> NoReturn:
 
     否则它会以 `ConnectError` / `ReadTimeout` 穿过所有 `except FeishuError` 的降级层:
     确认卡不再退文字、工作流节点落一句英文、`feishu_delivery_reason` 里只有 httpx 原文。
+
+    读超时 / 协议断开时请求**可能已经在飞书侧成功**;带 `uncertain` 参数,让卡片降级层
+    不要再用文字重发一遍(那会变成两条可见消息)。
     """
     detail = str(exc).strip() or type(exc).__name__
-    raise FeishuError("feishuErr_network", detail=detail[:300]) from exc
+    params: dict[str, Any] = {"detail": detail[:300]}
+    if isinstance(exc, (httpx.ReadTimeout, httpx.WriteTimeout, httpx.RemoteProtocolError)):
+        params["uncertain"] = True
+    raise FeishuError("feishuErr_network", **params) from exc
 
 
 def _resend_budget(method: str, url: str) -> int:
@@ -408,12 +414,24 @@ def send_markdown(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: s
             card = markdown_card(chunk, index=index, total=total)
             sent.append(send_card(bot, chat_id, card, receive_id_type=receive_id_type))
         except Exception as exc:  # noqa: BLE001 —— 见 docstring:降级成文字,而不是丢掉
+            if getattr(exc, "params", {}).get("uncertain"):
+                logger.warning(
+                    "feishu markdown card %d/%d outcome unknown (%s: %s); not resending",
+                    index, total, type(exc).__name__, exc,
+                )
+                continue
             logger.warning(
                 "feishu markdown card %d/%d failed (%s: %s); resending that part as text",
                 index, total, type(exc).__name__, exc,
             )
             label = f"（{index}/{total}）\n" if total > 1 else ""
-            sent.append(send_text(bot, chat_id, label + chunk, receive_id_type=receive_id_type))
+            try:
+                sent.append(send_text(bot, chat_id, label + chunk, receive_id_type=receive_id_type))
+            except Exception as fallback_exc:  # noqa: BLE001 —— 这一段落不下,后面的还要继续
+                logger.warning(
+                    "feishu markdown text fallback %d/%d failed (%s: %s); continuing with the rest",
+                    index, total, type(fallback_exc).__name__, fallback_exc,
+                )
     return sent
 
 
@@ -423,7 +441,7 @@ def update_card(bot: FeishuBot, message_id: str, card: dict[str, Any]) -> None:
     飞书只让改"这张应用自己发的、而且那条消息是交互卡片"的消息 —— 降级发出去的那种纯文字消息
     改不了,调用方据此再补一条(见 integrations/feishu/approvals.settle_run_approval)。
     """
-    data = call_api(bot, "PATCH", f"{SEND_URL}/{message_id}", {"content": json.dumps(card, ensure_ascii=False)})
+    data = call_api(bot, "PATCH", f"{SEND_URL}/{quote(message_id, safe='')}", {"content": json.dumps(card, ensure_ascii=False)})
     if data.get("code") != 0:
         _fail("feishuErr_updateCard", data)
 
@@ -490,7 +508,7 @@ def add_reaction_strict(bot: FeishuBot, message_id: str, emoji_type: str) -> str
     (坏了也不能反过来弄坏回复链路),而一个专门用来加表情的节点加不上时**必须说**。
     """
     data = call_api(
-        bot, "POST", f"{SEND_URL}/{message_id}/reactions", {"reaction_type": {"emoji_type": emoji_type}}
+        bot, "POST", f"{SEND_URL}/{quote(message_id, safe='')}/reactions", {"reaction_type": {"emoji_type": emoji_type}}
     )
     if data.get("code") != 0:
         _fail("feishuErr_reaction", data)
@@ -500,7 +518,7 @@ def add_reaction_strict(bot: FeishuBot, message_id: str, emoji_type: str) -> str
 def remove_reaction(bot: FeishuBot, message_id: str, reaction_id: str) -> bool:
     """Best-effort; never raises."""
     try:
-        data = call_api(bot, "DELETE", f"{SEND_URL}/{message_id}/reactions/{reaction_id}")
+        data = call_api(bot, "DELETE", f"{SEND_URL}/{quote(message_id, safe='')}/reactions/{quote(reaction_id, safe='')}")
         return data.get("code") == 0
     except Exception:  # noqa: BLE001
         logger.warning("feishu remove_reaction %s on %s failed", reaction_id, message_id, exc_info=True)
@@ -555,7 +573,7 @@ def _resource_name(disposition: str, file_key: str, kind: str, content_type: str
 def download_message_resource_named(bot: FeishuBot, message_id: str, file_key: str, kind: str) -> DownloadedResource:
     """把消息里的图片/文件取回来,**连它的名字和类型一起**。走 tenant token,和其它 API 调用同一条路。"""
 
-    url = f"{API_BASE}/im/v1/messages/{message_id}/resources/{file_key}"
+    url = f"{API_BASE}/im/v1/messages/{quote(message_id, safe='')}/resources/{quote(file_key, safe='')}"
 
     def _fetch(token: str) -> httpx.Response:
         #: 下载是 GET:限流(429)/ 网关(5xx)重发一遍不会多取一份东西(见 _resend_budget)。

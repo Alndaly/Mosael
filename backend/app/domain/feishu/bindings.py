@@ -18,7 +18,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import FeishuBindCode, FeishuBinding, FeishuBot, User, WorkspaceMember, now
@@ -98,17 +98,28 @@ def redeem_bind_code(db: Session, workspace_id: str, bot_id: str, open_id: str, 
     code = (text or "").strip().upper()
     if not looks_like_code(code):
         return None
-    row = db.get(FeishuBindCode, {"workspace_id": workspace_id, "code": code})
-    if row is None or row.expires_at < now() or not bind_member(db, workspace_id, bot_id, open_id, row.user_id):
+    # 先删掉再绑:DELETE 是这次兑换的 CAS。两个人同时拿同一个码时只有一个 DELETE 拿到
+    # user_id,另一个看到空 —— 不会两个 open_id 都绑到同一个成员上。
+    user_id = db.execute(
+        delete(FeishuBindCode)
+        .where(
+            FeishuBindCode.workspace_id == workspace_id,
+            FeishuBindCode.code == code,
+            FeishuBindCode.expires_at >= now(),
+        )
+        .returning(FeishuBindCode.user_id)
+    ).scalar_one_or_none()
+    if user_id is None:
         return None
-    db.delete(row)
-    db.flush()  # 同一个会话里接着认人(resolve_sender)、再兑同一个码,看到的得是兑过之后的样子
-    return db.get(User, row.user_id)
+    if not bind_member(db, workspace_id, bot_id, open_id, user_id):
+        return None
+    db.flush()  # 同一个会话里接着认人(resolve_sender),看到的得是兑过之后的样子
+    return db.get(User, user_id)
 
 
 def issue_bind_code(db: Session, workspace_id: str, user_id: str) -> tuple[str, datetime]:
     """Member self-issues a one-time code (10-min TTL) to redeem from Feishu."""
-    code = secrets.token_hex(3).upper()  # 6 hex chars
+    code = secrets.token_hex(4).upper()  # 8 hex chars = 32 bit
     expires = now() + timedelta(minutes=10)
     db.merge(FeishuBindCode(workspace_id=workspace_id, code=code, user_id=user_id, expires_at=expires))
     db.flush()
@@ -116,14 +127,21 @@ def issue_bind_code(db: Session, workspace_id: str, user_id: str) -> tuple[str, 
 
 
 def list_bindings(db: Session, workspace_id: str, bot_id: str) -> list[Binding]:
-    """**这台机器人**眼里的绑定。
+    """**这台机器人**眼里的、当前仍是工作区成员的绑定。
 
-    「哪台机器人」是这张表的键的一部分(open_id 按飞书应用隔离),列表天然只有本机的那些 ——
-    谁的面板显示谁的东西,不靠调用方再筛一遍。
+    `resolve_sender` 认人时会再查一次成员资格;面板若只 join User,会把已经被移出工作区的人
+    继续列成“已绑定”,和机器人实际拒绝他相矛盾。这里直接把成员表 join 进来。
     """
     rows = db.execute(
         select(FeishuBinding, User)
         .join(User, User.id == FeishuBinding.user_id)
+        .join(
+            WorkspaceMember,
+            and_(
+                WorkspaceMember.workspace_id == FeishuBinding.workspace_id,
+                WorkspaceMember.user_id == FeishuBinding.user_id,
+            ),
+        )
         .where(
             FeishuBinding.workspace_id == workspace_id,
             FeishuBinding.bot_id == bot_id,

@@ -779,6 +779,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
     provider_vendor = ""
     provider_model = ""
     result: TurnResult | None = None
+    assistant_message: Any | None = None
     #: 准备或运行时的失败,留到落库那一段里按原样抛出 —— 和那里自己抛的错走同一组 except。
     failure: BaseException | None = None
     #: 这是这段对话第一轮成功的回答:收尾之后照实际聊的内容给它起个名字(见 titles)。
@@ -1072,7 +1073,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             except Exception:  # noqa: BLE001 —— 收尾路径
                 logger.debug("could not tell the host to end Computer Use", exc_info=True)
     # 外部渠道(飞书……)把这一轮的结果送回原会话。在 drain 之前:排队的下一轮不该抢在这一轮的回复前面。
-    origins.turn_finished(origin, session_id)
+    origins.turn_finished(origin, session_id, getattr(assistant_message, "id", None))
     if name_it:
         # 另起一个线程:会话已经空闲了,排着的下一轮不等它。线程名和这一轮一样 —— 测试收尾时等的是同一类线程。
         titles.start(session_id, actor_id, thread_name=TURN_THREAD_NAME, resolve_chat_provider=resolve_chat_provider)

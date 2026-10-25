@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 
 from app.core.db import SessionLocal
-from app.db.models import FeishuBinding, FeishuBot
+from app.db.models import FeishuBinding, FeishuBot, WorkspaceMember
 from app.domain.feishu import bindings, routing
 from app.integrations.feishu import client as feishu_client
 from app.integrations.feishu import inbound
@@ -59,6 +59,33 @@ def test_unbound_sender_denied_and_bind_code_flow() -> None:
         assert bindings.redeem_bind_code(db, ws, bot["id"], "ou_bob", "ZZZZZZ") is None
         # A different, still-unbound sender is still denied.
         assert bindings.resolve_sender(db, ws, bot["id"], "ou_bob") is None
+
+
+def test_绑定码只能兑换一次() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    me = client.get("/api/auth/me").json()
+    bot = _bot(client, ws)
+    with SessionLocal() as db:
+        code, _ = bindings.issue_bind_code(db, ws, me["id"])
+        assert bindings.redeem_bind_code(db, ws, bot["id"], "ou_first", code) is not None
+        assert bindings.redeem_bind_code(db, ws, bot["id"], "ou_second", code) is None
+        db.commit()
+        assert bindings.resolve_sender(db, ws, bot["id"], "ou_first").id == me["id"]
+        assert bindings.resolve_sender(db, ws, bot["id"], "ou_second") is None
+
+
+def test_移出工作区后绑定列表不再显示他() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    me = client.get("/api/auth/me").json()
+    bot = _bot(client, ws)
+    with SessionLocal() as db:
+        _bind(db, ws, bot["id"], "ou_gone", me["id"])
+        member = db.get(WorkspaceMember, {"workspace_id": ws, "user_id": me["id"]})
+        db.delete(member)
+        db.commit()
+        assert bindings.list_bindings(db, ws, bot["id"]) == []
 
 
 def test_换过应用之后旧行的open_id在新机器人里认不出来() -> None:
