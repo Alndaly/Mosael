@@ -24,7 +24,7 @@ const { createComputerUseOverlay, computerUseOverlayHtml } = require("./computer
     screen: { getAllDisplays: () => Array<{ bounds: { x: number; y: number; width: number; height: number } }> };
     label: () => string;
   }) => { show: () => void; hide: () => void; count: () => number };
-  computerUseOverlayHtml: (label: string) => string;
+  computerUseOverlayHtml: (options?: string | { label?: string; hint?: string; showStatus?: boolean }) => string;
 };
 
 function fakeElectron(displays: number) {
@@ -72,6 +72,8 @@ describe("屏幕四角描边", () => {
     });
     expect(created[0].setIgnoreMouseEvents).toHaveBeenCalledWith(true);
     expect(created[0].setAlwaysOnTop).toHaveBeenCalledWith(true, "screen-saver");
+    expect(decodeURIComponent(String(created[0].loadURL.mock.calls[0]?.[0]))).toContain("Computer Use 正在操作 Mosael");
+    expect(decodeURIComponent(String(created[1].loadURL.mock.calls[0]?.[0]))).not.toContain("Computer Use 正在操作 Mosael");
 
     overlay.show(); // 重复显示不叠窗口
     expect(created).toHaveLength(2);
@@ -81,10 +83,20 @@ describe("屏幕四角描边", () => {
     expect(overlay.count()).toBe(0);
   });
 
-  it("只画那圈边,不再重复写「正在操作」——窗口里那条提示条已经在说同一件事", () => {
-    const html = computerUseOverlayHtml();
-    expect(html).toContain("border:3px solid");
-    expect(html).not.toContain("Computer Use");
-    expect(html).not.toContain("正在操作");
+  it("默认只有红边;主屏状态胶囊只在启用时出现", () => {
+    const plain = computerUseOverlayHtml();
+    expect(plain).toContain("border:3px solid");
+    expect(plain).not.toContain("Computer Use");
+
+    const html = computerUseOverlayHtml({
+      showStatus: true,
+      label: "Computer Use 正在操作 Mosael",
+      hint: "⌘⇧Esc 随时急停",
+    });
+    expect(html).toContain("top:52px");
+    expect(html).toContain("Computer Use 正在操作 Mosael");
+    expect(html).toContain("⌘⇧Esc 随时急停");
+    expect(computerUseOverlayHtml({ showStatus: true, label: "<script>alert(1)</script>" }))
+      .toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
 });

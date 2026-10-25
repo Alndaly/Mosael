@@ -354,7 +354,12 @@ function pushComputerUseState(state) {
   if (win && !win.isDestroyed()) win.webContents.send(IPC.event.computerUseState, running);
 }
 
-const computerUseOverlay = createComputerUseOverlay({ BrowserWindow, screen });
+const computerUseOverlay = createComputerUseOverlay({
+  BrowserWindow,
+  screen,
+  label: () => t("computerUseActive"),
+  hint: () => t("computerUseHint"),
+});
 const computerUseCursor = createComputerUseCursor({ BrowserWindow });
 
 const { OwnWindowDriver } = require("./computerUse/ownWindowDriver.cjs");

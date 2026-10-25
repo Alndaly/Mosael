@@ -6,23 +6,47 @@
 // 它只画,不判断:什么时候亮、什么时候灭由 computerUseGuard.cjs 的状态说了算。
 
 /**
- * 只画一圈红边。**不再写「正在操作」那句话** —— 窗口里那条提示条已经把同一件事说了,还带着
- * 「停止」按钮;两边各说一遍就是同一语义画了两遍(维护者反复提的那条)。
+ * 红边 + 主屏顶部状态胶囊。红边负责“现在被控制中”;胶囊负责切到别的应用时仍看得见
+ * “谁在操作、怎么停”。窗口内提示条仍然保留,因为它带可点击的「停止」按钮。
  */
-function computerUseOverlayHtml() {
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]);
+}
+
+function computerUseOverlayHtml(options = {}) {
+  const settings = typeof options === "string" ? { label: options } : options;
+  const label = settings.label ?? "";
+  const hint = settings.hint ?? "";
+  const status = settings.showStatus && label
+    ? `<div style="position:fixed;top:52px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:min(720px,calc(100vw - 40px));padding:8px 14px;border:1px solid rgba(239,68,68,.55);border-radius:999px;background:rgba(17,20,24,.94);box-shadow:0 10px 30px rgba(0,0,0,.35);color:#f7f8fa;font:12px/1.35 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;pointer-events:none;white-space:nowrap">
+      <span style="width:7px;height:7px;flex:none;border-radius:999px;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.18)"></span>
+      <span style="font-weight:600">${escapeHtml(label)}</span>
+      ${hint ? `<span style="color:rgba(247,248,250,.58)">${escapeHtml(hint)}</span>` : ""}
+    </div>`
+    : "";
   return `<!doctype html><html><body style="margin:0;background:transparent;overflow:hidden">
   <div style="position:fixed;inset:0;border:3px solid rgba(239,68,68,0.92);border-radius:16px;box-sizing:border-box"></div>
+  ${status}
   </body></html>`;
 }
 
 function createComputerUseOverlay(options = {}) {
   const BrowserWindow = options.BrowserWindow;
   const screen = options.screen;
+  const getLabel = typeof options.label === "function" ? options.label : () => options.label ?? "";
+  const getHint = typeof options.hint === "function" ? options.hint : () => options.hint ?? "";
   let windows = [];
 
   function show() {
     if (!BrowserWindow || !screen || windows.length > 0) return;
-    for (const display of screen.getAllDisplays()) {
+    const displays = screen.getAllDisplays();
+    displays.forEach((display, index) => {
       const overlay = new BrowserWindow({
         x: display.bounds.x,
         y: display.bounds.y,
@@ -43,10 +67,15 @@ function createComputerUseOverlay(options = {}) {
       });
       overlay.setIgnoreMouseEvents(true);
       overlay.setAlwaysOnTop(true, "screen-saver");
-      void overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(computerUseOverlayHtml())}`);
+      const html = computerUseOverlayHtml({
+        label: getLabel(),
+        hint: getHint(),
+        showStatus: index === 0,
+      });
+      void overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
       overlay.once("ready-to-show", () => overlay.showInactive());
       windows.push(overlay);
-    }
+    });
   }
 
   function hide() {
