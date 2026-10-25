@@ -702,7 +702,7 @@ def comfyui(c: Capture) -> None:
     refreshed it, and each set should show it in its own language."""
     c.goto("plugins")
     c.page.get_by_role("button", name=re.compile("^ComfyUI")).first.click()
-    c.connection("offline").get_by_role("button", name=c.word("刷新工作流")).click()
+    c.connection("offline").get_by_role("button", name=c.word("刷新工作流", "Refresh workflows")).click()
     c.hold(2500)
     c.page.mouse.move(1000, 860)
     c.hold(600)
@@ -765,7 +765,7 @@ def workflow_library(c: Capture) -> None:
     # Pasted in one go, like a paste (keyboard.insert_text), not typed character by character.
     c.page.keyboard.insert_text(SEED.COMFY.IMPORT_SAMPLE)
     c.hold(1200)
-    importer.get_by_role("button", name=c.word("认一下")).click()
+    importer.get_by_role("button", name=c.word("认一下", "Read it")).click()
     importer.get_by_text(c.word("工作流路径")).wait_for()
     c.hold(1500)
     c.page.mouse.move(720, 520)
@@ -1042,6 +1042,7 @@ def main() -> None:
                      "note": "Live interface captures from an isolated demo backend seeded by website/scripts/seed-doc-demo.py. "
                              "Licensed sample footage and manually prepared editing exercise; no simulated AI replies, "
                              "tool successes or publishing successes."})
+    failures: list[tuple[str, str, str, str]] = []
     with sync_playwright() as p, tempfile.TemporaryDirectory(prefix="mosael-record-") as tmp:
         browser = p.chromium.launch()
         for locale in locales:
@@ -1077,12 +1078,13 @@ def main() -> None:
                     c = Capture(page, locale, theme, fixture, args.app, out)
                     try:
                         fn(c)
-                    except Exception:
+                    except Exception as error:
                         failure = Path(tempfile.gettempdir()) / f"mosael-capture-failure-{locale}-{theme}-{name}"
                         page.screenshot(path=f"{failure}.png")
                         Path(f"{failure}.txt").write_text(page.locator("body").inner_text())
-                        print(f"Failure screenshot: {failure}.png", flush=True)
-                        raise
+                        failures.append((locale, theme, name, str(error)))
+                        print(f"Failure screenshot: {failure}.png ({error})", flush=True)
+                        continue
                     duration = time.monotonic() - c.start
                     video = page.video
                     context.close()
@@ -1111,6 +1113,10 @@ def main() -> None:
                             "capturedAt": captured_at, "bytes": target.stat().st_size,
                             "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
                     manifest.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        if failures:
+            print("FAILED scenes (others completed):", flush=True)
+            for locale, theme, name, error in failures:
+                print(f"  {locale}/{theme}/{name}: {error.splitlines()[0]}", flush=True)
         browser.close()
     print("Trial captures written to " + str(out) if trial else "Capture manifest saved.", flush=True)
 
