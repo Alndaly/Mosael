@@ -13,6 +13,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
+from app.core.unit_of_work import after_commit
 from app.db.models import (
     AgentMemory,
     AgentMessage,
@@ -196,7 +197,9 @@ def ask(db: Session, user: User, session_id: str, questions: list[dict[str, Any]
     row = agent_questions.ask(db, workspace_id=session.workspace_id, session_id=session.id, questions=questions)
     from app.domain.agent import origins
 
-    origins.question_opened(db, row)
+    # 和确认卡同一条事务边界:等问题行真的提交后再发卡。提前发卡会留下“点得快就查不到”
+    # 的窗口,请求失败回滚时还会在飞书里留一张永远答不了的卡。
+    after_commit(db, lambda: origins.question_opened_after_commit(row))
     return row
 
 
@@ -230,12 +233,16 @@ def answer(db: Session, user: User, question_id: str, answers: dict[str, Any]) -
 
 
 def dismiss(db: Session, user: User, question_id: str) -> AgentQuestion:
-    """不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。"""
+    """不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。
+
+    只有**真的**把 pending 翻成 dismissed 的那一次才投递 —— 重复点击 / 回调重投不能再造一条用户消息。
+    """
     row = _question_row(db, question_id)
     _question_session(db, user, row.session_id, write=True)
-    dismissed = agent_questions.dismiss(db, row)
-    agent_questions.deliver_to_session(db, dismissed, user)
-    return dismissed
+    changed = agent_questions.dismiss(db, row)
+    if changed:
+        agent_questions.deliver_to_session(db, row, user)
+    return row
 
 
 # ---------------- 跨会话记忆 ----------------

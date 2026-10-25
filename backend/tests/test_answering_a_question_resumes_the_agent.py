@@ -73,6 +73,33 @@ def test_跳过也要有下文() -> None:
     assert len(said) == 1 and "跳过" in said[0], said
 
 
+def test_重复跳过不会重复送达() -> None:
+    """跳过也是 decision:只有真正把 pending 翻成 dismissed 的那一次才送。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    session_id, question_id = _ask(client, workspace["id"])
+
+    assert client.post(f"/api/agent/questions/{question_id}/dismiss").status_code == 200
+    assert client.post(f"/api/agent/questions/{question_id}/dismiss").status_code == 200
+
+    said = _user_messages(session_id)
+    assert len(said) == 1 and "跳过" in said[0], said
+
+
+def test_答过之后再跳过不会再生一条用户消息() -> None:
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    session_id, question_id = _ask(client, workspace["id"])
+
+    client.post(
+        f"/api/agent/questions/{question_id}/answer",
+        json={"answers": {"成片走哪个方向?": ["告白场景"]}},
+    )
+    skip = client.post(f"/api/agent/questions/{question_id}/dismiss")
+    assert skip.status_code == 200, skip.text
+    assert len(_user_messages(session_id)) == 1
+
+
 def test_答案本身仍然记在那一行上() -> None:
     """送回对话是**额外**的一步,不能因此丢了 get_answer 那条路 —— 两个消费者都要有。"""
     client = fresh_client()

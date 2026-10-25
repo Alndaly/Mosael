@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from app.core.db import SessionLocal
 from app.db.models import AgentQuestion, AgentSession, ToolConfirmation
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,18 @@ def question_opened(db: Session, question: AgentQuestion) -> None:
         handler.question_opened(db, question)
     except Exception:  # noqa: BLE001 —— 渠道那头出问题不该让问题本身消失
         logger.exception("announcing a question to %s failed question=%s", session.origin, getattr(question, "id", ""))
+
+
+def confirmation_opened_after_commit(confirmation: ToolConfirmation) -> None:
+    """`after_commit` 入口:原会话已经提交,不能再用它发 SQL;新开一个只读会话把卡推出去。"""
+    with SessionLocal() as db:
+        confirmation_opened(db, confirmation)
+
+
+def question_opened_after_commit(question: AgentQuestion) -> None:
+    """`after_commit` 入口:同 `confirmation_opened_after_commit`。"""
+    with SessionLocal() as db:
+        question_opened(db, question)
 
 
 def waiting_for_user(origin: str | None, session_id: str, waiting: bool) -> None:

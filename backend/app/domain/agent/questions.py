@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
@@ -130,22 +130,37 @@ def answer(db: Session, row: AgentQuestion, answers: dict[str, Any]) -> AgentQue
             if len(one) > MAX_FREE_TEXT_CHARS:
                 raise QuestionError("questionErr_freeTextTooLong", question=question, max=MAX_FREE_TEXT_CHARS)
         cleaned[str(question)] = values
-    row.answers = cleaned
-    row.status = "answered"
-    row.answered_at = now()
-    db.flush()
+    #: **认领和写入是一条条件更新。** 页面上的「已经答过了」只是先看一眼;真正裁决的是
+    #: `WHERE status='pending'`。飞书卡片回调是至少一次投递,两次点击各自读到 pending 时,
+    #: 先到的那条 UPDATE 赢;输的那条不能也去 deliver_to_session(否则同一选择会变成两条用户消息,
+    #: 再起两轮模型)。
+    claimed = db.execute(
+        update(AgentQuestion)
+        .where(AgentQuestion.id == row.id, AgentQuestion.status == "pending")
+        .values(status="answered", answers=cleaned, answered_at=now())
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        db.refresh(row)
+        raise QuestionError("questionErr_alreadyAnswered")
     db.refresh(row)
     return row
 
 
-def dismiss(db: Session, row: AgentQuestion) -> AgentQuestion:
-    """用户不想答。模型该继续往下走,而不是卡住 —— 见 mcp_server.ask_user 的回包。"""
-    if row.status == "pending":
-        row.status = "dismissed"
-        row.answered_at = now()
-        db.flush()
-        db.refresh(row)
-    return row
+def dismiss(db: Session, row: AgentQuestion) -> bool:
+    """用户不想答。返回这次**真的**把 pending 翻成 dismissed 了没有。
+
+    和 `answer` 同一条 CAS:重复点击 / 回调重投 / 已经答过之后再点跳过,都不能再送一条
+    “我跳过了”的用户消息。模型该继续往下走,但只在第一次跳过时有人需要把结果送回去。
+    """
+    changed = db.execute(
+        update(AgentQuestion)
+        .where(AgentQuestion.id == row.id, AgentQuestion.status == "pending")
+        .values(status="dismissed", answered_at=now())
+        .execution_options(synchronize_session=False)
+    )
+    db.refresh(row)
+    return changed.rowcount == 1
 
 
 def deliver_to_session(db: Session, row: AgentQuestion, user: User) -> None:

@@ -14,6 +14,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, User
 from app.domain.agent import autopilot, origins
 from app.domain.agent.confirmations import request_confirmation
@@ -53,5 +54,7 @@ def propose(
     # 飞书那边也不用推一张没人需要点的卡。
     if autopilot.consider(db, user, confirmation):
         return confirmation
-    origins.confirmation_opened(db, confirmation)
+    # 卡片必须等这次事务提交后再发:飞书那边点得快,回调会在行还不可见时到达;请求失败回滚时,
+    # 提前发出的卡也会变成一张永远点不动的死卡。推送本身是集成层的事,这里只登记提交后钩子。
+    after_commit(db, lambda: origins.confirmation_opened_after_commit(confirmation))
     return confirmation

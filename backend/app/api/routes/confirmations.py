@@ -14,7 +14,7 @@ router = APIRouter(tags=["confirmations"])
 
 @router.post("/confirmations", response_model=ConfirmationOut)
 def create_confirmation(
-    body: ConfirmationCreate, db: DbSession, user: CurrentUser, token: PresentedToken
+    body: ConfirmationCreate, db: Tx, user: CurrentUser, token: PresentedToken
 ) -> ToolConfirmation:
     """开卡的四步(过闸、建卡、判自动放行、推到原渠道)在 domain/agent/proposals.propose,智能体工具直接调同一个。
 
