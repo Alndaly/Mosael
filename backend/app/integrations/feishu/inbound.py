@@ -508,9 +508,20 @@ def _announce(db: Session, confirmation) -> None:
     announce_confirmation(db, confirmation)
 
 
+def _announce_question(db: Session, question) -> None:
+    from app.integrations.feishu import question_cards
+
+    question_cards.announce(db, question)
+
+
 origins.register(
     "feishu",
-    origins.ExternalOrigin(system_note=system_note, turn_finished=deliver_turn, confirmation_opened=_announce),
+    origins.ExternalOrigin(
+        system_note=system_note,
+        turn_finished=deliver_turn,
+        confirmation_opened=_announce,
+        question_opened=_announce_question,
+    ),
 )
 
 

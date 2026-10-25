@@ -174,7 +174,11 @@ def cited_message(db: Session, user: User, workspace_id: str, message_id: str) -
 def ask(db: Session, user: User, session_id: str, questions: list[dict[str, Any]]) -> AgentQuestion:
     """问题落在它那次对话里,往里问是写 —— 和发消息同一道闸。工作区跟着对话走,不由调用方另报。"""
     session = writable_session(db, user, session_id)
-    return agent_questions.ask(db, workspace_id=session.workspace_id, session_id=session.id, questions=questions)
+    row = agent_questions.ask(db, workspace_id=session.workspace_id, session_id=session.id, questions=questions)
+    from app.domain.agent import origins
+
+    origins.question_opened(db, row)
+    return row
 
 
 def _question_row(db: Session, question_id: str) -> AgentQuestion:

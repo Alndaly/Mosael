@@ -441,10 +441,12 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
         authorize_and_approve,
         authorize_and_reject,
     )
-    from app.integrations.feishu import cards
+    from app.integrations.feishu import cards, question_cards
 
     action = str(value.get("action") or "")
     confirmation_id = str(value.get("confirmation_id") or "")
+    if action in question_cards.ACTIONS:
+        return question_cards.handle_card_action(open_id, value, bot_id)
     #: **按动作名分流**:工具确认卡(改什么要人同意)和工作流的「等人确认」共用这一个回调入
     #: 口(见 connections.dispatch)。两件事的决定落在两张不同的单上,但"把 open_id 认成人、
     #: 把领域异常翻成 toast"这层是一样的 —— 所以是同一个入口,不是一个复制出来的入口。

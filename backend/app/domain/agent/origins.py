@@ -22,7 +22,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentSession, ToolConfirmation
+from app.db.models import AgentQuestion, AgentSession, ToolConfirmation
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class ExternalOrigin:
     system_note: Callable[[Session, AgentSession], str] | None = None
     turn_finished: Callable[[str], None] | None = None
     confirmation_opened: Callable[[Session, ToolConfirmation], None] | None = None
+    question_opened: Callable[[Session, AgentQuestion], None] | None = None
 
 
 _origins: dict[str, ExternalOrigin] = {}
@@ -71,3 +72,18 @@ def confirmation_opened(db: Session, confirmation: ToolConfirmation) -> None:
         handler.confirmation_opened(db, confirmation)
     except Exception:  # noqa: BLE001 —— 见 docstring
         logger.exception("announcing a confirmation to %s failed confirmation=%s", session.origin, confirmation.id)
+
+
+def question_opened(db: Session, question: AgentQuestion) -> None:
+    """一组选项问题挂在外部会话上时,交给那个渠道去推。推送失败只记日志 —— 问题本身已经落库。"""
+    session_id = getattr(question, "session_id", None)
+    if not session_id:
+        return
+    session = db.get(AgentSession, session_id)
+    handler = _origins.get((session.origin if session is not None else "") or "")
+    if handler is None or handler.question_opened is None:
+        return
+    try:
+        handler.question_opened(db, question)
+    except Exception:  # noqa: BLE001 —— 渠道那头出问题不该让问题本身消失
+        logger.exception("announcing a question to %s failed question=%s", session.origin, getattr(question, "id", ""))
