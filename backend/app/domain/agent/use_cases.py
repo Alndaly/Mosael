@@ -229,6 +229,9 @@ def answer(db: Session, user: User, question_id: str, answers: dict[str, Any]) -
     _question_session(db, user, row.session_id, write=True)
     answered = agent_questions.answer(db, row, answers)
     agent_questions.deliver_to_session(db, answered, user)
+    from app.domain.agent import origins
+
+    after_commit(db, lambda: origins.question_settled_after_commit(answered))
     return answered
 
 
@@ -242,6 +245,9 @@ def dismiss(db: Session, user: User, question_id: str) -> AgentQuestion:
     changed = agent_questions.dismiss(db, row)
     if changed:
         agent_questions.deliver_to_session(db, row, user)
+        from app.domain.agent import origins
+
+        after_commit(db, lambda: origins.question_settled_after_commit(row))
     return row
 
 

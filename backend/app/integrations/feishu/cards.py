@@ -12,14 +12,15 @@
 批准走的是与 HTTP 路由**同一个** `authorize_and_approve`,且**按点击者**校验:卡片是他批的,
 这次执行就记在他头上(见 domain/agent/confirmations 与 tests/test_agent_identity_ratchet.py)。
 
-## 为什么不用存 message_id
+## 消息 id:回调响应优先,消息 id 兜底
 
-卡片回调允许在响应里直接返回一张新卡片,飞书会就地替换原卡。所以「批准后把卡更新成结果态」
-不需要我们记住 message_id,也就不必给 ToolConfirmation 加列。
+批准时的回调响应可以就地换卡,这是最快的一条路;但它有 2.5 秒预算,超时后响应会被丢掉。
+应用内批准 / 过期也没有回调可搭车。所以工具确认卡和问题卡都保存 `feishu_message_id`:
+回调响应能到就响应,到不了(或不是从卡片触发)就用 `PATCH im/v1/messages/:message_id`
+把原卡收回成结果态。工作流确认卡原本就存这一格(ADR 0069)。
 
-**这条只对**工具确认卡**成立**:点击者还在回调那条线上。工作流的「等人确认」还有两条**没有回调可搭车**
-的结束方式(取消 / 超时),那里只能拿着消息 id 去 PATCH —— 所以那张单存了 `feishu_message_id`
-(见 domain/workflows/approvals 与 ADR 0069)。
+**不存在“不用存”的卡片了。** 没有消息 id 时只能让旧卡继续可点,用户第二次点才得到
+“已经处理过了” —— 这是一句误导,不是结果。
 """
 
 from __future__ import annotations
