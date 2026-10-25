@@ -1064,7 +1064,7 @@ function RecentToolRow({ call }: { call: ToolCall }) {
         <ChevronDown size={12} className={cn("shrink-0 text-muted-foreground/70 transition-transform", open && "rotate-180")} />
       </Button>
       {open && (
-        <div className="grid gap-1 pb-1.5">
+        <div className="grid gap-1 pb-1.5 pt-1">
           {hasDetail ? (
             <>
               {call.args != null && <ToolPayload label={t("agentToolArgs")} value={call.args} />}
