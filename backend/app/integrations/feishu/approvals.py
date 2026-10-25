@@ -519,5 +519,4 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
         settled = cards.settled_card(
             summary=summary, tool=tool, decision=decision, by=user.username
         )
-        _update_sent_card(db, card_bot_id, confirmation.feishu_message_id, settled)
         return CardDecision({"card": {"type": "raw", "data": settled}})

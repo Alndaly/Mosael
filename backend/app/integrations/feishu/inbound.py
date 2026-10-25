@@ -31,6 +31,7 @@ from app.db.models import (
     FeishuBot,
     FeishuInboundMessage,
     Job,
+    User,
     Workflow,
     WorkflowTrigger,
     WorkflowTriggerEvent,
@@ -673,6 +674,43 @@ def _announce(db: Session, confirmation) -> str | None:
     return announce_confirmation(db, confirmation)
 
 
+def _settle_question(db: Session, question) -> None:
+    from app.integrations.feishu import question_cards
+
+    origin = None
+    if question.session_id:
+        session = db.get(AgentSession, question.session_id)
+        if session is not None:
+            origin = _route(db, session)
+    if origin is None or not question.feishu_message_id:
+        return
+    client.update_card(origin[0], question.feishu_message_id, question_cards.settled_question_card(question))
+
+
+def _settle_confirmation(db: Session, confirmation) -> None:
+    from app.integrations.feishu import cards
+    from app.integrations.feishu.approvals import _full_summary
+
+    if confirmation.status not in {"approved", "executed", "rejected"} or not confirmation.feishu_message_id:
+        return
+    origin = None
+    if confirmation.session_id:
+        session = db.get(AgentSession, confirmation.session_id)
+        if session is not None:
+            origin = _route(db, session)
+    if origin is None:
+        return
+    decision = "approved" if confirmation.status in {"approved", "executed"} else "rejected"
+    decided_by = db.get(User, confirmation.decided_by) if confirmation.decided_by else None
+    settled = cards.settled_card(
+        summary=_full_summary(confirmation),
+        tool=confirmation.tool,
+        decision=decision,
+        by=decided_by.username if decided_by is not None else "",
+    )
+    client.update_card(origin[0], confirmation.feishu_message_id, settled)
+
+
 def _announce_question(db: Session, question) -> str | None:
     from app.integrations.feishu import question_cards
 
@@ -685,7 +723,9 @@ origins.register(
         system_note=system_note,
         turn_finished=deliver_turn,
         confirmation_opened=_announce,
+        confirmation_settled=_settle_confirmation,
         question_opened=_announce_question,
+        question_settled=_settle_question,
         waiting_for_user=_waiting_for_user,
     ),
 )

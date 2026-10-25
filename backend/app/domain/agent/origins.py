@@ -33,7 +33,9 @@ class ExternalOrigin:
     system_note: Callable[[Session, AgentSession], str] | None = None
     turn_finished: Callable[[str, str | None], None] | None = None
     confirmation_opened: Callable[[Session, ToolConfirmation], str | None] | None = None
+    confirmation_settled: Callable[[Session, ToolConfirmation], None] | None = None
     question_opened: Callable[[Session, AgentQuestion], str | None] | None = None
+    question_settled: Callable[[Session, AgentQuestion], None] | None = None
     #: 智能体开始 / 结束等用户操作(确认卡、选择卡)。等待时它没有在生成,`Typing` 这类
     #: “正在回复”的状态该摘;等完接着生成时要贴回去。参数是 `(session_id, waiting)`。
     waiting_for_user: Callable[[str, bool], None] | None = None
@@ -109,6 +111,19 @@ def confirmation_opened_after_commit(confirmation: ToolConfirmation) -> None:
                 db.commit()
 
 
+def confirmation_settled_after_commit(confirmation: ToolConfirmation) -> None:
+    """工具确认卡在应用内/回调里有了结论后,给外部渠道一次收卡的机会。"""
+    with SessionLocal() as db:
+        session = db.get(AgentSession, confirmation.session_id) if confirmation.session_id else None
+        handler = _origins.get((session.origin if session is not None else "") or "")
+        if handler is None or handler.confirmation_settled is None:
+            return
+        try:
+            handler.confirmation_settled(db, confirmation)
+        except Exception:  # noqa: BLE001 —— 状态已经落库,收卡失败只记日志
+            logger.exception("settling confirmation %s on %s failed", confirmation.id, session.origin)
+
+
 def question_opened_after_commit(question: AgentQuestion) -> None:
     """`after_commit` 入口:同 `confirmation_opened_after_commit`。"""
     with SessionLocal() as db:
@@ -118,6 +133,19 @@ def question_opened_after_commit(question: AgentQuestion) -> None:
             if row is not None:
                 row.feishu_message_id = message_id
                 db.commit()
+
+
+def question_settled_after_commit(question: AgentQuestion) -> None:
+    """问题在应用内被回答/跳过之后,给外部渠道一次收回原卡的机会。"""
+    with SessionLocal() as db:
+        session = db.get(AgentSession, question.session_id)
+        handler = _origins.get((session.origin if session is not None else "") or "")
+        if handler is None or handler.question_settled is None:
+            return
+        try:
+            handler.question_settled(db, question)
+        except Exception:  # noqa: BLE001 —— 状态已经落库,收卡失败只记日志
+            logger.exception("settling question %s on %s failed", question.id, session.origin)
 
 
 def waiting_for_user(origin: str | None, session_id: str, waiting: bool) -> None:

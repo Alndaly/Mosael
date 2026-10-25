@@ -255,12 +255,4 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             return {"toast": {"type": "error", "content": "处理失败,请到 Mosael 里查看"}}
 
         settled = settled_question_card(answered)
-        if origin is not None and answered.feishu_message_id:
-            try:
-                client.update_card(origin[0], answered.feishu_message_id, settled)
-            except Exception:  # noqa: BLE001 —— 回调响应仍会更新;这里失败只记日志
-                logger.warning(
-                    "feishu question card update failed question=%s message=%s",
-                    question_id, answered.feishu_message_id, exc_info=True,
-                )
         return {"card": {"type": "raw", "data": settled}}

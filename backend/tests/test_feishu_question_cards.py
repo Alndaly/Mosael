@@ -157,3 +157,36 @@ def test_waiting_finished_without_paused_typing_is_a_no_op(monkeypatch) -> None:
     monkeypatch.setattr(inbound, "_route_for_session", lambda sid: called.append(sid) or None)
     inbound._waiting_for_user("feishu-no-paused", False)
     assert called == []
+
+
+def test_飞书问题卡消息_id_会落库(monkeypatch) -> None:
+    from app.core.db import SessionLocal
+    from app.db.models import AgentQuestion
+    from app.domain.agent import host
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    bot = client.post(
+        "/api/feishu/bots",
+        json={"workspace_id": ws["id"], "app_id": "cli_question_id", "app_secret": "s"},
+    ).json()
+    with SessionLocal() as db:
+        session = host.get_or_create_external_session(
+            db, workspace_id=ws["id"], origin="feishu",
+            external_key=f"feishu:{bot['id']}:oc_q", title="飞书",
+        )
+        db.commit()
+        session_id = session.id
+
+    monkeypatch.setattr(question_cards.client, "send_card", lambda *args, **kwargs: "om_question")
+    created = client.post(
+        "/api/agent/questions",
+        json={"session_id": session_id, "questions": [{
+            "header": "风格", "question": "选一个风格",
+            "options": [{"label": "简洁"}, {"label": "丰富"}],
+        }]},
+    )
+    assert created.status_code in (200, 201), created.text
+    with SessionLocal() as db:
+        assert db.get(AgentQuestion, created.json()["id"]).feishu_message_id == "om_question"

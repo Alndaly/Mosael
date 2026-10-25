@@ -6,6 +6,7 @@ from sqlalchemy import false, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import DEFAULT_LOCALE, render_message
+from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, User, now
 from app.domain.agent.confirmable import tool_spec
 from app.domain.agent.errors import ConfirmationError
@@ -227,10 +228,18 @@ def decidable_filter(db: Session, user: User, workspace_id: str) -> Any:
 
 
 
+def _notify_card_settled(db: Session, confirmation: ToolConfirmation) -> None:
+    """提交之后让外部渠道收回原卡。没有 feishu_message_id 的卡由集成层自身 no-op。"""
+    from app.domain.agent import origins
+
+    after_commit(db, lambda: origins.confirmation_settled_after_commit(confirmation))
+
+
 def reject_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConfirmation:
     _claim(db, confirmation, "rejected")
     confirmation.resolved_at = now()
     db.flush()
+    _notify_card_settled(db, confirmation)
     return confirmation
 
 
@@ -263,6 +272,7 @@ def approve_confirmation(
     # 不提交:批准的入口(路由、飞书回调、自动放行的线程)提交。认领那一笔已经在 _claim 里落了。
     db.flush()
     db.refresh(confirmation)
+    _notify_card_settled(db, confirmation)
     return confirmation
 
 
