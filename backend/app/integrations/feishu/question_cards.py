@@ -104,12 +104,13 @@ def question_card(row: AgentQuestion) -> dict[str, Any]:
                 *[_question_block(index, question) for index, question in enumerate(questions)],
                 {
                     "tag": "column_set",
-                    "flex_mode": "none",
+                    "flex_mode": "bisect",
                     "horizontal_spacing": "default",
                     "columns": [
                         {
                             "tag": "column",
-                            "width": "auto",
+                            "width": "weighted",
+                            "weight": 1,
                             "vertical_align": "top",
                             "elements": [
                                 {
@@ -118,13 +119,15 @@ def question_card(row: AgentQuestion) -> dict[str, Any]:
                                     "name": "mosael_questions_skip",
                                     "text": {"tag": "plain_text", "content": "跳过"},
                                     "type": "default",
+                                    "width": "fill",
                                     "value": {"action": ACTION_SKIP, "question_id": row.id},
                                 }
                             ],
                         },
                         {
                             "tag": "column",
-                            "width": "auto",
+                            "width": "weighted",
+                            "weight": 1,
                             "vertical_align": "top",
                             "elements": [
                                 {
@@ -133,6 +136,7 @@ def question_card(row: AgentQuestion) -> dict[str, Any]:
                                     "name": SUBMIT_NAME,
                                     "type": "primary",
                                     "text": {"tag": "plain_text", "content": "提交"},
+                                    "width": "fill",
                                     "value": {"action": ACTION_ANSWER, "question_id": row.id},
                                 }
                             ],
