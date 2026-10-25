@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.2.1": {
+    zh: [
+      "**飞书卡片 UI 统一铺满。** 确认卡、审批卡、选择卡的并列按钮都改成等宽列里的 `fill` 按钮，跳过/提交、同意/拒绝合起来占满一行；输入框与下拉占满整行，只有纯文案行保持默认整行宽度。",
+      "**飞书卡片有了完整生命周期。** 卡片发出去后保存消息 id；回调超时、应用内批准/拒绝/作答/跳过、确认卡过期时都会 `PATCH` 原卡，不再留一张还能点的旧卡。过期确认卡显示「已失效」。",
+      "**飞书入站与触发器更可靠。** 入站消息有跨重启的持久收件箱，重启后会继续 drain 排队消息；线程异常不再静默吞消息；触发器把来源群写进 job，混合认领不再回落智能体，发送者必须有 `edit` 权限。",
+      "**网络、凭据与安全边界。** httpx 网络错误统一成 `FeishuError`，凭据轮换立即失效旧 token；卡片/文本/下载有明确大小上限；绑定码原子单次使用、加长并写审计；worker 不再继承主密钥。",
+    ],
+    en: [
+      "**Feishu cards now fill their rows.** Confirmation, approval and question cards use equal-width columns with `fill` buttons, so skip/submit and approve/reject share one full-width row; inputs and selects span the row, while text-only rows keep the default width.",
+      "**Feishu cards have a full lifecycle.** Each sent card stores its message id. Slow callbacks, in-app approve/reject/answer/skip and card expiry all `PATCH` the original message instead of leaving a clickable stale card; expired confirmations become “Expired”.",
+      "**More reliable Feishu inbound and triggers.** A durable inbox deduplicates across restarts, queued messages are drained after restart, and inbound thread failures are contained. Trigger jobs carry their origin chat, mixed claims no longer fall through to the agent, and senders need `edit` permission.",
+      "**Network, credential and security boundaries.** httpx failures become `FeishuError`, credential rotation invalidates the old token, card/text/download sizes are capped, bind codes are longer, atomic and audited, and the worker no longer inherits the master key.",
+    ],
+  },
   "v2.2.0": {
     zh: [
       "**发布矩阵补上图文与长文。** 抖音图文 / 文章、小红书图文 / 长文、X 图文 / 长文、TikTok 图文、B 站专栏、视频号图文都接上了；发布页和工作流的发布节点共用同一套「内容类型 + 素材 + 正文 + 平台选项」，封面要不要给由平台声明(required / optional / none)，而不是写死在表单里。七家平台的入口、成功信号和真机核对过的上限收进站点契约，每天用不登录的浏览器冒烟一次。",
