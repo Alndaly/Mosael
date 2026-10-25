@@ -21,11 +21,16 @@ it("工具说明里的记号渲染成格式,按钮里不套链接", () => {
     description: "[插件·OSS] 交回一条**限时直链**,传给 `reference_video`。见 [文档](https://example.com)",
     parameters: { type: "object", properties: {} },
     confirmation: false,
+    read_only: true,
+    awaits_answer: false,
   };
   const { container } = render(<ToolBrowserRow tool={tool as never} />);
   expect(screen.getByText("限时直链").tagName).toBe("STRONG");
   expect(screen.getByText("reference_video").tagName).toBe("CODE");
   expect(container.querySelector("button a")).toBeNull();
+  expect(screen.getByText("agentToolPlugin")).toBeInTheDocument();
+  expect(screen.getByText("agentToolReadOnly")).toBeInTheDocument();
+  expect(screen.getByText("agentToolNoParams")).toBeInTheDocument();
   fireEvent.click(container.querySelector("button")!);
   expect(container.textContent).not.toMatch(/\*\*|`|\]\(/);
 });

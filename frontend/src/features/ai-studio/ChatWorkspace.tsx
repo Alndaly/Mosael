@@ -1094,9 +1094,29 @@ function ToolPayload({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+/** 工具卡片的参数概览:几个参数、其中几个必填。JSON Schema 缺 properties 时算无参。 */
+function toolParameterStats(parameters: AgentTool["parameters"]): { total: number; required: number } {
+  const properties = (parameters as { properties?: unknown } | null | undefined)?.properties;
+  const total = properties && typeof properties === "object" ? Object.keys(properties).length : 0;
+  const required = Array.isArray((parameters as { required?: unknown } | null | undefined)?.required)
+    ? ((parameters as { required: unknown[] }).required.length)
+    : 0;
+  return { total, required };
+}
+
+/** 工具卡片上的小徽标:只读、需确认、会提问、插件来源。 */
+function ToolBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-ui-2xs font-normal text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
 export function ToolBrowserRow({ tool }: { tool: AgentTool }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
+  const stats = toolParameterStats(tool.parameters);
   return (
     <button
       type="button"
@@ -1105,11 +1125,10 @@ export function ToolBrowserRow({ tool }: { tool: AgentTool }) {
     >
       <span className="flex min-w-0 flex-wrap items-center gap-1.5">
         <ToolName name={tool.name} className="min-w-0" />
-        {tool.confirmation && (
-          <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-ui-2xs font-normal text-muted-foreground">
-            {t("agentToolNeedsConfirm")}
-          </span>
-        )}
+        {tool.name.startsWith("plugin__") && <ToolBadge>{t("agentToolPlugin")}</ToolBadge>}
+        {tool.confirmation && <ToolBadge>{t("agentToolNeedsConfirm")}</ToolBadge>}
+        {tool.read_only && <ToolBadge>{t("agentToolReadOnly")}</ToolBadge>}
+        {tool.awaits_answer && <ToolBadge>{t("agentToolAsks")}</ToolBadge>}
       </span>
       {/* 工具说明是写给模型看的,常带 `代码` 和 **强调**;在按钮里,链接只留文字。
           收着时给三行 —— 卡片比原来的一行宽裕,能多读到半句"它到底做什么";点开看全。 */}
@@ -1122,6 +1141,11 @@ export function ToolBrowserRow({ tool }: { tool: AgentTool }) {
           <InlineMarkdown text={tool.description} links={false} />
         </Truncate>
       )}
+      <span className="mt-auto border-t border-divider pt-2 text-ui-2xs tabular-nums text-muted-foreground">
+        {stats.total === 0
+          ? t("agentToolNoParams")
+          : t("agentToolParamSummary").replace("{n}", String(stats.total)).replace("{m}", String(stats.required))}
+      </span>
     </button>
   );
 }
