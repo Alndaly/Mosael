@@ -26,7 +26,7 @@ def _shot(width: int, height: int) -> dict:
         "height": height,
         "image": base64.b64encode(_png(width, height)).decode("ascii"),
         "elements": [],
-        "meta": {"windowNumber": 7},
+        "meta": {"windowNumber": 7, "capture_id": "11111111-1111-1111-1111-111111111111"},
     }
 
 
@@ -43,8 +43,8 @@ def test_desktop_observation_is_exposed_as_read_only_and_routes_the_old_tool() -
         assert specs[name]["confirmation"] is False
         assert name in mcp_server.READ_ONLY_TOOLS
         assert name not in mcp_server.CONFIRMATION_TOOLS
-    assert "no desktop click" in specs["computer_desktop_windows"]["description"].lower()
-    assert "do not claim you can click" in specs["computer_desktop_accessibility"]["description"].lower()
+    assert "separate confirmation tools" in specs["computer_desktop_windows"]["description"].lower()
+    assert "computer_desktop_click" in specs["computer_desktop_accessibility"]["description"]
     assert "computer_desktop_windows" in specs["computer_screenshot"]["description"]
 
 

@@ -434,8 +434,8 @@ def computer_desktop_windows() -> dict[str, Any]:
     """Read-only: list visible desktop windows, including other apps.
 
     Each row includes `id` for computer_desktop_screenshot and `pid` for
-    computer_desktop_accessibility, plus owner, title and geometry. This only observes;
-    no desktop click, type or scroll tool is currently exposed.
+    computer_desktop_accessibility, plus owner, title and geometry. Observation is read-only;
+    click, type and scroll are separate confirmation tools.
     """
     from app.domain.agent.computer_use import desktop_windows
 
@@ -466,12 +466,114 @@ def computer_desktop_accessibility(
     """Read-only: read another app's macOS accessibility tree by `pid`.
 
     Use computer_desktop_windows first. Returns a one-time snapshot_id and element tokens.
-    macOS asks for Accessibility through the native permission guide when needed. Tokens are
-    observations only: desktop input is not exposed yet, so do not claim you can click them.
+    macOS asks for Accessibility through the native permission guide when needed. Pass a token
+    to computer_desktop_click, computer_desktop_type or computer_desktop_scroll; the driver
+    re-reads the app and refuses the action if that element changed.
     """
     from app.domain.agent.computer_use import desktop_accessibility
 
     return desktop_accessibility(pid=pid)
+
+
+@tool(effect="confirms")
+def computer_desktop_click(
+    token: Annotated[str, Field(description="Element token from computer_desktop_accessibility. Use token OR capture_id+x/y.")] = "",
+    capture_id: Annotated[str, Field(description="capture_id from computer_desktop_screenshot. Use with x and y.")] = "",
+    x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
+    y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
+    button: Annotated[str, Field(description='"left" or "right".')] = "left",
+    click_count: Annotated[int, Field(description="1 (single) or 2 (double).")] = 1,
+    scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: click a token or captured point in another desktop app.
+
+    Use computer_desktop_accessibility for a token, or computer_desktop_screenshot for
+    capture_id plus pixel coordinates. The Electron driver refuses stale targets, moved
+    windows and protected apps (password managers, System Settings, terminals). Every click
+    waits for the user's approval unless the session already allowed edit-tier cards.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_desktop_click",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "token": token,
+                "capture_id": capture_id,
+                "x": x,
+                "y": y,
+                "button": button,
+                "click_count": click_count,
+                "scale": scale,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
+def computer_desktop_type(
+    text: Annotated[str, Field(description="What to type (at most 2000 characters).")],
+    token: Annotated[str, Field(description="Element token from computer_desktop_accessibility. Use token OR capture_id+x/y.")] = "",
+    capture_id: Annotated[str, Field(description="capture_id from computer_desktop_screenshot. Use with x and y.")] = "",
+    x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
+    y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
+    scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: type into a token or captured point in another desktop app.
+
+    The driver focuses the target app and clicks the target before typing. It refuses stale
+    targets, moved windows and protected apps. Every input waits for the user's approval
+    unless the session already allowed edit-tier cards.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_desktop_type",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "text": text,
+                "token": token,
+                "capture_id": capture_id,
+                "x": x,
+                "y": y,
+                "scale": scale,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
+def computer_desktop_scroll(
+    dy: Annotated[int, Field(description="Wheel notches: positive scrolls down, negative up (max 30).")],
+    token: Annotated[str, Field(description="Element token from computer_desktop_accessibility. Use token OR capture_id+x/y.")] = "",
+    capture_id: Annotated[str, Field(description="capture_id from computer_desktop_screenshot. Use with x and y.")] = "",
+    x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
+    y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
+    scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: scroll over a token or captured point in another desktop app.
+
+    The driver refuses stale targets, moved windows and protected apps. Every scroll waits
+    for the user's approval unless the session already allowed edit-tier cards.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_desktop_scroll",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "dy": dy,
+                "token": token,
+                "capture_id": capture_id,
+                "x": x,
+                "y": y,
+                "scale": scale,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
 
 
 @tool(effect="reads")

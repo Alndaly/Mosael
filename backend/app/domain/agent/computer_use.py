@@ -49,6 +49,9 @@ SCREENSHOT_CHANNEL = "computer:screenshot"
 DESKTOP_WINDOWS_CHANNEL = "computer:desktop-windows"
 DESKTOP_SCREENSHOT_CHANNEL = "computer:desktop-screenshot"
 DESKTOP_ACCESSIBILITY_CHANNEL = "computer:desktop-accessibility"
+DESKTOP_CLICK_CHANNEL = "computer:desktop-click"
+DESKTOP_TYPE_CHANNEL = "computer:desktop-type"
+DESKTOP_SCROLL_CHANNEL = "computer:desktop-scroll"
 #: 动手:L1 的点击与输入(ADR 0075 的 P1)。坐标是**看着的那张图**上的(缩放过的)像素,
 #: 这里除以 scale 换成窗口的 CSS 像素再交给主进程 —— 模型不需要知道缩放这回事。
 CLICK_CHANNEL = "computer:click"
@@ -106,8 +109,13 @@ def desktop_screenshot(window_id: object, scale: float = DEFAULT_SCALE) -> dict[
     answer = _host_call(DESKTOP_SCREENSHOT_CHANNEL, {"windowNumber": target})
     raw = _image_bytes(answer)
     width, height, raw = _size_and_pixels(raw, factor)
+    meta = answer.get("meta")
+    capture_id = str(meta.get("capture_id") or "") if isinstance(meta, dict) else ""
+    if not capture_id:
+        raise ComputerUseError("The desktop window bridge answered without a capture binding.")
     return {
         "window_id": target,
+        "capture_id": capture_id,
         "width": width,
         "height": height,
         "scale": factor,
@@ -130,6 +138,93 @@ def _desktop_id(value: object, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ComputerUseError(f"{name} must be a positive integer from computer_desktop_windows.")
     return value
+
+
+def _desktop_target(
+    token: object, capture_id: object, x: object, y: object, scale: float
+) -> dict[str, Any]:
+    token_text = str(token or "").strip()
+    capture_text = str(capture_id or "").strip()
+    if bool(token_text) == bool(capture_text):
+        raise ComputerUseError("Provide exactly one target: an element token, or capture_id with x and y.")
+    if token_text:
+        head, _, index = token_text.rpartition(":")
+        if not head or not index.isdigit():
+            raise ComputerUseError("The desktop element token is invalid; observe the app again.")
+        return {"token": token_text}
+    factor = _scale(scale)
+    if x is None or y is None:
+        raise ComputerUseError("capture_id needs both x and y in the screenshot you looked at.")
+    return {
+        "captureId": capture_text,
+        "x": _screenshot_coordinate(x, "x", factor),
+        "y": _screenshot_coordinate(y, "y", factor),
+    }
+
+
+def desktop_click(
+    token: object = "",
+    capture_id: object = "",
+    x: object = None,
+    y: object = None,
+    button: object = "left",
+    click_count: object = 1,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """点一下已验证的桌面目标;令牌或截图绑定由 Electron 驱动复核。"""
+    target = _desktop_target(token, capture_id, x, y, scale)
+    kind = str(button or "left").strip().lower()
+    if kind not in CLICK_BUTTONS:
+        raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
+    count = _click_count(click_count)
+    _mark_touched()
+    answer = _host_call(DESKTOP_CLICK_CHANNEL, {**target, "button": kind, "clickCount": count})
+    if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
+        raise ComputerUseError("The desktop bridge answered without confirming the click.")
+    return {**answer, "button": kind, "clickCount": count}
+
+
+def desktop_type(
+    text: object = "",
+    token: object = "",
+    capture_id: object = "",
+    x: object = None,
+    y: object = None,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在已验证的桌面目标里输入文字;只输入这一串,不按额外快捷键。"""
+    if not isinstance(text, str) or not text:
+        raise ComputerUseError("text must be a non-empty string; nothing was typed.")
+    if len(text) > MAX_TYPE_CHARS:
+        raise ComputerUseError(f"text must be at most {MAX_TYPE_CHARS} characters (got {len(text)}); nothing was typed.")
+    target = _desktop_target(token, capture_id, x, y, scale)
+    _mark_touched()
+    answer = _host_call(DESKTOP_TYPE_CHANNEL, {**target, "text": text})
+    if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
+        raise ComputerUseError("The desktop bridge answered without confirming the typing.")
+    return {**answer, "typed": len(text)}
+
+
+def desktop_scroll(
+    dy: object = 0,
+    token: object = "",
+    capture_id: object = "",
+    x: object = None,
+    y: object = None,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在已验证的桌面目标上滚动;dy > 0 向下,最多 30 格。"""
+    if isinstance(dy, bool) or not isinstance(dy, (int, float)):
+        raise ComputerUseError(f"dy must be a number of wheel notches (got {dy!r}).")
+    notches = int(dy)
+    if notches == 0 or abs(notches) > MAX_SCROLL_NOTCHES:
+        raise ComputerUseError(f"dy must be a non-zero integer between -{MAX_SCROLL_NOTCHES} and {MAX_SCROLL_NOTCHES}.")
+    target = _desktop_target(token, capture_id, x, y, scale)
+    _mark_touched()
+    answer = _host_call(DESKTOP_SCROLL_CHANNEL, {**target, "dy": notches})
+    if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
+        raise ComputerUseError("The desktop bridge answered without confirming the scroll.")
+    return {**answer, "dy": notches}
 
 
 def _mark_touched() -> None:
@@ -385,14 +480,20 @@ __all__ = [
     "MIN_SCALE",
     "SCREENSHOT_CHANNEL",
     "DESKTOP_ACCESSIBILITY_CHANNEL",
+    "DESKTOP_CLICK_CHANNEL",
     "DESKTOP_SCREENSHOT_CHANNEL",
+    "DESKTOP_SCROLL_CHANNEL",
+    "DESKTOP_TYPE_CHANNEL",
     "DESKTOP_WINDOWS_CHANNEL",
     "SCROLL_CHANNEL",
     "TYPE_CHANNEL",
     "click",
     "end_turn",
     "desktop_accessibility",
+    "desktop_click",
     "desktop_screenshot",
+    "desktop_scroll",
+    "desktop_type",
     "desktop_windows",
     "screenshot",
     "scroll",

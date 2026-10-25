@@ -1,7 +1,7 @@
 # ADR 0075 · Computer Use：三层的边界与安全模型
 
 - 状态：**Accepted** — 2026-10-21 提出；**L1（自己的窗口）已交付**（截图、点击、滚动、输入、
-  「被控制中」与急停）。L2 / L3 的推进见 [ADR 0081](0081-desktop-driver-and-model-driven-web.md)
+  「被控制中」与急停），**L3 的 macOS 只读与动作已交付**。L2 / 回放见 [ADR 0081](0081-desktop-driver-and-model-driven-web.md)
 - 相关：ADR 0021 / 0044（确认卡与效果）、ADR 0032（宿主能力）、ADR 0038（工作台）
 - 代码位置：`backend/app/domain/agent/computer_use.py`、`backend/app/domain/agent/confirmable/computer_use.py`、
   `electron/main.cjs`（回环桥）、`electron/computerUseGuard.cjs`、`electron/computerUseOverlay.cjs`、
@@ -65,8 +65,8 @@ L1 的四个动作 —— 截图、点击、滚动、输入 —— 都只作用�
    **空闲 30 秒自动退出**被控制状态（`computerUseGuard` 的 `idleMs`）—— 忘了停不该一直亮着。
 4. **急停一直挡到 `resume()`**：全局热键，**不依赖 App 在前台**；挡住之后再来一次点击/输入一律拒
    （状态机在收到动作时第一道就拒，和放行与否无关）。
-5. **黑名单与打码属于 L3，尚未实现**：密码管理器、钥匙串、系统设置、终端那些是「能碰整个桌面」
-   之后的约束；L1 只截自己的窗口，此刻没有意义。它写在 ADR 0081 里，别在这一层假装已经做了。
+5. **黑名单属于 L3，动作已实现**：密码管理器、钥匙串、系统设置、终端等受保护应用直接拒绝输入；
+   截图打码与回放清理仍随 P3 推进。L1 只截自己的窗口，不受这一条影响。
 
 ## 决定 4 · L2 的方向：任意网站，但先确定性、后模型
 
@@ -110,7 +110,7 @@ L1 的四个动作 —— 截图、点击、滚动、输入 —— 都只作用�
 | 回环桥（端口/令牌/0600/独立部署说人话） | ✅ 已交付 |
 | 回放时间线（决定 5） | ⬜ **未实现** |
 | L2 模型驱动网页（决定 4 的第 2 点半） | ⬜ 未实现；确定性那一半已在发布域 |
-| L3 桌面级驱动 | ⬜ 未实现，见 [ADR 0081](0081-desktop-driver-and-model-driven-web.md) |
+| L3 桌面级驱动 | ✅ macOS 只读观察、权限引导与点击 / 输入 / 滚动已交付，见 [ADR 0081](0081-desktop-driver-and-model-driven-web.md)；回放未实现 |
 
 ## 后果
 

@@ -55,6 +55,9 @@ export const IPC: {
     computerDesktopWindows: "computer:desktop-windows";
     computerDesktopScreenshot: "computer:desktop-screenshot";
     computerDesktopAccessibility: "computer:desktop-accessibility";
+    computerDesktopClick: "computer:desktop-click";
+    computerDesktopType: "computer:desktop-type";
+    computerDesktopScroll: "computer:desktop-scroll";
     computerClick: "computer:click";
     computerType: "computer:type";
     computerScroll: "computer:scroll";

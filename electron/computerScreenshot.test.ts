@@ -271,6 +271,7 @@ type BridgeHarness = {
   dataDir: string;
   logs: string[];
   bridge: HostBridge;
+  cursor: { showAt: (x: number, y: number) => void };
   ask: (message: unknown) => Promise<BridgeReply>;
   close: () => void;
 };
@@ -295,6 +296,7 @@ function bridgeSources(): string {
     sourceOf("answerHostBridgeRequest"),
     sourceOf("desktopObserve"),
     sourceOf("desktopWindows"),
+    sourceOf("withDesktopAction"),
     sourceOf("startHostBridge"),
     sourceOf("startHostBridgeOnce"),
     sourceOf("stopHostBridge"),
@@ -342,10 +344,14 @@ function askBridge(port: number, message: unknown): Promise<BridgeReply> {
 async function startBridge(options: {
   windows: FakeWindow[];
   main?: FakeWindow | null;
-  desktopDriver?: { observe: (target?: Record<string, unknown>) => Promise<unknown> } | null;
+  desktopDriver?: {
+    observe: (target?: Record<string, unknown>) => Promise<unknown>;
+    act?: (action: Record<string, unknown>) => Promise<unknown>;
+  } | null;
 }): Promise<BridgeHarness> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosael-host-bridge-"));
   const logs: string[] = [];
+  const cursor = { showAt: vi.fn() };
   const context = {
     Buffer,
     JSON,
@@ -361,9 +367,14 @@ async function startBridge(options: {
     IPC: contract.IPC,
     parseComputerScreenshot: contract.parseComputerScreenshot,
     parseComputerDesktopAccessibility: contract.parseComputerDesktopAccessibility,
+    parseComputerDesktopClick: contract.parseComputerDesktopClick,
+    parseComputerDesktopScroll: contract.parseComputerDesktopScroll,
     parseComputerDesktopScreenshot: contract.parseComputerDesktopScreenshot,
+    parseComputerDesktopType: contract.parseComputerDesktopType,
     parseComputerDesktopWindows: contract.parseComputerDesktopWindows,
     desktopUseDriver: options.desktopDriver ?? null,
+    withComputerUse: (action: () => unknown) => action(),
+    computerUseCursor: cursor,
     //: 归一化判断住在 publish/coords(Retina 上 capturePage 给物理像素):桥的沙箱里也递进去。
     captureToCss: require("./publish/coords.cjs").captureToCss,
     BrowserWindow: { getAllWindows: () => options.windows },
@@ -378,6 +389,7 @@ async function startBridge(options: {
     dataDir,
     logs,
     bridge,
+    cursor,
     ask: (message) => askBridge(bridge.port, message),
     close: () => {
       api.stopHostBridge();
@@ -522,6 +534,26 @@ describe("宿主桥的安全边界", () => {
       });
       expect(reply).toMatchObject({ ok: false, status: 400 });
       expect(desktopDriver.observe).not.toHaveBeenCalled();
+    } finally {
+      bridge.close();
+    }
+  });
+  it("桌面动作经写死通道、参数契约和指针提示", async () => {
+    const main = fakeWindow("main");
+    const desktopDriver = {
+      observe: vi.fn(),
+      act: vi.fn(async (action: Record<string, unknown>) => ({ ...action, point: { x: 60, y: 40 } })),
+    };
+    const bridge = await startBridge({ windows: [main], main, desktopDriver });
+    try {
+      const reply = await bridge.ask({
+        token: bridge.bridge.token,
+        channel: "computer:desktop-click",
+        payload: { token: "snap-1:0", button: "right", clickCount: 2 },
+      });
+      expect(reply).toMatchObject({ ok: true, result: { point: { x: 60, y: 40 } } });
+      expect(desktopDriver.act).toHaveBeenCalledWith({ kind: "click", token: "snap-1:0", button: "right", clickCount: 2 });
+      expect(bridge.cursor.showAt).toHaveBeenCalledWith(60, 40);
     } finally {
       bridge.close();
     }

@@ -8,7 +8,8 @@ import { DesktopDriverMac } from "./desktopDriverMac.cjs";
 
 function harness() {
   const calls: Array<[string, string[]]> = [];
-  const runner = vi.fn(async (file: string, args: string[]) => {
+  const performInputs: Array<Record<string, unknown>> = [];
+  const runner = vi.fn(async (file: string, args: string[], _timeout?: number, input?: string) => {
     calls.push([file, args]);
     if (file === "screencapture") {
       fs.writeFileSync(args[2], Buffer.from("fake-png"));
@@ -25,20 +26,25 @@ function harness() {
       return { stdout: JSON.stringify({ granted: true }), stderr: "" };
     }
     if (kind === "windows") {
-      return { stdout: JSON.stringify([{ id: 7, owner: "Finder", title: "Documents", x: 1, y: 2, width: 800, height: 600, layer: 0, alpha: 1, onscreen: true, active: true }]), stderr: "" };
+      return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "Finder", title: "Documents", x: 1, y: 2, width: 800, height: 600, layer: 0, alpha: 1, onscreen: true, active: true }]), stderr: "" };
     }
     if (kind === "ax") {
-      return { stdout: JSON.stringify({ snapshot_id: "snap-1", elements: [{ id: "snap-1:0", role: "AXButton", title: "Save" }] }), stderr: "" };
+      return { stdout: JSON.stringify({ snapshot_id: "snap-1", elements: [{ id: "snap-1:0", path: "0.1", role: "AXButton", title: "Save", frame: { x: 10, y: 20, width: 100, height: 40 } }] }), stderr: "" };
+    }
+    if (kind === "perform") {
+      const request = JSON.parse(String(input)) as Record<string, unknown>;
+      performInputs.push(request);
+      return { stdout: JSON.stringify({ ok: true, action: request.action, point: request.point }), stderr: "" };
     }
     throw new Error(`unexpected ${file} ${kind}`);
   });
-  return { calls, runner };
+  return { calls, performInputs, runner };
 }
 
-describe("DesktopDriverMac(ADR 0081 P1)", () => {
-  it("capabilities 是只读:有树与截图,没有输入", () => {
+describe("DesktopDriverMac(ADR 0081)", () => {
+  it("capabilities 有树、截图与动作", () => {
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool" });
-    expect(driver.capabilities()).toEqual({ tree: true, screenshots: true, input: false, platforms: ["macos-window"] });
+    expect(driver.capabilities()).toEqual({ tree: true, screenshots: true, input: true, platforms: ["macos-window"] });
   });
 
   it("windows 枚举在屏窗口(CDWindowList 的字段原样交回)", async () => {
@@ -60,7 +66,7 @@ describe("DesktopDriverMac(ADR 0081 P1)", () => {
     expect(shot.height).toBe(600);
     expect(shot.image).toBe(Buffer.from("fake-png").toString("base64"));
     expect(shot.elements).toEqual([]);
-    expect(shot.meta).toEqual({ windowNumber: 7 });
+    expect(shot.meta).toMatchObject({ windowNumber: 7, capture_id: expect.any(String) });
   });
 
   it("observe(pid) 返回一次性 snapshot_id 与元素令牌", async () => {
@@ -68,14 +74,95 @@ describe("DesktopDriverMac(ADR 0081 P1)", () => {
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
     const result = await driver.observe({ pid: 42 });
     expect(result.meta).toEqual({ pid: 42, snapshot_id: "snap-1" });
-    expect(result.elements).toEqual([{ id: "snap-1:0", role: "AXButton", title: "Save" }]);
+    expect(result.elements).toEqual([
+      { id: "snap-1:0", path: "0.1", role: "AXButton", title: "Save", frame: { x: 10, y: 20, width: 100, height: 40 } },
+    ]);
   });
 
-  it("act 与 verify 都不支持,明确报出来", async () => {
+  it("verify 仍不支持,不冒充已验证", () => {
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool" });
-    await expect(driver.act({ kind: "click" })).rejects.toThrow("act_not_supported");
     expect(driver.verify()).toEqual({ ok: false, reason: "verify_not_supported", evidence: null });
   });
+
+  it("令牌动作重读 AX 后点元素中心", async () => {
+    const { runner, performInputs } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await driver.observe({ pid: 42 });
+    const result = await driver.act({ kind: "click", token: "snap-1:0", button: "left", clickCount: 2 });
+    expect(result).toMatchObject({ kind: "click", windowNumber: 7, pid: 42, point: { x: 60, y: 40 } });
+    expect(performInputs).toEqual([{
+      action: "click",
+      pid: 42,
+      point: { x: 60, y: 40 },
+      button: "left",
+      clickCount: 2,
+      text: "",
+      dy: 0,
+    }]);
+  });
+
+  it("像素动作把截图坐标映射到窗口全局坐标", async () => {
+    const { runner, performInputs } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    const shot = await driver.observe({ windowNumber: 7 });
+    await driver.act({ kind: "click", captureId: shot.meta.capture_id, x: 400, y: 300 });
+    expect(performInputs[0]).toMatchObject({ action: "click", pid: 42, point: { x: 401, y: 302 } });
+  });
+
+  it("令牌对应的界面变了就拒绝,不点旧坐标", async () => {
+    const { runner } = harness();
+    const original = runner.getMockImplementation()!;
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await driver.observe({ pid: 42 });
+    runner.mockImplementation(async (file, args, timeout, input) => {
+      if (file === "/fake/tool" && args[0] === "ax") {
+        return { stdout: JSON.stringify({ snapshot_id: "snap-1", elements: [{ id: "snap-1:0", path: "0.1", role: "AXButton", title: "Delete", frame: { x: 10, y: 20, width: 100, height: 40 } }] }), stderr: "" };
+      }
+      return original(file, args, timeout, input);
+    });
+    await expect(driver.act({ kind: "click", token: "snap-1:0" })).rejects.toMatchObject({ code: "desktop_stale_snapshot" });
+  });
+
+  it("绑定只允许用一次", async () => {
+    const { runner } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await driver.observe({ pid: 42 });
+    await driver.act({ kind: "click", token: "snap-1:0" });
+    await expect(driver.act({ kind: "click", token: "snap-1:0" }))
+      .rejects.toMatchObject({ code: "desktop_stale_snapshot" });
+  });
+
+
+  it("受保护应用直接拒绝,不落到 CGEvent", async () => {
+    const { runner, performInputs } = harness();
+    const original = runner.getMockImplementation()!;
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await driver.observe({ pid: 42 });
+    runner.mockImplementation(async (file, args, timeout, input) => {
+      if (file === "/fake/tool" && args[0] === "windows") {
+        return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "Terminal", title: "zsh", x: 1, y: 2, width: 800, height: 600, onscreen: true }]), stderr: "" };
+      }
+      return original(file, args, timeout, input);
+    });
+    await expect(driver.act({ kind: "click", token: "snap-1:0" })).rejects.toMatchObject({ code: "desktop_protected_app" });
+    expect(performInputs).toEqual([]);
+  });
+
+  it("截图后窗口移动就拒绝,不点漂移的坐标", async () => {
+    const { runner } = harness();
+    const original = runner.getMockImplementation()!;
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    const shot = await driver.observe({ windowNumber: 7 });
+    runner.mockImplementation(async (file, args, timeout, input) => {
+      if (file === "/fake/tool" && args[0] === "windows") {
+        return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "Finder", title: "Documents", x: 50, y: 2, width: 800, height: 600, onscreen: true }]), stderr: "" };
+      }
+      return original(file, args, timeout, input);
+    });
+    await expect(driver.act({ kind: "click", captureId: shot.meta.capture_id, x: 10, y: 10 }))
+      .rejects.toMatchObject({ code: "desktop_stale_capture" });
+  });
+
 
   it("工具回错时把原文带出来,不静默降级", async () => {
     const driver = new DesktopDriverMac({

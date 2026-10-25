@@ -81,6 +81,9 @@ const IPC = Object.freeze({
     computerDesktopWindows: "computer:desktop-windows",
     computerDesktopScreenshot: "computer:desktop-screenshot",
     computerDesktopAccessibility: "computer:desktop-accessibility",
+    computerDesktopClick: "computer:desktop-click",
+    computerDesktopType: "computer:desktop-type",
+    computerDesktopScroll: "computer:desktop-scroll",
     computerClick: "computer:click",
     computerType: "computer:type",
     computerScroll: "computer:scroll",
@@ -661,6 +664,58 @@ function parseComputerDesktopAccessibility(value) {
   return { pid: desktopId(payload.pid, "pid", channel) };
 }
 
+function desktopTarget(payload, channel, extraKeys) {
+  onlyKeys(payload, ["token", "captureId", "x", "y", ...extraKeys], channel);
+  const token = typeof payload.token === "string" ? payload.token.trim() : "";
+  const captureId = typeof payload.captureId === "string" ? payload.captureId.trim() : "";
+  if (Boolean(token) === Boolean(captureId)) {
+    throw new TypeError(`${channel}: provide exactly one of token or captureId with x/y`);
+  }
+  if (token) {
+    if (!/^[A-Za-z0-9-]{1,64}:\d{1,8}$/.test(token)) throw new TypeError(`${channel}: token is invalid`);
+    return { token };
+  }
+  if (!/^[a-f0-9-]{36}$/.test(captureId)) throw new TypeError(`${channel}: captureId is invalid`);
+  const pixel = (key) => {
+    const n = payload[key];
+    if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
+    return n;
+  };
+  return { captureId, x: pixel("x"), y: pixel("y") };
+}
+
+function parseComputerDesktopClick(value) {
+  const channel = IPC.invoke.computerDesktopClick;
+  const payload = record(value, channel);
+  const target = desktopTarget(payload, channel, ["button", "clickCount"]);
+  const button = payload.button === undefined ? "left" : payload.button;
+  if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
+  const clickCount = payload.clickCount === undefined ? 1 : payload.clickCount;
+  if (clickCount !== 1 && clickCount !== 2) throw new TypeError(`${channel}: clickCount must be 1 or 2`);
+  return { ...target, button, clickCount };
+}
+
+function parseComputerDesktopType(value) {
+  const channel = IPC.invoke.computerDesktopType;
+  const payload = record(value, channel);
+  const target = desktopTarget(payload, channel, ["text"]);
+  const text = payload.text;
+  if (typeof text !== "string" || !text) throw new TypeError(`${channel}: text must be a non-empty string`);
+  if (text.length > 2000) throw new TypeError(`${channel}: text must be at most 2000 characters`);
+  return { ...target, text };
+}
+
+function parseComputerDesktopScroll(value) {
+  const channel = IPC.invoke.computerDesktopScroll;
+  const payload = record(value, channel);
+  const target = desktopTarget(payload, channel, ["dy"]);
+  const dy = payload.dy;
+  if (!Number.isInteger(dy) || dy === 0 || Math.abs(dy) > 30) {
+    throw new TypeError(`${channel}: dy must be a non-zero integer between -30 and 30`);
+  }
+  return { ...target, dy };
+}
+
 /**
  * 点一下 Mosael 自己的窗口:坐标是**页面 CSS 像素**(左上角为原点),和 `capturePage` 拍出来的
  * 图同一个坐标系(缩放在后端做,见 domain/agent/computer_use)。按钮只认左/右,连点只认 1/2。
@@ -1072,7 +1127,10 @@ module.exports = {
   parseCaptureMode,
   parseComputerClick,
   parseComputerDesktopAccessibility,
+  parseComputerDesktopClick,
+  parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
+  parseComputerDesktopType,
   parseComputerDesktopWindows,
   parseHostLayer,
   parseComputerScreenshot,

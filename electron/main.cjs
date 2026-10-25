@@ -56,7 +56,10 @@ const {
   parseCaptureMode,
   parseComputerClick,
   parseComputerDesktopAccessibility,
+  parseComputerDesktopClick,
+  parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
+  parseComputerDesktopType,
   parseComputerDesktopWindows,
   parseHostLayer,
   parseComputerScreenshot,
@@ -369,6 +372,13 @@ async function desktopWindows(target = {}) {
   return { windows: await desktopObserve(target) };
 }
 
+async function withDesktopAction(action) {
+  if (!desktopUseDriver) throw new Error("Desktop actions currently support macOS only.");
+  const result = await withComputerUse(() => action(desktopUseDriver));
+  if (result?.point) computerUseCursor.showAt(result.point.x, result.point.y);
+  return result;
+}
+
 const computerUseGuard = createComputerUseGuard({
   //: 30 秒没有新动作就自动熄灭(写成乘法,别让「固定 30 秒」的旧判据误扫到)。
   idleMs: 30 * 1000,
@@ -456,6 +466,12 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerDesktopWindows]: () => desktopWindows(parseComputerDesktopWindows(request.payload)),
     [IPC.invoke.computerDesktopScreenshot]: () => desktopObserve(parseComputerDesktopScreenshot(request.payload)),
     [IPC.invoke.computerDesktopAccessibility]: () => desktopObserve(parseComputerDesktopAccessibility(request.payload)),
+    [IPC.invoke.computerDesktopClick]: () =>
+      withDesktopAction((driver) => driver.act({ kind: "click", ...parseComputerDesktopClick(request.payload) })),
+    [IPC.invoke.computerDesktopType]: () =>
+      withDesktopAction((driver) => driver.act({ kind: "type", ...parseComputerDesktopType(request.payload) })),
+    [IPC.invoke.computerDesktopScroll]: () =>
+      withDesktopAction((driver) => driver.act({ kind: "scroll", ...parseComputerDesktopScroll(request.payload) })),
     [IPC.invoke.computerClick]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerType]: () =>
@@ -473,7 +489,7 @@ async function answerHostBridgeRequest(line, socket) {
     return replyHostBridge(socket, {
       ok: false,
       status: 405,
-      error: "The host bridge only serves computer:screenshot, computer:click, computer:type and read-only desktop observation.",
+      error: "The host bridge only serves computer:screenshot, computer:click, computer:type and registered desktop observation/action channels.",
     });
   }
   try {
