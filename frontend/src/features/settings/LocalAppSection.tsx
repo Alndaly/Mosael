@@ -118,7 +118,7 @@ export function UpdateCheckButton() {
   const label =
     phase === "downloading"
       ? t("updateDownloading").replace("{percent}", String(info?.percent ?? 0))
-      : phase === "downloaded"
+      : phase === "downloaded" || phase === "deferred"
         ? t("updateInstallNow")
         : info?.hasUpdate
           ? canInstall
@@ -132,12 +132,13 @@ export function UpdateCheckButton() {
       variant="outline"
       loading={busy !== null || phase === "downloading"}
       onClick={async () => {
-        if (phase === "downloaded") {
+        if (phase === "downloaded" || phase === "deferred") {
           setBusy("install");
           try {
             const next = await install!();
             setInfo(next);
-            if (next.error) toast.error(next.error);
+            if (next.error === "update_jobsRunning") toast.error(t("updateJobsRunning"));
+            else if (next.error) toast.error(next.error);
           } finally {
             setBusy(null);
           }

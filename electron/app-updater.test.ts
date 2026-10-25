@@ -38,7 +38,7 @@ function updater(): FakeUpdater {
   return one;
 }
 
-function setup({ dev = false }: { dev?: boolean } = {}) {
+function setup({ dev = false, runningJobs = 0 }: { dev?: boolean; runningJobs?: number } = {}) {
   const events: Array<{ kind: string; info: Record<string, unknown> }> = [];
   const updaterInstance = updater();
   const controller = createAppUpdater({
@@ -55,6 +55,7 @@ function setup({ dev = false }: { dev?: boolean } = {}) {
     },
     setTimeout: vi.fn(),
     setInterval: vi.fn(),
+    getRunningJobs: () => runningJobs,
   });
   return { controller, updater: updaterInstance, events };
 }
@@ -105,6 +106,13 @@ describe("应用内更新", () => {
     const { controller, updater } = setup();
     await controller.check();
     expect(controller.install().error).toBe("update_notDownloaded");
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+  });
+  it("有任务在跑时先不重启", async () => {
+    const { controller, updater } = setup({ runningJobs: 1 });
+    await controller.check();
+    await controller.download();
+    expect(controller.install()).toMatchObject({ phase: "deferred", error: "update_jobsRunning" });
     expect(updater.quitAndInstall).not.toHaveBeenCalled();
   });
 

@@ -68,7 +68,7 @@ export interface MainStaleStatus {
   canRestart: boolean;
 }
 
-export type MosaelUpdatePhase = "idle" | "unsupported" | "available" | "up-to-date" | "downloading" | "downloaded" | "error" | "installing";
+export type MosaelUpdatePhase = "idle" | "unsupported" | "available" | "up-to-date" | "downloading" | "downloaded" | "deferred" | "error" | "installing";
 
 export interface MosaelUpdateInfo {
   current?: string;

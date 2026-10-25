@@ -1001,5 +1001,6 @@ export const otherUi = {
   updateInstallNow: "Restart and install",
   updateDownloading: "Downloading {percent}%",
   updateDownloadFailed: "Update download failed",
+  updateJobsRunning: "Wait for running jobs to finish before restarting to update",
   updateCheckFailed: "Could not check for updates, try again later",
 } as const;

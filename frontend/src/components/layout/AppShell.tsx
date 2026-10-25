@@ -161,6 +161,8 @@ export function AppShell({
             onClick: () => void window.mosaelDesktop?.installUpdate?.(),
           },
         });
+      } else if (info.phase === "deferred") {
+        toast(t("updateJobsRunning"));
       } else if (info.phase === "error") {
         toast.error(t("updateDownloadFailed"), { description: info.error });
       }

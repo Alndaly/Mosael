@@ -1539,8 +1539,8 @@ app.whenReady().then(async () => {
       },
     });
   }
-  // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
-  // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
+  // 更新:设置页主动查;打包版启动后静默查。发现新版本后由用户触发下载,
+  // 下载完成由用户点「重启并安装」;失败的检查只记日志,不打扰用户。
   const updateController = createAppUpdater({
     app,
     autoUpdater: isDev ? null : require("electron-updater").autoUpdater,
@@ -1549,6 +1549,7 @@ app.whenReady().then(async () => {
     log: appendMainLog,
     setTimeout,
     setInterval,
+    getRunningJobs: () => lastSystemStatus.runningJobs,
     emit: (kind, payload) => {
       const channel = kind === "available" ? IPC.event.updateAvailable : IPC.event.updateProgress;
       for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);

@@ -158,6 +158,10 @@ const MESSAGES = {
     zh: "更新包还没下载完成",
     en: "The update is still downloading",
   },
+  update_jobsRunning: {
+    zh: "当前还有任务在跑,等任务结束后再重启更新",
+    en: "Wait for running jobs to finish before restarting to update",
+  },
   publisher_loadFailed: { zh: "发布执行器加载失败:{detail}", en: "The publisher failed to load: {detail}" },
   publisher_missing: {
     zh: "发布执行器不可用:electron/publish.bundle.cjs 缺失(先跑 pnpm build:publisher)",

@@ -997,5 +997,6 @@ export const otherUi = {
   updateInstallNow: "重启并安装",
   updateDownloading: "正在下载 {percent}%",
   updateDownloadFailed: "更新下载失败",
+  updateJobsRunning: "当前还有任务在跑，等任务结束后再重启更新",
   updateCheckFailed: "无法检查更新,请稍后再试",
 } as const;

@@ -19,7 +19,7 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout: later, setInterval: every }) {
+function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout: later, setInterval: every, getRunningJobs = () => 0 }) {
   const enabled = !isDev && Boolean(autoUpdater);
   const current = app.getVersion();
   let latest = "";
@@ -128,7 +128,12 @@ function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout:
 
   function install() {
     if (!enabled) return info({ error: "update_installUnsupported" });
-    if (phase !== "downloaded") return info({ error: "update_notDownloaded" });
+    if (phase !== "downloaded" && phase !== "deferred") return info({ error: "update_notDownloaded" });
+    if (getRunningJobs() > 0) {
+      phase = "deferred";
+      emitProgress({ error: "update_jobsRunning" });
+      return info({ error: "update_jobsRunning" });
+    }
     // 静默安装并强制重启。before-quit 里已有的后端/发布器收尾照常执行。
     autoUpdater.quitAndInstall(true, true);
     return info({ phase: "installing" });
