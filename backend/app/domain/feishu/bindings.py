@@ -26,6 +26,7 @@ from app.domain.collaboration import record_activity
 
 #: 「这条绑定曾经存在过」在审计表里叫什么。**历史**,不是活跃状态(见 `record_removed` / ADR 0070 §9)。
 BINDING_REMOVED_ACTION = "feishu.binding.removed"
+BINDING_ADDED_ACTION = "feishu.binding.added"
 #: 这条历史记的是「哪条绑定」(哪台机器人眼里的哪串 open_id),不是任何一张活跃表的行。
 BINDING_SUBJECT_TYPE = "feishu_binding"
 
@@ -83,6 +84,22 @@ def bind_member(db: Session, workspace_id: str, bot_id: str, open_id: str, user_
         FeishuBinding(workspace_id=workspace_id, bot_id=bot_id, open_id=open_id, user_id=user_id)
     )
     db.flush()
+    bot = db.get(FeishuBot, bot_id)
+    record_activity(
+        db,
+        workspace_id=workspace_id,
+        actor_id=user_id,
+        action=BINDING_ADDED_ACTION,
+        subject_type=BINDING_SUBJECT_TYPE,
+        subject_id=bot_id,
+        summary="绑定了飞书机器人",
+        payload={
+            "bot_id": bot_id,
+            "app_id": bot.app_id if bot is not None else "",
+            "bot_name": bot.name if bot is not None else "",
+            "open_id": open_id,
+        },
+    )
     return True
 
 

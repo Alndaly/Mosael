@@ -431,3 +431,25 @@ def test_凭据轮换后旧_token_立即失效() -> None:
     client._token_cache[bot.id] = ("old-token", 10**12)
     client.invalidate_token(bot.id)
     assert bot.id not in client._token_cache
+
+
+def test_文本和卡片请求体超限在出网前就失败() -> None:
+    with pytest.raises(client.FeishuError) as text_error:
+        client.send_text(_Bot("b-too-long-text"), "oc_x", "字" * 200_000)
+    assert text_error.value.key == "feishuErr_sendText"
+
+    huge_card = {"elements": [{"tag": "div", "text": {"tag": "lark_md", "content": "字" * 40_000}}]}
+    with pytest.raises(client.FeishuError) as card_error:
+        client.send_card(_Bot("b-too-long-card"), "oc_x", huge_card)
+    assert card_error.value.key == "feishuErr_sendCard"
+
+
+def test_下载声明超过上限直接拒绝(wire) -> None:
+    wire(lambda: httpx.Response(
+        200,
+        content=b"tiny",
+        headers={"content-type": "video/mp4", "content-length": str(client.RESOURCE_MAX_BYTES + 1)},
+    ))
+    with pytest.raises(client.FeishuError) as caught:
+        client.download_message_resource_named(_Bot("b-big-download"), "om", "fk", "file")
+    assert caught.value.key == "feishuErr_download"

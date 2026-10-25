@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 API_BASE = "https://open.feishu.cn/open-apis"
 TOKEN_URL = f"{API_BASE}/auth/v3/tenant_access_token/internal"
 SEND_URL = f"{API_BASE}/im/v1/messages"
+#: 单个飞书资源下载上限。消息里的视频/文件先整段读进内存再交给素材库;没有上限时一个超大附件
+#: 就能把后端内存打满。200 MB 足够覆盖常见视频,超过的在 API 这一层直接说清。
+RESOURCE_MAX_BYTES = 200 * 1024 * 1024
 #: 机器人所在的那个群列表(`im/v1/chats`):节点上「发到某个群」和「列出机器人所在的群」都读它。
 CHATS_URL = f"{API_BASE}/im/v1/chats"
 #: 一页最多要几个群(飞书自己的上限)。
@@ -240,11 +243,14 @@ def _message_id(data: dict[str, Any]) -> str:
 
 def send_text(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: str = "chat_id") -> str:
     """发一条文字,返回它的 message_id。`receive_id_type` 是 `chat_id`(会话)或 `open_id`(私聊某个人)。"""
+    body = {"receive_id": chat_id, "msg_type": "text", "content": json.dumps({"text": text}, ensure_ascii=False)}
+    if _message_bytes(body) > TEXT_PAYLOAD_MAX_BYTES:
+        raise FeishuError("feishuErr_sendText", detail=f"text exceeds {TEXT_PAYLOAD_MAX_BYTES} bytes")
     data = call_api(
         bot,
         "POST",
         f"{SEND_URL}?receive_id_type={receive_id_type}",
-        {"receive_id": chat_id, "msg_type": "text", "content": json.dumps({"text": text})},
+        body,
     )
     if data.get("code") != 0:
         _fail("feishuErr_sendText", data)
@@ -259,11 +265,14 @@ def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_
     飞书按 `schema` 自己认。`content` 放**整张卡**序列化后的字符串(官方「发送消息内容结构 →
     卡片 → 方式三:使用卡片 JSON 发送」),2.0 不再额外包一层,所以这里两种结构都是同一条路。
     """
+    body = {"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)}
+    if _message_bytes(body) > CARD_PAYLOAD_MAX_BYTES:
+        raise FeishuError("feishuErr_sendCard", detail=f"card exceeds {CARD_PAYLOAD_MAX_BYTES} bytes")
     data = call_api(
         bot,
         "POST",
         f"{SEND_URL}?receive_id_type={receive_id_type}",
-        {"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
+        body,
     )
     if data.get("code") != 0:
         _fail("feishuErr_sendCard", data)
@@ -278,6 +287,12 @@ def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_
 #: 2.0 的外壳(`schema` / `body`)、编号头也一起算在里面。
 #: 29_000 留 1 KB 余量给真实收件 id(`_RECEIVE_ID_PLACEHOLDER` 已按更长的算)。
 CARD_PAYLOAD_MAX_BYTES = 29_000
+#: 文本消息的 content 请求体上限(官方 150 KB)。超了飞书回 230025;提前说清,别把原文丢在网关。
+TEXT_PAYLOAD_MAX_BYTES = 150_000
+
+
+def _message_bytes(body: dict[str, Any]) -> int:
+    return len(json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8"))
 
 #: 量请求体时用的收件 id 占位。真实 chat_id / open_id 一般 30~60 字符,这里给 67 —— 偏大即安全。
 _RECEIVE_ID_PLACEHOLDER = "oc_" + "0" * 64
@@ -600,9 +615,26 @@ def download_message_resource_named(bot: FeishuBot, message_id: str, file_key: s
         if isinstance(body, dict):
             params["code"], params["msg"] = body.get("code"), body.get("msg")
         raise FeishuError("feishuErr_download", **params)
+    declared = response.headers.get("content-length")
+    if declared:
+        try:
+            too_large = int(declared) > RESOURCE_MAX_BYTES
+        except ValueError:
+            too_large = False
+        if too_large:
+            raise FeishuError(
+                "feishuErr_download", status="HTTP 200",
+                detail=f"file exceeds {RESOURCE_MAX_BYTES // (1024 * 1024)} MB",
+            )
+    content = response.content
+    if len(content) > RESOURCE_MAX_BYTES:
+        raise FeishuError(
+            "feishuErr_download", status="HTTP 200",
+            detail=f"file exceeds {RESOURCE_MAX_BYTES // (1024 * 1024)} MB",
+        )
     content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
     return DownloadedResource(
-        data=response.content,
+        data=content,
         filename=_resource_name(response.headers.get("content-disposition", ""), file_key, kind, content_type),
         content_type=content_type,
     )

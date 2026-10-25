@@ -173,6 +173,10 @@ record_activity(
 会顶到边界 —— 所以落实现时 `subject_id` **只放 `bot_id`**,`open_id` 进 `payload`(JSON,没有这个
 上界)。
 
+**绑定成功也留痕**:`bind_member` 写 `feishu.binding.added`,同样只把 `bot_id` 放 `subject_id`,
+`app_id` / `bot_name` / `open_id` 进 `payload`。它审计的是"谁把哪个飞书身份绑到了哪个成员",
+不参与授权判断。
+
 ## Consequences
 
 - **数据库 29 → 30 → 31。** 30 把能无歧义归属的行回填到那一台机器人(维护者的真库上那唯一一行正是
