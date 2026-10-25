@@ -271,3 +271,27 @@ class Test答完的那条记录:
         with SessionLocal() as db:
             row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
             assert q._answer_record(row) is None
+
+
+def test_feishu_ownerless_session_can_ask_and_answer(monkeypatch) -> None:
+    """飞书群聊会话没有主人；它不是「看不见」，而是按工作区成员权限使用（同确认卡）。"""
+    from app.db.models import User
+    from app.domain.agent import use_cases
+    from app.domain.agent.host import get_or_create_external_session
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    monkeypatch.setattr(use_cases.agent_questions, "deliver_to_session", lambda *args, **kwargs: None)
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.username == "tester").one()
+        session = get_or_create_external_session(
+            db, workspace_id=ws, origin="feishu", external_key="feishu:bot:chat", title="飞书 · 测试",
+        )
+        row = use_cases.ask(db, user, session.id, _ok())
+        db.commit()
+        assert row.session_id == session.id
+        answered = use_cases.answer(db, user, row.id, {"这段成片发到哪儿?": ["B站"]})
+        db.commit()
+        assert answered.status == "answered"
+        assert answered.answers == {"这段成片发到哪儿?": ["B站"]}

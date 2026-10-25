@@ -171,9 +171,28 @@ def cited_message(db: Session, user: User, workspace_id: str, message_id: str) -
 # ---------------- 问用户 ----------------
 
 
+def _question_session(db: Session, user: User, session_id: str, *, write: bool) -> AgentSession:
+    """问题挂在一次对话上；飞书群聊会话**没有主人**（ADR 0044 §9），不能按普通私人会话判。
+
+    有主人的照旧走 readable/writable；无主的只要求调用人仍是该工作区成员，写问题再要 `ai` 权限。
+    确认卡内核早已用同一条规则（sessions.ensure_decides_for），问题卡漏了这一条，
+    飞书里的 ask_user 才会在创建问题时返回 Not found。
+    """
+    session = db.get(AgentSession, session_id)
+    if session is None:
+        raise NotVisible("Not found")
+    if session.owner_user_id is not None:
+        return writable_session(db, user, session.id) if write else readable_session(db, user, session.id)
+    if write:
+        ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    else:
+        ensure_workspace_access(db, user, session.workspace_id)
+    return session
+
+
 def ask(db: Session, user: User, session_id: str, questions: list[dict[str, Any]]) -> AgentQuestion:
     """问题落在它那次对话里,往里问是写 —— 和发消息同一道闸。工作区跟着对话走,不由调用方另报。"""
-    session = writable_session(db, user, session_id)
+    session = _question_session(db, user, session_id, write=True)
     row = agent_questions.ask(db, workspace_id=session.workspace_id, session_id=session.id, questions=questions)
     from app.domain.agent import origins
 
@@ -191,19 +210,20 @@ def _question_row(db: Session, question_id: str) -> AgentQuestion:
 
 def question(db: Session, user: User, question_id: str) -> AgentQuestion:
     row = _question_row(db, question_id)
-    readable_session(db, user, row.session_id)
+    _question_session(db, user, row.session_id, write=False)
     return row
 
 
 def pending_questions(db: Session, user: User, session_id: str) -> list[AgentQuestion]:
     """某次对话里还没答的问题。**按会话取,不按工作区** —— 一个问题脱离上下文没有意义。"""
-    return agent_questions.pending_for(db, readable_session(db, user, session_id).id)
+    session = _question_session(db, user, session_id, write=False)
+    return agent_questions.pending_for(db, session.id)
 
 
 def answer(db: Session, user: User, question_id: str, answers: dict[str, Any]) -> AgentQuestion:
     """作答会变成那次对话里的一条用户消息:是在里面写,只有主人。"""
     row = _question_row(db, question_id)
-    writable_session(db, user, row.session_id)
+    _question_session(db, user, row.session_id, write=True)
     answered = agent_questions.answer(db, row, answers)
     agent_questions.deliver_to_session(db, answered, user)
     return answered
@@ -212,7 +232,7 @@ def answer(db: Session, user: User, question_id: str, answers: dict[str, Any]) -
 def dismiss(db: Session, user: User, question_id: str) -> AgentQuestion:
     """不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。"""
     row = _question_row(db, question_id)
-    writable_session(db, user, row.session_id)
+    _question_session(db, user, row.session_id, write=True)
     dismissed = agent_questions.dismiss(db, row)
     agent_questions.deliver_to_session(db, dismissed, user)
     return dismissed
