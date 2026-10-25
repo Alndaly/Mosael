@@ -25115,6 +25115,101 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/replay/{replay_id}/{which}": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Get Agent Replay Image",
+        "description": "一张动作前后的证据截图。只给这段会话的读者,文件只在本机数据目录。",
+        "operationId": "get_agent_replay_image_api_agent_sessions__session_id__replay__replay_id___which__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "replay_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Replay Id"
+            }
+          },
+          {
+            "name": "which",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Which"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/sessions/{session_id}/replay": {
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Clear Agent Replay",
+        "description": "清空这一段对话的回放:文件删掉,消息和确认卡里的元数据也去掉。",
+        "operationId": "clear_agent_replay_api_agent_sessions__session_id__replay_delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}/stream": {
       "get": {
         "tags": [
@@ -37232,7 +37327,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 120
+                "maxLength": 120,
+                "minLength": 1
               },
               {
                 "type": "null"
@@ -37244,7 +37340,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 400
+                "maxLength": 400,
+                "minLength": 1
               },
               {
                 "type": "null"
