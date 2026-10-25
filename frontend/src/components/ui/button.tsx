@@ -43,6 +43,10 @@ const buttonVariants = cva(
         xs: `${CONTROL_HEIGHT.xs} rounded-md px-2.5 text-ui-xs ${CONTROL_ICON.text.xs}`,
         sm: `${CONTROL_HEIGHT.sm} rounded-md px-3`,
         lg: `${CONTROL_HEIGHT.lg} rounded-md px-6`,
+        //: 文字型动作(链接 / 题目 / 说明行里的「取消任务」「前往结果」):不占控件高度、没有内边距,
+        //: 字号自己挑。配合 `variant="link"` 用;`text-note` 的 11px 与说明行同号。
+        "text-row": "h-auto p-0 text-ui-xs [&_svg]:size-3.5",
+        "text-note": "h-auto p-0 text-ui-2xs [&_svg]:size-3",
         // 方钮和同档文字控件一样高:icon 40 和 md 的输入框、按钮并排,icon-sm 32、icon-xs 28 同理。图标在哪一档都是 16。
         // 此前 icon 是 36,比同档 40 矮一截;挨着字段的试听键只好另起一档 icon-lg(40)—— 定稿后合成一个名字。
         // 这几档以前没有 token 时,几十处各自写 `h-7 w-7` 盖在 size="icon" 上 —— 盖漏一处就是一颗大圆钮杵在一排小控件中间。

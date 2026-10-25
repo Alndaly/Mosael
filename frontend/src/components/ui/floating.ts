@@ -26,6 +26,9 @@ export const MODAL_SURFACE = "modal-surface rounded-2xl border border-[var(--mod
 //: (真机:AI Studio 开着确认卡时点「全部放行」,确认弹窗被卡盖住,「取消」「我明白」都点不到)。
 //: 菜单(z-[120])和工作台外壳(z-[200])照旧在它上面,那两层的秩序不变。
 export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:no-drag] fixed inset-0 z-70 bg-[var(--overlay-modal)]";
+//: 从浮层(会话设置 Popover)里打开的确认框:必须压过 popper 包装层(全局 z 120),
+//: 否则它被自己的触发层盖住,「取消」「我明白」都点不到。仍在窗口外壳 z 200 之下。
+export const OVER_POPOVER_MODAL_LAYER = "z-[130]";
 export const MODAL_TITLE = "m-0 text-ui-lg font-semibold leading-snug tracking-tight break-words";
 export const MODAL_DESCRIPTION = "text-ui-sm leading-relaxed text-muted-foreground break-words";
 const MENU_ITEM_SHAPE = "relative flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-ui-sm leading-5 outline-none transition-colors";

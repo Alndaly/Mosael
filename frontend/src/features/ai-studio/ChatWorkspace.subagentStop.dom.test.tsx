@@ -89,6 +89,9 @@ vi.mock("@/features/agent/SubagentPanel", () => {
   };
 });
 
+vi.mock("@/features/agent/effectiveModel", () => ({ useEffectiveChatModel: () => ({ model: "m" }) }));
+vi.mock("@/components/jobs/SessionJobsCard", async (importOriginal) => ({ ...(await importOriginal<Record<string, unknown>>()), SessionJobsCard: () => null }));
+
 import { ChatWorkspace } from "./ChatWorkspace";
 
 class NoopResizeObserver {

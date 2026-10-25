@@ -43,8 +43,10 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     showClose?: boolean
     showOverlay?: boolean
+    /** 遮罩的层叠;从浮层里打开的确认框用它抬过 popper。 */
+    overlayClassName?: string
   }
->(({ className, children, showClose = true, showOverlay = true, onEscapeKeyDown, onInteractOutside, ...props }, ref) => {
+>(({ className, children, showClose = true, showOverlay = true, overlayClassName, onEscapeKeyDown, onInteractOutside, ...props }, ref) => {
   // 兜底撤销 body 上的模态副作用(pointer-events / 滚动锁),两者都有卡住不还原的路径。见 hook 注释。
   useModalTeardownGuard()
   //: 从工作台那一列里打开的:抬过外壳、请原生视图让开(见 overChromeModal)
@@ -53,7 +55,7 @@ const DialogContent = React.forwardRef<
   return (
   <DialogPortal>
     {/* 遮罩一直挂着:卸掉再挂回来会排到内容后面、盖住弹窗(见 appChrome) */}
-    {showOverlay && <DialogOverlay className={layer} />}
+    {showOverlay && <DialogOverlay className={cn(layer, overlayClassName)} />}
     <DialogPrimitive.Content
       ref={ref}
       // **宽度由 w 定,max-w 只管不出屏幕。** 此前默认宽写在 max-w 上(32rem),调用方给的 w-[…] 再宽也被它压回

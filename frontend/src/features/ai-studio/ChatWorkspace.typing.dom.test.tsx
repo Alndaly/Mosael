@@ -166,10 +166,10 @@ it("打字不重画已有的气泡;发送键跟着框里空不空走,发出去�
   await waitFor(() => expect(box().value).toBe(""));
 });
 
-it("对话页为别的事重渲(开右侧的智能体环境)也不重画气泡", async () => {
+it("对话页为别的事重渲(右侧智能体环境默认开着)也不重画气泡", async () => {
   await mount();
   const settled = { ...renders };
-  fireEvent.click(screen.getByRole("button", { name: "agentInspectorTitle" }));
+  expect(screen.getByRole("button", { name: "agentInspectorTitle" })).toHaveAttribute("aria-pressed", "true");
   await screen.findByRole("complementary", { name: "agentInspectorTitle" });
   expect(renders.user - settled.user, "开右栏时用户气泡被重画了").toBe(0);
   expect(renders.assistant - settled.assistant, "开右栏时助手气泡被重画了").toBe(0);

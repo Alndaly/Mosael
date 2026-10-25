@@ -463,7 +463,9 @@ export function ChatWorkspace({
 
   const narrow = useMediaMatch("(max-width: 1180px)");
   const single = useMediaMatch("(max-width: 820px)");
-  const [environmentOpen, setEnvironmentOpen] = React.useState(false);
+  //: 默认展开(维护者要求「智能体 tab 一进来就能看到环境」)。窄屏走浮层(drawer),
+  //: 同样默认开着;要腾地方时点工具栏那颗开关收起。
+  const [environmentOpen, setEnvironmentOpen] = React.useState(true);
   const environmentId = React.useId();
   //: 工具栏的高度:右侧「智能体环境」的头部拿它对齐成同一条分隔线(见 ChatInspector 的 headerHeight)。
   //
@@ -995,7 +997,7 @@ function ChatInspector({
           // 分量。整宽 outline 按钮会和这块的主内容(最近调用)一样重,而它其实是偶尔才点的。
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:text-foreground"
+            className="flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 text-ui-xs font-normal text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
             onClick={() => setToolBrowser(true)}
           >
             <span className="tabular-nums">{t("agentToolsAll").replace("{n}", String(tools.length))}</span>
@@ -1039,15 +1041,18 @@ function RecentToolRow({ call }: { call: ToolCall }) {
   const hasDetail = call.args != null || call.result != null;
   return (
     <li className="grid min-w-0">
-      <button
-        type="button"
-        className="-mx-1 grid min-h-8 min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border-0 bg-transparent px-1 py-1.5 text-left text-ui-xs text-foreground transition-colors hover:bg-secondary"
+      {/* 整个一行都是按钮:状态圈、工具名、耗时、展开箭头全在热区里,纵向居中。
+          耗时和说明行同号(11px),靠右;悬停时整行文字出现下划线(和其它 section 的文字动作一致)。 */}
+      <Button
+        variant="link"
+        size="text-row"
+        className="grid w-full min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 text-left text-foreground"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         <AgentStatusIcon status={toAgentStatus(call.status)} />
         <ToolName name={call.name} className="text-ui-xs font-normal" />
-        <em className="not-italic tabular-nums text-ui-xs text-muted-foreground">
+        <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">
           {call.status === "error"
             ? t("toolStatusFailed")
             : call.status === "running"
@@ -1055,11 +1060,11 @@ function RecentToolRow({ call }: { call: ToolCall }) {
               : typeof seconds === "number"
                 ? `${seconds}s`
                 : t("toolStatusDone")}
-        </em>
+        </span>
         <ChevronDown size={12} className={cn("shrink-0 text-muted-foreground/70 transition-transform", open && "rotate-180")} />
-      </button>
+      </Button>
       {open && (
-        <div className="grid gap-1 pb-1.5 pl-[18px]">
+        <div className="grid gap-1 pb-1.5">
           {hasDetail ? (
             <>
               {call.args != null && <ToolPayload label={t("agentToolArgs")} value={call.args} />}
@@ -1095,24 +1100,25 @@ export function ToolBrowserRow({ tool }: { tool: AgentTool }) {
   return (
     <button
       type="button"
-      className="grid min-w-0 cursor-pointer gap-0.5 border-0 border-b border-border/50 bg-transparent px-0.5 py-2 text-left last:border-b-0"
+      className="grid h-full min-w-0 cursor-pointer content-start gap-2 rounded-lg border border-border bg-panel p-3 text-left transition-colors hover:border-border-strong hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onClick={() => setOpen((value) => !value)}
     >
-      <span className="flex min-w-0 items-center gap-1.5">
-        <ToolName name={tool.name} />
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <ToolName name={tool.name} className="min-w-0" />
         {tool.confirmation && (
           <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-ui-2xs font-normal text-muted-foreground">
             {t("agentToolNeedsConfirm")}
           </span>
         )}
       </span>
-      {/* 工具说明是写给模型看的,常带 `代码` 和 **强调**;在按钮里,链接只留文字。收着时露两行,点开看全。 */}
+      {/* 工具说明是写给模型看的,常带 `代码` 和 **强调**;在按钮里,链接只留文字。
+          收着时给三行 —— 卡片比原来的一行宽裕,能多读到半句"它到底做什么";点开看全。 */}
       {open ? (
         <span className="min-w-0 break-words text-ui-xs leading-[1.5] text-muted-foreground">
           <InlineMarkdown text={tool.description} links={false} />
         </span>
       ) : (
-        <Truncate lines={2} className="text-ui-xs leading-[1.5] text-muted-foreground">
+        <Truncate lines={3} className="text-ui-xs leading-[1.5] text-muted-foreground">
           <InlineMarkdown text={tool.description} links={false} />
         </Truncate>
       )}
@@ -1140,31 +1146,39 @@ function ToolBrowser({
     ? tools.filter((tool) => `${tool.name} ${toPlainText(tool.description)}`.toLowerCase().includes(needle))
     : tools;
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={`${t("agentInspectorCapabilities")} · ${tools.length}`}>
-      <div className="grid min-w-0 gap-2">
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`${t("agentInspectorCapabilities")} · ${tools.length}`}
+      // 工具说明是这张弹窗的主体,默认 32rem 一行一个工具读起来太挤;宽屏给到 64rem,
+      // 卡片按可用宽度自己排 2–4 列。
+      className="w-[min(64rem,calc(100vw-2rem))]"
+    >
+      <div className="grid min-w-0 gap-3">
         <Input value={query} placeholder={t("agentToolsSearch")} onChange={(event) => setQuery(event.target.value)} />
-        {/* 一行一个工具、发丝线分隔,而不是一堆卡片盒子 —— 三十多条时盒子的边框比内容还抢眼。
-            说明默认夹到两行(工具说明是写给模型看的,动辄一整段),点开看全文。
-            **横向必须锁死**:grid 子项默认 min-width:auto,长英文单词会把整个弹窗撑宽,
-            于是内容跟着左右晃。min-w-0 + break-words 是这里唯一有效的组合。 */}
-        <div className="grid max-h-[52vh] min-w-0 gap-px overflow-y-auto overflow-x-hidden">
+        {/* **响应式卡片网格**,不是一行一个。工具说明动辄一整段,横着排不下时卡片自己换行;
+            minmax(min(100%,15rem),1fr) 让窄窗口退成一列,宽窗口吃满 2–4 列。
+            横向仍要锁死:grid 子项默认 min-width:auto,长英文单词会把弹窗撑宽。 */}
+        <div className="grid max-h-[62vh] min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] content-start gap-2.5 overflow-y-auto overflow-x-hidden">
           {matched.map((tool) => (
             <ToolBrowserRow key={tool.name} tool={tool} />
           ))}
           {/* 「搜不到」和「还没有」是两回事:前者的下一步是**清掉筛选**,所以给一个能点的出口,
               而不是一句无处可去的灰字。 */}
           {matched.length === 0 && (
-            <EmptyState
-              size="compact"
-              icon={<SearchX size={15} />}
-              title={t("agentToolNoMatch")}
-              body={t("agentToolNoMatchBody").replace("{q}", query)}
-              action={
-                <Button size="sm" variant="outline" onClick={() => setQuery("")}>
-                  {t("clearSearch")}
-                </Button>
-              }
-            />
+            <div className="col-span-full">
+              <EmptyState
+                size="compact"
+                icon={<SearchX size={15} />}
+                title={t("agentToolNoMatch")}
+                body={t("agentToolNoMatchBody").replace("{q}", query)}
+                action={
+                  <Button size="sm" variant="outline" onClick={() => setQuery("")}>
+                    {t("clearSearch")}
+                  </Button>
+                }
+              />
+            </div>
           )}
         </div>
         {version && (

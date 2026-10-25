@@ -97,6 +97,8 @@ vi.mock("@/features/agent/trace/TraceView", () => ({ TraceView: () => null, Trac
 vi.mock("@/features/agent/trace/traceModel", () => ({ buildTurns: () => [] }));
 
 import { sendAgentMessage } from "@/api/client";
+vi.mock("@/components/jobs/SessionJobsCard", async (importOriginal) => ({ ...(await importOriginal<Record<string, unknown>>()), SessionJobsCard: () => null }));
+
 import { ChatWorkspace } from "./ChatWorkspace";
 
 beforeEach(() => {

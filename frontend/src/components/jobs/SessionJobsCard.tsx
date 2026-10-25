@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ListChecks, Loader2 } from "lucide-react";
+import { ListChecks } from "lucide-react";
 
 import { cancelJob, topLevelJobsQuery, type JobSummary } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -160,35 +160,34 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
                 }
                 noteTrailing={
                   active ? (
-                    <button
-                      type="button"
-                      className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
-                      disabled={cancel.isPending && cancel.variables === job.id}
+                    <Button
+                      variant="link"
+                      size="text-note"
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      loading={cancel.isPending && cancel.variables === job.id}
                       onClick={() => cancel.mutate(job.id)}
                     >
-                      {cancel.isPending && cancel.variables === job.id ? (
-                        <Loader2 className="size-3 animate-mosael-spin" aria-label={t("jobCancel")} />
-                      ) : (
-                        t("jobCancel")
-                      )}
-                    </button>
+                      {t("jobCancel")}
+                    </Button>
                   ) : failed && page ? (
-                    <button
-                      type="button"
-                      className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+                    <Button
+                      variant="link"
+                      size="text-note"
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
                       onClick={() => {
                         void leaveNativeView();
                         gotoJobPage(job, kind);
                       }}
                     >
                       {t("chatJobsGoto")}
-                    </button>
+                    </Button>
                   ) : null
                 }
               >
                 <Button
-                  variant="inline"
-                  className="-ml-1.5 w-full min-w-0 justify-start font-normal text-foreground hover:bg-transparent hover:text-foreground hover:underline"
+                  variant="link"
+                  size="text-row"
+                  className="w-full min-w-0 justify-start text-left text-foreground"
                   onClick={() => setDetailJob(job)}
                 >
                   <Truncate>{subject || kind.label}</Truncate>

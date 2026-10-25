@@ -100,6 +100,7 @@ export function ModalShell({
   children,
   className,
   bodyClassName,
+  overlayClassName,
   dismissible = true,
   modal = true,
   onEscapeKeyDown,
@@ -123,6 +124,8 @@ export function ModalShell({
   className?: string;
   /** 覆盖滚动区的内边距 —— 内容自己就是通栏的(比如一张图)时用。 */
   bodyClassName?: string;
+  /** 遮罩的层叠;从浮层里打开的确认框用它抬过 popper。 */
+  overlayClassName?: string;
   /** Non-dismissible panels stay open until their own primary action completes. */
   dismissible?: boolean;
   /** Non-modal panels leave the rest of the application interactive and omit the overlay. */
@@ -152,6 +155,7 @@ export function ModalShell({
         {...dropzone?.handlers}
         showClose={dismissible}
         showOverlay={modal}
+        overlayClassName={overlayClassName}
         onEscapeKeyDown={(event) => {
           if (!dismissible) {
             event.preventDefault();

@@ -110,6 +110,9 @@ vi.mock("@/features/agent/SessionSettingsMenu", () => ({ SessionSettingsMenu: ()
 vi.mock("@/features/agent/trace/TraceView", () => ({ TraceView: () => null, TraceStatsBar: () => null }));
 vi.mock("@/features/agent/trace/traceModel", () => ({ buildTurns: () => [] }));
 
+vi.mock("@/features/agent/effectiveModel", () => ({ useEffectiveChatModel: () => ({ model: "m" }) }));
+vi.mock("@/components/jobs/SessionJobsCard", async (importOriginal) => ({ ...(await importOriginal<Record<string, unknown>>()), SessionJobsCard: () => null }));
+
 import { ChatWorkspace } from "./ChatWorkspace";
 
 class NoopResizeObserver {

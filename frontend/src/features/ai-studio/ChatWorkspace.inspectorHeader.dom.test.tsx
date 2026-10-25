@@ -21,7 +21,7 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { adoptAgentSession, startAgentDraft } from "@/features/agent/sessionSelection";
@@ -159,7 +159,9 @@ it("会话从草稿变成一条时整列不重建,面板头部照旧跟着工具
   startAgentDraft("w1", STUDIO_PLACE);
   await mount();
 
-  fireEvent.click(screen.getByRole("button", { name: "agentInspectorTitle" }));
+  //: 宽屏默认展开 —— 不用先点开关。
+  const toggle = screen.getByRole("button", { name: "agentInspectorTitle" });
+  expect(toggle).toHaveAttribute("aria-pressed", "true");
   const aside = await screen.findByRole("complementary", { name: "agentInspectorTitle" });
   const header = aside.firstElementChild as HTMLElement;
   const content = aside.children[1] as HTMLElement;

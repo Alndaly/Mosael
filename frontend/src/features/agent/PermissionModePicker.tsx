@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { OVER_POPOVER_MODAL_LAYER } from "@/components/ui/floating";
 import { Truncate } from "@/components/ui/truncate";
 import { useSessionSettings } from "@/features/agent/currentAgentSession";
 import type { AgentPlace } from "@/features/agent/places";
@@ -114,6 +115,9 @@ export function PermissionModePicker({ workspaceId, place, session }: { workspac
       <ModalShell
         open={pendingBypass}
         onOpenChange={setPendingBypass}
+        //: 这个确认框是从会话设置 Popover 里开的,必须压过 popper 的 z 120,否则被弹层盖住。
+        className={OVER_POPOVER_MODAL_LAYER}
+        overlayClassName={OVER_POPOVER_MODAL_LAYER}
         title={<span className="flex items-center gap-2"><ShieldAlert size={16} className="text-destructive" /> {t("permModeBypassConfirmTitle")}</span>}
         footer={
           <>
