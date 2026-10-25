@@ -83,14 +83,11 @@ def _question_block(index: int, question: dict[str, Any]) -> dict[str, Any]:
                 "width": "weighted",
                 "weight": 1,
                 "vertical_align": "top",
-                "elements": [{"tag": "markdown", "content": title + hint}],
-            },
-            {
-                "tag": "column",
-                "width": "weighted",
-                "weight": 1,
-                "vertical_align": "top",
-                "elements": [selector, other],
+                "elements": [
+                    {"tag": "markdown", "content": title + hint},
+                    selector,
+                    other,
+                ],
             },
         ],
     }
@@ -106,26 +103,42 @@ def question_card(row: AgentQuestion) -> dict[str, Any]:
             "elements": [
                 *[_question_block(index, question) for index, question in enumerate(questions)],
                 {
-                    "tag": "button",
-                    "action_type": "form_submit",
-                    "name": SUBMIT_NAME,
-                    "type": "primary",
-                    "text": {"tag": "lark_md", "content": "提交"},
-                    "value": {"action": ACTION_ANSWER, "question_id": row.id},
+                    "tag": "column_set",
+                    "flex_mode": "none",
+                    "horizontal_spacing": "default",
+                    "columns": [
+                        {
+                            "tag": "column",
+                            "width": "auto",
+                            "vertical_align": "top",
+                            "elements": [
+                                {
+                                    "tag": "button",
+                                    "action_type": "request",
+                                    "name": "mosael_questions_skip",
+                                    "text": {"tag": "plain_text", "content": "跳过"},
+                                    "type": "default",
+                                    "value": {"action": ACTION_SKIP, "question_id": row.id},
+                                }
+                            ],
+                        },
+                        {
+                            "tag": "column",
+                            "width": "auto",
+                            "vertical_align": "top",
+                            "elements": [
+                                {
+                                    "tag": "button",
+                                    "action_type": "form_submit",
+                                    "name": SUBMIT_NAME,
+                                    "type": "primary",
+                                    "text": {"tag": "plain_text", "content": "提交"},
+                                    "value": {"action": ACTION_ANSWER, "question_id": row.id},
+                                }
+                            ],
+                        },
+                    ],
                 },
-            ],
-        }
-    )
-    elements.append(
-        {
-            "tag": "action",
-            "actions": [
-                {
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": "跳过"},
-                    "type": "default",
-                    "value": {"action": ACTION_SKIP, "question_id": row.id},
-                }
             ],
         }
     )
