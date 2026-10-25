@@ -228,6 +228,32 @@ def test_飞书卡片消息_id_会落库(ctx, monkeypatch) -> None:
         assert db.get(ToolConfirmation, cid).feishu_message_id == "om_card_sent"
 
 
+def test_确认卡过期时收回飞书原卡(ctx, monkeypatch) -> None:
+    from app.domain.agent import card_expiry
+    from app.integrations.feishu import client as feishu_client
+
+    client, ws, _, _ = ctx
+    with SessionLocal() as db:
+        bot = FeishuBot(workspace_id=ws, app_id="cli_card_expire", app_secret="s")
+        db.add(bot)
+        db.commit()
+        bot_id = bot.id
+    monkeypatch.setattr(feishu_client, "send_card", lambda *args, **kwargs: "om_expire")
+    cid = _make_feishu_confirmation(client, ws, bot_id)
+
+    updated: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        feishu_client, "update_card",
+        lambda bot, message_id, card: updated.append((message_id, card)),
+    )
+    with SessionLocal() as db:
+        card_expiry.expire_card(db, db.get(ToolConfirmation, cid), card_expiry.EXPIRY_TURN_ENDED)
+        db.commit()
+
+    assert updated and updated[0][0] == "om_expire"
+    assert updated[0][1]["header"]["title"]["content"] == "已失效"
+
+
 def test_missing_card_capability_degrades_to_text_and_records_why(ctx, monkeypatch) -> None:
     """开发者后台没开交互卡片时,不能静默失败。
 

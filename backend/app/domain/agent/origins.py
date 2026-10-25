@@ -124,6 +124,14 @@ def confirmation_settled_after_commit(confirmation: ToolConfirmation) -> None:
             logger.exception("settling confirmation %s on %s failed", confirmation.id, session.origin)
 
 
+def confirmation_settled_by_id_after_commit(confirmation_id: str) -> None:
+    """`after_commit` 入口:按 id 读回刚过期的卡,再交给渠道。"""
+    with SessionLocal() as db:
+        confirmation = db.get(ToolConfirmation, confirmation_id)
+        if confirmation is not None:
+            confirmation_settled_after_commit(confirmation)
+
+
 def question_opened_after_commit(question: AgentQuestion) -> None:
     """`after_commit` 入口:同 `confirmation_opened_after_commit`。"""
     with SessionLocal() as db:

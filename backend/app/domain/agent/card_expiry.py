@@ -11,9 +11,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, now
 
 EXPIRED = "expired"
@@ -25,17 +26,32 @@ EXPIRY_WAIT_TIMEOUT = "wait_timeout"
 EXPIRY_BACKEND_RESTARTED = "backend_restarted"
 
 
+def _notify_expired(db: Session, confirmation_id: str) -> None:
+    from app.domain.agent import origins
+
+    after_commit(db, lambda one=confirmation_id: origins.confirmation_settled_by_id_after_commit(one))
+
+
 def expire_session_cards(db: Session, session_id: str, reason: str) -> int:
     """这段对话还在等人的卡全部作废(一轮收尾时调;不提交,跟随调用方的事务)。返回作废了几张。
 
     条件更新,和认领卡(confirmations._claim)同一种写法:用户恰好在这一刻点了批准,谁先落库谁算 —— 批准赢了,这张卡就照常执行。
     """
+    ids = list(
+        db.scalars(
+            select(ToolConfirmation.id).where(
+                ToolConfirmation.session_id == session_id, ToolConfirmation.status == "pending"
+            )
+        )
+    )
     result = db.execute(
         update(ToolConfirmation)
         .where(ToolConfirmation.session_id == session_id, ToolConfirmation.status == "pending")
         .values(status=EXPIRED, error=reason, resolved_at=now())
         .execution_options(synchronize_session=False)
     )
+    for confirmation_id in ids:
+        _notify_expired(db, confirmation_id)
     return int(result.rowcount or 0)
 
 
@@ -49,6 +65,8 @@ def expire_card(db: Session, confirmation: ToolConfirmation, reason: str) -> Too
     )
     db.flush()
     db.refresh(confirmation)
+    if confirmation.status == EXPIRED:
+        _notify_expired(db, confirmation.id)
     return confirmation
 
 

@@ -87,6 +87,18 @@ def settled_card(*, summary: str, tool: str, decision: str, by: str) -> dict[str
     }
 
 
+def expired_card(*, summary: str, tool: str) -> dict[str, Any]:
+    """这张卡已经因为对话结束 / 等待超时 / 重启而作废,不能再点。"""
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {"template": "grey", "title": {"tag": "plain_text", "content": "已失效"}},
+        "elements": [
+            _text(f"**{summary or tool}**"),
+            _text("这一轮已经结束,这张卡不能再操作。"),
+        ],
+    }
+
+
 def notice_card(message: str) -> dict[str, Any]:
     """点击被拒时的提示卡(未绑定、无权限、卡已失效)。原卡保持可点,便于有权限的人接手。"""
     return {
