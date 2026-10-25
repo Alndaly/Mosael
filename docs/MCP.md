@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **131** 个工具,其中 **43** 个走确认卡、**1** 个停下来等用户作答。
+共 **137** 个工具,其中 **46** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -51,6 +51,12 @@
 | `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
 | `computer_click` | 确认卡 | Confirmation required: click a point in Mosael's app window. |
+| `computer_desktop_accessibility` | 直接执行 | Read-only: read another app's macOS accessibility tree by `pid`. |
+| `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
+| `computer_desktop_screenshot` | 直接执行 | Read-only: capture another app's visible desktop window by `window_id`. |
+| `computer_desktop_scroll` | 确认卡 | Confirmation required: scroll over a token or captured point in another desktop app. |
+| `computer_desktop_type` | 确认卡 | Confirmation required: type into a token or captured point in another desktop app. |
+| `computer_desktop_windows` | 直接执行 | Read-only: list visible desktop windows, including other apps. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
 | `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |
 | `computer_type` | 确认卡 | Confirmation required: type text into Mosael's app window (into the focused field). |

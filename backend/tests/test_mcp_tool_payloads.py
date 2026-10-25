@@ -109,6 +109,9 @@ ARGS: dict[str, dict[str, Any]] = {
     "analyze_asset": {"asset_id": "no-such-asset", "question": "这是什么"},
     # 桌面壳的宿主桥不在这个测试进程里:调用会回一句人话(ComputerUseError),不是载荷形状被拒。
     "computer_screenshot": {},
+    "computer_desktop_windows": {},
+    "computer_desktop_screenshot": {"window_id": 7},
+    "computer_desktop_accessibility": {"pid": 42},
     "read_document": {"asset_id": "no-such-asset", "first": 1, "last": 2},
     "analyze_document_pages": {"asset_id": "no-such-asset", "pages": [1], "question": "版式怎样"},
     "transcribe_asset": {"asset_id": "no-such-asset"},

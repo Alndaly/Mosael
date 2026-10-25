@@ -1,5 +1,5 @@
 {
-  "version": 40,
+  "version": 41,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -34,6 +34,7 @@
     "migrate-added-track-records-list-what-moved",
     "migrate-agent-notice-envelope-out-of-content",
     "migrate-agent-pending-view",
+    "migrate-agent-questions-feishu-message-id",
     "migrate-agent-session-groups",
     "migrate-agent-session-order",
     "migrate-agent-session-plan",
@@ -218,6 +219,7 @@
     "migrate-subtitle-tracks-carry-no-sound",
     "migrate-subtitle-tracks-hide-instead-of-mute",
     "migrate-thumbnails-keep-transparency",
+    "migrate-tool-confirmations-feishu-message-id",
     "migrate-tool-confirmations-name-their-tool-call",
     "migrate-tool-confirmations-session",
     "migrate-track-role",

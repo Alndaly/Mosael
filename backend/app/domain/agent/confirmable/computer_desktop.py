@@ -66,13 +66,8 @@ def _scale(payload: dict[str, Any]) -> float:
     return float(value)
 
 
-def _summary_keys(action: str, payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    if payload.get("token"):
-        return f"confirm_computerDesktop{action}Token", {"token": str(payload.get("token"))[:120]}
-    return f"confirm_computerDesktop{action}Pixel", {
-        "x": int(payload.get("x", 0)),
-        "y": int(payload.get("y", 0)),
-    }
+def _point_params(payload: dict[str, Any]) -> dict[str, Any]:
+    return {"x": int(payload.get("x", 0)), "y": int(payload.get("y", 0))}
 
 
 def _validate_click(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
@@ -87,8 +82,9 @@ def _validate_click(db: Session, workspace_id: str, payload: dict[str, Any], act
 
 
 def _summarize_click(db: Session, payload: dict[str, Any]) -> Summary:
-    key, params = _summary_keys("Click", payload)
-    return key, params
+    if payload.get("token"):
+        return "confirm_computerDesktopClickToken", {"token": str(payload.get("token"))[:120]}
+    return "confirm_computerDesktopClickPixel", _point_params(payload)
 
 
 def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -129,8 +125,10 @@ def _validate_type(db: Session, workspace_id: str, payload: dict[str, Any], acto
 
 
 def _summarize_type(db: Session, payload: dict[str, Any]) -> Summary:
-    key, params = _summary_keys("Type", payload)
-    return key, {**params, "text": str(payload.get("text") or "")[:400]}
+    text = str(payload.get("text") or "")[:400]
+    if payload.get("token"):
+        return "confirm_computerDesktopTypeToken", {"token": str(payload.get("token"))[:120], "text": text}
+    return "confirm_computerDesktopTypePixel", {**_point_params(payload), "text": text}
 
 
 def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
@@ -169,12 +167,15 @@ def _validate_scroll(db: Session, workspace_id: str, payload: dict[str, Any], ac
 
 def _summarize_scroll(db: Session, payload: dict[str, Any]) -> Summary:
     notches = int(payload.get("dy") or 0)
-    direction = "Down" if notches > 0 else "Up"
-    suffix = "Token" if payload.get("token") else "Pixel"
-    key = f"confirm_computerDesktopScroll{direction}{suffix}"
+    steps = abs(notches)
     if payload.get("token"):
-        return key, {"token": str(payload.get("token"))[:120], "steps": abs(notches)}
-    return key, {"x": int(payload.get("x", 0)), "y": int(payload.get("y", 0)), "steps": abs(notches)}
+        token = str(payload.get("token"))[:120]
+        if notches > 0:
+            return "confirm_computerDesktopScrollDownToken", {"token": token, "steps": steps}
+        return "confirm_computerDesktopScrollUpToken", {"token": token, "steps": steps}
+    if notches > 0:
+        return "confirm_computerDesktopScrollDownPixel", {**_point_params(payload), "steps": steps}
+    return "confirm_computerDesktopScrollUpPixel", {**_point_params(payload), "steps": steps}
 
 
 def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:

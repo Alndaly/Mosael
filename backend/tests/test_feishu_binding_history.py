@@ -43,6 +43,10 @@ def _history(db, workspace_id: str, bot_id: str) -> list[dict]:
     return collaboration.list_activity(db, workspace_id, subject_type="feishu_binding", subject_id=bot_id)
 
 
+def _removed(db, workspace_id: str, bot_id: str) -> list[dict]:
+    return [event for event in _history(db, workspace_id, bot_id) if event["action"] == "feishu.binding.removed"]
+
+
 def test_显式解绑记一条历史() -> None:
     client = fresh_client()
     ws = _workspace(client)
@@ -50,12 +54,13 @@ def test_显式解绑记一条历史() -> None:
     bot = _bot(client, ws, name="客服助手", app_id="cli_support")
     with SessionLocal() as db:
         _bind(db, ws, bot["id"], "ou_alice", me["id"])
-        assert _history(db, ws, bot["id"]) == [], "还没解绑,不该有这条历史"
+        assert [event["action"] for event in _history(db, ws, bot["id"])] == ["feishu.binding.added"]
+        assert _removed(db, ws, bot["id"]) == [], "还没解绑,不该有这条历史"
 
     assert client.delete(f"/api/feishu/bots/{bot['id']}/bindings/ou_alice").status_code == 204
 
     with SessionLocal() as db:
-        events = _history(db, ws, bot["id"])
+        events = _removed(db, ws, bot["id"])
         assert len(events) == 1, events
         event = events[0]
         assert event["action"] == "feishu.binding.removed"
@@ -97,7 +102,7 @@ def test_删机器人给它名下每条绑定各记一条() -> None:
         assert db.query(FeishuBinding).filter_by(bot_id=doomed["id"]).count() == 0, (
             "活跃表里一条都不留(不是标成已删)"
         )
-        events = _history(db, ws, doomed["id"])
+        events = _removed(db, ws, doomed["id"])
         assert len(events) == 2, f"每条绑定各记一条,不是汇总成一条:{events}"
         assert {one["payload"]["open_id"] for one in events} == {"ou_a", "ou_b"}
         assert all(one["action"] == "feishu.binding.removed" for one in events)
@@ -106,9 +111,9 @@ def test_删机器人给它名下每条绑定各记一条() -> None:
         assert {one["payload"]["bot_name"] for one in events} == {"要删的"}
 
         #: 痕迹不指着 `feishu_bots`:机器人那一行没了,这两条照样查得到。
-        assert len(_history(db, ws, doomed["id"])) == 2
+        assert len(_removed(db, ws, doomed["id"])) == 2
         #: 别的机器人的绑定一动不动 —— 历史也不该记到它名下。
-        assert _history(db, ws, kept["id"]) == []
+        assert _removed(db, ws, kept["id"]) == []
         assert db.get(FeishuBinding, {"workspace_id": ws, "bot_id": kept["id"], "open_id": "ou_kept"}) is not None
 
 
@@ -128,8 +133,8 @@ def test_历史不参与授权_认人与面板只读活跃表() -> None:
     assert client.delete(f"/api/feishu/bots/{bot['id']}/bindings/ou_alice").status_code == 204
 
     with SessionLocal() as db:
-        assert _history(db, ws, bot["id"])[0]["action"] == "feishu.binding.removed", "审计表里查得到"
-        assert db.query(ActivityEvent).filter_by(subject_type="feishu_binding", subject_id=bot["id"]).count() == 1
+        assert _removed(db, ws, bot["id"])[0]["action"] == "feishu.binding.removed", "审计表里查得到"
+        assert db.query(ActivityEvent).filter_by(action="feishu.binding.removed", subject_type="feishu_binding", subject_id=bot["id"]).count() == 1
         assert bindings.resolve_sender(db, ws, bot["id"], "ou_alice") is None, "历史不是授权依据"
         assert bindings.list_bindings(db, ws, bot["id"]) == []
 

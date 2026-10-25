@@ -128,19 +128,6 @@ def _toast(message: str) -> CardDecision:
     return CardDecision({"toast": {"type": "error", "content": message}})
 
 
-def _update_sent_card(db: Session, bot_id: str | None, message_id: str | None, card: dict[str, Any]) -> None:
-    """回调可能已经超过 worker 的 2.5 秒预算;结果照样写回原卡,别让群里留一张还能点的旧卡。"""
-    if not bot_id or not message_id:
-        return
-    bot = db.get(FeishuBot, bot_id)
-    if bot is None:
-        return
-    try:
-        client.update_card(bot, message_id, card)
-    except Exception:  # noqa: BLE001 —— 回调响应仍会送一次;这里失败只记日志
-        logger.warning("feishu card update after decision failed message=%s", message_id, exc_info=True)
-
-
 # ---------------- 工作流「等人确认」:发卡、路由、收回调 ----------------
 
 
@@ -439,7 +426,6 @@ def _handle_run_approval(open_id: str, action: str, value: dict[str, Any], bot_i
         settled = cards.settled_approval_card(
             title=approval.title, decision=decision, by=user.display_name or user.username, note=note,
         )
-        _update_sent_card(db, approval.feishu_bot_id, approval.feishu_message_id, settled)
         return CardDecision({"card": {"type": "raw", "data": settled}})
 
 

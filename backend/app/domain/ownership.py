@@ -130,6 +130,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "FeishuBot": ("app/domain/feishu/",),
     "FeishuBinding": ("app/domain/feishu/",),
     "FeishuBindCode": ("app/domain/feishu/",),
+    "FeishuInboundMessage": ("app/integrations/feishu/",),
     "PluginPackage": ("app/domain/plugins/",),
     "PluginMarketHold": ("app/domain/plugins/",),
     "PluginInstance": ("app/domain/plugins/",),

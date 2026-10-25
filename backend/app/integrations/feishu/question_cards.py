@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.i18n import LocalizedError
 from app.db.models import AgentQuestion
 from app.domain.agent import use_cases
 from app.domain.feishu import bindings, routing
@@ -27,6 +28,10 @@ OTHER_PREFIX = "question_other_"
 FORM_NAME = "mosael_questions"
 SUBMIT_NAME = "mosael_questions_submit"
 MAX_OTHER_CHARS = 1000
+
+
+class QuestionFormError(LocalizedError, ValueError):
+    """飞书表单内容不完整;带文案 key,界面按语言翻译。"""
 
 
 def _text(content: str) -> dict[str, Any]:
@@ -177,12 +182,12 @@ def settled_question_card(row: AgentQuestion) -> dict[str, Any]:
 
 def answers_from_form(row: AgentQuestion, form_value: Any) -> dict[str, list[str]]:
     if not isinstance(form_value, dict):
-        raise ValueError("缺少表单内容")
+        raise QuestionFormError("questionErr_formMissing")
     answers: dict[str, list[str]] = {}
     for index, question in enumerate(row.questions or []):
         other = str(form_value.get(_other_name(index)) or "").strip()
         if len(other) > MAX_OTHER_CHARS:
-            raise ValueError("「其他」太长")
+            raise QuestionFormError("questionErr_otherTooLong", max=MAX_OTHER_CHARS)
         if other:
             answers[str(question.get("question"))] = [other]
             continue
@@ -194,9 +199,9 @@ def answers_from_form(row: AgentQuestion, form_value: Any) -> dict[str, list[str
         else:
             values = [str(picked).strip()] if str(picked).strip() else []
         if not values:
-            raise ValueError("每个问题都要选一个或填写「其他」")
+            raise QuestionFormError("questionErr_answerMissing")
         if not bool(question.get("multi_select")) and len(values) > 1:
-            raise ValueError("单选题只能选一个")
+            raise QuestionFormError("questionErr_singleChoice")
         answers[str(question.get("question"))] = values
     return answers
 
@@ -245,10 +250,7 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             db.commit()
         except ValueError as exc:
             db.rollback()
-            message = str(exc)
-            if message.startswith("questionErr_"):
-                message = "答案不完整或已经失效,请重新打开这组问题。"
-            return {"toast": {"type": "error", "content": message}}
+            return {"toast": {"type": "error", "content": str(exc)}}
         except Exception:  # noqa: BLE001
             db.rollback()
             logger.exception("feishu question answer failed question=%s", question_id)

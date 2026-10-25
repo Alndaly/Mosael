@@ -242,6 +242,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{question}」的自由文本太长(上限 {max} 字)",
         "en": "The free-text answer to \"{question}\" is too long (limit {max} characters).",
     },
+    "questionErr_formMissing": {"zh": "缺少表单内容", "en": "The form content is missing."},
+    "questionErr_otherTooLong": {"zh": "「其他」太长(上限 {max} 字)", "en": "The “other” answer is too long (limit {max} characters)."},
+    "questionErr_answerMissing": {"zh": "每个问题都要选一个或填写「其他」", "en": "Choose an option or fill in “other” for every question."},
+    "questionErr_singleChoice": {"zh": "单选题只能选一个", "en": "A single-choice question accepts only one option."},
     # 时间线(序列)
     "seqErr_nothingToUndo": {"zh": "没有可撤销的操作", "en": "Nothing to undo."},
     "seqErr_nothingToRedo": {"zh": "没有可重做的操作", "en": "Nothing to redo."},

@@ -26,7 +26,7 @@ def test_收件人选项带着是哪台机器人的openid() -> None:
     两台才会暴露"按 label 里的机器人名反推"那种猜法 —— 并且选项清单是按机器人分组列的
     (见 `field_options._feishu_bound_users`),顺序由库里的 created_at 决定,所以断言按 value 索引。
     """
-    from app.db.models import FeishuBinding, FeishuBot, User
+    from app.db.models import FeishuBinding, FeishuBot, User, WorkspaceMember
     from tests.util import second_client
 
     client = fresh_client()
@@ -45,6 +45,7 @@ def test_收件人选项带着是哪台机器人的openid() -> None:
         db.add_all([
             FeishuBinding(workspace_id=workspace, bot_id=bots[0].id, open_id="ou_in_one", user_id=tester.id),
             FeishuBinding(workspace_id=workspace, bot_id=bots[1].id, open_id="ou_in_two", user_id=mate.id),
+            WorkspaceMember(workspace_id=workspace, user_id=mate.id, role="editor"),
         ])
         db.commit()
         expected = {"ou_in_one": (bots[0].id, "一号"), "ou_in_two": (bots[1].id, "二号")}

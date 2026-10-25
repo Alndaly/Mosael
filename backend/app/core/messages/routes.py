@@ -507,4 +507,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "今日诗词暂时不可达:{detail}",
         "en": "The daily poem service is unreachable right now: {detail}",
     },
+    "routeErr_replayImageGone": {
+        "zh": "这张回放截图已经被清掉了。",
+        "en": "This replay image was cleared.",
+    },
 }

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import AgentQuestion, AgentSession, ToolConfirmation
 
 logger = logging.getLogger(__name__)
@@ -102,13 +103,12 @@ def question_opened(db: Session, question: AgentQuestion) -> str | None:
 def confirmation_opened_after_commit(confirmation: ToolConfirmation) -> None:
     """`after_commit` 入口:原会话已经提交,不能再用它发 SQL;新开一个只读会话把卡推出去,
     并把**卡片消息 id** 写回那一行 —— 之后回调超时/应用内批准/过期才有东西可收回。"""
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         message_id = confirmation_opened(db, confirmation)
         if message_id:
             row = db.get(ToolConfirmation, confirmation.id)
             if row is not None:
                 row.feishu_message_id = message_id
-                db.commit()
 
 
 def confirmation_settled_after_commit(confirmation: ToolConfirmation) -> None:
@@ -134,13 +134,12 @@ def confirmation_settled_by_id_after_commit(confirmation_id: str) -> None:
 
 def question_opened_after_commit(question: AgentQuestion) -> None:
     """`after_commit` 入口:同 `confirmation_opened_after_commit`。"""
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         message_id = question_opened(db, question)
         if message_id:
             row = db.get(AgentQuestion, question.id)
             if row is not None:
                 row.feishu_message_id = message_id
-                db.commit()
 
 
 def question_settled_after_commit(question: AgentQuestion) -> None:

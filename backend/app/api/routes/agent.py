@@ -10,7 +10,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
-from app.api.responses import event_stream
+from app.api.responses import event_stream, file_response
 from sqlalchemy import select
 
 from app.core.i18n import tr
@@ -339,8 +339,8 @@ def get_agent_replay_image(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="This replay image was cleared.")
-    return FileResponse(path, media_type="image/png")
+        raise HTTPException(status_code=404, detail=tr("routeErr_replayImageGone"))
+    return file_response(db, path, media_type="image/png")
 
 
 @router.delete("/agent/sessions/{session_id}/replay", status_code=204)
