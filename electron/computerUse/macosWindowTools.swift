@@ -100,15 +100,44 @@ func accessibilityTree(_ pid: Int32) -> [String: Any] {
     return ["snapshot_id": snapshot, "elements": elements]
 }
 
+func permissionStatus() -> [String: Bool] {
+    return [
+        "accessibility": AXIsProcessTrusted(),
+        "screen": CGPreflightScreenCaptureAccess(),
+    ]
+}
+
+/// 只有用户点了「向系统申请」才走到这里;状态查询绝不触发系统弹窗。
+func requestPermission(_ kind: String) -> Bool {
+    switch kind {
+    case "accessibility":
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        return AXIsProcessTrustedWithOptions(options)
+    case "screen":
+        return CGRequestScreenCaptureAccess()
+    default:
+        FileHandle.standardError.write(Data("unknown permission: \(kind)\n".utf8))
+        exit(2)
+    }
+}
+
 let arguments = CommandLine.arguments
 if arguments.count < 2 {
-    FileHandle.standardError.write(Data("usage: macos-window-tools windows | ax <pid>\n".utf8))
+    FileHandle.standardError.write(Data("usage: macos-window-tools windows | permissions | request-permission <accessibility|screen> | ax <pid>\n".utf8))
     exit(2)
 }
 
 switch arguments[1] {
 case "windows":
     WindowJSON.write(listWindows())
+case "permissions":
+    WindowJSON.write(permissionStatus())
+case "request-permission":
+    guard arguments.count >= 3 else {
+        FileHandle.standardError.write(Data("request-permission needs accessibility or screen\n".utf8))
+        exit(2)
+    }
+    WindowJSON.write(["granted": requestPermission(arguments[2])])
 case "ax":
     guard arguments.count >= 3, let pid = Int32(arguments[2]) else {
         FileHandle.standardError.write(Data("ax needs a numeric pid\n".utf8))

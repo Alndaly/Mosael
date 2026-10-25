@@ -18,6 +18,12 @@ function harness() {
       return { stdout: "pixelWidth: 800\npixelHeight: 600\n", stderr: "" };
     }
     const kind = args[0];
+    if (kind === "permissions") {
+      return { stdout: JSON.stringify({ accessibility: true, screen: true }), stderr: "" };
+    }
+    if (kind === "request-permission") {
+      return { stdout: JSON.stringify({ granted: true }), stderr: "" };
+    }
     if (kind === "windows") {
       return { stdout: JSON.stringify([{ id: 7, owner: "Finder", title: "Documents", x: 1, y: 2, width: 800, height: 600, layer: 0, alpha: 1, onscreen: true, active: true }]), stderr: "" };
     }
@@ -77,5 +83,46 @@ describe("DesktopDriverMac(ADR 0081 P1)", () => {
       runner: async () => { throw new Error("screen recording permission required"); },
     });
     await expect(driver.observe({ windowNumber: 7 })).rejects.toThrow("screen recording permission required");
+  });
+
+  it("权限状态查询不申请权限,也不弹引导", async () => {
+    const { runner, calls } = harness();
+    const permissionGuide = vi.fn();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner, permissionGuide });
+    await expect(driver.permissions()).resolves.toEqual({ accessibility: true, screen: true });
+    expect(permissionGuide).not.toHaveBeenCalled();
+    expect(calls).toEqual([["/fake/tool", ["permissions"]]]);
+  });
+
+  it("缺权限时先给用户引导,仍未授权则回结构化错误", async () => {
+    const runner = vi.fn(async () => ({ stdout: JSON.stringify({ accessibility: false, screen: false }), stderr: "" }));
+    const permissionGuide = vi.fn().mockResolvedValue({ action: "settings", opened: true });
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner, permissionGuide });
+    const failure = await driver.observe({ pid: 42 }).catch((error) => error);
+    expect(permissionGuide).toHaveBeenCalledWith("accessibility");
+    expect(failure).toMatchObject({ code: "desktop_permission_required", permission: "accessibility" });
+    expect(runner).toHaveBeenCalledTimes(2);
+  });
+
+  it("用户在引导里授权后,同一次观察继续执行", async () => {
+    let granted = false;
+    const runner = vi.fn(async (_binary: string, args: string[]) => {
+      if (args[0] === "permissions") {
+        return { stdout: JSON.stringify({ accessibility: granted, screen: true }), stderr: "" };
+      }
+      return { stdout: JSON.stringify({ snapshot_id: "snap-2", elements: [] }), stderr: "" };
+    });
+    const permissionGuide = vi.fn(async () => { granted = true; });
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner, permissionGuide });
+    await expect(driver.observe({ pid: 42 })).resolves.toMatchObject({ meta: { snapshot_id: "snap-2" } });
+    expect(permissionGuide).toHaveBeenCalledWith("accessibility");
+  });
+
+  it("只有显式 requestPermission 才触发系统申请", async () => {
+    const { runner, calls } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await expect(driver.requestPermission("screen")).resolves.toBe(true);
+    expect(calls).toEqual([["/fake/tool", ["request-permission", "screen"]]]);
+    await expect(driver.requestPermission("camera")).rejects.toThrow("Unsupported desktop permission");
   });
 });

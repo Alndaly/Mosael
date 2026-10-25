@@ -97,16 +97,18 @@ DesktopDriver
 | P3 | 回放：时间线落盘 + 用户可见 | 一次 L3 会话能从时间线复现"第几步错" |
 | P4 | L2：`BrowserDriver` + 模型驱动兜底 | 一个没有契约的站点完成一次填写（提交动作仍走确认卡） |
 
-P1 之前**不申请任何系统权限**；P2 才申请 TCC，且申请前先讲清"为什么要、可以随时撤销"。
+P1 的只读观察也需要对应权限；查询状态**不弹窗**，只有用户在原生引导里点了「向系统申请」才请求 TCC，
+「打开系统设置」则由另一颗按钮显式触发，申请前讲清为什么要、可以随时撤销。
 
 P1 实现注记：先按原表尝试了 `SCScreenshotManager.captureImage`，但在 macOS 27 的命令行工具里触发
 `CGS_REQUIRE_INIT` 断言，`NSApplicationMain` / `RunLoop` 几种启动方式下又无法稳定返回；
 因此 P1 的实际截图走系统 `screencapture`（同一 `CGWindowListCreateImage` 路径），尺寸用 `sips` 读取。
 这不是静默降级：失败原样交回，且此处在 ADR 中留痕。后续若 SCK 命令行路径修好，可换回去。
 
-2026-10-25 实测：`DesktopDriverMac` + Swift 工具已落地，窗口枚举与 Mosael 窗口截图通过；
-Finder 的 AX 读取在当前环境返回 `-25211`（辅助功能未授予），因此 P1 的"读出树并截图"尚未全绿，
-权限引导仍需在 P1 收尾时接到用户可见流程。
+2026-10-25 实测：`DesktopDriverMac` + Swift 工具已落地，窗口枚举、Mosael 窗口截图与 Finder AX 均通过
+（Finder 返回 400 个元素）。`permissions` 只查询；`request-permission` 只在用户点击后调用；
+`desktopPermissionGuide.cjs` 提供主进程原生引导与正式装配入口，未授权时返回
+`desktop_permission_required`，授权成功后同一次观察继续执行。
 
 ## 后果
 

@@ -60,6 +60,21 @@ const MESSAGES = {
   // ---- 托盘 ----
   // Computer Use(ADR 0075):托盘菜单上的字。四角描边只画边、不写字(同一句话窗口里的提示条已经在说)。
   computerUse_stop: { zh: "停止 Computer Use", en: "Stop Computer Use" },
+  desktopPermission_title: { zh: "Computer Use 需要系统权限", en: "Computer Use needs system permission" },
+  desktopPermission_accessibilityMessage: {
+    zh: "允许 Mosael 读取其他应用的控件，才能使用桌面辅助功能。",
+    en: "Allow Mosael to read other apps’ controls to use desktop accessibility.",
+  },
+  desktopPermission_screenMessage: {
+    zh: "允许 Mosael 截取其他应用的窗口，才能看见桌面内容。",
+    en: "Allow Mosael to capture other apps’ windows so Computer Use can see the desktop.",
+  },
+  desktopPermission_detail: {
+    zh: "「向系统申请」会显示 macOS 授权框；若之前拒绝过，请打开系统设置，在「隐私与安全性」里启用 Mosael。你可以随时撤销；授权后回到 Mosael 重试。",
+    en: "“Request Permission” shows the macOS consent prompt. If you previously denied access, open System Settings and enable Mosael under Privacy & Security. You can revoke it anytime; return to Mosael and retry afterward.",
+  },
+  desktopPermission_request: { zh: "向系统申请", en: "Request Permission" },
+  desktopPermission_openSettings: { zh: "打开系统设置", en: "Open System Settings" },
   tray_running: { zh: "{count} 个任务运行中", en: "{count} running" },
   tray_idle: { zh: "空闲", en: "Idle" },
   tray_open: { zh: "打开 Mosael", en: "Open Mosael" },

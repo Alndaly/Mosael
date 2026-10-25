@@ -58,12 +58,30 @@ function parse(stdout) {
   return parsed;
 }
 
+const PERMISSION_KINDS = new Set(["accessibility", "screen"]);
+
+function permissionRequired(kind) {
+  const label = kind === "accessibility" ? "Accessibility" : "Screen Recording";
+  const error = new Error(
+    `macOS ${label} permission is required. Enable Mosael in System Settings → Privacy & Security → ${label}, then retry.`,
+  );
+  error.code = "desktop_permission_required";
+  error.permission = kind;
+  return error;
+}
+
 class DesktopDriverMac {
   /** `binaryPath` 仅供测试注入;生产从 Swift 源码编译并缓存。 */
-  constructor({ cacheDir = path.join(os.tmpdir(), "mosael-window-tools"), binaryPath = null, runner = run } = {}) {
+  constructor({
+    cacheDir = path.join(os.tmpdir(), "mosael-window-tools"),
+    binaryPath = null,
+    runner = run,
+    permissionGuide = null,
+  } = {}) {
     this.cacheDir = cacheDir;
     this.binaryPath = binaryPath;
     this.runner = runner;
+    this.permissionGuide = permissionGuide;
   }
 
   capabilities() {
@@ -72,6 +90,29 @@ class DesktopDriverMac {
 
   async binary() {
     return this.binaryPath ?? ensureBinary(this.cacheDir);
+  }
+
+  /** 只查询,不触发系统授权弹窗。 */
+  async permissions() {
+    const binary = await this.binary();
+    const { stdout } = await this.runner(binary, ["permissions"]);
+    return parse(stdout);
+  }
+
+  /** 仅供用户明确点击「向系统申请」后调用;observe 不会偷偷申请。 */
+  async requestPermission(kind) {
+    if (!PERMISSION_KINDS.has(kind)) throw new TypeError(`Unsupported desktop permission: ${String(kind)}`);
+    const binary = await this.binary();
+    const { stdout } = await this.runner(binary, ["request-permission", kind]);
+    return Boolean(parse(stdout).granted);
+  }
+
+  async requirePermission(kind) {
+    let status = await this.permissions();
+    if (status[kind]) return;
+    if (this.permissionGuide) await this.permissionGuide(kind);
+    status = await this.permissions();
+    if (!status[kind]) throw permissionRequired(kind);
   }
 
   /** 枚举当前在屏窗口(CGWindowList,不需要 Screen Recording)。 */
@@ -90,6 +131,7 @@ class DesktopDriverMac {
   async observe(target = {}) {
     const binary = await this.binary();
     if (target.windowNumber !== undefined) {
+      await this.requirePermission("screen");
       // `screencapture`(CGWindowListCreateImage)是当前可靠的窗口截图路径:
       // SCScreenshotManager.captureImage 在本机命令行里会 CGS_REQUIRE_INIT 断言。
       // 先落盘再读回,尺寸用 `sips` 读,不猜。
@@ -109,6 +151,7 @@ class DesktopDriverMac {
       };
     }
     if (target.pid !== undefined) {
+      await this.requirePermission("accessibility");
       const { stdout } = await this.runner(binary, ["ax", String(target.pid)]);
       const result = parse(stdout);
       return { elements: result.elements ?? [], meta: { pid: target.pid, snapshot_id: result.snapshot_id } };
