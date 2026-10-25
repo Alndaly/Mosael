@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 class ExternalOrigin:
     system_note: Callable[[Session, AgentSession], str] | None = None
     turn_finished: Callable[[str, str | None], None] | None = None
-    confirmation_opened: Callable[[Session, ToolConfirmation], None] | None = None
-    question_opened: Callable[[Session, AgentQuestion], None] | None = None
+    confirmation_opened: Callable[[Session, ToolConfirmation], str | None] | None = None
+    question_opened: Callable[[Session, AgentQuestion], str | None] | None = None
     #: 智能体开始 / 结束等用户操作(确认卡、选择卡)。等待时它没有在生成,`Typing` 这类
     #: “正在回复”的状态该摘;等完接着生成时要贴回去。参数是 `(session_id, waiting)`。
     waiting_for_user: Callable[[str, bool], None] | None = None
@@ -65,45 +65,59 @@ def turn_finished(origin: str | None, session_id: str, message_id: str | None = 
         logger.exception("delivering a finished turn to %s failed session=%s", origin, session_id)
 
 
-def confirmation_opened(db: Session, confirmation: ToolConfirmation) -> None:
-    """一张新卡挂在某次外部会话上时,交给那个渠道去推。推送失败只记日志 —— 卡本身已经开好了。"""
+def confirmation_opened(db: Session, confirmation: ToolConfirmation) -> str | None:
+    """一张新卡挂在某次外部会话上时,交给那个渠道去推。推送失败只记日志 —— 卡本身已经开好了。
+    成功时返回飞书消息 id(只返回卡片 id,不返回降级文字的消息 id)。"""
     if not confirmation.session_id:
-        return
+        return None
     session = db.get(AgentSession, confirmation.session_id)
     handler = _origins.get((session.origin if session is not None else "") or "")
     if handler is None or handler.confirmation_opened is None:
-        return
+        return None
     try:
-        handler.confirmation_opened(db, confirmation)
+        return handler.confirmation_opened(db, confirmation)
     except Exception:  # noqa: BLE001 —— 见 docstring
         logger.exception("announcing a confirmation to %s failed confirmation=%s", session.origin, confirmation.id)
+        return None
 
 
-def question_opened(db: Session, question: AgentQuestion) -> None:
+def question_opened(db: Session, question: AgentQuestion) -> str | None:
     """一组选项问题挂在外部会话上时,交给那个渠道去推。推送失败只记日志 —— 问题本身已经落库。"""
     session_id = getattr(question, "session_id", None)
     if not session_id:
-        return
+        return None
     session = db.get(AgentSession, session_id)
     handler = _origins.get((session.origin if session is not None else "") or "")
     if handler is None or handler.question_opened is None:
-        return
+        return None
     try:
-        handler.question_opened(db, question)
+        return handler.question_opened(db, question)
     except Exception:  # noqa: BLE001 —— 渠道那头出问题不该让问题本身消失
         logger.exception("announcing a question to %s failed question=%s", session.origin, getattr(question, "id", ""))
+        return None
 
 
 def confirmation_opened_after_commit(confirmation: ToolConfirmation) -> None:
-    """`after_commit` 入口:原会话已经提交,不能再用它发 SQL;新开一个只读会话把卡推出去。"""
+    """`after_commit` 入口:原会话已经提交,不能再用它发 SQL;新开一个只读会话把卡推出去,
+    并把**卡片消息 id** 写回那一行 —— 之后回调超时/应用内批准/过期才有东西可收回。"""
     with SessionLocal() as db:
-        confirmation_opened(db, confirmation)
+        message_id = confirmation_opened(db, confirmation)
+        if message_id:
+            row = db.get(ToolConfirmation, confirmation.id)
+            if row is not None:
+                row.feishu_message_id = message_id
+                db.commit()
 
 
 def question_opened_after_commit(question: AgentQuestion) -> None:
     """`after_commit` 入口:同 `confirmation_opened_after_commit`。"""
     with SessionLocal() as db:
-        question_opened(db, question)
+        message_id = question_opened(db, question)
+        if message_id:
+            row = db.get(AgentQuestion, question.id)
+            if row is not None:
+                row.feishu_message_id = message_id
+                db.commit()
 
 
 def waiting_for_user(origin: str | None, session_id: str, waiting: bool) -> None:

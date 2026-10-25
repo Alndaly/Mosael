@@ -667,16 +667,16 @@ def system_note(db: Session, session: AgentSession) -> str:
     )
 
 
-def _announce(db: Session, confirmation) -> None:
+def _announce(db: Session, confirmation) -> str | None:
     from app.integrations.feishu.approvals import announce_confirmation
 
-    announce_confirmation(db, confirmation)
+    return announce_confirmation(db, confirmation)
 
 
-def _announce_question(db: Session, question) -> None:
+def _announce_question(db: Session, question) -> str | None:
     from app.integrations.feishu import question_cards
 
-    question_cards.announce(db, question)
+    return question_cards.announce(db, question)
 
 
 origins.register(

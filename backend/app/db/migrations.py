@@ -65,6 +65,35 @@ def _migrate_tool_confirmations_name_their_tool_call() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN tool_call_id VARCHAR(128)"))
 
 
+def _migrate_tool_confirmations_feishu_message_id() -> None:
+    """tool_confirmations 新增 feishu_message_id:工具确认卡发到飞书后的消息 id。
+
+    回调超时、应用内批准、会话过期时用它把原卡换成结果态。老卡留空 —— 没有消息 id
+    就无法安全地就地更新,不猜、不回填。
+    """
+    inspector = inspect(engine)
+    if "tool_confirmations" not in set(inspector.get_table_names()):
+        return
+    if "feishu_message_id" in {c["name"] for c in inspector.get_columns("tool_confirmations")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN feishu_message_id VARCHAR(128)"))
+
+
+def _migrate_agent_questions_feishu_message_id() -> None:
+    """agent_questions 新增 feishu_message_id:选择卡发到飞书后的消息 id。
+
+    回答、跳过、过期时用它把原卡换成结果态;老问题卡留空。
+    """
+    inspector = inspect(engine)
+    if "agent_questions" not in set(inspector.get_table_names()):
+        return
+    if "feishu_message_id" in {c["name"] for c in inspector.get_columns("agent_questions")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agent_questions ADD COLUMN feishu_message_id VARCHAR(128)"))
+
+
 def _migrate_note_revisions_remember_where_they_came_from() -> None:
     """笔记的每一版补三列:怎么来的 `origin`、替谁写的 `created_by`、从哪一版恢复的 `restored_from`。
 
@@ -10195,6 +10224,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_assets_get_a_name_sort_key,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 ToolConfirmation 已经指望 tool_call_id 在了。
                 _migrate_tool_confirmations_name_their_tool_call,
+                # 同上:ORM 上的 ToolConfirmation / AgentQuestion 指望飞书消息 id 在。
+                _migrate_tool_confirmations_feishu_message_id,
+                _migrate_agent_questions_feishu_message_id,
                 # 同上:ORM 上的 NoteRevision 指望来历、作者、恢复自哪一版这三列在。
                 _migrate_note_revisions_remember_where_they_came_from,
                 # 同上:ORM 上的 Note 指望保存序号这一列在。

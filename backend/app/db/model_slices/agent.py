@@ -211,6 +211,8 @@ class AgentQuestion(Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    #: 这张问题卡发到飞书后的消息 id;回答/跳过/过期时用它把卡收回成结果态。
+    feishu_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class ToolConfirmation(Base):
@@ -232,6 +234,9 @@ class ToolConfirmation(Base):
     #: **只管摆在哪儿,不管授权**:报错了只是卡摆错了地方,归属与自动放行照旧由 session_id(凭据)决定。
     #: 可空:MCP 直连、POST /api/confirmations 开的卡不是对话里的某一步。
     tool_call_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    #: 这张卡发到飞书后的消息 id。只在**确实发出卡片**时写;回调超时、应用内批准、
+    #: 过期时用它把原卡换成结果态,而不是留一张还能点的旧卡。
+    feishu_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     tool: Mapped[str] = mapped_column(String(80), nullable=False)
     permission: Mapped[str] = mapped_column(String(40), nullable=False)
     #: 卡上那句话。**存的是渲染好的默认语言**,而真正的事实是下面那两列 ——

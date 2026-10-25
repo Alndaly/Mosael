@@ -75,8 +75,8 @@ _CARD_SETUP_HINT = (
 )
 
 
-def announce_confirmation(db: Session, confirmation: Any) -> None:
-    """把新建的确认卡推到它所属的飞书会话。
+def announce_confirmation(db: Session, confirmation: Any) -> str | None:
+    """把新建的确认卡推到它所属的飞书会话。成功时返回**卡片**消息 id;降级文字不返回。
 
     推送失败一律降级、绝不抛:飞书那边出问题不该让确认本身建不出来。降级分两层 ——
     先退成纯文本(至少让飞书里的人知道「有东西等你确认」并给出原因),再不行就只剩桌面端的
@@ -85,12 +85,12 @@ def announce_confirmation(db: Session, confirmation: Any) -> None:
     try:
         origin = _feishu_origin(db, confirmation.session_id)
         if origin is None:
-            return
+            return None
         bot, chat_id = origin
         from app.integrations.feishu import cards
 
         try:
-            client.send_card(
+            message_id = client.send_card(
                 bot,
                 chat_id,
                 cards.confirmation_card(
@@ -100,7 +100,7 @@ def announce_confirmation(db: Session, confirmation: Any) -> None:
                     requested_by=confirmation.requested_by,
                 ),
             )
-            return
+            return message_id
         except client.FeishuError as exc:
             missing_capability = CARD_CAPABILITY_ERROR in str(exc)
             logger.warning("feishu card send failed, falling back to text: %s", exc)
@@ -114,8 +114,10 @@ def announce_confirmation(db: Session, confirmation: Any) -> None:
             if bot_row is not None and CARD_CAPABILITY_ERROR not in (bot_row.status_detail or ""):
                 bot_row.status_detail = f"交互卡片未开启({CARD_CAPABILITY_ERROR}):{_CARD_SETUP_HINT}"[:400]
                 db.commit()
+        return None
     except Exception:  # noqa: BLE001 — 见 docstring
         logger.exception("feishu confirmation notice failed confirmation=%s", getattr(confirmation, "id", "?"))
+        return None
 
 
 class CardDecision(dict):
@@ -124,6 +126,19 @@ class CardDecision(dict):
 
 def _toast(message: str) -> CardDecision:
     return CardDecision({"toast": {"type": "error", "content": message}})
+
+
+def _update_sent_card(db: Session, bot_id: str | None, message_id: str | None, card: dict[str, Any]) -> None:
+    """回调可能已经超过 worker 的 2.5 秒预算;结果照样写回原卡,别让群里留一张还能点的旧卡。"""
+    if not bot_id or not message_id:
+        return
+    bot = db.get(FeishuBot, bot_id)
+    if bot is None:
+        return
+    try:
+        client.update_card(bot, message_id, card)
+    except Exception:  # noqa: BLE001 —— 回调响应仍会送一次;这里失败只记日志
+        logger.warning("feishu card update after decision failed message=%s", message_id, exc_info=True)
 
 
 # ---------------- 工作流「等人确认」:发卡、路由、收回调 ----------------
@@ -421,9 +436,11 @@ def _handle_run_approval(open_id: str, action: str, value: dict[str, Any], bot_i
             return _toast("处理失败,请到 Mosael 里查看")
         if not won:
             return _toast("这张卡已经处理过了")
-        return CardDecision({"card": {"type": "raw", "data": cards.settled_approval_card(
+        settled = cards.settled_approval_card(
             title=approval.title, decision=decision, by=user.display_name or user.username, note=note,
-        )}})
+        )
+        _update_sent_card(db, approval.feishu_bot_id, approval.feishu_message_id, settled)
+        return CardDecision({"card": {"type": "raw", "data": settled}})
 
 
 def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") -> CardDecision:
@@ -471,9 +488,10 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
         if confirmation.status != "pending":
             return _toast("这张确认卡已经处理过了")
 
+        card_bot_id = _app_for_card(db, bot_id, confirmation.session_id)
         user = (
             bindings.resolve_sender(
-                db, confirmation.workspace_id, _app_for_card(db, bot_id, confirmation.session_id), open_id,
+                db, confirmation.workspace_id, card_bot_id, open_id,
             )
             if open_id
             else None
@@ -498,13 +516,8 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             logger.exception("feishu card decision failed confirmation=%s", confirmation_id)
             return _toast("处理失败,请到 Mosael 里查看")
 
-        return CardDecision(
-            {
-                "card": {
-                    "type": "raw",
-                    "data": cards.settled_card(
-                        summary=summary, tool=tool, decision=decision, by=user.username
-                    ),
-                }
-            }
+        settled = cards.settled_card(
+            summary=summary, tool=tool, decision=decision, by=user.username
         )
+        _update_sent_card(db, card_bot_id, confirmation.feishu_message_id, settled)
+        return CardDecision({"card": {"type": "raw", "data": settled}})

@@ -201,13 +201,13 @@ def answers_from_form(row: AgentQuestion, form_value: Any) -> dict[str, list[str
     return answers
 
 
-def announce(db: Session, row: AgentQuestion) -> None:
+def announce(db: Session, row: AgentQuestion) -> str | None:
     origin = routing.session_origin(db, row.session_id)
     if origin is None:
-        return
+        return None
     bot, chat_id = origin
     try:
-        client.send_card(bot, chat_id, question_card(row))
+        return client.send_card(bot, chat_id, question_card(row))
     except Exception as exc:  # noqa: BLE001 —— 问题已经落库,卡片只是渠道
         logger.warning("feishu question card failed question=%s", row.id, exc_info=True)
         reason = str(getattr(exc, "detail", "") or exc)[:300]
@@ -215,6 +215,7 @@ def announce(db: Session, row: AgentQuestion) -> None:
             client.send_text(bot, chat_id, f"有一组选择需要你在 Mosael 里回答;飞书卡片发送失败:{reason}")
         except Exception:  # noqa: BLE001
             logger.warning("feishu question fallback text failed question=%s", row.id, exc_info=True)
+        return None
 
 
 def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") -> dict[str, Any]:
@@ -253,4 +254,13 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             logger.exception("feishu question answer failed question=%s", question_id)
             return {"toast": {"type": "error", "content": "处理失败,请到 Mosael 里查看"}}
 
-        return {"card": {"type": "raw", "data": settled_question_card(answered)}}
+        settled = settled_question_card(answered)
+        if origin is not None and answered.feishu_message_id:
+            try:
+                client.update_card(origin[0], answered.feishu_message_id, settled)
+            except Exception:  # noqa: BLE001 —— 回调响应仍会更新;这里失败只记日志
+                logger.warning(
+                    "feishu question card update failed question=%s message=%s",
+                    question_id, answered.feishu_message_id, exc_info=True,
+                )
+        return {"card": {"type": "raw", "data": settled}}
