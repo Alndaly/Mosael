@@ -141,16 +141,23 @@ it("只列本对话发起的任务:状态、进度、失败原因各说各的", 
   expect(container.querySelector("[data-session-jobs]")?.textContent).toContain("chatJobsScope");
   expect(container.querySelectorAll("[data-session-job]")).toHaveLength(2);
 
+  //: 题目是一颗文字按钮:悬停才出现下划线,不是整行都能点。
+  const title = screen.getByRole("button", { name: "山间的清晨" });
+  expect(title.className).toContain("hover:underline");
   //: 还在跑的那一行给取消。
-  fireEvent.click(screen.getByLabelText("jobCancel"));
+  const cancelButton = screen.getByRole("button", { name: "jobCancel" });
+  expect(cancelButton.className).toContain("hover:underline");
+  fireEvent.click(cancelButton);
   await waitFor(() => expect(h.cancelJob).toHaveBeenCalledWith("run-1"));
 
   //: 点整行 → 任务详情。
   fireEvent.click(screen.getByText("山间的清晨"));
   await waitFor(() => expect(screen.getByTestId("job-detail").textContent).toBe("fail-1"));
 
-  //: 失败那一行的「前往」落在它的生成记录上。
-  fireEvent.click(screen.getByText("chatJobsGoto"));
+  //: 失败那一行的「前往」落在它的生成记录上,同样是悬停下划线的文字按钮。
+  const goto = screen.getByRole("button", { name: "chatJobsGoto" });
+  expect(goto.className).toContain("hover:underline");
+  fireEvent.click(goto);
   expect(h.gotoRecord).toHaveBeenCalledWith("/ai?tab=create", "mosael:ai-record", "gen-session-2");
 });
 
@@ -237,6 +244,18 @@ describe("和「任务计划」同一套行语法", () => {
     //: 完工行没有取消钮,所以主行里唯一一个 svg 就是状态圈;计划那侧同样。
     expect(container.querySelector("[data-session-job] [data-inspector-row]")!.querySelectorAll("svg")).toHaveLength(1);
     expect(container.querySelector("[data-plan-step] [data-inspector-row]")!.querySelectorAll("svg")).toHaveLength(1);
+  });
+
+  it("⑤ 在跑的排在最前,不被上一条做完的任务顶下去", async () => {
+    h.jobs = [
+      job({ id: "done", status: "succeeded", progress: 1, created_at: stamp(1), payload: { subject: "刚做完的", receipt: { session_id: "s1" } } }),
+      job({ id: "run", status: "running", progress: 0.4, created_at: stamp(30), payload: { subject: "在跑的", receipt: { session_id: "s1" } } }),
+      job({ id: "wait", status: "queued", created_at: stamp(2), payload: { subject: "排队的", receipt: { session_id: "s1" } } }),
+    ];
+    const { container } = mount();
+    await screen.findByText("在跑的");
+    const order = [...container.querySelectorAll("[data-session-job]")].map((row) => row.getAttribute("data-session-job"));
+    expect(order).toEqual(["run", "wait", "done"]);
   });
 
   it("④ 进度/用时在主行下方的说明行里,和文字同一左缘", async () => {

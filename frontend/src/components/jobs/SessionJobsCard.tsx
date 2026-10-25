@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ListChecks, X } from "lucide-react";
+import { ListChecks, Loader2 } from "lucide-react";
 
 import { cancelJob, topLevelJobsQuery, type JobSummary } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -10,7 +10,6 @@ import { InspectorStatusRow, toAgentStatus } from "@/components/layout/Inspector
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
 import { gotoJobPage, jobPage, useJobKinds } from "@/components/jobs/jobKinds";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { leaveNativeView } from "@/lib/nativeView";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -102,10 +101,15 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
       (query.state.data ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
   });
 
-  const mine = React.useMemo(
-    () => (jobs.data ?? []).filter((job) => receiptSessionId(job) === sessionId),
-    [jobs.data, sessionId],
-  );
+  const mine = React.useMemo(() => {
+    // 先看在跑的,再看排队的,最后是已经结束的;同一档里新的在上。侧栏只扫一眼,
+    // 「现在有什么在跑」必须第一眼看见,而不是被上一条做完的任务顶下去。
+    const rank = (status: string) =>
+      status === "running" ? 0 : status === "queued" ? 1 : status === "failed" ? 2 : 3;
+    return (jobs.data ?? [])
+      .filter((job) => receiptSessionId(job) === sessionId)
+      .sort((a, b) => rank(a.status) - rank(b.status) || Date.parse(b.created_at) - Date.parse(a.created_at));
+  }, [jobs.data, sessionId]);
 
   const cancel = useMutation({
     mutationFn: (jobId: string) => cancelJob(jobId),
@@ -119,9 +123,9 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
 
   return (
     <InspectorCard icon={ListChecks} title={t("chatJobsTitle")} aside={String(mine.length)}>
-      <div className="grid min-w-0 gap-1.5" data-session-jobs="">
-        <p className="m-0 text-ui-2xs leading-normal text-muted-foreground">{t("chatJobsScope")}</p>
-        <ul className="m-0 grid list-none gap-1 p-0">
+      <div className="grid min-w-0 gap-2" data-session-jobs="">
+        <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("chatJobsScope")}</p>
+        <ul className="m-0 grid list-none gap-1.5 p-0">
         {mine.map((job) => {
           const kind = kindOf(job.kind);
           const subject = jobSubjectOf(job, kind.label, t);
@@ -130,52 +134,65 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
           const page = jobPage(job, kind);
           const progress = typeof job.progress === "number" ? job.progress : 0;
           const elapsed = Math.max(0, (Date.now() - Date.parse(job.created_at)) / 1000);
+          const meta = active
+            ? progress > 0
+              ? `${Math.round(progress * 100)}%`
+              : t("chatJobsElapsed").replace("{t}", formatElapsedSeconds(elapsed))
+            : failed && (job.error_summary || job.error)
+              ? job.error_summary || job.error
+              : null;
           return (
             <li key={job.id} data-session-job={job.id}>
               {/* 和「任务计划」同一个 InspectorStatusRow:左边一个圈、右边文字,右侧不再写一遍状态。
-                  类型图标两边都不画;进度/用时/失败原因走说明行(在主行下方,和文字同一左缘)。 */}
+                  主行只放用户写的题目(没有题目时才用种类名当主行);种类、进度/用时/失败原因都归
+                  说明行,和文字同一左缘。题目本身是一颗悬停才出现下划线的文字按钮,点它看详情。 */}
               <InspectorStatusRow
                 status={toAgentStatus(job.status)}
-                onActivate={() => setDetailJob(job)}
-                trailing={
+                note={
+                  subject ? (
+                    <span className="flex min-w-0 items-baseline gap-1.5">
+                      <span className="shrink-0">{kind.label}</span>
+                      {meta ? <Truncate className="flex-1 tabular-nums">{meta}</Truncate> : null}
+                    </span>
+                  ) : meta ? (
+                    <Truncate className={active ? "tabular-nums" : undefined}>{meta}</Truncate>
+                  ) : null
+                }
+                noteTrailing={
                   active ? (
-                    <IconButton
-                      size="icon-xs"
-                      label={t("jobCancel")}
-                      loading={cancel.isPending && cancel.variables === job.id}
+                    <button
+                      type="button"
+                      className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
+                      disabled={cancel.isPending && cancel.variables === job.id}
                       onClick={() => cancel.mutate(job.id)}
                     >
-                      <X size={12} />
-                    </IconButton>
+                      {cancel.isPending && cancel.variables === job.id ? (
+                        <Loader2 className="size-3 animate-mosael-spin" aria-label={t("jobCancel")} />
+                      ) : (
+                        t("jobCancel")
+                      )}
+                    </button>
                   ) : failed && page ? (
-                    <Button
-                      variant="ghost"
-                      size="xs"
+                    <button
+                      type="button"
+                      className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
                       onClick={() => {
                         void leaveNativeView();
                         gotoJobPage(job, kind);
                       }}
                     >
                       {t("chatJobsGoto")}
-                    </Button>
-                  ) : null
-                }
-                note={
-                  active ? (
-                    <span className="tabular-nums">
-                      {progress > 0
-                        ? `${Math.round(progress * 100)}%`
-                        : t("chatJobsElapsed").replace("{t}", formatElapsedSeconds(elapsed))}
-                    </span>
-                  ) : failed && (job.error_summary || job.error) ? (
-                    <Truncate>{job.error_summary || job.error}</Truncate>
+                    </button>
                   ) : null
                 }
               >
-                <span className="flex min-w-0 items-baseline gap-1.5">
-                  <span className="shrink-0 text-ui-2xs text-muted-foreground">{kind.label}</span>
-                  {subject ? <Truncate className="flex-1 text-ui-xs text-foreground">{subject}</Truncate> : null}
-                </span>
+                <Button
+                  variant="inline"
+                  className="-ml-1.5 w-full min-w-0 justify-start font-normal text-foreground hover:bg-transparent hover:text-foreground hover:underline"
+                  onClick={() => setDetailJob(job)}
+                >
+                  <Truncate>{subject || kind.label}</Truncate>
+                </Button>
               </InspectorStatusRow>
             </li>
           );

@@ -261,6 +261,7 @@ function Hint({
   disabledReason,
   side,
   align,
+  className,
   children,
 }: {
   /** 第一行:控件叫什么,或者(文字按钮上)那句补充说明。文字已经写清楚的按钮别再套一层说一遍。 */
@@ -270,6 +271,8 @@ function Hint({
   disabledReason?: string | false | null
   side?: Side
   align?: "start" | "center" | "end"
+  /** 只作用在禁用态那层壳上:包着整块字段的 Hint 要传 `flex w-full`,否则壳按 inline-flex 收缩,字段也跟着窄一截。 */
+  className?: string
   children: React.ReactNode
 }) {
   const [open, setOpen] = useExclusiveOpen()
@@ -289,7 +292,7 @@ function Hint({
     <span
       data-hint-disabled=""
       tabIndex={0}
-      className="inline-flex max-w-full cursor-not-allowed rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring [&>*]:pointer-events-none"
+      className={cn("inline-flex max-w-full cursor-not-allowed rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring [&>*]:pointer-events-none", className)}
     >
       {children}
     </span>

@@ -3,8 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { createNoteImage } from "./NoteImage";
 import { createNoteCodeBlock } from "./NoteCodeBlock";
 export { noteImageUrl } from "./NoteImage";
-import { TableKit } from "@tiptap/extension-table";
-import { NoteTable } from "./NoteTable";
+import { Table, TableKit } from "@tiptap/extension-table";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { NoteHighlight, NoteMarkdown } from "./NoteHighlight";
@@ -61,5 +60,5 @@ export const notePlaceholder =
 export function noteExtensions(readonly = false, locale = "zh-CN",
                                { previewImages = false, workspaceId = "" }: { previewImages?: boolean; workspaceId?: string } = {}) {
   return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference.configure({ workspaceId }), createNoteImage(locale, { preview: previewImages }), createNoteCodeBlock(locale),
-    TableKit.configure({ table: false }), NoteTable, TaskList, TaskItem.configure({ nested: true }), NoteHighlight, NoteMarkdown];
+    TableKit.configure({ table: false }), Table, TaskList, TaskItem.configure({ nested: true }), NoteHighlight, NoteMarkdown];
 }

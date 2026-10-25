@@ -85,19 +85,21 @@ export function ThinkingLevelPicker({ workspaceId, place, session }: { workspace
     const reason = unavailable ? t("agentThinkingUnavailable") : t("modelListLoading");
     //: 按钮一直是禁用的,说明挂在 Hint 给它套的壳上:读取中只说「读取中」,发不出时再说一句怎么办。
     return (
-      <Hint label={unavailable ? reason : undefined} disabledReason={unavailable ? t("agentThinkingUnavailableHint") : reason}>
-        {/* 和读完之后同一颗下拉(sm),只是点不了:此前自己画了一颗「像下拉的按钮」,箭头、字号和读完之后的那颗对不上 */}
-        <span className="block">
-          <Select disabled value="">
-            <SelectTrigger size="sm" className="w-full" aria-label={reason}>
-              <span className="flex min-w-0 items-center gap-1.5">
-                <Brain className="size-3.5 shrink-0 opacity-70" />
-                <Truncate className="text-muted-foreground">{reason}</Truncate>
-              </span>
-            </SelectTrigger>
-          </Select>
-        </span>
-      </Hint>
+      <div className="w-full min-w-0">
+        <Hint className="flex w-full" label={unavailable ? reason : undefined} disabledReason={unavailable ? t("agentThinkingUnavailableHint") : reason}>
+          {/* 和读完之后同一颗下拉(sm),只是点不了:此前自己画了一颗「像下拉的按钮」,箭头、字号和读完之后的那颗对不上 */}
+          <span className="block w-full min-w-0">
+            <Select disabled value="">
+              <SelectTrigger size="sm" className="w-full" aria-label={reason}>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Brain className="size-3.5 shrink-0 opacity-70" />
+                  <Truncate className="text-muted-foreground">{reason}</Truncate>
+                </span>
+              </SelectTrigger>
+            </Select>
+          </span>
+        </Hint>
+      </div>
     );
   }
   /*
@@ -131,24 +133,28 @@ export function ThinkingLevelPicker({ workspaceId, place, session }: { workspace
             : t("agentThinkingHigh");
   return (
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题(与分析方式同一处理)。
-    <Select key={value} value={value} onValueChange={(next) => setLevel.mutate({ thinking_level: next })}>
-      <SelectTrigger
-        size="sm"
-        className="w-full"
-        aria-label={t("agentThinkingLevel")}
-      >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Brain className="size-3.5 shrink-0 opacity-70" />
-          <SelectValue />
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {offered.map((level) => (
-          <SelectItem key={level} value={level}>
-            {label(level)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    // 外层必须是块级且占满:Radix 的 Root 不产生 DOM,直接把它当 grid 子项时,
+    // 触发器的 `w-full` 只会按内容宽度算,于是这一格比上面的权限、下面的分析方式窄一截。
+    <div className="w-full min-w-0">
+      <Select key={value} value={value} onValueChange={(next) => setLevel.mutate({ thinking_level: next })}>
+        <SelectTrigger
+          size="sm"
+          className="w-full"
+          aria-label={t("agentThinkingLevel")}
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Brain className="size-3.5 shrink-0 opacity-70" />
+            <SelectValue />
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          {offered.map((level) => (
+            <SelectItem key={level} value={level}>
+              {label(level)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

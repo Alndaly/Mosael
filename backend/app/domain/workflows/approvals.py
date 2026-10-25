@@ -431,8 +431,8 @@ def dispatch_resume(job_id: str, *, approval_id: str | None = None) -> bool:
 #: 不用库里的格子记这件事,是因为这里要挡的正是**两次派发之间**那一段毫秒级窗口 —— 那一段里
 #: 库里还没有任何可写的状态(派出去的那条线程还没跑到任何一步)。
 #:
-#: 标记在**恢复的那条运行跑完 / 又停在下一道门上**时放下(`resume_finished`,引擎在收尾时调):
-#: 这样"下一次唤醒"照样派得出去,而"同一次等待"只派一次。
+#: 标记在**恢复的那条运行落终态之后**放下(`resume_finished`,引擎在收尾时调):这样
+#: "同一次等待"只派一次。下一道门是另一张单(approval id 不同),不需要先清掉旧标记。
 _RESUMED: set[tuple[str, str]] = set()
 _RESUMED_LOCK = threading.Lock()
 
@@ -452,11 +452,17 @@ def _forget_resume(job_id: str, approval_id: str) -> None:
 
 
 def resume_finished(job_id: str) -> None:
-    """这次运行的恢复**不在飞了**(跑完了,或又停在下一道门上):把它的标记放下。
+    """这次运行的恢复**已经收尾**:只在任务不再 `running` 时把标记放下。
 
-    引擎在接回来的那条线程收尾时调(见 engine.continue_workflow_job)。放下之后,下一道门上的
-    决定(或者重启 resumer)照旧派得出去。
+    不能一律放下:恢复线程「跑完」和任务行落终态之间还隔着一次提交,而另一条唤醒路可能正好
+    在这条缝里进来 —— 看到任务仍是 `running`,标记却已经被清掉,于是同一个等待被派第二次
+    (此前在整套测试的负载下真的撞上过)。任务停在下一道门上时也仍是 `running`:那张新单的
+    approval id 不同,旧标记留着不挡它,反而正好挡住「同一个等待」被重复派发。
     """
+    with unit_of_work() as db:
+        job = db.get(Job, job_id)
+        if job is not None and job.status == "running":
+            return
     with _RESUMED_LOCK:
         for key in [one for one in _RESUMED if one[0] == job_id]:
             _RESUMED.discard(key)

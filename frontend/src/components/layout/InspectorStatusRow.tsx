@@ -81,6 +81,7 @@ const ACTIVATABLE_ROW_CLASS =
  * @param status 归一过的状态(见 `toAgentStatus`)—— 圈画在左缘,别处不再表达状态。
  * @param note 主行下方那一行:进度、用时、失败原因。**不要**把这类信息塞进 `trailing`。
  * @param trailing 主行右缘只放动作(取消、前往结果);它不参与"这行是什么状态"。
+ * @param noteTrailing 说明行右缘的动作。动作不挤主行标题时放这里,和说明同一行。
  * @param onActivate 给了就是可点的整行(后台任务点开详情);仍然保留键盘 Enter / 空格。
  */
 export function InspectorStatusRow({
@@ -88,6 +89,7 @@ export function InspectorStatusRow({
   children,
   note,
   trailing,
+  noteTrailing,
   onActivate,
   className,
 }: {
@@ -95,6 +97,7 @@ export function InspectorStatusRow({
   children: ReactNode;
   note?: ReactNode;
   trailing?: ReactNode;
+  noteTrailing?: ReactNode;
   onActivate?: () => void;
   className?: string;
 }) {
@@ -131,13 +134,14 @@ export function InspectorStatusRow({
         )}
         {trailing ? <div className="-my-1 flex shrink-0 items-center gap-1">{trailing}</div> : null}
       </div>
-      {note ? (
+      {note || noteTrailing ? (
         //: 缩进 = 圈的 12px + 间距 6px:说明和上面的文字同一个左缘,而不是挂在主行右边。
         <div
           data-inspector-note=""
-          className="grid min-w-0 gap-0.5 pl-[18px] text-ui-2xs leading-normal text-muted-foreground"
+          className="flex min-w-0 items-start gap-2 pl-[18px] text-ui-2xs leading-normal text-muted-foreground"
         >
-          {note}
+          {note ? <div className="grid min-w-0 flex-1 gap-0.5">{note}</div> : null}
+          {noteTrailing ? <div className="flex shrink-0 items-center">{noteTrailing}</div> : null}
         </div>
       ) : null}
     </div>

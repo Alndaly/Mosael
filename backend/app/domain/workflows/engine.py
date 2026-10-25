@@ -1100,10 +1100,10 @@ def continue_workflow_job(db: Session, job: Job, checkpoint: dict[str, Any]) -> 
     job_id = job.id
 
     def run_resumed() -> None:
-        """接回来的那一轮,外头再套一层:跑完(或者又停在下一道门上)就把"恢复中"的标记放下。
+        """接回来的那一轮,外头再套一层:收尾时告诉 approvals 这次恢复不在飞了。
 
-        `approvals.resume_finished` 放下标记之后,下一道门上的决定才派得出去 —— 而这次恢复在飞的
-        那一段里,同一个等待不会被第二条唤醒路再派一遍(见 approvals.dispatch_resume)。
+        任务落终态之后才真正放下「恢复中」的标记(见 approvals.resume_finished);那之前同一个
+        等待不会被第二条唤醒路再派一遍,而下一道门有自己那张单的 id,不靠清标记才派得出去。
         """
         from app.domain.workflows import approvals
 
