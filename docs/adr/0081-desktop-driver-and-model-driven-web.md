@@ -55,7 +55,7 @@ DesktopDriver
 | 能力 | macOS | Windows |
 | --- | --- | --- |
 | 枚举窗口 / 前台窗口 | `CGWindowListCopyWindowInfo` | `EnumWindows` |
-| 窗口截图 | `ScreenCaptureKit`（单窗口） | `Windows.Graphics.Capture` |
+| 窗口截图 | `screencapture`（CGWindowListCreateImage；P1 实测路径） | `Windows.Graphics.Capture` |
 | 可访问性树 | `AXUIElement`（`AXUIElementCopyAttributeValue`） | UI Automation |
 | 输入注入 | `CGEvent`（鼠标 / 键盘） | `SendInput` |
 | 权限 | **辅助功能** + **屏幕录制**（两项 TCC，都要先申请） | 无需 TCC |
@@ -98,6 +98,15 @@ DesktopDriver
 | P4 | L2：`BrowserDriver` + 模型驱动兜底 | 一个没有契约的站点完成一次填写（提交动作仍走确认卡） |
 
 P1 之前**不申请任何系统权限**；P2 才申请 TCC，且申请前先讲清"为什么要、可以随时撤销"。
+
+P1 实现注记：先按原表尝试了 `SCScreenshotManager.captureImage`，但在 macOS 27 的命令行工具里触发
+`CGS_REQUIRE_INIT` 断言，`NSApplicationMain` / `RunLoop` 几种启动方式下又无法稳定返回；
+因此 P1 的实际截图走系统 `screencapture`（同一 `CGWindowListCreateImage` 路径），尺寸用 `sips` 读取。
+这不是静默降级：失败原样交回，且此处在 ADR 中留痕。后续若 SCK 命令行路径修好，可换回去。
+
+2026-10-25 实测：`DesktopDriverMac` + Swift 工具已落地，窗口枚举与 Mosael 窗口截图通过；
+Finder 的 AX 读取在当前环境返回 `-25211`（辅助功能未授予），因此 P1 的"读出树并截图"尚未全绿，
+权限引导仍需在 P1 收尾时接到用户可见流程。
 
 ## 后果
 
