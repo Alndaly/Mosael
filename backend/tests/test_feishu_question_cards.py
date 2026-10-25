@@ -37,6 +37,7 @@ def test_single_and_multi_use_the_matching_feishu_component() -> None:
     assert '"tag": "multi_select_static"' in multi
     assert '"tag": "select_static"' not in multi
     assert question_cards.FORM_NAME in single
+    assert '"max_length": 1000' in single
     assert "form_submit" in single
     assert question_cards.ACTION_ANSWER in single
     assert question_cards.ACTION_SKIP in single

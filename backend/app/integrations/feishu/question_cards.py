@@ -26,7 +26,7 @@ FIELD_PREFIX = "question_"
 OTHER_PREFIX = "question_other_"
 FORM_NAME = "mosael_questions"
 SUBMIT_NAME = "mosael_questions_submit"
-MAX_OTHER_CHARS = 2000
+MAX_OTHER_CHARS = 1000
 
 
 def _text(content: str) -> dict[str, Any]:
@@ -191,10 +191,11 @@ def announce(db: Session, row: AgentQuestion) -> None:
     bot, chat_id = origin
     try:
         client.send_card(bot, chat_id, question_card(row))
-    except Exception:  # noqa: BLE001 —— 问题已经落库,卡片只是渠道
+    except Exception as exc:  # noqa: BLE001 —— 问题已经落库,卡片只是渠道
         logger.warning("feishu question card failed question=%s", row.id, exc_info=True)
+        reason = str(getattr(exc, "detail", "") or exc)[:300]
         try:
-            client.send_text(bot, chat_id, "有一组选择需要你在 Mosael 里回答;飞书卡片发送失败。")
+            client.send_text(bot, chat_id, f"有一组选择需要你在 Mosael 里回答;飞书卡片发送失败:{reason}")
         except Exception:  # noqa: BLE001
             logger.warning("feishu question fallback text failed question=%s", row.id, exc_info=True)
 
