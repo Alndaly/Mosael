@@ -107,6 +107,22 @@ def test_accessibility_returns_the_snapshot_without_promising_input(monkeypatch)
     }
 
 
+def test_protected_apps_are_masked_before_the_model_sees_them(monkeypatch) -> None:
+    client = fresh_client()
+    shot = _shot(320, 200)
+    shot["meta"] = {**shot["meta"], "owner": "Terminal"}
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: shot)
+
+    response = client.post("/api/agent/tools/computer_desktop_screenshot", json={"arguments": {"window_id": 7}})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["result"].get("protected") is True, body
+    assert body["result"]["owner"] == "Terminal"
+    image = base64.b64decode(body["images"][0]["data"])
+    assert image != _png(320, 200)
+    assert image.startswith(b"\x89PNG")
+
+
 @pytest.mark.parametrize(
     ("tool", "arguments"),
     [

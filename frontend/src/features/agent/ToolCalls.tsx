@@ -1,8 +1,10 @@
 import React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Brain, Check, ChevronRight, CircleAlert, Loader2, Settings2, Sparkles, X } from "lucide-react";
 
 import { getJob, type Confirmation, type JobSummary } from "@/api/client";
+import { agentReplayImageUrl, clearAgentReplay } from "@/api/domains/sessions";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
 import { JobKindIcon, useJobKinds } from "@/components/jobs/jobKinds";
@@ -155,7 +157,7 @@ function format(value: unknown): string {
  * 「谁放的行」要说清:自动放行(本会话始终允许、自动 / 跳过档)和用户亲手点的不是一回事,
  * 写成同一个「已批准」等于替他认了一个他没做过的决定(同一条理由见 AutoApprovalTrace)。
  */
-function decisionWord(card: Confirmation, t: ReturnType<typeof useI18n>): string {
+function decisionWord(card: Confirmation, t: Translate): string {
   const who = card.decision_mode === "manual" ? t("confirmDecisionManual") : t("confirmDecisionAuto");
   switch (card.status) {
     case "pending":
@@ -172,6 +174,96 @@ function decisionWord(card: Confirmation, t: ReturnType<typeof useI18n>): string
       //: 作废(这一轮已经结束,见 cardExpiry):按由头说。
       return t(expiryLabel(card.error));
   }
+}
+
+type ReplayImage = { url?: string; width?: number; height?: number; error?: string };
+type ReplayEvidence = {
+  version?: number;
+  session_id?: string;
+  replay_id?: string;
+  at?: string;
+  action?: { kind?: string; button?: string; clickCount?: number; text?: string; dy?: number };
+  before?: ReplayImage;
+  after?: ReplayImage;
+  error?: string;
+};
+
+type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
+
+function replayOf(data: unknown): ReplayEvidence | null {
+  if (!data || typeof data !== "object" || Array.isArray(data) || !("replay" in data)) return null;
+  const value = data.replay;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as ReplayEvidence;
+}
+
+function replayActionText(replay: ReplayEvidence, t: Translate): string {
+  const action = replay.action ?? {};
+  if (action.kind === "type") return t("computerReplayType", { text: action.text ?? "" });
+  if (action.kind === "scroll") return t("computerReplayScroll", { dy: String(action.dy ?? 0) });
+  const button = action.button === "right" ? t("computerReplayRight") : t("computerReplayLeft");
+  return t("computerReplayClick", { button, count: String(action.clickCount ?? 1) });
+}
+
+function DesktopReplay({ replay }: { replay: ReplayEvidence }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const [broken, setBroken] = React.useState<Record<string, boolean>>({});
+  const clear = useMutation({
+    mutationFn: () => clearAgentReplay(String(replay.session_id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-messages", replay.session_id] }),
+  });
+  const image = (which: "before" | "after") => {
+    const evidence = replay[which];
+    if (!evidence?.url || broken[which]) {
+      return (
+        <div className="grid min-h-[88px] place-items-center rounded-md border border-border bg-secondary/40 px-2 text-center text-ui-xs text-muted-foreground">
+          {t("computerReplayCleared")}
+        </div>
+      );
+    }
+    return (
+      <img
+        src={agentReplayImageUrl(String(replay.session_id), String(replay.replay_id), which)}
+        alt={which === "before" ? t("computerReplayBefore") : t("computerReplayAfter")}
+        className="max-h-[240px] w-full rounded-md border border-border object-contain"
+        onError={() => setBroken((current) => ({ ...current, [which]: true }))}
+      />
+    );
+  };
+  return (
+    <div className="flex min-w-0 flex-col gap-2" data-computer-replay={replay.replay_id}>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("computerReplayTitle")}</span>
+        {replay.session_id && replay.replay_id ? (
+          <Button
+            variant="inline"
+            className="shrink-0 text-ui-xs"
+            disabled={clear.isPending}
+            onClick={() => clear.mutate()}
+            title={clear.isError ? t("computerReplayClearFailed") : undefined}
+          >
+            {clear.isPending ? t("computerReplayClearing") : t("computerReplayClear")}
+          </Button>
+        ) : null}
+      </div>
+      <div className="grid min-w-0 grid-cols-2 gap-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-ui-2xs text-muted-foreground">{t("computerReplayBefore")}</span>
+          {image("before")}
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-ui-2xs text-muted-foreground">{t("computerReplayAfter")}</span>
+          {image("after")}
+        </div>
+      </div>
+      <span className="text-ui-xs text-muted-foreground">
+        {replayActionText(replay, t)}
+        {replay.at ? ` · ${new Date(replay.at).toLocaleTimeString()}` : ""}
+      </span>
+      {replay.error ? <span className="text-ui-xs text-destructive">{replay.error}</span> : null}
+    </div>
+  );
 }
 
 function ToolCallCard({ tool }: { tool: ToolCall }) {
@@ -199,15 +291,16 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   // Structure first: the runtimes hand us the result pre-stringified, so without unwrapping
   // there is nothing to render but the string.
   const data = React.useMemo(() => toolResultData(tool.result), [tool.result]);
+  const replay = React.useMemo(() => replayOf(data), [data]);
   //: 这一页认得这次的结果(工作台「助手」的诊断、新标签页):画这一页给的,但仍属于这次工具调用的明细。
   const pageViews = React.useContext(AgentPageViewsContext);
   const pageCard = tool.status === "error" || !pageViews ? null : pageViews.toolResult(tool.name, data);
   const hasPageCard = pageCard !== null;
-  const card = tool.status === "error" ? null : <ToolResultCard value={data} />;
+  const card = tool.status === "error" || replay ? null : <ToolResultCard value={data} />;
   // 富卡认得出这份数据的形状时,**下面那块裸 JSON 就是同一份东西再摆一遍**。
   // 判据用 detectShape 而不是 card:card 是 JSX 元素,恒为真。
-  const richShape = tool.status !== "error" && detectShape(data) !== null;
-  const resultText = richShape || failed ? null : format(data ?? tool.result);
+  const richShape = !replay && tool.status !== "error" && detectShape(data) !== null;
+  const resultText = richShape || failed || Boolean(replay) ? null : format(data ?? tool.result);
   // 富卡也算"有内容" —— 少了它这一项,一个「参数就是摘要 + 结果是富卡」的调用会算成没内容,
   // 整行不可展开,而那张富卡就永远看不到了。原注释警告过的正是这个陷阱(card 恒为真不能当判据),
   // 现在有了 richShape 这个真正的布尔值。
@@ -235,7 +328,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
       ? rawFailureFields(format(data ?? tool.result) ?? "", t("toolFailed"))
       : null;
   const hasBody = Boolean(
-    (argText && !argsAreJustPreview) || resultText || richShape || hasPageCard || failure || assetIds.length > 0,
+    (argText && !argsAreJustPreview) || resultText || richShape || hasPageCard || failure || assetIds.length > 0 || replay,
   );
   // 页面专用结果和失败原因原先作为工具行的兄弟卡一直摊开,看起来像第二条消息。
   // 现在它们进这次调用的明细,结果刚到或失败时自动展开,仍然不会把重要回包藏起来。
@@ -342,6 +435,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               />
             </div>
           )}
+          {replay ? <DesktopReplay replay={replay} /> : null}
           {assetIds.length > 0 && (
             //: `reveal`:每张卡带一颗「在素材库中打开」—— 做出来的图现在只在过程里,这个出口要跟着过来。
             <MediaPreviewGrid assetIds={assetIds} reveal className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5")} />

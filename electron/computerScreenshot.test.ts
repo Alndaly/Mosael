@@ -552,7 +552,7 @@ describe("宿主桥的安全边界", () => {
         payload: { token: "snap-1:0", button: "right", clickCount: 2 },
       });
       expect(reply).toMatchObject({ ok: true, result: { point: { x: 60, y: 40 } } });
-      expect(desktopDriver.act).toHaveBeenCalledWith({ kind: "click", token: "snap-1:0", button: "right", clickCount: 2 });
+      expect(desktopDriver.act).toHaveBeenCalledWith({ kind: "click", replay: true, token: "snap-1:0", button: "right", clickCount: 2 });
       expect(bridge.cursor.showAt).toHaveBeenCalledWith(60, 40);
     } finally {
       bridge.close();

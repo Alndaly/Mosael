@@ -456,7 +456,8 @@ def computer_desktop_screenshot(
     from app.domain.agent.computer_use import desktop_screenshot
 
     shot = desktop_screenshot(window_id=window_id, scale=scale)
-    return _computer_image_response(shot, asset_name="桌面窗口截图", extra={"window_id": shot["window_id"]})
+    extra = {key: shot[key] for key in ("window_id", "capture_id", "protected", "owner") if key in shot}
+    return _computer_image_response(shot, asset_name="桌面窗口截图", extra=extra)
 
 
 @tool(effect="reads")

@@ -60,21 +60,36 @@ def test_the_card_rejects_ambiguous_targets_and_bad_actions() -> None:
 
 def test_capture_coordinates_are_scaled_back_before_the_bridge(monkeypatch) -> None:
     calls: list[tuple[str, dict]] = []
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
     def fake_host_call(channel: str, payload: dict) -> dict:
         calls.append((channel, payload))
-        return {"point": {"x": 100, "y": 200}, "windowNumber": 7, "pid": 42}
+        return {
+            "point": {"x": 100, "y": 200},
+            "windowNumber": 7,
+            "pid": 42,
+            "replay": {
+                "action": {"kind": "click", "button": "left", "clickCount": 1},
+                "before": {"image": png, "width": 1, "height": 1},
+                "after": {"image": png, "width": 1, "height": 1},
+            },
+        }
 
     monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
     from app.core.db import SessionLocal
 
     with SessionLocal() as db:
         card = types.SimpleNamespace(
+            id="card-1",
+            session_id="session-1",
             payload={"capture_id": CAPTURE, "x": 50, "y": 100, "button": "left", "click_count": 1, "scale": 0.5},
             workspace_id="w1",
         )
         result = tool_spec("computer_desktop_click").execute(db, card, "user-1")
     assert result["point"] == {"x": 100, "y": 200}
+    assert result["replay"]["session_id"] == "session-1"
+    assert result["replay"]["before"]["url"].endswith("/before.png")
+    assert "image" not in result["replay"]["before"]
     assert calls == [("computer:desktop-click", {
         "captureId": CAPTURE,
         "x": 100,

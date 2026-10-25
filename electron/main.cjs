@@ -467,11 +467,11 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerDesktopScreenshot]: () => desktopObserve(parseComputerDesktopScreenshot(request.payload)),
     [IPC.invoke.computerDesktopAccessibility]: () => desktopObserve(parseComputerDesktopAccessibility(request.payload)),
     [IPC.invoke.computerDesktopClick]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "click", ...parseComputerDesktopClick(request.payload) })),
+      withDesktopAction((driver) => driver.act({ kind: "click", replay: true, ...parseComputerDesktopClick(request.payload) })),
     [IPC.invoke.computerDesktopType]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "type", ...parseComputerDesktopType(request.payload) })),
+      withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...parseComputerDesktopType(request.payload) })),
     [IPC.invoke.computerDesktopScroll]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "scroll", ...parseComputerDesktopScroll(request.payload) })),
+      withDesktopAction((driver) => driver.act({ kind: "scroll", replay: true, ...parseComputerDesktopScroll(request.payload) })),
     [IPC.invoke.computerClick]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerType]: () =>

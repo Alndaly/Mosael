@@ -67,6 +67,14 @@ CLICK_BUTTONS = ("left", "right")
 #: 一次最多输入这么多字符。再多就不是「在输入框里写一句话」,而是整段粘贴了。
 MAX_TYPE_CHARS = 2000
 
+#: 这些应用即使只读截图也不把像素交出去(与 Electron 驱动的动作黑名单对齐)。
+PROTECTED_OWNERS = frozenset({
+    "1Password", "1Password 7", "Bitwarden", "Dashlane", "Keeper", "KeePassXC",
+    "Keychain Access", "钥匙串访问", "Passwords", "密码", "SecurityAgent",
+    "System Settings", "System Preferences", "系统设置", "系统偏好设置",
+    "Terminal", "终端", "iTerm2", "Warp", "loginwindow",
+})
+
 
 class ComputerUseError(ValueError):
     """给模型看的一句话。不是 traceback,也不是 HTTP 500 —— 模型据此改参数或告诉用户。"""
@@ -110,9 +118,13 @@ def desktop_screenshot(window_id: object, scale: float = DEFAULT_SCALE) -> dict[
     raw = _image_bytes(answer)
     width, height, raw = _size_and_pixels(raw, factor)
     meta = answer.get("meta")
+    owner = str(meta.get("owner") or "") if isinstance(meta, dict) else ""
     capture_id = str(meta.get("capture_id") or "") if isinstance(meta, dict) else ""
     if not capture_id:
         raise ComputerUseError("The desktop window bridge answered without a capture binding.")
+    protected = owner in PROTECTED_OWNERS
+    if protected:
+        raw = _protected_placeholder(width, height)
     return {
         "window_id": target,
         "capture_id": capture_id,
@@ -120,6 +132,7 @@ def desktop_screenshot(window_id: object, scale: float = DEFAULT_SCALE) -> dict[
         "height": height,
         "scale": factor,
         "image": base64.b64encode(raw).decode("ascii"),
+        **({"protected": True, "owner": owner} if protected else {}),
     }
 
 
@@ -132,6 +145,24 @@ def desktop_accessibility(pid: object) -> dict[str, Any]:
     if not isinstance(elements, list) or not isinstance(meta, dict):
         raise ComputerUseError("The desktop accessibility bridge answered without a valid AX snapshot.")
     return {"pid": target, "snapshot_id": str(meta.get("snapshot_id") or ""), "elements": elements}
+
+
+def _protected_placeholder(width: int, height: int) -> bytes:
+    """受保护窗口只给一块打码占位,不把真实像素交给模型或回放。"""
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (max(1, width), max(1, height)), (24, 30, 40))
+    draw = ImageDraw.Draw(image)
+    text = "Protected window"
+    box = draw.textbbox((0, 0), text)
+    draw.text(
+        ((width - (box[2] - box[0])) / 2, (height - (box[3] - box[1])) / 2),
+        text,
+        fill=(160, 170, 184),
+    )
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def _desktop_id(value: object, name: str) -> int:

@@ -18,8 +18,29 @@ from app.domain.agent.computer_use import (
 from app.domain.agent.computer_use import desktop_click as use_click
 from app.domain.agent.computer_use import desktop_scroll as use_scroll
 from app.domain.agent.computer_use import desktop_type as use_type
+from app.domain.agent import replay as replay_store
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
+
+
+def _with_replay(confirmation: Any, result: dict[str, Any]) -> dict[str, Any]:
+    evidence = result.get("replay")
+    if not isinstance(evidence, dict):
+        return result
+    session_id = getattr(confirmation, "session_id", None)
+    if not session_id:
+        return {key: value for key, value in result.items() if key != "replay"}
+    try:
+        return replay_store.store_action_replay(
+            session_id=str(session_id),
+            replay_id=str(getattr(confirmation, "id", "")),
+            replay=evidence,
+            result=result,
+        )
+    except (OSError, ValueError) as error:
+        clean = {key: value for key, value in result.items() if key != "replay"}
+        clean["replay"] = {"version": 1, "error": str(error)}
+        return clean
 
 
 def _target(payload: dict[str, Any]) -> dict[str, Any]:
@@ -73,7 +94,7 @@ def _summarize_click(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     try:
-        return use_click(
+        return _with_replay(confirmation, use_click(
             token=payload.get("token", ""),
             capture_id=payload.get("capture_id", ""),
             x=payload.get("x"),
@@ -81,7 +102,7 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
             button=str(payload.get("button") or "left"),
             click_count=payload.get("click_count", 1),
             scale=_scale(payload),
-        )
+        ))
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None
 
@@ -115,14 +136,14 @@ def _summarize_type(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     try:
-        return use_type(
+        return _with_replay(confirmation, use_type(
             text=payload.get("text", ""),
             token=payload.get("token", ""),
             capture_id=payload.get("capture_id", ""),
             x=payload.get("x"),
             y=payload.get("y"),
             scale=_scale(payload),
-        )
+        ))
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None
 
@@ -159,14 +180,14 @@ def _summarize_scroll(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     try:
-        return use_scroll(
+        return _with_replay(confirmation, use_scroll(
             dy=payload.get("dy", 0),
             token=payload.get("token", ""),
             capture_id=payload.get("capture_id", ""),
             x=payload.get("x"),
             y=payload.get("y"),
             scale=_scale(payload),
-        )
+        ))
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None
 

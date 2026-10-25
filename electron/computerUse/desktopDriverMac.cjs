@@ -152,6 +152,26 @@ class DesktopDriverMac {
     return this.binaryPath ?? ensureBinary(this.cacheDir);
   }
 
+  async captureWindowImage(windowNumber, maxDimension = null) {
+    const output = path.join(os.tmpdir(), `mosael-evidence-${crypto.randomUUID()}.png`);
+    try {
+      await this.runner("screencapture", ["-l", String(windowNumber), output]);
+      if (maxDimension) await this.runner("sips", ["-Z", String(maxDimension), output]);
+      const { stdout: dimensions } = await this.runner("sips", ["-g", "pixelWidth", "-g", "pixelHeight", output]);
+      const size = Object.fromEntries(dimensions.trim().split("\n").filter((line) => line.includes(":")).map((line) => {
+        const [key, value] = line.split(":");
+        return [key.trim(), Number(value.trim())];
+      }));
+      return {
+        image: fs.readFileSync(output).toString("base64"),
+        width: size.pixelWidth,
+        height: size.pixelHeight,
+      };
+    } finally {
+      fs.rmSync(output, { force: true });
+    }
+  }
+
   /** 只查询,不触发系统授权弹窗。 */
   async permissions() {
     const binary = await this.binary();
@@ -225,7 +245,7 @@ class DesktopDriverMac {
         width: size.pixelWidth,
         height: size.pixelHeight,
         elements: [],
-        meta: { windowNumber: target.windowNumber, capture_id: captureId },
+        meta: { windowNumber: target.windowNumber, capture_id: captureId, owner: window.owner, pid: window.pid },
       };
     }
     if (target.pid !== undefined) {
@@ -317,9 +337,19 @@ class DesktopDriverMac {
       throw new TypeError(`Unsupported desktop action: ${String(action.kind)}`);
     }
     await this.requirePermission("accessibility");
+    if (action.replay) await this.requirePermission("screen");
     const target = await this.resolveTarget(action);
     //: 一次性绑定:动作一旦开始就作废 —— 即使 CGEvent 半途失败,也不许拿旧快照再点一次。
     (target.binding.kind === "snapshot" ? this.snapshots : this.captures).delete(target.binding.key);
+    const capture = async () => {
+      if (!action.replay) return null;
+      try {
+        return await this.captureWindowImage(target.windowNumber, 1280);
+      } catch (error) {
+        return { error: String(error?.message || error) };
+      }
+    };
+    const before = await capture();
     const request = {
       action: action.kind,
       pid: target.pid,
@@ -332,11 +362,26 @@ class DesktopDriverMac {
     const binary = await this.binary();
     const { stdout } = await this.runner(binary, ["perform"], 20000, JSON.stringify(request));
     const result = parse(stdout);
+    const after = await capture();
     return {
       kind: action.kind,
       windowNumber: target.windowNumber,
       pid: target.pid,
       point: result.point ?? target.point,
+      ...(action.replay ? {
+        replay: {
+          at: new Date().toISOString(),
+          action: {
+            kind: action.kind,
+            button: action.button ?? "left",
+            clickCount: action.clickCount ?? 1,
+            text: action.text ?? "",
+            dy: action.dy ?? 0,
+          },
+          before,
+          after,
+        },
+      } : {}),
     };
   }
 

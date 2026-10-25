@@ -123,6 +123,18 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     await expect(driver.act({ kind: "click", token: "snap-1:0" })).rejects.toMatchObject({ code: "desktop_stale_snapshot" });
   });
 
+  it("回放请求会在动作前后各拍一张缩小证据", async () => {
+    const { runner, performInputs } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await driver.observe({ pid: 42 });
+    const result = await driver.act({ kind: "type", token: "snap-1:0", text: "hello", replay: true });
+    expect(performInputs[0]).toMatchObject({ action: "type", text: "hello" });
+    expect(result.replay.action).toMatchObject({ kind: "type", text: "hello" });
+    expect(result.replay.before).toMatchObject({ width: 800, height: 600 });
+    expect(result.replay.after).toMatchObject({ width: 800, height: 600 });
+  });
+
+
   it("绑定只允许用一次", async () => {
     const { runner } = harness();
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });

@@ -1,5 +1,5 @@
 import type { components } from "@/api/generated/schema";
-import { api, apiStream } from "@/api/transport";
+import { API_BASE, api, apiStream, getAuthToken } from "@/api/transport";
 
 export type SessionGroup = components["schemas"]["SessionGroupOut"];
 export type SessionGroupKind = "agent" | "generation";
@@ -33,6 +33,18 @@ export function deleteSessionGroup(groupId: string): Promise<unknown> {
 
 export function deleteAgentSession(sessionId: string): Promise<unknown> {
   return api(`/api/agent/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+/** Computer Use 回放:动作前后的证据截图(带查询令牌,给 `<img>` 用)。 */
+export function agentReplayImageUrl(sessionId: string, replayId: string, which: "before" | "after"): string {
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
+  return `${API_BASE}/api/agent/sessions/${sessionId}/replay/${replayId}/${which}.png${suffix}`;
+}
+
+/** 清空这一段对话的所有回放文件和消息里的元数据。 */
+export function clearAgentReplay(sessionId: string): Promise<unknown> {
+  return api(`/api/agent/sessions/${sessionId}/replay`, { method: "DELETE" });
 }
 
 /** Share or unshare a user-owned resource with one workspace. */

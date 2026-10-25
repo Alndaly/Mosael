@@ -8,13 +8,14 @@ from pathlib import Path
 import asyncio
 
 from fastapi import APIRouter, HTTPException, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.api.responses import event_stream
 from sqlalchemy import select
 
 from app.core.i18n import tr
 from app.domain.agent import autopilot, host
+from app.domain.agent import replay as agent_replay
 from app.domain.agent import stream as agent_stream
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession, Tx
@@ -318,8 +319,35 @@ def add_agent_session_allowance(
 @router.delete("/agent/sessions/{session_id}", status_code=204)
 def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
     session = writable_session(db, user, session_id)
+    session_id_value = session.id
     sharing.forget(db, "agent_session", session.id)
     db.delete(session)
+    db.commit()
+    agent_replay.clear_session_files(session_id_value)
+    return Response(status_code=204)
+
+
+@router.get("/agent/sessions/{session_id}/replay/{replay_id}/{which}")
+def get_agent_replay_image(
+    session_id: str, replay_id: str, which: str, db: DbSession, user: CurrentUser
+) -> FileResponse:
+    """一张动作前后的证据截图。只给这段会话的读者,文件只在本机数据目录。"""
+    readable_session(db, user, session_id)
+    which = which.removesuffix(".png")
+    try:
+        path = agent_replay.image_path(session_id, replay_id, which)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="This replay image was cleared.")
+    return FileResponse(path, media_type="image/png")
+
+
+@router.delete("/agent/sessions/{session_id}/replay", status_code=204)
+def clear_agent_replay(session_id: str, db: DbSession, user: CurrentUser) -> Response:
+    """清空这一段对话的回放:文件删掉,消息和确认卡里的元数据也去掉。"""
+    session = writable_session(db, user, session_id)
+    agent_replay.clear_replay(db, session.id)
     db.commit()
     return Response(status_code=204)
 
