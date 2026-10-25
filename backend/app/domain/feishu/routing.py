@@ -197,8 +197,20 @@ def session_origin(db: Session, session_id: str | None) -> tuple[FeishuBot, str]
 
 
 def run_origin(db: Session, job: Any) -> tuple[FeishuBot, str] | None:
-    """这次运行来自哪个飞书会话:任务载荷里那份回执指着一次 `origin="feishu"` 的智能体会话。"""
-    receipt = (getattr(job, "payload", None) or {}).get("receipt")
+    """这次运行来自哪个飞书会话。
+
+    两条来源:触发器在起跑时就把 `(bot_id, chat_id)` 写进任务载荷;普通智能体发起的运行则
+    从回执指向的 `origin="feishu"` 会话解。触发器那条**不能**靠回执 —— trigger job 没有
+    `AgentSession`,否则 `channel=origin` 会退到 owner 私聊。
+    """
+    payload = getattr(job, "payload", None) or {}
+    trigger_bot_id = str(payload.get("trigger_bot_id") or "").strip()
+    trigger_chat_id = str(payload.get("trigger_chat_id") or "").strip()
+    if trigger_bot_id and trigger_chat_id:
+        bot = db.get(FeishuBot, trigger_bot_id)
+        if bot is not None and bot.workspace_id == getattr(job, "workspace_id", ""):
+            return bot, trigger_chat_id
+    receipt = payload.get("receipt")
     if not isinstance(receipt, dict):
         return None
     return session_origin(db, str(receipt.get("session_id") or ""))

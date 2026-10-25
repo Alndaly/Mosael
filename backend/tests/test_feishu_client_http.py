@@ -402,3 +402,32 @@ def test_分页遇到重复的page_token就停(wire) -> None:
         {"id": "oc_b", "name": "b"},
     ]
     assert len(_paths(seen, "/chats")) == 2, "见过这个 token 就该停,不再要第三页"
+
+
+def test_网络错误统一变成飞书错误(monkeypatch) -> None:
+    """httpx 的 ConnectError/ReadTimeout 不能穿过所有 `except FeishuError` 的降级层。"""
+    from app.integrations.feishu import client as feishu_client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if _is_token(request):
+            return _token_ok()
+        raise httpx.ConnectError("network down", request=request)
+
+    class _Scripted(feishu_client.RetryingClient):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = httpx.MockTransport(handler)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(feishu_client, "RetryingClient", _Scripted)
+    with pytest.raises(feishu_client.FeishuError) as caught:
+        feishu_client.send_text(_Bot("b-network"), "oc_x", "hello")
+
+    assert caught.value.key == "feishuErr_network"
+    assert "network down" in str(caught.value)
+
+
+def test_凭据轮换后旧_token_立即失效() -> None:
+    bot = _Bot("b-token-rotate")
+    client._token_cache[bot.id] = ("old-token", 10**12)
+    client.invalidate_token(bot.id)
+    assert bot.id not in client._token_cache

@@ -141,6 +141,16 @@ def _fail(key: str, data: dict[str, Any]) -> NoReturn:
     raise FeishuError(key, **{name: value for name, value in said.items() if value not in (None, "")})
 
 
+def _network_failure(exc: httpx.RequestError) -> NoReturn:
+    """把 httpx 的网络错误收成飞书自己的错误类型。
+
+    否则它会以 `ConnectError` / `ReadTimeout` 穿过所有 `except FeishuError` 的降级层:
+    确认卡不再退文字、工作流节点落一句英文、`feishu_delivery_reason` 里只有 httpx 原文。
+    """
+    detail = str(exc).strip() or type(exc).__name__
+    raise FeishuError("feishuErr_network", detail=detail[:300]) from exc
+
+
 def _resend_budget(method: str, url: str) -> int:
     """这次调用允许自动重发几次(不含首次)。
 
@@ -179,7 +189,10 @@ def get_tenant_access_token(bot: FeishuBot, force: bool = False) -> str:
     #: 非幂等请求只在对方明说没处理这一次(429 / 503 / 529)时重发。**次数是飞书自己的**
     #: (`FEISHU_MAX_RESENDS`),不是设置页那个 AI 连接的重试次数(见 _resend_budget)。
     with RetryingClient(timeout=15.0, max_retries=_resend_budget("POST", TOKEN_URL)) as client:
-        response = client.post(TOKEN_URL, json={"app_id": bot.app_id, "app_secret": bot.app_secret})
+        try:
+            response = client.post(TOKEN_URL, json={"app_id": bot.app_id, "app_secret": bot.app_secret})
+        except httpx.RequestError as exc:
+            _network_failure(exc)
         data = _payload(response)
     if data.get("code") != 0:
         _fail("feishuErr_token", data)
@@ -193,10 +206,19 @@ def get_tenant_access_token(bot: FeishuBot, force: bool = False) -> str:
     return token
 
 
+def invalidate_token(bot_id: str) -> None:
+    """凭据轮换 / 删机器人后调用:下一次请求重新取 token,不继续拿旧应用的那一份。"""
+    with _token_lock:
+        _token_cache.pop(bot_id, None)
+
+
 def call_api(bot: FeishuBot, method: str, url: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
     def _call(token: str) -> dict[str, Any]:
         with RetryingClient(timeout=15.0, max_retries=_resend_budget(method, url)) as client:
-            response = client.request(method, url, headers={"Authorization": f"Bearer {token}"}, json=body)
+            try:
+                response = client.request(method, url, headers={"Authorization": f"Bearer {token}"}, json=body)
+            except httpx.RequestError as exc:
+                _network_failure(exc)
             return _payload(response)
 
     data = _call(get_tenant_access_token(bot))
@@ -538,7 +560,10 @@ def download_message_resource_named(bot: FeishuBot, message_id: str, file_key: s
     def _fetch(token: str) -> httpx.Response:
         #: 下载是 GET:限流(429)/ 网关(5xx)重发一遍不会多取一份东西(见 _resend_budget)。
         with RetryingClient(timeout=60.0, max_retries=_resend_budget("GET", url)) as client:
-            return client.get(url, params={"type": kind}, headers={"Authorization": f"Bearer {token}"})
+            try:
+                return client.get(url, params={"type": kind}, headers={"Authorization": f"Bearer {token}"})
+            except httpx.RequestError as exc:
+                _network_failure(exc)
 
     response = _fetch(get_tenant_access_token(bot))
     if response.status_code == 401:  # token 半路过期

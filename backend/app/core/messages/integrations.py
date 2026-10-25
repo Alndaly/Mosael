@@ -11,6 +11,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "获取 tenant_access_token 失败: {detail}",
         "en": "Couldn't get a tenant_access_token: {detail}",
     },
+    "feishuErr_network": {
+        "zh": "连接飞书失败: {detail}",
+        "en": "Couldn't reach Feishu: {detail}",
+    },
     "feishuErr_sendText": {
         "zh": "飞书发消息失败: {detail}",
         "en": "Couldn't send the Feishu message: {detail}",

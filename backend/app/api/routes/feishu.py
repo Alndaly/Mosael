@@ -37,14 +37,21 @@ def create_bot(body: FeishuBotCreate, db: Tx, user: CurrentUser) -> FeishuBot:
 @router.patch("/feishu/bots/{bot_id}", response_model=FeishuBotOut)
 def update_bot(bot_id: str, body: FeishuBotUpdate, db: Tx, user: CurrentUser) -> FeishuBot:
     changes = body.model_dump(exclude_unset=True)
+    credential_changed = bool({"app_id", "app_secret"} & set(changes))
     bot = feishu.update_bot(db, user, bot_id, changes)
-    if "enabled" in changes:
-        toggle = connections.start_connection if bot.enabled else connections.stop_connection
-        after_commit(db, lambda: toggle(bot_id))
-    elif {"app_id", "app_secret"} & set(changes):
-        #: **换了凭据要重启这条连接**:旧进程手里还是旧 app_secret(甚至解不开的那一份),
-        #: 不重启的话设置页会一直显示旧错误,用户以为"改了没用"。
-        after_commit(db, lambda: connections.restart_connection(bot_id))
+    if credential_changed:
+        # 旧 token 是旧 app 的;不失效的话,最长两小时内所有出站 REST 仍会拿它去发。
+        after_commit(db, lambda: client.invalidate_token(bot_id))
+    if credential_changed or "enabled" in changes:
+        # 凭据变了要重启;开关变了要起/停。两件事同时写时,以“当前 enabled 状态”为准:
+        # 禁用就停,启用就重启,不出现“先停再被起”或“只停了但凭据没换”的分叉。
+        def sync_connection() -> None:
+            if bot.enabled:
+                connections.restart_connection(bot_id)
+            else:
+                connections.stop_connection(bot_id)
+
+        after_commit(db, sync_connection)
     return bot
 
 
@@ -52,6 +59,7 @@ def update_bot(bot_id: str, body: FeishuBotUpdate, db: Tx, user: CurrentUser) ->
 def delete_bot(bot_id: str, db: Tx, user: CurrentUser) -> Response:
     feishu.editable_bot(db, user, bot_id)
     connections.stop_connection(bot_id)
+    client.invalidate_token(bot_id)
     feishu.delete_bot(db, user, bot_id)
     return Response(status_code=204)
 

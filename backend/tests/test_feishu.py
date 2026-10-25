@@ -107,6 +107,37 @@ def test_bot_crud_and_permissions() -> None:
     assert client.delete(f"/api/feishu/bots/{created['id']}").status_code == 204
 
 
+def test_凭据更新会失效旧_token_并重启连接(monkeypatch) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    bot = client.post(
+        "/api/feishu/bots",
+        json={"workspace_id": ws["id"], "app_id": "cli_rotate", "app_secret": "old"},
+    ).json()
+    from app.integrations.feishu import connections
+
+    invalidated: list[str] = []
+    restarted: list[str] = []
+    stopped: list[str] = []
+    monkeypatch.setattr(feishu_client, "invalidate_token", lambda bot_id: invalidated.append(bot_id))
+    monkeypatch.setattr(connections, "restart_connection", lambda bot_id: restarted.append(bot_id))
+    monkeypatch.setattr(connections, "stop_connection", lambda bot_id: stopped.append(bot_id))
+
+    assert client.patch(
+        f"/api/feishu/bots/{bot['id']}", json={"app_id": "cli_new", "app_secret": "new"},
+    ).status_code == 200
+    assert invalidated == [bot["id"]]
+    assert restarted == [bot["id"]]
+    assert stopped == []
+
+    assert client.patch(
+        f"/api/feishu/bots/{bot['id']}", json={"enabled": False, "app_secret": "newer"},
+    ).status_code == 200
+    assert invalidated == [bot["id"], bot["id"]]
+    assert restarted == [bot["id"]], "禁用时不应再起连接"
+    assert stopped == [bot["id"]]
+
+
 def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
     client = fresh_client()
     _configured(client)

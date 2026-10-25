@@ -101,6 +101,22 @@ def claimable(db: Session, message: IncomingMessage) -> tuple[list[str], list[st
     )
 
 
+def recorded_claims(db: Session, message: IncomingMessage, claimed: list[str]) -> dict[str, str]:
+    """`claimed` 里已经为这条消息留过痕的触发器 → 那行事件的状态。
+
+    去重和“这条消息是不是已经有人认领过”是同一份事实;分开查会漂移。
+    """
+    if not claimed:
+        return {}
+    rows = db.execute(
+        select(WorkflowTriggerEvent.trigger_id, WorkflowTriggerEvent.status).where(
+            WorkflowTriggerEvent.message_id == message.message_id,
+            WorkflowTriggerEvent.trigger_id.in_(claimed),
+        )
+    ).all()
+    return {str(trigger_id): str(status) for trigger_id, status in rows}
+
+
 def unrecorded_claims(db: Session, message: IncomingMessage, claimed: list[str]) -> list[str]:
     """`claimed` 里**还没为这条消息写过事件行**的那些 —— 飞书重投时这一条会是空的。
 
@@ -112,14 +128,7 @@ def unrecorded_claims(db: Session, message: IncomingMessage, claimed: list[str])
     """
     if not claimed:
         return []
-    already = set(
-        db.scalars(
-            select(WorkflowTriggerEvent.trigger_id).where(
-                WorkflowTriggerEvent.message_id == message.message_id,
-                WorkflowTriggerEvent.trigger_id.in_(claimed),
-            )
-        )
-    )
+    already = recorded_claims(db, message, claimed)
     return [trigger_id for trigger_id in claimed if trigger_id not in already]
 
 
@@ -226,9 +235,12 @@ def _fire_one(db: Session, trigger_id: str, message: IncomingMessage) -> Outcome
         created_by=actor,
         payload={
             "subject": workflow.name,
-            #: 运行历史据此说得出"这次是触发器起的";它也把这一次运行和那条消息连起来。
+            #: 运行历史据此说得出"这次是触发器起的";它把这一次运行和那条消息连起来,
+            #: 也让 `channel=origin` 的飞书节点/等人确认知道消息从哪个群来(而不是退回 owner 私聊)。
             "trigger_id": trigger.id,
             "trigger_event_id": event.id,
+            "trigger_bot_id": message.bot_id,
+            "trigger_chat_id": message.chat_id,
         },
         message="jobMsg_workflowQueued",
         message_params={"name": workflow.name},

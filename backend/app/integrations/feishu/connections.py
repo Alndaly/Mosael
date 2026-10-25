@@ -185,6 +185,9 @@ def start_connection(bot_id: str) -> None:
         bot = db.get(FeishuBot, bot_id)
         if bot is None:
             raise LookupError(bot_id)
+        if not bot.enabled:
+            bots.write_status(bot_id, "offline")
+            return
         credentials = {"app_id": bot.app_id, "app_secret": bot.app_secret}
         #: **凭据解不开就别起进程**:`EncryptedText` 解不出来时给的是空串,子进程只看到"没有凭据",
         #: 于是 exit 2 —— 设置页上只剩「长连接进程退出(code 2)」,而该做的动作(重填 Secret)一个字没说。
@@ -291,4 +294,4 @@ def start_or_report(bot_id: str) -> None:
 
 def restart_connection(bot_id: str) -> None:
     stop_connection(bot_id)
-    start_connection(bot_id)
+    start_or_report(bot_id)

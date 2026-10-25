@@ -420,6 +420,29 @@ def test_目标解析_origin_回到这次运行来的那个飞书会话() -> Non
     )
 
 
+def test_目标解析_触发器任务从载荷里的来源群解析() -> None:
+    """trigger job 没有 AgentSession;origin 必须从起跑时写下的 bot/chat 解,不能退回 owner 私聊。"""
+    from types import SimpleNamespace
+
+    from app.domain.feishu import routing
+
+    ws = _workspace()
+    bot_id = _bot(ws)
+
+    with SessionLocal() as db:
+        got = routing.run_origin(
+            db,
+            SimpleNamespace(
+                workspace_id=ws,
+                payload={"trigger_bot_id": bot_id, "trigger_chat_id": "oc_from_trigger"},
+            ),
+        )
+
+    assert got is not None
+    assert got[0].id == bot_id
+    assert got[1] == "oc_from_trigger"
+
+
 @pytest.mark.parametrize(
     ("channel", "to", "raw_type", "expected"),
     [

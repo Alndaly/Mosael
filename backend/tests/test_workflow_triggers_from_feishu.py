@@ -992,3 +992,12 @@ def test_seen_recently_不看墙上时钟(monkeypatch) -> None:
     monkeypatch.setattr(inbound, "time", _JumpedClock)
 
     assert inbound.seen_recently(message_id) is True
+
+
+def test_历史上已认领的消息本次只剩限流也不再回落智能体() -> None:
+    """T1 以前已经 started,这次重投只剩 T2 被限流:不能再跑一轮智能体(ADR 0065 §3)。"""
+    outcome = dispatch.Outcome(trigger_id="t2", trigger_name="T2", status=dispatch.STATUS_THROTTLED)
+    assert inbound._left_for_the_agent([outcome], ["t2"], {"t1": dispatch.STATUS_STARTED}) is False
+
+    # 历史上也只是 throttled(从没跑起来)时,仍然允许回落。
+    assert inbound._left_for_the_agent([outcome], ["t2"], {"t1": dispatch.STATUS_THROTTLED}) is True

@@ -40,6 +40,7 @@ from app.domain.agent import origins
 from app.domain.agent.host import get_or_create_external_session, post_user_message
 from app.domain.feishu import bindings
 from app.domain.jobs import register_settle_listener
+from app.domain.permissions import holds_workspace_perm
 from app.domain.triggers import IncomingMessage, Outcome
 from app.domain.triggers import dispatch as trigger_dispatch
 from app.integrations.feishu import client
@@ -341,7 +342,9 @@ def handle_incoming(
                 client.send_text(bot, chat_id, unbound_reply(bot, text))
             return
         #: **只有绑定过的人能驱动触发器**(ADR 0065 §4):上面那一道就是它的门槛 —— 未绑定的消息
-        #: 在这里已经回头了,连匹配都轮不到。触发器跑起来花的是配置它那个人的钥匙和额度。
+        #: 在这里已经回头了,连匹配都轮不到。触发器跑起来花的是配置它那个人的钥匙和额度,
+        #: 所以发送者还必须具备这个工作区的 edit —— 只读成员不该用别人的额度跑自动化。
+        can_fire_triggers = holds_workspace_perm(db, user, bot.workspace_id, "edit")
         message = IncomingMessage(
             workspace_id=bot.workspace_id,
             bot_id=bot.id,
@@ -354,7 +357,9 @@ def handle_incoming(
         )
         #: **先问谁认这条消息,再决定去不去下载附件。** 下载要调飞书、落盘、探测、生成缩略图
         #: (文件与视频还要跑 ffprobe)—— 没人认领时一个字节都不该去下。
-        claimed, skipped = trigger_dispatch.claimable(db, message)
+        claimed, skipped = (
+            trigger_dispatch.claimable(db, message) if can_fire_triggers else ([], [])
+        )
         # 图片下载要几秒(下载 + 探测 + 缩略图),不该占着数据库会话;而 bot 是纯配置,
         # 出了 session 只用它的 id/app_id/app_secret 调 REST,detached 也够用。
         db.expunge(bot)
@@ -362,8 +367,10 @@ def handle_incoming(
 
     already_ingested: list[str] | None = None
     if claimed:
-        outcomes, already_ingested = _run_triggers(bot, message, claimed, skipped, message_type, content_json)
-        if not _left_for_the_agent(outcomes, claimed):
+        outcomes, already_ingested, prior = _run_triggers(
+            bot, message, claimed, skipped, message_type, content_json,
+        )
+        if not _left_for_the_agent(outcomes, claimed, prior):
             return
         #: 限流命中的消息**回落到智能体会话那条路**(ADR 0065 §3:限流了也"一切如常,会话链路
         #: 一个字节都没变"),面板上那一行 `throttled` 照旧留痕。附件在上面已经为这次运行收过一遍,
@@ -444,28 +451,24 @@ def _run_triggers(
     skipped: list[str],
     message_type: str,
     content_json: str,
-) -> tuple[list[Outcome], list[str]]:
+) -> tuple[list[Outcome], list[str], dict[str, str]]:
     """触发器认领了这条消息:去重 → 收附件 → 起运行 → 把回执发回群。
 
-    返回 `(每条触发器对这条消息的结论, 这一趟收进素材库的素材 id)`。调用方两样都要:结论里
-    全是"被限流"时这条消息要回落到智能体会话,而那时附件已经为这次运行收过一遍了,不能再收第二遍。
-
-    **去重比附件下载还早**:已经为这条消息留过痕的触发器(飞书重投)连下载都不该做 —— 运行有
-    库里那条唯一约束挡着,可素材是白多一份的。附件下载仍然排在匹配之后:只有**确定有人认**才值得
-    去调飞书下载、落盘、探测、生成缩略图。附件取不回来时这一次不跑:素材就是入参,缺了起一次
-    注定失败的运行没有意义。
+    返回 `(每条触发器对这条消息的结论, 这一趟收进素材库的素材 id, 之前已经留痕的认领状态)`。
+    最后一个用来判断“这条消息过去已经被谁认领过”,避免本次只剩限流时又回落给智能体。
     """
     with SessionLocal() as db:
-        fresh = trigger_dispatch.unrecorded_claims(db, message, list(claimed))
+        prior = trigger_dispatch.recorded_claims(db, message, list(claimed))
+        fresh = [trigger_id for trigger_id in claimed if trigger_id not in prior]
     if not fresh:
         #: 这条消息已经被这些触发器处理过了(飞书重投 + 进程重启清掉了 seen_recently)。
         #: 一个字节的活儿都不干:不起运行、不再下载、也不在群里再回一次执。
         logger.info("feishu: message %s was already recorded by its triggers", message.message_id)
-        return [], []
+        return [], [], prior
     asset_ids, _ = _ingest_attachments(bot, message.workspace_id, message.message_id, message_type, content_json)
     if not asset_ids and (_image_keys(message_type, content_json) or _file_attachment(message_type, content_json)[0]):
         client.send_text(bot, message.chat_id, _ATTACHMENT_MISSING)
-        return [], []
+        return [], [], prior
     message = replace(message, asset_ids=tuple(asset_ids))
     with SessionLocal() as db:
         #: 去重、限流、起运行、落事件都在这一个事务里(领域不提交,入口提交 —— 见用例边界棘轮)。
@@ -483,7 +486,7 @@ def _run_triggers(
             client.send_text(bot, outcome.chat_id or message.chat_id, outcome.receipt)
         except Exception:  # noqa: BLE001 —— 一条回执失败,后面几条照发
             logger.exception("feishu trigger receipt failed trigger=%s", outcome.trigger_id)
-    return outcomes, asset_ids
+    return outcomes, asset_ids, prior
 
 
 #: 附件没能进素材库时给群里的那一句。两种原因合起来说:下载取不回来,或者素材库不收这种文件
@@ -491,19 +494,25 @@ def _run_triggers(
 _ATTACHMENT_MISSING = "附件没能取回来或没能收进素材库(飞书资源下载失败,或者素材库不收这种文件),换一个或稍后再试。"
 
 
-def _left_for_the_agent(outcomes: list[Outcome], claimed: list[str]) -> bool:
+def _left_for_the_agent(outcomes: list[Outcome], claimed: list[str], prior: dict[str, str]) -> bool:
     """这一次**没有任何触发器真的跑起来**,而且原因只是限流 —— 这条消息该回落到智能体会话。
 
     只看**认领过**的那几条(落选的那些 `skipped` 是"它本来也认、只是没轮到",和这条消息有没有
     起过运行无关 —— 把它们算进来,一场风暴里"三条都限流 + 两条落选"就会既不起运行、也不喂智能体)。
 
-    认领的那些结论**非空、且全是 `throttled`** 时为真:
+    之前已经留过痕的认领也参与判断:如果历史上是 `started` / `refused` / `failed`,这条消息
+    已经被触发器认领过,本次只剩限流也不能再喂智能体。只有历史全是 `throttled`(从没跑起来)
+    才允许回落。
+
+    本次结论**非空、且全是 `throttled`** 时为真:
 
     - `started` → 有人认了(ADR 0065 §3:命中即认领,不再喂智能体);
     - `refused` / `failed` → 触发器认了它,只是配置跑不起来:留痕 + 站内通知主人、群里不喊(§5);
     - **一条结论都没有**(被 `unrecorded_claims` 挡回去的重投、或认领它的触发器在两步之间被关掉)
       → 不能当成"没人要",否则同一条消息会再喂一轮。
     """
+    if any(status != trigger_dispatch.STATUS_THROTTLED for status in prior.values()):
+        return False
     handled = [one for one in outcomes if one.trigger_id in set(claimed)]
     return bool(handled) and all(one.status == trigger_dispatch.STATUS_THROTTLED for one in handled)
 
