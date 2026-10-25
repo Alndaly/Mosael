@@ -2,16 +2,18 @@
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
   "v2.2.1": {
     zh: [
-      "**飞书卡片 UI 统一铺满。** 确认卡、审批卡、选择卡的并列按钮都改成等宽列里的 `fill` 按钮，跳过/提交、同意/拒绝合起来占满一行；输入框与下拉占满整行，只有纯文案行保持默认整行宽度。",
-      "**飞书卡片有了完整生命周期。** 卡片发出去后保存消息 id；回调超时、应用内批准/拒绝/作答/跳过、确认卡过期时都会 `PATCH` 原卡，不再留一张还能点的旧卡。过期确认卡显示「已失效」。",
-      "**飞书入站与触发器更可靠。** 入站消息有跨重启的持久收件箱，重启后会继续 drain 排队消息；线程异常不再静默吞消息；触发器把来源群写进 job，混合认领不再回落智能体，发送者必须有 `edit` 权限。",
-      "**网络、凭据与安全边界。** httpx 网络错误统一成 `FeishuError`，凭据轮换立即失效旧 token；卡片/文本/下载有明确大小上限；绑定码原子单次使用、加长并写审计；worker 不再继承主密钥。",
+      "**Computer Use 真正可用了。** 补齐 macOS 辅助功能 / 屏幕录制权限引导；点击、输入、滚动都走确认卡，按 AX 元素或截图像素操作，受保护应用直接拒绝；每次动作前后留证据图，可回放、可停止，主屏常驻急停提示。",
+      "**飞书对话也能做选择题。** `ask_user` 以单选 / 多选 / 自由文本表单卡回到原会话，答案唤醒同一条 Mosael 会话；确认卡和问题卡补齐事务、幂等、消息 id 生命周期与跨重启收件箱。",
+      "**智能体环境更顺手。** AI tab 默认展开右侧栏；后台任务按运行中优先排序，题目和动作都是悬停下划线文字按钮；最近工具整行可点；全部工具弹窗加宽并排成响应式卡片，显示只读 / 需确认 / 会提问 / 插件来源与参数数量。",
+      "**会话设置的确认框不再被挡住。** 「全部放行」确认框抬到设置浮层之上；思考档位字段撑满整行。",
+      "**依赖整体升级。** Electron 45、Next 16.4、FastAPI 0.162 等全量更新，测试与双平台安装包重新验证。",
     ],
     en: [
-      "**Feishu cards now fill their rows.** Confirmation, approval and question cards use equal-width columns with `fill` buttons, so skip/submit and approve/reject share one full-width row; inputs and selects span the row, while text-only rows keep the default width.",
-      "**Feishu cards have a full lifecycle.** Each sent card stores its message id. Slow callbacks, in-app approve/reject/answer/skip and card expiry all `PATCH` the original message instead of leaving a clickable stale card; expired confirmations become “Expired”.",
-      "**More reliable Feishu inbound and triggers.** A durable inbox deduplicates across restarts, queued messages are drained after restart, and inbound thread failures are contained. Trigger jobs carry their origin chat, mixed claims no longer fall through to the agent, and senders need `edit` permission.",
-      "**Network, credential and security boundaries.** httpx failures become `FeishuError`, credential rotation invalidates the old token, card/text/download sizes are capped, bind codes are longer, atomic and audited, and the worker no longer inherits the master key.",
+      "**Computer Use is now usable.** macOS Accessibility and Screen Recording permission guidance is in place; click, type and scroll go through confirmation cards and operate by AX token or captured pixel, while protected apps are refused. Every action keeps before/after evidence that can be replayed, and a global emergency-stop indicator stays visible.",
+      "**Feishu conversations can ask questions.** `ask_user` returns single-choice, multi-choice and free-text form cards to the same Mosael session, and answers wake that session. Confirmation and question cards now have transactional, idempotent, message-id lifecycles plus a restart-safe inbound inbox.",
+      "**A more usable agent inspector.** The AI tab opens with the right sidebar visible; background jobs sort running first, with hover-underline title and actions; recent tools are one clickable row; the All tools dialog is wider and uses responsive cards showing read-only, approval, asks, plugin source and parameter counts.",
+      "**The bypass confirmation is no longer covered.** “Allow all” confirmation sits above the settings popover, and the thinking-level field fills its row.",
+      "**Dependencies upgraded across the board.** Electron 45, Next 16.4, FastAPI 0.162 and the rest were refreshed; tests and both platform installers were re-verified.",
     ],
   },
   "v2.2.0": {
