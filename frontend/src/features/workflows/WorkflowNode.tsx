@@ -176,7 +176,8 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
         // 连接点变成贴边的半圆 —— 而它们正是要突出到边界之外才看得见。
         // 预览夹在标题层和接点层之间,本来就不碰圆角;真正需要圆角的是最底下那一层,
         // 由它自己 rounded-b 处理(见参数层)。
-        "group/node relative flex min-w-[192px] max-w-[280px] flex-col rounded-[var(--wf-node-radius)] [--wf-node-radius:var(--radius-lg)] shadow-sm border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
+        // **节点不投影**:画布上的卡片靠边框和底色分界,浮层才需要 elevation。
+        "group/node relative flex min-w-[192px] max-w-[280px] flex-col rounded-[var(--wf-node-radius)] [--wf-node-radius:var(--radius-lg)] border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
         // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
         // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",

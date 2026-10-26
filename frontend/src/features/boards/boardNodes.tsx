@@ -42,6 +42,10 @@ import { QuietPortsContext } from "@/features/boards/boardPorts";
  *
  * **画板只有一种视觉语言:格子就是它的内容。** 一张图就是那张图,一段视频是一帧画面加播放键;
  * 空着的格子是一块安静的占位,正中一枚淡淡的图标,名字在格子上方。
+ *
+ * **节点不投影。** 边框和底色已经说明卡片边界;再叠一层 `shadow-sm` 等于把同一件事画两遍,
+ * 而 Tailwind 的 `shadow-sm` 本身还是两层(含负 spread),在画布缩放下会显出第二道边。
+ * 只有真的浮在画布之上的东西(操作条、面板)才有 elevation。ComfyUI 的节点也是平面卡片。
  */
 
 /** 便签的色板。给固定几种而不是任意色值 —— 一组固定的色才让「黄色是待办、蓝色是参考」成立。 */
@@ -371,7 +375,7 @@ export function NoteNode({ data, selected }: NodeProps) {
       className={cn(
         // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
         // 裁在这里等于把它们裁掉(图片/视频那两处已经栽过一次)。裁剪交给里面那层。
-        "group relative h-full w-full rounded-xl border p-4 text-ui-md leading-relaxed shadow-sm transition-shadow",
+        "group relative h-full w-full rounded-xl border p-4 text-ui-md leading-relaxed",
         noteColorClass(item.color),
         state.className,
         //: 选中**不加彩色描边** —— 四角的缩放点已经说明选中了(图片/视频那两处早就这么做,
@@ -443,7 +447,7 @@ export function NoteNode({ data, selected }: NodeProps) {
       {writeFailed && !editing && failure && (
         <div
           data-note-write-failed=""
-          className="nodrag nopan absolute inset-x-1 bottom-1 z-10 min-w-0 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 shadow-sm backdrop-blur"
+          className="nodrag nopan absolute inset-x-1 bottom-1 z-10 min-w-0 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 backdrop-blur"
         >
           <FailureCard size="inline" lines={2} title={t(runCopy(item).failed)} {...failure} />
         </div>
@@ -480,7 +484,7 @@ function AbilityRunStrip({ data, className }: { data: BoardNodeData; className?:
     return (
       <div
         data-board-ability-run={status}
-        className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 min-w-0 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 shadow-sm backdrop-blur", className)}
+        className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 min-w-0 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 backdrop-blur", className)}
       >
         <FailureCard size="inline" title={[said, abilityLabel].filter(Boolean).join(" · ")} {...failure} />
       </div>
@@ -490,7 +494,7 @@ function AbilityRunStrip({ data, className }: { data: BoardNodeData; className?:
     <div
       data-board-ability-run={status}
       role={running ? "status" : "alert"}
-      className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs shadow-sm backdrop-blur", className)}
+      className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs backdrop-blur", className)}
     >
       {running ? <Loader2 size={11} className="shrink-0 animate-spin text-primary" /> : <Ban size={11} className="shrink-0 text-muted-foreground" />}
       <Truncate className={cn("flex-1", running ? "text-primary" : "text-muted-foreground")}>
@@ -673,7 +677,7 @@ export function ImageNode({ data, selected }: NodeProps) {
         // 圆角裁剪交给里面那层媒体。
         //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
         //: 再套一圈主色反而盖过节点里的画面。
-        "group relative h-full w-full border border-border bg-panel shadow-sm",
+        "group relative h-full w-full border border-border bg-panel",
         CELL_RADIUS,
         state.className,
       )}
@@ -751,7 +755,7 @@ export function VideoNode({ data, selected }: NodeProps) {
         // 同上:标签和接点都在框外,不能裁在这一层。
         //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
         //: 再套一圈主色反而盖过节点里的画面。
-        "group relative h-full w-full border border-border bg-panel shadow-sm",
+        "group relative h-full w-full border border-border bg-panel",
         CELL_RADIUS,
         state.className,
       )}
@@ -785,7 +789,7 @@ function AudioNode({ data, selected }: NodeProps) {
   return (
     <div
       data-board-run-status={state["data-board-run-status"]}
-      className={cn("group relative h-full w-full border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}
+      className={cn("group relative h-full w-full border border-border bg-panel", CELL_RADIUS, state.className)}
     >
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <NodeLabel data={nodeData} />
@@ -833,7 +837,7 @@ function DocumentNode({ data, selected }: NodeProps) {
     //: 选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」(图片、视频、便签都是这一条)。
     <div
       data-board-run-status={state["data-board-run-status"]}
-      className={cn("group relative flex h-full w-full flex-col rounded-xl border border-border bg-panel shadow-sm", state.className)}
+      className={cn("group relative flex h-full w-full flex-col rounded-xl border border-border bg-panel", state.className)}
     >
       <NodeResizer
         minWidth={260}
@@ -971,7 +975,7 @@ export function SceneNode({ data, selected }: NodeProps) {
   //: 跑挂了只在选中时挂出来 —— 此前不分是谁在跑,一次能力失败就把整格换成失败块,场景看不见了。
   const pending = !runningAbility(item) && (status === "queued" || status === "running" || status === "failed");
   //: `group`:接点在悬停时显形(group-hover)—— 少了它,3D 场景格的接点只有选中了才看得见。
-  return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}>
+  return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel", CELL_RADIUS, state.className)}>
     <NodeResizer minWidth={240} minHeight={180} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
     <NodeLabel data={nodeData} /><Ports visible={selected} disabled={commentMode} />
     {/* 在跑 / 跑挂了:**整格**一块,不留底栏 —— 和文档格在写时同一个样子。底栏写的是这一格现在挂的场景名,
@@ -1026,7 +1030,7 @@ export function EntityNode({ data, selected }: NodeProps) {
     <div
       data-board-entity={item.entity_id ?? ""}
       data-board-run-status={state["data-board-run-status"]}
-      className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}
+      className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel", CELL_RADIUS, state.className)}
     >
       <NodeResizer minWidth={160} minHeight={200} isVisible={selected && !commentMode} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       {/* 名字前面是这个资产自己那一种的图标(场景是定位针,道具是盒子),不是一律「人物」。 */}
@@ -1102,7 +1106,7 @@ export function SequenceNode({ data, selected }: NodeProps) {
   //: 接着剪不影响这一次。
   const exporting = status === "queued" || status === "running" || (selected && (status === "failed" || status === "cancelled"));
   return (
-    <div className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS,
+    <div className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel", CELL_RADIUS,
                        selected && "border-border-strong")}>
       <NodeResizer minWidth={420} minHeight={320} isVisible={selected} lineClassName="!border-transparent"
                    handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />

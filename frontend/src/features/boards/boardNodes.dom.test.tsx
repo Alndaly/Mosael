@@ -137,6 +137,8 @@ describe("无限画布节点运行状态", () => {
       if (status === "succeeded") expect(node?.className).not.toMatch(/ring-success|border-success/);
       //: 状态只画在自己的边框上:外环、外发光会溢出格子,压到旁边的格子和连线上(用户截图里在跑那一格的光晕)。
       expect(node?.className, `${kind} ${status}`).not.toMatch(/\bring-[1-8]\b|shadow-\[0_0_/);
+      //: 画布节点是**平面卡片**:边框和底色说明边界,再叠 drop shadow 就是同一件事画两遍。
+      expect(node?.className, `${kind} ${status}`).not.toMatch(/\bshadow-/);
       unmount();
     }
   });
