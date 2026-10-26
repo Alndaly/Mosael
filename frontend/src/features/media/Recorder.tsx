@@ -392,7 +392,7 @@ export function Recorder({
         className="fixed bottom-3 right-3 z-70 flex items-center gap-2 rounded-full border border-floating-border bg-panel/95 py-1 pl-3 pr-1 text-foreground shadow-[var(--shadow-floating)] backdrop-blur-xl [.is-desktop_&]:[-webkit-app-region:no-drag]"
       >
         <span className="h-2 w-2 animate-recorder-blink rounded-full bg-destructive" aria-hidden />
-        <span className="text-ui-xs font-medium">{t("recordInProgress")}</span>
+        <span className="text-ui-xs font-semibold">{t("recordInProgress")}</span>
         <span className="timecode tabular-nums text-ui-xs text-muted-foreground">{fmt(secs)}</span>
         <IconButton size="icon-xs" label={t("recordExpand")} onClick={() => setMinimized(false)}>
           <Maximize2 size={13} />
@@ -421,19 +421,28 @@ export function Recorder({
       )}
       bodyClassName={recording ? "px-3" : undefined}
       footer={
-        <div className="flex w-full min-w-0 items-center justify-between gap-4">
-          <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
-            {t(`record_${source}_hint` as never) as string}
-          </span>
+        <div
+          className={cn(
+            "flex w-full min-w-0 items-center gap-4",
+            recording ? "justify-end" : "justify-between",
+          )}
+        >
+          {/* 录制中这段说明已经完成使命:它解释的是「开始前要选什么源」,再占一行只会把
+              停止和最小化推远。状态已经在预览的红点/计时里说清楚。 */}
+          {!recording && (
+            <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
+              {t(`record_${source}_hint` as never) as string}
+            </span>
+          )}
           {!recording ? (
             <Button className="shrink-0" size="sm" disabled={starting || stopping} onClick={start}>
               <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
             </Button>
           ) : (
             <div className="flex shrink-0 items-center gap-1">
-              <IconButton label={t("recordMinimize")} onClick={() => setMinimized(true)}>
-                <Minimize2 size={13} />
-              </IconButton>
+              <Button variant="ghost" size="sm" onClick={() => setMinimized(true)}>
+                <Minimize2 size={13} /> {t("recordMinimize")}
+              </Button>
               <Button size="sm" variant="destructive" onClick={stop}>
                 <Square size={11} /> {t("recordStop")}
               </Button>
