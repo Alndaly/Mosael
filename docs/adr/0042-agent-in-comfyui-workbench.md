@@ -344,7 +344,7 @@ ComfyUI 的保存或工作台顶栏的「保存」。
     → `runControls` 后),开确认卡。跑的是画布上这张**存过的**工作流(含没存的改动);从没存过的新标签页没有路径,`run_canvas` 会拒 ——
     「不替用户存盘」照旧,先请他存。交回 `job_id`、`generation_id`、`workflow`、`kind`;`prompt_id` 不在这一步,要用时从 `get_job` 拿。
     失败时也带 `job_id`,`comfy_check(job_id=…)` 把报错拆到节点。别处存着的工作流仍走它自己的工具或 `run_plugin_tool`。
-- **确认卡**(§4 拍板 4 / 5):三个新工具都在 `backend/app/domain/agent/confirmable/comfyui.py` 注册,卡上的话照读的人的语言写,
+- **确认卡**(§4 拍板 4 / 5):三个新工具都在 `backend/app/domain/workbench/confirmable.py` 注册,卡上的话照读的人的语言写,
   分别写清下载(站、大小、目录、要不要登录)、安装(发布者、版本、依赖风险、要重启、正在跑的任务会断)和运行(跑的是哪一张、要不要先存)。
   确认文案在 `backend/app/core/messages/integrations.py`,拒绝和失败的原因在 `backend/app/core/messages/plugins.py`。
 - **不悄悄重试**:下载、安装、运行每个都过确认卡;被拒或失败就按结果里的原因说,别原样再发、别换条路绕开。装包会重启那台 ComfyUI,
