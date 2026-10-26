@@ -119,6 +119,8 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 
 正式分发采用 **R2 主源 + GitHub 自动兜底 + 百度网盘人工兜底**。R2 使用自己的 HTTPS 域名，不使用 `r2.dev` 公共测试域名。`latest/` 放当前版的全部产物，`v<tag>/` 再放一份不可变副本；`update_feed_url` 与插件索引 URL 都指到 `latest/`，索引内的版本包指向 `v<tag>/`。
 
+当前生产配置：Bucket `mosael-releases`，公开域名 `https://dl.mosael.com`，对象前缀 `mosael`。自动更新根地址是 `https://dl.mosael.com/mosael/latest/`，插件索引是 `https://dl.mosael.com/mosael/latest/registry.json`，官网人工下载页是 `https://dl.mosael.com/mosael/latest/index.html`。
+
 在管理页「引擎 → 下载源」分别配置 R2 更新根地址和插件索引地址；留空时仍保持 GitHub-only，不改变已有部署。官网 `website/src/lib/site.ts` 的 `r2.url` 留空时也保持原有百度/GitHub 分流。
 
 发布前先用 dry-run 核对布局，再上传并逐个回读校验：
@@ -133,7 +135,7 @@ export R2_BUCKET=...
 node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
 ```
 
-脚本逐个上传 `latest/` 与 `v<tag>/` 文件并回读 Content-Length 和 SHA-256，失败即停止，不能只凭 PutObject 成功就宣称镜像已发布。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
+脚本逐个上传 `latest/` 与 `v<tag>/` 文件并回读 Content-Length 和 SHA-256，失败即停止，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。

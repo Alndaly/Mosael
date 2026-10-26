@@ -94,6 +94,9 @@ jobs:
           pnpm --dir browser-extension typecheck
           pnpm build:extension
 
+      - name: Release tooling tests
+        run: node --test test/r2-download-page.test.mjs
+
       # 官网是独立 pnpm 工作区,不会被根目录的 install/build 顺带覆盖。
       # production build 同时检查 TypeScript、路由、MDX 和服务端渲染边界。
       # 官网的 lint 不在这里:它挂在根的 `pnpm lint` 里,由上面的 Lint 步骤跑 —— 这样本地提交前

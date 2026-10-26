@@ -5,10 +5,12 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { argv, exit } from "node:process";
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { renderDownloadPage } from "./r2-download-page.mjs";
 
 const CONTENT_TYPES = new Map([
   [".yml", "text/yaml"],
   [".json", "application/json"],
+  [".html", "text/html; charset=utf-8"],
   [".zip", "application/zip"],
   [".dmg", "application/x-apple-diskimage"],
   [".exe", "application/vnd.microsoft.portable-executable"],
@@ -36,7 +38,7 @@ if (!options.dist || !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(options.tag ||
 }
 const dist = resolve(options.dist);
 const files = existsSync(dist)
-  ? readdirSync(dist).filter((name) => statSync(resolve(dist, name)).isFile())
+  ? readdirSync(dist).filter((name) => name !== "index.html" && statSync(resolve(dist, name)).isFile())
   : [];
 if (files.length === 0) {
   console.error(`no release files found: ${dist}`);
@@ -56,9 +58,19 @@ const plans = files.flatMap((name) => {
     { ...base, key: keyFor(name, true), cacheControl: "public,max-age=0,must-revalidate" },
   ];
 });
+const downloadPage = renderDownloadPage(files, options.tag);
+for (const latest of [false, true]) {
+  plans.push({
+    body: Buffer.from(downloadPage),
+    size: Buffer.byteLength(downloadPage),
+    contentType: CONTENT_TYPES.get(".html"),
+    key: keyFor("index.html", latest),
+    cacheControl: latest ? "public,max-age=0,must-revalidate" : "public,max-age=31536000,immutable",
+  });
+}
 
 if (options.dryRun) {
-  for (const plan of plans) console.log(JSON.stringify(plan));
+  for (const { body: _body, ...plan } of plans) console.log(JSON.stringify(plan));
 } else {
   const accountId = process.env.R2_ACCOUNT_ID || "";
   const endpoint = process.env.R2_ENDPOINT || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
@@ -70,7 +82,7 @@ if (options.dryRun) {
   }
   const client = new S3Client({ region: "auto", endpoint, credentials: { accessKeyId, secretAccessKey } });
   for (const plan of plans) {
-    const body = readFileSync(plan.file);
+    const body = plan.body ?? readFileSync(plan.file);
     const localSha = createHash("sha256").update(body).digest("hex");
     await client.send(new PutObjectCommand({
       Bucket: bucket,
