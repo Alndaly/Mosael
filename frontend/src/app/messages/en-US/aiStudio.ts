@@ -135,6 +135,7 @@ export const aiStudio = {
   chatQueuedCancel: "Remove",
   chatSteerAction: "Steer",
   chatSteerHint: "Cut into the running turn and change what the agent does next",
+  chatSteerPending: "Waiting to steer this turn…",
   chatQueuedResume: "Send",
   chatQueuedResumeHint: "You stopped the agent, so this one was held back. Send it now",
   chatSteerTooLate: "That turn already ended — it will run on its own next",

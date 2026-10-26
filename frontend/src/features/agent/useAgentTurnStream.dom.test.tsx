@@ -95,6 +95,22 @@ it("收尾在 messages + session 两条失效都 settle 之后才清流态", asy
   await waitFor(() => expect(screen.getByLabelText("text").textContent).toBe(""));
 });
 
+it("steer 边界让段号变化时：立即失效持久消息和队列，不靠轮询等到下一次", { timeout: 4000 }, async () => {
+  chunks.push(JSON.stringify({ text: "插话前", segment: 0, done: false, timeline: [] }));
+  chunks.push(JSON.stringify({ text: "", segment: 1, done: false, timeline: [] }));
+  chunks.push(JSON.stringify({ text: "插话后", segment: 1, done: true, timeline: [] }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidated: string[] = [];
+  client.invalidateQueries = (async (args: { queryKey?: unknown[] }) => {
+    if (Array.isArray(args?.queryKey) && typeof args.queryKey[0] === "string") invalidated.push(args.queryKey[0]);
+  }) as typeof client.invalidateQueries;
+
+  show(client);
+
+  await waitFor(() => expect(invalidated).toContain("agent-queue"));
+  expect(invalidated).toContain("agent-messages");
+});
+
 // 当前会话现在可以从面板外面换掉(另一个面板、免提浮标),面板里没有「切会话」那一刻可以
 // 挂 reset —— 所以由这个 hook 自己认:看的不再是这条流的会话,就掐流、清流态。
 it("看的会话换成了别的:掐掉手上那条流,流态清空", async () => {

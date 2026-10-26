@@ -47,6 +47,21 @@ it("插进这一轮和撤回各自点到自己那一条", () => {
   expect(cancel).toHaveBeenCalledWith("q1");
 });
 
+it("已点插话、模型还没读到的那条显示等待状态，不再给第二个插话按钮", () => {
+  const steer = vi.fn();
+  render(
+    <QueuedMessages
+      messages={[{ id: "q1", content: "改成竖屏", payload: { queued: true, steer_pending: true } }]}
+      onSteer={steer}
+      onResume={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  expect(screen.getByText("chatSteerPending")).toBeTruthy();
+  expect(screen.queryByText("chatSteerAction")).toBeNull();
+  expect(steer).not.toHaveBeenCalled();
+});
+
 /**
  * 按了停止,排着的那几条被扣下(D63):那一格是「继续发送」,不是「插话」—— 没有一轮在跑,插不进去;它也不会自己发出去。
  */

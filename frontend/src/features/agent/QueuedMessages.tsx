@@ -55,7 +55,9 @@ export function QueuedMessages({
         >
           <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
           <Truncate className="flex-1 text-foreground">{message.content}</Truncate>
-          {isHeld(message) ? (
+          {isSteerPending(message) ? (
+            <span className="shrink-0 text-ui-xs text-primary">{t("chatSteerPending")}</span>
+          ) : isHeld(message) ? (
             <Hint label={t("chatQueuedResumeHint")}>
               <Button variant="inline" className="shrink-0" disabled={resuming} onClick={() => onResume(message.id)}>
                 <Send /> {t("chatQueuedResume")}
@@ -81,6 +83,11 @@ export function QueuedMessages({
       ))}
     </>
   );
+}
+
+/** 已点「插话」、但模型还没真正读到的那一条：留在当前队列位显示，不能再点一次插话。 */
+function isSteerPending(message: { payload?: unknown }): boolean {
+  return Boolean((message.payload as { steer_pending?: boolean } | null | undefined)?.steer_pending);
 }
 
 /** 按停止时扣下的那一条(后端 host._hold_queue 打的标):等人点「继续发送」,不会自己发出去。 */

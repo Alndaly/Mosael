@@ -57,6 +57,7 @@ export function useAgentTurnStream(viewedSessionId: string | null): AgentTurnStr
    * 请求**都排在它们后面,表现是整个界面卡死。
    */
   const abortRef = React.useRef<AbortController | null>(null);
+  const segmentRef = React.useRef(0);
 
   const reset = React.useCallback(() => {
     abortRef.current?.abort();
@@ -79,6 +80,7 @@ export function useAgentTurnStream(viewedSessionId: string | null): AgentTurnStr
       const controller = new AbortController();
       abortRef.current = controller;
       streamingRef.current = targetSessionId;
+      segmentRef.current = 0;
       setStreamText("");
       setStreamTimeline([]);
       try {
@@ -90,6 +92,13 @@ export function useAgentTurnStream(viewedSessionId: string | null): AgentTurnStr
             continue; // 一条坏事件不该让同一条流后面的更新全都失效
           }
           if (streamingRef.current !== targetSessionId) continue;
+          const segment = Number(payload.segment ?? 0);
+          if (segment !== segmentRef.current) {
+            segmentRef.current = segment;
+            // steer 被模型消费：上一段和插话已经落库，立即取回，避免实时气泡清空的空窗。
+            void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
+            void qc.invalidateQueries({ queryKey: ["agent-queue", targetSessionId] });
+          }
           setStreamText(payload.text);
           setStreamTimeline((payload.timeline ?? []) as AgentTimelineItem[]);
           if (payload.done) break;
