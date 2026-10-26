@@ -3,6 +3,12 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [Unreleased]
+
+### 设置页
+
+- **页头与分割线统一。** 页头改用独立的 `SettingsPageHeader` 和 shadcn `Separator`,不再用空设置组或容器边框充当标题分隔;标题到分割线统一 8px,页头分割线到内容统一 28px。「能力提供方」「我的音色」「技能」及各供应商页的动作不再把分割线撑出不一致间距。
+
 ## [2.2.3] - 2026-10-26
 
 ### 应用内更新修复

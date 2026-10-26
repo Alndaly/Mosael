@@ -15,6 +15,7 @@ import {
   SettingsListItem,
   SettingsRow,
   SettingsSectionStack,
+  SettingsPageHeader,
   SettingsTag,
 } from "@/components/settings/settings-layout";
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
@@ -30,11 +31,18 @@ describe("settings section layout", () => {
     const content = container.querySelector('[data-slot="settings-group-content"]');
     const header = container.querySelector('[data-slot="settings-group-header"]');
     expect(content).not.toBeNull();
-    expect(header).not.toHaveClass("border-b");
-    expect(header).toHaveClass("pb-2");
+    expect(header).toHaveClass("pb-1");
     expect(content).not.toHaveClass("rounded-lg");
     expect(content).not.toHaveClass("border");
     expect(content).not.toHaveClass("bg-panel");
+  });
+
+  it("uses a Separator below a page header", () => {
+    const { container } = render(<SettingsPageHeader title="能力提供方" />);
+
+    const header = container.querySelector('[data-slot="settings-group-header"]');
+    expect(header).toHaveClass("pb-1");
+    expect(container.querySelector('[data-slot="separator"]')).not.toBeNull();
   });
 
   it("separates sections and gives the next header more breathing room", () => {
@@ -49,11 +57,10 @@ describe("settings section layout", () => {
     );
 
     expect(screen.getAllByRole("heading")).toHaveLength(3);
-    // 线画在**后一节**身上,由相邻兄弟触发 —— 不再插一个独立的 Separator 元素。
+    // 空 Group 不是页头,不画标题 Separator;组间仍按原有相邻规则分隔。
     const stack = container.querySelector('[data-slot="settings-section-stack"]')!;
     expect(stack.querySelectorAll('[data-slot="separator"]')).toHaveLength(0);
-    expect(stack.className).toContain("[&>[data-slot=settings-group]+[data-slot=settings-group]]:border-t");
-    // 紧贴上一节,下面留出下一节标题的层级;不用 my-*,那会和上一节最后一行的内边距叠起来。
+    // 间距仍由后一节承担,不用 my-*,免得和上一节最后一行的内边距叠起来。
     expect(stack.className).toContain("[&>[data-slot=settings-group]+[data-slot=settings-group]]:mt-3");
     expect(stack.className).toContain("[&>[data-slot=settings-group]+[data-slot=settings-group]]:pt-7");
   });

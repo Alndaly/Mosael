@@ -66,12 +66,13 @@ it("页里没有「内置配音引擎」那一组了:标题、说明、三条「
   const { container } = renderPage();
   expect(container.textContent).not.toContain("内置配音引擎");
   expect(container.textContent).not.toContain("即开即用");
-  //: 只剩一页头 + 这一工作区的音色库(`VoiceLibrarySection` 在这里是桩,它自己那一节另测)。
-  expect(container.querySelectorAll('[data-slot="settings-group"]')).toHaveLength(1);
+  //: 页头已经是独立 SettingsPageHeader;音色库组件在这里是桩,它自己那一节另测。
+  expect(container.querySelectorAll('[data-slot="settings-page-header"]')).toHaveLength(1);
+  expect(container.querySelectorAll('[data-slot="settings-group"]')).toHaveLength(0);
 });
 
 it("侧栏与页头都叫「我的音色」,页说明只说这个工作区有哪些音色、怎么建", () => {
-  //: 侧栏那一项读的就是 `section.label` —— 页头也从同一个键来(settingsSections 的空组),
+  //: 侧栏那一项读的就是 `section.label` —— 页头也从同一个键来(settingsSections 的 SettingsPageHeader),
   //: 两处不会各写一遍再分叉。
   expect(zhCN[section.label]).toBe("我的音色");
   const { container } = renderPage();

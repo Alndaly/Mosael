@@ -39,6 +39,7 @@ import { PageLoadError } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { Disclosure } from "@/components/ui/disclosure";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { findPluginsFor } from "@/lib/deepLink";
@@ -51,7 +52,7 @@ const KEY = capabilityKeys.choices();
  * 装在一个容器里,而不是直接作为 `SettingsSectionStack` 的孩子 —— 那一层会给相邻的
  * `[data-slot=settings-group]` 画线,卡片自己已经有边框了。
  */
-const CARD_STACK = "mt-6 grid gap-4";
+const CARD_STACK = "grid gap-4";
 
 /** 一家都没有时怎么说:素材外链要去建一个对象存储连接;别的能力说句通用的。 */
 const NONE_HINT: Record<string, MessageKey> = { public_url: "assetLinkNone" };
@@ -174,7 +175,7 @@ function CapabilitySkeletonGroup({ shape, label }: { shape: CapabilitySkeletonSh
       <div data-capability-skeleton-content="" aria-hidden="true" className="contents">
         <header
           data-slot="settings-group-header"
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 px-4 pt-4 pb-2"
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 pb-1 px-4 pt-4"
         >
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -203,6 +204,7 @@ function CapabilitySkeletonGroup({ shape, label }: { shape: CapabilitySkeletonSh
             <Skeleton className="h-8 w-24 rounded-full" />
           </div>
         </header>
+        <Separator />
         <div data-slot="settings-group-content" className="grid [&>*+*]:border-t [&>*+*]:border-divider px-4">
           <SettingsItemRow
             label={<Skeleton data-capability-skeleton-label="" className="h-3.5 w-20" />}

@@ -18,7 +18,7 @@ import {
 
 import type { Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
-import { SettingsGroup } from "@/components/settings/settings-layout";
+import { SettingsPageHeader } from "@/components/settings/settings-layout";
 import { AccountSection } from "@/features/settings/AccountSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AgentSkillsSection } from "@/features/settings/AgentSkillsSection";
@@ -110,7 +110,7 @@ function withPageHeader(section: SettingsSection, description: MessageKey): Sett
     ...section,
     render: (ctx) => (
       <>
-        <SettingsGroup title={ctx.t(section.label)} description={ctx.t(description)} />
+        <SettingsPageHeader title={ctx.t(section.label)} description={ctx.t(description)} />
         {section.render(ctx)}
       </>
     ),

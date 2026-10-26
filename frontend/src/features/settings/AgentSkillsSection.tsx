@@ -19,7 +19,7 @@ import { errorText } from "@/api/errorMessage";
 import { skillKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
-import { SettingsEmpty, SettingsGroup, SettingsItemNote, SettingsItemRow, SettingsTag } from "@/components/settings/settings-layout";
+import { SettingsEmpty, SettingsGroup, SettingsItemNote, SettingsItemRow, SettingsPageHeader, SettingsTag } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Switch } from "@/components/ui/switch";
@@ -104,7 +104,7 @@ export function AgentSkillsSection({ workspace }: { workspace: Workspace }) {
 
   return (
     <>
-      <SettingsGroup
+      <SettingsPageHeader
         title={t("agentSkillsTitle")}
         description={t("agentSkillsDesc")}
         actions={
@@ -151,20 +151,19 @@ export function AgentSkillsSection({ workspace }: { workspace: Workspace }) {
             />
           </div>
         }
-      >
-        {skills.isError ? (
-          <SettingsEmpty
-            icon={<Sparkles size={20} />}
-            title={t("pageLoadError")}
-            body={errorText(skills.error)}
-            action={
-              <Button variant="secondary" onClick={() => void skills.refetch()}>
-                {t("retry")}
-              </Button>
-            }
-          />
-        ) : null}
-      </SettingsGroup>
+      />
+      {skills.isError ? (
+        <SettingsEmpty
+          icon={<Sparkles size={20} />}
+          title={t("pageLoadError")}
+          body={errorText(skills.error)}
+          action={
+            <Button variant="secondary" onClick={() => void skills.refetch()}>
+              {t("retry")}
+            </Button>
+          }
+        />
+      ) : null}
       {groups.map((group) => {
         const members = rows.filter((one) => one.source === group.key);
         if (group.key === "plugin" && members.length === 0) return null;

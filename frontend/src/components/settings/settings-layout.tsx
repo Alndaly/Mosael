@@ -2,6 +2,7 @@ import React from "react";
 
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 /**
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
  * only Rows, ItemRows and Blocks. Any other element between two of them — including a display:none
  * one, which sibling selectors do not skip — adds or shifts a divider.
  * Hidden file inputs belong inside the Row whose control opens them.
+ * 页头由 SettingsPageHeader 接 Separator;真实设置组只在有内容时接 Separator,不把空组当页头。
  *
  * 住在 components/ 而不是 features/settings/ 里:设置、插件、定时任务、管理四个页面都是这个
  * 版式,而前三个曾经要 import 第四个的内部文件才能画一行设置 —— 一套给大家用的版式不该长在
@@ -32,6 +34,67 @@ import { cn } from "@/lib/utils";
  * 卡片页要框就引用这一个常量。
  */
 export const SETTINGS_CARD = "overflow-hidden rounded-lg border border-border bg-panel";
+
+type SettingsTitleHeaderProps = {
+  title: string;
+  description?: string;
+  actions?: React.ReactNode;
+  card?: boolean;
+  page?: boolean;
+  titleAdornment?: React.ReactNode;
+};
+
+/** 页头和设置组共用的标题信息组:左侧标题说明,右侧动作;下方固定留 4px,再接组间距 4px。 */
+function SettingsTitleHeader({ title, description, actions, card = false, page = false, titleAdornment }: SettingsTitleHeaderProps) {
+  return (
+    <header
+      data-slot="settings-group-header"
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 pb-1",
+        card ? "px-4 pt-4" : "px-0.5",
+      )}
+    >
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+          <h2
+            data-slot="settings-group-title"
+            className={cn("m-0 font-semibold leading-snug tracking-tight", page ? "text-2xl" : card ? "text-ui-md" : "text-xl")}
+          >
+            {title}
+          </h2>
+          {titleAdornment && (
+            <span
+              data-slot="settings-group-adornment"
+              className="inline-flex min-w-0 items-center gap-1.5 text-ui-sm font-normal leading-snug text-muted-foreground"
+            >
+              <span aria-hidden>·</span>
+              {titleAdornment}
+            </span>
+          )}
+        </div>
+        {description && (
+          <p
+            data-slot="settings-group-description"
+            className={cn("mb-0 mt-1.5 leading-[1.55] text-muted-foreground", card ? "text-ui-sm" : "text-ui-md")}
+          >
+            {description}
+          </p>
+        )}
+      </div>
+      {actions && <div data-slot="settings-group-actions" className="flex shrink-0 items-center gap-2">{actions}</div>}
+    </header>
+  );
+}
+
+/** 一页的身份:页名、页说明和页动作。它不是没有内容的 SettingsGroup。 */
+export function SettingsPageHeader({ title, description, actions }: Omit<SettingsTitleHeaderProps, "card" | "page" | "titleAdornment">) {
+  return (
+    <section data-slot="settings-page-header" className="grid gap-1 pb-7">
+      <SettingsTitleHeader title={title} description={description} actions={actions} page />
+      <Separator />
+    </section>
+  );
+}
 
 export function SettingsGroup({
   title,
@@ -52,8 +115,6 @@ export function SettingsGroup({
   titleAdornment?: React.ReactNode;
   className?: string;
   contentClassName?: string;
-  /** 没有内容时**不画那个框** —— 只有标题和说明的分组(比如"自助注册已开放")本来就没有行,
-   *  空着渲染出来是一条无缘无故的横线。 */
   children?: React.ReactNode;
 }) {
   const hasContent = React.Children.toArray(children).some(Boolean);
@@ -63,67 +124,14 @@ export function SettingsGroup({
       data-settings-card={card ? "" : undefined}
       className={cn("@container/settings grid gap-1", card && SETTINGS_CARD, className)}
     >
-      {/* 动作**对齐整个抬头的竖向中心**,不是对齐标题那一行,也不是对齐整块的底边。
-          三种都试过:`items-end` 在说明一长时把按钮拖到最后一行旁边,看着像那句话的一部分;
-          `items-start` 则在说明有两三行时把按钮顶在最上面,右边空出一大块。
-          `items-center` 两头都不沾 —— 按钮始终落在这一节抬头的视觉重心上。
-
-          卡片里改成**两列网格**:右边那格按动作自己的宽度收,动作永远钉在右上角。`flex-wrap` 在说明
-          一长时会把动作折到说明下面(维护者截图里「去插件市场找」两种位置就是它) —— 网格不折。 */}
-      <header
-        data-slot="settings-group-header"
-        className={cn(
-          card
-            ? "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 px-4 pt-4"
-            : "flex flex-wrap items-start justify-between gap-4 px-0.5",
-          card ? (hasContent ? "pb-2" : "pb-4") : hasContent && "pb-2",
-        )}
-      >
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h2
-              data-slot="settings-group-title"
-              className={cn(
-                "m-0 font-semibold leading-snug tracking-tight",
-                card ? "text-ui-md" : "text-xl",
-              )}
-            >
-              {title}
-            </h2>
-            {titleAdornment && (
-              <span
-                data-slot="settings-group-adornment"
-                className="inline-flex min-w-0 items-center gap-1.5 text-ui-sm font-normal leading-snug text-muted-foreground"
-              >
-                <span aria-hidden>·</span>
-                {titleAdornment}
-              </span>
-            )}
-          </div>
-          {description && (
-            /* 说明跟着这一列铺开,不设宽度上限:设置页是宽面板,后面紧跟满宽的行,说明被 42rem
-               截住时右边会空出一大块(维护者指出)。同一种「节说明」在全应用只有一种规则
-               (管理页的 AdminSection 是同一条);窄容器(弹窗、侧栏)里的正文不在此列 —— 它们的行长本来就短。
-
-               卡片里说明收一档:`text-ui-sm`(14px 灰)是说明,控件行的标签是同一档字号但
-               `font-medium text-foreground` —— 颜色 + 字重把「这是操作」和「这是解释」分开。 */
-            <p
-              data-slot="settings-group-description"
-              className={cn(
-                "mb-0 mt-1.5 leading-[1.55] text-muted-foreground",
-                card ? "text-ui-sm" : "text-ui-md",
-              )}
-            >
-              {description}
-            </p>
-          )}
-        </div>
-        {actions && (
-          <div data-slot="settings-group-actions" className="flex shrink-0 items-center gap-2">
-            {actions}
-          </div>
-        )}
-      </header>
+      <SettingsTitleHeader
+        title={title}
+        description={description}
+        actions={actions}
+        card={card}
+        titleAdornment={titleAdornment}
+      />
+      {hasContent && <Separator />}
       {hasContent && (
         <div
           data-slot="settings-group-content"
