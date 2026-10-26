@@ -265,6 +265,8 @@ describe("Recorder", () => {
 
     await user.click(screen.getByRole("button", { name: /recordStart/ }));
     await screen.findByRole("button", { name: /recordStop/ });
+    // 录制浮窗靠边框和底色分界;模态阴影在深色画布上会形成一圈厚暗带。
+    expect(screen.getByRole("dialog")).toHaveClass("!shadow-none");
     // 展开态的停止是 sm 档(32px);DialogFooter 的 40px 强制规则不能把它撑回去。
     expect(screen.getByRole("button", { name: "recordStop" })).toHaveClass("h-8");
     await user.click(screen.getByRole("button", { name: "recordMinimize" }));

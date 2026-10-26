@@ -436,7 +436,7 @@ export function Recorder({
       className={cn(
         "w-[520px]",
         recording &&
-          "!bottom-3 !left-auto !right-3 !top-auto !w-[360px] !max-w-[calc(100vw-1.5rem)] !translate-x-0 !translate-y-0",
+          "!bottom-3 !left-auto !right-3 !top-auto !w-[360px] !max-w-[calc(100vw-1.5rem)] !translate-x-0 !translate-y-0 !shadow-none",
       )}
       headerClassName={recording ? "px-3 pb-2 pt-3" : undefined}
       bodyClassName={recording ? "px-3" : undefined}
