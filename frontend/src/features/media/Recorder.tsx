@@ -443,23 +443,24 @@ export function Recorder({
       footerLayout={recording ? "plain" : "dialog"}
       footerClassName={recording ? "px-3 pb-3 pt-3" : undefined}
       footer={
-        <div className="grid w-full min-w-0 gap-2">
-          {/* 提示独占一行:放在按钮旁边时它会被挤成两三行,把底栏撑高。录制中只说
-              「停止后会落成素材」,不再重复已经完成的选源说明。 */}
-          <Truncate className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
-            {recording ? t("recordSaveHint") : (t(`record_${source}_hint` as never) as string)}
-          </Truncate>
-          <div className="flex justify-end">
-            {!recording ? (
-              <Button className="shrink-0" size="sm" disabled={starting || stopping} onClick={start}>
-                <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
-              </Button>
-            ) : (
-              <Button size="sm" variant="destructive" onClick={stop}>
-                <Square size={11} /> {t("recordStop")}
-              </Button>
-            )}
-          </div>
+        <div className={cn("w-full min-w-0", recording ? "flex justify-end" : "grid gap-2")}>
+          {!recording && (
+            <>
+              <Truncate className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
+                {t(`record_${source}_hint` as never) as string}
+              </Truncate>
+              <div className="flex justify-end">
+                <Button className="shrink-0" size="sm" disabled={starting || stopping} onClick={start}>
+                  <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
+                </Button>
+              </div>
+            </>
+          )}
+          {recording && (
+            <Button size="sm" variant="destructive" onClick={stop}>
+              <Square size={11} /> {t("recordStop")}
+            </Button>
+          )}
         </div>
       }
     >

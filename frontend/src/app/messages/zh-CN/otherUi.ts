@@ -117,7 +117,6 @@ export const otherUi = {
   recordMinimize: "最小化",
   recordExpand: "展开录制窗口",
   recordInProgress: "录制中",
-  recordSaveHint: "停止后自动保存为素材",
   recordDenied: "无法访问该录制源(可能被拒绝或设备不可用)",
   recordFailed: "录制失败,请检查设备后重试",
   recordEmpty: "没有录到内容 — 请确认摄像头/麦克风可用后重试",
