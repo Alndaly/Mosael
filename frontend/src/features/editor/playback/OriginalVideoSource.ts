@@ -19,7 +19,9 @@ export class OriginalVideoSource {
 
   constructor(url: string, onFrame: () => void) {
     const video = document.createElement("video");
-    video.preload = "auto";
+    // Metadata only: a paused seek fetches the needed byte range. "auto" would
+    // start downloading a multi-gigabyte original just because the playhead parked.
+    video.preload = "metadata";
     video.muted = true;
     video.playsInline = true;
     // No crossOrigin: Electron's file:// origin is rejected by strict CORS on
