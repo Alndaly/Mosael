@@ -1,5 +1,5 @@
 import React from "react";
-import { Ban, Check, CircleAlert, Loader2, ShieldAlert, TriangleAlert, X } from "lucide-react";
+import { Ban, Check, CircleAlert, CircleHelp, Loader2, ShieldAlert, TriangleAlert, X } from "lucide-react";
 
 import type { Confirmation } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -135,6 +135,8 @@ const SETTLED = {
   executed: { icon: Check, label: "confirmStatusExecuted", className: "text-success" },
   rejected: { icon: X, label: "confirmStatusRejected", className: "text-muted-foreground" },
   failed: { icon: CircleAlert, label: "confirmStatusFailed", className: "text-destructive" },
+  //: 批准后执行到一半后端重启:可能已经生效,也可能没有。不能写「已执行」或「失败」。
+  unknown: { icon: CircleHelp, label: "confirmStatusUnknown", className: "text-warning" },
   //: 作废:这一轮已经结束,没人在等这张卡了(说法按由头,见 cardExpiry)。不是出错,不标红。
   expired: { icon: Ban, label: "confirmExpiredTurnEnded", className: "text-muted-foreground" },
 } as const;

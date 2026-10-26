@@ -691,7 +691,7 @@ def _settle_confirmation(db: Session, confirmation) -> None:
     from app.integrations.feishu import cards
     from app.integrations.feishu.approvals import _full_summary
 
-    if confirmation.status not in {"approved", "executed", "rejected", "expired"} or not confirmation.feishu_message_id:
+    if confirmation.status not in {"approved", "executed", "rejected", "expired", "unknown"} or not confirmation.feishu_message_id:
         return
     origin = None
     if confirmation.session_id:
@@ -700,7 +700,10 @@ def _settle_confirmation(db: Session, confirmation) -> None:
             origin = _route(db, session)
     if origin is None:
         return
-    if confirmation.status == "expired":
+    if confirmation.status == "unknown":
+        # 批过、执行到一半后端没了:不能写「已同意」(读起来像做完了),也不能写「已失效」(读起来像没做)。
+        settled = cards.interrupted_card(summary=_full_summary(confirmation), tool=confirmation.tool)
+    elif confirmation.status == "expired":
         settled = cards.expired_card(summary=_full_summary(confirmation), tool=confirmation.tool)
     else:
         decision = "approved" if confirmation.status in {"approved", "executed"} else "rejected"

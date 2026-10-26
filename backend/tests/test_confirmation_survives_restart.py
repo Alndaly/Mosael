@@ -98,3 +98,38 @@ def select_cards(session_id):
 
     return select(ToolConfirmation).where(ToolConfirmation.session_id.is_(None) if session_id is None
                                           else ToolConfirmation.session_id == session_id)
+
+
+def test_批准后执行到一半重启_记未知而不是没做() -> None:
+    """`approved` 是认领,不是结果:执行器可能已经删了东西、花了钱。
+
+    进程死在认领之后、结果之前时,这张卡既不能回到 pending 重跑,也不能写成「已失效/没做」。
+    重启收尾把它记成 `unknown`,并把理由留给界面与模型。
+    """
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    with SessionLocal() as db:
+        card = ToolConfirmation(
+            workspace_id=ws["id"],
+            session_id=None,
+            tool="browser_open",
+            permission="external",
+            summary="打开浏览器",
+            status="approved",
+        )
+        db.add(card)
+        db.commit()
+        card_id = card.id
+
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
+
+    with SessionLocal() as db:
+        reconcile_orphaned_agent_sessions(db)
+        db.commit()
+
+    with SessionLocal() as db:
+        row = db.get(ToolConfirmation, card_id)
+        assert row.status == "unknown"
+        assert row.error == "execution_unknown"
+        assert row.resolved_at is not None

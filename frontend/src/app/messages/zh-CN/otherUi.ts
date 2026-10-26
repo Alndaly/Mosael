@@ -204,6 +204,7 @@ export const otherUi = {
   confirmStatusExecuted: "已执行",
   confirmStatusRejected: "已拒绝",
   confirmStatusFailed: "执行失败",
+  confirmStatusUnknown: "结果未知(执行中重启,先确认现状)",
   confirmExpiredTurnStopped: "这一轮已停止,卡已作废",
   confirmExpiredWaitTimeout: "等太久没有批,卡已作废",
   confirmExpiredTurnEnded: "这一轮已经结束,卡已作废",

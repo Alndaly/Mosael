@@ -309,6 +309,10 @@ def _claim(db: Session, confirmation: ToolConfirmation, to_status: str) -> None:
     )
     # 这里仍提交:认领是「这张卡归我执行了」,要在执行器开跑之前落定 —— 执行器可能很慢、可能付费,
     # 中途进程没了,卡也不能回到 pending 被再批一次;提交同时放掉 SQLite 的写锁,不让慢执行器攥着它。
+    #
+    # 这一笔提交也是**「结果未知」那一态的由来**:进程死在提交之后、执行器落结果之前,卡就停在 approved。
+    # 启动收尾把它记成 unknown(card_expiry.resolve_interrupted_executions):批过的动作可能已经做了一半,
+    # 所以既不回到 pending 重跑,也不说成「没做」—— 界面上那半句如实写「不知道」。
     db.commit()
     db.refresh(confirmation)
     if result.rowcount != 1:

@@ -70,6 +70,26 @@ for _ in sys.stdin:
 '''
 
 
+def test_sidecar_env_drops_master_key_and_keeps_node_environment() -> None:
+    """主密钥不能进 sidecar 的环境;Node/测试真正需要的普通变量仍要保留。"""
+    env = pi_client.sidecar_env({
+        "PATH": "/bin",
+        "FRAME_LOG": "/tmp/frames",
+        "MOSAEL_SECRET_KEY": "decrypts-everything",
+        "MOSAEL_SECRET_KEY_STDIN": "yes",
+        "MOSAEL_CARD_WAIT_MS": "1000",
+        "OPENAI_API_KEY": "sk-secret",
+        "SOME_TOKEN": "secret",
+    })
+    assert env["PATH"] == "/bin"
+    assert env["FRAME_LOG"] == "/tmp/frames"
+    assert env["MOSAEL_CARD_WAIT_MS"] == "1000"
+    assert "MOSAEL_SECRET_KEY" not in env
+    assert "MOSAEL_SECRET_KEY_STDIN" not in env
+    assert "OPENAI_API_KEY" not in env
+    assert "SOME_TOKEN" not in env
+
+
 @pytest.fixture
 def fake_sidecar(tmp_path: Path, monkeypatch):
     script = tmp_path / "sidecar.py"
@@ -201,11 +221,21 @@ class TestControlFrames:
         """Per-message cancel depends on this: pi can only clear its queue, so the client
         declares what should remain rather than what to remove."""
         capture: dict = {}
-        self._run_with("s-queue", lambda: pi_client.set_turn_queue("s-queue", ["二", "三"]), capture)
+        self._run_with(
+            "s-queue",
+            lambda: pi_client.set_turn_queue(
+                "s-queue",
+                [{"steerId": "m-2", "prompt": "二"}, {"steerId": "m-3", "prompt": "三"}],
+            ),
+            capture,
+        )
         frames = _frames(echo_sidecar)
 
         queue = next(f for f in frames if f["type"] == "queue")
-        assert queue["prompts"] == ["二", "三"]
+        assert queue["items"] == [
+            {"steerId": "m-2", "prompt": "二"},
+            {"steerId": "m-3", "prompt": "三"},
+        ]
 
     def test_an_empty_queue_is_sent_as_an_empty_list_not_skipped(self, echo_sidecar) -> None:
         """Withdrawing the only queued message must actually clear pi's queue."""
@@ -214,7 +244,7 @@ class TestControlFrames:
         frames = _frames(echo_sidecar)
 
         queue = next(f for f in frames if f["type"] == "queue")
-        assert queue["prompts"] == []
+        assert queue["items"] == []
 
     def test_image_bytes_cross_the_python_to_sidecar_protocol(self, echo_sidecar) -> None:
         capture: dict = {}

@@ -350,7 +350,7 @@ def steer_turn(session_id: str, prompt: str, mode: str = "steer", steer_id: str 
     )
 
 
-def set_turn_queue(session_id: str, prompts: list[str]) -> bool:
+def set_turn_queue(session_id: str, items: list[dict[str, str]]) -> bool:
     """Replace the running turn's steering queue. False when there is no turn to talk to.
 
     Declaring the whole queue rather than deleting one entry is what makes per-message cancel
@@ -361,7 +361,7 @@ def set_turn_queue(session_id: str, prompts: list[str]) -> bool:
     if live is None:
         return False
     return live.send_awaiting_ack(
-        {"type": "queue", "turnId": live.turn_id, "prompts": prompts}, ack_type="queued"
+        {"type": "queue", "turnId": live.turn_id, "items": items}, ack_type="queued"
     )
 
 
@@ -403,6 +403,39 @@ def pi_sidecar_command() -> tuple[str, str]:
     return node, sidecar
 
 
+#: sidecar 允许看到的 `MOSAEL_*` 业务开关。**其余 `MOSAEL_*` 一律不继承** ——
+#: `MOSAEL_SECRET_KEY`(部署时解开库里全部密文的那把钥匙)不该躺在一个跑模型输出、跑工具调用、
+#: 跑第三方 Node 依赖的子进程环境里。feishu 长连接子进程早就是这个理由。
+_SIDECAR_ENV_ALLOW = frozenset({"MOSAEL_CARD_WAIT_MS"})
+
+#: 非 `MOSAEL_*` 的密钥类变量也按名字挡掉。这里不是穷举秘密的清单,而是一道防手滑的网:
+#: 真正的不变式是「MOSAEL 命名空间默认不继承」,这些只是常见的供应商 / CI 变量。
+_SECRET_ENV_MARKERS = (
+    "SECRET", "TOKEN", "PASSWORD", "API_KEY", "PRIVATE_KEY",
+    "ACCESS_KEY", "CREDENTIAL", "AUTH_KEY",
+)
+
+
+def sidecar_env(base: dict[str, str] | None = None) -> dict[str, str]:
+    """给 sidecar 的环境:**保留 Node / 代理 / 测试工具需要的普通变量,挡掉 MOSAEL 与密钥**。
+
+    早前的 `{**os.environ}` 把主密钥一起交了出去。过窄的白名单也不行:它会挡掉
+    `FRAME_LOG`、`SSL_CERT_FILE`、平台路径、代理等 Node 真正需要的东西,于是测试和打包版
+    在另一条路上坏掉。所以这里按**命名空间 + 密钥形状**挡:
+    `MOSAEL_*` 只有明确列出的业务开关能过;名字像密钥的一律不过;其余原样保留。
+    """
+    source = os.environ if base is None else base
+    out: dict[str, str] = {}
+    for key, value in source.items():
+        upper = key.upper()
+        if upper.startswith("MOSAEL_") and key not in _SIDECAR_ENV_ALLOW:
+            continue
+        if any(marker in upper for marker in _SECRET_ENV_MARKERS):
+            continue
+        out[key] = value
+    return out
+
+
 def spawn_pi(*, stderr: int = subprocess.PIPE) -> subprocess.Popen:
     """起一个 pi sidecar 进程,stdin / stdout 走 JSONL。一轮对话、压缩、无工具补全、刷新令牌、订阅登录都从这里起。
 
@@ -412,7 +445,7 @@ def spawn_pi(*, stderr: int = subprocess.PIPE) -> subprocess.Popen:
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
         raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
-    env = {**os.environ}
+    env = sidecar_env()
     # 打包版把 Electron 二进制当 node 用(MOSAEL_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
     # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
     if os.environ.get("MOSAEL_AGENT_BIN_NODE"):

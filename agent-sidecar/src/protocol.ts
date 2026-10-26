@@ -99,11 +99,23 @@ export interface SteerRequest {
  * pi can clear the queue but not remove one entry from it, and the UI needs per-message
  * cancel. Sending the desired queue rather than a delete makes that possible and is
  * idempotent: the client says what should be pending, not what changed.
+ *
+ * Every entry carries its Mosael message id (`steerId`), exactly like a single `steer`
+ * frame. Re-declaring a queue is *re-enqueueing* it: an entry that lost its id would be
+ * read by the model but never reported back as applied, so the backend would keep thinking
+ * it is still pending — and run the same message again as its own turn afterwards.
  */
 export interface QueueRequest {
   type: "queue";
   turnId: string;
-  prompts: string[];
+  items: QueuedSteer[];
+}
+
+/** 一条「应该还排着」的插话:要排的话 + Mosael 那条消息的 id。 */
+export interface QueuedSteer {
+  /** Mosael 的队列消息 id。sidecar 把它写进 mosaelSteerId,模型真正消费时再原样回传。 */
+  steerId: string;
+  prompt: string;
 }
 
 /** Stop a running turn. Whatever it produced so far is kept. */

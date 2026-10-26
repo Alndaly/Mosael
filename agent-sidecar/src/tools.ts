@@ -13,10 +13,13 @@
  * model receives the executed result rather than a pending stub.
  *
  * `awaits_answer: true` (ask_user) is the same shape pointed at the question card, with one
- * difference that matters: a confirmation that times out means the action never happened, so
- * that one throws; a question that times out only means the user has not got to it yet — the
- * answer still reaches the conversation later — so that one returns "pending" and lets the
- * model carry on instead of reporting a failure and asking all over again.
+ * difference that matters: a confirmation that times out means the action never happened —
+ * **unless the card had already reached `approved`** (the user said yes and the backend claimed
+ * it, see `_claim`), in which case nobody knows whether it ran: that case says so and never
+ * reports "did not execute" (see CARD_EXECUTION_UNKNOWN). A question that times out only means
+ * the user has not got to it yet — the answer still reaches the conversation later — so that one
+ * returns "pending" and lets the model carry on instead of reporting a failure and asking all
+ * over again.
  */
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
@@ -138,12 +141,12 @@ interface Question { id: string; status: string; answers: unknown }
  * `settle` 返回 undefined 表示还没定下来,继续等;抛错就是终局的坏结果。到点之后由调用方
  * 决定是抛错还是给一个"还没轮到"的回包 —— 那正是确认卡和选择卡唯一不同的地方。
  */
-async function awaitCard<T>(
+async function awaitCard<T, Settlement>(
   read: () => Promise<T>,
-  settle: (current: T) => unknown | undefined,
+  settle: (current: T) => Settlement | undefined,
   signal: AbortSignal | undefined,
   hooks: ToolHooks,
-): Promise<unknown | undefined> {
+): Promise<Settlement | undefined> {
   const ceiling = Number(process.env.MOSAEL_CARD_WAIT_MS) || CARD_WAIT_CEILING_MS;
   const step = Math.min(1500, ceiling);
   // 等人的这段时间告诉后端:它停掉整轮时限的表(见 pi_client 的 awaiting_user),等完再接着走。成对发,出错也发。
@@ -175,9 +178,31 @@ async function expireCard(apiBase: string, token: string, confirmationId: string
 }
 
 /**
+ * 一张卡现在算不算「定了」:执行完 → 结果;拒绝 / 失败 / 未知 / 作废 → 终局的坏结果(抛错);
+ * 还在等人(`pending`)或**已经批准、正在执行**(`approved`)→ undefined,继续等。
+ *
+ * `approved` 必须继续等,不能当成结果:批准只是认领,执行还在后头。
+ */
+function confirmationOutcome(cur: Confirmation): { result: unknown } | undefined {
+  if (cur.status === "executed") return { result: cur.result };
+  if (cur.status === "rejected") throw new Error("用户拒绝了该操作");
+  if (cur.status === "failed") throw new Error(`执行失败:${cur.error ?? "unknown"}`);
+  if (cur.status === "unknown") throw new Error(CARD_EXECUTION_UNKNOWN);
+  if (cur.status === "expired" || cur.status === "cancelled") throw new Error(CARD_EXPIRED);
+  return undefined;
+}
+
+/**
  * Block until the user resolves a confirmation card in Mosael.
  * pending -> approved -> executed(result) | failed(error) | rejected. This is the
  * confirmation gate: the agent's turn waits here until the user acts.
+ *
+ * `approved` 是**认领**:用户点了、后端先把这张卡认下来(状态落库)再执行。所以从 approved 往后,
+ * 「有没有做」只有后端知道 —— 进程死在中间时它自己也只能记成 `unknown`(重启收尾,
+ * 见 backend domain/agent/card_expiry.resolve_interrupted_executions)。
+ *
+ * 到点那一刻**最后看到的是 approved**,就不能说「没有执行」:动作可能已经做了一半。这一支报「结果未知」,
+ * 并明确要求先去确认、不要自动重来(同一条理由见后端 card_expiry 的 UNKNOWN)。
  */
 async function awaitConfirmation(
   apiBase: string,
@@ -186,30 +211,34 @@ async function awaitConfirmation(
   signal: AbortSignal | undefined,
   hooks: ToolHooks,
 ): Promise<unknown> {
-  const settled = await awaitCard<Confirmation>(
-    () => apiGet(apiBase, token, `/api/confirmations/${confirmationId}`, undefined, signal) as Promise<Confirmation>,
-    (cur) => {
-      if (cur.status === "executed") return { result: cur.result };
-      if (cur.status === "rejected") throw new Error("用户拒绝了该操作");
-      if (cur.status === "failed") throw new Error(`执行失败:${cur.error ?? "unknown"}`);
-      if (cur.status === "expired" || cur.status === "cancelled") throw new Error(CARD_EXPIRED);
-      return undefined;
-    },
-    signal,
-    hooks,
-  );
-  // 超时 = 这个动作**没有发生**。说成别的都会让模型以为它做过了 —— 所以先把卡作废,保证它以后也不会发生。
-  if (settled === undefined) {
-    await expireCard(apiBase, token, confirmationId);
-    throw new Error(CARD_WAIT_TIMED_OUT);
-  }
-  return (settled as { result: unknown }).result;
+  const read = () =>
+    apiGet(apiBase, token, `/api/confirmations/${confirmationId}`, undefined, signal) as Promise<Confirmation>;
+  const settled = await awaitCard<Confirmation, { result: unknown }>(read, confirmationOutcome, signal, hooks);
+  if (settled !== undefined) return settled.result;
+  // 到点前最后一次查询与「到点」之间还隔着一步 sleep:再读一次,把恰好落在这一步里的批准分开 ——
+  // 差这一步就会把「已经批了、正在执行」说成「没有执行」。
+  const last = await read();
+  const late = confirmationOutcome(last);  // 这一步之后只剩 pending / approved(终局的那几态上面已经抛了)
+  if (late !== undefined) return late.result;
+  if (last.status === "approved") throw new Error(CARD_EXECUTION_UNKNOWN);
+  // 到点 = 这个动作**没有发生**。说成别的都会让模型以为它做过了 —— 所以先把卡作废,保证它以后也不会发生。
+  await expireCard(apiBase, token, confirmationId);
+  throw new Error(CARD_WAIT_TIMED_OUT);
 }
 
 /** 卡等到点:作废了,动作没做。和后端作废卡时写给模型的话同一个意思(系统提示里说「卡已作废 = 没做」)。 */
 export const CARD_WAIT_TIMED_OUT = "等待用户确认超时,这张卡已作废 —— 这个操作没有执行。";
 /** 卡在别处被作废了(这一轮被停止 / 结束时后端结掉的)。 */
 export const CARD_EXPIRED = "这张确认卡已作废 —— 这个操作没有执行。";
+/**
+ * 批准之后、结果出来之前的空档:后端在跑它的时候重启了(卡停在 `unknown`),或者等到点了它还在执行。
+ *
+ * **不能说「没有执行」**:批准是当场的,后端认领之后就已经开始做了 —— 它可能已经生效一半。
+ * 也不能让模型自己重来:同一条命令再来一次,可能就是第二份删除、第二次付费。先说清「不知道」,
+ * 再说下一步(去确认现状)。
+ */
+export const CARD_EXECUTION_UNKNOWN =
+  "这张卡已经批准并开始执行,但没等到结果 —— 动作可能已经生效,也可能没有。不要自动重试:先确认现在的状态,再决定要不要重做。";
 
 /**
  * Block until the user answers (or skips) a question card in Mosael.
@@ -225,7 +254,7 @@ async function awaitAnswer(
   signal: AbortSignal | undefined,
   hooks: ToolHooks,
 ): Promise<unknown> {
-  const settled = await awaitCard<Question>(
+  const settled = await awaitCard<Question, { status: string; answers?: unknown; skipped?: boolean }>(
     () => apiGet(apiBase, token, `/api/agent/questions/${questionId}`, undefined, signal) as Promise<Question>,
     (cur) => {
       if (cur.status === "answered") return { status: "answered", answers: cur.answers ?? {} };

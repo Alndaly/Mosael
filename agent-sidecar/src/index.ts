@@ -22,6 +22,7 @@ import {
 } from "./protocol.js";
 import { watchParent } from "./lifetime.js";
 import { installProxyFromEnv } from "./proxy.js";
+import { SteerLedger } from "./steerQueue.js";
 import { refreshCredential, runCompaction, runGatewayCompletion, runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
 import { describeError } from "./errors";
@@ -51,6 +52,23 @@ const stopped = new Set<string>();
 
 /** 进行中的登录:loginId -> 取消开关。授权可能持续几分钟,用户随时可能关掉弹窗。 */
 const logins = new Map<string, AbortController>();
+
+/**
+ * 每个还在跑的轮次的插话账本(turnId -> 账本)。
+ *
+ * 「整队重新声明」是重新入队,不记账就会把已经被模型读走的那几条再排一遍 —— 同一句话在上下文里出现两遍。
+ * 轮次结束时连同 active 一起丢掉:下一轮的 id 不会复用,留着只会跟着进程长。
+ */
+const steerLedgers = new Map<string, SteerLedger>();
+
+function steerLedger(turnId: string): SteerLedger {
+  let ledger = steerLedgers.get(turnId);
+  if (!ledger) {
+    ledger = new SteerLedger();
+    steerLedgers.set(turnId, ledger);
+  }
+  return ledger;
+}
 
 async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promise<void> {
   const { turnId, prompt } = msg;
@@ -89,7 +107,11 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         // 子智能体的每一步。result 原样带上 —— 截断是展示层的事,传输层截了就再也补不回来。
         onSubtool: (event) => send({ type: "subtool", turnId, ...event }),
         onSubagentResult: (parentCallId, archive) => send({ type: "subagent_result", turnId, parentCallId, archive }),
-        onSteerApplied: (steerId) => send({ type: "steer_applied", turnId, steerId }),
+        onSteerApplied: (steerId) => {
+          // 先记账再回传:重新声明的判定看的是这份账本,晚一拍就可能把已经读过的再排一遍。
+          steerLedger(turnId).recordApplied(steerId);
+          send({ type: "steer_applied", turnId, steerId });
+        },
       },
     );
     if (result.aborted) send({ type: "aborted", turnId });
@@ -217,6 +239,7 @@ async function main(): Promise<void> {
             abortPending.delete(msg.turnId);
             stopped.delete(msg.turnId);
             running.delete(msg.turnId);
+            steerLedgers.delete(msg.turnId);
           });
       } else if (msg.type === "gateway_complete") {
         oneShot(
@@ -237,17 +260,13 @@ async function main(): Promise<void> {
           };
           if (msg.mode === "follow_up") agent.followUp(message);
           else agent.steer(message);
+          if (msg.steerId) steerLedger(msg.turnId).recordQueued(msg.steerId, msg.mode !== "follow_up");
           send({ type: "queued", turnId: msg.turnId, mode: msg.mode ?? "steer", pending: true });
         }
       } else if (msg.type === "queue") {
         const agent = active.get(msg.turnId);
-        if (agent) {
-          agent.clearSteeringQueue();
-          for (const prompt of msg.prompts) {
-            agent.steer({ role: "user" as const, content: prompt, timestamp: Date.now() });
-          }
-        }
-        send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && msg.prompts.length > 0 });
+        const kept = agent ? steerLedger(msg.turnId).declare(agent, msg.items) : [];
+        send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && kept.length > 0 });
       } else if (msg.type === "refresh_credential") {
         oneShot(
           handleRefreshCredential(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: describeError(err) })),

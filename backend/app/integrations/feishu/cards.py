@@ -119,6 +119,22 @@ def expired_card(*, summary: str, tool: str) -> dict[str, Any]:
     }
 
 
+def interrupted_card(*, summary: str, tool: str) -> dict[str, Any]:
+    """这张卡**批过、也已经开始执行**,但后端在它落结果之前重启了 —— 结果是「不知道」。
+
+    不能写「已同意」:那读起来像已经做完了。也不能写「已失效」:那读起来像没做。所以单独一副说法,
+    并且明说**先去确认,别直接重做** —— 它可能已经生效了一半(见 domain/agent/card_expiry 的 UNKNOWN)。
+    """
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {"template": "orange", "title": {"tag": "plain_text", "content": "结果未知"}},
+        "elements": [
+            _text(f"**{summary or tool}**"),
+            _text("这张卡已经批准,但后端在它执行时重启了 —— 动作可能已经生效,也可能没有。先确认现状,不要直接重做。"),
+        ],
+    }
+
+
 def notice_card(message: str) -> dict[str, Any]:
     """点击被拒时的提示卡(未绑定、无权限、卡已失效)。原卡保持可点,便于有权限的人接手。"""
     return {

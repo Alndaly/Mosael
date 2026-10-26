@@ -204,6 +204,7 @@ export const otherUi = {
   confirmStatusExecuted: "Done",
   confirmStatusRejected: "Rejected",
   confirmStatusFailed: "Failed",
+  confirmStatusUnknown: "Result unknown (restarted mid-run; check before retrying)",
   confirmExpiredTurnStopped: "The turn was stopped — card voided",
   confirmExpiredWaitTimeout: "Waited too long — card voided",
   confirmExpiredTurnEnded: "The turn has ended — card voided",

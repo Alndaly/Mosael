@@ -1271,6 +1271,10 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
     下面那张卡还亮着三个按钮等你点 —— 而 approve_confirmation 是**当场执行工具**的
     (不是唤醒某个还在等的线程),点下去真的会把浏览器打开、把节点加上,而结果没有任何一轮
     对话去接收。所以这不是"点了没反应"那种小事,是一个已经没有上下文的动作仍然可以被执行。
+
+    **已经批准、还没落结果的那些另算**:它们不是「在等人」,是「认领了、执行到一半进程没了」。
+    批过的动作到底做没做,只能如实记成 `unknown`(见 card_expiry.resolve_interrupted_executions),
+    既不作废(那会被读成「没做」)也绝不自动重跑。
     """
     stale = db.scalars(select(AgentSession).where(AgentSession.status == "running")).all()
     redeliver: list[str] = []
@@ -1312,6 +1316,13 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
             )
             .values(status=card_expiry.EXPIRED, error=card_expiry.EXPIRY_BACKEND_RESTARTED, resolved_at=now())
         )
+    #: **认领了、没落结果的卡**(`approved`)不分挂在哪儿,全部记成「未知」:认领是**本进程**做的,
+    #: 重启之后本进程里没有任何在执行的卡,此刻的 approved 一定是上一个进程留下的。上面那一笔只管
+    #: running 会话里的 pending;这一笔必须无条件跑 —— 挂在外部智能体(session_id 为空)名下的卡
+    #: 也会被本进程认领、执行,死在中间时同样会永远停在「正在执行」。
+    unknown = card_expiry.resolve_interrupted_executions(db)
+    if unknown:
+        logger.warning("resolved %d confirmation(s) left approved by the previous run as unknown", unknown)
     #: 被重启打断的不只是回执:会话忙时排队的那条用户消息也没有线程了。此前只有回执会
     #: 重新 drain,排队的消息会永远躺着,而下一条新消息还会插到它前面。所有飞书会话在这里
     #: 对一次账 —— 还在 pending 的 queued 消息就是该接着跑的那一轮。
@@ -1414,7 +1425,10 @@ def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -
         # 已经点过插话、但模型还没消费：把 sidecar 的 steer 队列按剩余 pending 重新声明。
         # pi 只能清空整队，不能删单条；`set_turn_queue` 就是为这个场景保留的幂等接口。
         remaining = [
-            user_prompt(item.content, item.payload or {}, db=db, workspace_id=session.workspace_id)
+            {
+                "steerId": item.id,
+                "prompt": user_prompt(item.content, item.payload or {}, db=db, workspace_id=session.workspace_id),
+            }
             for item in _queued_messages(db, session)
             if item.id != message_id and (item.payload or {}).get("steer_pending")
         ]
