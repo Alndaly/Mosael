@@ -385,7 +385,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
             )}
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
-            <span className="flex-none font-mono text-foreground">{tool.name}</span>
+            <Truncate className="min-w-0 shrink font-mono text-foreground">{tool.name}</Truncate>
             {preview && !open && <Truncate className="flex-1 font-mono">{preview}</Truncate>}
             {/* 摘要占中间那一段(它可缩),状态与耗时**永远靠右** —— 但靠的是摘要那一栏的右缘,
                 不是整行的最右。没有摘要时补一个占位,否则这一行的耗时会贴在名字后面,
