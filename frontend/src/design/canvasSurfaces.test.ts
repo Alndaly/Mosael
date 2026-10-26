@@ -20,6 +20,14 @@ import {
  */
 const css = readFileSync(join(import.meta.dirname, "tokens.css"), "utf8");
 
+const SHADOW_TOKENS = [
+  "shadow-floating",
+  "shadow-modal",
+  "shadow-panel",
+  "shadow-canvas-window",
+  "shadow-raised",
+];
+
 /** 取某个选择器块里的一条自定义属性(最后一次声明为准,和层叠一致)。 */
 function token(selector: string, name: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -51,8 +59,15 @@ describe("画布浮层", () => {
       expect(strongestAlpha(windowShadow)).toBeGreaterThan(
         strongestAlpha(token(theme, "shadow-panel")),
       );
-      // 单层做不到"既有接触感又有远处的软影";三层是这条影子的形状本身。
-      expect(windowShadow.split("),").length).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`${theme}:每一档高度只有一层柔光,不是多层同心环`, () => {
+      for (const name of SHADOW_TOKENS) {
+        const value = token(theme, name);
+        // 一档 elevation 只给一个 shadow;高度靠模糊半径与 alpha,不靠叠层。
+        expect(value.split(/,(?![^(]*\))/).length, `--${name} 又叠了多层:${value}`).toBe(1);
+        expect(value).not.toMatch(/-[0-9.]+px/);
+      }
     });
   }
 
@@ -111,13 +126,12 @@ describe("画布浮层", () => {
  */
 describe("深色阴影的形状", () => {
   const DARK = ".dark";
-  const SHADOWS = ["shadow-floating", "shadow-modal", "shadow-panel", "shadow-canvas-window", "shadow-raised"];
 
   /** `0 12px 32px -8px rgb(0 0 0 / 0.2)` → 每一项的四条长度值。 */
   const layers = (value: string) =>
     [...value.matchAll(/(-?\d+(?:\.\d+)?)(?:px)?/g)].map((one) => Number(one[1]));
 
-  for (const name of SHADOWS) {
+  for (const name of SHADOW_TOKENS) {
     it(`--${name}:深色下没有负 spread`, () => {
       const value = token(DARK, name);
       //: 一条阴影 = `offsetX offsetY blur spread? color`;spread 是**颜色前面的那个长度**。
@@ -130,10 +144,10 @@ describe("深色阴影的形状", () => {
       }
     });
 
-    it(`--${name}:深色下 alpha 不超过 0.24`, () => {
+    it(`--${name}:深色下单层 alpha 不超过 0.34`, () => {
       const value = token(DARK, name);
       for (const match of value.matchAll(/\/\s*([0-9.]+)\s*\)/g)) {
-        expect(Number(match[1]), `${name} 的某一层太黑:${value}`).toBeLessThanOrEqual(0.24);
+        expect(Number(match[1]), `${name} 太黑会变成一块灰板:${value}`).toBeLessThanOrEqual(0.34);
       }
     });
   }

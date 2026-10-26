@@ -296,17 +296,15 @@
   --canvas-window-tint: rgb(251 252 254 / 0.70);
   --canvas-window: var(--canvas-window-solid);
   --canvas-window-filter: none;
-  --shadow-floating: 0 4px 16px rgb(24 32 48 / 0.10);
-  --shadow-modal: 0 12px 36px rgb(24 32 48 / 0.12);
-  --shadow-panel: 0 2px 8px rgb(32 40 59 / 0.06), 0 8px 24px rgb(32 40 59 / 0.04);
-  /* 浮窗的影子要能看见。**这是它和工具条胶囊唯一的区别** —— 同一种材质,不同的高度:
-     胶囊贴着画布(--shadow-panel),窗口浮在画布之上,而且会互相叠放,没有影子就分不出谁在上面。
-     三层是为了同时给出接触感(1px)、形体(24px)和远处的软阴影(56px);单独一层做不到。 */
-  --shadow-canvas-window:
-    0 1px 2px rgb(24 32 48 / 0.08),
-    0 10px 24px -8px rgb(24 32 48 / 0.18),
-    0 28px 56px -16px rgb(24 32 48 / 0.14);
-  --shadow-raised: 0 8px 32px rgb(32 40 59 / 0.12), 0 24px 64px rgb(32 40 59 / 0.06);
+  /* 一档高度**只用一层柔光**。此前浮窗堆了三层(1px 接触 + 24px 形体 + 56px 远景),
+     三圈 alpha 台阶在浅色和深色底上都读得出「同心环」,看起来像几块板叠着。
+     参考 ComfyUI 浮层的做法:每一档 elevation 只有一个 shadow token,层次靠
+     模糊半径和强度分,不靠多层描边。见 canvasSurfaces.test.ts 的棘轮。 */
+  --shadow-floating: 0 8px 28px rgb(24 32 48 / 0.10);
+  --shadow-modal: 0 18px 56px rgb(24 32 48 / 0.16);
+  --shadow-panel: 0 4px 18px rgb(32 40 59 / 0.07);
+  --shadow-canvas-window: 0 18px 52px rgb(24 32 48 / 0.14);
+  --shadow-raised: 0 14px 44px rgb(32 40 59 / 0.12);
 
   /* Editor surfaces */
   --monitor-bg: #191b20;
@@ -417,22 +415,14 @@
   --modal-control: rgb(255 255 255 / 0.05);
   --canvas-window-solid: #24272c;
   --canvas-window-tint: rgb(36 39 44 / 0.70);
-  /* 深色下**所有阴影都换成"大模糊 + 低 alpha + 零 spread"**。
-     原因是深色底上的暗影只有几十级灰阶可用:alpha 一大、spread 一负,层与层的交界就成了
-     看得见的一圈(维护者 2026-10-24:「很多阴影有着明显的分层」—— 画布节点弹窗、内嵌浏览器
-     浮窗都在列)。零 spread 让衰减从边缘连续开始,alpha 压低之后每一圈的台阶小于 1/255,
-     也就不再有"同心环"。层次仍靠**强度与模糊半径**分开,不靠负 spread 收边。 */
-  --shadow-floating: 0 2px 10px rgb(0 0 0 / 0.18);
-  --shadow-modal: 0 4px 14px rgb(0 0 0 / 0.18), 0 20px 48px rgb(0 0 0 / 0.16);
-  --shadow-panel: 0 2px 8px rgb(0 0 0 / 0.16), 0 10px 28px rgb(0 0 0 / 0.10);
-  --shadow-canvas-window:
-    0 2px 6px rgb(0 0 0 / 0.16),
-    0 10px 26px rgb(0 0 0 / 0.20),
-    0 30px 64px rgb(0 0 0 / 0.14);
-  --shadow-raised:
-    0 2px 8px rgb(0 0 0 / 0.18),
-    0 12px 32px rgb(0 0 0 / 0.20),
-    0 32px 72px rgb(0 0 0 / 0.12);
+  /* 深色下一档高度同样只有一层:`大模糊 + 无 spread`。深色底能用的灰阶很少,
+     多层阴影的交界会变成看得见的一圈(2026-10-24 的同心环问题)。现在直接不叠层,
+     用 alpha 和模糊半径分高度;边缘从第一像素开始连续衰减,没有台阶可看。 */
+  --shadow-floating: 0 8px 28px rgb(0 0 0 / 0.22);
+  --shadow-modal: 0 20px 60px rgb(0 0 0 / 0.32);
+  --shadow-panel: 0 4px 18px rgb(0 0 0 / 0.20);
+  --shadow-canvas-window: 0 18px 52px rgb(0 0 0 / 0.30);
+  --shadow-raised: 0 14px 44px rgb(0 0 0 / 0.28);
 
   /* Neutral monitor surround and lanes; clip colors identify media types. */
   --monitor-bg: #0b0c0e;
