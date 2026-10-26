@@ -206,9 +206,17 @@ def test_启动扫描给旧素材补音频代理_缺什么补什么_终态不再
                 proxymod.proxy_path(directory).write_bytes(b"x")
             return asset.id
 
-    old_video = make("old_video", "video", {"proxy_status": "ready"}, with_video_proxy=True)
+    old_video = make(
+        "old_video", "video",
+        {"proxy_status": "ready", "proxy_spec_version": proxymod.PROXY_SPEC_VERSION},
+        with_video_proxy=True,
+    )
     old_audio = make("old_audio", "audio", {})
-    silent = make("silent", "video", {"proxy_status": "ready", "audio_proxy_status": "silent"}, with_video_proxy=True)
+    silent = make(
+        "silent", "video",
+        {"proxy_status": "ready", "audio_proxy_status": "silent", "proxy_spec_version": proxymod.PROXY_SPEC_VERSION},
+        with_video_proxy=True,
+    )
     broken = make("broken", "audio", {"audio_proxy_status": "failed"})
     image = make("image", "image", {})
 

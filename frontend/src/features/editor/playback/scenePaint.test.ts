@@ -34,6 +34,24 @@ describe("paintScene clip appearance", () => {
     expect(ctx.drawImage).toHaveBeenCalledWith(layer.img, 350, 0, 900, 900, -225, -225, 450, 450);
   });
 
+  it("DPR 缩放画布时阴影按设备像素补偿,视觉尺寸不缩水", () => {
+    const ctx = context() as ReturnType<typeof context> & { getTransform: () => DOMMatrix };
+    ctx.getTransform = () => ({ a: 2, b: 0, c: 0, d: 2, e: 0, f: 0 }) as DOMMatrix;
+    const layer = baseLayer();
+    layer.appearance = {
+      mask: { shape: "rounded", radius: 0.2 },
+      shadow: { enabled: true, color: "#000000", opacity: 0.5, blur: 20, offsetX: 5, offsetY: 7 },
+    };
+    ctx.fill.mockImplementationOnce(() => {
+      expect(ctx.shadowBlur).toBe(40);
+      expect(ctx.shadowOffsetY).toBe(14);
+    });
+
+    paintScene(ctx as unknown as CanvasRenderingContext2D, [layer], { width: 800, height: 450, fillMode: "cover" });
+
+    expect(ctx.fill).toHaveBeenCalledTimes(1);
+  });
+
   it("draws a shadow behind the masked shape", () => {
     const ctx = context();
     const layer = baseLayer();

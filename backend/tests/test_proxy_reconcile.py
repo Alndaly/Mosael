@@ -8,25 +8,40 @@ pending 孤儿(重启害死守护线程留下的)和从没跑过的照旧要救�
 from __future__ import annotations
 
 from app.domain.assets import proxies
+from app.media.paths import resolve_key
+from app.media.proxy import PROXY_SPEC_VERSION, proxy_path
 from tests.util import fresh_client
 
 
-def _make_asset(client, name: str, proxy_status: str | None) -> str:
-    ws = client.post("/api/workspaces", json={"name": "W"}).json() if not hasattr(_make_asset, "_ws") else _make_asset._ws  # type: ignore[attr-defined]
-    _make_asset._ws = ws  # type: ignore[attr-defined]
+def _make_asset(
+    client,
+    name: str,
+    proxy_status: str | None,
+    *,
+    spec_version: int | None = None,
+    with_proxy: bool = False,
+) -> str:
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
     from app.core.db import SessionLocal
     from app.db.models import Asset
 
     with SessionLocal() as db:
+        info = {"proxy_status": proxy_status} if proxy_status else {}
+        if spec_version is not None:
+            info["proxy_spec_version"] = spec_version
         asset = Asset(
             workspace_id=ws["id"],
             name=name,
             kind="video",
             file_key=f"media/{name}.mp4",
-            media_info={"proxy_status": proxy_status} if proxy_status else {},
+            media_info=info,
         )
         db.add(asset)
         db.commit()
+        if with_proxy:
+            directory = resolve_key(asset.file_key).parent
+            directory.mkdir(parents=True, exist_ok=True)
+            proxy_path(directory).write_bytes(b"x")
         return asset.id
 
 
@@ -52,3 +67,27 @@ def test_启动补齐扫描跳过failed_只救孤儿(monkeypatch) -> None:
     assert failed_id not in queued, "failed 的素材被启动扫描重新排队 —— 无限重试回来了"
     assert orphan_id in queued
     assert fresh_id in queued
+
+
+def test_规格过期的ready代理会被重建_当前规格不重转(monkeypatch) -> None:
+    client = fresh_client()
+    current_id = _make_asset(
+        client, "current", "ready", spec_version=PROXY_SPEC_VERSION, with_proxy=True
+    )
+    stale_id = _make_asset(
+        client, "stale", "ready", spec_version=PROXY_SPEC_VERSION - 1, with_proxy=True
+    )
+
+    queued: list[str] = []
+    monkeypatch.setattr(proxies.settings, "generate_proxies", True)
+    monkeypatch.setattr(
+        proxies, "queue_proxy_job",
+        lambda db, asset, **kw: kw["video"] and (queued.append(asset.id) or object()),
+    )
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        proxies.reconcile_missing_proxies(db)
+
+    assert current_id not in queued, "当前规格的现成代理不该重转"
+    assert stale_id in queued, "720p 时代的旧代理必须按新规格重建,不能继续被复用"

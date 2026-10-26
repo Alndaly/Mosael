@@ -613,7 +613,7 @@ def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileR
 
 @router.get("/assets/{asset_id}/proxy")
 def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
-    """The 720p preview proxy the compositor decodes (see media/proxy.py)."""
+    """The 1080p preview proxy the compositor decodes (see media/proxy.py)."""
     asset = use_cases.readable_file(db, user, asset_id)
     proxy = proxy_path(resolve_key(asset.file_key).parent)
     if not proxy.is_file():

@@ -65,6 +65,14 @@ function shadowColor(color: string, opacity: number): string {
     effect is on `ctx`. Identical output whether `ctx` is an on-screen canvas or an OffscreenCanvas. */
 export function paintScene(ctx: Ctx2D, layers: ScenePaintLayer[], opts: ScenePaintOptions): void {
   const { width, height, fillMode } = opts;
+  // Shadow offsets/blur are canvas pixels and deliberately ignore the current
+  // transform. The DPR-aware compositor paints sequence coordinates through a
+  // scale matrix, so compensate here: otherwise the element gets sharper while
+  // its shadow silently shrinks to half size on a Retina monitor. Export passes
+  // an identity transform and is unchanged.
+  const matrix = typeof ctx.getTransform === "function" ? ctx.getTransform() : null;
+  const shadowScaleX = matrix ? Math.hypot(matrix.a, matrix.b) : 1;
+  const shadowScaleY = matrix ? Math.hypot(matrix.c, matrix.d) : 1;
   ctx.clearRect(0, 0, width, height);
   for (const layer of layers) {
     const { img, mw, mh, tf, filter, isBase, appearance } = layer;
@@ -126,9 +134,9 @@ export function paintScene(ctx: Ctx2D, layers: ScenePaintLayer[], opts: ScenePai
       ctx.filter = "none";
       ctx.fillStyle = appearance.shadow.color;
       ctx.shadowColor = shadowColor(appearance.shadow.color, appearance.shadow.opacity);
-      ctx.shadowBlur = appearance.shadow.blur;
-      ctx.shadowOffsetX = appearance.shadow.offsetX + away;
-      ctx.shadowOffsetY = appearance.shadow.offsetY;
+      ctx.shadowBlur = appearance.shadow.blur * ((shadowScaleX + shadowScaleY) / 2);
+      ctx.shadowOffsetX = (appearance.shadow.offsetX + away) * shadowScaleX;
+      ctx.shadowOffsetY = appearance.shadow.offsetY * shadowScaleY;
       maskPath(ctx, appearance.mask.shape, drawX, drawY, drawWidth, drawHeight, appearance.mask.radius);
       ctx.fill();
       ctx.restore();

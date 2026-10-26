@@ -1698,7 +1698,7 @@ export interface paths {
         };
         /**
          * Get Asset Proxy
-         * @description The 720p preview proxy the compositor decodes (see media/proxy.py).
+         * @description The 1080p preview proxy the compositor decodes (see media/proxy.py).
          */
         get: operations["get_asset_proxy_api_assets__asset_id__proxy_get"];
         put?: never;

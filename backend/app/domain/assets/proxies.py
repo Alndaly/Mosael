@@ -41,6 +41,7 @@ from app.media.probe import probe_has_audio
 from app.media.proxy import (
     AUDIO_PROXY_NAME,
     PROXY_NAME,
+    PROXY_SPEC_VERSION,
     TRANSCODE_SLOTS,
     ProxyFailed,
     ProxyTimedOut,
@@ -66,6 +67,19 @@ def proxy_status(asset: Asset) -> str:
     return str((asset.media_info or {}).get("proxy_status") or "none")
 
 
+def proxy_spec_version(asset: Asset) -> int:
+    """The encode recipe this asset's proxy was built with; 0 when never recorded."""
+    try:
+        return int((asset.media_info or {}).get("proxy_spec_version") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def proxy_is_current(asset: Asset) -> bool:
+    """A ready proxy built with the current encode recipe. Older files need a rebuild."""
+    return proxy_status(asset) == "ready" and proxy_spec_version(asset) == PROXY_SPEC_VERSION
+
+
 def audio_proxy_key_for(asset: Asset) -> str:
     return str(Path(asset.file_key).parent / AUDIO_PROXY_NAME)
 
@@ -76,18 +90,22 @@ def audio_proxy_status(asset: Asset) -> str:
 
 
 def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None = None) -> None:
-    """只改代理自己那两个键(proxy_status / proxy_key),别的键不碰。
+    """只改代理自己那几个键(proxy_status / proxy_key / proxy_spec_version),别的键不碰。
 
     转码线程在转码**之前**就读出了这份素材,转码一跑几十秒,这期间别人往 media_info 里补写的键
     (改口型记的块、配音记的音色)它手上的那份都没有 —— 此前拿它整份写回,把那些键全抹了
     (改口型的块缓存因此从来不命中)。见 assets/media_info。
     """
     if key is not None:
-        patch_media_info(db, asset_id, {"proxy_status": status, "proxy_key": key})
+        patch_media_info(
+            db,
+            asset_id,
+            {"proxy_status": status, "proxy_key": key, "proxy_spec_version": PROXY_SPEC_VERSION},
+        )
     elif status != "ready":
-        patch_media_info(db, asset_id, {"proxy_status": status}, drop=["proxy_key"])
+        patch_media_info(db, asset_id, {"proxy_status": status}, drop=["proxy_key", "proxy_spec_version"])
     else:
-        patch_media_info(db, asset_id, {"proxy_status": status})
+        patch_media_info(db, asset_id, {"proxy_status": status}, drop=["proxy_key", "proxy_spec_version"])
 
 
 def _set_audio_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None = None) -> None:
@@ -144,6 +162,7 @@ def queue_proxy_job(db: Session, asset: Asset, *, created_by: str | None, video:
     if video:
         info["proxy_status"] = "pending"
         info.pop("proxy_key", None)
+        info.pop("proxy_spec_version", None)
     if audio:
         info["audio_proxy_status"] = "pending"
         info.pop("audio_proxy_key", None)
@@ -294,7 +313,10 @@ def reconcile_missing_proxies(db: Session) -> int:
 
     A backend restart orphans the daemon thread, leaving media_info stuck at
     "pending"; here we re-drive anything whose proxy file is actually missing,
-    and repair the status of proxies that exist on disk but lost their flag.
+    repair the status of proxies that exist on disk but lost their flag, and
+    rebuild a ready proxy whose recorded encode recipe is older than
+    `PROXY_SPEC_VERSION` (e.g. the 720p → 1080p change). The version doubles as
+    the migration marker, so old rows need no separate schema migration.
 
     这也是**音频代理的补建流程**:音频代理是后来加的,之前入库的素材一份都没有,启动扫描替它们
     各排一次(和画面代理当初上线时一样)。字段是新增的、旧素材上没有就是「还没排过」,不需要迁移。
@@ -308,12 +330,16 @@ def reconcile_missing_proxies(db: Session) -> int:
         directory = resolve_key(asset.file_key).parent
         video = False
         if proxies_possible(asset):
-            if proxy_path(directory).is_file():
-                if proxy_status(asset) != "ready":
-                    _set_proxy_meta(db, asset.id, "ready", key=proxy_key_for(asset))
+            if (
+                proxy_path(directory).is_file()
+                and proxy_is_current(asset)
+                and proxy_key_for(asset) != (asset.media_info or {}).get("proxy_key")
+            ):
+                _set_proxy_meta(db, asset.id, "ready", key=proxy_key_for(asset))
             # failed 是**判定过的终态**,不是"还没跑":源文件坏的素材每次转必败,启动扫描再替它
             # 排队只会无限重试 —— dev 模式每次热重启跑一轮,两个坏素材曾这样滚出上千条失败任务。
-            # 这里只救 pending 孤儿(重启害死的)和从没跑过的;想再试坏素材走手动重试(那是人的判断)。
+            # 这里只救 pending 孤儿(重启害死的)、从没跑过的,以及规格过期的旧代理。
+            # 想再试坏素材走手动重试(那是人的判断)。
             elif proxy_status(asset) != "failed":
                 video = True
         audio = False

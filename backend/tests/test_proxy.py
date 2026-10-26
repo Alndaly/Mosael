@@ -56,9 +56,10 @@ def test_build_proxy_caps_height_and_is_decodable(tmp_path: Path) -> None:
 
     assert proxymod.build_proxy(src, target) is True
     info = probe_media(target)
-    assert info["height"] == proxymod.PROXY_HEIGHT  # capped at 720
+    assert proxymod.PROXY_HEIGHT == 1080
+    assert info["height"] == proxymod.PROXY_HEIGHT  # capped at 1080
     assert info["width"] % 2 == 0  # even dimensions (yuv420p requirement)
-    assert info["width"] == 1280  # 1920×1080 → 1280×720, aspect preserved
+    assert info["width"] == 1920  # 1920×1080 stays one-for-one, aspect preserved
 
 
 def test_build_proxy_never_upscales(tmp_path: Path) -> None:
@@ -66,7 +67,7 @@ def test_build_proxy_never_upscales(tmp_path: Path) -> None:
     make_video(src, 640, 360)
     target = tmp_path / "proxy.mp4"
     assert proxymod.build_proxy(src, target) is True
-    assert probe_media(target)["height"] == 360  # min(720, 360) = 360
+    assert probe_media(target)["height"] == 360  # min(1080, 360) = 360
 
 
 
@@ -99,6 +100,7 @@ def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.Mo
     # Asset now reports ready + carries a proxy_key; the endpoint serves the file.
     refreshed = client.get(f"/api/assets/{asset['id']}").json()
     assert refreshed["media_info"]["proxy_status"] == "ready"
+    assert refreshed["media_info"]["proxy_spec_version"] == proxymod.PROXY_SPEC_VERSION
     assert refreshed["media_info"]["proxy_key"].endswith("/proxy.mp4")
 
     res = client.get(f"/api/assets/{asset['id']}/proxy")

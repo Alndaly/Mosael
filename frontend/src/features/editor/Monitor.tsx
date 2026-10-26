@@ -310,8 +310,12 @@ export function Monitor({
     () =>
       activeVisualAssets
         .map((asset) => {
-          const info = (asset.media_info ?? {}) as { proxy_key?: string; proxy_status?: string };
-          return `${asset.id}:${info.proxy_key ?? ""}:${info.proxy_status ?? ""}`;
+          const info = (asset.media_info ?? {}) as {
+            proxy_key?: string;
+            proxy_status?: string;
+            proxy_spec_version?: number;
+          };
+          return `${asset.id}:${info.proxy_key ?? ""}:${info.proxy_status ?? ""}:${info.proxy_spec_version ?? ""}`;
         })
         .join("|"),
     [activeVisualAssets],

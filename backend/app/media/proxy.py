@@ -1,6 +1,6 @@
 """Proxies for the WebCodecs compositor.
 
-On video import we transcode a lightweight 720p H.264 proxy with a fixed short
+On video import we transcode a lightweight 1080p H.264 proxy with a fixed short
 GOP + faststart. The browser compositor decodes THIS (guaranteed-decodable
 avc/mp4, cheap to seek) instead of the original, whose codec/container could be
 anything. Best-effort — a failed proxy just means that clip falls back to the
@@ -36,9 +36,14 @@ from app.core.config import settings
 from app.core.text import blame_line
 
 PROXY_NAME = "proxy.mp4"
-# Height cap for the proxy. The compositor decodes this, not the original, so a
-# 720p ceiling keeps decode cheap while staying crisp on typical preview panes.
-PROXY_HEIGHT = 720
+# Height cap for the proxy. The compositor decodes this, not the original. 1080p
+# matches a 1080p sequence one-for-one and keeps 4K screen recordings legible;
+# the old 720p ceiling was visibly upscaled in the monitor (and worse on Retina).
+PROXY_HEIGHT = 1080
+# Bump whenever the preview encode recipe changes (height, CRF, GOP, codec).
+# Assets record this next to proxy_status; startup reconciliation rebuilds any
+# proxy whose recorded spec is older instead of silently serving the old file.
+PROXY_SPEC_VERSION = 2
 # Full-resolution export proxy (路 C): same short-GOP/no-B-frame recipe, native resolution, and a
 # near-visually-lossless CRF because the final export pass re-encodes it — the extra generation must
 # not show. Sibling to the asset like the preview proxy; larger, but temporary and cache-reused.

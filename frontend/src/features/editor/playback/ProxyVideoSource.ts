@@ -1,7 +1,7 @@
 import { RangeReader, byteSpan, readTrackIndex, sampleIndexAt, type TrackIndex } from "./mp4Index";
 
 /**
- * 画面代理(720p、短 GOP、无 B 帧 —— 见后端 media/proxy.py)的解码,分两层:
+ * 画面代理(1080p、短 GOP、无 B 帧 —— 见后端 media/proxy.py)的解码,分两层:
  *
  * - {@link ProxyMedia}:**一份素材一个**。样本表只读一次(按 Range 读开头的 moov),样本数据按 GOP 用
  *   Range 取、按字节预算缓存。同一素材的所有片段共用它 —— 此前每个片段各自下载并常驻一整份代理,
@@ -375,7 +375,7 @@ export class ProxyVideoSource {
   /**
    * Release the decoder and decoded frames (keeping one held frame), but keep the position.
    *
-   * An open VideoDecoder plus up to MAX_FRAMES open VideoFrames (~1.4MB each at 720p) per idle
+   * An open VideoDecoder plus up to MAX_FRAMES open VideoFrames (~3MB each at 1080p) per idle
    * cursor is invisible to any byte budget and enough to exhaust the browser's limit on
    * concurrent hardware decoders. frameAt() revives it: ensureDecoder reconfigures, and a
    * decodeCursor of 0 with no buffered frames makes the next call take the seek path.

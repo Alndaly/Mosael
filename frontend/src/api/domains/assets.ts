@@ -102,7 +102,7 @@ export function assetFilmstripUrl(assetId: string): string {
   return assetUrl(assetId, "filmstrip");
 }
 
-/** The 720p preview proxy decoded by the WebCodecs compositor. */
+/** The 1080p preview proxy decoded by the WebCodecs compositor. */
 export function assetProxyUrl(assetId: string): string {
   return assetUrl(assetId, "proxy");
 }
