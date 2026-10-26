@@ -143,6 +143,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
         return;
       }
       setRestartAsk(false);
+      //: 重启会重建原生视图和布局,主进程里的 inset 声明可能已被清掉;宽度没变,上报器不会自己再发。
+      window.requestAnimationFrame(() => column.reassert());
       invalidatePluginDependents(qc);
       invalidateResources(qc, ["workflows", "models"]);
     },

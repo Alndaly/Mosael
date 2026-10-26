@@ -66,26 +66,35 @@ function useWindowWidth(): number {
 
 /** 让出的宽交给主进程:一帧最多报一次,报的总是最新的那个。卸载时立刻还回去(0)。
  * 统一走声明式 inset:弹窗开关只改覆盖原因,不再被另一路直接 setShellInset(0) 把列宽抹掉。 */
-function useInsetReporter(inset: number): void {
+function useInsetReporter(inset: number): () => void {
   const latest = React.useRef(inset);
   const sent = React.useRef<number | null>(null);
   const cancel = React.useRef<(() => void) | null>(null);
+  const send = React.useCallback(() => {
+    sent.current = latest.current;
+    void window.mosaelPublish?.setHostLayer({
+      id: "comfy-workbench-column",
+      kind: "inset",
+      side: "right",
+      active: latest.current > 0,
+      width: latest.current,
+    });
+  }, []);
+  const reassert = React.useCallback(() => {
+    cancel.current?.();
+    cancel.current = null;
+    sent.current = null;
+    send();
+  }, [send]);
   React.useEffect(() => {
     latest.current = inset;
     if (cancel.current) return;
     cancel.current = nextFrame(() => {
       cancel.current = null;
       if (sent.current === latest.current) return;
-      sent.current = latest.current;
-      void window.mosaelPublish?.setHostLayer({
-        id: "comfy-workbench-column",
-        kind: "inset",
-        side: "right",
-        active: latest.current > 0,
-        width: latest.current,
-      });
+      send();
     });
-  }, [inset]);
+  }, [inset, send]);
   React.useEffect(
     () => () => {
       cancel.current?.();
@@ -93,11 +102,14 @@ function useInsetReporter(inset: number): void {
     },
     [],
   );
+  return reassert;
 }
 
 export interface ColumnWidth {
-  /** 列现在画多宽 */
+  /** 那一列现在画多宽 */
   width: number;
+  /** 主进程重建视图/布局后,把当前声明重报一遍(例如 ComfyUI 重启成功) */
+  reassert: () => void;
   bounds: SidebarBounds;
   dragging: boolean;
   /** 那条可拖的边:直接摆进列里 */
@@ -135,7 +147,7 @@ export function useColumnWidth(open: boolean): ColumnWidth {
     [bounds],
   );
 
-  useInsetReporter(open ? width : 0);
+  const reassert = useInsetReporter(open ? width : 0);
   React.useEffect(() => () => stopDrag.current?.(), []);
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
@@ -203,6 +215,7 @@ export function useColumnWidth(open: boolean): ColumnWidth {
 
   return {
     width,
+    reassert,
     bounds,
     dragging,
     handleProps: {

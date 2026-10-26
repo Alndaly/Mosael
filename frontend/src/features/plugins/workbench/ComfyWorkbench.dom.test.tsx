@@ -1621,8 +1621,10 @@ describe("顶栏重启 ComfyUI 服务", () => {
     fireEvent.click(screen.getByRole("button", { name: "workbenchRestart" }));
     expect(screen.getByText("workbenchRestartBody")).toBeTruthy();
     await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenCalledWith({ id: "native-view-aside", kind: "overlay", active: true }));
+    bridge.mosaelPublish.setHostLayer.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "workbenchRestartConfirm" }));
     await waitFor(() => expect(api.rebootWorkflowServer).toHaveBeenCalledWith(TARGET.instanceId));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_DEFAULT }));
     await waitFor(() => expect(screen.queryByText("workbenchRestartBody")).toBeNull());
   });
 
