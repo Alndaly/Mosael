@@ -6,9 +6,9 @@ export const CANVAS_PANEL_EDGE_INSET_PX = 8;
 /**
  * 画布上那层浮起来的东西共用的材质:半透 + 背后模糊 + 一条很轻的描边。
  *
- * **节点和工具条都不投影。** 它们贴着画布,边框和底色已经说明边界;再给 elevation 就会和
- * 节点、内嵌选中块、评论钉叠成一串同心阴影。只有真正脱离画布、会互相叠放的窗口才浮起
- * (见 CANVAS_WINDOW_SURFACE_CLASS)。这是两者唯一的差别 —— 颜色、描边、圆角仍是同一份。
+ * **画布内的一切都不投影。** 节点、工具条、生成器面板、评论卡、内嵌选中块都贴着同一张
+ * 无限画布;边框和抬高的底色已经说明边界,再给 elevation 就会叠出一圈深色带,缩放后更像
+ * 多层。只有遮罩模态和真正浮在画布之外的录制胶囊保留阴影。
  */
 export const CANVAS_GLASS_SURFACE_CLASS =
   "canvas-overlay-surface border border-floating-border";
@@ -24,7 +24,7 @@ export const CANVAS_GLASS_SURFACE_CLASS =
  * 挡住的每一块都是用户还想看见的东西 —— 这条界线决定了要不要透。
  */
 export const CANVAS_WINDOW_SURFACE_CLASS =
-  "canvas-overlay-surface rounded-xl border border-floating-border shadow-[var(--shadow-canvas-window)]";
+  "canvas-overlay-surface rounded-xl border border-floating-border";
 
 /** Keep the panel one standard gap below the floating toolbar. */
 export function canvasPanelTop(toolbarTop: number): number {

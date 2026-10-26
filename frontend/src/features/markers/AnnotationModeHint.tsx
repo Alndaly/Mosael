@@ -17,7 +17,7 @@ export function AnnotationModeHint({ kind, onExit }: { kind: "comment" | "marker
     return listenKeys(window, exit, true);
   }, [onExit]);
   const exitLabel = t(kind === "comment" ? "boardExitCommentMode" : "markerExitMode");
-  return <div data-board-comment-mode-hint="" className="absolute left-1/2 top-16 z-30 flex h-[42px] max-w-[calc(100%-24px)] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 py-1 pl-3 pr-1.5 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl"
+  return <div data-board-comment-mode-hint="" className="absolute left-1/2 top-16 z-30 flex h-[42px] max-w-[calc(100%-24px)] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 py-1 pl-3 pr-1.5 text-ui-xs text-foreground backdrop-blur-xl"
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     <span className="shrink-0 font-semibold text-primary">{t(kind === "comment" ? "boardCommentMode" : "markerMode")}</span>
     <span className="mx-1.5 text-muted-foreground">·</span>

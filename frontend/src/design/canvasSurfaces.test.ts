@@ -24,7 +24,6 @@ const SHADOW_TOKENS = [
   "shadow-floating",
   "shadow-modal",
   "shadow-panel",
-  "shadow-canvas-window",
   "shadow-raised",
 ];
 
@@ -38,13 +37,6 @@ function token(selector: string, name: string): string {
   return matches[matches.length - 1][1].trim();
 }
 
-/** 一条 box-shadow 里最深的那一层的 alpha。 */
-function strongestAlpha(shadow: string): number {
-  const alphas = [...shadow.matchAll(/\/\s*([0-9.]+)\s*\)/g)].map((one) => Number(one[1]));
-  if (!alphas.length) throw new Error(`No alpha in ${shadow}`);
-  return Math.max(...alphas);
-}
-
 describe("画布浮层", () => {
   for (const theme of [":root", ".dark"] as const) {
     it(`${theme}:浮窗的底色不是实色 —— 它盖住的每一块都是用户还想看见的画布`, () => {
@@ -52,13 +44,6 @@ describe("画布浮层", () => {
       const alpha = /\/\s*([0-9.]+)\s*\)/.exec(tint);
       expect(alpha, `--canvas-window-tint 需要带 alpha,收到 ${tint}`).not.toBeNull();
       expect(Number(alpha![1])).toBeLessThan(0.85);
-    });
-
-    it(`${theme}:浮窗的影子要比工具条胶囊明显 —— 它们会互相叠放,没有影子就分不出谁在上面`, () => {
-      const windowShadow = token(theme, "shadow-canvas-window");
-      expect(strongestAlpha(windowShadow)).toBeGreaterThan(
-        strongestAlpha(token(theme, "shadow-panel")),
-      );
     });
 
     it(`${theme}:每一档高度只有一层柔光,不是多层同心环`, () => {
@@ -88,13 +73,11 @@ describe("画布浮层", () => {
     }
   });
 
-  it("停靠不等于取消影子 —— 右栏那两块并排,不能一块浮着一块贴着", () => {
+  it("停靠和浮动共用同一材质,不用 shadow-none 切出第二种表面", () => {
     /*
      * 智能体面板停靠成右栏时曾经无条件 `shadow-none`,而并排的执行历史面板照旧带影子:
-     * 同一条右栏里上下两块,材质看着不是一套。
-     *
-     * "停靠"在这里不等于"嵌进版面":整条右栏是 absolute、浮在画布之上的。真正嵌进版面的是
-     * 3D 场景页那种 inline 停靠 —— 它走另一条分支,拿的是 bg-workspace-panel,本来就没有影子类。
+     * 同一条右栏里上下两块,材质看着不是一套。现在画布内的面板本身都不投影,更不该靠
+     * `shadow-none` 再分叉 —— 两块统一走同一个停靠外框。
      */
     for (const path of ["features/agent/CanvasAgentChat.tsx", "features/workflows/WorkflowRunHistory.tsx"]) {
       const text = readFileSync(join(import.meta.dirname, "..", path), "utf8");
@@ -108,12 +91,11 @@ describe("画布浮层", () => {
     }
   });
 
-  it("工具条和浮窗同材质;只有真正脱离画布的浮窗有影子", () => {
+  it("画布内的工具条和窗口都不投影,只靠边框与底色分界", () => {
     const material = (value: string) =>
       value.split(" ").filter((one) => !one.startsWith("shadow-") && !one.startsWith("rounded-"));
     expect(material(CANVAS_WINDOW_SURFACE_CLASS)).toEqual(material(CANVAS_GLASS_SURFACE_CLASS));
-    expect(CANVAS_WINDOW_SURFACE_CLASS).toContain("shadow-[var(--shadow-canvas-window)]");
-    //: 工具条贴着画布/节点,边框和底色已经足够;再投影就和节点、内嵌块叠成一串阴影。
+    expect(CANVAS_WINDOW_SURFACE_CLASS).not.toContain("shadow-");
     expect(CANVAS_GLASS_SURFACE_CLASS).not.toContain("shadow-");
   });
 });

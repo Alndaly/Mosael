@@ -303,7 +303,6 @@
   --shadow-floating: 0 8px 28px rgb(24 32 48 / 0.10);
   --shadow-modal: 0 18px 56px rgb(24 32 48 / 0.16);
   --shadow-panel: 0 4px 18px rgb(32 40 59 / 0.07);
-  --shadow-canvas-window: 0 18px 52px rgb(24 32 48 / 0.14);
   --shadow-raised: 0 14px 44px rgb(32 40 59 / 0.12);
 
   /* Editor surfaces */
@@ -421,7 +420,6 @@
   --shadow-floating: 0 8px 28px rgb(0 0 0 / 0.22);
   --shadow-modal: 0 20px 60px rgb(0 0 0 / 0.32);
   --shadow-panel: 0 4px 18px rgb(0 0 0 / 0.20);
-  --shadow-canvas-window: 0 18px 52px rgb(0 0 0 / 0.30);
   --shadow-raised: 0 14px 44px rgb(0 0 0 / 0.28);
 
   /* Neutral monitor surround and lanes; clip colors identify media types. */
