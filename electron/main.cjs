@@ -93,6 +93,7 @@ const {
   parseUrlRequest,
 } = require("./ipc-contract.cjs");
 const { createAppUpdater } = require("./app-updater.cjs");
+const { keychainName, rememberKeychainName } = require("./key-identity.cjs");
 const i18n = require("./i18n.cjs");
 const { t } = i18n;
 
@@ -101,13 +102,6 @@ const { t } = i18n;
 // 这里的 setName 影响 app.getName()/部分弹窗,setAppUserModelId 影响 Windows 任务栏归组。
 // 打包版统一由 electron-builder 的 productName 决定。必须在 app ready 前调用。
 const isDev = !app.isPackaged;
-// safeStorage 在 macOS 按应用名选钥匙串项。开发版和打包版**不能共用「Mosael」这一项**:
-// 两边的签名身份不同,一边封存的钥匙另一边解不开;更坏的是后启动的一边会把这个数据目录的钥匙
-// 重新封存成自己那一把,旧凭据全部失效。开发版用独立名字,系统钥匙串各管各的。
-app.setName(isDev ? "Mosael Dev" : "Mosael");
-// setName 会改变默认 userData 路径;开发版的缓存、分区和登录态仍留在原来的 Mosael 目录里。
-if (isDev) app.setPath("userData", path.join(app.getPath("appData"), "Mosael"));
-app.setAppUserModelId(isDev ? "dev.mosael.app.dev" : "dev.mosael.app");
 
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/account-view-preload.cjs。
@@ -151,6 +145,15 @@ const mainLogPath = path.join(electronLogDir, "main.log");
 const configuredDataDir = process.env.MOSAEL_DATA_DIR
   ? path.resolve(process.env.MOSAEL_DATA_DIR)
   : path.join(os.homedir(), ".mosael");
+
+// safeStorage 在 macOS 按应用名选钥匙串项。身份属于**数据目录**,不属于可执行文件:
+// 默认生产数据继续用 Mosael,临时/开发目录首次使用 Mosael Dev;已有 `secret.key.owner` 时一律听它的。
+// 这样换开发版/打包版打开同一份数据仍能解开同一把钥匙,不会各封一把。
+const appIdentity = keychainName(configuredDataDir, { dev: isDev });
+app.setName(appIdentity);
+// setName 会改变默认 userData 路径;开发版的缓存、分区和登录态仍留在原来的 Mosael 目录里。
+if (isDev) app.setPath("userData", path.join(app.getPath("appData"), "Mosael"));
+app.setAppUserModelId(isDev ? "dev.mosael.app.dev" : "dev.mosael.app");
 
 function rotateLogIfLarge(file, maxBytes = 5 * 1024 * 1024) {
   try {
@@ -756,7 +759,10 @@ async function spawnBackendProcess() {
     }
     // 壳令牌:界面(file://,Origin 为 null)发往本机后端的请求都带上它,后端只放行带着它的 null 来源。
     installShellHeader(shellToken(resolved.key));
-    if (resolved.sealed) masterKey = resolved.key;
+    if (resolved.sealed) {
+      masterKey = resolved.key;
+      rememberKeychainName(configuredDataDir, appIdentity);
+    }
   }
 
   const { command, args, cwd } = backendCommand();

@@ -12,14 +12,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { app, safeStorage } = require("electron");
-
-//: safeStorage 在 macOS 按应用名找系统钥匙串项。这个脚本只服务开发数据目录,必须和开发 Electron 用同一个
-//: `Mosael Dev` 身份;打包版是 `Mosael`,两者不共用钥匙。
-app.setName("Mosael Dev");
+const { keychainName } = require("../electron/key-identity.cjs");
 
 const dataDir = process.env.MOSAEL_DATA_DIR
   ? path.resolve(process.env.MOSAEL_DATA_DIR)
   : path.join(process.env.HOME || "", ".mosael");
+
+//: safeStorage 在 macOS 按应用名找系统钥匙串项。名字属于数据目录 —— 与主进程读同一份归属规则,
+//: 否则默认 `~/.mosael` 会拿 Mosael Dev 去解打包版封存的钥匙,必然失败。
+app.setName(keychainName(dataDir, { dev: true }));
+
 const sealed = path.join(dataDir, "secret.key.sealed");
 const plain = path.join(dataDir, "secret.key");
 
