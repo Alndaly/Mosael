@@ -2364,11 +2364,14 @@ def run_plugin_tool(tool: str, arguments: dict[str, Any] | None = None, workspac
     return _confirmation_reply(confirmation)
 
 
-# ---------- ComfyUI 工作台里的智能体(ADR 0042:读和诊断、改和新建) ----------
+# ---------- ComfyUI 工作台里的智能体(ADR 0042:读和诊断、改和新建、补全和试跑) ----------
 #
-# 碰画布的(comfy_canvas_read / comfy_locate / comfy_check / comfy_canvas_edit / comfy_canvas_new)经桌面版主进程交给那个连接开着的
-# 工作台;工作台没开着就说「先在工作台里打开这台 ComfyUI」。别的(模板、节点类型、节点包)只问那个连接的插件,工作台开没开都能用。
+# 碰画布的(comfy_canvas_read / comfy_locate / comfy_check / comfy_canvas_edit / comfy_canvas_new / comfy_canvas_run)经桌面版主进程
+# 交给那个连接开着的工作台;工作台没开着就说「先在工作台里打开这台 ComfyUI」。别的(模板、节点类型、节点包、模型库)只问那个连接的
+# 插件,工作台开没开都能用。
 # 改当前这张(comfy_canvas_edit)开确认卡、点「应用」才改;新标签页(comfy_canvas_new)不动开着的、不开卡;都不存盘。
+# 第三步(补全和试跑,拍板 4、5):下载模型、装节点包、跑画布上这张——**都开确认卡**,卡上写清多大、哪台机器、装的是哪一版、
+# 会不会重启;装节点包要等装完才重启(见 domain/workbench_agent)。
 # `instance_id` 是 ComfyUI 连接的 id(工作台「助手」的页面上下文里有);调用的人只接了一台时可以不给。见 domain/workbench_agent。
 
 
@@ -2397,7 +2400,10 @@ def comfy_locate(node: str, subgraph: str = "", instance_id: str = "", workspace
 def comfy_check(instance_id: str = "", job_id: str = "", last_error: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only diagnosis of the workbench canvas: findings per node (ref, severity, kind, cause, fix) —
     missing nodes / models, mistyped or unconnected inputs, values outside a dropdown or range, size multiples, base
-    model mismatches. Pass the last run's `job_id` (page context) or `last_error` to map that error onto nodes."""
+    model mismatches. A `missing_model` finding also carries `model` {name, folder, url?, sha256?, hash_type?,
+    elsewhere?} — the file the workflow wants (and `elsewhere` when a same-named file sits in another subfolder), so you
+    don't have to parse the prose `fix`. Pass the last run's `job_id` (page context) or `last_error` to map that error
+    onto nodes."""
     from app.domain import workbench_agent
 
     return _use_case(workbench_agent.check, workspace_id or _default_workspace_id(), instance_id, job_id, last_error)
@@ -2497,6 +2503,82 @@ def comfy_node_pack_info(pack_id: str, instance_id: str = "", workspace_id: str 
     from app.domain import workbench_agent
 
     return _use_case(workbench_agent.node_pack_info, workspace_id or _default_workspace_id(), pack_id, instance_id)
+
+
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
+def comfy_model_search(filename: str, folder: str = "", hash: str = "", hash_type: str = "",  # noqa: A002
+                       instance_id: str = "") -> dict[str, Any]:
+    """Read-only: find download links for a model the workflow is missing, by `filename` (+ `folder`, and the `hash` the
+    workflow declares with its `hash_type`). Returns `candidates` (source, filename, url, page, size, base_model, and
+    `confidence`: only "confirmed" — the SHA256 matched — may be downloaded, `direct` is true then), the sites that
+    failed, and the `hash` state. Never downloads."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.model_search, filename, folder, hash, hash_type, instance_id)
+
+
+@tool(effect="reads", needs="workflow_library", kit="comfyui")
+def comfy_model_resolve(url: str, instance_id: str = "") -> dict[str, Any]:
+    """Read-only: what a link points at — filename, size, suggested `folder`, source, title, triggers,
+    whether that file is already on the machine (`exists`), and whether the download would use that site's token.
+    Call it before comfy_model_download when the URL came from the user or a template."""
+    from app.domain import workbench_agent
+
+    return _use_case(workbench_agent.model_resolve, url, instance_id)
+
+
+@tool(effect="confirms", needs="workflow_library", kit="comfyui")
+def comfy_model_download(url: str, folder: str, filename: str, sha256: str = "", instance_id: str = "",
+                         workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: download a model onto that ComfyUI's disk. The card says which file, which folder, how big
+    and on which machine — say the size before asking. Refused up front when the link doesn't resolve to `filename`,
+    when the file is already there, or when `sha256` isn't 64 hex characters. The download runs in the background: the
+    approved card's result carries the `job_id` — poll it with get_job; the catalog refreshes when it ends."""
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "comfy_model_download",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"instance_id": instance_id, "url": url, "folder": folder, "filename": filename, "sha256": sha256},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms", needs="workflow_library", kit="comfyui")
+def comfy_node_pack_install(pack_id: str, version: str = "", instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: install ONE custom node pack from the Comfy Registry and restart that ComfyUI.
+    `pack_id` is the registry id (comfy_node_pack_search / comfy_node_pack_info give it); git URLs are refused. Only a
+    version that is active and not deprecated is installed — Banned packs and packs with no normal version are refused,
+    and so are packs already installed at that version or disabled in ComfyUI. The card writes the version, publisher,
+    dependency risk (torch) and fit with this machine; restarting interrupts running jobs. Waits for the install, then
+    restarts, then reads the catalog back — the result says the version now installed."""
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "comfy_node_pack_install",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"instance_id": instance_id, "pack_id": pack_id, "version": version},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms", needs="workflow_library", kit="comfyui")
+def comfy_canvas_run(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: run the workflow open on the ComfyUI workbench canvas (unsaved edits included) — the
+    trial run behind "run it and read the errors". The workflow must have been saved at least once (ComfyUI's Ctrl+S);
+    a brand-new tab is refused. The approved card's result carries the `job_id`: poll it with get_job, outputs become
+    assets, and on failure pass that job_id to comfy_check to map the error onto nodes."""
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "comfy_canvas_run",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"instance_id": instance_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
 
 
 @tool(effect="reads")

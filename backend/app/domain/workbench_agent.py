@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 
 from sqlalchemy import select
@@ -27,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, get_current_locale, render_message
 from app.db.models import PluginInstance, User
 from app.domain import browser
-from app.domain.permissions import ensure_workspace_access
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import instances as inst
 from app.domain.plugins import runtime, tools
 from app.domain.plugins.manifest import WORKFLOW_LIBRARY
@@ -195,7 +196,7 @@ def check(db: Session, user: User, workspace_id: str, instance_id: str = "", job
 # --- 改画布、开新标签(ADR 0042 第二步) -------------------------------------------------------------
 
 #: 问题单里交给智能体 / 写上确认卡的,每条只留这几样(原因和改法是插件按语言写好的)。
-_FINDING_KEYS = ("ref", "type", "severity", "kind", "input", "cause", "fix")
+_FINDING_KEYS = ("ref", "type", "severity", "kind", "input", "cause", "fix", "model")
 #: 新建时从空白搭:一张空的界面格式图。
 EMPTY_GRAPH: dict[str, Any] = {"last_node_id": 0, "last_link_id": 0, "nodes": [], "links": [], "groups": [], "config": {},
                                "extra": {}, "version": 0.4}
@@ -380,21 +381,330 @@ def node_pack_info(db: Session, user: User, workspace_id: str, pack_id: str, ins
     return _ask(db, instance, {"op": "node_pack_info", "id": pack_id, **({"content": graph} if graph is not None else {})})
 
 
+# --- 模型、节点包、试跑(ADR 0042 第三步:由智能体起头,都要点头) ----------------------------------
+#
+# 三件事的底层都早就有(`model_library` / `workflow_library`),这里只做智能体这一侧缺的那一层:
+# 认哪台连接、开卡之前先把事实查清楚(链接是哪个文件、包是哪一版、画布上这张存没存过),批准之后照做,
+# 并把智能体接下来该知道的交回去(任务号、装完重启、目录里现在是什么)。
+
+#: 等装节点包那一次任务落终态:每拍多久、最多等多久。装完要重启,所以「任务还在跑」时绝不重启。
+NODE_INSTALL_POLL_SECONDS = 0.2
+NODE_INSTALL_TIMEOUT_SECONDS = 900
+#: 节点包 id 的样子(和插件 `node_packs._PACK_ID` 同一条):注册表里的 id,不是一个地址、也不是 `user/repo`。
+_PACK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}$")
+#: 注册表把「这一版能不能装」写在版本状态里(和插件同一个词)。
+_ACTIVE, _BANNED = "NodeVersionStatusActive", "NodeVersionStatusBanned"
+#: 最新一版被标记(Flagged)也是「不能装那一版」:有正常版本时插件把 `install_version` 指回它,那时才装。
+_FLAGGED = "NodeVersionStatusFlagged"
+_BANNED_PACKS = {"NodeStatusBanned", "NodeStatusDeleted"}
+
+
+def bytes_text(size: Any) -> str:
+    """字节数写给卡上看(`17.2 GB`)。说不清就是空串 —— 卡上不编一个大小。"""
+    try:
+        value = float(size)
+    except (TypeError, ValueError):
+        return ""
+    if value < 0:
+        return ""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return ""
+
+
+def _plain(value: str, *, key: str) -> str:
+    """文件名、目录名只能是一段(和 `model_library.start_download` 同一套判据,只是要在开卡之前就拒)。"""
+    text = (value or "").strip()
+    if not text or text in (".", "..") or any(mark in text for mark in ("/", "\\", ":", "\x00")) or \
+            any(ord(char) < 32 for char in text):
+        raise WorkbenchAgentError(key, name=text)
+    return text
+
+
+def model_search(db: Session, user: User, filename: str, folder: str = "", hash: str = "", hash_type: str = "",
+                 instance_id: str = "") -> dict[str, Any]:
+    """`comfy_model_search`:按文件名去模型站上找下载地址(插件搜,宿主规整)。只读,不改那台机器。"""
+    from app.domain import model_library
+
+    name = str(filename or "").strip()
+    if not name:
+        raise WorkbenchAgentError("workbenchErr_noModelName")
+    instance = connection(db, user, instance_id)
+    found = model_library.search_sources(db, instance, name, str(folder or "").strip(), str(hash or "").strip(),
+                                         str(hash_type or "").strip())
+    return {"instance_id": instance.id, "instance": instance.name, **found}
+
+
+def model_resolve(db: Session, user: User, url: str, instance_id: str = "") -> dict[str, Any]:
+    """`comfy_model_resolve`:一个链接指的是哪个文件、多大、建议放哪个目录、是不是已经有了。只读。"""
+    from app.domain import model_library
+
+    instance = connection(db, user, instance_id)
+    return {"instance_id": instance.id, "instance": instance.name, "url": str(url or "").strip(),
+            **model_library.resolve(db, instance, str(url or ""))}
+
+
+def propose_download(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> None:
+    """`comfy_model_download` 开卡之前(确认卡的 validate):链接要认得出是哪个文件、下到哪、多大、那台机器上还没有。
+
+    认不出、文件名对不上的不开卡 —— 卡上写的必须是待会儿真要下的那一个文件。事实写回 `payload`,`summarize` 只说这些。
+    """
+    from app.domain import model_library
+
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    url = str(payload.get("url") or "").strip()
+    if not url:
+        raise WorkbenchAgentError("workbenchErr_modelUrl")
+    filename = _plain(str(payload.get("filename") or ""), key="modelLibErr_badFilename")
+    folder = _plain(str(payload.get("folder") or ""), key="modelLibErr_badFolder")
+    digest = str(payload.get("sha256") or "").strip().lower()
+    if digest and not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise WorkbenchAgentError("modelLibErr_badHash", hash=str(payload.get("sha256") or "").strip()[:64])
+    #: 认不出的链接、不是 http(s) 的链接由它按自己的话说(见 model_library.resolve)。
+    found = model_library.resolve(db, instance, url)
+    known = str(found.get("filename") or "")
+    if known and known != filename:
+        raise WorkbenchAgentError("workbenchErr_modelOtherFile", name=known, other=filename)
+    if found.get("exists"):
+        raise WorkbenchAgentError("workbenchErr_modelExists", name=filename, folder=folder)
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    payload.update({
+        "instance_id": instance.id,
+        "instance": instance.name,
+        "url": url,
+        "filename": filename,
+        "folder": folder,
+        "size": found.get("size"),
+        "source": str(found.get("source") or ""),
+        "sha256": digest,
+    })
+
+
+def start_model_download(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """批准之后:在那台机器上排一个下载任务(进度、取消、下完刷新目录都是任务那一侧的)。返回任务号。"""
+    from app.domain import model_library
+
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    job = model_library.start_download(
+        db, user, instance, workspace_id=workspace_id, url=str(payload["url"]), folder=str(payload["folder"]),
+        filename=str(payload["filename"]), sha256=str(payload.get("sha256") or ""),
+    )
+    return {
+        "job_id": job.id,
+        "kind": job.kind,
+        "instance": instance.name,
+        "filename": str(payload["filename"]),
+        "folder": str(payload["folder"]),
+        "size": payload.get("size"),
+        "source": str(payload.get("source") or ""),
+        "url": str(payload["url"]),
+    }
+
+
+def propose_node_install(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> None:
+    """`comfy_node_pack_install` 开卡之前(确认卡的 validate):只装注册表里**现在**有正常版本的那一个包。
+
+    git 地址、`Flagged` / `Banned`、没有正常版本的、已经装着同一版的、装着但停用的,都不开卡 —— 每一条都有确切原因
+    (ADR 0042 §7)。版本、发布者、要不要动 PyTorch、和这台机器合不合写回 `payload`,卡上照这些说。
+    """
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    raw = str(payload.get("pack_id") or "").strip()
+    if not raw:
+        raise WorkbenchAgentError("workbenchErr_noPack")
+    if not _PACK_ID.fullmatch(raw):
+        #: git 地址、`user/repo` 之流:注册表里没有,也不该由智能体贴一个来源不明的仓库(ADR 0042 §7)。
+        raise WorkbenchAgentError("workbenchErr_gitPack", pack=raw[:200])
+    #: **现查**注册表:卡上写的必须是这一刻那一版的状态,不是搜索时记下的。
+    info = node_pack_info(db, user, workspace_id, raw, instance.id)
+    pack = str(info.get("id") or raw)
+    newest = info.get("newest_version") if isinstance(info.get("newest_version"), dict) else {}
+    newest_version, status = str(newest.get("version") or ""), str(newest.get("status") or "")
+    version = str(info.get("install_version") or "")
+    if str(info.get("pack_status") or "") in _BANNED_PACKS or status == _BANNED:
+        raise WorkbenchAgentError("workbenchErr_packBanned", pack=pack, version=newest_version or version)
+    if str(info.get("pack_status") or ""):
+        #: 包本身在注册表里不是 Active(被标记、待审、已删):不管版本列表里写了什么,这里没有能装的那一版。
+        raise WorkbenchAgentError("workbenchErr_packNoActive", pack=pack)
+    if not version or (version == newest_version and (status != _ACTIVE or bool(newest.get("deprecated")))):
+        #: 只有被标记 / 封禁 / 弃用的版本(插件把 `install_version` 退回到 latest):没有能装的那一版。
+        raise WorkbenchAgentError("workbenchErr_packNoActive", pack=pack)
+    wanted = str(payload.get("version") or "").strip()
+    if wanted and wanted != version:
+        #: 给的那一版不是注册表里现在正常的那个:不替它猜(装错版本那台 ComfyUI 可能起不来)。
+        raise WorkbenchAgentError("workbenchErr_packVersion", pack=pack, version=wanted, active=version)
+    installed = info.get("installed") if isinstance(info.get("installed"), dict) else {}
+    if installed.get("enabled") is False:
+        raise WorkbenchAgentError("workbenchErr_packDisabled", pack=pack)
+    if str(installed.get("version") or "") == version:
+        raise WorkbenchAgentError("workbenchErr_packInstalled", pack=pack, version=version)
+    compat = info.get("compatibility") if isinstance(info.get("compatibility"), dict) else {}
+    payload.update({
+        "instance_id": instance.id,
+        "instance": instance.name,
+        "pack": pack,
+        "name": str(info.get("name") or pack),
+        "publisher": str(info.get("publisher") or ""),
+        "version": version,
+        "dependency_risk": str(info.get("dependency_risk") or ""),
+        "torch_touching": [str(one) for one in info.get("torch_touching") or [] if isinstance(one, str)][:10],
+        "mismatched": sorted(key for key in ("os", "accelerator", "comfyui")
+                             if isinstance(compat.get(key), dict) and compat[key].get("ok") is False),
+        "newest_version": newest_version,
+        "newest_note": "flagged" if status == _FLAGGED else "deprecated" if bool(newest.get("deprecated")) else "",
+        "installed_version": str(installed.get("version") or ""),
+    })
+
+
+def _wait_job(db: Session, job_id: str, *, timeout: float) -> Any:
+    """等一个后台任务落终态。**等待期间把会话交还**(commit + close):派发登记在 after_commit 上的线程要先有那一次
+    提交才起得来;装节点包可能几分钟,攥着事务也就攥着写锁。给出的是那个任务(`finish_job` 写进去的都在)。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+    from app.domain.jobs import TERMINAL_STATUSES
+
+    db.commit()
+    deadline = time.monotonic() + timeout
+    while True:
+        with SessionLocal() as fresh:
+            job = fresh.get(Job, job_id)
+            if job is None:
+                raise WorkbenchAgentError("workbenchErr_jobGone", job=job_id)
+            if job.status in TERMINAL_STATUSES:
+                fresh.expunge(job)
+                return job
+        if time.monotonic() >= deadline:
+            raise WorkbenchAgentError("workbenchErr_jobTimeout", job=job_id, minutes=str(max(1, int(timeout // 60))))
+        time.sleep(NODE_INSTALL_POLL_SECONDS)
+
+
+def install_node_pack(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """批准之后:装那一个包 → **等它落终态** → 重启那台 ComfyUI → 读目录说现在装的是哪一版。
+
+    装的那一下失败 / 被取消,就**不重启**(正在装的时候重启会把装了一半的包留在那台机器上);等太久也不重启,
+    任务还在跑,回任务中心看它。
+    """
+    from app.domain import workflow_library
+    from app.domain.plugins.errors import PluginDomainError
+    from app.domain.plugins.runtime import PluginRuntimeError
+    from app.domain.workflow_library import WorkflowLibraryError
+
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    pack, version = str(payload["pack"]), str(payload.get("version") or "")
+    job = workflow_library.start_node_install(db, user, instance, workspace_id=workspace_id, packs=[pack],
+                                              versions={pack: version} if version else None)
+    job_id = job.id
+    final = _wait_job(db, job_id, timeout=NODE_INSTALL_TIMEOUT_SECONDS)
+    if final.status != "succeeded":
+        #: 失败原因整句带着(任务那一侧已经收过上限):按位置裁掉的往往正是写着原因的那一段。
+        raise WorkbenchAgentError("workbenchErr_nodeInstallFailed", name=pack,
+                                  detail=_job_error(db, user, job_id) or str(final.message or ""))
+    result = final.result if isinstance(final.result, dict) else {}
+    installed = [str(one) for one in result.get("installed") or [] if isinstance(one, str)] or [pack]
+    #: 装完才重启(插件/Manager 那一侧也一样要求):新装的节点包这时才加载,目录这时才重拉。
+    #: 重启没成有两种说法:插件当场报错(没装 Manager、Manager 不让重启)和它回来了 `back: false` —— 对用户是同一件事,
+    #: 而**包已经装上了**,那句必须说出来,不能让卡只写着「失败」。
+    try:
+        rebooted = workflow_library.reboot(db, instance)
+    except (WorkflowLibraryError, PluginDomainError, PluginRuntimeError) as exc:
+        raise WorkbenchAgentError("workbenchErr_rebootFailed", name=instance.name, pack=pack, detail=str(exc)) from exc
+    if not rebooted.get("back"):
+        raise WorkbenchAgentError("workbenchErr_rebootFailed", name=instance.name, pack=pack,
+                                  detail=render_message("workbenchErr_rebootNoAnswer", get_current_locale(), {}))
+    #: 重启之后目录里到底有没有它、是哪一版 —— 不拿 Manager 的「装好了」当结论(它也可能装进了没被加载的目录)。
+    catalog = _ask(db, instance, {"op": "node_packs"}, output_budget=runtime.CATALOG_OUTPUT_BYTES)
+    loaded = next((str(one.get("version") or "") for one in catalog.get("packs") or []
+                   if isinstance(one, dict) and str(one.get("id") or "").lower() == pack.lower()), "")
+    if not loaded:
+        raise WorkbenchAgentError("workbenchErr_packNotLoaded", pack=pack, name=instance.name)
+    return {"pack": pack, "version": version, "installed": installed, "job_id": job_id,
+            "restarted": True, "catalog_version": loaded}
+
+
+def propose_canvas_run(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> None:
+    """`comfy_canvas_run` 开卡之前(确认卡的 validate):画布上这张**存过**才跑(运行要一张这个连接下的生成模型);
+    从没存过的新标签页先让用户存(Ctrl+S)。卡上写开的是哪一张。"""
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    info = _opened(read_graph(db, user, workspace_id, instance).get("info"))
+    if info["temporary"] or not info["path"]:
+        raise WorkbenchAgentError("workbenchErr_canvasUnsaved", name=info["name"])
+    payload.update({"instance_id": instance.id, "instance": instance.name, "workflow": info})
+
+
+def _run_controls(db: Session, user: User, workspace_id: str, instance: PluginInstance, phase: str) -> None:
+    """「运行」前后照前端自己的「生成后怎样」换种子(和界面同一条)。桥做不了(主进程是旧的、这一下没排上)不拦着跑 ——
+    紧跟着的 export 会把「工作台没开着」说清楚。"""
+    try:
+        _workbench(db, user, workspace_id, instance, {"op": "runControls", "phase": phase})
+    except WorkbenchAgentError:
+        return
+
+
+def run_canvas(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """批准之后:跑画布上现在这张(含没存的改动,见 `workflow_library.run_canvas`)。
+
+    开卡之后画布上换了一张就不跑(跑的是用户没看过的那张);导出前后各让桥走一遍前端自己的「生成后怎样」。
+    """
+    from app.domain import workflow_library
+
+    instance = connection(db, user, str(payload.get("instance_id") or ""))
+    proposed = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else {}
+    info = _opened(read_graph(db, user, workspace_id, instance).get("info"))
+    if info["temporary"] or not info["path"]:
+        raise WorkbenchAgentError("workbenchErr_canvasUnsaved", name=info["name"])
+    if proposed.get("key") and info["key"] != str(proposed.get("key")):
+        raise WorkbenchAgentError("workbenchErr_runOtherTab",
+                                  name=str(proposed.get("name") or proposed.get("key") or ""))
+    _run_controls(db, user, workspace_id, instance, "before")
+    answer = _workbench(db, user, workspace_id, instance, {"op": "export"})
+    exported = answer.get("export") if isinstance(answer.get("export"), dict) else None
+    if exported is None or not isinstance(exported.get("prompt"), dict) or not isinstance(exported.get("workflow"), dict):
+        raise WorkbenchAgentError("workbenchErr_bridge", detail="export")
+    #: 重读和导出之间用户在标签栏里换了一张:导出的那份带着是**哪一张**(桥的 `at.key`)。不是卡上这一张就不跑 ——
+    #: 跑的是用户没看过的那张图,而这条卡上写的是另一张。
+    at = exported.get("at") if isinstance(exported.get("at"), dict) else {}
+    exported_key = str(at.get("key") or "")
+    if exported_key and proposed.get("key") and exported_key != str(proposed["key"]):
+        raise WorkbenchAgentError("workbenchErr_runOtherTab",
+                                  name=str(proposed.get("name") or proposed.get("key") or ""))
+    created, job = workflow_library.run_canvas(
+        db, user, instance, workspace_id=workspace_id, path=info["path"], prompt=exported["prompt"],
+        workflow=exported["workflow"], client_id=str(exported.get("clientId") or ""),
+    )
+    #: 生成任务这一笔先落库:跑它的线程要读到这一行才起得来;而「运行」之后那一下是**另一个会话**里的工作台动作
+    #: (browser 那条路自己开会话),攥着这笔写事务排它就会等到写锁超时(实测 31 秒,SQlite)。
+    db.commit()
+    _run_controls(db, user, workspace_id, instance, "after")
+    return {"job_id": job.id, "generation_id": created.id, "workflow": info,
+            "kind": str(getattr(created, "kind", "") or "")}
+
+
 __all__ = [
+    "NODE_INSTALL_TIMEOUT_SECONDS",
     "WorkbenchAgentError",
     "apply_edit",
+    "bytes_text",
     "canvas",
     "check",
     "connection",
+    "install_node_pack",
     "locate",
+    "model_resolve",
+    "model_search",
     "node_pack_info",
     "node_pack_search",
     "node_packs",
     "node_types",
     "open_new",
     "plan_edit",
+    "propose_canvas_run",
+    "propose_download",
     "propose_edit",
+    "propose_node_install",
     "read_graph",
+    "run_canvas",
+    "start_model_download",
     "template",
     "templates",
 ]

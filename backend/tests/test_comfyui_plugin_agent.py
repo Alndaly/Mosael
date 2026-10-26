@@ -316,6 +316,24 @@ def test_两处都没写_还是老样子_放一个文件或者换成已有的(pl
     finding = next(one for one in plugin("check_graph", content=_txt2img(ckpt="juggernaut.safetensors"))["findings"]
                    if one["kind"] == "missing_model")
     assert "https://" not in finding["fix"] and "放一个文件" in finding["fix"]
+    assert finding["model"] == {"name": "juggernaut.safetensors", "folder": "checkpoints"}, "没有地址:只有名字和目录"
+
+
+def test_缺的模型_带着结构化的名字_目录_地址和哈希(plugin) -> None:
+    """智能体照这几样发起下载(工作台 domain/workbench_agent 的 comfy_model_download):文件名、目录、工作流自己写的
+    地址和哈希都是**字段**,不用从 `fix` 那句话里猜。同名文件在别的目录时不给下载地址 —— 该做的是把那一格改成它。"""
+    url = "https://huggingface.co/x/y/resolve/main/juggernaut.safetensors"
+    graph = _txt2img(ckpt="juggernaut.safetensors")
+    graph["models"] = [{"name": "juggernaut.safetensors", "directory": "checkpoints", "url": url,
+                        "hash": "aa" * 32, "hash_type": "sha256"}]
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_model")
+    assert finding["model"] == {"name": "juggernaut.safetensors", "folder": "checkpoints", "url": url,
+                                "sha256": "aa" * 32, "hash_type": "sha256"}
+
+    elsewhere = next(one for one in plugin("check_graph", content=_txt2img(ckpt="waiNSFW_v140.safetensors"))["findings"]
+                     if one["kind"] == "missing_model")
+    assert elsewhere["model"] == {"name": "waiNSFW_v140.safetensors", "folder": "checkpoints",
+                                  "elsewhere": "illustrious/waiNSFW_v140.safetensors"}
 
 
 def test_扫描一张工作流_顶层和节点级都读_节点级胜出_带着_hash(plugin) -> None:

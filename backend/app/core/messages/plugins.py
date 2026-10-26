@@ -926,4 +926,81 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{node}」不是画布上节点的写法:根图上的写编号(12),子图里的写从根图往里走的编号(12:5)",
         "en": "“{node}” is not a canvas node reference: use the id for top-level nodes (12) and the path for nodes in subgraphs (12:5)",
     },
+    # 模型、节点包、试跑(ADR 0042 第三步):由智能体起头,开卡之前先把说不清的都拒掉
+    "workbenchErr_noModelName": {
+        "zh": "要给一个文件名(工作流里缺的那个模型叫什么),我才能去模型站上找",
+        "en": "Give the file name of the missing model so I can look for it on the model sites",
+    },
+    "workbenchErr_modelUrl": {
+        "zh": "要给一个下载链接:先用 comfy_model_search 找,或者用工作流里写着的那个地址",
+        "en": "Give a download URL: find one with comfy_model_search first, or use the one the workflow declares",
+    },
+    "workbenchErr_modelOtherFile": {
+        "zh": "这个链接指的是「{name}」,不是「{other}」:按插件解析出来的文件名下(否则下下来的文件叫错名字)",
+        "en": "That link is for “{name}”, not “{other}”: download it under the name the plugin resolved (otherwise the file lands under the wrong name)",
+    },
+    "workbenchErr_modelExists": {
+        "zh": "这台 ComfyUI 的 {folder} 目录里已经有「{name}」了:要换一个文件就先在模型库里删掉它,这里不覆盖",
+        "en": "“{name}” is already in the {folder} folder on this ComfyUI: to fetch another file, remove it in the model library first; nothing is overwritten here",
+    },
+    "workbenchErr_noPack": {
+        "zh": "要给一个节点包 id(注册表里的那个,如 rgthree-comfy):先用 comfy_node_pack_search 找",
+        "en": "Give a node pack id (the registry one, e.g. rgthree-comfy): find one with comfy_node_pack_search first",
+    },
+    "workbenchErr_gitPack": {
+        "zh": "「{pack}」不是注册表里的节点包 id(git 地址、user/repo 都不算):这种包只装注册表里状态正常的那一版,git 来源的请在 ComfyUI-Manager 里自己装",
+        "en": "“{pack}” isn't a Comfy Registry node pack id (git URLs and user/repo don't count): only registry packs with a normal version are installed here; install git sources yourself in ComfyUI-Manager",
+    },
+    "workbenchErr_packBanned": {
+        "zh": "「{pack}」{version} 被注册表封禁(Banned):不装。换一个包,或者让用户自己在 ComfyUI-Manager 里决定",
+        "en": "“{pack}” {version} is Banned on the registry: not installing it. Pick another pack, or leave the decision to the user in ComfyUI-Manager",
+    },
+    "workbenchErr_packNoActive": {
+        "zh": "「{pack}」在注册表里没有被标记/封禁之外、也没弃用的版本(能装的只有 Flagged / Banned 的那些):不装",
+        "en": "“{pack}” has no version on the registry that is neither Flagged/Banned nor deprecated: not installing it",
+    },
+    "workbenchErr_packVersion": {
+        "zh": "「{pack}」现在能装的正常版本是 {active},不是 {version}:要指定的版本先确认它在注册表里是正常状态",
+        "en": "The normal version of “{pack}” available now is {active}, not {version}: check that the version you want is in good standing on the registry",
+    },
+    "workbenchErr_packInstalled": {
+        "zh": "「{pack}」{version} 已经装着了:没有可装的更新",
+        "en": "“{pack}” {version} is already installed: there is no update to install",
+    },
+    "workbenchErr_packDisabled": {
+        "zh": "「{pack}」装着、但是在 ComfyUI 里被停用了:先让用户启用它,再回来看要不要更新",
+        "en": "“{pack}” is installed but disabled in ComfyUI: have the user enable it first, then come back to updates",
+    },
+    "workbenchErr_nodeInstallFailed": {
+        "zh": "「{name}」没装成,那台 ComfyUI 没有重启:{detail}",
+        "en": "“{name}” didn't install, and that ComfyUI was not restarted: {detail}",
+    },
+    "workbenchErr_jobGone": {
+        "zh": "那个任务({job})不见了:可能这台连接被删了",
+        "en": "That job ({job}) is gone: the connection may have been removed",
+    },
+    "workbenchErr_jobTimeout": {
+        "zh": "等了 {minutes} 分钟还没装完(任务 {job} 还在跑):没有重启那台 ComfyUI,去任务中心看它",
+        "en": "It's still installing after {minutes} minutes (job {job} is still running): that ComfyUI was not restarted; watch it in the job center",
+    },
+    "workbenchErr_rebootFailed": {
+        "zh": "「{pack}」装上了,但 ComfyUI「{name}」没能重启:{detail}。去那台机器看看日志,它回来之后点「运行」再试",
+        "en": "“{pack}” is installed, but ComfyUI “{name}” couldn't restart: {detail}. Check its logs on that machine and run again once it's back",
+    },
+    "workbenchErr_rebootNoAnswer": {
+        "zh": "它没有在时限内回来",
+        "en": "it didn't come back in time",
+    },
+    "workbenchErr_packNotLoaded": {
+        "zh": "「{pack}」装完了、ComfyUI「{name}」也重启了,但节点包清单里还是没有它:看那台 ComfyUI 的日志(多半是加载失败)",
+        "en": "“{pack}” was installed and “{name}” restarted, but the node pack list still doesn't have it: check that ComfyUI's logs (it probably failed to load)",
+    },
+    "workbenchErr_canvasUnsaved": {
+        "zh": "画布上这张「{name}」还没存过:先让用户在 ComfyUI 里存一下(Ctrl+S,工作流菜单里的「保存」),再运行",
+        "en": "“{name}” on the canvas has never been saved: have the user save it in ComfyUI first (Ctrl+S, or Save in the workflow menu), then run",
+    },
+    "workbenchErr_runOtherTab": {
+        "zh": "画布上开着的已经不是「{name}」了:切回那一张再运行,或者让我对着现在这张重新提一次",
+        "en": "The canvas no longer shows “{name}”: switch back and run that one, or let me propose a run for the one open now",
+    },
 }

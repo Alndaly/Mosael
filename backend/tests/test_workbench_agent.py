@@ -21,10 +21,10 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import BrowserAction, BrowserSession, Job
-from app.domain import browser
+from app.domain import browser, model_library, workbench_agent
 from app.domain.agent import autopilot
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
-from tests.util import fresh_client, second_client, worker_client
+from tests.util import fresh_client, second_client, wait_status, worker_client
 
 PACKAGE = "dev.mosael.comfyui"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "comfyui" / "agent"
@@ -156,6 +156,11 @@ def test_诊断画布上这张_带上那次运行的报错拆到节点(connected
         out = _tool(client, "comfy_check", workspace, instance_id=instance_id, job_id=job_id)["result"]
     kinds = {(one["ref"], one["kind"]) for one in out["findings"]}
     assert ("459:458", "last_run_error") in kinds and ("459:451", "missing_model") in kinds
+    missing = next(one for one in out["findings"] if one["ref"] == "459:451" and one["kind"] == "missing_model")
+    assert missing["model"]["name"] == "qwen_image_2.1_int8_convrot.safetensors"
+    assert missing["model"]["folder"] == "diffusion_models"
+    assert missing["model"]["url"].startswith("https://huggingface.co/"), \
+        "模板写着下载地址:结构化字段里有它 —— 智能体照它发起下载,不从 fix 里猜"
     assert out["workflow"]["name"] == "Qwen 编辑" and out["counts"]["error"] >= 2
 
 
@@ -196,7 +201,8 @@ def test_空着太久的工作台会话收回时_排的那条关闭不拆视图(
 
 
 COMFY_TOOLS = {"comfy_canvas_read", "comfy_locate", "comfy_check", "comfy_templates", "comfy_template", "comfy_node_types",
-               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new"}
+               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new",
+               "comfy_model_search", "comfy_model_resolve", "comfy_model_download", "comfy_node_pack_install", "comfy_canvas_run"}
 
 
 def test_没接_ComfyUI_的人_每一轮不发_comfy_工具的定义(connected) -> None:
@@ -241,15 +247,25 @@ def _simple() -> dict[str, Any]:
     return {"last_node_id": 9, "last_link_id": 9, "nodes": nodes, "links": links, "version": 0.4}
 
 
+#: 桥「运行」导出的 API 格式图(`graphToPrompt` 的 `output`):一份最小、能交给那台 ComfyUI 的。
+EXPORTED_PROMPT: dict[str, Any] = {
+    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd_xl_base_1.0.safetensors"}},
+    "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "canvas", "images": ["4", 0]}},
+}
+
+
 class Canvas:
     """画布上开着的那一张:读到的是它现在的样子;桥接了一批就换成改后的样子(这里由测试给)。记下每一次调用。
 
     `revision` 是这一张改过几回(桥的轮询 / readGraph 报的);改图时和桥一样先比 `expect`:不是读的那一张、读过之后又改过就不改。
-    `after_next_read`:下一次读完之后画布上发生的事(重读和交给桥之间,用户在 ComfyUI 里换了一张、又改了一笔)。"""
+    `after_next_read`:下一次读完之后画布上发生的事(重读和交给桥之间,用户在 ComfyUI 里换了一张、又改了一笔)。
+    `export_key`:导出那一刻报回的是哪一张(默认就是当前这张;设成别的模拟「重读之后、导出之前换了标签页」)。"""
 
     def __init__(self, graph: dict[str, Any], key: str = "workflows/人像.json", name: str = "人像",
-                 after: dict[str, Any] | None = None) -> None:
+                 after: dict[str, Any] | None = None, temporary: bool = False) -> None:
         self.graph, self.key, self.name, self.after = graph, key, name, after
+        self.temporary = temporary
+        self.export_key: str = ""
         self.revision = 1
         self.after_next_read: Any = None
         self.calls: list[dict[str, Any]] = []
@@ -259,12 +275,20 @@ class Canvas:
         if call["op"] == "readGraph":
             answer = {"ok": True, "graph": {"workflow": copy.deepcopy(self.graph), "selection": [], "modified": False,
                                             "revision": self.revision, "layer": None,
-                                            "info": {"name": self.name, "path": self.key.removeprefix("workflows/"), "key": self.key,
-                                                     "temporary": False}}}
+                                            "info": {"name": self.name,
+                                                     "path": "" if self.temporary else self.key.removeprefix("workflows/"),
+                                                     "key": self.key, "temporary": self.temporary}}}
             then, self.after_next_read = self.after_next_read, None
             if then is not None:
                 then()
             return answer
+        if call["op"] == "runControls":
+            return {"ok": True}
+        if call["op"] == "export":
+            #: 桥的「运行」导出:界面格式 + API 格式 + 前端的 clientId(见 electron/publish/comfyWorkbench.ts)
+            return {"ok": True, "export": {"workflow": copy.deepcopy(self.graph), "prompt": EXPORTED_PROMPT,
+                                           "clientId": "4f1c0e2a9b7d4c51a3e8",
+                                           "at": {"key": self.export_key or self.key, "revision": self.revision}}}
         if call["op"] == "applyOps":
             expect = call.get("expect") or {}
             if expect.get("key") != self.key:
@@ -481,3 +505,291 @@ def test_新标签页_带上是哪段对话开的_按凭据认_不按参数(conn
             assert answer.status_code == 200 and "result" in answer.json(), answer.text
     opened = [call for call in canvas.calls if call["op"] == "openWorkflow"]
     assert [call.get("openedBy") for call in opened] == [session_id, session_id]
+
+
+# --- 补全和试跑(ADR 0042 第三步:下载模型、装节点包、试跑) ------------------------------------------
+
+STEP_THREE = {"comfy_model_search", "comfy_model_resolve", "comfy_model_download", "comfy_node_pack_install",
+              "comfy_canvas_run"}
+DOWNLOAD_URL = "https://huggingface.co/Comfy-Org/flux/resolve/main/flux1-dev-fp8.safetensors"
+DIGEST = "ab" * 32
+
+
+def _resolved(**overrides: Any) -> dict[str, Any]:
+    out = {"source": "huggingface", "url": DOWNLOAD_URL, "page": "https://huggingface.co/Comfy-Org/flux",
+           "filename": "flux1-dev-fp8.safetensors", "size": 17_246_524_772, "folder": "checkpoints",
+           "family": "Flux", "triggers": [], "title": "FLUX.1 dev", "exists": False, "uses_token": True, "note": ""}
+    out.update(overrides)
+    return out
+
+
+def _pack_info(**overrides: Any) -> dict[str, Any]:
+    """`comfy_node_pack_info` 交回来的那一份(形状照插件的 node_packs.node_pack_info)。注册表那一下在测试里换掉。"""
+    out = {
+        "id": "rgthree-comfy", "name": "rgthree's ComfyUI Nodes", "publisher": "Regis Gaughan, III (rgthree)",
+        "newest_version": {"version": "1.0.2610050029", "status": "NodeVersionStatusFlagged", "deprecated": False,
+                           "date": "2026-10-05"},
+        "install_version": "1.0.2608210019", "dependency_risk": "low", "torch_touching": [],
+        "compatibility": {"os": {"ok": True}, "accelerator": {"ok": True}, "comfyui": {"ok": True}},
+        "advice": [],
+    }
+    out.update(overrides)
+    return out
+
+
+class _Job:
+    """`start_download` 交回来的后台任务(真的那个由任务中心那一套管,这里只看交回去的是什么)。"""
+
+    def __init__(self, job_id: str, kind: str) -> None:
+        self.id, self.kind = job_id, kind
+
+
+def test_补全和试跑的五个工具_都在工作台那一份_只读和确认卡分得清() -> None:
+    """发现成本那一条(ADR 0042 §7):五个工具都跟着 ComfyUI 工作台那一份发,都要工作流库;三个会改那台机器的开确认卡,
+    两个只读的不开 —— 而且三个确认卡都在登记表里(不然点「批准」那一刻才报 Unknown mutating tool)。"""
+    import mcp_server
+    from app.domain.agent.confirmable import tool_specs
+
+    assert STEP_THREE <= set(mcp_server.REGISTERED_TOOLS)
+    for name in STEP_THREE:
+        assert mcp_server.TOOL_KITS.get(name) == "comfyui", name
+        assert mcp_server.TOOL_NEEDS.get(name) == "workflow_library", name
+    assert {name for name in STEP_THREE if name in mcp_server.READ_ONLY_TOOLS} == \
+        {"comfy_model_search", "comfy_model_resolve"}
+    confirming = {"comfy_model_download", "comfy_node_pack_install", "comfy_canvas_run"}
+    assert STEP_THREE & mcp_server.CONFIRMATION_TOOLS == confirming
+    assert confirming <= set(tool_specs()), "确认卡工具必须登记:否则批准时报 Unknown mutating tool"
+
+
+def test_按文件名找下载地址_只读_只问插件(connected, monkeypatch) -> None:
+    client, _, instance_id, workspace = connected
+    asked: list[tuple[Any, ...]] = []
+
+    def fake(db, instance, filename, folder="", digest="", hash_type=""):
+        asked.append((instance.id, filename, folder, digest, hash_type))
+        return {"filename": filename, "candidates": [
+            {"source": "huggingface", "filename": filename, "url": DOWNLOAD_URL, "confidence": "confirmed",
+             "direct": True, "sha256": DIGEST, "size": 17_246_524_772}],
+            "failed": [], "hash": {"state": "matched", "reason": "", "sha256": DIGEST, "note": ""}}
+
+    monkeypatch.setattr(model_library, "search_sources", fake)
+    out = _tool(client, "comfy_model_search", workspace, filename="flux1-dev-fp8.safetensors", folder="checkpoints",
+                hash=DIGEST, hash_type="sha256", instance_id=instance_id)["result"]
+    assert out["instance_id"] == instance_id and out["candidates"][0]["direct"] is True
+    assert asked == [(instance_id, "flux1-dev-fp8.safetensors", "checkpoints", DIGEST, "sha256")]
+    assert "文件名" in _tool(client, "comfy_model_search", workspace, filename="")["error"]
+    with SessionLocal() as db:
+        assert db.query(BrowserAction).count() == 0, "只读的不排工作台动作"
+
+
+def test_解析链接_只读_不是_http_的当场拒绝(connected, monkeypatch) -> None:
+    client, _, instance_id, workspace = connected
+    bad = _tool(client, "comfy_model_resolve", workspace, url="file:///etc/passwd", instance_id=instance_id)
+    assert "http:// 或 https://" in bad["error"]
+    monkeypatch.setattr(model_library, "resolve", lambda db, instance, url: _resolved(url=url))
+    out = _tool(client, "comfy_model_resolve", workspace, url=DOWNLOAD_URL, instance_id=instance_id)["result"]
+    assert out["instance_id"] == instance_id and out["filename"] == "flux1-dev-fp8.safetensors"
+    assert out["folder"] == "checkpoints" and out["size"] == 17_246_524_772 and out["exists"] is False
+
+
+def test_下载模型_先开确认卡_写明文件名_大小_目录_哪台机器_批准之后排一个下载任务(connected, monkeypatch) -> None:
+    client, _, instance_id, workspace = connected
+    started: dict[str, Any] = {}
+
+    monkeypatch.setattr(model_library, "resolve", lambda db, instance, url: _resolved(url=url))
+
+    def fake_start(db, user, instance, *, workspace_id, url, folder, filename, sha256=""):
+        started.update({"instance": instance.id, "workspace_id": workspace_id, "url": url, "folder": folder,
+                        "filename": filename, "sha256": sha256, "user": user.id})
+        return _Job("job-dl-1", "model_download")
+
+    monkeypatch.setattr(model_library, "start_download", fake_start)
+    out = _tool(client, "comfy_model_download", workspace, url=DOWNLOAD_URL, folder="checkpoints",
+                filename="flux1-dev-fp8.safetensors", sha256=DIGEST.upper(), instance_id=instance_id)["result"]
+    assert out["status"] == "pending" and started == {}, "开卡之前一样没开始下"
+    card = _card(client, out["confirmation_id"])
+    assert card["permission"] == "external"
+    assert "flux1-dev-fp8.safetensors" in card["summary"] and "checkpoints" in card["summary"]
+    assert "16.1 GB" in card["summary"], "卡上写明多大"
+    assert "huggingface" in card["summary"], "卡上写明从哪个站来"
+    approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "executed", approved
+    assert approved["result"]["job_id"] == "job-dl-1" and approved["result"]["kind"] == "model_download"
+    assert started.pop("user"), "任务记的是批准这张卡的那个人"
+    assert started == {"instance": instance_id, "workspace_id": workspace, "url": DOWNLOAD_URL,
+                       "folder": "checkpoints", "filename": "flux1-dev-fp8.safetensors", "sha256": DIGEST}
+
+
+@pytest.mark.parametrize("resolved, arguments, fragment", [
+    (_resolved(filename="another.safetensors"), {}, "不是「flux1-dev-fp8.safetensors」"),
+    (_resolved(exists=True), {}, "已经有「flux1-dev-fp8.safetensors」"),
+    (_resolved(), {"filename": "../evil.safetensors"}, "文件名"),
+    (_resolved(), {"folder": "checkpoints/evil"}, "目录"),
+    (_resolved(), {"sha256": "not-a-sha256"}, "不是 SHA256"),
+])
+def test_下载模型_链接对不上文件_已经有了_名字不合法_都不开卡(connected, monkeypatch, resolved, arguments, fragment) -> None:
+    """卡上写的必须是待会儿真要下的那一个文件:认出来的是别的文件名、那台机器上已经有、名字带路径、哈希不是 SHA256 ——
+    都在开卡之前拒,一张卡也不留。"""
+    client, _, instance_id, workspace = connected
+    monkeypatch.setattr(model_library, "resolve", lambda db, instance, url: resolved)
+    monkeypatch.setattr(model_library, "start_download",
+                        lambda *args, **kwargs: pytest.fail("没开卡就不该开始下"))
+    out = _tool(client, "comfy_model_download", workspace, instance_id=instance_id,
+                **{"url": DOWNLOAD_URL, "folder": "checkpoints", "filename": "flux1-dev-fp8.safetensors", **arguments})
+    assert fragment in out["error"]
+    assert _cards(client, workspace) == []
+
+
+def test_装节点包_git地址_封禁_没有正常版本_装过了_停用的都不开卡(connected, monkeypatch) -> None:
+    client, _, instance_id, workspace = connected
+    cases = [
+        ("https://github.com/someone/ComfyUI-Only-On-Git", _pack_info(), "注册表"),
+        ("someone/ComfyUI-Only-On-Git", _pack_info(), "注册表"),
+        ("comfyui-reactor-node",
+         _pack_info(id="comfyui-reactor-node", install_version="0.5.2-b1",
+                    newest_version={"version": "0.5.2-b1", "status": "NodeVersionStatusBanned", "deprecated": False}),
+         "封禁"),
+        ("comfyui-only-flagged",
+         _pack_info(id="comfyui-only-flagged", install_version="2.0.0",
+                    newest_version={"version": "2.0.0", "status": "NodeVersionStatusFlagged", "deprecated": False}),
+         "不装"),
+        ("comfyui-installed",
+         _pack_info(installed={"version": "1.0.2608210019", "enabled": True}), "已经装着了"),
+        ("comfyui-off",
+         _pack_info(installed={"version": "1.0.2608210019", "enabled": False}), "停用"),
+    ]
+    for pack_id, info, fragment in cases:
+        monkeypatch.setattr(workbench_agent, "node_pack_info", lambda *args, _info=info, **kwargs: _info)
+        monkeypatch.setattr(workbench_agent, "install_node_pack",
+                            lambda *args, **kwargs: pytest.fail("没开卡就不该装"))
+        out = _tool(client, "comfy_node_pack_install", workspace, pack_id=pack_id, instance_id=instance_id)
+        assert fragment in out["error"], (pack_id, out)
+    assert _cards(client, workspace) == []
+
+
+def test_装节点包_给的那一版不是注册表里正常的那个_不替它猜(connected, monkeypatch) -> None:
+    client, _, instance_id, workspace = connected
+    monkeypatch.setattr(workbench_agent, "node_pack_info", lambda *args, **kwargs: _pack_info())
+    out = _tool(client, "comfy_node_pack_install", workspace, pack_id="rgthree-comfy", version="9.9.9",
+                instance_id=instance_id)
+    assert "9.9.9" in out["error"] and "1.0.2608210019" in out["error"]
+    assert _cards(client, workspace) == []
+
+
+def test_装节点包_卡上写版本_发布者_风险_装完等任务落终态再重启再读目录(connected, monkeypatch) -> None:
+    """ADR 0042 §7 + 拍板 4:只装注册表里正常的那一版;卡上写发布者、版本、会不会动 PyTorch、装完要重启。
+    批准之后:起装的任务 → **等它落终态** → 重启那台 ComfyUI → 读目录说现在装的是哪一版。"""
+    client, comfy, instance_id, workspace = connected
+    comfy.state.manager = "V4.2.1"
+    monkeypatch.setattr(workbench_agent, "node_pack_info", lambda *args, **kwargs: _pack_info(
+        torch_touching=["torch>=2.4.0"], dependency_risk="high",
+        compatibility={"os": {"ok": True}, "accelerator": {"ok": False}, "comfyui": {"ok": True}}))
+    with Executor(Canvas(_simple())):
+        out = _tool(client, "comfy_node_pack_install", workspace, pack_id="rgthree-comfy",
+                    instance_id=instance_id)["result"]
+    assert out["status"] == "pending"
+    card = _card(client, out["confirmation_id"])
+    assert card["permission"] == "external"
+    summary = card["summary"]
+    assert "rgthree's ComfyUI Nodes" in summary and "1.0.2608210019" in summary
+    assert "发布者" in summary and "Regis Gaughan" in summary, "谁发布的写上"
+    assert "Flagged" in summary, "最新一版被标记:装的是它之前那个正常版本"
+    assert "PyTorch" in summary and "加速器" in summary, "依赖风险和和这台机器合不合都说"
+    assert "重启" in summary and "中断" in summary
+    #: 卡上那两格是**分开**渲染的(`confirmations.card_parts`):标题一句话,后果提示单独一行。
+    #: 几条注意必须都在那一格里(此前它们是一个列表,标题和提示两格都空)。
+    assert "装节点包" in card["headline"] and "重启" in card["headline"]
+    assert "Flagged" not in card["headline"], "后果提示单独一行,不混进标题"
+    warning = card["warning"]
+    assert "最新的一版" in warning and "Flagged" in warning
+    assert "PyTorch" in warning and "torch>=2.4.0" in warning
+    assert "accelerator" in warning and "加速器" in warning
+    assert card["payload"]["version"] == "1.0.2608210019"
+
+    approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "executed", approved
+    result = approved["result"]
+    assert result["pack"] == "rgthree-comfy" and result["version"] == "1.0.2608210019"
+    assert result["restarted"] is True and result["catalog_version"] == "1.0.0", "重启之后目录里读回来的那一版"
+    paths = [one[1] for one in comfy.state.calls]
+    assert paths.index("/v2/manager/queue/task") < paths.index("/v2/manager/reboot"), "装完才重启"
+    with SessionLocal() as db:
+        [job] = db.query(Job).filter(Job.kind == "node_install").all()
+        assert job.status == "succeeded" and [one[1] for one in comfy.state.calls].count("/v2/manager/reboot") == 1
+
+
+def test_试跑_开卡之前说清是哪一张_批准之后导出_建一个普通的生成任务(connected) -> None:
+    client, comfy, instance_id, workspace = connected
+    canvas = Canvas(_simple(), key="workflows/portrait.json", name="portrait")
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_run", workspace, instance_id=instance_id)["result"]
+        assert out["status"] == "pending"
+        assert canvas.ops() == ["readGraph"], "开卡只读了画布,没导出、没跑"
+        card = _card(client, out["confirmation_id"])
+        assert card["permission"] == "render-cost"
+        assert "portrait" in card["summary"] and "portrait.json" in card["summary"], "卡上写跑的是哪一张"
+        approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "executed", approved
+    assert canvas.ops() == ["readGraph", "readGraph", "runControls", "export", "runControls"], \
+        "批准之后:核对还是那一张 → 「运行」前换种子 → 导出 → 建任务 → 「运行」后换种子"
+    assert [call["phase"] for call in canvas.calls if call["op"] == "runControls"] == ["before", "after"]
+    result = approved["result"]
+    assert result["workflow"]["path"] == "portrait.json" and result["kind"] == "image"
+    assert wait_status(client, result["job_id"]) == "succeeded"
+    submitted = comfy.posted("/prompt")[0]
+    assert submitted["prompt"] == EXPORTED_PROMPT, "画布上导出的图原样提交"
+    assert submitted["client_id"] == "4f1c0e2a9b7d4c51a3e8"
+
+
+def test_试跑_从没存过的那张不开卡_先说去存(connected) -> None:
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple(), key="workflows/Unsaved Workflow.json", name="未命名", temporary=True)
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_run", workspace, instance_id=instance_id)
+    assert "还没存过" in out["error"] and "Ctrl+S" in out["error"]
+    assert canvas.ops() == ["readGraph"]
+    assert _cards(client, workspace) == []
+
+
+def test_试跑_开卡之后画布上换了一张_不跑(connected) -> None:
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple(), key="workflows/portrait.json", name="portrait")
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_run", workspace, instance_id=instance_id)["result"]
+        canvas.key, canvas.name = "workflows/别的.json", "别的"
+        approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "failed" and "开着的已经不是" in approved["error"]
+    assert canvas.ops() == ["readGraph", "readGraph"], "核对之后没导出、没跑"
+
+
+def test_试跑_重读之后导出之前换了标签页_导出的不是卡上那张_不跑(connected) -> None:
+    """桥的导出带回来的是**它导的是哪一张**(`at.key`)。重读和导出之间用户在标签栏里换了一张,导出来的是那一张的图 ——
+    照着它提交,跑的就是用户没看过的那张,而卡上写的是另一张。"""
+    client, comfy, instance_id, workspace = connected
+    canvas = Canvas(_simple(), key="workflows/portrait.json", name="portrait")
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_run", workspace, instance_id=instance_id)["result"]
+        canvas.export_key = "workflows/别的.json"
+        approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "failed" and "开着的已经不是" in approved["error"]
+    assert canvas.ops() == ["readGraph", "readGraph", "runControls", "export"], "导出之后才发现:没建任务"
+    assert comfy.posted("/prompt") == [], "一张都没提交"
+
+
+def test_装节点包_重启没成_说清包装上了_重启失败(connected, monkeypatch) -> None:
+    """Manager 不让重启(403):包**已经装上了**,卡上说成一句「失败」就丢了这件事。原话带着,并且说清没有重启。"""
+    client, comfy, instance_id, workspace = connected
+    comfy.state.manager = "V4.2.1"
+    comfy.state.manager_reboot_allowed = False
+    monkeypatch.setattr(workbench_agent, "node_pack_info", lambda *args, **kwargs: _pack_info())
+    with Executor(Canvas(_simple())):
+        out = _tool(client, "comfy_node_pack_install", workspace, pack_id="rgthree-comfy",
+                    instance_id=instance_id)["result"]
+    approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "failed", approved
+    assert "rgthree-comfy" in approved["error"] and "装上了" in approved["error"]
+    assert "没能重启" in approved["error"] and "security_level" in approved["error"], "插件的原话说出来"
+    with SessionLocal() as db:
+        [job] = db.query(Job).filter(Job.kind == "node_install").all()
+        assert job.status == "succeeded", "包确实装上了:失败的是重启"
+    assert "/v2/manager/reboot" in [one[1] for one in comfy.state.calls]

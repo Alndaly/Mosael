@@ -79,7 +79,8 @@ PLUGIN_TOOL_CAP = 6_000
 
 PACKAGE = "dev.mosael.comfyui"
 COMFY_TOOLS = {"comfy_canvas_read", "comfy_locate", "comfy_check", "comfy_templates", "comfy_template", "comfy_node_types",
-               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new"}
+               "comfy_node_packs", "comfy_node_pack_search", "comfy_node_pack_info", "comfy_canvas_edit", "comfy_canvas_new",
+               "comfy_model_search", "comfy_model_resolve", "comfy_model_download", "comfy_node_pack_install", "comfy_canvas_run"}
 #: 这一轮没发的插件工具经它们够得着;一个没发的都没有就不发。
 ON_DEMAND = {"plugin_tools", "run_plugin_tool"}
 #: 改 Mosael 自家画布的那一份里的几样(不必列全:在且只在工作台以外)。

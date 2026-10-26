@@ -5,7 +5,7 @@ seo_title: ComfyUI client: workflows as models, model library
 keywords: ComfyUI client, ComfyUI desktop, ComfyUI workflows, ComfyUI model manager, LoRA trigger words, ComfyUI app
 order: 18
 updated: 2026-10-17
-version: 2.2.3
+version: 2.2.5
 ---
 
 ComfyUI is connected through the **ComfyUI plugin** that ships with Mosael: it is already on the Plugins page,
@@ -665,8 +665,19 @@ beside it:
   inside a subgraph change that subgraph's definition — the list says how many places it is used in the workflow and that every one of
   them changes. A batch that would add errors is fixed by the agent before it reaches you. Ask it to **create** one and it opens the
   official template in a **new tab** (your open workflows stay as they are), says how many models are missing and how big they are in
-  total, and the card's **Download** takes you to Missing. **It never saves for you**: changed and new workflows stay unsaved until you
-  save them in ComfyUI, wherever you like. Downloading models, installing node packs and test runs come in a later version.
+  total, and the card's **Download** takes you to Missing. Ask it to **fill in what's missing** and it searches the model sites by file
+  name (the full name first, then without the extension), showing the site, repository, exact file, size and base model: **only the
+  hash-confirmed match may be downloaded without you choosing one** — a merely similar file is put to you, never picked for you.
+  Pasting a link makes it check the file, size and target folder first (and whether that site needs a sign-in). A download shows a
+  card with the site, size and folder, then runs as a background task; it never overwrites an existing file. Ask it to **install a node
+  pack** and it checks the registry again before the card and installs only a normal, active version — not a git URL, not a pack whose
+  newest version is Flagged or Banned, not one with only deprecated versions — saying whether the dependencies touch PyTorch and that
+  **ComfyUI has to restart**; when the install finishes it restarts ComfyUI for you and the node and model lists are read again. Ask
+  it to **run** this workflow and it runs the saved workflow on the canvas (unsaved changes included) behind a confirmation card; a
+  workflow that has never been saved has to be saved in ComfyUI first. Runs of workflows saved elsewhere go through their own
+  confirmation card; a failed run's error is split onto the nodes. Nothing is retried silently: every download, install and run needs
+  its card, and a refusal or failure is reported with its reason. **It never saves for you**: changed and new workflows stay unsaved
+  until you save them in ComfyUI, wherever you like.
 
 The workbench talks to the canvas through a fixed script that Mosael's main process injects; only Mosael reads the canvas, and the page
 can't call into Mosael. If the ComfyUI frontend is too old and lacks something, that part says “This ComfyUI frontend doesn't

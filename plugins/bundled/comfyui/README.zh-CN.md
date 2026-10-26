@@ -643,7 +643,8 @@ ADR 0042 第一步。工作台右边那一列多了第五个页签「助手」(M
   宿主给的出网代理。
 
 插件还带一份技能 `skills/comfyui-workflows/SKILL.md`(「ComfyUI 工作流」):先找官方模板、照这台机器的模型改、改之前先读图、缺东西先说
-多大、不替你存盘、提到节点写 `#12`(界面把它变成能点的「定位」)。随 Mosael 一起发的插件带的技能默认开着。
+多大、缺的模型只在确认卡上搜和下载、节点包先查注册表再装且装完要重启、跑存着的工作流或画布上这张都要过确认卡、不替你存盘、提到节点写
+`#12`(界面把它变成能点的「定位」)。随 Mosael 一起发的插件带的技能默认开着。
 
 实测:沙盒 ComfyUI 0.39.0 / 前端 1.53.10、维护者那台 0.39.0 + Manager V4.2.1(只读 GET)、Comfy 注册表(rgthree-comfy 最新一版此刻
 是 `Flagged`)。
@@ -670,10 +671,36 @@ ADR 0042 第二步。「助手」能改画布上开着的这张、能在新标�
 工作流(和打开模板同一条路),桥从不执行保存。
 
 技能 `comfyui-workflows` 跟着改了:先读再改、一件事一批、用户点「应用」才改、被拒在开卡之前就照原因改了再提、子图改的是定义、新建模板
-优先(在新标签页打开,缺什么、多大先说)。下载模型、装节点包、试跑还在后面那一步。
+优先(在新标签页打开,缺什么、多大先说)。
 
 实测:沙盒 ComfyUI 0.39.0 / 前端 1.53.10 —— 一批七条改动一次 Ctrl+Z 全退;有一条说不通的一批画布一点没动;模板在新标签页打开是临时的、
 workflows 目录里没多文件;子图里加节点、加输出口接出来、提升 / 收回控件、删输入口、打包、拆开都改到了定义上。
+
+## 工作台里的智能体:下载、安装、运行(1.24.0)
+
+ADR 0042 第三步。智能体现在能把开的事做完:缺的模型搜出来、认链接、下载;缺的节点包装上、重启那台 ComfyUI;跑工作流 —— 包括画布上这一张。
+这几个是宿主工具(`backend/app/domain/workbench_agent.py`,和别的 `comfy_*` 注册在一起);插件自己那几样底层实现(模型库的搜索 / 认链接 /
+下载、`install_nodes`、`run_canvas`)没变。
+
+- `comfy_model_search`、`comfy_model_resolve` **只读**。搜收 `filename`(可带 `folder`,知道哈希就带 `hash` / `hash_type`),交回候选的
+  `filename`、`url`、`size`、`confidence`、`direct`、`sha256`;认链接收 `url`,交回 `filename`、`size`、`folder`、`source`、`exists`、
+  `uses_token`。**只有哈希对上的那一档(`direct: true`)可以不等人挑就下**;`exact` / `likely` 摆给用户自己点,从不替他选。
+- `comfy_model_download` 收 `url`、`folder`、`filename`,可选 `sha256`;开确认卡(哪个站、多大、下到哪台机器的哪个目录),批准后交回的是
+  `model_download` **任务号**,不是文件。智能体用 `get_job` 轮询;下完那条连接的模型清单会刷新,画布下拉和 `comfy_check` 都看得到。同名文件
+  **不会覆盖**。
+- `comfy_node_pack_install` 收 `pack_id`,可选 `version`;开卡之前宿主重新读一遍 `comfy_node_pack_info`,**只装注册表里、状态正常(Active)的
+  版本** —— git 地址的包、`Flagged` / `Banned` 的包、只有弃用版本的包都不装,并说明原因。卡上写发布者、版本、依赖风险(直接依赖 torch 的
+  单独点出来)和**装完要重启 ComfyUI**。批准后起 `node_install` 任务,**等它到终态**,再重启那台 ComfyUI(本机托管的服务走宿主重启,否则走
+  Manager 的 `/reboot`),然后把节点包清单重新读一遍,重启本身会刷新宿主那边的清单。
+- `comfy_canvas_run` 跑**画布上那张存过的工作流**(含没存的改动),走工作台本来「运行」那条路(`runControls` 前 → `export` → `run_canvas` →
+  `runControls` 后),要确认卡。**从没存过的工作流没有路径,会被拒** —— 存盘仍是用户在 ComfyUI 里的事。交回 `job_id`、`generation_id`、
+  `workflow`、`kind`;**`prompt_id` 不在这一步,要用时从 `get_job` 拿**;失败时也带 `job_id`, `comfy_check` 能把报错拆到节点。
+  别的存着的工作流照旧走它自己的工具或 `run_plugin_tool`。
+- 下载、装包、跑**都不会悄悄重试**。每样都要过确认卡;被拒或失败就照原因说,不原样再发、不绕开。
+- `comfy_*` 工具的 `instance_id` 在只有一条正常连接时都可以不写。
+
+技能 `comfyui-workflows` 照这个循环写:缺模型 → 搜 / 认 → 确认 → 轮询 → 再查;缺节点包 → 搜 / 分析 → 不安全的拒绝 → 确认 → 轮询 → 重启 →
+再查;然后跑,失败就带任务号诊断。
 
 ## 进度、取消、重启
 

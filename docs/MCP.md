@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **137** 个工具,其中 **46** 个走确认卡、**1** 个停下来等用户作答。
+共 **142** 个工具,其中 **49** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -42,9 +42,14 @@
 | `comfy_canvas_edit` | 确认卡 | Confirmation required: change the workflow open on the workbench canvas. One batch, all or nothing, one Ctrl+Z; |
 | `comfy_canvas_new` | 直接执行 | Open a workflow in a NEW workbench tab; the open ones stay untouched, nothing is saved (the user saves). |
 | `comfy_canvas_read` | 直接执行 | Read-only summary of the ComfyUI workbench canvas (unsaved edits included): per layer (root graph, each |
+| `comfy_canvas_run` | 确认卡 | Confirmation required: run the workflow open on the ComfyUI workbench canvas (unsaved edits included) — the |
 | `comfy_check` | 直接执行 | Read-only diagnosis of the workbench canvas: findings per node (ref, severity, kind, cause, fix) — |
 | `comfy_locate` | 直接执行 | Select and center a node on the workbench canvas, opening its subgraph first. `node`: a ref like "12" |
+| `comfy_model_download` | 确认卡 | Confirmation required: download a model onto that ComfyUI's disk. The card says which file, which folder, how big |
+| `comfy_model_resolve` | 直接执行 | Read-only: what a link points at — filename, size, suggested `folder`, source, title, triggers, |
+| `comfy_model_search` | 直接执行 | Read-only: find download links for a model the workflow is missing, by `filename` (+ `folder`, and the `hash` the |
 | `comfy_node_pack_info` | 直接执行 | Read-only: analyse a node pack before installing — registry status of the newest version |
+| `comfy_node_pack_install` | 确认卡 | Confirmation required: install ONE custom node pack from the Comfy Registry and restart that ComfyUI. |
 | `comfy_node_pack_search` | 直接执行 | Read-only: find node packs by `query` or missing `node_types` (Manager mappings, then the |
 | `comfy_node_packs` | 直接执行 | Read-only: installed custom node packs (id, version, enabled, source, node types); with the |
 | `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |

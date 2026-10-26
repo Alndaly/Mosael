@@ -138,7 +138,7 @@ class _Findings:
 
     def add(self, ref: str, kind: str, severity: str, cause: str, fix: str, *, input_name: str = "",
             class_type: str = "", refs: list[str] | None = None, pack: dict[str, Any] | None = None,
-            core: bool = False) -> None:
+            core: bool = False, model: dict[str, Any] | None = None) -> None:
         key = (ref, kind, input_name)
         if key in self.seen or len(self.items) >= MAX_FINDINGS:
             return
@@ -165,6 +165,10 @@ class _Findings:
                                  "instances": self.paths.get(str(layer.get("id")), [])}
         if refs and len(refs) > 1:
             entry["refs"] = refs[:20]
+        #: 缺的模型的那几样**结构化**事实(文件名、目录、声明的地址 / 哈希):工作台「缺失项」和人一样照它下载,
+        #: 智能体也不用从 `fix` 那句话里猜(见 domain/workbench_agent 的 comfy_model_download)。
+        if model:
+            entry["model"] = model
         self.items.append(entry)
 
     def say(self, zh: str, en: str) -> str:
@@ -423,8 +427,20 @@ def _choice_finding(found: _Findings, ref: str, kind: str, name: str, value: str
                     downloads: dict[str, dict[str, str]], comfy: Comfy) -> None:
     base = _norm(value).split("/")[-1]
     if labels.model_folder(kind, name) or _looks_like_model(name, value):
-        folder = labels.model_folder(kind, name) or (downloads.get(base) or {}).get("directory", "")
+        declared = downloads.get(base) or {}
+        folder = labels.model_folder(kind, name) or declared.get("directory", "")
         elsewhere = next((one for one in names if one.split("/")[-1] == base), "")
+        #: 结构化的事实:文件名、目录,加上工作流自己写的地址 / 哈希(见 `_Findings.add` 的 `model`)。
+        facts: dict[str, Any] = {"name": base, "folder": folder}
+        if elsewhere:
+            #: 这台机器上有一个同名文件:该做的是把那一格改成它,不是再下一份 —— facts 里也就不给下载地址。
+            facts["elsewhere"] = _norm(elsewhere)
+        elif declared.get("url"):
+            facts["url"] = str(declared["url"])
+            digest = str(declared.get("hash") or "").strip().lower()
+            if _SHA256.match(digest):
+                facts["sha256"] = digest
+                facts["hash_type"] = str(declared.get("hash_type") or "sha256").strip().lower() or "sha256"
         if elsewhere:
             size = next((item.get("size") for item in files_in(comfy, folder)
                          if _norm(str(item.get("name") or "")) == _norm(elsewhere)
@@ -447,15 +463,15 @@ def _choice_finding(found: _Findings, ref: str, kind: str, name: str, value: str
                                 "同名不等于同一个(没有核对过内容);如果确定是它,把这一格改成它",
                                 f"This machine has a same-named file at “{elsewhere}” ({_size_text(size_bytes)}). A shared name "
                                 "is not proof it is the same file (the contents were not checked); pick it only if you're sure")
-        elif (downloads.get(base) or {}).get("url"):
-            fix = found.say(f"下载它到 {folder or '对应的模型目录'}:{downloads[base]['url']}(先说多大,确认后再下)",
-                            f"Download it into {folder or 'the matching models folder'}: {downloads[base]['url']} (state the size and confirm first)")
+        elif declared.get("url"):
+            fix = found.say(f"下载它到 {folder or '对应的模型目录'}:{declared['url']}(先说多大,确认后再下)",
+                            f"Download it into {folder or 'the matching models folder'}: {declared['url']} (state the size and confirm first)")
         else:
             fix = found.say(f"放一个文件进 {folder or '对应的模型目录'},或者在下拉里换成已有的(共 {len(names)} 个)",
                             f"Put the file into {folder or 'the matching models folder'}, or pick one of the {len(names)} available")
         found.add(ref, "missing_model", "error",
                   found.say(f"这台机器上没有模型文件「{value}」({folder or name})", f"This machine doesn't have the model file “{value}” ({folder or name})"),
-                  fix, input_name=name)
+                  fix, input_name=name, model=facts)
         return
     close = [one for one in names if one.lower() == value.lower()] or names[:5]
     found.add(ref, "combo_not_in_list", "error",

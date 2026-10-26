@@ -92,7 +92,18 @@ def test_随_Mosael_发的插件带的技能默认开_像内置的一样_能关(
         assert "- dev.mosael.comfyui:comfyui-workflows(ComfyUI 工作流):" in runtime.skills_prompt(db, ws)
         body = runtime.use_skill(db, ws, "dev.mosael.comfyui:comfyui-workflows")["instructions"]
         assert "comfy_check" in body and "comfy_canvas_edit" in body and "点「应用」" in body, "改画布要用户点「应用」(ADR 0042 第二步)"
-        assert "还不能下载模型、装节点包、运行" in body, "下载、装、试跑在第三步:技能不许说那几样已经有了"
+        for name in (
+            "comfy_model_search", "comfy_model_resolve", "comfy_model_download",
+            "comfy_node_pack_install", "comfy_canvas_run",
+        ):
+            assert name in body, f"第三步的工具 {name} 要写进技能(ADR 0042 §4)"
+        assert "get_job" in body and "model_download" in body and "node_install" in body, "下载 / 安装是后台任务,要轮询任务号"
+        assert "filename" in body and "folder" in body and "sha256" in body, "搜模型、下模型的入参要写全"
+        assert "pack_id" in body and "注册表" in body and "Flagged" in body, "装节点包只装注册表里正常的版本(§7)"
+        assert "重启" in body, "装完节点包要重启那台 ComfyUI"
+        assert "存过" in body, "跑画布上这张要先存过一次"
+        assert "不会悄悄重试" in body or "不悄悄重试" in body, "下载、安装、运行不许悄悄重试"
+        assert "还不能下载模型、装节点包、运行" not in body, "下载、装、试跑在第三步已经做了,技能不许再说没有"
         store.set_enabled(db, ws, skill, False, user_id=None)
         db.commit()
         assert "comfyui-workflows" not in runtime.skills_prompt(db, ws)

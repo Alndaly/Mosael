@@ -816,6 +816,49 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "  ⚠️ 子图「{name}」在这张图里用了 {uses} 处:改的是它的定义,每一处都会变",
         "en": " (⚠️ the subgraph “{name}” is used in {uses} places here: its definition changes, so every one of them changes)",
     },
+    "confirm_comfyModelDownload": {
+        "zh": "下载模型「{name}」到 ComfyUI「{instance}」的 {folder} 目录:{size}{source} —— 下完那台机器上就能选它了",
+        "en": "Download the model “{name}” into “{instance}”'s {folder} folder on ComfyUI: {size}{source} — once it's done you can pick it on that machine",
+    },
+    "confirm_comfyModelSize": {"zh": "约 {size}", "en": "about {size}"},
+    "confirm_comfyModelSizeUnknown": {"zh": "大小不明", "en": "size unknown"},
+    "confirm_comfyModelSource": {"zh": "，来自 {source}", "en": ", from {source}"},
+    "confirm_comfyNodePackInstall": {
+        "zh": "给 ComfyUI「{instance}」装节点包「{name}」{version} 版{publisher} —— 装完会重启它,正在跑的任务会中断{warning}",
+        "en": "Install the node pack “{name}” {version}{publisher} into “{instance}” on ComfyUI — ComfyUI restarts afterwards, so running jobs are interrupted{warning}",
+    },
+    "confirm_comfyPackPublisher": {"zh": "(发布者 {publisher})", "en": " (publisher: {publisher})"},
+    #: 几条注意合成**一个**片段:卡上的标题与后果提示只认得一个 `warning`(`confirmations.card_parts`),分开摆会整个丢掉。
+    #: 里面按语言连起来(core.i18n.read_param 对列表用各自的顿号 / 逗号)。
+    "confirm_comfyPackRisks": {"zh": "  ⚠️ {notes}", "en": " (⚠️ {notes})"},
+    "confirm_comfyPackFlagged": {
+        "zh": "最新的一版 {version} 被注册表标记(Flagged),装的是它之前那个正常版本",
+        "en": "the newest version {version} is Flagged on the registry; this installs the normal version before it",
+    },
+    "confirm_comfyPackDeprecated": {
+        "zh": "最新的一版 {version} 已被弃用",
+        "en": "the newest version {version} is deprecated",
+    },
+    "confirm_comfyPackMismatch": {
+        "zh": "和这台机器可能不合:{parts}(操作系统 / 加速器 / ComfyUI 版本)",
+        "en": "may not fit this machine: {parts} (OS / accelerator / ComfyUI version)",
+    },
+    "confirm_comfyPackTorch": {
+        "zh": "会动 PyTorch({deps}):装错版本那台 ComfyUI 可能起不来",
+        "en": "touches PyTorch ({deps}): a wrong version can stop that ComfyUI from starting",
+    },
+    "confirm_comfyPackRisk": {
+        "zh": "依赖风险:{risk}(会装额外的 Python 包)",
+        "en": "dependency risk: {risk} (it installs extra Python packages)",
+    },
+    "confirm_comfyPackUpgrade": {
+        "zh": "现在是 {current},装完是 {version}",
+        "en": "currently {current}, becomes {version}",
+    },
+    "confirm_comfyCanvasRun": {
+        "zh": "在 ComfyUI「{instance}」上运行画布上开着的「{name}」({path})—— 用的是那台机器的显卡,跑完把结果和报错交回来",
+        "en": "Run “{name}” ({path}), open on the canvas, on “{instance}”'s ComfyUI — it uses that machine's GPU; results and errors come back here",
+    },
     "confirm_deleteAssets": {
         "zh": "永久删除 {count} 个素材({names}){tail} —— 文件会从磁盘上清掉,撤不回来",
         "en": "Permanently delete {count} assets ({names}){tail} — the files are removed from disk and cannot be recovered",

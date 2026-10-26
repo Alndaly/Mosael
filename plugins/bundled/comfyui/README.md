@@ -843,8 +843,10 @@ which the host asks through):
   The registry is reached through the egress proxy the host provides.
 
 The plugin also ships a skill, `skills/comfyui-workflows/SKILL.md` ("ComfyUI workflows"): start from official templates, adapt them to
-this machine's models, read the graph before changing it, say how big missing downloads are first, never save for you, and write
-nodes as `#12` (the interface turns that into a clickable "locate"). Skills of plugins that ship with Mosael are on by default.
+this machine's models, read the graph before changing it, say how big missing downloads are first, search and download a missing
+model only through the confirmation card, install a node pack only after checking the registry and only with a restart, run a saved
+workflow (or the saved canvas) through the confirmation card, never save for you, and write nodes as `#12` (the interface turns that
+into a clickable "locate"). Skills of plugins that ship with Mosael are on by default.
 
 Tested against: a sandbox ComfyUI 0.39.0 / frontend 1.53.10, the maintainer's 0.39.0 + Manager V4.2.1 (read-only GETs), and the
 Comfy registry (the newest rgthree-comfy version is `Flagged` right now).
@@ -881,13 +883,45 @@ templates); the bridge never runs Save.
 
 The `comfyui-workflows` skill follows: read before changing, one batch per change, the user clicks Apply, a batch refused before the
 card is fixed according to the reasons and proposed again, subgraph edits change the definition, new workflows start from official
-templates (opened in a new tab, saying what is missing and how big first). Downloading models, installing node packs and test runs
-come in the next step.
+templates (opened in a new tab, saying what is missing and how big first).
 
 Tested against a sandbox ComfyUI 0.39.0 / frontend 1.53.10: one Ctrl+Z undid a seven-op batch; a batch with one bad op left the canvas
 untouched; a template opened in a new tab stayed temporary and no file appeared in the workflows folder; adding a node inside a
 subgraph, adding an output and wiring it, promoting and unpromoting a widget, removing an input, packing and unpacking all changed the
 definition.
+
+## The agent in the workbench: downloading, installing, running (1.24.0)
+
+Step three of ADR 0042. The Assistant can now finish what it starts: search for a missing model and download it, install a missing
+custom node pack and restart ComfyUI, and run a workflow — including the one on the canvas. These are host tools
+(`backend/app/domain/workbench_agent.py`, registered next to the other `comfy_*` tools); the plugin's own lower-level operations
+(`model_library` search/resolve/download, `install_nodes`, `run_canvas`) are unchanged.
+
+- `comfy_model_search` and `comfy_model_resolve` are **read-only**. Search takes `filename` (plus `folder`, and `hash` / `hash_type`
+  when known) and returns candidates with `filename`, `url`, `size`, `confidence`, `direct` and `sha256`; resolve takes a `url` and
+  returns `filename`, `size`, `folder`, `source`, `exists` and `uses_token`. Only the hash-confirmed tier (`direct: true`) may be
+  downloaded without the user picking a candidate; `exact` and `likely` are shown to the user, never picked for them.
+- `comfy_model_download` takes `url`, `folder`, `filename` and optional `sha256`, shows a confirmation card (site, size, which
+  machine, which folder) and returns a `model_download` **job**, not a file. The agent polls `get_job`; when the job finishes the
+  connection's model catalog is refreshed, so the canvas dropdowns and `comfy_check` see the file. An existing file is never
+  overwritten.
+- `comfy_node_pack_install` takes `pack_id` and an optional `version`; the host re-reads `comfy_node_pack_info` before opening the
+  card and only proceeds for a **registry** pack with a normal, active version — git URLs, `Flagged` / `Banned` packs and packs whose
+  only versions are deprecated are refused with the reason. The card states the publisher, version, dependency risk (torch-touching
+  packs are called out) and that **ComfyUI has to restart**. After approval it starts the `node_install` job, **waits for a terminal
+  state**, then reboots that ComfyUI (the host restarts a locally managed service, otherwise Manager's `/reboot`); the node-pack
+  catalog is read again, and the reboot itself refreshes the host's catalogs.
+- `comfy_canvas_run` runs **the saved workflow on the canvas** (including unsaved changes) through the workbench's ordinary Run path
+  (`runControls` before → `export` → `run_canvas` → `runControls` after), behind a confirmation card. A workflow that has never been
+  saved has no path and is refused — saving stays the user's job in ComfyUI. It returns `job_id`, `generation_id`, `workflow` and
+  `kind`; `prompt_id` is not part of that answer and comes from `get_job`. A failure is handed back with `job_id` so `comfy_check` can
+  split the error onto nodes. Saved workflows elsewhere still run through their own workflow tool or `run_plugin_tool`.
+- Downloads, installs and runs are **never silently retried**. Each needs its card, and a refusal or failure is reported with its
+  reason instead of being re-sent or worked around.
+
+The `comfyui-workflows` skill follows this loop: missing model → search/resolve → confirm → poll → check again; missing pack →
+search/info → refuse unsafe ones → confirm → poll → restart → check again; then run, and if it fails, diagnose with the job id.
+`instance_id` is optional on every `comfy_*` tool when exactly one healthy connection exists.
 
 ## Progress, cancelling, restarts
 

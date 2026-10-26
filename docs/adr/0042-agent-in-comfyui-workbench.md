@@ -3,8 +3,8 @@
 ## Status
 
 Accepted — 2026-10-07。下面七条由维护者于 2026-10-07 拍板:第 6 条改成**子图也能改**,其余照推荐;另加两样 —— 智能体能拿到
-这台 ComfyUI 装了哪些自定义节点包,能**搜索、分析、下载安装**节点包(§7)。分三步做,都进 1.9.4。第一步(读和诊断)、第二步(改和新建)
-已实现,见文末的两份实现记录。
+这台 ComfyUI 装了哪些自定义节点包,能**搜索、分析、下载安装**节点包(§7)。分三步做(原计划都进 1.9.4,实际随版本陆续发):
+第一步(读和诊断)、第二步(改和新建)、第三步(下载、安装、试跑)都已实现,见文末的三份实现记录。
 
 ## Context
 
@@ -112,8 +112,8 @@ ComfyUI 的保存或工作台顶栏的「保存」。
 | `comfy_node_pack_search` | 按名字、用途或「缺的这个节点类型」找节点包 | 不用 |
 | `comfy_node_pack_info` | 分析一个节点包(§7) | 不用 |
 | `comfy_node_pack_install` | 装一个节点包,装完重启那台 ComfyUI | **要**(拍板 4):卡上写分析结果和要重启 |
-| 下载模型、装节点包 | 现有的下载 / 装节点那一套,由它起头 | **要**(拍板 4) |
-| 试跑 | 现有的工作台「运行」,跑完把结果和报错交回来 | **要**(拍板 5) |
+| 下载模型 | `comfy_model_search` / `comfy_model_resolve`(只读)、`comfy_model_download`(下载) | **要**(拍板 4):卡上写哪个站、多大、下到哪 |
+| 试跑 | `comfy_canvas_run`:现有的工作台「运行」,跑完把结果和报错交回来 | **要**(拍板 5) |
 
 `comfy_canvas_edit` 应用前再跑一次 `check_graph`,改完的图要是比改之前多出问题就不交,把问题说给智能体让它重改。
 
@@ -174,7 +174,7 @@ ComfyUI 的保存或工作台顶栏的「保存」。
 1. **读和诊断**:「助手」页签、`readGraph`(含子图定义)、`node_types` / `templates` / `template` / `check_graph`、诊断的「定位」;
    节点包的列出、搜索、分析(§7);技能。
 2. **改和新建**:`applyOps`(一批一步撤销,根图和子图,§6)、`openWorkflow`、改动清单确认卡与「应用」、「照这个改」。
-3. **补全和试跑**:由智能体起头的下载模型、装节点包(§7)、试跑(确认卡),跑完读报错接着改。
+3. **补全和试跑**:由智能体起头的下载模型、装节点包(§7)、试跑(确认卡),跑完读报错接着改。—— **已实现**(2026-10-26,见文末第三步实现记录)。
 
 **测试**:
 - 桥的三样新操作(含子图:改定义、边界口、提升控件)对着一个假的 `window.app` / LiteGraph 跑(和 `comfyEditor.test.ts` 一样),再在测试场那台真 ComfyUI 0.39 上实测:
@@ -248,7 +248,7 @@ ComfyUI 的保存或工作台顶栏的「保存」。
   按严重程度列出 5 个错误、2 个警告(缺 FaceDetailer 及出自 Impact Pack、steps 0、采样器不在列表、#7 的 clip 没连、#8 的 vae 接成了
   CLIP、SD 1.5 的 LoRA 配 Illustrious 底模、宽 1001),每条带 #编号;点回复里的 #8,画布上选中了 VAEDecode。
 - 「我想做一个用 Qwen-Image 2.1 编辑图片的工作流」:`comfy_templates`(两次)→ `comfy_template`,推荐官方「Qwen Image 2.1:图像编辑」,
-  说清版本够、不缺节点、缺 4 个模型合计约 26.7 GB(逐个写目录和大小,点明第四个只有开提示词增强才要),说明这一版不能替他打开、下载。
+  说清版本够、不缺节点、缺 4 个模型合计约 26.7 GB(逐个写目录和大小,点明第四个只有开提示词增强才要),说明第二步这一版还不能替他打开、下载。
 - 「rgthree-comfy 能装或者升级吗?」:`comfy_node_pack_info` → `comfy_node_packs`,结论是已经装着最近一个正常的版本、更新的两版都被标记
   (Flagged)不建议升级,发布者、星数、下载量、不碰 torch、和这台机器兼容都说到了,还指出画布上缺的 #11 不是它提供的。
 
@@ -258,7 +258,7 @@ ComfyUI 的保存或工作台顶栏的「保存」。
 
 ## 第二步做成了什么(2026-10-07,实现记录)
 
-**改和新建**落地;下载模型、装节点包、试跑留给第三步。
+**改和新建**落地;下载模型、装节点包、试跑留给第三步(2026-10-26 已完成,见文末第三步实现记录)。
 
 - **插件先算**(§2「每批改动先经插件对着 `/object_info` 校验」):新 op `edit_plan` 把智能体写的一批改动对着画布上这张和这台 ComfyUI 的节点
   定义逐条查,在一份拷贝上照着改一遍(`canvas_edit.py`)。改动的写法就是 §2、§6 那一套:`add_node`(临时名字 `$a`)、`remove_node`、
@@ -321,6 +321,36 @@ ComfyUI 的保存或工作台顶栏的「保存」。
   换到缺失项。接着「步数改成 40,再把子图里采样器的 denoise 提到外面」:一张卡两处(根图上 #459 的 steps 25 → 40、子图那一组里提升
   #459:458 的 denoise),应用后外面那个节点上多了 denoise。
 
-**留给第三步**:由智能体起头的下载模型(确认卡写多大、下到哪台)、装节点包(`install_nodes`,卡上写 `node_pack_info` 的 `install_version` 和
-`dependency_risk`、要不要重启)、试跑(确认卡;跑完把结果和报错交回来接着改)。**留给 ADR 0044 第 4 步**:桥报 `renamedFrom` / `openedBy`、
-工作台调 `/agent/homes/move`、工作流库改名挪动时挪家、新标签页接住发起它的那段对话。
+**留给 ADR 0044 第 4 步**:桥报 `renamedFrom` / `openedBy`、工作台调 `/agent/homes/move`、工作流库改名挪动时挪家、新标签页接住发起它的那段对话。
+
+## 第三步做成了什么(2026-10-26,实现记录)
+
+**下载、安装、试跑**落地。底层实现基本都在,这一步把智能体接上去,并且把「谁都不能替他做」的那几道门补在宿主这一侧。
+
+- **工具**(§4):三个新能力五个工具,都注册在 `backend/mcp_server.py` 里和其他 `comfy_*` 一起,`needs="workflow_library"`、
+  `kit="comfyui"`;`instance_id` 只有一条正常连接时可以省略(`workbench_agent.connection`)。插件清单里不新增公开工具 ——
+  `comfyui_generation` 那类是宿主内部能力,`exposed()` 会把 `internal` 滤掉。
+  - `comfy_model_search(filename, folder?, hash?, hash_type?, instance_id?)`:只读,按文件名(可带哈希)查 Civitai / HuggingFace /
+    ModelScope,交回候选(`filename`、`url`、`size`、`confidence`、`direct`、`sha256`)和搜索失败的站。
+  - `comfy_model_resolve(url, instance_id?)`:只读,认一个下载链接,交回 `filename`、`size`、`folder`、`source`、`exists`、`uses_token`。
+  - `comfy_model_download(url, folder, filename, sha256?, instance_id?, workspace_id?)`:开确认卡(哪个站、多大、下到哪台机器的哪个目录),
+    批准后走 `model_library.start_download` 起一个 `model_download` **任务**,交回任务号;下完那条连接的模型清单刷新。同名文件不覆盖;
+    URL、目录、文件名和可选 SHA-256 都由底层校验。只允许下载哈希对上的那一档(`direct: true`)自动进行,`exact` / `likely` 必须由用户挑。
+  - `comfy_node_pack_install(pack_id, version?, instance_id?, workspace_id?)`:开卡之前重新读一遍 `node_pack_info`,只放行**注册表里、有正常
+    Active 版本**的包;git 地址、`Flagged` / `Banned`、只有弃用版本的都拒,并说明原因(§7)。卡上写发布者、版本、依赖风险(torch 相关单独点出)
+    和**装完要重启**。批准后走 `workflow_library.start_node_install` 起 `node_install` 任务,**等到终态**再 `workflow_library.reboot`
+    (本机托管的服务走宿主重启,否则 Manager `/reboot`),然后把节点包清单重新读一遍;重启本身会刷新宿主那边的清单。
+  - `comfy_canvas_run(instance_id?, workspace_id?)`:走工作台本来「运行」那条路(`runControls` 前 → `export` → `workflow_library.run_canvas`
+    → `runControls` 后),开确认卡。跑的是画布上这张**存过的**工作流(含没存的改动);从没存过的新标签页没有路径,`run_canvas` 会拒 ——
+    「不替用户存盘」照旧,先请他存。交回 `job_id`、`generation_id`、`workflow`、`kind`;`prompt_id` 不在这一步,要用时从 `get_job` 拿。
+    失败时也带 `job_id`,`comfy_check(job_id=…)` 把报错拆到节点。别处存着的工作流仍走它自己的工具或 `run_plugin_tool`。
+- **确认卡**(§4 拍板 4 / 5):三个新工具都在 `backend/app/domain/agent/confirmable/comfyui.py` 注册,卡上的话照读的人的语言写,
+  分别写清下载(站、大小、目录、要不要登录)、安装(发布者、版本、依赖风险、要重启、正在跑的任务会断)和运行(跑的是哪一张、要不要先存)。
+  确认文案在 `backend/app/core/messages/integrations.py`,拒绝和失败的原因在 `backend/app/core/messages/plugins.py`。
+- **不悄悄重试**:下载、安装、运行每个都过确认卡;被拒或失败就按结果里的原因说,别原样再发、别换条路绕开。装包会重启那台 ComfyUI,
+  模型可能几十 GB —— 事前把大小、目标机器、目录、要重启说清楚。下载拿到的任务号用 `get_job` 轮询;装包自己会等到装完并重启再交回来。
+- **技能**(§8):`skills/comfyui-workflows/SKILL.md` 改成讲完三条闭环 —— 缺模型 → 搜 / 认链接 → 确认 → 轮询 → 再查;缺节点包 → 搜 / 分析
+  → 不安全的拒 → 确认 → 装完重启 → 再查;跑(画布上这张走 `comfy_canvas_run`,别处存着的走它自己的工具或 `run_plugin_tool`);
+  失败带任务号回 `comfy_check`。也写明存过 / 没存过的区别和「不悄悄重试」。
+- **顺带**:技能里「`instance_id` 在只有一条连接时可省」的说法改对了(此前写「工具都要」,而 `list_workflows`、`plugin_tools`、`get_job`、
+  `generate_*` 都不接它)。

@@ -74,6 +74,14 @@ ARGS: dict[str, dict[str, Any]] = {
     "comfy_node_pack_info": {"pack_id": "rgthree-comfy"},
     "comfy_canvas_new": {"template": "image_qwen_image_2_1_image_edit", "name": "Qwen 编辑",
                          "ops": [{"op": "set_widget", "node": "459", "widget": "steps", "value": 30}]},
+    # 第三步(ADR 0042 拍板 4、5):下载模型、装节点包、试跑 —— 没有连接时领域先拒,载荷形状照样要接得住。
+    "comfy_model_search": {"filename": "flux1-dev-fp8.safetensors", "folder": "checkpoints", "hash": "ab" * 32,
+                           "hash_type": "sha256"},
+    "comfy_model_resolve": {"url": "https://huggingface.co/a/b/resolve/main/tiny.safetensors"},
+    "comfy_model_download": {"url": "https://huggingface.co/a/b/resolve/main/tiny.safetensors",
+                             "folder": "checkpoints", "filename": "tiny.safetensors"},
+    "comfy_node_pack_install": {"pack_id": "rgthree-comfy", "version": "1.0.2608210019"},
+    "comfy_canvas_run": {},
     "create_note": {"title": "冒烟笔记", "markdown": "正文"},
     "append_note": {"note_id": "no-such-note", "base_revision": 1, "markdown": "补充"},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会
