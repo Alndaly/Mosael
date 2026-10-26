@@ -15,6 +15,7 @@ import threading
 import time
 
 import pytest
+from sqlalchemy import select
 
 from app.domain.agent import host
 from app.ai.sidecar.pi_client import TurnResult
@@ -107,7 +108,7 @@ def _wait_idle(session_id: str, seconds: float = 30) -> str:
 def test_a_mid_turn_message_is_queued_not_steered(monkeypatch, held_turn) -> None:
     """The default must not touch the running turn."""
     steers: list[str] = []
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steers.append(text) or True)
+    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
 
     client = fresh_client()
     sid = _session(client)
@@ -161,7 +162,7 @@ def test_a_queued_message_keeps_hidden_context(held_turn) -> None:
 
 def test_steering_is_opt_in_per_message(monkeypatch, held_turn) -> None:
     steers: list[str] = []
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steers.append(text) or True)
+    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
 
     client = fresh_client()
     sid = _session(client)
@@ -176,15 +177,17 @@ def test_steering_is_opt_in_per_message(monkeypatch, held_turn) -> None:
 
     assert res.status_code == 200 and res.json() == {"steered": True}
     assert steers == ["当前工作流 workflow_id=w1\n\n用户消息:\n改成竖屏"]
-    # It left the queue: steering it and then running it again would answer it twice.
-    assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+    # 还在队列里，但已是 pending steer：模型没读到之前不能再跑成下一轮，也不能再点第二次插话。
+    [pending] = client.get(f"/api/agent/sessions/{sid}/queue").json()
+    assert pending["id"] == queued[0]["id"]
+    assert pending["payload"]["steer_pending"] is True
     held_turn.release()
     assert _wait_idle(sid) == "idle"
 
 
 def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch, held_turn) -> None:
     """Reporting a failure the user cannot act on is worse than letting it run on its own."""
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": False)
+    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": False)
 
     client = fresh_client()
     sid = _session(client)
@@ -311,9 +314,9 @@ def test_the_transcript_interleaves_questions_and_answers(monkeypatch) -> None:
     ], transcript
 
 
-def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch, held_turn) -> None:
-    """Same rule for the other path: it joins the conversation when it is cut in."""
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": True)
+def test_a_steered_message_waits_for_the_model_boundary_then_joins_the_transcript(monkeypatch, held_turn) -> None:
+    """点击插话只进入 pending；模型真正读到它时才出队、才成为对话消息。"""
+    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": True)
 
     client = fresh_client()
     sid = _session(client)
@@ -325,10 +328,54 @@ def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch, hel
     with SessionLocal() as db:
         steered = db.get(AgentMessage, queued[0]["id"])
         original = db.get(AgentMessage, first["id"])
-        assert steered.created_at >= original.created_at
+        assert (steered.payload or {}).get("queued") is True, "sidecar 只是接住了请求，还没被模型消费"
+        assert (steered.payload or {}).get("steer_pending") is True
+        assert steered.created_at == original.created_at or steered.created_at >= original.created_at
+
+    assert host._mark_steer_applied(sid, queued[0]["id"]) is True
+    with SessionLocal() as db:
+        steered = db.get(AgentMessage, queued[0]["id"])
         assert not (steered.payload or {}).get("queued")
+        assert not (steered.payload or {}).get("steer_pending")
     held_turn.release()
     assert _wait_idle(sid) == "idle"
+
+
+def test_steer_boundary_freezes_one_assistant_segment_and_orders_user_between_segments() -> None:
+    """段 1 → user 插话 → 段 2：同一个 turn 内切成两条 assistant 消息。"""
+    client = fresh_client()
+    sid = _session(client)
+    from app.domain.agent.stream import _stream_append, _stream_reset, _stream_segment_reset
+    _stream_reset(sid)
+    with SessionLocal() as db:
+        draft = host._open_assistant_draft(sid)
+        user = AgentMessage(session_id=sid, role="user", content="改一下",
+                            payload={"queued": True, "queued_by": "u1", "steer_pending": True})
+        db.add(user)
+        db.commit()
+        user_id = user.id
+    _stream_append(sid, "先做这一段")
+    snapshot = host._stream_segment_snapshot(sid)
+    first_segment = host._finish_streaming_segment(sid, draft, text="先做这一段", snapshot=snapshot)
+    assert first_segment
+    assert host._mark_steer_applied(sid, user_id) is True
+    _stream_segment_reset(sid)
+    from app.domain.agent.stream import get_stream_state
+    assert get_stream_state(sid)["segment"] == 1
+    with SessionLocal() as db:
+        _stream_append(sid, "插话后继续")
+        host._finish_assistant_draft(
+            db, host._open_assistant_draft(sid), sid, content="插话后继续",
+            payload={"timeline": [{"type": "text", "text": "插话后继续"}]},
+        )
+        db.commit()
+        rows = list(db.scalars(
+            select(AgentMessage)
+            .where(AgentMessage.session_id == sid)
+            .order_by(AgentMessage.created_at)
+        ))
+    contents = [row.content for row in rows if row.role in ("assistant", "user")]
+    assert contents[-3:] == ["先做这一段", "改一下", "插话后继续"], contents
 
 
 def test_另一个智能体发来的通知_不夺标题_且带结构化来源(monkeypatch) -> None:

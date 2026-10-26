@@ -55,6 +55,7 @@ def _stream_reset(session_id: str) -> None:
             "text": "",
             "done": False,
             "seq": 0,
+            "segment": 0,
             "timeline": [],
             "tool_starts": {},
             "first_token_at": None,
@@ -264,6 +265,33 @@ def _stream_append(session_id: str, delta: str) -> None:
             else:
                 timeline.append({"type": "text", "text": delta})
             state["seq"] += 1
+
+
+def _stream_segment_snapshot(session_id: str) -> dict:
+    """当前 assistant 段到此为止的正文与 timeline。
+
+    steer 被模型消费时调用：先把已经发生的内容冻结成一个独立段，再让主循环从空状态继续。
+    `first_token_at` / `turn_id` 保留在流状态里，仍属于同一个 turn。
+    """
+    with _streams_lock:
+        state = _streams.get(session_id)
+        if not state:
+            return {"text": "", "timeline": []}
+        _close_open_thinking(state)
+        return {"text": str(state.get("text") or ""), "timeline": [dict(item) for item in state.get("timeline", [])]}
+
+
+def _stream_segment_reset(session_id: str) -> None:
+    """清空实时正文与 timeline，开始同一回合的下一段；保留 turn_id 与首 token 时刻。"""
+    with _streams_lock:
+        state = _streams.get(session_id)
+        if state is None:
+            return
+        state["text"] = ""
+        state["timeline"] = []
+        state["tool_starts"] = {}
+        state["segment"] = int(state.get("segment") or 0) + 1
+        state["seq"] += 1
 
 
 def _stream_finish(session_id: str, final_text: str) -> None:

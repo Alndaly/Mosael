@@ -225,6 +225,7 @@ def run_turn(
     on_tool: "Callable[[dict], None] | None" = None,
     on_thinking: "Callable[[dict], None] | None" = None,
     on_awaiting_user: "Callable[[bool], None] | None" = None,
+    on_steer_applied: "Callable[[str], None] | None" = None,
     thinking_level: str = "off",
     images: list[dict[str, str]] | None = None,
 ) -> TurnResult:
@@ -246,6 +247,7 @@ def run_turn(
             thinking_level=thinking_level,
             images=images,
             on_awaiting_user=on_awaiting_user,
+            on_steer_applied=on_steer_applied,
         )
     raise SidecarError(f"Unknown agent adapter: {adapter}")
 
@@ -335,14 +337,16 @@ _LIVE: dict[str, _LiveTurn] = {}
 _LIVE_LOCK = threading.Lock()
 
 
-def steer_turn(session_id: str, prompt: str, mode: str = "steer") -> bool:
+def steer_turn(session_id: str, prompt: str, mode: str = "steer", steer_id: str = "") -> bool:
     """Inject a message into the running turn. False when there is no turn to inject into."""
     with _LIVE_LOCK:
         live = _LIVE.get(session_id)
     if live is None:
         return False
     return live.send_awaiting_ack(
-        {"type": "steer", "turnId": live.turn_id, "prompt": prompt, "mode": mode}, ack_type="queued"
+        {"type": "steer", "turnId": live.turn_id, "prompt": prompt, "mode": mode,
+         **({"steerId": steer_id} if steer_id else {})},
+        ack_type="queued",
     )
 
 
@@ -628,6 +632,7 @@ def _run_pi(
     on_tool: Callable[[dict], None] | None = None,
     on_thinking: Callable[[dict], None] | None = None,
     on_awaiting_user: Callable[[bool], None] | None = None,
+    on_steer_applied: Callable[[str], None] | None = None,
     session_id: str = "",
     force_compact: bool = False,
     thinking_level: str = "off",
@@ -718,6 +723,10 @@ def _run_pi(
                 # 「这条插进去了吗」的回执。pending=False 意味着那一轮在用户打字和这一帧
                 # 到达之间结束了 —— 调用方据此把消息当成普通的下一轮发,而不是摘掉队列标。
                 live.ack("queued", bool(event.get("pending")))
+            elif kind == "steer_applied":
+                steer_id = str(event.get("steerId") or "")
+                if steer_id and on_steer_applied is not None:
+                    on_steer_applied(steer_id)
             elif kind == "aborted_ack":
                 live.ack("aborted_ack", bool(event.get("accepted")))
             elif kind == "awaiting_user":

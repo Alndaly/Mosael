@@ -88,6 +88,8 @@ export interface SteerRequest {
   type: "steer";
   turnId: string;
   prompt: string;
+  /** Mosael 的队列消息 id；sidecar 在模型真正消费这条 steer 时原样回传。 */
+  steerId?: string;
   mode?: "steer" | "follow_up";
 }
 
@@ -218,6 +220,7 @@ export type Event =
       compaction?: { droppedMessages: number; tokensBefore: number; tokensAfter: number; summary: string } | null;
     }
   | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
+  | { type: "steer_applied"; turnId: string; steerId: string }
   | { type: "aborted"; turnId: string }
   //: 这一轮开始 / 结束等人(批确认卡、答选择卡)。后端在等人的那段时间停掉整轮时限的表:人慢慢看卡不该把这一轮判成超时。
   //: 几张卡同时等时成对发,后端按计数停表。

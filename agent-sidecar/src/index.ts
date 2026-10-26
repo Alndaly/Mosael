@@ -89,6 +89,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         // 子智能体的每一步。result 原样带上 —— 截断是展示层的事,传输层截了就再也补不回来。
         onSubtool: (event) => send({ type: "subtool", turnId, ...event }),
         onSubagentResult: (parentCallId, archive) => send({ type: "subagent_result", turnId, parentCallId, archive }),
+        onSteerApplied: (steerId) => send({ type: "steer_applied", turnId, steerId }),
       },
     );
     if (result.aborted) send({ type: "aborted", turnId });
@@ -228,7 +229,12 @@ async function main(): Promise<void> {
           // the backend send it as an ordinary next turn instead of dropping it.
           send({ type: "queued", turnId: msg.turnId, mode: msg.mode ?? "steer", pending: false });
         } else {
-          const message = { role: "user" as const, content: msg.prompt, timestamp: Date.now() };
+          const message = {
+            role: "user" as const,
+            content: msg.prompt,
+            timestamp: Date.now(),
+            ...(msg.steerId ? { mosaelSteerId: msg.steerId } : {}),
+          };
           if (msg.mode === "follow_up") agent.followUp(message);
           else agent.steer(message);
           send({ type: "queued", turnId: msg.turnId, mode: msg.mode ?? "steer", pending: true });

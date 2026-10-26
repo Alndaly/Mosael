@@ -415,7 +415,7 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
         return TurnResult(text="ok")
 
     monkeypatch.setattr(host, "run_turn", slow_run_turn)
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer": steers.append(text) or True)
+    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
 
     client = fresh_client()
     _configured(client)

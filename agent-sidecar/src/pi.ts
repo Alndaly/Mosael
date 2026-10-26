@@ -751,6 +751,8 @@ export interface PiTurnHandlers {
   onToolEnd: (toolCallId: string, result: unknown, isError: boolean) => void;
   /** 子智能体的一步工具调用(start/end),挂在发起它的 run_subagent 调用名下。 */
   onSubtool?: (event: { parentCallId: string } & SubagentToolEvent) => void;
+  /** 一条 steer 真正进入模型上下文:这是当前回合的 UI 段边界。 */
+  onSteerApplied?: (steerId: string) => void;
   /** 后台派发的子智能体跑完了:把完整存档交给宿主,填回发起那张卡。 */
   onSubagentResult?: (
     parentCallId: string,
@@ -872,7 +874,10 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
 
   let full = "";
   agent.subscribe((event) => {
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+    if (event.type === "message_start" && event.message.role === "user") {
+      const steerId = (event.message as { mosaelSteerId?: string }).mosaelSteerId;
+      if (steerId) handlers.onSteerApplied?.(steerId);
+    } else if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       const delta = event.assistantMessageEvent.delta;
       full += delta;
       handlers.onDelta(delta);

@@ -442,6 +442,8 @@ class AgentStreamEvent(ApiModel):
 
     #: 这一轮到此刻的正文。全量,不是增量 —— 客户端直接赋值即可。
     text: str = ""
+    #: 当前 assistant 段号。steer 被模型消费时递增；前端据此立即取回刚冻结的上一段和插话。
+    segment: int = 0
     #: 这一轮结束了。**后端发完它就 break。** 客户端读它来收尾,而不是靠"流关了"去推断:
     #: 那个推断在中间设备拖着连接不关的时候会一直等下去。
     done: bool = False

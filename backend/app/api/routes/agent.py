@@ -375,6 +375,7 @@ def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> Stre
                     "data: "
                     + AgentStreamEvent(
                         text=state["text"],
+                        segment=int(state.get("segment") or 0),
                         done=state["done"],
                         timeline=state.get("timeline", []),
                     ).model_dump_json()

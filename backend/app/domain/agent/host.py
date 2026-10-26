@@ -11,7 +11,9 @@ from sqlalchemy import and_, exists, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.pi_client import SidecarError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
+from app.ai.sidecar.pi_client import (
+    SidecarError, TurnResult, abort_turn, compact_session, run_turn, set_turn_queue, steer_turn,
+)
 from app.domain.agent.prompt import (
     _attached_images,
     _prompt_snapshot,
@@ -28,6 +30,8 @@ from app.domain.agent.stream import (
     _stream_append,
     _stream_finish,
     _stream_reset,
+    _stream_segment_reset,
+    _stream_segment_snapshot,
     _stream_thinking,
     _stream_tool_event,
     _stream_turn_id,
@@ -739,6 +743,44 @@ def _streaming_draft(db: Session, session_id: str) -> AgentMessage | None:
     return None
 
 
+def _finish_streaming_segment(session_id: str, draft_id: str | None, *, text: str, snapshot: dict) -> str | None:
+    """把当前 assistant 段冻结成独立消息，返回消息 id（空段不落库）。"""
+    timeline = _timeline_for_payload(snapshot, text)
+    with SessionLocal() as db:
+        if not text.strip() and not timeline:
+            draft = db.get(AgentMessage, draft_id) if draft_id else None
+            if draft is not None and (draft.payload or {}).get("streaming"):
+                db.delete(draft)
+                db.commit()
+            return None
+        message = _finish_assistant_draft(
+            db,
+            draft_id,
+            session_id,
+            content=text,
+            payload={"timeline": timeline, "steer_segment": True} if timeline else {"steer_segment": True},
+        )
+        db.commit()
+        return message.id
+
+
+def _mark_steer_applied(session_id: str, steer_id: str) -> bool:
+    """sidecar 已经把这条 steer 放进模型上下文：现在才把它移出队列、写进 transcript。"""
+    with SessionLocal() as db:
+        message = db.get(AgentMessage, steer_id)
+        if message is None or message.session_id != session_id:
+            return False
+        payload = dict(message.payload or {})
+        if not payload.get("queued"):
+            return False
+        _unqueue(db, message)
+        payload = dict(message.payload or {})
+        payload.pop("steer_pending", None)
+        message.payload = payload
+        db.commit()
+        return True
+
+
 def _failed_turn_timeline(session_id: str) -> dict:
     """失败那一轮已经发生过的过程,整理成和成功轮同一种形状。
 
@@ -835,15 +877,19 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             failure = exc
 
     # ---- 2. 运行:不持有任何数据库会话 ----
-    draft_id: str | None = None
+    draft_holder: dict[str, str | None] = {"id": None}
     draft_buffer: dict[str, float | str] = {"text": "", "saved": 0.0, "at": 0.0}
+    all_text = {"value": ""}
+    segments = {"count": 0, "last_finished": None}
     if failure is None:
         # 先落一条空草稿:跑的过程中**边流边写**,进程被掐断时已经说过的话还在库里。
-        draft_id = _open_assistant_draft(session_id)
+        draft_holder["id"] = _open_assistant_draft(session_id)
 
         def _persist_delta(delta: str) -> None:
             _stream_append(session_id, delta)
+            all_text["value"] += delta
             draft_buffer["text"] = str(draft_buffer["text"]) + delta
+            draft_id = draft_holder["id"]
             if draft_id is None:
                 return
             now = time.monotonic()
@@ -854,6 +900,19 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             draft_buffer["saved"] = float(len(str(draft_buffer["text"])))
             _flush_assistant_draft(draft_id, str(draft_buffer["text"]))
 
+        def _on_steer_applied(steer_id: str) -> None:
+            """模型已经读到插话:冻结当前 assistant 段，插入 user，后续写进新段。"""
+            text = str(draft_buffer["text"])
+            snapshot = _stream_segment_snapshot(session_id)
+            finished = _finish_streaming_segment(session_id, draft_holder["id"], text=text, snapshot=snapshot)
+            if finished:
+                segments["last_finished"] = finished
+            _mark_steer_applied(session_id, steer_id)
+            _stream_segment_reset(session_id)
+            draft_buffer.update({"text": "", "saved": 0.0, "at": 0.0})
+            draft_holder["id"] = _open_assistant_draft(session_id)
+            segments["count"] += 1
+
         try:
             result = run_turn(
                 adapter,
@@ -861,6 +920,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 on_tool=lambda event: _stream_tool_event(session_id, event),
                 on_thinking=lambda event: _stream_thinking(session_id, event),
                 on_awaiting_user=lambda waiting: origins.waiting_for_user(origin, session_id, waiting),
+                on_steer_applied=_on_steer_applied,
                 **turn_kwargs,
             )
         except Exception as exc:  # noqa: BLE001 —— 落库那一段按类型处理
@@ -885,35 +945,58 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             if result.adapter_state is not None:
                 session.adapter_state = result.adapter_state  # pi 多轮记忆:回存序列化消息
             stream_state = get_stream_state(session_id)
-            timeline = _timeline_for_payload(stream_state, final_text)
+            # 有 steer 边界时，实时流里只剩最后一段；前面各段已经作为独立 assistant 消息落库。
+            segment_text = final_text
+            if segments["count"]:
+                streamed = decode_byte_fallback(all_text["value"])
+                segment_text = decode_byte_fallback(str(draft_buffer["text"]))
+                if final_text.startswith(streamed) and len(final_text) > len(streamed):
+                    segment_text += final_text[len(streamed):]
+            timeline = _timeline_for_payload(stream_state, segment_text)
             # Never persist a blank assistant turn: an empty reply with no tool calls means the
             # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
             # provider misconfiguration look like "nothing happened".
-            if result.aborted and not final_text.strip() and not timeline:
+            if result.aborted and not segment_text.strip() and not timeline:
                 # 还没出字就被停下:那不是「模型什么都没回」,是用户按了停止 —— 照停止记,不报检查供应商配置。
-                final_text = tr("agentTurn_stoppedBeforeReply")
-            if not final_text.strip() and not timeline:
+                segment_text = tr("agentTurn_stoppedBeforeReply")
+            tail_empty = not segment_text.strip() and not timeline
+            if tail_empty and not (segments["count"] and segments["last_finished"]):
                 raise SidecarError("agentErr_emptyReply", human=tr("agentErr_emptyReply"))
             usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
             usage["metering"] = _turn_metering(prompt, final_text, result.usage)
             prompt_snapshot = _prompt_snapshot(db, session.id, system_prompt)
-            assistant_message = _finish_assistant_draft(
-                db,
-                draft_id,
-                session.id,
-                content=final_text,
-                payload={
-                    "usage": usage,
-                    # 系统提示变了才记 —— 轨迹上的每条 SYSTEM 都是一次真实变化。
-                    **({"prompt": prompt_snapshot} if prompt_snapshot else {}),
-                    # 上下文水位挂在最近一条助手消息上,前端据此画进度条 —— 不另建一张表:
-                    # 它天然随对话推进而更新,且历史消息保留着当时的水位,回看时也说得通。
-                    **({"context": result.context} if result.context else {}),
-                    # 压缩必须被看见:静默压缩会让用户以为模型"忘了"早期内容。
-                    **({"compaction": result.compaction} if result.compaction else {}),
-                    **({"timeline": timeline} if timeline else {}),
-                },
-            )
+            payload = {
+                "usage": usage,
+                # 系统提示变了才记 —— 轨迹上的每条 SYSTEM 都是一次真实变化。
+                **({"prompt": prompt_snapshot} if prompt_snapshot else {}),
+                # 上下文水位挂在最近一条助手消息上,前端据此画进度条 —— 不另建一张表:
+                # 它天然随对话推进而更新,且历史消息保留着当时的水位,回看时也说得通。
+                **({"context": result.context} if result.context else {}),
+                # 压缩必须被看见:静默压缩会让用户以为模型"忘了"早期内容。
+                **({"compaction": result.compaction} if result.compaction else {}),
+                **({"timeline": timeline} if timeline else {}),
+            }
+            if tail_empty:
+                # 插话后模型没有产出:删掉空草稿,把本轮的 usage / 水位挂回上一段，不造空气泡。
+                blank = db.get(AgentMessage, draft_holder["id"]) if draft_holder["id"] else None
+                if blank is not None and (blank.payload or {}).get("streaming"):
+                    db.delete(blank)
+                    db.flush()
+                assistant_message = db.get(AgentMessage, str(segments["last_finished"]))
+                if assistant_message is None:
+                    raise SidecarError("agentErr_emptyReply", human=tr("agentErr_emptyReply"))
+                assistant_message.payload = {
+                    **(assistant_message.payload or {}),
+                    **{key: value for key, value in payload.items() if key != "timeline"},
+                }
+            else:
+                assistant_message = _finish_assistant_draft(
+                    db,
+                    draft_holder["id"],
+                    session.id,
+                    content=segment_text,
+                    payload=payload,
+                )
             cards_expire_as = card_expiry.EXPIRY_TURN_STOPPED if result.aborted else card_expiry.EXPIRY_TURN_ENDED
             stopped_by_user = result.aborted
             name_it = titles.wants_a_name(db, session)
@@ -964,7 +1047,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             failure_text = getattr(exc, "human", "") or tr("agentErr_turnFailed")
             assistant_message = _finish_assistant_draft(
                 db,
-                draft_id,
+                draft_holder["id"],
                 session.id,
                 # 说得出原因就说原因 —— 「请稍后重试」对一次超时是错的建议;正文在前,原因在后。
                 content="{}\n\n{}".format(streamed, failure_text) if streamed else failure_text,
@@ -1010,7 +1093,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             crashed = tr("agentErr_turnCrashed")
             assistant_message = _finish_assistant_draft(
                 db,
-                draft_id,
+                draft_holder["id"],
                 session.id,
                 content="{}\n\n{}".format(streamed, crashed) if streamed else crashed,
                 error=str(exc)[:800],
@@ -1327,6 +1410,15 @@ def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -
     message = db.get(AgentMessage, message_id)
     if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
         raise HostError("agentErr_messageAlreadyRunning")
+    if (message.payload or {}).get("steer_pending"):
+        # 已经点过插话、但模型还没消费：把 sidecar 的 steer 队列按剩余 pending 重新声明。
+        # pi 只能清空整队，不能删单条；`set_turn_queue` 就是为这个场景保留的幂等接口。
+        remaining = [
+            user_prompt(item.content, item.payload or {}, db=db, workspace_id=session.workspace_id)
+            for item in _queued_messages(db, session)
+            if item.id != message_id and (item.payload or {}).get("steer_pending")
+        ]
+        set_turn_queue(session.id, remaining)
     db.delete(message)
     db.flush()
     return [item.content for item in _queued_messages(db, session)]
@@ -1403,6 +1495,7 @@ def _unqueue(db: Session, message: AgentMessage) -> None:
     payload.pop("queued", None)
     payload.pop("queued_by", None)
     payload.pop("held", None)
+    payload.pop("steer_pending", None)
     message.payload = payload
     message.created_at = now()
 
@@ -1418,9 +1511,17 @@ def steer_queued_message(db: Session, session: AgentSession, message_id: str, us
         raise HostError("agentErr_queuedMessageMissing")
     # 插话那一份和直发、排队同一个 user_prompt:引用清单、「/」点名的技能都要跟着进去。
     payload = message.payload or {}
-    if not steer_turn(session.id, user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)):
+    if not steer_turn(
+        session.id,
+        user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id),
+        steer_id=message.id,
+    ):
         return False
-    _unqueue(db, message)
+    # **先不要出队。** steer 请求被 sidecar 接住不等于模型已经读到它；等 `steer_applied`
+    # 真正进入上下文时，才把它写成 transcript 消息并切开 assistant 段。
+    payload = dict(payload)
+    payload["steer_pending"] = True
+    message.payload = payload
     db.flush()
     return True
 

@@ -31437,6 +31437,11 @@
             "title": "Text",
             "default": ""
           },
+          "segment": {
+            "type": "integer",
+            "title": "Segment",
+            "default": 0
+          },
           "done": {
             "type": "boolean",
             "title": "Done",

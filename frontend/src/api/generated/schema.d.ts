@@ -10985,6 +10985,11 @@ export interface components {
              */
             text: string;
             /**
+             * Segment
+             * @default 0
+             */
+            segment: number;
+            /**
              * Done
              * @default false
              */
