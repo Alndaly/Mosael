@@ -34,6 +34,8 @@ export interface StandInFrame {
 
 /** 等那张画面画上屏最多等多久:拍得到就几十毫秒;卡住了也不能让浮层一直被视图盖着。 */
 const FRAME_LOAD_WAIT_MS = 1_000;
+/** 拍画面本身最多等多久。ComfyUI 那种持续出帧的网页可能让 capturePage 迟迟不回来 —— 画面只是过渡,不能让截图阻塞让位。 */
+const SNAPSHOT_WAIT_MS = 350;
 
 let holders = 0;
 /** 主进程那边已经把视图挪开了(或者至少记了一笔)。 */
@@ -96,7 +98,12 @@ const nextFrame = () =>
  * 回 false。
  */
 async function stepAside(bridge: Bridge): Promise<boolean> {
-  const shot = typeof bridge.snapshotPage === "function" ? await bridge.snapshotPage().catch(() => null) : null;
+  const shot = typeof bridge.snapshotPage === "function"
+    ? await Promise.race([
+        bridge.snapshotPage().catch(() => null),
+        wait(SNAPSHOT_WAIT_MS).then(() => null),
+      ])
+    : null;
   if (holders === 0) return false;
   if (shot) {
     const take = ++takes;

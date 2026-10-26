@@ -178,6 +178,26 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
     }
   });
 
+  it("网页截图一直不回来也照样让开:拍画面不能成为浮层被原生视图永久盖住的条件", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "requestAnimationFrame"] });
+    snapshotPage.mockImplementation(() => new Promise(() => {}));
+    try {
+      render(<NativeViewStandIn />);
+      const release = stepNativeViewAside();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true]);
+      expect(standIn()).toBeNull();
+      release();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("没有前台网页(拍不到画面):只请主进程记一笔,什么都不铺", async () => {
     snapshotPage.mockImplementation(async () => {
       log.push("snapshot");
