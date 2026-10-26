@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.2.3": {
+    zh: [
+      "**应用内更新能真正完成安装了。** 安装包现在内嵌 `app-update.yml`，下载不再因配置缺失报 `ENOENT`；macOS 在 Squirrel 安装前退出托盘常驻拦截，旧进程可以正常关闭、替换并重启。",
+      "**发布冒烟覆盖更新链路。** 打包检查会核对更新源和缓存目录，并继续验证数据库升级、渲染桥与 WebAuthn；回归测试覆盖任务运行时延迟安装和退出时窗口关闭。",
+      "**Windows 完整版 FFmpeg 构建更新。** 一键安装使用上游 `autobuild-2026-10-25-13-00`，下载地址与 SHA-256 清单已重新校验。",
+    ],
+    en: [
+      "**In-app updates now finish installing.** Packages embed `app-update.yml`, so downloads no longer fail with `ENOENT`; on macOS, tray residency is disabled before Squirrel installs, allowing the old process to close, be replaced and relaunch.",
+      "**Release smoke covers the update path.** Packaged checks verify the update source and cache directory alongside database upgrades, the renderer bridge and WebAuthn; regressions cover deferred installs with running jobs and window close during quit.",
+      "**Refreshed full FFmpeg for Windows.** One-click installation now uses upstream `autobuild-2026-10-25-13-00`, with download URLs and SHA-256 manifests revalidated.",
+    ],
+  },
   "v2.2.2": {
     zh: [
       "**应用内自动更新。** 新版本可以直接在「本机应用」里检查、下载、显示进度并重启安装；macOS 用已签名、公证的 ZIP，Windows 用 NSIS，不再要求手动下载安装包。",

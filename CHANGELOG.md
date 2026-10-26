@@ -3,12 +3,13 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
-## [Unreleased]
+## [2.2.3] - 2026-10-26
 
 ### 应用内更新修复
 
 - **安装包补齐更新器配置。** `app-update.yml` 随 macOS / Windows 包内嵌，下载不再因配置缺失报 `ENOENT`；打包冒烟会检查更新源与缓存目录。
-- **重启安装不再被托盘常驻拦住。** 退出时先停止常驻行为，窗口关闭不会再被改写成隐藏，Squirrel 可以等待进程退出并完成替换、重启。
+- **重启安装不再被托盘常驻拦住。** 在 `quitAndInstall` 前显式停止常驻拦截，窗口关闭不会再被改写成隐藏；Squirrel 可以等待旧进程退出，完成替换并重启。
+- **Windows 完整版 FFmpeg 构建更新。** 「让 Mosael 装一个完整版 FFmpeg」使用上游 `autobuild-2026-10-25-13-00`，清单已重新校验。
 
 ## [2.2.2] - 2026-10-26
 
