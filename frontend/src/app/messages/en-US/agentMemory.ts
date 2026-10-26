@@ -34,6 +34,7 @@ export const agentMemory = {
   monMute: "Mute",
   monVolume: "Volume",
   monFullscreen: "Fullscreen",
+  monExitFullscreen: "Exit full screen",
   pickDetailTitle: "Select an item",
   pickDetailBody: "Pick one from the list to see its details here.",
   mediaSelectMode: "Select",

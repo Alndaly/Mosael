@@ -111,6 +111,31 @@ describe("层序与时间线一致", () => {
   });
 });
 
+describe("监视器全屏", () => {
+  it("全屏目标是监视器外壳,进度条和底部控制条跟着一起进去", () => {
+    let target: Element | null = null;
+    const original = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = vi.fn(function (this: HTMLElement) {
+      target = this;
+      return Promise.resolve();
+    });
+
+    renderMonitor([track("V1", 0, [clip("c1", "V1", 0, 10)])]);
+    fireEvent.click(screen.getByRole("button", { name: "monFullscreen" }));
+
+    expect(target).not.toBeNull();
+    // 全屏元素必须同时包住画面和底部控制条;只包画面会让进度条、播放键、退出全屏全部消失。
+    expect(target!.querySelector('[data-testid="monitor-timecode"]')).not.toBeNull();
+    expect(target!.contains(screen.getByRole("button", { name: "monFullscreen" }))).toBe(true);
+
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => target });
+    act(() => void document.dispatchEvent(new Event("fullscreenchange")));
+    expect(screen.getByRole("button", { name: "monExitFullscreen" })).toBeVisible();
+    delete (document as { fullscreenElement?: Element }).fullscreenElement;
+    HTMLElement.prototype.requestFullscreen = original;
+  });
+});
+
 describe("监视器走帧", () => {
   it("逐帧按钮按帧号走,时间码显示到帧", () => {
     renderMonitor([track("V1", 0, [clip("c1", "V1", 0, 10)])], 25);

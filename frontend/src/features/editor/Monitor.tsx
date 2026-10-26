@@ -1,5 +1,5 @@
 import React from "react";
-import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Minimize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
 import { type Asset, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -81,7 +81,15 @@ export function Monitor({
   const { setPlayhead, togglePlaying, toggleLoop, cyclePlaybackRate, setVolume, toggleMuted } =
     useEditorStore.getState();
   const stageRef = React.useRef<HTMLDivElement | null>(null);
-  const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
+  const monitorShellRef = React.useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+
+  React.useEffect(() => {
+    const sync = () => setIsFullscreen(document.fullscreenElement === monitorShellRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    sync();
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
 
   const videoTracks = React.useMemo(
@@ -371,13 +379,15 @@ export function Monitor({
     }
   };
   const toggleFullscreen = () => {
-    // Fullscreen the stage (not the frame): it's a size container that centers the frame, so the
-    // frame's cq-based min(100cqw, 100cqh×ar) sizing now resolves against the SCREEN and stays
-    // 16:9 (letterboxed), instead of the frame filling the screen and object-fit cropping it.
-    const stage = monitorStageRef.current;
-    if (!stage) return;
+    // Fullscreen the monitor shell, not just the picture: the scrubber and the
+    // bottom controls are siblings of the stage. Requesting the stage made the
+    // browser exclude them, so fullscreen had no progress bar and no way to
+    // pause/seek/leave except Esc. The shell keeps the frame's size-container
+    // available above the controls, so the 16:9 letterbox math is unchanged.
+    const shell = monitorShellRef.current;
+    if (!shell) return;
     if (document.fullscreenElement) void document.exitFullscreen();
-    else void stage.requestFullscreen().catch(() => undefined);
+    else void shell.requestFullscreen().catch(() => undefined);
   };
   const playToggle = () => {
     if (!playing && totalDuration > 0 && useEditorStore.getState().playhead >= totalDuration) setPlayhead(0);
@@ -395,7 +405,10 @@ export function Monitor({
   };
 
   return (
-    <div className="grid h-full min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]">
+    <div
+      ref={monitorShellRef}
+      className="grid h-full min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-black [&:fullscreen::backdrop]:bg-black"
+    >
       {/* 音频只有一条路:WebAudio 混音器,它的 AudioContext 同时是时间线的主时钟。
           曾经还有一条「每个活跃音频片段一个 <audio>」的元素路,随画面元素路一并删除——
           两条路并存时混音器与 <video> 会各放一遍,所以引擎选择必须是唯一且稳定的一个。 */}
@@ -412,7 +425,7 @@ export function Monitor({
           </filter>
         </svg>
       )}
-      <div className="grid min-h-0 place-items-center p-3 [container-type:size] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-black [&:fullscreen::backdrop]:bg-black" ref={monitorStageRef}>
+      <div className="grid min-h-0 place-items-center p-3 [container-type:size]">
         <div className="relative aspect-video max-h-full max-w-full overflow-hidden rounded-sm bg-black [container-type:inline-size] w-[min(100cqw,calc(100cqh*var(--frame-ar,1.7778)))] [:fullscreen_&]:rounded-none" ref={stageRef} onClick={onFrameClick} style={frameStyle}>
           {/* fillMode=blur 的模糊背景由 paintScene 直接画在同一张 canvas 上(见 scenePaint),
               这里不再另铺一层 DOM 视频——那是元素路的做法,两者会叠出双重背景。 */}
@@ -591,7 +604,7 @@ export function Monitor({
       {/* 底部行:左右缩进与画面/进度条同一刻度(12px);上下留白让按钮离面板底边有呼吸感,
           不再紧贴底边界线(pt 略小于 pb,视觉重心稍稍上抬)。 */}
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 pb-3 pt-2 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <IconButton variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} label={t("monStart")} shortcut="Home">
             <SkipBack size={14} />
           </IconButton>
@@ -624,7 +637,7 @@ export function Monitor({
           </Hint>
         </div>
         <MonitorTimecode totalDuration={totalDuration} fps={fps} />
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <IconButton variant="ghost" size="icon-sm" onClick={toggleMuted} aria-pressed={masterMuted} label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </IconButton>
@@ -637,8 +650,13 @@ export function Monitor({
             onValueChange={([value]) => setVolume(value)}
             aria-label={t("monVolume")}
           />
-          <IconButton variant="ghost" size="icon-sm" onClick={toggleFullscreen} label={t("monFullscreen")}>
-            <Maximize2 size={13} />
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleFullscreen}
+            label={isFullscreen ? t("monExitFullscreen") : t("monFullscreen")}
+          >
+            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           </IconButton>
         </div>
       </div>

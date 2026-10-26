@@ -35,6 +35,7 @@ export const agentMemory = {
   monMute: "静音",
   monVolume: "音量",
   monFullscreen: "全屏",
+  monExitFullscreen: "退出全屏",
   // 主从页面:列表有内容但未选中时,详情区显示"去选择"而非复用整页空态的"还没有X"。
   pickDetailTitle: "选择一项查看",
   pickDetailBody: "从左侧列表选一项,这里显示它的详情。",

@@ -973,7 +973,7 @@ export function Timeline({
           字照样给读屏(sr-only)—— 此前这一排在 1024 宽时折成两行,轨道区只剩一条半。 */}
       <div className="editor-timeline-toolbar @container/timeline-bar flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider bg-workspace-panel px-3 py-1.5">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
-          <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
+          <div className="inline-flex h-8 items-stretch gap-1 whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <Hint label={t("toolSelectHint")} shortcut="A">
               <Button
                 variant="ghost"
@@ -997,7 +997,7 @@ export function Timeline({
               </Button>
             </Hint>
           </div>
-          <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editMode")}>
+          <div className="inline-flex h-8 items-stretch gap-1 whitespace-nowrap" role="group" aria-label={t("editMode")}>
             <Hint label={t("editModeOverwriteHint")}>
               <Button
                 variant="ghost"
@@ -1022,9 +1022,9 @@ export function Timeline({
             </Hint>
           </div>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           {toolbarExtra}
-          {(onSplitClip || onDuplicateClip || onDeleteClips) && <span className="mx-[3px] h-4 w-px bg-divider" />}
+          {(onSplitClip || onDuplicateClip || onDeleteClips) && <span className="mx-1 h-4 w-px bg-divider" />}
           {onSplitClip && (
             <IconButton
               variant="ghost"
@@ -1083,7 +1083,7 @@ export function Timeline({
               <Trash2 size={14} />
             </IconButton>
           )}
-          <span className="mx-[3px] h-4 w-px bg-divider" />
+          <span className="mx-1 h-4 w-px bg-divider" />
           {onAddTrack && (
             <Popover>
               <PopoverTrigger asChild>
@@ -1210,9 +1210,9 @@ export function Timeline({
                 </span>
                 )}
               </div>
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1">
               {onSetTrackState && (
-                <span className="inline-flex gap-0.5">
+                <span className="inline-flex gap-1">
                   {/* 静音 / 独奏 / 闪避只管声音。字幕轨没有声音(在它上面按独奏,「有轨在独奏」成立
                       而它自己不出声,结果是整片静音),它头上只有「隐藏」:预览和成片里都不画这条字幕。 */}
                   {track.kind === "subtitle" ? (
