@@ -247,8 +247,10 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
 - **这一轮在哪**:这一轮要回答的用户消息里最新一条的 `place`;没有(飞书、另一段对话的通知、老消息)就用这段对话的家。
 - **工具分三份**,在 `mcp_server.tool` 上声明 `kit`:
   - 不声明 —— 通用,哪儿都发:素材、生成、笔记、技能、记忆、计划、`open_view`、浏览器、任务……以及各种「列出 / 读」;
-  - `kit="comfyui"` —— `comfy_*`(0042 第一步的九个,第二、三步加的改图、新建、装节点包、试跑也进这一份):**只在这一轮在 ComfyUI 工作台**时发。
+  - `kit="comfyui"` —— `comfy_*`(0042 第一步的九个,第二、三步加的改图、新建、装节点包、试跑也进这一份):**这一轮在 ComfyUI 工作台**时发。
     `needs="workflow_library"` 照旧叠在上面:没接 ComfyUI 的人在哪都不发;
+    **例外**:一段家是 ComfyUI 的对话被 AI Studio(或别的页面)继续时,这一轮的主集仍是当前地点,但补回 `comfyui` kit。
+    否则上下文里会出现 `plugin__…__list_models` 这类名字,工具表里却够不着;补的是**会话的家**对应的那一份,不是把 `comfy_*` 塞进所有新对话。
   - `kit="canvas"` —— 改 Mosael 自家画布的那一份:`edit_board`、`get_board`、`run_board_item`、`list_board_producers`、`edit_timeline`、`edit_scene`、
     `view_scene`、`render_scene_references`、`list_scene_models`、`edit_workflow`、`update_workflow`、`list_workflow_node_types`、`blender_*`。
     **工作台以外哪儿都发**,工作台里不发。
