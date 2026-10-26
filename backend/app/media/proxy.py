@@ -27,9 +27,12 @@ the index with a few Range requests and decodes only the stretch of samples it i
 
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
+import uuid
 from pathlib import Path
+from typing import Any, Callable
 
 from app.core.child_process import run_logged
 from app.core.config import settings
@@ -88,14 +91,59 @@ class ProxyFailed(RuntimeError):
         self.reason = reason
 
 
-def build_proxy(source: Path, target: Path, *, timeout: float = PROXY_TIMEOUT_FLOOR_SECONDS) -> bool:
+def _part_path(target: Path) -> Path:
+    """一次转码自己的临时文件名。ffmpeg **只写这里**,转完整了才换到 `target` 上。
+
+    此前是把要给人读的 `proxy.mp4` 直接交给 ffmpeg,失败/超时再把它删掉:于是一次重建没转成,
+    连**原来那份还能用的**代理一起没了 —— 取消、超时、换个版本重转,三条路都踩得到。而且
+    转的过程中,那半截文件就是接口在发的那一份。进程被杀掉时留下的 `*.part.mp4` 在素材目录里,
+    删素材时跟着目录一起走,不会出现在任何列表里。
+    """
+    tag = f"{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex[:8]}"
+    return target.with_name(f"{target.stem}.{tag}.part{target.suffix}")
+
+
+def _still_wanted(check: Callable[[], None] | None) -> None:
+    """收尾之前问一句「还有人要吗」。
+
+    **转码不该认识任务系统**(这个模块的说明就是这么定的,见文件头):所以 `check` 是调用方传进来的,
+    领域那边给的是 jobs.ensure_wanted。被取消时它抛 JobCancelled —— 产出不发布、旧代理不动、
+    也不把「转坏了」记到素材上。
+    """
+    if check is not None:
+        check()
+
+
+def _publish(part: Path, target: Path) -> bool:
+    """换上刚转好的那一份。`os.replace` 在同一个目录里是原子的:读的人要么看见旧代理,要么看见新的。"""
+    try:
+        os.replace(part, target)
+    except OSError:
+        part.unlink(missing_ok=True)
+        return False
+    return target.is_file()
+
+
+def build_proxy(
+    source: Path,
+    target: Path,
+    *,
+    timeout: float = PROXY_TIMEOUT_FLOOR_SECONDS,
+    on_child: Callable[[subprocess.Popen], Any] | None = None,
+    still_wanted: Callable[[], None] | None = None,
+) -> bool:
     """Transcode the H.264 short-GOP faststart preview proxy. Returns success.
 
-    超时抛 `ProxyTimedOut`(半截文件已删),好让调用方说清是「太慢」而不是「转坏了」;ffmpeg 自己报错退出时抛
-    `ProxyFailed`,带着它说明原因的那一行(源文件坏了、编码不支持……)—— 此前失败只有一句「ffmpeg 代理转码失败」,
-    看不出是哪种(体检 UM-33)。"""
+    超时抛 `ProxyTimedOut`,ffmpeg 自己报错退出时抛 `ProxyFailed`(带着它说明原因的那一行)—— 两种都
+    **不会动 `target`**:新的一份先写在别处,成了才换上去(见 `_part_path` / `_publish`)。
+
+    `on_child` 在 ffmpeg 起来的那一刻交给调用方:任务取消要掐得掉它,而掐得掉的前提是它登记在这个任务上
+    (见 jobs.register_job_child)。`still_wanted` 在收尾前问一次(领域传 jobs.ensure_wanted),被取消就抛
+    JobCancelled,不发布产出。"""
+
     # Cap height (even width via -2), never upscaling — yuv420p needs even dimensions either way.
     scale = f"scale=-2:'min({PROXY_HEIGHT},ih)'"
+    part = _part_path(target)
     args = [
         settings.ffmpeg, "-y", "-v", "error",
         "-i", str(source),
@@ -109,33 +157,53 @@ def build_proxy(source: Path, target: Path, *, timeout: float = PROXY_TIMEOUT_FL
         "-bf", "0",
         "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         "-c:a", "aac", "-b:a", "128k",
-        str(target),
+        str(part),
     ]
     try:
-        run_logged(args, check=True, capture_output=True, timeout=timeout, what="代理转码")
+        run_logged(args, check=True, capture_output=True, timeout=timeout, what="代理转码", on_child=on_child)
     except subprocess.TimeoutExpired as exc:
-        target.unlink(missing_ok=True)
+        part.unlink(missing_ok=True)
+        _still_wanted(still_wanted)
         raise ProxyTimedOut(f"proxy transcode did not finish within {timeout:.0f}s") from exc
     except subprocess.CalledProcessError as exc:
-        target.unlink(missing_ok=True)
+        part.unlink(missing_ok=True)
+        # 取消时 ffmpeg 是我们自己掐的,非零退出码不是素材的错:先问一句,是取消就让 JobCancelled 冒上去,
+        # 别把一个已经没人要的转码记成「素材转坏了」。
+        _still_wanted(still_wanted)
         said = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
         raise ProxyFailed(blame_line(said)) from exc
     except Exception:
-        target.unlink(missing_ok=True)
+        part.unlink(missing_ok=True)
+        _still_wanted(still_wanted)
         return False
-    return target.is_file()
+    try:
+        _still_wanted(still_wanted)  # 转完了,但已经没人要了:产出不发布
+    except Exception:
+        part.unlink(missing_ok=True)
+        raise
+    return _publish(part, target)
 
 
 def audio_proxy_path(asset_directory: Path) -> Path:
     return asset_directory / AUDIO_PROXY_NAME
 
 
-def build_audio_proxy(source: Path, target: Path) -> bool:
+def build_audio_proxy(
+    source: Path,
+    target: Path,
+    *,
+    on_child: Callable[[subprocess.Popen], Any] | None = None,
+    still_wanted: Callable[[], None] | None = None,
+) -> bool:
     """Transcode the preview audio proxy (first audio stream only). Returns success.
 
     Callers check `probe_has_audio` first: a source with no audio stream is not a failure, it is
     a silent asset, and must be recorded as such rather than retried.
+
+    和画面代理同一条规矩:写在自己的临时文件里,成了才换到 `target` 上 —— 重建失败不会把还能用的
+    那份音频代理删掉。`on_child` / `still_wanted` 的用处见 `build_proxy`。
     """
+    part = _part_path(target)
     args = [
         settings.ffmpeg, "-y", "-v", "error",
         "-i", str(source),
@@ -145,14 +213,20 @@ def build_audio_proxy(source: Path, target: Path) -> bool:
         # moov first: the browser reads the sample table with a couple of small Range requests
         # and then fetches only the byte ranges of the samples it is about to decode.
         "-movflags", "+faststart",
-        str(target),
+        str(part),
     ]
     try:
-        run_logged(args, check=True, capture_output=True, timeout=1800, what="音频代理转码")
+        run_logged(args, check=True, capture_output=True, timeout=1800, what="音频代理转码", on_child=on_child)
     except Exception:
-        target.unlink(missing_ok=True)
+        part.unlink(missing_ok=True)
+        _still_wanted(still_wanted)
         return False
-    return target.is_file()
+    try:
+        _still_wanted(still_wanted)
+    except Exception:
+        part.unlink(missing_ok=True)
+        raise
+    return _publish(part, target)
 
 
 __all__ = [

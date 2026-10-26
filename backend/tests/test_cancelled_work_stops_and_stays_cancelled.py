@@ -174,7 +174,7 @@ def test_a_proxy_cancelled_while_waiting_for_a_slot_stays_cancelled(monkeypatch)
     monkeypatch.setattr(settings, "generate_proxies", True)
     monkeypatch.setattr(proxies, "audio_proxies_possible", lambda asset: False)
     built: list[str] = []
-    monkeypatch.setattr(proxies, "build_proxy", lambda src, dst: built.append(str(src)) or True)
+    monkeypatch.setattr(proxies, "build_proxy", lambda src, dst, **_options: built.append(str(src)) or True)
     settled: list[str] = []
     monkeypatch.setitem(jobs_bus._SETTLE_LISTENERS, "probe", lambda db, job: settled.append(job.status))
 

@@ -203,3 +203,39 @@ def test_守卫只有一处(monkeypatch: pytest.MonkeyPatch) -> None:
     assert proxyjobs.proxies_possible(SimpleNamespace(kind="audio", file_key="k")) is False
     monkeypatch.setattr(settings, "generate_proxies", False)
     assert proxyjobs.proxies_possible(video) is False
+
+
+def test_重建失败不动已有的好代理(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """新的代理先写临时文件,失败/超时不能把还能用的那份一起删掉。"""
+    src = tmp_path / "src.mp4"
+    src.write_bytes(b"source")
+    target = tmp_path / "proxy.mp4"
+    target.write_bytes(b"good-proxy")
+
+    def boom(*_args, **_kwargs):
+        raise subprocess.CalledProcessError(1, "ffmpeg", stderr=b"encoder exploded")
+
+    monkeypatch.setattr(proxymod, "run_logged", boom)
+    with pytest.raises(proxymod.ProxyFailed):
+        proxymod.build_proxy(src, target)
+    assert target.read_bytes() == b"good-proxy"
+    assert not list(tmp_path.glob("*.part.mp4"))
+
+
+def test_代理转码把子进程交给任务取消(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`on_child` 必须传到 run_logged,否则取消任务时掐不到 ffmpeg。"""
+    src = tmp_path / "src.mp4"
+    src.write_bytes(b"source")
+    target = tmp_path / "proxy.mp4"
+    seen: list[object] = []
+
+    def fake_run(args, **kwargs):
+        callback = kwargs["on_child"]
+        callback("ffmpeg-child")
+        Path(args[-1]).write_bytes(b"new-proxy")
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr(proxymod, "run_logged", fake_run)
+    assert proxymod.build_proxy(src, target, on_child=seen.append) is True
+    assert seen == ["ffmpeg-child"]
+    assert target.read_bytes() == b"new-proxy"

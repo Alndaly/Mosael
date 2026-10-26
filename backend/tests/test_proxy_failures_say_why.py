@@ -58,7 +58,7 @@ def test_任务失败原因里写着那一行(monkeypatch, tmp_path: Path) -> No
     with SessionLocal() as db:
         job_id = db.scalars(select(Job).where(Job.kind == "proxy")).first().id
 
-    def broken(_source, _target, *, timeout):
+    def broken(_source, _target, *, timeout, **_options):
         raise proxymod.ProxyFailed("moov atom not found")
 
     monkeypatch.setattr(proxyjobs, "build_proxy", broken)

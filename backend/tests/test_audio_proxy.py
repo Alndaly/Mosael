@@ -178,7 +178,7 @@ def test_音频代理转失败_记failed_任务失败_画面代理那一半照�
     monkeypatch.setattr(settings, "generate_proxies", True)
     monkeypatch.setattr(jobs_bus.threading, "Thread", _FakeThread)
     monkeypatch.setattr(proxyjobs, "build_proxy", lambda source, target, **_options: target.write_bytes(b"x") is not None)
-    monkeypatch.setattr(proxyjobs, "build_audio_proxy", lambda source, target: False)
+    monkeypatch.setattr(proxyjobs, "build_audio_proxy", lambda source, target, **_options: False)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     src = tmp_path / "talk.mp4"

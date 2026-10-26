@@ -29,10 +29,12 @@ from app.domain.jobs import (
     JobCancelled,
     blame,
     create_job,
+    detach_job_child,
     dispatch_job,
     emit_job_event,
     ensure_wanted,
     finish_job,
+    register_job_child,
     say,
     start_job,
 )
@@ -146,10 +148,38 @@ def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force:
     return queue_proxy_job(db, asset, created_by=created_by, video=video, audio=audio)
 
 
+def _active_proxy_job(db: Session, asset: Asset) -> Job | None:
+    """这个素材上**还没落终态**的代理任务,有就返回它。
+
+    同一份素材同时只该有一个:两个任务会往同一个 `proxy.mp4` 里转(名字还是那个名字),各自写
+    `pending` / `ready`,最后一个落库的说了算 —— 而先完成的那一份可能已经把「转好了」写回去,又被
+    后一个的 `pending` 盖掉。启动补齐扫描和「重新生成」按钮撞在一起时,这条路真的会走到。
+    """
+    for job in db.scalars(
+        select(Job)
+        .where(
+            Job.workspace_id == asset.workspace_id,
+            Job.kind == "proxy",
+            Job.status.in_(("queued", "running")),
+        )
+        .order_by(Job.created_at)
+    ):
+        if (job.payload or {}).get("asset_id") == asset.id:
+            return job
+    return None
+
+
 def queue_proxy_job(db: Session, asset: Asset, *, created_by: str | None, video: bool, audio: bool) -> Job | None:
-    """排一个代理任务,只做点名的那几样;两样都不要就什么都不做。"""
+    """排一个代理任务,只做点名的那几样;两样都不要就什么都不做。
+
+    这份素材已经在转的话,**把那个任务交回去**,不再建第二个:重复的入口是存在的(导入、启动补齐扫描、
+    重新生成按钮),它们本来就可能同时问一遍。`force` 重建也一样 —— 它要的那次重建已经在路上。
+    """
     if not (video or audio):
         return None
+    running = _active_proxy_job(db, asset)
+    if running is not None:
+        return running
     job = create_job(
         db,
         workspace_id=asset.workspace_id,
@@ -213,6 +243,14 @@ def _transcode(job_id: str, asset_id: str) -> None:
         if not start_job(db, job, progress=0.1):
             _drop_pending(db, job_id, asset_id)
             return
+        #: 本次任务起过的 ffmpeg。取消经 register_job_child 掐得到它们;转完必须撤掉登记 ——
+        #: 掐一个已经退出的 pid,极端情况下会掐到被系统复用的那一个(导出那边同样在 finally 里撤)。
+        children: list[object] = []
+
+        def track(child: object) -> None:
+            children.append(child)
+            register_job_child(job_id, child)
+
         try:
             say(job, "jobMsg_proxyRunning")
             emit_job_event(db, job.id, "job.running", {})
@@ -233,14 +271,21 @@ def _transcode(job_id: str, asset_id: str) -> None:
                 limit = proxy_timeout((asset.media_info or {}).get("duration"))
                 ffmpeg_said = ""
                 try:
-                    built = build_proxy(source, proxy_path(source.parent), timeout=limit)  # slot held by _run_proxy
+                    # slot held by _run_proxy。`on_child` 让取消掐得掉 ffmpeg,`still_wanted` 让取消过的
+                    # 转码不发布产出、也不被记成「素材转坏了」。
+                    built = build_proxy(
+                        source,
+                        proxy_path(source.parent),
+                        timeout=limit,
+                        on_child=track,
+                        still_wanted=ensure_wanted,
+                    )
                     timed_out = False
                 except ProxyTimedOut:
                     built, timed_out = False, True
                 except ProxyFailed as exc:
                     #: 带上 ffmpeg 说明原因的那一行:源文件坏了、编码不支持、磁盘满了,看得出是哪种(体检 UM-33)。
                     built, timed_out, ffmpeg_said = False, False, exc.reason
-                ensure_wanted()  # 转码中途被取消:ffmpeg 已被停下,不把「转坏了」记到素材上
                 if built:
                     result["proxy_key"] = proxy_key_for(asset)
                     _set_proxy_meta(db, asset_id, "ready", key=result["proxy_key"])
@@ -253,10 +298,16 @@ def _transcode(job_id: str, asset_id: str) -> None:
                     )
             if audio:
                 if not probe_has_audio(source):
+                    # 取消会把探测(ffprobe)掐断,它于是回 False:别把「没有音轨」记成终态。
+                    ensure_wanted()
                     _set_audio_proxy_meta(db, asset_id, "silent")
                 else:
-                    built = build_audio_proxy(source, audio_proxy_path(source.parent))
-                    ensure_wanted()
+                    built = build_audio_proxy(
+                        source,
+                        audio_proxy_path(source.parent),
+                        on_child=track,
+                        still_wanted=ensure_wanted,
+                    )
                     if built:
                         result["audio_proxy_key"] = audio_proxy_key_for(asset)
                         _set_audio_proxy_meta(db, asset_id, "ready", key=result["audio_proxy_key"])
@@ -275,6 +326,9 @@ def _transcode(job_id: str, asset_id: str) -> None:
         except Exception as exc:  # a worker thread must record failure, never die silently
             db.rollback()
             _fail(db, job_id, asset_id, exc, video=video, audio=audio)
+        finally:
+            for child in children:
+                detach_job_child(job_id, child)
 
 
 def _drop_pending(db: Session, job_id: str, asset_id: str) -> None:

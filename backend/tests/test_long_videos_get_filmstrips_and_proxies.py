@@ -144,7 +144,7 @@ def test_长片的代理按时长给时限_超时和转坏分开说(monkeypatch,
         job_id = db.scalars(select(Job).where(Job.kind == "proxy")).first().id
     limits: list[float] = []
 
-    def too_slow(_source, target, *, timeout):
+    def too_slow(_source, target, *, timeout, **_options):
         limits.append(timeout)
         raise proxymod.ProxyTimedOut("slow")
 
