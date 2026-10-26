@@ -175,7 +175,7 @@ export function BoardCommentLayer({
             <button
               type="button"
               className={cn(
-                "grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full border text-ui-2xs font-semibold shadow-[var(--shadow-panel)] transition-transform hover:scale-110",
+                "grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full border text-ui-2xs font-semibold transition-transform hover:scale-110",
                 movable && "cursor-grab active:cursor-grabbing",
                 active
                   ? "border-primary bg-action text-action-foreground"
@@ -276,7 +276,7 @@ export function BoardCommentLayer({
           <IconButton
             unstyled
             data-comment-drag-handle=""
-            className="pointer-events-auto grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
+            className="pointer-events-auto grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground active:cursor-grabbing"
             label={t("comments")}
             onPointerDown={(event) => {
               if (event.button !== 0) return;

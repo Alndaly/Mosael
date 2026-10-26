@@ -6,12 +6,12 @@ export const CANVAS_PANEL_EDGE_INSET_PX = 8;
 /**
  * 画布上那层浮起来的东西共用的材质:半透 + 背后模糊 + 一条很轻的描边。
  *
- * **只有影子分高度。** 工具条和标题胶囊贴着画布(--shadow-panel),浮窗浮在画布之上、而且
- * 会彼此叠放,所以要一层明显得多的影子(见 CANVAS_WINDOW_SURFACE_CLASS)。这是两者唯一的差别 ——
- * 颜色、模糊、描边、圆角都必须是同一份,否则同一张画布上会读出两种"浮层"。
+ * **节点和工具条都不投影。** 它们贴着画布,边框和底色已经说明边界;再给 elevation 就会和
+ * 节点、内嵌选中块、评论钉叠成一串同心阴影。只有真正脱离画布、会互相叠放的窗口才浮起
+ * (见 CANVAS_WINDOW_SURFACE_CLASS)。这是两者唯一的差别 —— 颜色、描边、圆角仍是同一份。
  */
 export const CANVAS_GLASS_SURFACE_CLASS =
-  "canvas-overlay-surface border border-floating-border shadow-[var(--shadow-panel)]";
+  "canvas-overlay-surface border border-floating-border";
 
 /**
  * 画布上的**浮窗**:合成器、评论卡、智能体面板、执行历史。

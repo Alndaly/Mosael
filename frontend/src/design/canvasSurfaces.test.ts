@@ -108,21 +108,22 @@ describe("画布浮层", () => {
     }
   });
 
-  it("工具条和浮窗是同一种材质,只差一层影子", () => {
+  it("工具条和浮窗同材质;只有真正脱离画布的浮窗有影子", () => {
     const material = (value: string) =>
       value.split(" ").filter((one) => !one.startsWith("shadow-") && !one.startsWith("rounded-"));
     expect(material(CANVAS_WINDOW_SURFACE_CLASS)).toEqual(material(CANVAS_GLASS_SURFACE_CLASS));
     expect(CANVAS_WINDOW_SURFACE_CLASS).toContain("shadow-[var(--shadow-canvas-window)]");
-    expect(CANVAS_GLASS_SURFACE_CLASS).toContain("shadow-[var(--shadow-panel)]");
+    //: 工具条贴着画布/节点,边框和底色已经足够;再投影就和节点、内嵌块叠成一串阴影。
+    expect(CANVAS_GLASS_SURFACE_CLASS).not.toContain("shadow-");
   });
 });
 
 /**
- * 深色下的阴影**不许有负 spread、alpha 也不许大**。
+ * 深色下的阴影**只留给真正浮起的窗口,而且不许有负 spread、alpha 也不许大**。
  *
  * 深色底上能用的灰阶只有几十级:负 spread 会把衰减的起点切成一条硬边,alpha 一大,层与层之间
- * 就成了看得见的一圈同心环(维护者 2026-10-24:「很多阴影有着明显的分层」—— 画布节点弹窗、
- * 内嵌浏览器浮窗都在列)。层次靠**强度与模糊半径**分,不靠负 spread 收边。
+ * 就成了看得见的一圈同心环。画布节点、工具条、内嵌选中块、评论钉现在一律不投影;剩下的
+ * 每一档仍保持单层、无负 spread。
  */
 describe("深色阴影的形状", () => {
   const DARK = ".dark";

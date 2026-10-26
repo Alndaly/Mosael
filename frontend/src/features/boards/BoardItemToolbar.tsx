@@ -170,7 +170,7 @@ export function ItemToolbar({
       <div
         ref={bar}
         style={fit}
-        className="nodrag nopan flex items-center gap-1 whitespace-nowrap rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]"
+        className="nodrag nopan flex items-center gap-1 whitespace-nowrap rounded-full border border-floating-border bg-panel p-1.5"
       >
         {/* 按类型来的几段各装在一格里,**分隔线是那一格自己的右边框**(ToolbarCluster)。于是它不可能在没有
             动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的条件,加了音频节点之后就和实际渲染分了岔。 */}
@@ -583,7 +583,7 @@ function SlotSwitch({
               aria-checked={on}
               className={cn(
                 "flex max-w-40 cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-ui-xs transition-colors",
-                on ? "bg-panel text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                on ? "bg-panel text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
               onClick={() => onSwitch(one.id as BoardProducer)}
             >

@@ -564,7 +564,7 @@ export function NodeInspector({
         两组都按"有才出":没跑过就没有「本次产出」,不是子图就没有「进入子图」。
         和面板一样长在画布坐标系里,所以同样要挂 nodrag/nopan —— 不然按下去是在拖节点。 */}
     <NodeToolbar nodeId={node.id} isVisible position={Position.Top} align="center" offset={12}>
-      <div className="nodrag nopan nokey flex items-center gap-1 rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]">
+      <div className="nodrag nopan nokey flex items-center gap-1 rounded-full border border-floating-border bg-panel p-1.5">
         {areas.map((id) => (
           <button
             key={id}

@@ -784,7 +784,7 @@ export function WorkflowEditor({
                   <div
                     data-wf-run-refused=""
                     className={visitedRefusal === refusal
-                      ? "pointer-events-auto max-w-[440px] rounded-full border border-field-border bg-card px-3 py-1.5 shadow-sm"
+                      ? "pointer-events-auto max-w-[440px] rounded-full border border-field-border bg-card px-3 py-1.5"
                       : "pointer-events-auto w-full max-w-[440px] rounded-lg bg-card"}
                   >
                     <FailureCard
@@ -817,7 +817,7 @@ export function WorkflowEditor({
                         onClick={() => handleCollapse(selectedFlowIds)}
                         // **select-none**:它出现的时机正是框选拖拽刚结束的那一刻,而那一下拖拽会把
                         // 按钮上的字一起选中 —— 于是文字顶着一层系统选区的紫色,看着像坏了。
-                        className="inline-flex select-none items-center gap-1.5 rounded-full border border-field-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+                        className="inline-flex select-none items-center gap-1.5 rounded-full border border-field-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
                       >
                         <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
                       </button>

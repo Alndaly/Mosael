@@ -207,7 +207,7 @@ export function BoardSelectionOutlet({
           label={label}
           onPointerDown={begin}
           className={cn(
-            "nodrag nopan pointer-events-auto absolute grid size-7 -translate-x-1/2 -translate-y-1/2 cursor-crosshair place-items-center rounded-full border shadow-sm transition-colors",
+            "nodrag nopan pointer-events-auto absolute grid size-7 -translate-x-1/2 -translate-y-1/2 cursor-crosshair place-items-center rounded-full border transition-colors",
             point
               ? "border-primary bg-primary text-primary-foreground"
               : "border-primary/70 bg-panel text-primary hover:border-primary hover:bg-primary hover:text-primary-foreground",

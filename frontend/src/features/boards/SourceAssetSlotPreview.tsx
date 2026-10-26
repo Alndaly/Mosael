@@ -66,7 +66,7 @@ export function SourceAssetSlotPreview({
           unstyled
           label={`${t("boardRemove")}${label}`}
           onClick={onRemove}
-          className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
+          className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
         >
           <X size={9} />
         </IconButton>
