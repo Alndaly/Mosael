@@ -856,8 +856,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "currently {current}, becomes {version}",
     },
     "confirm_comfyCanvasRun": {
-        "zh": "在 ComfyUI「{instance}」上运行画布上开着的「{name}」({path})—— 用的是那台机器的显卡,跑完把结果和报错交回来",
-        "en": "Run “{name}” ({path}), open on the canvas, on “{instance}”'s ComfyUI — it uses that machine's GPU; results and errors come back here",
+        "zh": "在 ComfyUI「{instance}」上运行画布上开着的「{name}」({path}){target} —— 用的是那台机器的显卡,跑完把结果和报错交回来",
+        "en": "Run “{name}” ({path}), open on the canvas, on “{instance}”'s ComfyUI{target} — it uses that machine's GPU; results and errors come back here",
+    },
+    "confirm_comfyCanvasRunNode": {
+        "zh": ",只跑输出节点 #{node} 和它依赖的上游",
+        "en": ", executing only output node #{node} and its upstream dependencies",
+    },
+    "workbenchErr_runNodeMissing": {
+        "zh": "画布上找不到节点 #{node},这次没有运行。先重新读一遍画布,再选输出节点。",
+        "en": "Node #{node} is not on the canvas, so nothing was run. Read the canvas again and pick an output node.",
     },
     "confirm_deleteAssets": {
         "zh": "永久删除 {count} 个素材({names}){tail} —— 文件会从磁盘上清掉,撤不回来",

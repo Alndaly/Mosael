@@ -255,10 +255,12 @@ def required_inputs(prompt: dict[str, Any], object_info: dict[str, Any], locale:
 
 
 def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str,
-           extra_data: dict[str, Any] | None = None) -> str:
+           extra_data: dict[str, Any] | None = None, targets: list[str] | None = None) -> str:
     body: dict[str, Any] = {"prompt": prompt, "client_id": client_id}
     if extra_data:
         body["extra_data"] = extra_data
+    if targets:
+        body["partial_execution_targets"] = targets
     try:
         answer = comfy.post("/prompt", body)
     except ComfyError as exc:
@@ -858,11 +860,31 @@ def _generate_canvas(canvas: dict[str, Any], comfy: Comfy, locale: str, emit: Em
     if not _CLIENT_ID.match(client_id):
         client_id = uuid.uuid4().hex
     info = comfy.object_info()
+    raw_targets = canvas.get("partial_execution_targets")
+    targets: list[str] | None = None
+    if raw_targets is not None:
+        if not isinstance(raw_targets, list) or not raw_targets or len(raw_targets) > 50 or not all(
+                isinstance(one, str) and one.strip() and len(one) <= 200 for one in raw_targets):
+            raise ComfyError(say(locale, "「只跑这个节点」的节点号不对,没有提交", "The partial-execution node id is invalid; nothing was submitted"))
+        targets = [one.strip() for one in raw_targets]
+        missing = [one for one in targets if one not in prompt]
+        if missing:
+            raise ComfyError(say(locale, f"画布上没有节点 #{'、#'.join(missing)},没有提交",
+                                     f"The canvas has no node #{', #'.join(missing)}; nothing was submitted"))
+        not_output = [one for one in targets
+                      if not (info.get(str((prompt.get(one) or {}).get("class_type") or "")) or {}).get("output_node")]
+        if not_output:
+            raise ComfyError(say(
+                locale,
+                f"ComfyUI 的「只跑这个节点」只能跑输出节点;#{'、#'.join(not_output)} 不是输出节点。"
+                "先选一个会产出图片 / 视频 / 音频的输出节点,或者不指定节点跑整张。",
+                f"ComfyUI partial execution can only target output nodes; #{', #'.join(not_output)} is not an output node. "
+                "Pick an output node that produces media, or omit the node to run the whole canvas."))
     preflight(prompt, info, locale)
     required_inputs(prompt, info, locale)
     extra = ({"extra_pnginfo": {"workflow": workflow}}
              if isinstance(workflow, dict) and isinstance(workflow.get("nodes"), list) else None)
-    prompt_id = submit(comfy, prompt, client_id, locale, extra)
+    prompt_id = submit(comfy, prompt, client_id, locale, extra, targets)
     emit({"event": "task", "task": {"prompt_id": prompt_id, "client_id": client_id}})
     progress(emit, 0.02, say(locale, "已交给 ComfyUI(画布上这张)", "Submitted to ComfyUI (the canvas graph)"))
     entry = follow_poll(comfy, prompt_id, emit, locale)

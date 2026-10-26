@@ -2565,17 +2565,19 @@ def comfy_node_pack_install(pack_id: str, version: str = "", instance_id: str = 
 
 
 @tool(effect="confirms", needs="workflow_library", kit="comfyui")
-def comfy_canvas_run(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+def comfy_canvas_run(instance_id: str = "", workspace_id: str = "", node_id: str = "") -> dict[str, Any]:
     """Confirmation required: run the workflow open on the ComfyUI workbench canvas (unsaved edits included) — the
     trial run behind "run it and read the errors". The workflow must have been saved at least once (ComfyUI's Ctrl+S);
-    a brand-new tab is refused. The approved card's result carries the `job_id`: poll it with get_job, outputs become
-    assets, and on failure pass that job_id to comfy_check to map the error onto nodes."""
+    a brand-new tab is refused. Pass `node_id` (as shown by comfy_canvas_read) to execute only that output node and
+    its upstream using ComfyUI partial execution; omit it to run the whole canvas. The approved card's result carries
+    the `job_id`: poll it with get_job, outputs become assets, and on failure pass that job_id to comfy_check to map
+    the error onto nodes."""
     confirmation = _open_card(
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "comfy_canvas_run",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"instance_id": instance_id},
+            "payload": {"instance_id": instance_id, "node_id": node_id},
         },
     )
     return _confirmation_reply(confirmation)

@@ -741,6 +741,30 @@ def test_试跑_开卡之前说清是哪一张_批准之后导出_建一个普�
     assert submitted["client_id"] == "4f1c0e2a9b7d4c51a3e8"
 
 
+def test_试跑_只跑一个输出节点_确认卡写节点_提交带部分执行目标(connected) -> None:
+    client, comfy, instance_id, workspace = connected
+    canvas = Canvas(_simple(), key="workflows/portrait.json", name="portrait")
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_run", workspace, instance_id=instance_id, node_id="9")["result"]
+        card = _card(client, out["confirmation_id"])
+        assert "只跑输出节点 #9" in card["summary"]
+        approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "executed", approved
+    submitted = comfy.posted("/prompt")[0]
+    assert submitted["partial_execution_targets"] == ["9"], "只执行这个输出节点和它的上游"
+    assert submitted["prompt"] == EXPORTED_PROMPT
+
+
+def test_试跑_指定了画布上没有的节点_不提交(connected) -> None:
+    client, comfy, instance_id, workspace = connected
+    canvas = Canvas(_simple(), key="workflows/portrait.json", name="portrait")
+    with Executor(canvas):
+        out = _tool(client, "comfy_canvas_run", workspace, instance_id=instance_id, node_id="99")["result"]
+        approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
+    assert approved["status"] == "failed" and "#99" in approved["error"]
+    assert comfy.posted("/prompt") == [], "节点不存在时一张都不提交"
+
+
 def test_试跑_从没存过的那张不开卡_先说去存(connected) -> None:
     client, _, instance_id, workspace = connected
     canvas = Canvas(_simple(), key="workflows/Unsaved Workflow.json", name="未命名", temporary=True)

@@ -630,6 +630,9 @@ def propose_canvas_run(db: Session, user: User, workspace_id: str, payload: dict
     if info["temporary"] or not info["path"]:
         raise WorkbenchAgentError("workbenchErr_canvasUnsaved", name=info["name"])
     payload.update({"instance_id": instance.id, "instance": instance.name, "workflow": info})
+    node_id = str(payload.get("node_id") or "").strip()
+    if node_id:
+        payload["node_id"] = node_id
 
 
 def _run_controls(db: Session, user: User, workspace_id: str, instance: PluginInstance, phase: str) -> None:
@@ -668,9 +671,13 @@ def run_canvas(db: Session, user: User, workspace_id: str, payload: dict[str, An
     if exported_key and proposed.get("key") and exported_key != str(proposed["key"]):
         raise WorkbenchAgentError("workbenchErr_runOtherTab",
                                   name=str(proposed.get("name") or proposed.get("key") or ""))
+    node_id = str(payload.get("node_id") or "").strip()
+    if node_id and node_id not in exported["prompt"]:
+        raise WorkbenchAgentError("workbenchErr_runNodeMissing", node=node_id)
     created, job = workflow_library.run_canvas(
         db, user, instance, workspace_id=workspace_id, path=info["path"], prompt=exported["prompt"],
         workflow=exported["workflow"], client_id=str(exported.get("clientId") or ""),
+        targets=[node_id] if node_id else None,
     )
     #: 生成任务这一笔先落库:跑它的线程要读到这一行才起得来;而「运行」之后那一下是**另一个会话**里的工作台动作
     #: (browser 那条路自己开会话),攥着这笔写事务排它就会等到写锁超时(实测 31 秒,SQlite)。

@@ -184,10 +184,12 @@ def _run_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor
 
 def _run_summarize(db: Session, payload: dict[str, Any]) -> Summary:
     workflow = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else {}
+    node_id = str(payload.get("node_id") or "")
     return "confirm_comfyCanvasRun", {
         "instance": str(payload.get("instance") or ""),
         "name": str(workflow.get("name") or ""),
         "path": str(workflow.get("path") or ""),
+        "target": fragment("confirm_comfyCanvasRunNode", node=node_id) if node_id else "",
     }
 
 

@@ -674,7 +674,9 @@ beside it:
   pack** and it checks the registry again before the card and installs only a normal, active version — not a git URL, not a pack whose
   newest version is Flagged or Banned, not one with only deprecated versions — saying whether the dependencies touch PyTorch and that
   **ComfyUI has to restart**; when the install finishes it restarts ComfyUI for you and the node and model lists are read again. Ask
-  it to **run** this workflow and it runs the saved workflow on the canvas (unsaved changes included) behind a confirmation card; a
+  it to **run** this workflow and it runs the saved workflow on the canvas (unsaved changes included) behind a confirmation card; name an output
+  node (for example “run only #9” after reading the canvas) and it uses ComfyUI partial execution to run just that node and its upstream.
+  Partial execution only accepts output nodes; an intermediate loader or sampler is refused rather than silently widening the run. A
   workflow that has never been saved has to be saved in ComfyUI first. Runs of workflows saved elsewhere go through their own
   confirmation card; a failed run's error is split onto the nodes. Nothing is retried silently: every download, install and run needs
   its card, and a refusal or failure is reported with its reason. **It never saves for you**: changed and new workflows stay unsaved

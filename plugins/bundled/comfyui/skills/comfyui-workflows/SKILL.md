@@ -1,6 +1,6 @@
 ---
 name: comfyui-workflows
-description: "在 ComfyUI 工作台里帮用户做 ComfyUI 工作流的做法:先找官方模板、照这台机器的模型改、读画布、诊断问题、改画布上这张(用户点「应用」才改)、在新标签页新建、查节点和节点包、下载缺的模型、安装节点包(装完重启)、跑存着的工作流或画布上这一张。用户在工作台的「助手」里说「做一个 X 的工作流」「这个工作流有什么问题」「帮我改 / 修一下」「缺什么节点 / 模型」「这个节点包能不能装」「下载这个模型」「装这个节点包」「跑一下 / 运行这个工作流」时先读它。"
+description: "在 ComfyUI 工作台里帮用户做 ComfyUI 工作流的做法:先找官方模板、照这台机器的模型改、读画布、诊断问题、改画布上这张(用户点「应用」才改)、在新标签页新建、查节点和节点包、下载缺的模型、安装节点包(装完重启)、跑存着的工作流、跑画布上这一张、只跑某个输出节点。用户在工作台的「助手」里说「做一个 X 的工作流」「这个工作流有什么问题」「帮我改 / 修一下」「缺什么节点 / 模型」「这个节点包能不能装」「下载这个模型」「装这个节点包」「跑一下 / 运行这个工作流」「只跑这个节点」时先读它。"
 metadata:
   mosael-title: "ComfyUI 工作流"
 ---
@@ -37,6 +37,7 @@ metadata:
 | 缺的模型 | `comfy_model_search`(按文件名找下载地址)、`comfy_model_resolve`(认一个链接)、`comfy_model_download`(下,要确认) |
 | 跑存着的工作流 | 画布上开着的那张、这段对话里用过或用户点过名的,各有自己的工具(「工作流 · 名字」),直接调;别的那几张先 `list_workflows` 找到(`tool` 那一栏;有表单的工作流在 `forms[].tool`,要全部参数走生成、带完整工作流的模型 id),`plugin_tools(tool=…)` 看它收哪些入参,再 `run_plugin_tool(tool, arguments)` —— 开一张确认卡,卡上写的、批准后跑的和调它自己的工具一样;入参名写错会报错并列出它认的 |
 | 跑画布上这一张 | `comfy_canvas_run`:跑**屏上现在这张存过的工作流**(含没存的改动);要确认;没存过的先请他存 |
+| 只跑画布上一个输出节点 | 同一个 `comfy_canvas_run`,带 `node_id`(照 `comfy_canvas_read` 的编号,例如 `9`):只跑这个输出节点和它依赖的上游;ComfyUI 的部分执行只接受输出节点,别的节点会明确拒绝 |
 | 等后台任务 | `get_job`(按任务号)、`list_jobs`(最近的任务);模型下载是 `model_download`,装节点包是 `node_install` |
 | 下拉里有哪些值 | 定义里写着「N options — plugin_tools lists them」的那一格(模型、LoRA 这种几百项的),`plugin_tools(tool=…, input=…, query=…)` 按字筛着查,**别猜文件名** |
 
@@ -178,8 +179,11 @@ metadata:
 
 - **画布上这一张** → `comfy_canvas_run`(要确认)。跑的是屏上现在这张,**含没存的改动**。它要求这张工作流**存过至少一次**
   (有路径);新标签页里没存过的会被拒 —— 先说「先请你在 ComfyUI 里存一下」,别自己存,也别为了能跑就把图另开一张。
-  确认卡上写清跑的是哪一张、要不要先存。批准后任务和在工作台里点「运行」一样:交回 `job_id`、`generation_id`、`workflow`、`kind`,
+  确认卡上写清跑的是哪一张、是不是只跑某个节点、要不要先存。批准后任务和在工作台里点「运行」一样:交回 `job_id`、`generation_id`、`workflow`、`kind`,
   结果进素材库,界面按节点分组;`prompt_id` 不在这一步,**要用时从 `get_job(job_id=…)` 拿**。
+  - **只跑一个节点**:先 `comfy_canvas_read` 看清输出节点编号(比如 SaveImage 的 `#9`),再
+    `comfy_canvas_run(node_id="9")`。ComfyUI 会把该节点和它的上游放进 `partial_execution_targets`;它**只支持输出节点**,
+    Loader / Sampler 这类中间节点会被明确拒绝 —— 不要为了绕开限制去改图。不传 `node_id` 就是整张画布,行为不变。
 - **存着的工作流**(不一定开在画布上)→ 先用 `list_workflows` 找到它,再用它自己的工具或 `run_plugin_tool(tool=…, arguments=…)`。
   参数名要照 `plugin_tools` 列出来的写;`arguments` 里的必填项常见的是 `prompt` 和图片这类槽位(`image_10`)。每次跑都开确认卡。
 

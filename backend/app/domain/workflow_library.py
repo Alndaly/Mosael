@@ -1266,7 +1266,7 @@ def _api_graph(prompt: Any) -> dict[str, Any]:
 
 def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, path: str,
                prompt: dict[str, Any], workflow: dict[str, Any] | None, client_id: str,
-               project_id: str | None = None) -> tuple[GenerationJob, Job]:
+               project_id: str | None = None, targets: list[str] | None = None) -> tuple[GenerationJob, Job]:
     """工作台的「运行」(ADR 0038 §6):跑画布上现在这张(含没存的改动)。建一个**普通的生成任务** —— 模型是这张工作流
     (`path`,得已经是这个连接下的生成模型:新建的要先在 ComfyUI 里存一次),图放在任务的载荷里(不进生成参数),插件
     提交它、`client_id` 用前端的那个、按历史轮询跟到完成。取消、重启后接着等、用量、素材入库都是生成任务已有的那一套。"""
@@ -1275,10 +1275,14 @@ def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_i
 
     _require(db, instance)
     path = workflow_path(path)
+    clean_targets = [str(one).strip() for one in (targets or []) if str(one).strip()]
+    if len(clean_targets) > 50 or any(len(one) > 200 for one in clean_targets):
+        raise WorkflowLibraryError("workflowLibErr_canvasBadPrompt")
     graph = {
         "prompt": _api_graph(prompt),
         **({"workflow": _canvas(workflow)} if workflow is not None else {}),
         **({"client_id": client_id} if _CLIENT_ID.fullmatch(client_id or "") else {}),
+        **({"partial_execution_targets": clean_targets} if clean_targets else {}),
     }
     profile = _profile(db, instance)
     row = provider_models.get_model(db, profile.id, path) if profile is not None else None

@@ -213,6 +213,32 @@ def test_跑画布上的图_不读文件不填参数_用前端的clientId_带上
         "这一种的全部产出,各带来自哪个节点 —— 工作台按节点分组摆"
 
 
+def test_跑画布上的一个输出节点_只把节点号交给部分执行(comfy, tmp_path: Path) -> None:
+    comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}}
+    prompt = _canvas_prompt()
+    out = _generate(comfy, tmp_path, {
+        "kind": "image", "model": "", "prompt": "", "negative_prompt": "", "parameters": {}, "inputs": [],
+        "resume": None,
+        "graph": {"prompt": prompt, "workflow": multi_reference_ui(), "client_id": "partialnode",
+                  "partial_execution_targets": ["9"]},
+    })
+    body = next(call[2] for call in comfy.state.calls if call[1] == "/prompt")
+    assert body["partial_execution_targets"] == ["9"]
+    assert [one["parameters"]["source_node"] for one in out["result"]["outputs"]] == ["9"]
+
+
+def test_跑画布上的非输出节点_明确拒绝且不提交(comfy, tmp_path: Path) -> None:
+    for node_id, message in (("3", "输出节点"), ("99", "没有节点")):
+        calls = len(comfy.state.calls)
+        with pytest.raises(runtime.PluginRuntimeError, match=message):
+            _generate(comfy, tmp_path, {
+                "kind": "image", "model": "", "prompt": "", "parameters": {}, "inputs": [], "resume": None,
+                "graph": {"prompt": _canvas_prompt(), "client_id": "badpartial",
+                          "partial_execution_targets": [node_id]},
+            })
+        assert not [call for call in comfy.state.calls[calls:] if call[1] == "/prompt"]
+
+
 def test_跑画布上的图_clientId认不出就用自己的_图形状不对什么都不提交(comfy, tmp_path: Path) -> None:
     comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}}
     _generate(comfy, tmp_path, {"kind": "image", "model": "", "prompt": "", "parameters": {}, "inputs": [], "resume": None,
