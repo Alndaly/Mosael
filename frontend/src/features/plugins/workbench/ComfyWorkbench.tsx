@@ -14,6 +14,11 @@ import { invalidatePluginDependents, refreshConnectionCatalog } from "@/features
 import { rebootWorkflowServer } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { invalidateResources } from "@/api/resourceKeys";
+import {
+  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { OverChromeModals } from "@/components/ui/overChromeModal";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
@@ -125,22 +130,23 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const qc = useQueryClient();
   const columnOpen = open === "open";
   const [restartAsk, setRestartAsk] = React.useState(false);
+  const [restartError, setRestartError] = React.useState("");
   const restart = useMutation({
     mutationFn: () => {
       if (!target) throw new Error(t("workbenchBridgeMissing"));
       return rebootWorkflowServer(target.instanceId);
     },
+    onMutate: () => setRestartError(""),
     onSuccess: ({ back }) => {
       if (!back) {
-        setSaveNote(t("workbenchRestartFailed"));
+        setRestartError(t("workbenchRestartFailed"));
         return;
       }
       setRestartAsk(false);
-      setSaveNote("");
       invalidatePluginDependents(qc);
       invalidateResources(qc, ["workflows", "models"]);
     },
-    onError: (error) => setSaveNote(errorText(error)),
+    onError: (error) => setRestartError(errorText(error)),
   });
   const run = useCanvasRun(target);
   const column = useColumnWidth(columnOpen && Boolean(target));
@@ -340,16 +346,6 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
             count: one === "missing" ? missingCount : undefined,
           }))}
         />
-        {restartAsk && (
-          <InlineConfirm
-            title={t("workbenchRestartTitle").replace("{server}", target.instanceName)}
-            body={t("workbenchRestartBody")}
-            confirmLabel={t("workbenchRestartConfirm")}
-            pending={restart.isPending}
-            onCancel={() => setRestartAsk(false)}
-            onConfirm={() => restart.mutate()}
-          />
-        )}
         {saveNote && <p role="alert" className="m-0 flex-none px-3 pt-3 text-ui-xs text-destructive">{saveNote}</p>}
         {!state && (
           <div className={TAB_PANEL}>
@@ -392,6 +388,29 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
     <ChromeAboveDialogs>
       {bar}
       {aside}
+      <OverChromeModals.Provider value>
+        <AlertDialog
+          open={restartAsk}
+          onOpenChange={(next) => {
+            if (!next && restart.isPending) return;
+            setRestartAsk(next);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("workbenchRestartTitle").replace("{server}", target?.instanceName ?? "")}</AlertDialogTitle>
+              <AlertDialogDescription>{t("workbenchRestartBody")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            {restartError && <p role="alert" className="m-0 text-ui-sm text-destructive">{restartError}</p>}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={restart.isPending}>{t("cancel")}</AlertDialogCancel>
+              <Button loading={restart.isPending} onClick={() => restart.mutate()}>
+                {t("workbenchRestartConfirm")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </OverChromeModals.Provider>
     </ChromeAboveDialogs>
   );
 }
