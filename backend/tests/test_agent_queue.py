@@ -185,6 +185,33 @@ def test_steering_is_opt_in_per_message(monkeypatch, held_turn) -> None:
     assert _wait_idle(sid) == "idle"
 
 
+def test_steer_applied_可以先于插话请求返回_旧payload不会把消息写回队列(monkeypatch, held_turn) -> None:
+    """sidecar 极快消费 steer 时，后台已出队，API 不能拿旧对象回写 queued。"""
+    client = fresh_client()
+    sid = _session(client)
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "一"})
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "改一下"})
+    queued = client.get(f"/api/agent/sessions/{sid}/queue").json()
+
+    def racy(session_id: str, text: str, mode: str = "steer", steer_id: str = "") -> bool:
+        with SessionLocal() as db:
+            message = db.get(AgentMessage, steer_id)
+            assert (message.payload or {}).get("steer_pending") is True, "发 steer 前 pending 必须先落库"
+        assert host._mark_steer_applied(sid, steer_id) is True
+        return True
+
+    monkeypatch.setattr(host, "steer_turn", racy)
+    response = client.post(f"/api/agent/sessions/{sid}/queue/{queued[0]['id']}/steer")
+    assert response.json() == {"steered": True}
+    assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
+    with SessionLocal() as db:
+        message = db.get(AgentMessage, queued[0]["id"])
+        assert not (message.payload or {}).get("queued")
+        assert not (message.payload or {}).get("steer_pending")
+    held_turn.release()
+    assert _wait_idle(sid) == "idle"
+
+
 def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch, held_turn) -> None:
     """Reporting a failure the user cannot act on is worse than letting it run on its own."""
     monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": False)

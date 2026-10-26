@@ -1511,18 +1511,18 @@ def steer_queued_message(db: Session, session: AgentSession, message_id: str, us
         raise HostError("agentErr_queuedMessageMissing")
     # 插话那一份和直发、排队同一个 user_prompt:引用清单、「/」点名的技能都要跟着进去。
     payload = message.payload or {}
-    if not steer_turn(
-        session.id,
-        user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id),
-        steer_id=message.id,
-    ):
+    prompt = user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)
+    # **先把 pending 落库再发 steer。** sidecar 可能在 `steer_turn` 返回前就回传
+    # `steer_applied`；后台线程若先出队，API 再拿旧 payload 写回会把消息变回 queued。
+    pending_payload = dict(payload)
+    pending_payload["steer_pending"] = True
+    message.payload = pending_payload
+    db.commit()
+    if not steer_turn(session.id, prompt, steer_id=message.id):
+        # 那一轮刚好结束了：撤回 pending，保持 queued，下一轮照常执行。
+        message.payload = {key: value for key, value in pending_payload.items() if key != "steer_pending"}
+        db.commit()
         return False
-    # **先不要出队。** steer 请求被 sidecar 接住不等于模型已经读到它；等 `steer_applied`
-    # 真正进入上下文时，才把它写成 transcript 消息并切开 assistant 段。
-    payload = dict(payload)
-    payload["steer_pending"] = True
-    message.payload = payload
-    db.flush()
     return True
 
 
