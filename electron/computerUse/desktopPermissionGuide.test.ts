@@ -64,6 +64,9 @@ describe("desktop permission guide(ADR 0081)", () => {
         granted = true;
         return { stdout: JSON.stringify({ granted: true }), stderr: "" };
       }
+      if (args[0] === "windows") {
+        return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "Finder", title: "Documents", x: 1, y: 2, width: 800, height: 600, layer: 0, alpha: 1, onscreen: true, active: true }]), stderr: "" };
+      }
       return { stdout: JSON.stringify({ snapshot_id: "snap-guided", elements: [] }), stderr: "" };
     });
     const { dialog, shell } = harness(0);
@@ -77,7 +80,9 @@ describe("desktop permission guide(ADR 0081)", () => {
     });
     await expect(driver.observe({ pid: 42 })).resolves.toMatchObject({ meta: { snapshot_id: "snap-guided" } });
     expect(dialog.showMessageBox).toHaveBeenCalledOnce();
-    expect(runner.mock.calls.map((call) => call[1][0])).toEqual(["permissions", "request-permission", "permissions", "ax"]);
+    expect(runner.mock.calls.map((call) => call[1][0])).toEqual([
+      "windows", "permissions", "request-permission", "permissions", "ax",
+    ]);
   });
 
 });

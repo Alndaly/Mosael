@@ -4,7 +4,11 @@
 // App.tsx)——曾经往页面里注入过一个悬浮返回钮兜底 macOS 焦点吞点击,现已移除:工具栏那条本身
 // 在主窗口视图里,不涉及跨 webContents 首点丢失,注入钮反而挡住平台页面右上角。
 const { webFrame, ipcRenderer } = require("electron");
-const { IPC } = require("./ipc-contract.cjs");
+//: **不能相对 require。** 这个 preload 跑在被沙箱化的账号视图里,Electron 的沙箱 preload
+//: 只允许 `require("electron")`;`require("./ipc-contract.cjs")` 会在加载时抛错,后面整段补丁
+//: (反检测、Passkey 防挂起、视频号登录探测)一行都不会执行。通道名与主进程契约的一致性由
+//: `account-view-patches.test.ts` 对照 `ipc-contract.cjs` 守住。
+const NET_PROBE_CHANNEL = "mosael:net-probe";
 
 // 反检测:视图是 contextIsolation 的,preload 改 navigator 影响不到页面「主世界」——必须用
 // webFrame.executeJavaScript 把补丁注进主世界,且趁 preload 执行(document_start 前、页面脚本跑之前)
@@ -104,7 +108,7 @@ try {
       const parsed = new URL(String(url), location.href);
       if (!PROBE_HOSTS.includes(parsed.hostname)) return;
       const text = typeof body === "string" ? body : "";
-      ipcRenderer.send(IPC.send.netProbe, {
+      ipcRenderer.send(NET_PROBE_CHANNEL, {
         path: parsed.pathname,
         status,
         body: text.slice(0, 200),

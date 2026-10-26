@@ -79,6 +79,35 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     ]);
   });
 
+  it("受保护应用的截图与 AX 都拒绝,而且不先申请权限", async () => {
+    const calls: string[] = [];
+    const runner = vi.fn(async (file: string, args: string[]) => {
+      if (args[0] === "permissions") {
+        calls.push("permissions");
+        return { stdout: JSON.stringify({ accessibility: true, screen: true }), stderr: "" };
+      }
+      if (file === "/fake/tool" && args[0] === "windows") {
+        calls.push("windows");
+        return {
+          stdout: JSON.stringify([{ id: 7, pid: 42, owner: "1Password", title: "Vault", x: 1, y: 2, width: 800, height: 600, layer: 0, alpha: 1, onscreen: true, active: true }]),
+          stderr: "",
+        };
+      }
+      if (file === "screencapture" || (file === "/fake/tool" && args[0] === "ax")) {
+        calls.push(file === "screencapture" ? "screencapture" : "ax");
+        return { stdout: "", stderr: "" };
+      }
+      throw new Error(`unexpected ${file} ${args[0]}`);
+    });
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+
+    await expect(driver.observe({ windowNumber: 7 })).rejects.toMatchObject({ code: "desktop_protected_app" });
+    await expect(driver.observe({ pid: 42 })).rejects.toMatchObject({ code: "desktop_protected_app" });
+    expect(calls).not.toContain("permissions");
+    expect(calls).not.toContain("screencapture");
+    expect(calls).not.toContain("ax");
+  });
+
   it("verify 仍不支持,不冒充已验证", () => {
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool" });
     expect(driver.verify()).toEqual({ ok: false, reason: "verify_not_supported", evidence: null });
@@ -193,14 +222,19 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     expect(calls).toEqual([["/fake/tool", ["permissions"]]]);
   });
 
-  it("缺权限时先给用户引导,仍未授权则回结构化错误", async () => {
-    const runner = vi.fn(async () => ({ stdout: JSON.stringify({ accessibility: false, screen: false }), stderr: "" }));
+  it("缺权限时先给用户引导,仍未授权则报结构化错误", async () => {
+    const runner = vi.fn(async (_binary: string, args: string[]) => {
+      if (args[0] === "windows") {
+        return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "Finder", title: "Documents", x: 1, y: 2, width: 800, height: 600, layer: 0, alpha: 1, onscreen: true, active: true }]), stderr: "" };
+      }
+      return { stdout: JSON.stringify({ accessibility: false, screen: false }), stderr: "" };
+    });
     const permissionGuide = vi.fn().mockResolvedValue({ action: "settings", opened: true });
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner, permissionGuide });
     const failure = await driver.observe({ pid: 42 }).catch((error) => error);
     expect(permissionGuide).toHaveBeenCalledWith("accessibility");
     expect(failure).toMatchObject({ code: "desktop_permission_required", permission: "accessibility" });
-    expect(runner).toHaveBeenCalledTimes(2);
+    expect(runner).toHaveBeenCalledTimes(3); // windows + permissions ×2
   });
 
   it("用户在引导里授权后,同一次观察继续执行", async () => {
@@ -208,6 +242,9 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     const runner = vi.fn(async (_binary: string, args: string[]) => {
       if (args[0] === "permissions") {
         return { stdout: JSON.stringify({ accessibility: granted, screen: true }), stderr: "" };
+      }
+      if (args[0] === "windows") {
+        return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "Finder", title: "Documents", x: 1, y: 2, width: 800, height: 600, layer: 0, alpha: 1, onscreen: true, active: true }]), stderr: "" };
       }
       return { stdout: JSON.stringify({ snapshot_id: "snap-2", elements: [] }), stderr: "" };
     });

@@ -97,6 +97,18 @@ describe("内嵌账号视图的页面补丁", () => {
     await expect(window.PublicKeyCredential.isConditionalMediationAvailable()).resolves.toBe(false);
   });
 
+  it("沙箱可加载:不相对 require,net-probe 通道与主进程契约一致", () => {
+    // Sandboxed preload 只能 require("electron");相对 require 会让整份文件在加载时抛错,
+    // 测试只 eval 补丁字符串时完全看不见。通道名内联了,所以在这里对照一次契约。
+    // 注释里解释这条规则时会出现 `require("./…")`,只检查真正的代码行。
+    const code = SOURCE.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n");
+    expect(code).not.toMatch(/require\(["']\.\//);
+    const contract = fs.readFileSync(path.resolve(__dirname, "ipc-contract.cjs"), "utf8");
+    const channel = contract.match(/netProbe:\s*"([^"]+)"/)?.[1];
+    expect(channel).toBeTruthy();
+    expect(SOURCE).toContain(`"${channel}"`);
+  });
+
   it("反检测那几条还在 —— 只补 Chromium 与 Chrome 确有差别的那几处", () => {
     // 同一段脚本里的东西,别在改 WebAuthn 时把它们碰掉了。
     const script = stealthSource();

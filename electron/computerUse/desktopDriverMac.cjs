@@ -153,6 +153,10 @@ class DesktopDriverMac {
   }
 
   async captureWindowImage(windowNumber, maxDimension = null) {
+    const window = (await this.windows()).find((one) => one.id === windowNumber && one.onscreen);
+    if (!window) throw bindingError("desktop_target_not_visible", "That desktop window is no longer visible.");
+    //: 受保护应用连画面都不给读 —— 这道闸此前只挂在动作上,截图与 AX 可以绕过它。
+    allowedOwner(window.owner);
     const output = path.join(os.tmpdir(), `mosael-evidence-${crypto.randomUUID()}.png`);
     try {
       await this.runner("screencapture", ["-l", String(windowNumber), output]);
@@ -211,6 +215,13 @@ class DesktopDriverMac {
   async observe(target = {}) {
     const binary = await this.binary();
     if (target.windowNumber !== undefined) {
+      // 先解析窗口并过受保护应用闸,再申请屏幕权限/截屏。受保护应用不该因为一次 observe
+      // 先弹出授权、拍完再拒绝。
+      const window = (await this.windows()).find((one) => one.id === target.windowNumber);
+      if (!window || !window.onscreen || !(window.width > 0) || !(window.height > 0)) {
+        throw new Error(`Desktop window ${target.windowNumber} is not visible; nothing was captured.`);
+      }
+      allowedOwner(window.owner);
       await this.requirePermission("screen");
       // `screencapture`(CGWindowListCreateImage)是当前可靠的窗口截图路径:
       // SCScreenshotManager.captureImage 在本机命令行里会 CGS_REQUIRE_INIT 断言。
@@ -222,10 +233,6 @@ class DesktopDriverMac {
         const [key, value] = line.split(":");
         return [key.trim(), Number(value.trim())];
       }));
-      const window = (await this.windows()).find((one) => one.id === target.windowNumber);
-      if (!window || !window.onscreen || !(window.width > 0) || !(window.height > 0)) {
-        throw new Error(`Desktop window ${target.windowNumber} is not visible; nothing was captured.`);
-      }
       const captureId = crypto.randomUUID();
       keepLatest(this.captures, captureId, {
         windowNumber: target.windowNumber,
@@ -249,6 +256,10 @@ class DesktopDriverMac {
       };
     }
     if (target.pid !== undefined) {
+      const visible = (await this.windows()).find((one) => one.pid === target.pid && one.onscreen);
+      if (!visible) throw bindingError("desktop_target_not_visible", "The target app has no visible window right now.");
+      //: AX 树里就是标题、正文和输入值 —— 受保护应用必须先在这里被挡住。
+      allowedOwner(visible.owner);
       await this.requirePermission("accessibility");
       const { stdout } = await this.runner(binary, ["ax", String(target.pid)]);
       const result = parse(stdout);
