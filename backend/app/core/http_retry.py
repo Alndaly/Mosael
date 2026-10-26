@@ -98,21 +98,25 @@ def status_resend_is_safe(request: httpx.Request, status: int) -> bool:
     return status in _NOT_PROCESSED_STATUSES
 
 
+#: 请求送到了、回答断在半路:读超时之外,连接在回答中途断掉(对面掉线、回了半截)也是这一类。
+_ANSWER_LOST = (httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError)
+
+
 def resend_is_safe(request: httpx.Request, exc: httpx.RequestError) -> bool:
     """这次失败之后再发一遍,会不会让供应商多做(多收)一次。
 
-    **读超时不重发非幂等请求。** 读超时的意思是请求已经送到、对方在做,只是没在我们等的时间里答完 ——
-    一次大 JSON 的对话、一次生成提交,对方多半照样做完并计费。此前一律重发(最多再 3 次),于是一次慢回答
-    变成四次全价的调用,而用户只看到一个超时。连不上、连接池等不到这类**请求根本没出门**的失败,重发是安全的;
-    GET 这类幂等请求读超时也照旧重发。
+    **回答可能丢了就不重发非幂等请求。** 读超时、读到一半连接断掉(ReadError)、对面不按协议回完就挂
+    (RemoteProtocolError)都说的是同一件事:请求已经送到、对方在做,只是回答没到我们手上 —— 一次大 JSON 的
+    对话、一次生成提交,对方多半照样做完并计费。此前只挡了读超时,于是「服务器断开没给回答」这一类会再发
+    最多 3 次,一次慢回答变成四次全价的调用,而用户只看到一个超时。连不上(ConnectError)、写不出去
+    (WriteError)、连接池等不到(PoolTimeout)这类**请求根本没出门 / 没送全**的失败,重发是安全的;
+    GET 这类幂等请求怎么断都照旧重发。
     """
     if request.method.upper() in _IDEMPOTENT_METHODS:
         return True
-    return not isinstance(exc, httpx.ReadTimeout)
+    return not isinstance(exc, _ANSWER_LOST)
 
 
-#: 请求送到了、回答断在半路:读超时之外,连接在回答中途断掉(对面掉线、回了半截)也是这一类。
-_ANSWER_LOST = (httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError)
 #: 网关替源站回的「我没等到」:502 / 504,和 Cloudflare 的 520–527、530(源站照样在做)。源站自己回的 500 不算 ——
 #: 那是它说「我这儿出错了」,多半没做成。
 _GATEWAY_GAVE_UP = frozenset({502, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530})

@@ -250,6 +250,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个插件连接已经删掉了,下载没开始",
         "en": "This plugin connection was deleted; the download did not start",
     },
+    "modelLibErr_alreadyDownloading": {
+        "zh": "「{folder}/{name}」已经有一条下载在跑了:两条同时下同一个文件会在同一个半截文件上打架。等它下完(失败或取消之后再点,会接着下)",
+        "en": "“{folder}/{name}” is already downloading: two downloads of the same file would write into the same partial file. Wait for it to finish (start it again after a failure or cancellation and it resumes).",
+    },
     "workflowLibErr_outputGone": {
         "zh": "这份产出已经不在这个工作区里了(删掉了,或者是别的工作区的)",
         "en": "This output is no longer in this workspace (it was deleted, or belongs to another workspace).",

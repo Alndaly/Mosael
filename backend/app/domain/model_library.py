@@ -637,6 +637,21 @@ def start_download(
     blocked = inst.blocked_reason(db, instance)
     if blocked:
         raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
+    #: **同一个文件同时只排一条。** 两条任务下同一个 (连接, 目录, 文件名) 会落到那台机器上的同一个 `.part`:
+    #: 后一条的写入截断前一条,交错出来的文件长度对、内容谁也认不出(插件那边另有一把 O_EXCL 锁兜着,
+    #: 见 install._claim_download)。这里先挡掉,用户看到的是「已经在下了」而不是两个都在跑。
+    #: 只查还在跑的:下完 / 失败 / 取消之后重排是正常的(失败时半截留着,下一次接着下)。
+    running = db.scalar(
+        select(Job.id).where(
+            Job.kind == KIND,
+            Job.status.in_(("queued", "running")),
+            Job.payload["instance_id"].as_string() == instance.id,
+            Job.payload["folder"].as_string() == folder,
+            Job.payload["filename"].as_string() == filename,
+        ).limit(1)
+    )
+    if running:
+        raise ModelLibraryError("modelLibErr_alreadyDownloading", name=filename, folder=folder)
     job = create_job(
         db,
         workspace_id=workspace_id,

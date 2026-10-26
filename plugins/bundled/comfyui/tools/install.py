@@ -14,6 +14,11 @@
    URL + 校验器 + 总大小,不一致就重下 —— 绝不把两个不同的文件接在一起。取消 / 失败不再删;只有用户明确点
    「删除没下完的部分」(`discard_partial`)才删。超过 `PART_MAX_AGE_DAYS` 天的孤儿 `.part` 在开始下一次本机
    下载时顺手扫掉(正在续的那一份除外)。
+   **同一份半截同一时刻只有一条下载能写**:写之前用 O_EXCL 建 `<名字>.mosael-part.lock` 抢写权(`_claim_download`),
+   抢不到就当场拒绝、一个字节都不碰。此前两条下载(两次点击、两个工作区、崩了之后的重试)共用一个 `.part`:
+   后一条的 `open("wb")` 截断前一条,两条交错写出来的文件长度对、内容谁也认不出,先下完的那条还会把它挂上正式的名字。
+   宿主那一侧也在建任务时按 (连接, 目录, 文件名) 挡掉重复的那条(见 domain/model_library.start_download),
+   这里是不信任调用方的那一层。
 3. **ComfyUI-Manager** 的装模型接口(`/v2/manager/version` 回 V4 时,ComfyUI 在另一台机器上):那台机器自己去下。不报
    字节进度,也没有停下单个任务的接口;它的安全策略只在 ComfyUI 监听回环地址、或 `network_mode = personal_cloud` 时
    才放行 —— 被拒时历史里只记一个 failed,原因在日志里(`/internal/logs/raw`),这里把它找出来说人话,并记下来;
@@ -77,6 +82,11 @@ PART_SIDECAR_SUFFIX = ".mosael-part.json"
 #: 超过这么多天的孤儿 `.part` 才在下次本机下载开始时扫掉。定 7 天:几十 GB 的模型在慢线路上跨几个晚上下完是常事,
 #: 一两天就清会把「明天接着下」的人也清掉;而一周没动过的半截基本不会再被认领,几个文件就能白占几十 GB。
 PART_MAX_AGE_DAYS = 7
+#: 一份半截同一时刻只允许一条下载写:旁边放 `<名字>.mosael-part.lock`,O_EXCL 建出来才算抢到(见 _claim_download)。
+LOCK_SUFFIX = ".mosael-part.lock"
+#: 锁多久没被碰过就认为是崩掉的上一条留下的。活着的下载每写一次进度都碰一下,而单次读最多阻塞 60 秒
+#: (_open_download 的读超时),所以十分钟没动静只可能是那条已经没了。
+LOCK_STALE_SECONDS = 600.0
 #: 同一台机器的判定:最多比对几个文件、翻几个目录。
 SAME_MACHINE_FILES = 6
 SAME_MACHINE_FOLDERS = 8
@@ -380,13 +390,76 @@ def _content_range(response: Any) -> tuple[int, int, int | None] | None:
     return int(found.group(1)), int(found.group(2)), (None if found.group(3) == "*" else int(found.group(3)))
 
 
-def _file_digest(part: Path) -> "hashlib._Hash":
-    """把一个已有的半截读完再接着算 SHA256(续传时最终哈希要覆盖**整个文件**,不只是新下的那段)。"""
+def _file_digest(part: Path, *, touch: Callable[[], None] | None = None) -> "hashlib._Hash":
+    """把一个已有的半截读完再接着算 SHA256(续传时最终哈希要覆盖**整个文件**,不只是新下的那段)。
+
+    `touch`:读完一块碰一下锁 —— 几十 GB 的半截要算好几分钟,别让「多久没人碰」那条判据把活着的那条判成崩了。"""
     digest = hashlib.sha256()
     with part.open("rb") as handle:
         for block in iter(lambda: handle.read(CHUNK), b""):
             digest.update(block)
+            if touch is not None:
+                touch()
     return digest
+
+
+def _lock_path(directory: Path, filename: str) -> Path:
+    return directory / f"{filename}{LOCK_SUFFIX}"
+
+
+def _create_lock(path: Path) -> int | None:
+    """独占建一个文件(O_EXCL)。建不出来就是别人已经占着。"""
+    try:
+        return os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        return None
+
+
+def _touch(lock: Path) -> None:
+    """活着就时不时碰一下锁:崩掉的那条留下的锁按「多久没人碰」判过期。碰不到不算错(不是下载的事)。"""
+    try:
+        os.utime(lock)
+    except OSError:
+        pass
+
+
+def _claim_download(directory: Path, filename: str, locale: str) -> Path:
+    """拿到这一份半截的**写权**:`<名字>.mosael-part.lock` 用 O_EXCL 建出来才算抢到。
+
+    同一个文件的两条下载共用一个 `.part`:后一条 `open("wb")` 会把前一条写到一半的字节截断,两条交错写出来的文件
+    长度对、内容谁也认不出 —— 而两边都以为自己在写这份半截,谁先下完谁就把它挂上正式的名字。用户的两次点击、
+    两个工作区、或者上次崩了之后的重试,都能凑成这样一对。所以写之前先抢锁,抢不到就当场说清楚,**一个字节都不碰**。
+
+    锁是上一条崩掉留下的(没有人碰它超过 `LOCK_STALE_SECONDS`)就接管:活着的下载每写一次进度都碰它一下。
+    """
+    lock = _lock_path(directory, filename)
+    handle = _create_lock(lock)
+    if handle is None:
+        try:
+            idle = time.time() - lock.stat().st_mtime
+        except OSError:
+            idle = 0.0
+        if idle > LOCK_STALE_SECONDS:
+            lock.unlink(missing_ok=True)  # 上一条崩了,这么久没人碰
+            handle = _create_lock(lock)
+    if handle is None:
+        raise ComfyError(say(locale, f"「{filename}」已经有一条下载在写它了(同一台机器上同一个文件只能有一条):"
+                                    "等它下完,或者先把那一条停掉",
+                             f"“{filename}” is already being downloaded (only one download per file on a machine at a "
+                             f"time): wait for it to finish, or stop that one first"))
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(f"{os.getpid()} {time.time():.0f}\n")
+    return lock
+
+
+def _release_download(lock: Path) -> None:
+    """放手:**只删自己那一把**(里面记着自己的 pid)。万一锁已经被判过期、别人接管了,不能把别人的锁删掉。"""
+    try:
+        owner = lock.read_text(encoding="utf-8").split(" ", 1)[0].strip()
+    except OSError:
+        return
+    if owner == str(os.getpid()):
+        lock.unlink(missing_ok=True)
 
 
 def _sidecar_data(sidecar: Path) -> dict[str, Any]:
@@ -525,7 +598,19 @@ def _download_finished(emit: Emit, locale: str, written: int, total: int | None,
 
 
 def via_local(directory: Path, url: str, folder: str, filename: str, locale: str, emit: Emit, *, sha256: str = "") -> dict[str, Any]:
+    """本机那条路(文件头第 2 条)。**先抢这一份半截的写权**再动它(见 `_claim_download`):同一个文件的第二条下载
+    不会去截断第一条的 `.part`。成品只在整份下完、该核对的也核对过之后才挂上正式的名字(见 `_publish`),
+    半截永远不叫正式的名字。"""
     directory.mkdir(exist_ok=True)
+    lock = _claim_download(directory, filename, locale)
+    try:
+        return _write_local(lock, directory, url, folder, filename, locale, emit, sha256=sha256)
+    finally:
+        _release_download(lock)
+
+
+def _write_local(lock: Path, directory: Path, url: str, folder: str, filename: str, locale: str, emit: Emit, *,
+                 sha256: str = "") -> dict[str, Any]:
     final = directory / filename
     part, sidecar = _part_paths(directory, filename)
     if final.exists():
@@ -538,7 +623,7 @@ def via_local(directory: Path, url: str, folder: str, filename: str, locale: str
         _remove_partial(part, sidecar)
         offset = 0
     stored = _sidecar_data(sidecar)
-    digest = _file_digest(part) if (offset and sha256) else hashlib.sha256()
+    digest = _file_digest(part, touch=lambda: _touch(lock)) if (offset and sha256) else hashlib.sha256()
     restarted = False
     while True:
         headers: dict[str, str] = {}
@@ -556,7 +641,7 @@ def via_local(directory: Path, url: str, folder: str, filename: str, locale: str
                 #: Range 越界:本地这份可能已经下完了。**能按声明的 SHA256 校验就留下**,校验不了(没有哈希、
                 #: 或对不上)就删掉重下 —— 不把一个没核对过的文件挂上正式的名字。
                 response.close()
-                if sha256 and offset > 0 and _file_digest(part).hexdigest() == sha256:
+                if sha256 and offset > 0 and _file_digest(part, touch=lambda: _touch(lock)).hexdigest() == sha256:
                     _publish(part, final, locale, folder, filename)
                     sidecar.unlink(missing_ok=True)
                     total_known = stored.get("total_bytes") if isinstance(stored.get("total_bytes"), int) else offset
@@ -639,6 +724,7 @@ def via_local(directory: Path, url: str, folder: str, filename: str, locale: str
                     now = time.monotonic()
                     if now - last >= PROGRESS_SECONDS:
                         last = now
+                        _touch(lock)  # 活着:别让「多久没人碰」那条判据把这一条判成崩了
                         speed = new_written / max(now - started, 0.001)
                         _bytes_progress(emit, locale, offset + new_written, total, speed)
             written = offset + new_written
@@ -728,16 +814,25 @@ def partial(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
 
 
 def _publish(part: Path, final: Path, locale: str, folder: str, filename: str) -> None:
-    """半截文件挂上正式的名字,**不覆盖**:硬链接在目标已存在时失败,没有竞态窗口;文件系统不支持硬链接时退回改名
-    (Windows 的改名本来就不覆盖,别处先查一遍)。"""
+    """半截文件挂上正式的名字,**只有在整份下完、该核对的都核对过之后才调这里**(调用点都在成功那一段)。
+
+    **不覆盖**:硬链接在目标已存在时失败,没有竞态窗口;文件系统不支持硬链接时先用 O_EXCL 把正式的名字**占住**、
+    再改名盖掉自己占的那个空文件 —— 先 `exists()` 再 `rename` 有窗口,别人正好在这几毫秒里写进同名文件就会被覆盖。"""
     try:
         os.link(part, final)
     except FileExistsError as exc:
         raise ComfyError(_same_name(locale, folder, filename)) from exc
     except OSError:
-        if final.exists():
+        try:
+            reserved = os.open(final, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
             raise ComfyError(_same_name(locale, folder, filename)) from None
-        os.rename(part, final)
+        os.close(reserved)
+        try:
+            os.replace(part, final)
+        except OSError:
+            final.unlink(missing_ok=True)  # 没换成:别留下一个 0 字节的同名文件
+            raise
         return
     part.unlink(missing_ok=True)
 

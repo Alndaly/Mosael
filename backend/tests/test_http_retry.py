@@ -1,7 +1,11 @@
 """AI 供应商瞬断/限流/过载时自动重试,4xx 立即失败;最大重试次数可在设置页配置。
 
-背景:供应商偶发「Server disconnected without sending a response」等网络瞬断,旧实现一次就把
-整条工作流判失败(真丢过一条,28 秒后同参数重试即成功)。这里锁定重试语义 + 可配置次数。
+背景:供应商偶发连不上、限流、网关 5xx 等瞬时失败,旧实现一次就把整条工作流判失败(真丢过一条,
+28 秒后同参数重试即成功)。这里锁定重试语义 + 可配置次数。
+
+**回答可能丢了就不再重发非幂等请求**(读超时、读到一半断线、对面不按协议挂掉):请求已经送到,
+对方做没做不知道、多半在做并且会扣钱 —— 重发一次就是再付一次全价。连不上、没写出去、连接池等不到
+这类「根本没出门」的失败照旧重发。
 
 重试现在做在传输层(core/http_retry.RetryingClient),**所有 AI 出站调用共用** —— 生图、
 生视频、语音、向量化此前一次都不重试,而设置页那句话读起来管的是全部。所以打桩点也从
@@ -56,12 +60,13 @@ def _install(monkeypatch, handler) -> None:
 
 
 def test_transient_disconnect_then_succeeds(monkeypatch):
+    """连不上(请求根本没出门)这种瞬断照旧重试 —— 回答丢了的那些不重发,见下面那条。"""
     calls = {"n": 0}
 
     def handler(request):
         calls["n"] += 1
         if calls["n"] < 3:
-            raise httpx.RemoteProtocolError("Server disconnected without sending a response.", request=_req())
+            raise httpx.ConnectError("connection refused", request=_req())
         return _ok()
 
     _install(monkeypatch, handler)
@@ -356,6 +361,45 @@ def test_读超时不重发付费的_POST_连不上照旧重发_GET_读超时也
         client.get("https://provider.test/models")
     assert calls == ["GET"] * 3, "幂等的 GET 读超时照旧重发"
     #: 请求根本没出门(连不上)的照旧重发 —— 见 test_gives_up_after_max_retries。
+
+
+@pytest.mark.parametrize("error", [httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError])
+def test_回答可能丢了_非幂等请求一次都不重发_GET照旧(monkeypatch, error):
+    """读超时、读到一半连接断掉、对面没按协议回完就挂 —— 三件事都是「请求送到了,回答没到」。
+
+    此前只挡了读超时:供应商回半截就断(`Server disconnected without sending a response`)时会再发最多 3 次,
+    一次生成提交变成四次全价调用,而用户只看到一个失败。这三类都按「回答丢了」处理。
+    """
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(request.method)
+        raise error("lost", request=request)
+
+    _install(monkeypatch, handler)
+    with pytest.raises(AiChatError):
+        chat(_target(), [{"role": "user", "content": "hi"}], max_retries=3)
+    assert calls == ["POST"], f"{error.__name__} 之后又发了一遍付费的 POST"
+
+    calls.clear()
+    with http_retry.RetryingClient(max_retries=2) as client, pytest.raises(error):
+        client.get("https://provider.test/models")
+    assert calls == ["GET"] * 3, f"幂等的 GET 遇到 {error.__name__} 照旧重发"
+
+
+@pytest.mark.parametrize("error", [httpx.ConnectError, httpx.WriteError, httpx.PoolTimeout])
+def test_没出门或没写全的失败_非幂等请求照旧重发(monkeypatch, error):
+    """连不上(ConnectError)、没写出去(WriteError)、连接池等不到(PoolTimeout):对方没可能做过这一次,重发安全。"""
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(request.method)
+        raise error("boom", request=request)
+
+    _install(monkeypatch, handler)
+    with pytest.raises(error):
+        http_retry.post("https://provider.test/submit", json={"x": 1}, max_retries=2)
+    assert calls == ["POST"] * 3
 
 
 def test_要一大份_JSON_的对话节点按_max_tokens_放宽等待_读超时只付一次(monkeypatch):

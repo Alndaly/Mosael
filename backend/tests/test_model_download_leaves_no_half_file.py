@@ -150,3 +150,16 @@ def test_老半截还在时下成了_目录里只留成品(install, tmp_path: Pa
     assert out == {"folder": "loras", "name": "big.safetensors", "size": len(body), "route": "local"}
     assert (directory / "big.safetensors").read_bytes() == body
     assert _names(directory) == ["big.safetensors"], f"半截被清掉、只留成品:{_names(directory)}"
+
+
+def test_同一份半截同一时刻只有一条下载能写(install, tmp_path: Path) -> None:
+    """锁是 O_EXCL 的 `<名字>.mosael-part.lock`:第二条在碰 `.part` 之前就被拒。"""
+    first = install._claim_download(tmp_path, "tiny.safetensors", "zh")
+    try:
+        with pytest.raises(install.ComfyError):
+            install._claim_download(tmp_path, "tiny.safetensors", "zh")
+    finally:
+        install._release_download(first)
+    # 放手之后可以重新抢
+    second = install._claim_download(tmp_path, "tiny.safetensors", "zh")
+    install._release_download(second)

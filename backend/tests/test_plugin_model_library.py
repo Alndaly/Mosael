@@ -809,6 +809,14 @@ def test_下载_取消经取消文件传到插件(library) -> None:
         "workspace_id": workspace, "url": "https://huggingface.co/a/b/resolve/main/slow.safetensors",
         "folder": "loras", "filename": "slow.safetensors",
     }).json()
+    #: 同一 (连接, 目录, 文件名) 正在跑时,第二条不建任务 —— 两条会写同一个 `.part`。
+    duplicate = client.post(f"/api/plugins/instances/{instance_id}/model-library/downloads", json={
+        "workspace_id": workspace, "url": "https://huggingface.co/a/b/resolve/main/slow.safetensors",
+        "folder": "loras", "filename": "slow.safetensors",
+    })
+    assert duplicate.status_code == 422
+    assert "已经有一条下载" in duplicate.text or "already downloading" in duplicate.text
+
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         current = client.get(f"/api/jobs/{job['id']}").json()
