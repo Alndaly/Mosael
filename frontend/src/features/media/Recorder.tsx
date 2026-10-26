@@ -2,6 +2,8 @@ import React from "react";
 import {
   Circle,
   FlipHorizontal2,
+  Maximize2,
+  Minimize2,
   Mic,
   Monitor as ScreenIcon,
   Settings,
@@ -15,6 +17,7 @@ import { toast } from "sonner";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -106,6 +109,7 @@ export function Recorder({
   const capturesCamera = source === "camera" || source === "screenCamera";
   const capturesMicrophone = source !== "screen";
   const [recording, setRecording] = React.useState(false);
+  const [minimized, setMinimized] = React.useState(false);
   const [starting, setStarting] = React.useState(false);
   const [stopping, setStopping] = React.useState(false);
   const [secs, setSecs] = React.useState(0);
@@ -289,6 +293,7 @@ export function Recorder({
     controllerRef.current = null;
     setStarting(false);
     setRecording(false);
+    setMinimized(false);
     cleanupUi();
   }, [cleanupUi]);
 
@@ -299,6 +304,7 @@ export function Recorder({
     // event cannot both finalize and import the same files.
     controllerRef.current = null;
     setRecording(false);
+    setMinimized(false);
     // Keeps the camera closed while the recording finalizes: a successful stop closes the dialog.
     setStopping(true);
     if (timerRef.current) window.clearInterval(timerRef.current);
@@ -354,6 +360,7 @@ export function Recorder({
       setPreviewStreams(active.previewStreams);
       setStarting(false);
       setRecording(true);
+      setMinimized(false);
       setSecs(0);
       timerRef.current = window.setInterval(() => setSecs((value) => value + 1), 1000);
       setGrantedInputs((current) => ({
@@ -375,6 +382,27 @@ export function Recorder({
   };
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  if (recording && minimized) {
+    return (
+      <div
+        data-recording-minimized=""
+        role="group"
+        aria-label={t("recordInProgress")}
+        className="fixed bottom-3 right-3 z-70 flex items-center gap-2 rounded-full border border-floating-border bg-panel/95 py-1 pl-3 pr-1 text-foreground shadow-[var(--shadow-floating)] backdrop-blur-xl [.is-desktop_&]:[-webkit-app-region:no-drag]"
+      >
+        <span className="h-2 w-2 animate-recorder-blink rounded-full bg-destructive" aria-hidden />
+        <span className="text-ui-xs font-medium">{t("recordInProgress")}</span>
+        <span className="timecode tabular-nums text-ui-xs text-muted-foreground">{fmt(secs)}</span>
+        <IconButton size="icon-xs" label={t("recordExpand")} onClick={() => setMinimized(false)}>
+          <Maximize2 size={13} />
+        </IconButton>
+        <IconButton size="icon-xs" variant="destructive" label={t("recordStop")} onClick={() => void stop()}>
+          <Square size={10} className="fill-current" />
+        </IconButton>
+      </div>
+    );
+  }
 
   return (
     <ModalShell
@@ -402,9 +430,14 @@ export function Recorder({
               <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
             </Button>
           ) : (
-            <Button className="shrink-0" size="sm" variant="destructive" onClick={stop}>
-              <Square size={11} /> {t("recordStop")}
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <IconButton label={t("recordMinimize")} onClick={() => setMinimized(true)}>
+                <Minimize2 size={13} />
+              </IconButton>
+              <Button size="sm" variant="destructive" onClick={stop}>
+                <Square size={11} /> {t("recordStop")}
+              </Button>
+            </div>
           )}
         </div>
       }

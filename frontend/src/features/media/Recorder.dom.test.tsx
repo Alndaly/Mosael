@@ -254,6 +254,30 @@ describe("Recorder", () => {
     expect(screen.getByRole("button", { name: /recordStop/ })).toBeVisible();
   });
 
+  it("minimizes a running recording to a compact status pill and expands it again", async () => {
+    const probe = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
+    getUserMedia.mockResolvedValueOnce(probe.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+    await screen.findByRole("button", { name: /recordStop/ });
+    await user.click(screen.getByRole("button", { name: "recordMinimize" }));
+
+    const pill = screen.getByRole("group", { name: "recordInProgress" });
+    expect(pill).toHaveAttribute("data-recording-minimized");
+    expect(pill).toHaveTextContent("recordInProgress");
+    expect(pill).toHaveTextContent("00:00");
+    expect(screen.getByRole("button", { name: "recordStop" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "recordExpand" }));
+    expect(screen.queryByRole("group", { name: "recordInProgress" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "recordMinimize" })).toBeVisible();
+  });
+
   it("keeps both live previews attached after the recorder becomes a floating controller", async () => {
     const screenCapture = fakeStream({ audio: true });
     const cameraCapture = fakeStream();
