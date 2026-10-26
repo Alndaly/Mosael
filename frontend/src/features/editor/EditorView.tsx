@@ -98,6 +98,11 @@ import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
 import { useDndAccessibility } from "@/components/app/dndAccessibility";
 
+/** `#/editor?p=…&s=…` 里点名的那条时间线。 */
+function namedSequenceFromHash(): string | null {
+  return new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("s");
+}
+
 /** 选中项目之后的剪辑台。没有项目时由 `app/pages.tsx` 渲染项目浏览器,这里不再有第二种空态。 */
 export function EditorView({ workspace, project }: { workspace: Workspace; project: Project }) {
   return <Editor workspace={workspace} project={project} />;
@@ -144,8 +149,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     queryFn: () => api<Sequence[]>(`/api/projects/${project.id}/sequences`),
   });
   //: 链接里点名的那条时间线(画板上时间线格的「在剪辑里打开」,ADR 0030:一张画板的几格时间线在同一个项目里)。
-  //: 只在第一次渲染时读 —— 之后地址会被路由改写成只剩 ?p=。点名的不在这个项目里就回到默认:最近改过的那条。
-  const [namedSequence] = React.useState(() => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("s"));
+  //: **跟 hashchange 走**,不是只在挂载时读一次:人已经开着剪辑页时点另一格时间线,只改 hash
+  //: 不会重新挂载 EditorView,旧代码于是什么都不发生(地址里却已经是新的 `?s=`)。
+  const [namedSequence, setNamedSequence] = React.useState(namedSequenceFromHash);
+  React.useEffect(() => {
+    const sync = () => setNamedSequence(namedSequenceFromHash());
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const sequence = sequences.data?.find((one) => one.id === namedSequence) ?? sequences.data?.[0] ?? null;
   //: 时间线、监视器、检查器读的素材:**这条时间线用到的那些**,完整字段(见 useSequenceAssets)。
   //: 素材池是另一回事 —— 它一页页列素材库(MediaPool 自己取),配音片段这类中间产物不在那里,却照样在时间线上。

@@ -40,7 +40,7 @@ import {
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
-import { readHash, writeHash } from "@/app/hashRoute";
+import { projectAfterHashChange, readHash, writeHash } from "@/app/hashRoute";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
@@ -549,6 +549,8 @@ function Studio({
   const [projectId, setProjectId] = React.useState<string | null>(
     initial.projectId,
   );
+  const projectIdRef = React.useRef(projectId);
+  projectIdRef.current = projectId;
 
   const [sceneNavigation] = React.useState(() => {
     const routes = new SceneRouteMemory();
@@ -588,7 +590,12 @@ function Studio({
       setView(next.view);
       //: `#/editor` 不带 `p` = 回到项目列表。只在有值时设置的话,从剪辑里点
       //: 「全部项目」会留下旧 projectId,页面还以为选中着那个项目。
-      setProjectId(next.projectId);
+      //: 其它页没带 `p` 时沿用当前项目:侧栏换页不是“放弃正在剪的这条时间线”。
+      const kept = projectAfterHashChange(projectIdRef.current, next);
+      projectIdRef.current = kept;
+      setProjectId(kept);
+      //: 把 `?p=` 写回地址。否则从侧栏进笔记/场景后刷新一次,项目又丢了。
+      writeHash(next.view, kept);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
