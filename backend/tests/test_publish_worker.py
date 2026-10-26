@@ -132,8 +132,9 @@ def test_title_limit_and_binding_check_flow() -> None:
     marked = client.post("/api/publish/worker/mark-due").json()
     assert marked["marked"] == 1
 
-    # 心跳 → 在线状态
-    client.post("/api/publish/worker/heartbeat")
+    # 心跳 → 在线状态(心跳带上执行器身份与在飞任务;这里没有在飞任务,报空列表)
+    beat = client.post("/api/publish/worker/heartbeat", json={"worker": WORKER, "task_ids": []})
+    assert beat.status_code == 200
     assert client.get("/api/publish/worker/status").json()["online"] is True
 
 

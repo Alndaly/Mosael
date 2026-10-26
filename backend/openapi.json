@@ -1201,7 +1201,18 @@
           "publish-worker"
         ],
         "summary": "Heartbeat",
+        "description": "执行器活着的一次心跳(同时续在飞任务的 `updated_at`,见 `HeartbeatRequest.task_ids`)。",
         "operationId": "heartbeat_api_publish_worker_heartbeat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__routes__publish_worker__HeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1211,6 +1222,16 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Heartbeat Api Publish Worker Heartbeat Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -55188,6 +55209,28 @@
           "worker"
         ],
         "title": "ClaimRequest"
+      },
+      "app__api__routes__publish_worker__HeartbeatRequest": {
+        "properties": {
+          "worker": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Worker"
+          },
+          "task_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Task Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker"
+        ],
+        "title": "HeartbeatRequest"
       },
       "app__api__routes__publish_worker__ReportRequest": {
         "properties": {

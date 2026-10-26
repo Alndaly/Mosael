@@ -89,6 +89,34 @@ def test_回滚到保存点_里面登记的钩子不跑_外面的照跑(probe) -
     assert seen == ["outer", "inner-kept"]
 
 
+def test_释放保存点不是提交_钩子等到最外层提交(probe) -> None:
+    """保存点释放也会发 after_commit(SQLAlchemy 对**每一层** commit 都发),但释放不等于落库:
+    外层之后照样可能回滚。此前 `_run_hooks` 不分辨层级,一次 `begin_nested()` 的正常结束就把
+    **所有**钩子(包括外层的)取走跑掉了 —— 外层一失败,文件已经删了、线程已经起了,行却回来了。
+
+    所以:保存点释放一拍都不跑;外层提交之后按登记顺序各跑一次;外层回滚则全部丢掉。"""
+    seen: list[str] = []
+    with pytest.raises(RuntimeError), unit_of_work() as db:
+        _write(db, "outer")
+        after_commit(db, lambda: seen.append("outer"))
+        with db.begin_nested():
+            _write(db, "inner-undone")
+            after_commit(db, lambda: seen.append("inner-undone"))
+        assert seen == [], "保存点释放不是提交,钩子不该跑"
+        raise RuntimeError("外层失败")
+    assert seen == [], "外层回滚了,保存点里登记的钩子跟着丢掉"
+    assert probe() == []
+
+    with unit_of_work() as db:
+        _write(db, "a")
+        with db.begin_nested():
+            after_commit(db, lambda: seen.append("inner"))
+        after_commit(db, lambda: seen.append("outer"))
+        assert seen == [], "外层还没提交"
+    assert seen == ["inner", "outer"], "只有最外层提交之后才跑,且每条只跑一次"
+    assert probe() == ["a"]
+
+
 def test_保存点是事务里的第一句时_外层回滚照样收回它(probe) -> None:
     """pysqlite 只在第一句写之前自己 BEGIN,SAVEPOINT 不算写。此前事务里还没写过时开保存点,SQLite 把它当成最外层
     事务的开头,RELEASE 当场提交 —— 外层之后回滚,保存点里写的收不回来。现在这种保存点开在一个 `BEGIN IMMEDIATE`

@@ -51,6 +51,15 @@ class AccountPatchRequest(BaseModel):
     last_error: str | None = None
 
 
+class HeartbeatRequest(BaseModel):
+    #: 执行器的稳定身份 —— 与认领同一个值(`readWorkerId()`)。
+    worker: str = Field(min_length=1, max_length=64)
+    #: 这个执行器**此刻手上**的发布任务 id(在飞的,不含已落终态的)。心跳拿它给那些行续
+    #: `updated_at`,否则一条跑过 STALE_RUNNING_MINUTES 的正常发布会被判成悬挂。认不出的 id
+    #: (别人的、已结束的、不存在的)静默忽略。
+    task_ids: list[str] = Field(default_factory=list)
+
+
 @router.post("/publish/worker/claim")
 def claim(body: ClaimRequest, db: Tx) -> dict[str, Any]:
     return {"task": publish_worker.claim_next_pending(db, body.exclude_accounts, worker=body.worker)}
@@ -114,6 +123,7 @@ def worker_account(account_id: str, db: DbSession) -> dict[str, Any]:
 
 
 @router.post("/publish/worker/heartbeat")
-def heartbeat() -> dict[str, Any]:
-    publish_worker.heartbeat()
+def heartbeat(body: HeartbeatRequest, db: Tx) -> dict[str, Any]:
+    """执行器活着的一次心跳(同时续在飞任务的 `updated_at`,见 `HeartbeatRequest.task_ids`)。"""
+    publish_worker.heartbeat(db, worker=body.worker, task_ids=body.task_ids)
     return {"ok": True}

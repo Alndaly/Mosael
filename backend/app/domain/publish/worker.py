@@ -39,9 +39,32 @@ BINDING_RECHECK_HOURS = 12
 _last_heartbeat: float | None = None
 
 
-def heartbeat() -> None:
+def heartbeat(db: Session, *, worker: str, task_ids: list[str]) -> int:
+    """执行器活着的一次心跳,顺带给**它手上那些任务**续 `updated_at`。
+
+    `task_ids` 是执行器此刻正在跑的发布任务 id(Electron 的 claim 循环每一拍把自己的在飞任务
+    带上来)。判据 2(`reclaim_orphaned_running` 的「多久没动静」)读的就是 `updated_at`:
+    没有这一步时,一条跑过 STALE_RUNNING_MINUTES 的正常发布会被**任何一次** claim —— 包括它
+    自己下一拍 —— 判成悬挂。短视频几分钟,长视频 / 大文件 / 平台审核慢完全可能更久,那不是卡死。
+
+    只续**自己认领的、还没落终态的**行:别人的任务不该被一句心跳续命,已判失败/取消的也不该
+    被改回来。认不出的 id(别人的、已结束的、不存在的)静默忽略 —— 心跳不该因为一条过期任务
+    就失败。返回续了几行。
+    """
     global _last_heartbeat
     _last_heartbeat = time.monotonic()
+    wanted = [task_id for task_id in task_ids if task_id]
+    if not wanted:
+        return 0
+    return db.execute(
+        PublishTask.__table__.update()
+        .where(
+            PublishTask.id.in_(wanted),
+            PublishTask.status.notin_(TERMINAL_TASK_STATUSES),
+            PublishTask.claimed_by == worker,
+        )
+        .values(updated_at=now())
+    ).rowcount
 
 
 def worker_online() -> bool:
@@ -54,8 +77,9 @@ def _browser_platforms() -> list[str]:
     return list(PUBLISH_PLATFORMS)
 
 
-# 一条 running 任务最长允许多久没有任何回报;超过即视为发布器悬挂。短片上传通常几分钟内
-# 就有终态,给到 30 分钟足够宽松,不会误杀正常上传。
+# 一条 running 任务最长允许多久没有任何回报(含心跳);超过即视为发布器悬挂。短片上传通常几分钟内
+# 就有终态,给到 30 分钟足够宽松,不会误杀正常上传。执行器活着时心跳会续在飞任务的 `updated_at`
+# (见 `heartbeat`),所以这条时钟只在**执行器也没动静**时才跑完。
 STALE_RUNNING_MINUTES = 30
 
 
@@ -80,6 +104,8 @@ def reclaim_orphaned_running(db: Session, exclude_accounts: list[str], *, worker
         orphaned = mine and task.account_id not in exclude_accounts
         #: **判据 2 是全局的,而且必须是。** 执行器彻底死掉之后没人再来认领它的任务,
         #: 只有"多久没动静"这条能把它们收回来 —— 限制成只有认领者能判,等于它们永远挂着。
+        #: 「有动静」包括执行器的心跳:它每拍把在飞任务的 `updated_at` 续上(`heartbeat`),
+        #: 所以一条跑了一小时的正常发布不会被这条判据误杀,心跳停了才开始计时。
         stalled = task.updated_at is not None and task.updated_at < stale_before
         if not (orphaned or stalled):
             continue
@@ -93,18 +119,16 @@ def reclaim_orphaned_running(db: Session, exclude_accounts: list[str], *, worker
     return reclaimed
 
 
-def claim_next_pending(
-    db: Session, exclude_accounts: list[str], *, worker: str = ""
-) -> dict[str, Any] | None:
-    """认领最老的一条 pending 浏览器任务并翻成 running。
+def _next_claimable(
+    db: Session, exclude_accounts: list[str]
+) -> tuple[PublishTask, PublishAccount] | None:
+    """队头那一条可认领的(pending + 浏览器平台 + 账号启用),连账号一起取回。
 
-    单进程 SQLite 后端:同事务内 select→update 即原子。**多个执行器也安全**,因为下面
-    还排除了「任何人正在跑的账号」—— 而不是只排除调用方自己在跑的那些。
-
-    `worker` 是执行器的稳定身份,记在 claimed_by 上,给回收那一侧分辨归属用。
+    排除**任何人**正在跑的账号,不只是调用方自己在跑的那些:一个平台账号同时被两条任务驱动
+    是不行的(平台侧的登录态、上传队列都只有一份)。此前唯一的守卫是调用方自报的
+    exclude_accounts —— 那在多执行器下等于没有守卫:B 不知道 A 在跑哪个账号,照样会认领
+    同一个账号的下一条。
     """
-    # 每次轮询顺手回收悬挂的 running 任务(worker 活着就会持续调这里,重启后第一拍即清理)。
-    reclaim_orphaned_running(db, exclude_accounts, worker=worker)
     stmt = (
         select(PublishTask, PublishAccount)
         .join(PublishAccount, PublishAccount.id == PublishTask.account_id)
@@ -115,21 +139,57 @@ def claim_next_pending(
         )
         .order_by(PublishTask.created_at)
     )
-    #: 排除**任何人**正在跑的账号,不只是调用方自己在跑的那些。
-    #:
-    #: 一个平台账号同时被两条任务驱动是不行的(平台侧的登录态、上传队列都只有一份),而
-    #: 此前唯一的守卫是调用方自报的 exclude_accounts —— 那在多执行器下等于没有守卫:
-    #: B 不知道 A 在跑哪个账号,照样会认领同一个账号的下一条。
     busy = set(
         db.scalars(select(PublishTask.account_id).where(PublishTask.status == "running")).all()
     )
     blocked = busy | set(exclude_accounts)
     if blocked:
         stmt = stmt.where(PublishTask.account_id.not_in(sorted(blocked)))
-    row = db.execute(stmt.limit(1)).first()
-    if row is None:
-        return None
-    task, account = row
+    return db.execute(stmt.limit(1)).first()
+
+
+def _claim_row(db: Session, task_id: str, worker: str) -> bool:
+    """把这一条从 pending 翻成 running;它已经不是 pending 了就不写(rowcount 0)。
+
+    走 UPDATE 语句而不是 ORM 对象:判据和写必须是**同一条语句**,否则中间那一小段就是
+    两个执行器都能通过的窗口。
+    """
+    return bool(
+        db.execute(
+            PublishTask.__table__.update()
+            .where(PublishTask.id == task_id, PublishTask.status == "pending")
+            .values(status="running", claimed_by=worker)
+        ).rowcount
+    )
+
+
+def claim_next_pending(
+    db: Session, exclude_accounts: list[str], *, worker: str = ""
+) -> dict[str, Any] | None:
+    """认领最老的一条 pending 浏览器任务并翻成 running。
+
+    **认领是一次 CAS,不是先判再写。** 此前是「select 一条 pending → 把它改成 running」:
+    读和写之间别人完全可能已经把这一条拿走了(多开一个后端实例、或同一进程里两个请求交错),
+    于是同一条任务被两个执行器各发一遍 —— 平台上是两条作品。现在写的时候带上
+    `WHERE status = 'pending'`(与 jobs 的 worker 认领同一套做法),写不进去(rowcount 0)
+    就说明这条已经不归我们:丢掉手里的陈旧行,回到队头重选下一条。
+
+    `exclude_accounts` 是调用方正在跑的账号;**任何**人正在跑的账号也会被排除(见 `_next_claimable`)。
+    `worker` 是执行器的稳定身份,记在 claimed_by 上 —— 回收、心跳续期都靠它分辨归属。
+    """
+    # 每次轮询顺手回收悬挂的 running 任务(worker 活着就会持续调这里,重启后第一拍即清理)。
+    reclaim_orphaned_running(db, exclude_accounts, worker=worker)
+    while True:
+        row = _next_claimable(db, exclude_accounts)
+        if row is None:
+            return None
+        task, account = row
+        if not _claim_row(db, task.id, worker):
+            # 另一个执行器抢先了:这一条在库里已经不是 pending,下一次选不会再选到它。
+            # 手里的对象不动它 —— 我们从没写过它,留在 identity map 里也回不到候选。
+            continue
+        db.refresh(task)
+        break
     # 素材删了、发布记录留着的(asset_id 置空,见 PublishTask.asset_id)。还在发的素材删不掉,所以排着的任务正常走不到这里。
     #: 图文 / 文章可能有多份素材(ADR 0076):`asset_ids` 为空(老任务)时回退到 `[asset_id]`。
     wanted_ids = list(task.asset_ids or []) or ([task.asset_id] if task.asset_id else [])
@@ -151,8 +211,6 @@ def claim_next_pending(
         return None
     asset = items[0]
 
-    task.status = "running"
-    task.claimed_by = worker
     if task.job_id:
         job = db.get(Job, task.job_id)
         if job is not None and start_job(db, job):

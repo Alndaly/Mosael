@@ -162,8 +162,11 @@ export function patchAccount(
   return req("/worker/account", "PATCH", { account_id: accountId, ...patch });
 }
 
-export function heartbeat(): Promise<unknown> {
-  return req("/worker/heartbeat", "POST");
+/** 一次心跳。**带上手上正在跑的发布任务 id**:后端拿它给这些行续 `updated_at` —— 判「发布器
+ *  悬挂」看的就是这个时间戳;不带的话,一条跑过 30 分钟的正常发布会被任何一次 claim 判成中断。
+ *  别人的 / 已落终态的 id 后端会忽略(只有自己认领的非终态行会被续),所以不必自己先筛。 */
+export function heartbeat(taskIds: string[] = []): Promise<unknown> {
+  return req("/worker/heartbeat", "POST", { worker: readWorkerId(), task_ids: taskIds });
 }
 
 /** 打开某账号视图前拿它的代理(用户手动登录/看页/检查页面时;后台任务/复检的代理走 claim 负载)。 */

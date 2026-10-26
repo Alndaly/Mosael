@@ -56,8 +56,9 @@ let workbench: WorkbenchSessions | null = null;
 let floatLayer: FloatLayer | null = null;
 /** 原生视图在前台时右下角的提示条画在这一块上(ADR 0051);提示条上的按钮靠它把指针交回渲染层。 */
 let toastLayer: FloatLayer | null = null;
-// 正在跑「真发布任务」的账号:size 即并发数,元素即认领时要排除的账号(同账号串行)。
-const running = new Set<string>();
+// 正在跑「真发布任务」的账号 → 那一条任务 id:size 即并发数,key 即认领时要排除的账号(同账号串行),
+// value 是心跳要报给后端的在飞任务(后端拿它续 updated_at,避免长任务被当成悬挂)。
+const running = new Map<string, string>();
 const taskControllers = new Map<string, AbortController>();
 // 正在后台复检登录态的账号:与 running 分开——否则复检会被误当成"发布任务进行中"挡住用户登录。
 const rechecking = new Set<string>();
@@ -649,14 +650,16 @@ async function loop(gen: number): Promise<void> {
   if (stopped || gen !== generation) return;
   let didWork = false; // 这拍干了活(发布/巡检)→ 下拍快轮询,把队列尽快排空
   try {
-    await backend.heartbeat();
+    // 心跳:顺便把手上这些任务报上去续 updated_at —— 不带的话,一条跑过 30 分钟的正常发布
+    // 会被后端(包括自己的下一拍 claim)判成"发布器中断"。
+    await backend.heartbeat([...running.values()]);
     // 补发布任务到并发上限。认领时排除正在跑的账号(同账号串行);拿到就后台并发跑(不 await)。
     while (running.size < MAX_CONCURRENT) {
-      const { task } = await backend.claimTask([...running]);
+      const { task } = await backend.claimTask([...running.keys()]);
       if (stopped || gen !== generation || !task) break;
       plog("claimed:", task.id, task.platform, "account:", task.account_id);
       didWork = true;
-      running.add(task.account_id);
+      running.set(task.account_id, task.id);
       void runTask(task).catch((error) => {
         // runTask 自身兜底了 report;走到这说明兜底之前就炸了(如 toAdapterTask)——必须留痕。
         plog("runTask crashed before report:", task.id, error instanceof Error ? error : String(error));

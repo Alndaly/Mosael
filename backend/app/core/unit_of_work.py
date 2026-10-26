@@ -55,6 +55,12 @@ def _inside(owner: SessionTransaction | None, transaction: SessionTransaction) -
 
 @event.listens_for(Session, "after_commit")
 def _run_hooks(db: Session) -> None:
+    #: **保存点释放也发这个事件。** SQLAlchemy 对每一层 commit 都发(`SessionTransaction.commit`:
+    #: `if self._parent is None or self.nested`),而保存点释放并不等于落库:外层之后照样可能回滚。
+    #: 在这里把钩子取走跑掉,就是把「提交成功之后再做」提前成「保存点释放之后再做」—— 外层一失败,
+    #: 文件已经删了、线程已经起了,行却回滚回来了。留着,交给真正的那次提交。
+    if db.in_nested_transaction():
+        return
     hooks = db.info.pop(_HOOKS, [])
     for _owner, hook in hooks:
         try:

@@ -545,7 +545,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Heartbeat */
+        /**
+         * Heartbeat
+         * @description 执行器活着的一次心跳(同时续在飞任务的 `updated_at`,见 `HeartbeatRequest.task_ids`)。
+         */
         post: operations["heartbeat_api_publish_worker_heartbeat_post"];
         delete?: never;
         options?: never;
@@ -22399,6 +22402,13 @@ export interface components {
             /** Worker */
             worker: string;
         };
+        /** HeartbeatRequest */
+        app__api__routes__publish_worker__HeartbeatRequest: {
+            /** Worker */
+            worker: string;
+            /** Task Ids */
+            task_ids?: string[];
+        };
         /** ReportRequest */
         app__api__routes__publish_worker__ReportRequest: {
             /** Task Id */
@@ -23352,7 +23362,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__routes__publish_worker__HeartbeatRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -23363,6 +23377,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
