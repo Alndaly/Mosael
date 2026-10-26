@@ -30,7 +30,7 @@ import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
 import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
-import { InlineConfirm, PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
+import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { onWorkbenchPlaces, useWorkbench, workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 import { comboFromEvent, formatCombo, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
