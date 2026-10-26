@@ -13,6 +13,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import { TagFilter } from "@/components/app/TagFilter";
 import { RenameDialog } from "@/components/app/modals";
@@ -122,8 +123,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
   //: 刷新回到列表,而这个深链本来就认(体检 UM-34)。只在还停在资产页时改,不碰别的页的地址。
   React.useEffect(() => {
     if (!window.location.hash.startsWith("#/entities")) return;
-    const wanted = openId ? `#/entities?entity=${encodeURIComponent(openId)}` : "#/entities";
-    if (window.location.hash !== wanted) window.history.replaceState(null, "", wanted);
+    const params = new URLSearchParams();
+    if (openId) params.set("entity", openId);
+    replaceHash("entities", readHash().projectId, params);
   }, [openId]);
 
   if (openId) {

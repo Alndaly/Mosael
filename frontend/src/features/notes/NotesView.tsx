@@ -32,6 +32,7 @@ import { saveBlobToDisk } from "@/lib/download";
 import { useFileDrop } from "@/lib/useFileDrop";
 import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
+import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import type { ComposerChip } from "@/lib/composerChip";
 import { plainExcerpt } from "@/lib/plainExcerpt";
@@ -120,7 +121,10 @@ export function NotesView({ workspace, AgentPanel, onNoteChange }: {
   const writeBlocked = useWriteBlocked(workspace.role);
   const [id, setId] = React.useState(() => locationNote() ?? rememberedNote(workspace.id));
   // 从记住的那篇打开时把地址补上,和点开一篇的状态一样(刷新、返回都认它)。
-  React.useEffect(() => { if (id && !locationNote()) window.history.replaceState(null, "", noteHref(id)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (!id || locationNote()) return;
+    replaceHash("notes", readHash().projectId, new URLSearchParams({ note: id }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   React.useEffect(() => { if (id) rememberNote(workspace.id, id); }, [workspace.id, id]);
   const sidebar = useResizableSidebar("notes", { min: 220, max: 480, fallback: 260 });
   const [selecting,setSelecting] = React.useState(false);

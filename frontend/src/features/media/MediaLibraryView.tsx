@@ -20,6 +20,7 @@ import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { assetKindKey, documentFacts, IMPORT_ACCEPT, kindHasSound, kindIsVisual } from "@/lib/assetKinds";
 import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { toast } from "sonner";
+import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
@@ -189,7 +190,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     const wanted = new URLSearchParams(window.location.hash.split("?")[1] || "").get("asset");
     if (!wanted) return;
     setPreviewingId(wanted);
-    window.history.replaceState(null, "", window.location.hash.split("?")[0] || "#/media");
+    replaceHash("media", readHash().projectId);
   }, []);
   // 多选的状态机是共用的(见 lib/useMultiSelect)—— 素材、发布记录、工作流三处同一份。
   const { selectMode, enter: enterSelectMode, selectedIds, toggle: toggleSelected, selectAll, allSelected, clear: clearSelection, exit: exitSelectMode } =

@@ -1,6 +1,7 @@
 import React from "react";
 
 import type { Workspace } from "@/api/client";
+import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
@@ -67,7 +68,7 @@ function useStudioLink(setTab: (tab: StudioTab) => void) {
     const take = () => {
       const link = parseAiStudioHash(window.location.hash);
       if (!link || (!link.tab && !link.session && !link.kind)) return;
-      window.history.replaceState(null, "", "#/ai");
+      replaceHash("ai", readHash().projectId);
       if (link.tab) set.current(link.tab);
       else if (link.session || link.kind) set.current("create");
       if (link.kind) emitOpenEvent(CREATION_FILTER_EVENT, link.kind);

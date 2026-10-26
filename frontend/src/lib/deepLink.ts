@@ -254,9 +254,14 @@ export function useHashOpenRequest(route: string, param: string, event: string):
     const take = () => {
       const [path, query = ""] = window.location.hash.replace(/^#\/?/, "").split("?");
       if (`#/${path}` !== route) return;
-      const id = new URLSearchParams(query).get(param);
+      const params = new URLSearchParams(query);
+      const id = params.get(param);
       if (!id) return;
-      window.history.replaceState(null, "", route);
+      //: 只拿掉这一个参数。路由在地址里还带着 `?p=`(当前项目);整段 replace 成
+      //: `#/boards` 会把项目一起抹掉,刷新后回到项目列表。
+      params.delete(param);
+      const next = params.size ? `${route}?${params.toString()}` : route;
+      window.history.replaceState(null, "", next);
       emitOpenEvent(event, id);
     };
     take();

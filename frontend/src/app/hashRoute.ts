@@ -38,6 +38,21 @@ export function projectAfterHashChange(
   return next.view === "editor" ? null : currentProjectId;
 }
 
+/** 写一个规范 hash;`params` 是这一页自己的参数,`p` 由这里统一补。 */
+export function replaceHash(
+  view: StudioView,
+  projectId: string | null,
+  params: URLSearchParams = new URLSearchParams(),
+) {
+  const nextParams = new URLSearchParams(params);
+  if (projectId) nextParams.set("p", projectId);
+  const query = nextParams.size ? `?${nextParams.toString()}` : "";
+  const next = `#/${view}${query}`;
+  if (window.location.hash !== next) {
+    window.history.replaceState(null, "", next);
+  }
+}
+
 export function writeHash(view: StudioView, projectId: string | null) {
   const sameView = window.location.hash.startsWith(`#/${view}?`);
   const current = new URLSearchParams(sameView ? (window.location.hash.split("?")[1] ?? "") : "");
@@ -52,11 +67,6 @@ export function writeHash(view: StudioView, projectId: string | null) {
     //: 剪辑页的 `?s=` 是“打开另一条时间线”的入口,不是可以被路由顺手抹掉的临时参数。
     params.set("s", current.get("s")!);
   }
-  if (projectId) params.set("p", projectId);
-  const query = params.size ? `?${params.toString()}` : "";
-  const next = `#/${view}${query}`;
-  if (window.location.hash !== next) {
-    window.history.replaceState(null, "", next);
-  }
+  replaceHash(view, projectId, params);
 }
 

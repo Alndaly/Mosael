@@ -52,6 +52,15 @@ describe("打开另一张画板", () => {
     expect(window.location.hash).toBe("#/boards");
   });
 
+  it("清掉打开参数时保留当前项目 ?p=", () => {
+    window.history.replaceState(null, "", "#/boards?board=b&p=proj-1");
+    render(<BoardsPage initial={["a", "b"]} />);
+    expect(screen.getByTestId("open").textContent).toBe("b");
+    const params = new URLSearchParams(window.location.hash.split("?")[1]);
+    expect(params.get("p")).toBe("proj-1");
+    expect(params.get("board")).toBeNull();
+  });
+
   it("已经开着 A 时去 B:只改 hash 的老写法也接得住,openBoard 当然也行", async () => {
     window.history.replaceState(null, "", "#/boards?board=a");
     render(<BoardsPage initial={["a", "b", "c"]} />);
