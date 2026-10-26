@@ -19,6 +19,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { OverChromeModals } from "@/components/ui/overChromeModal";
+import { FailureCard } from "@/components/failure/FailureCard";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
@@ -403,7 +404,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
               <AlertDialogTitle>{t("workbenchRestartTitle").replace("{server}", target?.instanceName ?? "")}</AlertDialogTitle>
               <AlertDialogDescription>{t("workbenchRestartBody")}</AlertDialogDescription>
             </AlertDialogHeader>
-            {restartError && <p role="alert" className="m-0 text-ui-sm text-destructive">{restartError}</p>}
+            {restartError && <FailureCard size="inline" title={t("workbenchRestart")} summary={restartError} />}
             <AlertDialogFooter>
               <AlertDialogCancel disabled={restart.isPending}>{t("cancel")}</AlertDialogCancel>
               <Button loading={restart.isPending} onClick={() => restart.mutate()}>
