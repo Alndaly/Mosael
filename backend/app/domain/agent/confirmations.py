@@ -246,6 +246,7 @@ def reject_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConf
 def approve_confirmation(
     db: Session, confirmation: ToolConfirmation, choices: dict[str, bool] | None = None
 ) -> ToolConfirmation:
+    confirmation_id = confirmation.id
     # 开关先查(认不出的键不认领这张卡,人改了再点),认领之后再写进 payload:认领那一笔会提交,
     # 写在它前面的话,一张已经被别人批掉的卡的 payload 也会跟着被改掉。
     picked = _checked_choices(confirmation, choices)
@@ -254,6 +255,9 @@ def approve_confirmation(
         confirmation.payload = {**(confirmation.payload or {}), **picked}
     try:
         result = _execute(db, confirmation)
+        #: 执行体可能按 `connection_handed_back` 交还会话(安装/运行这类长任务)。
+        #: 永远用稳定 id 取回当前卡，不依赖执行前那个实例还附着在 Session 上。
+        confirmation = db.get(ToolConfirmation, confirmation_id) or confirmation
         confirmation.status = "executed"
         confirmation.result = result
     except Exception as exc:
@@ -263,6 +267,7 @@ def approve_confirmation(
         # 撤得干净是因为 `_claim` 刚提交过:从那一刻起会话里只有执行体的改动,回滚正好就是它那一段
         # (提交之后才跑的钩子 —— 删文件、起任务线程 —— 跟着丢掉,见 core/unit_of_work)。
         db.rollback()
+        confirmation = db.get(ToolConfirmation, confirmation_id) or confirmation
         confirmation.status = "failed"
         #: **整句存下,不按位置截**(与 jobs.blame 同一条):`error` 是 Text 列,长短是界面排版的事 —— 卡上过长的
         #: 原因折起来显示(ConfirmationCard)。此前的 `[:500]` 把长一点的原因切成半句,切掉的恰好是后半截,

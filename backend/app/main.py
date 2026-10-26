@@ -462,6 +462,7 @@ def _wire_seams() -> None:
     model_library.register_uses()
     workflow_library.register_uses()
     from app.domain.agent.confirmable import registry as confirmable_registry
+    from app.domain import workbench  # noqa: F401  (registration)
     from app.domain.workflows import capability_uses as workflow_capability_uses
 
     capabilities.register_use_finder(workflow_capability_uses.capability_uses)

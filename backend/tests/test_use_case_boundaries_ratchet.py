@@ -30,8 +30,10 @@ DOMAIN_COMMITS: dict[str, int] = {
     "app/domain/agent/confirmations.py": 1,
     #: +2:一轮对话进行中的**助手草稿**。流式正文必须每拍落一次库 —— 一轮模型调用要跑几十秒,
     #: 不能攥着调用方的会话;而后端重启时内存里的字全没了(维护者:「中断后只剩工具调用」)。
+    #: +5:steer 在 sidecar 回调线程与 API 线程之间切换段/队列状态;段收尾、消息出队必须各自短事务,
+    #: 才能让实时流、持久消息和下一次模型请求看到同一个边界(ADR 0084)。
     #: 和这个文件里已有的几处同属"后台任务自带的短事务",不是领域函数随手 commit。
-    "app/domain/agent/host.py": 12,
+    "app/domain/agent/host.py": 17,
     "app/domain/assets/denoise.py": 1,
     "app/domain/assets/importer.py": 1,
     "app/domain/assets/proxies.py": 1,

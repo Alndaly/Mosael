@@ -558,25 +558,26 @@ def propose_node_install(db: Session, user: User, workspace_id: str, payload: di
 
 
 def _wait_job(db: Session, job_id: str, *, timeout: float) -> Any:
-    """等一个后台任务落终态。**等待期间把会话交还**(commit + close):派发登记在 after_commit 上的线程要先有那一次
-    提交才起得来;装节点包可能几分钟,攥着事务也就攥着写锁。给出的是那个任务(`finish_job` 写进去的都在)。"""
+    """等一个后台任务落终态。**等待期间把会话交还**(connection_handed_back):
+    派发登记在 after_commit 上的线程要先有那一次提交才起得来;装节点包可能几分钟,攥着事务也就攥着写锁。"""
     from app.core.db import SessionLocal
     from app.db.models import Job
     from app.domain.jobs import TERMINAL_STATUSES
+    from app.domain.workflows.executors.common import connection_handed_back
 
-    db.commit()
-    deadline = time.monotonic() + timeout
-    while True:
-        with SessionLocal() as fresh:
-            job = fresh.get(Job, job_id)
-            if job is None:
-                raise WorkbenchAgentError("workbenchErr_jobGone", job=job_id)
-            if job.status in TERMINAL_STATUSES:
-                fresh.expunge(job)
-                return job
-        if time.monotonic() >= deadline:
-            raise WorkbenchAgentError("workbenchErr_jobTimeout", job=job_id, minutes=str(max(1, int(timeout // 60))))
-        time.sleep(NODE_INSTALL_POLL_SECONDS)
+    with connection_handed_back(db):
+        deadline = time.monotonic() + timeout
+        while True:
+            with SessionLocal() as fresh:
+                job = fresh.get(Job, job_id)
+                if job is None:
+                    raise WorkbenchAgentError("workbenchErr_jobGone", job=job_id)
+                if job.status in TERMINAL_STATUSES:
+                    fresh.expunge(job)
+                    return job
+            if time.monotonic() >= deadline:
+                raise WorkbenchAgentError("workbenchErr_jobTimeout", job=job_id, minutes=str(max(1, int(timeout // 60))))
+            time.sleep(NODE_INSTALL_POLL_SECONDS)
 
 
 def install_node_pack(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -681,7 +682,10 @@ def run_canvas(db: Session, user: User, workspace_id: str, payload: dict[str, An
     )
     #: 生成任务这一笔先落库:跑它的线程要读到这一行才起得来;而「运行」之后那一下是**另一个会话**里的工作台动作
     #: (browser 那条路自己开会话),攥着这笔写事务排它就会等到写锁超时(实测 31 秒,SQlite)。
-    db.commit()
+    from app.domain.workflows.executors.common import connection_handed_back
+    db.flush()
+    with connection_handed_back(db):
+        pass
     _run_controls(db, user, workspace_id, instance, "after")
     return {"job_id": job.id, "generation_id": created.id, "workflow": info,
             "kind": str(getattr(created, "kind", "") or "")}
