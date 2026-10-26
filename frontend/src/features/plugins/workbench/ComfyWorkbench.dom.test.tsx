@@ -1617,9 +1617,10 @@ describe("助手(ADR 0042 第二步):诊断的「定位」「照这个改」、�
 describe("顶栏重启 ComfyUI 服务", () => {
   it("先确认再重启:返回成功后关闭确认卡并刷新依赖", async () => {
     api.rebootWorkflowServer.mockResolvedValue({ back: true });
-    await mount();
+    const bridge = await mount();
     fireEvent.click(screen.getByRole("button", { name: "workbenchRestart" }));
     expect(screen.getByText("workbenchRestartBody")).toBeTruthy();
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenCalledWith({ id: "native-view-aside", kind: "overlay", active: true }));
     fireEvent.click(screen.getByRole("button", { name: "workbenchRestartConfirm" }));
     await waitFor(() => expect(api.rebootWorkflowServer).toHaveBeenCalledWith(TARGET.instanceId));
     await waitFor(() => expect(screen.queryByText("workbenchRestartBody")).toBeNull());
