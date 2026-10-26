@@ -32,6 +32,7 @@
     "dev:isolated": "MOSAEL_DATA_DIR=\"${MOSAEL_DATA_DIR:-$HOME/.mosael-dev}\" pnpm dev"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
     "@electron/osx-sign": "^2.7.1",
     "electron": "^45.0.0",
     "electron-builder": "^26.18.0",

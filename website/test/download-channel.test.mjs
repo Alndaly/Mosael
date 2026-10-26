@@ -13,9 +13,9 @@ const MIRROR = { url: "https://pan.baidu.com/s/1example", code: "ab12" };
 const NONE = { url: "", code: "" };
 const RELEASES = "https://github.com/Alndaly/Mosael/releases/latest";
 
-test("中国大陆时区走网盘,其余走 GitHub", () => {
-  assert.equal(detectChannel({ timeZone: "Asia/Shanghai" }, MIRROR), "china");
-  assert.equal(detectChannel({ timeZone: "Asia/Urumqi" }, MIRROR), "china");
+test("没配 R2 时中国大陆时区走网盘,其余走 GitHub", () => {
+  assert.equal(detectChannel({ timeZone: "Asia/Shanghai" }, MIRROR), "baidu");
+  assert.equal(detectChannel({ timeZone: "Asia/Urumqi" }, MIRROR), "baidu");
   // 港澳台归 GitHub:那边访问 GitHub 通常没问题,网盘反而要多装一个客户端。
   for (const zone of ["Asia/Hong_Kong", "Asia/Taipei", "Asia/Macau", "America/New_York", "Europe/Berlin"]) {
     assert.equal(detectChannel({ timeZone: zone, languages: ["zh-CN"] }, MIRROR), "global", zone);
@@ -23,8 +23,8 @@ test("中国大陆时区走网盘,其余走 GitHub", () => {
 });
 
 test("拿不到时区才看语言:简体算国内,繁体不算", () => {
-  assert.equal(detectChannel({ languages: ["zh-CN", "en"] }, MIRROR), "china");
-  assert.equal(detectChannel({ languages: ["zh-Hans-CN"] }, MIRROR), "china");
+  assert.equal(detectChannel({ languages: ["zh-CN", "en"] }, MIRROR), "baidu");
+  assert.equal(detectChannel({ languages: ["zh-Hans-CN"] }, MIRROR), "baidu");
   assert.equal(detectChannel({ languages: ["zh-TW"] }, MIRROR), "global");
   assert.equal(detectChannel({ languages: [] }, MIRROR), "global");
 });
@@ -46,8 +46,19 @@ test("访客自己选过的优先,认不出的值当没选过", () => {
 });
 
 test("首屏默认值只看页面语言,链接按渠道给", () => {
-  assert.equal(defaultChannel("zh", MIRROR), "china");
+  assert.equal(defaultChannel("zh", MIRROR), "baidu");
   assert.equal(defaultChannel("en", MIRROR), "global");
   assert.equal(channelHref("china", MIRROR, RELEASES), MIRROR.url);
   assert.equal(channelHref("global", MIRROR, RELEASES), RELEASES);
+});
+
+test("R2 是境内主源,GitHub 与网盘各自保留备用语义", () => {
+  const direct = { url: "https://dl.example.com/mosael/" };
+  assert.equal(detectChannel({ timeZone: "Asia/Shanghai" }, MIRROR, direct), "china");
+  assert.equal(defaultChannel("zh", MIRROR, direct), "china");
+  assert.equal(storedChannel("china", MIRROR, direct), "china");
+  assert.equal(storedChannel("baidu", MIRROR, direct), "baidu");
+  assert.equal(channelHref("china", MIRROR, RELEASES, direct), direct.url);
+  assert.equal(channelHref("baidu", MIRROR, RELEASES, direct), MIRROR.url);
+  assert.equal(channelHref("global", MIRROR, RELEASES, direct), RELEASES);
 });

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from sqlalchemy.orm import Session
 
 from app.db.models import DeploymentConfig
@@ -43,6 +45,33 @@ def set_shared_host_folders(db: Session, folders: list[str]) -> None:
 def plugin_registry_url(db: Session) -> str:
     """部署管理员配的插件市场索引地址;没配是空串(用哪一份默认由 plugins.registry 决定)。"""
     return (_row(db).plugin_registry_url or "").strip()
+
+
+def set_plugin_registry_url(db: Session, value: str) -> None:
+    _row(db).plugin_registry_url = _normalize_download_url(value)
+
+
+def update_feed_url(db: Session) -> str:
+    """应用更新包的下载根地址;空串 = 只用 GitHub Releases。"""
+    return (_row(db).update_feed_url or "").strip()
+
+
+def set_update_feed_url(db: Session, value: str) -> None:
+    _row(db).update_feed_url = _normalize_download_url(value, trailing_slash=True)
+
+
+def _normalize_download_url(value: str, *, trailing_slash: bool = False) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    try:
+        parts = urlsplit(value)
+        valid = parts.scheme in ("http", "https") and bool(parts.hostname)
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError("download source URL must be an absolute http(s) URL")
+    return value.rstrip("/") + "/" if trailing_slash else value
 
 
 def web_url(db: Session) -> str:

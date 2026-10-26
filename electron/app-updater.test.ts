@@ -2,8 +2,9 @@ import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { gunzipSync } from "node:zlib";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,7 +39,7 @@ function updater(): FakeUpdater {
   return one;
 }
 
-function setup({ dev = false, runningJobs = 0 }: { dev?: boolean; runningJobs?: number } = {}) {
+function setup({ dev = false, runningJobs = 0, feedUrl = "" }: { dev?: boolean; runningJobs?: number; feedUrl?: string } = {}) {
   const events: Array<{ kind: string; info: Record<string, unknown> }> = [];
   const onInstall = vi.fn();
   const updaterInstance = updater();
@@ -57,6 +58,7 @@ function setup({ dev = false, runningJobs = 0 }: { dev?: boolean; runningJobs?: 
     setTimeout: vi.fn(),
     setInterval: vi.fn(),
     getRunningJobs: () => runningJobs,
+    getFeedUrl: async () => feedUrl,
     onInstall,
   });
   return { controller, updater: updaterInstance, events, onInstall };
@@ -91,6 +93,33 @@ describe("应用内更新", () => {
     expect(installing.phase).toBe("installing");
     expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true);
     expect(onInstall).toHaveBeenCalledTimes(1);
+  });
+
+  it("R2 是主源,失败后自动回退 GitHub,后续检查不反复撞失败源", async () => {
+    const { controller, updater } = setup({ feedUrl: "https://r2.example/stable/" });
+    await controller.check();
+    expect(updater.setFeedURL).toHaveBeenLastCalledWith({ provider: "generic", url: "https://r2.example/stable/" });
+
+    updater.checkForUpdates.mockRejectedValueOnce(new Error("R2 offline"));
+    const recovered = await controller.check();
+    expect(recovered.source).toBe("github-fallback");
+    expect(recovered.manualUrl).toContain("pan.baidu.com");
+    expect(updater.setFeedURL).toHaveBeenLastCalledWith({ provider: "github", owner: "Alndaly", repo: "Mosael" });
+
+    await controller.check();
+    expect(updater.setFeedURL).toHaveBeenLastCalledWith({ provider: "github", owner: "Alndaly", repo: "Mosael" });
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(4);
+  });
+
+  it("下载阶段失败也回退 GitHub 并完成安装包下载", async () => {
+    const { controller, updater } = setup({ feedUrl: "https://r2.example/stable" });
+    updater.downloadUpdate.mockRejectedValueOnce(new Error("R2 download failed"));
+
+    const downloaded = await controller.download();
+    expect(downloaded.phase).toBe("downloaded");
+    expect(downloaded.source).toBe("github-fallback");
+    expect(updater.downloadUpdate).toHaveBeenCalledTimes(2);
+    expect(updater.setFeedURL).toHaveBeenLastCalledWith({ provider: "github", owner: "Alndaly", repo: "Mosael" });
   });
 
   it("同一轮下载不重复发起", async () => {
@@ -150,9 +179,55 @@ describe("更新元数据", () => {
     const winSha = createHash("sha512").update("exe").digest("base64");
     expect(macYml).toContain("path: Mosael-2.2.2-mac-signed.zip");
     expect(macYml).toContain(`sha512: ${macSha}`);
+    for (const artifact of [mac, windows]) {
+      const blockMap = JSON.parse(gunzipSync(readFileSync(`${artifact}.blockmap`)).toString());
+      expect(blockMap.version).toBe("2");
+      expect(blockMap.files[0].checksums.length).toBeGreaterThan(0);
+      expect(blockMap.files[0].sizes.length).toBeGreaterThan(0);
+    }
     expect(macYml).toContain("size: 3");
     expect(winYml).toContain("path: Mosael.Setup.2.2.2.exe");
     expect(winYml).toContain(`sha512: ${winSha}`);
     expect(winYml).toContain("size: 3");
+  });
+  it("macOS 更新 ZIP 以 Copy 存储 app.asar,让未变块可以复用", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mosael-mac-update-package-"));
+    const app = join(dir, "Mosael.app");
+    mkdirSync(join(app, "Contents", "Resources"), { recursive: true });
+    writeFileSync(join(app, "Contents", "Resources", "app.asar"), "application archive");
+    const root = fileURLToPath(new URL("..", import.meta.url));
+    const zip = join(dir, "Mosael-2.2.3-mac-signed.zip");
+    execFileSync(process.execPath, [join(root, "scripts", "pack-mac-update.mjs"), "--app", app, "--out", zip], {
+      cwd: root,
+      stdio: "pipe",
+    });
+
+    const listing = execFileSync("unzip", ["-lv", zip], { encoding: "utf8" });
+    const asarEntry = listing.split("\n").find((line) => line.includes("Contents/Resources/app.asar"));
+    expect(asarEntry).toBeTruthy();
+    expect(asarEntry).toContain("Stored");
+    expect(listing).toContain("Mosael.app/");
+  });
+  it("R2 发布目录:latest 放当前元数据,版本目录放全部产物", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mosael-r2-publish-"));
+    writeFileSync(join(dir, "latest-mac.yml"), "version: 2.2.3\n");
+    writeFileSync(join(dir, "latest.yml"), "version: 2.2.3\n");
+    writeFileSync(join(dir, "registry.json"), "{\"plugins\":[]}\n");
+    writeFileSync(join(dir, "Mosael-2.2.3-mac-signed.zip"), "zip");
+    writeFileSync(join(dir, "Mosael-2.2.3-mac-signed.zip.blockmap"), "blockmap");
+    const root = fileURLToPath(new URL("..", import.meta.url));
+    const output = execFileSync(process.execPath, [join(root, "scripts", "publish-r2.mjs"), "--dist", dir, "--tag", "v2.2.3", "--dry-run"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    const plans = output.trim().split("\n").map((line) => JSON.parse(line));
+    const keys = plans.map((plan) => plan.key);
+    expect(keys).toContain("mosael/latest/latest-mac.yml");
+    expect(keys).toContain("mosael/latest/latest.yml");
+    expect(keys).toContain("mosael/latest/registry.json");
+    expect(keys).toContain("mosael/v2.2.3/registry.json");
+    expect(keys).toContain("mosael/v2.2.3/Mosael-2.2.3-mac-signed.zip");
+    expect(keys).toContain("mosael/latest/Mosael-2.2.3-mac-signed.zip");
+    expect(keys).toContain("mosael/latest/Mosael-2.2.3-mac-signed.zip.blockmap");
   });
 });

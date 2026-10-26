@@ -111,6 +111,8 @@ class DeploymentConfig(Base):
     #: 是部署级设置而不是每人一份:装插件是把代码放进**这台机器**,而这台机器上装了什么
     #: 对所有用户是同一件事。公司内网可以指向自己那一份。
     plugin_registry_url: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
+    #: electron-updater generic provider 的下载根地址。空 = 只从 GitHub Releases 更新。
+    update_feed_url: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
     #: 管理员共享给成员的本机文件夹(真实路径列表)。这台电脑上的文件是部署主人的私有资源:
     #: 非管理员只能读素材库里的文件,或落在这些文件夹里的路径(见 domain/host_files)。
     shared_host_folders: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")

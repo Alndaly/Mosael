@@ -81,6 +81,8 @@ export interface MosaelUpdateInfo {
   total?: number;
   url?: string;
   error?: string;
+  manualUrl?: string;
+  source?: "r2" | "github" | "github-fallback";
 }
 
 export interface LiveViewFrame {

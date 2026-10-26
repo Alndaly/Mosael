@@ -2047,6 +2047,20 @@ def _migrate_plugin_registry_url() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN plugin_registry_url VARCHAR(500) NOT NULL DEFAULT ''"))
 
 
+def _migrate_update_feed_url() -> None:
+    """deployment_config 新增 update_feed_url(应用更新包下载根地址)。空串 = 只用 GitHub Releases。
+
+    create_all 只建新表,不给已有表补列;加列要在 SCHEMA 之前。幂等。
+    """
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return
+    if "update_feed_url" in {c["name"] for c in inspector.get_columns("deployment_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE deployment_config ADD COLUMN update_feed_url VARCHAR(500) NOT NULL DEFAULT ''"))
+
+
 def _migrate_shared_host_folders() -> None:
     """deployment_config 新增 shared_host_folders(管理员共享给成员的本机文件夹)。
 
@@ -10175,6 +10189,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_source_assets_get_a_role,
                 _migrate_workflow_source_assets,
                 _migrate_plugin_registry_url,
+                # 同上:ORM 上的 DeploymentConfig 指望「应用更新包下载根地址」那一列在。
+                _migrate_update_feed_url,
                 _migrate_generation_job_message_keys,
                 _migrate_agent_session_order,
                 _migrate_agent_notice_envelope_out_of_content,

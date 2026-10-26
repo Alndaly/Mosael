@@ -224,6 +224,7 @@
   "migrate-transcription-engines-are-providers": "62c4c676909fe2d9",
   "migrate-translation-engines-are-providers": "980d8d017aa1fb63",
   "migrate-tts-pip-index": "64cb76555d7cdd1a",
+  "migrate-update-feed-url": "fa97538573db7b15",
   "migrate-usage-finds-who-spent-it": "b52cd4032f367237",
   "migrate-usage-remembers-who-spent": "2306e103c924a1a9",
   "migrate-usage-unpriced-reason": "499b244efc7d8759",

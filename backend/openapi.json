@@ -38701,6 +38701,16 @@
             "type": "string",
             "title": "Github Mirror",
             "default": ""
+          },
+          "update_feed_url": {
+            "type": "string",
+            "title": "Update Feed Url",
+            "default": ""
+          },
+          "plugin_registry_url": {
+            "type": "string",
+            "title": "Plugin Registry Url",
+            "default": ""
           }
         },
         "type": "object",
@@ -38768,6 +38778,30 @@
               }
             ],
             "title": "Model Source"
+          },
+          "update_feed_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Update Feed Url"
+          },
+          "plugin_registry_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plugin Registry Url"
           }
         },
         "type": "object",

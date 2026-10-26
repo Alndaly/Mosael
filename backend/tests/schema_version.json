@@ -1,5 +1,5 @@
 {
-  "version": 41,
+  "version": 42,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -226,6 +226,7 @@
     "migrate-transcription-engines-are-providers",
     "migrate-translation-engines-are-providers",
     "migrate-tts-pip-index",
+    "migrate-update-feed-url",
     "migrate-usage-finds-who-spent-it",
     "migrate-usage-remembers-who-spent",
     "migrate-usage-unpriced-reason",

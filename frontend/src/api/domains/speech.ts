@@ -313,9 +313,9 @@ export function getInstallSource(): Promise<InstallSource> {
   return api<InstallSource>("/api/settings/install-source");
 }
 
-/** 只改给了的那一行(pip / npm / 「让 Mosael 装」的 PyTorch 源、GitHub 镜像前缀、模型下载源);空串 = 官方源 / 直连。 */
+/** 只改给了的那一行(依赖源、PyTorch 源、GitHub 镜像、R2 更新源、插件索引、模型下载源);空串 = 默认源。 */
 export function updateInstallSource(
-  body: { pip_index?: string; npm_registry?: string; pytorch_index?: string; github_mirror?: string; model_source?: string },
+  body: { pip_index?: string; npm_registry?: string; pytorch_index?: string; github_mirror?: string; update_feed_url?: string; plugin_registry_url?: string; model_source?: string },
 ): Promise<InstallSource> {
   return api<InstallSource>("/api/settings/install-source", { method: "PUT", body: JSON.stringify(body) });
 }

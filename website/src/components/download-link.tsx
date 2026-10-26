@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 下载入口:国内走百度网盘,其余走 GitHub Releases(判据见 lib/download-channel)。
+ * 下载入口:R2 直连(如果配置了)优先,GitHub 是全球与自动备用,百度网盘是人工备用(判据见 lib/download-channel)。
  *
  * 首屏(服务端渲染)只知道页面语言,先按语言给一个默认值;挂上之后再看访客自己选过没有、
  * 没选过就按时区判。一页上的几个入口(顶栏、首页按钮、页脚、下载页的卡片)共享同一个选择 ——
@@ -16,6 +16,7 @@ import {
   type Channel,
   channelHref,
   chinaAvailable,
+  directAvailable,
   defaultChannel,
   detectChannel,
   STORAGE_KEY,
@@ -63,16 +64,17 @@ function initialChoice(): Channel {
     // 隐私模式、禁用存储:当没选过。
   }
   return (
-    storedChannel(stored, SITE.baiduPan) ??
+    storedChannel(stored, SITE.baiduPan, SITE.r2) ??
     detectChannel(
       { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, languages: navigator.languages },
       SITE.baiduPan,
+      SITE.r2,
     )
   );
 }
 
 export function useDownloadChannel(locale: Locale): [Channel, (next: Channel) => void] {
-  const channel = React.useSyncExternalStore(subscribe, currentChoice, () => defaultChannel(locale, SITE.baiduPan));
+  const channel = React.useSyncExternalStore(subscribe, currentChoice, () => defaultChannel(locale, SITE.baiduPan, SITE.r2));
   return [channel, choose];
 }
 
@@ -88,7 +90,7 @@ export function DownloadLink({
 }) {
   const [channel] = useDownloadChannel(locale);
   return (
-    <a href={channelHref(channel, SITE.baiduPan, SITE.releases)} target="_blank" rel="noreferrer" className={className}>
+    <a href={channelHref(channel, SITE.baiduPan, SITE.releases, SITE.r2)} target="_blank" rel="noreferrer" className={className}>
       {children}
     </a>
   );
@@ -99,9 +101,15 @@ export function DownloadChoice({ locale }: { locale: Locale }) {
   const t = getMessages(locale).downloadChannel;
   const [channel, choose] = useDownloadChannel(locale);
   const options: Array<{ id: Channel; title: string; via: string; body: string; href: string; code?: string }> = [];
+  if (directAvailable(SITE.r2)) {
+    options.push({
+      id: "china", title: t.chinaDirect, via: t.chinaDirectVia, body: t.chinaDirectBody,
+      href: channelHref("china", SITE.baiduPan, SITE.releases, SITE.r2),
+    });
+  }
   if (chinaAvailable(SITE.baiduPan)) {
     options.push({
-      id: "china", title: t.china, via: t.chinaVia, body: t.chinaBody,
+      id: "baidu", title: t.baidu, via: t.chinaVia, body: t.chinaBody,
       href: SITE.baiduPan.url, code: SITE.baiduPan.code || undefined,
     });
   }

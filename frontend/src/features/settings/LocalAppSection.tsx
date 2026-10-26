@@ -90,6 +90,8 @@ type UpdateInfo = {
   percent?: number;
   url?: string;
   error?: string;
+  manualUrl?: string;
+  source?: string;
 };
 
 export function UpdateCheckButton() {
@@ -99,6 +101,12 @@ export function UpdateCheckButton() {
   const check = window.mosaelDesktop?.checkUpdates;
   const download = window.mosaelDesktop?.downloadUpdate;
   const install = window.mosaelDesktop?.installUpdate;
+  const reportError = (next: UpdateInfo, message: string) => {
+    toast.error(message, {
+      description: String(next.error),
+      action: next.manualUrl ? { label: t("updateManualDownload"), onClick: () => window.open(next.manualUrl, "_blank") } : undefined,
+    });
+  };
 
   React.useEffect(() => {
     const offAvailable = window.mosaelDesktop?.onUpdateAvailable?.((next) => {
@@ -138,7 +146,7 @@ export function UpdateCheckButton() {
             const next = await install!();
             setInfo(next);
             if (next.error === "update_jobsRunning") toast.error(t("updateJobsRunning"));
-            else if (next.error) toast.error(next.error);
+            else if (next.error) reportError(next, next.error);
           } finally {
             setBusy(null);
           }
@@ -149,7 +157,7 @@ export function UpdateCheckButton() {
           try {
             const next = await download!();
             setInfo(next);
-            if (next.error) toast.error(t("updateDownloadFailed"), { description: String(next.error) });
+            if (next.error) reportError(next, t("updateDownloadFailed"));
           } finally {
             setBusy(null);
           }
@@ -163,7 +171,7 @@ export function UpdateCheckButton() {
         try {
           const next = await check();
           setInfo(next);
-          if (next.error) toast.error(t("updateCheckFailed"), { description: String(next.error) });
+          if (next.error) reportError(next, t("updateCheckFailed"));
           else if (next.hasUpdate) {
             toast(t("updateAvailable").replace("{version}", next.latest ?? ""), {
               duration: 12000,

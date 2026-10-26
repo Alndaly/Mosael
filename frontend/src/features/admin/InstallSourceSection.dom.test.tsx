@@ -15,9 +15,10 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => t }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const updates: Record<string, string>[] = [];
+let loadError: Error | null = null;
 let stored: Record<string, unknown> = {};
 vi.mock("@/api/client", () => ({
-  getInstallSource: () => Promise.resolve(stored),
+  getInstallSource: () => loadError ? Promise.reject(loadError) : Promise.resolve(stored),
   updateInstallSource: (body: Record<string, string>) => {
     updates.push(body);
     stored = { ...stored, ...body };
@@ -37,6 +38,7 @@ function show() {
 }
 
 beforeEach(() => {
+  loadError = null;
   updates.length = 0;
   stored = {
     pip_index: "", npm_registry: "", pip_presets: [], npm_presets: [], pytorch_index: "", github_mirror: "",
@@ -86,4 +88,26 @@ it("模型下载源是这一节里的一行:显示存着的那个,换了只存�
   await userEvent.click(picker);
   await userEvent.click(await screen.findByRole("option", { name: "settingsVoiceCloneSourceHf" }));
   await waitFor(() => expect(updates).toEqual([{ model_source: "hf" }]));
+});
+
+it("R2 更新源和插件索引离开框时分别保存", async () => {
+  show();
+  const feed = await screen.findByLabelText("installSourceUpdateFeed");
+  fireEvent.change(feed, { target: { value: " https://r2.example/releases " } });
+  fireEvent.blur(feed);
+  const registry = await screen.findByLabelText("installSourceRegistry");
+  fireEvent.change(registry, { target: { value: " https://r2.example/latest/registry.json " } });
+  fireEvent.blur(registry);
+  await waitFor(() => expect(updates).toEqual([
+    { update_feed_url: "https://r2.example/releases" },
+    { plugin_registry_url: "https://r2.example/latest/registry.json" },
+  ]));
+});
+
+it("配置读取失败时显示错误,不拿空值继续保存", async () => {
+  loadError = new Error("offline");
+  show();
+  expect(await screen.findByText("pageLoadError")).toBeTruthy();
+  expect(screen.queryByLabelText("installSourceUpdateFeed")).toBeNull();
+  expect(updates).toEqual([]);
 });

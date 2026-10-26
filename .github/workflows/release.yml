@@ -246,7 +246,7 @@ jobs:
               pnpm exec electron-builder --mac dir --publish never -c.mac.notarize=false
               node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app --signature-only
               version=$(node -p "require('./package.json').version")
-              ditto -c -k --sequesterRsrc --keepParent release/mac-arm64/Mosael.app "release/Mosael-$version-mac-signed.zip"
+              node scripts/pack-mac-update.mjs --app release/mac-arm64/Mosael.app --out "release/Mosael-$version-mac-signed.zip"
             else
               pnpm exec electron-builder --mac dmg --publish never
               node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app
@@ -260,11 +260,13 @@ jobs:
           if [ "$RUNNER_OS" = "macOS" ]; then
             # DMG 是首次安装包;Squirrel 更新要吃的是同一个签名 .app 的 ZIP。
             if [ ! -f "release/Mosael-$version-mac-signed.zip" ]; then
-              ditto -c -k --sequesterRsrc --keepParent release/mac-arm64/Mosael.app "release/Mosael-$version-mac-signed.zip"
+              node scripts/pack-mac-update.mjs --app release/mac-arm64/Mosael.app --out "release/Mosael-$version-mac-signed.zip"
             fi
             node scripts/write-update-metadata.mjs --version "$version" --mac "release/Mosael-$version-mac-signed.zip" --out release
+            test -f "release/Mosael-$version-mac-signed.zip.blockmap"
           else
             node scripts/write-update-metadata.mjs --version "$version" --windows "release/Mosael Setup $version.exe" --out release
+            test -f "release/Mosael Setup $version.exe.blockmap"
           fi
 
       - name: Smoke packaged Electron and database upgrade
@@ -278,6 +280,7 @@ jobs:
           files=(${{ matrix.asset_glob }})
           if compgen -G "release/latest*.yml" > /dev/null; then files+=(release/latest*.yml); fi
           if compgen -G "release/*-mac-signed.zip" > /dev/null; then files+=(release/*-mac-signed.zip); fi
+          if compgen -G "release/*.blockmap" > /dev/null; then files+=(release/*.blockmap); fi
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
 
       - name: Upload artifact (dry run)
@@ -288,6 +291,7 @@ jobs:
           path: |
             ${{ runner.os == 'macOS' && inputs.notarization == 'local' && 'release/*-mac-signed.zip' || matrix.asset_glob }}
             release/latest*.yml
+            release/*.blockmap
           if-no-files-found: error
 
   publish:

@@ -78,6 +78,7 @@ version: 2.2.3
 - **下载源**:装东西从哪个镜像拉。「依赖下载源(pip 镜像)」给本机引擎装 Python 依赖用 —— 每个都要拉 2–3 GB,国内直连官方 PyPI
   常常慢到不可用;「npm 源」给要装 npm 依赖的插件(比如 Remotion)。插件连接上可以各自换,没换就跟随这里。最后一行「模型下载源」
   管模型权重从哪儿下(HF 镜像、HuggingFace、ModelScope):声音克隆、本机识别(NSFW)、Mosael 起的本机 ComfyUI 都读它。
+- **R2 更新源与插件市场索引**:R2 使用自定义 HTTPS 域名,应用内更新优先读它,失败自动回退 GitHub;插件索引要写完整的 `registry.json` 地址,索引里的插件 ZIP 也必须可访问。留空则继续使用 GitHub Releases。百度网盘只作人工下载备用,不能当自动更新源。
 - **转写模型**:FunASR、sherpa-onnx、WhisperX 的运行环境和模型。「安装运行环境」之后,它才会出现在「设置 → 能力提供方 → 转写」里能选。
   **FunASR 和 sherpa-onnx 是同一个 SenseVoice 模型**（FunASR 走 torch，sherpa-onnx 走 ONNX）：后者不装 torch、权重约 230 MB（对 900 MB），
   装得快、启动快得多，代价是**没有说话人分离** —— 要按人分开逐字稿就选 FunASR。默认仍是 FunASR。

@@ -181,6 +181,10 @@ class InstallSourceOut(ApiModel):
     model_sources: list[str] = Field(default_factory=list)
     #: 下 GitHub 上钉死的压缩包时接在前面的镜像前缀(以 `/` 结尾);空 = 直连。
     github_mirror: str = ""
+    #: 应用更新包的下载根地址(electron-updater generic provider);空 = 只用 GitHub Releases。
+    update_feed_url: str = ""
+    #: 插件市场的完整 registry.json 地址;空 = 用内置默认。
+    plugin_registry_url: str = ""
 
 
 class InstallSourceUpdate(ApiModel):
@@ -191,6 +195,9 @@ class InstallSourceUpdate(ApiModel):
     #: 空串 = 直连。
     github_mirror: str | None = Field(default=None, max_length=500)
     model_source: str | None = Field(default=None, pattern="^(hf|hf-mirror|modelscope)$")
+    #: 空串分别 = 只用 GitHub Releases / 内置插件市场索引。
+    update_feed_url: str | None = Field(default=None, max_length=500)
+    plugin_registry_url: str | None = Field(default=None, max_length=500)
 
 
 class DenoiseEngineOut(ApiModel):

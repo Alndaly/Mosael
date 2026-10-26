@@ -8,6 +8,7 @@ const UPDATE_OWNER = "Alndaly";
 const UPDATE_REPO = "Mosael";
 const UPDATE_RELEASES = `https://github.com/${UPDATE_OWNER}/${UPDATE_REPO}/releases`;
 const UPDATE_API = `https://api.github.com/repos/${UPDATE_OWNER}/${UPDATE_REPO}/releases/latest`;
+const MANUAL_DOWNLOAD_URL = "https://pan.baidu.com/s/5n5TXJoBkkF61BOyzFqgnjg";
 
 function compareVersions(a, b) {
   const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);
@@ -19,7 +20,7 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout: later, setInterval: every, getRunningJobs = () => 0, onInstall = () => {} }) {
+function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout: later, setInterval: every, getRunningJobs = () => 0, onInstall = () => {}, getFeedUrl = async () => "" }) {
   const enabled = !isDev && Boolean(autoUpdater);
   const current = app.getVersion();
   let latest = "";
@@ -29,10 +30,13 @@ function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout:
   let total = 0;
   let error = "";
   let announced = "";
+  let selectedFeed = "";
+  let fallback = false;
   let downloadPromise = null;
 
   const supportsAutoInstall = enabled;
   const url = () => (latest ? `${UPDATE_RELEASES}/tag/v${latest}` : UPDATE_RELEASES);
+  const githubFeed = () => autoUpdater.setFeedURL({ provider: "github", owner: UPDATE_OWNER, repo: UPDATE_REPO });
   const info = (extra = {}) => ({
     current,
     latest,
@@ -44,16 +48,44 @@ function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout:
     total,
     error,
     url: url(),
+    manualUrl: MANUAL_DOWNLOAD_URL,
+    source: fallback ? "github-fallback" : selectedFeed ? "r2" : "github",
     ...extra,
   });
   const emitProgress = (extra = {}) => emit("progress", info(extra));
+  const prepareFeed = async () => {
+    const next = (await getFeedUrl()).trim();
+    if (next !== selectedFeed) {
+      selectedFeed = next;
+      fallback = false;
+    }
+    if (fallback || !selectedFeed) {
+      githubFeed();
+    } else {
+      autoUpdater.setFeedURL({ provider: "generic", url: selectedFeed });
+    }
+    return selectedFeed;
+  };
+  const withFallback = async (work) => {
+    try {
+      return await work();
+    } catch (cause) {
+      if (!selectedFeed || fallback) throw cause;
+      fallback = true;
+      latest = "";
+      phase = "available";
+      githubFeed();
+      log("update-feed-fallback", cause);
+      return work();
+    }
+  };
   const emitAvailable = () => emit("available", info());
 
   if (enabled) {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
     autoUpdater.allowPrerelease = false;
-    autoUpdater.setFeedURL({ provider: "github", owner: UPDATE_OWNER, repo: UPDATE_REPO });
+    githubFeed();
     autoUpdater.on("download-progress", (progress) => {
       phase = "downloading";
       percent = Math.max(0, Math.min(100, Math.round(Number(progress.percent) || 0)));
@@ -95,7 +127,8 @@ function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout:
       }
       return result;
     }
-    const result = await autoUpdater.checkForUpdates();
+    await prepareFeed();
+    const result = await withFallback(() => autoUpdater.checkForUpdates());
     const next = String(result?.updateInfo?.version || "").replace(/^v/i, "");
     if (!next) throw new Error("update_noTag");
     const changed = latest !== next;
@@ -119,7 +152,7 @@ function createAppUpdater({ app, autoUpdater, emit, log, net, isDev, setTimeout:
     percent = 0;
     error = "";
     emitProgress();
-    downloadPromise = autoUpdater.downloadUpdate().finally(() => {
+    downloadPromise = withFallback(() => autoUpdater.downloadUpdate()).finally(() => {
       downloadPromise = null;
     });
     await downloadPromise;

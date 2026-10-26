@@ -21,7 +21,7 @@ type Preset = components["schemas"]["PackageSourcePresetOut"];
 const FOLLOW = "__follow__";
 const CUSTOM = "__custom__";
 
-export function PackageSourcePicker({ presets, value, onChange, followLabel, ariaLabel }: {
+export function PackageSourcePicker({ presets, value, onChange, followLabel, ariaLabel, disabled = false }: {
   presets: Preset[];
   /** 预设 key 或自定义地址;空 = 跟随(给了 followLabel 时)或官方源。 */
   value: string;
@@ -29,6 +29,7 @@ export function PackageSourcePicker({ presets, value, onChange, followLabel, ari
   /** 给了就多一项「跟随 Mosael(…)」,空值表示它。 */
   followLabel?: string;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   const t = useI18n();
   const official = presets.find((preset) => !preset.url)?.value ?? "";
@@ -51,6 +52,7 @@ export function PackageSourcePicker({ presets, value, onChange, followLabel, ari
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
       <SearchableSelect
+        disabled={disabled}
         className={SETTINGS_FIELD_WIDTH}
         value={selected}
         onValueChange={choose}
@@ -63,6 +65,7 @@ export function PackageSourcePicker({ presets, value, onChange, followLabel, ari
       {selected === CUSTOM && (
         <CustomAddress
           ariaLabel={ariaLabel}
+          disabled={disabled}
           value={isCustom ? value : ""}
           onCommit={(url) => {
             const next = url.trim();
@@ -74,7 +77,7 @@ export function PackageSourcePicker({ presets, value, onChange, followLabel, ari
   );
 }
 
-function CustomAddress({ value, onCommit, ariaLabel }: { value: string; onCommit: (value: string) => void; ariaLabel: string }) {
+function CustomAddress({ value, onCommit, ariaLabel, disabled = false }: { value: string; onCommit: (value: string) => void; ariaLabel: string; disabled?: boolean }) {
   const draft = useDraftText<HTMLInputElement>({ value, onValueChange: onCommit, commit: "blur" });
-  return <Input className={SETTINGS_FIELD_WIDTH} aria-label={ariaLabel} placeholder="https://" autoFocus={!value} {...draft} />;
+  return <Input className={SETTINGS_FIELD_WIDTH} aria-label={ariaLabel} placeholder="https://" autoFocus={!value} disabled={disabled} {...draft} />;
 }

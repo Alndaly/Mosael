@@ -71,6 +71,12 @@ def test_发版那份的下载地址钉在这次发版的_tag_上(generator) -> 
             assert one["download"] == f"https://github.com/Alndaly/Mosael/releases/download/v1.5.3/{one['id']}.zip"
 
 
+def test_自定义下载域时索引指向版本化直链(generator) -> None:
+    release = generator.release_index("v1.5.3", download_base="https://r2.example/releases/")
+    for one in release["plugins"]:
+        if not one["bundled"]:
+            assert one["download"] == f"https://r2.example/releases/v1.5.3/{one['id']}.zip"
+
 @pytest.mark.parametrize("tag", ["main", "1.5.3", "v1.5", "refs/tags/v1.5.3"])
 def test_只认发版的_tag(generator, tag: str) -> None:
     with pytest.raises(SystemExit):

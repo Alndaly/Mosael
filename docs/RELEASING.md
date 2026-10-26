@@ -110,8 +110,30 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 - 公证完成的 macOS arm64 `.dmg`。
 - 应用内更新产物:macOS `Mosael-VERSION-mac-signed.zip`(同一份已签名/公证的 `.app` ZIP,不是 DMG)和 Windows NSIS 安装包。`latest-mac.yml` / `latest.yml` 由 `scripts/write-update-metadata.mjs` 从**最终二进制**生成并上传;缺了它们,`electron-updater` 找不到更新。
   每个 `.app` / NSIS 包还必须内嵌 `resources/app-update.yml`（由 `build/app-update.yml` 经 `extraResources` 拷入），声明 GitHub owner/repo 和 updater 缓存目录；`test/bundle.smoke.mjs` 会在启动前检查它。只上传元数据而漏掉包内配置，会在下载开始时报 `ENOENT: …/app-update.yml`。
-  手动交接时:macOS ZIP 用与公证相同的那份 ditto 产物,Windows 用同一次构建的 NSIS 安装包。`write-update-metadata.mjs` 会把 sha512 写进元数据;不要手抄或从旧版复制。
+  差分更新还要发布 macOS `Mosael-VERSION-mac-signed.zip.blockmap` 和 Windows `Mosael Setup VERSION.exe.blockmap`。它们由 `write-update-metadata.mjs` 与元数据同时从最终二进制生成;工作流会检查文件存在并上传。旧版本首次升级时会同时取新旧两份 blockmap,之后更新器按 Range 下载变化块,失败才回退完整包。
+  手动交接时:macOS ZIP 用与公证相同的 `Mosael.app` 经 `scripts/pack-mac-update.mjs` 生成,其中 `Contents/Resources/app.asar` 以 `Copy` 存储,其他成员正常压缩并保留符号链接;不要用普通 `ditto` ZIP 替代,否则压缩流变化会让差分退化成整包下载。Windows 用同一次构建的 NSIS 安装包。`write-update-metadata.mjs` 会把 sha512 写进元数据;不要手抄或从旧版复制。
+  `SHA256SUMS` 也要覆盖这些 `.blockmap`,不能只核对安装包本体。
   本地最终发布目录 `dist/VERSION/` 也应包含 `latest-mac.yml` / `latest.yml`,Release 的下载地址才能被应用内更新读到。
+
+### R2 主源与 GitHub 自动兜底
+
+正式分发采用 **R2 主源 + GitHub 自动兜底 + 百度网盘人工兜底**。R2 使用自己的 HTTPS 域名，不使用 `r2.dev` 公共测试域名。`latest/` 放当前版的全部产物，`v<tag>/` 再放一份不可变副本；`update_feed_url` 与插件索引 URL 都指到 `latest/`，索引内的版本包指向 `v<tag>/`。
+
+在管理页「引擎 → 下载源」分别配置 R2 更新根地址和插件索引地址；留空时仍保持 GitHub-only，不改变已有部署。官网 `website/src/lib/site.ts` 的 `r2.url` 留空时也保持原有百度/GitHub 分流。
+
+发布前先用 dry-run 核对布局，再上传并逐个回读校验：
+
+```bash
+node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION --dry-run
+export R2_ACCOUNT_ID=...
+export R2_ACCESS_KEY_ID=...
+export R2_SECRET_ACCESS_KEY=...
+export R2_BUCKET=...
+# 可选:R2_PREFIX=mosael、R2_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
+```
+
+脚本逐个上传 `latest/` 与 `v<tag>/` 文件并回读 Content-Length 和 SHA-256，失败即停止，不能只凭 PutObject 成功就宣称镜像已发布。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。

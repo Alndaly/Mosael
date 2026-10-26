@@ -14274,6 +14274,16 @@ export interface components {
              * @default
              */
             github_mirror: string;
+            /**
+             * Update Feed Url
+             * @default
+             */
+            update_feed_url: string;
+            /**
+             * Plugin Registry Url
+             * @default
+             */
+            plugin_registry_url: string;
         };
         /** InstallSourceUpdate */
         InstallSourceUpdate: {
@@ -14287,6 +14297,10 @@ export interface components {
             github_mirror?: string | null;
             /** Model Source */
             model_source?: string | null;
+            /** Update Feed Url */
+            update_feed_url?: string | null;
+            /** Plugin Registry Url */
+            plugin_registry_url?: string | null;
         };
         /** InvitationListOut */
         InvitationListOut: {

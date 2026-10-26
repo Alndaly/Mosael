@@ -20,7 +20,7 @@ from app.api.schemas import (
     NetworkConfigUpdate,
 )
 from app.db.models import Job, NetworkConfig
-from app.domain import ai_runtime, media_tools, media_tools_install
+from app.domain import ai_runtime, deployment, media_tools, media_tools_install
 from app.domain.network import apply_to_process, get_config as get_network
 from app.domain.voices import tts_settings
 from app.domain.permissions import ensure_deployment_admin
@@ -152,13 +152,13 @@ def get_install_source(db: DbSession, user: CurrentUser) -> InstallSourceOut:
     也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),
     但界面和接口不再挂在克隆名下。
     """
-    return _install_source_out()
+    return _install_source_out(db)
 
 
 #: 模型下载源能选哪几个:两种 HuggingFace 端点,加上 ModelScope(只有支持它的克隆引擎会走)。
 MODEL_SOURCES = ("hf-mirror", "hf", "modelscope")
 
-def _install_source_out() -> InstallSourceOut:
+def _install_source_out(db: Session) -> InstallSourceOut:
     from app.ai.runtime import config as runtime_config
     from app.domain.local_services import sources as service_sources
     from app.domain.plugins import package_sources
@@ -172,6 +172,8 @@ def _install_source_out() -> InstallSourceOut:
         pytorch_index=current.pytorch_index or "",
         pytorch_presets=service_sources.pytorch_presets(),
         github_mirror=current.github_mirror or "",
+        update_feed_url=deployment.update_feed_url(db),
+        plugin_registry_url=deployment.plugin_registry_url(db),
         model_source=current.source,
         model_sources=list(MODEL_SOURCES),
     )
@@ -184,7 +186,6 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
     from app.ai.runtime import config as runtime_config
     from app.domain.local_services import sources as service_sources
     from app.domain.plugins import package_sources
-    from app.domain.plugins.errors import PluginDomainError
 
     row = tts_settings.saved_row(db)
     try:
@@ -198,10 +199,14 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
             row.pytorch_index = service_sources.normalize_pytorch_index(body.pytorch_index)
         if body.github_mirror is not None:
             row.github_mirror = service_sources.normalize_github_mirror(body.github_mirror)
+        if body.update_feed_url is not None:
+            deployment.set_update_feed_url(db, body.update_feed_url)
+        if body.plugin_registry_url is not None:
+            deployment.set_plugin_registry_url(db, body.plugin_registry_url)
         model_source_changed = body.model_source is not None and body.model_source != row.source
         if body.model_source is not None:
             row.source = body.model_source
-    except PluginDomainError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     runtime_config.refresh()
@@ -212,4 +217,4 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
         tts_models.clear_runtime_probes()
         tts_models.forget_failures()
         tts_daemon.pool().drop_all()
-    return _install_source_out()
+    return _install_source_out(db)

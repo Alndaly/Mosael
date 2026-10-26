@@ -999,4 +999,5 @@ export const otherUi = {
   updateDownloadFailed: "更新下载失败",
   updateJobsRunning: "当前还有任务在跑，等任务结束后再重启更新",
   updateCheckFailed: "无法检查更新,请稍后再试",
+  updateManualDownload: "去百度网盘手动下载",
 } as const;

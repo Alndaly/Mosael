@@ -10,6 +10,8 @@ export const SITE = {
    * url 留空 = 国内渠道还没开:各处下载入口一律走 GitHub,不显示国内选项(见 lib/download-channel)。
    */
   baiduPan: { url: "https://pan.baidu.com/s/5n5TXJoBkkF61BOyzFqgnjg", code: "" },
+  /** 国内 HTTPS 直链(可选):配置后优先于网盘;留空保持现有百度/GitHub 分流。 */
+  r2: { url: "" },
   authorX: "https://x.com/KindaHuaX",
   email: "mailto:1142704468@qq.com",
 } as const;

@@ -102,6 +102,7 @@ by a deployment admin" where they would need one (the transcript, the denoise di
 - **Noise reduction**: the built-in method needs nothing; DeepFilterNet downloads once here (about 30 MB); RNNoise ships with the app.
 
 ![Admin → Engines: download sources (pip and npm), then the local engines such as transcription models, each with its install button](/media/screens/en/admin-engines.png)
+- **R2 update feed and plugin registry**: use a custom HTTPS R2 domain. In-app updates prefer it and fall back to GitHub on failure. The registry setting takes a full `registry.json` URL, and the plugin ZIP URLs inside it must also be reachable. Leave empty to keep using GitHub Releases. Baidu Netdisk is a manual download fallback only, not an automatic update feed.
 
 "Installed" here means the engine was actually loaded once, not that a folder exists; an interrupted install reports an incomplete
 runtime, and installing again fills in what is missing.

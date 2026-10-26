@@ -8,6 +8,8 @@ import { PackageSourcePicker } from "@/components/settings/PackageSourcePicker";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
 import { useDraftText } from "@/components/ui/draft-text";
 import { Input } from "@/components/ui/input";
+import { Download } from "lucide-react";
+import { PageLoadError } from "@/components/layout/EmptyState";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 
@@ -38,10 +40,19 @@ export function InstallSourceSection() {
     mutationFn: updateInstallSource,
     onSuccess: (next) => {
       qc.setQueryData(["install-source"], next);
+      void qc.invalidateQueries({ queryKey: ["local-service-plan"] });
       toast.success(t("saved"));
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  if (source.isError) {
+    return (
+      <AdminSection id="install-source" title={t("installSourceTitle")} description={t("installSourceDesc")}>
+        <PageLoadError size="section" icon={<Download size={20} />} error={source.error} onRetry={() => void source.refetch()} />
+      </AdminSection>
+    );
+  }
 
   return (
     <AdminSection id="install-source" title={t("installSourceTitle")} description={t("installSourceDesc")}>
@@ -52,6 +63,7 @@ export function InstallSourceSection() {
             presets={source.data?.pip_presets ?? []}
             value={source.data?.pip_index ?? ""}
             onChange={(pip_index) => save.mutate({ pip_index })}
+            disabled={save.isPending}
           />
         </AdminRow>
         <AdminRow label={t("installSourceNpm")} description={t("installSourceNpmHint")}>
@@ -60,6 +72,7 @@ export function InstallSourceSection() {
             presets={source.data?.npm_presets ?? []}
             value={source.data?.npm_registry ?? ""}
             onChange={(npm_registry) => save.mutate({ npm_registry })}
+            disabled={save.isPending}
           />
         </AdminRow>
         <AdminRow label={t("installSourcePytorch")} description={t("installSourcePytorchHint")}>
@@ -68,16 +81,42 @@ export function InstallSourceSection() {
             presets={source.data?.pytorch_presets ?? []}
             value={source.data?.pytorch_index ?? ""}
             onChange={(pytorch_index) => save.mutate({ pytorch_index })}
+            disabled={save.isPending}
           />
         </AdminRow>
         <AdminRow label={t("installSourceGithub")} description={t("installSourceGithubHint")}>
-          <GithubMirror value={source.data?.github_mirror ?? ""} onCommit={(github_mirror) => save.mutate({ github_mirror })} />
+          <UrlField
+            ariaLabel={t("installSourceGithub")}
+            value={source.data?.github_mirror ?? ""}
+            onCommit={(github_mirror) => save.mutate({ github_mirror })}
+            placeholder={t("installSourceGithubPlaceholder")}
+            disabled={save.isPending}
+          />
+        </AdminRow>
+        <AdminRow label={t("installSourceUpdateFeed")} description={t("installSourceUpdateFeedHint")}>
+          <UrlField
+            ariaLabel={t("installSourceUpdateFeed")}
+            value={source.data?.update_feed_url ?? ""}
+            onCommit={(update_feed_url) => save.mutate({ update_feed_url })}
+            placeholder={t("installSourceUpdateFeedPlaceholder")}
+            disabled={save.isPending}
+          />
+        </AdminRow>
+        <AdminRow label={t("installSourceRegistry")} description={t("installSourceRegistryHint")}>
+          <UrlField
+            ariaLabel={t("installSourceRegistry")}
+            value={source.data?.plugin_registry_url ?? ""}
+            onCommit={(plugin_registry_url) => save.mutate({ plugin_registry_url })}
+            placeholder={t("installSourceRegistryPlaceholder")}
+            disabled={save.isPending}
+          />
         </AdminRow>
         {/* 模型权重从哪儿下:此前藏在「声音克隆」里,却管着本机识别(NSFW)和 Mosael 起的本机 ComfyUI 的所有 HuggingFace
             下载(体检 UM-16)。数据到了才挂下拉:Radix Select 挂载之后从外部改 value 会回调一个空串,这里一回调就存。 */}
         <AdminRow label={t("voiceCloneSource")} description={t("installSourceModelHint")}>
           {source.data ? (
             <OptionPicker
+              disabled={save.isPending}
               ariaLabel={t("voiceCloneSource")}
               className={SETTINGS_FIELD_WIDTH}
               value={source.data.model_source}
@@ -94,9 +133,8 @@ export function InstallSourceSection() {
   );
 }
 
-/** GitHub 镜像前缀:一个离开时才存的地址框(值住在服务端,每敲一个字发一次请求会把字吞掉);清空就是直连。 */
-function GithubMirror({ value, onCommit }: { value: string; onCommit: (value: string) => void }) {
-  const t = useI18n();
+/** URL 输入:一个离开时才存的地址框(值住在服务端,每敲一个字发一次请求会把字吞掉);清空就是默认源。 */
+function UrlField({ value, onCommit, placeholder, ariaLabel, disabled = false }: { value: string; onCommit: (value: string) => void; placeholder: string; ariaLabel: string; disabled?: boolean }) {
   const draft = useDraftText<HTMLInputElement>({
     value,
     onValueChange: (next) => {
@@ -107,8 +145,9 @@ function GithubMirror({ value, onCommit }: { value: string; onCommit: (value: st
   return (
     <Input
       className={SETTINGS_FIELD_WIDTH}
-      aria-label={t("installSourceGithub")}
-      placeholder={t("installSourceGithubPlaceholder")}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      disabled={disabled}
       spellCheck={false}
       {...draft}
     />

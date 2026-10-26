@@ -1550,6 +1550,20 @@ app.whenReady().then(async () => {
     setTimeout,
     setInterval,
     getRunningJobs: () => lastSystemStatus.runningJobs,
+    getFeedUrl: async () => {
+      try {
+        const response = await net.fetch(`${BACKEND_URL}/api/settings/install-source`, {
+          headers: { "X-Mosael-Shell": currentShellToken },
+          signal: AbortSignal.timeout(4000),
+        });
+        if (!response.ok) throw new Error(`install-source ${response.status}`);
+        const data = await response.json();
+        return String(data.update_feed_url || "");
+      } catch (error) {
+        appendMainLog("update-source-read-failed", error);
+        return "";
+      }
+    },
     onInstall: () => system?.markQuitting(),
     emit: (kind, payload) => {
       const channel = kind === "available" ? IPC.event.updateAvailable : IPC.event.updateProgress;

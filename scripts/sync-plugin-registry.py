@@ -53,6 +53,7 @@ DEFAULT_REPO = "Alndaly/Mosael"
 #: Release,应用经 `releases/latest/download/registry.json` 拿到索引,再按这里的地址下包 ——
 #: 读索引的那一刻恰好发了新版,拿到的也是「那一版的索引 + 那一版的包」,不会错配。
 RELEASE_DOWNLOAD_TEMPLATE = "https://github.com/{repo}/releases/download/{tag}/{id}.zip"
+MIRROR_DOWNLOAD_TEMPLATE = "{base}/{tag}/{id}.zip"
 
 #: 官网那一份(main)的下载地址:最新一次 Release 的附件。只有已经发出去的老版本应用还从这份装
 #: (它们的默认索引地址写死成了 mosael.com 上这份);它的版本号是 main 上的,可能比这个地址给的新
@@ -91,16 +92,20 @@ def website_index(repo: str = DEFAULT_REPO) -> dict:
     }
 
 
-def release_index(tag: str, repo: str = DEFAULT_REPO) -> dict:
+def release_index(tag: str, repo: str = DEFAULT_REPO, download_base: str = "") -> dict:
     """应用里的市场装的那一份:这一次发版(`tag`)的产物,下载地址钉在这个 tag 上。"""
     if not TAG_RE.match(tag):
         raise SystemExit(f"--release 要的是发版的 tag(v1.2.3),拿到的是 {tag!r}")
     if not REPO_RE.match(repo):
         raise SystemExit(f"--repo 要的是 owner/name,拿到的是 {repo!r}")
+    if download_base and not download_base.startswith(("https://", "http://")):
+        raise SystemExit("--download-base 只接受 http(s) 地址")
+    base = download_base.rstrip("/")
+    template = MIRROR_DOWNLOAD_TEMPLATE if base else RELEASE_DOWNLOAD_TEMPLATE
     return {
         "channel": "release",
         "release": tag,
-        "plugins": build_entries(lambda plugin_id: RELEASE_DOWNLOAD_TEMPLATE.format(repo=repo, tag=tag, id=plugin_id)),
+        "plugins": build_entries(lambda plugin_id: template.format(repo=repo, base=base, tag=tag, id=plugin_id)),
     }
 
 
@@ -145,6 +150,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--release", metavar="TAG", help="生成发版产物:这次发版的 tag(v1.2.3)")
     parser.add_argument("--repo", default=DEFAULT_REPO, help=f"owner/name(默认 {DEFAULT_REPO})")
+    parser.add_argument("--download-base", default="", help="自定义发布文件根地址(如 https://r2.example/releases),包地址变为 <根>/vTAG/<id>.zip")
     parser.add_argument(
         "--packages",
         type=Path,
@@ -160,7 +166,7 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.packages is None:
         parser.error("--release 要带 --packages:索引只能和它核对过的那批插件包一起发")
-    index = release_index(args.release, args.repo)
+    index = release_index(args.release, args.repo, args.download_base)
     verify_packages(index, args.packages)
     attach_digests(index, args.packages)
     out = args.packages / RELEASE_INDEX_NAME
