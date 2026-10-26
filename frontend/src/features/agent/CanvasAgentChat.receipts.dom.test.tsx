@@ -120,7 +120,7 @@ beforeEach(() => {
   adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
 });
 
-async function mount() {
+async function mount(extra: { showJobReceipts?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
@@ -134,6 +134,7 @@ async function mount() {
         mode="docked"
         onModeChange={() => {}}
         onClose={() => {}}
+        {...extra}
       />
     </QueryClientProvider>,
   );
@@ -158,6 +159,14 @@ it("回执画成任务通知,不进待发消息那一条条;用户自己排的�
   expect(steer.textContent).toContain("顺便把音量调大一点");
   expect(container.querySelectorAll("[data-job-receipt]")).toHaveLength(2);
   expect(steer.textContent).not.toContain("genStopped");
+});
+
+it("工作台助手列不显示后台任务回执:任务由运行面板和任务中心承担", async () => {
+  const { container } = await mount({ showJobReceipts: false });
+  await screen.findByText("在配第三段");
+  expect(container.querySelectorAll("[data-job-receipt]")).toHaveLength(0);
+  expect(screen.queryByText("下载成片时断了")).toBeNull();
+  expect(screen.getByText("把五段旁白都配上音")).toBeTruthy();
 });
 
 it("还没交给智能体的回执画在正在跑的那一轮下面;交过的按时间排在前面", async () => {

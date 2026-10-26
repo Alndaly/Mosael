@@ -119,6 +119,7 @@ export function CanvasAgentChat({
   place,
   mode,
   dockedLayout = "overlay",
+  showJobReceipts = true,
   onModeChange,
   onClose,
 }: {
@@ -138,6 +139,8 @@ export function CanvasAgentChat({
   mode: CanvasAgentMode;
   /** Canvas docks cover content; the editor reserves a separate grid column. */
   dockedLayout?: "overlay" | "inline";
+  /** 工作台助手列里后台任务已由「运行与结果」/任务中心承担,不再把 job_receipt 塞进对话。 */
+  showJobReceipts?: boolean;
   /** 不给就没有「浮起来 / 停靠」那颗(ComfyUI 工作台的「助手」页签:就在那一列里)。 */
   onModeChange?: (mode: CanvasAgentMode) => void;
   /** 不给就没有关闭键(工作台的页签:换个页签就收起来了)。 */
@@ -293,8 +296,9 @@ export function CanvasAgentChat({
   const visibleMessages = messages.data ?? [];
   //: 还没交给智能体的回执画在正在跑的那一轮**下面**:这一轮结束它才交出去(时间戳改成那一刻),
   //: 交出去之后它在对话里也排在这一轮的回答之后 —— 现在就按那个位置画,结束时不跳位。
-  const transcript = visibleMessages.filter((message) => !isWaitingReceipt(message));
-  const waitingReceipts = visibleMessages.filter(isWaitingReceipt);
+  const transcript = visibleMessages.filter((message) =>
+    !isWaitingReceipt(message) && (showJobReceipts || message.role !== JOB_RECEIPT_ROLE));
+  const waitingReceipts = showJobReceipts ? visibleMessages.filter(isWaitingReceipt) : [];
   //: 被智能体**接住**的回执归给接住它的那一轮回答(见 ChatBubble.caughtReceiptsByMessage)。
   //: 和工作台同一个函数、同一条规矩:归属只能由拿到全部消息的列表容器算。
   const folded = React.useMemo(() => caughtReceiptsByMessage(transcript), [transcript]);

@@ -164,6 +164,7 @@ export function AssistantPanel({ target, place, runs, workflowKey, onShowMissing
         place={place}
         mode="docked"
         dockedLayout="inline"
+        showJobReceipts={false}
       />
       </SectionBoundary>
     </AgentPageViewsContext.Provider>
