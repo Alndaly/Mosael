@@ -252,8 +252,8 @@ pnpm fetch:tts-python   # the interpreter local engines' environments are built 
 Browser development mode with frontend hot reload:
 
 ```bash
-# Terminal 1: backend
-cd backend && uv run --frozen python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8800
+# Terminal 1: backend (unlocks the data directory's key from the system keychain when needed)
+pnpm dev:backend
 
 # Terminal 2: frontend
 cd frontend && pnpm dev
@@ -271,6 +271,11 @@ process loaded (`electron/main.cjs`, the preload and the bundles) changes, the r
 code: a notice at the bottom says the main process code was updated, and **Restart** relaunches only Electron while
 Vite and the backend keep running (the browser session's top bar shows a restart badge too). The main-window DevTools
 shortcut on macOS is `Cmd+Option+I`.
+
+A data directory owns its master-key identity in `secret.key.owner`; the dev launcher reads that identity before
+unlocking `secret.key.sealed`, so `~/.mosael` and `~/.mosael-dev` do not fight over one keychain item. Do not run raw
+`uvicorn` against a sealed data directory without `MOSAEL_SECRET_KEY`, and do not point a packaged build at a directory
+owned by the dev identity.
 
 For a separate, isolated stack (its own backend on another port, `MOSAEL_DATA_DIR` pointing at a scratch directory),
 start Vite with the backend address so the very first page load talks to it:

@@ -225,8 +225,8 @@ pnpm fetch:tts-python   # 本机引擎(声音克隆、转写、分离)建环境�
 浏览器开发模式（支持前端热更新）：
 
 ```bash
-# 终端 1：后端
-cd backend && uv run --frozen python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8800
+# 终端 1：后端(数据目录的主密钥封存过时,自动从系统钥匙串解出)
+pnpm dev:backend
 
 # 终端 2：前端
 cd frontend && pnpm dev
@@ -241,6 +241,10 @@ pnpm dev
 桌面开发命令会同时启动 Vite、发布 bundle 监听和 Electron。主进程加载的产物(`electron/main.cjs`、preload 和几个 bundle)
 变了之后，正在跑的仍是旧代码：界面底部会提示「主进程代码已更新，重启后生效」，点「重启」只重新拉起 Electron，Vite 和后端照常运行
 (浏览器会话顶栏里也有一个常驻的重启标记)。主窗口 DevTools 快捷键为 `Cmd+Option+I`。
+
+一个数据目录的主密钥归属记在 `secret.key.owner` 里；开发启动器先读这份归属，再解封 `secret.key.sealed`，
+所以 `~/.mosael` 和 `~/.mosael-dev` 不会抢同一个钥匙串项。不要绕过启动器直接对封存过的目录跑 `uvicorn`
+(除非显式给 `MOSAEL_SECRET_KEY`)，也不要用打包版去打开开发身份拥有的数据目录。
 
 另起一套互不干扰的环境(自己的后端开在别的端口、`MOSAEL_DATA_DIR` 指向临时目录)时，起 Vite 要带上后端地址，页面第一次加载
 就连它：
