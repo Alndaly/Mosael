@@ -38,6 +38,13 @@ vi.mock("@/api/client", () => api);
 vi.mock("@/api/domains/generation", () => ({ listGenerationOptions: api.listGenerationOptions }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh" }) }));
 
+vi.hoisted(() => {
+  for (let proto = Object.getPrototypeOf(window); proto; proto = Object.getPrototypeOf(proto)) {
+    if (Object.prototype.hasOwnProperty.call(proto, "ontouchstart")) delete (proto as Record<string, unknown>).ontouchstart;
+  }
+  delete (window as unknown as Record<string, unknown>).ontouchstart;
+});
+
 import type { ModelFile, ModelNsfw } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { ModalShell } from "@/components/app/modals";
@@ -450,6 +457,57 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
     expect(card.querySelector("[data-model-detail]")).toBe(info);
     expect(card.querySelector("[data-model-preview]")).toBe(preview);
     expect(row("SDXL Base").querySelector("[data-model-state]"), "选中的那张卡有 ✓").not.toBeNull();
+  });
+
+  it("从详情看大图再关闭:详情与工作台侧栏都保留", async () => {
+    await mount();
+    fireEvent.click(within(row("SDXL Base")).getByRole("button", { name: "workbenchModelDetailOpen" }));
+    const dialog = await waitFor(() => {
+      expect(detailDialog()).not.toBeNull();
+      return detailDialog()!;
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "viewFullSizeOf" }));
+    await waitFor(() => expect(document.querySelector(".PhotoView-Portal")).not.toBeNull());
+    fireEvent.click(document.querySelector<HTMLElement>("[data-image-preview-close]")!);
+    await waitFor(() => expect(document.querySelector(".PhotoView-Portal")?.classList.contains("PhotoView-Slider__willClose")).toBe(true));
+    expect(detailDialog(), "大图关闭不能把下一层详情顺手关掉").not.toBeNull();
+    expect(document.querySelector("aside"), "工作台侧栏也不该跟着关闭").not.toBeNull();
+  });
+
+  it("从详情按 Escape 关大图:只关大图,不把详情或侧栏一起关掉", async () => {
+    await mount();
+    fireEvent.click(within(row("SDXL Base")).getByRole("button", { name: "workbenchModelDetailOpen" }));
+    const dialog = await waitFor(() => {
+      expect(detailDialog()).not.toBeNull();
+      return detailDialog()!;
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "viewFullSizeOf" }));
+    await waitFor(() => expect(document.querySelector(".PhotoView-Portal")).not.toBeNull());
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector(".PhotoView-Portal")?.classList.contains("PhotoView-Slider__willClose")).toBe(true));
+    expect(detailDialog()).not.toBeNull();
+    expect(document.querySelector("aside")).not.toBeNull();
+  });
+
+  it("点大图空白处关闭:不把下一层详情或侧栏当成点击外部一起关掉", async () => {
+    await mount();
+    fireEvent.click(within(row("SDXL Base")).getByRole("button", { name: "workbenchModelDetailOpen" }));
+    const dialog = await waitFor(() => {
+      expect(detailDialog()).not.toBeNull();
+      return detailDialog()!;
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "viewFullSizeOf" }));
+    const portal = await waitFor(() => {
+      expect(document.querySelector(".PhotoView-Portal")).not.toBeNull();
+      return document.querySelector(".PhotoView-Portal")!;
+    });
+    const backdrop = portal.querySelector<HTMLElement>(".PhotoView__PhotoWrap")!;
+    fireEvent.mouseDown(backdrop, { button: 0, clientX: 5, clientY: 5 });
+    fireEvent.mouseUp(window, { button: 0, clientX: 5, clientY: 5 });
+    fireEvent.click(backdrop, { button: 0, clientX: 5, clientY: 5 });
+    await waitFor(() => expect(portal.classList.contains("PhotoView-Slider__willClose")).toBe(true));
+    expect(detailDialog()).not.toBeNull();
+    expect(document.querySelector("aside")).not.toBeNull();
   });
 
   it("⑩ 名字与副题的 Truncate 都显式 side=\"bottom\":不跟着工作台那一列默认的「朝左」横到画布上", async () => {
