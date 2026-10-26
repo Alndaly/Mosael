@@ -250,6 +250,27 @@ def test_通用插件工具_一段新对话里哪一处都不发完整定义_工
         assert all(f"{plugin['name']} ({len(plugin['tools']['declare'])})" in note for plugin in general_plugins.ALL), note
 
 
+def test_从AI_STUDIO继续工作流对话_仍带工作台工具_and_general_plugins_不丢(everywhere) -> None:
+    """会话的家是 ComfyUI、这一条却在 AI Studio 说：主集仍是 AI Studio，但工作台工具必须补回来。"""
+    session = everywhere["sessions"]["comfyui"]
+    _said(session, {"kind": "studio", "id": ""})
+    tools = _turn_tools(everywhere["client"], session)
+    assert COMFY_TOOLS <= tools, "工作流对话在 AI Studio 继续时，ComfyUI 工具不能消失"
+    assert any(name.endswith("__list_models") for name in tools), "ComfyUI 连接自己的 list_models 必须够得着"
+    assert CANVAS_TOOLS <= tools, "AI Studio 自己的画布工具照常在"
+    assert ON_DEMAND <= tools
+
+
+def test_从AI_STUDIO继续工作流对话_固定开销仍不超过回退窗口六成(everywhere) -> None:
+    session = everywhere["sessions"]["comfyui"]
+    _said(session, {"kind": "studio", "id": ""})
+    parts = _context(everywhere["client"], session)
+    budget = int(LOCAL_FALLBACK_CONTEXT_WINDOW * FIXED_OVERHEAD_SHARE)
+    assert parts["tools"] + parts["system"] <= budget, (
+        f"跨地点继续工作流对话时固定开销 {parts['tools'] + parts['system']} 超过回退窗口六成({budget})"
+    )
+
+
 def test_工作台那一轮_工作流工具只发画布上开着的那张(everywhere) -> None:
     """十五张工作流的工具都报上来了;画布上开着的是最大那张(一百多个可调项、十几个 349 项的 LoRA 下拉),这一轮只发它一张。"""
     specs = _turn_specs(everywhere["client"], everywhere["sessions"]["comfyui"])

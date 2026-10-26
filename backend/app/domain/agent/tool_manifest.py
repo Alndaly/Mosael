@@ -329,12 +329,23 @@ def kits_for(place: Any) -> frozenset[str]:
 
 
 def session_kits(db: Any, session_id: str) -> frozenset[str] | None:
-    """`session_id` 那段对话这一轮发哪几份(没有对话 / 对话没了:None,全部)。工具在执行时按它认够得着的插件工具。"""
+    """`session_id` 那段对话这一轮发哪几份(没有对话 / 对话没了:None,全部)。工具在执行时按它认够得着的插件工具。
+
+    主集合仍由**当前这一条消息的地点**决定；但一段家在工作台的对话被 AI Studio 继续时，
+    当前地点是 studio，若不补回 `comfyui`，工作流工具和 ComfyUI 连接自己的 `list_models` 等
+    就会「名字在上下文里、调用却够不着」。补的是会话的家，不是把所有插件工具塞进每一处。
+    """
     from app.db.models import AgentSession
-    from app.domain.agent.places import turn_place
+    from app.domain.agent.places import COMFYUI, home_of, turn_place
 
     session = db.get(AgentSession, session_id) if session_id else None
-    return kits_for(turn_place(db, session)) if session is not None else None
+    if session is None:
+        return None
+    place = turn_place(db, session)
+    kits = set(kits_for(place))
+    if place.kind != COMFYUI and home_of(session).kind == COMFYUI:
+        kits.add("comfyui")
+    return frozenset(kits)
 
 
 def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -> list[ToolSpec]:
@@ -351,7 +362,7 @@ def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -
     tools = asyncio.run(registry.mcp.list_tools())
     provided = _provided_capabilities(db, user_id)
     turn = turn_of(db, session) if session is not None else None
-    kits = kits_for(turn.place) if turn is not None else None
+    kits = session_kits(db, session.id) if session is not None else None
     specs = [
         ToolSpec(
             name=tool.name,
