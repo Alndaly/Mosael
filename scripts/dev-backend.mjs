@@ -66,11 +66,14 @@ if (!env.MOSAEL_SECRET_KEY && !existsSync(join(dataDir, "secret.key")) && exists
   env.MOSAEL_SECRET_KEY = key.key;
 }
 
+const flag = process.argv.indexOf("--timeout-graceful-shutdown");
+const gracefulShutdown = flag >= 0 ? process.argv[flag + 1] : "5";
+
 const child = spawn("uv", [
   "run", "--frozen", "python", "-m", "uvicorn", "app.main:app",
   "--host", "127.0.0.1",
   "--port", env.MOSAEL_BACKEND_PORT || "8800",
-  "--timeout-graceful-shutdown", "5",
+  "--timeout-graceful-shutdown", gracefulShutdown,
   "--reload",
 ], { cwd: join(root, "backend"), env, stdio: "inherit" });
 

@@ -21,7 +21,7 @@
     "watch:preload": "esbuild electron/preload.cjs --bundle --platform=node --format=cjs --external:electron --outfile=electron/preload.bundle.cjs --watch=forever",
     "build:publisher": "pnpm typecheck:electron && esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
     "watch:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs --watch=forever",
-    "dev:backend": "node scripts/dev-backend.mjs",
+    "dev:backend": "node scripts/dev-backend.mjs --timeout-graceful-shutdown 5",
     "dev": "pnpm --dir frontend electron:dev",
     "fetch:tts-python": "node scripts/fetch-tts-python.mjs",
     "typecheck:electron": "pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.json && pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.preload.json",
