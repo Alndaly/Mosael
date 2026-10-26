@@ -23,9 +23,10 @@ permissions:
   contents: read
 
 jobs:
-  # 三组并行跑,各自出结论:便宜的那组(lint、契约快照、sidecar / electron / 扩展、官网)几分钟就有结果,
-  # 不用再排在二十分钟的后端测试后面 —— f5db6125f 那次官网 MDX 写坏,要等满整个 job 才报出来。
-  # 三组都过,这道门禁才算过(ci.yml / release.yml 等的是整个 workflow,不是哪一个 job)。
+  # 各组并行跑,各自出结论:便宜的那几组(lint、契约快照、sidecar / electron / 扩展、官网、cloud、
+  # mosael-formats)几分钟就有结果,不用再排在二十分钟的后端测试后面 —— f5db6125f 那次官网 MDX 写坏,
+  # 要等满整个 job 才报出来。
+  # 全部过了,这道门禁才算过(ci.yml / release.yml 等的是整个 workflow,不是哪一个 job)。
   # 本机门禁是同一份清单:README「测试与检查」。
   checks:
     runs-on: ubuntu-latest
@@ -53,7 +54,7 @@ jobs:
             exit 1
           }
 
-      # 四处 lint(frontend、website 的 oxlint,backend、packages/mosael-formats 的 ruff)都是零告警,所以它能当闸用 —— 一条开局几百条警告的 lint 只能当摆设。
+      # 五处 lint(frontend、website 的 oxlint,backend、cloud、packages/mosael-formats 的 ruff)都是零告警,所以它能当闸用 —— 一条开局几百条警告的 lint 只能当摆设。
       # 打头的是 scripts/check-conflict-markers.py:被跟踪的文本文件里不许留着合并冲突的标记(e36342248 漏进 CHANGELOG 过一行)。
       # 放在测试前面:它几秒钟就跑完,而且它抓的那类问题(未定义名字、未用变量)在测试
       # 里往往表现为一个八竿子打不着的报错。
@@ -94,8 +95,10 @@ jobs:
           pnpm --dir browser-extension typecheck
           pnpm build:extension
 
+      # 发布链路里的纯函数(下载页、TTS 解释器的资产清单与哈希校验)用 node:test 跑,
+      # 不联网、不解包 —— 和本地 `pnpm test:scripts` 是同一条。
       - name: Release tooling tests
-        run: node --test test/r2-download-page.test.mjs
+        run: pnpm test:scripts
 
       # 官网是独立 pnpm 工作区,不会被根目录的 install/build 顺带覆盖。
       # production build 同时检查 TypeScript、路由、MDX 和服务端渲染边界。
@@ -230,6 +233,32 @@ jobs:
           path: .ci/junit-backend.xml
           if-no-files-found: ignore
 
+
+  # MosaelCloud(`cloud/`):独立服务、独立 uv 工程。此前它没有任何门禁 —— `cloud/README.md` 写着
+  # 「CI 只跑上面的 pytest」,而实际上连 pytest 也没跑:迁移、会话 CSRF、身份隔离这些用例
+  # 只在写它们的那台机器上绿过。单独一个 job,不塞进 checks,是因为它有自己的一份依赖(cloud/uv.lock),
+  # 和 backend 装的东西不重叠,而且它很快,并排跑不拖慢谁。
+  cloud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: cloud
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: cloud/uv.lock
+      - name: Install dependencies
+        run: uv sync --frozen
+      # 同一条命令也挂在根的 `pnpm lint` 里(那里用 `uv run --directory cloud ruff check`),
+      # 所以本地提交前跑的那一次和这里是同一个配置、同一批规则。
+      - name: Lint
+        run: uv run ruff check
+      - name: Tests
+        run: uv run python -m pytest -q
 
   formats:
     runs-on: ubuntu-latest

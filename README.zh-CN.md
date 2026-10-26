@@ -258,18 +258,20 @@ cd frontend && VITE_MOSAEL_API_URL=http://127.0.0.1:8833 pnpm exec vite --host 1
 
 ### 测试与检查
 
-和 CI([`.github/workflows/tests.yml`](.github/workflows/tests.yml),分「快的那几项」「前端」「后端」三组并行跑)是同一份清单,改一处要两处一起改:
+和 CI([`.github/workflows/tests.yml`](.github/workflows/tests.yml),分「快的那几项」「前端」「后端」「MosaelCloud」「mosael-formats」几组并行跑)是同一份清单,改一处要两处一起改:
 
 ```bash
-pnpm lint                                   # 没收拾干净的合并冲突标记 + oxlint(frontend、website)+ ruff(backend、community、packages/mosael-formats)
+pnpm lint                                   # 没收拾干净的合并冲突标记 + oxlint(frontend、website)+ ruff(backend、cloud、packages/mosael-formats)
 pnpm --dir frontend build                   # tsc --noEmit + vite build;后端的烧字测试要用这份 dist 真渲
 (cd backend && uv run --frozen python -m pytest -q)
+(cd cloud && uv run --frozen python -m pytest -q)  # MosaelCloud:账号服务,自己一个 uv 工程
 pnpm --dir frontend exec vitest run
 uv run --project backend --frozen python backend/scripts/export_openapi.py --check && pnpm gen:api   # 再 git diff frontend/src/api/generated/schema.d.ts
 pnpm --dir agent-sidecar typecheck && pnpm --dir agent-sidecar build && pnpm --dir agent-sidecar test
 pnpm typecheck:electron
 pnpm --dir browser-extension test && pnpm --dir browser-extension typecheck && pnpm build:extension
 pnpm --dir website test && pnpm --dir website build
+pnpm test:scripts                           # 发版链路(node:test):下载页、TTS 解释器的资产清单与 sha256 校验
 ```
 
 以上命令从仓库根目录运行。本地跑 `pnpm lint` 加上改动涉及的那几行就够,CI 每次全跑。最新检查结果以 [GitHub Actions](https://github.com/Alndaly/Mosael/actions) 为准，用例数量随项目变化。

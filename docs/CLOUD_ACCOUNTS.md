@@ -77,7 +77,8 @@ location /           { proxy_pass http://127.0.0.1:3000; }
 
 **为什么同域反代而不是跨域 + CORS**:会话在 HttpOnly cookie 里,同源时它是第一方 cookie;
 跨域就得 `SameSite=None`,把 CSRF 面放大,还要维护一份 CORS 白名单。同源之后 Cloud 只需要
-认识官网这一个 Origin,浏览器端也没有任何 token 要存。CI 不启动 Cloud 服务,只跑它的 pytest。
+认识官网这一个 Origin,浏览器端也没有任何 token 要存。CI 不启动 Cloud 服务:`.github/workflows/tests.yml`
+的 `cloud` job 只跑 `uv sync --frozen`、ruff 和 pytest(TestClient),不监听端口。
 
 **`CLOUD_PUBLIC_URL` 必须就是用户实际访问的那个 Origin**(例如用户从 `www.mosael.com` 进站,
 这里也写 `https://www.mosael.com`)。它同时决定 cookie 的站点与写请求的同源校验;写错的表现

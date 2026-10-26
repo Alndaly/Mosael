@@ -20,29 +20,19 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 
+import { PY, TARGETS, downloadUrl, sha256File, targetFor, verifySha256 } from "./tts-python-release.mjs";
+
 const run = promisify(execFile);
 const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "build", "python");
 
-// python-build-standalone:预编译、可重定位的 CPython,专为"随应用分发"设计。
-const RELEASE = "20261001";
-// **3.13,不是 3.14。** 这个解释器建的 venv 要装转写引擎 whisperx,而它到最新的 3.8.6 为止都声明
-// Requires-Python <3.14 —— 3.14 上 pip 直接找不到能装的版本。其余引擎(f5-tts、fish-speech、
-// funasr、demucs)3.14 都装得上。whisperx 放开 3.14 之后再升;后端自己早已是 3.14,它不 import whisperx。
-const PY = "3.13.16";
-const TARGETS = {
-  "darwin-arm64": `cpython-${PY}+${RELEASE}-aarch64-apple-darwin-install_only_stripped.tar.gz`,
-  "darwin-x64": `cpython-${PY}+${RELEASE}-x86_64-apple-darwin-install_only_stripped.tar.gz`,
-  "win32-x64": `cpython-${PY}+${RELEASE}-x86_64-pc-windows-msvc-install_only_stripped.tar.gz`,
-  "linux-x64": `cpython-${PY}+${RELEASE}-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz`,
-};
-
 const key = `${process.platform}-${process.arch}`;
-const asset = TARGETS[key];
-if (!asset) {
+const target = targetFor(process.platform, process.arch);
+if (!target) {
   console.error(`[tts-python] 不支持的平台 ${key};支持:${Object.keys(TARGETS).join(", ")}`);
   process.exit(1);
 }
+const { asset, sha256 } = target;
 
 const interpreter = path.join(OUT, process.platform === "win32" ? "python.exe" : path.join("bin", "python3"));
 
@@ -75,7 +65,7 @@ if (!process.env.FORCE && present === PY) {
 }
 if (present) console.log(`[tts-python] 现有的是 ${present},换成 ${PY}`);
 
-const url = `https://github.com/astral-sh/python-build-standalone/releases/download/${RELEASE}/${asset}`;
+const url = downloadUrl(asset);
 console.log(`[tts-python] 下载 ${asset}`);
 
 await rm(OUT, { recursive: true, force: true });
@@ -88,6 +78,20 @@ if (!res.ok) {
 }
 const archive = path.join(OUT, "python.tar.gz");
 await pipeline(Readable.fromWeb(res.body), createWriteStream(archive));
+
+// **解包之前**核对 sha256:哈希钉在上游那次不可变构建上(scripts/tts-python-release.mjs)。
+// 打包进 App 的这个解释器会在用户机器上跑 `-m venv` 和 pip,被换包等于把任意代码发出去;
+// 而 tar 一旦解包就已经落盘了,再校验只能算事后发现。对不上就删掉压缩包并退出,不继续。
+const actual = await sha256File(archive);
+if (!verifySha256(actual, sha256)) {
+  await rm(archive, { force: true });
+  console.error(`[tts-python] sha256 不匹配:${asset}`);
+  console.error(`[tts-python]   期望 ${sha256}`);
+  console.error(`[tts-python]   实际 ${actual}`);
+  console.error(`[tts-python] 已删除下载的压缩包,未解包。上游发布若是重打过,要同步改 scripts/tts-python-release.mjs 里的哈希。`);
+  process.exit(1);
+}
+console.log(`[tts-python] sha256 校验通过:${sha256}`);
 
 // 压缩包里是一层 `python/`,--strip-components=1 把它摊平到 build/python/ 下。
 //

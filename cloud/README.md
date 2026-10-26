@@ -199,7 +199,8 @@ uv run pytest -q     # 每个用例一个临时 SQLite 库,不连外网
 uv run ruff check
 ```
 
-CI 不启动这个服务;它只跑上面的 pytest。OAuth 测试注入
+CI 的 `cloud` job([`.github/workflows/tests.yml`](../.github/workflows/tests.yml))跑的就是上面这两条,
+root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也不连外网。OAuth 测试注入
 `tests/conftest.py` 里的 `FakeOAuthProvider`(会像真 provider 一样校验 PKCE 与 redirect_uri),
 **不连 GitHub / Google**。
 

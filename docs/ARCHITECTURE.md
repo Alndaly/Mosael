@@ -366,6 +366,8 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 路径,又把一个可选功能变成了配置作业。所以拆成两半:
 
 - **随包只带解释器**(`build/python`,~48MB,由 `pnpm fetch:tts-python` 在构建期抓取)。
+  下载的包在解包、执行**之前**按 `scripts/tts-python-release.mjs` 里钉死的 sha256 校验
+  (取自上游 release 的 `SHA256SUMS`),对不上就删包退出 —— 这个解释器会在用户机器上跑 pip。
   打包版后端是 PyInstaller 冻结二进制、`sys.executable` 指向自己**建不了 venv**,所以壳经
   `MOSAEL_TTS_BASE_PYTHON` 把它指给后端(`electron/main.cjs`)。**开发时也用它**:
   `interpreter.base_python()` 在注入之后先找仓库里的 `build/python`,而不是后端自己 ——
