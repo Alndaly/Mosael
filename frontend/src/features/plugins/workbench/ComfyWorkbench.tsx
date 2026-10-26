@@ -10,10 +10,10 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Hint, HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
-import { refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
+import { invalidatePluginDependents, refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
 import { rebootWorkflowServer } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
-import { invalidatePluginDependents, invalidateResources } from "@/api/resourceKeys";
+import { invalidateResources } from "@/api/resourceKeys";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
@@ -126,7 +126,10 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const columnOpen = open === "open";
   const [restartAsk, setRestartAsk] = React.useState(false);
   const restart = useMutation({
-    mutationFn: () => rebootWorkflowServer(target.instanceId),
+    mutationFn: () => {
+      if (!target) throw new Error(t("workbenchBridgeMissing"));
+      return rebootWorkflowServer(target.instanceId);
+    },
     onSuccess: ({ back }) => {
       if (!back) {
         setSaveNote(t("workbenchRestartFailed"));
