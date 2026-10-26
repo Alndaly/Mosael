@@ -806,13 +806,13 @@ describe("版式:空的、在读的摆在面板正中;每个页签自己滚动;�
     }
   });
 
-  it("顶栏的控件一样大:返回、操控方式、保存、运行、收起面板都是 sm 那一档(32px、同一个字号),排在栏的正中", async () => {
+  it("顶栏的控件一样大:返回、重启、操控方式、保存、运行、收起面板都是 sm 那一档(32px、同一个字号),排在栏的正中", async () => {
     await mount();
     const bar = document.querySelector<HTMLElement>("[data-comfy-workbench-bar]")!;
     expect(bar.className).toMatch(/\bitems-center\b/);
     const controls = [...bar.querySelectorAll<HTMLElement>("[data-bar-control]")];
     expect(controls.map((one) => one.getAttribute("aria-label") || one.textContent)).toEqual([
-      "publishBackToApp", "workbenchSave", "workbenchRun", "workbenchColumnHide",
+      "publishBackToApp", "workbenchRestart", "workbenchSave", "workbenchRun", "workbenchColumnHide",
     ]);
     for (const one of controls) {
       expect(one.className, `${one.textContent}:32px 高`).toMatch(/\b(h-8|size-8)\b/);
@@ -1611,6 +1611,26 @@ describe("助手(ADR 0042 第二步):诊断的「定位」「照这个改」、�
     await mount();
     tab("workbenchTabAssistant");
     expect(result().textContent).toBe("");
+  });
+});
+
+describe("顶栏重启 ComfyUI 服务", () => {
+  it("先确认再重启:返回成功后关闭确认卡并刷新依赖", async () => {
+    api.rebootWorkflowServer.mockResolvedValue({ back: true });
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "workbenchRestart" }));
+    expect(screen.getByText("workbenchRestartBody")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "workbenchRestartConfirm" }));
+    await waitFor(() => expect(api.rebootWorkflowServer).toHaveBeenCalledWith(TARGET.instanceId));
+    await waitFor(() => expect(screen.queryByText("workbenchRestartBody")).toBeNull());
+  });
+
+  it("服务没回来:明确报错,不把重启当成成功", async () => {
+    api.rebootWorkflowServer.mockResolvedValue({ back: false });
+    await mount();
+    fireEvent.click(screen.getByRole("button", { name: "workbenchRestart" }));
+    fireEvent.click(screen.getByRole("button", { name: "workbenchRestartConfirm" }));
+    expect(await screen.findByText("workbenchRestartFailed")).toBeTruthy();
   });
 });
 

@@ -725,6 +725,7 @@ export const plugins = {
   workbenchRestartTitle: "Restart ComfyUI on {server}?",
   workbenchRestartBody: "Running tasks are interrupted. Save unsaved changes on the canvas first: the ComfyUI frontend usually restores open workflows, but that isn't guaranteed.",
   workbenchRestartConfirm: "Restart",
+  workbenchRestartFailed: "ComfyUI did not come back after the restart. Check the service and try again.",
   workbenchAppHint: "This edits the forms of the workflow open on the canvas (it can have several, each an entry of its own): when one of them is chosen in AI Studio, boards or workflow nodes, or the agent calls it, only the items on that form are shown. When you're done, click Sync to canvas, then Save in the top bar (or Ctrl+S on the canvas) to store it in the workflow file — together with any other changes on the canvas.",
   workbenchAppReload: "Reload from canvas",
   workbenchAppWrite: "Sync to canvas",

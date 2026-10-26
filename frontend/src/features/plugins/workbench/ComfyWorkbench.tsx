@@ -1,6 +1,6 @@
 import React from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, Save, TriangleAlert } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, RefreshCw, Save, TriangleAlert } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ChromeStatusSlot } from "@/components/app/chromeStatusSlot";
@@ -11,6 +11,9 @@ import { Hint, HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ComfyNavigationSwitch } from "@/features/plugins/ComfyNavigationSwitch";
 import { refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
+import { rebootWorkflowServer } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
+import { invalidatePluginDependents, invalidateResources } from "@/api/resourceKeys";
 import { useAgentPlace } from "@/features/agent/activePlace";
 import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
@@ -22,7 +25,7 @@ import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
 import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
-import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
+import { InlineConfirm, PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { onWorkbenchPlaces, useWorkbench, workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 import { comboFromEvent, formatCombo, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
@@ -119,8 +122,24 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   //: 缺失项页签上的数字:检查过有缺的就挂徽标 —— 打开一张缺东西的工作流时不再静默(默认停在「模型」页签)。
   const [missingCount, setMissingCount] = React.useState(0);
   const [saveNote, setSaveNote] = React.useState("");
-  const run = useCanvasRun(target);
+  const qc = useQueryClient();
   const columnOpen = open === "open";
+  const [restartAsk, setRestartAsk] = React.useState(false);
+  const restart = useMutation({
+    mutationFn: () => rebootWorkflowServer(target.instanceId),
+    onSuccess: ({ back }) => {
+      if (!back) {
+        setSaveNote(t("workbenchRestartFailed"));
+        return;
+      }
+      setRestartAsk(false);
+      setSaveNote("");
+      invalidatePluginDependents(qc);
+      invalidateResources(qc, ["workflows", "models"]);
+    },
+    onError: (error) => setSaveNote(errorText(error)),
+  });
+  const run = useCanvasRun(target);
   const column = useColumnWidth(columnOpen && Boolean(target));
   const workflow = state?.workflow ?? null;
   const workflowKey = workflow?.key ?? "";
@@ -249,6 +268,17 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
         </div>
         {/* 等人拍板的卡、免提浮标:画布在前台时收在这里(ADR 0051,见 ChromeStatusSlot) */}
         <ChromeStatusSlot size="sm" />
+        <Button
+          variant="outline"
+          size="sm"
+          data-bar-control=""
+          className="[-webkit-app-region:no-drag] shrink-0"
+          loading={restart.isPending}
+          onClick={() => setRestartAsk(true)}
+        >
+          <RefreshCw />
+          {t("workbenchRestart")}
+        </Button>
         <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" variant="outline" labeled />
         <Hint label={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}
               shortcut={canSave ? formatCombo(SAVE_KEY) : null}>
@@ -307,6 +337,16 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
             count: one === "missing" ? missingCount : undefined,
           }))}
         />
+        {restartAsk && (
+          <InlineConfirm
+            title={t("workbenchRestartTitle").replace("{server}", target.instanceName)}
+            body={t("workbenchRestartBody")}
+            confirmLabel={t("workbenchRestartConfirm")}
+            pending={restart.isPending}
+            onCancel={() => setRestartAsk(false)}
+            onConfirm={() => restart.mutate()}
+          />
+        )}
         {saveNote && <p role="alert" className="m-0 flex-none px-3 pt-3 text-ui-xs text-destructive">{saveNote}</p>}
         {!state && (
           <div className={TAB_PANEL}>

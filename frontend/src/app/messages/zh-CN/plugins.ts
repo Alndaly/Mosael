@@ -737,6 +737,7 @@ export const plugins = {
   workbenchRestartTitle: "重启 {server} 上的 ComfyUI?",
   workbenchRestartBody: "正在跑的任务会中断。画布上没存的改动先存好:ComfyUI 前端一般会恢复开着的工作流,但这不能担保。",
   workbenchRestartConfirm: "重启",
+  workbenchRestartFailed: "重启后 ComfyUI 没有恢复。请检查服务状态后再试。",
   workbenchAppHint: "这里改的是画布上正开着的这张工作流的表单(可以有几张,各是它的一个入口):在 AI Studio、画板、工作流节点里选一张表单,或者智能体调用它时,只显示那张表上的几项。改好后点「同步到画布」,再点顶栏的「保存」(或在画布里按 Ctrl+S)才算存进工作流文件 —— 和你在画布上改的其他东西一起存。",
   workbenchAppReload: "按画布重新读取",
   workbenchAppWrite: "同步到画布",
