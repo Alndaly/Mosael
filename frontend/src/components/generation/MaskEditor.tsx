@@ -1931,7 +1931,7 @@ export function MaskEditor({
               data-mask-doc-frame=""
               hidden
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 origin-top-left rounded-[1px] outline outline-1 outline-border-strong shadow-[var(--shadow-panel)]"
+              className="pointer-events-none absolute left-0 top-0 origin-top-left rounded-[1px] outline outline-1 outline-border-strong"
             />
             <div
               ref={ringRef}

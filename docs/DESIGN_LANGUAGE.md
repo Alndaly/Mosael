@@ -236,6 +236,8 @@ token 取值,业务代码只挑档位和变体,不在 className 里改高度、�
 - **只有真正脱离画布的浮层有阴影**:遮罩模态、录制中的状态胶囊。每一档只有**一层**,
   不用负 spread,不靠多层描边制造接触感。
 - 阴影的 alpha 压在 0.34 以内,层次靠模糊半径和强度分;需要硬边界就画描边。
+- Tailwind 自带的 `shadow-sm/md/lg` 是双层、还带负 spread,所以 `tokens.css` 的 `@theme`
+  已把整套 `--shadow-*` 映射到单层令牌。业务里即使写了 `shadow-sm`,也不会重新长出同心环。
 
 棘轮:`design/canvasSurfaces.test.ts` 钉着“画布内 surface 不含 shadow”“每一档只有一层、
 无负 spread”。

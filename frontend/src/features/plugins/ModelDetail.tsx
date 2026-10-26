@@ -399,7 +399,7 @@ function SavePreviewButton({ model, actions, className }: { model: ModelFile; ac
   const why = actions.saveUnavailable(model);
   return (
     <Hint label={t(model.preview_kind === "video" ? "modelSavePreviewHintVideo" : "modelSavePreviewHint")} disabledReason={why}>
-      <Button variant="secondary" size="sm" className={cn("shadow-[var(--shadow-floating)]", className)} disabled={Boolean(why)}
+      <Button variant="secondary" size="sm" className={className} disabled={Boolean(why)}
               loading={actions.savingPreview(model)} onClick={() => actions.savePreview(model)}>
         <ImageUp size={13} />
         {t("modelSavePreview")}
@@ -836,7 +836,7 @@ export function ModelDetail({
         <Button
           variant="secondary"
           size="sm"
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 shadow-[var(--shadow-floating)]"
+          className="absolute bottom-3 left-1/2 -translate-x-1/2"
           onClick={() => setRevealed(true)}
         >
           <Eye size={13} />

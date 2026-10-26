@@ -231,7 +231,7 @@ export function PreviewOriginMark({ origin, className }: { origin: string | unde
         tabIndex={0}
         aria-label={t("modelPreviewFromSite").replace("{site}", site)}
         className={cn(
-          "relative z-10 inline-flex h-5 items-center rounded-full bg-[color-mix(in_srgb,var(--panel)_88%,transparent)] px-1.5 text-ui-2xs font-semibold leading-none text-foreground shadow-[var(--shadow-floating)]",
+          "relative z-10 inline-flex h-5 items-center rounded-full bg-[color-mix(in_srgb,var(--panel)_88%,transparent)] px-1.5 text-ui-2xs font-semibold leading-none text-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           className,
         )}

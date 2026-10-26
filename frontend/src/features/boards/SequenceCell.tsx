@@ -407,8 +407,8 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
                     //: 线两侧各留几像素的抓取区,按住左右拖(按下落到条上,走拖播放头那条路)。
                     <span data-sequence-playhead="" aria-hidden="true" className="absolute inset-y-0 w-3 -translate-x-1/2 cursor-ew-resize"
                           style={{ left: strip.toX(time) }}>
-                      <span className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-primary shadow-[0_0_0_1px_rgba(255,255,255,0.85),0_1px_4px_rgba(0,0,0,0.35)]" />
-                      <span className="pointer-events-none absolute top-0 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-white bg-primary shadow-md" />
+                      <span className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-primary" />
+                      <span className="pointer-events-none absolute top-0 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-white bg-primary" />
                     </span>
                   )}
                 </div>

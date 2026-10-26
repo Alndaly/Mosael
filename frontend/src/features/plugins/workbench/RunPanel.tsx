@@ -352,7 +352,7 @@ function RunCard({
                            loading="lazy" className="block aspect-square w-full rounded-md bg-secondary object-cover" />
                       {isVideo && (
                         <span aria-hidden className="absolute inset-0 grid place-items-center rounded-md bg-black/15">
-                          <span className="grid size-7 place-items-center rounded-full bg-background/85 text-foreground shadow-sm"><Play size={13} fill="currentColor" /></span>
+                          <span className="grid size-7 place-items-center rounded-full bg-background/85 text-foreground"><Play size={13} fill="currentColor" /></span>
                         </span>
                       )}
                     </IconButton>

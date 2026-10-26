@@ -254,7 +254,7 @@ const TranscriptRow = React.memo(function TranscriptRow({
           )}
         </div>
         {/* 操作浮层不参与栅格宽度:平时完全不占正文空间,悬停或键盘聚焦时才出现。 */}
-        <div className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-md border border-border bg-popover/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover/sentence:pointer-events-auto group-hover/sentence:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+        <div className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-md border border-border bg-popover/95 p-0.5 opacity-0 transition-opacity group-hover/sentence:pointer-events-auto group-hover/sentence:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
           {canSplit && (
             <IconButton
               unstyled

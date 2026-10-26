@@ -72,7 +72,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
                     aria-current={section === item.id ? "page" : undefined}
                     className={cn(
                       "flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-ui-sm text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      section === item.id && "bg-panel font-semibold text-primary shadow-sm",
+                      section === item.id && "bg-panel font-semibold text-primary",
                     )}
                     onClick={() => {
                       setFocusCapability(null);

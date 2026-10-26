@@ -1063,7 +1063,7 @@ function CardMenuButton({ model, onOpenMenu, className }: { model: ModelFile; on
       data-model-menu-button=""
       label={t("modelMenuLabel").replace("{name}", baseName(model.name))}
       className={cn(
-        "absolute right-1.5 top-1.5 z-10 opacity-0 shadow-[var(--shadow-floating)] transition-opacity duration-100",
+        "absolute right-1.5 top-1.5 z-10 opacity-0 transition-opacity duration-100",
         "group-hover/thumb:opacity-100 group-focus-within/thumb:opacity-100 focus-visible:opacity-100",
         "[@media(hover:none)]:opacity-100",
         className,

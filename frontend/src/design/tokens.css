@@ -27,6 +27,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Tailwind 自带的 --shadow-sm/md/lg 是双层(还带负 spread)。业务里只要写
+     `shadow-sm`,就会绕过我们的单层令牌,重新长出一圈台阶。这里把整套
+     默认档映射到同一个单层体系:任何 `shadow-*` 都只会得到一层柔光。 */
+  --shadow-2xs: 0 1px 2px rgb(0 0 0 / 0.06);
+  --shadow-xs: 0 2px 4px rgb(0 0 0 / 0.06);
+  --shadow-sm: var(--shadow-panel);
+  --shadow-md: var(--shadow-floating);
+  --shadow-lg: var(--shadow-raised);
+  --shadow-xl: var(--shadow-raised);
+  --shadow-2xl: var(--shadow-raised);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

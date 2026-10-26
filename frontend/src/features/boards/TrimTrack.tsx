@@ -107,7 +107,7 @@ export function TrimTrack({
           )}
           style={{ left: `calc(${side === "start" ? left : right}% - 6px)` }}
         >
-          <span className="h-full w-1 rounded-full bg-primary shadow-sm" />
+          <span className="h-full w-1 rounded-full bg-primary" />
         </div>
       ))}
     </div>

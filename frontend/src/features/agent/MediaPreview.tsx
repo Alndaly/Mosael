@@ -78,7 +78,7 @@ function MediaPreview({ assetId, gallery, reveal }: { assetId: string; gallery?:
           label={t("agentOutputOpenInLibrary")}
           variant="secondary"
           size="icon-xs"
-          className="absolute right-1.5 top-1.5 opacity-0 shadow-sm transition-opacity duration-100 focus-visible:opacity-100 group-hover/media:opacity-100"
+          className="absolute right-1.5 top-1.5 opacity-0 transition-opacity duration-100 focus-visible:opacity-100 group-hover/media:opacity-100"
           onClick={() => gotoAsset(asset.data.id)}
         >
           <FolderOpen />
@@ -242,7 +242,7 @@ function InlineMediaFigure({ assetId, gallery }: { assetId: string; gallery?: Im
         label={t("agentOutputOpenInLibrary")}
         variant="secondary"
         size="icon-xs"
-        className="absolute right-1.5 top-1.5 opacity-0 shadow-sm transition-opacity duration-100 focus-visible:opacity-100 group-hover/media:opacity-100"
+        className="absolute right-1.5 top-1.5 opacity-0 transition-opacity duration-100 focus-visible:opacity-100 group-hover/media:opacity-100"
         onClick={() => gotoAsset(data.id)}
       >
         <FolderOpen />

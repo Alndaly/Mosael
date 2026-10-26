@@ -55,7 +55,7 @@ export function MarkerPin({ data, selected }: NodeProps) {
             style={!editable ? { pointerEvents: "none" } : undefined}
             data-marker-pin={marker.id}
             className={cn(
-              "flex h-7 max-w-[220px] items-center gap-1.5 rounded-full border border-border bg-panel/95 pl-2 pr-2.5 text-ui-xs text-foreground shadow-sm backdrop-blur",
+              "flex h-7 max-w-[220px] items-center gap-1.5 rounded-full border border-border bg-panel/95 pl-2 pr-2.5 text-ui-xs text-foreground backdrop-blur",
               "hover:border-action",
               selected && "border-action ring-1 ring-action",
             )}

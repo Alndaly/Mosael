@@ -34,8 +34,8 @@
 /* Keep tools on the document's baseline; only the scrolled surface gains glass. */
 .note-format-sentinel { height:1px; margin-bottom:-1px; pointer-events:none; }
 .note-format { position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 0; margin-bottom:32px; color:var(--muted-foreground); isolation:isolate; }
-.note-format::before { content:""; position:absolute; inset:0 -12px; z-index:-1; border-radius:0 0 12px 12px; background:transparent; transition:background-color var(--motion-base) var(--motion-ease-enter),box-shadow var(--motion-base) var(--motion-ease-enter),backdrop-filter var(--motion-base) var(--motion-ease-enter); pointer-events:none; }
-.note-format[data-stuck=true]::before { background:var(--modal-surface); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); box-shadow:0 6px 18px -12px color-mix(in srgb,var(--foreground) 16%,transparent); }
+.note-format::before { content:""; position:absolute; inset:0 -12px; z-index:-1; border-radius:0 0 12px 12px; background:transparent; transition:background-color var(--motion-base) var(--motion-ease-enter),backdrop-filter var(--motion-base) var(--motion-ease-enter); pointer-events:none; }
+.note-format[data-stuck=true]::before { background:var(--modal-surface); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); }
 .note-format-group { display:flex; align-items:center; gap:2px; flex-shrink:0; }
 .note-format-group + .note-format-group { padding-left:8px; border-left:1px solid color-mix(in srgb,var(--foreground) 7%,transparent); }
 .note-format .note-format-history { margin-left:auto; border-left:0; padding-left:0; }
