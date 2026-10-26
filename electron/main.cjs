@@ -100,8 +100,14 @@ const { t } = i18n;
 // macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
 // 这里的 setName 影响 app.getName()/部分弹窗,setAppUserModelId 影响 Windows 任务栏归组。
 // 打包版统一由 electron-builder 的 productName 决定。必须在 app ready 前调用。
-app.setName("Mosael");
-app.setAppUserModelId("dev.mosael.app");
+const isDev = !app.isPackaged;
+// safeStorage 在 macOS 按应用名选钥匙串项。开发版和打包版**不能共用「Mosael」这一项**:
+// 两边的签名身份不同,一边封存的钥匙另一边解不开;更坏的是后启动的一边会把这个数据目录的钥匙
+// 重新封存成自己那一把,旧凭据全部失效。开发版用独立名字,系统钥匙串各管各的。
+app.setName(isDev ? "Mosael Dev" : "Mosael");
+// setName 会改变默认 userData 路径;开发版的缓存、分区和登录态仍留在原来的 Mosael 目录里。
+if (isDev) app.setPath("userData", path.join(app.getPath("appData"), "Mosael"));
+app.setAppUserModelId(isDev ? "dev.mosael.app.dev" : "dev.mosael.app");
 
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/account-view-preload.cjs。
@@ -117,7 +123,6 @@ if (process.platform !== "darwin") app.commandLine.appendSwitch("enable-features
 
 const BACKEND_PORT = Number(process.env.MOSAEL_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
-const isDev = !app.isPackaged;
 // 应用自己的页面在哪:开发时是 Vite,打包后是 dist 里的文件。主窗口只许停在这里、IPC 只收这里发来的、壳令牌只加在
 // 这里发出的请求上(见 app-origin.cjs)。
 const FRONTEND_URL = process.env.MOSAEL_FRONTEND_URL || "http://127.0.0.1:5173";

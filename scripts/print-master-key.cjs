@@ -13,6 +13,10 @@ const path = require("node:path");
 
 const { app, safeStorage } = require("electron");
 
+//: safeStorage 在 macOS 按应用名找系统钥匙串项。这个脚本只服务开发数据目录,必须和开发 Electron 用同一个
+//: `Mosael Dev` 身份;打包版是 `Mosael`,两者不共用钥匙。
+app.setName("Mosael Dev");
+
 const dataDir = process.env.MOSAEL_DATA_DIR
   ? path.resolve(process.env.MOSAEL_DATA_DIR)
   : path.join(process.env.HOME || "", ".mosael");
