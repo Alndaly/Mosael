@@ -35,6 +35,8 @@ export {
   closePanel,
   setPanelMuted,
   setPanelsHidden,
+  setHostLayer,
+  clearHostLayer,
 } from "./publishWorker";
 // 浏览器会话顶栏的页面工具:只作用于前台视图(见 pageTarget)。
 export { capturePage, beginRegionCapture, finishRegionCapture } from "./pageCapture";
