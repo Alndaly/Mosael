@@ -3,7 +3,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Loader2 } from "lucide-react"
 
-import { CONTROL_HEIGHT, CONTROL_ICON, CONTROL_SQUARE, INLINE_ACTION_SIZE, PRESSED, PRESSED_BORDER } from "@/components/ui/control-size"
+import { COMPACT_ICON, COMPACT_ICON_SQUARE, CONTROL_HEIGHT, CONTROL_ICON, CONTROL_SQUARE, INLINE_ACTION_SIZE, PRESSED, PRESSED_BORDER } from "@/components/ui/control-size"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
@@ -54,6 +54,8 @@ const buttonVariants = cva(
         icon: `${CONTROL_SQUARE.md} rounded-md ${CONTROL_ICON.square}`,
         "icon-sm": `${CONTROL_SQUARE.sm} rounded-md ${CONTROL_ICON.square}`,
         "icon-xs": `${CONTROL_SQUARE.xs} rounded-md ${CONTROL_ICON.square}`,
+        //: 24px,只给紧凑状态胶囊。普通的工具行请用 icon-xs。
+        "icon-2xs": `${COMPACT_ICON_SQUARE} rounded-md ${COMPACT_ICON}`,
       },
       //: 形状:默认圆角 8px;`round` 是全圆 —— 胶囊形的浮动工具条(画板格子上方那一条)里的按钮、输入框底栏的发送键、
       //: 播放键。挑这一项,别在 className 里写 rounded-full(棘轮 design/controlOverrides.test.ts)。

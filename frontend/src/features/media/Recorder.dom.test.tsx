@@ -265,6 +265,8 @@ describe("Recorder", () => {
 
     await user.click(screen.getByRole("button", { name: /recordStart/ }));
     await screen.findByRole("button", { name: /recordStop/ });
+    // 展开态的停止是 sm 档(32px);DialogFooter 的 40px 强制规则不能把它撑回去。
+    expect(screen.getByRole("button", { name: "recordStop" })).toHaveClass("h-8");
     await user.click(screen.getByRole("button", { name: "recordMinimize" }));
 
     const pill = screen.getByRole("group", { name: "recordInProgress" });
@@ -272,6 +274,8 @@ describe("Recorder", () => {
     expect(pill).toHaveTextContent("recordInProgress");
     expect(pill).toHaveTextContent("00:00");
     expect(screen.getByRole("button", { name: "recordStop" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "recordExpand" })).toHaveClass("size-6");
+    expect(screen.getByRole("button", { name: "recordStop" })).toHaveClass("size-6");
 
     await user.click(screen.getByRole("button", { name: "recordExpand" }));
     expect(screen.queryByRole("group", { name: "recordInProgress" })).not.toBeInTheDocument();

@@ -94,12 +94,16 @@ export function ModalShell({
   open,
   onOpenChange,
   title,
+  titleAction,
   header,
   footer,
   onSubmit,
   children,
   className,
+  headerClassName,
   bodyClassName,
+  footerClassName,
+  footerLayout = "dialog",
   overlayClassName,
   dismissible = true,
   modal = true,
@@ -109,6 +113,8 @@ export function ModalShell({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: React.ReactNode;
+  /** 标题行最右侧的动作(最小化、切换模式……)。与标题垂直居中,不挤进 footer。 */
+  titleAction?: React.ReactNode;
   /** 钉在标题下面、**不跟着滚**的一条:搜索框、筛选器这类"作用于下面整份列表"的东西。 */
   header?: React.ReactNode;
   /** 钉在底部的动作区。表单的「取消 / 确定」放这里,长表单滚动时它仍然在。 */
@@ -122,8 +128,17 @@ export function ModalShell({
   children: React.ReactNode;
   /** Override the default width (w-[360px]) for wider dialogs, e.g. the recorder. */
   className?: string;
+  /** 覆盖头/尾的整组留白(浮动小窗比标准弹窗更紧时用)。 */
+  headerClassName?: string;
   /** 覆盖滚动区的内边距 —— 内容自己就是通栏的(比如一张图)时用。 */
   bodyClassName?: string;
+  /** 覆盖底栏的整组留白。 */
+  footerClassName?: string;
+  /**
+   * `dialog`:标准弹窗底栏(强制 40px 动作、右对齐)。`plain`:调用方自己排版动作 ——
+   * 浮动小窗的底栏不该把 `size="sm"` 的按钮再撑回 40px。
+   */
+  footerLayout?: "dialog" | "plain";
   /** 遮罩的层叠;从浮层里打开的确认框用它抬过 popper。 */
   overlayClassName?: string;
   /** Non-dismissible panels stay open until their own primary action completes. */
@@ -177,11 +192,19 @@ export function ModalShell({
             // **头尾和正文之间的留白长在头尾上,不长在正文上。** 此前是头部 pb-0 + 正文 py-6:
             // 静止时看着一样,可正文一滚,那 24px 就跟着滚走了 —— 列表直接顶到搜索框下沿,
             // 像是被搜索框压住。正文只留 pt-1 / pb-1,给首尾那个输入框的聚焦光圈(ring-2)不被裁掉。
-            "sticky top-0 z-10 shrink-0 px-6 pb-5 pt-6",
+            "sticky top-0 z-10 shrink-0",
+            headerClassName ?? "px-6 pb-5 pt-6",
             header && "gap-2.5",
           )}
         >
-          <DialogTitle>{title}</DialogTitle>
+          {titleAction ? (
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <DialogTitle>{title}</DialogTitle>
+              {titleAction}
+            </div>
+          ) : (
+            <DialogTitle>{title}</DialogTitle>
+          )}
           {header}
         </DialogHeader>
         <div
@@ -209,14 +232,21 @@ export function ModalShell({
             children
           )}
         </div>
-        {footer && (
+        {footer && footerLayout === "plain" ? (
+          <div data-slot="modal-footer" className={cn("shrink-0", footerClassName)}>
+            <ModalFormContext.Provider value={onSubmit ? formId : null}>{footer}</ModalFormContext.Provider>
+          </div>
+        ) : footer ? (
           <DialogFooter
             data-slot="modal-footer"
-            className="sticky bottom-0 z-10 shrink-0 gap-2 px-6 pb-6 pt-5 sm:items-center"
+            className={cn(
+              "sticky bottom-0 z-10 shrink-0 gap-2",
+              footerClassName ?? "px-6 pb-6 pt-5 sm:items-center",
+            )}
           >
             <ModalFormContext.Provider value={onSubmit ? formId : null}>{footer}</ModalFormContext.Provider>
           </DialogFooter>
-        )}
+        ) : null}
         {dropzone?.overlay}
       </DialogContent>
     </Dialog>

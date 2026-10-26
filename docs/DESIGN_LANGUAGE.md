@@ -32,11 +32,14 @@ token 取值,业务代码只挑档位和变体,不在 className 里改高度、�
 | `md` | 40px | 按钮 16px、字段 12px | 14px | 16px | 40px |
 | `lg` | 44px | 按钮 24px | 14px | 16px | —— |
 | 行内 | 24px,上下各收 2px(不撑高那一行) | 6px | 12px,不加粗 | 14px | —— |
+| 紧凑状态 | 24px | —— | 11px(`text-ui-2xs`) | 12px | 24px(`icon-2xs`) |
 
-- 刻度住在 `components/ui/control-size.ts`(`CONTROL_HEIGHT`、`CONTROL_SQUARE`、`CONTROL_ICON`、`FIELD_SIZE`、`FIELD_TEXTAREA`、
-  `FIELD_INVALID`、`SEGMENTED_SIZE`、`CHIP_SIZE`、`INLINE_ACTION_SIZE`),按钮、字段、下拉触发器、分段控件、胶囊筛选都从这里取。
+- 刻度住在 `components/ui/control-size.ts`(`CONTROL_HEIGHT`、`CONTROL_SQUARE`、`CONTROL_ICON`、`COMPACT_ICON_SQUARE`、
+  `COMPACT_ICON`、`FIELD_SIZE`、`FIELD_TEXTAREA`、`FIELD_INVALID`、`SEGMENTED_SIZE`、`CHIP_SIZE`、`INLINE_ACTION_SIZE`),
+  按钮、字段、下拉触发器、分段控件、胶囊筛选都从这里取。
   **别处不写 `h-7` / `h-8` / `h-10` 来对齐**:同高要是构造出来的,不是碰巧都写了同一个数。
-- 方形图标按钮和同档文字控件**一样高**:`icon-xs` 28、`icon-sm` 32、`icon` 40。只有这三个名字。
+- 方形图标按钮和同档文字控件**一样高**:`icon-xs` 28、`icon-sm` 32、`icon` 40。`icon-2xs` 24 只给紧凑状态胶囊
+  (录制中的展开/停止),不要拿去排普通工具行。
 - 字号:界面只用 `text-ui-*` 这几档(11 / 12 / 14 / 16 / 18 / 32px)。
 - 圆角:控件 8px(`rounded-md`);外面套一层的容器 = 里面的圆角 + 内边距(分段控件外壳 12px = 8 + 4);复选框 4px;
   胶囊筛选、标签、开关是全圆。不用投影区分控件,用描边和底色。
@@ -149,7 +152,7 @@ token 取值,业务代码只挑档位和变体,不在 className 里改高度、�
 ## 七、图标
 
 - 用 lucide。线宽默认 2,不改。
-- 大小跟档位(见刻度表);只有图标的按钮在所有档位都是 16px。
+- 大小跟档位(见刻度表);只有图标的按钮在常规档位是 16px,`icon-2xs` 的紧凑状态胶囊是 12px。
 - 装饰性的图标(标题前、空状态里)加 `aria-hidden`;颜色跟着文字或用次要色,不另起颜色。
 
 ## 八、动效

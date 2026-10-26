@@ -9,7 +9,7 @@
  * `size="icon"` 渲染成 36px,杵在一排 28px 中间。圆形按钮尤其藏不住这 8px —— 智能体输入框
  * 的工具行就是这么坏的,当时是手工把那几个按钮补上 `h-7 w-7`,而不是补上缺的那一档。
  *
- * 刻度是:`xs`/`icon-xs` 28,`sm`/`icon-sm` 32,`default`/`icon` 40,`lg` 44。
+ * 刻度是:`icon-2xs` 24(只给紧凑状态胶囊),`xs`/`icon-xs` 28,`sm`/`icon-sm` 32,`default`/`icon` 40,`lg` 44。
  * 想要新的一档就往 `buttonVariants` 里加一档,别在 className 里加。
  *
  * **`icon` 是 36,和 `default`(40)不是一对。** 36 是顶栏那一档(⌘K 那颗胶囊就是 h-9),

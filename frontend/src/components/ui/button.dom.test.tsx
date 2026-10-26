@@ -107,6 +107,15 @@ describe("Button 的方钮和图标跟着档位", () => {
     }
   });
 
+  it("icon-2xs 是 24px 状态胶囊专用档,图标 12", () => {
+    const { getByRole, unmount } = render(<Button size="icon-2xs" aria-label="紧凑" />);
+    const classes = getByRole("button").className.split(/\s+/);
+    expect(classes).toContain("size-6");
+    expect(classes).toContain("[&_svg]:size-3");
+    expect(classes).not.toContain("size-7");
+    unmount();
+  });
+
   it("xs 文字按钮里的图标 14,sm 和默认档 16", () => {
     const icon = (size: "xs" | "sm" | "default") => {
       const { getByRole, unmount } = render(<Button size={size}>新建</Button>);
@@ -133,6 +142,13 @@ describe("Button 的方钮和图标跟着档位", () => {
       expect(classes, size).not.toContain("[&_svg]:size-3.5");
       unmount();
     }
+    const { getByRole, unmount } = render(
+      <IconButton size="icon-2xs" label="紧凑">
+        <svg />
+      </IconButton>,
+    );
+    expect(getByRole("button").className.split(/\s+/)).toContain("[&_svg]:size-3");
+    unmount();
   });
 });
 

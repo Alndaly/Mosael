@@ -117,6 +117,7 @@ export const otherUi = {
   recordMinimize: "Minimize",
   recordExpand: "Expand recording window",
   recordInProgress: "Recording",
+  recordSaveHint: "Saved as an asset when you stop",
   recordDenied: "Can't access that recording source (denied or unavailable)",
   recordFailed: "Recording failed — check the devices and try again",
   recordEmpty: "Nothing was captured — check that the camera/microphone works, then retry",

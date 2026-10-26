@@ -44,6 +44,14 @@ export const CONTROL_ICON = {
 } as const;
 
 /**
+ * **只给紧凑状态胶囊**的一档:24px 方钮、12px 图标。录制中的最小化/停止就住在
+ * 32px 高的浮动胶囊里,用 icon-xs(28)会把胶囊顶满,用 inline(24 但带文字留白)
+ * 又只剩文字动作。它不是工具条档位,别拿去排普通按钮行。
+ */
+export const COMPACT_ICON_SQUARE = "size-6";
+export const COMPACT_ICON = "[&_svg]:size-3";
+
+/**
  * 字段(输入框、下拉触发器)的**档位**:高度 + 左右留白 + 字号一起走,和 `buttonVariants` 的
  * xs/sm/default 是同一把尺 —— `<Input size="sm">` 挨着 `<Button size="sm">`,同高是构造出来的,
  * 不是两边碰巧都写了 `h-8`。字号跟着高度走:28px 的框里 text-ui-sm 会把字顶满。

@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -389,16 +390,27 @@ export function Recorder({
         data-recording-minimized=""
         role="group"
         aria-label={t("recordInProgress")}
-        className="fixed bottom-3 right-3 z-70 flex items-center gap-2 rounded-full border border-floating-border bg-panel/95 py-1 pl-3 pr-1 text-foreground shadow-[var(--shadow-floating)] backdrop-blur-xl [.is-desktop_&]:[-webkit-app-region:no-drag]"
+        className="fixed bottom-3 right-3 z-70 flex items-center gap-1 rounded-full border border-floating-border bg-panel/95 py-0.5 pl-1 pr-0.5 text-foreground shadow-[var(--shadow-floating)] backdrop-blur-xl [.is-desktop_&]:[-webkit-app-region:no-drag]"
       >
-        <span className="h-2 w-2 animate-recorder-blink rounded-full bg-destructive" aria-hidden />
-        <span className="text-ui-xs font-semibold">{t("recordInProgress")}</span>
-        <span className="timecode tabular-nums text-ui-xs text-muted-foreground">{fmt(secs)}</span>
-        <IconButton size="icon-xs" label={t("recordExpand")} onClick={() => setMinimized(false)}>
-          <Maximize2 size={13} />
+        <span className="size-1.5 animate-recorder-blink rounded-full bg-destructive" aria-hidden />
+        <span className="text-ui-2xs font-semibold">{t("recordInProgress")}</span>
+        <span className="timecode tabular-nums text-ui-2xs text-muted-foreground">{fmt(secs)}</span>
+        <IconButton
+          size="icon-2xs"
+          shape="round"
+          label={t("recordExpand")}
+          onClick={() => setMinimized(false)}
+        >
+          <Maximize2 />
         </IconButton>
-        <IconButton size="icon-xs" variant="destructive" label={t("recordStop")} onClick={() => void stop()}>
-          <Square size={10} className="fill-current" />
+        <IconButton
+          size="icon-2xs"
+          shape="round"
+          label={t("recordStop")}
+          onClick={() => void stop()}
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Square className="fill-current" />
         </IconButton>
       </div>
     );
@@ -412,6 +424,13 @@ export function Recorder({
         onOpenChange(next);
       }}
       title={t("recordTitle")}
+      titleAction={
+        recording ? (
+          <IconButton size="icon-xs" label={t("recordMinimize")} onClick={() => setMinimized(true)}>
+            <Minimize2 />
+          </IconButton>
+        ) : undefined
+      }
       dismissible={!recording}
       modal={!recording}
       className={cn(
@@ -419,35 +438,28 @@ export function Recorder({
         recording &&
           "!bottom-3 !left-auto !right-3 !top-auto !w-[360px] !max-w-[calc(100vw-1.5rem)] !translate-x-0 !translate-y-0",
       )}
+      headerClassName={recording ? "px-3 pb-2 pt-3" : undefined}
       bodyClassName={recording ? "px-3" : undefined}
+      footerLayout={recording ? "plain" : "dialog"}
+      footerClassName={recording ? "px-3 pb-3 pt-3" : undefined}
       footer={
-        <div
-          className={cn(
-            "flex w-full min-w-0 items-center gap-4",
-            recording ? "justify-end" : "justify-between",
-          )}
-        >
-          {/* 录制中这段说明已经完成使命:它解释的是「开始前要选什么源」,再占一行只会把
-              停止和最小化推远。状态已经在预览的红点/计时里说清楚。 */}
-          {!recording && (
-            <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
-              {t(`record_${source}_hint` as never) as string}
-            </span>
-          )}
-          {!recording ? (
-            <Button className="shrink-0" size="sm" disabled={starting || stopping} onClick={start}>
-              <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
-            </Button>
-          ) : (
-            <div className="flex shrink-0 items-center gap-1">
-              <Button variant="ghost" size="sm" onClick={() => setMinimized(true)}>
-                <Minimize2 size={13} /> {t("recordMinimize")}
+        <div className="grid w-full min-w-0 gap-2">
+          {/* 提示独占一行:放在按钮旁边时它会被挤成两三行,把底栏撑高。录制中只说
+              「停止后会落成素材」,不再重复已经完成的选源说明。 */}
+          <Truncate className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
+            {recording ? t("recordSaveHint") : (t(`record_${source}_hint` as never) as string)}
+          </Truncate>
+          <div className="flex justify-end">
+            {!recording ? (
+              <Button className="shrink-0" size="sm" disabled={starting || stopping} onClick={start}>
+                <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
               </Button>
+            ) : (
               <Button size="sm" variant="destructive" onClick={stop}>
                 <Square size={11} /> {t("recordStop")}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       }
     >
