@@ -327,8 +327,6 @@ export interface MosaelPageToolsBridge {
   /** 只取最近一次 listImages 列出过的地址。 */
   fetchImages(urls: string[]): Promise<PageFetchedImage[]>;
   readPage(mode: "article" | "selection"): Promise<{ page: PageToolsPage; html: string; selection: string }>;
-  /** 侧栏开合:网页右侧让出这么宽(像素)。 */
-  setInset(right: number): Promise<void>;
   /** 内嵌浏览器里点的下载:进度、下好了(等着存)、没下成。返回取消订阅。 */
   onDownload(callback: (notice: PageDownloadNotice) => void): () => void;
   /** 把一份下好的下载存进素材库(用渲染层自己的服务器与会话)。失败时抛出一句已翻好的话。 */

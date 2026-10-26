@@ -51,7 +51,6 @@ export const IPC: {
     pageToolsImages: "pageTools:images";
     pageToolsFetchImages: "pageTools:fetchImages";
     pageToolsRead: "pageTools:read";
-    pageToolsInset: "pageTools:inset";
     pageToolsSaveDownload: "pageTools:saveDownload";
     computerScreenshot: "computer:screenshot";
     computerDesktopWindows: "computer:desktop-windows";
@@ -157,7 +156,6 @@ export function parseRegionSelection(value: unknown): {
 };
 export function parseImageUrls(value: unknown): { urls: string[] };
 export function parseReadMode(value: unknown): { mode: "article" | "selection" };
-export function parseToolsInset(value: unknown): { right: number };
 export function parsePageId(value: unknown, channel: string): { id: string };
 export function parsePageOrder(value: unknown): { ids: string[] };
 export function parseNewPage(value: unknown): { url: string };

@@ -35,7 +35,6 @@ const contract = require("./ipc-contract.cjs") as {
   parseRegionSelection: (value: unknown) => { selection: Record<string, number> | null };
   parseImageUrls: (value: unknown) => { urls: string[] };
   parseReadMode: (value: unknown) => { mode: string };
-  parseToolsInset: (value: unknown) => { right: number };
   parseSaveDownload: (value: unknown) => Record<string, string | null>;
   parseSaveFileBegin: (value: unknown) => { name: string };
   parseSaveFileChunk: (value: unknown) => { id: string; bytes: Uint8Array };
@@ -373,9 +372,6 @@ describe("Electron IPC contract", () => {
     expect(contract.parseReadMode({ mode: "selection" })).toEqual({ mode: "selection" });
     expect(() => contract.parseReadMode({ mode: "html" })).toThrow(/mode/);
 
-    expect(contract.parseToolsInset({ right: 360 })).toEqual({ right: 360 });
-    expect(() => contract.parseToolsInset({ right: -1 })).toThrow(/right/);
-    expect(() => contract.parseToolsInset({ right: Number.NaN })).toThrow(/right/);
   });
 
   it("decodes the page list's requests: page ids are the main process's numbers, the order is a list of them", () => {

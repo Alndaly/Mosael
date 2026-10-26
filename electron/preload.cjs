@@ -253,7 +253,6 @@ const pageToolsBridge = {
   listImages: () => invoke(IPC.invoke.pageToolsImages),
   fetchImages: (urls) => invoke(IPC.invoke.pageToolsFetchImages, { urls }),
   readPage: (mode) => invoke(IPC.invoke.pageToolsRead, { mode }),
-  setInset: (right) => invoke(IPC.invoke.pageToolsInset, { right }),
   // 内嵌浏览器里点的下载不弹保存框:主进程报进度 / 下好了,渲染层带着自己的会话来存进素材库。
   onDownload: (callback) => onEvent(IPC.event.pageToolsDownload, callback),
   saveDownload: (request) => invoke(IPC.invoke.pageToolsSaveDownload, request),

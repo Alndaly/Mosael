@@ -64,7 +64,8 @@ function useWindowWidth(): number {
   return width;
 }
 
-/** 让出的宽交给主进程:一帧最多报一次,报的总是最新的那个。卸载时立刻还回去(0)。 */
+/** 让出的宽交给主进程:一帧最多报一次,报的总是最新的那个。卸载时立刻还回去(0)。
+ * 统一走声明式 inset:弹窗开关只改覆盖原因,不再被另一路直接 setShellInset(0) 把列宽抹掉。 */
 function useInsetReporter(inset: number): void {
   const latest = React.useRef(inset);
   const sent = React.useRef<number | null>(null);
@@ -76,13 +77,19 @@ function useInsetReporter(inset: number): void {
       cancel.current = null;
       if (sent.current === latest.current) return;
       sent.current = latest.current;
-      void window.mosaelPageTools?.setInset(latest.current);
+      void window.mosaelPublish?.setHostLayer({
+        id: "comfy-workbench-column",
+        kind: "inset",
+        side: "right",
+        active: latest.current > 0,
+        width: latest.current,
+      });
     });
   }, [inset]);
   React.useEffect(
     () => () => {
       cancel.current?.();
-      void window.mosaelPageTools?.setInset(0);
+      void window.mosaelPublish?.setHostLayer({ id: "comfy-workbench-column", kind: "inset", side: "right", active: false, width: 0 });
     },
     [],
   );

@@ -89,7 +89,6 @@ const {
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,
-  parseToolsInset,
   parseUrlRequest,
 } = require("./ipc-contract.cjs");
 const { createAppUpdater } = require("./app-updater.cjs");
@@ -1511,9 +1510,6 @@ app.whenReady().then(async () => {
     requirePublish().fetchImages(parseImageUrls(payload).urls),
   );
   handle(IPC.invoke.pageToolsRead, (_e, payload) => requirePublish().readPage(parseReadMode(payload).mode));
-  handle(IPC.invoke.pageToolsInset, (_e, payload) =>
-    requirePublish().setToolsInset(parseToolsInset(payload).right),
-  );
   handle(IPC.invoke.pageToolsSaveDownload, (_e, payload) =>
     requirePublish().saveDownload(parseSaveDownload(payload)),
   );

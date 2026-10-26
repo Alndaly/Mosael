@@ -73,7 +73,6 @@ const IPC = Object.freeze({
     pageToolsImages: "pageTools:images",
     pageToolsFetchImages: "pageTools:fetchImages",
     pageToolsRead: "pageTools:read",
-    pageToolsInset: "pageTools:inset",
     pageToolsSaveDownload: "pageTools:saveDownload",
     // Computer Use P0(ADR 0075):**只读地截 Mosael 自己的窗口**。没有鼠标 / 键盘 / 拖拽 / 滚动,
     // 也不走系统截屏 —— 主进程用 webContents.capturePage() 拍自己,不需要屏幕录制权限。
@@ -847,17 +846,6 @@ function parseReadMode(value) {
   return { mode: oneOf(payload, "mode", ["article", "selection"], channel) };
 }
 
-/** 侧栏开合:前台视图右侧让出的像素宽。 */
-function parseToolsInset(value) {
-  const channel = IPC.invoke.pageToolsInset;
-  const payload = record(value, channel);
-  onlyKeys(payload, ["right"], channel);
-  const right = payload.right;
-  if (typeof right !== "number" || !Number.isFinite(right) || right < 0 || right > 4000) {
-    throw new TypeError(`${channel}: right must be a number between 0 and 4000`);
-  }
-  return { right };
-}
 
 /** 页面列表里的一页:主进程给的 id(网页的数字编号)。 */
 function pageId(value, channel) {
@@ -1164,6 +1152,5 @@ module.exports = {
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,
-  parseToolsInset,
   parseUrlRequest,
 };

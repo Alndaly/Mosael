@@ -46,9 +46,8 @@ beforeEach(() => {
       return () => undefined;
     }),
     saveDownload,
-    setInset: vi.fn(async () => undefined),
   };
-  Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView } });
+  Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView, setHostLayer: vi.fn(async () => undefined) } });
 });
 
 function show({ workspaceId = "ws" as string | null, toolbar = false } = {}) {

@@ -75,7 +75,6 @@ beforeEach(() => {
     listImages: vi.fn(async () => ({ page: PAGE, images: [] })),
     fetchImages: vi.fn(async () => []),
     readPage: vi.fn(async (mode: string) => ({ page: PAGE, html: mode === "article" ? "<article>正文</article>" : "", selection: "" })),
-    setInset: vi.fn(async () => undefined),
   };
   Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView, setHostLayer } });
   URL.createObjectURL = vi.fn(() => "blob:preview");
@@ -180,7 +179,7 @@ describe("下载页面里的视频", () => {
     api.importFromUrl.mockResolvedValue({ id: "job-1", progress: 0 });
     show();
     fireEvent.click(toolButton("video"));
-    expect(tools.setInset).toHaveBeenCalledWith(360);
+    expect(setHostLayer).toHaveBeenCalledWith({ id: "page-tools-drawer", kind: "inset", side: "right", active: true, width: 360 });
     const card = await waitFor(() => {
       const found = document.querySelector("[data-video-platform]") as HTMLElement | null;
       expect(found).not.toBeNull();

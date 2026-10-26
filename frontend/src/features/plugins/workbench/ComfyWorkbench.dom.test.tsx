@@ -141,7 +141,6 @@ function desktop() {
       },
       setComfyNavigation: vi.fn(async () => ({ ok: true, outcome: "applied" })),
     },
-    mosaelPageTools: { setInset: vi.fn(async (_right: number) => undefined) },
     mosaelPublish: {
       hideView: vi.fn(async () => undefined),
       setHostLayer: vi.fn(async (_claim: { id: string; kind: string; active: boolean }) => undefined),
@@ -247,15 +246,15 @@ describe("ComfyUI 工作台", () => {
     expect(within(bar).getByRole("heading").textContent).toBe("古风");
     expect(within(bar).getByText(TARGET.instanceName)).toBeTruthy();
     expect(within(bar).getByRole("img", { name: "workbenchUnsavedChanges" })).toBeTruthy();
-    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_DEFAULT }));
     expect(within(column()).getAllByRole("tab").map((one) => one.textContent)).toEqual([
       "workbenchTabModels", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant",
     ]);
     fireEvent.click(within(bar).getByRole("button", { name: "workbenchColumnHide" }));
-    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(0));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: false, width: 0 }));
     expect(screen.queryByRole("complementary", { name: "workbenchColumn" })).toBeNull();
     fireEvent.click(within(bar).getByRole("button", { name: "workbenchColumnShow" }));
-    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_DEFAULT }));
     fireEvent.click(within(bar).getByRole("button", { name: /publishBackToApp/ }));
     expect(bridge.mosaelPublish.hideView).toHaveBeenCalled();
     bridge.emit(null);
@@ -847,13 +846,13 @@ describe("右边那一列拉宽拉窄", () => {
     expect(width()).toBe(COLUMN_DEFAULT + 100);
     //: 拖动期间视图边完全跟手,不再多让出一截(实测指针捕获已足够,DRAG_GUARD 保险拆了)。
     expect(document.querySelector("[data-workbench-drag-guard]")).toBeNull();
-    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT + 100));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_DEFAULT + 100 }));
     fireEvent.pointerMove(window, { clientX: 100, buttons: 1, pointerId: 1 });
     expect(width(), "最宽是窗口的一半(主进程也最多让出一半)").toBe(720);
     fireEvent.pointerMove(window, { clientX: 1400, buttons: 1, pointerId: 1 });
     expect(width(), "最窄 300").toBe(COLUMN_MIN);
     fireEvent.pointerUp(window, { pointerId: 1 });
-    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_MIN));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_MIN }));
   });
 
   it("拖柄的竖条压在列左边那条分割线上、和别处一样;热区不往线左边(原生的画布底下)伸", async () => {
@@ -889,7 +888,7 @@ describe("右边那一列拉宽拉窄", () => {
     expect(width()).toBe(720);
     fireEvent.keyDown(handle(), { key: "Home" });
     expect(width()).toBe(COLUMN_MIN);
-    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_MIN));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_MIN }));
     fireEvent.doubleClick(handle());
     expect(width()).toBe(COLUMN_DEFAULT);
     fireEvent.keyDown(handle(), { key: "ArrowLeft" });

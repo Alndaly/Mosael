@@ -40,7 +40,6 @@ export {
 } from "./publishWorker";
 // 浏览器会话顶栏的页面工具:只作用于前台视图(见 pageTarget)。
 export { capturePage, beginRegionCapture, finishRegionCapture } from "./pageCapture";
-export { setToolsInset } from "./pageTarget";
 export { probeVideos } from "./pageVideos";
 export { listImages, fetchImages } from "./pageImages";
 export { readPage } from "./pageRead";

@@ -48,4 +48,16 @@ describe("让位声明", () => {
     expect(after.insetRight).toBe(480);
     expect(() => layers.set("x", { kind: "sneaky", active: true })).toThrow(/unknown kind/);
   });
+  it("弹窗开关只改覆盖原因,右侧栏声明不会被弹窗归零", () => {
+    const layers = createHostLayers();
+    layers.set("comfy-workbench-column", { kind: "inset", active: true, width: 420 });
+    layers.set("preview", { kind: "overlay", active: true });
+    expect(layers.directives().insetRight).toBe(420);
+    expect(layers.directives().reasons).toEqual(["overlay"]);
+    layers.set("preview", { kind: "overlay", active: false });
+    expect(layers.directives().insetRight).toBe(420);
+    expect(layers.directives().reasons).toEqual([]);
+    layers.set("comfy-workbench-column", { kind: "inset", active: false, width: 0 });
+    expect(layers.directives().insetRight).toBe(0);
+  });
 });
