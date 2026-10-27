@@ -57,3 +57,28 @@ it("复检途中被登录接管:不回写复检结论", async () => {
   expect(mocks.backend.patchAccount).not.toHaveBeenCalledWith("wx", expect.objectContaining({ binding_status: "bound" }));
   expect(mocks.views.hide).not.toHaveBeenCalled(); // 人还在登录页上,内嵌浏览器不能自己收起
 });
+
+it("用户收起登录视图:取消流程,不把账号状态覆盖成 unknown", async () => {
+  startPublishWorker({ window: {} as never });
+  await openLogin("wx", "weixin-channels");
+  await vi.advanceTimersByTimeAsync(10);
+  mocks.views.visibleAccountId = null;
+
+  await vi.advanceTimersByTimeAsync(5_000);
+
+  expect(mocks.backend.patchAccount).not.toHaveBeenCalledWith("wx", { binding_status: "unknown" });
+});
+
+it("checkLogin 在途时停止执行器:收尾不写回 unknown", async () => {
+  const pending = Promise.withResolvers<boolean>();
+  mocks.adapter.checkLogin.mockImplementation(() => pending.promise);
+  startPublishWorker({ window: {} as never });
+  await openLogin("wx", "weixin-channels");
+  await vi.advanceTimersByTimeAsync(10);
+
+  stopPublishWorker();
+  pending.resolve(false);
+  await vi.advanceTimersByTimeAsync(10);
+
+  expect(mocks.backend.patchAccount).not.toHaveBeenCalledWith("wx", { binding_status: "unknown" });
+});

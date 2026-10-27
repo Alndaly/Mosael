@@ -13,20 +13,31 @@ import { describe, expect, it, vi } from "vitest";
 const MAIN = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
 
 /** 从 main.cjs 里取出 showWindow 本身,配上假的 BrowserWindow / createWindow 跑。 */
-function loadShowWindow(windows: FakeWindow[], createWindow = vi.fn()) {
+function loadShowWindow(windows: FakeWindow[], createWindow = vi.fn(), mainWindow: FakeWindow | null = windows[0] ?? null) {
   const source = MAIN.match(/\nfunction showWindow\(\) \{[\s\S]*?\n\}\n/)?.[0];
   if (!source) throw new Error("showWindow not found in main.cjs");
-  const context = { BrowserWindow: { getAllWindows: () => windows }, createWindow, showWindow: undefined as undefined | (() => void) };
+  const context = {
+    BrowserWindow: { getAllWindows: () => windows },
+    mainWindow,
+    createWindow: () => {
+      createWindow();
+      if (!context.mainWindow || context.mainWindow.isDestroyed()) {
+        context.mainWindow = windows.at(-1) ?? null;
+      }
+    },
+    showWindow: undefined as undefined | (() => void),
+  };
   vm.runInNewContext(`${source}; this.showWindow = showWindow;`, context);
   return { showWindow: context.showWindow!, createWindow };
 }
 
 type FakeWindow = ReturnType<typeof fakeWindow>;
-function fakeWindow({ visible = true, minimized = false } = {}) {
+function fakeWindow({ visible = true, minimized = false, destroyed = false } = {}) {
   const win = {
     visible,
     minimized,
-    isDestroyed: () => false,
+    destroyed,
+    isDestroyed: () => win.destroyed,
     isMinimized: () => win.minimized,
     restore: vi.fn(() => (win.minimized = false)),
     show: vi.fn(() => (win.visible = true)),
@@ -57,6 +68,26 @@ describe("叫回主窗口", () => {
     const createWindow = vi.fn(() => windows.push(fakeWindow()));
     loadShowWindow(windows, createWindow).showWindow();
     expect(createWindow).toHaveBeenCalledOnce();
+  });
+
+  it("启动小窗排在窗口列表首位:仍然叫回真正的主窗口", () => {
+    const splash = fakeWindow();
+    const main = fakeWindow({ visible: false });
+    const { showWindow } = loadShowWindow([splash, main], vi.fn(), main);
+    showWindow();
+    expect(main.visible).toBe(true);
+    expect(main.focus).toHaveBeenCalled();
+    expect(splash.show).not.toHaveBeenCalled();
+  });
+
+  it("主窗口已销毁:即使辅助窗还在也重建主窗口", () => {
+    const splash = fakeWindow();
+    const destroyed = fakeWindow({ destroyed: true });
+    const windows = [splash, destroyed];
+    const createWindow = vi.fn(() => windows.push(fakeWindow()));
+    loadShowWindow(windows, createWindow, destroyed).showWindow();
+    expect(createWindow).toHaveBeenCalledOnce();
+    expect(splash.show).not.toHaveBeenCalled();
   });
 
   it("点 Dock(activate)和托盘「打开 Mosael」走同一个 showWindow", () => {

@@ -23,15 +23,19 @@ import { IPC } from "../ipc-contract.cjs";
 import { adoptSecondInstance, protocol } from "./protocol";
 import type { SystemContext } from "./types";
 
-function fakeWindow() {
-  return {
-    isDestroyed: () => false,
+function fakeWindow({ loading = false } = {}) {
+  const win = {
+    destroyed: false,
+    isDestroyed: () => win.destroyed,
     webContents: {
-      isLoading: () => false,
+      destroyed: false,
+      isDestroyed: () => win.webContents.destroyed,
+      isLoading: () => loading,
       send: vi.fn(),
       once: vi.fn(),
     },
   };
+  return win;
 }
 
 function fakeContext(win: ReturnType<typeof fakeWindow>) {
@@ -97,5 +101,29 @@ describe("mosael:// 协议唤起的落点", () => {
       view: "plugins",
       market: "dev.mosael.remotion",
     });
+  });
+
+  it("等待页面加载期间窗口或 webContents 销毁:到期回调安全跳过", () => {
+    const win = fakeWindow({ loading: true });
+    protocol.register(fakeContext(win));
+    let finishLoad!: () => void;
+    win.webContents.once.mockImplementation((_event, callback) => { finishLoad = callback as () => void; });
+    handlers.get("open-url")!({ preventDefault: vi.fn() }, "mosael://open?view=statistics");
+
+    win.destroyed = true;
+    expect(() => finishLoad()).not.toThrow();
+    win.destroyed = false;
+    win.webContents.destroyed = true;
+    expect(() => finishLoad()).not.toThrow();
+    expect(win.webContents.send).not.toHaveBeenCalled();
+  });
+
+  it("窗口活着但 send 自己失败:真实错误继续抛出", () => {
+    const win = fakeWindow();
+    win.webContents.send.mockImplementation(() => { throw new Error("IPC channel failed"); });
+    protocol.register(fakeContext(win));
+    expect(() =>
+      handlers.get("open-url")!({ preventDefault: vi.fn() }, "mosael://open?view=statistics"),
+    ).toThrow("IPC channel failed");
   });
 });

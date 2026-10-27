@@ -131,6 +131,20 @@ it("心跳说这条已经不归我了(后端不等了):中止它", async () => {
   await vi.advanceTimersByTimeAsync(20_000);
   expect(signal.aborted).toBe(true);
 });
+it("停止执行器:在跑的动作立即中止并回报终态,不把租约留到过期", async () => {
+  mocks.backend.claim.mockResolvedValueOnce(action("a1", "s1", "long"));
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(1_000);
+  const signal = mocks.drivers.get("s1")!.signal!;
+
+  stopBrowserWorker();
+
+  expect(signal.aborted).toBe(true);
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
+    status: "failed",
+    error: "browser worker stopped",
+  });
+});
 
 it("后端放弃了这条(运行停下、超时):认领循环下一拍就中止它,不等 20 秒一次的心跳", async () => {
   mocks.backend.claim.mockResolvedValueOnce(action("a1", "s1", "long"));
@@ -179,6 +193,26 @@ it("先搬完登录分区,再开始认领", async () => {
   expect(mocks.backend.settlePartitionMove).toHaveBeenCalledWith("m1", { status: "done", reason: "" });
   expect(mocks.backend.partitionMoves).toHaveBeenCalledTimes(1);
 });
+it("分区已搬但回执失败:自动重试同一回执,不再次搬目录", async () => {
+  seedOldLogin("rpa-settle-retry");
+  mocks.backend.partitionMoves.mockResolvedValue([
+    { id: "m-retry", old_partition: "persist:rpa-settle-retry", new_partition: "persist:rpa-ws-settle-retry" },
+  ]);
+  mocks.backend.settlePartitionMove.mockRejectedValueOnce(new Error("backend offline"));
+
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(5_000);
+
+  expect(mocks.backend.settlePartitionMove).toHaveBeenCalledTimes(2);
+  expect(mocks.backend.settlePartitionMove).toHaveBeenNthCalledWith(1, "m-retry", { status: "done", reason: "" });
+  expect(mocks.backend.settlePartitionMove).toHaveBeenNthCalledWith(2, "m-retry", { status: "done", reason: "" });
+  expect(existsSync(join(mocks.paths.userData, "Partitions", "rpa-ws-settle-retry"))).toBe(true);
+  expect(mocks.backend.claim).toHaveBeenCalled();
+  const moveCalls = mocks.backend.partitionMoves.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(mocks.backend.partitionMoves).toHaveBeenCalledTimes(moveCalls);
+});
+
 
 it("旧目录不在这台电脑上:不回话(别的电脑还要搬),照常开始认领", async () => {
   mocks.backend.partitionMoves.mockResolvedValue([
@@ -190,7 +224,7 @@ it("旧目录不在这台电脑上:不回话(别的电脑还要搬),照常开始
   expect(mocks.backend.claim).toHaveBeenCalled();
 });
 
-it("搬家因为分区正被用着推迟了:搬成之前不在新分区上开视图,动作报失败说清原因", async () => {
+it("搬家因分区占用推迟:自动重试,搬成之前不认领也不在新分区开视图", async () => {
   //: 同一进程里执行器重启过:上一轮用过旧分区,这一轮后端刚写下搬家单
   seedOldLogin("rpa-xhs");
   mocks.backend.claim.mockResolvedValueOnce({ ...action("a0", "s0", "warm"), partition: "persist:rpa-xhs" });
@@ -199,6 +233,7 @@ it("搬家因为分区正被用着推迟了:搬成之前不在新分区上开视
   mocks.pending.get("warm")!();
   await vi.advanceTimersByTimeAsync(10);
   stopBrowserWorker();
+  mocks.backend.claim.mockClear();
 
   mocks.backend.partitionMoves.mockResolvedValue([
     { id: "m1", old_partition: "persist:rpa-xhs", new_partition: "persist:rpa-ws-0123456789abcdef" },
@@ -209,8 +244,10 @@ it("搬家因为分区正被用着推迟了:搬成之前不在新分区上开视
   await vi.advanceTimersByTimeAsync(3_000);
 
   expect(mocks.backend.settlePartitionMove).not.toHaveBeenCalled();
+  expect(mocks.backend.partitionMoves.mock.calls.length).toBeGreaterThan(1);
   expect(mocks.views.registerSession).not.toHaveBeenCalled();
-  expect(mocks.backend.report).toHaveBeenCalledWith("a1", expect.objectContaining({ status: "failed" }));
+  expect(mocks.backend.claim).not.toHaveBeenCalled();
+  expect(mocks.backend.report).not.toHaveBeenCalledWith("a1", expect.anything());
 });
 
 /** 这一步做的时候,浏览器开始了这些下载(每一份都已经有了结局)。 */

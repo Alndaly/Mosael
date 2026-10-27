@@ -1075,11 +1075,12 @@ async function askAfterRendererCrashes(win, details) {
 
 /** 把主窗口叫到前台:不在就建一个,最小化了就还原。托盘、Dock(activate)、第二次启动、深链都走这一个。 */
 function showWindow() {
-  let win = BrowserWindow.getAllWindows()[0];
-  if (!win || win.isDestroyed()) {
+  let win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  if (!win) {
     createWindow();
-    win = BrowserWindow.getAllWindows()[0];
+    win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   }
+  // createWindow 可能因生命周期竞态没留下可用窗口;辅助窗/启动小窗绝不能冒充主窗口。
   if (!win) return;
   if (win.isMinimized()) win.restore();
   win.show();
@@ -1745,7 +1746,7 @@ app.whenReady().then(async () => {
     //: 渲染层启动就调的自定义 CSS 那四条(见下面的注释)。
     try {
       systemHandle = system.registerSystemCapabilities({
-        getWindow: () => BrowserWindow.getAllWindows()[0] ?? null,
+        getWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
         showWindow,
         isDev,
         iconPath: path.join(__dirname, "..", "build", "icon.png"),

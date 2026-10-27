@@ -27,13 +27,16 @@ function deliver(channel: string, payload: unknown): void {
   if (!context) return;
   context.showWindow();
   const win = context.getWindow();
-  if (!win || win.isDestroyed()) return;
-  // 窗口可能刚被重建、页面还没加载完,这时 send 会丢。等到 did-finish-load 再发。
-  if (win.webContents.isLoading()) {
-    win.webContents.once("did-finish-load", () => win.webContents.send(channel, payload));
-  } else {
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+  const send = () => {
+    // did-finish-load 是延迟回调:注册时活着不代表触发时还活着。只跳过已销毁对象,
+    // 不 catch send 自己抛出的错误,真正的 IPC 故障仍应可见。
+    if (win.isDestroyed() || win.webContents.isDestroyed()) return;
     win.webContents.send(channel, payload);
-  }
+  };
+  // 窗口可能刚被重建、页面还没加载完,这时 send 会丢。等到 did-finish-load 再发。
+  if (win.webContents.isLoading()) win.webContents.once("did-finish-load", send);
+  else send();
 }
 
 export function handleDeepLink(link: DeepLink | null): void {

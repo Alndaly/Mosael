@@ -117,13 +117,21 @@ export class BackendCredentialStore implements CredentialStore {
       return lease.credential ?? undefined;
     }
 
+    // 先更新本轮内存:供应商已经换发了 token,持久化失败绝不能把它退回头帧里的旧值。
+    this.seeded = next;
     // `base_version` 带回去:后端据此判断「我拿到租约之后有没有别人写过」。没人写过时它会
     // **照写**,因为手上这份是刚换出来的唯一有效凭据 —— 丢掉它下一轮就是 invalid_grant。
-    const res = await this.post("/commit", {
-      lease: lease.lease,
-      credential: next,
-      base_version: lease.version,
-    });
+    let res: Response;
+    try {
+      res = await this.post("/commit", {
+        lease: lease.lease,
+        credential: next,
+        base_version: lease.version,
+      });
+    } catch (error) {
+      log(`credential commit request failed (${describeError(error).slice(0, 200)});本轮继续使用内存中的凭据`);
+      return next;
+    }
     if (!res.ok) {
       // 409 有**两种**原因,而它们要的处置正好相反 —— 早先这里把两种合并成一种,只往 stderr
       // 写一行:对「被顶替」是对的(别人刚写了新凭据,我这份该丢),对「只是我慢了」是
@@ -136,7 +144,6 @@ export class BackendCredentialStore implements CredentialStore {
         log(`credential commit rejected (${res.status}, code=${code ?? "?"});本轮继续使用内存中的凭据`);
       }
     }
-    this.seeded = next;
     return next;
   }
 

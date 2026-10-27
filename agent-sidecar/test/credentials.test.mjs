@@ -59,6 +59,10 @@ function startBackend(script) {
       const step = req.url.split("/").pop();
       calls.push({ step, body: body ? JSON.parse(body) : null, auth: req.headers.authorization });
       const reply = script[step] ?? { status: 200, json: {} };
+      if (reply.status === 0) {
+        req.socket.destroy();
+        return;
+      }
       res.writeHead(reply.status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(reply.json ?? {}));
     });
@@ -190,6 +194,32 @@ const NEW = { type: "oauth", access: "新", refresh: "r2", expires: 3 };
   server.close();
 }
 
+// 7) 后端数据库 commit 失败(500):新 token 仍留在内存,下一次 read 不会退回旧值
+{
+  const { server, base } = await startBackend({
+    acquire: { status: 200, json: { lease: "L7", credential: STORED, version: 1 } },
+    commit: { status: 500, json: { detail: "database commit failed" } },
+  });
+  const store = new BackendCredentialStore(base, "tok", "prof-7", OLD);
+  const out = await store.modify("prof-7", async () => NEW);
+  assert.deepEqual(out, NEW);
+  assert.deepEqual(await store.read(), NEW, "数据库写回失败也不能丢掉刚换出来的内存凭据");
+  server.close();
+}
+
+// 8) commit 请求本身失败(连接断开):同样返回并保留新 token
+{
+  const { server, base } = await startBackend({
+    acquire: { status: 200, json: { lease: "L8", credential: STORED, version: 1 } },
+    commit: { status: 0 },
+  });
+  const store = new BackendCredentialStore(base, "tok", "prof-8", OLD);
+  const out = await store.modify("prof-8", async () => NEW);
+  assert.deepEqual(out, NEW, "写回请求失败不该让这一轮丢掉供应商刚发来的新 token");
+  assert.deepEqual(await store.read(), NEW);
+  server.close();
+}
+
 // 6) sidecar 不负责登出
 {
   const { server, base } = await startBackend({});
@@ -198,4 +228,4 @@ const NEW = { type: "oauth", access: "新", refresh: "r2", expires: 3 };
   server.close();
 }
 
-console.log("PASS  BackendCredentialStore 6 组断言全过");
+console.log("PASS  BackendCredentialStore 8 组断言全过");

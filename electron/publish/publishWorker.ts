@@ -760,6 +760,8 @@ export function stopPublishWorker(): void {
     clearTimeout(loginPollTimer);
     loginPollTimer = null;
   }
+  // 本次登录已被停止:清掉接管标记,重启后复检可以正常认领;取消本身不产生新的登录态结论。
+  loginAccounts.clear();
   // 销毁并清空 views,让下次 startPublishWorker 能重新绑定新窗口(mac 关窗→重新激活)。持久化会话
   // 在磁盘分区里(persist:mosael-<id>),销毁视图不丢登录态。
   destroySharedViews();
@@ -776,19 +778,14 @@ export function stopPublishWorker(): void {
 }
 
 /**
- * 结束一次登录轮询:停定时器,并且**把过渡态收干净**。
+ * 结束一次登录轮询:停定时器,并清掉登录接管标记。
  *
- * openLogin 一进来就把账号写成 `checking`(界面显示「检测中」),而在此之前只有"登录成功"这一条
- * 路把它改回去 —— 超时、用户放弃、导航失败三个出口都把它留在 checking。而 checking 不在任何认领
- * 条件里(要等满 10 分钟的悬挂自愈),于是卡片就一直转:线上 TikTok 那条正是这样,日志里只有
- * 反复的登录页 goto,一条 recheck start 都没有。
- *
- * 没登上就写回 `unknown` —— 字面意思就是「还不知道」,是此刻唯一诚实的值,而且它**立刻可被复检
- * 认领**(claim_check 的第一个条件),下一拍就会去问出真实状态。不猜 bound,也不武断判 login_required。
+ * 超时、打开/导航失败时用 `unknown` 收起过渡态,让下一拍复检问出真实状态。
+ * 用户取消或执行器停止不是一个「未登录」结论:只收尾,不覆盖账号状态;旧 generation 更不能写新一代。
  */
-function endLogin(gen: number, accountId?: string, loggedIn = false): void {
+function endLogin(gen: number, accountId?: string, loggedIn = false, writeUnknown = true): void {
   if (accountId) loginAccounts.delete(accountId);
-  if (accountId && !loggedIn) {
+  if (accountId && !loggedIn && writeUnknown && gen === generation && !stopped) {
     void backend
       .patchAccount(accountId, { binding_status: "unknown" })
       .catch(() => undefined); // 回写失败:下个 ttl 的复检照样会纠正
@@ -1024,7 +1021,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
           lastNegativeUrl,
           negatives,
         });
-        endLogin(gen, accountId);
+        endLogin(gen, accountId, false, why === "timeout");
         return;
       }
       // 用户把这个视图收起来了(返回 / 双击 Esc / 切去别的账号)= 他不打算登了。继续轮询没有意义,
@@ -1040,7 +1037,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
           lastNegativeUrl,
           negatives,
         });
-        endLogin(gen, accountId);
+        endLogin(gen, accountId, false, false);
         return;
       }
       let ok = false;
@@ -1053,7 +1050,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       }
       // checkLogin 挂起期间可能已 stop/换代:再查一次,别对已属新代的共享状态动手或续排。
       if (stopped || gen !== generation || !views) {
-        endLogin(gen, accountId);
+        endLogin(gen, accountId, false, false);
         return;
       }
       if (!ok) {

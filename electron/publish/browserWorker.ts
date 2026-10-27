@@ -28,7 +28,7 @@ import { plog } from "./log";
 import { createTrace } from "./trace.cjs";
 import { t } from "../i18n.cjs";
 import { parseComfyWorkbenchCall } from "../ipc-contract.cjs";
-import { applyPartitionMove } from "./partitionMoves";
+import { applyPartitionMove, type PartitionMoveOutcome } from "./partitionMoves";
 
 const trace = createTrace({ dir: app.getPath("userData") });
 import { comfyWorkbenchCall } from "./publishWorker";
@@ -64,6 +64,8 @@ const usedPartitions = new Set<string>();
  * 一开就建出空目录,旧登录再也搬不过去。只在同一进程里重启执行器、后端又刚写下搬家单时才会有。
  */
 const awaitingMove = new Set<string>();
+/** 已实际搬完、但后端回执还没成功的结果:重试只重发回执,绝不再次执行磁盘搬迁。 */
+const unsettledMoves = new Map<string, PartitionMoveOutcome>();
 
 export function startBrowserWorker(): void {
   stopBrowserWorker();
@@ -78,8 +80,14 @@ export function stopBrowserWorker(): void {
   const views = sharedViews();
   for (const sessionId of panelled) views?.panelDetach(sessionId);
   panelled.clear();
-  for (const controller of running.values()) controller.abort();
-  running.clear();
+  for (const [actionId, controller] of running) {
+    // 停止不是失联:立即把认领来的动作收成终态,后端由此释放会话与租约,
+    // 不必等 60 秒 TTL。report 会同步摘掉本地 holding; aborted 动作的迟到回报保持终态幂等。
+    void browserBackend.report(actionId, { status: "failed", error: "browser worker stopped" }).catch((error: unknown) => {
+      plog("browser worker stop report failed:", actionId, error instanceof Error ? error.message : String(error));
+    });
+    controller.abort();
+  }
   sessionTails.clear();
 }
 
@@ -144,19 +152,28 @@ function schedule(action: ClaimedAction): void {
 async function movePartitions(): Promise<boolean> {
   const moves = await browserBackend.partitionMoves();
   const userData = app.getPath("userData");
+  let complete = true;
   for (const move of moves) {
-    const result = applyPartitionMove(userData, move, (partition) => usedPartitions.has(partition));
-    if (result.status === "absent") continue; // 这台电脑上没有那份登录:不回话,别的电脑还要搬它
-    if (result.status === "deferred") {
-      awaitingMove.add(move.new_partition);
-      plog("browser partition move deferred (in use):", move.old_partition, "→", move.new_partition);
-      continue;
+    let result = unsettledMoves.get(move.id);
+    if (!result) {
+      const applied = applyPartitionMove(userData, move, (partition) => usedPartitions.has(partition));
+      if (applied.status === "absent") continue; // 这台电脑上没有那份登录:不回话,别的电脑还要搬它
+      if (applied.status === "deferred") {
+        complete = false;
+        awaitingMove.add(move.new_partition);
+        plog("browser partition move deferred (in use):", move.old_partition, "→", move.new_partition);
+        continue;
+      }
+      result = applied;
+      unsettledMoves.set(move.id, result);
     }
     awaitingMove.delete(move.new_partition);
     plog("browser partition move:", move.old_partition, "→", move.new_partition, result.status, result.reason);
+    // 失败会抛到认领循环:结果留在 unsettledMoves,下一拍只重发这份回执。
     await browserBackend.settlePartitionMove(move.id, result);
+    unsettledMoves.delete(move.id);
   }
-  return true;
+  return complete;
 }
 
 /** 工作台会话的分区前缀(和 ipc-contract 拼的同一个):分区后面就是连接 id。 */
