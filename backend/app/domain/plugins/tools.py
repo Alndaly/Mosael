@@ -524,9 +524,8 @@ def _run_process(
         service.done()
     try:
         plugin_state.persist(db, instance, result.state, baseline=injected.baseline, notify=notify)
-    except PluginDomainError:
-        # 状态是**续期的副作用**,不是这次产出的所有权。GPU/远端已经跑完,
-        # 交付文件和输出不能因一个未声明/过长的 state 键而被当成没发生。
+    except Exception:  # noqa: BLE001 — 状态是副作用,不能吞掉插件已经完成的产出
+        # 交付文件和输出不能因状态校验、加密或数据库写回失败而被当成没发生。
         logger.warning("插件 %s 的状态没能记下,继续交付已完成产出", instance.id, exc_info=True)
     return result.output
 

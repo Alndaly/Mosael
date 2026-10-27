@@ -129,6 +129,19 @@ class Test只能写声明过的键:
             assert invocation.status == "succeeded"
             assert invocation.output["generated"] == "already-paid"
 
+    def test_状态写回系统异常也不丢已完成产出(self, tmp_path, monkeypatch) -> None:
+        """加密或数据库写回失败同样只是状态副作用，不能把已生成的结果改成失败。"""
+        ws, instance_id = install(tmp_path, WRITES_BOTH)
+
+        def fail_persist(*_args, **_kwargs):
+            raise RuntimeError("credential store unavailable")
+
+        monkeypatch.setattr(plugin_state, "persist", fail_persist)
+        with SessionLocal() as db:
+            invocation = invoke(db, instance_id, "go", {}, workspace_id=ws)
+            assert invocation.status == "succeeded"
+            assert invocation.output["done"] is True
+
     def test_值太长也拦(self, tmp_path) -> None:
         """挡的是「把整份响应缓存塞进 state」—— 那会让每次调用都重写一遍数据库。"""
         ws, instance_id = install(tmp_path, WRITES_BOTH)
