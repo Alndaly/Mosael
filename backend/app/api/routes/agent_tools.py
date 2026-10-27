@@ -31,7 +31,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession, PresentedToken
+from app.api.deps import CurrentUser, DbSession, PresentedToken, Tx
 from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
@@ -180,7 +180,7 @@ def _invoke_plugin_tool(
 def invoke_agent_tool(
     name: str,
     body: ToolInvocation,
-    db: DbSession,
+    db: Tx,
     user: CurrentUser,
     token: PresentedToken,
     workspace_id: str = "",

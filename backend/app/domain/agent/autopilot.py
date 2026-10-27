@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
+from app.core.unit_of_work import after_commit
 from app.core.security import find_session
 from app.db.models import AgentSession, ToolConfirmation, User, Workspace, now
 from app.domain.agent import judge as judge_module
@@ -256,16 +257,10 @@ def consider(db: Session, user: User, confirmation: ToolConfirmation) -> bool:
         # 看见一张自己出现又自己消失的卡。**这不是一个新状态** —— 期限会自己过去,所以进程崩在
         # 判断中间也不需要谁去回收,卡自己回到待办(与 AuthSession 的过期同一种做法)。
         confirmation.hold_until = now() + timedelta(seconds=judge_module.JUDGE_TIMEOUT_SECONDS)
-        db.commit()
-        threading.Thread(
-            target=_judge_thread,
-            args=(confirmation.id, user.id),
-            daemon=True,
-            name=AUTOPILOT_THREAD_NAME,
-        ).start()
+        confirmation_id, user_id = confirmation.id, user.id
+        after_commit(db, lambda: _start_judge_thread(confirmation_id, user_id))
         return True
     if not decision.approve:
-        db.commit()
         return False
     _hand_off(db, confirmation, decision.mode, user.id)
     return True
@@ -279,10 +274,23 @@ def _hand_off(db: Session, confirmation: ToolConfirmation, mode: str, user_id: s
     confirmation.decision_mode = mode
     confirmation.decided_by = user_id
     confirmation.hold_until = None
-    db.commit()
+    confirmation_id = confirmation.id
+    after_commit(db, lambda: _start_execute_thread(confirmation_id, user_id))
+
+
+def _start_judge_thread(confirmation_id: str, user_id: str) -> None:
+    threading.Thread(
+        target=_judge_thread,
+        args=(confirmation_id, user_id),
+        daemon=True,
+        name=AUTOPILOT_THREAD_NAME,
+    ).start()
+
+
+def _start_execute_thread(confirmation_id: str, user_id: str) -> None:
     threading.Thread(
         target=_execute_thread,
-        args=(confirmation.id, user_id),
+        args=(confirmation_id, user_id),
         daemon=True,
         name=AUTOPILOT_THREAD_NAME,
     ).start()
@@ -292,9 +300,10 @@ def _judge_thread(confirmation_id: str, user_id: str) -> None:
     """问一次隔离判断者,按裁决决定放行还是交回用户。
 
     **任何不是"明确放行"的结果都退回用户**:拒绝、超时、报错、回了个读不懂的东西 —— 判断者不可用
-    不等于放行。
+    不等于放行。问判断者是网络调用,不放在写事务里;拿到裁决后再开一个短事务落结果。
     """
     from app.core.db import SessionLocal
+    from app.core.unit_of_work import unit_of_work
 
     with SessionLocal() as db:
         confirmation = db.get(ToolConfirmation, confirmation_id)
@@ -306,19 +315,21 @@ def _judge_thread(confirmation_id: str, user_id: str) -> None:
         # 归属:这一次判断花的钱算在这张卡所在的工作区头上。不传的话 `billable` 只能记一条
         # 归属不明的账,而那一栏存在的意义是告诉用户"你少配了哪条价格规则"。
         workspace_id = confirmation.workspace_id
-        try:
-            verdict = judge_module.ask(
-                request,
-                user_id=user_id,
-                workspace_id=workspace_id,
-                source_type="tool_confirmation",
-                source_id=confirmation_id,
-            )
-        except Exception as exc:  # noqa: BLE001 —— 超时/网络/解析不出来,都算判不了
-            logger.warning("judge could not settle confirmation %s: %s", confirmation_id, exc)
+    try:
+        verdict = judge_module.ask(
+            request,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            source_type="tool_confirmation",
+            source_id=confirmation_id,
+        )
+    except Exception as exc:  # noqa: BLE001 —— 超时/网络/解析不出来,都算判不了
+        logger.warning("judge could not settle confirmation %s: %s", confirmation_id, exc)
+        with unit_of_work() as db:
             _release(db, confirmation_id, {**detail, "judge_failed": str(exc)[:300]})
-            return
-        detail["judge"] = {**request.recorded(), "allow": verdict.allow, "reason": verdict.reason, "model": verdict.model}
+        return
+    detail["judge"] = {**request.recorded(), "allow": verdict.allow, "reason": verdict.reason, "model": verdict.model}
+    with unit_of_work() as db:
         confirmation = db.get(ToolConfirmation, confirmation_id)
         if confirmation is None or confirmation.status != "pending":
             return
@@ -336,7 +347,6 @@ def _release(db: Session, confirmation_id: str, detail: dict) -> None:
         return
     confirmation.hold_until = None
     confirmation.decision_detail = detail
-    db.commit()
 
 
 def _execute_thread(confirmation_id: str, user_id: str) -> None:
