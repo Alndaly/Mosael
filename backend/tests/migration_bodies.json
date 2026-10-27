@@ -2,8 +2,6 @@
   "migrate-agent-questions-feishu-message-id": "79ade469ef85a1b6",
   "migrate-bound-profiles-use-the-account-partition": "d4a40e65310bd20f",
   "migrate-browser-profiles-pin-identity": "d957b75417e51c8f",
-  "migrate-cloud-login-table": "c14a2b8d465a5648",
-  "migrate-drop-cloud-bindings-table": "aae01e58d1e94122",
   "migrate-publish-tasks-get-content-shape": "5fdb6a738dab692f",
   "migrate-tool-confirmations-feishu-message-id": "8449e28b6f789c21",
   "migrate-tool-confirmations-make-tool-calls-idempotent": "3caa4e9d573bd279",

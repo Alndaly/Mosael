@@ -170,34 +170,6 @@ def _migrate_bound_profiles_use_the_account_partition() -> None:
             )
 
 
-def _migrate_cloud_login_table() -> None:
-    """桌面端登录 MosaelCloud 之后存会话 cookie 的那张表。
-
-    新表本身由 SCHEMA 阶段的 create-all 建;这一步把它**当作一次显式迁移记账**,并给那些在
-    新表加入之前就已经建好的库补一道 checkfirst —— 旧库升级时不会因为「这张表是后来才有的」
-    而缺一块。它只碰这张新表,不动 `users` 或任何旧表。
-
-    **没有旧数据要搬**:设备绑定已经整张删掉,而桌面端此前没有云登录会话。这条迁移只建表。
-    """
-    from app.db.models import CloudLogin
-
-    Base.metadata.create_all(bind=engine, tables=[CloudLogin.__table__], checkfirst=True)
-
-
-def _migrate_drop_cloud_bindings_table() -> None:
-    """删掉 `cloud_bindings` —— 云端设备绑定机制已经移除。
-
-    这张表只回答「这个本地用户绑了哪个云端账号、拿到的设备凭据是什么」;云端那侧的表、路由和
-    模型一起删了,本地这一行没有可指向的东西。不写兼容分支:老库升级时整表 DROP,云账号与
-    社区分享都不依赖它。
-    """
-    inspector = inspect(engine)
-    if "cloud_bindings" not in set(inspector.get_table_names()):
-        return
-    with engine.begin() as conn:
-        conn.execute(text("DROP TABLE cloud_bindings"))
-
-
 def init_db() -> None:
     """Prepare storage, then execute the validated startup migration plan."""
 
@@ -561,7 +533,7 @@ def _recurring(phase: MigrationPhase, *operations: Any) -> tuple[MigrationStep, 
 
 
 def migration_plan() -> MigrationPlan:
-    """Startup migration plan inside the rolling v1.9.11+ support window.
+    """Startup migration plan inside the rolling v2.0.0+ support window.
 
     Only migrations added after the oldest supported Release remain one-time steps; older
     shapes are already reached by upgrading through that Release. Recurring reconciliation
@@ -581,11 +553,6 @@ def migration_plan() -> MigrationPlan:
         *_recurring(
             MigrationPhase.SCHEMA,
             _create_current_schema,
-        ),
-        *_steps(
-            MigrationPhase.AFTER_SCHEMA,
-            _migrate_drop_cloud_bindings_table,
-            _migrate_cloud_login_table,
         ),
         *_recurring(
             MigrationPhase.AFTER_SCHEMA,

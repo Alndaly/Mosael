@@ -4,8 +4,6 @@
     "migrate-agent-questions-feishu-message-id",
     "migrate-bound-profiles-use-the-account-partition",
     "migrate-browser-profiles-pin-identity",
-    "migrate-cloud-login-table",
-    "migrate-drop-cloud-bindings-table",
     "migrate-publish-tasks-get-content-shape",
     "migrate-tool-confirmations-feishu-message-id",
     "migrate-tool-confirmations-make-tool-calls-idempotent",

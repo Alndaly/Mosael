@@ -20,7 +20,7 @@
 | agent-sidecar | ~2,400 行 TS | pi Agent 运行时,JSONL/stdin 协议 |
 | 工作流执行器 | 2,715 行(`backend/app/domain/workflows/executors/`,11 个文件)(原 2,358 / 10) | 按域分组而非按节点一文件 |
 | 工作流节点类型 | 56 种(`NODE_TYPES`) | 每一种要么有对应的智能体工具,要么在 `NOT_A_TOOL` 里写明为什么 |
-| 数据库迁移函数 | 11 个 `_migrate_*`;`migration_plan()` 共 19 步(10 次一次性 + 9 对账)(`backend/app/db/migrations.py`,605 行;2026-09-29 为 5,912 行,2026-10-27 退休 v1.9.11 之前迁移) | 无迁移框架 |
+| 数据库迁移函数 | 9 个 `_migrate_*`;`migration_plan()` 共 17 步(8 次一次性 + 9 对账)(`backend/app/db/migrations.py`,578 行;2026-09-29 为 5,912 行,2026-10-28 门槛推进到 v2.0.0) | 无迁移框架 |
 | 契约语料 | 11 份 JSON(`contracts/`)(原 9) | 语言中立、多侧测试各跑一遍;实测 11/11 两侧都在跑 |
 | 棘轮测试 | 101 个文件带 `RATCHET` 标记 | 由 `scripts/sync-ratchet-docs.py` 同步进 `docs/CONVENTIONS.md` |
 | ADR | 19 份(`docs/adr/0001`–`0019`)(原 18) | 2026-08 至 2026-09 密集决策期 |
@@ -84,7 +84,7 @@ flowchart TD
     S1 --> S2 --> S3
 
     subgraph LIFE["后端 lifespan(main.py:82-131)"]
-        L1["init_db:create_all + 11 个 _migrate_* / 19 步"]
+        L1["init_db:create_all + 9 个 _migrate_* / 17 步"]
         L2["_prepare_network(库→进程 env 装配)+ issue_worker_key"]
         L3["register_external_kind(MOSAEL_EXTERNAL_JOB_KINDS)"]
         L4["四个 reconcile:孤儿 job 判失败 / 智能体会话拨回 idle<br/>/ 浏览器状态回收 / 代理补齐与坏素材修复"]
@@ -387,7 +387,7 @@ graph LR
 
 运行时**不跑迁移框架**。`init_db()` = `Base.metadata.create_all`(新装机建全表)+ 窗口内的 `_migrate_*`(已装机补差)+ 对账步骤。改表 = 改 `model_slices/<domain>.py` **且**加一个 `_migrate_*`,少一步就是"新装机好、老用户崩"。仓库里曾留 30 个从不执行且已漂移的 Alembic 文件,随这条规约一并移除。
 
-- **退休判据**:迁移引入时间早于最早仍支持的 Release(当前 v1.9.11;最新公开 v2.2.3 往前 8 个版本序号)才可删——删错 = 用户打开看到空工作室。
+- **退休判据**:迁移引入时间早于最早仍支持的 Release(当前 v2.0.0;最新公开 v2.2.4 往前 8 个版本序号)才可删——删错 = 用户打开看到空工作室。
 - **判据是"这份数据归谁"**:我们能改写的(DB、数据目录、插件清单)升级时就地改写,读取代码只认一种形状;改写不了的(导出文件、环境变量、外部报文)才允许在边界上认两种形状、进门就归一。迁移必须幂等;改用户磁盘文件先留 `.bak`。
 - **打包路径冒烟**:`test/bundle.smoke.mjs` 用 `test/upgrade_db_fixture.py` 造旧库,真正启动打包后的 Electron,验证冻结后端完成升级并健康、renderer 加载、旧数据正确——覆盖源码单测碰不到的打包路径。
 

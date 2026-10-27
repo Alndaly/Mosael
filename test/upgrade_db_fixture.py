@@ -50,11 +50,6 @@ def seed(data_dir: Path) -> None:
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             ("legacy-question", "legacy-workspace", "legacy-session", "[]", "[]", "pending", NOW),
         )
-        db.execute(
-            "INSERT INTO cloud_bindings (user_id, cloud_user_id, email, device_id, token, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            ("legacy-user", "legacy-cloud", "", "legacy-device", "", NOW),
-        )
         db.execute("PRAGMA user_version = 0")
 
 
@@ -62,10 +57,8 @@ def verify(data_dir: Path) -> None:
     database = data_dir / "mosael.db"
     with sqlite3.connect(database) as db:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "cloud_bindings" in tables:
-            raise SystemExit("upgrade failed: cloud_bindings was not dropped")
         if "cloud_login" not in tables:
-            raise SystemExit("upgrade failed: cloud_login was not created")
+            raise SystemExit("upgrade failed: cloud_login is missing")
 
         columns = {row[1] for row in db.execute("PRAGMA table_info(publish_tasks)")}
         if not {"content_kind", "asset_ids", "body", "media_meta"} <= columns:

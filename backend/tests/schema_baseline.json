@@ -263,12 +263,12 @@
     "created_at",
     "updated_at"
   ],
-  "cloud_bindings": [
+  "cloud_login": [
     "user_id",
-    "cloud_user_id",
     "email",
-    "device_id",
-    "token",
+    "cookie_name",
+    "cookie_value",
+    "expires_at",
     "created_at"
   ],
   "comment_mentions": [

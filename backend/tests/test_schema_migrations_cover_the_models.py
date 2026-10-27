@@ -185,8 +185,6 @@ def test_保留迁移都在最早支持版本的库上跑过() -> None:
         graph = json.loads(connection.execute("select graph from workflows where id = 'seed-id'").fetchone()[0])
         indexes = {row[0] for row in connection.execute("select name from sqlite_master where type='index'")}
 
-    assert "cloud_bindings" not in tables, "drop-cloud-bindings 没有跑掉窗口内的旧表"
-    assert "cloud_login" in tables, "cloud-login 没有给老库建出会话表"
     assert "identity" in columns["browser_profiles"]
     assert "feishu_message_id" in columns["agent_questions"]
     assert "feishu_message_id" in columns["tool_confirmations"]
