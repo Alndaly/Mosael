@@ -781,6 +781,76 @@ def test_下载是一个后台任务_报进度_下完让连接的目录重新拉
         (job["id"], "succeeded", "mosael-test-tiny.safetensors")]
 
 
+def test_下载列表先按连接过滤_别连接的200条不会挤掉本连接活动任务(library) -> None:
+    """全局最近 200 条不是本连接的最近 200 条;活动任务还必须永远留在列表里。"""
+    client, instance_id, _ = library
+    workspace = _workspace(client)
+    from datetime import datetime, timedelta
+
+    from app.db.models import Job, PluginInstance
+    from app.domain import model_library
+
+    base = datetime(2026, 1, 1)
+    with SessionLocal() as db:
+        instance = db.get(PluginInstance, instance_id)
+        target = Job(workspace_id=workspace, kind=model_library.KIND, status="running",
+                     payload={"instance_id": instance_id, "folder": "checkpoints", "filename": "target.safetensors"},
+                     created_at=base)
+        db.add(target)
+        for n in range(200):
+            db.add(Job(workspace_id=workspace, kind=model_library.KIND, status="succeeded",
+                       payload={"instance_id": "another-connection", "folder": "checkpoints", "filename": f"{n}.safetensors"},
+                       created_at=base + timedelta(seconds=n + 1)))
+        db.commit()
+        assert [job.id for job in model_library.downloads(db, instance)] == [target.id]
+
+
+def test_同一文件并发提交只有一条任务_未提交窗口也被占位(library, monkeypatch) -> None:
+    """查重和 create_job 之间不能被另一个请求穿过去;flush 后、外层 commit 前也要挡住第二条。"""
+    client, instance_id, _ = library
+    workspace = _workspace(client)
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.db.models import Job, PluginInstance, User
+    from app.domain import model_library
+
+    monkeypatch.setattr(model_library, "dispatch_job", lambda *_args: None)
+    original_create = model_library.create_job
+
+    def slow_create(*args, **kwargs):
+        # 没有占位时，所有线程都能先查到「没有 running」再建任务。
+        time.sleep(0.05)
+        return original_create(*args, **kwargs)
+
+    monkeypatch.setattr(model_library, "create_job", slow_create)
+    with SessionLocal() as db:
+        user_id = db.query(User).first().id
+    barrier = threading.Barrier(6)
+
+    def submit():
+        with SessionLocal() as db:
+            barrier.wait()
+            try:
+                job = model_library.start_download(
+                    db, db.get(User, user_id), db.get(PluginInstance, instance_id), workspace_id=workspace,
+                    url="https://huggingface.co/a/b/resolve/main/race.safetensors",
+                    folder="checkpoints", filename="race.safetensors",
+                )
+                db.commit()
+                return "created", job.id
+            except model_library.ModelLibraryError as exc:
+                db.rollback()
+                return "duplicate", exc.key
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        outcomes = list(pool.map(lambda _: submit(), range(6)))
+    assert [kind for kind, _ in outcomes].count("created") == 1, outcomes
+    assert [value for kind, value in outcomes if kind == "duplicate"] == ["modelLibErr_alreadyDownloading"] * 5
+    with SessionLocal() as db:
+        rows = db.query(Job).filter(Job.kind == model_library.KIND).all()
+        assert len([job for job in rows if job.payload.get("filename") == "race.safetensors"]) == 1
+
+
 def test_带SHA256的下载_哈希交给插件_格式不对当场拒绝(library) -> None:
     """多平台确认过的来源下载时要带上 SHA256(插件下完核对);不是 64 位十六进制的当场拒绝,不交给插件。"""
     client, instance_id, _ = library

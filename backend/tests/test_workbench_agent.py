@@ -667,6 +667,31 @@ def test_装节点包_git地址_封禁_没有正常版本_装过了_停用的都
     assert _cards(client, workspace) == []
 
 
+def test_批准后注册表变成封禁_执行前再拒一次(connected, monkeypatch) -> None:
+    """确认卡是隔天批的:validate 时正常不等于执行时仍正常。执行前必须重查注册表,
+    被封禁的包连 start_node_install 都不许发。"""
+    client, _, instance_id, workspace = connected
+    banned = _pack_info(pack_status="NodeStatusBanned")
+    monkeypatch.setattr(workbench_agent, "node_pack_info", lambda *args, **kwargs: banned)
+
+    def should_not_start(*_args, **_kwargs):
+        pytest.fail("封禁的包不该进入安装任务")
+
+    from app.db.models import User
+    from app.domain import workflow_library
+
+    monkeypatch.setattr(workflow_library, "start_node_install", should_not_start)
+    with SessionLocal() as db:
+        user = db.query(User).first()
+        with pytest.raises(workbench_agent.WorkbenchAgentError) as caught:
+            workbench_agent.install_node_pack(
+                db,
+                user,
+                workspace,
+                {"instance_id": instance_id, "pack_id": "rgthree-comfy", "pack": "rgthree-comfy", "version": "1.0.2608210019"},
+            )
+        assert caught.value.key == "workbenchErr_packBanned"
+
 def test_装节点包_给的那一版不是注册表里正常的那个_不替它猜(connected, monkeypatch) -> None:
     client, _, instance_id, workspace = connected
     monkeypatch.setattr(workbench_agent, "node_pack_info", lambda *args, **kwargs: _pack_info())

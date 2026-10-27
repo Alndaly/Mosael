@@ -522,7 +522,12 @@ def _run_process(
     finally:
         # 用完了:闲置的钟从现在算(本机服务;没有本机服务时什么都不做)
         service.done()
-    plugin_state.persist(db, instance, result.state, baseline=injected.baseline, notify=notify)
+    try:
+        plugin_state.persist(db, instance, result.state, baseline=injected.baseline, notify=notify)
+    except PluginDomainError:
+        # 状态是**续期的副作用**,不是这次产出的所有权。GPU/远端已经跑完,
+        # 交付文件和输出不能因一个未声明/过长的 state 键而被当成没发生。
+        logger.warning("插件 %s 的状态没能记下,继续交付已完成产出", instance.id, exc_info=True)
     return result.output
 
 

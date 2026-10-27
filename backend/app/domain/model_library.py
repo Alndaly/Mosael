@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment
@@ -90,6 +90,22 @@ class _Snapshot:
 
 _lock = threading.Lock()
 _snapshots: dict[str, _Snapshot] = {}
+#: 查重和建任务必须是一段原子临界区;否则两个请求都查不到 running,会给同一个 .part 排出两条任务。
+_download_submit_lock = threading.Lock()
+#: 已 flush 但尚未提交的任务对其他 Session 还不可见;用(key)占位补齐这段窗口。
+_pending_downloads: set[tuple[str, str, str]] = set()
+_DOWNLOAD_RESERVATIONS = "mosael_model_download_reservations"
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _release_download_reservations(db: Session, transaction: Any) -> None:
+    """提交、回滚或关闭会话都释放本次占位;提交后数据库里的 queued/running 行接管查重。"""
+    if transaction.parent is not None:
+        return
+    keys = db.info.pop(_DOWNLOAD_RESERVATIONS, ())
+    with _download_submit_lock:
+        _pending_downloads.difference_update(keys)
+
 #: 一个连接一把:记着的地址没了时,同时到的几十个预览请求只让插件列一遍,别的等它列完。
 _listing_locks: dict[str, threading.Lock] = {}
 
@@ -641,30 +657,39 @@ def start_download(
     #: 后一条的写入截断前一条,交错出来的文件长度对、内容谁也认不出(插件那边另有一把 O_EXCL 锁兜着,
     #: 见 install._claim_download)。这里先挡掉,用户看到的是「已经在下了」而不是两个都在跑。
     #: 只查还在跑的:下完 / 失败 / 取消之后重排是正常的(失败时半截留着,下一次接着下)。
-    running = db.scalar(
-        select(Job.id).where(
-            Job.kind == KIND,
-            Job.status.in_(("queued", "running")),
-            Job.payload["instance_id"].as_string() == instance.id,
-            Job.payload["folder"].as_string() == folder,
-            Job.payload["filename"].as_string() == filename,
-        ).limit(1)
-    )
-    if running:
-        raise ModelLibraryError("modelLibErr_alreadyDownloading", name=filename, folder=folder)
-    job = create_job(
-        db,
-        workspace_id=workspace_id,
-        kind="model_download",  # 和 KIND 同一个;任务目录的测试按字面量扫
-        created_by=user.id,
-        payload={"instance_id": instance.id, "url": url.strip(), "folder": folder, "filename": filename,
-                 **({"sha256": digest} if digest else {}), "subject": filename},
-        message="jobMsg_modelDownloadQueued",
-        message_params={"name": filename},
-    )
-    job_id = job.id
-    dispatch_job(db, job, lambda: _download(job_id))
-    return job
+    key = (instance.id, folder, filename)
+    with _download_submit_lock:
+        running = db.scalar(
+            select(Job.id).where(
+                Job.kind == KIND,
+                Job.status.in_(("queued", "running")),
+                Job.payload["instance_id"].as_string() == instance.id,
+                Job.payload["folder"].as_string() == folder,
+                Job.payload["filename"].as_string() == filename,
+            ).limit(1)
+        )
+        if running or key in _pending_downloads:
+            raise ModelLibraryError("modelLibErr_alreadyDownloading", name=filename, folder=folder)
+        _pending_downloads.add(key)
+        db.info.setdefault(_DOWNLOAD_RESERVATIONS, []).append(key)
+        try:
+            job = create_job(
+                db,
+                workspace_id=workspace_id,
+                kind="model_download",  # 和 KIND 同一个;任务目录的测试按字面量扫
+                created_by=user.id,
+                payload={"instance_id": instance.id, "url": url.strip(), "folder": folder, "filename": filename,
+                         **({"sha256": digest} if digest else {}), "subject": filename},
+                message="jobMsg_modelDownloadQueued",
+                message_params={"name": filename},
+            )
+            job_id = job.id
+            dispatch_job(db, job, lambda: _download(job_id))
+            return job
+        except BaseException:
+            _pending_downloads.discard(key)
+            db.info[_DOWNLOAD_RESERVATIONS].remove(key)
+            raise
 
 
 def _cancelled(job_id: str) -> bool:
@@ -1053,11 +1078,21 @@ def _save_preview(db: Session, instance: PluginInstance, folder: str, name: str,
 
 def downloads(db: Session, instance: PluginInstance) -> list[Job]:
     """这个连接最近的下载任务(在跑的总在里面),新的在前。"""
-    rows = db.scalars(select(Job).where(Job.kind == KIND).order_by(Job.created_at.desc()).limit(200))
-    mine = [job for job in rows if (job.payload or {}).get("instance_id") == instance.id]
-    active = [job for job in mine if job.status in ("queued", "running")]
-    finished = [job for job in mine if job.status not in ("queued", "running")]
-    return active + finished[: max(0, RECENT_DOWNLOADS - len(active))]
+    active = db.scalars(
+        select(Job).where(
+            Job.kind == KIND,
+            Job.payload["instance_id"].as_string() == instance.id,
+            Job.status.in_(("queued", "running")),
+        ).order_by(Job.created_at.desc())
+    ).all()
+    finished = db.scalars(
+        select(Job).where(
+            Job.kind == KIND,
+            Job.payload["instance_id"].as_string() == instance.id,
+            Job.status.not_in(("queued", "running")),
+        ).order_by(Job.created_at.desc()).limit(max(0, RECENT_DOWNLOADS - len(active)))
+    ).all()
+    return [*active, *finished]
 
 
 def _on_instance_change(_db: Session, instance: PluginInstance, refresh: bool) -> None:

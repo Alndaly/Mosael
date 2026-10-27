@@ -112,20 +112,22 @@ class Test落库并分流:
 
 
 class Test只能写声明过的键:
-    def test_没声明的键当场失败(self, tmp_path) -> None:
-        """忽略的话插件以为自己存下了,下次拿到旧值,而错误表现在几十分钟后的另一个地方。"""
+    def test_未知键不丢已完成产出(self, tmp_path) -> None:
+        """state 是续期副作用,不是产出所有权。键写错了只记录错误,GPU/远端已经跑完的输出照样交付。
+
+        否则一次 ComfyUI 调用已经计费、文件已生成,却被一个未声明的 state 键判成「失败未扣费」。"""
         ws, instance_id = install(
             tmp_path,
             """
             import json, sys
             sys.stdin.read()
-            print(json.dumps({"ok": True, "output": {}, "state": {"随便一个键": "x"}}))
+            print(json.dumps({"ok": True, "output": {"generated": "already-paid"}, "state": {"随便一个键": "x"}}))
             """,
         )
         with SessionLocal() as db:
             invocation = invoke(db, instance_id, "go", {}, workspace_id=ws)
-            assert invocation.status == "failed"
-            assert "未声明" in (invocation.error or "")
+            assert invocation.status == "succeeded"
+            assert invocation.output["generated"] == "already-paid"
 
     def test_值太长也拦(self, tmp_path) -> None:
         """挡的是「把整份响应缓存塞进 state」—— 那会让每次调用都重写一遍数据库。"""

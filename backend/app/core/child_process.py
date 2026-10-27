@@ -514,14 +514,14 @@ def _communicate_bounded(
     out_parts: list[Any] = []
     err_tail: deque[Any] = deque()
     err_size = [0]
+    out_size = [0]
     exceeded = threading.Event()
 
     def drain_stdout() -> None:
-        total = 0
         try:
             while chunk := process.stdout.read(16 * 1024):
-                total += len(chunk)
-                if total > max_stdout:
+                out_size[0] += len(chunk)
+                if out_size[0] > max_stdout:
                     exceeded.set()
                     stop(process)
                     return
@@ -567,7 +567,7 @@ def _communicate_bounded(
             stop(process)
             thread.join(timeout=1.0)
     if exceeded.is_set():
-        raise ProcessOutputLimitExceeded(f"stdout exceeded {max_stdout}")
+        raise ProcessOutputLimitExceeded(f"stdout exceeded {max_stdout}", output_bytes=out_size[0])
     return empty.join(out_parts), empty.join(err_tail)
 
 
@@ -660,7 +660,15 @@ def run_logged(
 
 
 class ProcessOutputLimitExceeded(RuntimeError):
-    """A child exceeded its output budget (run_bounded: stdout + stderr; run_logged(max_stdout=): stdout)."""
+    """A child exceeded its output budget (run_bounded: stdout + stderr; run_logged(max_stdout=): stdout).
+
+    `output_bytes` is what the bounded reader actually accumulated before aborting.
+    Callers must report this instead of the configured read limit.
+    """
+
+    def __init__(self, message: str, *, output_bytes: int | None = None) -> None:
+        super().__init__(message)
+        self.output_bytes = output_bytes
 
 
 def run_bounded(args, *, input: bytes = b"", timeout: float, max_output_bytes: int,

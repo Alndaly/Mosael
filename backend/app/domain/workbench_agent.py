@@ -586,13 +586,24 @@ def install_node_pack(db: Session, user: User, workspace_id: str, payload: dict[
     装的那一下失败 / 被取消,就**不重启**(正在装的时候重启会把装了一半的包留在那台机器上);等太久也不重启,
     任务还在跑,回任务中心看它。
     """
+    # 确认卡可能隔天才被批准:卡的 validate 只代表开卡那一刻。
+    # 执行前必须重查注册表,否则已被 Flagged/Banned 的包也会装上机器。
+    approved = dict(payload)
+    propose_node_install(db, user, workspace_id, approved)
+    pack, version = str(approved["pack"]), str(approved["version"])
+    if pack != str(payload["pack"]) or version != str(payload.get("version") or ""):
+        raise WorkbenchAgentError(
+            "workbenchErr_packVersion",
+            pack=pack,
+            version=f"{payload.get('version') or ''} → {version}",
+        )
+
     from app.domain import workflow_library
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.runtime import PluginRuntimeError
     from app.domain.workflow_library import WorkflowLibraryError
 
-    instance = connection(db, user, str(payload.get("instance_id") or ""))
-    pack, version = str(payload["pack"]), str(payload.get("version") or "")
+    instance = connection(db, user, str(approved.get("instance_id") or ""))
     job = workflow_library.start_node_install(db, user, instance, workspace_id=workspace_id, packs=[pack],
                                               versions={pack: version} if version else None)
     job_id = job.id

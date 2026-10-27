@@ -148,6 +148,8 @@ def test_输出停不下来的插件在超过上限时就停_不等到超时(tmp
     with pytest.raises(PluginRuntimeError) as caught:
         execute_tool(*plugin, "x", {}, timeout=20)
     assert caught.value.key == "pluginErr_outputTooLarge"
+    assert caught.value.params["size"] != "9.4 MB", "不能把 read_limit(预算 + 8MB)当成实际读取量"
+    assert float(caught.value.params["size"].split()[0]) < 9.0
     assert time.monotonic() - started < 10, "读到上限了还在等它"
 
 

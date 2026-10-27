@@ -301,9 +301,13 @@ def execute_tool(
     except subprocess.TimeoutExpired as exc:
         raise PluginTimeout("pluginErr_timeout", seconds=f"{timeout:g}") from exc
     except ProcessOutputLimitExceeded as exc:
+        actual = exc.output_bytes
+        # 超限分支只能报实际读到的字节;此前把 read_limit(预算 + 8MB)当成实际大小,
+        # 8.1MB 的输出会被误报成 16MB。
+        size = _size_text(actual) if actual is not None else f">{_size_text(read_limit)}"
         raise PluginRuntimeError(
             "pluginErr_outputTooLarge", tool=_call_text(tool_name, input_payload),
-            limit=_size_text(budget), size=_size_text(read_limit),
+            limit=_size_text(budget), size=size,
         ) from exc
     finally:
         for switch in attached:
