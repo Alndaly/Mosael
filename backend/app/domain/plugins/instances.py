@@ -36,6 +36,24 @@ def get(db: Session, instance_id: str) -> PluginInstance:
     return instance
 
 
+def owned(db: Session, instance_id: str, user_id: str) -> PluginInstance | None:
+    """**这个人自己接的**那个;不是他的就当不存在。
+
+    接入归人(见 db.models.PluginInstance)。"别人接的"和"不存在"对他是同一件事 —— 分开说等于
+    告诉他这个 id 有效。归属判定只此一处:每个入口各写一遍的话,漏掉任何一处都不会报错,
+    只会让那条路径能读到别人的第三方凭据。
+    """
+    instance = db.get(PluginInstance, instance_id)
+    if instance is None or instance.owner_user_id != user_id:
+        return None
+    return instance
+
+
+def owned_ids(db: Session, user_id: str) -> list[str]:
+    """这个人自己接的那些实例的 id。"""
+    return list(db.scalars(select(PluginInstance.id).where(PluginInstance.owner_user_id == user_id)))
+
+
 def manifest_for(db: Session, instance: PluginInstance) -> Manifest:
     package = db.get(PluginPackage, instance.package_id)
     if package is None:

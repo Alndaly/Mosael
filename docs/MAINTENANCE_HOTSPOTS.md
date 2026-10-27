@@ -540,6 +540,10 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 - **路由不是第二个领域层。** 画板的四个动作(生成/写字/念/截)整个写在路由里,连提示词拼装和
   素材摊平都在。现在在 `domain/boards/actions.py`,路由只认人、翻错误。后来(ADR 0021)四个动作
   又收成一张产出者注册表(`domain/boards/producers.py`),四条路由合成一条 `/run`。
+  2026-10-28 同一形状又在两处找到并收掉:`routes/plugins.py` 的包列表 / 实例视图 / 市场条目组装
+  进了 `domain/plugin_page.py`(和 `dashboard` 一样是一页的读模型,放进 `plugins/` 会和能力表成包级环),
+  接入归属判定进了 `plugins/instances.owned`,调用记录进了 `plugins/invocations`;`routes/auth.py` 的
+  认人、改资料、头像、改密码、部署管理员名单进了 `domain/accounts.py`。
 - **私有名字不跨包借用**(`tests/test_private_names_stay_in_their_package.py`):被借的那一刻它就是
   一个没人承认的接口 —— 而四处里有三处借的其实是**放错了地方**的规则。
 - **抄第二份就会漏掉修复。** 下载进度/就绪探测曾有三份实现,其中"探测代次"那个坑只修在一份上。

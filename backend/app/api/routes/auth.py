@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import time
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from app.api.responses import file_response
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
@@ -22,17 +20,12 @@ from app.api.schemas import (
     UserOut,
     UserProfileUpdate,
 )
-from app.core.config import settings
-from app.domain.permissions import ensure_deployment_admin
 from app.core.security import (
     find_session,
-    hash_password,
     mint_login_session,
-    revoke_other_logins,
-    verify_password,
 )
-from app.domain import deployment, members
-from app.db.models import OAuthIdentity, User
+from app.domain import accounts, deployment, members
+from app.db.models import User
 
 router = APIRouter(tags=["auth"])
 
@@ -44,10 +37,7 @@ def current_user_out(db: Session, user: User) -> UserOut:
     model_validate 的话,漏掉的那个出口就会把一个 Google 账号报成密码账号(第三方登录取票
     此前就只回三个字段,头像要到下次启动才出现)。
     """
-    providers = db.scalars(
-        select(OAuthIdentity.provider).where(OAuthIdentity.user_id == user.id).order_by(OAuthIdentity.created_at)
-    ).all()
-    return UserOut.model_validate(user).model_copy(update={"oauth_providers": list(providers)})
+    return UserOut.model_validate(user).model_copy(update={"oauth_providers": accounts.login_providers(db, user)})
 
 
 @router.post("/auth/register", response_model=AuthOut)
@@ -97,17 +87,7 @@ def list_deployment_users(db: DbSession, user: CurrentUser) -> list[dict]:
 
     只有部署管理员能看:成员名单在工作区里各自可见,而**跨工作区的全量名单**是部署级信息。
     """
-    ensure_deployment_admin(db, user)
-    rows = db.scalars(select(User).order_by(User.created_at.asc()))
-    return [
-        {
-            "id": row.id,
-            "username": row.username,
-            "display_name": row.display_name,
-            "is_deployment_admin": row.is_deployment_admin,
-        }
-        for row in rows
-    ]
+    return accounts.deployment_users(db, user)
 
 
 @router.post("/auth/users/{user_id}/deployment-admin")
@@ -117,27 +97,20 @@ def set_deployment_admin(user_id: str, body: DeploymentAdminUpdate, db: DbSessio
     最后一个部署管理员不能被收回:没有他,实例配置改不了、注册邀请码也发不出来,这个部署就成了
     一块砖头,而且**没有任何应用内的路可以救回来**。
     """
-    ensure_deployment_admin(db, user)
-    target = db.get(User, user_id)
+    try:
+        target = accounts.set_deployment_admin(db, user, user_id, granted=body.granted)
+    except accounts.LastDeploymentAdmin as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if target is None:
         raise HTTPException(status_code=404, detail="Not found")
-    if not body.granted:
-        others = db.scalar(
-            select(func.count())
-            .select_from(User)
-            .where(User.is_deployment_admin.is_(True), User.id != target.id)
-        )
-        if not others:
-            raise HTTPException(status_code=409, detail=tr("routeErr_lastDeploymentAdmin"))
-    target.is_deployment_admin = bool(body.granted)
     db.commit()
     return {"user_id": target.id, "is_deployment_admin": target.is_deployment_admin}
 
 
 @router.post("/auth/login", response_model=AuthOut)
 def login(body: AuthCredentials, db: DbSession) -> AuthOut:
-    user = db.scalar(select(User).where(User.username == members.normalize_username(body.username)))
-    if user is None or not verify_password(body.password, user.password_hash):
+    user = accounts.authenticate(db, body.username, body.password)
+    if user is None:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     token = _create_session(db, user)
     db.commit()
@@ -151,21 +124,15 @@ def me(db: DbSession, user: CurrentUser) -> UserOut:
 
 @router.patch("/auth/me", response_model=UserOut)
 def update_me(body: UserProfileUpdate, db: DbSession, user: CurrentUser) -> UserOut:
-    username = members.normalize_username(body.username)
-    if username != user.username:
-        existing = db.scalar(select(User).where(User.username == username, User.id != user.id))
-        if existing is not None:
-            raise HTTPException(status_code=409, detail=tr("memberErr_usernameTaken"))
-    user.username = username
-    user.display_name = body.display_name.strip() or username
-    user.signature = body.signature.strip()
+    try:
+        accounts.update_profile(
+            db, user, username=body.username, display_name=body.display_name, signature=body.signature
+        )
+    except members.UsernameTaken as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.commit()
     db.refresh(user)
     return current_user_out(db, user)
-
-
-_AVATAR_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
-_AVATAR_MAX_BYTES = 4 * 1024 * 1024
 
 
 @router.post("/auth/me/avatar", response_model=UserOut)
@@ -173,25 +140,13 @@ def upload_avatar(db: DbSession, user: CurrentUser, file: UploadFile = File(...)
     """上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。
 
     同步端点(跑在线程池里):写盘和数据库都是阻塞调用,放在 async 里会卡住事件循环。"""
-    ext = _AVATAR_TYPES.get((file.content_type or "").lower())
-    if ext is None:
-        raise HTTPException(status_code=415, detail=tr("routeErr_avatarType"))
     #: 多读一个字节就知道超没超,不必整份读进来。
-    data = file.file.read(_AVATAR_MAX_BYTES + 1)
-    if not data:
-        raise HTTPException(status_code=422, detail=tr("routeErr_emptyFile"))
-    if len(data) > _AVATAR_MAX_BYTES:
-        raise HTTPException(status_code=413, detail=tr("routeErr_avatarTooLarge"))
-    avatars_dir = settings.data_dir / "avatars"
-    avatars_dir.mkdir(parents=True, exist_ok=True)
-    key = f"avatars/{user.id}-{int(time.time())}.{ext}"
-    (settings.data_dir / key).write_bytes(data)
-    previous = user.avatar_key
-    user.avatar_key = key
+    data = file.file.read(accounts.AVATAR_MAX_BYTES + 1)
+    try:
+        accounts.set_avatar(db, user, content_type=file.content_type or "", data=data)
+    except accounts.AvatarRejected as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     db.commit()
-    # 旧文件在提交成功后清理;失败也只是留一个孤儿文件,不影响正确性。
-    if previous and previous.startswith("avatars/"):
-        (settings.data_dir / previous).unlink(missing_ok=True)
     db.refresh(user)
     return current_user_out(db, user)
 
@@ -200,25 +155,20 @@ def upload_avatar(db: DbSession, user: CurrentUser, file: UploadFile = File(...)
 def get_user_avatar(user_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     """任何已登录用户可取(团队页/成员列表要显示彼此头像)。<img> 带不了请求头,
     走与素材文件同款的 ?token= 查询参数鉴权(CurrentUser 依赖两者都认)。"""
-    target = db.get(User, user_id)
-    key = (target.avatar_key if target else "") or ""
-    # key 只能落在 avatars/ 下,防目录穿越(库里即便被改坏也不放行)。
-    if not key.startswith("avatars/") or "/../" in key or key.endswith(".."):
+    found = accounts.avatar_file(db, user_id)
+    if found is None:
         raise HTTPException(status_code=404, detail="No avatar")
-    path = settings.data_dir / key
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="No avatar")
-    media_type = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}.get(path.suffix.lstrip("."), "application/octet-stream")
+    path, media_type = found
     return file_response(db, path, media_type=media_type, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.post("/auth/me/password")
 def update_password(body: PasswordUpdate, db: DbSession, user: CurrentUser, token: PresentedToken) -> dict:
     """改密码,并把这个人**别处的登录**都踢下线(当前这一份留着,改完不用重新登录)。"""
-    if not verify_password(body.current_password, user.password_hash):
-        raise HTTPException(status_code=401, detail=tr("routeErr_currentPasswordWrong"))
-    user.password_hash = hash_password(body.new_password)
-    signed_out = revoke_other_logins(db, user.id, token)
+    try:
+        signed_out = accounts.change_password(db, user, current=body.current_password, new=body.new_password, keep=token)
+    except accounts.WrongPassword as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     db.commit()
     return {"ok": True, "signed_out": signed_out}
 
@@ -244,9 +194,8 @@ def bootstrap(db: DbSession) -> BootstrapOut:
 
     没人 → 界面进「创建管理员账户」:那时没有任何人可以发邀请,而没有部署管理员的部署是块砖头。
     """
-    count = db.scalar(select(func.count()).select_from(User)) or 0
     return BootstrapOut(
-        has_users=count > 0, open_registration=deployment.open_registration(db), web_url=deployment.web_url(db)
+        has_users=accounts.has_users(db), open_registration=deployment.open_registration(db), web_url=deployment.web_url(db)
     )
 
 

@@ -25,7 +25,7 @@ FROZEN = {
     "deps/auth.py": 4,
     "routes/agent_tools.py": 1,
     "routes/assets.py": 12,
-    "routes/auth.py": 4,
+    "routes/auth.py": 3,
     "routes/browser_worker.py": 1,
     "routes/confirmations.py": 1,
     "routes/documents.py": 1,

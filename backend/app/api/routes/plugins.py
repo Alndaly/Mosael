@@ -6,15 +6,13 @@
 
 from __future__ import annotations
 
-import re
 from typing import Literal
 
 import anyio.from_thread
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import get_current_locale, render_message, tr, translate_fields
+from app.core.i18n import get_current_locale, tr, translate_fields
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     CapabilityTermOut,
@@ -48,9 +46,7 @@ from app.api.schemas import (
     PluginInstanceUpdate,
     PluginInvocationOut,
     PluginInvokeRequest,
-    PluginMarketEntry,
     PluginMarketOut,
-    PluginMarketTool,
     PluginPackageOut,
     PluginPermissionGrantOut,
     PluginPermissionGrantUpdate,
@@ -84,9 +80,8 @@ from app.api.schemas import (
     WorkflowTrashRequest,
 )
 from app.core.config import settings
-from app.domain.effects import EFFECTS
 from app.domain.permissions import ensure_deployment_admin
-from app.db.models import Job, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage, User
+from app.db.models import Job, PluginInstance, PluginInvocation, PluginPackage, User
 from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOut
 from app.ai.runtime import nsfw_models
 from app.ai.runtime.errors import RuntimeSetupError
@@ -98,20 +93,19 @@ from app.domain import workflow_library
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
-from app.domain.plugins import bundled
 from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
-from app.domain.plugins import package_sources
+from app.domain import plugin_page
+from app.domain.plugins import invocations
 from app.domain.plugins import install as installer
 from app.domain.plugins import oauth as plugin_oauth
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
-from app.domain.plugins import shared_tables
 from app.domain.plugins import tools as tools_domain
 from app.domain.plugins import updates
 from app.domain.plugins import use_cases as plugin_use_cases
-from app.domain.plugins.manifest import GENERATION, manifest_of, text_of, web_url
+from app.domain.plugins.manifest import GENERATION, text_of, web_url
 
 router = APIRouter(tags=["plugins"])
 
@@ -129,7 +123,7 @@ def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
         installer.raise_problems(installer.sync(db, settings.plugins_dir, owner_user_id=user.id))
     except PluginDomainError as exc:
         raise _fail(exc) from exc
-    return _packages(db, user)
+    return plugin_page.packages(db, user)
 
 
 @router.get("/plugins/capabilities", response_model=list[CapabilityTermOut])
@@ -149,56 +143,7 @@ def browse_market(db: DbSession, user: CurrentUser) -> PluginMarketOut:
     跟着应用发,远端的版本号不该在这里长出一个「更新」。
     """
     ensure_deployment_admin(db, user)
-    installed = {row.id: row for row in db.scalars(select(PluginPackage))}
-    shipped = [one for one in bundled.plugins() if one.id in installed]
-    index_error = ""
-    try:
-        remote = market.fetch_index(market.index_url(db))
-    except PluginDomainError as exc:
-        remote, index_error = [], str(exc)
-    local_ids = {one.id for one in shipped}
-    entries = [market.bundled_entry(manifest_of(installed[one.id])) for one in shipped] + [
-        entry for entry in remote if entry["id"] not in local_ids
-    ]
-    holds = updates.holds(db)
-    return PluginMarketOut(
-        plugins=[_market_entry(entry, installed, holds) for entry in entries],
-        index_error=index_error,
-    )
-
-
-def _market_entry(entry: dict, installed: dict[str, PluginPackage], holds: dict[str, PluginMarketHold]) -> PluginMarketEntry:
-    package = installed.get(entry["id"])
-    update = updates.state_of(entry, package, holds.get(entry["id"]))
-    return PluginMarketEntry(
-        **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download", "sha256")},
-        author_url=web_url(entry.get("author_url")),
-        #: docs 在索引里也可以按语言分,和名字、简介一样在这儿定语言。
-        docs=web_url(text_of(entry.get("docs"))),
-        #: 索引里的名字和简介照搬清单,而清单里它们可以是按语言分的对象 —— 在这儿定语言。
-        name=text_of(entry.get("name")),
-        summary=text_of(entry.get("summary")),
-        description=text_of(entry.get("description")),
-        permissions=[p for p in (entry.get("permissions") or []) if isinstance(p, str)],
-        runtime=str(entry.get("runtime") or "process"),
-        provides=[p for p in (entry.get("provides") or []) if isinstance(p, str)],
-        tools=[
-            PluginMarketTool(
-                name=str(tool["name"]),
-                label=text_of(tool.get("label")),
-                description=text_of(tool.get("description")),
-                #: 索引里写了什么就是什么;不认识的值当没写(界面不标),不在这里替它猜。
-                effects=str(tool.get("effects")) if tool.get("effects") in EFFECTS else "",
-            )
-            for tool in (entry.get("tools") or [])
-            if isinstance(tool, dict) and tool.get("name")
-        ],
-        installed=package is not None,
-        installed_version=package.version if package else "",
-        update_available=update.available,
-        update_unreleased=update.unreleased,
-        bundled=entry.get("bundled") is True,
-    )
+    return PluginMarketOut.model_validate(plugin_page.market_page(db))
 
 
 @router.post("/plugins/install/preview", response_model=PluginInstallPreview)
@@ -262,7 +207,7 @@ def install_from_url(body: PluginInstallRequest, db: DbSession, user: CurrentUse
         db.commit()
     except PluginDomainError as exc:
         raise _fail(exc) from exc
-    return _packages(db, user)
+    return plugin_page.packages(db, user)
 
 
 @router.get("/plugins/dir")
@@ -277,173 +222,18 @@ def plugins_directory(user: CurrentUser) -> dict[str, str]:
 
 @router.get("/plugins", response_model=list[PluginPackageOut])
 def list_packages(db: DbSession, user: CurrentUser) -> list[dict]:
-    return _packages(db, user)
+    return plugin_page.packages(db, user)
 
 
 def my_instance(db: DbSession, instance_id: str, user: CurrentUser) -> PluginInstance:
-    """**我自己接的**那个,不是就 404。
+    """**我自己接的**那个,不是就 404 —— 回 403 等于告诉他这个 id 有效。
 
-    接入归人(见 db.models.PluginInstance)。"别人接的"和"不存在"对他是同一件事 —— 回 403 等于
-    告诉他这个 id 有效。归属判定只此一处:每个路由各写一遍的话,漏掉任何一处都不会报错,
-    只会让那条路径能读到别人的第三方凭据。
+    归属判定本身在 `domain/plugins/instances.owned`,这里只把「不是你的」翻成 HTTP。
     """
-    instance = db.get(PluginInstance, instance_id)
-    if instance is None or instance.owner_user_id != user.id:
+    instance = inst.owned(db, instance_id, user.id)
+    if instance is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_pluginConnectionNotFound"))
     return instance
-
-
-def _my_instance_ids(db: DbSession, user: CurrentUser) -> list[str]:
-    return list(db.scalars(select(PluginInstance.id).where(PluginInstance.owner_user_id == user.id)))
-
-
-def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
-    """装了哪些包 + **我自己**接的那些实例。
-
-    包是这台机器的事实,人人看得到(否则他不知道有什么可接);实例是他自己的接入,别人的一个
-    都不该出现 —— 此前这里不做过滤,新账号一进插件页就看到管理员接好的一排。
-    """
-    out: list[dict] = []
-    shipped = {one.id for one in bundled.plugins()}
-    for package in db.scalars(select(PluginPackage).order_by(PluginPackage.name)):
-        manifest = manifest_of(package)
-        out.append(
-            {
-                "id": package.id,
-                #: 名字从清单现取,不取库里那一列 —— 那一列是装的时候定的,装的人是什么语言
-                #: 就一直是什么语言;清单里若写了多语言,这里才跟得上看的人。
-                "name": manifest.name,
-                "version": package.version,
-                "summary": manifest.summary,
-                "description": manifest.description,
-                #: 和市场条目同一个形状、同一个算法(registry.market_tools):「关于」里的工具和市场里的一致。
-                "tools": market.market_tools(manifest),
-                "kind": manifest.runtime.kind,
-                "multiple": manifest.multiple,
-                "permissions": manifest.permissions,
-                "homepage": manifest.homepage,
-                "author_name": manifest.author.name,
-                "author_url": manifest.author.url,
-                "docs": manifest.docs,
-                "config_fields": [_field(f) for f in manifest.config],
-                "summary_field": _summary_field(manifest),
-                "credential_fields": [_field(f) for f in manifest.credentials],
-                #: 声明了 OAuth 就给一个「去授权」的入口,不必手抄令牌(见 domain/plugins/oauth)。
-                #: 声明不全的当没声明 —— 半个声明会长出一个点了必然失败的按钮。
-                "oauth": (
-                    {"fills": [one.key for one in plugin_oauth.fills(manifest.oauth, manifest.credentials)]}
-                    if manifest.oauth is not None
-                    else None
-                ),
-                "provides": manifest.provides,
-                "generation_noun": manifest.generation_noun,
-                #: 能起哪几种本机服务(ADR 0041):连接页上据此摆「本机服务」那张卡。
-                "services": [{"key": one.key, "title": one.title} for one in manifest.services],
-                "bundled": package.id in shipped,
-                "instances": [
-                    _instance(db, i)
-                    for i in pkg.instances_of(db, package.id)
-                    if i.owner_user_id == user.id
-                ],
-            }
-        )
-    return out
-
-
-_TEMPLATE_KEY = re.compile(r"\{([A-Za-z0-9_]+)(?::label)?\}")
-
-
-def _summary_field(manifest) -> str:
-    """插件页上**收起的连接**那一行摆哪一项配置(「关键地址」):名字模板里引用的第一个配置项(ComfyUI 的
-    `{server_url}`、TikHub 的 `{platform:label}`);没写模板就是第一个必填的文本配置项;都没有就是空串(不摆)。"""
-    config = {field.key: field for field in manifest.config}
-    for key in _TEMPLATE_KEY.findall(manifest.name_template or ""):
-        if key in config:
-            return key
-    return next((field.key for field in manifest.config if field.required and field.type == "string"), "")
-
-
-def _field(spec) -> dict:
-    return {
-        "key": spec.key,
-        "label": spec.label,
-        "type": spec.type,
-        "help": spec.help,
-        "required": spec.required,
-        "secret": spec.secret,
-        "options": spec.options,
-        "default": spec.default,
-        "multiline": spec.multiline,
-        "language": spec.language,
-    }
-
-
-def _instance(db: DbSession, instance) -> dict:
-    chosen = inst.exposed_tools(db, instance.id)
-    tools = tools_domain.all_tools(db, instance)
-    return {
-        "id": instance.id,
-        "package_id": instance.package_id,
-        "name": instance.name,
-        "enabled": instance.enabled,
-        "config": instance.config or {},
-        "blocked_reason": inst.blocked_reason(db, instance),
-        "pending_permissions": inst.pending_permissions(db, instance),
-        "permissions_added": inst.permissions_added(db, instance),
-        "authorization": inst.authorization_state(db, instance),
-        # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。认领调用类能力的
-        # (MinerU 的解析)是普通工具,在这张表里,带着能力和「也用在」(ADR 0033)。
-        #: `input_schema` 里重复的大表按内容收一次(见 domain/plugins/shared_tables):界面读的是 `form`,
-        #: 这份原始的声明一个字段都不读它 —— 收完这一份 2,929,540 字节的工具清单少 23 万字节,而展平回来
-        #: 逐字节相同。`form` 原样不动(界面按它的 `options` 直接画下拉)。
-        "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool),
-                   "used_by": _used_by(tool["provides"]),
-                   "input_schema": shared_tables.share(tool["input_schema"] or {})}
-                  for tool in tools if not tool["internal"]],
-        "capability_status": {
-            capability: _capability_status(status)
-            for capability, status in (instance.capability_status or {}).items()
-            if isinstance(status, dict)
-        },
-        "network": {"mode": instance.network_mode, "proxy_url": instance.proxy_url},
-        "package_sources": package_sources.describe(inst.manifest_for(db, instance).package_sources,
-                                                    instance.package_sources),
-    }
-
-
-def _used_by(provides: list[str]) -> list[dict]:
-    from app.domain import capabilities
-
-    return [{"capability": capability, **use} for capability in provides for use in capabilities.used_by(capability)]
-
-
-def _tool_form(tool: dict) -> dict:
-    """插件页「试一下」那张表单的字段 —— **和这个工具在工作流里当节点时是同一份声明**(名字、素材选择器、
-    下拉、数字框、高级那一档),前端用同一个表单组件渲染。选连接那一格不要:试跑就是在这个连接上。"""
-    from app.domain.plugins.nodes import node_meta
-    from app.domain.workflows.node_catalog import translated_spec, with_data_type
-
-    locale = get_current_locale()
-    config = node_meta(tool).get("config") or {}
-    return {
-        key: translated_spec(key, with_data_type(key, spec), locale)
-        for key, spec in config.items()
-        if key != "instance_id" and isinstance(spec, dict)
-    }
-
-
-def _capability_status(status: dict) -> dict:
-    """落库的那一份(失败原因存的是文案 key + 参数,见 jobs.blame)→ 按看的人的语言说出来。"""
-    key = str(status.get("error_key") or "")
-    error = render_message(key, get_current_locale(), status.get("error_params") or {}) if key else str(
-        status.get("error") or ""
-    )
-    return {
-        "models": status.get("models"),
-        "tools": status.get("tools"),
-        "refreshed_at": status.get("refreshed_at"),
-        "error": error,
-    }
 
 
 # --- 实例 ---------------------------------------------------------------
@@ -475,7 +265,7 @@ def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, 
     except PluginDomainError as exc:  # 本机服务的错(LocalServiceError)也是一种,按它自己的状态码
         db.rollback()
         raise _fail(exc, exc.status if isinstance(exc, LocalServiceError) else 422) from exc
-    return _instance(db, instance)
+    return plugin_page.instance_view(db, instance)
 
 
 @router.patch("/plugins/instances/{instance_id}", response_model=PluginInstanceOut)
@@ -499,7 +289,7 @@ def update_instance(instance_id: str, body: PluginInstanceUpdate, db: Tx, user: 
         )
     except PluginDomainError as exc:
         raise _fail(exc) from exc
-    return _instance(db, instance)
+    return plugin_page.instance_view(db, instance)
 
 
 @router.delete("/plugins/instances/{instance_id}", status_code=204)
@@ -533,7 +323,7 @@ def refresh_instance_tools(instance_id: str, db: DbSession, user: CurrentUser) -
         instance = tools_domain.refresh_tools(db, my_instance(db, instance_id, user))
     except PluginDomainError as exc:
         raise _fail(exc) from exc
-    return _instance(db, instance)
+    return plugin_page.instance_view(db, instance)
 
 
 @router.get("/plugins/instances/{instance_id}/models", response_model=list[PluginProvidedModelOut])
@@ -1021,7 +811,7 @@ def update_capabilities(
         inst.set_exposed(db, instance, body.tools)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
-    return _instance(db, instance)
+    return plugin_page.instance_view(db, instance)
 
 
 @router.get("/plugins/instances/{instance_id}/permissions", response_model=list[PluginPermissionGrantOut])
@@ -1104,19 +894,17 @@ def list_invocations(
     **一定有上限。** 每条都带着完整输出,一条就可能上 MB;插件页只摆最近十条,却曾经一次拿回一个连接的全部
     上千条(七百多 MB),渲染进程解不动,界面反复崩溃(见 tools.invoke_host 的 `record`)。
     """
-    stmt = select(PluginInvocation).where(PluginInvocation.instance_id.in_(_my_instance_ids(db, user)))
-    if instance_id:
-        stmt = stmt.where(PluginInvocation.instance_id == instance_id)
-    return list(db.scalars(stmt.order_by(PluginInvocation.created_at.desc()).limit(limit)))
+    return invocations.recent(db, user.id, instance_id=instance_id, limit=limit)
 
 
 @router.delete("/plugins/invocations/{invocation_id}", status_code=204)
 def delete_invocation(invocation_id: str, db: DbSession, user: CurrentUser) -> None:
-    obj = db.get(PluginInvocation, invocation_id)
-    if obj is not None:
-        my_instance(db, obj.instance_id, user)  # 别人的记录删不得,也不该知道它存在
-        db.delete(obj)
-        db.commit()
+    try:
+        invocations.delete(db, user.id, invocation_id)
+    except invocations.InvocationNotYours as exc:
+        #: 别人的记录删不得,也不该知道它存在 —— 和「接入不是你的」同一句 404。
+        raise HTTPException(status_code=404, detail=tr("routeErr_pluginConnectionNotFound")) from exc
+    db.commit()
 
 
 @router.delete("/plugins/invocations", status_code=204)
@@ -1124,11 +912,7 @@ def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None 
     """清空**我自己**的调用记录;带 instance_id 只清该接入的。"""
     if instance_id:
         my_instance(db, instance_id, user)
-    stmt = select(PluginInvocation).where(PluginInvocation.instance_id.in_(_my_instance_ids(db, user)))
-    if instance_id:
-        stmt = stmt.where(PluginInvocation.instance_id == instance_id)
-    for obj in db.scalars(stmt):
-        db.delete(obj)
+    invocations.clear(db, user.id, instance_id=instance_id)
     db.commit()
 
 
