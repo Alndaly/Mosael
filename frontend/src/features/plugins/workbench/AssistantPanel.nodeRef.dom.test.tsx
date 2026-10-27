@@ -17,7 +17,7 @@ describe("ComfyUI 助手回复里的节点引用", () => {
       <PreferencesProvider>
         <TooltipProvider delayDuration={0}>
           <MarkdownRefsContext.Provider value={NODE_REFS}>
-            <AgentMarkdown>{"看 #12 这个节点"}</AgentMarkdown>
+            <AgentMarkdown>{"看 #12 这个节点，网站是 [civitai.com](https://civitai.com/models/1)"}</AgentMarkdown>
           </MarkdownRefsContext.Provider>
         </TooltipProvider>
       </PreferencesProvider>
@@ -33,5 +33,11 @@ describe("ComfyUI 助手回复里的节点引用", () => {
     const tooltip = await screen.findByRole("tooltip");
     expect(tooltip.textContent).toContain("#12");
     expect(tooltip.textContent).toContain("定位");
+
+    const website = screen.getByRole("link", { name: "civitai.com" });
+    fireEvent.pointerEnter(website);
+    fireEvent.pointerMove(website);
+    const websiteTooltip = await screen.findByRole("tooltip");
+    expect(websiteTooltip.textContent).toContain("https://civitai.com/models/1");
   });
 });

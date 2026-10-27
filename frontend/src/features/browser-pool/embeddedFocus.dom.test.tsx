@@ -134,7 +134,7 @@ describe("点进 Mosael 的壳,键盘先交回渲染层", () => {
     expect(focusHost).toHaveBeenCalledTimes(1);
     hide();
     fireEvent.pointerDown(byId("address"));
-    expect(focusHost).toHaveBeenCalledTimes(1);
+    expect(focusHost, "视图状态漏播也不影响交回宿主，重复聚焦是空操作").toHaveBeenCalledTimes(2);
   });
 });
 

@@ -1,7 +1,7 @@
 import React from "react";
 import { BookOpen, Globe } from "lucide-react";
 import { canonicalSourceUrl, type Citation } from "./links";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Hint, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 
 export const CitationContext = React.createContext<Map<string, Citation>>(new Map());
@@ -11,7 +11,12 @@ export function CitationLink({ href, children }: React.ComponentProps<"a"> & {no
   const source = normalized ? sources.get(normalized) : undefined;
   if (!source) {
     const safe = normalized || (href?.startsWith("#/") ? href : undefined);
-    return safe ? <a href={safe} target={safe.startsWith("#") ? undefined : "_blank"} rel="noopener noreferrer" className="text-primary underline underline-offset-2 break-words">{children}</a> : <span>{children}</span>;
+    //: 没有结构化来源的普通链接也要能看见完整地址:气泡里只写了域名/短标题,悬停才回答"到底去哪"。
+    return safe ? (
+      <Hint label={safe}>
+        <a href={safe} target={safe.startsWith("#") ? undefined : "_blank"} rel="noopener noreferrer" className="text-primary underline underline-offset-2 break-words">{children}</a>
+      </Hint>
+    ) : <span>{children}</span>;
   }
   const Icon = source.kind === "note" ? BookOpen : Globe;
   // 悬停卡片(标题 + 摘录 + 网址)是富内容,不走 Hint。胶囊里截断的名字在卡片里都看得全(网页的域名在网址里、

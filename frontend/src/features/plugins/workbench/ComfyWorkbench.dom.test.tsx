@@ -1484,6 +1484,9 @@ describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () =>
       expect(found).not.toBeNull();
       return found!;
     });
+    fireEvent.pointerEnter(inner);
+    fireEvent.pointerMove(inner);
+    expect((await screen.findByRole("tooltip")).textContent).toContain("#459:451");
     fireEvent.click(inner);
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "locate", node: "459:451", subgraph: null }));
     expect(within(shownPanel()).queryByRole("status")).toBeNull();
