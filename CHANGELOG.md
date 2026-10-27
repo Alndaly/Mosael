@@ -26,6 +26,10 @@ commit list and downloadable artifacts.
 - 差分更新冒烟与 ratchet 文档检查进入 CI；R2 先完整校验不可变版本目录，再更新 `latest`。
 - platform-smoke 保留真实失败结果和退出码，上传实际 JSONL 报告而不是契约占位文件。
 
+### 素材与传输
+
+- 素材上传收到 401 时与其他本机请求一致触发重新登录，不再只显示普通上传失败。
+
 ## [2.2.4] - 2026-10-26
 
 ### ComfyUI 智能体

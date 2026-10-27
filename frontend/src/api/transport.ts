@@ -247,6 +247,12 @@ export function apiUpload<T>(
       if (event.lengthComputable && event.total > 0) onProgress?.(Math.min(1, event.loaded / event.total));
     };
     xhr.onload = () => {
+      if (xhr.status === 401 && !path.startsWith("/api/auth/")) {
+        console.warn(`[auth] 401 from POST ${path} — local session dropped, back to sign-in`);
+        onUnauthorized?.();
+        reject(new Error("Not authenticated"));
+        return;
+      }
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(failure(path, "POST", xhr.status, xhr.statusText, xhr.responseText ?? ""));
         return;

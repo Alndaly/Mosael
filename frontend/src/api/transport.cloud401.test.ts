@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { apiAllowingUnauthorized, setAuthToken, setUnauthorizedHandler } from "@/api/transport";
+import { apiAllowingUnauthorized, apiUpload, setAuthToken, setUnauthorizedHandler } from "@/api/transport";
 
 /**
  * `apiAllowingUnauthorized` 的 401 **不能**把人从本机账号踢出去。
@@ -36,5 +36,23 @@ describe("云端 401 不等于本机退出", () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
     //: 令牌还在 —— 回来之后还是同一个本机账号。
     expect(window.localStorage.getItem("mosael.auth.token")).toBe("local-token");
+  });
+
+  it("apiUpload 的 401 走本地登出，不停在普通上传错误", async () => {
+    class UnauthorizedUpload {
+      upload = {};
+      status = 401;
+      statusText = "Unauthorized";
+      responseText = JSON.stringify({ detail: "expired" });
+      onload: (() => void) | null = null;
+      open() {}
+      setRequestHeader() {}
+      getResponseHeader() { return null; }
+      send() { this.onload?.(); }
+    }
+    vi.stubGlobal("XMLHttpRequest", UnauthorizedUpload);
+
+    await expect(apiUpload("/api/assets/import", new FormData())).rejects.toThrow("Not authenticated");
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 });
