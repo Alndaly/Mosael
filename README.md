@@ -343,7 +343,7 @@ pnpm dist:mac    # build a macOS DMG
 | Command | Output |
 | --- | --- |
 | `pnpm build:frontend` | `frontend/dist` |
-| `pnpm build:publisher` | `electron/publish.bundle.cjs` |
+| `pnpm build:browser` | `electron/browser.bundle.cjs` |
 | `pnpm build:system` | `electron/system.bundle.cjs` |
 | `pnpm build:preload` | `electron/preload.bundle.cjs` |
 | `pnpm build:sidecar` | `agent-sidecar/dist/sidecar.cjs` |

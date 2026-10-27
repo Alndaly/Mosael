@@ -8,7 +8,7 @@
  * **语言从哪来**:渲染层把界面语言写在 `<html lang>` 上,preload 盯着它、变了就经
  * IPC.send.locale 报给主进程(见 preload.cjs)。报上来之前(启动那一两秒)用系统语言垫着。
  *
- * **每个 bundle 各有一份状态**:publish.bundle.cjs / system.bundle.cjs 由 esbuild 各自把本模块
+ * **每个 bundle 各有一份状态**:browser.bundle.cjs / system.bundle.cjs 由 esbuild 各自把本模块
  * 打进去,和 main.cjs 这份不是同一个实例 —— 所以语言变化由 main.cjs 的 applyLocale 逐个转告
  * (它们各自导出 setLocale)。
  *
@@ -164,8 +164,8 @@ const MESSAGES = {
   },
   publisher_loadFailed: { zh: "发布执行器加载失败:{detail}", en: "The publisher failed to load: {detail}" },
   publisher_missing: {
-    zh: "发布执行器不可用:electron/publish.bundle.cjs 缺失(先跑 pnpm build:publisher)",
-    en: "The publisher is unavailable: electron/publish.bundle.cjs is missing (run pnpm build:publisher first)",
+    zh: "发布执行器不可用:electron/browser.bundle.cjs 缺失(先跑 pnpm build:browser)",
+    en: "The publisher is unavailable: electron/browser.bundle.cjs is missing (run pnpm build:browser first)",
   },
   webauthn_pickAccountTitle: { zh: "选择账号", en: "Choose an account" },
   webauthn_pickAccountMessage: {
@@ -467,7 +467,7 @@ const MESSAGES = {
     zh: "桌面端没有完成这一步,再试一次",
     en: "The desktop app couldn't finish this; try again",
   },
-  // 「切换页面」节点(见 publish/actionPage.ts)。
+  // 「切换页面」节点(见 browser/pool/actionPage.ts)。
   browserErr_pageNeedsTarget: {
     zh: "要切到哪一页:填第几个、标题里的字,或网址里的一段",
     en: "Which page to switch to: give its position, words from its title, or part of its URL",
@@ -487,7 +487,7 @@ const MESSAGES = {
     zh: "这是这个会话里唯一的页面,不能关;要关掉整个浏览器请用「关闭浏览器」",
     en: "This is the session's only page, so it can't be closed; use “Close browser” to close the whole browser",
   },
-  // 「截图」节点(见 publish/actionCapture.ts)。
+  // 「截图」节点(见 browser/pool/actionCapture.ts)。
   browserErr_shotNeedsSelector: {
     zh: "截元素要填 CSS 选择器",
     en: "Capturing an element needs a CSS selector",
@@ -504,7 +504,7 @@ const MESSAGES = {
     zh: "这一页截不了整页长图(开着开发者工具时也会这样),可以先截可见区域",
     en: "This page can't be captured as a full-page image (this also happens while DevTools is open); try the visible area",
   },
-  // 内嵌浏览器里的下载(不弹保存框,直接进素材库;见 publish/downloads.ts)。
+  // 内嵌浏览器里的下载(不弹保存框,直接进素材库;见 browser/pool/downloads.ts)。
   downloadErr_type: {
     zh: "素材库不收这种文件:「{name}」。能存的是视频、音频、图片和常见文档(PDF、Word、PPT、Excel、文本……)",
     en: "The library can't take “{name}”: you can save video, audio, images and common documents (PDF, Word, PowerPoint, Excel, text…)",

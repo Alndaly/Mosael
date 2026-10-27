@@ -182,7 +182,7 @@ def content_limits(platform: str, kind: str) -> dict[str, Any]:
     return {**DEFAULT_CONTENT_LIMITS.get(kind, {}), **declared}
 
 
-#: **我们已经会发**的形状(执行器侧适配器声明的那一份,由 electron/publish/adapters/*.ts 的
+#: **我们已经会发**的形状(执行器侧适配器声明的那一份,由 electron/browser/publish/adapters/*.ts 的
 #: `supports` 交叉核对,见 tests/test_publish_adapter_supports_match_registry.py)。
 #: 它和 `content_kinds`(平台能发什么)是两件事:这里是**进度**,界面只列这里有的,不摆一个点了会
 #: 在真实页面上失败的选项。
@@ -438,7 +438,7 @@ def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -
 
     **还没发完的任务先撤单**:任务行随外键一起没了,而它背后那个任务总线上的 job 不会 —— 此前它一直停在「排队 / 运行中」,
     任务中心和等着它的工作流节点永远等不到结果。撤单让 job 落取消态;正在发的那条,桌面发布器每半秒查一次任务状态,
-    查不到任务就中止(electron/publish/publishWorker.ts 的 checkpoint)。"""
+    查不到任务就中止(electron/browser/publish/publishWorker.ts 的 checkpoint)。"""
     from app.domain.jobs import cancel_job_tree
 
     sharing.ensure_manageable(db, "publish_account", account, actor=actor)

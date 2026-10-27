@@ -45,7 +45,7 @@ describe("开发时主进程过期", () => {
     render(<MainStaleNotice />);
     await act(async () => undefined);
     expect(screen.queryByRole("status")).toBeNull();
-    act(() => push({ files: ["publish.bundle.cjs"], canRestart: true }));
+    act(() => push({ files: ["browser.bundle.cjs"], canRestart: true }));
     const notice = screen.getByRole("status");
     expect(notice.textContent).toContain("mainStaleText");
     fireEvent.click(screen.getByRole("button", { name: "mainStaleRestart" }));

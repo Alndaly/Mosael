@@ -1,0 +1,111 @@
+// 从桌面发布器移植的最小类型集。这里只保留 pageDriver/accountViews/adapters 用到的形状;
+// 任务的持久化/状态源在 Mosael 后端(/api/publish),publishWorker.ts 负责把后端任务映射成
+// 适配器期望的 PublishTask 形状。
+import type { SupportedPlatform } from "./publish/platforms";
+
+export type Platform = SupportedPlatform;
+
+export type TaskStatus =
+  | "pending"
+  | "running"
+  | "waiting_manual"
+  | "login_required"
+  | "permission_required"
+  | "blocked"
+  | "cancelled"
+  | "success"
+  | "failed";
+
+// 内嵌视图从顶部这么多像素处开始铺(上方留给「登录中·返回」条)。必须与 PublishViewBar 的
+// 高度一致,否则中间空档会露出 App 自己的顶栏,看着穿帮。
+// 由 contracts/shared-constants.json 钉住(前端那份是 App.tsx 的 PUBLISH_BAR_HEIGHT)。
+/**
+ * 实时视图通道(IPC `browser:frame`)的线上格式。
+ *
+ * 两个 worker 共用一条通道和同一个前端面板——「自动化浏览器在干什么」对用户是一件事,不该因为
+ * 内部分了 RPA 与发布两个执行器就冒出两个窗口。既然是同一份数据,类型也只能有一份:此前
+ * browserWorker 与 publishWorker 各自声明了一个同形状的 interface,前端的全局声明是两者的并集,
+ * 三处任何一处改了另外两处都不会报错。
+ *
+ * `dataUrl` 可选是本质约束而非偷懒:发布账号视图跑任务时不在窗口里,Chromium 不为未参与合成的
+ * 视图产生像素(见 accountViews 的说明),此时只有 label 与 url。
+ */
+export interface LiveViewFrame {
+  /** RPA 用会话 id,发布用账号 id。 */
+  sessionId: string;
+  /** 画面;取不到时缺省。 */
+  dataUrl?: string;
+  /** 当前步骤,如「B站 · 上传视频」。发布任务会带,RPA 会话不带。 */
+  label?: string;
+  url?: string;
+  /** 已到终态(成功/失败)。面板据此停掉「运行中」的转圈,免得「失败」配着「后台运行中」自相矛盾。 */
+  settled?: boolean;
+}
+
+export const EMBED_HEADER_HEIGHT = 56;
+
+export interface ViewState {
+  visible: boolean;
+  accountId: string | null;
+  accountName: string | null;
+  // 内嵌浏览器工具栏状态(仅可见视图有效):当前地址、前进/后退可用、加载中。
+  url?: string;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+  loading?: boolean;
+  /** 页面标题。顶栏的页面工具把它记进出处(截图、图片、视频、笔记)。 */
+  title?: string;
+  /**
+   * 这个视图的会话分区。顶栏的页面工具据此找回它对应的浏览器池档案 —— 借登录态下载、
+   * 用当前档案跑模板都要档案 id,而视图 id 对池档案、发布账号、RPA 会话各是一种东西。
+   */
+  partition?: string | null;
+  /** 这个会话开着的页面(左侧页面列表),按列表次序。 */
+  pages?: PageSummary[];
+  /** 一个会话最多同时开几个页面。 */
+  pageLimit?: number;
+  /** 最近一次因为开满了而拦下新页面的时刻(毫秒时间戳,0 是没有过);变了就提示一句。 */
+  pageLimitHitAt?: number;
+  /**
+   * 这个视图现在是不是**静着音**(默认就是)。顶栏那枚音量按钮据此显示开/关。
+   *
+   * 声音是**用户显式打开**才有的:前台全屏也一样 —— 否则打开内嵌浏览器,平台的自动播放视频直接响。
+   */
+  muted?: boolean;
+}
+
+/** 页面列表里的一项。 */
+export interface PageSummary {
+  id: string;
+  title: string;
+  url: string;
+  /** 网站图标的地址(http(s));没有是空串。 */
+  favicon: string;
+  current: boolean;
+}
+
+/** 能下发的三种内容形状(ADR 0076);`document` 不是其中一种,它要先转换成这三种之一。 */
+export type ContentKind = "video" | "image-text" | "article";
+
+/** 适配器消费的任务形状:contentKind / mediaPaths(视频就是一份)/ title / tags / platformOptions{…}。 */
+export interface PublishTask {
+  id: string;
+  accountId: string;
+  accountName: string;
+  platform: Platform;
+  /** 这一条发的是什么形状(ADR 0076)。必填:没有"没写就当视频"这一档。 */
+  contentKind: ContentKind;
+  /** 图文 / 文章的全部素材,**按顺序**;视频就是一份。 */
+  mediaPaths: string[];
+  /** 正文 / 长文(图文与文章用);平台没有正文栏就是空串。 */
+  body: string;
+  title: string;
+  tags: string[];
+  platformOptions: Record<string, unknown>;
+  scheduledAt: string | null;
+  status: TaskStatus;
+  errorMessage: string | null;
+  screenshotPath: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

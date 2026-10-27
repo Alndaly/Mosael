@@ -14,9 +14,9 @@
 
 | 层 | 文件(行数) | 职责 | 决策点在哪 |
 |---|---|---|---|
-| 视图层 | `publish/accountViews.ts`(1514) | 会话(=视图)与页面(tab)两级、挂载/让位、面板几何、代理、下载、静音、外链协议 | 一个账号一个会话;前台单槽 |
-| 驱动层 | `publish/pageDriver.ts`(1570) | `evaluate` / 选择器 / 文本匹配 / 可信指针 / 各种等待原语 | 每次交互都降级成什么 |
-| 站点契约 | `publish/adapters/*` + `selectors.ts` + `platforms.ts` | 每个平台的入口、选择器、文案、上限 | 平台长什么样 |
+| 视图层 | `browser/pool/accountViews.ts`(1514) | 会话(=视图)与页面(tab)两级、挂载/让位、面板几何、代理、下载、静音、外链协议 | 一个账号一个会话;前台单槽 |
+| 驱动层 | `browser/page/pageDriver.ts`(1570) | `evaluate` / 选择器 / 文本匹配 / 可信指针 / 各种等待原语 | 每次交互都降级成什么 |
+| 站点契约 | `browser/publish/adapters/*` + `selectors.ts` + `platforms.ts` | 每个平台的入口、选择器、文案、上限 | 平台长什么样 |
 | 执行循环 | `publishWorker.ts`(999) / `browserWorker.ts`(267) | 从后端 claim 动作 → 在视图上执行 → 回报 | 谁在什么时候能动这一页 |
 
 三个**硬约束**贯穿全部设计,记住它们后面几乎所有怪设计都能解释:
@@ -131,11 +131,11 @@ Chrome」)。现在只有**平台级一个维度**,而真实世界的影响因�
 | **P0** | 身份是平台级单值,失败无证据 | ①身份升级成「站点档案」(host → 身份 + 是否覆盖 client hints),②登录失败时自动取证:URL 链、关键 cookie **名**(不记值)、最后 3 次 `checkLogin` 判据结果、一张截图,落进 `browser-trace.log` 一处;**③已发现并修掉的实例**:同一个账号存在两份分区 —— 登录落在 `persist:mosael-<accountId>`,而池档案还指着历史前缀 `persist:openstudio-<accountId>`,于是「卡片说已登录、打开也是登录态,智能体开会话却让他登录」。修法:`_migrate_bound_profiles_use_the_account_partition` 把绑定了账号的档案改回规范分区(幂等) |
 | **P1** | 站点契约散落、改版无感知 | 契约集中成数据(`contracts/platforms/*.json`),加「每日冒烟」:只开创作页,断言关键选择器还在;断了自动开卡或用 Computer Use 兜底 |
 | **P2** | 让位协议手工登记 | 抽成统一的「宿主要在这一块画东西」声明 API,浮层声明区域 → 视图自动让位/挪开,而不是每个浮层各改一处 |
-| ~~**P3**~~ | 登录是一堆 if | ✅ 已做:`publish/loginPhase.cjs`,`opening → waiting → verifying → bound / failed(timeout/dismissed/stopped/error/switched)`,已接进 `openLogin` |
+| ~~**P3**~~ | 登录是一堆 if | ✅ 已做:`browser/publish/loginPhase.cjs`,`opening → waiting → verifying → bound / failed(timeout/dismissed/stopped/error/switched)`,已接进 `openLogin` |
 | ~~**P4**~~ | 会话所有权只有一句报错 | ✅ 已做:池档案被占用时说出「谁占着、开了多久」(`browserErr_profileBusyInUse` + `browserHolder_*` 文案) |
 | **P5** | 坐标系换算散落 | 统一 `pageToDip` / `dipToPage` helper,把 zoomFactor、Retina 缩放、窗口内容原点三件事收在一处 |
 | **P6** | 面板缩放(0.3)下的交互 | 现在靠 `getZoomFactor()` 现算;归入 P5 |
-| ~~**P7**~~ | 观察性差 | ✅ 已做:`publish/trace.cjs` 写 `<userData>/browser-trace.log`(一行一个 JSON、URL 只留 origin+path、凭据键打码、2MB 轮转),登录状态机与每个浏览器动作都记一条 |
+| ~~**P7**~~ | 观察性差 | ✅ 已做:`browser/trace.cjs` 写 `<userData>/browser-trace.log`(一行一个 JSON、URL 只留 origin+path、凭据键打码、2MB 轮转),登录状态机与每个浏览器动作都记一条 |
 
 ## 8. 结论
 

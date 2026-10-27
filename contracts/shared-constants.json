@@ -21,7 +21,7 @@
         },
         {
           "runtime": "electron",
-          "location": "electron/publish/accountViews.ts",
+          "location": "electron/browser/pool/accountViews.ts",
           "symbol": "PARTITION_PREFIX"
         }
       ]
@@ -33,7 +33,7 @@
       "implementations": [
         {
           "runtime": "electron",
-          "location": "electron/publish/types.ts",
+          "location": "electron/browser/types.ts",
           "symbol": "EMBED_HEADER_HEIGHT"
         },
         {
@@ -150,7 +150,7 @@
         },
         {
           "runtime": "electron",
-          "location": "electron/publish/downloadRules.ts",
+          "location": "electron/browser/pool/downloadRules.ts",
           "symbol": "MAX_DOWNLOAD_BYTES"
         },
         {

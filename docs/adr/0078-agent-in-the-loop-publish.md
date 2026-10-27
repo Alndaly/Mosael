@@ -2,7 +2,7 @@
 
 - 状态:Proposed — 2026-10-23
 - 相关:ADR 0076(内容形状)、ADR 0075(Computer Use)、ADR 0044(确认卡与措辞)
-- 代码位置:`electron/publish/`(适配器与执行器)、`backend/app/domain/publish/`、`backend/mcp_server.py`
+- 代码位置:`electron/browser/`(适配器与执行器)、`backend/app/domain/publish/`、`backend/mcp_server.py`
 
 ## 要解决什么
 

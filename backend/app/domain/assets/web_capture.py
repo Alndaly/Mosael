@@ -29,7 +29,7 @@ from app.domain.assets.importer import import_binary_asset
 from app.domain.assets.source_url import remember_asset_source
 
 #: 单个文件上限。整页长图(上限 15000 CSS 像素高,高分屏两倍)量化前能有二三十 MB;再大就不是一张截图了。
-#: Electron 那一侧取页面图片用的是同一个数(electron/publish/pageImages.ts 的 MAX_IMAGE_BYTES)。
+#: Electron 那一侧取页面图片用的是同一个数(electron/browser/page/pageImages.ts 的 MAX_IMAGE_BYTES)。
 MAX_CAPTURE_BYTES = 40 * 1024 * 1024
 
 #: 怎么来的。截图三种对应顶栏「截屏」的三个选项;page_image 是「采集页面图片」;page_video 是「下载页面里的视频」
@@ -39,7 +39,7 @@ PAGE_VIDEO = "page_video"
 #: 「截图」节点截的(自动化会话里那一页):可见区域、整页长图、某个元素。框选要人拖,节点里没有。
 NODE_SCREENSHOT_KINDS = ("screenshot_visible", "screenshot_full", "screenshot_element")
 
-#: 认得的图片格式 → 落盘扩展名。和 electron/publish/pageToolsCore.sniffImage 认的是同一组。
+#: 认得的图片格式 → 落盘扩展名。和 electron/browser/page/pageToolsCore.sniffImage 认的是同一组。
 _EXTENSIONS = {
     "image/png": ".png",
     "image/jpeg": ".jpg",

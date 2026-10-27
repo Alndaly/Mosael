@@ -277,7 +277,7 @@ uv run --frozen python -m PyInstaller --noconfirm --clean --onedir --name mosael
 
 ### 4.3 前端 → Electron
 
-前端 `build` = `tsc --noEmit && vite build`，`vite.config.ts` 用 `base: "./"` 使打包后 `loadFile()` 可用；版本号唯一来源是根 `package.json`（`import pkg from "../package.json"` → `define.__APP_VERSION__`，注释记录了用 `readFileSync` 导致长命 dev server 显示旧版本号的事故）。Electron 侧三段 esbuild bundle：`build:preload`（`electron/preload.cjs`）、`build:publisher`（`electron/publish/index.ts`，发布执行器）、`build:system`（`electron/system/index.ts`），均先过 `typecheck:electron`。sidecar bundle 必须带 `--ignore-annotations`——`agent-sidecar/package.json` 注释记录：pi-ai 的 `sideEffects` 标注会让 esbuild 摘掉 `createModels()` 依赖的初始化，"删掉它会静默复现该故障：类型与单测全绿，只有 test:bundle 抓得到"。
+前端 `build` = `tsc --noEmit && vite build`，`vite.config.ts` 用 `base: "./"` 使打包后 `loadFile()` 可用；版本号唯一来源是根 `package.json`（`import pkg from "../package.json"` → `define.__APP_VERSION__`，注释记录了用 `readFileSync` 导致长命 dev server 显示旧版本号的事故）。Electron 侧三段 esbuild bundle：`build:preload`（`electron/preload.cjs`）、`build:browser`（`electron/browser/index.ts`，发布执行器）、`build:system`（`electron/system/index.ts`），均先过 `typecheck:electron`。sidecar bundle 必须带 `--ignore-annotations`——`agent-sidecar/package.json` 注释记录：pi-ai 的 `sideEffects` 标注会让 esbuild 摘掉 `createModels()` 依赖的初始化，"删掉它会静默复现该故障：类型与单测全绿，只有 test:bundle 抓得到"。
 
 electron-builder 配置（根 `package.json` 的 `build` 字段）：mac 强制签名（`forceCodeSigning: true`）、hardenedRuntime、自定义 `sign: scripts/sign-mac.cjs`、entitlements 分主/Helper 两份、嵌入 `build/mosael.provisionprofile`；win 走 NSIS（`build/installer.nsh`，非一键安装、允许改目录）；注册了 `mosael://` 协议与视频/音频文件关联。
 

@@ -310,7 +310,7 @@ pnpm dist:mac    # 构建 macOS DMG
 | 命令 | 产物 |
 | --- | --- |
 | `pnpm build:frontend` | `frontend/dist` |
-| `pnpm build:publisher` | `electron/publish.bundle.cjs` |
+| `pnpm build:browser` | `electron/browser.bundle.cjs` |
 | `pnpm build:system` | `electron/system.bundle.cjs` |
 | `pnpm build:sidecar` | `agent-sidecar/dist/sidecar.cjs` |
 | `pnpm build:extension` | `browser-extension/dist` |

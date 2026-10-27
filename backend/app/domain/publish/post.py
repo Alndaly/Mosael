@@ -9,8 +9,8 @@
 
 ## 从哪来
 
-ID 是执行器(electron/publish)在点「发布」那一刻从**平台自己的发布接口的返回**里读的
-(见 electron/publish/publishedPost.ts),平台的前端拿到的就是这个 ID。读不到(平台改了
+ID 是执行器(electron/browser)在点「发布」那一刻从**平台自己的发布接口的返回**里读的
+(见 electron/browser/publish/publishedPost.ts),平台的前端拿到的就是这个 ID。读不到(平台改了
 接口)时 `post_id` 是空串 —— **不编一个**:空的一眼看得出没抓到,编的会被当真去查。
 
 ## 形状

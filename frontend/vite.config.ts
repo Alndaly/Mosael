@@ -77,7 +77,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // 第二张页:内嵌浏览器的浮层视图(electron/publish/floatLayer.ts)加载它,把外壳里的悬停说明画在网页上面。
+      // 第二张页:内嵌浏览器的浮层视图(electron/browser/pool/floatLayer.ts)加载它,把外壳里的悬停说明画在网页上面。
       // 和主窗口同一套样式,画出来一模一样。
       input: {
         index: path.resolve(here, "index.html"),

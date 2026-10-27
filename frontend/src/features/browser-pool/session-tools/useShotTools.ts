@@ -7,7 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { captureName, saveScreenshot, type PageToolsBridge, type ShotMode } from "./pageActions";
 import type { ToolNotice } from "./useToolNotice";
 
-/** 整页长图的高度上限(CSS 像素),和 electron/publish/pageToolsCore 的 MAX_FULL_PAGE_HEIGHT 一致。 */
+/** 整页长图的高度上限(CSS 像素),和 electron/browser/page/pageToolsCore 的 MAX_FULL_PAGE_HEIGHT 一致。 */
 const FULL_PAGE_LIMIT = 15_000;
 
 const SHOT_NAME: Record<ShotMode, MessageKey> = {

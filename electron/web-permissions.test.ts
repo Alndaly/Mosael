@@ -154,9 +154,11 @@ describe("main.cjs 的接法", () => {
   });
 
   it("内嵌视图不自己另装处理器(一个会话只能有一个,后装的会盖掉默认拒绝)", () => {
-    const publish = fs.readdirSync(path.join(__dirname, "publish")).filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name));
-    for (const name of publish) {
-      expect(fs.readFileSync(path.join(__dirname, "publish", name), "utf8"), name).not.toMatch(/setPermission(Request|Check)Handler/);
+    const browser = fs
+      .readdirSync(path.join(__dirname, "browser"), { recursive: true, encoding: "utf8" })
+      .filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name));
+    for (const name of browser) {
+      expect(fs.readFileSync(path.join(__dirname, "browser", name), "utf8"), name).not.toMatch(/setPermission(Request|Check)Handler/);
     }
   });
 });

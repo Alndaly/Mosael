@@ -29,7 +29,7 @@
 graph TB
     subgraph Desktop["Electron 桌面壳(electron/main.cjs)"]
         UI["React 前端<br/>(file:// / localhost:5173, hash 路由)"]
-        PW["发布执行器 publish.bundle.cjs<br/>+ 浏览器执行器 browserWorker"]
+        PW["发布执行器 browser.bundle.cjs<br/>+ 浏览器执行器 browserWorker"]
         SYS["系统能力层 system.bundle.cjs<br/>托盘/角标/防睡眠/深链"]
     end
 
@@ -367,6 +367,6 @@ Mosael 是教科书级的"**模块化单体 + 卫星进程**":它用 ADR-0001 �
 | 智能体 | `backend/app/domain/agent/host.py`、`backend/mcp_server.py`、`agent-sidecar/src/` |
 | 供应商/生成 | `backend/app/ai/providers/`、`backend/app/domain/generation/` |
 | 插件 | `backend/app/domain/plugins/`、`plugins/examples/` |
-| 桌面壳 | `electron/main.cjs`、`electron/system/`、`electron/publish/` |
+| 桌面壳 | `electron/main.cjs`、`electron/system/`、`electron/browser/` |
 | 工程 | `.github/workflows/`、`test/bundle.smoke.mjs`、`scripts/` |
 | 统一语言 | `CONTEXT.md`、`docs/adr/0001`–`0018`、`docs/PROCESS_STATE.md` |

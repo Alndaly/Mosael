@@ -18,7 +18,7 @@ from app.domain.publish import IMPLEMENTED_KINDS, content_kinds, implemented_kin
 
 RATCHET = True
 
-ADAPTERS = Path(__file__).resolve().parents[2] / "electron" / "publish" / "adapters"
+ADAPTERS = Path(__file__).resolve().parents[2] / "electron" / "browser" / "publish" / "adapters"
 #: 文件名 → 平台。`mock` 是测试替身,不参与。
 FILES = {
     "douyin.ts": "douyin",

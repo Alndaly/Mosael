@@ -53,7 +53,7 @@ const IPC = Object.freeze({
     publishSnapshotPage: "publish:snapshotPage",
     // Mosael 的整窗浮层(看大图)亮着:前台网页挪到窗口外,浮层收起再放回(见 accountViews 的 ForegroundHideReason)。
     //: **声明式让位**(P2):浮层说「我要在页面上画东西、要哪种让法」,主进程折算成对原生视图的指令。
-    //: 新浮层只接这一条,不必再记得四条老通道各接一次(见 publish/hostLayers)。
+    //: 新浮层只接这一条,不必再记得四条老通道各接一次(见 browser/pool/hostLayers)。
     publishHostLayer: "publish:hostLayer",
     // 键盘交给前台网页(顶栏、页面列表里点完之后接着打字的是网页)。
     publishFocusPage: "publish:focusPage",
@@ -96,7 +96,7 @@ const IPC = Object.freeze({
     computerResume: "computer:resume",
     // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的那个位置(见 save-file.cjs)。四步走 ——
     // 开工(弹框)、写一块、收尾(改名到位)、撤掉。分四步而不是一步:素材原文件可以有 2 GiB
-    // (见 publish/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节。
+    // (见 browser/pool/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节。
     saveFileBegin: "saveFile:begin",
     saveFileWrite: "saveFile:write",
     saveFileEnd: "saveFile:end",
@@ -107,10 +107,10 @@ const IPC = Object.freeze({
     systemStatus: "system:status",
     systemNotify: "system:notify",
     locale: "mosael:locale",
-    // 内嵌浏览器外壳里的悬停说明交给浮层视图画在网页上面 / 收起(见 publish/floatLayer.ts)。
+    // 内嵌浏览器外壳里的悬停说明交给浮层视图画在网页上面 / 收起(见 browser/pool/floatLayer.ts)。
     floatShow: "float:show",
     floatHide: "float:hide",
-    // 原生视图在前台时,右下角的提示条交给提示条那一块浮层视图画在网页上面 / 收起(ADR 0051,见 publish/floatLayer.ts)。
+    // 原生视图在前台时,右下角的提示条交给提示条那一块浮层视图画在网页上面 / 收起(ADR 0051,见 browser/pool/floatLayer.ts)。
     // 登录排障:内嵌视图 preload 把页面自己发出的请求结果(含响应体前 200 字)回传给主进程。
     // 只收微信那两个域,只写结构化日志 —— 见 main.cjs 的 installNetProbeRelay。
     netProbe: "mosael:net-probe",
@@ -129,7 +129,7 @@ const IPC = Object.freeze({
     publishView: "publish:view",
     publishPanels: "publish:panels",
     browserFrame: "browser:frame",
-    // 用户在内嵌浏览器里点的下载:进度、下好了、没下成(见 publish/downloads.ts)。
+    // 用户在内嵌浏览器里点的下载:进度、下好了、没下成(见 browser/pool/downloads.ts)。
     pageToolsDownload: "pageTools:download",
     // ComfyUI 工作台:主进程轮询画布里的桥看到的(选中、脏标记、能力、事件);state 为 null 是会话结束了。
     comfyuiWorkbench: "comfyui:workbench",
@@ -283,7 +283,7 @@ function parseComfyNavigation(value) {
 /**
  * 开 ComfyUI 工作台(工作流库里打开一张、「新建」都走这里)。分区**由这里按连接 id 拼**(`persist:pool-comfyui-<id>`),
  * 渲染层点不了别的分区(发布账号、别的档案)。`path` 给了就打开那一张 —— 路径和宿主同一套规矩(workflows/ 里的相对路径、
- * .json 结尾、不带 ..、隐藏段和 Windows 不收的字符),只会作为字符串嵌进主进程写死的那段脚本(见 publish/comfyEditor.ts);
+ * .json 结尾、不带 ..、隐藏段和 Windows 不收的字符),只会作为字符串嵌进主进程写死的那段脚本(见 browser/comfy/comfyEditor.ts);
  * `fresh` 是新建一张;两样都不给就回到画布上开着的那张。
  */
 function parseComfyWorkbenchOpen(value) {
@@ -822,7 +822,7 @@ function parseRegionSelection(value) {
   return { selection };
 }
 
-/** 取图:地址清单。主进程只取最近一次列图里出现过的地址(见 publish/pageImages.fetchImages)。 */
+/** 取图:地址清单。主进程只取最近一次列图里出现过的地址(见 browser/page/pageImages.fetchImages)。 */
 function parseImageUrls(value) {
   const channel = IPC.invoke.pageToolsFetchImages;
   const payload = record(value, channel);
@@ -1046,7 +1046,7 @@ function parsePickPath(value) {
   };
 }
 
-/** 「保存到本地」一块字节的上限(8 MiB)。一次一块才走得通:素材原文件可以有 2 GiB(见 publish/downloadRules.MAX_DOWNLOAD_BYTES),
+/** 「保存到本地」一块字节的上限(8 MiB)。一次一块才走得通:素材原文件可以有 2 GiB(见 browser/pool/downloadRules.MAX_DOWNLOAD_BYTES),
  *  而一条 IPC 消息装不下那么多字节(见 save-file.cjs);渲染层那边也按同一个数攒块(见 lib/download)。 */
 const MAX_SAVE_CHUNK = 8 * 1024 * 1024;
 

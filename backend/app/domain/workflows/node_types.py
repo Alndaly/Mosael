@@ -2722,7 +2722,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "url": "wfOut_browser_page_url", "title": "wfOut_browser_page_title", "count": "wfOut_browser_page_count",
         },
     },
-    #: 截这一页存进素材库。截图本身和浏览器会话顶栏的「截屏」是同一份实现(electron/publish/pageCapture);
+    #: 截这一页存进素材库。截图本身和浏览器会话顶栏的「截屏」是同一份实现(electron/browser/page/pageCapture);
     #: 框选要人拖,节点里换成「某个元素」。
     "browser_screenshot": {
         "external": True,

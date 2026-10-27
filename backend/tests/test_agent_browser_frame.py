@@ -1,7 +1,7 @@
 """智能体的浏览器工具也认「在框架里」:元素在页面里某个同源 iframe 里时,填那个框架的选择器。
 
 和工作流节点同一件事、同一份实现:工具只把 `frame` 原样交给执行器(和节点交的是同一个参数),找框架、
-判跨域、等框架出现、报错的原话都在执行器那边(electron/publish/browserActions.ts + pageDriver.inFrame)。
+判跨域、等框架出现、报错的原话都在执行器那边(electron/browser/pool/browserActions.ts + pageDriver.inFrame)。
 这里钉的是接线:六个按选择器操作的工具都收这个参数、交得过去;没填就不交(整个页面,和以前一样)。
 """
 from __future__ import annotations

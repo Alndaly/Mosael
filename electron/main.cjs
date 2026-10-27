@@ -38,8 +38,8 @@ const {
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { createComputerUseGuard } = require("./computerUseGuard.cjs");
-//: 坐标换算只有一份(见 publish/coords):Retina 截图归一化也走它。
-const { captureToCss } = require("./publish/coords.cjs");
+//: 坐标换算只有一份(见 browser/pool/coords):Retina 截图归一化也走它。
+const { captureToCss } = require("./browser/pool/coords.cjs");
 const { createComputerUseOverlay } = require("./computerUseOverlay.cjs");
 const { createComputerUseCursor } = require("./computerUseCursor.cjs");
 const { pickPath } = require("./path-picker.cjs");
@@ -284,10 +284,10 @@ let quitting = false;
 let publish = null;
 let publishLoadError = null;
 try {
-  publish = require("./publish.bundle.cjs");
+  publish = require("./browser.bundle.cjs");
 } catch (e) {
   publishLoadError = e;
-  console.warn("[publish] failed to load the publisher (is electron/publish.bundle.cjs built?):", e.message);
+  console.warn("[publish] failed to load the publisher (is electron/browser.bundle.cjs built?):", e.message);
 }
 
 // 系统能力层(托盘 / 常驻 / 开机自启 / 防睡眠):同样是 esbuild 单文件 bundle,同样不挡启动
@@ -608,7 +608,7 @@ function stopHostBridge() {
 const NET_PROBE_HOSTS = new Set(["channels.weixin.qq.com", "open.weixin.qq.com"]);
 
 function installNetProbeRelay() {
-  const { createTrace } = require("./publish/trace.cjs");
+  const { createTrace } = require("./browser/trace.cjs");
   const probeTrace = createTrace({ dir: app.getPath("userData") });
   listen(IPC.send.netProbe, (_event, payload) => {
     try {
@@ -1451,7 +1451,7 @@ app.whenReady().then(async () => {
   );
   handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
   handle(IPC.invoke.publishSnapshotPage, () => requirePublish().snapshotViewPage());
-  //: 声明式让位(P2):一条通道承载所有浮层的「请原生视图让开」,见 publish/hostLayers。
+  //: 声明式让位(P2):一条通道承载所有浮层的「请原生视图让开」,见 browser/pool/hostLayers。
   handle(IPC.invoke.publishHostLayer, (_e, payload) => requirePublish().setHostLayer(parseHostLayer(payload)));
   handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());
   handle(IPC.invoke.publishFocusHost, () => requirePublish().focusHostWindow());

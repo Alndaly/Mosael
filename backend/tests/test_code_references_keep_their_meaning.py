@@ -58,7 +58,7 @@ def _run_js(expression: str, inputs: dict | None) -> object:
     node = shutil.which("node")
     if node is None:
         pytest.skip("这台机器上没有 node")
-    # 和 electron/publish/browserActions.ts 的 scriptWithInput 同一种包法:一个块,块里先声明 input。
+    # 和 electron/browser/pool/browserActions.ts 的 scriptWithInput 同一种包法:一个块,块里先声明 input。
     script = expression if inputs is None else "{ const input = " + json.dumps(inputs) + ";\n" + expression + "\n}"
     done = subprocess.run(
         [node, "-e", f"process.stdout.write(JSON.stringify(eval({json.dumps(script)})))"],

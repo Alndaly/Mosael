@@ -1,5 +1,5 @@
 /**
- * 采集页面图片:素材名怎么起、带着什么出处入库(主进程那一半在 electron/publish/pageImages)。
+ * 采集页面图片:素材名怎么起、带着什么出处入库(主进程那一半在 electron/browser/page/pageImages)。
  */
 import { importWebCapture, type Asset } from "@/api/client";
 

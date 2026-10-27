@@ -57,7 +57,7 @@ cd backend
 cd ..
 pnpm --dir frontend test
 pnpm --dir frontend build
-pnpm build:publisher
+pnpm build:browser
 pnpm build:system
 ```
 

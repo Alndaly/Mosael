@@ -3,7 +3,7 @@
  * 筛;跑完的产出按来自的节点分组、标节点名;画布上的事件 → 正在跑哪个节点、第几步;「只要这个节点的图」→ 应用表单草稿只标这一个结果;
  * 运行按工作流分;缺失项定位到画布上的节点、按节点包分组。
  *
- * 桥报来的东西主进程已经规整过(electron/publish/comfyWorkbench.parseWorkbenchPoll);这里仍只当提示:节点名字以导出的那张图为准,
+ * 桥报来的东西主进程已经规整过(electron/browser/comfy/comfyWorkbench.parseWorkbenchPoll);这里仍只当提示:节点名字以导出的那张图为准,
  * 产出来自哪个节点以插件读的历史为准(任务回执里的 `source_node`)。
  */
 import type { EncoderRecipe, Job, ModelFile, NodeEncoders, WorkflowNodePack } from "@/api/client";

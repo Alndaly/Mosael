@@ -116,7 +116,7 @@ def test_执行器身份是必填的() -> None:
 
     此前认领可以不带 `worker`,读路径配一条「为空 = 老执行器不报身份」的兼容分支。而执行器
     就在这个仓库里、跟后端**同一个安装包**发布,`readWorkerId()`
-    (electron/publish/publishBackend.ts)永远返回一个非空 id(环境变量 → 落盘的文件 →
+    (electron/browser/publish/publishBackend.ts)永远返回一个非空 id(环境变量 → 落盘的文件 →
     现生成一个 uuid)—— 那条分支在这个产品里**永远走不到**,它只是给"两个执行器会互相把
     对方的任务判成孤儿"这个已经想清楚的问题留了一个假的例外口。
 

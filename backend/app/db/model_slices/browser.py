@@ -105,7 +105,7 @@ class BrowserPartitionMove(Base):
     具名会话的分区名改过一次形状(旧:`persist:rpa-<清洗后的名字>`,跨工作区共用、非 ASCII 名字撞成一个;
     新:`persist:rpa-<工作区>-<名字哈希>`)。已经登录过的数据在 Electron 的 `userData/Partitions/<分区名>`
     目录里,后端既不知道那个目录在哪,也不该去碰它 —— 所以迁移只写下「谁搬到哪」,执行器启动时领走、
-    搬完回报(见 electron/publish/partitionMoves.ts)。
+    搬完回报(见 electron/browser/pool/partitionMoves.ts)。
 
     `status` 是迁移时定下的:pending(要搬)/ abandoned(不搬:这个旧分区也被别的工作区、别的名字用过,只归最早的
     那一个,原因写在 `reason`)。**搬没搬是每台电脑自己的事**,记在 BrowserPartitionMoveReceipt 上 —— 登录数据在

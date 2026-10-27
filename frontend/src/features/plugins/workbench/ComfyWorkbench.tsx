@@ -125,7 +125,7 @@ function useSameWorkflowKey(workflowKey: string): string {
  * 缺失项、应用、运行与结果、助手 —— 智能体,ADR 0042)。网页是原生视图、盖在一切 DOM 上:顶栏占着视图上沿那 `barHeight`(和主进程 EMBED_HEADER_HEIGHT
  * 同一个数,见 contracts/shared-constants.json),右边那一列开着时视图让出那么宽(见 columnWidth);要确认的事就地确认。
  *
- * 和画布通话的是主进程注入的桥(只拉不推,见 electron/publish/comfyWorkbench);这版前端缺了哪一样,那一处就说「这版 ComfyUI
+ * 和画布通话的是主进程注入的桥(只拉不推,见 electron/browser/comfy/comfyWorkbench);这版前端缺了哪一样,那一处就说「这版 ComfyUI
  * 前端不支持 X」,画布照常是一个能用的 ComfyUI。
  *
  * **画布上换了一张**(在 ComfyUI 自己的标签栏、侧栏里):桥报的 `workflow.key` 变了,模型库、缺失项、应用这几个面板按它重挂

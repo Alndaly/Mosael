@@ -14,7 +14,7 @@ Qwen-Image 2.1 编辑图片的工作流;或者提问工作流存在的问题。�
 ### 现在有什么
 
 - **工作台**(ADR 0038):桌面版全屏,左边是 ComfyUI 自己的画布(内嵌视图),右边一列四个页签 —— 模型库、缺失项、应用、运行与结果。
-- **工作台的桥**(`electron/publish/comfyWorkbench.ts`,`WORKBENCH_VERSION = 3`):主进程往页面里注入写死的脚本,挂一个冻结的
+- **工作台的桥**(`electron/browser/comfy/comfyWorkbench.ts`,`WORKBENCH_VERSION = 3`):主进程往页面里注入写死的脚本,挂一个冻结的
   `window.__mosaelWorkbench`。宿主能调的只有七样 —— `setWidget`、`refreshCombos`、`export`、`save`、`setMarks`、`locate`、
   `runControls`;状态靠主进程每 300 ms `poll` 一次拉回来(工作流名、改没改、`revision`、选中的节点、运行事件),页面从不主动推。
   **能改的只有控件的值和标记,不能加删节点、不能连线。** 用到的前端接口:`app.graphToPrompt`、`app.loadGraphData`(只在打开一张
@@ -22,7 +22,7 @@ Qwen-Image 2.1 编辑图片的工作流;或者提问工作流存在的问题。�
   (`Comfy.SaveWorkflow`、`Comfy.NewBlankWorkflow`)、`canvas.selectItems` / `centerOnNode`。
 - **智能体**:pi 跑在 sidecar 里,工具全在 `backend/mcp_server.py` 一张表上(105 个,`reads` / `writes` / `confirms` 三种),要人点头的走
   确认卡。**没有一个工具碰得到工作台**;也没有「在界面里执行、把结果交回智能体」的工具。最接近的是浏览器那一组(`browser_*`):后端
-  排一条动作,Electron 主进程的 worker(`electron/publish/browserWorker.ts`)领走、在内嵌页面里执行、把结果报回去 —— 后端 → 主进程 →
+  排一条动作,Electron 主进程的 worker(`electron/browser/pool/browserWorker.ts`)领走、在内嵌页面里执行、把结果报回去 —— 后端 → 主进程 →
   页面的来回已经有现成的样子。
 - **对话面板**:`frontend/src/features/agent/CanvasAgentChat.tsx` 一个面板给工作流、画板、剪辑、3D 场景、笔记共用 —— 用工作区当前的会话,
   每条消息带一段看不见的页面上下文(`contextLine`,上限 4000 字),输入框里打「/」点技能。

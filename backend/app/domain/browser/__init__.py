@@ -855,7 +855,7 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
     #: 空着太久的会话也在这里收:执行器在线就一直在认领,这是后端唯一一条按时到来的路;收掉时排的
     #: close 动作也正好由这一拍领走,把视图拆了。
     reclaim_idle_sessions(db)
-    #: **同一个会话串行,不同会话并发。** 执行器一次领多条、各自跑(见 electron/publish/browserWorker);
+    #: **同一个会话串行,不同会话并发。** 执行器一次领多条、各自跑(见 electron/browser/pool/browserWorker);
     #: 一个会话上还有一条在跑,它后面的就先不发 —— 同一个视图上两个动作交错着点、导航,谁也做不对。
     #: 在这里挡而不是在执行器里排队:领走即开始计执行时间(run_action),排在执行器里的那段不该算进去。
     busy_sessions = select(BrowserAction.session_id).where(BrowserAction.status == "running")

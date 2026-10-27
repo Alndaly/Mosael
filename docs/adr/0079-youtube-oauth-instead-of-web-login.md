@@ -2,7 +2,7 @@
 
 - 状态:Proposed — 2026-10-23
 - 相关:ADR 0044(确认卡与措辞)、ADR 0076(发布的内容形状)
-- 代码位置:`electron/publish/adapters/youtube.ts`、`backend/app/domain/publish/`、`backend/app/domain/providers/`
+- 代码位置:`electron/browser/publish/adapters/youtube.ts`、`backend/app/domain/publish/`、`backend/app/domain/providers/`
 
 ## 先修回归(2026-10-23)
 

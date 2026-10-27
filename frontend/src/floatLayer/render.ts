@@ -1,4 +1,4 @@
-/** 主进程交过来的一条说明(electron/publish/floatLayer.ts 的 show)。 */
+/** 主进程交过来的一条说明(electron/browser/pool/floatLayer.ts 的 show)。 */
 export type FloatPayload = {
   html: string;
   root: { className: string; style: string; attributes: Record<string, string> };
@@ -10,7 +10,7 @@ export type FloatPayload = {
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-/** 主进程交过来的提示条那一块(electron/publish/floatLayer.ts 的 `toasts` 那一种,渲染层见 components/app/toastMirror)。 */
+/** 主进程交过来的提示条那一块(electron/browser/pool/floatLayer.ts 的 `toasts` 那一种,渲染层见 components/app/toastMirror)。 */
 export type ToastsPayload = Pick<FloatPayload, "html" | "root">;
 
 /** 根元素换成主窗口的主题、字体、语言。 */

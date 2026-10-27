@@ -13,7 +13,7 @@ import { showSavedAsset, type Notice } from "./useToolNotice";
 /**
  * 内嵌浏览器里点的下载:**不弹系统保存框,下完直接存进素材库。**
  *
- * 主进程接管下载、存到临时目录,下好了告诉这里(见 electron/publish/downloads.ts);这里用界面自己的服务器
+ * 主进程接管下载、存到临时目录,下好了告诉这里(见 electron/browser/pool/downloads.ts);这里用界面自己的服务器
  * 和会话把它存进当前工作区。挂在应用最外层而不是顶栏里:下载可能在用户收起内嵌浏览器之后才下完,那时顶栏
  * 已经不在了,文件照样要存。提示在顶栏挂着时说在顶栏里(网页盖住了窗口其余部分),否则用应用的 toast。
  *

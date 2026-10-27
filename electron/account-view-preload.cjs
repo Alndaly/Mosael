@@ -19,7 +19,7 @@ const NET_PROBE_CHANNEL = "mosael:net-probe";
 // 此前这里还伪造过 WebGL vendor/renderer(谎报 Intel —— 这台是 Apple Silicon)和 permissions.query
 // 的返回(一个普通对象而不是 PermissionStatus),plugins 则是 `Plugin 1/2/3` 三个假名字。这比不补更
 // 糟:反欺诈一比对就是「自称 Chrome、指纹却不是 Chrome」。X 的登录页一直挂「An unexpected error
-// occurred」,排查到这一层(详见 publish/accountViews 的登录探针)。WebGL / permissions 现在不碰 ——
+// occurred」,排查到这一层(详见 browser/pool/accountViews 的登录探针)。WebGL / permissions 现在不碰 ——
 // Electron 与 Chrome 同为 ANGLE 渲染,原生值本就接近;plugins 补成 Chrome 真实报的 PDF 列表。
 const STEALTH_JS = `(() => {
   const def = (obj, prop, get) => { try { Object.defineProperty(obj, prop, { get, configurable: true }); } catch (e) {} };

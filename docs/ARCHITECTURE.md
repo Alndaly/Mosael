@@ -11,7 +11,7 @@
    若 8800 已有健康后端(如 dev server),**复用它**,不再起新进程(`ensureBackend()` 里的 `isHealthy()` 检查)。
 2. **开窗加载前端** — 打包版 `loadFile(frontend/dist/index.html)`,开发版 `loadURL(localhost:5173)`。
    hash 路由(`#/editor?p=<id>`)——因为 `file://` 下 path 路由不可用。
-3. **启动发布执行器** — `publish.bundle.cjs` 里的 worker 开始轮询后端认领发布任务(见 [PUBLISHING.md](PUBLISHING.md))。
+3. **启动发布执行器** — `browser.bundle.cjs` 里的 worker 开始轮询后端认领发布任务(见 [PUBLISHING.md](PUBLISHING.md))。
 
 后端是**唯一事实源**。前端和发布执行器都只是它的客户端——这也是为什么发布执行器能在 App 重启后接着干活。
 
@@ -54,7 +54,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `render.py` | 序列 → RenderPlan(纯函数)→ ffmpeg 执行导出 |
 | `transcripts/` | 逐字稿:ASR 导入、token 级编辑、投影到时间线(删句 = 剪源区间) |
 | `workflows/` | DAG 工作流:节点注册表(元数据)+ `executors/` 执行器注册表(行为)+ 统一并行调度引擎(`execute_graph`);新增节点 = 元数据 + 一个执行器文件,引擎不动。**嵌套**:`subgraph`(内嵌可复用子图)、`call_workflow`(调另一工作流当子流程,子 job 收纳 + 级联取消 + 防递归/过深)、`output`(声明工作流输出契约);子图与循环体都跑在同一套引擎上(并行/条件一致)。**引用即依赖**(`reference_dependencies`):节点 `{{…}}` 引用了谁就等谁落定,拓扑排序、环路校验、调度共用这一份 —— 此前只有被规范化成数据边的引用(顶层字段、两段路径)才排先后,`{{分镜.json.shots}}` 或循环 `inputs` 里的引用可能在上游跑完前被读成空值 |
-| `publish/` | 发布:平台注册表(**只有需要登录态的真平台**)、任务队列、worker 协议;账号即挂平台的浏览器档案(`profile_id`)。执行器侧另有**平台契约 / 浮层策略 / 判定原语**(`electron/publish/contracts.ts`、`overlays.ts`、`verify.ts`),见 [ADR 0080](adr/0080-publish-automation-contract-and-pipeline.md) |
+| `publish/` | 发布:平台注册表(**只有需要登录态的真平台**)、任务队列、worker 协议;账号即挂平台的浏览器档案(`profile_id`)。执行器侧另有**平台契约 / 浮层策略 / 判定原语**(`electron/browser/publish/contracts.ts`、`overlays.ts`、`verify.ts`),见 [ADR 0080](adr/0080-publish-automation-contract-and-pipeline.md) |
 | `browser/` | 浏览器池 / 持久登录:`BrowserProfile`(可复用登录身份 = 持久分区 + 代理 + 元数据)统一发布账号与通用档案;会话受**租约**(一档案一时刻一会话)。RPA 节点 / 智能体 / 手动会话都经「入队动作 + 执行器回报」桥驱动 Electron 里的浏览器 |
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。webhook 凭任务级密钥触发,同一把密钥还能查那次运行的进度、取消它(`api/routes/hooks`),密钥由服务端独管、可重置。启用着的任务一定跑得起来(`ensure_runnable`):绑的工作流删了,任务随即停用。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
 | `agent/` | 智能体会话:pi Agent Adapter + sidecar 流式协议 + 会话/记忆 + 工具循环 + 子智能体。**记忆**是每轮都在的短约定(`memory.py`,封顶);**技能**是按需读的做法(`skills/`,[ADR-0040](adr/0040-agent-skills.md)):开放的 SKILL.md 文件夹,内置的在 `builtin_skills/`、工作区的在 `<数据目录>/skills/<工作区>/`、插件带的在包里的 `skills/`,启用与来源记在 `agent_skills` 表;系统提示里只有名字和一句说明(封顶、顺序固定),全文经只读工具 `use_skill` / `read_skill_file` 读,输入框的「/」把全文挂到这一轮;导入的技能是不可信指令,不改确认卡和权限档,脚本不执行。插件清单里给外部智能体看的工具目录叫**工具集**(`toolsets.py`、`/api/agent/toolsets`),和技能是两件事 |
@@ -755,6 +755,25 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 
 单实例锁在 `main.cjs`(必须早于 app ready):没有它,双击两次图标就有两个实例 —— 两个发布 worker
 抢同一批任务、两套内嵌浏览器争同一个登录分区,而后端因为端口健康检查会复用,表面上「没问题」。
+
+### 内嵌浏览器(`electron/browser/`)
+
+主进程里所有「驱动一张网页」的事都在这里,esbuild 从 `index.ts` 打成 `browser.bundle.cjs`。
+目录按职责分四块,根上只留跨块共用的 `types` / `errors` / `log` / `trace`:
+
+| 目录 | 管什么 | 入口 |
+| --- | --- | --- |
+| `publish/` | 发布执行器:认领任务、平台契约与适配器(`adapters/`)、发表后的核对,以及账号登录流程 | `publishWorker.ts` |
+| `pool/` | 浏览器池:内嵌视图与浮动面板(`accountViews`、`panel*`、`floatLayer`、`hostLayers`)、执行器动作(`browserWorker` / `action*`)、下载与分区搬迁、坐标换算 | `browserWorker.ts`、`accountViews.ts` |
+| `page/` | 页面工具:驱动一张页面(`pageDriver`)和读页、取图、取视频、截长图等页面内能力 | `pageDriver.ts` |
+| `comfy/` | ComfyUI 工作台:画布视图、编辑器桥、会话 | `comfyWorkbench.ts` |
+
+目录是按职责搬的,代码没改,所以依赖还不是单向的,有两处要知道:
+
+- `page` 和 `pool` 互相引用:页面工具要从 `pool/accountViews` 拿当前视图,`accountViews` 又用 `page/pageDriver` 驱动页面;
+- `publish/publishWorker.ts` 还兼着内嵌视图的宿主(视图导航、浮层、工作台的打开与调用都从它导出),
+  所以 `pool/browserWorker` 反过来引用它来调工作台。这不代表这些职责属于发布,是下一步要拆出去的东西。
+`pool/coords.cjs` 与 `trace.cjs` 不进 bundle,`main.cjs` 与 `computerUse/` 直接 `require` 它们。
 
 ## 智能体与 MCP
 

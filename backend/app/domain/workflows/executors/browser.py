@@ -333,7 +333,7 @@ def browser_evaluate(db: Session, scope: RunScope, config: dict[str, Any]) -> di
 
 @register("browser_page")
 def browser_page(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """在会话的几个页面之间切换,或关掉当前页(见 electron/publish/actionPage.ts)。交出现在这一页的网址、标题,
+    """在会话的几个页面之间切换,或关掉当前页(见 electron/browser/pool/actionPage.ts)。交出现在这一页的网址、标题,
     和会话里开着几个页面。"""
     sid = _session_in(db, scope, config)
     operation = "close" if str(config.get("operation") or "") == "close" else "switch"
@@ -352,7 +352,7 @@ def browser_page(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     }
 
 
-#: 「截图」节点能截的三种(和 electron/publish/actionCapture.ts 的 SHOT_MODES 同一组)。
+#: 「截图」节点能截的三种(和 electron/browser/pool/actionCapture.ts 的 SHOT_MODES 同一组)。
 SHOT_MODES = ("visible", "full", "element")
 #: 截会话里的哪一页:按第几个 / 标题含 / 网址含找(同「切换页面」);不在这里的就是当前页。
 PAGE_BYS = ("index", "title", "url")
@@ -360,7 +360,7 @@ PAGE_BYS = ("index", "title", "url")
 
 @register("browser_screenshot")
 def browser_screenshot(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """截这一页存进素材库,交出素材 id。截图和入库都在执行器那一侧(见 electron/publish/actionCapture.ts):
+    """截这一页存进素材库,交出素材 id。截图和入库都在执行器那一侧(见 electron/browser/pool/actionCapture.ts):
     截好的图经执行器通道交给后端,出处带着这次运行、这个节点(随动作参数的 origin 交过去)。"""
     sid = _session_in(db, scope, config)
     mode = str(config.get("mode") or "visible")

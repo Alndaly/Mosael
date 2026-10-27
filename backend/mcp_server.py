@@ -1843,7 +1843,7 @@ def show_widget(title: str, html: str) -> dict[str, Any]:
 
 def _in_frame(frame: str) -> dict[str, str]:
     """「在框架里」:元素在哪个同源 iframe 里。和工作流节点交的是同一个参数,找框架、判跨域、报错都在执行器那边
-    (electron/publish/browserActions.ts);没填就不交 —— 作用在整个页面,和以前一样。"""
+    (electron/browser/pool/browserActions.ts);没填就不交 —— 作用在整个页面,和以前一样。"""
     frame = (frame or "").strip()
     return {"frame": frame} if frame else {}
 

@@ -1,6 +1,6 @@
 """工作流「切换页面」节点:会话里开着几个页面时切到某一页,或关掉当前页。
 
-页面本身在执行器那一侧(electron/publish/actionPage.ts + accountViews 的页面列表);这里钉后端这一半:
+页面本身在执行器那一侧(electron/browser/pool/actionPage.ts + accountViews 的页面列表);这里钉后端这一半:
 节点把「切 / 关、按什么找、找什么」交给执行器,交出现在这一页的网址、标题和页数;登记齐全;智能体也有。
 """
 from __future__ import annotations

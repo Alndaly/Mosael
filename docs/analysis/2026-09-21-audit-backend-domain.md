@@ -430,7 +430,7 @@ mine = task.claimed_by == worker if worker else True
 
 注释写着"`worker` 为空 = 老执行器不报身份。那时保持原样(单执行器部署行为不变)"。
 但执行器就在这个仓库里、跟后端同一个安装包发布,而且
-`electron/publish/publishBackend.ts:95-120` 里 `readWorkerId()` 永远返回一个非空 id
+`electron/browser/publish/publishBackend.ts:95-120` 里 `readWorkerId()` 永远返回一个非空 id
 (环境变量 → 落盘的文件 → 现生成一个 uuid)。所以这条分支在这个产品里**永远走不到**,
 它只是把"两个执行器会互相把对方的任务判成孤儿"这个已经想清楚的问题,留了一个假的例外口。
 
@@ -629,7 +629,7 @@ mine = task.claimed_by == worker if worker else True
 - `backend/app/domain/sequences/operations.py`
 - `backend/app/domain/publish/worker.py`
 - `backend/app/api/routes/publish_worker.py`
-- `electron/publish/publishBackend.ts`
+- `electron/browser/publish/publishBackend.ts`
 - `backend/app/domain/ownership.py`
 - `backend/app/db/migrations.py`
 - `frontend/src/features/workflows/runSteps.ts`

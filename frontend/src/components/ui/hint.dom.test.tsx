@@ -179,7 +179,7 @@ describe("说明套在有自己状态的控件上", () => {
 });
 
 describe("内嵌浏览器外壳(顶栏、页面列表、侧栏)里的说明", () => {
-  // 外壳旁边就是原生网页视图,盖在一切 DOM 上。说明交给一块透明的原生浮层视图画(见 electron/publish/floatLayer),
+  // 外壳旁边就是原生网页视图,盖在一切 DOM 上。说明交给一块透明的原生浮层视图画(见 electron/browser/pool/floatLayer),
   // DOM 里那份只用来量位置、给读屏。没有浮层视图(网页版)时照旧画在 DOM 里,压在外壳上面。
   const content = () => document.querySelector("[data-tooltip]") as HTMLElement | null;
   const showFloat = vi.fn();

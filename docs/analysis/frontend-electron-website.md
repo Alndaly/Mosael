@@ -18,7 +18,7 @@ flowchart TD
     W --> P1["打包版 loadFile(frontend/dist/index.html)"]
     W --> P2["开发版 loadURL(127.0.0.1:5173)"]
     W --> P3["hash 路由 #/editor?p=id<br/>file:// 下 path 路由不可用"]
-    W --> K["③ 起 worker(publish.bundle.cjs)"]
+    W --> K["③ 起 worker(browser.bundle.cjs)"]
     K --> K1["startPublishWorker<br/>轮询认领发布任务"]
     K --> K2["startBrowserWorker<br/>轮询认领浏览器任务"]
 ```
@@ -144,7 +144,7 @@ graph TD
 | `protocol` | `mosael://` + 文件关联;只导航不执行;dev 不注册(系统级注册会劫持真实安装版);`MEDIA_EXTENSIONS` 白名单过滤拖入文件 |
 | `shortcuts` / `customCss` | 全局快捷键;用户自定义 CSS(userData/custom.css,推送而非轮询) |
 
-### 2.4 发布执行器与浏览器执行器(`electron/publish/`,esbuild → `publish.bundle.cjs`,4,998 行)
+### 2.4 发布执行器与浏览器执行器(`electron/browser/`,esbuild → `browser.bundle.cjs`,4,998 行)
 
 - **publishWorker.ts**:轮询后端认领发布任务,驱动每账号一个持久登录的 `WebContentsView` 跑平台适配器。并发模型「**跨账号并发、同账号串行 + 前台单槽**」:`MAX_CONCURRENT=3`(`MOSAEL_PUBLISH_CONCURRENCY` 可覆盖,夹 1–5);`running`/`rechecking`/`loginAccounts` 三个集合分开,避免复检/登录互相误判;`generation` 代数让 stop→restart 后旧回调自我了断。
 - **悬浮面板几何**(`accountViews.ts`):卡片 384×244 + 26px 标题条 + 4px 内缩,视图缩放反算使**布局视口恒为 1280×800**——不缩放平台会渲染窄屏版、选择器全变。挂进窗口(参与合成)才有真实布局与 `isTrusted=true` 可信输入;原生 View 画不了圆角,圆角/阴影由渲染层在视图**下方**画(子视图永远盖在宿主页面之上),圆角值只有主进程一份、经 IPC 下发。
@@ -156,7 +156,7 @@ graph TD
 
 ### 2.5 契约常量
 
-`contracts/shared-constants.json` 钉住「两个运行时都要认、而谁也不拥有」的常量:发布分区前缀 `mosael`(后端 `db.py` 与 `accountViews.ts` 拼同一个磁盘目录,错开则所有已登录账号 cookie 凭空消失且无报错)、内嵌视图头高 56px(四处实现:`publish/types.ts`、`App.tsx PUBLISH_BAR_HEIGHT`、`window-chrome.cjs`、`windowChrome.ts`)、笔记追加分隔符 `\n\n`。
+`contracts/shared-constants.json` 钉住「两个运行时都要认、而谁也不拥有」的常量:发布分区前缀 `mosael`(后端 `db.py` 与 `accountViews.ts` 拼同一个磁盘目录,错开则所有已登录账号 cookie 凭空消失且无报错)、内嵌视图头高 56px(四处实现:`browser/types.ts`、`App.tsx PUBLISH_BAR_HEIGHT`、`window-chrome.cjs`、`windowChrome.ts`)、笔记追加分隔符 `\n\n`。
 
 ---
 

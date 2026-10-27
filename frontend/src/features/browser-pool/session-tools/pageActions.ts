@@ -10,7 +10,7 @@ export type PageToolsBridge = NonNullable<Window["mosaelPageTools"]>;
 export type PageCapture = Awaited<ReturnType<PageToolsBridge["capture"]>>;
 export type PageInfo = PageCapture["page"];
 
-/** 主进程拒绝时消息里带的原因码(见 electron/publish/pageTarget.ts 的 PageToolError)。 */
+/** 主进程拒绝时消息里带的原因码(见 electron/browser/page/pageTarget.ts 的 PageToolError)。 */
 export type PageToolErrorCode = "no_page" | "capture_failed" | "full_page_unavailable";
 
 export function pageToolErrorCode(error: unknown): PageToolErrorCode | null {

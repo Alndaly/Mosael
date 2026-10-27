@@ -9,7 +9,7 @@
 这条在 ADR 里**一个字都没有** —— `ClaimRequest.worker` 收下了却从不使用,表上也没有对应的列。
 
 没有单一的可见现象:单执行器下它工作正常。问题是**没有任何东西能在多执行器或执行器崩溃时
-保证正确**,而隔壁两条都有。同一个文件(`electron/publish/browserBackend.ts`)里为发布执行器的
+保证正确**,而隔壁两条都有。同一个文件(`electron/browser/pool/browserBackend.ts`)里为发布执行器的
 workerId 写了整整一页「必须跨重启稳定」的理由,隔壁这条道没学。
 """
 

@@ -196,7 +196,7 @@ const publishBridge = {
   /** 弹窗开着时把悬浮面板收起来(关掉再放回):原生视图永远压在渲染层之上。 */
   setPanelsHidden: (hidden) => invoke(IPC.invoke.publishPanelsHidden, { hidden }),
   //: **声明式让位**(P2):浮层说「我要在页面上画东西、要哪种让法」,主进程折算成对原生视图的指令
-  //: (见 publish/hostLayers)。新浮层用这条,不必再记得四条老通道各接一次。
+  //: (见 browser/pool/hostLayers)。新浮层用这条,不必再记得四条老通道各接一次。
   setHostLayer: (claim) => invoke(IPC.invoke.publishHostLayer, claim),
   /** 悬浮浏览器声音开关；真实状态随 onPanels 回传。 */
   setPanelMuted: (id, muted) => invoke(IPC.invoke.publishPanelMuted, { id, muted }),
@@ -245,7 +245,7 @@ const browserBridge = {
 };
 contextBridge.exposeInMainWorld("mosaelBrowser", browserBridge);
 
-// 浏览器会话顶栏的页面工具。都作用于前台那个内嵌视图 —— 渲染层不点名要哪个视图(见 publish/pageTarget.ts)。
+// 浏览器会话顶栏的页面工具。都作用于前台那个内嵌视图 —— 渲染层不点名要哪个视图(见 browser/page/pageTarget.ts)。
 /** @type {import("./preload-api").MosaelPageToolsBridge} */
 const pageToolsBridge = {
   capture: (mode) => invoke(IPC.invoke.pageToolsCapture, { mode }),

@@ -26,8 +26,8 @@ const TIMER_PROMISE = /new Promise(?:<[^>]*>)?\(\s*\(?\s*(\w+)[^)=]*\)?\s*=>\s*\
 const TIMER_WAITS: Record<string, number> = {
   "electron/backend-lifecycle.test.ts": 1,
   "electron/preload-locale.test.ts": 1,
-  "electron/publish/accountViewsPanels.test.ts": 1,
-  "electron/publish/comfyWorkbench.test.ts": 1,
+  "electron/browser/pool/accountViewsPanels.test.ts": 1,
+  "electron/browser/comfy/comfyWorkbench.test.ts": 1,
   "frontend/src/components/app/imagePreviewClose.dom.test.tsx": 1,
   "frontend/src/components/app/imagePreviewLayers.dom.test.tsx": 1,
   "frontend/src/components/app/suggestionMenu.dom.test.tsx": 1,

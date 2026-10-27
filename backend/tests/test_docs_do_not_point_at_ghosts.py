@@ -158,7 +158,10 @@ def test_棘轮说明里指到的路径也都还在() -> None:
         text = path.read_text(encoding="utf-8")
         # 只看开头那段说明,不看测试体:测试体里出现的路径常常是**故意造的假路径**
         # (tmp_path 的用例、变异验证的样例),那些本来就不该存在。
-        head = text[: text.find("\nRATCHET") if "\nRATCHET" in text else min(len(text), 4000)]
+        # 没有 RATCHET 标记时取前 4000 字,但退到那之前最后一个换行:按字数硬切会把路径拦腰截断
+        # (`…/bilibili.ts` 切成 `…/bilibili.t`),报一个并不存在的幽灵。
+        end = text.find("\nRATCHET") if "\nRATCHET" in text else text.rfind("\n", 0, 4000) if len(text) > 4000 else len(text)
+        head = text[:end]
         for one in _missing_code_paths(ROOT, head, top_level=top_level):
             ghosts.append(f"{path.relative_to(ROOT)} → {one}")
     assert not ghosts, "棘轮说明里指到了不存在的文件:\n  " + "\n  ".join(ghosts)

@@ -538,7 +538,7 @@ it("开发时主进程是旧的(能替你重启):报错直接给「重启」", a
   Object.assign(window, {
     mosaelDesktop: {
       devMain: {
-        status: async () => ({ files: ["publish.bundle.cjs"], canRestart: true }),
+        status: async () => ({ files: ["browser.bundle.cjs"], canRestart: true }),
         onStale: () => () => undefined,
         restart,
       },
@@ -547,7 +547,7 @@ it("开发时主进程是旧的(能替你重启):报错直接给「重启」", a
   const { mainStale } = await import("@/features/desktop/mainStale");
   mainStale.reset();
   const off = mainStale.subscribe(() => undefined);
-  await waitFor(() => expect(mainStale.get().files).toEqual(["publish.bundle.cjs"]));
+  await waitFor(() => expect(mainStale.get().files).toEqual(["browser.bundle.cjs"]));
   tools.capture.mockRejectedValueOnce(new Error("这个功能要重启 Mosael 才能用(应用的一部分还是旧版本)"));
   show();
   fireEvent.click(toolButton("shot"));

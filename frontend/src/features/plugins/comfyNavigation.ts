@@ -1,6 +1,6 @@
 /**
  * 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标)在渲染层这一侧:**按连接记在这台电脑上**(localStorage),缺省看平台 ——
- * macOS 是触控板,别的是鼠标(也是 ComfyUI 自己的缺省)。真正去设的是主进程(electron/publish/comfyNavigation):只在这个视图里
+ * macOS 是触控板,别的是鼠标(也是 ComfyUI 自己的缺省)。真正去设的是主进程(electron/browser/comfy/comfyNavigation):只在这个视图里
  * 生效,写回 ComfyUI 服务器的那一下被拦下,坐在那台机器前面的人不受影响。
  */
 import React from "react";

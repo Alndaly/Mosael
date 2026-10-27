@@ -224,7 +224,7 @@ jobs:
       - name: Build desktop bundles / frontend / sidecar / backend
         run: |
           pnpm build:preload
-          pnpm build:publisher
+          pnpm build:browser
           pnpm build:system
           pnpm build:frontend
           pnpm build:sidecar

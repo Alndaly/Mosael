@@ -50,7 +50,7 @@ describe("顶栏里的「需要重启」小标记", () => {
     await act(async () => undefined);
     expect(badge()).toBeNull();
 
-    act(() => push({ files: ["publish.bundle.cjs"], canRestart: true }));
+    act(() => push({ files: ["browser.bundle.cjs"], canRestart: true }));
     expect(badge()).not.toBeNull();
     expect(badge()!.getAttribute("aria-label")).toBe("mainStaleText");
     expect(await readHint(badge()!)).toBe("mainStaleTextmainStaleBadgeHint");

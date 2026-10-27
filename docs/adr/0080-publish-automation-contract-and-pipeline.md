@@ -2,9 +2,9 @@
 
 - 状态:Accepted — 2026-10-24,已实现
 - 相关:ADR 0076(发布的内容形状)、ADR 0078(失败取证与人工兜底)、ADR 0006(旧数据用迁移)
-- 代码位置:`electron/publish/contract.ts`、`electron/publish/contracts.ts`、
-  `electron/publish/overlays.ts`、`electron/publish/verify.ts`、`electron/publish/fakePage.ts`、
-  `electron/publish/publishWorker.ts`、`backend/app/db/migrations.py`
+- 代码位置:`electron/browser/publish/contract.ts`、`electron/browser/publish/contracts.ts`、
+  `electron/browser/publish/overlays.ts`、`electron/browser/publish/verify.ts`、`electron/browser/publish/fakePage.ts`、
+  `electron/browser/publish/publishWorker.ts`、`backend/app/db/migrations.py`
 
 ## 背景:一天里六次失败,根子只有四个
 

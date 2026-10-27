@@ -74,10 +74,10 @@ Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`�
 
 **Files**
 
-- `electron/publish/adapters.ts`
-- `electron/publish/selectors.ts`
-- `electron/publish/pageDriver.ts`
-- `electron/publish/publishWorker.ts`
+- `electron/browser/publish/adapters.ts`
+- `electron/browser/publish/selectors.ts`
+- `electron/browser/page/pageDriver.ts`
+- `electron/browser/publish/publishWorker.ts`
 
 **Problem**
 
@@ -90,9 +90,9 @@ Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`�
 
 **Completed**
 
-- 已把平台页面选择器契约抽到 `electron/publish/selectors.ts`。这是第一条低风险 seam:
+- 已把平台页面选择器契约抽到 `electron/browser/publish/selectors.ts`。这是第一条低风险 seam:
   平台页面 DOM 变化现在可以独立 review,不用在 1000 行 Adapter 实现里找常量。
-- 已按平台拆到 `electron/publish/adapters/*.ts`,`electron/publish/adapters.ts` 只保留
+- 已按平台拆到 `electron/browser/publish/adapters/*.ts`,`electron/browser/publish/adapters.ts` 只保留
   `ADAPTERS` 注册表(2026-10-24:那条 `if` 链换成了表)。调用方不感知文件布局。
 - 已把小红书等平台 helper 移回对应 Adapter。`PageDriver` 只保留导航、DOM 探测、可信输入、文件、
   cookie、诊断与截图这些通用浏览器能力。
@@ -508,7 +508,7 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 
 - `pnpm lint`(仓库根)**每次都跑** —— 它是 oxlint(frontend、website)加三处 ruff(backend、community、
   packages/mosael-formats),是 CI 的第一步。只跑 frontend 那半漏过 F401,CI 连红过三次
-- `pnpm build:publisher` when touching `electron/publish/**`
+- `pnpm build:browser` when touching `electron/browser/**`
 - `pnpm --dir frontend build && pnpm --dir frontend exec vitest run` when touching frontend(`build` = `tsc --noEmit` +
   vite build;整套 vitest 要跑满,`design/` 下的棘轮扫全仓)
 - `cd backend && ./.venv/bin/python -m pytest -q` when touching backend — **跑满,别只跑相关文件**:

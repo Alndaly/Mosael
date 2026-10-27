@@ -285,7 +285,7 @@ class Canvas:
         if call["op"] == "runControls":
             return {"ok": True}
         if call["op"] == "export":
-            #: 桥的「运行」导出:界面格式 + API 格式 + 前端的 clientId(见 electron/publish/comfyWorkbench.ts)
+            #: 桥的「运行」导出:界面格式 + API 格式 + 前端的 clientId(见 electron/browser/comfy/comfyWorkbench.ts)
             return {"ok": True, "export": {"workflow": copy.deepcopy(self.graph), "prompt": EXPORTED_PROMPT,
                                            "clientId": "4f1c0e2a9b7d4c51a3e8",
                                            "at": {"key": self.export_key or self.key, "revision": self.revision}}}

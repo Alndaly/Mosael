@@ -186,7 +186,7 @@ sidecar 专门为这件事发了一条事件。**唯独中间那一跳把问题�
 - `backend/app/api/routes/browser_worker.py:24-25` —— `ClaimRequest.worker` 收下了;
   `backend/app/domain/browser/__init__.py:273-295` —— `claim_next_action(db, *, worker="")`
   的函数体里**一次都没用过 `worker`**。`BrowserAction` 上也没有 `claimed_by` 这一列。
-- `electron/publish/browserBackend.ts:51,56` —— 客户端发的是**字面量** `"browser"`,
+- `electron/browser/pool/browserBackend.ts:51,56` —— 客户端发的是**字面量** `"browser"`,
   不是身份。对比同文件 `:82-117` 为发布执行器的 `workerId` 写的整整一页:
   「**必须跨重启稳定**:重启后第一拍要认出自己那些没跑完的任务并收回来,那是这条判据存在的
   全部理由。」——同一个文件里,同一课,隔壁那条道没学。
@@ -441,7 +441,7 @@ sidecar 专门为这件事发了一条事件。**唯独中间那一跳把问题�
 | `_HEARTBEATS`(浏览器)| `browser_worker.py:21,64` | 写进去,全仓零个读者 |
 | `_HEARTBEATS`(通用 job)| `job_worker.py:23,92` | 同上(租约续期走的是 `renew_worker_leases`,不读这个字典) |
 | `GET /api/publish/worker/status` | `publish_worker.py:113-115` → `worker_online()` | 全仓唯一调用方是 `backend/tests/test_publish_worker.py:129`。前端只在生成的 `schema.d.ts:485` 里有它的类型 |
-| `PublishAccount.profile_name` | `publish_worker.py:42,91` + `domain/publish/worker.py:303,314-315` | 后端收、落库、进 `api/schemas/publish.py:66`;而执行器那侧 `electron/publish/publishBackend.ts:145-150` 的 `patchAccount` 签名里**根本没有这个字段**。永远是 NULL |
+| `PublishAccount.profile_name` | `publish_worker.py:42,91` + `domain/publish/worker.py:303,314-315` | 后端收、落库、进 `api/schemas/publish.py:66`;而执行器那侧 `electron/browser/publish/publishBackend.ts:145-150` 的 `patchAccount` 签名里**根本没有这个字段**。永远是 NULL |
 
 单看每一条都无害。合起来它们是同一件事:**协议的两侧没有任何一处被强制对齐**,
 所以两个方向都会长出死代码——一边加了没人读,一边读了从不出现。§2.1 建议的那条棘轮
@@ -488,7 +488,7 @@ sidecar 专门为这件事发了一条事件。**唯独中间那一跳把问题�
 
 ### 2.12 【低】开发态不构建 sidecar,也不 watch system
 
-`frontend/package.json:15` 的 `electron:dev` 会先构建 `build:preload` / `build:publisher` /
+`frontend/package.json:15` 的 `electron:dev` 会先构建 `build:preload` / `build:browser` /
 `build:system`,并 watch `publisher` 和 `preload`。而:
 
 - **没有 `build:sidecar`。** `agent-sidecar/dist/` 不入 git(`git ls-files agent-sidecar/dist`
@@ -553,7 +553,7 @@ video.currentTime = Math.max(0, Math.min(..., message.seconds));
   `code` / `user_prompt` 两个参数名,而它已经被 manifest 里的 `blender-mcp==1.9.1` 钉住了。
   结论不变(保持线上格式不变是好事),但理由该改,否则下次会为一个不存在的约束多付一次代价。
 
-- **发布执行器的多执行器正确性。** `electron/publish/publishBackend.ts:82-117` 的身份、
+- **发布执行器的多执行器正确性。** `electron/browser/publish/publishBackend.ts:82-117` 的身份、
   `domain/publish/worker.py:58-89` 的两条回收判据(「只有认领者能说」+「全局兜底」)、
   `:114-124` 的「排除**任何人**正在跑的账号」,加上 `backend/tests/test_two_publish_workers.py`
   逐条钉住。这一处是本次审计里做得最完整的。
@@ -662,13 +662,13 @@ video.currentTime = Math.max(0, Math.min(..., message.seconds));
 - `backend/app/api/routes/browser_worker.py`
 - `backend/app/domain/publish/worker.py`
 - `backend/app/domain/browser/__init__.py`
-- `electron/publish/publishBackend.ts`
-- `electron/publish/browserBackend.ts`
-- `electron/publish/browserWorker.ts`
+- `electron/browser/publish/publishBackend.ts`
+- `electron/browser/pool/browserBackend.ts`
+- `electron/browser/pool/browserWorker.ts`
 
 **Electron 壳**
 - `electron/main.cjs`
-- `electron/publish/accountViews.ts`
+- `electron/browser/pool/accountViews.ts`
 - `electron/preload-build.test.ts`
 - `test/bundle.smoke.mjs`
 - `frontend/package.json`(`electron:dev`)

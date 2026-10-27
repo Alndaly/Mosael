@@ -86,7 +86,7 @@
 url / ids / published_at`),之后按作品 ID 查数据(TikHub 之类)就靠它。任务列表接口、job 结果
 (工作流发布节点的 `post_id` / `post_url` 输出)、智能体的 `list_publish_tasks` 都能读到。
 
-ID 是执行器从**平台自己的发布接口的响应**里读的(`electron/publish/publishedPost.ts`):
+ID 是执行器从**平台自己的发布接口的响应**里读的(`electron/browser/publish/publishedPost.ts`):
 点提交前开始监听那一个接口,等到平台确认后停。读原文而不是 JSON.parse —— 抖音 / TikTok
 的 19 位 ID 过一次 JS 数字就错了;每个平台的 ID 都有形状校验。读不到就是空 `post_id`,不编。
 YouTube 另有一路:详情页上的 youtu.be 链接(适配器早就在读,用来认「这一支」)。
@@ -115,9 +115,9 @@ YouTube 另有一路:详情页上的 youtu.be 链接(适配器早就在读,用�
 
 ## 平台契约与判定口径(改适配器前先读这一节)
 
-每个平台"发布这件事"写成一份**契约**(`electron/publish/contract.ts`、`contracts.ts`):
+每个平台"发布这件事"写成一份**契约**(`electron/browser/publish/contract.ts`、`contracts.ts`):
 按形状的入口(直连地址 / 要点的 tab)、按形状的文件框、提交按钮、**成功信号**、要关的浮层。
-页面上的中文与 CSS 在 `electron/publish/selectors.ts`(匹配真实站点的词表,豁免翻译),契约引用它。
+页面上的中文与 CSS 在 `electron/browser/publish/selectors.ts`(匹配真实站点的词表,豁免翻译),契约引用它。
 
 改某平台之前,先分清它属于哪一类:
 
@@ -125,8 +125,8 @@ YouTube 另有一路:详情页上的 youtu.be 链接(适配器早就在读,用�
 | --- | --- |
 | 投稿地址 / tab 文案 / 文件框 / 提交按钮 / 成功判据 / 该关的提示框 | **契约**(`contracts.ts`)+ 必要时 `selectors.ts` |
 | 那个平台特有的动作(逗号成段、zone 编辑器、封面、视频 ID 核对) | 适配器本身 |
-| "这一次到底成没成"的口径 | **`electron/publish/verify.ts`**(`textEntered` / `linesEntered` / `successVisible` / `awaitResult`) |
-| "平台弹了个东西挡住下一步" | **`electron/publish/overlays.ts`** 的规则 + `selectors.ts` 的 `overlays` |
+| "这一次到底成没成"的口径 | **`electron/browser/publish/verify.ts`**(`textEntered` / `linesEntered` / `successVisible` / `awaitResult`) |
+| "平台弹了个东西挡住下一步" | **`electron/browser/publish/overlays.ts`** 的规则 + `selectors.ts` 的 `overlays` |
 
 执行器在**每一步之前**统一清一遍浮层(`publishWorker` 的 `step()`),适配器不需要记得"这里可能有个提示框"。
 

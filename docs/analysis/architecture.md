@@ -43,7 +43,7 @@ graph TD
     subgraph EL["Electron 主进程 electron/main.cjs(927 行)"]
         SPAWN["spawn mosael-backend(PyInstaller 冻结二进制;dev 为 uvicorn)<br/>ensureBackend 探活复用或新起,轮询 /api/health 等就绪 30s(main.cjs:247)<br/>注入 MOSAEL_DATA_DIR / MOSAEL_LOCAL_DESKTOP=1 等环境(main.cjs:268-293)"]
         WIN["BrowserWindow 加载前端<br/>file:// 打包 / localhost:5173 dev,hash 路由"]
-        PUBW["publish.bundle.cjs 发布执行器<br/>轮询认领发布任务"]
+        PUBW["browser.bundle.cjs 发布执行器<br/>轮询认领发布任务"]
         SYSW["system.bundle.cjs 系统能力层<br/>托盘/角标/防睡眠,缺失不挡启动"]
         LOCK["单实例锁(main.cjs:185,早于 app ready)"]
     end
@@ -619,7 +619,7 @@ flowchart TD
 | 渲染双实现 | `backend/app/media/{scene,render_plan,render_executor,text_render}.py`、`frontend/src/features/editor/playback/` |
 | 契约语料 | `contracts/*.json` + `backend/tests/test_*_parity.py` + `frontend/src/**/*.parity.test.ts` |
 | 组装根 | `backend/app/main.py`(`_wire_seams`、`lifespan`、CORS、异常翻译) |
-| Electron 壳 | `electron/main.cjs`、`electron/system/*.ts`、`electron/publish/` |
+| Electron 壳 | `electron/main.cjs`、`electron/system/*.ts`、`electron/browser/` |
 | 智能体 | `backend/app/domain/agent/host.py`、`agent-sidecar/src/{pi,compaction,subagent,tools}.ts`、`backend/mcp_server.py` |
 | 供应商 | `backend/app/ai/providers/{contracts,adapters,registry.py,media_transfer.py}`、`backend/app/domain/provider_*.py` |
 | 生成契约 | `backend/app/domain/generation/{catalog,resolution,custom_profiles,operations,runner}.py` |

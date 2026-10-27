@@ -1,7 +1,7 @@
 {
   "// 说明": [
-    "发布执行器(electron/publish/**)的类型检查配置。",
-    "运行时由 esbuild 打成 publish.bundle.cjs,而 esbuild **不做类型检查**——在这个文件存在之前,",
+    "发布执行器(electron/browser/**)的类型检查配置。",
+    "运行时由 esbuild 打成 browser.bundle.cjs,而 esbuild **不做类型检查**——在这个文件存在之前,",
     "这些源码从未被 tsc 看过一眼,于是积累了失效的 @ts-expect-error 和无人发现的类型问题。",
     "noEmit:只检查,产物仍由 esbuild 出。"
   ],
@@ -25,7 +25,7 @@
     ]
   },
   "include": [
-    "publish/**/*.ts",
+    "browser/**/*.ts",
     "system/**/*.ts"
   ],
   "// exclude 说明": [
