@@ -127,14 +127,25 @@ describe("网页亮着时按 ⌘K(ADR 0051 D36)", () => {
 
 describe("点进 Mosael 的壳,键盘先交回渲染层", () => {
   it("网页亮着时点工作台那一列/顶栏:先 focusHost,再决定要不要交给网页;点壳外不动", () => {
-    show();
-    fireEvent.pointerDown(byId("address"));
-    expect(focusHost).toHaveBeenCalledTimes(1);
-    fireEvent.pointerDown(document.body);
-    expect(focusHost).toHaveBeenCalledTimes(1);
-    hide();
-    fireEvent.pointerDown(byId("address"));
-    expect(focusHost, "视图状态漏播也不影响交回宿主，重复聚焦是空操作").toHaveBeenCalledTimes(2);
+    vi.useFakeTimers();
+    try {
+      show();
+      fireEvent.pointerDown(byId("address"));
+      vi.runAllTimers();
+      expect(focusHost).toHaveBeenCalledTimes(1);
+      fireEvent.pointerUp(byId("address"));
+      vi.runAllTimers();
+      expect(focusHost).toHaveBeenCalledTimes(2);
+      fireEvent.pointerDown(document.body);
+      vi.runAllTimers();
+      expect(focusHost).toHaveBeenCalledTimes(2);
+      hide();
+      fireEvent.pointerDown(byId("address"));
+      vi.runAllTimers();
+      expect(focusHost, "视图状态漏播也不影响交回宿主，重复聚焦是空操作").toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

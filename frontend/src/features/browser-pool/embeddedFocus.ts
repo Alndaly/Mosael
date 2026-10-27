@@ -39,9 +39,12 @@ export function installEmbeddedFocus(): () => void {
     if (nativeViewAside()) return;
     const target = event.target;
     if (!(target instanceof Element) || !target.closest("[data-app-chrome]")) return;
-    void bridge.focusHost?.();
+    //: 原生视图可能在同一下 pointerdown/up 的处理末尾把焦点抢回去;推到下一拍再交,
+    //: 用户松手后按 ⌘C 时键盘已经在 Mosael。
+    window.setTimeout(() => void bridge.focusHost?.(), 0);
   };
   window.addEventListener("pointerdown", focusHostOnPointer, true);
+  window.addEventListener("pointerup", focusHostOnPointer, true);
   const stopKeys = listenKeys(
     window,
     (event) => {
@@ -58,6 +61,7 @@ export function installEmbeddedFocus(): () => void {
     stopView();
     stopKeys();
     window.removeEventListener("pointerdown", focusHostOnPointer, true);
+    window.removeEventListener("pointerup", focusHostOnPointer, true);
   };
 }
 

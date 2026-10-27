@@ -874,7 +874,10 @@ export class AccountViewManager {
   /** 键盘交回 Mosael 的渲染层(点在工作台那一列、发布顶栏等壳里之后)。 */
   focusHost(): void {
     if (this.window && !this.window.isDestroyed()) this.window.focus();
+    //: 原生 WebContentsView 在前台时会自己咬着键盘焦点。focus 宿主是唯一能交回键盘的公开入口;
+    //: 末尾再 focus 一次窗口,确保它不是只在 webContents 层换了焦点、窗口还没成为 key window。
     this.hostWebContents()?.focus();
+    if (this.window && !this.window.isDestroyed()) this.window.focus();
   }
 
   /** 主窗口自己的网页(Mosael 的界面)。 */
