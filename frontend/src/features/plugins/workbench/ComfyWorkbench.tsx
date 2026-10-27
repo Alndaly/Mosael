@@ -44,12 +44,25 @@ type Tab = (typeof TABS)[number];
 const BAR_REGION = { side: "bottom" as const };
 //: 等桥多久才说「连不上」:第一次打开要下整套前端,慢的机器上要好几十秒
 const BRIDGE_PATIENCE_MS = 45_000;
-const COLUMN_REGION = { side: "left" as const };
+//: 右列是完整的 DOM、没有原生网页盖在上面;说明留在 DOM 里,压在外壳之上即可。
+const COLUMN_REGION = { side: "top" as const, layer: "dom" as const };
 const SAVE_KEY = "Mod+S";
 
 /** 这一下按键落在工作台自己的顶栏或右边那一列里(助手的输入框也在这一列)。 */
 const inWorkbench = (target: EventTarget | null) =>
   target instanceof Element && target.closest("[data-comfy-workbench-bar], [data-comfy-workbench-column]") !== null;
+
+/** 工作台 Cmd+C 只复制眼前选中的文字;输入框/可编辑区交给浏览器自己的复制语义。 */
+function copySelection(event: React.ClipboardEvent<HTMLElement>): void {
+  const target = event.target;
+  if (target instanceof Element && target.closest("input, textarea, [contenteditable='true']")) return;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return;
+  const text = selection.toString();
+  if (!text.trim()) return;
+  event.clipboardData.setData("text/plain", text);
+  event.preventDefault();
+}
 
 /**
  * 每个页签自己滚动(竖排的 flex,面板的根占满剩下的高 —— 空的、在读的摆在正中,见 workbenchParts)。能拿焦点:在里面点了
@@ -327,6 +340,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
       <aside
         {...APP_CHROME}
         data-comfy-workbench-column=""
+        onCopy={copySelection}
         aria-label={t("workbenchColumn")}
         style={{ top: barHeight, width: column.width }}
         className="fixed bottom-0 right-0 z-[200] flex flex-col border-l border-border bg-panel"

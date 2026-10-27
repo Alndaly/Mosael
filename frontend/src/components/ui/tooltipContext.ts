@@ -49,7 +49,9 @@ export type HintRegionValue = {
   /**
    * `lightbox`:全屏看大图那一层(z-220,压在外壳上面)里的说明。那时原生网页视图已经让开了(见 nativeViewAside),
    * 说明照常画在 DOM 里,只是层要抬到大图之上(标 `data-over-lightbox`,styles.css 据此抬层),不交给浮层视图。
+   * `dom`:这块外壳自己就是完整的一块 DOM、没有原生网页视图盖在上面(工作台右边那一列),说明留在 DOM 里,
+   * 抬到外壳之上即可;交给浮层视图反而会绕一层,浮层没显示时这里就像"没有说明"。
    */
-  layer?: "lightbox"
+  layer?: "lightbox" | "dom"
 }
 export const HintRegion = React.createContext<HintRegionValue | null>(null)

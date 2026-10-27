@@ -411,3 +411,29 @@ describe("说明只在真有人要看的时候出:不闪", () => {
     expect(events).toEqual(["mount"]);
   });
 });
+
+describe("纯 DOM 外壳里的说明", () => {
+  it("layer=dom 不走浮层视图,直接在 DOM 里抬到外壳之上", async () => {
+    const showFloat = vi.fn();
+    const hideFloat = vi.fn();
+    Object.defineProperty(window, "mosaelPublish", {
+      configurable: true,
+      value: { showFloat, hideFloat },
+    });
+    render(
+      <TooltipProvider delayDuration={0}>
+        <HintRegion.Provider value={{ side: "top", layer: "dom" }}>
+          <Hint label="在工作台里定位">
+            <button type="button">#12</button>
+          </Hint>
+        </HintRegion.Provider>
+      </TooltipProvider>,
+    );
+    const trigger = screen.getByRole("button", { name: "#12" });
+    fireEvent.pointerEnter(trigger);
+    fireEvent.pointerMove(trigger);
+    const content = await screen.findByRole("tooltip");
+    expect(content.hasAttribute("data-over-chrome")).toBe(true);
+    expect(showFloat).not.toHaveBeenCalled();
+  });
+});

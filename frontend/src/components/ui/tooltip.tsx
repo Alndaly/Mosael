@@ -134,8 +134,9 @@ function regionPlacement(region: HintRegionValue | null, side: Side | undefined)
   return region.layer === "lightbox" ? { side: placed, "data-over-lightbox": "" } : { side: placed, "data-over-chrome": "" }
 }
 
-/** 这块里的说明要交给浮层视图画到原生网页视图上面吗(外壳里要;大图那一层不用 —— 视图已经让开了)。 */
-const mirrorsToFloat = (region: HintRegionValue | null) => region !== null && region.layer !== "lightbox"
+/** 这块里的说明要交给浮层视图画到原生网页视图上面吗(真正被网页盖住的外壳要;大图层和纯 DOM 外壳不用)。 */
+const mirrorsToFloat = (region: HintRegionValue | null) =>
+  region !== null && region.layer !== "lightbox" && region.layer !== "dom"
 
 const CHROME_LAYER = { ...APP_CHROME, "data-over-chrome": "" } as const
 

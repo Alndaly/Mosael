@@ -1495,6 +1495,22 @@ describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () =>
     expect(shownPanel().querySelector('[data-comfy-node="9"]'), "代码里的不变成定位").toBeNull();
     expect(screen.getByText("#9").tagName).toBe("CODE");
   });
+
+  it("Cmd+C 复制选中的回答文字，不把默认复制让给底下的网页", async () => {
+    agent.reply = "复制这一段回答";
+    await mount();
+    tab("workbenchTabAssistant");
+    const paragraph = await screen.findByText("复制这一段回答");
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const setData = vi.fn();
+    const event = fireEvent.copy(paragraph, { clipboardData: { setData } });
+    expect(setData).toHaveBeenCalledWith("text/plain", "复制这一段回答");
+    expect(event).toBe(false);
+  });
 });
 
 describe("助手(ADR 0042 第二步):诊断的「定位」「照这个改」、改完的、新标签页的「去下载」", () => {

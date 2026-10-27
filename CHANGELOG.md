@@ -19,6 +19,7 @@ commit list and downloadable artifacts.
 - 中文输入法组词时暂停 ProseMirror 的 DOM 观察，退格缩短候选不会再让残留拼音进入正文。
 - ComfyUI 助手回复里的节点引用补上悬停说明与读屏名称；Hint 现在包在真实 DOM 锚点上。
 - 没有结构化来源的普通网站链接悬停显示完整地址，与引用胶囊的悬停卡片保持同一套 Interaction。
+- ComfyUI 工作台右列的说明改为 DOM 层直接绘制，不再依赖原生浮层视图；窗口与宿主 webContents 一起交回焦点。
 
 ### 桌面发布生命周期
 

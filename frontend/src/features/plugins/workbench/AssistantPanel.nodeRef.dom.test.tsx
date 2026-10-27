@@ -5,9 +5,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PreferencesProvider } from "@/app/preferences";
+import { CitationContext } from "@/components/markdown/CitationLink";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { MarkdownRefsContext } from "@/components/markdown/markdownRefs";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { HintRegion, TooltipProvider } from "@/components/ui/tooltip";
 import { NODE_REFS } from "./AssistantPanel";
 
 describe("ComfyUI 助手回复里的节点引用", () => {
@@ -39,5 +40,30 @@ describe("ComfyUI 助手回复里的节点引用", () => {
     fireEvent.pointerMove(website);
     const websiteTooltip = await screen.findByRole("tooltip");
     expect(websiteTooltip.textContent).toContain("https://civitai.com/models/1");
+  });
+
+  it("有结构化来源的网站胶囊悬停显示标题、摘录和网址", async () => {
+    const href = "https://civitai.com/models/1";
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PreferencesProvider>
+          <HintRegion.Provider value={{ side: "top", layer: "dom" }}>
+          <TooltipProvider delayDuration={0}>
+            <CitationContext.Provider value={new Map([[href, {
+              href, title: "模型页", label: "civitai.com", kind: "web", excerpt: "作者 catlover1937",
+            }]])}>
+              <AgentMarkdown>{"[civitai.com](https://civitai.com/models/1)"}</AgentMarkdown>
+            </CitationContext.Provider>
+          </TooltipProvider>
+          </HintRegion.Provider>
+        </PreferencesProvider>
+      </QueryClientProvider>,
+    );
+    const website = screen.getByRole("link", { name: "模型页" });
+    fireEvent.pointerEnter(website);
+    fireEvent.pointerMove(website);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.textContent).toContain("作者 catlover1937");
+    expect(tooltip.textContent).toContain(href);
   });
 });

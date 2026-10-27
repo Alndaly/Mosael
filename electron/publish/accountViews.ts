@@ -873,6 +873,7 @@ export class AccountViewManager {
 
   /** 键盘交回 Mosael 的渲染层(点在工作台那一列、发布顶栏等壳里之后)。 */
   focusHost(): void {
+    if (this.window && !this.window.isDestroyed()) this.window.focus();
     this.hostWebContents()?.focus();
   }
 
