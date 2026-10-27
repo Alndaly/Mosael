@@ -65,7 +65,7 @@ def _scan() -> set[str]:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             # 总线自己当然又建 job 又起线程 —— 它就是那个唯一的派发点。
-            if rel == "app/domain/jobs.py":
+            if rel == "app/domain/jobs/__init__.py":
                 continue
             if _calls(node, "create_job") and _spawns_thread(node) and not _calls(node, "dispatch_job"):
                 found.add(f"{rel}::{node.name}")

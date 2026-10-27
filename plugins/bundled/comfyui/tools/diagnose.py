@@ -166,7 +166,7 @@ class _Findings:
         if refs and len(refs) > 1:
             entry["refs"] = refs[:20]
         #: 缺的模型的那几样**结构化**事实(文件名、目录、声明的地址 / 哈希):工作台「缺失项」和人一样照它下载,
-        #: 智能体也不用从 `fix` 那句话里猜(见 domain/workbench_agent 的 comfy_model_download)。
+        #: 智能体也不用从 `fix` 那句话里猜(见 domain/workbench/agent 的 comfy_model_download)。
         if model:
             entry["model"] = model
         self.items.append(entry)

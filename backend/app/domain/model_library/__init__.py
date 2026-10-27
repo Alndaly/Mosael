@@ -32,7 +32,9 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, fragment
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, ModelFileMark, PluginInstance, User
-from app.domain import capabilities, model_nsfw_local, model_previews
+from app.domain import capabilities
+from app.domain.model_library import nsfw_local as model_nsfw_local
+from app.domain.model_library import previews as model_previews
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import egress as plugin_egress

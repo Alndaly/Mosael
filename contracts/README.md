@@ -344,7 +344,7 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 | --- | --- | --- |
 | 宿主(表单、结果、过桥的标记) | `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` | `backend/tests/test_node_shapes_parity.py`、`test_plugin_workflow_library.py` |
 | 桥(标记写进画布前再查一遍,以及 `locate`) | `electron/ipc-contract.cjs` 的 `ANY_NODE` / `CANVAS_NODE` / `NODE_PATH` | `electron/ipc-contract.test.ts` |
-| 工作台智能体(`comfy_locate` 的 `node`) | `backend/app/domain/workbench_agent.py` 的 `_NODE_REF` | `backend/tests/test_node_shapes_parity.py` |
+| 工作台智能体(`comfy_locate` 的 `node`) | `backend/app/domain/workbench/agent.py` 的 `_NODE_REF` | `backend/tests/test_node_shapes_parity.py` |
 | 插件改图(那一步指哪一层) | `plugins/bundled/comfyui/tools/canvas_edit.py` 的 `_PATH` | 同上 |
 | 助手回复里的引用 | `frontend/src/features/plugins/workbench/nodeRefs.ts` 的 `NODE_REF` | `nodeRefs.parity.test.ts` |
 

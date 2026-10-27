@@ -59,7 +59,7 @@
     "finding": "**存在,而且只在「只有一段」这一点上。** `canvas_path`(`{0,16}`)收 `12` 和 `-3`;`subgraph_path`(`{1,16}`)拒它们。深度上限两侧相同(16 个冒号段),所以「更宽」说的是**下界**,不是上限。两处对「负号只在第一段」的看法一致 —— 那个维度上没有差异。",
     "wider": "canvas_path",
     "in_use": [
-      "canvas_path 的三处 —— `plugins/bundled/comfyui/tools/canvas_edit.py` 的 `_PATH`(没给 `graph` 时那个节点指哪一层)、`backend/app/domain/workbench_agent.py` 的 `_NODE_REF`(`comfy_locate` 的 `node`)、`frontend/src/features/plugins/workbench/nodeRefs.ts` 的 `NODE_REF`(助手回复里的 `#12`)。三处说的都是「画布上的引用」,而 `#12` 就是根图节点 —— 拒了它才是错的。",
+      "canvas_path 的三处 —— `plugins/bundled/comfyui/tools/canvas_edit.py` 的 `_PATH`(没给 `graph` 时那个节点指哪一层)、`backend/app/domain/workbench/agent.py` 的 `_NODE_REF`(`comfy_locate` 的 `node`)、`frontend/src/features/plugins/workbench/nodeRefs.ts` 的 `NODE_REF`(助手回复里的 `#12`)。三处说的都是「画布上的引用」,而 `#12` 就是根图节点 —— 拒了它才是错的。",
       "subgraph_path 的一处 —— `electron/ipc-contract.cjs` 的 `NODE_PATH`。它只在 `locate` 上、和子图 id 二选一时用,管的是「路径」那一半;不带冒号的单号由同一个文件里的 `CANVAS_NODE` 收。所以**桥那一侧不是漏了一条**:两条正则合起来覆盖的和 `canvas_path` 一样,只是它那边分成了两份。",
       "深度上限 16 还有第四处背书:`plugins/bundled/comfyui/tools/subgraphs.py` 的 `MAX_DEPTH = 16`(子图递归最多 16 层),而画布摘要、应用表单都是照它枚举节点的 —— 第 17 层根本不是画布上叫得出的位置。"
     ],
@@ -96,7 +96,7 @@
     {
       "shape": "canvas_path",
       "runtime": "python",
-      "location": "backend/app/domain/workbench_agent.py",
+      "location": "backend/app/domain/workbench/agent.py",
       "symbol": "_NODE_REF",
       "note": "`comfy_locate` 的 `node`。"
     },

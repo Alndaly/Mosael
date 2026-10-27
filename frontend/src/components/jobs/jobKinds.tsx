@@ -1,6 +1,6 @@
 /**
  * 任务种类在界面上的样子。**名字、要不要提示、改动了什么、在哪一页看,都由后端声明**
- * (`GET /api/jobs/kinds`,见 backend/app/domain/job_catalog.py 与 ADR-0018);这里只补两样后端
+ * (`GET /api/jobs/kinds`,见 backend/app/domain/jobs/catalog.py 与 ADR-0018);这里只补两样后端
  * 不该知道的东西:每种任务的图标,和每种资源对应的缓存键。
  *
  * 此前这些是任务中心、子任务清单、任务详情里各自手写的表,彼此对不上。

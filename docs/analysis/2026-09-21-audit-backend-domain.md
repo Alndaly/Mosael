@@ -59,7 +59,7 @@ scenes / blender / permissions 四处同构)、数据归属地图 + 棘轮、CAS
 
 连接池是 5 + 10 溢出、30 秒取用超时 —— 这不是我算的,是仓库自己写下的
 (`app/domain/assets/proxies.py:80-88`),并且为它立过规矩:**先拿信号量,再开会话**
-(`app/domain/jobs.py:112-121`),还上了测试(`tests/test_worker_admission.py:78-116`)。
+(`app/domain/jobs/__init__.py:112-121`),还上了测试(`tests/test_worker_admission.py:78-116`)。
 
 工作流引擎是唯一反着做的一层:
 
@@ -588,7 +588,7 @@ mine = task.claimed_by == worker if worker else True
 ## 附:本次用到的关键文件
 
 **任务总线**
-- `backend/app/domain/jobs.py`
+- `backend/app/domain/jobs/__init__.py`
 - `backend/app/api/schemas/jobs.py`
 - `backend/app/core/i18n.py`
 - `backend/app/core/db.py`

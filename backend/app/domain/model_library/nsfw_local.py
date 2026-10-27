@@ -32,7 +32,7 @@ from typing import Any
 from PIL import Image
 
 from app.ai.runtime import nsfw_models
-from app.domain import model_previews
+from app.domain.model_library import previews as model_previews
 
 logger = logging.getLogger(__name__)
 

@@ -14480,7 +14480,7 @@ export interface components {
         };
         /**
          * JobKindOut
-         * @description 一种任务在界面上的样子(见 app/domain/job_catalog.py)。label 已按请求方的语言翻好。
+         * @description 一种任务在界面上的样子(见 app/domain/jobs/catalog.py)。label 已按请求方的语言翻好。
          */
         JobKindOut: {
             /** Kind */

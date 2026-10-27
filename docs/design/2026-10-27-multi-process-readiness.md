@@ -65,7 +65,7 @@ flowchart LR
 | `app/domain/publish/worker.py` 的认领 | 多个认领者重复领同一条发布任务 | 原子认领 + 租约；多主机时用 `FOR UPDATE SKIP LOCKED` |
 | `app/domain/members.py:_lock` | 最后两个所有者可同时被降级 | 条件更新（按剩余所有者数量判断） |
 | `app/domain/agent/autopilot.py:ALLOWANCE_LOCK` | “始终允许”读改写互相覆盖 | 行版本/CAS 更新 |
-| `app/domain/model_library.py:_pending_downloads` | 两进程各自占位，同一 `.part` 排两条任务 | 数据库唯一占位行；插件 `O_EXCL` 仍是最后防线 |
+| `app/domain/model_library/__init__.py:_pending_downloads` | 两进程各自占位，同一 `.part` 排两条任务 | 数据库唯一占位行；插件 `O_EXCL` 仍是最后防线 |
 | `app/domain/workflows/approvals.py:_RESUMED` | 两条唤醒路各派一次恢复 | 数据库幂等键，而不是进程内标记 |
 | `app/domain/voices/remote.py:_copy_locks` | 远端多建一份克隆音色 | 数据库租约（按副本 key） |
 | `app/domain/blender/bridge.py:_locks` | 同一 `.blend` 被两次同步同时驱动 | 数据库租约（按连接） |
@@ -79,7 +79,7 @@ flowchart LR
 
 | 资源 | 为什么不能每个 web 一份 | 目标形态 |
 |---|---|---|
-| `app/domain/jobs.py:_runner`、`_CHILDREN`、`_KILLED`、各类 slots | 每进程一套 16 个名额；取消只能杀本进程子进程；重启丢失队列 | 单独 job worker 进程，数据库出队/心跳/租约；web 只入队 |
+| `app/domain/jobs/__init__.py:_runner`、`_CHILDREN`、`_KILLED`、各类 slots | 每进程一套 16 个名额；取消只能杀本进程子进程；重启丢失队列 | 单独 job worker 进程，数据库出队/心跳/租约；web 只入队 |
 | `app/workers/scheduler.py:_stop_event` | 每进程一个调度线程，同一 cron 触发多次 | 单例 scheduler worker（租约选主） |
 | 飞书 `connections._processes/_pumps` | 每进程再拉一份 lark 子进程，同一条消息处理两次 | 单例飞书连接 worker；消息经 outbox |
 | `app/domain/agent/login.py:_sessions` | 浏览器窗口只在发起进程；轮询落到别处查无会话 | 单例登录 worker，或短期路由到 owner 进程 |

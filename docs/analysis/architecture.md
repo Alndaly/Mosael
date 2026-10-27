@@ -122,7 +122,7 @@ graph LR
 
 ---
 
-## 2. 核心机制一:任务总线(`backend/app/domain/jobs.py`,766 行)
+## 2. 核心机制一:任务总线(`backend/app/domain/jobs/__init__.py`,766 行)
 
 ### 2.1 形态
 
@@ -613,7 +613,7 @@ flowchart TD
 
 | 主题 | 文件 |
 | --- | --- |
-| 任务总线 | `backend/app/domain/jobs.py`、`backend/app/api/routes/job_worker.py`、`backend/app/domain/job_catalog.py` |
+| 任务总线 | `backend/app/domain/jobs/__init__.py`、`backend/app/api/routes/job_worker.py`、`backend/app/domain/jobs/catalog.py` |
 | 工作流 | `backend/app/domain/workflows/{__init__,engine,revisions,binding,field_options}.py`、`executors/` |
 | 剪辑内核 | `backend/app/domain/sequences/{operations,history}.py`、`undo/` |
 | 渲染双实现 | `backend/app/media/{scene,render_plan,render_executor,text_render}.py`、`frontend/src/features/editor/playback/` |

@@ -52,8 +52,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "GenerationJob": ("app/domain/generation/",),
     "GenerationSession": ("app/domain/generation/",),
     # 任务总线(Job/TaskEvent 只在总线创建;进度/事件请走 jobs.py 的接口)
-    "Job": ("app/domain/jobs.py",),
-    "TaskEvent": ("app/domain/jobs.py",),
+    "Job": ("app/domain/jobs/__init__.py",),
+    "TaskEvent": ("app/domain/jobs/__init__.py",),
     # 任务中心的水位线(ADR 0050):每人每个工作区一条,只由面板的用例写。
     "JobCenterMark": ("app/domain/job_center/",),
     "Notification": ("app/domain/notifications/",),
@@ -145,7 +145,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     #: 连接背后由宿主起停的本机服务(ADR 0041):只由本机服务的领域模块写。
     "LocalService": ("app/domain/local_services/",),
     #: 模型文件的手动 NSFW 标记(ADR 0038 §9):只由模型库的领域模块写。
-    "ModelFileMark": ("app/domain/model_library.py",),
+    "ModelFileMark": ("app/domain/model_library/__init__.py",),
     #: 素材的手动 NSFW 标记(工作流库「最近的产出」上标的):只由工作流库的领域模块写。
     "AssetNsfwMark": ("app/domain/workflow_library.py",),
     #: 素材外链的缓存由生成链路写(传完记下、过期重传),见 generation/public_links。

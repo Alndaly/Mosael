@@ -894,7 +894,7 @@ definition.
 
 Step three of ADR 0042. The Assistant can now finish what it starts: search for a missing model and download it, install a missing
 custom node pack and restart ComfyUI, and run a workflow — including the one on the canvas. These are host tools
-(`backend/app/domain/workbench_agent.py`, registered next to the other `comfy_*` tools); the plugin's own lower-level operations
+(`backend/app/domain/workbench/agent.py`, registered next to the other `comfy_*` tools); the plugin's own lower-level operations
 (`model_library` search/resolve/download, `install_nodes`, `run_canvas`) are unchanged.
 
 - `comfy_model_search` and `comfy_model_resolve` are **read-only**. Search takes `filename` (plus `folder`, and `hash` / `hash_type`

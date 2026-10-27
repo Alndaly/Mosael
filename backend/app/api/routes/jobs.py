@@ -8,7 +8,7 @@ from app.domain.job_center import use_cases as job_center
 from app.api.schemas import JobCenterClearedOut, JobCenterOut, JobKindCatalogOut, JobOut, JobSummaryOut, TaskEventOut
 from app.core.i18n import get_current_locale, render_message, t
 from app.db.models import Job, TaskEvent
-from app.domain import job_catalog
+from app.domain.jobs import catalog as job_catalog
 
 router = APIRouter(tags=["jobs"])
 

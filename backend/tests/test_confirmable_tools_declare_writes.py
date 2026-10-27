@@ -19,7 +19,7 @@ import pytest
 from app.domain.agent.confirmable import registry
 from app.domain.agent.confirmable.registry import ConfirmableTool, tool_families, tool_spec, tool_specs
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX
-from app.domain.job_catalog import FALLBACK, JOB_KINDS
+from app.domain.jobs.catalog import FALLBACK, JOB_KINDS
 from app.domain.resources import RESOURCES
 from tests.util import fresh_client
 

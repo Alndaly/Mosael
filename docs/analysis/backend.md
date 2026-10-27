@@ -108,11 +108,11 @@ graph TD
 
 ### 3.4 数据归属棘轮
 
-`app/domain/ownership.py` 的 `TABLE_OWNERS` 字典把约 70 张表逐一登记到唯一拥有方路径前缀:"表的行创建只能发生在拥有它的领域模块里;跨领域需要新行时,调用拥有方的领域函数,不直接 `Model(...)`"。例如 `Job`/`TaskEvent` 只属于 `app/domain/jobs.py`,`AuthSession` 只属于 `auth.py` + `core/`。`tests/test_data_ownership_ratchet.py` 执行"存量越界冻结在 allowlist 只减不增,新增越界直接失败"(ADR-0003)。路由层与测试豁免("路由是薄转译,测试要造数据",`ownership.py:116-117`)。
+`app/domain/ownership.py` 的 `TABLE_OWNERS` 字典把约 70 张表逐一登记到唯一拥有方路径前缀:"表的行创建只能发生在拥有它的领域模块里;跨领域需要新行时,调用拥有方的领域函数,不直接 `Model(...)`"。例如 `Job`/`TaskEvent` 只属于 `app/domain/jobs/__init__.py`,`AuthSession` 只属于 `auth.py` + `core/`。`tests/test_data_ownership_ratchet.py` 执行"存量越界冻结在 allowlist 只减不增,新增越界直接失败"(ADR-0003)。路由层与测试豁免("路由是薄转译,测试要造数据",`ownership.py:116-117`)。
 
 ---
 
-## 4. 任务总线(`app/domain/jobs.py`,766 行)——后端的心脏
+## 4. 任务总线(`app/domain/jobs/__init__.py`,766 行)——后端的心脏
 
 ### 4.1 模型与不变量
 

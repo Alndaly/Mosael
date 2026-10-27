@@ -6,7 +6,7 @@
 download_to_path 下载、校验通过才挪到正式位置),所以「在不在」只看正式位置上有没有这个文件。落在
 `<数据目录>/nsfw-classifier/`,卸载时一个目录删掉。
 
-下载是部署级的动作(往这台机器上放东西),路由只给部署管理员;识别本身在 domain/model_nsfw_local。
+下载是部署级的动作(往这台机器上放东西),路由只给部署管理员;识别本身在 domain/model_library/nsfw_local。
 """
 
 from __future__ import annotations

@@ -10,7 +10,7 @@ Accepted — 2026-10-09,已实现(见文末「实现记录」)。2026-10-08 后�
 ### 此前怎么记「取消」
 
 任务(`jobs` 表)只有四个状态:`queued` / `running` / `succeeded` / `failed`。**被人取消记成 `failed` + `error_key = jobErr_cancelled`**
-(`backend/app/domain/jobs.py` 的 `_cancel_job_row`,`error` 写「已取消」,消息 `jobMsg_cancelled`)。要把「我自己停掉的」和「跑挂了」
+(`backend/app/domain/jobs/__init__.py` 的 `_cancel_job_row`,`error` 写「已取消」,消息 `jobMsg_cancelled`)。要把「我自己停掉的」和「跑挂了」
 分开说的地方各自去认这个 key:`jobs.was_cancelled`(给 webhook 的回报、画板格子的回执)、生成记录抄下同一个 key(`generation.runner`)、
 文档解析和模型库 / 工作流库的几处(`documents/extraction`、`plugin_parse`、`model_library`、`workflow_library`、`workflows/engine`)。
 

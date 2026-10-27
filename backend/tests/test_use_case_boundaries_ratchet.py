@@ -48,7 +48,7 @@ DOMAIN_COMMITS: dict[str, int] = {
     "app/domain/generation/plugin_connections.py": 1,
     "app/domain/generation/public_links.py": 1,
     "app/domain/generation/runner.py": 14,
-    "app/domain/jobs.py": 10,
+    "app/domain/jobs/__init__.py": 10,
     "app/domain/members.py": 5,
     "app/domain/network.py": 1,
     "app/domain/plugins/bundled.py": 1,

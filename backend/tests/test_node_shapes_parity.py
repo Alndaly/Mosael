@@ -182,7 +182,7 @@ def _implementation_entry(location: str, symbol: str) -> dict:
     "location,symbol",
     [
         ("backend/app/domain/workflow_library.py", "_ANY_NODE"),
-        ("backend/app/domain/workbench_agent.py", "_NODE_REF"),
+        ("backend/app/domain/workbench/agent.py", "_NODE_REF"),
         ("plugins/bundled/comfyui/tools/canvas_edit.py", "_PATH"),
     ],
 )
@@ -239,7 +239,7 @@ def test_前端那一处把契约的判据嵌在自己的模式里() -> None:
 
 @pytest.mark.parametrize("location,symbol,reader", [
     ("plugins/bundled/comfyui/tools/canvas_edit.py", "_PATH", _python_pattern),
-    ("backend/app/domain/workbench_agent.py", "_NODE_REF", _python_pattern),
+    ("backend/app/domain/workbench/agent.py", "_NODE_REF", _python_pattern),
     ("electron/ipc-contract.cjs", "CANVAS_NODE", _js_regex_literal),
     ("electron/ipc-contract.cjs", "ANY_NODE", _js_regex_literal),
     ("electron/ipc-contract.cjs", "NODE_PATH", _js_regex_literal),
@@ -386,7 +386,7 @@ def test_工作台智能体的定位_真入口逐条跑契约的用例() -> None
     这里只跑形状那一半(剩下的要一台连着的工作台),但形状正是断过一次的那一半:桥当年拒了
     `12:5`,而 `comfy_locate` 认它 —— 两侧对同一串给的答案不同。
     """
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     shape = _shape("canvas_path")
     pattern = workbench_agent._NODE_REF  # noqa: SLF001 — 契约测试直接看那一处落点

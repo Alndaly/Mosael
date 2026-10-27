@@ -297,7 +297,7 @@ code 节点无 Docker 就拒绝执行,不得以普通子进程回落;worker key 
 
 1. **契约语料三层一致性机制**(语料 + 措辞扫描 + 单一来源扫描):把跨语言双实现一致性这个业界难题做成可执行、可演进、自知边界的体系,每条 case 的 `why` 字段保留事故现场。证据:`contracts/`、`contracts/README.md`、§4.1。
 2. **89 道棘轮 + 生成式清单 + 清单同步测试**:架构纪律从 review 负担变成 CI 事实,且清单不会腐烂。证据:`docs/CONVENTIONS.md` RATCHETS 区块、`scripts/sync-ratchet-docs.py`。
-3. **任务总线一个抽象承载七件事**:取消、并发控制、父子归属、播报策略、回执、外派扩容、事件保留。证据:`backend/app/domain/jobs.py`。
+3. **任务总线一个抽象承载七件事**:取消、并发控制、父子归属、播报策略、回执、外派扩容、事件保留。证据:`backend/app/domain/jobs/__init__.py`。
 4. **打包冒烟直接验证升级路径**:旧库 fixture + 真实打包产物 + 逐阶段落盘,钉死桌面应用最痛的回归。证据:`test/bundle.smoke.mjs` + `test/upgrade_db_fixture.py`。
 5. **竞态处理的系统性**:条件 UPDATE 贯穿(claim 会话/job/确认卡/画板 revision)、终态防复活、回执挂状态跳变、线程命名收编测试。证据:`jobs.py:183-229`、`engine.py`、`boards/ops.py`。
 6. **安全边界全部机制化**:fail-closed 沙箱、隔离的 AI 判断者、worker key 本地文件边界、插件最小环境、CORS 精确收窄、IPC parse 纵深防御。
@@ -358,7 +358,7 @@ Mosael 是教科书级的"**模块化单体 + 卫星进程**":它用 ADR-0001 �
 
 | 主题 | 关键文件 |
 | --- | --- |
-| 任务总线 | `backend/app/domain/jobs.py`、`api/routes/job_worker.py` |
+| 任务总线 | `backend/app/domain/jobs/__init__.py`、`api/routes/job_worker.py` |
 | 工作流 | `backend/app/domain/workflows/{__init__,engine,revisions}.py`、`executors/` |
 | 剪辑内核 | `backend/app/domain/sequences/`、`undo/` |
 | 渲染双实现 | `backend/app/media/scene.py` ↔ `frontend/src/features/editor/playback/sceneModel.ts` |

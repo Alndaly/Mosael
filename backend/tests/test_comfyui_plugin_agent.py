@@ -320,7 +320,7 @@ def test_两处都没写_还是老样子_放一个文件或者换成已有的(pl
 
 
 def test_缺的模型_带着结构化的名字_目录_地址和哈希(plugin) -> None:
-    """智能体照这几样发起下载(工作台 domain/workbench_agent 的 comfy_model_download):文件名、目录、工作流自己写的
+    """智能体照这几样发起下载(工作台 domain/workbench/agent 的 comfy_model_download):文件名、目录、工作流自己写的
     地址和哈希都是**字段**,不用从 `fix` 那句话里猜。同名文件在别的目录时不给下载地址 —— 该做的是把那一格改成它。"""
     url = "https://huggingface.co/x/y/resolve/main/juggernaut.safetensors"
     graph = _txt2img(ckpt="juggernaut.safetensors")

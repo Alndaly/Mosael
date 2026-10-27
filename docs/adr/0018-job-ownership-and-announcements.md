@@ -45,7 +45,7 @@ Three causes, each structural:
      (a render registers its output, and the proxy for it, as its last step).
    Cancellation already cascades down `parent_job_id`, so cancelling a subtitle dub now also stops
    its per-line syntheses.
-2. **Job kinds are declared once, in the backend** (`app/domain/job_catalog.py`), and served by
+2. **Job kinds are declared once, in the backend** (`app/domain/jobs/catalog.py`), and served by
    `GET /api/jobs/kinds`: label, announcement policy (`always` / `failures` / `never`), the
    resources a finished job may have changed, and the page (plus payload field) that shows its
    record. The job bus stays domain-agnostic; the catalog is a separate table, like `NODE_TYPES`.

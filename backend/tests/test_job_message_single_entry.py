@@ -24,7 +24,7 @@ BACKEND = pathlib.Path(__file__).resolve().parent.parent
 def test_没有人绕开say直接写job_message() -> None:
     offenders: list[str] = []
     for path in BACKEND.glob("app/**/*.py"):
-        if path.name == "jobs.py" and path.parent.name == "domain":
+        if path.name == "__init__.py" and path.parent.name == "jobs" and path.parent.parent.name == "domain":
             continue  # say() 自己住在这儿
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             # 只找对 Job 行的 message 赋值:`xxx_job.message =` / `job.message =`

@@ -43,7 +43,7 @@
 | `app/domain/plugins/registry.py:_INSTALL_LOCK` | 同一时刻只换一个插件目录 | 两个进程同时装同一个插件:两边都判「还没装」,一个把目录挪进另一个里面去。 |
 | `app/core/secrets_at_rest.py:_lock` | 第一次取主密钥(标准输入只读一次;没配也没交的话在数据目录建一把) | 两个进程都没找到密钥文件时各建一把,盘上留下后写的那把 —— 先写那把加密进库的凭据从此解不开。配了 `MOSAEL_SECRET_KEY`(或桌面版从标准输入交)就没有这件事。 |
 | `app/core/rate_limit.py:WindowLimiter._events` | 远程部署的登录、OAuth 与计费操作限流窗口 | 两个进程各有自己的计数，同一客户端可在每个进程分别用满额度。当前单进程拓扑下限额准确；横向扩展时必须先把这份窗口搬到共享存储或入口网关。 |
-| `app/domain/model_library.py:_pending_downloads` | 模型下载在「查重 → flush → 外层提交」窗口内的 (连接, 目录, 文件名) 占位 | 两个进程各自占位，仍可能给同一个 `.part` 建出两条任务；插件的 O_EXCL 锁是最后防线。重启后由数据库里的 queued/running 行接管查重。 |
+| `app/domain/model_library/__init__.py:_pending_downloads` | 模型下载在「查重 → flush → 外层提交」窗口内的 (连接, 目录, 文件名) 占位 | 两个进程各自占位，仍可能给同一个 `.part` 建出两条任务；插件的 O_EXCL 锁是最后防线。重启后由数据库里的 queued/running 行接管查重。 |
 
 > **飞书长连接的子进程怎么起**:打包版的后端是冻结二进制、盘上没有 `app` 包,所以
 > `python -m app.integrations.feishu.worker` 在那一版里必然 `ModuleNotFoundError`(2026-10-23:
@@ -59,10 +59,10 @@
 | `app/ai/runtime/tts_daemon.py:_POOL` | 常驻 TTS 工作进程池 | 重启后第一次合成要重新加载模型(十几秒到几分钟)。第二个后端进程会**再养一份**,显存翻倍。 |
 | `app/ai/runtime/asr_daemon.py:_POOL` | 常驻 ASR 工作进程池 | 同上。语音对话的首句延迟就取决于这个池热没热。 |
 | `app/domain/agent/stream.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的)。 |
-| `app/domain/jobs.py:_KILLED` | 取消已经掐过、执行体还在跑的任务 | 取消在提交之前就掐子进程;执行体恰好在那一刻起的新子进程去库里查还是 running,没人掐它。登记时先看这里。执行体结束就忘掉,重启后没有执行体可言。 |
-| `app/domain/jobs.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
-| `app/domain/jobs.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |
-| `app/domain/jobs.py:RENDER_SLOTS`、`app/domain/jobs.py:ASR_SLOTS`、`app/domain/jobs.py:TTS_SLOTS`、`app/domain/jobs.py:PLUGIN_SLOTS`、`app/media/proxy.py:TRANSCODE_SLOTS`、`app/domain/workflows/engine.py:NODE_CONNECTIONS` | 几类重活同时跑几份(导出、识别、合成、插件进程、代理转码),以及工作流引擎能同时占几条库连接 | 名额按进程算:第二个进程再给一份,同时跑的 ffmpeg、模型进程翻倍,机器被压满;引擎那份本来就按本进程的连接池算,不出错。重启后归零,没有要恢复的。 |
+| `app/domain/jobs/__init__.py:_KILLED` | 取消已经掐过、执行体还在跑的任务 | 取消在提交之前就掐子进程;执行体恰好在那一刻起的新子进程去库里查还是 running,没人掐它。登记时先看这里。执行体结束就忘掉,重启后没有执行体可言。 |
+| `app/domain/jobs/__init__.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
+| `app/domain/jobs/__init__.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |
+| `app/domain/jobs/__init__.py:RENDER_SLOTS`、`app/domain/jobs/__init__.py:ASR_SLOTS`、`app/domain/jobs/__init__.py:TTS_SLOTS`、`app/domain/jobs/__init__.py:PLUGIN_SLOTS`、`app/media/proxy.py:TRANSCODE_SLOTS`、`app/domain/workflows/engine.py:NODE_CONNECTIONS` | 几类重活同时跑几份(导出、识别、合成、插件进程、代理转码),以及工作流引擎能同时占几条库连接 | 名额按进程算:第二个进程再给一份,同时跑的 ffmpeg、模型进程翻倍,机器被压满;引擎那份本来就按本进程的连接池算,不出错。重启后归零,没有要恢复的。 |
 | `app/integrations/feishu/inbound.py:_awaiting_replies` | 每个会话里还在等回复的飞书消息(收尾时摘 Typing 反应) | 一轮在哪个进程跑完,就在哪个进程收尾;第二个进程看不见别人贴的反应。重启丢了它,只是那几条消息上的「码字中」不会被摘掉 —— 回复照样发。 |
 | `app/integrations/feishu/inbound.py:_paused_typing` | 智能体等选择卡/确认卡时,被暂存的原消息 id(等完再贴回 Typing) | 和 `_awaiting_replies` 同属一个进程;重启丢了它,等待中的 Typing 不会再贴回,回复照样发。第二个进程各存各的。 |
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
@@ -152,9 +152,9 @@
 - `app/media/filmstrip.py:_making` — 每个素材目录一把锁:同一段素材的帧条同时只做一份,后到的等它做完直接拿(画板上同一段
   素材挂了好几处时,此前各起一份 ffmpeg)。帧条本身和「做不出来」的标记都在素材目录里,重启不丢;多进程下各锁各的,
   只是可能多做一遍。每段打开过帧条的素材一条,不随请求数增长。
-- `app/domain/model_library.py:_snapshots`、`app/domain/model_library.py:_listing_locks` — 模型库(ADR 0034、ADR 0038 §9):每个连接最近一次列出的「哪个文件的预览图在那台服务器上的哪儿」(连同模型旁边的预览视频、别处的示例图、插件交的 NSFW 依据、怎么对上 Civitai 的),以及记着的地址没了时只让插件列一遍的那把锁。重启后是空的:界面要预览图时宿主先替它列一遍。多进程下各记各的,只是多列一遍。
-- `app/domain/model_previews.py:_indexes`、`app/domain/model_previews.py:_fetch_locks`、`app/domain/model_previews.py:_slots` — 模型预览图:每个连接「那台服务器上谁有预览图、是图还是视频」的索引的内存那一份(真身在磁盘上,`<数据目录>/model-previews/<连接>/server-previews.json`,说没有的十分钟内不再问)、同一个地址同时被要好几次时只去取一次(只缩一次缩略图、只转一次视频)的每地址一把锁,以及同时去取的名额(每个连接去那台服务器两张,别处的图床全进程三张)。重启后锁和名额是空的、索引从磁盘读回;预览图、缩略图、转好的预览视频本身在磁盘缓存里,不丢。多进程下各记各的,同时取的张数按进程数翻倍。
-- `app/domain/model_nsfw_local.py:_scores`、`app/domain/model_nsfw_local.py:_queue`、`app/domain/model_nsfw_local.py:_queued`、`app/domain/model_nsfw_local.py:_unreadable`、`app/domain/model_nsfw_local.py:_digests`、`app/domain/model_nsfw_local.py:_weights`、`app/domain/model_nsfw_local.py:_worker`、`app/domain/model_nsfw_local.py:_dirty` — 本机识别模型预览图(ADR 0038 §9):按缩略图内容的哈希记的结果的内存那一份(真身在磁盘上,`<数据目录>/nsfw-classifier/scores-<版本>.json`,攒几条写一次、队列空了写)、排着队的缩略图和它们的哈希、这次进程里认不出的、每个缩略图文件的哈希(按修改时间和大小复用)、读进内存的权重(二十来 MB)、那一个后台线程和还没写盘的条数。重启丢掉的是排着的队和没写盘的几条:下次列模型库时还没结果的会重新排进去。多进程下各算各的,同一张图可能被算两遍,写盘时后写的那份为准(都是同一个模型算的同一个数)。
+- `app/domain/model_library/__init__.py:_snapshots`、`app/domain/model_library/__init__.py:_listing_locks` — 模型库(ADR 0034、ADR 0038 §9):每个连接最近一次列出的「哪个文件的预览图在那台服务器上的哪儿」(连同模型旁边的预览视频、别处的示例图、插件交的 NSFW 依据、怎么对上 Civitai 的),以及记着的地址没了时只让插件列一遍的那把锁。重启后是空的:界面要预览图时宿主先替它列一遍。多进程下各记各的,只是多列一遍。
+- `app/domain/model_library/previews.py:_indexes`、`app/domain/model_library/previews.py:_fetch_locks`、`app/domain/model_library/previews.py:_slots` — 模型预览图:每个连接「那台服务器上谁有预览图、是图还是视频」的索引的内存那一份(真身在磁盘上,`<数据目录>/model-previews/<连接>/server-previews.json`,说没有的十分钟内不再问)、同一个地址同时被要好几次时只去取一次(只缩一次缩略图、只转一次视频)的每地址一把锁,以及同时去取的名额(每个连接去那台服务器两张,别处的图床全进程三张)。重启后锁和名额是空的、索引从磁盘读回;预览图、缩略图、转好的预览视频本身在磁盘缓存里,不丢。多进程下各记各的,同时取的张数按进程数翻倍。
+- `app/domain/model_library/nsfw_local.py:_scores`、`app/domain/model_library/nsfw_local.py:_queue`、`app/domain/model_library/nsfw_local.py:_queued`、`app/domain/model_library/nsfw_local.py:_unreadable`、`app/domain/model_library/nsfw_local.py:_digests`、`app/domain/model_library/nsfw_local.py:_weights`、`app/domain/model_library/nsfw_local.py:_worker`、`app/domain/model_library/nsfw_local.py:_dirty` — 本机识别模型预览图(ADR 0038 §9):按缩略图内容的哈希记的结果的内存那一份(真身在磁盘上,`<数据目录>/nsfw-classifier/scores-<版本>.json`,攒几条写一次、队列空了写)、排着队的缩略图和它们的哈希、这次进程里认不出的、每个缩略图文件的哈希(按修改时间和大小复用)、读进内存的权重(二十来 MB)、那一个后台线程和还没写盘的条数。重启丢掉的是排着的队和没写盘的几条:下次列模型库时还没结果的会重新排进去。多进程下各算各的,同一张图可能被算两遍,写盘时后写的那份为准(都是同一个模型算的同一个数)。
 - `app/domain/plugins/catalog_watch.py:_failed` — 插件目录刷不出来时的退避:每个(实例, 能力)记着刷失败时的指纹、连着失败了几次、下次什么时候再试(一分钟起翻倍、最多半小时;那边指纹又变了立刻再试)。重启后是空的:第一次巡检照常整份重拉一遍,之后重新从一分钟退起 —— 多问的只是那一次。多进程下各退各的,刷不出来的那台被多问一倍。
 - `app/domain/providers/auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
 - `app/domain/workflows/approvals.py:_RESUMED` — 「这一次等待(运行 + 那张单)的恢复**已经派出去了**」的标记,挡住"同一个等待被两条唤醒路各派一遍"
@@ -171,11 +171,11 @@
 
 - `app/domain/agent/confirmable/registry.py:_TOOLS` — 确认卡工具的登记表。
 - `app/domain/agent/confirmable/registry.py:_FAMILIES` — 按名字前缀认领的一族确认卡(插件工具 `plugin__…`),同样在 import 时登记。
-- `app/domain/jobs.py:_EXECUTION_MODES`(每个 kind 在进程内跑还是交给外部执行器)、
-  `app/domain/jobs.py:_RECEIPT_DELIVERERS`、
-  `app/domain/jobs.py:_SETTLE_LISTENERS`(任务落终态后谁跟着收拾,目前是浏览器:工作流一次运行开的会话随它关)、
-  `app/domain/jobs.py:_CANCEL_LISTENERS`(某种任务被取消时,外面跟着要撤的那张单,和取消同一个事务 —— 目前是发布单)、
-  `app/domain/jobs.py:_RESUMERS`(重启后哪一类任务能**接着干**而不是判失败 —— 目前只有生成:
+- `app/domain/jobs/__init__.py:_EXECUTION_MODES`(每个 kind 在进程内跑还是交给外部执行器)、
+  `app/domain/jobs/__init__.py:_RECEIPT_DELIVERERS`、
+  `app/domain/jobs/__init__.py:_SETTLE_LISTENERS`(任务落终态后谁跟着收拾,目前是浏览器:工作流一次运行开的会话随它关)、
+  `app/domain/jobs/__init__.py:_CANCEL_LISTENERS`(某种任务被取消时,外面跟着要撤的那张单,和取消同一个事务 —— 目前是发布单)、
+  `app/domain/jobs/__init__.py:_RESUMERS`(重启后哪一类任务能**接着干**而不是判失败 —— 目前只有生成:
   提交给供应商之后远端照样在生成、照样扣费。回执本身落在 `Job.payload.remote_task`,不在内存里)
 - `app/domain/sequences/undo/registry.py:_REGISTRY`
 - `app/domain/workflows/executors/registry.py:_REGISTRY`、
@@ -223,10 +223,10 @@
 - `app/ai/model_catalog.py:_cache_lock`、`app/ai/runtime/remote_size.py:_lock`、`app/ai/runtime/config.py:_lock`、
   `app/ai/runtime/tts_daemon.py:_POOL_LOCK`、`app/ai/runtime/asr_daemon.py:_POOL_LOCK`、`app/ai/sidecar/pi_client.py:_LIVE_LOCK`
 - `app/api/routes/oauth.py:_pending_lock`、`app/domain/agent/login.py:_sessions_lock`、`app/domain/agent/stream.py:_streams_lock`、
-  `app/domain/blender/bridge.py:_guard`(守 `_locks` 这张表本身)、`app/domain/jobs.py:_CHILDREN_LOCK`、`app/domain/providers/auth.py:_lock`、
+  `app/domain/blender/bridge.py:_guard`(守 `_locks` 这张表本身)、`app/domain/jobs/__init__.py:_CHILDREN_LOCK`、`app/domain/providers/auth.py:_lock`、
   `app/domain/voices/remote.py:_locks_guard`(守 `_copy_locks` 这张表本身)
 - `app/domain/local_services/installer.py:_registry_lock`、`app/domain/local_services/supervisor.py:_registry_lock`
-- `app/domain/model_library.py:_lock`、`app/domain/model_library.py:_download_submit_lock`、`app/domain/model_nsfw_local.py:_lock`、`app/domain/model_previews.py:_lock`、
+- `app/domain/model_library/__init__.py:_lock`、`app/domain/model_library/__init__.py:_download_submit_lock`、`app/domain/model_library/nsfw_local.py:_lock`、`app/domain/model_library/previews.py:_lock`、
   `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、
   `app/domain/media_tools.py:_status_lock`(探 ffmpeg 一次一个:启动时的后台探测和管理页的「重新检测」可能撞上)
   `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、

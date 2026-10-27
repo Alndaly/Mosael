@@ -5,7 +5,7 @@
 
 而它没有任何信号会腐烂。抽查三条:
 
-    app/domain/jobs.py      「派发点只有 dispatch_job 一处」   假(当时有 4 个反例)
+    app/domain/jobs/__init__.py      「派发点只有 dispatch_job 一处」   假(当时有 4 个反例)
     app/domain/assets/…     「入库的唯一实现」                  假(POST /api/assets 直接建行)
     app/domain/ai_chat.py   「对话补全的唯一实现」              真
 

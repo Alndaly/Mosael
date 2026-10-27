@@ -20,7 +20,7 @@ RATCHET = True
 APP = pathlib.Path(__file__).resolve().parents[1] / "app"
 
 #: 总线自己:落取消态、重启收尾的就是它。
-OWNER = "domain/jobs.py"
+OWNER = "domain/jobs/__init__.py"
 
 #: 还没改过来的执行体。**只减不增**:改好一处就从这里删一处。
 REMAINING = {

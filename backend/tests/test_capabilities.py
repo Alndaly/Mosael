@@ -162,7 +162,8 @@ def test_清单里文档解析只给宿主调_规矩和生成一样(patch: dict,
 
 def test_点名自动用的那个之外的内置实现_存下来_挑的时候用它() -> None:
     """降噪三个本机引擎:点名 RNNoise 此前报「没有这个连接」(用户截图)—— 默认那张表只认插件连接。"""
-    from app.domain import audio_capabilities, capabilities
+    from app.domain import capabilities
+    from app.domain import audio_capabilities
 
     client = fresh_client()
     me = _me(client)

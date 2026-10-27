@@ -13,7 +13,7 @@ import ast
 import re
 from pathlib import Path
 
-from app.domain.job_catalog import FALLBACK_LABEL_KEY, JOB_KINDS
+from app.domain.jobs.catalog import FALLBACK_LABEL_KEY, JOB_KINDS
 from tests.util import fresh_client
 
 APP = Path(__file__).resolve().parents[1] / "app"
@@ -66,7 +66,7 @@ def test_代码里建的每种任务都在目录里() -> None:
     created = _created_kinds()
     assert len(created) >= 10, "扫描没扫到东西,多半是 create_job 改了名字"
     missing = {kind: where for kind, where in created.items() if kind not in JOB_KINDS}
-    assert not missing, f"这些任务种类不在 app/domain/job_catalog.py 里:{missing}"
+    assert not missing, f"这些任务种类不在 app/domain/jobs/catalog.py 里:{missing}"
 
 
 def test_目录里没有用不到的种类() -> None:

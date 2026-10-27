@@ -32,7 +32,8 @@ def engines_known_missing(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_分离插件配好了但没定成默认_真跑时用不上_检查也说缺(tmp_path, engines_known_missing) -> None:
-    from app.domain import audio_capabilities, capabilities
+    from app.domain import capabilities
+    from app.domain import audio_capabilities
 
     _client, ws, me, plugin, _asset = _setup(tmp_path)
     assert _statuses(me, ws)["separation_engine"] == "missing", "分离不许自动用插件(auto_single=False)"
@@ -44,7 +45,8 @@ def test_分离插件配好了但没定成默认_真跑时用不上_检查也说
 
 def test_定了分离插件的人_配音前的预检认得他的插件(tmp_path, engines_known_missing) -> None:
     """配音排任务前的预检此前按「没有人」挑提供方,插件永远不在候选里。"""
-    from app.domain import audio_capabilities, capabilities
+    from app.domain import capabilities
+    from app.domain import audio_capabilities
     from app.domain.voices.original_audio import OriginalAudioError, ensure_original_audio_mode
 
     _client, _ws, me, plugin, _asset = _setup(tmp_path)

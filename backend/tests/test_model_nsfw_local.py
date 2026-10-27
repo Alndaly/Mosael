@@ -16,7 +16,7 @@ import pytest
 from PIL import Image
 
 from app.ai.runtime import nsfw_models
-from app.domain import model_nsfw_local
+from app.domain.model_library import nsfw_local as model_nsfw_local
 from tests.util import fresh_client, second_client
 
 
@@ -206,7 +206,7 @@ def test_有原文件就看原文件_不看ComfyUI现转的有损那张_取不�
     一层层有损压缩把一张卡通特写推过了 0.5。这里用颜色替分数:缓存里那份(有损)偏红,原文件是绿的。"""
     from io import BytesIO
 
-    from app.domain import model_previews
+    from app.domain.model_library import previews as model_previews
 
     lossy = _original(tmp_path / "lossy", (210, 30, 40))
     raw = BytesIO()

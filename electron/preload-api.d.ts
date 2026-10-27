@@ -256,11 +256,11 @@ export interface MosaelBrowserBridge {
   onComfyWorkbench(callback: (update: { connectionId: string; state: ComfyWorkbenchState | null }) => void): () => void;
 }
 
-export type ComfyWorkbenchCall = import("./publish/comfyWorkbench").WorkbenchCall;
-export type ComfyWorkbenchCallResult = import("./publish/comfyWorkbench").WorkbenchCallResult | { ok: false; error: "invalid"; message?: string };
-export type ComfyWorkbenchState = import("./publish/comfyWorkbench").WorkbenchState;
-export type ComfyWorkbenchEvent = import("./publish/comfyWorkbench").WorkbenchEvent;
-export type ComfyWorkbenchExport = import("./publish/comfyWorkbench").WorkbenchExport;
+export type ComfyWorkbenchCall = import("./browser/comfy/comfyWorkbench").WorkbenchCall;
+export type ComfyWorkbenchCallResult = import("./browser/comfy/comfyWorkbench").WorkbenchCallResult | { ok: false; error: "invalid"; message?: string };
+export type ComfyWorkbenchState = import("./browser/comfy/comfyWorkbench").WorkbenchState;
+export type ComfyWorkbenchEvent = import("./browser/comfy/comfyWorkbench").WorkbenchEvent;
+export type ComfyWorkbenchExport = import("./browser/comfy/comfyWorkbench").WorkbenchExport;
 
 /** 页面工具作用的那一页。 */
 export interface PageToolsPage {

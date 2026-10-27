@@ -607,7 +607,7 @@ def test_排队等那台服务器的请求_不攥着数据库连接(library, mon
     client, instance_id, previews = library
     #: 数有几个请求已经走到「排队取这张图」那一步(同一个地址一把锁,先到的那个去等取图名额,其余的等它)。
     #: 十二个都到了再数连接;此前是睡 0.8 秒就数 —— 机器一忙请求还没走到排队那一步,数出来也是 0,断言照样成立。
-    from app.domain import model_previews as previews_module
+    from app.domain.model_library import previews as previews_module
 
     at_the_gate: list[str] = []
     real_gate = previews_module.PreviewSource._gate
@@ -626,7 +626,7 @@ def test_排队等那台服务器的请求_不攥着数据库连接(library, mon
 
     previews.body, previews.kind = _portrait_png(), "image/png"
     assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
-    from app.domain import model_previews
+    from app.domain.model_library import previews as model_previews
 
     slots = model_previews._slots.setdefault(f"server:{instance_id}", threading.BoundedSemaphore(model_previews.SERVER_FETCHES))
     for _ in range(model_previews.SERVER_FETCHES):
@@ -1125,7 +1125,7 @@ def test_存为预览图_取别处那张_缩到512宽的PNG_交插件写回_之�
 
     from PIL import Image
 
-    from app.domain import model_previews
+    from app.domain.model_library import previews as model_previews
 
     client, instance_id, _ = library
     base = f"/api/plugins/instances/{instance_id}/model-library"
@@ -1259,7 +1259,7 @@ def test_补图时按文件名对上的不替你存_列出来等你确认(librar
 
 
 def test_挑哪张示例图_有图就在图里挑_要最稳妥的挑分级最低的_照常就要作者排在前的() -> None:
-    from app.domain.model_previews import Elsewhere, pick
+    from app.domain.model_library.previews import Elsewhere, pick
 
     clip = Elsewhere("https://x/clip.mp4", "video", "civitai", 1, False)
     spicy = Elsewhere("https://x/spicy.jpg", "image", "civitai", 8, True)
@@ -1316,7 +1316,7 @@ def test_示例只有视频的_用视频当预览_存回的是视频本身(libra
     data = runtime.data_dir_for(PACKAGE_ID)
     assert (data / "saved-name").read_text() == "preview.mp4", "维护者:不要用帧,直接用视频当预览"
     assert _video_facts((data / "saved.bin").read_bytes())["width"] == 512
-    from app.domain import model_previews
+    from app.domain.model_library import previews as model_previews
 
     assert model_previews.server_kind(instance_id, "loras", name) == "video", "存回的是视频:列表马上标成那台服务器上的视频"
 
@@ -1331,7 +1331,7 @@ def local_classifier(monkeypatch):
     from PIL import Image
 
     from app.ai.runtime import nsfw_models
-    from app.domain import model_nsfw_local
+    from app.domain.model_library import nsfw_local as model_nsfw_local
 
     def reset() -> None:
         model_nsfw_local.forget()
@@ -1359,7 +1359,7 @@ def _local(model: dict) -> list[dict]:
 
 
 def test_本机识别_看显示着的那张的缩略图_列的时候不等_下次列出就有(library, local_classifier) -> None:
-    from app.domain import model_nsfw_local
+    from app.domain.model_library import nsfw_local as model_nsfw_local
 
     client, instance_id, _ = library
     base = f"/api/plugins/instances/{instance_id}/model-library"
@@ -1388,7 +1388,7 @@ def test_本机识别_看显示着的那张的缩略图_列的时候不等_下�
 
 
 def test_本机识别_认不出的不说话_那台服务器上的预览图也看(library, local_classifier) -> None:
-    from app.domain import model_nsfw_local
+    from app.domain.model_library import nsfw_local as model_nsfw_local
 
     client, instance_id, _ = library
     base = f"/api/plugins/instances/{instance_id}/model-library"
@@ -1403,7 +1403,7 @@ def test_本机识别_那台服务器上的预览图看原文件_不看ComfyUI�
     """沙盒实测:Big Buck Bunny 的兔脸特写,原 PNG 0.47、ComfyUI 预览接口现转的 WebP 0.69、再缩一次的缩略图 0.78 ——
     判成了 NSFW。插件报了原文件(ComfyUI-Custom-Scripts 原样交出)时看原文件。这里用颜色替分数:预览接口那张偏红,
     原文件是绿的。"""
-    from app.domain import model_nsfw_local
+    from app.domain.model_library import nsfw_local as model_nsfw_local
 
     client, instance_id, previews = library
     previews.body, previews.kind = _colored_png((200, 30, 30), (384, 480)), "image/png"

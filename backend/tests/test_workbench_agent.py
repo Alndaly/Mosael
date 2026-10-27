@@ -21,7 +21,8 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import BrowserAction, BrowserSession, Job
-from app.domain import browser, model_library, workbench_agent
+from app.domain import browser, model_library
+from app.domain.workbench import agent as workbench_agent
 from app.domain.agent import autopilot
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
 from tests.util import fresh_client, second_client, wait_status, worker_client

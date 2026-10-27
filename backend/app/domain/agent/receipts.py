@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import DEFAULT_LOCALE, render_message, tr
 from app.db.models import AgentMessage, AgentSession, GenerationJob, Job, User
 from app.domain.agent import host
-from app.domain.job_catalog import FALLBACK_LABEL_KEY, job_kind
+from app.domain.jobs.catalog import FALLBACK_LABEL_KEY, job_kind
 from app.domain.jobs import CANCELLED, TERMINAL_STATUSES, register_receipt_deliverer
 
 logger = logging.getLogger(__name__)

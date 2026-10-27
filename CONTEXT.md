@@ -40,7 +40,7 @@ job kind 的属性,决定由谁执行:`in_process`(守护线程,进程死任务�
 ### 任务总线
 
 **任务总线**:
-`jobs` + `task_events` 两张表加 `app/domain/jobs.py` 的接口;一切耗时操作收敛为 job。
+`jobs` + `task_events` 两张表加 `app/domain/jobs/__init__.py` 的接口;一切耗时操作收敛为 job。
 _Avoid_: 队列服务、调度中心
 
 **派发(dispatch)**:

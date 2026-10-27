@@ -2371,8 +2371,8 @@ def run_plugin_tool(tool: str, arguments: dict[str, Any] | None = None, workspac
 # 插件,工作台开没开都能用。
 # 改当前这张(comfy_canvas_edit)开确认卡、点「应用」才改;新标签页(comfy_canvas_new)不动开着的、不开卡;都不存盘。
 # 第三步(补全和试跑,拍板 4、5):下载模型、装节点包、跑画布上这张——**都开确认卡**,卡上写清多大、哪台机器、装的是哪一版、
-# 会不会重启;装节点包要等装完才重启(见 domain/workbench_agent)。
-# `instance_id` 是 ComfyUI 连接的 id(工作台「助手」的页面上下文里有);调用的人只接了一台时可以不给。见 domain/workbench_agent。
+# 会不会重启;装节点包要等装完才重启(见 domain/workbench/agent)。
+# `instance_id` 是 ComfyUI 连接的 id(工作台「助手」的页面上下文里有);调用的人只接了一台时可以不给。见 domain/workbench/agent。
 
 
 @tool(effect="reads", needs="workflow_library", kit="comfyui")
@@ -2382,7 +2382,7 @@ def comfy_canvas_read(instance_id: str = "", workspace_id: str = "") -> dict[str
     (`groups`: g1/g2 with title, position and size), plus selection, modified flag
     and missing node types. Refs: "12" at top level, "12:5" inside the subgraph of node 12; mention nodes as #12 / #12:5
     (the user can click them). Needs the workbench open."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.canvas, workspace_id or _default_workspace_id(), instance_id)
 
@@ -2391,7 +2391,7 @@ def comfy_canvas_read(instance_id: str = "", workspace_id: str = "") -> dict[str
 def comfy_locate(node: str, subgraph: str = "", instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Select and center a node on the workbench canvas, opening its subgraph first. `node`: a ref like "12"
     or "12:5". Changes nothing."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.locate, workspace_id or _default_workspace_id(), node, subgraph, instance_id)
 
@@ -2404,7 +2404,7 @@ def comfy_check(instance_id: str = "", job_id: str = "", last_error: str = "", w
     elsewhere?} — the file the workflow wants (and `elsewhere` when a same-named file sits in another subfolder), so you
     don't have to parse the prose `fix`. Pass the last run's `job_id` (page context) or `last_error` to map that error
     onto nodes."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.check, workspace_id or _default_workspace_id(), instance_id, job_id, last_error)
 
@@ -2441,7 +2441,7 @@ def comfy_canvas_new(template: str = "", pack: str = "", ops: list[dict[str, Any
     `template` (+`pack`): an official template adapted to this machine (prefer this); `ops` (comfy_canvas_edit ops, root
     graph): tweak the template or build from blank; `path`: a saved workflow instead. `name`: the tab name. Returns the tab,
     the template's missing models with sizes, and a check."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.open_new, workspace_id or _default_workspace_id(), template, pack, path, name, ops or [],
                      instance_id, opened_by=_SESSION_ID.get())
@@ -2452,7 +2452,7 @@ def comfy_templates(query: str = "", task: str = "", model: str = "", limit: int
     """Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building
     from scratch. Each lists its models and whether this machine has them (or in another subfolder / precision), total
     `size` in bytes and the minimum ComfyUI version. Tell the user sizes before any download."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.templates, query, task, model, limit, instance_id)
 
@@ -2462,7 +2462,7 @@ def comfy_template(name: str, pack: str = "", instance_id: str = "") -> dict[str
     """Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder
     / precision), what stays missing (URL, size), missing node types and a graph summary. Never invents files. `pack`:
     for node-pack templates."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.template, name, pack, instance_id)
 
@@ -2471,7 +2471,7 @@ def comfy_template(name: str, pack: str = "", instance_id: str = "") -> dict[str
 def comfy_node_types(query: str = "", classes: list[str] | None = None, limit: int = 10, instance_id: str = "") -> dict[str, Any]:
     """Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type,
     required, options, default, range), outputs and pack."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.node_types, query, classes or [], limit, instance_id)
 
@@ -2480,7 +2480,7 @@ def comfy_node_types(query: str = "", classes: list[str] | None = None, limit: i
 def comfy_node_packs(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only: installed custom node packs (id, version, enabled, source, node types); with the
     workbench open, also which pack each canvas node comes from."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.node_packs, workspace_id or _default_workspace_id(), instance_id)
 
@@ -2489,7 +2489,7 @@ def comfy_node_packs(instance_id: str = "", workspace_id: str = "") -> dict[str,
 def comfy_node_pack_search(query: str = "", node_types: list[str] | None = None, instance_id: str = "") -> dict[str, Any]:
     """Read-only: find node packs by `query` or missing `node_types` (Manager mappings, then the
     Comfy Registry), ranked, installed ones marked. Check one with comfy_node_pack_info before recommending it."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.node_pack_search, query, node_types or [], instance_id)
 
@@ -2500,7 +2500,7 @@ def comfy_node_pack_info(pack_id: str, instance_id: str = "", workspace_id: str 
     (Flagged / Banned / deprecated: say so, don't recommend it; `install_version` is the latest normal one), publisher,
     license, downloads, stars, dependency risk (high if it touches torch), fit with this machine, the installed version
     and changelog, and which missing nodes it provides. Tell the user the `advice`."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.node_pack_info, workspace_id or _default_workspace_id(), pack_id, instance_id)
 
@@ -2512,7 +2512,7 @@ def comfy_model_search(filename: str, folder: str = "", hash: str = "", hash_typ
     workflow declares with its `hash_type`). Returns `candidates` (source, filename, url, page, size, base_model, and
     `confidence`: only "confirmed" — the SHA256 matched — may be downloaded, `direct` is true then), the sites that
     failed, and the `hash` state. Never downloads."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.model_search, filename, folder, hash, hash_type, instance_id)
 
@@ -2522,7 +2522,7 @@ def comfy_model_resolve(url: str, instance_id: str = "") -> dict[str, Any]:
     """Read-only: what a link points at — filename, size, suggested `folder`, source, title, triggers,
     whether that file is already on the machine (`exists`), and whether the download would use that site's token.
     Call it before comfy_model_download when the URL came from the user or a template."""
-    from app.domain import workbench_agent
+    from app.domain.workbench import agent as workbench_agent
 
     return _use_case(workbench_agent.model_resolve, url, instance_id)
 
@@ -3766,7 +3766,7 @@ _JOB_SUBJECT_KEYS = ("subject", "title", "name", "prompt", "text")
 def _job_kind_label(kind: str) -> str:
     """任务种类的名字,按**当前语言**(和 `/api/jobs/kinds` 出口那一份同一张表)。"""
     from app.core.i18n import tr
-    from app.domain.job_catalog import FALLBACK_LABEL_KEY, job_kind
+    from app.domain.jobs.catalog import FALLBACK_LABEL_KEY, job_kind
 
     meta = job_kind(kind)
     return tr(meta.label_key if meta.kind else FALLBACK_LABEL_KEY)

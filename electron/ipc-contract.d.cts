@@ -134,7 +134,7 @@ export function parseComfyWorkbenchOpen(value: unknown): {
 };
 export function parseComfyWorkbenchCall(value: unknown): {
   partition: string;
-  call: import("./publish/comfyWorkbench").WorkbenchCall;
+  call: import("./browser/comfy/comfyWorkbench").WorkbenchCall;
 };
 export function parseTitleOverlay(value: unknown): { color: string; symbolColor: string };
 export function parseSystemStatus(value: unknown): { runningJobs: number; progress?: number | null };

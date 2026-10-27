@@ -492,7 +492,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_target_lang_de": {"zh": "德语", "en": "German"},
     "wfOpt_target_lang_es": {"zh": "西班牙语", "en": "Spanish"},
     "wfOpt_target_lang_ru": {"zh": "俄语", "en": "Russian"},
-    # ---- 任务种类(app/domain/job_catalog.py) ----
+    # ---- 任务种类(app/domain/jobs/catalog.py) ----
     "jobKind_workflow": {"zh": "工作流", "en": "Workflow"},
     "jobKind_publish": {"zh": "发布", "en": "Publish"},
     "jobKind_render": {"zh": "导出", "en": "Export"},

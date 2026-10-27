@@ -661,7 +661,8 @@ def _output_nsfw(asset: Asset, manual: bool | None) -> dict[str, Any]:
     """一份产出算不算 NSFW —— 和模型预览图同一套判断(model_library.nsfw_verdict):手动标的压过一切;没标时看本机识别
     (这一张图的原文件,按内容记结果;权重没下、还没算过就没有这一条,下次列出就有)。视频、音频只认手动标记:为了识别去读
     整段视频算哈希,不值。"""
-    from app.domain import model_library, model_nsfw_local
+    from app.domain import model_library
+    from app.domain.model_library import nsfw_local as model_nsfw_local
 
     signals: list[dict[str, Any]] = []
     if asset.kind == "image" and asset.file_key:

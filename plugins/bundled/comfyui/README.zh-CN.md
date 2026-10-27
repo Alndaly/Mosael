@@ -679,7 +679,7 @@ workflows 目录里没多文件;子图里加节点、加输出口接出来、提
 ## 工作台里的智能体:下载、安装、运行(1.24.0)
 
 ADR 0042 第三步。智能体现在能把开的事做完:缺的模型搜出来、认链接、下载;缺的节点包装上、重启那台 ComfyUI;跑工作流 —— 包括画布上这一张。
-这几个是宿主工具(`backend/app/domain/workbench_agent.py`,和别的 `comfy_*` 注册在一起);插件自己那几样底层实现(模型库的搜索 / 认链接 /
+这几个是宿主工具(`backend/app/domain/workbench/agent.py`,和别的 `comfy_*` 注册在一起);插件自己那几样底层实现(模型库的搜索 / 认链接 /
 下载、`install_nodes`、`run_canvas`)没变。
 
 - `comfy_model_search`、`comfy_model_resolve` **只读**。搜收 `filename`(可带 `folder`,知道哈希就带 `hash` / `hash_type`),交回候选的

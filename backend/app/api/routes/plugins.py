@@ -93,7 +93,7 @@ from app.ai.runtime.errors import RuntimeSetupError
 from app.domain import local_services
 from app.domain.local_services import LocalServiceError
 from app.domain import model_library
-from app.domain import model_nsfw_local
+from app.domain.model_library import nsfw_local as model_nsfw_local
 from app.domain import workflow_library
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.plugins import PluginDomainError

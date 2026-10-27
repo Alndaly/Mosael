@@ -22,7 +22,7 @@ from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, fragment, t
 from app.db.models import Job, TaskEvent
 from app.db.models import now as models_now
-from app.domain import job_catalog
+from app.domain.jobs import catalog as job_catalog
 
 logger = logging.getLogger(__name__)
 
