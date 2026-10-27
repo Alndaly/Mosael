@@ -1479,13 +1479,17 @@ describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () =>
     bridge.comfyWorkbench.mockImplementation(async ({ call }: { call: ComfyWorkbenchCall }) =>
       call.op === "locate" && call.node === "4" ? { ok: false, error: "noNode" } : { ok: true });
     tab("workbenchTabAssistant");
-    const inner = await screen.findByRole("button", { name: "#459:451" });
+    const inner = await waitFor(() => {
+      const found = shownPanel().querySelector<HTMLButtonElement>('[data-comfy-node="459:451"]');
+      expect(found).not.toBeNull();
+      return found!;
+    });
     fireEvent.click(inner);
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "locate", node: "459:451", subgraph: null }));
     expect(within(shownPanel()).queryByRole("status")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "#4" }));
+    fireEvent.click(shownPanel().querySelector<HTMLButtonElement>('[data-comfy-node="4"]')!);
     expect(await within(shownPanel()).findByRole("status")).toHaveProperty("textContent", "画布上没有节点 #4");
-    expect(screen.queryByRole("button", { name: "#9" }), "代码里的不变成定位").toBeNull();
+    expect(shownPanel().querySelector('[data-comfy-node="9"]'), "代码里的不变成定位").toBeNull();
     expect(screen.getByText("#9").tagName).toBe("CODE");
   });
 });

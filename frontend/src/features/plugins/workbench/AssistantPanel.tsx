@@ -94,9 +94,14 @@ function lastRunLine(t: Translate, events: readonly ComfyWorkbenchEvent[], lastR
  */
 function NodeRef({ node, children }: { node: string; children: React.ReactNode }) {
   const t = useI18n();
+  const locate = t("workbenchAssistantLocate").replace("{node}", node);
   return (
-    <Hint label={t("workbenchAssistantLocate").replace("{node}", node)}>
-      <LocateNodeButton node={node} label={children} />
+    <Hint label={locate}>
+      {/* Hint 的 Slot 只能把事件交给一个真实 DOM 元素;LocateNodeButton 返回 Fragment(按钮 + 定位失败提示),
+          直接包组件时悬停事件落不到按钮上,说明永远不出来。这里给它一层单元素锚点。 */}
+      <span className="inline-flex min-w-0 align-baseline">
+        <LocateNodeButton node={node} label={children} ariaLabel={locate} />
+      </span>
     </Hint>
   );
 }
@@ -104,7 +109,7 @@ function NodeRef({ node, children }: { node: string; children: React.ReactNode }
 /** 工具行里这一页认得的结果:诊断、改完的、新标签页(见 assistantViews)。 */
 const PAGE_VIEWS: AgentPageViews = { toolResult: assistantToolResult };
 
-const NODE_REFS: MarkdownRefs = {
+export const NODE_REFS: MarkdownRefs = {
   rewrite: linkNodeRefs,
   render: (node, children) => <NodeRef node={node}>{children}</NodeRef>,
 };
