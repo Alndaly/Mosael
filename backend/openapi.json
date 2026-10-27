@@ -32379,6 +32379,113 @@
         "title": "AssetLineageOut",
         "description": "一份素材的来源链:它的出处,出处的出处……(往上至多几级,见 domain/assets/lineage)。"
       },
+      "AssetMediaInfoOut": {
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "has_thumbnail": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Thumbnail"
+          },
+          "has_waveform": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Waveform"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "AssetMediaInfoOut",
+        "description": "素材详情里的 `media_info`:**常读的几项有类型,其余键原样透传**。\n\n`media_info` 是一份 JSON,写它的地方很多(探测、代理、转写、出处……)。此前响应里它是 `dict`,\n前端拿到的类型是 `{[key]: unknown}`,每个读的人都得自己记住键名、自己 `typeof` 一遍 ——\n读错过不止一次。这里把大家都在读的几项声明出来;别的键照旧带着(`extra=\"allow\"`)。\n\n两条约束,都是为了「加类型」不改变接口的行为:\n\n- **读不懂的一格当没有**,和卡片同一个判据(`_card_value`):库里记坏一个数,不该让详情 500;\n- **只回原本就有的键**:没探测过的素材没有 `duration`,响应里也不该多出一个 `\"duration\": null`。"
+      },
       "AssetOut": {
         "properties": {
           "id": {
@@ -32421,9 +32528,7 @@
             "title": "File Key"
           },
           "media_info": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Media Info"
+            "$ref": "#/components/schemas/AssetMediaInfoOut"
           },
           "tags": {
             "items": {

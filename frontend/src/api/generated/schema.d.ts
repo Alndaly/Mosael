@@ -11464,6 +11464,41 @@ export interface components {
             /** Parents */
             parents: components["schemas"]["AssetLineageNode"][];
         };
+        /**
+         * AssetMediaInfoOut
+         * @description 素材详情里的 `media_info`:**常读的几项有类型,其余键原样透传**。
+         *
+         *     `media_info` 是一份 JSON,写它的地方很多(探测、代理、转写、出处……)。此前响应里它是 `dict`,
+         *     前端拿到的类型是 `{[key]: unknown}`,每个读的人都得自己记住键名、自己 `typeof` 一遍 ——
+         *     读错过不止一次。这里把大家都在读的几项声明出来;别的键照旧带着(`extra="allow"`)。
+         *
+         *     两条约束,都是为了「加类型」不改变接口的行为:
+         *
+         *     - **读不懂的一格当没有**,和卡片同一个判据(`_card_value`):库里记坏一个数,不该让详情 500;
+         *     - **只回原本就有的键**:没探测过的素材没有 `duration`,响应里也不该多出一个 `"duration": null`。
+         */
+        AssetMediaInfoOut: {
+            /** Duration */
+            duration?: number | null;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Fps */
+            fps?: number | null;
+            /** Has Thumbnail */
+            has_thumbnail?: boolean | null;
+            /** Has Waveform */
+            has_waveform?: boolean | null;
+            /** Format */
+            format?: string | null;
+            /** Pages */
+            pages?: number | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** AssetOut */
         AssetOut: {
             /** Id */
@@ -11482,10 +11517,7 @@ export interface components {
             original_filename: string;
             /** File Key */
             file_key: string;
-            /** Media Info */
-            media_info: {
-                [key: string]: unknown;
-            };
+            media_info: components["schemas"]["AssetMediaInfoOut"];
             /** Tags */
             tags?: string[];
             /** Derived From */

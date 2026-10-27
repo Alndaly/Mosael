@@ -6,7 +6,7 @@ import math
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import ConfigDict, Field, computed_field, field_validator, model_serializer, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
 
 class AssetDerivationOut(ApiModel):
@@ -14,6 +14,49 @@ class AssetDerivationOut(ApiModel):
 
     asset_id: str
     op: str
+
+
+class AssetMediaInfoOut(ApiModel):
+    """素材详情里的 `media_info`:**常读的几项有类型,其余键原样透传**。
+
+    `media_info` 是一份 JSON,写它的地方很多(探测、代理、转写、出处……)。此前响应里它是 `dict`,
+    前端拿到的类型是 `{[key]: unknown}`,每个读的人都得自己记住键名、自己 `typeof` 一遍 ——
+    读错过不止一次。这里把大家都在读的几项声明出来;别的键照旧带着(`extra="allow"`)。
+
+    两条约束,都是为了「加类型」不改变接口的行为:
+
+    - **读不懂的一格当没有**,和卡片同一个判据(`_card_value`):库里记坏一个数,不该让详情 500;
+    - **只回原本就有的键**:没探测过的素材没有 `duration`,响应里也不该多出一个 `"duration": null`。
+    """
+
+    model_config = ConfigDict(extra="allow", allow_inf_nan=False)
+
+    duration: float | None = None
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None
+    #: 两个布尔也写成可选:没有这个键时响应里就没有它(见 `_only_present`),类型不能说它一定在。
+    has_thumbnail: bool | None = None
+    #: 导入时抽过波形(见 domain/assets/importer)。
+    has_waveform: bool | None = None
+    format: str | None = None
+    pages: int | None = None
+    size_bytes: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _readable(cls, raw: Any) -> Any:
+        if not isinstance(raw, dict):
+            return raw
+        typed = {name: _card_value(name, raw[name]) for name in _MEDIA_INFO_TYPED if name in raw}
+        return {**raw, **typed}
+
+    #: 不写返回注解:写了 pydantic 就按注解出 schema,类型化的那几项会退成 `unknown`。
+    @model_serializer(mode="wrap")
+    def _only_present(self, handler):  # noqa: ANN001, ANN202
+        data = handler(self)
+        present = self.model_fields_set | set(self.model_extra or {})
+        return {key: value for key, value in data.items() if key in present}
 
 
 class AssetOut(OrmModel):
@@ -25,7 +68,7 @@ class AssetOut(OrmModel):
     name: str
     original_filename: str
     file_key: str
-    media_info: dict
+    media_info: AssetMediaInfoOut
     tags: list[str] = Field(default_factory=list)
     #: 它是从哪几份素材做出来的(截取、转 GIF、导出成片……);导入的素材是空的。
     derived_from: list[AssetDerivationOut] = Field(default_factory=list)
@@ -84,9 +127,13 @@ class AssetCardMediaOut(ApiModel):
     line_text: str | None = None
 
 
+#: AssetMediaInfoOut 上有类型的那几项;读法和卡片同一个(_card_value)。
+_MEDIA_INFO_TYPED = ("duration", "width", "height", "fps", "has_thumbnail", "has_waveform", "format", "pages", "size_bytes")
+
+
 def _card_value(field: str, value: Any) -> Any:
     """读不懂的一格当没有:一份素材里记坏了一个数(NaN、字符串),不该让整页列表 500。"""
-    if field == "has_thumbnail":
+    if field in ("has_thumbnail", "has_waveform"):
         return value is True
     if field == "format":
         return value if isinstance(value, str) else None
