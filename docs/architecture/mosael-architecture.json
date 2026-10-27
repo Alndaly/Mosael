@@ -1,0 +1,499 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Mosael 整体架构",
+    "locale": "zh-CN",
+    "output": "mosael-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Alndaly/Mosael",
+      "provider": "github",
+      "revision": "1f6d8b5c0cef28f167f70540edd5f2357193499e"
+    },
+    "viewBox": [
+      1150,
+      630
+    ],
+    "views": [
+      {
+        "id": "boot",
+        "label": "启动与主路径",
+        "focus": [
+          "electron",
+          "frontend",
+          "backend",
+          "sqlite"
+        ],
+        "note": "Electron 拉起后端、开窗加载前端；后端是唯一事实源，数据落本机 SQLite。"
+      },
+      {
+        "id": "jobs",
+        "label": "任务总线与子进程",
+        "focus": [
+          "backend",
+          "jobs",
+          "sidecar",
+          "plugins",
+          "media",
+          "providers"
+        ],
+        "note": "所有耗时工作都是 job；sidecar、插件、ffmpeg 都是可被 kill_job_child 掐掉的子进程。"
+      },
+      {
+        "id": "publish",
+        "label": "发布与浏览器池",
+        "focus": [
+          "publisher",
+          "backend",
+          "platforms"
+        ],
+        "note": "执行器按 claim / report 协议认领任务，用持久登录档案驱动平台页面。"
+      },
+      {
+        "id": "cloud",
+        "label": "云端与外部客户端",
+        "focus": [
+          "cloud",
+          "website",
+          "backend",
+          "extension"
+        ],
+        "note": "官网和桌面端都只跟 MosaelCloud 通信；Chrome 扩展是受认证的外部客户端。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "cloud",
+      "type": "cloud",
+      "label": "MosaelCloud",
+      "sublabel": "账号 · 社区 · 市场",
+      "tag": "cloud/",
+      "pos": [
+        460,
+        30
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "cloud/README.md",
+          "label": "账号服务"
+        }
+      ]
+    },
+    {
+      "id": "website",
+      "type": "frontend",
+      "label": "官网 mosael.com",
+      "sublabel": "Next.js 16",
+      "tag": "website/",
+      "pos": [
+        720,
+        30
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "electron",
+      "type": "backend",
+      "label": "Electron 主进程",
+      "sublabel": "三段自举 · 系统能力",
+      "tag": "electron/main.cjs",
+      "pos": [
+        210,
+        150
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "electron/main.cjs",
+          "label": "ensureBackend"
+        }
+      ]
+    },
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "React 前端",
+      "sublabel": "React 19 · Vite 8",
+      "tag": "frontend/",
+      "pos": [
+        210,
+        280
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "frontend/src/api/transport.ts",
+          "label": "API 传输层"
+        }
+      ]
+    },
+    {
+      "id": "publisher",
+      "type": "backend",
+      "label": "发布执行器",
+      "sublabel": "浏览器池 · 页面驱动",
+      "tag": "electron/publish/",
+      "pos": [
+        210,
+        420
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "electron/publish/publishWorker.ts",
+          "label": "publishWorker"
+        }
+      ]
+    },
+    {
+      "id": "backend",
+      "type": "backend",
+      "label": "FastAPI 后端",
+      "sublabel": "领域内核 · :8800",
+      "tag": "唯一事实源",
+      "pos": [
+        460,
+        272
+      ],
+      "size": [
+        170,
+        80
+      ],
+      "sources": [
+        {
+          "path": "backend/app/main.py",
+          "label": "应用入口"
+        },
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "label": "领域表"
+        }
+      ]
+    },
+    {
+      "id": "sqlite",
+      "type": "database",
+      "label": "SQLite (WAL)",
+      "sublabel": "数据目录 · 素材",
+      "tag": "migrations.py",
+      "pos": [
+        720,
+        420
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/db/migrations.py",
+          "label": "迁移窗口"
+        }
+      ]
+    },
+    {
+      "id": "jobs",
+      "type": "messagebus",
+      "label": "任务总线",
+      "sublabel": "jobs + task_events",
+      "tag": "jobs.py",
+      "pos": [
+        720,
+        280
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/domain/jobs.py",
+          "label": "jobs"
+        }
+      ]
+    },
+    {
+      "id": "sidecar",
+      "type": "backend",
+      "label": "agent-sidecar",
+      "sublabel": "pi Agent · Node",
+      "tag": "agent-sidecar/",
+      "pos": [
+        950,
+        150
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "agent-sidecar/src/protocol.ts",
+          "label": "帧协议"
+        }
+      ]
+    },
+    {
+      "id": "plugins",
+      "type": "backend",
+      "label": "插件子进程",
+      "sublabel": "ComfyUI · MinerU · 存储",
+      "tag": "plugins/bundled/",
+      "pos": [
+        950,
+        280
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/domain/plugins/runtime.py",
+          "label": "插件运行时"
+        }
+      ]
+    },
+    {
+      "id": "media",
+      "type": "backend",
+      "label": "媒体引擎",
+      "sublabel": "ffmpeg · ASR/TTS · Blender",
+      "tag": "ai/runtime/",
+      "pos": [
+        950,
+        420
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "backend/app/media/render_executor.py",
+          "label": "渲染执行"
+        }
+      ]
+    },
+    {
+      "id": "providers",
+      "type": "external",
+      "label": "AI 供应商",
+      "sublabel": "API Key · OAuth · ComfyUI",
+      "pos": [
+        950,
+        30
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "platforms",
+      "type": "external",
+      "label": "发布平台",
+      "sublabel": "抖音 · 小红书 · B 站",
+      "pos": [
+        20,
+        420
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "extension",
+      "type": "frontend",
+      "label": "Chrome 扩展",
+      "sublabel": "MV3 Side Panel",
+      "tag": "browser-extension/",
+      "pos": [
+        460,
+        540
+      ],
+      "size": [
+        170,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "本机 · Mosael 桌面应用",
+      "wraps": [
+        "electron",
+        "frontend",
+        "publisher",
+        "backend",
+        "sqlite",
+        "jobs",
+        "sidecar",
+        "plugins",
+        "media"
+      ],
+      "pad": 28
+    },
+    {
+      "kind": "security-group",
+      "label": "出站守卫 outbound_guard",
+      "wraps": [
+        "backend",
+        "jobs"
+      ],
+      "pad": 16
+    }
+  ],
+  "connections": [
+    {
+      "id": "spawn-backend",
+      "from": "electron",
+      "to": "backend",
+      "label": "spawn · 健康检查",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelSegment": 0
+    },
+    {
+      "id": "load-ui",
+      "from": "electron",
+      "to": "frontend",
+      "label": "IPC · preload",
+      "labelAt": [
+        285,
+        247
+      ]
+    },
+    {
+      "id": "ui-api",
+      "from": "frontend",
+      "to": "backend",
+      "label": "HTTP · 流式",
+      "variant": "emphasis"
+    },
+    {
+      "id": "persist",
+      "from": "backend",
+      "to": "sqlite",
+      "label": "SQLAlchemy"
+    },
+    {
+      "id": "enqueue",
+      "from": "backend",
+      "to": "jobs",
+      "label": "建 job",
+      "variant": "emphasis"
+    },
+    {
+      "id": "agent-frames",
+      "from": "jobs",
+      "to": "sidecar",
+      "label": "stdin 帧",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "plugin-call",
+      "from": "jobs",
+      "to": "plugins",
+      "label": "stdin JSON"
+    },
+    {
+      "id": "media-run",
+      "from": "jobs",
+      "to": "media",
+      "label": "子进程",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "agent-llm",
+      "from": "sidecar",
+      "to": "providers",
+      "label": "订阅对话"
+    },
+    {
+      "id": "claim-report",
+      "from": "publisher",
+      "to": "backend",
+      "label": "claim / report",
+      "variant": "dashed"
+    },
+    {
+      "id": "drive-pages",
+      "from": "publisher",
+      "to": "platforms",
+      "label": "登录档案"
+    },
+    {
+      "id": "cloud-sync",
+      "from": "backend",
+      "to": "cloud",
+      "label": "HTTPS",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "site-cloud",
+      "from": "website",
+      "to": "cloud",
+      "label": "HTTPS"
+    },
+    {
+      "id": "ext-api",
+      "from": "extension",
+      "to": "backend",
+      "label": "Bearer 会话",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "进程与自举",
+      "items": [
+        "Electron 拉起后端，复用已健康的 :8800",
+        "前端与发布执行器都只是后端的客户端",
+        "sidecar、插件、ffmpeg 都挂在 job 下，取消即掐"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "领域内核",
+      "items": [
+        "路由只做转译与鉴权，规则在 domain/",
+        "生成参数描述符 catalog 是唯一事实源",
+        "工作流、画板、剪辑共用注册表 + 统一引擎"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "边界与安全",
+      "items": [
+        "所有出站请求只过 outbound_guard 一道",
+        "智能体写操作先出确认卡再执行",
+        "扩展 CORS 只认 32 位扩展 id + Bearer"
+      ]
+    }
+  ]
+}

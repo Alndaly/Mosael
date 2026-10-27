@@ -1,5 +1,8 @@
 # 架构
 
+全局一张图:[architecture/mosael-architecture.html](architecture/mosael-architecture.html)(可交互,双击用浏览器打开)。
+源是同目录的 `mosael-architecture.json`(Archify 规格,组件挂着仓库里的出处);进程或通信方式变了先改它,再重新生成 HTML。
+
 ## 三段自举:App 启动时发生了什么
 
 `open "Mosael.app"` 一条命令背后是三件事,顺序由 `electron/main.cjs` 编排:
