@@ -12,6 +12,7 @@ import { MenuContent, MenuItem, MenuItemBody } from "@/components/ui/menu";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import type { TrimPayload } from "@/features/editor/sequenceEditTypes";
 import {
   clipDuration,
   clipEnd,
@@ -83,14 +84,6 @@ function cachedPeaks(
   if (cache.size > 400) cache.clear();
   cache.set(key, value);
   return value;
-}
-
-export interface TrimPayload {
-  timeline_start: number;
-  src_in: number;
-  src_out: number;
-  /** false = 只修这一段,不带链接组员(按住 ⌥ 修剪,或临时解链的选区)。 */
-  linked?: boolean;
 }
 
 export function Timeline({

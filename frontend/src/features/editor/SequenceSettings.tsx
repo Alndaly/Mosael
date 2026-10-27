@@ -6,6 +6,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FILL_MODES, type FillMode } from "@/features/editor/sequenceEditTypes";
 import { cn } from "@/lib/utils";
 
 /** 常用画幅。别的尺寸(比如从素材建出来的序列)照样显示,只是没有哪一档亮着。 */
@@ -17,9 +18,6 @@ export const ASPECT_PRESETS = [
 ] as const;
 
 /** 底层画面和画幅比例不一致时怎么铺(后端 SetSequenceReframeRequest 收的就是这三个)。 */
-export const FILL_MODES = ["cover", "contain", "blur"] as const;
-export type FillMode = (typeof FILL_MODES)[number];
-
 const FILL_LABELS: Record<FillMode, MessageKey> = {
   cover: "fillCover",
   contain: "fillContain",
