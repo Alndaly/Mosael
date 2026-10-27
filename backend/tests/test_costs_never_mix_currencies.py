@@ -179,29 +179,3 @@ def test_没用上的那条规则不算混币种() -> None:
         )
         db.commit()
     assert (event.cost_micros, event.currency, event.unpriced_reason) == (2_000_000, "CNY", None)
-
-
-def test_migrate_usage_unpriced_reason_adds_the_column_once() -> None:
-    """老库的 provider_usage_events 没有 unpriced_reason:迁移补上这一列,老事件留空(当时没问过
-    这个问题,也补不出来),重跑什么都不做。"""
-    from sqlalchemy import text
-
-    from app.core.db import engine
-    from app.db.migrations import _migrate_usage_unpriced_reason
-
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    with SessionLocal() as db:
-        db.add(_event(ws, "old", provider="alibaba", micros=12_000_000, currency="CNY"))
-        db.commit()
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE provider_usage_events DROP COLUMN unpriced_reason"))
-    _migrate_usage_unpriced_reason()
-    _migrate_usage_unpriced_reason()
-    with engine.begin() as conn:
-        columns = [row[1] for row in conn.execute(text("PRAGMA table_info(provider_usage_events)"))]
-        kept = conn.execute(
-            text("SELECT cost_micros, currency, unpriced_reason FROM provider_usage_events WHERE idempotency_key = 'old'")
-        ).one()
-    assert columns.count("unpriced_reason") == 1
-    assert tuple(kept) == (12_000_000, "CNY", None)

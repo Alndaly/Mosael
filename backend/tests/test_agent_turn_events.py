@@ -165,33 +165,3 @@ def test_同一个事件写两次是覆盖_顺序按seq() -> None:
         rows = turn_events(db, "s-idem")
     assert [(row["seq"], row["kind"]) for row in rows] == [(1, "tool_end"), (2, "tool_start")]
     assert rows[0]["payload"]["tool"]["status"] == "done"
-
-
-def test_迁移为已有库建出这张表且重跑安全() -> None:
-    """这张表**不在 `Base.metadata` 里**(它是过程日志),`create_all` 看不见它 —— 已有库靠
-    `migrate-agent-turn-events-table` 补上。验:旧库里没有它时建出来(列、唯一键),
-    再跑一次什么都不做。
-    """
-    from sqlalchemy import inspect, text
-
-    from app.core.db import engine
-    from app.db import migrations
-
-    fresh_client()
-    with engine.begin() as connection:
-        connection.execute(text("DROP TABLE IF EXISTS agent_turn_events"))
-
-    migrations._migrate_agent_turn_events_table()
-
-    inspector = inspect(engine)
-    assert "agent_turn_events" in set(inspector.get_table_names())
-    assert {column["name"] for column in inspector.get_columns("agent_turn_events")} == {
-        "id", "session_id", "turn_id", "seq", "kind", "payload", "created_at",
-    }
-    unique = {
-        tuple(item["column_names"]) for item in inspector.get_unique_constraints("agent_turn_events")
-    }
-    assert ("turn_id", "seq") in unique
-
-    migrations._migrate_agent_turn_events_table()  # 重跑安全
-

@@ -181,44 +181,8 @@ def test_an_unreadable_secret_reads_as_absent_instead_of_garbage(monkeypatch) ->
 # ---------------- 迁移 ----------------
 
 
-def test_the_migration_encrypts_what_is_already_there() -> None:
-    """老库里躺着的明文得被就地加密 —— 升级之后盘上不该还留着看得懂的密钥。"""
-    from app.db.migrations import _migrate_encrypt_secrets
-
-    client = fresh_client()
-    client.post("/api/workspaces", json={"name": "W"})
-    profile_id = _profile(client)
-
-    # 退回加密前的形状:直接写明文进去。
-    with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE provider_credentials SET api_key = :v WHERE profile_id = :p"),
-            {"v": "sk-LEGACY-PLAINTEXT", "p": profile_id},
-        )
-
-    _migrate_encrypt_secrets()
-
-    stored = str(_raw("provider_credentials", "api_key", profile_id=profile_id))
-    assert "sk-LEGACY-PLAINTEXT" not in stored, "迁移没有加密老数据"
-    with SessionLocal() as db:
-        me = db.query(User).order_by(User.created_at).first()
-        assert db.get(ProviderCredential, {"profile_id": profile_id, "owner_user_id": me.id}).api_key == "sk-LEGACY-PLAINTEXT"
 
 
-def test_the_migration_is_idempotent() -> None:
-    """跑两次不该把密文再加密一层。"""
-    from app.db.migrations import _migrate_encrypt_secrets
-
-    client = fresh_client()
-    client.post("/api/workspaces", json={"name": "W"})
-    profile_id = _profile(client)
-
-    _migrate_encrypt_secrets()
-    _migrate_encrypt_secrets()
-
-    with SessionLocal() as db:
-        me = db.query(User).order_by(User.created_at).first()
-        assert db.get(ProviderCredential, {"profile_id": profile_id, "owner_user_id": me.id}).api_key == "sk-PLAINTEXT-1234"
 
 
 def test_desktop_hands_the_key_over_stdin_and_nothing_lands_on_disk_or_in_env(monkeypatch, tmp_path) -> None:

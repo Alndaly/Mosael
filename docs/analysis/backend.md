@@ -99,11 +99,11 @@ graph TD
 
 ### 3.3 表结构演进:**不跑迁移框架**
 
-`init_db()` = `Base.metadata.create_all` + `app/db/migrations.py`(2059 行;2026-09-29 为 5,912 行)里 **51 个 `_migrate_*` 函数**按需补差(加列/改外键/回填/加密迁移/哈希会话令牌等)。规约(CONTEXT.md:137-149):
+`init_db()` = `Base.metadata.create_all` + `app/db/migrations.py`(605 行;2026-09-29 为 5,912 行)里的 **11 个 `_migrate_*` 函数**组成 **19 步计划**(10 次一次性 + 9 对账)按需补差(加列/改外键/回填/加密迁移/哈希会话令牌等)。规约(CONTEXT.md:137-149):
 
 - 改表 = 改 `model_slices/*.py` **且** 加一个 `_migrate_*`,少一步就是"新装机好、老用户崩";
 - Alembic 已整体移除——"30 个迁移文件从不被执行,且自 2026-07-23 起与 models.py 漂移(模型改 6 次、迁移 0 次)"(ARCHITECTURE.md:184-185);
-- 迁移退休判据:引入时间早于最早仍支持的 Release(当前 v0.1.0)才可删(ADR-0006);
+- 迁移退休判据:引入时间早于最早仍支持的 Release(当前 v1.9.11;最新公开 v2.2.3 往前 8 个版本序号)才可删(ADR-0006);
 - 发版 CI 的 `test/bundle.smoke.mjs` 用 `test/upgrade_db_fixture.py` 造旧库、真正启动打包 Electron 验证升级路径,不是只检查产物存在。
 
 ### 3.4 数据归属棘轮
@@ -518,7 +518,7 @@ sequenceDiagram
 2. **回合级 sidecar 进程的成本**:每轮对话 spawn 一个 Node 进程 + 每次建 Agent 重新构建 tools/Provider(含 OAuth 目录获取)。设计上有意为之(凭据与状态一致性),但慢端点上每轮固定开销可观;`TURN_TIMEOUT_SECONDS=600` 与确认卡 590s 上限之间的 10 秒余量,在"用户批得慢 + 模型跑得慢"叠加时偏紧。
 3. **双份实现的维护面**:上下文计量(Python/TS)、场景模型(Python/TS)、`PARTITION_PREFIX` 等共享常量靠 contracts 语料钉住,机制可靠;但凡未进语料的共享语义(如 thinkingLevelMap 的语义、`_ATTACHED_ASSET` 正则与前端 `ATTACHMENT_TOKEN` 的"同一协议",host.py:120-121)仍靠注释约定,是下一批漂移的候选地。
 4. **进程内状态**:`_LIVE`/`_streams`/`_HEARTBEATS`/速率限流窗口都在进程内,与"单进程应用"的自洽假设绑定(PROCESS_STATE.md);任何未来横向扩展都要一次性处理这批点。
-5. **迁移体积**:51 个 `_migrate_*` 且持续增长;退休判据(v0.1.0 门槛)目前意味着几乎不能删,`migrations.py` 会长期膨胀——这是既定取舍(ADR-0006),但值得在提升门槛时同步清理。
+5. **迁移体积**:迁移只保留滚动八版本窗口内的一次性步骤 + 对账步骤;2026-10-27 已退休 v1.9.11 之前的 229 条,后续每次发布都按同一门槛清理。`migrations.py` 不应再靠无限增长维持兼容。
 6. **守护线程 + SQLite 会话的测试脆弱面**:`wait_for_idle_jobs`/`wait_for_idle_turns` 的注释本身就承认了"单独跑绿、全量跑红"的历史;这类按线程名收编的做法有效但脆弱,新增后台线程若不守 `JOB_THREAD_NAME`/`TURN_THREAD_NAME` 约定,旧病会复发(现有测试守着,属可控)。
 7. **依赖策略**:`pyproject.toml` 多处显式声明传递依赖(websockets/cryptography/beautifulsoup4),注释理由一致("依赖别人的传递依赖意味着对方换实现时这里静默失效")——这是有意的冗余,代价是升级时要手工跟进。
 

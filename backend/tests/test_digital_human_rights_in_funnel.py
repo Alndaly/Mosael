@@ -7,13 +7,11 @@
 from __future__ import annotations
 
 from app.domain.generation.origins import STUDIO_ORIGIN
-import json
 
 import pytest
-from sqlalchemy import text
 
-from app.core.db import SessionLocal, engine
-from app.db.models import Asset, Entity, EntityReference, Voice
+from app.core.db import SessionLocal
+from app.db.models import Entity, EntityReference, Voice
 from app.domain.generation import create_generation_job
 from app.domain.generation.operations import GenerationDomainError
 from tests.util import fresh_client, insert_asset, make_voice
@@ -94,29 +92,6 @@ def test_改口型的原片同样看_虚构人物和查不到出处的素材不�
             not in ("genErr_entityConsentMissing", "genErr_voiceConsentMissing")
 
 
-def test_迁移_已有的克隆配音从配音任务补上是哪把嗓子() -> None:
-    from app.db.migrations import _migrate_cloned_speech_remembers_its_voice as migrate
-    from app.domain import jobs as jobs_domain
-
-    ws = _workspace()
-    voice = make_voice(ws, "旧嗓子")
-    old = insert_asset(ws, kind="audio", name="旧配音.wav", media_info={"duration": 3.0})
-    edge = insert_asset(ws, kind="audio", name="Edge 配的.wav")
-    with SessionLocal() as db:
-        for voice_id, asset_id in ((voice, old), ("zh-CN-XiaoxiaoNeural", edge)):
-            job = jobs_domain.create_job(db, workspace_id=ws, kind="tts", created_by=None, payload={"voice_id": voice_id})
-            job.status, job.result = "succeeded", {"asset_id": asset_id}
-        db.commit()
-
-    migrate()
-    migrate()
-
-    with SessionLocal() as db:
-        assert db.get(Asset, old).media_info == {"duration": 3.0, "voice_id": voice}
-        assert "voice_id" not in (db.get(Asset, edge).media_info or {}), "引擎自带的嗓子不是谁的克隆,不记"
-    with engine.begin() as conn:
-        stored = json.loads(conn.execute(text("SELECT media_info FROM assets WHERE id = :a"), {"a": old}).scalar_one())
-    assert stored["voice_id"] == voice
 
 
 def test_智能体开卡时就说_不等人批准之后才被拒() -> None:

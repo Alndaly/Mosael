@@ -80,31 +80,6 @@ def test_不是工具调用开的卡_没有这一项() -> None:
     assert card["tool_call_id"] is None
 
 
-def test_迁移给老库的确认卡表补上这一列_老卡留空_重跑不动() -> None:
-    from app.core.db import engine
-    from app.db import migrations
-
-    fresh_client()
-    with engine.begin() as conn:
-        conn.execute(sa.text("DROP TABLE tool_confirmations"))
-        conn.execute(sa.text(
-            "CREATE TABLE tool_confirmations (id VARCHAR(64) PRIMARY KEY, workspace_id VARCHAR(64) NOT NULL, "
-            "session_id VARCHAR(64), tool VARCHAR(80) NOT NULL, permission VARCHAR(40) NOT NULL, "
-            "summary VARCHAR(500) NOT NULL DEFAULT '', status VARCHAR(24) NOT NULL DEFAULT 'pending')"
-        ))
-        conn.execute(sa.text(
-            "INSERT INTO tool_confirmations (id, workspace_id, session_id, tool, permission, status) "
-            "VALUES ('old', 'w', 's', 'run_workflow', 'ai-cost', 'executed')"
-        ))
-
-    migrations._migrate_tool_confirmations_name_their_tool_call()
-    migrations._migrate_tool_confirmations_name_their_tool_call()
-
-    with engine.begin() as conn:
-        columns = {row[1] for row in conn.execute(sa.text("PRAGMA table_info(tool_confirmations)"))}
-        assert "tool_call_id" in columns
-        assert conn.execute(sa.text("SELECT tool_call_id FROM tool_confirmations WHERE id='old'")).scalar() is None
-    fresh_client()
 
 
 def test_迁移合并重复工具调用并建立唯一索引_重跑不动() -> None:

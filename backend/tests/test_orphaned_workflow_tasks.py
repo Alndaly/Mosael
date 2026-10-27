@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from app.core.db import SessionLocal
-from app.db.models import Job, ScheduledTask, ScheduledTaskRun, Workflow, now
+from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
 from app.workers.scheduler import tick
 from tests.util import fresh_client
 
@@ -165,45 +165,3 @@ def test_调度循环遇到跑不起来的任务_停掉它_不耽误别的() -> 
     with SessionLocal() as db:
         broken = db.get(ScheduledTask, broken_id)
         assert broken.enabled is False and broken.next_run_at is None
-
-
-def test_迁移停掉库里已有的孤儿任务_再跑一次什么都不做() -> None:
-    from app.db.migrations import _disable_tasks_bound_to_deleted_workflows
-
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    other_ws = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
-    alive = _workflow(client, ws)
-    foreign = _workflow(client, other_ws, "别人的流")
-    with SessionLocal() as db:
-        #: 直接写行,绕过建任务的检查 —— 模拟删除路径还不管定时任务时留下的数据。
-        def seed(name: str, payload: dict, enabled: bool = True) -> str:
-            task = ScheduledTask(
-                workspace_id=ws, name=name, kind="workflow", trigger_type="interval",
-                schedule={"seconds": 3600}, enabled=enabled, payload=payload,
-                next_run_at=now() + timedelta(hours=1),
-            )
-            db.add(task)
-            db.flush()
-            return task.id
-
-        orphan = seed("孤儿", {"workflow_id": "deleted-long-ago"})
-        unbound = seed("没绑", {})
-        cross = seed("别的工作区的", {"workflow_id": foreign})
-        good = seed("好的", {"workflow_id": alive})
-        already_off = seed("本来就停着", {"workflow_id": "deleted-long-ago"}, enabled=False)
-        db.commit()
-
-    _disable_tasks_bound_to_deleted_workflows()
-    _disable_tasks_bound_to_deleted_workflows()
-
-    with SessionLocal() as db:
-        for task_id in (orphan, unbound, cross):
-            task = db.get(ScheduledTask, task_id)
-            assert task.enabled is False and task.next_run_at is None, task.name
-        # 任务本身留着,只动开关:界面还要据这个 id 说「绑定的工作流已删除」。
-        assert db.get(ScheduledTask, orphan).payload == {"workflow_id": "deleted-long-ago"}
-        assert db.get(ScheduledTask, already_off).enabled is False
-        kept = db.get(ScheduledTask, good)
-        assert kept.enabled is True and kept.next_run_at is not None
-        assert db.get(Workflow, alive) is not None

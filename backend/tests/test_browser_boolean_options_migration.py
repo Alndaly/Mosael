@@ -15,7 +15,6 @@ import json
 from sqlalchemy import text
 
 from app.core.db import engine
-from app.db.migrations import _migrate_browser_boolean_options
 from tests.util import fresh_client
 
 GRAPH = {
@@ -53,39 +52,10 @@ def _seed(graph: dict) -> None:
         )
 
 
-def test_三个浏览器节点的是非值迁成_true_false() -> None:
-    _seed(GRAPH)
-
-    _migrate_browser_boolean_options()
-
-    nodes = {node["id"]: node for node in _stored()["nodes"]}
-    assert nodes["n1"]["config"]["exact"] == "true"
-    assert nodes["n2"]["config"]["all"] == "false"
-    assert nodes["n3"]["config"]["gone"] == "true"
-    body = nodes["n5"]["config"]["body"]["nodes"][0]
-    assert body["config"]["exact"] == "false", "子图里的节点漏掉了"
 
 
-def test_别的字段一个字都不动() -> None:
-    """「是」在提示词里是内容。按(节点类型, 字段名)对里迁,不是见到「是」就改。"""
-    _seed(GRAPH)
-
-    _migrate_browser_boolean_options()
-
-    nodes = {node["id"]: node for node in _stored()["nodes"]}
-    assert nodes["n4"]["config"]["prompt"] == "是"
-    assert nodes["n4"]["config"]["exact"] == "是", "llm 节点上碰巧同名的字段不该被改"
-    assert nodes["n1"]["config"]["selector"] == "#ok"
 
 
-def test_跑第二次什么都不改() -> None:
-    _seed(GRAPH)
-
-    _migrate_browser_boolean_options()
-    once = _stored()
-    _migrate_browser_boolean_options()
-
-    assert _stored() == once
 
 
 def test_目录里已经没有中文选项值() -> None:

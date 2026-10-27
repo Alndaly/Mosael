@@ -98,5 +98,6 @@ def test_升级已有库时_一次性迁移仍然会跑一遍() -> None:
     assert _applied() == set()
     migration_plan().run()
     applied = _applied()
-    assert len(applied) > 50
+    expected = {step.name for step in migration_plan().steps if step.once}
+    assert applied == expected, "升级后的第一次启动必须把窗口内的每条一次性迁移都跑一遍再记上"
     assert "create-current-schema" not in applied, "对账型的不记账"

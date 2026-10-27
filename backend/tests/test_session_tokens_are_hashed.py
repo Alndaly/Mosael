@@ -56,39 +56,8 @@ def test_the_credential_still_works() -> None:
     assert client.get("/api/auth/me").status_code == 200
 
 
-def test_an_old_plaintext_row_is_migrated_in_place() -> None:
-    """老库里那些明文行要就地哈希掉,而且人不掉线 —— 他手上那串还是原来那串。"""
-    from app.core.db import engine
-    from app.db.migrations import _migrate_hash_session_tokens
-    from sqlalchemy import text
-
-    client = fresh_client()
-    raw = _raw_token(client)
-    with engine.begin() as conn:
-        conn.execute(
-            text("UPDATE auth_sessions SET token = :raw WHERE token = :hashed"),
-            {"raw": raw, "hashed": f"sha256:{hashlib.sha256(raw.encode()).hexdigest()}"},
-        )
-    assert raw in _stored_tokens(), "先把它改回明文,才谈得上迁移"
-
-    _migrate_hash_session_tokens()
-
-    assert raw not in _stored_tokens()
-    assert client.get("/api/auth/me").status_code == 200, "迁移不该把人踢下线"
 
 
-def test_running_the_migration_twice_does_not_double_hash() -> None:
-    """迁移会被每次启动跑一遍。哈希两次的话,所有人一次性掉线。"""
-    from app.db.migrations import _migrate_hash_session_tokens
-
-    client = fresh_client()
-    before = _stored_tokens()
-
-    _migrate_hash_session_tokens()
-    _migrate_hash_session_tokens()
-
-    assert _stored_tokens() == before
-    assert client.get("/api/auth/me").status_code == 200
 
 
 def test_nobody_looks_the_token_up_by_hand() -> None:

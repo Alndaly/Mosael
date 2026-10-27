@@ -1,8 +1,8 @@
-"""Build and verify the smallest supported pre-upgrade database used by the packaged smoke.
+"""Build and verify the oldest supported (v1.9.11) database for the packaged upgrade smoke.
 
-This fixture deliberately owns only facts required by the upgrade contract. ``create_all`` must
-build everything else; historical publish-task and board shapes prove that startup migrations
-upgrade both table schemas and JSON data rather than succeeding only on a clean install.
+The fixture owns only facts required by the remaining rolling-window migrations. Table shapes
+come from the real v1.9.11 schema baseline; explicit rows exercise the migrations that still
+transform old data, rather than succeeding only on an empty install.
 """
 
 from __future__ import annotations
@@ -12,83 +12,97 @@ import sqlite3
 import sys
 from pathlib import Path
 
+BASELINE = Path(__file__).resolve().parents[1] / "backend" / "tests" / "schema_baseline.json"
+NOW = "2026-01-01 00:00:00"
+
 
 def seed(data_dir: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     database = data_dir / "mosael.db"
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     with sqlite3.connect(database) as db:
-        db.executescript(
-            """
-            CREATE TABLE publish_tasks (
-                id VARCHAR(64) PRIMARY KEY,
-                workspace_id VARCHAR(64) NOT NULL,
-                account_id VARCHAR(64) NOT NULL,
-                asset_id VARCHAR(64) NOT NULL,
-                title VARCHAR(300) NOT NULL DEFAULT '',
-                description TEXT NOT NULL DEFAULT '',
-                tags JSON NOT NULL DEFAULT '[]',
-                short_title VARCHAR(80) NOT NULL DEFAULT '',
-                status VARCHAR(40) NOT NULL DEFAULT 'pending',
-                error_message TEXT,
-                screenshot_path TEXT,
-                job_id VARCHAR(64),
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL
-            );
-            INSERT INTO publish_tasks (
-                id, workspace_id, account_id, asset_id, status, created_at, updated_at
-            ) VALUES (
-                'legacy-task', 'legacy-workspace', 'legacy-account', 'legacy-asset',
-                'prepared', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-            );
+        for table, columns in baseline.items():
+            declared = ", ".join(
+                f'"{column}" TEXT' + (" PRIMARY KEY" if column == "id" else "") for column in columns
+            )
+            db.execute(f'CREATE TABLE "{table}" ({declared})')
 
-            CREATE TABLE boards (
-                id VARCHAR(64) PRIMARY KEY,
-                workspace_id VARCHAR(64) NOT NULL,
-                name VARCHAR(180) NOT NULL,
-                canvas JSON NOT NULL,
-                created_at DATETIME NOT NULL,
-                updated_at DATETIME NOT NULL
-            );
-            INSERT INTO boards (id, workspace_id, name, canvas, created_at, updated_at)
-            VALUES (
-                'legacy-board', 'legacy-workspace', 'Legacy board',
-                '{"items":[{"id":"image-1","kind":"image","x":0,"y":0,"text":"old prompt","job_id":"job-1"},{"id":"note-1","kind":"note","x":0,"y":300,"text":"hello"},{"id":"tool-1","kind":"action","x":300,"y":300,"form":{"producer":"node:translate","config":{"target_lang":"en"},"bindings":{"text":[{"from":"note-1"}]}}}],"edges":[{"id":"e1","source":"note-1","target":"tool-1"}]}',
-                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-            );
-            """
+        db.execute(
+            "INSERT INTO publish_tasks (id, workspace_id, account_id, asset_id, title, description, tags, "
+            "short_title, options, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("legacy-task", "legacy-workspace", "legacy-account", "legacy-asset", "Legacy title", "",
+             "[]", "", "{}", "prepared", NOW, NOW),
         )
+        graph = {"nodes": [{"id": "publish-1", "type": "publish", "config": {}}], "edges": []}
+        db.execute(
+            "INSERT INTO workflows (id, workspace_id, name, description, graph, revision, graph_hash, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("legacy-workflow", "legacy-workspace", "Legacy workflow", "", json.dumps(graph), "1", "", NOW, NOW),
+        )
+        for row_id in ("old-first", "old-second"):
+            db.execute(
+                "INSERT INTO tool_confirmations (id, workspace_id, session_id, tool_call_id, tool, permission, "
+                "summary, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (row_id, "legacy-workspace", "legacy-session", "legacy-call", "run_workflow", "edit", "", "pending", NOW),
+            )
+        db.execute(
+            "INSERT INTO agent_questions (id, workspace_id, session_id, questions, answers, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("legacy-question", "legacy-workspace", "legacy-session", "[]", "[]", "pending", NOW),
+        )
+        db.execute(
+            "INSERT INTO cloud_bindings (user_id, cloud_user_id, email, device_id, token, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("legacy-user", "legacy-cloud", "", "legacy-device", "", NOW),
+        )
+        db.execute("PRAGMA user_version = 0")
 
 
 def verify(data_dir: Path) -> None:
     database = data_dir / "mosael.db"
     with sqlite3.connect(database) as db:
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "cloud_bindings" in tables:
+            raise SystemExit("upgrade failed: cloud_bindings was not dropped")
+        if "cloud_login" not in tables:
+            raise SystemExit("upgrade failed: cloud_login was not created")
+
         columns = {row[1] for row in db.execute("PRAGMA table_info(publish_tasks)")}
-        if "options" not in columns:
-            raise SystemExit("upgrade failed: publish_tasks.options was not added")
-        status, options = db.execute(
-            "SELECT status, options FROM publish_tasks WHERE id = 'legacy-task'"
+        if not {"content_kind", "asset_ids", "body", "media_meta"} <= columns:
+            raise SystemExit(f"upgrade failed: publish_tasks columns are {sorted(columns)}")
+        content_kind, asset_ids, body, media_meta = db.execute(
+            "SELECT content_kind, asset_ids, body, media_meta FROM publish_tasks WHERE id = 'legacy-task'"
         ).fetchone()
-        if status != "cancelled":
-            raise SystemExit(f"upgrade failed: prepared task stayed {status!r}")
-        if options not in ("{}", {}):
-            raise SystemExit(f"upgrade failed: options default is {options!r}")
-        canvas = db.execute("SELECT canvas FROM boards WHERE id = 'legacy-board'").fetchone()[0]
-        board = json.loads(canvas) if isinstance(canvas, str) else canvas
-        item = board["items"][0]
-        if item.get("run") != {"status": "running", "job_id": "job-1"}:
-            raise SystemExit(f"upgrade failed: board run state is {item.get('run')!r}")
-        if item.get("form") != {"prompt": "old prompt", "producer": "generate"}:
-            raise SystemExit(f"upgrade failed: board form is {item.get('form')!r}")
-        if "job_id" in item or "error" in item:
-            raise SystemExit(f"upgrade failed: board kept legacy state fields: {item!r}")
-        # 画板上的工具格撤下(migrate-board-tool-cells-become-abilities):翻译搬成它接着的那张便签的一项能力。
-        by_id = {one["id"]: one for one in board["items"]}
-        if "tool-1" in by_id or any(one.get("kind") == "action" for one in board["items"]):
-            raise SystemExit(f"upgrade failed: a tool item is still on the board: {board['items']!r}")
-        abilities = (by_id["note-1"].get("form") or {}).get("abilities")
-        if abilities != {"node:translate": {"config": {"target_lang": "en"}, "bindings": {}}}:
-            raise SystemExit(f"upgrade failed: the note's abilities are {abilities!r}")
+        if (content_kind, json.loads(asset_ids), body, json.loads(media_meta)) != ("video", ["legacy-asset"], "", {}):
+            raise SystemExit(
+                "upgrade failed: publish task is "
+                f"{(content_kind, asset_ids, body, media_meta)!r}"
+            )
+
+        question_columns = {row[1] for row in db.execute("PRAGMA table_info(agent_questions)")}
+        if "feishu_message_id" not in question_columns:
+            raise SystemExit("upgrade failed: agent_questions.feishu_message_id is missing")
+        confirmation_columns = {row[1] for row in db.execute("PRAGMA table_info(tool_confirmations)")}
+        if "feishu_message_id" not in confirmation_columns:
+            raise SystemExit("upgrade failed: tool_confirmations.feishu_message_id is missing")
+        indexes = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+        if "uq_tool_confirmations_session_tool_call" not in indexes:
+            raise SystemExit("upgrade failed: confirmation idempotency index is missing")
+        linked = [row[0] for row in db.execute(
+            "SELECT tool_call_id FROM tool_confirmations ORDER BY rowid"
+        )]
+        if linked != ["legacy-call", None]:
+            raise SystemExit(f"upgrade failed: duplicate confirmation links are {linked!r}")
+
+        graph = json.loads(db.execute("SELECT graph FROM workflows WHERE id = 'legacy-workflow'").fetchone()[0])
+        if graph["nodes"][0]["config"].get("content_kind") != "video":
+            raise SystemExit("upgrade failed: workflow publish node has no content_kind")
+        profile_columns = {row[1] for row in db.execute("PRAGMA table_info(browser_profiles)")}
+        if "identity" not in profile_columns:
+            raise SystemExit("upgrade failed: browser_profiles.identity is missing")
+        deployment_columns = {row[1] for row in db.execute("PRAGMA table_info(deployment_config)")}
+        if "update_feed_url" not in deployment_columns:
+            raise SystemExit("upgrade failed: deployment_config.update_feed_url is missing")
 
 
 if __name__ == "__main__":

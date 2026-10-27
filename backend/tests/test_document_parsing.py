@@ -193,29 +193,6 @@ def test_还没解析好的不能存成笔记() -> None:
     assert refused.status_code == 409 and "还没解析好" in refused.json()["detail"]
 
 
-def test_迁移_早先建的解析表补上页面图列_从各段抄过来() -> None:
-    import json as _json
-
-    from sqlalchemy import inspect as sa_inspect, text
-
-    from app.core.db import engine
-    from app.db.migrations import _migrate_asset_extractions_remember_page_images, migration_plan
-
-    assert "migrate-asset-extractions-remember-page-images" in {step.name for step in migration_plan().steps}
-    fresh_client()
-    with engine.begin() as conn:
-        conn.execute(text("DROP TABLE asset_extractions"))
-        conn.execute(text("CREATE TABLE asset_extractions (id VARCHAR(64) PRIMARY KEY, asset_id VARCHAR(64), workspace_id VARCHAR(64), "
-                          "parser VARCHAR(64), parser_name VARCHAR(200), status VARCHAR(16), error TEXT, job_id VARCHAR(64), unit VARCHAR(16), "
-                          "sections INTEGER, chars INTEGER, outline JSON, notes JSON, created_at DATETIME, finished_at DATETIME)"))
-        conn.execute(text("INSERT INTO asset_extractions (id, outline) VALUES ('x', :outline)"),
-                     {"outline": _json.dumps([{"index": 1, "image": "pages/001.png"}, {"index": 2, "image": None}])})
-    _migrate_asset_extractions_remember_page_images()
-    _migrate_asset_extractions_remember_page_images()
-    assert "page_images" in {one["name"] for one in sa_inspect(engine).get_columns("asset_extractions")}
-    with engine.connect() as conn:
-        assert _json.loads(conn.execute(text("SELECT page_images FROM asset_extractions WHERE id = 'x'")).scalar()) == ["pages/001.png"]
-    fresh_client()  # 把表按当前模型重建回来,别的测试照常
 
 
 def test_几份_PDF_同时解析不把进程打挂(tmp_path) -> None:

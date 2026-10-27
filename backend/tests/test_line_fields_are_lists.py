@@ -9,10 +9,7 @@
 
 from __future__ import annotations
 
-import json
 
-from app.core.db import SessionLocal
-from app.db.models import Workflow
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import canonicalize_line_fields, normalize_graph
 
@@ -39,26 +36,6 @@ def test_已经是列表的原样不动_规范化幂等() -> None:
     assert normalize_graph(once, node_types=NODE_TYPES) == once
 
 
-def test_迁移把库里已存的多行文本转成列表() -> None:
-    from app.db.migrations import _migrate_line_fields_are_lists
-    from tests.util import fresh_client
-
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    with SessionLocal() as db:
-        #: 直接写行,绕过保存入口 —— 模拟规范形状改变之前落库的图。
-        workflow = Workflow(workspace_id=ws, name="旧图", graph=_graph(TEXT))
-        db.add(workflow)
-        db.commit()
-        workflow_id = workflow.id
-
-    _migrate_line_fields_are_lists()
-    _migrate_line_fields_are_lists()
-
-    with SessionLocal() as db:
-        graph = db.get(Workflow, workflow_id).graph
-        graph = json.loads(graph) if isinstance(graph, str) else graph
-        assert graph["nodes"][1]["config"]["source_assets"] == ["{{a.asset_id}}:first_frame", "{{b.asset_id}}:last_frame"]
 
 
 def test_列表里的整组引用在运行时被摊平() -> None:

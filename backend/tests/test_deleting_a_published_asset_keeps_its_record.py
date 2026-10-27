@@ -8,9 +8,8 @@ job 却一直停在「运行中」。
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import text
 
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key
 from app.db.models import Asset, Job, PublishTask, User
 from tests.test_publish_worker import WORKER, setup_browser_task
@@ -150,59 +149,3 @@ CREATE TABLE publish_tasks (
     FOREIGN KEY(job_id) REFERENCES jobs (id) ON DELETE SET NULL
 )
 """
-
-
-def test_老库的发布记录升级后_删素材不再连带删掉_名字补上_再跑一次什么都不做() -> None:
-    from app.db.migrations import _migrate_publish_records_outlive_their_asset
-
-    client = _client()
-    ws, _, task = setup_browser_task(client)
-    _claim(client, task["id"])
-    _report(client, task["id"], status="success", post=POST)
-    columns = "id, workspace_id, account_id, asset_id, title, description, tags, short_title, status, error_message, " \
-        "screenshot_path, job_id, created_at, updated_at, options, claimed_by, post"
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE publish_tasks RENAME TO publish_tasks_new"))
-        conn.execute(text(OLD_PUBLISH_TASKS))
-        conn.execute(text(f"INSERT INTO publish_tasks ({columns}) SELECT {columns} FROM publish_tasks_new"))
-        conn.execute(text("DROP TABLE publish_tasks_new"))
-    engine.dispose()
-
-    _migrate_publish_records_outlive_their_asset()
-    #: 老库升上来时会跑**整条**迁移链:除了「记录活得比素材久」,还包括内容形状那几列
-    #: (ADR 0076 的 content_kind / asset_ids / body)。只跑前者的话,这张老形状的表缺列,
-    #: 之后 ORM 一读就炸。
-    from app.db.migrations import _migrate_publish_tasks_get_content_shape
-
-    _migrate_publish_tasks_get_content_shape()
-    _migrate_publish_records_outlive_their_asset()  # 第二次:已经是新形状,只按名字补一遍(没有要补的)
-
-    with engine.connect() as conn:
-        #: 先读完再挑:读一行就丢下的结果,底下的语句跟着连接回池子(见 test_pooled_connections_carry_no_open_statement)
-        foreign_keys = conn.execute(text("PRAGMA foreign_key_list(publish_tasks)")).all()
-        columns = conn.execute(text("PRAGMA table_info(publish_tasks)")).all()
-    asset_fk = next(row for row in foreign_keys if row[3] == "asset_id")
-    asset_column = next(row for row in columns if row[1] == "asset_id")
-    assert asset_fk[6] == "SET NULL"
-    assert asset_column[3] == 0, "asset_id 还是不可空"
-    kept = _task_out(client, ws["id"], task["id"])
-    assert kept["asset_name"] == "成片A"
-    assert kept["post"]["post_id"] == POST["post_id"]
-
-    assert client.delete(f"/api/assets/{task['asset_id']}").status_code == 204
-    assert _task_out(client, ws["id"], task["id"]) is not None, "升级之后删素材,发布记录还是连带删了"
-
-
-def test_老库里没有发布表_迁移什么都不做() -> None:
-    from app.db.migrations import _migrate_publish_records_outlive_their_asset
-
-    fresh_client()
-    with engine.begin() as conn:
-        conn.execute(text("DROP TABLE publish_tasks"))
-    engine.dispose()
-
-    _migrate_publish_records_outlive_their_asset()
-
-    with engine.connect() as conn:
-        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'"))}
-    assert "publish_tasks" not in tables

@@ -9,10 +9,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import inspect, text
 
-from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_webhook_secrets_are_hashed
+from app.core.db import SessionLocal
 from app.db.models import ScheduledTask
 from tests.util import fresh_client, second_client
 
@@ -122,27 +120,6 @@ def test_客户端带来的密钥一律不收() -> None:
     assert owner.post(f"/api/hooks/scheduled-tasks/{created['id']}?secret={chosen}").status_code == 403
 
 
-def test_老库里的明文密钥换成哈希_外部系统手上那串照样能用_提醒重置() -> None:
-    owner, _, ws, workflow = _team("editor")
-    task = _webhook(owner, ws, workflow)
-    old = "an-old-plaintext-secret"
-    # 造一行「改成只存哈希之前」的样子:明文在 payload 里,没有哈希列。
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE scheduled_tasks SET webhook_secret_hash = NULL, webhook_secret_set_at = NULL, "
-                          "payload = json_set(payload, '$.webhook_secret', :old) WHERE id = :id"), {"old": old, "id": task["id"]})
-        conn.execute(text("ALTER TABLE scheduled_tasks DROP COLUMN webhook_secret_hash"))
-        conn.execute(text("ALTER TABLE scheduled_tasks DROP COLUMN webhook_secret_set_at"))
-    engine.dispose()
-    assert "webhook_secret_hash" not in {column["name"] for column in inspect(engine).get_columns("scheduled_tasks")}
-
-    _migrate_webhook_secrets_are_hashed()
-    _migrate_webhook_secrets_are_hashed()  # 每次启动都会跑:再跑一次什么都不变
-    engine.dispose()
-
-    listed = next(one for one in owner.get(f"/api/scheduled-tasks?workspace_id={ws}").json() if one["id"] == task["id"])
-    assert "webhook_secret" not in listed["payload"] and listed["payload"]["workflow_id"] == workflow["id"]
-    assert listed["webhook_secret_set_at"] is None, "曾经对所有人可见的那把:界面据此提醒重置"
-    assert owner.post(f"/api/hooks/scheduled-tasks/{task['id']}?secret={old}").status_code == 200
 
 
 def test_改删跑的路由都过主人这道闸() -> None:

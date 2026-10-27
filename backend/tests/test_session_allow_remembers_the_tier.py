@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
-from app.db.models import AgentSession, ToolConfirmation, User
+from app.db.models import ToolConfirmation, User
 from app.domain.agent.autopilot import wait_for_idle_autopilot
 from app.domain.agent.host import wait_for_idle_turns
 from app.domain.jobs import wait_for_idle_jobs
@@ -114,54 +114,3 @@ def test_同一个工具点过两次_留高的那一档() -> None:
         {"tool": "run_workflow", "permission": "ai-cost"},
         {"tool": "edit_timeline", "permission": "edit"},
     ]
-
-
-def test_迁移把老的工具名转成_工具和声明下限档_撤不回的和认不出的去掉_再跑一次不动() -> None:
-    from app.db.migrations import _migrate_session_allow_remembers_the_tier as migrate
-
-    chat = Chat()
-    with SessionLocal() as db:
-        session = db.get(AgentSession, chat.sid)
-        session.auto_allow_tools = [
-            "edit_timeline", "run_workflow", "render_sequence", "plugin__conn1__bill",
-            "delete_assets", "publish_asset", "run_code", "retired_tool",
-            {"tool": "generate_image", "permission": "ai-cost"},
-        ]
-        db.commit()
-
-    migrate()
-    migrate()
-
-    with SessionLocal() as db:
-        assert db.get(AgentSession, chat.sid).auto_allow_tools == [
-            {"tool": "edit_timeline", "permission": "edit"},
-            {"tool": "run_workflow", "permission": "ai-cost"},
-            {"tool": "render_sequence", "permission": "render-cost"},
-            {"tool": "plugin__conn1__bill", "permission": "edit"},
-            {"tool": "generate_image", "permission": "ai-cost"},
-        ]
-
-
-def test_迁移里抄的下限档和此刻的登记表一致() -> None:
-    """迁移的身体是冻住的快照;这里只核对写它的这一刻没有抄错(以后登记表变了,改的是新工具,不是这份老数据)。
-
-    所以只核对**表里抄了的**那些:抄进去的档位和登记表一致,撤不回的两档一个都没抄。迁移之后才加的工具
-    (edit_note 是第一个)不在表里是对的 —— 老数据里不可能有它只记了名字的条目,别为了这条去改冻住的迁移。
-    """
-    import inspect
-    import re
-
-    from app.db import migrations
-    from app.domain.agent.autopilot import SESSION_ALLOWABLE
-    from app.domain.agent.confirmable import tool_specs
-
-    source = inspect.getsource(migrations._migrate_session_allow_remembers_the_tier)
-    copied = dict(re.findall(r'"(\w+)": "([\w-]+)"', source))
-    assert len(copied) >= 15, "没从迁移里读出那张表?"
-    specs = tool_specs()
-    for name, floor in copied.items():
-        if name in specs:
-            assert specs[name].permission == floor, name
-    for name, spec in specs.items():
-        if spec.permission not in SESSION_ALLOWABLE:
-            assert f'"{name}":' not in source, name

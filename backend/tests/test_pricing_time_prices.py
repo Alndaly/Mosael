@@ -335,36 +335,3 @@ def test_effective_period_is_judged_at_the_occurrence_time() -> None:
 
 
 # ---------- 迁移 ----------
-
-
-def test_migrate_pricing_time_prices_adds_the_columns_once() -> None:
-    """老库的规则没有这两列:迁移补上,老规则 = 全天一个价(空时段、空时区),重跑什么都不做。"""
-    from sqlalchemy import text
-
-    from app.core.db import engine
-    from app.db.migrations import _migrate_pricing_time_prices
-
-    ws = _ws()
-    with SessionLocal() as db:
-        rule = create_pricing_rule(
-            db, workspace_id=ws, capability="chat", billing_unit="million_input_token", unit_amount_micros=9
-        )
-        rule_id = rule.id
-        db.commit()
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE provider_pricing_rules DROP COLUMN time_prices"))
-        conn.execute(text("ALTER TABLE provider_pricing_rules DROP COLUMN time_zone"))
-    _migrate_pricing_time_prices()
-    _migrate_pricing_time_prices()
-    with engine.begin() as conn:
-        columns = [row[1] for row in conn.execute(text("PRAGMA table_info(provider_pricing_rules)"))]
-        kept = conn.execute(
-            text("SELECT unit_amount_micros, time_prices, time_zone FROM provider_pricing_rules WHERE id = :id"),
-            {"id": rule_id},
-        ).one()
-    assert columns.count("time_prices") == 1 and columns.count("time_zone") == 1
-    assert tuple(kept) == (9, "[]", "")
-    with SessionLocal() as db:
-        loaded = db.get(ProviderPricingRule, rule_id)
-        assert (loaded.time_prices, loaded.time_zone) == ([], "")
-        assert price_at(loaded, utc(MONDAY, 3)) == 9

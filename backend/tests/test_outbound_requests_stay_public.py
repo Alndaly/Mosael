@@ -16,10 +16,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import httpx
 import pytest
-from sqlalchemy import inspect, select, text
+from sqlalchemy import select
 
 from app.core import outbound_guard
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.engine import execute_graph
@@ -373,22 +373,6 @@ def test_启动时把库里的名单推进进程() -> None:
     assert [one.text for one in outbound_guard.current_allowlist()] == ["192.168.1.0/24"]
 
 
-def test_老库补上空的允许名单() -> None:
-    from app.db.migrations import _migrate_outbound_allowlist
-    from app.domain import deployment
-
-    fresh_client()
-    with SessionLocal() as db:
-        deployment.open_registration(db)
-        db.commit()
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE deployment_config DROP COLUMN outbound_allowlist"))
-    engine.dispose()
-    assert "outbound_allowlist" not in {c["name"] for c in inspect(engine).get_columns("deployment_config")}
-    _migrate_outbound_allowlist()
-    with engine.begin() as conn:
-        assert conn.execute(text("SELECT outbound_allowlist FROM deployment_config")).scalars().all() == ["[]"]
-    _migrate_outbound_allowlist()  # 再跑一次什么都不做
 
 
 def _no_dns(host: str, port: int) -> list[str]:

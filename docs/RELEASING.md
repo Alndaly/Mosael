@@ -60,6 +60,8 @@ gh run watch RUN_ID --interval 45 --exit-status
 
 若以后配置了全部五项 GitHub secrets（另含 `APPLE_ID` 和 `APPLE_APP_SPECIFIC_PASSWORD`），可按 `release.yml` 的 tag 自动发布路径操作。不要在缺少云端 Apple 凭据时先推 tag 再期待自动发布成功。不要为了让门禁通过关闭签名、时间戳或测试。
 
+发版前 `release.yml` 会执行 `scripts/check-support-window.py`，要求最早支持版本恰好比本次版本落后 8 个稳定 Release。当前门槛写在 `backend/app/db/support_window.py`；推进门槛时同步重新生成 `backend/tests/schema_baseline.json` 和 `test/upgrade_db_fixture.py`。
+
 ## 3. 下载、验证与公证
 
 下面以占位符表示本次 run、版本及路径，实际执行时替换；在仓库外建立专用工作目录，避免把大包纳入 Git。

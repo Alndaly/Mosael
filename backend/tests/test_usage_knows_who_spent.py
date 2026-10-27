@@ -8,13 +8,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from sqlalchemy import text
 
-from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_deployments_keep_finished_jobs_for_a_year as add_retention
-from app.db.migrations import _migrate_usage_finds_who_spent_it as backfill
-from app.db.migrations import _migrate_usage_remembers_who_spent as add_column
-from app.db.models import AgentMessage, AgentSession, GenerationJob, GenerationSession, Job, ProviderUsageEvent, User
+from app.core.db import SessionLocal
+from app.db.models import ProviderUsageEvent, User
 from app.domain.billing.usage import billable
 from tests.util import fresh_client
 
@@ -55,55 +51,3 @@ def test_记账时记下替谁花的钱() -> None:
 
 def _event(db, ws: str, key: str, **facts) -> None:
     db.add(ProviderUsageEvent(workspace_id=ws, capability="chat", operation="x", idempotency_key=key, **facts))
-
-
-def test_老账回填_顺着任务消息会话找人_找不到的留空_跑两遍和一遍一样() -> None:
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    with SessionLocal() as db:
-        me = db.query(User).filter_by(username="tester").one().id
-        job = Job(workspace_id=ws, kind="render", status="succeeded", created_by=me)
-        session = AgentSession(workspace_id=ws, title="会话", owner_user_id=me)
-        generation_session = GenerationSession(workspace_id=ws, title="图", owner_user_id=me)
-        db.add_all([job, session, generation_session])
-        db.flush()
-        message = AgentMessage(session_id=session.id, role="assistant", content="好")
-        generation = GenerationJob(workspace_id=ws, session_id=generation_session.id, provider="p", model="m", kind="image",
-                                   request={"prompt": "x"})
-        db.add_all([message, generation])
-        db.flush()
-        _event(db, ws, "by-job", job_id=job.id)
-        _event(db, ws, "by-message", agent_message_id=message.id, source_type="agent_message", source_id=message.id)
-        _event(db, ws, "by-message-source", source_type="agent_message", source_id=message.id)
-        _event(db, ws, "by-session", source_type="agent_session", source_id=session.id)
-        _event(db, ws, "by-generation", source_type="generation_job", source_id=generation.id)
-        _event(db, ws, "by-preview", source_type="voice_preview", source_id=me)
-        _event(db, ws, "preview-of-nobody", source_type="voice_preview", source_id="gone-user")
-        _event(db, ws, "workflow", source_type="workflow", source_id="w1")
-        db.commit()
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE provider_usage_events DROP COLUMN user_id"))
-
-    add_column()
-    backfill()
-    add_column()
-    backfill()
-
-    with engine.begin() as conn:
-        found = dict(conn.execute(text("SELECT idempotency_key, user_id FROM provider_usage_events")).all())
-    assert found == {
-        "by-job": me, "by-message": me, "by-message-source": me, "by-session": me, "by-generation": me, "by-preview": me,
-        "preview-of-nobody": None, "workflow": None,
-    }
-
-
-def test_老库的部署设置补上任务保留天数_默认一年() -> None:
-    client = fresh_client()
-    #: 老库里那一行部署设置(这里先存一次,行就落下了)
-    assert client.put("/api/admin/job-retention", json={"days": 180}).status_code == 200
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE deployment_config DROP COLUMN job_retention_days"))
-    add_retention()
-    add_retention()
-    with engine.begin() as conn:
-        assert [row[0] for row in conn.execute(text("SELECT job_retention_days FROM deployment_config"))] == [365]

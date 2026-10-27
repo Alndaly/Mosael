@@ -72,27 +72,3 @@ def test_old_jpeg_thumbnails_are_replaced(tmp_path: Path) -> None:
     assert not (video_dir / "thumbnail.jpg").exists()
     with Image.open(thumbnail_path(video_dir)) as image:
         assert image.format == "WEBP" and image.size == (320, 180)
-
-
-def test_the_migration_replaces_old_thumbnails_of_real_assets() -> None:
-    """迁移 migrate-thumbnails-keep-transparency:库里的素材、盘上的旧 JPEG 缩略图 → WebP;再跑一次什么都不做。"""
-    from app.core.config import settings
-    from app.db.migrations import _migrate_thumbnails_keep_transparency
-    from tests.util import create_asset, fresh_client
-
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    create_asset(client, {"workspace_id": ws["id"], "kind": "image", "name": "icon", "file_key": "media/icon/icon.png", "media_info": {}})
-    folder = settings.data_dir / "media" / "icon"
-    folder.mkdir(parents=True, exist_ok=True)
-    _transparent_icon(folder / "icon.png")
-    Image.new("RGB", (320, 240), (0, 0, 0)).save(folder / "thumbnail.jpg")
-
-    _migrate_thumbnails_keep_transparency()
-    assert not (folder / "thumbnail.jpg").exists()
-    first = thumbnail_path(folder).read_bytes()
-    with Image.open(thumbnail_path(folder)) as image:
-        assert image.convert("RGBA").getpixel((0, 0))[3] == 0
-
-    _migrate_thumbnails_keep_transparency()
-    assert thumbnail_path(folder).read_bytes() == first

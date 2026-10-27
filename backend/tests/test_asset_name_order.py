@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import random
 
-from sqlalchemy import inspect, text
 
 from app.core.collation import name_sort_key
-from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_assets_get_a_name_sort_key
+from app.core.db import SessionLocal
 from app.db.models import Asset
 from tests.util import fresh_client, insert_asset
 
@@ -113,23 +111,3 @@ def test_排序键只在名字写进去的那一处算_新建改名都经过它(
         asset.name = "Banana"
         assert asset.name_sort_key == name_sort_key("Banana")
         db.rollback()
-
-
-def test_迁移给老表补上排序键_老素材都算好_再跑一次什么都不做() -> None:
-    ws = _workspace(fresh_client())
-    for name in ("阿", "Banana", "第10集"):
-        insert_asset(ws, kind="image", name=name)
-    with engine.begin() as conn:
-        conn.execute(text("DROP INDEX IF EXISTS idx_assets_workspace_intermediate_name"))
-        conn.execute(text("ALTER TABLE assets DROP COLUMN name_sort_key"))
-    engine.dispose()
-    assert "name_sort_key" not in {column["name"] for column in inspect(engine).get_columns("assets")}
-
-    _migrate_assets_get_a_name_sort_key()
-    _migrate_assets_get_a_name_sort_key()
-    engine.dispose()
-
-    assert "idx_assets_workspace_intermediate_name" in {index["name"] for index in inspect(engine).get_indexes("assets")}
-    with engine.connect() as conn:
-        rows = conn.execute(text("SELECT name, name_sort_key FROM assets")).all()
-    assert {name: key for name, key in rows} == {name: name_sort_key(name) for name in ("阿", "Banana", "第10集")}

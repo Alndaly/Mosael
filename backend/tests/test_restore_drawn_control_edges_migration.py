@@ -38,7 +38,6 @@ import pytest
 from sqlalchemy import text
 
 from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_restore_drawn_control_edges
 from app.db.models import User, Workflow
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.engine import BRANCHING_NODE_TYPES
@@ -412,51 +411,8 @@ def _put_legacy_graph(workflow_id: str, graph: dict[str, Any]) -> None:
         )
 
 
-def test_迁移给库里的图补边_自动落一版修订_第二遍什么都不做() -> None:
-    """官方副本和用户自己画的图**都补**(折边当年不看 `meta.source`);补完落新修订,再跑一遍是空的。"""
-    client = fresh_client()
-    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    ids: dict[str, str] = {}
-    for source in ("official", "custom"):
-        created = client.post("/api/workflows", json={"workspace_id": workspace, "name": source}).json()
-        ids[source] = created["id"]
-        _put_legacy_graph(created["id"], _legacy_graph(None if source == "custom" else source))
-
-    _migrate_restore_drawn_control_edges()
-
-    stored = _stored_graphs(list(ids.values()))
-    for source, workflow_id in ids.items():
-        controls = [edge for edge in stored[workflow_id]["edges"] if edge.get("kind", "control") == "control"]
-        assert controls == [{"id": "c-a-b", "source": "a", "target": "b"}], f"{source} 没补对:{controls}"
-        assert _revision_count(workflow_id) == 2, f"{source} 该落一版新修订"
-        with engine.begin() as connection:
-            note = connection.execute(
-                text("SELECT note, created_by FROM workflow_revisions WHERE workflow_id = :id ORDER BY revision DESC LIMIT 1"),
-                {"id": workflow_id},
-            ).one()
-        assert "控制边" in note[0] and note[1], "新修订要有说明和作者(沿用上一版)"
-    untouched = _stored_graphs(list(ids.values()))
-    revisions = {workflow_id: _revision_count(workflow_id) for workflow_id in ids.values()}
-
-    _migrate_restore_drawn_control_edges()  # 启动迁移本来就该能重跑
-
-    assert _stored_graphs(list(ids.values())) == untouched, "第二遍又改了图"
-    assert {workflow_id: _revision_count(workflow_id) for workflow_id in ids.values()} == revisions, "第二遍又落了修订"
 
 
-def test_作者画了线的新形状图_迁移碰都不碰() -> None:
-    """库里已经有那条控制边(作者画的、或者上一次迁移补的):图原样、不落修订。"""
-    client = fresh_client()
-    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    created = client.post("/api/workflows", json={"workspace_id": workspace, "name": "已经是对的"}).json()
-    graph = _legacy_graph(None)
-    graph["edges"].append({"id": "e-a-b", "source": "a", "target": "b"})
-    _put_legacy_graph(created["id"], graph)
-
-    _migrate_restore_drawn_control_edges()
-
-    assert _stored_graphs([created["id"]])[created["id"]] == graph
-    assert _revision_count(created["id"]) == 1
 
 
 def test_恢复到升级之前的那一版_恢复的那份先升级_补回控制边() -> None:

@@ -14,9 +14,7 @@
 
 from __future__ import annotations
 
-import json
 
-import sqlalchemy as sa
 
 from tests.test_note_passage_edits import Chat
 from tests.util import fresh_client
@@ -81,42 +79,3 @@ def test_写笔记的入口都得说出自己是谁() -> None:
         parameter = inspect.signature(writer).parameters["origin"]
         assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
         assert parameter.default is inspect.Parameter.empty, writer.__name__
-
-
-def test_迁移给老版本补上来历_第一版是新建_批准过的改笔记卡是智能体_重跑不动() -> None:
-    from app.core.db import engine
-    from app.db import migrations
-
-    c = fresh_client()
-    me = c.get("/api/auth/me").json()
-    ws = c.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    with engine.begin() as conn:
-        conn.execute(sa.text("DROP TABLE note_revisions"))
-        conn.execute(sa.text(
-            "CREATE TABLE note_revisions (note_id VARCHAR(64) NOT NULL REFERENCES notes(id) ON DELETE CASCADE, "
-            "revision INTEGER NOT NULL, snapshot JSON NOT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (note_id, revision))"
-        ))
-        conn.execute(sa.text(
-            "INSERT INTO notes (id, workspace_id, title, markdown, tags, topics, sources, favorite, trashed, revision, created_at, updated_at) "
-            "VALUES ('n', :ws, '周报', '三', '[]', '[]', '[]', 0, 0, 3, '2026-10-01 00:00:00', '2026-10-01 00:00:00')"
-        ), {"ws": ws})
-        for revision in (1, 2, 3):
-            conn.execute(sa.text(
-                "INSERT INTO note_revisions (note_id, revision, snapshot, created_at) VALUES ('n', :r, :s, '2026-10-01 00:00:00')"
-            ), {"r": revision, "s": json.dumps({"title": "周报", "markdown": str(revision)})})
-        conn.execute(sa.text(
-            "INSERT INTO tool_confirmations (id, workspace_id, tool, permission, status, result, decided_by, payload, summary, "
-            "summary_key, summary_params, requested_by, decision_mode, created_at) "
-            "VALUES ('card', :ws, 'edit_note', 'edit', 'executed', :result, :me, '{}', '', '', '{}', 'pi', 'manual', "
-            "'2026-10-01 00:00:00')"
-        ), {"ws": ws, "me": me["id"], "result": json.dumps({"note_id": "n", "revision": 3})})
-
-    migrations._migrate_note_revisions_remember_where_they_came_from()
-    migrations._migrate_note_revisions_remember_where_they_came_from()
-
-    with engine.begin() as conn:
-        rows = conn.execute(sa.text(
-            "SELECT revision, origin, created_by, restored_from FROM note_revisions WHERE note_id = 'n' ORDER BY revision"
-        )).all()
-    assert [tuple(row) for row in rows] == [(1, "create", None, None), (2, "edit", None, None), (3, "agent", me["id"], None)]
-    fresh_client()

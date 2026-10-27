@@ -287,41 +287,6 @@ def test_输出口叫artifact的_下游拿到的是收进素材库的那一份(t
     assert isinstance(produced["artifact"], str) and produced["artifact"], "artifact 口是空的"
 
 
-def test_存成映射的数组入参_迁移成按顺序的值列表(tmp_path) -> None:
-    from app.db.migrations import _migrate_plugin_array_inputs_are_lists
-    from app.db.models import Workflow
-
-    import json
-
-    from sqlalchemy import text
-
-    from app.core.db import engine
-    from app.domain.workflows.revisions import graph_digest
-
-    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
-    _install(tmp_path, user_id())
-    with SessionLocal() as db:
-        workflow = create_workflow(db, workspace_id=ws, name="老流程", graph=_graph({
-            "id": "j", "type": f"plugin.{PACKAGE}.join", "config": {},
-        }), created_by=user_id())
-        db.commit()
-        workflow_id = workflow.id
-    #: 老版本存下的样子(现在的保存会把它规范化成列表):当前图和修订都是映射。
-    old = _graph({"id": "j", "type": f"plugin.{PACKAGE}.join",
-                  "config": {"items": {"a": "第一段", "b": "{{start.x}}"}, "sizes": [1]}})
-    with engine.begin() as connection:
-        for table, column in (("workflows", "id"), ("workflow_revisions", "workflow_id")):
-            connection.execute(text(f"UPDATE {table} SET graph = :g, graph_hash = :h WHERE {column} = :id"),
-                               {"g": json.dumps(old, ensure_ascii=False), "h": graph_digest(old), "id": workflow_id})
-
-    _migrate_plugin_array_inputs_are_lists()
-    _migrate_plugin_array_inputs_are_lists()  # 再跑什么都不改
-
-    with SessionLocal() as db:
-        graph = db.get(Workflow, workflow_id).graph
-        assert db.get(Workflow, workflow_id).revision == 2
-    node = next(one for one in graph["nodes"] if one["id"] == "j")
-    assert node["config"] == {"items": ["第一段", "{{start.x}}"], "sizes": [1]}
 
 
 def test_老清单里node_config多标的素材_升级时去掉_升完装得上() -> None:

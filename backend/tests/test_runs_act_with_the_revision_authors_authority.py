@@ -23,7 +23,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.db.models import Job, ScheduledTaskRun, User, Workflow
 from app.domain import browser, sharing, workflows
 from app.domain.workflows import revisions
@@ -295,32 +295,3 @@ def test_host_files_follow_the_revision_author_too(tmp_path) -> None:
 
 
 # ---------------- 迁移:老修订补上作者 ----------------
-
-
-def test_old_revisions_get_the_workflows_creator_as_author() -> None:
-    from app.db.migrations import _backfill_workflow_revision_authors
-
-    owner, workspace, mate = _team()
-    graph = {"nodes": [{"id": "start", "type": "start", "config": {}}], "edges": []}
-    known = mate.post("/api/workflows", json={"workspace_id": workspace["id"], "name": "同事建的", "graph": graph}).json()
-    changed = {"nodes": [{"id": "start", "type": "start", "config": {"params": {"v": 1}}}], "edges": []}
-    owner.patch(f"/api/workflows/{known['id']}", json={"graph": changed, "base_graph_hash": known["graph_hash"]})
-    unknown = owner.post("/api/workflows", json={"workspace_id": workspace["id"], "name": "没记作者", "graph": graph}).json()
-    with engine.begin() as conn:
-        # 老数据:第二版(和整条「没记作者」的)说不出是谁存的。
-        conn.execute(text("UPDATE workflow_revisions SET created_by = NULL WHERE workflow_id = :id AND revision = 2"), {"id": known["id"]})
-        conn.execute(text("UPDATE workflow_revisions SET created_by = NULL WHERE workflow_id = :id"), {"id": unknown["id"]})
-
-    _backfill_workflow_revision_authors()
-
-    with engine.begin() as conn:
-        authors = dict(conn.execute(text(
-            "SELECT workflow_id || ':' || revision, created_by FROM workflow_revisions"
-        )).all())
-    assert authors[f"{known['id']}:1"] == _uid("mate")
-    assert authors[f"{known['id']}:2"] == _uid("mate"), "创建者 = 最早一版有记录的作者"
-    assert authors[f"{unknown['id']}:1"] == _uid("tester"), "一版都没记录时是工作区 owner"
-
-    _backfill_workflow_revision_authors()  # 再跑一次什么都不做
-    with engine.begin() as conn:
-        assert conn.execute(text("SELECT count(*) FROM workflow_revisions WHERE created_by IS NULL")).scalar() == 0

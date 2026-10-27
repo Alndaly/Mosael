@@ -13,7 +13,6 @@
 
 from __future__ import annotations
 
-import pytest
 import sqlalchemy as sa
 
 from app.core.db import SessionLocal, engine
@@ -136,39 +135,3 @@ def _old_table(columns: str) -> None:
             f"revision INTEGER NOT NULL, snapshot JSON NOT NULL, {columns}created_at DATETIME NOT NULL, "
             "PRIMARY KEY (note_id, revision))"
         ))
-
-
-@pytest.mark.parametrize("columns", [
-    #: 跑过 1.8.3 开发期那一步(界面上分组)的老库:有 group_start 和字数列。
-    "origin VARCHAR(16) NOT NULL DEFAULT 'edit', created_by VARCHAR(64), restored_from INTEGER, "
-    "group_start INTEGER NOT NULL DEFAULT 0, chars_added INTEGER NOT NULL DEFAULT 0, "
-    "chars_removed INTEGER NOT NULL DEFAULT 0, title_changed BOOLEAN NOT NULL DEFAULT 0, ",
-    #: 只补过来历的老库:两样都没有。
-    "origin VARCHAR(16) NOT NULL DEFAULT 'edit', created_by VARCHAR(64), restored_from INTEGER, ",
-])
-def test_迁移把版本表收成合并后的样子_补上开始写的时间_去掉分组那一列_重跑不动(columns: str) -> None:
-    import json
-
-    from app.db import migrations
-
-    c, ws, _ = _setup()
-    _old_table(columns)
-    with engine.begin() as conn:
-        conn.execute(sa.text(
-            "INSERT INTO notes (id, workspace_id, title, markdown, tags, topics, sources, favorite, trashed, revision, save_seq, "
-            "created_at, updated_at) VALUES ('n', :ws, '周报', '', '[]', '[]', '[]', 0, 0, 1, 1, '2026-10-01 00:00:00', '2026-10-01 00:00:00')"
-        ), {"ws": ws})
-        conn.execute(sa.text(
-            "INSERT INTO note_revisions (note_id, revision, snapshot, origin, created_at) VALUES ('n', 1, :s, 'create', '2026-10-03 12:39:50')"
-        ), {"s": json.dumps({"title": "周报", "markdown": "周一"})})
-
-    migrations._migrate_note_revisions_take_the_merged_shape()
-    migrations._migrate_note_revisions_take_the_merged_shape()
-
-    with engine.begin() as conn:
-        found = {row[1] for row in conn.execute(sa.text("PRAGMA table_info(note_revisions)"))}
-        assert "group_start" not in found
-        assert {"started_at", "chars_added", "chars_removed", "title_changed"} <= found
-        assert conn.execute(sa.text("SELECT started_at, created_at FROM note_revisions")).one() == (
-            "2026-10-03 12:39:50", "2026-10-03 12:39:50")
-    fresh_client()

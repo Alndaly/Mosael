@@ -44,13 +44,6 @@ def test_未声明的音色补上声明() -> None:
     assert client.patch(f"/api/voices/{voice}", json={"consent_kind": "maybe"}).status_code == 422
 
 
-def test_迁移_已有的音色写成未声明_再跑一次不动() -> None:
-    from app.db.migrations import _migrate_voices_declare_consent, migration_plan
-
-    assert "migrate-voices-declare-consent" in {step.name for step in migration_plan().steps}
-    fresh_client()
-    _migrate_voices_declare_consent()
-    _migrate_voices_declare_consent()
 
 
 @pytest.fixture()

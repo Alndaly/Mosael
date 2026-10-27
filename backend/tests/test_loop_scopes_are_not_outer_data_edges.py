@@ -16,12 +16,9 @@ import json
 
 from sqlalchemy import text
 
-from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_loop_scopes_are_not_outer_data_edges
-from app.db.models import Workflow, WorkflowRevision
+from app.core.db import engine
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.revisions import current_workflow_revision
 from tests.util import fresh_client
 
 
@@ -133,39 +130,3 @@ def _stored(workflow_id: str) -> dict:
         return json.loads(
             connection.execute(text("SELECT graph FROM workflows WHERE id = :id"), {"id": workflow_id}).scalar_one()
         )
-
-
-def test_迁移把错接的数据边改回体内引用_补回被折掉的控制边_修订对上_重跑不动() -> None:
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    workflow_id = client.post("/api/workflows", json={"workspace_id": ws, "name": "被改写过"}).json()["id"]
-    untouched_id = client.post("/api/workflows", json={"workspace_id": ws, "name": "没事的"}).json()["id"]
-    _as_saved_by_1_8_0(workflow_id, _corrupted())
-    untouched = _stored(untouched_id)
-
-    _migrate_loop_scopes_are_not_outer_data_edges()
-
-    graph = _stored(workflow_id)
-    nodes = {node["id"]: node for node in graph["nodes"]}
-    assert nodes["each"]["config"]["output"] == "{{llm-1.text}}"
-    assert nodes["again"]["config"]["condition"] == "{{llm-1.text}}"
-    assert nodes["again"]["config"]["output"] == "已经重填过", "重填过的不该被覆盖"
-    assert nodes["each"]["inputs"] == [] and nodes["again"]["inputs"] == []
-    assert not [edge for edge in graph["edges"] if edge.get("kind") == "data"]
-    pairs = {(edge["source"], edge["target"]) for edge in graph["edges"]}
-    assert ("llm-1", "each") in pairs and ("llm-1", "again") in pairs, "被折掉的控制边没补回来"
-    assert len([edge for edge in graph["edges"] if (edge["source"], edge["target"]) == ("llm-1", "again")]) == 1
-    inner = next(node for node in nodes["sub"]["config"]["body"]["nodes"] if node["id"] == "inner")
-    assert inner["config"]["output"] == "{{llm-1.text}}"
-    assert nodes["sub"]["config"]["body"]["edges"] == [{"id": "c-llm-1-inner", "source": "llm-1", "target": "inner"}]
-    assert _stored(untouched_id) == untouched
-
-    with SessionLocal() as db:
-        workflow = db.get(Workflow, workflow_id)
-        assert current_workflow_revision(db, workflow).graph == graph
-        revisions = db.query(WorkflowRevision).filter_by(workflow_id=workflow_id).count()
-
-    _migrate_loop_scopes_are_not_outer_data_edges()
-    assert _stored(workflow_id) == graph
-    with SessionLocal() as db:
-        assert db.query(WorkflowRevision).filter_by(workflow_id=workflow_id).count() == revisions

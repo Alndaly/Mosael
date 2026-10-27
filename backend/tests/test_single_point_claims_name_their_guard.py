@@ -67,7 +67,6 @@ ALLOWLIST: frozenset[str] = frozenset({
     "app/ai/runtime/asr_models.py:唯一的探测实现",
     "app/core/config.py:唯一真相",
     "app/core/usage_scope.py:唯一真源",
-    "app/db/migrations.py:唯一真相",
     # 部署配置那条随模型切片搬到了 model_slices/runtime_config.py(models.py 现在只剩装配)。
     "app/db/model_slices/runtime_config.py:唯一真相",
     "app/domain/agent/confirmations.py:唯一实现",

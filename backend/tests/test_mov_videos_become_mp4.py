@@ -71,38 +71,3 @@ def _mov_asset(client, name: str, original: str) -> tuple[str, Path]:  # type: i
     folder = settings.data_dir / "media" / f"rec-{name}"
     folder.mkdir(parents=True, exist_ok=True)
     return asset["id"], folder
-
-
-def test_the_migration_repackages_existing_movs() -> None:
-    """迁移 migrate-mov-videos-become-mp4:换文件、改行;用户改过的名字不动;再跑一次什么都不做。"""
-    from app.db.migrations import _migrate_mov_videos_become_mp4
-
-    client = fresh_client()
-    default_id, default_dir = _mov_asset(client, "clip.mov", "clip.mov")
-    _mov(default_dir / "clip.mov")
-    renamed_id, renamed_dir = _mov_asset(client, "我的录屏", "rec.mov")
-    _mov(renamed_dir / "rec.mov")
-
-    _migrate_mov_videos_become_mp4()
-    with SessionLocal() as db:
-        default, renamed = db.get(Asset, default_id), db.get(Asset, renamed_id)
-        assert default.file_key.endswith("clip.mp4") and default.original_filename == "clip.mp4"
-        assert default.name == "clip.mp4"
-        assert renamed.file_key.endswith("rec.mp4") and renamed.name == "我的录屏"
-    assert (default_dir / "clip.mp4").is_file() and not (default_dir / "clip.mov").exists()
-
-    stamp = (default_dir / "clip.mp4").stat().st_mtime_ns
-    _migrate_mov_videos_become_mp4()
-    assert (default_dir / "clip.mp4").stat().st_mtime_ns == stamp
-
-
-def test_the_migration_finishes_a_half_done_repackage() -> None:
-    """上次换好了文件、还没改行就断了:这次看到同名 .mp4 就只改行。"""
-    from app.db.migrations import _migrate_mov_videos_become_mp4
-
-    client = fresh_client()
-    asset_id, folder = _mov_asset(client, "half.mov", "half.mov")
-    _mov(folder / "half.mp4")  # 只剩新文件,.mov 已经删了
-    _migrate_mov_videos_become_mp4()
-    with SessionLocal() as db:
-        assert db.get(Asset, asset_id).file_key.endswith("half.mp4")

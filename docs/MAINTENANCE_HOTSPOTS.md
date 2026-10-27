@@ -129,17 +129,17 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 ## 4. 超大 feature 文件
 
-~~`WorkflowsView.tsx`(4086 行,还在长)~~ → 已拆(2026-09-29,见 4.2)、`EditorView.tsx`(1305 → 现 1136)、
-`timeline/Timeline.tsx`(1.2k,现 1281)。
+~~`WorkflowsView.tsx`(4086 行,还在长)~~ → 已拆(2026-09-29,见 4.2)、`EditorView.tsx`(现 786)、
+`timeline/Timeline.tsx`(现 1737)。
 
-按**内聚度**过一遍之后(2026-08-25 重新量过),结论和最初的判断不一样 —— 行数不是判据:
+按**内聚度**过一遍之后(行数不是判据;下表的直接 hook 数在 2026-10-27 重新量过):
 
-| | 行(2026-08-25) | 现在(2026-09-29) | 查询 | state | 判断 |
+| | 行(2026-08-25) | 现在(2026-10-27) | 直接 useQuery/Mutation | state | 判断 |
 | --- | --- | --- | --- | --- | --- |
-| `Timeline` | 1197 | 1281 | **0** | 6 | 大而内聚,不拆 |
-| `NodeInspector` | 904 | 663(AI 生成、LLM 两段另成文件) | 9 | **1** | 纯渲染,904 行是**宽度**不是混乱,不拆 |
-| `WorkflowEditor` | 1123 | 811(画布行为收进 6 个 hook,见 4.2) | 6 | 14 | 见下 |
-| `Editor` | ~~1143~~ 925 | 1136(`EditorView.tsx`) | **37** | ~~7~~ 3 | 面板摆放已抽走;剩下的是序列变更 |
+| `Timeline` | 1197 | 1737 | **1** | 3 | 大而内聚,不拆 |
+| `NodeInspector` | 904 | 800(AI 生成、LLM 两段另成文件) | **2** | **1** | 纯渲染,行数是**宽度**不是混乱,不拆 |
+| `WorkflowEditor` | 1123 | 989(画布行为收进 6 个 hook,见 4.2) | 3 | 9 | 见下 |
+| `Editor` | ~~1143~~ 925 | **786**(`EditorView.tsx`) | **4**(序列/字体查询 + 2 个字体 mutation) | **2** | 序列变更已移入 `useSequenceMutations`;剩余是界面编排 |
 
 `WorkflowEditor` 曾被判定为"最该拆的那个"。重新量之后:它的 state 分四组,而**「图数据」那组
 (nodes/edges/dirty/runJobId)被引用 106 次**,其余三组加起来 36 次 —— 也就是说它其实也是
@@ -158,8 +158,11 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 **`Editor` 里那一大把 useQuery/useMutation**,绝大多数是同一件事:对当前序列做一次编辑
 (插入/移动/裁剪/删除/分割/调速/变换…),共用 `applySequence` / `settleWith` /
-`resyncAfterFailedDrag` 三个回调。这是一个内聚的组 —— 该整组抽成 `useSequenceMutations`,
-而不是按"面板编排 / 变换与合成"那样横着切。低优先,顺手做。
+`resyncAfterFailedDrag` 三个语义。
+
+**已完成(2026-10-27)**:这组编辑收进 `useSequenceMutations`,按 `runtime` / `clips` /
+`tracks` / `subtitles` / `history` / `state` 分组;缓存写回、409 冲突替换、拖拽草稿收尾与
+选区清理只有一份。`EditorView` 不再逐个声明序列 mutation。
 
 > 教训:「这个文件太大了」不是一条可执行的判据。**查询数与 state 分组**才是 —— 前者说明它
 > 承担了多少件事,后者说明那些事彼此相不相干。
@@ -179,8 +182,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 | `backend/app/domain/generation/catalog.py` | 1,717 | 364 | 能力描述符数据分到 `generation/descriptors/` |
 | `backend/app/domain/workflows/templates.py` | 2,050 | 346 | 三张大图模板与模型选择、schema 各成一个 `templates_*.py` |
 
-**没拆**:`backend/app/db/migrations.py`(5,912 行)是按时间排的历史迁移,每条是一份冻结快照,
-按行数拆开只会让「这一步在谁之前」更难看清。
+**没拆**:`backend/app/db/migrations.py` 2026-10-27 已按滚动窗口退休到约 600 行,保留窗口内的一次性迁移与对账步骤;不按行数拆,因为「这一步在谁之前」比文件长度重要。
 
 ### 4.1 三个数据装配文件 — 第一阶段已完成（2026-09-01）
 
@@ -210,9 +212,11 @@ base 归属由 [`contracts/scene-cases.json`](../contracts/scene-cases.json) 双
 
 ## 6. `_migrate_*` 会持续堆积
 
-运行时没有迁移框架,已装机的表结构变更全靠 `app/db/migrations.py` 里的 `_migrate_*` 链,而它只增不减。
+运行时没有迁移框架,已装机的表结构变更全靠 `app/db/migrations.py` 里的 `_migrate_*` 链。
 退休判据写在 [ARCHITECTURE.md](ARCHITECTURE.md):引入时间早于**最早仍支持的 Release** 即可删。
-每次停止支持某个旧版本时顺手清一轮,否则 `init_db()` 会慢慢长成考古现场。
+支持窗口是**最新公开版往前 8 个版本序号**(含最新共 9 个 Release);2026-10-27 已把 v1.9.11
+之前的 229 条一次性迁移退休,文件从一万多行收回到窗口内的 10 条一次性迁移 + 对账步骤。
+每次发布都要重算窗口并清一轮,否则 `init_db()` 会慢慢长成考古现场。
 
 **删之前必须核对发布时间**(`gh release list` 的时间是 UTC,git log 默认本地时区,边界很容易算反),
 以及那一版实际用的数据目录/库文件名——删错的代价是用户打开看到空工作室。

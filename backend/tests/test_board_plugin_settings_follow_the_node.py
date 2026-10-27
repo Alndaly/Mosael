@@ -14,8 +14,7 @@ import textwrap
 from pathlib import Path
 
 from app.core.db import SessionLocal
-from app.db.migrations import _migrate_board_plugin_array_inputs_are_lists
-from app.db.models import Board, PluginInstance, PluginPackage
+from app.db.models import PluginInstance, PluginPackage
 from app.domain.boards.tools import board_outputs
 from app.domain.plugins.tools import refresh_tools
 from tests.util import fresh_client, user_id
@@ -92,31 +91,3 @@ def _install(tmp_path: Path) -> None:
         db.commit()
         refresh_tools(db, instance, notify=False)
         db.commit()
-
-
-def test_格子上存成映射的数组入参_迁移成值的列表(tmp_path) -> None:
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    _install(tmp_path)
-    producer = f"node:plugin.{PACKAGE}.join"
-    canvas = {"items": [
-        {"id": "slot", "kind": "text", "form": {"producer": producer, "config": {"items": {"a": "一", "b": "二"}, "title": "t"}}},
-        {"id": "cell", "kind": "image", "form": {"abilities": {producer: {"config": {"items": {"x": "甲"}}, "bindings": {}}}}},
-        {"id": "plain", "kind": "text", "text": "不动"},
-    ], "edges": []}
-    with SessionLocal() as db:
-        board = Board(workspace_id=ws, name="老画板", canvas=canvas, revision=3)
-        db.add(board)
-        db.commit()
-        board_id = board.id
-
-    _migrate_board_plugin_array_inputs_are_lists()
-    _migrate_board_plugin_array_inputs_are_lists()  # 再跑什么都不改
-
-    with SessionLocal() as db:
-        board = db.get(Board, board_id)
-        items = {item["id"]: item for item in board.canvas["items"]}
-        assert board.revision == 4
-    assert items["slot"]["form"]["config"] == {"items": ["一", "二"], "title": "t"}
-    assert items["cell"]["form"]["abilities"][producer]["config"] == {"items": ["甲"]}
-    assert items["plain"] == canvas["items"][2]

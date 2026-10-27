@@ -216,76 +216,12 @@ def _to_pre_split_shape() -> None:
     engine.dispose()
 
 
-def test_existing_rows_stay_visible_after_the_migration() -> None:
-    """老库里的东西今天大家都看得见 —— 升级不该把它们从同事眼前拿走。
-
-    迁移给每一条已存在的记录建一行「共享给它当前所在的工作区」,所以行为完全一致;
-    **从此以后新建的默认私有**。
-    """
-    from app.db.migrations import _migrate_resource_ownership
-
-    owner, workspace, mate = _team()
-    account_id = _seed_publish_account(workspace["id"], "tester")
-    _to_pre_split_shape()
-
-    _migrate_resource_ownership()
-
-    listed = mate.get(f"/api/publish/accounts?workspace_id={workspace['id']}").json()
-    assert account_id in [row["id"] for row in listed]
 
 
-def test_the_migration_is_idempotent() -> None:
-    from app.core.db import engine
-    from app.db.migrations import _migrate_resource_ownership
-    from sqlalchemy import text
-
-    owner, workspace, _mate = _team()
-    _seed_publish_account(workspace["id"], "tester")
-    _to_pre_split_shape()
-    _migrate_resource_ownership()
-    _migrate_resource_ownership()
-
-    with engine.begin() as conn:
-        rows = conn.execute(text("SELECT COUNT(*) FROM resource_shares")).scalar()
-    assert rows == 1, f"跑两次建出了 {rows} 行"
 
 
-def test_revoking_a_share_survives_a_restart() -> None:
-    """**收回之后重启,不能被迁移又加回来。**
-
-    线上翻过车:新建的发布账号本该默认私有,重启一次就变成了团队共享;在界面上点「收回」也一样,
-    重启之后又回来了。根因是那条迁移每次启动都「给没有共享行的记录补一行」—— 而共享是用户随时
-    在改的状态:第一次跑到那里时「没有共享行」是老数据,之后它意味着**主人收回了**。
-    """
-    from app.core.db import engine
-    from app.db.migrations import _migrate_resource_ownership
-    from sqlalchemy import text
-
-    owner, workspace, mate = _team()
-    account_id = _seed_publish_account(workspace["id"], "tester")
-    owner.post(f"/api/shares/publish_account/{account_id}", json={"workspace_id": workspace["id"]})
-    owner.request("DELETE", f"/api/shares/publish_account/{account_id}", json={"workspace_id": workspace["id"]})
-
-    _migrate_resource_ownership()  # = 重启
-
-    with engine.begin() as conn:
-        rows = conn.execute(text("SELECT COUNT(*) FROM resource_shares")).scalar()
-    assert rows == 0, f"收回之后重启又被加回了 {rows} 行"
-    listed = mate.get(f"/api/publish/accounts?workspace_id={workspace['id']}").json()
-    assert account_id not in [row["id"] for row in listed]
 
 
-def test_a_new_account_stays_private_across_a_restart() -> None:
-    """新建的发布账号默认私有(domain/sharing.KINDS),**重启也还是私有**。"""
-    from app.db.migrations import _migrate_resource_ownership
-
-    owner, workspace, mate = _team()
-    account_id = _seed_publish_account(workspace["id"], "tester")
-
-    _migrate_resource_ownership()  # = 重启
-
-    listed = mate.get(f"/api/publish/accounts?workspace_id={workspace['id']}").json()
-    assert account_id not in [row["id"] for row in listed]
 
 
 # ---------------- 主人自己始终看得见 ----------------

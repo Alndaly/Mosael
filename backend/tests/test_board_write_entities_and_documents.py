@@ -264,30 +264,3 @@ def test_回执把笔记填进引用着文件的文档格_文件那一份摘掉_
         item = db.get(Board, board_id).canvas["items"][0]
     assert item["run"]["status"] == "succeeded", item
     assert item["note_id"] == note["id"] and "asset_id" not in item, item
-
-
-def test_老画板上的文档格补上写字() -> None:
-    import json
-
-    from sqlalchemy import text
-
-    from app.core.db import engine
-    from app.db.migrations import _migrate_board_documents_can_be_written
-
-    client = fresh_client()
-    ws = _workspace(client)
-    board_id = _board(client, ws, [{"id": "doc", "kind": "document", "x": 0, "y": 0},
-                                   {"id": "n", "kind": "note", "x": 0, "y": 300}])
-    with engine.begin() as conn:
-        raw = conn.execute(text("SELECT canvas, revision FROM boards WHERE id = :id"), {"id": board_id}).one()
-        canvas = json.loads(raw[0]) if isinstance(raw[0], str) else raw[0]
-        canvas["items"][0].pop("form", None)
-        conn.execute(text("UPDATE boards SET canvas = :c WHERE id = :id"), {"c": json.dumps(canvas), "id": board_id})
-        before = raw[1]
-    _migrate_board_documents_can_be_written()
-    with SessionLocal() as db:
-        from app.db.models import Board
-
-        board = db.get(Board, board_id)
-        assert board.canvas["items"][0]["form"] == {"producer": "write"}
-        assert board.revision == before + 1

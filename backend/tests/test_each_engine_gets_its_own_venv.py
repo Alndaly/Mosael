@@ -141,14 +141,3 @@ def test_asr_migrates_its_shared_venv_too(tmp_path, monkeypatch) -> None:
 
     assert (tmp_path / "venv-funasr").is_dir()
     assert not (tmp_path / "venv").exists()
-
-
-def test_both_migrations_run_at_startup() -> None:
-    """它们得**有人叫** —— 只写一个函数而没人调用,和没写一样。"""
-    import inspect
-
-    from app.db import migrations
-
-    source = inspect.getsource(migrations)
-
-    assert "migrate_shared_venv" in source, "启动时没有人跑这两个迁移"

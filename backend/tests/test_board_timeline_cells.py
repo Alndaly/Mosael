@@ -238,10 +238,6 @@ def test_画板上的撤销带着版本号_时间线在别处改过就不撤别�
     assert client.post(f"/api/sequences/{sequence}/undo").status_code == 200, "不带版本号(剪辑页)照旧撤最新一步"
 
 
-def test_迁移_画板记着项目这一列() -> None:
-    from app.db.migrations import migration_plan
-
-    assert "migrate-boards-remember-their-project" in {step.name for step in migration_plan().steps}
 
 
 def test_时间线格挂导出_存下时写明产出者() -> None:
@@ -329,39 +325,6 @@ def test_在时间线格上导出_成片落成右边一格视频_时间线格不
                         form={"config": {"resolution": "4k"}}).status_code == 422
 
 
-def test_迁移_已经放下的时间线格写明导出_别的格子不动() -> None:
-    import json
-
-    from app.db.migrations import _migrate_board_sequence_cells_name_their_producer, migration_plan
-
-    assert "migrate-board-sequence-cells-name-their-producer" in {step.name for step in migration_plan().steps}
-    client, ws, _ = _setup()
-    with SessionLocal() as db:
-        #: 直接写行,绕过保存入口 —— 模拟升级前落库的画布。
-        board = Board(workspace_id=ws, name="旧板", revision=3, canvas={"items": [
-            {"id": "t", "kind": "sequence", "x": 0, "y": 0, "sequence_id": "s1"},
-            {"id": "n", "kind": "note", "x": 0, "y": 0, "text": "旁白", "form": {"producer": "write"}},
-        ], "edges": []})
-        untouched = Board(workspace_id=ws, name="新板", revision=2, canvas={"items": [
-            {"id": "t", "kind": "sequence", "x": 0, "y": 0, "sequence_id": "s2", "form": {"producer": "sequence_export"}},
-        ], "edges": []})
-        db.add_all([board, untouched])
-        db.commit()
-        board_id, untouched_id = board.id, untouched.id
-
-    def read(board_id: str) -> tuple[dict, int]:
-        with SessionLocal() as db:
-            row = db.get(Board, board_id)
-            return (json.loads(row.canvas) if isinstance(row.canvas, str) else row.canvas), row.revision
-
-    _migrate_board_sequence_cells_name_their_producer()
-    once, revision = read(board_id)
-    _migrate_board_sequence_cells_name_their_producer()
-    assert read(board_id) == (once, revision) and revision == 4, "再跑一次不该再动"
-    items = {item["id"]: item for item in once["items"]}
-    assert items["t"]["form"] == {"producer": "sequence_export"} and items["t"]["sequence_id"] == "s1"
-    assert items["n"]["form"] == {"producer": "write"}
-    assert read(untouched_id)[1] == 2
 
 
 # ── 智能体(edit_board)认识时间线格 ─────────────────────────────────────────

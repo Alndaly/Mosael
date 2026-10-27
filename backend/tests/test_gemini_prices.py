@@ -13,7 +13,6 @@ from sqlalchemy import select
 
 from app.ai.gemini_models import is_chat_model
 from app.core.db import SessionLocal
-from app.db.migrations import _migrate_existing_libraries_get_the_gemini_chat_prices, migration_plan
 from app.db.models import ProviderPricingRule
 from app.domain.billing import price_reference
 from app.domain.billing.pricing_prefill import prefill_profile_pricing
@@ -131,31 +130,3 @@ def test_预填之后一轮智能体按_pi_报的三个数算钱() -> None:
         expected = Decimal(1_000) * Decimal("0.3") + Decimal(200) * Decimal("2.5") + Decimal(4_000) * Decimal("0.03")
         assert event.cost_confidence == "estimated"
         assert (event.cost_micros, event.currency) == (int(expected), "USD")
-
-
-def test_老库升级_有_gemini_对话模型行的_google_连接补上价() -> None:
-    fresh_client()
-    assert "migrate-existing-libraries-get-the-gemini-chat-prices" in {step.name for step in migration_plan().steps}
-    with SessionLocal() as db:
-        # 升级前就有人给素材分析的原生视频手动加过一行 Gemini、标成对话。
-        analysis = _google_connection(db, ("gemini-2.5-pro", ["chat"]), ("veo", ["video"]))
-        veo_only = _google_connection(db, ("veo", ["video"]))
-        other = add_provider(db, name="DeepSeek", vendor="deepseek", base_url="https://api.deepseek.com",
-                             api_key="k", model="deepseek-v4-pro", capability_ids=["chat"], make_default=False)
-        db.commit()
-        ids = (analysis.id, veo_only.id, other.id)
-
-    _migrate_existing_libraries_get_the_gemini_chat_prices()
-    with SessionLocal() as db:
-        assert _rules(db, ids[0]) == {
-            ("gemini-2.5-pro", "million_input_token", 1_250_000),
-            ("gemini-2.5-pro", "million_output_token", 10_000_000),
-            ("gemini-2.5-pro", "million_cache_read_token", 125_000),
-        }
-        assert _rules(db, ids[1]) == set()
-        assert _rules(db, ids[2]) == set(), "别家没点过预填,升级不替它补"
-        before = _rules(db, ids[0])
-
-    _migrate_existing_libraries_get_the_gemini_chat_prices()
-    with SessionLocal() as db:
-        assert _rules(db, ids[0]) == before, "重跑什么都不变"

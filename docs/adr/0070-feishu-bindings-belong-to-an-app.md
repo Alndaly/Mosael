@@ -193,12 +193,8 @@ record_activity(
 
 ## 验收
 
-- `backend/tests/test_feishu_bindings_know_their_app_migration.py`:喂旧形状(含同人不同应用四行),
-  验新主键序、回填、标 stale、丢死引用、再跑一次不变 —— 那一步的身体**冻着**,这条验的是 30 当时
-  搬成了什么样(历史快照),不是现在的形状。
-- `backend/tests/test_feishu_bindings_drop_stale_rows_migration.py`:喂**真 v30 形状**并走真升级路径,
-  验 `bot_id=''` 的死行没了、留下的原样(含 `created_at`)、列定义逐字、主键序、
-  `PRAGMA foreign_key_list` 里有 `(feishu_bots, bot_id, id, CASCADE)`、模型上没有默认值,再跑一次全等。
+- 这两条迁移测试属 v1.9.11 之前的历史升级路径，已随滚动支持窗口退休（2026-10-27）；
+  当时的验收覆盖旧形状主键序、回填、标 stale、死引用清理与重跑幂等，结论保留在 ADR 正文。
 - `backend/tests/test_feishu_binding.py`:签名(少了 `bot_id` 就报)、"拿 A 的 open_id 配 B"被拒、
   面板不串台、拿 B 的 URL 删不掉 A 那条、**删机器人时它名下的绑定一起没了**。
 - `backend/tests/test_feishu_onboarding.py`:建完绑发起人;回包缺 open_id / 缺发起人 / 发起人已不在

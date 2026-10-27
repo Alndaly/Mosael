@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.db import PARTITION_PREFIX, SessionLocal
-from app.db.migrations import _backfill_browser_pool
-from app.db.models import BrowserProfile, BrowserSession, PublishAccount, User, Workflow
+from app.core.db import SessionLocal
+from app.db.models import BrowserProfile, BrowserSession, User, Workflow
 from app.domain import browser
 from app.domain.publish import create_account
 from app.domain.workflows import WorkflowDomainError, create_workflow
@@ -69,31 +68,6 @@ def test_new_publish_account_gets_pool_profile() -> None:
     assert len(pool) == 1 and pool[0]["platform"] == "bilibili" and pool[0]["bound_account_id"] == acc_id
 
 
-def test_backfill_relinks_legacy_account_preserving_partition() -> None:
-    """老库里的发布账号(profile_id 为空)由回填补档,分区按当前约定 persist:<prefix>-<id>。
-    磁盘上的老目录由 Electron 在用到该分区时惰性改名(见 accountViews.migrateLegacyPartitionDir),
-    所以登录仍不丢;幂等。"""
-    client = fresh_client()
-    ws = _ws(client)
-    with SessionLocal() as db:
-        acc_id = create_account(db, workspace_id=ws, platform="bilibili", name="老号", config={}, owner=_me(db)).id
-        db.commit()  # 测试是入口:领域函数不提交
-        # 模拟老库:清掉自动建的档案与指针,回到「有账号、无档案」的历史态
-        acc = db.get(PublishAccount, acc_id)
-        db.delete(db.get(BrowserProfile, acc.profile_id))
-        acc.profile_id = None
-        db.commit()
-
-    _backfill_browser_pool()
-
-    with SessionLocal() as db:
-        acc = db.get(PublishAccount, acc_id)
-        assert acc.profile_id is not None
-        assert db.get(BrowserProfile, acc.profile_id).partition == f"persist:{PARTITION_PREFIX}-{acc_id}"
-
-    _backfill_browser_pool()  # 幂等:再跑不重复建档
-    with SessionLocal() as db:
-        assert db.query(BrowserProfile).filter(BrowserProfile.workspace_id == ws).count() == 1
 
 
 def test_profile_lease_one_active_session() -> None:
@@ -183,25 +157,6 @@ def test_pool_agent_tools_in_manifest_and_gating() -> None:
     assert by_name.get("browser_pool_list", {}).get("confirmation") is False  # 只读发现 → 内联
 
 
-def test_cannot_delete_bound_or_busy_profile() -> None:
-    client = fresh_client()
-    ws = _ws(client)
-    # 绑定了发布账号 → 拒删
-    with SessionLocal() as db:
-        acc_id = create_account(db, workspace_id=ws, platform="bilibili", name="B", config={}, owner=_me(db)).id
-        db.commit()  # 测试是入口:领域函数不提交
-    _backfill_browser_pool()
-    with SessionLocal() as db:
-        bound_pid = db.get(PublishAccount, acc_id).profile_id
-        with pytest.raises(browser.BrowserDomainError):
-            browser.delete_profile(db, ws, bound_pid, actor=_me(db).id)
-    # 有活动会话 → 拒删
-    with SessionLocal() as db:
-        pid = browser.create_profile(db, workspace_id=ws, name="忙", owner=_me(db)).id
-        db.commit()  # 测试是入口:领域函数不提交
-        browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
-        with pytest.raises(browser.BrowserDomainError):
-            browser.delete_profile(db, ws, pid, actor=_me(db).id)
 
 
 def test_manually_opening_a_generic_profile_is_remembered() -> None:
@@ -226,25 +181,6 @@ def test_manually_opening_a_generic_profile_is_remembered() -> None:
     assert client.post("/api/browser/profiles/nope/opened", json={"url": "https://a.b/"}).status_code == 404
 
 
-def test_migrate_browser_profile_start_url_adds_the_column_once() -> None:
-    """老库的 browser_profiles 没有 start_url:迁移补上这一列,老档案留空,重跑什么都不做。"""
-    from sqlalchemy import text
-
-    from app.core.db import engine
-    from app.db.migrations import _migrate_browser_profile_start_url
-
-    client = fresh_client()
-    ws = _ws(client)
-    prof = client.post("/api/browser/profiles", json={"workspace_id": ws, "name": "老档案"}).json()
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE browser_profiles DROP COLUMN start_url"))
-    _migrate_browser_profile_start_url()
-    _migrate_browser_profile_start_url()
-    with engine.begin() as conn:
-        columns = [row[1] for row in conn.execute(text("PRAGMA table_info(browser_profiles)"))]
-        kept = conn.execute(text("SELECT name, start_url FROM browser_profiles WHERE id = :id"), {"id": prof["id"]}).one()
-    assert columns.count("start_url") == 1
-    assert tuple(kept) == ("老档案", None)
 
 
 def test_a_profile_carries_its_own_browser_identity() -> None:

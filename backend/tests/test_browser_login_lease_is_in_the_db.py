@@ -10,12 +10,11 @@ from __future__ import annotations
 import threading
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_browser_sessions_one_open_per_login
-from app.db.models import BrowserAction, BrowserSession, User
+from app.db.models import BrowserSession, User
 from app.domain import browser
 from tests.util import fresh_client, lock_wait
 
@@ -179,43 +178,3 @@ def test_库里直接插第二个开着的具名会话_被索引拒绝() -> None
                               owner_kind="workflow", owner_id="b", status="open"))
         with pytest.raises(IntegrityError):
             db.commit()
-
-
-def test_迁移_先收掉已经撞上的_每份登录留最早开的那个_再建索引() -> None:
-    ws = _ws()
-    with engine.begin() as conn:
-        conn.execute(text("DROP INDEX IF EXISTS uq_browser_sessions_open_login"))
-        for sid, at in (("s-old", "2026-01-01 00:00:00"), ("s-new", "2026-01-02 00:00:00")):
-            conn.execute(
-                text(
-                    "INSERT INTO browser_sessions (id, workspace_id, kind, name, partition, owner_kind, owner_id, status, "
-                    "last_url, created_at, updated_at) VALUES (:id, :ws, 'named', 'xhs', 'persist:rpa-x', 'workflow', :id, "
-                    "'open', '', :at, :at)"
-                ),
-                {"id": sid, "ws": ws, "at": at},
-            )
-        # 临时会话不在其列:同一个分区名也不该被收
-        conn.execute(
-            text(
-                "INSERT INTO browser_sessions (id, workspace_id, kind, name, partition, owner_kind, status, last_url, "
-                "created_at, updated_at) VALUES ('s-eph', :ws, 'ephemeral', '', 'ephemeral-1', 'agent', 'open', '', "
-                "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
-            ),
-            {"ws": ws},
-        )
-    with SessionLocal() as db:
-        db.add(BrowserAction(session_id="s-new", workspace_id=ws, action="click", args={}, status="queued"))
-        db.commit()
-
-    _migrate_browser_sessions_one_open_per_login()
-    _migrate_browser_sessions_one_open_per_login()  # 重复跑无害
-
-    with SessionLocal() as db:
-        assert db.get(BrowserSession, "s-old").status == "open"
-        assert db.get(BrowserSession, "s-new").status == "closed"
-        assert db.get(BrowserSession, "s-eph").status == "open"
-        action = db.query(BrowserAction).filter(BrowserAction.session_id == "s-new").one()
-        assert (action.status, action.error) == ("failed", "browserErr_sessionClosed")
-    with engine.connect() as conn:
-        names = {row[1] for row in conn.execute(text("PRAGMA index_list('browser_sessions')"))}
-    assert "uq_browser_sessions_open_login" in names

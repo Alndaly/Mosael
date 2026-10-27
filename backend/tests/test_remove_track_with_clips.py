@@ -103,27 +103,3 @@ def test_撤销删掉的配音轨_还回来的仍是配音轨() -> None:
     assert client.delete(f"/api/sequences/{seq}/tracks/{dub_id}").status_code == 200
     assert client.post(f"/api/sequences/{seq}/undo").status_code == 200
     assert _track(client, seq, dub_id)["role"] == "dub"
-
-
-def test_迁移补齐老的删轨记录_撤销照样走得通() -> None:
-    from sqlalchemy import select
-
-    from app.core.db import SessionLocal
-    from app.db.migrations import _migrate_removed_track_records_are_complete, migration_plan
-    from app.db.models import SequenceOperation
-
-    assert "migrate-removed-track-records-are-complete" in {s.name for s in migration_plan().steps}
-    client, seq, track_id = _setup()
-    client.delete(f"/api/sequences/{seq}/tracks/{track_id}", params={"with_clips": True})
-    with SessionLocal() as db:
-        operation = db.scalars(
-            select(SequenceOperation).where(SequenceOperation.sequence_id == seq, SequenceOperation.kind == "remove_track")
-        ).one()
-        old_shape = ("muted", "solo", "locked", "duck", "role")
-        operation.payload = {k: v for k, v in operation.payload.items() if k not in old_shape}
-        db.commit()
-    _migrate_removed_track_records_are_complete()
-    _migrate_removed_track_records_are_complete()
-    assert client.post(f"/api/sequences/{seq}/undo").status_code == 200
-    restored = _track(client, seq, track_id)
-    assert restored["role"] == "" and len(restored["clips"]) == 3

@@ -15,7 +15,6 @@ import json
 from sqlalchemy import text
 
 from app.core.db import engine
-from app.db.migrations import _migrate_subtitle_tracks_carry_no_sound, _migrate_subtitle_tracks_hide_instead_of_mute
 from app.media.render_plan import build_render_plan
 from tests.util import fresh_client
 
@@ -94,63 +93,8 @@ def _operations(sequence_id: str) -> list[tuple[str, dict]]:
     return [(kind, json.loads(payload) if isinstance(payload, str) else payload) for kind, payload in rows]
 
 
-def test_migration_turns_subtitle_mute_into_hidden() -> None:
-    """老库:字幕轨借 muted 表示「不显示」,操作日志里记的也是 muted。迁移后两处都说 hidden。"""
-    client, seq, track_id = _sequence_with_subtitle_track()
-    audio = client.post(f"/api/sequences/{seq}/tracks", json={"kind": "audio"}).json()
-    audio_id = next(t["id"] for t in audio["tracks"] if t["kind"] == "audio")
-    client.patch(f"/api/sequences/{seq}/tracks/{audio_id}", json={"muted": True})
-    client.patch(f"/api/sequences/{seq}/tracks/{track_id}", json={"hidden": True})
-    # 还原成老库的样子:字幕轨上是 muted,日志里的状态没有 hidden 这一格。
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE tracks SET muted = 1, hidden = 0 WHERE id = :id"), {"id": track_id})
-        for op_id, raw in conn.execute(
-            text("SELECT id, payload FROM sequence_operations WHERE sequence_id = :s AND kind = 'set_track_state'"),
-            {"s": seq},
-        ).all():
-            payload = json.loads(raw) if isinstance(raw, str) else dict(raw)
-            for state in (payload, payload["previous"]):
-                if payload["track_id"] == track_id:
-                    state["muted"] = state["hidden"]
-                del state["hidden"]
-            conn.execute(
-                text("UPDATE sequence_operations SET payload = :p WHERE id = :id"),
-                {"p": json.dumps(payload), "id": op_id},
-            )
-
-    _migrate_subtitle_tracks_hide_instead_of_mute()
-    _migrate_subtitle_tracks_hide_instead_of_mute()  # 重跑什么都不做
-
-    subtitle = _track(client, seq, track_id)
-    assert subtitle["hidden"] is True and subtitle["muted"] is False
-    # 音频轨的静音是真的静音,不动。
-    kept = _track(client, seq, audio_id)
-    assert kept["muted"] is True and kept["hidden"] is False
-    states = {payload["track_id"]: payload for kind, payload in _operations(seq) if kind == "set_track_state"}
-    assert states[track_id]["hidden"] is True and states[track_id]["muted"] is False
-    assert states[track_id]["previous"] == {**states[track_id]["previous"], "hidden": False, "muted": False}
-    assert states[audio_id]["muted"] is True and states[audio_id]["hidden"] is False
-    # 改写过的日志撤得回去:撤销那次隐藏,字幕重新显示。
-    client.post(f"/api/sequences/{seq}/undo")
-    assert _track(client, seq, track_id)["hidden"] is False
 
 
-def test_migration_clears_solo_and_duck_left_on_subtitle_tracks() -> None:
-    client, seq, track_id = _sequence_with_subtitle_track()
-    audio = client.post(f"/api/sequences/{seq}/tracks", json={"kind": "audio"}).json()
-    audio_id = next(t["id"] for t in audio["tracks"] if t["kind"] == "audio")
-    client.patch(f"/api/sequences/{seq}/tracks/{audio_id}", json={"solo": True, "duck": True})
-    # 老库里的样子:字幕轨上按下过独奏(那时轨道头还给它摆着 S)。
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE tracks SET solo = 1, duck = 1 WHERE id = :id"), {"id": track_id})
-
-    _migrate_subtitle_tracks_carry_no_sound()
-
-    subtitle = _track(client, seq, track_id)
-    assert subtitle["solo"] is False and subtitle["duck"] is False
-    # 音频轨上的标记是用户真的想要的,不动。
-    kept = _track(client, seq, audio_id)
-    assert kept["solo"] is True and kept["duck"] is True
 
 
 def _plan(*, base: dict, audio: list[dict], mute_base_audio: bool = False, duck_base_audio: bool = False):

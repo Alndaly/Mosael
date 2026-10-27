@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -96,29 +95,6 @@ def test_文档放不上时间线() -> None:
     assert refused_insert.value.key == "seqErr_assetNotMedia"
 
 
-def test_迁移_被当成视频的文档改回来_真视频不动() -> None:
-    from app.db.migrations import _migrate_documents_are_not_videos, migration_plan
-    from app.media.paths import asset_dir, asset_key
-
-    assert "migrate-documents-are-not-videos" in {step.name for step in migration_plan().steps}
-    client = fresh_client()
-    ws = _ws(client)
-    with SessionLocal() as db:
-        for asset_id, name in (("deck", "方案.pptx"), ("real", "clip.mp4")):
-            folder = asset_dir(ws, asset_id)
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / name).write_bytes(b"12345")
-            db.add(Asset(id=asset_id, workspace_id=ws, kind="video", name=name, original_filename=name,
-                         file_key=asset_key(ws, asset_id, name), media_info={"fps": 1.0}))
-        db.commit()
-
-    _migrate_documents_are_not_videos()
-    _migrate_documents_are_not_videos()
-    with SessionLocal() as db:
-        deck, real = db.get(Asset, "deck"), db.get(Asset, "real")
-        info = deck.media_info if isinstance(deck.media_info, dict) else json.loads(deck.media_info)
-        assert deck.kind == "document" and info == {"format": "pptx", "size_bytes": 5}
-        assert real.kind == "video" and real.media_info == {"fps": 1.0}
 
 
 def test_迁移改回来的文档_有人读的时候补上本地解析_解析过的不再补() -> None:

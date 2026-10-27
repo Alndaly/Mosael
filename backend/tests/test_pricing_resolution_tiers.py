@@ -111,25 +111,3 @@ def test_the_rule_api_round_trips_a_normalized_resolution() -> None:
     assert patched.json()["resolution"] == "768p"
     cleared = client.patch(f"/api/settings/provider-pricing-rules/{created.json()['id']}", json={"resolution": ""})
     assert cleared.json()["resolution"] == "", "清空 = 不限分辨率"
-
-
-def test_migration_adds_the_resolution_column_once() -> None:
-    """老库的规则没有这一列:补上,老规则 = 不限分辨率,重跑什么都不做。"""
-    from sqlalchemy import text
-
-    from app.core.db import engine
-    from app.db.migrations import _migrate_pricing_rules_by_resolution
-
-    _ws()
-    with SessionLocal() as db:
-        rule_id = create_pricing_rule(db, capability="video", billing_unit="video_second", unit_amount_micros=7).id
-        db.commit()
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE provider_pricing_rules DROP COLUMN resolution"))
-    _migrate_pricing_rules_by_resolution()
-    _migrate_pricing_rules_by_resolution()
-    with engine.begin() as conn:
-        columns = [row[1] for row in conn.execute(text("PRAGMA table_info(provider_pricing_rules)"))]
-        kept = conn.execute(text("SELECT resolution FROM provider_pricing_rules WHERE id = :id"), {"id": rule_id}).scalar()
-    assert columns.count("resolution") == 1
-    assert kept == ""

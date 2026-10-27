@@ -9,11 +9,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_capability_defaults_name_builtins
 from tests.util import fresh_client
 
 
@@ -56,26 +55,6 @@ def _rows() -> list[tuple]:
         )))
 
 
-def test_老行原样搬过去_之后能存内置实现_跑第二次不动() -> None:
-    fresh_client()
-    instance = _connection()
-    _old_shaped_table(instance)
-
-    _migrate_capability_defaults_name_builtins()
-    engine.dispose()
-    assert "builtin_id" in {c["name"] for c in inspect(engine).get_columns("plugin_capability_defaults")}
-    assert _rows() == [("u1", "document_parse", instance, None)], "悬空的那行不搬"
-
-    from app.domain.plugins import capability_defaults
-
-    with SessionLocal() as db:
-        capability_defaults.set_default(db, "u1", "audio_denoise", "builtin:rnnoise",
-                                        builtin_ids=frozenset({"builtin:ffmpeg", "builtin:rnnoise"}))
-        assert capability_defaults.default_of(db, "u1", "audio_denoise") == "builtin:rnnoise"
-        db.commit()  # 测试是入口:领域函数不提交
-
-    _migrate_capability_defaults_name_builtins()
-    assert _rows() == [("u1", "audio_denoise", None, "builtin:rnnoise"), ("u1", "document_parse", instance, None)]
 
 
 def test_两列都空的行存不进去() -> None:

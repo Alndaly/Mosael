@@ -215,7 +215,7 @@ stateDiagram-v2
 
 #### EditorView 编排
 
-`EditorView.tsx`(1,330 行,2026-09-29 为 1,136 行):CSS Grid 布局(`editorColumns` L817-823),左栏四页签独立记忆宽度(`useEditorPanels.ts`,`localStorage["mosael.editor.panels.v2"]`,紧凑断点 ≤1000px 收成两列);React Query 持有全部服务端实体,mutation 成功多用 `applySequence(updated)` 直接写缓存而非 invalidate(避免窗口期);editorStore 只装瞬时态。
+`EditorView.tsx`(786 行,2026-09-29 为 1,136 行):CSS Grid 布局(`editorColumns` L410-416),左栏四页签独立记忆宽度(`useEditorPanels.ts`,`localStorage["mosael.editor.panels.v2"]`,紧凑断点 ≤1000px 收成两列);React Query 持有全部服务端实体,序列编辑 mutation 收在 `useSequenceMutations` 的 `clips/tracks/subtitles/history` 分组里,成功多用 `applySequence(updated)` 直接写缓存而非 invalidate(避免窗口期);editorStore 只装瞬时态。
 
 ### 3.2 画板(`features/boards/`):无限画布
 
@@ -355,8 +355,8 @@ sequenceDiagram
 ### 5.2 值得注意的风险与权衡
 
 - **轮询密度**:智能体生态在 SSE 之外叠加了 5+ 条 1.2–4s 的轮询回路,画板另有 2.5s 回执轮询、确认卡 2.5s、选择卡 2s——本地单用户无碍,团队服务器模式下并发客户端的 QPS 值得关注。
-- **单体大文件**:WorkflowsView.tsx 3,967 行、BoardCanvas.tsx 1,751 行、SceneStudio.tsx 1,550 行、AiStudio.tsx 1,411 行、EditorView.tsx 1,330 行、messages.ts 5,320 行——功能内聚但单文件认知负荷高,靠文件头长注释维系。
-  (2026-09-29 更新:WorkflowsView 433、BoardCanvas 831、messages.ts 11 行入口,均已按职责拆开,见 `docs/MAINTENANCE_HOTSPOTS.md` 4.2;AiStudio.tsx 现 50 行,工作台本体在 `GenerateWorkspace.tsx`;SceneStudio 1,666、EditorView 1,136 未拆。)
+- **单体大文件**:`WorkflowsView.tsx`、`BoardCanvas.tsx`、`SceneStudio.tsx`、`AiStudio.tsx`、`EditorView.tsx`、`messages.ts` —— 功能内聚但单文件认知负荷高,靠文件头长注释维系;行数不在这里钉死,以免修一次代码就多一处过期度量。
+  (2026-10-27 重测:WorkflowsView 520、BoardCanvas 1,182、AiStudio 89(工作台本体 `GenerateWorkspace.tsx` 2,469)、SceneStudio 1,728、EditorView 786、messages.ts 11 行入口;WorkflowsView/BoardCanvas/messages 已按职责拆开,见 `docs/MAINTENANCE_HOTSPOTS.md` 4.2。)
 - **lint 空缺**:typescript-eslint 不支持 TS 7 导致 eslint 路线封闭(前端与官网同),oxlint 只开 14 条;`react-hooks/exhaustive-deps` 37 处与 React Compiler 规则组约 120 处显式搁置,依赖人工纪律与测试补偿。
 - **hash 路由的局限**:`file://` 兼容的代价是 URL 表达力弱(query 参数自拼),深链靠 `mosael:open-*` 事件三连发兜底挂载竞速——务实但脆弱(80/300/800ms 之外挂载的更慢视图会丢事件)。
 - **WebAuthn hybrid 缺位**:扫码/手机 passkey 是 Electron 未暴露的能力(webauthn.cjs 头注释),只能等平台开放。

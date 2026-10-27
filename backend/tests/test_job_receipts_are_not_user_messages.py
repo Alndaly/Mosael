@@ -19,7 +19,6 @@ import threading
 from typing import Any
 
 import pytest
-import sqlalchemy as sa
 from sqlalchemy import event
 
 import mcp_server
@@ -233,78 +232,3 @@ def test_有人排了一条话_回执搭那一轮的车_不单独再起一轮(mo
     assert second.index("「配音 2」已完成") < second.index("顺便把音量调大一点"), "回执要在用户那句话之前交代"
     order = [(one["role"], one["content"]) for one in _messages(client, sid)]
     assert order.index(("user", "顺便把音量调大一点")) > order.index(("job_receipt", "「配音 2」已完成,素材 id:asset-2。"))
-
-
-def test_存量回执迁成自己的角色_排着的那条迁成待送_重跑不动() -> None:
-    from app.core.db import engine
-    from app.db import migrations
-
-    client = fresh_client()
-    sid = _session(client)
-    me = _me()
-    with SessionLocal() as db:
-        db.add_all([
-            AgentMessage(id="sent", session_id=sid, role="user", content="「旧配音」已完成。", payload={"from_job": "j-old"}),
-            AgentMessage(id="waiting", session_id=sid, role="user", content="「排着的」已完成。",
-                         payload={"from_job": "j-wait", "queued": True, "queued_by": me}),
-            AgentMessage(id="mine", session_id=sid, role="user", content="我自己说的", payload={"queued": True, "queued_by": me}),
-            AgentMessage(id="agent", session_id=sid, role="user", content="别的会话来的", payload={"from_agent_session": "s2"}),
-        ])
-        db.commit()
-
-    migrations._migrate_job_receipts_get_their_own_role()
-    migrations._migrate_job_receipts_get_their_own_role()
-
-    with engine.begin() as conn:
-        rows = {
-            row.id: (row.role, __import__("json").loads(row.payload))
-            for row in conn.execute(sa.text("SELECT id, role, payload FROM agent_messages"))
-        }
-    assert rows["sent"] == ("job_receipt", {"job_id": "j-old"})
-    assert rows["waiting"] == ("job_receipt", {"job_id": "j-wait", "undelivered": True, "deliver_as": me})
-    assert rows["mine"] == ("user", {"queued": True, "queued_by": me})
-    assert rows["agent"] == ("user", {"from_agent_session": "s2"})
-    assert [one["content"] for one in _queue(client, sid)] == ["我自己说的"]
-
-
-def test_存量回执补上它的任务做出来的素材_没成功的和任务不在的记空表_重跑不动() -> None:
-    """回执记下 asset_ids 之前落库的那些,照它们的任务补:界面才画得出那一轮回答里的图。"""
-    from app.core.db import engine
-    from app.db import migrations
-
-    client = fresh_client()
-    sid = _session(client)
-    with SessionLocal() as db:
-        # 不挂回执:这里只要任务这一行,别让它落终态时真去送一条(那会起一轮、改掉下面那几条回执)。
-        made = [jobs_domain.create_job(db, workspace_id=_workspace(sid), kind="generation", created_by=_me(), payload={})
-                for _ in range(3)]
-        db.commit()
-        many, one, failed = (job.id for job in made)
-    with SessionLocal() as db:
-        for job_id, status, result in ((many, "succeeded", {"asset_ids": ["a1", "a2"]}),
-                                       (one, "succeeded", {"asset_id": "a3"}),
-                                       (failed, "failed", {"asset_id": "半截"})):
-            job = db.get(Job, job_id)
-            job.status, job.result = status, result
-        db.add_all([
-            AgentMessage(id="many", session_id=sid, role="job_receipt", content="「出图」已完成。", payload={"job_id": many}),
-            AgentMessage(id="one", session_id=sid, role="job_receipt", content="「配音」已完成。",
-                         payload={"job_id": one, "undelivered": True}),
-            AgentMessage(id="failed", session_id=sid, role="job_receipt", content="「失败的」失败了。", payload={"job_id": failed}),
-            AgentMessage(id="gone", session_id=sid, role="job_receipt", content="「清掉的」已完成。", payload={"job_id": "早没了"}),
-            AgentMessage(id="done", session_id=sid, role="job_receipt", content="「新的」已完成。",
-                         payload={"job_id": many, "asset_ids": ["只认这个"]}),
-        ])
-        db.commit()
-
-    migrations._migrate_job_receipts_name_their_assets()
-    migrations._migrate_job_receipts_name_their_assets()
-
-    with engine.begin() as conn:
-        rows = {row.id: __import__("json").loads(row.payload)
-                for row in conn.execute(sa.text("SELECT id, payload FROM agent_messages WHERE role = 'job_receipt'"))}
-    assert rows["many"] == {"job_id": many, "asset_ids": ["a1", "a2"]}
-    assert rows["one"] == {"job_id": one, "undelivered": True, "asset_ids": ["a3"]}
-    assert rows["failed"]["asset_ids"] == [], "没成功的任务什么都没做出来"
-    assert rows["gone"]["asset_ids"] == []
-    assert rows["done"]["asset_ids"] == ["只认这个"], "已经记过的不动"

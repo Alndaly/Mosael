@@ -266,42 +266,6 @@ def test_没名字时给个默认名() -> None:
     assert client.post("/api/boards", json={"workspace_id": ws}).json()["name"] == "新画板"
 
 
-def test_启动迁移把旧节点状态收进run并持久化() -> None:
-    from app.core.db import SessionLocal
-    from app.db.migrations import _migrate_board_canvas_state
-    from app.db.models import Board
-
-    client = fresh_client()
-    ws = _workspace(client)
-    board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "旧画布"}).json()["id"]
-    with SessionLocal() as db:
-        board = db.get(Board, board_id)
-        assert board is not None
-        board.canvas = {
-            "items": [
-                {"id": "running", "kind": "image", "x": 0, "y": 0, "text": "旧提示", "job_id": "job-1"},
-                {"id": "failed", "kind": "video", "x": 1, "y": 1, "error": "上游失败"},
-            ],
-            "edges": [],
-        }
-        db.commit()
-
-    #: 直接调这个迁移,而不是走 init_db:一次性迁移跑过就记账了(见 migration_runner),
-    #: 让启动再跑一遍是在验一件已经不成立的事。
-    _migrate_board_canvas_state()
-
-    canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
-    assert canvas["items"][0]["run"] == {"status": "running", "job_id": "job-1"}
-    assert canvas["items"][0]["form"] == {"prompt": "旧提示"}
-    assert canvas["items"][1]["run"] == {"status": "failed", "error": "上游失败"}
-    assert all("job_id" not in item and "error" not in item for item in canvas["items"])
-
-    # 再跑一遍是空操作,不会把旧字段又变回来。
-    _migrate_board_canvas_state()
-    with SessionLocal() as db:
-        stored = db.get(Board, board_id)
-        assert stored is not None
-        assert stored.canvas == canvas
 
 
 # ── 画布校验 ────────────────────────────────────────────────────────────────

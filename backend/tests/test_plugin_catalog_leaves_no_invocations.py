@@ -22,13 +22,11 @@ JSON,渲染进程解不动。删连接时记录跟着级联删掉,所以重建�
 from __future__ import annotations
 
 import inspect
-import json
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 
 from app.core.db import SessionLocal
-from app.db.migrations import _drop_plugin_catalog_invocations as migrate
 from app.db.models import PluginInvocation
 from app.domain.plugins import tools
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
@@ -88,23 +86,3 @@ def test_列表缺省只回最新十条_最多一百条() -> None:
     assert [row["output"]["n"] for row in listed] == list(range(14, 4, -1)), "最新的十条,新的在前"
     assert len(client.get(f"/api/plugins/invocations?instance_id={instance_id}&limit=100").json()) == 15
     assert client.get(f"/api/plugins/invocations?instance_id={instance_id}&limit=101").status_code == 422
-
-
-def test_迁移清掉存量的目录记录_别的不动_再跑一次不变() -> None:
-    client = fresh_client()
-    with FakeComfyUI() as comfy:
-        instance_id = _connect(client, comfy.url)
-    catalog = [{"op": "tools"}, {"op": "models"}, {"op": "explain", "ids": ["a"]}, {"op": "explain", "tools": ["wf_x"]},
-               {"op": "resolve", "url": "https://example.com/m.safetensors"},
-               {"op": "search_sources", "filename": "m.safetensors", "folder": "checkpoints"}]
-    kept = [{"op": "generate", "model": "builtin:txt2img", "prompt": "猫"}, {"op": "upgrade_marks", "paths": []},
-            {"text": "一个用户在插件页试跑的工具,入参里没有 op"}]
-    _seed(instance_id, catalog * 3 + kept)
-
-    migrate()
-    with SessionLocal() as db:
-        left = [row.input for row in db.scalars(select(PluginInvocation).where(PluginInvocation.instance_id == instance_id))]
-    assert sorted(json.dumps(one, sort_keys=True) for one in left) == sorted(json.dumps(one, sort_keys=True) for one in kept)
-
-    migrate()
-    assert _count(instance_id) == len(kept)

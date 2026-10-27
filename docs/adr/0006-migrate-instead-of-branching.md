@@ -24,9 +24,14 @@
 
 ## 支持窗口
 
-当前最早支持从 **v0.1.0** 直接升级；在首次稳定大版本明确提高这一门槛前，所有公开版本写下的
-自有数据都必须能由当前版本自动迁移。提高门槛必须同时修改这里、Release Notes 和
-`test/upgrade_db_fixture.py`，之后才允许删除门槛之前的 `_migrate_*`。
+支持**滚动八个版本序号**:最新公开 Release 往回数 8 个,连同最新一共 9 个 Release。
+当前最新公开版是 v2.2.3,因此最早支持 **v1.9.11**;所有仍在窗口内的公开版本写下的自有数据
+都必须能由当前版本自动迁移。
+
+每次发版重新计算窗口。最早支持版本只能随最新版前进;提高门槛必须同时修改这里、Release Notes、
+`CONTEXT.md`、`docs/ARCHITECTURE.md`、`test/upgrade_db_fixture.py` 和
+`backend/tests/schema_baseline.json`,之后才允许删除门槛之前的 `_migrate_*`。
+发版工作流会检查窗口没有超过 8 个版本。
 
 这个承诺只覆盖**持久数据升级**，不覆盖把不同 Release 的 Electron 壳、renderer、后端或 worker
 混在一起运行。一个桌面安装包是一个发布单元；需要独立部署的外部接口应以显式 API/协议版本协商，

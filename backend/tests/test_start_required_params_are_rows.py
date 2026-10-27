@@ -21,11 +21,9 @@ import json
 
 from sqlalchemy import text
 
-from app.core.db import SessionLocal, engine
-from app.db.migrations import _migrate_start_required_params_are_a_list
-from app.db.models import Workflow, WorkflowRevision
+from app.core.db import engine
 from app.domain.workflows import validate_graph
-from app.domain.workflows.revisions import current_workflow_revision, graph_digest
+from app.domain.workflows.revisions import graph_digest
 from tests.util import fresh_client
 
 
@@ -69,41 +67,6 @@ def _stored(workflow_id: str) -> dict:
         )
 
 
-def test_迁移把逗号分隔的一串改成参数名的列表_点名了却没有那一行的补一行_修订对上_重跑不动() -> None:
-    client, workspace = _client_and_workspace()
-    old_id = client.post("/api/workflows", json={"workspace_id": workspace, "name": "老的", "graph": _graph({})}).json()["id"]
-    blank_id = client.post("/api/workflows", json={"workspace_id": workspace, "name": "空串", "graph": _graph({})}).json()["id"]
-    new_id = client.post("/api/workflows", json={
-        "workspace_id": workspace, "name": "新的",
-        "graph": _graph({"params": {"topic": ""}, "required_params": ["topic"]}),
-    }).json()["id"]
-    #: 全角逗号、多余的空格、重复、params 里没有的名字 —— 手打的那一格里什么都有。
-    _as_saved_by_an_older_version(old_id, _graph({
-        "params": {"topic": "", "tone": "轻松"}, "required_params": " extra，topic, topic ,",
-    }))
-    _as_saved_by_an_older_version(blank_id, _graph({"params": {"topic": "猫"}, "required_params": ""}))
-    untouched = _stored(new_id)
-
-    _migrate_start_required_params_are_a_list()
-
-    migrated = _start_config(_stored(old_id))
-    assert migrated["params"] == {"topic": "", "tone": "轻松", "extra": ""}, "点名了却没有那一行的,补一行(默认空着)"
-    assert migrated["required_params"] == ["topic", "extra"], "按参数的顺序"
-    assert _start_config(_stored(blank_id))["required_params"] == []
-    assert _stored(new_id) == untouched, "已经是列表的不动"
-
-    with SessionLocal() as db:
-        workflow = db.get(Workflow, old_id)
-        assert current_workflow_revision(db, workflow).graph == _stored(old_id)
-        assert current_workflow_revision(db, workflow).source == "migration"
-        revisions = db.query(WorkflowRevision).filter_by(workflow_id=old_id).count()
-
-    _migrate_start_required_params_are_a_list()
-    with SessionLocal() as db:
-        assert db.query(WorkflowRevision).filter_by(workflow_id=old_id).count() == revisions, "重跑不再落新的一版"
-    #: 补出来的那一行照旧是必填:运行前照旧拦,说清是哪一个。
-    refused = client.post(f"/api/workflows/{old_id}/run", json={"params": {"topic": "猫"}})
-    assert refused.status_code == 422 and refused.json()["detail"]["message"] == "「开始」缺少必填:extra", refused.text
 
 
 def test_导入老版本导出的文件_必填改成列表() -> None:
@@ -116,15 +79,6 @@ def test_导入老版本导出的文件_必填改成列表() -> None:
     assert config["required_params"] == ["topic", "tag"] and config["params"] == {"topic": "", "tag": ""}
 
 
-def test_恢复到升级之前的那一版_必填照样是列表() -> None:
-    client, workspace = _client_and_workspace()
-    workflow = client.post("/api/workflows", json={"workspace_id": workspace, "name": "W", "graph": _graph({})}).json()
-    _as_saved_by_an_older_version(workflow["id"], _graph({"params": {"topic": ""}, "required_params": "topic"}))
-    _migrate_start_required_params_are_a_list()
-    #: 历史修订里第一版还是一串字(迁移改不到历史修订)。
-    restored = client.post(f"/api/workflows/{workflow['id']}/revisions/1/restore")
-    assert restored.status_code == 200, restored.text
-    assert _start_config(restored.json()["graph"])["required_params"] == ["topic"]
 
 
 def test_保存时只留存在的参数名_没有那一行的补一行_去重_按参数顺序() -> None:

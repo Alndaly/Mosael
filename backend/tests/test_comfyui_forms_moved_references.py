@@ -19,9 +19,9 @@ import copy
 from typing import Any
 
 import pytest
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select
 
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.db.models import (
     Board, GenerationJob, GenerationSession, PluginCapability, PluginInstance, ProviderModel, ProviderProfile, Workflow,
     WorkflowRevision,
@@ -222,36 +222,3 @@ def test_同一批改名分两次报上来_后报的那张照样改_先改过的
         moves = db.get(PluginInstance, ids["instance"]).applied_moves
         assert moves["generation"] == {"form-entries": ["later.json", "portrait.json"]}
         assert sorted(moves["tools"]["form-entries"]) == sorted([FULL_TOOL, "wf_b2f4c3e81111"])
-
-
-def test_老账只按_key_记的_迁成按旧名字记_那时有的名字都算做过_再跑一次不变(upgraded) -> None:
-    """迁移(PLG-2):老账 `{"generation": ["form-entries"]}` 没说做了哪几个名字。那一次是按当时插件报的全部名字做的,所以换成这个
-    连接现在有的全部名字(模型行的 id、存着的工具名)—— 之后特意选的完整工作流不会因为换了记账的形状被改走。"""
-    from app.db.migrations import _migrate_applied_moves_remember_old_names
-
-    client, _, ids = upgraded
-    _refresh(client, ids["instance"])
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE plugin_instances SET applied_moves = :m WHERE id = :i"),
-                     {"m": '{"generation": ["form-entries"], "tools": ["form-entries"]}', "i": ids["instance"]})
-    with SessionLocal() as db:
-        session = GenerationSession(workspace_id=ids["ws"], owner_user_id=user_id(), provider_profile_id=ids["profile"],
-                                    model="portrait.json", kind="image", title="之后特意选的完整工作流")
-        db.add(session)
-        db.commit()
-        session_id = session.id
-        models = sorted(db.scalars(select(ProviderModel.model_id).where(ProviderModel.provider_profile_id == ids["profile"])))
-        tools = sorted({tool["name"] for tool in db.get(PluginInstance, ids["instance"]).discovered_tools})
-
-    _migrate_applied_moves_remember_old_names()
-    with SessionLocal() as db:
-        moves = db.get(PluginInstance, ids["instance"]).applied_moves
-    assert moves == {"generation": {"form-entries": models}, "tools": {"form-entries": tools}}
-    assert "portrait.json" in models and FULL_TOOL in tools
-
-    _refresh(client, ids["instance"])
-    with SessionLocal() as db:
-        assert db.get(GenerationSession, session_id).model == "portrait.json", "那时有的名字算做过:不再改"
-    _migrate_applied_moves_remember_old_names()
-    with SessionLocal() as db:
-        assert db.get(PluginInstance, ids["instance"]).applied_moves == moves, "已经是新形状:再跑一次不变"

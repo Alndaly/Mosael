@@ -11,10 +11,6 @@ import json
 import socket
 from pathlib import Path
 
-from app.core.db import SessionLocal
-from app.db.migrations import _migrate_blender_host_is_ipv4 as migrate
-from app.db.models import PluginInstance, PluginPackage
-from tests.util import fresh_client, user_id
 
 MANIFEST = Path(__file__).resolve().parents[2] / "plugins" / "examples" / "blender" / "mosael.plugin.json"
 
@@ -35,31 +31,3 @@ def test_ipv6回环本来就连不上_AF_INET的套接字认不得它() -> None:
 def test_清单里不再有ipv6回环() -> None:
     host = next(f for f in json.loads(MANIFEST.read_text(encoding="utf-8"))["instance"]["config"] if f["key"] == "BLENDER_HOST")
     assert [o["value"] for o in host["options"]] == ["127.0.0.1", "localhost"]
-
-
-def test_存着ipv6回环的连接改成127_别的不碰_再跑一次不动() -> None:
-    fresh_client()
-    me = user_id("tester")
-    with SessionLocal() as db:
-        db.add_all([
-            PluginPackage(id="dev.mosael.blender", name="Blender MCP", version="0.3.0", manifest={}),
-            PluginPackage(id="dev.example.other", name="Other", version="1.0.0", manifest={}),
-        ])
-        db.flush()
-        db.add_all([
-            PluginInstance(id="b6", owner_user_id=me, package_id="dev.mosael.blender", name="B",
-                           config={"BLENDER_HOST": "::1", "BLENDER_PORT": "9877", "DISABLE_TELEMETRY": "true"}),
-            PluginInstance(id="b4", owner_user_id=me, package_id="dev.mosael.blender", name="B",
-                           config={"BLENDER_HOST": "localhost", "BLENDER_PORT": "9876"}),
-            PluginInstance(id="other", owner_user_id=me, package_id="dev.example.other", name="O",
-                           config={"BLENDER_HOST": "::1"}),
-        ])
-        db.commit()
-
-    migrate()
-    migrate()
-
-    with SessionLocal() as db:
-        assert db.get(PluginInstance, "b6").config == {"BLENDER_HOST": "127.0.0.1", "BLENDER_PORT": "9877", "DISABLE_TELEMETRY": "true"}
-        assert db.get(PluginInstance, "b4").config == {"BLENDER_HOST": "localhost", "BLENDER_PORT": "9876"}
-        assert db.get(PluginInstance, "other").config == {"BLENDER_HOST": "::1"}

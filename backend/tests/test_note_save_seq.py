@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import sqlalchemy as sa
 
 from tests.util import fresh_client
 
@@ -50,29 +49,3 @@ def test_恢复和彻底删除也认保存序号() -> None:
     url = f"/api/notes/{note['id']}"
     assert c.delete(url, params={"workspace_id": ws, "base_save_seq": trashed["save_seq"] - 1}).status_code == 409
     assert c.delete(url, params={"workspace_id": ws, "base_save_seq": trashed["save_seq"]}).status_code == 204
-
-
-def test_迁移给老笔记补上保存序号_从当前版本号起_重跑不动() -> None:
-    from app.core.db import engine
-    from app.db import migrations
-
-    c, ws, _ = _setup()
-    with engine.begin() as conn:
-        conn.execute(sa.text("DROP TABLE note_revisions"))
-        conn.execute(sa.text("DROP TABLE notes"))
-        conn.execute(sa.text(
-            "CREATE TABLE notes (id VARCHAR(64) PRIMARY KEY, workspace_id VARCHAR(64) NOT NULL, project_id VARCHAR(64), "
-            "title VARCHAR(240) NOT NULL, markdown TEXT NOT NULL, tags JSON NOT NULL, topics JSON NOT NULL, sources JSON NOT NULL, "
-            "favorite BOOLEAN NOT NULL, trashed BOOLEAN NOT NULL, revision INTEGER NOT NULL, created_at DATETIME NOT NULL, "
-            "updated_at DATETIME NOT NULL)"
-        ))
-        conn.execute(sa.text(
-            "INSERT INTO notes VALUES ('n', :ws, NULL, '周报', '三', '[]', '[]', '[]', 0, 0, 7, '2026-10-01 00:00:00', '2026-10-01 00:00:00')"
-        ), {"ws": ws})
-
-    migrations._migrate_notes_count_their_saves()
-    migrations._migrate_notes_count_their_saves()
-
-    with engine.begin() as conn:
-        assert conn.execute(sa.text("SELECT revision, save_seq FROM notes WHERE id = 'n'")).one() == (7, 7)
-    fresh_client()

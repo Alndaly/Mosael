@@ -9,19 +9,14 @@
 
 from __future__ import annotations
 
-import json
 import textwrap
 from pathlib import Path
 
-from sqlalchemy import text
 
 from app.core.db import SessionLocal
-from app.db.migrations import _migrate_plugin_union_array_inputs_are_lists
-from app.db.models import Board, PluginInstance, PluginPackage, Workflow
+from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins.nodes import node_meta
 from app.domain.plugins.tools import invoke, refresh_tools
-from app.domain.workflows import create_workflow
-from app.domain.workflows.revisions import graph_digest
 from tests.util import fresh_client, user_id
 
 PACKAGE = "dev.test.unioner"
@@ -95,46 +90,3 @@ def test_可以不填的素材数组_插件收到的是路径(tmp_path) -> None:
 
 
 _START_ONLY = {"nodes": [{"id": "start", "type": "start", "config": {}}], "edges": []}
-
-
-def test_存成映射的可以不填的数组_工作流和画板上都迁成值的列表(tmp_path) -> None:
-    ws, _ = _install(tmp_path)
-    kind = f"plugin.{PACKAGE}.join"
-    graph = {"nodes": [
-        {"id": "start", "type": "start", "config": {}},
-        {"id": "j", "type": kind, "config": {"parts": {"a": "一", "b": "{{start.x}}"}}},
-        {"id": "loop", "type": "loop_foreach", "config": {"items": "[1]", "body": {
-            "nodes": [{"id": "k", "type": kind, "config": {"parts": {"a": "甲"}, "sizes": ["1"]}}], "edges": []}}},
-    ], "edges": [{"id": "e1", "source": "start", "target": "j"}]}
-    canvas = {"items": [
-        {"id": "slot", "kind": "text", "form": {"producer": f"node:{kind}", "config": {"parts": {"a": "一"}}}},
-        {"id": "cell", "kind": "image", "form": {"abilities": {f"node:{kind}": {"config": {"parts": {"x": "乙"}}}}}},
-        {"id": "plain", "kind": "text", "text": "不动"},
-    ], "edges": []}
-    with SessionLocal() as db:
-        workflow_id = create_workflow(db, workspace_id=ws, name="老流程", graph=_START_ONLY, created_by=user_id()).id
-        board = Board(workspace_id=ws, name="老画板", canvas=canvas, revision=3)
-        db.add(board)
-        db.commit()
-        board_id = board.id
-        #: 老版本存下的样子(现在的保存会按声明把映射规范化成列表):当前图和修订都是映射。
-        for table, column in (("workflows", "id"), ("workflow_revisions", "workflow_id")):
-            db.execute(text(f"UPDATE {table} SET graph = :g, graph_hash = :h WHERE {column} = :id"),
-                       {"g": json.dumps(graph, ensure_ascii=False), "h": graph_digest(graph), "id": workflow_id})
-        db.commit()
-
-    _migrate_plugin_union_array_inputs_are_lists()
-    _migrate_plugin_union_array_inputs_are_lists()  # 再跑什么都不改
-
-    with SessionLocal() as db:
-        workflow = db.get(Workflow, workflow_id)
-        assert workflow.revision == 2
-        nodes = {node["id"]: node for node in workflow.graph["nodes"]}
-        board = db.get(Board, board_id)
-        assert board.revision == 4
-        items = {item["id"]: item for item in board.canvas["items"]}
-    assert nodes["j"]["config"] == {"parts": ["一", "{{start.x}}"]}
-    assert nodes["loop"]["config"]["body"]["nodes"][0]["config"] == {"parts": ["甲"], "sizes": ["1"]}
-    assert items["slot"]["form"]["config"] == {"parts": ["一"]}
-    assert items["cell"]["form"]["abilities"][f"node:{kind}"]["config"] == {"parts": ["乙"]}
-    assert items["plain"] == canvas["items"][2]

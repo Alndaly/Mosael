@@ -109,6 +109,11 @@ jobs:
           cache: pnpm
       - name: Install browser extension dependencies
         run: pnpm install --frozen-lockfile --filter mosael-browser-extension...
+      - name: Verify rolling support window
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-support-window.py --repo "$GITHUB_REPOSITORY" --latest "$GITHUB_REF_NAME"
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}

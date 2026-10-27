@@ -468,27 +468,6 @@ def test_a_callers_task_hears_about_the_called_workflow(team) -> None:
 # ---------------- 升级(D11) ----------------
 
 
-def test_upgrading_vouches_for_what_each_task_runs_today(team) -> None:
-    """升级前任务就是这样在跑的:迁移给主人对绑着的那张图、和它调用的子流程的当前版各记一条认可。重跑不重复记。"""
-    from app.db.migrations import _migrate_scheduled_tasks_vouch_for_what_they_run as migrate
-
-    child = _workflow(team.mate, team.workspace["id"], _child_graph(), name="子流程")
-    parent = _workflow(team.mate, team.workspace["id"], _caller_graph(child["id"]), name="父流程")
-    task = _hooked_task(team.owner, team.workspace["id"], parent["id"])
-    job, _run = _fire(team.owner, task)
-    assert job.error_key == "wfErr_spendNotVouched", "迁移之前:同事写的那两版没有主人担保"
-
-    migrate()
-    assert user_id("tester") in _attested_by(parent["id"], parent["revision"])
-    assert user_id("tester") in _attested_by(child["id"], child["revision"])
-    with SessionLocal() as db:
-        before = db.query(WorkflowRevisionAttestation).count()
-    migrate()
-    with SessionLocal() as db:
-        assert db.query(WorkflowRevisionAttestation).count() == before
-
-    job, _run = _fire(team.owner, task)
-    assert job.status == "succeeded", job.error
 
 
 # ---------------- 棘轮 ----------------

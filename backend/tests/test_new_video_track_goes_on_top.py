@@ -7,11 +7,8 @@ position 升序就是时间线从上到下,也是画面的叠放顺序(最上面
 
 from __future__ import annotations
 
-from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.db.migrations import _migrate_added_track_records_list_what_moved, migration_plan
-from app.db.models import SequenceOperation
 from app.domain.render import build_plan_for_sequence
 from tests.util import fresh_client, insert_asset
 
@@ -61,17 +58,3 @@ def test_指定位置插在中间_撤销还回原来的行_重做再让一次() 
     assert _rows(client.post(f"/api/sequences/{seq}/undo").json()) == ["V1", "A1"]
     assert _rows(client.post(f"/api/sequences/{seq}/redo").json()) == ["V1", "A2", "A1"]
     assert client.post(f"/api/sequences/{seq}/tracks", json={"kind": "audio", "index": 9}).status_code == 422
-
-
-def test_迁移给老的加轨记录补上_谁都没让过() -> None:
-    assert "migrate-added-track-records-list-what-moved" in {s.name for s in migration_plan().steps}
-    client, _ws, sequence = _setup()
-    seq = sequence["id"]
-    client.post(f"/api/sequences/{seq}/tracks", json={"kind": "audio"})
-    with SessionLocal() as db:
-        operation = db.scalars(select(SequenceOperation).where(SequenceOperation.sequence_id == seq)).one()
-        operation.payload = {k: v for k, v in operation.payload.items() if k != "shifted"}
-        db.commit()
-    _migrate_added_track_records_list_what_moved()
-    _migrate_added_track_records_list_what_moved()
-    assert _rows(client.post(f"/api/sequences/{seq}/undo").json()) == ["V1", "A1"]

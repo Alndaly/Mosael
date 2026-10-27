@@ -41,26 +41,6 @@ def test_an_ordinary_member_cannot_touch_it() -> None:
     assert mate.put("/api/admin/registration", json={"open": False}).status_code == 403
 
 
-def test_the_env_var_only_seeds_the_first_row(monkeypatch) -> None:
-    """老部署设过环境变量的,迁移按它建初始行;之后**以库为准**。
-
-    不做"两边都读":那样一个部署会同时有两个答案,而谁赢取决于代码里的顺序。
-    """
-    from app.core.db import engine
-    from app.db.migrations import _migrate_deployment_config
-    from sqlalchemy import text
-
-    admin = fresh_client()
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM deployment_config"))
-    monkeypatch.setenv("MOSAEL_OPEN_REGISTRATION", "0")
-    _migrate_deployment_config()
-    assert admin.get("/api/auth/bootstrap").json()["open_registration"] is False
-
-    # 库里已经有行之后,环境变量再变也不影响 —— 它只播种一次。
-    monkeypatch.setenv("MOSAEL_OPEN_REGISTRATION", "1")
-    _migrate_deployment_config()
-    assert admin.get("/api/auth/bootstrap").json()["open_registration"] is False
 
 
 def test_the_ui_actually_has_the_switch() -> None:

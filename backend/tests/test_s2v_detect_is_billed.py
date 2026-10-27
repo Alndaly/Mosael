@@ -188,22 +188,3 @@ def test_预填跟着说话照片一起补上预检的价_它不在模型目录�
             prefill_profile_pricing(db, profile, base_url=profile.base_url, catalog=[])
             db.commit()
         assert _detect_rules(profile_id) == expected, model
-
-
-def test_老库由迁移补上预检的价_只给配了说话照片的连接_跑两次也只有一条() -> None:
-    from app.db.migrations import _migrate_existing_libraries_get_the_s2v_detect_price
-
-    with_s2v = _alibaba("wan2.2-s2v")
-    with SessionLocal() as db:
-        from app.db.models import ProviderProfile
-        from tests.util import add_provider as _add
-
-        other = _add(db, name="另一条", vendor="alibaba", base_url="", api_key="k", model="qwen-plus",
-                     capability_ids=["chat"], make_default=False)
-        db.commit()
-        other_id = other.id
-        assert db.get(ProviderProfile, with_s2v) is not None
-    _migrate_existing_libraries_get_the_s2v_detect_price()
-    _migrate_existing_libraries_get_the_s2v_detect_price()
-    assert _detect_rules(with_s2v) == [("video", "image", 4000, "CNY")]
-    assert _detect_rules(other_id) == []

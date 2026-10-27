@@ -224,39 +224,8 @@ def test_后端重启作废的卡和别的作废同一种状态() -> None:
     assert (card.status, card.error) == ("expired", "backend_restarted")
 
 
-def test_老库里的孤儿卡和老的已取消卡_迁移成作废() -> None:
-    from app.db.migrations import _expire_orphaned_session_confirmations
-
-    client = fresh_client()
-    sid = _session(client)
-    orphan = _open_card(sid)
-    restarted = _open_card(sid)
-    with SessionLocal() as db:
-        db.get(ToolConfirmation, restarted).status = "cancelled"
-        db.get(ToolConfirmation, restarted).error = "backend restarted mid-turn"
-        workspace_id = db.get(AgentSession, sid).workspace_id
-        mcp = ToolConfirmation(workspace_id=workspace_id, tool="create_workflow", permission="edit",
-                               summary="MCP 直连开的", payload={}, session_id=None, requested_by="mcp-agent")
-        done = ToolConfirmation(workspace_id=workspace_id, tool="create_workflow", permission="edit",
-                                summary="批过的", payload={}, session_id=sid, status="executed")
-        db.add_all([mcp, done])
-        db.commit()
-        mcp_id, done_id = mcp.id, done.id
-
-    _expire_orphaned_session_confirmations()
-    _expire_orphaned_session_confirmations()  # 幂等
-
-    assert (_card(orphan).status, _card(orphan).error) == ("expired", "orphaned")
-    assert _card(orphan).resolved_at is not None
-    assert (_card(restarted).status, _card(restarted).error) == ("expired", "backend_restarted")
-    assert _card(mcp_id).status == "pending", "没挂对话的卡不属于哪一轮,不碰"
-    assert _card(done_id).status == "executed"
 
 
-def test_迁移在迁移计划里() -> None:
-    from app.db.migrations import migration_plan
-
-    assert "expire-orphaned-session-confirmations" in {step.name for step in migration_plan().steps}
 
 
 # ---------------------------------------------------------------------------

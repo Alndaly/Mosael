@@ -24,16 +24,15 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from sqlalchemy import JSON, Column, DateTime, Index, Integer, MetaData, String, Table, UniqueConstraint, delete, select
+from sqlalchemy import JSON, Column, DateTime, Index, Integer, MetaData, String, Table, delete, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.model_base import new_id, now
 
-#: **不进 `Base.metadata`。** 这张表由迁移建(`migrations._migrate_agent_turn_events_table`),
-#: 不从 `create_all` 走:测试 `tests/schema_baseline.json` 记的是「老库出生时的表」,新表往那里补一笔
-#: 需要解释,而这张表与既有领域表没有关系(也不设外键 —— 事件是过程日志,会话删了就该由清理收走,
+#: **不进 `Base.metadata`。** 这张表由 `_create_current_schema` 在每次启动时 `checkfirst` 补建,
+#: 不从 `create_all` 走:它与既有领域表没有关系(也不设外键 —— 事件是过程日志,会话删了就该由清理收走,
 #: 不该让 DROP TABLE 的顺序变成它的负担)。
 TURN_EVENTS = Table(
     "agent_turn_events",
@@ -45,7 +44,7 @@ TURN_EVENTS = Table(
     Column("kind", String(32), nullable=False),
     Column("payload", JSON, nullable=False),
     Column("created_at", DateTime, nullable=False),
-    UniqueConstraint("turn_id", "seq", name="uq_agent_turn_events_turn_seq"),
+    Index("uq_agent_turn_events_turn_seq", "turn_id", "seq", unique=True),
     Index("ix_agent_turn_events_session", "session_id", "created_at"),
 )
 

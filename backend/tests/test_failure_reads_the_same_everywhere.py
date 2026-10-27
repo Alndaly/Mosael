@@ -10,13 +10,12 @@ for url 'https://dashscope.aliyuncs.com/api/v1/services/ai…」;AI 工作台在
 
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 
 import pytest
 
 from app.core.db import SessionLocal
-from app.db.models import Board, GenerationJob, Job
+from app.db.models import GenerationJob, Job
 from app.domain.failure_summary import summarize
 
 #: httpx 状态码异常的原话 —— 注意 For more information 前面是**换行**。
@@ -118,33 +117,6 @@ def test_画板格子存那一句和原文(monkeypatch) -> None:
     assert saved.json()["canvas"]["items"][0]["run"] == run
 
 
-def test_老画板上的失败格子由迁移改成那一句加原文() -> None:
-    from tests.util import fresh_client
-    from app.db.migrations import _migrate_board_failures_keep_their_original_error
-
-    client = fresh_client()
-    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    old = ("DashScope 请求失败:" + HTTPX_401)[:300]
-    board_id = client.post("/api/boards", json={"workspace_id": workspace, "name": "B", "canvas": {
-        "items": [
-            {"id": "a", "kind": "image", "x": 0, "y": 0, "run": {"status": "failed", "error": old}},
-            {"id": "b", "kind": "image", "x": 300, "y": 0, "run": {"status": "failed", "error": "没有产出"}},
-        ],
-        "edges": [],
-    }}).json()["id"]
-    with SessionLocal() as db:
-        before = db.get(Board, board_id).revision
-
-    _migrate_board_failures_keep_their_original_error()
-    _migrate_board_failures_keep_their_original_error()  # 幂等:第二遍什么都不动
-
-    with SessionLocal() as db:
-        board = db.get(Board, board_id)
-        canvas = board.canvas if isinstance(board.canvas, dict) else json.loads(board.canvas)
-        assert board.revision == before + 1
-    first, second = canvas["items"]
-    assert first["run"] == {"status": "failed", "error": "DashScope 请求失败:HTTP 401 Unauthorized", "error_detail": old}
-    assert second["run"] == {"status": "failed", "error": "没有产出"}, "本来就是一句人话的不动"
 
 
 # --- 失败卡(维护者 2026-10-08:「生成失败」消息框太丑)----------------------------------------------------------------------
@@ -222,39 +194,6 @@ def test_画板格子跑挂了_原因和怎么修拼好存进格子() -> None:
     assert english["error_summary"].startswith("ComfyUI hit an error") and english["error_hint"]["cause"].startswith("That ComfyUI")
 
 
-def test_老画板上失败的格子挪进新形状_读出来和原来一样_重跑不变() -> None:
-    from tests.util import fresh_client
-    from app.db.migrations import _migrate_board_failures_follow_the_reader
-
-    client = fresh_client()
-    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    board_id = client.post("/api/boards", json={"workspace_id": workspace, "name": "B", "canvas": {"items": [], "edges": []}}).json()["id"]
-    old_items = [
-        {"id": "a", "kind": "image", "x": 0, "y": 0, "run": {"status": "failed", "error": "DashScope 不认这把密钥",
-                                                              "error_detail": "Client error '401 Unauthorized'", "error_hint": "去设置里换一把"}},
-        {"id": "b", "kind": "image", "x": 300, "y": 0, "run": {"status": "failed", "error": "没有产出"}},
-    ]
-    with SessionLocal() as db:
-        board = db.get(Board, board_id)
-        board.canvas = {"items": old_items, "edges": []}
-        db.commit()
-        before = board.revision
-
-    _migrate_board_failures_follow_the_reader()
-    _migrate_board_failures_follow_the_reader()
-
-    with SessionLocal() as db:
-        board = db.get(Board, board_id)
-        canvas = board.canvas if isinstance(board.canvas, dict) else json.loads(board.canvas)
-        assert board.revision == before + 1
-    first, second = canvas["items"]
-    assert first["run"] == {"status": "failed", "error": "Client error '401 Unauthorized'",
-                            "error_params": {"summary": "DashScope 不认这把密钥", "hint": {"cause": "去设置里换一把"}}}
-    assert second["run"] == {"status": "failed", "error": "没有产出"}, "只有一句的不动"
-    view = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}).json()["failures"]
-    assert view["a"] == {"error_summary": "DashScope 不认这把密钥", "error_detail": "Client error '401 Unauthorized'",
-                         "error_hint": {"cause": "去设置里换一把", "steps": []}}, "读出来和原来一样"
-    assert view["b"] == {"error_summary": "没有产出", "error_detail": None, "error_hint": None}
 
 
 def test_插件说的失败的样子_原因和步骤收成规整的形状() -> None:
@@ -272,35 +211,6 @@ def test_插件说的失败的样子_原因和步骤收成规整的形状() -> N
     assert len(many["hint"]["steps"]) == 6, "步骤有上限"
 
 
-def test_老的一整句提示挪进原因_重跑不变() -> None:
-    """1.22.0 插件交的 hint 是一整句话:迁移把它原样挪进 `cause`(任务和生成记录两处),新形状不动。"""
-    from sqlalchemy import text as sql
-
-    from app.core.db import engine
-    from app.db.migrations import _migrate_failure_hints_say_cause_and_steps
-    from tests.util import fresh_client
-
-    client = fresh_client()
-    old_hint = {"__text": {"zh": "这是那台 ComfyUI 上的问题:…… pip install -U comfy-kitchen ……", "en": "This is …"}}
-    old = {**COMFY_FAILURE, "hint": old_hint}
-    workspace = _failed_generation(client, key="providerErr_pluginFailed", params=old, error="x")
-    _failed_generation(client, key="providerErr_pluginFailed", params=COMFY_FAILURE, error="y")
-    _failed_generation(client, key="providerErr_pluginFailed", params={**COMFY_FAILURE, "hint": ""}, error="z")
-
-    _migrate_failure_hints_say_cause_and_steps()
-    _migrate_failure_hints_say_cause_and_steps()
-
-    with engine.begin() as conn:
-        rows = [*conn.execute(sql("SELECT error, error_params FROM jobs")), *conn.execute(sql("SELECT error, error_params FROM generation_jobs"))]
-    hints: dict[str, list] = {}
-    for error, raw in rows:
-        params = json.loads(raw) if isinstance(raw, str) else raw
-        hints.setdefault(error, []).append(params.get("hint", "—"))
-    assert hints["x"] == [{"cause": old_hint}, {"cause": old_hint}], "任务和生成记录两处都挪了"
-    assert hints["y"] == [COMFY_FAILURE["hint"], COMFY_FAILURE["hint"]], "新形状不动"
-    assert hints["z"] == ["—", "—"], "空的提示去掉"
-    [record] = client.get("/api/generation/jobs", params={"workspace_id": workspace}).json()
-    assert record["error_hint"] == {"cause": old_hint["__text"]["zh"], "steps": []}
 
 
 def test_插件没说人话的_只留原因_原文和它一样就没有详情() -> None:

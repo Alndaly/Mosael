@@ -18,7 +18,6 @@ from sqlalchemy import text
 
 from app.core.db import engine
 from app.core.i18n import render_message
-from app.db.migrations import _migrate_plugin_connection_errors_follow_the_reader
 from app.domain.jobs import blame
 from app.domain.plugins.runtime import PluginRuntimeError, _final_response
 from tests.fake_comfyui import comfyui_grants
@@ -93,51 +92,3 @@ def _stored(instance_id: str) -> dict:
     with engine.begin() as conn:
         raw = conn.execute(text("SELECT capability_status FROM plugin_instances WHERE id = :id"), {"id": instance_id}).scalar_one()
     return json.loads(raw) if isinstance(raw, str) else raw
-
-
-def test_迁移_插件说的死文字认不回_清掉_别的不动() -> None:
-    frozen = "连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused"
-    instance_id = _instance_with({
-        "generation": {"models": 3, "refreshed_at": "2026-10-01T00:00:00+00:00", "fingerprint": "abc",
-                       "error": frozen, "error_key": "pluginErr_upstream", "error_params": {"detail": frozen},
-                       "attempted_at": "2026-10-05T00:00:00+00:00"},
-    })
-
-    _migrate_plugin_connection_errors_follow_the_reader()
-
-    generation = _stored(instance_id)["generation"]
-    assert (generation["error"], generation["error_key"], generation["error_params"]) == ("", "", {})
-    assert (generation["models"], generation["refreshed_at"], generation["fingerprint"]) == (3, "2026-10-01T00:00:00+00:00", "abc"), \
-        "上一次成功的记录留着:模型清单本身也还是那一份"
-
-
-def test_迁移_只存了一句话的旧记录_认得回文案的改成文案_认不回的清掉() -> None:
-    said = render_message("pluginErr_toolsBadShape", "zh", {"name": "ComfyUI · 本机", "shape": '{"tools": [...]}'})
-    instance_id = _instance_with({
-        "tools": {"tools": 0, "error": said, "error_key": "", "error_params": {}},
-        "generation": {"error": "boom: something odd", "error_key": "", "error_params": {}},
-    })
-
-    _migrate_plugin_connection_errors_follow_the_reader()
-
-    stored = _stored(instance_id)
-    tools = stored["tools"]
-    assert tools["error_key"] == "pluginErr_toolsBadShape"
-    assert render_message(tools["error_key"], "en", tools["error_params"]) == \
-        "“ComfyUI · 本机” returned a tool list in the wrong shape; it should be {\"tools\": [...]}."
-    assert (stored["generation"]["error"], stored["generation"]["error_key"]) == ("", "")
-
-
-def test_迁移_已经是文案_key_加参数的不动_再跑一次什么都不做() -> None:
-    structured = {"tools": {"tools": 2, "error": "x", "error_key": "pluginErr_timeout", "error_params": {"seconds": "60"}}}
-    instance_id = _instance_with(structured)
-
-    _migrate_plugin_connection_errors_follow_the_reader()
-    assert _stored(instance_id) == structured
-
-    bilingual = {"generation": {"error": "x", "error_key": "pluginErr_upstream",
-                                "error_params": {"detail": {"__text": {"zh": "连不上", "en": "Can't reach"}}}}}
-    instance_id = _instance_with(bilingual)
-    _migrate_plugin_connection_errors_follow_the_reader()
-    _migrate_plugin_connection_errors_follow_the_reader()
-    assert _stored(instance_id) == bilingual, "按语言分着存的就是新形状"

@@ -214,52 +214,10 @@ def _audio_track_with(db, sequence_id: str, sources: list[str]) -> str:
     return track_id
 
 
-def test_backfill_marks_tracks_that_hold_only_tts_output() -> None:
-    """上线前配过的音要认出来 —— 判据是轨上放的**是什么**,不是它叫什么、排第几。"""
-    from app.core.db import SessionLocal
-    from app.db.migrations import backfill_dub_tracks
-    from app.db.models import Track
-
-    client = fresh_client()
-    sequence_id, _ = _sequence_with_subtitle(client)
-    with SessionLocal() as db:
-        track_id = _audio_track_with(db, sequence_id, ["tts", "tts"])
-    backfill_dub_tracks()
-    with SessionLocal() as db:
-        assert db.get(Track, track_id).role == "dub"
 
 
-def test_backfill_leaves_ordinary_audio_tracks_alone() -> None:
-    """BGM / 录音 / 原声轨不是配音轨 —— 哪怕它上面也有一段 TTS 产物。
-
-    占用用户自己的音轨比多建一条轨糟得多:下一次配音会往里插段落,而他放的东西还在里面。
-    """
-    from app.core.db import SessionLocal
-    from app.db.migrations import backfill_dub_tracks
-    from app.db.models import Track
-
-    client = fresh_client()
-    sequence_id, _ = _sequence_with_subtitle(client)
-    with SessionLocal() as db:
-        mixed = _audio_track_with(db, sequence_id, ["tts", "imported"])
-    backfill_dub_tracks()
-    with SessionLocal() as db:
-        assert db.get(Track, mixed).role == ""
 
 
-def test_backfill_does_not_promote_an_empty_track() -> None:
-    """空轨恰恰是失败的配音留下的残骸,把它认成配音轨等于把垃圾扶正。"""
-    from app.core.db import SessionLocal
-    from app.db.migrations import backfill_dub_tracks
-    from app.db.models import Track
-
-    client = fresh_client()
-    sequence_id, _ = _sequence_with_subtitle(client)
-    with SessionLocal() as db:
-        empty = _audio_track_with(db, sequence_id, [])
-    backfill_dub_tracks()
-    with SessionLocal() as db:
-        assert db.get(Track, empty).role == ""
 
 
 def test_整条字幕轨是要配的那批的默认答案() -> None:

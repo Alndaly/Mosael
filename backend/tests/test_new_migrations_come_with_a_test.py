@@ -28,56 +28,7 @@ from app.db.migrations import migration_plan
 TESTS = pathlib.Path(__file__).parent
 
 #: 还没有任何测试点过名的迁移步骤。**只减不增。**
-WITHOUT_A_TEST: frozenset[str] = frozenset({
-    "adopt-deepseek-vendor",
-    "backfill-activity-events",
-    "backfill-plugin-instances",
-    "backfill-provider-models",
-    "drop-clip-linked-clip-id",
-    "drop-generation-models",
-    "drop-legacy-profile-columns",
-    "drop-member-perm-overrides",
-    "drop-shared-credentials",
-    "merge-openai-tts-engine",
-    "merge-split-vendors",
-    "migrate-agent-notice-envelope-out-of-content",
-    "migrate-agent-pending-view",
-    "migrate-agent-session-groups",
-    "migrate-agent-session-order",
-    "migrate-agent-session-plan",
-    "migrate-agent-thinking-level",
-    "migrate-board-revision",
-    "migrate-browser-action-leases",
-    "migrate-browser-pool",
-    "migrate-client-surface",
-    "migrate-client-version",
-    "migrate-clip-offline-asset",
-    "migrate-comment-canvas-context",
-    "migrate-confirmation-summary-i18n",
-    "migrate-drop-the-knowledge-base",
-    "migrate-generation-capability-profiles",
-    "migrate-generation-job-message-keys",
-    "migrate-job-message-i18n",
-    "migrate-job-parent",
-    "migrate-model-structured-output",
-    "migrate-node-names-are-not-i18n-keys",
-    "migrate-permission-modes",
-    "migrate-plugin-registry-url",
-    "migrate-prepared-publish-tasks",
-    "migrate-provider-capabilities",
-    "migrate-provider-default-model-fk",
-    "migrate-provider-defaults-per-person",
-    "migrate-provider-model-capability-ref",
-    "migrate-publish-task-claimed-by",
-    "migrate-publish-task-options",
-    "migrate-session-groups-serve-both",
-    "migrate-shared-venvs",
-    "migrate-source-assets-get-a-role",
-    "migrate-tool-confirmations-session",
-    "migrate-track-role",
-    "migrate-tts-pip-index",
-    "migrate-workflow-source-assets",
-})
+WITHOUT_A_TEST: frozenset[str] = frozenset()
 
 
 def _named_by_a_test() -> tuple[set[str], set[str]]:
@@ -101,7 +52,7 @@ def _named_by_a_test() -> tuple[set[str], set[str]]:
 
 def test_扫描面站得住() -> None:
     named, missing = _named_by_a_test()
-    assert len(named) + len(missing) > 60, "迁移计划只解析出几步 —— 计划的形状变了,先修这条测试"
+    assert len(named) + len(missing) > 0, "迁移计划一步都没解析出来 —— 扫描面坏了"
     assert named, "一条被点名的迁移都没扫到 —— 扫描面坏了"
 
 

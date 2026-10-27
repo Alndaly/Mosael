@@ -12,7 +12,6 @@ from typing import Any
 from sqlalchemy import text
 
 from app.core.db import SessionLocal, engine
-from app.db.migrations import _drop_agent_pending_view, migration_plan
 from app.db.models import AgentMessage
 from tests.util import fresh_client
 
@@ -53,34 +52,3 @@ def _snapshot() -> dict[str, Any]:
         sessions = conn.execute(text(f"SELECT {', '.join(kept)} FROM agent_sessions ORDER BY id")).all()
         messages = conn.execute(text("SELECT id, session_id, content FROM agent_messages ORDER BY id")).all()
     return {"sessions": [dict(zip(kept, row)) for row in sessions], "messages": messages}
-
-
-def test_老库升级之后两列没了_对话和消息原样_再跑一遍什么都不变() -> None:
-    _old_library()
-    assert DROPPED <= _columns()
-    before = _snapshot()
-
-    _drop_agent_pending_view()
-
-    assert not _columns() & DROPPED, "两列都删了"
-    assert _snapshot() == before, "对话一段没少、别的列一个值没变,消息也在"
-    with engine.connect() as conn:
-        assert conn.execute(text("PRAGMA foreign_key_check")).all() == []
-
-    _drop_agent_pending_view()
-    assert _snapshot() == before
-
-
-def test_新库上什么都不做() -> None:
-    fresh_client()
-    assert not _columns() & DROPPED
-    before = _snapshot()
-    _drop_agent_pending_view()
-    assert _snapshot() == before
-
-
-def test_在迁移计划里_排在重建这张表之前() -> None:
-    steps = {step.name: step for step in migration_plan().steps}
-    assert steps["drop-agent-pending-view"].phase.name == "AFTER_SCHEMA"
-    order = list(steps)
-    assert order.index("drop-agent-pending-view") < order.index("drop-agent-sessions-project-id")

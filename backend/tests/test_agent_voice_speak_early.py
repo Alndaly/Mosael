@@ -10,7 +10,6 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from app.core.db import engine
-from app.db.migrations import _migrate_agent_voice_speak_early, migration_plan
 from tests.util import fresh_client
 
 
@@ -48,40 +47,12 @@ def _row() -> tuple:
             "FROM agent_voice_prefs WHERE owner_user_id = 'u-old'")).one()
 
 
-def test_迁移登记在计划里() -> None:
-    assert "migrate-agent-voice-speak-early" in {step.name for step in migration_plan().steps}
 
 
-def test_老库补上这一列_默认先出声_别的字段不动() -> None:
-    fresh_client()
-    _old_table()
-    assert "speak_early" not in _columns()
-
-    _migrate_agent_voice_speak_early()
-
-    assert "speak_early" in _columns()
-    assert tuple(_row()) == ("edge", "zh-CN-XiaoxiaoNeural", 1.25, 1, "", 1), "默认 1 = 先出声"
 
 
-def test_再跑一次什么都不做() -> None:
-    fresh_client()
-    _old_table()
-    _migrate_agent_voice_speak_early()
-    before = _row()
-
-    _migrate_agent_voice_speak_early()  # 不报 duplicate column,也不改已有的值
-
-    assert _row() == before
 
 
-def test_没有这张表的老库不建半张() -> None:
-    fresh_client()
-    with engine.begin() as conn:
-        conn.execute(text("DROP TABLE agent_voice_prefs"))
-
-    _migrate_agent_voice_speak_early()
-
-    assert _columns() == set()
 
 
 def _settings(client, **extra: object):

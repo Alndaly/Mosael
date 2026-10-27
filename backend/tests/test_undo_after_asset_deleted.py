@@ -7,11 +7,7 @@ asset_id 重建一行,撞上 RESTRICT 外键 → IntegrityError → 500;撤销�
 
 from __future__ import annotations
 
-from sqlalchemy import select
 
-from app.core.db import SessionLocal
-from app.db.migrations import _migrate_sequence_operation_clip_records_are_complete, migration_plan
-from app.db.models import Clip, SequenceOperation
 from tests.util import fresh_client, insert_asset
 
 
@@ -93,38 +89,3 @@ def test_撤销插入后删素材_重做还回脱机占位() -> None:
     redone = client.post(f"/api/sequences/{seq}/redo")
     assert redone.status_code == 200, redone.text
     assert _video(redone.json())[0]["offline_asset"]["asset_id"] == gone
-
-
-def test_迁移把老的片段记录补齐_老记录照样撤得动() -> None:
-    assert "migrate-sequence-operation-clip-records-are-complete" in {s.name for s in migration_plan().steps}
-    client, seq, track, _keep, gone = _setup()
-    state = _insert(client, seq, track, gone, 0, 10)
-    clip_id = _video(state)[0]["id"]
-    assert client.delete(f"/api/sequences/{seq}/clips/{clip_id}").status_code == 200
-    with SessionLocal() as db:
-        operation = db.scalars(
-            select(SequenceOperation).where(SequenceOperation.sequence_id == seq, SequenceOperation.kind == "delete_clip")
-        ).one()
-        # 退回成补齐之前的老形状:改动日志里那份片段记录只有位置(老记录转成日志后就是这样)。
-        (entry,) = operation.payload["changes"]
-        position = {key: entry["clip"][key] for key in
-                    ("clip_id", "track_id", "asset_id", "timeline_start", "src_in", "src_out")}
-        operation.payload = {**operation.payload, "changes": [{**entry, "clip": position}]}
-        db.commit()
-    assert client.delete(f"/api/assets/{gone}").status_code == 204
-
-    _migrate_sequence_operation_clip_records_are_complete()
-    _migrate_sequence_operation_clip_records_are_complete()  # 幂等
-
-    with SessionLocal() as db:
-        payload = db.scalars(
-            select(SequenceOperation).where(SequenceOperation.sequence_id == seq, SequenceOperation.kind == "delete_clip")
-        ).one().payload["changes"][0]["clip"]
-    assert payload["speed"] == 1.0 and payload["offline_asset"] is None and payload["link_group"] is None
-    # 素材在迁移之前就删了、时间线上也没有它的脱机片段:名字已经无处可查,只留下 id。
-    assert payload["asset_snapshot"] == {"asset_id": gone, "name": "", "kind": "", "duration": None}
-
-    undone = client.post(f"/api/sequences/{seq}/undo")
-    assert undone.status_code == 200, undone.text
-    with SessionLocal() as db:
-        assert db.get(Clip, clip_id).offline_asset["asset_id"] == gone
