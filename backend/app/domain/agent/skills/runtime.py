@@ -20,6 +20,9 @@ MAX_LISTED_DESCRIPTION_CHARS = 300
 MAX_LISTING_CHARS = 3000
 #: 一条消息最多点名几个技能(「/」)。每个都是整份正文挂进这一轮。
 MAX_FORCED_SKILLS = 3
+#: 一条消息里所有点名技能连同说明的总上限。单个 SKILL.md 允许 64 KB，不能原样乘上技能数量。
+MAX_FORCED_CONTEXT_CHARS = 30000
+_FORCED_TRUNCATED = "\n\n【技能上下文已截断】"
 
 _HEADER = (
     "\n\n【技能】下面是这个工作区可用的技能。做对应的事之前,先用 use_skill 读它的完整做法再照着做;"
@@ -114,7 +117,11 @@ def forced_context(db: Session, workspace_id: str, refs: list[str]) -> str:
         blocks.append(f"【用户点名用技能:{skill.ref}】{_notice(skill)}\n\n{skill.doc.body.strip()}")
     if not blocks:
         return ""
-    return "用户在这条消息里点名要用下面的技能(全文已经附上,不用再 use_skill):\n\n" + "\n\n".join(blocks)
+    text = "用户在这条消息里点名要用下面的技能(全文已经附上,不用再 use_skill):\n\n" + "\n\n".join(blocks)
+    if len(text) <= MAX_FORCED_CONTEXT_CHARS:
+        return text
+    # 截断必须明说：模型不能把半份技能当成完整做法，调用方也有稳定行为可测。
+    return text[: MAX_FORCED_CONTEXT_CHARS - len(_FORCED_TRUNCATED)].rstrip() + _FORCED_TRUNCATED
 
 
 def skills_in_turn(db: Session, session_id: str) -> list[str]:
@@ -164,6 +171,7 @@ def skills_in_turn(db: Session, session_id: str) -> list[str]:
 
 __all__ = [
     "MAX_FORCED_SKILLS",
+    "MAX_FORCED_CONTEXT_CHARS",
     "MAX_LISTED_DESCRIPTION_CHARS",
     "MAX_LISTING_CHARS",
     "forced_context",

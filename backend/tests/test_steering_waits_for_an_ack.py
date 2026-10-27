@@ -52,6 +52,10 @@ def _drop(session_id: str) -> None:
         _LIVE.pop(session_id, None)
 
 
+def _answer(live: _LiveTurn, ack_type: str, value: bool, request_id: str | None = None) -> None:
+    live.ack(ack_type, value, live._ack_request_id if request_id is None else request_id)
+
+
 def test_对面说没接住时返回False_哪怕管道写成功了() -> None:
     live = _live("s1")
     try:
@@ -60,7 +64,7 @@ def test_对面说没接住时返回False_哪怕管道写成功了() -> None:
         caller.start()
         # sidecar:那一轮刚好结束了 —— pending=False。
         _wait_until(lambda: bool(live._ack_type))
-        live.ack("queued", False)
+        _answer(live, "queued", False)
         caller.join(timeout=30)
 
         assert result == [False], "写成功被当成了插进去 —— 这条消息会被摘掉队列标然后蒸发"
@@ -75,7 +79,7 @@ def test_对面说接住了才返回True() -> None:
         caller = threading.Thread(target=lambda: result.append(steer_turn("s2", "改成横屏")))
         caller.start()
         _wait_until(lambda: bool(live._ack_type))
-        live.ack("queued", True)
+        _answer(live, "queued", True)
         caller.join(timeout=30)
 
         assert result == [True]
@@ -115,7 +119,7 @@ def test_停止也等回执_一轮刚开始时按下不算数() -> None:
         caller = threading.Thread(target=lambda: result.append(abort_turn("s5")))
         caller.start()
         _wait_until(lambda: live._ack_type == "aborted_ack")
-        live.ack("aborted_ack", False)  # 那一轮已经结束了,没有东西可停
+        _answer(live, "aborted_ack", False)
         caller.join(timeout=30)
 
         assert result == [False]
@@ -134,16 +138,44 @@ def test_回执认类型_别人的回执不算数() -> None:
         )
         caller.start()
         _wait_until(lambda: live._ack_type == "aborted_ack")
-        live.ack("queued", True)  # 另一种回执:不该唤醒这个等待
+        _answer(live, "queued", True)
         #: 收不收是 ack() 当场定的:看那一下之后等待有没有被唤醒。此前是等的一方只等 0.4 秒,别人的回执晚到也是 False ——
         #: 机器一忙,类型不对的回执被收下了也看不出来。
         assert not live._ack.is_set(), "别人的回执把等待唤醒了"
-        live.ack("aborted_ack", False)
+        _answer(live, "aborted_ack", False)
         caller.join(timeout=30)
 
         assert result == [False]
     finally:
         _drop("s6")
+
+
+def test_迟到的上一帧回执不能替下一帧作答() -> None:
+    live = _live("s7")
+    try:
+        first = threading.Thread(
+            target=lambda: live.send_awaiting_ack({"type": "steer"}, ack_type="queued", timeout=0.05)
+        )
+        first.start()
+        _wait_until(lambda: bool(live._ack_request_id))
+        previous = live._ack_request_id
+        first.join(timeout=30)
+
+        result: list[bool] = []
+        caller = threading.Thread(
+            target=lambda: result.append(
+                live.send_awaiting_ack({"type": "steer"}, ack_type="queued", timeout=30)
+            )
+        )
+        caller.start()
+        _wait_until(lambda: bool(live._ack_request_id) and live._ack_request_id != previous)
+        _answer(live, "queued", True, previous)
+        assert not live._ack.is_set(), "上一帧迟到的回执错配给了这次请求"
+        _answer(live, "queued", False)
+        caller.join(timeout=30)
+        assert result == [False]
+    finally:
+        _drop("s7")
 
 
 def _wait_until(predicate, timeout: float = 30.0) -> None:

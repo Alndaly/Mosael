@@ -70,7 +70,7 @@ export function ConfirmationCard({
         <PermissionBadge permission={item.permission} />
       </header>
       <p className="m-0 text-ui-sm font-semibold leading-[1.5] [overflow-wrap:anywhere]">
-        <InlineMarkdown text={item.headline || item.summary} />
+        <InlineMarkdown text={item.headline || item.summary || item.tool} />
       </p>
       {!settled && item.warning ? <RiskNotice tone={tone} text={item.warning} /> : null}
       {!settled ? <PayloadSection item={item} /> : null}

@@ -99,6 +99,41 @@ def tool_cost(tool: str) -> str:
     return spec.cost if spec is not None else "none"
 
 
+def _prepare_confirmation(
+    db: Session,
+    *,
+    workspace_id: str,
+    tool: str,
+    payload: dict[str, Any],
+    actor_id: str | None,
+    requested_by: str = "external-agent",
+    session_id: str | None = None,
+    tool_call_id: str | None = None,
+) -> ToolConfirmation:
+    """完成校验与摘要，但不写入;调用方可在独立的小事务里处理唯一键冲突。"""
+    spec = tool_spec(tool)
+    if spec is None:
+        raise ConfirmationError(f"Unknown mutating tool: {tool}")
+    if spec.validate is not None:
+        spec.validate(db, workspace_id, payload, actor_id)
+    #: **key 和参数才是事实,渲染出来的那一行只是默认语言的快照。**
+    #: 确认卡是授权界面 —— 用户点「批准」之前唯一会读的就是这一行,而卡落库、活得比一次请求久。
+    #: 写入时就翻会把语言冻死在那一刻(`Job.message` 为这件事付过账,见 domain/jobs.say)。
+    summary_key, summary_params = spec.summarize(db, payload)
+    return ToolConfirmation(
+        workspace_id=workspace_id,
+        tool=tool,
+        permission=effective_permission(db, tool, payload),
+        summary=_stored_summary(render_message(summary_key, DEFAULT_LOCALE, summary_params)),
+        summary_key=summary_key,
+        summary_params=summary_params,
+        payload=payload,
+        requested_by=requested_by,
+        session_id=session_id,
+        tool_call_id=tool_call_id,
+    )
+
+
 def request_confirmation(
     db: Session,
     *,
@@ -111,26 +146,9 @@ def request_confirmation(
     tool_call_id: str | None = None,
 ) -> ToolConfirmation:
     """开一张卡。`actor_id` 是开卡的人(发起这次调用的凭据是谁的),校验里因人而异的事实按他算。"""
-    spec = tool_spec(tool)
-    if spec is None:
-        raise ConfirmationError(f"Unknown mutating tool: {tool}")
-    if spec.validate is not None:
-        spec.validate(db, workspace_id, payload, actor_id)
-    #: **key 和参数才是事实,渲染出来的那一行只是默认语言的快照。**
-    #: 确认卡是授权界面 —— 用户点「批准」之前唯一会读的就是这一行,而卡落库、活得比一次请求久。
-    #: 写入时就翻会把语言冻死在那一刻(`Job.message` 为这件事付过账,见 domain/jobs.say)。
-    summary_key, summary_params = spec.summarize(db, payload)
-    confirmation = ToolConfirmation(
-        workspace_id=workspace_id,
-        tool=tool,
-        permission=effective_permission(db, tool, payload),
-        summary=_stored_summary(render_message(summary_key, DEFAULT_LOCALE, summary_params)),
-        summary_key=summary_key,
-        summary_params=summary_params,
-        payload=payload,
-        requested_by=requested_by,
-        session_id=session_id,
-        tool_call_id=tool_call_id,
+    confirmation = _prepare_confirmation(
+        db, workspace_id=workspace_id, tool=tool, payload=payload, actor_id=actor_id,
+        requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id,
     )
     db.add(confirmation)
     db.flush()

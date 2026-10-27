@@ -220,8 +220,9 @@ async function prepareContext(
   model: Model<Api>,
   streamFn: ConstructorParameters<typeof Agent>[0]["streamFn"],
   force: boolean,
-): Promise<{ messages: AgentMessage[]; info: CompactionResult["info"] }> {
+): Promise<{ messages: AgentMessage[]; info: CompactionResult["info"]; usage: Record<string, number> }> {
   const contextWindow = Number(model.contextWindow) || 0;
+  let usage: Record<string, number> = {};
   const result = await compact(messages as unknown as CompactionMessage[], {
     contextWindow,
     force,
@@ -234,7 +235,14 @@ async function prepareContext(
         initialState: { systemPrompt: "你是一个严谨的对话摘要器。", model, tools: [], messages: summaryInput as unknown as AgentMessage[] },
         streamFn,
       });
-      await summarizer.prompt(SUMMARY_PROMPT);
+      const history = new Set(summarizer.state.messages);
+      try {
+        await summarizer.prompt(SUMMARY_PROMPT);
+      } finally {
+        // 只算这次摘要新产生的助手消息；摘要器手里的早期对话也可能带 usage。
+        // 即使摘要中途失败，供应商已经回报的调用量也不能丢。
+        usage = collectUsage(summarizer.state.messages.filter((message) => !history.has(message)));
+      }
       const last = [...summarizer.state.messages].reverse().find((m) => (m as { role?: string }).role === "assistant");
       const content = (last as { content?: unknown } | undefined)?.content;
       if (typeof content === "string") return content;
@@ -246,7 +254,7 @@ async function prepareContext(
       return "";
     },
   });
-  return { messages: result.messages as unknown as AgentMessage[], info: result.info };
+  return { messages: result.messages as unknown as AgentMessage[], info: result.info, usage };
 }
 
 const FALLBACK_MAX_TOKENS = 4096;
@@ -680,14 +688,15 @@ export async function runCompaction(input: {
   sessionState?: unknown;
   apiBase: string;
   token: string;
-}): Promise<{ sessionState: unknown; context: { tokens: number; window: number }; compaction: CompactionResult["info"] }> {
+}): Promise<{ sessionState: unknown; context: { tokens: number; window: number }; compaction: CompactionResult["info"]; usage: Record<string, unknown> }> {
   const { models, model } = await resolveModels(input.provider, input.model, input.apiBase, input.token);
   const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
-  const { messages, info } = await prepareContext(prior, model as Model<Api>, streamFnFor(models), true);
+  const { messages, info, usage } = await prepareContext(prior, model as Model<Api>, streamFnFor(models), true);
   return {
     sessionState: messages,
     context: { tokens: contextTokens(messages as unknown as CompactionMessage[]), window: Number(model?.contextWindow) || 0 },
     compaction: info,
+    usage,
   };
 }
 
@@ -827,7 +836,7 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   let contextFull = false;
   const streamFn = streamFnFor(models);
   // 轮前按 token 水位压缩(超过窗口 80% 触发,或调用方显式要求)。
-  const { messages: priorMessages, info: compaction } = await prepareContext(
+  const { messages: priorMessages, info: compaction, usage: compactionUsage } = await prepareContext(
     prior,
     model as Model<Api>,
     streamFn,
@@ -957,7 +966,7 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   const stallText = stalled ? stallMessage(stalled, full, Number(model?.maxTokens) || FALLBACK_MAX_TOKENS) : undefined;
   return {
     text: full,
-    usage: collectUsage(messages, turnStartIndex),
+    usage: mergeUsage(compactionUsage, collectUsage(messages, turnStartIndex)),
     sessionState: messages,
     errorMessage: aborted ? undefined : failed?.errorMessage ?? stallText,
     errorCode: aborted ? undefined : contextFull ? "context_full" : stalled ? stalled.code : undefined,
@@ -1007,5 +1016,14 @@ function collectUsage(messages: readonly unknown[], startIndex = 0): Record<stri
   if (cacheRead) out.cache_read_tokens = cacheRead;
   if (cacheWrite) out.cache_write_tokens = cacheWrite;
   if (reasoning) out.reasoning_tokens = reasoning;
+  return out;
+}
+
+/** 摘要与正式回答都是真实调用；逐字段相加，不能把历史消息的 usage 再扫一遍。 */
+function mergeUsage(...records: readonly Record<string, number>[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) out[key] = (out[key] ?? 0) + value;
+  }
   return out;
 }

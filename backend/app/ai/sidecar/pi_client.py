@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -269,10 +270,11 @@ class _LiveTurn:
         self._lock = threading.Lock()
         self.turn_id = turn_id
         self.closed = False
-        # 一次只允许一个等回执的帧在飞 —— 回执事件只带 turnId,认不出是哪一帧的。
+        # 每一帧都有独立 requestId：类型相同的迟到回执不能替下一次请求作答。
         self._ack_lock = threading.Lock()
         self._ack = threading.Event()
         self._ack_type: str | None = None
+        self._ack_request_id = ""
         self._ack_value: bool | None = None
 
     def send(self, frame: dict) -> bool:
@@ -302,19 +304,20 @@ class _LiveTurn:
         把它当成普通的下一轮发过去而不是丢掉"),只是后端的事件循环里没有它的分支。
         """
         with self._ack_lock:
+            self._ack_request_id = uuid.uuid4().hex
             self._ack_type = ack_type
             self._ack_value = None
             self._ack.clear()
-            if not self.send(frame):
+            if not self.send({**frame, "requestId": self._ack_request_id}):
                 return False
             if not self._ack.wait(timeout):
                 logger.warning("sidecar 未在 %.1f 秒内回执 %s,按「没接住」处理", timeout, ack_type)
                 return False
             return bool(self._ack_value)
 
-    def ack(self, ack_type: str, value: bool) -> None:
-        """读流的线程读到一条回执事件时调这里。"""
-        if self._ack_type != ack_type:
+    def ack(self, ack_type: str, value: bool, request_id: str) -> None:
+        """读流的线程读到一条回执事件时调这里；类型与请求 id 都必须对应。"""
+        if self._ack_type != ack_type or not request_id or self._ack_request_id != request_id:
             return
         self._ack_value = value
         self._ack.set()
@@ -755,13 +758,13 @@ def _run_pi(
             elif kind == "queued":
                 # 「这条插进去了吗」的回执。pending=False 意味着那一轮在用户打字和这一帧
                 # 到达之间结束了 —— 调用方据此把消息当成普通的下一轮发,而不是摘掉队列标。
-                live.ack("queued", bool(event.get("pending")))
+                live.ack("queued", bool(event.get("pending")), str(event.get("requestId") or ""))
             elif kind == "steer_applied":
                 steer_id = str(event.get("steerId") or "")
                 if steer_id and on_steer_applied is not None:
                     on_steer_applied(steer_id)
             elif kind == "aborted_ack":
-                live.ack("aborted_ack", bool(event.get("accepted")))
+                live.ack("aborted_ack", bool(event.get("accepted")), str(event.get("requestId") or ""))
             elif kind == "awaiting_user":
                 # 等人批卡 / 作答的这段不算进任何一把表(见 AWAITING_USER_PAUSE_CAP_SECONDS)。成对来,按计数停表。
                 waiting = bool(event.get("waiting"))
@@ -897,6 +900,7 @@ class CompactionResult:
     adapter_state: object | None
     context: dict | None
     compaction: dict | None
+    usage: dict | None = None
 
 
 def compact_session(
@@ -906,6 +910,7 @@ def compact_session(
     provider: dict | None,
     model: str | None,
     adapter_state: object | None,
+    request_id: str = "",
 ) -> CompactionResult:
     """只压缩不对话 —— 界面上的「立即压缩」。
 
@@ -916,7 +921,7 @@ def compact_session(
         raise SidecarError("aiErr_noProvider")
     frame = {
         "type": "compact",
-        "turnId": "compact",
+        "turnId": request_id or uuid.uuid4().hex,
         "systemPrompt": "",
         "apiBase": api_base,
         "token": token,
@@ -944,6 +949,7 @@ def compact_session(
                 adapter_state=event.get("sessionState"),
                 context=event.get("context") if isinstance(event.get("context"), dict) else None,
                 compaction=event.get("compaction") if isinstance(event.get("compaction"), dict) else None,
+                usage=event.get("usage") if isinstance(event.get("usage"), dict) else None,
             )
         if event.get("type") == "error":
             child.finish()

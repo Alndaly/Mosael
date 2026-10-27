@@ -5,6 +5,7 @@ import logging
 import math
 import threading
 import time
+import uuid
 from typing import Any
 
 from sqlalchemy import and_, exists, or_, select, update
@@ -1580,12 +1581,14 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
         provider_dict, agent_model, _profile = resolve_chat_provider(db, profile_id, model, user_id=owner_id)
         token = mint_tool_token(db, user)
         db.close()
+        compaction_id = uuid.uuid4().hex
         result = compact_session(
             api_base=f"http://{settings.backend_host}:{settings.backend_port}",
             token=token,
             provider=provider_dict,
             model=agent_model,
             adapter_state=before,
+            request_id=compaction_id,
         )
         with unit_of_work() as write:
             row = write.get(AgentSession, session_id)
@@ -1593,6 +1596,23 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
                 return {"context": None, "compaction": None}
             if result.adapter_state is not None:
                 row.adapter_state = result.adapter_state
+            if result.usage:
+                # 摘要也是一次真实模型调用。手动压缩没有 assistant 消息可挂账，
+                # 以会话为来源、这次压缩 id 为幂等键；轮前压缩则已并入 agent_turn，不另记一笔。
+                with billable(
+                    write,
+                    user_id=owner_id,
+                    capability="chat",
+                    operation="agent_compaction",
+                    workspace_id=row.workspace_id,
+                    provider_profile_id=_profile.id,
+                    provider=_profile.vendor,
+                    model=agent_model or "",
+                    source_type="agent_session",
+                    source_id=session_id,
+                    idempotency_key=f"agent-compaction:{compaction_id}",
+                ) as call:
+                    call.meter(_turn_metering("", "", result.usage), raw=result.usage)
             if result.compaction:
                 write.add(
                     AgentMessage(

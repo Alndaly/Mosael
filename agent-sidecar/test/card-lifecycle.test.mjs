@@ -137,7 +137,7 @@ function runTurn(send, turnId, apiBase, modelBase) {
   try {
     runTurn(send, "t1", apiBase, modelBase);
     await waitFor((e) => e.type === "awaiting_user" && e.waiting === true, "开始等人");
-    send({ type: "abort", turnId: "t1" });
+    send({ type: "abort", turnId: "t1", requestId: "abort-card-1" });
     const done = await waitFor((e) => e.type === "turn_done" || e.type === "error", "这一轮收尾");
     assert.equal(done.type, "turn_done", `停止被报成了失败:${JSON.stringify(done)}`);
     assert.ok(events.some((e) => e.type === "aborted" && e.turnId === "t1"), "没有报「被停止」");

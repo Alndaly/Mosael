@@ -191,6 +191,7 @@ async function handleCompact(msg: CompactRequest): Promise<void> {
     sessionState: result.sessionState,
     context: result.context,
     compaction: result.compaction,
+    usage: result.usage,
   });
 }
 
@@ -250,7 +251,7 @@ async function main(): Promise<void> {
         if (!agent) {
           // The turn finished between the user typing and this frame arriving. Saying so lets
           // the backend send it as an ordinary next turn instead of dropping it.
-          send({ type: "queued", turnId: msg.turnId, mode: msg.mode ?? "steer", pending: false });
+          send({ type: "queued", turnId: msg.turnId, requestId: msg.requestId, mode: msg.mode ?? "steer", pending: false });
         } else {
           const message = {
             role: "user" as const,
@@ -261,12 +262,12 @@ async function main(): Promise<void> {
           if (msg.mode === "follow_up") agent.followUp(message);
           else agent.steer(message);
           if (msg.steerId) steerLedger(msg.turnId).recordQueued(msg.steerId, msg.mode !== "follow_up");
-          send({ type: "queued", turnId: msg.turnId, mode: msg.mode ?? "steer", pending: true });
+          send({ type: "queued", turnId: msg.turnId, requestId: msg.requestId, mode: msg.mode ?? "steer", pending: true });
         }
       } else if (msg.type === "queue") {
         const agent = active.get(msg.turnId);
         const kept = agent ? steerLedger(msg.turnId).declare(agent, msg.items) : [];
-        send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && kept.length > 0 });
+        send({ type: "queued", turnId: msg.turnId, requestId: msg.requestId, mode: "steer", pending: Boolean(agent) && kept.length > 0 });
       } else if (msg.type === "refresh_credential") {
         oneShot(
           handleRefreshCredential(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: describeError(err) })),
@@ -281,7 +282,7 @@ async function main(): Promise<void> {
         else if (running.has(msg.turnId)) abortPending.add(msg.turnId);
         // 回执:后端据此知道「按下去到底算不算数」。accepted=false 只有一个意思 ——
         // 那一轮已经结束了,没有东西可停(不是错误,界面上不该报)。
-        send({ type: "aborted_ack", turnId: msg.turnId, accepted: running.has(msg.turnId) });
+        send({ type: "aborted_ack", turnId: msg.turnId, requestId: msg.requestId, accepted: running.has(msg.turnId) });
       } else if (msg.type === "auth_login") {
         const controller = new AbortController();
         logins.set(msg.loginId, controller);

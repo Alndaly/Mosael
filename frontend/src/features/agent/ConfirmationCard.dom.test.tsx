@@ -74,6 +74,19 @@ describe("确认卡的层级", () => {
     expect(screen.queryByRole("note")).toBeNull();
   });
 
+  it("未识别的外部卡没有摘要时也显示工具名和原始数据，不留空白", () => {
+    const { container } = renderCard(card({
+      tool: "new_external_action",
+      headline: "",
+      summary: "",
+      warning: "",
+      payload: { path: "/tmp/report.txt" },
+    }));
+    expect(container.querySelector("article > p")!.textContent).toBe("new_external_action");
+    expect(container.querySelector("dl")!.textContent).toContain("/tmp/report.txt");
+    expect(container.querySelector("details pre")).not.toBeNull();
+  });
+
   it("窄对话栏里不横向溢出:网格列可压缩、标题可断行、请求方一行截断", () => {
     const { container } = renderCard(card());
     const article = container.querySelector("article")!;

@@ -30,7 +30,7 @@ await build({
   packages: "external",
   ignoreAnnotations: true,
 });
-const { runPiTurn, runGatewayCompletion } = await import(pathToFileURL(outfile).href);
+const { runPiTurn, runGatewayCompletion, runCompaction } = await import(pathToFileURL(outfile).href);
 
 const fixture = JSON.parse(readFileSync(path.join(import.meta.dirname, "fixtures", "gemini-thought-signatures.json"), "utf-8"));
 const SIG = fixture.signatures;
@@ -259,6 +259,59 @@ test("钥匙空着就当场报错,不去用环境变量里别人的钥匙", asyn
   try {
     await assert.rejects(() => gateway(gemini.baseUrl, "gemini-2.5-flash", {}, ""), /API Key/);
     assert.equal(gemini.requests.length, 0, "一个请求都不该发出去");
+  } finally {
+    await gemini.close();
+  }
+});
+
+test("轮前压缩的摘要调用并入本轮用量，历史 usage 不重复累计", async () => {
+  const gemini = await fakeGemini([textReply("交接摘要"), textReply("继续回答")]);
+  try {
+    const result = await runPiTurn(
+      {
+        systemPrompt: "系统",
+        prompt: "继续",
+        provider: geminiProvider(gemini.baseUrl),
+        model: fixture.model,
+        tools: [],
+        apiBase: "http://127.0.0.1:1",
+        token: "t",
+        forceCompact: true,
+        sessionState: [
+          { role: "user", content: "早期问题".repeat(1000), timestamp: 1 },
+          { role: "assistant", content: [{ type: "text", text: "早期回答" }], usage: { input: 9000, output: 900 }, timestamp: 2 },
+          { role: "user", content: "最近问题", timestamp: 3 },
+        ],
+      },
+      handlers(),
+    );
+    assert.ok(result.compaction, "测试必须先真的发生压缩");
+    assert.equal(gemini.requests.length, 2);
+    assert.equal(result.usage.requests, 2, "摘要与回答各一次模型调用");
+    assert.equal(result.usage.input_tokens, 40);
+    assert.equal(result.usage.output_tokens, 6);
+  } finally {
+    await gemini.close();
+  }
+});
+
+test("手动 compact 也交出摘要这次调用的 usage", async () => {
+  const gemini = await fakeGemini([textReply("交接摘要")]);
+  try {
+    const result = await runCompaction({
+      provider: geminiProvider(gemini.baseUrl),
+      model: fixture.model,
+      apiBase: "http://127.0.0.1:1",
+      token: "t",
+      sessionState: [
+        { role: "user", content: "早期问题".repeat(1000), timestamp: 1 },
+        { role: "user", content: "最近问题", timestamp: 2 },
+      ],
+    });
+    assert.ok(result.compaction);
+    assert.equal(result.usage.requests, 1);
+    assert.equal(result.usage.input_tokens, 20);
+    assert.equal(result.usage.output_tokens, 3);
   } finally {
     await gemini.close();
   }

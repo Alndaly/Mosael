@@ -65,6 +65,33 @@ def _migrate_tool_confirmations_name_their_tool_call() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN tool_call_id VARCHAR(128)"))
 
 
+def _migrate_tool_confirmations_make_tool_calls_idempotent() -> None:
+    """一次对话里的一个 tool_call_id 只能开一张卡；空 id 的外部调用不受限制。
+
+    旧版本可能已经留下重复卡。保留最早那张的关联，其余历史卡仍在，但不再冒充那次调用的
+    唯一确认单；这样升级能建立唯一索引，新重试也不会再放大旧重复。
+    """
+    inspector = inspect(engine)
+    if "tool_confirmations" not in set(inspector.get_table_names()):
+        return
+    if "tool_call_id" not in {column["name"] for column in inspector.get_columns("tool_confirmations")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE tool_confirmations SET tool_call_id = NULL "
+            "WHERE session_id IS NOT NULL AND tool_call_id IS NOT NULL "
+            "AND rowid NOT IN ("
+            "SELECT MIN(rowid) FROM tool_confirmations "
+            "WHERE session_id IS NOT NULL AND tool_call_id IS NOT NULL "
+            "GROUP BY session_id, tool_call_id)"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_tool_confirmations_session_tool_call "
+            "ON tool_confirmations (session_id, tool_call_id) "
+            "WHERE session_id IS NOT NULL AND tool_call_id IS NOT NULL"
+        ))
+
+
 def _migrate_tool_confirmations_feishu_message_id() -> None:
     """tool_confirmations 新增 feishu_message_id:工具确认卡发到飞书后的消息 id。
 
@@ -10240,6 +10267,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_assets_get_a_name_sort_key,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 ToolConfirmation 已经指望 tool_call_id 在了。
                 _migrate_tool_confirmations_name_their_tool_call,
+                _migrate_tool_confirmations_make_tool_calls_idempotent,
                 # 同上:ORM 上的 ToolConfirmation / AgentQuestion 指望飞书消息 id 在。
                 _migrate_tool_confirmations_feishu_message_id,
                 _migrate_agent_questions_feishu_message_id,

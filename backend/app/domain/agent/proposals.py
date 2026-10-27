@@ -12,13 +12,26 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, User
 from app.domain.agent import autopilot, origins
-from app.domain.agent.confirmations import request_confirmation
+from app.domain.agent.confirmations import _prepare_confirmation
 from app.domain.permissions import ensure_workspace_perm
+
+
+def _for_tool_call(db: Session, session_id: str | None, tool_call_id: str | None) -> ToolConfirmation | None:
+    """同一对话里这次工具调用已经开过的卡。没有完整身份的外部调用不参与去重。"""
+    if not session_id or not tool_call_id:
+        return None
+    return db.scalar(
+        select(ToolConfirmation).where(
+            ToolConfirmation.session_id == session_id,
+            ToolConfirmation.tool_call_id == tool_call_id,
+        )
+    )
 
 
 def propose(
@@ -40,16 +53,25 @@ def propose(
     开卡要 edit 权限:卡批了就会改东西,不能让只读的人借一张卡去改。
     """
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    confirmation = request_confirmation(
-        db,
-        workspace_id=workspace_id,
-        tool=tool,
-        payload=payload,
-        actor_id=user.id,
-        requested_by=requested_by,
-        session_id=session_id,
-        tool_call_id=tool_call_id,
+    existing = _for_tool_call(db, session_id, tool_call_id)
+    if existing is not None:
+        return existing
+    # validate 可能经独立连接写入(例如工作台连接),所以先在 SAVEPOINT 外完成;
+    # 只有真正 insert 进保存点,唯一键冲突时回滚这一点,调用方其余事务不受影响。
+    confirmation = _prepare_confirmation(
+        db, workspace_id=workspace_id, tool=tool, payload=payload, actor_id=user.id,
+        requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id,
     )
+    try:
+        with db.begin_nested():
+            db.add(confirmation)
+            db.flush()
+            db.refresh(confirmation)
+    except IntegrityError:
+        existing = _for_tool_call(db, session_id, tool_call_id)
+        if existing is not None:
+            return existing
+        raise
     # 该不该不问就执行。判定就地做完(全是本地查询),执行交给后台线程 —— 放行了就不必再问用户,
     # 飞书那边也不用推一张没人需要点的卡。
     if autopilot.consider(db, user, confirmation):

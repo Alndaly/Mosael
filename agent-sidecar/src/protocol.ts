@@ -87,6 +87,8 @@ export interface GatewayCompletionRequest {
 export interface SteerRequest {
   type: "steer";
   turnId: string;
+  /** 本次插话请求 id；回执原样带回，防止迟到回执错配。 */
+  requestId: string;
   prompt: string;
   /** Mosael 的队列消息 id；sidecar 在模型真正消费这条 steer 时原样回传。 */
   steerId?: string;
@@ -108,6 +110,8 @@ export interface SteerRequest {
 export interface QueueRequest {
   type: "queue";
   turnId: string;
+  /** 本次队列声明请求 id；回执原样带回。 */
+  requestId: string;
   items: QueuedSteer[];
 }
 
@@ -122,6 +126,8 @@ export interface QueuedSteer {
 export interface AbortRequest {
   type: "abort";
   turnId: string;
+  /** 本次停止请求 id；回执原样带回。 */
+  requestId: string;
 }
 
 /** 只压缩,不对话。对应界面上的「立即压缩」—— 用户想主动整理上下文,而不是先发一句话。 */
@@ -231,7 +237,7 @@ export type Event =
        *  压缩必须被看见,否则用户不知道早期消息已经不在上下文里了。 */
       compaction?: { droppedMessages: number; tokensBefore: number; tokensAfter: number; summary: string } | null;
     }
-  | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
+  | { type: "queued"; turnId: string; requestId: string; mode: "steer" | "follow_up"; pending: boolean }
   | { type: "steer_applied"; turnId: string; steerId: string }
   | { type: "aborted"; turnId: string }
   //: 这一轮开始 / 结束等人(批确认卡、答选择卡)。后端在等人的那段时间停掉整轮时限的表:人慢慢看卡不该把这一轮判成超时。
@@ -239,7 +245,7 @@ export type Event =
   | { type: "awaiting_user"; turnId: string; waiting: boolean }
   //: abort 帧的**回执**,和 `aborted` 是两件事:`aborted` 要等 Agent 真的停下来才发,
   //: 回答不了「你收到了吗」。accepted=false 意味着那一轮已经结束,没有东西可停。
-  | { type: "aborted_ack"; turnId: string; accepted: boolean }
+  | { type: "aborted_ack"; turnId: string; requestId: string; accepted: boolean }
   | { type: "credential_refreshed"; turnId: string; refreshed: boolean }
   | { type: "gateway_done"; turnId: string; text: string; usage?: Record<string, unknown> }
   | {
@@ -248,6 +254,8 @@ export type Event =
       sessionState: unknown;
       context?: { tokens: number; window: number };
       compaction?: { droppedMessages: number; tokensBefore: number; tokensAfter: number; summary: string } | null;
+      /** 摘要这次模型调用的真实用量；轮前压缩则并入 turn_done.usage。 */
+      usage?: Record<string, unknown>;
     }
   //: 失败也要把 sessionState 交出来。pi 的一轮**跑完了**才带 errorMessage(它不抛异常,
   //: 把失败记在最后一条 assistant 消息上),此时工具可能已经调过很多次、副作用已经落库。

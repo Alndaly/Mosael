@@ -14,7 +14,7 @@ import threading
 from app.ai.sidecar import pi_client
 from app.ai.sidecar.pi_client import CompactionResult, TurnResult
 from app.core.db import SessionLocal
-from app.db.models import AgentMessage, AgentSession
+from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
 from app.domain.agent import host
 from tests.test_agent_queue import _session, _wait_idle, _wait_until
 from tests.util import fresh_client
@@ -89,3 +89,30 @@ def test_正在回答时不压_压完或压失败都放开这段对话(monkeypat
     assert failed.status_code == 502
     with SessionLocal() as db:
         assert db.get(AgentSession, sid).status == "idle", "压缩失败之后这段对话一直被占着"
+
+
+def test_手动压缩的摘要调用进入现有用量账_一次压缩只记一笔(monkeypatch) -> None:
+    monkeypatch.setattr(
+        host,
+        "compact_session",
+        lambda **_kwargs: CompactionResult(
+            adapter_state=[{"role": "user", "content": "【交接说明】早期对话"}],
+            context=None,
+            compaction={"droppedMessages": 2, "tokensBefore": 900, "tokensAfter": 100, "summary": "早期对话"},
+            usage={"requests": 1, "input_tokens": 120, "output_tokens": 30, "total_tokens": 150},
+        ),
+    )
+    client = fresh_client()
+    sid = _session(client)
+
+    response = client.post(f"/api/agent/sessions/{sid}/compact")
+
+    assert response.status_code == 200, response.text
+    with SessionLocal() as db:
+        events = db.query(ProviderUsageEvent).filter(ProviderUsageEvent.operation == "agent_compaction").all()
+        assert len(events) == 1
+        assert events[0].source_type == "agent_session" and events[0].source_id == sid
+        assert events[0].units["requests"] == 1
+        assert events[0].units["input_tokens"] == 120
+        assert events[0].units["output_tokens"] == 30
+        assert events[0].raw_usage["total_tokens"] == 150

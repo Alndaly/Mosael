@@ -337,6 +337,20 @@ def test_斜杠点名的技能全文挂到这一轮_落库带着名字(monkeypat
     assert too_many.status_code == 422
 
 
+def test_点名技能上下文有总字上限_超长时明确截断() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    _create(ws, "huge", body="开始标记\n" + "x" * 60000)
+
+    with SessionLocal() as db:
+        context = runtime.forced_context(db, ws, ["huge"])
+
+    assert len(context) <= runtime.MAX_FORCED_CONTEXT_CHARS
+    assert "开始标记" in context
+    assert "【技能上下文已截断】" in context
+    assert not context.endswith("x" * 100), "不能把整份超长正文原样塞进上下文"
+
+
 # ---------------------------------------------------------------- YAML 子集对着 PyYAML
 
 

@@ -65,8 +65,9 @@ const waitFor = (predicate, label, timeout = 8000) =>
   });
 
 // ① 停一轮根本不存在的:回执要说「没接住」——「按晚了」不是错误,界面上不该报。
-send({ type: "abort", turnId: "ghost" });
+send({ type: "abort", turnId: "ghost", requestId: "abort-ghost-1" });
 const ghost = await waitFor((e) => e.type === "aborted_ack" && e.turnId === "ghost", "ghost 的回执");
+assert.equal(ghost.requestId, "abort-ghost-1", "回执必须关联它回答的那一帧");
 assert.equal(ghost.accepted, false, "不存在的轮次却说停住了");
 
 // ② 派一轮出去,**立刻**按停止 —— 此刻 Agent 几乎肯定还没就绪(buildAllTools 要打一次 HTTP,
@@ -83,9 +84,10 @@ send({
   workspaceId: "w",
   sessionId: "s",
 });
-send({ type: "abort", turnId: "early" });
+send({ type: "abort", turnId: "early", requestId: "abort-early-1" });
 
 const early = await waitFor((e) => e.type === "aborted_ack" && e.turnId === "early", "early 的回执");
+assert.equal(early.requestId, "abort-early-1", "回执必须原样带回请求 id");
 assert.equal(early.accepted, true, "那一轮明明还在,却回了「没有东西可停」—— 按了等于没按");
 
 child.kill();

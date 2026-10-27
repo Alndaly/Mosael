@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.db import Base
 from app.db.model_base import new_id, now
@@ -220,6 +220,13 @@ class ToolConfirmation(Base):
     __table_args__ = (
         Index("idx_tool_confirmations_ws_status", "workspace_id", "status"),
         Index("idx_tool_confirmations_session", "session_id", "status"),
+        Index(
+            "uq_tool_confirmations_session_tool_call",
+            "session_id",
+            "tool_call_id",
+            unique=True,
+            sqlite_where=text("session_id IS NOT NULL AND tool_call_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
