@@ -218,6 +218,7 @@
   "migrate-subtitle-tracks-hide-instead-of-mute": "e354ecb584fc9961",
   "migrate-thumbnails-keep-transparency": "0fb0bdd31f83b469",
   "migrate-tool-confirmations-feishu-message-id": "8449e28b6f789c21",
+  "migrate-tool-confirmations-make-tool-calls-idempotent": "3caa4e9d573bd279",
   "migrate-tool-confirmations-name-their-tool-call": "f6279d7c6e831704",
   "migrate-tool-confirmations-session": "3170dd20dece7a1a",
   "migrate-track-role": "a576216dc9a62e04",

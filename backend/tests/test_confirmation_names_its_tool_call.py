@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import pytest
 import sqlalchemy as sa
 
 from app.core.db import SessionLocal
@@ -103,4 +104,35 @@ def test_迁移给老库的确认卡表补上这一列_老卡留空_重跑不动
         columns = {row[1] for row in conn.execute(sa.text("PRAGMA table_info(tool_confirmations)"))}
         assert "tool_call_id" in columns
         assert conn.execute(sa.text("SELECT tool_call_id FROM tool_confirmations WHERE id='old'")).scalar() is None
+    fresh_client()
+
+
+def test_迁移合并重复工具调用并建立唯一索引_重跑不动() -> None:
+    """老库已经有重复卡时，保留最早关联；其余历史卡保留但解除 tool_call_id 绑定。"""
+    from app.core.db import engine
+    from app.db import migrations
+
+    fresh_client()
+    with engine.begin() as conn:
+        conn.execute(sa.text("DROP TABLE tool_confirmations"))
+        conn.execute(sa.text(
+            "CREATE TABLE tool_confirmations (id VARCHAR(64) PRIMARY KEY, session_id VARCHAR(64), tool_call_id VARCHAR(128))"
+        ))
+        conn.execute(sa.text(
+            "INSERT INTO tool_confirmations (id, session_id, tool_call_id) VALUES "
+            "('first', 's', 'call-1'), ('second', 's', 'call-1'), ('other', 's', 'call-2'), ('external', NULL, 'call-1')"
+        ))
+
+    migrations._migrate_tool_confirmations_make_tool_calls_idempotent()
+    migrations._migrate_tool_confirmations_make_tool_calls_idempotent()
+
+    with engine.begin() as conn:
+        rows = conn.execute(sa.text(
+            "SELECT id, tool_call_id FROM tool_confirmations ORDER BY id"
+        )).all()
+        assert rows == [("external", "call-1"), ("first", "call-1"), ("other", "call-2"), ("second", None)]
+        with pytest.raises(sa.exc.IntegrityError):
+            conn.execute(sa.text(
+                "INSERT INTO tool_confirmations (id, session_id, tool_call_id) VALUES ('third', 's', 'call-1')"
+            ))
     fresh_client()

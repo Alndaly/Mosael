@@ -1,5 +1,5 @@
 {
-  "version": 42,
+  "version": 43,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -220,6 +220,7 @@
     "migrate-subtitle-tracks-hide-instead-of-mute",
     "migrate-thumbnails-keep-transparency",
     "migrate-tool-confirmations-feishu-message-id",
+    "migrate-tool-confirmations-make-tool-calls-idempotent",
     "migrate-tool-confirmations-name-their-tool-call",
     "migrate-tool-confirmations-session",
     "migrate-track-role",

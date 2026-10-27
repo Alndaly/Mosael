@@ -43,6 +43,7 @@
 | `app/domain/plugins/registry.py:_INSTALL_LOCK` | 同一时刻只换一个插件目录 | 两个进程同时装同一个插件:两边都判「还没装」,一个把目录挪进另一个里面去。 |
 | `app/core/secrets_at_rest.py:_lock` | 第一次取主密钥(标准输入只读一次;没配也没交的话在数据目录建一把) | 两个进程都没找到密钥文件时各建一把,盘上留下后写的那把 —— 先写那把加密进库的凭据从此解不开。配了 `MOSAEL_SECRET_KEY`(或桌面版从标准输入交)就没有这件事。 |
 | `app/core/rate_limit.py:WindowLimiter._events` | 远程部署的登录、OAuth 与计费操作限流窗口 | 两个进程各有自己的计数，同一客户端可在每个进程分别用满额度。当前单进程拓扑下限额准确；横向扩展时必须先把这份窗口搬到共享存储或入口网关。 |
+| `app/domain/model_library.py:_pending_downloads` | 模型下载在「查重 → flush → 外层提交」窗口内的 (连接, 目录, 文件名) 占位 | 两个进程各自占位，仍可能给同一个 `.part` 建出两条任务；插件的 O_EXCL 锁是最后防线。重启后由数据库里的 queued/running 行接管查重。 |
 
 > **飞书长连接的子进程怎么起**:打包版的后端是冻结二进制、盘上没有 `app` 包,所以
 > `python -m app.integrations.feishu.worker` 在那一版里必然 `ModuleNotFoundError`(2026-10-23:
@@ -225,7 +226,7 @@
   `app/domain/blender/bridge.py:_guard`(守 `_locks` 这张表本身)、`app/domain/jobs.py:_CHILDREN_LOCK`、`app/domain/providers/auth.py:_lock`、
   `app/domain/voices/remote.py:_locks_guard`(守 `_copy_locks` 这张表本身)
 - `app/domain/local_services/installer.py:_registry_lock`、`app/domain/local_services/supervisor.py:_registry_lock`
-- `app/domain/model_library.py:_lock`、`app/domain/model_nsfw_local.py:_lock`、`app/domain/model_previews.py:_lock`、
+- `app/domain/model_library.py:_lock`、`app/domain/model_library.py:_download_submit_lock`、`app/domain/model_nsfw_local.py:_lock`、`app/domain/model_previews.py:_lock`、
   `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、
   `app/domain/media_tools.py:_status_lock`(探 ffmpeg 一次一个:启动时的后台探测和管理页的「重新检测」可能撞上)
   `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、

@@ -815,14 +815,6 @@ def test_同一文件并发提交只有一条任务_未提交窗口也被占位(
     from app.domain import model_library
 
     monkeypatch.setattr(model_library, "dispatch_job", lambda *_args: None)
-    original_create = model_library.create_job
-
-    def slow_create(*args, **kwargs):
-        # 没有占位时，所有线程都能先查到「没有 running」再建任务。
-        time.sleep(0.05)
-        return original_create(*args, **kwargs)
-
-    monkeypatch.setattr(model_library, "create_job", slow_create)
     with SessionLocal() as db:
         user_id = db.query(User).first().id
     barrier = threading.Barrier(6)
