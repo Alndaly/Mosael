@@ -871,6 +871,11 @@ export class AccountViewManager {
     this.visibleWebContents()?.focus();
   }
 
+  /** 键盘交回 Mosael 的渲染层(点在工作台那一列、发布顶栏等壳里之后)。 */
+  focusHost(): void {
+    this.hostWebContents()?.focus();
+  }
+
   /** 主窗口自己的网页(Mosael 的界面)。 */
   private hostWebContents(): Electron.WebContents | null {
     const contents = (this.window as unknown as { webContents?: Electron.WebContents } | null)?.webContents;

@@ -57,6 +57,7 @@ const IPC = Object.freeze({
     publishHostLayer: "publish:hostLayer",
     // 键盘交给前台网页(顶栏、页面列表里点完之后接着打字的是网页)。
     publishFocusPage: "publish:focusPage",
+    publishFocusHost: "publish:focusHost",
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",

@@ -33,6 +33,15 @@ export function installEmbeddedFocus(): () => void {
     }
     visible = state.visible;
   });
+  //: 原生视图亮着时,系统键盘焦点还在网页那边;点进 Mosael 的壳(工作台右列、发布顶栏)不会自动交回来。
+  //: 不交回来的话,壳里选中的文字按 ⌘C 仍由网页处理——复制到的是网页里选中的东西,不是眼前这段文字。
+  const focusHostOnPointer = (event: PointerEvent) => {
+    if (!visible || nativeViewAside()) return;
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest("[data-app-chrome]")) return;
+    void bridge.focusHost?.();
+  };
+  window.addEventListener("pointerdown", focusHostOnPointer, true);
   const stopKeys = listenKeys(
     window,
     (event) => {
@@ -48,6 +57,7 @@ export function installEmbeddedFocus(): () => void {
   return () => {
     stopView();
     stopKeys();
+    window.removeEventListener("pointerdown", focusHostOnPointer, true);
   };
 }
 

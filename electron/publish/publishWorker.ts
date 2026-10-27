@@ -846,6 +846,11 @@ export function snapshotViewPage(): Promise<ForegroundSnapshot | null> {
 export function focusViewPage(): void {
   views?.focusForeground();
 }
+
+/** 键盘交回 Mosael 的渲染层(点在工作台那一列、发布顶栏等壳里之后)。 */
+export function focusHostWindow(): void {
+  views?.focusHost();
+}
 /** 外壳里的悬停说明画到网页上面 / 收起(见 floatLayer)。 */
 export function showFloat(hint: FloatHint): Promise<void> {
   return floatLayer?.show(hint) ?? Promise.resolve();

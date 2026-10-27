@@ -209,6 +209,8 @@ const publishBridge = {
   snapshotPage: () => invoke(IPC.invoke.publishSnapshotPage),
   // Mosael 的整窗浮层(看大图)亮着时前台网页挪到窗口外,收起时放回(原生视图盖在一切 DOM 上)。
   focusPage: () => invoke(IPC.invoke.publishFocusPage),
+  // 点进 Mosael 的壳(工作台右列、发布顶栏)时把键盘交回渲染层;原生视图在前台时会继续拿着焦点。
+  focusHost: () => invoke(IPC.invoke.publishFocusHost),
   // 外壳里的悬停说明画到网页上面(浮层视图):不等回话,跟着说明出、收。
   showFloat: (hint) => ipcRenderer.send(IPC.send.floatShow, hint),
   hideFloat: (id) => ipcRenderer.send(IPC.send.floatHide, id ? { id } : {}),

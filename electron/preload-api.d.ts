@@ -182,6 +182,8 @@ export interface MosaelPublishBridge {
   snapshotPage(): Promise<PageSnapshot | null>;
   /** 键盘交给前台网页(顶栏、页面列表里用鼠标点完之后,接着打字的该是网页)。 */
   focusPage(): Promise<void>;
+  /** 点进 Mosael 的壳之后,把键盘交回渲染层(原生视图在前台时不会自己交回来)。 */
+  focusHost(): Promise<void>;
   /**
    * 内嵌浏览器外壳(顶栏、页面列表、侧栏)里的悬停说明交给浮层视图,画在原生网页视图上面(DOM 画不上去)。
    * 渲染层量好位置、序列化好内容交过来(见 components/ui/floatLayer);收起时给同一个 id。

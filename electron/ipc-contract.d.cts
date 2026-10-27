@@ -38,6 +38,7 @@ export const IPC: {
     publishHostLayer: "publish:hostLayer";
     publishOverlay: "publish:overlay";
     publishFocusPage: "publish:focusPage";
+    publishFocusHost: "publish:focusHost";
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
     browserClearProfile: "browser:clearProfile";

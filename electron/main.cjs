@@ -1442,6 +1442,7 @@ app.whenReady().then(async () => {
   //: 声明式让位(P2):一条通道承载所有浮层的「请原生视图让开」,见 publish/hostLayers。
   handle(IPC.invoke.publishHostLayer, (_e, payload) => requirePublish().setHostLayer(parseHostLayer(payload)));
   handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());
+  handle(IPC.invoke.publishFocusHost, () => requirePublish().focusHostWindow());
   // 内嵌浏览器外壳里的悬停说明:交给浮层视图画在网页上面 / 收起(只收主窗口自己发来的,listen 那一道已经认过)。
   listen(IPC.send.floatShow, (_event, payload) => {
     if (publish) void publish.showFloat(parseFloatShow(payload));

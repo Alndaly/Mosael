@@ -12,6 +12,7 @@ import { installEmbeddedFocus, pageAfterPointer } from "./embeddedFocus";
 type ViewState = { visible: boolean; accountId: string | null; accountName: string | null };
 let listeners: Array<(state: ViewState) => void> = [];
 const focusPage = vi.fn(async () => undefined);
+const focusHost = vi.fn(async () => undefined);
 const emit = (state: ViewState) => act(() => listeners.forEach((listener) => listener(state)));
 const frame = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)));
 let uninstall = () => undefined as void;
@@ -19,6 +20,7 @@ let uninstall = () => undefined as void;
 beforeEach(() => {
   listeners = [];
   focusPage.mockClear();
+  focusHost.mockClear();
   document.body.innerHTML = `
     <div role="dialog"><button id="opener">在工作台里打开</button><button id="other">别的</button></div>
     <div data-app-chrome=""><input id="address" aria-label="地址栏" /><button id="back">返回 Mosael</button></div>`;
@@ -26,6 +28,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       focusPage,
+      focusHost,
       onViewState: (callback: (state: ViewState) => void) => {
         listeners.push(callback);
         return () => {
@@ -119,6 +122,19 @@ describe("网页亮着时按 ⌘K(ADR 0051 D36)", () => {
     expect(onKey).toHaveBeenCalledTimes(1);
     expect(focusPage).toHaveBeenCalled();
     document.removeEventListener("keydown", onKey);
+  });
+});
+
+describe("点进 Mosael 的壳,键盘先交回渲染层", () => {
+  it("网页亮着时点工作台那一列/顶栏:先 focusHost,再决定要不要交给网页;点壳外不动", () => {
+    show();
+    fireEvent.pointerDown(byId("address"));
+    expect(focusHost).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(document.body);
+    expect(focusHost).toHaveBeenCalledTimes(1);
+    hide();
+    fireEvent.pointerDown(byId("address"));
+    expect(focusHost).toHaveBeenCalledTimes(1);
   });
 });
 

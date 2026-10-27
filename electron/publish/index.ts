@@ -23,6 +23,7 @@ export {
   snapshotViewPage,
   showFloat,
   focusViewPage,
+  focusHostWindow,
   hideFloat,
   showToasts,
   hideToasts,
