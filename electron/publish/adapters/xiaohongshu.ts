@@ -5,7 +5,7 @@ import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOpt
 import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { SELECTORS } from "../selectors";
-import { contractFor } from "../contracts";
+import { contractFor, fieldsFor } from "../contracts";
 import { AutomationBlockedError } from "../errors";
 import { clearOverlays } from "../overlays";
 import { linesEntered, successVisible } from "../verify";
@@ -61,6 +61,9 @@ export class XiaohongshuAdapter implements PublishAdapter {
   private readonly s = SELECTORS.xiaohongshu;
   /** 页面契约:入口 / 提交 / 成功信号 / 浮层都从这儿来,适配器只管小红书特有的动作。 */
   private readonly c = contractFor("xiaohongshu");
+  private get f() {
+    return fieldsFor(this.c, this.task.contentKind);
+  }
 
   constructor(
     private readonly driver: PageDriver,
@@ -82,7 +85,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         .waitTextEnabledDeep(this.s.articleNewText, 15_000, {})
         .catch(() => false);
       await clickTextPreferTrusted(this.driver, this.s.articleNewText, { exact: true });
-      const ready = await this.driver.cssVisible(this.s.articleTitle, 20_000).catch(() => false);
+      const ready = await this.driver.cssVisible(this.f.title, 20_000).catch(() => false);
       if (!ready) {
         await plogPageState("Xiaohongshu long-article editor missing:", this.driver);
         throw publishError("xiaohongshu", "publishErr_editorMissing");
@@ -179,7 +182,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT);
     await this.driver.setFiles(this.s.fileInput, videoPath);
     // Editor fields render once the upload is accepted; wait for the title.
-    const ready = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
+    const ready = await this.driver.cssVisible(this.f.title, UPLOAD_TIMEOUT);
     if (!ready) {
       throw publishError("xiaohongshu", "publishErr_editorMissing");
     }
@@ -202,7 +205,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
       (await this.driver.cssAttached(this.s.imageFileInput, ACTION_TIMEOUT)) ? this.s.imageFileInput : this.s.fileInput;
     await this.driver.fileInputAttached(input, ACTION_TIMEOUT);
     await this.driver.setFiles(input, paths);
-    const ready = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
+    const ready = await this.driver.cssVisible(this.f.title, UPLOAD_TIMEOUT);
     if (!ready) {
       throw publishError("xiaohongshu", "publishErr_editorMissing");
     }
@@ -234,12 +237,12 @@ export class XiaohongshuAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     if (this.task.contentKind === "article") {
-      await this.driver.cssVisible(this.s.articleEditor, ACTION_TIMEOUT);
-      if (!(await this.driver.clearRichEditor(this.s.articleEditor))) {
+      await this.driver.cssVisible(this.f.body, ACTION_TIMEOUT);
+      if (!(await this.driver.clearRichEditor(this.f.body))) {
         throw publishError("xiaohongshu", "publishErr_editorNotEmpty");
       }
-      await this.driver.insertTextLines(this.s.articleEditor, value);
-      const shown = await this.driver.cssValue(this.s.articleEditor);
+      await this.driver.insertTextLines(this.f.body, value);
+      const shown = await this.driver.cssValue(this.f.body);
       const squash = (text: string) => text.replace(/\s+/g, "");
       if (!squash(shown ?? "").includes(squash(value).slice(0, 40))) {
         await plogPageState("Xiaohongshu long-article body mismatch:", this.driver);
@@ -247,30 +250,30 @@ export class XiaohongshuAdapter implements PublishAdapter {
       }
       return;
     }
-    await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
+    await this.driver.cssVisible(this.f.body, ACTION_TIMEOUT);
     //: **先清干净**:小红书会恢复上一次的草稿,旧字不清掉、新字插进去就是搅在一起
     //: (真机 2026-10-23:正文里混着上一轮的字,校验永远不成立)。
-    if (!(await this.driver.clearRichEditor(this.s.contentEditor))) {
+    if (!(await this.driver.clearRichEditor(this.f.body))) {
       throw publishError("xiaohongshu", "publishErr_editorNotEmpty");
     }
     await typeOrFill(
       this.driver,
       "xiaohongshu body",
-      this.s.contentEditor,
+      this.f.body,
       value,
       async () => {
-        await this.driver.focusAndClearField(this.s.contentEditor);
-        await this.driver.insertText(this.s.contentEditor, value);
+        await this.driver.focusAndClearField(this.f.body);
+        await this.driver.insertText(this.f.body, value);
       },
       //: **逐行打**(每行一个真实回车):整段塞进去时,换行会先当普通文字、事后才一次性成段,
       //: 看着就是「先出现一整段、然后一瞬间全部换行」(维护者 2026-10-23)。
       async () => {
-        await this.driver.pointerClickCss(this.s.contentEditor).catch(() => undefined);
-        await this.driver.focusAndClearField(this.s.contentEditor);
+        await this.driver.pointerClickCss(this.f.body).catch(() => undefined);
+        await this.driver.focusAndClearField(this.f.body);
         await this.driver.typeLines(value);
       },
     );
-    const { ok, matched, total } = await linesEntered(this.driver, this.s.contentEditor, value);
+    const { ok, matched, total } = await linesEntered(this.driver, this.f.body, value);
     if (!ok) {
       if (matched === 0) throw publishError("xiaohongshu", "publishErr_descriptionRejected");
       throw publishError("xiaohongshu", "publishErr_bodyPartial", { matched, total });
@@ -298,26 +301,26 @@ export class XiaohongshuAdapter implements PublishAdapter {
   async fillTitle(title: string): Promise<void> {
     if (this.task.contentKind === "article") {
       const value = title.slice(0, 64);
-      await this.driver.cssVisible(this.s.articleTitle, ACTION_TIMEOUT);
-      await this.driver.fillField(this.s.articleTitle, value);
-      const current = await this.driver.cssValue(this.s.articleTitle);
+      await this.driver.cssVisible(this.f.title, ACTION_TIMEOUT);
+      await this.driver.fillField(this.f.title, value);
+      const current = await this.driver.cssValue(this.f.title);
       if (!current?.includes(value)) throw publishError("xiaohongshu", "publishErr_titleRejected");
       return;
     }
     const value = title.slice(0, 20);
-    await this.driver.cssVisible(this.s.titleInput, ACTION_TIMEOUT);
-    await typeOrFill(this.driver, "xiaohongshu title", this.s.titleInput, value, () =>
-      this.driver.fillCss(this.s.titleInput, value),
+    await this.driver.cssVisible(this.f.title, ACTION_TIMEOUT);
+    await typeOrFill(this.driver, "xiaohongshu title", this.f.title, value, () =>
+      this.driver.fillCss(this.f.title, value),
     );
     const accepted = await this.driver.waitForFunction(
       `(() => {
-        const el = document.querySelector(${JSON.stringify(this.s.titleInput)});
+        const el = document.querySelector(${JSON.stringify(this.f.title)});
         return el && el.value === ${JSON.stringify(value)};
       })()`,
       3_000,
       200,
     );
-    const current = await this.driver.cssValue(this.s.titleInput);
+    const current = await this.driver.cssValue(this.f.title);
     if (!accepted || current !== value) {
       throw publishError("xiaohongshu", "publishErr_titleRejected");
     }
@@ -330,14 +333,14 @@ export class XiaohongshuAdapter implements PublishAdapter {
     //: 文字打两次(维护者 2026-10-23:「会打两遍输入框文案」),而且第二遍的校验还可能不过。
     const description = this.task.contentKind === "video" ? stringOption(this.task, "description") : "";
     if (description) {
-      await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
-      await typeOrFill(this.driver, "xiaohongshu desc", this.s.contentEditor, description, async () => {
-        await this.driver.focusAndClearField(this.s.contentEditor);
-        await this.driver.insertText(this.s.contentEditor, description);
+      await this.driver.cssVisible(this.f.body, ACTION_TIMEOUT);
+      await typeOrFill(this.driver, "xiaohongshu desc", this.f.body, description, async () => {
+        await this.driver.focusAndClearField(this.f.body);
+        await this.driver.insertText(this.f.body, description);
       });
-      await this.driver.insertText(this.s.contentEditor, " ");
+      await this.driver.insertText(this.f.body, " ");
       const accepted = await this.driver.waitForFunction(
-        this.acceptsTextExpression(this.s.contentEditor, description),
+        this.acceptsTextExpression(this.f.body, description),
         3_000,
         200,
       );
@@ -363,7 +366,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     if (!usable.length) {
       return;
     }
-    await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
+    await this.driver.cssVisible(this.f.tags, ACTION_TIMEOUT);
     for (const tag of usable) {
       const normalizedTag = tag;
       //: **每个标签单独一行**再逐字打(维护者:「标签最好应该换行输入」)。挤在同一行里,
@@ -386,7 +389,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         plog("xiaohongshu tag skipped (topic text rejected):", normalizedTag);
         await this.driver
           .evaluate(`(() => {
-            const editor = document.querySelector(${JSON.stringify(this.s.contentEditor)});
+            const editor = document.querySelector(${JSON.stringify(this.f.tags)});
             if (!editor) return false;
             const range = document.createRange();
             range.selectNodeContents(editor);
@@ -445,7 +448,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
       if (!selected && !(await this.hasTopicChip(normalizedTag))) {
         throw publishError("xiaohongshu", "publishErr_tagRejected", { tag: normalizedTag });
       }
-      await this.driver.insertText(this.s.contentEditor, " ");
+      await this.driver.insertText(this.f.tags, " ");
     }
   }
 
@@ -776,7 +779,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         .evaluate<{ backToEditor: boolean; titleEmpty: boolean }>(`(() => {
           const url = location.href;
           const isEditor = /\/publish\/publish|\/new\/publish/.test(url);
-          const title = document.querySelector(${JSON.stringify(this.s.titleInput)});
+          const title = document.querySelector(${JSON.stringify(this.f.title)});
           return { backToEditor: Boolean(isEditor), titleEmpty: !title || !(title.value || '').trim() };
         })()`)
         .catch(() => null);

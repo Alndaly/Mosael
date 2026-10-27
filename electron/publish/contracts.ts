@@ -1,15 +1,22 @@
 /**
  * 各平台的页面契约(见 contract.ts 的说明)。**这是平台事实的唯一手写处**:
- * 页面词表仍在 selectors 里(CSS/文案),形状怎么落、怎么算成功、哪些浮层要关,在这里。
+ * 页面词表仍在 selectors 里(CSS/文案),形状怎么落、怎么算成功、哪些浮层要关、每种形状填哪些
+ * 字段,在这里。适配器的填表动作只经 `fieldsFor` 取字段。
  */
 import { resolvePlatform, type SupportedPlatform } from "./platforms";
-import type { PlatformContract } from "./contract";
+import type { PlatformContract, PlatformFields } from "./contract";
+import type { ContentKind } from "./types";
 import { SELECTORS } from "./selectors";
 
 const xhs = SELECTORS.xiaohongshu;
 const douyin = SELECTORS.douyin;
 
 const XIAOHONGSHU: PlatformContract = {
+  fields: {
+    video: { title: xhs.titleInput, body: xhs.contentEditor, tags: xhs.contentEditor, description: xhs.contentEditor },
+    "image-text": { title: xhs.titleInput, body: xhs.contentEditor, tags: xhs.contentEditor, description: xhs.contentEditor },
+    article: { title: xhs.articleTitle, body: xhs.articleEditor, tags: xhs.articleEditor, description: xhs.articleEditor },
+  },
   entry: {
     video: {
       url: `${resolvePlatform("xiaohongshu").publishUrl}?from=homepage&target=video`,
@@ -40,6 +47,21 @@ const XIAOHONGSHU: PlatformContract = {
 };
 
 const DOUYIN: PlatformContract = {
+  fields: {
+    video: { title: douyin.titleInput, body: douyin.descEditor, tags: douyin.descEditor, description: douyin.descEditor },
+    "image-text": {
+      title: douyin.imageTitleInput,
+      body: douyin.imageDescEditor,
+      tags: douyin.imageDescEditor,
+      description: douyin.imageDescEditor,
+    },
+    article: {
+      title: douyin.articleTitleInput,
+      body: douyin.articleEditor,
+      tags: douyin.articleEditor,
+      description: douyin.articleSummaryInput,
+    },
+  },
   entry: {
     video: { url: resolvePlatform("douyin").publishUrl, acceptExtensions: [".mp4", ".mov"] },
     "image-text": {
@@ -70,6 +92,21 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
   xiaohongshu: XIAOHONGSHU,
   douyin: DOUYIN,
   "weixin-channels": {
+    fields: {
+      video: {
+        title: SELECTORS.weixinChannels.descEditor,
+        body: SELECTORS.weixinChannels.descEditor,
+        tags: SELECTORS.weixinChannels.descEditor,
+        description: SELECTORS.weixinChannels.descEditor,
+        shortTitle: SELECTORS.weixinChannels.shortTitleInput,
+      },
+      "image-text": {
+        title: SELECTORS.weixinChannels.imageTitleInput,
+        body: SELECTORS.weixinChannels.imageDescEditor,
+        tags: SELECTORS.weixinChannels.imageDescEditor,
+        description: SELECTORS.weixinChannels.imageDescEditor,
+      },
+    },
     entry: {
       video: { url: resolvePlatform("weixin-channels").publishUrl },
       //: 图文是另一页「发表动态」:表单整个在 `empty.html` 那个 iframe 里(适配器用 inFrame 进去)。
@@ -87,6 +124,20 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   bilibili: {
+    fields: {
+      video: {
+        title: SELECTORS.bilibili.titleInput,
+        body: SELECTORS.bilibili.descEditor,
+        tags: SELECTORS.bilibili.tagInput,
+        description: SELECTORS.bilibili.descEditor,
+      },
+      article: {
+        title: SELECTORS.bilibili.articleTitle,
+        body: SELECTORS.bilibili.articleEditor,
+        tags: SELECTORS.bilibili.articleEditor,
+        description: SELECTORS.bilibili.articleEditor,
+      },
+    },
     entry: {
       video: { url: resolvePlatform("bilibili").publishUrl },
       //: 专栏:一套独立的编辑器页面(编辑器在 `read-editor` iframe 里,适配器用 inFrame 进去)。
@@ -105,6 +156,20 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   tiktok: {
+    fields: {
+      video: {
+        title: SELECTORS.tiktok.captionEditor,
+        body: SELECTORS.tiktok.captionEditor,
+        tags: SELECTORS.tiktok.captionEditor,
+        description: SELECTORS.tiktok.captionEditor,
+      },
+      "image-text": {
+        title: SELECTORS.tiktok.captionEditor,
+        body: SELECTORS.tiktok.captionEditor,
+        tags: SELECTORS.tiktok.captionEditor,
+        description: SELECTORS.tiktok.captionEditor,
+      },
+    },
     entry: {
       video: { url: resolvePlatform("tiktok").publishUrl },
       //: 照片档是同一个投稿页的另一个 tab(`?tab=photo`),直连过去最稳。
@@ -124,6 +189,26 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   x: {
+    fields: {
+      video: {
+        title: SELECTORS.x.textEditor,
+        body: SELECTORS.x.textEditor,
+        tags: SELECTORS.x.textEditor,
+        description: SELECTORS.x.textEditor,
+      },
+      "image-text": {
+        title: SELECTORS.x.textEditor,
+        body: SELECTORS.x.textEditor,
+        tags: SELECTORS.x.textEditor,
+        description: SELECTORS.x.textEditor,
+      },
+      article: {
+        title: SELECTORS.x.articleTitle,
+        body: SELECTORS.x.articleEditor,
+        tags: SELECTORS.x.articleEditor,
+        description: SELECTORS.x.articleEditor,
+      },
+    },
     entry: {
       video: { url: resolvePlatform("x").publishUrl },
       //: 图文和视频是**同一个撰写页、同一个文件框**(X 的文件框图片与视频一起收)。
@@ -143,6 +228,7 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   mock: {
+    fields: { video: { title: "#status", body: "#status", tags: "#status" } },
     entry: { video: { url: "about:blank" } },
     fileInput: { video: "input[type='file']" },
     submitText: SELECTORS.x.postTexts[0],
@@ -151,6 +237,14 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   youtube: {
+    fields: {
+      video: {
+        title: SELECTORS.youtube.titleBox,
+        body: SELECTORS.youtube.descBox,
+        tags: SELECTORS.youtube.descBox,
+        description: SELECTORS.youtube.descBox,
+      },
+    },
     entry: { video: { url: resolvePlatform("youtube").publishUrl } },
     fileInput: { video: SELECTORS.youtube.fileInput },
     submitText: SELECTORS.youtube.doneButton,
@@ -162,4 +256,11 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
 /** 这个平台的契约。 */
 export function contractFor(platform: string): PlatformContract {
   return PUBLISH_CONTRACTS[resolvePlatform(platform).id];
+}
+
+/** 某个内容形状的字段 selector。契约缺这一项属于装配错误，必须立即失败而不是猜选择器。 */
+export function fieldsFor(contract: PlatformContract, kind: ContentKind): PlatformFields {
+  const fields = contract.fields[kind];
+  if (!fields) throw new Error(`publish contract fields missing for ${kind}`);
+  return fields;
 }

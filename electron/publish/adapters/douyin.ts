@@ -3,7 +3,7 @@ import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_PUBLISH_VIDEO, UPLOAD_TIMEOUT, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
-import { contractFor } from "../contracts";
+import { contractFor, fieldsFor } from "../contracts";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
 import { clearOverlays } from "../overlays";
@@ -21,6 +21,9 @@ export class DouyinAdapter implements PublishAdapter {
   private readonly s = SELECTORS.douyin;
   /** 页面契约:入口 / 提交 / 成功信号 / 浮层都从这儿来。 */
   private readonly c = contractFor("douyin");
+  private get f() {
+    return fieldsFor(this.c, this.task.contentKind);
+  }
 
   constructor(
     private readonly driver: PageDriver,
@@ -78,7 +81,7 @@ export class DouyinAdapter implements PublishAdapter {
       500,
     );
     if (!landed) throw publishError("douyin", "publishErr_editorMissing");
-    await this.driver.cssVisible(this.s.imageTitleInput, UPLOAD_TIMEOUT);
+    await this.driver.cssVisible(this.f.title, UPLOAD_TIMEOUT);
     await this.clearStuckOverlays();
   }
 
@@ -118,12 +121,12 @@ export class DouyinAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     if (this.isArticle) {
-      await this.driver.cssVisible(this.s.articleEditor, ACTION_TIMEOUT);
-      if (!(await this.driver.clearRichEditor(this.s.articleEditor))) {
+      await this.driver.cssVisible(this.f.body, ACTION_TIMEOUT);
+      if (!(await this.driver.clearRichEditor(this.f.body))) {
         throw publishError("douyin", "publishErr_editorNotEmpty");
       }
-      await this.driver.insertTextLines(this.s.articleEditor, value);
-      const shown = await this.driver.cssValue(this.s.articleEditor);
+      await this.driver.insertTextLines(this.f.body, value);
+      const shown = await this.driver.cssValue(this.f.body);
       const squash = (text: string) => text.replace(/\s+/g, "");
       if (!squash(shown ?? "").includes(squash(value).slice(0, 40))) {
         await plogPageState("Douyin article body mismatch:", this.driver);
@@ -131,7 +134,7 @@ export class DouyinAdapter implements PublishAdapter {
       }
       return;
     }
-    const selector = this.s.imageDescEditor;
+    const selector = this.f.body;
     await this.driver.cssVisible(selector, ACTION_TIMEOUT);
     //: **先把它清干净再打**。抖音的正文编辑器会恢复上一次的字(平台自己存草稿),而原来那套
     //: 清空(`execCommand selectAll + delete`)在它身上静默失败 —— 于是新字插进旧字中间,得到
@@ -192,13 +195,13 @@ export class DouyinAdapter implements PublishAdapter {
   async fillTitle(title: string): Promise<void> {
     if (this.isArticle) {
       const value = title.slice(0, 30);
-      await this.driver.cssVisible(this.s.articleTitleInput, ACTION_TIMEOUT);
-      await this.driver.fillField(this.s.articleTitleInput, value);
-      const current = await this.driver.cssValue(this.s.articleTitleInput);
+      await this.driver.cssVisible(this.f.title, ACTION_TIMEOUT);
+      await this.driver.fillField(this.f.title, value);
+      const current = await this.driver.cssValue(this.f.title);
       if (!current?.includes(value)) throw publishError("douyin", "publishErr_titleRejected");
       return;
     }
-    const selector = this.task.contentKind === "image-text" ? this.s.imageTitleInput : this.s.titleInput;
+    const selector = this.f.title;
     await this.driver.cssVisible(selector, ACTION_TIMEOUT);
     //: 图文标题上限 20(真机 0/20),视频那一档是 30。
     const value = title.slice(0, this.task.contentKind === "image-text" ? 20 : 30);
@@ -207,7 +210,7 @@ export class DouyinAdapter implements PublishAdapter {
 
   /** 描述/正文那一格:视频是 `作品描述`,图文是 `添加作品描述...` —— 同一个编辑器家族的两种壳。 */
   private get descField(): string {
-    return this.task.contentKind === "image-text" ? this.s.imageDescEditor : this.s.descEditor;
+    return this.f.description ?? this.f.body;
   }
 
   async fillTags(tags: string[]): Promise<void> {

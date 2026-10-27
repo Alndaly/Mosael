@@ -6,7 +6,7 @@ import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
 import { awaitResult } from "../verify";
-import { contractFor } from "../contracts";
+import { contractFor, fieldsFor } from "../contracts";
 
 export class BilibiliAdapter implements PublishAdapter {
 
@@ -33,6 +33,9 @@ export class BilibiliAdapter implements PublishAdapter {
   private readonly s = SELECTORS.bilibili;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
   private readonly c = contractFor("bilibili");
+  private get f() {
+    return fieldsFor(this.c, this.task.contentKind);
+  }
 
   constructor(
     private readonly driver: PageDriver,
@@ -44,7 +47,7 @@ export class BilibiliAdapter implements PublishAdapter {
       //: 专栏编辑器在 iframe 里,**等里面那格标题出现**才算这一页就绪(外层的导航早就有了)。
       await this.driver.goto(this.entryUrl());
       const inner = this.articleDriver();
-      if (!(await inner.cssVisible(this.s.articleTitle, 20_000).catch(() => false))) {
+      if (!(await inner.cssVisible(this.f.title, 20_000).catch(() => false))) {
         await plogPageState("Bilibili article editor missing:", this.driver);
         throw publishError("bilibili", "publishErr_editorMissing");
       }
@@ -88,7 +91,7 @@ export class BilibiliAdapter implements PublishAdapter {
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
 
-    const editorReady = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
+    const editorReady = await this.driver.cssVisible(this.f.title, UPLOAD_TIMEOUT);
     if (!editorReady) {
       throw publishError("bilibili", "publishErr_editorMissing");
     }
@@ -159,20 +162,20 @@ export class BilibiliAdapter implements PublishAdapter {
     if (this.isArticle) {
       const value = title.slice(0, 50);
       const inner = this.articleDriver();
-      if (!(await inner.cssVisible(this.s.articleTitle, ACTION_TIMEOUT))) {
+      if (!(await inner.cssVisible(this.f.title, ACTION_TIMEOUT))) {
         throw publishError("bilibili", "publishErr_editorMissing");
       }
-      await inner.fillField(this.s.articleTitle, value);
-      const current = await inner.cssValue(this.s.articleTitle);
+      await inner.fillField(this.f.title, value);
+      const current = await inner.cssValue(this.f.title);
       if (!current?.includes(value)) throw publishError("bilibili", "publishErr_titleRejected");
       return;
     }
     const value = title.slice(0, 80);
-    await this.driver.cssVisible(this.s.titleInput, ACTION_TIMEOUT);
-    await typeOrFill(this.driver, "bilibili title", this.s.titleInput, value, () =>
-      this.driver.fillField(this.s.titleInput, value),
+    await this.driver.cssVisible(this.f.title, ACTION_TIMEOUT);
+    await typeOrFill(this.driver, "bilibili title", this.f.title, value, () =>
+      this.driver.fillField(this.f.title, value),
     );
-    const current = await this.driver.cssValue(this.s.titleInput);
+    const current = await this.driver.cssValue(this.f.title);
     if (!current?.includes(value)) {
       throw publishError("bilibili", "publishErr_titleRejected");
     }
@@ -182,13 +185,13 @@ export class BilibiliAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     const inner = this.articleDriver();
-    if (!(await inner.cssVisible(this.s.articleEditor, ACTION_TIMEOUT))) {
+    if (!(await inner.cssVisible(this.f.body, ACTION_TIMEOUT))) {
       await plogPageState("Bilibili article editor missing:", this.driver);
       throw publishError("bilibili", "publishErr_editorMissing");
     }
-    await inner.focusAndClearField(this.s.articleEditor);
-    await inner.insertTextLines(this.s.articleEditor, value);
-    const shown = await inner.cssValue(this.s.articleEditor);
+    await inner.focusAndClearField(this.f.body);
+    await inner.insertTextLines(this.f.body, value);
+    const shown = await inner.cssValue(this.f.body);
     //: 判定按"字都在"(空白不敏感):tiptap 会按段落重排,行内空白/顺序在它那儿不是问题,
     //: 但**大段缺失**是问题(发布后不能改,少一段就是少一段)。
     const squash = (text: string) => text.replace(/\s+/g, "");
@@ -206,9 +209,9 @@ export class BilibiliAdapter implements PublishAdapter {
 
     const description = stringOption(this.task, "description");
     if (description) {
-      if (await this.driver.cssVisible(this.s.descEditor, 5_000)) {
-        await typeOrFill(this.driver, "bilibili desc", this.s.descEditor, description, () =>
-          this.driver.fillField(this.s.descEditor, description),
+      if (await this.driver.cssVisible(this.f.body, 5_000)) {
+        await typeOrFill(this.driver, "bilibili desc", this.f.body, description, () =>
+          this.driver.fillField(this.f.body, description),
         );
       } else {
         await this.driver.fillInputNearText("简介", description).catch(() => false); // i18n-ok
@@ -452,7 +455,7 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   private async inputTag(tag: string): Promise<boolean> {
-    const focused = await this.driver.focusAndClearField(this.s.tagInput);
+    const focused = await this.driver.focusAndClearField(this.f.tags);
     if (!focused) {
       return false;
     }

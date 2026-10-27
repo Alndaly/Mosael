@@ -5,8 +5,8 @@
  * 里、「发完算什么成功」在适配器自己的 `waitResult` 里、「挡路的浮层怎么关」又是另一套。
  * 加一种形状 / 一个平台就得同时改三处,漏一处就出现"填好了、点不了、或者发成功了却判失败"。
  *
- * 契约只写**事实**,不写流程 —— 流程在执行器(`publishWorker` 的步骤管道)。
- * 平台特有的动作(小红书的逗号成段、抖音的 zone 编辑器、B 站封面)仍留在适配器里。
+ * 契约只写**事实**,不写流程 —— 流程在执行器(`runPublishTask`)。
+ * 标题 / 正文 / 标签等**填表字段**也在这里按内容形状声明(见 `fields`),适配器只做平台特有动作。
  */
 import type { ContentKind } from "./types";
 import type { OverlayRule } from "./overlays";
@@ -26,8 +26,22 @@ export interface KindEntry {
   hint?: string;
 }
 
+export interface PlatformFields {
+  /** 标题输入框;与正文同栏的平台两键指向同一 selector。 */
+  title: string;
+  /** 正文 / 简介输入框。 */
+  body: string;
+  /** 标签输入位置;没有独立标签栏时与正文同栏。 */
+  tags: string;
+  /** 平台额外描述的输入位置(通常是简介或摘要)。 */
+  description?: string;
+  /** 平台额外短标题的输入位置。 */
+  shortTitle?: string;
+}
+
 export interface PlatformContract {
-  /** 入口:按形状。没写的形状 = 适配器还没接(见 `supports`)。 */
+  /** 各内容形状的字段 selector;适配器只从这里取标题、正文和标签位置。 */
+  fields: Partial<Record<ContentKind, PlatformFields>>;
   entry: Partial<Record<ContentKind, KindEntry>>;
   /** 上传入口:按形状挑文件输入框(按 `accept` 区分,**不猜**)。 */
   fileInput: Partial<Record<ContentKind, string>>;

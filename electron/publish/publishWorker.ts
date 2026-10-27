@@ -11,8 +11,6 @@
 //    失败/受阻现场。用 views.visibleAccountId 表达前台是否被占;被占时后台任务不抢,视图仍在,
 //    用户可稍后从任务行「查看页面」再亮出来。
 import { app, type BaseWindow } from "electron";
-import { mkdir, stat as fsStat } from "node:fs/promises";
-import path from "node:path";
 
 import { t as tr } from "../i18n.cjs";
 import {
@@ -24,31 +22,24 @@ import {
   type PanelLayoutChange,
 } from "./accountViews";
 import type { DownloadNotice } from "./downloads";
-import type { ContentKind } from "./types";
-import type { PublishAdapter } from "./adapters/shared";
 import { FloatLayer, type FloatHint, type FloatPointer } from "./floatLayer";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
-import { publishError } from "./adapters/shared";
 import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
 import type { ComfyNavigation, NavigationOutcome } from "./comfyNavigation";
 import { comfyViewOpening, comfyViewShown, setComfyNavigation } from "./comfyViews";
 import type { WorkbenchCall, WorkbenchCallResult, WorkbenchState } from "./comfyWorkbench";
 import { WorkbenchSessions } from "./comfyWorkbenchSessions";
-import { isAutomationBlockedError } from "./errors";
 import { platformName, resolvePlatform } from "./platforms";
-import { SELECTORS } from "./selectors";
-import { clickTextPreferTrusted } from "./adapters/shared";
-import { clearOverlays, type OverlayRule } from "./overlays";
 //: 登录的显式状态机与结构化日志(P3 / P7):失败时要能一眼看出停在哪一步、为什么停。
 import { createLoginFlow } from "./loginPhase.cjs";
 import { createTrace } from "./trace.cjs";
 //: 声明式让位(P2):浮层只说「要哪种让法」,折算成对原生视图的指令在这里做一次。
 import { createHostLayers } from "./hostLayers.cjs";
-import { findPost, postEndpoint } from "./publishedPost";
 import type { PageDriver } from "./pageDriver";
 import type { LiveViewFrame, PublishTask, ViewState } from "./types";
 import * as backend from "./publishBackend";
+import { runPublishTask } from "./runPublishTask";
 
 let views: AccountViewManager | null = null;
 /** ComfyUI 工作台的会话(ADR 0038 §3):主进程轮询内嵌画布里的桥,交给渲染层。 */
@@ -84,9 +75,6 @@ let onSettled: ((info: SettleInfo) => void) | null = null;
 let onFrame: ((frame: LiveViewFrame) => void) | null = null;
 
 const LIVE_TICK_MS = 1000;
-// 面板挂不上时的兜底视口尺寸(CDP Emulation)。与面板模式的布局视口(384/0.3 = 1280×800)取同一档,
-// 平台页面按桌面版布局,不会掉进移动端/窄屏分支。
-const BACKGROUND_VIEWPORT = { width: 1280, height: 800 };
 // 连续这么多次取不到画面就放弃取像(见 LiveMirror.tick)。
 const CAPTURE_ATTEMPTS = 3;
 // 「镜像单槽」:同时最多镜像一个账号。与前台单槽同一个道理——并发时多账号轮流推帧,面板只会来回
@@ -202,10 +190,6 @@ function settle(t: PublishTask, status: string): void {
 
 const POLL_IDLE_MS = 4000;
 const POLL_BUSY_MS = 500;
-// 每步之间的拟人停顿:随机区间而非固定值(固定节奏本身就是一种自动化特征)。桌面版是 1–3s 随机。
-const stepDelay = (): number => 700 + Math.floor(Math.random() * 1100); // 700–1800ms
-
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** 请求前台可见槽:仅当前台空闲(无视图可见)才把该账号亮出并返回 true;被占则不抢(让当前占用者先
  *  处理完),返回 false——视图仍在(表单/现场都在),用户可稍后从任务行「查看页面」再亮出来。 */
@@ -215,364 +199,36 @@ function requestFront(accountId: string): boolean {
   return true;
 }
 
-/** 桌面版 resolveBlockedStatus 的等价:AutomationBlockedError → 任务受阻状态;普通异常 → null(失败)。 */
-function resolveBlockedStatus(
-  error: unknown,
-): "waiting_manual" | "login_required" | "permission_required" | "blocked" | null {
-  if (!isAutomationBlockedError(error)) return null;
-  if (error.reason === "manual_required") return "waiting_manual";
-  if (error.reason === "login_required") return "login_required";
-  if (error.reason === "permission_required") return "permission_required";
-  return "blocked";
-}
-
-/**
- * **内容形状 → 怎么把它传上去**。一张表,不写「不是视频就当图文」那种分支。
- *
- * 加一种形状(文章、播客)时在这里加一行、在适配器里实现对应方法;worker 的主流程一个字都不用动。
- * 表里没有 = 不支持,和适配器声明的 `supports` 一起在动手前拦下。
- */
-const UPLOAD_BY_KIND: Partial<Record<ContentKind, (adapter: PublishAdapter, task: PublishTask) => Promise<void>>> = {
-  //: 视频就是 `mediaPaths` 里那一份(协议里没有单独的"视频路径")。
-  video: (adapter, task) => adapter.uploadVideo(task.mediaPaths[0]),
-  "image-text": (adapter, task) => {
-    if (!adapter.uploadImages) {
-      return Promise.reject(publishError(task.platform, "publishErr_kindNotImplemented", { kind: "image-text" }));
-    }
-    return adapter.uploadImages(task.mediaPaths);
-  },
-  //: 文章是**一篇长文**;有的平台要一张封面(抖音必填),有的不用(小红书按正文自动生成)。
-  //: 适配器声明了 `uploadCover` 就把素材交给它(0 或 1 张),没声明就什么都不做 ——
-  //: 但**必须在表里**:没有它,写作「这一档没实现」,文章就发不出去。
-  article: (adapter, task) => adapter.uploadCover?.(task.mediaPaths) ?? Promise.resolve(),
-};
-
-/** 哪几种形状**有正文栏**要填(视频那档的文案走「简介」)。加形状时改这一行。 */
-const FILLS_BODY: ReadonlySet<ContentKind> = new Set<ContentKind>(["image-text", "article"]);
-
-function toAdapterTask(t: backend.BackendTask): PublishTask {
-  return {
-    id: t.id,
-    accountId: t.account_id,
-    accountName: t.account_name,
-    platform: resolvePlatform(t.platform).id,
-    contentKind: (t.content_kind as "video" | "image-text" | "article" | undefined) ?? "video",
-    mediaPaths: t.media_paths,
-    body: t.body ?? "",
-    title: t.title,
-    tags: t.tags || [],
-    platformOptions: {
-      // 平台自己的选项在前(可见性、允许评论…);下面三个是所有平台共用的,放后面免得被同名键盖掉。
-      ...(t.options ?? {}),
-      description: t.description || "",
-      shortTitle: t.short_title || "",
-    },
-    scheduledAt: null,
-    status: "running",
-    errorMessage: null,
-    screenshotPath: null,
-    createdAt: "",
-    updatedAt: "",
-  };
-}
-
-async function captureFailure(
-  taskId: string,
-  driver: { screenshot: (p: string) => Promise<void> },
-) {
-  try {
-    const dir = path.join(app.getPath("userData"), "publish-screenshots");
-    await mkdir(dir, { recursive: true });
-    const file = path.join(dir, `${taskId}-${Date.now()}.png`);
-    await driver.screenshot(file);
-    return file;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 发布失败时留一份**可判读的现场**(ADR 0078 第一条):卡在哪一步、页面当时是什么样、哪些元素像目标。
- *
- * 为什么不是"再截一张图就够了":2026-10-23 一天撞了三次「我们对那一页的理解错了一点」——
- * 落在视频 tab、判据文案根本不存在、富文本把空格变换行。这三次光看截图都看不出**判据**错在哪,
- * 所以这里连「这一步期望什么、页面上有哪些候选」一起记。
- */
-async function collectFailureForensics(
-  task: PublishTask,
-  driver: PageDriver,
-  error: unknown,
-  stepLabel: string,
-): Promise<void> {
-  try {
-    const facts = await driver.evaluate<{
-      url: string;
-      title: string;
-      text: string;
-      fileAccepts: string[];
-      candidates: { tag: string; text: string; x: number; y: number }[];
-    }>(`(() => {
-      const visible = (e) => {
-        const r = e.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
-      };
-      const candidates = [...document.querySelectorAll("button, [role=button], a, .creator-tab, input, [contenteditable]")]
-        .filter(visible)
-        .slice(0, 40)
-        .map((e) => ({
-          tag: e.tagName.toLowerCase(),
-          text: (e.textContent || e.getAttribute("placeholder") || "").trim().slice(0, 40),
-          x: Math.round(e.getBoundingClientRect().x),
-          y: Math.round(e.getBoundingClientRect().y),
-        }))
-        .filter((one) => one.text);
-      return {
-        url: location.href,
-        title: document.title,
-        text: (document.body?.innerText || "").slice(0, 2000),
-        fileAccepts: [...document.querySelectorAll('input[type="file"]')].map((one) => one.getAttribute("accept") || ""),
-        candidates: candidates.slice(0, 12),
-      };
-    })()`);
-    trace.event("publish-failure", {
-      task: task.id,
-      platform: task.platform,
-      kind: task.contentKind,
-      step: stepLabel,
-      error: (error instanceof Error ? error.message : String(error)).slice(0, 300),
-      ...facts,
-    });
-    plog("publish forensics:", task.id, stepLabel, facts.url.slice(0, 120), `candidates=${facts.candidates.length}`);
-  } catch (failure) {
-    plog("publish forensics failed:", task.id, String(failure).slice(0, 160));
-  }
-}
-
-/** 这一条任务要上传的素材里,第一个**磁盘上没有 / 是空文件**的(给名字)。都齐就 null。 */
-async function firstMissingMedia(task: PublishTask): Promise<string | null> {
-  for (const [index, file] of task.mediaPaths.entries()) {
-    try {
-      const stat = await fsStat(file);
-      if (!stat.isFile() || stat.size === 0) return mediaName(task, index, file);
-    } catch {
-      return mediaName(task, index, file);
-    }
-  }
-  return null;
-}
-
-/** 报错里写哪一份:单份就用任务标题,多份带上序号 —— 用户才知道该换哪张图。 */
-function mediaName(task: PublishTask, index: number, file: string): string {
-  const base = path.basename(file);
-  if (task.mediaPaths.length <= 1) return base;
-  return `${index + 1}/${task.mediaPaths.length} · ${base}`;
-}
-
-/** 跑一条发布任务(后台不可见)。完成时从 running 移除。需要用户在场的时刻(准备好待确认 / 失败现场)
- *  请求前台可见槽:抢到就亮出来,抢不到(前台被别的账号占)也没关系——视图仍在,任务行可再亮。 */
 async function runTask(bt: backend.BackendTask): Promise<void> {
   if (!views) {
     plog("runTask aborted (views=null):", bt.id);
     running.delete(bt.account_id);
     return;
   }
-  plog("runTask start:", bt.id, bt.platform, bt.media_paths.join(", "));
-  //: 同一份身份规则:发布任务走的也是这个账号的视图。
-  //: 老版本/测试替身可能没有这个方法:身份是锦上添花,绝不能让它挡住任务。
-  views?.setAccountPlatform?.(bt.account_id, bt.platform);
-  const t = toAdapterTask(bt);
   const taskViews = views;
-  const driver = taskViews.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
-  const platformLabel = platformName(t.platform);
-  const mirror = new LiveMirror(t.accountId, driver, `${platformLabel} · ${tr("publishStep_preparing")}`);
-  // 每一步同时进日志和实时窗口。这段之前完全不留痕:一次「表单填好了却没投出去」的故障,日志里
-  // 只表现为 checkLogin 之后静默五分钟,画面上也什么都看不到,无从判断卡在上传、填表还是提交。
+  const driver = taskViews.getDriver(bt.account_id);
+  const platformLabel = platformName(resolvePlatform(bt.platform).id);
+  const mirror = new LiveMirror(bt.account_id, driver, `${platformLabel} · ${tr("publishStep_preparing")}`);
   const controller = new AbortController();
-  taskControllers.set(t.accountId, controller);
-  driver.setAbortSignal(controller.signal);
-  let cancelled = false;
-  const checkpoint = async (): Promise<void> => {
-    controller.signal.throwIfAborted();
-    try {
-      const state = await backend.taskStatus(t.id);
-      if (state.status !== "running") {
-        cancelled = true;
-        controller.abort(new Error("Task is no longer running"));
-      }
-    } catch (error) {
-      // If status cannot be verified, stop before the next platform action.
-      controller.abort(error);
-    }
-    controller.signal.throwIfAborted();
-  };
-  let polling = false;
-  /** 发布接口的响应监听;失败 / 取消时在 finally 里撤掉。 */
-  let capture: { stop(): Promise<unknown> } | null = null;
-  const cancellationTimer = setInterval(() => {
-    if (polling || controller.signal.aborted) return;
-    polling = true;
-    void checkpoint().catch(() => undefined).finally(() => { polling = false; });
-  }, 500);
-  let stepLabel = "";
-  //: 这一页会挡路的浮层(声明在 selectors 的 `overlays`)。**每一步之前**统一清一遍 ——
-  //: 平台弹层不报错,只是把下一步挡住,失败会以"某个无关步骤超时"的形式出现(2026-10-23 三次)。
-  //: 平台的页面词表里可能还没有 `overlays`(比如刚接的新平台):那就没有要清的浮层。
-  const selectorTable = SELECTORS as Record<string, { overlays?: readonly OverlayRule[] } | undefined>;
-  const overlayRules = selectorTable[resolvePlatform(t.platform).id]?.overlays ?? [];
-  const clearStuckOverlays = async (): Promise<void> => {
-    if (!overlayRules.length) return;
-    await clearOverlays(driver, overlayRules, resolvePlatform(t.platform).id, (text) =>
-      clickTextPreferTrusted(driver, text, { exact: true, selector: "button, [role=button], div, span" }),
-    ).catch((error: unknown) => plog("clearStuckOverlays failed:", String(error).slice(0, 120)));
-  };
-  const step = async (label: string, settled = false): Promise<void> => {
-    await checkpoint();
-    stepLabel = label;
-    plog("runTask step:", bt.id, label);
-    mirror.step(`${platformLabel} · ${label}`, settled);
-    //: 进入这一步之前,先把上一屏留下的提示框 / 引导关掉(幂等,没有就一次驱动调用都不做)。
-    if (!settled) await clearStuckOverlays();
-  };
+  taskControllers.set(bt.account_id, controller);
   try {
-    // 把视图挂成右下角悬浮面板:参与合成 → 有真实布局与命中测试 → **可信指针输入可用**,
-    // 而且画面是真的(不必再截图镜像)。挂不上(窗口没了)时退回 CDP 视口覆盖:那样至少有布局,
-    // 点击会自动降级到 DOM 事件。
-    await checkpoint();
-    taskViews.panelAttach(t.accountId);
-    if (!taskViews.isPanelled(t.accountId)) {
-      await driver.setMetricsOverride(BACKGROUND_VIEWPORT.width, BACKGROUND_VIEWPORT.height);
-    }
-    mirror.start();
-    await taskViews.configureAccount(t.accountId, bt.proxy);
-    const adapter = createAdapter(t.platform, driver, t);
-    await step(tr("publishStep_openCreator"));
-    await adapter.openCreatorPage();
-    plog("runTask creator page opened:", bt.id, driver.url());
-    await delay(stepDelay());
-
-    await step(tr("publishStep_checkLogin"));
-    const loggedIn = await adapter.checkLogin();
-    plog("runTask checkLogin:", bt.id, loggedIn);
-    if (!loggedIn) {
-      await backend.patchAccount(t.accountId, {
-        binding_status: "login_required",
-        last_error: tr("publishErr_notLoggedIn"),
-      });
-      await backend.reportTask(t.id, {
-        status: "login_required",
-        error_message: tr("publishErr_notLoggedInTask"),
-      });
-      settle(t, "login_required");
-      return;
-    }
-    await backend.patchAccount(t.accountId, { binding_status: "bound", last_error: null });
-
-    await step(tr("publishStep_upload"));
-    //: 按任务声明的形状挑上传方法(ADR 0076)。适配器不自己判断 kind —— 它只声明自己做到了哪些,
-    //: 由这里按 `supports` 对一遍,对不上就**在动手前**失败,说清这个平台/这个适配器还发不了。
-    const kind = t.contentKind;
-    const supported = adapter.supports;
-    const upload = UPLOAD_BY_KIND[kind];
-    if (!supported.includes(kind) || !upload) {
-      throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
-    }
-    //: **先看文件在不在**。素材文件丢了(被清理、换机器、迁移没带上)时,把不存在的路径交给页面只会得到
-    //: 平台自己一句含糊的「部分文件处理失败,未上传」—— 少一张图照样进编辑器,发出去的笔记比看到的多
-    //: 少一张都不知道(真机 2026-10-23)。在这里点名,比让平台去猜清楚得多。
-    const missing = await firstMissingMedia(t);
-    if (missing) throw publishError(t.platform, "publishErr_assetFileMissing", { name: missing });
-    await upload(adapter, t);
-    await delay(stepDelay());
-    await step(tr("publishStep_fillTitle"));
-    await adapter.fillTitle(t.title);
-    await delay(stepDelay());
-    //: 正文只有认这一种形状的适配器才填 —— 加形状时只改 `FILLS_BODY` 这一行。
-    if (FILLS_BODY.has(kind) && t.body) {
-      const fillBody = adapter.fillBody?.bind(adapter);
-      if (!fillBody) throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
-      await step(tr("publishStep_fillBody"));
-      await fillBody(t.body);
-      await delay(stepDelay());
-    }
-    await step(tr("publishStep_fillTags"));
-    await adapter.fillTags(t.tags);
-    await delay(stepDelay());
-
-    // 从点提交之前开始听平台的发布接口:作品 ID 就在它的响应里(见 publishedPost.ts)。
-    const endpoint = postEndpoint(resolvePlatform(t.platform).id);
-    const listening = endpoint ? driver.captureResponses(endpoint) : null;
-    capture = listening;
-    await step(tr("publishStep_submit"));
-    await adapter.submit();
-    await delay(stepDelay());
-    await step(tr("publishStep_waitConfirm"));
-    await adapter.waitResult();
-    const responses = listening ? await listening.stop() : [];
-    capture = null;
-    const post = findPost(resolvePlatform(t.platform).id, responses, adapter.knownPostId?.() ?? null);
-    plog("runTask post:", t.id, { responses: responses.map((r) => r.url), post });
-    await step(tr("publishStep_done"), true);
-    await backend.reportTask(t.id, { status: "success", post });
-    plog("runTask success:", t.id);
-    settle(t, "success");
-  } catch (error) {
-    if (cancelled || stopped) {
-      settle(t, "cancelled");
-      return;
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    plog("runTask error:", t.id, error instanceof Error ? error : message);
-    // 让实时窗口停在失败那一刻的画面与步骤上,而不是无声消失。
-    mirror.step(`${platformLabel} · ${tr("publishStep_failed")}`, true);
-    // 回报失败是这一段里**唯一不能被跳过**的事:它没送到,后端就永远停在 running,前台看到的是
-    // 「一直在跑」。所以它前面的每一步都必须既有界又不抛 —— 线上就出过 captureFailure 里
-    // capturePage 挂死、把回报一起拖没的情况(见 PageDriver.screenshot 的注释)。
-    const screenshot = await captureFailure(t.id, driver);
-    //: 失败现场也要**可判读**:一张截图 + 一句话,看不出「那一页到底长什么样、还差什么」。
-    //: 这一步把当时的事实与候选元素写进 trace(ADR 0078 的第一条),用户与后续分析都靠它。
-    await collectFailureForensics(t, driver, error, stepLabel);
-    const blocked = resolveBlockedStatus(error);
-    const bindingStatus =
-      blocked === "login_required"
-        ? "login_required"
-        : blocked === "waiting_manual"
-          ? "manual_required"
-          : blocked === "permission_required"
-            ? "permission_required"
-            : null;
-    if (bindingStatus) {
-      await backend
-        .patchAccount(t.accountId, { binding_status: bindingStatus, last_error: message })
-        .catch((patchError: unknown) =>
-          plog("runTask patchAccount failed (still reporting):", t.id, String(patchError).slice(0, 120)),
-        );
-    }
-    await backend.reportTask(t.id, {
-      status: blocked ?? "failed",
-      error_message: message,
-      screenshot_path: screenshot,
+    await runPublishTask(bt, {
+      views: taskViews,
+      driver,
+      mirror,
+      controller,
+      trace,
+      isStopped: () => stopped,
+      onSettled: settle,
+      requestFront,
     });
-    settle(t, blocked ?? "failed");
-    //: **普通失败不抢前台**。此前失败且有现场就 `requestFront`,于是任务一挂,整个窗口被那块
-    //: 内嵌浏览器顶掉,人正在做的别的事被赶走 —— 而失败原因已经在任务行里写着,现场截图也存下来了
-    //: (维护者 2026-10-23:「一旦发布中途失败就自动跳到全屏内嵌浏览器,我觉得没有必要」)。
-    //: 只有**真的需要人当场处理**的那几档才亮出来:验证码 / 权限 / 手工确认 —— 那几档不处理,
-    //: 任务永远过不去,而人也不知道该点什么。
-    if (bindingStatus) requestFront(t.accountId);
   } finally {
-    clearInterval(cancellationTimer);
-    await capture?.stop().catch(() => undefined);
     mirror.stop();
-    // 撤面板 + 撤视口覆盖:任务结束后视图可能被用户从「查看页面」亮出来,带着面板缩放或覆盖
-    // 都会和窗口尺寸对不上。panelDetach 会顺手把 zoomFactor 还原成 1(它按 origin 持久化)。
-    taskViews.panelDetach(t.accountId);
-    await driver.clearMetricsOverride().catch(() => undefined);
-    if (taskControllers.get(t.accountId) === controller) {
-      taskControllers.delete(t.accountId);
-      running.delete(t.accountId);
+    if (taskControllers.get(bt.account_id) === controller) {
+      taskControllers.delete(bt.account_id);
+      running.delete(bt.account_id);
       driver.setAbortSignal(null);
     }
-    // 后台任务默认从不 show;占了前台的(准备好/失败现场)留着供查看,这里不主动 hide。
   }
 }
 

@@ -70,7 +70,7 @@ ByteDance 已作为命名校准：方舟生成在 `bytedance/ark/`，火山语�
 Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`，避免浅层复制。ComfyUI 已移出内置 Adapter，
 成为随应用发的插件(ADR 0020)：插件的生成连接由 `registry` 的动态来源给出同一个 `PluginGenerationAdapter`。
 
-## 1. 发布执行器:平台 Adapter seam
+## 1. 发布执行器:平台 Adapter seam — ✅ 已收口(2026-10-27)
 
 **Files**
 
@@ -102,13 +102,13 @@ Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`�
   - `verify.ts`:判定原语(文字进没进 / 按行按顺序 / 成功信号带 `formGone` 闸);
   - `fakePage.ts` + `contracts.pipeline.test.ts`:平台 × 形状自动展开的管道测试。
 
-**Remaining slice**
+**Completed (2026-10-27)**
 
-1. 抽出 `runPublishTask(...)` Module:`publishWorker.ts` 目前仍同时拥有轮询/并发和单任务的状态回报、
-   截图、blocked 映射。抽出后让 worker 只编排,并给单任务执行形成一个稳定测试 surface。
-   (2026-10-24 的 P2 只把"浮层"和"判定"抽走了,步骤编排本身还在这个文件里。)
-2. 契约还差**字段级**声明:标题 / 正文 / 标签的选择器现在仍在 `selectors.ts`,适配器各自引用它 ——
-   下一步把它们也写进契约,适配器就只剩"平台特有动作"了。
+- `runPublishTask.ts` 接管单条任务的状态机:登录、上传、填表、提交、失败现场与回报。
+  `publishWorker.ts` 只负责认领、并发、镜像和 controller 装配,不再拥有平台步骤。
+- `PlatformContract.fields` 声明每种内容形状的标题、正文、标签、描述与短标题选择器;
+  适配器填表只经 `fieldsFor(...)` 取字段,契约测试要求已支持形状齐全。
+- 页面生命周期词表仍留在 `selectors.ts`,但不再与填表字段混用。
 
 ## 2. 前端全局样式 — ✅ 已解决(2026-07-22)
 

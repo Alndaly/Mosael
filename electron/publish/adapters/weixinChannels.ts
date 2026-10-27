@@ -5,7 +5,7 @@ import { ACTION_TIMEOUT, HUMAN_INTERVENTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIME
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { AutomationBlockedError } from "../errors";
-import { contractFor } from "../contracts";
+import { contractFor, fieldsFor } from "../contracts";
 import { awaitResult } from "../verify";
 import { plog } from "../log";
 
@@ -33,6 +33,9 @@ export class WeixinChannelsAdapter implements PublishAdapter {
   private readonly s = SELECTORS.weixinChannels;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
   private readonly c = contractFor("weixin-channels");
+  private get f() {
+    return fieldsFor(this.c, this.task.contentKind);
+  }
 
   constructor(
     private readonly driver: PageDriver,
@@ -134,9 +137,9 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     if (this.isImageText) {
       const value = title.slice(0, 22);
       const inner = this.imageDriver();
-      await inner.cssVisible(this.s.imageTitleInput, ACTION_TIMEOUT);
-      await inner.fillField(this.s.imageTitleInput, value);
-      const current = await inner.cssValue(this.s.imageTitleInput);
+      await inner.cssVisible(this.f.title, ACTION_TIMEOUT);
+      await inner.fillField(this.f.title, value);
+      const current = await inner.cssValue(this.f.title);
       if (!current?.includes(value)) throw publishError("weixin-channels", "publishErr_titleRejected");
       return;
     }
@@ -144,16 +147,15 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     await this.assertCanPublish();
     const description = stringOption(this.task, "description") ?? title;
     const shortTitle = stringOption(this.task, "shortTitle") ?? title;
-    await this.driver.cssVisible(this.s.descEditor, ACTION_TIMEOUT);
-    await typeOrFill(this.driver, "weixin-channels desc", this.s.descEditor, description, async () => {
-      await this.driver.focusAndClearField(this.s.descEditor);
-      await this.driver.insertText(this.s.descEditor, description);
+    await this.driver.cssVisible(this.f.title, ACTION_TIMEOUT);
+    await typeOrFill(this.driver, "weixin-channels desc", this.f.title, description, async () => {
+      await this.driver.focusAndClearField(this.f.title);
+      await this.driver.insertText(this.f.title, description);
     });
     // Optional short title (best effort; skipped if the field is absent).
-    if (await this.driver.cssVisible(this.s.shortTitleInput, 2_000)) {
-      await this.driver
-        .fillCss(this.s.shortTitleInput, shortTitle.slice(0, 16))
-        .catch(() => undefined);
+    const shortTitleField = this.f.shortTitle;
+    if (shortTitleField && (await this.driver.cssVisible(shortTitleField, 2_000))) {
+      await this.driver.fillCss(shortTitleField, shortTitle.slice(0, 16)).catch(() => undefined);
     } else {
       await this.driver.fillInputNearText("短标题", shortTitle.slice(0, 16)).catch(() => false); // i18n-ok
     }
@@ -163,13 +165,13 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     const inner = this.imageDriver();
-    if (!(await inner.cssVisible(this.s.imageDescEditor, ACTION_TIMEOUT))) {
+    if (!(await inner.cssVisible(this.f.body, ACTION_TIMEOUT))) {
       await plogPageState("WeChat channels image description missing:", this.driver);
       throw publishError("weixin-channels", "publishErr_editorMissing");
     }
-    await inner.focusAndClearField(this.s.imageDescEditor);
-    await inner.insertTextLines(this.s.imageDescEditor, value);
-    const shown = await inner.cssValue(this.s.imageDescEditor);
+    await inner.focusAndClearField(this.f.body);
+    await inner.insertTextLines(this.f.body, value);
+    const shown = await inner.cssValue(this.f.body);
     const squash = (text: string) => text.replace(/\s+/g, "");
     if (!squash(shown ?? "").includes(squash(value).slice(0, 40))) {
       await plogPageState("WeChat channels image description mismatch:", this.driver);
@@ -184,8 +186,8 @@ export class WeixinChannelsAdapter implements PublishAdapter {
       for (const tag of tags) {
         const normalized = normalizeTag(tag);
         if (!normalized) continue;
-        await inner.focusEnd(this.s.imageDescEditor);
-        await inner.insertText(this.s.imageDescEditor, ` #${normalized}`);
+        await inner.focusEnd(this.f.tags);
+        await inner.insertText(this.f.tags, ` #${normalized}`);
         await wait(300);
       }
       return;
@@ -193,13 +195,13 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     if (!tags.length) {
       return;
     }
-    await this.driver.cssVisible(this.s.descEditor, ACTION_TIMEOUT);
+    await this.driver.cssVisible(this.f.tags, ACTION_TIMEOUT);
     for (const tag of tags) {
       const normalizedTag = normalizeTag(tag);
       if (!normalizedTag) {
         continue;
       }
-      await this.driver.insertText(this.s.descEditor, ` #${normalizedTag}`);
+      await this.driver.insertText(this.f.tags, ` #${normalizedTag}`);
       await this.driver.pressKey("Space");
       await wait(300);
     }

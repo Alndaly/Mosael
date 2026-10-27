@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
 
-const { PUBLISH_CONTRACTS, contractFor } = await import("./contracts");
+const { PUBLISH_CONTRACTS, contractFor, fieldsFor } = await import("./contracts");
 const { ADAPTER_SUPPORTS } = await import("./adapters");
 
 const PLATFORMS = Object.keys(PUBLISH_CONTRACTS);
@@ -31,9 +31,12 @@ describe("平台契约", () => {
       const contract = PUBLISH_CONTRACTS[platform as keyof typeof PUBLISH_CONTRACTS];
       for (const kind of kinds) {
         expect(contract.entry[kind], `${platform} × ${kind}:契约没有入口`).toBeTruthy();
+        const fields = contract.fields[kind];
+        expect(fields?.title, `${platform} × ${kind}:契约没有标题字段`).toBeTruthy();
+        expect(fields?.body, `${platform} × ${kind}:契约没有正文字段`).toBeTruthy();
+        expect(fields?.tags, `${platform} × ${kind}:契约没有标签字段`).toBeTruthy();
         //: 文章是一篇长文,**没有素材** —— 不要求文件框;视频 / 图文必须有一个。
         if (kind === "article") continue;
-        expect(contract.fileInput[kind], `${platform} × ${kind}:契约没有文件框`).toBeTruthy();
       }
     }
   });
@@ -41,5 +44,10 @@ describe("平台契约", () => {
   it("按平台取契约时 id 归一化(别名 / 大小写都能取到)", () => {
     expect(contractFor("抖音")).toBe(contractFor("douyin"));
     expect(contractFor("xiaohongshu")).toBe(contractFor("xiaohongshu"));
+  });
+
+  it("fieldsFor 返回该形状的字段，缺失时明确报装配错误", () => {
+    expect(fieldsFor(contractFor("douyin"), "article").title).toBe(contractFor("douyin").fields.article?.title);
+    expect(() => fieldsFor(contractFor("mock"), "article")).toThrow("publish contract fields missing");
   });
 });

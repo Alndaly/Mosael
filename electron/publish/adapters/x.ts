@@ -6,7 +6,7 @@ import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, hasStoredSession, plogPageState, publishError, stringOption, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { plog } from "../log";
-import { contractFor } from "../contracts";
+import { contractFor, fieldsFor } from "../contracts";
 import { awaitResult } from "../verify";
 
 /**
@@ -41,6 +41,9 @@ export class XAdapter implements PublishAdapter {
   private readonly s = SELECTORS.x;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
   private readonly c = contractFor("x");
+  private get f() {
+    return fieldsFor(this.c, this.task.contentKind);
+  }
 
   // 帖子文本要把「简介」一起写进去(见 fillTitle),所以任务要留着。
   constructor(
@@ -192,9 +195,9 @@ export class XAdapter implements PublishAdapter {
   async fillTitle(title: string): Promise<void> {
     if (this.isArticle) {
       const value = title.slice(0, 100);
-      await this.driver.cssVisible(this.s.articleTitle, ACTION_TIMEOUT);
-      await this.driver.fillField(this.s.articleTitle, value);
-      const current = await this.driver.cssValue(this.s.articleTitle);
+      await this.driver.cssVisible(this.f.title, ACTION_TIMEOUT);
+      await this.driver.fillField(this.f.title, value);
+      const current = await this.driver.cssValue(this.f.title);
       if (!current?.includes(value)) throw publishError("x", "publishErr_titleRejected");
       return;
     }
@@ -206,10 +209,10 @@ export class XAdapter implements PublishAdapter {
     // 发出去的帖子只有「标题 #标签」)。标签由 fillTags 接在末尾。
     const description = stringOption(this.task, "description");
     const text = description ? `${title}\n${description}` : title;
-    await this.driver.focusAndClearField(this.s.textEditor);
-    await this.driver.insertText(this.s.textEditor, text);
+    await this.driver.focusAndClearField(this.f.title);
+    await this.driver.insertText(this.f.title, text);
     await wait(400);
-    const actual = ((await this.driver.cssValue(this.s.textEditor)) ?? "").trim();
+    const actual = ((await this.driver.cssValue(this.f.title)) ?? "").trim();
     if (!actual.includes(title.trim()) || (description && !actual.includes(description.trim()))) {
       await plogPageState("X text mismatch:", this.driver);
       throw publishError("x", "publishErr_titleMismatch", {
@@ -224,11 +227,11 @@ export class XAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     if (this.isArticle) {
-      await this.driver.cssVisible(this.s.articleEditor, ACTION_TIMEOUT);
-      await this.driver.focusAndClearField(this.s.articleEditor);
-      await this.driver.insertTextLines(this.s.articleEditor, value);
+      await this.driver.cssVisible(this.f.body, ACTION_TIMEOUT);
+      await this.driver.focusAndClearField(this.f.body);
+      await this.driver.insertTextLines(this.f.body, value);
       await wait(500);
-      const actual = ((await this.driver.cssValue(this.s.articleEditor)) ?? "").trim();
+      const actual = ((await this.driver.cssValue(this.f.body)) ?? "").trim();
       //: 判定按"开头那段字在不在"(DraftJS 按段落重排,行内空白不是问题;整段缺失才是)。
       if (!actual.replace(/\s+/g, "").includes(value.replace(/\s+/g, "").slice(0, 40))) {
         await plogPageState("X article body mismatch:", this.driver);
@@ -238,11 +241,11 @@ export class XAdapter implements PublishAdapter {
     }
     const title = this.task.title.trim();
     const text = title ? `${title}\n\n${value}` : value;
-    await this.driver.cssVisible(this.s.textEditor, ACTION_TIMEOUT);
-    await this.driver.focusAndClearField(this.s.textEditor);
-    await this.driver.insertTextLines(this.s.textEditor, text);
+    await this.driver.cssVisible(this.f.body, ACTION_TIMEOUT);
+    await this.driver.focusAndClearField(this.f.body);
+    await this.driver.insertTextLines(this.f.body, text);
     await wait(400);
-    const actual = ((await this.driver.cssValue(this.s.textEditor)) ?? "").trim();
+    const actual = ((await this.driver.cssValue(this.f.body)) ?? "").trim();
     if (!actual.includes(title || value.split("\n")[0])) {
       await plogPageState("X body mismatch:", this.driver);
       throw publishError("x", "publishErr_descriptionRejected");
@@ -258,18 +261,18 @@ export class XAdapter implements PublishAdapter {
       for (const tag of tags) {
         const clean = tag.replace(/^#/, "").trim();
         if (!clean) continue;
-        await this.driver.focusEnd(this.s.articleEditor);
-        await this.driver.insertText(this.s.articleEditor, ` ${clean}`);
+        await this.driver.focusEnd(this.f.tags);
+        await this.driver.insertText(this.f.tags, ` ${clean}`);
         await wait(300);
       }
       return;
     }
     // 话题写进正文末尾:X 的 #hashtag 本来就是正文的一部分,没有独立标签框。
-    await this.driver.focusEnd(this.s.textEditor);
+    await this.driver.focusEnd(this.f.tags);
     for (const tag of tags) {
       const clean = tag.replace(/^#/, "").trim();
       if (!clean) continue;
-      await this.driver.insertText(this.s.textEditor, ` #${clean}`);
+      await this.driver.insertText(this.f.tags, ` #${clean}`);
       await wait(400);
     }
   }

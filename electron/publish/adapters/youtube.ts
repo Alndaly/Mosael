@@ -7,7 +7,7 @@ import { AutomationBlockedError } from "../errors";
 import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { plog } from "../log";
-import { contractFor } from "../contracts";
+import { contractFor, fieldsFor } from "../contracts";
 import { resolvePlatform } from "../platforms";
 
 export class YoutubeAdapter implements PublishAdapter {
@@ -25,6 +25,9 @@ export class YoutubeAdapter implements PublishAdapter {
   private readonly s = SELECTORS.youtube;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
   private readonly c = contractFor("youtube");
+  private get f() {
+    return fieldsFor(this.c, this.task.contentKind);
+  }
   /** 本次上传拿到的视频 ID(详情页会显示 youtu.be 链接)。收尾判定靠它认「**这一支**发出去了」。 */
   private uploadedId: string | null = null;
 
@@ -152,10 +155,10 @@ export class YoutubeAdapter implements PublishAdapter {
     // YouTube **用文件名预填标题**。清不干净的后果是发出一个叫 `3cce86226e01…` 的视频,而且是
     // 静默的:表单合法、流程照走完。所以填完必须回读校验,宁可当场失败(草稿是私享的,重来即可)。
     const value = title.slice(0, resolvePlatform("youtube").titleMaxLength ?? 100);
-    await this.driver.focusAndClearField(this.s.titleBox);
-    await this.driver.insertText(this.s.titleBox, value);
+    await this.driver.focusAndClearField(this.f.title);
+    await this.driver.insertText(this.f.title, value);
     await wait(400);
-    const actual = ((await this.driver.cssValue(this.s.titleBox)) ?? "").trim();
+    const actual = ((await this.driver.cssValue(this.f.title)) ?? "").trim();
     if (actual !== value) {
       await plogPageState("YouTube title mismatch:", this.driver);
       throw publishError("youtube", "publishErr_titleMismatch", {
@@ -164,9 +167,9 @@ export class YoutubeAdapter implements PublishAdapter {
       });
     }
     const description = stringOption(this.task, "description");
-    if (description && (await this.driver.cssVisible(this.s.descBox, 5_000))) {
-      await this.driver.focusAndClearField(this.s.descBox);
-      await this.driver.insertText(this.s.descBox, description);
+    if (description && (await this.driver.cssVisible(this.f.body, 5_000))) {
+      await this.driver.focusAndClearField(this.f.body);
+      await this.driver.insertText(this.f.body, description);
       await wait(300);
     }
   }
@@ -175,15 +178,15 @@ export class YoutubeAdapter implements PublishAdapter {
     if (tags.length === 0) {
       return;
     }
-    if (!(await this.driver.cssVisible(this.s.descBox, 5_000))) {
+    if (!(await this.driver.cssVisible(this.f.tags, 5_000))) {
       return;
     }
     const hashtags = tags
       .map((tag) => `#${tag.replace(/^#/, "").replace(/\s+/g, "")}`)
       .filter((tag) => tag.length > 1)
       .join(" ");
-    await this.driver.focusEnd(this.s.descBox);
-    await this.driver.insertText(this.s.descBox, `\n\n${hashtags}`);
+    await this.driver.focusEnd(this.f.tags);
+    await this.driver.insertText(this.f.tags, `\n\n${hashtags}`);
     await wait(300);
   }
 

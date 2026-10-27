@@ -7,7 +7,7 @@ import { AutomationBlockedError } from "../errors";
 import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { plog } from "../log";
-import { contractFor } from "../contracts";
+import { contractFor, fieldsFor } from "../contracts";
 import { awaitResult } from "../verify";
 
 export class TiktokAdapter implements PublishAdapter {
@@ -25,6 +25,9 @@ export class TiktokAdapter implements PublishAdapter {
   private readonly s = SELECTORS.tiktok;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
   private readonly c = contractFor("tiktok");
+  private get f() {
+    return fieldsFor(this.c, this.task.contentKind);
+  }
 
   // 文案走 fillTitle/fillTags 的入参,但**发布选项要从 task 上取**(可见性),所以两个都留。
   constructor(
@@ -123,7 +126,7 @@ export class TiktokAdapter implements PublishAdapter {
     }
     await this.driver.setFiles(input, paths);
     //: 进到编辑页(`/tiktokstudio/upload/post/photo`)并且文案编辑器出现 = 图接住了。
-    if (!(await this.driver.cssVisible(this.s.captionEditor, UPLOAD_TIMEOUT))) {
+    if (!(await this.driver.cssVisible(this.f.body, UPLOAD_TIMEOUT))) {
       throw publishError("tiktok", "publishErr_editorMissing");
     }
   }
@@ -134,11 +137,11 @@ export class TiktokAdapter implements PublishAdapter {
     if (!value) return;
     const title = this.task.title.trim();
     const text = title ? `${title}\n\n${value}` : value;
-    await this.driver.cssVisible(this.s.captionEditor, ACTION_TIMEOUT);
-    await this.driver.focusAndClearField(this.s.captionEditor);
-    await this.driver.insertTextLines(this.s.captionEditor, text);
+    await this.driver.cssVisible(this.f.body, ACTION_TIMEOUT);
+    await this.driver.focusAndClearField(this.f.body);
+    await this.driver.insertTextLines(this.f.body, text);
     await wait(500);
-    const actual = ((await this.driver.cssValue(this.s.captionEditor)) ?? "").trim();
+    const actual = ((await this.driver.cssValue(this.f.body)) ?? "").trim();
     if (!actual.includes(title || value.split("\n")[0])) {
       await plogPageState("TikTok photo caption mismatch:", this.driver);
       throw publishError("tiktok", "publishErr_descriptionRejected");
@@ -151,10 +154,10 @@ export class TiktokAdapter implements PublishAdapter {
     // TikTok 没有独立标题栏,这一栏是**文案**;标签在 fillTags 里接到同一段文字后面。
     // 和 YouTube 一样:TikTok 用**文件名**预填文案,清不干净就会发出一条叫 3cce8622… 的片子,
     // 而且是静默的。填完回读校验一次。
-    await this.driver.focusAndClearField(this.s.captionEditor);
-    await this.driver.insertText(this.s.captionEditor, title);
+    await this.driver.focusAndClearField(this.f.title);
+    await this.driver.insertText(this.f.title, title);
     await wait(500);
-    const actual = ((await this.driver.cssValue(this.s.captionEditor)) ?? "").trim();
+    const actual = ((await this.driver.cssValue(this.f.title)) ?? "").trim();
     if (!actual.includes(title.trim())) {
       await plogPageState("TikTok caption mismatch:", this.driver);
       throw publishError("tiktok", "publishErr_titleMismatch", {
@@ -171,11 +174,11 @@ export class TiktokAdapter implements PublishAdapter {
     // 话题写进文案末尾:TikTok 的标签本来就是文案里的 #hashtag,没有独立标签框。
     // 逐个敲进去而不是一次性插入 —— 站内的话题联想面板会在输入时弹出,一次性插入常常
     // 让最后一个话题停在"未确认"状态。
-    await this.driver.focusEnd(this.s.captionEditor);
+    await this.driver.focusEnd(this.f.tags);
     for (const tag of tags) {
       const clean = tag.replace(/^#/, "").trim();
       if (!clean) continue;
-      await this.driver.insertText(this.s.captionEditor, ` #${clean}`);
+      await this.driver.insertText(this.f.tags, ` #${clean}`);
       await wait(600);
       // 关掉联想面板,免得它把下一次输入吃掉。
       await this.driver.pressKey("Escape").catch(() => undefined);
