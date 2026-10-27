@@ -105,8 +105,7 @@ async function runOne(platformId) {
  * 用 `spawnSync` 串行:一家最多半分钟,串行足够快;而异步 spawn 在这里要处理管道缓冲与退出竞态,
  * 多写的那些代码只会自己出问题(实测挂住过一次)。
  */
-function runAll(platformIds) {
-  const { spawnSync } = require("node:child_process");
+function runAll(platformIds, spawnSync = require("node:child_process").spawnSync) {
   const results = [];
   for (const id of platformIds) {
     const child = spawnSync(process.execPath, ["--no-sandbox", __filename, "--platform", id], {
@@ -117,15 +116,36 @@ function runAll(platformIds) {
     const line = out
       .split("\n")
       .find((one) => one.trim().startsWith("{") && one.includes("\"platform\""));
+    let result;
     if (line) {
       try {
-        results.push(JSON.parse(line));
-        continue;
+        result = JSON.parse(line);
       } catch {
         /* 落到下面记一条失败 */
       }
     }
-    results.push({ platform: id, ok: false, failure: `child exited ${child.status}: ${out.trim().slice(-200)}` });
+    const detail = out.trim().slice(-200);
+    const processFailure = child.error
+      ? `child error: ${child.error.message}`
+      : child.signal
+        ? `child terminated by ${child.signal}`
+        : child.status !== 0
+          ? `child exited ${child.status}`
+          : "";
+    if (processFailure) {
+      results.push({
+        ...result,
+        platform: id,
+        ok: false,
+        exitCode: child.status,
+        signal: child.signal || undefined,
+        failure: `${processFailure}${detail ? `: ${detail}` : ""}`,
+      });
+    } else if (result) {
+      results.push(result);
+    } else {
+      results.push({ platform: id, ok: false, exitCode: child.status, failure: `child produced no result${detail ? `: ${detail}` : ""}` });
+    }
   }
   const failed = results.filter((one) => !one.ok);
   console.log(JSON.stringify({ at: new Date().toISOString(), total: results.length, failed: failed.length }));
@@ -138,22 +158,26 @@ const directPlatform = (() => {
   return index >= 0 ? String(process.argv[index + 1] || "").trim() : "";
 })();
 
-if (directPlatform) {
-  runOne(directPlatform)
-    .then((code) => process.exit(code))
-    .catch((error) => {
-      console.error("smoke crashed:", error);
-      process.exit(1);
-    });
-} else {
-  const wanted = process.argv
-    .slice(1)
-    .filter((arg) => !arg.startsWith("-"))
-    .filter((arg) => !/\.c?js$/.test(arg));
-  const { cases } = loadCases(wanted);
-  if (cases.length === 0) {
-    console.error("没有要跑的平台(检查平台名拼写;空参数 = 全部)。");
-    process.exit(2);
+if (require.main === module) {
+  if (directPlatform) {
+    runOne(directPlatform)
+      .then((code) => process.exit(code))
+      .catch((error) => {
+        console.error("smoke crashed:", error);
+        process.exit(1);
+      });
+  } else {
+    const wanted = process.argv
+      .slice(1)
+      .filter((arg) => !arg.startsWith("-"))
+      .filter((arg) => !/\.c?js$/.test(arg));
+    const { cases } = loadCases(wanted);
+    if (cases.length === 0) {
+      console.error("没有要跑的平台(检查平台名拼写;空参数 = 全部)。");
+      process.exit(2);
+    }
+    process.exit(runAll(cases.map((one) => one.id)));
   }
-  process.exit(runAll(cases.map((one) => one.id)));
 }
+
+module.exports = { runAll };

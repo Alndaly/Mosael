@@ -61,6 +61,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Ratchet documentation is fresh
+        run: python3 scripts/sync-ratchet-docs.py --check
+
       # 契约链快照的新鲜度:openapi.json 必须是 app 此刻的形状,schema.d.ts 必须是从它
       # 再生成出来的那份。此前两端靠手工同步,漂移没有任何闸 —— 已经实测漂过一次
       # (BoardGenerate.provider_profile_id 进了路由没进快照)。
@@ -95,10 +98,14 @@ jobs:
           pnpm --dir browser-extension typecheck
           pnpm build:extension
 
-      # 发布链路里的纯函数(下载页、TTS 解释器的资产清单与哈希校验)用 node:test 跑,
-      # 不联网、不解包 —— 和本地 `pnpm test:scripts` 是同一条。
+      # 发布链路脚本回归:本机 HTTP 替身覆盖 R2 两阶段上传,另测下载页、TTS 资产清单、
+      # platform-smoke 汇总与 CI 接线 —— 和本地 `pnpm test:scripts` 是同一条。
       - name: Release tooling tests
         run: pnpm test:scripts
+
+      # 真正走 electron-updater 的 Range 下载与结果校验;不能只检查 blockmap 文件存在。
+      - name: Differential update smoke
+        run: xvfb-run -a ./node_modules/.bin/electron --no-sandbox test/differential-update.smoke.cjs
 
       # 官网是独立 pnpm 工作区,不会被根目录的 install/build 顺带覆盖。
       # production build 同时检查 TypeScript、路由、MDX 和服务端渲染边界。

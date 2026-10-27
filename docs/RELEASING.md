@@ -135,7 +135,7 @@ export R2_BUCKET=...
 node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
 ```
 
-脚本逐个上传 `latest/` 与 `v<tag>/` 文件并回读 Content-Length 和 SHA-256，失败即停止，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
+  脚本分两阶段发布：先把全部文件写入不可变 `v<tag>/`，逐个回读校验 Content-Length 与 SHA-256；这一阶段全部成功后，才更新 `latest/` 并做同样校验。任何不可变文件失败都会立即停止，不会碰 `latest/`，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。

@@ -29,7 +29,7 @@
     "watch:system": "esbuild electron/system/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/system.bundle.cjs --watch=forever",
     "watch:sidecar": "pnpm --dir agent-sidecar watch",
     "gen:api": "openapi-typescript backend/openapi.json -o frontend/src/api/generated/schema.d.ts",
-    "test:scripts": "node --test test/r2-download-page.test.mjs test/tts-python-release.test.mjs",
+    "test:scripts": "node --test test/r2-download-page.test.mjs test/publish-r2.test.mjs test/platform-smoke.test.cjs test/release-ci.test.mjs test/tts-python-release.test.mjs",
     "dev:isolated": "MOSAEL_DATA_DIR=\"${MOSAEL_DATA_DIR:-$HOME/.mosael-dev}\" pnpm dev"
   },
   "devDependencies": {

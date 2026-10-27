@@ -46,20 +46,20 @@ if (files.length === 0) {
 }
 const prefix = (process.env.R2_PREFIX || "mosael").replace(/^\/+|\/+$/g, "");
 const keyFor = (name, latest) => `${prefix ? `${prefix}/` : ""}${latest ? "latest" : options.tag}/${name}`;
-const plans = files.flatMap((name) => {
-  const file = resolve(dist, name);
-  const base = {
-    file,
-    size: statSync(file).size,
-    contentType: CONTENT_TYPES.get(basename(name).slice(name.lastIndexOf("."))) || "application/octet-stream",
-  };
-  return [
-    { ...base, key: keyFor(name, false), cacheControl: "public,max-age=31536000,immutable" },
-    { ...base, key: keyFor(name, true), cacheControl: "public,max-age=0,must-revalidate" },
-  ];
-});
 const downloadPage = renderDownloadPage(files, options.tag);
+const plans = [];
+// 不可变目录是发布的第一阶段:其中任何一个对象上传或回读失败,都不会碰到 latest。
 for (const latest of [false, true]) {
+  for (const name of files) {
+    const file = resolve(dist, name);
+    plans.push({
+      file,
+      size: statSync(file).size,
+      contentType: CONTENT_TYPES.get(basename(name).slice(name.lastIndexOf("."))) || "application/octet-stream",
+      key: keyFor(name, latest),
+      cacheControl: latest ? "public,max-age=0,must-revalidate" : "public,max-age=31536000,immutable",
+    });
+  }
   plans.push({
     body: Buffer.from(downloadPage),
     size: Buffer.byteLength(downloadPage),

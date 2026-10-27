@@ -38,7 +38,8 @@ jobs:
       # Electron 在无头 Linux 上要 xvfb;--no-sandbox 由脚本自己加(容器里 root 跑不了沙箱)。
       - name: Run the site-contract smoke
         run: |
-          xvfb-run -a ./node_modules/.bin/electron --no-sandbox scripts/platform-smoke.cjs ${{ inputs.platforms }}
+          set -o pipefail
+          xvfb-run -a ./node_modules/.bin/electron --no-sandbox scripts/platform-smoke.cjs ${{ inputs.platforms }} | tee platform-smoke-report.jsonl
 
       # 结果落成 artifact:红了直接看是哪一家、页面当时是什么样。
       - name: Upload report
@@ -47,5 +48,5 @@ jobs:
         with:
           name: platform-smoke-report
           path: |
-            contracts/platform-contracts.json
-          if-no-files-found: ignore
+            platform-smoke-report.jsonl
+          if-no-files-found: error

@@ -20,6 +20,11 @@ commit list and downloadable artifacts.
 - 停止浏览器 worker 会回报终态并释放租约，deferred 分区会自动重试且不会重复搬迁。
 - 登录取消不再覆盖账号状态，主窗口与延迟 IPC 按生命周期防崩，OAuth 持久化失败仍保留本轮新凭据。
 
+### 构建与发布
+
+- 差分更新冒烟与 ratchet 文档检查进入 CI；R2 先完整校验不可变版本目录，再更新 `latest`。
+- platform-smoke 保留真实失败结果和退出码，上传实际 JSONL 报告而不是契约占位文件。
+
 ## [2.2.4] - 2026-10-26
 
 ### ComfyUI 智能体
