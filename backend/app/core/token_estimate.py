@@ -3,8 +3,8 @@
 **纯函数,住在 core** —— 没有一行数据库、不认识任何领域概念,却被 `ai/providers/contracts/generation.py`
 引用。放在 domain 会让整棵适配器树为了一个字符串统计而依赖领域层。
 
-名字不叫 `tokens`:那个已经被**认证 token** 占着(core/tokens.py 的 token_digest)。
-两个「token」在这个仓库里是完全不同的两件事,重名会让下一个人 import 错那一个。
+名字不叫 `tokens`:「token」在这个仓库里是完全不同的两件事 —— 这里是模型的计数单位,
+**认证令牌**的摘要在 core/token_digest.py。光叫 `tokens` 的模块会让下一个人 import 错那一个。
 
 它是估算不是账单:调用方用 token_estimate=true 标出来,足够画首页图表和看趋势,不能当成
 供应商的计费记录。

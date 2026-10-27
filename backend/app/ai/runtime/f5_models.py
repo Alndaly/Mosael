@@ -32,7 +32,7 @@ import logging
 
 from app.ai.runtime import remote_size
 from app.ai.runtime.tts_models import bytes_on_disk
-from app.core.rate import DownloadRate
+from app.core.transfer_rate import DownloadRate
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore
 from app.ai.runtime.errors import RuntimeSetupError, failure_message

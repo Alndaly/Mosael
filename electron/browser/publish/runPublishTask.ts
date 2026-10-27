@@ -6,7 +6,7 @@ import { t as tr } from "../../i18n.cjs";
 import type { AccountViewManager } from "../pool/accountViews";
 import { createAdapter as defaultCreateAdapter } from "./adapters";
 import { clickTextPreferTrusted, publishError, type PublishAdapter } from "./adapters/shared";
-import { contractFor } from "./contracts";
+import { contractFor } from "./platformContracts";
 import { isAutomationBlockedError } from "../errors";
 import { plog } from "../log";
 import { clearOverlays } from "./overlays";

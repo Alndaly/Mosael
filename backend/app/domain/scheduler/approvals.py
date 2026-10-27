@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import DEFAULT_LOCALE, t
 from app.db.models import Notification, ScheduledTask, User, Workflow, WorkflowRevision
 from app.domain.authority import Voucher
-from app.domain.references import referrers
+from app.domain.referrers import referrers
 from app.domain.scheduler.executors import bound_workflow
 
 #: 通知载荷里 `reminder` 那一格的值:认出这一类提醒(去重用)。

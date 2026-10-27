@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, Board, Entity, EntityReference, GenerationJob, Workflow, now
-from app.domain.references import referrers
+from app.domain.referrers import referrers
 from app.domain.entities.catalog import (
     DEFAULT_ROLE,
     KINDS,

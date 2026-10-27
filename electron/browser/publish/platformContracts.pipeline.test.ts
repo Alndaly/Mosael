@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
 
-const { PUBLISH_CONTRACTS } = await import("./contracts");
+const { PUBLISH_CONTRACTS } = await import("./platformContracts");
 const { ADAPTER_SUPPORTS } = await import("./adapters");
 const { fakeDriver, fakePage } = await import("./fakePage");
 const { clearOverlays } = await import("./overlays");

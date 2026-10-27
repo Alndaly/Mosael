@@ -7,7 +7,7 @@ import { AutomationBlockedError } from "../../errors";
 import { t } from "../../../i18n.cjs";
 import { platformName } from "../platforms";
 import { plog } from "../../log";
-import { contractFor, fieldsFor } from "../contracts";
+import { contractFor, fieldsFor } from "../platformContracts";
 import { resolvePlatform } from "../platforms";
 
 export class YoutubeAdapter implements PublishAdapter {

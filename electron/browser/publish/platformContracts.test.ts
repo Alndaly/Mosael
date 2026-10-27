@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
 
-const { PUBLISH_CONTRACTS, contractFor, fieldsFor } = await import("./contracts");
+const { PUBLISH_CONTRACTS, contractFor, fieldsFor } = await import("./platformContracts");
 const { ADAPTER_SUPPORTS } = await import("./adapters");
 
 const PLATFORMS = Object.keys(PUBLISH_CONTRACTS);

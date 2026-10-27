@@ -6,7 +6,7 @@ import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, hasStoredSession, plogPageState, publishError, stringOption, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { plog } from "../../log";
-import { contractFor, fieldsFor } from "../contracts";
+import { contractFor, fieldsFor } from "../platformContracts";
 import { awaitResult } from "../verify";
 
 /**

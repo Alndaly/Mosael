@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from app.core.rate import DownloadRate
+from app.core.transfer_rate import DownloadRate
 
 
 def test_a_burst_does_not_read_as_infinite_then_zero() -> None:
@@ -84,14 +84,14 @@ def test_nobody_hand_rolls_the_speed_math_again() -> None:
     """转写和克隆两条下载路曾经各有一份 `(现在 - 上次) / dt`,于是同一个毛病要修两遍。
 
     这条盯的是"别再长出第三份"。判据是**形状**:给一个叫 speed/rate 的名字赋一个"差 / 间隔"。
-    新写下载进度时改用 core.rate.DownloadRate。
+    新写下载进度时改用 core.transfer_rate.DownloadRate。
     """
     import ast
     import pathlib
 
     offenders: list[str] = []
     for path in sorted(pathlib.Path("app").rglob("*.py")):
-        if path.as_posix() == "app/core/rate.py":  # 它就是那一份实现
+        if path.as_posix() == "app/core/transfer_rate.py":  # 它就是那一份实现
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

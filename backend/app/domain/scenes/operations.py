@@ -18,7 +18,7 @@ from app.core.unit_of_work import after_commit
 from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.db import references
-from app.domain.references import referrers
+from app.domain.referrers import referrers
 from app.ai.providers.contracts.generation import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from app.domain.scenes import glb
 from app.domain.scenes.types import SceneContent

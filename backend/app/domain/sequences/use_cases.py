@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.i18n import tr
 from app.db.models import Board, Project, Sequence, Track, User
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, require_sequence_access
-from app.domain.references import referrers
+from app.domain.referrers import referrers
 from app.domain.sequences._timeline import DEFAULT_CANVAS
 from app.domain.sequences.creation import copy_sequence, create_sequence_scaffold
 from app.domain.sequences.errors import SequenceDomainError

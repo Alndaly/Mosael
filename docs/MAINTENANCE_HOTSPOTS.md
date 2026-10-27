@@ -97,10 +97,10 @@ Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`�
 - 已把小红书等平台 helper 移回对应 Adapter。`PageDriver` 只保留导航、DOM 探测、可信输入、文件、
   cookie、诊断与截图这些通用浏览器能力。
 - **2026-10-24 又收了三层**(ADR 0080):
-  - `contract.ts` / `contracts.ts`:平台事实(入口 / 文件框 / 提交 / 成功信号 / 浮层)成了数据;
+  - `platformContract.ts` / `platformContracts.ts`:平台事实(入口 / 文件框 / 提交 / 成功信号 / 浮层)成了数据;
   - `overlays.ts`:挡路浮层的声明式关法,执行器每步之前统一跑;
   - `verify.ts`:判定原语(文字进没进 / 按行按顺序 / 成功信号带 `formGone` 闸);
-  - `fakePage.ts` + `contracts.pipeline.test.ts`:平台 × 形状自动展开的管道测试。
+  - `fakePage.ts` + `platformContracts.pipeline.test.ts`:平台 × 形状自动展开的管道测试。
 
 **Completed (2026-10-27)**
 

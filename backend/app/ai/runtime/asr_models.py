@@ -34,7 +34,7 @@ from app.ai.runtime import remote_size
 from app.ai.runtime import workers
 from app.core import interpreter, pip_install, run_log
 from app.core.child_process import ChildProcess, popen_text, run_logged
-from app.core.rate import DownloadRate
+from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line
 
@@ -955,7 +955,7 @@ def _download_body(model_id: str) -> None:
     threading.Thread(target=lambda: [None for _ in child.raw_lines()], daemon=True).start()
 
     # 速度按**最近一段**算,不是按最近一次采样:下载器成块写盘,单窗口读数会在 0 和几百 MB/s
-    # 之间跳,而 ETA 在跳到 0 的那一瞬就消失。和克隆那条下载路共用一份实现(core.rate)。
+    # 之间跳,而 ETA 在跳到 0 的那一瞬就消失。和克隆那条下载路共用一份实现(core.transfer_rate)。
     rate = DownloadRate()
     rate.update(last_bytes, at=started)
     # **分母问源要**,不用目录里那个写死的估算。用户已经在等这次下载,所以这里可以阻塞去问

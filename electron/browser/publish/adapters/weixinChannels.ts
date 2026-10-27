@@ -5,7 +5,7 @@ import { ACTION_TIMEOUT, HUMAN_INTERVENTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIME
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { AutomationBlockedError } from "../../errors";
-import { contractFor, fieldsFor } from "../contracts";
+import { contractFor, fieldsFor } from "../platformContracts";
 import { awaitResult } from "../verify";
 import { plog } from "../../log";
 

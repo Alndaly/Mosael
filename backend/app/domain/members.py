@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.core.i18n import LocalizedError, tr
 from app.core.security import hash_password
-from app.core.tokens import token_digest
+from app.core.token_digest import token_digest
 from app.core.unit_of_work import after_commit
 from app.db.models import InviteLink, Notification, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
 from app.domain import deployment

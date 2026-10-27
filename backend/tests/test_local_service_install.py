@@ -575,7 +575,7 @@ def test_后端退出_删连接时_正在装的先取消(plugged) -> None:
 
 
 def test_速度按同一个文件的字节和时间算_换文件重新量(monkeypatch: pytest.MonkeyPatch) -> None:
-    """和别的下载同一个算法(core/rate 的滑动平均):第一个点没有速度,之后收敛到真实速率;换了文件重新量。"""
+    """和别的下载同一个算法(core/transfer_rate 的滑动平均):第一个点没有速度,之后收敛到真实速率;换了文件重新量。"""
     from app.domain.local_services.logs import ServiceLog
 
     clock = [100.0]

@@ -177,7 +177,7 @@ TikTok、YouTube 社区帖)只能转成图片轮播(一页一图)。这是上一
   「上传图文,请先切换到图片 tab」。
 - 两档的拖拽区文案不同:视频「拖拽视频到此或点击上传」、图文「**上传图片**,或写文字生成图片」;
   文案会随改版换,所以适配器拿**文件 input 的 `accept`** 当主判据(视频 `video/*`、图文 `image/*`)。
-- 「形状 → 进入步骤」那张表已经搬进**平台契约**(`electron/browser/publish/contracts.ts` 的
+- 「形状 → 进入步骤」那张表已经搬进**平台契约**(`electron/browser/publish/platformContracts.ts` 的
   `entry[kind]`):直连地址 / 要点的 tab / 该选中的 tab / 接受的扩展名。小红书长文那一档仍是
   两步、无文件上传,接的时候照抄现有的 `entry.video` 写法即可(见 ADR 0080)。
 

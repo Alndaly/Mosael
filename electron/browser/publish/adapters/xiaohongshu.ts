@@ -5,7 +5,7 @@ import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOpt
 import { t } from "../../../i18n.cjs";
 import { platformName } from "../platforms";
 import { SELECTORS } from "../selectors";
-import { contractFor, fieldsFor } from "../contracts";
+import { contractFor, fieldsFor } from "../platformContracts";
 import { AutomationBlockedError } from "../../errors";
 import { clearOverlays } from "../overlays";
 import { linesEntered, successVisible } from "../verify";

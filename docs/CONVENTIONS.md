@@ -247,7 +247,7 @@ SQLite 同一时刻只有一个写事务。从第一句写到提交,别的写入
 
 画布、工作流图、生成请求、3D 场景、定时任务的 JSON 里点名的素材 / 资产 / 场景 / 时间线……由 `db/references`
 按一份抽取规则派生进 `record_references`:flush 时跟着写,启动时按规则版本号对账重建。「谁还指着它」用
-`domain/references.referrers` 查,**不要**再把整列 JSON 转字符串去 `LIKE`,也不要逐行遍历。
+`domain/referrers.referrers` 查,**不要**再把整列 JSON 转字符串去 `LIKE`,也不要逐行遍历。
 
 - 新增一种来源或一个点名字段:改 `db/references` 的抽取规则,并把 `EXTRACTOR_VERSION` 加一。
 - 绕过 flush 的写(比较并交换的 `update(Board)…values(canvas=…)`)要就地 `references.resync`

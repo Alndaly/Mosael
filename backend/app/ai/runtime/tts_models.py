@@ -26,7 +26,7 @@ from typing import Any
 
 from app.core import interpreter, pip_install, run_log
 from app.core.child_process import ChildProcess, popen_text, run_logged
-from app.core.rate import DownloadRate
+from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
 from app.ai.runtime import remote_size

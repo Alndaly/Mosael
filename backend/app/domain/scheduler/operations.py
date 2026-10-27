@@ -11,12 +11,12 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.core.tokens import token_digest
+from app.core.token_digest import token_digest
 from app.db import references
 from app.db.models import ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import create_job
 from app.domain.providers.moved_models import renamed
-from app.domain.references import referrers
+from app.domain.referrers import referrers
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ def create_scheduled_task(
 
 def issue_webhook_secret(db: Session, task: ScheduledTask) -> str:
     """给 webhook 任务发一把新的触发密钥,**返回原文** —— 这是原文唯一一次出现:库里只存哈希
-    (`webhook_secret_hash`,见 core/tokens.token_digest),调用方把它放进这一次的响应给主人看一眼。
+    (`webhook_secret_hash`,见 core/token_digest.token_digest),调用方把它放进这一次的响应给主人看一眼。
 
     外部触发路由不走登录态,按这把密钥鉴权(见 api/routes/hooks);它同时管着触发、查进度和取消三件事。
     """

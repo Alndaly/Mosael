@@ -2,7 +2,7 @@
 
 - 状态:Accepted — 2026-10-24,已实现
 - 相关:ADR 0076(发布的内容形状)、ADR 0078(失败取证与人工兜底)、ADR 0006(旧数据用迁移)
-- 代码位置:`electron/browser/publish/contract.ts`、`electron/browser/publish/contracts.ts`、
+- 代码位置:`electron/browser/publish/platformContract.ts`、`electron/browser/publish/platformContracts.ts`、
   `electron/browser/publish/overlays.ts`、`electron/browser/publish/verify.ts`、`electron/browser/publish/fakePage.ts`、
   `electron/browser/publish/publishWorker.ts`、`backend/app/db/migrations.py`
 
@@ -36,7 +36,7 @@
 - `overlays`:会挡路的浮层(见第 3 条)。
 
 平台页面上的中文留在 `selectors.ts`(那是**匹配真实站点**的词表,豁免翻译),契约引用它 ——
-所以 `contracts.ts` 里一个中文字面量都没有(CI 的 `uiTextIsTranslated` 棘轮盯着这条)。
+所以 `platformContracts.ts` 里一个中文字面量都没有(CI 的 `uiTextIsTranslated` 棘轮盯着这条)。
 
 **适配器只留平台特有动作**:小红书正文的逗号成段、抖音的 zone 编辑器、B站的封面、YouTube 的
 "列表里出现本次上传的视频 ID"。其余(入口、文件框、提交、成功判定)一律从契约来。
@@ -79,7 +79,7 @@
 ### 6. 契约要有可执行的测试
 
 `fakePage.ts` 提供一个**假页面**(地址 / 文字 / 选择器在不在 / 编辑器内容 / 点过谁 / 交了哪些文件),
-`contracts.pipeline.test.ts` 用它把「平台 × 形状」**自动展开**地跑一遍:进得去、交得了、
+`platformContracts.pipeline.test.ts` 用它把「平台 × 形状」**自动展开**地跑一遍:进得去、交得了、
 成功认得出(**含 `formGone` 闸门**)、浮层清得掉、正文按行按顺序。新平台 / 新形状会自动多出一组
 用例 —— 要么过、要么红,漏不掉。
 

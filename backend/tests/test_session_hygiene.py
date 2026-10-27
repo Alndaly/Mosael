@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.core.security import revoke_session
-from app.core.tokens import token_digest
+from app.core.token_digest import token_digest
 from app.db.models import AuthSession
 from tests.util import PASSWORD, fresh_client
 

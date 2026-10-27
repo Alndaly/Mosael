@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.i18n import LocalizedError, get_current_locale, tr
-from app.core.rate import DownloadRate
+from app.core.transfer_rate import DownloadRate
 from app.domain.local_services.errors import LocalServiceError
 from app.domain.local_services.logs import ServiceLog
 from app.domain.plugins.manifest import text_of
@@ -50,7 +50,7 @@ TRIAL_TITLES = {
 }
 #: 一份安装计划最多几步(插件说的,再加宿主那一步)。
 MAX_STEPS = 20
-#: 算速度的平滑:这么多秒之前的样本权重减半(core/rate,和别的下载同一个算法)。
+#: 算速度的平滑:这么多秒之前的样本权重减半(core/transfer_rate,和别的下载同一个算法)。
 SPEED_HALF_LIFE_SECONDS = 3.0
 #: 后端退出时等正在装的停下最多多久(插件收到取消文件后停掉 pip,一般一两秒)。
 SHUTDOWN_WAIT_SECONDS = 15.0
@@ -150,7 +150,7 @@ class InstallRun:
         self.item, self.done_bytes, self.total_bytes, self.speed, self._measuring = None, None, None, None, None
 
     def _measure(self, key: str, item: Any, done: int | None) -> None:
-        """同一步、同一个文件的字节 → 速度(core/rate 的滑动平均,抖动磨平)。换了文件就重新开始量。"""
+        """同一步、同一个文件的字节 → 速度(core/transfer_rate 的滑动平均,抖动磨平)。换了文件就重新开始量。"""
         if done is None:
             return
         if self._measuring != (key, item):

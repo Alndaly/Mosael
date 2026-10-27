@@ -115,7 +115,7 @@ YouTube 另有一路:详情页上的 youtu.be 链接(适配器早就在读,用�
 
 ## 平台契约与判定口径(改适配器前先读这一节)
 
-每个平台"发布这件事"写成一份**契约**(`electron/browser/publish/contract.ts`、`contracts.ts`):
+每个平台"发布这件事"写成一份**契约**(`electron/browser/publish/platformContract.ts`、`platformContracts.ts`):
 按形状的入口(直连地址 / 要点的 tab)、按形状的文件框、提交按钮、**成功信号**、要关的浮层。
 页面上的中文与 CSS 在 `electron/browser/publish/selectors.ts`(匹配真实站点的词表,豁免翻译),契约引用它。
 
@@ -123,14 +123,14 @@ YouTube 另有一路:详情页上的 youtu.be 链接(适配器早就在读,用�
 
 | 你要改的 | 改哪里 |
 | --- | --- |
-| 投稿地址 / tab 文案 / 文件框 / 提交按钮 / 成功判据 / 该关的提示框 | **契约**(`contracts.ts`)+ 必要时 `selectors.ts` |
+| 投稿地址 / tab 文案 / 文件框 / 提交按钮 / 成功判据 / 该关的提示框 | **契约**(`platformContracts.ts`)+ 必要时 `selectors.ts` |
 | 那个平台特有的动作(逗号成段、zone 编辑器、封面、视频 ID 核对) | 适配器本身 |
 | "这一次到底成没成"的口径 | **`electron/browser/publish/verify.ts`**(`textEntered` / `linesEntered` / `successVisible` / `awaitResult`) |
 | "平台弹了个东西挡住下一步" | **`electron/browser/publish/overlays.ts`** 的规则 + `selectors.ts` 的 `overlays` |
 
 执行器在**每一步之前**统一清一遍浮层(`publishWorker` 的 `step()`),适配器不需要记得"这里可能有个提示框"。
 
-**改契约的代价**:平台改版导致契约失配时,`contracts.pipeline.test.ts`(假页面 + 平台 × 形状自动展开)
+**改契约的代价**:平台改版导致契约失配时,`platformContracts.pipeline.test.ts`(假页面 + 平台 × 形状自动展开)
 会先在 CI 里红;真机失败时也会说出具体是哪一步、缺什么,而不是一句"未确认发布"。
 
 **旧数据不许用运行时分支兼容**:任务与工作流图里的旧形状由迁移一次补齐(见

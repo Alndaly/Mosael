@@ -1,10 +1,10 @@
 /**
- * 各平台的页面契约(见 contract.ts 的说明)。**这是平台事实的唯一手写处**:
+ * 各平台的页面契约(见 platformContract.ts 的说明)。**这是平台事实的唯一手写处**:
  * 页面词表仍在 selectors 里(CSS/文案),形状怎么落、怎么算成功、哪些浮层要关、每种形状填哪些
  * 字段,在这里。适配器的填表动作只经 `fieldsFor` 取字段。
  */
 import { resolvePlatform, type SupportedPlatform } from "./platforms";
-import type { PlatformContract, PlatformFields } from "./contract";
+import type { PlatformContract, PlatformFields } from "./platformContract";
 import type { ContentKind } from "../types";
 import { SELECTORS } from "./selectors";
 

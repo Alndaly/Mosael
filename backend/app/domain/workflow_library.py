@@ -85,7 +85,7 @@ from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError,
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 from app.domain.providers import models as provider_models
 from app.domain.providers import moved_models
-from app.domain.references import referrers
+from app.domain.referrers import referrers
 from app.media.paths import resolve_key
 
 logger = logging.getLogger(__name__)

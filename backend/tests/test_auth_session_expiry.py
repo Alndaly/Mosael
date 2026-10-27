@@ -32,7 +32,7 @@ from tests.util import PASSWORD, fresh_client
 
 
 def _row(token: str) -> AuthSession | None:
-    """按**来客手上那串**取行 —— 库里存的是它的哈希(见 core/tokens),主键不再是令牌本身。"""
+    """按**来客手上那串**取行 —— 库里存的是它的哈希(见 core/token_digest),主键不再是令牌本身。"""
     with SessionLocal() as db:
         return find_session(db, token)
 
