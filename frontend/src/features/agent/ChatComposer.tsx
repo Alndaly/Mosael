@@ -5,6 +5,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { PluginKey } from "@tiptap/pm/state";
 
 import { useI18n } from "@/app/preferences";
+import { pauseCompositionObserver, resumeCompositionObserver } from "@/components/app/compositionObserver";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { useExternalContent } from "@/components/app/useExternalContent";
@@ -306,6 +307,11 @@ export function ChatComposer({
       //: 会把它当正文插进来。认领下来(它只 preventDefault、不拦冒泡),文件交给外面整块对话区上的
       //: 附件拖放(见 composerAttachments)。编辑器里自己挪一段字(moved)照旧归它。
       handleDrop: (_view, event, _slice, moved) => !moved && Array.from(event.dataTransfer?.types ?? []).includes("Files"),
+      handleDOMEvents: {
+        //: 中文 IME 组词时不能逐拍把候选写进文档(退格会留下拼音),见 compositionObserver。
+        compositionstart: pauseCompositionObserver,
+        compositionend: resumeCompositionObserver,
+      },
       handleKeyDown: (_view, event) => {
         if (!sendsOnEnter(event, menuOpenRef.current)) return false;
         event.preventDefault();
@@ -314,6 +320,9 @@ export function ChatComposer({
       },
     },
     onUpdate: ({ editor: instance }) => {
+      //: 组词中的 DOM 只是输入法的候选,不是用户确认的正文。把它 emit 给父层,父层再经
+      //: useExternalContent 回灌时,退格后残留的拼音会被当成正文追加(中文输入法 + Backspace)。
+      if (instance.view.composing) return;
       const next = instance.getJSON();
       emitted.current = JSON.stringify(next);
       onChange(next);

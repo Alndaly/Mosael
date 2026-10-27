@@ -16,6 +16,7 @@ commit list and downloadable artifacts.
 
 - 确认卡按对话与 `tool_call_id` 幂等，ACK 携带请求关联 ID，压缩调用的真实用量纳入计费。
 - 强制技能上下文有总大小上限并明确标记截断；未知外部确认卡至少展示工具名与可检查的参数。
+- 中文输入法组词时暂停 ProseMirror 的 DOM 观察，退格缩短候选不会再让残留拼音进入正文。
 
 ### 桌面发布生命周期
 
