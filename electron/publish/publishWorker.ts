@@ -847,6 +847,12 @@ export function focusViewPage(): void {
   views?.focusForeground();
 }
 
+/** 原生网页占着前台时,菜单的 ⌘C 先问 Mosael 自己的选中文字;没有才落回网页。 */
+export function copyHostSelectionIfAny(): Promise<boolean> {
+  if (!views?.visibleAccountId) return Promise.resolve(false);
+  return views.copyHostSelectionIfAny();
+}
+
 /** 键盘交回 Mosael 的渲染层(点在工作台那一列、发布顶栏等壳里之后)。 */
 export function focusHostWindow(): void {
   views?.focusHost();

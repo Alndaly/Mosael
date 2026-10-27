@@ -25,7 +25,7 @@ commit list and downloadable artifacts.
 
 - 停止浏览器 worker 会回报终态并释放租约，deferred 分区会自动重试且不会重复搬迁。
 - 登录取消不再覆盖账号状态，主窗口与延迟 IPC 按生命周期防崩，OAuth 持久化失败仍保留本轮新凭据。
-- 点进 ComfyUI 工作台右列或发布顶栏时先把键盘焦点交回 Mosael，`Cmd+C` 不会再复制到底下网页的选中内容。
+- 点进 ComfyUI 工作台右列或发布顶栏时先把键盘焦点交回 Mosael；菜单 `Cmd+C` 优先复制 Mosael 自己的选区，没有选区才交给前台网页。
 
 ### 构建与发布
 

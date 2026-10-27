@@ -871,6 +871,16 @@ export class AccountViewManager {
     this.visibleWebContents()?.focus();
   }
 
+  /** 内嵌网页在前台时,把「宿主就绪层里选中的文字」交给系统剪贴板;没有选中就 false。 */
+  async copyHostSelectionIfAny(): Promise<boolean> {
+    const host = this.hostWebContents();
+    if (!host) return false;
+    const text = await host.executeJavaScript("window.getSelection()?.toString() ?? ''").catch(() => "");
+    if (!text || !String(text).trim()) return false;
+    host.copy();
+    return true;
+  }
+
   /** 键盘交回 Mosael 的渲染层(点在工作台那一列、发布顶栏等壳里之后)。 */
   focusHost(): void {
     if (this.window && !this.window.isDestroyed()) this.window.focus();

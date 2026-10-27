@@ -13,6 +13,7 @@ const {
   shell,
   systemPreferences,
   globalShortcut,
+  webContents,
 } = require("electron");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
@@ -1001,7 +1002,18 @@ function buildAppMenu() {
         { role: "redo", label: t("menu_redo") },
         { type: "separator" },
         { role: "cut", label: t("menu_cut") },
-        { role: "copy", label: t("menu_copy") },
+        {
+          //: 原生网页占着前台时,系统焦点可能还在那个 WebContentsView 上。先看 Mosael 自己的选中文字,
+          //: 没有再执行默认复制 —— 否则工作台右列选中的回答会被底下画布的 Text 节点顶掉。
+          label: t("menu_copy"),
+          accelerator: "CommandOrControl+C",
+          click: () => {
+            void (async () => {
+              if (publish?.embeddedViewVisible?.() && await publish.copyHostSelectionIfAny?.()) return;
+              webContents.getFocusedWebContents()?.copy();
+            })();
+          },
+        },
         { role: "paste", label: t("menu_paste") },
         { role: "selectAll", label: t("menu_selectAll") },
       ],

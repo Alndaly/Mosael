@@ -24,6 +24,7 @@ export {
   showFloat,
   focusViewPage,
   focusHostWindow,
+  copyHostSelectionIfAny,
   hideFloat,
   showToasts,
   hideToasts,
