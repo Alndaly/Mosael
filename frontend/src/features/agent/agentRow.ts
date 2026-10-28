@@ -83,6 +83,19 @@ export const AGENT_TURN_BLOCKS_CLASS = "grid w-full min-w-0 grid-cols-[minmax(0,
  */
 export const MESSAGE_FOOTER_ROW_CLASS = "mt-1.5 flex min-h-[calc(1lh+0.25rem)] items-center gap-1.5 text-ui-xs";
 
+/**
+ * 页脚上一个动作长什么样。**抽成一份**是因为这一行里已经有两个了(复制、朗读),而它们
+ * 各写各的时候立刻就漂了:一个是带文字的胶囊、11px 图标、小圆角;另一个是方形图标钮、
+ * 13px、大圆角、还自带一套高度和焦点样式。并排放着像两个不同来处的东西。
+ *
+ * **字号不写在这里**:tokens.css 里那条无层级的 `button{font:inherit}` 会压掉按钮自己的
+ * 字号类(class 还在,尺寸静默回落到继承值)。所以字号由行容器定,按钮继承 —— 见下面。
+ */
+export const FOOTER_ACTION_CLASS =
+  "inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 " +
+  "text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground " +
+  "disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
+
 /** 助手那一轮占的那一列(ChatBubble 和骨架共用;骨架换成真内容时不挪位置)。 */
 export const CHAT_ASSISTANT_ROW_CLASS = "relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]";
 

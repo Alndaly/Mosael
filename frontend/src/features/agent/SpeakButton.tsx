@@ -22,7 +22,7 @@ import { playBlob, stopPlayback } from "@/lib/audioPlayback";
 import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
 import { speakText } from "@/features/agent/speechPipeline";
 import { loadSpeechMode, prefetchSpeechMode } from "@/features/agent/speechSettings";
-import { FOOTER_ACTION_CLASS } from "@/features/agent/messageUsage";
+import { FOOTER_ACTION_CLASS } from "@/features/agent/agentRow";
 import { cn } from "@/lib/utils";
 
 export function SpeakButton({

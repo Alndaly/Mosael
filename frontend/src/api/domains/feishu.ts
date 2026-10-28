@@ -1,4 +1,4 @@
-import { api } from "@/api/client";
+import { api } from "@/api/transport";
 
 /** 飞书机器人(设置 → 飞书机器人)。**接口字面量住在这一层**:界面只调函数(design/apiSeam)。 */
 

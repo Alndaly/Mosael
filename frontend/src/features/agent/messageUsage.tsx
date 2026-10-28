@@ -8,7 +8,7 @@ import { usePreferences } from "@/app/preferences";
 import { Hint } from "@/components/ui/tooltip";
 import { formatCosts, sumByCurrency, type CostAmount } from "@/lib/money";
 import { formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
-import { MESSAGE_FOOTER_ROW_CLASS } from "@/features/agent/agentRow";
+import { FOOTER_ACTION_CLASS, MESSAGE_FOOTER_ROW_CLASS } from "@/features/agent/agentRow";
 import { cn } from "@/lib/utils";
 
 /**
@@ -133,19 +133,6 @@ function formatUsageCost(
  * 助手那侧是耗时/tokens/计费,用户那侧是发出的时间 —— 两边**长得一样**,因为它们是同一件事:
  * 这条消息的元信息。分成两个组件各写一份的话,间距、字号、悬停行为会各走各的。
  */
-/**
- * 页脚上一个动作长什么样。**抽成一份**是因为这一行里已经有两个了(复制、朗读),而它们
- * 各写各的时候立刻就漂了:一个是带文字的胶囊、11px 图标、小圆角;另一个是方形图标钮、
- * 13px、大圆角、还自带一套高度和焦点样式。并排放着像两个不同来处的东西。
- *
- * **字号不写在这里**:tokens.css 里那条无层级的 `button{font:inherit}` 会压掉按钮自己的
- * 字号类(class 还在,尺寸静默回落到继承值)。所以字号由行容器定,按钮继承 —— 见下面。
- */
-export const FOOTER_ACTION_CLASS =
-  "inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 " +
-  "text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground " +
-  "disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent";
-
 export function MessageFooter({
   content,
   children,

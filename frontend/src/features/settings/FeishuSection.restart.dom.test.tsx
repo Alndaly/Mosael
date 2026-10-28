@@ -14,7 +14,7 @@ import { beforeEach, expect, it, vi } from "vitest";
  */
 
 const api = vi.hoisted(() => vi.fn());
-vi.mock("@/api/client", () => ({ api }));
+vi.mock("@/api/transport", () => ({ api }));
 vi.mock("@/app/preferences", async () => {
   const { messages } = await import("@/app/messages");
   const table = messages["zh-CN"] as Record<string, string>;
