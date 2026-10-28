@@ -564,24 +564,16 @@ export function SessionList<S extends ListedSession>({
           />
         </div>
       )}
-      <div
-        className={cn(
-          "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5",
-          !showSkeleton && loaded && ((mainCount === 0 && groupList.length === 0 && byGroup.aside.length === 0) || (Boolean(keyword) && visible.length === 0)) &&
-            "content-center justify-items-center",
-        )}
-      >
+      {/* 一列两段:上面是列表(分组 → 未分组 → 来自别处,**分组永远在最上面**),下面是空态。空态排在分组之后、
+          占满剩下的高度并在其中居中 —— 此前它排在分组前面、整列居中:「来自别处」被挤到空态底下,空态贴着搜索框,
+          下面一大片空着(维护者 2026-10-29 指出);建过分组时它干脆不出现,一排「某某 0」看不出这一类一条都没有。 */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-1.5">
         {/* 还没读到:铺一屏骨架,而不是一个看着像「一条都没有」的空格子(见 SessionListSkeleton)。
             空态那两句、分组计数都在这一支外面 —— 它们只说「确实没有」。 */}
         {showSkeleton && <SessionListSkeleton label={t(spec.loading)} />}
         {!showSkeleton && (
           <>
-          {loaded && mainCount === 0 && groupList.length === 0 && !keyword && (
-            <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={emptyTitle ?? t(spec.empty)} />
-          )}
-          {keyword && visible.length === 0 && (
-            <EmptyState size="compact" icon={<SearchX size={15} />} title={t(spec.searchNoMatch)} />
-          )}
+          <div className="grid shrink-0 grid-cols-[minmax(0,1fr)] content-start gap-1">
           {groupList.map((group) => {
             const members = byGroup.map.get(group.id) ?? [];
             // 搜索时把没命中的分组整段收起 —— 一排「某某 0」既占地方,又让人以为搜错了。
@@ -641,6 +633,17 @@ export function SessionList<S extends ListedSession>({
             <div className="grid gap-1 pt-1" data-session-aside="">
               <GroupToggle open={asideShown} label={aside.title} count={byGroup.aside.length} onClick={() => setAsideOpen(!asideOpen)} />
               {asideShown && byGroup.aside.map(renderSession)}
+            </div>
+          )}
+          </div>
+          {/* 「这里一条都没有」只看这里开的(分组里的也算这里开的;「来自别处」不算):分组都是空的也照说。 */}
+          {(keyword ? visible.length === 0 : loaded && mainCount === 0) && (
+            <div data-session-empty="" className="grid min-h-0 flex-1 place-items-center">
+              {keyword ? (
+                <EmptyState size="compact" icon={<SearchX size={15} />} title={t(spec.searchNoMatch)} />
+              ) : (
+                <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={emptyTitle ?? t(spec.empty)} />
+              )}
             </div>
           )}
           </>
