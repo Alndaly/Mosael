@@ -89,7 +89,7 @@ from app.domain import local_services
 from app.domain.local_services import LocalServiceError
 from app.domain import model_library
 from app.domain.model_library import nsfw_local as model_nsfw_local
-from app.domain import workflow_library
+from app.domain import server_workflows
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
@@ -549,16 +549,16 @@ def get_model_node_folders(instance_id: str, body: ModelNodeFoldersRequest, db: 
 # 服务器上的文件:撞名回 409(带一个建议名,不覆盖);插件那一头说的错(连不上、它自己的报错)和路径不对回 422,原话交给界面。
 
 def _workflow_library_failed(exc: Exception) -> HTTPException:
-    if isinstance(exc, workflow_library.WorkflowConflict):
+    if isinstance(exc, server_workflows.WorkflowConflict):
         return HTTPException(status_code=409, detail={"code": "exists", "message": str(exc), "suggestion": exc.suggestion})
-    if isinstance(exc, workflow_library.WorkflowFolderNotEmpty):
+    if isinstance(exc, server_workflows.WorkflowFolderNotEmpty):
         return HTTPException(status_code=409, detail={"code": "not_empty", "message": str(exc), "count": exc.count})
-    if isinstance(exc, workflow_library.WorkflowStale):
+    if isinstance(exc, server_workflows.WorkflowStale):
         return HTTPException(status_code=409, detail={"code": "stale", "message": str(exc), "modified": exc.modified})
     return HTTPException(status_code=422, detail=str(exc))
 
 
-_WORKFLOW_LIBRARY_ERRORS = (workflow_library.WorkflowLibraryError, PluginDomainError, PluginRuntimeError)
+_WORKFLOW_LIBRARY_ERRORS = (server_workflows.WorkflowLibraryError, PluginDomainError, PluginRuntimeError)
 
 
 @router.get("/plugins/instances/{instance_id}/workflow-library", response_model=WorkflowLibraryOut)
@@ -567,7 +567,7 @@ def get_workflow_library(instance_id: str, db: DbSession, user: CurrentUser, wor
     给了 `workspace_id` 就带上这个工作区里最近一次用它生成的产出。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.library(db, user, instance, workspace_id=workspace_id)
+        return server_workflows.library(db, user, instance, workspace_id=workspace_id)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -578,7 +578,7 @@ def get_workflow_outputs(instance_id: str, path: str, workspace_id: str, db: DbS
     NSFW 的判断(和模型预览图同一套)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.outputs(db, user, instance, workspace_id=workspace_id, path=path)
+        return server_workflows.outputs(db, user, instance, workspace_id=workspace_id, path=path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -588,7 +588,7 @@ def mark_workflow_output_nsfw(instance_id: str, body: WorkflowOutputNsfwRequest,
     """手动标一份产出是不是 NSFW,`nsfw: null` 去掉标记。回新的判断(手动的压过本机识别)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.mark_output_nsfw(db, user, instance, workspace_id=body.workspace_id,
+        return server_workflows.mark_output_nsfw(db, user, instance, workspace_id=body.workspace_id,
                                                  asset_id=body.asset_id, nsfw=body.nsfw)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
@@ -599,7 +599,7 @@ def get_workflow_content(instance_id: str, path: str, db: DbSession, user: Curre
     """一张工作流的原文(导出成 JSON)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.content(db, instance, path)
+        return server_workflows.content(db, instance, path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -609,7 +609,7 @@ def get_workflow_app(instance_id: str, path: str, db: DbSession, user: CurrentUs
     """一张工作流的表单(ADR 0038、0045):全部能填的项、交回结果的输出节点、文件里的每张表单、读到时的改动时间。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.app_form(db, instance, path)
+        return server_workflows.app_form(db, instance, path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -620,7 +620,7 @@ def annotate_workflow(instance_id: str, body: WorkflowAnnotateRequest, db: Tx, u
     那张在读到之后被改过就不写,回 409 `stale`。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.annotate(
+        return server_workflows.annotate(
             db, instance, body.path, modified=body.modified, forms=[one.model_dump() for one in body.forms],
             results=body.results,
         )
@@ -634,7 +634,7 @@ def upgrade_workflow_marks(instance_id: str, body: WorkflowUpgradeMarksRequest, 
     那台机器上刚改过的那张跳过。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.upgrade_marks(db, instance, [one.model_dump() for one in body.paths])
+        return server_workflows.upgrade_marks(db, instance, [one.model_dump() for one in body.paths])
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -646,7 +646,7 @@ def get_form_usages(instance_id: str, workspace_id: str, db: DbSession, user: Cu
     这张表单的模型 id 和工具名(`…/workflow-library/app` 的回答里有)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return {"uses": workflow_library.form_usages(db, user, instance, workspace_id=workspace_id, model=model[:160],
+        return {"uses": server_workflows.form_usages(db, user, instance, workspace_id=workspace_id, model=model[:160],
                                                      tool=tool[:64])}
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
@@ -657,7 +657,7 @@ def get_canvas_app(instance_id: str, body: WorkflowCanvasRequest, db: DbSession,
     """工作台的「表单」页签(ADR 0038 §3):画布上现在这张(含没存的改动)的表单。不读、不写那台机器上的文件。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.app_live(db, instance, body.content, body.path)
+        return server_workflows.app_live(db, instance, body.content, body.path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -667,7 +667,7 @@ def get_canvas_marks(instance_id: str, body: WorkflowCanvasMarksRequest, db: DbS
     """表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.app_marks(
+        return server_workflows.app_marks(
             db, instance, body.content, forms=[one.model_dump() for one in body.forms], results=body.results,
         )
     except _WORKFLOW_LIBRARY_ERRORS as exc:
@@ -679,7 +679,7 @@ def run_canvas(instance_id: str, body: WorkflowCanvasRunRequest, db: Tx, user: C
     """工作台的「运行」(ADR 0038 §6):跑画布上现在这张,建一个普通的生成任务(模型是 `path` 那张工作流)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        created, job = workflow_library.run_canvas(
+        created, job = server_workflows.run_canvas(
             db, user, instance, workspace_id=body.workspace_id, project_id=body.project_id, path=body.path,
             prompt=body.prompt, workflow=body.workflow, client_id=body.client_id,
         )
@@ -695,7 +695,7 @@ def inspect_workflow_import(instance_id: str, body: WorkflowLibraryImportRequest
     """导入前先认一遍(不改那台机器):换成界面格式的那张图和它的预览。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.inspect_import(db, instance, text=body.text, data=body.data, filename=body.filename,
+        return server_workflows.inspect_import(db, instance, text=body.text, data=body.data, filename=body.filename,
                                                url=body.url)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
@@ -706,7 +706,7 @@ def save_workflow(instance_id: str, body: WorkflowLibrarySaveRequest, db: Tx, us
     """把导入的那张存进那台服务器的 workflows/(不覆盖)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.save(db, instance, body.path, body.content)
+        return server_workflows.save(db, instance, body.path, body.content)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -716,7 +716,7 @@ def install_workflow_nodes(instance_id: str, body: WorkflowInstallNodesRequest, 
     """经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.start_node_install(db, user, instance, workspace_id=body.workspace_id,
+        return server_workflows.start_node_install(db, user, instance, workspace_id=body.workspace_id,
                                                   packs=body.packs, versions=body.versions)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
@@ -727,7 +727,7 @@ def reboot_workflow_server(instance_id: str, db: DbSession, user: CurrentUser) -
     """经这个连接(ComfyUI-Manager)重启那台 ComfyUI,等它回来(正在跑的任务会中断 —— 界面上确认过)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.reboot(db, instance)
+        return server_workflows.reboot(db, instance)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -737,7 +737,7 @@ def copy_workflow(instance_id: str, body: WorkflowCopyRequest, db: Tx, user: Cur
     """在那台服务器上复制一张(不覆盖)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.copy(db, instance, body.path, body.new_path)
+        return server_workflows.copy(db, instance, body.path, body.new_path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -747,7 +747,7 @@ def rename_workflow(instance_id: str, body: WorkflowRenameRequest, db: Tx, user:
     """在那台服务器上改名 / 挪目录(不覆盖)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.rename(db, instance, body.path, body.new_path)
+        return server_workflows.rename(db, instance, body.path, body.new_path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -757,7 +757,7 @@ def trash_workflow(instance_id: str, body: WorkflowTrashRequest, db: Tx, user: C
     """「删除」:挪进那台服务器上的回收目录,能恢复。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.trash(db, instance, body.path)
+        return server_workflows.trash(db, instance, body.path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -767,7 +767,7 @@ def restore_workflow(instance_id: str, body: WorkflowRestoreRequest, db: Tx, use
     """从回收目录挪回去(原处被占了就撞名,带着新名字再来)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.restore(db, instance, body.path, body.new_path)
+        return server_workflows.restore(db, instance, body.path, body.new_path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -777,7 +777,7 @@ def create_workflow_folder(instance_id: str, body: WorkflowFolderRequest, db: Tx
     """在那台服务器的 workflows/ 里新建一个文件夹。已经有了回 409(带建议名)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.make_folder(db, instance, body.path)
+        return server_workflows.make_folder(db, instance, body.path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -787,7 +787,7 @@ def rename_workflow_folder(instance_id: str, body: WorkflowFolderRenameRequest, 
     """文件夹改名 / 挪到别的文件夹里:里面的工作流跟着换路径。目标已经有了回 409(带建议名),不合并进去。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.rename_folder(db, instance, body.path, body.new_path)
+        return server_workflows.rename_folder(db, instance, body.path, body.new_path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
@@ -797,7 +797,7 @@ def trash_workflow_folder(instance_id: str, body: WorkflowFolderRequest, db: Tx,
     """删除一个文件夹:只删空的,挪进回收目录。里面还有文件回 409(`not_empty`,带着几个)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.trash_folder(db, instance, body.path)
+        return server_workflows.trash_folder(db, instance, body.path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 

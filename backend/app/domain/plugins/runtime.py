@@ -87,8 +87,8 @@ MAX_OUTPUT_BYTES = 1_000_000
 
 #: **目录类回答**(工具清单、模型清单、模型库、工作流库、节点包、音色清单)的预算。它们不是「一次工具调用」,而是
 #: 「这台服务器此刻有什么」的一整份目录。六处调用点:`dynamic_tools.refresh`(`op tools`)、`generation_catalog`
-#: (`op models`)、`model_library.library`(`op library`)、`workflow_library.library`(`op workflows`)、
-#: `workbench_agent.node_packs`(`op node_packs`:装了哪些节点包,每个最多 60 个类型)、
+#: (`op models`)、`model_library.library`(`op library`)、`server_workflows.library`(`op workflows`)、
+#: `workbench/agent.py 的 node_packs`(`op node_packs`:装了哪些节点包,每个最多 60 个类型)、
 #: `voices.engine_catalog._plugin_voices`(`op voices`:这个引擎 / 账号里能念的音色)。
 #:
 #: 撞过的那一次(维护者截图):远端 ComfyUI 连接显示「出错了 · 已开启 0/7 个工具」,原因只有一句

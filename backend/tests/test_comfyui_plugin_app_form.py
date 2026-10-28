@@ -253,7 +253,7 @@ def test_能填的项_ComfyUI给的名字和说明_hidden的不列_advanced的�
 
 def test_每项交回的节点名是一对_不再另带英文那份(plugin) -> None:
     """节点名按语言分着交回(`{"zh", "en"}` 一对),插件自己不挑一种、也不塌成一句 —— 挑一句是**宿主按读的人的
-    语言**做的事(见 backend `app/domain/workflow_library._picked`)。此前另带过一条 `node_label_en`(挑一条显示、
+    语言**做的事(见 backend `app/domain/server_workflows._picked`)。此前另带过一条 `node_label_en`(挑一条显示、
     英文名另走一路),那个设计被否掉了。图级的项(种子、尺寸、跑几遍)没有节点,不带。
 
     本地化名字(花式模糊)和英文名(Fancy Blur)不是同一个词的那种最要看这一条:两种语言都在同一对里。"""

@@ -130,7 +130,7 @@ def delete_connection(db: Session, profile: ProviderProfile) -> None:
     (`generation_jobs` / `agent_sessions` / `provider_usage_events`.provider_profile_id)写的都是
     `ondelete="SET NULL"`,行一没,那些记录上的出处当场变成 NULL,而且**没有任何代码回填**。
     代价跑出来过:工作流详情的「最近的产出」拿 `provider_profile_id == profile.id` 查
-    (domain/workflow_library._runs),从此再也认不出那些产出;用量记录也不再说得清钱花在哪条连接上。
+    (domain/server_workflows._runs),从此再也认不出那些产出;用量记录也不再说得清钱花在哪条连接上。
 
     同一个仓库里早有正解:GenerationSession 的 `origin_kind`/`origin_id` **故意不设外键**,注释写着
     「要的正是『东西删了,会话照旧』」。连接也是同一回事 —— 它是历史的出处,删掉它不该连带抹掉

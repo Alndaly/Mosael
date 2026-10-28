@@ -922,7 +922,7 @@ class WorkflowRecentOutputOut(ApiModel):
 
 
 class WorkflowRecentOutputsOut(ApiModel):
-    """详情里那一组:新的在前,最多 workflow_library.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。"""
+    """详情里那一组:新的在前,最多 server_workflows.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。"""
 
     outputs: list[WorkflowRecentOutputOut] = Field(default_factory=list)
     more: bool = False
@@ -1041,7 +1041,7 @@ class WorkflowFillableOut(ApiModel):
     input: str
     #: text / media / model / number / choice / toggle / seed / size / runs
     kind: Literal["text", "media", "model", "number", "choice", "toggle", "seed", "size", "runs"]
-    #: 人话名字:插件交回一对语言,宿主**按看的人的语言挑好的一句**(见 app/domain/workflow_library._picked)。
+    #: 人话名字:插件交回一对语言,宿主**按看的人的语言挑好的一句**(见 app/domain/server_workflows._picked)。
     #: 名字在边界上就是一句 —— 「带着语言表透到前端去挑」那一套维护者撤掉了(「为了 ComfyUI 和 Mosael 的语言不匹配
     #: 问题特地兼容做一套方案是不合理的」),搜索、撞名、显示都读这一句
     title: str = ""

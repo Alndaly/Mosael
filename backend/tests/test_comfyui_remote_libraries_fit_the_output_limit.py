@@ -150,9 +150,9 @@ def test_工作流很多的远端_工作流库读得出来(comfy) -> None:
 
 def test_工作流库真的超过预算时_整份不收_说得清(monkeypatch) -> None:
     """文案仍是「工具名(含 op)+ 上限 + 实际多大 + 下一步」,不是一句「超过大小限制」;而且不截断。"""
-    from app.domain import workflow_library
+    from app.domain import server_workflows
 
-    monkeypatch.setattr(workflow_library, "CATALOG_OUTPUT_BYTES", 1_000)
+    monkeypatch.setattr(server_workflows, "CATALOG_OUTPUT_BYTES", 1_000)
     with FakeComfyUI() as server:
         client = fresh_client()
         instance_id = _connect(client, server.url)

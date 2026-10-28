@@ -69,7 +69,7 @@
     {
       "shape": "any_node",
       "runtime": "python",
-      "location": "backend/app/domain/workflow_library.py",
+      "location": "backend/app/domain/server_workflows.py",
       "symbol": "_ANY_NODE",
       "note": "「同步到画布」那条链的宿主一侧:表单里那一项的 `node`、`results` 的每一项、插件交回的 `marks.nodes` 的键。"
     },

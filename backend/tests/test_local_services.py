@@ -722,22 +722,22 @@ def test_工作台打开前_ensure_等它就绪再回来(plugged, tmp_path: Path
 
 
 def test_工作流库的重启_插件说归宿主管就由宿主停了再起(plugged, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.domain import workflow_library
+    from app.domain import server_workflows
 
     instance_id = _connection(plugged)
     _configure(plugged, instance_id, _folder(tmp_path))
     restarted: list[str] = []
-    monkeypatch.setattr(workflow_library, "_require", lambda _db, _instance: None)
-    monkeypatch.setattr(workflow_library.tools, "invoke_host", lambda *_a, **_k: {"host_restart": True})
+    monkeypatch.setattr(server_workflows, "_require", lambda _db, _instance: None)
+    monkeypatch.setattr(server_workflows.tools, "invoke_host", lambda *_a, **_k: {"host_restart": True})
     monkeypatch.setattr(local_services, "restart", lambda _db, instance, wait=False: restarted.append(instance.id))
     with SessionLocal() as db:
-        assert workflow_library.reboot(db, db.get(PluginInstance, instance_id)) == {"back": True}
+        assert server_workflows.reboot(db, db.get(PluginInstance, instance_id)) == {"back": True}
     assert restarted == [instance_id], "不经 Manager 重启:那会让宿主以为它崩了"
 
-    monkeypatch.setattr(workflow_library.tools, "invoke_host", lambda *_a, **_k: {"back": True})
+    monkeypatch.setattr(server_workflows.tools, "invoke_host", lambda *_a, **_k: {"back": True})
     restarted.clear()
     with SessionLocal() as db:
-        assert workflow_library.reboot(db, db.get(PluginInstance, instance_id)) == {"back": True}
+        assert server_workflows.reboot(db, db.get(PluginInstance, instance_id)) == {"back": True}
     assert restarted == [], "连一台服务器的照旧由插件经 Manager 重启"
 
 

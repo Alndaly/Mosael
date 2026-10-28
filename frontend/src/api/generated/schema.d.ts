@@ -21813,7 +21813,7 @@ export interface components {
         };
         /**
          * WorkflowRecentOutputsOut
-         * @description 详情里那一组:新的在前,最多 workflow_library.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。
+         * @description 详情里那一组:新的在前,最多 server_workflows.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。
          */
         WorkflowRecentOutputsOut: {
             /** Outputs */

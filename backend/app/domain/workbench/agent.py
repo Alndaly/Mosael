@@ -598,13 +598,13 @@ def install_node_pack(db: Session, user: User, workspace_id: str, payload: dict[
             version=f"{payload.get('version') or ''} → {version}",
         )
 
-    from app.domain import workflow_library
+    from app.domain import server_workflows
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.runtime import PluginRuntimeError
-    from app.domain.workflow_library import WorkflowLibraryError
+    from app.domain.server_workflows import WorkflowLibraryError
 
     instance = connection(db, user, str(approved.get("instance_id") or ""))
-    job = workflow_library.start_node_install(db, user, instance, workspace_id=workspace_id, packs=[pack],
+    job = server_workflows.start_node_install(db, user, instance, workspace_id=workspace_id, packs=[pack],
                                               versions={pack: version} if version else None)
     job_id = job.id
     final = _wait_job(db, job_id, timeout=NODE_INSTALL_TIMEOUT_SECONDS)
@@ -618,7 +618,7 @@ def install_node_pack(db: Session, user: User, workspace_id: str, payload: dict[
     #: 重启没成有两种说法:插件当场报错(没装 Manager、Manager 不让重启)和它回来了 `back: false` —— 对用户是同一件事,
     #: 而**包已经装上了**,那句必须说出来,不能让卡只写着「失败」。
     try:
-        rebooted = workflow_library.reboot(db, instance)
+        rebooted = server_workflows.reboot(db, instance)
     except (WorkflowLibraryError, PluginDomainError, PluginRuntimeError) as exc:
         raise WorkbenchAgentError("workbenchErr_rebootFailed", name=instance.name, pack=pack, detail=str(exc)) from exc
     if not rebooted.get("back"):
@@ -657,11 +657,11 @@ def _run_controls(db: Session, user: User, workspace_id: str, instance: PluginIn
 
 
 def run_canvas(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """批准之后:跑画布上现在这张(含没存的改动,见 `workflow_library.run_canvas`)。
+    """批准之后:跑画布上现在这张(含没存的改动,见 `server_workflows.run_canvas`)。
 
     开卡之后画布上换了一张就不跑(跑的是用户没看过的那张);导出前后各让桥走一遍前端自己的「生成后怎样」。
     """
-    from app.domain import workflow_library
+    from app.domain import server_workflows
 
     instance = connection(db, user, str(payload.get("instance_id") or ""))
     proposed = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else {}
@@ -686,7 +686,7 @@ def run_canvas(db: Session, user: User, workspace_id: str, payload: dict[str, An
     node_id = str(payload.get("node_id") or "").strip()
     if node_id and node_id not in exported["prompt"]:
         raise WorkbenchAgentError("workbenchErr_runNodeMissing", node=node_id)
-    created, job = workflow_library.run_canvas(
+    created, job = server_workflows.run_canvas(
         db, user, instance, workspace_id=workspace_id, path=info["path"], prompt=exported["prompt"],
         workflow=exported["workflow"], client_id=str(exported.get("clientId") or ""),
         targets=[node_id] if node_id else None,

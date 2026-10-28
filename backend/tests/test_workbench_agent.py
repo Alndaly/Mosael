@@ -679,9 +679,9 @@ def test_批准后注册表变成封禁_执行前再拒一次(connected, monkeyp
         pytest.fail("封禁的包不该进入安装任务")
 
     from app.db.models import User
-    from app.domain import workflow_library
+    from app.domain import server_workflows
 
-    monkeypatch.setattr(workflow_library, "start_node_install", should_not_start)
+    monkeypatch.setattr(server_workflows, "start_node_install", should_not_start)
     with SessionLocal() as db:
         user = db.query(User).first()
         with pytest.raises(workbench_agent.WorkbenchAgentError) as caught:

@@ -3,7 +3,7 @@
 病在 `domain/providers/connections.delete_connection` 那一句 `db.delete(profile)`:引用连接的
 几个外键写的都是 `ondelete="SET NULL"`(`generation_jobs`、`agent_sessions`、`provider_usage_events`
 的 `provider_profile_id`),行一没,那些记录上的**出处**当场变成 NULL,而且没有任何代码回填。
-工作流详情的「最近的产出」拿 `provider_profile_id == profile.id` 查(`domain/workflow_library._runs`),
+工作流详情的「最近的产出」拿 `provider_profile_id == profile.id` 查(`domain/server_workflows._runs`),
 从此再也认不出那些产出;用量记录也不再说得清钱花在哪条连接上。
 
 同一个仓库里早有这条判断:`GenerationSession` 的 `origin_kind`/`origin_id` **故意不设外键**,注释写着
@@ -23,7 +23,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, GenerationJob, ProviderCredential, ProviderModel, ProviderProfile
-from app.domain import workflow_library
+from app.domain import server_workflows
 from app.domain.providers import selection
 from app.domain.providers.credentials import get as credential_of
 from tests.util import fresh_client
@@ -88,8 +88,8 @@ def test_删掉的连接从列表里消失_而它的历史产出照旧算得出�
 
         # ②的正面:`_runs` 是工作流库算「这张工作流最近的产出」的那一跳,它按 profile.id 查。
         # 这里用真实的那个函数,不另写一份等价判据 —— 拿它算得出那一份产出。
-        runs = workflow_library._runs(db, SimpleNamespace(id=""), profile, workspace_id, ["m"], [], limit=5)
-        found, more = workflow_library._produced(db, runs, workspace_id, limit=10)
+        runs = server_workflows._runs(db, SimpleNamespace(id=""), profile, workspace_id, ["m"], [], limit=5)
+        found, more = server_workflows._produced(db, runs, workspace_id, limit=10)
         assert [one["asset_id"] for one in found] == ["made-by-it"], "删连接之后,它做出来的产出还算得出来"
         assert more is False
 

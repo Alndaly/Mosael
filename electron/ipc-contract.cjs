@@ -304,7 +304,7 @@ function parseComfyWorkbenchOpen(value) {
 const CANVAS_NODE = /^-?\d{1,10}$/;
 //: **文件 / 执行图里的节点号**:`12` 是根图上的、`12:5` 是根图 12 号那个子图里面的 5 号、`12:5:3` 再往里一层
 //: (ADR 0042 §6 的写法)。应用表单的项、`marks.nodes` 的键都按它 —— 子图里面的节点一样放得进表单。
-//: 和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是**同一套判据** —— 契约里是 `any_node`
+//: 和宿主 `backend/app/domain/server_workflows.py` 的 `_ANY_NODE` 是**同一套判据** —— 契约里是 `any_node`
 //: (那一处和这一处在契约里各是一个 `implementations` 落点)。
 const ANY_NODE = /^\d{1,9}(?::\d{1,9})*$/;
 //: 从根图往里走的节点路径(`12:5`:根图 12 号节点那个子图里面的 5 号;ADR 0042 智能体指节点的写法),最多 16 层。

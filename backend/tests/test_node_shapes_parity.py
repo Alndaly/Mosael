@@ -76,7 +76,7 @@ def _oracle(shape: dict) -> re.Pattern[str]:
 def _unanchored(pattern: str) -> str:
     """去掉首尾的 `^` / `$`。
 
-    **锚是各自的写法,不是判据**:`workflow_library._ANY_NODE` 不带锚(调用点是 `fullmatch`),
+    **锚是各自的写法,不是判据**:`server_workflows._ANY_NODE` 不带锚(调用点是 `fullmatch`),
     桥的 `ANY_NODE` 带(`.test`),两处说的是同一件事。比之前先把它抹掉 —— 否则「这个判据
     逐字一致」会变成「这个判据的锚也一致」,而锚根本不影响任何一条用例。
     """
@@ -181,7 +181,7 @@ def _implementation_entry(location: str, symbol: str) -> dict:
 @pytest.mark.parametrize(
     "location,symbol",
     [
-        ("backend/app/domain/workflow_library.py", "_ANY_NODE"),
+        ("backend/app/domain/server_workflows.py", "_ANY_NODE"),
         ("backend/app/domain/workbench/agent.py", "_NODE_REF"),
         ("plugins/bundled/comfyui/tools/canvas_edit.py", "_PATH"),
     ],

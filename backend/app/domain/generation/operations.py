@@ -248,7 +248,7 @@ def _create_generation_job(
     按它找那一处的会话(别处一处一条,创作页每次新开);点了名的会话照旧,出处是那条会话开的时候定的。
 
     `workbench_graph`:ComfyUI 工作台跑**画布上现在这张**(ADR 0038 §6):前端 `graphToPrompt` 出来的 API 图、界面格式、前端的
-    `clientId`(工作流库那一侧规整过,见 workflow_library.run_canvas)。图就是用户要跑的样子 —— 不补声明的默认值、不按模型的
+    `clientId`(工作流库那一侧规整过,见 server_workflows.run_canvas)。图就是用户要跑的样子 —— 不补声明的默认值、不按模型的
     提示词 / 参数 / 素材规矩判(那些说的是存着的那张),调用方也不给提示词、参数和素材。它放在**任务的载荷**里交给执行器
     (几百 KB,不进生成参数、不进生成记录的请求,任务出口也不带它),生成记录上只记一句 `workbench: true`。
 

@@ -682,9 +682,9 @@ def test_导入_插件建议的路径不像样就不给_插件说认不出照原
 @pytest.mark.parametrize("body", [{}, {"text": "{}", "url": "https://huggingface.co/a/b/resolve/main/x.json"},
                                   {"url": "ftp://example.com/x.json"}, {"text": "x" * 200}])
 def test_导入_只给一样_链接要http_太大的不交给插件(library, monkeypatch, body) -> None:
-    from app.domain import workflow_library
+    from app.domain import server_workflows
 
-    monkeypatch.setattr(workflow_library, "MAX_IMPORT_CHARS", 100)
+    monkeypatch.setattr(server_workflows, "MAX_IMPORT_CHARS", 100)
     client, instance_id = library
     response = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/inspect", json=body)
     assert response.status_code == 422, response.text
@@ -1049,7 +1049,7 @@ def test_工作台_画布上这张的应用表单_没有路径和改动时间_�
 
 #: 一个节点号的形状(`12` 是根图上的、`12:5` 是根图 12 号那个子图里面的 5 号、`12:5:3` 再往里一层,ADR 0042 §6)。
 #: 用例**不在这里抄**:它住在 `contracts/node-shapes.json` 的 `any_node`,宿主 `_ANY_NODE`
-#: (`backend/app/domain/workflow_library.py`)和桥的 `ANY_NODE`(`electron/ipc-contract.cjs`)说的都是它,
+#: (`backend/app/domain/server_workflows.py`)和桥的 `ANY_NODE`(`electron/ipc-contract.cjs`)说的都是它,
 #: 而两侧的跑手读的是同一份文件(这边 + `electron/ipc-contract.test.ts`)。
 #:
 #: **抄一份的代价是「改判据」变成两处编辑,而两边都能各自变绿** —— 这正是桥曾经只认顶层节点号、而宿主

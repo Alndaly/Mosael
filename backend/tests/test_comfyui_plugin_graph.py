@@ -713,7 +713,7 @@ def test_标签压过内置表_有标签就用标签_没有才用表里的名字
 
 def test_名字一律交一对_画布上那句标签是一句就并进去两种语言同值(labels) -> None:
     """插件交给宿主的名字**一律是 `{"zh", "en"}` 一对**(挑哪一句显示是宿主按读的人的语言做的事,见 backend
-    `app/domain/workflow_library._picked`)。工作流自己存的那份标签是**一句、不带语言**:并进这一对时两种语言里
+    `app/domain/server_workflows._picked`)。工作流自己存的那份标签是**一句、不带语言**:并进这一对时两种语言里
     都写它 —— 插件不替一句标签编一门语言,也不把一对塌成一句。"""
 
     def cell(zh, en) -> "labels.Parameter":

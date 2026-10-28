@@ -56,6 +56,13 @@ _Avoid_: 超时(对付费的远端工作,我们这边没有"等太久"这回事)
 
 ### 工作流
 
+**工作流 vs 服务器上的工作流(工作流库)**:
+「工作流」单说指 **Mosael 自己的 DAG**:节点、边、引擎、修订、运行(`domain/workflows/`)。插件那台服务器(ComfyUI)上存着的
+`.json` 是**另一样东西** —— 由认领 `workflow_library` 能力的插件管,宿主这一侧在 `domain/server_workflows.py`(ADR 0035),
+界面上叫「工作流库」。它能被当成一个生成模型、也能被一个工作流节点调用,但它不是 Mosael 的工作流。
+_Avoid_: 把宿主模块再叫回 `workflow_library`(和 `workflows/` 只差一个词,读的人会 import 错);在说服务器上那张图时
+只说「工作流」;改掉能力 id `workflow_library`(那是插件清单里的契约,不是模块名)
+
 **节点注册表(NODE_TYPES)**:
 节点的元数据接缝:驱动校验、画布 UI、智能体提示。
 

@@ -367,7 +367,7 @@ def describe(node: str, name: str, class_type: str, title: str, order: int,
     表照旧管**排序和「收不收进高级」**(`rank` / `common` / `KNOWN_BY_CLASS`):有没有标签都一样。
 
     交回的是一对 `{"zh", "en"}`:`own` 那份标签是一句、不带语言,并进这一对时两种语言里都写它。挑哪一句显示是
-    宿主按**读的人的语言**做的事(见 backend `app/domain/workflow_library._picked`)—— 名字在这一层不塌成一句。
+    宿主按**读的人的语言**做的事(见 backend `app/domain/server_workflows._picked`)—— 名字在这一层不塌成一句。
     """
     known = KNOWN_BY_CLASS.get((class_type, name)) or KNOWN.get(name)
     custom = _custom_title(title, class_type)

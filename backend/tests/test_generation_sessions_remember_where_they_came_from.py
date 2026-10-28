@@ -188,18 +188,18 @@ def test_每个入口说自己是哪一处() -> None:
     assert seen["origin"] == STUDIO_ORIGIN
 
     # ComfyUI 工作台的「运行」:那台连接上的那张工作流(和对话的 comfyui 地方同一种 id)
-    from app.domain import workflow_library
+    from app.domain import server_workflows
 
     seen.clear()
     profile = SimpleNamespace(id="p1", vendor="plugin:dev.mosael.comfyui")
     row = SimpleNamespace(model_id="海报/封面.json", enabled=True, capability_ids=["image"])
     with SessionLocal() as db, \
-            mock_patch.object(workflow_library, "_require", lambda *_a: None), \
-            mock_patch.object(workflow_library, "_profile", lambda *_a: profile), \
-            mock_patch.object(workflow_library.provider_models, "get_model", lambda *_a: row), \
+            mock_patch.object(server_workflows, "_require", lambda *_a: None), \
+            mock_patch.object(server_workflows, "_profile", lambda *_a: profile), \
+            mock_patch.object(server_workflows.provider_models, "get_model", lambda *_a: row), \
             mock_patch("app.domain.generation.use_cases.generate", side_effect=_spy(seen)):
         with pytest.raises(_Seen):
-            workflow_library.run_canvas(db, SimpleNamespace(id="u1"), SimpleNamespace(id="c1"), workspace_id=ws,
+            server_workflows.run_canvas(db, SimpleNamespace(id="u1"), SimpleNamespace(id="c1"), workspace_id=ws,
                                         path="海报/封面.json", prompt={"3": {"class_type": "KSampler", "inputs": {}}},
                                         workflow=None, client_id="")
     assert seen["origin"] == Origin(COMFYUI, "c1/海报/封面.json")
