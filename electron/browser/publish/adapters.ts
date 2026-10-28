@@ -1,6 +1,6 @@
-import type { PublishTask } from "../types";
+import type { PublishTask } from "./publishTypes";
 import { resolvePlatform } from "./platforms";
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 import type { PublishAdapter } from "./adapters/shared";
 import { MockAdapter } from "./adapters/mock";
 import { DouyinAdapter } from "./adapters/douyin";

@@ -5,8 +5,8 @@
 import fs from "node:fs";
 
 import { browserBackend } from "./browserBackend";
-import { UploadRefused, provenanceFields } from "./downloadUpload";
-import { discardDownload, type DownloadCollector } from "./downloads";
+import { UploadRefused, provenanceFields } from "../views/downloadUpload";
+import { discardDownload, type DownloadCollector } from "../views/downloads";
 import { t } from "../../i18n.cjs";
 
 /**

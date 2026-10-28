@@ -21,7 +21,7 @@
         },
         {
           "runtime": "electron",
-          "location": "electron/browser/pool/accountViews.ts",
+          "location": "electron/browser/views/accountViews.ts",
           "symbol": "PARTITION_PREFIX"
         }
       ]
@@ -150,7 +150,7 @@
         },
         {
           "runtime": "electron",
-          "location": "electron/browser/pool/downloadRules.ts",
+          "location": "electron/browser/views/downloadRules.ts",
           "symbol": "MAX_DOWNLOAD_BYTES"
         },
         {

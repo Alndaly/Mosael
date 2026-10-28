@@ -29,18 +29,24 @@ const mocks = vi.hoisted(() => {
   return { driver, views, adapter, backend };
 });
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
-vi.mock("../pool/accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
+vi.mock("../views/accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
 vi.mock("./adapters", () => ({ createAdapter: () => mocks.adapter }));
 vi.mock("../log", () => ({ plog: vi.fn() }));
 vi.mock("./publishBackend", () => mocks.backend);
 import { openLogin, startPublishWorker, stopPublishWorker } from "./publishWorker";
+import { startViewHost, stopViewHost } from "../views/viewHost";
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   mocks.views.visibleAccountId = null;
 });
-afterEach(() => { stopPublishWorker(); vi.clearAllTimers(); vi.useRealTimers(); });
+afterEach(() => {
+  stopPublishWorker();
+  stopViewHost();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
 
 it("复检途中被登录接管:不回写复检结论", async () => {
   mocks.backend.claimCheck.mockResolvedValueOnce({
@@ -51,7 +57,8 @@ it("复检途中被登录接管:不回写复检结论", async () => {
     await openLogin("wx", "weixin-channels");
     return true;
   });
-  startPublishWorker({ window: {} as never });
+  startViewHost({ window: {} as never });
+  startPublishWorker({});
   await vi.advanceTimersByTimeAsync(12_000);
   expect(mocks.adapter.checkLogin.mock.calls.length).toBeGreaterThan(1); // 登录轮询接着在问
   expect(mocks.backend.patchAccount).not.toHaveBeenCalledWith("wx", expect.objectContaining({ binding_status: "bound" }));
@@ -59,7 +66,8 @@ it("复检途中被登录接管:不回写复检结论", async () => {
 });
 
 it("用户收起登录视图:取消流程,不把账号状态覆盖成 unknown", async () => {
-  startPublishWorker({ window: {} as never });
+  startViewHost({ window: {} as never });
+  startPublishWorker({});
   await openLogin("wx", "weixin-channels");
   await vi.advanceTimersByTimeAsync(10);
   mocks.views.visibleAccountId = null;
@@ -72,11 +80,13 @@ it("用户收起登录视图:取消流程,不把账号状态覆盖成 unknown", 
 it("checkLogin 在途时停止执行器:收尾不写回 unknown", async () => {
   const pending = Promise.withResolvers<boolean>();
   mocks.adapter.checkLogin.mockImplementation(() => pending.promise);
-  startPublishWorker({ window: {} as never });
+  startViewHost({ window: {} as never });
+  startPublishWorker({});
   await openLogin("wx", "weixin-channels");
   await vi.advanceTimersByTimeAsync(10);
 
   stopPublishWorker();
+  stopViewHost();
   pending.resolve(false);
   await vi.advanceTimersByTimeAsync(10);
 

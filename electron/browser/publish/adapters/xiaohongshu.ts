@@ -1,5 +1,5 @@
-import type { PublishTask } from "../../types";
-import type { PageDriver } from "../../page/pageDriver";
+import type { PublishTask } from "../publishTypes";
+import type { PageDriver } from "../../driver/pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOption, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { t } from "../../../i18n.cjs";

@@ -38,8 +38,8 @@ const {
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { createComputerUseGuard } = require("./computerUseGuard.cjs");
-//: 坐标换算只有一份(见 browser/pool/coords):Retina 截图归一化也走它。
-const { captureToCss } = require("./browser/pool/coords.cjs");
+//: 坐标换算只有一份(见 browser/driver/coords):Retina 截图归一化也走它。
+const { captureToCss } = require("./browser/driver/coords.cjs");
 const { createComputerUseOverlay } = require("./computerUseOverlay.cjs");
 const { createComputerUseCursor } = require("./computerUseCursor.cjs");
 const { pickPath } = require("./path-picker.cjs");
@@ -1181,7 +1181,7 @@ function createWindow() {
     if (!win.isDestroyed()) publish?.republishViewState?.();
   });
   // 工作台那一页(顶栏、右边那一列)是渲染层自己的状态,换一份文档就没了、认领不了它的 ComfyUI 视图:换文档的那一刻
-  // 收起它(普通网页留着,上面那一帧补播把顶栏画回来)。见 publishWorker.releaseWorkbenchView。
+  // 收起它(普通网页留着,上面那一帧补播把顶栏画回来)。见 browser/comfy/comfyHost.releaseWorkbenchView。
   win.webContents.on("did-start-navigation", (details) => {
     if (details.isMainFrame && !details.isSameDocument) publish?.releaseWorkbenchView?.();
   });
@@ -1255,12 +1255,15 @@ function createWindow() {
     win.loadFile(path.join(FRONTEND_DIST, "index.html"));
   }
 
-  // 启动发布执行器:后端是任务事实源,这里驱动每账号一个持久登录的内嵌视图。
-  // mac 关窗→重新激活会重建窗口:先 stop 再 start,把视图挂到新窗口上。
+  // 内嵌浏览器:先建视图宿主(视图、浮层),再起借它视图的 ComfyUI 工作台与发布执行器(后端是任务事实源,
+  // 这里驱动每账号一个持久登录的内嵌视图)。mac 关窗→重新激活会重建窗口:先全部 stop 再 start,把视图挂到新窗口上。
   if (publish) {
     try {
+      publish.stopBrowserWorker();
       publish.stopPublishWorker();
-      publish.startPublishWorker({
+      publish.stopComfyHost();
+      publish.stopViewHost();
+      publish.startViewHost({
         window: win,
         onViewChanged: (state) => {
           if (!win.isDestroyed()) win.webContents.send(IPC.event.publishView, state);
@@ -1284,10 +1287,15 @@ function createWindow() {
           win.webContents.focus();
           win.webContents.send(IPC.event.commandPalette);
         },
+      });
+      publish.startComfyHost({
+        window: win,
         // ComfyUI 工作台:主进程轮询内嵌画布里的桥看到的(选中、脏标记、能力、事件),规整过才发;null 是会话结束了。
         onWorkbench: (update) => {
           if (!win.isDestroyed()) win.webContents.send(IPC.event.comfyuiWorkbench, update);
         },
+      });
+      publish.startPublishWorker({
         // 发布任务在后台不可见的账号视图里跑,用户否则完全看不到它在做什么。走与 RPA 相同的
         // browser:frame 通道和同一个前端面板——「自动化浏览器在干什么」对用户是一件事,不该
         // 因为内部分了两个 worker 就冒出两个窗口。
@@ -1333,9 +1341,8 @@ function createWindow() {
   // 浏览器自动化执行器(RPA / 智能体):与发布并列,独立会话/分区,不碰发布登录。
   // 会话视图与发布账号视图共用同一套内嵌视图与右下角面板(见 accountViews.createSharedViews),
   // 画面是真实渲染的,不再需要截帧推送 —— 所以这里也不再传 onFrame。
-  if (publish && publish.startBrowserWorker) {
+  if (publish) {
     try {
-      publish.stopBrowserWorker();
       publish.startBrowserWorker();
     } catch (e) {
       console.warn("[browser] failed to start the browser worker:", e.message);
@@ -1345,8 +1352,10 @@ function createWindow() {
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
     try {
+      publish?.stopBrowserWorker();
       publish?.stopPublishWorker();
-      publish?.stopBrowserWorker?.();
+      publish?.stopComfyHost();
+      publish?.stopViewHost();
     } catch {
       /* 窗口已销毁,忽略 */
     }
@@ -1426,7 +1435,7 @@ app.whenReady().then(async () => {
   handle(IPC.invoke.publishBack, () => requirePublish().viewBack());
   handle(IPC.invoke.publishForward, () => requirePublish().viewForward());
   handle(IPC.invoke.publishReload, () => requirePublish().viewReload());
-  handle(IPC.invoke.publishHideView, () => requirePublish().hidePublishView());
+  handle(IPC.invoke.publishHideView, () => requirePublish().hideEmbeddedView());
   // 悬浮面板:渲染层拖动/缩放/关闭。几何由主进程持有(layout() 要用,还要落盘)。
   handle(IPC.invoke.publishPanelLayout, (_e, payload) =>
     requirePublish().setPanelLayout(parsePanelLayout(payload)),
@@ -1451,7 +1460,7 @@ app.whenReady().then(async () => {
   );
   handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
   handle(IPC.invoke.publishSnapshotPage, () => requirePublish().snapshotViewPage());
-  //: 声明式让位(P2):一条通道承载所有浮层的「请原生视图让开」,见 browser/pool/hostLayers。
+  //: 声明式让位(P2):一条通道承载所有浮层的「请原生视图让开」,见 browser/views/hostLayers。
   handle(IPC.invoke.publishHostLayer, (_e, payload) => requirePublish().setHostLayer(parseHostLayer(payload)));
   handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());
   handle(IPC.invoke.publishFocusHost, () => requirePublish().focusHostWindow());

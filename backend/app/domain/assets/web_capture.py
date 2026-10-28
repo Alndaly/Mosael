@@ -39,7 +39,7 @@ PAGE_VIDEO = "page_video"
 #: 「截图」节点截的(自动化会话里那一页):可见区域、整页长图、某个元素。框选要人拖,节点里没有。
 NODE_SCREENSHOT_KINDS = ("screenshot_visible", "screenshot_full", "screenshot_element")
 
-#: 认得的图片格式 → 落盘扩展名。和 electron/browser/page/pageToolsCore.sniffImage 认的是同一组。
+#: 认得的图片格式 → 落盘扩展名。和 electron/browser/driver/pageToolsCore.sniffImage 认的是同一组。
 _EXTENSIONS = {
     "image/png": ".png",
     "image/jpeg": ".jpg",

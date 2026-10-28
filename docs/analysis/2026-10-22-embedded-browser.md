@@ -14,8 +14,8 @@
 
 | 层 | 文件(行数) | 职责 | 决策点在哪 |
 |---|---|---|---|
-| 视图层 | `browser/pool/accountViews.ts`(1514) | 会话(=视图)与页面(tab)两级、挂载/让位、面板几何、代理、下载、静音、外链协议 | 一个账号一个会话;前台单槽 |
-| 驱动层 | `browser/page/pageDriver.ts`(1570) | `evaluate` / 选择器 / 文本匹配 / 可信指针 / 各种等待原语 | 每次交互都降级成什么 |
+| 视图层 | `browser/views/accountViews.ts`(1514) | 会话(=视图)与页面(tab)两级、挂载/让位、面板几何、代理、下载、静音、外链协议 | 一个账号一个会话;前台单槽 |
+| 驱动层 | `browser/driver/pageDriver.ts`(1570) | `evaluate` / 选择器 / 文本匹配 / 可信指针 / 各种等待原语 | 每次交互都降级成什么 |
 | 站点契约 | `browser/publish/adapters/*` + `selectors.ts` + `platforms.ts` | 每个平台的入口、选择器、文案、上限 | 平台长什么样 |
 | 执行循环 | `publishWorker.ts`(999) / `browserWorker.ts`(267) | 从后端 claim 动作 → 在视图上执行 → 回报 | 谁在什么时候能动这一页 |
 

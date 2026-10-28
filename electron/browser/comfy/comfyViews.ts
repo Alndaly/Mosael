@@ -9,7 +9,7 @@
  */
 import { session, type Session, type WebContents } from "electron";
 
-import { sharedViews } from "../pool/accountViews";
+import { sharedViews } from "../views/accountViews";
 import { comfyReady } from "./comfyEditor";
 import {
   navigationScript,

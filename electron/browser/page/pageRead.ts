@@ -2,8 +2,8 @@
  * 存成笔记 —— 主进程这一半:读出渲染后的页面或选中的文字(正文怎么挑由后端做,见 backend documents/web_page)。
  */
 import { foreground, pageOf } from "./pageTarget";
-import { MAX_PAGE_HTML, MAX_SELECTION_CHARS, READ_PAGE_SCRIPT } from "./pageReadCore";
-import type { PageInfo } from "./pageToolsCore";
+import { MAX_PAGE_HTML, MAX_SELECTION_CHARS, READ_PAGE_SCRIPT } from "../driver/pageReadCore";
+import type { PageInfo } from "../driver/pageToolsCore";
 
 /** 读页面:渲染后的 HTML(整页正文由后端挑)或选中的文字。 */
 export async function readPage(mode: "article" | "selection"): Promise<{ page: PageInfo; html: string; selection: string }> {

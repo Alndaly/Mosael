@@ -3,18 +3,18 @@ import { mkdir, stat as fsStat } from "node:fs/promises";
 import path from "node:path";
 
 import { t as tr } from "../../i18n.cjs";
-import type { AccountViewManager } from "../pool/accountViews";
+import type { AccountViewManager } from "../views/accountViews";
 import { createAdapter as defaultCreateAdapter } from "./adapters";
 import { clickTextPreferTrusted, publishError, type PublishAdapter } from "./adapters/shared";
 import { contractFor } from "./platformContracts";
 import { isAutomationBlockedError } from "../errors";
 import { plog } from "../log";
 import { clearOverlays } from "./overlays";
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 import { platformName, resolvePlatform } from "./platforms";
 import { findPost, postEndpoint } from "./publishedPost";
 import * as defaultBackend from "./publishBackend";
-import type { ContentKind, PublishTask } from "../types";
+import type { ContentKind, PublishTask } from "./publishTypes";
 
 const BACKGROUND_VIEWPORT = { width: 1280, height: 800 };
 export interface PublishTaskTrace {

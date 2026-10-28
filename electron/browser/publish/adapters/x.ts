@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 
-import type { PublishTask } from "../../types";
-import type { PageDriver } from "../../page/pageDriver";
+import type { PublishTask } from "../publishTypes";
+import type { PageDriver } from "../../driver/pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, hasStoredSession, plogPageState, publishError, stringOption, wait } from "./shared";
 import { SELECTORS } from "../selectors";

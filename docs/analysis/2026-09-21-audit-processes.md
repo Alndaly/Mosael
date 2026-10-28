@@ -668,7 +668,7 @@ video.currentTime = Math.max(0, Math.min(..., message.seconds));
 
 **Electron 壳**
 - `electron/main.cjs`
-- `electron/browser/pool/accountViews.ts`
+- `electron/browser/views/accountViews.ts`
 - `electron/preload-build.test.ts`
 - `test/bundle.smoke.mjs`
 - `frontend/package.json`(`electron:dev`)

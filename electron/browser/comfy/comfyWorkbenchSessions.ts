@@ -11,7 +11,7 @@
  *
  * 不碰 Electron:驱动、「视图还亮着吗」、发给渲染层的口子都由调用方给(publishWorker),测试里换成假的。
  */
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 import { comfyReady } from "./comfyEditor";
 import {
   parseWorkbenchPoll,

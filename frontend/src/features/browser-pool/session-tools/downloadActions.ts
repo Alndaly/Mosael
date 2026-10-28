@@ -2,7 +2,7 @@ import type { MessageKey } from "@/app/messages";
 
 import type { Notice } from "./useToolNotice";
 
-/** 主进程报来的一份下载(见 electron/browser/pool/downloads.ts 的 DownloadNotice)。 */
+/** 主进程报来的一份下载(见 electron/browser/views/downloads.ts 的 DownloadNotice)。 */
 export type DownloadNotice = Parameters<Parameters<NonNullable<Window["mosaelPageTools"]>["onDownload"]>[0]>[0];
 type SaveDownload = NonNullable<Window["mosaelPageTools"]>["saveDownload"];
 

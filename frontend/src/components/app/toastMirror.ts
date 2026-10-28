@@ -9,7 +9,7 @@ import { useNativeViewInFront } from "@/lib/nativeView";
  *
  * 原生视图盖在一切 DOM 上:写请求失败、拖到 Dock 上的文件导入失败、更新提示……这些提示条在 DOM 里照常弹,屏幕上看不见,
  * 内嵌浏览器亮着时一条都不剩。所以这段时间里,提示条那一整块(Sonner 的 `<section>`)原样交给主进程的提示条浮层视图
- * (electron/browser/pool/floatLayer.ts 的 `toasts` 那一种),压在网页上面画;DOM 里那份照常渲染、照常计时、照常给读屏念,只是透明
+ * (electron/browser/views/floatLayer.ts 的 `toasts` 那一种),压在网页上面画;DOM 里那份照常渲染、照常计时、照常给读屏念,只是透明
  * (styles.css 的 `[data-toasts-mirrored]`)。
  *
  * - **位置**:浮层视图的右下角就是窗口的右下角,浮层页照主窗口的样子把提示条贴着右下角摆(Sonner 的 `--offset-*` 在 HTML 里带着,

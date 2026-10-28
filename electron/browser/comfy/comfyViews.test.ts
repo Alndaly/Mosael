@@ -35,7 +35,7 @@ vi.mock("electron", () => ({
     },
   },
 }));
-vi.mock("../pool/accountViews", () => ({
+vi.mock("../views/accountViews", () => ({
   sharedViews: () => ({
     currentContents: (id: string) => fake.contents.get(id) ?? null,
     existingDriver: (id: string) => fake.drivers.get(id) ?? null,

@@ -5,7 +5,7 @@
  * 这一份只认 Mosael 主窗口:`capturePage` + `sendInputEvent`。
  * 从 `main.cjs` 搬出时逐字未改,行为零变化;守卫 / overlay / cursor 仍由 main.cjs 持有。
  */
-const { captureToCss } = require("../browser/pool/coords.cjs");
+const { captureToCss } = require("../browser/driver/coords.cjs");
 
 /**
  * 按名字挑一个窗口。**只挑 Mosael 自己的** —— 桌面、别的 App 在这里根本没有对应项。
@@ -170,7 +170,7 @@ async function captureMosaelWindow(mainWindow) {
   //: 就是同一套数,后端那个 scale 也就还是唯一的一次缩放。
   const content = typeof win.getContentSize === "function" ? win.getContentSize() : null;
   let shot = image;
-  //: 归一化判断也住在 browser/pool/coords(Retina 上 capturePage 给物理像素,而 sendInputEvent 认 CSS)。
+  //: 归一化判断也住在 browser/driver/coords(Retina 上 capturePage 给物理像素,而 sendInputEvent 认 CSS)。
   const target = captureToCss(image.getSize(), content || null);
   if (target) shot = image.resize({ width: target.width, height: target.height, quality: "best" });
   const { width, height } = shot.getSize();

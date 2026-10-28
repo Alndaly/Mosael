@@ -3,9 +3,9 @@
 // 新窗口(target=_blank、window.open)会进会话的页面列表并自动切过去(见 accountViews.openWindow),所以
 // 「点了一个在新窗口打开的链接,下一步就在新页面上接着做」不需要这个节点;要回到原来那一页、或者跳到
 // 某个特定的页面、或者看完关掉,才用它。
-import type { AccountViewManager } from "./accountViews";
+import type { AccountViewManager } from "../views/accountViews";
 import type { ActionOutcome } from "./browserActions";
-import type { PageMatch } from "./pageList";
+import type { PageMatch } from "../views/pageList";
 import { t } from "../../i18n.cjs";
 
 export const PAGE_OPERATIONS = ["switch", "close", "list"] as const;

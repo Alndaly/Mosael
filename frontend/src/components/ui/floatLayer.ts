@@ -32,7 +32,7 @@ export function rootLook(): FloatHint["root"] {
 }
 
 /**
- * 把一块浮层(说明)交给**浮层视图**画到原生网页视图上面(见 electron/browser/pool/floatLayer.ts)。内嵌浏览器的
+ * 把一块浮层(说明)交给**浮层视图**画到原生网页视图上面(见 electron/browser/views/floatLayer.ts)。内嵌浏览器的
  * 外壳(顶栏、页面列表、侧栏)旁边就是原生网页视图,盖在一切 DOM 上 —— DOM 里的说明伸进去就看不见。
  *
  * DOM 里那份照常渲染、照常由 Radix 摆位置:它用来量位置、给读屏念(`role="tooltip"` 还在),只是透明。

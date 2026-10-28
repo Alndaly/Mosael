@@ -29,7 +29,7 @@ vi.mock("../page/pageTarget", () => {
 });
 vi.mock("./browserBackend", () => ({ browserBackend: { uploadArtifact: mocks.upload } }));
 vi.mock("./browserActions", () => ({ ELEMENT_WAIT_MS: 5_000 }));
-vi.mock("./accountViews", () => {
+vi.mock("../views/accountViews", () => {
   class PageGoneError extends Error {}
   return { PageGoneError };
 });
@@ -134,7 +134,7 @@ describe("「截图」节点", () => {
   });
 
   it("那一页在截之前没了(会话 / 页面关了):说没截到", async () => {
-    const { PageGoneError } = await import("./accountViews");
+    const { PageGoneError } = await import("../views/accountViews");
     const gone = { ...surface.views, withPageOnSurface: async () => { throw new PageGoneError("s1", null); } };
     await expect(captureForAction({ actionId: "a1", views: gone as never, sessionId: "s1", args: {} })).rejects.toThrow(/没截到画面/);
   });

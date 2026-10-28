@@ -1,10 +1,10 @@
 /**
  * 采集页面图片 —— 主进程这一半:列出页面上的图、用这个档案的会话把字节取回来(筛选与认格式在 pageImagesCore)。
  */
-import { fetchBytes } from "./pageFetch";
+import { fetchBytes } from "../driver/pageFetch";
 import { foreground, pageOf } from "./pageTarget";
-import { IMAGE_SCAN_SCRIPT, pickPageImages, sniffImage, type PageImage } from "./pageImagesCore";
-import type { PageInfo } from "./pageToolsCore";
+import { IMAGE_SCAN_SCRIPT, pickPageImages, sniffImage, type PageImage } from "../driver/pageImagesCore";
+import type { PageInfo } from "../driver/pageToolsCore";
 
 /** 单张图片最多多大。和后端收素材的上限一致(见 domain/assets/web_capture.MAX_CAPTURE_BYTES)。 */
 export const MAX_IMAGE_BYTES = 40 * 1024 * 1024;

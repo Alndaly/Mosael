@@ -27,7 +27,7 @@ from app.domain.assets.web_capture import RunOrigin, WebCaptureError, WebSource,
 from app.media.probe import AUDIO_EXTENSIONS, DOCUMENT_EXTENSIONS
 
 #: 单个下载文件的上限(2 GiB)。两个小时的 1080p 录像在这个量级;再大的不该经「点一下链接」进素材库。
-#: Electron 那一侧下载之前按同一个数先拦(electron/browser/pool/downloadRules.ts 的 MAX_DOWNLOAD_BYTES,
+#: Electron 那一侧下载之前按同一个数先拦(electron/browser/views/downloadRules.ts 的 MAX_DOWNLOAD_BYTES,
 #: 两边由 contracts/shared-constants.json 钉住)。
 MAX_DOWNLOAD_BYTES = 2_147_483_648
 

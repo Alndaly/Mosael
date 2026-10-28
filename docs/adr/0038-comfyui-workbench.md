@@ -32,7 +32,7 @@ AI Studio 右栏遵守同一条规则：提示词用可编辑控件直接绑定�
 留空时用工作流内保存值的语义必须留在字段附近。因此只含提示词和参考图的精简表单也必须有参数入口；任何界面不得为弹层另存一份
 提示词或素材列表。
 | 跑 | `plugins/bundled/comfyui/tools/run.py` | 提交、WebSocket / 轮询进度、只停自己的任务(`stop`)、带回执重启后接着等、跑几遍(`run_repeated`) |
-| 内嵌编辑器(2026-10-07 起并进工作台,见 §10) | `electron/browser/comfy/comfyEditor.ts`(写死的脚本)、`electron/browser/publish/publishWorker.ts` 的 `openComfyWorkflow`、契约 `electron/ipc-contract.cjs` 的 `parseComfyWorkflow`、前端 `frontend/src/features/plugins/workflowEditor.ts` | 浏览器池那套内嵌视图(`electron/browser/pool/accountViews.ts`,分区 `persist:pool-comfyui-<连接 id>`)打开这台 ComfyUI,主进程注入脚本:等 `window.app.extensionManager.workflow` 就绪,`getWorkflowByPath` 取那一张,`app.loadGraphData` 打开 |
+| 内嵌编辑器(2026-10-07 起并进工作台,见 §10) | `electron/browser/comfy/comfyEditor.ts`(写死的脚本)、`electron/browser/publish/publishWorker.ts` 的 `openComfyWorkflow`、契约 `electron/ipc-contract.cjs` 的 `parseComfyWorkflow`、前端 `frontend/src/features/plugins/workflowEditor.ts` | 浏览器池那套内嵌视图(`electron/browser/views/accountViews.ts`,分区 `persist:pool-comfyui-<连接 id>`)打开这台 ComfyUI,主进程注入脚本:等 `window.app.extensionManager.workflow` 就绪,`getWorkflowByPath` 取那一张,`app.loadGraphData` 打开 |
 | 存回 ComfyUI | 同上 | **Mosael 自己不写这张图**:用户在内嵌的 ComfyUI 里 Ctrl+S,是 ComfyUI 前端自己覆盖写回 `workflows/`。视图收起时 Mosael 重拉一遍目录、工作流库、模型库(`workflowEditor.ts` 的 `onReturn`;ADR 0035 §4 写的「每 5 秒看一次改动时间」实际没做成这样)。Mosael 经插件写的(导入、复制)一律 `overwrite=false` |
 
 动手前在维护者那台 ComfyUI 上只读核对(0.38.0,前端 1.53.10,单用户模式 `GET /users` → `{"storage": "server"}`;

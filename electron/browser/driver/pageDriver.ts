@@ -9,8 +9,8 @@ import { writeFile } from "node:fs/promises";
 
 import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "../errors";
 import { plog } from "../log";
-//: 四套坐标系只在一处相乘(P5/P6):见 browser/pool/coords。
-import { pageToView, safeZoom } from "../pool/coords.cjs";
+//: 四套坐标系只在一处相乘(P5/P6):见 browser/driver/coords。
+import { pageToView, safeZoom } from "./coords.cjs";
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -229,7 +229,7 @@ export class PageDriver {
     })();
     const jitterX = Math.min(rect.width / 4, 6);
     const jitterY = Math.min(rect.height / 4, 6);
-    //: 页面 CSS → 视图 CSS:乘法住在 browser/pool/coords(P5/P6),这里不再自己乘。
+    //: 页面 CSS → 视图 CSS:乘法住在 browser/driver/coords(P5/P6),这里不再自己乘。
     const tx = Math.round(pageToView(rect.x + rect.width / 2 + (Math.random() * 2 - 1) * jitterX, zoom));
     const ty = Math.round(pageToView(rect.y + rect.height / 2 + (Math.random() * 2 - 1) * jitterY, zoom));
     const steps = this.rand(3, 6);

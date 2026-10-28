@@ -13,11 +13,11 @@
 // 同一会话的串行由后端认领时保证(它不发一个还有动作在跑的会话上的下一条),这里再按会话排一次队兜底。
 //
 // **工作台动作**(会话类型 `workbench`,ADR 0042):智能体读 ComfyUI 画布、在画布上指一个节点,也走这条队列 —— 后端排、
-// 这里领。它不开视图、不挂面板:交给那个连接**开着的工作台**(publishWorker 的工作台会话,桥在那里),工作台没开着桥就说 closed。
+// 这里领。它不开视图、不挂面板:交给那个连接**开着的工作台**(comfy/comfyHost 的工作台会话,桥在那里),工作台没开着桥就说 closed。
 // 调用照渲染层那个口子同一个解析器(ipc-contract 的 parseComfyWorkbenchCall)查过才进桥,后端送不进代码。
 import { app } from "electron";
 
-import { sharedViews } from "./accountViews";
+import { sharedViews } from "../views/accountViews";
 import { captureForAction } from "./actionCapture";
 import { pageForAction } from "./actionPage";
 import { dropActionDownloads, saveActionDownloads } from "./actionDownloads";
@@ -31,7 +31,7 @@ import { parseComfyWorkbenchCall } from "../../ipc-contract.cjs";
 import { applyPartitionMove, type PartitionMoveOutcome } from "./partitionMoves";
 
 const trace = createTrace({ dir: app.getPath("userData") });
-import { comfyWorkbenchCall } from "../publish/publishWorker";
+import { comfyWorkbenchCall } from "../comfy/comfyHost";
 
 const IDLE_MS = 1200;
 /**

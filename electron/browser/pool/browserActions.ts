@@ -1,6 +1,6 @@
 import { Script } from "node:vm";
 
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "../errors";
 import { t } from "../../i18n.cjs";
 

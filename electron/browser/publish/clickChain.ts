@@ -18,7 +18,7 @@
  * 一致,并且明确记下最终走的是可信路径还是降级路径(后者是风控暴露面,值得在日志里看得见)。
  */
 import { plog } from "../log";
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 
 /** 平台通用的「正在处理」文案:出现即说明点击已被受理,不必再换点法。 */
 export const PROCESSING_TEXTS = ["正在投稿", "正在发布", "提交中", "发布中", "处理中"] as const; // i18n-ok

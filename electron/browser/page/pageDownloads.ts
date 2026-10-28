@@ -2,9 +2,9 @@
 // 自己的会话来取:存进哪个服务器、哪个工作区、以谁的身份,都只有渲染层知道。
 //
 // 令牌只在这一次请求的头里用,不落盘、不进日志(和「创建备份」那条同一个做法,见 main.cjs dataCreateBackup)。
-import { sharedViews } from "../pool/accountViews";
-import { discardDownload } from "../pool/downloads";
-import { provenanceFields, uploadDownload } from "../pool/downloadUpload";
+import { sharedViews } from "../views/accountViews";
+import { discardDownload } from "../views/downloads";
+import { provenanceFields, uploadDownload } from "../views/downloadUpload";
 import { getLocale, t } from "../../i18n.cjs";
 
 export interface SaveDownloadRequest {

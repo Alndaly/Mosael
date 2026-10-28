@@ -8,7 +8,7 @@
  * 来源,都经 JSON 编码嵌进去,渲染层送不进别的代码;来源对不上(视图停在别的站点)就什么都不做。新建只执行前端自己的
  * 「新建」命令,先探测有没有。
  */
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 
 /** 打开的结果:打开了 / 那台机器上没有这一张 / 视图不在这台 ComfyUI 上 / 前端一直没就绪(比如要先登录)。 */
 export type ComfyOpenOutcome = "opened" | "missing" | "elsewhere" | "notReady";

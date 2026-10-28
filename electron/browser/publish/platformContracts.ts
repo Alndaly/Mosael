@@ -5,7 +5,7 @@
  */
 import { resolvePlatform, type SupportedPlatform } from "./platforms";
 import type { PlatformContract, PlatformFields } from "./platformContract";
-import type { ContentKind } from "../types";
+import type { ContentKind } from "./publishTypes";
 import { SELECTORS } from "./selectors";
 
 const xhs = SELECTORS.xiaohongshu;

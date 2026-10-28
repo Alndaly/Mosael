@@ -8,7 +8,7 @@
  *
  * 边界:它测的是**契约数据与判定口径**,不是平台真实 DOM;真实页面的细节仍要真机核对。
  */
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 import { DEEP_TEXT_EXPR } from "./verify";
 
 export interface FakePage {

@@ -28,25 +28,14 @@ const mocks = vi.hoisted(() => {
   return { views, driver };
 });
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
-vi.mock("../pool/accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
-vi.mock("../pool/floatLayer", () => ({ FloatLayer: class { warm() {} hide() {} destroy() {} } }));
-vi.mock("../comfy/comfyViews", () => ({ comfyViewOpening: vi.fn(), comfyViewShown: vi.fn(), setComfyNavigation: vi.fn() }));
-vi.mock("../comfy/comfyEditor", () => ({ comfyReady: () => "true", openWorkflowInPage: vi.fn(), newWorkflowInPage: vi.fn() }));
-vi.mock("./adapters", () => ({ createAdapter: vi.fn() }));
+vi.mock("../views/accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
+vi.mock("../views/floatLayer", () => ({ FloatLayer: class { warm() {} hide() {} destroy() {} } }));
+vi.mock("./comfyViews", () => ({ comfyViewOpening: vi.fn(), comfyViewShown: vi.fn(), setComfyNavigation: vi.fn() }));
+vi.mock("./comfyEditor", () => ({ comfyReady: () => "true", openWorkflowInPage: vi.fn(), newWorkflowInPage: vi.fn() }));
 vi.mock("../log", () => ({ plog: vi.fn() }));
-vi.mock("./publishBackend", () => ({
-  markDue: vi.fn(async () => {}), heartbeat: vi.fn(async () => {}), claimTask: vi.fn(async () => ({ task: null })),
-  claimCheck: vi.fn(async () => ({ account: null })),
-}));
 
-import {
-  comfyWorkbenchCall,
-  openComfyWorkbench,
-  openPoolLogin,
-  releaseWorkbenchView,
-  startPublishWorker,
-  stopPublishWorker,
-} from "./publishWorker";
+import { openPoolLogin, startViewHost, stopViewHost } from "../views/viewHost";
+import { comfyWorkbenchCall, openComfyWorkbench, releaseWorkbenchView, startComfyHost, stopComfyHost } from "./comfyHost";
 
 const PARTITION = "persist:pool-comfyui-c1";
 
@@ -55,10 +44,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.views.visibleAccountId = null;
   // 主窗口:开着、看得见(工作台在窗口藏起来时会暂停轮询,见 comfyWorkbenchSessions 的 paused)。
-  startPublishWorker({ window: { isDestroyed: () => false, isVisible: () => true, isMinimized: () => false } as never });
+  const window = { isDestroyed: () => false, isVisible: () => true, isMinimized: () => false } as never;
+  startViewHost({ window });
+  startComfyHost({ window });
 });
 afterEach(() => {
-  stopPublishWorker();
+  stopComfyHost();
+  stopViewHost();
   vi.clearAllTimers();
   vi.useRealTimers();
 });

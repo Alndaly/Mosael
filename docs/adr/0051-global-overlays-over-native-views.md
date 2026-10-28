@@ -16,10 +16,10 @@ Accepted — 2026-10-09,已实现(见文末「实现记录」)。2026-10-08 全�
 
 | 机制 | 在哪 | 管什么 |
 | --- | --- | --- |
-| 窗口外壳(`APP_CHROME`,z-200) | `components/ui/appChrome.ts`;内嵌浏览器的顶栏 `PublishViewBar`、页面列表、侧栏,工作台的顶栏和右边那一列 | 外壳画在视图**旁边**(视图按外壳让出的宽度摆,见 `electron/browser/pool/accountViews.ts` 的 `foregroundBounds`),不是上面 |
+| 窗口外壳(`APP_CHROME`,z-200) | `components/ui/appChrome.ts`;内嵌浏览器的顶栏 `PublishViewBar`、页面列表、侧栏,工作台的顶栏和右边那一列 | 外壳画在视图**旁边**(视图按外壳让出的宽度摆,见 `electron/browser/views/accountViews.ts` 的 `foregroundBounds`),不是上面 |
 | `ChromeAboveDialogs` | 同上 | 外壳挂到 body 末尾:拖拽区按文档顺序收集,排在已经开着的弹窗后面才拖得动窗口 |
 | 让开 + 冻结帧(`nativeViewAside`) | `components/ui/nativeViewAside.tsx`;看大图、工作台里的模型详情(`OverChromeModals`,z-205) | 先在原处铺一张网页此刻的画面,再请主进程把视图挪到窗口外;收起时反过来。网页一直在出帧,画布不闪 |
-| 浮层视图(`FloatLayer`) | `electron/browser/pool/floatLayer.ts`、`frontend/float-layer.html` | 外壳里的悬停说明画在一块透明的原生视图上,压在网页视图上面;不拿焦点 |
+| 浮层视图(`FloatLayer`) | `electron/browser/views/floatLayer.ts`、`frontend/float-layer.html` | 外壳里的悬停说明画在一块透明的原生视图上,压在网页视图上面;不拿焦点 |
 
 问题是:**这几套都是「用到的组件自己记得接」**。没接的那些,原生视图一亮着就全看不见 —— 而它们大多不是用户在视图里点出来的,
 是系统、后台、快捷键从外面开的。
@@ -101,7 +101,7 @@ Accepted — 2026-10-09,已实现(见文末「实现记录」)。2026-10-08 全�
    `leave` 调 `leaveNativeView`;提示条外面包着 `APP_CHROME`。
 
 行为由各自的 DOM 测试盯(任务中心、命令面板、确认卡、免提浮标、提示条、深链、`OverNativeView`),主进程那一半由
-`electron/browser/pool/floatLayer.test.ts`(提示条那一种、指针换算)和 `accountViewsPanels.test.ts`(⌘K)盯。
+`electron/browser/views/floatLayer.test.ts`(提示条那一种、指针换算)和 `accountViewsPanels.test.ts`(⌘K)盯。
 
 ## 否掉的备选
 

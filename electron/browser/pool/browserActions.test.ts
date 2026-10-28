@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { executeBrowserAction } from "./browserActions";
 import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "../errors";
 import { DEFAULT_LOCALE, setLocale } from "../../i18n.cjs";
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 
 /** 只实现这几个动作用得到的那几项;其余留空,用到就会立刻炸出来。 */
 function fakeDriver(url: string, overrides: Partial<PageDriver> = {}): PageDriver {

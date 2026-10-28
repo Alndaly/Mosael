@@ -12,7 +12,7 @@
  *
  * 这里把它们收成三条原语。口径**按可靠性排**:能看平台自己给的信号(地址 / 字数计数)就不猜文案。
  */
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 
 /** 去掉所有空白与零宽字符:富文本改写的只是排版,不是内容。 */
 export function squash(text: string | null | undefined): string {

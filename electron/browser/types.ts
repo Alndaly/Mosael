@@ -1,24 +1,4 @@
-// 从桌面发布器移植的最小类型集。这里只保留 pageDriver/accountViews/adapters 用到的形状;
-// 任务的持久化/状态源在 Mosael 后端(/api/publish),publishWorker.ts 负责把后端任务映射成
-// 适配器期望的 PublishTask 形状。
-import type { SupportedPlatform } from "./publish/platforms";
-
-export type Platform = SupportedPlatform;
-
-export type TaskStatus =
-  | "pending"
-  | "running"
-  | "waiting_manual"
-  | "login_required"
-  | "permission_required"
-  | "blocked"
-  | "cancelled"
-  | "success"
-  | "failed";
-
-// 内嵌视图从顶部这么多像素处开始铺(上方留给「登录中·返回」条)。必须与 PublishViewBar 的
-// 高度一致,否则中间空档会露出 App 自己的顶栏,看着穿帮。
-// 由 contracts/shared-constants.json 钉住(前端那份是 App.tsx 的 PUBLISH_BAR_HEIGHT)。
+// 内嵌浏览器各块共用的形状:实时视图通道的帧、视图状态、页面列表。发布专用的(任务、平台、内容形状)在 publish/publishTypes。
 /**
  * 实时视图通道(IPC `browser:frame`)的线上格式。
  *
@@ -42,6 +22,9 @@ export interface LiveViewFrame {
   settled?: boolean;
 }
 
+// 内嵌视图从顶部这么多像素处开始铺(上方留给「登录中·返回」条)。必须与 PublishViewBar 的
+// 高度一致,否则中间空档会露出 App 自己的顶栏,看着穿帮。
+// 由 contracts/shared-constants.json 钉住(前端那份是 App.tsx 的 PUBLISH_BAR_HEIGHT)。
 export const EMBED_HEADER_HEIGHT = 56;
 
 export interface ViewState {
@@ -82,30 +65,4 @@ export interface PageSummary {
   /** 网站图标的地址(http(s));没有是空串。 */
   favicon: string;
   current: boolean;
-}
-
-/** 能下发的三种内容形状(ADR 0076);`document` 不是其中一种,它要先转换成这三种之一。 */
-export type ContentKind = "video" | "image-text" | "article";
-
-/** 适配器消费的任务形状:contentKind / mediaPaths(视频就是一份)/ title / tags / platformOptions{…}。 */
-export interface PublishTask {
-  id: string;
-  accountId: string;
-  accountName: string;
-  platform: Platform;
-  /** 这一条发的是什么形状(ADR 0076)。必填:没有"没写就当视频"这一档。 */
-  contentKind: ContentKind;
-  /** 图文 / 文章的全部素材,**按顺序**;视频就是一份。 */
-  mediaPaths: string[];
-  /** 正文 / 长文(图文与文章用);平台没有正文栏就是空串。 */
-  body: string;
-  title: string;
-  tags: string[];
-  platformOptions: Record<string, unknown>;
-  scheduledAt: string | null;
-  status: TaskStatus;
-  errorMessage: string | null;
-  screenshotPath: string | null;
-  createdAt: string;
-  updatedAt: string;
 }

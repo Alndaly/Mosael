@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { pageForAction } from "./actionPage";
-import { PageList } from "./pageList";
+import { PageList } from "../views/pageList";
 
 function fakeViews(pages: Array<{ title: string; url: string }>) {
   const list = new PageList<{ title: string; url: string }>();

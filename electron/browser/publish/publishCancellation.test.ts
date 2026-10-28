@@ -18,11 +18,12 @@ vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(async () => undefined),
   stat: vi.fn(async () => ({ isFile: () => true, size: 1 })),
 }));
-vi.mock("../pool/accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
+vi.mock("../views/accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
 vi.mock("./adapters", () => ({ createAdapter: () => mocks.adapter }));
 vi.mock("../log", () => ({ plog: vi.fn() }));
 vi.mock("./publishBackend", () => mocks.backend);
 import { startPublishWorker, stopPublishWorker } from "./publishWorker";
+import { startViewHost, stopViewHost } from "../views/viewHost";
 
 const MEDIA = "/tmp/mosael-cancel-test.mp4";
 
@@ -35,14 +36,20 @@ beforeEach(() => {
   } });
   mocks.adapter.fillTags.mockImplementation(async () => true);
 });
-afterEach(() => { stopPublishWorker(); vi.clearAllTimers(); vi.useRealTimers(); });
+afterEach(() => {
+  stopPublishWorker();
+  stopViewHost();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
 
 it("cancellation during preparation prevents submitting to the platform", async () => {
   mocks.adapter.fillTags.mockImplementation(async () => {
     mocks.backend.taskStatus.mockResolvedValue({ status: "cancelled" });
     return true;
   });
-  startPublishWorker({ window: {} as never });
+  startViewHost({ window: {} as never });
+  startPublishWorker({});
   await vi.advanceTimersByTimeAsync(15_000);
   expect(mocks.adapter.fillTags).toHaveBeenCalledOnce();
   expect(mocks.adapter.submit).not.toHaveBeenCalled();
@@ -51,7 +58,8 @@ it("cancellation during preparation prevents submitting to the platform", async 
 });
 
 it("active tasks still submit and report success", async () => {
-  startPublishWorker({ window: {} as never });
+  startViewHost({ window: {} as never });
+  startPublishWorker({});
   await vi.advanceTimersByTimeAsync(15_000);
   expect(mocks.adapter.submit).toHaveBeenCalledOnce();
   expect(mocks.backend.reportTask).toHaveBeenCalledWith("task", { status: "success", post: null });

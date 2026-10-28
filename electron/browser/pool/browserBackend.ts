@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import { net } from "electron";
 
-import { postFile } from "./downloadUpload";
+import { postFile } from "../views/downloadUpload";
 import type { PartitionMove, PartitionMoveOutcome } from "./partitionMoves";
 import { getLocale } from "../../i18n.cjs";
 

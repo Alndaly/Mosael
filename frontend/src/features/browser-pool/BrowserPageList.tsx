@@ -30,7 +30,7 @@ const PAGE_LIST_REGION = { side: "right" as const };
  * 都带过渡,原生网页视图在过渡期间由一张画面替着(见 usePageListMotion)。
  *
  * 页面在新窗口打开(target=_blank、window.open)时会进这个列表并切过去,不再弹一个独立小窗(见
- * electron/browser/pool/accountViews.openWindow)。列表是渲染层的 DOM,原生网页视图盖不住它 —— 所以挂着时
+ * electron/browser/views/accountViews.openWindow)。列表是渲染层的 DOM,原生网页视图盖不住它 —— 所以挂着时
  * 告诉主进程左侧让出多宽(setPagesInset),卸载时还回去。
  */
 export function BrowserPageList({ state, top }: { state: PublishViewState; top: number }) {
@@ -65,7 +65,7 @@ function PageList({
   const backdropRight = snapshot ? snapshot.bounds.x + snapshot.bounds.width : 0;
   const edge = useEdgeColor(snapshot?.frame ?? null);
 
-  //: 声明式让位(P2):只说「左侧要让出多少」,折算成对原生视图的指令由主进程做(见 browser/pool/hostLayers)。
+  //: 声明式让位(P2):只说「左侧要让出多少」,折算成对原生视图的指令由主进程做(见 browser/views/hostLayers)。
   React.useEffect(() => {
     void bridge.setHostLayer({ id: "page-list-inset", kind: "inset", side: "left", active: inset > 0, width: inset });
   }, [bridge, inset]);

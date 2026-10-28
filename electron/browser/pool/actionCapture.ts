@@ -4,7 +4,7 @@
 // 把截不到的原因说成人话、截好的图带着出处交给后端(执行器通道,和动作里的下载同一个入口,见 actionDownloads)。
 import type { WebContents } from "electron";
 
-import { PageGoneError, type AccountViewManager } from "./accountViews";
+import { PageGoneError, type AccountViewManager } from "../views/accountViews";
 import { pageMatch } from "./actionPage";
 import { ELEMENT_WAIT_MS, type ActionOutcome } from "./browserActions";
 import { browserBackend } from "./browserBackend";

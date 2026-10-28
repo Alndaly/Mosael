@@ -6,7 +6,7 @@
  */
 import { nativeImage, type NativeImage, type WebContents } from "electron";
 
-import { sharedViews } from "../pool/accountViews";
+import { sharedViews } from "../views/accountViews";
 import { PageToolError, foreground, pageOf } from "./pageTarget";
 import {
   planClip,
@@ -16,7 +16,7 @@ import {
   type PageInfo,
   type PageRect,
   type SelectionFraction,
-} from "./pageToolsCore";
+} from "../driver/pageToolsCore";
 
 export interface PageCapture {
   /** PNG 字节(自己的一份拷贝,能直接装进 Blob)。 */

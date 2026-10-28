@@ -76,7 +76,7 @@ Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`�
 
 - `electron/browser/publish/adapters.ts`
 - `electron/browser/publish/selectors.ts`
-- `electron/browser/page/pageDriver.ts`
+- `electron/browser/driver/pageDriver.ts`
 - `electron/browser/publish/publishWorker.ts`
 
 **Problem**

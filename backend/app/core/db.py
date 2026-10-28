@@ -33,7 +33,7 @@ class Base(DeclarativeBase):
 
 
 #: 发布账号登录分区的命名前缀(完整分区名 = persist:<PARTITION_PREFIX>-<accountId>)。
-#: 与 electron/browser/pool/accountViews.ts 的同名约定必须一致——两边拼的是同一个磁盘目录。
+#: 与 electron/browser/views/accountViews.ts 的同名约定必须一致——两边拼的是同一个磁盘目录。
 #: 由 contracts/shared-constants.json 钉住(不一致 = 所有发布账号的登录态凭空消失)。
 PARTITION_PREFIX = "mosael"
 

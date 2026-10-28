@@ -14,7 +14,7 @@
  */
 import type { Session } from "electron";
 
-import { classifyMedia, type MediaResponse } from "../page/videoProbe";
+import { classifyMedia, type MediaResponse } from "../driver/videoProbe";
 
 /** 每个视图留多少条。一个页面看完几个视频也到不了这个数;信息流刷久了旧的自然被挤掉。 */
 export const MAX_RESPONSES_PER_VIEW = 80;

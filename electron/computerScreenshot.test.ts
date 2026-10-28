@@ -78,8 +78,8 @@ function fakeWindow(
 
 function loadCapture() {
   const context = {
-    //: 归一化判断住在 browser/pool/coords(Retina 上 capturePage 给物理像素):沙箱里要把它递进去。
-    captureToCss: require("./browser/pool/coords.cjs").captureToCss,
+    //: 归一化判断住在 browser/driver/coords(Retina 上 capturePage 给物理像素):沙箱里要把它递进去。
+    captureToCss: require("./browser/driver/coords.cjs").captureToCss,
     Object,
     String,
     Error,
@@ -375,8 +375,8 @@ async function startBridge(options: {
     desktopUseDriver: options.desktopDriver ?? null,
     withComputerUse: (action: () => unknown) => action(),
     computerUseCursor: cursor,
-    //: 归一化判断住在 browser/pool/coords(Retina 上 capturePage 给物理像素):桥的沙箱里也递进去。
-    captureToCss: require("./browser/pool/coords.cjs").captureToCss,
+    //: 归一化判断住在 browser/driver/coords(Retina 上 capturePage 给物理像素):桥的沙箱里也递进去。
+    captureToCss: require("./browser/driver/coords.cjs").captureToCss,
     BrowserWindow: { getAllWindows: () => options.windows },
     mainWindow: options.main ?? null,
   };

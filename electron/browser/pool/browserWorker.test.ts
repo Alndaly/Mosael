@@ -52,22 +52,22 @@ const mocks = vi.hoisted(() => {
   const paths = { userData: "" };
   const capture = vi.fn();
   const page = vi.fn();
-  //: 那个连接开着的工作台(publishWorker 的工作台会话)
+  //: 那个连接开着的工作台(comfy/comfyHost 的工作台会话)
   const workbench = vi.fn(async (_opts: { partition: string; call: unknown }): Promise<unknown> => ({ ok: true }));
   return { drivers, views, backend, pending, execute, paths, capture, page, workbench };
 });
 
 vi.mock("electron", () => ({ app: { getPath: () => mocks.paths.userData } }));
-vi.mock("./accountViews", () => ({ sharedViews: () => mocks.views }));
+vi.mock("../views/accountViews", () => ({ sharedViews: () => mocks.views }));
 vi.mock("./browserBackend", () => ({ browserBackend: mocks.backend }));
 vi.mock("./browserActions", () => ({ executeBrowserAction: mocks.execute }));
 vi.mock("./actionCapture", () => ({ captureForAction: mocks.capture }));
 vi.mock("./actionPage", () => ({ pageForAction: mocks.page }));
 vi.mock("../log", () => ({ plog: vi.fn() }));
-vi.mock("../publish/publishWorker", () => ({ comfyWorkbenchCall: mocks.workbench }));
+vi.mock("../comfy/comfyHost", () => ({ comfyWorkbenchCall: mocks.workbench }));
 
 import { startBrowserWorker, stopBrowserWorker } from "./browserWorker";
-import { DownloadCollector, type CollectedDownload } from "./downloads";
+import { DownloadCollector, type CollectedDownload } from "../views/downloads";
 
 const action = (id: string, session: string, tag: string) => ({
   id, session_id: session, partition: `ephemeral-${session}`, kind: "ephemeral", action: "wait", args: { tag },
@@ -319,7 +319,7 @@ it("后端拒收(入库那道闸):这一步失败,带着后端那句话", async 
   const file = downloaded("clip.mp4");
   stepDownloads(file);
   mocks.execute.mockImplementationOnce(async () => ({ lastUrl: "https://example.com/files" }));
-  const { UploadRefused } = await import("./downloadUpload");
+  const { UploadRefused } = await import("../views/downloadUpload");
   mocks.backend.uploadArtifact.mockRejectedValueOnce(new UploadRefused(413, "下载的文件太大了:最多 2.0 GB。"));
   mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), action: "click" });
   startBrowserWorker();

@@ -6,15 +6,15 @@ import { chromeIdentityOverride, cleanChromeUserAgent, identityForPlatform } fro
 //: 登录排障:视频号那几轮只有「扫码成功、cookie 种下了、又回登录页」这一句,看不出是哪条请求判死的。
 //: 这里把这两个站点的请求结果记进 browser-trace.log(只记 origin+path,不带查询串)。
 import { watchSession as watchNet } from "./netTrace.cjs";
-//: 四套坐标系只在一处相乘(P5/P6):见 browser/pool/coords。
-import { cssToDip } from "./coords.cjs";
+//: 四套坐标系只在一处相乘(P5/P6):见 browser/driver/coords。
+import { cssToDip } from "../driver/coords.cjs";
 import { createTrace } from "../trace.cjs";
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type PageSummary, type ViewState } from "../types";
 import { DownloadRouter, type DownloadNotice } from "./downloads";
 import { MediaRecorder } from "./mediaRecorder";
-import { PageDriver } from "../page/pageDriver";
+import { PageDriver } from "../driver/pageDriver";
 import { MAX_PAGES, PageList, type PageMatch } from "./pageList";
 import { panelMediaScript } from "./panelAudio";
 import {
@@ -695,7 +695,7 @@ export class AccountViewManager {
     return { width: width / zoom, height: height / zoom };
   }
 
-  /** CSS 像素的矩形 → 原生视图要的 DIP。**换算住在 browser/pool/coords**,这里只把缩放递进去(P5)。 */
+  /** CSS 像素的矩形 → 原生视图要的 DIP。**换算住在 browser/driver/coords**,这里只把缩放递进去(P5)。 */
   private toDip(rect: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
     return cssToDip(rect, this.hostZoom());
   }

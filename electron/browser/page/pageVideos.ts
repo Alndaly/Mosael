@@ -4,8 +4,8 @@
  */
 import type { WebContents } from "electron";
 
-import { sharedViews } from "../pool/accountViews";
-import { fetchBytes } from "./pageFetch";
+import { sharedViews } from "../views/accountViews";
+import { fetchBytes } from "../driver/pageFetch";
 import { foreground, pageOf } from "./pageTarget";
 import {
   VIDEO_SCAN_SCRIPT,
@@ -15,7 +15,7 @@ import {
   mergeVideoCandidates,
   type PageVideoScan,
   type VideoProbe,
-} from "./videoProbe";
+} from "../driver/videoProbe";
 
 /** 清单最多读多大。正常的 m3u8 / mpd 几 KB 到几百 KB。 */
 const MAX_MANIFEST_BYTES = 2_000_000;

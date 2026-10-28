@@ -1,7 +1,7 @@
 /**
  * 页面驱动上「收文案」和「收选择器」两族方法不能混。
  *
- * 被测的是 electron/browser/page/pageDriver.ts 的 PageDriver。
+ * 被测的是 electron/browser/driver/pageDriver.ts 的 PageDriver。
  *
  * 驱动上几乎每个方法都收 CSS 选择器,只有 `waitButtonEnabled` 收的是**按钮文案** —— 于是它最容易
  * 被顺手传进一个选择器,而那样它只会去找"文本恰好等于 `#next-button` 的按钮",永远找不到,

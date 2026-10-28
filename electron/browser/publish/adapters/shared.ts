@@ -1,7 +1,7 @@
-import type { ContentKind, PublishTask } from "../../types";
+import type { ContentKind, PublishTask } from "../publishTypes";
 import type { SupportedPlatform } from "../platforms";
 import { platformName, resolvePlatform } from "../platforms";
-import type { PageDriver } from "../../page/pageDriver";
+import type { PageDriver } from "../../driver/pageDriver";
 import { plog } from "../../log";
 import { t } from "../../../i18n.cjs";
 

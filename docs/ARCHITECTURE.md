@@ -781,21 +781,21 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 ### 内嵌浏览器(`electron/browser/`)
 
 主进程里所有「驱动一张网页」的事都在这里,esbuild 从 `index.ts` 打成 `browser.bundle.cjs`。
-目录按职责分四块,根上只留跨块共用的 `types` / `errors` / `log` / `trace`:
+目录就是层,**只往下依赖、文件之间不许成环**(`electron/browser/layering.test.ts` 钉着),根上只留跨块共用的
+`types` / `errors` / `log` / `trace`:
 
-| 目录 | 管什么 | 入口 |
+| 层(从下往上) | 管什么 | 入口 |
 | --- | --- | --- |
-| `publish/` | 发布执行器:认领任务、平台契约与适配器(`adapters/`)、发表后的核对,以及账号登录流程 | `publishWorker.ts` |
-| `pool/` | 浏览器池:内嵌视图与浮动面板(`accountViews`、`panel*`、`floatLayer`、`hostLayers`)、执行器动作(`browserWorker` / `action*`)、下载与分区搬迁、坐标换算 | `browserWorker.ts`、`accountViews.ts` |
-| `page/` | 页面工具:驱动一张页面(`pageDriver`)和读页、取图、取视频、截长图等页面内能力 | `pageDriver.ts` |
-| `comfy/` | ComfyUI 工作台:画布视图、编辑器桥、会话 | `comfyWorkbench.ts` |
+| `driver/` | 驱动一张页面(`pageDriver`)和纯页面操作(读页、取图、视频探测、坐标换算 `coords.cjs`):只认一个 webContents | `pageDriver.ts` |
+| `views/` | 内嵌视图与悬浮面板(`accountViews`、`panel*`)、浮层与让位(`floatLayer`、`hostLayers`)、下载;**视图宿主** `viewHost` 在主窗口里建好它们,并接管工具条、页面列表、面板这些对前台视图的操作 | `viewHost.ts`、`accountViews.ts` |
+| `page/` | 顶栏的页面工具(截图、取图、取视频、读页、存下载):作用于前台那个视图 | `pageTarget.ts` |
+| `comfy/` | ComfyUI 工作台:借宿主的视图开工作台会话(`comfyHost`)、编辑器桥、画布视图 | `comfyHost.ts` |
+| `publish/` | 发布执行器:认领任务、平台契约与适配器(`adapters/`)、发表后的核对、账号登录与复检;发布专用的类型在 `publishTypes` | `publishWorker.ts` |
+| `pool/` | 浏览器池的 RPA / 智能体执行器(`browserWorker` / `action*`):动作要用顶栏的页面工具,工作台调用交给 `comfy` | `browserWorker.ts` |
 
-目录是按职责搬的,代码没改,所以依赖还不是单向的,有两处要知道:
-
-- `page` 和 `pool` 互相引用:页面工具要从 `pool/accountViews` 拿当前视图,`accountViews` 又用 `page/pageDriver` 驱动页面;
-- `publish/publishWorker.ts` 还兼着内嵌视图的宿主(视图导航、浮层、工作台的打开与调用都从它导出),
-  所以 `pool/browserWorker` 反过来引用它来调工作台。这不代表这些职责属于发布,是下一步要拆出去的东西。
-`pool/coords.cjs` 与 `trace.cjs` 不进 bundle,`main.cjs` 与 `computerUse/` 直接 `require` 它们。
+`page` / `comfy` / `publish` 同在一层、互不认识。主进程按 **宿主 → 工作台 → 发布 → RPA** 的顺序启动(`startViewHost`、
+`startComfyHost`、`startPublishWorker`、`startBrowserWorker`),停的时候反过来;三个执行器都从 `views/viewHost.hostedViews()`
+现取视图,宿主重建之后不攥着旧的。`driver/coords.cjs` 与 `trace.cjs` 不进 bundle,`main.cjs` 与 `computerUse/` 直接 `require` 它们。
 
 ## 智能体与 MCP
 

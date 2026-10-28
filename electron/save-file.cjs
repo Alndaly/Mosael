@@ -12,7 +12,7 @@
  * 渲染层没了,原来那个文件都一个字节没动。
  *
  * 为什么分四步(begin / write / end / abort)而不是一把把整份交过来:素材原文件可以有 2 GiB
- * (见 browser/pool/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节,渲染层也不该为了存一个
+ * (见 browser/views/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节,渲染层也不该为了存一个
  * 文件先把整份读进内存 —— 一块最多 8 MiB(见 ipc-contract.MAX_SAVE_CHUNK),流由渲染层自己拉
  * (fetch 的 body 或 Blob 的 stream),主进程这边只碰这一块。
  */

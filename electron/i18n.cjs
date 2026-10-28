@@ -504,7 +504,7 @@ const MESSAGES = {
     zh: "这一页截不了整页长图(开着开发者工具时也会这样),可以先截可见区域",
     en: "This page can't be captured as a full-page image (this also happens while DevTools is open); try the visible area",
   },
-  // 内嵌浏览器里的下载(不弹保存框,直接进素材库;见 browser/pool/downloads.ts)。
+  // 内嵌浏览器里的下载(不弹保存框,直接进素材库;见 browser/views/downloads.ts)。
   downloadErr_type: {
     zh: "素材库不收这种文件:「{name}」。能存的是视频、音频、图片和常见文档(PDF、Word、PPT、Excel、文本……)",
     en: "The library can't take “{name}”: you can save video, audio, images and common documents (PDF, Word, PowerPoint, Excel, text…)",

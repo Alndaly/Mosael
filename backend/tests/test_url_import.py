@@ -177,7 +177,7 @@ class Test取不到时说清是哪一种原因:
 def test_geo_blocked_points_at_the_outbound_proxy_not_a_profile_proxy() -> None:
     """地区受限时该改的是**这台机器的出站代理**。
 
-    浏览器档案的代理只作用于内嵌浏览器(见 electron/browser/pool/accountViews.setProxy);「从链接导入」
+    浏览器档案的代理只作用于内嵌浏览器(见 electron/browser/views/accountViews.setProxy);「从链接导入」
     的 yt-dlp 走的是 core/outbound_proxy 那条路(见 media/ytdlp._guarded)。此前那句让人「为浏览器
     档案配置代理」——照做也不会影响这条路,是一句照做无效的误导。
     """

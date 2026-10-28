@@ -1,17 +1,13 @@
-// 发布执行器的打包入口。esbuild 把这里连同 pageDriver/accountViews/adapters/... 打成
-// 单个 CommonJS(electron/browser.bundle.cjs),供 electron/main.cjs require。
+// 内嵌浏览器的打包入口。esbuild 把这里连同它引到的一切打成单个 CommonJS(electron/browser.bundle.cjs),
+// 供 electron/main.cjs require。分层见 browser/layering.test.ts:driver → views → page / pool / comfy / publish。
+//
+// 启动顺序:先 startViewHost(视图、浮层),再 startComfyHost、startPublishWorker、startBrowserWorker(都借宿主的视图);
+// 停的时候反过来,最后 stopViewHost。
 export {
-  startPublishWorker,
-  stopPublishWorker,
-  openLogin,
+  startViewHost,
+  stopViewHost,
   openPoolLogin,
-  setComfyViewNavigation,
-  openComfyWorkbench,
-  comfyWorkbenchCall,
-  openPage,
-  signOutAccount,
   clearPoolProfile,
-  inspectAccount,
   navigateView,
   viewBack,
   viewForward,
@@ -30,15 +26,32 @@ export {
   hideToasts,
   republishViewState,
   hostZoomChanged,
-  releaseWorkbenchView,
   embeddedViewVisible,
-  hidePublishView,
+  hideEmbeddedView,
   setPanelLayout,
   closePanel,
   setPanelMuted,
   setPanelsHidden,
   setHostLayer,
   clearHostLayer,
+} from "./views/viewHost";
+// ComfyUI 工作台(ADR 0038 §3):借宿主的视图开工作台会话。
+export {
+  startComfyHost,
+  stopComfyHost,
+  setComfyViewNavigation,
+  openComfyWorkbench,
+  comfyWorkbenchCall,
+  releaseWorkbenchView,
+} from "./comfy/comfyHost";
+// 发布执行器:轮询后端认领发布任务、账号登录与复检。
+export {
+  startPublishWorker,
+  stopPublishWorker,
+  openLogin,
+  openPage,
+  signOutAccount,
+  inspectAccount,
 } from "./publish/publishWorker";
 // 浏览器会话顶栏的页面工具:只作用于前台视图(见 pageTarget)。
 export { capturePage, beginRegionCapture, finishRegionCapture } from "./page/pageCapture";

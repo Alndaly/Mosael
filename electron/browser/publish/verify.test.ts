@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { linesEntered, squash, textEntered } from "./verify";
-import type { PageDriver } from "../page/pageDriver";
+import type { PageDriver } from "../driver/pageDriver";
 
 /** 只实现原语用得到的两个方法:读编辑器 / 整页文字。 */
 function fakeDriver(editorText: string, bodyText = "") {

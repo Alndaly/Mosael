@@ -39,7 +39,7 @@ vi.mock("electron", () => ({
     },
   },
 }));
-vi.mock("../pool/accountViews", () => ({ sharedViews: () => null }));
+vi.mock("../views/accountViews", () => ({ sharedViews: () => null }));
 
 const { captureContents } = await import("./pageCapture");
 

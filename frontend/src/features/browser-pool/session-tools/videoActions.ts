@@ -36,7 +36,7 @@ export function startVideoDownload(params: {
 
 /**
  * 这个候选能不能下:**真 DRM 不能**;AES-128 加密的 HLS 能 —— 交给 yt-dlp 时它会取钥匙、会解。
- * 页面扫描把这两种分在 `protection` 的 `drm` / `encrypted` 上(见 electron/browser/page/videoProbe)。
+ * 页面扫描把这两种分在 `protection` 的 `drm` / `encrypted` 上(见 electron/browser/driver/videoProbe)。
  */
 export function downloadable(candidate: VideoCandidate): boolean {
   return candidate.protection !== "drm";

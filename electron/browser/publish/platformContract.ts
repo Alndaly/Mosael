@@ -8,7 +8,7 @@
  * 契约只写**事实**,不写流程 —— 流程在执行器(`runPublishTask`)。
  * 标题 / 正文 / 标签等**填表字段**也在这里按内容形状声明(见 `fields`),适配器只做平台特有动作。
  */
-import type { ContentKind } from "../types";
+import type { ContentKind } from "./publishTypes";
 import type { OverlayRule } from "./overlays";
 import type { SuccessSignals } from "./verify";
 

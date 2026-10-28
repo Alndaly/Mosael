@@ -449,7 +449,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This content isn't available: it may be private, deleted or taken down.",
     },
     #: 「从链接导入」走的是 media/ytdlp 那条出站代理(部署设置 → 出站代理),不是浏览器档案的代理 ——
-    #: 档案代理只作用于内嵌浏览器(见 electron/browser/pool/accountViews.setProxy)。此前那句叫人「为浏览器
+    #: 档案代理只作用于内嵌浏览器(见 electron/browser/views/accountViews.setProxy)。此前那句叫人「为浏览器
     #: 档案配置代理」,照着做对这条路无效。
     "urlImportErr_geoBlocked": {
         "zh": "这条内容在当前网络所在的地区看不到,或站点限制了这台机器的对外 IP。影响「从链接导入」的是这台机器的出站代理(部署设置 → 出站代理);档案自己的代理只管内嵌浏览器,不管这条路。",

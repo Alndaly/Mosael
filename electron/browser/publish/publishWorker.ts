@@ -10,43 +10,23 @@
 //  - 「前台可见槽」至多一个(视图 attach 到窗口):留给需要用户在场的时刻——登录扫码、
 //    失败/受阻现场。用 views.visibleAccountId 表达前台是否被占;被占时后台任务不抢,视图仍在,
 //    用户可稍后从任务行「查看页面」再亮出来。
-import { app, type BaseWindow } from "electron";
+import { app } from "electron";
 
 import { t as tr } from "../../i18n.cjs";
-import {
-  createSharedViews,
-  destroySharedViews,
-  type AccountViewManager,
-  type ForegroundSnapshot,
-  type PanelCard,
-  type PanelLayoutChange,
-} from "../pool/accountViews";
-import type { DownloadNotice } from "../pool/downloads";
-import { FloatLayer, type FloatHint, type FloatPointer } from "../pool/floatLayer";
+import { hostedViews } from "../views/viewHost";
 import { plog } from "../log";
 import { createAdapter } from "./adapters";
-import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "../comfy/comfyEditor";
-import type { ComfyNavigation, NavigationOutcome } from "../comfy/comfyNavigation";
-import { comfyViewOpening, comfyViewShown, setComfyNavigation } from "../comfy/comfyViews";
-import type { WorkbenchCall, WorkbenchCallResult, WorkbenchState } from "../comfy/comfyWorkbench";
-import { WorkbenchSessions } from "../comfy/comfyWorkbenchSessions";
 import { platformName, resolvePlatform } from "./platforms";
 //: 登录的显式状态机与结构化日志(P3 / P7):失败时要能一眼看出停在哪一步、为什么停。
 import { createLoginFlow } from "./loginPhase.cjs";
 import { createTrace } from "../trace.cjs";
-//: 声明式让位(P2):浮层只说「要哪种让法」,折算成对原生视图的指令在这里做一次。
-import { createHostLayers } from "../pool/hostLayers.cjs";
-import type { PageDriver } from "../page/pageDriver";
-import type { LiveViewFrame, PublishTask, ViewState } from "../types";
+import type { PageDriver } from "../driver/pageDriver";
+import type { LiveViewFrame } from "../types";
+import type { PublishTask } from "./publishTypes";
 import * as backend from "./publishBackend";
 import { runPublishTask } from "./runPublishTask";
 
-let views: AccountViewManager | null = null;
-/** ComfyUI 工作台的会话(ADR 0038 §3):主进程轮询内嵌画布里的桥,交给渲染层。 */
-let workbench: WorkbenchSessions | null = null;
-let floatLayer: FloatLayer | null = null;
-/** 原生视图在前台时右下角的提示条画在这一块上(ADR 0051);提示条上的按钮靠它把指针交回渲染层。 */
-let toastLayer: FloatLayer | null = null;
+let started = false;
 // 正在跑「真发布任务」的账号 → 那一条任务 id:size 即并发数,key 即认领时要排除的账号(同账号串行),
 // value 是心跳要报给后端的在飞任务(后端拿它续 updated_at,避免长任务被当成悬挂)。
 const running = new Map<string, string>();
@@ -138,7 +118,7 @@ class LiveMirror {
     let dataUrl: string | undefined;
     // 已挂成悬浮面板时,真实画面就在屏幕右下角,再截一遍纯属浪费(capturePage 不便宜,
     // 而且在这种视图上曾经把渲染状态搞坏过)。此时只推步骤文案。
-    if (views?.isPanelled(this.accountId)) {
+    if (hostedViews()?.isPanelled(this.accountId)) {
       this.push(undefined);
       return;
     }
@@ -194,12 +174,15 @@ const POLL_BUSY_MS = 500;
 /** 请求前台可见槽:仅当前台空闲(无视图可见)才把该账号亮出并返回 true;被占则不抢(让当前占用者先
  *  处理完),返回 false——视图仍在(表单/现场都在),用户可稍后从任务行「查看页面」再亮出来。 */
 function requestFront(accountId: string): boolean {
+  const views = hostedViews();
   if (!views || views.visibleAccountId) return false;
   views.show(accountId);
   return true;
 }
 
 async function runTask(bt: backend.BackendTask): Promise<void> {
+  //: 视图归视图宿主(views/viewHost),每次现取 —— 宿主重建之后不攥着一份旧的。
+  const views = hostedViews();
   if (!views) {
     plog("runTask aborted (views=null):", bt.id);
     running.delete(bt.account_id);
@@ -236,6 +219,8 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
  *  「已登录」只是快照,会话会过期、也可能在别处登出——这里定期把 UI 拉回真实状态。复检失败(网络/
  *  导航抖动)不下线用户,保留原状态,下个 ttl 再查。 */
 async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
+  //: 视图归视图宿主(views/viewHost),每次现取 —— 宿主重建之后不攥着一份旧的。
+  const views = hostedViews();
   if (!views) return;
   // 用户已开始登录接管:放弃本次复检,别和登录抢同一个视图 goto。放弃也要把认领时写下的
   // checking 放回去 —— 认领了不回报,账号就挂在「检测中」出不来(与 loop 里那条同一个理由)。
@@ -323,7 +308,7 @@ async function loop(gen: number): Promise<void> {
       });
     }
     // 没有更多待发任务、且完全空闲(无发布/复检并发、前台无视图占用)时,后台静默复检一个到期账号。
-    if (running.size === 0 && rechecking.size === 0 && !views?.visibleAccountId) {
+    if (running.size === 0 && rechecking.size === 0 && !hostedViews()?.visibleAccountId) {
       const { account } = await backend.claimCheck();
       // 用户正在登录接管的账号跳过复检(否则抢同一个视图 goto → 空白)。但**认领已经把它翻成
       // checking 了** —— 跳过就等于认领了不回报,账号会挂在「检测中」直到 10 分钟的悬挂自愈。
@@ -354,52 +339,16 @@ async function loop(gen: number): Promise<void> {
 
 /** 在应用主窗口里启动执行器。onViewChanged 让渲染层知道内嵌视图显示/隐藏(可驱动顶栏留白)。 */
 export function startPublishWorker(opts: {
-  window: BaseWindow;
-  onViewChanged?: (state: ViewState) => void;
-  getAccountName?: (accountId: string) => string | null;
   onTaskSettled?: (info: SettleInfo) => void;
   onFrame?: (frame: LiveViewFrame) => void;
-  /** 悬浮卡片几何变化 —— 渲染层照它画圆角/阴影/标题条(原生 View 画不了)。 */
-  onPanels?: (cards: PanelCard[]) => void;
-  /** 用户在内嵌浏览器里点的下载:进度、下好了、没下成(渲染层据此存进素材库并在顶栏说一句)。 */
-  onDownload?: (notice: DownloadNotice) => void;
-  /** ComfyUI 工作台:桥那边看到的(选中、脏标记、能力、事件);`state: null` 是会话结束了。 */
-  onWorkbench?: (update: { connectionId: string; state: WorkbenchState | null }) => void;
-  /** 提示条那一块浮层视图上的指针(主窗口的 CSS 坐标):渲染层据此点真的那条提示(ADR 0051)。 */
-  onToastsPointer?: (pointer: FloatPointer) => void;
-  /** 内嵌网页、工作台画布里按了 ⌘K:交给渲染层开命令面板(ADR 0051)。 */
-  onCommandPalette?: () => void;
 }): void {
-  if (views) return;
+  if (started) return;
+  started = true;
   stopped = false;
   generation += 1; // 新一代:旧代在途的 loop/登录轮询不会复活成重复链
   running.clear();
   onSettled = opts.onTaskSettled ?? null;
   onFrame = opts.onFrame ?? null;
-  // 浮层视图(外壳里的悬停说明画在网页上面):内嵌浏览器一亮出来就先建好,收回去时收起说明。
-  floatLayer = new FloatLayer(opts.window, () => views?.focusTarget() ?? null);
-  toastLayer = new FloatLayer(opts.window, () => views?.focusTarget() ?? null, {
-    kind: "toasts",
-    onPointer: (pointer) => opts.onToastsPointer?.(pointer),
-  });
-  const onViewChanged = (state: ViewState) => {
-    if (state.visible) floatLayer?.warm();
-    else {
-      floatLayer?.hide();
-      toastLayer?.hide();
-    }
-    opts.onViewChanged?.(state);
-  };
-  // 共享实例:浏览器(RPA/智能体)执行器用的是同一个管理器(见 accountViews.createSharedViews)。
-  views = createSharedViews(onViewChanged, opts.onPanels, opts.onDownload, () => opts.onCommandPalette?.());
-  views.attachWindow(opts.window, opts.getAccountName ?? (() => null));
-  workbench = new WorkbenchSessions({
-    driver: (partition) => views?.existingDriver(partition) ?? null,
-    visible: (partition) => views?.visibleAccountId === partition,
-    paused: () => opts.window.isDestroyed() || !opts.window.isVisible() || opts.window.isMinimized(),
-    emit: (partition, state) =>
-      opts.onWorkbench?.({ connectionId: partition.slice(COMFY_PARTITION_PREFIX.length), state }),
-  });
   plog("worker started, generation", generation);
   // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。
   void backend.markDue().catch(() => undefined);
@@ -418,15 +367,8 @@ export function stopPublishWorker(): void {
   }
   // 本次登录已被停止:清掉接管标记,重启后复检可以正常认领;取消本身不产生新的登录态结论。
   loginAccounts.clear();
-  // 销毁并清空 views,让下次 startPublishWorker 能重新绑定新窗口(mac 关窗→重新激活)。持久化会话
-  // 在磁盘分区里(persist:mosael-<id>),销毁视图不丢登录态。
-  destroySharedViews();
-  views = null;
-  workbench = null;
-  floatLayer?.destroy();
-  floatLayer = null;
-  toastLayer?.destroy();
-  toastLayer = null;
+  // 视图本身归视图宿主,由主进程在这之后 stopViewHost 销毁。
+  started = false;
   onFrame = null;
   mirroring = null;
   running.clear();
@@ -453,111 +395,8 @@ function endLogin(gen: number, accountId?: string, loggedIn = false, writeUnknow
   }
 }
 
-/** 浏览器池通用档案登录:复用发布账号那套**内嵌视图**(AccountViewManager.openView),在该档案分区
- *  亮出登录页,不弹外部系统窗。与 openLogin 一样占前台单槽——已有视图在前台则拒绝。viewId = 分区名。
- *  通用档案没有平台适配器/登录态轮询,登不登成由用户自己判断(cookie 落分区即可)。 */
-export async function openPoolLogin(opts: {
-  partition: string;
-  url: string;
-  name?: string;
-  proxy?: string | null;
-  resume?: boolean;
-  /** 档案钉的浏览器身份(见 BrowserProfile.identity);不传就按平台规矩。 */
-  identity?: string | null;
-}): Promise<void> {
-  if (!views) throw new Error(tr("publishErr_notReady"));
-  if (views.visibleAccountId && views.visibleAccountId !== opts.partition)
-    throw new Error(tr("publishErr_foregroundBusy"));
-  //: **建视图之前**定身份(UA 随第一次请求发出去),见 accountViews.applyIdentity。
-  if (opts.identity) views.setAccountIdentity(opts.partition, opts.identity);
-  await views.openView({
-    viewId: opts.partition,
-    partition: opts.partition,
-    name: opts.name,
-    url: opts.url,
-    proxy: opts.proxy ?? null,
-    resume: opts.resume === true,
-  });
-}
-
 /** 排查日志:一行一个 JSON(userData/browser-trace.log,超 2MB 轮转一份)。 */
 const trace = createTrace({ dir: app.getPath("userData") });
-
-const COMFY_PARTITION_PREFIX = "persist:pool-comfyui-";
-
-/** 开工作台的结果:打开了那一张 / 新建了一张 / 只是回到画布,或者没成的原因(那台机器上没有这一张、这版前端没有「新建」命令……)。 */
-export type WorkbenchOpenOutcome = ComfyOpenOutcome | ComfyNewOutcome;
-
-/**
- * ComfyUI 工作台(ADR 0038 §3):亮出这个连接的内嵌视图(还开着就接着用,不重新载入 —— 那边可能有没存的改动),开始一个工作台
- * 会话(注入桥、轮询),再打开 `workflows/<path>` 那一张、或者执行前端自己的「新建」命令新建一张、或者什么都不开(回到画布上
- * 开着的那张),见 comfyEditor。工作流库里打开一张、「新建」都走这里;和池档案登录同一个前台单槽。
- */
-export async function openComfyWorkbench(opts: {
-  partition: string;
-  url: string;
-  name: string;
-  path: string | null;
-  fresh: boolean;
-}): Promise<WorkbenchOpenOutcome> {
-  const driver = await showComfyView(opts);
-  if (!driver || !workbench) return "notReady";
-  workbench.start(opts.partition, new URL(opts.url).origin);
-  if (opts.path) return openWorkflowInPage(driver, { url: opts.url, path: opts.path });
-  if (opts.fresh) return newWorkflowInPage(driver, { url: opts.url });
-  return "opened";
-}
-
-/** 工作台面板要桥做的一件事(填值、刷新下拉、导出、保存、写标记)。会话不在就不做。 */
-export function comfyWorkbenchCall(opts: { partition: string; call: WorkbenchCall }): Promise<WorkbenchCallResult> {
-  if (!workbench) return Promise.resolve({ ok: false, error: "closed" });
-  return workbench.call(opts.partition, opts.call);
-}
-
-
-/** 亮出一个 ComfyUI 连接的内嵌视图(还开着就接着用):先记下来源、装上设置写回的闸,亮出来之后挂上「载入完」的监听。 */
-async function showComfyView(opts: { partition: string; url: string; name: string }) {
-  comfyViewOpening(opts.partition, opts.url);
-  await openPoolLogin({ partition: opts.partition, url: opts.url, name: opts.name || undefined, resume: true });
-  comfyViewShown(opts.partition);
-  return views?.existingDriver(opts.partition) ?? null;
-}
-
-/** 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标,见 comfyNavigation):只在这个视图里生效,每次载入之后再设一次。 */
-export function setComfyViewNavigation(opts: { partition: string; mode: ComfyNavigation }): Promise<NavigationOutcome> {
-  return setComfyNavigation(opts.partition, opts.mode);
-}
-
-/** 渲染层重新加载之后,把当前内嵌视图状态补播一次(见 AccountViewManager.republish)。 */
-export function republishViewState(): void {
-  views?.republish();
-}
-
-/** 主窗口的页面缩放变了(「视图 → 放大 / 缩小」):视图按新的缩放重新摆(见 AccountViewManager.hostZoom)。 */
-export function hostZoomChanged(): void {
-  views?.hostZoomChanged();
-}
-
-/**
- * 主窗口换了一份文档(重新加载、HMR 整页刷新、出错后点「重新加载」、渲染进程崩了):前台要是**工作台**的 ComfyUI 视图,就收起来、
- * 停掉工作台会话。
- *
- * 原生视图亮着时,渲染层必须画着和它配套的那一圈:工作台是顶栏加右边那一列,普通网页是内嵌浏览器的顶栏。普通网页的那一圈
- * 只看视图状态就画得回来(主进程补播、preload 记着最新的一帧);工作台那一页却是渲染层自己的状态 —— 开的是哪个连接、在哪个
- * 工作区、哪个页签、这次跑过的几次 —— 新的那一份文档里都没有,认领不了那个视图。留着它,就是一块没有顶栏、没有那一列的
- * 光秃秃的画布盖在应用上(维护者截图)。收起的视图本身还活着:「在工作台里打开」回到同一张,没存的改动还在。
- */
-export function releaseWorkbenchView(): void {
-  const partition = views?.visibleAccountId;
-  if (!partition || !workbench?.active(partition)) return;
-  workbench.stop(partition, false);
-  views?.hide();
-}
-
-/** 内嵌视图此刻是否占着前台 —— 主进程据此决定 ⌘R 刷的是内嵌页面还是应用本身。 */
-export function embeddedViewVisible(): boolean {
-  return Boolean(views?.visibleAccountId);
-}
 
 /** 触发某账号登录:亮出其视图、打开登录页,轮询登录态并回写后端(最多 10 分钟)。 */
 /**
@@ -606,6 +445,8 @@ async function collectLoginForensics(input: {
 }
 
 export async function openLogin(accountId: string, platform: string): Promise<void> {
+  //: 视图归视图宿主(views/viewHost),每次现取 —— 宿主重建之后不攥着一份旧的。
+  const views = hostedViews();
   if (!views) return;
   // 该账号正有「真发布任务」在后台跑:登录会切它的视图/抢焦点,拒绝,等任务完成。
   // 注意:后台复检(rechecking)不在此列——复检恰恰是为确认登录态,用户手动登录优先级更高,可抢占。
@@ -665,7 +506,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
     const poll = async () => {
       loginPollTimer = null;
       // stop/换代/视图销毁/超时:收工,不再续排。
-      if (stopped || gen !== generation || !views || Date.now() > deadline) {
+      if (stopped || gen !== generation || !hostedViews() || Date.now() > deadline) {
         const why = Date.now() > deadline ? "timeout" : "stopped";
         plog("login poll ended without login:", accountId, why);
         flow.fail(why);
@@ -705,7 +546,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         flow.checkFailed(error);
       }
       // checkLogin 挂起期间可能已 stop/换代:再查一次,别对已属新代的共享状态动手或续排。
-      if (stopped || gen !== generation || !views) {
+      if (stopped || gen !== generation || !hostedViews()) {
         endLogin(gen, accountId, false, false);
         return;
       }
@@ -726,7 +567,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         }
         // 登上了 = 这个内嵌浏览器的差事办完了,自己收回去。此前它会一直挂在前台,用户得再点一次
         // 「返回 Mosael」才能回来 —— 而他刚做完的事本来就以"回到账号池看到已登录"为终点。
-        if (views?.visibleAccountId === accountId) views.hide();
+        if (hostedViews()?.visibleAccountId === accountId) views.hide();
         endLogin(gen, accountId, true);
         return;
       }
@@ -739,7 +580,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       accountId,
       platform,
       reason: `error: ${String(error).slice(0, 120)}`,
-      driver: views?.getDriver(accountId) ?? null,
+      driver: hostedViews()?.getDriver(accountId) ?? null,
       lastNegativeUrl: "",
       negatives: 0,
     });
@@ -756,6 +597,8 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
  * 有的平台(B 站)只让当前页面的会话失效,分区里别处的 cookie 还在。清分区是唯一确定的做法。
  */
 export async function signOutAccount(accountId: string): Promise<void> {
+  //: 视图归视图宿主(views/viewHost),每次现取 —— 宿主重建之后不攥着一份旧的。
+  const views = hostedViews();
   if (!views) throw new Error(tr("publishErr_notReady"));
   if (running.has(accountId)) throw new Error(tr("publishErr_accountBusy"));
   // 登录轮询还挂着的话先收掉 —— 否则它下一拍在空分区上问一次,把刚写的状态又改一遍。
@@ -765,17 +608,11 @@ export async function signOutAccount(accountId: string): Promise<void> {
   await backend.patchAccount(accountId, { binding_status: "login_required", last_error: null });
 }
 
-/** 通用档案「清除登录数据」:和退出登录同一件事,只是这里没有平台、也没有登录态要回写。 */
-export async function clearPoolProfile(partition: string): Promise<void> {
-  if (!views) throw new Error(tr("publishErr_notReady"));
-  // 池档案的视图 id 就是分区名(见 openPoolLogin)。
-  await views.clearAccountData(partition, partition);
-  plog("pool profile cleared:", partition);
-}
-
 /** 手动打开某账号的平台页面:亮出其视图。若该视图已有页面(如刚「仅准备」好的发布表单——hide
  *  只是移除子视图、webContents 与页面都还在),直接恢复,用户可人工确认/真发;否则导航到创作首页。 */
 export async function openPage(accountId: string, platform: string): Promise<void> {
+  //: 视图归视图宿主(views/viewHost),每次现取 —— 宿主重建之后不攥着一份旧的。
+  const views = hostedViews();
   if (!views) return;
   // 前台被别的账号占(登录 / 待确认现场):亮出那个占用者,别抢(切走会打断它)。
   if (views.visibleAccountId && views.visibleAccountId !== accountId) {
@@ -795,6 +632,8 @@ export async function openPage(accountId: string, platform: string): Promise<voi
 /** 打开某账号内嵌视图的 DevTools(调试平台适配器/巡检选择器用)。先确保视图存在、
  *  必要时亮出并导航到平台页,再挂 detached 检查器;再点一次则关闭。 */
 export async function inspectAccount(accountId: string, platform: string): Promise<boolean> {
+  //: 视图归视图宿主(views/viewHost),每次现取 —— 宿主重建之后不攥着一份旧的。
+  const views = hostedViews();
   if (!views) return false;
   // 前台被别的账号占(登录/待确认现场)→ 别抢,直接给那个视图开检查器。
   if (views.visibleAccountId && views.visibleAccountId !== accountId) {
@@ -811,124 +650,3 @@ export async function inspectAccount(accountId: string, platform: string): Promi
   return views.openDevTools(accountId);
 }
 
-/** 内嵌浏览器工具栏:导航当前可见视图。 */
-export function navigateView(url: string): void {
-  views?.navigate(url);
-}
-export function viewBack(): void {
-  views?.back();
-}
-export function viewForward(): void {
-  views?.forward();
-}
-export function viewReload(): void {
-  views?.reload();
-}
-
-/** 前台会话的页面列表(渲染层左侧那一列):切换、关闭、重排、新建、让出左侧。 */
-export function switchViewPage(id: string): boolean {
-  return views?.switchVisiblePage(id) ?? false;
-}
-export function closeViewPage(id: string): boolean {
-  return views?.closeVisiblePage(id) ?? false;
-}
-export function reorderViewPages(ids: string[]): boolean {
-  return views?.reorderVisiblePages(ids) ?? false;
-}
-export function newViewPage(url: string): boolean {
-  return views?.newPage(url) ?? false;
-}
-/** 页面列表展开、收起、临时展开:先拍下前台网页的画面(渲染层铺回原处),再把原生视图挪开 / 放回原处。 */
-export function snapshotViewPage(): Promise<ForegroundSnapshot | null> {
-  return views?.snapshotForeground() ?? Promise.resolve(null);
-}
-/** 键盘交给前台网页(顶栏、页面列表里点完之后)。 */
-export function focusViewPage(): void {
-  views?.focusForeground();
-}
-
-/** 原生网页占着前台时,菜单的 ⌘C 先问 Mosael 自己的选中文字;没有才落回网页。 */
-export function copyHostSelectionIfAny(): Promise<boolean> {
-  if (!views?.visibleAccountId) return Promise.resolve(false);
-  return views.copyHostSelectionIfAny();
-}
-
-/** 键盘交回 Mosael 的渲染层(点在工作台那一列、发布顶栏等壳里之后)。 */
-export function focusHostWindow(): void {
-  views?.focusHost();
-}
-/** 外壳里的悬停说明画到网页上面 / 收起(见 floatLayer)。 */
-export function showFloat(hint: FloatHint): Promise<void> {
-  return floatLayer?.show(hint) ?? Promise.resolve();
-}
-export function hideFloat(id?: string): void {
-  floatLayer?.hide(id);
-}
-/** 原生视图在前台时,右下角的提示条画到网页上面 / 收起(ADR 0051)。 */
-export function showToasts(toasts: Omit<FloatHint, "id">): Promise<void> {
-  return toastLayer?.show({ id: "toasts", ...toasts }) ?? Promise.resolve();
-}
-export function hideToasts(): void {
-  toastLayer?.hide();
-}
-
-/** 收起内嵌视图,把窗口还给 React UI。 */
-/** 渲染层拖动/缩放悬浮面板后落到这里(几何由主进程持有:layout() 要用,还要落盘)。 */
-export function setPanelLayout(change: PanelLayoutChange): void {
-  views?.setPanelLayout(change);
-}
-
-/** 手动关闭某块悬浮面板:只撤面板,任务/会话照常继续跑(它不依赖面板)。 */
-export function closePanel(id: string): void {
-  views?.panelDetach(id);
-}
-
-/**
- * 渲染层的弹窗开着时把悬浮面板收起来(原生视图永远压在渲染层之上,见 AccountViewManager.setPanelsHidden)。
- * 与 closePanel 不同:只藏,任务照常继续,关掉弹窗再放回来。
- */
-export function setPanelsHidden(hidden: boolean): void {
-  views?.setPanelsHidden(hidden);
-}
-
-/**
- * 声明式让位(P2):浮层发一条声明,这里把**所有**在生效的声明折算成指令。
- *
- * 为什么不再让每个浮层各调一条通道:每加一个浮层就要记得接一次,漏接的表现是「被网页盖住、点不到」,
- * 而且不报错。现在只有这一处懂「几条声明怎么合成」,新浮层只要说清楚自己要哪种让法。
- */
-const hostLayers = createHostLayers();
-
-export function setHostLayer(claim: { id: string; kind: string; active: boolean; width?: number }): void {
-  const directives = hostLayers.set(claim.id, claim);
-  applyHostLayers(directives);
-}
-
-/** 浮层卸载:撤掉它那条声明(否则它会一直占着让位,网页永远缩着)。 */
-export function clearHostLayer(id: string): void {
-  applyHostLayers(hostLayers.clear(id));
-}
-
-function applyHostLayers(directives: {
-  reasons: string[];
-  panelsHidden: boolean;
-  insetRight: number;
-  insetLeft: number;
-}): void {
-  if (!views) return;
-  for (const reason of ["region", "cover", "overlay"] as const) {
-    views.setForegroundHidden(reason, directives.reasons.includes(reason));
-  }
-  views.setPanelsHidden(directives.panelsHidden);
-  views.setShellInset(directives.insetRight);
-  views.setPagesInset(directives.insetLeft);
-}
-
-/** 悬浮浏览器声音由 Electron 层控制,页面脚本无法绕过也不会因 SPA 导航失效。 */
-export function setPanelMuted(id: string, muted: boolean): void {
-  views?.setPanelMuted(id, muted);
-}
-
-export function hidePublishView(): void {
-  views?.hide();
-}

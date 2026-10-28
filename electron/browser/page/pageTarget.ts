@@ -7,8 +7,8 @@
  */
 import type { WebContents } from "electron";
 
-import { sharedViews } from "../pool/accountViews";
-import type { PageInfo } from "./pageToolsCore";
+import { sharedViews } from "../views/accountViews";
+import type { PageInfo } from "../driver/pageToolsCore";
 
 export class PageToolError extends Error {
   /** 给渲染层认的原因码;要给人看的话由渲染层按码去文案表里取。 */
