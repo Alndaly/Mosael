@@ -629,6 +629,8 @@ def test_托管_venv_的对账不碰本机服务的安装目录(monkeypatch: pyt
     monkeypatch.setattr(tts_config, "MANAGED_TTS_ROOT", roots["tts"])
     monkeypatch.setattr(asr_models, "MANAGED_ASR_ROOT", roots["asr"])
     monkeypatch.setattr(separation_models, "MANAGED_SEPARATION_ROOT", roots["sep"])
+    # 对账只认随包解释器(见 interpreter.bundled_python);CI 上没有 build/python,得替它说「在」。
+    monkeypatch.setattr(interpreter, "bundled_python", lambda: "/bundled/python3")
     monkeypatch.setattr(interpreter, "python_minor", lambda _python: "3.13")
     engine = roots["tts"] / "venv-f5-tts"
     managed = settings.data_dir / records.INSTALLS / "abc" / ".venv"
