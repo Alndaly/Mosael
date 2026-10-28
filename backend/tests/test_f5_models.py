@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.runtime import f5_models
-from app.ai.runtime.tts_language import clone_supports
+from app.ai.runtime.f5_models import clone_supports
 
 
 def test_language_support_comes_from_installed_weights(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,15 +86,14 @@ def test_scripts_that_do_give_evidence() -> None:
 
 def test_an_explicit_model_beats_the_guess(monkeypatch: pytest.MonkeyPatch) -> None:
     """用户明说要哪份权重时,不再看文字 —— 这是拉丁字母那几门语言唯一的用法。"""
-    from app.ai.runtime import tts_models
 
     monkeypatch.setattr(f5_models, "installed", lambda model: True)
-    picked = tts_models.weights_for("f5-tts", "Bonjour tout le monde", "fr")
+    picked = f5_models.weights_for("f5-tts", "Bonjour tout le monde", "fr")
     assert picked["checkpoint"].startswith("fr/")
 
     # 明说的那份没装 → 退回按文字挑(而不是拿一份不存在的权重去合成)。
     monkeypatch.setattr(f5_models, "installed", lambda model: model.id == "base")
-    fallback = tts_models.weights_for("f5-tts", "Bonjour tout le monde", "fr")
+    fallback = f5_models.weights_for("f5-tts", "Bonjour tout le monde", "fr")
     assert fallback["checkpoint"].startswith("F5TTS_v1_Base/")
 
 

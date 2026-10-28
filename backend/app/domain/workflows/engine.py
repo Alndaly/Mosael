@@ -20,7 +20,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
+from app.core.db import SessionLocal
 from app.core.i18n import DEFAULT_LOCALE, get_current_locale, speaking, t, tr
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.db.models import Job, Workflow, WorkflowRevision
@@ -66,6 +66,7 @@ from app.domain.workflows.binding import (
 )
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
+from app.domain.workflows import node_budget
 from app.domain.workflows.graph_run import GraphResume, GraphRun
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import keep_full_texts, snapshot
@@ -75,20 +76,6 @@ logger = logging.getLogger(__name__)
 
 MAX_PARALLEL_NODES = 8
 
-#: **同时能有多少个节点占着数据库连接。**
-#:
-#: 这是全仓"先拿槽再开会话"那条规矩(见 domain/jobs 的 RENDER_SLOTS 那段注释)在工作流这一层
-#: 的落地 —— 而此前它在这一层**不存在**:`MAX_PARALLEL_NODES = 8`、循环体的 4、嵌套深度 8,
-#: 三个常数写在三个文件里,每一个单看都克制,**而它们是相乘的**。一个"8 个并行节点、每个都是
-#: call_workflow"的图就要 8 + 8 ×(子驱动 + 子节点)条连接,而池子只有 15。越线之后是
-#: `QueuePool limit of size 5 overflow 10 reached`,由 blame() 原样记进 job.error。
-#:
-#: **嵌套天然被压住**:这是模块级的一个信号量,子图的节点和父图的节点从同一份预算里取,
-#: 所以乘积进不来。数从池子自己算出来(见 core/db.pool_capacity),不另写一个。
-#:
-#: 同一份预算里取,就不能有人攥着它等别人:在等的节点(executors.common.wait_until)和跑体的
-#: 容器节点(循环 / 子图,见 run_node)都把它交还 —— 只有真在用数据库的叶子占着它。
-NODE_CONNECTIONS = threading.Semaphore(max(1, pool_capacity() - POOL_RESERVE))
 
 
 def start_workflow_job(
@@ -821,9 +808,9 @@ def run_graph(
         # 「采样 12/20」,而不是一个转了十分钟的圈。内嵌子图不发节点事件,也就不听。
         listening = listening_for_progress(progress_listener(nid) if has_job else None)
         try:
-            # **先拿预算,再开会话** —— 顺序就是这条规矩的全部(见 NODE_CONNECTIONS)。
+            # **先拿预算,再开会话** —— 顺序就是这条规矩的全部(见 node_budget)。
             # 反过来的话,等的那个线程已经把连接攥在手里了。
-            with NODE_CONNECTIONS, SessionLocal() as node_db:  # 每节点独立 session(非线程安全)
+            with node_budget.NODE_CONNECTIONS, SessionLocal() as node_db:  # 每节点独立 session(非线程安全)
                 if is_cancelled(node_db):
                     raise WorkflowDomainError("wfErr_cancelled")
                 # 工作流本身就是节点的运行作用域(RunScope:工作区、id、名字),直接给它。
@@ -1197,8 +1184,13 @@ def run_workflow(
 
 #: **「把暂停在等人确认上的运行接着跑」这件事只有引擎会做,所以由引擎自己登记。**
 #: 方向是有讲究的:领域(approvals)不许 import 引擎 —— 那就又给"引擎 ⇄ 执行器"那一族添一个
-#: 新环(见 tests/test_import_layering 的 LAZY_CYCLE_MODULES);反过来,引擎认识工作流的领域。
+#: 新环(见 tests/test_import_layering);反过来,引擎认识工作流的领域。
 #: 放在模块末尾:登记的是一个**已经定义好**的函数。
 from app.domain.workflows import approvals as _approvals  # noqa: E402
 
 _approvals.use_resume_dispatcher(continue_workflow_job)
+
+#: 容器类执行器(循环体、子图、调用另一个工作流)回头跑图也经同一个方向的登记(见 graph_runner)。
+from app.domain.workflows import graph_runner as _graph_runner  # noqa: E402
+
+_graph_runner.use(run_graph=run_graph, start_workflow_job=start_workflow_job)

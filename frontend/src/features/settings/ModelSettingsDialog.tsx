@@ -212,7 +212,7 @@ function CapabilityRefField({
           构造的);给不出时才是真的只剩提示词。说清前者能帮用户判断该指哪个参照模型。
           注意这里说的是"通道发得出",不是"生成界面会摆出来" —— 界面在没有可选值时会凭空
           造出整张清单(size→1024x1024、duration→5),所以那些键要等界面能表达"不知道有哪些
-          取值"之后才放出来。见 domain/generation/catalog.fallback_capabilities。 */}
+          取值"之后才放出来。见 domain/generation_catalog.fallback_capabilities。 */}
       {!known && !value && (
         <p className="m-0 text-ui-xs leading-[1.45] text-warning">
           {fallbackKeys.length > 0

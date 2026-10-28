@@ -275,7 +275,7 @@ def plan_drawing(db: Session, workspace_id: str, node_type: str, config: dict[st
                  actor_id: str | None) -> Drawing:
     """画之前的全部检查,**不花钱、不写任何东西**:资产在不在、有没有图片参考图、模型收不收参考图、
     要画哪几张(都有了就直说)。节点跑的时候先过它;资产详情页点「开始」时也先过它,说不通的当场说,
-    不起一个注定失败的任务(见 domain/entities/drawing)。"""
+    不起一个注定失败的任务(见 domain/workflows/entity_drawing)。"""
     from app.domain.entities import EntityDomainError, generation_profile, get_entity, references_of
 
     entity_id = _text(config.get("entity_id"))

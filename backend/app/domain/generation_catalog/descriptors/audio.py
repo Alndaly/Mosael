@@ -1,6 +1,6 @@
 """音频生成(音乐 / BGM / 歌曲 / 音效 / 给视频配声)的能力描述符。
 
-由 domain/generation/catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
 """
 
 from __future__ import annotations

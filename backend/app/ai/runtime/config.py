@@ -78,10 +78,6 @@ HF_ENDPOINTS = {
 #: 恰好兼容;赌注会在上游某次更新时兑现,而症状是"我只动了 A,B 怎么坏了"。
 MANAGED_TTS_ROOT = settings.data_dir / "tts"
 
-#: 分开之前那个共用的。**不留作兼容候选** —— 多路兼容本身就是负担。它由 migrate_shared_venv
-#: 一次性搬走或删掉,搬完之后这个路径就不该再出现在任何判断里。
-LEGACY_SHARED_VENV = MANAGED_TTS_ROOT / "venv"
-
 # App-managed Fish Speech install: the one-click download fetches the official source
 # checkout + s2-pro weights here, so real synthesis works on a fresh machine without any
 # manual path config (Settings paths still override).
@@ -111,66 +107,6 @@ def managed_venv_python(engine_id: str) -> Path:
 
 def _venv_python(venv: Path) -> Path:
     return venv / ("Scripts" if _WINDOWS else "bin") / ("python.exe" if _WINDOWS else "python")
-
-
-def _selected_engine() -> str:
-    return get().engine
-
-
-def _engines_a_venv_can_run(python: Path) -> list[str]:
-    """这个解释器能跑哪些引擎。判据和运行时用的是同一份(合成真正 import 的那几行)。"""
-    import logging as _logging
-
-    from app.ai.runtime import tts_models
-    from app.core.child_process import run_logged
-
-    able: list[str] = []
-    for engine in tts_models.CATALOG:
-        code = tts_models._probe_code(engine.id)
-        if not code:
-            continue
-        try:
-            probe = run_logged([str(python), "-c", code], capture_output=True, timeout=180,
-                               what="迁移前探测克隆引擎", level=_logging.DEBUG)
-        except (OSError, RuntimeError, ValueError):
-            continue
-        if probe.returncode == 0:
-            able.append(engine.id)
-    return able
-
-
-def migrate_shared_venv() -> None:
-    """把分开之前那个共用 venv 搬到它实际服务的引擎名下,搬完删掉旧路径。
-
-    为什么是迁移而不是"留着当候选":留着就意味着两条路并存,而**两条路正是这次的病根** ——
-    一个环境同时被两个引擎装东西,谁先装谁定版本。多留一天,就多一天可能有人往里装。
-
-    规则:
-      - 只跑得了一个引擎 → 归它。
-      - 两个都跑得了(用户机器上就是这样)→ 归当前选中的那个;另一个按需自己装一份。
-      - 一个都跑不了 → 没用的数据,删掉。
-      - 目标已经存在 → 不覆盖(那是用户后来装好的),旧的直接删。
-    """
-    import shutil
-
-    legacy = LEGACY_SHARED_VENV
-    python = _venv_python(legacy)
-    if not legacy.is_dir():
-        return
-    able = _engines_a_venv_can_run(python) if python.is_file() else []
-    if not able:
-        logger.info("删掉跑不了任何引擎的旧共用 venv:%s", legacy)
-        shutil.rmtree(legacy, ignore_errors=True)
-        return
-    target_engine = _selected_engine() if _selected_engine() in able else able[0]
-    target = managed_venv_dir(target_engine)
-    if target.exists():
-        logger.info("%s 已经有自己的运行环境了,直接删掉旧的共用 venv", target_engine)
-        shutil.rmtree(legacy, ignore_errors=True)
-        return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    legacy.rename(target)
-    logger.info("旧的共用 venv 归给 %s:%s → %s", target_engine, legacy, target)
 
 
 # Marker files that prove each managed dir is a real checkout / real weights (not a

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
 from app.domain.jobs import current_parent_job_id
-from app.domain.workflows import WorkflowDomainError, interpolate
+from app.domain.workflows import WorkflowDomainError, graph_runner, interpolate
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, wait_for_job
@@ -71,8 +71,6 @@ def _guard_recursion(db: Session, target_id: str, current_wf_id: str) -> None:
 
 @register("call_workflow")
 def call_workflow(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.workflows.engine import start_workflow_job
-
     target_id = str(config.get("workflow_id") or "").strip()
     if not target_id:
         raise WorkflowDomainError("wfErr_pickWorkflow")
@@ -86,7 +84,7 @@ def call_workflow(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     params = dict(inputs) if isinstance(inputs, dict) else {}
     # start_workflow_job 建的子 job 经 create_job 读 contextvar,parent = 当前工作流 job → 自动收纳。
     try:
-        child = start_workflow_job(db, target, created_by=current_actor(db), params=params)
+        child = graph_runner.start_workflow_job(db, target, created_by=current_actor(db), params=params)
     except WorkflowDomainError as exc:
         #: 开跑前那一道说的是**子工作流自己**的话(「节点 start 缺少必填配置 …」),挂在这个节点上读的人会去
         #: 调用方的开始节点里找。说清是调的哪一张跑不起来。

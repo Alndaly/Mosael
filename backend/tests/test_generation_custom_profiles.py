@@ -159,7 +159,7 @@ class Test表单结构描述端点:
 
 class Test自定义档案参与解析:
     def test_自定义与内置在同一个命名空间里各自解析(self) -> None:
-        from app.domain.generation import resolve_capability_ref
+        from app.domain.generation_catalog import resolve_capability_ref
 
         custom = {"abc": {"parameter_keys": ["size"]}}
         assert resolve_capability_ref("profile:abc", "image", custom=custom) == {"parameter_keys": ["size"]}
@@ -168,7 +168,7 @@ class Test自定义档案参与解析:
     def test_没带自定义名册时解析不到(self) -> None:
         """一份参数组只在它所属的那条连接里有意义。别的连接指过来解析不到,于是落回兜底并
         在界面上显示"还没认出来" —— 比悄悄套用另一条连接的断言要好。"""
-        from app.domain.generation import resolve_capability_ref
+        from app.domain.generation_catalog import resolve_capability_ref
 
         assert resolve_capability_ref("profile:abc", "image") is None
 

@@ -1,6 +1,6 @@
 """经 Evolink 网关的视频能力描述符(通用 t2v/i2v、Seedance 1.5 / 2.0 / 2.5、Veo 3.1 Pro)。
 
-由 domain/generation/catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
 """
 
 from __future__ import annotations

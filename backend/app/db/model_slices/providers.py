@@ -161,7 +161,7 @@ class ProviderModel(Base):
     #: 都没有 —— 于是用户明知道自己那行 `gpt-image-2-client` 就是 gpt-image-2、明知道某个中转的
     #: gemini 支持尺寸,却没有任何地方写得下来,只能等我们往静态目录里补一行。
     #:
-    #: 两种写法,一个概念(解析见 domain/generation/catalog.resolve_capability_ref):
+    #: 两种写法,一个概念(解析见 domain/generation_catalog.resolve_capability_ref):
     #:   `model:openai-compatible/gpt-image-2`  「它和 X 一样」——**跟着 X 的更新走**
     #:   `profile:openai-image`                 目录里没有对应模型时,直接指一份能力档案
     #:

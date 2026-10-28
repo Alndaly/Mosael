@@ -36,8 +36,12 @@ from app.core.transfer_rate import DownloadRate
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore
 from app.ai.runtime.errors import RuntimeSetupError, failure_message
+from app.ai.runtime.tts_language import detect_script
 
 logger = logging.getLogger(__name__)
+
+#: 这张权重表属于哪个引擎(tts_models.CATALOG 里的那一项)。
+ENGINE_ID = "f5-tts"
 
 #: 量一次盘的间隔。和引擎权重、转写模型那两条路取同一个值 —— 三处报的是同一种东西,
 #: 刷新快慢不该各不相同。
@@ -497,12 +501,12 @@ def _run_download(model_id: str) -> None:
     try:
         # 拉权重要用**装了 huggingface_hub 的那个解释器** —— 也就是引擎自己的 venv。
         # 后端解释器里没有它,而为了下个模型去后端装一份 HF 客户端是另一条会漂移的路。
-        python = tts_models.resolve_engine_python("f5-tts")
+        python = tts_models.resolve_engine_python(ENGINE_ID)
         if python is None:
             raise RuntimeSetupError("runtimeErr_f5RuntimeMissing")
         request = {
             "action": "fetch_model",
-            "engine": "f5-tts",
+            "engine": ENGINE_ID,
             "hf_repo": model.hf_repo,
             "modelscope_repo": model.modelscope_repo,
             "checkpoint": model.checkpoint,
@@ -527,7 +531,7 @@ def _run_download(model_id: str) -> None:
         watcher.start()
         try:
             tts_daemon.pool().request(
-                "f5-tts", python, request,
+                ENGINE_ID, python, request,
                 on_progress=report, timeout=7200, env=tts_models._worker_env(python),
             )
         finally:
@@ -546,3 +550,36 @@ def _run_download(model_id: str) -> None:
         message, params, raw = _failure_from(exc)
         _failed_at[model_id] = _now_iso()
         set_live(model_id, status="failed", message=message, params=params, error=raw[:400])
+
+
+def weights_for(engine_id: str, text: str, model_id: str = "") -> dict[str, str]:
+    """这次合成该用**哪一份权重**。
+
+    只有 F5 有多份(按语言分,就是这个文件里的目录);别的引擎一份权重走天下,返回空字典。
+    判断住在 F5 的权重目录里而不是引擎目录(tts_models):挑哪一份要读这里的目录、问装没装,而这里下载权重
+    又要用引擎的运行环境 —— 放在引擎目录里,两个模块就互相 import 了(见 tests/test_import_layering)。
+
+    `model_id` 是**用户明说的**那一份,优先于按文字自动挑。这不是可选的锦上添花:法语、德语、
+    西班牙语、意大利语、芬兰语都写拉丁字母,没有任何字符能证明"这是法语而不是英语"——
+    自动挑永远挑不中它们,只能由人来说。
+    """
+    if engine_id != ENGINE_ID:
+        return {}
+    explicit = get(model_id) if model_id else None
+    chosen = explicit if explicit is not None and installed(explicit) else for_language(detect_script(text))
+    # 给 worker 的是**本地**相对路径(每个模型在自己的子目录里),不是仓库内路径。
+    return {"checkpoint": chosen.local_checkpoint, "vocab": chosen.local_vocab} if chosen is not None else {}
+
+
+def clone_supports(script: str) -> bool:
+    """本地克隆**现在**念不念得了这套书写系统。
+
+    答案取决于这台机器上装了哪几份权重(就是这个文件里的目录)。引擎什么语言都
+    支持,支持范围由模型决定;此前这里写死"不认日韩",等于把一个可以通过下载解决的问题
+    说成了引擎的固有限制。
+
+    没有硬证据(空 script)一律放行:那是中英文或拿不准,默认模型就是为这种情况准备的。
+    """
+    if not script:
+        return True
+    return script in installed_languages()

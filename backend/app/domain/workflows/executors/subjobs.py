@@ -624,8 +624,8 @@ def inspect_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     }
 
 
-#: 拿输入 id 并确认属于这次运行所在工作区的一对帮手。本体在 executors.inputs —— 住在 cycle 外,
-#: 这样不卷在 engine ⇄ executors 循环里的新执行器(如 shots)也能用,不用一起进 LAZY_CYCLE_MODULES。
+#: 拿输入 id 并确认属于这次运行所在工作区的一对帮手。本体在 executors.inputs(一片叶子),
+#: 别的执行器(如 shots)直接从那里拿,不必为了两个帮手依赖 subjobs 这一整块。
 from app.domain.workflows.executors.inputs import _asset_in, _sequence_in  # noqa: F401  (re-export: 既有引用处照旧)
 
 

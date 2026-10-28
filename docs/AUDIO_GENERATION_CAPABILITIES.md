@@ -2,7 +2,7 @@
 
 > 核查日期：2026-09-25。音频(音乐、BGM、歌曲、音效、给视频配声)是生成的第三种,见
 > [ADR 0022](adr/0022-audio-is-a-generation-kind.md)。本文区分「供应商原生能力」与「Mosael 已接通能力」;
-> 只有后者进 `backend/app/domain/generation/catalog.py`,出现在界面、工作流与智能体的参数描述符里。
+> 只有后者进 `backend/app/domain/generation_catalog/__init__.py`,出现在界面、工作流与智能体的参数描述符里。
 >
 > **证据等级:全部是「官方文档」,没有一家真机跑过** —— 没有密钥可核,而这些接口按次收钱。第一次真跑时要
 > 像视频那边(`tests/test_capabilities_match_reality.py`)一样逐项重核上限。

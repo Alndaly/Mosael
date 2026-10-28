@@ -43,7 +43,7 @@ from app.db.models import PluginInstance, ProviderProfile
 from app.domain import capabilities
 from app.domain.providers import models as provider_models
 from app.domain.providers import moved_models
-from app.domain.generation.catalog import GENERATION_KINDS, PROMPT_MODES
+from app.domain.generation_catalog import GENERATION_KINDS, PROMPT_MODES
 from app.domain.plugins import instances as inst
 from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins import moves as plugin_moves

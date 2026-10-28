@@ -139,7 +139,7 @@ def full_video_generation_graph(
     - **场景**:每个场景先画一张设定图;
     - **构图与机位**:LLM 按分镜搭 3D 白模,每镜一个布景台、一台相机(推拉摇移都在相机轨迹上),
       后端渲出白模首尾帧和运镜视频,镜头语言从机位轨迹**算出来**进提示词;
-    - **每镜两条路之一**(Seedance 这类模型上两组素材互斥,见 generation/catalog.SOURCE_GROUPS):
+    - **每镜两条路之一**(Seedance 这类模型上两组素材互斥,见 generation_catalog.SOURCE_GROUPS):
       `keyframes` 先按白模机位画首帧(需要时加尾帧)再出片,构图最稳;`references` 把三视图、
       设定图、白模帧和运镜视频直接交给视频模型,适合复杂运镜。走哪条由分镜逐镜决定,能选哪几条
       由视频模型的能力决定(见 VideoPlan.modes)。

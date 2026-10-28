@@ -147,10 +147,6 @@ def _import_name(engine: str) -> str:
 #: 所以这里也按引擎分开。
 MANAGED_ASR_ROOT = settings.data_dir / "asr"
 
-#: 分开之前那个共用的。**不留作兼容候选**,由 migrate_shared_venv 一次性搬走或删掉。
-LEGACY_SHARED_VENV = MANAGED_ASR_ROOT / "venv"
-
-
 def _venv_python(venv: Path) -> Path:
     windows = os.name == "nt"
     return venv / ("Scripts" if windows else "bin") / ("python.exe" if windows else "python")
@@ -163,48 +159,6 @@ def managed_venv_dir(engine: str) -> Path:
 
 def managed_venv_python(engine: str) -> Path:
     return _venv_python(managed_venv_dir(engine))
-
-
-def _engines_a_venv_can_run(python: Path) -> list[str]:
-    """这个解释器能跑哪些转写引擎。"""
-    able: list[str] = []
-    for engine in ENGINE_REQUIREMENTS:
-        try:
-            probe = run_logged([str(python), "-c", f"import {_import_name(engine)}"], capture_output=True, timeout=180,
-                               what="迁移前探测转写引擎", level=logging.DEBUG)
-        except (subprocess.SubprocessError, OSError):
-            continue
-        if probe.returncode == 0:
-            able.append(engine)
-    return able
-
-
-def migrate_shared_venv() -> None:
-    """把分开之前那个共用 venv 搬到它实际服务的引擎名下,搬完删掉旧路径。
-
-    和克隆那边同一条规矩(见 domain/tts_config.migrate_shared_venv):**不留兼容候选** ——
-    留着就是两条路并存,而一个环境同时被两个引擎装东西,正是"装一边弄坏另一边"的机制本身。
-    """
-    import shutil
-
-    legacy = LEGACY_SHARED_VENV
-    python = _venv_python(legacy)
-    if not legacy.is_dir():
-        return
-    able = _engines_a_venv_can_run(python) if python.is_file() else []
-    if not able:
-        logger.info("删掉跑不了任何转写引擎的旧共用 venv:%s", legacy)
-        shutil.rmtree(legacy, ignore_errors=True)
-        return
-    preferred = settings.asr_provider.strip().lower()
-    target_engine = preferred if preferred in able else able[0]
-    target = managed_venv_dir(target_engine)
-    if target.exists():
-        shutil.rmtree(legacy, ignore_errors=True)
-        return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    legacy.rename(target)
-    logger.info("旧的共用 venv 归给 %s:%s → %s", target_engine, legacy, target)
 
 
 # funasr aliases → their ModelScope cache directory names (funasr materialises

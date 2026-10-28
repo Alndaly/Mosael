@@ -170,6 +170,18 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
     return out
 
 
+def pull_tools_quietly(db: Session, instance: PluginInstance) -> None:
+    """启用、改配置、换出站路线之后顺手拉一次工具清单(登记到 instances.on_tools_stale)。
+
+    **失败不抛**:原因由 refresh_tools 记进 `capability_status["tools"]`,插件页照着说;缺配置、缺凭据那种由
+    blocked_reason 说。卡在这里会变成死结 —— 填凭据的入口正是启用之后那张卡片。
+    """
+    try:
+        refresh_tools(db, instance, notify=False)
+    except PluginDomainError:
+        pass
+
+
 def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True) -> PluginInstance:
     """向 MCP 服务重新要一次工具清单。进程类实例的清单写在 manifest 里,无需刷新。
 

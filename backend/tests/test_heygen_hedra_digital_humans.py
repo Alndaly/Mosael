@@ -25,7 +25,7 @@ from app.ai.providers.contracts.generation import (
     GenerationRequest,
     SourceAsset,
 )
-from app.domain.generation.catalog import (
+from app.domain.generation_catalog import (
     HEDRA_CHARACTER_3_CAPABILITIES,
     HEYGEN_AVATAR_CAPABILITIES,
     HEYGEN_LIPSYNC_CAPABILITIES,

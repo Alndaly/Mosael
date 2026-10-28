@@ -769,7 +769,7 @@ def test_带货口播_每一拍的视频铺上去就静音_出片时就关掉声
     clip = _beats_body(_pitch(presenter=presenter, video=SEEDANCE))["beat_clip"]["config"]
     assert clip["parameters"]["generate_audio"] is False
     #: 提交时补默认值那一步不能把「关」当成没填又补回「开」。
-    from app.domain.generation.catalog import known_capabilities_for
+    from app.domain.generation_catalog import known_capabilities_for
     from app.domain.generation.operations import with_declared_defaults
 
     capabilities = known_capabilities_for(SEEDANCE.provider, SEEDANCE.model, "video")

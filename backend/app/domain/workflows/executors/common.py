@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain.jobs import CANCELLED, cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows import NODE_TYPES, WorkflowDomainError, graph_runner, node_budget
 from app.domain.workflows.graph_run import GraphRun
 from app.domain.workflows.run_scope import halted
 #: 整数格的解析在 numbers 里(它不碰引擎,不进 engine⇄executors 那个环);执行器照旧从这里取。
@@ -86,7 +86,7 @@ def wait_for_job(job_id: str, *, release: "Session | None" = None) -> Job:
 
     **`release` 是调用方自己的会话:等待期间把它连同引擎的连接预算一起交还。**
 
-    一个只是在等的节点不该占着连接。不还的话,引擎那份预算(engine.NODE_CONNECTIONS)会
+    一个只是在等的节点不该占着连接。不还的话,引擎那份预算(node_budget.NODE_CONNECTIONS)会
     被一群等着的父节点占满,而它们等的正是子图里那些**取不到预算**的节点 —— 死锁,而且表现
     是"工作流卡住不动",看不出和连接池有关。父会话在等待期间也确实没有任何用处:这里轮询
     用的是自己开的独立会话。
@@ -165,16 +165,14 @@ def connection_handed_back(session: Session | None):
 @contextmanager
 def _budget_released(active: bool):
     """等待期间把引擎的连接预算还回去,等完再拿回来。"""
-    from app.domain.workflows.engine import NODE_CONNECTIONS
-
     if not active:
         yield
         return
-    NODE_CONNECTIONS.release()
+    node_budget.NODE_CONNECTIONS.release()
     try:
         yield
     finally:
-        NODE_CONNECTIONS.acquire()
+        node_budget.NODE_CONNECTIONS.acquire()
 
 
 def run_body(node_type: str, body: dict[str, Any], scope: dict[str, Any], *, workflow_id: str) -> dict[str, Any]:
@@ -202,9 +200,7 @@ def run_body_to_the_end(node_type: str, body: dict[str, Any], scope: dict[str, A
         # 字段固定的作用域(`loop`)逐个字段核对;`*配置字段` 的键来自这次的配置,不在这里核。
         if not any(one.startswith("*") for one in fields) and set(scope[root]) != set(fields):
             raise RuntimeError(f"{node_type} seeds {root} with {sorted(scope[root])} but declares {sorted(fields)}")
-    from app.domain.workflows.engine import run_graph  # 惰性:避开 engine↔executors 循环导入
-
-    run = run_graph(body, wf_id=workflow_id, initial_context=scope, entry_is_root=True)
+    run = graph_runner.run_graph(body, wf_id=workflow_id, initial_context=scope, entry_is_root=True)
     if run.cancelled:
         raise WorkflowDomainError("wfErr_cancelled")
     return run

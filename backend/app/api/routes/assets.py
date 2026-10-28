@@ -11,10 +11,12 @@ from app.api.responses import file_response
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AssetCardOut, AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, ImageUrlImportRequest, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.domain.voices import use_cases as voice_use_cases
 from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
 from app.domain import host_files
+from app.domain.analysis import use_cases as analysis_use_cases
 from app.domain.assets import use_cases
 from app.domain.assets.listing import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, AssetFacets, AssetListingError, AssetScope
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
@@ -392,7 +394,7 @@ def analyze_asset_route(
     # 智能体看素材走 analyze_asset 这个工具(用这次对话的连接、模型和视频分析方式,见 mcp_server);
     # 这条路由是人点的,用他单独选的分析配置。
     try:
-        result = use_cases.analyze(db, user, asset_id, body.question, profile_id=body.profile_id, mode=body.mode)
+        result = analysis_use_cases.analyze(db, user, asset_id, body.question, profile_id=body.profile_id, mode=body.mode)
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return AnalyzeAssetResponse(**result)
@@ -438,7 +440,7 @@ def transcribe_asset(
     语言只传给识别模型,不暗中切换引擎。挑法见 `transcription.transcriber`(ADR 0032)。
     """
     try:
-        return use_cases.start_transcription(db, user, asset_id, language=language, engine=engine)
+        return voice_use_cases.start_transcription(db, user, asset_id, language=language, engine=engine)
     except ASRError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

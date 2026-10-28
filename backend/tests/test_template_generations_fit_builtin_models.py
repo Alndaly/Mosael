@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from app.domain.generation.catalog import known_capabilities_for
-from app.domain.generation.descriptors.builtin import BUILTIN_MODELS
+from app.domain.generation_catalog import known_capabilities_for
+from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
 from app.domain.workflows.executors.basic import json_extract
 from app.domain.workflows.graph_rules import interpolate

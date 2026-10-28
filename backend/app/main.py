@@ -78,7 +78,7 @@ logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import AssetProjectError
-from app.domain.assets.deletion import AssetBeingPublished
+from app.domain.assets.deletion import AssetNotDeletable
 from app.domain.assets.importer import AssetFileTypeError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes.operations import SceneDomainError
@@ -279,9 +279,9 @@ def _install_permission_handlers(app: FastAPI) -> None:
         """素材库不收这种文件(ADR 0031)。和上面同一个理由:入库的入口很多,判断在 assets/importer 一处,翻成 415 也在这一处。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
-    @app.exception_handler(AssetBeingPublished)
-    async def _asset_being_published(_request: Request, exc: AssetBeingPublished) -> JSONResponse:
-        """素材还在发布,不让删(409)。删素材有接口和智能体确认卡两个入口,判断在 assets/deletion 一处,翻也在这一处。"""
+    @app.exception_handler(AssetNotDeletable)
+    async def _asset_not_deletable(_request: Request, exc: AssetNotDeletable) -> JSONResponse:
+        """素材现在还不能删(409,例如还在发布)。删素材有接口和智能体确认卡两个入口,拦截登记在 assets/deletion 一处,翻也在这一处。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(SkillDomainError)
@@ -437,6 +437,12 @@ def _wire_seams() -> None:
         on_instance_change=dynamic_tools.refresh,
     ))
     host_capabilities.use_table(capabilities.instance_hooks)
+    # 连接启用、换服务器、换出站路线之后 MCP 连接重拉工具清单:拉法在 plugins.tools(要真的去调插件),
+    # 实例那一层不认识它(见 domain/plugins/instances.on_tools_stale)。
+    from app.domain.plugins import instances as plugin_instances
+    from app.domain.plugins import tools as plugin_tools
+
+    plugin_instances.on_tools_stale(plugin_tools.pull_tools_quietly)
     # 本机服务(ADR 0041):每一次插件调用之前先问一声 —— 连接背后的本机服务停着就起(用到时起),后台刷新目录跳过停着的。
     # 插件域不 import 本机服务(它要反过来调插件),由这里把实现交给插件域的那道缝。
     from app.domain import local_services
@@ -447,6 +453,16 @@ def _wire_seams() -> None:
     from app.domain.documents import extraction as document_extraction
 
     capabilities.register_finish(documents.DOCUMENT_PARSE, document_extraction.finish_plugin_call)
+    # 素材是最底下的一层:时间线、生成、资产库、发布、文档都引用它,它一个都不认识(见 tests/test_import_layering)。
+    # 删素材之前的拦截与善后、入库之后的接续,由各自的上层在这里登记到素材域的缝上。
+    from app.domain import publish
+    from app.domain.assets import deletion as asset_deletion
+    from app.domain.assets import importer as asset_importer
+    from app.domain.entities import library as entity_library
+
+    asset_deletion.add_guard(publish.refuse_while_publishing)
+    asset_deletion.on_deleting(entity_library.forget_asset)
+    asset_importer.on_imported(document_extraction.parse_on_import)
     # 「用在哪」(ADR 0032 §4):宿主界面入口各自登记;工作流节点、智能体工具现扫各自的注册表。
     documents.register_uses()
     public_links.register_uses()

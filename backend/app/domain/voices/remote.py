@@ -36,7 +36,7 @@ from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.model_base import now
 from app.db.models import Job, ProviderProfile, Voice, VoiceEnrollment
-from app.domain.voices.consent import UNDECLARED
+from app.domain.consent import UNDECLARED
 from app.domain.voices.errors import VoiceError
 from app.domain.voices.speech import BUILTIN_PREFIX, adapter_id
 from app.domain.voices.target import speech_target

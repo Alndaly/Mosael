@@ -1,11 +1,11 @@
 """视频生成的能力描述符:万相、可灵、方舟 Seedance、MiniMax、Google Veo 这些原厂直连的。
 
-由 domain/generation/catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
 """
 
 from __future__ import annotations
 
-from app.domain.generation.descriptors.shared import KEYFRAME_GROUP, REFERENCE_GROUP, REFERENCE_SCENE_LIMITS
+from app.domain.generation_catalog.descriptors.shared import KEYFRAME_GROUP, REFERENCE_GROUP, REFERENCE_SCENE_LIMITS
 
 #: 万相(通义)视频。**尺寸用 `宽*高` 而不是 480p 这种档位名** —— 百炼收的就是像素对。
 #:

@@ -56,7 +56,7 @@ STUDIO_ORIGIN = Origin(STUDIO)
 
 def of_run_scope(scope_id: str) -> Origin:
     """工作流执行器跑在谁名下(`RunScope.id`)→ 出处:画板上跑的能力是 `board:<id>`、资产详情页上的是 `entity:<id>`
-    (见 boards.tools.BoardScope、entities.drawing.EntityScope),别的就是那张工作流。"""
+    (见 boards.tools.BoardScope、workflows.entity_drawing.EntityScope),别的就是那张工作流。"""
     for prefix, kind in (("board:", BOARD), ("entity:", ENTITY)):
         if scope_id.startswith(prefix):
             return Origin(kind, scope_id[len(prefix):])

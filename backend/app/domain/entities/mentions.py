@@ -33,7 +33,7 @@ from app.ai.providers import roles_supplied_via_url
 from app.db.models import Entity
 from app.domain.entities.catalog import attach_order, parse_entity_ids
 from app.domain.entities.library import EntityDomainError, references_of
-from app.domain.generation.catalog import prompt_mode
+from app.domain.generation_catalog import prompt_mode
 
 #: 一次生成最多点名几个资产。
 MAX_MENTIONS = 8

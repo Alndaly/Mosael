@@ -1,6 +1,6 @@
 """素材角色的名字与说明、两组互斥素材、共用的张数上限 —— 好几家描述符都要用的那几块。
 
-由 domain/generation/catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
 """
 
 from __future__ import annotations

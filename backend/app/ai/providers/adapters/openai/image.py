@@ -148,7 +148,7 @@ class OpenAIImageAdapter(GenerationAdapter):
                     files = []
                     handles = []
                     try:
-                        # 张数由描述符管(见 domain/generation/catalog 的 source_limits),
+                        # 张数由描述符管(见 domain/generation_catalog 的 source_limits),
                         # 提交前那道统一校验已经拦过。这里再截一刀的话,超出的那几张会被
                         # 悄悄丢掉 —— 任务照样成功,只是用的图和用户挂的不一样。
                         for index, url in enumerate(reference_urls, start=1):

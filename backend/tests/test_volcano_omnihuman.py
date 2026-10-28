@@ -19,7 +19,7 @@ from app.ai.providers.adapters.bytedance.volcano.omnihuman import (
     extract_video,
 )
 from app.ai.providers.contracts.generation import GenerationAdapterContext, GenerationAdapterError, GenerationRequest
-from app.domain.generation.catalog import VOLCANO_OMNIHUMAN_15_CAPABILITIES
+from app.domain.generation_catalog import VOLCANO_OMNIHUMAN_15_CAPABILITIES
 
 
 def _request(**parameters: Any) -> GenerationRequest:

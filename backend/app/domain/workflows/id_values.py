@@ -7,8 +7,8 @@
 **住在自己这个模块里,而不是某个执行器里**:绑定那一层也要用它 —— 「引用即发送」把提示词
 引用到的素材并进「要模型看的图片」时,手动那一串和那份「不要自动带上」的排除清单都得按同一
 条规矩解析(见 binding.with_referenced_assets)。放在 executors 下面的话 binding 就得回头
-依赖执行器那一包,而那一包和引擎本来就是环(tests/test_import_layering.py 的 LAZY_CYCLE_MODULES,
-只减不增)。executors/common 把它转出去,执行器那边照旧从同一个地方拿(`id_list` 只有一个实现)。
+依赖执行器那一包,而执行器那一包要经引擎跑起来 —— 绑定是引擎的一部分,回头依赖执行器就绕成了环
+(tests/test_import_layering 一个环都不许有)。executors/common 把它转出去,执行器那边照旧从同一个地方拿(`id_list` 只有一个实现)。
 """
 
 from __future__ import annotations

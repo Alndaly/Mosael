@@ -81,7 +81,7 @@ def build_submit_payload(request: GenerationRequest, context: GenerationAdapterC
     # content 数组按 `role` 区分每一份素材是干什么的,这正是接口自己的形状。
     #
     # **每个角色都可能有多份**:参考图能给九张、参考视频三段、参考音频三段(上限见
-    # domain/generation/catalog 的 source_limits,数字是接口自己报的)。此前这里走的是单数的
+    # domain/generation_catalog 的 source_limits,数字是接口自己报的)。此前这里走的是单数的
     # source_value,九张参考图只发得出第一张 —— 不报错,只是效果不对。
     #
     # seedance-1 不认 role,那一档只发首帧(多发也没有字段承载它们)。

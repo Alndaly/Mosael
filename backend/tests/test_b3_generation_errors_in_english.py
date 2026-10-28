@@ -76,7 +76,7 @@ def test_不认的参数_可用清单按英文的逗号连起来(english) -> Non
 def test_角色名的文案和目录里的中文名是同一份() -> None:
     """名字的产地是 catalog.SOURCE_ROLE_LABELS;文案 `genRole_*` 的 zh 必须和它一字不差,
     每个角色都得有 —— 漏一个,报错里就会冒出 `reference_audio` 这种内部名字。"""
-    from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+    from app.domain.generation_catalog import SOURCE_ROLE_LABELS
 
     for role, label in SOURCE_ROLE_LABELS.items():
         key = f"genRole_{role}"

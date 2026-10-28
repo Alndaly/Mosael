@@ -238,7 +238,7 @@ def test_json配置项_保存前必须能解析_说出第几行第几列(tmp_pat
 def test_随应用发的插件多了工具_已接好的连接补上开关(tmp_path, monkeypatch) -> None:
     import json as _json
 
-    from app.domain.plugins import bundled
+    from app.domain.plugins import bundled, bundled_install
     from app.domain.plugins.instances import exposed_tools
 
     source = tmp_path / "bundled" / "demo"
@@ -253,16 +253,16 @@ def test_随应用发的插件多了工具_已接好的连接补上开关(tmp_pa
     plugins_dir = tmp_path / "installed"
     fresh_client()
     with SessionLocal() as db:
-        bundled.install(db, plugins_dir)
+        bundled_install.install(db, plugins_dir)
         instance = PluginInstance(package_id=manifest["id"], name="示例", enabled=True, owner_user_id="u")
         db.add(instance)
         db.commit()
-        bundled.install(db, plugins_dir)
+        bundled_install.install(db, plugins_dir)
         assert exposed_tools(db, instance.id) == {"old"}
         manifest["version"] = "1.1.0"
         manifest["tools"]["declare"].append({"name": "new", "input_schema": {"type": "object"}})
         (source / "mosael.plugin.json").write_text(_json.dumps(manifest), encoding="utf-8")
-        bundled.install(db, plugins_dir)
+        bundled_install.install(db, plugins_dir)
         assert exposed_tools(db, instance.id) == {"old", "new"}, "升级带来的新工具按 recommended 预勾"
 
 

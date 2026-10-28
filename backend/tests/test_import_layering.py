@@ -17,7 +17,7 @@ import ast
 import collections
 from pathlib import Path
 
-#: 这份文件是一道**棘轮**:反向依赖一条都不许有,环里的模块只减不增(见 LAZY_CYCLE_MODULES)。
+#: 这份文件是一道**棘轮**:反向依赖一条都不许有;算上函数内的延迟导入,模块级、包级的环也一个都不许有。
 RATCHET = True
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -239,52 +239,24 @@ def test_top_level_imports_are_acyclic() -> None:
     assert not _cycles(_graph(include_lazy=False))
 
 
-#: 算上函数内延迟导入之后**还在环里的模块**。只减不增的棘轮。
-#:
-#: 这份清单曾经是空的 —— 但那是个假象:`from app.domain.workflows import executors` 这类写法被记成了对**包**的
-#: 依赖,相对导入干脆整个没看,于是包和子模块之间的环、跨子模块的环整类隐身。解析修好之后当场露出十一处;
-#: 顶层导入里的那些已经拆掉(注册表挪进 registry.py,见 workflows/executors 与 sequences/undo),剩下的都是
-#: 函数内的延迟导入,冻结在这里。
-#:
-#: 规则:新模块进环 → 红;有模块出了环 → 也红,把它从这里删掉(不留一扇随时可以走回来的门)。
-LAZY_CYCLE_MODULES = frozenset(
-    {
-        # TTS 引擎目录与语言表互相查。
-        "app.ai.runtime.config", "app.ai.runtime.f5_models", "app.ai.runtime.tts_language", "app.ai.runtime.tts_models",
-        # 插件实例、状态、工具调用、宿主能力通知:实例变了要通知能力表,工具调用又要读实例。
-        "app.domain.plugins.host_capabilities", "app.domain.plugins.instances", "app.domain.plugins.state",
-        "app.domain.plugins.tools",
-        "app.domain.plugins.bundled", "app.domain.plugins.packages",
-        # 生成解析要查供应商模型,供应商模型又要问生成目录「这个模型是哪一类」。
-        "app.domain.generation", "app.domain.generation.operations", "app.domain.generation.resolution",
-        "app.domain.providers.models",
-        # 工作流引擎 ⇄ 执行器:子工作流节点回头调引擎,引擎按注册表找执行器。
-        "app.domain.workflows.engine", "app.domain.workflows.executors", "app.domain.workflows.executors.ai",
-        "app.domain.workflows.executors.basic", "app.domain.workflows.executors.common",
-        "app.domain.workflows.executors.content", "app.domain.workflows.executors.dub_lipsync",
-        "app.domain.workflows.executors.entities", "app.domain.workflows.executors.loops",
-        "app.domain.workflows.executors.scenes", "app.domain.workflows.executors.subjobs",
-        "app.domain.workflows.executors.subworkflow", "app.domain.workflows.executors.talking",
-        "app.domain.workflows.field_options", "app.domain.workflows.templates",
-    }
-)
-
-
 def test_no_cycle_survives_even_lazy_imports() -> None:
-    """把函数内延迟导入也算上,环里的模块**只减不增**(见 LAZY_CYCLE_MODULES)。
+    """把函数内的延迟导入也算上,模块之间**一个环都不许有**。
 
-    这里曾经允许过一个:core.db ⇄ db.models —— Base 定义在 core.db,models 依赖它,而 init_db
-    又要回头 import models 才能 create_all,当时判成"SQLAlchemy 的标准形态,无法消除"。
-    **那个判断是错的**:环的根源不是 Base,是 `core/db.py` 同时当了底座和迁移编排器。迁移搬去
-    `app/db/migrations.py` 之后,init_db 不再需要从底座回头引 models,环自己就没了。
+    函数内 import 绕开的只是**导入期**的报错:两个模块照样互相认识,改一边就得懂另一边。这里曾经冻结过
+    三十一个模块(TTS 引擎目录与语言表、插件实例与工具调用、生成解析与供应商模型、工作流引擎与执行器),
+    每一族都是一个职责放错了层:F5 权重的挑法住在引擎目录里、清单的读法住在实例里、静态生成目录住在生成域里、
+    「再跑一张图」写死成 import 引擎。挪到该在的那一层(或换成组装根接上的一道缝)之后,清单清空、规则收紧。
+
+    更早还允许过一个:core.db ⇄ db.models —— Base 定义在 core.db,models 依赖它,而 init_db 又要回头
+    import models 才能 create_all,当时判成"SQLAlchemy 的标准形态,无法消除"。**那个判断是错的**:环的根源
+    不是 Base,是 `core/db.py` 同时当了底座和迁移编排器。
+
+    红了的话:**不要**再写一个函数内的 import 绕过去,那正是这条要拦的。看是哪条边往回走 ——
+    多半是一个只该住在下层的东西(一张词表、一份静态目录)放在了上层,或者下层在替上层做事;前者挪下去,
+    后者在下层开一道缝(`on_xxx` / `use(...)`),由组装根 `app.main._wire_seams` 接上。
     """
-    in_cycles = {module for cycle in _cycles(_graph(include_lazy=True)) for module in cycle}
-    joined = sorted(in_cycles - LAZY_CYCLE_MODULES)
-    assert not joined, (
-        "这些模块新进了循环依赖(通常是某处用函数内 import 绕开了分层):\n  " + "\n  ".join(joined)
-    )
-    left = sorted(LAZY_CYCLE_MODULES - in_cycles)
-    assert not left, "这些模块已经不在环里了,把它们从 LAZY_CYCLE_MODULES 里删掉:\n  " + "\n  ".join(left)
+    cycles = _cycles(_graph(include_lazy=True))
+    assert not cycles, "这些模块(算上函数内的延迟导入)互相 import:\n  " + "\n  ".join(" ⇄ ".join(c) for c in cycles)
 
 
 def _package_of(module: str) -> str:
@@ -314,24 +286,13 @@ def test_packages_do_not_import_each_other_in_a_circle() -> None:
     assert not cycles, "这些包在顶层互相 import:\n  " + "\n  ".join(" ⇄ ".join(c) for c in cycles)
 
 
-#: 算上延迟导入之后仍在包级环里的领域包。只减不增的棘轮,规则同 LAZY_CYCLE_MODULES。
-#:
-#: 它们大多是**往下**的正常依赖(工作流用账单、用供应商),被少数几条往回走的延迟导入串成了一个环:
-#: 供应商模型回头问生成目录、素材导入回头建资产与文档、资产回头调工作流画图。拆掉那几条回边,
-#: 这个环就散了 —— 在那之前,至少不许有新的包被卷进来。
-LAZY_CYCLE_PACKAGES = frozenset(
-    {
-        "app.domain.ai_chat", "app.domain.analysis", "app.domain.assets", "app.domain.billing",
-        "app.domain.documents", "app.domain.entities", "app.domain.generation", "app.domain.providers",
-        "app.domain.publish", "app.domain.render", "app.domain.scenes", "app.domain.translate",
-        "app.domain.voices", "app.domain.workflows",
-    }
-)
+def test_packages_stay_acyclic_even_lazily() -> None:
+    """包级,算上函数内的延迟导入:领域包之间也**一个环都不许有**。
 
-
-def test_the_package_level_cycle_only_shrinks() -> None:
-    in_cycles = {package for cycle in _cycles(_package_graph(include_lazy=True)) for package in cycle}
-    joined = sorted(in_cycles - LAZY_CYCLE_PACKAGES)
-    assert not joined, "这些包新被卷进了包级循环依赖:\n  " + "\n  ".join(joined)
-    left = sorted(LAZY_CYCLE_PACKAGES - in_cycles)
-    assert not left, "这些包已经不在环里了,把它们从 LAZY_CYCLE_PACKAGES 里删掉:\n  " + "\n  ".join(left)
+    模块级无环挡不住这一种:素材删除回头问发布、素材导入回头起文档解析、资产补画回头跑工作流执行器 ——
+    没有哪两个**模块**首尾相接,十四个包却连成了一个环。拆法见各处:素材域开了删除与入库的缝(assets.deletion /
+    assets.importer),补画挪进工作流域(workflows.entity_drawing),授权声明的词表成了叶子(domain/consent),
+    静态生成目录挪出生成域(domain/generation_catalog)。
+    """
+    cycles = _cycles(_package_graph(include_lazy=True))
+    assert not cycles, "这些包(算上函数内的延迟导入)互相 import:\n  " + "\n  ".join(" ⇄ ".join(c) for c in cycles)

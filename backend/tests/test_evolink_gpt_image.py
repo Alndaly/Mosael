@@ -18,7 +18,7 @@ import pytest
 
 from app.ai.providers.adapters.evolink.generation import build_image_payload
 from app.ai.providers.contracts.generation import GenerationRequest
-from app.domain.generation.catalog import known_capabilities_for
+from app.domain.generation_catalog import known_capabilities_for
 from app.domain.generation.operations import GenerationDomainError, validate_parameters
 
 RATIOS = ["1:1", "1:2", "2:1", "1:3", "3:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "9:21", "21:9"]

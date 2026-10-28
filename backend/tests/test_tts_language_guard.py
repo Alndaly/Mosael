@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
+from app.ai.runtime.f5_models import clone_supports
+from app.ai.runtime.tts_language import detect_script, edge_voice_language
 from app.domain.voices.voices import VoiceError, _refuse_if_unspeakable
 
 

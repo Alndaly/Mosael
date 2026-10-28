@@ -25,12 +25,13 @@ import threading
 
 from app.core.db import POOL_RESERVE, engine, pool_capacity
 from app.domain.workflows import engine as wf_engine
+from app.domain.workflows import node_budget
 
 
 def test_预算是从池子算出来的_不是另写的一个数() -> None:
     """写死的话,改 `create_engine` 的人不会知道还有第二处要跟着改。"""
     assert pool_capacity() == engine.pool.size() + engine.pool._max_overflow
-    budget = wf_engine.NODE_CONNECTIONS._value
+    budget = node_budget.NODE_CONNECTIONS._value
     assert budget == max(1, pool_capacity() - POOL_RESERVE)
     assert budget < pool_capacity(), "引擎能把池子占满 —— 那 HTTP 请求和任务总线就没连接了"
 
@@ -38,9 +39,9 @@ def test_预算是从池子算出来的_不是另写的一个数() -> None:
 def test_并行节点数不再是连接数的上界() -> None:
     """`MAX_PARALLEL_NODES` 说的是"同时跑几个节点",预算说的是"同时占几条连接" ——
     两者不是一回事,而此前只有前者。嵌套时前者会相乘,后者不会。"""
-    assert wf_engine.MAX_PARALLEL_NODES > wf_engine.NODE_CONNECTIONS._value or True
+    assert wf_engine.MAX_PARALLEL_NODES > node_budget.NODE_CONNECTIONS._value or True
     # 关键是**存在**这份预算,并且它是模块级的(子图和父图从同一份里取)。
-    assert isinstance(wf_engine.NODE_CONNECTIONS, threading.Semaphore)
+    assert isinstance(node_budget.NODE_CONNECTIONS, threading.Semaphore)
 
 
 def test_取消检查复用节点自己的会话_不再另开一条() -> None:
@@ -64,10 +65,10 @@ def test_等待中的节点会把预算还回去() -> None:
     assert "release" in source
     assert "connection_handed_back" in source
 
-    before = wf_engine.NODE_CONNECTIONS._value
+    before = node_budget.NODE_CONNECTIONS._value
     with common._budget_released(True):
-        assert wf_engine.NODE_CONNECTIONS._value == before + 1, "等待期间没把预算还回去"
-    assert wf_engine.NODE_CONNECTIONS._value == before, "等完没把预算拿回来"
+        assert node_budget.NODE_CONNECTIONS._value == before + 1, "等待期间没把预算还回去"
+    assert node_budget.NODE_CONNECTIONS._value == before, "等完没把预算拿回来"
 
 
 def test_每一处等待都把自己的会话交了出去() -> None:
@@ -113,7 +114,7 @@ def test_嵌套容器跑体时不占预算_并行的循环套子图跑得完(mon
         wf_id = workflow.id
 
     budget = threading.Semaphore(2)
-    monkeypatch.setattr(wf_engine, "NODE_CONNECTIONS", budget)
+    monkeypatch.setattr(node_budget, "NODE_CONNECTIONS", budget)
     leaf = {"nodes": [{"id": "leaf", "type": "template", "config": {"template": "叶子"}}], "edges": []}
     body = {"nodes": [{"id": "sub", "type": "subgraph", "config": {"inputs": {}, "body": leaf}}], "edges": []}
     graph = {

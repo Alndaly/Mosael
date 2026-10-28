@@ -62,7 +62,7 @@
 | `app/domain/jobs/__init__.py:_KILLED` | 取消已经掐过、执行体还在跑的任务 | 取消在提交之前就掐子进程;执行体恰好在那一刻起的新子进程去库里查还是 running,没人掐它。登记时先看这里。执行体结束就忘掉,重启后没有执行体可言。 |
 | `app/domain/jobs/__init__.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
 | `app/domain/jobs/__init__.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |
-| `app/domain/jobs/__init__.py:RENDER_SLOTS`、`app/domain/jobs/__init__.py:ASR_SLOTS`、`app/domain/jobs/__init__.py:TTS_SLOTS`、`app/domain/jobs/__init__.py:PLUGIN_SLOTS`、`app/media/proxy.py:TRANSCODE_SLOTS`、`app/domain/workflows/engine.py:NODE_CONNECTIONS` | 几类重活同时跑几份(导出、识别、合成、插件进程、代理转码),以及工作流引擎能同时占几条库连接 | 名额按进程算:第二个进程再给一份,同时跑的 ffmpeg、模型进程翻倍,机器被压满;引擎那份本来就按本进程的连接池算,不出错。重启后归零,没有要恢复的。 |
+| `app/domain/jobs/__init__.py:RENDER_SLOTS`、`app/domain/jobs/__init__.py:ASR_SLOTS`、`app/domain/jobs/__init__.py:TTS_SLOTS`、`app/domain/jobs/__init__.py:PLUGIN_SLOTS`、`app/media/proxy.py:TRANSCODE_SLOTS`、`app/domain/workflows/node_budget.py:NODE_CONNECTIONS` | 几类重活同时跑几份(导出、识别、合成、插件进程、代理转码),以及工作流引擎能同时占几条库连接 | 名额按进程算:第二个进程再给一份,同时跑的 ffmpeg、模型进程翻倍,机器被压满;引擎那份本来就按本进程的连接池算,不出错。重启后归零,没有要恢复的。 |
 | `app/integrations/feishu/inbound.py:_awaiting_replies` | 每个会话里还在等回复的飞书消息(收尾时摘 Typing 反应) | 一轮在哪个进程跑完,就在哪个进程收尾;第二个进程看不见别人贴的反应。重启丢了它,只是那几条消息上的「码字中」不会被摘掉 —— 回复照样发。 |
 | `app/integrations/feishu/inbound.py:_paused_typing` | 智能体等选择卡/确认卡时,被暂存的原消息 id(等完再贴回 Typing) | 和 `_awaiting_replies` 同属一个进程;重启丢了它,等待中的 Typing 不会再贴回,回复照样发。第二个进程各存各的。 |
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
@@ -188,7 +188,14 @@
   结果态」的实现。同一个方向:领域只决定**什么时候**要收(判 `feishu_message_id`),怎么改那条消息是集成层的事
   (见 ADR 0069)。它排成 `after_commit`,所以失败也只影响那张卡,不影响已经落库的取消 / 超时。
 - `app/domain/workflows/approvals.py:_RESUME_DISPATCHER` — 「把暂停在等人确认上的运行接着派发出去」的实现。
-  引擎在 import 时登记自己,运行时只读 —— 反过来让领域去 import 引擎会给「引擎 ⇄ 执行器」那一族添一个新环。
+  引擎在 import 时登记自己,运行时只读 —— 反过来让领域去 import 引擎就成了环(tests/test_import_layering 一个环都不许有)。
+- `app/domain/workflows/graph_runner.py:_run_graph`、`app/domain/workflows/graph_runner.py:_start_workflow_job` —— 容器类执行器
+  (循环体、子图、调用另一个工作流)回头跑图的入口。引擎在模块末尾登记自己,运行时只读;执行器只认识这道缝。
+- `app/domain/assets/deletion.py:_guards`、`app/domain/assets/deletion.py:_cleanups` —— 删素材之前的拦截(还在发布的不删)
+  与善后(资产库摘掉参考图)。组装根在导入期登记,运行时只读;素材域不认识发布和资产库。
+- `app/domain/assets/importer.py:_imported_listeners` —— 有字节的素材入库之后接着做的事(文档的本地解析)。组装根登记,运行时只读。
+- `app/domain/plugins/instances.py:_tools_pullers` —— 连接启用 / 换服务器 / 换出站路线之后重拉 MCP 工具清单的实现
+  (`plugins.tools.pull_tools_quietly`)。组装根登记,运行时只读;实例那一层不认识工具调用。
 - `app/domain/feishu/gateway.py:_TRANSPORT` — 「怎么发飞书」的实现(发文字 / 发卡片 / 取附件 / 加表情 / 列群)。
   组装根在导入期登记(集成层填进来),运行时只读 —— 和上面那条同一个道理:领域层不认识集成层,而两族节点
   (「等人确认」和 4 个飞书能力节点)要的是**同一份**发送原语(见 ADR 0066)。

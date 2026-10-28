@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+from app.domain.generation_catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 import contextlib
 import contextvars
@@ -1096,7 +1096,7 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
     return out
 
 
-#: 生成种类。和后端 domain/generation/catalog.GENERATION_KINDS 同一份含义;这里是 MCP 进程,
+#: 生成种类。和后端 domain/generation_catalog.GENERATION_KINDS 同一份含义;这里是 MCP 进程,
 #: 不 import 后端领域(它经 HTTP 说话),所以只列名字 —— 后端认不出的种类会在 /generation/options 上回 422。
 _GENERATION_KINDS = ("image", "video", "audio")
 
@@ -1148,7 +1148,7 @@ def _parameter_help(capabilities: dict[str, Any]) -> dict[str, Any]:
     """把一个模型的描述符翻成「这些参数能给,各自能给什么」。
 
     **不在这里维护第二份名单** —— 键从描述符自己的 parameter_keys 来。新增一个参数只要
-    改目录(domain/generation/catalog),界面和智能体同时拿到;在这里再列一遍的话,漏掉的
+    改目录(domain/generation_catalog),界面和智能体同时拿到;在这里再列一遍的话,漏掉的
     那一个不会报错,只会让智能体以为它不存在。
     """
     help_: dict[str, Any] = {}
@@ -1416,6 +1416,7 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
     Pass "native" only when the user explicitly asks for native/whole-video analysis.
     """
     from app.api.schemas import JobOut
+    from app.domain.analysis import use_cases as analysis_use_cases
     from app.domain.assets import use_cases
 
     if mode == "shots":
@@ -1431,18 +1432,19 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
         if session_id:
             workspace_id = use_cases.readable(db, user, asset_id).workspace_id
             target = agent_session_target(db, session_id, workspace_id=workspace_id, user_id=user.id)
-        return use_cases.analyze(db, user, asset_id, question, session_target=target, mode=mode)
+        return analysis_use_cases.analyze(db, user, asset_id, question, session_target=target, mode=mode)
 
     return _use_case(analyze, asset_id)
 
 
 def _queue_shot_breakdown(db, user, asset_id: str):
     """工具那一路的「拆镜头」:按**这次对话**的连接和模型排任务,和素材详情页那个按钮同一条路
-    (`use_cases.start_shots` → `analysis.shots_task`,任务种类 `shot_breakdown`)。
+    (`analysis.use_cases.start_shots` → `analysis.shots_task`,任务种类 `shot_breakdown`)。
 
     `mode="shots"` 不是喂视频的方式,所以不受会话里选定的分析方式覆盖 —— 那个选择管的是「整段直读还是抽帧」。
     """
     from app.domain.agent.analysis_target import agent_session_target
+    from app.domain.analysis import use_cases as analysis_use_cases
     from app.domain.assets import use_cases
 
     target = None
@@ -1450,7 +1452,7 @@ def _queue_shot_breakdown(db, user, asset_id: str):
     if session_id:
         workspace_id = use_cases.readable(db, user, asset_id).workspace_id
         target = agent_session_target(db, session_id, workspace_id=workspace_id, user_id=user.id)
-    return use_cases.start_shots(db, user, asset_id, session_target=target)
+    return analysis_use_cases.start_shots(db, user, asset_id, session_target=target)
 
 
 @tool(effect="reads")
@@ -3201,9 +3203,9 @@ def transcribe_asset(asset_id: str) -> dict[str, Any]:
     video looks like; that is analyze_asset.
     """
     from app.api.schemas import JobOut
-    from app.domain.assets import use_cases
+    from app.domain.voices import use_cases as voice_use_cases
 
-    return _use_case(use_cases.start_transcription, asset_id, out=JobOut)
+    return _use_case(voice_use_cases.start_transcription, asset_id, out=JobOut)
 
 
 @tool(effect="confirms")

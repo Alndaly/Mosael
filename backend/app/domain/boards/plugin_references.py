@@ -201,7 +201,7 @@ def generation_index(db: Session, user_id: str | None, kinds: Any = None) -> Gen
     (`plugin_instance_id` 指回实例)下的 —— 工具和模型要是**同一个连接**的才算同一件事。
     """
     from app.domain.providers import models as provider_models
-    from app.domain.generation.catalog import GENERATION_KINDS
+    from app.domain.generation_catalog import GENERATION_KINDS
 
     index: GenerationIndex = {}
     for kind in kinds if kinds is not None else GENERATION_KINDS:

@@ -73,7 +73,7 @@ def build_submit_payload(request: GenerationRequest, context: GenerationAdapterC
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt}]
     # content 数组按 role 区分每一份素材的用途 —— 这是接口自己的形状(文件顶上那段注释说的
     # 就是它)。**每个角色都可能有多份**:参考图九张、参考视频三段、参考音频三段,上限见
-    # domain/generation/catalog 的 source_limits。此前这里走单数的 source_value,挂了九张
+    # domain/generation_catalog 的 source_limits。此前这里走单数的 source_value,挂了九张
     # 参考图也只发得出第一张。
     for role in _CONTENT_ROLES:
         kind = _CONTENT_KINDS[role]

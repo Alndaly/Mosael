@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from datetime import UTC, datetime
 from typing import Any
 
@@ -296,15 +296,22 @@ def set_package_sources(db: Session, instance: PluginInstance, choices: dict[str
     return instance
 
 
-def _pull_tools(db: Session, instance: PluginInstance) -> None:
-    """顺手拉一次工具清单。**失败不抛**:原因由 refresh_tools 记进 `capability_status["tools"]`,插件页照着说;
-    缺配置、缺凭据那种由 blocked_reason 说。"""
-    from app.domain.plugins.tools import refresh_tools
+#: 连接能做的事可能变了(刚启用、换了一台 MCP 服务器、换了出站的路)之后,MCP 连接顺手重拉一次工具清单。
+#: 拉法在 plugins.tools(它要真的去调插件),由组装根登记(见 app.main)—— 实例这一层只管连接本身,
+#: 认识工具调用的话,工具调用回头读实例就成了环(见 tests/test_import_layering)。
+ToolsPuller = Callable[[Session, PluginInstance], None]
+_tools_pullers: list[ToolsPuller] = []
 
-    try:
-        refresh_tools(db, instance, notify=False)
-    except PluginDomainError:
-        pass
+
+def on_tools_stale(puller: ToolsPuller) -> None:
+    """登记「工具清单可能过时了」之后怎么重拉。**失败不抛**是拉的那一方的约定(见 tools.pull_tools_quietly)。"""
+    if puller not in _tools_pullers:
+        _tools_pullers.append(puller)
+
+
+def _pull_tools(db: Session, instance: PluginInstance) -> None:
+    for puller in _tools_pullers:
+        puller(db, instance)
 
 
 def missing_config(db: Session, instance: PluginInstance) -> list[str]:

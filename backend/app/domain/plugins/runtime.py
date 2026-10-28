@@ -86,7 +86,7 @@ def data_dir_for(package_id: str) -> Path:
 MAX_OUTPUT_BYTES = 1_000_000
 
 #: **目录类回答**(工具清单、模型清单、模型库、工作流库、节点包、音色清单)的预算。它们不是「一次工具调用」,而是
-#: 「这台服务器此刻有什么」的一整份目录。六处调用点:`dynamic_tools.refresh`(`op tools`)、`generation.catalog`
+#: 「这台服务器此刻有什么」的一整份目录。六处调用点:`dynamic_tools.refresh`(`op tools`)、`generation_catalog`
 #: (`op models`)、`model_library.library`(`op library`)、`workflow_library.library`(`op workflows`)、
 #: `workbench_agent.node_packs`(`op node_packs`:装了哪些节点包,每个最多 60 个类型)、
 #: `voices.engine_catalog._plugin_voices`(`op voices`:这个引擎 / 账号里能念的音色)。

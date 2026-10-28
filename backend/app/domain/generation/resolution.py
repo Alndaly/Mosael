@@ -20,7 +20,7 @@ from app.db.models import (
     ProviderModel,
 )
 from app.domain.providers import models as provider_models
-from app.domain.generation.catalog import (
+from app.domain.generation_catalog import (
     GENERATION_KINDS,
     capabilities_are_known,
     capabilities_for,

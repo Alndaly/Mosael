@@ -4,7 +4,7 @@ from typing import Any
 
 #: 描述符的数据住在 descriptors/ 下(按介质 / 厂商分文件);这里重新导出每一个名字 ——
 #: 调用方照旧从 catalog 取。**导入而不是复制**:下面的档案名册按对象身份(id())反查。
-from app.domain.generation.descriptors.shared import (
+from app.domain.generation_catalog.descriptors.shared import (
     SOURCE_ROLE_LABELS,  # noqa: F401
     SOURCE_ROLE_HELP,  # noqa: F401
     SOURCE_ROLE_MEDIA,  # noqa: F401
@@ -14,7 +14,7 @@ from app.domain.generation.descriptors.shared import (
     SOURCE_GROUP_DROPS,  # noqa: F401
     REFERENCE_SCENE_LIMITS,  # noqa: F401
 )
-from app.domain.generation.descriptors.image import (
+from app.domain.generation_catalog.descriptors.image import (
     OPENAI_IMAGE_CAPABILITIES,
     QWEN_TEXT_IMAGE_CAPABILITIES,
     QWEN_PRO_IMAGE_CAPABILITIES,
@@ -29,7 +29,7 @@ from app.domain.generation.descriptors.image import (
     EVOLINK_GPT_IMAGE_25_CAPABILITIES,
     EVOLINK_GPT_IMAGE_15_CAPABILITIES,
 )
-from app.domain.generation.descriptors.avatar import (
+from app.domain.generation_catalog.descriptors.avatar import (
     WAN_22_S2V_CAPABILITIES,
     VOLCANO_OMNIHUMAN_15_CAPABILITIES,
     HEYGEN_AVATAR_CAPABILITIES,
@@ -39,7 +39,7 @@ from app.domain.generation.descriptors.avatar import (
     KLING_AVATAR_CAPABILITIES,
     KLING_LIPSYNC_CAPABILITIES,
 )
-from app.domain.generation.descriptors.video import (
+from app.domain.generation_catalog.descriptors.video import (
     WAN_VIDEO_CAPABILITIES,
     WAN_27_T2V_CAPABILITIES,
     WAN_27_I2V_CAPABILITIES,
@@ -56,7 +56,7 @@ from app.domain.generation.descriptors.video import (
     MINIMAX_VIDEO_CAPABILITIES,
     GOOGLE_VEO_VIDEO_CAPABILITIES,
 )
-from app.domain.generation.descriptors.evolink_video import (
+from app.domain.generation_catalog.descriptors.evolink_video import (
     EVOLINK_VIDEO_T2V_CAPABILITIES,
     EVOLINK_VIDEO_I2V_CAPABILITIES,
     EVOLINK_SEEDANCE_15_CAPABILITIES,
@@ -77,7 +77,7 @@ from app.domain.generation.descriptors.evolink_video import (
     EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES,
     EVOLINK_VEO_31_PRO_CAPABILITIES,
 )
-from app.domain.generation.descriptors.audio import (
+from app.domain.generation_catalog.descriptors.audio import (
     VOCAL_GENDER_SCHEMA,  # noqa: F401
     EVOLINK_SUNO_CAPABILITIES,
     EVOLINK_SUNO_V4_CAPABILITIES,
@@ -91,7 +91,7 @@ from app.domain.generation.descriptors.audio import (
     ALIBABA_FUN_MUSIC_PREVIEW_CAPABILITIES,
     ALIBABA_AUDIOGEN_CAPABILITIES,
 )
-from app.domain.generation.descriptors.builtin import (
+from app.domain.generation_catalog.descriptors.builtin import (
     AUDIO_BUILTIN_MODELS,  # noqa: F401
     EVOLINK_BUILTIN_MODELS,  # noqa: F401
     BUILTIN_MODELS,

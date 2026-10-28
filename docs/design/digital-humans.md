@@ -39,7 +39,7 @@
 
 | 已有的 | 在哪里 | 和数字人的关系 |
 | --- | --- | --- |
-| 素材角色 `driving_audio`（驱动音频）、`source_video`（源视频）、`first_frame`（首帧） | `ai/providers/contracts/generation.py`、`domain/generation/catalog.py`（`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`） | 说话照片和改口型要用的角色都已经有了，**不用新增角色** |
+| 素材角色 `driving_audio`（驱动音频）、`source_video`（源视频）、`first_frame`（首帧） | `ai/providers/contracts/generation.py`、`domain/generation_catalog/__init__.py`（`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`） | 说话照片和改口型要用的角色都已经有了，**不用新增角色** |
 | 万相 2.7 图生视频认「首帧 + 驱动音频」 | `catalog.WAN_27_I2V_CAPABILITIES` | 今天就能让照片说话，但只有 2–15 秒，时长要手选（见下文的问题 1） |
 | 生成页、画板面板都能挂驱动音频 | `features/ai-studio/AiStudio.tsx`、`features/boards/NodeComposer.tsx` | 界面入口已经有 |
 | ComfyUI 作为生成提供方（[ADR 0020](../adr/0020-plugins-can-be-generation-providers.md)） | `plugins/bundled/comfyui/tools/graph.py` 的 `slots()`：视频图里的音频输入被认成驱动音频 | 本机跑 InfiniteTalk、LatentSync 这类图，主程序零改动 |

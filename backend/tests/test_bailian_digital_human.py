@@ -146,7 +146,7 @@ def test_说话照片的结果是一个对象_不是数组() -> None:
 
 
 def test_两个模型在目录里_成片时长跟着音频_不收提示词() -> None:
-    from app.domain.generation.catalog import VIDEORETALK_CAPABILITIES, WAN_22_S2V_CAPABILITIES
+    from app.domain.generation_catalog import VIDEORETALK_CAPABILITIES, WAN_22_S2V_CAPABILITIES
 
     for caps in (WAN_22_S2V_CAPABILITIES, VIDEORETALK_CAPABILITIES):
         assert caps["duration_follows"] == "driving_audio" and caps["prompt"] == "none"

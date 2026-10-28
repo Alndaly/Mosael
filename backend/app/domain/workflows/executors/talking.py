@@ -4,7 +4,7 @@
 和配音库同一份解析),生成走 `create_generation_job`(模型、素材角色、时长跟着音频的校验都在生成漏斗里)。
 
 - `entity_speak`:人物资产「让它说话」。脸是它的正面图,嗓子是它自己的音色;**真人要有本人或已获同意的声明**
-  (`usable_for_digital_human`),起任务之前就拒。
+  (`voice_usable_for_digital_human`),起任务之前就拒。
 - `image_speak`:图片格「让它说话」。脸由那一格给,嗓子在面板上挑。
 - `video_lipsync`:视频格「对口型」。片子由那一格给;音频接上游的音频格,没接就用稿子当场配。
 
@@ -74,12 +74,12 @@ def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
     在花钱之前问 —— 配完音才拒,那段配音就白付了。"""
     from app.db.models import Voice
     from app.domain.voices.speech import CLONE_ENGINE
-    from app.domain.voices.consent import usable_for_digital_human
+    from app.domain.consent import voice_usable_for_digital_human
 
     if (engine or CLONE_ENGINE) != CLONE_ENGINE or not voice:
         return
     row = db.get(Voice, voice)
-    if row is not None and not usable_for_digital_human(row):
+    if row is not None and not voice_usable_for_digital_human(row):
         raise WorkflowDomainError("wfErr_voiceConsentMissing", params={"name": row.name})
 
 
@@ -195,7 +195,7 @@ def _speaking_entity(db: Session, workspace_id: str, entity_id: str) -> tuple[An
 
 def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], actor_id: str | None) -> dict[str, Any]:
     """人物说话之前的全部检查,**不花钱、不写东西**:是人物、真人有授权声明、有音色、有图、有会说话照片的模型、有稿子。
-    节点跑的时候先过它;资产详情页点「让它说话」时也先过它(domain/entities/drawing),说不通的当场说。"""
+    节点跑的时候先过它;资产详情页点「让它说话」时也先过它(domain/workflows/entity_drawing),说不通的当场说。"""
     entity, engine, voice = _speaking_entity(db, workspace_id, _text(config.get("entity_id")))
     if not _text(config.get("text")):
         raise WorkflowDomainError("wfErr_talkingNeedsText")

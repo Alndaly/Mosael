@@ -1,6 +1,11 @@
-"""资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4)。
+"""资产详情页上的「补全多角度」「生成表情」「让它说话」(ADR 0027 阶段 4)。
 
-**不自己实现。** 跑的是工作流那两个节点的执行器(workflows/executors/entities 的 `entity_angles` /
+**住在工作流域,不在资产域**:它跑的是工作流节点的执行器,资产域认识工作流的话,工作流节点读资产
+那条正常的依赖就绕成了环(见 tests/test_import_layering)。
+
+闸在 workflows/use_cases.draw_entity(资产的 `ai` 那一道),这里只管起任务。
+
+**不自己实现。** 跑的是工作流那几个节点的执行器(workflows/executors/entities 的 `entity_angles` /
 `entity_expressions`)—— 和画板上资产格的能力是同一个,画哪几张、用哪个模型、挂成什么角度只在那里决定。
 这里只多做两件详情页自己的事:
 
@@ -18,8 +23,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Entity, Job
-from app.domain.jobs import create_job, dispatch_job
+from app.domain.jobs import create_job, dispatch_job, run_job_inline
+from app.domain.workflows import node_budget
+from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.entities import plan_drawing
+from app.domain.workflows.executors.talking import check_entity_speak
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +55,6 @@ class EntityScope:
 
 def start_drawing(db: Session, entity: Entity, ability: str, config: dict[str, Any], *, actor_id: str) -> Job:
     """检查说得通就起任务,返回任务;说不通抛 WorkflowDomainError(调用方翻成 422)。"""
-    from app.domain.workflows.executors.entities import plan_drawing
-    from app.domain.workflows.executors.talking import check_entity_speak
-
     node_type = DRAW_NODES[ability]
     settings = {**config, "entity_id": entity.id}
     #: 起任务之前的检查和节点跑的时候是同一份(不花钱):补画查图和模型,说话还要查授权声明和音色。
@@ -72,17 +80,11 @@ def start_drawing(db: Session, entity: Entity, ability: str, config: dict[str, A
 def _run(job_id: str, node_type: str, scope: EntityScope, config: dict[str, Any], ability: str) -> None:
     """任务线程里跑节点。和画板跑一项能力同一个形状(boards.tools._run_in_job):先拿连接预算再开会话 ——
     节点里等生成时会把预算交还再拿回来。"""
-    from app.core.db import SessionLocal
-    from app.core.unit_of_work import unit_of_work
-    from app.domain.jobs import run_job_inline
-    from app.domain.workflows.engine import NODE_CONNECTIONS
-    from app.domain.workflows.executors import get_executor
-
     def body() -> dict[str, Any]:
         handler = get_executor(node_type)
         assert handler is not None, node_type
         # 节点跑完就是它的事务边界(同 workflows.engine):正常结束提交,抛出来就回滚。
-        with NODE_CONNECTIONS, unit_of_work() as node_db:
+        with node_budget.NODE_CONNECTIONS, unit_of_work() as node_db:
             output = handler(node_db, scope, dict(config))
         return output
 

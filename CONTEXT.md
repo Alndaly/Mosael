@@ -312,7 +312,7 @@ _Avoid_: `providers/image/<vendor>.py` 式纯能力目录；一个供应商一�
 它与各家原生 Adapter 并列,不复用 OAuth Gateway,也不在本地承诺绕过上游内容审核。
 
 **生成能力契约**:
-`domain/generation/catalog.py` 只按精确 `(vendor, model, kind)` 返回能力；未知/手填模型保留提示词
+`domain/generation_catalog/__init__.py` 只按精确 `(vendor, model, kind)` 返回能力；未知/手填模型保留提示词
 提交，但 `parameter_keys=[]`，不会继承同供应商第一款型号，也不会伪造 1024、720p、5 秒等默认值。
 描述符同时表达布尔参数、供应商枚举、特殊时长与“分辨率 → 合法时长”组合，AI 工作台、无限画布、
 工作流和 MCP 共用。Adapter 只读取已声明参数并翻译字段名；外链素材与素材库文件使用同一角色语义。

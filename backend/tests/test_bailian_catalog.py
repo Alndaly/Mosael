@@ -7,7 +7,7 @@ def test_万相在生成目录里_视频模型不在兼容目录中() -> None:
     """必须写进内置目录:兼容模式的 /models 只列 OpenAI 兼容的模型,视频走百炼原生端点 ——
     真机实测那个接口对百炼只返回两个 wan 图像模型,一个视频模型都没有。不写的话用户在界面上
     一个也选不到。"""
-    from app.domain.generation.catalog import BUILTIN_MODELS
+    from app.domain.generation_catalog import BUILTIN_MODELS
 
     #: 数字人那两个(说话照片、改口型,ADR 0028)不是万相的出片模型:不按尺寸 / 清晰度出片,另有测试钉着。
     talking = {"speech-to-video", "video-lipsync"}
@@ -37,7 +37,7 @@ def test_原生端点的模型必须能在设置里看到() -> None:
     /models,**视频走原生端点、根本不在那份清单里**(真机:那个接口对百炼只返回两个 wan
     图像模型)。于是用户看不到、加不进来,而他并不知道为什么。
     """
-    from app.domain.generation import builtin_models_for
+    from app.domain.generation_catalog import builtin_models_for
 
     videos = builtin_models_for("alibaba", "video")
     assert len(videos) >= 5, "内置目录里没有万相视频模型"

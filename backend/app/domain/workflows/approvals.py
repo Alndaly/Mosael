@@ -393,7 +393,7 @@ def dispatch_resume(job_id: str, *, approval_id: str | None = None) -> bool:
     付了两次)。
 
     **派发那一步由引擎自己登记进来**(见 `use_resume_dispatcher`):这个模块不许 import engine ——
-    那就又给"引擎 ⇄ 执行器"那一族添一个新环(见 tests/test_import_layering 的 LAZY_CYCLE_MODULES)。
+    那就成了"引擎 ⇄ 工作流领域"的环(tests/test_import_layering 一个环都不许有)。
     方向反过来就干净了:引擎认识工作流的领域,领域不认识引擎。
     """
     dispatch = _RESUME_DISPATCHER

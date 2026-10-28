@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.db import PARTITION_PREFIX
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, Job, PublishAccount, PublishTask, User
+from app.domain.assets.deletion import AssetNotDeletable
 from app.domain.authority import Actor, actor_id
 from app.domain import sharing
 from app.domain.jobs import create_job, register_external_kind
@@ -455,10 +456,28 @@ def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -
 
 
 def active_tasks_for_asset(db: Session, asset_id: str) -> list[PublishTask]:
-    """这份素材还在发的那些任务(没落终态的)。删素材之前问一声(见 assets.deletion.delete_asset)。"""
+    """这份素材还在发的那些任务(没落终态的)。"""
     return list(db.scalars(select(PublishTask).where(
         PublishTask.asset_id == asset_id, PublishTask.status.notin_(TERMINAL_TASK_STATUSES),
     )))
+
+
+class AssetBeingPublished(AssetNotDeletable):
+    """这份素材还有没发完的发布任务。先等它发完,或先取消那条发布。"""
+
+
+def refuse_while_publishing(db: Session, asset: Asset) -> None:
+    """还在发的素材不让删 —— 素材删除的一道拦截(组装根登记到 assets.deletion.add_guard)。
+
+    发布器认领任务之后要按 `asset_id` 读这份文件、上传到平台;中途把文件删了,平台那头是一次传了一半的失败,
+    而这边任务已经没有素材可重试。发完了(成功 / 失败 / 已取消)就随便删 —— 发布记录留着(见 PublishTask.asset_id)。
+    """
+    active = active_tasks_for_asset(db, asset.id)
+    if active:
+        account = db.get(PublishAccount, active[0].account_id)
+        raise AssetBeingPublished(
+            "assetErr_beingPublished", name=asset.name, account=account.name if account else "", count=len(active),
+        )
 
 
 def start_publish(

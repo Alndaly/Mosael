@@ -10,9 +10,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import User, Workflow
+from app.db.models import Job, User, Workflow
+from app.domain import entities as entity_library
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
-from app.domain.workflows import available_node_types, list_workflows as _list
+from app.domain.workflows import available_node_types, entity_drawing, list_workflows as _list
 from app.domain.workflows.node_catalog import describe_node_types
 
 
@@ -109,3 +110,15 @@ def decide_run_approval(
         db, approval, decision=decision, user_id=user.id,
         user_name=user.display_name or user.username, note=note, via=via,
     )
+
+
+def draw_entity(db: Session, user: User, entity_id: str, ability: str, config: dict[str, Any]) -> Job:
+    """资产详情页上的「补全多角度 / 生成表情 / 让它说话」:照这个资产的参考图跑那个工作流节点,画成的挂回来。
+
+    付费生成,闸是资产的 `ai` 那一道(和生成页同一道)。说不通的(没图、模型不收参考图、角度都齐了)
+    当场抛 WorkflowDomainError,不起任务(见 workflows/entity_drawing)。
+    """
+    workspace_id = entity_library.entity_workspace(db, entity_id)
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    entity = entity_library.get_entity(db, workspace_id, entity_id)
+    return entity_drawing.start_drawing(db, entity, ability, config, actor_id=user.id)

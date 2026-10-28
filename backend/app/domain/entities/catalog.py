@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.db.references import split_ids
+from app.domain.consent import CONSENT_KINDS
 
 #: 三种资产。「风格」那一种先不做(ADR 0027「以后再议」)。
 KINDS: tuple[str, ...] = ("character", "location", "prop")
@@ -55,8 +56,6 @@ DEFAULT_ROLE: dict[str, str] = {"character": "front", "location": "concept", "pr
 #: 词表这一层不依赖配音引擎的装配。
 VOICE_LIBRARY_ENGINE = "builtin:clone"
 
-#: 真人 / 虚构的授权声明(数字人方案「合规」一节)。真人要 `self` 或 `authorized` 才能用于数字人功能。
-CONSENT_KINDS: tuple[str, ...] = ("self", "authorized", "fictional")
 
 #: 一个资产最多挂几张参考图。参考图墙是一面墙,不是一个素材库;再多就该拆成变体。
 MAX_REFERENCES = 60

@@ -491,28 +491,6 @@ def _ffmpeg_runtime_dir(engine_python: str) -> str:
     return ""
 
 
-def weights_for(engine_id: str, text: str, model_id: str = "") -> dict[str, str]:
-    """这次合成该用**哪一份权重**。
-
-    只有 F5 有多份(按语言分,见 ai/runtime/f5_models);别的引擎一份权重走天下,返回空字典。
-    判断放在这个文件里,是因为"哪个引擎有多份权重"本身就是关于引擎的知识 —— 它属于目录,
-    不属于调用方(棘轮 test_engine_capabilities_live_in_one_table 盯的正是这个)。
-
-    `model_id` 是**用户明说的**那一份,优先于按文字自动挑。这不是可选的锦上添花:法语、德语、
-    西班牙语、意大利语、芬兰语都写拉丁字母,没有任何字符能证明"这是法语而不是英语"——
-    自动挑永远挑不中它们,只能由人来说。
-    """
-    if engine_id != "f5-tts":
-        return {}
-    from app.ai.runtime import f5_models
-    from app.ai.runtime.tts_language import detect_script
-
-    explicit = f5_models.get(model_id) if model_id else None
-    chosen = explicit if explicit is not None and f5_models.installed(explicit) else f5_models.for_language(detect_script(text))
-    # 给 worker 的是**本地**相对路径(每个模型在自己的子目录里),不是仓库内路径。
-    return {"checkpoint": chosen.local_checkpoint, "vocab": chosen.local_vocab} if chosen is not None else {}
-
-
 def _worker_env(engine_python: str = "") -> dict[str, str]:
     """Env for the TTS worker subprocess: point HuggingFace at the configured
     mirror so first-use model downloads work (e.g. hf-mirror in CN), and pass the
@@ -554,7 +532,7 @@ def candidate_pythons(engine_id: str) -> list[Path]:
     托管 venv 排在自动位:用户点过「下载」之后就该直接可用,不必再去设置里填路径——
     那个输入框只是留给"我自己装好了、想用我的环境"的高级用法。
 
-    分开之前那个共用 venv **不在这里** —— 它由 `tts_config.migrate_shared_venv()` 一次性
+    分开之前那个共用 venv **不在这里** —— 它曾由一次性迁移
     搬到它实际服务的引擎名下。留着当候选就是两条路并存,而两条路正是这次的病根。
     """
     from app.ai.runtime import config as tts_config

@@ -1,6 +1,6 @@
 """数字人的能力描述符:说话照片(一张人像跟着驱动音频说话)与对口型(原片的嘴对上新配音)。见 ADR 0028。
 
-由 domain/generation/catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
 """
 
 from __future__ import annotations

@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from app.domain.generation import catalog as C
+from app.domain import generation_catalog as C
 
 RATCHET = True
 

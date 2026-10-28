@@ -1,6 +1,6 @@
 """结构性约束:**「有哪几种输入素材角色」只有一个产地。**
 
-产地是 `ai/providers/contracts/generation.SOURCE_ROLES`(名字)和 `domain/generation/catalog.SOURCE_ROLE_LABELS`
+产地是 `ai/providers/contracts/generation.SOURCE_ROLES`(名字)和 `domain/generation_catalog.SOURCE_ROLE_LABELS`
 (中文名)。catalog 里那张表的注释已经把这件事的历史写清楚了 —— 它曾经存在三份,而
 「新增角色时漏掉哪一份都不会报错,只是智能体不知道有这个东西,于是永远不会用它」。
 
@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 from app.ai.providers.contracts.generation import SOURCE_ROLES
-from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+from app.domain.generation_catalog import SOURCE_ROLE_LABELS
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
@@ -39,7 +39,7 @@ def test_每个角色还说得出自己收哪类素材() -> None:
     workflows/binding.with_referenced_assets):少一条 = 那个角色并进来的素材不做检查,
     一段视频会被当成参考图发出去 —— 换来一次 400 或者一次白花钱的生成。
     """
-    from app.domain.generation.catalog import SOURCE_ROLE_MEDIA
+    from app.domain.generation_catalog import SOURCE_ROLE_MEDIA
 
     assert set(SOURCE_ROLE_MEDIA) == set(SOURCE_ROLES), (
         f"收哪类素材的表与角色表对不上:只在角色表={set(SOURCE_ROLES) - set(SOURCE_ROLE_MEDIA)}、"
@@ -137,14 +137,14 @@ def test_没有第二处把角色名铺开写() -> None:
 
     app_dir = _p.Path(__file__).resolve().parents[1] / "app"
     #: 产地本身,以及供应商各自的**线上字段名映射**(万相把 source_video 叫 video,
-    #: 那是两套命名之间的翻译,不是抄我们的表)。描述符的数据住在 generation/descriptors/ 下
+    #: 那是两套命名之间的翻译,不是抄我们的表)。描述符的数据住在 generation_catalog/descriptors/ 下
     #: (catalog 的一部分,按介质分文件),整个目录算产地。
     allowed = (
         "providers/contracts/generation.py",
-        "generation/catalog.py",
+        "generation_catalog/__init__.py",
         "providers/adapters/alibaba/dashscope/video.py",
     )
-    allowed_dirs = ("domain/generation/descriptors",)
+    allowed_dirs = ("domain/generation_catalog/descriptors",)
 
     offenders = []
     for path in sorted(app_dir.rglob("*.py")):

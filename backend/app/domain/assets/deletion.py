@@ -7,44 +7,64 @@
 —— 不然两个外键(SET NULL / CASCADE)把痕迹清光,那条生成和「还在排队」长得一模一样)。
 接口和智能体的确认卡走同一个函数,正是因为第三条最容易被漏掉;第四条是真的漏掉过(见
 `_mark_generations_result_deleted`)。
+
+**上层的事经两道缝接进来,这里不认识它们**(组装根 app.main 登记):
+
+- **拦**(`add_guard`):还不能删的,抛 `AssetNotDeletable` 的子类 —— 今天只有发布(发布器还要读这份文件);
+  确认卡开卡时也问同一组(`ensure_deletable`),别让用户批准了一张执行时才报错的卡;
+- **跟着收拾**(`on_deleting`):删行之前、同一个事务里,引用它的上层记录各自善后 —— 今天只有资产库
+  (参考图摘掉,记一笔「少了哪一张」)。
+
+素材是最底下的一层:时间线、生成、资产库、发布都引用它。此前这里直接 import 发布和资产库,于是素材域
+和它们互相认识,一路串成包级的环(见 tests/test_import_layering)。
 """
 
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
-from app.db.models import Asset, Clip, GeneratedAsset, GenerationJob, PublishAccount
+from app.db.models import Asset, Clip, GeneratedAsset, GenerationJob
 from app.db.models import Sequence as SequenceModel
 from app.domain.sequences.offline import offline_snapshot
 from app.media.paths import resolve_key
 
 
-class AssetBeingPublished(LocalizedError, ValueError):
-    """这份素材还有没发完的发布任务。先等它发完,或先取消那条发布。"""
+class AssetNotDeletable(LocalizedError, ValueError):
+    """这份素材现在还不能删。具体原因由登记拦截的那一方说(见 `add_guard`)。"""
 
     status = 409
 
 
-def ensure_not_being_published(db: Session, asset: Asset) -> None:
-    """还在发的素材不让删。
+Guard = Callable[[Session, Asset], None]
+Cleanup = Callable[[Session, Asset], Any]
+_guards: list[Guard] = []
+_cleanups: list[Cleanup] = []
 
-    发布器认领任务之后要按 `asset_id` 读这份文件、上传到平台;中途把文件删了,平台那头是一次传了一半的失败,
-    而这边任务已经没有素材可重试。发完了(成功 / 失败 / 已取消)就随便删 —— 发布记录留着(见 PublishTask.asset_id)。
-    """
-    from app.domain.publish import active_tasks_for_asset
 
-    active = active_tasks_for_asset(db, asset.id)
-    if active:
-        account = db.get(PublishAccount, active[0].account_id)
-        raise AssetBeingPublished(
-            "assetErr_beingPublished", name=asset.name, account=account.name if account else "", count=len(active),
-        )
+def add_guard(guard: Guard) -> None:
+    """登记一道「还不能删」的拦截:不能删就抛 `AssetNotDeletable` 的子类,能删什么都不做。"""
+    if guard not in _guards:
+        _guards.append(guard)
+
+
+def on_deleting(cleanup: Cleanup) -> None:
+    """登记一项删行之前的善后。和删除在同一个事务里;抛出来整次删除回滚。"""
+    if cleanup not in _cleanups:
+        _cleanups.append(cleanup)
+
+
+def ensure_deletable(db: Session, asset: Asset) -> None:
+    """这份素材现在能不能删。不能就抛 `AssetNotDeletable`(子类说清是谁拦的)。"""
+    for guard in _guards:
+        guard(db, asset)
 
 
 @dataclass(frozen=True)
@@ -90,9 +110,9 @@ def delete_asset(db: Session, asset: Asset) -> Deleted:
 
     不记成可撤销的时间线操作:素材文件已经删了,撤销只能还回一个指向空文件的片段。
 
-    **还在发布的不删**(见 ensure_not_being_published);发完的照删,发布记录留着、`asset_id` 置空。
+    **登记过的拦截先问一遍**(`ensure_deletable`,今天是「还在发布的不删」)。
     """
-    ensure_not_being_published(db, asset)
+    ensure_deletable(db, asset)
     _mark_generations_result_deleted(db, asset)
     snapshot = offline_snapshot(asset)
     touched: set[str] = set()
@@ -107,11 +127,9 @@ def delete_asset(db: Session, asset: Asset) -> Deleted:
         db.execute(
             update(SequenceModel).where(SequenceModel.id.in_(touched)).values(revision=SequenceModel.revision + 1)
         )
-    # 它若是哪个资产的参考图(ADR 0027),那张参考图随之摘掉,资产上记一笔「少了哪一张」。
-    # 资产本身不动 —— 删素材不删资产。
-    from app.domain.entities import forget_asset
-
-    forget_asset(db, asset)
+    # 引用它的上层记录各自善后(今天是资产库的参考图,ADR 0027),删行之前、同一个事务里。
+    for cleanup in _cleanups:
+        cleanup(db, asset)
     db.flush()
     name = asset.name
     asset_id = asset.id

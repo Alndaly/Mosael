@@ -32,7 +32,8 @@ from app.api.schemas import (
 from app.core.i18n import get_current_locale, t
 from app.db.models import Entity, Job
 from app.domain import entities as library
-from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, CONSENT_KINDS, KINDS, ROLES, ROLES_BY_KIND
+from app.domain.consent import CONSENT_KINDS
+from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, KINDS, ROLES, ROLES_BY_KIND
 from app.domain.entities import use_cases
 
 router = APIRouter(tags=["entities"])
@@ -216,10 +217,11 @@ def draw_entity(entity_id: str, body: EntityDrawRequest, db: Tx, user: CurrentUs
     """
     from app.core.i18n import render_message
     from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows import use_cases as workflow_use_cases
 
     config = {"model": body.model, "scope": body.scope, "expressions": body.expressions, "text": body.text}
     try:
-        return use_cases.draw(db, user, entity_id, body.ability, config)
+        return workflow_use_cases.draw_entity(db, user, entity_id, body.ability, config)
     except WorkflowDomainError as exc:
         detail = render_message(exc.key, get_current_locale(), exc.params) if exc.key else str(exc)
         raise HTTPException(status_code=422, detail=detail) from exc

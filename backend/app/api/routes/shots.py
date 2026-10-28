@@ -16,6 +16,7 @@ from app.api.responses import file_response
 from app.api.schemas import JobOut, ShotBreakdownResponse, ShotMotionTrackResponse
 from app.core.i18n import tr
 from app.db.models import Job
+from app.domain.analysis import use_cases as analysis_use_cases
 from app.domain.assets import use_cases
 from app.domain.shots import breakdowns
 
@@ -30,7 +31,7 @@ def start_shot_breakdown(asset_id: str, db: Tx, user: CurrentUser) -> Job:
     读 `GET /assets/{id}/shots`。**重拆覆盖**同一张表(ADR 0061 待拍板 2),没有历史版本。
     """
     try:
-        return use_cases.start_shots(db, user, asset_id)
+        return analysis_use_cases.start_shots(db, user, asset_id)
     except breakdowns.ShotBreakdownError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

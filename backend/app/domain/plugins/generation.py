@@ -71,7 +71,7 @@ class PluginModel:
     inputs: tuple[dict[str, Any], ...] = ()
     max_outputs: int = 1
     #: 一次运行交回几份(张数为 1、参数都按缺省时):ComfyUI 的一张工作流有几个保存节点就是几。宿主据此一次摆好
-    #: 那么多格占位(见 generation.catalog.outputs_per_run)。
+    #: 那么多格占位(见 generation_catalog.outputs_per_run)。
     outputs_per_run: int = 1
     prompt_dialect: str = ""
     #: 提示词要不要写:`required` / `optional` / `none`(空串 = 没说,按 required)。认不认这个值由宿主侧判

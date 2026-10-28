@@ -491,7 +491,7 @@ def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = Fal
     `digital_human`:这把嗓子要交给数字人(改口型、说话照片)—— 只挑声明过是谁的(ADR 0028 §5)。
     此前照样预填最早那一把,未声明的克隆音色一进数字人那一步就被拒,而配音的钱已经花了。
     """
-    from app.domain.voices.consent import UNDECLARED
+    from app.domain.consent import UNDECLARED
 
     if not workspace_id:
         return ""

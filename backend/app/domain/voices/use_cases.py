@@ -9,8 +9,14 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Job, User, Voice
-from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, require_sequence_access
-from app.domain.voices import voices
+from app.domain.permissions import (
+    NotVisible,
+    ensure_workspace_access,
+    ensure_workspace_perm,
+    require_asset,
+    require_sequence_access,
+)
+from app.domain.voices import transcription, voices
 
 
 def readable(db: Session, user: User, voice_id: str) -> Voice:
@@ -151,3 +157,12 @@ def dub_subtitles(
         synthesis=synthesis,
         original_audio=original_audio,
     )
+
+
+def start_transcription(db: Session, user: User, asset_id: str, *, language: str = "", engine: str = "") -> Job:
+    """给一份素材排转写。闸是素材的 `ai` 那一档(转写可能用云端引擎、花钱)。
+
+    入口住在配音域而不是素材域:素材是最底下的一层,认识转写的话两个包就成了环(见 tests/test_import_layering)。
+    """
+    require_asset(db, user, asset_id, perm="ai")
+    return transcription.start_transcription(db, asset_id, created_by=user.id, language=language, engine=engine)

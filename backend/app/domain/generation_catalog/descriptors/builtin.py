@@ -1,11 +1,11 @@
 """内置模型名册:哪家、哪个模型 id、哪种生成,用的是哪份描述符。
 
-由 domain/generation/catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
 """
 
 from __future__ import annotations
 
-from app.domain.generation.descriptors.image import (
+from app.domain.generation_catalog.descriptors.image import (
     EVOLINK_GPT_IMAGE_15_CAPABILITIES,
     EVOLINK_GPT_IMAGE_25_CAPABILITIES,
     EVOLINK_GPT_IMAGE_2_BETA_CAPABILITIES,
@@ -19,7 +19,7 @@ from app.domain.generation.descriptors.image import (
     SEEDREAM_3_IMAGE_CAPABILITIES,
     SEEDREAM_4_IMAGE_CAPABILITIES,
 )
-from app.domain.generation.descriptors.avatar import (
+from app.domain.generation_catalog.descriptors.avatar import (
     HEDRA_CHARACTER_3_CAPABILITIES,
     HEYGEN_AVATAR_CAPABILITIES,
     HEYGEN_LIPSYNC_CAPABILITIES,
@@ -29,7 +29,7 @@ from app.domain.generation.descriptors.avatar import (
     VOLCANO_OMNIHUMAN_15_CAPABILITIES,
     WAN_22_S2V_CAPABILITIES,
 )
-from app.domain.generation.descriptors.video import (
+from app.domain.generation_catalog.descriptors.video import (
     GOOGLE_VEO_VIDEO_CAPABILITIES,
     KLING_LEGACY_VIDEO_CAPABILITIES,
     KLING_V3_OMNI_VIDEO_CAPABILITIES,
@@ -45,7 +45,7 @@ from app.domain.generation.descriptors.video import (
     WAN_VIDEO_CAPABILITIES,
     WAN_VIDEO_EDIT_CAPABILITIES,
 )
-from app.domain.generation.descriptors.evolink_video import (
+from app.domain.generation_catalog.descriptors.evolink_video import (
     EVOLINK_SEEDANCE_15_CAPABILITIES,
     EVOLINK_SEEDANCE_20_FAST_I2V_CAPABILITIES,
     EVOLINK_SEEDANCE_20_FAST_R2V_CAPABILITIES,
@@ -62,7 +62,7 @@ from app.domain.generation.descriptors.evolink_video import (
     EVOLINK_VIDEO_I2V_CAPABILITIES,
     EVOLINK_VIDEO_T2V_CAPABILITIES,
 )
-from app.domain.generation.descriptors.audio import (
+from app.domain.generation_catalog.descriptors.audio import (
     ALIBABA_AUDIOGEN_CAPABILITIES,
     ALIBABA_FUN_MUSIC_CAPABILITIES,
     ALIBABA_FUN_MUSIC_PREVIEW_CAPABILITIES,

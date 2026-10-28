@@ -319,7 +319,7 @@ def test_设置页加了什么_生成页就有什么() -> None:
 
 def test_描述符按模型查_查不到给不猜参数的保守兜底() -> None:
     """目录外模型仍能提交提示词，但不能继承别的型号或被伪造一组参数。"""
-    from app.domain.generation import capabilities_for
+    from app.domain.generation_catalog import capabilities_for
 
     assert capabilities_for("bytedance", "doubao-seedance-2-0-260128", "video")["resolutions"]
     # 完全不认识的 vendor

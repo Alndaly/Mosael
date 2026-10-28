@@ -179,7 +179,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 | `backend/app/core/i18n.py` | 5,123 | 251 | 文案表分到 `core/messages/` 14 片,合并时 key 重名直接报错 |
 | `backend/app/domain/sequences/operations.py` | 1,872 | 241 | 只留时间线操作表;算子分到 placement / tracks / text / clip_properties / cutting |
 | `backend/app/domain/boards/canvas.py` | ~1,580 | 188 | shape / validation / persistence / run_state / outputs / receipts |
-| `backend/app/domain/generation/catalog.py` | 1,717 | 364 | 能力描述符数据分到 `generation/descriptors/` |
+| `backend/app/domain/generation_catalog/__init__.py` | 1,717 | 364 | 能力描述符数据分到 `generation_catalog/descriptors/` |
 | `backend/app/domain/workflows/templates.py` | 2,050 | 346 | 三张大图模板与模型选择、schema 各成一个 `templates_*.py` |
 
 **没拆**:`backend/app/db/migrations.py` 2026-10-27 已按滚动窗口退休到约 600 行,保留窗口内的一次性迁移与对账步骤;不按行数拆,因为「这一步在谁之前」比文件长度重要。

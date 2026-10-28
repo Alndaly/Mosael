@@ -3,7 +3,7 @@
 用户在图片格的生成面板选「1×」,点生成之后落出两三格:ComfyUI 的一张工作流常常不止一个保存节点(原图 + 放大、
 几个预览),一次运行交回的是这几个节点各一份;画板此前只摆一格占位,第二份起在回执到的那一刻才往右冒出来。
 现在模型说一次交回几份(`outputs_per_run`,随「结果取自」变的写在那个参数的 `x-outputs-per-run` 上)× 张数
-(generation.catalog.outputs_per_run),发起生成时就摆好那么多格;回执按先后填进去,交回的少了多摆的收掉、多了照旧
+(generation_catalog.outputs_per_run),发起生成时就摆好那么多格;回执按先后填进去,交回的少了多摆的收掉、多了照旧
 往右排,失败 / 取消时一起摆的那几格收掉(这一格留着提示词等重试)。
 """
 
@@ -37,7 +37,7 @@ VENDOR = f"plugin:{PACKAGE}"
 
 
 def test_一次交回几份_模型说的每次几份乘张数() -> None:
-    from app.domain.generation.catalog import outputs_per_run
+    from app.domain.generation_catalog import outputs_per_run
 
     choice = {"type": "string", "enum": ["all", "9", "12"], "x-outputs-per-run": {"all": 2, "9": 1, "12": 1}}
     caps = {"outputs_per_run": 2, "parameter_schema": {"output_node": choice}}

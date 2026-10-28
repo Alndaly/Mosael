@@ -16,7 +16,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import PluginPackage
-from app.domain.plugins import PluginDomainError, bundled, packages
+from app.domain.plugins import PluginDomainError, bundled, bundled_install, packages
 from tests.util import fresh_client
 
 
@@ -49,11 +49,11 @@ def test_启动对账把随包插件装进插件目录并登记(shipped) -> None
     with SessionLocal() as db:
         package = db.get(PluginPackage, "test.bundled")
         assert package is not None and package.manifest["_path"] == str(target)
-        assert bundled.install(db, settings.plugins_dir) == [], "内容没变就不该再拷一遍"
+        assert bundled_install.install(db, settings.plugins_dir) == [], "内容没变就不该再拷一遍"
 
         # 这一版带的插件改了(开发时改了代码、或者升级带来了新版本)→ 下一次对账换成新的
         (plugin / "main.py").write_text("print('v2')\n", encoding="utf-8")
-        assert bundled.install(db, settings.plugins_dir) == ["test.bundled"]
+        assert bundled_install.install(db, settings.plugins_dir) == ["test.bundled"]
     assert (target / "main.py").read_text() == "print('v2')\n"
     assert not any(path.name.endswith(".installing") for path in settings.plugins_dir.iterdir())
 

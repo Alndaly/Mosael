@@ -1,5 +1,4 @@
-"""整数格的解析:一格整数怎么读、下限怎么说。不碰引擎、不碰数据库 —— 笔记节点这类不在 engine⇄executors
-环里的执行器也能用(见 tests/test_import_layering 的 LAZY_CYCLE_MODULES)。"""
+"""整数格的解析:一格整数怎么读、下限怎么说。不碰引擎、不碰数据库 —— 一片叶子,哪个执行器都能用。"""
 
 from __future__ import annotations
 

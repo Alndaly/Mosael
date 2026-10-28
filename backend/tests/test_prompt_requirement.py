@@ -23,7 +23,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import PluginPackage
-from app.domain.generation import catalog as C
+from app.domain import generation_catalog as C
 from app.domain.generation.custom_profiles import CapabilityProfileError, profile_form_schema, validate_capabilities
 from app.domain.generation.operations import GenerationDomainError, check_text_inputs, validate_text_inputs
 from app.domain.generation.plugin_connections import descriptor

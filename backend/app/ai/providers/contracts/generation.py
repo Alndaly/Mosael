@@ -69,7 +69,7 @@ DRIVING_AUDIO = "driving_audio"
 #: 蒙版说「只动这一块」;混成参考图的话,整张图都会被重画。
 MASK = "mask"
 
-#: 全部角色。描述符(domain/generation/catalog)声明某个模型认哪几种,界面和智能体都读它。
+#: 全部角色。描述符(domain/generation_catalog)声明某个模型认哪几种,界面和智能体都读它。
 SOURCE_ROLES = (
     FIRST_FRAME,
     LAST_FRAME,
@@ -147,7 +147,7 @@ class SourceAsset:
 
 @dataclass(frozen=True)
 class GenerationRequest:
-    kind: str  # "image" | "video" | "audio"(见 domain/generation/catalog.GENERATION_KINDS)
+    kind: str  # "image" | "video" | "audio"(见 domain/generation_catalog.GENERATION_KINDS)
     model: str
     prompt: str
     negative_prompt: str = ""
@@ -242,7 +242,7 @@ class GenerationAdapter(ABC):
 
     #: **这个 Adapter 能发出去的标量参数。** 它描述的是我们自己构造的那个请求,不是对供应商
     #: API 的推测 —— 代码就在下面,发哪几项一目了然。目录查不到某个模型时,界面据此仍能给出
-    #: 参数(见 domain/generation/catalog.capabilities_for),而不是一个只剩提示词的空壳。
+    #: 参数(见 domain/generation_catalog.capabilities_for),而不是一个只剩提示词的空壳。
     #:
     #: **素材角色不在其中**(first_frame / reference_image / …)。那些是"这个模型做哪种任务",
     #: 按模型变得厉害(text-to-video 和 image-to-video 本来就是两件事),猜错就是给文生视频
@@ -624,7 +624,7 @@ def _untyped_image_url(request: GenerationRequest, role: str) -> str | None:
 def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
     """取某个角色的**全部**素材。
 
-    参考图可以给九张、参考视频三段(见 domain/generation/catalog 里各家的 `source_limits`),
+    参考图可以给九张、参考视频三段(见 domain/generation_catalog 里各家的 `source_limits`),
     而 `source_value` 只会返回第一份。适配器此前一律走单数那个,于是用户挑了九张参考图,
     真正发出去的只有第一张 —— 不报错,只是效果不对,而且没人看得出来少了八张。
 

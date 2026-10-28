@@ -27,6 +27,7 @@ from app.ai import gemini_models, model_catalog
 from app.ai.model_catalog import CatalogModel, fetch_models
 from app.core.i18n import tr
 from app.db.models import GenerationCapabilityDeclaration, ProviderModel, ProviderProfile
+from app.domain.generation_catalog import GENERATION_KINDS, builtin_models_for
 from app.domain.providers import thinking
 from app.domain.providers.credentials import ResolvedConnection
 from app.domain.providers.presets import (
@@ -112,8 +113,6 @@ def infer_capabilities(vendor: str, model_id: str) -> list[str]:
     name = (model_id or "").strip().lower()
     if not name:
         return []
-    from app.domain.generation import builtin_models_for
-    from app.domain.generation.catalog import GENERATION_KINDS
 
     for kind in GENERATION_KINDS:
         if any(name == known.lower() for known in builtin_models_for(vendor, kind)):
@@ -152,7 +151,6 @@ def evidenced_capabilities(
     inferred = infer_capabilities(vendor, model_id)
     if inferred:
         return inferred
-    from app.domain.generation.catalog import GENERATION_KINDS
 
     named = set(declared_kinds() if callable(declared_kinds) else declared_kinds)
     declared = [kind for kind in GENERATION_KINDS if kind in named]

@@ -13,7 +13,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import Entity, EntityReference
 from app.domain.entities import attach_entities
-from app.domain.generation.catalog import (
+from app.domain.generation_catalog import (
     KLING_V3_OMNI_VIDEO_CAPABILITIES,
     OPENAI_IMAGE_CAPABILITIES,
     QWEN_EDIT_IMAGE_CAPABILITIES,

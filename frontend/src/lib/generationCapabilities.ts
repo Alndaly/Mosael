@@ -13,7 +13,7 @@ import type { MessageKey } from "@/app/messages";
 
 /**
  * 生成的种类:图像、视频、音频(音乐 / BGM / 音效 / 给视频配声,见 ADR 0022)。和后端
- * domain/generation/catalog.GENERATION_KINDS 同一份;设置页、工作流节点按它逐种列出,不再各写一份
+ * domain/generation_catalog.GENERATION_KINDS 同一份;设置页、工作流节点按它逐种列出,不再各写一份
  * `["image", "video"]` —— 那样加一种介质时,漏改的那一处只会让它在某个入口上悄悄不见。
  */
 export const GENERATION_KINDS = ["image", "video", "audio"] as const;
@@ -111,7 +111,7 @@ export function capabilityBoolean(model: GenerationOption | null, key: string, f
  * 这个角色最多能挂几份。目录里没写就是 1 —— **保守的那一边**:多挂一份的下场是提交时被拒,
  * 少挂一份只是少一张参考图。
  *
- * 数字来自各家接口自己的报错(见后端 domain/generation/catalog 的 source_limits),
+ * 数字来自各家接口自己的报错(见后端 domain/generation_catalog 的 source_limits),
  * 不是我们定的:火山和海螺给九张参考图,万相给参考图 + 参考视频合计五份。
  */
 /**
@@ -521,7 +521,7 @@ function positiveInteger(value: unknown): number | undefined {
 /**
  * 张数为 1 时**一次交回几份**:模型说的 `outputs_per_run`(ComfyUI 的一张工作流跑一遍交回几张:几个结果节点各收到
  * 它那批),某个参数的取值改变它时(「结果取自」只要其中一个节点的)按那个参数的 `x-outputs-per-run`。和后端
- * generation.catalog.outputs_per_run 同一个算法 —— 画板按它 × 张数一次摆好那么多格占位,「N×」上显示的就是那个总数。
+ * generation_catalog.outputs_per_run 同一个算法 —— 画板按它 × 张数一次摆好那么多格占位,「N×」上显示的就是那个总数。
  */
 export function outputsPerRun(model: GenerationOption | null, parameters: Record<string, unknown>): number {
   let perRun = positiveInteger(model?.capabilities?.outputs_per_run) ?? 1;

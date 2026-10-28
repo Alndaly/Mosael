@@ -16,8 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.billing.usage import billable, once
-from app.ai.runtime import tts_daemon, tts_models
-from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
+from app.ai.runtime import f5_models, tts_daemon, tts_models
+from app.ai.runtime.f5_models import clone_supports
+from app.ai.runtime.tts_language import detect_script, edge_voice_language
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.domain.jobs import TTS_SLOTS, JobCancelled, blame, ensure_wanted, finish_job, say, start_job
 from app.db.models import Asset, Job, Voice
@@ -31,6 +32,7 @@ from app.core.child_process import run_logged
 from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line, strip_ansi
 from app.core.config import settings
+from app.domain.consent import CONSENT_KINDS
 from app.domain.voices.errors import VoiceError
 from app.domain.voices.speakable import speakable_text
 from app.domain.voices.speech import (
@@ -206,8 +208,6 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     keys = _SCRIPT_REFUSALS[script]
     if engine == CLONE_ENGINE:
         if not clone_supports(script):
-            from app.ai.runtime import f5_models
-
             missing = f5_models.missing_for_language(script)
             if missing is not None:
                 # **能下就说下什么** —— 这不是引擎的固有限制,是这台机器上还缺一份权重。
@@ -269,9 +269,7 @@ def _transcode_reference(source: Path, target: Path) -> None:
 
 
 def _declared(kind: str) -> str:
-    """建音色、补声明时收的那一项:只能是 entities.catalog.CONSENT_KINDS 里的一种,不收「未声明」。"""
-    from app.domain.entities.catalog import CONSENT_KINDS
-
+    """建音色、补声明时收的那一项:只能是 consent.CONSENT_KINDS 里的一种,不收「未声明」。"""
     cleaned = (kind or "").strip()
     if cleaned not in CONSENT_KINDS:
         raise VoiceError("voiceErr_consentKind", kinds=" / ".join(CONSENT_KINDS))
@@ -753,8 +751,8 @@ def _run_synthesis_body(
                     "text": text,
                 }
                 # 按这段文本该用哪份权重 —— 无条件问一句,**这里不需要知道哪个引擎有多份**。
-                # 有多份的引擎自己回答(tts_models.weights_for),没有的返回空,原样跑。
-                request.update(tts_models.weights_for(engine, text, clone_model))
+                # 有多份的引擎自己回答(f5_models.weights_for),没有的返回空,原样跑。
+                request.update(f5_models.weights_for(engine, text, clone_model))
                 request["output_path"] = str(out_wav)
                 # 语速按引擎传:fish 的请求结构里没有这一项,塞进去只会被忽略,
                 # 而"传了却没用"正是今天反复出现的那种谎。

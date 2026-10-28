@@ -1,6 +1,6 @@
 """图像生成的能力描述符(OpenAI 兼容、通义千问、Seedream、Evolink 图像)。
 
-由 domain/generation/catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
 """
 
 from __future__ import annotations

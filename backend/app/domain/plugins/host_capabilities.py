@@ -23,7 +23,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import PluginInstance
+from app.db.models import PluginInstance, PluginPackage
+from app.domain.plugins.manifest import manifest_of
 
 logger = logging.getLogger(__name__)
 
@@ -95,12 +96,15 @@ def notify(db: Session, instance: PluginInstance, *, refresh: bool) -> None:
     (比如 ComfyUI 没开,目录刷不出来)要记在它自己的状态里(`capability_status`),而不是让
     「改配置」这个操作报错,那会让用户以为配置没存上。
     """
-    from app.domain.plugins import instances as inst
     from app.domain.plugins import service_gate
 
+    # 直接读包上的清单,不经 instances.manifest_for:实例那一层改完要通知这里,这里再回头 import 它就成了环。
+    package = db.get(PluginPackage, instance.package_id)
+    if package is None:  # 包刚被卸载之类:没有宿主侧可对齐
+        return
     try:
-        provides = inst.manifest_for(db, instance).provides
-    except Exception:  # noqa: BLE001 — 包刚被卸载之类:没有宿主侧可对齐
+        provides = manifest_of(package).provides
+    except Exception:  # noqa: BLE001 — 清单读不出来同上:不回灌给插件操作
         return
     # 连接背后的本机服务没在跑(ADR 0041):这次不重问插件 —— 为了刷新目录把它起起来违背「用到时才起」,
     # 不起又只会记下一句「连不上」。目录留着上次的;它起来以后会自己通知一次刷新(见 local_services)。

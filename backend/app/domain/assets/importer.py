@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import io
 import shutil
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from app.core.uploads import UploadedFile
 from sqlalchemy import select
@@ -25,6 +25,18 @@ class AssetFileTypeError(LocalizedError, ValueError):
     """这种文件素材库不收:不是图片、视频、音频,也不是认得的文档。"""
 
     status = 415
+
+
+#: 一份有字节的素材入库之后,上层各自要接着做的事(今天是文档的本地解析,见 documents.extraction.parse_on_import)。
+#: 组装根(app.main)登记;素材是最底下的一层,不认识文档解析 —— 认识了的话,文档转笔记要回头登记素材,两个包就成了环。
+ImportedListener = Callable[[Session, Asset], Any]
+_imported_listeners: list[ImportedListener] = []
+
+
+def on_imported(listener: ImportedListener) -> None:
+    """登记一项「入库之后接着做」。和入库在同一个事务里,在代理转码排上之后调。"""
+    if listener not in _imported_listeners:
+        _imported_listeners.append(listener)
 
 
 def _document_info(path: Path) -> dict:
@@ -236,13 +248,8 @@ def _import_stream(
     db.refresh(asset)
     # 代理转码只是 ffmpeg,不碰任何凭据、不花额度 —— 没有主体是如实的,不是漏填。
     start_proxy_job(db, asset, created_by=None)  # 720p preview proxy for the compositor (no-op unless video)
-    if asset.kind == "document":
-        #: 文档一进来就用**本地解析**解一遍(ADR 0031):不出本机、不花钱,智能体马上就能读。交给云端(MinerU)
-        #: 必须是人点名的 —— 在素材详情里「用 ×× 重新解析」,这里不看他的默认。
-        from app.domain.documents import LOCAL_PARSER
-        from app.domain.documents.extraction import start_parse
-
-        start_parse(db, asset, owner_user_id=None, provider_id=LOCAL_PARSER)
+    for listener in _imported_listeners:
+        listener(db, asset)
     return asset
 
 

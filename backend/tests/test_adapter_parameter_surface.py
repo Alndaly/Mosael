@@ -121,7 +121,7 @@ def test_兜底给键但一个取值都不声称() -> None:
     的值被发出去。这条闸曾经靠"键也为空"把着,那是承重的;界面改成"不知道就空着"之后,
     把门的变成这一条断言。
     """
-    from app.domain.generation.catalog import (
+    from app.domain.generation_catalog import (
         adapter_parameter_surface,
         capabilities_are_known,
         fallback_capabilities,
@@ -138,7 +138,7 @@ def test_兜底给键但一个取值都不声称() -> None:
 
 def test_依赖模型名的通道保持保守() -> None:
     """seedance 那几个真的按模型分支(t2v 和 i2v 是两件事),猜错就是给文生视频摆首帧槽位。"""
-    from app.domain.generation.catalog import fallback_capabilities
+    from app.domain.generation_catalog import fallback_capabilities
 
     assert fallback_capabilities("bytedance", "video")["parameter_keys"] == []
 

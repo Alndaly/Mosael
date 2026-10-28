@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Entity, GenerationSession, Job, User
+from app.db.models import Asset, Entity, GenerationSession, User
 from app.domain import entities as library
 from app.domain import sharing
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
@@ -73,14 +73,6 @@ def set_reference_role(db: Session, user: User, entity_id: str, asset_id: str, r
 def remove_reference(db: Session, user: User, entity_id: str, asset_id: str) -> Entity:
     """摘掉一张参考图。素材还在素材库里。"""
     return library.remove_reference(db, entity(db, user, entity_id, perm="edit"), asset_id)
-
-
-def draw(db: Session, user: User, entity_id: str, ability: str, config: dict[str, Any]) -> Job:
-    """照这个资产的参考图再画几张,画成的挂回来。说不通的(没图、模型不收参考图、角度都齐了)
-    当场抛 WorkflowDomainError,不起任务。"""
-    from app.domain.entities.drawing import start_drawing
-
-    return start_drawing(db, entity(db, user, entity_id, perm="ai"), ability, config, actor_id=user.id)
 
 
 def usage(db: Session, user: User, entity_id: str) -> tuple[Entity, Any]:

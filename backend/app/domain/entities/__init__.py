@@ -6,7 +6,6 @@
 from app.domain.entities.catalog import (
     ATTACH_PRIORITY,
     ATTRIBUTE_KEYS,
-    CONSENT_KINDS,
     KINDS,
     ROLES,
     ROLES_BY_KIND,
@@ -44,7 +43,6 @@ from app.domain.entities.mentions import Expansion, attach_entities, generation_
 __all__ = [
     "ATTACH_PRIORITY",
     "ATTRIBUTE_KEYS",
-    "CONSENT_KINDS",
     "KINDS",
     "ROLES",
     "ROLES_BY_KIND",

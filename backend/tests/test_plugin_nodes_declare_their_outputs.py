@@ -66,7 +66,7 @@ def test_运行时报出的工具也说到做到(tmp_path: Path) -> None:
     自定义保存节点、只交出一段字的打标签)让插件现报一份,过同一道棘轮,再加上它自己的两条。"""
     from app.ai.providers.contracts.generation import SOURCE_ROLES
     from app.domain.boards.tools import landing_outputs
-    from app.domain.generation.catalog import GENERATION_KINDS
+    from app.domain.generation_catalog import GENERATION_KINDS
     from app.domain.plugins import runtime
     from app.domain.plugins.dynamic_tools import clean_mirror
     from app.domain.plugins.nodes import node_meta

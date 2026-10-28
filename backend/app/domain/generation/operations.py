@@ -24,7 +24,7 @@ from app.ai.providers import (
     get_generation_adapter,
     roles_supplied_via_url,
 )
-from app.domain.generation.catalog import (
+from app.domain.generation_catalog import (
     SOURCE_GROUP_DROPS,
     SOURCE_GROUPS,
     SOURCE_ROLE_LABELS,
@@ -143,7 +143,7 @@ def check_digital_human_rights(db: Session, workspace_id: str, source_assets: Se
     """
     from app.db.models import Entity, EntityReference, Voice
     from app.domain.entities.catalog import usable_for_digital_human as entity_usable
-    from app.domain.voices.consent import usable_for_digital_human as voice_usable
+    from app.domain.consent import voice_usable_for_digital_human as voice_usable
 
     for entry in source_assets:
         role = str((entry or {}).get("role") or "")

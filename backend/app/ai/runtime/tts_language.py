@@ -43,7 +43,7 @@ def detect_script(text: str) -> str:
 
     **拉丁字母的语言(法语、德语、西班牙语、意大利语、芬兰语)永远返回 `""`** —— 它们和英语
     共用一套字母,没有任何字符能证明"这是法语而不是英语"。所以那几门语言的权重选不出来,
-    只能由用户明说要用哪一份(见 tts_models.weights_for 的 `model_id`)。装作能认出来的话,
+    只能由用户明说要用哪一份(见 f5_models.weights_for 的 `model_id`)。装作能认出来的话,
     代价是给英文文本套上一份法语权重,而那同样是一段念不对的音频。
 
     返回空串**不代表是中文或英文**,只代表「这段文本没有给出任何硬证据」—— 调用方据此放行,
@@ -70,19 +70,3 @@ def edge_voice_language(voice: str) -> str:
     """Edge 音色 id 自带 locale(`ja-JP-NanamiNeural`)—— 语言就写在名字里,不用猜。"""
     head = (voice or "").split("-", 1)[0].strip().lower()
     return head if len(head) == 2 and head.isalpha() else ""
-
-
-def clone_supports(script: str) -> bool:
-    """本地克隆**现在**念不念得了这套书写系统。
-
-    答案不在这里 —— 它取决于这台机器上装了哪几份权重(见 ai/runtime/f5_models)。引擎什么语言都
-    支持,支持范围由模型决定;此前这里写死"不认日韩",等于把一个可以通过下载解决的问题
-    说成了引擎的固有限制。
-
-    没有硬证据(空 script)一律放行:那是中英文或拿不准,默认模型就是为这种情况准备的。
-    """
-    if not script:
-        return True
-    from app.ai.runtime import f5_models
-
-    return script in f5_models.installed_languages()

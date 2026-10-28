@@ -19,7 +19,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import GenerationCapabilityDeclaration, ProviderProfile
 from app.domain.providers import models as provider_models
-from app.domain.generation.catalog import GENERATION_KINDS
+from app.domain.generation_catalog import GENERATION_KINDS
 from app.domain.generation.resolution import (
     GenerationResolutionError,
     generation_options,

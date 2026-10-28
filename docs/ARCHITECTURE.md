@@ -58,8 +58,8 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `browser/` | 浏览器池 / 持久登录:`BrowserProfile`(可复用登录身份 = 持久分区 + 代理 + 元数据)统一发布账号与通用档案;会话受**租约**(一档案一时刻一会话)。RPA 节点 / 智能体 / 手动会话都经「入队动作 + 执行器回报」桥驱动 Electron 里的浏览器 |
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。webhook 凭任务级密钥触发,同一把密钥还能查那次运行的进度、取消它(`api/routes/hooks`),密钥由服务端独管、可重置。启用着的任务一定跑得起来(`ensure_runnable`):绑的工作流删了,任务随即停用。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
 | `agent/` | 智能体会话:pi Agent Adapter + sidecar 流式协议 + 会话/记忆 + 工具循环 + 子智能体。**记忆**是每轮都在的短约定(`memory.py`,封顶);**技能**是按需读的做法(`skills/`,[ADR-0040](adr/0040-agent-skills.md)):开放的 SKILL.md 文件夹,内置的在 `builtin_skills/`、工作区的在 `<数据目录>/skills/<工作区>/`、插件带的在包里的 `skills/`,启用与来源记在 `agent_skills` 表;系统提示里只有名字和一句说明(封顶、顺序固定),全文经只读工具 `use_skill` / `read_skill_file` 读,输入框的「/」把全文挂到这一轮;导入的技能是不可信指令,不改确认卡和权限档,脚本不执行。插件清单里给外部智能体看的工具目录叫**工具集**(`toolsets.py`、`/api/agent/toolsets`),和技能是两件事 |
-| `voices/`(配 `ai/runtime/`) | 语音:音色库与克隆、字幕配音(`subtitle_dub.py`)、TTS 设置的数据库那一侧(`tts_settings.py`);ASR / TTS 的引擎目录、worker 与守护进程在 `ai/runtime/`。**语言能力挂在权重上而不是引擎上**(`ai/runtime/f5_models.py` 是那张表,`ai/runtime/tts_language.py` 是合成前的那道判断)。**一把嗓子还能复刻到远端引擎**(`remote.py`,[ADR-0037](adr/0037-cosyvoice-remote-voice-clone.md)):副本按账号(连接 + 钥匙主人)和模型挂在嗓子下面(`voice_enrollments`),`speak_to_file` 在合成前把 `voice_id` 解析成远端副本 —— 没有就建、远端没了重建一次;上传前要这个账号点过头(409 `remote_voice_consent_required`),删嗓子先删远端。「这次合成走哪条连接、哪个模型」只在 `target.py` 算一处 |
-| `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(五条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。描述符只按精确 `(vendor, model, kind)` 匹配，**查不到时不猜这个模型**(同系列不同型号的时长、角色、枚举经常不同)。但「不猜模型」不等于「什么都不知道」:请求是我们自己构造的,Adapter 说得出自己发哪几项标量参数(`parameter_surface`),那个面与模型名无关时兜底就用它 —— **只给键、不声称取值范围**;面依赖模型时才是空参数表。用户还可以给自己那条连接写一份参数组,在模型行上按 kind 指过去(见 [ADR-0015](adr/0015-generation-parameters-come-from-the-adapter.md))。布尔、枚举、特殊时长和分辨率-时长组合也属于这份契约。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、槽位按顺序叫什么 `source_labels`(插件给的,三处界面把第 i 个名字标在第 i 格上)、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** |
+| `voices/`(配 `ai/runtime/`) | 语音:音色库与克隆、字幕配音(`subtitle_dub.py`)、TTS 设置的数据库那一侧(`tts_settings.py`);ASR / TTS 的引擎目录、worker 与守护进程在 `ai/runtime/`。**语言能力挂在权重上而不是引擎上**(`ai/runtime/f5_models.py` 是那张表,也由它回答「这份文本本地克隆念不念得了」;`ai/runtime/tts_language.py` 只认书写系统)。**一把嗓子还能复刻到远端引擎**(`remote.py`,[ADR-0037](adr/0037-cosyvoice-remote-voice-clone.md)):副本按账号(连接 + 钥匙主人)和模型挂在嗓子下面(`voice_enrollments`),`speak_to_file` 在合成前把 `voice_id` 解析成远端副本 —— 没有就建、远端没了重建一次;上传前要这个账号点过头(409 `remote_voice_consent_required`),删嗓子先删远端。「这次合成走哪条连接、哪个模型」只在 `target.py` 算一处 |
+| `generation/`(配 `generation_catalog/`) | 文生图/视频。**参数描述符(`generation_catalog/`,纯静态,供应商与资产库也查它,所以不在生成包里)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(五条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。描述符只按精确 `(vendor, model, kind)` 匹配，**查不到时不猜这个模型**(同系列不同型号的时长、角色、枚举经常不同)。但「不猜模型」不等于「什么都不知道」:请求是我们自己构造的,Adapter 说得出自己发哪几项标量参数(`parameter_surface`),那个面与模型名无关时兜底就用它 —— **只给键、不声称取值范围**;面依赖模型时才是空参数表。用户还可以给自己那条连接写一份参数组,在模型行上按 kind 指过去(见 [ADR-0015](adr/0015-generation-parameters-come-from-the-adapter.md))。布尔、枚举、特殊时长和分辨率-时长组合也属于这份契约。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、槽位按顺序叫什么 `source_labels`(插件给的,三处界面把第 i 个名字标在第 i 格上)、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** |
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
 | `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
@@ -74,8 +74,30 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `core/text.blame_line` | 从子进程输出里挑出**说明失败原因**的那一行。**不取最后一行**:那常常是收尾提示、分隔线,或者一根 tqdm 进度条(这个坑踩过三次,判据因此收在一处) |
 | `ai/runtime/remote_size.py` | 问下载源要**实际的**文件大小(HuggingFace `?blobs=true` / ModelScope `/repo/files?Recursive=True`),按这次真正要取的文件算而不是整仓。问不到就退回目录里的估算**并说出它是估算** |
 | `billing/` | 用量台账:按服务商回报的用量 / 扣费记账,失败没回报的记 0,免费的(Edge 配音)记 0 且标 `free`、不进花费汇总;**记账的 `provider` 是连接的厂商**(价目规则按它配):语音合成记 `connection_vendor_for_speech_engine(engine)`,百炼一条连接下的 qwen-tts 和 CosyVoice 都记 `alibaba` —— 此前 CosyVoice 记成引擎 id `alibaba-cosyvoice`,永远对不上价,老账由迁移 `migrate-speech-usage-follows-todays-booking` 改过来;复刻音色记一笔免费的 `tts / enroll_voice`([ADR-0037](adr/0037-cosyvoice-remote-voice-clone.md));回包里的用量另作核对(`ReportedUsage.observed`),对不上只记日志和依据不改账。没给 `job_id` 的调用挂在当前正在执行的任务上,`run_costs` 顺着 `parent_job_id` 把一次工作流运行的整棵任务树按币种加起来,记进运行结果 |
-| `jobs.py` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events`;终态时按 payload 里的 `receipt` 回执给发起方(监听状态变化,不认某个函数 —— 各处写法不一) |
+| `jobs/` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events`;终态时按 payload 里的 `receipt` 回执给发起方(监听状态变化,不认某个函数 —— 各处写法不一) |
 | `notifications.py` | 站内通知:按用户投递,团队模式扇出给工作区成员 |
+
+### 依赖方向:一个环都不许有,延迟导入也不行
+
+`backend/tests/test_import_layering.py` 把**函数内的延迟导入也算上**:模块之间、领域包之间都不许成环。
+延迟导入只是把环藏到了导入期之外,两个模块照样互相认识。曾经冻结过 31 个模块和 14 个包,每一处都是职责放错了层,
+拆法只有两种:
+
+- **该住在下层的东西挪下去**:静态生成目录(`domain/generation_catalog/`)、授权声明词表(`domain/consent.py`)、
+  节点连接预算(`workflows/node_budget.py`)、F5 权重的挑法(`ai/runtime/f5_models.weights_for`)、
+  随包插件目录与安装分开(`backend/app/domain/plugins/bundled.py` / `bundled_install.py`)。
+- **下层替上层做事的,在下层开一道缝,由组装根 `app.main._wire_seams` 接上**:
+
+| 缝 | 下层只声明 | 上层登记 |
+| --- | --- | --- |
+| `assets.deletion.add_guard` / `on_deleting` | 删素材前的拦截(抛 `AssetNotDeletable`)与善后 | 发布(还在发的不删)、资产库(摘掉参考图) |
+| `assets.importer.on_imported` | 有字节的素材入库之后接着做的事 | 文档的本地解析 |
+| `plugins.instances.on_tools_stale` | 启用 / 换服务器 / 换出站路线后重拉 MCP 工具清单 | `plugins.tools.pull_tools_quietly` |
+| `workflows.graph_runner.use` | 容器类执行器(循环体、子图、调用工作流)回头跑图 | 引擎在模块末尾自己登记 |
+
+用例也按「做的是哪一域的事」放:看图分析、拆镜头在 `analysis/use_cases.py`,转写在 `voices/use_cases.py`,
+资产的补画 / 表情 / 说话在 `workflows/entity_drawing.py`(跑的是工作流节点)—— 闸都是素材 / 资产自己的那一道,
+只是入口不放在被读的那一层。
 
 ### 任务总线是枢纽
 

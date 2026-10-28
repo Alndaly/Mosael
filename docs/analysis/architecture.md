@@ -510,7 +510,7 @@ graph TD
 ```mermaid
 flowchart TD
     DECL["模型行声明 generation_capability_declarations<br/>按 (provider_model_id, kind) 唯一<br/>catalog_ref / template_id 二源互斥,CHECK 约束<br/>template 删除被 RESTRICT"]
-    CAT["目录精确匹配 domain/generation/catalog.py<br/>按 (vendor, model, kind),查不到不猜"]
+    CAT["目录精确匹配 domain/generation_catalog/__init__.py<br/>按 (vendor, model, kind),查不到不猜"]
     SURF["Adapter 参数面<br/>仅当 surface_depends_on_model=False<br/>只给键、不声称取值范围"]
     EMPTY["空:参数表为空,但保留提示词提交"]
     DECL --> CAT --> SURF --> EMPTY

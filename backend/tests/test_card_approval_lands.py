@@ -147,7 +147,7 @@ def test_完全放行档_自动放行的删除真的删了() -> None:
 def test_执行体炸在第二个素材_第一个也回来_文件还在_卡记失败(monkeypatch) -> None:
     """一张卡要么全做、要么全不做。此前执行体抛错时只把卡标成失败、入口照常提交 —— 删两个素材、第二个炸了,
     第一个照样删掉(提交之后连文件都清了),卡上却写着失败:用户以为什么都没发生,而这一档撤不回来。"""
-    from app.domain import entities
+    from app.domain.assets import deletion as asset_deletion
     from app.media.paths import resolve_key
 
     chat = Chat()
@@ -162,14 +162,12 @@ def test_执行体炸在第二个素材_第一个也回来_文件还在_卡记�
         path.write_bytes(b"video")
     card_id = chat.agent_deletes()
 
-    real_forget = entities.forget_asset
-
-    def forget_then_fail_on_the_second(db, asset):
+    def fail_on_the_second(db, asset):
         if asset.id == chat.asset_ids[1]:
             raise RuntimeError("第二个素材删不掉")
-        return real_forget(db, asset)
 
-    monkeypatch.setattr(entities, "forget_asset", forget_then_fail_on_the_second)
+    # 删素材之前的善后是登记进素材域的(见 assets/deletion.on_deleting);在原有的那几项后面加一项会炸的。
+    monkeypatch.setattr(asset_deletion, "_cleanups", [*asset_deletion._cleanups, fail_on_the_second])
     approved = chat.client.post(f"/api/confirmations/{card_id}/approve")
 
     assert approved.status_code == 200, approved.text

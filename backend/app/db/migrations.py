@@ -246,12 +246,12 @@ def _install_bundled_plugins() -> None:
     """
     from sqlalchemy.orm import Session
 
-    from app.domain.plugins import bundled
+    from app.domain.plugins import bundled_install
 
     if "plugin_packages" not in set(inspect(engine).get_table_names()):
         return
     with Session(engine) as db:
-        bundled.install(db, settings.plugins_dir)
+        bundled_install.install(db, settings.plugins_dir)
 
 
 def _rewrite_replaced_plugin_tools() -> None:

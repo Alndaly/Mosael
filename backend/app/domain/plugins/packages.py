@@ -149,7 +149,7 @@ def _iter_manifest_paths(plugins_dir: Path) -> list[Path]:
     paths: list[Path] = []
     for child in sorted(plugins_dir.iterdir()):
         # 隐藏目录是安装 / 对账的暂存与替换现场(`.<id>.installing-…`、`.<id>.replaced-…`,见
-        # registry.install_archive 与 bundled.install):里面有一份完整的清单,扫到它就会把包记录的
+        # registry.install_archive 与 bundled_install.install):里面有一份完整的清单,扫到它就会把包记录的
         # 目录指到一个马上要被删掉的地方。
         if not child.is_dir() or child.name.startswith("."):
             continue

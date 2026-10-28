@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
-from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
+from app.domain.generation_catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.media_kinds import declared_media
 from app.domain.scenes.operations import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
@@ -1083,7 +1083,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "label": "wfField_source_assets_roles",
                 "description": "wfNode_ai_generate_source_assets_roles",
             },
-            #: 首尾帧组和参考素材组互斥时用哪一组(见 generation/catalog.SOURCE_GROUPS)。
+            #: 首尾帧组和参考素材组互斥时用哪一组(见 generation_catalog.SOURCE_GROUPS)。
             #: 允许手填:整片流程里是逐镜决定的,值来自上游(`{{…}}`)。
             "source_group": {
                 "advanced": True, "type": "string", "default": "all", "options": list(SOURCE_GROUPS),

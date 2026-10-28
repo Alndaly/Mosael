@@ -83,12 +83,12 @@ _KNOWN_KEYS: dict[str, str] = {
 
 def _choices() -> dict[str, tuple[str, ...]]:
     """`choice` 形状的键各能取哪几个值。和上面那张表一样**白名单**:取值的事实源在 catalog。"""
-    from app.domain.generation.catalog import PROMPT_MODES
+    from app.domain.generation_catalog import PROMPT_MODES
 
     return {"prompt": PROMPT_MODES}
 
 def _kinds() -> tuple[str, ...]:
-    from app.domain.generation.catalog import GENERATION_KINDS
+    from app.domain.generation_catalog import GENERATION_KINDS
 
     return GENERATION_KINDS
 
@@ -171,7 +171,7 @@ def _defaults_for(key: str) -> str | None:
 
 
 def _builtin_capabilities(kind: str) -> list[dict[str, Any]]:
-    from app.domain.generation.catalog import BUILTIN_MODELS
+    from app.domain.generation_catalog import BUILTIN_MODELS
 
     return [item.get("capabilities", {}) for item in BUILTIN_MODELS if item.get("kind") == kind]
 
@@ -193,7 +193,7 @@ def profile_form_schema(kind: str) -> dict[str, Any]:
     **这是表单唯一的事实源。** 前端的语义化表单由它驱动,而不是把 34 个键的知识在
     TypeScript 里再抄一遍 —— 加字段时后端加一行,表单自动长出对应的控件。
     """
-    from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+    from app.domain.generation_catalog import SOURCE_ROLE_LABELS
 
     capabilities = _builtin_capabilities(kind)
     choices = _choices()
@@ -387,7 +387,7 @@ def _usable_name(db: Session, profile_id: str, kind: str, name: str, *, keep: st
 def capability_ref_choices(db: Session, kind: str, profile: ProviderProfile | None) -> dict[str, list[Any]]:
     """设置页里「这一行的生成参数按什么来」能选什么(口径见接口 GET /generation/capability-refs)。
     给了连接就加上它自己的参数组和这条通道本身给得出的参数;**调用方负责确认连接是他自己的**。"""
-    from app.domain.generation.catalog import BUILTIN_MODELS, CAPABILITY_PROFILES, profile_id_for
+    from app.domain.generation_catalog import BUILTIN_MODELS, CAPABILITY_PROFILES, profile_id_for
 
     models = [
         {
@@ -430,7 +430,7 @@ def capability_ref_choices(db: Session, kind: str, profile: ProviderProfile | No
     #: 取值范围没人验证过。界面要分开说这两种处境,合成一句会在其中一边说假话(见 ADR 0015)。
     fallback_keys: list[str] = []
     if profile is not None:
-        from app.domain.generation.catalog import adapter_parameter_surface
+        from app.domain.generation_catalog import adapter_parameter_surface
 
         fallback_keys = list(adapter_parameter_surface(profile.vendor, kind))
     return {"models": models, "profiles": profiles, "fallback_keys": fallback_keys}

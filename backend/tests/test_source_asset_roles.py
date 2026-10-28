@@ -150,7 +150,7 @@ class Test描述符声明了这些角色:
     def test_支持尾帧的模型在目录里说得出来(self) -> None:
         """界面按描述符渲染控件,智能体按描述符知道能给什么 —— 适配器认得而目录不说,
         等于这个能力只有读代码的人知道。"""
-        from app.domain.generation.catalog import BUILTIN_MODELS
+        from app.domain.generation_catalog import BUILTIN_MODELS
 
         by_id = {item["id"]: item for item in BUILTIN_MODELS}
         for model_id in ("minimax:MiniMax-H3:video", "kuaishou:kling:video"):
@@ -235,7 +235,7 @@ def test_页面地址不算直链() -> None:
 
 def test_方舟的描述符声明了这条交付限制() -> None:
     """声明写在描述符上而不是适配器里的 if —— 否则 fast/mini 这些 `**` 继承来的变体会漏掉。"""
-    from app.domain.generation.catalog import (
+    from app.domain.generation_catalog import (
         SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
         SEEDANCE_2_VIDEO_CAPABILITIES,
     )

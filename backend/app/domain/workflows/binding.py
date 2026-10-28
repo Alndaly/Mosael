@@ -213,7 +213,7 @@ def _line_asset_ids(lines: list[str]) -> list[str]:
     角色名时才算角色 —— 模板串自己带冒号(`{{图.a:b}}`)不能被腰斩。这里只要 id 那一半:判
     「这一份已经在里面了,不要并第二遍」。
     """
-    from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+    from app.domain.generation_catalog import SOURCE_ROLE_LABELS
 
     out: list[str] = []
     for line in lines:
@@ -224,7 +224,7 @@ def _line_asset_ids(lines: list[str]) -> list[str]:
 
 def _role_overrides(value: Any) -> dict[str, str]:
     """`<那一格>_roles`:用户把自动来的哪一条引用改成了什么角色(一条一个 `引用路径:角色`)。"""
-    from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+    from app.domain.generation_catalog import SOURCE_ROLE_LABELS
 
     entries = value if isinstance(value, list) else [value]
     out: dict[str, str] = {}
@@ -307,7 +307,7 @@ def with_referenced_assets(
     视频。视频当参考图发出去只会当场 400,把整条工作流拦下来,而用户的提示词本身没有任何问题。
     """
     from app.db.models import Asset
-    from app.domain.generation.catalog import SOURCE_ROLE_MEDIA
+    from app.domain.generation_catalog import SOURCE_ROLE_MEDIA
     from app.domain.workflows.id_values import id_list
     from app.domain.workflows.node_types import NODE_TYPES, config_media, output_data_type
 

@@ -188,7 +188,7 @@ def test_每种能力都有记账的路径() -> None:
                         billed.add(kw.value.value)
 
     # 生成域的 capability 是运行时变量(generation.kind),静态看不到 —— 它覆盖生成的全部种类。
-    from app.domain.generation.catalog import GENERATION_KINDS
+    from app.domain.generation_catalog import GENERATION_KINDS
 
     billed |= set(GENERATION_KINDS)
     missing = sorted(set(ALL_CAPABILITY_IDS) - billed)

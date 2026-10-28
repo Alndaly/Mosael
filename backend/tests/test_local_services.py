@@ -685,7 +685,7 @@ def test_对齐目录不是用它_不替它起(plugged, tmp_path: Path, monkeypa
     真机上撞到过:一个刚就绪就崩的服务,就绪后那次刷新正好撞上它崩了,于是替它又起了一次 —— 「5 分钟内最多重启 3 次」失效。"""
     from types import SimpleNamespace
 
-    from app.domain.plugins import host_capabilities, instances, service_gate
+    from app.domain.plugins import host_capabilities, service_gate
 
     instance_id = _connection(plugged)
     _configure(plugged, instance_id, _folder(tmp_path))
@@ -697,7 +697,7 @@ def test_对齐目录不是用它_不替它起(plugged, tmp_path: Path, monkeypa
     seen: list[bool] = []
     monkeypatch.setattr(host_capabilities, "_lookup", lambda _capability: (
         lambda _db, _instance, _refresh: seen.append(service_gate._autostart.get()), None, None))
-    monkeypatch.setattr(instances, "manifest_for", lambda _db, _instance: SimpleNamespace(provides=["generation"]))
+    monkeypatch.setattr(host_capabilities, "manifest_of", lambda _package: SimpleNamespace(provides=["generation"]))
     with SessionLocal() as db:
         host_capabilities.notify(db, db.get(PluginInstance, instance_id), refresh=True)
     assert seen == [False], "宿主侧对齐目录时问插件,不替本机服务起进程"

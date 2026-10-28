@@ -15,7 +15,7 @@ import pytest
 
 from app.ai.providers import get_generation_adapter
 from app.ai.providers.contracts.generation import GenerationRequest
-from app.domain.generation.catalog import BUILTIN_MODELS, capabilities_for, known_capabilities_for
+from app.domain.generation_catalog import BUILTIN_MODELS, capabilities_for, known_capabilities_for
 from app.domain.generation.operations import (
     GenerationDomainError,
     requested_negative_prompt,
@@ -330,7 +330,7 @@ class Test角色只有一张表:
 
     def test_每种角色都有名字和说明(self) -> None:
         from app.ai.providers.contracts.generation import SOURCE_ROLES
-        from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+        from app.domain.generation_catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 
         assert set(SOURCE_ROLES) == set(SOURCE_ROLE_LABELS), "角色和中文名对不上"
         assert set(SOURCE_ROLES) == set(SOURCE_ROLE_HELP), "角色和给智能体的说明对不上"
@@ -338,7 +338,7 @@ class Test角色只有一张表:
     def test_报错和智能体读的是同一张表(self) -> None:
         """两份的话,同一个角色在报错里叫「参考图」、在智能体那儿叫别的,谁也对不上号。"""
         from app.domain.generation import operations
-        from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+        from app.domain.generation_catalog import SOURCE_ROLE_LABELS
 
         assert operations._label("reference_video") == SOURCE_ROLE_LABELS["reference_video"]
 
@@ -475,7 +475,7 @@ class Test能力档案名册:
     """
 
     def test_目录里用到的每一份能力都在名册里(self) -> None:
-        from app.domain.generation.catalog import CAPABILITY_PROFILES, profile_id_for
+        from app.domain.generation_catalog import CAPABILITY_PROFILES, profile_id_for
 
         missing = [
             item["id"]
@@ -494,7 +494,7 @@ class Test能力档案名册:
         按内容去重会让 `openai-image` 和某个恰好一样的档案合并,之后其中一边改了,
         指着它的用户行会被悄悄带走。
         """
-        from app.domain.generation.catalog import CAPABILITY_PROFILES
+        from app.domain.generation_catalog import CAPABILITY_PROFILES
 
         assert len(CAPABILITY_PROFILES) == len({id(v) for v in CAPABILITY_PROFILES.values()})
 
@@ -505,7 +505,7 @@ class Test能力档案名册:
         经 evolink 则多出 size / num_images、14 张、两种模式。按 model id 跨 vendor 兜底
         会把后者的参数发给前者,当场被拒。
         """
-        from app.domain.generation.catalog import profile_id_for
+        from app.domain.generation_catalog import profile_id_for
 
         own = profile_id_for("alibaba", "qwen-image-edit", "image")
         relayed = profile_id_for("evolink", "qwen-image-edit", "image")
@@ -525,7 +525,7 @@ class Test用户在自己那行模型上声明生成参数:
 
         存的是**指针**不是快照:以后 gpt-image-2 的描述符改宽了,指着它的行跟着变。
         """
-        from app.domain.generation.catalog import capabilities_for, resolve_capability_ref
+        from app.domain.generation_catalog import capabilities_for, resolve_capability_ref
 
         target = capabilities_for("openai-compatible", "gpt-image-2", "image")
         assert resolve_capability_ref("model:openai-compatible/gpt-image-2", "image") == target
@@ -534,26 +534,26 @@ class Test用户在自己那行模型上声明生成参数:
         ) == target
 
     def test_目录里没有对应模型时可以直接指一份档案(self) -> None:
-        from app.domain.generation.catalog import CAPABILITY_PROFILES, resolve_capability_ref
+        from app.domain.generation_catalog import CAPABILITY_PROFILES, resolve_capability_ref
 
         assert resolve_capability_ref("profile:openai-image", "image") == CAPABILITY_PROFILES["openai-image"]
 
     def test_指针跨不过kind(self) -> None:
         """同一个 id 的图片档案套到视频上,参数是另一套 —— 宁可认不出,不可发错。"""
-        from app.domain.generation.catalog import resolve_capability_ref
+        from app.domain.generation_catalog import resolve_capability_ref
 
         assert resolve_capability_ref("model:openai-compatible/gpt-image-2", "video") is None
 
     def test_指向不存在的东西回None而不是抛(self) -> None:
         """一个指向已被删掉的模型的旧值,不该让整个模型列表 500。"""
-        from app.domain.generation.catalog import resolve_capability_ref
+        from app.domain.generation_catalog import resolve_capability_ref
 
         for bad in ("", None, "乱写的", "profile:不存在", "model:nobody/nothing", "model:没有斜杠"):
             assert resolve_capability_ref(bad, "image") is None
 
     def test_声明优先于目录(self) -> None:
         """用户说了就按用户的来 —— 他知道自己那个端点,我们只有一张静态表。"""
-        from app.domain.generation.catalog import capabilities_for
+        from app.domain.generation_catalog import capabilities_for
 
         #: alibaba 自家的 qwen-image-edit 只收 reference_image;用户声明"按 evolink 那份"之后
         #: 应当拿到 evolink 的那一份(size / num_images / 14 张参考图)。
@@ -569,7 +569,7 @@ class Test用户在自己那行模型上声明生成参数:
 
         合成一个的后果今天见过:生成节点的「参数」按钮对着一堆其实有参数的模型悄悄消失了。
         """
-        from app.domain.generation.catalog import capabilities_are_known, capabilities_for
+        from app.domain.generation_catalog import capabilities_are_known, capabilities_for
 
         unknown = "gemini-3.1-flash-image"
         assert capabilities_are_known("openai-compatible", unknown, "image") is False

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # -- B3·生成、发布、浏览器、素材 --
-    # 生成:素材角色的名字(zh 与 domain/generation/catalog.SOURCE_ROLE_LABELS 一致,有测试钉着)
+    # 生成:素材角色的名字(zh 与 domain/generation_catalog.SOURCE_ROLE_LABELS 一致,有测试钉着)
     "genRole_first_frame": {"zh": "首帧", "en": "first frame"},
     "genRole_last_frame": {"zh": "尾帧", "en": "last frame"},
     "genRole_reference_image": {"zh": "参考图", "en": "reference image"},

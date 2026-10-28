@@ -44,9 +44,9 @@ def _is_known_model(vendor: str, model_id: str, catalog: dict[str, dict]) -> boo
     """
     if model_id in catalog:
         return True
-    from app.domain.generation import builtin_models_for
+    from app.domain.generation_catalog import builtin_models_for
 
-    from app.domain.generation.catalog import GENERATION_KINDS
+    from app.domain.generation_catalog import GENERATION_KINDS
 
     return any(model_id in builtin_models_for(vendor, kind) for kind in GENERATION_KINDS)
 
@@ -172,8 +172,8 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
 
     # 内置目录:走原生端点、不在 /models 里的那些。能力**按 kind 给准**,而不是套用 vendor
     # 的全集 —— 一个万相视频模型不该被声明成"对话 + 图像 + 视频 + 语音"。
-    from app.domain.generation import builtin_models_for
-    from app.domain.generation.catalog import GENERATION_KINDS
+    from app.domain.generation_catalog import builtin_models_for
+    from app.domain.generation_catalog import GENERATION_KINDS
 
     for kind in GENERATION_KINDS:
         for model_id in builtin_models_for(profile.vendor, kind):

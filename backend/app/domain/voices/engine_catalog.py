@@ -316,7 +316,7 @@ def cloned_voices(db: Session, workspace_id: str) -> list[dict[str, Any]]:
     from sqlalchemy import select
 
     from app.db.models import Voice
-    from app.domain.voices.consent import UNDECLARED
+    from app.domain.consent import UNDECLARED
 
     rows = db.scalars(
         select(Voice)
@@ -419,7 +419,7 @@ def cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool =
     from sqlalchemy import select
 
     from app.db.models import Voice
-    from app.domain.voices.consent import UNDECLARED
+    from app.domain.consent import UNDECLARED
 
     if not workspace_id:
         return "missing"

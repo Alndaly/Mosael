@@ -163,33 +163,6 @@ def attach_transcript(db: Session, user: User, asset_id: str, **fields: Any) -> 
     return get_transcript_for_asset(db, asset_id) or transcript
 
 
-def analyze(
-    db: Session,
-    user: User,
-    asset_id: str,
-    question: str,
-    *,
-    session_target: Any = None,
-    profile_id: str | None = None,
-    mode: str | None = None,
-) -> dict[str, Any]:
-    """看图 / 看视频。分析记的那一笔用量跟调用方的事务走。
-
-    `session_target`:智能体发起时,这次对话定下的连接、模型和视频分析方式(agent/analysis_target 解析,
-    **由调用方**解析好传进来 —— 素材域不认识智能体会话,认识了就把 agent、画板、Blender 一起卷进包级的环)。
-    给了它,调用方传的 mode 不作数:用户在会话里选定的方式不能被工具参数覆盖。
-    """
-    from app.domain.analysis.service import analyze_asset
-
-    asset = require_asset(db, user, asset_id, perm="ai")
-    if session_target is not None:
-        return analyze_asset(
-            db, asset, question, user_id=user.id, mode=session_target.mode,
-            resolved_connection=session_target.connection, model=session_target.model, surface="automation",
-        )
-    return analyze_asset(db, asset, question, user_id=user.id, profile_id=profile_id, mode=mode)
-
-
 def grab_frame(db: Session, user: User, asset_id: str, at: float, *, project_id: str | None = None) -> Asset:
     """取某一帧存成一份**新**素材;原素材不动。"""
     from app.domain.assets.frames import save_frame_as_asset
@@ -405,13 +378,6 @@ def import_from_url(db: Session, user: User, workspace_id: str, **request: Any) 
 # ---------------- 派生任务(产出新素材,原素材不动) ----------------
 
 
-def start_transcription(db: Session, user: User, asset_id: str, *, language: str = "", engine: str = "") -> Job:
-    from app.domain.voices.transcription import start_transcription as start
-
-    require_asset(db, user, asset_id, perm="ai")
-    return start(db, asset_id, created_by=user.id, language=language, engine=engine)
-
-
 def start_gif(db: Session, user: User, asset_id: str, **options: Any) -> Job:
     from app.domain.assets.video_gif import start_video_to_gif
 
@@ -468,24 +434,6 @@ def regenerate_proxy(db: Session, user: User, asset_id: str) -> Job | None:
 
 
 # ---------------- 镜头表(ADR 0061,是这份素材的派生物) ----------------
-
-
-def start_shots(db: Session, user: User, asset_id: str, *, session_target: Any = None) -> Job:
-    """排一条「拆镜头」后台任务:量刀口取帧,有视觉模型就逐镜判画面(见 domain/analysis/shots_task)。
-
-    `session_target`:智能体发起时按**这次对话**的连接和模型判画面(和 `analyze` 同一个来源,ADR 0061 待拍板 3
-    的默认挑法因此不参与);人点的(素材详情页那个按钮)不给,走「分析」那条默认挑法 —— Kimi → MiniMax → OpenAI → 兼容,
-    一个都没有时机器那一半照样交。
-
-    拆镜头会往这份素材的目录里写帧和联系表、并覆盖它的镜头表,所以是 `ai` 那一档写闸。
-    """
-    from app.domain.analysis.shots_task import start_breakdown
-
-    asset = require_asset(db, user, asset_id, perm="ai")
-    profile_id, model, surface = None, "", "direct"
-    if session_target is not None:
-        profile_id, model, surface = session_target.connection.id, session_target.model, "automation"
-    return start_breakdown(db, asset, created_by=user.id, profile_id=profile_id, model=model, surface=surface)
 
 
 def shot_breakdown(db: Session, user: User, asset_id: str) -> dict[str, Any]:

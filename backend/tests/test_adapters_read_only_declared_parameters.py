@@ -33,7 +33,7 @@ from __future__ import annotations
 import pathlib
 import re
 
-from app.domain.generation import catalog as C
+from app.domain import generation_catalog as C
 from app.domain.generation.operations import allowed_parameter_keys
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
@@ -118,7 +118,7 @@ def test_适配器读的参数键都被声明过() -> None:
     assert not new, (
         "这些参数键适配器读了、却没有任何描述符声明 —— 发它会被校验器拦下,不发它这段代码就是死的:\n"
         + "\n".join(f"  {where}: {key}" for where, key in new)
-        + "\n去 domain/generation/catalog 里声明它们,而不是加进这条测试的豁免名单。"
+        + "\n去 domain/generation_catalog 里声明它们,而不是加进这条测试的豁免名单。"
     )
 
 

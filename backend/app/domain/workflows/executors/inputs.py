@@ -1,8 +1,7 @@
 """执行器共用的「拿输入 id,并确认它属于这次运行所在的工作区」。
 
-住在一个单独的小模块里而不是 subjobs:不少执行器要用这两个帮手,而 subjobs 在
-engine ⇄ executors 的既有循环里(test_import_layering 的 LAZY_CYCLE_MODULES)——
-新执行器 import 它就一起进了环。这里只认 registry 的 RunScope,是片叶子。
+住在一个单独的小模块里而不是 subjobs:不少执行器要用这两个帮手,而 subjobs 是一大块(要起子任务、
+认识渲染与发布)—— 为了两个帮手依赖它不值得。这里只认 registry 的 RunScope,是片叶子。
 """
 
 from __future__ import annotations

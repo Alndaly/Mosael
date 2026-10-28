@@ -27,7 +27,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, Job, ProviderUsageEvent
 from app.domain.providers import models as provider_models
 from app.domain.billing import price_reference
-from app.domain.generation import catalog as C
+from app.domain import generation_catalog as C
 from app.domain.generation.operations import (
     GenerationDomainError,
     validate_against_capabilities,

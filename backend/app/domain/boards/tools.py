@@ -457,7 +457,7 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
                 label: str) -> None:
     """任务线程里跑节点。父任务(current_parent_job_id)已经由 dispatch_job 设好。
 
-    **先拿连接预算,再开会话**,和工作流引擎跑一个节点完全一样(见 engine.NODE_CONNECTIONS):
+    **先拿连接预算,再开会话**,和工作流引擎跑一个节点完全一样(见 workflows/node_budget):
     节点里的等待(wait_for_job(release=db))会把预算交还再拿回来 —— 没先拿的话那一还就多出一份。
     """
     from app.core.db import SessionLocal
@@ -465,7 +465,7 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
     from app.db.models import Job
     from app.domain.jobs import run_job_inline
     from app.domain.workflows import WorkflowDomainError
-    from app.domain.workflows.engine import NODE_CONNECTIONS
+    from app.domain.workflows import node_budget
     from app.domain.workflows.executors import get_executor
 
     def body() -> dict[str, Any]:
@@ -473,7 +473,7 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
         if handler is None:
             raise WorkflowDomainError("wfErr_noExecutor", params={"type": node_type})
         # 节点跑完就是它的事务边界(和工作流引擎的 run_node 一样):成功才提交。
-        with NODE_CONNECTIONS, unit_of_work() as node_db:
+        with node_budget.NODE_CONNECTIONS, unit_of_work() as node_db:
             output = handler(node_db, scope, dict(config))
         return {"outputs": board_outputs(meta, output if isinstance(output, dict) else {"output": output})}
 

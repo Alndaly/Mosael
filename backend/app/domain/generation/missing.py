@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import authored_text, fragment, read_param
 from app.db.models import PluginInstance, ProviderModel, ProviderProfile
-from app.domain.generation.catalog import GENERATION_KINDS
+from app.domain.generation_catalog import GENERATION_KINDS
 from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins.groups import readable_group
 

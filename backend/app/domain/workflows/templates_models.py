@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from app.db.models import ProviderModel
-from app.domain.generation.catalog import known_capabilities_for
+from app.domain.generation_catalog import known_capabilities_for
 from app.domain.generation.resolution import resolve_row
 from app.domain.providers.defaults import get_row
 from app.domain.providers.models import effective_capabilities

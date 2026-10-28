@@ -22,7 +22,7 @@ from app.ai.providers.contracts.generation import (
     GenerationRequest,
     SourceAsset,
 )
-from app.domain.generation.catalog import KLING_AVATAR_CAPABILITIES, KLING_LIPSYNC_CAPABILITIES
+from app.domain.generation_catalog import KLING_AVATAR_CAPABILITIES, KLING_LIPSYNC_CAPABILITIES
 
 
 def _files(tmp_path: Path) -> tuple[Path, Path]:
