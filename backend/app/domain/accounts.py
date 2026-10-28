@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -20,7 +19,7 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.core.security import hash_password, revoke_other_logins, verify_password
 from app.core.unit_of_work import after_commit
-from app.db.models import OAuthIdentity, User
+from app.db.models import OAuthIdentity, User, new_id
 from app.domain import members
 from app.domain.permissions import ensure_deployment_admin
 
@@ -95,10 +94,13 @@ _AVATAR_MEDIA_TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/w
 
 
 def set_avatar(db: Session, user: User, *, content_type: str, data: bytes) -> User:
-    """上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。
+    """上传/替换头像:落 data_dir/avatars/<uid>-<随机 id>.<ext>,每次一个新 key,天然破缓存。
 
     `data` 由调用方最多读 `AVATAR_MAX_BYTES + 1` 个字节 —— 多一个字节就知道超没超,不必整份读进来。
     旧文件在提交成功后清理;失败也只是留一个孤儿文件,不影响正确性。
+
+    **key 不能用秒级时间戳。** 此前是 `<uid>-<秒>.<ext>`:同一秒里再传一张同类型的(连点两下),新 key 和旧 key
+    一模一样 —— 写入覆盖了旧文件,提交后又按「旧 key」清理,删掉的正是刚传上去的那张,库里记着头像、盘上没有文件。
     """
     ext = AVATAR_TYPES.get((content_type or "").lower())
     if ext is None:
@@ -109,26 +111,28 @@ def set_avatar(db: Session, user: User, *, content_type: str, data: bytes) -> Us
         raise AvatarRejected("routeErr_avatarTooLarge", status=413)
     avatars_dir = settings.data_dir / "avatars"
     avatars_dir.mkdir(parents=True, exist_ok=True)
-    key = f"avatars/{user.id}-{int(time.time())}.{ext}"
+    key = f"avatars/{user.id}-{new_id()}.{ext}"
     (settings.data_dir / key).write_bytes(data)
-    previous = user.avatar_key
+    previous = _avatar_path(user.avatar_key)
     user.avatar_key = key
-    if previous and previous.startswith("avatars/"):
-        after_commit(db, lambda: (settings.data_dir / previous).unlink(missing_ok=True))
+    if previous is not None:
+        after_commit(db, lambda: previous.unlink(missing_ok=True))
     return user
 
 
-def avatar_file(db: Session, user_id: str) -> tuple[Path, str] | None:
-    """某人头像在盘上的位置和 media type;没有就是 None。
-
-    key 只能落在 avatars/ 下,防目录穿越(库里即便被改坏也不放行)。
-    """
-    target = db.get(User, user_id)
-    key = (target.avatar_key if target else "") or ""
+def _avatar_path(key: str | None) -> Path | None:
+    """头像 key 在盘上的位置。key 只能落在 avatars/ 下,防目录穿越 —— 库里即便被改坏也不放行,读和删同一道判断。"""
+    key = key or ""
     if not key.startswith("avatars/") or "/../" in key or key.endswith(".."):
         return None
-    path = settings.data_dir / key
-    if not path.is_file():
+    return settings.data_dir / key
+
+
+def avatar_file(db: Session, user_id: str) -> tuple[Path, str] | None:
+    """某人头像在盘上的位置和 media type;没有就是 None。"""
+    target = db.get(User, user_id)
+    path = _avatar_path(target.avatar_key if target else None)
+    if path is None or not path.is_file():
         return None
     return path, _AVATAR_MEDIA_TYPES.get(path.suffix.lstrip("."), "application/octet-stream")
 

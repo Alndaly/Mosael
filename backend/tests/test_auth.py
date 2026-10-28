@@ -135,10 +135,7 @@ def test_avatar_upload_replace_and_serve(tmp_path) -> None:
     got = client.get(f"/api/auth/users/{me['id']}/avatar")
     assert got.status_code == 200 and got.content == png
 
-    # 重传:key 变化(时间戳)、旧文件删除
-    import time as _time
-
-    _time.sleep(1.1)
+    # 重传:key 变化、旧文件删除
     up2 = client.post("/api/auth/me/avatar", files={"file": ("b.webp", b"RIFF0000WEBP", "image/webp")})
     key2 = up2.json()["avatar_key"]
     assert key2 != key1 and key2.endswith(".webp")
@@ -152,3 +149,25 @@ def test_avatar_upload_replace_and_serve(tmp_path) -> None:
 
     # 无头像用户 → 404
     assert client.get("/api/auth/users/does-not-exist/avatar").status_code == 404
+
+
+def test_同一秒里连传两张同类型的头像_后一张还在() -> None:
+    """此前 key 是 `<uid>-<秒>.<ext>`:同一秒、同类型再传一次,新旧 key 相同,写入覆盖旧文件之后,提交后的清理
+    按「旧 key」删掉的正是刚传的那张 —— 库里记着头像,盘上没有文件,头像一直不显示。"""
+    from app.core.config import settings
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    first = b"\x89PNG\r\n\x1a\n" + b"1" * 64
+    second = b"\x89PNG\r\n\x1a\n" + b"2" * 64
+
+    key1 = client.post("/api/auth/me/avatar", files={"file": ("a.png", first, "image/png")}).json()["avatar_key"]
+    up2 = client.post("/api/auth/me/avatar", files={"file": ("b.png", second, "image/png")})
+    assert up2.status_code == 200
+    key2 = up2.json()["avatar_key"]
+
+    assert key2 != key1
+    assert (settings.data_dir / key2).is_file(), "刚传的那张被当成旧头像删掉了"
+    assert not (settings.data_dir / key1).exists()
+    me = client.get("/api/auth/me").json()
+    assert client.get(f"/api/auth/users/{me['id']}/avatar").content == second

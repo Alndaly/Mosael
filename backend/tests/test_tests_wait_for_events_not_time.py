@@ -32,7 +32,6 @@ TESTS = Path(__file__).resolve().parent
 SLEEPS: dict[str, int] = {
     "test_a_broken_pipe_does_not_wedge_the_pool.py": 1,
     "test_agent_queue_drain.py": 2,
-    "test_auth.py": 1,
     "test_browser_queue_timeout.py": 1,
     "test_browser_sessions_share_nothing_they_should_not.py": 1,
     "test_cancelled_work_stops_and_stays_cancelled.py": 2,
