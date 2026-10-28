@@ -56,6 +56,21 @@ def self_command(*args: str) -> list[str]:
     return [sys.executable, *args]
 
 
+def bundled_python() -> str:
+    """随包分发的那个独立解释器:壳注入的,或开发时仓库里抓下来的那一份。不在返回空串。
+
+    和 `base_python()` 分开问,是因为有一件事**只能**拿它当判据:托管 venv 该跟着哪个版本走
+    (见 `drop_venvs_built_on_another_python`)。兜底的那几个解释器只是"此刻凑合能用的",
+    不代表用户该有的那一个。
+    """
+    injected = os.environ.get(BASE_PYTHON_ENV, "").strip()
+    if injected and Path(injected).is_file():
+        return injected
+    if not is_frozen() and REPO_BUNDLED_PYTHON.is_file():
+        return str(REPO_BUNDLED_PYTHON)
+    return ""
+
+
 def base_python() -> str:
     """用来**创建**托管 venv 的解释器。找不到可用的返回空串。
 
@@ -65,11 +80,9 @@ def base_python() -> str:
     whisperx 还不支持 3.14),而托管 venv 装什么、装不装得上,取决于建它的解释器。开发时用的
     不是用户那一个,就是在验一个用户不会遇到的环境。
     """
-    injected = os.environ.get(BASE_PYTHON_ENV, "").strip()
-    if injected and Path(injected).is_file():
-        return injected
-    if not is_frozen() and REPO_BUNDLED_PYTHON.is_file():
-        return str(REPO_BUNDLED_PYTHON)
+    bundled = bundled_python()
+    if bundled:
+        return bundled
     mine = self_python()
     if mine and Path(mine).is_file():
         return mine
@@ -124,9 +137,15 @@ def drop_venvs_built_on_another_python(roots: Iterable[Path]) -> list[Path]:
     删掉,引擎回到「未安装」,用户点一次下载就用现在的解释器重建。模型权重不在 venv 里,不受影响。
 
     认不出版本(没有 pyvenv.cfg)的不动 —— 那不是我们建的,或者是半截的,都轮不到这里判。
+
+    **判据只认随包的那个解释器**,不认 `base_python()` 的兜底。随包那个暂时不在(开发时
+    `pnpm fetch:tts-python` 正在重抓:先删目录、再下载解包,中间几十秒它不存在),兜底就落到
+    后端自己的 3.14 上 —— 而 `uvicorn --reload` 恰好在这时重启、跑这条对账,于是克隆、转写、分离
+    所有用 3.13 建的环境被当成"旧的"一并删掉,权重还在,界面上成了「权重已下好、缺运行环境」。
+    随包那个不在,就说不出"该是哪个版本",那就什么都不删。
     """
-    base = base_python()
-    want = python_minor(base) if base else ""
+    bundled = bundled_python()
+    want = python_minor(bundled) if bundled else ""
     if not want:
         return []
     dropped: list[Path] = []

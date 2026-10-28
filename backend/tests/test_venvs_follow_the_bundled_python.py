@@ -19,6 +19,7 @@ from app.core import interpreter
 from app.core.interpreter import drop_venvs_built_on_another_python, venv_python_minor
 
 HERE = f"{sys.version_info.major}.{sys.version_info.minor}"
+_REAL_BUNDLED = interpreter.bundled_python
 
 
 def _venv(root: Path, name: str, version: str | None) -> Path:
@@ -34,8 +35,8 @@ def _venv(root: Path, name: str, version: str | None) -> Path:
 
 @pytest.fixture
 def roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
-    # 建 venv 用的解释器就是跑测试的这一个 —— 开发时 base_python() 也正是它。
-    monkeypatch.setattr(interpreter, "base_python", lambda: sys.executable)
+    # 让跑测试的这一个充当随包解释器。
+    monkeypatch.setattr(interpreter, "bundled_python", lambda: sys.executable)
     tts, asr = tmp_path / "tts", tmp_path / "asr"
     tts.mkdir()
     asr.mkdir()
@@ -86,10 +87,27 @@ def test_找不到解释器时不删(roots: tuple[Path, Path], monkeypatch: pyte
     """说不出「现在是哪个版本」,就没有资格判谁旧 —— 删了只会逼用户白白重下几个 GB。"""
     tts, _ = roots
     old = _venv(tts, "venv-f5-tts", "3.12.11")
-    monkeypatch.setattr(interpreter, "base_python", lambda: "")
+    monkeypatch.setattr(interpreter, "bundled_python", lambda: "")
 
     assert drop_venvs_built_on_another_python((tts,)) == []
     assert old.is_dir()
+
+
+def test_随包解释器暂时不在时_兜底的版本不算数(roots: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    """维护者机器上真出过的一幕:重抓 build/python 的那几十秒里后端重启,`base_python()` 落到后端
+    自己的 3.14 上,克隆 / 转写 / 分离的 3.13 环境全被删了,只剩权重。兜底解释器不是判据。"""
+    tts, _ = roots
+    built_on_bundled = _venv(tts, "venv-f5-tts", "3.13.16")
+    monkeypatch.setattr(interpreter, "REPO_BUNDLED_PYTHON", tts / "missing" / "python3")
+    monkeypatch.delenv(interpreter.BASE_PYTHON_ENV, raising=False)
+    # 撤掉 fixture 的桩:这里要的就是真的 bundled_python 去看「随包那个在不在」。
+    monkeypatch.setattr(interpreter, "bundled_python", _REAL_BUNDLED)
+    # 兜底落到后端自己(跑测试的这一个)身上,把它说成 3.14 —— 和那台机器上一样,是另一个次版本。
+    monkeypatch.setattr(interpreter, "python_minor", lambda python: "3.14")
+
+    assert interpreter.base_python() == sys.executable, "前提:兜底确实落到了后端自己身上"
+    assert drop_venvs_built_on_another_python((tts,)) == []
+    assert built_on_bundled.is_dir()
 
 
 def test_读得懂uv建的venv(tmp_path: Path) -> None:
@@ -107,7 +125,7 @@ def test_启动时的对账真的会调到它(tmp_path: Path, monkeypatch: pytes
     from app.ai.runtime import config as tts_config
     from app.db.migrations import _drop_venvs_built_on_another_python, migration_plan
 
-    monkeypatch.setattr(interpreter, "base_python", lambda: sys.executable)
+    monkeypatch.setattr(interpreter, "bundled_python", lambda: sys.executable)
     roots = {}
     for module, attr, name in (
         (tts_config, "MANAGED_TTS_ROOT", "tts"),

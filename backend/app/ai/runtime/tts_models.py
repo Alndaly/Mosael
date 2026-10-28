@@ -890,7 +890,11 @@ def start_download(engine_id: str) -> dict[str, Any]:
     engine = _BY_ID.get(engine_id)
     if engine is None:
         raise KeyError(engine_id)
-    if _is_installed(engine):
+    # **"权重都在了"不等于"没事可做"**:还可能缺运行环境,而界面上「安装运行环境」那颗按钮
+    # 发的正是这个请求。权重齐了就早返回的话,那颗按钮点了没有任何反应(转写那边踩过同一个坑,
+    # 见 asr_models.start_download)。下面那条下载路径先 ensure_engine_runtime,权重已在就只是预热。
+    ready, _checked = runtime_status(engine.id)
+    if _is_installed(engine) and ready:
         return _status_dict(engine)
     # **并行是允许的。** 每个引擎有自己的 venv、自己的权重目录,下载跑在各自的一次性子进程里
     # (不共用常驻进程),所以两个引擎同时装不会互相弄坏 —— 只是抢带宽和磁盘。

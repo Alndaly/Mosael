@@ -45,7 +45,10 @@ function clonesFromReference(engineId: string): boolean {
 /** 权重表的一个能力分区:组头(小标题 + 一句说明)+ 组里的「默认」那一个控件 + 那一组的行。
  *  分组**只**是渲染时的分区 —— 下载、状态、进度、失败、重试仍是同一份 ModelDownloadRow 和同一个 mutation。
  *  「默认」永远在组说明之后、列表之前(和转写那一节同一个位置),而且只属于这一组 —— 克隆引擎的默认
- *  不该挂在含预置音色引擎的整节顶上。 */
+ *  不该挂在含预置音色引擎的整节顶上。
+ *
+ *  间距和 `AdminSection` 同一档(`gap-3`):转写、人声分离、降噪那几节里「默认」卡和列表卡隔 12px,
+ *  这里是同一种结构,不能因为多包了一层就成了 8px —— 截图上一眼就能看出这一节"挤"。 */
 function EngineGroup({
   kind,
   title,
@@ -61,7 +64,7 @@ function EngineGroup({
   children: React.ReactNode;
 }) {
   return (
-    <section data-engine-group={kind} aria-label={title} className="grid min-w-0 gap-2">
+    <section data-engine-group={kind} aria-label={title} className="grid min-w-0 gap-3">
       <div className="grid min-w-0 gap-0.5">
         <h3 className="m-0 text-ui-sm font-semibold leading-snug">{title}</h3>
         <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{description}</p>

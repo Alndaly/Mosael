@@ -74,3 +74,39 @@ def test_the_weights_phase_still_reports_bytes() -> None:
         assert row["total_bytes"] == 1_500_000_000
     finally:
         tts_models._store.clear("f5-tts")
+
+
+def test_installing_the_runtime_works_on_already_downloaded_weights(monkeypatch) -> None:
+    """权重齐了、只差运行环境时,「安装运行环境」那颗按钮必须真的做事。
+
+    维护者截图:F5-TTS、Fish Speech、Qwen3-TTS 三行都写着「权重已下好,…点右边补上运行环境即可」,
+    点了没有任何反应 —— `start_download` 见权重齐了就早返回,没走到 ensure_engine_runtime。
+    转写那边修过同一个坑(见 test_asr_runtime_is_honest 里同名的那条),这里补到 TTS 上。
+    """
+    started: list[str] = []
+    monkeypatch.setattr(tts_models, "_is_installed", lambda engine: True)
+    monkeypatch.setattr(tts_models, "runtime_status", lambda engine_id: (False, True))
+    monkeypatch.setattr(
+        tts_models.threading, "Thread",
+        lambda target=None, args=(), daemon=False, **_kwargs: type(
+            "T", (), {"start": lambda self: started.append(args[0]) if args else None}
+        )(),
+    )
+    tts_models._store.clear("qwen-tts")
+    try:
+        tts_models.start_download("qwen-tts")
+    finally:
+        tts_models._store.clear("qwen-tts")
+
+    assert started == ["qwen-tts"], "权重在盘上时,装运行环境这条路被挡住了"
+
+
+def test_nothing_to_do_when_weights_and_runtime_are_both_there(monkeypatch) -> None:
+    started: list[str] = []
+    monkeypatch.setattr(tts_models, "_is_installed", lambda engine: True)
+    monkeypatch.setattr(tts_models, "runtime_status", lambda engine_id: (True, True))
+    monkeypatch.setattr(tts_models.threading, "Thread", lambda *a, **k: started.append("thread"))
+
+    tts_models.start_download("f5-tts")
+
+    assert started == []
