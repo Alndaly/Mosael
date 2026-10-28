@@ -41,6 +41,14 @@ def test_领域模块只经公共interface使用provider() -> None:
     assert not offenders, f"domain 不应选择具体 Adapter:{offenders}"
 
 
+def test_公共interface只转出契约与registry_不转出任何一家adapter() -> None:
+    """ADR 0086:领域层「只经公共 Interface」曾经只是名义上的 —— 门面把火山播客、各家音色表、五个语音 Adapter 类
+    原样转了出去,语音领域照样写死每一家。现在各家在契约上声明目录信息,Registry 汇总、交出实现;门面只认这两样。"""
+    imports = _imports(PROVIDERS / "__init__.py")
+    leaked = sorted(name for name in imports if name.startswith("app.ai.providers.adapters"))
+    assert not leaked, f"公共 Interface 不该转出具体 Adapter 的东西:{leaked}"
+
+
 def test_adapter不反向导入公共门面或registry() -> None:
     offenders: list[str] = []
     for path in (PROVIDERS / "adapters").rglob("*.py"):

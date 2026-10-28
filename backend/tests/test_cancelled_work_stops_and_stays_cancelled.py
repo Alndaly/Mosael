@@ -216,13 +216,13 @@ def test_a_remote_voice_cancelled_while_queued_never_calls_the_paid_engine(monke
 
 
 def test_a_podcast_cancelled_while_queued_never_calls_the_provider(monkeypatch) -> None:
-    import app.ai.providers as providers
+    from app.ai.providers.adapters.bytedance.volcano import podcast as volcano_podcast
     from app.domain.voices import voices
 
     ws = _workspace()
     job_id = _job(ws, "podcast")
     calls: list[str] = []
-    monkeypatch.setattr(providers, "synthesize_volcano_podcast", lambda *a, **k: calls.append("podcast"))
+    monkeypatch.setattr(volcano_podcast, "synthesize_volcano_podcast", lambda *a, **k: calls.append("podcast"))
     _cancel(job_id)
 
     voices._run_podcast_body(job_id, ws, None, "材料", "", 0, [], 1.0)

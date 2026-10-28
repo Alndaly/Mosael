@@ -488,7 +488,7 @@ Provider 代码用三层 Module 表达能力与连接协议两条轴：
 | `app/ai/providers/adapters/` | 按供应商/平台连接协议组织的 Implementation | 依赖契约和共享下载 Seam，不反向依赖公共门面或 Registry |
 | `app/ai/providers/adapters/shared/` | 只有适配器用的实现辅助:HTTP 失败归类、异步任务轮询、音频产出落盘 | 放在 adapters 底下,领域碰不到;契约层因此只剩领域也要认的类型与角色 |
 | `app/ai/providers/registry.py` | 内置 Adapter 的唯一装配入口 | 精确注册 `(vendor, kind)` / 语音引擎 id，重复键启动失败 |
-| `app.ai.providers` | 领域调用方的稳定公共 Interface | 领域 Module 不直接选择具体 Adapter |
+| `app.ai.providers` | 领域调用方的稳定公共 Interface:**只转出契约与 Registry**(ADR 0086)。语音引擎在契约上声明目录信息(要不要钥匙、语速、内置音色),Registry 汇总;播客是独立的契约,由 `registry.podcast_engine()` 交出 | 领域 Module 不直接选择、也不经门面间接认识具体 Adapter |
 
 Adapter 目录先按**平台/企业归属**建立命名空间，再按**产品协议族**划分真正的实现边界；协议族内部
 横跨多种能力时，再按 `image.py` / `video.py` / `speech.py` 拆分。ByteDance 下的

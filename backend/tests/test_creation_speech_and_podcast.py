@@ -228,7 +228,7 @@ def test_视觉一族里换种类_会话记着最后一次用的() -> None:
 
 
 def test_播客照稿念_一段一轮_对谈稿跟着素材走(monkeypatch) -> None:
-    import app.ai.providers as providers
+    from app.ai.providers.adapters.bytedance.volcano import podcast as volcano_podcast
     from app.ai.providers import PodcastSynthesisResult
 
     asked: dict = {}
@@ -239,7 +239,7 @@ def test_播客照稿念_一段一轮_对谈稿跟着素材走(monkeypatch) -> N
         return PodcastSynthesisResult(audio=b"x", texts=[{"speaker": turn["speaker"], "text": turn["text"]}
                                                          for turn in kwargs["turns"]])
 
-    monkeypatch.setattr(providers, "synthesize_volcano_podcast", fake_podcast)
+    monkeypatch.setattr(volcano_podcast, "synthesize_volcano_podcast", fake_podcast)
     client = fresh_client()
     ws = _workspace(client)
     speakers = [{"value": "zh_male_dayixiansheng_v2_saturn_bigtts", "label": "大壹先生"},
@@ -295,8 +295,9 @@ def test_播客建任务之前就说清哪里不对(body: dict, status: int) -> 
 
 
 def test_播客没给发音人_用目录里的前两位(monkeypatch) -> None:
-    import app.ai.providers as providers
-    from app.ai.providers import PODCAST_SPEAKERS, PodcastSynthesisResult
+    from app.ai.providers.adapters.bytedance.volcano import podcast as volcano_podcast
+    from app.ai.providers import PodcastSynthesisResult
+    from app.ai.providers.adapters.bytedance.volcano.speech import PODCAST_SPEAKERS
 
     asked: dict = {}
 
@@ -305,7 +306,7 @@ def test_播客没给发音人_用目录里的前两位(monkeypatch) -> None:
         kwargs["out_path"].write_bytes(b"ID3fake-podcast")
         return PodcastSynthesisResult(audio=b"x", texts=[])
 
-    monkeypatch.setattr(providers, "synthesize_volcano_podcast", fake_podcast)
+    monkeypatch.setattr(volcano_podcast, "synthesize_volcano_podcast", fake_podcast)
     client = fresh_client()
     ws = _workspace(client)
     res = client.post("/api/generation/podcast", json={"workspace_id": ws, "mode": "research", "text": "AI 剪辑的未来"})

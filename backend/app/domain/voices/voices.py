@@ -58,9 +58,6 @@ from mosael_formats.plugin_manifest import SPEECH
 from app.domain.voices.target import speech_target
 from app.ai import providers
 from app.ai.providers import (
-    MAX_PODCAST_ROUNDS,
-    MAX_PODCAST_ROUND_CHARS,
-    PODCAST_SPEAKERS,
     PodcastAction,
     SpeechSynthesisError,
     SpeechSynthesisRequest,
@@ -1004,9 +1001,8 @@ def preview_podcast_to_file(
     spoken = text.strip()
     if not spoken:
         raise VoiceError("providerErr_podcastReadNeedsText")
-    profile = providers_selection.resolve_connection(db, "volcano-podcast", user_id=user_id)
-    token = (profile.api_key if profile else None) or ""
-    appid = str((profile.extra if profile else {}).get("appid") or "")
+    engine = providers.podcast_engine()
+    profile = providers_selection.resolve_connection(db, engine.engine_id, user_id=user_id)
     out = out_dir / "podcast-preview.mp3"
     with billable(
         db,
@@ -1015,15 +1011,14 @@ def preview_podcast_to_file(
         operation="preview_podcast_voice",
         idempotency_key=once("preview_podcast_voice"),
         workspace_id=workspace_id,
-        provider="volcano-podcast",
+        provider=engine.engine_id,
         provider_profile_id=profile.id if profile else None,
         source_type="voice_preview",
         source_id=user_id or "",
     ) as call:
         call.meter(characters=len(spoken), speakers=1, requests=1)
-        providers.synthesize_volcano_podcast(
-            appid,
-            token,
+        engine.synthesize(
+            profile,
             action=PodcastAction.READ,
             input_text=spoken,
             turns=[{"speaker": voice, "text": spoken}],
@@ -1187,7 +1182,7 @@ def _synthesize_remote(
 def podcast_speakers(speakers: list[str] | None) -> list[str]:
     """播客的发音人:给了用给的,没给用目录里的前两位 —— 发音人不花钱,不是替人挑一个要付费的东西(ADR 0055 §6)。"""
 
-    return [voice for voice in (speakers or []) if voice] or [voice for voice, _ in PODCAST_SPEAKERS[:2]]
+    return [voice for voice in (speakers or []) if voice] or [voice for voice, _ in providers.podcast_engine().speakers[:2]]
 
 
 def start_podcast(
@@ -1234,13 +1229,13 @@ def start_podcast(
             index = turn.get("speaker")
             if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(chosen):
                 raise VoiceError("voiceErr_podcastTurnSpeaker")
-            if len(line) > MAX_PODCAST_ROUND_CHARS:
-                raise VoiceError("providerErr_podcastTurnTooLong", limit=MAX_PODCAST_ROUND_CHARS)
+            if len(line) > providers.podcast_engine().max_round_chars:
+                raise VoiceError("providerErr_podcastTurnTooLong", limit=providers.podcast_engine().max_round_chars)
             script.append({"speaker": chosen[index], "text": line})
         if not script:
             raise VoiceError("providerErr_podcastReadNeedsText")
-        if len(script) > MAX_PODCAST_ROUNDS:
-            raise VoiceError("providerErr_podcastTooManyTurns", limit=MAX_PODCAST_ROUNDS)
+        if len(script) > providers.podcast_engine().max_rounds:
+            raise VoiceError("providerErr_podcastTooManyTurns", limit=providers.podcast_engine().max_rounds)
     else:
         if len(chosen) != 2 or chosen[0] == chosen[1]:
             raise VoiceError("providerErr_podcastNeedsTwoSpeakers")
@@ -1321,11 +1316,9 @@ def _run_podcast_body(
         # 「在做」先落库:一次播客合成要几分钟,界面要马上看得到。
         db.commit()
 
-        profile = providers_selection.resolve_connection(db, "volcano-podcast", provider_profile_id, user_id=job.created_by)
-        # The token lives in api_key and the appid in extra — the podcast socket takes both,
-        # and neither is the v3 speech API Key.
-        token = (profile.api_key if profile else None) or ""
-        appid = str((profile.extra if profile else {}).get("appid") or "")
+        engine = providers.podcast_engine()
+        #: 凭据怎么从连接里取(火山:appid 在附加字段、token 在钥匙)是那一家自己的事,这里只把连接整个交过去。
+        profile = providers_selection.resolve_connection(db, engine.engine_id, provider_profile_id, user_id=job.created_by)
         source_type, source_id = usage_source or ("job", job_id)
         #: 按交出去的字数计:改写是材料、讨论是主题、照稿念是每一段加起来。
         characters = sum(len(turn["text"]) for turn in turns) if turns else len(text or topic or "")
@@ -1338,7 +1331,7 @@ def _run_podcast_body(
                 capability="podcast",
                 operation="synthesize_podcast",
                 workspace_id=workspace_id,
-                provider="volcano-podcast",
+                provider=engine.engine_id,
                 provider_profile_id=profile.id if profile else None,
                 source_type=source_type,
                 source_id=source_id,
@@ -1348,9 +1341,8 @@ def _run_podcast_body(
             ) as call:
                 # 播客按输入文本量计费,和 TTS 同一类;说话人数会影响时长,一并记下来。
                 call.meter(characters=characters, speakers=len(speakers or []), requests=1)
-                result = providers.synthesize_volcano_podcast(
-                    appid,
-                    token,
+                result = engine.synthesize(
+                    profile,
                     action=action,
                     input_text=text,
                     prompt_text=topic,

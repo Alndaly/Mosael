@@ -2,31 +2,11 @@
 
 调用方从这里取得能力契约和 Registry 查询；``contracts`` 定义 Seam，``adapters`` 保存供应商
 协议 Implementation，``registry`` 是唯一装配入口。领域 Module 不应直接选择具体 Adapter。
+
+**这里只转出契约与 Registry,不转出任何一家 Adapter 的东西**(ADR 0086):引擎目录要的「要不要钥匙、
+内置音色」由各 Adapter 在契约上声明、Registry 汇总;播客由 Registry 交出契约形状的那一家。
 """
 
-from app.ai.providers.adapters.alibaba.dashscope.speech import (
-    BailianSpeechAdapter,
-    CosyVoiceSpeechAdapter,
-    extract_bailian_audio_url,
-    is_cosyvoice,
-)
-from app.ai.providers.adapters.microsoft.edge_speech import EDGE_BUILTIN_VOICES, EdgeSpeechAdapter
-from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
-from app.ai.providers.adapters.bytedance.volcano.speech import (
-    PODCAST_SPEAKERS,
-    VOLCANO_BUILTIN_VOICES,
-    VolcanoSpeechAdapter,
-)
-from app.ai.providers.adapters.bytedance.volcano.speakers import VolcOpenAPIError, list_all_speakers
-from app.ai.providers.adapters.bytedance.volcano.podcast import (
-    MAX_ROUND_CHARS as MAX_PODCAST_ROUND_CHARS,
-    MAX_ROUNDS as MAX_PODCAST_ROUNDS,
-    PodcastAction,
-    PodcastSynthesisError,
-    PodcastSynthesisResult,
-    split_to_rounds as split_podcast_rounds,
-    synthesize_volcano_podcast,
-)
 from app.ai.providers.contracts.generation import (
     direct_media_url,
     DRIVING_AUDIO,
@@ -55,7 +35,17 @@ from app.ai.providers.contracts.generation import (
     allowed_source_url_parameters,
     roles_supplied_via_url,
 )
+from app.ai.providers.contracts.podcast import (
+    PodcastAction,
+    PodcastConnection,
+    PodcastEngine,
+    PodcastSynthesisError,
+    PodcastSynthesisResult,
+    split_to_rounds,
+)
 from app.ai.providers.contracts.speech import (
+    AccountVoiceCatalog,
+    SpeechCatalogError,
     MAX_PARALLEL_SPEECH_REQUESTS,
     SPEECH_REQUEST_TIMEOUT_SECONDS,
     SpeechSynthesisRequest,
@@ -69,6 +59,10 @@ from app.ai.providers.contracts.voice_enrollment import (
     VoiceEnrollmentError,
 )
 from app.ai.providers.registry import (
+    account_voices,
+    builtin_voice_labels,
+    podcast_engine,
+    speech_engines,
     REMOTE_SPEECH_ADAPTERS,
     VOICE_ENROLLMENT_ADAPTERS,
     build_speech_adapter,
@@ -82,18 +76,10 @@ from app.ai.providers.registry import (
 __all__ = [
     "direct_media_url",
     "DRIVING_AUDIO",
-    "EDGE_BUILTIN_VOICES",
     "FIRST_CLIP",
     "FIRST_FRAME",
     "LAST_FRAME",
     "MASK",
-    "PODCAST_SPEAKERS",
-    "MAX_PODCAST_ROUNDS",
-    "MAX_PODCAST_ROUND_CHARS",
-    "PodcastAction",
-    "split_podcast_rounds",
-    "PodcastSynthesisError",
-    "PodcastSynthesisResult",
     "REFERENCE_AUDIO",
     "REFERENCE_IMAGE",
     "REFERENCE_VIDEO",
@@ -107,10 +93,6 @@ __all__ = [
     "SPEECH_REQUEST_TIMEOUT_SECONDS",
     "SOURCE_ROLES",
     "SOURCE_VIDEO",
-    "VOLCANO_BUILTIN_VOICES",
-    "BailianSpeechAdapter",
-    "CosyVoiceSpeechAdapter",
-    "EdgeSpeechAdapter",
     "GenerationProgressCallbacks",
     "RemoteTaskSettled",
     "RemoteTaskWatch",
@@ -121,25 +103,30 @@ __all__ = [
     "GenerationAdapter",
     "GenerationRequest",
     "GenerationResult",
-    "OpenAISpeechAdapter",
     "GenerationAdapterContext",
     "GenerationAdapterError",
     "SourceAsset",
     "SpeechSynthesisRequest",
     "SpeechSynthesisError",
     "SpeechAdapter",
-    "VolcanoSpeechAdapter",
     "allowed_source_url_parameters",
     "build_speech_adapter",
-    "extract_bailian_audio_url",
     "get_generation_adapter",
     "has_capability_implementation",
-    "is_cosyvoice",
     "register_generation_adapter_source",
     "roles_supplied_via_url",
     "synthesize_many",
-    "synthesize_volcano_podcast",
     "connection_vendor_for_speech_engine",
-    "VolcOpenAPIError",
-    "list_all_speakers",
+    "AccountVoiceCatalog",
+    "PodcastAction",
+    "PodcastConnection",
+    "PodcastEngine",
+    "PodcastSynthesisError",
+    "PodcastSynthesisResult",
+    "SpeechCatalogError",
+    "account_voices",
+    "builtin_voice_labels",
+    "podcast_engine",
+    "speech_engines",
+    "split_to_rounds",
 ]

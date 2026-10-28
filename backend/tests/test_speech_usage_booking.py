@@ -10,7 +10,7 @@ import wave
 from pathlib import Path
 
 
-from app.ai.providers import CosyVoiceSpeechAdapter
+from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
 from app.core.db import SessionLocal
 from app.db.models import ProviderUsageEvent
 from app.domain.billing.usage import create_pricing_rule

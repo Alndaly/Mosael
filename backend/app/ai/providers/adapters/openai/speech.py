@@ -22,6 +22,14 @@ class OpenAISpeechAdapter:
     supports_parallel_synthesis = True
     free_of_charge = False
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
+    needs_key = True
+    supports_speed = True
+    needs_voice_id = False
+    note_key = "ttsProviderNote_openai"
+
+    @classmethod
+    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
+        return tuple((voice, voice) for voice in cls.VOICES)
 
     def __init__(self, api_key: str, model: str = "gpt-4o-mini-tts", base_url: str = "") -> None:
         if not api_key:

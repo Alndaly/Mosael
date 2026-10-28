@@ -16,6 +16,12 @@ import threading
 import pytest
 
 from app.ai.providers.adapters.bytedance.volcano import podcast
+from app.ai.providers.contracts.podcast import split_to_rounds
+
+
+def _rounds(text: str, *, dual: bool) -> list[str]:
+    """按火山的上限切(切法本身在契约里,上限是那一家的)。"""
+    return split_to_rounds(text, dual=dual, max_rounds=podcast.MAX_ROUNDS, max_round_chars=podcast.MAX_ROUND_CHARS)
 from app.ai.providers.adapters.bytedance.volcano.podcast_protocol import (
     EventType,
     PodcastProtocolMessage,
@@ -84,21 +90,21 @@ class TestFraming:
 class TestRoundSplitting:
     def test_two_speakers_get_one_sentence_each(self) -> None:
         """Otherwise one voice reads a paragraph and the other answers once."""
-        rounds = podcast.split_to_rounds("第一句。第二句。第三句。", dual=True)
+        rounds = _rounds("第一句。第二句。第三句。", dual=True)
         assert rounds == ["第一句。", "第二句。", "第三句。"]
 
     def test_a_single_speaker_packs_rounds(self) -> None:
         """Nothing to alternate, so fewer rounds means a smaller bill."""
-        rounds = podcast.split_to_rounds("短句。" * 40, dual=False)
+        rounds = _rounds("短句。" * 40, dual=False)
         assert len(rounds) < 40
         assert all(len(r) <= podcast.MAX_ROUND_CHARS + len("短句。") for r in rounds)
 
     def test_rounds_are_capped(self) -> None:
         """A runaway job is billed per round."""
-        assert len(podcast.split_to_rounds("句。" * 500, dual=True)) == podcast.MAX_ROUNDS
+        assert len(_rounds("句。" * 500, dual=True)) == podcast.MAX_ROUNDS
 
     def test_empty_text_yields_no_rounds(self) -> None:
-        assert podcast.split_to_rounds("   \n  ", dual=True) == []
+        assert _rounds("   \n  ", dual=True) == []
 
 
 class TestArgumentChecks:

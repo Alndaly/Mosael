@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.providers import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+from app.ai.providers.adapters.bytedance.volcano.speech import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
 from app.ai.providers.adapters.bytedance.volcano import speakers
 from tests.util import fresh_client
 
@@ -43,7 +43,7 @@ def test_with_ak_sk_the_account_list_wins_and_carries_the_family(monkeypatch) ->
         json={"name": "v", "vendor": "volcano", "config": {"api_key": "k", "ak": "AK", "sk": "SK"}},
     )
     monkeypatch.setattr(
-        "app.ai.providers.list_all_speakers",
+        "app.ai.providers.adapters.bytedance.volcano.speech.list_all_speakers",
         lambda ak, sk: [{"VoiceType": "zh_male_custom_bigtts", "Name": "定制音色", "ResourceID": "seed-icl-2.0"}],
     )
 
@@ -65,7 +65,7 @@ def test_a_failing_account_lookup_falls_back_instead_of_erroring(monkeypatch) ->
     def boom(ak, sk):
         raise speakers.VolcOpenAPIError("100004 InvalidAccessKey")
 
-    monkeypatch.setattr("app.ai.providers.list_all_speakers", boom)
+    monkeypatch.setattr("app.ai.providers.adapters.bytedance.volcano.speech.list_all_speakers", boom)
 
     assert [v["value"] for v in _voices(client, "builtin:volcano")] == [v for v, _ in VOLCANO_BUILTIN_VOICES]
 

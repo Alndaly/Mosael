@@ -18,12 +18,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Mapping
 from pathlib import Path
 
-from app.core.i18n import LocalizedError
+from app.ai.providers.contracts.podcast import (
+    PodcastAction,
+    PodcastConnection,
+    PodcastSynthesisError,
+    PodcastSynthesisResult,
+)
+from app.ai.providers.adapters.bytedance.volcano.speech import PODCAST_SPEAKERS
 from app.ai.providers.adapters.bytedance.volcano.podcast_protocol import EventType, PodcastProtocolMessage, MessageType, MessageFlags, parse_message
 from app.core import outbound_proxy
 from app.core.outbound_guard import Origin
@@ -42,59 +47,6 @@ FRAME_TIMEOUT = 180
 #: on what is reasonable to ask for.
 MAX_ROUNDS = 60
 MAX_ROUND_CHARS = 280
-
-
-class PodcastSynthesisError(LocalizedError, RuntimeError):
-    """Raised when the podcast cannot be produced, carrying 火山's message where there is one.
-
-    带文案 key(`providerErr_podcast*`,见 core/i18n),按读的人的语言翻;火山回的原话放进 `detail`。"""
-
-
-class PodcastAction:
-    """What the server should do with the text it is given."""
-
-    #: Summarise input_text into a dialogue. Requires exactly two speakers.
-    SUMMARIZE = 0
-    #: Read nlp_texts verbatim; the speaker follows the text, not speaker_info.
-    READ = 3
-    #: Research prompt_text on the web, then discuss it. Requires exactly two speakers.
-    RESEARCH = 4
-
-
-@dataclass
-class PodcastSynthesisResult:
-    audio: bytes = b""
-    #: One entry per spoken turn: {"speaker": ..., "text": ...}. This is what becomes the
-    #: transcript, and for SUMMARIZE it is the only place the generated dialogue exists.
-    texts: list[dict] = field(default_factory=list)
-
-
-def split_to_rounds(text: str, *, dual: bool) -> list[str]:
-    """Chop a plain text into rounds for READ (callers that have prose, not a script — the agent's
-    `generate_podcast` reading a passage; the script editor sends its own rounds).
-
-    With two speakers a round is one sentence, so the voices actually alternate; packing
-    several sentences into a round would have one speaker read a paragraph and the other
-    answer once. With a single speaker there is nothing to alternate, so rounds are packed to
-    MAX_ROUND_CHARS to keep the round count (and the bill) down.
-    """
-    sentences = [part.strip() for part in re.split(r"(?<=[。!?!?\n])", text) if part.strip()]
-    if not sentences:
-        return []
-    if dual:
-        return sentences[:MAX_ROUNDS]
-
-    rounds: list[str] = []
-    current = ""
-    for sentence in sentences:
-        if current and len(current) + len(sentence) > MAX_ROUND_CHARS:
-            rounds.append(current)
-            current = sentence
-        else:
-            current += sentence
-    if current:
-        rounds.append(current)
-    return rounds[:MAX_ROUNDS]
 
 
 def _session_payload(
@@ -316,3 +268,37 @@ def synthesize_volcano_podcast(
     if out_path is not None:
         out_path.write_bytes(result.audio)
     return result
+
+
+class VolcanoPodcastEngine:
+    """火山的播客合成,照 contracts/podcast.PodcastEngine 的形状交给领域层(见 registry.podcast_engine)。
+
+    凭据是语音控制台的 appid(连接的附加字段)+ access token(连接的钥匙),和 v3 语音的 API Key 不通用 ——
+    这件事只有这里知道,领域层只把那条连接整个交进来。
+    """
+
+    engine_id = "volcano-podcast"
+    label_key = "ttsProvider_volcanoPodcast"
+    note_key = "ttsProviderNote_volcanoPodcast"
+    speakers = PODCAST_SPEAKERS
+    max_rounds = MAX_ROUNDS
+    max_round_chars = MAX_ROUND_CHARS
+
+    def synthesize(
+        self,
+        connection: PodcastConnection | None,
+        *,
+        action: int,
+        input_text: str = "",
+        prompt_text: str = "",
+        turns: list[dict] | None = None,
+        speakers: list[str] | None = None,
+        speed: float = 1.0,
+        out_path: Path | None = None,
+    ) -> PodcastSynthesisResult:
+        token = (connection.api_key if connection is not None else None) or ""
+        extra: Mapping = connection.extra if connection is not None and connection.extra else {}
+        return synthesize_volcano_podcast(
+            str(extra.get("appid") or ""), token, action=action, input_text=input_text, prompt_text=prompt_text,
+            turns=turns, speakers=speakers, speed=speed, out_path=out_path,
+        )

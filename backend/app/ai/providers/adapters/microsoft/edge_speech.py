@@ -53,6 +53,14 @@ class EdgeSpeechAdapter:
     label_key = "ttsProvider_edge"
     supports_parallel_synthesis = True
     free_of_charge = True
+    needs_key = False
+    supports_speed = True
+    needs_voice_id = False
+    note_key = "ttsProviderNote_edge"
+
+    @classmethod
+    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
+        return EDGE_BUILTIN_VOICES
 
     def __init__(self, voice: str = "") -> None:
         self._default_voice = voice

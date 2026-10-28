@@ -79,6 +79,16 @@ class BailianSpeechAdapter:
         return (model or "").strip().lower().startswith(cls.SPEED_PREFIXES)
     #: 取不到模型时的兜底:两族的交集,哪个模型都认。
     VOICES = ("Cherry", "Serena", "Ethan", "Chelsie")
+    needs_key = True
+    #: qwen-tts 家族没有语速参数。
+    supports_speed = False
+    #: 模型是开放集合(日期快照、instruct / vd / vc 变体),百炼又没有列音色的接口:认得出的模型走下拉,认不出的退回填 id。
+    needs_voice_id = True
+    note_key = "ttsProviderNote_bailian"
+
+    @classmethod
+    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
+        return tuple((voice, voice) for voice in cls.voices_for(model))
 
     @classmethod
     def voices_for(cls, model: str) -> tuple[str, ...]:
@@ -192,6 +202,9 @@ class CosyVoiceSpeechAdapter(BailianSpeechAdapter):
 
     engine_id = "alibaba-cosyvoice"
     label_key = "ttsProvider_cosyvoice"
+    #: 实测 rate=1.5 把 2.25 秒的句子变成 1.50 秒,是真变速。
+    supports_speed = True
+    note_key = "ttsProviderNote_cosyvoice"
     MODEL_PREFIXES = ("cosyvoice",)
     DEFAULT_MODEL = "cosyvoice-v2"
 

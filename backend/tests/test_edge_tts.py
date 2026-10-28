@@ -14,13 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.providers import (
-    EDGE_BUILTIN_VOICES,
-    EdgeSpeechAdapter,
-    SpeechSynthesisRequest,
-    SpeechSynthesisError,
-    build_speech_adapter,
-)
+from app.ai.providers import SpeechSynthesisRequest, SpeechSynthesisError, build_speech_adapter
+from app.ai.providers.adapters.microsoft.edge_speech import EDGE_BUILTIN_VOICES, EdgeSpeechAdapter
 from app.domain.voices.engine_catalog import describe_engines
 from tests.util import fresh_client
 

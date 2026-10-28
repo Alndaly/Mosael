@@ -32,21 +32,15 @@ from app.domain.voices.speech import (
 from mosael_formats.plugin_manifest import SPEECH
 
 from app.ai.providers import (
-    EDGE_BUILTIN_VOICES,
-    PODCAST_SPEAKERS,
-    VOLCANO_BUILTIN_VOICES,
-    BailianSpeechAdapter,
-    CosyVoiceSpeechAdapter,
-    EdgeSpeechAdapter,
-    OpenAISpeechAdapter,
-    VolcanoSpeechAdapter,
-    connection_vendor_for_speech_engine,
     REMOTE_SPEECH_ADAPTERS,
-    VolcOpenAPIError,
+    SpeechCatalogError,
+    account_voices,
+    connection_vendor_for_speech_engine,
+    podcast_engine,
+    speech_engines,
 )
 
 from app.domain.voices.voice_labels import builtin_voice_label
-from app.ai import providers
 from app.ai.runtime import config as tts_config, qwen_models, tts_models
 from app.core.i18n import fragment, tr
 from app.db.models import Voice
@@ -132,67 +126,28 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "ready": qwen_ready,
             "note": "ttsProviderNote_qwenReady" if qwen_ready else "ttsProviderNote_qwenMissing",
         },
-        {
-            "id": f"{BUILTIN_PREFIX}{EdgeSpeechAdapter.engine_id}",
-            "label": EdgeSpeechAdapter.label_key,
-            "needs_key": False,
-            "supports_speed": True,
-            "needs_voice_id": False,
-            "voices": [voice for voice, _ in EDGE_BUILTIN_VOICES],
-            "note": "ttsProviderNote_edge",
-        },
-        {
-            "id": f"{BUILTIN_PREFIX}{OpenAISpeechAdapter.engine_id}",
-            "label": OpenAISpeechAdapter.label_key,
-            "needs_key": True,
-            "supports_speed": True,
-            "needs_voice_id": False,
-            "voices": list(OpenAISpeechAdapter.VOICES),
-            "note": "ttsProviderNote_openai",
-        },
+        #: 内置的念字引擎照 Registry 列,每一家的目录信息由它自己在契约上声明(ADR 0086)。
+        *(
+            {
+                "id": f"{BUILTIN_PREFIX}{engine.engine_id}",
+                "label": engine.label_key,
+                "needs_key": engine.needs_key,
+                "supports_speed": engine.supports_speed,
+                "needs_voice_id": engine.needs_voice_id,
+                #: 音色随模型变的那几家(百炼)按这个人那条连接上配的模型给;认不出的模型回空,界面退回填 id。
+                "voices": [voice for voice, _ in engine.builtin_voices(active_model_for(engine, user_id))],
+                "note": engine.note_key,
+            }
+            for engine in speech_engines()
+        ),
         {
             "id": PODCAST_ENGINE,
-            "label": "ttsProvider_volcanoPodcast",
+            "label": podcast_engine().label_key,
             "needs_key": True,
             "supports_speed": True,
             "needs_voice_id": False,
-            "voices": [voice for voice, _ in PODCAST_SPEAKERS],
-            "note": "ttsProviderNote_volcanoPodcast",
-        },
-        {
-            "id": f"{BUILTIN_PREFIX}{BailianSpeechAdapter.engine_id}",
-            "label": BailianSpeechAdapter.label_key,
-            "needs_key": True,
-            # qwen-tts 家族没有语速参数。摆一个拨不动的旋钮比不摆更糟。
-            "supports_speed": False,
-            # 模型是开放集合(日期快照、instruct / vd / vc 变体),而百炼没有列音色的接口。
-            # 认得出的模型走下拉(见 /api/tts/voices),认不出的退回填 id —— 而不是空下拉。
-            "needs_voice_id": True,
-            "voices": list(BailianSpeechAdapter.voices_for(active_model_for(BailianSpeechAdapter, user_id))),
-            "note": "ttsProviderNote_bailian",
-        },
-        {
-            # 同一把 DashScope Key 的第二套 API。分开列的理由见 CosyVoiceSpeechAdapter 的说明。
-            "id": f"{BUILTIN_PREFIX}{CosyVoiceSpeechAdapter.engine_id}",
-            "label": CosyVoiceSpeechAdapter.label_key,
-            "needs_key": True,
-            # 实测 rate=1.5 把 2.25 秒的句子变成 1.50 秒,是真变速。
-            "supports_speed": True,
-            "needs_voice_id": True,
-            "voices": list(CosyVoiceSpeechAdapter.voices_for(active_model_for(CosyVoiceSpeechAdapter, user_id))),
-            "note": "ttsProviderNote_cosyvoice",
-        },
-        {
-            "id": f"{BUILTIN_PREFIX}{VolcanoSpeechAdapter.engine_id}",
-            "label": VolcanoSpeechAdapter.label_key,
-            "needs_key": True,
-            "supports_speed": True,
-            # The catalogue is account-dependent, so the real list comes from /api/tts/voices —
-            # live when AK/SK are set, the built-in list otherwise. Either way it is a list, so
-            # the panel offers a dropdown rather than asking the user to type an opaque id.
-            "needs_voice_id": False,
-            "voices": [voice for voice, _ in VOLCANO_BUILTIN_VOICES],
-            "note": "ttsProviderNote_volcano",
+            "voices": [voice for voice, _ in podcast_engine().speakers],
+            "note": podcast_engine().note_key,
         },
     ]
     for engine in engines:
@@ -343,17 +298,14 @@ def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dic
         provider = next((one for one in capabilities.plugin_providers(db, user_id, CAPABILITY) if one.id == engine), None)
         return _plugin_voices(db, provider) if provider is not None and not provider.missing else []
     engine = adapter_id(engine)
-    if engine in (BailianSpeechAdapter.engine_id, CosyVoiceSpeechAdapter.engine_id):
-        # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的
-        # id 更是完全另一套)。这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的
-        # 音色、发出去的是 B 的请求 —— 用户选了个看着合法的音色,拿回一句"音色不存在"。
-        engine_cls = REMOTE_SPEECH_ADAPTERS[engine]
-        return [
-            {"value": voice, "label": voice}
-            for voice in engine_cls.voices_for(active_model_for(engine_cls, user_id))
-        ]
+    engine_cls = REMOTE_SPEECH_ADAPTERS.get(engine)
+    if engine_cls is not None and getattr(engine_cls, "MODEL_PREFIXES", ()):
+        # 音色**跟着模型走**的那几家(百炼:qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的 id 完全另一套)。
+        # 这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的音色、发出去的是 B 的请求。
+        return [{"value": voice, "label": label}
+                for voice, label in engine_cls.builtin_voices(active_model_for(engine_cls, user_id))]
 
-    if engine != "volcano":
+    if engine_cls is None or not hasattr(engine_cls, "account_voices"):
         fixed = next((item for item in describe_engines(db, user_id) if item["id"] == f"{BUILTIN_PREFIX}{engine}"), None)
         voices = list(fixed.get("voices") or []) if fixed else []
         # **标签要从所有带标签的清单里找**,不只是 edge。engine 目录里的 `voices` 是纯 id
@@ -362,30 +314,17 @@ def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dic
         # 这种一眼认不出谁是谁的原始 id(真机截图)。
         return [{"value": voice, "label": builtin_voice_label(voice) or voice} for voice in voices]
 
-    # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/providers/credentials) ——
-    # 列音色用的是我的账号,不是"这个部署里随便谁的"。
-    volcano = providers_selection.resolve_connection(db, "volcano", user_id=user_id)
-    ak, sk = str((volcano.extra if volcano else {}).get("ak") or ""), str((volcano.extra if volcano else {}).get("sk") or "")
-    if ak and sk:
-
-        try:
-            live = providers.list_all_speakers(ak, sk)
-        except VolcOpenAPIError as exc:
-            # Falling back beats failing: the user can still synthesise, and the reason the
-            # live list is missing belongs in the log rather than in a broken dropdown.
-            logger.info("volcano live voice list unavailable: %s", exc)
-        else:
-            if live:
-                return [
-                    {
-                        "value": speaker.get("VoiceType", ""),
-                        "label": speaker.get("Name") or speaker.get("VoiceType", ""),
-                        "resource_id": speaker.get("ResourceID", ""),
-                    }
-                    for speaker in live
-                    if speaker.get("VoiceType")
-                ]
-    return [{"value": voice, "label": label} for voice, label in VOLCANO_BUILTIN_VOICES]
+    # 音色**随账号变**的那几家(火山):按**我自己**那条连接现拉(密字段跟着我的钥匙走,见 domain/providers/credentials),
+    # 拉不到就退回内置清单 —— 用户照样能念,拉不到的原因记日志,不让下拉坏掉。
+    connection = providers_selection.resolve_connection(db, engine, user_id=user_id)
+    try:
+        live = account_voices(engine, connection.extra if connection else {})
+    except SpeechCatalogError as exc:
+        logger.info("%s live voice list unavailable: %s", engine, exc)
+        live = None
+    if live:
+        return live
+    return [{"value": voice, "label": label} for voice, label in engine_cls.builtin_voices()]
 
 
 def local_engine_ready(engine_id: str) -> bool | None:

@@ -25,14 +25,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.ai.providers import (
-    BailianSpeechAdapter,
-    CosyVoiceSpeechAdapter,
-    EdgeSpeechAdapter,
-    OpenAISpeechAdapter,
-    VolcanoSpeechAdapter,
-    connection_vendor_for_speech_engine,
-)
+from app.ai.providers import connection_vendor_for_speech_engine, podcast_engine, speech_engines
 from app.ai.runtime import qwen_models, config as tts_config, tts_models
 from app.core.i18n import tr, fragment
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Use, register_use
@@ -44,9 +37,10 @@ from app.domain.providers import selection as providers_selection
 BUILTIN_PREFIX = "builtin:"
 #: 「克隆音色」这一项。没选引擎时按它算。
 CLONE_ENGINE = f"{BUILTIN_PREFIX}clone"
-EDGE_ENGINE = f"{BUILTIN_PREFIX}{EdgeSpeechAdapter.engine_id}"
+#: 不要钥匙、不联网之外什么都不用配的那一家(今天是 Edge):没配置任何东西时也念得出来。
+EDGE_ENGINE = next(f"{BUILTIN_PREFIX}{engine.engine_id}" for engine in speech_engines() if not engine.needs_key)
 #: 播客引擎:一次产出一整段双人对话,不是"念一句话"那种 —— 念字的地方都不该列它,也不进配音能力。
-PODCAST_ENGINE = f"{BUILTIN_PREFIX}volcano-podcast"
+PODCAST_ENGINE = f"{BUILTIN_PREFIX}{podcast_engine().engine_id}"
 #: 本机 Qwen3-TTS(预置音色,文本进、音频出)。
 QWEN_ENGINE = f"{BUILTIN_PREFIX}qwentts"
 #: **本机念字引擎**:能力表里的 id → ai/runtime 那边的引擎名。本机克隆(`builtin:clone`)不在这里 ——
@@ -102,9 +96,10 @@ CAPABILITY = Capability(
         Builtin(id=CLONE_ENGINE, name_key="ttsProvider_clone", ready=_clone_ready),
         # 本机念字引擎:不要钥匙、不联网、不克隆 —— 只要一份权重和一个解释器。
         Builtin(id=QWEN_ENGINE, name_key="ttsProvider_qwen", ready=_local_ready(QWEN_ENGINE)),
-        Builtin(id=EDGE_ENGINE, name_key=EdgeSpeechAdapter.label_key),
-        *(Builtin(id=f"{BUILTIN_PREFIX}{cls.engine_id}", name_key=cls.label_key, ready=_connection_ready(cls.engine_id))
-          for cls in (OpenAISpeechAdapter, VolcanoSpeechAdapter, BailianSpeechAdapter, CosyVoiceSpeechAdapter)),
+        #: 内置的念字引擎照 Registry 列(ADR 0086):要钥匙的按「这个人配好了那条连接」判就绪,不要钥匙的随时可用。
+        *(Builtin(id=f"{BUILTIN_PREFIX}{engine.engine_id}", name_key=engine.label_key,
+                  **({"ready": _connection_ready(engine.engine_id)} if engine.needs_key else {}))
+          for engine in speech_engines()),
     ),
     auto_single=False,
     #: 默认 = 引擎 + 音色一对(见 domain/voices/defaults);设置页那一行因此是两个控件,不是一个下拉。

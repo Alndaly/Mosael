@@ -23,6 +23,7 @@ from app.ai.providers.adapters.bytedance.ark.image import SeedreamAdapter
 from app.ai.providers.adapters.bytedance.ark.video import SeedanceAdapter
 from app.ai.providers.adapters.bytedance.volcano.music import VolcanoMusicAdapter
 from app.ai.providers.adapters.bytedance.volcano.omnihuman import VolcanoOmniHumanAdapter
+from app.ai.providers.adapters.bytedance.volcano.podcast import VolcanoPodcastEngine
 from app.ai.providers.adapters.bytedance.volcano.speech import VolcanoSpeechAdapter
 from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapter
 from app.ai.providers.adapters.google.lyria import LyriaAdapter
@@ -42,6 +43,7 @@ from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
 from app.ai.providers.contracts.denoise import DenoiseAdapter
 from app.ai.providers.contracts.generation import GenerationAdapter
 from app.ai.providers.contracts.separation import SeparationAdapter
+from app.ai.providers.contracts.podcast import PodcastEngine
 from app.ai.providers.contracts.speech import SpeechSynthesisError, SpeechAdapter
 from app.ai.providers.contracts.voice_enrollment import VoiceEnrollmentAdapter, VoiceEnrollmentError
 
@@ -229,8 +231,50 @@ def build_speech_adapter(
     return adapter(api_key=api_key, voice=voice, model=model, base_url=base_url)
 
 
+#: 引擎目录里的念字引擎,**按界面上列出来的先后**(ADR 0086)。领域层照这份列,不再逐家手写一段。
+_SPEECH_ENGINES: tuple[type[SpeechAdapter], ...] = (
+    EdgeSpeechAdapter,
+    OpenAISpeechAdapter,
+    BailianSpeechAdapter,
+    CosyVoiceSpeechAdapter,
+    VolcanoSpeechAdapter,
+)
+_PODCAST_ENGINE = VolcanoPodcastEngine()
+
+
+def speech_engines() -> tuple[type[SpeechAdapter], ...]:
+    """内置的念字引擎(远端与 Edge),界面上的先后。每一家的目录信息(要不要钥匙、语速、音色)见 contracts/speech。"""
+    return _SPEECH_ENGINES
+
+
+def podcast_engine() -> PodcastEngine:
+    """播客合成的那一家(contracts/podcast)。"""
+    return _PODCAST_ENGINE
+
+
+def builtin_voice_labels() -> dict[str, str]:
+    """所有内置音色(念字引擎与播客发音人)的 id → 给人看的名字。音色随模型变的那几家只取不依赖模型的那一份。"""
+    labels: dict[str, str] = {}
+    for engine in _SPEECH_ENGINES:
+        labels.update(dict(engine.builtin_voices()))
+    labels.update(dict(_PODCAST_ENGINE.speakers))
+    return labels
+
+
+def account_voices(engine_id: str, connection_extra) -> list[dict[str, str]] | None:
+    """音色随账号变的那几家:按这条连接现拉一份清单;别的引擎回 None(它们的清单就是内置那一份)。
+    拉失败抛 contracts/speech.SpeechCatalogError。"""
+    engine = REMOTE_SPEECH_ADAPTERS.get(engine_id)
+    catalog = getattr(engine, "account_voices", None)
+    return catalog(connection_extra) if catalog is not None else None
+
+
 __all__ = [
     "REMOTE_SPEECH_ADAPTERS",
+    "account_voices",
+    "builtin_voice_labels",
+    "podcast_engine",
+    "speech_engines",
     "VOICE_ENROLLMENT_ADAPTERS",
     "build_voice_enrollment_adapter",
     "DENOISE_ADAPTERS",

@@ -10,7 +10,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from collections.abc import Mapping
+from typing import Any, Protocol
 
 from app.core.i18n import LocalizedError
 
@@ -51,8 +52,33 @@ class SpeechAdapter(Protocol):
     supports_parallel_synthesis: bool
     #: 用它念不花钱(Edge 的免费在线语音)。记账据此记 0、可信度「免费」,而不是一条找不到价格规则的「未定价」。
     free_of_charge: bool
+    #: 下面几项是**目录信息**:领域层照它列引擎、摆控件,不再逐家手写一段(ADR 0086)。
+    #: 要不要一条带钥匙的连接(Edge 不要)。
+    needs_key: bool
+    #: 有没有语速可调。摆一个拨不动的旋钮比不摆更糟。
+    supports_speed: bool
+    #: 音色是开放集合、认不出的要手填 id(百炼),还是一定从下拉里选。
+    needs_voice_id: bool
+    #: 设置页上这一家底下那句说明的文案 key。
+    note_key: str
+
+    @classmethod
+    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
+        """内置音色:(id, 给人看的名字)。音色随模型变的(百炼)按 `model` 给;认不出的模型回空。"""
+        ...
 
     def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None: ...
+
+
+class SpeechCatalogError(LocalizedError, RuntimeError):
+    """按账号现拉音色清单没拉成(带文案 key,供应商的原话放进 `detail`)。调用方退回内置清单,不该让下拉坏掉。"""
+
+
+class AccountVoiceCatalog(Protocol):
+    """音色清单**随账号变**的那几家(火山):按这条连接现拉一份。每一项是 {value, label, resource_id?}。"""
+
+    @classmethod
+    def account_voices(cls, connection_extra: Mapping[str, Any]) -> list[dict[str, str]]: ...
 
 
 

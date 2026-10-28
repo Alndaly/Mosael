@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.providers import BailianSpeechAdapter, extract_bailian_audio_url
+from app.ai.providers.adapters.alibaba.dashscope.speech import BailianSpeechAdapter, extract_bailian_audio_url
 
 
 # ---------------- qwen-tts ----------------
@@ -89,7 +89,7 @@ def test_认不出的模型回空_由界面退回填id() -> None:
     """
     assert BailianSpeechAdapter.voices_for("qwen3-tts-vd-2026-01-26") == ()
     # v3-plus / v3.5-* 即使用 _v3 音色也回 418(多半账号未开通);v1 明确说"不支持 http call"。
-    from app.ai.providers import CosyVoiceSpeechAdapter
+    from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
 
     for model in ("cosyvoice-v1", "cosyvoice-v3-plus", "cosyvoice-v3.5-flash"):
         assert CosyVoiceSpeechAdapter.voices_for(model) == (), model
@@ -162,7 +162,7 @@ def test_cosyvoice音色按主版本分表_跨版本不通用() -> None:
 
     两张表逐个真机验证过(2026-08-24),不是照文档抄的 —— v3-flash 比 v2 多出 8 个。
     """
-    from app.ai.providers import CosyVoiceSpeechAdapter
+    from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
 
     v2 = CosyVoiceSpeechAdapter.voices_for("cosyvoice-v2")
     v3 = CosyVoiceSpeechAdapter.voices_for("cosyvoice-v3-flash")
@@ -177,7 +177,7 @@ def test_cosyvoice音色按主版本分表_跨版本不通用() -> None:
 def test_v3plus不会误配到v3flash的表() -> None:
     """前缀匹配最怕这种:`cosyvoice-v3-plus` 和 `cosyvoice-v3-flash` 前 13 个字符一样。
     误配的话用户会拿到一张看着合法、发出去全是 418 的音色表。"""
-    from app.ai.providers import CosyVoiceSpeechAdapter
+    from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
 
     assert CosyVoiceSpeechAdapter.voices_for("cosyvoice-v3-plus") == ()
 
@@ -186,7 +186,8 @@ def test_播客音色不能显示成原始id() -> None:
     """真机截图抓到的回归:固定音色改从 describe_engines(None) 出之后,标签丢了 ——
     engine 目录里的 voices 是纯 id,而 (id, 名字) 成对的表在别处。只查 edge 的话,
     播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`。"""
-    from app.ai.providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+    from app.ai.providers.adapters.microsoft.edge_speech import EDGE_BUILTIN_VOICES
+    from app.ai.providers.adapters.bytedance.volcano.speech import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
 
     labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
     for voice, expected in PODCAST_SPEAKERS:
@@ -200,7 +201,8 @@ def test_两个引擎共用同一条连接的凭据() -> None:
     """和火山那两条的差别在**钥匙**:火山 TTS 与播客来自两个控制台、两把 Key,所以是两个
     vendor;百炼这两套共用一把 DashScope Key,拆 vendor 会让用户把同一把钥匙填两遍
     (bytedance 当年就是这么拆的,后来合了)。所以只拆引擎,凭据仍指向 alibaba。"""
-    from app.ai.providers import CosyVoiceSpeechAdapter, connection_vendor_for_speech_engine
+    from app.ai.providers import connection_vendor_for_speech_engine
+    from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
 
     assert connection_vendor_for_speech_engine(CosyVoiceSpeechAdapter.engine_id) == "alibaba"
     assert connection_vendor_for_speech_engine("alibaba") == "alibaba"
@@ -212,7 +214,7 @@ def test_两个引擎共用同一条连接的凭据() -> None:
 def test_模型按族筛_免得把qwen的模型发去cosyvoice() -> None:
     """一条连接下可以同时挂 qwen-tts 和 cosyvoice-v2。不筛的话切到 CosyVoice 引擎会把
     qwen 的模型名发去 CosyVoice 的端点,得到一句看不懂的 `url error`。"""
-    from app.ai.providers import BailianSpeechAdapter as B, CosyVoiceSpeechAdapter as C
+    from app.ai.providers.adapters.alibaba.dashscope.speech import BailianSpeechAdapter as B, CosyVoiceSpeechAdapter as C
 
     assert B.MODEL_PREFIXES == ("qwen-tts", "qwen3-tts")
     assert C.MODEL_PREFIXES == ("cosyvoice",)
@@ -223,7 +225,7 @@ def test_模型按族筛_免得把qwen的模型发去cosyvoice() -> None:
 
 def test_两个引擎各自的音色和语速() -> None:
     """面板上显示什么,不该取决于用户在这条连接下当前恰好配了哪个模型 —— 这正是分开列的理由。"""
-    from app.ai.providers import CosyVoiceSpeechAdapter
+    from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
     from app.domain.voices.engine_catalog import describe_engines
 
     entries = {e["id"]: e for e in describe_engines(None)}
@@ -236,7 +238,7 @@ def test_两个引擎各自的音色和语速() -> None:
 def test_cosyvoice引擎默认就是能用的模型() -> None:
     """这条连接还没配任何 cosyvoice 模型时,引擎也该能跑 —— 回落到 DEFAULT_MODEL,
     而不是把空模型名发出去。"""
-    from app.ai.providers import CosyVoiceSpeechAdapter
+    from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
 
     assert CosyVoiceSpeechAdapter(api_key="k")._model == "cosyvoice-v2"
     assert CosyVoiceSpeechAdapter.voices_for(CosyVoiceSpeechAdapter.DEFAULT_MODEL), "默认模型没有音色"

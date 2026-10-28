@@ -607,6 +607,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "用一个音色把文字念出来。本机克隆、Edge、各家云端之外,装了配音插件的也在这里。这里设的是这台机器的默认:引擎和音色是成对选的,所以默认也是一对;没设默认时,每个用到它的地方各自点名。",
         "en": "Read text aloud in a voice. Besides on-device cloning, Edge and cloud engines, installed speech plugins appear here. What you set here is this machine's default: engine and voice are picked together, so the default is a pair; with no default, every place that uses it names its own.",
     },
+    "speechErr_accountVoicesUnavailable": {"zh": "没能按账号拉到音色清单:{detail}", "en": "Could not fetch the account's voice list: {detail}"},
     "speechErr_unknownEngine": {"zh": "没有这个配音引擎:{name}", "en": "No such speech engine: {name}"},
     "speechErr_engineNotReady": {"zh": "「{plugin}」还用不了:{missing}", "en": "“{plugin}” can't be used yet: {missing}"},
     "speechErr_unknownEngineChoose": {

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
-from app.ai.providers import split_podcast_rounds
+from app.ai.providers import podcast_engine, split_to_rounds
 from app.core.unit_of_work import after_commit
 from app.domain.entities.catalog import parse_entity_ids
 from app.domain.generation import operations as generation_operations, runner as generation_runner, voiced
@@ -216,7 +216,8 @@ def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None)
     if mode == "read":
         dual = len(speakers) != 1
         turns = [{"speaker": index % 2 if dual else 0, "text": line}
-                 for index, line in enumerate(split_podcast_rounds(text, dual=dual))]
+                 for index, line in enumerate(split_to_rounds(
+                     text, dual=dual, max_rounds=podcast_engine().max_rounds, max_round_chars=podcast_engine().max_round_chars))]
     record, job = voiced.create_podcast(
         db,
         workspace_id=confirmation.workspace_id,

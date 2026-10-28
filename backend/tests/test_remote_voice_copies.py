@@ -13,7 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.ai.providers import CosyVoiceSpeechAdapter, RemoteVoice, SpeechSynthesisError, VoiceEnrollmentError
+from app.ai.providers import RemoteVoice, SpeechSynthesisError, VoiceEnrollmentError
+from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAdapter
 from app.ai.providers import registry as provider_registry
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job, ProviderUsageEvent, Voice, VoiceEnrollment

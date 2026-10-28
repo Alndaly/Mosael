@@ -11,7 +11,13 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 
-from app.ai.providers.contracts.speech import SPEECH_REQUEST_TIMEOUT_SECONDS, SpeechSynthesisRequest, SpeechSynthesisError
+from app.ai.providers.adapters.bytedance.volcano.speakers import VolcOpenAPIError, list_all_speakers
+from app.ai.providers.contracts.speech import (
+    SPEECH_REQUEST_TIMEOUT_SECONDS,
+    SpeechCatalogError,
+    SpeechSynthesisError,
+    SpeechSynthesisRequest,
+)
 
 
 class VolcanoSpeechAdapter:
@@ -32,6 +38,32 @@ class VolcanoSpeechAdapter:
     label_key = "ttsProvider_volcano"
     supports_parallel_synthesis = True
     free_of_charge = False
+    needs_key = True
+    supports_speed = True
+    #: 音色清单随账号变,但总是一张清单:现拉的(配了 AK/SK)或内置的,面板给下拉而不是让人填一串看不懂的 id。
+    needs_voice_id = False
+    note_key = "ttsProviderNote_volcano"
+
+    @classmethod
+    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
+        return VOLCANO_BUILTIN_VOICES
+
+    @classmethod
+    def account_voices(cls, connection_extra) -> list[dict[str, str]]:
+        """这个账号能用的音色(OpenAPI 现拉,ak/sk 在连接的附加字段里);没配 AK/SK 回空,拉失败抛 SpeechCatalogError。"""
+        ak, sk = str(connection_extra.get("ak") or ""), str(connection_extra.get("sk") or "")
+        if not (ak and sk):
+            return []
+        try:
+            live = list_all_speakers(ak, sk)
+        except VolcOpenAPIError as exc:
+            raise SpeechCatalogError("speechErr_accountVoicesUnavailable", detail=str(exc)) from exc
+        return [
+            {"value": speaker.get("VoiceType", ""), "label": speaker.get("Name") or speaker.get("VoiceType", ""),
+             "resource_id": speaker.get("ResourceID", "")}
+            for speaker in live
+            if speaker.get("VoiceType")
+        ]
 
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:

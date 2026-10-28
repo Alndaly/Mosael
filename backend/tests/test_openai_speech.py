@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.providers import OpenAISpeechAdapter, SpeechSynthesisError, SpeechSynthesisRequest
+from app.ai.providers import SpeechSynthesisError, SpeechSynthesisRequest
+from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
 
 
 class TestOpenAI:
