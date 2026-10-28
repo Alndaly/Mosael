@@ -11,7 +11,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.domain import quotes, social_media
-from app.domain.workflows import WorkflowDomainError, as_text
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import as_text
 from app.domain.workflows.executors.registry import RunScope, register
 
 #: 一次最多整理多少条。作品列表一页几十条,评论能翻出几百条 —— 交给模型读的那份要有个头。

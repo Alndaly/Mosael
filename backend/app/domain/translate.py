@@ -20,7 +20,7 @@ import httpx
 from app.core.i18n import LocalizedError, tr
 from app.domain import capabilities
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
-from app.domain.plugins.manifest import TRANSLATION
+from mosael_formats.plugin_manifest import TRANSLATION
 from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.core import http_retry

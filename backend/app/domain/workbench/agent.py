@@ -31,7 +31,7 @@ from app.domain import browser
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import instances as inst
 from app.domain.plugins import runtime, tools
-from app.domain.plugins.manifest import WORKFLOW_LIBRARY
+from mosael_formats.plugin_manifest import WORKFLOW_LIBRARY
 
 #: 问插件的上限:取模板要把几张模板的整图取一遍、问下载地址多大;注册表在公网上。
 PLUGIN_TIMEOUT_SECONDS = 120

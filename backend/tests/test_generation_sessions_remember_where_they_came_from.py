@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import AgentSession, GenerationJob, GenerationSession, User, Workflow
-from app.domain.generation import create_generation_job
+from app.domain.generation.operations import create_generation_job
 from app.domain.generation.origins import (
     AGENT,
     BOARD,
@@ -137,7 +137,7 @@ def test_每个入口说自己是哪一处() -> None:
         "base_revision": board_revision(client, board_id, ws),
     })
     seen: dict = {}
-    with mock_patch("app.domain.generation.create_generation_job", side_effect=_spy(seen)):
+    with mock_patch("app.domain.generation.operations.create_generation_job", side_effect=_spy(seen)):
         with pytest.raises(_Seen):
             run_on_board(client, board_id, ws, producer="generate", item_id="shot", kind="image",
                          form={"prompt": "一只猫", "provider": "openai", "model": "gpt-image-1"})
@@ -149,7 +149,7 @@ def test_每个入口说自己是哪一处() -> None:
     for scope_id, expected in (("w1", Origin(WORKFLOW, "w1")), (f"board:{board_id}", Origin(BOARD, board_id)),
                                ("entity:e1", Origin(ENTITY, "e1"))):
         seen.clear()
-        with SessionLocal() as db, mock_patch("app.domain.generation.create_generation_job", side_effect=_spy(seen)):
+        with SessionLocal() as db, mock_patch("app.domain.generation.operations.create_generation_job", side_effect=_spy(seen)):
             with pytest.raises(_Seen):
                 ai_generate(db, SimpleNamespace(workspace_id=ws, id=scope_id, name="x"), {"kind": "image", "prompt": "猫"})
         assert seen["origin"] == expected, scope_id
@@ -159,7 +159,7 @@ def test_每个入口说自己是哪一处() -> None:
 
     seen.clear()
     task = SimpleNamespace(id="t1", workspace_id=ws, project_id=None, owner_user_id=None, payload={"prompt": "早安海报"})
-    with SessionLocal() as db, mock_patch("app.domain.generation.create_generation_job", side_effect=_spy(seen)):
+    with SessionLocal() as db, mock_patch("app.domain.generation.operations.create_generation_job", side_effect=_spy(seen)):
         with pytest.raises(_Seen):
             _run_generation(db, task, SimpleNamespace(), SimpleNamespace())
     assert seen["origin"] == Origin(SCHEDULE, "t1")
@@ -169,7 +169,7 @@ def test_每个入口说自己是哪一处() -> None:
 
     card = SimpleNamespace(tool="generate_image", workspace_id=ws, session_id="a1", payload={"prompt": "猫"})
     for target, run in (
-        ("app.domain.generation.create_generation_job", lambda db: agent_generation._execute_generation(db, card, None)),
+        ("app.domain.generation.operations.create_generation_job", lambda db: agent_generation._execute_generation(db, card, None)),
         ("app.domain.generation.voiced.create_speech",
          lambda db: agent_generation._execute_generate_audio(db, SimpleNamespace(**{**vars(card), "payload": {"text": "你好"}}), None)),
         ("app.domain.generation.voiced.create_podcast",
@@ -182,7 +182,7 @@ def test_每个入口说自己是哪一处() -> None:
         assert seen["origin"] == Origin(AGENT, "a1"), target
     #: 没挂在哪段对话上的老卡:出处说不出,和迁移同一个判据 —— studio
     seen.clear()
-    with SessionLocal() as db, mock_patch("app.domain.generation.create_generation_job", side_effect=_spy(seen)):
+    with SessionLocal() as db, mock_patch("app.domain.generation.operations.create_generation_job", side_effect=_spy(seen)):
         with pytest.raises(_Seen):
             agent_generation._execute_generation(db, SimpleNamespace(**{**vars(card), "session_id": None}), None)
     assert seen["origin"] == STUDIO_ORIGIN

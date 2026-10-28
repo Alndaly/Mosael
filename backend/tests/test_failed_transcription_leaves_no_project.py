@@ -13,9 +13,10 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.db.models import Asset, Project, Workflow
 from app.domain.jobs import create_job
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates import transcript_video_cleanup_graph, translated_dub_graph
+from app.domain.workflows.templates_cleanup import transcript_video_cleanup_graph
+from app.domain.workflows.templates_dub import translated_dub_graph
 from app.domain.workflows.templates_models import ModelChoice
 from tests.util import fresh_client
 

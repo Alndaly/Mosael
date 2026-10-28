@@ -164,7 +164,8 @@ def studio(monkeypatch):
 
 
 def test_官方模板真跑_模型拿到口头禅的时间_按时间删掉_时间线和整理后的逐字稿对得上(studio) -> None:
-    from app.domain.workflows.templates import localised_names, transcript_video_cleanup_graph
+    from app.domain.workflows.templates import localised_names
+    from app.domain.workflows.templates_cleanup import transcript_video_cleanup_graph
     from app.domain.workflows.templates_models import ModelChoice
 
     chat = ModelChoice(profile_id=studio.profile, provider="openai-compatible", model="writer")

@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 
 from mosael_formats.plugin_manifest import MANIFEST_FILENAME
-from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION, upgrade
+from mosael_formats.plugin_manifest_upgrade import upgrade
 
 logger = logging.getLogger(__name__)
 
@@ -72,4 +72,8 @@ def _backup(path: Path) -> None:
         shutil.copy2(path, backup)
 
 
-__all__ = ["CANONICAL_FILENAME", "LEGACY_FILENAMES", "MANIFEST_VERSION", "migrate_directory", "upgrade"]
+__all__ = [
+    "CANONICAL_FILENAME",
+    "LEGACY_FILENAMES",
+    "migrate_directory",
+]

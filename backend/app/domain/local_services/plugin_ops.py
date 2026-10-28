@@ -35,7 +35,7 @@ from app.domain.local_services.errors import LocalServiceError
 from app.domain.local_services.supervisor import DEFAULT_READY_TIMEOUT
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
-from app.domain.plugins.manifest import Manifest, text_of
+from mosael_formats.plugin_manifest import Manifest, text_of
 from app.domain.plugins.runtime import StreamHooks
 
 #: 认目录:插件给试跑 `import torch` 那一步 30 秒上限,前后再读几个文件。

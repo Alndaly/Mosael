@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.i18n import get_current_locale, pick_text, set_current_locale
+from app.core.i18n import get_current_locale, set_current_locale
+from mosael_formats.i18n import pick_text
 
 
 def _text(value: Any) -> str:

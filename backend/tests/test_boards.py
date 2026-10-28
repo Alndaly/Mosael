@@ -13,7 +13,8 @@ import shutil
 
 import pytest
 
-from app.domain.boards import BoardDomainError, normalize_canvas
+from app.domain.boards.errors import BoardDomainError
+from app.domain.boards.shape import normalize_canvas
 from tests.media_fixtures import TINY_HEIC
 from tests.util import board_revision, fresh_client, run_on_board, run_on_board_settled
 
@@ -101,7 +102,7 @@ def test_自动保存和回执不刷屏团队动态_同人同板一段时间只�
 
     from app.core.db import SessionLocal
     from app.db.models import ActivityEvent
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -376,7 +377,7 @@ def test_每一种格子都能起名_名字是一行字(kind: str) -> None:
 
 
 def test_名字写错了当场拒绝() -> None:
-    from app.domain.boards.canvas import MAX_TITLE_CHARS
+    from app.domain.boards.shape import MAX_TITLE_CHARS
 
     normalize_canvas({"items": [{"id": "a", "kind": "image", "x": 0, "y": 0, "title": "长" * MAX_TITLE_CHARS}]})
     with pytest.raises(BoardDomainError, match=str(MAX_TITLE_CHARS)):
@@ -406,7 +407,7 @@ def test_布尔不算数字() -> None:
 
 
 def test_太大的画布拒绝() -> None:
-    from app.domain.boards import MAX_ITEMS
+    from app.domain.boards.shape import MAX_ITEMS
 
     items = [{"id": f"n{i}", "kind": "note", "x": 0, "y": 0} for i in range(MAX_ITEMS + 1)]
     with pytest.raises(BoardDomainError, match="最多"):
@@ -419,7 +420,7 @@ def test_图片视频项的三种状态都存得下() -> None:
     「节点本身就是生成单元」这件事**从空槽开始**:放下一个空的图片槽,底下挂提示词面板,
     写完提交才有任务。此前空槽和生成中都被当成错误拒掉了。
     """
-    from app.domain.boards import ITEM_KINDS
+    from app.domain.boards.shape import ITEM_KINDS
 
     assert "video" in ITEM_KINDS
     empty, running, done = normalize_canvas(
@@ -502,7 +503,7 @@ def test_任务成功后占位就地变成素材() -> None:
     from types import SimpleNamespace
 
     from app.db.models import Board
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -538,7 +539,7 @@ def test_任务失败时留着这一项并写上原因() -> None:
     from types import SimpleNamespace
 
     from app.db.models import Board
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -567,7 +568,7 @@ def test_任务失败但没留下原因时不编一个原因() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import Board
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -587,7 +588,7 @@ def test_跑挂了也留着连进来的那条线() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import Board
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -616,7 +617,7 @@ def test_回执登记在导入期() -> None:
     这个仓库为同一个形状修过一次(TTS 配置来源),不该再来一遍。"""
     import app.main  # noqa: F401 —— 组装根,import 它就等于装配完成
 
-    from app.domain.boards import RECEIPT_KIND, deliver_generated
+    from app.domain.boards.receipts import RECEIPT_KIND, deliver_generated
     from app.domain.jobs import _RECEIPT_DELIVERERS
 
     assert _RECEIPT_DELIVERERS.get(RECEIPT_KIND) is deliver_generated
@@ -633,7 +634,7 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -689,7 +690,7 @@ def test_删掉在跑的格子后撤销_任务已经结束的话当场补上那�
     服务端收下客户端带回来的「在跑」时查一眼那个任务:结束了就按终态补送。别的工作区的任务号不认。"""
     from app.core.db import SessionLocal
     from app.db.models import Job
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
     from tests.util import seed_assets
 
     client = fresh_client()
@@ -742,7 +743,7 @@ def test_客户端不会把已经失败的节点重新写成_loading() -> None:
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -767,7 +768,7 @@ def test_旧自动保存不会覆盖便签写作的成功正文和空表单() ->
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -884,7 +885,7 @@ def test_提示词文档必须是_tiptap_doc() -> None:
 
 def test_音频项和图片视频同一套三状态() -> None:
     """配音、旁白、BGM 都是想法的一部分 —— 画板上摊开的东西不该只有能看的。"""
-    from app.domain.boards import ITEM_KINDS
+    from app.domain.boards.shape import ITEM_KINDS
 
     assert "audio" in ITEM_KINDS
     empty, done = normalize_canvas(
@@ -909,7 +910,7 @@ def test_失败之后重新生成_画布上是这一轮的占位而不是上一�
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, place_pending, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, place_pending, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1048,7 +1049,7 @@ def test_在已有的空槽上生成不会撞上自己() -> None:
     拒重复 id),用户看到的是一句「画板项 id 重复」,而他只是点了生成。
     """
     from app.core.db import SessionLocal
-    from app.domain.boards import place_pending
+    from app.domain.boards.receipts import place_pending
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1099,7 +1100,7 @@ def test_一次出多张时每一张都落回画布() -> None:
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1164,7 +1165,7 @@ def test_写文案就地落进那张便签_成功后重置一次性表单() -> N
 
     from app.core.db import SessionLocal
     from app.db.models import Board
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1507,7 +1508,7 @@ def test_语音合成的产出也能落回画板() -> None:
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1632,7 +1633,7 @@ def test_截取产出走的是画板同一套回执() -> None:
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1784,7 +1785,7 @@ def test_画板把素材归一成字典再交给领域层() -> None:
         seen["source_assets"] = kwargs.get("source_assets")
         raise RuntimeError("到这儿就够了")
 
-    with mock_patch("app.domain.generation.create_generation_job", side_effect=spy):
+    with mock_patch("app.domain.generation.operations.create_generation_job", side_effect=spy):
         with pytest.raises(RuntimeError):
             run_on_board(
                 client, board_id, ws, producer="generate", item_id="gen-1", kind="image", x=0, y=0,

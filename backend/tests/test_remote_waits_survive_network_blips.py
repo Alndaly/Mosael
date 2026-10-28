@@ -54,6 +54,7 @@ def _video_generation() -> tuple[str, str]:
 
 def _route_seedance(monkeypatch, handler) -> None:
     from app.ai.providers.adapters.bytedance.ark import video as ark
+    from app.core import http_retry as core_http_retry
     from app.domain.generation import runner
 
     profile = SimpleNamespace(id=None, vendor="bytedance", api_key="sk-test", base_url="", extra={})
@@ -61,7 +62,7 @@ def _route_seedance(monkeypatch, handler) -> None:
     monkeypatch.setattr(runner.provider_models, "model_id_for", lambda *a, **kw: "")
     transport = httpx.MockTransport(handler)
 
-    class Routed(ark.RetryingClient):
+    class Routed(core_http_retry.RetryingClient):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             kwargs["transport"] = transport
             super().__init__(*args, **kwargs)

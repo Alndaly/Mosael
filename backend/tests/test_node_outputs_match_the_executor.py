@@ -123,7 +123,7 @@ def _returned_keys(fn: ast.AST) -> set[str] | None:
 
 
 def test_声明的输出就是执行体返回的那些() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     mismatched: list[str] = []
     checked = 0

@@ -24,7 +24,7 @@ from PIL import Image
 from app.core.db import SessionLocal
 from app.db.models import PluginInstance, PluginPackage, Workflow
 from app.domain.plugins.tools import invoke, refresh_tools
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.binding import one_asset_fields
 from app.domain.workflows.engine import execute_graph
 from tests.util import fresh_client, user_id

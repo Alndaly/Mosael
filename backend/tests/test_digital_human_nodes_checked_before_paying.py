@@ -14,10 +14,11 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Entity, EntityReference, Job, Voice, Workflow
-from app.domain.workflows import WorkflowDomainError, create_workflow
+from app.domain.workflows import create_workflow
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.executors import talking
-from app.domain.workflows.templates import translated_dub_graph
+from app.domain.workflows.templates_dub import translated_dub_graph
 from tests.util import fresh_client, make_voice, user_id
 
 LIPSYNC = {"id": "p:video:videoretalk", "is_default": True, "capabilities": {"modes": ["video-lipsync"]}}
@@ -117,7 +118,7 @@ def test_人物说话_没有本人或同意声明的真人_在花钱之前就拒
 
 def test_生成节点挂了驱动音频_没勾授权就拒_授权是引用时留给运行时(workspace) -> None:
     """驱动音频常是上游的引用(`{{配音.asset_id}}:driving_audio`),角色写在模板里 —— 按原始配置认出这是数字人生成。"""
-    from app.domain.workflows.executors import run_preflights
+    from app.domain.workflows.executors.registry import run_preflights
 
     graph = {
         "nodes": [

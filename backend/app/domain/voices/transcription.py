@@ -43,7 +43,7 @@ from app.core.child_process import run_logged
 from app.domain import asr as asr_defaults
 from app.domain import capabilities
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
-from app.domain.plugins.manifest import TRANSCRIPTION
+from mosael_formats.plugin_manifest import TRANSCRIPTION
 
 logger = logging.getLogger(__name__)
 

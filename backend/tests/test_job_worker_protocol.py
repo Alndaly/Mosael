@@ -269,7 +269,7 @@ class TestDispatchWiring:
             assert claim_next_job(db, kinds=["tts"]).id == job.id
 
     def test_generation_respects_external_mode(self, monkeypatch) -> None:
-        from app.domain.generation import create_generation_job
+        from app.domain.generation.operations import create_generation_job
         from app.domain.generation.runner import start_generation_thread
 
         self._external(monkeypatch, "ai_generation")

@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, PluginInstance, PluginInvocation, PluginPackage, User, Workspace, WorkspaceMember
-from app.domain.assets import register_file_asset
+from app.domain.assets.importer import register_file_asset
 from tests.util import fresh_client
 
 

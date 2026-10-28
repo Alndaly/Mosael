@@ -40,11 +40,11 @@ from app.domain.voices.speech import (
     EDGE_ENGINE,
     LOCAL_SPEECH_ENGINES,
     QWEN_ENGINE,
-    SPEECH,
     adapter_id,
     is_plugin,
     require_engine,
 )
+from mosael_formats.plugin_manifest import SPEECH
 from app.domain.voices.target import speech_target
 
 if TYPE_CHECKING:
@@ -814,7 +814,6 @@ def _run_synthesis_body(
 
 
 __all__ = [
-    "VoiceError",
     "create_from_upload",
     "create_from_speaker",
     "list_voices",

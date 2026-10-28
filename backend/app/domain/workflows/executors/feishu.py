@@ -31,7 +31,8 @@ from app.db.models import FeishuBot, Job
 from app.domain.feishu import gateway as feishu_gateway
 from app.domain.feishu import routing
 from app.domain.jobs import current_parent_job_id
-from app.domain.workflows import WorkflowDomainError, as_text
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import as_text
 from app.domain.workflows.executors.registry import (
     PreflightNode,
     RunScope,

@@ -26,6 +26,7 @@ import pytest
 
 from app.ai.runtime import tts_models
 from app.domain.voices import voices
+from app.domain.voices import errors
 from app.ai.runtime import config as tts_config
 from app.core.db import SessionLocal
 from app.db.models import Job
@@ -62,7 +63,7 @@ def test_it_refuses_before_creating_a_job(monkeypatch) -> None:
 
     with SessionLocal() as db:
         before = db.query(Job).count()
-        with pytest.raises(voices.VoiceError) as caught:
+        with pytest.raises(errors.VoiceError) as caught:
             voices.start_synthesis(db, text="这是一段测试配音。", project_id=None, created_by=None, voice_id=voice_id)
         assert db.query(Job).count() == before, "已经起了一个注定发占位音的任务"
 

@@ -160,7 +160,7 @@ def _spy_generation(client, ws: str, board_id: str, form: dict) -> dict:
         seen.update(kwargs)
         raise RuntimeError("到这儿就够了")
 
-    with mock_patch("app.domain.generation.create_generation_job", side_effect=spy):
+    with mock_patch("app.domain.generation.operations.create_generation_job", side_effect=spy):
         with pytest.raises(RuntimeError):
             run_on_board(client, board_id, ws, producer="generate", item_id="shot", kind="image", x=300, y=0,
                          form={"prompt": "站在街口", "provider": "openai", "model": "gpt-image-1", **form})
@@ -200,7 +200,7 @@ def test_工作流生成节点的_entity_ids_交给同一个漏斗() -> None:
     """节点的 `entity_ids` 可以是挑出来的一串,也可以是上游插值出来的一段字(逗号 / 换行分隔)。"""
     from types import SimpleNamespace
 
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     seen: dict = {}
 
@@ -210,7 +210,7 @@ def test_工作流生成节点的_entity_ids_交给同一个漏斗() -> None:
 
     fresh_client()
     scope = SimpleNamespace(workspace_id="ws-1", id="wf-1", name="流程")
-    with SessionLocal() as db, mock_patch("app.domain.generation.create_generation_job", side_effect=spy):
+    with SessionLocal() as db, mock_patch("app.domain.generation.operations.create_generation_job", side_effect=spy):
         with pytest.raises(RuntimeError):
             get_executor("ai_generate")(db, scope, {"kind": "image", "prompt": "街口", "entity_ids": "e1, e2\ne1"})
     assert seen["entity_ids"] == ["e1", "e2"]

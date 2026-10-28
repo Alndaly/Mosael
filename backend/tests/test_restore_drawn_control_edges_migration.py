@@ -39,8 +39,8 @@ from sqlalchemy import text
 
 from app.core.db import SessionLocal, engine
 from app.db.models import User, Workflow
-from app.domain.workflows import NODE_TYPES
-from app.domain.workflows.engine import BRANCHING_NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.graph_rules import BRANCHING_NODE_TYPES
 from app.domain.workflows.graph_upgrade import drawn_control_edges_come_back
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.revisions import commit_graph_revision, graph_digest

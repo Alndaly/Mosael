@@ -16,7 +16,7 @@ from PIL import Image
 from app.core.db import SessionLocal
 from app.db.models import Asset, BrowserAction
 from app.domain import browser as bdom
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.executors import browser as bx
 from app.domain.workflows.run_scope import node_scope
 from tests.util import fresh_client, worker_client

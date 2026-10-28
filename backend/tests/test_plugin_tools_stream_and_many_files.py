@@ -98,7 +98,7 @@ def _install(tmp_path: Path) -> tuple[str, str, list[str]]:
         instance = PluginInstance(package_id=package.id, name="收集器", enabled=True, owner_user_id="")
         db.add(instance)
         db.commit()
-        from app.domain.assets import register_file_asset
+        from app.domain.assets.importer import register_file_asset
 
         for index in range(3):
             media = tmp_path / f"素材{index}.txt"
@@ -162,7 +162,7 @@ def test_工作流节点里的进度成了节点事件(monkeypatch) -> None:
     from app.domain.plugins.nodes import node_meta
     from app.domain.workflows import create_workflow
     from app.domain.workflows.engine import start_workflow_job
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
     from tests.util import user_id
 
     kind = "plugin.demo.slowpoke"

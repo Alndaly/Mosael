@@ -24,6 +24,7 @@ import pytest
 
 from app.ai.runtime import tts_models
 from app.domain.voices import voices
+from app.domain.voices import errors
 from tests.util import fresh_client
 
 
@@ -57,7 +58,7 @@ def test_fish_refuses_an_empty_reference_text(monkeypatch) -> None:
 
     with SessionLocal() as db:
         before = db.query(Job).count()
-        with pytest.raises(voices.VoiceError) as caught:
+        with pytest.raises(errors.VoiceError) as caught:
             voices.start_synthesis(db, text="你好", project_id=None, created_by=None,
                                    voice_id=voice_id, clone_engine="fish-speech")
         assert db.query(Job).count() == before, "起了一个注定说不清话的十分钟任务"

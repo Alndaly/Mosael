@@ -1,5 +1,1 @@
-"""Transcript domain interface."""
-
-from app.domain.transcripts.operations import attach_transcript, get_transcript_for_asset
-
-__all__ = ["attach_transcript", "get_transcript_for_asset"]
+"""逐字稿领域。调用方从各子模块取,包本身不转出名字。"""

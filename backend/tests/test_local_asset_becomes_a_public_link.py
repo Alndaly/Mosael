@@ -190,7 +190,7 @@ def test_插件版本太旧_没有工具认领上传时让他去更新(world) ->
 
 
 def test_工具声明了包上没有的能力_清单当场拒绝() -> None:
-    from app.domain.plugins.manifest import ManifestError, parse
+    from mosael_formats.plugin_manifest import ManifestError, parse
 
     wrong = {**STORAGE, "provides": []}
     with pytest.raises(ManifestError, match="public_url"):
@@ -201,7 +201,7 @@ def test_随应用内置的对象存储声明了这个能力_也声明了由哪�
     import json
     from pathlib import Path
 
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     root = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "object-storage"
     manifest = parse(json.loads((root / "mosael.plugin.json").read_text(encoding="utf-8")), "object-storage")

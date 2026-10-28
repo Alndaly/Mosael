@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
+from app.domain.sequences.clip_properties import DetachClipAudio, detach_clip_audio
 from tests.util import fresh_client, insert_asset
 
 

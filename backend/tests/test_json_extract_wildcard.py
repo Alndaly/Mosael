@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 
 RESULTS = [
     {"on_model": {"asset_id": "img-1"}, "on_model_clip": {"asset_id": "clip-1"}},
@@ -40,7 +40,7 @@ def test_没有星号照旧取一格() -> None:
 def test_没有星号时取不到就报错_星号下没有的只是不占位() -> None:
     import pytest
 
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     with pytest.raises(WorkflowDomainError) as missing:
         _extract(RESULTS, "1.on_model_clip.asset_id")
@@ -53,7 +53,7 @@ def test_来源是空的而路径要往里走_直说来源空() -> None:
     把「上游没东西」藏成了「路径不对」,人照着路径改死也修不好。现在来源空且要往里走时直说来源空。"""
     import pytest
 
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     with pytest.raises(WorkflowDomainError) as empty:
         _extract("", "0.name")
@@ -86,7 +86,7 @@ def test_长度保留段_列表字典字符串都给_len() -> None:
     # 取不到长度的(数字/None)走 missing 报错,不瞎猜
     import pytest
 
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     with pytest.raises(WorkflowDomainError):
         _extract(42, "$length")

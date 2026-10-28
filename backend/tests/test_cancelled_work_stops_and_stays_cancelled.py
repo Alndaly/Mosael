@@ -512,7 +512,8 @@ def _registered(source: str) -> list[str]:
 
 def test_a_separation_cancelled_as_it_finishes_registers_no_stems(monkeypatch) -> None:
     from app.domain.assets import separation as separation_module
-    from app.domain.assets.separation import BACKGROUND, VOCALS, start_separation_job
+    from app.domain.assets.separation import start_separation_job
+    from app.ai.providers.contracts.separation import BACKGROUND, VOCALS
 
     class FinishesThenGetsCancelled:
         engine_id = "fake"

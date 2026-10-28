@@ -21,7 +21,7 @@ from sqlalchemy import select
 from app.core import outbound_guard
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import execute_graph
 from tests.util import fresh_client, second_client
 

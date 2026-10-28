@@ -33,7 +33,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.i18n import DEFAULT_LOCALE, render_message
+from app.core.i18n import render_message
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import FeishuBot, Workflow, WorkflowRunApproval
 from app.domain.feishu import bindings, routing
 from app.domain.workflows.approvals import (
@@ -448,11 +449,8 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
     失败一律回 toast:原卡保持可点,好让真正有权限的人接手。
     """
     from app.db.models import ToolConfirmation
-    from app.domain.agent.confirmations import (
-        ConfirmationError,
-        authorize_and_approve,
-        authorize_and_reject,
-    )
+    from app.domain.agent.confirmations import authorize_and_approve, authorize_and_reject
+    from app.domain.agent.errors import ConfirmationError
     from app.integrations.feishu import cards, question_cards
 
     action = str(value.get("action") or "")

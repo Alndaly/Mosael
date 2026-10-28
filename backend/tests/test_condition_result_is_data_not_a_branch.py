@@ -21,7 +21,9 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
-from app.domain.workflows import BRANCHING_NODE_TYPES, NODE_TYPES, create_workflow
+from app.domain.workflows import create_workflow
+from app.domain.workflows.graph_rules import BRANCHING_NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.engine import start_workflow_job
 from tests.util import user_id, fresh_client
 

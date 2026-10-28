@@ -124,7 +124,7 @@ def _cards() -> int:
 ])
 def test_清单里的后果写错或和只读打架_装的那一刻就报(tools: dict, says: str) -> None:
     from app.core.i18n import render_message
-    from app.domain.plugins.manifest import ManifestError, parse
+    from mosael_formats.plugin_manifest import ManifestError, parse
 
     with pytest.raises(ManifestError) as caught:
         parse({"id": "x", "name": "X", "version": "1", "tools": tools}, "/p")

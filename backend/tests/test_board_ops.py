@@ -15,9 +15,10 @@ import re
 
 import pytest
 
-from app.domain.boards.canvas import DEFAULT_SIZE
+from app.domain.boards.shape import DEFAULT_SIZE
 from app.domain.boards.ops import apply_board_ops
-from app.domain.boards import BoardDomainError, normalize_canvas
+from app.domain.boards.errors import BoardDomainError
+from app.domain.boards.shape import normalize_canvas
 
 RATCHET = True
 
@@ -133,8 +134,9 @@ def test_智能体改画板走确认卡_并且写坏的算子在批准前就失�
     那时他以为自己批准的是一件做得成的事。
     """
     from app.core.db import SessionLocal
-    from app.domain.agent.confirmable import tool_spec
-    from app.domain.agent.confirmations import ConfirmationError, request_confirmation
+    from app.domain.agent.confirmable.registry import tool_spec
+    from app.domain.agent.confirmations import request_confirmation
+    from app.domain.agent.errors import ConfirmationError
     from tests.util import fresh_client
 
     assert tool_spec("edit_board").permission == "edit"

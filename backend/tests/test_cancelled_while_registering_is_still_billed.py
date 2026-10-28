@@ -29,6 +29,7 @@ def test_登记素材时被停下_成片在库_账也在(monkeypatch) -> None:
     from tests.util import fresh_client
     from app.domain import jobs
     from app.domain.generation import runner
+    from app.domain.assets import importer
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -54,7 +55,7 @@ def test_登记素材时被停下_成片在库_账也在(monkeypatch) -> None:
                               reported_usage=lambda raw: ReportedUsage())
     monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: adapter)
 
-    registered = runner.register_file_asset
+    registered = importer.register_file_asset
     count = {"n": 0}
 
     def register(db, **fields):

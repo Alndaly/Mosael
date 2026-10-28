@@ -49,7 +49,7 @@ from app.domain.boards.actions import (
     trim_on_board,
     write_on_board,
 )
-from app.domain.boards.canvas import BoardDomainError
+from app.domain.boards.errors import BoardDomainError
 from app.domain.boards.producer_ids import (
     BUILTIN_PRODUCER_IDS,
     SCENE_PRODUCER,
@@ -389,7 +389,7 @@ def _scene_render_meta() -> dict[str, Any]:
 
     落板的只有三份素材(首帧、尾帧、运镜视频);镜头语言、跳过的模型、模型提醒是给工作流连线的。
     """
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     node = NODE_TYPES[SCENE_PRODUCER]
     config = {key: dict(node["config"][key]) for key in SCENE_RENDER_FIELDS}
@@ -447,7 +447,7 @@ def _preflight_sequence_export(db: Session, request: RunRequest, form: SequenceE
 
 def _sequence_export_meta() -> dict[str, Any]:
     """导出给界面的描述:名字和一句说明是画板自己的,字段和输出是工作流节点那一份(不抄)。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     node = NODE_TYPES["export_sequence"]
     return {
@@ -479,8 +479,8 @@ def _builtins() -> dict[str, Producer]:
     from app.domain.boards.trim import TrimError
     from app.domain.generation.operations import GenerationDomainError
     from app.domain.generation.resolution import KINDS as GENERATION_KINDS
-    from app.domain.voices.voices import VoiceError
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.voices.errors import VoiceError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     return {
         one.id: one
@@ -675,7 +675,7 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
       没有执行者(None)就不列插件:「不按人过滤」只给后台无人路径用,画板上总有一个点运行的人。
     """
     from app.domain.boards.transforms import is_content_transform
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     out: dict[str, Producer] = {}
     for node_type, meta in NODE_TYPES.items():
@@ -720,7 +720,7 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
     from app.domain.boards.transforms import board_hosts, board_role, host_field, host_sink
     from app.domain.notes import NoteDomainError
     from app.domain.plugins.errors import PluginDomainError
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     role = board_role(meta)
 
@@ -1001,7 +1001,7 @@ def _check_node_form(canvas: dict[str, Any], item_id: str, producer: Producer, f
     """一份节点产出者的表单(`{config, bindings}`)在这一格上说得通。"""
     from app.domain.boards.tools import check_bindings
     from app.domain.boards.transforms import external_id_field, host_field, wiring_field
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.binding import check_number_fields
 
     config = form.get("config") or {}

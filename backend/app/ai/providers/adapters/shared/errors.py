@@ -13,11 +13,9 @@ from app.ai.providers.contracts.generation import GenerationAdapterError, saniti
 #: 失败的类别和归类表住在契约里(宿主也照它说话,见 contracts/failures);这里照旧导出,适配器从这儿拿。
 __all__ = [
     "PollAnswerUnreadable",
-    "UPSTREAM_ERROR_KEYS",
     "adapter_http_error",
     "categorized_http_error",
     "http_error_detail",
-    "http_status_category",
     "transient_poll_failure",
     "upstream_error",
 ]

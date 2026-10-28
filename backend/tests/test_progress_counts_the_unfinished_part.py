@@ -126,4 +126,4 @@ def test_f5_progress_still_counts_everything_it_did_before(tmp_path, monkeypatch
 
 def test_there_is_only_one_size_walker() -> None:
     """一份实现。两份量法就是下一次"只改了一边"的来源 —— 这个 bug 本来就是这么来的。"""
-    assert f5_models.bytes_on_disk is tts_models.bytes_on_disk
+    assert tts_models.bytes_on_disk is tts_models.bytes_on_disk

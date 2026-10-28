@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Sequence, SequenceOperation
 from app.domain.sequences import concurrency
-from app.domain.sequences import undo as undo_registry
+from app.domain.sequences.undo import registry
 from app.domain.sequences._timeline import _record_operation, _require_sequence
 from app.domain.sequences.errors import SequenceDomainError
 
@@ -28,7 +28,7 @@ from app.domain.sequences.errors import SequenceDomainError
 #: 曾经这是一个手写元组,和 operations.py 里的 24 处 _record_operation 各自维护。两边不同步
 #: 时的表现极坏:往回找的时候按 kind 过滤,于是它跳过刚做的那条,把**更早的一条编辑**撤了 ——
 #: 200,没有报错,can_undo 一直是 true。用户按一次 ⌘Z,消失的是他没打算撤销的东西。
-UNDOABLE_KINDS = undo_registry.undoable_kinds()
+UNDOABLE_KINDS = registry.undoable_kinds()
 
 
 def _expect(db: Session, sequence: Sequence, expected_revision: int | None, actor_id: str | None) -> None:
@@ -78,7 +78,7 @@ def undo(
         if operation is None:
             raise SequenceDomainError("seqErr_nothingToUndo")
     # kind 不在注册表里就直接报错。往回跳过这一条去撤更早的,等于替用户丢掉一件他没要求撤销的事。
-    _replay(db, lambda: undo_registry.apply_inverse(db, sequence, operation.kind, operation.payload))
+    _replay(db, lambda: registry.apply_inverse(db, sequence, operation.kind, operation.payload))
     operation.reverted = True
     _record_operation(
         db,
@@ -116,7 +116,7 @@ def redo(
         raise SequenceDomainError("seqErr_nothingToRedo")
     if mine:
         _ensure_reversible(db, sequence, undo_operation, expected_revision, actor_id)
-    _replay(db, lambda: undo_registry.apply_forward(db, sequence, original.kind, original.payload))
+    _replay(db, lambda: registry.apply_forward(db, sequence, original.kind, original.payload))
     original.reverted = False
     undo_operation.reverted = True
     _record_operation(
@@ -182,7 +182,7 @@ def _latest_undoable(
     """
     query = select(SequenceOperation).where(
         SequenceOperation.sequence_id == sequence_id,
-        SequenceOperation.kind.notin_(tuple(undo_registry.NOT_UNDOABLE)),
+        SequenceOperation.kind.notin_(tuple(registry.NOT_UNDOABLE)),
         SequenceOperation.reverted.is_(False),
     )
     if mine:
@@ -208,7 +208,7 @@ def _has_edit_after(
 ) -> bool:
     query = select(SequenceOperation.id).where(
         SequenceOperation.sequence_id == sequence_id,
-        SequenceOperation.kind.notin_(tuple(undo_registry.NOT_UNDOABLE)),
+        SequenceOperation.kind.notin_(tuple(registry.NOT_UNDOABLE)),
         SequenceOperation.revision_after > revision,
     )
     if mine:

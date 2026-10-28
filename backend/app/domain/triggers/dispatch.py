@@ -29,7 +29,8 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import t
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Workflow, WorkflowTrigger, WorkflowTriggerEvent, now
 from app.domain.jobs import blame, create_job, finish_job
 from app.domain.notifications import notify
@@ -212,7 +213,7 @@ def _fire_one(db: Session, trigger_id: str, message: IncomingMessage) -> Outcome
 
         check_runnable(db, workflow, params, actor)
     except Exception as exc:  # noqa: BLE001 —— 认得出原因的当拒绝,认不出的也是拒绝
-        from app.domain.workflows import WorkflowDomainError
+        from app.domain.workflows.errors import WorkflowDomainError
 
         reason = (
             t("triggerRefused_notRunnable", DEFAULT_LOCALE, workflow=workflow.name, reason=str(exc))

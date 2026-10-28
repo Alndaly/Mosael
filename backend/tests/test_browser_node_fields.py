@@ -15,7 +15,7 @@ import types
 
 from app.core.db import SessionLocal
 from app.domain import browser as bdom
-from app.domain.workflows import validate_graph
+from app.domain.workflows.graph_rules import validate_graph
 from app.domain.workflows.executors import browser as bx
 from tests.util import fresh_client, worker_client
 
@@ -44,7 +44,7 @@ def test_点击的选择器和文字恰好一样() -> None:
 
 
 def test_等待的三样条件恰好一样_都在第一屏() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     specs = NODE_TYPES["browser_wait"]["config"]
     assert not any(specs[key].get("advanced") for key in ("selector", "url_contains", "text"))
@@ -119,7 +119,7 @@ FRAME_NODES = ("browser_click", "browser_input", "browser_upload", "browser_extr
 
 def test_按选择器找元素的节点都有在框架里这一格() -> None:
     from app.core.i18n import tr
-    from app.domain.workflows import NODE_TYPES, config_label
+    from app.domain.workflows.node_types import NODE_TYPES, config_label
 
     for node_type in FRAME_NODES:
         spec = NODE_TYPES[node_type]["config"]["frame"]

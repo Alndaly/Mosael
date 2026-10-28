@@ -10,7 +10,8 @@ from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale
 from app.api.schemas import BoardCreate, BoardDuplicate, BoardNoteAppend, BoardNoteAppendOut, BoardOut, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardSummaryOut, BoardUpdate
 from app.db.models import Board
-from app.domain.boards import BoardDomainError, BoardNotFound, BoardRevisionConflict, producers
+from app.domain.boards import producers
+from app.domain.boards.errors import BoardDomainError, BoardNotFound, BoardRevisionConflict
 from app.domain.boards import use_cases as boards
 
 router = APIRouter(tags=["boards"])

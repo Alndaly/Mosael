@@ -20,7 +20,7 @@ from app.core.db import SessionLocal
 from app.db.models import Transcript, Workflow
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import wait_for_idle_jobs
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import fresh_client
 
 

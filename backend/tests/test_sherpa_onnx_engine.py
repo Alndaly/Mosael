@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from app.ai.runtime import asr_models, remote_size
+from app.ai.runtime import errors
 from app.ai.runtime.workers import asr
 
 
@@ -241,7 +242,7 @@ def test_校验不过就不留文件(tmp_path: Path, monkeypatch: pytest.MonkeyP
     one = asr_models.PinnedFile(name="model.onnx", role="model", url="https://example.invalid/x",
                                 bytes=18, sha256="0" * 64)
 
-    with pytest.raises(asr_models.RuntimeSetupError) as raised:
+    with pytest.raises(errors.RuntimeSetupError) as raised:
         asr_models._fetch_pinned(one, target)
 
     assert raised.value.key == "asrErr_weightChecksum"

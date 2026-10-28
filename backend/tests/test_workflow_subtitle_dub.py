@@ -14,8 +14,9 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Clip, Track, Workflow
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import fresh_client, make_voice
 
 
@@ -209,8 +210,8 @@ class Test字幕配音:
 
 class Test官方工作流:
     def test_译配模板连得起来且默认压回原长度(self) -> None:
-        from app.domain.workflows import validate_graph
-        from app.domain.workflows.templates import translated_dub_graph
+        from app.domain.workflows.graph_rules import validate_graph
+        from app.domain.workflows.templates_dub import translated_dub_graph
 
         graph = translated_dub_graph(voice_id="v1")
         # 只差用户自己选那份视频 —— 其余每一处配置都该是完整的。
@@ -245,7 +246,7 @@ class Test官方工作流:
 
     def test_新节点都归了类(self) -> None:
         """EXTERNAL/INTERNAL 合起来必须覆盖全部节点 —— 漏掉的那个恰恰是没人想过后果的那个。"""
-        from app.domain.workflows import EXTERNAL_NODE_TYPES, INTERNAL_NODE_TYPES
+        from app.domain.workflows.graph_rules import EXTERNAL_NODE_TYPES, INTERNAL_NODE_TYPES
 
         for node_type in ("generate_subtitles", "dub_subtitles"):
             assert node_type in EXTERNAL_NODE_TYPES | INTERNAL_NODE_TYPES

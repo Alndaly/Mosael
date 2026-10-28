@@ -22,12 +22,14 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
-from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
+from app.core.i18n import LocalizedError, t
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.assets.intermediates import DUB_LINE
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import CANCELLED, CANCELLED_ERROR_KEY, JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
-from app.domain.sequences.operations import AddTrack, InsertClip, add_track, insert_clip
+from app.domain.sequences.tracks import AddTrack, add_track
+from app.domain.sequences.placement import InsertClip, insert_clip
 from app.domain.voices.original_audio import (
     DEFAULT_ORIGINAL_AUDIO,
     OriginalAudioError,
@@ -325,7 +327,7 @@ def _existing_dubs(db: Session, sequence_id: str, start: float, end: float) -> l
 
 def _run_dub(job_id: str) -> None:
     from app.domain.sequences.grouping import OperationGroup
-    from app.domain.sequences.operations import DeleteClip, delete_clip
+    from app.domain.sequences.placement import DeleteClip, delete_clip
 
     with unit_of_work() as db:
         job = db.get(Job, job_id)

@@ -17,7 +17,7 @@ from app.core.db import SessionLocal
 from app.core.config import settings
 from app.db.models import User, PluginPackage, PluginInstance, Scene3D, Scene3DModel
 from app.domain.blender import bridge
-from app.domain.plugins.manifest import parse
+from mosael_formats.plugin_manifest import parse
 from app.domain.scenes.types import SceneContent
 from tests.test_scenes import setup_scene
 
@@ -79,7 +79,7 @@ UPSTREAM_READ_ONLY = {
 def test_upstream_read_only_tools_skip_the_card_and_writers_do_not():
     """没标只读的 MCP 工具按 external 算,智能体每调一次都先开确认卡 —— 查一下 API 的写法、看一眼视口也要人点。
     改场景、下载资产、导出文件、调付费生成的那些照旧要确认;原始的代码执行入口只给互通用。"""
-    from app.domain.effects import NONE, plugin_tool_effects
+    from mosael_formats.effects import NONE, plugin_tool_effects
 
     raw = json.loads(MANIFEST.read_text())
     overrides = raw['tools']['overrides']

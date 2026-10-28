@@ -13,7 +13,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.domain.agent.confirmable.generation import _validate_generate_video
 from app.domain.agent.errors import ConfirmationError
-from app.domain.generation import create_generation_job
+from app.domain.generation.operations import create_generation_job
 from app.domain.generation.operations import GenerationDomainError, is_digital_human_request
 from tests.util import fresh_client
 

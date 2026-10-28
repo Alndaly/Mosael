@@ -105,7 +105,7 @@ def test_画板上连进生成格的场景按连线取_镜头和用法照表单(
         seen.update(kwargs)
         raise RuntimeError("到这儿就够了")
 
-    with mock_patch("app.domain.generation.create_generation_job", side_effect=spy), pytest.raises(RuntimeError):
+    with mock_patch("app.domain.generation.operations.create_generation_job", side_effect=spy), pytest.raises(RuntimeError):
         run_on_board(client, board_id, ws, producer="generate", item_id="shot", kind="video", x=400, y=0,
                      form={"prompt": "她在跑", "scene_reference": {"shot_id": "shot-1", "use": "frames"}})
     assert seen["scene_reference"] == {"shot_id": "shot-1", "use": "frames", "scene_id": scene_id}
@@ -113,7 +113,7 @@ def test_画板上连进生成格的场景按连线取_镜头和用法照表单(
 
 def test_生成漏斗挂上渲出来的素材_说明并进提示词_回执记下修订(monkeypatch) -> None:
     from app.domain import jobs as jobs_bus
-    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import create_generation_job
 
     from tests.test_entity_generation_paths import _seedance
 
@@ -135,7 +135,7 @@ def test_生成漏斗挂上渲出来的素材_说明并进提示词_回执记下
 
 
 def _generate(ws: str, profile: str, scene_id: str, **extra):
-    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import create_generation_job
 
     with SessionLocal() as db:
         generation, _job = create_generation_job(

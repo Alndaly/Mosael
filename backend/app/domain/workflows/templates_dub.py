@@ -1,14 +1,14 @@
 """内置模板「视频译配」的图(和带改口型的那一版):视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 →(改口型)→ 导出。
 
-由 templates.py 统一重新导出;调用方照旧从 templates 取。
+调用方直接从这个模块取(一个名字只有一个来源,见 tests/test_imports_come_from_where_names_live)。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from app.core.i18n import pick_text
-from app.domain.workflows import NODE_TYPES
+from mosael_formats.i18n import pick_text
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import ModelChoice
 

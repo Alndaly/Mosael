@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.workflows import validate_graph
+from app.domain.workflows.graph_rules import validate_graph
 
 
 def _graph(*nodes: dict, edges: list | None = None) -> dict:

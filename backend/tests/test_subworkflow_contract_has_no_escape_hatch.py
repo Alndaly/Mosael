@@ -122,7 +122,7 @@ def test_被调图没有输出节点时说得出口() -> None:
 
 def test_输出节点不能放进循环体或子图() -> None:
     """放在体里它照样跑、产出却没人收 —— 看起来声明了输出,被调用时拿到的还是没有。"""
-    from app.domain.workflows import validate_graph
+    from app.domain.workflows.graph_rules import validate_graph
 
     body = {"nodes": [{"id": "out", "type": "output", "config": {"values": {"x": "1"}}}], "edges": []}
     for container in ({"type": "subgraph", "config": {"body": body}},

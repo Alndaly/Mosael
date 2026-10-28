@@ -99,7 +99,7 @@ def settle_previous_run() -> dict[str, int]:
     """
     from app.core.unit_of_work import unit_of_work
     from app.domain.agent.host import reconcile_orphaned_agent_sessions
-    from app.domain.assets import reconcile_broken_media_info
+    from app.domain.assets.importer import reconcile_broken_media_info
     from app.domain.assets.proxies import reconcile_missing_proxies
     from app.domain.blender.bridge import reconcile_orphaned_transfers
 

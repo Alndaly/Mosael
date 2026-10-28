@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.plugins.manifest import OAuthSpec
+from mosael_formats.plugin_manifest import OAuthSpec
 from app.domain.plugins.oauth import (
     PluginOAuthError,
     authorize_url,
@@ -94,7 +94,7 @@ def test_一个声明过的字段都没回就说出来() -> None:
 
 def test_声明不全就当没声明() -> None:
     """半个 oauth 块会让界面长出一个点了必然失败的按钮。"""
-    from app.domain.plugins.manifest import oauth_spec
+    from mosael_formats.plugin_manifest import oauth_spec
 
     assert oauth_spec({"authorize_url": "https://x.test/a"}) is None  # 缺 token_url / client_id_field / stores
     assert oauth_spec(None) is None
@@ -114,7 +114,7 @@ def test_oauth_块读的是_instance_那一层() -> None:
     解析器读不到,于是 oauth 为 None,按钮不出现,而**没有任何一处报错** —— 用户看到的
     只是"没有授权入口",作者看到的是"我明明声明了"。写解析器的人自己就踩进去过一次。
     """
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     block = {
         "authorize_url": "https://x.test/auth",
@@ -135,7 +135,7 @@ def test_百度网盘自己声明了_oauth() -> None:
     import json
     import pathlib
 
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     root = pathlib.Path(__file__).resolve().parents[2]
     raw = json.loads((root / "plugins/examples/baidu-pan/mosael.plugin.json").read_text(encoding="utf-8"))

@@ -2,7 +2,7 @@
 
 对话节点按它出结构化结果;布景执行器(executors/scenes)也借场景设计那一份。
 
-由 templates.py 统一重新导出;调用方照旧从 templates 取。
+调用方直接从这个模块取(一个名字只有一个来源,见 tests/test_imports_come_from_where_names_live)。
 """
 
 from __future__ import annotations

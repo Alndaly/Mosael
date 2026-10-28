@@ -13,8 +13,6 @@ from app.core.token_digest import token_digest
 """Password hashing (stdlib PBKDF2) and opaque session tokens."""
 
 __all__ = [
-    "LOGIN_SESSION_TTL",
-    "SERVICE_SESSION_TTL",
     "find_session",
     "hash_password",
     "mint_login_session",
@@ -23,7 +21,6 @@ __all__ = [
     "SERVICE_PATH_PREFIXES",
     "service_request_allowed",
     "prune_expired_sessions",
-    "token_digest",
     "revoke_other_logins",
     "revoke_session",
     "renew_if_stale",

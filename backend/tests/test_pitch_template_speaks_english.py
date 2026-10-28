@@ -12,7 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.domain.workflows.templates import ModelChoice, blank_template_graphs
+from app.domain.workflows.templates import blank_template_graphs
+from app.domain.workflows.templates_models import ModelChoice
 from app.domain.workflows.templates_business import PRODUCT_PITCH_SHORT, product_pitch_short_graph
 from tests.util import fresh_client
 

@@ -33,9 +33,9 @@ from app.api.schemas import (
 from app.core.i18n import tr
 from app.db.models import PluginInstance, User
 from app.domain import local_services
-from app.domain.local_services import LocalServiceError
+from app.domain.local_services.errors import LocalServiceError
 from app.domain.permissions import ensure_deployment_admin
-from app.domain.plugins import PluginDomainError
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
 
 router = APIRouter(tags=["local-services"])

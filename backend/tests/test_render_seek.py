@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.media import render_executor as rx
+from app.core import config
 from app.media.render_executor import build_ffmpeg_command
 from app.media.render_plan import build_render_plan
 
@@ -67,7 +68,7 @@ def _first_pixel_rgb(path: Path, at: float) -> tuple[int, int, int]:
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_deep_clip_stays_frame_accurate(tmp_path: Path, monkeypatch):
     """源:前 3s 红、后 3s 绿。剪 [4,6] 应得 2s 纯绿——证明 -ss 精确落到 src_in 而非从 0 起。"""
-    monkeypatch.setattr(rx.settings, "hw_encode", False)  # 软件编码,输出确定
+    monkeypatch.setattr(config.settings, "hw_encode", False)  # 软件编码,输出确定
     src = tmp_path / "src.mp4"
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error",
@@ -104,7 +105,7 @@ def test_入点落在关键帧上_声音不缺头(tmp_path: Path, monkeypatch):
     声音和源对不上(一声「咔」)。底轨、上层轨、音频轨走的是同一个快进,这里用音频轨的一段量。"""
     import numpy as np
 
-    monkeypatch.setattr(rx.settings, "hw_encode", False)
+    monkeypatch.setattr(config.settings, "hw_encode", False)
     src = tmp_path / "src.mp4"
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=64x36:r=30:d=8",

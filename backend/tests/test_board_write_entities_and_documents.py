@@ -242,7 +242,7 @@ def test_回执把笔记填进引用着文件的文档格_文件那一份摘掉_
     from types import SimpleNamespace
 
     from app.db.models import Board
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
     from tests.util import board_revision
 
     client = fresh_client()

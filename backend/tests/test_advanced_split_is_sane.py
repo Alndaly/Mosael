@@ -15,7 +15,7 @@ RATCHET = True
 
 import pytest
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 
 
 def _config(name: str) -> dict:

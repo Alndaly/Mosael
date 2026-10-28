@@ -6,7 +6,7 @@ from app.db.models import Asset, Clip, Font, Project, Sequence, Track, Workspace
 from app.domain.render import build_plan_for_sequence
 from app.media.paths import font_key
 from app.domain.sequences.history import undo
-from app.domain.sequences.operations import (
+from app.domain.sequences.clip_properties import (
     DetachClipAudio,
     SetClipGain,
     SetClipTransform,

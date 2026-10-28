@@ -31,12 +31,14 @@ from typing import Any
 
 if __package__:
     from .parent_watch import watch_parent
-    from .tts_protocol import KeyedWorkerError, encode_event_line, error_event
+    from .line_protocol import KeyedWorkerError, error_event
+    from .tts_protocol import encode_event_line
 else:
     # Executed directly by the engine's isolated interpreter; its sys.path only
     # contains this directory, not the application package.
     from parent_watch import watch_parent
-    from tts_protocol import KeyedWorkerError, encode_event_line, error_event
+    from line_protocol import KeyedWorkerError, error_event
+    from tts_protocol import encode_event_line
 
 
 # ---------------------------------------------------------------------------

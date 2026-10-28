@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from app.domain.generation_catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 import contextlib
 import contextvars
@@ -2630,7 +2630,8 @@ def create_note(title: str, markdown: str, workspace_id: str = "", sources: list
     """Create a persistent note when the user asks to save research or writing. Preserve factual
     sources as {kind: asset|message|note|url, id, label, quote, start?, end?, url?, revision?}.
     Do not save unrequested AI drafts over the user's writing."""
-    from app.api.schemas.notes import NoteContent, NoteCreate, NoteOut
+    from app.api.schemas.notes import NoteCreate, NoteOut
+    from app.domain.note_types import NoteContent
     from app.domain.notes import use_cases
 
     request = NoteCreate(workspace_id=workspace_id or _default_workspace_id(), title=title, markdown=markdown,

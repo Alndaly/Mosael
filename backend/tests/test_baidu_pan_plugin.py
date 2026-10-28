@@ -250,7 +250,7 @@ class Test清单和实现对得上:
         assert "TOOLS = {" in source
 
     def test_清单能被宿主解析(self) -> None:
-        from app.domain.plugins.manifest import parse
+        from mosael_formats.plugin_manifest import parse
 
         raw = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
         manifest = parse(raw, str(PLUGIN))

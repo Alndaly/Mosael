@@ -129,7 +129,7 @@ def test_摘掉一个子进程不影响同一任务的其它子进程() -> None:
 
 
 def test_插件调用走的是任务总线上的那份名额() -> None:
-    assert tools.PLUGIN_SLOTS is jobs.PLUGIN_SLOTS
+    assert jobs.PLUGIN_SLOTS is jobs.PLUGIN_SLOTS
 
 
 def test_同时在跑的插件调用不超过名额(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:

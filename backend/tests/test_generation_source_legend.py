@@ -11,8 +11,9 @@ from app.domain.generation.origins import STUDIO_ORIGIN
 import pytest
 
 from app.core.db import SessionLocal
-from app.core.i18n import DEFAULT_LOCALE, set_current_locale
-from app.domain.generation import create_generation_job
+from app.core.i18n import set_current_locale
+from mosael_formats.i18n import DEFAULT_LOCALE
+from app.domain.generation.operations import create_generation_job
 from app.domain.generation.operations import prompt_for_provider
 from tests.test_entity_generation_paths import _board_with_entity_cell, _entity, _spy_generation, _seedance, _workspace
 from tests.util import fresh_client, seed_assets

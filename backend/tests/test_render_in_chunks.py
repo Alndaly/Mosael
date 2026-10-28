@@ -24,6 +24,7 @@ from PIL import Image
 
 from app.core.config import settings
 from app.media import render_executor
+from app.core import child_process
 from app.media.render_executor import _chunk_windows, execute_render
 from app.media.render_plan import build_render_plan
 
@@ -120,7 +121,7 @@ def test_分块渲出来的和一次渲完的逐帧逐采样一样(monkeypatch, 
 
     monkeypatch.setattr(render_executor, "_CHUNK_LAYERS", 6)
     chunked = tmp_path / "chunked.mp4"
-    with patch.object(render_executor, "popen_text", wraps=render_executor.popen_text) as spawned:
+    with patch.object(render_executor, "popen_text", wraps=child_process.popen_text) as spawned:
         execute_render(plan, resolve, chunked)
     runs = [call.args[0] for call in spawned.call_args_list]
     windows = _chunk_windows(plan)

@@ -7,14 +7,13 @@ from typing import Any
 
 import pytest
 
-from app.domain.workflows import NODE_TYPES, validate_graph, with_run_params
-from app.domain.workflows.templates import (
-    ModelChoice,
-    built_in_template_graph,
-    full_video_generation_graph,
-    translated_dub_graph,
-    transcript_video_cleanup_graph,
-)
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.graph_rules import validate_graph, with_run_params
+from app.domain.workflows.templates import built_in_template_graph
+from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates_full_video import full_video_generation_graph
+from app.domain.workflows.templates_dub import translated_dub_graph
+from app.domain.workflows.templates_cleanup import transcript_video_cleanup_graph
 from app.domain.workflows.normalization import canonicalize_data_bindings
 
 REF_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
@@ -224,7 +223,7 @@ class Test分镜能选的路跟着视频模型走:
 def test_布景的形状就是_3D_场景的数据格式() -> None:
     """布景 LLM 的输出直接交给 scene_create 按 SceneContent 校验 —— 两边的字段必须对得上。"""
     from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
-    from app.domain.workflows.templates import _set_design_schema
+    from app.domain.workflows.templates_schemas import _set_design_schema
 
     schema = _set_design_schema()
     assert set(schema["properties"]) <= set(SceneContent.model_fields)
@@ -362,7 +361,11 @@ class Test示范工作流要挑得动的模型:
         return row
 
     def test_判断规则(self) -> None:
-        from app.domain.workflows.templates import REFERENCE_IMAGES_NEEDED, _can_shoot_from_references, _can_take_references
+        from app.domain.workflows.templates_models import (
+            REFERENCE_IMAGES_NEEDED,
+            _can_shoot_from_references,
+            _can_take_references,
+        )
 
         assert _can_take_references(None, SEEDREAM, needed=REFERENCE_IMAGES_NEEDED), "Seedream 4 收 14 张参考图"
         assert not _can_take_references(None, ModelChoice(provider="bytedance", model="doubao-seedream-3-0-t2i-250415"),
@@ -373,7 +376,7 @@ class Test示范工作流要挑得动的模型:
     def test_默认图像模型只会文生图时换一个能带参考的(self) -> None:
         from app.core.db import SessionLocal
         from app.domain.providers.defaults import set_default
-        from app.domain.workflows.templates import _reference_image_model
+        from app.domain.workflows.templates_models import _reference_image_model
         from tests.util import fresh_client
 
         fresh_client()
@@ -386,7 +389,7 @@ class Test示范工作流要挑得动的模型:
 
     def test_一个合用的都没有就留空(self) -> None:
         from app.core.db import SessionLocal
-        from app.domain.workflows.templates import _reference_image_model
+        from app.domain.workflows.templates_models import _reference_image_model
         from tests.util import fresh_client
 
         fresh_client()
@@ -420,7 +423,7 @@ class Test示范工作流要挑得动的模型:
         """此前只看参数键:说话照片、改口型、改视频也收首帧 / 参考素材,被当成镜头模型;参考那条路一镜交 8 张,
         可灵 kling-v3-omni 只收 4 张照样算能走;万相 wan2.7-r2v 要求参考图或参考视频至少一种,首帧那条路注定被拒,
         照样算能走首帧。"""
-        from app.domain.workflows.templates import _can_shoot_from_references, _video_plan
+        from app.domain.workflows.templates_models import _can_shoot_from_references, _video_plan
 
         for vendor, model in (("alibaba", "wan2.2-s2v"), ("alibaba", "videoretalk"), ("alibaba", "wan2.7-videoedit")):
             assert not _can_shoot_from_references(None, ModelChoice(provider=vendor, model=model)), model
@@ -432,7 +435,7 @@ class Test示范工作流要挑得动的模型:
         """Evolink 的 gpt-image-1.5 尺寸表是 "1:1"、"16:9" 这种画幅比,此前按 x 拆开转整数,建图 500。"""
         from app.core.db import SessionLocal
         from app.domain.providers.defaults import set_default
-        from app.domain.workflows.templates import _image_plan
+        from app.domain.workflows.templates_models import _image_plan
         from tests.util import fresh_client
 
         assert _image_plan(None, ModelChoice(provider="evolink", model="gpt-image-1.5")).frame_sizes.keys() <= {"16:9", "9:16", "1:1"}
@@ -521,12 +524,10 @@ def test_模板里的节点名跟着界面语言走() -> None:
     此前这些名字是写死的中文:英文用户从模板建一条流程,画布上一排中文节点。
     """
     from app.core.db import SessionLocal
-    from app.domain.workflows.templates import (
-        FULL_VIDEO_GENERATION,
-        TRANSCRIPT_VIDEO_CLEANUP,
-        TRANSLATED_DUB,
-        built_in_template_graph,
-    )
+    from app.domain.workflows.templates import built_in_template_graph
+    from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION
+    from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP
+    from app.domain.workflows.templates_dub import TRANSLATED_DUB
     from tests.util import fresh_client
 
     fresh_client()
@@ -587,7 +588,8 @@ def test_每个模板节点都写了中英两份名字() -> None:
 # 起点是「用户手里已有的东西」的那四个模板
 # --------------------------------------------------------------------------------------
 
-from app.domain.workflows.templates import MAX_SHOTS_CEILING, TEMPLATE_CATALOG  # noqa: E402
+from app.domain.workflows.templates import TEMPLATE_CATALOG  # noqa: E402
+from app.domain.workflows.templates_schemas import MAX_SHOTS_CEILING
 from app.domain.workflows.templates_business import (  # noqa: E402
     BUSINESS_TEMPLATE_CATALOG,
     fabric_lookbook_graph,
@@ -852,19 +854,18 @@ def test_面料规格页不许编数字() -> None:
 def test_模板卡片和图一一对应() -> None:
     """卡片是用户**照着判断自己能不能跑**的那份东西。有卡片没图 = 点了报错;
     有图没卡片 = 这个模板根本没人找得到。"""
-    from app.domain.workflows.templates import (
+    from app.domain.workflows.templates_business import (
         FABRIC_LOOKBOOK,
-        FULL_VIDEO_GENERATION,
         HIGHLIGHT_SHORTS,
         PRODUCT_ON_MODEL,
         FOOTAGE_MONTAGE,
         PRODUCT_PITCH_PRESENTER,
         PRODUCT_PITCH_SHORT,
         TALKING_SCRIPT_VIDEO,
-        TRANSCRIPT_VIDEO_CLEANUP,
-        TRANSLATED_DUB,
-        TRANSLATED_DUB_LIPSYNC,
     )
+    from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION
+    from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP
+    from app.domain.workflows.templates_dub import TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC
     from app.domain.workflows.templates_analysis import ACCOUNT_ANALYSIS, COMMENT_INSIGHTS, VIRAL_VIDEO_BREAKDOWN
     from app.domain.workflows.templates_shots import REFERENCE_VIDEO_SHOTS
 
@@ -1009,7 +1010,7 @@ def test_布景台的组是场景格式本来就支持的() -> None:
 def test_稿子到数字人口播_分段配音逐段说话_授权留给跑的人() -> None:
     """ADR 0028 阶段 3:长稿按说话照片接得住的长度分段;每段一次「让它说话」接上一段的音频,按段的顺序首尾相接;
     字幕用配音的实测时长;授权确认不替用户选。"""
-    from app.domain.workflows import validate_graph
+    from app.domain.workflows.graph_rules import validate_graph
     from app.domain.workflows.templates_business import talking_script_video_graph
 
     graph = talking_script_video_graph(voice_id="v1")
@@ -1030,8 +1031,8 @@ def test_稿子到数字人口播_分段配音逐段说话_授权留给跑的人
 
 def test_视频翻译改口型_同一张译配图在导出之前多一步对口型_原来那条模板不变() -> None:
     """ADR 0028 阶段 3:改口型接在配音之后、导出之前;前面几步和「视频译配」是同一张图(不另抄一份)。"""
-    from app.domain.workflows import validate_graph
-    from app.domain.workflows.templates import translated_dub_graph
+    from app.domain.workflows.graph_rules import validate_graph
+    from app.domain.workflows.templates_dub import translated_dub_graph
 
     plain = translated_dub_graph(voice_id="v1")
     synced = translated_dub_graph(voice_id="v1", lipsync=True)
@@ -1048,7 +1049,7 @@ def test_视频翻译改口型_同一张译配图在导出之前多一步对口�
 
 def test_数字人出镜带货_开场收尾由资产人物说_每拍用它的嗓子配画外音_顺序是开场各拍收尾() -> None:
     """ADR 0028 阶段 3「带货口播升级」:同一张带货图换掉口播那一段;不出镜的那条不变。"""
-    from app.domain.workflows import validate_graph
+    from app.domain.workflows.graph_rules import validate_graph
     from app.domain.workflows.templates_business import product_pitch_short_graph
 
     graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)

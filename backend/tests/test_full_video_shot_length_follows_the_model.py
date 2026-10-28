@@ -16,7 +16,8 @@ from typing import Any
 import pytest
 
 from app.domain.workflows import templates_models
-from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
+from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates_full_video import full_video_generation_graph
 from app.domain.workflows.templates_models import _video_plan
 
 CHAT = ModelChoice(profile_id="chat", provider="openai", model="chat-model")
@@ -71,8 +72,8 @@ def test_每镜秒数只有开始节点那一格说了算(video: ModelChoice) ->
 def test_所选模型出不了那个时长_运行前就拦() -> None:
     """Seedance 2.0 收 4–15 秒:每镜 20 秒的话,在任何一次付费调用之前就说清(和画幅同一道检查)。"""
     from app.core.db import SessionLocal
-    from app.domain.workflows import WorkflowDomainError
-    from app.domain.workflows.executors import run_preflights
+    from app.domain.workflows.errors import WorkflowDomainError
+    from app.domain.workflows.executors.registry import run_preflights
     from tests.util import add_provider, fresh_client, user_id
 
     workspace = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]

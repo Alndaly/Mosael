@@ -37,11 +37,11 @@ _GENERATION_KIND_BY_TOOL = {"generate_image": "image", "generate_video": "video"
 
 def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import create_generation_job
     from app.domain.generation.operations import parse_source_assets
     from app.core.unit_of_work import after_commit
     from app.domain.generation.runner import start_generation_thread
-    from app.domain.entities import parse_entity_ids
+    from app.domain.entities.catalog import parse_entity_ids
     kind = _GENERATION_KIND_BY_TOOL[confirmation.tool]
     generation, job = create_generation_job(
         db,
@@ -137,7 +137,7 @@ def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, 
     from app.domain.voices.engine_catalog import pick_speech
     from app.domain.voices.remote import RemoteConsentRequired
     from app.domain.voices.speech import SpeechProviderUnavailable
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     if not str(payload.get("text") or "").strip():
         raise ConfirmationError("confirmErr_speechNeedsText")

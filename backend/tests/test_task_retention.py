@@ -26,6 +26,7 @@ from app.db.models import (
 )
 from app.domain import deployment
 from app.workers import scheduler
+from app.core import unit_of_work
 from tests.util import fresh_client, second_client
 
 
@@ -147,7 +148,7 @@ def test_保留清理不把任务读成ORM对象_一批一个事务(monkeypatch)
         nonlocal loaded
         loaded += 1
 
-    real = scheduler.unit_of_work
+    real = unit_of_work.unit_of_work
 
     def counted():
         nonlocal commits

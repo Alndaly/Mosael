@@ -136,7 +136,7 @@ def _scope(ws: str):
 
 
 def test_工作流节点_读解析出的正文_可以只取几段() -> None:
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -154,7 +154,7 @@ def test_工作流节点_读解析出的正文_可以只取几段() -> None:
 
 def test_工作流节点_还没解析过的先在本机解析一遍() -> None:
     from app.db.models import AssetExtraction
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -168,8 +168,8 @@ def test_工作流节点_还没解析过的先在本机解析一遍() -> None:
 
 
 def test_工作流节点_不是文档的说清楚() -> None:
-    from app.domain.workflows import WorkflowDomainError
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.errors import WorkflowDomainError
+    from app.domain.workflows.executors.registry import get_executor
     from tests.util import make_video_asset
 
     client = fresh_client()

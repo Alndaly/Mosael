@@ -76,7 +76,7 @@ def test_nothing_is_committed_and_nobody_is_woken_if_settling_fails(turns, monke
     def broken(_db) -> int:
         raise RuntimeError("disk gone")
 
-    monkeypatch.setattr("app.domain.assets.reconcile_broken_media_info", broken)
+    monkeypatch.setattr("app.domain.assets.importer.reconcile_broken_media_info", broken)
     with pytest.raises(RuntimeError):
         restart.settle_previous_run()
 

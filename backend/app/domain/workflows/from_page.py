@@ -19,9 +19,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import pick_text
+from mosael_formats.i18n import pick_text
 from app.db.models import RecordReference, Workflow
-from app.domain.workflows import WorkflowDomainError, create_workflow, edit_workflow_graph, list_workflows
+from app.domain.workflows import create_workflow, edit_workflow_graph, list_workflows
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.templates_analysis import (
     ACCOUNT_ANALYSIS,
     ANALYSIS_TEMPLATE_CATALOG,

@@ -10,16 +10,10 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent, Workflow
 from app.domain.jobs import JOB_THREAD_NAME
-from app.domain.workflows import (
-    NODE_TYPES,
-    WorkflowDomainError,
-    create_workflow,
-    default_graph,
-    interpolate,
-    topo_order,
-    update_workflow,
-    validate_graph,
-)
+from app.domain.workflows import create_workflow, default_graph, update_workflow
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import interpolate, topo_order, validate_graph
 from tests.util import user_id, acting_as, add_provider, fresh_client, create_asset, until, wait_settled, module_time
 
 #: 跑到 code 节点的任务最多等多久。code 节点每跑一次要建、起、删一个 Docker 容器 —— 本机空闲时三四秒,并行跑测试套时
@@ -723,7 +717,7 @@ def test_json_extract_取不到就报错_说清在哪一段断的_那一层有�
     """此前取不到静默交出 null:下游拿着空值往下跑,失败出现在隔了几个节点、看不出原因的地方。"""
     import pytest
 
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors.basic import json_extract
 
     src = {"data": {"items": [{"title": "hello"}]}}
@@ -1318,7 +1312,7 @@ def test_llm_node_rejects_empty_prompt(monkeypatch) -> None:
 
 
 def test_new_nodes_registered_and_validate() -> None:
-    from app.domain.workflows.executors import registered_types
+    from app.domain.workflows.executors.registry import registered_types
 
     for node_type in ("json_extract", "text_transform", "delay", "synthesize_speech", "notify"):
         assert node_type in NODE_TYPES, node_type
@@ -1339,7 +1333,7 @@ def test_new_nodes_registered_and_validate() -> None:
 
 
 def test_condition_operators_and_bad_branch_handle() -> None:
-    from app.domain.workflows import validate_graph
+    from app.domain.workflows.graph_rules import validate_graph
     from app.domain.workflows.executors.basic import condition
 
     assert condition(None, None, {"left": "5", "op": "gt", "right": "3"})["result"] is True
@@ -1550,7 +1544,7 @@ def test_一个节点失败_兄弟节点等着的子任务跟着取消(monkeypat
     而兄弟节点等的是它派生的子任务(生成、导出……),那些子任务照样在跑、照样花钱,
     做完了也没人要。失败要让这一轮停下:兄弟节点等着的子任务取消,失败立刻报出来。"""
     from app.domain.jobs import create_job, was_cancelled
-    from app.domain.workflows.executors import _REGISTRY
+    from app.domain.workflows.executors.registry import _REGISTRY
     from app.domain.workflows.executors import common
 
     monkeypatch.setattr(common, "CHILD_POLL_SECONDS", 0.05)
@@ -1632,7 +1626,7 @@ def test_取消之后才失败的节点_执行历史里记的是已取消_不是
     失败原因是「会话已关闭」「子任务失败」这类**被收走的那一方**的话。实测(真实执行器,取消一条在等元素出现的
     运行):执行历史里那一步写着「浏览器会话不存在或已关闭」,看的人会以为是会话出了问题。它是被取消的。"""
     from app.domain.jobs import cancel_job
-    from app.domain.workflows.executors import _REGISTRY
+    from app.domain.workflows.executors.registry import _REGISTRY
 
     entered = threading.Event()
 
@@ -1708,7 +1702,7 @@ def test_生成节点的参数_没填的不发给供应商(monkeypatch) -> None:
     """表单里留着的空行、落空的引用,插值出来都是空串。插件节点早就在交给工具之前把它们滤掉了,
     生成节点没有:空串原样进 parameters,布尔参数报「不是布尔值」、时长报「不是整数」,
     校验不管的就直接发给供应商。「没填」只有一种意思,两个节点走同一条规矩。"""
-    from app.domain import generation
+    from app.domain.generation import operations
     from app.domain.workflows.executors import subjobs
 
     seen: dict = {}
@@ -1720,7 +1714,7 @@ def test_生成节点的参数_没填的不发给供应商(monkeypatch) -> None:
         seen.update(kwargs["parameters"])
         raise Captured
 
-    monkeypatch.setattr(generation, "create_generation_job", capture)
+    monkeypatch.setattr(operations, "create_generation_job", capture)
     workflow = Workflow(id="w1", workspace_id="ws", name="W", graph={"nodes": [], "edges": []})
     with pytest.raises(Captured):
         subjobs.ai_generate(
@@ -1821,8 +1815,8 @@ def test_node_types_and_executor_registry_stay_in_lockstep() -> None:
 
     少一边都意味着漂移:有元数据没执行器 = 画布能拖出一个跑不了的节点;有执行器没
     元数据 = 校验/画布/智能体都不知道它存在。"""
-    from app.domain.workflows import NODE_TYPES
-    from app.domain.workflows.executors import registered_types
+    from app.domain.workflows.node_types import NODE_TYPES
+    from app.domain.workflows.executors.registry import registered_types
 
     assert set(NODE_TYPES) == set(registered_types())
 
@@ -1901,7 +1895,7 @@ def test_每个节点类型都有分组和一句人话描述() -> None:
     漏标 category 不会报错,只会让那个节点静默掉进面板末尾的"其它"里 —— 加节点的人看不到,
     用节点的人找不到。描述同理:面板上每行都有一句说明,空着的那行就是一个只有作者看得懂
     的名字。"""
-    from app.domain.workflows import NODE_CATEGORIES, NODE_TYPES
+    from app.domain.workflows.node_types import NODE_CATEGORIES, NODE_TYPES
 
     for node_type, meta in NODE_TYPES.items():
         assert meta.get("category") in NODE_CATEGORIES, f"{node_type} 的分组不在 NODE_CATEGORIES 里"
@@ -1911,8 +1905,9 @@ def test_每个节点类型都有分组和一句人话描述() -> None:
 def test_节点清单按分组顺序返回_前端不再排第二次() -> None:
     from tests.util import fresh_client
 
-    from app.core.i18n import DEFAULT_LOCALE, t
-    from app.domain.workflows import NODE_CATEGORIES
+    from app.core.i18n import t
+    from mosael_formats.i18n import DEFAULT_LOCALE
+    from app.domain.workflows.node_types import NODE_CATEGORIES
 
     client = fresh_client()
     items = client.get("/api/workflows/node-types").json()

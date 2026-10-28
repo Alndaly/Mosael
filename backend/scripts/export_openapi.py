@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.main import app
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.node_catalog import describe_node_types
 
 #: 内置节点类型的接点快照:每种节点的配置字段(类型、编辑器、按什么单位接线)和声明的输出,连同**两种语言的名字**。

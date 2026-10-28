@@ -29,7 +29,7 @@ def _norm(text: str) -> str:
 
 
 def test_说明不是把标签重说一遍() -> None:
-    from app.domain.workflows import NODE_TYPES, config_label
+    from app.domain.workflows.node_types import NODE_TYPES, config_label
 
     offenders = []
     for name, spec in sorted(NODE_TYPES.items()):

@@ -21,7 +21,8 @@ from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
 from app.domain.workflows.executors.basic import json_extract
 from app.domain.workflows.graph_rules import interpolate
-from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
+from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates_full_video import full_video_generation_graph
 from app.domain.workflows.templates_business import (
     fabric_lookbook_graph,
     product_on_model_graph,

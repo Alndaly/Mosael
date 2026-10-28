@@ -12,9 +12,10 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Job
-from app.domain.workflows import WorkflowDomainError, create_workflow
+from app.domain.workflows import create_workflow
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import start_workflow_job
-from app.domain.workflows.templates import translated_dub_graph
+from app.domain.workflows.templates_dub import translated_dub_graph
 from tests.util import fresh_client, user_id
 
 
@@ -67,7 +68,7 @@ def test_预检按跑的人挑提供方(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_原声处理是引用或不是只去掉人声_预检不拦(monkeypatch: pytest.MonkeyPatch) -> None:
     """引用的值要到运行时才知道,不在这里猜;选了静音 / 压低的根本用不着分离。"""
-    from app.domain.workflows.executors import run_preflights
+    from app.domain.workflows.executors.registry import run_preflights
 
     monkeypatch.setattr("app.domain.assets.separation.available", lambda *_a, **_k: False)
     for mode in ("mute", "duck", "{{start.original_audio}}"):

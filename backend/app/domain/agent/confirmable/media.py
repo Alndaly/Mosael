@@ -166,7 +166,7 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
     from app.domain.voices.engine_catalog import pick_speech
     from app.domain.voices.remote import RemoteConsentRequired, check_voice, speaks_library_voice
     from app.domain.voices.speech import CLONE_ENGINE, SpeechProviderUnavailable
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     try:
         engine, voice = pick_speech(

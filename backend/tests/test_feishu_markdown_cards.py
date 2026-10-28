@@ -35,6 +35,7 @@ import httpx
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, FeishuBot
 from app.integrations.feishu import client, inbound
+from app.core import http_retry
 from tests.util import fresh_client
 
 
@@ -63,7 +64,7 @@ class _Wire:
                 return httpx.Response(200, json=wire.card_error)
             return httpx.Response(200, json={"code": 0, "data": {"message_id": f"om_{len(wire.seen)}"}})
 
-        class _Scripted(client.RetryingClient):
+        class _Scripted(http_retry.RetryingClient):
             def __init__(self, *args, **kwargs):
                 kwargs["transport"] = httpx.MockTransport(handler)
                 super().__init__(*args, **kwargs)

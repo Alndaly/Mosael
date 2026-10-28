@@ -13,7 +13,8 @@ from typing import Any
 import pytest
 
 from app.core.unit_of_work import unit_of_work
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import entities as executors
 from app.domain.workflows.field_options import OptionContext, field_options
 from tests.util import fresh_client, seed_assets
@@ -55,14 +56,14 @@ class FakeGeneration:
 
 @pytest.fixture()
 def setup(monkeypatch):
-    from app.domain import generation
+    from app.domain.generation import operations
     from app.domain.generation import resolution, runner
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     seed_assets(ws, {"front": "image", "clip": "video"})
     fake = FakeGeneration(ws)
-    monkeypatch.setattr(generation, "create_generation_job", fake.create)
+    monkeypatch.setattr(operations, "create_generation_job", fake.create)
     monkeypatch.setattr(runner, "start_generation_thread", lambda generation_id: None)
     monkeypatch.setattr(resolution, "generation_options", lambda db, kind, user_id=None: list(OPTIONS))
     monkeypatch.setattr(executors, "wait_for_job", fake.wait)
@@ -281,7 +282,7 @@ def test_这一轮在停_几张一起起的都取消_不只是正在等的那一
         children.append(job.id)
         return SimpleNamespace(id=f"gen-{len(children)}"), job
 
-    monkeypatch.setattr("app.domain.generation.create_generation_job", create)
+    monkeypatch.setattr("app.domain.generation.operations.create_generation_job", create)
     monkeypatch.setattr(runner, "start_generation_thread", lambda generation_id: None)
     entity_id = _entity(client, ws)
     with halt_scope() as halt, unit_of_work() as db:
@@ -310,7 +311,7 @@ def test_第三张被拒_前两张已经建好的任务一并取消_不停在排
         children.append(job.id)
         return SimpleNamespace(id=f"gen-{len(children)}"), job
 
-    monkeypatch.setattr("app.domain.generation.create_generation_job", create)
+    monkeypatch.setattr("app.domain.generation.operations.create_generation_job", create)
     entity_id = _entity(client, ws)
     with unit_of_work() as db, pytest.raises(WorkflowDomainError) as refused:
         executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})

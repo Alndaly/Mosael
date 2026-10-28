@@ -21,7 +21,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, render_message, tr
+from app.core.i18n import render_message, tr
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import AgentMessage, AgentSession, GenerationJob, Job, User
 from app.domain.agent import host
 from app.domain.jobs.catalog import FALLBACK_LABEL_KEY, job_kind

@@ -13,7 +13,7 @@ from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import JobOut, ScrubAssetRequest, ScrubReportOut
 from app.db.models import Job
 from app.domain.assets import use_cases
-from app.domain.assets.scrub import ScrubError
+from app.domain.assets.scrub.engine import ScrubError
 
 router = APIRouter(tags=["scrub"])
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.i18n import t
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.node_catalog import describe_node_types, distinct_labels
 from app.domain.workflows.node_types import config_label, output_label, reference_label
 

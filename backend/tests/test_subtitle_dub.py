@@ -396,6 +396,7 @@ class Test原声处理归配音本身:
         from app.ai.runtime import tts_models
         from app.db.models import ToolConfirmation
         from app.domain.agent import confirmations
+        from app.domain.agent import errors
 
         #: 开卡时就认引擎能不能用(engine_catalog.pick_speech):这里要的是装好了克隆引擎的那种机器。
         monkeypatch.setattr(tts_models, "runtime_status", lambda engine: (True, True))
@@ -415,7 +416,7 @@ class Test原声处理归配音本身:
         assert captured["original_audio"] == "mute"
         assert captured["synthesis"]["voice_id"] == voice
 
-        with SessionLocal() as db, pytest.raises(confirmations.ConfirmationError, match="original_audio"):
+        with SessionLocal() as db, pytest.raises(errors.ConfirmationError, match="original_audio"):
             confirmations.request_confirmation(
                 db, workspace_id=workspace_id, tool="dub_subtitles", actor_id=None,
                 payload={**payload, "original_audio": "louder"},

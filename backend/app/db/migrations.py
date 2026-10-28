@@ -214,7 +214,7 @@ def _upgrade_stored_plugin_manifests() -> None:
     只动记录:`_path` 是扫描写进去的运行时字段,迁移链会清掉它,这里放回去。磁盘那份下次扫描时由同一串步骤改。
     """
     from app.domain.plugins.manifest import PATH_KEY
-    from app.domain.plugins.migrations import upgrade
+    from mosael_formats.plugin_manifest_upgrade import upgrade
 
     if "plugin_packages" not in set(inspect(engine).get_table_names()):
         return

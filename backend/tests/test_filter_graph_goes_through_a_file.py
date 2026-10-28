@@ -17,6 +17,7 @@ import pytest
 
 from app.core.config import settings
 from app.media import render_executor
+from app.core import child_process
 from app.media.render_executor import _filter_script_flag, build_ffmpeg_command, execute_render
 from app.media.render_plan import build_render_plan
 
@@ -55,7 +56,7 @@ def test_一百多段的时间线_命令行不过_Windows_的上限_照样渲得
     assert len(graph) > WINDOWS_COMMAND_LINE_LIMIT, "时间线不够长,测不到要测的东西"
 
     out = tmp_path / "o.mp4"
-    with patch.object(render_executor, "popen_text", wraps=render_executor.popen_text) as spawned:
+    with patch.object(render_executor, "popen_text", wraps=child_process.popen_text) as spawned:
         execute_render(plan, resolve, out)
     argv = spawned.call_args.args[0]
     assert sum(len(part) + 1 for part in argv) < WINDOWS_COMMAND_LINE_LIMIT, "滤镜图还在命令行上"

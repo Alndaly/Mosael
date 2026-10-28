@@ -12,13 +12,15 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Entity, EntityReference
-from app.domain.entities import attach_entities
-from app.domain.generation_catalog import (
+from app.domain.entities.mentions import attach_entities
+from app.domain.generation_catalog.descriptors.video import (
     KLING_V3_OMNI_VIDEO_CAPABILITIES,
+    SEEDANCE_2_VIDEO_CAPABILITIES,
+)
+from app.domain.generation_catalog.descriptors.image import (
     OPENAI_IMAGE_CAPABILITIES,
     QWEN_EDIT_IMAGE_CAPABILITIES,
     QWEN_TEXT_IMAGE_CAPABILITIES,
-    SEEDANCE_2_VIDEO_CAPABILITIES,
 )
 from app.domain.generation.operations import GenerationDomainError, validate_against_capabilities
 from tests.util import fresh_client, seed_assets
@@ -167,7 +169,7 @@ def test_别的工作区的资产点不了(ws) -> None:
     other = fresh_client("stranger")
     theirs = _workspace(other)
     stranger = _entity(theirs, "外人", "", [])
-    from app.domain.entities import EntityDomainError
+    from app.domain.entities.library import EntityDomainError
 
     with pytest.raises(EntityDomainError):
         _expand(ws, [stranger], OPENAI_IMAGE_CAPABILITIES)

@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderPricingRule, ProviderUsageEvent
-from app.domain.workflows import executors as registry
+from app.domain.workflows.executors import registry as executors_registry
 from tests.util import add_provider, fresh_client
 
 
@@ -81,7 +81,7 @@ def _run(client, workspace_id: str, profile_id: str, *, fails: bool) -> dict:
 @pytest.fixture
 def setup(monkeypatch):
     _install_chat(monkeypatch)
-    monkeypatch.setitem(registry._REGISTRY, "delay", _child_with_a_bill)
+    monkeypatch.setitem(executors_registry._REGISTRY, "delay", _child_with_a_bill)
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:

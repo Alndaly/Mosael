@@ -22,6 +22,7 @@ from app.db.models import GenerationJob, Job, ProviderUsageEvent
 from app.domain import jobs as jobs_bus
 from app.domain.billing.usage import billable
 from app.domain.generation import runner
+from app.ai.providers.contracts import generation as contracts_generation
 from app.domain.jobs import finish_job
 from tests.util import fresh_client
 
@@ -52,7 +53,7 @@ def test_生成落成功之后的收拾里_账已经在(monkeypatch, tmp_path: P
 
     adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=lambda request: None,
                               supports_progress_callbacks=False, supports_resume=False, generate=generate,
-                              reported_usage=lambda raw: runner.ReportedUsage())
+                              reported_usage=lambda raw: contracts_generation.ReportedUsage())
     monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: adapter)
     monkeypatch.setattr("app.domain.providers.selection.resolve_connection", lambda *a, **kw: None)
     seen: dict[str, list[str]] = {}

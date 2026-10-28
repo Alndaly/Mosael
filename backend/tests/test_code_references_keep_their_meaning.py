@@ -24,7 +24,7 @@ import sys
 import pytest
 
 from app.domain.sandbox import _WRAPPER
-from app.domain.workflows import interpolate
+from app.domain.workflows.graph_rules import interpolate
 from app.domain.workflows.code_references import references_become_input, string_reads_keep_their_text
 
 CONTEXT = {

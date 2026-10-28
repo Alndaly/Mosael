@@ -116,7 +116,7 @@ class Test生成不点名模型时用我的默认:
     现在在生成漏斗里(generation.operations._default_model),四个入口同一个答案。"""
 
     def _create(self, db, workspace_id: str, user_id: str | None):
-        from app.domain.generation import create_generation_job
+        from app.domain.generation.operations import create_generation_job
 
         return create_generation_job(
             db, origin=STUDIO_ORIGIN, workspace_id=workspace_id, session_id=None, project_id=None, created_by=user_id,

@@ -19,7 +19,8 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.core.i18n import LocalizedError, get_current_locale, t
 from app.db.models import PluginInstance
-from app.domain.plugins import PluginDomainError, instances, tools
+from app.domain.plugins import instances, tools
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.scenes.render.gltf import LIGHT_UNIT
 from app.domain.scenes.render.raster import kelvin_rgb, linear_to_hex
 from app.domain.scenes.types import SceneContent, SceneLighting, SceneObject, SceneShot

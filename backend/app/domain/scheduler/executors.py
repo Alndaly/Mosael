@@ -60,7 +60,7 @@ def _run_workflow(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: 
 
 
 def _run_generation(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
-    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import create_generation_job
     from app.domain.generation.operations import parse_source_assets
     from app.domain.generation.origins import SCHEDULE, Origin
     from app.domain.generation.runner import start_generation_thread
@@ -130,7 +130,7 @@ Readiness = Callable[[Session, str, dict[str, Any], "str | None"], LocalizedErro
 
 def _workflow_ready(db: Session, workspace_id: str, payload: dict[str, Any], owner: str | None) -> LocalizedError | None:
     """绑的工作流在,而且**带着任务的参数、替任务的主人**跑得起来 —— 和点运行同一套检查(workflows.engine.check_runnable)。"""
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.engine import check_runnable
 
     workflow = bound_workflow(db, workspace_id=workspace_id, payload=payload)
@@ -184,7 +184,8 @@ def notify_run_failed(
     db: Session, task: ScheduledTask, job: Job | None, reason: str, *, disabled: bool = False
 ) -> None:
     """定时任务这一次没跑起来(`disabled`:而且因此停用了):通知工作区。链接指向定时任务页,载荷里带着这一次的任务。"""
-    from app.core.i18n import DEFAULT_LOCALE, t
+    from app.core.i18n import t
+    from mosael_formats.i18n import DEFAULT_LOCALE
     from app.domain.notifications import notify
 
     notify(

@@ -13,7 +13,7 @@ from app.domain.providers import models as provider_models
 from app.domain.providers import structured_output
 from app.domain.providers import thinking
 from app.domain.providers.credentials import ResolvedConnection
-from app.domain.providers.selection import normalize_capability_ids
+from app.domain.providers.presets import normalize_capability_ids
 
 from app.domain.permissions import require_own_profile
 

@@ -14,6 +14,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain import render
+from app.media import render_executor
 from tests.test_export_flow import make_test_video
 from tests.util import fresh_client
 
@@ -77,7 +78,7 @@ def test_素材都在_照常编码(monkeypatch, tmp_path: Path) -> None:
 
     def encode(plan, resolve_key, output_path, on_progress, on_child, on_phase):
         encoded.append(1)
-        raise render.RenderExecutionError("stop here", stderr_tail="")
+        raise render_executor.RenderExecutionError("stop here", stderr_tail="")
 
     monkeypatch.setattr(render, "execute_render", encode)
     render._run_export(job_id, plan)

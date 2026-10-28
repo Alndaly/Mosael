@@ -6,7 +6,7 @@ key === "note_id"`。那是一张手抄表 —— 插件节点永远进不去,�
 
 from __future__ import annotations
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from tests.util import fresh_client
 
 RATCHET = True

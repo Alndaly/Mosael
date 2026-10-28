@@ -12,7 +12,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Entity, EntityReference, Voice
-from app.domain.generation import create_generation_job
+from app.domain.generation.operations import create_generation_job
 from app.domain.generation.operations import GenerationDomainError
 from tests.util import fresh_client, insert_asset, make_voice
 

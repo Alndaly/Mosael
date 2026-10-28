@@ -35,12 +35,8 @@ from app.api.schemas import (
 from app.domain import people
 from app.domain.scheduler import use_cases as scheduler_uc
 from app.db.models import Job, Workflow, WorkflowRevision
-from app.domain.workflows import (
-    WorkflowDomainError,
-    create_workflow,
-    list_workflows,
-    update_workflow,
-)
+from app.domain.workflows import create_workflow, list_workflows, update_workflow
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.failure_summary import detail_of, hint_of, summarize
 from app.domain.job_center import use_cases as job_center
 from app.domain.workflows.engine import start_workflow_job
@@ -100,7 +96,7 @@ def workflow_templates() -> list[dict]:
     说明只有一份(domain/workflows/templates.TEMPLATE_CATALOG),应用的模板卡片和官网的模板页
     读的是同一份 —— 此前是三套各写各的。图标留在前端(和节点图标、任务种类同一条规矩)。
     """
-    from app.core.i18n import pick_text
+    from mosael_formats.i18n import pick_text
     from app.domain.workflows.templates import TEMPLATE_CATALOG, current_template_versions
 
     locale = get_current_locale()
@@ -139,7 +135,7 @@ def workflow_template_checks(workspace_id: str, db: DbSession, user: CurrentUser
 def _by_locale(value: object, locale: str) -> list:
     """一串按语言分的清单(`{"zh": [...], "en": [...]}`)。"""
     if isinstance(value, dict):
-        from app.core.i18n import DEFAULT_LOCALE
+        from mosael_formats.i18n import DEFAULT_LOCALE
 
         picked = value.get(locale) or value.get(DEFAULT_LOCALE) or next(iter(value.values()), [])
         return list(picked or [])

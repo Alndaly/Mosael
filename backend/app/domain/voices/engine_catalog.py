@@ -23,13 +23,13 @@ from app.domain.voices.speech import (
     LOCAL_SPEECH_ENGINES,
     PODCAST_ENGINE,
     QWEN_ENGINE,
-    SPEECH,
     SpeechProviderUnavailable,
     adapter_id,
     engine_ready,
     is_plugin,
     require_engine,
 )
+from mosael_formats.plugin_manifest import SPEECH
 
 from app.ai.providers import (
     EDGE_BUILTIN_VOICES,
@@ -523,7 +523,7 @@ def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, wo
     点名的引擎得**现在**就能用(没配连接、克隆没装都在这里说),而不是等人批准之后任务才失败。
     """
     from app.domain import capabilities
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     engine, voice = (engine or "").strip(), (voice or "").strip()
     engines = speaking_engines(db, user_id, workspace_id)
@@ -587,7 +587,7 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     `options` 是两条路各自的附加项(克隆权重、引擎连接/模型),不属于这条路的丢掉。
     """
     from app.domain.voices.defaults import resolve_voice_default
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     #: **这一个就是「点名」那一处的兜底**(配音唯一接线点):点名的照原样,两格都空才用默认那一对。
     #: 空手回去仍然交给下面那句"没有选音色" —— 没有默认时行为和以前逐字一样。

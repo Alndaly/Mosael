@@ -21,7 +21,7 @@ from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job
 from app.domain.workflows.engine import execute_graph
 from app.domain.workflows.executors import dub_lipsync as module
-from app.domain.workflows.templates import translated_dub_graph
+from app.domain.workflows.templates_dub import translated_dub_graph
 from tests.util import fresh_client
 
 #: 30 秒原片,每 6 秒一句;模型一次收 2–10 秒 —— 切成好几块,每块一两句。
@@ -108,7 +108,7 @@ def pipeline(monkeypatch):
     monkeypatch.setattr(separation, "available", lambda *_a, **_k: True)
     monkeypatch.setattr(separation, "separate_asset", fake_separate)
     monkeypatch.setattr(module, "_pick_model", lambda db, choice, mode: model)
-    monkeypatch.setattr("app.domain.generation.create_generation_job", generation)
+    monkeypatch.setattr("app.domain.generation.operations.create_generation_job", generation)
     monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda generation_id: None)
 
     client = fresh_client()

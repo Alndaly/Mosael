@@ -36,7 +36,8 @@ from app.core.i18n import LocalizedError, get_current_locale
 from app.core.outbound_guard import Origin
 from app.domain.plugins.child_env import base_env
 from app.domain.plugins.egress import UNDECIDED, Egress
-from app.domain.plugins.manifest import LOCALE_ENV, expand
+from app.domain.plugins.manifest import LOCALE_ENV
+from mosael_formats.plugin_manifest import expand
 
 #: 连接 + 握手 + 一次调用的**默认**总预算。和进程类插件的 60s 对齐。
 #: 借道这条通道的产品功能可以自带预算 —— 见 runtime.PLUGIN_TIMEOUT_SECONDS 上那段说明。

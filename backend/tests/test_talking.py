@@ -12,7 +12,8 @@ from typing import Any
 import pytest
 
 from app.core.db import SessionLocal
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import talking
 from tests.util import fresh_client, seed_assets
 
@@ -43,7 +44,7 @@ class Fakes:
 
 @pytest.fixture()
 def setup(monkeypatch):
-    from app.domain import generation
+    from app.domain.generation import operations
     from app.domain.generation import resolution, runner
     from app.domain.workflows.executors import subjobs
 
@@ -52,7 +53,7 @@ def setup(monkeypatch):
     seed_assets(ws, {"face": "image", "side": "image", "clip": "video", "line": "audio"})
     fakes = Fakes(ws)
     monkeypatch.setattr(subjobs, "synthesize_speech", fakes.speak)
-    monkeypatch.setattr(generation, "create_generation_job", fakes.create)
+    monkeypatch.setattr(operations, "create_generation_job", fakes.create)
     monkeypatch.setattr(runner, "start_generation_thread", lambda generation_id: None)
     monkeypatch.setattr(resolution, "generation_options", lambda db, kind, user_id=None: [SEEDANCE, S2V, RETALK])
     monkeypatch.setattr(talking, "wait_for_job", lambda job_id, release=None: SimpleNamespace(result={"asset_ids": ["talk"]}))

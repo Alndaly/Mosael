@@ -17,7 +17,7 @@ import pytest
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import talking
 from app.domain.workflows.executors.talking import split_script, talking_segments
 from tests.util import fresh_client, make_voice, seed_assets
@@ -80,7 +80,7 @@ def test_按实测时长凑段_字幕时间照配音(voicing) -> None:
 def test_每段带着起止和挑定的模型_下游字幕和说话照片接得上(voicing) -> None:
     """此前段落只有 start / duration:「生成字幕」按 start/end 读段落,接它就是 0 条;下游「让它说话」留空模型时
     自己再挑一次,可能挑到上限不同的另一个 —— 分段是按这个模型的上限切的。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     voicing.seconds.update({"甲。": 8, "乙。": 7, "丙。": 6})
     with SessionLocal() as db:

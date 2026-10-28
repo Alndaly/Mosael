@@ -94,7 +94,7 @@ def test_没发成的任务没有作品() -> None:
 
 
 def test_工作流发布节点把作品ID和链接交给下游() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     spec = NODE_TYPES["publish"]
     assert {"post_id", "post_url"} <= set(spec["outputs"])

@@ -26,7 +26,7 @@ from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
 from app.domain.assets.intermediates import LIPSYNC_CHUNK
 from app.domain.voices.subtitle_dub import DUB_LINE_KEY
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.common import stop_if_stopping
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.media.tempo import atempo_filters
@@ -141,7 +141,7 @@ def _lines_on(db: Session, scope: RunScope, voice_track: Any, clip_start: float,
     截取却仍从这句的开头算 —— 整句往后错了那一截,越往后嘴越对不上。现在起点落在 0,截取往后挪同样一段
     (按这句的变速折回素材里的秒数)。
     """
-    from app.domain.workflows.executors.subjobs import _asset_in
+    from app.domain.workflows.executors.inputs import _asset_in
     from app.media.paths import resolve_key
 
     lines: list[Line] = []
@@ -256,8 +256,9 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     from app.domain.assets.importer import register_file_asset
     from app.domain.assets.lineage import CONCAT, MIX, TRIM, Derivation, derived
     from app.domain.render import DIGITAL_HUMAN_SOURCE
-    from app.domain.sequences.operations import AddTrack, InsertClip, add_track, insert_clip
-    from app.domain.workflows.executors.subjobs import _asset_in, _sequence_in
+    from app.domain.sequences.tracks import AddTrack, add_track
+    from app.domain.sequences.placement import InsertClip, insert_clip
+    from app.domain.workflows.executors.inputs import _asset_in, _sequence_in
     from app.media.paths import resolve_key
 
     _require_consent(config)

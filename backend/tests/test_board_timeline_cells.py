@@ -158,7 +158,7 @@ def test_空槽连进时间线格_生成出来之后接到末尾_只接一次() 
     那封撞在一起)只接一次;没连着时间线的格子照旧。"""
     from types import SimpleNamespace
 
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client, ws, board = _setup()
     sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
@@ -185,7 +185,7 @@ def test_连着时间线格的媒体格跑完一项能力_宿主自己的素材�
     时间线末尾 —— 每跑一次能力,时间线上就多一段同样的音频。只有这一轮把素材填进宿主时才接。"""
     from types import SimpleNamespace
 
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client, ws, board = _setup()
     sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
@@ -253,7 +253,7 @@ def test_时间线格挂导出_存下时写明产出者() -> None:
 def test_导出设置照剪辑页那一份_不认识的值说清楚() -> None:
     import pytest
 
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors.subjobs import export_params
 
     assert export_params({}) is None, "一样都没填就按默认档导出"

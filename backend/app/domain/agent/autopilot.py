@@ -93,7 +93,7 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     「这一次不用问人」排在「没有会话」之前:它不是谁开的口子,而是这次调用本身不需要口子(工具自己声明,
     见 ConfirmableTool.needs_card)—— MCP 直连、飞书上跑一格的一项只读能力也一样直接跑。
     """
-    from app.domain.agent.confirmable import allowance_name, tool_spec
+    from app.domain.agent.confirmable.registry import allowance_name, tool_spec
 
     spec = tool_spec(confirmation.tool)
     if spec is not None and spec.always_asks:
@@ -177,7 +177,7 @@ def set_session_allowances(db: Session, user: User, session: AgentSession, entri
       多一条永远不生效的承诺(decide 头一条就不放它)。
     - 记下**是谁定的**:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 decide)。
     """
-    from app.domain.agent.confirmable import tool_spec
+    from app.domain.agent.confirmable.registry import tool_spec
 
     merged: dict[str, str] = {}
     for tool, permission in entries:

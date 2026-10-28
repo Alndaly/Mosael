@@ -26,7 +26,7 @@ from app.core.i18n import LocalizedError, get_current_locale, tr
 from app.core.transfer_rate import DownloadRate
 from app.domain.local_services.errors import LocalServiceError
 from app.domain.local_services.logs import ServiceLog
-from app.domain.plugins.manifest import text_of
+from mosael_formats.plugin_manifest import text_of
 from app.domain.plugins.runtime import PluginCancelled
 
 logger = logging.getLogger(__name__)

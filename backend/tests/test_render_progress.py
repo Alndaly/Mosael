@@ -10,6 +10,7 @@ import pytest
 
 from app.domain import render as render_domain
 from app.media import render_executor as rx
+from app.core import config
 from app.media.render_executor import (
     PHASE_ENCODE,
     PHASE_FALLBACK,
@@ -83,7 +84,7 @@ def test_export_message_encode_speed_only():
 def test_real_render_reports_phases_and_progress(tmp_path: Path, monkeypatch):
     """跑一次真 ffmpeg,验证块解析对真实 -progress 输出成立:阶段流转 + 进度到 1.0 + 拿到速度。"""
     # 软件编码,输出确定;也避开硬件编码器在 CI 上的不确定性。
-    monkeypatch.setattr(rx.settings, "hw_encode", False)
+    monkeypatch.setattr(config.settings, "hw_encode", False)
     base = tmp_path / "base.mp4"
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",

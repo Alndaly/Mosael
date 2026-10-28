@@ -60,7 +60,6 @@ from app.domain.local_services.supervisor import (
     RESTARTING,
     RUNNING,
     STARTING,
-    STATES,
     STOPPED,
     LaunchSpec,
     ServiceProcess,
@@ -70,7 +69,8 @@ from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import service_gate
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import SERVICE_ADDRESS_FIELD, manifest_of
+from app.domain.plugins.manifest import manifest_of
+from mosael_formats.plugin_manifest import SERVICE_ADDRESS_FIELD
 from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from mosael_formats.plugin_env import EGRESS_KEYS, HOST_PREFIX
 
@@ -1132,12 +1132,48 @@ def stop_all() -> None:
 
 
 __all__ = [
-    "ACTIVE", "FAILED", "GATE", "ISSUE_KEYS", "RESTARTING", "RUNNING", "SERVICE_ENV", "SHARED_ENV", "STARTING", "STATES",
-    "STOPPED", "LocalServiceError", "add_nodes", "adopt_orphans", "base_minor", "begin_install", "begin_rollback",
-    "begin_update", "begin_using", "check_idle",
-    "cancel_install", "configure", "create_connection", "detect", "discover", "ensure_running", "footprint", "forget_instance",
+    "GATE",
+    "ISSUE_KEYS",
+    "SERVICE_ENV",
+    "SHARED_ENV",
+    "add_nodes",
+    "adopt_orphans",
+    "base_minor",
+    "begin_install",
+    "begin_rollback",
+    "begin_update",
+    "begin_using",
+    "check_idle",
+    "cancel_install",
+    "configure",
+    "create_connection",
+    "detect",
+    "discover",
+    "ensure_running",
+    "footprint",
+    "forget_instance",
     "forget_package",
-    "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "package_installs", "package_roots", "plan", "prepare_install",
-    "recent_install_logs", "recent_logs", "remove", "remove_install", "restart", "start", "start_idle_watch", "start_kept_running", "status",
-    "stop", "stop_all", "touch", "running_version", "versions",
+    "install_log_path",
+    "issue_of",
+    "log_path",
+    "model_folders",
+    "needs_rebuild",
+    "package_installs",
+    "package_roots",
+    "plan",
+    "prepare_install",
+    "recent_install_logs",
+    "recent_logs",
+    "remove",
+    "remove_install",
+    "restart",
+    "start",
+    "start_idle_watch",
+    "start_kept_running",
+    "status",
+    "stop",
+    "stop_all",
+    "touch",
+    "running_version",
+    "versions",
 ]

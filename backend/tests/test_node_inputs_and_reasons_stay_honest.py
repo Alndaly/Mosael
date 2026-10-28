@@ -12,8 +12,8 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import Asset, Transcript, TranscriptSegment, Workflow
 from app.domain.jobs import create_job
-from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import fresh_client
 
 

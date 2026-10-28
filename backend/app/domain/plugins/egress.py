@@ -36,7 +36,7 @@ from app.core import outbound_guard
 from app.db.models import PluginInstance
 from app.domain import network
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import Manifest
+from mosael_formats.plugin_manifest import Manifest
 
 FOLLOW = "follow"
 DIRECT = "direct"

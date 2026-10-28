@@ -31,10 +31,12 @@ from app.db.models import Job, Note, Workflow
 from app.domain import browser
 from app.domain.plugins import mcp_bridge
 from app.domain.plugins import tools as tools_domain
-from app.domain.workflows import WorkflowDomainError, validate_graph, with_run_params
-from app.domain.workflows import executors as registry
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import validate_graph, with_run_params
+from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates import ModelChoice, requirement_statuses
+from app.domain.workflows.templates import requirement_statuses
+from app.domain.workflows.templates_models import ModelChoice
 from app.domain.workflows.templates_analysis import (
     TIKHUB_CALLS,
     TIKHUB_PLUGIN,
@@ -130,8 +132,8 @@ class Outside:
         self.responses = {**RESPONSES, **(responses or {})}
         self.calls: dict[str, list[Any]] = defaultdict(list)
         self.download_fails = download_fails
-        monkeypatch.setitem(registry._REGISTRY, "llm", self.llm)
-        monkeypatch.setitem(registry._REGISTRY, "transcribe_asset", self.transcribe)
+        monkeypatch.setitem(executors_registry._REGISTRY, "llm", self.llm)
+        monkeypatch.setitem(executors_registry._REGISTRY, "transcribe_asset", self.transcribe)
         monkeypatch.setattr(browser, "_enqueue", self.browser_action)
         monkeypatch.setattr(mcp_bridge, "_sync", self.mcp)
         monkeypatch.setattr(ytdlp, "download", self.download)

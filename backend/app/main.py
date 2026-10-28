@@ -77,13 +77,13 @@ from app.db.migrations import init_db
 logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
-from app.domain.assets import AssetProjectError
+from app.domain.assets.project_scope import AssetProjectError
 from app.domain.assets.deletion import AssetNotDeletable
 from app.domain.assets.importer import AssetFileTypeError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes.operations import SceneDomainError
 from app.domain.agent.skills.catalog import SkillDomainError
-from app.domain.entities import EntityDomainError
+from app.domain.entities.library import EntityDomainError
 from app.domain.blender.bridge import BlenderDomainError
 from app.domain.voices.remote import RemoteConsentRequired
 from app.domain.jobs import register_external_kind
@@ -356,7 +356,7 @@ def _wire_seams() -> None:
     # 插件与素材库之间那道缝同理 —— 两边各自都不认识对方(见 plugins/media_bridge)。
     from app.domain.assets import plugin_bridge as asset_plugin_bridge
     # 画板上生成的产出要落回画布 —— 同样是「任务不认识画板,画板认识任务」。
-    from app.domain import boards as board_receipts
+    from app.domain.boards import receipts
     # 工作流一次运行开的浏览器会话,随这次运行落终态而关(成功、失败、取消)——
     # 同样是「任务不认识浏览器,浏览器认识任务」。
     from app.domain import browser as browser_sessions
@@ -407,6 +407,7 @@ def _wire_seams() -> None:
     # 宿主能力的契约(ADR 0031 §5):各项能力的宿主侧把自己登记进能力表,设置页照表列出每一项。
     from app.domain import capabilities
     from app.domain import documents
+    from mosael_formats import plugin_manifest
     from app.domain.generation import public_links
     from app.domain import audio_capabilities
     from app.domain.voices import transcription
@@ -423,7 +424,7 @@ def _wire_seams() -> None:
     # 生成、工具清单也在这张表里(ADR 0032 §1:只剩一张),只是不参与挑选;表里挂着插件实例变了之后宿主侧怎么
     # 对齐的钩子。插件域不 import 能力表,由这里把查钩子的函数交给它的转发器。
     from app.domain.plugins import host_capabilities
-    from app.domain.plugins.manifest import GENERATION, TOOLS
+    from mosael_formats.plugin_manifest import GENERATION, TOOLS
 
     capabilities.register(plugin_connections.CAPABILITY)
     from app.domain import model_library
@@ -452,7 +453,7 @@ def _wire_seams() -> None:
     # 调用类能力的收尾(ADR 0033 §3):智能体、工作流直接调了认领文档解析的工具,结果存成那份文档的一次解析。
     from app.domain.documents import extraction as document_extraction
 
-    capabilities.register_finish(documents.DOCUMENT_PARSE, document_extraction.finish_plugin_call)
+    capabilities.register_finish(plugin_manifest.DOCUMENT_PARSE, document_extraction.finish_plugin_call)
     # 素材是最底下的一层:时间线、生成、资产库、发布、文档都引用它,它一个都不认识(见 tests/test_import_layering)。
     # 删素材之前的拦截与善后、入库之后的接续,由各自的上层在这里登记到素材域的缝上。
     from app.domain import publish
@@ -464,8 +465,8 @@ def _wire_seams() -> None:
     asset_deletion.on_deleting(entity_library.forget_asset)
     asset_importer.on_imported(document_extraction.parse_on_import)
     # 删工作流时绑着它的定时任务、触发器同一个事务里停用:它们依赖工作流,工作流不认识它们(见 workflows/deletion)。
-    from app.domain.scheduler import stop_tasks_bound_to_workflow
-    from app.domain.triggers import stop_triggers_bound_to_workflow
+    from app.domain.scheduler.operations import stop_tasks_bound_to_workflow
+    from app.domain.triggers.use_cases import stop_triggers_bound_to_workflow
     from app.domain.workflows import deletion as workflow_deletion
 
     workflow_deletion.on_deleting(stop_tasks_bound_to_workflow)
@@ -514,7 +515,7 @@ def _wire_seams() -> None:
     plugin_references.install()
     board_plugin_references.install()
     asset_plugin_bridge.install()
-    board_receipts.install()
+    receipts.install()
     browser_sessions.install()
     # 取消发布任务时撤它的发布单 —— 同样是「任务不认识发布,发布认识任务」。
     from app.domain.publish import worker as publish_worker

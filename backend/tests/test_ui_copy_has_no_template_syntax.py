@@ -16,7 +16,7 @@ RATCHET = True
 from collections.abc import Iterator
 
 from app.core.messages.node_catalog import MESSAGES as NODE_CATALOG_MESSAGES
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.node_catalog import describe_node_types
 
 #: 字段声明里会显示出来的几格(default 是输入框的占位)。

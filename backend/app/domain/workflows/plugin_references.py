@@ -261,7 +261,7 @@ def _deep_references(value: Any, node_id: str, outputs: set[str]) -> set[str]:
 def _inner_keys(node: dict[str, Any]) -> tuple[str, ...]:
     """容器节点(循环 / 子图)配置里属于**体内**作用域的几格(NESTED_BODY_RAW_KEYS):`output` / `condition` 里的
     `{{p1.x}}` 指的是体里的 p1,不是这一层同名的那个。和 normalization、reference_dependencies 同一条界线。"""
-    from app.domain.workflows import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES
+    from app.domain.workflows.graph_rules import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES
 
     return NESTED_BODY_RAW_KEYS if str(node.get("type") or "") in NESTED_BODY_TYPES else ()
 

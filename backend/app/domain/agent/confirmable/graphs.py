@@ -33,7 +33,7 @@ def graph_to_persist(db: Session, tool: str, payload: dict[str, Any]) -> object:
     if tool != "edit_workflow":
         return None
     from app.db.models import Workflow
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.graph_ops import apply_graph_ops
 
     workflow = db.get(Workflow, str(payload.get("workflow_id") or ""))
@@ -70,7 +70,7 @@ def external_warning(external: set[str] | None) -> Any:
     if not external:
         return ""
     from app.core.i18n import fragment
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     #: **这里不是出口。** 原先这里 `t(..., get_current_locale())` 当场翻 —— 而确认卡由
     #: sidecar / MCP 调进来,那条路不带 Accept-Language(查过,零命中),所以 locale 恒为 zh:

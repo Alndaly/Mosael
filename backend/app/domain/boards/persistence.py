@@ -127,7 +127,7 @@ def _copy_timelines(db: Session, board: Board) -> None:
     """副本上的时间线格各自复制一条时间线,放进副本自己的项目。**不和原板共用**:共用的话在副本里剪一刀,
     原板那一格跟着变,两边的撤销还会互相撤掉对方的步骤。原来那条已经不在的格子照原样留着(和原板一样是空的)。"""
     from app.db.models import Sequence
-    from app.domain.sequences import copy_sequence
+    from app.domain.sequences.creation import copy_sequence
 
     canvas = json.loads(json.dumps(board.canvas or {}))
     copied: dict[str, str] = {}

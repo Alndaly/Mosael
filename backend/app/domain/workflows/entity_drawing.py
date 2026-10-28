@@ -28,7 +28,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Entity, Job
 from app.domain.jobs import create_job, dispatch_job, run_job_inline
 from app.domain.workflows import node_budget
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 from app.domain.workflows.executors.entities import plan_drawing
 from app.domain.workflows.executors.talking import check_entity_speak
 

@@ -9,8 +9,10 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import BrowserSession
 from app.domain import browser as bdom
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
-from app.domain.workflows.executors import browser as bx, registered_types
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors import browser as bx
+from app.domain.workflows.executors.registry import registered_types
 from tests.util import fresh_client
 
 BROWSER_NODES = [

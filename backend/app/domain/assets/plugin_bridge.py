@@ -32,7 +32,7 @@ def _take(
     derived_from: tuple[str, ...] = (),
 ) -> tuple[str, str]:
     """插件产出 → 素材库。返回 (id, 名字)。交给插件的那几份素材记成它的出处(插件拿 AI 素材加工出来的,照样含 AI)。"""
-    from app.domain.assets import register_file_asset
+    from app.domain.assets.importer import register_file_asset
     from app.domain.assets.lineage import PLUGIN, derived
 
     asset = register_file_asset(

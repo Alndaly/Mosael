@@ -20,7 +20,7 @@ from typing import Any
 from app.core.db import SessionLocal
 from app.core.i18n import set_current_locale
 from app.db.models import Job, PluginInstance, PluginPackage
-from app.domain.plugins.manifest import parse, text_of
+from mosael_formats.plugin_manifest import parse, text_of
 from app.domain.plugins.nodes import node_meta
 from app.domain.plugins.tools import refresh_tools
 from app.domain.workflows import create_workflow

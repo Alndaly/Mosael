@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
 from app.domain.jobs import current_parent_job_id
-from app.domain.workflows import AwaitingApproval, WorkflowDomainError
+from app.domain.workflows.errors import AwaitingApproval, WorkflowDomainError
 from app.domain.workflows.executors.registry import (
     PreflightNode,
     RunScope,

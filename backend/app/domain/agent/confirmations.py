@@ -5,10 +5,11 @@ from typing import Any
 from sqlalchemy import false, update
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, render_message
+from app.core.i18n import render_message
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, User, now
-from app.domain.agent.confirmable import tool_spec
+from app.domain.agent.confirmable.registry import tool_spec
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.sessions import decides_for_filter, ensure_decides_for
 from app.domain.jobs import reset_receipt, set_receipt
@@ -25,7 +26,6 @@ SequenceOperations, so every approved edit stays undoable.
 """
 
 __all__ = [
-    "ConfirmationError",
     "approve_confirmation",
     "authorize_and_approve",
     "authorize_and_reject",

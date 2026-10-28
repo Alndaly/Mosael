@@ -9,7 +9,7 @@ domain/capabilities 那一份挑法:**没定默认就用本地的** —— 文�
 from __future__ import annotations
 
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable
-from app.domain.plugins.manifest import DOCUMENT_PARSE
+from mosael_formats.plugin_manifest import DOCUMENT_PARSE
 LOCAL_PARSER = "builtin:local"
 
 
@@ -39,4 +39,9 @@ def register_uses() -> None:
     register_use(Use(DOCUMENT_PARSE, "app", fragment("capUse_documentReparse")))
 
 
-__all__ = ["CAPABILITY", "DOCUMENT_PARSE", "LOCAL_PARSER", "DocumentParserUnavailable", "register_uses"]
+__all__ = [
+    "CAPABILITY",
+    "LOCAL_PARSER",
+    "DocumentParserUnavailable",
+    "register_uses",
+]

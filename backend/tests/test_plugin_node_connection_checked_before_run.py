@@ -20,7 +20,8 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import Job, PluginInstance, PluginPackage
 from app.domain.plugins.tools import refresh_tools
-from app.domain.workflows import WorkflowDomainError, create_workflow
+from app.domain.workflows import create_workflow
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import start_workflow_job
 from tests.util import fresh_client, second_client, user_id
 

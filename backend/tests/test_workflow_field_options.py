@@ -17,7 +17,7 @@ from tests.util import fresh_client
 
 
 def test_声明里用到的来源都存在() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
     import app.main  # noqa: F401 —— 组装根:能力表登记好了,`providers.<能力>` 才认得
     from app.domain.workflows.field_options import known_source
 
@@ -39,13 +39,14 @@ def _ctx(workspace_id: str = "w", parent: str = ""):
 
 def test_引擎清单_克隆在前_只列就绪的_不列播客(monkeypatch) -> None:
     from app.domain.voices import engine_catalog
+    from app.domain.voices import speech
     from app.domain.workflows.field_options import field_options
 
     monkeypatch.setattr(engine_catalog, "describe_engines", lambda db=None, user_id=None: [
         {"id": "builtin:clone", "label": "ttsProvider_clone", "ready": False},
         {"id": "builtin:edge", "label": "Edge", "ready": True},
         {"id": "builtin:volcano", "label": "火山", "ready": False},
-        {"id": engine_catalog.PODCAST_ENGINE, "label": "播客", "ready": True},
+        {"id": speech.PODCAST_ENGINE, "label": "播客", "ready": True},
     ])
     options = field_options(None, "speech_engines", _ctx())
     assert [one["value"] for one in options] == ["builtin:clone", "builtin:edge"]
@@ -127,7 +128,7 @@ def test_执行体把克隆音色交给克隆那条(engine, monkeypatch) -> None
 
 
 def test_执行体不收别的工作区的克隆音色(monkeypatch) -> None:
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors import subjobs
 
     monkeypatch.setattr(subjobs, "current_actor", lambda db: None)
@@ -146,7 +147,7 @@ class Test清单从哪来都由声明说了算:
     def test_声明都指向真实存在的来源(self) -> None:
         import app.main  # noqa: F401 —— 组装根:能力表登记好了,`providers.<能力>` 才认得
         from app.domain.plugins.nodes import node_meta
-        from app.domain.workflows import NODE_TYPES
+        from app.domain.workflows.node_types import NODE_TYPES
         from app.domain.workflows.field_options import known_source
 
         declared = {

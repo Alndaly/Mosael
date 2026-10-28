@@ -35,7 +35,7 @@ def test_输出口叫artifact和artifacts的_落板落的是收进素材库的�
 
     from app.domain.plugins.nodes import node_meta
     from app.domain.plugins.tools import find
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
     from tests.util import acting_as
 
     client = fresh_client()

@@ -13,7 +13,7 @@ from typing import Any
 
 from app.core.i18n import tr
 from app.db.models import Voice
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
@@ -62,59 +62,22 @@ from app.domain.workflows.templates_analysis import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-#: 模型挑选、Schema 与三张大图住在旁边的 templates_* 模块里;这里重新导出每一个名字 ——
-#: 调用方(路由、执行器、测试)照旧从 templates 取。
+#: 模型挑选、Schema 与几张大图住在旁边的 templates_* 模块里,调用方直接从那里取;这里只 import 自己要用的。
 from app.domain.workflows.templates_models import (
-    ModelChoice,  # noqa: F401
-    VideoPlan,  # noqa: F401
-    ImagePlan,  # noqa: F401
-    _default_model,  # noqa: F401
-    _capabilities,  # noqa: F401
+    ModelChoice,
     REFERENCE_IMAGES_NEEDED,
     SINGLE_REFERENCE,
-    _can_take_references,  # noqa: F401
-    _can_shoot_from_references,  # noqa: F401
-    _pick,  # noqa: F401
     _chat_model,
     _shot_video_model,
     _reference_image_model,
-    _image_plan,  # noqa: F401
-    _video_plan,  # noqa: F401
 )
-from app.domain.workflows.templates_schemas import (
-    _object,  # noqa: F401
-    _creative_brief_schema,  # noqa: F401
-    _narrative_script_schema,  # noqa: F401
-    BLOCKOUT_COLORS,  # noqa: F401
-    _visual_bible_schema,  # noqa: F401
-    SHOT_SIZES,  # noqa: F401
-    CAMERA_ANGLES,  # noqa: F401
-    CAMERA_MOVES,  # noqa: F401
-    _shot_schema,  # noqa: F401
-    MAX_SHOTS_CEILING,  # noqa: F401
-    _storyboard_schema,  # noqa: F401
-    SET_KINDS,  # noqa: F401
-    _set_design_schema,  # noqa: F401
-)
-from app.domain.workflows.templates_cleanup import (
-    TRANSCRIPT_VIDEO_CLEANUP,
-    _cleanup_schema,  # noqa: F401
-    transcript_video_cleanup_graph,
-)
+from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP, transcript_video_cleanup_graph
 from app.domain.workflows.templates_dub import (
     TRANSLATED_DUB,
     TRANSLATED_DUB_LIPSYNC,
     translated_dub_graph,
 )
-from app.domain.workflows.templates_full_video import (
-    FULL_VIDEO_GENERATION,
-    _COORDINATES,  # noqa: F401
-    _PROP_RULE,  # noqa: F401
-    _camera_rules,  # noqa: F401
-    blockout_rules,  # noqa: F401
-    single_set_rules,  # noqa: F401
-    full_video_generation_graph,
-)
+from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
 from app.domain.workflows.templates_shots import (
     REFERENCE_VIDEO_SHOTS,
     SHOTS_TEMPLATE_CATALOG,
@@ -471,7 +434,7 @@ def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]
     **只动名字**:config 里的值是数据(提示词、模板串),不是给人看的标签 —— 翻它们等于改这条
     工作流要做的事。
     """
-    from app.core.i18n import pick_text
+    from mosael_formats.i18n import pick_text
 
     for node in graph.get("nodes") or []:
         if isinstance(node, dict) and isinstance(node.get("name"), dict):

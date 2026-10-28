@@ -80,7 +80,7 @@ def wire(monkeypatch):
             others += 1
             return answers[at]()
 
-        class _Scripted(client.RetryingClient):
+        class _Scripted(http_retry.RetryingClient):
             def __init__(self, *args, **kwargs):
                 kwargs["transport"] = httpx.MockTransport(handler)
                 super().__init__(*args, **kwargs)
@@ -413,7 +413,7 @@ def test_网络错误统一变成飞书错误(monkeypatch) -> None:
             return _token_ok()
         raise httpx.ConnectError("network down", request=request)
 
-    class _Scripted(feishu_client.RetryingClient):
+    class _Scripted(http_retry.RetryingClient):
         def __init__(self, *args, **kwargs):
             kwargs["transport"] = httpx.MockTransport(handler)
             super().__init__(*args, **kwargs)

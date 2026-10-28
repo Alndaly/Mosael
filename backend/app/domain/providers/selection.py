@@ -11,13 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ProviderProfile
 from app.domain.providers import credentials as provider_credentials
-from app.domain.providers.presets import (  # noqa: F401 —— 两个 vendor 能力函数在 presets,这里照旧可取
+from app.domain.providers.presets import (
     KNOWN_AUTH_TYPES,
     KNOWN_CAPABILITY_IDS,
     capability_ids_for_vendor,
-    normalize_capability_ids,
     provider_definition,
-    served_by_pi,
 )
 from app.domain.providers.credentials import ResolvedConnection
 

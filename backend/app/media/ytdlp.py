@@ -103,7 +103,8 @@ class YtdlpError(RuntimeError):
     """
 
     def __init__(self, key: str, **params: object) -> None:
-        from app.core.i18n import DEFAULT_LOCALE, t
+        from app.core.i18n import t
+        from mosael_formats.i18n import DEFAULT_LOCALE
 
         self.key = key
         self.params = params
@@ -666,7 +667,7 @@ def classify(exc: BaseException) -> YtdlpError:
     from yt_dlp.networking.exceptions import HTTPError, TransportError
     from yt_dlp.utils import GeoRestrictedError, UnsupportedError
 
-    from app.media.extractors import SiteAdapterError, SiteAdapterPending
+    from app.media.extractors.errors import SiteAdapterError, SiteAdapterPending
 
     chain = _causes(exc)
     #: 这几类已经带着「是哪一种」:yt-dlp 里的代码抛的 `YtdlpError` 带 key,站点适配器抛的

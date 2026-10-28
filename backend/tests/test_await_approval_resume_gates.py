@@ -31,7 +31,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import Job, Notification, WorkflowRunApproval, now
 from app.domain.jobs import reconcile_orphaned_jobs, wait_for_idle_jobs
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows import approvals as run_approvals
 from app.domain.workflows.engine import check_runnable
 from tests.test_await_approval_node import (

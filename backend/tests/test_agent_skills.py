@@ -17,8 +17,9 @@ from app.core.db import SessionLocal
 from app.db.models import PluginPackage
 from app.domain.agent import host
 from app.domain.agent import prompt as agent_prompt
-from app.domain.agent.host import TurnResult
+from app.ai.sidecar.pi_client import TurnResult
 from app.domain.agent.skills import catalog, runtime, store
+from mosael_formats import agent_skill
 from app.domain.plugins.manifest import PATH_KEY
 from mosael_formats.agent_skill import SkillDoc
 from tests.util import add_provider, fresh_client
@@ -398,7 +399,7 @@ def test_计时不出问题(monkeypatch) -> None:
         _create(ws, f"fast-{index:02d}")
     _system_prompt(ws)
     parsed: list[str] = []
-    real_parse = catalog.parse_skill_md
+    real_parse = agent_skill.parse_skill_md
 
     def counting_parse(text, *args, **kwargs):
         parsed.append(text)

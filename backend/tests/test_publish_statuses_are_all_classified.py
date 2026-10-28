@@ -27,7 +27,7 @@ def _sets():
 
 
 def test_每个状态都归了档() -> None:
-    from app.domain.publish.worker import TASK_STATUSES
+    from app.domain.publish import TASK_STATUSES
 
     covered = set().union(*_sets().values())
     missing = sorted(set(TASK_STATUSES) - covered)
@@ -38,7 +38,7 @@ def test_每个状态都归了档() -> None:
 
 
 def test_没有归了档却不存在的状态() -> None:
-    from app.domain.publish.worker import TASK_STATUSES
+    from app.domain.publish import TASK_STATUSES
 
     for name, group in _sets().items():
         stale = sorted(group - set(TASK_STATUSES))

@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.domain.boards import BoardDomainError
+from app.domain.boards.errors import BoardDomainError
 from tests.util import board_revision, fresh_client, run_on_board, second_client, wait_status
 
 
@@ -97,7 +97,7 @@ def test_空槽的缺省产出者和注册表对得上() -> None:
     """
     from app.core.db import SessionLocal
     from app.domain.boards import producers
-    from app.domain.boards.canvas import ITEM_KINDS
+    from app.domain.boards.shape import ITEM_KINDS
     from app.domain.boards.producer_ids import SLOT_PRODUCERS
 
     fresh_client()
@@ -115,8 +115,9 @@ def test_写入之后每一个能产出的空槽都写明了产出者() -> None:
     """棘轮:不管哪条路造出来的格子(画布的「添加」、智能体、3D 场景页、脚本),过了 normalize 之后,
     能产出、还没产出的每一格都写明了产出者,而且是挂得了它的那一个;有了产出的媒体格、不产出的种类不补。"""
     from app.core.db import SessionLocal
-    from app.domain.boards import normalize_canvas, producers
-    from app.domain.boards.canvas import ITEM_KINDS
+    from app.domain.boards import producers
+    from app.domain.boards.shape import normalize_canvas
+    from app.domain.boards.shape import ITEM_KINDS
     from app.domain.boards.producer_ids import DERIVED_BUILTINS, SLOT_PRODUCERS
 
     fresh_client()
@@ -233,7 +234,8 @@ def test_运行要带版本号_旧版本起不了任务() -> None:
 
 
 def test_画布上的表单只认产出者的名字() -> None:
-    from app.domain.boards import BoardDomainError, normalize_canvas
+    from app.domain.boards.errors import BoardDomainError
+    from app.domain.boards.shape import normalize_canvas
 
     ok = normalize_canvas({"items": [{"id": "a", "kind": "audio", "x": 0, "y": 0, "form": {"producer": "speak"}}]})
     assert ok["items"][0]["form"] == {"producer": "speak"}
@@ -264,7 +266,7 @@ def test_跑过的那一格表单上写着是谁做的(monkeypatch) -> None:
 
 def test_智能体放下的空格子也写明产出者() -> None:
     """算子自己不写缺省产出者 —— 落库那一道(normalize)补,和别的新建路是同一条规则。"""
-    from app.domain.boards import normalize_canvas
+    from app.domain.boards.shape import normalize_canvas
     from app.domain.boards.ops import apply_board_ops
 
     canvas = normalize_canvas(apply_board_ops({"items": [], "edges": []}, [
@@ -495,8 +497,8 @@ def test_画板上的内置变换从节点声明里读_是它吃的那几种格�
     from app.core.i18n import MESSAGES
     from app.domain.boards import producers
     from app.domain.boards.transforms import ABILITY, BOARD_GROUPS, content_transform_gap
-    from app.domain.workflows import NODE_TYPES, WIRING_CATEGORIES
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.node_types import NODE_TYPES, WIRING_CATEGORIES
+    from app.domain.workflows.executors.registry import get_executor
 
     declared = {name for name, spec in NODE_TYPES.items() if "board" in (spec.get("surfaces") or ())}
     assert declared == set(BOARD_NODES)
@@ -540,7 +542,7 @@ def test_声明了画板的流程节点注册表也不收_跑的时候说清楚(
     画布上存着的那一项点运行,说清楚这件事归工作流。"""
     from app.core.db import SessionLocal
     from app.domain.boards import producers
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     monkeypatch.setitem(NODE_TYPES, "http_request", {**NODE_TYPES["http_request"], "surfaces": ["workflow", "board"],
                                                      "board_outputs": ["text"]})
@@ -989,7 +991,7 @@ def test_数字字段填的不是数_起任务之前就拒() -> None:
 
 
 def test_线断了绑定就摘掉_能力的设置照留() -> None:
-    from app.domain.boards import normalize_canvas
+    from app.domain.boards.shape import normalize_canvas
 
     canvas = normalize_canvas({
         "items": [
@@ -1058,7 +1060,7 @@ def test_产出按声明的类型落成格子() -> None:
 
 
 def test_别的文件落成写着素材名的便签() -> None:
-    from app.domain.boards.canvas import _canvas_with_delivered_result
+    from app.domain.boards.outputs import _canvas_with_delivered_result
 
     canvas = {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0, "width": 280, "asset_id": "src",
                          "run": {"status": "running", "job_id": "j", "ability": "node:separate_audio"}}], "edges": []}
@@ -1102,7 +1104,7 @@ def test_素材字段只接它声明的那几种素材() -> None:
     from app.domain.boards.tools import bindable_kinds, check_bindings
     from app.domain.boards.transforms import board_group, board_hosts
     from app.domain.plugins.nodes import node_meta
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     transcribe = NODE_TYPES["transcribe_asset"]["config"]
     assert bindable_kinds("asset_id", transcribe["asset_id"]) == ["video", "audio"]
@@ -1134,7 +1136,7 @@ def test_素材字段只接它声明的那几种素材() -> None:
 def test_能力的设置归宿主_它自己再跑一次也带着() -> None:
     """一格自己的产出者重新跑(重新生成、让 AI 改写)时,摆占位写的是它自己那一份表单 —— 能力的设置是这一格的,
     不跟着这一轮换掉;跑一项能力时,设置合进宿主此刻的表单,自己的产出者和别的几项不动。"""
-    from app.domain.boards.canvas import _keeping_abilities, _with_ability
+    from app.domain.boards.receipts import _keeping_abilities, _with_ability
 
     stored = {"prompt": "旧", "abilities": {"node:translate": {"config": {"target_lang": "en"}}}, "producer": "write"}
     assert _keeping_abilities({"prompt": "新", "model": "m", "producer": "write"}, stored) == {

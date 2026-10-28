@@ -41,6 +41,7 @@ def test_重启接着取_首帧素材删了也照样去问远端(monkeypatch, tm
     from tests.util import fresh_client
     from app.domain import jobs
     from app.domain.generation import runner
+    from app.ai.providers.contracts import generation
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -74,7 +75,7 @@ def test_重启接着取_首帧素材删了也照样去问远端(monkeypatch, tm
 
     adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=validate,
                               supports_progress_callbacks=False, supports_resume=True,
-                              resume=resume, generate=None, reported_usage=lambda raw: runner.ReportedUsage())
+                              resume=resume, generate=None, reported_usage=lambda raw: generation.ReportedUsage())
     monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: adapter)
 
     with SessionLocal() as db:

@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, create_note, query_notes, read_reference
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError, field_name
+from app.domain.workflows.node_types import NODE_TYPES, field_name
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.authority import current_authority
 from app.domain.workflows.executors.numbers import whole_number
 from app.domain.workflows.executors.registry import RunScope, register

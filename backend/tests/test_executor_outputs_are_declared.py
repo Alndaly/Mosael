@@ -29,7 +29,7 @@ import ast
 from collections.abc import Callable
 from pathlib import Path
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 
 BACKEND = Path(__file__).resolve().parent.parent
 EXECUTORS = BACKEND / "app" / "domain" / "workflows" / "executors"
@@ -227,7 +227,7 @@ def test_每个声明的输出都有标签和类型说得通() -> None:
     这一半没法静态证伪(执行器可能条件性地不返回某个键),所以只钉住能钉的:声明的每个键
     都要有中文标签,否则界面上露出的是英文键名。
     """
-    from app.domain.workflows import output_label
+    from app.domain.workflows.node_types import output_label
 
     missing: list[str] = []
     for name, spec in NODE_TYPES.items():

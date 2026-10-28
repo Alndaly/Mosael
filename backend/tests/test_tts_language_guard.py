@@ -13,7 +13,8 @@ import pytest
 
 from app.ai.runtime.f5_models import clone_supports
 from app.ai.runtime.tts_language import detect_script, edge_voice_language
-from app.domain.voices.voices import VoiceError, _refuse_if_unspeakable
+from app.domain.voices.voices import _refuse_if_unspeakable
+from app.domain.voices.errors import VoiceError
 
 
 def test_kana_is_hard_evidence_of_japanese() -> None:

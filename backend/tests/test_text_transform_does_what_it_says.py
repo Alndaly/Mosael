@@ -11,7 +11,9 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Workflow
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import validate_graph
 from app.domain.workflows.engine import execute_graph
 from tests.util import fresh_client
 

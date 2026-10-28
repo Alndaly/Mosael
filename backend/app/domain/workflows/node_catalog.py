@@ -11,7 +11,7 @@ from collections import Counter
 from typing import Any
 
 from app.core.i18n import MESSAGES, t
-from app.domain.workflows import (
+from app.domain.workflows.node_types import (
     NODE_CATEGORIES,
     config_data_type,
     config_editor,

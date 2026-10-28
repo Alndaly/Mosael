@@ -17,11 +17,14 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, Transcript
 from app.domain.sequences.errors import SequenceDomainError
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.domain.jobs import current_actor
 from app.domain.voices.fillers import filler_spans
-from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job, whole_number
+from app.domain.workflows.executors.common import provided, text_lines, truthy, wait_for_job
+from app.domain.workflows.id_values import id_list
+from app.domain.workflows.executors.numbers import whole_number
+from app.domain.workflows.executors.inputs import _asset_in, _sequence_in
 
 logger = logging.getLogger(__name__)
 
@@ -225,11 +228,11 @@ def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
 
 @register("ai_generate")
 def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import create_generation_job
     from app.domain.generation.operations import GenerationDomainError, keep_source_group, parse_source_assets
     from app.domain.generation.origins import of_run_scope
     from app.domain.generation.runner import start_generation_thread
-    from app.domain.entities import parse_entity_ids
+    from app.domain.entities.catalog import parse_entity_ids
 
     kind = str(config.get("kind", "image")).strip() or "image"
     # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
@@ -352,7 +355,7 @@ def import_url(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     """
     from app.domain import browser, sharing
     from app.domain.assets.from_url import UrlImportError, start_url_import
-    from app.domain.workflows import as_text
+    from app.domain.workflows.graph_rules import as_text
     from app.domain.workflows.authority import current_authority
 
     url = as_text(config.get("url")).strip()
@@ -396,7 +399,7 @@ def _speech_params(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     音色的报错原样转述(带着它的 key):此前在前面拼一截「语音合成」/「字幕配音」,那截是
     写死的中文,而原因在落库那一刻就被翻成了字 —— 英文界面里读到的是两段中文。"""
     from app.domain.voices.engine_catalog import synthesis_params
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     try:
         return synthesis_params(
@@ -452,7 +455,7 @@ def clone_engine_problem() -> WorkflowDomainError | None:
     """
     from app.ai.runtime import config as tts_config
     from app.ai.runtime import tts_models
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     engine = tts_config.get().engine
     label = next((item.label for item in tts_models.CATALOG if item.id == engine), engine)
@@ -624,9 +627,6 @@ def inspect_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     }
 
 
-#: 拿输入 id 并确认属于这次运行所在工作区的一对帮手。本体在 executors.inputs(一片叶子),
-#: 别的执行器(如 shots)直接从那里拿,不必为了两个帮手依赖 subjobs 这一整块。
-from app.domain.workflows.executors.inputs import _asset_in, _sequence_in  # noqa: F401  (re-export: 既有引用处照旧)
 
 
 #: 同一条时间线被别的写入方抢先改了一版时,重读重试几次。每一次冲突都意味着别人**已经写成**了一次,
@@ -663,7 +663,7 @@ def _write_timeline(db: Session, scope: RunScope, sequence_id: str, write: Calla
 
 def _seconds(config: dict[str, Any], key: str, node_type: str) -> float | None:
     """一格秒数:留空是 None;填了就得是有限的数(数字格式已由 check_number_fields 核过,这里挡 inf / nan)。"""
-    from app.domain.workflows import NODE_TYPES, field_name
+    from app.domain.workflows.node_types import NODE_TYPES, field_name
 
     raw = config.get(key)
     if raw in (None, ""):
@@ -685,7 +685,7 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     """
     from app.domain.sequences.append import asset_span, track_end, track_for_asset
     from app.domain.sequences.fitting import TRACK_FOR_ASSET, fit_asset_on_track
-    from app.domain.sequences.operations import InsertClip, insert_clip
+    from app.domain.sequences.placement import InsertClip, insert_clip
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
     asset = _asset_in(db, scope, str(config.get("asset_id", "")).strip())
@@ -775,7 +775,7 @@ def _fit_speed(span: float, max_duration: Any) -> float | None:
 
 @register("timeline_add_track")
 def timeline_add_track(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.sequences.operations import AddTrack, add_track
+    from app.domain.sequences.tracks import AddTrack, add_track
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
     kind = str(config.get("kind", "video")).strip() or "video"
@@ -799,7 +799,7 @@ def timeline_clear(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     **一次删完,记一条操作**(placement.delete_clips_batch):此前逐条 delete_clip,清掉 40 段就是 40 条
     撤销记录 —— 想在剪辑页里撤回这一次清空,得按 40 次 ⌘Z。
     """
-    from app.domain.sequences.operations import DeleteClipsBatch, delete_clips_batch
+    from app.domain.sequences.placement import DeleteClipsBatch, delete_clips_batch
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
 
@@ -820,7 +820,7 @@ def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) ->
     不循环调用 cut_clip_range:范围都是**原片段**的源时间,一次交给批量算子,它先归并、再从后往前拿,
     正好承接逐字稿分析节点产出的多个停顿、口头禅和重录区间。
     """
-    from app.domain.sequences.operations import CutClipRanges, cut_clip_ranges
+    from app.domain.sequences.cutting import CutClipRanges, cut_clip_ranges
 
     sequence = _sequence_in(db, scope, str(config.get("sequence_id") or "").strip())
     clip_id = str(config.get("clip_id") or "").strip()
@@ -1173,7 +1173,7 @@ def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
     「没有就新建」不是省事,是这个节点在工作流里的常态 —— 上游 project_sequence_create 建出来的
     新时间线只有视频轨和音频轨,而逼用户先接一个「加轨道」节点,只是把机器能算的事推给人。
     """
-    from app.domain.sequences.operations import AddTrack, add_track
+    from app.domain.sequences.tracks import AddTrack, add_track
 
     tracks = list(sequence.tracks or [])
     if track_id:
@@ -1207,8 +1207,8 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     条数对不上直接报错,不截断。少一条就意味着从那一条起**每一句字幕都配错了时间**,而截断后
     的成片看起来是完整的 —— 那种错要等到有人从头看一遍才发现。
     """
-    from app.domain.sequences.operations import GenerateSubtitles
-    from app.domain.sequences.operations import generate_subtitles as generate
+    from app.domain.sequences.text import GenerateSubtitles
+    from app.domain.sequences.text import generate_subtitles as generate
 
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     segments = _segments_in(config.get("segments"))

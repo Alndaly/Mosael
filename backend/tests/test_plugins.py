@@ -579,7 +579,7 @@ def test_旧写法的清单在扫描时就地迁移成新写法() -> None:
     和 core/db.py 那串 _migrate_* 同一个思路 —— 读取路径里的 `if 老写法 elif 新写法` 是永久
     的税,而两条分支里总有一条平时没人走、坏了也没人发现。
     """
-    from app.domain.plugins.migrations import MANIFEST_VERSION
+    from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION
 
     client = install(LEGACY)
     directory = plugins_root() / "legacy"
@@ -677,8 +677,8 @@ def test_两种插件节点对没填的入参一个说法() -> None:
     import pytest
 
     from app.db.models import Workflow, Workspace
-    from app.domain.workflows import WorkflowDomainError
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.errors import WorkflowDomainError
+    from app.domain.workflows.executors.registry import get_executor
     from tests.util import acting_as
 
     client = install(SIMPLE)

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Sequence
-from app.domain.assets import register_file_asset
+from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import DENOISE, FRAME, ai_generated_assets, derived
 from app.domain.sequences.overview import describe_sequence
 from tests.util import fresh_client

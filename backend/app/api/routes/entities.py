@@ -31,7 +31,8 @@ from app.api.schemas import (
 )
 from app.core.i18n import get_current_locale, t
 from app.db.models import Entity, Job
-from app.domain import entities as library
+from app.domain.entities import library as entities_library
+from app.domain.entities import catalog
 from app.domain.consent import CONSENT_KINDS
 from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, KINDS, ROLES, ROLES_BY_KIND
 from app.domain.entities import use_cases
@@ -40,7 +41,7 @@ router = APIRouter(tags=["entities"])
 
 
 def summaries_out(db: Session, rows: list[Entity]) -> list[EntitySummaryOut]:
-    refs, variants, first = library.counts_for(db, [row.id for row in rows])
+    refs, variants, first = entities_library.counts_for(db, [row.id for row in rows])
     parents = {
         parent.id: parent.name
         for parent in db.scalars(select(Entity).where(Entity.id.in_({row.parent_id for row in rows if row.parent_id})))
@@ -52,7 +53,7 @@ def summaries_out(db: Session, rows: list[Entity]) -> list[EntitySummaryOut]:
             parent_id=row.parent_id,
             parent_name=parents.get(row.parent_id or "", ""),
             name=row.name,
-            cover_asset_id=library.cover_of(row, first.get(row.id)),
+            cover_asset_id=entities_library.cover_of(row, first.get(row.id)),
             tags=list(row.tags or []),
             reference_count=refs.get(row.id, 0),
             variant_count=variants.get(row.id, 0),
@@ -63,7 +64,7 @@ def summaries_out(db: Session, rows: list[Entity]) -> list[EntitySummaryOut]:
 
 
 def entity_out(db: Session, entity: Entity) -> EntityOut:
-    references = library.references_of(db, entity.id)
+    references = entities_library.references_of(db, entity.id)
     first_image = next((asset.id for _, asset in references if asset.kind == "image"), None)
     parent = db.get(Entity, entity.parent_id) if entity.parent_id else None
     return EntityOut(
@@ -76,7 +77,7 @@ def entity_out(db: Session, entity: Entity) -> EntityOut:
         description=entity.description,
         prompt=entity.prompt,
         cover_asset_id=entity.cover_asset_id,
-        display_cover_asset_id=library.cover_of(entity, first_image),
+        display_cover_asset_id=entities_library.cover_of(entity, first_image),
         attributes=dict(entity.attributes or {}),
         tags=list(entity.tags or []),
         lost_references=list(entity.lost_references or []),
@@ -90,8 +91,8 @@ def entity_out(db: Session, entity: Entity) -> EntityOut:
             }
             for ref, asset in references
         ],
-        variants=summaries_out(db, library.variants_of(db, entity.id)),
-        usable_for_digital_human=library.usable_for_digital_human(dict(entity.attributes or {})),
+        variants=summaries_out(db, entities_library.variants_of(db, entity.id)),
+        usable_for_digital_human=catalog.usable_for_digital_human(dict(entity.attributes or {})),
         created_at=entity.created_at,
         updated_at=entity.updated_at,
     )
@@ -216,7 +217,7 @@ def draw_entity(entity_id: str, body: EntityDrawRequest, db: Tx, user: CurrentUs
     说不通的(没图、模型不收参考图、角度都齐了)当场 422,不起任务;说得通就回那个任务,界面跟着它的进度。
     """
     from app.core.i18n import render_message
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows import use_cases as workflow_use_cases
 
     config = {"model": body.model, "scope": body.scope, "expressions": body.expressions, "text": body.text}

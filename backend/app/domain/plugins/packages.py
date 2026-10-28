@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import PATH_KEY, ManifestError, parse
+from app.domain.plugins.manifest import PATH_KEY
+from mosael_formats.plugin_manifest import ManifestError, parse
 from app.domain.plugins.migrations import CANONICAL_FILENAME, LEGACY_FILENAMES, migrate_directory
 from app.domain.plugins.runtime import data_dir_for
 

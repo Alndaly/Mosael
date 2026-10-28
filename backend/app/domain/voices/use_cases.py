@@ -17,6 +17,7 @@ from app.domain.permissions import (
     require_sequence_access,
 )
 from app.domain.voices import transcription, voices
+from app.domain.voices import errors
 
 
 def readable(db: Session, user: User, voice_id: str) -> Voice:
@@ -85,7 +86,7 @@ def choose_agent_voice(
 
     if voice_id:
         if not remote.clones_remotely(engine):
-            raise voices.VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
+            raise errors.VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
         voice = usable(db, user, voice_id)
         remote.check_voice(
             db, engine=engine, voice_id=voice.id, workspace_id=voice.workspace_id, user_id=user.id,

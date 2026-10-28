@@ -39,12 +39,10 @@ from typing import Any
 
 import pytest
 
-from app.domain.workflows import (
-    NODE_TYPES,
-    config_data_type,
+from app.domain.workflows.node_types import NODE_TYPES, config_data_type, output_data_type
+from app.domain.workflows.graph_rules import (
     never_run_nodes,
     never_run_references,
-    output_data_type,
     reference_dependencies,
     validate_graph,
     with_run_params,

@@ -51,7 +51,8 @@ from urllib.parse import urlsplit
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, fragment, pick_text
+from app.core.i18n import LocalizedError, fragment
+from mosael_formats.i18n import pick_text
 from app.core.unit_of_work import unit_of_work
 from app.db.models import (
     Asset,
@@ -82,7 +83,7 @@ from app.domain.plugins import instances as inst
 from app.domain.plugins import moves as plugin_moves
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import GENERATION, TOOLS, WORKFLOW_LIBRARY
+from mosael_formats.plugin_manifest import GENERATION, TOOLS, WORKFLOW_LIBRARY
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS

@@ -18,6 +18,8 @@ from unittest.mock import patch
 import pytest
 
 from app.media import render_executor as rx
+from app.core import config
+from app.core import child_process
 from app.media.render_plan import build_render_plan
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
@@ -64,7 +66,7 @@ def test_hw_args_are_bitrate_mode_and_yuv420p(encoder):
 
 
 def test_video_encode_args_prefers_hw_when_available(monkeypatch):
-    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(config.settings, "hw_encode", True)
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: "h264_nvenc")
     args = rx._video_encode_args(_out())
     assert args[:2] == ["-c:v", "h264_nvenc"]
@@ -72,7 +74,7 @@ def test_video_encode_args_prefers_hw_when_available(monkeypatch):
 
 
 def test_video_encode_args_software_when_flag_off(monkeypatch):
-    monkeypatch.setattr(rx.settings, "hw_encode", False)
+    monkeypatch.setattr(config.settings, "hw_encode", False)
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: "h264_videotoolbox")
     args = rx._video_encode_args(_out())
     assert args[:2] == ["-c:v", "libx264"]
@@ -80,7 +82,7 @@ def test_video_encode_args_software_when_flag_off(monkeypatch):
 
 
 def test_video_encode_args_software_when_no_hw(monkeypatch):
-    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(config.settings, "hw_encode", True)
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: None)
     args = rx._video_encode_args(_out())
     assert args[:2] == ["-c:v", "libx264"]
@@ -88,7 +90,7 @@ def test_video_encode_args_software_when_no_hw(monkeypatch):
 
 def test_webm_走_VP9_不用硬件编码器(monkeypatch):
     """硬件编码器都是 H.264,webm 装不了:有硬件也走 libvpx-vp9,CRF 按 ×1.5 对到 VP9 的刻度。"""
-    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(config.settings, "hw_encode", True)
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: "h264_videotoolbox")
     args = rx._video_encode_args(_out(crf=20, container="webm"))
     assert args[:2] == ["-c:v", "libvpx-vp9"]
@@ -97,7 +99,7 @@ def test_webm_走_VP9_不用硬件编码器(monkeypatch):
 
 
 def test_force_software_overrides_available_hw(monkeypatch):
-    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(config.settings, "hw_encode", True)
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: "h264_qsv")
     args = rx._video_encode_args(_out(), force_software=True)
     assert args[:2] == ["-c:v", "libx264"]
@@ -129,7 +131,7 @@ def _long_plan(tmp_path: Path, *, crf: int, seconds: float = 32.0, size: str = "
 
 
 def test_高画质档和短片不走硬件(monkeypatch, tmp_path):
-    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(config.settings, "hw_encode", True)
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: "h264_videotoolbox")
     monkeypatch.setattr(rx, "_hw_encoder_works", lambda encoder, output: True)
     long_standard = build_render_plan(
@@ -149,12 +151,12 @@ def test_高画质档和短片不走硬件(monkeypatch, tmp_path):
 def test_起不来的硬件编码器在开跑之前就被挡下_不再整条从_0_重来(monkeypatch, tmp_path):
     """此前整条用硬件跑挂了,才用软件从头再跑一遍 —— 读素材、建滤镜图、渲字幕全白花。"""
     plan = _long_plan(tmp_path, crf=20)
-    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(config.settings, "hw_encode", True)
     #: 一个 ffmpeg 不认的编码器:列表里有它,开编那一刻才失败 —— 和没显卡的 NVENC 同一个形状。
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: "h264_unavailable_hw")
     phases: list[str] = []
     out = tmp_path / "o.mp4"
-    with patch.object(rx, "popen_text", wraps=rx.popen_text) as spawned:
+    with patch.object(rx, "popen_text", wraps=child_process.popen_text) as spawned:
         rx.execute_render(plan, lambda key: tmp_path / key, out, on_phase=phases.append)
     assert spawned.call_count == 1, "导出跑了不止一遍"
     assert "libx264" in spawned.call_args.args[0]
@@ -171,7 +173,7 @@ def _ssim(a: Path, b: Path) -> float:
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_videotoolbox_的档位名副其实(monkeypatch, tmp_path):
     """真编一遍:硬件「标准」不比软件「标准」差,硬件「体积小」不比软件「体积小」差。"""
-    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(config.settings, "hw_encode", True)
     probe = _long_plan(tmp_path, crf=20, seconds=2, size="640x360")
     if not rx._hw_encoder_works("h264_videotoolbox", probe.output):
         pytest.skip("这台机器没有能用的 VideoToolbox(-q:v 只有 Apple Silicon 认)")

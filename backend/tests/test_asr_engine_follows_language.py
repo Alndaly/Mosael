@@ -91,7 +91,7 @@ def test_an_unknown_engine_is_rejected() -> None:
 
 def test_the_workflow_node_lists_transcription_providers() -> None:
     """节点的引擎格是能力表的提供方(ADR 0032):本机引擎和插件并列,不再写死 auto / funasr / whisperx。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     engine = NODE_TYPES["transcribe_asset"]["config"]["engine"]
     assert engine["options_from"] == "providers.transcription"

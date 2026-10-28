@@ -195,7 +195,7 @@ def _run_node(node_type: str, workspace_id: str, actor_id: str | None, config: d
     from app.db.models import Workflow
     from app.domain.jobs import create_job, reset_parent_job, set_parent_job
     from app.domain.workflows import create_workflow
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []}, created_by=actor_id)
@@ -276,7 +276,7 @@ def test_the_pool_card_uses_the_approvers_authority() -> None:
 
 
 def test_a_mate_cannot_open_a_private_pool_profile() -> None:
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     owner, workspace, _mate = _team()
     profile_id = _profile(owner, workspace["id"])
@@ -304,7 +304,7 @@ def test_a_shared_pool_profile_opens_for_the_mate() -> None:
 
 def test_a_session_id_is_not_a_key_to_someone_elses_browser() -> None:
     """主人开着自己的池档案会话;同事拿到会话 id,也不能在里面跑动作。"""
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     owner, workspace, mate = _team()
     profile_id = _profile(owner, workspace["id"])
@@ -430,7 +430,7 @@ def test_pickers_only_offer_what_you_may_use() -> None:
 
 def test_the_browser_open_profile_field_is_a_picker() -> None:
     """池档案这一格从下拉里挑,不再要人去浏览器池把 id 抄过来。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
     from app.domain.workflows.field_options import SOURCES
 
     source = NODE_TYPES["browser_open"]["config"]["profile_id"].get("options_from")

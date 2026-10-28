@@ -86,12 +86,12 @@ from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOu
 from app.ai.runtime import nsfw_models
 from app.ai.runtime.errors import RuntimeSetupError
 from app.domain import local_services
-from app.domain.local_services import LocalServiceError
+from app.domain.local_services.errors import LocalServiceError
 from app.domain import model_library
 from app.domain.model_library import nsfw_local as model_nsfw_local
 from app.domain import server_workflows
 from app.domain.generation.operations import GenerationDomainError
-from app.domain.plugins import PluginDomainError
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
 from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import host_capabilities
@@ -105,7 +105,7 @@ from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
 from app.domain.plugins import updates
 from app.domain.plugins import use_cases as plugin_use_cases
-from app.domain.plugins.manifest import GENERATION, text_of, web_url
+from mosael_formats.plugin_manifest import GENERATION, text_of, web_url
 
 router = APIRouter(tags=["plugins"])
 

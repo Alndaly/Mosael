@@ -9,7 +9,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Voice
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import talking
 from tests.test_voices import _tiny_wav
 from tests.util import fresh_client, make_voice, seed_assets

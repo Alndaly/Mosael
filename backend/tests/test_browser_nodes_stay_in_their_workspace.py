@@ -18,7 +18,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import BrowserSession
 from app.domain import browser as bdom
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import browser as bx
 from tests.util import fresh_client
 

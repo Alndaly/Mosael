@@ -18,6 +18,7 @@ from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent, now
 from app.domain import jobs as jobs_bus
 from app.workers import scheduler
+from app.core import unit_of_work
 from tests.util import fresh_client
 
 
@@ -50,7 +51,7 @@ class _Watch:
         self.loaded = 0
         self.commits = 0
         event.listen(Job, "load", self._loaded)
-        real = scheduler.unit_of_work
+        real = unit_of_work.unit_of_work
 
         def counted():
             self.commits += 1

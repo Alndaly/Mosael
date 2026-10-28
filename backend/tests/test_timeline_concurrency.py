@@ -108,7 +108,7 @@ def test_版本号的CAS撞上_也是409() -> None:
     from app.core.db import SessionLocal
     from app.db.models import Sequence
     from app.domain.sequences.errors import SequenceRevisionConflict
-    from app.domain.sequences.operations import SetClipGain, set_clip_gain
+    from app.domain.sequences.clip_properties import SetClipGain, set_clip_gain
 
     owner, _mate, sid, _seen, first, _second = _setup()
     with SessionLocal() as db:

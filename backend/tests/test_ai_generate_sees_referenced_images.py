@@ -18,8 +18,9 @@ from types import SimpleNamespace
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
-from app.domain.workflows import NODE_TYPES, create_workflow
-from app.domain.workflows import executors as registry
+from app.domain.workflows import create_workflow
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.revisions import attest_current_revision
 from tests.util import fresh_client, insert_asset, user_id
@@ -39,7 +40,7 @@ class Studio:
         self.workspace_id = workspace_id
         self.output_asset = output_asset
         self.calls: list[dict] = []
-        monkeypatch.setitem(registry._REGISTRY, "ai_generate", self.generate)
+        monkeypatch.setitem(executors_registry._REGISTRY, "ai_generate", self.generate)
 
     def generate(self, db, scope, config) -> dict:
         kind = str(config.get("kind") or "image")

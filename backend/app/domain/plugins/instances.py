@@ -22,7 +22,8 @@ from app.db.model_base import now
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
 from app.domain.plugins import egress, host_capabilities, oauth as plugin_oauth, package_sources
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import TOOLS, Field, Manifest, manifest_of, render_name
+from app.domain.plugins.manifest import manifest_of
+from mosael_formats.plugin_manifest import TOOLS, Field, Manifest, render_name
 from app.core.i18n import tr
 
 #: 掩码回显。前端把它原样发回来时表示"这项没改"。

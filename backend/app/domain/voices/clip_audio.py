@@ -154,7 +154,7 @@ def _place(
     """产出放到时间线上(一步撤销)。返回动了几个片段。"""
     from app.domain.sequences.grouping import OperationGroup
     from app.domain.sequences.media_swap import ReplaceClipMedia, clips_using, replace_clip_media
-    from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
+    from app.domain.sequences.clip_properties import DetachClipAudio, detach_clip_audio
 
     sequence = db.get(Sequence, sequence_id)
     clip = db.get(Clip, clip_id)

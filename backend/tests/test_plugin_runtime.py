@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.plugins.manifest import parse
+from mosael_formats.plugin_manifest import parse
 from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
 from tests.util import fresh_client
 

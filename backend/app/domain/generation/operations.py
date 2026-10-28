@@ -24,17 +24,12 @@ from app.ai.providers import (
     get_generation_adapter,
     roles_supplied_via_url,
 )
-from app.domain.generation_catalog import (
-    SOURCE_GROUP_DROPS,
-    SOURCE_GROUPS,
-    SOURCE_ROLE_LABELS,
-    known_capabilities_for,
-    outputs_per_run,
-    prompt_mode,
-)
+from app.domain.generation_catalog import known_capabilities_for, outputs_per_run, prompt_mode
+from app.domain.generation_catalog.descriptors.shared import SOURCE_GROUP_DROPS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.generation.missing import explain_missing
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
-from app.core.i18n import LocalizedError, fragment, pick_text, tr
+from app.core.i18n import LocalizedError, fragment, tr
+from mosael_formats.i18n import pick_text
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.generation.origins import STUDIO, Origin
 from app.domain.generation.sessions import SESSION_FAMILIES, ensure_writable, has_records, new_session, same_family, session_at
@@ -329,7 +324,8 @@ def _create_generation_job(
         scene_receipt = rendered.receipt
 
     # `@资产` 在校验之前展开:拼进来的提示词描述和挂上的参考图,和手写、手挂的走同一套校验。
-    from app.domain.entities import EntityDomainError, attach_entities
+    from app.domain.entities.library import EntityDomainError
+    from app.domain.entities.mentions import attach_entities
 
     try:
         expansion = attach_entities(

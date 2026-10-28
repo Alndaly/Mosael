@@ -18,7 +18,7 @@ import pytest
 
 import mcp_server
 from app.domain.agent import computer_use
-from app.domain.agent.confirmable import tool_spec
+from app.domain.agent.confirmable.registry import tool_spec
 from app.domain.agent.errors import ConfirmationError
 from tests.util import fresh_client
 

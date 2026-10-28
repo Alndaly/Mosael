@@ -12,8 +12,9 @@ from app.core.db import SessionLocal
 from app.db.models import BrowserProfile, BrowserSession, User, Workflow
 from app.domain import browser
 from app.domain.publish import create_account
-from app.domain.workflows import WorkflowDomainError, create_workflow
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows import create_workflow
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import pinned, user_id, fresh_client
 
 

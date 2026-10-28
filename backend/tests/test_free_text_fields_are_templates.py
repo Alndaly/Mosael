@@ -50,7 +50,7 @@ _PICKER_KEYS = {
 
 
 def test_自由文本字段都声明成了template() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     offenders = [
         f"{name}.{key}"
@@ -75,7 +75,7 @@ def test_引擎确实对普通字符串也做替换() -> None:
 
     这里直接验引擎:一个没被声明成 template 的键,照样会被 interpolate 换掉。
     """
-    from app.domain.workflows import interpolate
+    from app.domain.workflows.graph_rules import interpolate
 
     context = {"llm-1": {"text": "换进来了"}}
     assert interpolate({"随便什么键": "{{llm-1.text}}"}, context) == {"随便什么键": "换进来了"}
@@ -86,7 +86,7 @@ def test_引擎确实对普通字符串也做替换() -> None:
 def test_选择器名单里没有过期的条目() -> None:
     """名单里的键要是已经没有一个节点在用了,就该划掉 —— 留着它会豁免一个不存在的东西,
     下次真有字段漏了 template 时,读名单的人会以为"这里本来就有豁免"。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     used = {key for spec in NODE_TYPES.values() for key in (spec.get("config") or {})}
     stale = sorted(_PICKER_KEYS - used)

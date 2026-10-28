@@ -11,8 +11,14 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Board, Sequence, User
 from app.domain.boards import producers
-from app.domain.boards.canvas import (
-    BoardRevisionConflict, create_board, delete_board, duplicate_board, get_board, list_boards, update_board,
+from app.domain.boards.errors import BoardRevisionConflict
+from app.domain.boards.persistence import (
+    create_board,
+    delete_board,
+    duplicate_board,
+    get_board,
+    list_boards,
+    update_board,
 )
 from app.domain.boards.persistence import board_summary
 from app.domain.boards.receipts import revived_runs, settle_revived_runs

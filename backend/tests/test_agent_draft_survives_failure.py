@@ -30,12 +30,13 @@ def _wait(client: TestClient, session_id: str) -> list[dict]:
 
 def test_a_failed_turn_keeps_what_the_model_already_said(monkeypatch) -> None:
     from app.domain.agent import host
+    from app.ai.sidecar import pi_client
 
     def failing_run_turn(adapter, *, on_delta, **_kwargs):
         #: 先说两句,再从中间炸掉 —— 这两句必须留下来。
         on_delta("我先看看节点类型。")
         on_delta("搭好了 4 路并发抓取。")
-        raise host.SidecarError("agentErr_turnFailed", human="智能体执行失败，请稍后重试。")
+        raise pi_client.SidecarError("agentErr_turnFailed", human="智能体执行失败，请稍后重试。")
 
     monkeypatch.setattr(host, "run_turn", failing_run_turn)
     client = fresh_client()

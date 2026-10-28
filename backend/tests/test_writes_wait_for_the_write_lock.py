@@ -28,7 +28,7 @@ from app.core import db as core_db
 from app.core.db import SessionLocal, engine
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Note, Workflow, Workspace
-from app.domain.workflows import executors as registry
+from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.engine import execute_graph
 from tests.util import fresh_client, lock_wait
 
@@ -115,7 +115,7 @@ def _settled(prefix: str) -> Iterator[tuple[threading.Event, threading.Event]]:
 
 def test_节点读过之后别人提交了一笔_节点照样写得进去_不是快照过期(monkeypatch) -> None:
     ws, wf_id = _workflow()
-    note_create = registry._REGISTRY["note_create"]
+    note_create = executors_registry._REGISTRY["note_create"]
 
     def read_then_write(db, scope, config):
         db.scalars(select(Workspace)).all()
@@ -124,7 +124,7 @@ def test_节点读过之后别人提交了一笔_节点照样写得进去_不是
             other.commit()
         return note_create(db, scope, config)
 
-    monkeypatch.setitem(registry._REGISTRY, "note_create", read_then_write)
+    monkeypatch.setitem(executors_registry._REGISTRY, "note_create", read_then_write)
     execute_graph(GRAPH, wf_id=wf_id, params={})
     assert _notes(ws) == 1
 

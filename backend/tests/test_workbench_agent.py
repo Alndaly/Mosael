@@ -549,7 +549,7 @@ def test_补全和试跑的五个工具_都在工作台那一份_只读和确认
     """发现成本那一条(ADR 0042 §7):五个工具都跟着 ComfyUI 工作台那一份发,都要工作流库;三个会改那台机器的开确认卡,
     两个只读的不开 —— 而且三个确认卡都在登记表里(不然点「批准」那一刻才报 Unknown mutating tool)。"""
     import mcp_server
-    from app.domain.agent.confirmable import tool_specs
+    from app.domain.agent.confirmable.registry import tool_specs
 
     assert STEP_THREE <= set(mcp_server.REGISTERED_TOOLS)
     for name in STEP_THREE:

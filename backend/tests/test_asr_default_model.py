@@ -22,6 +22,7 @@ from app.ai.runtime import asr_models
 from app.core.db import SessionLocal
 from app.db.models import User
 from app.domain.voices import transcription
+from app.core import config
 from tests.util import fresh_client
 
 WHISPER_LARGE = "whisperx-large-v3"
@@ -160,7 +161,7 @@ def test_没设默认时保持原来的行为_whisper用配置里的型号(monke
     _transcribe("builtin:whisperx", tmp_path)
 
     assert seen["request"]["provider"] == "whisperx"
-    assert seen["request"]["whisper_model"] == transcription.settings.asr_whisper_model
+    assert seen["request"]["whisper_model"] == config.settings.asr_whisper_model
 
 
 # ---------------------------------------------------------------------------

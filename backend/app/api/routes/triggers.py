@@ -18,7 +18,7 @@ from pydantic import Field
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas.base import ApiModel, OrmModel
 from app.db.models import WorkflowTrigger, WorkflowTriggerEvent
-from app.domain.triggers import TriggerDomainError
+from app.domain.triggers.use_cases import TriggerDomainError
 from app.domain.triggers import use_cases as triggers
 
 router = APIRouter(tags=["triggers"])

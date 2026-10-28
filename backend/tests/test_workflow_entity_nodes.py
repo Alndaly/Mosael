@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.db import SessionLocal
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.entities import entity_get, entity_save
 from app.domain.workflows.field_options import OptionContext, field_options
 from tests.util import fresh_client, seed_assets
@@ -143,8 +143,8 @@ def test_资产下拉可以按种类筛() -> None:
 
 def test_整片模板的角色循环_库里有的直接用_没有的画完存成资产(monkeypatch) -> None:
     """「从主题到完整视频」的角色循环体原样拿来跑:林小满库里有图,阿澄没有 —— 只画阿澄,画完存成人物资产。"""
-    from app.domain.workflows import executors
-    from app.domain.workflows.templates import full_video_generation_graph
+    from app.domain.workflows.executors import registry
+    from app.domain.workflows.templates_full_video import full_video_generation_graph
     from tests.test_workflow_templates import CHAT, SEEDANCE, SEEDREAM
 
     client, ws = _setup()
@@ -156,7 +156,7 @@ def test_整片模板的角色循环_库里有的直接用_没有的画完存成
         drawn.append(config["prompt"])
         return {"asset_id": "sheet", "asset_ids": ["sheet"], "generation_id": "g"}
 
-    monkeypatch.setitem(executors._REGISTRY, "ai_generate", fake_generate)
+    monkeypatch.setitem(registry._REGISTRY, "ai_generate", fake_generate)
     template = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
     loop = next(node for node in template["nodes"] if node["id"] == "character_sheets")
     characters = [{"name": "林小满", "appearance": "short hair", "role": "主角"},

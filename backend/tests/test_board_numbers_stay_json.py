@@ -15,7 +15,8 @@ import json
 
 import pytest
 
-from app.domain.boards import BoardDomainError, normalize_canvas
+from app.domain.boards.errors import BoardDomainError
+from app.domain.boards.shape import normalize_canvas
 
 
 def _canvas(x: object) -> dict:
@@ -41,7 +42,7 @@ def test_算子那一侧同样挡() -> None:
     """智能体走的是 apply_board_ops,它有自己的 _number —— 两处都要挡,否则挡住的那条路
     只是把入口挪了一下。"""
     from app.domain.boards.ops import apply_board_ops
-    from app.domain.boards import BoardDomainError as Err
+    from app.domain.boards.errors import BoardDomainError as Err
 
     with pytest.raises(Err):
         apply_board_ops({"items": [], "edges": []}, [{"kind": "add_item", "type": "note", "x": float("nan"), "y": 0}])

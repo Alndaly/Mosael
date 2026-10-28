@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from app.domain.generation_catalog import BUILTIN_MODELS
+from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 
 
 def test_支持有声的_Seedance_默认都开着声音() -> None:

@@ -16,9 +16,9 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Workflow
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows import engine as wf_engine
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 from app.domain.workflows.run_scope import halted
 from tests.util import fresh_client, until
 

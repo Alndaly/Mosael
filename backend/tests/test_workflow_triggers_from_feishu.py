@@ -718,7 +718,8 @@ def test_收不进素材库的文件也要回一句而不是静默(monkeypatch) 
 
 def _refusing_engine(monkeypatch) -> None:
     """让 `start_workflow_job` 在 `check_runnable` 过了之后抛 —— ADR 0047「这一版要你认可」那一路。"""
-    from app.domain.workflows import WorkflowDomainError, engine
+    from app.domain.workflows import engine
+    from app.domain.workflows.errors import WorkflowDomainError
 
     def refuse(*args, **kwargs):
         raise WorkflowDomainError("wfErr_spendNotVouched", params={"workflow": "被触发的流", "revision": 3})

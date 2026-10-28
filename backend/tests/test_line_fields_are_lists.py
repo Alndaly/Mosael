@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import canonicalize_line_fields, normalize_graph
 
 TEXT = "{{a.asset_id}}:first_frame\n\n  {{b.asset_id}}:last_frame  \n"
@@ -41,7 +41,7 @@ def test_已经是列表的原样不动_规范化幂等() -> None:
 def test_列表里的整组引用在运行时被摊平() -> None:
     """插值保留整串引用的原类型(一组),解析时摊平 —— 和一条一条写出来是一回事。"""
     from app.domain.generation.operations import parse_source_assets
-    from app.domain.workflows import interpolate
+    from app.domain.workflows.graph_rules import interpolate
 
     config = ["{{first.asset_id}}:first_frame", "{{sheets.results}}"]
     context = {"first": {"asset_id": "f1"}, "sheets": {"results": ["h1:reference_image", "h2:reference_image"]}}

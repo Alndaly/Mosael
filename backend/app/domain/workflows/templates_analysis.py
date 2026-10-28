@@ -25,8 +25,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import pick_text, tr
-from app.domain.workflows import NODE_TYPES
+from app.core.i18n import tr
+from mosael_formats.i18n import pick_text
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.template_requirements import (
     CHAT_MODEL,

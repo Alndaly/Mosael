@@ -73,7 +73,7 @@ def test_可以不填的数组_表单和运行时一样当数组(tmp_path) -> No
 
 
 def test_可以不填的素材数组_插件收到的是路径(tmp_path) -> None:
-    from app.domain.assets import register_file_asset
+    from app.domain.assets.importer import register_file_asset
 
     ws, instance_id = _install(tmp_path)
     config = node_meta(TOOLS[1])["config"]["files"]

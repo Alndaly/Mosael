@@ -25,7 +25,7 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
-from app.domain.plugins.manifest import Field, Manifest, OAuthSpec
+from mosael_formats.plugin_manifest import Field, Manifest, OAuthSpec
 
 #: 一个声明了 oauth 的连接**授权到哪一步了**(插件页连接卡片上那一条状态)。
 #: 没声明 oauth 的连接不谈授权,是空串。

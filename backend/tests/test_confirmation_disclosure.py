@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.domain.agent.confirmable import tool_spec
+from app.domain.agent.confirmable.registry import tool_spec
 
 
 class _NoDb:

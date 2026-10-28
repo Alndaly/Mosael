@@ -16,7 +16,8 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import PluginPackage
-from app.domain.plugins import PluginDomainError, bundled, bundled_install, packages
+from app.domain.plugins import bundled, bundled_install, packages
+from app.domain.plugins.errors import PluginDomainError
 from tests.util import fresh_client
 
 
@@ -88,7 +89,7 @@ def test_随包插件随后端一起打包() -> None:
 
 def test_仓库里随包的插件都能装() -> None:
     """plugins/bundled 下的每一个都有合法清单、入口在 —— 坏一个,每次启动对账都会炸。"""
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     shipped = bundled.plugins()
     assert shipped, "plugins/bundled 下至少有 ComfyUI"

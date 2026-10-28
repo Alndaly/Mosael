@@ -42,7 +42,7 @@ def test_渲白模是挂在场景格上的内置产出者_工具格撤下画板(
     from app.domain.boards import producers
     from app.domain.boards.producer_ids import SLOT_PRODUCERS, derives_outputs, runs_from_draft
     from app.domain.scenes.operations import REFERENCE_RENDERS
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     client = fresh_client()
     with SessionLocal() as db:
@@ -79,7 +79,8 @@ def test_渲白模是挂在场景格上的内置产出者_工具格撤下画板(
 
 def test_新放下的场景格写明产出者_不存图() -> None:
     """场景格就是一个场景(ADR 0029 §1):格子上画的是场景的全景白模,连到下游给的是场景 —— 不再存一帧当缩略图。"""
-    from app.domain.boards import BoardDomainError, normalize_canvas
+    from app.domain.boards.errors import BoardDomainError
+    from app.domain.boards.shape import normalize_canvas
 
     canvas = normalize_canvas({"items": [{"id": "s1", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc"}], "edges": []})
     assert canvas["items"][0]["form"] == {"producer": "scene_render"}
@@ -170,8 +171,8 @@ def test_好几个镜头没挑_跑挂了说清楚_场景格留着() -> None:
 
 
 def test_智能体在场景格上写设置_替人点运行不开卡() -> None:
-    from app.domain.boards import normalize_canvas
-    from app.domain.boards.canvas import BoardDomainError
+    from app.domain.boards.shape import normalize_canvas
+    from app.domain.boards.errors import BoardDomainError
     from app.domain.boards.ops import apply_board_ops
 
     canvas = normalize_canvas({"items": [{"id": "s1", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc"}], "edges": []})

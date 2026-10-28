@@ -17,7 +17,8 @@ from collections.abc import Iterator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import t
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Notification, ScheduledTask, User, Workflow, WorkflowRevision
 from app.domain.authority import Voucher
 from app.domain.referrers import referrers
@@ -45,7 +46,7 @@ def attest_bound_workflow(db: Session, task: ScheduledTask, user_id: str) -> Non
 
 def awaiting_approval(db: Session, task: ScheduledTask) -> Voucher | None:
     """这个任务下一次到点,会不会停在「这一版要主人认可」:会的话是哪条工作流的哪一版。停用的、不是工作流的不算。"""
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.engine import unvouched_spend
 
     if task.kind != "workflow" or not task.enabled or not task.owner_user_id:

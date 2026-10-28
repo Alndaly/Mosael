@@ -10,7 +10,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Project
-from app.domain.sequences import create_sequence_scaffold
+from app.domain.sequences.creation import create_sequence_scaffold
 from app.domain.sequences.errors import SequenceDomainError
 from tests.util import fresh_client
 

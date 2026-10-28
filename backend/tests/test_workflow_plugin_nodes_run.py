@@ -19,7 +19,7 @@ from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent
 from app.domain.workflows import create_workflow
 from app.domain.workflows.engine import start_workflow_job
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import user_id, fresh_client
 
 ECHO = "plugin.demo.echo"

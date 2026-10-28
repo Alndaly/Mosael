@@ -23,18 +23,6 @@ tests/test_undo_registry.py 这道棘轮守着,例外写进 NOT_UNDOABLE 并说�
 
 from __future__ import annotations
 
-from app.domain.sequences.undo.registry import (  # noqa: F401 —— 包的公开面不变
-    NOT_UNDOABLE,
-    Applier,
-    UndoPair,
-    _REGISTRY,
-    _pair,
-    apply_forward,
-    apply_inverse,
-    is_bookkeeping,
-    undoable,
-    undoable_kinds,
-)
 
 # 导入即注册:各模块只认 registry,不回头 import 这个包 —— 包和它的子模块之间就没有环了。
 from app.domain.sequences.undo import clips, group, properties, tracks  # noqa: F401

@@ -5,9 +5,9 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.db.models import Job, User, Workflow
 from app.domain.jobs import cancel_job, create_job, current_actor, current_parent_job_id
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import fresh_client
 
 

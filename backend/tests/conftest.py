@@ -206,7 +206,8 @@ def _every_test_starts_from_the_same_process_state():
     单进程按文件顺序跑时,总有后面某条测试碰巧把它们改回去,于是一直看不出来;并行之后每个 worker 分到的用例
     不一样,中招的就变成了随机的一批「中文报错断言拿到英文」。在这里统一还原,而不是去改每一条忘了还原的测试。
     """
-    from app.core.i18n import DEFAULT_LOCALE, set_current_locale
+    from app.core.i18n import set_current_locale
+    from mosael_formats.i18n import DEFAULT_LOCALE
 
     environ = os.environ.copy()
     set_current_locale(DEFAULT_LOCALE)

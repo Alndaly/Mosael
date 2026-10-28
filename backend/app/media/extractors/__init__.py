@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.media.extractors.errors import SiteAdapterError, SiteAdapterPending
 from app.media.extractors.missav import MissAVIE
 
 #: 自定义 extractor 类,**顺序 = 被问的顺序**。工厂与 `matching_extractor` 都读这一份。
@@ -24,7 +23,4 @@ CUSTOM_EXTRACTORS: tuple[type[Any], ...] = (MissAVIE,)
 
 __all__ = [
     "CUSTOM_EXTRACTORS",
-    "MissAVIE",
-    "SiteAdapterError",
-    "SiteAdapterPending",
 ]

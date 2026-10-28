@@ -71,20 +71,21 @@ def test_代码里建的每种任务都在目录里() -> None:
 
 def test_目录里没有用不到的种类() -> None:
     """前端那张表曾列着一个后端从不创建的 `scheduled`。"""
-    from app.domain.scheduler import SCHEDULED_EXECUTORS as SCHEDULABLE_KINDS
+    from app.domain.scheduler.executors import SCHEDULED_EXECUTORS as SCHEDULABLE_KINDS
 
     used = set(_created_kinds()) | set(SCHEDULABLE_KINDS)
     assert set(JOB_KINDS) <= used, f"没人创建的种类:{set(JOB_KINDS) - used}"
 
 
 def test_定时任务能排的种类都在目录里() -> None:
-    from app.domain.scheduler import SCHEDULED_EXECUTORS as SCHEDULABLE_KINDS
+    from app.domain.scheduler.executors import SCHEDULED_EXECUTORS as SCHEDULABLE_KINDS
 
     assert set(SCHEDULABLE_KINDS) <= set(JOB_KINDS)
 
 
 def test_名字齐全_页面存在() -> None:
-    from app.core.i18n import LOCALES, MESSAGES
+    from app.core.i18n import MESSAGES
+    from mosael_formats.i18n import LOCALES
 
     for key in [entry.label_key for entry in JOB_KINDS.values()] + [FALLBACK_LABEL_KEY]:
         assert key in MESSAGES and all(MESSAGES[key].get(locale) for locale in LOCALES), key

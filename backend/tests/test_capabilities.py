@@ -152,7 +152,7 @@ def test_不能定别人的连接_也不能定没声明这项能力的() -> None
      "pluginErr_manifestCapabilityClaimedTwice"),
 ])
 def test_清单里文档解析只给宿主调_规矩和生成一样(patch: dict, key: str) -> None:
-    from app.domain.plugins.manifest import ManifestError, parse
+    from mosael_formats.plugin_manifest import ManifestError, parse
 
     parse(PARSER, "/tmp/x")
     with pytest.raises(ManifestError) as raised:

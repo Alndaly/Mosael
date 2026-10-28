@@ -29,7 +29,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Board
 from app.domain.boards.actions import BoardInputError, document_cell, upstream_cells
-from app.domain.boards.canvas import get_board, receipt_to_item
+from app.domain.boards.persistence import get_board
+from app.domain.boards.receipts import receipt_to_item
 from app.domain.jobs import create_job, dispatch_job, reset_receipt, set_receipt
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def binding_sink(key: str, spec: Any) -> str | None:
     **前端不另写一份**:产出者清单(`GET /api/boards/producers`)给每个字段带上 `board_sources`
     (见 bindable_kinds),面板照它列上游;能力挂在哪几种格子上(boards.transforms.board_hosts)也从它推。
     """
-    from app.domain.workflows import config_data_type
+    from app.domain.workflows.node_types import config_data_type
 
     if not isinstance(spec, dict):
         return None
@@ -91,7 +92,7 @@ def bindable_kinds(key: str, spec: Any) -> list[str]:
     素材字段声明了只收哪几种素材(`media`,见 workflows.config_media)时只接那几种格子:转写只吃
     音频和视频,接一张图片进去只会在运行时报错。
     """
-    from app.domain.workflows import config_media
+    from app.domain.workflows.node_types import config_media
 
     sink = binding_sink(key, spec)
     if not sink:
@@ -281,7 +282,7 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
     (插件交出的产出记在某个具名输出上,见 plugins.tools._collect_artifact)就是素材,不是一段写着 id 的字。
     落哪几个见 landing_outputs。空值不落 —— 一个没用上的「尾帧」不该在画布上占一格空便签。
     """
-    from app.domain.workflows import output_data_type
+    from app.domain.workflows.node_types import output_data_type
 
     #: 这一轮收进素材库的文件:一串(asset_ids)和单独交的那一份(asset_id —— 只交了一份 `artifact` 时没有 asset_ids)。
     collected = {str(one) for one in [*(output.get("asset_ids") or ()), output.get("asset_id")] if isinstance(one, str)}
@@ -347,7 +348,7 @@ def prepare_node_run(
     fixed: dict[str, Any] = {}
     if host_input is not None:
         key, sink = host_input
-        from app.domain.boards.canvas import item_not_found
+        from app.domain.boards.errors import item_not_found
 
         host = next((one for one in (board.canvas or {}).get("items") or [] if one.get("id") == request.item_id), None)
         if host is None:
@@ -428,7 +429,7 @@ def _check_entity_kind(db: Session, workspace_id: str, entity_id: str, spec: Any
     读的是同一句)。"""
     from app.core.i18n import get_current_locale, t
     from app.db.models import Entity
-    from app.domain.workflows import config_entity_kinds
+    from app.domain.workflows.node_types import config_entity_kinds
 
     kinds = config_entity_kinds(spec)
     entity = db.get(Entity, entity_id)
@@ -464,9 +465,9 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
     from app.core.unit_of_work import unit_of_work
     from app.db.models import Job
     from app.domain.jobs import run_job_inline
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows import node_budget
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     def body() -> dict[str, Any]:
         handler = get_executor(node_type)

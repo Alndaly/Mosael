@@ -29,9 +29,9 @@ def test_文档解析用在哪_设置_文档详情_工作流节点_智能体工�
 
 
 def test_新节点声明了_providers_字段就自动出现_不用登记(monkeypatch) -> None:
-    from app.domain import workflows
+    from app.domain.workflows import node_types
 
-    monkeypatch.setitem(workflows.NODE_TYPES, "demo_denoise", {
+    monkeypatch.setitem(node_types.NODE_TYPES, "demo_denoise", {
         "label": "wfNode_document_to_markdown",
         "config": {"engine": {"type": "string", "options_from": "providers.document_parse", "label": "wfField_parser"}},
     })
@@ -55,7 +55,7 @@ def test_通用选项来源_认得登记过的能力_认不出的说清楚() -> 
 def test_插件能写的每一项能力都叫得出名字_说得出用在哪() -> None:
     """插件市场按能力筛、插件页说它替宿主做什么,都照这一份词表 —— 此前前端手写了两项(素材外链、文档解析),
     别的能力在市场里只显示原词。"""
-    from app.domain.plugins.manifest import CLAIMED_CAPABILITIES
+    from mosael_formats.plugin_manifest import CLAIMED_CAPABILITIES
     from tests.util import fresh_client
 
     client = fresh_client()

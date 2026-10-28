@@ -25,8 +25,11 @@ import numpy as np
 import pytest
 
 from app.ai.runtime import qwen_models, tts_models
+from app.ai.runtime import download_state
+from app.ai.runtime import errors
 from app.ai.runtime.workers import tts as tts_worker
 from app.domain.voices import engine_catalog, voices
+from app.domain.voices import errors as voices_errors
 from app.domain.voices.speech import CAPABILITY, LOCAL_SPEECH_ENGINES, QWEN_ENGINE
 
 
@@ -161,7 +164,7 @@ def test_download_progress_is_the_shared_shape() -> None:
     """进度条、速度、ETA、失败原因都是同一条下载路的形状 —— 新引擎不另造一份。"""
     tts_models._store.set(
         qwen_models.ENGINE_ID,
-        tts_models.DownloadProgress(status="downloading", downloaded=1024, total=4096, message="dlMsg_preparing"),
+        download_state.DownloadProgress(status="downloading", downloaded=1024, total=4096, message="dlMsg_preparing"),
     )
     try:
         row = tts_models.get_status(qwen_models.ENGINE_ID)
@@ -193,7 +196,7 @@ def test_a_broken_runtime_leaves_a_reason_not_a_silent_missing_button(monkeypatc
     """失败要落在状态上并带着原因 —— 此前「加载一会儿就没了」正是没有原因的那一版。"""
 
     def boom(engine_id: str) -> None:
-        raise tts_models.RuntimeSetupError("runtimeErr_noBasePythonTts")
+        raise errors.RuntimeSetupError("runtimeErr_noBasePythonTts")
 
     monkeypatch.setattr(tts_models, "ensure_engine_runtime", boom)
     tts_models._store.clear(qwen_models.ENGINE_ID)
@@ -330,7 +333,7 @@ def test_a_worker_failure_keeps_its_reason(monkeypatch: pytest.MonkeyPatch, tmp_
     """失败给明确原因(本地引擎的 key 由 worker 带回来),不写占位音。"""
 
     def boom(engine, python, payload, **_kwargs):
-        raise tts_models.RuntimeSetupError("runtimeErr_qwenModelMissing")
+        raise errors.RuntimeSetupError("runtimeErr_qwenModelMissing")
 
     monkeypatch.setattr(voices.tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python3")
     monkeypatch.setattr(voices.tts_models, "is_installed", lambda engine_id: True)
@@ -339,7 +342,7 @@ def test_a_worker_failure_keeps_its_reason(monkeypatch: pytest.MonkeyPatch, tmp_
         lambda: types.SimpleNamespace(request=boom),
     )
 
-    with pytest.raises(tts_models.RuntimeSetupError) as caught:
+    with pytest.raises(errors.RuntimeSetupError) as caught:
         voices.speak_to_file(
             None,
             text="你好",
@@ -470,7 +473,7 @@ def test_installed_requires_both_pinned_weight_files(monkeypatch: pytest.MonkeyP
 
 def test_arabic_is_refused_before_a_job_is_created() -> None:
     """Qwen3-TTS 的 10 种语言里没有阿拉伯文 —— 装作能念只会交出一段废音。"""
-    with pytest.raises(voices.VoiceError) as caught:
+    with pytest.raises(voices_errors.VoiceError) as caught:
         voices._refuse_if_unspeakable("مرحبا كيف حالك", QWEN_ENGINE, "vivian", "")  # noqa: SLF001
 
     assert caught.value.key == "voiceErr_qwenUnsupportedLanguage"

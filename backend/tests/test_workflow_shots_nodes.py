@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Workflow
 from app.domain.shots import breakdowns
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.shots import describe_shots, detect_shots, shot_report
 from tests.util import fresh_client
 
@@ -197,7 +197,7 @@ def test_shot_report_requires_breakdown(client, scope, video_asset) -> None:
 
 
 def test_node_types_registered() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
     from app.domain.workflows.executors.registry import get_executor
 
     for node_type, spends in (("detect_shots", False), ("describe_shots", True), ("shot_report", False)):

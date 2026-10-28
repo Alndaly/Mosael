@@ -12,7 +12,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.i18n import t
-from app.domain.boards import BoardDomainError, BoardRevisionConflict, normalize_canvas
+from app.domain.boards.errors import BoardDomainError, BoardRevisionConflict
+from app.domain.boards.shape import normalize_canvas
 from app.domain.boards.ops import apply_board_ops
 from app.domain.boards.trim import TrimError, start_trim
 from app.domain.markers import MarkerError, normalize_shortcut

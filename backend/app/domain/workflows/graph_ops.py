@@ -12,7 +12,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
 
 GRAPH_OP_KINDS = (
     "add_node",

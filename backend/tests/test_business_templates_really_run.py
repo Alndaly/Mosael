@@ -27,10 +27,12 @@ import pytest
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Note, Project, Sequence, Track, Workflow
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
-from app.domain.workflows import WorkflowDomainError, validate_graph, with_run_params
-from app.domain.workflows import executors as registry
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import validate_graph, with_run_params
+from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
+from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates_full_video import full_video_generation_graph
 from app.domain.workflows.templates_business import (
     DUCKED_SOURCE_GAIN,
     fabric_lookbook_graph,
@@ -72,7 +74,7 @@ class Studio:
             "transcribe_asset": self.transcribe,
             "export_sequence": self.export,
         }.items():
-            monkeypatch.setitem(registry._REGISTRY, node_type, handler)
+            monkeypatch.setitem(executors_registry._REGISTRY, node_type, handler)
         #: 「口播按时长收紧」改写时直接调对话节点的执行体(不经登记表),一起换成假的。
         from app.domain.workflows.executors import ai as ai_nodes
 
@@ -508,7 +510,7 @@ class Test带货口播真跑:
             #: 空文本交给真的合成节点 —— 它当场拒(「合成文本不能为空」),就是此前整条失败的那一下。
             return real_speak(db, scope, config) if not config["text"].strip() else studio.speak(db, scope, config)
 
-        monkeypatch.setitem(registry._REGISTRY, "synthesize_speech", speak)
+        monkeypatch.setitem(executors_registry._REGISTRY, "synthesize_speech", speak)
         graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
                       "product_photo", asset_id=_asset(ws, "image", "毛衣"))
         context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
@@ -530,7 +532,7 @@ class Test带货口播真跑:
                 raise WorkflowDomainError("wfErr_emptyText")  # 真节点对空稿子同样当场拒
             return speak_on_camera(db, scope, config)
 
-        monkeypatch.setitem(registry._REGISTRY, "entity_speak", entity_speak)
+        monkeypatch.setitem(executors_registry._REGISTRY, "entity_speak", entity_speak)
         graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)
         _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
         _pick(graph, "presenter", entity_id="presenter-1")
@@ -559,7 +561,7 @@ class Test带货口播真跑:
             captured.append(config["system"])
             return answer(db, scope, config)
 
-        monkeypatch.setitem(registry._REGISTRY, "llm", llm)
+        monkeypatch.setitem(executors_registry._REGISTRY, "llm", llm)
         graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
                       "product_photo", asset_id=_asset(ws, "image", "毛衣"))
         _run(ws, graph, product_name="羊毛衫", selling_points="不起球", target_duration_seconds=60)
@@ -575,7 +577,7 @@ class Test带货口播真跑:
         def gone(db, scope, config):
             raise WorkflowDomainError("wfErr_entityGetNeedsTarget")
 
-        monkeypatch.setitem(registry._REGISTRY, "entity_get", gone)
+        monkeypatch.setitem(executors_registry._REGISTRY, "entity_get", gone)
         with pytest.raises(WorkflowDomainError):
             _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
         assert studio.calls["llm"] == []
@@ -597,7 +599,7 @@ class Test带货口播真跑:
             entity_id = entity.id
         studio = Studio(monkeypatch, ws, {"product_pitch_script": {"hook_line": "h", "beats": BEATS, "call_to_action": "c"}})
         #: 取主播用真的节点:音色、图都从资产库里的这个人物来。
-        monkeypatch.setitem(registry._REGISTRY, "entity_get", real_entity_get)
+        monkeypatch.setitem(executors_registry._REGISTRY, "entity_get", real_entity_get)
         graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)
         _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
         _pick(graph, "presenter", entity_id=entity_id)
@@ -791,7 +793,7 @@ class Test带货口播每一拍动起来:
                 raise WorkflowDomainError("wfErr_cancelled")
             return generate(db, scope, config)
 
-        monkeypatch.setitem(registry._REGISTRY, "ai_generate", video_fails)
+        monkeypatch.setitem(executors_registry._REGISTRY, "ai_generate", video_fails)
         with pytest.raises(WorkflowDomainError):
             _run(ws, _moving_pitch(ws), product_name="羊毛衫", selling_points="不起球")
         with unit_of_work() as db:
@@ -971,7 +973,7 @@ class Test独立的几项_一项失败不拖垮其余:
                     raise WorkflowDomainError("wfErr_cancelled")
             return generate(db, scope, config)
 
-        monkeypatch.setitem(registry._REGISTRY, "ai_generate", flaky)
+        monkeypatch.setitem(executors_registry._REGISTRY, "ai_generate", flaky)
         graph = _pick(product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE), "product_photo",
                       asset_id=_asset(ws, "image", "开衫平铺"))
         context = _run(ws, graph, product_name="开衫", product_brief="米色针织开衫")
@@ -1006,7 +1008,7 @@ class Test长视频切片_没挑出片段:
         def broken(db, scope, config):
             raise WorkflowDomainError("wfErr_cancelled")
 
-        monkeypatch.setitem(registry._REGISTRY, "transcribe_asset", broken)
+        monkeypatch.setitem(executors_registry._REGISTRY, "transcribe_asset", broken)
         graph = _pick(highlight_shorts_graph(chat=CHAT), "source_video", asset_id=_asset(ws, "video", "访谈", duration=600.0))
         with pytest.raises(WorkflowDomainError):
             _run(ws, graph)
@@ -1136,7 +1138,7 @@ class Test整片真跑:
             "scene_render": scene_render,
         }
         for node_type, handler in fakes.items():
-            monkeypatch.setitem(registry._REGISTRY, node_type, handler)
+            monkeypatch.setitem(executors_registry._REGISTRY, node_type, handler)
 
         context = _run(ws, graph, topic="一家老面馆", voice_id="voice-1")
 

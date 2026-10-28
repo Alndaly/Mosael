@@ -20,15 +20,10 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Board
-from app.domain.boards.canvas import (
-    BoardDomainError,
-    ensure_revision,
-    get_board,
-    item_not_found,
-    live_job,
-    place_pending,
-    receipt_to_item,
-)
+from app.domain.boards.errors import BoardDomainError, item_not_found
+from app.domain.boards.persistence import ensure_revision, get_board
+from app.domain.boards.run_state import live_job
+from app.domain.boards.receipts import place_pending, receipt_to_item
 from app.domain.jobs import create_job, reset_receipt, run_job_inline, set_receipt
 
 if TYPE_CHECKING:
@@ -244,7 +239,7 @@ def generate_on_board(
     **一次交回几份就摆几格**(generation.planned_outputs:模型说的一次几份 × 张数):第 2 份起的占位摆在右边,
     回执按先后填进去(见 outputs._canvas_with_delivered_result)。
     """
-    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import create_generation_job
     from app.domain.generation.origins import BOARD, Origin
     from app.core.unit_of_work import after_commit
     from app.domain.generation.operations import parse_source_assets, planned_outputs
@@ -394,7 +389,7 @@ def _entity_materials(db: Session, workspace_id: str, entity_ids: list[str]) -> 
     """点名的资产 → (给模型读的材料, 给模型看的图)。和生成里的 `@资产` 同一份画像(entities.generation_profile):
     名字(变体带母体)、提示词描述、按挑图先后排的图片参考图,这里只取前几张。"""
     from app.core.i18n import get_current_locale, t
-    from app.domain.entities import generation_profile
+    from app.domain.entities.mentions import generation_profile
     from app.domain.entities.mentions import resolve_mentions
 
     materials: list[str] = []

@@ -75,7 +75,7 @@ def _connect(owner_id: str) -> str:
 def test_按编号取东西的工具不在画板的工具清单里_工作流里照旧在(tmp_path: Path) -> None:
     from app.core.db import SessionLocal
     from app.domain.boards import producers
-    from app.domain.workflows import available_node_types
+    from app.domain.workflows.node_types import available_node_types
 
     client = fresh_client()
     me = _me(client)

@@ -17,7 +17,7 @@ RATCHET = True
 import asyncio
 
 import mcp_server
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 
 #: 节点类型 → 对应的智能体工具名。
 NODE_TO_TOOL: dict[str, str] = {
@@ -190,7 +190,7 @@ def test_两份确认清单必须一致() -> None:
     只加一边不会报错,只会在**用户点批准的那一刻**才炸 —— 而那时智能体已经告诉他"正在做了"。
     (这次就是:三个新工具只加进了 CONFIRMATION_TOOLS,开卡直接 422 Unknown mutating tool。)
     """
-    from app.domain.agent.confirmable import tool_specs
+    from app.domain.agent.confirmable.registry import tool_specs
 
     assert set(mcp_server.CONFIRMATION_TOOLS) == set(tool_specs())
 
@@ -205,7 +205,7 @@ def test_确认卡的权限档次前端都有文案() -> None:
     import re
     from pathlib import Path
 
-    from app.domain.agent.confirmable import PERMISSIONS, tool_specs
+    from app.domain.agent.confirmable.registry import PERMISSIONS, tool_specs
 
     frontend = Path(__file__).resolve().parents[2] / "frontend/src"
     badge = (frontend / "features/agent/PermissionBadge.tsx").read_text("utf-8")

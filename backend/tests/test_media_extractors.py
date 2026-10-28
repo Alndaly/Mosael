@@ -22,6 +22,7 @@ from yt_dlp.extractor.common import InfoExtractor
 
 from app.core.i18n import MESSAGES
 from app.media import extractors, ytdlp
+from app.media.extractors import errors
 
 
 class _Claimed(Exception):
@@ -536,21 +537,21 @@ def test_og_title_and_image_are_used_when_present(site, monkeypatch: pytest.Monk
 
 
 def test_page_without_packed_blocks_raises_a_clear_parse_error(site, monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(extractors.SiteAdapterError) as caught:
+    with pytest.raises(errors.SiteAdapterError) as caught:
         _parse(site, monkeypatch, "<html><body>nothing here</body></html>")
     assert caught.value.key == "urlImportErr_siteParseFailed"
 
 
 def test_page_with_packed_blocks_but_no_media_address_raises(site, monkeypatch: pytest.MonkeyPatch) -> None:
     no_media = _packed("source='https://media.example.test/offline-fixture/not-a-playlist';")
-    with pytest.raises(extractors.SiteAdapterError) as caught:
+    with pytest.raises(errors.SiteAdapterError) as caught:
         _parse(site, monkeypatch, _page(no_media))
     assert caught.value.key == "urlImportErr_siteParseFailed"
 
 
 def test_all_packed_blocks_undecodable_raises_a_distinct_error(site, monkeypatch: pytest.MonkeyPatch) -> None:
     broken = "eval(function(p,a,c,k,e,d){throw new Error('broken m3u8')}('x'.split('|')))"
-    with pytest.raises(extractors.SiteAdapterError) as caught:
+    with pytest.raises(errors.SiteAdapterError) as caught:
         _parse(site, monkeypatch, _page(broken))
     assert caught.value.key == "urlImportErr_siteScriptUndecodable"
 
@@ -564,7 +565,7 @@ def test_oversized_page_raises_a_distinct_error(site, monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(site.MissAVIE, "_request_webpage", fake_request)
 
-    with pytest.raises(extractors.SiteAdapterError) as caught:
+    with pytest.raises(errors.SiteAdapterError) as caught:
         site.MissAVIE()._real_extract("https://missav123.com/cn/ssis-001")
     assert caught.value.key == "urlImportErr_sitePageTooLarge"
     assert caught.value.params["site"] == site.SITE_NAME
@@ -581,13 +582,13 @@ def test_oversized_page_raises_a_distinct_error(site, monkeypatch: pytest.Monkey
 def test_parse_errors_have_localized_messages_and_survive_classify(key: str) -> None:
     """适配器层不 import `media/ytdlp`;带 key 的错误由 `ytdlp.classify` 翻成给用户看的那句话。"""
     assert set(MESSAGES[key]) >= {"zh", "en"}
-    error = extractors.SiteAdapterError(key, site="MissAV", max_mb=8)
+    error = errors.SiteAdapterError(key, site="MissAV", max_mb=8)
     assert ytdlp.classify(error).key == key
 
 
 def test_site_adapter_pending_error_path_is_kept_for_future_adapters() -> None:
     """`SiteAdapterPending` 留着:别的适配器以后还会先认领、后写解析。"""
-    pending = extractors.SiteAdapterPending("Example")
+    pending = errors.SiteAdapterPending("Example")
     assert ytdlp.classify(pending).key == "urlImportErr_sitePending"
     assert ytdlp.classify(pending).params == {"site": "Example"}
 

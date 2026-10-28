@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from app.domain.workflows import as_text, interpolate
+from app.domain.workflows.graph_rules import as_text, interpolate
 from app.domain.workflows.executors.basic import condition, http_request, template
 
 

@@ -373,7 +373,7 @@ def test_上传工具按流式协议说话_最后一行是结果(m, monkeypatch,
 
 
 def _manifest():
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     raw = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
     raw["_path"] = str(PLUGIN)
@@ -381,7 +381,7 @@ def _manifest():
 
 
 def test_清单_上传对外有后果_流式并声明预算_拉回和只读的不问人() -> None:
-    from app.domain.effects import plugin_tool_effects
+    from mosael_formats.effects import plugin_tool_effects
 
     manifest = _manifest()
     tools = {tool["name"]: tool for tool in manifest.declared_tools}
@@ -397,7 +397,7 @@ def test_清单_上传对外有后果_流式并声明预算_拉回和只读的�
 
 def test_清单_连接名沿用老插件的写法() -> None:
     """老连接叫「阿里云 OSS · 桶名」。新模板按服务商渲染出同一个名字,迁过来的连接名字照旧跟着配置走。"""
-    from app.domain.plugins.manifest import render_name
+    from mosael_formats.plugin_manifest import render_name
 
     manifest = _manifest()
     assert render_name(manifest, {"STORAGE_PROVIDER": "aliyun-oss", "STORAGE_BUCKET": "mosael"}) == "阿里云 OSS · mosael"

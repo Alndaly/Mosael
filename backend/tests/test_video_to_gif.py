@@ -67,8 +67,9 @@ def test_素材接口只给视频排任务且原素材不变() -> None:
 
 
 def test_工作流节点已注册并归为内部变更() -> None:
-    from app.domain.workflows import INTERNAL_NODE_TYPES, NODE_TYPES
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.graph_rules import INTERNAL_NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
+    from app.domain.workflows.executors.registry import get_executor
 
     assert "video_to_gif" in NODE_TYPES
     assert "video_to_gif" in INTERNAL_NODE_TYPES

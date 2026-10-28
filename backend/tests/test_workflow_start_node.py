@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import inspect
 
-from app.domain.workflows import engine, validate_graph
+from app.domain.workflows import engine
+from app.domain.workflows.graph_rules import validate_graph
 
 
 def _graph(start_id: str) -> dict:

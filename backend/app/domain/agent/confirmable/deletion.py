@@ -97,7 +97,7 @@ def _summarize_delete_assets(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute_delete_assets(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain.assets import delete_asset_with_clips
+    from app.domain.assets.deletion import delete_asset
 
     payload = confirmation.payload or {}
     deleted: list[dict[str, Any]] = []
@@ -107,7 +107,7 @@ def _execute_delete_assets(db: Session, confirmation: Any, actor: str | None) ->
         # 开卡到批准之间用户可能已经自己删了。那不是失败 —— 结果就是他要的那个结果。
         if asset is None or asset.workspace_id != confirmation.workspace_id:
             continue
-        result = delete_asset_with_clips(db, asset)
+        result = delete_asset(db, asset)
         offline += result.offline_clips
         deleted.append({"asset_id": result.asset_id, "name": result.name})
     return {"deleted": deleted, "offline_clips": offline}

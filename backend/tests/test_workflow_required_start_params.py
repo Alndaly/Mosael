@@ -7,8 +7,10 @@
 
 from __future__ import annotations
 
-from app.domain.workflows import validate_graph, with_run_params
-from app.domain.workflows.templates import TEMPLATE_CATALOG, ModelChoice, full_video_generation_graph
+from app.domain.workflows.graph_rules import validate_graph, with_run_params
+from app.domain.workflows.templates import TEMPLATE_CATALOG
+from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates_full_video import full_video_generation_graph
 from app.domain.workflows.templates_business import (
     fabric_lookbook_graph,
     footage_montage_graph,

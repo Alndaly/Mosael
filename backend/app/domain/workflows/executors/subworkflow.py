@@ -12,7 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
 from app.domain.jobs import current_parent_job_id
-from app.domain.workflows import WorkflowDomainError, graph_runner, interpolate
+from app.domain.workflows import graph_runner
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import interpolate
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, wait_for_job

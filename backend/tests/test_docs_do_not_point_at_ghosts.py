@@ -216,7 +216,7 @@ def test_后缀不再枚举_没列过的那些也在扫描面内(tmp_path: pathl
 def test_发布文档列的状态和权威清单一致() -> None:
     """状态清单是手抄进文档的,而抄漏/抄多都不报错。文档里曾经有个 `prepared` ——
     代码里从来没有过这个状态。"""
-    from app.domain.publish.worker import TASK_STATUSES
+    from app.domain.publish import TASK_STATUSES
 
     text = (ROOT / "docs" / "PUBLISHING.md").read_text(encoding="utf-8")
     match = re.search(r"回报富状态:`([a-z_/]+)`", text)

@@ -36,7 +36,7 @@ from app.ai.providers import (
 from app.ai.runtime import qwen_models
 from app.core.i18n import tr
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable
-from app.domain.plugins.manifest import SPEECH
+from mosael_formats.plugin_manifest import SPEECH
 
 BUILTIN_PREFIX = "builtin:"
 #: 「克隆音色」这一项。没选引擎时按它算。
@@ -207,7 +207,6 @@ __all__ = [
     "LOCAL_SPEECH_ENGINES",
     "PODCAST_ENGINE",
     "QWEN_ENGINE",
-    "SPEECH",
     "SpeechProviderUnavailable",
     "adapter_id",
     "engine_choices",

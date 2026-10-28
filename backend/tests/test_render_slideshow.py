@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from app.media import render_executor as rx
+from app.core import config
 from app.media.render_plan import build_render_plan
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
@@ -38,7 +39,7 @@ def _pixel(path: Path, at: float) -> tuple[int, int, int]:
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_animated_multiclip_slideshow_renders_each_clip(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(rx.settings, "hw_encode", False)
+    monkeypatch.setattr(config.settings, "hw_encode", False)
     red, green = tmp_path / "red.png", tmp_path / "green.png"
     _solid(red, "red")
     _solid(green, "green")

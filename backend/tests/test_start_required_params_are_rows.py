@@ -22,7 +22,7 @@ import json
 from sqlalchemy import text
 
 from app.core.db import engine
-from app.domain.workflows import validate_graph
+from app.domain.workflows.graph_rules import validate_graph
 from app.domain.workflows.revisions import graph_digest
 from tests.util import fresh_client
 

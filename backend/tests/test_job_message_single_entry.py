@@ -14,7 +14,8 @@ from __future__ import annotations
 import pathlib
 import re
 
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import t
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Job
 from app.domain.jobs import say
 

@@ -28,7 +28,7 @@ def create_board_sequence(db: Session, workspace_id: str, board_id: str, *, copy
     剪一刀,原件那一格跟着变,两边的撤销还会互相撤掉对方的步骤;和整板复制(persistence._copy_timelines)同一条。
     """
     from app.domain.boards.errors import BoardDomainError
-    from app.domain.sequences import copy_sequence, create_sequence_scaffold
+    from app.domain.sequences.creation import copy_sequence, create_sequence_scaffold
 
     board = get_board(db, workspace_id, board_id)
     project = board_project(db, board)

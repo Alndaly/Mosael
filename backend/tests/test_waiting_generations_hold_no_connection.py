@@ -98,6 +98,7 @@ def short_pool_timeout(monkeypatch):
 
 def test_十五个在等远端的生成不占连接(monkeypatch, short_pool_timeout) -> None:
     from app.domain.generation import runner
+    from app.ai.providers.contracts import generation as contracts_generation
     from app.domain.jobs import wait_for_idle_jobs
 
     release = threading.Event()
@@ -115,7 +116,7 @@ def test_十五个在等远端的生成不占连接(monkeypatch, short_pool_time
 
     adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=lambda r: None,
                               supports_progress_callbacks=False, supports_resume=True, generate=generate,
-                              reported_usage=lambda raw: runner.ReportedUsage())
+                              reported_usage=lambda raw: contracts_generation.ReportedUsage())
     monkeypatch.setattr("app.domain.providers.selection.resolve_connection", lambda *a, **kw: None)
     monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: adapter)
 
@@ -139,6 +140,7 @@ def test_十五个在等远端的生成不占连接(monkeypatch, short_pool_time
 def test_同步付费调用跑着的时候不占连接(monkeypatch, short_pool_timeout) -> None:
     """同步生图一次 POST 两三分钟:调适配器之前的读事务要结束,不然这段时间连接一直被它攥着。"""
     from app.domain.generation import runner
+    from app.ai.providers.contracts import generation as contracts_generation
     from app.domain.jobs import wait_for_idle_jobs
 
     release = threading.Event()
@@ -151,7 +153,7 @@ def test_同步付费调用跑着的时候不占连接(monkeypatch, short_pool_t
 
     adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=lambda r: None,
                               supports_progress_callbacks=False, supports_resume=False, generate=generate,
-                              reported_usage=lambda raw: runner.ReportedUsage())
+                              reported_usage=lambda raw: contracts_generation.ReportedUsage())
     monkeypatch.setattr("app.domain.providers.selection.resolve_connection", lambda *a, **kw: None)
     monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: adapter)
 

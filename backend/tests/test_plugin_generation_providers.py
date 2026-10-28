@@ -35,7 +35,7 @@ from app.db.models import (
     ProviderUsageEvent,
 )
 from app.domain.plugins import runtime
-from app.domain.plugins.manifest import ManifestError, parse
+from mosael_formats.plugin_manifest import ManifestError, parse
 from tests.util import fresh_client, second_client, wait_status
 
 PNG = (

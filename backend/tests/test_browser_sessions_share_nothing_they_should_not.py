@@ -20,7 +20,8 @@ from app.core.db import SessionLocal
 from app.core.i18n import t
 from app.db.models import BrowserAction
 from app.domain import browser
-from app.domain.workflows import WorkflowDomainError
+from app.db.model_slices import browser as model_slices_browser
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import browser as bx
 from types import SimpleNamespace
 from app.domain.workflows.run_scope import halt_scope
@@ -32,7 +33,7 @@ def _workspaces(count: int = 1) -> list[str]:
     return [client.post("/api/workspaces", json={"name": f"W{i}"}).json()["id"] for i in range(count)]
 
 
-def _named(ws: str, name: str, owner: str = "run-1") -> browser.BrowserSession:
+def _named(ws: str, name: str, owner: str = "run-1") -> model_slices_browser.BrowserSession:
     with SessionLocal() as db:
         return browser.open_session(
             db, workspace_id=ws, kind="named", name=name, owner_kind="workflow", owner_id=owner, actor=None

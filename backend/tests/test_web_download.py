@@ -291,6 +291,6 @@ def test_打开网址没下载时素材id是空串(monkeypatch) -> None:
 
 @pytest.mark.parametrize("node", ["browser_navigate", "browser_click"])
 def test_节点声明了下载素材这个输出(node) -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     assert "asset_id" in NODE_TYPES[node]["outputs"]

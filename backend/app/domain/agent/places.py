@@ -151,7 +151,7 @@ def _comfy_connection(db: Session, user: User, connection_id: str) -> PluginInst
     """他自己接的、认领了工作流库的那个连接(和 workbench/agent.py 的 connection 同一条:连接归人)。"""
     from app.domain.plugins import instances as inst
     from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.manifest import WORKFLOW_LIBRARY
+    from mosael_formats.plugin_manifest import WORKFLOW_LIBRARY
 
     instance = db.get(PluginInstance, connection_id)
     if instance is None or instance.owner_user_id != user.id:

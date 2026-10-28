@@ -12,21 +12,6 @@ NODE_TYPES 与本注册表一一对应,防止两个接缝漂移。
 
 from __future__ import annotations
 
-from app.domain.workflows.executors.registry import (  # noqa: F401 —— 包的公开面不变
-    Handler,
-    PreflightNode,
-    PrefixFactory,
-    RunScope,
-    _PREFIX_REGISTRY,
-    _REGISTRY,
-    get_executor,
-    register,
-    register_prefix,
-    registered_types,
-    register_preflight,
-    register_prefix_preflight,
-    run_preflights,
-)
 
 # 导入即注册:各模块只认 registry,不回头 import 这个包 —— 包和它的子模块之间就没有环了。
 from app.domain.workflows.executors import ai, approval, basic, browser, content, dub_lipsync, entities, feishu, knowledge, loops, media_scrub, scenes, shots, social, subjobs, subworkflow, talking  # noqa: F401

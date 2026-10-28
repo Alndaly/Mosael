@@ -16,7 +16,7 @@ from app.db.models import LocalService, PluginInstance
 from app.domain.local_services.errors import LocalServiceError
 from app.domain.local_services.supervisor import port_in_use
 from app.domain.plugins import instances as inst
-from app.domain.plugins.manifest import SERVICE_ADDRESS_FIELD, Service
+from mosael_formats.plugin_manifest import SERVICE_ADDRESS_FIELD, Service
 
 #: 在哪跑:「用我自己装的」(选一个目录)、「让 Mosael 装」(装在宿主分的目录里,ADR 0041 §4)。
 DIRECTORY = "directory"

@@ -43,7 +43,7 @@ from app.core.i18n import is_message_key, tr
 from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT, EXTERNAL_ID_FORMAT, schema_type
-from app.domain.plugins.manifest import TOOLS, text_of, tool_label
+from mosael_formats.plugin_manifest import TOOLS, text_of, tool_label
 
 logger = logging.getLogger(__name__)
 

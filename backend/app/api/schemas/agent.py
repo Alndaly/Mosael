@@ -388,7 +388,7 @@ class ConfirmationOut(FailureReadout, OrmModel):
         `mode="after"` 里,顺序就不再是任何东西的前提,以后谁重排字段都不会把语言弄丢。
         """
         from app.core.i18n import get_current_locale, render_message
-        from app.domain.agent.confirmable import allowance_name, tool_spec
+        from app.domain.agent.confirmable.registry import allowance_name, tool_spec
         from app.domain.agent.confirmations import card_parts
 
         locale = get_current_locale()

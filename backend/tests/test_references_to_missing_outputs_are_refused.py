@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.core.i18n import set_current_locale
 from app.db.models import Job, User
-from app.domain.workflows import validate_graph
+from app.domain.workflows.graph_rules import validate_graph
 from app.domain.workflows.templates import TEMPLATE_CATALOG, built_in_template_graph
 from tests.util import fresh_client
 

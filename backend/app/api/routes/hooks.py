@@ -20,7 +20,7 @@ from app.api.schemas import JobOut
 from app.core.i18n import tr
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun
 from app.domain.jobs import JobError, cancel_job
-from app.domain.scheduler import SchedulerDomainError, trigger_scheduled_task, webhook_secret_matches
+from app.domain.scheduler.operations import SchedulerDomainError, trigger_scheduled_task, webhook_secret_matches
 from app.api.schemas.base import ApiModel
 
 router = APIRouter(tags=["hooks"])

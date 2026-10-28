@@ -11,7 +11,8 @@ from app.core.db import SessionLocal
 from app.db.models import Clip, Sequence, SequenceOperation
 from app.domain.sequences.grouping import OperationGroup
 from app.domain.sequences.history import can_redo, redo, undo
-from app.domain.sequences.operations import AddTrack, InsertTextClip, add_track, insert_text_clip
+from app.domain.sequences.tracks import AddTrack, add_track
+from app.domain.sequences.text import InsertTextClip, insert_text_clip
 from tests.util import fresh_client
 
 

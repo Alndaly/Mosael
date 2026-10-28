@@ -228,7 +228,7 @@ def _run_upload(workspace_id: str, actor_id: str | None, config: dict, monkeypat
     from app.db.models import Workflow
     from app.domain.jobs import create_job, reset_parent_job, set_parent_job
     from app.domain.workflows import create_workflow
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     uploaded: list = []
     monkeypatch.setattr(browser, "upload_file", lambda sid, file, **kw: uploaded.append(file) or {})
@@ -253,7 +253,7 @@ def _run_upload(workspace_id: str, actor_id: str | None, config: dict, monkeypat
 
 
 def test_the_upload_node_reads_host_paths_only_for_the_admin(tmp_path, monkeypatch) -> None:
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     _owner, workspace, _mate = _team()
     secret = _secret(tmp_path)
@@ -306,7 +306,7 @@ def test_the_agent_upload_action_goes_through_the_seam(tmp_path, monkeypatch) ->
 
 
 def test_the_upload_node_refuses_an_asset_and_a_path_together(tmp_path, monkeypatch) -> None:
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     owner, workspace, _mate = _team()
     secret = _secret(tmp_path)

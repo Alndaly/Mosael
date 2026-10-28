@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
-from app.domain.generation_catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
+from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
+from app.domain.generation_catalog.descriptors.shared import SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.media_kinds import declared_media
 from app.domain.scenes.operations import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
@@ -423,7 +424,8 @@ def field_name(key: str, spec: dict[str, Any] | None = None) -> Any:
 def node_title(node: dict[str, Any], types: dict[str, dict[str, Any]] | None = None) -> str:
     """报错里提到一个节点时叫它什么:节点的标题;没起名就是节点类型的显示名(按这次请求的语言);类型认不出(插件没装)
     就是它的 id。和画布就绪清单的节点名同一个取法(analyze.ts 的 nodeName)—— 同一个问题两边说的是同一个名字。"""
-    from app.core.i18n import get_current_locale, pick_text, tr
+    from app.core.i18n import get_current_locale, tr
+    from mosael_formats.i18n import pick_text
 
     name = node.get("name")
     #: 官方模板的图在建图那一刻才定语言,之前节点名是 {zh, en}(见 templates.localised_names)。

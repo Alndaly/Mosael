@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pydantic import Field, field_validator, model_validator
 from sqlalchemy import inspect as sqlalchemy_inspect
 from app.api.schemas.base import ApiModel, OrmModel
-from app.domain.sequences import CANVAS_SIZE_RANGE, DEFAULT_CANVAS, FPS_RANGE
+from app.domain.sequences._timeline import CANVAS_SIZE_RANGE, DEFAULT_CANVAS, FPS_RANGE
 
 class SequenceCreate(ApiModel):
     workspace_id: str

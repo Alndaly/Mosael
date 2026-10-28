@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Sequence, Track, Workflow
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 from app.domain.workflows.executors.subjobs import transcript_sentences
 from tests.util import fresh_client
 

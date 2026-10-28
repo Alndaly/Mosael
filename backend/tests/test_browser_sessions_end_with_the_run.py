@@ -23,7 +23,8 @@ from app.core.db import SessionLocal
 from app.db.models import BrowserAction, BrowserSession, Job, User
 from app.domain import browser as bdom
 from app.domain.jobs import cancel_job, create_job, reset_parent_job, set_parent_job, wait_for_idle_jobs
-from app.domain.workflows import WorkflowDomainError, create_workflow
+from app.domain.workflows import create_workflow
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.executors import browser as bx
 from tests.util import pinned, user_id, fresh_client

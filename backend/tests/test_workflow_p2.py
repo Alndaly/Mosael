@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.workflows import interpolate, validate_body_graph, validate_graph
+from app.domain.workflows.graph_rules import interpolate, validate_body_graph, validate_graph
 from app.domain.workflows.executors.loops import LOOP_FOREACH_HARD_CAP
 
 

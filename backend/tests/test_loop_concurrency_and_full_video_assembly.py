@@ -19,9 +19,9 @@ import pytest
 
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Track, Workflow
-from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows import executors as registry
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors import registry as executors_registry
+from app.domain.workflows.executors.registry import get_executor
 from app.domain.workflows.executors.loops import LOOP_FOREACH_MAX_CONCURRENCY
 from tests.util import fresh_client
 
@@ -52,7 +52,7 @@ def fake_node(monkeypatch):
     """临时换掉某个节点类型的执行器。"""
 
     def install(node_type: str, handler) -> None:
-        monkeypatch.setitem(registry._REGISTRY, node_type, handler)
+        monkeypatch.setitem(executors_registry._REGISTRY, node_type, handler)
 
     return install
 
@@ -256,7 +256,8 @@ def _middle_of_full_video(fake_node, *, shots, voice_id, project) -> tuple[dict[
     所以模板里被规范成数据边的那些引用,走的是和真跑一样的路。
     """
     from app.domain.workflows.engine import execute_graph
-    from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
+    from app.domain.workflows.templates_models import ModelChoice
+    from app.domain.workflows.templates_full_video import full_video_generation_graph
 
     graph = full_video_generation_graph(
         chat=ModelChoice(profile_id="c", provider="o", model="m"),
@@ -290,7 +291,8 @@ def _middle_of_full_video(fake_node, *, shots, voice_id, project) -> tuple[dict[
 
 def _assemble_seconds() -> float:
     """每镜多长由模板按视频模型定;从模板里读,不在测试里另写一个数。"""
-    from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
+    from app.domain.workflows.templates_models import ModelChoice
+    from app.domain.workflows.templates_full_video import full_video_generation_graph
 
     graph = full_video_generation_graph(
         chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(profile_id="v", provider="f", model="vm")

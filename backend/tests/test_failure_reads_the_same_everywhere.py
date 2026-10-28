@@ -86,7 +86,7 @@ def test_生成记录带着那一句_按读的人的语言翻_原文另给(local
 
 def test_画板格子存那一句和原文(monkeypatch) -> None:
     from tests.util import fresh_client
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -172,7 +172,7 @@ def test_画板格子的详情里_原因和怎么修拼成一段_命令单独一
 
 def test_画板格子跑挂了_原因和怎么修拼好存进格子() -> None:
     from tests.util import fresh_client
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]

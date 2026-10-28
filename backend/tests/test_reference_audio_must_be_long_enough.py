@@ -22,6 +22,7 @@ import wave
 import pytest
 
 from app.domain.voices import voices
+from app.domain.voices import errors
 from tests.util import fresh_client
 
 
@@ -54,7 +55,7 @@ def test_a_two_second_clip_is_refused() -> None:
 
 def test_the_message_says_how_long_it_should_be() -> None:
     """拒绝要**能行动**:说清楚要多长,而不是只说"太短"。"""
-    with pytest.raises(voices.VoiceError) as caught:
+    with pytest.raises(errors.VoiceError) as caught:
         voices.check_reference_duration(2.6)
     assert "5" in str(caught.value) and "15" in str(caught.value), str(caught.value)
 
@@ -91,7 +92,7 @@ def test_it_is_refused_before_the_voice_row_exists() -> None:
 
 def test_an_existing_short_voice_is_flagged_not_silently_used() -> None:
     """库里已经有的短音色(用户那条)不能装作没事 —— 合成前就说清楚。"""
-    with pytest.raises(voices.VoiceError) as caught:
+    with pytest.raises(errors.VoiceError) as caught:
         voices.check_reference_duration(2.6)
 
     assert "秒" in str(caught.value)
@@ -119,7 +120,7 @@ def test_synthesis_refuses_an_existing_short_voice(monkeypatch) -> None:
 
     with SessionLocal() as db:
         before = db.query(Job).count()
-        with pytest.raises(voices.VoiceError) as caught:
+        with pytest.raises(errors.VoiceError) as caught:
             voices.start_synthesis(db, text="你好", project_id=None, created_by=None, voice_id=voice["id"])
         assert db.query(Job).count() == before, "起了一个注定听不懂的十分钟任务"
 

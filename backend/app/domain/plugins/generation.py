@@ -28,7 +28,7 @@ from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import clean_group
-from app.domain.plugins.manifest import GENERATION
+from mosael_formats.plugin_manifest import GENERATION
 from app.domain.plugins.moves import Moves, clean_moves
 from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, StreamHooks
 
@@ -482,7 +482,6 @@ __all__ = [
     "CATALOG_TIMEOUT_SECONDS",
     "Catalog",
     "Explained",
-    "GENERATION",
     "GenerationCall",
     "GenerationOutcome",
     "MODEL_KINDS",

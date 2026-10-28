@@ -17,7 +17,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, PluginInstance, PluginPackage
-from app.domain.assets import register_file_asset
+from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import EXPORT, TRIM, Derivation, ai_generated_assets, derived
 from tests.util import fresh_client, insert_asset, user_id
 

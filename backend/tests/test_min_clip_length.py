@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import pytest
-from app.domain.sequences.operations import MIN_CUT_REMAINDER
+from app.domain.sequences._timeline import MIN_CUT_REMAINDER
 from tests.util import fresh_client, insert_asset
 
 

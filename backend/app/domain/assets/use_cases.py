@@ -101,7 +101,7 @@ def transcript_by_source(db: Session, user: User, workspace_id: str, url: str) -
 
 
 def transcript_of(db: Session, user: User, asset_id: str) -> Transcript | None:
-    from app.domain.transcripts import get_transcript_for_asset
+    from app.domain.transcripts.operations import get_transcript_for_asset
 
     readable(db, user, asset_id)
     return get_transcript_for_asset(db, asset_id)
@@ -154,8 +154,8 @@ def delete_asset(db: Session, user: User, asset_id: str) -> Deleted:
 
 def attach_transcript(db: Session, user: User, asset_id: str, **fields: Any) -> Transcript:
     """给素材挂一份逐字稿。素材不存在时交给 transcripts 说「找不到」(它有自己的错误与状态码)。"""
-    from app.domain.transcripts import attach_transcript as attach
-    from app.domain.transcripts import get_transcript_for_asset
+    from app.domain.transcripts.operations import attach_transcript as attach
+    from app.domain.transcripts.operations import get_transcript_for_asset
 
     if db.get(Asset, asset_id) is not None:
         require_asset(db, user, asset_id, perm="edit")

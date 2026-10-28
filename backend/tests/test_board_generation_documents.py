@@ -14,8 +14,9 @@ from unittest.mock import patch as mock_patch
 import pytest
 
 from app.core.db import SessionLocal
-from app.core.i18n import DEFAULT_LOCALE, set_current_locale
-from app.domain.generation import create_generation_job
+from app.core.i18n import set_current_locale
+from mosael_formats.i18n import DEFAULT_LOCALE
+from app.domain.generation.operations import create_generation_job
 from app.domain.generation import operations
 from app.domain.generation.operations import ReferenceDocument, prompt_for_provider
 from tests.test_entity_generation_paths import _seedance, _workspace
@@ -64,7 +65,7 @@ def _run(client, ws: str, board_id: str):
         seen.update(kwargs)
         raise RuntimeError("到这儿就够了")
 
-    with mock_patch("app.domain.generation.create_generation_job", side_effect=spy):
+    with mock_patch("app.domain.generation.operations.create_generation_job", side_effect=spy):
         try:
             response = run_on_board(client, board_id, ws, producer="generate", item_id="shot", kind="image", x=600, y=0,
                                     form={"prompt": "照这份脚本画第一幕", "provider": "openai", "model": "gpt-image-1"})

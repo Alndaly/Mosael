@@ -19,10 +19,12 @@ from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_f
 from app.domain.analysis.service import image_part
 from app.domain.billing.usage import billable, once
 from app.domain.providers.chat_connection import require_connection, runner_choice
-from app.domain.workflows import WorkflowDomainError, field_name
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.node_types import field_name
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
-from app.domain.workflows.executors.common import id_list, stopping, text_lines
+from app.domain.workflows.executors.common import stopping, text_lines
+from app.domain.workflows.id_values import id_list
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 
@@ -623,7 +625,7 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     (出镜版主播说的开场和收尾),按念出来的时长从总时长里扣掉。先删再改写:不替要删的那几段花改写的钱。
     """
     from app.core.i18n import tr
-    from app.domain.workflows.executors.common import whole_number
+    from app.domain.workflows.executors.numbers import whole_number
 
     raw = config.get("items")
     if isinstance(raw, str):

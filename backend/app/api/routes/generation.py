@@ -25,7 +25,7 @@ from app.domain.permissions import require_own_profile
 from app.domain.voices.errors import VoiceError
 from app.db.models import GenerationJob, GenerationSession
 from app.domain import session_groups
-from app.domain.generation import generation_options
+from app.domain.generation.resolution import generation_options
 from app.domain.generation import use_cases as generation
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.origins import STUDIO_ORIGIN

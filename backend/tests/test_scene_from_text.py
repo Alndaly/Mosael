@@ -14,7 +14,8 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Scene3D
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import ai as ai_executors
 from app.domain.workflows.executors.scenes import scene_from_text
 from tests.test_scene_workflow_nodes import LAYOUT
@@ -42,7 +43,7 @@ def _scope():
 def test_照文字搭一个场景_不是每镜一个布景台_相机规矩和整片模板同一份(written) -> None:
     """用户截图:「一个女孩在雪山脚下的草原上跑步」搭成了三套一样的草原和山、女孩不动 —— 那是整片模板分镜的搭法
     (每镜一个布景台)。这里是一个地方里的一段事:一个布景,动作是人物的关键帧,几台相机拍同一段。"""
-    from app.domain.workflows.templates import _camera_rules, blockout_rules, single_set_rules
+    from app.domain.workflows.templates_full_video import _camera_rules, blockout_rules, single_set_rules
 
     scope = _scope()
     with SessionLocal() as db:
@@ -74,7 +75,7 @@ def test_没有文字_镜头数夹在范围里(written) -> None:
 
 def test_画板上是_3D_场景格的一种填法_剧本从连进来的文档便签接_搭好的场景落进这一格() -> None:
     """交出的是一个场景,剧本是参数不是原料 —— 和提示词出图挂在图片格上同一条判法,不挂在文档、便签上。"""
-    from app.domain.boards.canvas import _canvas_with_delivered_result
+    from app.domain.boards.outputs import _canvas_with_delivered_result
     from app.domain.boards.tools import bindable_kinds, board_outputs
     from app.domain.boards.transforms import board_hosts, board_role, content_transform_gap, host_fields, output_kinds
 
@@ -98,7 +99,8 @@ def test_画板上是_3D_场景格的一种填法_剧本从连进来的文档便
 
 
 def test_空的_3D_场景格存得下_写了_id_照旧校验() -> None:
-    from app.domain.boards import BoardDomainError, normalize_canvas
+    from app.domain.boards.errors import BoardDomainError
+    from app.domain.boards.shape import normalize_canvas
 
     empty = normalize_canvas({"items": [{"id": "set", "kind": "scene", "x": 0, "y": 0}], "edges": []})
     assert "scene_id" not in empty["items"][0]

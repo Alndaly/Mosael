@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.i18n import set_current_locale
-from app.domain.plugins.manifest import parse, text_of
+from mosael_formats.plugin_manifest import parse, text_of
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "plugins" / "examples"
@@ -116,7 +116,7 @@ def test_文档链接只认_http() -> None:
 
     这里不是在防御格式,是在防御来源:清单是别人写的。
     """
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     base = {"id": "x", "name": "X", "version": "1"}
     for good in ("https://docs.example.com/", "http://example.com/a"):
@@ -130,7 +130,7 @@ def test_参数就叫title或description时_不被当成说明文字() -> None:
     """`properties` 下面的键是**字段名**。此前整棵树里凡是叫 title / description 的双语对象都当
     说明文字翻 —— 于是一个名叫 `title` 的参数,整个 schema 被换成了一个字符串(Remotion 插件
     「讲解视频」的标题参数就这样丢了类型;发布类插件的 `description` 参数同理)。"""
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     title_schema = {"type": "string", "description": {"zh": "视频标题", "en": "Video title"}}
     raw = {
@@ -161,7 +161,7 @@ def test_input_schema_里的说明也要定语言() -> None:
     标签后面跟着一句 `[object Object]`。作者按清单里到处都能用的写法写了双语,而这一处偏偏
     不认;这种"大部分地方能用"的不一致最难自己发现,因为写的人根本不会怀疑它。
     """
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     raw = {
         "id": "x.y",
@@ -200,7 +200,7 @@ def test_input_schema_里的说明也要定语言() -> None:
 def test_嵌套层里的说明同样要定语言() -> None:
     """只认 `properties` 那一层等于换个写法就又漏了 —— JSON Schema 里说明文字可以出现在
     items、oneOf、$defs 的任何一层,而那时的表现和这次一模一样:一句 `[object Object]`。"""
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     raw = {
         "id": "x.y",
@@ -300,7 +300,7 @@ class Test插件自己处理多语言:
 
     def test_按主语言匹配_不按整串相等(self) -> None:
         """清单里的键是作者写的,他没有义务用我们这两个短标签(真见过 `en-US`)。"""
-        from app.domain.plugins.manifest import text_of
+        from mosael_formats.plugin_manifest import text_of
 
         value = {"zh-CN": "起始目录", "en-US": "Start directory"}
         assert text_of(value, "zh") == "起始目录"
@@ -308,7 +308,7 @@ class Test插件自己处理多语言:
         assert text_of({"EN": "Upper"}, "en") == "Upper"
 
     def test_挑不到时先退作者声明的原文语言(self) -> None:
-        from app.domain.plugins.manifest import parse, text_of
+        from mosael_formats.plugin_manifest import parse, text_of
 
         value = {"de": "Startverzeichnis", "en": "Start directory"}
         #: 没声明原文语言:退到部署缺省(zh)→ 也没有 → 作者写的第一条。

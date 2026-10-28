@@ -14,7 +14,8 @@ from app.db.models import PluginInstance
 from app.domain.plugins import instances as inst
 from app.domain.plugins.nodes import plugin_node_types, why_unusable
 from app.domain.plugins.tools import refresh_tools
-from app.domain.workflows import WorkflowDomainError, create_workflow
+from app.domain.workflows import create_workflow
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import start_workflow_job
 from tests.test_plugin_nodes_hold_what_they_declare import PACKAGE, _graph, _install
 from tests.util import fresh_client, second_client, user_id

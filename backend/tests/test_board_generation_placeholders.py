@@ -66,7 +66,7 @@ def _items(client, board_id: str, ws: str) -> list[dict[str, Any]]:
 
 
 def _place(ws: str, board_id: str, *, outputs: int, job: str = "job-x") -> list[dict[str, Any]]:
-    from app.domain.boards import place_pending
+    from app.domain.boards.receipts import place_pending
 
     with SessionLocal() as db:
         placed = place_pending(db, workspace_id=ws, board_id=board_id, outputs=outputs, item={
@@ -78,7 +78,7 @@ def _place(ws: str, board_id: str, *, outputs: int, job: str = "job-x") -> list[
 
 
 def _deliver(board_id: str, *, status: str = "succeeded", asset_ids: list[str] | None = None, error: str = "") -> None:
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     job = SimpleNamespace(id="job-x", status=status, result={"asset_ids": asset_ids or []} if status == "succeeded" else None,
                           error=error, payload={}, created_by=None)

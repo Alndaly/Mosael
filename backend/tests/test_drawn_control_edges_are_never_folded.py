@@ -29,7 +29,7 @@ from typing import Any, Iterator
 
 import pytest
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates import TEMPLATE_CATALOG, blank_template_graphs
 from tests.util import fresh_client

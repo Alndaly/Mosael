@@ -28,14 +28,14 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
-from app.domain.effects import EFFECTS, NONE as NO_EFFECTS
+from mosael_formats.effects import EFFECTS, NONE as NO_EFFECTS
 from app.domain.plugins import instances as inst
 from app.domain.plugins import moves as plugin_moves
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import clean_group
 #: 工具名的规矩和清单里声明的工具是同一条(见 manifest.TOOL_NAME_RE)。
-from app.domain.plugins.manifest import TOOL_NAME_RE, TOOLS
+from mosael_formats.plugin_manifest import TOOL_NAME_RE, TOOLS
 from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError
 
 logger = logging.getLogger(__name__)

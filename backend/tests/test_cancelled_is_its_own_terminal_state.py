@@ -36,8 +36,8 @@ from app.domain.jobs import (
     finish_job,
     report_job,
 )
-from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows import executors as registry
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.engine import execute_graph
 from app.domain.workflows.executors import common as executors_common
 from tests.util import fresh_client, until, user_id
@@ -170,7 +170,7 @@ def test_工作流等着的子任务被单独停了_节点失败_说子任务已
         executors_common.wait_for_job(child.id, release=db)
         return {}
 
-    monkeypatch.setitem(registry._REGISTRY, "note_create", waits_for_a_child)
+    monkeypatch.setitem(executors_registry._REGISTRY, "note_create", waits_for_a_child)
     monkeypatch.setattr(executors_common, "CHILD_POLL_SECONDS", 0.05)
     graph = {
         "nodes": [{"id": "start", "type": "start", "config": {}},

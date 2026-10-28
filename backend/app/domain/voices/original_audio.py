@@ -93,7 +93,7 @@ def _is_original_footage(db: Session, asset: Asset | None) -> bool:
 
 def _dub_windows(db: Session, dub_track_id: str) -> list[tuple[float, float]]:
     """配音在时间线上占着的时间窗(合并过的)。"""
-    from app.domain.sequences.operations import timeline_span
+    from app.domain.sequences._timeline import timeline_span
 
     spans = sorted(
         (clip.timeline_start, clip.timeline_start + timeline_span(clip))
@@ -110,7 +110,7 @@ def _dub_windows(db: Session, dub_track_id: str) -> list[tuple[float, float]]:
 
 def _original_clips(db: Session, sequence: Sequence, dub_track_id: str, windows: list[tuple[float, float]]) -> list[Clip]:
     """配音盖得到的、原片发声的那些片段(轨和片段都没被静音)。"""
-    from app.domain.sequences.operations import timeline_span
+    from app.domain.sequences._timeline import timeline_span
 
     chosen: list[Clip] = []
     for track in sequence.tracks or []:
@@ -174,7 +174,7 @@ def _duck_everything_else(db: Session, sequence: Sequence, dub_track_id: str, *,
     **视频轨也要算。** 一条视频片段自带的声音和音频轨上的声音一样会被听见,而译配这条流程恰恰把
     原片整段放在视频轨上(音频轨是空的)—— 只挑 kind=="audio" 的话,标记落在一条没有片段的空轨上。
     """
-    from app.domain.sequences.operations import SetTrackState, set_track_state
+    from app.domain.sequences.tracks import SetTrackState, set_track_state
 
     # 先把要改的那几条挑出来:改动会 flush,边遍历边改的话,下一圈读到的可能是过期的对象。
     targets = [
@@ -187,7 +187,8 @@ def _duck_everything_else(db: Session, sequence: Sequence, dub_track_id: str, *,
 
 
 def _mute_under_dub(db: Session, sequence: Sequence, dub_track_id: str, *, actor_id: str | None) -> None:
-    from app.domain.sequences.operations import SetClipEffects, set_clip_effects, timeline_span
+    from app.domain.sequences.clip_properties import SetClipEffects, set_clip_effects
+    from app.domain.sequences._timeline import timeline_span
 
     windows = _dub_windows(db, dub_track_id)
     plan: list[tuple[str, dict[str, Any]]] = []
@@ -308,7 +309,7 @@ def _split_voice_from_music(
     from app.ai.providers.contracts.separation import SeparationError
     from app.domain.assets.separation import available, separate_asset
     from app.domain.jobs import RENDER_SLOTS
-    from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
+    from app.domain.sequences.clip_properties import DetachClipAudio, detach_clip_audio
 
     with unit_of_work() as db:
         sequence = db.get(Sequence, sequence_id)

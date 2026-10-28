@@ -2,18 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-#: 描述符的数据住在 descriptors/ 下(按介质 / 厂商分文件);这里重新导出每一个名字 ——
-#: 调用方照旧从 catalog 取。**导入而不是复制**:下面的档案名册按对象身份(id())反查。
-from app.domain.generation_catalog.descriptors.shared import (
-    SOURCE_ROLE_LABELS,  # noqa: F401
-    SOURCE_ROLE_HELP,  # noqa: F401
-    SOURCE_ROLE_MEDIA,  # noqa: F401
-    KEYFRAME_GROUP,  # noqa: F401
-    REFERENCE_GROUP,  # noqa: F401
-    SOURCE_GROUPS,  # noqa: F401
-    SOURCE_GROUP_DROPS,  # noqa: F401
-    REFERENCE_SCENE_LIMITS,  # noqa: F401
-)
+#: 描述符的数据住在 descriptors/ 下(按介质 / 厂商分文件),调用方直接从那里取。这里 import 它们是因为下面的
+#: 档案名册要用:**导入而不是复制** —— 名册按对象身份(id())反查。
 from app.domain.generation_catalog.descriptors.image import (
     OPENAI_IMAGE_CAPABILITIES,
     QWEN_TEXT_IMAGE_CAPABILITIES,
@@ -21,7 +11,6 @@ from app.domain.generation_catalog.descriptors.image import (
     QWEN_EDIT_IMAGE_CAPABILITIES,
     SEEDREAM_4_IMAGE_CAPABILITIES,
     SEEDREAM_3_IMAGE_CAPABILITIES,
-    EVOLINK_IMAGE_SIZES,  # noqa: F401
     EVOLINK_IMAGE_CAPABILITIES,
     EVOLINK_IMAGE_EDIT_CAPABILITIES,
     EVOLINK_GPT_IMAGE_2_CAPABILITIES,
@@ -48,7 +37,6 @@ from app.domain.generation_catalog.descriptors.video import (
     KLING_V3_VIDEO_CAPABILITIES,
     KLING_V3_OMNI_VIDEO_CAPABILITIES,
     WAN_VIDEO_EDIT_CAPABILITIES,
-    ARK_VIDEO_RATIOS,  # noqa: F401
     SEEDANCE_2_VIDEO_CAPABILITIES,
     SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
     SEEDANCE_1_VIDEO_CAPABILITIES,
@@ -60,16 +48,12 @@ from app.domain.generation_catalog.descriptors.evolink_video import (
     EVOLINK_VIDEO_T2V_CAPABILITIES,
     EVOLINK_VIDEO_I2V_CAPABILITIES,
     EVOLINK_SEEDANCE_15_CAPABILITIES,
-    EVOLINK_SEEDANCE_20_BASE,  # noqa: F401
     EVOLINK_SEEDANCE_20_T2V_CAPABILITIES,
     EVOLINK_SEEDANCE_20_I2V_CAPABILITIES,
     EVOLINK_SEEDANCE_20_R2V_CAPABILITIES,
     EVOLINK_SEEDANCE_20_FAST_T2V_CAPABILITIES,
     EVOLINK_SEEDANCE_20_FAST_I2V_CAPABILITIES,
     EVOLINK_SEEDANCE_20_FAST_R2V_CAPABILITIES,
-    EVOLINK_SEEDANCE_25_BASE,  # noqa: F401
-    EVOLINK_SEEDANCE_25_DURATION,  # noqa: F401
-    EVOLINK_SEEDANCE_25_RATIOS,  # noqa: F401
     EVOLINK_SEEDANCE_25_T2V_CAPABILITIES,
     EVOLINK_SEEDANCE_25_I2V_CAPABILITIES,
     EVOLINK_SEEDANCE_25_R2V_CAPABILITIES,
@@ -78,7 +62,6 @@ from app.domain.generation_catalog.descriptors.evolink_video import (
     EVOLINK_VEO_31_PRO_CAPABILITIES,
 )
 from app.domain.generation_catalog.descriptors.audio import (
-    VOCAL_GENDER_SCHEMA,  # noqa: F401
     EVOLINK_SUNO_CAPABILITIES,
     EVOLINK_SUNO_V4_CAPABILITIES,
     EVOLINK_SUNO_V55_CAPABILITIES,
@@ -91,11 +74,7 @@ from app.domain.generation_catalog.descriptors.audio import (
     ALIBABA_FUN_MUSIC_PREVIEW_CAPABILITIES,
     ALIBABA_AUDIOGEN_CAPABILITIES,
 )
-from app.domain.generation_catalog.descriptors.builtin import (
-    AUDIO_BUILTIN_MODELS,  # noqa: F401
-    EVOLINK_BUILTIN_MODELS,  # noqa: F401
-    BUILTIN_MODELS,
-)
+from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 
 #: **生成的种类**:图像、视频、音频。全仓只有这一份 —— 解析、设置页、参数组表单、插件目录、
 #: 画板的「生成」产出者都从这里读。此前 `("image", "video")` 在七个文件里各抄一份,于是

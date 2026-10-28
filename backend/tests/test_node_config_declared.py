@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.generation.operations import parse_source_assets
 
 """节点声明的配置项,必须覆盖执行器真正读取的那些。
@@ -137,7 +137,7 @@ def test_素材和时间线字段自己会声明类型() -> None:
 
     加一种节点忘了补表不会报错,只是安静地少了选择器和校验。所以改成按字段名推,这条钉住它。
     """
-    from app.domain.workflows import NODE_TYPES, config_data_type
+    from app.domain.workflows.node_types import NODE_TYPES, config_data_type
 
     for name, spec in NODE_TYPES.items():
         for key, meta in (spec.get("config") or {}).items():
@@ -150,7 +150,7 @@ def test_素材和时间线字段自己会声明类型() -> None:
 def test_场景字段按命名约定认成场景() -> None:
     """`scene_id` 和 asset_id / sequence_id 同一套约定 —— 画板把上游的场景卡接进来时,
     靠这个类型判断「这一格能不能接到那个字段上」。"""
-    from app.domain.workflows import NODE_TYPES, config_data_type
+    from app.domain.workflows.node_types import NODE_TYPES, config_data_type
 
     assert config_data_type("scene_id", {}) == "scene"
     assert config_data_type("source_scene_id", {}) == "scene"
@@ -184,7 +184,7 @@ def test_插件_schema_里标了_format_asset_的字段就是素材() -> None:
 def test_显式声明压过命名约定() -> None:
     """约定覆盖不到的字段(名字不叫 asset_id 但装的就是素材)要能显式指定,
     否则这条约定就从"省事"变成了"挡路"。"""
-    from app.domain.workflows import config_data_type
+    from app.domain.workflows.node_types import config_data_type
 
     assert config_data_type("whatever", {"data_type": "asset"}) == "asset"
     assert config_data_type("whatever", {}) == ""
@@ -210,7 +210,7 @@ def test_每个配置字段都有中文标签() -> None:
     被抄到消费方那边,加东西时漏掉不报错,只是界面上默默露出一个英文单词。
     """
     from app.core.i18n import MESSAGES
-    from app.domain.workflows import NODE_TYPES, config_label
+    from app.domain.workflows.node_types import NODE_TYPES, config_label
 
     missing = [
         f"{name}.{key}"
@@ -225,7 +225,7 @@ def test_每个配置字段都有中文标签() -> None:
 def test_每个内置输出接点都有可翻译的语义名() -> None:
     """人性化键名只是插件降级;内置节点不允许靠它遮住漏翻译。"""
     from app.core.i18n import MESSAGES
-    from app.domain.workflows import NODE_TYPES, output_label
+    from app.domain.workflows.node_types import NODE_TYPES, output_label
 
     missing = [
         f"{name}.{key}"
@@ -239,7 +239,7 @@ def test_每个内置输出接点都有可翻译的语义名() -> None:
 def test_节点自己的_label_压过共用表() -> None:
     """`selector` 在六种浏览器节点里是同一个意思,所以按键名给;某个节点要特别说法时
     得能覆盖,否则共用表就从"省事"变成了"挡路"。"""
-    from app.domain.workflows import config_label
+    from app.domain.workflows.node_types import config_label
 
     #: 表里存的是 key(出口才翻,见 core/i18n)——这里断言的是「用了共用表那一条」,
     #: 而不是那条长什么样。
@@ -254,7 +254,7 @@ def test_共用表的名字只给同一个意思的字段() -> None:
     循环体那一格的名字「子图」;「从链接下载素材」的 `fail_on_error` 管的是下载失败,却显示成 HTTP
     节点那一格的「非 2xx 算失败」。
     """
-    from app.domain.workflows import config_label
+    from app.domain.workflows.node_types import config_label
 
     def label(node_type: str, key: str) -> str:
         return config_label(key, NODE_TYPES[node_type]["config"][key])
@@ -350,7 +350,7 @@ def test_名字到值的映射不该让用户手写_JSON() -> None:
     让用户对着一个 `{}` 手写 JSON,键名要背、引号逗号要记,而**写错了直到运行才知道**:
     少个引号是解析失败(还算好),引用名写错则一路静默传个空值下去。
     """
-    from app.domain.workflows import NODE_TYPES, config_editor
+    from app.domain.workflows.node_types import NODE_TYPES, config_editor
 
     for name, spec in NODE_TYPES.items():
         for key, meta in (spec.get("config") or {}).items():
@@ -367,7 +367,7 @@ def test_名字到值的映射不该让用户手写_JSON() -> None:
 def test_只有真正自由结构的才留原始_JSON() -> None:
     """json_schema 是一份 schema,天然嵌套,拍平成键值对是错的。**默认给 map**,
     例外自己声明 —— 这样新加的 object 字段自动就有友好编辑器,而不是等谁记得来补。"""
-    from app.domain.workflows import config_editor
+    from app.domain.workflows.node_types import config_editor
 
     assert config_editor("json_schema", {"type": "object"}) == "json"
     assert config_editor("inputs", {"type": "object"}) == "map"
@@ -383,8 +383,9 @@ def test_下拉选项都有中英文名字() -> None:
     (`LITERAL_OPTION_FIELDS`)—— 把 GET 翻成中文只会更难懂。
     """
     from app.domain.workflows.node_catalog import LITERAL_OPTION_FIELDS
-    from app.core.i18n import LOCALES, MESSAGES
-    from app.domain.workflows import NODE_TYPES
+    from app.core.i18n import MESSAGES
+    from mosael_formats.i18n import LOCALES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     missing: list[str] = []
     for node, spec in NODE_TYPES.items():
@@ -403,7 +404,7 @@ def test_节点描述对任意一份注册表都成立() -> None:
     """节点面板和画板的工具清单共用 describe_node_types:调用方可以只给注册表的一部分
     (画板只列挑过的节点),翻译和分组排序照样对 —— 同一个节点在两处不会叫两个名字、排两个位置。"""
     from app.domain.plugins.nodes import PLUGIN_NODE_CATEGORY, node_meta
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
     from app.domain.workflows.node_catalog import describe_node_types
 
     registry = {

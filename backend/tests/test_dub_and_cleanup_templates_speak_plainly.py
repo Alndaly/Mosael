@@ -16,8 +16,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
-from app.domain.workflows.templates import TEMPLATE_CATALOG, ModelChoice, transcript_video_cleanup_graph, translated_dub_graph
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.templates import TEMPLATE_CATALOG
+from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates_cleanup import transcript_video_cleanup_graph
+from app.domain.workflows.templates_dub import translated_dub_graph
 
 CHINESE = re.compile(r"[一-鿿]")
 

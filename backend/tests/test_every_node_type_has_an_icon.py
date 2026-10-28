@@ -33,7 +33,7 @@ def _declared_icons() -> set[str]:
 
 
 def test_每个节点类型都有图标() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     missing = sorted(set(NODE_TYPES) - _declared_icons())
     assert not missing, (
@@ -44,7 +44,7 @@ def test_每个节点类型都有图标() -> None:
 
 def test_图标表里不留已经不存在的节点() -> None:
     """棘轮只能缩:节点删掉或改名时,图标要跟着删,否则这张表会慢慢变成一份历史记录。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     stale = sorted(_declared_icons() - set(NODE_TYPES))
     assert not stale, f"这些图标对应的节点类型已经不在了,从 NODE_ICONS 里删掉:{stale}"

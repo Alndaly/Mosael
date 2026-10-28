@@ -31,6 +31,7 @@ import inspect
 import pytest
 
 from app.domain.sequences import operations as ops
+from app.domain.sequences import errors
 
 
 def test_清单从派发表算出来_不是第二份手写() -> None:
@@ -58,7 +59,7 @@ def test_那几个曾经做不到的事现在做得到() -> None:
 
 
 def test_不认识的算子仍然报得明白() -> None:
-    with pytest.raises(ops.SequenceDomainError, match="不认识的时间线操作"):
+    with pytest.raises(errors.SequenceDomainError, match="不认识的时间线操作"):
         ops.apply_edit_operations(None, "seq", [{"kind": "fly_to_the_moon"}])
 
 

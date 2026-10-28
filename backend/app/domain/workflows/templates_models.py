@@ -3,7 +3,7 @@
 
 模板入口(templates.py)和整片生成那张大图都要用,所以单独一份,放在两者下面。
 
-由 templates.py 统一重新导出;调用方照旧从 templates 取。
+调用方直接从这个模块取(一个名字只有一个来源,见 tests/test_imports_come_from_where_names_live)。
 """
 
 from __future__ import annotations

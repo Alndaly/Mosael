@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.i18n import set_current_locale
-from app.domain.plugins.manifest import parse, tool_label
+from mosael_formats.plugin_manifest import parse, tool_label
 from app.domain.plugins.nodes import node_meta
 
 ROOT = Path(__file__).resolve().parents[2]

@@ -8,7 +8,7 @@
 引用到的素材并进「要模型看的图片」时,手动那一串和那份「不要自动带上」的排除清单都得按同一
 条规矩解析(见 binding.with_referenced_assets)。放在 executors 下面的话 binding 就得回头
 依赖执行器那一包,而执行器那一包要经引擎跑起来 —— 绑定是引擎的一部分,回头依赖执行器就绕成了环
-(tests/test_import_layering 一个环都不许有)。executors/common 把它转出去,执行器那边照旧从同一个地方拿(`id_list` 只有一个实现)。
+(tests/test_import_layering 一个环都不许有)。执行器和绑定都直接从这里取(`id_list` 只有一个实现)。
 """
 
 from __future__ import annotations

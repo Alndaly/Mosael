@@ -14,9 +14,10 @@
 
 from __future__ import annotations
 
-from app.domain.agent.confirmable import tool_spec
+from app.domain.agent.confirmable.registry import tool_spec
 from app.domain.agent.confirmations import effective_permission
-from app.domain.workflows import EXTERNAL_NODE_TYPES, INTERNAL_NODE_TYPES, NODE_TYPES, external_nodes_in_graph
+from app.domain.workflows.graph_rules import EXTERNAL_NODE_TYPES, INTERNAL_NODE_TYPES, external_nodes_in_graph
+from app.domain.workflows.node_types import NODE_TYPES
 from tests.util import fresh_client
 
 START = {"id": "start_1", "type": "start", "config": {}}

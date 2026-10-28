@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from app.core.i18n import set_current_locale
-from app.domain.plugins.manifest import parse
+from mosael_formats.plugin_manifest import parse
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "plugins" / "examples"
 BASE = {"id": "x.y", "manifest_version": 1, "name": "X", "version": "1"}

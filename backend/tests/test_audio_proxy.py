@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets import proxies as proxyjobs
+from app.core import config
 import app.domain.jobs as jobs_bus
 from app.media import proxy as proxymod
 from app.media.paths import resolve_key
@@ -221,7 +222,7 @@ def test_启动扫描给旧素材补音频代理_缺什么补什么_终态不再
     image = make("image", "image", {})
 
     queued: dict[str, tuple[bool, bool]] = {}
-    monkeypatch.setattr(proxyjobs.settings, "generate_proxies", True)
+    monkeypatch.setattr(config.settings, "generate_proxies", True)
     monkeypatch.setattr(
         proxyjobs, "queue_proxy_job",
         lambda db, asset, *, created_by, video, audio: (video or audio) and queued.setdefault(asset.id, (video, audio)),
@@ -247,7 +248,7 @@ def test_盘上已有音频代理而状态丢了_扫描把状态修回ready(monk
         directory.mkdir(parents=True, exist_ok=True)
         proxymod.audio_proxy_path(directory).write_bytes(b"x")
         asset_id = asset.id
-    monkeypatch.setattr(proxyjobs.settings, "generate_proxies", True)
+    monkeypatch.setattr(config.settings, "generate_proxies", True)
     with SessionLocal() as db:
         assert proxyjobs.reconcile_missing_proxies(db) == 0
         db.commit()

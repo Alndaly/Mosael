@@ -211,7 +211,7 @@ def test_调用方说停_不再起新的句子(monkeypatch) -> None:
 
 
 def test_逐句翻译节点_这一轮在停就停下_说的是在停(monkeypatch) -> None:
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors.ai import translate_lines
     from app.domain.workflows.run_scope import halt_scope
 

@@ -79,7 +79,7 @@ def test_可用节点类型只有一处组装() -> None:
     """接口层和 AI 编排此前各组一份,而 AI 编排那份**只有内置节点**。"""
     import inspect
 
-    from app.domain.workflows import available_node_types
+    from app.domain.workflows.node_types import available_node_types
 
     source = inspect.getsource(available_node_types)
     assert "plugin_node_types" in source

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, AssetExtraction, Job, now
 from app.domain import capabilities
-from app.domain.documents import CAPABILITY, LOCAL_PARSER, DocumentParserUnavailable
+from app.domain.documents import CAPABILITY, LOCAL_PARSER
 from app.domain.documents.local import DocumentParseError, Parsed, attach_page_images, parse_local
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say, was_cancelled
 from app.media.paths import asset_dir, resolve_key
@@ -32,8 +32,6 @@ from app.media.thumbnails import thumbnail_path, write_thumbnail
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "DocumentParseError",
-    "DocumentParserUnavailable",
     "extraction_dir",
     "finish_plugin_call",
     "latest_extraction",

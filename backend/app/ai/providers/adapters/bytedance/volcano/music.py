@@ -39,7 +39,8 @@ from app.ai.providers.contracts.generation import (
     GenerationResult,
     metering_from_request,
 )
-from app.ai.providers.adapters.shared.errors import http_error_detail, http_status_category, upstream_error
+from app.ai.providers.adapters.shared.errors import http_error_detail, upstream_error
+from app.ai.providers.contracts.failures import http_status_category
 from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.core.http_retry import RetryingClient
 

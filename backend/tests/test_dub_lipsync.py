@@ -21,8 +21,9 @@ from app.core.config import settings
 from app.db.models import Asset, Clip, Entity, EntityReference, Job, Project, Sequence, Track, Voice, Workspace
 from app.domain.assets.importer import register_file_asset
 from app.domain.render import ai_generated_assets, build_plan_for_sequence
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import dub_lipsync as module
+from app.domain.workflows.executors import talking
 from app.domain.workflows.executors.dub_lipsync import dub_lipsync, plan_chunks
 from tests.util import fresh_client, make_voice
 
@@ -84,7 +85,7 @@ def dubbed(monkeypatch):
         db.flush()
         return SimpleNamespace(id=job.id), job
 
-    monkeypatch.setattr("app.domain.generation.create_generation_job", generation)
+    monkeypatch.setattr("app.domain.generation.operations.create_generation_job", generation)
     monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda generation_id: None)
     return ids, calls
 
@@ -239,9 +240,10 @@ def test_原片是真人人物资产的参考图_没有声明就拒(dubbed) -> N
 def test_起点在原片之前的那句_剪掉露在外面的那截_不往后错(monkeypatch) -> None:
     """配音轨上一句从原片开始前 0.5 秒说起:混音时它应当从这句露在里面的那一截念起、落在 0 秒。此前起点夹到 0,
     截取却仍从这句的开头算 —— 整句往后错了 0.5 秒。"""
-    import app.domain.workflows.executors.subjobs as subjobs
+    from app.domain.workflows.executors import inputs
 
-    monkeypatch.setattr(subjobs, "_asset_in", lambda db, scope, asset_id: SimpleNamespace(id=asset_id, file_key="k", media_info={}))
+    #: dub_lipsync 在用到时才从 inputs 取 `_asset_in`:补丁打在那里。
+    monkeypatch.setattr(inputs, "_asset_in", lambda db, scope, asset_id: SimpleNamespace(id=asset_id, file_key="k", media_info={}))
     early = SimpleNamespace(muted=False, asset_id="a", timeline_start=9.5, src_in=0.0, src_out=2.0, speed=2.0, gain=1.0)
     [line] = module._lines_on(None, SimpleNamespace(workspace_id="w"), SimpleNamespace(clips=[early]),
                               clip_start=10.0, span=6.0)
@@ -295,7 +297,7 @@ def test_帧率不是整数的原片_切出来的每块都在模型收的长度�
         db.flush()
         return SimpleNamespace(id=job.id), job
 
-    monkeypatch.setattr("app.domain.generation.create_generation_job", generation)
+    monkeypatch.setattr("app.domain.generation.operations.create_generation_job", generation)
     monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda generation_id: None)
     out = _run(ids)
     assert out["chunk_count"] == out["generated_count"] == 3, "25 秒按 10 秒上限硬切成三块,每块都被收下"
@@ -307,7 +309,7 @@ def test_这一轮在停_不再提交下一块改口型(dubbed, monkeypatch) -> 
     from app.domain.workflows.run_scope import halt_scope
 
     ids, calls = dubbed
-    real = module._generate
+    real = talking._generate
 
     with halt_scope() as halt:
         def generate_then_stop(*args, **kwargs):

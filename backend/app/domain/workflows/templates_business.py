@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import ModelChoice, _capabilities, _image_plan, _video_plan
 from app.domain.workflows.template_requirements import (
@@ -1071,7 +1071,7 @@ def product_pitch_short_graph(
     `locale`:图里**给人看的**默认值(新项目的名字、完成通知、念不完的提醒)在建图这一刻定语言,和节点名同一条。
     此前写死中文,官网英文副本里也是中文。
     """
-    from app.core.i18n import pick_text
+    from mosael_formats.i18n import pick_text
 
     def text(zh: str, en: str) -> str:
         return pick_text({"zh": zh, "en": en}, locale)

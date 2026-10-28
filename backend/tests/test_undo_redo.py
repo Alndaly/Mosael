@@ -140,7 +140,7 @@ def test_两个写入方抢同一个版本号时后到的那个被挡下() -> No
     from app.core.db import SessionLocal
     from app.db.models import Sequence
     from app.domain.sequences.errors import SequenceDomainError
-    from app.domain.sequences.operations import _record_operation
+    from app.domain.sequences._timeline import _record_operation
 
     client = fresh_client()
     _, _, sequence = setup_sequence(client)

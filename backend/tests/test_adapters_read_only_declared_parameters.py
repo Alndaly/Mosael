@@ -33,7 +33,7 @@ from __future__ import annotations
 import pathlib
 import re
 
-from app.domain import generation_catalog as C
+from app.domain.generation_catalog.descriptors import builtin
 from app.domain.generation.operations import allowed_parameter_keys
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
@@ -60,7 +60,7 @@ def _allowed_by_vendor() -> dict[str, set[str]]:
     """每家**认哪些参数键** —— 口径来自校验器自己那一份(operations.allowed_parameter_keys),
     不在这里重算。重算就是又抄了一张表,而这条测试正是为抄表而设的。"""
     keys: dict[str, set[str]] = {}
-    for model in C.BUILTIN_MODELS:
+    for model in builtin.BUILTIN_MODELS:
         keys.setdefault(model["provider"], set()).update(allowed_parameter_keys(model["capabilities"]))
     return keys
 
@@ -74,7 +74,7 @@ def _vendor_by_module() -> dict[str, set[str]]:
     from app.ai.providers import get_generation_adapter
 
     out: dict[str, set[str]] = {}
-    for model in C.BUILTIN_MODELS:
+    for model in builtin.BUILTIN_MODELS:
         provider = get_generation_adapter(model["provider"], model["kind"])
         if provider is not None:
             out.setdefault(type(provider).__module__, set()).add(model["provider"])
@@ -84,7 +84,7 @@ def _vendor_by_module() -> dict[str, set[str]]:
 def _allowed_anywhere() -> set[str]:
     """任何一家认的键。只给认不出归属的共用件(base.py)兜底用。"""
     keys: set[str] = set()
-    for model in C.BUILTIN_MODELS:
+    for model in builtin.BUILTIN_MODELS:
         keys.update(allowed_parameter_keys(model["capabilities"]))
     return keys
 

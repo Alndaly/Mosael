@@ -87,7 +87,7 @@ def test_文档放不上时间线() -> None:
     assert refused.status_code in (400, 422), refused.text
     body = client.get(f"/api/sequences/{sequence}").json()
     track = next(one for one in body["tracks"] if one["kind"] == "video")
-    from app.domain.sequences.operations import InsertClip, insert_clip
+    from app.domain.sequences.placement import InsertClip, insert_clip
     from app.domain.sequences.errors import SequenceDomainError
 
     with SessionLocal() as db, pytest.raises(SequenceDomainError) as refused_insert:

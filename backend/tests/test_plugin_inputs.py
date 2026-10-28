@@ -119,7 +119,7 @@ def _install(tmp_path: Path) -> tuple[str, str, str]:
         instance = PluginInstance(package_id=package.id, name="上传器", enabled=True, owner_user_id="")
         db.add(instance)
         db.commit()
-        from app.domain.assets import register_file_asset
+        from app.domain.assets.importer import register_file_asset
 
         asset = register_file_asset(db, workspace_id=ws, project_id=None, source_path=media,
                                     name="成片.txt", source="imported")

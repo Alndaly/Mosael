@@ -24,7 +24,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import t
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import (
     AgentMessage,
     AgentSession,
@@ -42,7 +43,8 @@ from app.domain.agent.host import get_or_create_external_session, post_user_mess
 from app.domain.feishu import bindings
 from app.domain.jobs import register_settle_listener
 from app.domain.permissions import holds_workspace_perm
-from app.domain.triggers import IncomingMessage, Outcome
+from app.domain.triggers.matching import IncomingMessage
+from app.domain.triggers.dispatch import Outcome
 from app.domain.triggers import dispatch as trigger_dispatch
 from app.integrations.feishu import client
 

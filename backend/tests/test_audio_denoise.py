@@ -179,7 +179,7 @@ class Test引擎的挑法:
     def test_节点上的引擎是能力表里的提供方(self) -> None:
         """此前写死 `auto / ffmpeg / deepfilternet / rnnoise`,插件插不进来;现在从能力表现查(ADR 0032)。"""
         from app.ai.providers.contracts.denoise import STRENGTHS
-        from app.domain.workflows import NODE_TYPES
+        from app.domain.workflows.node_types import NODE_TYPES
 
         config = NODE_TYPES["denoise_audio"]["config"]
         assert config["engine"]["options_from"] == "providers.audio_denoise" and "options" not in config["engine"]
@@ -234,7 +234,7 @@ class Test排队和开卡之前就判:
             dm.deepfilter_ready.cache_clear()
 
     def test_确认卡上说得出会去掉音乐(self) -> None:
-        from app.domain.agent.confirmable import tool_spec
+        from app.domain.agent.confirmable.registry import tool_spec
 
         def _summarize(tool: str, payload: dict, locale: str = "zh") -> str:
             # 渲染之后再断言:卡上那句话现在存的是 (key, 参数),出口才翻(见 confirmable/registry)。
@@ -357,7 +357,7 @@ class Test工作流节点和确认卡:
         from app.db.models import Asset, Workflow
         from app.domain.assets import denoise
         from app.domain.workflows.executors.subjobs import denoise_audio_node
-        from app.domain.workflows import WorkflowDomainError
+        from app.domain.workflows.errors import WorkflowDomainError
         from tests.util import fresh_client
 
         client = fresh_client()
@@ -385,8 +385,8 @@ class Test工作流节点和确认卡:
     def test_确认卡开卡前就判档位和素材类型(self) -> None:
         from app.core.db import SessionLocal
         from app.db.models import Asset
-        from app.domain.agent.confirmable import tool_spec
-        from app.domain.agent.confirmations import ConfirmationError
+        from app.domain.agent.confirmable.registry import tool_spec
+        from app.domain.agent.errors import ConfirmationError
 
         def _validate_payload(db, tool, workspace_id, payload):
             tool_spec(tool).validate(db, workspace_id, payload, None)

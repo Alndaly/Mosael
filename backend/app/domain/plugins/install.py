@@ -15,7 +15,8 @@ from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins import instances as inst
 from app.domain.plugins import packages as pkg
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import Manifest, manifest_of
+from app.domain.plugins.manifest import manifest_of
+from mosael_formats.plugin_manifest import Manifest
 
 
 def sync(db: Session, plugins_dir: Path, *, owner_user_id: str = "") -> pkg.ScanResult:

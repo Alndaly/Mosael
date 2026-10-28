@@ -135,7 +135,7 @@ def _invoke_plugin_tool(
     from app.domain.agent.proposals import propose
     from app.domain.agent.confirmable.plugin_tools import exposed_tool
     from app.domain.effects import needs_card
-    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.use_cases import invoke_tool
 
     match = exposed_tool(db, name, user.id)

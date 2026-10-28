@@ -151,7 +151,7 @@ def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentV
 
     远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。"""
     from app.domain.voices import use_cases as voice_uc
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     try:
         row = voice_uc.choose_agent_voice(

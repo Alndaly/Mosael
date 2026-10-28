@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 from app.ai.runtime import tts_models
+from app.ai.runtime import download_state
 
 
 def test_the_fish_estimate_matches_the_real_repo() -> None:
@@ -47,7 +48,7 @@ def test_a_disproven_estimate_stops_being_a_denominator(monkeypatch) -> None:
     monkeypatch.setattr(tts_models, "_measure", lambda item: engine.expected_bytes + 1_000_000_000)
     tts_models._store.set(
         "fish-speech",
-        tts_models.DownloadProgress(status="downloading", downloaded=engine.expected_bytes + 1_000_000_000,
+        download_state.DownloadProgress(status="downloading", downloaded=engine.expected_bytes + 1_000_000_000,
                          total=engine.expected_bytes, message="下载中"),
     )
     try:
@@ -63,7 +64,7 @@ def test_a_sane_estimate_still_draws_the_bar() -> None:
     engine = tts_models._BY_ID["fish-speech"]
     tts_models._store.set(
         "fish-speech",
-        tts_models.DownloadProgress(status="downloading", downloaded=engine.expected_bytes // 3,
+        download_state.DownloadProgress(status="downloading", downloaded=engine.expected_bytes // 3,
                          total=engine.expected_bytes, message="下载中"),
     )
     try:

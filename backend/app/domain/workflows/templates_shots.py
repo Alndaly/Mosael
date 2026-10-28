@@ -4,15 +4,15 @@
 已有的视频**(ADR 0061 §4)。镜头表、联系表、逐镜判断全走 domain/shots 的三个新节点 —— 刀口 / 时长 / 动静是
 代码量出来的,只有「看画面」和「写总结」花钱。
 
-由 templates.py 统一重新导出;调用方照旧从 templates 取。
+调用方直接从这个模块取(一个名字只有一个来源,见 tests/test_imports_come_from_where_names_live)。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from app.core.i18n import pick_text
-from app.domain.workflows import NODE_TYPES
+from mosael_formats.i18n import pick_text
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.template_requirements import CHAT_MODEL, TRANSCRIPTION_ENGINE, requirement
 from app.domain.workflows.templates_models import ModelChoice

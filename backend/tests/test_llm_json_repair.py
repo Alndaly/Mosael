@@ -176,7 +176,7 @@ def test_响应格式里的_Schema_三种不对分开说() -> None:
     """
     import pytest
 
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors.ai import _response_format
 
     with pytest.raises(WorkflowDomainError) as missing:

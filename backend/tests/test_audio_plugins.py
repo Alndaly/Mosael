@@ -99,11 +99,11 @@ def test_接了分离插件没定成默认_本机引擎又没装_说去设置里
     """没定默认时按本机引擎挑(声音交给插件必须是他自己定过的)。本机引擎没装时,此前一律说「请管理员装引擎」——
     他明明接了一家现成能用的。"""
     from app.core.i18n import t
-    from app.domain import audio_capabilities
+    from app.ai.providers import registry
     from app.domain.voices.original_audio import OriginalAudioError, ensure_original_audio_mode
 
     _client, _ws, me, _plugin, _asset_id = _setup(tmp_path)
-    for adapter in audio_capabilities.SEPARATION_ADAPTERS.values():
+    for adapter in registry.SEPARATION_ADAPTERS.values():
         monkeypatch.setattr(adapter, "runtime_ready", lambda: False)
     with pytest.raises(OriginalAudioError) as refused:
         ensure_original_audio_mode("separate", owner_user_id=me)

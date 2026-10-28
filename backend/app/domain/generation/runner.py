@@ -44,7 +44,8 @@ from sqlalchemy import func, or_, select
 from app.core.db import SessionLocal
 from app.core.http_retry import sent_but_unanswered
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t, tr
+from app.core.i18n import LocalizedError, t, tr
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now
 from app.domain.providers import models as provider_models
 from app.domain.generation.operations import prompt_for_provider

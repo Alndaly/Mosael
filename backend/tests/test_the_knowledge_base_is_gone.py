@@ -54,7 +54,7 @@ def test_the_agent_tools_are_gone() -> None:
 
 
 def test_the_workflow_node_is_gone() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     assert "kb_search" not in NODE_TYPES
 

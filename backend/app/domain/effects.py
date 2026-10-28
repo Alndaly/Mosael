@@ -24,13 +24,10 @@
 from __future__ import annotations
 
 from mosael_formats.effects import (
-    EFFECTS,
     EXTERNAL,
     LOCAL_CODE,
     NONE,
     PAID,
-    PLUGIN_DEFAULT,
-    plugin_tool_effects,
 )
 
 #: 每种后果开卡时归哪一档权限(confirmable/registry.PERMISSIONS 里的名字)。
@@ -61,14 +58,7 @@ def warning_key(effects: object) -> str:
 
 
 __all__ = [
-    "EFFECTS",
-    "EXTERNAL",
-    "LOCAL_CODE",
-    "NONE",
-    "PAID",
-    "PLUGIN_DEFAULT",
     "needs_card",
     "permission_for",
-    "plugin_tool_effects",
     "warning_key",
 ]

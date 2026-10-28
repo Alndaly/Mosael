@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from app.core import abort
 from app.core.db import SessionLocal
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.core.i18n import DEFAULT_LOCALE, LocalizedError, fragment, t
+from app.core.i18n import LocalizedError, fragment, t
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Job, TaskEvent
 from app.db.models import now as models_now
 from app.domain.jobs import catalog as job_catalog
@@ -368,7 +369,8 @@ def say(job: Job, key: str, **params: object) -> None:
     为什么不只存 key:这一列**落库**,任务记录活得比一次请求久,写入时就翻会把语言冻死在那一刻 ——
     用户切成英文后历史任务仍是中文,而那正是这次要修的毛病。
     """
-    from app.core.i18n import DEFAULT_LOCALE, is_message_key, render_message, stored_param
+    from app.core.i18n import is_message_key, render_message, stored_param
+    from mosael_formats.i18n import DEFAULT_LOCALE
 
     #: 有几处传进来的是一句现成的话(子任务转述的消息、第三方的原话)。它不是 key,不该当 key
     #: 落库 —— 否则读的时候会被当模板再填一遍(见 core/i18n.is_message_key)。
@@ -1097,7 +1099,8 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
         if job is None:
             return None
         # 这里走的是 UPDATE 语句(不是 ORM 对象),所以不能用 say();两栏一起写,含义与它一致。
-        from app.core.i18n import DEFAULT_LOCALE, t
+        from app.core.i18n import t
+        from mosael_formats.i18n import DEFAULT_LOCALE
 
         claimed = db.execute(
             Job.__table__.update()

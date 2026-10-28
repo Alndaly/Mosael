@@ -45,23 +45,26 @@ def timeline():
 
 
 def _cases(clip: str, subtitle: str) -> list[tuple[object, object]]:
-    from app.domain.sequences import operations as ops
+    from app.domain.sequences import placement
+    from app.domain.sequences import clip_properties
+    from app.domain.sequences import cutting
+    from app.domain.sequences import text
 
     return [
-        (ops.move_clip, ops.MoveClip(clip_id=clip, timeline_start=NAN)),
-        (ops.move_clip, ops.MoveClip(clip_id=clip, timeline_start=INF)),
-        (ops.move_clip, ops.MoveClip(clip_id=clip, timeline_start="3")),  # type: ignore[arg-type]
-        (ops.set_clip_gain, ops.SetClipGain(clip_id=clip, gain=NAN)),
-        (ops.set_clip_speed, ops.SetClipSpeed(clip_id=clip, speed=NAN)),
-        (ops.cut_clip_range, ops.CutClipRange(clip_id=clip, src_start=NAN, src_end=4)),
-        (ops.split_clip, ops.SplitClip(clip_id=clip, src_time=INF)),
-        (ops.trim_clip, ops.TrimClip(clip_id=clip, timeline_start=0, src_in=0, src_out=INF)),
-        (ops.set_clip_transform, ops.SetClipTransform(clip_id=clip, transform={"scale": NAN})),
-        (ops.set_clip_transform, ops.SetClipTransform(clip_id=clip, transform={"keyframes": [{"t": NAN, "scale": 1}]})),
-        (ops.set_clip_transform, ops.SetClipTransform(clip_id=clip, transform={"scale": "big"})),
-        (ops.set_clip_effects, ops.SetClipEffects(clip_id=clip, effects={"fade_in": NAN})),
-        (ops.set_clip_effects, ops.SetClipEffects(clip_id=clip, effects={"text_style": {"font_size": INF}})),
-        (ops.insert_text_clip, ops.InsertTextClip(track_id=subtitle, text="hi", timeline_start=0, duration=INF)),
+        (placement.move_clip, placement.MoveClip(clip_id=clip, timeline_start=NAN)),
+        (placement.move_clip, placement.MoveClip(clip_id=clip, timeline_start=INF)),
+        (placement.move_clip, placement.MoveClip(clip_id=clip, timeline_start="3")),  # type: ignore[arg-type]
+        (clip_properties.set_clip_gain, clip_properties.SetClipGain(clip_id=clip, gain=NAN)),
+        (clip_properties.set_clip_speed, clip_properties.SetClipSpeed(clip_id=clip, speed=NAN)),
+        (cutting.cut_clip_range, cutting.CutClipRange(clip_id=clip, src_start=NAN, src_end=4)),
+        (cutting.split_clip, cutting.SplitClip(clip_id=clip, src_time=INF)),
+        (placement.trim_clip, placement.TrimClip(clip_id=clip, timeline_start=0, src_in=0, src_out=INF)),
+        (clip_properties.set_clip_transform, clip_properties.SetClipTransform(clip_id=clip, transform={"scale": NAN})),
+        (clip_properties.set_clip_transform, clip_properties.SetClipTransform(clip_id=clip, transform={"keyframes": [{"t": NAN, "scale": 1}]})),
+        (clip_properties.set_clip_transform, clip_properties.SetClipTransform(clip_id=clip, transform={"scale": "big"})),
+        (clip_properties.set_clip_effects, clip_properties.SetClipEffects(clip_id=clip, effects={"fade_in": NAN})),
+        (clip_properties.set_clip_effects, clip_properties.SetClipEffects(clip_id=clip, effects={"text_style": {"font_size": INF}})),
+        (text.insert_text_clip, text.InsertTextClip(track_id=subtitle, text="hi", timeline_start=0, duration=INF)),
     ]
 
 
@@ -79,7 +82,7 @@ def test_领域算子拒收非有限数_时间线不动(timeline, case) -> None:
 
 
 def test_整组移动里有一个非有限的起点_整组不动(timeline) -> None:
-    from app.domain.sequences.operations import ClipMove, MoveClipsBatch, move_clips_batch
+    from app.domain.sequences.placement import ClipMove, MoveClipsBatch, move_clips_batch
 
     with SessionLocal() as db:
         with pytest.raises(SequenceDomainError):
@@ -89,7 +92,7 @@ def test_整组移动里有一个非有限的起点_整组不动(timeline) -> No
 
 def test_一键生成字幕_非有限的起点或时长被拒(timeline) -> None:
     client, seq = timeline["client"], timeline["seq"]
-    from app.domain.sequences.operations import GenerateSubtitles, generate_subtitles
+    from app.domain.sequences.text import GenerateSubtitles, generate_subtitles
 
     with SessionLocal() as db:
         with pytest.raises(SequenceDomainError):
@@ -100,7 +103,7 @@ def test_一键生成字幕_非有限的起点或时长被拒(timeline) -> None:
 
 
 def test_字幕样式里的非有限数回落默认_而不是钳到上限(timeline) -> None:
-    from app.domain.sequences.operations import clean_subtitle_style
+    from app.domain.sequences.text import clean_subtitle_style
 
     style = clean_subtitle_style({"font_size": NAN, "offset": INF})
     assert style["font_size"] == 32.0 and style["offset"] == 8.0

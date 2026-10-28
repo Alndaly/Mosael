@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.i18n import pick_text
+from mosael_formats.i18n import pick_text
 
 #: 认的入口种类。
 ENTRIES = ("full", "form")

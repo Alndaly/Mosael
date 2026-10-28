@@ -14,7 +14,7 @@ from app.domain.effects import needs_card, permission_for, warning_key
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.confirmable.graphs import external_warning, graph_under_review
-from app.domain.workflows import external_nodes_in_graph
+from app.domain.workflows.graph_rules import external_nodes_in_graph
 
 
 
@@ -46,7 +46,7 @@ def _check_graph(db: Session, graph: object, before: object = None) -> None:
     (`before` 是改之前的图):人手写在代码里的 `{{…}}` 可以是字面量,不该让智能体之后的每一次改动都过不去。
     """
     from app.domain.plugins.nodes import plugin_node_types, why_unusable
-    from app.domain.workflows import validate_graph
+    from app.domain.workflows.graph_rules import validate_graph
 
     def explain(node_type: str) -> str | None:
         reason = why_unusable(db, node_type, None)
@@ -149,7 +149,7 @@ def _execute_update_workflow(db: Session, confirmation: Any, actor: str | None) 
 
 
 def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.graph_ops import GRAPH_OP_KINDS, apply_graph_ops
 
     workflow = _workflow_in(db, workspace_id, payload)
@@ -219,7 +219,7 @@ def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, An
     此前只看工作流在不在:缺一个必填的开始参数、插件节点这个人用不了,都要等用户批准之后、建任务时才报 ——
     用户点了同意,看到的是一句失败。跑不起来就不开卡,原因原样交给智能体,它能照着补参数或换做法。
     """
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.engine import check_runnable
 
     workflow = _workflow_in(db, workspace_id, payload)
@@ -285,7 +285,9 @@ def _board_in(db: Session, workspace_id: str, payload: dict[str, Any]):
 
 def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.domain.boards.ops import BOARD_OP_KINDS, apply_board_ops
-    from app.domain.boards import BoardDomainError, check_canvas, producers
+    from app.domain.boards import producers
+    from app.domain.boards.errors import BoardDomainError
+    from app.domain.boards.validation import check_canvas
 
     board = _board_in(db, workspace_id, payload)
     operations = payload.get("operations")
@@ -337,7 +339,7 @@ def _execute_edit_board(db: Session, confirmation: Any, actor: str | None) -> di
     payload = confirmation.payload
     from app.db.models import Board
     from app.domain.boards.ops import apply_board_ops
-    from app.domain.boards import update_board
+    from app.domain.boards.persistence import update_board
 
     from app.domain.boards.timelines import append_connected_media, create_pending_sequences
 
@@ -366,7 +368,7 @@ def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor:
     「这一格正在跑」照样由 run 那一侧挡(见 actions._ensure_slot_ready)。
     """
     from app.domain.boards import producers
-    from app.domain.boards.canvas import item_not_found
+    from app.domain.boards.errors import item_not_found
     from app.domain.boards.producer_ids import runs_from_draft
 
     board = _board_in(db, workspace_id, payload)
@@ -414,7 +416,8 @@ def _validate_run_board_item(db: Session, workspace_id: str, payload: dict[str, 
     escalate),它不能由调用方在 payload 里自己带。
     """
     from app.core.i18n import is_message_key
-    from app.domain.boards import BoardDomainError, producers
+    from app.domain.boards import producers
+    from app.domain.boards.errors import BoardDomainError
 
     payload.pop("ability", None)
     board, item, request = _run_request(db, workspace_id, payload, actor)

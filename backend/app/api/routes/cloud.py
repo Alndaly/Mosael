@@ -21,7 +21,8 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import CloudCodeIn, CloudEmailIn, CloudLoginIn, CloudSessionOut
-from app.core.i18n import get_current_locale, pick_text, tr
+from app.core.i18n import get_current_locale, tr
+from mosael_formats.i18n import pick_text
 from app.db.models import CloudLogin, User
 from app.domain import cloud_binding
 

@@ -184,10 +184,11 @@ class Test配音流程忠实执行用户选择:
         fresh_client()
         monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
         seen: list[str] = []
-        import app.domain.sequences.operations as ops
+        from app.domain.sequences import clip_properties, tracks
 
-        monkeypatch.setattr(ops, "set_track_state", lambda *a, **k: seen.append("state"))
-        monkeypatch.setattr(ops, "set_clip_effects", lambda *a, **k: seen.append("effects"))
+        #: 原声处理在用到时才从 tracks / clip_properties 取这两个算子:哨兵打在那里。
+        monkeypatch.setattr(tracks, "set_track_state", lambda *a, **k: seen.append("state"))
+        monkeypatch.setattr(clip_properties, "set_clip_effects", lambda *a, **k: seen.append("effects"))
         with pytest.raises(original_audio.OriginalAudioError, match="分离引擎"):
             original_audio.apply_original_audio("s1", "dub", "separate", actor_id=None)
         assert seen == [], "用户选的是分离，不得偷偷改成静音"
@@ -269,7 +270,7 @@ class Test配音流程忠实执行用户选择:
         from app.core.db import SessionLocal
         from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace
         from app.domain.assets import separation as sep
-        from app.domain.sequences import operations as ops
+        from app.domain.sequences import clip_properties
         from app.domain.voices import original_audio
         from tests.util import fresh_client
 
@@ -309,7 +310,7 @@ class Test配音流程忠实执行用户选择:
 
         monkeypatch.setattr(sep, "available", lambda *_a, **_k: True)
         monkeypatch.setattr(sep, "separate_asset", separate)
-        monkeypatch.setattr(ops, "detach_clip_audio", lambda *a, **k: pytest.fail("不该动时间线"))
+        monkeypatch.setattr(clip_properties, "detach_clip_audio", lambda *a, **k: pytest.fail("不该动时间线"))
         with pytest.raises(original_audio.OriginalAudioError, match="第二段炸了"):
             original_audio.apply_original_audio(seq_id, dub_id, "separate", actor_id=None)
         with SessionLocal() as db:
@@ -379,7 +380,7 @@ class Test节点上的引擎是选出来的:
     def test_选项是能力表里的提供方(self) -> None:
         """节点上的引擎曾经是一格自由文本,后来是写死的 `auto / demucs`;现在从能力表现查(ADR 0032):
         本机引擎、配好的分离插件都在下拉里,留空 = 按运行者的默认。"""
-        from app.domain.workflows import NODE_TYPES
+        from app.domain.workflows.node_types import NODE_TYPES
 
         spec = NODE_TYPES["separate_audio"]["config"]["engine"]
         assert spec["options_from"] == "providers.audio_separation" and "options" not in spec and "default" not in spec

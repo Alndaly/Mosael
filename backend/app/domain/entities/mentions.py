@@ -228,5 +228,10 @@ def attach_entities(
     return Expansion(note="\n".join(lines), source_assets=[*source_assets, *added], receipt=receipt)
 
 
-__all__ = ["Expansion", "MAX_MENTIONS", "attach_entities", "parse_entity_ids", "resolve_mentions"]
+__all__ = [
+    "Expansion",
+    "MAX_MENTIONS",
+    "attach_entities",
+    "resolve_mentions",
+]
 

@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-from app.domain.workflows import NODE_TYPES, validate_graph
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.graph_rules import validate_graph
 
 
 def _graph(upload_config: dict, *, bound: str = "") -> dict:

@@ -16,8 +16,10 @@ from sqlalchemy import text
 from app.core.db import SessionLocal, engine
 from app.db.migrations import _upgrade_stored_plugin_manifests as reconcile
 from app.db.models import PluginPackage
-from app.domain.plugins.manifest import PATH_KEY, ManifestError, manifest_of
-from app.domain.plugins.migrations import MANIFEST_VERSION, migrate_directory
+from app.domain.plugins.manifest import PATH_KEY, manifest_of
+from mosael_formats.plugin_manifest import ManifestError
+from app.domain.plugins.migrations import migrate_directory
+from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION
 from tests.util import fresh_client
 
 #: Manim 0.2.0 装进插件目录后的清单(节选到出事的那部分)。

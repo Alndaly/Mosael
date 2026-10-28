@@ -49,7 +49,6 @@ decode_event_line = _PROTOCOL.decode
 __all__ = [
     "EVENT_KINDS",
     "EVENT_PREFIX",
-    "WorkerProtocolError",
     "decode_event_line",
     "encode_event_line",
     "validate_event",

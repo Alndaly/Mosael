@@ -225,7 +225,7 @@ def test_没有默认时点名的入口照旧要求点名() -> None:
     """`pick_speech`(智能体开卡)和 `synthesis_params`(念字的执行入口)在没有默认时给的是同一句话。"""
     from app.domain.voices.engine_catalog import pick_speech, synthesis_params
     from app.domain.voices.speech import SpeechProviderUnavailable
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     _client()
     with SessionLocal() as db, pytest.raises(SpeechProviderUnavailable):

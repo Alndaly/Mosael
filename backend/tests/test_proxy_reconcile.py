@@ -8,6 +8,7 @@ pending 孤儿(重启害死守护线程留下的)和从没跑过的照旧要救�
 from __future__ import annotations
 
 from app.domain.assets import proxies
+from app.core import config
 from app.media.paths import resolve_key
 from app.media.proxy import PROXY_SPEC_VERSION, proxy_path
 from tests.util import fresh_client
@@ -52,7 +53,7 @@ def test_启动补齐扫描跳过failed_只救孤儿(monkeypatch) -> None:
     fresh_id = _make_asset(client, "没跑过", None)
 
     queued: list[str] = []
-    monkeypatch.setattr(proxies.settings, "generate_proxies", True)
+    monkeypatch.setattr(config.settings, "generate_proxies", True)
     # 只看**画面**代理排没排:音频代理是另一样(见 test_audio_proxy),坏视频的声音照样该补。
     monkeypatch.setattr(
         proxies, "queue_proxy_job",
@@ -79,7 +80,7 @@ def test_规格过期的ready代理会被重建_当前规格不重转(monkeypatc
     )
 
     queued: list[str] = []
-    monkeypatch.setattr(proxies.settings, "generate_proxies", True)
+    monkeypatch.setattr(config.settings, "generate_proxies", True)
     monkeypatch.setattr(
         proxies, "queue_proxy_job",
         lambda db, asset, **kw: kw["video"] and (queued.append(asset.id) or object()),

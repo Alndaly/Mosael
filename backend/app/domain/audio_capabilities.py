@@ -30,7 +30,7 @@ from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
 from app.core.i18n import tr
 from app.domain import capabilities
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
-from app.domain.plugins.manifest import AUDIO_DENOISE, AUDIO_SEPARATION
+from mosael_formats.plugin_manifest import AUDIO_DENOISE, AUDIO_SEPARATION
 
 BUILTIN_PREFIX = "builtin:"
 

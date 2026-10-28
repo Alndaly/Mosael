@@ -13,7 +13,8 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import ToolConfirmation
-from app.domain.agent.confirmations import ConfirmationError, _claim
+from app.domain.agent.confirmations import _claim
+from app.domain.agent.errors import ConfirmationError
 from tests.util import fresh_client
 
 

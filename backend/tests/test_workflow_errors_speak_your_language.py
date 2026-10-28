@@ -41,7 +41,8 @@ def test_报错不写死句子() -> None:
 
 
 def test_用到的每个_key_都有中英两份() -> None:
-    from app.core.i18n import LOCALES, MESSAGES
+    from app.core.i18n import MESSAGES
+    from mosael_formats.i18n import LOCALES
 
     used = {
         first.value
@@ -77,7 +78,7 @@ def test_失败原因按读的人的语言翻() -> None:
 def test_领域异常自己就说得出缺省语言那一句() -> None:
     """`str(exc)` 给的是缺省语言那句话 —— 日志、拼进别的错误里、直接读库的脚本都读它。"""
     from app.domain.jobs import blame
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     exc = WorkflowDomainError("wfErr_noExecutor", params={"type": "demo"})
     assert str(exc) == "节点类型 demo 没有执行器"
@@ -115,7 +116,7 @@ def test_报错里提到的字段名也跟着读的人的语言走() -> None:
     from app.core.i18n import set_current_locale
     from app.db.models import Job, Workflow, now
     from app.domain.jobs import blame
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors.knowledge import note_search
 
     with pytest.raises(WorkflowDomainError) as caught:
@@ -143,7 +144,7 @@ def test_数字字段填了不是数字_说是哪一格而不是一句_python_�
     插值之后就按声明查一遍,所有节点一条规矩。"""
     from app.core.db import SessionLocal
     from app.db.models import Workflow
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.engine import execute_graph
     from tests.util import fresh_client
 
@@ -174,13 +175,14 @@ def test_翻译转述上游的失败_带着上游的_key() -> None:
 
     from app.core.i18n import set_current_locale
     from app.domain import translate as tr
+    from app.domain import ai_chat
     from app.domain.ai_chat import AiChatError, ChatTarget
 
     def broken(*_args, **_kwargs):
         raise AiChatError("aiChatErr_network", label="aiChat_labelDefault", detail="timed out")
 
     target = ChatTarget(base_url="https://x", api_key="k", model="m")
-    original = tr.chat
+    original = ai_chat.chat
     tr.chat = broken
     try:
         with pytest.raises(tr.TranslateError) as caught:
@@ -199,7 +201,7 @@ def test_报错里的一串名字按读的人的习惯连起来() -> None:
     """顿号是中文的连接号。此前列表在抛错的地方就用「、」连成了一个字符串,英文句子里夹着顿号。"""
     from app.core.i18n import set_current_locale
     from app.domain.jobs import blame
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     exc = WorkflowDomainError("pluginErr_manyInstances", params={"package": "p", "names": ["A 号", "B 号"]})
     assert blame(exc)["error_params"]["names"] == ["A 号", "B 号"], "列表该原样落库,读的时候再连"

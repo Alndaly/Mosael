@@ -27,7 +27,7 @@ from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, SOURCE_VIDEO
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import current_actor
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.domain.workflows.executors.common import stop_if_stopping, wait_for_job
 
@@ -116,7 +116,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
 
     **等生成的时候 `db` 会被交还**(wait_for_job 的 release:commit + close):调用方在这之前取到的 ORM 对象,
     之后都是脱离会话的,要用就按 id 重新取。`project_id`:产出挂在哪个项目下(译配对口型挂在译配项目里)。"""
-    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import create_generation_job
     from app.domain.generation.operations import GenerationDomainError
     from app.domain.generation.origins import of_run_scope
     from app.domain.generation.runner import start_generation_thread
@@ -156,7 +156,8 @@ def _require_consent(config: dict[str, Any]) -> None:
 
 def _portrait(db: Session, entity: Any) -> str:
     """人物说话用哪张脸:正面 > 全身 > 挑图先后的第一张(变体没有自己的图时用母体的)。"""
-    from app.domain.entities import generation_profile, references_of
+    from app.domain.entities.mentions import generation_profile
+    from app.domain.entities.library import references_of
 
     _name, _descriptor, images = generation_profile(db, entity)
     if not images:
@@ -171,7 +172,7 @@ def _portrait(db: Session, entity: Any) -> str:
 
 def _speaking_entity(db: Session, workspace_id: str, entity_id: str) -> tuple[Any, str, str]:
     """要说话的人物资产,和它的(引擎, 音色):是人物、真人有授权声明、有音色、克隆音色有授权声明。不花钱、不写东西。"""
-    from app.domain.entities import EntityDomainError, get_entity
+    from app.domain.entities.library import EntityDomainError, get_entity
     from app.domain.entities.catalog import usable_for_digital_human
 
     if not entity_id:
@@ -311,7 +312,7 @@ def entity_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 @register("image_speak")
 def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """一张人像说一段话:音频接上游的(比如长稿分段配好的一段),没接就用稿子和挑的嗓子当场配 → 这张图 + 这段音频做说话照片。"""
-    from app.domain.workflows.executors.subjobs import _asset_in
+    from app.domain.workflows.executors.inputs import _asset_in
 
     _require_consent(config)
     face = _text(config.get("asset_id"))
@@ -336,7 +337,7 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
 @register("video_lipsync")
 def video_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """一段片子对上新的话:音频接上游的,没接就用稿子当场配 → 改口型。"""
-    from app.domain.workflows.executors.subjobs import _asset_in
+    from app.domain.workflows.executors.inputs import _asset_in
 
     _require_consent(config)
     video = _text(config.get("asset_id"))
@@ -470,7 +471,8 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     一组的几句拼成一段音频交给一次说话照片。句子不从中间断开,接缝落在句子之间。字幕直接用稿子加这些实测时长,
     不再转写一遍。上限来自所选模型的描述符,不写死;`max_seconds` 只能往小里调。
     """
-    from app.domain.workflows.executors.subjobs import _asset_in, synthesize_speech
+    from app.domain.workflows.executors.subjobs import synthesize_speech
+    from app.domain.workflows.executors.inputs import _asset_in
 
     text = _text(config.get("text"))
     if not text:

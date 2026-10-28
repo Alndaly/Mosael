@@ -21,21 +21,21 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.authority import ensure_vouched_to_spend
-from app.domain.effects import plugin_tool_effects
+from mosael_formats.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, egress as plugin_egress, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins import service_gate
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import readable_group
-from app.domain.plugins.manifest import (
+from app.domain.plugins.manifest import manifest_of
+from mosael_formats.plugin_manifest import (
     CALL_CAPABILITIES,
     CATALOG_CAPABILITIES,
     GENERATION,
     Manifest,
     localized_tool,
     TOOL_NAME_RE,
-    manifest_of,
     text_of,
     tool_label,
 )

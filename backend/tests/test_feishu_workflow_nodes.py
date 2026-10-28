@@ -28,7 +28,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, FeishuBinding, FeishuBot, Workspace
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.integrations.feishu import client
 from tests.util import fresh_client, user_id
 
@@ -80,7 +80,7 @@ def _bind(ws: str, open_id: str = OPEN_ID, bot_id: str = "") -> str:
 
 def _run(node_type: str, config: dict[str, Any], ws: str) -> dict[str, Any]:
     """**直接调执行器**(不走引擎):这几个节点都是"做一件事、交几格产物",不需要真线程。"""
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     handler = get_executor(node_type)
     assert handler is not None, f"{node_type} 没有登记执行器"

@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from app.core.i18n import tr
 from app.domain.agent import autopilot, host
+from app.ai.sidecar import pi_client
 from app.domain.agent import replay as agent_replay
 from app.domain.agent import stream as agent_stream
 from app.domain import sharing
@@ -46,7 +47,7 @@ from app.api.schemas import (
 )
 from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
-from app.domain.agent import list_agent_toolsets
+from app.domain.agent.toolsets import list_agent_toolsets
 from app.domain import session_groups
 from app.domain.agent import places, titles
 from app.domain.agent import questions as agent_questions
@@ -197,7 +198,7 @@ def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> 
         result = host.compact_session_context(db, session, user)
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except host.SidecarError as exc:
+    except pi_client.SidecarError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return AgentCompactOut(**result)
 

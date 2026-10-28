@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy import select
 
 from app.domain.agent import host
+from app.domain.agent import stream
 from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
@@ -382,7 +383,7 @@ def test_steer_boundary_freezes_one_assistant_segment_and_orders_user_between_se
         db.commit()
         user_id = user.id
     _stream_append(sid, "先做这一段")
-    snapshot = host._stream_segment_snapshot(sid)
+    snapshot = stream._stream_segment_snapshot(sid)
     first_segment = host._finish_streaming_segment(sid, draft, text="先做这一段", snapshot=snapshot)
     assert first_segment
     assert host._mark_steer_applied(sid, user_id) is True

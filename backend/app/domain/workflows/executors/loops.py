@@ -16,9 +16,11 @@ from typing import Any, Iterator
 
 from sqlalchemy.orm import Session
 
-from app.domain.workflows import VARIABLE_RE, WorkflowDomainError, interpolate
+from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.executors.common import at_least, run_body, run_body_to_the_end, truthy, whole_number
+from app.domain.workflows.executors.common import run_body, run_body_to_the_end, truthy
+from app.domain.workflows.executors.numbers import at_least, whole_number
 from app.domain.workflows.run_scope import halted, shared_halt
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。

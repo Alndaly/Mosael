@@ -15,8 +15,9 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Project, Workflow, Workspace
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError
-from app.domain.workflows.executors.common import id_list
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.id_values import id_list
 from app.domain.workflows.executors.content import (
     asset_tag,
     asset_update,
@@ -200,7 +201,7 @@ def test_asset_query_name_filter_is_literal() -> None:
 
 def test_every_new_node_type_is_registered_and_executable() -> None:
     """A type in the registry with no handler is offered in the palette and fails at run time."""
-    from app.domain.workflows.executors import registered_types
+    from app.domain.workflows.executors.registry import registered_types
 
     for node_type in ("asset_tag", "asset_update", "project_create"):
         assert node_type in NODE_TYPES, f"{node_type} missing from the palette"

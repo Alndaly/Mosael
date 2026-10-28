@@ -28,6 +28,8 @@ from app.db.models import Asset, GeneratedAsset, Job, ProviderUsageEvent
 from app.domain.providers import models as provider_models
 from app.domain.billing import price_reference
 from app.domain import generation_catalog as C
+from app.domain.generation_catalog.descriptors import audio as descriptors_audio
+from app.domain.generation_catalog.descriptors import builtin
 from app.domain.generation.operations import (
     GenerationDomainError,
     validate_against_capabilities,
@@ -52,7 +54,7 @@ def test_音频是生成的一种_各处读的是同一份() -> None:
 
 
 def test_每个内置音频模型都有能跑的Adapter_且描述符是自洽的() -> None:
-    audio = [one for one in C.BUILTIN_MODELS if one["kind"] == "audio"]
+    audio = [one for one in builtin.BUILTIN_MODELS if one["kind"] == "audio"]
     assert audio, "目录里一个音频模型都没有"
     for item in audio:
         caps = item["capabilities"]
@@ -100,7 +102,7 @@ def _text(kind: str, prompt: str, parameters: dict, capabilities: dict | None = 
 
 
 def test_会唱歌词的模型可以只给歌词_什么都不给不行() -> None:
-    caps = C.EVOLINK_SUNO_CAPABILITIES
+    caps = descriptors_audio.EVOLINK_SUNO_CAPABILITIES
     _text("audio", "", {"lyrics": "[Verse] 啦"}, caps)
     _text("audio", "城市流行", {}, caps)
     with pytest.raises(GenerationDomainError, match="描述和歌词至少要给一段"):
@@ -108,17 +110,17 @@ def test_会唱歌词的模型可以只给歌词_什么都不给不行() -> None
 
 
 def test_给视频配声的模型什么字都可以不给() -> None:
-    assert C.KLING_VIDEO_TO_AUDIO_CAPABILITIES["prompt"] == "optional"
-    _text("audio", "", {}, C.KLING_VIDEO_TO_AUDIO_CAPABILITIES)
+    assert descriptors_audio.KLING_VIDEO_TO_AUDIO_CAPABILITIES["prompt"] == "optional"
+    _text("audio", "", {}, descriptors_audio.KLING_VIDEO_TO_AUDIO_CAPABILITIES)
 
 
 def test_不会唱歌词的模型照旧要提示词() -> None:
     with pytest.raises(GenerationDomainError, match="要写一段描述"):
-        _text("audio", "", {}, C.KLING_TEXT_TO_AUDIO_CAPABILITIES)
+        _text("audio", "", {}, descriptors_audio.KLING_TEXT_TO_AUDIO_CAPABILITIES)
 
 
 def test_纯音乐不带歌词_而且要有描述() -> None:
-    caps = C.GOOGLE_LYRIA_CAPABILITIES
+    caps = descriptors_audio.GOOGLE_LYRIA_CAPABILITIES
     with pytest.raises(GenerationDomainError, match="二选一"):
         _text("audio", "钢琴", {"instrumental": True, "lyrics": "啦啦"}, caps)
     with pytest.raises(GenerationDomainError, match="纯音乐要写一段描述"):
@@ -127,14 +129,14 @@ def test_纯音乐不带歌词_而且要有描述() -> None:
 
 
 def test_歌词按模型的上限拦() -> None:
-    caps = C.EVOLINK_SUNO_CAPABILITIES
+    caps = descriptors_audio.EVOLINK_SUNO_CAPABILITIES
     _text("audio", "", {"lyrics": "啦" * 5000}, caps)
     with pytest.raises(GenerationDomainError, match="5000"):
         _text("audio", "", {"lyrics": "啦" * 5001}, caps)
 
 
 def test_歌词和描述只收一段的模型_两段都给当场说() -> None:
-    caps = C.VOLCANO_SONG_CAPABILITIES
+    caps = descriptors_audio.VOLCANO_SONG_CAPABILITIES
     _text("audio", "", {"lyrics": "啦啦啦啦啦"}, caps)
     _text("audio", "欢快的流行", {}, caps)
     with pytest.raises(GenerationDomainError, match="只能给一段"):
@@ -143,7 +145,7 @@ def test_歌词和描述只收一段的模型_两段都给当场说() -> None:
 
 def test_不会唱歌词的模型_给了歌词也不能代替描述() -> None:
     with pytest.raises(GenerationDomainError, match="要写一段描述"):
-        _text("audio", "", {"lyrics": "只有歌词"}, C.KLING_TEXT_TO_AUDIO_CAPABILITIES)
+        _text("audio", "", {"lyrics": "只有歌词"}, descriptors_audio.KLING_TEXT_TO_AUDIO_CAPABILITIES)
 
 
 def test_歌词必须是文字() -> None:
@@ -155,7 +157,7 @@ def test_歌词必须是文字() -> None:
 
 
 def test_音频的参数按描述符拦() -> None:
-    caps = C.VOLCANO_SONG_CAPABILITIES
+    caps = descriptors_audio.VOLCANO_SONG_CAPABILITIES
     validate_against_capabilities("volcano-music", "GenSongForTime", "audio", {"duration_seconds": 120}, [], capabilities=caps)
     with pytest.raises(GenerationDomainError):
         validate_against_capabilities("volcano-music", "GenSongForTime", "audio", {"duration_seconds": 20}, [], capabilities=caps)
@@ -168,17 +170,17 @@ def test_音频的参数按描述符拦() -> None:
     # 纯音乐是布尔开关,字符串 "true" 不收
     with pytest.raises(GenerationDomainError):
         validate_against_capabilities(
-            "google", "lyria-3.5", "audio", {"instrumental": "true"}, [], capabilities=C.GOOGLE_LYRIA_CAPABILITIES
+            "google", "lyria-3.5", "audio", {"instrumental": "true"}, [], capabilities=descriptors_audio.GOOGLE_LYRIA_CAPABILITIES
         )
     # 人声性别按它自己的声明查可选值
     with pytest.raises(GenerationDomainError):
         validate_against_capabilities(
-            "evolink", "suno-v5-beta", "audio", {"vocal_gender": "robot"}, [], capabilities=C.EVOLINK_SUNO_CAPABILITIES
+            "evolink", "suno-v5-beta", "audio", {"vocal_gender": "robot"}, [], capabilities=descriptors_audio.EVOLINK_SUNO_CAPABILITIES
         )
 
 
 def test_视频配声必须挂那段视频_而且只收链接() -> None:
-    caps = C.KLING_VIDEO_TO_AUDIO_CAPABILITIES
+    caps = descriptors_audio.KLING_VIDEO_TO_AUDIO_CAPABILITIES
     with pytest.raises(GenerationDomainError):
         validate_against_capabilities("kuaishou", "kling-video-to-audio", "audio", {}, [], capabilities=caps)
     validate_against_capabilities(

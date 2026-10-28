@@ -11,7 +11,8 @@ from contextlib import contextmanager
 
 import pytest
 
-from app.core.i18n import DEFAULT_LOCALE, set_current_locale
+from app.core.i18n import set_current_locale
+from mosael_formats.i18n import DEFAULT_LOCALE
 
 
 @contextmanager
@@ -89,7 +90,7 @@ def test_智能体回合的线程带着发消息的人的语言(monkeypatch) -> 
 
 def test_时间线撤销的报错_英文() -> None:
     from app.domain.sequences.errors import SequenceDomainError
-    from app.domain.sequences.undo import _pair
+    from app.domain.sequences.undo.registry import _pair
 
     with pytest.raises(SequenceDomainError) as raised:
         _pair("no-such-op")
@@ -99,7 +100,7 @@ def test_时间线撤销的报错_英文() -> None:
 
 def test_工作流错误在请求里按请求语言说() -> None:
     """编辑器里同步报的图操作错误,路由拿 str(exc) 当 detail —— 此前永远是缺省语言。"""
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.graph_ops import apply_graph_ops
 
     with pytest.raises(WorkflowDomainError) as raised:
@@ -112,7 +113,7 @@ def test_工作流错误在请求里按请求语言说() -> None:
 def test_转述别的领域的错误时带着_key() -> None:
     """`WorkflowDomainError.from_error` 留住 key/参数 —— 落库的失败原因才能按读的人翻。"""
     from app.domain.sandbox import SandboxUnavailable
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     wrapped = WorkflowDomainError.from_error(SandboxUnavailable("sandboxErr_dockerMissing"))
     assert wrapped.key == "sandboxErr_dockerMissing"

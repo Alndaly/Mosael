@@ -15,7 +15,7 @@ from app.db.models import Job
 from app.domain import browser, host_files, sharing
 from app.domain.jobs import current_parent_job_id
 from app.domain.permissions import NotVisible
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.authority import current_authority
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.run_scope import current_node, halted

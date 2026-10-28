@@ -89,11 +89,13 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
+from app.core.i18n import LocalizedError, t
+from mosael_formats.i18n import DEFAULT_LOCALE
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.db.models import Job, User, Workflow, WorkflowRevision, WorkflowRunApproval, now
 from app.domain.notifications import notify
-from app.domain.workflows import WorkflowDomainError, as_text
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import as_text
 
 logger = logging.getLogger(__name__)
 

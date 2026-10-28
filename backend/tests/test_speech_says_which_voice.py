@@ -12,7 +12,7 @@ import pytest
 
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Workflow
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import fresh_client, make_voice
 
 

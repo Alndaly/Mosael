@@ -404,7 +404,7 @@ def test_没出门或没写全的失败_非幂等请求照旧重发(monkeypatch,
 
 def test_要一大份_JSON_的对话节点按_max_tokens_放宽等待_读超时只付一次(monkeypatch):
     from app.db.models import Workflow
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors import ai as ai_nodes
     from tests.util import acting_as, add_provider
 

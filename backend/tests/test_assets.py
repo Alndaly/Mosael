@@ -116,8 +116,8 @@ def test_导入时挂到别的工作区的项目_同样拒绝() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import Asset
-    from app.domain.assets import import_binary_asset
-    from app.domain.assets import AssetProjectError
+    from app.domain.assets.importer import import_binary_asset
+    from app.domain.assets.project_scope import AssetProjectError
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

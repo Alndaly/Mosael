@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 
 from app.domain import quotes
-from app.domain.workflows import NODE_TYPES
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.executors.registry import get_executor
 
 COMMENTS = [
     {"author": "甲", "text": "看了那么久的三角洲视频，感觉昊天bb那样的主播完全就只能是观赏[Mygo表情包_忧郁]反而老六更适合我们普通玩家", "likes": 86},

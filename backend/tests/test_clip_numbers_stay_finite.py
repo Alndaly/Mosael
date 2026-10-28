@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.sequences.operations import SequenceDomainError, _validate_clip_range
+from app.domain.sequences.errors import SequenceDomainError
+from app.domain.sequences._timeline import _validate_clip_range
 
 BAD = [float("nan"), float("inf"), float("-inf")]
 

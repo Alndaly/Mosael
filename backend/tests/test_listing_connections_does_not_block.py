@@ -21,6 +21,7 @@ import threading
 import time
 
 from app.domain.providers import auth as provider_auth
+from app.ai.sidecar import pi_client
 from tests.util import add_provider, fresh_client, until
 from app.core.db import SessionLocal
 
@@ -99,7 +100,7 @@ def test_the_refresh_still_happens(monkeypatch) -> None:
 def test_a_failing_refresh_never_reaches_the_response(monkeypatch) -> None:
     """刷不动是**那条连接**的事,不该变成整页的错误 —— 断网时每条订阅连接都会刷不动。"""
     def boom(**kwargs):
-        raise provider_auth.SidecarError("OAuth refresh failed: fetch failed")
+        raise pi_client.SidecarError("OAuth refresh failed: fetch failed")
 
     monkeypatch.setattr(provider_auth, "refresh_oauth_credential", boom)
     provider_auth._refresh_failed_at.clear()

@@ -39,7 +39,8 @@ class WorkflowDomainError(RuntimeError):
 
     def __init__(self, message: str, *, params: dict[str, Any] | None = None,
                  details: dict[str, Any] | None = None) -> None:
-        from app.core.i18n import DEFAULT_LOCALE, is_message_key, render_message, stored_param
+        from app.core.i18n import is_message_key, render_message, stored_param
+        from mosael_formats.i18n import DEFAULT_LOCALE
 
         #: **只有认得出的才是 key。** 此前无条件记成 key,于是十几处 `WorkflowDomainError(str(exc))`
         #: 把第三方报错原文当 key 落了库(见 core/i18n.is_message_key)。

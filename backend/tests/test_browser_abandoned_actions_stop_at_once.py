@@ -76,7 +76,7 @@ def test_问放弃名单不续约_不归你的令牌也算放弃() -> None:
 
 
 def test_动作超时之后_失败现场的截图马上就能领走_不等被放弃的那条做完() -> None:
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors import browser as executor
 
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]

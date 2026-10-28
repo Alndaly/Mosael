@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.plugins import media_bridge
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import text_of
+from mosael_formats.plugin_manifest import text_of
 
 logger = logging.getLogger(__name__)
 

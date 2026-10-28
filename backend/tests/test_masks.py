@@ -558,7 +558,7 @@ def test_导入接口不再收出处() -> None:
 def test_从AI生成的图画的蒙版_被标含AI(tmp_path) -> None:
     """**AI 继承这条线**:出处里有一份含 AI 的,产出就含 AI。反面照:普通导入的图上画的不含。"""
     from app.core.db import SessionLocal
-    from app.domain.assets import register_file_asset
+    from app.domain.assets.importer import register_file_asset
     from tests.util import fresh_client
 
     client = fresh_client()

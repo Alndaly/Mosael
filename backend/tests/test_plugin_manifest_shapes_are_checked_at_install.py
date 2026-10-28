@@ -18,7 +18,7 @@ import pytest
 
 from app.domain.plugins import registry as market
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import ManifestError, parse
+from mosael_formats.plugin_manifest import ManifestError, parse
 
 BASE = {
     "id": "dev.test.shape",
@@ -103,7 +103,8 @@ def test_仓库里的每个插件清单都过得了这几条() -> None:
 def test_老写法的包照样装得上_装的时候先按升级链改合格(tmp_path) -> None:
     """清单规则收紧之后,磁盘上、库里的老清单都有升级链改合格;装包 / 更新包此前却直接 parse —— 一个早就发布的
     老写法包(node.config 多标了素材)被 pluginErr_manifestNodeAssetNotInSchema 挡在门外。"""
-    from app.domain.plugins.migrations import MANIFEST_VERSION, migrate_directory
+    from app.domain.plugins.migrations import migrate_directory
+    from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION
 
     old = {**BASE, "manifest_version": 4, "tools": {"declare": [{
         "name": "t", "input_schema": {"type": "object", "properties": {"img": {"type": "string"}}},

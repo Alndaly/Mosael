@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, render_message
 from app.db.models import PluginInstance, PluginMarketHold, PluginPackage, User
-from app.domain.effects import EFFECTS
+from mosael_formats.effects import EFFECTS
 from app.domain.plugins import bundled, package_sources, shared_tables, updates
 from app.domain.plugins import instances as inst
 from app.domain.plugins import oauth as plugin_oauth
@@ -27,7 +27,8 @@ from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import manifest_of, text_of, web_url
+from app.domain.plugins.manifest import manifest_of
+from mosael_formats.plugin_manifest import text_of, web_url
 
 
 def packages(db: Session, user: User) -> list[dict[str, Any]]:

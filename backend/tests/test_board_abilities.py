@@ -26,7 +26,7 @@ MEDIA_KINDS = {"image", "video", "audio"}
 
 
 def _check(producer_id: str, meta: dict) -> None:
-    from app.domain.boards.canvas import ITEM_KINDS
+    from app.domain.boards.shape import ITEM_KINDS
     from app.domain.boards.transforms import ABILITY, SLOT, board_hosts, board_role, host_field, host_fields
 
     hosts = board_hosts(meta)

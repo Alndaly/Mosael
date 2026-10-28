@@ -19,6 +19,7 @@ import pytest
 from app.ai.providers import VoiceEnrollmentError, build_voice_enrollment_adapter
 from app.ai.providers.adapters.alibaba.dashscope import uploads as temporary_storage
 from app.ai.providers.adapters.alibaba.dashscope import voice_enrollment
+from app.core import http_retry
 from app.ai.providers.adapters.alibaba.dashscope.voice_enrollment import CUSTOMIZATION_PATH, CosyVoiceEnrollmentAdapter
 
 POLICY = {"data": {"upload_host": "https://dashscope-file.oss.example.com", "upload_dir": "dashscope-instant/abc",
@@ -39,7 +40,7 @@ def bailian(monkeypatch):
         action = (body or {}).get("input", {}).get("action", "")
         return replies.get(action) or httpx.Response(200, json={"output": {}})
 
-    real = voice_enrollment.RetryingClient
+    real = http_retry.RetryingClient
 
     def client(**kwargs):
         return real(transport=httpx.MockTransport(handler), **kwargs)

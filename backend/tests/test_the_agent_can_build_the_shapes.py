@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from app.domain.workflows import validate_graph
+from app.domain.workflows.graph_rules import validate_graph
 from app.domain.workflows.graph_ops import apply_graph_ops
 
 EMPTY: dict = {"nodes": [], "edges": []}
@@ -88,7 +88,7 @@ def test_it_can_call_another_workflow() -> None:
 
 def test_the_node_catalogue_tells_the_agent_these_exist() -> None:
     """智能体是从这份清单认识节点的 —— 三种形状都得在里面,而且描述要说清什么时候用。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     assert NODE_TYPES["subgraph"]["description"], "子图没有描述,智能体只能靠名字猜"
     assert NODE_TYPES["call_workflow"]["description"]

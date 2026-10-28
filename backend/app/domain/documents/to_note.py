@@ -13,7 +13,8 @@ import re
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Note
-from app.domain.documents.extraction import DocumentParseError, extraction_dir, latest_extraction
+from app.domain.documents.extraction import extraction_dir, latest_extraction
+from app.domain.documents.local import DocumentParseError
 from app.domain.note_types import NoteContent, NoteSource
 
 #: 笔记正文的上限(NoteContent.markdown)。超了截断并说一句 —— 几百页的 PDF 存成一篇笔记本来就读不完。

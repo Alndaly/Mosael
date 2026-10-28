@@ -1,7 +1,17 @@
 from fastapi import APIRouter, Query, Response
 
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NotePageCreate, NoteRestore, NoteRevisionOut, NoteUpdate, NoteReferenceOut
+from app.api.schemas.notes import (
+    NoteAppend,
+    NoteCreate,
+    NoteOut,
+    NotePageCreate,
+    NoteRestore,
+    NoteRevisionOut,
+    NoteUpdate,
+    NoteReferenceOut,
+)
+from app.domain.note_types import NoteContent
 from app.domain.agent import use_cases as agent_use_cases
 from app.domain.notes import use_cases
 

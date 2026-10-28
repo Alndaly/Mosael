@@ -24,6 +24,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import PluginPackage
 from app.domain import generation_catalog as C
+from app.domain.generation_catalog.descriptors import builtin
 from app.domain.generation.custom_profiles import CapabilityProfileError, profile_form_schema, validate_capabilities
 from app.domain.generation.operations import GenerationDomainError, check_text_inputs, validate_text_inputs
 from app.domain.generation.plugin_connections import descriptor
@@ -49,7 +50,7 @@ def test_没写就是必须写_认不出的值也按必须写() -> None:
 
 
 def test_内置目录只用这一格_老的两个布尔不再出现() -> None:
-    for item in C.BUILTIN_MODELS:
+    for item in builtin.BUILTIN_MODELS:
         caps = item["capabilities"]
         assert not {"requires_prompt", "prompt_optional"} & set(caps), item["id"]
         assert caps.get("prompt", "required") in C.PROMPT_MODES, item["id"]

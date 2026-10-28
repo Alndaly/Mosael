@@ -7,6 +7,7 @@ import logging
 import pytest
 
 from app.core import logging as applog
+from app.core import config
 
 
 @pytest.fixture
@@ -35,7 +36,7 @@ def test_configure_logging_idempotent_and_scoped(restore_app_logger, monkeypatch
 
 def test_configure_logging_respects_level(restore_app_logger, monkeypatch):
     monkeypatch.setattr(applog, "_configured", False)
-    monkeypatch.setattr(applog.settings, "log_level", "DEBUG")
+    monkeypatch.setattr(config.settings, "log_level", "DEBUG")
     applog.configure_logging()
     assert restore_app_logger.level == logging.DEBUG
 

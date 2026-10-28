@@ -60,7 +60,7 @@ def _seed(graph: dict) -> None:
 
 def test_目录里已经没有中文选项值() -> None:
     """迁移只管存量。**目录本身**再写回中文的话,新图立刻又长出旧值。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     for key, meta in NODE_TYPES.items():
         for field, spec in (meta.get("config") or {}).items():

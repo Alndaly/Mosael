@@ -82,7 +82,7 @@ class Test工作流节点:
         assert captured["engine"] == "builtin:clone" and captured["voice_id"] == "v-1"
 
     def test_没选音色时直说(self, captured, monkeypatch) -> None:
-        from app.domain.workflows import WorkflowDomainError
+        from app.domain.workflows.errors import WorkflowDomainError
 
         with pytest.raises(WorkflowDomainError, match="没有选音色"):
             self._run({"text": "念一句", "engine": "builtin:edge"}, monkeypatch)
@@ -104,7 +104,7 @@ def test_音色是一格_清单跟着引擎变() -> None:
     特例。现在:一格 `voice`,依赖 `engine`,两格的清单都由 options_from 声明,前端不认识这个节点。
     """
     from app.core.i18n import MESSAGES
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
     from app.domain.workflows.field_options import SOURCES
 
     for node in ("synthesize_speech", "dub_subtitles"):

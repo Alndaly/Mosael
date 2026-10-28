@@ -17,7 +17,7 @@ RATCHET = True
 import re
 from pathlib import Path
 
-from app.domain.sequences import undo as undo_registry
+from app.domain.sequences.undo import registry
 from tests.util import fresh_client, make_video_asset
 
 SEQUENCES = Path(__file__).resolve().parents[1] / "app/domain/sequences"
@@ -40,7 +40,7 @@ def _recorded_kinds() -> set[str]:
 
 def test_每一种记录下来的操作都登记了逆操作() -> None:
     recorded = _recorded_kinds()
-    known = set(undo_registry.undoable_kinds()) | set(undo_registry.NOT_UNDOABLE)
+    known = set(registry.undoable_kinds()) | set(registry.NOT_UNDOABLE)
     missing = sorted(recorded - known)
     assert missing == [], (
         "这些操作会写进撤销日志,却没有登记逆操作 —— 用户按 ⌘Z 时会撤掉更早的一条编辑:\n  "
@@ -53,14 +53,14 @@ def test_注册表里没有已经不再记录的操作() -> None:
     recorded = _recorded_kinds()
     # undo / redo 是撤销机制自己追加的记账,不在算子模块的静态文本里,单独放行。
     bookkeeping = {"undo", "redo"}
-    stale = sorted((set(undo_registry.undoable_kinds()) | set(undo_registry.NOT_UNDOABLE)) - recorded - bookkeeping)
+    stale = sorted((set(registry.undoable_kinds()) | set(registry.NOT_UNDOABLE)) - recorded - bookkeeping)
     assert stale == [], f"登记了不存在的操作: {stale}"
 
 
 def test_两个方向必须成对() -> None:
     """只写逆向不写正向的话,撤销好使、重做时才炸 —— 而那时用户已经把东西撤掉了。"""
-    for kind in undo_registry.undoable_kinds():
-        pair = undo_registry._REGISTRY[kind]
+    for kind in registry.undoable_kinds():
+        pair = registry._REGISTRY[kind]
         assert callable(pair.inverse) and callable(pair.forward), kind
 
 
@@ -72,7 +72,7 @@ def test_撤销不会跳过没登记的操作去撤更早的那条() -> None:
     """
     from app.core.db import SessionLocal
     from app.db.models import Sequence
-    from app.domain.sequences.operations import _record_operation
+    from app.domain.sequences._timeline import _record_operation
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

@@ -21,8 +21,8 @@ from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain import social_media
-from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import get_executor
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import fresh_client
 
 CST = timezone(timedelta(hours=8))
@@ -238,7 +238,7 @@ class Test整理作品:
         assert (one["views"], one["likes"], one["comments"], one["collects"], one["shares"]) == (100000, 9000, 300, 2000, 500)
 
     def test_英文摘要里没有中文标签(self) -> None:
-        from app.core.i18n import CURRENT_LOCALE
+        from mosael_formats.i18n import CURRENT_LOCALE
 
         token = CURRENT_LOCALE.set("en")
         try:

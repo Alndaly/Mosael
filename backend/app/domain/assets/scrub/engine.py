@@ -41,7 +41,7 @@ from app.domain.assets.scrub import mp4 as mp4_mod
 from app.domain.assets.scrub import nal as nal_mod
 from app.domain.assets.scrub.findings import MediaFacts
 from app.domain.assets.scrub.mp4 import Mp4Error, Reader
-from app.domain.assets.scrub.verify import frame_md5, pcm_md5
+from app.domain.assets.scrub.verify import pcm_md5
 
 logger = logging.getLogger(__name__)
 
@@ -436,6 +436,11 @@ def jsonable(gates: list[dict[str, object]]) -> str:
 
 
 __all__ = [
-    "AacEdit", "ScrubError", "ScrubOutcome", "frame_md5", "gate_report", "jsonable",
-    "render_report", "scrub_file",
+    "AacEdit",
+    "ScrubError",
+    "ScrubOutcome",
+    "gate_report",
+    "jsonable",
+    "render_report",
+    "scrub_file",
 ]

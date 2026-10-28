@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, AssetExtraction, Job
-from app.domain.documents import DOCUMENT_PARSE
+from mosael_formats.plugin_manifest import DOCUMENT_PARSE
 from app.domain.documents.local import DocumentParseError, Parsed, Section, html_to_markdown, _split_by_headings
 
 _MARKER = re.compile(r"<!--\s*(page|slide|sheet|section)\s*:\s*(\d+)\s*-->")

@@ -12,7 +12,8 @@ from app.api.schemas import AssetExtractionOut, DocumentNoteOut, DocumentTextOut
 from app.db.models import AssetExtraction
 from app.domain.capabilities import CapabilityUnavailable
 from app.domain.documents import use_cases as documents
-from app.domain.documents.extraction import DocumentParseError, extraction_dir, read_sections
+from app.domain.documents.extraction import extraction_dir, read_sections
+from app.domain.documents.local import DocumentParseError
 
 router = APIRouter(tags=["documents"])
 

@@ -2,7 +2,7 @@
 
 **清单只有一套规则。** 用户点「从文件安装」时过的清单校验,和社区服务收到一个插件包时过的,是同一个
 `parse`(ADR 0026:社区上能上架的,装得上;装不上的,上不了架)。所以解析器住在两边共用的格式包里,
-这个模块不再有自己的一份 —— 别处照旧 `from app.domain.plugins.manifest import parse`,拿到的就是那一份。
+这个模块不再有自己的一份,也不转出那一份:调用方直接 `from mosael_formats.plugin_manifest import parse`。
 
 留在这里的只有桌面端自己的事:包记录上的清单怎么读(`manifest_of`,它认得数据库模型),
 以及宿主告诉插件进程「这次说哪种语言」的那个环境变量名。
@@ -13,42 +13,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from mosael_formats.plugin_manifest import (
-    AUDIO_DENOISE,
-    AUDIO_SEPARATION,
-    TRANSCRIPTION,
-    TRANSLATION,
-    SPEECH,
-    CODE_FIELD_TYPES,
-    DOCUMENT_PARSE,
-    FIELD_TYPES,
-    GENERATION,
-    CALL_CAPABILITIES,
-    CATALOG_CAPABILITIES,
-    CLAIMED_CAPABILITIES,
-    KEY_RE,
-    MODEL_LIBRARY,
-    PLUGIN_ID_RE,
-    SERVICE_ADDRESS_FIELD,
-    TOOL_NAME_RE,
-    TOOLS,
-    WORKFLOW_LIBRARY,
-    Author,
-    Field,
     Manifest,
-    ManifestError,
-    OAuthSpec,
-    Runtime,
-    Service,
-    ToolOverride,
-    expand,
-    localized_tool,
-    oauth_spec,
     parse,
-    render_name,
-    runtime_of,
-    text_of,
-    tool_label,
-    web_url,
 )
 
 if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块是叶子
@@ -68,43 +34,7 @@ def manifest_of(package: "PluginPackage") -> Manifest:
 
 
 __all__ = [
-    "Author",
-    "CODE_FIELD_TYPES",
-    "AUDIO_DENOISE",
-    "AUDIO_SEPARATION",
-    "TRANSCRIPTION",
-    "TRANSLATION",
-    "SPEECH",
-    "DOCUMENT_PARSE",
-    "FIELD_TYPES",
-    "Field",
-    "GENERATION",
-    "CALL_CAPABILITIES",
-    "CATALOG_CAPABILITIES",
-    "CLAIMED_CAPABILITIES",
-    "KEY_RE",
     "LOCALE_ENV",
-    "MODEL_LIBRARY",
-    "WORKFLOW_LIBRARY",
-    "Manifest",
-    "ManifestError",
-    "OAuthSpec",
     "PATH_KEY",
-    "PLUGIN_ID_RE",
-    "Runtime",
-    "SERVICE_ADDRESS_FIELD",
-    "Service",
-    "TOOLS",
-    "TOOL_NAME_RE",
-    "ToolOverride",
-    "expand",
-    "localized_tool",
     "manifest_of",
-    "oauth_spec",
-    "parse",
-    "render_name",
-    "runtime_of",
-    "text_of",
-    "tool_label",
-    "web_url",
 ]

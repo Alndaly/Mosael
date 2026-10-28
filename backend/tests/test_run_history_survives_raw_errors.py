@@ -30,7 +30,7 @@ def test_一句带花括号的原话原样渲染() -> None:
 
 def test_原话不当_key_落库_而且一个字都不丢() -> None:
     from app.domain.jobs import blame
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     exc = WorkflowDomainError(RAW)
     assert exc.key == ""
@@ -50,7 +50,7 @@ def test_任务消息也一样(monkeypatch) -> None:
 
 def test_认得出的_key_照旧翻() -> None:
     from app.domain.jobs import blame
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     assert blame(WorkflowDomainError("wfErr_noExecutor", params={"type": "demo"}))["error_key"] == "wfErr_noExecutor"
 

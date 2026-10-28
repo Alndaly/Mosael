@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.generation_catalog import SEEDANCE_2_VIDEO_CAPABILITIES as SEEDANCE_2
+from app.domain.generation_catalog.descriptors.video import SEEDANCE_2_VIDEO_CAPABILITIES as SEEDANCE_2
 from app.domain.generation.operations import GenerationDomainError, validate_against_capabilities
 
 
@@ -58,7 +58,7 @@ class Test区间校验:
 class Test枚举型不受影响:
     def test_只收枚举里那几个(self) -> None:
         """万相只支持 5 秒(枚举)。加了区间那条路之后,枚举这条不该跟着松掉。"""
-        from app.domain.generation_catalog import WAN_VIDEO_CAPABILITIES as WAN
+        from app.domain.generation_catalog.descriptors.video import WAN_VIDEO_CAPABILITIES as WAN
 
         assert WAN["duration_seconds"] == [5], "万相是枚举型 —— 这条用例的前提"
         with pytest.raises(GenerationDomainError):

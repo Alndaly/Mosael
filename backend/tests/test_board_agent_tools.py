@@ -124,7 +124,7 @@ def test_写坏的表单在开卡时就拒(operations: list[dict], says: str) ->
 
 
 def test_set_form_能力的设置逐键合并_绑定逐字段替换_别的几项和宿主自己的表单不动() -> None:
-    from app.domain.boards import BoardDomainError
+    from app.domain.boards.errors import BoardDomainError
     from app.domain.boards.ops import apply_board_ops
 
     base = {"items": [
@@ -415,7 +415,7 @@ def test_内置产出者和填法不由智能体当能力点运行(tmp_path) -> 
 
 def test_花钱的按_ai_cost_开卡_对外的按_external() -> None:
     """能力的后果决定卡的档位 —— 自动档里花钱的有连开上限,对外的回到人(见 autopilot)。"""
-    from app.domain.agent.confirmable import tool_spec
+    from app.domain.agent.confirmable.registry import tool_spec
 
     spec = tool_spec("run_board_item")
     assert spec is not None and spec.permission == "edit" and spec.needs_card is not None
@@ -455,7 +455,7 @@ def test_卡上说清跑哪个工具_用哪条连接_有什么后果() -> None:
     import re
 
     from app.core.i18n import render_message
-    from app.domain.agent.confirmable import tool_spec
+    from app.domain.agent.confirmable.registry import tool_spec
 
     spec = tool_spec("run_board_item")
     external = {"producer": "node:translate", "effects": "external", "tool": {"key": "wfNode_translate"},

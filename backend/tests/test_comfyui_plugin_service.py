@@ -98,7 +98,7 @@ def _problems(found: dict, locale: str = "zh") -> list[tuple[str, str]]:
 
 
 def test_随包的_ComfyUI_声明了本机服务_归生成那个工具() -> None:
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     raw = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
     manifest = parse(raw, str(PLUGIN))

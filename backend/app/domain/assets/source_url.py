@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Job, Transcript
-from app.domain.transcripts import get_transcript_for_asset
+from app.domain.transcripts.operations import get_transcript_for_asset
 
 
 _TRACKING_QUERY_PREFIXES = ("utm_",)

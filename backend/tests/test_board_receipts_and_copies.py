@@ -19,7 +19,7 @@ def _board(client, ws: str, canvas: dict) -> str:
 
 def _deliver(board_id: str, item_id: str, job: SimpleNamespace) -> None:
     from app.core.db import SessionLocal
-    from app.domain.boards import deliver_generated, receipt_to_item
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
 
     with SessionLocal() as db:
         deliver_generated(db, job, receipt_to_item(board_id, item_id))
@@ -87,7 +87,7 @@ def test_同一格再出一次多张_多出来的那几张不撞上一轮的() -
 
     # 第二轮:同一格重新进入生成(place_pending 的效果),再交回两张。
     from app.core.db import SessionLocal
-    from app.domain.boards import place_pending
+    from app.domain.boards.receipts import place_pending
 
     with SessionLocal() as db:
         place_pending(db, workspace_id=ws, board_id=board_id, item={
@@ -110,10 +110,11 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
     线程没起:任务中心里一条永远排队的任务,画布上什么都没有,用户看到的是一句「有冲突」。
 
     摆占位是服务端对**一格**的合并,不是客户端快照 —— 它该合到最新的画布上,而不是被这次保存挡回去。"""
-    import app.domain.generation as generation
+    from app.domain.generation import operations
     import app.domain.generation.runner as runner
     from app.core.db import SessionLocal
-    from app.domain.boards import producers, update_board
+    from app.domain.boards import producers
+    from app.domain.boards.persistence import update_board
 
     client = fresh_client()
     ws = _workspace(client)
@@ -130,7 +131,7 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
             })
         return SimpleNamespace(id="gen-1", provider="p", provider_profile_id="pp", model="m"), SimpleNamespace(id="job-1")
 
-    monkeypatch.setattr(generation, "create_generation_job", create_job_while_user_autosaves)
+    monkeypatch.setattr(operations, "create_generation_job", create_job_while_user_autosaves)
     monkeypatch.setattr(runner, "start_generation_thread", started.append)
 
     revision = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["revision"]
@@ -151,7 +152,7 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
 def _live_board(client, ws: str) -> str:
     """一张板,上面那一格正在跑一个真由服务端摆下的任务(job-1)。"""
     from app.core.db import SessionLocal
-    from app.domain.boards import place_pending
+    from app.domain.boards.receipts import place_pending
 
     board_id = _board(client, ws, {"items": [{"id": "img", "kind": "image", "x": 0, "y": 0,
                                                "form": {"prompt": "一只猫"}}], "edges": []})
@@ -186,9 +187,10 @@ def test_正在跑的那一格不能再起一个任务(monkeypatch) -> None:
     占位换成第二轮 —— 而第一轮的回执回来时照样填进这一格。"""
     import pytest
 
-    import app.domain.generation as generation
+    from app.domain.generation import operations
     from app.core.db import SessionLocal
-    from app.domain.boards import BoardDomainError, producers
+    from app.domain.boards import producers
+    from app.domain.boards.errors import BoardDomainError
 
     client = fresh_client()
     ws = _workspace(client)
@@ -200,7 +202,7 @@ def test_正在跑的那一格不能再起一个任务(monkeypatch) -> None:
         created.append("job")
         raise AssertionError("不该走到建任务这一步")
 
-    monkeypatch.setattr(generation, "create_generation_job", create_generation_job)
+    monkeypatch.setattr(operations, "create_generation_job", create_generation_job)
 
     with SessionLocal() as db, pytest.raises(BoardDomainError):
         producers.run(db, _generate(ws, board_id, user_id, board_revision(client, board_id, ws), {
@@ -215,7 +217,7 @@ def test_正文里_at_到的素材不会在失败后变成槽位里挂着的素�
     """发出去的 source_assets = 槽位挂的 + 正文里 @ 到的(见前端 mergeSourceAssets);表单里的
     source_assets 只是**槽位**那一半,@ 的那几份记在 mentioned_asset_ids 上。此前占位把发出去的
     合并清单写回表单,跑挂了重试时 @ 过的素材出现在槽位里 —— 正文里删掉那个 @,它照样被发出去。"""
-    import app.domain.generation as generation
+    from app.domain.generation import operations
     import app.domain.generation.runner as runner
     from app.core.db import SessionLocal
     from app.domain.boards import producers
@@ -225,7 +227,7 @@ def test_正文里_at_到的素材不会在失败后变成槽位里挂着的素�
     board_id = _board(client, ws, {"items": [{"id": "img", "kind": "image", "x": 0, "y": 0}], "edges": []})
     user_id = client.get("/api/auth/me").json()["id"]
     monkeypatch.setattr(
-        generation, "create_generation_job",
+        operations, "create_generation_job",
         lambda db, **_: (SimpleNamespace(id="gen-1", provider="p", provider_profile_id="pp", model="m"), SimpleNamespace(id="job-1")),
     )
     monkeypatch.setattr(runner, "start_generation_thread", lambda _id: None)
@@ -276,7 +278,7 @@ def test_创建副本时正在写的便签不带着写作中过去() -> None:
     """便签上的写字只落回原板那一格。副本里那张便签带着 running 过去的话,永远等不到写完,
     一直显示「写作中」。和生成那种是同一条规则。"""
     from app.core.db import SessionLocal
-    from app.domain.boards import place_pending
+    from app.domain.boards.receipts import place_pending
 
     client = fresh_client()
     ws = _workspace(client)
@@ -298,7 +300,8 @@ def test_智能体往画板上放一个够不着的文档或场景_开卡时就�
     import pytest
 
     from app.core.db import SessionLocal
-    from app.domain.agent.confirmations import ConfirmationError, request_confirmation
+    from app.domain.agent.confirmations import request_confirmation
+    from app.domain.agent.errors import ConfirmationError
 
     client = fresh_client()
     ws = _workspace(client)
@@ -374,7 +377,7 @@ def test_不是这一轮的回执不动这一格() -> None:
     ws = _workspace(client)
     board_id = _live_board(client, ws)  # job-1 在跑
     from app.core.db import SessionLocal
-    from app.domain.boards import place_pending
+    from app.domain.boards.receipts import place_pending
 
     _deliver(board_id, "img", SimpleNamespace(id="job-1", status="failed", result=None, error="炸了"))
     with SessionLocal() as db:
@@ -452,7 +455,7 @@ def test_成功结束却没交回产出_失败原因不是任务状态() -> None
 def _board_with_live_job(client, ws: str) -> tuple[str, str]:
     """一张板:便签 n1 连进 img,img 正跑着一个库里真有的任务(排队中)。回 (板, 任务)。"""
     from app.core.db import SessionLocal
-    from app.domain.boards import place_pending
+    from app.domain.boards.receipts import place_pending
     from app.domain.jobs import create_job
 
     board_id = _board(client, ws, {"items": [

@@ -19,7 +19,7 @@ KERNEL = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "agent
 
 
 def test_每个登记的工具四样俱全() -> None:
-    from app.domain.agent.confirmable import tool_specs
+    from app.domain.agent.confirmable.registry import tool_specs
 
     specs = tool_specs()
     assert len(specs) >= 15, "登记表几乎是空的,多半是注册模块没被 import 到"
@@ -30,7 +30,7 @@ def test_每个登记的工具四样俱全() -> None:
 
 def test_内核不点名任何工具() -> None:
     """内核只管卡的生命周期:开卡、认人、领卡、执行、回执。"""
-    from app.domain.agent.confirmable import tool_specs
+    from app.domain.agent.confirmable.registry import tool_specs
 
     kernel = KERNEL.read_text(encoding="utf-8")
     named = sorted(name for name in tool_specs() if f'"{name}"' in kernel)
@@ -40,6 +40,6 @@ def test_内核不点名任何工具() -> None:
 def test_登记表和_MCP_那份要确认的清单一致() -> None:
     import mcp_server
 
-    from app.domain.agent.confirmable import tool_specs
+    from app.domain.agent.confirmable.registry import tool_specs
 
     assert set(mcp_server.CONFIRMATION_TOOLS) == set(tool_specs())

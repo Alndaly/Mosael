@@ -59,13 +59,13 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def _is_external(key: str, spec: dict[str, Any]) -> bool:
-    from app.domain.workflows import EXTERNAL_ID, config_data_type
+    from app.domain.workflows.node_types import EXTERNAL_ID, config_data_type
 
     return config_data_type(key, spec) == EXTERNAL_ID
 
 
 def _is_entity(key: str, spec: dict[str, Any]) -> bool:
-    from app.domain.workflows import config_data_type
+    from app.domain.workflows.node_types import config_data_type
 
     if _is_external(key, spec):
         return False
@@ -73,7 +73,7 @@ def _is_entity(key: str, spec: dict[str, Any]) -> bool:
 
 
 def _has_picker(key: str, spec: dict[str, Any]) -> bool:
-    from app.domain.workflows import config_data_type
+    from app.domain.workflows.node_types import config_data_type
 
     return bool(
         spec.get("options_from")
@@ -103,7 +103,7 @@ def _plugin_tools() -> dict[str, dict[str, Any]]:
 
 
 def _registry() -> dict[str, dict[str, Any]]:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     return {**NODE_TYPES, **_plugin_tools()}
 

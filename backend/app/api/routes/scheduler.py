@@ -12,7 +12,7 @@ from app.api.schemas import (
 )
 from app.db.models import ScheduledTask, ScheduledTaskRun
 from app.domain import sharing
-from app.domain.scheduler import SchedulerBusy, SchedulerDomainError
+from app.domain.scheduler.operations import SchedulerBusy, SchedulerDomainError
 from app.domain.scheduler import use_cases as scheduler
 
 router = APIRouter(tags=["scheduler"])

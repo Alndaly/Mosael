@@ -126,7 +126,7 @@ def test_跑代码只有确认卡一条路_插件的原始入口不暴露() -> N
     """Blender MCP 自带的 execute_blender_code 不经确认;它和 blender_execute 并存就是后门。"""
     import mcp_server
     from app.domain.agent import rules
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     assert "blender_execute" in mcp_server.CONFIRMATION_TOOLS
     assert rules.evaluate("blender_execute", {}, rules.default_rules()).denied

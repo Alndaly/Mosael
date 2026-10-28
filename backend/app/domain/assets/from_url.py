@@ -35,7 +35,8 @@ from app.core.outbound_guard import Origin
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
-from app.domain.assets import register_file_asset, web_capture, web_download
+from app.domain.assets import web_capture, web_download
+from app.domain.assets.importer import register_file_asset
 from app.domain.assets.source_url import remember_asset_source
 from app.domain.assets.web_capture import PAGE_VIDEO, WebSource, remember_web_source
 from app.domain.jobs import (

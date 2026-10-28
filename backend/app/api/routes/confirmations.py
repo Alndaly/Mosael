@@ -6,7 +6,8 @@ from app.api.schemas import ConfirmationApproval, ConfirmationCreate, Confirmati
 from app.db.models import ToolConfirmation
 from app.domain.agent import autopilot
 from app.domain.agent import use_cases as agent_use_cases
-from app.domain.agent.confirmations import ConfirmationError, authorize_and_approve, authorize_and_reject
+from app.domain.agent.confirmations import authorize_and_approve, authorize_and_reject
+from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.proposals import propose
 
 router = APIRouter(tags=["confirmations"])

@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 from app.ai.providers.contracts.generation import SOURCE_ROLES
-from app.domain.generation_catalog import SOURCE_ROLE_LABELS
+from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_LABELS
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
@@ -39,7 +39,7 @@ def test_每个角色还说得出自己收哪类素材() -> None:
     workflows/binding.with_referenced_assets):少一条 = 那个角色并进来的素材不做检查,
     一段视频会被当成参考图发出去 —— 换来一次 400 或者一次白花钱的生成。
     """
-    from app.domain.generation_catalog import SOURCE_ROLE_MEDIA
+    from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_MEDIA
 
     assert set(SOURCE_ROLE_MEDIA) == set(SOURCE_ROLES), (
         f"收哪类素材的表与角色表对不上:只在角色表={set(SOURCE_ROLES) - set(SOURCE_ROLE_MEDIA)}、"
@@ -92,7 +92,7 @@ def test_节点说明是算出来的_不是写死的() -> None:
     而别处 `except` 住的是旧的那个 —— 于是后面的用例莫名其妙地红,而原因在这条测试里。
     (第一版就是这么干的,连累了 test_workflows 两条。)
     """
-    from app.domain.workflows import NODE_TYPES, _generation_parameters_help, _source_assets_help
+    from app.domain.workflows.node_types import NODE_TYPES, _generation_parameters_help, _source_assets_help
 
     config = NODE_TYPES["ai_generate"]["config"]
     # **比对的是接线,不是函数。** 只调一次生成函数、看它算得对不对是没用的:

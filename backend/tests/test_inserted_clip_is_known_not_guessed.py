@@ -15,8 +15,8 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Sequence, Track, Workflow
-from app.domain.sequences import operations
-from app.domain.workflows.executors import get_executor
+from app.domain.sequences import placement
+from app.domain.workflows.executors.registry import get_executor
 from tests.util import fresh_client
 
 
@@ -43,7 +43,7 @@ def test_并行分支同时往时间线上接_各自拿到自己那一段(monkey
     with SessionLocal() as db:
         tracks = {track.kind: track.id for track in db.get(Sequence, sequence_id).tracks}
 
-    real_insert = operations.insert_clip
+    real_insert = placement.insert_clip
 
     def insert_then_a_sibling_lands(db, seq_id, op):
         """这一段刚插上,紧跟着又多了一段更新的(另一条分支接的配音)—— 引擎里两条分支本来就并行。
@@ -52,12 +52,13 @@ def test_并行分支同时往时间线上接_各自拿到自己那一段(monkey
         就在同一个事务里插,照样是整条序列里最新的一段 —— 按「最新」去猜的话猜到的就是它。
         """
         made = real_insert(db, seq_id, op)
-        real_insert(db, seq_id, operations.InsertClip(
+        real_insert(db, seq_id, placement.InsertClip(
             track_id=tracks["audio"], asset_id=voice, timeline_start=0.0, src_in=0.0, src_out=8.0,
         ))
         return made
 
-    monkeypatch.setattr(operations, "insert_clip", insert_then_a_sibling_lands)
+    #: 时间线节点在用到时才从 placement 取 `insert_clip`:补丁打在那里。
+    monkeypatch.setattr(placement, "insert_clip", insert_then_a_sibling_lands)
     with SessionLocal() as db:
         workflow = Workflow(workspace_id=ws, name="W", graph={"nodes": [], "edges": []})
         db.add(workflow)

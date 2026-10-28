@@ -14,8 +14,10 @@ from app.db.models import Asset, Project
 from app.domain.jobs import current_actor, current_parent_job_id
 from app.domain.notifications import notify
 from app.domain.projects import create_project
-from app.domain.sequences import CANVAS_SIZE_RANGE, FPS_RANGE, create_sequence_scaffold
-from app.domain.workflows import WorkflowDomainError, as_text
+from app.domain.sequences._timeline import CANVAS_SIZE_RANGE, FPS_RANGE
+from app.domain.sequences.creation import create_sequence_scaffold
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import as_text
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.workflows.executors.registry import (
     Preflight,
@@ -25,13 +27,15 @@ from app.domain.workflows.executors.registry import (
     register_prefix,
     register_prefix_preflight,
 )
-from app.domain.workflows.executors.common import id_list, provided, whole_number
+from app.domain.workflows.executors.common import provided
+from app.domain.workflows.id_values import id_list
+from app.domain.workflows.executors.numbers import whole_number
 
 
 def _run_plugin_tool(
     db: Session, instance_id: str, tool_name: str, payload: dict[str, Any], *, workspace_id: str
 ) -> dict[str, Any]:
-    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.tools import invoke
 
     # 只给宿主适配层调的工具(internal)图里存着也不跑 —— 那道门在 invoke 里(pluginErr_toolInternal)。
@@ -70,7 +74,7 @@ def _connection_error(exc: Exception) -> WorkflowDomainError:
 
 def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str) -> str:
     """节点上选的连接,只在**跑这条流程的人**自己的连接里找(见 plugins.nodes.resolve_instance)。"""
-    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.nodes import resolve_instance
 
     try:

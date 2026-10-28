@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import settings
-from app.domain.assets import scrub as scrub_pkg
+from app.domain.assets.scrub import findings
 from app.domain.assets.scrub import aac as aac_mod
 from app.domain.assets.scrub import canonical as canonical_mod
 from app.domain.assets.scrub import gates as gates_mod
@@ -249,7 +249,7 @@ def test_a_dirty_video_comes_out_clean_and_every_gate_passes(tmp_path: Path) -> 
     source = _dirty_video(tmp_path / "dirty.mp4")
     target = tmp_path / "clean.mp4"
     outcome = scrub_file(source, target, provenance=False)
-    gates = scrub_pkg.run_all(outcome)
+    gates = gates_mod.run_all(outcome)
     assert all(gate["ok"] for gate in gates), [gate for gate in gates if not gate["ok"]]
     assert [gate["id"] for gate in gates] == [f"G{i}" for i in range(1, 11)]
 
@@ -466,15 +466,15 @@ def test_a_data_track_is_dropped(tmp_path: Path) -> None:
     source = tmp_path / "with-data-track.mp4"
     _encode(source, tags=False, cover=False)
     assert _relabel_track_as_data(source)
-    before = scrub_pkg.inspect(source)
+    before = findings.inspect(source)
     assert [track.handler for track in before.container.data_tracks] == ["meta"]
 
     target = tmp_path / "clean.mp4"
     outcome = scrub_file(source, target, provenance=False)
-    after = scrub_pkg.inspect(target)
+    after = findings.inspect(target)
     assert after.container.data_tracks == []
     assert [track.handler for track in after.container.tracks] == ["vide"]
-    assert not [gate for gate in scrub_pkg.run_all(outcome) if not gate["ok"]]
+    assert not [gate for gate in gates_mod.run_all(outcome) if not gate["ok"]]
 
 
 def test_hevc_sei_is_stripped_too(tmp_path: Path) -> None:
@@ -491,7 +491,7 @@ def test_hevc_sei_is_stripped_too(tmp_path: Path) -> None:
                  if kind == nal_mod.SEI_USER_DATA_UNREGISTERED and any(payload)]
     assert leftovers == []
     assert _video_vcl(source) == _video_vcl(target)
-    assert not [gate for gate in scrub_pkg.run_all(outcome) if not gate["ok"]]
+    assert not [gate for gate in gates_mod.run_all(outcome) if not gate["ok"]]
     _ = before_sei
 
 
@@ -506,7 +506,7 @@ def test_a_large_file_is_never_read_whole(tmp_path: Path) -> None:
     target = tmp_path / "clean.mp4"
     outcome = scrub_file(source, target, provenance=False)
     assert outcome.max_read < size // 8, f"单次读了 {outcome.max_read} 字节,文件才 {size} 字节"
-    assert not [gate for gate in scrub_pkg.run_all(outcome) if not gate["ok"]]
+    assert not [gate for gate in gates_mod.run_all(outcome) if not gate["ok"]]
 
 
 # ---------------- 碎片化 MP4(moof):门禁比的是规范输入 ----------------
@@ -565,7 +565,7 @@ def test_碎片化输入跑得通十道门全绿(tmp_path: Path) -> None:
     assert outcome.canonical_baseline is True, "碎片化输入要按规范输入比"
     assert any("碎片化" in note for note in outcome.warnings)
 
-    gates = scrub_pkg.run_all(outcome)
+    gates = gates_mod.run_all(outcome)
     assert all(gate["ok"] for gate in gates), [gate for gate in gates if not gate["ok"]]
     assert [gate["id"] for gate in gates] == [f"G{i}" for i in range(1, 11)]
     #: 逐样本的那几道门要能自证比的是哪一份输入(对账文本里"输入 0 个样本"读着像我们的错)。
@@ -617,7 +617,7 @@ def test_非碎片化输入仍然拿源自己当基准(tmp_path: Path) -> None:
     outcome = scrub_file(source, tmp_path / "clean.mp4", provenance=False)
     assert outcome.canonical_baseline is False
     assert not any("碎片化" in note for note in outcome.warnings)
-    gates = scrub_pkg.run_all(outcome)
+    gates = gates_mod.run_all(outcome)
     for gate_id in ("G6", "G7", "G8", "G9"):
         assert _gate(gates, gate_id)["evidence"]["baseline"] == "source", gate_id
 
@@ -688,7 +688,7 @@ def test_the_node_runs_and_returns_the_report(tmp_path: Path) -> None:
     """`scrub_metadata` 节点:素材进,干净素材 + 对账文本 + 门禁结果出。"""
     from app.db.models import Asset
     from app.core.db import SessionLocal
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
 
     source = _dirty_video(tmp_path / "dirty.mp4")
     client = fresh_client()

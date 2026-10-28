@@ -42,7 +42,7 @@ from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import MODEL_LIBRARY
+from mosael_formats.plugin_manifest import MODEL_LIBRARY
 from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 

@@ -16,8 +16,8 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Workflow
-from app.domain.workflows import executors as registry
-from app.domain.workflows import reference_dependencies, validate_graph
+from app.domain.workflows.executors import registry as executors_registry
+from app.domain.workflows.graph_rules import reference_dependencies, validate_graph
 from tests.util import fresh_client
 
 
@@ -38,8 +38,8 @@ def test_没有连线_只靠引用_也要等被引用的节点跑完(monkeypatch
         time.sleep(0.1)  # 慢一点:不等的话,读的一方一定先跑
         return {"json": {"voice": {"id": "voice-1"}}}
 
-    monkeypatch.setitem(registry._REGISTRY, "code", slow)
-    monkeypatch.setitem(registry._REGISTRY, "template", lambda db, workflow, config: {"text": config["template"]})
+    monkeypatch.setitem(executors_registry._REGISTRY, "code", slow)
+    monkeypatch.setitem(executors_registry._REGISTRY, "template", lambda db, workflow, config: {"text": config["template"]})
     graph = {
         "nodes": [
             {"id": "slow", "type": "code", "config": {"code": "x"}},

@@ -17,7 +17,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Track, Transcript, TranscriptSegment, Workflow
 from app.domain.jobs import create_job
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates import translated_dub_graph
+from app.domain.workflows.templates_dub import translated_dub_graph
 from tests.util import fresh_client
 
 #: 两段日文,各 2 秒,中间空半秒。译文比原文长 —— 正是要靠变速压回去的那种情况。

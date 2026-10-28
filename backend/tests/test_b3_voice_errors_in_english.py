@@ -24,8 +24,9 @@ def _en(exc: LocalizedError) -> str:
 
 def test_short_reference_audio_is_refused_in_english_with_the_numbers() -> None:
     from app.domain.voices import voices
+    from app.domain.voices import errors
 
-    with pytest.raises(voices.VoiceError) as caught:
+    with pytest.raises(errors.VoiceError) as caught:
         voices.check_reference_duration(2.6)
 
     assert _en(caught.value) == (
@@ -38,10 +39,11 @@ def test_short_reference_audio_is_refused_in_english_with_the_numbers() -> None:
 
 def test_worker_failure_keeps_the_upstream_line_inside_an_english_sentence() -> None:
     from app.domain.voices import voices
+    from app.domain.voices import errors
 
     error = voices.worker_failure("Traceback...\nModuleNotFoundError: No module named 'natsort'\n")
 
-    assert isinstance(error, voices.VoiceError)
+    assert isinstance(error, errors.VoiceError)
     assert _en(error) == (
         "Speech synthesis failed: ModuleNotFoundError: No module named 'natsort' — the engine's runtime is "
         "incomplete. A deployment admin clicks Download under Admin → Engines → Speech synthesis engines to add the missing "
@@ -50,7 +52,8 @@ def test_worker_failure_keeps_the_upstream_line_inside_an_english_sentence() -> 
 
 
 def test_language_guard_names_the_language_in_english() -> None:
-    from app.domain.voices.voices import VoiceError, _refuse_if_unspeakable
+    from app.domain.voices.voices import _refuse_if_unspeakable
+    from app.domain.voices.errors import VoiceError
 
     with pytest.raises(VoiceError) as caught:
         _refuse_if_unspeakable("三日前のだったらちょっとお腹壊しちゃうかな", "builtin:edge", "zh-CN-XiaoxiaoNeural", "")

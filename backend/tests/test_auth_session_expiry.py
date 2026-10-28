@@ -20,13 +20,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 from app.core.db import SessionLocal
-from app.core.security import (
-    LOGIN_SESSION_TTL,
-    SERVICE_SESSION_TTL,
-    find_session,
-    mint_service_session,
-    prune_expired_sessions,
-)
+from app.core.security import find_session, mint_service_session, prune_expired_sessions
+from app.core.config import LOGIN_SESSION_TTL, SERVICE_SESSION_TTL
 from app.db.models import AuthSession, User, now
 from tests.util import PASSWORD, fresh_client
 

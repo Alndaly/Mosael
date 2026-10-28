@@ -11,7 +11,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core import outbound_guard
-from app.domain.workflows import WorkflowDomainError, as_text
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import as_text
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.numbers import at_least, whole_number
 from app.domain.workflows.executors.common import truthy, wait_until

@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import get_generation_adapter
-from app.core.i18n import LocalizedError, get_current_locale, pick_text
+from app.core.i18n import LocalizedError, get_current_locale
+from mosael_formats.i18n import pick_text
 from app.db.models import (
     GenerationCapabilityDeclaration,
     GenerationCapabilityProfile,

@@ -86,7 +86,7 @@ def test_without_isolation_execution_is_refused_but_saving_is_not(monkeypatch) -
         )
         assert made.status_code == 200, made.text
 
-        from app.domain.workflows import WorkflowDomainError
+        from app.domain.workflows.errors import WorkflowDomainError
         from app.domain.workflows.executors.basic import run_python
         import pytest
 

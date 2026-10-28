@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from app.ai.runtime.workers.line_protocol import WorkerProtocolError
 from app.ai.runtime.workers.tts_protocol import (
-    WorkerProtocolError,
     decode_event_line,
     encode_event_line,
 )

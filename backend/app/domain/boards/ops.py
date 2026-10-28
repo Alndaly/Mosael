@@ -20,7 +20,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from app.domain.boards.canvas import DEFAULT_SIZE, ITEM_KINDS, NOTE_COLORS, BoardDomainError, finite_number, item_not_found
+from app.domain.boards.shape import DEFAULT_SIZE, ITEM_KINDS, NOTE_COLORS, finite_number
+from app.domain.boards.errors import BoardDomainError, item_not_found
 from app.domain.boards.producer_ids import SLOT_PRODUCERS, node_type_of, runs_from_draft
 
 BOARD_OP_KINDS = (

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.workflows import start_option_violations
+from app.domain.workflows.graph_rules import start_option_violations
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True

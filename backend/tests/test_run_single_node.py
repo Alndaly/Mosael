@@ -19,7 +19,9 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import TaskEvent, Workspace, Workflow
-from app.domain.workflows import WorkflowDomainError, engine as wf_engine
+from app.domain.workflows import engine as wf_engine
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors import registry
 from tests.util import fresh_client, wait_settled
 
 
@@ -37,7 +39,7 @@ def _workflow_id() -> str:
 
 def _count_llm(monkeypatch) -> list[str]:
     """LLM 执行器桩:计数(零调用就是「下游没跑、钱没花」),其余类型走真注册表。"""
-    real = wf_engine.get_executor
+    real = registry.get_executor
     calls: list[str] = []
 
     def fake(node_type: str):

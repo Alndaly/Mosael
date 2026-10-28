@@ -47,6 +47,7 @@ def test_停在running的插件调用被判成失败() -> None:
 def test_插件调用的重启原因跟着界面语言(monkeypatch) -> None:
     """此前这一句是写死的中文 —— 英文界面上照样冒出一句「后端重启,这次调用没有结果」。"""
     from app.core import i18n
+    from mosael_formats import i18n as mosael_formats_i18n
     from app.domain.plugins.tools import reconcile_orphaned_invocations
 
     fresh_client()
@@ -62,7 +63,7 @@ def test_插件调用的重启原因跟着界面语言(monkeypatch) -> None:
         try:
             assert reconcile_orphaned_invocations(db) == 1
         finally:
-            i18n.set_current_locale(i18n.DEFAULT_LOCALE)
+            i18n.set_current_locale(mosael_formats_i18n.DEFAULT_LOCALE)
         row = db.query(PluginInvocation).one()
         assert "restarted" in (row.error or "")
 

@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.domain.jobs import current_actor
-from app.domain.assets.scrub import removed_counts, scrub_asset
+from app.domain.assets.scrub.task import removed_counts, scrub_asset
 from app.domain.assets.scrub.engine import ScrubError
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.inputs import _asset_in

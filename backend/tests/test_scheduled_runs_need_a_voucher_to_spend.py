@@ -33,7 +33,7 @@ from app.db.models import (
     WorkflowRevision,
     WorkflowRevisionAttestation,
 )
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from tests.util import add_provider, fresh_client, second_client, user_id
 
 
@@ -268,7 +268,7 @@ def test_clicking_run_in_the_editor_counts_as_approval(team) -> None:
 def test_an_agent_card_counts_only_when_a_person_approved_it(team) -> None:
     """智能体的「运行工作流」卡:人点了同意就是点了运行;自动放行的是无人看着的运行,不替他认可。"""
     from app.domain.agent.confirmable.automation import _execute_run_workflow
-    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.errors import WorkflowDomainError
 
     workflow = _workflow(team.owner, team.workspace["id"], _llm_graph())
     edited = _edit(team.mate, workflow["id"], _llm_graph("改过"))

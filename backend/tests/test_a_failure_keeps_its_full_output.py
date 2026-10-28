@@ -14,11 +14,12 @@ from pathlib import Path
 import pytest
 
 from app.core import run_log
+from app.core import config
 
 
 @pytest.fixture(autouse=True)
 def _logs_in_tmp(monkeypatch, tmp_path):
-    monkeypatch.setattr(run_log.settings, "data_dir", tmp_path)
+    monkeypatch.setattr(config.settings, "data_dir", tmp_path)
     return tmp_path
 
 
@@ -65,7 +66,7 @@ def test_old_logs_are_pruned_but_not_the_other_kind(_logs_in_tmp: Path) -> None:
 
 def test_a_write_failure_is_swallowed_not_raised(monkeypatch, tmp_path: Path) -> None:
     """落不了盘是件小事,不该让它把正在报的那个错盖掉。"""
-    monkeypatch.setattr(run_log.settings, "data_dir", tmp_path / "nope")
+    monkeypatch.setattr(config.settings, "data_dir", tmp_path / "nope")
     monkeypatch.setattr(run_log.Path, "write_text", _boom)
     assert run_log.save("x", kind="worker", what="w") is None
 

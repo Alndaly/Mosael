@@ -17,7 +17,8 @@ import re
 
 import pytest
 
-from app.core.i18n import DEFAULT_LOCALE, LOCALES, MESSAGES, normalize_locale, t
+from app.core.i18n import MESSAGES, normalize_locale, t
+from mosael_formats.i18n import DEFAULT_LOCALE, LOCALES
 from app.domain.publish import PUBLISH_PLATFORMS, option_specs
 from tests.util import fresh_client
 
@@ -163,10 +164,11 @@ def test_download_progress_messages_take_params() -> None:
     的话那句话从此只有一种语言,而这正是它们此前一直是中文的原因。
     """
     from app.ai.runtime import tts_models
+    from app.ai.runtime import download_state
 
     tts_models._store.set(
         "f5-tts",
-        tts_models.DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": "F5-TTS"}),
+        download_state.DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": "F5-TTS"}),
     )
     try:
         client = fresh_client()
@@ -308,7 +310,7 @@ def test_工作流节点目录里存的是_key_不是文案() -> None:
     覆盖三处:节点的名字和说明、每个配置字段的说明、以及字段名那张表(它出现在检查器的
     每一行标题上)。分组名同理 —— 它是面板每一栏的标题。
     """
-    from app.domain.workflows import NODE_CATEGORIES, NODE_TYPES, _FIELD_LABELS
+    from app.domain.workflows.node_types import NODE_CATEGORIES, NODE_TYPES, _FIELD_LABELS
 
     offenders: list[str] = []
     for category in NODE_CATEGORIES:
@@ -330,7 +332,7 @@ def test_工作流节点目录里存的是_key_不是文案() -> None:
 
 def test_工作流节点目录写的_key_都翻得出来() -> None:
     """拼错了 t() 会原样返回它 —— 界面上就是一串 wfNode_xxx。"""
-    from app.domain.workflows import NODE_CATEGORIES, NODE_TYPES, _FIELD_LABELS
+    from app.domain.workflows.node_types import NODE_CATEGORIES, NODE_TYPES, _FIELD_LABELS
 
     unknown: list[str] = []
     for key in [*NODE_CATEGORIES, *_FIELD_LABELS.values()]:

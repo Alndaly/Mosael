@@ -35,7 +35,8 @@ from app.db.models import (
     now,
 )
 from app.domain.jobs import cancel_job, reconcile_orphaned_jobs
-from app.domain.workflows import WorkflowDomainError, create_workflow
+from app.domain.workflows import create_workflow
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows import approvals as run_approvals
 from app.domain.workflows.engine import check_runnable, start_workflow_job
 from app.integrations.feishu import cards

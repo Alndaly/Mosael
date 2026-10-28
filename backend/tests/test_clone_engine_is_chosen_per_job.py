@@ -24,6 +24,7 @@ import pytest
 
 from app.ai.runtime import tts_models
 from app.domain.voices import voices
+from app.domain.voices import errors
 from app.core.db import SessionLocal
 from app.db.models import Job
 from tests.util import fresh_client
@@ -63,7 +64,7 @@ def test_missing_weights_refuse_instead_of_starting_a_download(monkeypatch) -> N
 
     with SessionLocal() as db:
         before = db.query(Job).count()
-        with pytest.raises(voices.VoiceError) as caught:
+        with pytest.raises(errors.VoiceError) as caught:
             voices.start_synthesis(db, text="念一句", project_id=None, created_by=None, voice_id=voice_id)
         assert db.query(Job).count() == before, "起了一个会顺手下 2GB 的任务"
 
@@ -108,7 +109,7 @@ def test_an_unknown_engine_is_refused(monkeypatch) -> None:
     voice_id = _a_voice(client)
 
     with SessionLocal() as db:
-        with pytest.raises(voices.VoiceError):
+        with pytest.raises(errors.VoiceError):
             voices.start_synthesis(
                 db, text="念一句", project_id=None, created_by=None, voice_id=voice_id, clone_engine="不存在的引擎"
             )

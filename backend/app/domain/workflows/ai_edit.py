@@ -17,12 +17,9 @@ from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.billing.usage import BillableCall, billable, once
 from app.domain.providers.chat_connection import require_connection
 from app.core.i18n import LocalizedError, get_current_locale, t, tr
-from app.domain.workflows import (
-    NODE_TYPES,
-    WorkflowDomainError,
-    available_node_types,
-    validate_graph,
-)
+from app.domain.workflows.node_types import NODE_TYPES, available_node_types
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import validate_graph
 
 TIMEOUT_SECONDS = 120
 

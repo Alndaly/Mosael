@@ -15,7 +15,8 @@ import pytest
 
 from app.ai.providers import get_generation_adapter
 from app.ai.providers.contracts.generation import GenerationRequest
-from app.domain.generation_catalog import BUILTIN_MODELS, capabilities_for, known_capabilities_for
+from app.domain.generation_catalog import capabilities_for, known_capabilities_for
+from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation.operations import (
     GenerationDomainError,
     requested_negative_prompt,
@@ -330,7 +331,7 @@ class Test角色只有一张表:
 
     def test_每种角色都有名字和说明(self) -> None:
         from app.ai.providers.contracts.generation import SOURCE_ROLES
-        from app.domain.generation_catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+        from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 
         assert set(SOURCE_ROLES) == set(SOURCE_ROLE_LABELS), "角色和中文名对不上"
         assert set(SOURCE_ROLES) == set(SOURCE_ROLE_HELP), "角色和给智能体的说明对不上"
@@ -338,7 +339,7 @@ class Test角色只有一张表:
     def test_报错和智能体读的是同一张表(self) -> None:
         """两份的话,同一个角色在报错里叫「参考图」、在智能体那儿叫别的,谁也对不上号。"""
         from app.domain.generation import operations
-        from app.domain.generation_catalog import SOURCE_ROLE_LABELS
+        from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_LABELS
 
         assert operations._label("reference_video") == SOURCE_ROLE_LABELS["reference_video"]
 

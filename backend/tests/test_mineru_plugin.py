@@ -172,14 +172,14 @@ def test_上传被拒_提示区域和代理设置(tmp_path, monkeypatch) -> None
 def test_清单里没有自己的网络字段_那是宿主给每个连接的() -> None:
     """代理曾是 MinerU 自己发明的一对配置(MINERU_NETWORK / MINERU_PROXY),跟的是系统代理,不知道 Mosael 的设置。
     现在它是宿主给每个插件连接的「网络」(见 domain/plugins/egress);清单里再出现就是两套规矩。"""
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     manifest = parse(json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8")), PLUGIN)
     assert not [field.key for field in manifest.config if "NETWORK" in field.key or "PROXY" in field.key]
 
 
 def test_清单_只给宿主调_认领文档解析() -> None:
-    from app.domain.plugins.manifest import parse
+    from mosael_formats.plugin_manifest import parse
 
     manifest = parse(json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8")), str(PLUGIN))
     assert manifest.provides == ["document_parse"] and manifest.tool_providing("document_parse") == "mineru_parse"
@@ -274,7 +274,7 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
     options = client.get("/api/workflows/field-options",
                          params={"workspace_id": ws, "source": "providers.document_parse"}).json()
     assert {"builtin:local", plugin["id"]} <= {one["value"] for one in options}
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.executors.registry import get_executor
     from tests.test_document_reading import _scope
 
     run = get_executor("document_to_markdown")

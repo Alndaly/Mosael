@@ -19,9 +19,10 @@ from app.core.i18n import fragment
 from sqlalchemy.orm import Session
 
 from app.db.models import Scene3D
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.executors.common import id_list, whole_number
+from app.domain.workflows.id_values import id_list
+from app.domain.workflows.executors.numbers import whole_number
 
 
 def _layout(value: Any) -> dict[str, Any]:
@@ -183,7 +184,8 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     """
     from app.domain.workflows.executors.ai import llm
     from app.domain.workflows.field_options import split_chat_model
-    from app.domain.workflows.templates import _set_design_schema, single_set_rules
+    from app.domain.workflows.templates_schemas import _set_design_schema
+    from app.domain.workflows.templates_full_video import single_set_rules
 
     text = str(config.get("text") or "").strip()
     if not text:

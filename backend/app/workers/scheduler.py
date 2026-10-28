@@ -21,7 +21,7 @@ from app.domain.jobs import (
     expired_job_trees,
     prunable_task_events,
 )
-from app.domain.scheduler import SchedulerBusy, SchedulerDomainError, trigger_scheduled_task
+from app.domain.scheduler.operations import SchedulerBusy, SchedulerDomainError, trigger_scheduled_task
 from app.domain.scheduler.executors import notify_run_failed, sync_run_states
 from app.domain.scheduler.operations import compute_next_run_at
 

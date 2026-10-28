@@ -118,8 +118,8 @@ def test_my_workflow_cannot_run_on_someone_elses_instance() -> None:
 
     from app.db.models import User, Workflow, Workspace
     from app.domain.plugins.nodes import node_type_id
-    from app.domain.workflows import WorkflowDomainError
-    from app.domain.workflows.executors import get_executor
+    from app.domain.workflows.errors import WorkflowDomainError
+    from app.domain.workflows.executors.registry import get_executor
     from tests.test_plugins import SIMPLE
     from tests.util import acting_as
 
@@ -153,7 +153,7 @@ def test_选连接只在执行者自己的连接里找() -> None:
     import pytest
 
     from app.db.models import User
-    from app.domain.plugins import PluginDomainError
+    from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.nodes import resolve_instance
     from tests.test_plugins import SIMPLE
 

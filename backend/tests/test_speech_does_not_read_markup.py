@@ -22,6 +22,7 @@ import pytest
 
 from app.ai.runtime import tts_models
 from app.domain.voices import voices
+from app.domain.voices import errors
 from app.domain.voices.speakable import speakable_text
 from tests.util import fresh_client
 
@@ -269,6 +270,6 @@ def test_只剩符号的配音任务在建任务之前就退回去(monkeypatch) 
 
     with SessionLocal() as db:
         before = db.query(Job).count()
-        with pytest.raises(voices.VoiceError):
+        with pytest.raises(errors.VoiceError):
             voices.start_synthesis(db, text="***", project_id=None, created_by=None, voice_id=voice_id)
         assert db.query(Job).count() == before

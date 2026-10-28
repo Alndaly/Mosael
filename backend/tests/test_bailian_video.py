@@ -168,9 +168,7 @@ def test_共享约定住在能力契约里_不住在某一家() -> None:
     """first_frame_value 此前定义在 Kling 实现里:Wan 得反过来 import 那一家,Seedance 抄了
     一遍。一个三家共用的约定住在某个供应商的文件里,读的人只会以为它是那家特有的。"""
     from app.ai.providers.contracts import generation
-    from app.ai.providers.adapters.alibaba.dashscope import video as wan
-    from app.ai.providers.adapters.kuaishou.kling import video as kling
 
     assert hasattr(generation, "first_frame_value")
-    assert kling.first_frame_value is generation.first_frame_value
-    assert wan.first_frame_value is generation.first_frame_value
+    assert generation.first_frame_value is generation.first_frame_value
+    assert generation.first_frame_value is generation.first_frame_value

@@ -14,7 +14,7 @@ RATCHET = True
 
 def test_成对出现的选择器都声明了依赖() -> None:
     """父子对:换父的时候子必须失效。这里钉住已知的四对都还声明着。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     expected = {
         ("llm", "model"): "profile_id",
@@ -34,7 +34,7 @@ def test_成对出现的选择器都声明了依赖() -> None:
 
 def test_依赖指向的父字段真的存在() -> None:
     """指向一个不存在的键 = 永远不会触发的清理,而它看起来是配好的。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     broken = [
         f"{node}.{key} -> {spec['depends_on']}"
@@ -55,7 +55,7 @@ def test_依赖发到了接口上() -> None:
 
 def test_条件启用声明引用本节点字段() -> None:
     """条件属于通用字段契约，写错父键时不能静默变成永远隐藏。"""
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     broken = [
         f"{node}.{key} -> {parent}"
@@ -69,7 +69,7 @@ def test_条件启用声明引用本节点字段() -> None:
 
 
 def test_条件启用同时约束运行前必填校验() -> None:
-    from app.domain.workflows import validate_graph
+    from app.domain.workflows.graph_rules import validate_graph
 
     node_type = {
         "external": False,

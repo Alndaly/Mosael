@@ -3,7 +3,7 @@
 
 连同它给布景那一步用的提示词规则(blockout_rules / single_set_rules)。
 
-由 templates.py 统一重新导出;调用方照旧从 templates 取。
+调用方直接从这个模块取(一个名字只有一个来源,见 tests/test_imports_come_from_where_names_live)。
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, _capabilities, _image_plan, _video_plan
 from app.domain.workflows.templates_schemas import (

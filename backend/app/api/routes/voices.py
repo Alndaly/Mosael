@@ -33,6 +33,7 @@ from app.api.schemas import (
 )
 from app.ai.runtime import tts_daemon, tts_models
 from app.domain.voices import tts_settings, voices
+from app.domain.voices import errors
 from app.domain.permissions import ensure_deployment_admin
 from app.domain.voices import use_cases as voice_uc
 from app.ai.runtime import config as tts_config
@@ -109,7 +110,7 @@ def upload_voice(
             db, workspace_id=workspace_id, source=tmp_path, name=name, reference_text=reference_text,
             consent_kind=consent_kind, actor_id=user.id,
         )
-    except voices.VoiceError as exc:
+    except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -125,7 +126,7 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: Tx, user: CurrentUser)
             db, workspace_id=asset.workspace_id, asset_id=body.asset_id, speaker=body.speaker, name=body.name,
             consent_kind=body.consent_kind, actor_id=user.id,
         )
-    except voices.VoiceError as exc:
+    except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _voice_out(db, voice, user.id, [])
 
@@ -136,7 +137,7 @@ def update_voice(voice_id: str, body: VoiceUpdate, db: Tx, user: CurrentUser) ->
     try:
         return _voice_out(db, voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text,
                                                   consent_kind=body.consent_kind, actor_id=user.id), user.id)
-    except voices.VoiceError as exc:
+    except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -146,7 +147,7 @@ def recognize_reference(voice_id: str, db: Tx, user: CurrentUser) -> dict:
     voice = voice_uc.usable(db, user, voice_id)
     try:
         return _voice_out(db, voices.recognize_reference_text(db, voice, actor_id=user.id), user.id)
-    except (voices.VoiceError, ASRError) as exc:
+    except (errors.VoiceError, ASRError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -166,7 +167,7 @@ def copy_voice_to_engine(voice_id: str, body: RemoteCopyRequest, db: Tx, user: C
             db, voice, engine=body.engine, actor_id=user.id, consent=body.consent,
             provider_profile_id=body.provider_profile_id,
         )
-    except voices.VoiceError as exc:
+    except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -206,7 +207,7 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: Tx, user: CurrentUser
             created_by=user.id, clone_engine=body.clone_engine, clone_model=getattr(body, "clone_model", ""),
             speed=body.speed,
         )
-    except voices.VoiceError as exc:
+    except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -338,7 +339,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
         params = synthesis_params(
             db, engine=body.engine, voice=body.voice, user_id=user.id, workspace_id=body.workspace_id
         )
-    except voices.VoiceError as exc:
+    except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     with tempfile.TemporaryDirectory(prefix="mosael-preview-") as tmp:
         try:
@@ -387,7 +388,7 @@ def synthesize_with_engine(body: EngineSynthesizeRequest, db: Tx, user: CurrentU
             engine_model=body.engine_model,
             speed=body.speed,
         )
-    except voices.VoiceError as exc:
+    except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

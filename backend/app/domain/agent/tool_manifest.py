@@ -177,7 +177,8 @@ def _on_demand(tool: dict[str, Any], kit: str) -> bool:
 def _wanted(tool: dict[str, Any], agent_name: str, turn: Turn) -> bool:
     """一个只在用得上时才发的插件工具,这一轮发不发(ADR 0044 修订 2026-10-08):这段对话调过的(直接调,或经 `plugin_tools` /
     `run_plugin_tool` 点到);工作流工具另加画布上开着的那张、用户点过名的。"""
-    from app.domain.agent.places import COMFYUI, comfy_parts
+    from app.domain.agent.places import COMFYUI
+    from app.domain.place_names import comfy_parts
 
     workflow = tool.get("workflow") or {}
     path = workflow.get("path") or ""

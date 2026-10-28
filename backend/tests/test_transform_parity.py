@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.sequences.operations import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
+from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 from app.media.render_executor import _kf_sample
 from app.media.render_plan import _read_transform
 

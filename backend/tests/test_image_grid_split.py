@@ -72,7 +72,7 @@ def test_切成九张进素材库_按阅读顺序_记着出处(tmp_path) -> None
 
 
 def test_画板上切出的几张照原来的宫格排_高度按原图比例() -> None:
-    from app.domain.boards.canvas import _derive
+    from app.domain.boards.outputs import _derive
 
     host = {"id": "h", "kind": "image", "x": 0, "y": 0, "width": 300, "height": 450}
     outputs = [{"type": "asset", "asset_id": f"a{n}"} for n in range(6)] + [{"type": "layout", "columns": 3}]
@@ -92,7 +92,7 @@ def test_画板上切出的几张照原来的宫格排_高度按原图比例() -
 
 
 def test_节点在工作流里跑_交回全部和列数() -> None:
-    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.node_types import NODE_TYPES
 
     spec = NODE_TYPES["image_grid_split"]
     assert spec["board_columns"] == "columns" and "board" in spec["surfaces"]

@@ -22,7 +22,7 @@ from app.core.db import SessionLocal
 from app.core.i18n import tr
 from app.db.models import PluginInstance, PluginPackage, User
 from app.domain.plugins import instances as inst
-from app.domain.plugins.manifest import Field, OAuthSpec
+from mosael_formats.plugin_manifest import Field, OAuthSpec
 from app.domain.plugins.oauth import AUTHORIZED, REJECTED, UNAUTHORIZED, authorization_state, fills
 from app.domain.plugins.runtime import PluginRuntimeError, _final_response
 from app.domain.plugins.tools import invoke

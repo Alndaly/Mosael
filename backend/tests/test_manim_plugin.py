@@ -622,7 +622,7 @@ class Test清单:
         return json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
 
     def test_宿主读得懂(self) -> None:
-        from app.domain.plugins.manifest import parse
+        from mosael_formats.plugin_manifest import parse
 
         parsed = parse(self.manifest(), str(PLUGIN))
         assert parsed.id == "dev.mosael.manim" and {t["name"] for t in parsed.declared_tools} == {

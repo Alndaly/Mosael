@@ -41,9 +41,9 @@ from mosael_formats import plugin_archive
 from app.media.scratch import PLUGIN_INSTALL, scratch_dir
 from app.core.http_retry import RetryingClient
 from app.domain import deployment
-from app.domain.effects import plugin_tool_effects
+from mosael_formats.effects import plugin_tool_effects
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import Manifest
+from mosael_formats.plugin_manifest import Manifest
 
 logger = logging.getLogger(__name__)
 

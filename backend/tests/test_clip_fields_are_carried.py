@@ -19,7 +19,7 @@ from sqlalchemy import inspect as sa_inspect
 from app.core.db import SessionLocal
 from app.db.models import Clip, Project, Sequence
 from app.domain.render import build_plan_for_sequence
-from app.domain.sequences import copy_sequence
+from app.domain.sequences.creation import copy_sequence
 from app.domain.sequences._timeline import INHERITED_CLIP_FIELDS, RESTORABLE_CLIP_FIELDS
 from app.media.render_plan import RenderPlanError
 from tests.util import fresh_client, insert_asset

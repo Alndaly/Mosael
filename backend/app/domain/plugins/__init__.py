@@ -9,7 +9,3 @@
 
 设计与取舍见 docs/PLUGIN_ARCHITECTURE.md 与 docs/adr/0005-*。
 """
-
-from app.domain.plugins.errors import PluginDomainError
-
-__all__ = ["PluginDomainError"]

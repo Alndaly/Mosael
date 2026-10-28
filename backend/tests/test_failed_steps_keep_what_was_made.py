@@ -15,8 +15,8 @@ import pytest
 
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Workflow
-from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows import executors as registry
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors import registry as executors_registry
 from tests.util import fresh_client
 
 
@@ -47,8 +47,8 @@ def shoot(monkeypatch):
             raise WorkflowDomainError("wfErr_llmPromptEmpty")
         return {"asset_id": f"clip-{config['item']}"}
 
-    monkeypatch.setitem(registry._REGISTRY, "t_picture", picture)
-    monkeypatch.setitem(registry._REGISTRY, "t_clip", clip)
+    monkeypatch.setitem(executors_registry._REGISTRY, "t_picture", picture)
+    monkeypatch.setitem(executors_registry._REGISTRY, "t_clip", clip)
 
 
 def _loop(output: str, concurrency: int) -> dict[str, Any]:

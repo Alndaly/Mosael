@@ -71,7 +71,7 @@ def test_recorded_audio_webm_gains_duration_and_waveform() -> None:
 def test_startup_reconcile_repairs_legacy_recordings() -> None:
     """remux 修复上线前入库的坏素材(缺时长)由启动兜底补修。"""
     from app.core.db import SessionLocal
-    from app.domain.assets import reconcile_broken_media_info
+    from app.domain.assets.importer import reconcile_broken_media_info
     from app.media.paths import resolve_key
 
     client = fresh_client()
@@ -102,7 +102,9 @@ def test_启动兜底补不出时长的_记成失败_之后的启动不再碰它
     from app.core.config import settings
     from app.core.db import SessionLocal
     from app.db.models import Asset
-    from app.domain.assets import importer, reconcile_broken_media_info
+    from app.domain.assets import importer
+    from app.domain.assets.importer import reconcile_broken_media_info
+    from app.media import probe
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -112,7 +114,7 @@ def test_启动兜底补不出时长的_记成失败_之后的启动不再碰它
     created = create_asset(client, {"workspace_id": ws["id"], "kind": "audio", "name": "录音", "file_key": "media/broken-rec/rec.webm"})
 
     remuxed: list[str] = []
-    real = importer.remux_in_place
+    real = probe.remux_in_place
     monkeypatch.setattr(importer, "remux_in_place", lambda path: remuxed.append(path.name) or real(path))
     with SessionLocal() as db:
         assert reconcile_broken_media_info(db) == 0

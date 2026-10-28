@@ -291,8 +291,8 @@ def test_输出口叫artifact的_下游拿到的是收进素材库的那一份(t
 
 def test_老清单里node_config多标的素材_升级时去掉_升完装得上() -> None:
     """清单规则收紧(node.config 标了素材,input_schema 里也得是):装着的老清单要能被某一步改合格,否则读它就抛。"""
-    from app.domain.plugins.manifest import parse
-    from app.domain.plugins.migrations import upgrade
+    from mosael_formats.plugin_manifest import parse
+    from mosael_formats.plugin_manifest_upgrade import upgrade
 
     raw = {"id": "a", "name": "n", "version": "1", "manifest_version": 4, "runtime": {"kind": "process", "entry": "m.py"},
            "tools": {"declare": [{"name": "t", "input_schema": {"type": "object", "properties": {

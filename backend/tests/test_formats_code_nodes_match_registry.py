@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from mosael_formats.workflow_file import CODE_NODE_TYPES
 
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES
 
 
 def test_运行代码的节点两边是同一批() -> None:

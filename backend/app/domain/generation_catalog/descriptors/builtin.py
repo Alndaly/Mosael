@@ -1,6 +1,6 @@
 """内置模型名册:哪家、哪个模型 id、哪种生成,用的是哪份描述符。
 
-由 domain/generation_catalog 统一重新导出;调用方照旧从 catalog 取,这里只放数据。
+调用方直接从这个模块取(一个名字只有一个来源);这里只放数据,函数在 domain/generation_catalog。
 """
 
 from __future__ import annotations

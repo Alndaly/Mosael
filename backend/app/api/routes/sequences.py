@@ -60,70 +60,78 @@ from app.domain.sequences import concurrency, loading
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
 from app.domain.sequences.history import redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
-from app.domain.sequences.operations import (
+from app.domain.sequences.tracks import (
     AddTrack,
+    MoveTrack,
+    RemoveTrack,
+    SetTrackState,
+    add_track as add_track_operation,
+    remove_track as remove_track_operation,
+    set_track_state as set_track_state_operation,
+    move_track as move_track_operation,
+)
+from app.domain.sequences.cutting import (
     CutClipRange,
     CutClipRanges,
     ClipRangeCuts,
     CutClipRangesBatch,
+    SplitClip,
+    SplitClipPoints,
+    ClipPointSplits,
+    SplitClipPointsBatch,
+    cut_clip_range as cut_clip_range_operation,
+    cut_clip_ranges as cut_clip_ranges_operation,
+    cut_clip_ranges_batch as cut_clip_ranges_batch_operation,
+    split_clip as split_clip_operation,
+    split_clip_at_points as split_clip_points_operation,
+    split_clip_points_batch as split_clip_points_batch_operation,
+)
+from app.domain.sequences.placement import (
     DeleteClip,
     DeleteClipsBatch,
     DuplicateClips,
     RippleDeleteClipsBatch,
     InsertClip,
-    GenerateSubtitles,
-    InsertTextClip,
     ClipMove,
     MoveClip,
     MoveClipsBatch,
-    MoveTrack,
-    RemoveTrack,
     RippleDeleteClip,
+    TrimClip,
+    delete_clip as delete_clip_operation,
+    delete_clips_batch as delete_clips_batch_operation,
+    duplicate_clips as duplicate_clips_operation,
+    ripple_delete_clips_batch as ripple_delete_clips_batch_operation,
+    ripple_delete_clip as ripple_delete_clip_operation,
+    insert_clip as insert_clip_operation,
+    move_clip as move_clip_operation,
+    move_clips_batch as move_clips_batch_operation,
+    trim_clip as trim_clip_operation,
+)
+from app.domain.sequences.text import (
+    GenerateSubtitles,
+    InsertTextClip,
+    SetClipText,
+    SetClipTextsBatch,
+    SetSubtitleStyle,
+    set_subtitle_style as set_subtitle_style_operation,
+    generate_subtitles as generate_subtitles_operation,
+    insert_text_clip as insert_text_clip_operation,
+    set_clip_text as set_clip_text_operation,
+    set_clip_texts_batch as set_clip_texts_batch_operation,
+)
+from app.domain.sequences.clip_properties import (
     DetachClipAudio,
     SetClipEffects,
     SetClipGain,
     SetClipSpeed,
     SetClipTransform,
     SetSequenceReframe,
-    SetClipText,
-    SetClipTextsBatch,
-    SetSubtitleStyle,
-    SetTrackState,
-    SplitClip,
-    SplitClipPoints,
-    ClipPointSplits,
-    SplitClipPointsBatch,
-    TrimClip,
-    add_track as add_track_operation,
-    cut_clip_range as cut_clip_range_operation,
-    cut_clip_ranges as cut_clip_ranges_operation,
-    cut_clip_ranges_batch as cut_clip_ranges_batch_operation,
-    delete_clip as delete_clip_operation,
-    delete_clips_batch as delete_clips_batch_operation,
-    duplicate_clips as duplicate_clips_operation,
-    ripple_delete_clips_batch as ripple_delete_clips_batch_operation,
-    remove_track as remove_track_operation,
-    ripple_delete_clip as ripple_delete_clip_operation,
     detach_clip_audio as detach_clip_audio_operation,
     set_clip_effects as set_clip_effects_operation,
     set_clip_gain as set_clip_gain_operation,
     set_clip_speed as set_clip_speed_operation,
     set_clip_transform as set_clip_transform_operation,
     set_sequence_reframe as set_sequence_reframe_operation,
-    set_subtitle_style as set_subtitle_style_operation,
-    set_track_state as set_track_state_operation,
-    split_clip as split_clip_operation,
-    split_clip_at_points as split_clip_points_operation,
-    split_clip_points_batch as split_clip_points_batch_operation,
-    insert_clip as insert_clip_operation,
-    generate_subtitles as generate_subtitles_operation,
-    insert_text_clip as insert_text_clip_operation,
-    set_clip_text as set_clip_text_operation,
-    set_clip_texts_batch as set_clip_texts_batch_operation,
-    move_clip as move_clip_operation,
-    move_clips_batch as move_clips_batch_operation,
-    move_track as move_track_operation,
-    trim_clip as trim_clip_operation,
 )
 
 router = APIRouter(tags=["sequences"])
@@ -689,7 +697,7 @@ def dub_subtitles(
     """
     from app.domain.voices import use_cases as voices
     from app.domain.voices.subtitle_dub import DubError, dub_targets
-    from app.domain.voices.voices import VoiceError
+    from app.domain.voices.errors import VoiceError
 
     require_sequence_access(db, user, sequence_id, perm="edit")
     # 「碰过没有」按要配的那几条字幕算:没点名就是整条轨上现在的那些(改字的记录里只有片段 id,没有轨道 id),
