@@ -463,6 +463,13 @@ def _wire_seams() -> None:
     asset_deletion.add_guard(publish.refuse_while_publishing)
     asset_deletion.on_deleting(entity_library.forget_asset)
     asset_importer.on_imported(document_extraction.parse_on_import)
+    # 删工作流时绑着它的定时任务、触发器同一个事务里停用:它们依赖工作流,工作流不认识它们(见 workflows/deletion)。
+    from app.domain.scheduler import stop_tasks_bound_to_workflow
+    from app.domain.triggers import stop_triggers_bound_to_workflow
+    from app.domain.workflows import deletion as workflow_deletion
+
+    workflow_deletion.on_deleting(stop_tasks_bound_to_workflow)
+    workflow_deletion.on_deleting(stop_triggers_bound_to_workflow)
     # 「用在哪」(ADR 0032 §4):宿主界面入口各自登记;工作流节点、智能体工具现扫各自的注册表。
     documents.register_uses()
     public_links.register_uses()

@@ -7,8 +7,6 @@ from urllib.parse import quote
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.core.i18n import tr
 from app.domain.sequences import use_cases as sequence_use_cases
@@ -55,12 +53,12 @@ from app.api.schemas import (
     SplitClipRequest,
     TrimClipRequest,
 )
-from app.db.models import Asset, Job, Sequence, Track
+from app.db.models import Asset, Job, Sequence
 from app.domain.permissions import require_sequence_access
 from app.domain.render import start_export
-from app.domain.sequences import concurrency
+from app.domain.sequences import concurrency, loading
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
-from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
+from app.domain.sequences.history import redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
     AddTrack,
@@ -193,14 +191,7 @@ def list_sequences(project_id: str, request: Request, db: DbSession, user: Curre
     ids_and_revisions = sequence_use_cases.revisions_of_project(db, user, project_id)
     stale = [sid for sid, revision in ids_and_revisions if _SEQUENCE_JSON.get(sid, (None,))[0] != revision]
     if stale:
-        stmt = (
-            select(Sequence)
-            .where(Sequence.id.in_(stale))
-            .options(selectinload(Sequence.tracks).selectinload(Track.clips))
-        )
-        for sequence in db.scalars(stmt):
-            sequence.can_undo = can_undo(db, sequence.id)
-            sequence.can_redo = can_redo(db, sequence.id)
+        for sequence in loading.with_timelines(db, stale):
             _sequence_json(sequence)  # populates the cache
     bodies = [_SEQUENCE_JSON[sid][1] for sid, _ in ids_and_revisions if sid in _SEQUENCE_JSON]
 
@@ -249,9 +240,7 @@ def append_asset(
     actor = user.id
 
     def run() -> None:
-        sequence = db.get(Sequence, sequence_id)
-        if sequence is None:
-            raise SequenceNotFound("Sequence not found")
+        sequence = loading.sequence_row(db, sequence_id)
         concurrency.run_on_base(
             db,
             sequence,
@@ -485,9 +474,7 @@ def import_subtitles(
     data = file.file.read(_SUBTITLE_FILE_LIMIT + 1)
     if len(data) > _SUBTITLE_FILE_LIMIT:
         raise HTTPException(status_code=413, detail=tr("subfileErr_tooLarge"))
-    sequence = db.get(Sequence, sequence_id)
-    if sequence is None:
-        raise HTTPException(status_code=404, detail="Sequence not found")
+    sequence = _sequence_row(db, sequence_id)
     try:
         result = concurrency.run_on_base(
             db,
@@ -765,9 +752,7 @@ def _ensure_seen(db, user, sequence_id: str, base_revision: int | None, ids: lis
     """排任务的编辑(配音、片段声音处理)也照着调用方看到的那一版:任务稍后才动时间线,但念哪几句、处理哪一段,
     是按他看到的那一版选的。那几段(或那条轨)在这之后被别人改过,就 409 附最新序列,不替他在一份过时的选择上花钱。
     只看点名的那几样有没有被碰过(见 concurrency.Footprint):别处的编辑不挡。"""
-    sequence = db.get(Sequence, sequence_id)
-    if sequence is None:
-        raise HTTPException(status_code=404, detail="Sequence not found")
+    sequence = _sequence_row(db, sequence_id)
     try:
         concurrency.run_on_base(
             db,
@@ -872,14 +857,16 @@ def _sequence_response(sequence: Sequence) -> Response:
 
 
 def _get_sequence(db, sequence_id: str) -> Sequence:
-    stmt = (
-        select(Sequence)
-        .where(Sequence.id == sequence_id)
-        .options(selectinload(Sequence.tracks).selectinload(Track.clips))
-    )
-    sequence = db.scalar(stmt)
-    if sequence is None:
-        raise HTTPException(status_code=404, detail="Sequence not found")
-    sequence.can_undo = can_undo(db, sequence_id)
-    sequence.can_redo = can_redo(db, sequence_id)
-    return sequence
+    """整张时间线(轨道、片段、撤销标记,见 sequences/loading);不在回 404。"""
+    try:
+        return loading.with_timeline(db, sequence_id)
+    except SequenceNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _sequence_row(db, sequence_id: str) -> Sequence:
+    """时间线那一行;不在回 404。"""
+    try:
+        return loading.sequence_row(db, sequence_id)
+    except SequenceNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

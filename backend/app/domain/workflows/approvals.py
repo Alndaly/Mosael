@@ -89,7 +89,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.db.models import Job, User, Workflow, WorkflowRevision, WorkflowRunApproval, now
 from app.domain.notifications import notify
@@ -295,6 +295,14 @@ def record_checkpoint(db: Session, approval: WorkflowRunApproval, checkpoint: di
 
 
 # ---------------- 决定 ----------------
+
+
+class RunApprovalRefused(LocalizedError, ValueError):
+    """应用内这一次批不了:单不在(404)、已经决定过了(409)、节点不收备注(422)。`status` 是路由该回的 HTTP 状态。"""
+
+    def __init__(self, key: str, *, status: int) -> None:
+        super().__init__(key)
+        self.status = status
 
 
 class ApprovalError(Exception):

@@ -19728,7 +19728,7 @@
           "admin"
         ],
         "summary": "List Users",
-        "description": "这个部署里的人:身份、最近在用吗、跑的是哪一版。\n\n版本取他**最近一次**用到的那份凭据上报的 —— 一个人可以同时开着桌面端和网页端,而管理员\n要回答的是\"他现在跑的是哪一版\"。",
+        "description": "这个部署里的人:身份、最近在用吗、跑的是哪一版(见 accounts.people_overview)。",
         "operationId": "list_users_api_admin_users_get",
         "responses": {
           "200": {
@@ -19800,7 +19800,7 @@
           "admin"
         ],
         "summary": "Reset User Password",
-        "description": "替一个成员重置密码:生成一个临时密码(只在这一次给出),他已经登录着的会话全部作废(见 members.reset_password)。\n\n忘了密码的人此前只能被删号重来。改自己的密码走「设置 → 账户」(要旧密码) —— 在这里重置自己会把自己踢下线。",
+        "description": "替一个成员重置密码:临时密码只在这一次给出,他已经登录着的会话全部作废(见 accounts.reset_member_password)。",
         "operationId": "reset_user_password_api_admin_users__user_id__password_post",
         "parameters": [
           {

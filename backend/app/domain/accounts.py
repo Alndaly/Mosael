@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.core.security import hash_password, revoke_other_logins, verify_password
 from app.core.unit_of_work import after_commit
-from app.db.models import OAuthIdentity, User, new_id
+from app.db.models import AuthSession, OAuthIdentity, User, WorkspaceMember, new_id
 from app.domain import members
 from app.domain.permissions import ensure_deployment_admin
 
@@ -34,6 +34,14 @@ class LastDeploymentAdmin(AccountError):
 
 class WrongPassword(AccountError):
     """改密码时给的当前密码不对。"""
+
+
+class AccountNotFound(AccountError):
+    """部署管理员要操作的那个账号不存在。"""
+
+
+class ResetOwnPassword(AccountError):
+    """部署管理员想在管理页里重置自己的密码 —— 那会把自己踢下线;改自己的密码走「设置 → 账户」(要旧密码)。"""
 
 
 class AvatarRejected(AccountError):
@@ -153,6 +161,62 @@ def deployment_users(db: Session, actor: User) -> list[dict[str, object]]:
         }
         for row in rows
     ]
+
+
+def people_overview(db: Session, actor: User) -> list[dict[str, object]]:
+    """管理员控制台的成员一览:身份、最近在用吗、跑的是哪一版、在几个工作区里。只有部署管理员能看。
+
+    版本取他**最近一次**用到的那份凭据上报的 —— 一个人可以同时开着桌面端和网页端,而管理员
+    要回答的是"他现在跑的是哪一版"。
+    """
+    ensure_deployment_admin(db, actor)
+    latest: dict[str, AuthSession] = {}
+    for session in db.scalars(select(AuthSession).order_by(AuthSession.last_seen_at)):
+        if session.last_seen_at is not None:
+            latest[session.user_id] = session  # 按 last_seen 升序,最后一条即最新
+    workspaces = dict(
+        db.execute(select(WorkspaceMember.user_id, func.count()).group_by(WorkspaceMember.user_id)).all()
+    )
+    rows: list[dict[str, object]] = []
+    for person in db.scalars(select(User).order_by(User.created_at)):
+        seen = latest.get(person.id)
+        rows.append({
+            "id": person.id,
+            "username": person.username,
+            "display_name": person.display_name,
+            "is_deployment_admin": person.is_deployment_admin,
+            "created_at": person.created_at,
+            "last_seen_at": seen.last_seen_at if seen is not None else None,
+            "client_version": seen.client_version if seen is not None else "",
+            "client_surface": seen.client_surface if seen is not None else "",
+            "workspaces": int(workspaces.get(person.id, 0)),
+        })
+    return rows
+
+
+def _managed_account(db: Session, actor: User, user_id: str) -> User:
+    """部署管理员要操作的那个账号:先认人,再取;不存在抛 AccountNotFound。"""
+    ensure_deployment_admin(db, actor)
+    target = db.get(User, user_id)
+    if target is None:
+        raise AccountNotFound("routeErr_accountNotFound")
+    return target
+
+
+def delete_member_account(db: Session, actor: User, user_id: str) -> None:
+    """部署管理员删掉一个账号,以及只属于他的那些东西(规则见 members.delete_account,删不了抛 MemberError)。"""
+    members.delete_account(db, _managed_account(db, actor, user_id))
+
+
+def reset_member_password(db: Session, actor: User, user_id: str) -> str:
+    """部署管理员替一个成员重置密码:生成一个临时密码(只这一次给出),他已经登录着的会话全部作废。
+
+    忘了密码的人此前只能被删号重来。不能用在自己身上(见 ResetOwnPassword)。
+    """
+    target = _managed_account(db, actor, user_id)
+    if target.id == actor.id:
+        raise ResetOwnPassword("routeErr_resetOwnPassword")
+    return members.reset_password(db, target)
 
 
 def set_deployment_admin(db: Session, actor: User, user_id: str, *, granted: bool) -> User | None:

@@ -193,6 +193,8 @@
   (循环体、子图、调用另一个工作流)回头跑图的入口。引擎在模块末尾登记自己,运行时只读;执行器只认识这道缝。
 - `app/domain/assets/deletion.py:_guards`、`app/domain/assets/deletion.py:_cleanups` —— 删素材之前的拦截(还在发布的不删)
   与善后(资产库摘掉参考图)。组装根在导入期登记,运行时只读;素材域不认识发布和资产库。
+- `app/domain/workflows/deletion.py:_listeners` —— 删工作流之前,依赖它的东西怎么办(定时任务、触发器同一个事务里停用)。
+  组装根登记,运行时只读;工作流域不认识定时任务和触发器。
 - `app/domain/assets/importer.py:_imported_listeners` —— 有字节的素材入库之后接着做的事(文档的本地解析)。组装根登记,运行时只读。
 - `app/domain/plugins/instances.py:_tools_pullers` —— 连接启用 / 换服务器 / 换出站路线之后重拉 MCP 工具清单的实现
   (`plugins.tools.pull_tools_quietly`)。组装根登记,运行时只读;实例那一层不认识工具调用。

@@ -106,6 +106,8 @@ GATED_IN_THE_DOMAIN = {
     # 闸在领域模块 bundles.unpack(ensure_workspace_perm "upload",ADR 0059):技能包走
     # stage_import 暂存、非技能包图片 / 文本合订本进素材库,两条路都从这一个内核过闸。
     "agent_skills.py:unpack_agent_bundle",
+    # 部署级:闸在 accounts.reset_member_password(ensure_deployment_admin),不作用在某个工作区上
+    "admin.py:reset_user_password",
 }
 
 

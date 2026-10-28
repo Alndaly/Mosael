@@ -18,6 +18,7 @@ from app.core.i18n import LocalizedError
 from app.db.model_base import now
 from app.db import references
 from app.db.models import Workflow, WorkflowRevision, WorkflowRevisionAttestation
+from app.domain import people
 
 
 #: 版本历史是给人恢复工作流用的浏览窗口，不是运行快照的生命周期。
@@ -354,6 +355,14 @@ def revision_vouchers(db: Session, revision: WorkflowRevision) -> frozenset[str]
         select(WorkflowRevisionAttestation.user_id).where(WorkflowRevisionAttestation.revision_id == revision.id)
     )
     return frozenset({user for user in (revision.created_by, *attested) if user})
+
+
+def with_vouchers(db: Session, rows: list[WorkflowRevision]) -> list[WorkflowRevision]:
+    """给修订标上作者名和认可过它的人(非映射属性,只为序列化而挂)。"""
+    for row in rows:
+        row.created_by_name = people.display_name(db, row.created_by)
+        row.attested_by = sorted(revision_vouchers(db, row) - {row.created_by})
+    return rows
 
 
 def attest_current_revision(db: Session, workflow: Workflow, *, attested_by: str) -> WorkflowRevision:

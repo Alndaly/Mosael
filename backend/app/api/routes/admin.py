@@ -4,7 +4,6 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
 
 from app.core.i18n import tr
 from app.core.outbound_guard import AllowlistError
@@ -20,8 +19,7 @@ from app.api.schemas import (
     WebUrlUpdate,
 )
 from app.domain.permissions import ensure_deployment_admin
-from app.domain import dashboard, deployment, host_files, members, outbound_allowlist
-from app.db.models import AuthSession, User, WorkspaceMember
+from app.domain import accounts, dashboard, deployment, host_files, members, outbound_allowlist
 
 router = APIRouter(tags=["admin"])
 
@@ -35,37 +33,9 @@ router = APIRouter(tags=["admin"])
 """
 
 @router.get("/admin/users", response_model=list[AdminUserOut])
-def list_users(db: DbSession, user: CurrentUser) -> list[AdminUserOut]:
-    """这个部署里的人:身份、最近在用吗、跑的是哪一版。
-
-    版本取他**最近一次**用到的那份凭据上报的 —— 一个人可以同时开着桌面端和网页端,而管理员
-    要回答的是"他现在跑的是哪一版"。
-    """
-    ensure_deployment_admin(db, user)
-    people = db.scalars(select(User).order_by(User.created_at)).all()
-    latest: dict[str, AuthSession] = {}
-    for session in db.scalars(select(AuthSession).order_by(AuthSession.last_seen_at)):
-        if session.last_seen_at is not None:
-            latest[session.user_id] = session  # 按 last_seen 升序,最后一条即最新
-    counts = dict(
-        db.execute(
-            select(WorkspaceMember.user_id, func.count()).group_by(WorkspaceMember.user_id)
-        ).all()
-    )
-    return [
-        AdminUserOut(
-            id=person.id,
-            username=person.username,
-            display_name=person.display_name,
-            is_deployment_admin=person.is_deployment_admin,
-            created_at=person.created_at,
-            last_seen_at=latest[person.id].last_seen_at if person.id in latest else None,
-            client_version=latest[person.id].client_version if person.id in latest else "",
-            client_surface=latest[person.id].client_surface if person.id in latest else "",
-            workspaces=int(counts.get(person.id, 0)),
-        )
-        for person in people
-    ]
+def list_users(db: DbSession, user: CurrentUser) -> list[dict[str, object]]:
+    """这个部署里的人:身份、最近在用吗、跑的是哪一版(见 accounts.people_overview)。"""
+    return accounts.people_overview(db, user)
 
 
 @router.delete("/admin/users/{user_id}", status_code=204)
@@ -75,12 +45,10 @@ def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
     此前没有这条路:管理页能授予、能收回部署管理员,却删不掉一个账号 —— 于是"清理掉那个测试
     账号"只能去手改数据库,而手改必然漏(有些指向人的列有意不设外键)。
     """
-    ensure_deployment_admin(db, user)
-    target = db.get(User, user_id)
-    if target is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_accountNotFound"))
     try:
-        members.delete_account(db, target)
+        accounts.delete_member_account(db, user, user_id)
+    except accounts.AccountNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except members.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=204)
@@ -88,17 +56,13 @@ def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 @router.post("/admin/users/{user_id}/password", response_model=AdminPasswordResetOut)
 def reset_user_password(user_id: str, db: Tx, user: CurrentUser) -> AdminPasswordResetOut:
-    """替一个成员重置密码:生成一个临时密码(只在这一次给出),他已经登录着的会话全部作废(见 members.reset_password)。
-
-    忘了密码的人此前只能被删号重来。改自己的密码走「设置 → 账户」(要旧密码) —— 在这里重置自己会把自己踢下线。
-    """
-    ensure_deployment_admin(db, user)
-    target = db.get(User, user_id)
-    if target is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_accountNotFound"))
-    if target.id == user.id:
-        raise HTTPException(status_code=409, detail=tr("routeErr_resetOwnPassword"))
-    return AdminPasswordResetOut(password=members.reset_password(db, target))
+    """替一个成员重置密码:临时密码只在这一次给出,他已经登录着的会话全部作废(见 accounts.reset_member_password)。"""
+    try:
+        return AdminPasswordResetOut(password=accounts.reset_member_password(db, user, user_id))
+    except accounts.AccountNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except accounts.ResetOwnPassword as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 class RegistrationSwitch(BaseModel):

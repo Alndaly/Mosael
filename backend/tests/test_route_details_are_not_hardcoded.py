@@ -31,7 +31,6 @@ FROZEN = {
     "routes/documents.py": 1,
     "routes/fonts.py": 1,
     "routes/publish_worker.py": 2,
-    "routes/sequences.py": 3,
     "routes/settings/provider_pricing.py": 1,
 }
 

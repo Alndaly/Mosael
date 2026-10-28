@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Job, User, Workflow
+from app.db.models import Job, User, Workflow, WorkflowRunApproval
 from app.domain import entities as entity_library
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
-from app.domain.workflows import available_node_types, entity_drawing, list_workflows as _list
+from app.domain.workflows import available_node_types, deletion, entity_drawing, list_workflows as _list
 from app.domain.workflows.node_catalog import describe_node_types
 
 
@@ -110,6 +111,53 @@ def decide_run_approval(
         db, approval, decision=decision, user_id=user.id,
         user_name=user.display_name or user.username, note=note, via=via,
     )
+
+
+def decide_run_approval_in_app(
+    db: Session, user: User, approval_id: str, *, decision: str, note: str
+) -> WorkflowRunApproval:
+    """应用内批一次「等人确认」:单得在、还没决定过、节点收不收备注先说清,再走 `decide_run_approval`(和飞书同一条路)。
+
+    返回那张单的最新样子 —— 另一条路(飞书)在这一瞬间先到了也不是错误,决定已经落了,把最新那份给他看。
+    """
+    from app.domain.workflows import approvals
+
+    approval = db.get(WorkflowRunApproval, approval_id)
+    if approval is None:
+        raise approvals.RunApprovalRefused("routeErr_runApprovalNotFound", status=404)
+    if approval.status != approvals.PENDING:
+        raise approvals.RunApprovalRefused("routeErr_runApprovalSettled", status=409)
+    note = note.strip()
+    if note and not approval.allow_note:
+        #: 节点上关掉了备注那一格:不收,也不悄悄丢掉 —— 说一句,前端把输入框收起来。
+        raise approvals.RunApprovalRefused("routeErr_runApprovalNoNote", status=422)
+    if not decide_run_approval(db, user, approval, decision=decision, note=note, via="app"):
+        db.refresh(approval)
+    return approval
+
+
+def delete_workflow(db: Session, user: User, workflow_id: str) -> None:
+    """删掉一个工作流(编辑权限);绑着它的定时任务、触发器同一个事务里停用(见 workflows/deletion)。"""
+    deletion.delete_workflow(db, editable(db, user, workflow_id))
+
+
+def recent_runs(db: Session, user: User, workflow_id: str, *, limit: int = 50) -> list[Job]:
+    """这个工作流最近的运行(运行任务),新的在前;每次运行的节点步骤在任务事件里。
+
+    **按工作流在库里筛,再取前 N 条。** 此前是先取整个工作区最新的 N 个工作流任务、再按 workflow_id 过滤 ——
+    同一个工作区里别的工作流多跑几次,这个工作流的记录就被挤出前 N 条,历史面板随之变空。
+    """
+    workflow = readable(db, user, workflow_id)
+    return list(db.scalars(
+        select(Job)
+        .where(
+            Job.kind == "workflow",
+            Job.workspace_id == workflow.workspace_id,
+            Job.payload["workflow_id"].as_string() == workflow_id,
+        )
+        .order_by(Job.created_at.desc())
+        .limit(max(1, min(200, limit)))
+    ).all())
 
 
 def draw_entity(db: Session, user: User, entity_id: str, ability: str, config: dict[str, Any]) -> Job:

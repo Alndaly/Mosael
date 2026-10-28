@@ -5,7 +5,6 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query, Response
 from mosael_formats import workflow_file
-from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale, render_message, tr
@@ -33,10 +32,9 @@ from app.api.schemas import (
     WorkflowUnusableNodeOut,
     WorkflowUpdate,
 )
-from app.domain.scheduler import stop_tasks_bound_to_workflow
-from app.domain.triggers import stop_triggers_bound_to_workflow
+from app.domain import people
 from app.domain.scheduler import use_cases as scheduler_uc
-from app.db.models import Job, Workflow, WorkflowRevision, WorkflowRunApproval
+from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.workflows import (
     WorkflowDomainError,
     create_workflow,
@@ -62,7 +60,7 @@ from app.domain.workflows.revisions import (
     get_workflow_revision,
     list_workflow_revisions,
     restore_workflow_revision,
-    revision_vouchers,
+    with_vouchers,
 )
 from app.domain.workflows.templates import built_in_template_graph
 
@@ -358,37 +356,23 @@ def update(workflow_id: str, body: WorkflowUpdate, db: Tx, user: CurrentUser) ->
         raise HTTPException(status_code=422, detail=_localized(exc)) from exc
 
 
-def _with_vouchers(db, rows: list[WorkflowRevision]) -> list[WorkflowRevision]:
-    """给修订标上作者名和认可过它的人(非映射属性,只为序列化而挂)。"""
-    from app.db.models import User
-
-    for row in rows:
-        author = db.get(User, row.created_by) if row.created_by else None
-        row.created_by_name = (author.display_name or author.username) if author is not None else ""
-        row.attested_by = sorted(revision_vouchers(db, row) - {row.created_by})
-    return rows
-
-
 @router.get("/workflows/{workflow_id}/revisions", response_model=list[WorkflowRevisionOut])
 def list_revisions(workflow_id: str, db: DbSession, user: CurrentUser) -> list[WorkflowRevision]:
     workflow = workflow_uc.readable(db, user, workflow_id)
-    return _with_vouchers(db, list_workflow_revisions(db, workflow.id))
+    return with_vouchers(db, list_workflow_revisions(db, workflow.id))
 
 
 @router.get("/workflows/{workflow_id}/awaiting-approvals", response_model=list[TaskAwaitingApprovalOut])
 def awaiting_approvals(workflow_id: str, db: DbSession, user: CurrentUser) -> list[TaskAwaitingApprovalOut]:
     """绑着这张图(或调用它的图)、在等主人认可的定时任务(ADR 0047 D10)。编辑器据此提醒改图的人:你存的这一版
     要任务主人认可之后,那个任务到点才会接着花主人的 AI 连接 —— 只提醒、不拦;主人那边另有通知和任务上的标记。"""
-    from app.db.models import User
-
     workflow = workflow_uc.readable(db, user, workflow_id)
     rows: list[TaskAwaitingApprovalOut] = []
     for task, waiting in scheduler_uc.awaiting_approval_for(db, user, workflow):
-        owner = db.get(User, task.owner_user_id) if task.owner_user_id else None
         rows.append(TaskAwaitingApprovalOut(
             task_id=task.id,
             task_name=task.name,
-            owner_name=(owner.display_name or owner.username) if owner is not None else "",
+            owner_name=people.display_name(db, task.owner_user_id),
             is_mine=task.owner_user_id == user.id,
             awaiting=waiting.attest_details()["attest"],
         ))
@@ -432,24 +416,12 @@ def decide_run_approval(
     """
     from app.domain.workflows import approvals
 
-    approval = db.get(WorkflowRunApproval, approval_id)
-    if approval is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_runApprovalNotFound"))
-    if approval.status != approvals.PENDING:
-        raise HTTPException(status_code=409, detail=tr("routeErr_runApprovalSettled"))
-    note = body.note.strip()
-    if note and not approval.allow_note:
-        #: 节点上关掉了备注那一格:不收,也不悄悄丢掉 —— 说一句,前端把输入框收起来。
-        raise HTTPException(status_code=422, detail=tr("routeErr_runApprovalNoNote"))
     #: **权限和决定都在领域那一处**(workflow_uc.decide_run_approval):按工作区 edit 放行,再落决定、
     #: 唤醒那次运行。飞书卡片回调调的是同一个用例 —— 一个门不会因为在哪儿点而有两种权限。
-    won = workflow_uc.decide_run_approval(
-        db, user, approval, decision=body.decision, note=note, via="app",
-    )
-    if not won:
-        #: 另一条路(飞书)在这一瞬间先到了 —— 决定已经落了,这不是错误,把最新那份给他看。
-        db.refresh(approval)
-    return approval
+    try:
+        return workflow_uc.decide_run_approval_in_app(db, user, approval_id, decision=body.decision, note=body.note)
+    except approvals.RunApprovalRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 @router.post("/workflows/{workflow_id}/revisions/{revision}/attest", response_model=WorkflowRevisionOut)
@@ -465,7 +437,7 @@ def attest(workflow_id: str, revision: int, db: Tx, user: CurrentUser) -> Workfl
         attested = attest_revision(db, workflow, revision, attested_by=user.id)
     except WorkflowRevisionError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return _with_vouchers(db, [attested])[0]
+    return with_vouchers(db, [attested])[0]
 
 
 @router.get("/workflows/{workflow_id}/revisions/{revision}", response_model=WorkflowRevisionDetailOut)
@@ -474,7 +446,7 @@ def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUs
     item = get_workflow_revision(db, workflow.id, revision)
     if item is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_workflowRevisionNotFound"))
-    return _with_vouchers(db, [item])[0]
+    return with_vouchers(db, [item])[0]
 
 
 @router.post("/workflows/{workflow_id}/revisions/{revision}/restore", response_model=WorkflowOut)
@@ -489,16 +461,7 @@ def restore_revision(workflow_id: str, revision: int, db: Tx, user: CurrentUser)
 
 @router.delete("/workflows/{workflow_id}", status_code=204)
 def delete(workflow_id: str, db: Tx, user: CurrentUser) -> Response:
-    workflow = workflow_uc.editable(db, user, workflow_id)
-    # 绑着它的定时任务**同一个事务里停用** —— 此前删工作流不管它们:任务仍是启用的,到点照样
-    # 触发、照样失败,手动的也照样能点「立即运行」。这一步排在路由这层(和 sharing.forget 一样),
-    # 因为定时任务依赖工作流、工作流不能反过来认识定时任务(见 tests/test_import_layering.py)。
-    stop_tasks_bound_to_workflow(db, workflow)
-    # 绑着它的**触发器**同一个事务里停用(ADR 0065 §5),理由和上面那一条一样:图没了,
-    # 触发器留着也没用 —— 它只会在每来一条飞书消息时白试一次、再喊一次主人。
-    # 同样排在这一层:触发器依赖工作流,工作流不能反过来认识触发器。
-    stop_triggers_bound_to_workflow(db, workflow)
-    db.delete(workflow)
+    workflow_uc.delete_workflow(db, user, workflow_id)
     return Response(status_code=204)
 
 
@@ -547,20 +510,7 @@ def _run_refused(exc: WorkflowDomainError) -> HTTPException:
 def list_runs(workflow_id: str, db: DbSession, user: CurrentUser, limit: int = 50) -> list[Job]:
     """Execution history: the workflow's run jobs, newest first. Per-run node steps come from
     the existing GET /jobs/{job_id}/events (workflow.node.* events)."""
-    workflow = workflow_uc.readable(db, user, workflow_id)
-    #: **按工作流在库里筛,再取前 N 条。** 此前是先取整个工作区最新的 N 个工作流任务、再在这里
-    #: 按 workflow_id 过滤 —— 同一个工作区里别的工作流多跑几次,这个工作流的记录就被挤出前 N 条,
-    #: 历史面板随之变空,而它其实跑过很多次。
-    return list(db.scalars(
-        select(Job)
-        .where(
-            Job.kind == "workflow",
-            Job.workspace_id == workflow.workspace_id,
-            Job.payload["workflow_id"].as_string() == workflow_id,
-        )
-        .order_by(Job.created_at.desc())
-        .limit(max(1, min(200, limit)))
-    ).all())
+    return workflow_uc.recent_runs(db, user, workflow_id, limit=limit)
 
 
 @router.get("/workflows/runs/{job_id}/outputs/{node_id}/{key}", response_model=WorkflowRunOutputOut)
