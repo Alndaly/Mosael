@@ -312,7 +312,7 @@ def test_播客没给发音人_用目录里的前两位(monkeypatch) -> None:
     res = client.post("/api/generation/podcast", json={"workspace_id": ws, "mode": "research", "text": "AI 剪辑的未来"})
     assert res.status_code == 200, res.text
     assert wait_for_idle_jobs(15)
-    assert asked["speakers"] == [voice for voice, _ in PODCAST_SPEAKERS[:2]]
+    assert asked["speakers"] == [speaker.id for speaker in PODCAST_SPEAKERS[:2]]
     assert asked["prompt_text"] == "AI 剪辑的未来" and asked["input_text"] == ""
     assert [one["value"] for one in res.json()["generation"]["request"]["speakers"]] == asked["speakers"]
 

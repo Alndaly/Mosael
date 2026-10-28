@@ -1,6 +1,6 @@
 # 语音引擎在契约上声明目录信息，播客由 Registry 交出，公共接口不转出任何一家 Adapter
 
-- 状态：Accepted（2026-10-28）
+- 状态：Accepted（2026-10-28）；音色那一半（`builtin_voices`、`AccountVoiceCatalog`、`account_voices`）已由 [ADR 0087](0087-voice-option-catalog-and-ref.md) 取代为音色目录 `voices(context) -> list[VoiceOption]`
 - 相关：[ADR 0010](0010-provider-contracts-adapters-registry.md)（Provider 的契约 / Adapter / Registry 三层）
 
 ## Context

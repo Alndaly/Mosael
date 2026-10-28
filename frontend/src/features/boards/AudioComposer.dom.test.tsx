@@ -11,6 +11,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import type { BoardItem } from "@/api/client";
 import { AudioComposer } from "./AudioComposer";
+import { voiceOption } from "@/test/voiceOption";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({
@@ -32,7 +33,7 @@ vi.mock("@tanstack/react-query", () => ({
     // 所选引擎的发音人挂在配音库的前缀下(voiceKeys.engineVoices:["voices", 工作区, "engine", 引擎])。
     if (name === "voices" && queryKey[2] === "engine") {
       return queryKey[3] === "builtin:edge"
-        ? { data: [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" }, { value: "en-US-JennyNeural", label: "Jenny" }] }
+        ? { data: [voiceOption("zh-CN-XiaoxiaoNeural", "晓晓(女·温暖)"), voiceOption("en-US-JennyNeural", "Jenny")] }
         : { data: [] };
     }
     if (name === "voices") return { data: [] };           // 克隆库是空的 —— 正是那台新机器

@@ -34,8 +34,10 @@ from mosael_formats.plugin_manifest import SPEECH
 from app.ai.providers import (
     REMOTE_SPEECH_ADAPTERS,
     SpeechCatalogError,
-    account_voices,
+    VoiceCatalogContext,
+    VoiceOption,
     connection_vendor_for_speech_engine,
+    engine_voices,
     podcast_engine,
     speech_engines,
 )
@@ -122,7 +124,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             # generate_custom_voice 没有语速参数(它靠 instruct 控节奏,而界面没有这一格)。
             "supports_speed": False,
             "needs_voice_id": False,
-            "voices": [item.id for item in qwen_models.SPEAKERS],
+            "voices": [voice.id for voice in _preset_voices()],
             "ready": qwen_ready,
             "note": "ttsProviderNote_qwenReady" if qwen_ready else "ttsProviderNote_qwenMissing",
         },
@@ -135,7 +137,8 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
                 "supports_speed": engine.supports_speed,
                 "needs_voice_id": engine.needs_voice_id,
                 #: 音色随模型变的那几家(百炼)按这个人那条连接上配的模型给;认不出的模型回空,界面退回填 id。
-                "voices": [voice for voice, _ in engine.builtin_voices(active_model_for(engine, user_id))],
+                #: 这里只要 id、不按账号现拉(那要一次签名请求):整份清单在 list_engine_voices。
+                "voices": [voice.id for voice in engine.voices(VoiceCatalogContext(model=active_model_for(engine, user_id)))],
                 "note": engine.note_key,
             }
             for engine in speech_engines()
@@ -146,7 +149,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "needs_key": True,
             "supports_speed": True,
             "needs_voice_id": False,
-            "voices": [voice for voice, _ in podcast_engine().speakers],
+            "voices": [speaker.id for speaker in podcast_engine().speakers],
             "note": podcast_engine().note_key,
         },
     ]
@@ -187,7 +190,7 @@ def _plugin_engines(db: Session | None, user_id: str | None) -> list[dict[str, o
             "needs_key": False,
             "supports_speed": True,
             "needs_voice_id": False,
-            "voices": [voice["value"] for voice in _plugin_voices(db, provider)] if ready else [],
+            "voices": [voice.id for voice in _plugin_voices(db, provider)] if ready else [],
             "ready": ready,
             "note": "",
             "plugin": True,
@@ -195,7 +198,7 @@ def _plugin_engines(db: Session | None, user_id: str | None) -> list[dict[str, o
     return found
 
 
-def _plugin_voices(db: Session, provider) -> list[dict[str, str]]:
+def _plugin_voices(db: Session, provider) -> list[VoiceOption]:
     """插件连接能念的音色(`op: voices`)。问不到就是空清单,原因记进日志 —— 一个坏插件不该让引擎下拉整个拉不出来。"""
 
     try:
@@ -208,22 +211,18 @@ def _plugin_voices(db: Session, provider) -> list[dict[str, str]]:
         return []
     voices = output.get("voices") if isinstance(output, dict) else None
     return [
-        {"value": str(voice.get("id")), "label": str(voice.get("name") or voice.get("id"))}
+        VoiceOption(str(voice.get("id")), str(voice.get("name") or voice.get("id")))
         for voice in (voices if isinstance(voices, list) else [])
         if isinstance(voice, dict) and voice.get("id")
     ]
 
 
-def list_engine_voices(db: Session, engine: str, *, user_id: str | None, workspace_id: str = "") -> list[dict[str, Any]]:
-    """The voices an engine can speak in, live where the account allows it.
+def list_engine_voices(db: Session, engine: str, *, user_id: str | None, workspace_id: str = "") -> list[VoiceOption]:
+    """一个引擎能念的音色 —— **音色目录的唯一合并点**(ADR 0087)。
 
-    火山's catalogue depends on the account, and a voice used with the wrong resource family
-    fails with an opaque 55000000 — so when AK/SK are configured the list is pulled from the
-    account and each voice carries its family. Without them, the built-in list still works;
-    it is smaller and can go stale, which is a far better failure than an empty dropdown.
-
-    带了工作区、而这个引擎能复刻(CosyVoice)时,系统音色后面再接一组这个工作区配音库里的克隆音色(ADR 0037):
-    `value` 是嗓子的 id,`cloned` 为真 —— 选它时请求带 `voice_id`,宿主在合成前把它解析成远端副本。
+    引擎自己的那份来自它的音色目录(内置的照表;百炼按模型;火山配了 AK/SK 按账号现拉,资源族在 `extra` 里);
+    本机预置的(Qwen3-TTS)和插件的由这里接上。带了工作区、而这个引擎能复刻(CosyVoice)时,后面再接一组这个工作区
+    配音库里的克隆音色(`source="cloned"`,ADR 0037)—— 选它时请求带 `voice_id`,宿主在合成前把它解析成远端副本。
     """
     stock = _engine_voices(db, engine, user_id=user_id)
     if workspace_id and _clones_remotely(engine):
@@ -259,7 +258,7 @@ def set_default_voice(db: Session, engine: str, voice: str) -> tuple[str, str]:
         raise voice_defaults.UnknownVoiceEngine(wanted or engine)
     if found.missing:
         raise voice_defaults.VoiceEngineNotReady(found.name, tr("punct_listSep").join(found.missing))
-    listed = [str(item["value"]) for item in list_engine_voices(db, found.id, user_id=None)]
+    listed = [voice.id for voice in list_engine_voices(db, found.id, user_id=None)]
     if not voice:
         raise voice_defaults.VoiceMissing(found.id, listed)
     if voice not in listed:
@@ -272,7 +271,7 @@ def _clones_remotely(engine: str) -> bool:
     return clones_remotely(engine)
 
 
-def cloned_voices(db: Session, workspace_id: str) -> list[dict[str, Any]]:
+def cloned_voices(db: Session, workspace_id: str) -> list[VoiceOption]:
     """这个工作区配音库里**能复刻出去**的嗓子(声明过是谁的;没声明的不往外传,ADR 0028 §5)。"""
     from sqlalchemy import select
 
@@ -282,49 +281,60 @@ def cloned_voices(db: Session, workspace_id: str) -> list[dict[str, Any]]:
         .where(Voice.workspace_id == workspace_id, Voice.consent_kind != UNDECLARED)
         .order_by(Voice.created_at)
     )
-    return [{"value": row.id, "label": row.name, "cloned": True} for row in rows]
+    return [VoiceOption(row.id, row.name, source="cloned") for row in rows]
 
 
-def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dict[str, Any]]:
-    """引擎**自己的**音色(系统音色;火山按账号现拉)。"""
+def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[VoiceOption]:
+    """引擎**自己的**音色(不含配音库里的克隆音色)。
 
-    # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
-    # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
-    # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
-    # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
+    每一家的清单只有一个产地:它自己的音色目录。这里只决定**问的时候带什么**(模型、这个人那条连接)——
+    带什么必须和合成时同一条路径,否则下拉列的是 A 的音色、发出去的是 B 的请求。
+    """
+
     if is_plugin(engine):
         from app.domain import capabilities
 
         provider = next((one for one in capabilities.plugin_providers(db, user_id, CAPABILITY) if one.id == engine), None)
         return _plugin_voices(db, provider) if provider is not None and not provider.missing else []
+    if engine == QWEN_ENGINE:
+        return _preset_voices()
+    if engine == PODCAST_ENGINE:
+        return list(podcast_engine().speakers)
     engine = adapter_id(engine)
     engine_cls = REMOTE_SPEECH_ADAPTERS.get(engine)
-    if engine_cls is not None and getattr(engine_cls, "MODEL_PREFIXES", ()):
-        # 音色**跟着模型走**的那几家(百炼:qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的 id 完全另一套)。
-        # 这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的音色、发出去的是 B 的请求。
-        return [{"value": voice, "label": label}
-                for voice, label in engine_cls.builtin_voices(active_model_for(engine_cls, user_id))]
-
-    if engine_cls is None or not hasattr(engine_cls, "account_voices"):
-        fixed = next((item for item in describe_engines(db, user_id) if item["id"] == f"{BUILTIN_PREFIX}{engine}"), None)
-        voices = list(fixed.get("voices") or []) if fixed else []
-        # **标签要从所有带标签的清单里找**,不只是 edge。engine 目录里的 `voices` 是纯 id
-        # (schema 是 list[str]),而 edge / 播客 / 火山内置那三张表都是 (id, 名字) 成对的 ——
-        # 只查 edge 的话,播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`
-        # 这种一眼认不出谁是谁的原始 id(真机截图)。
-        return [{"value": voice, "label": builtin_voice_label(voice) or voice} for voice in voices]
-
-    # 音色**随账号变**的那几家(火山):按**我自己**那条连接现拉(密字段跟着我的钥匙走,见 domain/providers/credentials),
-    # 拉不到就退回内置清单 —— 用户照样能念,拉不到的原因记日志,不让下拉坏掉。
-    connection = providers_selection.resolve_connection(db, engine, user_id=user_id)
+    if engine_cls is None:
+        # 本机克隆念的是配音库里的嗓子(另一个下拉),认不出的引擎没有音色。
+        return []
+    context = _catalog_context(db, engine_cls, user_id=user_id)
     try:
-        live = account_voices(engine, connection.extra if connection else {})
+        return engine_voices(engine, context)
     except SpeechCatalogError as exc:
+        # 按账号现拉没成(火山):退回内置清单,用户照样能念;原因记日志,不让下拉坏掉。
         logger.info("%s live voice list unavailable: %s", engine, exc)
-        live = None
-    if live:
-        return live
-    return [{"value": voice, "label": label} for voice, label in engine_cls.builtin_voices()]
+        return engine_voices(engine, VoiceCatalogContext(model=context.model))
+
+
+def _catalog_context(db: Session, engine_cls: type, *, user_id: str | None) -> VoiceCatalogContext:
+    """问一家音色目录时带上什么:音色随模型变的(百炼)带这个人配的模型,要钥匙的带**他自己**那条连接的附加字段
+    (密字段跟着他的钥匙走,见 domain/providers/credentials)。"""
+
+    model = active_model_for(engine_cls, user_id) if getattr(engine_cls, "MODEL_PREFIXES", ()) else ""
+    if not engine_cls.needs_key:
+        return VoiceCatalogContext(model=model)
+    connection = providers_selection.resolve_connection(
+        db, connection_vendor_for_speech_engine(engine_cls.engine_id), user_id=user_id
+    )
+    return VoiceCatalogContext(model=model, connection_extra=connection.extra if connection else {})
+
+
+def _preset_voices() -> list[VoiceOption]:
+    """本机 Qwen3-TTS 的预置音色。语言是模型卡上写的每个音色的母语(它也念得了别的九种)。"""
+
+    return [
+        VoiceOption(speaker.id, speaker.label, source="preset",
+                    languages=(speaker.native_language,) if speaker.native_language else ())
+        for speaker in qwen_models.SPEAKERS
+    ]
 
 
 def local_engine_ready(engine_id: str) -> bool | None:
@@ -382,7 +392,7 @@ def voice_note(db: Session, *, engine: str, voice: str, workspace_id: str, user_
     entry = next((one for one in describe_engines(db, user_id) if one["id"] == engine), None)
     label = str(entry["label"]) if entry is not None else engine
     #: 带上工作区:CosyVoice 念的可能是配音库里的嗓子(ADR 0037),那时说它的名字,不说一串 id。
-    named = {one["value"]: one["label"] for one in list_engine_voices(db, engine, user_id=user_id, workspace_id=workspace_id)}
+    named = {one.id: one.label for one in list_engine_voices(db, engine, user_id=user_id, workspace_id=workspace_id)}
     spoken = str(named.get(voice, voice)).split("(")[0].strip() or voice
     has_clone = cloned_voice_status(db, workspace_id) != "missing"
     return tr("wfVoice_engineCloneReady" if has_clone else "wfVoice_engineNoClone", voice=spoken, engine=fragment(label))
@@ -392,13 +402,14 @@ def voice_resource_for(db: Session, engine: str, voice: str, *, user_id: str | N
     """这个音色的资源族(只有火山有)。**合成的那一方自己查**,不靠界面选音色时顺手填上 ——
     那样的话,每一个挑音色的地方都得记得多存一个字段,而忘了存的后果是音色不生效、也不报错。
     查不到就是空串:内置音色由合成那边按 id 推断。
+
+    **过渡**:它读的是火山 Adapter 放进 `VoiceOption.extra` 的那一格。ADR 0087 第 2 步里音色选择(`VoiceRef`)
+    原样带着 `extra` 走到合成,这个函数随之删除。
     """
     if not voice:
         return ""
-    for item in list_engine_voices(db, engine, user_id=user_id):
-        if item.get("value") == voice:
-            return str(item.get("resource_id") or "")
-    return ""
+    found = next((item for item in list_engine_voices(db, engine, user_id=user_id) if item.id == voice), None)
+    return str(found.extra.get("resource_id") or "") if found is not None else ""
 
 
 def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> list[dict[str, Any]]:
@@ -418,7 +429,7 @@ def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> lis
             voices = [{"id": str(voice), "name": builtin_voice_label(str(voice)) or str(voice)} for voice in engine["voices"]]
             if _clones_remotely(str(engine["id"])):
                 #: 能复刻的引擎(CosyVoice)也念得了配音库里的嗓子(念它的远端副本,第一次要用户同意上传)。
-                voices += [{"id": one["value"], "name": one["label"], "cloned": True} for one in cloned_voices(db, workspace_id)]
+                voices += [{"id": one.id, "name": one.label, "cloned": True} for one in cloned_voices(db, workspace_id)]
         plugin = bool(engine.get("plugin"))
         found.append({
             "id": engine["id"],

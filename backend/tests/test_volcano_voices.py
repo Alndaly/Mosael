@@ -31,8 +31,8 @@ def _voices(client, engine: str) -> list[dict]:
 def test_without_ak_sk_the_builtin_list_is_served() -> None:
     client = _admin_client()
     voices = _voices(client, "builtin:volcano")
-    assert [v["value"] for v in voices] == [v for v, _ in VOLCANO_BUILTIN_VOICES]
-    assert voices[0]["label"] and voices[0]["label"] != voices[0]["value"], "labels should be readable"
+    assert [v["id"] for v in voices] == [v.id for v in VOLCANO_BUILTIN_VOICES]
+    assert voices[0]["label"] and voices[0]["label"] != voices[0]["id"], "labels should be readable"
 
 
 def test_with_ak_sk_the_account_list_wins_and_carries_the_family(monkeypatch) -> None:
@@ -49,9 +49,23 @@ def test_with_ak_sk_the_account_list_wins_and_carries_the_family(monkeypatch) ->
 
     voices = _voices(client, "builtin:volcano")
 
-    #: `cloned` 只有能复刻的引擎(CosyVoice)念配音库里的嗓子时才是真(ADR 0037)。
-    assert voices == [{"value": "zh_male_custom_bigtts", "label": "定制音色", "resource_id": "seed-icl-2.0",
-                       "cloned": False, "is_default": False}]
+    #: 账号现拉的标成 `account`;资源族放在只有火山 Adapter 解释的 `extra` 里;语言由火山的 id 约定(`zh_…`)翻出来(ADR 0087)。
+    assert voices == [{"id": "zh_male_custom_bigtts", "label": "定制音色", "source": "account", "languages": ["zh"],
+                       "gender": "", "styles": [], "models": [], "preview_url": "",
+                       "extra": {"resource_id": "seed-icl-2.0"}, "is_default": False}]
+
+
+def test_account_voices_take_a_language_only_from_a_known_prefix(monkeypatch) -> None:
+    """白名单,不是「任意两个字母」:账号里自建的 `my_voice_42` 不该被认成某种语言 —— 认错了会拦下一次本来能成的合成。"""
+    from app.ai.providers import VoiceCatalogContext
+    from app.ai.providers.adapters.bytedance.volcano.speech import VolcanoSpeechAdapter
+
+    monkeypatch.setattr(
+        "app.ai.providers.adapters.bytedance.volcano.speech.list_all_speakers",
+        lambda ak, sk: [{"VoiceType": "ja_female_x_bigtts", "Name": "a"}, {"VoiceType": "my_voice_42", "Name": "b"}],
+    )
+    voices = VolcanoSpeechAdapter.voices(VoiceCatalogContext(connection_extra={"ak": "AK", "sk": "SK"}))
+    assert [(voice.id, voice.languages) for voice in voices] == [("ja_female_x_bigtts", ("ja",)), ("my_voice_42", ())]
 
 
 def test_a_failing_account_lookup_falls_back_instead_of_erroring(monkeypatch) -> None:
@@ -67,18 +81,18 @@ def test_a_failing_account_lookup_falls_back_instead_of_erroring(monkeypatch) ->
 
     monkeypatch.setattr("app.ai.providers.adapters.bytedance.volcano.speech.list_all_speakers", boom)
 
-    assert [v["value"] for v in _voices(client, "builtin:volcano")] == [v for v, _ in VOLCANO_BUILTIN_VOICES]
+    assert [v["id"] for v in _voices(client, "builtin:volcano")] == [v.id for v in VOLCANO_BUILTIN_VOICES]
 
 
 def test_podcast_voices_are_the_saturn_set() -> None:
     """These only work on the podcast socket; offering the normal TTS voices there fails."""
     client = _admin_client()
-    assert [v["value"] for v in _voices(client, "builtin:volcano-podcast")] == [v for v, _ in PODCAST_SPEAKERS]
+    assert [v["id"] for v in _voices(client, "builtin:volcano-podcast")] == [v.id for v in PODCAST_SPEAKERS]
 
 
 def test_openai_voices_come_from_the_engine_constant() -> None:
     client = _admin_client()
-    assert "alloy" in [v["value"] for v in _voices(client, "builtin:openai")]
+    assert "alloy" in [v["id"] for v in _voices(client, "builtin:openai")]
     # 旧 id **不再**解析:启动迁移把库里的三处都改掉了,读取代码里不留别名(见 ADR 0006)。
     assert _voices(client, "openai-tts") == []
 

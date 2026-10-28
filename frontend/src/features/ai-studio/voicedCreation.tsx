@@ -162,7 +162,7 @@ export function useSpeechDraft(workspaceId: string, engineId: string | null, las
 /** 选中的那个音色叫什么(记录上、产出的素材名里用它)。 */
 function chosenVoiceLabel(voice: SpeechVoice): string {
   if (voice.engine === CLONE_ENGINE) return voice.library.find((item) => item.id === voice.voiceId)?.name ?? "";
-  return voice.voiceChoices.find((item) => item.value === voice.engineVoice)?.label ?? voice.engineVoice;
+  return voice.voiceChoices.find((item) => item.id === voice.engineVoice)?.label ?? voice.engineVoice;
 }
 
 /** 念一段字的请求(工作区、会话由调用方补)。音色一格:克隆是嗓子 id,别的是引擎自己的音色(或配音库里的嗓子 id)。 */
@@ -302,8 +302,8 @@ export function usePodcastDraft(enabled: boolean, last: GenerationJob | null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastId]);
   // 下拉没选时**显示**的是第一 / 第二位,那就交同样的。
-  const pair: [string, string] = [picked[0] || choices[0]?.value || "", picked[1] || choices[1]?.value || ""];
-  const labelOf = React.useCallback((value: string) => choices.find((one) => one.value === value)?.label ?? value, [choices]);
+  const pair: [string, string] = [picked[0] || choices[0]?.id || "", picked[1] || choices[1]?.id || ""];
+  const labelOf = React.useCallback((value: string) => choices.find((one) => one.id === value)?.label ?? value, [choices]);
   const setSpeaker = (index: 0 | 1, value: string) =>
     setPicked((current) => (index === 0 ? [value, current[1]] : [current[0], value]));
   /** 「改稿再念」:那一份对谈稿装进照稿念,发音人换成那一次的两位。 */
@@ -558,7 +558,7 @@ export function PodcastSettings({
         <OptionPicker
           value={draft.pair[index]}
           onChange={(value) => draft.setSpeaker(index, value)}
-          options={draft.choices}
+          options={draft.choices.map((one) => ({ value: one.id, label: one.label }))}
           ariaLabel={t(index === 0 ? "voicePodcastSpeakerA" : "voicePodcastSpeakerB")}
           className={PARAMETER_CONTROL_CLASS}
         />
@@ -684,7 +684,7 @@ export function PodcastDialogue({
   const labelOf = (value: string) =>
     speakersOf(request).find((one) => one.value === value)?.label ||
     fromInfo.find((one) => one.value === value)?.label ||
-    catalog.data?.find((one) => one.value === value)?.label ||
+    catalog.data?.find((one) => one.id === value)?.label ||
     value;
   const [open, setOpen] = React.useState(false);
   //: 素材还没到:先占住对谈稿那一行(和会话首次加载的骨架同一个壳),到了原地换上,版面不跳
@@ -749,6 +749,6 @@ export function useVoiceLabels(workspaceId: string, engines: readonly string[]):
     enabled: Boolean(engine),
     staleTime: 60_000,
   });
-  return React.useMemo(() => new Map((voices.data ?? []).map((one) => [one.value, one.label])), [voices.data]);
+  return React.useMemo(() => new Map((voices.data ?? []).map((one) => [one.id, one.label])), [voices.data]);
 }
 

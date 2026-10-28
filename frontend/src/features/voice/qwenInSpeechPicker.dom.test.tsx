@@ -46,7 +46,7 @@ const CLONE = {
   ready: true,
   clones_voices: false,
 };
-/** 后端按目录翻好的音色:9 个预置音色,`cloned` 全是 false —— 一把克隆音色都没有。 */
+/** 后端按目录翻好的音色:9 个预置音色(`source: "preset"`)—— 一把克隆音色都没有。 */
 const QWEN_VOICES = [
   ["vivian", "Vivian(女·明亮)"],
   ["serena", "Serena(女·温柔)"],
@@ -57,7 +57,7 @@ const QWEN_VOICES = [
   ["aiden", "Aiden(男·美音)"],
   ["ono_anna", "音乃安娜(女·日语)"],
   ["sohee", "Sohee(女·韩语)"],
-].map(([value, label]) => ({ value, label, resource_id: "", cloned: false }));
+].map(([id, label]) => voiceOption(id, label, { source: "preset" }));
 
 vi.mock("@/api/client", () => ({
   getTtsConfig: () =>
@@ -83,6 +83,7 @@ vi.mock("@/api/client", () => ({
 
 import { SpeechVoiceFields } from "./SpeechVoiceFields";
 import { useSpeechVoice } from "./useSpeechVoice";
+import { voiceOption } from "@/test/voiceOption";
 
 function Harness() {
   const voice = useSpeechVoice("w1");
@@ -130,7 +131,7 @@ describe("Qwen3-TTS 在配音/合成的引擎选择器里", () => {
     // 音色是模型自带的 9 个,不是配音库里的克隆音色。
     const chosen = JSON.parse(screen.getByTestId("chosen").textContent ?? "[]");
     expect(chosen).toHaveLength(9);
-    expect(chosen.every((one: { cloned: boolean }) => one.cloned === false)).toBe(true);
+    expect(chosen.every((one: { source: string }) => one.source === "preset")).toBe(true);
   });
 
   it("选了它不会要求参考音频/克隆音色 —— 那是克隆引擎才有的两格", async () => {

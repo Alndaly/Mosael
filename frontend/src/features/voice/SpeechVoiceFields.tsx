@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { MessageKey } from "@/app/messages";
 import { runtimeState, type SpeechVoice } from "@/features/voice/useSpeechVoice";
 import { cn } from "@/lib/utils";
-import { CLONE_ENGINE } from "@/api/domains/speech";
+import { CLONE_ENGINE, type VoiceOption } from "@/api/domains/speech";
 
 /** 带小标签的紧凑表单格:下拉全长一个样,没有标签就分不清「音色」「语速」「发音人 B」谁是谁 ——
     标签贴在控件上方而不是靠占位符。 */
@@ -96,14 +96,15 @@ const TYPED_VOICE = "__typed_voice_id__";
 function remoteVoiceChoices(voice: SpeechVoice, t: ReturnType<typeof useI18n>) {
   const { stockVoices, clonedVoices, activeEngine } = voice;
   const typing = Boolean(activeEngine?.needs_voice_id) && stockVoices.length === 0;
+  const option = (item: VoiceOption, group?: string) => ({ value: item.id, label: item.label, ...(group ? { group } : {}) });
   if (clonedVoices.length === 0) {
-    return { typing, choices: stockVoices, value: voice.engineVoice, showInput: typing };
+    return { typing, choices: stockVoices.map((item) => option(item)), value: voice.engineVoice, showInput: typing };
   }
   const stockGroup = t("voiceGroupStock");
   const clonedGroup = t("voiceGroupCloned");
   const choices = [
-    ...stockVoices.map((item) => ({ ...item, group: stockGroup })),
-    ...clonedVoices.map((item) => ({ ...item, group: clonedGroup })),
+    ...stockVoices.map((item) => option(item, stockGroup)),
+    ...clonedVoices.map((item) => option(item, clonedGroup)),
     ...(typing ? [{ value: TYPED_VOICE, label: t("voiceTypeVoiceId"), group: t("voiceGroupOther") }] : []),
   ];
   const value = typing && !voice.speaksClonedVoice ? TYPED_VOICE : voice.engineVoice;

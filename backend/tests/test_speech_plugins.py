@@ -51,7 +51,7 @@ def test_插件引擎和内置引擎并列_音色问插件要() -> None:
     assert "builtin:clone" in engines and "builtin:edge" in engines
     assert engines[plugin]["ready"] is True and engines[plugin]["voices"] == ["anna", "bo"]
     voices = client.get("/api/tts/voices", params={"engine": plugin}).json()
-    assert [(one["value"], one["label"]) for one in voices] == [("anna", "安娜"), ("bo", "波")]
+    assert [(one["id"], one["label"]) for one in voices] == [("anna", "安娜"), ("bo", "波")]
     options = client.get("/api/workflows/field-options", params={"workspace_id": ws, "source": "speech_engines"}).json()
     assert plugin in {one["value"] for one in options}
 

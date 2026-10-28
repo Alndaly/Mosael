@@ -68,7 +68,7 @@ def _default_engine(client) -> str:
 
 
 def _default_voice(client, engine: str) -> str:
-    return next((row["value"] for row in _voices(client, engine) if row.get("is_default")), "")
+    return next((row["id"] for row in _voices(client, engine) if row.get("is_default")), "")
 
 
 def _choose_personal(client, provider_id: str):
@@ -118,7 +118,7 @@ def test_能设一对默认_两个候选接口都标出来() -> None:
     assert _default_voice(client, EDGE) == EDGE_VOICE_2
     #: 别的引擎、别的音色都不该被标成默认。
     assert [row["id"] for row in _engines(client) if row.get("is_default")] == [EDGE]
-    assert [row["value"] for row in _voices(client, EDGE) if row.get("is_default")] == [EDGE_VOICE_2]
+    assert [row["id"] for row in _voices(client, EDGE) if row.get("is_default")] == [EDGE_VOICE_2]
 
 
 def test_清掉默认() -> None:

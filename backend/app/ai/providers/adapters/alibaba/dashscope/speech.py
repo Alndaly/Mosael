@@ -9,7 +9,13 @@ import httpx
 from app.ai.providers.adapters.alibaba.dashscope import connection
 from app.core.http_retry import RetryingClient
 
-from app.ai.providers.contracts.speech import SPEECH_REQUEST_TIMEOUT_SECONDS, SpeechSynthesisRequest, SpeechSynthesisError
+from app.ai.providers.contracts.speech import (
+    SPEECH_REQUEST_TIMEOUT_SECONDS,
+    SpeechSynthesisError,
+    SpeechSynthesisRequest,
+    VoiceCatalogContext,
+    VoiceOption,
+)
 
 
 class BailianSpeechAdapter:
@@ -87,20 +93,25 @@ class BailianSpeechAdapter:
     note_key = "ttsProviderNote_bailian"
 
     @classmethod
-    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
-        return tuple((voice, voice) for voice in cls.voices_for(model))
+    def voices(cls, context: VoiceCatalogContext) -> list[VoiceOption]:
+        """按模型给。每一项记下它属于哪一族模型(`models`):换到别的族上,同名音色未必还念得出来。"""
+        family = cls.family_of(context.model)
+        return [VoiceOption(voice, voice, models=(family,) if family else ()) for voice in cls.voices_for(context.model)]
+
+    @classmethod
+    def family_of(cls, model: str) -> str:
+        """这个模型属于音色表里的哪一族(表里的键);认不出就是空串。"""
+        name = (model or "").strip()
+        # 最长前缀优先:qwen3-tts-flash 要先于 qwen-tts 命中,否则带 3 的那族会落到旧表上。
+        return next((prefix for prefix in sorted(cls.VOICES_BY_MODEL, key=len, reverse=True) if name.startswith(prefix)), "")
 
     @classmethod
     def voices_for(cls, model: str) -> tuple[str, ...]:
-        """这个模型能用哪些音色。认不出来就回空 —— 由调用方退回"自己填 id"。"""
-        name = (model or "").strip()
-        if not name:
+        """这个模型能用哪些音色。没给模型给两族的交集;认不出来就回空 —— 由调用方退回"自己填 id"。"""
+        if not (model or "").strip():
             return cls.VOICES
-        # 最长前缀优先:qwen3-tts-flash 要先于 qwen-tts 命中,否则带 3 的那族会落到旧表上。
-        for prefix in sorted(cls.VOICES_BY_MODEL, key=len, reverse=True):
-            if name.startswith(prefix):
-                return cls.VOICES_BY_MODEL[prefix]
-        return ()
+        family = cls.family_of(model)
+        return cls.VOICES_BY_MODEL[family] if family else ()
     PATH = "/api/v1/services/aigc/multimodal-generation/generation"
 
     # 签名要收 `voice`:build_speech_adapter 的兜底分支是

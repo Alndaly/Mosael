@@ -64,9 +64,3 @@ def detect_script(text: str) -> str:
         if hits >= _MIN_COUNT and hits / total >= _MIN_SHARE:
             return script
     return ""
-
-
-def edge_voice_language(voice: str) -> str:
-    """Edge 音色 id 自带 locale(`ja-JP-NanamiNeural`)—— 语言就写在名字里,不用猜。"""
-    head = (voice or "").split("-", 1)[0].strip().lower()
-    return head if len(head) == 2 and head.isalpha() else ""

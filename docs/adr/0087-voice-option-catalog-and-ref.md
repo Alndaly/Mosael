@@ -1,6 +1,6 @@
 # 音色是一等概念：契约上的音色目录，存储上唯一的音色选择
 
-- 状态：Accepted（2026-10-28）；分四步实施，见文末，尚未开始
+- 状态：Accepted（2026-10-28）；分四步实施，见文末。第 1 步已完成
 - 相关：
   - [ADR 0010](0010-provider-contracts-adapters-registry.md)：Provider 的契约、Adapter、Registry 三层
   - [ADR 0028](0028-digital-humans.md)：数字人与授权声明
@@ -172,6 +172,23 @@ class VoiceRef:
 - **`VoiceRef` 里塞语速。**
   同一把嗓子在对话里念快一点、在成片里念慢一点，是常见用法。
   合在一起，「是不是同一把嗓子」就要先剥掉语速才能比。
+
+## 第 1 步落定的细节
+
+- **契约形状**：`SpeechAdapter.voices(context: VoiceCatalogContext) -> list[VoiceOption]` 取代 `builtin_voices` 与
+  `AccountVoiceCatalog`。`VoiceCatalogContext` 带 `model` 和 `connection_extra`（含跟着钥匙走的密字段）。
+  Registry 交出 `engine_voices(engine_id, context)`、`builtin_voice(engine_id, voice_id)`、`builtin_voice_labels()`。
+- **音色的语言只有一个来源：目录上的 `languages`**。
+  - 内置表（Edge、火山、播客）把语言、性别写成数据列；本机 Qwen3-TTS 用模型卡上每个音色的母语。
+  - 火山账号音色的语言由火山 Adapter 按它自己的 id 约定（`zh_…`，白名单）翻出来 —— 那是这一家的规则，住在这一家。
+  - 前端字幕配音的提示（`features/editor/dubLanguage.ts`）和后端合成前的拦截（`domain/voices/voices._refuse_if_unspeakable`）
+    都改读目录，删掉了前后端各自解析音色 id 的两份代码。
+  - 后端拦截只查**内置**目录（`builtin_voice`，不发请求）：每次合成都走这里，不为它签名现拉账号清单。
+    账号音色的语言由界面在提交前按它拿到的那份目录提示。
+- **过渡（第 2 步删除）**：存储仍是 `engine_voice_resource` 一格字符串。
+  - 前端只在 `api/domains/speech.voiceResourceOf` 一处读 `extra`；
+  - 后端只在 `domain/voices/engine_catalog.voice_resource_for` 一处读。
+  - 调用处都只交 `VoiceOption`，不认识任何一家。
 
 ## 实施步骤
 

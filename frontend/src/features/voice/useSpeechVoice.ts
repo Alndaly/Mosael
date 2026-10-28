@@ -6,7 +6,7 @@ import { voiceKeys } from "@/api/queryKeys";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { speechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
-import { CLONE_ENGINE } from "@/api/domains/speech";
+import { CLONE_ENGINE, isClonedVoice, voiceResourceOf } from "@/api/domains/speech";
 
 /** 合成请求里「谁来念」那几个字段。/voices/{id}/synthesize、/tts/synthesize、字幕配音收的都是它。
  *  远端引擎念配音库里的嗓子(CosyVoice,ADR 0037)时带的是 `voice_id`,`engine_voice` 不带。 */
@@ -83,13 +83,13 @@ export function useSpeechVoice(workspaceId: string) {
   const activeEngine = engines.data?.find((item) => item.id === engine);
   const voiceChoices = engineVoices.data ?? [];
   //: 引擎自己的音色(系统音色)和配音库里的嗓子(克隆音色,只有能复刻的引擎才有)。
-  const stockVoices = voiceChoices.filter((item) => !item.cloned);
-  const clonedVoices = voiceChoices.filter((item) => item.cloned);
+  const stockVoices = voiceChoices.filter((item) => !isClonedVoice(item));
+  const clonedVoices = voiceChoices.filter(isClonedVoice);
   // 下拉在没选时**显示**第一个,那就提交同一个 —— 否则引擎会安静地用它自己的默认音。
   // 默认落在系统音色上,**不落在克隆音色上**:那一下要把参考音频传到第三方,得是人亲手点的。
-  const engineVoice = engineVoiceChoice || stockVoices[0]?.value || "";
-  const chosenVoice = voiceChoices.find((item) => item.value === engineVoice);
-  const speaksClonedVoice = Boolean(chosenVoice?.cloned);
+  const engineVoice = engineVoiceChoice || stockVoices[0]?.id || "";
+  const chosenVoice = voiceChoices.find((item) => item.id === engineVoice);
+  const speaksClonedVoice = isClonedVoice(chosenVoice);
 
   // 语速跟着**引擎能力**走:F5 吃 speed,fish 的请求里根本没有这一项;百炼的 qwen-tts 也没有。
   // 远端引擎缺这个字段时按支持处理(老引擎行为不变)。
@@ -113,7 +113,7 @@ export function useSpeechVoice(workspaceId: string) {
             engine,
             engine_voice: engineVoice,
             // 只有目录知道的资源族;不带的话火山回一个 55000000。
-            engine_voice_resource: chosenVoice?.resource_id ?? "",
+            engine_voice_resource: voiceResourceOf(chosenVoice),
             ...(speedSupported ? { speed } : {}),
           };
 
@@ -137,6 +137,8 @@ export function useSpeechVoice(workspaceId: string) {
     /** 这个引擎念得了的配音库嗓子(只有能复刻的引擎才有)。 */
     clonedVoices,
     engineVoice,
+    /** 选中的那一项音色(目录里的那一行);手填 id、还没拉到目录时没有。 */
+    chosenVoice,
     /** 选中的是配音库里的一把嗓子(由远端引擎念它的副本)。 */
     speaksClonedVoice,
     /** 用户亲手选过/填过的那个;空 = 还没动过(可以替他挑一个合适的)。 */

@@ -154,15 +154,31 @@ export function synthesizeVoice(
 /** A remote/local synthesis choice offered by the dubbing UI. */
 export type TtsEngineChoice = components["schemas"]["TtsEngineChoiceOut"];
 
-export type TtsVoice = components["schemas"]["TtsVoiceOut"];
+/** 音色目录里的一项(ADR 0087)。所有挑音色的地方同一个形状;`extra` 只有那一家后端适配器解释,界面不读。 */
+export type VoiceOption = components["schemas"]["VoiceOptionOut"];
 
 /**
  * 一个引擎能念的音色。带上工作区时,能复刻的引擎(CosyVoice)在系统音色后面多一组这个工作区配音库里的嗓子
- * (`cloned`,ADR 0037):选它时请求带 `voice_id`、`engine_voice` 留空。
+ * (`source: "cloned"`,ADR 0037):选它时请求带 `voice_id`、`engine_voice` 留空。
  */
-export function listTtsVoices(engine: string, workspaceId?: string): Promise<TtsVoice[]> {
+export function listTtsVoices(engine: string, workspaceId?: string): Promise<VoiceOption[]> {
   const workspace = workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : "";
-  return api<TtsVoice[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}${workspace}`);
+  return api<VoiceOption[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}${workspace}`);
+}
+
+/** 这一项是配音库里的克隆嗓子(念的是它的远端副本),不是引擎自己的音色。 */
+export function isClonedVoice(voice: VoiceOption | null | undefined): boolean {
+  return voice?.source === "cloned";
+}
+
+/**
+ * 合成请求里 `engine_voice_resource` 那一格(火山:音色所属的资源族,只有账号音色清单知道)。
+ *
+ * **过渡,全仓只在这里读 `extra`**:ADR 0087 第 2 步里,音色选择(`VoiceRef`)把 `extra` 原样带到合成,
+ * 这个函数和那一格请求字段一起删掉。调用处只交一个 `VoiceOption`,不认识任何一家。
+ */
+export function voiceResourceOf(voice: VoiceOption | null | undefined): string {
+  return voice?.extra?.resource_id ?? "";
 }
 
 export function listTtsEngines(): Promise<TtsEngineChoice[]> {

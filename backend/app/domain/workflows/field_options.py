@@ -88,12 +88,12 @@ def _speech_voices(db: Session, ctx: OptionContext) -> list[Option]:
         return [{"value": row.id, "label": row.name} for row in rows]
     return [
         {
-            "value": str(item["value"]),
-            "label": t("wfSpeechVoiceCloned", ctx.locale, name=str(item.get("label") or item["value"]))
-            if item.get("cloned")
-            else str(item.get("label") or item["value"]),
+            "value": voice.id,
+            "label": t("wfSpeechVoiceCloned", ctx.locale, name=voice.label or voice.id)
+            if voice.source == "cloned"
+            else voice.label or voice.id,
         }
-        for item in engine_catalog.list_engine_voices(db, engine, user_id=ctx.user_id, workspace_id=ctx.workspace_id)
+        for voice in engine_catalog.list_engine_voices(db, engine, user_id=ctx.user_id, workspace_id=ctx.workspace_id)
     ]
 
 

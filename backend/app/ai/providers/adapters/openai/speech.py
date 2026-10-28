@@ -8,7 +8,13 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 
-from app.ai.providers.contracts.speech import SPEECH_REQUEST_TIMEOUT_SECONDS, SpeechSynthesisRequest, SpeechSynthesisError
+from app.ai.providers.contracts.speech import (
+    SPEECH_REQUEST_TIMEOUT_SECONDS,
+    SpeechSynthesisError,
+    SpeechSynthesisRequest,
+    VoiceCatalogContext,
+    VoiceOption,
+)
 
 
 class OpenAISpeechAdapter:
@@ -28,8 +34,9 @@ class OpenAISpeechAdapter:
     note_key = "ttsProviderNote_openai"
 
     @classmethod
-    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
-        return tuple((voice, voice) for voice in cls.VOICES)
+    def voices(cls, context: VoiceCatalogContext) -> list[VoiceOption]:
+        # OpenAI 的音色多语言、文档也不标性别:只给 id,不替它补。
+        return [VoiceOption(voice, voice) for voice in cls.VOICES]
 
     def __init__(self, api_key: str, model: str = "gpt-4o-mini-tts", base_url: str = "") -> None:
         if not api_key:

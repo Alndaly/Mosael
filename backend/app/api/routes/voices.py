@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
@@ -22,7 +23,7 @@ from app.api.schemas import (
     VoiceDeleteOut,
     VoicePreviewRequest,
     TtsEngineChoiceOut,
-    TtsVoiceOut,
+    VoiceOptionOut,
     JobOut,
     SynthesizeRequest,
     TtsConfigOut,
@@ -260,21 +261,24 @@ def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
     return rows
 
 
-@router.get("/tts/voices", response_model=list[TtsVoiceOut])
+@router.get("/tts/voices", response_model=list[VoiceOptionOut])
 def list_tts_voices(engine: str, db: DbSession, user: CurrentUser, workspace_id: str = "") -> list[dict]:
-    """The voices an engine can speak in, live where the account allows it (see engine_catalog).
+    """一个引擎能念的音色(音色目录,见 engine_catalog.list_engine_voices)。
 
-    带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`cloned`,ADR 0037)。"""
+    带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`source="cloned"`,ADR 0037)。"""
 
     if workspace_id:
         voice_uc.ensure_can_list(db, user, workspace_id)
     default_engine, default_voice = voice_defaults.default_pair(db)
-    rows = engine_catalog.list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
-    for row in rows:
-        #: 默认是一对:问"这个音色是不是默认的",必须同时在默认那个引擎下问,否则 Edge 的晓晓
-        #: 会把火山上同名的音色也标成默认。
-        row["is_default"] = bool(default_voice) and engine == default_engine and row["value"] == default_voice
-    return rows
+    return [
+        {
+            **asdict(voice),
+            #: 默认是一对:问"这个音色是不是默认的",必须同时在默认那个引擎下问,否则 Edge 的晓晓
+            #: 会把火山上同名的音色也标成默认。
+            "is_default": bool(default_voice) and engine == default_engine and voice.id == default_voice,
+        }
+        for voice in engine_catalog.list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
+    ]
 
 
 @router.put("/settings/voice-default", response_model=VoiceDefaultOut)

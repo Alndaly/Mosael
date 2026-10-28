@@ -2437,9 +2437,9 @@ export interface paths {
         };
         /**
          * List Tts Voices
-         * @description The voices an engine can speak in, live where the account allows it (see engine_catalog).
+         * @description 一个引擎能念的音色(音色目录,见 engine_catalog.list_engine_voices)。
          *
-         *     带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`cloned`,ADR 0037)。
+         *     带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`source="cloned"`,ADR 0037)。
          */
         get: operations["list_tts_voices_api_tts_voices_get"];
         put?: never;
@@ -20263,33 +20263,6 @@ export interface components {
             runtime_checked: boolean;
         };
         /**
-         * TtsVoiceOut
-         * @description One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the
-         *     voice's family, and only the listing knows it — inferring it from the id is guesswork that
-         *     fails with an opaque 55000000.
-         */
-        TtsVoiceOut: {
-            /** Value */
-            value: string;
-            /** Label */
-            label: string;
-            /**
-             * Resource Id
-             * @default
-             */
-            resource_id: string;
-            /**
-             * Cloned
-             * @default false
-             */
-            cloned: boolean;
-            /**
-             * Is Default
-             * @default false
-             */
-            is_default: boolean;
-        };
-        /**
          * UnpricedUsageOut
          * @description 一组没能定价的用量:哪家、哪个模型、哪种能力,为什么,多少次。
          */
@@ -20598,6 +20571,59 @@ export interface components {
             name: string;
             /** Consent Kind */
             consent_kind: string;
+        };
+        /**
+         * VoiceOptionOut
+         * @description 音色目录里的一项(ADR 0087),所有挑音色的地方同一个形状。
+         *
+         *     `source` 说它从哪来:builtin(引擎内置)/ account(按账号现拉)/ preset(本机引擎预置)/ cloned(这个工作区
+         *     配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时请求带 `voice_id`、`engine_voice` 留空)。
+         *     语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样带回去,不读。
+         */
+        VoiceOptionOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Source */
+            source: string;
+            /**
+             * Languages
+             * @default []
+             */
+            languages: string[];
+            /**
+             * Gender
+             * @default
+             */
+            gender: string;
+            /**
+             * Styles
+             * @default []
+             */
+            styles: string[];
+            /**
+             * Models
+             * @default []
+             */
+            models: string[];
+            /**
+             * Preview Url
+             * @default
+             */
+            preview_url: string;
+            /**
+             * Extra
+             * @default {}
+             */
+            extra: {
+                [key: string]: string;
+            };
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
         };
         /** VoiceOut */
         VoiceOut: {
@@ -26863,7 +26889,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TtsVoiceOut"][];
+                    "application/json": components["schemas"]["VoiceOptionOut"][];
                 };
             };
             /** @description Validation Error */

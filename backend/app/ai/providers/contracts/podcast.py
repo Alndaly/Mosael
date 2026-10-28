@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from app.ai.providers.contracts.speech import VoiceOption
 from app.core.i18n import LocalizedError
 
 
@@ -52,8 +53,8 @@ class PodcastEngine(Protocol):
     engine_id: str
     label_key: str
     note_key: str
-    #: 内置发音人:(id, 给人看的名字)。
-    speakers: tuple[tuple[str, str], ...]
+    #: 内置发音人。和念字引擎的音色是同一种东西(ADR 0087),只是一次选两位,不是一个音色选择。
+    speakers: tuple[VoiceOption, ...]
     #: 一次最多几轮、每轮最多几个字 —— 按轮计费,这是预算,不是对「合理请求」的限制。
     max_rounds: int
     max_round_chars: int

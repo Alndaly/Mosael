@@ -196,17 +196,23 @@ class EngineSynthesizeRequest(ApiModel):
     project_id: str | None = None
 
 
-class TtsVoiceOut(ApiModel):
-    """One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the
-    voice's family, and only the listing knows it — inferring it from the id is guesswork that
-    fails with an opaque 55000000."""
+class VoiceOptionOut(ApiModel):
+    """音色目录里的一项(ADR 0087),所有挑音色的地方同一个形状。
 
-    value: str
+    `source` 说它从哪来:builtin(引擎内置)/ account(按账号现拉)/ preset(本机引擎预置)/ cloned(这个工作区
+    配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时请求带 `voice_id`、`engine_voice` 留空)。
+    语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样带回去,不读。"""
+
+    id: str
     label: str
-    resource_id: str = ""
-    #: 这一项是配音库里的一把克隆嗓子(`value` 是它的 id),由这个引擎念它的远端副本(ADR 0037)。
-    #: 选它时请求带 `voice_id`、`engine_voice` 留空。只在能复刻的引擎(CosyVoice)、带了工作区时出现。
-    cloned: bool = False
+    source: str
+    languages: list[str] = []
+    gender: str = ""
+    styles: list[str] = []
+    #: 只对这几个模型(或模型族前缀)有效;空 = 这个引擎的所有模型。
+    models: list[str] = []
+    preview_url: str = ""
+    extra: dict[str, str] = {}
     #: 这是不是这台机器默认那一对里的音色(和引擎一起标:默认是一对)。见 domain/voices/defaults。
     is_default: bool = False
 

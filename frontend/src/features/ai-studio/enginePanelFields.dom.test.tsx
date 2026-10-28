@@ -26,6 +26,7 @@ vi.mock("@/app/preferences", () => ({
 
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { voiceOption } from "@/test/voiceOption";
 
 beforeAll(() => {
   Object.assign(Element.prototype, {
@@ -94,11 +95,8 @@ const ENGINES = [
   { id: "builtin:volcano-podcast", label: "火山播客", needs_key: true, needs_voice_id: false,
     voices: ["voice-a", "voice-b"], supports_speed: true, note: "", ready: true, clones_voices: false },
 ];
-const EDGE_VOICES = [
-  { value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" },
-  { value: "zh-CN-YunxiNeural", label: "云希(男·阳光)" },
-];
-const PODCAST_VOICES = [{ value: "voice-a", label: "大壹先生" }, { value: "voice-b", label: "咪仔同学" }];
+const EDGE_VOICES = [voiceOption("zh-CN-XiaoxiaoNeural", "晓晓(女·温暖)"), voiceOption("zh-CN-YunxiNeural", "云希(男·阳光)")];
+const PODCAST_VOICES = [voiceOption("voice-a", "大壹先生"), voiceOption("voice-b", "咪仔同学")];
 
 const SESSIONS: Record<string, { kind: string; provider_profile_id: string | null; model: string }> = {
   image: { kind: "image", provider_profile_id: "p1", model: "img-model" },

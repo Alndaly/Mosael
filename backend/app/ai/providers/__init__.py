@@ -44,13 +44,15 @@ from app.ai.providers.contracts.podcast import (
     split_to_rounds,
 )
 from app.ai.providers.contracts.speech import (
-    AccountVoiceCatalog,
+    VOICE_SOURCES,
     SpeechCatalogError,
     MAX_PARALLEL_SPEECH_REQUESTS,
     SPEECH_REQUEST_TIMEOUT_SECONDS,
     SpeechSynthesisRequest,
     SpeechSynthesisError,
     SpeechAdapter,
+    VoiceCatalogContext,
+    VoiceOption,
     synthesize_many,
 )
 from app.ai.providers.contracts.voice_enrollment import (
@@ -59,8 +61,9 @@ from app.ai.providers.contracts.voice_enrollment import (
     VoiceEnrollmentError,
 )
 from app.ai.providers.registry import (
-    account_voices,
+    builtin_voice,
     builtin_voice_labels,
+    engine_voices,
     podcast_engine,
     speech_engines,
     REMOTE_SPEECH_ADAPTERS,
@@ -117,15 +120,18 @@ __all__ = [
     "roles_supplied_via_url",
     "synthesize_many",
     "connection_vendor_for_speech_engine",
-    "AccountVoiceCatalog",
     "PodcastAction",
     "PodcastConnection",
     "PodcastEngine",
     "PodcastSynthesisError",
     "PodcastSynthesisResult",
     "SpeechCatalogError",
-    "account_voices",
+    "VOICE_SOURCES",
+    "VoiceCatalogContext",
+    "VoiceOption",
+    "builtin_voice",
     "builtin_voice_labels",
+    "engine_voices",
     "podcast_engine",
     "speech_engines",
     "split_to_rounds",

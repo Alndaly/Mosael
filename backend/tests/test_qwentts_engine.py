@@ -93,7 +93,8 @@ def test_the_api_lists_it_and_its_voices() -> None:
     assert not engines[QWEN_ENGINE]["label"].startswith("ttsProvider_")
 
     voices = client.get(f"/api/tts/voices?engine={QWEN_ENGINE}").json()
-    assert [row["value"] for row in voices] == [speaker.id for speaker in qwen_models.MODEL.speakers]
+    assert [row["id"] for row in voices] == [speaker.id for speaker in qwen_models.MODEL.speakers]
+    assert {row["source"] for row in voices} == {"preset"}, "本机引擎预置的,不是某家内置的"
     assert [row["label"] for row in voices] == [speaker.label for speaker in qwen_models.MODEL.speakers]
 
 
@@ -113,9 +114,11 @@ def test_it_is_ready_only_when_weights_and_runtime_are_both_there(monkeypatch: p
 def test_its_voices_are_the_nine_official_speakers() -> None:
     """界面上的音色必须就是模型真有的那几个 —— 编一个出来,合成时才失败。"""
     rows = engine_catalog._engine_voices(None, QWEN_ENGINE, user_id=None)  # noqa: SLF001 — 目录的内部出口,测试照它
-    assert [one["value"] for one in rows] == [speaker.id for speaker in qwen_models.MODEL.speakers]
+    assert [one.id for one in rows] == [speaker.id for speaker in qwen_models.MODEL.speakers]
     # 名字是给人看的,不是一串 lower_snake_case。
-    assert all(one["label"] and one["label"] != one["value"] for one in rows)
+    assert all(one.label and one.label != one.id for one in rows)
+    # 语言是模型卡上每个音色的母语,照抄,不从名字里猜。
+    assert [one.languages for one in rows] == [(speaker.native_language,) for speaker in qwen_models.MODEL.speakers]
 
 
 # ---------------------------------------------------------------------------

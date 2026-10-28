@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.domain.billing.usage import billable, once
 from app.ai.runtime import f5_models, tts_daemon, tts_models, config as tts_config, qwen_models
 from app.ai.runtime.f5_models import clone_supports
-from app.ai.runtime.tts_language import detect_script, edge_voice_language
+from app.ai.runtime.tts_language import detect_script
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.domain.jobs import (
     TTS_SLOTS,
@@ -198,8 +198,6 @@ def worker_failure(stderr: str) -> VoiceError:
 #: 音色 id 的语言前缀 —— 火山的内置音色叫 `zh_female_cancan_…`,语言就写在名字里。
 #: **白名单**,不是「任意两个字母 + 下划线」:后者会把 `my_custom_voice` 里的 `my_` 当成语言
 #: 代码,于是用户自己起名的音色被无端挡下(测试抓到过)。拿不准时放行,是这道闸门的底线。
-_VOICE_ID_LANGS = frozenset({"zh", "en", "ja", "ko", "es", "fr", "de", "ru", "pt", "it", "ar", "hi", "th", "vi", "id"})
-_VOICE_ID_LANG = re.compile(r"^([a-z]{2})_")
 
 
 def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engine: str) -> None:
@@ -212,6 +210,10 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     只在**能确证**时拦(见 tts_language:假名、谚文是硬证据),而且只拦确知的不匹配 ——
     音色语言未知(账号自定义音色、OpenAI 那种多语言引擎)一律放行。宁可漏拦不可错拦:
     错拦挡住的是一次本来能成的合成。
+
+    **音色的语言只认音色目录上的声明**(ADR 0087):Edge 的 locale、火山的 id 约定都由各家 Adapter 翻成
+    `VoiceOption.languages`,这里不再自己解析 id。只查内置目录 —— 每次合成都走这里,不能为它签名现拉账号清单;
+    账号音色的语言由界面在提交前按它拿到的那份目录提示。
     """
     script = detect_script(text)
     if not script:
@@ -236,15 +238,11 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
                 raise VoiceError(keys["needs_weights"], size=str(size))
             raise VoiceError(keys["clone_unsupported"])
         return
-    if engine == EDGE_ENGINE:
-        voice_lang = edge_voice_language(engine_voice)
-        if voice_lang and voice_lang != script:
-            raise VoiceError(keys["edge_mismatch"], voice_lang=voice_lang)
-        return
-    # 别的引擎按音色 id 的语言前缀判(火山:zh_female_…)。前缀不认识就放行。
-    prefix = _VOICE_ID_LANG.match(engine_voice or "")
-    if prefix and prefix.group(1) in _VOICE_ID_LANGS and prefix.group(1) != script:
-        raise VoiceError(keys["voice_mismatch"], voice_lang=prefix.group(1))
+    voice = providers.builtin_voice(adapter_id(engine), engine_voice) if engine_voice else None
+    #: 目录上写的是 BCP 47(`ja-JP`),文种判据只认主语言(`ja`)。
+    spoken = sorted({language.split("-")[0] for language in voice.languages}) if voice is not None else []
+    if spoken and script not in spoken:
+        raise VoiceError(keys["edge_mismatch" if engine == EDGE_ENGINE else "voice_mismatch"], voice_lang=spoken[0])
 
 
 _SCRIPT_REFUSALS = {
@@ -1182,7 +1180,7 @@ def _synthesize_remote(
 def podcast_speakers(speakers: list[str] | None) -> list[str]:
     """播客的发音人:给了用给的,没给用目录里的前两位 —— 发音人不花钱,不是替人挑一个要付费的东西(ADR 0055 §6)。"""
 
-    return [voice for voice in (speakers or []) if voice] or [voice for voice, _ in providers.podcast_engine().speakers[:2]]
+    return [voice for voice in (speakers or []) if voice] or [speaker.id for speaker in providers.podcast_engine().speakers[:2]]
 
 
 def start_podcast(

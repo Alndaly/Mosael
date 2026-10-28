@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.ai.providers import VoiceOption
 from app.core.db import SessionLocal
 from app.domain.workflows.field_options import OptionContext
 from tests.util import fresh_client
@@ -76,7 +77,7 @@ def test_音色清单跟着引擎变(monkeypatch) -> None:
         assert field_options(db, "speech_voices", _ctx(mine, parent="")) == cloned
 
         monkeypatch.setattr(engine_catalog, "list_engine_voices", lambda db, engine, user_id, workspace_id="": [
-            {"value": f"{engine}-1", "label": "晓晓", "resource_id": "res"},
+            VoiceOption(f"{engine}-1", "晓晓", extra={"resource_id": "res"}),
         ])
         assert field_options(db, "speech_voices", _ctx(mine, parent="builtin:edge")) == [{"value": "builtin:edge-1", "label": "晓晓"}]
 

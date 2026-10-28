@@ -7,7 +7,12 @@ import logging
 import time
 from pathlib import Path
 
-from app.ai.providers.contracts.speech import SpeechSynthesisRequest, SpeechSynthesisError
+from app.ai.providers.contracts.speech import (
+    SpeechSynthesisError,
+    SpeechSynthesisRequest,
+    VoiceCatalogContext,
+    VoiceOption,
+)
 from app.core.http_retry import backoff_seconds, current_max_retries
 
 logger = logging.getLogger(__name__)
@@ -59,8 +64,8 @@ class EdgeSpeechAdapter:
     note_key = "ttsProviderNote_edge"
 
     @classmethod
-    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
-        return EDGE_BUILTIN_VOICES
+    def voices(cls, context: VoiceCatalogContext) -> list[VoiceOption]:
+        return list(EDGE_BUILTIN_VOICES)
 
     def __init__(self, voice: str = "") -> None:
         self._default_voice = voice
@@ -102,20 +107,21 @@ class EdgeSpeechAdapter:
 
 #: Curated Edge voices. The service lists hundreds; offering them all makes the dropdown
 #: useless. Chinese first (the primary audience), a couple of dialects, then English/Japanese.
-EDGE_BUILTIN_VOICES: tuple[tuple[str, str], ...] = (
-    ("zh-CN-XiaoxiaoNeural", "晓晓(女·温暖)"),
-    ("zh-CN-XiaoyiNeural", "晓伊(女·活泼)"),
-    ("zh-CN-YunxiNeural", "云希(男·阳光)"),
-    ("zh-CN-YunjianNeural", "云健(男·解说)"),
-    ("zh-CN-YunyangNeural", "云扬(男·新闻)"),
-    ("zh-CN-YunxiaNeural", "云夏(男·少年)"),
-    ("zh-CN-liaoning-XiaobeiNeural", "晓北(女·东北)"),
-    ("zh-CN-shaanxi-XiaoniNeural", "晓妮(女·陕西)"),
-    ("zh-TW-HsiaoChenNeural", "曉臻(台湾)"),
-    ("zh-HK-HiuMaanNeural", "曉曼(粤语)"),
-    ("en-US-AriaNeural", "Aria(英·女)"),
-    ("en-US-GuyNeural", "Guy(英·男)"),
-    ("ja-JP-NanamiNeural", "Nanami(日·女)"),
+#: 语言就是微软音色 id 里写着的那个区域;性别照微软的音色列表。
+EDGE_BUILTIN_VOICES: tuple[VoiceOption, ...] = (
+    VoiceOption("zh-CN-XiaoxiaoNeural", "晓晓(女·温暖)", languages=("zh-CN",), gender="female"),
+    VoiceOption("zh-CN-XiaoyiNeural", "晓伊(女·活泼)", languages=("zh-CN",), gender="female"),
+    VoiceOption("zh-CN-YunxiNeural", "云希(男·阳光)", languages=("zh-CN",), gender="male"),
+    VoiceOption("zh-CN-YunjianNeural", "云健(男·解说)", languages=("zh-CN",), gender="male"),
+    VoiceOption("zh-CN-YunyangNeural", "云扬(男·新闻)", languages=("zh-CN",), gender="male"),
+    VoiceOption("zh-CN-YunxiaNeural", "云夏(男·少年)", languages=("zh-CN",), gender="male"),
+    VoiceOption("zh-CN-liaoning-XiaobeiNeural", "晓北(女·东北)", languages=("zh-CN",), gender="female"),
+    VoiceOption("zh-CN-shaanxi-XiaoniNeural", "晓妮(女·陕西)", languages=("zh-CN",), gender="female"),
+    VoiceOption("zh-TW-HsiaoChenNeural", "曉臻(台湾)", languages=("zh-TW",), gender="female"),
+    VoiceOption("zh-HK-HiuMaanNeural", "曉曼(粤语)", languages=("zh-HK",), gender="female"),
+    VoiceOption("en-US-AriaNeural", "Aria(英·女)", languages=("en-US",), gender="female"),
+    VoiceOption("en-US-GuyNeural", "Guy(英·男)", languages=("en-US",), gender="male"),
+    VoiceOption("ja-JP-NanamiNeural", "Nanami(日·女)", languages=("ja-JP",), gender="female"),
 )
 
 

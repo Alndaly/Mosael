@@ -26,6 +26,7 @@ import {
   listTtsVoices,
   setAgentVoice,
 } from "@/api/client";
+import { isClonedVoice, voiceResourceOf } from "@/api/domains/speech";
 import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -77,16 +78,16 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     rememberSpeechMode(speechModeOf(pref.data));
   }, [pref.data]);
 
-  //: 带上工作区:CosyVoice 还列这个工作区配音库里的嗓子(`cloned`)。
+  //: 带上工作区:CosyVoice 还列这个工作区配音库里的嗓子(`source: "cloned"`)。
   const voices = useQuery({
     queryKey: voiceKeys.engineVoices(engine, workspaceId),
     queryFn: () => listTtsVoices(engine, workspaceId),
     enabled: Boolean(engine),
   });
   const voiceChoices = voices.data ?? [];
-  const chosen = voiceChoices.find((one) => one.value === voice);
-  const cloned = Boolean(chosen?.cloned);
-  const hasCloned = voiceChoices.some((one) => one.cloned);
+  const chosen = voiceChoices.find((one) => one.id === voice);
+  const cloned = isClonedVoice(chosen);
+  const hasCloned = voiceChoices.some(isClonedVoice);
   //: 只有就绪的转写候选能选:缺密钥 / 没装运行环境的,列出来只会让人选中之后才失败
   //: (和上面 TTS 引擎那一格同一条规矩)。
   const dictationChoices = ((capabilities.data ?? [])
@@ -108,7 +109,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
         setAgentVoice({
           engine,
           engine_voice: cloned ? "" : voice,
-          engine_voice_resource: cloned ? "" : (chosen?.resource_id ?? ""),
+          engine_voice_resource: cloned ? "" : voiceResourceOf(chosen),
           engine_model: "",
           provider_profile_id: null,
           voice_id: cloned ? voice : null,
@@ -284,8 +285,9 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
             onChange={setVoice}
             //: 有克隆音色时分两组:系统音色、我的克隆音色(和配音面板同一个分法)。
             options={voiceChoices.map((one) => ({
-              ...one,
-              ...(hasCloned ? { group: t(one.cloned ? "voiceGroupCloned" : "voiceGroupStock") } : {}),
+              value: one.id,
+              label: one.label,
+              ...(hasCloned ? { group: t(isClonedVoice(one) ? "voiceGroupCloned" : "voiceGroupStock") } : {}),
             }))}
             ariaLabel={t("agentVoiceVoice")}
             placeholder={t("agentVoicePickVoice")}

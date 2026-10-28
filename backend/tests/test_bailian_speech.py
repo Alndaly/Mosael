@@ -189,9 +189,11 @@ def test_播客音色不能显示成原始id() -> None:
     from app.ai.providers.adapters.microsoft.edge_speech import EDGE_BUILTIN_VOICES
     from app.ai.providers.adapters.bytedance.volcano.speech import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
 
-    labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
-    for voice, expected in PODCAST_SPEAKERS:
-        assert labels.get(voice) == expected != voice, f"{voice} 会显示成原始 id"
+    from app.ai.providers import builtin_voice_labels
+
+    labels = builtin_voice_labels()
+    for voice in (*EDGE_BUILTIN_VOICES, *PODCAST_SPEAKERS, *VOLCANO_BUILTIN_VOICES):
+        assert labels.get(voice.id) == voice.label != voice.id, f"{voice.id} 会显示成原始 id"
 
 
 # ---------------- 两个引擎、一条连接、一把钥匙 ----------------

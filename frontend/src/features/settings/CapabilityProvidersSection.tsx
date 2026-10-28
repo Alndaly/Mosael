@@ -20,7 +20,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
 import { listCapabilityChoices, setCapabilityDefault, type CapabilityChoices as Choices } from "@/api/domains/capabilities";
-import { CLONE_ENGINE, listTtsEngines, listTtsVoices, setVoiceDefault } from "@/api/domains/speech";
+import { CLONE_ENGINE, isClonedVoice, listTtsEngines, listTtsVoices, setVoiceDefault } from "@/api/domains/speech";
 import { useIsDeploymentAdmin } from "@/app/auth";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -277,9 +277,9 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
     staleTime: 30_000,
   });
   const voices = voicesQuery.data ?? [];
-  const serverVoice = voices.find((voice) => voice.is_default)?.value ?? "";
+  const serverVoice = voices.find((voice) => voice.is_default)?.id ?? "";
   const voice = pickedVoice ?? serverVoice;
-  const readyVoices = voices.filter((item) => !item.cloned);
+  const readyVoices = voices.filter((item) => !isClonedVoice(item));
   //: **选中即存,没有保存按钮** —— 和这一页 ASR / 降噪的默认行同一条规矩(维护者原话:「不需要这个保存默认的
   //: 按钮的」)。存的永远是完整的一对:引擎 + 音色都齐了才写;只换了引擎、音色还没挑,什么都不发 ——
   //: 半对存下去是念不出来的默认。选回「未指定」= 清掉默认(空对),和别处「选回自动」是同一件事。
@@ -308,7 +308,7 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
   const [restrictedOpen, setRestrictedOpen] = React.useState(false);
   //: 标题行照别组一样写「现在用谁」:默认那一对(引擎 · 音色);没设过就是「未指定」。
   const engineLabel = engines.find((item) => item.id === serverEngine)?.label ?? "";
-  const voiceLabel = voices.find((item) => item.value === serverVoice)?.label ?? "";
+  const voiceLabel = voices.find((item) => item.id === serverVoice)?.label ?? "";
   const current = serverEngine
     ? [engineLabel || serverEngine, voiceLabel].filter(Boolean).join(" · ")
     : t("capabilityUnset");
@@ -383,7 +383,7 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
             //: 引擎 + 音色都齐了:立刻写这一对,一次请求。
             if (engine) save.mutate({ engine, voice: value });
           }}
-          options={readyVoices.map((item) => ({ value: item.value, label: item.label }))}
+          options={readyVoices.map((item) => ({ value: item.id, label: item.label }))}
           className={SETTINGS_FIELD_WIDTH}
         />
       </SettingsItemRow>

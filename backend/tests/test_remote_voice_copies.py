@@ -294,7 +294,7 @@ def test_没声明是谁的嗓子_不复刻也不列(bailian) -> None:
     synth = _synthesize(env)
     assert synth.status_code == 422, synth.text
     listed = env.client.get("/api/tts/voices", params={"engine": COSY, "workspace_id": env.workspace_id}).json()
-    assert not [one for one in listed if one.get("cloned")], "下拉里不列没声明的嗓子"
+    assert not [one for one in listed if one["source"] == "cloned"], "下拉里不列没声明的嗓子"
     assert bailian.created == []
 
 
@@ -350,13 +350,13 @@ def test_删嗓子_远端删不掉的列出来_本机照删(bailian) -> None:
 def test_CosyVoice的音色下拉多一组克隆音色_要带工作区(bailian) -> None:
     env = _setup()
     plain = env.client.get("/api/tts/voices", params={"engine": COSY}).json()
-    assert plain and not [one for one in plain if one.get("cloned")], "不带工作区只有系统音色"
+    assert plain and not [one for one in plain if one["source"] == "cloned"], "不带工作区只有系统音色"
     grouped = env.client.get("/api/tts/voices", params={"engine": COSY, "workspace_id": env.workspace_id}).json()
-    assert grouped[-1] == {"value": env.voice_id, "label": "小美", "resource_id": "", "cloned": True,
-                           "is_default": False}
-    assert [one["value"] for one in grouped[:-1]] == [one["value"] for one in plain], "系统音色在前,克隆音色在后"
+    assert grouped[-1] == {"id": env.voice_id, "label": "小美", "source": "cloned", "languages": [], "gender": "",
+                           "styles": [], "models": [], "preview_url": "", "extra": {}, "is_default": False}
+    assert [one["id"] for one in grouped[:-1]] == [one["id"] for one in plain], "系统音色在前,克隆音色在后"
     edge = env.client.get("/api/tts/voices", params={"engine": "builtin:edge", "workspace_id": env.workspace_id}).json()
-    assert not [one for one in edge if one.get("cloned")], "念不了克隆音色的引擎不列"
+    assert not [one for one in edge if one["source"] == "cloned"], "念不了克隆音色的引擎不列"
 
 
 def test_工作流的配音说明_说克隆音色的名字_不说一串id(bailian) -> None:

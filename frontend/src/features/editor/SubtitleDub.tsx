@@ -132,7 +132,7 @@ export function SubtitleDub({
   const { engine, engineVoiceChoice, stockVoices, setEngineVoice } = voice;
   React.useEffect(() => {
     if (engine === CLONE_ENGINE || engineVoiceChoice || stockVoices.length === 0) return;
-    const match = pickVoiceFor(wantScript, engine, stockVoices);
+    const match = pickVoiceFor(wantScript, stockVoices);
     if (match) setEngineVoice(match);
   }, [engine, engineVoiceChoice, stockVoices, wantScript, setEngineVoice]);
 
@@ -146,7 +146,7 @@ export function SubtitleDub({
       : unspeakable(
           texts,
           engine,
-          engine === CLONE_ENGINE || voice.speaksClonedVoice ? "" : voice.engineVoice,
+          engine === CLONE_ENGINE || voice.speaksClonedVoice ? null : voice.chosenVoice,
           installedWeights.flatMap((model) => model.languages ?? []),
         );
   const langName = mismatch ? t(`langName_${mismatch}` as never) : "";
@@ -313,7 +313,7 @@ export function SubtitleDub({
               t("subtitleDubModelMissing")
                 .replaceAll("{lang}", langName)
                 .replace("{size}", (missingModel.expected_bytes / 1_000_000_000).toFixed(1))
-            : hasVoiceFor(mismatch, engine, stockVoices)
+            : hasVoiceFor(mismatch, stockVoices)
               ? t("subtitleDubLangVoice").replaceAll("{lang}", langName)
               : t("subtitleDubLangEngine").replaceAll("{lang}", langName)}
           {missingModel && !isAdmin && (

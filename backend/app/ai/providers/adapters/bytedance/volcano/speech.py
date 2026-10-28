@@ -17,6 +17,8 @@ from app.ai.providers.contracts.speech import (
     SpeechCatalogError,
     SpeechSynthesisError,
     SpeechSynthesisRequest,
+    VoiceCatalogContext,
+    VoiceOption,
 )
 
 
@@ -45,25 +47,30 @@ class VolcanoSpeechAdapter:
     note_key = "ttsProviderNote_volcano"
 
     @classmethod
-    def builtin_voices(cls, model: str = "") -> tuple[tuple[str, str], ...]:
-        return VOLCANO_BUILTIN_VOICES
+    def voices(cls, context: VoiceCatalogContext) -> list[VoiceOption]:
+        """配了 AK/SK 就按账号现拉(OpenAPI,ak/sk 在连接的附加字段里),没配或账号里一个都没有就给内置那张表。
 
-    @classmethod
-    def account_voices(cls, connection_extra) -> list[dict[str, str]]:
-        """这个账号能用的音色(OpenAPI 现拉,ak/sk 在连接的附加字段里);没配 AK/SK 回空,拉失败抛 SpeechCatalogError。"""
-        ak, sk = str(connection_extra.get("ak") or ""), str(connection_extra.get("sk") or "")
+        现拉的每一项把资源族放进 `extra["resource_id"]`:合成时请求头要和它对上,而只有这份清单知道它
+        (见 `_resource_id`)。拉失败抛 `SpeechCatalogError`,由调用方退回内置清单。
+        """
+        extra = context.connection_extra
+        ak, sk = str(extra.get("ak") or ""), str(extra.get("sk") or "")
         if not (ak and sk):
-            return []
+            return list(VOLCANO_BUILTIN_VOICES)
         try:
             live = list_all_speakers(ak, sk)
         except VolcOpenAPIError as exc:
             raise SpeechCatalogError("speechErr_accountVoicesUnavailable", detail=str(exc)) from exc
-        return [
-            {"value": speaker.get("VoiceType", ""), "label": speaker.get("Name") or speaker.get("VoiceType", ""),
-             "resource_id": speaker.get("ResourceID", "")}
+        account = [
+            VoiceOption(
+                speaker["VoiceType"], speaker.get("Name") or speaker["VoiceType"], source="account",
+                languages=_languages_of(speaker["VoiceType"]),
+                extra={"resource_id": speaker.get("ResourceID", "")} if speaker.get("ResourceID") else {},
+            )
             for speaker in live
             if speaker.get("VoiceType")
         ]
+        return account or list(VOLCANO_BUILTIN_VOICES)
 
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:
@@ -158,35 +165,45 @@ def probe_connection(profile) -> str:
     return "credential_rejected" if response.status_code in (401, 403) else "ok"
 
 
+#: 火山音色 id 的命名约定:以语言开头(`zh_female_…`、`en_male_…`、`ja_…`)。这是火山自己的规则,所以由这里
+#: 翻成目录上的语言;白名单而不是「任意两个字母」—— 账号里自建的 `my_voice_42` 不该被认成某种语言。
+_ID_LANGUAGES = frozenset({"zh", "en", "ja", "ko", "es", "fr", "de", "ru", "pt", "it", "ar", "hi", "th", "vi", "id"})
+
+
+def _languages_of(voice_type: str) -> tuple[str, ...]:
+    head = voice_type.split("_", 1)[0]
+    return (head,) if "_" in voice_type and head in _ID_LANGUAGES else ()
+
+
 #: The voices to offer when the account's AK/SK are not configured, so synthesis is usable
 #: without them. Deliberately excludes the emo_v2 multi-emotion voices: their resource family
 #: cannot be inferred from the id, and guessing produces an opaque 55000000 at synthesis time.
-VOLCANO_BUILTIN_VOICES: tuple[tuple[str, str], ...] = (
-    ("zh_female_cancan_mars_bigtts", "灿灿(女·活泼)"),
-    ("zh_female_shuangkuaisisi_moon_bigtts", "爽快思思(女)"),
-    ("zh_female_vv_uranus_bigtts", "Vivi 薇薇(女·2.0)"),
-    ("zh_female_wanwanxiaohe_moon_bigtts", "湾湾小何(女·台腔)"),
-    ("zh_female_xiaomei_mars_bigtts", "小美(女)"),
-    ("zh_female_qingxinnvsheng_mars_bigtts", "清新女声(女)"),
-    ("zh_female_zhixingnvsheng_mars_bigtts", "知性女声(女)"),
-    ("zh_male_liufei_uranus_bigtts", "刘飞(男·2.0)"),
-    ("zh_male_m191_uranus_bigtts", "云舟(男·2.0)"),
-    ("zh_male_wennuanahu_moon_bigtts", "温暖阿虎(男)"),
-    ("zh_male_shaonianzixin_moon_bigtts", "少年梓辛(男)"),
-    ("zh_male_jingqiangkanye_moon_bigtts", "京腔侃爷(男·北京)"),
-    ("zh_male_yangguangqingnian_moon_bigtts", "阳光青年(男)"),
-    ("zh_male_sunwukong_mars_bigtts", "孙悟空(角色)"),
-    ("en_female_anna_mars_bigtts", "Anna(英·女)"),
-    ("en_male_adam_mars_bigtts", "Adam(英·男)"),
+VOLCANO_BUILTIN_VOICES: tuple[VoiceOption, ...] = (
+    VoiceOption("zh_female_cancan_mars_bigtts", "灿灿(女·活泼)", languages=("zh",), gender="female"),
+    VoiceOption("zh_female_shuangkuaisisi_moon_bigtts", "爽快思思(女)", languages=("zh",), gender="female"),
+    VoiceOption("zh_female_vv_uranus_bigtts", "Vivi 薇薇(女·2.0)", languages=("zh",), gender="female"),
+    VoiceOption("zh_female_wanwanxiaohe_moon_bigtts", "湾湾小何(女·台腔)", languages=("zh",), gender="female"),
+    VoiceOption("zh_female_xiaomei_mars_bigtts", "小美(女)", languages=("zh",), gender="female"),
+    VoiceOption("zh_female_qingxinnvsheng_mars_bigtts", "清新女声(女)", languages=("zh",), gender="female"),
+    VoiceOption("zh_female_zhixingnvsheng_mars_bigtts", "知性女声(女)", languages=("zh",), gender="female"),
+    VoiceOption("zh_male_liufei_uranus_bigtts", "刘飞(男·2.0)", languages=("zh",), gender="male"),
+    VoiceOption("zh_male_m191_uranus_bigtts", "云舟(男·2.0)", languages=("zh",), gender="male"),
+    VoiceOption("zh_male_wennuanahu_moon_bigtts", "温暖阿虎(男)", languages=("zh",), gender="male"),
+    VoiceOption("zh_male_shaonianzixin_moon_bigtts", "少年梓辛(男)", languages=("zh",), gender="male"),
+    VoiceOption("zh_male_jingqiangkanye_moon_bigtts", "京腔侃爷(男·北京)", languages=("zh",), gender="male"),
+    VoiceOption("zh_male_yangguangqingnian_moon_bigtts", "阳光青年(男)", languages=("zh",), gender="male"),
+    VoiceOption("zh_male_sunwukong_mars_bigtts", "孙悟空(角色)", languages=("zh",), gender="male"),
+    VoiceOption("en_female_anna_mars_bigtts", "Anna(英·女)", languages=("en",), gender="female"),
+    VoiceOption("en_male_adam_mars_bigtts", "Adam(英·男)", languages=("en",), gender="male"),
 )
 
 #: 播客 voices. These only work on the podcast WebSocket, not the v3 single-voice endpoint,
 #: and read best paired within a series (大义+咪仔 / 刘飞+潇磊).
-PODCAST_SPEAKERS: tuple[tuple[str, str], ...] = (
-    ("zh_male_dayixiansheng_v2_saturn_bigtts", "大义(男)"),
-    ("zh_female_mizaitongxue_v2_saturn_bigtts", "咪仔(女)"),
-    ("zh_male_liufei_v2_saturn_bigtts", "刘飞(男)"),
-    ("zh_male_xiaolei_v2_saturn_bigtts", "潇磊(男)"),
+PODCAST_SPEAKERS: tuple[VoiceOption, ...] = (
+    VoiceOption("zh_male_dayixiansheng_v2_saturn_bigtts", "大义(男)", languages=("zh",), gender="male"),
+    VoiceOption("zh_female_mizaitongxue_v2_saturn_bigtts", "咪仔(女)", languages=("zh",), gender="female"),
+    VoiceOption("zh_male_liufei_v2_saturn_bigtts", "刘飞(男)", languages=("zh",), gender="male"),
+    VoiceOption("zh_male_xiaolei_v2_saturn_bigtts", "潇磊(男)", languages=("zh",), gender="male"),
 )
 
 

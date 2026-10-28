@@ -196,8 +196,8 @@ def test_装了很多音色的那个配音插件_音色列得出来(speech_catal
 
         listed = engine_catalog.list_engine_voices(db, instance_id, user_id=user.id)
     assert len(listed) == VOICES, "音色没列全(空清单 = 旧 1MB 下被吞掉的那一次)"
-    assert listed[0] == {"value": "voice-00000", "label": "Voice 00000 — catalogue entry"}
-    assert listed[-1]["value"] == f"voice-{VOICES - 1:05d}"
+    assert (listed[0].id, listed[0].label) == ("voice-00000", "Voice 00000 — catalogue entry")
+    assert listed[-1].id == f"voice-{VOICES - 1:05d}"
 
 
 def test_音色那一问用的是同一份目录预算(speech_catalog, monkeypatch) -> None:

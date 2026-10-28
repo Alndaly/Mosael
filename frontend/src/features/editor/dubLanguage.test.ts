@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { detectScript, hasVoiceFor, pickVoiceFor, unspeakable, voiceLanguage } from "./dubLanguage";
+import { detectScript, hasVoiceFor, pickVoiceFor, unspeakable } from "./dubLanguage";
 
 describe("书写系统识别", () => {
   it("假名是日文的硬证据", () => {
@@ -31,69 +31,63 @@ describe("书写系统识别", () => {
   });
 });
 
-describe("音色语言", () => {
-  it("Edge 的 id 自带 locale", () => {
-    expect(voiceLanguage("builtin:edge", "ja-JP-NanamiNeural")).toBe("ja");
-    expect(voiceLanguage("builtin:edge", "zh-CN-XiaoxiaoNeural")).toBe("zh");
-  });
-
-  it("其余引擎看前缀,但只认已知语言 —— `my_custom_voice` 的 `my_` 不是语言代码", () => {
-    expect(voiceLanguage("builtin:volcano", "zh_female_cancan_mars_bigtts")).toBe("zh");
-    expect(voiceLanguage("builtin:volcano", "my_custom_voice_42")).toBe("");
-  });
-});
-
-describe("念不念得了", () => {
+describe("念不念得了 —— 音色的语言只认目录上的声明(ADR 0087)", () => {
   const ja = ["お漏らし。", "ここに寝てるんでしょ？"];
+  const voice = (...languages: string[]) => ({ languages });
 
   it("日文交给只装了中英权重的本地克隆 —— 念不了", () => {
-    expect(unspeakable(ja, "builtin:clone", "", ["zh", "en"])).toBe("ja");
+    expect(unspeakable(ja, "builtin:clone", null, ["zh", "en"])).toBe("ja");
   });
 
   it("装上日语权重之后就念得了 —— 语言能力是**权重**的属性,不是引擎的", () => {
-    expect(unspeakable(ja, "builtin:clone", "", ["zh", "en", "ja"])).toBe("");
+    expect(unspeakable(ja, "builtin:clone", null, ["zh", "en", "ja"])).toBe("");
   });
 
-  it("日文配 ja 音色 —— 正是该放行的情形", () => {
-    expect(unspeakable(ja, "builtin:edge", "ja-JP-NanamiNeural")).toBe("");
+  it("日文配声明了 ja 的音色 —— 正是该放行的情形;BCP 47 只看主语言", () => {
+    expect(unspeakable(ja, "builtin:edge", voice("ja-JP"))).toBe("");
+    expect(unspeakable(ja, "builtin:volcano", voice("ja"))).toBe("");
   });
 
-  it("日文配中文音色 —— 拦", () => {
-    expect(unspeakable(ja, "builtin:edge", "zh-CN-XiaoxiaoNeural")).toBe("ja");
-    expect(unspeakable(ja, "builtin:volcano", "zh_female_cancan_mars_bigtts")).toBe("ja");
+  it("日文配声明了中文的音色 —— 拦", () => {
+    expect(unspeakable(ja, "builtin:edge", voice("zh-CN"))).toBe("ja");
+    expect(unspeakable(ja, "builtin:volcano", voice("zh"))).toBe("ja");
   });
 
-  it("音色语言拿不准时一律当能念 —— 错误的警告会让人怀疑所有警告", () => {
-    expect(unspeakable(ja, "builtin:openai", "alloy")).toBe("");
-    expect(unspeakable(ja, "builtin:volcano", "my_custom_voice_42")).toBe("");
+  it("目录没声明语言(OpenAI 的多语言音色、账号里自建的)一律当能念 —— 错误的警告会让人怀疑所有警告", () => {
+    expect(unspeakable(ja, "builtin:openai", voice())).toBe("");
+    expect(unspeakable(ja, "builtin:volcano", null)).toBe("");
+  });
+
+  it("**不从 id 里猜**:id 长得像中文音色,目录没说,就不拦", () => {
+    expect(unspeakable(ja, "builtin:volcano", { languages: [] })).toBe("");
   });
 
   it("中文字幕不触发任何提示", () => {
-    expect(unspeakable(["这是中文", "第二条"], "builtin:clone", "", ["zh", "en"])).toBe("");
+    expect(unspeakable(["这是中文", "第二条"], "builtin:clone", null, ["zh", "en"])).toBe("");
   });
 });
 
 
 describe("默认就选对,而不是先选错再警告", () => {
   const edgeVoices = [
-    { value: "zh-CN-XiaoxiaoNeural" },
-    { value: "en-US-AriaNeural" },
-    { value: "ja-JP-NanamiNeural" },
+    { id: "zh-CN-XiaoxiaoNeural", languages: ["zh-CN"] },
+    { id: "en-US-AriaNeural", languages: ["en-US"] },
+    { id: "ja-JP-NanamiNeural", languages: ["ja-JP"] },
   ];
 
-  it("日文字幕 + Edge → 直接落在日语音色上", () => {
+  it("日文字幕 + Edge → 直接落在声明了日语的音色上", () => {
     // 用户选了 Edge 却看到「晓晓」和一条警告,只会以为选错了引擎 —— 他没错,是默认值错了。
-    expect(pickVoiceFor("ja", "builtin:edge", edgeVoices)).toBe("ja-JP-NanamiNeural");
+    expect(pickVoiceFor("ja", edgeVoices)).toBe("ja-JP-NanamiNeural");
   });
 
   it("挑不出来时返回空串 —— 保持引擎自己的默认,不硬塞一个", () => {
-    expect(pickVoiceFor("ja", "builtin:volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe("");
-    expect(pickVoiceFor("", "builtin:edge", edgeVoices)).toBe("");
+    expect(pickVoiceFor("ja", [{ id: "zh_female_cancan_mars_bigtts", languages: ["zh"] }])).toBe("");
+    expect(pickVoiceFor("", edgeVoices)).toBe("");
   });
 
   it("有没有能念的,决定提示说「换音色」还是「换引擎」", () => {
-    expect(hasVoiceFor("ja", "builtin:edge", edgeVoices)).toBe(true);
-    expect(hasVoiceFor("ja", "builtin:volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe(false);
+    expect(hasVoiceFor("ja", edgeVoices)).toBe(true);
+    expect(hasVoiceFor("ja", [{ id: "zh_female_cancan_mars_bigtts", languages: ["zh"] }])).toBe(false);
   });
 });
 

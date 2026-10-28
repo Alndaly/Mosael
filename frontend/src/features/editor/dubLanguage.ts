@@ -6,8 +6,11 @@
  *
  * 判据与后端同一套:**只认书写系统**。假名只出现在日文里、谚文只出现在韩文里,这是硬证据;
  * 汉字中日共用、拉丁字母几十种语言共用,证明不了任何事,所以不据此提示。
+ *
+ * **音色念什么语言,只认音色目录上的声明**(`VoiceOption.languages`,ADR 0087)—— 不从音色 id 里解析;
+ * 各家 id 的命名约定由后端那一家的适配器翻成目录上的语言。
  */
-import { CLONE_ENGINE, EDGE_ENGINE } from "@/api/domains/speech";
+import { CLONE_ENGINE, type VoiceOption } from "@/api/domains/speech";
 
 /** 平假名 + 片假名。 */
 const KANA = /[぀-ヿ]/g;
@@ -47,18 +50,9 @@ export function detectScript(text: string): DubScript {
   return "";
 }
 
-/** Edge 音色 id 自带 locale(`ja-JP-NanamiNeural`);其余引擎看 `zh_female_…` 那种前缀。 */
-const VOICE_ID_LANGS = new Set(["zh", "en", "ja", "ko", "es", "fr", "de", "ru", "pt", "it", "ar", "hi", "th", "vi", "id"]);
-
-export function voiceLanguage(engine: string, voice: string): string {
-  if (!voice) return "";
-  if (engine === EDGE_ENGINE) {
-    const head = voice.split("-", 1)[0]?.toLowerCase() ?? "";
-    return head.length === 2 ? head : "";
-  }
-  const prefix = /^([a-z]{2})_/.exec(voice)?.[1] ?? "";
-  // 白名单,不是「任意两个字母」—— 否则 `my_custom_voice` 里的 `my_` 会被当成语言代码。
-  return VOICE_ID_LANGS.has(prefix) ? prefix : "";
+/** 这个音色声明的主语言(目录上是 BCP 47:`ja-JP` → `ja`)。没声明就是空集 —— 不知道,不是「什么都念不了」。 */
+function spokenLanguages(voice: Pick<VoiceOption, "languages"> | null | undefined): string[] {
+  return (voice?.languages ?? []).map((language) => language.split("-")[0].toLowerCase());
 }
 
 /**
@@ -70,7 +64,8 @@ export function voiceLanguage(engine: string, voice: string): string {
 export function unspeakable(
   texts: string[],
   engine: string,
-  voice: string,
+  /** 选中的那个引擎音色;克隆、念配音库里的嗓子时不给。 */
+  voice: Pick<VoiceOption, "languages"> | null | undefined,
   /** 本地克隆**现在**念得了的书写系统 —— 由这台机器上装了哪几份权重决定(见 /api/tts/f5-models)。 */
   cloneLanguages: readonly string[] = [],
 ): DubScript {
@@ -79,8 +74,8 @@ export function unspeakable(
   // 克隆引擎不是「只认中英」—— 那是**权重**的属性,而权重可以再下一份。写死在这里的话,
   // 用户下完日语模型仍然会被告知念不了(后端已经改成按权重判,前端一度还写着死的)。
   if (engine === CLONE_ENGINE) return cloneLanguages.includes(script) ? "" : script;
-  const language = voiceLanguage(engine, voice);
-  return language && language !== script ? script : "";
+  const spoken = spokenLanguages(voice);
+  return spoken.length > 0 && !spoken.includes(script) ? script : "";
 }
 
 
@@ -100,16 +95,12 @@ export function dubTextOf(clip: { text_override?: string | null }, line: "all" |
  * 有它才不必让用户自己去对:选了 Edge、字幕是日文,就该直接落在日语音色上,而不是先落在
  * 「晓晓」上、再弹一条警告让他猜要改什么(用户就是这么被绕进去的)。
  */
-export function pickVoiceFor(
-  script: DubScript,
-  engine: string,
-  choices: readonly { value: string }[],
-): string {
+export function pickVoiceFor(script: DubScript, choices: readonly Pick<VoiceOption, "id" | "languages">[]): string {
   if (!script) return "";
-  return choices.find((item) => voiceLanguage(engine, item.value) === script)?.value ?? "";
+  return choices.find((item) => spokenLanguages(item).includes(script))?.id ?? "";
 }
 
 /** 这个引擎的音色里,有没有念得了这段文本的 —— 决定提示该说「换音色」还是「换引擎」。 */
-export function hasVoiceFor(script: DubScript, engine: string, choices: readonly { value: string }[]): boolean {
-  return Boolean(pickVoiceFor(script, engine, choices));
+export function hasVoiceFor(script: DubScript, choices: readonly Pick<VoiceOption, "id" | "languages">[]): boolean {
+  return Boolean(pickVoiceFor(script, choices));
 }

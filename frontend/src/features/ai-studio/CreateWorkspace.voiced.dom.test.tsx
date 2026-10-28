@@ -24,6 +24,7 @@ vi.mock("@/app/preferences", () => ({
 
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { voiceOption } from "@/test/voiceOption";
 
 beforeAll(() => {
   Object.assign(Element.prototype, {
@@ -65,11 +66,8 @@ const ENGINES = [
   { id: "builtin:volcano-podcast", label: "火山播客", needs_key: true, needs_voice_id: false,
     voices: ["voice-a", "voice-b"], supports_speed: true, note: "", ready: true, clones_voices: false },
 ];
-const EDGE_VOICES = [
-  { value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" },
-  { value: "zh-CN-YunxiNeural", label: "云希(男·阳光)" },
-];
-const PODCAST_VOICES = [{ value: "voice-a", label: "大壹先生" }, { value: "voice-b", label: "咪仔同学" }];
+const EDGE_VOICES = [voiceOption("zh-CN-XiaoxiaoNeural", "晓晓(女·温暖)"), voiceOption("zh-CN-YunxiNeural", "云希(男·阳光)")];
+const PODCAST_VOICES = [voiceOption("voice-a", "大壹先生"), voiceOption("voice-b", "咪仔同学")];
 const IMAGE_OPTION = {
   id: "p1:image:gpt-image-1", provider_profile_id: "p1", profile_name: "OpenAI", provider: "openai", kind: "image",
   model: "gpt-image-1", model_label: "gpt-image-1", capabilities: { modes: ["text-to-image"], parameter_keys: [] },
@@ -126,7 +124,7 @@ function renderStudio({
     if (url.includes("/api/tts/engines")) return json(ENGINES);
     if (url.includes("/api/tts/voices")) {
       return json(url.includes("volcano-podcast") ? PODCAST_VOICES
-        : url.includes("openai") ? [{ value: "alloy", label: "alloy" }, { value: "nova", label: "nova" }] : EDGE_VOICES);
+        : url.includes("openai") ? [voiceOption("alloy"), voiceOption("nova")] : EDGE_VOICES);
     }
     if (url.includes("/api/tts/models")) return json([]);
     if (url.includes("/api/tts/config")) return json({ engine: "f5-tts" });

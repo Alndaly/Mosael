@@ -60,12 +60,15 @@ const registered = [
 const { listCapabilityChoices } = vi.hoisted(() => ({ listCapabilityChoices: vi.fn() }));
 vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices, setCapabilityDefault: vi.fn() }));
 const speechApi = vi.hoisted(() => ({
-  CLONE_ENGINE: "builtin:clone",
   listTtsEngines: vi.fn(),
   listTtsVoices: vi.fn(),
   setVoiceDefault: vi.fn(),
 }));
-vi.mock("@/api/domains/speech", () => speechApi);
+//: 只替换会发请求的那几个;常量和纯函数(CLONE_ENGINE、isClonedVoice)用真的,免得测的是一份手抄的副本。
+vi.mock("@/api/domains/speech", async (importActual) => ({
+  ...(await importActual<typeof import("@/api/domains/speech")>()),
+  ...speechApi,
+}));
 const admin = vi.hoisted(() => ({ value: true }));
 vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => admin.value }));
 vi.mock("@/app/preferences", () => ({
@@ -97,6 +100,7 @@ vi.mock("@/components/ui/option-picker", () => ({
 }));
 
 import { CAPABILITY_SKELETON_GROUPS, CapabilityProvidersSection } from "./CapabilityProvidersSection";
+import { voiceOption } from "@/test/voiceOption";
 
 /** 配音默认那一对的候选项:Edge 装好了、OpenAI 还没配连接;/tts/voices 给 Edge 的两把嗓子。 */
 const engines = [
@@ -106,8 +110,8 @@ const engines = [
     note: "ttsProviderNote_openai", ready: false, clones_voices: false, is_default: false },
 ];
 const edgeVoices = [
-  { value: "zh-CN-XiaoxiaoNeural", label: "晓晓", resource_id: "", cloned: false, is_default: true },
-  { value: "zh-CN-YunxiNeural", label: "云希", resource_id: "", cloned: false, is_default: false },
+  voiceOption("zh-CN-XiaoxiaoNeural", "晓晓", { is_default: true }),
+  voiceOption("zh-CN-YunxiNeural", "云希"),
 ];
 
 beforeEach(() => {
@@ -757,7 +761,7 @@ it("只选了一个(引擎)不写:默认必须是一对,而且没有可以手动
   ]);
   speechApi.listTtsVoices.mockImplementation(async (engineId: string) =>
     engineId === "builtin:volcano"
-      ? [{ value: "volcano-voice", label: "火山音色", resource_id: "", cloned: false, is_default: false }]
+      ? [voiceOption("volcano-voice", "火山音色")]
       : edgeVoices);
   render(
     <QueryClientProvider client={new QueryClient()}>

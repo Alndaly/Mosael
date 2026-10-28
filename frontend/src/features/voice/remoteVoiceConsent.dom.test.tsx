@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { VoicePanel } from "@/features/editor/VoicePanel";
 import { RemoteVoiceConsentHost } from "@/features/voice/remoteVoiceConsent";
 import { useEditorStore } from "@/features/editor/editorStore";
+import { voiceOption } from "@/test/voiceOption";
 
 const COSY = "builtin:alibaba-cosyvoice";
 
@@ -103,11 +104,11 @@ function serve() {
               : url.includes("/tts/voices")
                 ? url.includes("workspace_id=w1")
                   ? [
-                      { value: "longxiaochun_v3", label: "longxiaochun_v3" },
-                      { value: "longwan_v3", label: "longwan_v3" },
-                      { value: "v1", label: "我的嗓子", cloned: true },
+                      voiceOption("longxiaochun_v3"),
+                      voiceOption("longwan_v3"),
+                      voiceOption("v1", "我的嗓子", { source: "cloned" }),
                     ]
-                  : [{ value: "longxiaochun_v3", label: "longxiaochun_v3" }]
+                  : [voiceOption("longxiaochun_v3")]
                 : url.includes("/api/voices")
                   ? [{ id: "v1", name: "我的嗓子", reference_text: "", source: "upload", created_at: "2026-10-05T00:00:00Z",
                        has_reference: true, consent_kind: "self", remote_copies: [] }]

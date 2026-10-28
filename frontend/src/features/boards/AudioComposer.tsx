@@ -3,6 +3,7 @@ import { AudioLines } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listTtsEngines, listTtsVoices, type BoardItem, type Voice } from "@/api/client";
+import { isClonedVoice } from "@/api/domains/speech";
 import { voiceKeys } from "@/api/queryKeys";
 import { compactSpeechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
@@ -115,9 +116,9 @@ export function AudioComposer({
   const engineVoiceChoices = engineVoices.data ?? [];
   //: 没挑过时落在第一个**系统音色**上,不落在克隆音色上:那一下要把参考音频传到第三方,得是人亲手点的。
   const activeEngineVoice =
-    engineVoiceChoices.find((one) => one.value === engineVoice) ?? engineVoiceChoices.find((one) => !one.cloned) ?? null;
-  const speaksCloned = Boolean(activeEngineVoice?.cloned);
-  const hasCloned = engineVoiceChoices.some((one) => one.cloned);
+    engineVoiceChoices.find((one) => one.id === engineVoice) ?? engineVoiceChoices.find((one) => !isClonedVoice(one)) ?? null;
+  const speaksCloned = isClonedVoice(activeEngineVoice);
+  const hasCloned = engineVoiceChoices.some(isClonedVoice);
 
   //: 能不能念:克隆要有一把嗓子,引擎要有一个发音人。
   const ready = usingClone ? Boolean(current) : Boolean(activeEngineVoice);
@@ -125,9 +126,9 @@ export function AudioComposer({
   const serializedForm = JSON.stringify({
     prompt: text,
     ...(prefilled ? { prefilled } : {}),
-    voice_id: usingClone ? (current?.id ?? item.form?.voice_id ?? "") : speaksCloned ? (activeEngineVoice?.value ?? "") : "",
+    voice_id: usingClone ? (current?.id ?? item.form?.voice_id ?? "") : speaksCloned ? (activeEngineVoice?.id ?? "") : "",
     engine: usingClone ? "" : (activeEngine?.id ?? ""),
-    engine_voice: usingClone || speaksCloned ? "" : (activeEngineVoice?.value ?? ""),
+    engine_voice: usingClone || speaksCloned ? "" : (activeEngineVoice?.id ?? ""),
   });
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
   React.useEffect(() => {
@@ -147,9 +148,9 @@ export function AudioComposer({
       onSpeak({
         text: body,
         //: CosyVoice 念配音库里的嗓子:和克隆同一个字段,引擎音色留空(后端 producers 按 voice_slot 收)。
-        voiceId: usingClone ? (current?.id ?? "") : speaksCloned ? (activeEngineVoice?.value ?? "") : "",
+        voiceId: usingClone ? (current?.id ?? "") : speaksCloned ? (activeEngineVoice?.id ?? "") : "",
         engine: usingClone ? "" : (activeEngine?.id ?? ""),
-        engineVoice: usingClone || speaksCloned ? "" : (activeEngineVoice?.value ?? ""),
+        engineVoice: usingClone || speaksCloned ? "" : (activeEngineVoice?.id ?? ""),
       }),
     );
   };
@@ -187,13 +188,13 @@ export function AudioComposer({
             ) : (
               <Pick
                 ariaLabel={t("subtitleDubVoice")}
-                value={activeEngineVoice?.value ?? ""}
+                value={activeEngineVoice?.id ?? ""}
                 onChange={setEngineVoice}
                 //: 有克隆音色时分两组:系统音色、我的克隆音色(和配音面板同一个分法)。
                 options={engineVoiceChoices.map((one) => ({
-                  value: one.value,
+                  value: one.id,
                   label: one.label,
-                  ...(hasCloned ? { group: t(one.cloned ? "voiceGroupCloned" : "voiceGroupStock") } : {}),
+                  ...(hasCloned ? { group: t(isClonedVoice(one) ? "voiceGroupCloned" : "voiceGroupStock") } : {}),
                 }))}
               />
             )}

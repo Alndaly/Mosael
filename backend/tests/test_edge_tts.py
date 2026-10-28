@@ -38,8 +38,8 @@ def test_edge_voices_come_from_the_builtin_catalogue() -> None:
     res = client.get("/api/tts/voices?engine=builtin:edge")
     assert res.status_code == 200, res.text
     voices = res.json()
-    assert [v["value"] for v in voices] == [v for v, _ in EDGE_BUILTIN_VOICES]
-    assert voices[0]["label"] != voices[0]["value"], "labels should be readable"
+    assert [v["id"] for v in voices] == [v.id for v in EDGE_BUILTIN_VOICES]
+    assert voices[0]["label"] != voices[0]["id"], "labels should be readable"
 
 
 def test_provider_builds_with_no_credentials() -> None:
