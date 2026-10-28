@@ -268,14 +268,25 @@ _Avoid_: 用参数转述发起方;靠信封文案字符串匹配判断来源
 _Avoid_: `profile.default_model`(已删,是"一档案一模型"时代的字段);拿模型名当档案名建一堆档案
 
 **模型(ProviderModel)**:
-连接下的一行,是能力与运行时参数的**唯一挂载点**:`capability_ids`(留空回落 vendor 预设)、
+连接下的一行,是**产出类型**与运行时参数的**唯一挂载点**:`capability_ids`(留空回落 vendor 预设)、
 `context_window`、`reasoning` / `vision` / `reasoning_effort` / `developer_role`。
-拥有方是 `app/domain/provider_models.py`,建行只经 `upsert`。
+拥有方是 `backend/app/domain/providers/models.py`,建行只经 `upsert`。
 运行时参数**只下发用户显式设过的键**——`None` 与"显式设成 false"在下游行为不同。
 _Avoid_: 把能力挂在连接上(同一端点常常既有对话模型也有生图模型)
 
+**产出类型(output kind)**:
+一个**模型**产出什么:chat / image / video / audio / tts / podcast 六种,存在 `ProviderModel.capability_ids`
+(列名是历史叫法,它说的就是产出类型)。它回答「这个模型能拿来做什么」,**不是**宿主能力。
+_Avoid_: 把产出类型叫「能力」而不加限定 —— 宿主能力也叫能力,见文末 Flagged ambiguities
+
+**宿主能力(Capability)**:
+宿主要办成的**一件事**:配音(speech)、转写、翻译、降噪、人声分离、文档解析、素材外链……
+登记在 `backend/app/domain/capabilities/__init__.py`,候选 = 宿主内置实现(`builtin:` 前缀)+ 这个人自己的、声明了它的插件连接。
+一件事可以由不同产出类型的模型办成,也可以根本不经模型(本机 ffmpeg 降噪)。
+_Avoid_: 用宿主能力名去查模型的 `capability_ids`(配音是 `speech`,模型那边是 `tts`,两者不是同一张表)
+
 **能力默认(ProviderDefault)**:
-每种能力(chat / image / video / tts / podcast / embedding)指向**一行模型**,不是一个档案。
+每种**产出类型**(chat / image / video / audio / tts / podcast)指向**一行模型**,不是一个档案。
 只认这个人显式设的那一行;没有或指向失效就返回未配置,不替他静默挑别的模型。
 
 **执行面(execution surface)**:
@@ -295,7 +306,7 @@ API Key 走 `direct`、OAuth 走 `gateway`。图片直接送视觉输入；视�
 _Avoid_: 用 capability 代替执行通道;把 OAuth Token 或任意供应商地址暴露成通用反向代理
 
 **vendor 预设**:
-`app/domain/providers.py` 声明某个 vendor 支持哪些能力、设置页要收集哪些 `fields`、支持哪些鉴权方式。
+`backend/app/domain/providers/presets.py` 声明某个 vendor 支持哪些能力、设置页要收集哪些 `fields`、支持哪些鉴权方式。
 前端只渲染后端声明的 `fields`,不硬编码通用凭据模型。它是**兜底**:模型行没写能力时按它回落。
 _Avoid_: 仅凭 vendor 文案推断能力
 
@@ -343,8 +354,36 @@ _Avoid_: 用一个 ref 同时描述图片与视频；由画板/工作流/MCP 各
 那个工具的一次流式调用(进度、回执、取消文件)。设置页里只读,改动回插件页。ComfyUI 是随应用发的第一个(ADR 0020)。
 _Avoid_: 在生成链路里写 `if 是插件`;在设置页改插件建出来的连接;把 ComfyUI 当内置供应商
 
+**念字引擎(speech engine)**:
+「用谁来念」的那个实现:Edge、OpenAI、百炼 qwen-tts、CosyVoice、火山、本机克隆、本机 Qwen3-TTS,以及声明了 `speech` 的插件连接。
+它是配音这项**宿主能力**的候选,id 形如 `builtin:edge`。**引擎 ≠ vendor ≠ 连接**:百炼一条连接下有两个引擎(qwen-tts、
+CosyVoice),Edge 和本机引擎不要连接。远端引擎在契约上声明目录信息(ADR 0086)。
+_Avoid_: 把引擎 id 当 vendor id 去找连接(经 `connection_vendor_for_speech_engine`)
+
+**音色(voice)**:
+引擎念字时用的那把嗓子。四个来源:引擎**内置**的、按**账号**现拉的(火山)、本机引擎**预置**的(Qwen3-TTS)、
+配音库里的**克隆音色**。音色可能只对某几个模型有效(百炼按模型给;复刻出的音色绑死在建它的模型上)。
+_Avoid_: 把音色当成一个与模型无关的字符串
+
+**音色选项(VoiceOption)**:
+目录里列出的一项音色:id、名字、来源,以及语言、性别、风格、适用的模型(ADR 0087)。供应商私有的附加信息放在不透明的
+`extra` 里,只有那一家 Adapter 解释。
+
+**音色目录(VoiceCatalog)**:
+回答「这个引擎、这个模型下有哪些音色」的契约。内置、账号、预置三种来源都实现它;克隆音色是领域数据,由领域层并进同一份清单(ADR 0087)。
+
+**音色选择(VoiceRef)**:
+「选了哪把嗓子」的**唯一形状**:引擎 + 音色(引擎音色 id 或克隆音色 id,二者取一)+ 模型 + 连接 + 不透明 `extra`。
+默认、智能体朗读偏好、工作流节点、人物资产、合成请求都存它,合法性(音色属不属于引擎、适不适用模型)只在一处校验(ADR 0087)。
+语速不在其中 —— 那是念法,不是嗓子。
+_Avoid_: 各处各存一套 `engine` / `engine_voice` / `engine_model` / `voice_id` 列;把火山的资源族这类单家字段做成公共列
+
+**克隆音色(Voice)与远端副本(VoiceEnrollment)**:
+克隆音色 = 本机的一段参考音频 + 文字 + 授权声明,归工作区,是这把嗓子**唯一的来源**。远端副本 = 它复刻到某家账号、某个模型上的一份,
+丢了随时可从本机重建(ADR 0037)。
+
 **订阅额度**:
-`domain/provider_quota.py`,六家(anthropic / codex / openrouter / kimi / xai / copilot)各一个解析器。
+`backend/app/domain/providers/quota.py`,六家(anthropic / codex / openrouter / kimi / xai / copilot)各一个解析器。
 **只在用户点击时查**——这些端点都不是官方承诺的公开接口,定时轮询既容易撞限流,也会在对方改接口后
 变成后台里一直失败的任务。查不到不抛 5xx:"这家不支持"和"这次没查成"是两种正常结果。
 
@@ -360,7 +399,9 @@ _Avoid_: 在某一条调用路径里手写重试循环
 - **卫星进程**经 **worker 协议**(external 类)或 stdio/subprocess(共生类)与**事实源**通信
 - 每张表有且只有一个**数据归属**领域;**归属棘轮**守护它
 - **用量台账**从任务总线、智能体、生成执行器接收事实,不反向决定业务是否成功
-- 一个**连接**有 0..n 个**模型**;**能力默认**指向一行**模型**;**vendor 预设**只在模型没声明能力时兜底
+- 一个**连接**有 0..n 个**模型**;**能力默认**指向一行**模型**;**vendor 预设**只在模型没声明产出类型时兜底
+- **宿主能力**由候选(内置实现 / 插件连接)办成;配音的候选是**念字引擎**,它的默认是一个**音色选择**,不是一个提供方
+- 一个**念字引擎**经**音色目录**列出**音色选项**;用户的选择存成**音色选择**;**克隆音色**在可复刻的引擎上以**远端副本**出现
 - 能力的实际 HTTP/SDK 差异由 Adapter 接缝与**执行面**负责,不由**连接**或**模型**表达
 - **上下文预算**由所选**模型**的窗口决定;超过阈值触发**上下文整理**;**思考档位**是会话属性,与模型无关
 
@@ -373,4 +414,9 @@ _Avoid_: 在某一条调用路径里手写重试循环
 
 - 「worker」曾同时指发布执行器与任意后台线程——现约定:**worker** 专指经 worker 协议认领任务的外部进程;进程内的叫守护线程/执行器。
 - 「注册表」需带限定词:**节点注册表**(元数据)/ **执行器注册表**(行为)/ **工具注册表**(智能体)/ 平台注册表(发布)。
+- 「能力」有两个意思 —— 现约定:模型产出什么叫**产出类型**(`ProviderModel.capability_ids`,chat / image / video / audio / tts / podcast);
+  宿主要办成的一件事叫**宿主能力**(`domain/capabilities` 的 `Capability`,speech / translate / denoise……)。二者在语音上撞得最凶:
+  产出类型叫 `tts`,宿主能力叫 `speech`。说「能力」时带上限定词。
+- 「音色」曾同时指引擎音色 id、克隆音色的 `voices.id`、火山资源族与音色的组合 —— 现约定:一个**音色选项**是目录里的一项,
+  一个**音色选择**是存下来的那一份(ADR 0087)。
 - 「供应商」在 UI 里指**连接**(设置页那一行),在讨论 vendor 支持什么时指**vendor 预设**。谈架构时用**连接** / **模型** / **vendor 预设**三个词,别用「档案」——它此前既指供应商档案又指浏览器档案(`BrowserProfile`),而后者才是「档案」的正主。
