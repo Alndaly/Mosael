@@ -40,7 +40,7 @@ def list_users(db: DbSession, user: CurrentUser) -> list[dict[str, object]]:
 
 @router.delete("/admin/users/{user_id}", status_code=204)
 def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
-    """删掉一个账号,以及只属于他的那些东西(见 domain/members.delete_account)。
+    """删掉一个账号,以及只属于他的那些东西(见 domain/accounts.delete_user_account)。
 
     此前没有这条路:管理页能授予、能收回部署管理员,却删不掉一个账号 —— 于是"清理掉那个测试
     账号"只能去手改数据库,而手改必然漏(有些指向人的列有意不设外键)。
@@ -49,7 +49,7 @@ def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
         accounts.delete_member_account(db, user, user_id)
     except accounts.AccountNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except members.MemberError as exc:
+    except accounts.AccountError as exc:  # 最后一个部署管理员、还在共享工作区里
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=204)
 

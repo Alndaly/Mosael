@@ -26,6 +26,8 @@ DOMAIN_COMMITS: dict[str, int] = {
     #: 素材页「拆镜头」后台任务的长事务:量完、每判完一批要报进度并落一次断点,取消/失败时前几批仍在 ——
     #: 和 generation/runner 的进度提交同一类,不是领域函数随手 commit。
     "app/domain/analysis/shots_task.py": 3,
+    #: 删账号在成员锁里提交(锁放开之前就得落库,同 members),随删号一起从 members 搬来。
+    "app/domain/accounts.py": 1,
     "app/domain/agent/confirmations.py": 1,
     #: +2:一轮对话进行中的**助手草稿**。流式正文必须每拍落一次库 —— 一轮模型调用要跑几十秒,
     #: 不能攥着调用方的会话;而后端重启时内存里的字全没了(维护者:「中断后只剩工具调用」)。
@@ -49,7 +51,7 @@ DOMAIN_COMMITS: dict[str, int] = {
     "app/domain/generation/public_links.py": 1,
     "app/domain/generation/runner.py": 14,
     "app/domain/jobs/__init__.py": 10,
-    "app/domain/members.py": 5,
+    "app/domain/members.py": 4,
     "app/domain/network.py": 1,
     "app/domain/plugins/bundled_install.py": 1,
     "app/domain/plugins/dynamic_tools.py": 1,

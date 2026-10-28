@@ -29,12 +29,13 @@ _MIN_PASSWORD = 4
 def _reset_password(args: argparse.Namespace) -> int:
     from app.core.db import SessionLocal
     from app.db.models import User
-    from app.domain import members
+    from app.domain import accounts
+    from app.domain.usernames import normalize_username
 
     if args.password is not None and len(args.password) < _MIN_PASSWORD:
         print(f"密码至少 {_MIN_PASSWORD} 位 / The password needs at least {_MIN_PASSWORD} characters.", file=sys.stderr)
         return 2
-    username = members.normalize_username(args.username)
+    username = normalize_username(args.username)
     with SessionLocal() as db:
         user = db.query(User).filter(User.username == username).one_or_none()
         if user is None:
@@ -42,7 +43,7 @@ def _reset_password(args: argparse.Namespace) -> int:
             print(f"没有用户名为「{username}」的账号。这台部署上的账号:{known}", file=sys.stderr)
             print(f"No account named '{username}'. Accounts on this deployment: {known}", file=sys.stderr)
             return 1
-        password = members.reset_password(db, user, args.password)
+        password = accounts.reset_password(db, user, args.password)
         db.commit()
     print(f"已重置「{username}」的密码,他已经登录着的会话全部作废。")
     print(f"Password for '{username}' reset; every session signed in as them has been signed out.")

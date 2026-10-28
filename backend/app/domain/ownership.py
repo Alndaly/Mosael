@@ -15,7 +15,7 @@ from __future__ import annotations
 TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 团队/账号
     "Workspace": ("app/domain/members.py",),
-    "User": ("app/domain/members.py",),
+    "User": ("app/domain/accounts.py",),
     "AuthSession": ("app/api/routes/auth.py", "app/core/"),
     #: 邀请链接(ADR 0054):进这台部署、进某个工作区,或者两样一起。和成员行同一个领域建。
     "InviteLink": ("app/domain/members.py",),

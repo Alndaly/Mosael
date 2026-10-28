@@ -85,7 +85,7 @@ def test_closed_registration_also_closes_oauth_signup() -> None:
     """
     import pytest
 
-    from app.domain import deployment, members
+    from app.domain import accounts, deployment
 
     fresh_client()
     with SessionLocal() as db:
@@ -93,7 +93,7 @@ def test_closed_registration_also_closes_oauth_signup() -> None:
         deployment.set_open_registration(db, False)
         db.commit()
 
-        with pytest.raises(members.SignupClosed):
+        with pytest.raises(accounts.SignupClosed):
             _find_or_create_user(db, provider="google", subject="stranger", email="x@example.com", display_name="")
         db.rollback()
 

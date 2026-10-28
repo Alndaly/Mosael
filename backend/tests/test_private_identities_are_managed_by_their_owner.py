@@ -39,7 +39,7 @@ ROUTE_FILES = ("app/api/routes/publish.py", "app/api/routes/browser_profiles.py"
 USE_NOT_MANAGE = {"/browser/profiles/{profile_id}/opened"}
 
 
-#: 这几个名字只在这些模块上才是闸(`members.delete_account` 是删用户账号,另一回事)。
+#: 这几个名字只在这些模块上才是闸(删用户账号叫 `accounts.delete_user_account`,不同名,不会混进来)。
 _OWNERS = {"sharing", "publish", "browser", "browser_domain"}
 
 

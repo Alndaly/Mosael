@@ -1,4 +1,4 @@
-"""账号与工作区成员:谁能进这个部署、谁在哪个工作区里。
+"""工作区成员与邀请:谁在哪个工作区里、怎么被邀请进来。账号本身(建号、改密、删号)在 accounts。
 
 Workspace membership operations with the "last owner" invariant.
 
@@ -14,38 +14,26 @@ import threading
 from dataclasses import dataclass
 from datetime import timedelta
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.core.i18n import LocalizedError, tr
-from app.core.security import hash_password
 from app.core.token_digest import token_digest
 from app.core.unit_of_work import after_commit
 from app.db.models import InviteLink, Notification, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
 from app.domain import deployment
+from app.domain.usernames import normalize_username
 from app.domain.permissions import PermissionDenied
 from app.domain import notifications as notifications_svc
 
-#: 成员变动的「先查再改」(最后一个所有者、重复邀请、邀请已处理)靠这把锁串行。**锁里的提交是有意的**:
+#: 成员变动的「先查再改」(最后一个所有者、重复邀请、邀请已处理)靠这把锁串行;删账号(accounts.delete_user_account)也拿它。**锁里的提交是有意的**:
 #: 锁放开之前就得落库 —— 只 flush 的话,下一个拿到锁的请求读到的还是提交前的样子,两人同时降级
 #: 就能把工作区降到一个所有者都没有。
-_lock = threading.RLock()
+MEMBERSHIP_LOCK = threading.RLock()
 
 
 class MemberError(LocalizedError):
     """Domain error → mapped to HTTP 400/409 by the route. 带文案 key(`memberErr_*`)。"""
-
-
-class SignupClosed(MemberError):
-    """这个部署不收自助注册,也没带一个还能用的邀请码。"""
-
-
-class UsernameTaken(MemberError):
-    """用户名已经有人用了。"""
-
-
-def normalize_username(value: str) -> str:
-    return value.strip().lower()
 
 
 # ---------------- 邀请链接(ADR 0054) ----------------
@@ -133,82 +121,7 @@ def usable_invite(db: Session, code: str) -> InviteLink | None:
     return link if link is not None and link_state(link) == "open" else None
 
 
-def create_account(db: Session, *, username: str, display_name: str, password: str | None, invite_code: str = "") -> User:
-    """建一个账号。本地注册和第三方登录第一次进来**都走这里**。
-
-    此前两处各建各的,而第三方登录那处不看注册闸门:部署关掉自助注册之后,只要配了 Google /
-    Apple 登录,任何人照样能进来 —— 正是 ADR 0008 §0 那条提权链的第一环。
-
-    **引导之后转邀请制**:空库时照常放行 —— 那时没有任何人能发邀请,而没有部署管理员的部署是块
-    砖头,所以第一个账号成为部署管理员,并认领登录之前建的工作区。之后要么部署开放注册,要么带
-    一个还能用的邀请码(一次性:用掉就作废)。
-
-    `password` 为 None 是第三方账号:没有本地口令,填一个不可用的随机散列,密码登录天然走不通。
-    flush 拿到 id,提交交给调用方 —— 会话行要和账号一起进库。
-    """
-    bootstrapping = db.scalar(select(User).limit(1)) is None
-    invite = usable_invite(db, invite_code)
-    if not bootstrapping and not deployment.open_registration(db):
-        if invite is None:
-            #: 填了码却用不了,和压根没填是两回事:手里有码的人(抄错一位、过了一周、被别人先用了)此前也被告知
-            #: 「去要一个邀请码」,不知道是码的问题(体检 UM-09)。
-            raise SignupClosed("routeErr_inviteCodeUnusable" if (invite_code or "").strip() else "routeErr_signupClosed")
-        if not link_allows_signup(db, invite):
-            #: 工作区管理员发的链接只管进工作区,进部署那道门还没人点头(ADR 0054 D48)。
-            raise SignupClosed("routeErr_inviteLinkNeedsDeploymentAdmin")
-    username = normalize_username(username)
-    if db.scalar(select(User).where(User.username == username)) is not None:
-        raise UsernameTaken("memberErr_usernameTaken")
-    user = User(
-        username=username,
-        display_name=display_name.strip() or username,
-        signature="",
-        password_hash=hash_password(password if password is not None else secrets.token_hex(24)),
-        is_deployment_admin=bootstrapping,
-    )
-    db.add(user)
-    db.flush()
-    _adopt_orphan_workspaces(db, user)
-    if invite is not None:
-        #: 带着工作区的链接,注册完直接是那个工作区的成员 —— 不经过「先建一个自己的工作区」那一步。
-        _use_link(db, invite, user)
-    return user
-
-
-#: 管理员重置时生成的临时密码多长(token_urlsafe 的字节数,出来是 16 个字符)。
-_TEMP_PASSWORD_BYTES = 12
-
-
-def reset_password(db: Session, user: User, password: str | None = None) -> str:
-    """给一个账号换一个新密码,并让他已经登录着的会话全部失效。返回新密码的原文(只这一次,库里存的是哈希)。
-
-    忘了密码的人此前没有任何路:登录页没有入口,部署管理员也改不了别人的密码,只能删号重来 —— 连他的对话、密钥、
-    只有他一个人的工作区一起没了;唯一的部署管理员忘了密码就整台锁死。现在两条路:管理页「重置密码」(部署管理员
-    替成员换)、后端命令行 `reset-password`(兜唯一管理员被锁在外面,见 app/cli)。
-
-    `password` 为 None 时生成一个随机的临时密码 —— 交给对方,他登录后在「设置 → 账户」里改成自己的。不提交。
-    """
-    from app.db.models import AuthSession
-
-    chosen = password if password is not None else secrets.token_urlsafe(_TEMP_PASSWORD_BYTES)
-    user.password_hash = hash_password(chosen)
-    #: 旧会话一起作废:要重置往往是因为账号可能落在别人手上,换了密码而旧令牌照样能用就白换了。
-    db.query(AuthSession).filter(AuthSession.user_id == user.id).delete(synchronize_session=False)
-    db.flush()
-    return chosen
-
-
-def free_username(db: Session, base: str) -> str:
-    """`base` 没人用就是它,否则依次试 base2、base3……(第三方登录拿邮箱局部名起名时用)。"""
-    username = normalize_username(base)
-    suffix = 1
-    while db.scalar(select(User).where(User.username == username)) is not None:
-        suffix += 1
-        username = f"{normalize_username(base)}{suffix}"
-    return username
-
-
-def _adopt_orphan_workspaces(db: Session, user: User) -> None:
+def adopt_orphan_workspaces(db: Session, user: User) -> None:
     """本机升级路径:库里还没有任何成员关系时,第一个账号继承登录之前建的那些工作区。"""
     if db.scalar(select(WorkspaceMember).limit(1)) is not None:
         return
@@ -263,8 +176,8 @@ def invite_member(db: Session, workspace_id: str, inviter: User, username: str, 
 
     不再替队友建号(旧 add_member 已删):账号自助注册,管理员只发邀请——
     密码从此不经过任何第三人之手。"""
-    username = username.strip().lower()
-    with _lock:
+    username = normalize_username(username)
+    with MEMBERSHIP_LOCK:
         invitee = db.scalar(select(User).where(User.username == username))
         if invitee is None:
             raise MemberError("memberErr_userNotFound")
@@ -349,7 +262,7 @@ def respond_invitation(db: Session, invitation_id: str, user: User, accept: bool
     双向留痕:结果同样通知邀请人。"""
     from app.db.models import now as _now
 
-    with _lock:
+    with MEMBERSHIP_LOCK:
         invitation = db.get(WorkspaceInvitation, invitation_id)
         if invitation is None or invitation.invitee_id != user.id:
             raise MemberError("memberErr_inviteNotFound")
@@ -375,7 +288,7 @@ def respond_invitation(db: Session, invitation_id: str, user: User, accept: bool
     return invitation
 
 
-def _use_link(db: Session, link: InviteLink, user: User) -> bool:
+def use_invite_link(db: Session, link: InviteLink, user: User) -> bool:
     """`user` 用掉这张链接:记下谁、什么时候;带着工作区的,建成员行(本来就是成员就不动)并告诉发链接的人。
     回「新进了工作区」。不提交。"""
     link.used_by = user.id
@@ -433,7 +346,7 @@ def redeem_invite_link(db: Session, user: User, code: str) -> Joined:
         raise MemberError(_LINK_STATE_ERRORS[state])
     if member is not None:
         return Joined(workspace=workspace, role=member.role, owner_name=_owner_name(db, workspace.id), already_member=True)
-    _use_link(db, link, user)
+    use_invite_link(db, link, user)
     return Joined(workspace=workspace, role=link.role, owner_name=_owner_name(db, workspace.id), already_member=False)
 
 
@@ -555,7 +468,7 @@ def ensure_may_touch_owner(
 
 
 def set_role(db: Session, workspace_id: str, user_id: str, role: str) -> WorkspaceMember:
-    with _lock:
+    with MEMBERSHIP_LOCK:
         member = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
         if member is None:
             raise MemberError("memberErr_notMember")
@@ -568,7 +481,7 @@ def set_role(db: Session, workspace_id: str, user_id: str, role: str) -> Workspa
 
 
 def remove_member(db: Session, workspace_id: str, user_id: str) -> None:
-    with _lock:
+    with MEMBERSHIP_LOCK:
         member = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
         if member is None:
             raise MemberError("memberErr_notMember")
@@ -579,23 +492,6 @@ def remove_member(db: Session, workspace_id: str, user_id: str) -> None:
 
 
 
-
-
-#: 指向"某个人"的列。删账号时要跟着走的就是这些 —— **按 schema 认,不手写清单**:
-#: 新加一张带 owner_user_id 的表时,手写清单不会有任何东西提醒你漏了它,而漏掉的那些行会
-#: 变成指向不存在的人的孤儿(这些列有意不设外键,见 db.models)。
-PERSON_COLUMNS = ("user_id", "owner_user_id")
-
-
-def _tables_pointing_at_a_person() -> list[tuple[str, str]]:
-    from app.db.models import Base
-
-    return [
-        (table.name, column.name)
-        for table in Base.metadata.sorted_tables
-        for column in table.columns
-        if column.name in PERSON_COLUMNS
-    ]
 
 
 def solo_workspaces(db: Session, user_id: str) -> list[Workspace]:
@@ -620,49 +516,6 @@ def shared_workspaces(db: Session, user_id: str) -> list[Workspace]:
     solo = {w.id for w in solo_workspaces(db, user_id)}
     rows = db.scalars(select(WorkspaceMember).where(WorkspaceMember.user_id == user_id)).all()
     return [w for w in (db.get(Workspace, m.workspace_id) for m in rows) if w is not None and w.id not in solo]
-
-
-def delete_account(db: Session, user: User) -> None:
-    """删掉这个账号,以及只属于他的那些东西。
-
-    **他独占的工作区跟着他走**(里面只有他自己的内容,留着就是一堆没人看得见的行);**还有别人
-    在的不跟着走** —— 那里面有同事的素材、时间线、对话,宁可让管理员先去转让,也不要一次点击
-    毁掉别人的工作。
-
-    删的范围按 schema 推导(见 PERSON_COLUMNS),不手写清单:`agent_sessions.owner_user_id`
-    这类列有意不设外键,手写清单漏掉一张表不会有任何东西报错,只会留下指向不存在的人的孤儿行。
-
-    和「不能收回最后一个部署管理员」同一条:最后一个管理员不能删,否则这台部署没人管了。
-    """
-    with _lock:
-        if user.is_deployment_admin:
-            others = db.scalar(
-                select(func.count()).select_from(User).where(User.is_deployment_admin.is_(True), User.id != user.id)
-            )
-            if not others:
-                raise MemberError("memberErr_lastDeploymentAdmin")
-        blocked = shared_workspaces(db, user.id)
-        if blocked:
-            names = tr("punct_listSep").join(w.name for w in blocked)
-            raise MemberError("memberErr_sharedWorkspaces", names=names)
-
-        #: 独占的工作区走和「删工作区」同一条路:行靠外键 CASCADE 走,文件(素材、音色、LUT、字体、3D 模型、技能)在
-        #: 提交之后清。此前这里直接 `db.delete(workspace)`,绕过了那条路 —— 文件一个都没清。
-        for workspace in solo_workspaces(db, user.id):
-            delete_workspace(db, workspace.id)
-        db.flush()
-        from app.domain.storage_cleanup import delete_user_files
-
-        avatar_key = user.avatar_key
-        after_commit(db, lambda: delete_user_files(avatar_key))
-
-        # 剩下的按列扫。users 那一行留到最后 —— 有 CASCADE 的表会自己走,没有的在这里清掉。
-        for table, column in _tables_pointing_at_a_person():
-            if table == "users":
-                continue
-            db.execute(text(f"DELETE FROM {table} WHERE {column} = :uid"), {"uid": user.id})
-        db.delete(user)
-        db.commit()
 
 
 def delete_workspace(db: Session, workspace_id: str) -> None:

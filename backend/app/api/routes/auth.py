@@ -52,19 +52,19 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
 
     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。
-    闸门、首个账号的引导都在 domain/members.create_account —— 第三方登录建号走的是同一个。
+    闸门、首个账号的引导都在 domain/accounts.create_account —— 第三方登录建号走的是同一个。
     """
     try:
-        user = members.create_account(
+        user = accounts.create_account(
             db,
             username=body.username,
             display_name=body.display_name,
             password=body.password,
             invite_code=body.invite_code,
         )
-    except members.SignupClosed as exc:
+    except accounts.SignupClosed as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except members.UsernameTaken as exc:
+    except accounts.UsernameTaken as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     token = _create_session(db, user)
     db.commit()
@@ -128,7 +128,7 @@ def update_me(body: UserProfileUpdate, db: DbSession, user: CurrentUser) -> User
         accounts.update_profile(
             db, user, username=body.username, display_name=body.display_name, signature=body.signature
         )
-    except members.UsernameTaken as exc:
+    except accounts.UsernameTaken as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.commit()
     db.refresh(user)

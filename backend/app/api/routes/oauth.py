@@ -45,7 +45,8 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_login_session
 from app.db.models import OAuthIdentity, User
-from app.domain import members
+from app.domain import accounts
+from app.domain.usernames import free_username
 
 router = APIRouter(tags=["oauth"])
 
@@ -302,7 +303,7 @@ def _find_or_create_user(db: Session, *, provider: str, subject: str, email: str
         db.flush()
     base = (email.split("@")[0] if email else f"{provider}用户").strip().lower() or provider
     # 首次进来就是建一个新账号 —— 和本地注册同一个入口、同一道注册闸门;没有本地口令(password=None)。
-    user = members.create_account(db, username=members.free_username(db, base), display_name=display_name or base, password=None)
+    user = accounts.create_account(db, username=free_username(db, base), display_name=display_name or base, password=None)
     db.add(OAuthIdentity(provider=provider, subject=subject, user_id=user.id, email=email))
     return user
 

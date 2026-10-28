@@ -63,7 +63,7 @@ flowchart LR
 | `app/api/routes/oauth.py:_pending` | 回调落到另一个进程 → state 不匹配 | 数据库表 `oauth_pending`，带 `state`、PKCE、`expires_at` |
 | `app/domain/providers/auth.py:_leases` | 两进程同时刷新同一令牌，后写者作废 refresh token | 数据库租约 + fencing token |
 | `app/domain/publish/worker.py` 的认领 | 多个认领者重复领同一条发布任务 | 原子认领 + 租约；多主机时用 `FOR UPDATE SKIP LOCKED` |
-| `app/domain/members.py:_lock` | 最后两个所有者可同时被降级 | 条件更新（按剩余所有者数量判断） |
+| `app/domain/members.py:MEMBERSHIP_LOCK` | 最后两个所有者可同时被降级 | 条件更新（按剩余所有者数量判断） |
 | `app/domain/agent/autopilot.py:ALLOWANCE_LOCK` | “始终允许”读改写互相覆盖 | 行版本/CAS 更新 |
 | `app/domain/model_library/__init__.py:_pending_downloads` | 两进程各自占位，同一 `.part` 排两条任务 | 数据库唯一占位行；插件 `O_EXCL` 仍是最后防线 |
 | `app/domain/workflows/approvals.py:_RESUMED` | 两条唤醒路各派一次恢复 | 数据库幂等键，而不是进程内标记 |

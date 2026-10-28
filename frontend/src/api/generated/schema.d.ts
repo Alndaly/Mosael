@@ -49,7 +49,7 @@ export interface paths {
          *
          *     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
          *     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。
-         *     闸门、首个账号的引导都在 domain/members.create_account —— 第三方登录建号走的是同一个。
+         *     闸门、首个账号的引导都在 domain/accounts.create_account —— 第三方登录建号走的是同一个。
          */
         post: operations["register_api_auth_register_post"];
         delete?: never;
@@ -6544,7 +6544,7 @@ export interface paths {
         post?: never;
         /**
          * Delete User
-         * @description 删掉一个账号,以及只属于他的那些东西(见 domain/members.delete_account)。
+         * @description 删掉一个账号,以及只属于他的那些东西(见 domain/accounts.delete_user_account)。
          *
          *     此前没有这条路:管理页能授予、能收回部署管理员,却删不掉一个账号 —— 于是"清理掉那个测试
          *     账号"只能去手改数据库,而手改必然漏(有些指向人的列有意不设外键)。

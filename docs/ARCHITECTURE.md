@@ -75,6 +75,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `ai/runtime/remote_size.py` | 问下载源要**实际的**文件大小(HuggingFace `?blobs=true` / ModelScope `/repo/files?Recursive=True`),按这次真正要取的文件算而不是整仓。问不到就退回目录里的估算**并说出它是估算** |
 | `billing/` | 用量台账:按服务商回报的用量 / 扣费记账,失败没回报的记 0,免费的(Edge 配音)记 0 且标 `free`、不进花费汇总;**记账的 `provider` 是连接的厂商**(价目规则按它配):语音合成记 `connection_vendor_for_speech_engine(engine)`,百炼一条连接下的 qwen-tts 和 CosyVoice 都记 `alibaba` —— 此前 CosyVoice 记成引擎 id `alibaba-cosyvoice`,永远对不上价,老账由迁移 `migrate-speech-usage-follows-todays-booking` 改过来;复刻音色记一笔免费的 `tts / enroll_voice`([ADR-0037](adr/0037-cosyvoice-remote-voice-clone.md));回包里的用量另作核对(`ReportedUsage.observed`),对不上只记日志和依据不改账。没给 `job_id` 的调用挂在当前正在执行的任务上,`run_costs` 顺着 `parent_job_id` 把一次工作流运行的整棵任务树按币种加起来,记进运行结果 |
 | `jobs/` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events`;终态时按 payload 里的 `receipt` 回执给发起方(监听状态变化,不认某个函数 —— 各处写法不一) |
+| `accounts.py` / `members.py` / `usernames.py` | **账号**和**工作区成员**分开:`accounts` 管一个人的账号行从建出来到删掉(注册与第三方登录建号同一个 `create_account`、认人、资料与头像、改密与重置、删号、部署管理员名单与授予);`members` 管谁在哪个工作区、怎么被邀请进来(邀请链接、按用户名邀请、角色、移出、最后一个所有者不变量、删工作区);用户名怎么规整在叶子 `usernames` 里,两边都用它。`accounts` 依赖 `members`(建号时用邀请码、删号时处理独占的工作区),反过来不行 |
 | `notifications.py` | 站内通知:按用户投递,团队模式扇出给工作区成员 |
 
 ### 依赖方向:一个环都不许有,延迟导入也不行

@@ -37,7 +37,7 @@ class ProviderProfile(Base):
     __tablename__ = "provider_profiles"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    #: 谁的。不设外键、也不做级联:账号删除走 domain/members.delete_account 那条统一的路
+    #: 谁的。不设外键、也不做级联:账号删除走 domain/accounts.delete_user_account 那条统一的路
     #: (它按 schema 扫所有指向人的列),FK 在这里只会多一种删不掉账号的失败方式。
     owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="", index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
