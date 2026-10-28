@@ -6026,58 +6026,6 @@
         }
       }
     },
-    "/api/voices/{voice_id}/synthesize": {
-      "post": {
-        "tags": [
-          "voices"
-        ],
-        "summary": "Synthesize",
-        "operationId": "synthesize_api_voices__voice_id__synthesize_post",
-        "parameters": [
-          {
-            "name": "voice_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Voice Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SynthesizeRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/tts/f5-models": {
       "get": {
         "tags": [
@@ -6258,7 +6206,7 @@
           "voices"
         ],
         "summary": "Set Voice Default",
-        "description": "把这台机器的默认定成**一对**(引擎 + 音色)。\n\n**只许设现在就能用的引擎、并且音色必须属于它**(`domain/voices/defaults.set_default_voice`):\n成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。两格都空 = 清掉默认。\n和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。",
+        "description": "把这台机器的默认定成**一把嗓子**(`VoiceRef`:引擎 + 音色,绑模型的连模型)。\n\n**只许设现在就能用的引擎、并且音色必须属于它**(`engine_catalog.set_default_voice`):\n成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。null = 清掉默认。\n和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。",
         "operationId": "set_voice_default_api_settings_voice_default_put",
         "requestBody": {
           "content": {
@@ -6300,7 +6248,7 @@
           "voices"
         ],
         "summary": "Preview Voice",
-        "description": "试听一个配音引擎里的一把嗓子(资产的音色、以后挑嗓子的地方):念一小句,音频直接回给调用方。\n\n**和真用的时候同一条路** —— 参数由 engine_catalog.synthesis_params 凑(火山的资源族它自己查),合成走\nspeak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听\n活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。",
+        "description": "试听一个配音引擎里的一把嗓子(资产的音色、以后挑嗓子的地方):念一小句,音频直接回给调用方。\n\n**和真用的时候同一条路** —— 嗓子由 engine_catalog.voice_for_synthesis 定(火山的资源族在选择的 extra 里),合成走\nspeak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听\n活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。",
         "operationId": "preview_voice_api_tts_preview_post",
         "requestBody": {
           "content": {
@@ -6339,14 +6287,14 @@
         "tags": [
           "voices"
         ],
-        "summary": "Synthesize With Engine",
-        "description": "Synthesise with a remote engine. Separate from /voices/{id}/synthesize because the engine\nsupplies the voice — a stock one, or (CosyVoice) a library voice it speaks through its remote copy,\nwhich needs the account's consent first (409 `remote_voice_consent_required`, ADR 0037).",
-        "operationId": "synthesize_with_engine_api_tts_synthesize_post",
+        "summary": "Synthesize",
+        "description": "用一把嗓子念一段,产出登记成素材(ADR 0087:本机克隆、远端引擎、本机预置同一个接口,`voice` 说是哪把嗓子)。\n能复刻的引擎念配音库里的嗓子要这个账号先同意上传(409 `remote_voice_consent_required`,ADR 0037)。",
+        "operationId": "synthesize_api_tts_synthesize_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EngineSynthesizeRequest"
+                "$ref": "#/components/schemas/SynthesizeRequest"
               }
             }
           },
@@ -18747,7 +18695,7 @@
           "settings"
         ],
         "summary": "Get Agent Voice",
-        "description": "**我**在语音对话里用哪个音色、说话输入用哪一家。没设过就回一份空的(enabled=False)。\n\n和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载\n十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。",
+        "description": "**我**在语音对话里用哪个音色、说话输入用哪一家。没设过就回一份空的(enabled=False)。\n\n和配音的默认是两回事:配音要质量(本地克隆、首次加载十几分钟也认),对话要延迟。同一个默认服务两件事,\n必然在某一边是错的。",
         "operationId": "get_agent_voice_api_settings_agent_voice_get",
         "responses": {
           "200": {
@@ -18777,7 +18725,7 @@
           "settings"
         ],
         "summary": "Set Agent Voice",
-        "description": "设**我自己**的对话音色,以及说话输入用哪一家。只有这一档 —— 没有部署默认(同 provider-defaults)。\n\n远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。",
+        "description": "设**我自己**的对话音色,以及说话输入用哪一家。只有这一档 —— 没有部署默认(同 provider-defaults)。\n\n存之前照音色目录校验并补齐(音色属于引擎、模型对得上,火山的资源族由目录带上);远端引擎念配音库里的嗓子\n(`cloned_voice`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。",
         "operationId": "set_agent_voice_api_settings_agent_voice_put",
         "requestBody": {
           "content": {
@@ -31522,47 +31470,15 @@
       },
       "AgentVoiceOut": {
         "properties": {
-          "engine": {
-            "type": "string",
-            "title": "Engine",
-            "default": ""
-          },
-          "engine_voice": {
-            "type": "string",
-            "title": "Engine Voice",
-            "default": ""
-          },
-          "engine_voice_resource": {
-            "type": "string",
-            "title": "Engine Voice Resource",
-            "default": ""
-          },
-          "engine_model": {
-            "type": "string",
-            "title": "Engine Model",
-            "default": ""
-          },
-          "provider_profile_id": {
+          "voice": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/VoiceRefBody"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Provider Profile Id"
-          },
-          "voice_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Voice Id"
+            ]
           },
           "speed": {
             "type": "number",
@@ -31591,51 +31507,15 @@
       },
       "AgentVoiceUpdate": {
         "properties": {
-          "engine": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Engine",
-            "default": ""
-          },
-          "engine_voice": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Engine Voice",
-            "default": ""
-          },
-          "engine_voice_resource": {
-            "type": "string",
-            "maxLength": 200,
-            "title": "Engine Voice Resource",
-            "default": ""
-          },
-          "engine_model": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Engine Model",
-            "default": ""
-          },
-          "provider_profile_id": {
+          "voice": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/VoiceRefBody"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Provider Profile Id"
-          },
-          "voice_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Voice Id"
+            ]
           },
           "speed": {
             "type": "number",
@@ -36155,92 +36035,6 @@
         ],
         "title": "DuplicateClipsRequest",
         "description": "复制几段片段(复制粘贴、Alt 拖复制):位置之外的一切照原样,放下是覆盖,整批一步撤销。"
-      },
-      "EngineSynthesizeRequest": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Text"
-          },
-          "engine": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "Engine"
-          },
-          "provider_profile_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Profile Id"
-          },
-          "engine_model": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Engine Model",
-            "default": ""
-          },
-          "engine_voice": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Engine Voice",
-            "default": ""
-          },
-          "voice_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Voice Id"
-          },
-          "engine_voice_resource": {
-            "type": "string",
-            "maxLength": 60,
-            "title": "Engine Voice Resource",
-            "default": ""
-          },
-          "speed": {
-            "type": "number",
-            "maximum": 3.0,
-            "minimum": 0.25,
-            "title": "Speed",
-            "default": 1.0
-          },
-          "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Project Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "text",
-          "engine"
-        ],
-        "title": "EngineSynthesizeRequest",
-        "description": "Synthesis through a remote engine — in one of its stock voices (`engine_voice`), or, for an engine that can\nclone (CosyVoice), in a cloned voice from the library (`voice_id`, spoken through its remote copy; ADR 0037)."
       },
       "EntityCatalogOut": {
         "properties": {
@@ -49780,17 +49574,15 @@
             "minLength": 1,
             "title": "Text"
           },
-          "engine": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Engine"
-          },
           "voice": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Voice"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VoiceRefBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "voice_label": {
             "type": "string",
@@ -49804,41 +49596,6 @@
             "title": "Engine Label",
             "default": ""
           },
-          "engine_voice_resource": {
-            "type": "string",
-            "maxLength": 60,
-            "title": "Engine Voice Resource",
-            "default": ""
-          },
-          "provider_profile_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Profile Id"
-          },
-          "engine_model": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Engine Model",
-            "default": ""
-          },
-          "clone_engine": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Clone Engine",
-            "default": ""
-          },
-          "clone_model": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Clone Model",
-            "default": ""
-          },
           "speed": {
             "type": "number",
             "maximum": 3.0,
@@ -49850,12 +49607,10 @@
         "type": "object",
         "required": [
           "workspace_id",
-          "text",
-          "engine",
-          "voice"
+          "text"
         ],
         "title": "SpeechCreate",
-        "description": "创作页「语音」(ADR 0055):念一段字。音色一格和工作流、画板、智能体同一个口径 —— 克隆引擎是配音库里的嗓子 id,别的引擎是\n它自己的音色(能复刻的引擎点配音库里的嗓子时也是嗓子 id)。"
+        "description": "创作页「语音」(ADR 0055):念一段字,音色是一个音色选择(ADR 0087)。"
       },
       "SplitClipPointsBatchRequest": {
         "properties": {
@@ -50091,63 +49846,15 @@
             "title": "Original Audio",
             "default": "duck"
           },
-          "engine": {
-            "type": "string",
-            "maxLength": 80,
-            "title": "Engine",
-            "default": "builtin:clone"
-          },
-          "voice_id": {
+          "voice": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/VoiceRefBody"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Voice Id"
-          },
-          "clone_engine": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Clone Engine",
-            "default": ""
-          },
-          "clone_model": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Clone Model",
-            "default": ""
-          },
-          "provider_profile_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Profile Id"
-          },
-          "engine_model": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Engine Model",
-            "default": ""
-          },
-          "engine_voice": {
-            "type": "string",
-            "maxLength": 120,
-            "title": "Engine Voice",
-            "default": ""
-          },
-          "engine_voice_resource": {
-            "type": "string",
-            "maxLength": 60,
-            "title": "Engine Voice Resource",
-            "default": ""
+            ]
           },
           "speed": {
             "type": "number",
@@ -50191,11 +49898,25 @@
       },
       "SynthesizeRequest": {
         "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
           "text": {
             "type": "string",
             "maxLength": 2000,
             "minLength": 1,
             "title": "Text"
+          },
+          "voice": {
+            "$ref": "#/components/schemas/VoiceRefBody"
+          },
+          "speed": {
+            "type": "number",
+            "maximum": 3.0,
+            "minimum": 0.25,
+            "title": "Speed",
+            "default": 1.0
           },
           "project_id": {
             "anyOf": [
@@ -50207,32 +49928,16 @@
               }
             ],
             "title": "Project Id"
-          },
-          "clone_model": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Clone Model",
-            "default": ""
-          },
-          "clone_engine": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Clone Engine",
-            "default": ""
-          },
-          "speed": {
-            "type": "number",
-            "maximum": 2.0,
-            "minimum": 0.5,
-            "title": "Speed",
-            "default": 1.0
           }
         },
         "type": "object",
         "required": [
-          "text"
+          "workspace_id",
+          "text",
+          "voice"
         ],
-        "title": "SynthesizeRequest"
+        "title": "SynthesizeRequest",
+        "description": "用一把嗓子念一段,产出登记成素材(ADR 0087:一个接口,`voice` 说是哪把嗓子)。本机克隆念配音库里的嗓子\n(`cloned_voice`),远端引擎念它自己的音色(`voice`)—— 能复刻的引擎(CosyVoice)也念得了配音库里的嗓子(念它的远端副本,\n这个账号要先同意上传,不然 409 `remote_voice_consent_required`,ADR 0037)。"
       },
       "TaskAwaitingApprovalOut": {
         "properties": {
@@ -50899,6 +50604,11 @@
             "type": "string",
             "title": "Status"
           },
+          "clones_voices": {
+            "type": "boolean",
+            "title": "Clones Voices",
+            "default": true
+          },
           "downloaded_bytes": {
             "type": "integer",
             "title": "Downloaded Bytes",
@@ -51490,41 +51200,37 @@
       },
       "VoiceDefaultOut": {
         "properties": {
-          "engine": {
-            "type": "string",
-            "title": "Engine"
-          },
           "voice": {
-            "type": "string",
-            "title": "Voice"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VoiceRefBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
-        "required": [
-          "engine",
-          "voice"
-        ],
         "title": "VoiceDefaultOut",
-        "description": "改完之后的那一对。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。"
+        "description": "改完之后的那一把。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。"
       },
       "VoiceDefaultUpdate": {
         "properties": {
-          "engine": {
-            "type": "string",
-            "maxLength": 80,
-            "title": "Engine",
-            "default": ""
-          },
           "voice": {
-            "type": "string",
-            "maxLength": 200,
-            "title": "Voice",
-            "default": ""
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VoiceRefBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "title": "VoiceDefaultUpdate",
-        "description": "这台机器默认那一对(引擎 + 音色)。两格都空 = 清掉(回到每个入口各自点名)。"
+        "description": "这台机器默认那一把嗓子。null = 清掉(回到每个入口各自点名)。"
       },
       "VoiceDeleteOut": {
         "properties": {
@@ -51642,7 +51348,7 @@
           "source"
         ],
         "title": "VoiceOptionOut",
-        "description": "音色目录里的一项(ADR 0087),所有挑音色的地方同一个形状。\n\n`source` 说它从哪来:builtin(引擎内置)/ account(按账号现拉)/ preset(本机引擎预置)/ cloned(这个工作区\n配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时请求带 `voice_id`、`engine_voice` 留空)。\n语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样带回去,不读。"
+        "description": "音色目录里的一项(ADR 0087),所有挑音色的地方同一个形状。\n\n`source` 说它从哪来:builtin(引擎内置)/ account(按账号现拉)/ preset(本机引擎预置)/ cloned(这个工作区\n配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时音色选择写 `cloned_voice`)。\n语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样放进音色选择带回去,不读。"
       },
       "VoiceOut": {
         "properties": {
@@ -51724,17 +51430,8 @@
             "type": "string",
             "title": "Workspace Id"
           },
-          "engine": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "Engine"
-          },
           "voice": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Voice"
+            "$ref": "#/components/schemas/VoiceRefBody"
           },
           "text": {
             "type": "string",
@@ -51746,12 +51443,58 @@
         "type": "object",
         "required": [
           "workspace_id",
-          "engine",
           "voice",
           "text"
         ],
         "title": "VoicePreviewRequest",
-        "description": "试听一个引擎里的一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。"
+        "description": "试听一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。播客发音人也走这里(引擎是播客那一个)。"
+      },
+      "VoiceRefBody": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Engine"
+          },
+          "voice": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Voice",
+            "default": ""
+          },
+          "cloned_voice": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Cloned Voice",
+            "default": ""
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Model",
+            "default": ""
+          },
+          "connection": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Connection",
+            "default": ""
+          },
+          "extra": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine"
+        ],
+        "title": "VoiceRefBody",
+        "description": "「选了哪把嗓子」(ADR 0087):所有收音色、回音色的接口都是这一个形状,和库里存的 `VoiceRef` 一一对应。\n\n`voice`(引擎自己的音色 id)与 `cloned_voice`(这个工作区配音库里的克隆音色)**恰好一个**。`model`:选的那一项绑模型时\n一并写下(百炼按模型给音色;本机克隆写「引擎」或「引擎/权重」,如 `f5-tts/fr`);空 = 按引擎解析。`connection`:走哪条\n连接,空 = 这个人在该引擎上的那一条。`extra` 从音色目录那一项原样带回来,界面不读。形状不对直接 422。"
       },
       "VoiceUpdate": {
         "properties": {

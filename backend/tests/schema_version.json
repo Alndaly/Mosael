@@ -1,13 +1,18 @@
 {
-  "version": 43,
+  "version": 44,
   "steps": [
     "migrate-agent-questions-feishu-message-id",
+    "migrate-agent-voice-prefs-store-a-voice-ref",
     "migrate-bound-profiles-use-the-account-partition",
     "migrate-browser-profiles-pin-identity",
+    "migrate-character-voices-become-voice-refs",
+    "migrate-dub-lines-use-the-voice-ref-identity",
     "migrate-publish-tasks-get-content-shape",
+    "migrate-speech-records-store-a-voice-ref",
     "migrate-tool-confirmations-feishu-message-id",
     "migrate-tool-confirmations-make-tool-calls-idempotent",
     "migrate-update-feed-url",
+    "migrate-voice-default-stores-a-voice-ref",
     "migrate-workflow-publish-nodes-get-content-kind"
   ]
 }

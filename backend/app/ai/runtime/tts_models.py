@@ -65,6 +65,10 @@ class TtsEngine:
     #: 根本没有这一项 —— 给它一个语速等于假装能调。此前我用一句「本地克隆的 worker 不吃这个
     #: 参数」把两个引擎一起判了,而那句话只对 fish 成立。
     supports_speed: bool = False
+    #: 能不能拿一段参考音频克隆出一把嗓子(配音库的音色走它)。F5 / Fish 能;Qwen3-TTS 只念自带的预置音色,
+    #: 它是另一个念字引擎(`builtin:qwentts`),不是克隆引擎的一种 —— 界面的「克隆引擎」下拉、合成时解析
+    #: `VoiceRef.model` 都只认能克隆的这几个。
+    clones_voices: bool = True
 
 
 CATALOG: tuple[TtsEngine, ...] = (
@@ -125,6 +129,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         # 本机念字引擎(不是克隆):文本 + 9 个预置音色之一 → 音频。版本/文件/sha256 钉在
         # ai/runtime/qwen_models;这里只说"怎么装、怎么跑"。
         id=qwen_models.ENGINE_ID,
+        clones_voices=False,
         label="Qwen3-TTS",
         detail="ttsDetail_qwen",
         cache_dirs=("models--Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice",),
@@ -765,7 +770,7 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     base = {"id": engine.id, "label": engine.label, "detail": engine.detail,
             "expected_bytes": total, "total_is_estimate": estimated,
             "sources": list(sources_for(engine.id)),
-            "supports_speed": engine.supports_speed,
+            "supports_speed": engine.supports_speed, "clones_voices": engine.clones_voices,
             **_source_fields(engine)}
     if live is not None and live.status == "downloading":
         # **实测越过估计值 = 这个估计已经被证伪**,那一刻起就不该再拿它当分母:界面会画出一根

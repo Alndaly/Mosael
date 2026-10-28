@@ -56,7 +56,7 @@ def _row() -> tuple:
 
 
 def _settings(client, **extra: object):
-    body = {"engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural", "speed": 1, "enabled": False}
+    body = {"voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}, "speed": 1, "enabled": False}
     body.update(extra)
     return client.put("/api/settings/agent-voice", json=body)
 

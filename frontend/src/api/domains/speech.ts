@@ -144,13 +144,6 @@ export function voiceFromSpeaker(body: {
   return api<Voice>("/api/voices/from-speaker", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function synthesizeVoice(
-  id: string,
-  body: { text: string; project_id?: string | null; clone_engine?: string; speed?: number },
-): Promise<Job> {
-  return api<Job>(`/api/voices/${id}/synthesize`, { method: "POST", body: JSON.stringify(body) });
-}
-
 /** A remote/local synthesis choice offered by the dubbing UI. */
 export type TtsEngineChoice = components["schemas"]["TtsEngineChoiceOut"];
 
@@ -158,8 +151,36 @@ export type TtsEngineChoice = components["schemas"]["TtsEngineChoiceOut"];
 export type VoiceOption = components["schemas"]["VoiceOptionOut"];
 
 /**
+ * 「选了哪把嗓子」(ADR 0087 的 `VoiceRef`):所有收音色、回音色的接口都是这一个形状。`voice`(引擎自己的音色)与
+ * `cloned_voice`(配音库里的克隆音色)恰好一个。**只经下面两个函数造**,调用处不手拼字段。
+ */
+export type VoiceRef = Pick<VoiceRefBody, "engine"> & Partial<Omit<VoiceRefBody, "engine">>;
+//: 生成的类型把带默认值的格都标成了必填(回包里确实都在);写的那一侧只有引擎是必须的,其余缺了就是默认。
+type VoiceRefBody = components["schemas"]["VoiceRefBody"];
+
+/**
+ * 在一个引擎的音色目录里点了一项 → 那把嗓子。目录那一项的 `extra`(火山的资源族)原样带上 —— 只有目录知道它,
+ * 而合成时要它对得上;界面不读、不改。配音库里的嗓子(`source: "cloned"`)写 `cloned_voice`。
+ */
+export function voiceRefOf(engine: string, option: Pick<VoiceOption, "id" | "source" | "extra">): VoiceRef {
+  return option.source === "cloned"
+    ? { engine, cloned_voice: option.id }
+    : { engine, voice: option.id, ...(option.extra && Object.keys(option.extra).length ? { extra: option.extra } : {}) };
+}
+
+/** 本机克隆念配音库里的一把嗓子。`model` 写哪个本机引擎 / 哪一份权重(`f5-tts`、`f5-tts/fr`、`fish-speech`),空 = 部署默认。 */
+export function clonedVoiceRef(voiceId: string, model = ""): VoiceRef {
+  return { engine: CLONE_ENGINE, cloned_voice: voiceId, ...(model ? { model } : {}) };
+}
+
+/** 这把嗓子在它的目录里那一格 id(引擎音色或克隆音色)—— 给人看名字、查目录用。 */
+export function spokenId(voice: Pick<VoiceRef, "voice" | "cloned_voice">): string {
+  return voice.voice || voice.cloned_voice || "";
+}
+
+/**
  * 一个引擎能念的音色。带上工作区时,能复刻的引擎(CosyVoice)在系统音色后面多一组这个工作区配音库里的嗓子
- * (`source: "cloned"`,ADR 0037):选它时请求带 `voice_id`、`engine_voice` 留空。
+ * (`source: "cloned"`,ADR 0037),选它就是 `voiceRefOf` 给出的 `cloned_voice`。
  */
 export function listTtsVoices(engine: string, workspaceId?: string): Promise<VoiceOption[]> {
   const workspace = workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : "";
@@ -171,16 +192,6 @@ export function isClonedVoice(voice: VoiceOption | null | undefined): boolean {
   return voice?.source === "cloned";
 }
 
-/**
- * 合成请求里 `engine_voice_resource` 那一格(火山:音色所属的资源族,只有账号音色清单知道)。
- *
- * **过渡,全仓只在这里读 `extra`**:ADR 0087 第 2 步里,音色选择(`VoiceRef`)把 `extra` 原样带到合成,
- * 这个函数和那一格请求字段一起删掉。调用处只交一个 `VoiceOption`,不认识任何一家。
- */
-export function voiceResourceOf(voice: VoiceOption | null | undefined): string {
-  return voice?.extra?.resource_id ?? "";
-}
-
 export function listTtsEngines(): Promise<TtsEngineChoice[]> {
   return api<TtsEngineChoice[]>("/api/tts/engines");
 }
@@ -188,29 +199,23 @@ export function listTtsEngines(): Promise<TtsEngineChoice[]> {
 export type VoiceDefault = components["schemas"]["VoiceDefaultOut"];
 
 /**
- * 把这台机器的默认设成**一对**(引擎 + 音色;`PUT /api/settings/voice-default`,只有部署管理员能调)。
+ * 把这台机器的默认设成**一把嗓子**(`PUT /api/settings/voice-default`,只有部署管理员能调)。
  *
- * 默认不是一家提供方:引擎和音色是成对选的,所以两格一起写、一起校验(不属于这个引擎的音色回 409)。
- * 两格都空 = 清掉默认。回的是改完之后的那一对;候选列表上的 `is_default` 才是当前默认的唯一来源。
+ * 默认不是一家提供方:引擎和音色是成对选的,所以整把一起写、一起校验(不属于这个引擎的音色回 409)。
+ * `null` = 清掉默认。回的是改完之后的那一把;候选列表上的 `is_default` 才是当前默认的唯一来源。
  */
-export function setVoiceDefault(engine: string, voice: string): Promise<VoiceDefault> {
-  return api<VoiceDefault>("/api/settings/voice-default", {
-    method: "PUT",
-    body: JSON.stringify({ engine, voice }),
-  });
+export function setVoiceDefault(voice: VoiceRef | null): Promise<VoiceDefault> {
+  return api<VoiceDefault>("/api/settings/voice-default", { method: "PUT", body: JSON.stringify({ voice }) });
 }
 
 /**
- * 用远端引擎念:它自己的音色(`engine_voice`),或者能复刻的引擎(CosyVoice)念配音库里的一把嗓子(`voice_id`,
- * 念它的远端副本;这个账号第一次用时要同意上传,见 `remoteConsentRequest`)。
+ * 用一把嗓子念一段,产出登记成素材(`POST /api/tts/synthesize`)。本机克隆、远端引擎、本机预置同一个接口;
+ * 能复刻的引擎(CosyVoice)念配音库里的嗓子时,这个账号第一次用要同意上传(见 `remoteConsentRequest`)。
  */
-export function synthesizeWithEngine(body: {
+export function synthesize(body: {
   workspace_id: string;
   text: string;
-  engine: string;
-  engine_voice?: string;
-  voice_id?: string;
-  engine_voice_resource?: string;
+  voice: VoiceRef;
   speed?: number;
   project_id?: string | null;
 }): Promise<Job> {
@@ -256,11 +261,8 @@ export async function dubSubtitles(
     match_duration?: boolean;
     line?: "all" | "first" | "last";
     original_audio?: OriginalAudio;
-    engine?: string;
-    voice_id?: string | null;
-    clone_engine?: string;
-    clone_model?: string;
-    engine_voice?: string;
+    /** 用哪把嗓子念;不给 = 用默认那一把。 */
+    voice?: VoiceRef | null;
     speed?: number;
   },
 ): Promise<Job> {
@@ -281,9 +283,9 @@ export async function dubSubtitles(
  * 试听一把嗓子,拿回一段音频。本地克隆的音色放它的参考录音(那就是它);别的引擎念 `text` 这一小句,走和真用时
  * 同一条合成路(`POST /api/tts/preview`),不建任务、不进素材库。
  */
-export function fetchVoicePreview(body: { workspace_id: string; engine: string; voice: string; text: string }): Promise<Blob> {
-  return body.engine === CLONE_ENGINE
-    ? apiBlob(`/api/voices/${encodeURIComponent(body.voice)}/sample`)
+export function fetchVoicePreview(body: { workspace_id: string; voice: VoiceRef; text: string }): Promise<Blob> {
+  return body.voice.engine === CLONE_ENGINE && body.voice.cloned_voice
+    ? apiBlob(`/api/voices/${encodeURIComponent(body.voice.cloned_voice)}/sample`)
     : apiBlob("/api/tts/preview", { method: "POST", body: JSON.stringify(body) });
 }
 
@@ -356,7 +358,10 @@ export function getAgentVoice(): Promise<AgentVoice> {
   return api<AgentVoice>("/api/settings/agent-voice");
 }
 
-export function setAgentVoice(body: components["schemas"]["AgentVoiceUpdate"]): Promise<AgentVoice> {
+/** 存「语音对话」那一份:那把嗓子(`null` = 不选了)和念法。嗓子用写入形状(见 `VoiceRef`)。 */
+export function setAgentVoice(
+  body: Omit<components["schemas"]["AgentVoiceUpdate"], "voice"> & { voice: VoiceRef | null },
+): Promise<AgentVoice> {
   return api<AgentVoice>("/api/settings/agent-voice", { method: "PUT", body: JSON.stringify(body) });
 }
 

@@ -58,8 +58,8 @@ afterEach(() => { globalThis.fetch = originalFetch; });
 beforeEach(() => useEditorStore.getState().selectClip(null));
 
 const localEngines = [
-  { id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: true },
-  { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: false },
+  { id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: true, clones_voices: true },
+  { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: false, clones_voices: true },
 ];
 
 //: 默认只装了中英基础模型 —— 这台机器上最常见的样子,也是「日文念不了」的那个前提。
@@ -349,7 +349,9 @@ describe("给字幕配音", () => {
     await waitFor(() => expect(apply).toBeEnabled());
     await user.click(apply);
     await waitFor(() => expect(dubRequests).toHaveLength(1));
-    expect(dubRequests[0]).toMatchObject({ clip_ids: ["c1"], engine: "builtin:clone", voice_id: "v1", clone_engine: "f5-tts", speed: 1 });
+    expect(dubRequests[0]).toMatchObject({
+      clip_ids: ["c1"], voice: { engine: "builtin:clone", cloned_voice: "v1", model: "f5-tts" }, speed: 1,
+    });
   });
 
   it("两条字幕轨(双语分轨):一次只配一条,默认最下面那条,请求里带上轨道", async () => {

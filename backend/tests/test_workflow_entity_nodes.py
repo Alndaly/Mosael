@@ -33,7 +33,7 @@ def _scope(ws: str):
 
 def test_取资产_点名一个_交出提示词描述和按挑图先后排的参考图() -> None:
     client, ws = _setup()
-    made = _character(client, ws, prompt="短发,校服", attributes={"voice_engine": "builtin:edge", "voice_id": "zh-CN-XiaoxiaoNeural"})
+    made = _character(client, ws, prompt="短发,校服", attributes={"voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}})
     for asset_id, role in (("side", "side"), ("front", "front"), ("sheet", "turnaround"), ("clip", "concept")):
         client.post(f"/api/entities/{made['id']}/references", json={"asset_id": asset_id, "role": role})
     with SessionLocal() as db:

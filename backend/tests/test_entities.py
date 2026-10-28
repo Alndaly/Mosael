@@ -52,9 +52,9 @@ def test_种类和专有字段写错当场拒() -> None:
     bad_kind = client.post("/api/entities", json={"workspace_id": ws, "kind": "style", "name": "水彩"})
     assert bad_kind.status_code == 422
     wrong_key = client.post(
-        "/api/entities", json={"workspace_id": ws, "kind": "prop", "name": "伞", "attributes": {"voice_id": "v"}}
+        "/api/entities", json={"workspace_id": ws, "kind": "prop", "name": "伞", "attributes": {"voice": {"engine": "builtin:clone", "cloned_voice": "v"}}}
     )
-    assert wrong_key.status_code == 422 and "voice_id" in wrong_key.json()["detail"]
+    assert wrong_key.status_code == 422 and "voice" in wrong_key.json()["detail"]
     bad_color = client.post(
         "/api/entities",
         json={"workspace_id": ws, "kind": "character", "name": "李四", "attributes": {"blockout_color": "red"}},
@@ -89,20 +89,26 @@ def test_音色可以是任何配音引擎的_不认识的引擎当场拒() -> N
 
     client = fresh_client()
     ws = _workspace(client)
-    edge = _create(client, ws, attributes={"voice_engine": f"builtin:{EdgeSpeechAdapter.engine_id}", "voice_id": "zh-CN-XiaoxiaoNeural"})
-    assert edge["attributes"]["voice_engine"] == f"builtin:{EdgeSpeechAdapter.engine_id}"
-    assert edge["attributes"]["voice_id"] == "zh-CN-XiaoxiaoNeural", "别的引擎的嗓子不在音色库里,照样收"
+    edge_engine = f"builtin:{EdgeSpeechAdapter.engine_id}"
+    edge = _create(client, ws, attributes={"voice": {"engine": edge_engine, "voice": "zh-CN-XiaoxiaoNeural"}})
+    assert edge["attributes"]["voice"] == {"engine": edge_engine, "voice": "zh-CN-XiaoxiaoNeural"}, "别的引擎的嗓子照样收"
     unknown = client.post("/api/entities", json={
-        "workspace_id": ws, "kind": "character", "name": "赵六", "attributes": {"voice_engine": "no-such-engine", "voice_id": "x"},
+        "workspace_id": ws, "kind": "character", "name": "赵六", "attributes": {"voice": {"engine": "no-such-engine", "voice": "x"}},
     })
     assert unknown.status_code == 422
+    not_its_voice = client.post("/api/entities", json={
+        "workspace_id": ws, "kind": "character", "name": "周九", "attributes": {"voice": {"engine": edge_engine, "voice": "x"}},
+    })
+    assert not_its_voice.status_code == 422, "音色要在那个引擎的目录里,存的时候就说"
     podcast = client.post("/api/entities", json={
-        "workspace_id": ws, "kind": "character", "name": "钱七", "attributes": {"voice_engine": "builtin:volcano-podcast", "voice_id": "x"},
+        "workspace_id": ws, "kind": "character", "name": "钱七", "attributes": {"voice": {"engine": "builtin:volcano-podcast", "voice": "x"}},
     })
     assert podcast.status_code == 422, "播客引擎一次出整段对话,不是一把嗓子"
-    #: 只挑了引擎、没挑嗓子 = 没选。
-    bare = _create(client, ws, name="孙八", attributes={"voice_engine": f"builtin:{EdgeSpeechAdapter.engine_id}"})
-    assert "voice_engine" not in bare["attributes"]
+    #: 只挑了引擎、没挑嗓子不是一个音色选择:形状不对,当场拒(不悄悄当成没选)。
+    bare = client.post("/api/entities", json={
+        "workspace_id": ws, "kind": "character", "name": "孙八", "attributes": {"voice": {"engine": edge_engine}},
+    })
+    assert bare.status_code == 422
 
 
 
@@ -114,13 +120,13 @@ def test_音色和_3D_场景要在这个工作区() -> None:
     ws = _workspace(client)
     gone = client.post(
         "/api/entities",
-        json={"workspace_id": ws, "kind": "character", "name": "王五", "attributes": {"voice_id": "no-such-voice"}},
+        json={"workspace_id": ws, "kind": "character", "name": "王五",
+              "attributes": {"voice": {"engine": "builtin:clone", "cloned_voice": "no-such-voice"}}},
     )
     assert gone.status_code == 422
     voice_id = make_voice(ws)
-    ok = _create(client, ws, attributes={"voice_id": voice_id, "blockout_color": "#FF8800"})
-    assert ok["attributes"]["voice_id"] == voice_id
-    assert ok["attributes"]["voice_engine"] == "builtin:clone", "没写引擎就是音色库里的"
+    ok = _create(client, ws, attributes={"voice": {"engine": "builtin:clone", "cloned_voice": voice_id}, "blockout_color": "#FF8800"})
+    assert ok["attributes"]["voice"] == {"engine": "builtin:clone", "cloned_voice": voice_id}
     assert ok["attributes"]["blockout_color"] == "#ff8800"
     scene = client.post("/api/entities", json={"workspace_id": ws, "kind": "location", "name": "片场",
                                                "attributes": {"scene_id": "nope", "time_of_day": "黄昏"}})

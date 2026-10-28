@@ -22,12 +22,14 @@ import {
   PODCAST_ENGINE,
   fetchVoicePreview,
   getAsset,
+  spokenId,
   listTtsEngines,
   listTtsVoices,
   type GenerationJob,
   type PodcastCreate,
   type SpeechCreate,
   type TtsEngineChoice,
+  type VoiceRef,
 } from "@/api/client";
 import { assetKeys, voiceKeys } from "@/api/queryKeys";
 import type { MessageKey } from "@/app/messages";
@@ -139,7 +141,7 @@ export function useSpeechDraft(workspaceId: string, engineId: string | null, las
   const voice = useSpeechVoice(workspaceId);
   //: 这几个 setter 每次渲染都是新的(useSpeechVoice 不 memo):不放进依赖 —— 放进去的话每渲染一次就重设一次引擎,
   //: 而换引擎会清掉选好的音色(实测:右栏挑了云希,下一次渲染又回到晓晓)。
-  const { setEngine, setEngineVoice, setVoiceId, setSpeed, setCloneEngine } = voice;
+  const { setEngine, setEngineVoice, setVoiceId, setSpeed, setCloneEngine, setCloneWeights } = voice;
   const current = voice.engine;
   React.useEffect(() => {
     if (engineId && engineId !== current) setEngine(engineId);
@@ -148,11 +150,16 @@ export function useSpeechDraft(workspaceId: string, engineId: string | null, las
   const lastId = last?.id ?? "";
   React.useEffect(() => {
     if (!last || last.kind !== "speech" || last.provider !== engineId) return;
-    const request = (last.request ?? {}) as Record<string, unknown>;
-    if (last.provider === CLONE_ENGINE) setVoiceId(last.model);
-    else setEngineVoice(last.model);
+    const request = (last.request ?? {}) as { voice?: VoiceRef; speed?: unknown };
+    //: 记录上存的是那一次的那把嗓子(ADR 0087):克隆接上它的嗓子和本机引擎,别的接上引擎音色。
+    const spoken = request.voice;
+    if (spoken?.cloned_voice && last.provider === CLONE_ENGINE) {
+      setVoiceId(spoken.cloned_voice);
+      const [cloneEngine, weights = ""] = (spoken.model ?? "").split("/");
+      if (cloneEngine) setCloneEngine(cloneEngine);
+      setCloneWeights(weights);
+    } else if (spoken) setEngineVoice(spokenId(spoken));
     if (typeof request.speed === "number") setSpeed(request.speed);
-    if (typeof request.clone_engine === "string" && request.clone_engine) setCloneEngine(request.clone_engine);
     // 只在换了会话 / 那条记录变了时接一次;之后是用户自己在调
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastId, engineId]);
@@ -165,18 +172,13 @@ function chosenVoiceLabel(voice: SpeechVoice): string {
   return voice.voiceChoices.find((item) => item.id === voice.engineVoice)?.label ?? voice.engineVoice;
 }
 
-/** 念一段字的请求(工作区、会话由调用方补)。音色一格:克隆是嗓子 id,别的是引擎自己的音色(或配音库里的嗓子 id)。 */
+/** 念一段字的请求(工作区、会话由调用方补):那把嗓子(`VoiceRef`)、语速,和界面那份目录里的名字。 */
 export function speechRequest(voice: SpeechVoice, text: string): Omit<SpeechCreate, "workspace_id" | "session_id"> {
-  const { params } = voice;
   return {
     text,
-    engine: params.engine,
-    voice: params.voice_id ?? params.engine_voice ?? "",
+    ...voice.choice,
     voice_label: chosenVoiceLabel(voice),
     engine_label: voice.activeEngine?.label ?? (voice.engine === CLONE_ENGINE ? voice.engines.find((one) => one.id === CLONE_ENGINE)?.label ?? "" : ""),
-    engine_voice_resource: params.engine_voice_resource ?? "",
-    clone_engine: params.clone_engine ?? "",
-    ...(params.speed !== undefined ? { speed: params.speed } : {}),
   };
 }
 
@@ -192,7 +194,7 @@ export function SpeechSettings({ voice, workspaceId }: { voice: SpeechVoice; wor
   const noLibrary = clone && voice.libraryLoaded && voice.library.length === 0;
   const cloneUnready = clone && runtimeState(voice.cloneRuntime) === "unready";
   const engineUnready = !clone && voice.activeEngine?.ready === false;
-  const previewVoice = clone ? voice.voiceId : voice.engineVoice;
+  const previewVoice = voice.choice.voice;
   return (
     <ParameterSection icon={Mic} title={t("createSectionVoice")}>
       {noLibrary && (
@@ -216,7 +218,9 @@ export function SpeechSettings({ voice, workspaceId }: { voice: SpeechVoice; wor
           voiceAction={
             <VoicePreviewButton
               load={() =>
-                fetchVoicePreview({ workspace_id: workspaceId, engine: voice.engine, voice: previewVoice, text: t("createVoicePreviewText") })
+                previewVoice
+                  ? fetchVoicePreview({ workspace_id: workspaceId, voice: previewVoice, text: t("createVoicePreviewText") })
+                  : Promise.reject(new Error(t("createPickVoiceFirst")))
               }
               disabled={!previewVoice || engineUnready}
               disabledReason={t("createPickVoiceFirst")}
@@ -564,7 +568,11 @@ export function PodcastSettings({
         />
         <VoicePreviewButton
           load={() =>
-            fetchVoicePreview({ workspace_id: workspaceId, engine: PODCAST_ENGINE, voice: draft.pair[index], text: t("createVoicePreviewText") })
+            fetchVoicePreview({
+              workspace_id: workspaceId,
+              voice: { engine: PODCAST_ENGINE, voice: draft.pair[index] },
+              text: t("createVoicePreviewText"),
+            })
           }
           disabled={!draft.pair[index] || unready}
           disabledReason={t("createPickVoiceFirst")}

@@ -4,6 +4,7 @@ import time
 
 from fastapi.testclient import TestClient
 
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client, create_asset
 
 
@@ -298,7 +299,7 @@ def test_generate_image_confirmation_keeps_the_full_prompt() -> None:
     assert data["summary_params"]["asked"] == prompt
 
 
-def test_配音按音色认出配好了的云端引擎_不看语音合成默认模型(monkeypatch) -> None:
+def test_配音按音色认出配好了的云端引擎(monkeypatch) -> None:
     """配音没有默认(引擎和音色成对选):此前留空引擎就去查「语音合成的默认模型」,把连接的 vendor(`openai`)
     当引擎 id 传下去 —— 合成那一步不认它,而界面上根本设不了那一格。现在按音色认:`nova` 是 OpenAI 的。
     合成本身会联网,这里只截住任务的起点,看它拿到的是不是一对认得出的 (引擎 id, 音色)。"""
@@ -316,14 +317,10 @@ def test_配音按音色认出配好了的云端引擎_不看语音合成默认�
     monkeypatch.setattr("app.domain.voices.voices.start_synthesis", fake_start_synthesis)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    profile = client.post(
+    client.post(
         "/api/settings/providers",
         json={"name": "Speech", "vendor": "openai", "config": {"api_key": "sk-tts", "default_model": "tts-model"}},
     ).json()
-    client.put(
-        "/api/settings/provider-defaults/tts",
-        json={"provider_profile_id": profile["id"], "model": "tts-model"},
-    )
     data = client.post(
         "/api/confirmations",
         json={
@@ -338,9 +335,8 @@ def test_配音按音色认出配好了的云端引擎_不看语音合成默认�
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"]["job_id"] == made[0]
     assert approved["result"]["session_id"], "念的那一段记成创作页里的一条新会话(ADR 0055)"
-    assert captured["engine"] == "builtin:openai"
-    assert captured["engine_voice"] == "nova"
-    assert "engine_model" not in captured, "没点名模型就用连接自己的,不去套「默认模型」那一格"
+    #: 没点名模型:那把嗓子不带模型,合成时用连接自己的(语音合成没有「默认模型」那一格,ADR 0087)。
+    assert captured["voice"] == VoiceRef("builtin:openai", voice="nova")
 
 
 def test_invalid_payloads_rejected() -> None:

@@ -9,6 +9,8 @@ import logging
 import re
 import tempfile
 from collections.abc import Callable
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -70,6 +72,7 @@ from app.domain.plugins.tools import staged_artifact
 from app.domain.providers import selection as providers_selection
 from app.domain.voices import remote, transcription
 from app.domain.voices.voice_labels import builtin_voice_label
+from app.domain.voices.voice_ref import VoiceRef
 
 if TYPE_CHECKING:
     from app.domain.voices.remote import DeleteFailure
@@ -150,17 +153,25 @@ def _ffmpeg_reason(stderr: str) -> object:
     return blame_line(stderr) or LocalizedError("voiceErr_ffmpegNoReason")
 
 
-def resolve_clone_engine(requested: str = "") -> str:
-    """这一次用哪个本地引擎。
+#: 本机克隆在 `VoiceRef.model` 里写「哪个本机引擎 / 哪一份权重」时用的分隔符:`f5-tts`、`f5-tts/fr`、`fish-speech`。
+CLONE_MODEL_SEPARATOR = "/"
 
-    设置页那个是**默认**,不是唯一 —— 配音面板每次生成都可能想换一个(F5 快、Fish 支持情感
-    标签),而此前想换只能跑去设置页改全局。请求带了就用请求的,没带才回落到默认。
+
+def clone_runtime_of(model: str = "") -> tuple[str, str]:
+    """本机克隆这一次用哪个本地引擎、哪一份权重:`VoiceRef.model` → `(引擎, 权重)`(ADR 0087 §3)。
+
+    设置页那个引擎是**默认**,不是唯一 —— 配音面板每次生成都可能想换一个(F5 快、Fish 支持情感标签)。
+    空 = 部署默认的引擎、按文字自动挑权重;只写引擎 = 自动挑权重;`引擎/权重` = 人明说的那一份(法语、德语都写拉丁字母,
+    自动挑永远挑不中,见 f5_models.weights_for)。认不出就拒,不悄悄退回默认。
     """
 
-    engine = (requested or "").strip() or tts_config.get().engine
-    if engine not in {item.id for item in tts_models.CATALOG}:
-        raise VoiceError("voiceErr_unknownEngine", engine=engine)
-    return engine
+    engine, _, weights = (model or "").strip().partition(CLONE_MODEL_SEPARATOR)
+    engine = engine.strip() or tts_config.get().engine
+    if engine not in {item.id for item in tts_models.CATALOG if item.clones_voices}:
+        raise VoiceError("voiceErr_unknownCloneModel", model=model)
+    if weights and (engine != f5_models.ENGINE_ID or f5_models.get(weights) is None):
+        raise VoiceError("voiceErr_unknownCloneModel", model=model)
+    return engine, weights.strip()
 
 
 #: 长得像「异常那一行」的:`ModuleNotFoundError: ...`、`OSError: ...`、`RuntimeError: ...`。
@@ -200,7 +211,7 @@ def worker_failure(stderr: str) -> VoiceError:
 #: 代码,于是用户自己起名的音色被无端挡下(测试抓到过)。拿不准时放行,是这道闸门的底线。
 
 
-def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engine: str) -> None:
+def _refuse_if_unspeakable(text: str, voice: VoiceRef) -> None:
     """这段文本,这个音色念得了吗 —— 念不了就**现在**说,别等它交出一段废音。
 
     引擎在语言不匹配时不会报错:它按自己认识的发音规则硬念一遍,产出一段听起来像中文又不像
@@ -218,6 +229,7 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     script = detect_script(text)
     if not script:
         return
+    engine = voice.engine
     if engine == QWEN_ENGINE:
         # Qwen3-TTS 支持 10 种语言(含日韩俄),但**没有**阿拉伯文/天城文。念不了就现在说,
         # 别让它按自己的发音规则硬念一遍交出一段废音。日/韩/俄放行 —— 不要照抄克隆那条
@@ -238,9 +250,9 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
                 raise VoiceError(keys["needs_weights"], size=str(size))
             raise VoiceError(keys["clone_unsupported"])
         return
-    voice = providers.builtin_voice(adapter_id(engine), engine_voice) if engine_voice else None
+    listed = providers.builtin_voice(adapter_id(engine), voice.voice) if voice.voice else None
     #: 目录上写的是 BCP 47(`ja-JP`),文种判据只认主语言(`ja`)。
-    spoken = sorted({language.split("-")[0] for language in voice.languages}) if voice is not None else []
+    spoken = sorted({language.split("-")[0] for language in listed.languages}) if listed is not None else []
     if spoken and script not in spoken:
         raise VoiceError(keys["edge_mismatch" if engine == EDGE_ENGINE else "voice_mismatch"], voice_lang=spoken[0])
 
@@ -478,28 +490,21 @@ def start_synthesis(
     db: Session,
     *,
     text: str,
+    voice: VoiceRef,
     project_id: str | None,
     created_by: str | None,
-    voice_id: str | None = None,
     workspace_id: str = "",
-    engine: str = CLONE_ENGINE,
-    engine_voice: str = "",
-    engine_voice_resource: str = "",
-    provider_profile_id: str | None = None,
-    engine_model: str = "",
     speed: float = 1.0,
-    clone_engine: str = "",
-    clone_model: str = "",
     intermediate: str = "",
     voice_label: str = "",
     usage_source: tuple[str, str] | None = None,
     on_asset: OnAsset | None = None,
 ) -> Job:
-    """Queue a synthesis job.
+    """Queue a synthesis job in the chosen voice (`VoiceRef`, ADR 0087).
 
-    The clone engine needs a Voice row — it works from that reference clip. A remote engine does
-    not: it speaks in a stock voice, so it needs a workspace to own the result and an engine
-    voice id, and requiring a Voice there would mean inventing rows for voices we do not host.
+    The clone engine needs a Voice row — it works from that reference clip (`voice.cloned_voice`). A remote engine does
+    not: it speaks in a stock voice (`voice.voice`), so it needs a workspace to own the result; an engine that can clone
+    remotely (CosyVoice) may also be handed a library voice, which it speaks through its remote copy (ADR 0037).
 
     `intermediate`: the caller is making a part, not a result — each line of a subtitle dub is one
     (see domain/assets/intermediates). The produced asset is registered as that kind, so the library
@@ -517,55 +522,53 @@ def start_synthesis(
         raise VoiceError("voiceErr_textEmpty")
     # 语言对不上就现在拦 —— 建了任务再失败,用户已经等了几十秒;而它根本不会"失败",
     # 只会安静地交出一段念不对的音频。
-    _refuse_if_unspeakable(text, engine, engine_voice, clone_engine)
-    voice = None
-    require_engine(db, engine, user_id=created_by)
-    if engine == CLONE_ENGINE:
-        voice = db.get(Voice, voice_id or "")
-        if voice is None:
+    _refuse_if_unspeakable(text, voice)
+    require_engine(db, voice.engine, user_id=created_by)
+    cloned = db.get(Voice, voice.cloned_voice) if voice.cloned_voice else None
+    if voice.cloned_voice and cloned is None:
+        raise VoiceError("voiceErr_voiceNotFound")
+    if voice.engine == CLONE_ENGINE:
+        if cloned is None:
             raise VoiceError("voiceErr_voiceNotFound")
         # 参考音频够不够长,先查 —— 这是**用户自己的输入**,和这台机器装没装引擎无关,
         # 所以排在引擎检查前面。库里已经有的短音色(下限是后加的)也要挡在这儿,否则它会
         # 安安静静换来一次十分钟的合成和一段听不懂的声音。
-        reference = reference_path(voice)
+        reference = reference_path(cloned)
         if reference.is_file():
             check_reference_duration(float(probe_media(reference).get("duration") or 0.0))
-        # 先把引擎定下来:下面几条判据都跟引擎走,而请求不带引擎时它是空串 ——
+        # 先把引擎定下来:下面几条判据都跟引擎走,而选择里不写模型时它取部署默认 ——
         # 在解析之前判,等于对"用默认引擎"的那一半请求什么都没判。
-        clone_engine = resolve_clone_engine(clone_engine)
+        runtime, _weights = clone_runtime_of(voice.model)
         # 「留空则自动识别」这句话只有 F5 兑现。Fish Speech 拿到空文本就是空文本 ——
         # 在建任务之前说,而不是等一次十分钟的合成之后交一段听不懂的东西。
-        if clone_engine in engines_needing_reference_text() and not (voice.reference_text or "").strip():
-            raise VoiceError("voiceErr_referenceTextRequired", label=clone_engine)
+        if runtime in engines_needing_reference_text() and not (cloned.reference_text or "").strip():
+            raise VoiceError("voiceErr_referenceTextRequired", label=runtime)
         # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器、看一眼权重目录而已。
         # 不挡的话它会一路跑到 worker:导不进引擎就写一段正弦音(用户说的「根本克隆不了」),
         # 权重缺席就顺手下 2GB(用户说的「不该自动开启下载」)。
-        _require_local_engine(clone_engine)
-        workspace_id = voice.workspace_id
-        label = voice.name
+        _require_local_engine(runtime)
+        #: 用**建任务时**定下的那个引擎:中途有人去设置页改了默认,这一单不该跟着漂。
+        voice = replace(voice, model=CLONE_MODEL_SEPARATOR.join(filter(None, (runtime, _weights))))
+        workspace_id = cloned.workspace_id
+        label = cloned.name
     else:
         if not workspace_id:
             raise VoiceError("voiceErr_workspaceRequired")
-        label = _voice_label(engine_voice, voice_label) or engine
-        if engine in LOCAL_SPEECH_ENGINES:
+        label = _voice_label(voice.voice, voice_label) or voice.engine
+        if voice.engine in LOCAL_SPEECH_ENGINES:
             # 本机念字引擎:音色是模型自带的预置发音人,名字由目录认(不在目录里就是调用方的错)。
-
-            if engine_voice and qwen_models.speaker(engine_voice) is None:
-                raise VoiceError("voiceErr_qwenUnknownVoice", voice=engine_voice)
-            engine_voice = qwen_models.speaker_id(engine_voice) or qwen_models.DEFAULT_SPEAKER
-            label = _voice_label(engine_voice) or engine
+            if voice.voice and qwen_models.speaker(voice.voice) is None:
+                raise VoiceError("voiceErr_qwenUnknownVoice", voice=voice.voice)
+            voice = replace(voice, voice=qwen_models.speaker_id(voice.voice) or qwen_models.DEFAULT_SPEAKER)
+            label = _voice_label(voice.voice) or voice.engine
             # 和克隆那条同一个判据:解释器 + 权重都在才建任务,而不是排上队再失败/顺手下一份权重。
-            _require_local_engine(LOCAL_SPEECH_ENGINES[engine])
-        elif voice_id:
+            _require_local_engine(LOCAL_SPEECH_ENGINES[voice.engine])
+        elif cloned is not None:
             # 配音库里的一把嗓子,用远端引擎念(ADR 0037):嗓子在这个工作区、声明过是谁的、这个账号同意过上传 ——
             # 建任务之前问,没同意就回 409 让界面弹确认框,而不是排上队再失败。
-
-            if not remote.clones_remotely(engine):
-                raise VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
-            label = remote.check_voice(
-                db, engine=engine, voice_id=voice_id, workspace_id=workspace_id, user_id=created_by,
-                provider_profile_id=provider_profile_id, engine_model=engine_model,
-            ).name
+            if not remote.clones_remotely(voice.engine):
+                raise VoiceError("voiceErr_remoteCloneUnsupported", engine=voice.engine)
+            label = remote.check_voice(db, voice, workspace_id=workspace_id, user_id=created_by).name
     job = create_job(
         db,
         workspace_id=workspace_id,
@@ -574,94 +577,36 @@ def start_synthesis(
         payload={
             #: 完整文本:回执卡/任务卡用 `Truncate` 收窄,源头不再静默切 80 字(切了就拿不回原文)。
             "subject": text,
-            "voice_id": voice_id,
             "project_id": project_id,
             "text": text[:200],
-            "engine": engine,
-            "clone_engine": clone_engine if engine == CLONE_ENGINE else "",
-            "clone_model": clone_model,
-            "engine_voice": engine_voice,
-            "provider_profile_id": provider_profile_id,
-            "engine_model": engine_model,
+            "voice": voice.to_json(),
+            "speed": float(speed or 1.0),
             #: 产出登记成哪种中间产物(见 domain/assets/intermediates);空串 = 进素材库。
             "intermediate": intermediate,
         },
         message="jobMsg_ttsRunning", message_params={"voice": label},
     )
     job_id = job.id
-    asset_name = speech_asset_name(label, text)
-    dispatch_job(
-        db,
-        job,
-        lambda: _run_synthesis(
-            job_id,
-            voice_id,
-            text,
-            project_id,
-            engine,
-            engine_voice,
-            speed,
-            workspace_id,
-            engine_voice_resource,
-            provider_profile_id,
-            engine_model,
-            clone_engine,
-            clone_model,
-            asset_name=asset_name,
-            voice_label=label,
-            usage_source=usage_source,
-            on_asset=on_asset,
-        ),
+    run = partial(
+        _run_synthesis_body, job_id, voice, text, float(speed or 1.0),
+        workspace_id=workspace_id, project_id=project_id,
+        asset_name=speech_asset_name(label, text), voice_label=label, usage_source=usage_source, on_asset=on_asset,
     )
+    dispatch_job(db, job, lambda: _run_synthesis(voice, run))
     return job
 
 
-def _run_synthesis(
-    job_id: str,
-    voice_id: str | None,
-    text: str,
-    project_id: str | None,
-    engine: str = CLONE_ENGINE,
-    engine_voice: str = "",
-    speed: float = 1.0,
-    workspace_id: str = "",
-    engine_voice_resource: str = "",
-    provider_profile_id: str | None = None,
-    engine_model: str = "",
-    clone_engine: str = "",
-    clone_model: str = "",
-    *,
-    asset_name: str = "",
-    voice_label: str = "",
-    usage_source: tuple[str, str] | None = None,
-    on_asset: OnAsset | None = None,
-) -> None:
+def _run_synthesis(voice: VoiceRef, run: Callable[[], None]) -> None:
     """Take an admission slot before touching the database — see run_job_guarded(派发处已经替它套上了兜底).
 
     **本机引擎都取这个名额**(克隆、Qwen3-TTS):它们把几 GB 权重读进内存、在 CPU 上解码,
     两个一起跑只会互相抢内存和核。远端引擎是一次 HTTP 请求,不占内存,不该排在它后面。
     """
-    args = (
-        job_id,
-        voice_id,
-        text,
-        project_id,
-        engine,
-        engine_voice,
-        speed,
-        workspace_id,
-        engine_voice_resource,
-        provider_profile_id,
-        engine_model,
-        clone_engine,
-        clone_model,
-    )
-    extra = {"asset_name": asset_name, "voice_label": voice_label, "usage_source": usage_source, "on_asset": on_asset}
-    if engine == CLONE_ENGINE or engine in LOCAL_SPEECH_ENGINES:
+    if voice.engine == CLONE_ENGINE or voice.engine in LOCAL_SPEECH_ENGINES:
         with TTS_SLOTS:
-            _run_synthesis_body(*args, **extra)
+            run()
     else:
-        _run_synthesis_body(*args, **extra)
+        run()
 
 
 def _intermediate_of(job: Job) -> str:
@@ -689,19 +634,12 @@ def _update_progress(job_id: str, event: dict) -> None:
 
 def _run_synthesis_body(
     job_id: str,
-    voice_id: str | None,
+    voice: VoiceRef,
     text: str,
-    project_id: str | None,
-    engine: str = CLONE_ENGINE,
-    engine_voice: str = "",
-    speed: float = 1.0,
-    workspace_id: str = "",
-    engine_voice_resource: str = "",
-    provider_profile_id: str | None = None,
-    engine_model: str = "",
-    clone_engine: str = "",
-    clone_model: str = "",
+    speed: float,
     *,
+    workspace_id: str,
+    project_id: str | None,
     asset_name: str = "",
     voice_label: str = "",
     usage_source: tuple[str, str] | None = None,
@@ -713,39 +651,30 @@ def _run_synthesis_body(
             return
         try:
             #: 克隆引擎念的是这把嗓子;远端引擎点了配音库里的嗓子时也是它(念的是它的远端副本,ADR 0037)。
-            voice = db.get(Voice, voice_id) if voice_id else None
-            if voice is None and (voice_id or engine == CLONE_ENGINE):
+            cloned = db.get(Voice, voice.cloned_voice) if voice.cloned_voice else None
+            if voice.cloned_voice and cloned is None:
                 raise VoiceError("voiceErr_voiceNotFound")
             # 状态经总线写:排队时(等本机合成名额、派发器名额)被取消的,不在这里被写回「在跑」、照样去念。
             if not start_job(db, job, progress=0.2):
                 return
             #: 任务上说「合成《晓晓》配音中」,不说音色 id(建任务时那一句同样用的是名字)
-            say(job, "jobMsg_ttsRunning", voice=voice_label or (voice.name if voice else _voice_label(engine_voice) or engine))
+            say(job, "jobMsg_ttsRunning", voice=voice_label or (cloned.name if cloned else _voice_label(voice.voice) or voice.engine))
             emit_job_event(db, job.id, "job.running", {})
             # 「在念」先落库:合成要一阵(本机克隆十几分钟),界面要马上看得到。
             db.commit()
 
-            if engine != CLONE_ENGINE:
+            if voice.engine != CLONE_ENGINE:
                 _synthesize_remote(
-                    db, job, engine, engine_voice, text, speed,
+                    db, job, voice, text, speed,
                     workspace_id=workspace_id or job.workspace_id, project_id=project_id,
-                    voice_resource=engine_voice_resource,
-                    provider_profile_id=provider_profile_id,
-                    model_override=engine_model,
-                    voice=voice,
-                    asset_name=asset_name,
-                    usage_source=usage_source,
-                    on_asset=on_asset,
+                    cloned=cloned, asset_name=asset_name, usage_source=usage_source, on_asset=on_asset,
                 )
                 return
 
-            ref = reference_path(voice)
+            ref = reference_path(cloned)
             if not ref.is_file():
                 raise VoiceError("voiceErr_referenceMissing")
-            from app.ai.runtime import config as tts_config
-
-            # 用**建任务时**定下的那个引擎:中途有人去设置页改了默认,这一单不该跟着漂。
-            engine = clone_engine or tts_config.get().engine
+            engine, weights = clone_runtime_of(voice.model)
             python = tts_models.resolve_engine_python(engine)
             if python is None:  # 建任务时还在,跑起来时被卸了
                 raise VoiceError("voiceErr_noRuntime", label=engine)
@@ -760,12 +689,12 @@ def _run_synthesis_body(
                     "action": "synthesize",
                     "engine": engine,
                     "reference_wav": str(ref),
-                    "reference_text": voice.reference_text,
+                    "reference_text": cloned.reference_text,
                     "text": text,
                 }
                 # 按这段文本该用哪份权重 —— 无条件问一句,**这里不需要知道哪个引擎有多份**。
                 # 有多份的引擎自己回答(f5_models.weights_for),没有的返回空,原样跑。
-                request.update(f5_models.weights_for(engine, text, clone_model))
+                request.update(f5_models.weights_for(engine, text, weights))
                 request["output_path"] = str(out_wav)
                 # 语速按引擎传:fish 的请求结构里没有这一项,塞进去只会被忽略,
                 # 而"传了却没用"正是今天反复出现的那种谎。
@@ -793,10 +722,10 @@ def _run_synthesis_body(
                 ensure_wanted()  # 念的时候被取消了:产出不进素材库
                 asset = register_file_asset(
                     db,
-                    workspace_id=voice.workspace_id,
+                    workspace_id=cloned.workspace_id,
                     project_id=project_id,
                     source_path=out_wav,
-                    name=asset_name or speech_asset_name(voice.name, text),
+                    name=asset_name or speech_asset_name(cloned.name, text),
                     source="tts",
                     #: 合成人声(克隆的嗓子也是):成片里有它就要加 AI 标识(《深度合成管理规定》第十七条)。
                     ai_generated=True,
@@ -804,7 +733,7 @@ def _run_synthesis_body(
                 )
                 #: 记下是哪把克隆嗓子配的:这段音频拿去做数字人时,生成漏斗照它查音色的授权声明
                 #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
-                patch_media_info(db, asset.id, {"voice_id": voice.id})
+                patch_media_info(db, asset.id, {"voice_id": cloned.id})
                 if on_asset is not None:
                     on_asset(db, asset.id)
             job = db.get(Job, job_id)
@@ -823,7 +752,7 @@ def _run_synthesis_body(
                 emit_job_event(db, job.id, "job.failed", {})
             # 失败落进任务行是给用户看的;日志是给排查的人看的。此前只有前者,于是一次
             # 失败在日志里一个字都没有 —— 而这一整天的排查全靠日志。
-            logger.warning("配音任务 %s 失败(%s):%s", job_id, engine, str(exc)[:400])
+            logger.warning("配音任务 %s 失败(%s):%s", job_id, voice.engine, str(exc)[:400])
 
 
 __all__ = [
@@ -889,22 +818,17 @@ def speak_to_file(
     db,
     *,
     text: str,
-    engine: str,
-    engine_voice: str,
+    voice: VoiceRef,
     speed: float,
     workspace_id: str,
     user_id: str | None,
     out_dir: Path,
-    voice_resource: str = "",
-    provider_profile_id: str | None = None,
-    model_override: str = "",
     source_type: str,
     source_id: str,
     job_id: str | None = None,
-    voice_id: str | None = None,
     on_progress: Callable[[dict], None] | None = None,
 ) -> Path:
-    """用一个引擎合成一段语音,落到 `out_dir` 里,**不管产物归谁**。
+    """用选定的那把嗓子(`VoiceRef`)合成一段语音,落到 `out_dir` 里,**不管产物归谁**。
 
     本机念字引擎(Qwen3-TTS)和远端引擎在这一个入口后面分叉:前者交给常驻 worker(权重已经在
     它自己的解释器里),后者是一次 HTTP 请求。**入口以上的调用方不区分这两条** —— 试听、对话
@@ -917,8 +841,9 @@ def speak_to_file(
     记账的来源由调用方给:配音挂在 job 上,临时合成挂在别的东西上 —— 但**两边都要记**,
     各家 TTS 按字符计费,念一句也是钱。
 
-    `voice_id`:念的是配音库里的一把克隆嗓子(ADR 0037)。它在这里被解析成「这个人的连接 + 这次的模型」下的远端副本,
-    还没有就建(配音任务的进度写「正在百炼上复刻这把嗓子」);每个入口都经过这里,入口不用各自认识复刻。
+    `voice.cloned_voice`:念的是配音库里的一把克隆嗓子(ADR 0037)。它在这里被解析成「这个人的连接 + 这次的模型」下的
+    远端副本,还没有就建(配音任务的进度写「正在百炼上复刻这把嗓子」);每个入口都经过这里,入口不用各自认识复刻。
+    `voice.extra` 原样交给那一家 Adapter(火山的资源族),这里不读。
     """
 
     #: **到引擎的第二扇门。** 对话朗读、免提、试听、笔记朗读都直接走这里;任务那条路(配音、画板音、
@@ -927,26 +852,23 @@ def speak_to_file(
     text = speakable_text(text)
     if not text.strip():
         raise VoiceError("voiceErr_textEmpty")
-    if is_plugin(engine):
-        return _speak_with_plugin(db, engine, text=text, voice=engine_voice, speed=speed, out_dir=out_dir)
-    if engine in LOCAL_SPEECH_ENGINES:
+    if is_plugin(voice.engine):
+        return _speak_with_plugin(db, voice.engine, text=text, voice=voice.voice, speed=speed, out_dir=out_dir)
+    if voice.engine in LOCAL_SPEECH_ENGINES:
         return _speak_locally(
-            engine, text=text, engine_voice=engine_voice, out_dir=out_dir,
+            voice.engine, text=text, engine_voice=voice.voice, out_dir=out_dir,
             job_id=job_id, on_progress=on_progress,
         )
     #: 能力表里是 `builtin:edge`,`ai` 层的适配器认裸名 `edge`。
-    engine = adapter_id(engine)
-    profile, model = speech_target(
-        db, engine, user_id=user_id, provider_profile_id=provider_profile_id,
-        model_override=model_override, voice_resource=voice_resource,
-    )
+    engine = adapter_id(voice.engine)
+    profile, model = speech_target(db, voice, user_id=user_id)
     api_key = (profile.api_key if profile else None) or ""
     base_url = (profile.base_url if profile else "") or ""
     # 火山与 Edge 产出 mp3;其余(OpenAI 家族)按请求要的 wav 落盘。
     out = out_dir / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
 
-    def speak(session, voice: str) -> None:
-        adapter = providers.build_speech_adapter(engine, api_key=api_key, voice=voice, model=model, base_url=base_url)
+    def speak(session, spoken: str) -> None:
+        adapter = providers.build_speech_adapter(engine, api_key=api_key, voice=spoken, model=model, base_url=base_url)
         # 各家 TTS 普遍按**字符**计费,所以计量是字符数而不是 token —— 计量因供应商而异,
         # 正是 billable 留给调用方的那一半。
         with billable(
@@ -969,13 +891,13 @@ def speak_to_file(
             call.meter(characters=len(text), requests=1)
             if adapter.free_of_charge:
                 call.mark_free()
-            adapter.synthesize(SpeechSynthesisRequest(text=text, voice=voice, speed=speed), out)
+            adapter.synthesize(SpeechSynthesisRequest(text=text, voice=spoken, speed=speed, extra=voice.extra), out)
 
-    if not voice_id:
-        speak(db, engine_voice)
+    if not voice.cloned_voice:
+        speak(db, voice.voice)
         return out
     _speak_through_copy(
-        speak, voice_id=voice_id, engine=engine, profile=profile, user_id=user_id, model=model, job_id=job_id,
+        speak, voice_id=voice.cloned_voice, engine=engine, profile=profile, user_id=user_id, model=model, job_id=job_id,
     )
     return out
 
@@ -1107,17 +1029,13 @@ def _speak_with_plugin(db, engine: str, *, text: str, voice: str, speed: float, 
 def _synthesize_remote(
     db,
     job,
-    engine: str,
-    engine_voice: str,
+    voice: VoiceRef,
     text: str,
     speed: float,
     *,
     workspace_id: str,
     project_id: str | None,
-    voice_resource: str = "",
-    provider_profile_id: str | None = None,
-    model_override: str = "",
-    voice: Voice | None = None,
+    cloned: Voice | None = None,
     asset_name: str = "",
     usage_source: tuple[str, str] | None = None,
     on_asset: OnAsset | None = None,
@@ -1127,7 +1045,7 @@ def _synthesize_remote(
     No reference clip and no local model, so none of the worker-subprocess machinery applies —
     but the outcome has to look identical to the caller: an audio asset on the job's result.
 
-    `voice`: a cloned voice from the library, spoken through its remote copy (ADR 0037).
+    `cloned`: the library voice `voice.cloned_voice` names, spoken through its remote copy (ADR 0037).
     `asset_name` / `usage_source` / `on_asset`: see start_synthesis.
     """
     source_type, source_id = usage_source or ("job", job.id)
@@ -1135,19 +1053,14 @@ def _synthesize_remote(
         out = speak_to_file(
             db,
             text=text,
-            engine=engine,
-            engine_voice=engine_voice,
+            voice=voice,
             speed=speed,
             workspace_id=workspace_id,
             user_id=job.created_by,
-            voice_resource=voice_resource,
-            provider_profile_id=provider_profile_id,
-            model_override=model_override,
             out_dir=Path(tmp),
             source_type=source_type,
             source_id=source_id,
             job_id=job.id,
-            voice_id=voice.id if voice is not None else None,
             # 本机引擎(加载权重、解码)会报阶段;远端引擎不发,回调只是不被调用。
             on_progress=lambda event: _update_progress(job.id, event),
         )
@@ -1161,18 +1074,18 @@ def _synthesize_remote(
             workspace_id=workspace_id,
             project_id=project_id,
             source_path=out,
-            name=asset_name or speech_asset_name(voice.name if voice is not None else _voice_label(engine_voice) or engine, text),
+            name=asset_name or speech_asset_name(cloned.name if cloned is not None else _voice_label(voice.voice) or voice.engine, text),
             source="tts",
             ai_generated=True,
             intermediate=_intermediate_of(job),
         )
-        if voice is not None:
+        if cloned is not None:
             # 和本机克隆那条同一个记法:这段音频是这把嗓子的克隆,拿去做数字人时照它查授权声明。
-            patch_media_info(db, asset.id, {"voice_id": voice.id})
+            patch_media_info(db, asset.id, {"voice_id": cloned.id})
         if on_asset is not None:
             on_asset(db, asset.id)
     job = db.get(Job, job.id)
-    if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": asset.id, "engine": engine}):
+    if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": asset.id, "engine": voice.engine}):
         say(job, "jobMsg_ttsDone")
         emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
 

@@ -18,6 +18,7 @@ from app.domain import jobs as jobs_domain
 from app.domain.agent import host
 from app.domain.assets import from_url
 from app.domain.voices import voices
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client, insert_asset
 
 
@@ -176,7 +177,7 @@ def test_tts的subject存完整文本(monkeypatch) -> None:
     with SessionLocal() as db:
         job = voices.start_synthesis(
             db, text=text, project_id=None, created_by=user_id, workspace_id=workspace_id,
-            engine="builtin:edge", engine_voice="zh-CN-XiaoxiaoNeural",
+            voice=VoiceRef("builtin:edge", voice="zh-CN-XiaoxiaoNeural"),
         )
         db.commit()
         assert job.payload["subject"] == text

@@ -253,7 +253,7 @@ def test_念出来时选的引擎和发音人留在节点表单上_失败后原�
     import app.domain.voices.engine_catalog as engine_catalog
     import app.domain.voices.voices as voices
 
-    monkeypatch.setattr(engine_catalog, "synthesis_params", lambda db, **kwargs: {})
+    monkeypatch.setattr(engine_catalog, "voice_for_synthesis", lambda db, choice, **kwargs: choice)
     monkeypatch.setattr(voices, "start_synthesis", lambda db, **kwargs: SimpleNamespace(id="job-tts"))
 
     client = fresh_client()
@@ -338,7 +338,7 @@ def test_任务在占位落下之前就结束了_产出照样落回这一格(mon
         db.commit()  # 回执在这次提交之后就送出去了 —— 占位还没落下
         return job
 
-    monkeypatch.setattr(engine_catalog, "synthesis_params", lambda db, **kwargs: {})
+    monkeypatch.setattr(engine_catalog, "voice_for_synthesis", lambda db, choice, **kwargs: choice)
     monkeypatch.setattr(voices, "start_synthesis", synthesis_that_finishes_at_once)
 
     client = fresh_client()

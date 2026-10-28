@@ -12,6 +12,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, DubError, dub_targets, start_subtitle_dub
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -35,7 +36,7 @@ def test_跨两条字幕轨的一批被拒_一次只配一条() -> None:
     every = [clip for ids in cues.values() for clip in ids]
     with SessionLocal() as db, pytest.raises(DubError, match="不止一条字幕轨"):
         start_subtitle_dub(db, sequence_id=sid, clip_ids=every, match_duration=True, created_by=None,
-                           synthesis={"engine": "builtin:volcano", "engine_voice": "v"})
+                           voice=VoiceRef("builtin:volcano", voice="v"))
 
 
 def test_点名条目又给了轨道_只取那条轨上的() -> None:
@@ -64,7 +65,7 @@ def test_剪辑台的接口带上轨道_只把那条轨交下去(monkeypatch) ->
     sid, cues = _two_tracks(client)
     first, second = cues
     response = client.post(f"/api/sequences/{sid}/dub-subtitles",
-                           json={"track_id": second, "engine": "builtin:edge", "engine_voice": "zh-CN-XiaoxiaoNeural"})
+                           json={"track_id": second, "voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}})
     assert response.status_code == 422 and "到此为止" in response.text, response.text
     assert seen["clip_ids"] == cues[second]
     assert seen["match_duration"] is DEFAULT_MATCH_DURATION, "接口不传时用领域层那一个默认"
@@ -84,7 +85,7 @@ def test_配音照着看到的那一版排_选中的字幕被人改过就409_别
     client = fresh_client()
     sid, cues = _two_tracks(client)
     first, second = cues
-    body = {"track_id": second, "engine": "builtin:edge", "engine_voice": "zh-CN-XiaoxiaoNeural"}
+    body = {"track_id": second, "voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}}
     seen = client.get(f"/api/sequences/{sid}").json()["revision"]
     # 改的是另一条字幕轨上的字:和这次要配的那条轨不相干,照排。
     assert client.patch(f"/api/sequences/{sid}/clips/texts", json={"texts": [{"clip_id": cues[first][0], "text": "早"}]}).status_code == 200

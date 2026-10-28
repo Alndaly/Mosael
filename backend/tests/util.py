@@ -411,6 +411,17 @@ def make_voice(workspace_id: str, name: str = "测试音色") -> str:
         return voice.id
 
 
+def synthesize_cloned(client, voice_id: str, text: str, *, model: str = ""):
+    """用本机克隆念配音库里的一把嗓子(`POST /api/tts/synthesize`,音色是一个 VoiceRef,ADR 0087)。工作区取那把嗓子的。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Voice
+
+    with SessionLocal() as db:
+        workspace_id = db.get(Voice, voice_id).workspace_id
+    voice = {"engine": "builtin:clone", "cloned_voice": voice_id, **({"model": model} if model else {})}
+    return client.post("/api/tts/synthesize", json={"workspace_id": workspace_id, "text": text, "voice": voice})
+
+
 def executable_source(module_or_path: object) -> str:
     """一个模块**会被执行的那部分**源码 —— 注释和 docstring 都剥掉。
 

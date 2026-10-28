@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.db.models import ProviderUsageEvent, User
 from app.domain.billing.usage import costs_by_currency, record_usage
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -43,7 +44,7 @@ def test_Edge_配音记_0_可信度是免费(workspace, tmp_path) -> None:
 
     ws, me = workspace
     with SessionLocal() as db:
-        speak_to_file(db, text="点下方链接", engine="builtin:edge", engine_voice="zh-CN-XiaoxiaoNeural", speed=1.0,
+        speak_to_file(db, text="点下方链接", voice=VoiceRef("builtin:edge", voice="zh-CN-XiaoxiaoNeural"), speed=1.0,
                       workspace_id=ws, user_id=me, out_dir=tmp_path, source_type="test", source_id="t")
         db.commit()
         event = db.scalars(select(ProviderUsageEvent).where(ProviderUsageEvent.capability == "tts")).one()

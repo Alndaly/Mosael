@@ -179,9 +179,11 @@ def create_generation(body: GenerationCreate, db: Tx, user: CurrentUser) -> Gene
 def create_speech(body: SpeechCreate, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
     """创作页「语音」(ADR 0055):念一段字,记成会话里的一条。活儿由配音那一族做(任务种类还是 `tts`)。
     远端引擎念配音库里的嗓子、这个账号还没同意上传时回 409 `remote_voice_consent_required`(ADR 0037),界面弹确认框。"""
-    fields = body.model_dump()
+    fields = body.model_dump(exclude={"voice"})
     try:
-        created, job = generation.speak(db, user, fields.pop("workspace_id"), **fields)
+        created, job = generation.speak(
+            db, user, fields.pop("workspace_id"), **fields, voice=body.voice.ref() if body.voice is not None else None,
+        )
     except (GenerationDomainError, VoiceError, CapabilityUnavailable) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return GenerationCreateResponse(generation=GenerationJobOut.model_validate(created), job=job)

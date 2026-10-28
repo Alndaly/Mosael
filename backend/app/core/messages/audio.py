@@ -118,6 +118,32 @@ MESSAGES: dict[str, dict[str, str]] = {
     "podcastAssetName": {"zh": "{subject} · 播客", "en": "{subject} · Podcast"},
     "podcastAssetUntitled": {"zh": "未命名", "en": "Untitled"},
     "voiceErr_noVoiceSelected": {"zh": "没有选音色", "en": "No voice was selected."},
+    #: 音色选择(VoiceRef,ADR 0087)形状不对:调用方塞错了东西。
+    "voiceErr_refNotObject": {"zh": "音色选择要是一个对象", "en": "A voice choice must be an object."},
+    "voiceErr_refUnknownField": {"zh": "音色选择里有认不得的字段:{fields}", "en": "Unknown fields in the voice choice: {fields}"},
+    "voiceErr_refNoEngine": {"zh": "音色选择没说是哪个引擎", "en": "The voice choice doesn't name an engine."},
+    "voiceErr_refOneVoice": {
+        "zh": "音色选择要恰好一个:引擎自己的音色(voice)或配音库里的克隆音色(cloned_voice)",
+        "en": "A voice choice needs exactly one of: the engine's own voice (voice) or a cloned voice from the library (cloned_voice).",
+    },
+    "voiceErr_refFieldNotText": {"zh": "音色选择的「{field}」要是文字", "en": "The voice choice's “{field}” must be text."},
+    "voiceErr_refFieldTooLong": {
+        "zh": "音色选择的「{field}」太长了(最多 {limit} 个字符)",
+        "en": "The voice choice's “{field}” is too long (at most {limit} characters).",
+    },
+    "voiceErr_refBadExtra": {"zh": "音色选择的 extra 要是几项「文字 → 文字」", "en": "The voice choice's extra must be a few text-to-text entries."},
+    "voiceErr_clonedVoiceOnEngine": {
+        "zh": "「{engine}」念不了配音库里的克隆音色",
+        "en": "“{engine}” can't speak cloned voices from the library.",
+    },
+    "voiceErr_voiceNotForModel": {
+        "zh": "音色「{voice}」不适用模型 {model}(它只在 {models} 上能念)—— 换一个音色,或换回它的模型",
+        "en": "The voice “{voice}” doesn't work on {model} (only on {models}) — pick another voice, or switch back to its model.",
+    },
+    "voiceErr_unknownCloneModel": {
+        "zh": "本机克隆认不得「{model}」:要写成「引擎」或「引擎/权重」,比如 f5-tts、f5-tts/fr、fish-speech",
+        "en": "Local cloning doesn't know “{model}”: write “engine” or “engine/weights”, e.g. f5-tts, f5-tts/fr, fish-speech.",
+    },
     "voiceErr_voiceNotInWorkspace": {
         "zh": "这个工作区的配音库里没有这个音色",
         "en": "This voice isn't in this workspace's voice library.",

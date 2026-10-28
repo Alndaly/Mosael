@@ -15,6 +15,7 @@ from app.core.i18n import t
 from app.db.models import Asset, Clip, Job, Track
 from app.domain.jobs import create_job, wait_for_idle_jobs
 from app.domain.voices.subtitle_dub import start_subtitle_dub
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 #: 每句念出来多长(秒)。
@@ -61,7 +62,7 @@ def timeline(monkeypatch):
         with SessionLocal() as db:
             job_id = start_subtitle_dub(
                 db, sequence_id=sequence_id, clip_ids=[cues[text] for text in texts], match_duration=True, created_by=None,
-                synthesis={"engine": "builtin:volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
+                voice=VoiceRef("builtin:volcano", voice="v"), original_audio="keep",
             ).id
             db.commit()  # 测试是入口:任务在起它的那次事务提交之后才派发
         assert wait_for_idle_jobs(10)

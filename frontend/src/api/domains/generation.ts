@@ -1,5 +1,6 @@
 import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
+import type { VoiceRef } from "@/api/domains/speech";
 
 export type GenerationOption = components["schemas"]["GenerationOptionOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
@@ -53,8 +54,9 @@ export function retrieveGeneration(generationId: string): Promise<GenerationCrea
 type SpeechCreateIn = components["schemas"]["SpeechCreate"];
 type PodcastCreateIn = components["schemas"]["PodcastCreate"];
 /** 请求体:后端有缺省值的几格可以不给。 */
-export type SpeechCreate = Pick<SpeechCreateIn, "workspace_id" | "text" | "engine" | "voice">
-  & Partial<Omit<SpeechCreateIn, "workspace_id" | "text" | "engine" | "voice">>;
+//: 那把嗓子用音色选择的写入形状(只有引擎必填,见 speech.VoiceRef);不给 = 用默认那一把。
+export type SpeechCreate = Pick<SpeechCreateIn, "workspace_id" | "text">
+  & Partial<Omit<SpeechCreateIn, "workspace_id" | "text" | "voice">> & { voice?: VoiceRef | null };
 export type PodcastCreate = Pick<PodcastCreateIn, "workspace_id" | "mode"> & Partial<Omit<PodcastCreateIn, "workspace_id" | "mode">>;
 
 /**

@@ -31,6 +31,7 @@ from app.ai.runtime.workers import tts as tts_worker
 from app.domain.voices import engine_catalog, voices
 from app.domain.voices import errors as voices_errors
 from app.domain.voices.speech import CAPABILITY, LOCAL_SPEECH_ENGINES, QWEN_ENGINE
+from app.domain.voices.voice_ref import VoiceRef
 
 
 def _wave_bytes(seconds: float = 0.1, sr: int = 24000) -> bytes:
@@ -268,8 +269,7 @@ def _local_synthesis(monkeypatch: pytest.MonkeyPatch, tmp_path, pool) -> dict:
     out = voices.speak_to_file(
         None,
         text="你好,这是一段本机合成的语音。",
-        engine=QWEN_ENGINE,
-        engine_voice="vivian",
+        voice=VoiceRef(QWEN_ENGINE, voice="vivian"),
         speed=1.0,
         workspace_id="w1",
         user_id=None,
@@ -325,7 +325,7 @@ def test_japanese_text_asks_for_the_japanese_language(monkeypatch: pytest.Monkey
     monkeypatch.setattr(voices.tts_models, "is_installed", lambda engine_id: True)
     monkeypatch.setattr(voices.tts_daemon, "pool", lambda: types.SimpleNamespace(request=request))
     voices.speak_to_file(
-        None, text="こんにちは、今日はいい天気ですね", engine=QWEN_ENGINE, engine_voice="vivian",
+        None, text="こんにちは、今日はいい天気ですね", voice=VoiceRef(QWEN_ENGINE, voice="vivian"),
         speed=1.0, workspace_id="w1", user_id=None, out_dir=tmp_path,
         source_type="test", source_id="t1",
     )
@@ -349,8 +349,7 @@ def test_a_worker_failure_keeps_its_reason(monkeypatch: pytest.MonkeyPatch, tmp_
         voices.speak_to_file(
             None,
             text="你好",
-            engine=QWEN_ENGINE,
-            engine_voice="vivian",
+            voice=VoiceRef(QWEN_ENGINE, voice="vivian"),
             speed=1.0,
             workspace_id="w1",
             user_id=None,
@@ -477,14 +476,14 @@ def test_installed_requires_both_pinned_weight_files(monkeypatch: pytest.MonkeyP
 def test_arabic_is_refused_before_a_job_is_created() -> None:
     """Qwen3-TTS 的 10 种语言里没有阿拉伯文 —— 装作能念只会交出一段废音。"""
     with pytest.raises(voices_errors.VoiceError) as caught:
-        voices._refuse_if_unspeakable("مرحبا كيف حالك", QWEN_ENGINE, "vivian", "")  # noqa: SLF001
+        voices._refuse_if_unspeakable("مرحبا كيف حالك", VoiceRef(QWEN_ENGINE, voice="vivian"))  # noqa: SLF001
 
     assert caught.value.key == "voiceErr_qwenUnsupportedLanguage"
 
 
 def test_japanese_is_allowed_for_qwen() -> None:
     """日文是它支持的语言之一 —— 不要照抄克隆引擎那条「日文要下权重」的判据。"""
-    voices._refuse_if_unspeakable("こんにちは、今日はいい天気ですね", QWEN_ENGINE, "vivian", "")  # noqa: SLF001
+    voices._refuse_if_unspeakable("こんにちは、今日はいい天気ですね", VoiceRef(QWEN_ENGINE, voice="vivian"))  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------

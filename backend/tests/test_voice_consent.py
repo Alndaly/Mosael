@@ -69,7 +69,7 @@ def test_没声明的克隆音色用于数字人_配音之前就拦(gate) -> Non
     assert refused.value.key == "wfErr_voiceConsentMissing" and spoken == []
 
     person = client.post("/api/entities", json={"workspace_id": ws, "kind": "character", "name": "小美",
-                                                "attributes": {"voice_engine": "builtin:clone", "voice_id": voice}}).json()["id"]
+                                                "attributes": {"voice": {"engine": "builtin:clone", "cloned_voice": voice}}}).json()["id"]
     client.post(f"/api/entities/{person}/references", json={"asset_id": "face", "role": "front"})
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as refused:
         talking.check_entity_speak(db, ws, {"entity_id": person, "text": "你好"}, None)

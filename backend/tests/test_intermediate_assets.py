@@ -16,6 +16,7 @@ from app.db.models import Asset, Job
 from app.domain.assets.intermediates import DUB_LINE
 from app.domain.jobs import create_job, wait_for_idle_jobs
 from app.domain.voices.subtitle_dub import start_subtitle_dub
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client, insert_asset
 
 
@@ -106,7 +107,7 @@ def test_逐句配音让每一句的合成都登记成配音片段(monkeypatch) 
     monkeypatch.setattr(voices_module, "start_synthesis", fake_synthesis)
     with SessionLocal() as db:
         start_subtitle_dub(db, sequence_id=sid, clip_ids=clip_ids, match_duration=True, created_by=None,
-                           synthesis={"engine": "builtin:volcano", "engine_voice": "a", "workspace_id": ws})
+                           voice=VoiceRef("builtin:volcano", voice="a"))
         db.commit()
     assert wait_for_idle_jobs(15)
     assert asked == [DUB_LINE, DUB_LINE], "配出来的每一句都是这次配音的零件"
@@ -128,10 +129,8 @@ def test_合成按任务上说的登记成哪种中间产物_不说就是素材�
     client = fresh_client()
     ws = _workspace(client)
     with SessionLocal() as db:
-        part = voices_domain.start_synthesis(db, text="一句", project_id=None, created_by=None, engine="builtin:edge",
-                                             engine_voice="v", workspace_id=ws, intermediate=DUB_LINE).id
-        whole = voices_domain.start_synthesis(db, text="一段", project_id=None, created_by=None, engine="builtin:edge",
-                                              engine_voice="v", workspace_id=ws).id
+        part = voices_domain.start_synthesis(db, text="一句", project_id=None, created_by=None, voice=VoiceRef("builtin:edge", voice="v"), workspace_id=ws, intermediate=DUB_LINE).id
+        whole = voices_domain.start_synthesis(db, text="一段", project_id=None, created_by=None, voice=VoiceRef("builtin:edge", voice="v"), workspace_id=ws).id
         db.commit()
     assert wait_for_idle_jobs(15)
     with SessionLocal() as db:

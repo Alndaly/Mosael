@@ -40,6 +40,7 @@ from app.domain.sequences.append import track_end
 from app.domain.sequences.grouping import OperationGroup
 from app.domain.voices import voices as voices_voices
 from app.domain.voices.remote import check_voice, clones_remotely
+from app.domain.voices.voice_ref import VoiceRef, voice_identity
 
 logger = logging.getLogger(__name__)
 
@@ -62,20 +63,10 @@ _MIN_SPEED = 0.9
 _MAX_SPEED = 1.5
 
 
-#: 配好的那段音频上记着「这是哪一句、用哪把嗓子念的」:{"text": 念的字, "voice": voice_identity(...)}。
+#: 配好的那段音频上记着「这是哪一句、用哪把嗓子念的」:{"text": 念的字, "voice": voice_ref.voice_identity(...)}。
 #: 改口型的块缓存按它认句子(见 workflows/executors/dub_lipsync),不按音频字节 —— 同一句话、同一把嗓子
 #: 重新合成一遍,字节每次都可能不一样,按字节认的话整图重跑时每一块都认不出来、再买一次。
 DUB_LINE_KEY = "dub_line"
-#: 合成参数里决定「是哪把嗓子、念多快」的那几项。连接(provider_profile_id)、工作区这些不算 —— 换个人跑、
-#: 用他自己的连接调同一个音色,念出来还是同一把嗓子。
-_VOICE_FIELDS = ("engine", "voice_id", "engine_voice", "engine_model", "clone_engine", "clone_model", "speed")
-
-
-def voice_identity(synthesis: dict) -> str:
-    """一组合成参数说的是哪把嗓子(见 DUB_LINE_KEY)。"""
-    return "|".join(f"{field}={synthesis[field]}" for field in _VOICE_FIELDS if synthesis.get(field) not in (None, ""))
-
-
 class DubError(LocalizedError, RuntimeError):
     """字幕配音的领域错误。带文案 key(`dubErr_*`),按读的人的语言翻(见 core/i18n)。"""
 
@@ -158,11 +149,13 @@ def start_subtitle_dub(
     clip_ids: list[str],
     match_duration: bool,
     created_by: str | None,
-    synthesis: dict,
+    voice: VoiceRef,
+    speed: float = 1.0,
     line: str = "all",
     original_audio: str = DEFAULT_ORIGINAL_AUDIO,
 ) -> Job:
-    """给这些字幕条排一次配音。`synthesis` 原样转交 voices.start_synthesis(音色/引擎那一套);
+    """给这些字幕条排一次配音。`voice` 是定好的那把嗓子(`engine_catalog.voice_for_synthesis` 解析过),逐句交给
+    voices.start_synthesis;
     `original_audio` 是配好之后原声怎么办(见 voices/original_audio)。"""
     try:
         ensure_original_audio_mode(original_audio, owner_user_id=created_by)
@@ -179,7 +172,7 @@ def start_subtitle_dub(
         # **一次只配一条字幕轨。** 双语视频常见的形态是原文一条、译文一条:两条一起配,同一秒上一句念原文、
         # 一句念译文。剪辑台此前把所有字幕轨的条目一股脑交下来,而后端照单全收(探针 P2)。
         raise DubError("dubErr_clipsAcrossSubtitleTracks")
-    _check_remote_voice(db, synthesis, workspace_id=sequence.workspace_id, created_by=created_by)
+    _check_remote_voice(db, voice, workspace_id=sequence.workspace_id, created_by=created_by)
 
     job = create_job(
         db,
@@ -192,7 +185,8 @@ def start_subtitle_dub(
             "clip_ids": [clip.id for clip in clips],
             "match_duration": match_duration,
             "line": line,
-            "synthesis": synthesis,
+            "voice": voice.to_json(),
+            "speed": float(speed or 1.0),
             "original_audio": original_audio,
         },
         message="jobMsg_dubRunning",
@@ -203,19 +197,14 @@ def start_subtitle_dub(
     return job
 
 
-def _check_remote_voice(db: Session, synthesis: dict, *, workspace_id: str, created_by: str | None) -> None:
+def _check_remote_voice(db: Session, voice: VoiceRef, *, workspace_id: str, created_by: str | None) -> None:
     """远端引擎念配音库里的嗓子(ADR 0037):**排这一批之前**问清楚(声明过是谁的、这个账号同意过上传)。
 
     逐句的合成是在任务里排的,等到第一句才发现没同意,一整批已经排上了 —— 在这里快速失败,界面弹确认框。
     """
 
-    engine, voice_id = str(synthesis.get("engine") or ""), str(synthesis.get("voice_id") or "")
-    if voice_id and clones_remotely(engine):
-        check_voice(
-            db, engine=engine, voice_id=voice_id, workspace_id=workspace_id, user_id=created_by,
-            provider_profile_id=synthesis.get("provider_profile_id") or None,
-            engine_model=str(synthesis.get("engine_model") or ""),
-        )
+    if voice.cloned_voice and clones_remotely(voice.engine):
+        check_voice(db, voice, workspace_id=workspace_id, user_id=created_by)
 
 
 def _await_child(job_id: str) -> str:
@@ -303,9 +292,9 @@ def _dub_tracks(db: Session, sequence_id: str) -> list[Track]:
             if track.kind == "audio" and track.role == "dub"]
 
 
-def _line_identity(text: str, synthesis: dict) -> dict[str, str]:
+def _line_identity(text: str, voice: VoiceRef, speed: float) -> dict[str, str]:
     """一段配音「是哪一句、哪把嗓子念的」(见 DUB_LINE_KEY)。"""
-    return {"text": text, "voice": voice_identity(synthesis)}
+    return {"text": text, "voice": voice_identity(voice, speed)}
 
 
 def _existing_dubs(db: Session, sequence_id: str, start: float, end: float) -> list[tuple[Clip, dict]]:
@@ -338,7 +327,8 @@ def _run_dub(job_id: str) -> None:
         clip_ids = list(payload.get("clip_ids") or [])
         match_duration = bool(payload.get("match_duration"))
         line = str(payload.get("line") or "all")
-        synthesis = dict(payload.get("synthesis") or {})
+        voice = VoiceRef.of(payload.get("voice"))
+        speed = float(payload.get("speed") or 1.0)
         original_audio = str(payload.get("original_audio") or "keep")
         # 现在取出来:commit 之后这些属性会过期,而 job 出了这个 with 就是 detached 的 ——
         # 到下一个 session 里再读 job.created_by 会去刷一个已经关掉的连接。
@@ -378,7 +368,7 @@ def _run_dub(job_id: str) -> None:
                 timeline_start = clip.timeline_start
                 slot_end = timeline_start + max(slot_seconds, _OVERLAP_TOLERANCE)
                 existing = _existing_dubs(db, sequence_id, timeline_start, slot_end)
-                if any(identity == _line_identity(text, synthesis) for _, identity in existing):
+                if any(identity == _line_identity(text, voice, speed) for _, identity in existing):
                     skipped += 1
                     track_id = track_id or existing[0][0].track_id
                     job = db.get(Job, job_id)
@@ -395,7 +385,9 @@ def _run_dub(job_id: str) -> None:
                         created_by=created_by,
                         #: 每一句都是这次配音的零件:时间线、配音轨用它,素材库不列(见 domain/assets/intermediates)。
                         intermediate=DUB_LINE,
-                        **synthesis,
+                        voice=voice,
+                        speed=speed,
+                        workspace_id=sequence.workspace_id if sequence else "",
                     )
                 except JobError:
                     # 这次配音已经收尾(用户取消,或外面那条工作流取消后级联下来):总线不再让它
@@ -424,7 +416,7 @@ def _run_dub(job_id: str) -> None:
                 # 还留在轨上接着念。只删属于这一句的(见 _existing_dubs),而且到新的这段真配好了才删。
                 for stale, _identity in _existing_dubs(db, sequence_id, timeline_start, slot_end):
                     delete_clip(db, sequence_id, DeleteClip(clip_id=stale.id, actor_id=created_by))
-                patch_media_info(db, asset_id, {DUB_LINE_KEY: _line_identity(text, synthesis)})
+                patch_media_info(db, asset_id, {DUB_LINE_KEY: _line_identity(text, voice, speed)})
                 # 落哪条轨:**已有配音轨就用它**,没有才新建。每配一次多一条轨的话,改几句台词
                 # 重配几段,时间线上就摞起一叠只有一两段音频的轨。
                 #

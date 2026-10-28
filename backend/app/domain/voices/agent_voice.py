@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.db.models import AgentVoicePref
 from app.domain.voices import voices as voices_domain
+from app.domain.voices.voice_ref import VoiceRef
 
 
 class AgentVoiceUnavailable(LocalizedError, RuntimeError):
@@ -42,32 +43,30 @@ def dictation_engine(db: Session, user_id: str | None) -> str:
     return row.asr_engine.strip() if row is not None else ""
 
 
+def voice_of(row: AgentVoicePref | None) -> VoiceRef | None:
+    """这一行存的那把嗓子;没选过是 `None`。"""
+    return VoiceRef.stored(row.voice) if row is not None else None
+
+
 def upsert(
     db: Session,
     user_id: str,
     *,
-    engine: str,
-    engine_voice: str = "",
-    engine_voice_resource: str = "",
-    engine_model: str = "",
-    provider_profile_id: str | None = None,
-    voice_id: str | None = None,
+    voice: VoiceRef | None,
     speed: float = 1.0,
     enabled: bool = True,
     asr_engine: str = "",
     speak_early: bool = True,
 ) -> AgentVoicePref:
-    """建行/改行。**行创建只发生在这里**(数据归属,见 domain/ownership)。"""
+    """建行/改行。`voice` 是校验过的那一把(见 use_cases.choose_agent_voice);`None` = 不选了。
+
+    **行创建只发生在这里**(数据归属,见 domain/ownership)。
+    """
     row = db.get(AgentVoicePref, user_id)
     if row is None:
         row = AgentVoicePref(owner_user_id=user_id)
         db.add(row)
-    row.engine = engine.strip()
-    row.engine_voice = engine_voice.strip()
-    row.engine_voice_resource = engine_voice_resource.strip()
-    row.engine_model = engine_model.strip()
-    row.provider_profile_id = provider_profile_id or None
-    row.voice_id = voice_id or None
+    row.voice = voice.to_json() if voice is not None else {}
     #: 空串是**一个值**(跟随转写),不是"没改过" —— 选回跟随就要能清掉。
     row.asr_engine = asr_engine.strip()
     # 语速给个可用区间:各家引擎对超出范围的值反应不一,有的直接拒、有的悄悄夹取。
@@ -81,11 +80,10 @@ def upsert(
 
 
 def require_ready(db: Session, user_id: str) -> AgentVoicePref:
-    """引擎和音色都选好了的那份配置 —— **不问开关**。试听只要这个:配置的时候听一下效果,
+    """选好了嗓子的那份配置 —— **不问开关**。试听只要这个:配置的时候听一下效果,
     本来就发生在打开之前。没设过就说没设,不替他挑一个。"""
     row = get_row(db, user_id)
-    #: 音色是引擎自己的一个(engine_voice),或配音库里的一把嗓子由远端引擎念它的副本(voice_id,ADR 0037)。
-    if row is None or not row.engine or not (row.engine_voice or row.voice_id):
+    if row is None or voice_of(row) is None:
         raise AgentVoiceUnavailable("voiceErr_agentVoiceNotConfigured")
     return row
 
@@ -101,18 +99,16 @@ def require_enabled(db: Session, user_id: str) -> AgentVoicePref:
 def speak(db: Session, row: AgentVoicePref, *, text: str, workspace_id: str, out_dir: Path, source_type: str) -> Path:
     """用这份配置念一句,落到 `out_dir`。对话发声和试听都走这里 —— 试听听到的,就是以后念给他的
     那个声音;两处各拼一遍参数的话,少带一样(语速、资源族、模型)试听就和真用对不上。"""
+    voice = voice_of(row)
+    if voice is None:
+        raise AgentVoiceUnavailable("voiceErr_agentVoiceNotConfigured")
     return voices_domain.speak_to_file(
         db,
         text=text,
-        engine=row.engine,
-        engine_voice=row.engine_voice,
+        voice=voice,
         speed=row.speed,
         workspace_id=workspace_id,
         user_id=row.owner_user_id,
-        voice_resource=row.engine_voice_resource,
-        provider_profile_id=row.provider_profile_id,
-        model_override=row.engine_model,
-        voice_id=row.voice_id,
         out_dir=out_dir,
         # 记账挂在这个人身上:不是 job,是他的一次发声。**照样要记** —— 各家 TTS 按字符计费。
         source_type=source_type,

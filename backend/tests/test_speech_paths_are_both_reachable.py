@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from app.ai.providers import VoiceOption
+from app.domain.voices.voice_ref import VoiceRef
 
 
 @pytest.fixture
@@ -57,31 +58,26 @@ class Test工作流节点:
 
     def test_引擎音色一路传到底(self, captured, monkeypatch) -> None:
         """这条是修复本身:此前 engine / engine_voice 填了也没被传下去。音色现在是一格,
-        选了引擎时它就是那个引擎的音色;资源族由执行体自己查,不靠界面存。"""
+        选了引擎时它就是那个引擎的音色;资源族由执行体照音色目录补进那把嗓子(`extra`),不靠界面存。"""
         from app.domain.voices import engine_catalog
 
         monkeypatch.setattr(
-            engine_catalog, "list_engine_voices",
-            lambda db, engine, user_id, workspace_id="": [VoiceOption("zh_female_x", "x", extra={"resource_id": "res-9"})],
+            engine_catalog, "_engine_voices",
+            lambda db, engine, *, user_id, model="": [VoiceOption("zh_female_x", "x", extra={"resource_id": "res-9"})],
         )
         self._run({"text": "念一句", "engine": "builtin:volcano", "voice": "zh_female_x", "speed": 1.25}, monkeypatch)
-        assert captured["engine"] == "builtin:volcano"
-        assert captured["engine_voice"] == "zh_female_x"
-        assert captured["engine_voice_resource"] == "res-9"
-        assert "voice_id" not in captured, "引擎那条不该收到克隆那条的参数"
+        assert captured["voice"] == VoiceRef("builtin:volcano", voice="zh_female_x", extra={"resource_id": "res-9"})
         assert captured["speed"] == 1.25
         # 引擎那条要一个工作区来认领产出 —— 克隆那条是从 Voice 行上取的。
         assert captured["workspace_id"] == "ws-1"
 
     def test_克隆时音色就是配音库里的那一个(self, captured, monkeypatch) -> None:
         self._run({"text": "念一句", "engine": "builtin:clone", "voice": "v-1"}, monkeypatch)
-        assert captured["engine"] == "builtin:clone"
-        assert captured["voice_id"] == "v-1"
-        assert "engine_voice" not in captured
+        assert captured["voice"] == VoiceRef("builtin:clone", cloned_voice="v-1")
 
     def test_没填引擎按克隆算(self, captured, monkeypatch) -> None:
         self._run({"text": "念一句", "voice": "v-1"}, monkeypatch)
-        assert captured["engine"] == "builtin:clone" and captured["voice_id"] == "v-1"
+        assert captured["voice"] == VoiceRef("builtin:clone", cloned_voice="v-1")
 
     def test_没选音色时直说(self, captured, monkeypatch) -> None:
         from app.domain.workflows.errors import WorkflowDomainError
@@ -97,7 +93,7 @@ class Test画板配音:
         from app.domain.boards.producers import SpeakForm
 
         fields = set(SpeakForm.model_fields)
-        assert {"engine", "engine_voice", "engine_voice_resource", "speed"} <= fields
+        assert {"engine", "engine_voice", "voice_id", "speed"} <= fields
 
 
 def test_音色是一格_清单跟着引擎变() -> None:

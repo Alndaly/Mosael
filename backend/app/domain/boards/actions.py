@@ -43,6 +43,7 @@ from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, create_note, get_note, read_reference, save_note, snapshot
 from app.domain.providers.chat_connection import require_connection
 from app.domain.voices import voices as voices_voices
+from app.domain.voices.voice_ref import VoiceRef
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 
@@ -324,7 +325,8 @@ def speak_on_board(
     slot: Slot,
     actor_id: str,
     text: str,
-    synthesis: dict[str, Any],
+    voice: VoiceRef,
+    speed: float,
     voice_id: str | None,
     engine: str = "",
     engine_voice: str = "",
@@ -344,7 +346,9 @@ def speak_on_board(
         raise BoardInputError("boardErr_nothingToSpeak")
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
-        job = voices_voices.start_synthesis(db, text=text, project_id=None, created_by=actor_id, **synthesis)
+        job = voices_voices.start_synthesis(
+            db, text=text, voice=voice, speed=speed, workspace_id=workspace_id, project_id=None, created_by=actor_id,
+        )
     finally:
         reset_receipt(token)
     return _pending(db, workspace_id, slot, actor_id=actor_id, kind="audio", producer="speak", job_id=job.id,

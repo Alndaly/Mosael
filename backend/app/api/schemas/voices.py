@@ -4,21 +4,47 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
-from pydantic import Field
+from pydantic import Field, model_validator
 from app.api.schemas.base import ApiModel
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
+from app.domain.voices.voice_ref import VoiceRef
+
+
+class VoiceRefBody(ApiModel):
+    """「选了哪把嗓子」(ADR 0087):所有收音色、回音色的接口都是这一个形状,和库里存的 `VoiceRef` 一一对应。
+
+    `voice`(引擎自己的音色 id)与 `cloned_voice`(这个工作区配音库里的克隆音色)**恰好一个**。`model`:选的那一项绑模型时
+    一并写下(百炼按模型给音色;本机克隆写「引擎」或「引擎/权重」,如 `f5-tts/fr`);空 = 按引擎解析。`connection`:走哪条
+    连接,空 = 这个人在该引擎上的那一条。`extra` 从音色目录那一项原样带回来,界面不读。形状不对直接 422。
+    """
+
+    engine: str = Field(min_length=1, max_length=100)
+    voice: str = Field(default="", max_length=200)
+    cloned_voice: str = Field(default="", max_length=64)
+    model: str = Field(default="", max_length=120)
+    connection: str = Field(default="", max_length=64)
+    extra: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _one_voice(self) -> VoiceRefBody:
+        VoiceRef.of(self.model_dump())
+        return self
+
+    def ref(self) -> VoiceRef:
+        return VoiceRef.of(self.model_dump())
+
+    @classmethod
+    def of(cls, ref: VoiceRef | None) -> VoiceRefBody | None:
+        return cls(**ref.to_json()) if ref is not None else None
+
 
 class AgentVoiceOut(ApiModel):
     """语音对话的音色,以及说话输入(ASR)用哪一家。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"""
 
-    engine: str = ""
-    engine_voice: str = ""
-    engine_voice_resource: str = ""
-    engine_model: str = ""
-    provider_profile_id: str | None = None
-    voice_id: str | None = None
+    #: 念哪把嗓子;没选过是 null。
+    voice: VoiceRefBody | None = None
     speed: float = 1.0
-    #: 没设过时是 False,而且 engine 为空 —— 界面据此提示去选一个,而不是显示一个假的默认。
+    #: 没设过时是 False,而且 voice 为空 —— 界面据此提示去选一个,而不是显示一个假的默认。
     enabled: bool = False
     #: 说话输入用哪一家(能力表的提供方 id)。空 = 跟随「转写」的默认。
     asr_engine: str = ""
@@ -27,14 +53,9 @@ class AgentVoiceOut(ApiModel):
 
 
 class AgentVoiceUpdate(ApiModel):
-    engine: str = Field(default="", max_length=40)
-    engine_voice: str = Field(default="", max_length=120)
-    engine_voice_resource: str = Field(default="", max_length=200)
-    engine_model: str = Field(default="", max_length=120)
-    provider_profile_id: str | None = None
-    #: 配音库里的一把嗓子,由能复刻的远端引擎(CosyVoice)念它的副本(ADR 0037);给了它 `engine_voice` 就留空。
-    #: 这个账号还没同意上传就回 409(`remote_voice_consent_required`)。
-    voice_id: str | None = None
+    #: 念哪把嗓子;null = 不选了。点配音库里的嗓子(`cloned_voice`,由能复刻的远端引擎念它的副本,ADR 0037)而这个账号
+    #: 还没同意上传就回 409(`remote_voice_consent_required`)。
+    voice: VoiceRefBody | None = None
     speed: float = 1.0
     enabled: bool = True
     #: 说话输入用哪一家;空 = 跟随「转写」的默认。**和 `engine`(TTS)分开**,换念字的声音不改听写用谁。
@@ -123,18 +144,6 @@ class VoiceUpdate(ApiModel):
     consent_kind: str | None = None
 
 
-class SynthesizeRequest(ApiModel):
-    text: str = Field(min_length=1, max_length=2000)
-    project_id: str | None = None
-    #: 这一次用哪个本地引擎(f5-tts / fish-speech)。空 = 用部署配置里那个默认(管理页「引擎 → 声音克隆」)——
-    #: 那是默认,不是唯一。
-    clone_model: str = Field(default="", max_length=40)
-    clone_engine: str = Field(default="", max_length=40)
-    #: 语速。**只有声明支持的引擎会用它**(见 TtsEngine.supports_speed):F5 的 infer 吃,
-    #: fish 的请求结构里根本没有这一项。收下但不转发,好过让界面以为发了就生效。
-    speed: float = Field(default=1.0, ge=0.5, le=2.0)
-
-
 class SubtitleDubRequest(ApiModel):
     """给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本
     来自字幕、产物直接落到时间线上。"""
@@ -151,47 +160,30 @@ class SubtitleDubRequest(ApiModel):
     line: str = Field(default="all", pattern="^(all|first|last)$")
     #: 配好之后原声怎么办(见 domain/voices/original_audio)。
     original_audio: Literal["duck", "mute", "keep", "separate"] = "duck"
-    #: 配音引擎(能力表里的提供方 id:`builtin:clone`、`builtin:edge`、插件连接 id……)。
-    engine: str = Field(default="builtin:clone", max_length=80)
-    #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人 —— 能复刻的远端引擎(CosyVoice)点了配音库里的嗓子时
-    #: 也是这一格(念它的远端副本,ADR 0037),`engine_voice` 留空。
-    voice_id: str | None = None
-    clone_engine: str = Field(default="", max_length=40)
-    #: 明说要用哪一份克隆权重(见 ai/runtime/f5_models)。空 = 按文字自动挑。
+    #: 用哪把嗓子念;null = 用默认那一把(见 domain/voices/defaults)。本机克隆明说权重写在 `model` 里(`f5-tts/fr`):
     #: 法语/德语/西语/意语/芬兰语都写拉丁字母,自动挑**永远挑不中**,只能由人来说。
-    clone_model: str = Field(default="", max_length=40)
-    provider_profile_id: str | None = None
-    engine_model: str = Field(default="", max_length=120)
-    engine_voice: str = Field(default="", max_length=120)
-    engine_voice_resource: str = Field(default="", max_length=60)
+    voice: VoiceRefBody | None = None
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
 
 
 class VoicePreviewRequest(ApiModel):
-    """试听一个引擎里的一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。"""
+    """试听一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。播客发音人也走这里(引擎是播客那一个)。"""
 
     workspace_id: str
-    engine: str = Field(min_length=1, max_length=40)
-    voice: str = Field(min_length=1, max_length=200)
+    voice: VoiceRefBody
     text: str = Field(min_length=1, max_length=200)
 
 
-class EngineSynthesizeRequest(ApiModel):
-    """Synthesis through a remote engine — in one of its stock voices (`engine_voice`), or, for an engine that can
-    clone (CosyVoice), in a cloned voice from the library (`voice_id`, spoken through its remote copy; ADR 0037)."""
+class SynthesizeRequest(ApiModel):
+    """用一把嗓子念一段,产出登记成素材(ADR 0087:一个接口,`voice` 说是哪把嗓子)。本机克隆念配音库里的嗓子
+    (`cloned_voice`),远端引擎念它自己的音色(`voice`)—— 能复刻的引擎(CosyVoice)也念得了配音库里的嗓子(念它的远端副本,
+    这个账号要先同意上传,不然 409 `remote_voice_consent_required`,ADR 0037)。"""
 
     workspace_id: str
     text: str = Field(min_length=1, max_length=2000)
-    engine: str = Field(min_length=1, max_length=40)
-    provider_profile_id: str | None = None
-    engine_model: str = Field(default="", max_length=120)
-    engine_voice: str = Field(default="", max_length=120)
-    #: 配音库里的一把嗓子(和本机克隆同一个字段)。给了它 `engine_voice` 就留空。
-    voice_id: str | None = None
-    #: 火山 only: the voice's resource family. Only the account's voice list knows it, and the
-    #: synthesis header must agree with it or the call fails with an opaque 55000000. Blank
-    #: falls back to inferring it from the voice id, which works for the built-in voices.
-    engine_voice_resource: str = Field(default="", max_length=60)
+    voice: VoiceRefBody
+    #: 语速。**只有声明支持的引擎会用它**(见 TtsEngine.supports_speed):F5 的 infer 吃,
+    #: fish 的请求结构里根本没有这一项。收下但不转发,好过让界面以为发了就生效。
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
     project_id: str | None = None
 
@@ -200,8 +192,8 @@ class VoiceOptionOut(ApiModel):
     """音色目录里的一项(ADR 0087),所有挑音色的地方同一个形状。
 
     `source` 说它从哪来:builtin(引擎内置)/ account(按账号现拉)/ preset(本机引擎预置)/ cloned(这个工作区
-    配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时请求带 `voice_id`、`engine_voice` 留空)。
-    语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样带回去,不读。"""
+    配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时音色选择写 `cloned_voice`)。
+    语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样放进音色选择带回去,不读。"""
 
     id: str
     label: str
@@ -218,18 +210,16 @@ class VoiceOptionOut(ApiModel):
 
 
 class VoiceDefaultUpdate(ApiModel):
-    """这台机器默认那一对(引擎 + 音色)。两格都空 = 清掉(回到每个入口各自点名)。"""
+    """这台机器默认那一把嗓子。null = 清掉(回到每个入口各自点名)。"""
 
-    engine: str = Field(default="", max_length=80)
-    #: 这个引擎自己的音色 id;必须和引擎是一对,不属于它时 409。
-    voice: str = Field(default="", max_length=200)
+    #: 内置引擎的一个引擎音色;不属于那个引擎、不适用写下的模型时 409。
+    voice: VoiceRefBody | None = None
 
 
 class VoiceDefaultOut(ApiModel):
-    """改完之后的那一对。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。"""
+    """改完之后的那一把。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。"""
 
-    engine: str
-    voice: str
+    voice: VoiceRefBody | None = None
 
 
 class VoiceFromSpeakerRequest(ApiModel):

@@ -51,7 +51,7 @@ describe("文件类:整段一次,不读对话类的开关", () => {
     const readAloud = source("frontend/src/features/notes/readAloud.ts");
     expect(readAloud).not.toMatch(AGENT_SETTING);
     const save = readAloud.slice(readAloud.indexOf("function saveAsAudio"), readAloud.indexOf("function play("));
-    expect(save).toContain("synthesizeWithEngine");
+    expect(save).toContain("synthesize({");
     expect(save).toContain("text,");
     expect(save).not.toContain("splitForSpeech");
     //: 工具条上点「存为音频素材」时传的是一整段(只按接口字数上限截断)。

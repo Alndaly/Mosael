@@ -27,7 +27,6 @@ from app.db.models import (
     now,
     Scene3D,
     Scene3DModel,
-    Voice,
 )
 from app.domain.referrers import referrers
 from app.domain.entities.catalog import (
@@ -40,11 +39,13 @@ from app.domain.entities.catalog import (
     MAX_TAGS,
     MAX_TEXT_CHARS,
     ROLES_BY_KIND,
-    VOICE_LIBRARY_ENGINE,
     AttributeProblem,
     normalize_attributes,
 )
-from app.domain.voices.speech import known_engine
+from app.domain.voices.defaults import VoiceDefaultError
+from app.domain.voices.engine_catalog import check_voice
+from app.domain.voices.errors import VoiceError
+from app.domain.voices.voice_ref import VoiceRef
 
 
 class EntityDomainError(LocalizedError, ValueError):
@@ -224,19 +225,23 @@ def _attributes(db: Session, workspace_id: str, kind: str, raw: Any, stored: dic
         attributes = normalize_attributes(kind, raw, stored, actor_id=actor_id)
     except AttributeProblem as exc:
         raise EntityDomainError(exc.key, **exc.params) from exc
-    _check_attribute_targets(db, workspace_id, attributes)
+    _check_attribute_targets(db, workspace_id, attributes, actor_id)
     return attributes
 
 
-def _check_attribute_targets(db: Session, workspace_id: str, attributes: dict[str, Any]) -> None:
-    """专有字段指着的东西得在:音色库里的嗓子、3D 场景、3D 模型要在这个工作区(别处的 id 当场拒,不存一个
-    死链接);别的配音引擎要是认得的那几个(嗓子是引擎自己的目录里的,不在这里逐个去问)。"""
+def _check_attribute_targets(db: Session, workspace_id: str, attributes: dict[str, Any], actor_id: str | None) -> None:
+    """专有字段指着的东西得在:音色要是这个引擎念得了的那一把(配音库里的嗓子要在这个工作区;引擎音色要在它的目录里,
+    见 voices.engine_catalog.check_voice —— 补齐之后的那把写回属性),3D 场景、3D 模型要在这个工作区(别处的 id 当场拒,
+    不存一个死链接)。"""
 
-    engine = attributes.get("voice_engine")
-    if engine and engine != VOICE_LIBRARY_ENGINE and not known_engine(db, str(engine)):
-        raise EntityDomainError("entityErr_voiceEngineUnknown", engine=engine)
-    library_voice = ("voice_id", Voice) if engine == VOICE_LIBRARY_ENGINE else None
-    for field, model in tuple(filter(None, (library_voice, ("scene_id", Scene3D), ("model_asset_id", Scene3DModel)))):
+    if attributes.get("voice"):
+        try:
+            attributes["voice"] = check_voice(
+                db, VoiceRef.of(attributes["voice"]), user_id=actor_id, workspace_id=workspace_id,
+            ).to_json()
+        except (VoiceError, VoiceDefaultError) as exc:
+            raise EntityDomainError(exc.key, **exc.params) from exc
+    for field, model in (("scene_id", Scene3D), ("model_asset_id", Scene3DModel)):
         target_id = attributes.get(field)
         if not target_id:
             continue

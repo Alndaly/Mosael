@@ -57,7 +57,6 @@ FROZEN = {
     "domain/voices/engine_catalog.py": 8,
     "domain/voices/original_audio.py": 1,
     "domain/voices/speech.py": 2,
-    "domain/voices/voices.py": 1,
     "domain/workbench/agent.py": 6,
     "domain/workflows/executors/basic.py": 1,
     "domain/workflows/executors/subjobs.py": 1,

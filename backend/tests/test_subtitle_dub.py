@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from app.domain.voices.subtitle_dub import DubError, _speed_for, start_subtitle_dub
 from app.core.db import SessionLocal
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client, make_voice
 
 
@@ -85,7 +86,7 @@ def test_refuses_when_nothing_selected_has_text() -> None:
                 clip_ids=[clip_id],
                 match_duration=False,
                 created_by=None,
-                synthesis={"engine": "builtin:volcano", "engine_voice": "v", "workspace_id": "w"},
+                voice=VoiceRef("builtin:volcano", voice="v"),
             )
 
 
@@ -95,7 +96,7 @@ def test_dubbing_needs_both_edit_and_ai_permission() -> None:
     sequence_id, clip_id = _sequence_with_subtitle(client)
     response = client.post(
         f"/api/sequences/{sequence_id}/dub-subtitles",
-        json={"clip_ids": [clip_id], "engine": "builtin:volcano", "engine_voice": "v"},
+        json={"clip_ids": [clip_id], "voice": {"engine": "builtin:volcano", "voice": "v"}},
     )
     # 这个用户是工作区所有者,两道权限都有 —— 挡下来的会是"没配供应商",而不是 403。
     assert response.status_code != 403, response.text
@@ -310,7 +311,7 @@ class Test原声处理归配音本身:
         with SessionLocal() as db:
             job_id = start_subtitle_dub(
                 db, sequence_id=sequence_id, clip_ids=[clip_id], match_duration=False, created_by=None,
-                synthesis={"engine": "builtin:volcano", "engine_voice": "v", "workspace_id": "w"},
+                voice=VoiceRef("builtin:volcano", voice="v"),
                 original_audio="mute",
             ).id
             db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
@@ -332,7 +333,7 @@ class Test原声处理归配音本身:
         with SessionLocal() as db, pytest.raises(DubError, match="原声处理方式"):
             start_subtitle_dub(
                 db, sequence_id=sequence_id, clip_ids=[clip_id], match_duration=False, created_by=None,
-                synthesis={}, original_audio="louder",
+                voice=VoiceRef("builtin:volcano", voice="v"), original_audio="louder",
             )
 
     def test_明确选择只去人声时_没装分离引擎就不排任务(self, monkeypatch) -> None:
@@ -349,7 +350,7 @@ class Test原声处理归配音本身:
                 clip_ids=[clip_id],
                 match_duration=False,
                 created_by=None,
-                synthesis={},
+                voice=VoiceRef("builtin:volcano", voice="v"),
                 original_audio="separate",
             )
 
@@ -375,12 +376,12 @@ class Test原声处理归配音本身:
             voice = make_voice(db.get(Sequence, sequence_id).workspace_id)
         response = client.post(
             f"/api/sequences/{sequence_id}/dub-subtitles",
-            json={"clip_ids": [clip_id], "voice_id": voice, "original_audio": "separate", "clone_model": "m",
-                  "engine_model": "不属于克隆那条"},
+            json={"clip_ids": [clip_id], "voice": {"engine": "builtin:clone", "cloned_voice": voice, "model": "f5-tts/fr"},
+                  "original_audio": "separate"},
         )
         assert response.status_code == 422 and "到此为止" in response.text, response.text
         assert captured["original_audio"] == "separate"
-        assert captured["synthesis"] == {"engine": "builtin:clone", "speed": 1.0, "voice_id": voice, "clone_model": "m"}
+        assert (captured["voice"], captured["speed"]) == (VoiceRef("builtin:clone", cloned_voice=voice, model="f5-tts/fr"), 1.0)
 
     def test_别的工作区的音色用不了(self) -> None:
         client = fresh_client()
@@ -388,7 +389,7 @@ class Test原声处理归配音本身:
         other = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
         response = client.post(
             f"/api/sequences/{sequence_id}/dub-subtitles",
-            json={"clip_ids": [clip_id], "voice_id": make_voice(other)},
+            json={"clip_ids": [clip_id], "voice": {"engine": "builtin:clone", "cloned_voice": make_voice(other)}},
         )
         assert response.status_code == 422 and "配音库里没有这个音色" in response.text
 
@@ -414,7 +415,7 @@ class Test原声处理归配音本身:
             with pytest.raises(DubError, match="到此为止"):
                 confirmations._execute_approved(db, db.get(ToolConfirmation, card.id))
         assert captured["original_audio"] == "mute"
-        assert captured["synthesis"]["voice_id"] == voice
+        assert captured["voice"] == VoiceRef("builtin:clone", cloned_voice=voice)
 
         with SessionLocal() as db, pytest.raises(errors.ConfirmationError, match="original_audio"):
             confirmations.request_confirmation(

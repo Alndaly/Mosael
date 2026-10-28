@@ -123,7 +123,7 @@ beforeEach(() => {
   speechApi.listTtsVoices.mockReset();
   speechApi.listTtsVoices.mockResolvedValue(edgeVoices);
   speechApi.setVoiceDefault.mockReset();
-  speechApi.setVoiceDefault.mockResolvedValue({ engine: "builtin:edge", voice: "zh-CN-YunxiNeural" });
+  speechApi.setVoiceDefault.mockResolvedValue({ voice: { engine: "builtin:edge", voice: "zh-CN-YunxiNeural" } });
 });
 
 it("后端还在答的那几秒是骨架屏,不是一片白;答了原地换上", async () => {
@@ -744,7 +744,7 @@ it("引擎和音色都选了就立刻写这一对:一次 PUT,不弹按钮", asyn
   const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
   await waitFor(() => expect(pickers[1].textContent).toContain("云希"));
   fireEvent.click(within(pickers[1]).getByRole("button", { name: "云希" }));
-  await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalledWith("builtin:edge", "zh-CN-YunxiNeural"));
+  await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalledWith({ engine: "builtin:edge", voice: "zh-CN-YunxiNeural" }));
   //: 一次写:不是「先写引擎、再写音色」两笔。
   expect(speechApi.setVoiceDefault).toHaveBeenCalledTimes(1);
   //: 写后重取:引擎列表和这一家的音色列表都在失效之列(默认的唯一来源是它们的 is_default)。
@@ -791,7 +791,7 @@ it("改成「未指定」就清掉默认:立刻 PUT 空对,和 ASR 选回自动�
   const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
   await waitFor(() => expect(pickers[0].textContent).toContain("Edge"));
   fireEvent.click(within(pickers[0]).getByRole("button", { name: "capabilityUnset" }));
-  await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalledWith("", ""));
+  await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalledWith(null));
   expect(speechApi.setVoiceDefault).toHaveBeenCalledTimes(1);
 });
 

@@ -25,7 +25,7 @@ import {
   type EntitySummary,
   type EntityUsage,
 } from "@/api/client";
-import { sceneKeys } from "@/api/queryKeys";
+import { sceneKeys, voiceKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { useImagePreview } from "@/components/app/image-preview";
 import { SpeakButton } from "@/features/entities/SpeakDialog";
@@ -51,7 +51,8 @@ import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
 import { ReferenceWall, referenceGallery } from "@/features/entities/ReferenceWall";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
-import { CLONE_ENGINE } from "@/api/domains/speech";
+import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
+import { CLONE_ENGINE, listTtsVoices, spokenId, voiceRefOf, type VoiceOption, type VoiceRef } from "@/api/domains/speech";
 
 const FIELD = "w-full rounded-md border border-border bg-field px-3 py-2 text-ui-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const NONE = "__none__";
@@ -385,9 +386,10 @@ function PanelGroup({ title, wide = false, children }: { title: string; wide?: b
 function Facts({ entity, workspaceId }: { entity: Entity; workspaceId: string }) {
   const t = useI18n();
   const attributes = entity.attributes as Record<string, unknown>;
-  const voiceId = String(attributes.voice_id ?? "");
-  const { voices } = useVoiceOptions(workspaceId, voiceId ? String(attributes.voice_engine ?? VOICE_LIBRARY_ENGINE) : "");
-  const voice = voiceId ? (voices.data?.find((one) => one.value === voiceId)?.label ?? voiceId) : "";
+  const chosen = voiceOf(attributes);
+  const voiceId = chosen ? spokenId(chosen) : "";
+  const { voices } = useVoiceOptions(workspaceId, chosen?.engine ?? "");
+  const voice = voiceId ? (voices.data?.find((one) => one.id === voiceId)?.label ?? voiceId) : "";
   const items: React.ReactNode[] = [
     t("entityRefCount").replace("{n}", String(entity.references.length)),
     ...(entity.parent_id ? [] : [t("entityVariantCount").replace("{n}", String(entity.variants.length))]),
@@ -454,9 +456,8 @@ function KindFields({
           <VoiceField
             workspaceId={workspaceId}
             name={entity.name}
-            engine={String(attributes.voice_engine ?? "")}
-            voice={String(attributes.voice_id ?? "")}
-            onChange={(next) => save(next)}
+            voice={voiceOf(attributes)}
+            onChange={(voice) => save({ voice })}
           />
           <Field label={t("entityBlockoutColor")} hint={t("entityBlockoutColorHint")}>
             <ColorField
@@ -528,22 +529,35 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
-/** 本地克隆(音色库)这个引擎的名字,和后端 entities.catalog.VOICE_LIBRARY_ENGINE 同一个值。 */
-const VOICE_LIBRARY_ENGINE = CLONE_ENGINE;
+/** 人物资产存着的那把嗓子(`attributes.voice`,ADR 0087);没选过是 null。 */
+function voiceOf(attributes: Record<string, unknown>): VoiceRef | null {
+  const stored = attributes.voice as VoiceRef | undefined;
+  return stored?.engine ? stored : null;
+}
 
-/** 引擎清单、某个引擎的音色清单:和工作流「念稿」节点问的是同一个接口,列出来的一样。 */
+/** 一个引擎下能挑的嗓子:本机克隆列这个工作区的配音库,别的引擎列它的音色目录(能复刻的引擎还带配音库里的嗓子)。 */
+type VoiceChoice = Pick<VoiceOption, "id" | "label" | "source" | "extra">;
+
+/** 引擎清单(和工作流「念稿」节点同一个接口)、某个引擎的音色清单(和配音面板同一份目录)。 */
 function useVoiceOptions(workspaceId: string, engine: string) {
   const engines = useQuery({
     queryKey: ["entity-voice-engines", workspaceId],
     queryFn: () => fetchWorkflowFieldOptions("speech_engines", workspaceId),
     staleTime: 60_000,
   });
-  const voices = useQuery({
-    queryKey: ["entity-voices", workspaceId, engine],
-    queryFn: () => fetchWorkflowFieldOptions("speech_voices", workspaceId, engine),
-    enabled: Boolean(engine),
+  //: 两份清单各在自己的键族下(和配音面板、配音库同一份缓存),这里只合成「这个引擎能挑什么」。
+  const library = useVoiceLibrary(workspaceId, { enabled: engine === CLONE_ENGINE });
+  const catalog = useQuery({
+    queryKey: voiceKeys.engineVoices(engine, workspaceId),
+    queryFn: () => listTtsVoices(engine, workspaceId),
+    enabled: Boolean(engine) && engine !== CLONE_ENGINE,
     staleTime: 60_000,
   });
+  const voices: { data: VoiceChoice[] | undefined } = {
+    data: engine === CLONE_ENGINE
+      ? library.data?.map((voice) => ({ id: voice.id, label: voice.name, source: "cloned", extra: {} }))
+      : catalog.data,
+  };
   return { engines, voices };
 }
 
@@ -554,26 +568,27 @@ function useVoiceOptions(workspaceId: string, engine: string) {
 function VoiceField({
   workspaceId,
   name,
-  engine,
   voice,
   onChange,
 }: {
   workspaceId: string;
   /** 试听念「你好,我是{name}」。 */
   name: string;
-  engine: string;
-  voice: string;
-  onChange: (next: { voice_engine: string; voice_id: string }) => void;
+  /** 存着的那把嗓子;没选过是 null。 */
+  voice: VoiceRef | null;
+  onChange: (next: VoiceRef | null) => void;
 }) {
   const t = useI18n();
-  const [picked, setPicked] = React.useState(engine || VOICE_LIBRARY_ENGINE);
+  const engine = voice?.engine ?? "";
+  const [picked, setPicked] = React.useState(engine || CLONE_ENGINE);
   //: 只跟着「存着的那个」走:换引擎会先清掉嗓子(存回来的引擎是空的),那一刻不能把刚挑的引擎又拨回默认。
   React.useEffect(() => {
     if (engine) setPicked(engine);
   }, [engine]);
   const { engines, voices } = useVoiceOptions(workspaceId, picked);
   //: 存着的音色只属于存着的那个引擎:切到别的引擎时下拉回到「无」,试听也没有可念的。
-  const pickedVoice = voice && picked === (engine || VOICE_LIBRARY_ENGINE) ? voice : "";
+  const pickedVoice = voice && picked === engine ? spokenId(voice) : "";
+  const choices = voices.data ?? [];
   const engineOptions = engines.data ?? [];
   //: 存着的引擎现在没就绪(缺了 Key)也照样显示它,不把人已经选好的东西悄悄换掉。
   const withCurrent = engineOptions.some((one) => one.value === picked)
@@ -587,18 +602,25 @@ function VoiceField({
           value={picked}
           onChange={(next) => {
             setPicked(next);
-            if (voice) onChange({ voice_engine: "", voice_id: "" });
+            if (voice) onChange(null);
           }}
           options={withCurrent}
         />
         <OptionPicker
           ariaLabel={t("entityVoice")}
           value={pickedVoice || NONE}
-          onChange={(next) => onChange(next === NONE ? { voice_engine: "", voice_id: "" } : { voice_engine: picked, voice_id: next })}
-          options={[{ value: NONE, label: t("entityNone") }, ...(voices.data ?? [])]}
+          onChange={(next) => {
+            const option = choices.find((one) => one.id === next);
+            onChange(next === NONE || !option ? null : voiceRefOf(picked, option));
+          }}
+          options={[{ value: NONE, label: t("entityNone") }, ...choices.map((one) => ({ value: one.id, label: one.label }))]}
         />
         <VoicePreviewButton
-          load={() => fetchVoicePreview({ workspace_id: workspaceId, engine: picked, voice: pickedVoice, text: t("entityVoicePreviewText").replace("{name}", name) })}
+          load={() =>
+            voice
+              ? fetchVoicePreview({ workspace_id: workspaceId, voice, text: t("entityVoicePreviewText").replace("{name}", name) })
+              : Promise.reject(new Error(t("entityVoicePreviewPick")))
+          }
           disabled={!pickedVoice}
           disabledReason={t("entityVoicePreviewPick")}
         />

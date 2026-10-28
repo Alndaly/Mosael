@@ -23,6 +23,7 @@ import pytest
 
 from app.domain.voices import voices
 from app.domain.voices import errors
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -121,7 +122,7 @@ def test_synthesis_refuses_an_existing_short_voice(monkeypatch) -> None:
     with SessionLocal() as db:
         before = db.query(Job).count()
         with pytest.raises(errors.VoiceError) as caught:
-            voices.start_synthesis(db, text="你好", project_id=None, created_by=None, voice_id=voice["id"])
+            voices.start_synthesis(db, text="你好", project_id=None, created_by=None, voice=VoiceRef("builtin:clone", cloned_voice=voice["id"]))
         assert db.query(Job).count() == before, "起了一个注定听不懂的十分钟任务"
 
     assert "秒" in str(caught.value)

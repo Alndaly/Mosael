@@ -28,6 +28,7 @@ from app.domain.voices import engine_catalog, voices as voices_voices
 from app.domain.voices.engine_catalog import engine_label as engine_name
 from app.domain.voices.speech import PODCAST_ENGINE
 from app.domain.voices.voice_labels import builtin_voice_label
+from app.domain.voices.voice_ref import VoiceRef
 from app.domain.voices.voices import podcast_speakers, start_podcast
 
 SPEECH = "speech"
@@ -78,21 +79,15 @@ def create_speech(
     project_id: str | None,
     created_by: str | None,
     text: str,
-    engine: str,
-    voice: str,
+    voice: VoiceRef | None,
     voice_label: str = "",
     engine_label: str = "",
-    engine_voice_resource: str = "",
-    provider_profile_id: str | None = None,
-    engine_model: str = "",
-    clone_engine: str = "",
-    clone_model: str = "",
     speed: float = 1.0,
     lock_family: bool = False,
     origin: Origin,
 ) -> tuple[GenerationJob, Job]:
-    """念一段字,记成会话里的一条(ADR 0055 §3)。`voice` 是「音色一格」:克隆引擎是配音库里的嗓子 id,别的引擎是它自己的音色
-    (能复刻的引擎点配音库里的嗓子时也是嗓子 id)—— 和工作流、画板、智能体同一个口径,由 `synthesis_params` 拆成合成要的那组参数。
+    """念一段字,记成会话里的一条(ADR 0055 §3)。`voice` 是选定的那把嗓子(`None` = 用默认那一把),由
+    `engine_catalog.voice_for_synthesis` 定下来 —— 和工作流、画板、智能体同一个口径。
 
     `voice_label` / `engine_label`:界面那份目录里的名字(火山按账号现拉的音色只有界面那边知道名字),没给就在这里查。
     远端引擎念配音库里的嗓子还没同意上传时,`RemoteConsentRequired` 原样抛出(路由回 409,界面弹确认框)。"""
@@ -102,48 +97,39 @@ def create_speech(
                        family_of=SPEECH if lock_family else None)
         if session_id else None
     )
-    options: dict[str, Any] = {
-        "clone_engine": clone_engine, "clone_model": clone_model,
-        "provider_profile_id": provider_profile_id, "engine_model": engine_model,
-        "engine_voice_resource": engine_voice_resource,
-    }
-    params = engine_catalog.synthesis_params(
-        db, engine=engine, voice=voice, speed=speed, user_id=created_by, workspace_id=workspace_id,
-        **{key: value for key, value in options.items() if value},
+    chosen = engine_catalog.voice_for_synthesis(db, voice, user_id=created_by, workspace_id=workspace_id)
+    library_voice = db.get(Voice, chosen.cloned_voice) if chosen.cloned_voice else None
+    voice_name = (
+        library_voice.name if library_voice is not None
+        else voice_label.strip() or builtin_voice_label(chosen.voice) or chosen.voice
     )
-    engine = str(params["engine"])
-    library_voice = db.get(Voice, str(params.get("voice_id") or "")) if params.get("voice_id") else None
-    voice_name = library_voice.name if library_voice is not None else (voice_label.strip() or builtin_voice_label(voice) or voice)
     record_id = new_id()
     job = voices_voices.start_synthesis(
         db,
         text=text,
+        voice=chosen,
+        speed=speed,
+        workspace_id=workspace_id,
         project_id=project_id,
         created_by=created_by,
         voice_label=voice_name,
         usage_source=(USAGE_SOURCE, record_id),
         on_asset=partial(attach_output, record_id),
-        **params,
     )
     session = _resolve_session(
-        db, workspace_id=workspace_id, named=named, prompt=text, created_by=created_by, engine=(None, engine, SPEECH),
-        origin=origin,
+        db, workspace_id=workspace_id, named=named, prompt=text, created_by=created_by,
+        engine=(None, chosen.engine, SPEECH), origin=origin,
     )
     request: dict[str, Any] = {
         "prompt": text,
-        "voice": voice,
+        #: 「再来一次」照它原样重念:选择本身(引擎、音色、模型、附加信息)一格不少地记下。
+        "voice": chosen.to_json(),
         "voice_label": voice_name,
-        "engine_label": engine_label.strip() or engine_name(db, engine, created_by),
-        "speed": float(params.get("speed") or 1.0),
+        "engine_label": engine_label.strip() or engine_name(db, chosen.engine, created_by),
+        "speed": float(speed or 1.0),
     }
-    if params.get("clone_engine"):
-        request["clone_engine"] = params["clone_engine"]
-    if params.get("clone_model"):
-        request["clone_model"] = params["clone_model"]
-    if params.get("engine_voice_resource"):
-        request["voice_resource"] = params["engine_voice_resource"]
-    return _record(db, record_id, session_id=session.id, job=job, provider=engine, model=voice, kind=SPEECH,
-                   provider_profile_id=_existing_profile(db, provider_profile_id), request=request), job
+    return _record(db, record_id, session_id=session.id, job=job, provider=chosen.engine, model=chosen.spoken, kind=SPEECH,
+                   provider_profile_id=_existing_profile(db, chosen.connection or None), request=request), job
 
 
 def create_podcast(

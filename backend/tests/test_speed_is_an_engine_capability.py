@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from app.ai.runtime import tts_models
+from app.domain.voices.voice_ref import VoiceRef
 
 
 def test_f5_supports_speed() -> None:
@@ -72,13 +73,14 @@ def test_speed_rides_along_to_the_worker(monkeypatch) -> None:
 
     with SessionLocal() as db:
         job_id = voices.start_synthesis(db, text="你好", project_id=None, created_by=None,
-                                        voice_id=voice["id"], clone_engine="f5-tts", speed=1.5).id
+                                        voice=VoiceRef("builtin:clone", cloned_voice=voice["id"], model="f5-tts"), speed=1.5).id
         db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         voices._run_synthesis_body(
             job_id,
             #: 引擎 id 带前缀(`builtin:clone`)。写成裸名 "clone" 时这一句根本走不到 pool,断言只能靠
             #: start_synthesis 起的后台线程赶在它之前填上 `sent` —— 整套里偶尔赶不上,测试就时红时绿。
-            voice["id"], "你好", None, engine=CLONE_ENGINE, speed=1.5, clone_engine="f5-tts",
+            VoiceRef(CLONE_ENGINE, cloned_voice=voice["id"], model="f5-tts"), "你好", 1.5,
+            workspace_id=workspace_id, project_id=None,
         )
 
     assert sent.get("speed") == 1.5, sent

@@ -30,6 +30,7 @@ from app.domain.jobs import (
     reconcile_orphaned_jobs,
     report_job,
 )
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import add_provider, fresh_client
 
 
@@ -262,7 +263,8 @@ class TestDispatchWiring:
         with SessionLocal() as db:
             job = start_synthesis(
             db,
-            created_by=None, text="你好", project_id=None, workspace_id=workspace_id, engine="builtin:edge")
+            created_by=None, text="你好", project_id=None, workspace_id=workspace_id,
+            voice=VoiceRef("builtin:edge", voice="zh-CN-XiaoxiaoNeural"))
             db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
             db.refresh(job)
             assert job.status == "queued"

@@ -17,6 +17,7 @@ import wave
 
 
 from app.domain.voices import transcription, voices
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -112,5 +113,5 @@ def test_the_recognised_text_actually_unblocks_fish(monkeypatch) -> None:
 
     with SessionLocal() as db:
         job = voices.start_synthesis(db, text="你好", project_id=None, created_by=None,
-                                     voice_id=voice_id, clone_engine="fish-speech")
+                                     voice=VoiceRef("builtin:clone", cloned_voice=voice_id, model="fish-speech"))
     assert job.kind == "tts"

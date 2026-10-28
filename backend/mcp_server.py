@@ -1012,10 +1012,11 @@ def list_provider_models(capability: str = "", surface: str = "") -> dict[str, A
     empty `models` list means different things per surface, so read the echoed `surface`
     before telling the user they have nothing configured.
 
-    `capability` filters to one of chat / image / video / audio / tts / podcast; empty returns all
+    `capability` filters to one of chat / image / video / audio / podcast; empty returns all
     of them. **The LLM one is called "chat"** — there is no "text" or "llm" capability, and asking
     for one costs a failed call. `audio` is music / sound-effect generation (generate_sound),
-    `tts` is voice synthesis, `podcast` is multi-speaker dialogue.
+    `podcast` is multi-speaker dialogue. Voice synthesis is not here: its model belongs to the
+    chosen voice (pick an engine and a voice with the speech tools), not to a per-capability default.
 
     This answers "which models exist". For what an image, video or audio model ACCEPTS — sizes,
     durations, lyrics, which source roles it takes — call list_generation_models instead.

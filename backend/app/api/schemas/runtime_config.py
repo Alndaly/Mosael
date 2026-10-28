@@ -77,6 +77,8 @@ class TtsEngineOut(ApiModel):
     label: str
     detail: str
     status: str
+    #: 能不能克隆(配音库的嗓子走它)。Qwen3-TTS 是 False:它只念预置音色,不进「克隆引擎」下拉。
+    clones_voices: bool = True
     downloaded_bytes: int = 0
     total_bytes: int = 0
     expected_bytes: int = 0

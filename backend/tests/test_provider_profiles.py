@@ -247,12 +247,13 @@ def test_provider_defaults_require_matching_capability() -> None:
             "config": {"api_key": "sk-tts"},
         },
     ).json()
+    #: 语音合成没有「按能力的默认模型」那一格(ADR 0087 §4):模型属于选定的那把嗓子(`VoiceRef.model`)。
     assert (
         client.put(
             "/api/settings/provider-defaults/tts",
             json={"provider_profile_id": openai_tts["id"], "model": "gpt-4o-mini-tts"},
         ).status_code
-        == 200
+        == 404
     )
 
 

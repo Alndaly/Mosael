@@ -26,7 +26,7 @@ import {
   listTtsVoices,
   setAgentVoice,
 } from "@/api/client";
-import { isClonedVoice, voiceResourceOf } from "@/api/domains/speech";
+import { isClonedVoice, spokenId, voiceRefOf } from "@/api/domains/speech";
 import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -66,9 +66,9 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   React.useEffect(() => {
     if (hydrated.current || !pref.data) return;
     hydrated.current = true;
-    setEngine(pref.data.engine);
-    //: 音色那一格:引擎自己的,或者(CosyVoice)配音库里的一把嗓子 —— 存在 voice_id 上(ADR 0037)。
-    setVoice(pref.data.engine_voice || pref.data.voice_id || "");
+    //: 存着的那把嗓子(ADR 0087):引擎音色,或者(CosyVoice)配音库里的一把嗓子(`cloned_voice`,ADR 0037)。
+    setEngine(pref.data.voice?.engine ?? "");
+    setVoice(pref.data.voice ? spokenId(pref.data.voice) : "");
     setSpeed(pref.data.speed || 1);
     setAsrEngine(pref.data.asr_engine ?? "");
     savedAsrRef.current = pref.data.asr_engine ?? "";
@@ -86,7 +86,6 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   });
   const voiceChoices = voices.data ?? [];
   const chosen = voiceChoices.find((one) => one.id === voice);
-  const cloned = isClonedVoice(chosen);
   const hasCloned = voiceChoices.some(isClonedVoice);
   //: 只有就绪的转写候选能选:缺密钥 / 没装运行环境的,列出来只会让人选中之后才失败
   //: (和上面 TTS 引擎那一格同一条规矩)。
@@ -107,12 +106,8 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     mutationFn: (enabled: boolean) =>
       withRemoteVoiceConsent(() =>
         setAgentVoice({
-          engine,
-          engine_voice: cloned ? "" : voice,
-          engine_voice_resource: cloned ? "" : voiceResourceOf(chosen),
-          engine_model: "",
-          provider_profile_id: null,
-          voice_id: cloned ? voice : null,
+          //: 目录里那一项(带着只有目录知道的 extra);手填的 id 还没在目录里时是一个裸的引擎音色。
+          voice: voiceRefOf(engine, chosen ?? { id: voice, source: "builtin", extra: {} }),
           speed,
           enabled,
           asr_engine: asrEngine,
@@ -136,12 +131,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   const saveAsr = useMutation({
     mutationFn: (next: string) =>
       setAgentVoice({
-        engine: pref.data?.engine ?? "",
-        engine_voice: pref.data?.engine_voice ?? "",
-        engine_voice_resource: pref.data?.engine_voice_resource ?? "",
-        engine_model: pref.data?.engine_model ?? "",
-        provider_profile_id: pref.data?.provider_profile_id ?? null,
-        voice_id: pref.data?.voice_id ?? null,
+        voice: pref.data?.voice ?? null,
         speed: pref.data?.speed ?? 1,
         enabled: pref.data?.enabled ?? false,
         asr_engine: next,
@@ -174,12 +164,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     mutationFn: (next: boolean) =>
       withRemoteVoiceConsent(() =>
         setAgentVoice({
-          engine: pref.data?.engine ?? "",
-          engine_voice: pref.data?.engine_voice ?? "",
-          engine_voice_resource: pref.data?.engine_voice_resource ?? "",
-          engine_model: pref.data?.engine_model ?? "",
-          provider_profile_id: pref.data?.provider_profile_id ?? null,
-          voice_id: pref.data?.voice_id ?? null,
+          voice: pref.data?.voice ?? null,
           speed: pref.data?.speed ?? 1,
           enabled: pref.data?.enabled ?? false,
           asr_engine: pref.data?.asr_engine ?? "",
@@ -208,8 +193,9 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   const ready = Boolean(engine && voice);
   //: 试听念的是**存着的**那份(和对话里真念同一份),所以屏幕上的选择还没落库时先不给点 ——
   //: 否则刚换了音色就点,听到的是换之前那个。改完即存,这段空档只有一个请求那么长。
-  const savedVoice = pref.data?.engine_voice || pref.data?.voice_id || "";
-  const persisted = pref.data?.engine === engine && savedVoice === voice && pref.data?.speed === speed;
+  const savedEngine = pref.data?.voice?.engine ?? "";
+  const savedVoice = pref.data?.voice ? spokenId(pref.data.voice) : "";
+  const persisted = savedEngine === engine && savedVoice === voice && pref.data?.speed === speed;
 
   //: **改完即存,没有保存按钮。** 但存的时机有个条件:换引擎会把音色清空(旧音色在新引擎下
   //: 不存在),那一瞬间的组合是「新引擎 + 空音色」—— 存下去等于存了一份用不了的配置。
@@ -220,13 +206,13 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     const shape = `${engine}|${voice}|${speed}`;
     if (!savedRef.current) {
       // 水合之后的第一次:记下现状,别把服务端刚给的那份再写回去。
-      savedRef.current = `${pref.data?.engine ?? ""}|${savedVoice}|${pref.data?.speed ?? 1}`;
+      savedRef.current = `${savedEngine}|${savedVoice}|${pref.data?.speed ?? 1}`;
     }
     if (shape === savedRef.current) return;
     savedRef.current = shape;
     // 开关原样带上:关着的时候换音色只是改配置,不能顺手把「语音对话」重新打开。
     save.mutate(enabled);
-  }, [engine, voice, speed, ready, enabled, pref.data, savedVoice, save]);
+  }, [engine, voice, speed, ready, enabled, pref.data, savedEngine, savedVoice, save]);
 
   return (
     <SettingsGroup title={t("agentVoiceTitle")} description={t("agentVoiceDesc")}>

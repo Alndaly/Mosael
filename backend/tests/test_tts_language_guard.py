@@ -15,6 +15,7 @@ from app.ai.runtime.f5_models import clone_supports
 from app.ai.runtime.tts_language import detect_script
 from app.domain.voices.voices import _refuse_if_unspeakable
 from app.domain.voices.errors import VoiceError
+from app.domain.voices.voice_ref import VoiceRef
 
 
 def test_kana_is_hard_evidence_of_japanese() -> None:
@@ -52,22 +53,22 @@ def test_clone_model_reads_chinese_and_english_only() -> None:
 
 def test_japanese_into_the_clone_engine_is_refused_up_front() -> None:
     with pytest.raises(VoiceError) as exc:
-        _refuse_if_unspeakable("お漏らし。ここに寝てる", "builtin:clone", "", "f5-tts")
+        _refuse_if_unspeakable("お漏らし。ここに寝てる", VoiceRef("builtin:clone", cloned_voice="v", model="f5-tts"))
     # 报错要指出**出路**,不然用户只知道被拒绝了。
     assert "Edge" in str(exc.value)
 
 
 def test_a_matching_voice_is_let_through() -> None:
     """音色目录上 Nanami 声明的是 `ja-JP` —— 日文配它,正是该放行的情形(BCP 47 只看主语言)。"""
-    _refuse_if_unspeakable("お漏らし。ここに寝てる", "builtin:edge", "ja-JP-NanamiNeural", "")
+    _refuse_if_unspeakable("お漏らし。ここに寝てる", VoiceRef("builtin:edge", voice="ja-JP-NanamiNeural"))
 
 
 def test_a_voice_declared_chinese_is_refused_for_japanese_text() -> None:
     """语言只认音色目录上的声明(ADR 0087):Edge 的晓晓、火山内置的灿灿都声明了中文。"""
     with pytest.raises(VoiceError):
-        _refuse_if_unspeakable("お漏らし。ここに寝てる", "builtin:edge", "zh-CN-XiaoxiaoNeural", "")
+        _refuse_if_unspeakable("お漏らし。ここに寝てる", VoiceRef("builtin:edge", voice="zh-CN-XiaoxiaoNeural"))
     with pytest.raises(VoiceError):
-        _refuse_if_unspeakable("お漏らし。ここに寝てる", "builtin:volcano", "zh_female_cancan_mars_bigtts", "")
+        _refuse_if_unspeakable("お漏らし。ここに寝てる", VoiceRef("builtin:volcano", voice="zh_female_cancan_mars_bigtts"))
 
 
 def test_unknown_voice_language_is_let_through() -> None:
@@ -75,11 +76,11 @@ def test_unknown_voice_language_is_let_through() -> None:
 
     这里的职责是抓**确凿的**不匹配,不是给每个音色贴标签;拿不准时挡住用户是越权。
     """
-    _refuse_if_unspeakable("お漏らし。ここに寝てる", "builtin:openai", "alloy", "")
-    _refuse_if_unspeakable("お漏らし。ここに寝てる", "builtin:volcano", "my_custom_voice_42", "")
+    _refuse_if_unspeakable("お漏らし。ここに寝てる", VoiceRef("builtin:openai", voice="alloy"))
+    _refuse_if_unspeakable("お漏らし。ここに寝てる", VoiceRef("builtin:volcano", voice="my_custom_voice_42"))
 
 
 def test_the_guard_does_not_parse_ids_any_more() -> None:
     """**不从 id 里猜**:长得像中文音色的 id,只要不在目录里(账号现拉的、手填的),合成前就不拦 ——
     合成前的检查不为它签名现拉账号清单;账号音色的语言由界面在提交前按它拿到的目录提示。"""
-    _refuse_if_unspeakable("お漏らし。ここに寝てる", "builtin:volcano", "zh_female_not_in_catalogue_bigtts", "")
+    _refuse_if_unspeakable("お漏らし。ここに寝てる", VoiceRef("builtin:volcano", voice="zh_female_not_in_catalogue_bigtts"))

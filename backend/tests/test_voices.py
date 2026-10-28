@@ -4,7 +4,7 @@ import io
 import time
 import wave
 
-from tests.util import add_provider, fresh_client
+from tests.util import add_provider, fresh_client, synthesize_cloned
 
 
 #: 8 秒:够得着参考音频的下限(见 voices.REFERENCE_MIN_SECONDS)。此前这里是 1 秒,
@@ -43,7 +43,7 @@ def test_voice_upload_list_synthesize_delete() -> None:
 
     # 合成:这台机器上没装本地引擎,于是它**当场拒绝**,而不是起一个任务、发一段占位音。
     # (装上引擎后走的是同一个接口,区别只在这一句能不能过。)
-    refused = client.post(f"/api/voices/{voice['id']}/synthesize", json={"text": "这是一段测试配音。"})
+    refused = synthesize_cloned(client, voice["id"], "这是一段测试配音。")
     assert refused.status_code == 422, refused.text
     assert "引擎" in refused.json()["detail"]
 
@@ -206,8 +206,7 @@ def test_自建兼容端点的_base_url_能走到引擎() -> None:
             json={
                 "workspace_id": workspace_id,
                 "text": "hello",
-                "engine": "builtin:openai",
-                "engine_voice": "alloy",
+                "voice": {"engine": "builtin:openai", "voice": "alloy"},
             },
         )
         assert res.status_code == 200, res.text
@@ -224,9 +223,9 @@ def test_自建兼容端点的_base_url_能走到引擎() -> None:
 
 
 def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
-    """火山 needs the voice's family in a synthesis header, and it travels from the request
-    through three functions that pass their arguments positionally. Adding a parameter to one
-    of them is silent until synthesis fails with an opaque 55000000 — so pin the whole path."""
+    """火山 needs the voice's family in a synthesis header. Only the account voice list knows it; it travels inside the
+    voice choice (`VoiceRef.extra`, ADR 0087) from the request through the job thread to the adapter's request.
+    Dropping it anywhere is silent until synthesis fails with an opaque 55000000 — so pin the whole path."""
 
     import app.ai.providers as providers
     from app.core.db import SessionLocal
@@ -239,21 +238,23 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
 
     seen: dict = {}
 
-    def spy(engine, api_key, voice="", model="", base_url=""):
-        seen.update(voice=voice, model=model)
-        raise RuntimeError("no network in tests")
+    class _Spy:
+        free_of_charge = False
+
+        def synthesize(self, request, _out):
+            seen.update(voice=request.voice, extra=dict(request.extra))
+            raise RuntimeError("no network in tests")
 
     saved = providers.build_speech_adapter
-    providers.build_speech_adapter = spy
+    providers.build_speech_adapter = lambda *args, **kwargs: _Spy()
     try:
         res = client.post(
             "/api/tts/synthesize",
             json={
                 "workspace_id": workspace_id,
                 "text": "你好",
-                "engine": "builtin:volcano",
-                "engine_voice": "zh_male_custom_bigtts",
-                "engine_voice_resource": "seed-icl-2.0",
+                "voice": {"engine": "builtin:volcano", "voice": "zh_male_custom_bigtts",
+                          "extra": {"resource_id": "seed-icl-2.0"}},
             },
         )
         assert res.status_code == 200, res.text
@@ -263,5 +264,4 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
     finally:
         providers.build_speech_adapter = saved
 
-    assert seen.get("voice") == "zh_male_custom_bigtts", seen
-    assert seen.get("model") == "seed-icl-2.0", seen
+    assert seen == {"voice": "zh_male_custom_bigtts", "extra": {"resource_id": "seed-icl-2.0"}}, seen

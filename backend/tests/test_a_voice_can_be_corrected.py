@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import io
 import wave
+from app.domain.voices.voice_ref import VoiceRef
 
 from tests.util import fresh_client
 
@@ -104,5 +105,5 @@ def test_filling_in_the_text_unblocks_fish(monkeypatch) -> None:
 
     with SessionLocal() as db:
         job = voices.start_synthesis(db, text="你好", project_id=None, created_by=None,
-                                     voice_id=voice["id"], clone_engine="fish-speech")
+                                     voice=VoiceRef("builtin:clone", cloned_voice=voice["id"], model="fish-speech"))
     assert job.kind == "tts"

@@ -30,7 +30,8 @@ from app.domain.documents import CAPABILITY
 from app.domain.documents.extraction import start_parse
 from app.domain.documents.local import DocumentParseError
 from app.domain.voices import engine_catalog, subtitle_dub
-from app.domain.voices.engine_catalog import pick_speech, voice_slot
+from app.domain.voices.engine_catalog import pick_speech
+from app.domain.voices.voice_ref import VoiceRef
 from app.domain.voices.errors import VoiceError
 from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, ORIGINAL_AUDIO_MODES
 from app.domain.voices.remote import RemoteConsentRequired, check_voice, speaks_library_voice
@@ -196,7 +197,7 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
         #: 配音库里的嗓子交给远端引擎念(ADR 0037):开卡时就问这个账号同意过上传没有,不等批准之后才失败。
         remote_clone = speaks_library_voice(db, engine, voice)
         if remote_clone:
-            check_voice(db, engine=engine, voice_id=voice, workspace_id=workspace_id, user_id=actor)
+            check_voice(db, VoiceRef(engine, cloned_voice=voice), workspace_id=workspace_id, user_id=actor)
     except (SpeechProviderUnavailable, VoiceError, RemoteConsentRequired) as exc:
         raise ConfirmationError.relay(exc) from exc
     library = engine == CLONE_ENGINE or remote_clone
@@ -229,7 +230,11 @@ def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) ->
     sequence_id = str(payload.get("sequence_id") or "")
     named = [str(one) for one in (payload.get("clip_ids") or []) if str(one).strip()]
     clip_ids = dub_targets(db, sequence_id, named, str(payload.get("track_id") or ""))
-    engine = str(payload.get("engine") or "").strip() or CLONE_ENGINE
+    #: 卡上存的是开卡时定好的「引擎 + 一格音色」(`engine_voice` 或 `voice_id`,二者只有一个),到这里才变成一把嗓子。
+    choice = engine_catalog.voice_choice(
+        db, engine=str(payload.get("engine") or ""),
+        voice=str(payload.get("engine_voice") or payload.get("voice_id") or ""), user_id=actor,
+    )
     job = subtitle_dub.start_subtitle_dub(
         db,
         sequence_id=sequence_id,
@@ -237,15 +242,8 @@ def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) ->
         match_duration=bool(payload.get("match_duration", DEFAULT_MATCH_DURATION)),
         line=str(payload.get("line") or "all"),
         created_by=actor,
-        synthesis=engine_catalog.synthesis_params(
-            db,
-            engine=engine,
-            voice=voice_slot(engine, voice_id=str(payload.get("voice_id") or ""),
-                             engine_voice=str(payload.get("engine_voice") or "")),
-            speed=float(payload.get("speed") or 1.0),
-            user_id=actor,
-            workspace_id=confirmation.workspace_id,
-        ),
+        voice=engine_catalog.voice_for_synthesis(db, choice, user_id=actor, workspace_id=confirmation.workspace_id),
+        speed=float(payload.get("speed") or 1.0),
         original_audio=str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO),
     )
     return {"job_id": job.id}

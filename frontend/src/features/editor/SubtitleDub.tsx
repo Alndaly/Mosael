@@ -87,9 +87,10 @@ export function SubtitleDub({
   // 念出来仍是人话;此前这里默认关、智能体和工作流默认开,同一条时间线两个入口配出来不一样。
   const [matchDuration, setMatchDuration] = React.useState(DEFAULT_MATCH_DURATION);
   const [originalAudio, setOriginalAudio] = React.useState<OriginalAudio>("duck");
-  //: 用哪份 F5 权重。空 = 按文字自动挑 —— 中日韩俄阿印能认出来,而法德西意芬都写拉丁字母,
-  //: 没有任何字符能证明"这是法语而不是英语",只能由用户明说。
-  const [weights, setWeights] = React.useState(NONE);
+  //: 用哪份 F5 权重(记在这把嗓子的 `model` 里,见 useSpeechVoice)。空 = 按文字自动挑 —— 中日韩俄阿印能认出来,
+  //: 而法德西意芬都写拉丁字母,没有任何字符能证明"这是法语而不是英语",只能由用户明说。
+  const weights = voice.cloneWeights || NONE;
+  const setWeights = (value: string) => voice.setCloneWeights(optionalValue(value) ?? "");
   const usesF5 = voice.engine === CLONE_ENGINE && voice.cloneEngine === "f5-tts";
   const f5Models = useQuery({
     queryKey: ["f5-models"],
@@ -158,13 +159,12 @@ export function SubtitleDub({
     mutationFn: () =>
       withRemoteVoiceConsent(() =>
         dubSubtitles(sequence, {
-          ...voice.params,
+          ...voice.choice,
           clip_ids: targets.map((clip) => clip.id),
           track_id: focused ? focused.track_id : trackId,
           match_duration: matchDuration,
           line,
           original_audio: originalAudio,
-          ...(usesF5 ? { clone_model: optionalValue(weights) ?? "" } : {}),
         }),
       ),
     onSuccess: (queued) => {

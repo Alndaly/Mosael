@@ -42,6 +42,9 @@ class SpeechSynthesisRequest:
     text: str
     voice: str = ""  # engine-specific voice id; ignored by clone engines
     speed: float = 1.0
+    #: 这把嗓子在音色目录上的 `VoiceOption.extra`,经音色选择(`VoiceRef.extra`)原样带回来 —— 只有出它的那一家读
+    #: (火山的资源族)。别的 Adapter 不看它。
+    extra: Mapping[str, str] = field(default_factory=dict)
 
 
 class SpeechAdapter(Protocol):

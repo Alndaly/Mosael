@@ -25,6 +25,7 @@ import pytest
 from app.ai.runtime import tts_models
 from app.domain.voices import voices
 from app.domain.voices import errors
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -60,7 +61,7 @@ def test_fish_refuses_an_empty_reference_text(monkeypatch) -> None:
         before = db.query(Job).count()
         with pytest.raises(errors.VoiceError) as caught:
             voices.start_synthesis(db, text="你好", project_id=None, created_by=None,
-                                   voice_id=voice_id, clone_engine="fish-speech")
+                                   voice=VoiceRef("builtin:clone", cloned_voice=voice_id, model="fish-speech"))
         assert db.query(Job).count() == before, "起了一个注定说不清话的十分钟任务"
 
     message = str(caught.value)
@@ -78,7 +79,7 @@ def test_f5_still_accepts_an_empty_reference_text(monkeypatch) -> None:
 
     with SessionLocal() as db:
         job = voices.start_synthesis(db, text="你好", project_id=None, created_by=None,
-                                     voice_id=voice_id, clone_engine="f5-tts")
+                                     voice=VoiceRef("builtin:clone", cloned_voice=voice_id, model="f5-tts"))
     assert job.kind == "tts"
 
 

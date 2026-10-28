@@ -13,6 +13,7 @@ from typing import Any
 
 from app.db.references import split_ids
 from app.domain.consent import CONSENT_KINDS
+from app.domain.voices.voice_ref import VoiceRef, VoiceRefInvalid
 
 #: 三种资产。「风格」那一种先不做(ADR 0027「以后再议」)。
 KINDS: tuple[str, ...] = ("character", "location", "prop")
@@ -51,11 +52,6 @@ ATTACH_PRIORITY: dict[str, tuple[str, ...]] = {
 
 #: 新挂一张参考图、没说角度时按种类给的缺省:人物和道具先当正面,场景先当设定图。
 DEFAULT_ROLE: dict[str, str] = {"character": "front", "location": "concept", "prop": "front"}
-
-#: 音色库(本地克隆)这个引擎的名字 —— 和 voices.engine_catalog.CLONE_ENGINE 是同一个值;这里不 import 它,
-#: 词表这一层不依赖配音引擎的装配。
-VOICE_LIBRARY_ENGINE = "builtin:clone"
-
 
 #: 一个资产最多挂几张参考图。参考图墙是一面墙,不是一个素材库;再多就该拆成变体。
 MAX_REFERENCES = 60
@@ -128,12 +124,13 @@ def normalize_attributes(
         raise AttributeProblem("entityErr_attributeUnknown", keys=", ".join(unknown), allowed=", ".join(allowed))
     out: dict[str, Any] = {}
     if kind == "character":
-        # 音色是「引擎 + 那个引擎里的一把嗓子」,和配音、工作流的念稿同一种说法:本地克隆(音色库)只是其中一个引擎。
-        # 没写引擎就是音色库里的 —— 那是「一把嗓子」最常见的来处。只写了引擎、没挑嗓子,等于没选。
-        voice = _text(raw.get("voice_id"), "voice_id", 200)
-        if voice:
-            out["voice_engine"] = _text(raw.get("voice_engine"), "voice_engine", 64) or VOICE_LIBRARY_ENGINE
-            out["voice_id"] = voice
+        # 音色是一个音色选择(`VoiceRef`,ADR 0087),和配音、智能体朗读同一个形状:本地克隆(配音库)只是其中一个引擎。
+        # 空 / null = 没选。形状在这里查;嗓子在不在、属不属于那个引擎由 library 在落库前问音色目录。
+        if raw.get("voice"):
+            try:
+                out["voice"] = VoiceRef.of(raw["voice"]).to_json()
+            except VoiceRefInvalid as exc:
+                raise AttributeProblem(exc.key, **exc.params) from exc
         color = _text(raw.get("blockout_color"), "blockout_color", 7)
         if color:
             if not _COLOR.match(color):
@@ -167,7 +164,7 @@ def normalize_attributes(
 
 #: 每种资产的专有字段(ADR 0027 §2)。
 ATTRIBUTE_KEYS: dict[str, tuple[str, ...]] = {
-    "character": ("voice_engine", "voice_id", "blockout_color", "real_person", "consent"),
+    "character": ("voice", "blockout_color", "real_person", "consent"),
     "location": ("scene_id", "time_of_day"),
     "prop": ("model_asset_id",),
 }

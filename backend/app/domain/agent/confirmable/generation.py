@@ -22,7 +22,9 @@ from app.domain.generation.operations import (
     parse_source_assets,
 )
 from app.domain.generation.origins import AGENT, Origin, STUDIO_ORIGIN
+from app.domain.voices import engine_catalog
 from app.domain.voices.engine_catalog import pick_speech
+from app.domain.voices.voice_ref import VoiceRef
 from app.domain.voices.errors import VoiceError
 from app.domain.voices.remote import RemoteConsentRequired, check_voice, speaks_library_voice
 from app.domain.voices.speech import SpeechProviderUnavailable
@@ -164,15 +166,15 @@ def _check_remote_voice(db: Session, payload: dict[str, Any], *, workspace_id: s
 
     engine, voice = str(payload.get("engine") or ""), str(payload.get("voice") or "")
     if speaks_library_voice(db, engine, voice):
-        check_voice(db, engine=engine, voice_id=voice, workspace_id=workspace_id, user_id=actor,
-                    engine_model=str(payload.get("model") or "").strip())
+        check_voice(db, VoiceRef(engine, cloned_voice=voice, model=str(payload.get("model") or "").strip()),
+                    workspace_id=workspace_id, user_id=actor)
 
 def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateAudio", {"asked": _asked_for(payload)}
 
 def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    """念卡上定好的那一对,记进这段对话的那条创作会话(ADR 0055 §4、ADR 0052,和它出图一样)。参数经 synthesis_params 拼,和工作流、
-    画板、字幕配音同一条路。"""
+    """念卡上定好的那一对,记进这段对话的那条创作会话(ADR 0055 §4、ADR 0052,和它出图一样)。卡上的「引擎 + 一格音色」经
+    `engine_catalog.voice_choice` 变成一把嗓子,之后和工作流、画板、字幕配音同一条路。"""
     payload = confirmation.payload
 
     record, job = voiced.create_speech(
@@ -182,9 +184,10 @@ def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -
         project_id=payload.get("project_id"),
         created_by=actor,
         text=str(payload.get("text") or ""),
-        engine=str(payload.get("engine") or ""),
-        voice=str(payload.get("voice") or ""),
-        engine_model=str(payload.get("model") or "").strip(),
+        voice=engine_catalog.voice_choice(
+            db, engine=str(payload.get("engine") or ""), voice=str(payload.get("voice") or ""),
+            model=str(payload.get("model") or ""), user_id=actor,
+        ),
         speed=float(payload.get("speed") or 1.0),
         origin=_origin(confirmation),
     )

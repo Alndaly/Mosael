@@ -21,6 +21,7 @@ from app.db.models import Asset, Job, ProviderUsageEvent, Voice, VoiceEnrollment
 from app.domain.voices import remote
 from app.domain.voices import voices as voices_domain
 from app.media.paths import voice_dir, voice_key
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import add_provider, fresh_client, user_id, wait_status
 
 COSY = "builtin:alibaba-cosyvoice"
@@ -108,10 +109,9 @@ def _consent(env: SimpleNamespace) -> None:
     assert wait_status(env.client, job.json()["id"]) == "succeeded"
 
 
-def _synthesize(env: SimpleNamespace, **extra):
-    return env.client.post("/api/tts/synthesize", json={
-        "workspace_id": env.workspace_id, "text": "念一句", "engine": COSY, "voice_id": env.voice_id, **extra,
-    })
+def _synthesize(env: SimpleNamespace, *, model: str = ""):
+    voice = {"engine": COSY, "cloned_voice": env.voice_id, **({"model": model} if model else {})}
+    return env.client.post("/api/tts/synthesize", json={"workspace_id": env.workspace_id, "text": "念一句", "voice": voice})
 
 
 def _copies(voice_id: str) -> list[VoiceEnrollment]:
@@ -143,17 +143,17 @@ def test_字幕配音_智能体音色设置也一样拦(bailian) -> None:
     """同意不是界面上的一道闸:每个把配音库的嗓子交给远端引擎的入口,后端自己问。"""
     env = _setup()
     sequence_id = _subtitled_sequence(env.client, env.workspace_id)
-    dubbed = env.client.post(f"/api/sequences/{sequence_id}/dub-subtitles", json={"engine": COSY, "voice_id": env.voice_id})
+    dubbed = env.client.post(f"/api/sequences/{sequence_id}/dub-subtitles", json={"voice": {"engine": COSY, "cloned_voice": env.voice_id}})
     assert dubbed.status_code == 409 and dubbed.json()["detail"]["code"] == "remote_voice_consent_required", dubbed.text
 
-    chosen = env.client.put("/api/settings/agent-voice", json={"engine": COSY, "voice_id": env.voice_id, "enabled": True})
+    chosen = env.client.put("/api/settings/agent-voice", json={"voice": {"engine": COSY, "cloned_voice": env.voice_id}, "enabled": True})
     assert chosen.status_code == 409 and chosen.json()["detail"]["code"] == "remote_voice_consent_required", chosen.text
 
     # 绕开入口直接合成(智能体语音对话走的那一层):照样问,而不是悄悄传上去。
     with SessionLocal() as db, pytest.raises(remote.RemoteConsentRequired):
         voices_domain.speak_to_file(
-            db, text="嗨", engine=COSY, engine_voice="", speed=1.0, workspace_id=env.workspace_id,
-            user_id=user_id(), out_dir=Path("/nonexistent"), source_type="test", source_id="t", voice_id=env.voice_id,
+            db, text="嗨", voice=VoiceRef(COSY, cloned_voice=env.voice_id), speed=1.0, workspace_id=env.workspace_id,
+            user_id=user_id(), out_dir=Path("/nonexistent"), source_type="test", source_id="t",
         )
     assert bailian.created == []
 
@@ -226,7 +226,7 @@ def _account(env: SimpleNamespace) -> remote.Account:
     from app.domain.voices.target import speech_target
 
     with SessionLocal() as db:
-        profile, _model = speech_target(db, COSY, user_id=user_id())
+        profile, _model = speech_target(db, VoiceRef(COSY, cloned_voice="x"), user_id=user_id())
         return remote.Account.of(COSY, profile, user_id())
 
 
@@ -305,7 +305,7 @@ def test_换了模型_按需建新副本_旧的不动_也不再问(bailian) -> N
     env = _setup()
     _consent(env)
     [old] = _copies(env.voice_id)
-    job = _synthesize(env, engine_model="cosyvoice-v2")
+    job = _synthesize(env, model="cosyvoice-v2")
     assert job.status_code == 200, "同一个账号同意过,换模型不再问"
     assert wait_status(env.client, job.json()["id"]) == "succeeded"
     copies = {one.target_model: one for one in _copies(env.voice_id)}
@@ -364,19 +364,19 @@ def test_工作流的配音说明_说克隆音色的名字_不说一串id(bailia
 
     env = _setup()
     with SessionLocal() as db:
-        note = voice_note(db, engine=COSY, voice=env.voice_id, workspace_id=env.workspace_id, user_id=user_id())
+        note = voice_note(db, VoiceRef(COSY, cloned_voice=env.voice_id), workspace_id=env.workspace_id, user_id=user_id())
     assert "小美" in note and env.voice_id not in note, note
 
 
-def test_一格音色是配音库里的嗓子时_交voice_id(bailian) -> None:
-    from app.domain.voices.engine_catalog import synthesis_params
+def test_一格音色是配音库里的嗓子时_认成克隆音色(bailian) -> None:
+    from app.domain.voices.engine_catalog import voice_choice
 
     env = _setup()
     with SessionLocal() as db:
-        params = synthesis_params(db, engine=COSY, voice=env.voice_id, user_id=user_id(), workspace_id=env.workspace_id)
-        assert params["voice_id"] == env.voice_id and "engine_voice" not in params
-        stock = synthesis_params(db, engine=COSY, voice="longxiaochun_v3", user_id=user_id(), workspace_id=env.workspace_id)
-        assert stock["engine_voice"] == "longxiaochun_v3" and "voice_id" not in stock
+        library = voice_choice(db, engine=COSY, voice=env.voice_id, user_id=user_id())
+        assert (library.cloned_voice, library.voice) == (env.voice_id, "")
+        stock = voice_choice(db, engine=COSY, voice="longxiaochun_v3", user_id=user_id())
+        assert (stock.voice, stock.cloned_voice) == ("longxiaochun_v3", "")
 
 
 def test_重启时建到一半的副本记成失败_拿到id的接着等(bailian) -> None:

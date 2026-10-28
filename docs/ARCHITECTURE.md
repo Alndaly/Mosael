@@ -435,6 +435,12 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 创建入口只在“本地音色克隆”引擎下出现；远程 TTS 使用供应商自己的音色目录，不能把本地参考音色库
 展示在远程引擎下，避免暗示两者可以混用。
 
+**「选了哪把嗓子」只有一种形状:`VoiceRef`**(`domain/voices/voice_ref`,ADR 0087)。部署默认、语音对话偏好、人物资产、
+合成任务、字幕配音、创作页的语音记录都存 / 收它;前端只经 `api/domains/speech` 的 `voiceRefOf` / `clonedVoiceRef` 造它。
+写入时由 `engine_catalog.check_voice` 照音色目录校验并补齐(火山的资源族在 `extra` 里,原样经合成请求交回那一家
+Adapter),合成前由 `voice_for_synthesis` 解析默认、查不花钱的那几样。本机克隆的引擎 / 权重写在 `model`
+(`f5-tts/fr`),能不能克隆由运行时目录的 `clones_voices` 说 —— Qwen3-TTS 是另一个念字引擎,不在克隆引擎之列。
+
 **两个下载源是分开的**:「模型下载源」管 HF 权重(`HF_ENDPOINT`),「依赖下载源」管 pip 索引
 (`--index-url`)。装引擎要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用,而它与权重镜像并不是
 同一件事。自定义 index 只接受 http(s),避免任意字符串进子进程 argv。

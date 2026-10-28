@@ -13,12 +13,8 @@ import { readHint } from "@/test/hint";
  */
 
 const saved = {
-  engine: "edge",
-  engine_voice: "zh-CN-XiaoxiaoNeural",
-  engine_voice_resource: "",
-  engine_model: "",
-  provider_profile_id: null,
-  voice_id: null,
+  //: 存着的那把嗓子(ADR 0087 的音色选择);null = 没选。
+  voice: { engine: "builtin:edge", voice: "zh-CN-XiaoxiaoNeural" } as { engine: string; voice: string } | null,
   speed: 1,
   enabled: false,
   //: 说话输入的引擎。空 = 跟随转写默认(此前听写没有自己的开关)。
@@ -228,7 +224,7 @@ describe("试听", () => {
   });
 
   it("还没选好音色时试听是灰的,并说出为什么", async () => {
-    pref = { ...saved, engine_voice: "" };
+    pref = { ...saved, voice: null };
     renderSection();
     const preview = await screen.findByRole("button", { name: "voicePreview" });
     await waitFor(() => expect(screen.getByRole("switch", { name: "agentVoiceEnabled" })).toBeDisabled());

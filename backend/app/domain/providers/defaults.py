@@ -5,12 +5,15 @@ from sqlalchemy.orm import Session
 from app.db.models import ProviderDefault, ProviderModel
 
 """每种能力的默认供应商解析(统一到 ProviderProfile)。
-capability: chat / image / video / tts / podcast。"""
+capability: chat / image / video / audio / podcast。"""
 
 #: 能设默认模型的那几种能力。它曾经和 providers.ALL_CAPABILITY_IDS 差一项(embedding),
 #: 而那一项在弹窗里没有格子、在模型行上却有标签 —— 有人照着错的那份抄过一次。当前产品没有
 #: embedding 消费者,两份因此重新对齐;别再让它们分叉。
-DEFAULTABLE_CAPABILITIES = ("chat", "image", "video", "audio", "tts", "podcast")
+#:
+#: **语音合成(tts)不在其中**(ADR 0087 §4):念字的模型是音色选择的一部分(`VoiceRef.model`)—— 百炼的音色按模型给,
+#: 复刻出的音色绑死在建它的模型上,模型另存一格就会和音色对不上。旧的 tts 默认由迁移写进同一个人的朗读偏好后删掉。
+DEFAULTABLE_CAPABILITIES = ("chat", "image", "video", "audio", "podcast")
 
 
 def get_row(db: Session, capability: str, user_id: str | None) -> ProviderDefault | None:

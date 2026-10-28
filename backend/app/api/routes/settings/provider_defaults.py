@@ -6,13 +6,14 @@ from fastapi import APIRouter, HTTPException
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
+from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate, VoiceRefBody
 from app.domain.providers import thinking, models as provider_models
 from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default, get_row
 
 from app.domain.permissions import require_own_profile
 from app.domain.plugins.groups import readable_group
 from app.domain.voices import agent_voice, use_cases as voice_uc
+from app.domain.voices.defaults import UnknownVoiceEngine, VoiceNotInEngine
 from app.domain.voices.errors import VoiceError
 
 router = APIRouter(tags=["settings"])
@@ -118,63 +119,47 @@ def set_provider_default(
 
 
 
-@router.get("/settings/agent-voice", response_model=AgentVoiceOut)
-def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
-    """**我**在语音对话里用哪个音色、说话输入用哪一家。没设过就回一份空的(enabled=False)。
-
-    和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载
-    十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。
-    """
-
-    row = agent_voice.get_row(db, user.id)
-    if row is None:
-        return AgentVoiceOut()
+def _agent_voice_out(row) -> AgentVoiceOut:
     return AgentVoiceOut(
-        engine=row.engine,
-        engine_voice=row.engine_voice,
-        engine_voice_resource=row.engine_voice_resource,
-        engine_model=row.engine_model,
-        provider_profile_id=row.provider_profile_id,
-        voice_id=row.voice_id,
+        voice=VoiceRefBody.of(agent_voice.voice_of(row)),
         speed=row.speed,
         enabled=row.enabled,
         asr_engine=row.asr_engine,
         speak_early=row.speak_early,
     )
+
+
+@router.get("/settings/agent-voice", response_model=AgentVoiceOut)
+def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
+    """**我**在语音对话里用哪个音色、说话输入用哪一家。没设过就回一份空的(enabled=False)。
+
+    和配音的默认是两回事:配音要质量(本地克隆、首次加载十几分钟也认),对话要延迟。同一个默认服务两件事,
+    必然在某一边是错的。
+    """
+
+    row = agent_voice.get_row(db, user.id)
+    return _agent_voice_out(row) if row is not None else AgentVoiceOut()
 
 
 @router.put("/settings/agent-voice", response_model=AgentVoiceOut)
 def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentVoiceOut:
     """设**我自己**的对话音色,以及说话输入用哪一家。只有这一档 —— 没有部署默认(同 provider-defaults)。
 
-    远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。"""
+    存之前照音色目录校验并补齐(音色属于引擎、模型对得上,火山的资源族由目录带上);远端引擎念配音库里的嗓子
+    (`cloned_voice`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。"""
 
     try:
         row = voice_uc.choose_agent_voice(
             db,
             user,
-            engine=body.engine,
-            engine_voice=body.engine_voice,
-            engine_voice_resource=body.engine_voice_resource,
-            engine_model=body.engine_model,
-            provider_profile_id=body.provider_profile_id,
-            voice_id=body.voice_id,
+            voice=body.voice.ref() if body.voice is not None else None,
             speed=body.speed,
             enabled=body.enabled,
             asr_engine=body.asr_engine,
             speak_early=body.speak_early,
         )
-    except VoiceError as exc:
+    except UnknownVoiceEngine as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (VoiceError, VoiceNotInEngine) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return AgentVoiceOut(
-        engine=row.engine,
-        engine_voice=row.engine_voice,
-        engine_voice_resource=row.engine_voice_resource,
-        engine_model=row.engine_model,
-        provider_profile_id=row.provider_profile_id,
-        voice_id=row.voice_id,
-        speed=row.speed,
-        enabled=row.enabled,
-        asr_engine=row.asr_engine,
-        speak_early=row.speak_early,
-    )
+    return _agent_voice_out(row)

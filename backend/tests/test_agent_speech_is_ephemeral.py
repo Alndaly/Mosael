@@ -15,6 +15,7 @@ from pathlib import Path
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job, User
 from app.domain.voices import agent_voice
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -23,9 +24,12 @@ def _me() -> str:
         return db.query(User).first().id
 
 
-def _choose_voice(**overrides) -> None:
+def _choose_voice(*, engine: str = "builtin:edge", voice: str = "zh-CN-XiaoxiaoNeural", model: str = "",
+                  extra: dict[str, str] | None = None, **settings) -> None:
+    """存一份朗读偏好;`voice` 为空 = 没选嗓子。"""
+    chosen = VoiceRef(engine, voice=voice, model=model, extra=extra or {}) if voice else None
     with SessionLocal() as db:
-        agent_voice.upsert(db, _me(), **{"engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural", **overrides})
+        agent_voice.upsert(db, _me(), voice=chosen, **settings)
         db.commit()  # 领域函数不提交,测试就是这里的入口
 
 
@@ -102,14 +106,13 @@ def test_对话音色和配音默认是两行配置() -> None:
     assert client.get("/api/settings/agent-voice").json()["enabled"] is False
     saved = client.put(
         "/api/settings/agent-voice",
-        json={"engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural", "speed": 1.25, "enabled": True},
+        json={"voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}, "speed": 1.25, "enabled": True},
     )
     assert saved.status_code == 200, saved.text
-    assert saved.json()["engine"] == "edge" and saved.json()["speed"] == 1.25
+    assert saved.json()["voice"]["engine"] == "builtin:edge" and saved.json()["speed"] == 1.25
 
-    # 配音那一格没有因此被设上 —— 它是另一份配置。
-    tts_default = [row for row in client.get("/api/settings/provider-defaults").json() if row["capability"] == "tts"]
-    assert tts_default and not tts_default[0]["provider_profile_id"]
+    # 配音的默认没有因此被设上 —— 它是另一份配置。
+    assert not any(row["is_default"] for row in client.get("/api/tts/engines").json())
 
 
 def test_语速被夹在可用区间里() -> None:
@@ -118,7 +121,7 @@ def test_语速被夹在可用区间里() -> None:
     client.post("/api/workspaces", json={"name": "W"})
     reply = client.put(
         "/api/settings/agent-voice",
-        json={"engine": "edge", "engine_voice": "x", "speed": 9.0, "enabled": True},
+        json={"voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}, "speed": 9.0, "enabled": True},
     )
     assert reply.json()["speed"] == 2.0
 
@@ -144,7 +147,7 @@ def test_试听不要求开着_只要求选好(monkeypatch) -> None:
     untouched = client.post("/api/agent/speech/preview", json={"text": "试听", "workspace_id": workspace["id"]})
     assert untouched.status_code == 409 and "语音对话" in untouched.json()["detail"]
 
-    _choose_voice(engine_voice="", enabled=False)
+    _choose_voice(voice="", enabled=False)
     no_voice = client.post("/api/agent/speech/preview", json={"text": "试听", "workspace_id": workspace["id"]})
     assert no_voice.status_code == 409, "只选了引擎没选音色,不算选好"
 
@@ -160,15 +163,15 @@ def test_朗读笔记用他选的那把嗓子_不要求开着_记在朗读名下
     记账来源写明是朗读,不混进「试听」。"""
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
-    _choose_voice(engine="openai", engine_voice="alloy", speed=1.1, enabled=False)
+    _choose_voice(engine="builtin:openai", voice="alloy", speed=1.1, enabled=False)
     calls = _record_speech(monkeypatch)
 
     reply = client.post("/api/agent/speech/read", json={"text": "笔记里选中的一段", "workspace_id": workspace["id"]})
 
     assert reply.status_code == 200, reply.text
     assert reply.content == b"ID3fake-audio"
-    assert [(one["engine"], one["engine_voice"], one["speed"], one["source_type"]) for one in calls] == [
-        ("openai", "alloy", 1.1, "note_read_aloud"),
+    assert [(one["voice"], one["speed"], one["source_type"]) for one in calls] == [
+        (VoiceRef("builtin:openai", voice="alloy"), 1.1, "note_read_aloud"),
     ]
 
 
@@ -183,7 +186,7 @@ def test_试听和真念走的是同一套参数(monkeypatch) -> None:
     """试听听到的得是以后念给他的那个声音:两条路交给合成的东西,除了记账来源,一样不差。"""
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
-    _choose_voice(speed=1.5, engine_voice_resource="seed-tts-1.0", engine_model="m-1")
+    _choose_voice(speed=1.5, extra={"resource_id": "seed-tts-1.0"}, model="m-1")
     calls = _record_speech(monkeypatch)
 
     for path in ("/api/agent/speech/preview", "/api/agent/speech"):
@@ -191,5 +194,5 @@ def test_试听和真念走的是同一套参数(monkeypatch) -> None:
 
     preview, spoken = ({k: v for k, v in call.items() if k not in {"out_dir", "source_type"}} for call in calls)
     assert preview == spoken
-    assert spoken["speed"] == 1.5 and spoken["voice_resource"] == "seed-tts-1.0" and spoken["model_override"] == "m-1"
+    assert spoken["speed"] == 1.5 and spoken["voice"].extra == {"resource_id": "seed-tts-1.0"} and spoken["voice"].model == "m-1"
     assert [call["source_type"] for call in calls] == ["agent_voice_preview", "agent_speech"]

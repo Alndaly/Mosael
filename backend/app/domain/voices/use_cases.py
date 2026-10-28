@@ -17,7 +17,8 @@ from app.domain.permissions import (
     require_sequence_access,
 )
 from app.domain.voices import transcription, voices, errors, agent_voice, engine_catalog, remote, subtitle_dub
-from app.domain.voices.engine_catalog import speaking_engines as listed, voice_slot
+from app.domain.voices.engine_catalog import speaking_engines as listed
+from app.domain.voices.voice_ref import VoiceRef
 from app.domain.voices.subtitle_dub import dub_targets
 
 
@@ -63,48 +64,33 @@ def choose_agent_voice(
     db: Session,
     user: User,
     *,
-    engine: str,
-    engine_voice: str,
-    engine_voice_resource: str,
-    engine_model: str,
-    provider_profile_id: str | None,
-    voice_id: str | None,
+    voice: VoiceRef | None,
+    workspace_id: str = "",
     speed: float,
     enabled: bool,
     asr_engine: str = "",
     speak_early: bool = True,
 ):
-    """设**我自己**的对话音色,以及说话输入用哪一家(只有这一档,没有部署默认)。
+    """设**我自己**的对话音色,以及说话输入用哪一家(只有这一档,没有部署默认)。`voice` 为 `None` = 不选了。
 
-    点了配音库里的一把嗓子(只有能复刻的远端引擎这样点,ADR 0037)时,存之前问清楚:我能用这把嗓子、它声明过是谁的、
+    存之前照音色目录校验并补齐(`engine_catalog.check_voice`:引擎认得、音色属于它、模型对得上,火山的资源族由目录带上)。
+    点了配音库里的一把嗓子(只有能复刻的远端引擎这样点,ADR 0037)时,还要问清楚:我能用这把嗓子、它声明过是谁的、
     我这个账号同意过上传 —— 没同意就 409,设置页弹确认框;不然要等到对话里第一次开口才失败。
 
     说话输入那一格不在这里验就绪:验它要起子进程探测本机引擎,而这是每次保存都会走的路。界面上只列已经就绪的;
     哪天真用不了,听写那一刻由 capabilities.pick 带着原因拒绝(见 routes/asr 与 domain/voices/transcription)。
     """
 
-    if voice_id:
-        if not remote.clones_remotely(engine):
-            raise errors.VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
-        voice = usable(db, user, voice_id)
-        remote.check_voice(
-            db, engine=engine, voice_id=voice.id, workspace_id=voice.workspace_id, user_id=user.id,
-            provider_profile_id=provider_profile_id, engine_model=engine_model,
-        )
-        engine_voice = engine_voice_resource = ""
+    if voice is not None:
+        if voice.cloned_voice:
+            if not remote.clones_remotely(voice.engine):
+                raise errors.VoiceError("voiceErr_remoteCloneUnsupported", engine=voice.engine)
+            cloned = usable(db, user, voice.cloned_voice)
+            remote.check_voice(db, voice, workspace_id=cloned.workspace_id, user_id=user.id)
+            workspace_id = cloned.workspace_id
+        voice = engine_catalog.check_voice(db, voice, user_id=user.id, workspace_id=workspace_id)
     return agent_voice.upsert(
-        db,
-        user.id,
-        engine=engine,
-        engine_voice=engine_voice,
-        engine_voice_resource=engine_voice_resource,
-        engine_model=engine_model,
-        provider_profile_id=provider_profile_id,
-        voice_id=voice_id,
-        speed=speed,
-        enabled=enabled,
-        asr_engine=asr_engine,
-        speak_early=speak_early,
+        db, user.id, voice=voice, speed=speed, enabled=enabled, asr_engine=asr_engine, speak_early=speak_early,
     )
 
 
@@ -123,28 +109,14 @@ def dub_subtitles(
     match_duration: bool,
     line: str,
     original_audio: str,
-    engine: str,
-    voice_id: str | None,
-    engine_voice: str,
+    voice: VoiceRef | None,
     speed: float,
-    **options: object,
 ) -> Job:
-    """给时间线上选中的字幕条配音:要 `edit`(改这条时间线)也要 `ai`(花钱)。
-
-    `options` 是引擎那一套附加项(见 synthesis_params)。
-    """
+    """给时间线上选中的字幕条配音:要 `edit`(改这条时间线)也要 `ai`(花钱)。`voice` 为 `None` = 用默认那一把。"""
 
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
-    synthesis = engine_catalog.synthesis_params(
-        db,
-        engine=engine,
-        voice=voice_slot(engine, voice_id=voice_id, engine_voice=engine_voice),
-        speed=speed,
-        user_id=user.id,
-        workspace_id=sequence.workspace_id,
-        **options,
-    )
+    chosen = engine_catalog.voice_for_synthesis(db, voice, user_id=user.id, workspace_id=sequence.workspace_id)
     return subtitle_dub.start_subtitle_dub(
         db,
         sequence_id=sequence_id,
@@ -152,7 +124,8 @@ def dub_subtitles(
         match_duration=match_duration,
         line=line,
         created_by=user.id,
-        synthesis=synthesis,
+        voice=chosen,
+        speed=speed,
         original_audio=original_audio,
     )
 

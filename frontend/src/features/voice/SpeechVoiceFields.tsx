@@ -168,7 +168,7 @@ export function SpeechVoiceFields({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {voice.runtimes.map((item) => (
+                {voice.cloneRuntimes.map((item) => (
                   <SelectItem key={item.id} value={item.id} truncate>
                     {item.label}
                     {/* 「还没测过」不能显示成「未装好」—— 那是拿一个未知冒充结论。 */}

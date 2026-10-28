@@ -74,8 +74,8 @@ vi.mock("@/api/client", () => ({
   listTtsEngines: () => Promise.resolve([CLONE, QWEN]),
   listTtsModels: () =>
     Promise.resolve([
-      { id: "f5-tts", label: "F5-TTS", detail: "d", status: "installed", runtime_ready: true, runtime_checked: true },
-      { id: "qwen-tts", label: "Qwen3-TTS", detail: "d", status: "installed", runtime_ready: true, runtime_checked: true },
+      { id: "f5-tts", label: "F5-TTS", detail: "d", status: "installed", runtime_ready: true, runtime_checked: true, clones_voices: true },
+      { id: "qwen-tts", label: "Qwen3-TTS", detail: "d", status: "installed", runtime_ready: true, runtime_checked: true, clones_voices: false },
     ]),
   listTtsVoices: () => Promise.resolve(QWEN_VOICES),
   listVoices: () => Promise.resolve([]),
@@ -90,7 +90,7 @@ function Harness() {
   return (
     <div>
       <SpeechVoiceFields voice={voice} />
-      <pre data-testid="params">{JSON.stringify(voice.params)}</pre>
+      <pre data-testid="choice">{JSON.stringify(voice.choice)}</pre>
       <pre data-testid="chosen">{JSON.stringify(voice.voiceChoices)}</pre>
       <button type="button" onClick={() => voice.setEngineVoice("vivian")}>
         pick-vivian
@@ -134,6 +134,18 @@ describe("Qwen3-TTS 在配音/合成的引擎选择器里", () => {
     expect(chosen.every((one: { source: string }) => one.source === "preset")).toBe(true);
   });
 
+  it("它不在「克隆引擎」那一格里:它只念预置音色,拿配音库的嗓子去喂它念不出来", async () => {
+    const user = userEvent.setup();
+    renderHarness();
+
+    //: 引擎还是本机克隆:下面那一格是克隆引擎,只列能克隆的(F5 / Fish),Qwen3-TTS 是上面那一格里的另一个引擎。
+    const cloneEngine = await screen.findByRole("combobox", { name: "voicePanelCloneEngine" });
+    await user.click(cloneEngine);
+    const options = (await screen.findAllByRole("option")).map((one) => one.textContent ?? "");
+    expect(options.some((label) => label.includes("F5-TTS"))).toBe(true);
+    expect(options.some((label) => label.includes("Qwen3-TTS"))).toBe(false);
+  });
+
   it("选了它不会要求参考音频/克隆音色 —— 那是克隆引擎才有的两格", async () => {
     const user = userEvent.setup();
     renderHarness();
@@ -157,15 +169,11 @@ describe("Qwen3-TTS 在配音/合成的引擎选择器里", () => {
     await user.click(await screen.findByRole("option", { name: "Qwen3-TTS(本机)" }));
     await waitFor(() => expect(picker).toHaveTextContent("Qwen3-TTS(本机)"));
 
-    const params = JSON.parse(screen.getByTestId("params").textContent ?? "{}");
+    const choice = JSON.parse(screen.getByTestId("choice").textContent ?? "{}");
     // 引擎 id 就是能力表里的 `builtin:qwentts`;音色是预置音色的 id,默认落到第一个(vivian)。
-    expect(params.engine).toBe("builtin:qwentts");
-    expect(params.engine_voice).toBe("vivian");
-    // **不带参考音频**:qwen 这条路上没有 `voice_id`(克隆音色)、也没有克隆引擎那两格。
-    expect(params).not.toHaveProperty("voice_id");
-    expect(params).not.toHaveProperty("clone_engine");
-    expect(params).not.toHaveProperty("clone_model");
+    // **不带参考音频**:这把嗓子是引擎音色(`voice`),不是配音库里的克隆音色(`cloned_voice`)。
+    expect(choice.voice).toEqual({ engine: "builtin:qwentts", voice: "vivian" });
     // Qwen3-TTS 的 API 没有语速参数 —— 摆一个拨不动的旋钮比不摆更糟。
-    expect(params).not.toHaveProperty("speed");
+    expect(choice).not.toHaveProperty("speed");
   });
 });

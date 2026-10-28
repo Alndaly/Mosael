@@ -11,6 +11,7 @@ from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel
 from app.api.schemas.failures import FailureReadout
 from app.api.schemas.jobs import JobOut, _rendered
 from app.api.schemas.plugins import EntryGroupOut
+from app.api.schemas.voices import VoiceRefBody
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 from app.domain.jobs import CANCELLED_ERROR_KEY
 
@@ -116,25 +117,17 @@ class GenerationCreate(ApiModel):
 
 
 class SpeechCreate(ApiModel):
-    """创作页「语音」(ADR 0055):念一段字。音色一格和工作流、画板、智能体同一个口径 —— 克隆引擎是配音库里的嗓子 id,别的引擎是
-    它自己的音色(能复刻的引擎点配音库里的嗓子时也是嗓子 id)。"""
+    """创作页「语音」(ADR 0055):念一段字,音色是一个音色选择(ADR 0087)。"""
 
     workspace_id: str
     session_id: str | None = None
     project_id: str | None = None
     text: str = Field(min_length=1, max_length=2000)
-    engine: str = Field(min_length=1, max_length=80)
-    voice: str = Field(min_length=1, max_length=120)
+    #: 用哪把嗓子念;null = 用默认那一把。
+    voice: VoiceRefBody | None = None
     #: 界面那份目录里的名字(火山按账号现拉的音色只有界面知道名字):记录、产出的素材名用它。没给就由后端查。
     voice_label: str = Field(default="", max_length=120)
     engine_label: str = Field(default="", max_length=120)
-    #: 火山:音色的资源族(只有目录知道)。
-    engine_voice_resource: str = Field(default="", max_length=60)
-    provider_profile_id: str | None = None
-    engine_model: str = Field(default="", max_length=120)
-    #: 本机克隆这一次用哪个引擎、哪份权重(空 = 部署配置里的默认)。
-    clone_engine: str = Field(default="", max_length=40)
-    clone_model: str = Field(default="", max_length=40)
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
 
 

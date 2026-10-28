@@ -39,6 +39,7 @@ from app.domain.jobs import (
     start_job,
     wait_for_idle_jobs,
 )
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client, insert_asset
 
 FAKE_SECONDS = 20
@@ -209,7 +210,7 @@ def test_a_remote_voice_cancelled_while_queued_never_calls_the_paid_engine(monke
     monkeypatch.setattr(voices, "speak_to_file", lambda *a, **k: calls.append("speak"))
     _cancel(job_id)
 
-    voices._run_synthesis_body(job_id, None, "你好", None, "openai", "alloy", 1.0, ws)
+    voices._run_synthesis_body(job_id, VoiceRef("builtin:openai", voice="alloy"), "你好", 1.0, workspace_id=ws, project_id=None)
 
     assert calls == [], "排队时取消了的配音照样去调了付费接口"
     assert _status(job_id) == ("cancelled", "")
@@ -605,7 +606,7 @@ def test_a_remote_voice_cancelled_while_the_engine_speaks_registers_nothing(monk
     # 派发处给执行体设好的上下文(dispatch_job 的 run_as_job),这里直接调执行体,照样设上。
     token = jobs_bus.set_parent_job(job_id, strict=False)
     try:
-        voices._run_synthesis_body(job_id, None, "你好", None, "openai", "alloy", 1.0, ws)
+        voices._run_synthesis_body(job_id, VoiceRef("builtin:openai", voice="alloy"), "你好", 1.0, workspace_id=ws, project_id=None)
     except jobs_bus.JobCancelled:
         pass  # 派发处的兜底接得住它
     finally:

@@ -24,6 +24,7 @@ from app.ai.runtime import tts_models
 from app.domain.voices import voices
 from app.domain.voices import errors
 from app.domain.voices.speakable import speakable_text
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 #: 一段真会出现在助手回复里的 markdown:标题、粗体、斜体、删除线、列表、表格、省略号、破折号、URL、
@@ -114,10 +115,18 @@ def _a_voice(client) -> str:
     ).json()["id"]
 
 
+def _workspace_of(voice_id: str) -> str:
+    from app.core.db import SessionLocal
+    from app.db.models import Voice
+
+    with SessionLocal() as db:
+        return db.get(Voice, voice_id).workspace_id
+
+
 def _edge_voice(client) -> None:
     reply = client.put(
         "/api/settings/agent-voice",
-        json={"engine": "builtin:edge", "engine_voice": "zh-CN-XiaoxiaoNeural", "speed": 1.0, "enabled": True},
+        json={"voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}, "speed": 1.0, "enabled": True},
     )
     assert reply.status_code == 200, reply.text
 
@@ -173,8 +182,7 @@ def test_试听也是同一条路_标记不会念出来(spoken) -> None:
         "/api/tts/preview",
         json={
             "workspace_id": workspace["id"],
-            "engine": "builtin:edge",
-            "voice": "zh-CN-XiaoxiaoNeural",
+            "voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"},
             "text": "# 标题\n| a | b |",
         },
     )
@@ -208,8 +216,7 @@ def test_配音任务_送去合成的文本没有标记(monkeypatch, spoken) -> 
         "/api/tts/synthesize",
         json={
             "workspace_id": workspace["id"],
-            "engine": "builtin:edge",
-            "engine_voice": "zh-CN-XiaoxiaoNeural",
+            "voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"},
             "text": "## 标题\n- 列表一\n| a | b |",
         },
     )
@@ -239,7 +246,10 @@ def test_克隆配音_送给worker的文本没有标记(monkeypatch) -> None:
     client = fresh_client()
     voice_id = _a_voice(client)
 
-    reply = client.post(f"/api/voices/{voice_id}/synthesize", json={"text": "**粗体** # 标题 | a | b |"})
+    reply = client.post("/api/tts/synthesize", json={
+        "workspace_id": _workspace_of(voice_id), "text": "**粗体** # 标题 | a | b |",
+        "voice": {"engine": "builtin:clone", "cloned_voice": voice_id},
+    })
     assert reply.status_code == 200, reply.text
     assert wait_for_idle_jobs(timeout=30)
 
@@ -254,7 +264,8 @@ def test_只剩符号就说没话可念_不去合成一串符号(monkeypatch, sp
 
     refused = client.post(
         "/api/tts/preview",
-        json={"workspace_id": workspace["id"], "engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural", "text": "*** --- |"},
+        json={"workspace_id": workspace["id"], "voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"},
+              "text": "*** --- |"},
     )
 
     assert refused.status_code == 422, refused.text
@@ -271,5 +282,6 @@ def test_只剩符号的配音任务在建任务之前就退回去(monkeypatch) 
     with SessionLocal() as db:
         before = db.query(Job).count()
         with pytest.raises(errors.VoiceError):
-            voices.start_synthesis(db, text="***", project_id=None, created_by=None, voice_id=voice_id)
+            voices.start_synthesis(db, text="***", voice=VoiceRef("builtin:clone", cloned_voice=voice_id), project_id=None,
+                                   created_by=None)
         assert db.query(Job).count() == before

@@ -592,7 +592,7 @@ class Test带货口播真跑:
 
         ws = _workspace()
         voice = make_voice(ws, "主播的嗓子")
-        attributes = {"real_person": False, **({} if missing == "voice" else {"voice_engine": "builtin:clone", "voice_id": voice})}
+        attributes = {"real_person": False, **({} if missing == "voice" else {"voice": {"engine": "builtin:clone", "cloned_voice": voice}})}
         with unit_of_work() as db:
             entity = create_entity(db, workspace_id=ws, kind="character", name="小美", attributes=attributes)
             db.commit()

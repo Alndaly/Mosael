@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -27,6 +28,7 @@ from app.domain.voices.speech import (
     adapter_id,
     engine_ready,
     is_plugin,
+    known_engine,
     require_engine,
 )
 from mosael_formats.plugin_manifest import SPEECH
@@ -36,6 +38,7 @@ from app.ai.providers import (
     SpeechCatalogError,
     VoiceCatalogContext,
     VoiceOption,
+    builtin_voice,
     connection_vendor_for_speech_engine,
     engine_voices,
     podcast_engine,
@@ -55,6 +58,7 @@ from app.domain.voices import defaults as voice_defaults
 from app.domain.voices.defaults import resolve_voice_default
 from app.domain.voices.errors import VoiceError
 from app.domain.voices.remote import clones_remotely
+from app.domain.voices.voice_ref import VoiceRef
 from app.domain.voices.voices import list_voices
 
 logger = logging.getLogger(__name__)
@@ -78,7 +82,7 @@ def active_model_for(engine_cls: type, user_id: str | None = None) -> str:
                 connection_vendor_for_speech_engine(getattr(engine_cls, "engine_id", "")),
                 owner_user_id=user_id,
             )
-            found = provider_models.model_id_for_family(db, profile, "tts", prefixes) if profile else ""
+            found = provider_models.first_model_of_family(db, profile, "tts", prefixes)
             return found or default
     except Exception:  # noqa: BLE001 —— 引擎目录不该因为取不到模型就整个拉不出来
         return default
@@ -230,40 +234,32 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None, workspa
     return stock
 
 
-def set_default_voice(db: Session, engine: str, voice: str) -> tuple[str, str]:
-    """把这台机器的默认定成这一对(引擎 + 音色),校验放在这里。
+def set_default_voice(db: Session, choice: VoiceRef | None) -> VoiceRef | None:
+    """把这台机器的默认定成这一把嗓子,校验放在这里;`None` = 清掉默认。
 
     **只许设现在就能跑的引擎、并且音色必须属于它**:设完下一次念字就得先下载 / 先配连接的"默认",
     和没设没有区别,只是屏幕上多了一句承诺。音色和引擎不是一对时也当场拒 —— 那正是这个功能存在的
-    理由(引擎和音色是成对选的)。两格都空 = 清掉默认。
+    理由(引擎和音色是成对选的)。
 
-    只收内置引擎(插件连接属于某个人,不是这台机器的资产);音色清单和界面下拉同一个产地
-    (`list_engine_voices`,不带工作区 —— 别人的工作区配音库里的嗓子不在这台机器的默认里)。
+    只收内置引擎的**引擎音色**(插件连接属于某个人,不是这台机器的资产;配音库的克隆音色归某个工作区,不在这台机器的
+    默认里);音色清单和界面下拉同一个产地(`check_voice` → 音色目录)。
 
     不提交,由入口提交(和 `capabilities.set_default`、`denoise_defaults.set_default_engine` 同一套)。
     解析与存储在 `domain/voices/defaults`;本模块只负责问音色目录这一半。
     """
     from app.domain import capabilities
 
-    #: 旧 id / 大小写先按能力表归一 —— 和 pick、resolve 用的是同一份解析。
-    wanted = capabilities.canonical_id(CAPABILITY, engine)
-    voice = (voice or "").strip()
-    if not wanted and not voice:
-        return voice_defaults.clear_default(db)
-
+    if choice is None:
+        return voice_defaults.store_default(db, None)
     #: 部署默认只可能是内置引擎:插件连接在 provider 列表里要靠"谁"才拿得到,这里不传人。
-    candidates = capabilities.providers(db, None, CAPABILITY)
-    found = next((one for one in candidates if one.id == wanted), None)
+    found = next((one for one in capabilities.providers(db, None, CAPABILITY) if one.id == choice.engine), None)
     if found is None:
-        raise voice_defaults.UnknownVoiceEngine(wanted or engine)
+        raise voice_defaults.UnknownVoiceEngine(choice.engine)
     if found.missing:
         raise voice_defaults.VoiceEngineNotReady(found.name, tr("punct_listSep").join(found.missing))
-    listed = [voice.id for voice in list_engine_voices(db, found.id, user_id=None)]
-    if not voice:
-        raise voice_defaults.VoiceMissing(found.id, listed)
-    if voice not in listed:
-        raise voice_defaults.VoiceNotInEngine(voice, found.id)
-    return voice_defaults.store_default(db, found.id, voice)
+    if choice.cloned_voice or choice.engine == CLONE_ENGINE:
+        raise voice_defaults.VoiceMissing(found.id, [])
+    return voice_defaults.store_default(db, check_voice(db, choice, user_id=None))
 
 
 def _clones_remotely(engine: str) -> bool:
@@ -284,11 +280,12 @@ def cloned_voices(db: Session, workspace_id: str) -> list[VoiceOption]:
     return [VoiceOption(row.id, row.name, source="cloned") for row in rows]
 
 
-def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[VoiceOption]:
+def _engine_voices(db: Session, engine: str, *, user_id: str | None, model: str = "") -> list[VoiceOption]:
     """引擎**自己的**音色(不含配音库里的克隆音色)。
 
     每一家的清单只有一个产地:它自己的音色目录。这里只决定**问的时候带什么**(模型、这个人那条连接)——
-    带什么必须和合成时同一条路径,否则下拉列的是 A 的音色、发出去的是 B 的请求。
+    带什么必须和合成时同一条路径,否则下拉列的是 A 的音色、发出去的是 B 的请求。`model`:选择上已经写了模型时
+    按它问(百炼的音色随模型变);空 = 这个人那条连接上配的那个。
     """
 
     if is_plugin(engine):
@@ -305,7 +302,7 @@ def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[Voi
     if engine_cls is None:
         # 本机克隆念的是配音库里的嗓子(另一个下拉),认不出的引擎没有音色。
         return []
-    context = _catalog_context(db, engine_cls, user_id=user_id)
+    context = _catalog_context(db, engine_cls, user_id=user_id, model=model)
     try:
         return engine_voices(engine, context)
     except SpeechCatalogError as exc:
@@ -314,11 +311,14 @@ def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[Voi
         return engine_voices(engine, VoiceCatalogContext(model=context.model))
 
 
-def _catalog_context(db: Session, engine_cls: type, *, user_id: str | None) -> VoiceCatalogContext:
+def _catalog_context(db: Session, engine_cls: type, *, user_id: str | None, model: str = "") -> VoiceCatalogContext:
     """问一家音色目录时带上什么:音色随模型变的(百炼)带这个人配的模型,要钥匙的带**他自己**那条连接的附加字段
     (密字段跟着他的钥匙走,见 domain/providers/credentials)。"""
 
-    model = active_model_for(engine_cls, user_id) if getattr(engine_cls, "MODEL_PREFIXES", ()) else ""
+    if getattr(engine_cls, "MODEL_PREFIXES", ()):
+        model = model or active_model_for(engine_cls, user_id)
+    else:
+        model = ""
     if not engine_cls.needs_key:
         return VoiceCatalogContext(model=model)
     connection = providers_selection.resolve_connection(
@@ -378,38 +378,23 @@ def cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool =
     return "missing" if ready is False else "met" if ready else "unknown"
 
 
-def voice_note(db: Session, *, engine: str, voice: str, workspace_id: str, user_id: str | None) -> str:
-    """「这次配音用的是哪把嗓子」—— 按**实际**念的引擎和音色说的一句话(配音节点的 `voice_note`,完成通知里用)。
+def voice_note(db: Session, voice: VoiceRef, *, workspace_id: str, user_id: str | None) -> str:
+    """「这次配音用的是哪把嗓子」—— 按**实际**念的那一把说的一句话(配音节点的 `voice_note`,完成通知里用)。
 
     用的不是克隆音色时,顺带说清楚配音库里有没有能用的克隆音色(判据和模板预填音色同一个,见
     cloned_voice_status):此前带货口播的那句是建图时写死的,之后在节点里换上克隆音色,通知照样说 Edge。
     """
 
-    engine = (engine or "").strip() or CLONE_ENGINE
-    if engine == CLONE_ENGINE:
-        row = db.get(Voice, voice) if voice else None
-        return tr("wfVoice_cloned", name=row.name if row is not None else voice)
-    entry = next((one for one in describe_engines(db, user_id) if one["id"] == engine), None)
-    label = str(entry["label"]) if entry is not None else engine
+    if voice.engine == CLONE_ENGINE:
+        row = db.get(Voice, voice.cloned_voice) if voice.cloned_voice else None
+        return tr("wfVoice_cloned", name=row.name if row is not None else voice.cloned_voice)
+    entry = next((one for one in describe_engines(db, user_id) if one["id"] == voice.engine), None)
+    label = str(entry["label"]) if entry is not None else voice.engine
     #: 带上工作区:CosyVoice 念的可能是配音库里的嗓子(ADR 0037),那时说它的名字,不说一串 id。
-    named = {one.id: one.label for one in list_engine_voices(db, engine, user_id=user_id, workspace_id=workspace_id)}
-    spoken = str(named.get(voice, voice)).split("(")[0].strip() or voice
+    named = {one.id: one.label for one in list_engine_voices(db, voice.engine, user_id=user_id, workspace_id=workspace_id)}
+    spoken = str(named.get(voice.spoken, voice.spoken)).split("(")[0].strip() or voice.spoken
     has_clone = cloned_voice_status(db, workspace_id) != "missing"
     return tr("wfVoice_engineCloneReady" if has_clone else "wfVoice_engineNoClone", voice=spoken, engine=fragment(label))
-
-
-def voice_resource_for(db: Session, engine: str, voice: str, *, user_id: str | None) -> str:
-    """这个音色的资源族(只有火山有)。**合成的那一方自己查**,不靠界面选音色时顺手填上 ——
-    那样的话,每一个挑音色的地方都得记得多存一个字段,而忘了存的后果是音色不生效、也不报错。
-    查不到就是空串:内置音色由合成那边按 id 推断。
-
-    **过渡**:它读的是火山 Adapter 放进 `VoiceOption.extra` 的那一格。ADR 0087 第 2 步里音色选择(`VoiceRef`)
-    原样带着 `extra` 走到合成,这个函数随之删除。
-    """
-    if not voice:
-        return ""
-    found = next((item for item in list_engine_voices(db, engine, user_id=user_id) if item.id == voice), None)
-    return str(found.extra.get("resource_id") or "") if found is not None else ""
 
 
 def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> list[dict[str, Any]]:
@@ -453,7 +438,7 @@ def _engine_list(engines: list[dict[str, Any]]) -> str:
 def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, workspace_id: str) -> tuple[str, str]:
     """「引擎 + 音色」定成确定的一对 `(引擎 id, 音色)`,给**点名不全**的一方(智能体)用。
 
-    两格都空时先问这台机器的默认那一对(`domain/voices/defaults`,经 `synthesis_params`);没有默认才
+    两格都空时先问这台机器的默认那一把(`domain/voices/defaults`,经 `voice_for_synthesis`);没有默认才
     退回原来的"必须点名"。能做的还有两件:
 
     - 引擎按名字或 id 认(和字幕配音同一个认法,`capabilities.resolve_named`),认不出就把能用的 id 都列出来 ——
@@ -490,13 +475,13 @@ def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, wo
         return named.id, voice
     if not voice:
         #: 两格都没点名:先问默认那一对(唯一解析点见 domain/voices/defaults)。没有默认就照旧要求点名 ——
-        #: 行为和这一格出现之前完全一样。经 synthesis_params 走,是为了"默认"只有一份解析。
+        #: 行为和这一格出现之前完全一样。经 voice_for_synthesis 走,是为了"默认"只有一份解析。
         try:
-            defaulted = synthesis_params(db, engine="", voice="", user_id=user_id, workspace_id=workspace_id)
+            defaulted = voice_for_synthesis(db, None, user_id=user_id, workspace_id=workspace_id)
         except VoiceError:
             defaulted = None
         if defaulted is not None:
-            return str(defaulted["engine"]), str(defaulted.get("engine_voice") or defaulted.get("voice_id") or "")
+            return defaulted.engine, defaulted.spoken
         free = [one for one in usable if one["free"]]
         raise SpeechProviderUnavailable("speechErr_pickEngineAndVoice", choices=_engine_list(usable), free=_engine_list(free))
     owners = [one for one in engines if voice in voices_of[one["id"]]]
@@ -510,71 +495,111 @@ def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, wo
     return owner["id"], voice
 
 
-#: 只属于某一条路的附加项。另一条路收到它们会报"没有这个参数",所以按引擎挑着带。
-_CLONE_OPTIONS = ("clone_engine", "clone_model")
-_ENGINE_OPTIONS = ("provider_profile_id", "engine_model", "engine_voice_resource")
+def voice_choice(db: Session, *, engine: str, voice: str, model: str = "", connection: str = "",
+                 user_id: str | None) -> VoiceRef | None:
+    """「引擎 + 一格音色」(界面以外的点名:智能体的卡、工作流节点、画板条目)→ 一个定好的 `VoiceRef`;两格都空 = `None`
+    (交给默认,见 `voice_for_synthesis`)。
 
+    那一格按引擎分两种意思:克隆引擎是配音库里的嗓子(`cloned_voice`),别的引擎是它自己的音色(`voice`)—— 能复刻的引擎
+    (CosyVoice)例外,那一格是配音库里的嗓子时同样是 `cloned_voice`(ADR 0037;嗓子 id 是 32 位 hex,和引擎自己的音色名撞不上)。
+    只给了音色、没给引擎就是配音库里的(那是「一把嗓子」最常见的来处)。只给了引擎、没给音色,等于没选。
 
-def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0,
-                     user_id: str | None, workspace_id: str, **options: object) -> dict[str, object]:
-    """「引擎 + 一格音色」→ voices.start_synthesis 要的那组参数。念字的入口(工作流、智能体、
-    字幕配音)都走这里,不各自拼。
-
-    音色一格,按引擎分两种意思:克隆时是配音库里的音色 id(`voice_id`),其余是那个引擎的
-    音色(`engine_voice`)—— 能复刻的引擎(CosyVoice)例外,它也念得了配音库里的嗓子,那一格是嗓子 id 时
-    同样交 `voice_id`(ADR 0037)。两条路要的参数不是一个集合 —— 都塞过去,合成那边会收到它这条路上
-    根本没有的参数。火山的音色还要一个资源族,调用方没给就**这里自己查**,不靠界面选音色时
-    顺手存下。引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
-    `options` 是两条路各自的附加项(克隆权重、引擎连接/模型),不属于这条路的丢掉。
+    定好之后照音色目录补上 `extra` 和模型(`settle_voice`):点名的那一方只知道两串字,资源族、绑定的模型是目录的知识。
     """
-
-    #: **这一个就是「点名」那一处的兜底**(配音唯一接线点):点名的照原样,两格都空才用默认那一对。
-    #: 空手回去仍然交给下面那句"没有选音色" —— 没有默认时行为和以前逐字一样。
-    resolved = resolve_voice_default(db, user_id, explicit_engine=engine, explicit_voice=voice)
-    engine = (resolved.engine or "").strip() or CLONE_ENGINE
-    voice = (resolved.voice or "").strip()
+    engine, voice = (engine or "").strip(), (voice or "").strip()
     if not voice:
-        raise VoiceError("voiceErr_noVoiceSelected")
-    require_engine(db, engine, user_id=user_id)
-    unknown = set(options) - set(_CLONE_OPTIONS) - set(_ENGINE_OPTIONS)
-    if unknown:
-        # 调用方的编程错误,不会到界面上。
-        raise TypeError(f"synthesis_params got unknown options: {sorted(unknown)}")
-    params: dict[str, object] = {"engine": engine, "speed": float(speed or 1.0)}
-    clone = engine == CLONE_ENGINE
-    for key in _CLONE_OPTIONS if clone else _ENGINE_OPTIONS:
-        if options.get(key):
-            params[key] = options[key]
+        if engine:
+            raise VoiceError("voiceErr_noVoiceSelected")
+        return None
+    engine = engine or CLONE_ENGINE
+    library = engine == CLONE_ENGINE or (_clones_remotely(engine) and db.get(Voice, voice) is not None)
+    choice = VoiceRef(engine, voice="" if library else voice, cloned_voice=voice if library else "",
+                      model=(model or "").strip(), connection=(connection or "").strip())
+    return settle_voice(db, choice, user_id=user_id)
 
-    if clone:
-        #: 音色 id 可能来自任何地方(上游节点的输出、模型填的参数)—— 收进这个工作区。
-        row = db.get(Voice, voice)
+
+def settle_voice(db: Session, choice: VoiceRef, *, user_id: str | None) -> VoiceRef:
+    """照音色目录把选择补齐:`extra`(火山的资源族)原样从那一项带过来;那一项绑模型、选择上又没写模型时,写下这一刻
+    问目录用的那个模型(ADR 0087 §3「模型绑定的音色必须带模型」)。
+
+    目录里没有这一项(插件没答、百炼认不出的模型、火山没拉到账号清单)就原样交回 —— 这里只补,不拒;拒在写入时的 `check_voice`。
+    """
+    if choice.cloned_voice:
+        return choice
+    option, model = _option_of(db, choice, user_id=user_id)
+    if option is None:
+        return choice
+    return replace(choice, extra=dict(option.extra), model=choice.model or (model if option.models else ""))
+
+
+def check_voice(db: Session, choice: VoiceRef, *, user_id: str | None, workspace_id: str = "") -> VoiceRef:
+    """**写入时**的校验(设默认、存朗读偏好、存人物资产的音色):返回补齐之后要存的那一把。
+
+    - 引擎得是能力表认得的(拼错了、或者根本不是 `speech` 的一份实现,当场说);
+    - 克隆音色要在这个工作区、而且这个引擎念得了它(本机克隆,或能复刻的远端引擎);
+    - 引擎音色要在它的目录里(目录是空的 —— 插件没答、百炼认不出的模型 —— 就不拦:那时界面本来就让人手填 id);
+    - 目录说这把嗓子只在某几个模型上能念,而选择上写的是别的模型:拒,不悄悄换模型。
+
+    存之前就说,而不是等下一次合成才失败。远端副本的上传同意不在这里问(只有朗读偏好要,见 use_cases)。
+    """
+    if not known_engine(db, choice.engine):
+        raise voice_defaults.UnknownVoiceEngine(choice.engine)
+    if choice.cloned_voice:
+        if choice.engine != CLONE_ENGINE and not _clones_remotely(choice.engine):
+            raise VoiceError("voiceErr_clonedVoiceOnEngine", engine=choice.engine)
+        row = db.get(Voice, choice.cloned_voice)
+        if row is None or (workspace_id and row.workspace_id != workspace_id):
+            raise VoiceError("voiceErr_voiceNotInWorkspace")
+        return choice
+    if choice.engine == CLONE_ENGINE:
+        raise VoiceError("voiceErr_voiceNotInWorkspace")
+    listed = _engine_voices(db, choice.engine, user_id=user_id, model=choice.model)
+    option = next((one for one in listed if one.id == choice.voice), None)
+    if listed and option is None:
+        raise voice_defaults.VoiceNotInEngine(choice.voice, choice.engine)
+    settled = settle_voice(db, choice, user_id=user_id)
+    _refuse_model_mismatch(settled, option)
+    return settled
+
+
+def voice_for_synthesis(db: Session, choice: VoiceRef | None, *, user_id: str | None, workspace_id: str) -> VoiceRef:
+    """**合成前**的那一把:点名了就用点名的,没点名问默认(`defaults.resolve_voice_default`,唯一解析点);都没有就说
+    「没有选音色」。念字的入口(工作流、智能体、字幕配音、创作页、试听)都走这里,不各自拼。
+
+    这一刻再查一遍不花钱的那几样:引擎现在能用(缺连接、本机引擎没装,当场说)、克隆音色在这个工作区(音色 id 可能来自
+    任何地方:上游节点的输出、模型填的参数)、内置目录说的模型绑定还对得上。**不现拉账号清单** —— 每次合成都走这里。
+    """
+    choice = choice or resolve_voice_default(db, user_id)
+    if choice is None:
+        raise VoiceError("voiceErr_noVoiceSelected")
+    require_engine(db, choice.engine, user_id=user_id)
+    if choice.cloned_voice:
+        if choice.engine != CLONE_ENGINE and not _clones_remotely(choice.engine):
+            raise VoiceError("voiceErr_clonedVoiceOnEngine", engine=choice.engine)
+        row = db.get(Voice, choice.cloned_voice)
         if row is None or row.workspace_id != workspace_id:
             raise VoiceError("voiceErr_voiceNotInWorkspace")
-        params["voice_id"] = voice
-    elif _clones_remotely(engine) and db.get(Voice, voice) is not None:
-        #: 能复刻的引擎(CosyVoice)点的是配音库里的一把嗓子:合成时念它的远端副本(ADR 0037)。嗓子 id 是 32 位 hex,
-        #: 和引擎自己的音色名(`longxiaochun_v2`)撞不上。
-        if db.get(Voice, voice).workspace_id != workspace_id:
-            raise VoiceError("voiceErr_voiceNotInWorkspace")
-        params["voice_id"] = voice
-        params["workspace_id"] = workspace_id
-    else:
-        params["engine_voice"] = voice
-        params["workspace_id"] = workspace_id
-        if not params.get("engine_voice_resource"):
-            params["engine_voice_resource"] = voice_resource_for(db, engine, voice, user_id=user_id)
-    return params
+    elif choice.engine == CLONE_ENGINE:
+        raise VoiceError("voiceErr_voiceNotInWorkspace")
+    elif not is_plugin(choice.engine) and choice.engine not in (QWEN_ENGINE, PODCAST_ENGINE):
+        _refuse_model_mismatch(choice, builtin_voice(adapter_id(choice.engine), choice.voice))
+    return choice
 
 
-def voice_slot(engine: str, *, voice_id: str | None, engine_voice: str) -> str:
-    """请求里分开的两格(`voice_id` / `engine_voice`)→ synthesis_params 收的那一格音色。
+def _refuse_model_mismatch(choice: VoiceRef, option: VoiceOption | None) -> None:
+    """目录上这把嗓子只在某几个模型(族)上能念,而选择上写的是别的模型 —— 「这把嗓子用不了」,不悄悄换模型。"""
+    if option is None or not option.models or not choice.model:
+        return
+    if not choice.model.strip().lower().startswith(tuple(model.lower() for model in option.models)):
+        raise VoiceError("voiceErr_voiceNotForModel", voice=option.label, model=choice.model,
+                         models=tr("punct_listSep").join(option.models))
 
-    克隆引擎取 `voice_id`;别的引擎取它自己的音色,没给而点了配音库里的嗓子(`voice_id`)时 —— 只有能复刻的引擎
-    这样点 —— 取那把嗓子。字幕配音、画板念字、智能体的配音卡收的都是两格,各自判一遍的话,远端引擎点的嗓子会在其中一处被丢掉。
-    """
-    if (engine or CLONE_ENGINE) == CLONE_ENGINE:
-        return voice_id or ""
-    if engine_voice:
-        return engine_voice
-    return (voice_id or "") if _clones_remotely(engine) else ""
+
+def _option_of(db: Session, choice: VoiceRef, *, user_id: str | None) -> tuple[VoiceOption | None, str]:
+    """这把嗓子在它引擎的目录里是哪一项,以及问目录时用的模型(百炼按模型给音色)。"""
+    engine_cls = REMOTE_SPEECH_ADAPTERS.get(adapter_id(choice.engine)) if not is_plugin(choice.engine) else None
+    model = choice.model
+    if engine_cls is not None and getattr(engine_cls, "MODEL_PREFIXES", ()):
+        model = model or active_model_for(engine_cls, user_id)
+    listed = _engine_voices(db, choice.engine, user_id=user_id, model=model)
+    return next((one for one in listed if one.id == choice.voice), None), model

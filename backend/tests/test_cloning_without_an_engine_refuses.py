@@ -30,7 +30,8 @@ from app.domain.voices import errors
 from app.ai.runtime import config as tts_config
 from app.core.db import SessionLocal
 from app.db.models import Job
-from tests.util import fresh_client
+from app.domain.voices.voice_ref import VoiceRef
+from tests.util import fresh_client, synthesize_cloned
 
 
 #: 8 秒:够得着参考音频的下限(见 voices.REFERENCE_MIN_SECONDS)。此前这里是 1 秒,
@@ -64,7 +65,7 @@ def test_it_refuses_before_creating_a_job(monkeypatch) -> None:
     with SessionLocal() as db:
         before = db.query(Job).count()
         with pytest.raises(errors.VoiceError) as caught:
-            voices.start_synthesis(db, text="这是一段测试配音。", project_id=None, created_by=None, voice_id=voice_id)
+            voices.start_synthesis(db, text="这是一段测试配音。", project_id=None, created_by=None, voice=VoiceRef("builtin:clone", cloned_voice=voice_id))
         assert db.query(Job).count() == before, "已经起了一个注定发占位音的任务"
 
     message = str(caught.value)
@@ -78,7 +79,7 @@ def test_the_api_says_so_too(monkeypatch) -> None:
     client = fresh_client()
     _, voice_id = _a_voice(client)
 
-    resp = client.post(f"/api/voices/{voice_id}/synthesize", json={"text": "这是一段测试配音。"})
+    resp = synthesize_cloned(client, voice_id, "这是一段测试配音。")
 
     assert resp.status_code == 422, resp.text  # 仓库里 VoiceError 一律 422
     assert "引擎" in resp.json()["detail"]

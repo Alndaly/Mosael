@@ -6,16 +6,12 @@ import { voiceKeys } from "@/api/queryKeys";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { speechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
-import { CLONE_ENGINE, isClonedVoice, voiceResourceOf } from "@/api/domains/speech";
+import { CLONE_ENGINE, clonedVoiceRef, isClonedVoice, voiceRefOf, type VoiceRef } from "@/api/domains/speech";
 
-/** 合成请求里「谁来念」那几个字段。/voices/{id}/synthesize、/tts/synthesize、字幕配音收的都是它。
- *  远端引擎念配音库里的嗓子(CosyVoice,ADR 0037)时带的是 `voice_id`,`engine_voice` 不带。 */
-export type SpeechParams = {
-  engine: string;
-  voice_id?: string;
-  clone_engine?: string;
-  engine_voice?: string;
-  engine_voice_resource?: string;
+/** 合成请求里「谁来念、念多快」那两格。/tts/synthesize、字幕配音、创作页的语音收的都是它。
+ *  `voice` 是一把嗓子(ADR 0087 的 `VoiceRef`);还没选好时是 `null`。 */
+export type SpeechChoice = {
+  voice: VoiceRef | null;
   speed?: number;
 };
 
@@ -35,7 +31,7 @@ export function runtimeState(runtime: LocalRuntime | undefined): "checking" | "r
  *
  * 此前配音面板和字幕配音弹层各有一份:一份能换克隆引擎、能调语速,另一份不能;一份判断了
  * 「本地引擎装没装好」,另一份没判,于是同一个选择在两处得到两种结果。现在状态和判据在这里,
- * 界面在 SpeechVoiceFields,请求参数由 `params` 给出 —— 两条后端路由收的是同一组字段。
+ * 界面在 SpeechVoiceFields,请求里那两格由 `choice` 给出 —— 后端每一条念字的路由收的都是它。
  */
 export function useSpeechVoice(workspaceId: string) {
   // "clone" 是本地参考音克隆,要音色库里的一行;其余是远端引擎,自带发音人。
@@ -43,6 +39,8 @@ export function useSpeechVoice(workspaceId: string) {
   const [voiceChoice, setVoiceChoice] = React.useState<string | null>(null);
   const [engineVoiceChoice, setEngineVoiceChoice] = React.useState("");
   const [cloneEngineChoice, setCloneEngineChoice] = React.useState("");
+  //: 本机克隆明说用哪一份权重(F5 按语言分的那几份);空 = 按文字自动挑。法语、德语都写拉丁字母,自动挑永远挑不中。
+  const [cloneWeights, setCloneWeights] = React.useState("");
   const [speed, setSpeed] = React.useState(1);
 
   // staleTime 不能是 Infinity:这里带着"本地引擎装了没有",而用户就是会在设置页装完再回来。
@@ -74,8 +72,10 @@ export function useSpeechVoice(workspaceId: string) {
   const library = voices.data ?? [];
   const voiceId = voiceChoice ?? library[0]?.id ?? "";
   // 设置页那个是默认,这一次用哪个由这一次说了算。
+  //: 「克隆引擎」只列能克隆的那几个:Qwen3-TTS 也在本机引擎清单里,但它只念预置音色,是另一个念字引擎。
+  const cloneRuntimes = (runtimes.data ?? []).filter((item) => item.clones_voices);
   const cloneEngine = cloneEngineChoice || ttsConfig.data?.engine || "f5-tts";
-  const cloneRuntime = (runtimes.data ?? []).find((item) => item.id === cloneEngine);
+  const cloneRuntime = cloneRuntimes.find((item) => item.id === cloneEngine);
   // 能出声要两件事都成立:有解释器能 import 它,权重在盘上。还在探测时也不给点 —— 那一刻
   // 确实不知道跑不跑得起来,而按下去的代价是一次必然失败的合成(下拉里同时写着「检测中」)。
   const cloneUsable = runtimeState(cloneRuntime) === "ready";
@@ -102,20 +102,19 @@ export function useSpeechVoice(workspaceId: string) {
       ? Boolean(voiceId) && cloneUsable
       : stockVoices.length > 0 || !activeEngine?.needs_voice_id || Boolean(engineVoiceChoice.trim());
 
-  // 不支持语速时**不发** —— 发了也只会被忽略,而"传了却没用"正是那种谎。
-  const params: SpeechParams =
+  // 本机克隆的引擎 / 权重写在嗓子的 `model` 里(`f5-tts/fr`);权重只有 F5 才分。
+  const cloneModel = [cloneEngine, cloneEngine === "f5-tts" ? cloneWeights : ""].filter(Boolean).join("/");
+  const voiceRef: VoiceRef | null =
     engine === CLONE_ENGINE
-      ? { engine, voice_id: voiceId, clone_engine: cloneEngine, ...(speedSupported ? { speed } : {}) }
-      : speaksClonedVoice
-        ? // 远端引擎念配音库里的嗓子:和本机克隆同一个字段,宿主在合成前把它解析成远端副本(ADR 0037)。
-          { engine, voice_id: engineVoice, ...(speedSupported ? { speed } : {}) }
-        : {
-            engine,
-            engine_voice: engineVoice,
-            // 只有目录知道的资源族;不带的话火山回一个 55000000。
-            engine_voice_resource: voiceResourceOf(chosenVoice),
-            ...(speedSupported ? { speed } : {}),
-          };
+      ? voiceId
+        ? clonedVoiceRef(voiceId, cloneModel)
+        : null
+      : engineVoice
+        ? // 目录里那一项(带着只有目录知道的 extra,火山的资源族);手填的 id 没有目录行,就是一个裸的引擎音色。
+          voiceRefOf(engine, chosenVoice ?? { id: engineVoice, source: "builtin", extra: {} })
+        : null;
+  // 不支持语速时**不发** —— 发了也只会被忽略,而"传了却没用"正是那种谎。
+  const choice: SpeechChoice = { voice: voiceRef, ...(speedSupported ? { speed } : {}) };
 
   return {
     engine,
@@ -127,9 +126,12 @@ export function useSpeechVoice(workspaceId: string) {
     libraryLoading: voices.isLoading,
     voiceId,
     setVoiceId: setVoiceChoice,
-    runtimes: runtimes.data ?? [],
+    /** 能克隆的本机引擎(克隆引擎下拉的选项)。 */
+    cloneRuntimes,
     cloneEngine,
     setCloneEngine: setCloneEngineChoice,
+    cloneWeights,
+    setCloneWeights,
     cloneRuntime,
     voiceChoices,
     /** 引擎自己的音色(不含配音库里的嗓子)。按文字替人挑发音人时只在这里挑。 */
@@ -148,7 +150,7 @@ export function useSpeechVoice(workspaceId: string) {
     setSpeed,
     speedSupported,
     ready,
-    params,
+    choice,
   };
 }
 

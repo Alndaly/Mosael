@@ -24,6 +24,7 @@ from app.domain.jobs import create_job, wait_for_idle_jobs
 from app.domain.render import build_plan_for_sequence
 from app.domain.voices.original_audio import muted_gain_keyframes
 from app.domain.voices.subtitle_dub import start_subtitle_dub
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -63,7 +64,7 @@ def _dub(monkeypatch, ws: str, sid: str, line: str, mode: str, voice: str = "a")
     monkeypatch.setattr(voices_module, "start_synthesis", fake_synthesis)
     with SessionLocal() as db:
         job_id = start_subtitle_dub(db, sequence_id=sid, clip_ids=[line], match_duration=False, created_by=None,
-                                    synthesis={"engine": "builtin:volcano", "engine_voice": voice, "workspace_id": ws},
+                                    voice=VoiceRef("builtin:volcano", voice=voice),
                                     original_audio=mode).id
         db.commit()
     assert wait_for_idle_jobs(15)

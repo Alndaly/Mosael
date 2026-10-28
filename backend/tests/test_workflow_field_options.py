@@ -124,8 +124,8 @@ def test_执行体把克隆音色交给克隆那条(engine, monkeypatch) -> None
 
     monkeypatch.setattr(subjobs, "current_actor", lambda db: None)
     workflow = type("W", (), {"workspace_id": "w"})()
-    params = subjobs._speech_params(_VoiceDB("w"), workflow, {"engine": engine, "voice": "v1"})
-    assert params["voice_id"] == "v1" and "engine_voice" not in params and "workspace_id" not in params
+    voice = subjobs._speech_voice(_VoiceDB("w"), workflow, {"engine": engine, "voice": "v1"})
+    assert (voice.engine, voice.cloned_voice, voice.voice) == ("builtin:clone", "v1", "")
 
 
 def test_执行体不收别的工作区的克隆音色(monkeypatch) -> None:
@@ -135,7 +135,7 @@ def test_执行体不收别的工作区的克隆音色(monkeypatch) -> None:
     monkeypatch.setattr(subjobs, "current_actor", lambda db: None)
     workflow = type("W", (), {"workspace_id": "w"})()
     with pytest.raises(WorkflowDomainError, match="配音库里没有这个音色"):
-        subjobs._speech_params(_VoiceDB("别人的"), workflow, {"voice": "v1"})
+        subjobs._speech_voice(_VoiceDB("别人的"), workflow, {"voice": "v1"})
 
 
 class Test清单从哪来都由声明说了算:

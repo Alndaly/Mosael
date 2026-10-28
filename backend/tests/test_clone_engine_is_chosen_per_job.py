@@ -27,7 +27,8 @@ from app.domain.voices import voices
 from app.domain.voices import errors
 from app.core.db import SessionLocal
 from app.db.models import Job
-from tests.util import fresh_client
+from app.domain.voices.voice_ref import VoiceRef
+from tests.util import fresh_client, synthesize_cloned
 
 
 #: 8 秒:够得着参考音频的下限(见 voices.REFERENCE_MIN_SECONDS)。此前这里是 1 秒,
@@ -65,7 +66,7 @@ def test_missing_weights_refuse_instead_of_starting_a_download(monkeypatch) -> N
     with SessionLocal() as db:
         before = db.query(Job).count()
         with pytest.raises(errors.VoiceError) as caught:
-            voices.start_synthesis(db, text="念一句", project_id=None, created_by=None, voice_id=voice_id)
+            voices.start_synthesis(db, text="念一句", project_id=None, created_by=None, voice=VoiceRef("builtin:clone", cloned_voice=voice_id))
         assert db.query(Job).count() == before, "起了一个会顺手下 2GB 的任务"
 
     message = str(caught.value)
@@ -80,7 +81,7 @@ def test_both_present_goes_through(monkeypatch) -> None:
     voice_id = _a_voice(client)
 
     with SessionLocal() as db:
-        job = voices.start_synthesis(db, text="念一句", project_id=None, created_by=None, voice_id=voice_id)
+        job = voices.start_synthesis(db, text="念一句", project_id=None, created_by=None, voice=VoiceRef("builtin:clone", cloned_voice=voice_id))
         assert job.kind == "tts"
 
 
@@ -94,11 +95,11 @@ def test_the_request_can_override_the_configured_engine(monkeypatch) -> None:
 
     with SessionLocal() as db:
         job = voices.start_synthesis(
-            db, text="念一句", project_id=None, created_by=None, voice_id=voice_id, clone_engine="fish-speech"
+            db, text="念一句", project_id=None, created_by=None, voice=VoiceRef("builtin:clone", cloned_voice=voice_id, model="fish-speech")
         )
 
     assert "fish-speech" in asked, f"挡的还是设置页那个引擎:{asked}"
-    assert job.payload.get("clone_engine") == "fish-speech", "选的引擎没跟着任务走"
+    assert job.payload["voice"].get("model") == "fish-speech", "选的引擎没跟着任务走"
 
 
 def test_an_unknown_engine_is_refused(monkeypatch) -> None:
@@ -111,7 +112,7 @@ def test_an_unknown_engine_is_refused(monkeypatch) -> None:
     with SessionLocal() as db:
         with pytest.raises(errors.VoiceError):
             voices.start_synthesis(
-                db, text="念一句", project_id=None, created_by=None, voice_id=voice_id, clone_engine="不存在的引擎"
+                db, text="念一句", project_id=None, created_by=None, voice=VoiceRef("builtin:clone", cloned_voice=voice_id, model="不存在的引擎")
             )
 
 
@@ -121,9 +122,28 @@ def test_the_api_passes_the_choice_through(monkeypatch) -> None:
     client = fresh_client()
     voice_id = _a_voice(client)
 
-    resp = client.post(f"/api/voices/{voice_id}/synthesize", json={"text": "念一句", "clone_engine": "fish-speech"})
+    resp = synthesize_cloned(client, voice_id, "念一句", model="fish-speech")
 
     assert resp.status_code == 200, resp.text
     with SessionLocal() as db:
         job = db.get(Job, resp.json()["id"])
-        assert job.payload.get("clone_engine") == "fish-speech"
+        assert job.payload["voice"].get("model") == "fish-speech"
+
+
+def test_qwen_is_not_a_cloning_engine(monkeypatch) -> None:
+    """Qwen3-TTS 在本机引擎清单里,但它只念预置音色,是另一个念字引擎(`builtin:qwentts`)。克隆那条路的 `model`
+    写成 `qwen-tts`(界面的克隆引擎下拉曾经把它也列了出来)要当场说清,不能拿配音库的嗓子去喂它。"""
+    _runtime_ok(monkeypatch)
+    monkeypatch.setattr(tts_models, "is_installed", lambda engine_id: True)
+    client = fresh_client()
+    voice_id = _a_voice(client)
+
+    assert [engine.id for engine in tts_models.CATALOG if engine.clones_voices] == ["f5-tts", "fish-speech"]
+    with SessionLocal() as db:
+        before = db.query(Job).count()
+        with pytest.raises(errors.VoiceError, match="qwen-tts"):
+            voices.start_synthesis(db, text="念一句", project_id=None, created_by=None,
+                                   voice=VoiceRef("builtin:clone", cloned_voice=voice_id, model="qwen-tts"))
+        assert db.query(Job).count() == before
+    status = {row["id"]: row["clones_voices"] for row in client.get("/api/tts/models").json()}
+    assert status == {"f5-tts": True, "fish-speech": True, "qwen-tts": False}, "界面靠这一格决定克隆引擎下拉里列谁"

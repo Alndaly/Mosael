@@ -77,7 +77,7 @@ def _roles(fakes: Fakes) -> list[tuple[str, str]]:
 
 def test_人物说话_用它自己的嗓子配音_正面图加这段配音做说话照片(setup) -> None:
     client, ws, fakes = setup
-    person = _character(client, ws, voice_engine="builtin:edge", voice_id="zh-CN-XiaoxiaoNeural")
+    person = _character(client, ws, voice={"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"})
     with SessionLocal() as db:
         out = talking.entity_speak(db, _scope(ws), {"entity_id": person, "text": "大家好,我是小美"})
     assert fakes.spoken == [{"text": "大家好,我是小美", "engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}]
@@ -92,7 +92,7 @@ def test_人物说话_交出这段话的字幕_时间在这段视频里_整段�
     from app.db.models import Asset
 
     client, ws, fakes = setup
-    person = _character(client, ws, voice_engine="builtin:edge", voice_id="zh-CN-XiaoxiaoNeural")
+    person = _character(client, ws, voice={"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"})
     with SessionLocal() as db:
         db.add(Asset(id="talk", workspace_id=ws, kind="video", name="talk", file_key="", media_info={"duration": 2.375}))
         db.commit()
@@ -103,7 +103,7 @@ def test_人物说话_交出这段话的字幕_时间在这段视频里_整段�
 
 def test_人物说话的门槛_真人没声明_没音色_不是人物_都在起任务之前拦(setup) -> None:
     client, ws, fakes = setup
-    real = _character(client, ws, real_person=True, voice_engine="builtin:edge", voice_id="v")
+    real = _character(client, ws, real_person=True, voice={"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"})
     mute = _character(client, ws)
     place = client.post("/api/entities", json={"workspace_id": ws, "kind": "location", "name": "天台"}).json()["id"]
     for entity_id, key in ((real, "wfErr_entitySpeakNoConsent"), (mute, "wfErr_entitySpeakNoVoice"),
@@ -162,7 +162,7 @@ def test_详情页上让真人说话_没声明就当场_422_不起任务(setup) 
     from app.db.models import Job
 
     client, ws, fakes = setup
-    real = _character(client, ws, real_person=True, voice_engine="builtin:edge", voice_id="v")
+    real = _character(client, ws, real_person=True, voice={"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"})
     refused = client.post(f"/api/entities/{real}/draw", json={"ability": "speak", "text": "你好"})
     assert refused.status_code == 422 and "声明" in refused.json()["detail"]
     with SessionLocal() as db:

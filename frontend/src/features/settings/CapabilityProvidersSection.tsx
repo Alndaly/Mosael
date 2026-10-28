@@ -20,7 +20,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
 import { listCapabilityChoices, setCapabilityDefault, type CapabilityChoices as Choices } from "@/api/domains/capabilities";
-import { CLONE_ENGINE, isClonedVoice, listTtsEngines, listTtsVoices, setVoiceDefault } from "@/api/domains/speech";
+import {
+  CLONE_ENGINE,
+  isClonedVoice,
+  listTtsEngines,
+  listTtsVoices,
+  setVoiceDefault,
+  voiceRefOf,
+  type VoiceRef,
+} from "@/api/domains/speech";
 import { useIsDeploymentAdmin } from "@/app/auth";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -284,11 +292,11 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
   //: 按钮的」)。存的永远是完整的一对:引擎 + 音色都齐了才写;只换了引擎、音色还没挑,什么都不发 ——
   //: 半对存下去是念不出来的默认。选回「未指定」= 清掉默认(空对),和别处「选回自动」是同一件事。
   const save = useMutation({
-    mutationFn: (pair: { engine: string; voice: string }) => setVoiceDefault(pair.engine, pair.voice),
-    onSuccess: (_saved, pair) => {
+    mutationFn: (chosen: VoiceRef | null) => setVoiceDefault(chosen),
+    onSuccess: () => {
       //: 写后 invalidate:引擎/音色候选上的 `is_default` 是当前默认的唯一来源,不自己改缓存。
       void qc.invalidateQueries({ queryKey: ["tts-engines"] });
-      void qc.invalidateQueries({ queryKey: voiceKeys.engineVoices(pair.engine) });
+      void qc.invalidateQueries({ queryKey: voiceKeys.engineVoices(engine) });
       void qc.invalidateQueries({ queryKey: KEY });
     },
   });
@@ -365,7 +373,7 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
             //: 换引擎就换了一整套音色 id(旧音色在新引擎下不存在),音色那一格清空等重挑。
             setPickedVoice(null);
             //: 只换了引擎 = 一对还不齐,不写;选回「未指定」= 清掉默认(空对)。
-            if (next === "") save.mutate({ engine: "", voice: "" });
+            if (next === "") save.mutate(null);
           }}
           options={[
             { value: UNSET, label: t("capabilityUnset") },
@@ -380,8 +388,9 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
           placeholder={t("capabilityVoiceDefaultNeedVoice")}
           onChange={(value) => {
             setPickedVoice(value);
-            //: 引擎 + 音色都齐了:立刻写这一对,一次请求。
-            if (engine) save.mutate({ engine, voice: value });
+            //: 引擎 + 音色都齐了:立刻写这一把(目录那一项原样带上,见 voiceRefOf),一次请求。
+            const option = readyVoices.find((item) => item.id === value);
+            if (engine && option) save.mutate(voiceRefOf(engine, option));
           }}
           options={readyVoices.map((item) => ({ value: item.id, label: item.label }))}
           className={SETTINGS_FIELD_WIDTH}

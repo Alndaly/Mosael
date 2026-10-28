@@ -249,7 +249,7 @@ def test_跑过的那一格表单上写着是谁做的(monkeypatch) -> None:
     import app.domain.voices.engine_catalog as engine_catalog
     import app.domain.voices.voices as voices
 
-    monkeypatch.setattr(engine_catalog, "synthesis_params", lambda db, **kwargs: {})
+    monkeypatch.setattr(engine_catalog, "voice_for_synthesis", lambda db, choice, **kwargs: choice)
     monkeypatch.setattr(voices, "start_synthesis", lambda db, **kwargs: SimpleNamespace(id="job-tts"))
 
     client = fresh_client()

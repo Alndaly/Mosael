@@ -40,6 +40,7 @@ from app.domain.consent import UNDECLARED
 from app.domain.voices.errors import VoiceError
 from app.domain.voices.speech import BUILTIN_PREFIX, adapter_id
 from app.domain.voices.target import speech_target
+from app.domain.voices.voice_ref import VoiceRef
 from app.media.paths import resolve_key
 from app.ai.providers import (
     VOICE_ENROLLMENT_ADAPTERS,
@@ -176,29 +177,19 @@ def require_consent(db: Session, voice: Voice, account: Account, *, model: str) 
         )
 
 
-def check_voice(
-    db: Session,
-    *,
-    engine: str,
-    voice_id: str,
-    workspace_id: str,
-    user_id: str | None,
-    provider_profile_id: str | None = None,
-    engine_model: str = "",
-) -> Voice:
-    """用远端引擎念配音库里的一把嗓子之前,**建任务之前**问清楚:嗓子在这个工作区、声明过是谁的、这个账号同意过上传。
+def check_voice(db: Session, choice: VoiceRef, *, workspace_id: str, user_id: str | None) -> Voice:
+    """用远端引擎念配音库里的一把嗓子(`choice.cloned_voice`)之前,**建任务之前**问清楚:嗓子在这个工作区、声明过是谁的、
+    这个账号同意过上传。连接和模型照这次的选择解析(和合成同一处,见 `target.speech_target`)。
 
     没配连接时不在这里说 —— 合成那一步会说缺钥匙,那句话指得到设置页。
     """
-    voice = db.get(Voice, voice_id)
+    voice = db.get(Voice, choice.cloned_voice) if choice.cloned_voice else None
     if voice is None or (workspace_id and voice.workspace_id != workspace_id):
         raise VoiceError("voiceErr_voiceNotInWorkspace")
     refuse_undeclared(voice)
-    profile, model = speech_target(
-        db, engine, user_id=user_id, provider_profile_id=provider_profile_id, model_override=engine_model
-    )
+    profile, model = speech_target(db, choice, user_id=user_id)
     if profile is not None and user_id:
-        require_consent(db, voice, Account.of(engine, profile, user_id), model=model)
+        require_consent(db, voice, Account.of(choice.engine, profile, user_id), model=model)
     return voice
 
 
@@ -232,7 +223,9 @@ def start_enrollment(
     if not clones_remotely(engine):
         raise VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
     refuse_undeclared(voice)
-    profile, model = speech_target(db, engine, user_id=actor_id, provider_profile_id=provider_profile_id)
+    profile, model = speech_target(
+        db, VoiceRef(engine, cloned_voice=voice.id, connection=provider_profile_id or ""), user_id=actor_id
+    )
     if profile is None:
         raise VoiceError("voiceErr_remoteNoConnection")
     account = Account.of(engine, profile, actor_id)
@@ -294,7 +287,8 @@ def _enrollment_body(job_id: str) -> None:
         say(job, "jobMsg_remoteVoiceEnrolling", voice=voice.name)
         emit_job_event(db, job.id, "job.running", {})
         profile, resolved = speech_target(
-            db, engine, user_id=actor, provider_profile_id=str(payload.get("provider_profile_id") or "") or None,
+            db, VoiceRef(engine, cloned_voice=voice_id, connection=str(payload.get("provider_profile_id") or "")),
+            user_id=actor,
         )
         if profile is None:
             raise VoiceError("voiceErr_remoteNoConnection")

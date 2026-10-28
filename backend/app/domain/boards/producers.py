@@ -89,9 +89,7 @@ from app.domain.plugins import tools as plugins_tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.nodes import node_meta, node_type_id, parse_node_type
 from app.domain.voices import engine_catalog
-from app.domain.voices.engine_catalog import voice_slot
 from app.domain.voices.errors import VoiceError
-from app.domain.voices.speech import CLONE_ENGINE
 from app.domain.workflows.binding import check_number_fields
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.node_catalog import describe_node_types
@@ -240,7 +238,6 @@ class SpeakForm(_Form):
     #: 引擎音色:用现成的嗓子,不必先克隆。留空则走克隆那条(voice_id)。
     engine: str = ""
     engine_voice: str = ""
-    engine_voice_resource: str = ""
     speed: float = 1.0
 
 
@@ -336,17 +333,10 @@ def _start_write(db: Session, request: RunRequest, form: WriteForm) -> Board:
 
 def _start_speak(db: Session, request: RunRequest, form: SpeakForm) -> Board:
 
-    engine = form.engine.strip() or CLONE_ENGINE
     # 引擎音色和克隆音色两条都要能走(此前只传 voice_id,画板配音只认克隆音色);能复刻的引擎(CosyVoice)点了
-    # 配音库里的嗓子时也是 voice_id(ADR 0037)。
-    synthesis = engine_catalog.synthesis_params(
-        db,
-        engine=engine,
-        voice=voice_slot(engine, voice_id=form.voice_id, engine_voice=form.engine_voice),
-        speed=form.speed,
-        user_id=request.actor_id,
-        workspace_id=request.workspace_id,
-        engine_voice_resource=form.engine_voice_resource,
+    # 配音库里的嗓子时也是 voice_id(ADR 0037)。表单两格只有一格有值,交给 voice_choice 认成一把嗓子(火山的资源族它照目录补)。
+    choice = engine_catalog.voice_choice(
+        db, engine=form.engine, voice=form.engine_voice or form.voice_id, user_id=request.actor_id,
     )
     return speak_on_board(
         db,
@@ -354,7 +344,8 @@ def _start_speak(db: Session, request: RunRequest, form: SpeakForm) -> Board:
         slot=request.slot,
         actor_id=request.actor_id,
         text=form.text,
-        synthesis=synthesis,
+        voice=engine_catalog.voice_for_synthesis(db, choice, user_id=request.actor_id, workspace_id=request.workspace_id),
+        speed=form.speed,
         voice_id=form.voice_id,
         #: 表单照面板的形状记:克隆那条 engine 留空(不是 CLONE_ENGINE)。
         engine=form.engine.strip(),

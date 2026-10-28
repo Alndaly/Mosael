@@ -47,6 +47,7 @@ from app.domain.generation import (
 from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights
 from app.domain.generation.origins import of_run_scope
 from app.domain.voices.speech import CLONE_ENGINE
+from app.domain.voices.voice_ref import VoiceRef
 from app.domain.workflows.executors import inputs as executors_inputs, subjobs
 from app.domain.workflows.executors.subjobs import clone_engine_must_run
 from app.media.paths import resolve_key
@@ -194,12 +195,12 @@ def _speaking_entity(db: Session, workspace_id: str, entity_id: str) -> tuple[An
     attributes = dict(entity.attributes or {})
     if not usable_for_digital_human(attributes):
         raise WorkflowDomainError("wfErr_entitySpeakNoConsent", params={"name": entity.name})
-    voice = _text(attributes.get("voice_id"))
-    if not voice:
+    chosen = VoiceRef.stored(attributes.get("voice"))
+    if chosen is None:
         raise WorkflowDomainError("wfErr_entitySpeakNoVoice", params={"name": entity.name})
-    engine = _text(attributes.get("voice_engine"))
-    _require_voice_consent(db, engine, voice)
-    return entity, engine, voice
+    #: 节点里的念稿还是「引擎 + 一格音色」两格(ADR 0087 第 3 步改收 VoiceRef),这里交出那两格。
+    _require_voice_consent(db, chosen.engine, chosen.spoken)
+    return entity, chosen.engine, chosen.spoken
 
 
 def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], actor_id: str | None) -> dict[str, Any]:

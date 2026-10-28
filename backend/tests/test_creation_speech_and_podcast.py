@@ -47,8 +47,8 @@ def spoken(monkeypatch):
 
 
 def _speak(client, ws: str, **extra):
-    body = {"workspace_id": ws, "text": "欢迎来到 Mosael 的世界,今天我们聊聊 AI 剪辑", "engine": "builtin:edge",
-            "voice": "zh-CN-XiaoxiaoNeural", **extra}
+    body = {"workspace_id": ws, "text": "欢迎来到 Mosael 的世界,今天我们聊聊 AI 剪辑",
+            "voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}, **extra}
     return client.post("/api/generation/speech", json=body)
 
 

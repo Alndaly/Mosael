@@ -68,26 +68,21 @@ class DenoiseConfig(Base):
 
 
 class VoiceDefaultConfig(Base):
-    """Singleton (id='default') 这台机器默认用哪**一对**配音引擎和音色(设置 → 能力提供方 → 配音)。
+    """Singleton (id='default') 这台机器默认用哪**一把嗓子**配音(设置 → 能力提供方 → 配音)。
 
-    配音的默认不是一家提供方,而是「引擎 + 音色」两格一起:克隆音色的 id 换到 Edge 上就是错的,
-    所以默认也必须**成对**存在、成对校验。和转写默认模型、降噪默认引擎同一类 —— 引擎装没装、
-    这台机器默认念什么声音,对所有用户是同一件事,所以是部署级设置,写它只给部署管理员。
+    配音的默认不是一家提供方,而是「引擎 + 音色」(音色绑模型的还要连模型)一起:克隆音色的 id 换到 Edge 上就是错的,
+    所以默认存一个 `VoiceRef`(domain/voices/voice_ref,ADR 0087),整把一起校验。和转写默认模型、降噪默认引擎
+    同一类 —— 引擎装没装、这台机器默认念什么声音,对所有用户是同一件事,所以是部署级设置,写它只给部署管理员。
 
     **它不是唯一的一层。** 每个人在「能力提供方 → 配音」里定过的那一台引擎优先于它(那是他做的
     选择);没定过才落到这里。有效值只有一处算,见 `domain/voices/defaults.resolve_voice_default`。
-
-    **存的是能力表里的提供方 id**(`builtin:edge`)和那个引擎自己的音色 id,不是引擎名 / 音色名:
-    界面上能选的每一项在别处都叫这个。空串 = 没设过默认,行为和这一格出现之前完全一样。
     """
 
     __tablename__ = "voice_default_config"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
-    #: 能力表里 `speech` 的提供方 id(内置引擎;插件连接属于某个人,不是这台机器的资产)。空串 = 没设过。
-    engine: Mapped[str] = mapped_column(String(80), nullable=False, default="", server_default="")
-    #: 这个引擎自己的音色 id(`zh-CN-XiaoxiaoNeural`);和引擎是**一对**,不分开用。空串 = 没设过。
-    voice: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
+    #: 默认那一把嗓子(`VoiceRef` 的 JSON);引擎是能力表里 `speech` 的内置提供方 id。`{}` = 没设过。
+    voice: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

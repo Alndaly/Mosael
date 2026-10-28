@@ -706,7 +706,10 @@ def dub_subtitles(
         targets = list(body.clip_ids)
     _ensure_seen(db, user, sequence_id, base_revision, [*targets, body.track_id])
     try:
-        return voices.dub_subtitles(db, user, sequence_id, **body.model_dump())
+        return voices.dub_subtitles(
+            db, user, sequence_id, **body.model_dump(exclude={"voice"}),
+            voice=body.voice.ref() if body.voice is not None else None,
+        )
     except (DubError, VoiceError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

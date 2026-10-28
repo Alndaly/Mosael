@@ -159,18 +159,13 @@ def test_synthesis_through_the_api_sends_no_reference_audio(monkeypatch: pytest.
         json={
             "workspace_id": workspace,
             "text": "你好,这是一次真实合成。",
-            "engine": QWEN_ENGINE,
-            "engine_voice": "vivian",
+            "voice": {"engine": QWEN_ENGINE, "voice": "vivian"},
         },
     )
     assert res.status_code == 200, res.text
     job = res.json()
-    assert job["payload"]["engine"] == QWEN_ENGINE
-    assert job["payload"]["engine_voice"] == "vivian"
-    # 参考音频那几格全是空的/没有:这条不是克隆。
-    assert job["payload"]["voice_id"] is None
-    assert job["payload"]["clone_engine"] == ""
-    assert job["payload"]["clone_model"] == ""
+    #: 念的是引擎自己的预置音色,不是配音库里的克隆嗓子:这条不带参考音频。
+    assert job["payload"]["voice"] == {"engine": QWEN_ENGINE, "voice": "vivian"}
 
     assert wait_status(client, job["id"], timeout=30) == "succeeded"
     assert client.get(f"/api/jobs/{job['id']}").json()["result"]["engine"] == QWEN_ENGINE

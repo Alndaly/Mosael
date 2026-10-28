@@ -84,7 +84,7 @@ function speechRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: "g-speech", workspace_id: "w1", session_id: "s-speech", job_id: null, provider_profile_id: null,
     provider: "builtin:edge", model: "zh-CN-XiaoxiaoNeural", kind: "speech",
-    request: { prompt: "欢迎来到 Mosael", voice: "zh-CN-XiaoxiaoNeural", voice_label: "晓晓(女·温暖)", engine_label: "Edge 语音", speed: 1 },
+    request: { prompt: "欢迎来到 Mosael", voice: { engine: "builtin:edge", voice: "zh-CN-XiaoxiaoNeural" }, voice_label: "晓晓(女·温暖)", engine_label: "Edge 语音", speed: 1 },
     result_asset_id: "a-speech", result_asset_ids: ["a-speech"], error: null, error_summary: null, stopped: false,
     retrievable: false, costs: [], cost_confidence: "free",
     created_at: "2026-10-08T00:00:00Z", updated_at: "2026-10-08T00:00:03Z",
@@ -216,8 +216,8 @@ describe("语音", () => {
     await waitFor(() => expect(posts.some((one) => one.url.endsWith("/api/generation/speech"))).toBe(true));
     const body = posts.find((one) => one.url.endsWith("/api/generation/speech"))!.body!;
     expect(body).toMatchObject({
-      workspace_id: "w1", session_id: null, text: "欢迎来到 Mosael", engine: "builtin:edge",
-      voice: "zh-CN-XiaoxiaoNeural", voice_label: "晓晓(女·温暖)", engine_label: "Edge 语音",
+      workspace_id: "w1", session_id: null, text: "欢迎来到 Mosael",
+      voice: { engine: "builtin:edge", voice: "zh-CN-XiaoxiaoNeural" }, voice_label: "晓晓(女·温暖)", engine_label: "Edge 语音",
     });
     expect(posts.some((one) => one.url.endsWith("/api/generation/jobs")), "不走图像那条路").toBe(false);
     expect(posts.some((one) => one.url.endsWith("/api/generation/sessions")), "会话由后端现开").toBe(false);
@@ -246,7 +246,7 @@ describe("语音", () => {
     const { posts } = renderStudio({
       sessions: [sessionRow("s-speech", "speech", "产品旁白", "builtin:edge")],
       records: { "s-speech": [speechRecord(), speechRecord({ id: "g-2", model: "zh-CN-YunxiNeural",
-        request: { prompt: "第二段", voice: "zh-CN-YunxiNeural", voice_label: "云希(男·阳光)", speed: 1.25 } })] },
+        request: { prompt: "第二段", voice: { engine: "builtin:edge", voice: "zh-CN-YunxiNeural" }, voice_label: "云希(男·阳光)", speed: 1.25 } })] },
     });
     const panel = screen.getByRole("complementary", { name: "generationEngineSettings" });
     const picker = () => within(panel).getByRole("combobox", { name: "voiceEngineVoice" });
@@ -261,7 +261,8 @@ describe("语音", () => {
     await user.click(screen.getByRole("button", { name: "generate" }));
     await waitFor(() => expect(posts.some((one) => one.url.endsWith("/api/generation/speech"))).toBe(true));
     expect(posts.find((one) => one.url.endsWith("/api/generation/speech"))!.body).toMatchObject({
-      session_id: "s-speech", voice: "zh-CN-XiaoxiaoNeural", voice_label: "晓晓(女·温暖)", speed: 1.25,
+      session_id: "s-speech", voice: { engine: "builtin:edge", voice: "zh-CN-XiaoxiaoNeural" }, voice_label: "晓晓(女·温暖)",
+      speed: 1.25,
     });
   });
 
@@ -272,7 +273,7 @@ describe("语音", () => {
       sessions: [sessionRow("s-other", "speech", "另一个引擎", "builtin:openai"), sessionRow("s-speech", "speech", "产品旁白", "builtin:edge")],
       records: {
         "s-other": [speechRecord({ id: "g-o", session_id: "s-other", provider: "builtin:openai", model: "nova",
-                                   request: { prompt: "hi", voice: "nova", voice_label: "nova" } })],
+                                   request: { prompt: "hi", voice: { engine: "builtin:openai", voice: "nova" }, voice_label: "nova" } })],
         "s-speech": [speechRecord()],
       },
     });
@@ -318,7 +319,7 @@ describe("语音", () => {
     localStorage.setItem("mosael.generation.session.w1.create", "s-speech");
     renderStudio({
       sessions: [sessionRow("s-speech", "speech", "以前的语音", "builtin:edge")],
-      records: { "s-speech": [speechRecord({ request: { prompt: "很长的一段", voice: "zh-CN-XiaoxiaoNeural", truncated: true } })] },
+      records: { "s-speech": [speechRecord({ request: { prompt: "很长的一段", voice: { engine: "builtin:edge", voice: "zh-CN-XiaoxiaoNeural" }, truncated: true } })] },
     });
     expect(await screen.findByText("createTruncated")).toBeInTheDocument();
     //: 没记音色名的老记录:标题从引擎的音色目录里认

@@ -2,7 +2,7 @@ import React from "react";
 import { toast } from "sonner";
 
 import {
-  CLONE_ENGINE, EDGE_ENGINE, fetchVoicePreview, getAgentVoice, readWithAgentVoice, synthesizeVoice, synthesizeWithEngine,
+  EDGE_ENGINE, fetchVoicePreview, getAgentVoice, readWithAgentVoice, synthesize,
   type AgentVoice,
 } from "@/api/domains/speech";
 import { errorText } from "@/api/errorMessage";
@@ -95,8 +95,8 @@ export function useReadAloud(workspaceId: string, strings: { readingWithVoice: s
         //: 每次开念时现问一次:设置页刚改过音色,下一次朗读就该是新的那把。
         const pref = await getAgentVoice().catch(() => null);
         if (run.current !== mine) return;
-        //: 选好的那把:引擎自己的音色,或者(CosyVoice)配音库里的嗓子(voice_id,ADR 0037)。
-        const chosen = pref?.engine && (pref.engine_voice || pref.voice_id) ? pref : null;
+        //: 选好的那把(引擎音色,或 CosyVoice 念的配音库嗓子,ADR 0037);没选过就是 null,退回 Edge。
+        const chosen = pref?.voice ? pref : null;
         toastId.current = toast(chosen ? strings.readingWithVoice : strings.readingWithEdge, {
           duration: Infinity,
           action: {
@@ -111,7 +111,7 @@ export function useReadAloud(workspaceId: string, strings: { readingWithVoice: s
         });
         const fetchChunk = (chunk: string) => chosen
           ? readWithAgentVoice({ workspace_id: workspaceId, text: chunk })
-          : fetchVoicePreview({ workspace_id: workspaceId, engine: EDGE_ENGINE, voice: edgeVoice, text: chunk });
+          : fetchVoicePreview({ workspace_id: workspaceId, voice: { engine: EDGE_ENGINE, voice: edgeVoice }, text: chunk });
         let next = fetchChunk(chunks[0]);
         for (let index = 0; index < chunks.length; index += 1) {
           const blob = await next;
@@ -131,15 +131,11 @@ export function useReadAloud(workspaceId: string, strings: { readingWithVoice: s
   return { reading, start, stop };
 }
 
-/** 「存为音频素材」:用念的那把嗓子合成一份、进素材库(这一步建任务)。克隆音色走音色库那条路。 */
+/** 「存为音频素材」:用念的那把嗓子合成一份、进素材库(这一步建任务)。没选过就用 Edge 那一把。 */
 function saveAsAudio(workspaceId: string, text: string, chosen: AgentVoice | null, edgeVoice: string) {
-  if (!chosen) return synthesizeWithEngine({ workspace_id: workspaceId, text, engine: EDGE_ENGINE, engine_voice: edgeVoice });
-  if (chosen.engine === CLONE_ENGINE) return synthesizeVoice(chosen.voice_id || chosen.engine_voice, { text, speed: chosen.speed });
-  return synthesizeWithEngine({
-    workspace_id: workspaceId, text, engine: chosen.engine, engine_voice: chosen.engine_voice,
-    ...(chosen.voice_id ? { voice_id: chosen.voice_id } : {}),
-    engine_voice_resource: chosen.engine_voice_resource, speed: chosen.speed,
-  });
+  return chosen?.voice
+    ? synthesize({ workspace_id: workspaceId, text, voice: chosen.voice, speed: chosen.speed })
+    : synthesize({ workspace_id: workspaceId, text, voice: { engine: EDGE_ENGINE, voice: edgeVoice } });
 }
 
 function play(blob: Blob, holder: React.MutableRefObject<HTMLAudioElement | null>): Promise<void> {

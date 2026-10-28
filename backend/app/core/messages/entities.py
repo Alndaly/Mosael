@@ -126,10 +126,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_entityNothingDrawn": {"zh": "一张都没画出来", "en": "No image was drawn."},
     "wfErr_entitySaveNeedsName": {"zh": "「存成资产」要一个名字", "en": "Save to asset library needs a name."},
     "wfErr_entitySaveIfExists": {"zh": "同名时怎么办只能是:{options}", "en": "When one exists, choose one of: {options}"},
-    "entityErr_voiceEngineUnknown": {
-        "zh": "不认识的配音引擎:{engine}",
-        "en": "Unknown voice engine: {engine}",
-    },
     "entityErr_attributeTargetGone": {
         "zh": "{field} 指的东西不在这个工作区里",
         "en": "What {field} points at isn't in this workspace.",

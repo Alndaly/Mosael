@@ -286,8 +286,9 @@ _Avoid_: 把产出类型叫「能力」而不加限定 —— 宿主能力也叫
 _Avoid_: 用宿主能力名去查模型的 `capability_ids`(配音是 `speech`,模型那边是 `tts`,两者不是同一张表)
 
 **能力默认(ProviderDefault)**:
-每种**产出类型**(chat / image / video / audio / tts / podcast)指向**一行模型**,不是一个档案。
+每种**产出类型**(chat / image / video / audio / podcast)指向**一行模型**,不是一个档案。
 只认这个人显式设的那一行;没有或指向失效就返回未配置,不替他静默挑别的模型。
+**tts 没有这一格**:念字的模型是**音色选择**的一部分(`VoiceRef.model`,ADR 0087 §4)。
 
 **执行面(execution surface)**:
 能力回答“模型会什么”,执行面回答“这次调用经哪个 Adapter”。`agent` 走 pi Agent Adapter,API Key 与 OAuth
@@ -374,8 +375,10 @@ _Avoid_: 把音色当成一个与模型无关的字符串
 
 **音色选择(VoiceRef)**:
 「选了哪把嗓子」的**唯一形状**:引擎 + 音色(引擎音色 id 或克隆音色 id,二者取一)+ 模型 + 连接 + 不透明 `extra`。
-默认、智能体朗读偏好、工作流节点、人物资产、合成请求都存它,合法性(音色属不属于引擎、适不适用模型)只在一处校验(ADR 0087)。
-语速不在其中 —— 那是念法,不是嗓子。
+部署默认、智能体朗读偏好、人物资产、合成请求、创作页的语音记录都存它(工作流节点、画板条目、智能体卡第 3 步跟上);
+写入时照**音色目录**校验并补齐(`engine_catalog.check_voice`:属不属于引擎、适不适用模型,`extra` 由目录带上),
+合成前只查不花钱的那几样(`voice_for_synthesis`)(ADR 0087)。语速不在其中 —— 那是念法,不是嗓子。
+本机克隆的 F5 / Fish 二选一和权重写进 `model`:`f5-tts`、`f5-tts/fr`、`fish-speech`。
 _Avoid_: 各处各存一套 `engine` / `engine_voice` / `engine_model` / `voice_id` 列;把火山的资源族这类单家字段做成公共列
 
 **克隆音色(Voice)与远端副本(VoiceEnrollment)**:

@@ -16,7 +16,7 @@ from app.domain.voices.transcription import ASRError
 from app.core.i18n import get_current_locale, tr, translate_fields
 from app.db.models import Job
 from app.api.schemas import (
-    EngineSynthesizeRequest,
+    VoiceRefBody,
     RemoteCopyRequest,
     VoiceDefaultOut,
     VoiceDefaultUpdate,
@@ -202,19 +202,6 @@ def voice_sample(voice_id: str, db: DbSession, user: CurrentUser) -> FileRespons
     return file_response(db, path, media_type="audio/wav")
 
 
-@router.post("/voices/{voice_id}/synthesize", response_model=JobOut)
-def synthesize(voice_id: str, body: SynthesizeRequest, db: Tx, user: CurrentUser):
-    voice_uc.usable(db, user, voice_id)
-    try:
-        return voices.start_synthesis(
-            db, voice_id=voice_id, text=body.text, project_id=body.project_id,
-            created_by=user.id, clone_engine=body.clone_engine, clone_model=getattr(body, "clone_model", ""),
-            speed=body.speed,
-        )
-    except errors.VoiceError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
 @router.get("/tts/f5-models")
 def list_f5_models(user: CurrentUser) -> list[dict]:
     """本地克隆能用哪几份权重,各自认得什么语言、装没装。
@@ -253,11 +240,10 @@ def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
     **同一个答案只有一处来源**(和降噪、转写同一条),写入口在 `PUT /api/settings/voice-default`。
     """
 
-    default_engine, _default_voice = voice_defaults.default_pair(db)
     locale = get_current_locale()
     rows = [translate_fields(row, ("label", "note"), locale) for row in engine_catalog.describe_engines(db, user.id)]
     for row in rows:
-        row["is_default"] = bool(default_engine) and row["id"] == default_engine
+        row["is_default"] = voice_defaults.is_default(db, str(row["id"]))
     return rows
 
 
@@ -269,13 +255,13 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser, workspace_id:
 
     if workspace_id:
         voice_uc.ensure_can_list(db, user, workspace_id)
-    default_engine, default_voice = voice_defaults.default_pair(db)
+    default = voice_defaults.default_voice(db)
     return [
         {
             **asdict(voice),
             #: 默认是一对:问"这个音色是不是默认的",必须同时在默认那个引擎下问,否则 Edge 的晓晓
             #: 会把火山上同名的音色也标成默认。
-            "is_default": bool(default_voice) and engine == default_engine and voice.id == default_voice,
+            "is_default": default is not None and engine == default.engine and voice.id == default.voice,
         }
         for voice in engine_catalog.list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
     ]
@@ -283,45 +269,46 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser, workspace_id:
 
 @router.put("/settings/voice-default", response_model=VoiceDefaultOut)
 def set_voice_default(body: VoiceDefaultUpdate, db: Tx, user: CurrentUser) -> dict:
-    """把这台机器的默认定成**一对**(引擎 + 音色)。
+    """把这台机器的默认定成**一把嗓子**(`VoiceRef`:引擎 + 音色,绑模型的连模型)。
 
-    **只许设现在就能用的引擎、并且音色必须属于它**(`domain/voices/defaults.set_default_voice`):
-    成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。两格都空 = 清掉默认。
+    **只许设现在就能用的引擎、并且音色必须属于它**(`engine_catalog.set_default_voice`):
+    成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。null = 清掉默认。
     和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。
     """
 
     ensure_deployment_admin(db, user)
     try:
-        engine, voice = set_default_voice(db, body.engine, body.voice)
+        chosen = set_default_voice(db, body.voice.ref() if body.voice is not None else None)
     except voice_defaults.UnknownVoiceEngine as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (voice_defaults.VoiceEngineNotReady, voice_defaults.VoiceMissing,
-            voice_defaults.VoiceNotInEngine) as exc:
+            voice_defaults.VoiceNotInEngine, errors.VoiceError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     db.commit()
-    return {"engine": engine, "voice": voice}
+    return {"voice": VoiceRefBody.of(chosen)}
 
 
 @router.post("/tts/preview")
 def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -> Response:
     """试听一个配音引擎里的一把嗓子(资产的音色、以后挑嗓子的地方):念一小句,音频直接回给调用方。
 
-    **和真用的时候同一条路** —— 参数由 engine_catalog.synthesis_params 凑(火山的资源族它自己查),合成走
+    **和真用的时候同一条路** —— 嗓子由 engine_catalog.voice_for_synthesis 定(火山的资源族在选择的 extra 里),合成走
     speak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听
     活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。
     """
 
     # 念一句是花钱的(各家 TTS 按字符计费),和配音同一档权限;记账挂在这个工作区上。
     voice_uc.ensure_can_speak(db, user, body.workspace_id)
-    if body.engine == CLONE_ENGINE:
+    choice = body.voice.ref()
+    if choice.engine == CLONE_ENGINE:
         raise HTTPException(status_code=422, detail=tr("routeErr_previewCloneUsesSample"))
-    if body.engine == PODCAST_ENGINE:
+    if choice.engine == PODCAST_ENGINE:
         with tempfile.TemporaryDirectory(prefix="mosael-podcast-preview-") as tmp:
             try:
                 out = voices.preview_podcast_to_file(
                     db,
                     text=body.text,
-                    voice=body.voice,
+                    voice=choice.voice,
                     workspace_id=body.workspace_id,
                     user_id=user.id,
                     out_dir=Path(tmp),
@@ -332,9 +319,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
             media_type = "audio/mpeg" if out.suffix == ".mp3" else "audio/wav"
         return Response(content=audio, media_type=media_type, headers={"Cache-Control": "no-store"})
     try:
-        params = engine_catalog.synthesis_params(
-            db, engine=body.engine, voice=body.voice, user_id=user.id, workspace_id=body.workspace_id
-        )
+        chosen = engine_catalog.voice_for_synthesis(db, choice, user_id=user.id, workspace_id=body.workspace_id)
     except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     with tempfile.TemporaryDirectory(prefix="mosael-preview-") as tmp:
@@ -342,17 +327,13 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
             out = voices.speak_to_file(
                 db,
                 text=body.text.strip(),
-                engine=body.engine,
-                engine_voice=str(params.get("engine_voice") or ""),
+                voice=chosen,
                 speed=1.0,
                 workspace_id=body.workspace_id,
                 user_id=user.id,
-                voice_resource=str(params.get("engine_voice_resource") or ""),
                 out_dir=Path(tmp),
                 source_type="voice_preview",
                 source_id=user.id,
-                #: 能复刻的引擎点了配音库里的嗓子:念的是它的远端副本(ADR 0037)。
-                voice_id=str(params.get("voice_id") or "") or None,
             )
         except RemoteConsentRequired:
             raise  # 不是失败:界面据此弹「上传到哪」的确认框
@@ -364,25 +345,23 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
 
 
 @router.post("/tts/synthesize", response_model=JobOut)
-def synthesize_with_engine(body: EngineSynthesizeRequest, db: Tx, user: CurrentUser):
-    """Synthesise with a remote engine. Separate from /voices/{id}/synthesize because the engine
-    supplies the voice — a stock one, or (CosyVoice) a library voice it speaks through its remote copy,
-    which needs the account's consent first (409 `remote_voice_consent_required`, ADR 0037)."""
+def synthesize(body: SynthesizeRequest, db: Tx, user: CurrentUser):
+    """用一把嗓子念一段,产出登记成素材(ADR 0087:本机克隆、远端引擎、本机预置同一个接口,`voice` 说是哪把嗓子)。
+    能复刻的引擎念配音库里的嗓子要这个账号先同意上传(409 `remote_voice_consent_required`,ADR 0037)。"""
     voice_uc.ensure_can_speak(db, user, body.workspace_id)
+    choice = body.voice.ref()
+    if choice.cloned_voice:
+        voice_uc.usable(db, user, choice.cloned_voice)
     try:
+        chosen = engine_catalog.voice_for_synthesis(db, choice, user_id=user.id, workspace_id=body.workspace_id)
         return voices.start_synthesis(
             db,
             text=body.text,
+            voice=chosen,
+            speed=body.speed,
+            workspace_id=body.workspace_id,
             project_id=body.project_id,
             created_by=user.id,
-            workspace_id=body.workspace_id,
-            engine=body.engine,
-            engine_voice=body.engine_voice,
-            voice_id=body.voice_id or None,
-            engine_voice_resource=body.engine_voice_resource,
-            provider_profile_id=body.provider_profile_id,
-            engine_model=body.engine_model,
-            speed=body.speed,
         )
     except errors.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

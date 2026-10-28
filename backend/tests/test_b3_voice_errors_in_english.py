@@ -16,6 +16,7 @@ import pytest
 
 from app.core.i18n import LocalizedError, t
 from app.domain.jobs import blame
+from app.domain.voices.voice_ref import VoiceRef
 
 
 def _en(exc: LocalizedError) -> str:
@@ -56,7 +57,7 @@ def test_language_guard_names_the_language_in_english() -> None:
     from app.domain.voices.errors import VoiceError
 
     with pytest.raises(VoiceError) as caught:
-        _refuse_if_unspeakable("三日前のだったらちょっとお腹壊しちゃうかな", "builtin:edge", "zh-CN-XiaoxiaoNeural", "")
+        _refuse_if_unspeakable("三日前のだったらちょっとお腹壊しちゃうかな", VoiceRef("builtin:edge", voice="zh-CN-XiaoxiaoNeural"))
 
     assert _en(caught.value) == "This text is Japanese, but the selected Edge voice is zh. Pick a voice that starts with ja-."
     assert "日文" not in _en(caught.value)
@@ -72,7 +73,7 @@ def test_dub_error_carries_the_original_audio_key_instead_of_frozen_text() -> No
             clip_ids=[],
             match_duration=False,
             created_by=None,
-            synthesis={},
+            voice=VoiceRef("builtin:volcano", voice="v"),
             original_audio="bogus",
         )
 

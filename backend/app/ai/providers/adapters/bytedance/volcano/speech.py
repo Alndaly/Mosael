@@ -80,8 +80,14 @@ class VolcanoSpeechAdapter:
         self._base = (base_url or "https://openspeech.bytedance.com").rstrip("/")
         self._default_voice = voice
 
-    def _resource_id(self, voice: str) -> str:
-        """The voice family, which the header must agree with. An explicit seed-* model wins."""
+    def _resource_id(self, request: SpeechSynthesisRequest, voice: str) -> str:
+        """The voice family, which the header must agree with.
+
+        The account voice list knows it and puts it in `VoiceOption.extra["resource_id"]`; the voice choice carries that
+        back here (`request.extra`, ADR 0087). An explicit seed-* model is next; the built-in voices are inferred from the id.
+        """
+        if request.extra.get("resource_id"):
+            return request.extra["resource_id"]
         if self._model.startswith("seed-"):
             return self._model
         if voice.startswith("S_"):
@@ -108,7 +114,7 @@ class VolcanoSpeechAdapter:
         }
         headers = {
             "X-Api-Key": self._key,
-            "X-Api-Resource-Id": self._resource_id(voice),
+            "X-Api-Resource-Id": self._resource_id(request, voice),
             "X-Api-Request-Id": uuid.uuid4().hex,
             "Content-Type": "application/json",
         }

@@ -423,6 +423,271 @@ def _migrate_browser_profiles_pin_identity() -> None:
             conn.execute(text("ALTER TABLE browser_profiles ADD COLUMN identity VARCHAR(20)"))
 
 
+# ---------------- 音色选择改存一个 VoiceRef(ADR 0087 第 2 步) ----------------
+#
+# 此前六处各存一种形状(`engine_voice` / `voice_id` / `engine_model` / `clone_engine` / `clone_model` /
+# `engine_voice_resource` / `provider_profile_id`)。下面几步把库里的每一处改写成同一个 `VoiceRef` 的 JSON,
+# 之后读的一侧只认它(domain/voices/voice_ref)。旧形状到新形状的对应**只在 `_legacy_voice_ref` 一处**。
+
+#: 本机克隆在旧形状里是「引擎」和「权重」两格(`clone_engine` / `clone_model`),新形状写进 `model`:`f5-tts/fr`。
+_CLONE_ENGINE_ID = "builtin:clone"
+#: 这几步迁移要认的远端念字引擎:裸名 → (连接的厂商, 模型族前缀)。**冻结在迁移里**,不 import 契约层:
+#: `app.db` 不认识 `app.ai`(tests/test_import_layering),而且一步已经记过账的迁移不该随着以后的 Adapter 改动变行为。
+_SPEECH_ENGINES_AT_ADR_0087 = {
+    "openai": ("openai", ()),
+    "alibaba": ("alibaba", ("qwen-tts", "qwen3-tts")),
+    "alibaba-cosyvoice": ("alibaba", ("cosyvoice",)),
+    "volcano": ("volcano", ()),
+    "edge": ("edge", ()),
+}
+#: 字幕配音认句子的嗓子身份串里,各格的先后(和 domain/voices/voice_ref.voice_identity 同一个形状,冻结在这里)。
+_DUB_IDENTITY_FIELDS = ("engine", "voice", "cloned_voice", "model")
+
+
+def _legacy_voice_ref(
+    *, engine: str, voice: str = "", engine_voice: str = "", voice_id: str = "", model: str = "",
+    clone_engine: str = "", clone_model: str = "", connection: str = "", resource: str = "",
+    library: set[str],
+) -> dict[str, Any]:
+    """旧形状的一次音色选择 → `VoiceRef` 的 JSON;选不成一把嗓子(没引擎或没音色)是 `{}`。
+
+    `voice` 是「一格音色」的旧写法(人物资产、创作页记录):克隆引擎上、或者正好是配音库里一把嗓子的 id(能复刻的远端引擎
+    念它的副本)时是克隆音色,否则是引擎自己的音色。`engine_voice` / `voice_id` 是分开两格的旧写法(朗读偏好、合成参数)。
+    `library`:库里所有克隆音色的 id。
+    """
+    engine = (engine or "").strip()
+    engine_voice = (engine_voice or "").strip()
+    cloned = (voice_id or "").strip()
+    single = (voice or "").strip()
+    if single:
+        if engine == _CLONE_ENGINE_ID or single in library:
+            cloned = cloned or single
+        else:
+            engine_voice = engine_voice or single
+    if not engine or not (engine_voice or cloned):
+        return {}
+    if engine == _CLONE_ENGINE_ID:
+        model = "/".join(part for part in ((clone_engine or "").strip(), (clone_model or "").strip()) if part)
+    ref: dict[str, Any] = {"engine": engine}
+    if cloned and (engine == _CLONE_ENGINE_ID or not engine_voice):
+        ref["cloned_voice"] = cloned
+    else:
+        ref["voice"] = engine_voice
+    if (model or "").strip():
+        ref["model"] = model.strip()
+    if (connection or "").strip():
+        ref["connection"] = connection.strip()
+    if (resource or "").strip():
+        ref["extra"] = {"resource_id": resource.strip()}
+    return ref
+
+
+def _library_voice_ids(conn: Any) -> set[str]:
+    tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+    return {row[0] for row in conn.execute(text("SELECT id FROM voices"))} if "voices" in tables else set()
+
+
+def _columns(conn: Any, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+
+
+def _json_value(raw: Any) -> Any:
+    """迁移走裸 SQL,JSON 列读出来是文本;坏的当作没有。"""
+    if raw is None or isinstance(raw, (dict, list)):
+        return raw
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _tts_default_model(conn: Any, owner_user_id: str, engine: str) -> tuple[str, str]:
+    """这个人旧的「语音合成默认模型」(`provider_defaults` 里 capability='tts' 那一行)在这个引擎上意味着什么:
+    `(模型, 连接)`;不是这个引擎那一家、那一族的模型就是 `("", "")`。
+
+    它此前只在一处生效:合成时「全局默认正好指在这条连接上就用它」(ADR 0087 §4)。所以只有连接的厂商和这个引擎对得上、
+    模型在这个引擎那一族里(百炼一条连接两个引擎),才把它写进这个人朗读偏好的那把嗓子。
+    """
+    row = conn.execute(text(
+        "SELECT m.model_id, m.provider_profile_id, p.vendor FROM provider_defaults d "
+        "JOIN provider_models m ON m.id = d.provider_model_id JOIN provider_profiles p ON p.id = m.provider_profile_id "
+        "WHERE d.capability = 'tts' AND d.owner_user_id = :owner"
+    ), {"owner": owner_user_id}).first()
+    if row is None or not engine.startswith("builtin:"):
+        return "", ""
+    known = _SPEECH_ENGINES_AT_ADR_0087.get(engine.removeprefix("builtin:"))
+    model_id, profile_id, vendor = str(row[0] or ""), str(row[1] or ""), str(row[2] or "")
+    if known is None:
+        return "", ""
+    engine_vendor, prefixes = known
+    if vendor != engine_vendor or (prefixes and not model_id.lower().startswith(prefixes)):
+        return "", ""
+    return model_id, profile_id
+
+
+def _migrate_agent_voice_prefs_store_a_voice_ref() -> None:
+    """`agent_voice_prefs` 的六格音色(`engine` / `engine_voice` / `engine_voice_resource` / `engine_model` /
+    `provider_profile_id` / `voice_id`)并成一列 `voice`(`VoiceRef` 的 JSON,ADR 0087)。
+
+    同一个人旧的「语音合成默认模型」(`provider_defaults` capability='tts')在这一步并进他那把嗓子的 `model`(只在厂商、
+    模型族对得上、而朗读偏好自己没写模型时),然后**删掉所有 tts 默认行**:念字的模型从此只由音色选择带着。
+    六列都没有索引和约束,`DROP COLUMN` 直接删。表还没有、或已经是新形状就什么都不做。幂等。
+    """
+    with engine.begin() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+        if "agent_voice_prefs" in tables and "engine" in _columns(conn, "agent_voice_prefs"):
+            library = _library_voice_ids(conn)
+            if "voice" not in _columns(conn, "agent_voice_prefs"):
+                conn.execute(text("ALTER TABLE agent_voice_prefs ADD COLUMN voice JSON NOT NULL DEFAULT '{}'"))
+            rows = conn.execute(text(
+                "SELECT owner_user_id, engine, engine_voice, engine_voice_resource, engine_model, provider_profile_id, voice_id "
+                "FROM agent_voice_prefs"
+            )).fetchall()
+            has_defaults = {"provider_defaults", "provider_models", "provider_profiles"} <= tables
+            for owner, engine_id, engine_voice, resource, model, profile_id, voice_id in rows:
+                model, connection = (model or "").strip(), (profile_id or "").strip()
+                if not model and has_defaults:
+                    model, default_connection = _tts_default_model(conn, owner, engine_id or "")
+                    connection = connection or default_connection
+                ref = _legacy_voice_ref(
+                    engine=engine_id or "", engine_voice=engine_voice or "", voice_id=voice_id or "", model=model,
+                    connection=connection, resource=resource or "", library=library,
+                )
+                conn.execute(text("UPDATE agent_voice_prefs SET voice = :voice WHERE owner_user_id = :owner"),
+                             {"voice": json.dumps(ref, ensure_ascii=False), "owner": owner})
+            for dead in ("engine", "engine_voice", "engine_voice_resource", "engine_model", "provider_profile_id", "voice_id"):
+                if dead in _columns(conn, "agent_voice_prefs"):
+                    conn.execute(text(f"ALTER TABLE agent_voice_prefs DROP COLUMN {dead}"))
+        if "provider_defaults" in tables:
+            conn.execute(text("DELETE FROM provider_defaults WHERE capability = 'tts'"))
+
+
+def _migrate_voice_default_stores_a_voice_ref() -> None:
+    """`voice_default_config` 的「引擎 + 音色」两格(`engine` / `voice`)并成一列 `voice`(`VoiceRef` 的 JSON,ADR 0087)。
+
+    新列和旧的音色列同名:先把旧列改名腾出名字,建新列、回填,再删旧的两列。部署默认只收内置引擎的引擎音色,
+    所以旧的那一格就是 `voice`。表还没有、或已经是新形状就什么都不做。幂等。
+    """
+    with engine.begin() as conn:
+        columns = _columns(conn, "voice_default_config")
+        if "engine" not in columns:
+            return
+        if "legacy_voice" not in columns:
+            conn.execute(text("ALTER TABLE voice_default_config RENAME COLUMN voice TO legacy_voice"))
+        if "voice" not in _columns(conn, "voice_default_config"):
+            conn.execute(text("ALTER TABLE voice_default_config ADD COLUMN voice JSON NOT NULL DEFAULT '{}'"))
+        for row_id, engine_id, voice in conn.execute(text("SELECT id, engine, legacy_voice FROM voice_default_config")).fetchall():
+            ref = _legacy_voice_ref(engine=engine_id or "", engine_voice=voice or "", library=set())
+            conn.execute(text("UPDATE voice_default_config SET voice = :voice WHERE id = :id"),
+                         {"voice": json.dumps(ref, ensure_ascii=False), "id": row_id})
+        for dead in ("engine", "legacy_voice"):
+            conn.execute(text(f"ALTER TABLE voice_default_config DROP COLUMN {dead}"))
+
+
+def _migrate_character_voices_become_voice_refs() -> None:
+    """人物资产属性里的 `voice_engine` + `voice_id` 两格并成一个 `voice`(`VoiceRef` 的 JSON,ADR 0087)。
+
+    旧的 `voice_id` 是「一格音色」:引擎是本机克隆、或者它正好是配音库里一把嗓子时是克隆音色,否则是那个引擎自己的音色;
+    没写引擎的是配音库里的(旧的规范化就这么补)。只有一格的(没挑嗓子)等于没选,两个键一起删。幂等。
+    """
+    with engine.begin() as conn:
+        if "attributes" not in _columns(conn, "entities"):
+            return
+        library = _library_voice_ids(conn)
+        rows = conn.execute(text(
+            "SELECT id, attributes FROM entities WHERE attributes LIKE '%\"voice_engine\"%' OR attributes LIKE '%\"voice_id\"%'"
+        )).fetchall()
+        for entity_id, raw in rows:
+            attributes = _json_value(raw)
+            if not isinstance(attributes, dict) or not ({"voice_engine", "voice_id"} & set(attributes)):
+                continue
+            engine_id = str(attributes.pop("voice_engine", "") or "") or _CLONE_ENGINE_ID
+            ref = _legacy_voice_ref(engine=engine_id, voice=str(attributes.pop("voice_id", "") or ""), library=library)
+            if ref:
+                attributes["voice"] = ref
+            conn.execute(text("UPDATE entities SET attributes = :attributes WHERE id = :id"),
+                         {"attributes": json.dumps(attributes, ensure_ascii=False), "id": entity_id})
+
+
+def _migrate_speech_records_store_a_voice_ref() -> None:
+    """创作页的语音记录(`generation_jobs` kind='speech')在 `request` 里记的音色改成一个 `VoiceRef`(ADR 0087)。
+
+    旧的 `request.voice` 是「一格音色」,引擎在记录的 `provider` 上,连接在 `provider_profile_id` 上,本机克隆的引擎 / 权重
+    和火山的资源族各占一个键(`clone_engine` / `clone_model` / `voice_resource`)—— 并成一把嗓子之后那三个键删掉。
+    产出那一行(`generated_assets.parameters`)是建记录时 `request` 去掉 `prompt` 的副本,照新的 `request` 重写。幂等:
+    `voice` 已经是对象的跳过。
+    """
+    with engine.begin() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+        if "generation_jobs" not in tables:
+            return
+        library = _library_voice_ids(conn)
+        rows = conn.execute(text(
+            "SELECT id, job_id, provider, provider_profile_id, request FROM generation_jobs WHERE kind = 'speech'"
+        )).fetchall()
+        for record_id, job_id, provider, profile_id, raw in rows:
+            request = _json_value(raw)
+            if not isinstance(request, dict) or isinstance(request.get("voice"), dict):
+                continue
+            #: ADR 0055 并进「以前的语音」的那批老记录,`provider` 是引擎的裸名(`edge`),那时引擎 id 还没统一成
+            #: `builtin:*`(真库试跑时撞到的);音色选择只认能力表里的 id。
+            engine_id = str(provider or "")
+            if engine_id in _SPEECH_ENGINES_AT_ADR_0087:
+                engine_id = f"builtin:{engine_id}"
+            ref = _legacy_voice_ref(
+                engine=engine_id, voice=str(request.get("voice") or ""), connection=profile_id or "",
+                clone_engine=str(request.pop("clone_engine", "") or ""), clone_model=str(request.pop("clone_model", "") or ""),
+                resource=str(request.pop("voice_resource", "") or ""), library=library,
+            )
+            request["voice"] = ref
+            conn.execute(text("UPDATE generation_jobs SET request = :request WHERE id = :id"),
+                         {"request": json.dumps(request, ensure_ascii=False), "id": record_id})
+            if job_id and "generated_assets" in tables:
+                parameters = {key: value for key, value in request.items() if key != "prompt"}
+                conn.execute(text("UPDATE generated_assets SET parameters = :parameters WHERE job_id = :job"),
+                             {"parameters": json.dumps(parameters, ensure_ascii=False), "job": job_id})
+
+
+def _legacy_dub_identity(identity: str, library: set[str]) -> str:
+    """字幕配音记在音频上的旧「嗓子身份」串(`engine=…|engine_voice=…|speed=1.0`)→ 新的(`voice_ref.voice_identity`)。"""
+    fields = dict(part.split("=", 1) for part in identity.split("|") if "=" in part)
+    ref = _legacy_voice_ref(
+        engine=fields.get("engine", "") or _CLONE_ENGINE_ID, engine_voice=fields.get("engine_voice", ""),
+        voice_id=fields.get("voice_id", ""), model=fields.get("engine_model", ""),
+        clone_engine=fields.get("clone_engine", ""), clone_model=fields.get("clone_model", ""), library=library,
+    )
+    if not ref:
+        return identity
+    try:
+        speed = float(fields.get("speed") or 1.0)
+    except ValueError:
+        speed = 1.0
+    parts = [f"{name}={ref[name]}" for name in _DUB_IDENTITY_FIELDS if ref.get(name)]
+    return "|".join([*parts, f"speed={speed}"])
+
+
+def _migrate_dub_lines_use_the_voice_ref_identity() -> None:
+    """字幕配音产出的音频上记着「这是哪一句、哪把嗓子念的」(`media_info.dub_line`,见 voices/subtitle_dub.DUB_LINE_KEY)。
+    嗓子那一半改由 `VoiceRef` 算(ADR 0087),旧串照同样的对应重算 —— 不然重配同一句时认不出,每一句都再买一次。
+
+    新串以 `engine=` 开头、带着 `voice=` 或 `cloned_voice=`;已经是新串的(带这两样之一)跳过。幂等。
+    """
+    with engine.begin() as conn:
+        if "media_info" not in _columns(conn, "assets"):
+            return
+        library = _library_voice_ids(conn)
+        rows = conn.execute(text("SELECT id, media_info FROM assets WHERE media_info LIKE '%\"dub_line\"%'")).fetchall()
+        for asset_id, raw in rows:
+            info = _json_value(raw)
+            line = info.get("dub_line") if isinstance(info, dict) else None
+            identity = str(line.get("voice") or "") if isinstance(line, dict) else ""
+            if not identity or "|voice=" in identity or "|cloned_voice=" in identity:
+                continue
+            line["voice"] = _legacy_dub_identity(identity, library)
+            conn.execute(text("UPDATE assets SET media_info = :info WHERE id = :id"),
+                         {"info": json.dumps(info, ensure_ascii=False), "id": asset_id})
+
+
 def _rewrite_workflow_graphs(rewrite: Any, note: Any, *, only: Any = None) -> int:
     """把每个工作流的当前图过一遍 `rewrite`(连同循环体 / 子图,由 `rewrite` 自己走);变了的追加一版修订。
 
@@ -549,6 +814,12 @@ def migration_plan() -> MigrationPlan:
             _migrate_tool_confirmations_make_tool_calls_idempotent,
             _migrate_tool_confirmations_feishu_message_id,
             _migrate_agent_questions_feishu_message_id,
+            # ADR 0087:ORM 上 agent_voice_prefs / voice_default_config 两张表只有一列 `voice`(VoiceRef),排在 SCHEMA 之前。
+            _migrate_agent_voice_prefs_store_a_voice_ref,
+            _migrate_voice_default_stores_a_voice_ref,
+            _migrate_character_voices_become_voice_refs,
+            _migrate_speech_records_store_a_voice_ref,
+            _migrate_dub_lines_use_the_voice_ref_identity,
         ),
         *_recurring(
             MigrationPhase.SCHEMA,

@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
+import { voiceOption } from "@/test/voiceOption";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +34,8 @@ const api = vi.hoisted(() => ({
   listAssetPage: vi.fn(),
   fetchWorkflowFieldOptions: vi.fn(),
   fetchVoicePreview: vi.fn(),
+  listVoices: vi.fn(),
+  listTtsVoices: vi.fn(),
   listScenes: vi.fn(),
   listSceneModels: vi.fn(),
   drawEntity: vi.fn(),
@@ -45,6 +48,12 @@ vi.mock("@/api/domains/generation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/domains/generation")>()),
   listGenerationOptions: (kind: string) => api.listGenerationOptions(kind) as never,
   getMissingModel: (...args: unknown[]) => api.getMissingModel(...args) as never,
+}));
+
+//: 引擎音色的目录从 api/domains/speech 直接取(人物资产的音色选择器,和配音面板同一份)。
+vi.mock("@/api/domains/speech", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/domains/speech")>()),
+  listTtsVoices: (...args: unknown[]) => api.listTtsVoices(...args) as never,
 }));
 
 vi.mock("@/api/client", () => ({
@@ -169,12 +178,15 @@ beforeEach(() => {
   api.getEntityCatalog.mockResolvedValue(CATALOG);
   api.listAssetPage.mockImplementation(servedAssets([]));
   api.fetchWorkflowFieldOptions.mockImplementation(async (source: string, _ws: string, parent?: string) => {
-    if (source === "speech_engines") return [{ value: "clone", label: "本地克隆" }, { value: "edge", label: "Edge" }];
-    if (source === "speech_voices") return parent === "edge" ? [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓" }] : [{ value: "v1", label: "我的声音" }];
+    if (source === "speech_engines") return [{ value: "builtin:clone", label: "本地克隆" }, { value: "builtin:edge", label: "Edge" }];
+    void parent;
     if (source === "reference_image_models") return [{ value: "p1:image:edit", label: "连接 · 能改图 · 默认" }];
     if (source === "speech_video_models") return [{ value: "p1:video:wan2.2-s2v", label: "百炼 · 说话照片" }];
     return [];
   });
+  api.listVoices.mockResolvedValue([{ id: "v1", name: "我的声音" }]);
+  api.listTtsVoices.mockImplementation(async (engine: string) =>
+    engine === "builtin:edge" ? [voiceOption("zh-CN-XiaoxiaoNeural", "晓晓")] : []);
   api.listScenes.mockResolvedValue([]);
   api.listSceneModels.mockResolvedValue([]);
   api.getEntityUsage.mockResolvedValue({ boards: [], generations: [], workflows: [] });
@@ -601,7 +613,7 @@ describe("音色", () => {
     api.listEntities.mockResolvedValue([summary()]);
     //: 服务端的样子:第一次读到的带着音色库里那把嗓子,清掉之后再读就没有了。
     api.getEntity
-      .mockResolvedValueOnce(entity({ attributes: { real_person: false, voice_engine: "clone", voice_id: "v1" } }))
+      .mockResolvedValueOnce(entity({ attributes: { real_person: false, voice: { engine: "builtin:clone", cloned_voice: "v1" } } }))
       .mockResolvedValue(entity({ attributes: { real_person: false } }));
     api.updateEntity.mockResolvedValue(entity({ attributes: { real_person: false } }));
     mount(<EntitiesView workspace={WORKSPACE} />);
@@ -622,7 +634,7 @@ describe("音色", () => {
     fireEvent.click(await screen.findByRole("option", { name: "晓晓" }));
     await waitFor(() =>
       expect(api.updateEntity).toHaveBeenLastCalledWith("e1", {
-        attributes: { real_person: false, voice_engine: "edge", voice_id: "zh-CN-XiaoxiaoNeural" },
+        attributes: { real_person: false, voice: { engine: "builtin:edge", voice: "zh-CN-XiaoxiaoNeural" } },
       }),
     );
   });
@@ -665,7 +677,7 @@ describe("音色试听", () => {
   it("没挑嗓子时不能试听;挑了就念「你好,我是…」,克隆的放参考录音", async () => {
     window.location.hash = "#/entities?entity=e1";
     api.listEntities.mockResolvedValue([summary()]);
-    api.getEntity.mockResolvedValue(entity({ attributes: { real_person: false, voice_engine: "clone", voice_id: "v1" } }));
+    api.getEntity.mockResolvedValue(entity({ attributes: { real_person: false, voice: { engine: "builtin:clone", cloned_voice: "v1" } } }));
     const audio = new Blob(["x"], { type: "audio/wav" });
     api.fetchVoicePreview.mockResolvedValue(audio);
     mount(<EntitiesView workspace={WORKSPACE} />);
@@ -674,7 +686,7 @@ describe("音色试听", () => {
     fireEvent.click(preview);
     await waitFor(() =>
       expect(api.fetchVoicePreview).toHaveBeenCalledWith({
-        workspace_id: "ws", engine: "clone", voice: "v1", text: "entityVoicePreviewText",
+        workspace_id: "ws", voice: { engine: "builtin:clone", cloned_voice: "v1" }, text: "entityVoicePreviewText",
       }),
     );
     await waitFor(() => expect(playback.playBlob).toHaveBeenCalledWith(audio));

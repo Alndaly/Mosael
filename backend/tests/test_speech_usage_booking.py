@@ -14,6 +14,7 @@ from app.ai.providers.adapters.alibaba.dashscope.speech import CosyVoiceSpeechAd
 from app.core.db import SessionLocal
 from app.db.models import ProviderUsageEvent
 from app.domain.billing.usage import create_pricing_rule
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import add_provider, fresh_client, user_id
 
 MODEL = "cosyvoice-v3-flash"
@@ -39,8 +40,8 @@ def test_CosyVoice的账记在alibaba名下_预填价格那种按厂商配的价
         # 官方价 1 元/万字符 = 每字符 100 微元;和 pricing_prefill 一样按厂商配(provider = 连接的 vendor)。
         create_pricing_rule(db, provider_profile_id=profile.id, provider="alibaba", capability="tts", model=MODEL,
                             billing_unit="character", unit_amount_micros=100, currency="CNY", source="reference")
-        speak_to_file(db, text="点下方链接", engine="builtin:alibaba-cosyvoice", engine_voice="longxiaochun_v3",
-                      speed=1.0, workspace_id=ws, user_id=user_id(), provider_profile_id=profile.id,
+        voice = VoiceRef("builtin:alibaba-cosyvoice", voice="longxiaochun_v3", connection=profile.id)
+        speak_to_file(db, text="点下方链接", voice=voice, speed=1.0, workspace_id=ws, user_id=user_id(),
                       out_dir=tmp_path, source_type="test", source_id="t")
         db.commit()
         event = db.query(ProviderUsageEvent).filter(ProviderUsageEvent.capability == "tts").one()

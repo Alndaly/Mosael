@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job, Track
 from app.domain.jobs import cancel_job, create_job, wait_for_idle_jobs
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
 
@@ -65,7 +66,7 @@ def test_取消之后剩下的句子不再合成_任务也不会被写回完成(
     with SessionLocal() as db:
         dub["id"] = start_subtitle_dub(
             db, sequence_id=sequence_id, clip_ids=cue_ids, match_duration=False, created_by=None,
-            synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
+            voice=VoiceRef("builtin:volcano", voice="v"), original_audio="keep",
         ).id
         db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     assert wait_for_idle_jobs(10)
@@ -98,7 +99,7 @@ def test_等一句合成等到超时_放弃时把那条合成任务取消掉(mon
     with SessionLocal() as db:
         dub_id = start_subtitle_dub(
             db, sequence_id=sequence_id, clip_ids=cue_ids, match_duration=False, created_by=None,
-            synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
+            voice=VoiceRef("builtin:volcano", voice="v"), original_audio="keep",
         ).id
         db.commit()  # 测试是入口:任务在起它的那次事务提交之后才派发
     assert wait_for_idle_jobs(10)

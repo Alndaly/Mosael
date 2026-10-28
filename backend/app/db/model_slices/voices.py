@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.db.model_base import new_id, now
@@ -97,16 +97,9 @@ class AgentVoicePref(Base):
     __tablename__ = "agent_voice_prefs"
 
     owner_user_id: Mapped[str] = mapped_column(String(64), primary_key=True, default="")
-    #: 引擎 id(edge / openai / volcano / bailian / clone…)。空 = 没设过。
-    engine: Mapped[str] = mapped_column(String(40), nullable=False, default="")
-    #: 引擎自己的音色 id。克隆引擎用 voice_id 那一列。
-    engine_voice: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    engine_voice_resource: Mapped[str] = mapped_column(String(200), nullable=False, default="")
-    #: 手动指定的模型;留空按连接下的 tts 模型解析(见 voices.speak_to_file)。
-    engine_model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    provider_profile_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    #: 念的是配音库里的一把嗓子时指向 voices 表的那一行:能复刻的远端引擎(CosyVoice)念它的副本(ADR 0037)。
-    voice_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 念哪把嗓子:一个 `VoiceRef`(domain/voices/voice_ref,ADR 0087)—— 引擎、引擎音色或配音库里的克隆音色、绑定的模型、
+    #: 连接、那一家的附加信息,一列装下。`{}` = 没选过。序列化与校验只在 `VoiceRef` 一处。
+    voice: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     #: 语速。对话里通常比配音快一点,所以它也跟着这份配置走。
     speed: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     #: 关掉就不念 —— 有人只要说话输入,不要它出声。

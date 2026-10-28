@@ -37,6 +37,7 @@ from app.domain.generation import (
 )
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.origins import of_run_scope
+from app.domain.voices.voice_ref import VoiceRef
 
 #: 取资产时最多交出几张参考图(按挑图的先后)。
 DEFAULT_REFERENCE_LIMIT = 8
@@ -76,7 +77,7 @@ def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     except (TypeError, ValueError):
         limit = DEFAULT_REFERENCE_LIMIT
     picked = images[: max(1, limit)]
-    attributes = entity.attributes or {}
+    voice = VoiceRef.stored((entity.attributes or {}).get("voice"))
     return {
         "entity_id": entity.id,
         "found": 1,
@@ -86,8 +87,9 @@ def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
         "asset_ids": picked,
         #: 封面:设过的那张,没设就是挑图顺序里的第一张。
         "asset_id": entity.cover_asset_id or (picked[0] if picked else ""),
-        "voice_engine": str(attributes.get("voice_engine") or ""),
-        "voice_id": str(attributes.get("voice_id") or ""),
+        #: 节点的出口还是「引擎 + 一格音色」两格,接给念稿节点的那两格(ADR 0087 第 3 步改成一个音色选择)。
+        "voice_engine": voice.engine if voice is not None else "",
+        "voice_id": voice.spoken if voice is not None else "",
     }
 
 

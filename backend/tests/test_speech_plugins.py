@@ -10,6 +10,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import PluginInstance, User
+from app.domain.voices.voice_ref import VoiceRef
 
 TTS_PLUGIN = {
     "id": "dev.test.faketts", "manifest_version": 1, "name": "假配音", "version": "1",
@@ -61,7 +62,7 @@ def test_点名插件念一句_走宿主协议交回音频(tmp_path: Path) -> No
 
     _client, ws, me, plugin = _setup()
     with SessionLocal() as db:
-        out = voices.speak_to_file(db, text="你好", engine=plugin, engine_voice="anna", speed=1.0, workspace_id=ws,
+        out = voices.speak_to_file(db, text="你好", voice=VoiceRef(plugin, voice="anna"), speed=1.0, workspace_id=ws,
                                    user_id=me, out_dir=tmp_path, source_type="test", source_id="t")
     assert out.is_file() and out.suffix == ".wav" and out.stat().st_size > 1000
 
@@ -71,8 +72,8 @@ def test_配音任务的产出含AI_导出时认得出是合成人声() -> None:
     from tests.util import wait_status
 
     client, ws, _me, plugin = _setup()
-    job = client.post("/api/tts/synthesize", json={"workspace_id": ws, "text": "你好", "engine": plugin,
-                                                   "engine_voice": "anna"}).json()
+    job = client.post("/api/tts/synthesize", json={"workspace_id": ws, "text": "你好",
+                                                   "voice": {"engine": plugin, "voice": "anna"}}).json()
     assert wait_status(client, job["id"], timeout=30) == "succeeded"
     made = client.get(f"/api/jobs/{job['id']}").json()["result"]["asset_id"]
     asset = client.get(f"/api/assets/{made}").json()
@@ -97,5 +98,5 @@ def test_点名一个不存在的引擎_建任务之前就拒() -> None:
 
     _client, ws, me, _plugin = _setup()
     with SessionLocal() as db, pytest.raises(SpeechProviderUnavailable):
-        voices.start_synthesis(db, text="hi", project_id=None, created_by=me, workspace_id=ws,
-                               engine="nope", engine_voice="x")
+        voices.start_synthesis(db, text="hi", voice=VoiceRef("nope", voice="x"), project_id=None, created_by=me,
+                               workspace_id=ws)

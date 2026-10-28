@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 /**
  * 克隆音色复刻到百炼 CosyVoice(ADR 0037)的界面那一半:
  *
- * - CosyVoice 的音色下拉在系统音色之外多一组「我的克隆音色」,点了它请求带 `voice_id`、不带 `engine_voice`;
+ * - CosyVoice 的音色下拉在系统音色之外多一组「我的克隆音色」,点了它请求里那把嗓子是 `cloned_voice`;
  * - 后端说「这个账号还没同意上传这把嗓子」(409 `remote_voice_consent_required`)时弹确认框,同意了带着同意去复刻、
  *   再把刚才那一下重来一次;不同意就什么都不传、也不报错。
  *
@@ -92,7 +92,7 @@ function serve() {
       : url.includes("/tts/f5-models")
         ? []
         : url.includes("/api/tts/models")
-          ? [{ id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: true }]
+          ? [{ id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: true, clones_voices: true }]
           : url.includes("/api/settings/tts")
             ? { engine: "f5-tts", python_path: "", source: "modelscope" }
             : url.includes("/tts/engines")
@@ -157,7 +157,7 @@ describe("CosyVoice 念配音库里的嗓子", () => {
     expect(dubRequests).toEqual([]);
   });
 
-  it("点了克隆音色:后端要同意时弹确认框,同意了带着同意去复刻、再配一次,请求带 voice_id 不带 engine_voice", async () => {
+  it("点了克隆音色:后端要同意时弹确认框,同意了带着同意去复刻、再配一次,请求里那把嗓子是克隆音色(cloned_voice)", async () => {
     const user = userEvent.setup();
     const { dubRequests, copyRequests } = serve();
     await pickClonedVoiceOnCosyVoice(user);
@@ -178,8 +178,8 @@ describe("CosyVoice 念配音库里的嗓子", () => {
     expect(copyRequests).toEqual([
       { url: expect.stringContaining("/api/voices/v1/remote-copies"), body: { engine: COSY, provider_profile_id: "p1", consent: true } },
     ]);
-    expect(dubRequests[1]).toMatchObject({ engine: COSY, voice_id: "v1" });
-    expect(dubRequests[1]).not.toHaveProperty("engine_voice");
+    expect(dubRequests[1]).toMatchObject({ voice: { engine: COSY, cloned_voice: "v1" } });
+    expect(dubRequests[1].voice).not.toHaveProperty("voice");
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(toast.error).not.toHaveBeenCalled();
   });

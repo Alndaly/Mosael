@@ -2348,23 +2348,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/voices/{voice_id}/synthesize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Synthesize */
-        post: operations["synthesize_api_voices__voice_id__synthesize_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/tts/f5-models": {
         parameters: {
             query?: never;
@@ -2460,10 +2443,10 @@ export interface paths {
         get?: never;
         /**
          * Set Voice Default
-         * @description 把这台机器的默认定成**一对**(引擎 + 音色)。
+         * @description 把这台机器的默认定成**一把嗓子**(`VoiceRef`:引擎 + 音色,绑模型的连模型)。
          *
-         *     **只许设现在就能用的引擎、并且音色必须属于它**(`domain/voices/defaults.set_default_voice`):
-         *     成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。两格都空 = 清掉默认。
+         *     **只许设现在就能用的引擎、并且音色必须属于它**(`engine_catalog.set_default_voice`):
+         *     成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。null = 清掉默认。
          *     和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。
          */
         put: operations["set_voice_default_api_settings_voice_default_put"];
@@ -2487,7 +2470,7 @@ export interface paths {
          * Preview Voice
          * @description 试听一个配音引擎里的一把嗓子(资产的音色、以后挑嗓子的地方):念一小句,音频直接回给调用方。
          *
-         *     **和真用的时候同一条路** —— 参数由 engine_catalog.synthesis_params 凑(火山的资源族它自己查),合成走
+         *     **和真用的时候同一条路** —— 嗓子由 engine_catalog.voice_for_synthesis 定(火山的资源族在选择的 extra 里),合成走
          *     speak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听
          *     活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。
          */
@@ -2508,12 +2491,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Synthesize With Engine
-         * @description Synthesise with a remote engine. Separate from /voices/{id}/synthesize because the engine
-         *     supplies the voice — a stock one, or (CosyVoice) a library voice it speaks through its remote copy,
-         *     which needs the account's consent first (409 `remote_voice_consent_required`, ADR 0037).
+         * Synthesize
+         * @description 用一把嗓子念一段,产出登记成素材(ADR 0087:本机克隆、远端引擎、本机预置同一个接口,`voice` 说是哪把嗓子)。
+         *     能复刻的引擎念配音库里的嗓子要这个账号先同意上传(409 `remote_voice_consent_required`,ADR 0037)。
          */
-        post: operations["synthesize_with_engine_api_tts_synthesize_post"];
+        post: operations["synthesize_api_tts_synthesize_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6198,15 +6180,16 @@ export interface paths {
          * Get Agent Voice
          * @description **我**在语音对话里用哪个音色、说话输入用哪一家。没设过就回一份空的(enabled=False)。
          *
-         *     和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载
-         *     十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。
+         *     和配音的默认是两回事:配音要质量(本地克隆、首次加载十几分钟也认),对话要延迟。同一个默认服务两件事,
+         *     必然在某一边是错的。
          */
         get: operations["get_agent_voice_api_settings_agent_voice_get"];
         /**
          * Set Agent Voice
          * @description 设**我自己**的对话音色,以及说话输入用哪一家。只有这一档 —— 没有部署默认(同 provider-defaults)。
          *
-         *     远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。
+         *     存之前照音色目录校验并补齐(音色属于引擎、模型对得上,火山的资源族由目录带上);远端引擎念配音库里的嗓子
+         *     (`cloned_voice`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。
          */
         put: operations["set_agent_voice_api_settings_agent_voice_put"];
         post?: never;
@@ -11020,30 +11003,7 @@ export interface components {
          * @description 语音对话的音色,以及说话输入(ASR)用哪一家。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。
          */
         AgentVoiceOut: {
-            /**
-             * Engine
-             * @default
-             */
-            engine: string;
-            /**
-             * Engine Voice
-             * @default
-             */
-            engine_voice: string;
-            /**
-             * Engine Voice Resource
-             * @default
-             */
-            engine_voice_resource: string;
-            /**
-             * Engine Model
-             * @default
-             */
-            engine_model: string;
-            /** Provider Profile Id */
-            provider_profile_id?: string | null;
-            /** Voice Id */
-            voice_id?: string | null;
+            voice?: components["schemas"]["VoiceRefBody"] | null;
             /**
              * Speed
              * @default 1
@@ -11067,30 +11027,7 @@ export interface components {
         };
         /** AgentVoiceUpdate */
         AgentVoiceUpdate: {
-            /**
-             * Engine
-             * @default
-             */
-            engine: string;
-            /**
-             * Engine Voice
-             * @default
-             */
-            engine_voice: string;
-            /**
-             * Engine Voice Resource
-             * @default
-             */
-            engine_voice_resource: string;
-            /**
-             * Engine Model
-             * @default
-             */
-            engine_model: string;
-            /** Provider Profile Id */
-            provider_profile_id?: string | null;
-            /** Voice Id */
-            voice_id?: string | null;
+            voice?: components["schemas"]["VoiceRefBody"] | null;
             /**
              * Speed
              * @default 1
@@ -13125,45 +13062,6 @@ export interface components {
             timeline_start?: number | null;
             /** Track Id */
             track_id?: string | null;
-        };
-        /**
-         * EngineSynthesizeRequest
-         * @description Synthesis through a remote engine — in one of its stock voices (`engine_voice`), or, for an engine that can
-         *     clone (CosyVoice), in a cloned voice from the library (`voice_id`, spoken through its remote copy; ADR 0037).
-         */
-        EngineSynthesizeRequest: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Text */
-            text: string;
-            /** Engine */
-            engine: string;
-            /** Provider Profile Id */
-            provider_profile_id?: string | null;
-            /**
-             * Engine Model
-             * @default
-             */
-            engine_model: string;
-            /**
-             * Engine Voice
-             * @default
-             */
-            engine_voice: string;
-            /** Voice Id */
-            voice_id?: string | null;
-            /**
-             * Engine Voice Resource
-             * @default
-             */
-            engine_voice_resource: string;
-            /**
-             * Speed
-             * @default 1
-             */
-            speed: number;
-            /** Project Id */
-            project_id?: string | null;
         };
         /**
          * EntityCatalogOut
@@ -19598,8 +19496,7 @@ export interface components {
         };
         /**
          * SpeechCreate
-         * @description 创作页「语音」(ADR 0055):念一段字。音色一格和工作流、画板、智能体同一个口径 —— 克隆引擎是配音库里的嗓子 id,别的引擎是
-         *     它自己的音色(能复刻的引擎点配音库里的嗓子时也是嗓子 id)。
+         * @description 创作页「语音」(ADR 0055):念一段字,音色是一个音色选择(ADR 0087)。
          */
         SpeechCreate: {
             /** Workspace Id */
@@ -19610,10 +19507,7 @@ export interface components {
             project_id?: string | null;
             /** Text */
             text: string;
-            /** Engine */
-            engine: string;
-            /** Voice */
-            voice: string;
+            voice?: components["schemas"]["VoiceRefBody"] | null;
             /**
              * Voice Label
              * @default
@@ -19624,28 +19518,6 @@ export interface components {
              * @default
              */
             engine_label: string;
-            /**
-             * Engine Voice Resource
-             * @default
-             */
-            engine_voice_resource: string;
-            /** Provider Profile Id */
-            provider_profile_id?: string | null;
-            /**
-             * Engine Model
-             * @default
-             */
-            engine_model: string;
-            /**
-             * Clone Engine
-             * @default
-             */
-            clone_engine: string;
-            /**
-             * Clone Model
-             * @default
-             */
-            clone_model: string;
             /**
              * Speed
              * @default 1
@@ -19763,40 +19635,7 @@ export interface components {
              * @enum {string}
              */
             original_audio: "duck" | "mute" | "keep" | "separate";
-            /**
-             * Engine
-             * @default builtin:clone
-             */
-            engine: string;
-            /** Voice Id */
-            voice_id?: string | null;
-            /**
-             * Clone Engine
-             * @default
-             */
-            clone_engine: string;
-            /**
-             * Clone Model
-             * @default
-             */
-            clone_model: string;
-            /** Provider Profile Id */
-            provider_profile_id?: string | null;
-            /**
-             * Engine Model
-             * @default
-             */
-            engine_model: string;
-            /**
-             * Engine Voice
-             * @default
-             */
-            engine_voice: string;
-            /**
-             * Engine Voice Resource
-             * @default
-             */
-            engine_voice_resource: string;
+            voice?: components["schemas"]["VoiceRefBody"] | null;
             /**
              * Speed
              * @default 1
@@ -19816,27 +19655,25 @@ export interface components {
             dropped: number;
             sequence: components["schemas"]["SequenceOut"];
         };
-        /** SynthesizeRequest */
+        /**
+         * SynthesizeRequest
+         * @description 用一把嗓子念一段,产出登记成素材(ADR 0087:一个接口,`voice` 说是哪把嗓子)。本机克隆念配音库里的嗓子
+         *     (`cloned_voice`),远端引擎念它自己的音色(`voice`)—— 能复刻的引擎(CosyVoice)也念得了配音库里的嗓子(念它的远端副本,
+         *     这个账号要先同意上传,不然 409 `remote_voice_consent_required`,ADR 0037)。
+         */
         SynthesizeRequest: {
+            /** Workspace Id */
+            workspace_id: string;
             /** Text */
             text: string;
-            /** Project Id */
-            project_id?: string | null;
-            /**
-             * Clone Model
-             * @default
-             */
-            clone_model: string;
-            /**
-             * Clone Engine
-             * @default
-             */
-            clone_engine: string;
+            voice: components["schemas"]["VoiceRefBody"];
             /**
              * Speed
              * @default 1
              */
             speed: number;
+            /** Project Id */
+            project_id?: string | null;
         };
         /**
          * TaskAwaitingApprovalOut
@@ -20195,6 +20032,11 @@ export interface components {
             /** Status */
             status: string;
             /**
+             * Clones Voices
+             * @default true
+             */
+            clones_voices: boolean;
+            /**
              * Downloaded Bytes
              * @default 0
              */
@@ -20529,29 +20371,17 @@ export interface components {
         };
         /**
          * VoiceDefaultOut
-         * @description 改完之后的那一对。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。
+         * @description 改完之后的那一把。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。
          */
         VoiceDefaultOut: {
-            /** Engine */
-            engine: string;
-            /** Voice */
-            voice: string;
+            voice?: components["schemas"]["VoiceRefBody"] | null;
         };
         /**
          * VoiceDefaultUpdate
-         * @description 这台机器默认那一对(引擎 + 音色)。两格都空 = 清掉(回到每个入口各自点名)。
+         * @description 这台机器默认那一把嗓子。null = 清掉(回到每个入口各自点名)。
          */
         VoiceDefaultUpdate: {
-            /**
-             * Engine
-             * @default
-             */
-            engine: string;
-            /**
-             * Voice
-             * @default
-             */
-            voice: string;
+            voice?: components["schemas"]["VoiceRefBody"] | null;
         };
         /** VoiceDeleteOut */
         VoiceDeleteOut: {
@@ -20577,8 +20407,8 @@ export interface components {
          * @description 音色目录里的一项(ADR 0087),所有挑音色的地方同一个形状。
          *
          *     `source` 说它从哪来:builtin(引擎内置)/ account(按账号现拉)/ preset(本机引擎预置)/ cloned(这个工作区
-         *     配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时请求带 `voice_id`、`engine_voice` 留空)。
-         *     语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样带回去,不读。
+         *     配音库里的克隆音色,由能复刻的引擎念它的远端副本,ADR 0037 —— 选它时音色选择写 `cloned_voice`)。
+         *     语言 / 性别 / 风格**宁缺不猜**:空着的就是供应商没说。`extra` 只有那一家 Adapter 解释,界面原样放进音色选择带回去,不读。
          */
         VoiceOptionOut: {
             /** Id */
@@ -20665,17 +20495,50 @@ export interface components {
         };
         /**
          * VoicePreviewRequest
-         * @description 试听一个引擎里的一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。
+         * @description 试听一把嗓子:念一小句,直接回音频(不建任务、不进素材库)。播客发音人也走这里(引擎是播客那一个)。
          */
         VoicePreviewRequest: {
             /** Workspace Id */
             workspace_id: string;
-            /** Engine */
-            engine: string;
-            /** Voice */
-            voice: string;
+            voice: components["schemas"]["VoiceRefBody"];
             /** Text */
             text: string;
+        };
+        /**
+         * VoiceRefBody
+         * @description 「选了哪把嗓子」(ADR 0087):所有收音色、回音色的接口都是这一个形状,和库里存的 `VoiceRef` 一一对应。
+         *
+         *     `voice`(引擎自己的音色 id)与 `cloned_voice`(这个工作区配音库里的克隆音色)**恰好一个**。`model`:选的那一项绑模型时
+         *     一并写下(百炼按模型给音色;本机克隆写「引擎」或「引擎/权重」,如 `f5-tts/fr`);空 = 按引擎解析。`connection`:走哪条
+         *     连接,空 = 这个人在该引擎上的那一条。`extra` 从音色目录那一项原样带回来,界面不读。形状不对直接 422。
+         */
+        VoiceRefBody: {
+            /** Engine */
+            engine: string;
+            /**
+             * Voice
+             * @default
+             */
+            voice: string;
+            /**
+             * Cloned Voice
+             * @default
+             */
+            cloned_voice: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Connection
+             * @default
+             */
+            connection: string;
+            /** Extra */
+            extra?: {
+                [key: string]: string;
+            };
         };
         /**
          * VoiceUpdate
@@ -26743,41 +26606,6 @@ export interface operations {
             };
         };
     };
-    synthesize_api_voices__voice_id__synthesize_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                voice_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SynthesizeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_f5_models_api_tts_f5_models_get: {
         parameters: {
             query?: never;
@@ -26969,7 +26797,7 @@ export interface operations {
             };
         };
     };
-    synthesize_with_engine_api_tts_synthesize_post: {
+    synthesize_api_tts_synthesize_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -26978,7 +26806,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EngineSynthesizeRequest"];
+                "application/json": components["schemas"]["SynthesizeRequest"];
             };
         };
         responses: {

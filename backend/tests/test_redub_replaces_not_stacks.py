@@ -16,10 +16,11 @@ from app.db.models import Asset, Job, Sequence, SequenceOperation
 from app.domain.jobs import create_job, wait_for_idle_jobs
 from app.domain.sequences.history import can_undo, redo, undo
 from app.domain.voices.subtitle_dub import DUB_LINE_KEY, start_subtitle_dub
+from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client
 
-VOICE_A = {"engine": "builtin:volcano", "engine_voice": "a"}
-VOICE_B = {"engine": "builtin:volcano", "engine_voice": "b"}
+VOICE_A = VoiceRef("builtin:volcano", voice="a")
+VOICE_B = VoiceRef("builtin:volcano", voice="b")
 
 
 def _timeline(client, cues: list[tuple[str, float, float]]) -> tuple[str, str, list[str]]:
@@ -48,8 +49,8 @@ def _synth(monkeypatch, ws: str, *, fail: set[str] = frozenset()) -> list[tuple[
 
     calls: list[tuple[str, str]] = []
 
-    def fake_synthesis(db, *, text, project_id, created_by, **synthesis):
-        calls.append((text, synthesis.get("engine_voice", "")))
+    def fake_synthesis(db, *, text, voice, project_id, created_by, **_synthesis):
+        calls.append((text, voice.voice))
         job = create_job(db, workspace_id=ws, kind="tts", payload={}, created_by=None)
         if text in fail:
             job.status = "failed"
@@ -66,10 +67,10 @@ def _synth(monkeypatch, ws: str, *, fail: set[str] = frozenset()) -> list[tuple[
     return calls
 
 
-def _dub(sid: str, ws: str, clip_ids: list[str], voice: dict, mode: str = "keep") -> Job:
+def _dub(sid: str, ws: str, clip_ids: list[str], voice: VoiceRef, mode: str = "keep") -> Job:
     with SessionLocal() as db:
         job_id = start_subtitle_dub(db, sequence_id=sid, clip_ids=clip_ids, match_duration=True, created_by=None,
-                                    synthesis={**voice, "workspace_id": ws}, original_audio=mode).id
+                                    voice=voice, original_audio=mode).id
         db.commit()
     assert wait_for_idle_jobs(15)
     with SessionLocal() as db:
@@ -98,7 +99,7 @@ def test_换嗓子重配同一句_旧的那段被换掉而不是叠着念(monkey
     assert _dub(sid, ws, [line], VOICE_B).status == "succeeded"
     clips = _dub_clips(sid)
     assert len(clips) == 1, f"同一秒上只该有一个人在念这句:{clips}"
-    assert "engine_voice=b" in clips[0][1]
+    assert "voice=b" in clips[0][1]
 
 
 def test_同一句同一把嗓子已配过_不再合成也不再叠一段(monkeypatch) -> None:
@@ -141,7 +142,7 @@ def test_上一句的尾巴压进这一句时_重配这一句不会删掉上一�
     _synth(monkeypatch, ws)
     _dub(sid, ws, [first, second], VOICE_A)
     _dub(sid, ws, [second], VOICE_B)
-    assert _dub_clips(sid) == [(0.0, "engine=builtin:volcano|engine_voice=a"), (0.6, "engine=builtin:volcano|engine_voice=b")]
+    assert _dub_clips(sid) == [(0.0, "engine=builtin:volcano|voice=a|speed=1.0"), (0.6, "engine=builtin:volcano|voice=b|speed=1.0")]
 
 
 def test_一次配音连同原声处理在撤销栈上只占一步(monkeypatch) -> None:

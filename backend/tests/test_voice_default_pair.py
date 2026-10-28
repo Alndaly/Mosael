@@ -2,7 +2,7 @@
 
 维护者原话:「**配音应该也有默认机制**」。此前 `Capability.defaultable=False`,理由是「引擎和音色是成对选的
 (克隆音色的 id 换到 Edge 上就是错的),每个入口都点名」—— 成对是对的,「因此不能有默认」是错的:默认也可以
-是一对。所以这里存的是 `(engine, voice)` 两格,设的时候两个一起校验。
+是一对。所以这里存的是一把嗓子(`VoiceRef`,ADR 0087:引擎 + 音色,绑模型的连模型),设的时候整把一起校验。
 
 **两层,谁也不是谁的替代(和转写 / 降噪同一条规则):**
 
@@ -12,7 +12,7 @@
   「必须点名音色」)。
 
 有效值**只有一处**算:`domain/voices/defaults.resolve_voice_default()`。所有念字的入口都经过
-`engine_catalog.synthesis_params` —— 那个「点名」的读取点先问它,所以设置页写着的和真念出来的永远是
+`engine_catalog.voice_for_synthesis` —— 没点名时它先问那一处,所以设置页写着的和真念出来的永远是
 同一个答案。
 """
 
@@ -47,8 +47,9 @@ def _me() -> str:
 
 
 def _set(client, engine: str, voice: str):
-    """设这台机器的默认那一对(引擎 + 音色)。"""
-    return client.put("/api/settings/voice-default", json={"engine": engine, "voice": voice})
+    """设这台机器的默认那一把嗓子(引擎 + 引擎音色);两格都空 = 清掉。"""
+    chosen = {"engine": engine, "voice": voice} if engine or voice else None
+    return client.put("/api/settings/voice-default", json={"voice": chosen})
 
 
 def _engines(client) -> list[dict]:
@@ -78,13 +79,13 @@ def _choose_personal(client, provider_id: str):
     return reply.json()
 
 
-def _resolve(engine: str = "", voice: str = "") -> tuple[str, str]:
-    """唯一那个解析点的答案:(引擎, 音色)。"""
+def _resolve() -> tuple[str, str]:
+    """唯一那个解析点的答案:(引擎, 音色);没有默认是 `("", "")`。"""
     from app.domain.voices.defaults import resolve_voice_default
 
     with SessionLocal() as db:
-        found = resolve_voice_default(db, _me(), explicit_engine=engine, explicit_voice=voice)
-    return found.engine, found.voice
+        found = resolve_voice_default(db, _me())
+    return (found.engine, found.voice) if found is not None else ("", "")
 
 
 @pytest.fixture
@@ -112,8 +113,8 @@ def test_能设一对默认_两个候选接口都标出来() -> None:
     reply = _set(client, EDGE, EDGE_VOICE_2)
 
     assert reply.status_code == 200, reply.text
-    assert reply.json()["engine"] == EDGE
-    assert reply.json()["voice"] == EDGE_VOICE_2
+    assert reply.json()["voice"] == {"engine": EDGE, "voice": EDGE_VOICE_2, "cloned_voice": "", "model": "",
+                                     "connection": "", "extra": {}}
     assert _default_engine(client) == EDGE
     assert _default_voice(client, EDGE) == EDGE_VOICE_2
     #: 别的引擎、别的音色都不该被标成默认。
@@ -180,21 +181,27 @@ def test_只有部署管理员能改默认() -> None:
 # ---------------------------------------------------------------------------
 # ② 一处解析,优先级:入口点名 > 按人选的 > 部署默认 > 空
 # ---------------------------------------------------------------------------
-def test_入口点名的那一对压过所有默认(remote_engines_ready) -> None:
+def test_入口点名的那一把压过所有默认(remote_engines_ready) -> None:
+    from app.domain.voices.engine_catalog import voice_for_synthesis
+    from app.domain.voices.voice_ref import VoiceRef
+
     client = _client()
     assert _set(client, OPENAI, OPENAI_VOICE).status_code == 200
     _choose_personal(client, VOLCANO)
 
-    assert _resolve(EDGE, EDGE_VOICE) == (EDGE, EDGE_VOICE)
+    named = VoiceRef(EDGE, voice=EDGE_VOICE)
+    with SessionLocal() as db:
+        assert voice_for_synthesis(db, named, user_id=_me(), workspace_id="") == named
 
 
 def test_按人选的引擎压过部署默认_音色不硬套到另一家(remote_engines_ready) -> None:
-    """他在能力提供方里选的是一家引擎;部署默认的音色属于**另一家**,不能拿到这一家上去念。"""
+    """他在能力提供方里选的是一家引擎;部署默认的嗓子属于**另一家**,不能拿到这一家上去念 —— 没有一把能念的嗓子,
+    交给「必须点名」(不是悄悄用部署那一家)。"""
     client = _client()
     assert _set(client, OPENAI, OPENAI_VOICE).status_code == 200
     _choose_personal(client, VOLCANO)
 
-    assert _resolve() == (VOLCANO, "")
+    assert _resolve() == ("", "")
 
 
 def test_按人选的引擎和部署默认是同一家_音色跟着部署那一对(remote_engines_ready) -> None:
@@ -222,8 +229,8 @@ def test_什么都没设_解析给空_交给现有的必须点名() -> None:
 # ③ 「点名」那条路行为不变:没有默认时仍然要求点名
 # ---------------------------------------------------------------------------
 def test_没有默认时点名的入口照旧要求点名() -> None:
-    """`pick_speech`(智能体开卡)和 `synthesis_params`(念字的执行入口)在没有默认时给的是同一句话。"""
-    from app.domain.voices.engine_catalog import pick_speech, synthesis_params
+    """`pick_speech`(智能体开卡)和 `voice_for_synthesis`(念字的执行入口)在没有默认时给的是同一句话。"""
+    from app.domain.voices.engine_catalog import pick_speech, voice_for_synthesis
     from app.domain.voices.speech import SpeechProviderUnavailable
     from app.domain.voices.errors import VoiceError
 
@@ -231,12 +238,13 @@ def test_没有默认时点名的入口照旧要求点名() -> None:
     with SessionLocal() as db, pytest.raises(SpeechProviderUnavailable):
         pick_speech(db, engine="", voice="", user_id=_me(), workspace_id="")
     with SessionLocal() as db, pytest.raises(VoiceError, match="音色"):
-        synthesis_params(db, engine="", voice="", user_id=_me(), workspace_id="")
+        voice_for_synthesis(db, None, user_id=_me(), workspace_id="")
 
 
-def test_有默认时点名那处用默认那一对() -> None:
-    """默认替掉的正是「两格都空、于是要求点名」这一步 —— 点名了任何一格都不该被默认改写。"""
-    from app.domain.voices.engine_catalog import pick_speech, synthesis_params
+def test_有默认时没点名的入口用默认那一把() -> None:
+    """默认替掉的正是「没点名、于是要求点名」这一步 —— 点名了的不被默认改写。"""
+    from app.domain.voices.engine_catalog import pick_speech, voice_for_synthesis
+    from app.domain.voices.voice_ref import VoiceRef
 
     client = _client()
     assert _set(client, EDGE, EDGE_VOICE).status_code == 200
@@ -244,14 +252,12 @@ def test_有默认时点名那处用默认那一对() -> None:
     with SessionLocal() as db:
         assert pick_speech(db, engine="", voice="", user_id=_me(), workspace_id="") == (EDGE, EDGE_VOICE)
     with SessionLocal() as db:
-        params = synthesis_params(db, engine="", voice="", user_id=_me(), workspace_id="")
-    assert params["engine"] == EDGE
-    assert params["engine_voice"] == EDGE_VOICE
+        assert voice_for_synthesis(db, None, user_id=_me(), workspace_id="") == VoiceRef(EDGE, voice=EDGE_VOICE)
 
-    #: 点名了另一家 + 它的音色:默认一个字都不改。
+    #: 点名了另一把:默认一个字都不改。
     with SessionLocal() as db:
-        params = synthesis_params(db, engine=EDGE, voice=EDGE_VOICE_2, user_id=_me(), workspace_id="")
-    assert (params["engine"], params["engine_voice"]) == (EDGE, EDGE_VOICE_2)
+        named = voice_for_synthesis(db, VoiceRef(EDGE, voice=EDGE_VOICE_2), user_id=_me(), workspace_id="")
+    assert named == VoiceRef(EDGE, voice=EDGE_VOICE_2)
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +265,7 @@ def test_有默认时点名那处用默认那一对() -> None:
 # ---------------------------------------------------------------------------
 def test_配音默认只有一处解析() -> None:
     """`VoiceDefaultConfig` 只在 domain/voices/defaults 里读写;`resolve_voice_default` 只在
-    `synthesis_params` 里调一次。
+    `voice_for_synthesis` 里调一次。
 
     任何一个入口自己再算一遍,迟早给出两个答案 —— 设置页写着一对、念出来的是另一对,
     而用户看到的是「设了却没生效」。

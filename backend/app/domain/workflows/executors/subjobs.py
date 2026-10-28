@@ -67,6 +67,7 @@ from app.domain.voices.remote import RemoteConsentRequired
 from app.domain.voices.sentences import Segment, Token, sentences_for_editing
 from app.domain.voices.speech import CLONE_ENGINE
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, DubError
+from app.domain.voices.voice_ref import VoiceRef
 from app.domain.workflows.authority import current_authority
 from app.domain.workflows.graph_rules import as_text
 from app.domain.workflows.node_types import NODE_TYPES, field_name
@@ -419,21 +420,19 @@ def import_url(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     return {"asset_id": asset.id if asset else "", "name": asset.name if asset else "", "error": ""}
 
 
-def _speech_params(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """「引擎 + 音色」两格 → 合成要的那组参数(见 voices.engine_catalog.synthesis_params)。
+def _speech_voice(db: Session, scope: RunScope, config: dict[str, Any]) -> VoiceRef:
+    """节点上的「引擎 + 音色」两格 → 这次念的那把嗓子(见 voices.engine_catalog.voice_choice / voice_for_synthesis);
+    两格都空用默认那一把。
 
     音色的报错原样转述(带着它的 key):此前在前面拼一截「语音合成」/「字幕配音」,那截是
     写死的中文,而原因在落库那一刻就被翻成了字 —— 英文界面里读到的是两段中文。"""
 
+    actor = current_actor(db)
     try:
-        return engine_catalog.synthesis_params(
-            db,
-            engine=str(config.get("engine") or ""),
-            voice=str(config.get("voice") or ""),
-            speed=float(config.get("speed") or 1.0),
-            user_id=current_actor(db),
-            workspace_id=scope.workspace_id,
+        choice = engine_catalog.voice_choice(
+            db, engine=str(config.get("engine") or ""), voice=str(config.get("voice") or ""), user_id=actor,
         )
+        return engine_catalog.voice_for_synthesis(db, choice, user_id=actor, workspace_id=scope.workspace_id)
     except VoiceError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
 
@@ -446,13 +445,16 @@ def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> d
     不在建图时替人写死。"""
 
     actor = current_actor(db)
+    voice = _speech_voice(db, scope, config)
     try:
         child = voices.start_synthesis(
             db,
             text=str(config.get("text", "")),
+            voice=voice,
+            speed=float(config.get("speed") or 1.0),
+            workspace_id=scope.workspace_id,
             project_id=None,
             created_by=actor,
-            **_speech_params(db, scope, config),
         )
     except RemoteConsentRequired as exc:
         #: 远端引擎念配音库里的嗓子、这个账号还没同意上传(ADR 0037):工作流里没人能当场点头,
@@ -460,8 +462,7 @@ def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> d
         raise WorkflowDomainError.from_error(exc) from exc
     final = wait_for_job(child.id, release=db)
     try:
-        note = voice_note(db, engine=str(config.get("engine") or ""), voice=str(config.get("voice") or ""),
-                          workspace_id=scope.workspace_id, user_id=actor)
+        note = voice_note(db, voice, workspace_id=scope.workspace_id, user_id=actor)
     except Exception:  # noqa: BLE001 — 说明是旁路:说不出来不该让已经念好、付过钱的这一段作废
         logger.warning("说不出这次配音用的是哪把嗓子(engine=%s)", config.get("engine"), exc_info=True)
         note = ""
@@ -1324,7 +1325,7 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
             "overlap_note": "",
         }
 
-    synthesis = _speech_params(db, scope, config)
+    voice = _speech_voice(db, scope, config)
     try:
         job = subtitle_dub.start_subtitle_dub(
             db,
@@ -1333,7 +1334,8 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
             match_duration=_yes_no(config, "match_duration", default=DEFAULT_MATCH_DURATION),
             line=str(config.get("line") or "all"),
             created_by=current_actor(db),
-            synthesis=synthesis,
+            voice=voice,
+            speed=float(config.get("speed") or 1.0),
             original_audio=str(config.get("original_audio") or DEFAULT_ORIGINAL_AUDIO).strip().lower(),
         )
     except DubError as exc:

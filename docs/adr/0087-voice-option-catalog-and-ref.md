@@ -1,6 +1,6 @@
 # 音色是一等概念：契约上的音色目录，存储上唯一的音色选择
 
-- 状态：Accepted（2026-10-28）；分四步实施，见文末。第 1 步已完成
+- 状态：Accepted（2026-10-28）；分四步实施，见文末。第 1、2 步已完成
 - 相关：
   - [ADR 0010](0010-provider-contracts-adapters-registry.md)：Provider 的契约、Adapter、Registry 三层
   - [ADR 0028](0028-digital-humans.md)：数字人与授权声明
@@ -117,7 +117,7 @@ class VoiceRef:
   - 合成参数：`clone_engine`、`clone_model`；
   - 人物资产属性：`voice_engine`、`voice_id`。
 - 本机克隆引擎的 F5 / Fish 二选一（今天的 `clone_engine` / `clone_model`）并进 `model`，由本机念字 Adapter 解释。
-  编码在第 4 步落定，写进本 ADR。
+  编码已在第 2 步落定（`引擎` 或 `引擎/权重`），见「第 2 步落定的细节」。
 
 ### 4. 默认只有一层「念哪把嗓子」
 
@@ -185,10 +185,38 @@ class VoiceRef:
     都改读目录，删掉了前后端各自解析音色 id 的两份代码。
   - 后端拦截只查**内置**目录（`builtin_voice`，不发请求）：每次合成都走这里，不为它签名现拉账号清单。
     账号音色的语言由界面在提交前按它拿到的那份目录提示。
-- **过渡（第 2 步删除）**：存储仍是 `engine_voice_resource` 一格字符串。
-  - 前端只在 `api/domains/speech.voiceResourceOf` 一处读 `extra`；
-  - 后端只在 `domain/voices/engine_catalog.voice_resource_for` 一处读。
-  - 调用处都只交 `VoiceOption`，不认识任何一家。
+- **过渡（已在第 2 步删除）**：存储曾是 `engine_voice_resource` 一格字符串，前后端各有一处读 `extra`
+  （`voiceResourceOf` / `voice_resource_for`）。第 2 步起 `extra` 随 `VoiceRef` 走，两处都删了。
+
+## 第 2 步落定的细节
+
+- **值对象**：`backend/app/domain/voices/voice_ref.py`（叶子模块，不碰数据库与目录）。`VoiceRef.of` 只认当前形状，
+  结构不对抛 `VoiceRefInvalid`（422）；`to_json` 只写有值的格；`voice_identity(ref, 语速)` 是字幕配音认句子的规范化串
+  （`engine=…|voice=…|cloned_voice=…|model=…|speed=…`，连接与 `extra` 不算）。
+- **校验分两处，各管各的**（`domain/voices/engine_catalog`）：
+  - `check_voice`：**写入时**（部署默认、朗读偏好、人物资产）。引擎认得、克隆音色在工作区且这个引擎念得了、引擎音色在目录里
+    （目录为空时不拦，界面本就让人手填）、模型绑定对得上；返回照目录补齐 `extra` 与模型之后的那一把。
+  - `voice_for_synthesis`：**合成前**。没点名就问默认（`defaults.resolve_voice_default`，唯一解析点）；只查不花钱的：
+    引擎就绪、克隆音色在这个工作区、内置目录上的模型绑定。不现拉账号清单。
+  - `voice_choice`：界面以外的点名（智能体卡、工作流节点、画板条目）只有「引擎 + 一格音色」两串字，由它认成一把嗓子并
+    照目录补齐（`settle_voice`）。第 3 步这些入口改收 `VoiceRef` 之后它只剩智能体按名字点名那一处。
+- **火山的资源族**：`SpeechSynthesisRequest` 多一格 `extra`，`speak_to_file` 把 `VoiceRef.extra` 原样交给 Adapter，火山
+  在 `_resource_id` 里先读它。此前它借道「模型」那一格（`model_override or voice_resource`），已删。
+- **本机克隆的 `model` 编码在这一步就定了**（原计划第 4 步）：`引擎` 或 `引擎/权重`（`f5-tts`、`f5-tts/fr`、`fish-speech`），
+  空 = 部署默认引擎、按文字挑权重；解析只在 `voices.clone_runtime_of` 一处，认不出就拒。能不能克隆由运行时目录上的
+  `TtsEngine.clones_voices` 说（Qwen3-TTS 为假：它是另一个念字引擎，不进「克隆引擎」下拉，也不能写进克隆的 `model`）。
+  删 `clone_engine` / `clone_model` 两个合成参数就必须同时定它，所以提前。
+- **`ProviderDefault(tts)`**：迁移把同一个人、厂商与模型族对得上的 tts 默认模型写进他朗读偏好那把嗓子的 `model`（和
+  `connection`），再删掉所有 tts 默认行；`tts` 退出 `DEFAULTABLE_CAPABILITIES`，`model_id_for_family` 改为不问默认的
+  `first_model_of_family`。
+- **公开 API**：合成只剩一个接口 `POST /api/tts/synthesize`（收 `voice: VoiceRefBody`），`/voices/{id}/synthesize` 删除；
+  试听、字幕配音、部署默认、朗读偏好、创作页语音都收 / 回 `VoiceRefBody`。前端只经 `voiceRefOf` / `clonedVoiceRef` 造它。
+- **迁移**（`DATABASE_SCHEMA_VERSION` 44，测试 `test_voice_choices_become_voice_refs_migration.py`）：
+  `agent_voice_prefs`、`voice_default_config` 的旧格并成一列 `voice`（`DROP COLUMN`，不重建表）；人物资产
+  `voice_engine` + `voice_id` → `voice`；创作页语音记录的 `request.voice` 与产出 `parameters`（老记录的裸引擎名 `edge`
+  补成 `builtin:edge`，真库试跑时撞到）；字幕配音音频上的嗓子身份串重算。
+- **留给第 3 步**：工作流节点配置与「取资产」节点的出口（`voice_engine` / `voice_id` 两格，由 `VoiceRef` 投影出来）、画板
+  「念出来」的表单、智能体卡 payload 仍是字符串；它们在执行时经 `voice_choice` 变成一把嗓子。
 
 ## 实施步骤
 
@@ -197,5 +225,6 @@ class VoiceRef:
 1. **契约**：`VoiceOption` / `VoiceCatalog` / `VoiceCatalogContext`。远端 Adapter 改为实现它，删掉 `builtin_voices` 与 `AccountVoiceCatalog`。
    领域的音色列表改为只遍历 Registry + 克隆音色，公开 API 换成 `VoiceOptionOut`，前端选择器随之改。这一步不动存储。
 2. **`VoiceRef` 与迁移**：值对象、校验，数据库与人物资产迁移，`ProviderDefault(tts)` 迁移后删除，合成参数与 `voice_identity` 改形。
+   本机克隆的 `model` 编码一并定下（见上一节）。
 3. **工作流与画板**：节点配置、画板条目、智能体工具 schema 改收 `VoiceRef`；`workflow_file` 升到 v2 并加升级链。
-4. **本机念字引擎进 Registry**：落定本机克隆在 `model` 里的编码，写回本 ADR。
+4. **本机念字引擎进 Registry**：本机克隆 / Qwen3-TTS 实现 `SpeechAdapter` + `VoiceCatalog`，`clone_runtime_of` 随之搬进本机克隆 Adapter。
