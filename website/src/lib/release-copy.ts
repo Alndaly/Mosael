@@ -5,11 +5,13 @@ export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
       "**ComfyUI 智能体能补全并运行工作流了。** 缺的模型可以搜索、核对后下载；缺的节点包会先查注册表和依赖风险再安装并重启；画布上已保存的工作流可以运行，也可以只运行指定输出节点及其上游，每一步都有确认卡。",
       "**R2 成为正式下载主源。** 官网、应用内更新和插件市场使用 `dl.mosael.com`；更新失败自动回退 GitHub，百度网盘保留人工备用，应用内更新支持差分下载。",
       "**工作台浮层与工具行修复。** 模型详情和图片预览会正确让开内嵌画布；弹窗和重启服务不再把右侧栏宽度重置为零；超长插件工具名会省略，不再挤出耗时。",
+      "**音色选择只有一种形状。** 默认配音、语音对话、人物资产和创作页记录都存同一个音色选择，连同绑定的模型一起校验；音色目录带上语言与性别，旧数据升级时自动迁移。",
     ],
     en: [
       "**The ComfyUI agent can now complete and run workflows.** Missing models are searched and verified before download; missing node packs are checked against the registry and dependency risk, installed, then followed by a restart; saved canvas workflows can run whole or target one output node and its upstream, with confirmations at every step.",
       "**R2 is now the primary download channel.** The website, in-app updates and plugin market use `dl.mosael.com`; updates fall back to GitHub automatically, with differential downloads and a manual Baidu mirror.",
       "**Workbench overlay and tool-row fixes.** Model details and image previews correctly yield the embedded canvas; closing overlays or restarting the service no longer resets the sidebar width; long plugin tool names ellipsize instead of pushing out the duration.",
+      "**One shape for a chosen voice.** The default voice, voice chat, character assets and studio records all store the same voice choice, validated together with its bound model; voice catalogs now carry language and gender, and existing data migrates on upgrade.",
     ],
   },
   "v2.2.3": {
