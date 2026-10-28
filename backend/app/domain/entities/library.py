@@ -443,6 +443,12 @@ def reorder_references(db: Session, entity: Entity, asset_ids: list[str]) -> Ent
     return entity
 
 
+def parent_names(db: Session, rows: list[Entity]) -> dict[str, str]:
+    """这几个资产的上级(变体的本体)叫什么:{上级 id: 名字}。"""
+    ids = {row.parent_id for row in rows if row.parent_id}
+    return {parent.id: parent.name for parent in db.scalars(select(Entity).where(Entity.id.in_(ids)))} if ids else {}
+
+
 def forget_asset(db: Session, asset: Asset) -> int:
     """一份素材要删了:摘掉引用它的参考图,在那几个资产上记一笔「少了哪一张」。返回影响了几个资产。
 

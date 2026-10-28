@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
-from app.db.models import ProviderModel
 from app.domain.providers import thinking, models as provider_models
 from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default, get_row
 
@@ -26,7 +25,7 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
     for capability in DEFAULTABLE_CAPABILITIES:
         row = get_row(db, capability, user.id)
         # 默认只存一处(指向模型行),连接与模型名从那一行推导出来给界面。
-        model = db.get(ProviderModel, row.provider_model_id) if row and row.provider_model_id else None
+        model = provider_models.model_row(db, row.provider_model_id if row else None)
         out.append(
             ProviderDefaultOut(
                 capability=capability,

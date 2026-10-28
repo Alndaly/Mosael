@@ -3,10 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from app.api.responses import file_response
-from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.config import settings
-from app.db.models import PluginInstance
 from app.domain.blender import bridge, use_cases
 
 router = APIRouter(prefix='/scenes', tags=['Blender'])
@@ -14,7 +12,7 @@ router = APIRouter(prefix='/scenes', tags=['Blender'])
 
 @router.get('/blender/connections')
 def connections(db: DbSession, user: CurrentUser):
-    rows = db.scalars(select(PluginInstance).where(PluginInstance.owner_user_id == user.id, PluginInstance.package_id == bridge.PACKAGE))
+    rows = bridge.my_connections(db, user)
     return {'local': settings.local_desktop, 'connections': [{'id': r.id, 'name': r.name, 'enabled': r.enabled} for r in rows]}
 
 

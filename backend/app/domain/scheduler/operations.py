@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.core.token_digest import token_digest
 from app.db import references
-from app.db.models import ScheduledTask, ScheduledTaskRun, Workflow, now
+from app.db.models import Job, ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import create_job
 from app.domain.providers.moved_models import renamed
 from app.domain.referrers import referrers
@@ -82,6 +82,37 @@ def issue_webhook_secret(db: Session, task: ScheduledTask) -> str:
     task.webhook_secret_set_at = now()
     db.flush()
     return secret
+
+
+class WebhookRefused(LocalizedError):
+    """webhook 这一侧认不了:任务不在 / 密钥对不上 / 那次运行不是这个任务的。`status` 是路由该回的 HTTP 状态。"""
+
+    def __init__(self, key: str, *, status: int) -> None:
+        super().__init__(key)
+        self.status = status
+
+
+def webhook_task(db: Session, task_id: str, secret: str) -> ScheduledTask:
+    """外部系统凭任务级密钥来认的那条定时任务。库里只存哈希:来客手上那串再哈希一次比对。"""
+    task = db.get(ScheduledTask, task_id)
+    if task is None:
+        raise WebhookRefused("hookErr_taskNotFound", status=404)
+    if not webhook_secret_matches(task, secret):
+        raise WebhookRefused("hookErr_badSecret", status=403)
+    return task
+
+
+def webhook_run(db: Session, task: ScheduledTask, run_id: str) -> ScheduledTaskRun:
+    """这条任务的某一次运行;不是它的运行一律当不存在。"""
+    run = db.get(ScheduledTaskRun, run_id)
+    if run is None or run.scheduled_task_id != task.id:
+        raise WebhookRefused("hookErr_runNotFound", status=404)
+    return run
+
+
+def run_job(db: Session, run: ScheduledTaskRun) -> Job | None:
+    """这次运行起的那个任务(还没起、或者已经清掉了是 None)。"""
+    return db.get(Job, run.job_id) if run.job_id else None
 
 
 def webhook_secret_matches(task: ScheduledTask, secret: str) -> bool:

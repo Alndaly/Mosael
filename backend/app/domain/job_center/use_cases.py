@@ -11,7 +11,7 @@ from datetime import datetime
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import GenerationJob, Job, JobCenterMark, User, now
+from app.db.models import GenerationJob, Job, JobCenterMark, TaskEvent, User, now
 from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter
 from app.domain.jobs import TERMINAL_STATUSES, cancel_job
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_member, ensure_workspace_perm
@@ -63,6 +63,15 @@ def readable(db: Session, user: User, job_id: str) -> Job:
         # 看不见和不存在同一个回答 —— 连说法都一样,否则措辞本身就泄漏了「它存在」。
         raise NotVisible("Job not found") from None
     return job
+
+
+def events(db: Session, user: User, job_id: str, *, limit: int) -> list[TaskEvent]:
+    """一次运行的事件流(按时间正序)。上限按**最早**截断,不是最新 N 条:工作流详情靠 node.started / finished
+    配对还原每个节点的状态,取最新 N 条会把早期的 started 挤掉 —— 旧任务只剩最后一个节点,还一直显示在跑。"""
+    readable(db, user, job_id)
+    return list(db.scalars(
+        select(TaskEvent).where(TaskEvent.job_id == job_id).order_by(TaskEvent.created_at.asc()).limit(max(1, min(limit, 2000)))
+    ))
 
 
 def children(db: Session, user: User, job_id: str) -> list[Job]:

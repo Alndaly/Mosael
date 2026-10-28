@@ -9,6 +9,7 @@ from app.domain.agent import use_cases as agent_use_cases
 from app.domain.agent.confirmations import authorize_and_approve, authorize_and_reject
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.proposals import propose
+from app.domain.agent import confirmations as confirmations_domain
 
 router = APIRouter(tags=["confirmations"])
 
@@ -100,7 +101,7 @@ def expire(confirmation_id: str, db: Tx, user: CurrentUser, token: PresentedToke
 
 def _get_or_404(db: DbSession, confirmation_id: str) -> ToolConfirmation:
     """只管存在性。归属校验交给调用方 —— 读走 agent/use_cases.confirmation,写走 authorize_and_*。"""
-    confirmation = db.get(ToolConfirmation, confirmation_id)
+    confirmation = confirmations_domain.find_card(db, confirmation_id)
     if confirmation is None:
         raise HTTPException(status_code=404, detail="Not found")
     return confirmation

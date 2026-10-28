@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -91,11 +90,7 @@ def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderPro
     # 于是新账号一进设置页就看到八条别人建的连接,每条底下一行「未配置你的密钥」。
     # 删掉的连接也不在这里:那一行还在(生成历史要认得出处,见 connections.delete_connection),
     # 但"连接列表"问的是他现在有哪些连接。
-    profiles = db.scalars(
-        select(ProviderProfile)
-        .where(ProviderProfile.owner_user_id == user.id, ProviderProfile.deleted_at.is_(None))
-        .order_by(ProviderProfile.created_at)
-    ).all()
+    profiles = provider_connections.my_connections(db, user.id)
     # 自动续期只碰**我自己**那把钥匙 —— 过期的是谁的,谁登录的时候才刷得动。
     provider_auth.refresh_expired_in_background(
         [(profile, provider_credentials.get(db, profile.id, user.id)) for profile in profiles],

@@ -21,7 +21,6 @@ from app.api.schemas import (
     UserProfileUpdate,
 )
 from app.core.security import (
-    find_session,
     mint_login_session,
 )
 from app.domain import accounts, deployment, members
@@ -178,10 +177,8 @@ def logout(db: DbSession, user: CurrentUser, token: PresentedToken) -> dict:
     # Read the token the same way get_current_user does (PresentedToken is that same reader).
     # Reading only the header meant logging out of a ?token= session reported success and
     # revoked nothing — a false confirmation, which is worse than refusing.
-    session = find_session(db, token)
-    if session is not None and session.user_id == user.id:
-        db.delete(session)
-        db.commit()
+    accounts.sign_out(db, user, token)
+    db.commit()
     return {"ok": True}
 
 

@@ -20,12 +20,14 @@ from app.db.models import (
     AgentQuestion,
     AgentSession,
     ProviderProfile,
+    ProviderUsageEvent,
     ToolConfirmation,
     User,
     now,
 )
 from app.domain import sharing
 from app.domain.agent import (
+    replay as agent_replay,
     card_expiry,
     host,
     memory as agent_memory,
@@ -143,6 +145,32 @@ def move_homes(db: Session, user: User, workspace_id: str, kind: str, from_id: s
     if kind != places.COMFYUI:
         raise places.PlaceError("agentErr_placeOnlyComfyMoves")
     return places.move_comfy_homes(db, user, workspace_id, from_id, to_id)
+
+
+def messages(db: Session, user: User, session_id: str) -> list[AgentMessage]:
+    """这段对话的消息,按时间先后。看得见这段对话就看得见它的消息。"""
+    session = readable_session(db, user, session_id)
+    return list(db.scalars(select(AgentMessage).where(AgentMessage.session_id == session.id).order_by(AgentMessage.created_at)))
+
+
+def usage_events(db: Session, user: User, session_id: str) -> list[ProviderUsageEvent]:
+    """这段对话每一轮记下的用量(按消息挂的那几笔),按时间先后。"""
+    session = readable_session(db, user, session_id)
+    return list(db.scalars(
+        select(ProviderUsageEvent)
+        .join(AgentMessage, ProviderUsageEvent.agent_message_id == AgentMessage.id)
+        .where(AgentMessage.session_id == session.id)
+        .order_by(ProviderUsageEvent.created_at.asc())
+    ))
+
+
+def delete_session(db: Session, user: User, session_id: str) -> None:
+    """删掉一段对话(得是能写的那个人)。共享记录一并忘掉;回放文件在**提交之后**清 —— 回滚了对话还在,文件不能先没了。"""
+    session = writable_session(db, user, session_id)
+    session_id_value = session.id
+    sharing.forget(db, "agent_session", session.id)
+    db.delete(session)
+    after_commit(db, lambda: agent_replay.clear_session_files(session_id_value))
 
 
 def set_plan(db: Session, user: User, session_id: str, steps: list[Any]) -> AgentSession:

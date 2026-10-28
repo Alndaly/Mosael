@@ -11,7 +11,6 @@ from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.api.responses import event_stream, file_response
-from sqlalchemy import select
 
 from app.core.i18n import tr
 from app.domain.agent import (
@@ -25,7 +24,7 @@ from app.domain.agent import (
     questions as agent_questions,
 )
 from app.ai.sidecar import pi_client
-from app.domain import sharing, session_groups
+from app.domain import session_groups
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     AgentSpeechRequest,
@@ -145,21 +144,12 @@ def _out(db: DbSession, user: CurrentUser, session: AgentSession) -> AgentSessio
 
 @router.get("/agent/sessions/{session_id}/messages", response_model=list[AgentMessageOut])
 def list_agent_messages(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentMessage]:
-    session = readable_session(db, user, session_id)
-    stmt = select(AgentMessage).where(AgentMessage.session_id == session.id).order_by(AgentMessage.created_at)
-    return list(db.scalars(stmt))
+    return agent_use_cases.messages(db, user, session_id)
 
 
 @router.get("/agent/sessions/{session_id}/usage-events", response_model=list[ProviderUsageEventOut])
 def list_agent_usage_events(session_id: str, db: DbSession, user: CurrentUser) -> list[ProviderUsageEvent]:
-    session = readable_session(db, user, session_id)
-    stmt = (
-        select(ProviderUsageEvent)
-        .join(AgentMessage, ProviderUsageEvent.agent_message_id == AgentMessage.id)
-        .where(AgentMessage.session_id == session.id)
-        .order_by(ProviderUsageEvent.created_at.asc())
-    )
-    return list(db.scalars(stmt))
+    return agent_use_cases.usage_events(db, user, session_id)
 
 
 @router.get("/agent/sessions/{session_id}", response_model=AgentSessionOut)
@@ -323,12 +313,8 @@ def add_agent_session_allowance(
 
 @router.delete("/agent/sessions/{session_id}", status_code=204)
 def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
-    session = writable_session(db, user, session_id)
-    session_id_value = session.id
-    sharing.forget(db, "agent_session", session.id)
-    db.delete(session)
+    agent_use_cases.delete_session(db, user, session_id)
     db.commit()
-    agent_replay.clear_session_files(session_id_value)
     return Response(status_code=204)
 
 

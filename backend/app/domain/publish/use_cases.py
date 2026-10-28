@@ -9,7 +9,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import PublishAccount, PublishTask, User
+from app.core.i18n import LocalizedError
+from app.db.models import Asset, PublishAccount, PublishTask, User
 from app.domain import sharing
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 
@@ -33,6 +34,33 @@ def manageable_account(db: Session, user: User, account_id: str) -> PublishAccou
         raise NotVisible("Account not found")
     ensure_workspace_perm(db, user, account.workspace_id, "publish")
     return account
+
+
+class NotInWorkspace(LocalizedError):
+    """点名的账号或素材不在这个工作区里(路由回 404)。"""
+
+
+def publishing_inputs(db: Session, workspace_id: str, account_id: str, asset_ids: list[str]) -> tuple[PublishAccount, list[Asset]]:
+    """这次发布用的账号和素材(按发出去的顺序),都得在这个工作区里。
+
+    **「至少要几份」不在这里判** —— 视频要一份、图文要一份以上、文章看平台的 `cover` 声明;那些在 start_publish 里
+    按声明校验。这里只管「这些 id 归不归这个工作区」。
+    """
+    account = db.get(PublishAccount, account_id)
+    if account is None or account.workspace_id != workspace_id:
+        raise NotInWorkspace("routeErr_publishAccountNotInWorkspace")
+    assets: list[Asset] = []
+    for asset_id in (one for one in asset_ids if one):
+        found = db.get(Asset, asset_id)
+        if found is None or found.workspace_id != workspace_id:
+            raise NotInWorkspace("routeErr_assetNotInWorkspace")
+        assets.append(found)
+    return account, assets
+
+
+def delete_task(db: Session, user: User, task_id: str) -> None:
+    """删掉一条发布记录(工作区的发布权限)。不提交。"""
+    db.delete(deletable_task(db, user, task_id))
 
 
 def deletable_task(db: Session, user: User, task_id: str) -> PublishTask:

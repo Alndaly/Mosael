@@ -10,9 +10,10 @@ from fastapi.responses import FileResponse
 from app.api.responses import file_response
 
 from app.api.deps import CurrentUser, DbSession, Tx
+from app.domain.providers import connections as provider_connections
 from app.domain.voices.transcription import ASRError
 from app.core.i18n import get_current_locale, tr, translate_fields
-from app.db.models import Job, ProviderProfile
+from app.db.models import Job
 from app.api.schemas import (
     EngineSynthesizeRequest,
     RemoteCopyRequest,
@@ -70,12 +71,11 @@ def _voice_out(db, voice, user_id: str, copies: list | None = None) -> dict:
 
 def _copy_out(db, copy) -> dict:
 
-    profile = db.get(ProviderProfile, copy.provider_profile_id)
     return {
         "id": copy.id,
         "engine": f"{BUILTIN_PREFIX}{copy.engine}",
         "provider_profile_id": copy.provider_profile_id,
-        "connection": profile.name if profile is not None else "",
+        "connection": provider_connections.connection_name(db, copy.provider_profile_id),
         "target_model": copy.target_model,
         "status": copy.status,
         #: 存的是远端的原话或一个文案 key;是 key 就按读的人的语言翻。

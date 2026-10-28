@@ -369,6 +369,10 @@ def update_pricing_rule(db: Session, rule: ProviderPricingRule, **patch: Any) ->
     return rule
 
 
+def pricing_rule(db: Session, rule_id: str) -> ProviderPricingRule | None:
+    return db.get(ProviderPricingRule, rule_id)
+
+
 def delete_pricing_rule(db: Session, rule: ProviderPricingRule) -> None:
     db.delete(rule)
     db.flush()

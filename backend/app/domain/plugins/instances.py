@@ -63,6 +63,12 @@ def manifest_for(db: Session, instance: PluginInstance) -> Manifest:
     return manifest_of(package)
 
 
+def delete_instance(db: Session, instance: PluginInstance) -> None:
+    """删掉这个连接的那一行(凭据、能力开关、授权随外键级联)。背后本机服务的收尾由调用方先做(见 routes/plugins)。不提交。"""
+    db.delete(instance)
+    db.flush()
+
+
 def create(
     db: Session,
     package_id: str,

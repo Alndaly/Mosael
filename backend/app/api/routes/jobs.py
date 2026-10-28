@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.job_center import use_cases as job_center
 from app.api.schemas import JobCenterClearedOut, JobCenterOut, JobKindCatalogOut, JobOut, JobSummaryOut, TaskEventOut
 from app.core.i18n import get_current_locale, render_message, t
-from app.db.models import Job, TaskEvent
+from app.db.models import Job
 from app.domain.jobs import catalog as job_catalog
 
 router = APIRouter(tags=["jobs"])
@@ -98,15 +97,7 @@ def list_job_events(job_id: str, db: DbSession, user: CurrentUser, limit: int = 
     每个节点的状态,取最新 N 条会把早期的 started 挤掉 —— 表现为「旧任务只剩最后一个节点、
     前面的步骤全没了」,而最后那个节点因为丢了 started 反而显示成一直在跑。
     """
-    job_center.readable(db, user, job_id)
-    events = list(
-        db.scalars(
-            select(TaskEvent)
-            .where(TaskEvent.job_id == job_id)
-            .order_by(TaskEvent.created_at.asc())
-            .limit(max(1, min(limit, 2000)))
-        )
-    )
+    events = job_center.events(db, user, job_id, limit=limit)
     # 出口才翻:事件里存的是 key + 参数(见 domain/jobs.create_job),这里按请求方的
     # Accept-Language 渲染。没有 key 的事件(自由文本、外部 worker 写的)原样过。
     locale = get_current_locale()

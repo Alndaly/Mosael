@@ -17,7 +17,7 @@ from app.domain.providers.credentials import ResolvedConnection
 from app.domain.providers.selection import supports_capability
 from app.domain.billing import use_cases as billing
 from app.domain.billing.pricing_prefill import prefill_profile_pricing
-from app.domain.billing.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
+from app.domain.billing.usage import create_pricing_rule, delete_pricing_rule, pricing_rule, update_pricing_rule
 
 from app.domain.permissions import require_own_profile
 
@@ -120,7 +120,7 @@ def update_provider_pricing_rule(
     rule_id: str, body: ProviderPricingRuleUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderPricingRuleOut:
     ensure_deployment_admin(db, user)
-    rule = db.get(ProviderPricingRule, rule_id)
+    rule = pricing_rule(db, rule_id)
     if rule is None:
         raise HTTPException(status_code=404, detail="Not found")
     patch = _pricing_payload_with_profile_defaults(
@@ -141,7 +141,7 @@ def update_provider_pricing_rule(
 @router.delete("/settings/provider-pricing-rules/{rule_id}", status_code=204)
 def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser) -> Response:
     ensure_deployment_admin(db, user)
-    rule = db.get(ProviderPricingRule, rule_id)
+    rule = pricing_rule(db, rule_id)
     if rule is not None:
         delete_pricing_rule(db, rule)
         db.commit()

@@ -203,6 +203,19 @@ def list_models(db: Session, profile_id: str, *, enabled_only: bool = False) -> 
     return list(db.scalars(stmt.order_by(ProviderModel.model_id)))
 
 
+def model_row(db: Session, model_row_id: str | None) -> ProviderModel | None:
+    """按行 id 取一行模型(默认、定价这些地方存的是行 id)。"""
+    return db.get(ProviderModel, model_row_id) if model_row_id else None
+
+
+def remove_model(db: Session, profile_id: str, model_id: str) -> None:
+    """移除这条连接上的一行模型。目录里仍有的模型移除后回到「未配置」(还能再加回来),手填的则彻底消失。不提交。"""
+    model = get_model(db, profile_id, model_id)
+    if model is not None:
+        db.delete(model)
+        db.flush()
+
+
 def get_model(db: Session, profile_id: str, model_id: str) -> ProviderModel | None:
     """这条连接下这个模型的配置行;没配置过就是 None(仍可使用,只是没有任何覆盖)。"""
     if not profile_id or not model_id:

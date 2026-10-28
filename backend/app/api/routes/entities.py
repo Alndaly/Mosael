@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
-from sqlalchemy import select
 
 from sqlalchemy.orm import Session
 
@@ -42,10 +41,7 @@ router = APIRouter(tags=["entities"])
 
 def summaries_out(db: Session, rows: list[Entity]) -> list[EntitySummaryOut]:
     refs, variants, first = entities_library.counts_for(db, [row.id for row in rows])
-    parents = {
-        parent.id: parent.name
-        for parent in db.scalars(select(Entity).where(Entity.id.in_({row.parent_id for row in rows if row.parent_id})))
-    }
+    parents = entities_library.parent_names(db, rows)
     return [
         EntitySummaryOut(
             id=row.id,
@@ -66,13 +62,13 @@ def summaries_out(db: Session, rows: list[Entity]) -> list[EntitySummaryOut]:
 def entity_out(db: Session, entity: Entity) -> EntityOut:
     references = entities_library.references_of(db, entity.id)
     first_image = next((asset.id for _, asset in references if asset.kind == "image"), None)
-    parent = db.get(Entity, entity.parent_id) if entity.parent_id else None
+    parent_name = entities_library.parent_names(db, [entity]).get(entity.parent_id or "", "")
     return EntityOut(
         id=entity.id,
         workspace_id=entity.workspace_id,
         kind=entity.kind,
         parent_id=entity.parent_id,
-        parent_name=parent.name if parent is not None else "",
+        parent_name=parent_name,
         name=entity.name,
         description=entity.description,
         prompt=entity.prompt,

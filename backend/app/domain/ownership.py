@@ -21,7 +21,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "InviteLink": ("app/domain/members.py",),
     "WorkspaceMember": ("app/domain/members.py",),
     "WorkspaceInvitation": ("app/domain/members.py",),
-    "OAuthIdentity": ("app/api/routes/oauth.py",),
+    "OAuthIdentity": ("app/domain/accounts.py",),
     #: 桌面端登录 MosaelCloud 之后的那一枚会话 cookie:只归 cloud_binding 域建。
     "CloudLogin": ("app/domain/cloud_binding.py",),
     # 创作核心

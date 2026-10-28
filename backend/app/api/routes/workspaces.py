@@ -24,7 +24,8 @@ from app.api.schemas import (
 )
 from sqlalchemy.orm import Session
 
-from app.db.models import InviteLink, User, Workspace
+from app.db.models import InviteLink
+from app.domain import people
 from app.domain import dashboard, deployment, members as members_svc
 from app.domain.workspaces import use_cases as workspaces
 from app.domain.poem import PoemUnavailable, fetch_poem
@@ -138,12 +139,12 @@ def invite_member(workspace_id: str, body: InviteMemberRequest, db: Tx, user: Cu
 @router.get("/workspaces/{workspace_id}/invitations", response_model=InvitationListOut)
 def sent_invitations(workspace_id: str, db: DbSession, user: CurrentUser) -> InvitationListOut:
     """这个工作区发出去、对方还没应答的邀请(团队页列在成员下面,能撤回)。"""
-    workspace = db.get(Workspace, workspace_id)
+    workspace_name = members_svc.workspace_name(db, workspace_id)
     items = [
         InvitationOut(
             id=inv.id,
             workspace_id=workspace_id,
-            workspace_name=workspace.name if workspace else workspace_id,
+            workspace_name=workspace_name,
             inviter_name=inviter.display_name,
             invitee_name=invitee.display_name,
             role=inv.role,
@@ -166,7 +167,6 @@ def revoke_invitation(workspace_id: str, invitation_id: str, db: Tx, user: Curre
 
 def invite_link_out(db: Session, link: InviteLink) -> InviteLinkOut:
     """一张邀请链接交给界面的样子(团队页、管理页同一份)。"""
-    creator = db.get(User, link.created_by)
     return InviteLinkOut(
         id=link.id,
         code_hint=link.code_hint,
@@ -176,7 +176,7 @@ def invite_link_out(db: Session, link: InviteLink) -> InviteLinkOut:
         state=members_svc.link_state(link),
         allows_signup=members_svc.link_allows_signup(db, link),
         signup_requested=link.signup_requested_at is not None and not link.signup_approved_by,
-        created_by_name=(creator.display_name or creator.username) if creator is not None else "",
+        created_by_name=people.display_name(db, link.created_by),
         expires_at=link.expires_at,
         created_at=link.created_at,
     )
@@ -271,13 +271,11 @@ def _respond(db, invitation_id: str, user, *, accept: bool) -> InvitationOut:
         invitation = members_svc.respond_invitation(db, invitation_id, user, accept)
     except members_svc.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    workspace = db.get(Workspace, invitation.workspace_id)
-    inviter = db.get(User, invitation.inviter_id)
     return InvitationOut(
         id=invitation.id,
         workspace_id=invitation.workspace_id,
-        workspace_name=workspace.name if workspace else invitation.workspace_id,
-        inviter_name=inviter.display_name if inviter else invitation.inviter_id,
+        workspace_name=members_svc.workspace_name(db, invitation.workspace_id),
+        inviter_name=people.display_name(db, invitation.inviter_id) or invitation.inviter_id,
         invitee_name=user.display_name,
         role=invitation.role,
         status=invitation.status,

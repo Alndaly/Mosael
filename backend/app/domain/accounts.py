@@ -18,11 +18,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.i18n import LocalizedError, tr
-from app.core.security import hash_password, revoke_other_logins, verify_password
+from app.core.security import find_session, hash_password, revoke_other_logins, verify_password
 from app.core.unit_of_work import after_commit
 from app.db.models import AuthSession, OAuthIdentity, User, WorkspaceMember, new_id, Base
 from app.domain import deployment, members
-from app.domain.usernames import normalize_username
+from app.domain.usernames import free_username, normalize_username
 from app.domain.permissions import ensure_deployment_admin
 from app.domain.storage_cleanup import delete_user_files
 
@@ -182,6 +182,33 @@ def delete_user_account(db: Session, user: User) -> None:
             db.execute(text(f"DELETE FROM {table} WHERE {column} = :uid"), {"uid": user.id})
         db.delete(user)
         db.commit()
+
+
+def user_for_identity(db: Session, *, provider: str, subject: str, email: str, display_name: str) -> User:
+    """第三方登录认到的这个身份是谁;第一次进来就建一个账号并记下这个身份。
+
+    建号走 `create_account`(和本地注册同一个入口、同一道注册闸门,没有本地口令)。身份还在、账号已经删了的
+    (悬空身份)当作首次登录:删掉旧身份重建。不提交。
+    """
+    identity = db.get(OAuthIdentity, {"provider": provider, "subject": subject})
+    if identity is not None:
+        user = db.get(User, identity.user_id)
+        if user is not None:
+            return user
+        db.delete(identity)
+        db.flush()
+    base = (email.split("@")[0] if email else f"{provider}用户").strip().lower() or provider
+    user = create_account(db, username=free_username(db, base), display_name=display_name or base, password=None)
+    db.add(OAuthIdentity(provider=provider, subject=subject, user_id=user.id, email=email))
+    return user
+
+
+def sign_out(db: Session, user: User, token: str | None) -> None:
+    """作废这次请求带来的那份凭据(只认他自己的)。读凭据和认人同一个读法(core/security.find_session),
+    所以 `?token=` 的会话也登得出去 —— 此前只读请求头,登出报成功却什么都没作废。不提交。"""
+    session = find_session(db, token)
+    if session is not None and session.user_id == user.id:
+        db.delete(session)
 
 
 def authenticate(db: Session, username: str, password: str) -> User | None:

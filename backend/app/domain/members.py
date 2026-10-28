@@ -139,6 +139,12 @@ def adopt_orphan_workspaces(db: Session, user: User) -> None:
         db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))
 
 
+def workspace_name(db: Session, workspace_id: str) -> str:
+    """工作区在界面上叫什么;不在了就回它的 id(邀请、链接里还要说得出是哪个)。"""
+    workspace = db.get(Workspace, workspace_id)
+    return workspace.name if workspace is not None else workspace_id
+
+
 def owners_count(db: Session, workspace_id: str) -> int:
     return (
         db.scalar(

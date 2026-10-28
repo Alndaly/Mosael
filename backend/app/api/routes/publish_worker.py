@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import DbSession, Tx
-from app.db.models import PublishAccount, PublishTask
+from app.domain import publish
 from app.domain.publish import PublishDomainError
 from app.domain.publish import worker as publish_worker
 
@@ -67,7 +67,7 @@ def claim(body: ClaimRequest, db: Tx) -> dict[str, Any]:
 
 @router.get("/publish/worker/task/{task_id}")
 def task_status(task_id: str, db: DbSession) -> dict[str, Any]:
-    task = db.get(PublishTask, task_id)
+    task = publish.find_task(db, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"id": task.id, "status": task.status}
@@ -116,7 +116,7 @@ def patch_account(body: AccountPatchRequest, db: Tx) -> dict[str, Any]:
 @router.get("/publish/worker/account/{account_id}")
 def worker_account(account_id: str, db: DbSession) -> dict[str, Any]:
     """执行器打开某账号视图前拿它的连接参数(目前只有 proxy)。"""
-    account = db.get(PublishAccount, account_id)
+    account = publish.find_account(db, account_id)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
     return {"id": account.id, "proxy": account.proxy}

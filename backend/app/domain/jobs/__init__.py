@@ -758,6 +758,11 @@ def wait_for_idle_jobs(timeout: float = 5.0) -> bool:
     return _runner.idle() and not any(t.name == JOB_THREAD_NAME and t.is_alive() for t in threading.enumerate())
 
 
+def find_job(db: Session, job_id: str) -> Job | None:
+    """按 id 取任务。不认人 —— 外部执行器的回报通道凭租约令牌认(见 report_job),由调用方决定还要什么闸。"""
+    return db.get(Job, job_id)
+
+
 def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bool:
     """按 kind 的执行模式派发一个刚创建的 job。
 

@@ -58,6 +58,11 @@ def _stored_summary(text: str) -> str:
     return text if len(text) <= _SUMMARY_STORAGE_CHARS else text[: _SUMMARY_STORAGE_CHARS - 1].rstrip() + "…"
 
 
+def find_card(db: Session, confirmation_id: str) -> ToolConfirmation | None:
+    """按 id 取一张确认卡。只管存在性:归属校验交给调用方(读走 agent/use_cases.confirmation,写走 authorize_and_*)。"""
+    return db.get(ToolConfirmation, confirmation_id)
+
+
 def card_parts(summary_key: str, summary_params: dict[str, Any], locale: str) -> tuple[str, str]:
     """应用里那张卡的**标题**与**后果提示**,按读的人的语言。
 

@@ -44,9 +44,8 @@ from app.api.routes.auth import current_user_out
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_login_session
-from app.db.models import OAuthIdentity, User
+from app.db.models import User
 from app.domain import accounts
-from app.domain.usernames import free_username
 
 router = APIRouter(tags=["oauth"])
 
@@ -294,18 +293,7 @@ def _decode_jwt_payload(id_token: str) -> dict[str, Any]:
 def _find_or_create_user(db: Session, *, provider: str, subject: str, email: str, display_name: str) -> User:
     if not subject:
         raise OAuthLoginError("oauthLogin_noSubject")
-    identity = db.get(OAuthIdentity, {"provider": provider, "subject": subject})
-    if identity is not None:
-        user = db.get(User, identity.user_id)
-        if user is not None:
-            return user
-        db.delete(identity)  # 悬空身份(账号已删)→ 当作首次登录重建
-        db.flush()
-    base = (email.split("@")[0] if email else f"{provider}用户").strip().lower() or provider
-    # 首次进来就是建一个新账号 —— 和本地注册同一个入口、同一道注册闸门;没有本地口令(password=None)。
-    user = accounts.create_account(db, username=free_username(db, base), display_name=display_name or base, password=None)
-    db.add(OAuthIdentity(provider=provider, subject=subject, user_id=user.id, email=email))
-    return user
+    return accounts.user_for_identity(db, provider=provider, subject=subject, email=email, display_name=display_name)
 
 
 def _code_page(code: str) -> HTMLResponse:

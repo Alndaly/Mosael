@@ -19,6 +19,7 @@ from app.domain.workflows.node_types import available_node_types
 from app.domain.workflows.node_catalog import describe_node_types
 from app.domain.plugins.nodes import unusable
 from app.domain.workflows.from_page import start_from_page as prepare
+from app.domain.job_center import use_cases as job_center
 
 
 def readable(db: Session, user: User, workflow_id: str) -> Workflow:
@@ -138,6 +139,16 @@ def decide_run_approval_in_app(
 def delete_workflow(db: Session, user: User, workflow_id: str) -> None:
     """删掉一个工作流(编辑权限);绑着它的定时任务、触发器同一个事务里停用(见 workflows/deletion)。"""
     deletion.delete_workflow(db, editable(db, user, workflow_id))
+
+
+def visible_run(db: Session, user: User, job_id: str) -> tuple[Job, Workflow] | None:
+    """一次工作流运行(任务)和它跑的那张工作流;他看不见那次运行、或者工作流已经删了,是 None。"""
+    try:
+        job = job_center.readable(db, user, job_id)
+    except NotVisible:
+        return None
+    workflow = db.get(Workflow, str((job.payload or {}).get("workflow_id") or ""))
+    return (job, workflow) if workflow is not None else None
 
 
 def recent_runs(db: Session, user: User, workflow_id: str, *, limit: int = 50) -> list[Job]:

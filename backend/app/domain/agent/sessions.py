@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import false, select
 from sqlalchemy.orm import Session
 
+from app.core.security import find_session
 from app.db.models import AgentSession, User
 from app.domain import sharing
 from app.domain.permissions import NotVisible
@@ -21,6 +22,13 @@ from app.domain.sharing import AGENT_SESSION_KIND
 
 #: 共享记录里这一类叫什么(见 domain/sharing.KINDS)。
 SHARE_KIND = AGENT_SESSION_KIND
+
+
+def session_of_token(db: Session, token: str | None) -> AgentSession | None:
+    """这份凭据属于哪次对话(对话进程拿到的工具凭据挂着会话);登录令牌、MCP 直连没有对话,是 None。
+    归属由凭据决定,不由调用方声明。"""
+    auth = find_session(db, token)
+    return db.get(AgentSession, auth.agent_session_id) if auth is not None and auth.agent_session_id else None
 
 
 def readable_session(db: Session, user: User, session_id: str) -> AgentSession:

@@ -31,8 +31,8 @@ from app.domain.publish import (
     task_with_status,
     update_account,
 )
-from app.db.models import Asset, PublishAccount
-from app.core.i18n import get_current_locale, t, tr
+from app.db.models import PublishAccount
+from app.core.i18n import get_current_locale, t
 from app.domain.publish.copy import generate_copy
 
 router = APIRouter(tags=["publish"])
@@ -139,19 +139,11 @@ def list_publish_tasks(workspace_id: str, db: DbSession, user: CurrentUser) -> l
 @router.post("/publish/tasks", response_model=PublishTaskOut)
 def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
-    account = db.get(PublishAccount, body.account_id)
-    if account is None or account.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail=tr("routeErr_publishAccountNotInWorkspace"))
     #: 素材只有一种形状:`asset_ids`(按发出去的顺序)。视频也是只有一份的那个列表。
-    #: **"至少要几份"不在这里判** —— 视频要一份、图文要一份以上、文章看平台的 `cover` 声明
-    #: (required / optional / none)。这些都在领域层按声明校验,路由只管"这些 id 归不归这个工作区"。
-    requested_ids = [one for one in body.asset_ids if one]
-    assets: list[Asset] = []
-    for asset_id in requested_ids:
-        found = db.get(Asset, asset_id)
-        if found is None or found.workspace_id != body.workspace_id:
-            raise HTTPException(status_code=404, detail=tr("routeErr_assetNotInWorkspace"))
-        assets.append(found)
+    try:
+        account, assets = publish_uc.publishing_inputs(db, body.workspace_id, body.account_id, body.asset_ids)
+    except publish_uc.NotInWorkspace as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     try:
         task = start_publish(
             db,
@@ -177,8 +169,7 @@ def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
 
 @router.delete("/publish/tasks/{task_id}", status_code=204)
 def delete_publish_task(task_id: str, db: Tx, user: CurrentUser) -> Response:
-    task = publish_uc.deletable_task(db, user, task_id)
-    db.delete(task)
+    publish_uc.delete_task(db, user, task_id)
     return Response(status_code=204)
 
 

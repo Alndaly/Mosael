@@ -7,7 +7,6 @@ id(pool 页据此区分「发布账号」与通用档案)。删除受租约/绑�
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from sqlalchemy import select
 
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession, Tx
@@ -19,18 +18,18 @@ from app.api.schemas import (
     BrowserSessionOut,
     BrowserSessionRunOut,
 )
-from app.db.models import BrowserProfile, BrowserSession, PublishAccount, User, Workflow
+from app.db.models import BrowserProfile, BrowserSession, User
 from app.domain import browser
 from app.domain.browser import use_cases as profiles
-from app.domain.job_center import use_cases as job_center
-from app.domain.permissions import NotVisible
+from app.domain import publish
+from app.domain.workflows import use_cases as workflow_uc
 
 router = APIRouter(tags=["browser-profiles"])
 
 
 def _serialize(db, prof: BrowserProfile, user: User, shared: set[str]) -> BrowserProfileOut:
     """回档案 + 若被发布账号绑定则带上平台/账号 id(pool 页标注用)。"""
-    account = db.scalar(select(PublishAccount).where(PublishAccount.profile_id == prof.id))
+    account = publish.account_on_profile(db, prof.id)
     return BrowserProfileOut(
         id=prof.id,
         workspace_id=prof.workspace_id,
@@ -129,11 +128,8 @@ def _run_of(db: DbSession, user: User, session: BrowserSession) -> BrowserSessio
     """工作流运行开的会话属于那一次运行(会话的 owner 就是那次运行的工作流任务);看不见那次运行就不说。"""
     if session.owner_kind != "workflow" or not session.owner_id:
         return None
-    try:
-        job = job_center.readable(db, user, session.owner_id)
-    except NotVisible:
+    found = workflow_uc.visible_run(db, user, session.owner_id)
+    if found is None:
         return None
-    workflow = db.get(Workflow, str((job.payload or {}).get("workflow_id") or ""))
-    if workflow is None:
-        return None
+    job, workflow = found
     return BrowserSessionRunOut(job_id=job.id, workflow_id=workflow.id, workflow_name=workflow.name, started_at=job.created_at)

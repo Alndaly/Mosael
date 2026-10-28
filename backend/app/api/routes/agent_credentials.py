@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.db.models import ProviderProfile
+from app.domain.providers import connections as provider_connections
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers.auth import (
     CredentialLeaseError,
@@ -64,8 +65,8 @@ class CommitOut(BaseModel):
 def _require_owned_profile(db: DbSession, profile_id: str, user_id: str) -> ProviderProfile:
     # 删掉的连接不再是连接:钥匙跟着删连接一起清了(见 domain/providers/connections.delete_connection),
     # 那一行留着只为让历史认得出处 —— 它没有凭据可取,也不该被取。
-    profile = db.get(ProviderProfile, profile_id)
-    if profile is None or profile.deleted_at is not None or profile.owner_user_id != user_id:
+    profile = provider_connections.my_connection(db, profile_id, user_id)
+    if profile is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_providerNotFound"))
     return profile
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
@@ -35,6 +35,30 @@ from app.domain.providers.selection import normalize_auth_type, pi_provider_id
 
 class ConnectionConfigError(LocalizedError, ValueError):
     """连接自己的必填字段(端点、区域一类)没填。api 回 422。"""
+
+
+def my_connections(db: Session, user_id: str) -> list[ProviderProfile]:
+    """**他自己的**、还在的连接,按建的先后。连接归人(见 db.models.ProviderProfile);删掉的那一行还在
+    (生成历史要认得出处,见 delete_connection),但「他有哪些连接」问的是现在。"""
+    return list(db.scalars(
+        select(ProviderProfile)
+        .where(ProviderProfile.owner_user_id == user_id, ProviderProfile.deleted_at.is_(None))
+        .order_by(ProviderProfile.created_at)
+    ))
+
+
+def my_connection(db: Session, profile_id: str, user_id: str) -> ProviderProfile | None:
+    """他自己的、还在的这条连接;不是他的、删掉了、不存在都是 None。删掉的连接不再是连接:钥匙跟着删连接一起清了。"""
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None or profile.deleted_at is not None or profile.owner_user_id != user_id:
+        return None
+    return profile
+
+
+def connection_name(db: Session, profile_id: str | None) -> str:
+    """一条连接在界面上叫什么(展示用,不认人);不在了是空串。"""
+    profile = db.get(ProviderProfile, profile_id) if profile_id else None
+    return profile.name if profile is not None else ""
 
 
 def create_connection(

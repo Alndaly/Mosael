@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 from pydantic import ValidationError
+from sqlalchemy import select
 from app.core.config import settings
 from app.core.i18n import LocalizedError, get_current_locale, t
 from app.db.models import PluginInstance, Scene3DModel
@@ -92,6 +93,11 @@ def upstream_failure(text: object, empty_key: str, framed: str = "blenderErr_syn
 PACKAGE = 'dev.mosael.blender'
 _locks: dict[str, threading.Lock] = {}
 _guard = threading.Lock()
+
+
+def my_connections(db, user) -> list[PluginInstance]:
+    """他自己接的 Blender 连接(连接归人)。"""
+    return list(db.scalars(select(PluginInstance).where(PluginInstance.owner_user_id == user.id, PluginInstance.package_id == PACKAGE)))
 
 
 def connection(db, user, instance_id):

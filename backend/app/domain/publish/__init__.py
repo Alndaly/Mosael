@@ -454,6 +454,19 @@ def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -
     db.flush()
 
 
+def find_task(db: Session, task_id: str) -> PublishTask | None:
+    return db.get(PublishTask, task_id)
+
+
+def find_account(db: Session, account_id: str) -> PublishAccount | None:
+    return db.get(PublishAccount, account_id)
+
+
+def account_on_profile(db: Session, profile_id: str) -> PublishAccount | None:
+    """挂在这个浏览器档案上的发布账号(一个档案至多挂一个)。"""
+    return db.scalar(select(PublishAccount).where(PublishAccount.profile_id == profile_id))
+
+
 def active_tasks_for_asset(db: Session, asset_id: str) -> list[PublishTask]:
     """这份素材还在发的那些任务(没落终态的)。"""
     return list(db.scalars(select(PublishTask).where(

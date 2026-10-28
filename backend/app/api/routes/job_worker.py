@@ -14,8 +14,7 @@ from pydantic import BaseModel, Field
 
 from app.core.i18n import tr
 from app.api.deps import DbSession, Tx
-from app.db.models import Job
-from app.domain.jobs import claim_next_job, external_kinds, renew_worker_leases, report_job
+from app.domain.jobs import claim_next_job, external_kinds, find_job, renew_worker_leases, report_job
 
 router = APIRouter(tags=["job-worker"])
 
@@ -65,7 +64,7 @@ def claim(body: ClaimRequest, db: DbSession) -> dict[str, Any]:
 
 @router.patch("/jobs/worker/report")
 def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
-    job = db.get(Job, body.job_id)
+    job = find_job(db, body.job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_jobNotFound"))
     try:

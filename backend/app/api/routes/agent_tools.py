@@ -36,7 +36,6 @@ from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
-from app.db.models import AgentSession
 from app.domain.agent.autopilot import session_for_token
 from app.domain.agent.confirmable.plugin_tools import exposed_tool
 from app.domain.agent.errors import ConfirmationError
@@ -46,6 +45,7 @@ from app.domain.effects import needs_card
 from app.domain.jobs import reset_receipt, set_receipt
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.use_cases import invoke_tool
+from app.domain.agent.sessions import session_of_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent-tools"])
@@ -71,9 +71,7 @@ def list_agent_tools(db: DbSession, user: CurrentUser, token: PresentedToken) ->
     没有对话的调用方(登录令牌、MCP 直连)全给。
     """
 
-    session_id = session_for_token(db, token)
-    session = db.get(AgentSession, session_id) if session_id else None
-    return agent_tool_specs(db, user.id, session)
+    return agent_tool_specs(db, user.id, session_of_token(db, token))
 
 
 def _accepted_names(fn: Any) -> list[str]:
@@ -119,8 +117,7 @@ def _fit_arguments(fn: Any, arguments: dict[str, Any]) -> tuple[dict[str, Any], 
 def _session_workspace(db: Any, token: str) -> str:
     """这份凭据所属那次对话的工作区。没有会话(登录令牌、MCP 直连)就是空串。"""
 
-    auth = find_session(db, token)
-    session = db.get(AgentSession, auth.agent_session_id) if auth is not None and auth.agent_session_id else None
+    session = session_of_token(db, token)
     return session.workspace_id if session is not None else ""
 
 

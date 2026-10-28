@@ -18,9 +18,16 @@ from fastapi import APIRouter, HTTPException
 from app.api.deps import DbSession, Tx
 from app.api.schemas import JobOut
 from app.core.i18n import tr
-from app.db.models import Job, ScheduledTask, ScheduledTaskRun
+from app.db.models import ScheduledTask, ScheduledTaskRun
 from app.domain.jobs import JobError, cancel_job
-from app.domain.scheduler.operations import SchedulerDomainError, trigger_scheduled_task, webhook_secret_matches
+from app.domain.scheduler.operations import (
+    SchedulerDomainError,
+    WebhookRefused,
+    run_job,
+    trigger_scheduled_task,
+    webhook_run,
+    webhook_task,
+)
 from app.api.schemas.base import ApiModel
 
 router = APIRouter(tags=["hooks"])
@@ -43,24 +50,21 @@ class HookRunOut(ApiModel):
 
 
 def _task(db, task_id: str, secret: str) -> ScheduledTask:
-    task = db.get(ScheduledTask, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail=tr("hookErr_taskNotFound"))
-    #: 库里只存哈希(见 domain/scheduler.issue_webhook_secret):来客手上那串再哈希一次比对。
-    if not webhook_secret_matches(task, secret):
-        raise HTTPException(status_code=403, detail=tr("hookErr_badSecret"))
-    return task
+    try:
+        return webhook_task(db, task_id, secret)
+    except WebhookRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 def _run(db, task: ScheduledTask, run_id: str) -> ScheduledTaskRun:
-    run = db.get(ScheduledTaskRun, run_id)
-    if run is None or run.scheduled_task_id != task.id:
-        raise HTTPException(status_code=404, detail=tr("hookErr_runNotFound"))
-    return run
+    try:
+        return webhook_run(db, task, run_id)
+    except WebhookRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 def _out(db, run: ScheduledTaskRun) -> HookRunOut:
-    job = db.get(Job, run.job_id) if run.job_id else None
+    job = run_job(db, run)
     if job is None:
         return HookRunOut(run_id=run.id, status=run.status, error=run.error, result=run.result or {},
                           started_at=run.started_at, finished_at=run.finished_at)
@@ -95,7 +99,7 @@ def cancel_hook_run(task_id: str, run_id: str, secret: str, db: Tx) -> HookRunOu
     """取消这次运行。节点粒度:正在执行的那一步跑完就停,派生的子任务一并取消(见 jobs.cancel_job)。"""
     task = _task(db, task_id, secret)
     run = _run(db, task, run_id)
-    job = db.get(Job, run.job_id) if run.job_id else None
+    job = run_job(db, run)
     if job is None:
         raise HTTPException(status_code=409, detail=tr("jobErr_alreadyFinished"))
     try:

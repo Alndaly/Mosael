@@ -274,8 +274,6 @@ def delete_provider_model(profile_id: str, model_id: str, db: DbSession, user: C
     """移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
     手填的则彻底消失 —— 它本来就只存在于这一行里。"""
     require_own_profile(db, user, profile_id, editing=True)  # 归属判定,和这条连接上其余操作同一道门
-    model = provider_models.get_model(db, profile_id, model_id)
-    if model is not None:
-        db.delete(model)
-        db.commit()
+    provider_models.remove_model(db, profile_id, model_id)
+    db.commit()
     return Response(status_code=204)

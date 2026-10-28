@@ -171,6 +171,11 @@ def _load(path: Path) -> dict[str, Any]:
     return raw
 
 
+def installed(db: Session, package_id: str) -> PluginPackage | None:
+    """装着的这个包(没装是 None)。"""
+    return db.get(PluginPackage, package_id) if package_id else None
+
+
 def instances_of(db: Session, package_id: str) -> list[PluginInstance]:
     return list(
         db.scalars(

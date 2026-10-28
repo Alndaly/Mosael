@@ -81,7 +81,7 @@ from app.api.schemas import (
 )
 from app.core.config import settings
 from app.domain.permissions import ensure_deployment_admin
-from app.db.models import Job, PluginInstance, PluginInvocation, PluginPackage, User
+from app.db.models import Job, PluginInstance, PluginInvocation, User
 from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOut
 from app.ai.runtime import nsfw_models
 from app.ai.runtime.errors import RuntimeSetupError
@@ -164,7 +164,7 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
     unreleased = updates.not_released(db, raw, advertised_version=body.advertised_version, download=url)
     if unreleased:
         db.commit()
-    existing = db.get(PluginPackage, str(raw.get("id") or ""))
+    existing = pkg.installed(db, str(raw.get("id") or ""))
     declared = (raw.get("tools") or {}).get("declare") if isinstance(raw.get("tools"), dict) else []
     return PluginInstallPreview(
         id=str(raw.get("id") or ""),
@@ -305,7 +305,7 @@ def delete_instance(
         local_services.forget_instance(instance.id)
         if install == "remove":
             local_services.remove_install(db, instance, keep_models=keep_models)
-        db.delete(instance)
+        inst.delete_instance(db, instance)
         db.commit()
         # 模型库记着的预览图(内存里的地址、磁盘上的图)跟着连接走。
         model_library.drop_cache(instance_id)
