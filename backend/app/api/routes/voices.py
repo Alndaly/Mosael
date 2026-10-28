@@ -12,7 +12,7 @@ from app.api.responses import file_response
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.voices.transcription import ASRError
 from app.core.i18n import get_current_locale, tr, translate_fields
-from app.db.models import Job
+from app.db.models import Job, ProviderProfile
 from app.api.schemas import (
     EngineSynthesizeRequest,
     RemoteCopyRequest,
@@ -31,19 +31,26 @@ from app.api.schemas import (
     VoiceOut,
     VoiceUpdate,
 )
-from app.ai.runtime import tts_daemon, tts_models
-from app.domain.voices import tts_settings, voices
-from app.domain.voices import errors
+from app.ai.runtime import tts_daemon, tts_models, config as tts_config, f5_models
+from app.domain.voices import (
+    tts_settings,
+    voices,
+    errors,
+    use_cases as voice_uc,
+    defaults as voice_defaults,
+    engine_catalog,
+    remote,
+)
 from app.domain.permissions import ensure_deployment_admin
-from app.domain.voices import use_cases as voice_uc
-from app.ai.runtime import config as tts_config
+from app.domain.voices.engine_catalog import set_default_voice
+from app.domain.voices.remote import RemoteConsentRequired
+from app.domain.voices.speech import BUILTIN_PREFIX, CLONE_ENGINE, PODCAST_ENGINE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["voices"])
 
 
 def _voice_out(db, voice, user_id: str, copies: list | None = None) -> dict:
-    from app.domain.voices import remote
 
     if copies is None:
         copies = remote.copies_by_voice(db, [voice.id], owner_user_id=user_id).get(voice.id, [])
@@ -62,8 +69,6 @@ def _voice_out(db, voice, user_id: str, copies: list | None = None) -> dict:
 
 
 def _copy_out(db, copy) -> dict:
-    from app.db.models import ProviderProfile
-    from app.domain.voices.speech import BUILTIN_PREFIX
 
     profile = db.get(ProviderProfile, copy.provider_profile_id)
     return {
@@ -82,7 +87,6 @@ def _copy_out(db, copy) -> dict:
 
 @router.get("/voices", response_model=list[VoiceOut])
 def list_voices(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    from app.domain.voices import remote
 
     voice_uc.ensure_can_list(db, user, workspace_id)
     rows = voices.list_voices(db, workspace_id)
@@ -159,7 +163,6 @@ def copy_voice_to_engine(voice_id: str, body: RemoteCopyRequest, db: Tx, user: C
     同一个确认框)。同意记在副本上,之后换模型、副本被删按需重建,不再问。复刻在任务里做(上传、建、等它就绪,
     约十秒),这里只排上。
     """
-    from app.domain.voices import remote
 
     voice = voice_uc.usable(db, user, voice_id)
     try:
@@ -218,7 +221,6 @@ def list_f5_models(user: CurrentUser) -> list[dict]:
     这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定
     (见 ai/runtime/f5_models)。
     """
-    from app.ai.runtime import f5_models
 
     locale = get_current_locale()
     # message 也要翻:失败时它是 key(我们自己的原因)或第三方库的原话(翻不了,原样给)。
@@ -230,7 +232,6 @@ def list_f5_models(user: CurrentUser) -> list[dict]:
 def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
     # 和引擎下载同一道闸门:往**后端主机**上装 1.4 GB 权重是部署级动作,不属于任何工作区。
     ensure_deployment_admin(db, user)
-    from app.ai.runtime import f5_models
 
     try:
         row = f5_models.start_download(model_id)
@@ -250,12 +251,10 @@ def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
     每一行还带「是不是这台机器默认那一对里的引擎」(`is_default`)。默认不另开 GET ——
     **同一个答案只有一处来源**(和降噪、转写同一条),写入口在 `PUT /api/settings/voice-default`。
     """
-    from app.domain.voices import defaults as voice_defaults
-    from app.domain.voices.engine_catalog import describe_engines
 
     default_engine, _default_voice = voice_defaults.default_pair(db)
     locale = get_current_locale()
-    rows = [translate_fields(row, ("label", "note"), locale) for row in describe_engines(db, user.id)]
+    rows = [translate_fields(row, ("label", "note"), locale) for row in engine_catalog.describe_engines(db, user.id)]
     for row in rows:
         row["is_default"] = bool(default_engine) and row["id"] == default_engine
     return rows
@@ -266,13 +265,11 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser, workspace_id:
     """The voices an engine can speak in, live where the account allows it (see engine_catalog).
 
     带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`cloned`,ADR 0037)。"""
-    from app.domain.voices import defaults as voice_defaults
-    from app.domain.voices.engine_catalog import list_engine_voices
 
     if workspace_id:
         voice_uc.ensure_can_list(db, user, workspace_id)
     default_engine, default_voice = voice_defaults.default_pair(db)
-    rows = list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
+    rows = engine_catalog.list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
     for row in rows:
         #: 默认是一对:问"这个音色是不是默认的",必须同时在默认那个引擎下问,否则 Edge 的晓晓
         #: 会把火山上同名的音色也标成默认。
@@ -288,8 +285,6 @@ def set_voice_default(body: VoiceDefaultUpdate, db: Tx, user: CurrentUser) -> di
     成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。两格都空 = 清掉默认。
     和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。
     """
-    from app.domain.voices import defaults as voice_defaults
-    from app.domain.voices.engine_catalog import set_default_voice
 
     ensure_deployment_admin(db, user)
     try:
@@ -311,9 +306,6 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
     speak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听
     活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。
     """
-    from app.domain.voices.engine_catalog import synthesis_params
-    from app.domain.voices.remote import RemoteConsentRequired
-    from app.domain.voices.speech import CLONE_ENGINE, PODCAST_ENGINE
 
     # 念一句是花钱的(各家 TTS 按字符计费),和配音同一档权限;记账挂在这个工作区上。
     voice_uc.ensure_can_speak(db, user, body.workspace_id)
@@ -336,7 +328,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
             media_type = "audio/mpeg" if out.suffix == ".mp3" else "audio/wav"
         return Response(content=audio, media_type=media_type, headers={"Cache-Control": "no-store"})
     try:
-        params = synthesis_params(
+        params = engine_catalog.synthesis_params(
             db, engine=body.engine, voice=body.voice, user_id=user.id, workspace_id=body.workspace_id
         )
     except errors.VoiceError as exc:

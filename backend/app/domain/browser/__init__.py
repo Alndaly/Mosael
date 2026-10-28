@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.unit_of_work import immediate_unit_of_work, unit_of_work
-from app.core.i18n import LocalizedError, is_message_key, tr
+from app.core.i18n import LocalizedError, is_message_key, tr, fragment
 from app.domain import sharing
 from app.domain.authority import Actor
 from app.domain.host_files import HostFile
@@ -44,6 +44,7 @@ from app.db.models import (
     User,
     now,
 )
+from app.domain.jobs import TERMINAL_STATUSES, register_settle_listener
 
 _UNSET = object()  # update_profile 里区分「不改」与「置空」
 
@@ -369,7 +370,6 @@ def _profile_busy(holder: BrowserSession | None) -> BrowserDomainError:
     """
     if holder is None:
         return BrowserDomainError("browserErr_profileBusy")
-    from app.core.i18n import fragment
 
     minutes = max(0, int((now() - holder.created_at).total_seconds() // 60)) if holder.created_at else 0
     who = fragment(f"browserHolder_{holder.owner_kind or 'manual'}")
@@ -511,7 +511,6 @@ def _reclaimable_sessions(db: Session, *, partition: str | None = None) -> list[
     )
     if partition is not None:
         query = query.where(BrowserSession.partition == partition)
-    from app.domain.jobs import TERMINAL_STATUSES  # 同 install():导入期不依赖任务总线
 
     idle = []
     for session in db.scalars(query).all():
@@ -562,7 +561,6 @@ def _close_run_sessions(db: Session, job: Job) -> None:
 
 def install() -> None:
     """装配:任务总线不认识浏览器,是浏览器在这里把「运行结束就关会话」登记进去(app/main.py)。"""
-    from app.domain.jobs import register_settle_listener
 
     register_settle_listener("browser_sessions", _close_run_sessions)
 

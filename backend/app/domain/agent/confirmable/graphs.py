@@ -8,6 +8,11 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy.orm import Session
+from app.core.i18n import fragment
+from app.db.models import Workflow
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_ops import apply_graph_ops
+from app.domain.workflows.node_types import NODE_TYPES
 
 
 def graph_to_persist(db: Session, tool: str, payload: dict[str, Any]) -> object:
@@ -32,9 +37,6 @@ def graph_to_persist(db: Session, tool: str, payload: dict[str, Any]) -> object:
         return payload.get("graph")
     if tool != "edit_workflow":
         return None
-    from app.db.models import Workflow
-    from app.domain.workflows.errors import WorkflowDomainError
-    from app.domain.workflows.graph_ops import apply_graph_ops
 
     workflow = db.get(Workflow, str(payload.get("workflow_id") or ""))
     if workflow is None:
@@ -53,7 +55,6 @@ def graph_under_review(db: Session, tool: str, payload: dict[str, Any]) -> objec
     (一个开关迟早会被下一个调用方按错)。
     """
     if tool == "run_workflow":
-        from app.db.models import Workflow
 
         workflow = db.get(Workflow, str(payload.get("workflow_id") or ""))
         return workflow.graph if workflow is not None else None
@@ -69,8 +70,6 @@ def external_warning(external: set[str] | None) -> Any:
     """
     if not external:
         return ""
-    from app.core.i18n import fragment
-    from app.domain.workflows.node_types import NODE_TYPES
 
     #: **这里不是出口。** 原先这里 `t(..., get_current_locale())` 当场翻 —— 而确认卡由
     #: sidecar / MCP 调进来,那条路不带 Accept-Language(查过,零命中),所以 locale 恒为 zh:

@@ -16,6 +16,7 @@ from app.domain.workflows.graph_rules import as_text
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.numbers import at_least, whole_number
 from app.domain.workflows.executors.common import truthy, wait_until
+from app.domain.workflows.executors.ai import _parse_json_response
 
 HTTP_NODE_TIMEOUT_SECONDS = 60
 HTTP_TEXT_CAP = 100_000
@@ -220,7 +221,6 @@ def _fenced_json(text: str, *, default: Any) -> Any:
     """
     if not text.strip().startswith("```"):
         return default
-    from app.domain.workflows.executors.ai import _parse_json_response
 
     try:
         return _parse_json_response(text)

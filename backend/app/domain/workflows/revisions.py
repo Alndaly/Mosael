@@ -19,6 +19,10 @@ from app.db.model_base import now
 from app.db import references
 from app.db.models import Workflow, WorkflowRevision, WorkflowRevisionAttestation
 from app.domain import people
+from app.domain.collaboration import record_activity
+from app.domain.workflows.graph_upgrade import upgrade_graph
+from app.domain.workflows.node_types import available_node_types
+from app.domain.workflows.normalization import normalize_graph
 
 
 #: 版本历史是给人恢复工作流用的浏览窗口，不是运行快照的生命周期。
@@ -123,7 +127,6 @@ def create_initial_revision(
     )
     db.add(revision)
     db.flush()
-    from app.domain.collaboration import record_activity
 
     record_activity(
         db,
@@ -252,7 +255,6 @@ def commit_graph_revision(
         )
         db.add(revision)
         db.flush()
-        from app.domain.collaboration import record_activity
 
         record_activity(
             db,
@@ -331,9 +333,6 @@ def restore_workflow_revision(
     #: 恢复是「回到那一版」这个明确的意图,不是拿着旧底子的快照:落到最新那份上就是替换它。
     #: 那一版可能早于某次形状升级(迁移改的是库里当时的图,改不到历史修订):恢复的那份先升级、再规范化,
     #: 和保存落的是同一种形状 —— 否则迁移修好的旧形状借着恢复又回来(见 graph_upgrade)。
-    from app.domain.workflows.graph_upgrade import upgrade_graph
-    from app.domain.workflows.node_types import available_node_types
-    from app.domain.workflows.normalization import normalize_graph
 
     snapshot = normalize_graph(upgrade_graph(deepcopy(target.graph)), node_types=available_node_types(db))
     restored = commit_graph_revision(
@@ -390,7 +389,6 @@ def attest_revision(db: Session, workflow: Workflow, target_revision: int, *, at
     attestation = WorkflowRevisionAttestation(revision_id=revision.id, user_id=attested_by)
     db.add(attestation)
     db.flush()
-    from app.domain.collaboration import record_activity
 
     record_activity(
         db,

@@ -14,6 +14,8 @@ from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.sessions import decides_for_filter, ensure_decides_for
 from app.domain.jobs import reset_receipt, set_receipt
 from app.domain.permissions import ensure_workspace_perm, holds_workspace_perm
+from app.domain.agent import origins
+from app.domain.agent.receipts import receipt_to_session
 
 """
 Confirmation kernel (plan §16.2/§17.2): mutating external-agent tools never
@@ -248,7 +250,6 @@ def decidable_filter(db: Session, user: User, workspace_id: str) -> Any:
 
 def _notify_card_settled(db: Session, confirmation: ToolConfirmation) -> None:
     """提交之后让外部渠道收回原卡。没有 feishu_message_id 的卡由集成层自身 no-op。"""
-    from app.domain.agent import origins
 
     after_commit(db, lambda: origins.confirmation_settled_after_commit(confirmation))
 
@@ -346,7 +347,6 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
     而漏掉的那一处不会报错,只是那种任务的回执永远送不到。
     """
     if confirmation.session_id:
-        from app.domain.agent.receipts import receipt_to_session
 
         token = set_receipt(receipt_to_session(confirmation.session_id))
         try:

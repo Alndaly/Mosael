@@ -17,6 +17,10 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, AssetExtraction
 from app.domain.documents.extraction import ensure_parsed, extraction_dir, latest_extraction, read_sections
+from app.core.unit_of_work import unit_of_work
+from app.domain.analysis import service as analysis_service
+from app.domain.analysis.service import image_part
+from app.domain.billing.usage import billable, once
 
 #: 整篇直接放进对话上下文的上限(字)。再长只放目录,正文按段取。
 INLINE_CHARS = 12_000
@@ -43,7 +47,6 @@ def _document(db: Session, workspace_id: str, asset_id: str) -> Asset:
 
 def _ready(db: Session, asset: Asset, *, wait: bool) -> AssetExtraction:
     """最新成功的那份解析;还在解析就等一会儿(wait),失败 / 没有就说清楚。"""
-    from app.core.unit_of_work import unit_of_work
 
     deadline = time.monotonic() + (WAIT_SECONDS if wait else 0)
     #: 补一次解析是**它自己的一个用例**,自己提交:解析任务在提交之后才开跑(jobs.dispatch_job),而下面要在这里
@@ -187,8 +190,6 @@ def attachment_context(db: Session, workspace_id: str, asset_ids: list[str]) -> 
 def analyze_pages(db: Session, workspace_id: str, asset_id: str, pages: list[int], question: str, *,
                   user_id: str | None, profile_id: str | None = None) -> dict[str, Any]:
     """那几页的页面图 + 那几页的文字 → 视觉模型。页码按「原版」那一栏数(第几张页面图)。"""
-    from app.domain.analysis.service import call_vision_model, image_part, select_analysis_connection
-    from app.domain.billing.usage import billable, once
 
     asset = _document(db, workspace_id, asset_id)
     extraction = _ready(db, asset, wait=True)
@@ -207,8 +208,8 @@ def analyze_pages(db: Session, workspace_id: str, asset_id: str, pages: list[int
             f"[第 {page} 页]\n{text_by_page.get(page, '')[:4000]}" for page in wanted)
     content: list[dict[str, Any]] = [{"type": "text", "text": f"{context}\n\n{question.strip() or '说说这几页的内容和版式。'}"}]
     content.extend(image_part((root / images[page - 1]).read_bytes(), "image/png") for page in wanted)
-    profile = select_analysis_connection(db, profile_id, user_id)
+    profile = analysis_service.select_analysis_connection(db, profile_id, user_id)
     with billable(db, user_id=user_id, capability="chat", operation="analyze_document_pages", workspace_id=asset.workspace_id,
                   idempotency_key=once("analyze_document_pages"), source_type="asset", source_id=asset.id) as call:
-        answer = call_vision_model(db, profile, [{"role": "user", "content": content}], call)
+        answer = analysis_service.call_vision_model(db, profile, [{"role": "user", "content": content}], call)
     return {"asset_id": asset.id, "pages": wanted, "answer": answer}

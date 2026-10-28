@@ -29,9 +29,11 @@ from app.domain.generation.resolution import generation_options
 from app.domain.generation import use_cases as generation
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.origins import STUDIO_ORIGIN
-from app.domain.generation.custom_profiles import capability_ref_choices
+from app.domain.generation.custom_profiles import capability_ref_choices, profile_form_schema
 from app.domain.generation.prompt_optimizer import PromptOptimizeError
 from app.domain.generation.sessions import delete_session, writable_session
+from app.domain.generation.missing import explain_missing
+from app.domain.generation_catalog import GENERATION_KINDS
 
 router = APIRouter(tags=["generation"])
 
@@ -111,7 +113,6 @@ def explain_missing_model(
 ) -> GenerationMissingOut:
     """记着的 (连接, 模型) 不在生成选项里时:它叫什么、为什么不在、怎么修。会话、画板格子、工作流节点据此照常显示记着的
     那个、说原因、不让跑(ADR 0045 修订之一)。插件连接会去问插件(ComfyUI 要列一次目录)。"""
-    from app.domain.generation.missing import explain_missing
 
     found = explain_missing(db, user_id=user.id, provider_profile_id=provider_profile_id, model=model, kind=kind)
     return GenerationMissingOut(**found.read(get_current_locale()))
@@ -124,9 +125,7 @@ def get_capability_profile_schema(kind: str = "image") -> CapabilityProfileSchem
     前端的语义表单由它驱动:加一个字段只改后端 custom_profiles 一处,表单自动长出
     对应的控件。键名与分组的翻译在前端(messages.ts),后端不出文案。
     """
-    from app.domain.generation.custom_profiles import profile_form_schema
 
-    from app.domain.generation_catalog import GENERATION_KINDS
 
     if kind not in GENERATION_KINDS:
         raise HTTPException(status_code=422, detail=tr("routeErr_badGenerationKind"))

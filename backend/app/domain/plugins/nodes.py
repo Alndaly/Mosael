@@ -39,11 +39,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import is_message_key, tr
-from app.domain.media_kinds import MEDIA_KINDS
+from app.core.i18n import is_message_key, tr, get_current_locale, render_message
+from app.domain.media_kinds import MEDIA_KINDS, declared_media
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT, EXTERNAL_ID_FORMAT, schema_type
 from mosael_formats.plugin_manifest import TOOLS, text_of, tool_label
+from app.db.models import PluginInstance, PluginPackage
+from app.domain.plugins import dynamic_tools, instances as inst, tools as plugins_tools
+from app.domain.plugins.manifest import manifest_of
+from app.domain.plugins.tools import COLLECTED_AS
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +93,6 @@ def parse_node_type(node_type: str) -> tuple[str, str] | None:
 
 def _media(declared: Any) -> str | list[str] | None:
     """`x-media` → 节点声明的 `media`,和内置节点同一个写法:一种是字符串,几种是列表;认不出的丢掉。"""
-    from app.domain.media_kinds import declared_media
 
     kinds = declared_media(declared)
     if not kinds:
@@ -317,7 +320,6 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     #: 按名字推成素材,表单给素材选择器、画板接媒体格,运行时却不换路径(inputs.asset_fields 只听 format)。
     #: 没说的显式写成 any,名字推断就不再起作用。
     config = {key: {**entry, "data_type": entry.get("data_type") or "any"} for key, entry in config.items()}
-    from app.domain.plugins.tools import COLLECTED_AS
 
     outputs = declared_outputs(tool)
     output_types = declared.get("output_types")
@@ -409,10 +411,9 @@ def plugin_node_types(db: Session, user_id: str | None = None) -> dict[str, dict
     绑包的话,导出的图在别人机器上缺的是"连接"(可以现场建);绑实例的话缺的是"节点类型",
     图直接打不开。几条连接报的同一个节点入参不一样时怎么合,见 _across_connections。
     """
-    from app.domain.plugins.tools import exposed
 
     reported: dict[str, list[dict[str, Any]]] = {}
-    for tool in exposed(db, user_id):
+    for tool in plugins_tools.exposed(db, user_id):
         reported.setdefault(node_type_id(tool["package_id"], tool["name"]), []).append(tool)
     return {key: _across_connections(tools) for key, tools in reported.items()}
 
@@ -449,7 +450,6 @@ def instances_for_node(db: Session, node_type: str, user_id: str | None) -> list
     工作流执行器调它时就没传,于是我的流程会自动落到别人接的那条连接上,拿着他的第三方
     密钥跑、记在他的额度上。给个默认值就等于让漏传的地方静默通过。
     """
-    from app.domain.plugins.tools import exposed
 
     parsed = parse_node_type(node_type)
     if parsed is None:
@@ -457,7 +457,7 @@ def instances_for_node(db: Session, node_type: str, user_id: str | None) -> list
     package_id, tool_name = parsed
     return [
         {"id": tool["instance_id"], "name": tool["instance_name"]}
-        for tool in exposed(db, user_id)
+        for tool in plugins_tools.exposed(db, user_id)
         if tool["package_id"] == package_id and tool["name"] == tool_name
     ]
 
@@ -486,10 +486,6 @@ def unusable(db: Session, node_type: str, user_id: str | None) -> Unusable | Non
     没有它:运行时才知道工具的插件(ComfyUI 每张工作流一个)问插件为什么(`op: explain`,见 _explained)—— 表单是旧格式要升级、
     表单删了、工作流改名挪走了,各说各的;问不到才说「插件更新后去掉了它」。
     """
-    from app.db.models import PluginInstance, PluginPackage
-    from app.domain.plugins import instances as inst
-    from app.domain.plugins.manifest import manifest_of
-    from app.domain.plugins.tools import all_tools
 
     parsed = parse_node_type(node_type)
     if parsed is None:
@@ -514,7 +510,7 @@ def unusable(db: Session, node_type: str, user_id: str | None) -> Unusable | Non
     for instance in connections:
         # 先认出工具叫什么,再看连接卡在哪:被挡的连接缓存着的清单里也有它的名字 —— 此前被挡就直接跳过,
         # 报错里露的是调用名(ComfyUI 每张工作流一个的 `wf_<哈希>`),用户认不出是哪个。
-        tool = next((one for one in _tools_of(db, instance, all_tools) if one["name"] == tool_name), None)
+        tool = next((one for one in _tools_of(db, instance, plugins_tools.all_tools) if one["name"] == tool_name), None)
         if tool is not None:
             tool_shown = tool_label(tool) or tool_name
         blocked = inst.blocked_reason(db, instance)
@@ -564,8 +560,6 @@ def _per_connection(details: list[tuple[str, str]]) -> str:
 def _explained(db: Session, instance: Any, tool_name: str) -> Any:
     """问这个连接的插件:清单上为什么没有这个工具(只问运行时才报工具的那种插件,见 dynamic_tools.explain)。不支持这一问、
     这会儿问不到都是 None —— 退回宿主自己能说的那句,不让一句解释拖垮整件事。"""
-    from app.domain.plugins import dynamic_tools
-    from app.domain.plugins import instances as inst
 
     try:
         manifest = inst.manifest_for(db, instance)
@@ -588,7 +582,6 @@ def _tools_of(db: Session, instance: Any, all_tools: Any) -> list[dict[str, Any]
 def _tool_list_failure(instance: Any) -> str:
     """这条连接的工具清单上一次没刷出来的原因(instances.record_tool_list_failure 记的);刷成功过就是空串。
     按读的人的语言说(落库的是文案 key + 参数,和插件页同一个读法)。"""
-    from app.core.i18n import get_current_locale, render_message
 
     status = (instance.capability_status or {}).get(TOOLS) or {}
     key = str(status.get("error_key") or "")
@@ -631,7 +624,6 @@ def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, 
 
 def _owned_by(db: Session, instance_id: str, actor: str | None) -> bool:
     """这条连接还在、而且是 `actor` 自己接的(没有执行者 = 不按人分,和 instances_for_node 一样)。"""
-    from app.db.models import PluginInstance
 
     instance = db.get(PluginInstance, instance_id)
     return instance is not None and (actor is None or instance.owner_user_id == actor)
@@ -660,8 +652,6 @@ def check_plugin_node_instance(db: Session, node: dict[str, Any], actor: str | N
 
 def _plugin_name(db: Session, package_id: str) -> str:
     """报错里说插件叫什么(清单上的名字,按此刻的语言);包没了或清单坏了就说包 id。"""
-    from app.db.models import PluginPackage
-    from app.domain.plugins.manifest import manifest_of
 
     package = db.get(PluginPackage, package_id)
     try:

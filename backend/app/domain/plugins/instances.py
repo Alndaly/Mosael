@@ -25,6 +25,7 @@ from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import manifest_of
 from mosael_formats.plugin_manifest import TOOLS, Field, Manifest, render_name
 from app.core.i18n import tr
+from app.domain.jobs import blame
 
 #: 掩码回显。前端把它原样发回来时表示"这项没改"。
 MASK = "********"
@@ -615,7 +616,6 @@ def record_tool_list(db: Session, instance: PluginInstance, count: int, **extra:
 
 def record_tool_list_failure(db: Session, instance: PluginInstance, exc: Exception) -> None:
     """工具清单没刷出来:原因记下来(插件页照着说),上一次成功的记录留着 —— 清单本身也还是上一份。"""
-    from app.domain.jobs import blame
 
     previous = dict((instance.capability_status or {}).get(TOOLS) or {})
     set_capability_status(db, instance, TOOLS, {**previous, **blame(exc), "attempted_at": _stamp()})

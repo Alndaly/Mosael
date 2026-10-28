@@ -40,7 +40,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
-from app.db.models import Board
+from app.db.models import Board, PluginInstance, PluginPackage
 from app.domain.boards.actions import (
     BoardInputError,
     Slot,
@@ -58,7 +58,44 @@ from app.domain.boards.producer_ids import (
     node_type_of,
     runs_from_draft,
 )
-from app.domain.boards.transforms import ABILITY, SLOT
+from app.domain.boards.transforms import (
+    ABILITY,
+    SLOT,
+    board_config_view,
+    board_description,
+    board_group,
+    board_hosts,
+    board_role,
+    content_transform_gap,
+    external_id_field,
+    host_entity_kinds,
+    host_field,
+    host_fields,
+    host_sink,
+    is_content_transform,
+    output_kinds,
+    wiring_field,
+)
+from app.core.i18n import get_current_locale, t
+from app.domain.ai_chat import AiChatError
+from app.domain.boards.persistence import get_board
+from app.domain.boards.plugin_references import generation_index, mirrored_model
+from app.domain.boards.tools import bindable_kinds, check_bindings, prepare_node_run, run_node_on_board
+from app.domain.boards.trim import TrimError
+from app.domain.generation.operations import GenerationDomainError
+from app.domain.generation.resolution import KINDS as GENERATION_KINDS
+from app.domain.notes import NoteDomainError
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.nodes import node_meta, node_type_id, parse_node_type
+from app.domain.voices import engine_catalog
+from app.domain.voices.engine_catalog import voice_slot
+from app.domain.voices.errors import VoiceError
+from app.domain.voices.speech import CLONE_ENGINE
+from app.domain.workflows.binding import check_number_fields
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.node_catalog import describe_node_types
+from app.domain.workflows.node_types import NODE_TYPES
 
 
 class ProducerFailed(BoardDomainError):
@@ -298,13 +335,11 @@ def _start_write(db: Session, request: RunRequest, form: WriteForm) -> Board:
 
 
 def _start_speak(db: Session, request: RunRequest, form: SpeakForm) -> Board:
-    from app.domain.voices.engine_catalog import synthesis_params, voice_slot
-    from app.domain.voices.speech import CLONE_ENGINE
 
     engine = form.engine.strip() or CLONE_ENGINE
     # 引擎音色和克隆音色两条都要能走(此前只传 voice_id,画板配音只认克隆音色);能复刻的引擎(CosyVoice)点了
     # 配音库里的嗓子时也是 voice_id(ADR 0037)。
-    synthesis = synthesis_params(
+    synthesis = engine_catalog.synthesis_params(
         db,
         engine=engine,
         voice=voice_slot(engine, voice_id=form.voice_id, engine_voice=form.engine_voice),
@@ -362,8 +397,6 @@ def _scene_render_args(form: SceneRenderForm) -> dict[str, Any]:
 def _start_scene_render(db: Session, request: RunRequest, form: SceneRenderForm) -> Board:
     """在场景格上渲一次:**工作流节点 `scene_render` 的同一个执行器**,走能力那条路(建 `board_run` 任务、
     挂在它下面计量、能停),产出新建成场景格右边的几格(canvas._derive)。场景格自己不动。"""
-    from app.core.i18n import get_current_locale, t
-    from app.domain.boards.tools import run_node_on_board
 
     return run_node_on_board(
         db,
@@ -375,8 +408,6 @@ def _start_scene_render(db: Session, request: RunRequest, form: SceneRenderForm)
 
 
 def _preflight_scene_render(db: Session, request: RunRequest, form: SceneRenderForm) -> dict[str, Any]:
-    from app.core.i18n import get_current_locale, t
-    from app.domain.boards.tools import prepare_node_run
 
     prepare_node_run(db, request=request, **_scene_render_args(form),
                      label=t("boardProducer_scene_render", get_current_locale()))
@@ -389,7 +420,6 @@ def _scene_render_meta() -> dict[str, Any]:
 
     落板的只有三份素材(首帧、尾帧、运镜视频);镜头语言、跳过的模型、模型提醒是给工作流连线的。
     """
-    from app.domain.workflows.node_types import NODE_TYPES
 
     node = NODE_TYPES[SCENE_PRODUCER]
     config = {key: dict(node["config"][key]) for key in SCENE_RENDER_FIELDS}
@@ -424,8 +454,6 @@ def _sequence_export_args(form: SequenceExportForm) -> dict[str, Any]:
 def _start_sequence_export(db: Session, request: RunRequest, form: SequenceExportForm) -> Board:
     """在时间线格上导出一次:**工作流节点 `export_sequence` 的同一个执行器**(起一次正常的导出任务、等它做完),
     走能力那条路(`board_run` 任务、能停),成片新建成时间线格右边的一格视频。时间线格自己不动。"""
-    from app.core.i18n import get_current_locale, t
-    from app.domain.boards.tools import run_node_on_board
 
     return run_node_on_board(
         db,
@@ -437,8 +465,6 @@ def _start_sequence_export(db: Session, request: RunRequest, form: SequenceExpor
 
 
 def _preflight_sequence_export(db: Session, request: RunRequest, form: SequenceExportForm) -> dict[str, Any]:
-    from app.core.i18n import get_current_locale, t
-    from app.domain.boards.tools import prepare_node_run
 
     prepare_node_run(db, request=request, **_sequence_export_args(form),
                      label=t("boardProducer_sequence_export", get_current_locale()))
@@ -447,7 +473,6 @@ def _preflight_sequence_export(db: Session, request: RunRequest, form: SequenceE
 
 def _sequence_export_meta() -> dict[str, Any]:
     """导出给界面的描述:名字和一句说明是画板自己的,字段和输出是工作流节点那一份(不抄)。"""
-    from app.domain.workflows.node_types import NODE_TYPES
 
     node = NODE_TYPES["export_sequence"]
     return {
@@ -475,12 +500,6 @@ def _builtin_meta(producer_id: str) -> dict[str, Any]:
 def _builtins() -> dict[str, Producer]:
     """内置产出者。**导入期不碰这些领域** —— 生成、配音、截取各自的模块很重,且会回头
     认识画板;错误类型在这里才取。"""
-    from app.domain.ai_chat import AiChatError
-    from app.domain.boards.trim import TrimError
-    from app.domain.generation.operations import GenerationDomainError
-    from app.domain.generation.resolution import KINDS as GENERATION_KINDS
-    from app.domain.voices.errors import VoiceError
-    from app.domain.workflows.errors import WorkflowDomainError
 
     return {
         one.id: one
@@ -599,9 +618,6 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
     """一个节点产出者此刻跑不了:说清是哪一种情况。总是抛。"""
     from sqlalchemy import select
 
-    from app.db.models import PluginInstance, PluginPackage
-    from app.domain.plugins.nodes import parse_node_type
-    from app.domain.plugins.tools import all_tools, exposed
 
     parsed = parse_node_type(node_type)
     if parsed is None:
@@ -612,15 +628,12 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
         select(PluginInstance).where(PluginInstance.package_id == package_id, PluginInstance.owner_user_id == (actor_id or ""))
     ) if package is not None else []
     for instance in mine:
-        if any(tool["name"] == tool_name and tool["internal"] for tool in all_tools(db, instance)):
+        if any(tool["name"] == tool_name and tool["internal"] for tool in plugins_tools.all_tools(db, instance)):
             #: 只给宿主调的工具(生成协议那一类):画布上存着也不跑(和工作流里同一条)。
             raise BoardInputError("boardErr_toolInternal", tool=tool_name)
-    mine_exposed = [tool for tool in exposed(db, actor_id) if tool["package_id"] == package_id
+    mine_exposed = [tool for tool in plugins_tools.exposed(db, actor_id) if tool["package_id"] == package_id
                     and tool["name"] == tool_name] if actor_id else []
     if actor_id and mine_exposed:
-        from app.domain.boards.plugin_references import generation_index, mirrored_model
-        from app.domain.boards.transforms import content_transform_gap
-        from app.domain.plugins.nodes import node_meta
 
         index = generation_index(db, actor_id)
         for tool in mine_exposed:
@@ -674,8 +687,6 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
       同一个包接了两条连接,节点只有一个 —— 用哪条是表单里的 instance_id,运行时按人解析。
       没有执行者(None)就不列插件:「不按人过滤」只给后台无人路径用,画板上总有一个点运行的人。
     """
-    from app.domain.boards.transforms import is_content_transform
-    from app.domain.workflows.node_types import NODE_TYPES
 
     out: dict[str, Producer] = {}
     for node_type, meta in NODE_TYPES.items():
@@ -684,10 +695,8 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
             effects = str(meta.get("effects") or ("external" if meta.get("external") else "none"))
             out[node_producer_id(node_type)] = _node_producer(node_type, meta, effects)
     if actor_id:
-        from app.domain.plugins.nodes import node_meta, node_type_id
-        from app.domain.plugins.tools import exposed
 
-        tools = exposed(db, actor_id)
+        tools = plugins_tools.exposed(db, actor_id)
         generation = _mirror_check(db, actor_id, tools)
         for tool in tools:
             node_type = node_type_id(tool["package_id"], tool["name"])
@@ -705,7 +714,6 @@ def _mirror_check(db: Session, actor_id: str, tools: list[dict[str, Any]]) -> Ca
     生成目录只问一次(按声明里出现的种类),不是每个工具问一次 —— ComfyUI 一台服务器上百张工作流。
     模型得是**同一个连接**下的(工具报自哪个连接,模型就得出自那条连接的生成目录)。
     """
-    from app.domain.boards.plugin_references import generation_index, mirrored_model
 
     kinds = {str(tool["mirrors"].get("kind")) for tool in tools if isinstance(tool.get("mirrors"), dict)}
     index = generation_index(db, actor_id, kinds) if kinds else {}
@@ -717,10 +725,6 @@ def _mirror_check(db: Session, actor_id: str, tools: list[dict[str, Any]]) -> Ca
 
 
 def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Producer:
-    from app.domain.boards.transforms import board_hosts, board_role, host_field, host_sink
-    from app.domain.notes import NoteDomainError
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.workflows.errors import WorkflowDomainError
 
     role = board_role(meta)
 
@@ -733,13 +737,11 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
         return (field, str(host_sink(meta, field))) if field else None
 
     def label() -> str:
-        from app.core.i18n import get_current_locale, t
 
         #: 任务中心里这一条叫什么(节点的名字);宿主还没有内容时的那句话也叫它。
         return t(str(meta.get("label") or node_type), get_current_locale())
 
     def start(db: Session, request: RunRequest, form: NodeForm) -> Board:
-        from app.domain.boards.tools import run_node_on_board
 
         return run_node_on_board(
             db,
@@ -754,9 +756,6 @@ def _node_producer(node_type: str, meta: dict[str, Any], effects: str) -> Produc
         )
 
     def preflight(db: Session, request: RunRequest, form: NodeForm) -> dict[str, Any]:
-        from app.db.models import PluginInstance
-        from app.domain.boards.tools import prepare_node_run
-        from app.domain.plugins.nodes import parse_node_type
 
         _board, resolved = prepare_node_run(db, request=request, node_type=node_type, meta=meta,
                                             config=dict(form.config), bindings=bindings_of(form),
@@ -798,17 +797,6 @@ def describe(db: Session, actor_id: str | None, locale: str) -> list[dict[str, A
     它按吃什么内容归哪一组(能力图标的兜底),`board_description` 是给创作者看的一句说明。
     顺序就是注册表的顺序:内置的、内置节点、插件工具 —— 操作条上能力按它排,内置的在前。
     """
-    from app.core.i18n import t
-    from app.domain.boards.tools import bindable_kinds
-    from app.domain.boards.transforms import (
-        board_config_view,
-        board_description,
-        board_group,
-        host_entity_kinds,
-        host_fields,
-        output_kinds,
-    )
-    from app.domain.workflows.node_catalog import describe_node_types
 
     registry = _registry(db, actor_id)
     metas = {
@@ -883,7 +871,6 @@ def _admit(db: Session, request: RunRequest) -> tuple[Producer, BaseModel]:
 
 def _board_cell(db: Session, request: RunRequest) -> dict[str, Any] | None:
     """请求落在的那一格此刻在画布上的样子;还不在画布上(新放下的一格由占位摆上)回 None。"""
-    from app.domain.boards.persistence import get_board
 
     board = get_board(db, request.workspace_id, request.board_id)
     return next((one for one in (board.canvas or {}).get("items") or [] if one.get("id") == request.item_id), None)
@@ -999,10 +986,6 @@ def check_forms(db: Session, canvas: dict[str, Any], written: list[FormRef], act
 
 def _check_node_form(canvas: dict[str, Any], item_id: str, producer: Producer, form: dict[str, Any], kind: str) -> None:
     """一份节点产出者的表单(`{config, bindings}`)在这一格上说得通。"""
-    from app.domain.boards.tools import check_bindings
-    from app.domain.boards.transforms import external_id_field, host_field, wiring_field
-    from app.domain.workflows.errors import WorkflowDomainError
-    from app.domain.workflows.binding import check_number_fields
 
     config = form.get("config") or {}
     try:

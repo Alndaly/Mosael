@@ -20,10 +20,11 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError, tr
 from app.core.security import hash_password, revoke_other_logins, verify_password
 from app.core.unit_of_work import after_commit
-from app.db.models import AuthSession, OAuthIdentity, User, WorkspaceMember, new_id
+from app.db.models import AuthSession, OAuthIdentity, User, WorkspaceMember, new_id, Base
 from app.domain import deployment, members
 from app.domain.usernames import normalize_username
 from app.domain.permissions import ensure_deployment_admin
+from app.domain.storage_cleanup import delete_user_files
 
 
 class AccountError(LocalizedError):
@@ -136,7 +137,6 @@ PERSON_COLUMNS = ("user_id", "owner_user_id")
 
 
 def _tables_pointing_at_a_person() -> list[tuple[str, str]]:
-    from app.db.models import Base
 
     return [
         (table.name, column.name)
@@ -171,7 +171,6 @@ def delete_user_account(db: Session, user: User) -> None:
         for workspace in members.solo_workspaces(db, user.id):
             members.delete_workspace(db, workspace.id)
         db.flush()
-        from app.domain.storage_cleanup import delete_user_files
 
         avatar_key = user.avatar_key
         after_commit(db, lambda: delete_user_files(avatar_key))

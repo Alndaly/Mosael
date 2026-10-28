@@ -45,6 +45,7 @@ from app.ai.providers.adapters.shared.errors import http_error_detail, upstream_
 from app.ai.providers.contracts.failures import http_status_category
 from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.core.http_retry import RetryingClient
+from app.media.vendor_formats import speech_mp3, still_png
 
 VENDOR_LABEL = "HeyGen"
 BASE_URL = "https://api.heygen.com"
@@ -118,7 +119,6 @@ def image_field(request: GenerationRequest, work: Path) -> dict[str, Any]:
         return {"type": "url", "url": link}
     path = _path(request, FIRST_FRAME)
     if path.suffix.lower() not in IMAGE_TYPES:
-        from app.media.vendor_formats import still_png
 
         path = still_png(path, work / "portrait.png")
     return {"type": "base64", "media_type": IMAGE_TYPES[path.suffix.lower()],
@@ -130,7 +130,6 @@ def uploadable(path: Path, role: str, work: Path) -> Path:
     if path.suffix.lower() in UPLOAD_TYPES:
         return path
     if role == DRIVING_AUDIO:
-        from app.media.vendor_formats import speech_mp3
 
         return speech_mp3(path, work / "voice.mp3")
     raise GenerationAdapterError("providerErr_heygenVideoFormat", format=path.suffix.lower() or "?")

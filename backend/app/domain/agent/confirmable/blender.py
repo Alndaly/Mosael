@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session
 from app.core.i18n import fragment
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
+from app.core.config import settings
+from app.db.models import User
+from app.domain.blender import agent as blender_agent
 
 
 def _validate_blender_execute(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.core.config import settings
 
     if not settings.local_desktop:
         raise ConfirmationError("confirmErr_blenderLocalOnly")
@@ -35,8 +37,6 @@ def _summarize_blender_execute(db: Session, payload: dict[str, Any]) -> Summary:
     }
 
 def _execute_blender_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.db.models import User
-    from app.domain.blender import agent as blender_agent
 
     # 连接归人:用批准这张卡的那个人的 Blender。自动放行时 actor 是开模式的人(见 autopilot)。
     user = db.get(User, actor) if actor else None

@@ -65,7 +65,16 @@ from collections.abc import Callable
 from typing import Any
 
 from app.core.i18n import t
-from app.domain.boards.tools import binding_sink, landing_outputs
+from app.domain.boards.tools import binding_sink, landing_outputs, bindable_kinds
+from app.domain.media_kinds import declared_media
+from app.domain.workflows.node_types import (
+    EXTERNAL_ID,
+    WIRING_CATEGORIES,
+    config_data_type,
+    config_entity_kinds,
+    config_media,
+    output_data_type,
+)
 
 #: 变换按**它吃的是什么内容**归的组(界面上能力图标的兜底、智能体读的分类),顺序就是接口里排的顺序。
 #: `new` 是不吃画板内容、凭空产出素材的(文生图、讲解视频);`asset` 是吃素材却没说
@@ -79,7 +88,6 @@ _WIRING_FIELD_TYPES = frozenset({"object", "list", "code", "graph"})
 
 def wiring_field(key: str, spec: Any) -> bool:
     """这个字段是不是工程概念(映射、原始 JSON、代码、子图、声明成 JSON 的模板)—— 画板上不摆。"""
-    from app.domain.workflows.node_types import config_data_type
 
     if not isinstance(spec, dict):
         return True
@@ -90,14 +98,12 @@ def wiring_field(key: str, spec: Any) -> bool:
 
 def external_id_field(key: str, spec: Any) -> bool:
     """这个字段装的是不是另一个系统里的编号(任务号、fs_id、对象路径)—— 创作者写不出、认不出,画板上不摆。"""
-    from app.domain.workflows.node_types import EXTERNAL_ID, config_data_type
 
     return isinstance(spec, dict) and config_data_type(key, spec) == EXTERNAL_ID
 
 
 def content_outputs(meta: dict[str, Any]) -> list[str]:
     """落板的输出里算得上**内容**的那几个:素材,或点了名落板的文字。"""
-    from app.domain.workflows.node_types import output_data_type
 
     named = {str(name) for name in meta.get("board_outputs") or ()}
     out = []
@@ -122,8 +128,6 @@ def output_kinds(meta: dict[str, Any]) -> list[str]:
     素材就是它吐的那一种(`board_group` 是 image / video / audio 时:降噪、抠图);再说不清就是
     `asset` —— 界面按最通用的媒体格(图片)画。
     """
-    from app.domain.media_kinds import declared_media
-    from app.domain.workflows.node_types import output_data_type
 
     declared = meta.get("output_media") if isinstance(meta.get("output_media"), dict) else {}
     group = board_group(meta)
@@ -144,7 +148,6 @@ def output_kinds(meta: dict[str, Any]) -> list[str]:
 def _makes_media(meta: dict[str, Any]) -> bool:
     """它**交出一样东西**(素材,或一个 3D 场景),而不只是一段字。交出东西的,吃的文字是参数(提示词、剧本),不是原料 ——
     它是那种空格子的一种填法(提示词出图挂在图片格上,按剧本搭场景挂在 3D 场景格上)。"""
-    from app.domain.workflows.node_types import output_data_type
 
     return any(output_data_type(name, meta) in ("asset", "scene") for name in content_outputs(meta))
 
@@ -169,7 +172,6 @@ def content_transform_gap(meta: dict[str, Any], *, generation_has: Callable[[dic
     又只交出文字)、`mirrored_by_generation`(它声明了和某个生成模型是同一件事,而 `generation_has`
     说点运行的人用得上那个模型 —— 画板上走生成那一个入口,见模块说明第 6 条)。
     """
-    from app.domain.workflows.node_types import WIRING_CATEGORIES
 
     if meta.get("category") in WIRING_CATEGORIES:
         return "wiring"
@@ -233,7 +235,6 @@ def board_hosts(meta: dict[str, Any]) -> tuple[str, ...]:
     · 填法:它产出的那种素材的空格子(output_kinds 里的图片 / 视频 / 音频);说不清产出哪种素材(`asset`)的,
       三种媒体格都能挑它 —— 回执按素材实际的种类落(见 canvas 的就地填),对不上宿主的新建在右边。
     """
-    from app.domain.boards.tools import bindable_kinds
 
     fields = _host_fields(meta)
     if fields:
@@ -249,7 +250,6 @@ def board_hosts(meta: dict[str, Any]) -> tuple[str, ...]:
 
 def host_field(meta: dict[str, Any], kind: str) -> str | None:
     """能力挂在 `kind` 这种格子上时,宿主的内容填进哪个字段(第一个收得下它的,必填的在前)。填法没有这个字段。"""
-    from app.domain.boards.tools import bindable_kinds
 
     specs = meta.get("config") or {}
     return next((key for key, _sink in _host_fields(meta) if kind in bindable_kinds(key, specs[key])), None)
@@ -265,7 +265,6 @@ def host_fields(meta: dict[str, Any]) -> dict[str, str]:
 def host_entity_kinds(meta: dict[str, Any]) -> list[str]:
     """挂在资产格上的能力收哪几种资产(空 = 哪种都收)。**资产格不是一个样子**:人物、场景、道具各有各的能力 ——
     「生成表情」只对人物有意思。按宿主那个字段的声明推(workflows.config_entity_kinds),不另列清单。"""
-    from app.domain.workflows.node_types import config_entity_kinds
 
     field = host_field(meta, "entity") if board_role(meta) == ABILITY else None
     return list(config_entity_kinds((meta.get("config") or {}).get(field))) if field else []
@@ -290,7 +289,6 @@ def board_group(meta: dict[str, Any]) -> str:
         return "scene"
     if "entity" in sinks.values():
         return "entity"
-    from app.domain.workflows.node_types import config_media
 
     specs = meta.get("config") or {}
     media = [set(config_media(specs[key])) for key, sink in sinks.items() if sink == "asset"]

@@ -29,21 +29,33 @@ from sqlalchemy.orm import Session
 
 from app.ai.runtime import asr_daemon, asr_models
 from app.core.config import settings
-from app.core.i18n import LocalizedError, tr
+from app.core.i18n import LocalizedError, tr, fragment
 from app.core.text import blame_line
 from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
-from app.domain.jobs import ASR_SLOTS, blame, finish_job, lock_active_job, say, start_job
+from app.domain.jobs import (
+    ASR_SLOTS,
+    blame,
+    finish_job,
+    lock_active_job,
+    say,
+    start_job,
+    create_job,
+    dispatch_job,
+    emit_job_event,
+)
 from app.db.models import Asset, Job
-from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
 from app.media.paths import resolve_key
 from app.media.probe import probe_has_audio, probe_media
 from app.core.child_process import run_logged
-from app.domain import asr as asr_defaults
-from app.domain import capabilities
-from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
+from app.domain import asr as asr_defaults, capabilities
+from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider, Use, register_use
 from mosael_formats.plugin_manifest import TRANSCRIPTION
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError
+from app.domain.plugins.tools import quiet_hooks
 
 logger = logging.getLogger(__name__)
 
@@ -139,9 +151,6 @@ class PluginTranscriber:
         self._provider = provider
 
     def transcribe(self, wav: Path, language: str = "") -> dict:
-        from app.domain.plugins.errors import PluginDomainError
-        from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host, quiet_hooks
 
         heard: dict[str, Any] = {}
 
@@ -158,7 +167,7 @@ class PluginTranscriber:
 
         try:
             with unit_of_work() as db:
-                invoke_host(db, self._provider.id, TRANSCRIPTION, {"filename": wav.name, "language": language},
+                plugins_tools.invoke_host(db, self._provider.id, TRANSCRIPTION, {"filename": wav.name, "language": language},
                             files={"file": wav}, collect=collect, hooks=quiet_hooks(), record=True)
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise ASRError("asrErr_pluginFailed", plugin=self.name, detail=str(exc)[:500]) from exc
@@ -183,8 +192,6 @@ def transcriber(db: Session, owner_user_id: str | None, provider_id: str | None)
 
 def register_uses() -> None:
     """宿主界面上用到转写的入口(ADR 0032 §4)。工作流节点由注册表现扫。"""
-    from app.core.i18n import fragment
-    from app.domain.capabilities import Use, register_use
 
     register_use(Use(TRANSCRIPTION, "app", fragment("capUse_assetTranscribe")))
     register_use(Use(TRANSCRIPTION, "app", fragment("capUse_dictation")))

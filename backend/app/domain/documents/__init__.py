@@ -8,8 +8,9 @@ domain/capabilities 那一份挑法:**没定默认就用本地的** —— 文�
 
 from __future__ import annotations
 
-from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable
+from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Use, register_use
 from mosael_formats.plugin_manifest import DOCUMENT_PARSE
+from app.core.i18n import fragment
 LOCAL_PARSER = "builtin:local"
 
 
@@ -33,8 +34,6 @@ CAPABILITY = Capability(
 
 def register_uses() -> None:
     """宿主界面上用到文档解析的入口(ADR 0032 §4)。工作流节点、智能体工具由各自注册表现扫,不在这里写。"""
-    from app.core.i18n import fragment
-    from app.domain.capabilities import Use, register_use
 
     register_use(Use(DOCUMENT_PARSE, "app", fragment("capUse_documentReparse")))
 

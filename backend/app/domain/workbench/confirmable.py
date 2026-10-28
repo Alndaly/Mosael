@@ -27,10 +27,11 @@ from sqlalchemy.orm import Session
 from app.core.i18n import fragment
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
+from app.db.models import User
+from app.domain.workbench import agent as workbench_agent
 
 
 def _user(db: Session, actor: str | None):
-    from app.db.models import User
 
     user = db.get(User, actor) if actor else None
     if user is None:
@@ -39,7 +40,6 @@ def _user(db: Session, actor: str | None):
 
 
 def _validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.workbench import agent as workbench_agent
 
     workbench_agent.propose_edit(db, _user(db, actor), workspace_id, payload)
 
@@ -59,7 +59,6 @@ def _summarize(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain.workbench import agent as workbench_agent
 
     # 连接归人:用批准这张卡的那个人的连接、在他的桌面端上改(和读画布同一条路)
     return workbench_agent.apply_edit(db, _user(db, actor), confirmation.workspace_id, dict(confirmation.payload or {}))
@@ -81,13 +80,11 @@ confirmable_tool(ConfirmableTool(
 
 
 def _download_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.workbench import agent as workbench_agent
 
     workbench_agent.propose_download(db, _user(db, actor), workspace_id, payload)
 
 
 def _download_summarize(db: Session, payload: dict[str, Any]) -> Summary:
-    from app.domain.workbench import agent as workbench_agent
 
     size = workbench_agent.bytes_text(payload.get("size"))
     return "confirm_comfyModelDownload", {
@@ -102,7 +99,6 @@ def _download_summarize(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _download_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain.workbench import agent as workbench_agent
 
     return workbench_agent.start_model_download(db, _user(db, actor), confirmation.workspace_id,
                                                 dict(confirmation.payload or {}))
@@ -121,7 +117,6 @@ confirmable_tool(ConfirmableTool(
 
 
 def _install_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.workbench import agent as workbench_agent
 
     workbench_agent.propose_node_install(db, _user(db, actor), workspace_id, payload)
 
@@ -158,7 +153,6 @@ def _install_summarize(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _install_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain.workbench import agent as workbench_agent
 
     return workbench_agent.install_node_pack(db, _user(db, actor), confirmation.workspace_id,
                                              dict(confirmation.payload or {}))
@@ -177,7 +171,6 @@ confirmable_tool(ConfirmableTool(
 
 
 def _run_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.workbench import agent as workbench_agent
 
     workbench_agent.propose_canvas_run(db, _user(db, actor), workspace_id, payload)
 
@@ -194,7 +187,6 @@ def _run_summarize(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _run_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain.workbench import agent as workbench_agent
 
     return workbench_agent.run_canvas(db, _user(db, actor), confirmation.workspace_id,
                                       dict(confirmation.payload or {}))

@@ -41,6 +41,15 @@ from app.domain.voices.errors import VoiceError
 from app.domain.voices.speech import BUILTIN_PREFIX, adapter_id
 from app.domain.voices.target import speech_target
 from app.media.paths import resolve_key
+from app.ai.providers import (
+    VOICE_ENROLLMENT_ADAPTERS,
+    build_voice_enrollment_adapter,
+    connection_vendor_for_speech_engine,
+)
+from app.ai.providers.contracts.voice_enrollment import READY, REJECTED
+from app.domain.billing.usage import billable, once
+from app.domain.jobs import blame, create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.providers import selection as providers_selection
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +97,6 @@ class RemoteConsentRequired(LocalizedError, RuntimeError):
 
 def clones_remotely(engine: str) -> bool:
     """这个配音引擎能不能念配音库里的克隆音色(把嗓子复刻上去)。收能力表 id(`builtin:…`)或裸名。"""
-    from app.ai.providers import VOICE_ENROLLMENT_ADAPTERS
 
     return bool(engine) and adapter_id(engine) in VOICE_ENROLLMENT_ADAPTERS
 
@@ -124,7 +132,6 @@ class Account:
         )
 
     def adapter(self):
-        from app.ai.providers import build_voice_enrollment_adapter
 
         return build_voice_enrollment_adapter(self.engine, api_key=self.api_key, base_url=self.base_url)
 
@@ -221,7 +228,6 @@ def start_enrollment(
     同意落在这个账号、当前模型那一份副本上(还没有就建一行 `deploying`)。任务里建远端音色、等它就绪;合成那边如果
     同时也要用它,会在同一把锁上等这一份,不会建出第二个。
     """
-    from app.domain.jobs import create_job, dispatch_job
 
     if not clones_remotely(engine):
         raise VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
@@ -272,7 +278,6 @@ def start_enrollment(
 
 
 def _enrollment_body(job_id: str) -> None:
-    from app.domain.jobs import blame, emit_job_event, finish_job, say
 
     with unit_of_work() as db:
         job = db.get(Job, job_id)
@@ -416,8 +421,6 @@ def ensure_copy(
 
 def _create(adapter, account: Account, *, voice_id: str, workspace_id: str, model: str, reference) -> str:
     """传参考音频、建音色。记一条用量(`tts` / `enroll_voice`,免费):账上看得到哪天、哪把嗓子、传到了哪条连接。"""
-    from app.ai.providers import connection_vendor_for_speech_engine
-    from app.domain.billing.usage import billable, once
 
     with unit_of_work() as db, billable(
         db,
@@ -442,7 +445,6 @@ class _StillDeploying(Exception):
 
 
 def _wait_until_ready(adapter, remote_id: str) -> None:
-    from app.ai.providers.contracts.voice_enrollment import READY, REJECTED
 
     deadline = time.monotonic() + ENROLL_TIMEOUT_SECONDS
     while True:
@@ -530,8 +532,6 @@ def delete_copies(db: Session, voice: Voice) -> list[DeleteFailure]:
     每个账号用它主人的那把钥匙:副本在谁的账号里,就只有谁的钥匙删得掉。登记了的逐个删;再按前缀列一遍,
     连没登记上的(建到一半进程没了)也一起清掉。
     """
-    from app.ai.providers import connection_vendor_for_speech_engine
-    from app.domain.providers.selection import resolve_connection
 
     rows = list(db.scalars(select(VoiceEnrollment).where(VoiceEnrollment.voice_id == voice.id)))
     failures: list[DeleteFailure] = []
@@ -539,7 +539,7 @@ def delete_copies(db: Session, voice: Voice) -> list[DeleteFailure]:
     for row in rows:
         accounts.setdefault((row.engine, row.provider_profile_id, row.owner_user_id), []).append(row)
     for (engine, profile_id, owner), copies in accounts.items():
-        profile = resolve_connection(db, connection_vendor_for_speech_engine(engine), profile_id, user_id=owner)
+        profile = providers_selection.resolve_connection(db, connection_vendor_for_speech_engine(engine), profile_id, user_id=owner)
         if profile is None:
             #: 连接还在就报它的名字(钥匙没了);连接都删了只剩 id。
             gone = db.get(ProviderProfile, profile_id)

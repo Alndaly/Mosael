@@ -24,6 +24,7 @@ from app.db.models import (
     User,
     Workflow,
     WorkspaceMember,
+    now,
 )
 from app.domain.notifications import notify
 
@@ -77,7 +78,6 @@ def record_activity(
     所以「合并」就是这段时间里只留第一条;过了这段时间再编辑,记新的一条。
     """
     if coalesce_within is not None:
-        from app.db.models import now
 
         recent = db.scalars(
             select(ActivityEvent)

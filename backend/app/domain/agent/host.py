@@ -38,13 +38,14 @@ from app.domain.agent.stream import (
     _stream_turn_id,
     _timeline_for_payload,
 )
-from app.domain.agent import card_expiry
-from app.domain.agent import computer_use
-from app.domain.agent import origins
-from app.domain.agent import titles
+from app.domain.agent import card_expiry, computer_use, origins, titles
 from app.domain.agent.places import STUDIO_PLACE, Place
 from app.domain.agent.textclean import decode_byte_fallback
-from app.domain.providers import models as provider_models
+from app.domain.providers import (
+    models as provider_models,
+    credentials as provider_credentials,
+    selection as providers_selection,
+)
 from app.domain.providers.runtime import sidecar_provider
 from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context_tokens
 from app.domain.providers.model_limits import fallback_context_window
@@ -63,6 +64,7 @@ from app.db.agent_turn_events import (
 )
 from app.core.token_estimate import estimate_text_tokens
 from app.domain.billing.usage import billable
+from app.domain.agent.tool_manifest import agent_tool_specs
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Mosael;
@@ -109,13 +111,11 @@ def resolve_chat_provider(
     """pi 适配器的供应商三级解析:会话选定 → 「对话」能力默认 → 第一个启用供应商。
     AI Studio 与飞书共用 — 飞书早先裸调 run_turn 不带 provider,配好了供应商也
     永远报「未配置」,就是漏了这一步。返回 (provider_dict, model, profile)。"""
-    from app.domain.providers.selection import resolve_connection
 
-    from app.domain.providers import credentials as provider_credentials
 
     profile = None
     if provider_profile_id:
-        profile = resolve_connection(db, "", provider_profile_id, user_id=user_id)
+        profile = providers_selection.resolve_connection(db, "", provider_profile_id, user_id=user_id)
     if profile is None:
         # 默认解析已经是模型粒度的:拿到的是一行模型,连接就在它身上。
         default = provider_models.resolve_default(db, "chat", user_id)
@@ -1489,7 +1489,6 @@ def resume_queued_message(db: Session, session: AgentSession, message_id: str) -
 
 def drain_queue_after_commit(db: Session, session_id: str) -> None:
     """这次事务提交之后跑一次 drain(它开自己的会话、起下一轮,得读到刚提交的那一份)。"""
-    from app.core.unit_of_work import after_commit
 
     after_commit(db, lambda: _drain_queue(session_id))
 
@@ -1653,7 +1652,6 @@ def tool_definition_tokens(db: Session, session: AgentSession) -> int:
     清单和 /api/agent/tools 同一个函数、同一个答案(按这段对话的主人、这一轮在哪说的裁,ADR 0044 §8)—— 面板上的水位就是
     这一处这一轮真发出去的那份。
     """
-    from app.domain.agent.tool_manifest import agent_tool_specs
 
     payload = json.dumps(
         [
@@ -1713,7 +1711,6 @@ def session_model_catalog(db: Session, profile_id: str | None, user_id: str | No
     if not profile_id:
         return []
 
-    from app.domain.providers import credentials as provider_credentials
 
     # 目录跟着钥匙走:两个人的订阅档位可以不一样,拿别人的目录去算窗口是错的。
     mine = provider_credentials.get(db, profile_id, user_id) if user_id else None

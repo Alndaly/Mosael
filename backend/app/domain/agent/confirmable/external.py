@@ -15,7 +15,9 @@ from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, conf
 from app.domain.agent.errors import ConfirmationError
 from sqlalchemy import select
 
-from app.db.models import PublishAccount
+from app.db.models import PublishAccount, Asset as AssetModel
+from app.domain.publish import start_publish
+from app.domain.workflows.executors.basic import run_http, run_python
 
 
 def _summarize_publish_asset(db: Session, payload: dict[str, Any]) -> Summary:
@@ -25,8 +27,6 @@ def _summarize_publish_asset(db: Session, payload: dict[str, Any]) -> Summary:
 
 def _execute_publish_asset(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.db.models import Asset as AssetModel, PublishAccount
-    from app.domain.publish import start_publish
 
     account = db.get(PublishAccount, str(payload["account_id"]))
     asset = db.get(AssetModel, str(payload["asset_id"]))
@@ -64,7 +64,6 @@ def _summarize_http_request(db: Session, payload: dict[str, Any]) -> Summary:
 
 def _execute_http_request(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.workflows.executors.basic import run_http
 
     return run_http(
         method=str(payload.get("method") or "POST"),
@@ -91,7 +90,6 @@ def _summarize_run_code(db: Session, payload: dict[str, Any]) -> Summary:
 
 def _execute_run_code(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.workflows.executors.basic import run_python
 
     return run_python(str(payload.get("code") or ""), dict(payload.get("inputs") or {}))
 

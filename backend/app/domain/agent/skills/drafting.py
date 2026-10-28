@@ -20,6 +20,10 @@ from sqlalchemy.orm import Session
 from app.db.models import AgentMessage, AgentSession
 from app.domain.agent.skills.catalog import SkillDomainError
 from mosael_formats.agent_skill import MAX_DESCRIPTION_CHARS, MAX_NAME_CHARS, MAX_TITLE_CHARS, NAME_RE
+from app.domain import ai_chat
+from app.domain.ai_chat import target_for
+from app.domain.billing.usage import billable, once
+from app.domain.providers.chat_connection import require_connection
 
 #: 喂给起草模型的对话最多多少字(从最近往前取)。
 MAX_TRANSCRIPT_CHARS = 30000
@@ -101,9 +105,6 @@ def _parse(raw: str) -> dict[str, str]:
 
 def draft_from_session(db: Session, session: AgentSession, *, user_id: str) -> dict[str, str]:
     """起草,不保存。返回 {name, title, description, body}。"""
-    from app.domain.ai_chat import chat, target_for
-    from app.domain.billing.usage import billable, once
-    from app.domain.providers.chat_connection import require_connection
 
     transcript = _transcript(db, session)
     if not transcript:
@@ -125,7 +126,7 @@ def draft_from_session(db: Session, session: AgentSession, *, user_id: str) -> d
         #: 每次点「存成技能」都是一次新的调用,没有可以去重的工作单元。
         idempotency_key=once("agent_skill_draft"),
     ) as call:
-        raw = chat(
+        raw = ai_chat.chat(
             target,
             [
                 {"role": "system", "content": _SYSTEM},

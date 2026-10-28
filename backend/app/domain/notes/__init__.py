@@ -18,6 +18,7 @@ from app.domain.authority import Actor, actor_id, ensure
 from app.domain.note_types import NoteContent, NoteRevisionOrigin
 from app.db.models import Asset, AgentMessage, AgentSession, Board, Note, NoteRevision, Project
 from app.db.model_base import now
+from app.domain.notes import history
 
 
 class NoteDomainError(LocalizedError, ValueError):
@@ -119,7 +120,6 @@ def _ensure_cites_session(db: Session, session: AgentSession, actor: Actor) -> N
 def _record_revision(db: Session, note_id: str, revision: int, data: dict, *, actor: Actor,
                      origin: NoteRevisionOrigin, restored_from: int | None = None) -> None:
     """开新的一版。相对上一版改了多少在这里一并记下(见 notes/history)。"""
-    from app.domain.notes import history
 
     at = now()
     db.add(NoteRevision(note_id=note_id, revision=revision, snapshot=data, origin=origin, created_by=actor_id(actor),
@@ -157,7 +157,6 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_save_seq: int, 
     current = snapshot(note)
     if data == current:
         return note
-    from app.domain.notes import history
 
     at = now()
     content_changed = any(data[key] != current[key] for key in VERSIONED)

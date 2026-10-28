@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.db.models import InviteLink, User, Workspace
 from app.domain import dashboard, deployment, members as members_svc
 from app.domain.workspaces import use_cases as workspaces
+from app.domain.poem import PoemUnavailable, fetch_poem
 
 router = APIRouter(tags=["workspaces"])
 
@@ -86,7 +87,6 @@ class PoemOut(BaseModel):
 @router.get("/home/poem", response_model=PoemOut)
 def get_home_poem(user: CurrentUser) -> PoemOut:
     """向今日诗词取一句。走后端是为了吃到出站代理、并且 token 只换一次(见 domain/poem)。"""
-    from app.domain.poem import PoemUnavailable, fetch_poem
 
     try:
         poem = fetch_poem()

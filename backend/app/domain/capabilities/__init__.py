@@ -33,7 +33,9 @@ from typing import Any, NoReturn
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, tr
+from app.core.i18n import LocalizedError, tr, fragment
+from app.db.models import PluginInstance
+from app.domain.plugins import capability_defaults, instances as inst
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +175,6 @@ def _missing(db: Session, instance: Any) -> tuple[str, ...]:
     和 `instances.blocked_reason` 用的是同几道门(missing_config / missing_credentials / permissions_granted),
     不另写一份判定 —— 否则设置页下拉里选得到、真解析时才被权限挡回来,两边说的不是一回事。
     """
-    from app.domain.plugins import instances as inst
 
     absent = inst.missing_config(db, instance) + inst.missing_credentials(db, instance)
     if not inst.permissions_granted(db, instance):
@@ -217,7 +218,6 @@ def register_use_finder(finder: Callable[[], list[Use]]) -> None:
 def uses_of(name: str, *, settings: bool = True) -> list[Use]:
     """这项能力用在哪。设置页的「设成默认」是每项能力都有的,排第一;再是登记的入口,最后是现算的。
     `settings=False`:设置页自己列的时候不带那一条 —— 在「能力提供方」里写「能力提供方:设成默认」是废话。"""
-    from app.core.i18n import fragment
 
     #: 没有默认的能力不在设置里「设成默认」(今天每一项都有,包括配音 —— 它的默认是一对)。
     found = [Use(name, "app", fragment("capUse_settingsDefault"))] \
@@ -248,8 +248,6 @@ PROVIDERS_SOURCE = "providers."
 
 def plugin_providers(db: Session, owner_user_id: str | None, capability: Capability) -> list[Provider]:
     """这个人**自己的**、启用着的、声明了这项能力的插件连接,按名字排。装坏了的插件跳过,不拖垮整条链。"""
-    from app.db.models import PluginInstance
-    from app.domain.plugins import instances as inst
 
     if not owner_user_id:
         return []
@@ -285,7 +283,6 @@ def providers(db: Session, owner_user_id: str | None, capability: Capability) ->
 def default_id(db: Session, owner_user_id: str | None, capability: Capability) -> str | None:
     """他在这项能力上定的那一家(提供方 id);没定过是 None。**不起任何探测** —— 模板前置检查按它推
     「真跑的时候 choose 会用哪一家」,不能为了列一张状态表去起子进程。"""
-    from app.domain.plugins import capability_defaults
 
     return capability_defaults.default_of(db, owner_user_id, capability.name) if owner_user_id else None
 
@@ -409,7 +406,6 @@ def resolve_named(db: Session, owner_user_id: str | None, capability: Capability
 def set_default(db: Session, owner_user_id: str, capability: Capability, provider_id: str | None) -> None:
     """定下(或清掉)这个人在这项能力上的默认。选「不定时本来就会用的」内置实现 = 清掉;别的内置实现(降噪的
     RNNoise)是一次真的选择,照样存。"""
-    from app.domain.plugins import capability_defaults
 
     if not capability.defaultable:
         raise capability.error("capErr_notDefaultable", name=tr(capability.label_key))

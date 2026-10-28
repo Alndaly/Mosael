@@ -29,13 +29,13 @@ from app.api.schemas import (
     EntityVariantCreate,
     JobOut,
 )
-from app.core.i18n import get_current_locale, t
+from app.core.i18n import get_current_locale, t, render_message
 from app.db.models import Entity, Job
-from app.domain.entities import library as entities_library
-from app.domain.entities import catalog
+from app.domain.entities import library as entities_library, catalog, use_cases
 from app.domain.consent import CONSENT_KINDS
 from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, KINDS, ROLES, ROLES_BY_KIND
-from app.domain.entities import use_cases
+from app.domain.workflows import use_cases as workflow_use_cases
+from app.domain.workflows.errors import WorkflowDomainError
 
 router = APIRouter(tags=["entities"])
 
@@ -216,9 +216,6 @@ def draw_entity(entity_id: str, body: EntityDrawRequest, db: Tx, user: CurrentUs
 
     说不通的(没图、模型不收参考图、角度都齐了)当场 422,不起任务;说得通就回那个任务,界面跟着它的进度。
     """
-    from app.core.i18n import render_message
-    from app.domain.workflows.errors import WorkflowDomainError
-    from app.domain.workflows import use_cases as workflow_use_cases
 
     config = {"model": body.model, "scope": body.scope, "expressions": body.expressions, "text": body.text}
     try:

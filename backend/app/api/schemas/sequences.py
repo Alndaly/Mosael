@@ -10,6 +10,7 @@ from pydantic import Field, field_validator, model_validator
 from sqlalchemy import inspect as sqlalchemy_inspect
 from app.api.schemas.base import ApiModel, OrmModel
 from app.domain.sequences._timeline import CANVAS_SIZE_RANGE, DEFAULT_CANVAS, FPS_RANGE
+from app.domain.assets.lineage import ai_generated_assets
 
 class SequenceCreate(ApiModel):
     workspace_id: str
@@ -118,7 +119,6 @@ class SequenceOut(OrmModel):
         state = sqlalchemy_inspect(value, raiseerr=False)
         session = state.session if state is not None else None
         if session is not None:
-            from app.domain.assets.lineage import ai_generated_assets
 
             used = {clip.asset_id for track in model.tracks for clip in track.clips if clip.asset_id}
             model.ai_asset_ids = sorted(ai_generated_assets(session, used))

@@ -10,6 +10,8 @@ from pydantic import Field, ValidationInfo, field_serializer, field_validator
 from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.failures import FailureReadout
 from app.domain.resources import Resource
+from app.core.i18n import get_current_locale, render_message
+from app.domain.failure_summary import detail_of, hint_of, summarize
 
 
 class JobKindOut(ApiModel):
@@ -42,8 +44,6 @@ class TaskEventOut(OrmModel):
         那一句、原文、原因和怎么修,按读的人的语言(和任务、生成记录同一份,见 schemas/failures)。事件库里只存原样。"""
         if not isinstance(payload, dict) or not (payload.get("error") or payload.get("error_key")):
             return payload
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import detail_of, hint_of, summarize
 
         locale = get_current_locale()
         error = str(payload.get("error") or "")
@@ -123,7 +123,6 @@ class JobOut(JobSummaryOut):
 
 
 def _rendered(value: object, info: ValidationInfo, key_field: str, params_field: str) -> object:
-    from app.core.i18n import get_current_locale, render_message
 
     data = info.data if isinstance(info.data, dict) else {}
     key = data.get(key_field) or ""

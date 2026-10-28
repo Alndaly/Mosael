@@ -18,6 +18,7 @@ from app.core.usage_scope import current_workspace
 from app.db.models import Job, ProviderPricingRule, ProviderUsageEvent, now
 from app.domain.jobs import current_parent_job_id, emit_job_event
 from app.domain.billing.price_schedule import normalize_schedule, price_at
+from app.core.unit_of_work import unit_of_work
 
 logger = logging.getLogger(__name__)
 
@@ -681,7 +682,6 @@ def _settle_usage(session: Session, transaction: SessionTransaction) -> None:
     queued = session.info.pop(_QUEUED, None)
     if not queued:
         return
-    from app.core.unit_of_work import unit_of_work
 
     try:
         with unit_of_work() as fresh:

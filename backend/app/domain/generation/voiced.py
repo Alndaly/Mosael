@@ -20,9 +20,15 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.model_base import new_id
-from app.db.models import GeneratedAsset, GenerationJob, Job, ProviderProfile, Voice
+from app.db.models import GeneratedAsset, GenerationJob, Job, ProviderProfile, Voice, GenerationSession, now
 from app.domain.generation.operations import _named_session, _resolve_session
 from app.domain.generation.origins import Origin
+from app.domain.providers import models as provider_models
+from app.domain.voices import engine_catalog, voices as voices_voices
+from app.domain.voices.engine_catalog import engine_label as engine_name
+from app.domain.voices.speech import PODCAST_ENGINE
+from app.domain.voices.voice_labels import builtin_voice_label
+from app.domain.voices.voices import podcast_speakers, start_podcast
 
 SPEECH = "speech"
 PODCAST = "podcast"
@@ -90,9 +96,6 @@ def create_speech(
 
     `voice_label` / `engine_label`:界面那份目录里的名字(火山按账号现拉的音色只有界面那边知道名字),没给就在这里查。
     远端引擎念配音库里的嗓子还没同意上传时,`RemoteConsentRequired` 原样抛出(路由回 409,界面弹确认框)。"""
-    from app.domain.voices.engine_catalog import engine_label as engine_name, synthesis_params
-    from app.domain.voices.voice_labels import builtin_voice_label
-    from app.domain.voices.voices import start_synthesis
 
     named = (
         _named_session(db, workspace_id=workspace_id, session_id=session_id, actor=created_by,
@@ -104,7 +107,7 @@ def create_speech(
         "provider_profile_id": provider_profile_id, "engine_model": engine_model,
         "engine_voice_resource": engine_voice_resource,
     }
-    params = synthesis_params(
+    params = engine_catalog.synthesis_params(
         db, engine=engine, voice=voice, speed=speed, user_id=created_by, workspace_id=workspace_id,
         **{key: value for key, value in options.items() if value},
     )
@@ -112,7 +115,7 @@ def create_speech(
     library_voice = db.get(Voice, str(params.get("voice_id") or "")) if params.get("voice_id") else None
     voice_name = library_voice.name if library_voice is not None else (voice_label.strip() or builtin_voice_label(voice) or voice)
     record_id = new_id()
-    job = start_synthesis(
+    job = voices_voices.start_synthesis(
         db,
         text=text,
         project_id=project_id,
@@ -162,10 +165,6 @@ def create_podcast(
     """一段双人播客,记成会话里的一条(ADR 0055 §6)。`text` 在「改写材料」时是材料、「聊一个主题」时是主题;「照稿念」给
     `turns: [{speaker: 0|1, text}]`(`speaker` 是 `speakers` 里的第几位)。`speakers` 是 `[{value, label}]`,label 只用来显示。
     连接没点名就用这个人设的播客默认连接。"""
-    from app.domain.providers import models as provider_models
-    from app.domain.voices.voice_labels import builtin_voice_label
-    from app.domain.voices.speech import PODCAST_ENGINE
-    from app.domain.voices.voices import podcast_speakers, start_podcast
 
     named = (
         _named_session(db, workspace_id=workspace_id, session_id=session_id, actor=created_by,
@@ -226,7 +225,6 @@ def _record(
     provider_profile_id: str | None,
     request: dict[str, Any],
 ) -> GenerationJob:
-    from app.db.models import GenerationSession, now
 
     #: 任务中心「前往」打开的是这条创作会话(job_catalog 的 record_field)。任务是配音那一族建的,会话在它之后才定下来。
     job.payload = {**(job.payload or {}), "session_id": session_id}

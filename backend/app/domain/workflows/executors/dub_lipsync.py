@@ -40,6 +40,20 @@ from app.domain.workflows.executors.talking import (
     preflight_consent,
     preflight_model,
 )
+from app.core.child_process import run_logged
+from app.core.unit_of_work import unit_of_work
+from app.db.models import Asset, Clip, Sequence, Track
+from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import CONCAT, Derivation, MIX, TRIM, derived
+from app.domain.assets.media_info import patch_media_info
+from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights
+from app.domain.render import DIGITAL_HUMAN_SOURCE
+from app.domain.sequences import placement
+from app.domain.sequences.placement import InsertClip
+from app.domain.sequences.tracks import AddTrack, add_track
+from app.domain.workflows.executors import inputs as executors_inputs
+from app.domain.workflows.executors.inputs import _sequence_in
+from app.media.paths import resolve_key
 
 #: 模型没声明时的保守上下限(百炼 videoretalk 的文档值)。
 DEFAULT_LIMITS = (2.0, 120.0)
@@ -93,7 +107,6 @@ def plan_chunks(duration: float, lines: list[tuple[float, float]], low: float, h
 
 
 def _ffmpeg(args: list[str], what: str) -> None:
-    from app.core.child_process import run_logged
 
     result = run_logged([settings.ffmpeg, "-y", "-v", "error", *args], capture_output=True, text=True, timeout=1800, what=what)
     if result.returncode != 0:
@@ -141,8 +154,6 @@ def _lines_on(db: Session, scope: RunScope, voice_track: Any, clip_start: float,
     截取却仍从这句的开头算 —— 整句往后错了那一截,越往后嘴越对不上。现在起点落在 0,截取往后挪同样一段
     (按这句的变速折回素材里的秒数)。
     """
-    from app.domain.workflows.executors.inputs import _asset_in
-    from app.media.paths import resolve_key
 
     lines: list[Line] = []
     for one in sorted(voice_track.clips, key=lambda item: float(item.timeline_start)):
@@ -157,7 +168,7 @@ def _lines_on(db: Session, scope: RunScope, voice_track: Any, clip_start: float,
         if start < 0:
             src_in -= start * speed
             start = 0.0
-        source = _asset_in(db, scope, one.asset_id)
+        source = executors_inputs._asset_in(db, scope, one.asset_id)
         dubbed = (source.media_info or {}).get(DUB_LINE_KEY)
         said = json.dumps(dubbed, ensure_ascii=False, sort_keys=True) if dubbed else f"asset:{source.id}"
         lines.append(Line(start=start, end=end, path=resolve_key(str(source.file_key)), src_in=src_in,
@@ -172,7 +183,6 @@ def _require_rights(db: Session, workspace_id: str, video_id: str, lines: list[L
     资产的参考图 —— 漏斗里的 check_digital_human_rights 查它们什么都查不到。所以拿**原来的**素材走同一套判据:
     配音轨上每一句的音频(克隆音色要有授权声明)、原片(真人人物资产要有本人或已获同意的声明)。
     """
-    from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights
 
     entries = [{"asset_id": video_id, "role": SOURCE_VIDEO},
                *({"asset_id": asset_id, "role": DRIVING_AUDIO} for asset_id in dict.fromkeys(line.asset_id for line in lines))]
@@ -208,8 +218,6 @@ def _cached_chunk(db: Session, workspace_id: str, key: str) -> str:
     """同一块(见 _chunk_key)之前改过口型:交回那一份,不再花一次钱。"""
     from sqlalchemy import select
 
-    from app.db.models import Asset
-    from app.media.paths import resolve_key
 
     rows = db.scalars(select(Asset).where(Asset.workspace_id == workspace_id, Asset.kind == "video",
                                           Asset.media_info[CHUNK_KEY].as_string() == key))
@@ -220,9 +228,6 @@ def _remember_chunk(asset_id: str, key: str) -> None:
     """在改好口型的那一块上记下它是哪一块,**单独一个事务马上落库**:后面哪一块失败、这个节点整体回滚,
     这一块的钱也不白花 —— 重跑时认得出它(见 _cached_chunk)。它也是这道工序的零件:标成中间产物,素材库不列
     (它是生成漏斗登记的,登记时说不了,只能在这里补)。"""
-    from app.core.unit_of_work import unit_of_work
-    from app.db.models import Asset
-    from app.domain.assets.media_info import patch_media_info
 
     #: 只补这一个键:这块素材刚登记,代理转码正在别的线程里改它的 media_info(见 assets/media_info)。
     with unit_of_work() as keeper:
@@ -252,14 +257,6 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     sequence / clip / video 都是脱离会话、属性已过期的对象,再读一个属性就是 DetachedInstanceError —— 付过钱、
     改好了口型,却在把结果铺上时间线的那一刻崩掉。所以花钱之前把要用的都取成普通值,之后要对象就按 id 重新取。
     """
-    from app.db.models import Asset, Clip, Sequence, Track
-    from app.domain.assets.importer import register_file_asset
-    from app.domain.assets.lineage import CONCAT, MIX, TRIM, Derivation, derived
-    from app.domain.render import DIGITAL_HUMAN_SOURCE
-    from app.domain.sequences.tracks import AddTrack, add_track
-    from app.domain.sequences.placement import InsertClip, insert_clip
-    from app.domain.workflows.executors.inputs import _asset_in, _sequence_in
-    from app.media.paths import resolve_key
 
     _require_consent(config)
     sequence = _sequence_in(db, scope, _text(config.get("sequence_id")))
@@ -268,7 +265,7 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         raise WorkflowDomainError("wfErr_dubLipsyncNeedsClip")
     if abs(float(clip.speed) - 1.0) > 1e-6:
         raise WorkflowDomainError("wfErr_dubLipsyncSpeed")
-    video = _asset_in(db, scope, clip.asset_id)
+    video = executors_inputs._asset_in(db, scope, clip.asset_id)
     voice_track = db.get(Track, _text(config.get("track_id")))
     if voice_track is None or voice_track.sequence_id != sequence.id:
         raise WorkflowDomainError("wfErr_dubLipsyncNeedsTrack")
@@ -336,11 +333,11 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 ], project_id=project_id)
                 if not results:
                     raise WorkflowDomainError("wfErr_dubLipsyncNoResult", params={"index": index})
-                done = _asset_in(db, scope, results[0]).id
+                done = executors_inputs._asset_in(db, scope, results[0]).id
                 _remember_chunk(done, key)
                 generated += 1
             lipsynced.append(done)
-            parts.append(resolve_key(str(_asset_in(db, scope, done).file_key)))
+            parts.append(resolve_key(str(executors_inputs._asset_in(db, scope, done).file_key)))
         joined = work / "lipsync.mp4"
         _join(parts, width, height, fps, joined)
         #: 接回的整段不是哪一条生成记录的产出:标上数字人来源,导出时照样加 AI 标识(ADR 0028 §5)。
@@ -356,7 +353,7 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     db.refresh(sequence)
     track = next(one for one in sequence.tracks if one.id not in before)
     track_id = track.id
-    placed = insert_clip(db, sequence_id, InsertClip(track_id=track_id, asset_id=final,
+    placed = placement.insert_clip(db, sequence_id, InsertClip(track_id=track_id, asset_id=final,
                                                     timeline_start=clip_start, src_in=0.0, src_out=length))
     return {"asset_id": final, "clip_id": placed.id, "track_id": track_id, "chunk_count": len(chunks),
             "generated_count": generated, "reused_count": reused}

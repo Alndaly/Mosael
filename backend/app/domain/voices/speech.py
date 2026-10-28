@@ -33,10 +33,13 @@ from app.ai.providers import (
     VolcanoSpeechAdapter,
     connection_vendor_for_speech_engine,
 )
-from app.ai.runtime import qwen_models
-from app.core.i18n import tr
-from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable
+from app.ai.runtime import qwen_models, config as tts_config, tts_models
+from app.core.i18n import tr, fragment
+from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Use, register_use
 from mosael_formats.plugin_manifest import SPEECH
+from app.db.models import PluginInstance
+from app.domain.plugins import instances as inst
+from app.domain.providers import selection as providers_selection
 
 BUILTIN_PREFIX = "builtin:"
 #: 「克隆音色」这一项。没选引擎时按它算。
@@ -56,8 +59,6 @@ class SpeechProviderUnavailable(CapabilityUnavailable):
 
 
 def _clone_ready(_db: Session, _owner: str | None) -> tuple[str, ...]:
-    from app.ai.runtime import config as tts_config
-    from app.ai.runtime import tts_models
 
     ready, _checked = tts_models.runtime_status(tts_config.get().engine)
     return () if ready else (tr("ttsProviderNote_cloneMissing"),)
@@ -71,7 +72,6 @@ def _local_ready(engine: str):
     """
 
     def missing(_db: Session, _owner: str | None) -> tuple[str, ...]:
-        from app.ai.runtime import tts_models
 
         runtime = LOCAL_SPEECH_ENGINES[engine]
         ready, _checked = tts_models.runtime_status(runtime)
@@ -115,8 +115,6 @@ CAPABILITY = Capability(
 
 def register_uses() -> None:
     """宿主界面上用到配音的入口(ADR 0032 §4)。工作流节点由注册表现扫。"""
-    from app.core.i18n import fragment
-    from app.domain.capabilities import Use, register_use
 
     register_use(Use(SPEECH, "app", fragment("capUse_studioSpeech")))
     register_use(Use(SPEECH, "app", fragment("capUse_subtitleDub")))
@@ -165,8 +163,6 @@ def known_engine(db: Session, engine: str) -> bool:
         return True
     if engine.startswith(BUILTIN_PREFIX):
         return False
-    from app.db.models import PluginInstance
-    from app.domain.plugins import instances as inst
 
     instance = db.get(PluginInstance, engine)
     return instance is not None and SPEECH in inst.manifest_for(db, instance).provides
@@ -192,10 +188,9 @@ def engine_ready(db: Session | None, engine_id: str, needs_key: bool, user_id: s
         return True
     if db is None:
         return False
-    from app.domain.providers.selection import resolve_connection
 
     vendor = connection_vendor_for_speech_engine(engine_id)
-    connection = resolve_connection(db, vendor, user_id=user_id)
+    connection = providers_selection.resolve_connection(db, vendor, user_id=user_id)
     return connection is not None and bool(connection.api_key or connection.extra)
 
 

@@ -16,6 +16,10 @@ from sqlalchemy.orm import Session
 from app.core.i18n import tr
 from app.db.models import Sequence
 from app.domain.boards.persistence import board_project, get_board
+from app.domain.boards.errors import BoardDomainError
+from app.domain.sequences.append import append_asset
+from app.domain.sequences.creation import copy_sequence, create_sequence_scaffold
+from app.domain.sequences.errors import SequenceDomainError
 
 #: 新时间线的默认画幅:横屏 1080p、30 帧。第一段接进来时画幅跟着它走(sequences.append)。
 DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS = 1920, 1080, 30.0
@@ -27,8 +31,6 @@ def create_board_sequence(db: Session, workspace_id: str, board_id: str, *, copy
     `copy_of`:照着这条时间线复制一条(画板上复制一格时间线格)。**副本不和原件共用一条** —— 共用的话在副本里
     剪一刀,原件那一格跟着变,两边的撤销还会互相撤掉对方的步骤;和整板复制(persistence._copy_timelines)同一条。
     """
-    from app.domain.boards.errors import BoardDomainError
-    from app.domain.sequences.creation import copy_sequence, create_sequence_scaffold
 
     board = get_board(db, workspace_id, board_id)
     project = board_project(db, board)
@@ -88,8 +90,6 @@ def append_filled_media(db: Session, workspace_id: str, canvas: dict[str, Any], 
     连线那一刻它还是空槽,没什么可接(append_connected_media 跳过空槽);线在它就在 —— 产出落下时补接,和连一格
     有素材的进来是同一件事(ADR 0030 §3)。接不上的(素材没有时长……)跳过,不挡回执。交回接上的片段 id。
     """
-    from app.domain.sequences.append import append_asset
-    from app.domain.sequences.errors import SequenceDomainError
 
     by_id = {str(item.get("id")): item for item in canvas.get("items") or []}
     source = by_id.get(item_id)
@@ -113,7 +113,6 @@ def append_filled_media(db: Session, workspace_id: str, canvas: dict[str, Any], 
 def append_connected_media(db: Session, workspace_id: str, before: dict[str, Any], after: dict[str, Any]) -> list[str]:
     """新连进时间线格的视频 / 图片 / 音频格:把它的素材接到那条时间线末尾 —— 和界面上拉一根线同一件事(ADR 0030 §3)。
     原来就连着的不再接一遍;空槽(还没有素材)没什么可接。交回接上的片段 id。"""
-    from app.domain.sequences.append import append_asset
 
     old = {(str(edge.get("source")), str(edge.get("target"))) for edge in before.get("edges") or []}
     by_id = {str(item.get("id")): item for item in after.get("items") or []}

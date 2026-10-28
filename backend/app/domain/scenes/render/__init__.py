@@ -37,6 +37,9 @@ from app.domain.scenes.render.raster import (
 )
 from app.domain.scenes.render.sampling import CameraPose, sample_camera, sample_object
 from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
+from app.core.child_process import run_logged
+from app.core.config import settings
+from app.core.text import blame_line
 
 #: 镜头比例 → 参考帧尺寸。短边 540:图像模型的参考图、视频模型的参考视频都收得下,
 #: 又不至于让后端一帧渲上好几秒。
@@ -276,9 +279,6 @@ def _render(content: SceneContent, shot: SceneShot, time: float, camera: CameraP
 def render_shot_video(content: SceneContent, shot_id: str, target: Path,
                       models: ModelLibrary | None = None) -> Path:
     """整个镜头的运镜参考视频(H.264 MP4)。物体有动画的也一起动。"""
-    from app.core.child_process import run_logged
-    from app.core.config import settings
-    from app.core.text import blame_line
 
     shot = find_shot(content, shot_id)
     count = max(2, int(math.ceil(shot.duration * VIDEO_RENDER_FPS)) + 1)

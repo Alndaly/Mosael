@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, AssetExtraction, Note, User
 from app.domain.documents.extraction import ensure_parsed, start_parse
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
+from app.domain.documents.reading import analyze_pages
+from app.domain.documents.to_note import save_as_note as _save
+from app.domain.documents.web_page import page_note_content
 
 
 def _asset(db: Session, asset_id: str) -> Asset:
@@ -60,14 +63,12 @@ def analyze(
     db: Session, user: User, asset_id: str, pages: list[int], question: str, profile_id: str | None
 ) -> dict[str, Any]:
     """那几页的页面图 + 文字交给视觉模型(看版式、图表、截图)。"""
-    from app.domain.documents.reading import analyze_pages
 
     asset = _document_for(db, user, asset_id, "ai")
     return analyze_pages(db, asset.workspace_id, asset.id, pages, question, user_id=user.id, profile_id=profile_id)
 
 
 def save_as_note(db: Session, user: User, asset_id: str) -> Note:
-    from app.domain.documents.to_note import save_as_note as _save
 
     return _save(db, _document_for(db, user, asset_id, "edit"), actor_id=user.id)
 
@@ -78,7 +79,6 @@ def save_page_as_note(
 ) -> Note:
     """内嵌浏览器顶栏「存成笔记」:整页正文或选中的文字,带着来源(见 documents/web_page)。点名 `edit`,和存文档为笔记一样。"""
     from app.domain import notes
-    from app.domain.documents.web_page import page_note_content
 
     ensure_workspace_perm(db, user, workspace_id, "edit")
     content = page_note_content(url=url, title=title, html=html, selection=selection, project_id=project_id)

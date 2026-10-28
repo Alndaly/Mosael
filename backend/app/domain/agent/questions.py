@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import AgentQuestion, AgentSession, User, now
+from app.domain.agent import host
 
 MAX_QUESTIONS = 4
 MAX_OPTIONS = 6
@@ -191,7 +192,6 @@ def deliver_to_session(db: Session, row: AgentQuestion, user: User) -> None:
     冒出一条**他没写过**的消息(「我选好了:…」),带着 Steer 和删除两个按钮,莫名其妙。
     插不进去时才落回排队,由那一轮结束时的 drain 接走。
     """
-    from app.domain.agent import host
 
     session = db.get(AgentSession, row.session_id)
     if session is None:

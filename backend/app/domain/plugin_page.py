@@ -20,15 +20,22 @@ from sqlalchemy.orm import Session
 from app.core.i18n import get_current_locale, render_message
 from app.db.models import PluginInstance, PluginMarketHold, PluginPackage, User
 from mosael_formats.effects import EFFECTS
-from app.domain.plugins import bundled, package_sources, shared_tables, updates
-from app.domain.plugins import instances as inst
-from app.domain.plugins import oauth as plugin_oauth
-from app.domain.plugins import packages as pkg
-from app.domain.plugins import registry as market
-from app.domain.plugins import tools as tools_domain
+from app.domain.plugins import (
+    bundled,
+    package_sources,
+    shared_tables,
+    updates,
+    instances as inst,
+    oauth as plugin_oauth,
+    packages as pkg,
+    registry as market,
+    tools as tools_domain,
+)
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import manifest_of
 from mosael_formats.plugin_manifest import text_of, web_url
+from app.domain.plugins.nodes import node_meta
+from app.domain.workflows.node_catalog import translated_spec, with_data_type
 
 
 def packages(db: Session, user: User) -> list[dict[str, Any]]:
@@ -216,8 +223,6 @@ def _used_by(provides: list[str]) -> list[dict[str, Any]]:
 def _tool_form(tool: dict[str, Any]) -> dict[str, Any]:
     """插件页「试一下」那张表单的字段 —— **和这个工具在工作流里当节点时是同一份声明**(名字、素材选择器、
     下拉、数字框、高级那一档),前端用同一个表单组件渲染。选连接那一格不要:试跑就是在这个连接上。"""
-    from app.domain.plugins.nodes import node_meta
-    from app.domain.workflows.node_catalog import translated_spec, with_data_type
 
     locale = get_current_locale()
     config = node_meta(tool).get("config") or {}

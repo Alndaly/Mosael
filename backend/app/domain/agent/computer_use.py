@@ -24,6 +24,7 @@ import math
 import os
 import socket
 from typing import Any
+from app.core.config import settings
 
 #: 电脑使用**只有一个窗口**:应用主窗口。曾经还有 `publish`(发布器自己的 BrowserWindow),
 #: 但发布器后来成了应用里的页面与内嵌浏览器 —— 那个名字早就没有对应的窗口了(ADR 0075)。
@@ -433,7 +434,6 @@ def _bridge_endpoint() -> tuple[int, str]:
     port_text = os.environ.get(BRIDGE_PORT_ENV, "").strip()
     token = os.environ.get(BRIDGE_TOKEN_ENV, "").strip()
     if not port_text or not token:
-        from app.core.config import settings
 
         try:
             saved = json.loads((settings.data_dir / BRIDGE_FILE).read_text(encoding="utf-8"))

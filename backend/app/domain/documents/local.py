@@ -23,6 +23,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 from app.core.i18n import LocalizedError
+from app.domain.documents import office
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,6 @@ def _noop(_fraction: float, _message: str) -> None:
 
 def parse_local(source: Path, out_dir: Path, *, on_progress: Progress = _noop) -> Parsed:
     """解析一份文档,插图写进 `out_dir/images/`、页面图写进 `out_dir/pages/`。按扩展名分派。"""
-    from app.domain.documents import office
 
     (out_dir / "images").mkdir(parents=True, exist_ok=True)
     suffix = source.suffix.lower()
@@ -109,7 +109,6 @@ def attach_page_images(source: Path, out_dir: Path, parsed: Parsed, on_progress:
     """给解析结果配上页面图 —— **不管是谁解析的**(本地、MinerU……),页面图都由宿主照原件渲:PDF 直接渲,
     Office 文档本机有 LibreOffice 就转 PDF 再渲,没有就说一声。段和页一一对得上(PDF 按页、PPT 按幻灯片切,
     数目相同)就挂在各段上,对不上(Word 按章切)就单独记成 page_images。已经有页面图的不再渲。"""
-    from app.domain.documents import office
 
     if any(one.image for one in parsed.sections) or parsed.page_images:
         return

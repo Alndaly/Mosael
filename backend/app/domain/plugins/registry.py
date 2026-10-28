@@ -44,6 +44,7 @@ from app.domain import deployment
 from mosael_formats.effects import plugin_tool_effects
 from app.domain.plugins.errors import PluginDomainError
 from mosael_formats.plugin_manifest import Manifest
+from app.domain.plugins import bundled
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,6 @@ def install_archive(data: bytes, plugins_dir: Path, *, overwrite: bool = False) 
     rename 换上去。此前是先 rmtree 旧目录再从临时目录 move 过来 —— 临时目录和插件目录不在同一个
     文件系统时 move 是逐个文件拷贝,拷到一半失败,留下的是半个新版本、旧版本已经没了。
     """
-    from app.domain.plugins import bundled
 
     raw, root, workdir = inspect_archive(data)
     staging: Path | None = None

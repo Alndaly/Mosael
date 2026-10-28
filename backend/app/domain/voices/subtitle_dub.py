@@ -29,13 +29,17 @@ from app.domain.assets.intermediates import DUB_LINE
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import CANCELLED, CANCELLED_ERROR_KEY, JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.sequences.tracks import AddTrack, add_track
-from app.domain.sequences.placement import InsertClip, insert_clip
+from app.domain.sequences.placement import InsertClip, insert_clip, DeleteClip, delete_clip
 from app.domain.voices.original_audio import (
     DEFAULT_ORIGINAL_AUDIO,
     OriginalAudioError,
     apply_original_audio,
     ensure_original_audio_mode,
 )
+from app.domain.sequences.append import track_end
+from app.domain.sequences.grouping import OperationGroup
+from app.domain.voices import voices as voices_voices
+from app.domain.voices.remote import check_voice, clones_remotely
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +208,6 @@ def _check_remote_voice(db: Session, synthesis: dict, *, workspace_id: str, crea
 
     逐句的合成是在任务里排的,等到第一句才发现没同意,一整批已经排上了 —— 在这里快速失败,界面弹确认框。
     """
-    from app.domain.voices.remote import check_voice, clones_remotely
 
     engine, voice_id = str(synthesis.get("engine") or ""), str(synthesis.get("voice_id") or "")
     if voice_id and clones_remotely(engine):
@@ -277,7 +280,6 @@ def _room_for(db: Session, clip: Clip | None) -> float | None:
 
     后面没有字幕了:到原片(时间线上除字幕轨、配音轨之外的内容)结束为止。
     """
-    from app.domain.sequences.append import track_end
 
     if clip is None:
         return None
@@ -326,8 +328,6 @@ def _existing_dubs(db: Session, sequence_id: str, start: float, end: float) -> l
 
 
 def _run_dub(job_id: str) -> None:
-    from app.domain.sequences.grouping import OperationGroup
-    from app.domain.sequences.placement import DeleteClip, delete_clip
 
     with unit_of_work() as db:
         job = db.get(Job, job_id)
@@ -350,7 +350,6 @@ def _run_dub(job_id: str) -> None:
             return
         emit_job_event(db, job.id, "job.running", {})
 
-    from app.domain.voices.voices import start_synthesis
 
     #: **整次配音在撤销栈上是一步。** 建轨、每句的插入与调速、删掉被重配替换的旧配音、原声处理,
     #: 全部记进这一组(见 sequences/grouping)—— 此前一句 3 步,1000 句是两千多次 ⌘Z。
@@ -389,7 +388,7 @@ def _run_dub(job_id: str) -> None:
                     continue
                 sequence = db.get(Sequence, sequence_id)
                 try:
-                    child = start_synthesis(
+                    child = voices_voices.start_synthesis(
                         db,
                         text=text,
                         project_id=sequence.project_id if sequence else None,

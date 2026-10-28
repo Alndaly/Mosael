@@ -23,6 +23,10 @@ from app.db.models import Notification, ScheduledTask, User, Workflow, WorkflowR
 from app.domain.authority import Voucher
 from app.domain.referrers import referrers
 from app.domain.scheduler.executors import bound_workflow
+from app.domain.notifications import notify
+from app.domain.workflows.engine import unvouched_spend
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision
 
 #: 通知载荷里 `reminder` 那一格的值:认出这一类提醒(去重用)。
 REMINDER = "awaiting_approval"
@@ -33,7 +37,6 @@ _MAX_CALLER_DEPTH = 8
 def attest_bound_workflow(db: Session, task: ScheduledTask, user_id: str) -> None:
     """点「立即运行」即认可(D6):任务绑着的那张图的当前版,记点的人为担保人。不是工作流任务、图不在了,什么都不做
     (跑不起来的由触发前的检查报)。"""
-    from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision
 
     workflow = bound_workflow(db, workspace_id=task.workspace_id, payload=task.payload) if task.kind == "workflow" else None
     if workflow is None:
@@ -46,8 +49,6 @@ def attest_bound_workflow(db: Session, task: ScheduledTask, user_id: str) -> Non
 
 def awaiting_approval(db: Session, task: ScheduledTask) -> Voucher | None:
     """这个任务下一次到点,会不会停在「这一版要主人认可」:会的话是哪条工作流的哪一版。停用的、不是工作流的不算。"""
-    from app.domain.workflows.errors import WorkflowDomainError
-    from app.domain.workflows.engine import unvouched_spend
 
     if task.kind != "workflow" or not task.enabled or not task.owner_user_id:
         return None
@@ -84,7 +85,6 @@ def remind_owners(db: Session, workflow: Workflow, revision: WorkflowRevision) -
     主人自己存的不发 —— 他自己的那一版他就是担保人,还在等的是别处(子流程)的那一版,任务卡上看得见。
     同一个任务给主人的这类通知还有一条没读,就不再发。不提交,随存图的那个事务。
     """
-    from app.domain.notifications import notify
 
     saver = revision.created_by
     for task, waiting in tasks_waiting_on(db, workflow):

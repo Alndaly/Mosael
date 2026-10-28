@@ -32,6 +32,7 @@ from mosael_formats.agent_skill import (
     is_text,
     read_archive_files,
 )
+from app.domain.assets import importer
 
 #: 一次最多合订多少个文本文件。和一个技能最多带的文件数同一个量级:再多的包(整个仓库)该让智能体自己去读,
 #: 不是一口塞进对话。单个文本文件的上限就是技能里单个文件的上限(MAX_FILE_BYTES)。
@@ -111,7 +112,6 @@ def unpack(db: Session, user: User, workspace_id: str, *, source_name: str, arch
         preview = skill_use_cases.stage_import(db, user, workspace_id, files=clean, source_name=source_name)
         return {"source_name": source_name, "skill_import": preview, "assets": [], "skipped": []}
 
-    from app.domain.assets.importer import import_binary_asset
 
     images: dict[str, bytes] = {}
     texts: dict[str, str] = {}
@@ -133,12 +133,12 @@ def unpack(db: Session, user: User, workspace_id: str, *, source_name: str, arch
 
     assets: list[Asset] = []
     for path, data in images.items():
-        assets.append(import_binary_asset(db, workspace_id=workspace_id, project_id=None, data=data,
+        assets.append(importer.import_binary_asset(db, workspace_id=workspace_id, project_id=None, data=data,
                                           original=PurePosixPath(path).name, name=path))
     if texts:
         stem = _stem(source_name)
         document = compile_text(source_name, texts, skipped).encode("utf-8")
-        assets.append(import_binary_asset(db, workspace_id=workspace_id, project_id=None, data=document,
+        assets.append(importer.import_binary_asset(db, workspace_id=workspace_id, project_id=None, data=document,
                                           original=f"{stem}.md", content_type="text/markdown", name=f"{stem}.md"))
     return {"source_name": source_name, "skill_import": None, "assets": assets, "skipped": skipped}
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.core.i18n import LocalizedError
+from app.core.text import blame_line
 
 #: 一次降噪最长等多久。滤波器类引擎比实时快得多,模型类引擎在 CPU 上可能慢于实时;
 #: 一小时的访谈是正常输入。
@@ -37,7 +38,6 @@ def subprocess_failure(key: str, output: str, *, tool: str) -> DenoiseError:
     (「{tool} 没有说明原因」)—— 编一个原因比说不知道更糟,而"原因"这半句也要跟着语言走,
     不能是一个写死的中文兜底串。
     """
-    from app.core.text import blame_line
 
     detail = blame_line(output)
     return DenoiseError(key, detail=detail) if detail else DenoiseError(f"{key}Silent", tool=tool)

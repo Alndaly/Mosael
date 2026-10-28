@@ -24,6 +24,11 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import AgentMessage, AgentSession
+from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
+from app.domain import ai_chat
+from app.domain.ai_chat import target_for
+from app.domain.billing.usage import billable
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +109,6 @@ def _exchange(db: Session, session: AgentSession) -> tuple[str, str]:
 
 def _ask(target: Any, messages: list[dict[str, str]], *, workspace_id: str, session_id: str, user_id: str | None) -> str:
     """问一次模型。和别的一次性补全一样记账(见 billing.usage.billable):起名花的是这段对话主人的钱(`user_id`),账上要看得见。"""
-    from app.core.db import SessionLocal
-    from app.domain.ai_chat import chat
-    from app.domain.billing.usage import billable
 
     with SessionLocal() as billing_db, billable(
         billing_db,
@@ -119,7 +121,7 @@ def _ask(target: Any, messages: list[dict[str, str]], *, workspace_id: str, sess
         #: 一段对话只起一次名。
         idempotency_key=f"agent-title:{session_id}",
     ) as call:
-        return chat(target, messages, temperature=0.3, timeout=TITLE_TIMEOUT_SECONDS, label="aiChat_labelAgentTitle", call=call)
+        return ai_chat.chat(target, messages, temperature=0.3, timeout=TITLE_TIMEOUT_SECONDS, label="aiChat_labelAgentTitle", call=call)
 
 
 #: 「这段对话用哪条连接、哪个模型」的解析(host.resolve_chat_provider)。由 host 交进来 —— host 用这个模块,这里再 import
@@ -129,9 +131,6 @@ Resolve = Callable[..., tuple[Any, Any, Any]]
 
 def name_session(session_id: str, actor_id: str | None, resolve_chat_provider: Resolve) -> None:
     """起名并写回(在自己的线程里跑,见 `start`)。哪一步不成都停在第一句话那个名字上,不抛。"""
-    from app.core.db import SessionLocal
-    from app.core.unit_of_work import unit_of_work
-    from app.domain.ai_chat import target_for
 
     try:
         with SessionLocal() as db:

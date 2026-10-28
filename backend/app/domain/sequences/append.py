@@ -18,6 +18,8 @@ from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.fitting import TRACK_FOR_ASSET
 from app.domain.sequences.journal import Journal
 from app.domain.sequences.placement import InsertClip, place_clip
+from app.domain.sequences import coverage
+from app.domain.sequences.coverage import clip_end
 
 #: 图片在时间线上的定格时长(秒)。图片没有 duration,不给就是一段长度为 0 的空片段。
 STILL_SECONDS = 5.0
@@ -38,9 +40,8 @@ def track_end(track: Track) -> float:
     查库,不读 `track.clips`:同一个会话里连着接两段时,关系集合还是接第一段之前的样子,第二段就会
     算出「末尾是 0」而落在第一段上 —— 落点上已有片段是覆盖,第一段就没了。
     """
-    from app.domain.sequences.coverage import clip_end, clips_on_track
 
-    return max((clip_end(clip) for clip in clips_on_track(object_session(track), track.id)), default=0.0)
+    return max((clip_end(clip) for clip in coverage.clips_on_track(object_session(track), track.id)), default=0.0)
 
 
 def asset_span(asset: Asset) -> float:

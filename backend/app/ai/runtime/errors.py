@@ -7,7 +7,8 @@
 
 from __future__ import annotations
 
-from app.core.i18n import LocalizedError, is_message_key
+from app.core.i18n import LocalizedError, is_message_key, MESSAGES
+from app.core.text import blame_line
 
 
 class RuntimeSetupError(LocalizedError, RuntimeError):
@@ -32,7 +33,6 @@ def failure_message(exc: BaseException, *, limit: int = 400) -> tuple[str, dict[
 def venv_failure(output: str) -> RuntimeSetupError:
     """`python -m venv` 没建成。挑得出原因(core/text.blame_line)就带上;挑不出就直说没留下原因
     —— 这半句也跟着语言走,所以是另一条 key,不是一个写死的中文兜底串。"""
-    from app.core.text import blame_line
 
     detail = blame_line(output)
     return RuntimeSetupError("runtimeErr_venvFailed", detail=detail) if detail else RuntimeSetupError("runtimeErr_venvFailedSilent")
@@ -44,7 +44,6 @@ def with_log(message: str, params: dict[str, str], log: object | None) -> tuple[
     不把这半句拼进原因里:拼进去它就只剩一种语言了。有 `…Log` 变体的 key 用变体;原话(子进程
     自己说的那句)套进 `runtimeErr_failedWithLog`;别的 key 没有变体就原样返回。
     """
-    from app.core.i18n import MESSAGES
 
     if log is None:
         return message, params

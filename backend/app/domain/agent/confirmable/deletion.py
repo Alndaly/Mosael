@@ -19,6 +19,7 @@ from app.db.models import Asset, Clip, Project
 from app.core.i18n import fragment
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
+from app.domain.assets.deletion import AssetNotDeletable, delete_asset, ensure_deletable
 
 #: 一张卡最多删多少个。不是性能上限,是**读得完**的上限:卡上列不下的东西,用户点批准时
 #: 并不知道自己批了什么,而这一档撤不回来。要删更多就分几次,每次都看得见。
@@ -72,7 +73,6 @@ def _names(rows: list[Any], limit: int = 4) -> str:
 
 
 def _validate_delete_assets(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.assets.deletion import AssetNotDeletable, ensure_deletable
 
     rows = _rows(db, Asset, workspace_id, _ids(payload, "asset_ids"), "confirmErr_missingAssets")
     # 现在还不能删的(例如还在发布)开卡时就说(见 assets/deletion 的拦截),别让用户批准了一张执行时才报错的卡。
@@ -97,7 +97,6 @@ def _summarize_delete_assets(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute_delete_assets(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain.assets.deletion import delete_asset
 
     payload = confirmation.payload or {}
     deleted: list[dict[str, Any]] = []

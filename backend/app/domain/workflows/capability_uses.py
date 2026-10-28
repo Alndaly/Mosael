@@ -8,6 +8,7 @@ from __future__ import annotations
 from app.core.i18n import fragment
 from app.domain.capabilities import PROVIDERS_SOURCE, Use
 from mosael_formats.plugin_manifest import SPEECH
+from app.domain.workflows.node_types import NODE_TYPES, config_label
 
 #: 有自己选项来源、但同样是在点名某项能力的字段。配音的引擎格不走通用的 `providers.speech`:克隆音色那一项
 #: 总要在(没装好时它的音色清单是空的,选择本身仍然成立)、播客不列 —— 见 field_options._speech_engines。
@@ -15,7 +16,6 @@ _SOURCE_CAPABILITIES = {"speech_engines": SPEECH}
 
 
 def capability_uses() -> list[Use]:
-    from app.domain.workflows.node_types import NODE_TYPES, config_label
 
     found: list[Use] = []
     for spec in NODE_TYPES.values():

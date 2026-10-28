@@ -36,6 +36,16 @@ from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
+from app.db.models import AgentSession
+from app.domain.agent.autopilot import session_for_token
+from app.domain.agent.confirmable.plugin_tools import exposed_tool
+from app.domain.agent.errors import ConfirmationError
+from app.domain.agent.proposals import propose
+from app.domain.agent.receipts import receipt_to_session
+from app.domain.effects import needs_card
+from app.domain.jobs import reset_receipt, set_receipt
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.use_cases import invoke_tool
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent-tools"])
@@ -60,8 +70,6 @@ def list_agent_tools(db: DbSession, user: CurrentUser, token: PresentedToken) ->
     见 places.turn_place 与 tool_manifest.kits_for):ComfyUI 工作台里说的有 `comfy_*`、没有改 Mosael 画布的那一份,别处反过来。
     没有对话的调用方(登录令牌、MCP 直连)全给。
     """
-    from app.db.models import AgentSession
-    from app.domain.agent.autopilot import session_for_token
 
     session_id = session_for_token(db, token)
     session = db.get(AgentSession, session_id) if session_id else None
@@ -110,7 +118,6 @@ def _fit_arguments(fn: Any, arguments: dict[str, Any]) -> tuple[dict[str, Any], 
 
 def _session_workspace(db: Any, token: str) -> str:
     """这份凭据所属那次对话的工作区。没有会话(登录令牌、MCP 直连)就是空串。"""
-    from app.db.models import AgentSession
 
     auth = find_session(db, token)
     session = db.get(AgentSession, auth.agent_session_id) if auth is not None and auth.agent_session_id else None
@@ -130,13 +137,6 @@ def _invoke_plugin_tool(
     工作区:参数给了用参数(上面已经过了 ensure_workspace_member),没给就用这份凭据那次对话的 ——
     sidecar 不带这个参数,而卡总得开在某个工作区里,插件交出的文件也要收进它的素材库。
     """
-    from app.domain.agent.autopilot import session_for_token
-    from app.domain.agent.errors import ConfirmationError
-    from app.domain.agent.proposals import propose
-    from app.domain.agent.confirmable.plugin_tools import exposed_tool
-    from app.domain.effects import needs_card
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.use_cases import invoke_tool
 
     match = exposed_tool(db, name, user.id)
     if match is None:
@@ -221,8 +221,6 @@ def invoke_agent_tool(
         # 读类工具一个任务都不建,也就不会凭空多出回执。
         receipt = None
         if agent_session_id:
-            from app.domain.agent.receipts import receipt_to_session
-            from app.domain.jobs import reset_receipt, set_receipt
 
             receipt = set_receipt(receipt_to_session(agent_session_id))
         try:

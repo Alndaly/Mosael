@@ -14,13 +14,14 @@ from sqlalchemy.orm import Session
 from app.core.unit_of_work import after_commit
 from app.db.models import GenerationJob, GenerationSession, Job, User
 from app.domain import sharing
-from app.domain.generation.operations import GenerationDomainError, create_generation_job
+from app.domain.generation.operations import GenerationDomainError, create_generation_job, ensure_same_family
 from app.domain.generation.origins import STUDIO_ORIGIN, HERE, Origin, describe_origins
 from app.domain.generation.prompt_optimizer import optimize_image_prompt
 from app.domain.generation.runner import remote_poll_path, retrievable, start_generation_thread, start_retrieval_thread
 from app.domain.generation.sessions import SHARE_KIND, ensure_job_writable, new_session, visible_history
 from app.domain.jobs import create_job, emit_job_event
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
+from app.domain.generation import voiced
 
 #: 会话列表最多给多少条(最近用过的在前)。
 SESSION_LIST_LIMIT = 50
@@ -117,23 +118,20 @@ def generate(db: Session, user: User, workspace_id: str, *, origin: Origin, **re
 
 def speak(db: Session, user: User, workspace_id: str, **request: Any) -> tuple[GenerationJob, Job]:
     """创作页「语音」:念一段字,记成会话里的一条(ADR 0055)。任务由配音那一族在提交之后派发。"""
-    from app.domain.generation.voiced import create_speech
 
     ensure_workspace_perm(db, user, workspace_id, "ai")
-    return create_speech(db, workspace_id=workspace_id, created_by=user.id, lock_family=True, origin=STUDIO_ORIGIN, **request)
+    return voiced.create_speech(db, workspace_id=workspace_id, created_by=user.id, lock_family=True, origin=STUDIO_ORIGIN, **request)
 
 
 def podcast(db: Session, user: User, workspace_id: str, **request: Any) -> tuple[GenerationJob, Job]:
     """创作页「播客」:一段双人对谈,记成会话里的一条(ADR 0055)。"""
-    from app.domain.generation.voiced import create_podcast
 
     ensure_workspace_perm(db, user, workspace_id, "ai")
-    return create_podcast(db, workspace_id=workspace_id, created_by=user.id, lock_family=True, origin=STUDIO_ORIGIN, **request)
+    return voiced.create_podcast(db, workspace_id=workspace_id, created_by=user.id, lock_family=True, origin=STUDIO_ORIGIN, **request)
 
 
 def change_session_kind(db: Session, session: GenerationSession, kind: str) -> None:
     """改会话记着的种类(选了另一种模型):有记录的会话只在同一族里换(ADR 0055 §2)。"""
-    from app.domain.generation.operations import ensure_same_family
 
     ensure_same_family(db, session, kind)
     session.kind = kind

@@ -23,6 +23,17 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from sqlalchemy.orm import Session
+from app.core.unit_of_work import unit_of_work
+from app.domain.agent.host import reconcile_orphaned_agent_sessions
+from app.domain.assets import importer
+from app.domain.assets.proxies import reconcile_missing_proxies
+from app.domain.blender.bridge import reconcile_orphaned_transfers
+from app.domain.browser import reconcile_browser_state
+from app.domain.documents.extraction import reconcile_orphaned_extractions
+from app.domain.generation.runner import reconcile_unsettled_charges
+from app.domain.jobs import reconcile_orphaned_jobs
+from app.domain.plugins.tools import reconcile_orphaned_invocations
+from app.domain.voices.remote import reconcile_orphaned_enrollments
 
 #: 表名 → 为什么这张表的「进行中」**不是**被重启孤立的。每条都要说得出理由。
 NOT_ORPHANED_BY_RESTART: dict[str, str] = {
@@ -59,12 +70,6 @@ def registered() -> dict[str, Callable[[Session], int]]:
     含义(见 docs/PROCESS_STATE.md 和盯着它的那条棘轮)—— 把一份纯查表混进那份清单,会稀释
     它真正要回答的问题。导入延迟到这里,是因为这些模块反过来会用到领域层的东西。
     """
-    from app.domain.browser import reconcile_browser_state
-    from app.domain.documents.extraction import reconcile_orphaned_extractions
-    from app.domain.generation.runner import reconcile_unsettled_charges
-    from app.domain.jobs import reconcile_orphaned_jobs
-    from app.domain.plugins.tools import reconcile_orphaned_invocations
-    from app.domain.voices.remote import reconcile_orphaned_enrollments
 
     return {
         "jobs": reconcile_orphaned_jobs,
@@ -97,16 +102,11 @@ def settle_previous_run() -> dict[str, int]:
     (预览代理、坏素材的时长)也在这一个事务里,它们派出去的任务同样在提交之后才起线程。磁盘上的记录(Blender 的
     transfer.json)推导不出来,事务之外单列。返回每一项处理了几行。
     """
-    from app.core.unit_of_work import unit_of_work
-    from app.domain.agent.host import reconcile_orphaned_agent_sessions
-    from app.domain.assets.importer import reconcile_broken_media_info
-    from app.domain.assets.proxies import reconcile_missing_proxies
-    from app.domain.blender.bridge import reconcile_orphaned_transfers
 
     with unit_of_work() as db:
         settled = reconcile_after_restart(db)
         settled["agent_sessions"] = reconcile_orphaned_agent_sessions(db)
         reconcile_missing_proxies(db)
-        reconcile_broken_media_info(db)
+        importer.reconcile_broken_media_info(db)
     settled["blender_transfers"] = reconcile_orphaned_transfers()
     return settled

@@ -35,8 +35,8 @@ from app.core.outbound_guard import Origin
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
-from app.domain.assets import web_capture, web_download
-from app.domain.assets.importer import register_file_asset
+from app.domain.assets import web_capture, web_download, importer
+from app.domain.assets.importer import register_file_asset, AssetFileTypeError
 from app.domain.assets.source_url import remember_asset_source
 from app.domain.assets.web_capture import PAGE_VIDEO, WebSource, remember_web_source
 from app.domain.jobs import (
@@ -386,7 +386,6 @@ def import_image_url(
 
     取的过程是**边收边数**:超过上限当场停并删掉半截文件,不会把一个几百 MB 的地址整个读进内存。
     """
-    from app.domain.assets.importer import AssetFileTypeError, import_binary_asset
 
     ensure_public_link(url)
     workdir = scratch_dir(WEB_DOWNLOAD)
@@ -420,7 +419,7 @@ def import_image_url(
             raise web_capture.WebCaptureError("webCaptureErr_notImage", status=415)
         filename = f"image-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}{_IMAGE_EXTENSIONS[mime]}"
         try:
-            asset = import_binary_asset(
+            asset = importer.import_binary_asset(
                 db,
                 workspace_id=workspace_id,
                 project_id=project_id,
@@ -458,7 +457,6 @@ def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int =
     """
     import shutil
 
-    from app.media import ytdlp
 
     ensure_public_link(url)
     resolved = _resolve(url.strip())

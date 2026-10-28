@@ -59,7 +59,8 @@ def _takes_entity_id(fn: ast.AST) -> bool:
 def _scopes_to_workspace(fn: ast.AST) -> bool:
     """调用了收敛助手,或者取过 `.workspace_id`。同样只认代码,不认注释。"""
     for node in ast.walk(fn):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in SCOPING_CALLS:
+        #: 直接调和按模块属性调(`inputs._asset_in(...)`)都算。
+        if isinstance(node, ast.Call) and (getattr(node.func, "id", None) or getattr(node.func, "attr", None)) in SCOPING_CALLS:
             return True
         if isinstance(node, ast.Attribute) and node.attr == "workspace_id":
             return True

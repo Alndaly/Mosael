@@ -14,6 +14,8 @@ from typing import Any
 from pydantic import Field, computed_field
 
 from app.api.schemas.base import ApiModel
+from app.core.i18n import get_current_locale
+from app.domain.failure_summary import detail_of, hint_of, summarize
 
 
 class FailureStepOut(ApiModel):
@@ -53,8 +55,6 @@ class FailureReadout:
         error, key, params = self._failure()
         if not key and not error:
             return None
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import summarize
 
         return summarize(error, key, params, get_current_locale()) or None
 
@@ -66,8 +66,6 @@ class FailureReadout:
         error, key, params = self._failure()
         if not key and not error:
             return None
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import detail_of
 
         return detail_of(error, key, params, get_current_locale())
 
@@ -78,8 +76,6 @@ class FailureReadout:
         _, _, params = self._failure()
         if not params:
             return None
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import hint_of
 
         hint = hint_of(params, get_current_locale())
         return FailureHintOut.model_validate(hint) if hint else None

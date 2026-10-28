@@ -19,11 +19,12 @@ from app.domain.boards.persistence import (
     get_board,
     list_boards,
     update_board,
+    board_summary,
 )
-from app.domain.boards.persistence import board_summary
 from app.domain.boards.receipts import revived_runs, settle_revived_runs
 from app.domain.boards.timelines import create_board_sequence
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
+from app.domain.boards.ops import apply_board_ops
 
 
 def list_all(db: Session, user: User, workspace_id: str) -> list[dict[str, Any]]:
@@ -66,7 +67,6 @@ def append_note(
     追加判成冲突。位置照 add_item 的缺省 —— 摆在所有格子的右边,不压住任何一格。写入本身仍是带版本号的条件写
     (update_board),撞上真正的并发写就重读再追加。
     """
-    from app.domain.boards.ops import apply_board_ops
 
     ensure_workspace_perm(db, user, workspace_id, "edit")
     for attempt in range(APPEND_RETRIES):

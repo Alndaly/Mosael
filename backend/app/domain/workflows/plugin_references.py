@@ -48,6 +48,12 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, Workflow, WorkflowRevisionAttestation
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX, declared_outputs, parse_node_type
+from app.domain.plugins import dynamic_tools, moves, tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.providers import moved_models
+from app.domain.providers.moved_models import renamed
+from app.domain.workflows.graph_rules import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES
+from app.domain.workflows.revisions import commit_graph_revision, current_workflow_revision, revision_vouchers
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +96,9 @@ class Replacement:
 def _current_tools(db: Session, instance: PluginInstance) -> set[str] | None:
     """这个连接此刻有哪些工具(清单里声明的 + 运行时报出的)。读不出来(包记录没了、清单坏了)回 None ——
     那就当老工具还在,照严的来:说不准的时候不丢用户的值。"""
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.tools import all_tools
 
     try:
-        return {tool["name"] for tool in all_tools(db, instance)}
+        return {tool["name"] for tool in plugins_tools.all_tools(db, instance)}
     except (PluginDomainError, ValueError):  # ValueError 含清单解析的 ManifestError
         return None
 
@@ -261,7 +265,6 @@ def _deep_references(value: Any, node_id: str, outputs: set[str]) -> set[str]:
 def _inner_keys(node: dict[str, Any]) -> tuple[str, ...]:
     """容器节点(循环 / 子图)配置里属于**体内**作用域的几格(NESTED_BODY_RAW_KEYS):`output` / `condition` 里的
     `{{p1.x}}` 指的是体里的 p1,不是这一层同名的那个。和 normalization、reference_dependencies 同一条界线。"""
-    from app.domain.workflows.graph_rules import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES
 
     return NESTED_BODY_RAW_KEYS if str(node.get("type") or "") in NESTED_BODY_TYPES else ()
 
@@ -425,7 +428,6 @@ def _commit_mechanical_revision(db: Session, workflow: Workflow, rewrite: Any, n
                                 source: str = "migration") -> bool:
     """机械改写落一版修订(`source = "migration"`;工作流库里改名时跟着改的是 `"rename"`):作者沿用上一版,认可过上一版的人
     照样为这一版担保 —— 机械改写不该让一条跑得好好的流程停下来等人认可。不提交。"""
-    from app.domain.workflows.revisions import commit_graph_revision, current_workflow_revision, revision_vouchers
 
     previous = current_workflow_revision(db, workflow)
     vouchers = revision_vouchers(db, previous)
@@ -492,7 +494,6 @@ def follow_moved_tools(db: Session, instance: PluginInstance, renames: dict[str,
 
 def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str], *, why: str = "moved") -> int:
     """工作流里选着这条连接旧模型名的(生成节点、按生成选项选模型的那几格)改到新名字。不提交。返回改了几个工作流。"""
-    from app.domain.providers.moved_models import renamed
 
     changed = 0
     for workflow in db.scalars(select(Workflow)):
@@ -511,8 +512,6 @@ def _after_refresh(db: Session, instance: PluginInstance) -> None:
 
 
 def install() -> None:
-    from app.domain.plugins import dynamic_tools, moves
-    from app.domain.providers import moved_models
 
     dynamic_tools.on_refreshed(_after_refresh)
     moves.on_tools_moved(follow_moved_tools)

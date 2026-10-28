@@ -34,6 +34,8 @@ from app.domain.workflows.template_requirements import (
     requirement,
     SPEECH_VIDEO_MODEL,
 )
+from app.domain.voices.speech import CLONE_ENGINE, EDGE_ENGINE
+from mosael_formats.i18n import pick_text
 
 HIGHLIGHT_SHORTS = "highlight_shorts"
 PRODUCT_ON_MODEL = "product_on_model"
@@ -1026,7 +1028,6 @@ def _pitch_voice(voice_id: str) -> tuple[str, str]:
     没有就用免费的 Edge 音色。此前没有克隆音色这张模板就跑不了:念画外音那一格空着,运行前拦住。用的是哪一把、为什么,
     由配音节点运行时按实际念的那一把说(`voice_note`),不在这里写死 —— 之后在节点里换了音色,说明跟着变。
     """
-    from app.domain.voices.speech import CLONE_ENGINE, EDGE_ENGINE
 
     if voice_id:
         return CLONE_ENGINE, voice_id
@@ -1071,7 +1072,6 @@ def product_pitch_short_graph(
     `locale`:图里**给人看的**默认值(新项目的名字、完成通知、念不完的提醒)在建图这一刻定语言,和节点名同一条。
     此前写死中文,官网英文副本里也是中文。
     """
-    from mosael_formats.i18n import pick_text
 
     def text(zh: str, en: str) -> str:
         return pick_text({"zh": zh, "en": en}, locale)

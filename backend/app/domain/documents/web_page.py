@@ -19,6 +19,7 @@ from urllib.parse import urljoin, urlsplit
 
 from app.core.i18n import tr
 from app.domain.note_types import NoteContent, NoteSource
+from app.domain.documents.local import html_to_markdown
 
 #: 正文最多留多少字(笔记 markdown 的上限是 500000,留出来源那一行)。
 MAX_NOTE_MARKDOWN = 400_000
@@ -34,7 +35,6 @@ def article_markdown(html: str, base_url: str) -> str:
     """渲染后的 HTML → 正文 Markdown。链接和图片补成绝对地址(离开那个页面,相对地址就失效了)。"""
     from bs4 import BeautifulSoup
 
-    from app.domain.documents.local import html_to_markdown
 
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(_NEVER):

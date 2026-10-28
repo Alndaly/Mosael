@@ -43,6 +43,8 @@ from app.domain.jobs import (
     start_job,
 )
 from app.media.paths import resolve_key
+from app.domain import audio_capabilities
+from app.domain.capabilities import CapabilityUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +75,9 @@ class SeparatedAssets:
 
 def available(db: Session, owner_user_id: str | None, engine: str = "") -> bool:
     """现在有没有跑得起来的分离实现(`engine` 是提供方 id,空 = 按默认,见 audio_capabilities)。"""
-    from app.domain.audio_capabilities import separation_adapter
-    from app.domain.capabilities import CapabilityUnavailable
 
     try:
-        adapter = separation_adapter(db, owner_user_id, engine)
+        adapter = audio_capabilities.separation_adapter(db, owner_user_id, engine)
     except CapabilityUnavailable:
         return False
     return adapter.runtime_ready()
@@ -99,9 +99,8 @@ def separate_asset(
     (media/audio_io)—— 此前借的是转写那条,会先降成 16 kHz 单声道,拆出来的背景音再进成片时
     音质已经没了(ADR-0017 决定 6)。
     """
-    from app.domain.audio_capabilities import separation_adapter
 
-    adapter = separation_adapter(db, owner_user_id, engine)
+    adapter = audio_capabilities.separation_adapter(db, owner_user_id, engine)
     if not adapter.runtime_ready():
         # 装是显式的一步:第一次要建 venv、装 torch、拉权重,那是几分钟到几十分钟的事,
         # 不该藏在"点一下分离"后面一声不响地发生。

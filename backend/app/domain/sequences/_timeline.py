@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Clip, Sequence, SequenceOperation, SequenceRevision, Track
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict, TrackLocked
 from app.domain.sequences.offline import offline_snapshot
+from app.domain.collaboration import record_activity
 
 
 #: 一个片段最短多长(源时间,秒)。切分、按点切、按文字剪、覆盖裁剩、插入让位、修剪,以及新放下的
@@ -348,7 +349,6 @@ def _record_operation(
         )
     db.add(operation)
     db.flush()
-    from app.domain.collaboration import record_activity
 
     record_activity(
         db,

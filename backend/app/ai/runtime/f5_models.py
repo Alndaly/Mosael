@@ -30,13 +30,14 @@ from typing import Any
 
 import logging
 
-from app.ai.runtime import remote_size
+from app.ai.runtime import remote_size, config as tts_config, tts_daemon, tts_models
 from app.ai.runtime.tts_models import bytes_on_disk
 from app.core.transfer_rate import DownloadRate
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore
 from app.ai.runtime.errors import RuntimeSetupError, failure_message
 from app.ai.runtime.tts_language import detect_script
+from app.core.i18n import is_message_key
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +70,12 @@ def _failure_from(exc: BaseException) -> tuple[str, dict[str, str], str]:
     三类原因:我们自己抛的带 key(翻得出人话);连不上下载源的那几种(说清去哪儿换源);
     其余第三方库的原文(翻不了,只当详情,不摆进主句)。
     """
-    from app.core.i18n import is_message_key
 
     message, params = failure_message(exc)
     raw = str(exc).strip()
     if is_message_key(message):
         return message, params, raw
     if any(marker in message for marker in _HUB_UNREACHABLE):
-        from app.ai.runtime import config as tts_config
 
         return "runtimeErr_hubUnreachable", {"endpoint": str(tts_config.get().hf_endpoint)}, raw
     return "runtimeErr_f5DownloadFailed", {}, raw
@@ -240,7 +239,6 @@ def get(model_id: str) -> F5Model | None:
 
 
 def root() -> Path:
-    from app.ai.runtime import config as tts_config
 
     return tts_config.MANAGED_F5_MODEL
 
@@ -495,7 +493,6 @@ class _ByteWatcher:
 
 
 def _run_download(model_id: str) -> None:
-    from app.ai.runtime import tts_daemon, tts_models
 
     model = _BY_ID[model_id]
     try:

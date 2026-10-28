@@ -12,11 +12,31 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.jobs import current_actor
+from app.domain.jobs import current_actor, cancel_job_tree
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import wait_for_job
 from app.domain.workflows.id_values import id_list
+from app.core.unit_of_work import unit_of_work
+from app.db.models import Job
+from app.domain.entities.library import (
+    EntityDomainError,
+    add_reference,
+    create_entity,
+    find_by_name,
+    get_entity,
+    list_entities,
+    references_of,
+    update_entity,
+)
+from app.domain.entities.mentions import REFERENCE_ROLE, generation_profile
+from app.domain.generation import (
+    operations as generation_operations,
+    resolution as generation_resolution,
+    runner as generation_runner,
+)
+from app.domain.generation.operations import GenerationDomainError
+from app.domain.generation.origins import of_run_scope
 
 #: 取资产时最多交出几张参考图(按挑图的先后)。
 DEFAULT_REFERENCE_LIMIT = 8
@@ -32,8 +52,6 @@ def _text(value: Any) -> str:
 def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """点名一个资产,或按「种类 + 名字」找一个。点名的找不到是错;按名字找不到不是错,`found` 给 0 ——
     那正是「这个角色还没有,先去画」的分支。"""
-    from app.domain.entities.library import EntityDomainError, find_by_name, get_entity
-    from app.domain.entities.mentions import generation_profile
 
     entity_id = _text(config.get("entity_id"))
     name = _text(config.get("name"))
@@ -85,7 +103,6 @@ def entity_list(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     `text` 是给模型读的清单(一行一个:名字 — 提示词描述),「从主题到完整视频」把它交给定角色的那一步:
     故事里要的人和库里某一个是同一个,就原名沿用 —— 下游「取资产」按名字认得出它,不再重画。
     """
-    from app.domain.entities.library import EntityDomainError, list_entities
 
     kind = _text(config.get("kind"))
     try:
@@ -110,14 +127,6 @@ def entity_list(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
 def entity_save(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """把一套图存成资产。同种类同名的已经有了,缺省**合并**:补上它还没挂的参考图,提示词描述 / 描述只在
     原来空着时填 —— 人手改过的不被一次运行覆盖。选「另建一个」就总是新建。"""
-    from app.domain.entities.library import (
-        EntityDomainError,
-        add_reference,
-        create_entity,
-        find_by_name,
-        references_of,
-        update_entity,
-    )
 
     kind = _text(config.get("kind"))
     name = _text(config.get("name"))
@@ -220,7 +229,6 @@ EXPRESSION_PROMPT = ("Close-up portrait of the same character with a {expression
 def takes_reference_images(option: dict[str, Any]) -> bool:
     """这个生成选项收不收参考图。不收的只看得到文字描述,画出来是另一个人 —— 「补全」「表情」就没意义了。
     模型下拉(选项来源 `reference_image_models`)和运行前的检查问的是这同一句。"""
-    from app.domain.entities.mentions import REFERENCE_ROLE
 
     capabilities = option.get("capabilities") or {}
     return bool(option.get("adapter_available")) and REFERENCE_ROLE in (capabilities.get("parameter_keys") or ()) \
@@ -239,9 +247,8 @@ def automatic_reference_model(options: list[dict[str, Any]]) -> dict[str, Any] |
 
 def _reference_model(db: Session, choice: str, actor_id: str | None) -> dict[str, Any]:
     """用哪个图片模型:点名的那一个(`reference_image_models` 的选项 id),没点名见 automatic_reference_model。"""
-    from app.domain.generation.resolution import generation_options
 
-    options = generation_options(db, "image", user_id=actor_id)
+    options = generation_resolution.generation_options(db, "image", user_id=actor_id)
     if not choice:
         picked = automatic_reference_model(options)
         if picked is None:
@@ -278,8 +285,6 @@ def plan_drawing(db: Session, workspace_id: str, node_type: str, config: dict[st
     """画之前的全部检查,**不花钱、不写任何东西**:资产在不在、有没有图片参考图、模型收不收参考图、
     要画哪几张(都有了就直说)。节点跑的时候先过它;资产详情页点「开始」时也先过它,说不通的当场说,
     不起一个注定失败的任务(见 domain/workflows/entity_drawing)。"""
-    from app.domain.entities.library import EntityDomainError, get_entity, references_of
-    from app.domain.entities.mentions import generation_profile
 
     entity_id = _text(config.get("entity_id"))
     if not entity_id:
@@ -316,17 +321,12 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
     几张一起起、一起等(每张是一次独立的生成任务,挂在这一轮下面,取消这一轮就一并停)。有几张没画成的,
     画成的照样挂上,`failed` 说几张没成;一张都没成才算这一步失败(带着第一张的原因)。
     """
-    from app.domain.entities.library import EntityDomainError, add_reference, get_entity
-    from app.domain.generation.operations import create_generation_job
-    from app.domain.generation.operations import GenerationDomainError
-    from app.domain.generation.origins import of_run_scope
-    from app.domain.generation.runner import start_generation_thread
 
     model = drawing.model
     started: list[tuple[str, str, str]] = []
     try:
         for role, prompt in drawing.shots:
-            generation, child = create_generation_job(
+            generation, child = generation_operations.create_generation_job(
                 db,
                 workspace_id=scope.workspace_id,
                 session_id=None,
@@ -354,7 +354,7 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
         raise
     db.commit()
     for _role, generation_id, _child in started:
-        start_generation_thread(generation_id)
+        generation_runner.start_generation_thread(generation_id)
 
     drawn: list[tuple[str, str]] = []
     errors: list[WorkflowDomainError] = []
@@ -388,9 +388,6 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
 def _abandon(child_ids: list[str]) -> None:
     """不再等的那几张一并取消。wait_for_job 停下时只取消**它正在等的那一张**,几张一起起的另外几张照样在生成、
     照样扣费,做完了没人要。已经落了终态的不动(cancel_job_tree 自己认)。"""
-    from app.core.unit_of_work import unit_of_work
-    from app.db.models import Job
-    from app.domain.jobs import cancel_job_tree
 
     with unit_of_work() as cleanup:
         for child_id in child_ids:

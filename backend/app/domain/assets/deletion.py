@@ -31,10 +31,10 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
-from app.db.models import Asset, Clip, GeneratedAsset, GenerationJob
-from app.db.models import Sequence as SequenceModel
+from app.db.models import Asset, Clip, GeneratedAsset, GenerationJob, Sequence as SequenceModel
 from app.domain.sequences.offline import offline_snapshot
 from app.media.paths import resolve_key
+from app.db.model_base import now
 
 
 class AssetNotDeletable(LocalizedError, ValueError):
@@ -96,7 +96,6 @@ def _mark_generations_result_deleted(db: Session, asset: Asset) -> None:
         )
     )
     if refs:
-        from app.db.model_base import now
 
         db.execute(update(GenerationJob).where(GenerationJob.id.in_(refs)).values(result_deleted_at=now()))
 

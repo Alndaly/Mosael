@@ -7,15 +7,25 @@ from fastapi import APIRouter, HTTPException, Response
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
-from app.domain.providers import model_limits
-from app.domain.providers import credentials as provider_credentials
-from app.domain.providers import models as provider_models
-from app.domain.providers import structured_output
-from app.domain.providers import thinking
+from app.domain.providers import (
+    model_limits,
+    credentials as provider_credentials,
+    models as provider_models,
+    structured_output,
+    thinking,
+)
 from app.domain.providers.credentials import ResolvedConnection
 from app.domain.providers.presets import normalize_capability_ids
 
 from app.domain.permissions import require_own_profile
+from app.domain.generation.resolution import (
+    GenerationResolutionError,
+    KINDS,
+    declaration_refs_for_model,
+    resolve_row,
+    set_declaration_refs,
+)
+from app.domain.generation_catalog import GENERATION_KINDS, builtin_models_for
 
 
 router = APIRouter(tags=["settings"])
@@ -44,9 +54,7 @@ def _is_known_model(vendor: str, model_id: str, catalog: dict[str, dict]) -> boo
     """
     if model_id in catalog:
         return True
-    from app.domain.generation_catalog import builtin_models_for
 
-    from app.domain.generation_catalog import GENERATION_KINDS
 
     return any(model_id in builtin_models_for(vendor, kind) for kind in GENERATION_KINDS)
 
@@ -99,7 +107,6 @@ def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> Provide
         entry=catalog.get(model.model_id) or {},
         model=model,
     )
-    from app.domain.generation.resolution import KINDS, declaration_refs_for_model, resolve_row
 
     refs = declaration_refs_for_model(db, model)
     known_by_kind = {
@@ -172,8 +179,6 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
 
     # 内置目录:走原生端点、不在 /models 里的那些。能力**按 kind 给准**,而不是套用 vendor
     # 的全集 —— 一个万相视频模型不该被声明成"对话 + 图像 + 视频 + 语音"。
-    from app.domain.generation_catalog import builtin_models_for
-    from app.domain.generation_catalog import GENERATION_KINDS
 
     for kind in GENERATION_KINDS:
         for model_id in builtin_models_for(profile.vendor, kind):
@@ -221,7 +226,6 @@ def add_provider_model(
         **fields,
     )
     if body.generation_capability_refs is not None:
-        from app.domain.generation.resolution import GenerationResolutionError, set_declaration_refs
 
         try:
             set_declaration_refs(db, model, body.generation_capability_refs)
@@ -256,7 +260,6 @@ def update_provider_model(
     if "capability_ids" in patch:
         model.capability_ids = normalize_capability_ids(body.capability_ids) or []
     if body.generation_capability_refs is not None:
-        from app.domain.generation.resolution import GenerationResolutionError, set_declaration_refs
 
         try:
             set_declaration_refs(db, model, body.generation_capability_refs)

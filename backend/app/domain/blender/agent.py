@@ -21,6 +21,7 @@ from uuid import uuid4
 from app.core.config import settings
 from app.domain.blender import bridge
 from app.domain.blender.bridge import BlenderConflict, BlenderDomainError, BlenderUnavailable, render_warnings
+from app.domain.scenes.operations import apply_scene_operations, import_model
 
 #: 能从哪些角度看 Blender 里的东西 —— **只此一处**,角度随调用一起发给 worker。
 #: 值是 (方位角, 仰角),度:方位 0 = 从 -Y 看过去,和 Blender 的「前视图」(小键盘 1)一致;
@@ -134,7 +135,6 @@ def import_to_scene(db, user, scene, *, base_revision: int, name: str = '', obje
     CAS —— 两次检查之间被改了,那一次照样冲突,而模型已经在这个工作区里了(它归工作区,不归
     场景),下一次直接摆上去就行,不必再导一遍。
     """
-    from app.domain.scenes.operations import apply_scene_operations, import_model
 
     if base_revision != scene.revision:
         raise BlenderConflict('blenderErr_staleRevision', revision=scene.revision)

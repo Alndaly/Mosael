@@ -11,14 +11,14 @@ from jsonschema import Draft7Validator, SchemaError, ValidationError, validate a
 from jsonschema.validators import validator_for
 from sqlalchemy.orm import Session
 
-from app.core.i18n import fragment
+from app.core.i18n import fragment, tr
 from app.core.usage_scope import workspace_scope
 from app.db.models import Asset
 from app.domain.ai_runtime import configured_max_retries
-from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
+from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for, JSON_CONTRACT_MARKER
 from app.domain.analysis.service import image_part
 from app.domain.billing.usage import billable, once
-from app.domain.providers.chat_connection import require_connection, runner_choice
+from app.domain.providers.chat_connection import require_connection, runner_choice, default_chat_connection
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.node_types import field_name
 from app.domain.jobs import current_actor
@@ -27,6 +27,10 @@ from app.domain.workflows.executors.common import stopping, text_lines
 from app.domain.workflows.id_values import id_list
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
+from app.domain import translate as domain_translate
+from app.domain.providers import models as provider_models
+from app.domain.translate import TranslationStopped, language_label, same_language
+from app.domain.workflows.executors.numbers import whole_number
 
 LLM_TIMEOUT_SECONDS = 120
 #: 按要的输出长度放宽等待:按慢端点的出字速度(每秒约 25 个 token)算完 max_tokens 要多久,再加一段排队 / 首字的
@@ -203,7 +207,6 @@ def _schema_for_prompt(config: dict[str, Any]) -> str:
     开头带上网关那条兼容标记:降级路径(`ai_chat._downgrade_response_format_payload`)见到它就
     不再另贴一份契约,免得同一份 Schema 在一次请求里出现两遍。
     """
-    from app.domain.ai_chat import JSON_CONTRACT_MARKER
 
     mode = str(config.get("response_format") or "text")
     if mode not in {"json_schema", "json_object"}:
@@ -624,8 +627,6 @@ def fit_narration(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     _trim_to_budget),`dropped` / `note` 说清楚去掉了哪几段。`reserved_text` 是这几段之外也要念、也算进总时长的话
     (出镜版主播说的开场和收尾),按念出来的时长从总时长里扣掉。先删再改写:不替要删的那几段花改写的钱。
     """
-    from app.core.i18n import tr
-    from app.domain.workflows.executors.numbers import whole_number
 
     raw = config.get("items")
     if isinstance(raw, str):
@@ -724,8 +725,6 @@ def llm_preflight(db: Session, config: dict[str, Any], actor: str | None, place:
     还没配对话模型)也照样能按下运行。和执行时同一个解析(require_connection 缺省时取的 default_chat_connection,
     再按那条连接取对话模型)。连接或模型是引用的、或者点了名的,不在这里判(点了名的那条执行时照样会判)。
     """
-    from app.domain.providers import models as provider_models
-    from app.domain.providers.chat_connection import default_chat_connection
 
     if "profile_id" not in config or "model" not in config:
         return
@@ -754,7 +753,6 @@ def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     **顺序即对齐**:第 i 条译文配第 i 段的时间码,所以空段落也要占住自己的位置 ——
     translate_many 对空串返回空串,不压缩列表。
     """
-    from app.domain.translate import TranslationStopped, language_label, same_language, translate_many
 
     texts = text_lines(config.get("texts"))
     if not texts:
@@ -768,7 +766,7 @@ def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         raise WorkflowDomainError("wfErr_translateSameLanguage", params={"lang": language_label(target)})
     with workspace_scope(getattr(scope, "workspace_id", "") or ""):
         try:
-            translated = translate_many(
+            translated = domain_translate.translate_many(
                 db,
                 texts,
                 target,
@@ -787,7 +785,6 @@ def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
 
 @register("translate")
 def translate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.translate import translate as translate_text
 
     text = str(config.get("text", ""))
     if not text.strip():
@@ -795,7 +792,7 @@ def translate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str,
     # 工作流跑在后台线程,没有 HTTP 请求把工作区绑进上下文 —— 显式圈一下,AI 翻译的用量才有归属。
     # scope 可能为 None(单元测试直接调节点);那时没有归属可绑,记账会跳过并 warning。
     with workspace_scope(getattr(scope, "workspace_id", "") or ""):
-        translated = translate_text(
+        translated = domain_translate.translate(
             db,
             text,
             str(config.get("target_lang") or "en"),

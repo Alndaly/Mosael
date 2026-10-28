@@ -16,8 +16,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
-from dataclasses import field as dataclass_field
+from dataclasses import dataclass, field as dataclass_field
 from typing import Any, Literal
 
 from sqlalchemy import select
@@ -28,7 +27,7 @@ from app.ai.model_catalog import CatalogModel, fetch_models
 from app.core.i18n import tr
 from app.db.models import GenerationCapabilityDeclaration, ProviderModel, ProviderProfile
 from app.domain.generation_catalog import GENERATION_KINDS, builtin_models_for
-from app.domain.providers import thinking
+from app.domain.providers import thinking, credentials as provider_credentials
 from app.domain.providers.credentials import ResolvedConnection
 from app.domain.providers.presets import (
     capability_ids_for_vendor,
@@ -36,6 +35,7 @@ from app.domain.providers.presets import (
     normalize_capability_ids,
     served_by_pi,
 )
+from app.domain.providers.defaults import get_row
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
 RUNTIME_FIELDS = (
@@ -245,7 +245,6 @@ def models_for_capability(
         # 由 pi 承载的连接(OAuth 订阅,以及 Google Gemini 这类预设点名了 pi Provider 的 API Key 连接)只走
         # pi 的 Adapter:后端直连那条只会说 OpenAI 兼容协议。能力同为 chat 只说明模型会对话，不代表两条执行
         # 通道可以互换。
-        from app.domain.providers import credentials as provider_credentials
 
         def direct(model: ProviderModel) -> bool:
             return (
@@ -284,7 +283,6 @@ def resolve_default(db: Session, capability: str, user_id: str | None = None) ->
 
     `user_id` 给 None(后台里确实没有人的那些路径)时直接回 None:没有人,就没有他的默认。
     """
-    from app.domain.providers.defaults import get_row
 
     row = get_row(db, capability, user_id)
     if row is not None and row.provider_model_id:

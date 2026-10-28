@@ -11,12 +11,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.core.unit_of_work import after_commit
+from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.security import find_session
 from app.db.models import AgentSession, ToolConfirmation, User, Workspace, now
-from app.domain.agent import judge as judge_module
-from app.domain.agent import rules
+from app.domain.agent import judge as judge_module, rules, confirmations
 from app.domain.permissions import PermissionDenied, ensure_workspace_role
+from app.core.db import SessionLocal
+from app.domain.agent.confirmable.registry import allowance_name, tool_spec
 
 """自动放行:一张新开的确认卡该不该不问用户就执行。
 
@@ -93,7 +94,6 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     「这一次不用问人」排在「没有会话」之前:它不是谁开的口子,而是这次调用本身不需要口子(工具自己声明,
     见 ConfirmableTool.needs_card)—— MCP 直连、飞书上跑一格的一项只读能力也一样直接跑。
     """
-    from app.domain.agent.confirmable.registry import allowance_name, tool_spec
 
     spec = tool_spec(confirmation.tool)
     if spec is not None and spec.always_asks:
@@ -177,7 +177,6 @@ def set_session_allowances(db: Session, user: User, session: AgentSession, entri
       多一条永远不生效的承诺(decide 头一条就不放它)。
     - 记下**是谁定的**:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 decide)。
     """
-    from app.domain.agent.confirmable.registry import tool_spec
 
     merged: dict[str, str] = {}
     for tool, permission in entries:
@@ -302,8 +301,6 @@ def _judge_thread(confirmation_id: str, user_id: str) -> None:
     **任何不是"明确放行"的结果都退回用户**:拒绝、超时、报错、回了个读不懂的东西 —— 判断者不可用
     不等于放行。问判断者是网络调用,不放在写事务里;拿到裁决后再开一个短事务落结果。
     """
-    from app.core.db import SessionLocal
-    from app.core.unit_of_work import unit_of_work
 
     with SessionLocal() as db:
         confirmation = db.get(ToolConfirmation, confirmation_id)
@@ -355,8 +352,6 @@ def _execute_thread(confirmation_id: str, user_id: str) -> None:
     这里调的是 `authorize_and_approve`,和 HTTP 路由、飞书回调**同一个函数**:自动放行绕过的是
     「用户同意」,不是「他有没有这个权限」。三道授权闸一道不少;挡下来了就当作没有自动放行过。
     """
-    from app.core.unit_of_work import unit_of_work
-    from app.domain.agent.confirmations import authorize_and_approve
 
     # 线程就是入口:批准(或退回用户)在这里一起提交。
     with unit_of_work() as db:
@@ -365,7 +360,7 @@ def _execute_thread(confirmation_id: str, user_id: str) -> None:
         if confirmation is None or user is None:
             return
         try:
-            authorize_and_approve(db, user, confirmation)
+            confirmations.authorize_and_approve(db, user, confirmation)
         except Exception as exc:  # noqa: BLE001 —— 含权限不足(403)、并发抢占、执行器炸了
             logger.warning("autopilot could not settle confirmation %s: %s", confirmation_id, exc)
             _fall_back_to_a_human(db, confirmation_id, str(exc))

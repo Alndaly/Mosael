@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from app.ai.runtime import workers
+from app.ai.runtime import workers, remote_size, qwen_models, config as tts_config
 from typing import Any
 
 from app.core import interpreter, pip_install, run_log
@@ -29,8 +29,6 @@ from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
-from app.ai.runtime import remote_size
-from app.ai.runtime import qwen_models
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
 from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure, with_log
@@ -234,7 +232,6 @@ def bytes_on_disk(target: Path, *, include_unfinished: bool) -> int:
 
 def _fish_model_dir() -> Path | None:
     """Fish Speech 的权重目录(配置的 / App 托管的),没有解析出来就是 None。"""
-    from app.ai.runtime import config as tts_config
 
     model = tts_config.get().resolved_fish_model
     return Path(model) if model and Path(model).is_dir() else None
@@ -242,7 +239,6 @@ def _fish_model_dir() -> Path | None:
 
 def _f5_model_dir() -> Path | None:
     """F5 走 ModelScope 时权重落的地方(没有就是 None,那说明走的是 HF 缓存那条路)。"""
-    from app.ai.runtime import config as tts_config
 
     path = tts_config.MANAGED_F5_MODEL
     return path if path.is_dir() else None
@@ -495,7 +491,6 @@ def _worker_env(engine_python: str = "") -> dict[str, str]:
     """Env for the TTS worker subprocess: point HuggingFace at the configured
     mirror so first-use model downloads work (e.g. hf-mirror in CN), and pass the
     resolved Fish Speech source-checkout + weights dirs the worker runs from."""
-    from app.ai.runtime import config as tts_config
 
     cfg = tts_config.get()
     env = dict(os.environ)
@@ -535,7 +530,6 @@ def candidate_pythons(engine_id: str) -> list[Path]:
     分开之前那个共用 venv **不在这里** —— 它曾由一次性迁移
     搬到它实际服务的引擎名下。留着当候选就是两条路并存,而两条路正是这次的病根。
     """
-    from app.ai.runtime import config as tts_config
 
     candidates: list[Path] = []
     configured = tts_config.get().python_path
@@ -563,7 +557,6 @@ def _probe_code(engine_id: str) -> str | None:
     body = "; ".join(f"import {module}" for module in imports)
     if engine_id != "fish-speech":
         return body
-    from app.ai.runtime import config as tts_config
 
     cfg = tts_config.get()
     repo, model = cfg.resolved_fish_repo, cfg.resolved_fish_model
@@ -676,7 +669,6 @@ def _source_fields(engine: TtsEngine) -> dict[str, Any]:
     its own so the card can show it. f5-tts needs no source (pip package)."""
     if engine.id != "fish-speech":
         return {"needs_source": False, "source_ready": False, "source_dir": ""}
-    from app.ai.runtime import config as tts_config
 
     repo = tts_config.get().resolved_fish_repo
     return {"needs_source": True, "source_ready": bool(repo), "source_dir": repo}
@@ -684,7 +676,6 @@ def _source_fields(engine: TtsEngine) -> dict[str, Any]:
 
 def _download_source(engine_id: str) -> str:
     """这个引擎此刻**实际**会走的下载源(把库里存的值落到它支持的那几个上)。"""
-    from app.ai.runtime import config as tts_config
 
     return effective_source(engine_id, tts_config.get().source)
 
@@ -767,7 +758,6 @@ def _download_was_interrupted(engine: TtsEngine) -> bool:
 
 
 def _status_dict(engine: TtsEngine) -> dict[str, Any]:
-    from app.ai.runtime import config as tts_config
 
     live = _store.get(engine.id)
     source = effective_source(engine.id, tts_config.get().source)
@@ -865,7 +855,6 @@ def _failure_reason(stderr: str) -> tuple[str, dict[str, str]]:
     if not last:
         return unknown
     if any(marker in text for marker in _HUB_UNREACHABLE):
-        from app.ai.runtime import config as tts_config
 
         endpoint = tts_config.get().hf_endpoint
         # 截断只截**错误本身**,不截后面那半句 —— 那是整条消息里唯一能行动的部分。
@@ -927,7 +916,6 @@ def ensure_engine_runtime(engine_id: str) -> None:
 
     失败一律抛 RuntimeError 并带上可读原因;调用方把它落到下载状态上显示给用户。
     """
-    from app.ai.runtime import config as tts_config
 
     engine = _BY_ID[engine_id]
     if not engine.pip_requirements:
@@ -978,7 +966,6 @@ def _ensure_fish_source() -> None:
     """Clone the official Fish Speech source into the managed dir (its ``fish_speech`` package
     and ``tools.server.*`` modules aren't on PyPI, so real synthesis needs the checkout).
     No-op if already present; raises with a readable hint on failure."""
-    from app.ai.runtime import config as tts_config
 
     repo = tts_config.MANAGED_FISH_REPO
     if (repo / tts_config.FISH_REPO_MARKER).is_file():
@@ -1043,7 +1030,6 @@ def _download_body(engine_id: str) -> None:
     env = _worker_env(resolve_engine_python(engine_id) or "")
     progress_dir: Path | None = None
     if engine_id == "fish-speech":
-        from app.ai.runtime import config as tts_config
 
         try:
             _ensure_fish_source()
@@ -1111,7 +1097,6 @@ def _download_body(engine_id: str) -> None:
     if engine_id == "fish-speech":
         # Managed dirs just changed on disk — drop the cached resolution so probe/synthesis
         # pick them up without a restart.
-        from app.ai.runtime import config as tts_config
 
         tts_config.refresh()
     clear_runtime_probes()  # 刚装完,探测结果必须重算

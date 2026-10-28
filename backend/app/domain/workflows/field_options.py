@@ -19,6 +19,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import MESSAGES, LocalizedError, t
+from app.db.models import BrowserProfile, Entity, Project, PublishAccount, Scene3D, Sequence, Track, Voice, Workflow
+from app.domain.capabilities import PROVIDERS_SOURCE
+from app.domain.entities.catalog import ROLES, ROLES_BY_KIND
+from app.domain.feishu import bindings, bots, gateway, routing
+from app.domain.generation import resolution as generation_resolution
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.nodes import parse_node_type
+from app.domain.providers import credentials as provider_credentials, models as provider_models
+from app.domain.providers.selection import list_enabled_connections
+from app.domain.scenes.operations import list_models
+from app.domain.voices import engine_catalog
+from app.domain.voices.speech import CLONE_ENGINE, PODCAST_ENGINE
+from app.domain.workflows.executors import talking
+from app.domain.workflows.executors.entities import automatic_reference_model, takes_reference_images
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +68,9 @@ def _speech_engines(db: Session, ctx: OptionContext) -> list[Option]:
     它一次产出整段对话,不是"念一句话"的那种。克隆这一项总在:没装好时它的音色清单是空的,
     选择本身仍然成立。
     """
-    from app.domain.voices.engine_catalog import describe_engines
-    from app.domain.voices.speech import CLONE_ENGINE, PODCAST_ENGINE
 
     options: list[Option] = [{"value": CLONE_ENGINE, "label": t("wfSpeechEngineClone", ctx.locale)}]
-    for engine in describe_engines(db, ctx.user_id):
+    for engine in engine_catalog.describe_engines(db, ctx.user_id):
         engine_id = str(engine["id"])
         if engine_id in (CLONE_ENGINE, PODCAST_ENGINE) or not engine.get("ready"):
             continue
@@ -69,9 +81,6 @@ def _speech_engines(db: Session, ctx: OptionContext) -> list[Option]:
 def _speech_voices(db: Session, ctx: OptionContext) -> list[Option]:
     """这个引擎下能用的音色。克隆 → 工作区音色库;其余 → 那个引擎自己的目录 —— 能复刻的引擎(CosyVoice)后面再接
     配音库里的嗓子(念它的远端副本,ADR 0037),名字前标「克隆」,和系统音色分得开。"""
-    from app.db.models import Voice
-    from app.domain.voices.engine_catalog import list_engine_voices
-    from app.domain.voices.speech import CLONE_ENGINE
 
     engine = ctx.parent.strip() or CLONE_ENGINE
     if engine == CLONE_ENGINE:
@@ -84,7 +93,7 @@ def _speech_voices(db: Session, ctx: OptionContext) -> list[Option]:
             if item.get("cloned")
             else str(item.get("label") or item["value"]),
         }
-        for item in list_engine_voices(db, engine, user_id=ctx.user_id, workspace_id=ctx.workspace_id)
+        for item in engine_catalog.list_engine_voices(db, engine, user_id=ctx.user_id, workspace_id=ctx.workspace_id)
     ]
 
 
@@ -94,8 +103,6 @@ def _chat_connections(db: Session, ctx: OptionContext) -> list[Option]:
 
     判据和界面上那份一致:启用的;订阅计划要连过;填 Key 的要有 base_url。
     """
-    from app.domain.providers import credentials as provider_credentials
-    from app.domain.providers.selection import list_enabled_connections
 
     options: list[Option] = []
     for profile in list_enabled_connections(db, owner_user_id=ctx.user_id):
@@ -120,7 +127,6 @@ def _chat_models(db: Session, ctx: OptionContext) -> list[Option]:
     同一端点上的生图/生视频模型也在下拉里,选中就是一次注定 400 的对话请求;也不核对连接
     归谁,拿别人的连接 id 当 parent 就能看到他配了哪些模型。
     """
-    from app.domain.providers import models as provider_models
 
     parent = ctx.parent.strip()
     if not parent:
@@ -135,21 +141,19 @@ def _chat_models(db: Session, ctx: OptionContext) -> list[Option]:
 
 def _plugin_packages(db: Session, ctx: OptionContext) -> list[Option]:
     """接进来的插件包(按包,不按实例:同一个包的两次接入提供的是同一批工具)。"""
-    from app.domain.plugins.tools import exposed
 
     seen: dict[str, str] = {}
-    for tool in exposed(db, ctx.user_id):
+    for tool in plugins_tools.exposed(db, ctx.user_id):
         seen.setdefault(str(tool["package_id"]), str(tool["package_name"]))
     return [{"value": package, "label": label} for package, label in seen.items()]
 
 
 def _plugin_tools(db: Session, ctx: OptionContext) -> list[Option]:
     """这个包暴露出来的工具。"""
-    from app.domain.plugins.tools import exposed
 
     package = ctx.parent.strip() or _package_of(ctx.node_type)
     names: dict[str, str] = {}
-    for tool in exposed(db, ctx.user_id):
+    for tool in plugins_tools.exposed(db, ctx.user_id):
         if package and str(tool["package_id"]) != package:
             continue
         names.setdefault(str(tool["name"]), str(tool.get("label") or tool["name"]))
@@ -159,11 +163,10 @@ def _plugin_tools(db: Session, ctx: OptionContext) -> list[Option]:
 def _plugin_instances(db: Session, ctx: OptionContext) -> list[Option]:
     """用哪一次接入(哪条连接)。插件节点的包名在**节点类型**里,通用 plugin_tool 节点的在
     它选中的那个包里 —— 两者都收在这一处,界面不必认识插件节点长什么样。"""
-    from app.domain.plugins.tools import exposed
 
     package = _package_of(ctx.node_type) or ctx.parent.strip()
     seen: dict[str, str] = {}
-    for tool in exposed(db, ctx.user_id):
+    for tool in plugins_tools.exposed(db, ctx.user_id):
         if package and str(tool["package_id"]) != package:
             continue
         seen.setdefault(str(tool["instance_id"]), str(tool["instance_name"]))
@@ -172,7 +175,6 @@ def _plugin_instances(db: Session, ctx: OptionContext) -> list[Option]:
 
 def _package_of(node_type: str) -> str:
     """`plugin.<包>.<工具>` → 包名;不是插件节点就是空串。"""
-    from app.domain.plugins.nodes import parse_node_type
 
     parsed = parse_node_type(node_type)
     return parsed[0] if parsed else ""
@@ -184,7 +186,6 @@ def _publish_accounts(db: Session, ctx: OptionContext) -> list[Option]:
     此前列的是工作区里的全部账号 —— 同事的私有账号也在下拉里,选了之后运行时才被拒
     (publish.start_publish 查归属)。下拉和用的那一刻必须是同一个判据(sharing.usable_filter)。
     """
-    from app.db.models import PublishAccount
     from app.domain import sharing
 
     rows = db.scalars(
@@ -204,7 +205,6 @@ def _browser_profiles(db: Session, ctx: OptionContext) -> list[Option]:
     此前这一格是个自由文本框,要用户去浏览器池里把档案 id 抄过来 —— 抄得到别人的,运行时
     才被拒(browser.usable_profile)。判据和浏览器池列表、用的那一刻是同一个。
     """
-    from app.db.models import BrowserProfile
     from app.domain import sharing
 
     rows = db.scalars(
@@ -221,7 +221,6 @@ def _browser_profiles(db: Session, ctx: OptionContext) -> list[Option]:
 def _callable_workflows(db: Session, ctx: OptionContext) -> list[Option]:
     """能被调用的工作流。**把自己排掉** —— 直接自调是一定成环的那一种,没有理由摆在清单里
     (更深的环由运行时守卫拒绝)。"""
-    from app.db.models import Workflow
 
     rows = db.scalars(
         select(Workflow)
@@ -237,7 +236,6 @@ def _scene_models(db: Session, ctx: OptionContext) -> list[Option]:
     模型归工作区(见 domain/scenes),所以这份清单不依赖任何一个场景:工作流每跑一次都新建
     场景,按场景列的话它永远是空的。
     """
-    from app.domain.scenes.operations import list_models
 
     return [{"value": model.id, "label": model.name} for model in list_models(db, ctx.workspace_id)]
 
@@ -247,7 +245,6 @@ def _scenes(db: Session, ctx: OptionContext) -> list[Option]:
 
     此前「渲染白模参考」的场景一格是个文本框,要人去场景页把 id 抄过来。
     """
-    from app.db.models import Scene3D
 
     rows = db.scalars(
         select(Scene3D).where(Scene3D.workspace_id == ctx.workspace_id).order_by(Scene3D.updated_at.desc())
@@ -261,7 +258,6 @@ def _scene_shots(db: Session, ctx: OptionContext) -> list[Option]:
     parent 说不出是哪个场景(还没挑、是一段 `{{…}}` 引用、不在这个工作区)时是空清单 ——
     不猜,也不把别的工作区的场景内容透出来。
     """
-    from app.db.models import Scene3D
 
     scene_id = ctx.parent.strip()
     scene = db.get(Scene3D, scene_id) if scene_id else None
@@ -274,7 +270,6 @@ def _scene_shots(db: Session, ctx: OptionContext) -> list[Option]:
 
 def _projects(db: Session, ctx: OptionContext) -> list[Option]:
     """这个工作区里的项目,按最近改过的排(和项目列表同一个顺序)。"""
-    from app.db.models import Project
 
     rows = db.scalars(
         select(Project).where(Project.workspace_id == ctx.workspace_id).order_by(Project.updated_at.desc())
@@ -285,7 +280,6 @@ def _projects(db: Session, ctx: OptionContext) -> list[Option]:
 def _sequences(db: Session, ctx: OptionContext) -> list[Option]:
     """这个工作区里的时间线,显示成「项目 / 时间线」—— 每个项目的时间线默认都叫同一个名字,
     不带项目名的话一列「主时间线」分不出谁是谁。"""
-    from app.db.models import Project, Sequence
 
     rows = db.execute(
         select(Sequence.id, Sequence.name, Project.name)
@@ -301,7 +295,6 @@ def _sequence_tracks(db: Session, ctx: OptionContext) -> list[Option]:
 
     parent 说不出是哪条时间线(还没挑、是上游的引用、不在这个工作区)时是空清单。
     """
-    from app.db.models import Sequence, Track
 
     sequence_id = ctx.parent.strip()
     sequence = db.get(Sequence, sequence_id) if sequence_id else None
@@ -321,7 +314,6 @@ def _entities(db: Session, ctx: OptionContext, kind: str = "") -> list[Option]:
 
     `entities.<种类>` 只列那一种:字段声明点名种类(「选一个人物」),和选 3D 场景同一种下拉(ADR 0027 §3)。
     """
-    from app.db.models import Entity
 
     stmt = select(Entity).where(Entity.workspace_id == ctx.workspace_id)
     if kind:
@@ -339,7 +331,6 @@ def _entities(db: Session, ctx: OptionContext, kind: str = "") -> list[Option]:
 def _entity_roles(db: Session, ctx: OptionContext) -> list[Option]:
     """参考图的角度 / 用途,按种类(`parent` 是种类:人物有表情,场景的角度是全景 / 反打 / 俯视)。没给种类列全部。
     名字在后端文案表里,按读的人的语言。"""
-    from app.domain.entities.catalog import ROLES, ROLES_BY_KIND
 
     roles = ROLES_BY_KIND.get(ctx.parent, ROLES)
     return [{"value": role, "label": t(f"entityRole_{role}", ctx.locale)} for role in roles]
@@ -349,10 +340,8 @@ def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
     """收参考图的图片模型(资产格的「补全多角度」「生成表情」用):只看得到文字的模型画不出「同一个」。
     和生成页同一份清单(generation_options);留空时用的那一个标「默认」—— 和节点跑的时候同一个挑法
     (executors.entities.automatic_reference_model)。"""
-    from app.domain.generation.resolution import generation_options
-    from app.domain.workflows.executors.entities import automatic_reference_model, takes_reference_images
 
-    options = generation_options(db, "image", user_id=ctx.user_id)
+    options = generation_resolution.generation_options(db, "image", user_id=ctx.user_id)
     automatic = automatic_reference_model(options)
     return [
         {**generation_option_names(one),
@@ -374,9 +363,8 @@ def _talking_models(mode: str) -> Source:
     """会说话照片 / 改口型的视频模型(描述符的 `modes` 声明了才列,ADR 0028)。留空用默认或第一个会的。"""
 
     def list_them(db: Session, ctx: OptionContext) -> list[Option]:
-        from app.domain.workflows.executors.talking import talking_models
 
-        return [generation_option_names(one) for one in talking_models(db, mode, ctx.user_id)]
+        return [generation_option_names(one) for one in talking.talking_models(db, mode, ctx.user_id)]
 
     return list_them
 
@@ -386,9 +374,8 @@ def _talking_resolutions(mode: str) -> Source:
     模型会这一种就是它,否则第一个会的),列它的档;第一项是模型的默认档。"""
 
     def list_them(db: Session, ctx: OptionContext) -> list[Option]:
-        from app.domain.workflows.executors.talking import talking_models
 
-        models = talking_models(db, mode, ctx.user_id)
+        models = talking.talking_models(db, mode, ctx.user_id)
         model = next((one for one in models if one["id"] == ctx.parent), None) if ctx.parent else (
             next((one for one in models if one.get("is_default")), None) or (models[0] if models else None))
         capabilities = (model or {}).get("capabilities") or {}
@@ -420,7 +407,6 @@ def _automation_chat_models(db: Session, ctx: OptionContext) -> list[Option]:
     """能跑自动化对话的模型,**跨连接直接列模型** —— 和画板「让 AI 写」、设置页默认模型同一份清单
     (provider_models.models_for_capability)。值是 `<连接 id>:<模型>`,一次挑定两样:「先选连接再选模型」逼人先知道
     模型挂在哪条连接下,而那恰恰是他不关心的事。"""
-    from app.domain.providers import models as provider_models
 
     return [
         {"value": f"{row.provider_profile_id}:{row.model_id}", "label": row.display_name or row.model_id}
@@ -437,7 +423,6 @@ def _feishu_bots(db: Session, ctx: OptionContext) -> list[Option]:
     停用的也列:那个开关管的是长连接(收消息),出站的 REST 照发,所以"停用了"照样发得出去
     (见 routing.pick_bot)。自动挑选(留空)才只认启用中的那一个。
     """
-    from app.domain.feishu import bots
 
     return [{"value": row.id, "label": row.name or row.app_id} for row in bots.list_bots(db, ctx.workspace_id)]
 
@@ -454,7 +439,6 @@ def _feishu_bound_users(db: Session, ctx: OptionContext) -> list[Option]:
     只有这里说得清。前端选中时要把「机器人」那一格一并写上,而它拿不到"选项属于谁"这件事 ——
     依据只能是这个键,**不许**从标签里的机器人名反推(那是猜法)。
     """
-    from app.domain.feishu import bindings, bots
 
     all_bots = bots.list_bots(db, ctx.workspace_id)
     options: list[Option] = []
@@ -475,7 +459,6 @@ def _feishu_targets(db: Session, ctx: OptionContext) -> list[Option]:
     私聊 → 已绑定的人;发群 → 机器人所在的群。别的一档(哪来发回哪 / 手填 id)用不上这一格,
     给了清单反而是误导,所以是空表。
     """
-    from app.domain.feishu import routing
 
     channel = ctx.parent.strip()
     if channel == routing.USER:
@@ -495,7 +478,6 @@ def _feishu_chats(db: Session, ctx: OptionContext) -> list[Option]:
     id。所以每一项带着 `bot_id`(这串 id 是**哪台应用**看见的) —— 前端选中时
     要把「机器人」那一格一并写上,依据只能是这个键,不从标签里的机器人名反推。
     """
-    from app.domain.feishu import gateway, routing
 
     if not gateway.wired():
         return []
@@ -566,7 +548,6 @@ SOURCES: dict[str, Source] = {
 def known_source(source: str) -> bool:
     """这个来源名认不认得:登记在 SOURCES 里的,或 `providers.<登记过的能力>`(ADR 0032)。"""
     from app.domain import capabilities
-    from app.domain.capabilities import PROVIDERS_SOURCE
 
     if source in SOURCES:
         return True
@@ -574,7 +555,6 @@ def known_source(source: str) -> bool:
 
 
 def field_options(db: Session, source: str, ctx: OptionContext) -> list[Option]:
-    from app.domain.capabilities import PROVIDERS_SOURCE
 
     handler = SOURCES.get(source) or (
         _capability_providers(source.removeprefix(PROVIDERS_SOURCE)) if source.startswith(PROVIDERS_SOURCE) else None

@@ -27,10 +27,15 @@ from sqlalchemy.orm import Session
 from app.ai.providers.contracts.denoise import STRENGTHS, DenoiseAdapter, DenoiseError, DenoiseRequest
 from app.ai.providers.contracts.separation import BACKGROUND, VOCALS, SeparationAdapter, SeparationError, SeparationRequest
 from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
-from app.core.i18n import tr
+from app.core.i18n import tr, fragment
 from app.domain import capabilities
-from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
+from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider, Use, register_use
 from mosael_formats.plugin_manifest import AUDIO_DENOISE, AUDIO_SEPARATION
+from app.core.db import SessionLocal
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError
+from app.domain.plugins.tools import quiet_hooks, staged_artifact
 
 BUILTIN_PREFIX = "builtin:"
 
@@ -85,7 +90,6 @@ SEPARATION = Capability(
 
 def _produced(scratch: Path, spec: Any, error: type[Exception], key: str) -> Path:
     """插件交回的一份 `artifact` → 暂存目录里那份文件;没交、交在外面都说清楚。"""
-    from app.domain.plugins.tools import staged_artifact
 
     found = staged_artifact(scratch, spec)
     if found is None:
@@ -110,10 +114,6 @@ class PluginDenoiseAdapter:
         return not self._provider.missing
 
     def denoise(self, request: DenoiseRequest, out_path: Path) -> Path:
-        from app.core.db import SessionLocal
-        from app.domain.plugins.errors import PluginDomainError
-        from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host, quiet_hooks
 
         def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
             produced = _produced(scratch, output.get("artifact"), DenoiseError, "denoiseErr_pluginBadOutput")
@@ -123,7 +123,7 @@ class PluginDenoiseAdapter:
 
         try:
             with SessionLocal() as db:
-                invoke_host(db, self._provider.id, AUDIO_DENOISE,
+                plugins_tools.invoke_host(db, self._provider.id, AUDIO_DENOISE,
                             {"filename": request.audio_path.name, "strength": request.strength},
                             files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks(), record=True)
         except (PluginDomainError, PluginRuntimeError) as exc:
@@ -146,10 +146,6 @@ class PluginSeparationAdapter:
         return None
 
     def separate(self, request: SeparationRequest, out_dir: Path) -> dict[str, Path]:
-        from app.core.db import SessionLocal
-        from app.domain.plugins.errors import PluginDomainError
-        from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host, quiet_hooks
 
         made: dict[str, Path] = {}
 
@@ -166,7 +162,7 @@ class PluginSeparationAdapter:
 
         try:
             with SessionLocal() as db:
-                invoke_host(db, self._provider.id, AUDIO_SEPARATION, {"filename": request.audio_path.name},
+                plugins_tools.invoke_host(db, self._provider.id, AUDIO_SEPARATION, {"filename": request.audio_path.name},
                             files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks(), record=True)
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise SeparationError("separationErr_pluginFailed", plugin=self._provider.name, detail=str(exc)[:500]) from exc
@@ -190,8 +186,6 @@ def separation_adapter(db: Session, owner_user_id: str | None, provider_id: str 
 
 def register_uses() -> None:
     """宿主界面上用到这两项能力的入口(ADR 0032 §4)。工作流节点、智能体工具由各自注册表现扫。"""
-    from app.core.i18n import fragment
-    from app.domain.capabilities import Use, register_use
 
     register_use(Use(AUDIO_DENOISE, "app", fragment("capUse_assetDenoise")))
     register_use(Use(AUDIO_SEPARATION, "app", fragment("capUse_assetSeparate")))

@@ -12,6 +12,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from typing import Any
+from app.ai.runtime.errors import RuntimeSetupError
 
 INSTALLING = "installing"
 FAILED = "failed"
@@ -48,7 +49,6 @@ class InstallStore:
         with self._lock:
             live = self._live.get(engine)
             if live is not None and live.status == INSTALLING:
-                from app.ai.runtime.errors import RuntimeSetupError
 
                 raise RuntimeSetupError("runtimeErr_alreadyInstalling")
             self._live[engine] = InstallProgress(INSTALLING, message, dict(params))

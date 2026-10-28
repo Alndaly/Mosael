@@ -18,11 +18,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Job, Transcript, User
-from app.domain.assets import listing
+from app.domain.assets import listing, denoise, video_gif
 from app.domain.assets.deletion import Deleted, delete_asset as _delete
 from app.domain.assets.listing import DEFAULT_PAGE_SIZE, AssetFacets, AssetPage, AssetScope
 from app.domain.assets.project_scope import asset_project
-from app.domain.assets.web_capture import RunOrigin
+from app.domain.assets.web_capture import (
+    RunOrigin,
+    NODE_SCREENSHOT_KINDS,
+    read_capped,
+    register_web_capture,
+    remember_run_origin,
+    web_source,
+)
 from app.domain.permissions import (
     NotVisible,
     ensure_workspace_access,
@@ -30,6 +37,18 @@ from app.domain.permissions import (
     require_asset,
     require_sequence_access,
 )
+from app.domain.assets.frames import save_frame_as_asset
+from app.domain.assets.from_url import start_url_import
+from app.domain.assets.importer import import_uploaded_asset, register_file_asset
+from app.domain.assets.lineage import lineage_tree
+from app.domain.assets.masks import make_mask_asset, save_painted_mask as save
+from app.domain.assets.proxies import start_proxy_job
+from app.domain.assets.scrub.task import report_path_for, start_scrub_job
+from app.domain.assets.separation import start_separation_job
+from app.domain.assets.source_url import find_transcript_by_source
+from app.domain.assets.web_download import PAGE_DOWNLOAD, check_download_name, register_web_download
+from app.domain.transcripts.operations import attach_transcript as attach, get_transcript_for_asset
+from app.media.paths import resolve_key
 
 #: 标签的长度上限;更长的截断。
 TAG_MAX_CHARS = 40
@@ -54,7 +73,6 @@ def readable_file(db: Session, user: User, asset_id: str) -> Asset:
 
 def lineage(db: Session, user: User, asset_id: str) -> dict[str, Any]:
     """这份素材的来源链(他看得到这份素材才行;出处和它在同一个工作区)。"""
-    from app.domain.assets.lineage import lineage_tree
 
     asset = require_asset(db, user, asset_id)
     return {"asset_id": asset.id, "ai_generated": bool(asset.ai_generated), "parents": lineage_tree(db, asset)}
@@ -94,14 +112,12 @@ def assets_on_sequence(db: Session, user: User, sequence_id: str) -> list[Asset]
 
 
 def transcript_by_source(db: Session, user: User, workspace_id: str, url: str) -> Transcript | None:
-    from app.domain.assets.source_url import find_transcript_by_source
 
     ensure_workspace_access(db, user, workspace_id)
     return find_transcript_by_source(db, workspace_id, url)
 
 
 def transcript_of(db: Session, user: User, asset_id: str) -> Transcript | None:
-    from app.domain.transcripts.operations import get_transcript_for_asset
 
     readable(db, user, asset_id)
     return get_transcript_for_asset(db, asset_id)
@@ -154,8 +170,6 @@ def delete_asset(db: Session, user: User, asset_id: str) -> Deleted:
 
 def attach_transcript(db: Session, user: User, asset_id: str, **fields: Any) -> Transcript:
     """给素材挂一份逐字稿。素材不存在时交给 transcripts 说「找不到」(它有自己的错误与状态码)。"""
-    from app.domain.transcripts.operations import attach_transcript as attach
-    from app.domain.transcripts.operations import get_transcript_for_asset
 
     if db.get(Asset, asset_id) is not None:
         require_asset(db, user, asset_id, perm="edit")
@@ -165,7 +179,6 @@ def attach_transcript(db: Session, user: User, asset_id: str, **fields: Any) -> 
 
 def grab_frame(db: Session, user: User, asset_id: str, at: float, *, project_id: str | None = None) -> Asset:
     """取某一帧存成一份**新**素材;原素材不动。"""
-    from app.domain.assets.frames import save_frame_as_asset
 
     asset = db.get(Asset, asset_id)
     if asset is None or not asset.file_key:
@@ -190,7 +203,6 @@ def make_mask(
 
     浏览器那块画布读不到原图像素的场景(批量、智能体)走这一条;交给的是蒙版唯一的写出口(ADR 0057)。
     """
-    from app.domain.assets.masks import make_mask_asset
 
     asset = require_asset(db, user, asset_id, perm="edit")
     return make_mask_asset(
@@ -212,7 +224,6 @@ def save_painted_mask(
     **先过闸、再认源图、最后才读字节**:没权限、源图看不见或不在这个工作区的请求,一个字节都不落盘。
     源图要**看得见**才行 —— 出处是一条会被导出时的 AI 标识读到的事实,不能对着别人工作区里的素材说。
     """
-    from app.domain.assets.masks import save_painted_mask as save
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
     source = None
@@ -236,7 +247,6 @@ def import_upload(
 
     这条路**不收出处**:派生素材由做它的那道工序登记(浏览器画出来的蒙版走 `save_painted_mask`)。
     """
-    from app.domain.assets.importer import import_uploaded_asset
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
     return import_uploaded_asset(db, workspace_id=workspace_id, project_id=project_id, name=name, upload=upload)
@@ -260,7 +270,6 @@ def import_web_capture(
 
     先过闸、再看出处、最后才读字节:没权限或出处不像样的请求,一个字节都不落盘。
     """
-    from app.domain.assets.web_capture import read_capped, register_web_capture, web_source
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
     source = web_source(
@@ -287,8 +296,6 @@ def import_web_download(
 
     先过闸、再看出处和文件名,最后才收字节:没权限、出处不像样、类型不收的请求,一个字节都不落盘。
     """
-    from app.domain.assets.web_download import PAGE_DOWNLOAD, check_download_name, register_web_download
-    from app.domain.assets.web_capture import web_source
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
     source = web_source(
@@ -323,14 +330,6 @@ def import_action_artifact(db: Session, artifact: ActionArtifact, stream) -> Ass
     下载走 web_download 的闸(大小、类型、文件名);截图走 web_capture 的闸(只收图片、40 MB),出处种类只认
     节点截得出来的那三种。两种都再记上是哪次运行、哪个节点、哪个会话触发的。
     """
-    from app.domain.assets.web_capture import (
-        NODE_SCREENSHOT_KINDS,
-        read_capped,
-        register_web_capture,
-        remember_run_origin,
-        web_source,
-    )
-    from app.domain.assets.web_download import PAGE_DOWNLOAD, register_web_download
 
     if artifact.kind == "screenshot":
         source = web_source(
@@ -355,7 +354,6 @@ def import_action_artifact(db: Session, artifact: ActionArtifact, stream) -> Ass
 
 def import_local(db: Session, user: User, workspace_id: str, *, project_id: str | None, path: Path) -> Asset:
     """登记一个**已经放行过**的本机文件(路径的闸在 host_files,由调用方先过)。"""
-    from app.domain.assets.importer import register_file_asset
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
     return register_file_asset(
@@ -369,7 +367,6 @@ def ensure_can_import(db: Session, user: User, workspace_id: str) -> None:
 
 
 def import_from_url(db: Session, user: User, workspace_id: str, **request: Any) -> Job:
-    from app.domain.assets.from_url import start_url_import
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
     return start_url_import(db, workspace_id=workspace_id, created_by=user.id, **request)
@@ -379,9 +376,8 @@ def import_from_url(db: Session, user: User, workspace_id: str, **request: Any) 
 
 
 def start_gif(db: Session, user: User, asset_id: str, **options: Any) -> Job:
-    from app.domain.assets.video_gif import start_video_to_gif
 
-    return start_video_to_gif(db, asset=require_asset(db, user, asset_id, perm="edit"), created_by=user.id, **options)
+    return video_gif.start_video_to_gif(db, asset=require_asset(db, user, asset_id, perm="edit"), created_by=user.id, **options)
 
 
 def start_scrub(db: Session, user: User, asset_id: str, *, provenance: bool = False) -> Job:
@@ -390,7 +386,6 @@ def start_scrub(db: Session, user: User, asset_id: str, *, provenance: bool = Fa
     `provenance=True` 是那个单独的开关(默认关):连 AI 生成标记(C2PA)一起清。那不是"去掉你的
     隐私",是抹掉"这段是 AI 生成的"这个声明 —— 后果写在 `domain/assets/scrub/policy.PROVENANCE`。
     """
-    from app.domain.assets.scrub.task import start_scrub_job
 
     asset = require_asset(db, user, asset_id, perm="edit")
     return start_scrub_job(db, asset=asset, created_by=user.id, provenance=provenance)
@@ -402,8 +397,6 @@ def scrub_report(db: Session, user: User, asset_id: str) -> dict[str, Any]:
     **没清过是 200 + `status="none"`**,不是 404 —— 和「镜头表」同一个态度:还没做过是一次正常的
     回答,和「这份素材你看不到」不是一回事。
     """
-    from app.domain.assets.scrub.task import report_path_for
-    from app.media.paths import resolve_key
 
     asset = require_asset(db, user, asset_id)
     if not asset.file_key:
@@ -415,20 +408,17 @@ def scrub_report(db: Session, user: User, asset_id: str) -> dict[str, Any]:
 
 
 def start_separation(db: Session, user: User, asset_id: str, *, engine: str = "") -> Job:
-    from app.domain.assets.separation import start_separation_job
 
     return start_separation_job(db, asset=require_asset(db, user, asset_id, perm="edit"), created_by=user.id, engine=engine)
 
 
 def start_denoise(db: Session, user: User, asset_id: str, *, engine: str, strength: Any) -> Job:
-    from app.domain.assets.denoise import start_denoise_job
 
     asset = require_asset(db, user, asset_id, perm="edit")
-    return start_denoise_job(db, asset=asset, created_by=user.id, engine=engine, strength=strength)
+    return denoise.start_denoise_job(db, asset=asset, created_by=user.id, engine=engine, strength=strength)
 
 
 def regenerate_proxy(db: Session, user: User, asset_id: str) -> Job | None:
-    from app.domain.assets.proxies import start_proxy_job
 
     return start_proxy_job(db, require_asset(db, user, asset_id, perm="edit"), created_by=user.id, force=True)
 

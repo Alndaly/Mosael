@@ -15,10 +15,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import AgentMessage, AgentSession, Asset
-from app.domain.agent import memory as agent_memory
-from app.domain.agent import origins
-from app.domain.agent import places
+from app.domain.agent import memory as agent_memory, origins, places
 from app.domain.agent.skills import runtime as skills_runtime
+from app.db.model_slices.boards import Board
+from app.db.model_slices.notes import Note
+from app.db.model_slices.workflows import Workflow
+from app.domain.documents.reading import attachment_context
+from app.media.image_preview import browser_compatible_image
+from app.media.paths import resolve_key
 
 SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户本机的 Mosael 工作台里。
 你唯一的工作对象是 Mosael 里的素材、时间线与生成能力,通过 mosael MCP 工具操作:
@@ -129,8 +133,6 @@ MAX_AGENT_IMAGE_BYTES = 5 * 1024 * 1024
 
 def _attached_images(db: Session, workspace_id: str, prompt: str) -> list[dict[str, str]]:
     """Resolve image attachment tokens into a bounded, workspace-safe sidecar payload."""
-    from app.media.image_preview import browser_compatible_image
-    from app.media.paths import resolve_key
 
     out: list[dict[str, str]] = []
     used = 0
@@ -175,9 +177,6 @@ _REFERENCE_HOW = {
 
 
 def _reference_row(db: Session, kind: str, workspace_id: str, ident: str):
-    from app.db.model_slices.boards import Board
-    from app.db.model_slices.notes import Note
-    from app.db.model_slices.workflows import Workflow
 
     table = {"asset": Asset, "note": Note, "board": Board, "workflow": Workflow}.get(kind)
     if table is None:
@@ -251,7 +250,6 @@ def user_prompt(
     #: 挂进来的文档(ADR 0031):短的整篇、长的目录,正文让模型用 read_document 自己取。
     documents = list(dict.fromkeys(asset_id for asset_id, _name, kind in _ATTACHED_ASSET.findall(content) if kind == "document"))
     if documents and db is not None:
-        from app.domain.documents.reading import attachment_context
 
         prompt = _prompt_with_context(prompt, attachment_context(db, workspace_id, documents))
     #: 输入框里用「/」点名的技能(ADR 0040 §4):全文挂在这一轮,模型不用再 use_skill。

@@ -37,6 +37,8 @@ from sqlalchemy.orm import Session
 from app.domain.plugins import media_bridge
 from app.domain.plugins.errors import PluginDomainError
 from mosael_formats.plugin_manifest import text_of
+from app.domain.media_kinds import declared_media
+from app.media.audio_io import extract_audio, extract_speech
 
 logger = logging.getLogger(__name__)
 
@@ -252,14 +254,12 @@ def _json_text(text: str) -> Any:
 
 def _media(spec: dict[str, Any]) -> tuple[str, ...]:
     """入参的 `x-media`:只收这几种素材。和节点上的素材选择器同一个读法(media_kinds.declared_media)。"""
-    from app.domain.media_kinds import declared_media
 
     return declared_media(spec.get("x-media"))
 
 
 def _prepared(spec: dict[str, Any], path: Path) -> Path:
     """`x-audio`:先把声音抽成 wav 再交(`original` 原采样率,`speech` 16k 单声道),插件不必自己带 ffmpeg。"""
-    from app.media.audio_io import extract_audio, extract_speech
 
     prepare = spec.get("x-audio")
     if prepare not in ("original", "speech"):

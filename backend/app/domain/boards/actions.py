@@ -19,12 +19,32 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Board
+from app.db.models import Board, Asset, Job
 from app.domain.boards.errors import BoardDomainError, item_not_found
 from app.domain.boards.persistence import ensure_revision, get_board
 from app.domain.boards.run_state import live_job
 from app.domain.boards.receipts import place_pending, receipt_to_item
-from app.domain.jobs import create_job, reset_receipt, run_job_inline, set_receipt
+from app.domain.jobs import create_job, reset_receipt, run_job_inline, set_receipt, dispatch_job, lock_active_job
+from app.core.db import SessionLocal
+from app.core.i18n import get_current_locale, t
+from app.core.unit_of_work import after_commit
+from app.domain import ai_chat
+from app.domain.ai_chat import AiChatError, target_for
+from app.domain.analysis import service as analysis
+from app.domain.analysis.service import AnalysisError, image_part
+from app.domain.billing.usage import billable
+from app.domain.boards.trim import start_trim
+from app.domain.documents.reading import document_text
+from app.domain.entities.mentions import generation_profile, resolve_mentions
+from app.domain.generation import operations as generation_operations, runner as generation_runner
+from app.domain.generation.operations import ReferenceDocument, parse_source_assets, planned_outputs
+from app.domain.generation.origins import BOARD, Origin
+from app.domain.note_types import NoteContent
+from app.domain.notes import NoteDomainError, create_note, get_note, read_reference, save_note, snapshot
+from app.domain.providers.chat_connection import require_connection
+from app.domain.voices import voices as voices_voices
+from app.media.image_preview import browser_compatible_image
+from app.media.paths import resolve_key
 
 if TYPE_CHECKING:
     from app.domain.generation.operations import ReferenceDocument
@@ -144,16 +164,12 @@ def document_cell(db: Session, workspace_id: str, item: dict[str, Any]) -> Refer
 
     还没挑文档、素材还没解析好(或解析没成)回 None;引用的笔记进了回收站、那一版没了,notes 的错误原样抛出。
     """
-    from app.domain.generation.operations import ReferenceDocument
 
     if item.get("note_id"):
-        from app.domain.notes import read_reference
 
         ref = read_reference(db, workspace_id, str(item["note_id"]), item.get("note_revision"))
         return ReferenceDocument(title=str(ref["title"]), markdown=str(ref["markdown"]))
     if item.get("asset_id"):
-        from app.db.models import Asset
-        from app.domain.documents.reading import document_text
 
         markdown = document_text(db, workspace_id, str(item["asset_id"]))
         asset = db.get(Asset, str(item["asset_id"]))
@@ -168,7 +184,6 @@ def _upstream_document(db: Session, workspace_id: str, cell: dict[str, Any]) -> 
 
     一篇连着却读不到的文档悄悄跳过,产出少一块素材,用户无从知道 —— 面板上同样拦着(documentBlocked)。
     """
-    from app.domain.notes import NoteDomainError
 
     try:
         document = document_cell(db, workspace_id, cell)
@@ -239,11 +254,6 @@ def generate_on_board(
     **一次交回几份就摆几格**(generation.planned_outputs:模型说的一次几份 × 张数):第 2 份起的占位摆在右边,
     回执按先后填进去(见 outputs._canvas_with_delivered_result)。
     """
-    from app.domain.generation.operations import create_generation_job
-    from app.domain.generation.origins import BOARD, Origin
-    from app.core.unit_of_work import after_commit
-    from app.domain.generation.operations import parse_source_assets, planned_outputs
-    from app.domain.generation.runner import start_generation_thread
 
     _ensure_slot_ready(db, workspace_id, slot)
     board = get_board(db, workspace_id, slot.board_id)
@@ -253,7 +263,7 @@ def generate_on_board(
     documents = upstream_documents(db, workspace_id, board, slot.item_id)
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
-        generation, job = create_generation_job(
+        generation, job = generation_operations.create_generation_job(
             db,
             workspace_id=workspace_id,
             session_id=None,
@@ -303,7 +313,7 @@ def generate_on_board(
     )
     # 生成线程重开会话去读刚建的行(和这一格的占位):等入口提交之后再起。
     generation_id = generation.id
-    after_commit(db, lambda: start_generation_thread(generation_id))
+    after_commit(db, lambda: generation_runner.start_generation_thread(generation_id))
     return board
 
 
@@ -327,7 +337,6 @@ def speak_on_board(
     (和面板存的是同一个形状)。只记 voice_id 的话,引擎那条路跑挂了回来重试,面板落回第一个
     引擎,用户挑好的发音人没了。
     """
-    from app.domain.voices.voices import start_synthesis
 
     _ensure_slot_ready(db, workspace_id, slot)
     text = text.strip()
@@ -335,7 +344,7 @@ def speak_on_board(
         raise BoardInputError("boardErr_nothingToSpeak")
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
-        job = start_synthesis(db, text=text, project_id=None, created_by=actor_id, **synthesis)
+        job = voices_voices.start_synthesis(db, text=text, project_id=None, created_by=actor_id, **synthesis)
     finally:
         reset_receipt(token)
     return _pending(db, workspace_id, slot, actor_id=actor_id, kind="audio", producer="speak", job_id=job.id,
@@ -357,8 +366,6 @@ def trim_on_board(
 
     `slot` 可以是新的一格(从一段片子上截),也可以是一格截挂了的(照它表单上记的再截一次)。
     """
-    from app.db.models import Asset
-    from app.domain.boards.trim import start_trim
 
     _ensure_slot_ready(db, workspace_id, slot)
     asset = db.get(Asset, asset_id)
@@ -388,9 +395,6 @@ WRITE_IMAGES_PER_ENTITY = 2
 def _entity_materials(db: Session, workspace_id: str, entity_ids: list[str]) -> tuple[list[str], list[str]]:
     """点名的资产 → (给模型读的材料, 给模型看的图)。和生成里的 `@资产` 同一份画像(entities.generation_profile):
     名字(变体带母体)、提示词描述、按挑图先后排的图片参考图,这里只取前几张。"""
-    from app.core.i18n import get_current_locale, t
-    from app.domain.entities.mentions import generation_profile
-    from app.domain.entities.mentions import resolve_mentions
 
     materials: list[str] = []
     pictures: list[str] = []
@@ -437,9 +441,6 @@ def write_on_board(
 
     **也不自己实现「调 LLM」**:供应商解析、调用、计量和工作流的 LLM 节点、智能体是同三样东西。
     """
-    from app.domain.ai_chat import AiChatError
-    from app.domain.jobs import dispatch_job
-    from app.domain.providers.chat_connection import require_connection
 
     prompt = prompt.strip()
     if not prompt:
@@ -451,7 +452,6 @@ def write_on_board(
     kind = "document" if slot_item.get("kind") == "document" else "note"
     note_id = str(slot_item.get("note_id") or "") if kind == "document" else ""
     if note_id:
-        from app.domain.notes import get_note
 
         existing = get_note(db, workspace_id, note_id).markdown.strip()
     else:
@@ -518,8 +518,6 @@ class _WriteOrder:
 
 def _write_in_job(job_id: str, order: _WriteOrder) -> None:
     """任务线程里写。失败(模型报错、读素材炸了、落笔记出错)由 run_job_inline 落到任务上,回执随之送到那一格。"""
-    from app.core.db import SessionLocal
-    from app.db.models import Job
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -534,9 +532,6 @@ def _write_in_job(job_id: str, order: _WriteOrder) -> None:
 
 def _write(db: Session, job_id: str, order: _WriteOrder) -> dict[str, Any]:
     """调一次模型把字写出来,交回任务的 result:便签是一段正文,文档格是写成的那篇笔记(那一版)。"""
-    from app.domain.ai_chat import AiChatError, chat, target_for
-    from app.domain.billing.usage import billable
-    from app.domain.providers.chat_connection import require_connection
 
     kind, existing = order.kind, order.existing
     target_name = "这篇文档" if kind == "document" else "这张便签"
@@ -568,7 +563,7 @@ def _write(db: Session, job_id: str, order: _WriteOrder) -> dict[str, Any]:
         source_type="board",
         source_id=order.board_id,
     ) as call:
-        text = chat(
+        text = ai_chat.chat(
             target,
             [
                 {"role": "system", "content": system},
@@ -596,8 +591,6 @@ def _write(db: Session, job_id: str, order: _WriteOrder) -> dict[str, Any]:
             timeout=WRITE_TIMEOUT_SECONDS[kind],
         ).strip()
     if kind == "document":
-        from app.db.models import Job
-        from app.domain.jobs import lock_active_job
 
         #: 模型写的那一会儿人可能点了停止:那一格已经落成「已取消」,笔记就不能再新建、再改成新一版 —— 停下的活儿
         #: 不留副作用。拿到写锁再看(lock_active_job),看完到落笔记之间取消插不进来;停了就交回空结果(作废)。
@@ -622,8 +615,6 @@ def _write_note(db: Session, workspace_id: str, board: Board, note_id: str, mark
     """文档格写出来的正文落成笔记:引用着一篇的写成它的新一版,空的新建一篇(来源记上这张画板)。
     交回一份 `note` 产出,回执据此把文档格钉到这一版(canvas.outputs_of)。替点「写」的那个人写 ——
     笔记上原有的来源照留,新加的只有这张画板。"""
-    from app.domain.note_types import NoteContent
-    from app.domain.notes import create_note, get_note, save_note, snapshot
 
     if note_id:
         note = get_note(db, workspace_id, note_id)
@@ -662,11 +653,6 @@ def look_at(db: Session, workspace_id: str, asset_ids: list[str]) -> tuple[list[
 
     返回 (画面段, 文字材料)。
     """
-    from app.db.models import Asset
-    from app.domain.analysis import service as analysis
-    from app.domain.analysis.service import AnalysisError, image_part
-    from app.media.image_preview import browser_compatible_image
-    from app.media.paths import resolve_key
 
     parts: list[dict] = []
     materials: list[str] = []

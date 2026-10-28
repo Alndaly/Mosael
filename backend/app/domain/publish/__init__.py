@@ -18,7 +18,7 @@ from app.db.models import Asset, Job, PublishAccount, PublishTask, User
 from app.domain.assets.deletion import AssetNotDeletable
 from app.domain.authority import Actor, actor_id
 from app.domain import sharing
-from app.domain.jobs import create_job, register_external_kind
+from app.domain.jobs import create_job, register_external_kind, cancel_job_tree
 
 # 发布任务由桌面端执行器经 claim/report 驱动,跨后端重启存活;
 # 声明执行模式是领域自己的事,任务总线不点名 publish。
@@ -440,7 +440,6 @@ def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -
     **还没发完的任务先撤单**:任务行随外键一起没了,而它背后那个任务总线上的 job 不会 —— 此前它一直停在「排队 / 运行中」,
     任务中心和等着它的工作流节点永远等不到结果。撤单让 job 落取消态;正在发的那条,桌面发布器每半秒查一次任务状态,
     查不到任务就中止(electron/browser/publish/publishWorker.ts 的 checkpoint)。"""
-    from app.domain.jobs import cancel_job_tree
 
     sharing.ensure_manageable(db, "publish_account", account, actor=actor)
     for task in db.scalars(select(PublishTask).where(

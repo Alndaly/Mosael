@@ -41,9 +41,25 @@ from app.ai.providers import (
     OpenAISpeechAdapter,
     VolcanoSpeechAdapter,
     connection_vendor_for_speech_engine,
+    REMOTE_SPEECH_ADAPTERS,
+    VolcOpenAPIError,
 )
 
 from app.domain.voices.voice_labels import builtin_voice_label
+from app.ai import providers
+from app.ai.runtime import config as tts_config, qwen_models, tts_models
+from app.core.i18n import fragment, tr
+from app.db.models import Voice
+from app.domain.consent import UNDECLARED
+from app.domain.plugins import runtime as plugins_runtime, tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError
+from app.domain.providers import selection as providers_selection
+from app.domain.voices import defaults as voice_defaults
+from app.domain.voices.defaults import resolve_voice_default
+from app.domain.voices.errors import VoiceError
+from app.domain.voices.remote import clones_remotely
+from app.domain.voices.voices import list_voices
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +100,6 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
     给不出会话(没有 db)时,要钥匙的引擎按"不知道"算 = 不就绪:宁可少列一个,也不要让人选中之后
     才失败。
     """
-    from app.ai.runtime import qwen_models
-    from app.ai.runtime import tts_models
-    from app.ai.runtime import config as tts_config
 
     # **不等探测**:这个接口只是"引擎选择器要什么",而探测要起子进程 import torch。
     # 没测过时按"还没就绪"渲染,后台探完下一次拉列表就对了(见 tts_models.runtime_status)。
@@ -191,7 +204,6 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
 
 def engine_label(db: Session, engine: str, user_id: str | None) -> str:
     """一个配音引擎给人看的名字(按当前语言)。不问插件要音色 —— 只认名字,所以不起插件调用。认不出就是 id 本身。"""
-    from app.core.i18n import tr
 
     for row in describe_engines(None, user_id):
         if row["id"] == engine:
@@ -230,15 +242,12 @@ def _plugin_engines(db: Session | None, user_id: str | None) -> list[dict[str, o
 
 def _plugin_voices(db: Session, provider) -> list[dict[str, str]]:
     """插件连接能念的音色(`op: voices`)。问不到就是空清单,原因记进日志 —— 一个坏插件不该让引擎下拉整个拉不出来。"""
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError
-    from app.domain.plugins.tools import invoke_host
 
     try:
         #: 音色清单是**目录类回答**(这个引擎 / 账号里能念的音色,随音色数线性变大):和工具清单 / 模型清单 /
         #: 模型库 / 工作流库 / 节点包同一份预算(见 runtime.CATALOG_OUTPUT_BYTES)。别的插件调用一个字节都没放宽。
-        output = invoke_host(db, provider.id, SPEECH, {"op": "voices"}, record=False,
-                             output_budget=CATALOG_OUTPUT_BYTES)
+        output = plugins_tools.invoke_host(db, provider.id, SPEECH, {"op": "voices"}, record=False,
+                             output_budget=plugins_runtime.CATALOG_OUTPUT_BYTES)
     except (PluginDomainError, PluginRuntimeError) as exc:
         logger.info("speech plugin %s voices unavailable: %s", provider.id, exc)
         return []
@@ -280,9 +289,7 @@ def set_default_voice(db: Session, engine: str, voice: str) -> tuple[str, str]:
     不提交,由入口提交(和 `capabilities.set_default`、`denoise_defaults.set_default_engine` 同一套)。
     解析与存储在 `domain/voices/defaults`;本模块只负责问音色目录这一半。
     """
-    from app.core.i18n import tr
     from app.domain import capabilities
-    from app.domain.voices import defaults as voice_defaults
 
     #: 旧 id / 大小写先按能力表归一 —— 和 pick、resolve 用的是同一份解析。
     wanted = capabilities.canonical_id(CAPABILITY, engine)
@@ -306,7 +313,6 @@ def set_default_voice(db: Session, engine: str, voice: str) -> tuple[str, str]:
 
 
 def _clones_remotely(engine: str) -> bool:
-    from app.domain.voices.remote import clones_remotely
 
     return clones_remotely(engine)
 
@@ -315,8 +321,6 @@ def cloned_voices(db: Session, workspace_id: str) -> list[dict[str, Any]]:
     """这个工作区配音库里**能复刻出去**的嗓子(声明过是谁的;没声明的不往外传,ADR 0028 §5)。"""
     from sqlalchemy import select
 
-    from app.db.models import Voice
-    from app.domain.consent import UNDECLARED
 
     rows = db.scalars(
         select(Voice)
@@ -328,8 +332,6 @@ def cloned_voices(db: Session, workspace_id: str) -> list[dict[str, Any]]:
 
 def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dict[str, Any]]:
     """引擎**自己的**音色(系统音色;火山按账号现拉)。"""
-    from app.ai.providers import REMOTE_SPEECH_ADAPTERS
-    from app.domain.providers.selection import resolve_connection
 
     # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
     # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
@@ -362,13 +364,12 @@ def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dic
 
     # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/providers/credentials) ——
     # 列音色用的是我的账号,不是"这个部署里随便谁的"。
-    volcano = resolve_connection(db, "volcano", user_id=user_id)
+    volcano = providers_selection.resolve_connection(db, "volcano", user_id=user_id)
     ak, sk = str((volcano.extra if volcano else {}).get("ak") or ""), str((volcano.extra if volcano else {}).get("sk") or "")
     if ak and sk:
-        from app.ai.providers import VolcOpenAPIError, list_all_speakers
 
         try:
-            live = list_all_speakers(ak, sk)
+            live = providers.list_all_speakers(ak, sk)
         except VolcOpenAPIError as exc:
             # Falling back beats failing: the user can still synthesise, and the reason the
             # live list is missing belongs in the log rather than in a broken dropdown.
@@ -393,7 +394,6 @@ def local_engine_ready(engine_id: str) -> bool | None:
     True 跑得起来,False 已知跑不起来(没有运行环境、或权重没下),None 还没测过。
     只读已经测过的结果,不在请求里起探测(起子进程 import torch 要十几秒)。
     """
-    from app.ai.runtime import tts_models
 
     ready, known = tts_models.runtime_status(engine_id)
     if known and not ready:
@@ -405,7 +405,6 @@ def local_engine_ready(engine_id: str) -> bool | None:
 
 def clone_engine_ready() -> bool | None:
     """本机克隆引擎(配音库的音色走它)跑不跑得起来。判据同上,只是引擎取配置里那个默认。"""
-    from app.ai.runtime import config as tts_config
 
     return local_engine_ready(tts_config.get().engine)
 
@@ -418,8 +417,6 @@ def cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool =
     """
     from sqlalchemy import select
 
-    from app.db.models import Voice
-    from app.domain.consent import UNDECLARED
 
     if not workspace_id:
         return "missing"
@@ -438,8 +435,6 @@ def voice_note(db: Session, *, engine: str, voice: str, workspace_id: str, user_
     用的不是克隆音色时,顺带说清楚配音库里有没有能用的克隆音色(判据和模板预填音色同一个,见
     cloned_voice_status):此前带货口播的那句是建图时写死的,之后在节点里换上克隆音色,通知照样说 Edge。
     """
-    from app.core.i18n import fragment, tr
-    from app.db.models import Voice
 
     engine = (engine or "").strip() or CLONE_ENGINE
     if engine == CLONE_ENGINE:
@@ -473,8 +468,6 @@ def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> lis
     和界面那份目录(describe_engines)同一个产地,只是换成读得懂的形状:名字、说明翻好,音色带上名字,克隆那一项
     的音色是**这个工作区**音色库里的(界面上那一项的音色另有一个下拉)。播客不在其中 —— 它不念一句话。
     """
-    from app.core.i18n import tr
-    from app.domain.voices.voices import list_voices
 
     found: list[dict[str, Any]] = []
     for engine in describe_engines(db, user_id):
@@ -502,7 +495,6 @@ def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> lis
 
 
 def _engine_list(engines: list[dict[str, Any]]) -> str:
-    from app.core.i18n import tr
 
     return tr("punct_listSep").join(f"{one['id']} ({one['name']})" for one in engines) or "—"
 
@@ -523,7 +515,6 @@ def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, wo
     点名的引擎得**现在**就能用(没配连接、克隆没装都在这里说),而不是等人批准之后任务才失败。
     """
     from app.domain import capabilities
-    from app.domain.voices.errors import VoiceError
 
     engine, voice = (engine or "").strip(), (voice or "").strip()
     engines = speaking_engines(db, user_id, workspace_id)
@@ -586,8 +577,6 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     顺手存下。引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
     `options` 是两条路各自的附加项(克隆权重、引擎连接/模型),不属于这条路的丢掉。
     """
-    from app.domain.voices.defaults import resolve_voice_default
-    from app.domain.voices.errors import VoiceError
 
     #: **这一个就是「点名」那一处的兜底**(配音唯一接线点):点名的照原样,两格都空才用默认那一对。
     #: 空手回去仍然交给下面那句"没有选音色" —— 没有默认时行为和以前逐字一样。
@@ -606,7 +595,6 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     for key in _CLONE_OPTIONS if clone else _ENGINE_OPTIONS:
         if options.get(key):
             params[key] = options[key]
-    from app.db.models import Voice
 
     if clone:
         #: 音色 id 可能来自任何地方(上游节点的输出、模型填的参数)—— 收进这个工作区。

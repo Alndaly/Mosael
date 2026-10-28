@@ -29,6 +29,7 @@ from app.core.config import FFMPEG_FIELDS_FROM_ENVIRONMENT, Settings, settings
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
 from app.db.models import MediaToolsConfig
+from app.media.render_executor import ffmpeg_has_libass, text_burn_path
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,6 @@ def status() -> FfmpegStatus:
 def recheck() -> FfmpegStatus:
     """重探一次(装了 / 换了 ffmpeg 之后)。libass 的探测按路径缓存着,同一个路径上换了程序也要重探,所以先清掉。"""
     global _status
-    from app.media.render_executor import ffmpeg_has_libass, text_burn_path
 
     with _status_lock:
         ffmpeg = settings.ffmpeg

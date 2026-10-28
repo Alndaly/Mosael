@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, now
+from app.domain.agent import origins
 
 EXPIRED = "expired"
 #: 卡作废的由头 —— `ToolConfirmation.error` 里记的就是这几个码(界面按码说人话,见 frontend features/agent/cardExpiry)。
@@ -37,7 +38,6 @@ EXECUTION_UNKNOWN = "execution_unknown"
 
 
 def _notify_settled(db: Session, confirmation_id: str) -> None:
-    from app.domain.agent import origins
 
     after_commit(db, lambda one=confirmation_id: origins.confirmation_settled_by_id_after_commit(one))
 

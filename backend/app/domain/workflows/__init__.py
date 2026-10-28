@@ -25,6 +25,8 @@ from app.db.models import Workflow
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import _plugin_types, validate_graph
 from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.revisions import commit_graph_revision, create_initial_revision, replace_graph
 
 
 def list_workflows(db: Session, workspace_id: str) -> list[Workflow]:
@@ -45,7 +47,6 @@ def create_workflow(
     revision_note: str = "",
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
-    from app.domain.workflows.normalization import normalize_graph
 
     extra_types = _plugin_types(db)
     graph = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
@@ -56,7 +57,6 @@ def create_workflow(
         raise WorkflowDomainError("；".join(errors))
     workflow = Workflow(workspace_id=workspace_id, name=name, description=description, graph=graph)
     db.add(workflow)
-    from app.domain.workflows.revisions import create_initial_revision
 
     create_initial_revision(
         db,
@@ -72,7 +72,6 @@ def create_workflow(
 
 def _checked_graph(db: Session, graph: Any) -> dict[str, Any]:
     """落库前的同一道:规范化 + 校验(草稿级,允许缺配置、缺开始节点)。"""
-    from app.domain.workflows.normalization import normalize_graph
 
     extra_types = _plugin_types(db)
     normalized = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
@@ -99,7 +98,6 @@ def update_workflow(
     刚改了什么,底子对不上就撞 `WorkflowGraphConflict`,而不是把别人的写入静默盖掉。
     只改自己那一处的写入走 `edit_workflow_graph`。
     """
-    from app.domain.workflows.revisions import commit_graph_revision, replace_graph
 
     graph = changes.get("graph")
     if graph is not None:
@@ -135,7 +133,6 @@ def edit_workflow_graph(
 
     和画板的 `_merge_into_latest` 同一条 —— 从最新那份出发重做一遍,不会盖掉任何人。
     """
-    from app.domain.workflows.revisions import commit_graph_revision
 
     commit_graph_revision(
         db,

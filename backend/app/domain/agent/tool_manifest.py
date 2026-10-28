@@ -15,6 +15,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel
+from app.db.models import AgentMessage, AgentSession, PluginInstance
+from app.domain.agent.places import COMFYUI, home_of, turn_place
+from app.domain.agent.plugin_schema import agent_description, agent_parameters, omitted_note
+from app.domain.effects import needs_card
+from app.domain.place_names import comfy_parts
+from app.domain.plugins import instances as inst, tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
 
 
 def tool_registry():
@@ -116,8 +123,6 @@ class Turn:
 def turn_of(db: Any, session: Any) -> Turn:
     from sqlalchemy import select
 
-    from app.db.models import AgentMessage
-    from app.domain.agent.places import turn_place
 
     rows = db.execute(
         select(AgentMessage.role, AgentMessage.content, AgentMessage.payload)
@@ -177,8 +182,6 @@ def _on_demand(tool: dict[str, Any], kit: str) -> bool:
 def _wanted(tool: dict[str, Any], agent_name: str, turn: Turn) -> bool:
     """一个只在用得上时才发的插件工具,这一轮发不发(ADR 0044 修订 2026-10-08):这段对话调过的(直接调,或经 `plugin_tools` /
     `run_plugin_tool` 点到);工作流工具另加画布上开着的那张、用户点过名的。"""
-    from app.domain.agent.places import COMFYUI
-    from app.domain.place_names import comfy_parts
 
     workflow = tool.get("workflow") or {}
     path = workflow.get("path") or ""
@@ -197,9 +200,6 @@ def _wanted(tool: dict[str, Any], agent_name: str, turn: Turn) -> bool:
 def _plugin_kit(db: Any, instance_id: str, cache: dict[str, str]) -> str:
     """这个连接的插件工具属于哪一份:替宿主提供工作流库的是 `comfyui`,别的是 `GENERAL_PLUGIN_KIT`。`cache` 按连接记。"""
     if instance_id not in cache:
-        from app.db.models import PluginInstance
-        from app.domain.plugins import instances as inst
-        from app.domain.plugins.errors import PluginDomainError
 
         instance = db.get(PluginInstance, instance_id)
         try:
@@ -218,11 +218,10 @@ def agent_plugin_tools(db: Any, user_id: str | None, kits: frozenset[str] | None
     插件说不进智能体工具表的(`agent: false`;ComfyUI 有表单的工作流,它的完整工作流 —— 给智能体的是那张表单,ADR 0045 §5)不在
     这里:工作流节点、画板、插件页照常有它,这条路也不把它绕回来(要全部参数,智能体走生成那一路、带完整工作流的模型 id)。
     """
-    from app.domain.plugins.tools import exposed
 
     cache: dict[str, str] = {}
     found = []
-    for tool in exposed(db, user_id):
+    for tool in plugins_tools.exposed(db, user_id):
         if not tool["agent"]:
             continue
         kit = _plugin_kit(db, tool["instance_id"], cache)
@@ -243,8 +242,6 @@ def _plugin_tools(
 ) -> _PluginTools:
     """这个人暴露给智能体的插件工具。`turn` 给了(一段对话里的一轮)就只发这一处的那几份里**用得上的**(见 `_on_demand`、
     `_wanted`),没发的数一个数;发出去的每一个都按同一套收紧(plugin_schema)。"""
-    from app.domain.agent.plugin_schema import agent_description, agent_parameters, omitted_note
-    from app.domain.effects import needs_card
 
     specs = []
     unlisted: dict[str, int] = {}
@@ -324,7 +321,6 @@ def kits_for(place: Any) -> frozenset[str]:
     Manim 这些通用插件工具(`GENERAL_PLUGIN_KIT`);反过来,AI Studio 和 Mosael 各页面之间串门是常事(在画板里让它建一条时间线),
     那两份不按页面拆。
     """
-    from app.domain.agent.places import COMFYUI
 
     return frozenset({"comfyui"}) if place.kind == COMFYUI else frozenset({"canvas", GENERAL_PLUGIN_KIT})
 
@@ -336,8 +332,6 @@ def session_kits(db: Any, session_id: str) -> frozenset[str] | None:
     当前地点是 studio，若不补回 `comfyui`，工作流工具和 ComfyUI 连接自己的 `list_models` 等
     就会「名字在上下文里、调用却够不着」。补的是会话的家，不是把所有插件工具塞进每一处。
     """
-    from app.db.models import AgentSession
-    from app.domain.agent.places import COMFYUI, home_of, turn_place
 
     session = db.get(AgentSession, session_id) if session_id else None
     if session is None:
@@ -401,9 +395,6 @@ def _provided_capabilities(db: Any, user_id: str | None) -> set[str] | None:
         return None
     from sqlalchemy import select
 
-    from app.db.models import PluginInstance
-    from app.domain.plugins import instances as inst
-    from app.domain.plugins.errors import PluginDomainError
 
     provided = {""}
     for instance in db.scalars(select(PluginInstance).where(PluginInstance.owner_user_id == user_id)):

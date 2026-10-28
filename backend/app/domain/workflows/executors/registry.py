@@ -13,6 +13,7 @@ from typing import Any, Callable, Protocol
 from sqlalchemy.orm import Session
 
 from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate
 
 
 class RunScope(Protocol):
@@ -214,7 +215,6 @@ def _known_value(value: Any, known: dict[str, dict[str, Any]]) -> Any:
     认得出的引用:根是 `known` 里的一个名字,而且下一段是它真有的那一格 —— 开始参数里没有、这一次也没带的那一格
     不在这里猜(引用的意思是「运行时给」);`input` 里没登记的键在运行时是另一个节点的产物,不能当成空串。
     """
-    from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate
 
     if isinstance(value, dict):
         resolved = {key: _known_value(one, known) for key, one in value.items()}

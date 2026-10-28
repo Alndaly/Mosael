@@ -18,6 +18,9 @@ from app.domain.media_kinds import declared_media
 from app.domain.scenes.operations import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 from app.domain.shots.detect import DEFAULT_THRESHOLD as SHOT_DEFAULT_THRESHOLD
+from app.core.i18n import fragment, get_current_locale, tr
+from app.domain.plugins import nodes as plugins_nodes
+from mosael_formats.i18n import pick_text
 
 
 def _source_assets_help() -> dict[str, str]:
@@ -416,7 +419,6 @@ def field_name(key: str, spec: dict[str, Any] | None = None) -> Any:
     core/i18n.fragment):失败原因落库之后,读的时候和外层句子一起按读的人的语言翻。
     当场写成字的话 —— 中文字段名嵌进英文句子,或者英文键名 `max_tokens` 嵌进中文句子。
     """
-    from app.core.i18n import fragment
 
     return fragment(config_label(key, spec or {}))
 
@@ -424,8 +426,6 @@ def field_name(key: str, spec: dict[str, Any] | None = None) -> Any:
 def node_title(node: dict[str, Any], types: dict[str, dict[str, Any]] | None = None) -> str:
     """报错里提到一个节点时叫它什么:节点的标题;没起名就是节点类型的显示名(按这次请求的语言);类型认不出(插件没装)
     就是它的 id。和画布就绪清单的节点名同一个取法(analyze.ts 的 nodeName)—— 同一个问题两边说的是同一个名字。"""
-    from app.core.i18n import get_current_locale, tr
-    from mosael_formats.i18n import pick_text
 
     name = node.get("name")
     #: 官方模板的图在建图那一刻才定语言,之前节点名是 {zh, en}(见 templates.localised_names)。
@@ -451,7 +451,6 @@ def layer_titles(nodes: list[Any], types: dict[str, dict[str, Any]] | None = Non
 def reference_label(parts: list[str], nodes: dict[str, dict[str, Any]], types: dict[str, dict[str, Any]] | None = None) -> str:
     """一条引用(按点号拆开)在一句话里怎么说:「节点的名字 · 输出的显示名 · 子路径」;根不是这一层的节点(作用域名、
     不存在的节点)就按段说。和画布的 workflowRefCatalog.look / refLabel 同一个取法(节点没起名的用 id)—— 句子里不摆 `{{…}}`。"""
-    from app.core.i18n import tr
 
     node = nodes.get(parts[0]) if parts else None
     if node is None:
@@ -485,9 +484,8 @@ def available_node_types(db: Session, *, user_id: str | None = None) -> dict[str
 
     `db` 是必需的:装了什么插件是**用户机器上的事实**,不是这份代码的常量(见 plugins/nodes)。
     """
-    from app.domain.plugins.nodes import plugin_node_types
 
-    return {**NODE_TYPES, **plugin_node_types(db, user_id)}
+    return {**NODE_TYPES, **plugins_nodes.plugin_node_types(db, user_id)}
 
 
 def output_label(key: str, node_spec: dict[str, Any]) -> str:

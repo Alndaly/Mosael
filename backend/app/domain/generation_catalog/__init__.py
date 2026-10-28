@@ -75,6 +75,7 @@ from app.domain.generation_catalog.descriptors.audio import (
     ALIBABA_AUDIOGEN_CAPABILITIES,
 )
 from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
+from app.ai.providers import get_generation_adapter
 
 #: **生成的种类**:图像、视频、音频。全仓只有这一份 —— 解析、设置页、参数组表单、插件目录、
 #: 画板的「生成」产出者都从这里读。此前 `("image", "video")` 在七个文件里各抄一份,于是
@@ -300,7 +301,6 @@ def capabilities_for(
 
 def adapter_parameter_surface(vendor: str, kind: str) -> tuple[str, ...]:
     """这条通道能发出去的标量参数;依赖模型名的一律回空(保守)。"""
-    from app.ai.providers import get_generation_adapter
 
     adapter = get_generation_adapter(vendor, kind)
     if adapter is None or adapter.surface_depends_on_model:

@@ -20,6 +20,8 @@ from typing import Any
 from app.ai.runtime.errors import RuntimeSetupError, failure_message
 from app.ai.runtime.install_state import FAILED, InstallProgress, InstallStore
 from app.core.config import settings
+from app.ai import media_transfer
+from app.ai.runtime import config
 
 logger = logging.getLogger(__name__)
 
@@ -74,18 +76,16 @@ def _run_install() -> None:
 
 
 def download_url() -> str:
-    from app.ai.runtime import config
 
     return f"{config.get().hf_endpoint.rstrip('/')}/{REPO}/resolve/{REVISION}/model.safetensors"
 
 
 def _install() -> Path:
-    from app.ai.media_transfer import download_to_path
 
     target = weights_path()
     staging = target.with_name(f"{target.name}.download")
     try:
-        download_to_path(download_url(), staging, timeout=600)
+        media_transfer.download_to_path(download_url(), staging, timeout=600)
         digest = _sha256(staging)
         if digest != SHA256:
             # 不说「下载失败」—— 下载是成功的,只是下来的东西不是核对过的那一个。

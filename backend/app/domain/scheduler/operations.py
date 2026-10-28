@@ -17,6 +17,8 @@ from app.db.models import ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import create_job
 from app.domain.providers.moved_models import renamed
 from app.domain.referrers import referrers
+from app.domain.scheduler import executors
+from app.domain.scheduler.executors import SCHEDULED_EXECUTORS, SCHEDULED_READINESS, has_active_run
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,6 @@ def create_scheduled_task(
     owner: str | None,
 ) -> ScheduledTask:
     """`owner` 是挂它的那个人 —— 定时执行替他跑;启用着建,就要替他跑得起来。归属由调用方记(sharing.claim)。"""
-    from app.domain.scheduler.executors import SCHEDULED_EXECUTORS
 
     if kind not in SCHEDULED_EXECUTORS:
         # 此前什么都收:认不出的种类建得出来,到点排一个任务,然后永远停在"排队中"。
@@ -142,7 +143,6 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
     不提交:三个入口各自提交(调度循环每触发一个就提交一次,两条路由用 Tx)。要等提交之后才能做的
     (起生成线程)由执行体登记成 after_commit。
     """
-    from app.domain.scheduler.executors import dispatch_scheduled_job, has_active_run
 
     # 事前就知道跑不起来的,不开运行记录 —— 此前绑的工作流被删了照样能点「立即运行」,
     # 每点一次多一条 0.0 秒的失败。
@@ -150,7 +150,7 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
     if has_active_run(db, task.id):
         raise SchedulerBusy("schedErr_busy")
     run, job = _open_run(db, task)
-    dispatch_scheduled_job(db, task, run, job)
+    executors.dispatch_scheduled_job(db, task, run, job)
     if task.trigger_type == "once":
         task.enabled = False
         task.next_run_at = None
@@ -169,7 +169,6 @@ def ensure_runnable(
     **不变式:启用着的任务一定跑得起来。** 建任务、打开开关、三个触发入口都经这里;
     而让它跑不起来的那件事(删工作流)在发生的那一刻就把任务停掉(stop_tasks_bound_to_workflow)。
     """
-    from app.domain.scheduler.executors import SCHEDULED_READINESS
 
     check = SCHEDULED_READINESS.get(kind)
     problem = check(db, workspace_id, payload or {}, owner) if check else None

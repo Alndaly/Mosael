@@ -75,22 +75,26 @@ from app.db.references import generation_model_key
 from app.domain import capabilities, local_services
 from app.domain.agent import places
 from app.domain.boards.producer_ids import node_producer_id
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say, was_cancelled
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.plugins import generation as plugin_generation
-from app.domain.plugins import host_capabilities
-from app.domain.plugins import instances as inst
-from app.domain.plugins import moves as plugin_moves
-from app.domain.plugins import tools
+from app.domain.plugins import (
+    generation as plugin_generation,
+    host_capabilities,
+    instances as inst,
+    moves as plugin_moves,
+    tools,
+)
 from app.domain.plugins.errors import PluginDomainError
 from mosael_formats.plugin_manifest import GENERATION, TOOLS, WORKFLOW_LIBRARY
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
-from app.domain.providers import models as provider_models
-from app.domain.providers import moved_models
+from app.domain.providers import models as provider_models, moved_models
 from app.domain.referrers import referrers
 from app.media.paths import resolve_key
+from app.domain.generation import use_cases as generation_use_cases
+from app.domain.generation.origins import COMFYUI, Origin, describe_origins
+from app.domain.model_library import nsfw_local as model_nsfw_local
 
 logger = logging.getLogger(__name__)
 
@@ -666,7 +670,6 @@ def _output_nsfw(asset: Asset, manual: bool | None) -> dict[str, Any]:
     (这一张图的原文件,按内容记结果;权重没下、还没算过就没有这一条,下次列出就有)。视频、音频只认手动标记:为了识别去读
     整段视频算哈希,不值。"""
     from app.domain import model_library
-    from app.domain.model_library import nsfw_local as model_nsfw_local
 
     signals: list[dict[str, Any]] = []
     if asset.kind == "image" and asset.file_key:
@@ -1175,7 +1178,6 @@ def form_usages(db: Session, user: User, instance: PluginInstance, *, workspace_
         sessions = db.scalars(select(GenerationSession).where(
             GenerationSession.workspace_id == workspace_id, GenerationSession.provider_profile_id == profile_id,
             GenerationSession.model == model).order_by(GenerationSession.updated_at.desc()))
-        from app.domain.generation.origins import describe_origins
 
         #: 别处开的会话标题空着(ADR 0052):叫它那一处现在的名字
         uses += [{"kind": "session", "id": session.id, "name": session.title or session.origin_name, "count": 1}
@@ -1275,8 +1277,6 @@ def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_i
     """工作台的「运行」(ADR 0038 §6):跑画布上现在这张(含没存的改动)。建一个**普通的生成任务** —— 模型是这张工作流
     (`path`,得已经是这个连接下的生成模型:新建的要先在 ComfyUI 里存一次),图放在任务的载荷里(不进生成参数),插件
     提交它、`client_id` 用前端的那个、按历史轮询跟到完成。取消、重启后接着等、用量、素材入库都是生成任务已有的那一套。"""
-    from app.domain.generation.origins import COMFYUI, Origin
-    from app.domain.generation.use_cases import generate
 
     _require(db, instance)
     path = workflow_path(path)
@@ -1304,7 +1304,7 @@ def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_i
             raise WorkflowLibraryError("workflowLibErr_runFormsOld", path=path)
         raise WorkflowLibraryError("workflowLibErr_runNotModel", path=path)
     #: 这台连接上这张工作流的那条会话(ADR 0052,D44):和 0044 的 ComfyUI 地方同一种 id。工作流改了名不跟着走 —— 出处是开的那一刻
-    return generate(db, user, workspace_id, session_id=None, project_id=project_id, provider=profile.vendor, model=path,
+    return generation_use_cases.generate(db, user, workspace_id, session_id=None, project_id=project_id, provider=profile.vendor, model=path,
                     kind=kinds[0], prompt="", negative_prompt="", parameters={}, source_assets=[],
                     provider_profile_id=profile.id, workbench_graph=graph, origin=Origin(COMFYUI, f"{instance.id}/{path}"))
 
@@ -1452,7 +1452,6 @@ def _install(job_id: str) -> None:
                 say(job, message[:200])
 
     def cancelled() -> bool:
-        from app.domain.jobs import was_cancelled
 
         with unit_of_work() as db:
             job = db.get(Job, job_id)

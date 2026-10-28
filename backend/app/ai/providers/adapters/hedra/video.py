@@ -43,6 +43,7 @@ from app.ai.providers.adapters.shared.errors import http_error_detail, upstream_
 from app.ai.providers.contracts.failures import http_status_category
 from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.core.http_retry import RetryingClient
+from app.media.probe import probe_media
 
 VENDOR_LABEL = "Hedra"
 BASE_URL = "https://api.hedra.com/v3"
@@ -111,7 +112,6 @@ def upload_file(client: Any, path: Path) -> str:
 
 
 def _image_size(path: Path) -> tuple[int | None, int | None]:
-    from app.media.probe import probe_media
 
     info = probe_media(path, measure_missing_duration=False)
     return info.get("width"), info.get("height")

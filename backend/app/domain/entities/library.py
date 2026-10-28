@@ -17,7 +17,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.db.models import Asset, Board, Entity, EntityReference, GenerationJob, Workflow, now
+from app.db.models import (
+    Asset,
+    Board,
+    Entity,
+    EntityReference,
+    GenerationJob,
+    Workflow,
+    now,
+    Scene3D,
+    Scene3DModel,
+    Voice,
+)
 from app.domain.referrers import referrers
 from app.domain.entities.catalog import (
     DEFAULT_ROLE,
@@ -33,6 +44,7 @@ from app.domain.entities.catalog import (
     AttributeProblem,
     normalize_attributes,
 )
+from app.domain.voices.speech import known_engine
 
 
 class EntityDomainError(LocalizedError, ValueError):
@@ -219,8 +231,6 @@ def _attributes(db: Session, workspace_id: str, kind: str, raw: Any, stored: dic
 def _check_attribute_targets(db: Session, workspace_id: str, attributes: dict[str, Any]) -> None:
     """专有字段指着的东西得在:音色库里的嗓子、3D 场景、3D 模型要在这个工作区(别处的 id 当场拒,不存一个
     死链接);别的配音引擎要是认得的那几个(嗓子是引擎自己的目录里的,不在这里逐个去问)。"""
-    from app.db.models import Scene3D, Scene3DModel, Voice
-    from app.domain.voices.speech import known_engine
 
     engine = attributes.get("voice_engine")
     if engine and engine != VOICE_LIBRARY_ENGINE and not known_engine(db, str(engine)):

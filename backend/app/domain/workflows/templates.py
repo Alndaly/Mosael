@@ -83,6 +83,13 @@ from app.domain.workflows.templates_shots import (
     SHOTS_TEMPLATE_CATALOG,
     reference_video_shots_graph,
 )
+from app.ai.runtime import asr_models, separation_models
+from app.domain.consent import UNDECLARED
+from app.domain.voices import transcription
+from app.domain.voices.engine_catalog import cloned_voice_status
+from app.domain.workflows.executors import talking
+from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC
+from mosael_formats.i18n import pick_text
 
 
 #: 官方模板的**说明**:叫什么、干什么、分几步、跑之前要备好什么。图由上面那几个函数造,
@@ -434,7 +441,6 @@ def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]
     **只动名字**:config 里的值是数据(提示词、模板串),不是给人看的标签 —— 翻它们等于改这条
     工作流要做的事。
     """
-    from mosael_formats.i18n import pick_text
 
     for node in graph.get("nodes") or []:
         if isinstance(node, dict) and isinstance(node.get("name"), dict):
@@ -454,7 +460,6 @@ def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = Fal
     `digital_human`:这把嗓子要交给数字人(改口型、说话照片)—— 只挑声明过是谁的(ADR 0028 §5)。
     此前照样预填最早那一把,未声明的克隆音色一进数字人那一步就被拒,而配音的钱已经花了。
     """
-    from app.domain.consent import UNDECLARED
 
     if not workspace_id:
         return ""
@@ -507,7 +512,6 @@ def _cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool)
     """模板里配音节点写的是本机克隆引擎:要有一把克隆音色,**而且克隆引擎跑得起来**(此前只看有没有音色行)。
     数字人用的那把还要声明过是谁的。判据只有一份(voices.engine_catalog.cloned_voice_status),配音节点说「用的是
     哪把嗓子」时用的也是它。"""
-    from app.domain.voices.engine_catalog import cloned_voice_status
 
     return cloned_voice_status(db, workspace_id, digital_human=digital_human)  # type: ignore[return-value]
 
@@ -555,10 +559,7 @@ def requirement_problem(db: Session, *, user_id: str, workspace_id: str, check: 
 
 def _status_checks(db: Session, *, user_id: str, workspace_id: str) -> dict[str, Callable[[], CheckStatus]]:
     """每一项怎么查(到真问的时候才查:运行前只问选中的那一项,不该把引擎探测、音色清单全跑一遍)。"""
-    from app.ai.runtime import asr_models, separation_models
     from app.domain import audio_capabilities
-    from app.domain.voices import transcription
-    from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC, talking_models
 
     def met(found: Any) -> CheckStatus:
         return "met" if found else "missing"
@@ -573,8 +574,8 @@ def _status_checks(db: Session, *, user_id: str, workspace_id: str) -> dict[str,
         DIGITAL_HUMAN_VOICE: lambda: _cloned_voice_status(db, workspace_id, digital_human=True),
         TRANSCRIPTION_ENGINE: lambda: _provider_status(db, user_id, transcription.CAPABILITY, asr_models.runtime_status),
         SEPARATION_ENGINE: lambda: _provider_status(db, user_id, audio_capabilities.SEPARATION, separation_models.runtime_status),
-        SPEECH_VIDEO_MODEL: lambda: met(talking_models(db, SPEECH_TO_VIDEO, user_id)),
-        LIPSYNC_VIDEO_MODEL: lambda: met(talking_models(db, VIDEO_LIPSYNC, user_id)),
+        SPEECH_VIDEO_MODEL: lambda: met(talking.talking_models(db, SPEECH_TO_VIDEO, user_id)),
+        LIPSYNC_VIDEO_MODEL: lambda: met(talking.talking_models(db, VIDEO_LIPSYNC, user_id)),
         TIKHUB_ACCOUNT: lambda: tikhub_status(db, user_id, TIKHUB_ACCOUNT),
         TIKHUB_VIDEO: lambda: tikhub_status(db, user_id, TIKHUB_VIDEO),
         TIKHUB_COMMENTS: lambda: tikhub_status(db, user_id, TIKHUB_COMMENTS),

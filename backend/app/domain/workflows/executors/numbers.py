@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.node_types import NODE_TYPES, field_name
 from app.domain.workflows.errors import WorkflowDomainError
 
 
@@ -16,7 +16,6 @@ def whole_number(config: dict[str, Any], key: str, *, node_type: str, default: i
     `int(config.get(...))`:`"10.0"` 抛一句英文的 `invalid literal for int()`、不说是哪一格;有的
     干脆 except 掉,悄悄换成默认值 —— 填了 0 或 "10.0" 的人以为自己设了,其实跑的是 50。
     """
-    from app.domain.workflows.node_types import field_name
 
     raw = config.get(key)
     if raw is None or (isinstance(raw, str) and not raw.strip()):
@@ -34,7 +33,6 @@ def whole_number(config: dict[str, Any], key: str, *, node_type: str, default: i
 
 def at_least(value: int, minimum: int, *, key: str, node_type: str) -> int:
     """整数格的下限:不够就说是哪一格、最少多少(而不是悄悄换成默认值)。"""
-    from app.domain.workflows.node_types import field_name
 
     if value < minimum:
         spec = ((NODE_TYPES.get(node_type) or {}).get("config") or {}).get(key)

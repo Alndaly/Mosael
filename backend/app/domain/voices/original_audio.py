@@ -22,6 +22,15 @@ from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Sequence, Track, Transcript
 from app.domain.assets.lineage import SEPARATE, made_by, made_from
+from app.ai.providers.contracts.separation import SeparationError
+from app.core.db import SessionLocal
+from app.domain.assets import separation
+from app.domain.audio_capabilities import SEPARATION
+from app.domain.jobs import RENDER_SLOTS
+from app.domain.sequences import clip_properties, tracks
+from app.domain.sequences._timeline import timeline_span
+from app.domain.sequences.clip_properties import DetachClipAudio, SetClipEffects
+from app.domain.sequences.tracks import SetTrackState
 
 if TYPE_CHECKING:
     from app.domain.sequences.grouping import OperationGroup
@@ -49,13 +58,10 @@ def ensure_original_audio_mode(mode: str, *, owner_user_id: str | None) -> None:
         raise OriginalAudioError("dubErr_originalAudioMode", modes=" / ".join(ORIGINAL_AUDIO_MODES))
     if mode == "separate":
         from app.domain import capabilities
-        from app.domain.assets.separation import available
-        from app.domain.audio_capabilities import SEPARATION
 
-        from app.core.db import SessionLocal
 
         with SessionLocal() as db:
-            if not available(db, owner_user_id):
+            if not separation.available(db, owner_user_id):
                 #: 他接了分离插件、只是没定成默认:没定时按本机引擎挑(声音交给插件必须是他自己定过的),本机引擎又没装。
                 #: 此前一律说「请管理员装引擎」—— 他明明有一家现成能用的,该说的是去设置里把它定成默认。
                 ready = [one.name for one in capabilities.plugin_providers(db, owner_user_id, SEPARATION) if not one.missing]
@@ -93,7 +99,6 @@ def _is_original_footage(db: Session, asset: Asset | None) -> bool:
 
 def _dub_windows(db: Session, dub_track_id: str) -> list[tuple[float, float]]:
     """配音在时间线上占着的时间窗(合并过的)。"""
-    from app.domain.sequences._timeline import timeline_span
 
     spans = sorted(
         (clip.timeline_start, clip.timeline_start + timeline_span(clip))
@@ -110,7 +115,6 @@ def _dub_windows(db: Session, dub_track_id: str) -> list[tuple[float, float]]:
 
 def _original_clips(db: Session, sequence: Sequence, dub_track_id: str, windows: list[tuple[float, float]]) -> list[Clip]:
     """配音盖得到的、原片发声的那些片段(轨和片段都没被静音)。"""
-    from app.domain.sequences._timeline import timeline_span
 
     chosen: list[Clip] = []
     for track in sequence.tracks or []:
@@ -174,7 +178,6 @@ def _duck_everything_else(db: Session, sequence: Sequence, dub_track_id: str, *,
     **视频轨也要算。** 一条视频片段自带的声音和音频轨上的声音一样会被听见,而译配这条流程恰恰把
     原片整段放在视频轨上(音频轨是空的)—— 只挑 kind=="audio" 的话,标记落在一条没有片段的空轨上。
     """
-    from app.domain.sequences.tracks import SetTrackState, set_track_state
 
     # 先把要改的那几条挑出来:改动会 flush,边遍历边改的话,下一圈读到的可能是过期的对象。
     targets = [
@@ -183,12 +186,10 @@ def _duck_everything_else(db: Session, sequence: Sequence, dub_track_id: str, *,
         if track.id != dub_track_id and track.role != "dub" and _carries_audio(track) and not track.duck
     ]
     for track_id in targets:
-        set_track_state(db, sequence.id, SetTrackState(track_id=track_id, duck=True, actor_id=actor_id))
+        tracks.set_track_state(db, sequence.id, SetTrackState(track_id=track_id, duck=True, actor_id=actor_id))
 
 
 def _mute_under_dub(db: Session, sequence: Sequence, dub_track_id: str, *, actor_id: str | None) -> None:
-    from app.domain.sequences.clip_properties import SetClipEffects, set_clip_effects
-    from app.domain.sequences._timeline import timeline_span
 
     windows = _dub_windows(db, dub_track_id)
     plan: list[tuple[str, dict[str, Any]]] = []
@@ -200,7 +201,7 @@ def _mute_under_dub(db: Session, sequence: Sequence, dub_track_id: str, *, actor
         if keyframes != effects.get("gain_keyframes"):
             plan.append((clip.id, {**effects, "gain_keyframes": keyframes}))
     for clip_id, effects in plan:
-        set_clip_effects(db, sequence.id, SetClipEffects(clip_id=clip_id, effects=effects, actor_id=actor_id))
+        clip_properties.set_clip_effects(db, sequence.id, SetClipEffects(clip_id=clip_id, effects=effects, actor_id=actor_id))
 
 
 def _sample(points: list[tuple[float, float]], t: float, fallback: float) -> float:
@@ -306,10 +307,6 @@ def _split_voice_from_music(
     **先全部分离完再动时间线**:分到一半失败时不能留下半套背景音轨。用户明确选择的是
     ``separate``，任何静音降级都会改变成片语义，因此失败必须原样上报。
     """
-    from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.assets.separation import available, separate_asset
-    from app.domain.jobs import RENDER_SLOTS
-    from app.domain.sequences.clip_properties import DetachClipAudio, detach_clip_audio
 
     with unit_of_work() as db:
         sequence = db.get(Sequence, sequence_id)
@@ -331,7 +328,7 @@ def _split_voice_from_music(
                 backgrounds[asset_id] = cached
             else:
                 missing.append(asset_id)
-        if missing and not available(db, actor_id):
+        if missing and not separation.available(db, actor_id):
             raise OriginalAudioError("dubErr_separationUnavailable")
         plan_clips = [(clip.id, str(clip.asset_id)) for clip in sources]
 
@@ -341,7 +338,7 @@ def _split_voice_from_music(
                 with unit_of_work() as db:
                     asset = db.get(Asset, asset_id)
                     try:
-                        made = separate_asset(db, asset, engine="", owner_user_id=actor_id, span=spans[asset_id])
+                        made = separation.separate_asset(db, asset, engine="", owner_user_id=actor_id, span=spans[asset_id])
                     except SeparationError as exc:
                         # 分离那边的原因原样作参数(它若带 key,渲染时按读的人的语言翻)。
                         raise OriginalAudioError("dubErr_removeVoiceFailed", detail=exc) from exc
@@ -352,7 +349,7 @@ def _split_voice_from_music(
             if asset_id not in backgrounds:
                 continue
             background_id, offset = backgrounds[asset_id]
-            detach_clip_audio(
+            clip_properties.detach_clip_audio(
                 db,
                 sequence_id,
                 DetachClipAudio(clip_id=clip_id, audio_asset_id=background_id, audio_src_offset=offset, actor_id=actor_id),

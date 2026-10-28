@@ -34,6 +34,12 @@ from app.domain.jobs import (
     say,
     start_job,
 )
+from app.domain.assets import denoise, separation
+from app.domain.assets.denoise import DENOISABLE_KINDS
+from app.domain.sequences import clip_properties
+from app.domain.sequences.clip_properties import DetachClipAudio
+from app.domain.sequences.grouping import OperationGroup
+from app.domain.sequences.media_swap import ReplaceClipMedia, clips_using, replace_clip_media
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +53,6 @@ class ClipAudioError(LocalizedError, RuntimeError):
 
 def start_clip_audio_job(db: Session, *, sequence_id: str, clip_id: str, action: str, created_by: str | None) -> Job:
     """排一次片段声音处理。能当场判的(动作认不认得、片段有没有声音、引擎在不在)排队之前就判掉。"""
-    from app.domain.assets.denoise import DENOISABLE_KINDS, ready_adapter
-    from app.domain.assets.separation import available
 
     if action not in CLIP_AUDIO_ACTIONS:
         raise ClipAudioError("clipAudioErr_action", actions=" / ".join(CLIP_AUDIO_ACTIONS))
@@ -59,8 +63,8 @@ def start_clip_audio_job(db: Session, *, sequence_id: str, clip_id: str, action:
     if asset is None or asset.kind not in DENOISABLE_KINDS or not asset.file_key:
         raise ClipAudioError("clipAudioErr_noSound")
     if action == "denoise":
-        ready_adapter(db, created_by, "")
-    elif not available(db, created_by):
+        denoise.ready_adapter(db, created_by, "")
+    elif not separation.available(db, created_by):
         raise ClipAudioError("dubErr_separationUnavailable")
     job = create_job(
         db,
@@ -100,8 +104,6 @@ def _cached_stems(db: Session, asset: Asset) -> dict[str, str]:
 
 
 def _body(job_id: str) -> None:
-    from app.domain.assets.denoise import denoise_asset
-    from app.domain.assets.separation import separate_asset
 
     # 三段各自一个事务:「在跑」先落库、放掉写锁(处理一跑就是几分钟);产出的素材落库;再放上时间线。
     with unit_of_work() as db:
@@ -126,12 +128,12 @@ def _body(job_id: str) -> None:
             raise ClipAudioError("clipAudioErr_clipNotFound")
         made: dict[str, str] = {}
         if action == "denoise":
-            denoised, _engine = denoise_asset(db, asset, owner_user_id=created_by)
+            denoised, _engine = denoise.denoise_asset(db, asset, owner_user_id=created_by)
             made["denoised"] = denoised.id
         else:
             made = _cached_stems(db, asset)
             if not {"vocals", "background"} <= set(made):
-                stems = separate_asset(db, asset, owner_user_id=created_by)
+                stems = separation.separate_asset(db, asset, owner_user_id=created_by)
                 made = {"vocals": stems.vocals.id, "background": stems.background.id}
 
     with unit_of_work() as db:
@@ -152,9 +154,6 @@ def _place(
     actor_id: str | None,
 ) -> int:
     """产出放到时间线上(一步撤销)。返回动了几个片段。"""
-    from app.domain.sequences.grouping import OperationGroup
-    from app.domain.sequences.media_swap import ReplaceClipMedia, clips_using, replace_clip_media
-    from app.domain.sequences.clip_properties import DetachClipAudio, detach_clip_audio
 
     sequence = db.get(Sequence, sequence_id)
     clip = db.get(Clip, clip_id)
@@ -177,5 +176,5 @@ def _place(
             return 1
         stems = ("vocals",) if action == "isolate_voice" else ("vocals", "background")
         for stem in stems:
-            detach_clip_audio(db, sequence_id, DetachClipAudio(clip_id=clip.id, audio_asset_id=made[stem], actor_id=actor_id))
+            clip_properties.detach_clip_audio(db, sequence_id, DetachClipAudio(clip_id=clip.id, audio_asset_id=made[stem], actor_id=actor_id))
         return 1

@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.domain.agent.skills import catalog
 from app.domain.agent.skills.catalog import Skill, SkillDomainError
+from app.db.models import AgentMessage
+from app.domain.agent.stream import get_stream_state
 
 #: 目录里每条说明最多多少字、整段最多多少字。和记忆一样是每轮都付的钱,用户看不见这笔账,所以封顶。
 MAX_LISTED_DESCRIPTION_CHARS = 300
@@ -139,8 +141,6 @@ def skills_in_turn(db: Session, session_id: str) -> list[str]:
     """
     from sqlalchemy import func, select
 
-    from app.db.models import AgentMessage
-    from app.domain.agent.stream import get_stream_state
 
     if not session_id:
         return []

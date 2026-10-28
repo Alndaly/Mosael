@@ -9,6 +9,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.domain.resources import RESOURCES, Resource
+from app.core.i18n import fragment
+from app.domain.capabilities import Use
 
 #: 权限档次(plan §17.4)。"edit" 最坏也撤得回;"render-cost"/"ai-cost" 花的是时间或钱;
 #: "external" 的后果在这个应用之外 —— 发出去的帖子、别人服务器上的改动、本机跑过的代码。
@@ -152,8 +154,6 @@ def tool_families() -> tuple[str, ...]:
 
 def capability_uses() -> list:
     """智能体哪些工具点名用某项宿主能力(工具上的 `capability`)。现扫注册表,新工具声明了就出现。"""
-    from app.core.i18n import fragment
-    from app.domain.capabilities import Use
 
     return [Use(tool.capability, "agent", fragment("capUse_agentTool", tool=tool.name))
             for tool in _TOOLS.values() if tool.capability]

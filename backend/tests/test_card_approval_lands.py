@@ -197,7 +197,11 @@ def _callers_of(symbol: str) -> set[tuple[str, str]]:
         tree = ast.parse(path.read_text())
         for fn in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
             for node in ast.walk(fn):
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == symbol:
+                #: 直接调和按模块属性调(`confirmations.authorize_and_approve(...)`)都算。
+                if not isinstance(node, ast.Call):
+                    continue
+                called = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+                if called == symbol:
                     found.add((str(path), fn.name))
     return found
 

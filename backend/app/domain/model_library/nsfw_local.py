@@ -31,7 +31,7 @@ from typing import Any
 
 from PIL import Image
 
-from app.ai.runtime import nsfw_models
+from app.ai.runtime import nsfw_models, nsfw_vit
 from app.domain.model_library import previews as model_previews
 
 logger = logging.getLogger(__name__)
@@ -178,7 +178,6 @@ def _image(source: Source) -> Image.Image:
 def _probability(image: Image.Image) -> float:
     """一张图是 NSFW 的可能。拿不到权重就抛。"""
     global _weights
-    from app.ai.runtime import nsfw_vit
 
     if _weights is None:
         _weights = nsfw_vit.load(nsfw_models.weights_path())

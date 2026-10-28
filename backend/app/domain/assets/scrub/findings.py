@@ -10,11 +10,10 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.domain.assets.scrub import aac as aac_mod
-from app.domain.assets.scrub import mp4 as mp4_mod
-from app.domain.assets.scrub import nal as nal_mod
-from app.domain.assets.scrub import policy
+from app.domain.assets.scrub import aac as aac_mod, mp4 as mp4_mod, nal as nal_mod, policy
 from app.domain.assets.scrub.mp4 import Mp4Error, Reader, read_at
+from app.core.child_process import run_logged
+from app.core.config import settings
 
 #: 一次读进来做字节扫的块大小。**不整份读**。
 CHUNK = 1 << 20
@@ -159,8 +158,6 @@ def probe_tags(path: Path) -> dict[str, str]:
     import json
     import logging
 
-    from app.core.child_process import run_logged
-    from app.core.config import settings
 
     try:
         proc = run_logged(

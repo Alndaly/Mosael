@@ -12,7 +12,8 @@ from app.db.models import AgentSession, User
 from app.domain.agent.skills import catalog, drafting, managing, remote, runtime, store
 from app.domain.agent.skills.catalog import CONVERSATION, CREATED, Skill, SkillDomainError
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from mosael_formats.agent_skill import SkillDoc, SkillError, bundles_from_files, read_skill_archive
+from mosael_formats.agent_skill import SkillDoc, SkillError, bundles_from_files, read_skill_archive, check_path
+from app.domain.agent.sessions import readable_session
 
 
 def _skill(db: Session, workspace_id: str, ref: str) -> Skill:
@@ -37,7 +38,6 @@ def get_skill(db: Session, user: User, workspace_id: str, ref: str) -> Skill:
 
 def read_file(db: Session, user: User, workspace_id: str, ref: str, path: str) -> tuple[Skill, bytes, str]:
     """一个文件的原始内容(设置页看、下载)。返回 (技能, 内容, 规整过的路径)。"""
-    from mosael_formats.agent_skill import check_path
 
     ensure_workspace_access(db, user, workspace_id)
     skill = _skill(db, workspace_id, ref)
@@ -109,7 +109,6 @@ def commit_import(db: Session, user: User, workspace_id: str, import_id: str, ch
 
 def draft_from_session(db: Session, user: User, session_id: str) -> dict[str, str]:
     """「存成技能」:起草,不保存。看得见这次对话、又能在这个工作区里建技能,才值得花这一次模型调用。"""
-    from app.domain.agent.sessions import readable_session
 
     session: AgentSession = readable_session(db, user, session_id)
     ensure_workspace_perm(db, user, session.workspace_id, "ai")

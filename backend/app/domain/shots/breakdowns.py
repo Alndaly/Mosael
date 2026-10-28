@@ -26,6 +26,7 @@ from app.db.models import Asset, ShotBreakdown
 from app.domain.jobs import ensure_wanted
 from app.domain.shots import describe, detect, frames, report, track
 from app.media.paths import resolve_key
+from app.domain.transcripts.operations import get_transcript_for_asset
 
 
 class ShotBreakdownError(LocalizedError, ValueError):
@@ -82,7 +83,6 @@ def sheet_file(asset: Asset, name: str) -> Path | None:
 
 def transcript_segments(db: Session, asset_id: str) -> list[dict[str, Any]]:
     """这份素材最新那份逐字稿的段落(没转写过是空的)。台词按时间分给镜头,见 describe.assign_dialogue。"""
-    from app.domain.transcripts.operations import get_transcript_for_asset
 
     transcript = get_transcript_for_asset(db, asset_id)
     if transcript is None:

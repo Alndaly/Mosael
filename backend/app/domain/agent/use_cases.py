@@ -25,16 +25,20 @@ from app.db.models import (
     now,
 )
 from app.domain import sharing
-from app.domain.agent import card_expiry
-from app.domain.agent import host
-from app.domain.agent import memory as agent_memory
-from app.domain.agent import places
-from app.domain.agent import plan as agent_plan
-from app.domain.agent import questions as agent_questions
+from app.domain.agent import (
+    card_expiry,
+    host,
+    memory as agent_memory,
+    places,
+    plan as agent_plan,
+    questions as agent_questions,
+    origins,
+)
 from app.domain.agent.confirmations import decidable_filter
 from app.domain.agent.sessions import SHARE_KIND, ensure_reads_for, reads_for_filter, readable_session, writable_session
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 from app.domain.voices import agent_voice
+from app.domain.voices.remote import RemoteConsentRequired
 
 #: 会话列表最多给多少条(最近活跃在前)。
 SESSION_LIST_LIMIT = 50
@@ -195,7 +199,6 @@ def ask(db: Session, user: User, session_id: str, questions: list[dict[str, Any]
     """问题落在它那次对话里,往里问是写 —— 和发消息同一道闸。工作区跟着对话走,不由调用方另报。"""
     session = _question_session(db, user, session_id, write=True)
     row = agent_questions.ask(db, workspace_id=session.workspace_id, session_id=session.id, questions=questions)
-    from app.domain.agent import origins
 
     # 和确认卡同一条事务边界:等问题行真的提交后再发卡。提前发卡会留下“点得快就查不到”
     # 的窗口,请求失败回滚时还会在飞书里留一张永远答不了的卡。
@@ -229,7 +232,6 @@ def answer(db: Session, user: User, question_id: str, answers: dict[str, Any]) -
     _question_session(db, user, row.session_id, write=True)
     answered = agent_questions.answer(db, row, answers)
     agent_questions.deliver_to_session(db, answered, user)
-    from app.domain.agent import origins
 
     after_commit(db, lambda: origins.question_settled_after_commit(answered))
     return answered
@@ -245,7 +247,6 @@ def dismiss(db: Session, user: User, question_id: str) -> AgentQuestion:
     changed = agent_questions.dismiss(db, row)
     if changed:
         agent_questions.deliver_to_session(db, row, user)
-        from app.domain.agent import origins
 
         after_commit(db, lambda: origins.question_settled_after_commit(row))
     return row
@@ -383,7 +384,6 @@ def speak_line(db: Session, user: User, workspace_id: str, text: str, *, out_dir
     if not text:
         raise NothingToSay("routeErr_nothingToRead")
     pref = gate(db, user.id)
-    from app.domain.voices.remote import RemoteConsentRequired
 
     try:
         return agent_voice.speak(

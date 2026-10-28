@@ -21,6 +21,7 @@ from app.domain.generation_catalog import known_capabilities_for
 from app.domain.generation.resolution import resolve_row
 from app.domain.providers.defaults import get_row
 from app.domain.providers.models import effective_capabilities
+from app.domain.providers import models as provider_models
 
 
 @dataclass(frozen=True)
@@ -128,7 +129,6 @@ def _pick(db: Session, user_id: str, kind: str, usable) -> ModelChoice:
     chosen = _default_model(db, kind, user_id)
     if usable(db, chosen):
         return chosen
-    from app.domain.providers import models as provider_models
 
     for model in provider_models.models_for_capability(db, kind, user_id=user_id):
         if model.profile is None or not model.profile.enabled or kind not in effective_capabilities(model):

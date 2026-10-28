@@ -17,14 +17,20 @@ from typing import Literal
 
 import httpx
 
-from app.core.i18n import LocalizedError, tr
+from app.core.i18n import LocalizedError, tr, fragment
 from app.domain import capabilities
-from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
+from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider, Use, register_use
 from mosael_formats.plugin_manifest import TRANSLATION
 from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.core import http_retry
 from app.domain.billing.usage import BillableCall, billable, once
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError
+from app.domain.providers import credentials as provider_credentials, selection as providers_selection
+from app.domain.providers.chat_connection import default_chat_connection, runner_choice
+from app.domain.providers.models import models_for_capability
 
 #: 调用方在哪条执行通道上(见 ai_chat.target_for 的 surface)。
 ChatSurface = Literal["direct", "automation"]
@@ -82,7 +88,6 @@ CHAT = "builtin:chat"
 def _chat_ready(db, owner_user_id: str | None) -> tuple[str, ...]:
     """对话模型那一家要**这个人**有一个启用着的对话模型 —— 钥匙归人。此前只看「有没有随便一条启用的连接」,
     只接了生图连接的人也算齐了。用哪一个(点名的,或他的默认)到翻译时再解析(resolve_ai_chat_target)。"""
-    from app.domain.providers.models import models_for_capability
 
     #: 没有主人(系统任务、单元测试)就没有「他的连接」—— 连接归人。
     if db is None or not owner_user_id or not models_for_capability(db, "chat", user_id=owner_user_id):
@@ -114,8 +119,6 @@ CAPABILITY = Capability(
 
 def register_uses() -> None:
     """宿主界面上用到翻译的入口(ADR 0032 §4)。工作流节点由注册表现扫。"""
-    from app.core.i18n import fragment
-    from app.domain.capabilities import Use, register_use
 
     register_use(Use(TRANSLATION, "app", fragment("capUse_subtitleTranslate")))
 
@@ -151,16 +154,13 @@ def resolve_ai_chat_target(
 ) -> ChatTarget:
     """`surface` 是调用方所在的执行通道(见 ai_chat.target_for):工作流节点是 automation ——
     订阅授权的连接经网关可用,和 LLM 节点一样;界面上的翻译接口是 direct。"""
-    from app.domain.providers import credentials as provider_credentials
-    from app.domain.providers.chat_connection import default_chat_connection, runner_choice
-    from app.domain.providers.selection import find_enabled_connection
 
     #: 钉着的是别人的连接(别的成员建的图):换成他自己的默认,见 runner_choice。
     profile_id, model, pinned_by_other = runner_choice(db, profile_id, model, user_id=user_id)
     #: 没点名连接:他的默认对话模型所在的那条(和 LLM 节点同一个挑法,见 default_chat_connection)。此前是
     #: 最早建的那条启用连接 —— 不管它会不会对话,官方译配模板又没写连接,于是翻译跑到了一条生图连接上。
     profile = (
-        find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
+        providers_selection.find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
         if profile_id
         else default_chat_connection(db, owner_user_id=user_id, surface=surface)
     )
@@ -371,9 +371,6 @@ def translate_many(
 def _plugin_translate(db, provider: Provider, texts: list[str], target: str) -> list[str]:
     """认领 `translation` 的插件连接:入 `{"texts": [...], "target": 语言代码, "source": "auto"}`,
     出 `{"texts": [...]}`,条数和顺序都得对得上 —— 对不上整批作废,不把错位的译文写进字幕轨。"""
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.runtime import PluginRuntimeError
-    from app.domain.plugins.tools import invoke_host
 
     translated: list[str] = []
 
@@ -386,7 +383,7 @@ def _plugin_translate(db, provider: Provider, texts: list[str], target: str) -> 
         return {"texts": len(got)}
 
     try:
-        invoke_host(db, provider.id, TRANSLATION, {"texts": texts, "target": target, "source": "auto"}, collect=collect, record=True)
+        plugins_tools.invoke_host(db, provider.id, TRANSLATION, {"texts": texts, "target": target, "source": "auto"}, collect=collect, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise TranslateError("translateErr_pluginFailed", plugin=provider.name, detail=str(exc)[:500]) from exc
     return translated

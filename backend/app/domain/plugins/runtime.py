@@ -53,6 +53,7 @@ from app.domain.plugins.child_env import base_env
 from app.domain.plugins.egress import UNDECIDED, Egress
 from app.domain.plugins.manifest import LOCALE_ENV
 from app.domain.plugins.shared_tables import ACCEPTS as SHARED_TABLES, expand as expand_shared_tables
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,6 @@ DATA_ENV = "MOSAEL_PLUGIN_DATA_DIR"
 
 def data_dir_for(package_id: str) -> Path:
     """一个插件的持久目录(不保证存在)。卸载时随包一起删(见 packages.uninstall)。"""
-    from app.core.config import settings
 
     safe = "".join(ch if ch.isalnum() or ch in "-_." else "-" for ch in package_id).strip(".") or "plugin"
     return settings.data_dir / "plugin-data" / safe

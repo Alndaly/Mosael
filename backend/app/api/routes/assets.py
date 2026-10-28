@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Response, Uploa
 from fastapi.responses import FileResponse
 from app.api.responses import file_response
 
-from app.core.i18n import tr
+from app.core.i18n import tr, get_current_locale, t
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AssetCardOut, AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, ImageUrlImportRequest, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices import use_cases as voice_use_cases
@@ -25,6 +25,19 @@ from app.media.paths import resolve_key
 from app.media.proxy import audio_proxy_path, proxy_path
 from app.media.thumbnails import THUMBNAIL_MEDIA_TYPE, generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
+from app.ai.providers.contracts.denoise import DenoiseError
+from app.ai.providers.contracts.separation import SeparationError
+from app.domain.analysis.service import AnalysisError
+from app.domain.assets.frames import AssetFrameError
+from app.domain.assets.from_url import UrlImportError, import_image_url, probe_url as probe
+from app.domain.assets.masks import MaskAssetError
+from app.domain.assets.video_gif import VideoGifError
+from app.domain.assets.web_capture import WebCaptureError
+from app.domain.browser import BrowserDomainError
+from app.media import filmstrip
+from app.media.filmstrip import filmstrip_path
+from app.media.still import StillError
+from app.media.ytdlp import YtdlpError, matching_extractor
 
 router = APIRouter(tags=["assets"])
 
@@ -42,7 +55,6 @@ def url_support(
     importing the active page is meaningful. It must not make the user wait for remote metadata.
     """
     use_cases.ensure_can_browse(db, user, workspace_id)
-    from app.media.ytdlp import matching_extractor
 
     extractor = matching_extractor(url)
     return {"supported": extractor is not None, "extractor": extractor or ""}
@@ -76,7 +88,6 @@ def save_painted_mask(
     上传的图由后端**归一**成蒙版唯一的形状:读红通道、透明当黑、缩放到源图尺寸、存成 `L` 模式 PNG ——
     浏览器只管画。按配方算的那条(`POST /assets/{id}/mask`)交给的是同一个写出口。
     """
-    from app.domain.assets.masks import MaskAssetError
 
     try:
         return use_cases.save_painted_mask(
@@ -104,7 +115,6 @@ def import_web_capture(
 
     只收图片、有大小上限、文件名由服务端定 —— 闸都在 domain/assets/web_capture。
     """
-    from app.domain.assets.web_capture import WebCaptureError
 
     try:
         return use_cases.import_web_capture(
@@ -133,7 +143,6 @@ def import_web_download(
 
     大小上限、只收素材库认得的类型、文件名只取名字本身 —— 闸都在 domain/assets/web_download。
     """
-    from app.domain.assets.web_capture import WebCaptureError
 
     try:
         return use_cases.import_web_download(
@@ -155,10 +164,6 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     能往这个工作区里塞东西。
     """
     use_cases.ensure_can_import(db, user, body.workspace_id)
-    from app.core.i18n import get_current_locale, t
-    from app.domain.assets.from_url import UrlImportError
-    from app.domain.assets.from_url import probe_url as probe
-    from app.media.ytdlp import YtdlpError
 
     from app.domain import sharing
 
@@ -200,8 +205,6 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
 def import_from_url(body: UrlImportRequest, db: Tx, user: CurrentUser) -> Job:
     """把选中的条目下载进素材库。返回任务 —— 下载要跑一阵,不该占着一个请求。"""
     from app.domain import sharing
-    from app.domain.assets.from_url import UrlImportError
-    from app.domain.browser import BrowserDomainError
 
     try:
         return use_cases.import_from_url(
@@ -228,8 +231,6 @@ def import_image_from_url(body: ImageUrlImportRequest, db: Tx, user: CurrentUser
     走 `importer.import_binary_asset`;出处记成 `source_url`。同步完成 —— 一张图不值得为它排
     一个后台任务,用户点完就该在素材库里看到。
     """
-    from app.domain.assets.from_url import UrlImportError, import_image_url
-    from app.domain.assets.web_capture import WebCaptureError
 
     use_cases.ensure_can_import(db, user, body.workspace_id)
     try:
@@ -389,7 +390,6 @@ def analyze_asset_route(
     video mode from its own conversation. OAuth image/video-frame input uses the tool-free Gateway
     and never requires a caller-supplied service address.
     """
-    from app.domain.analysis.service import AnalysisError
 
     # 智能体看素材走 analyze_asset 这个工具(用这次对话的连接、模型和视频分析方式,见 mcp_server);
     # 这条路由是人点的,用他单独选的分析配置。
@@ -448,7 +448,6 @@ def transcribe_asset(
 @router.post("/assets/{asset_id}/convert-gif", response_model=JobOut)
 def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: Tx, user: CurrentUser) -> Job:
     """Create a **new** GIF asset. The source video remains untouched."""
-    from app.domain.assets.video_gif import VideoGifError
 
     try:
         return use_cases.start_gif(
@@ -471,7 +470,6 @@ def separate_asset_audio(asset_id: str, db: Tx, user: CurrentUser, engine: str =
     排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被
     某一层断掉 —— 用户看到"失败了",后台其实还在跑。
     """
-    from app.ai.providers.contracts.separation import SeparationError
     try:
         return use_cases.start_separation(db, user, asset_id, engine=engine)
     except SeparationError as exc:
@@ -481,7 +479,6 @@ def separate_asset_audio(asset_id: str, db: Tx, user: CurrentUser, engine: str =
 @router.post("/assets/{asset_id}/denoise", response_model=JobOut)
 def denoise_asset_audio(asset_id: str, body: DenoiseAssetRequest, db: Tx, user: CurrentUser) -> Job:
     """降噪,产出一份**新**素材;原素材不动(ADR-0017)。排成任务,理由同分离。"""
-    from app.ai.providers.contracts.denoise import DenoiseError
     try:
         return use_cases.start_denoise(db, user, asset_id, engine=body.engine, strength=body.strength)
     except DenoiseError as exc:
@@ -562,8 +559,6 @@ def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: Tx, user: Curre
 
     **原素材不动**,产出是新的一份 —— 取帧是「我要这个画面」,不是「把这段片子变成一张图」。
     """
-    from app.domain.assets.frames import AssetFrameError
-    from app.media.still import StillError
 
     try:
         return use_cases.grab_frame(db, user, asset_id, body.at, project_id=body.project_id)
@@ -578,7 +573,6 @@ def mask_asset(asset_id: str, body: MaskAssetRequest, db: Tx, user: CurrentUser)
     **原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。产出和编辑器画出来的那种
     是**同一种形状**(`L` 模式、和源图一样大,ADR 0057):两条路交给同一个写出口。
     """
-    from app.domain.assets.masks import MaskAssetError
 
     try:
         return use_cases.make_mask(
@@ -592,13 +586,12 @@ def mask_asset(asset_id: str, body: MaskAssetRequest, db: Tx, user: CurrentUser)
 @router.get("/assets/{asset_id}/filmstrip")
 def get_asset_filmstrip(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     """剪辑面板用的帧条(一张横向长图)。**按需生成、落盘缓存** —— 和缩略图同一条路。"""
-    from app.media.filmstrip import filmstrip_path, generate_filmstrip
 
     asset = use_cases.readable_file(db, user, asset_id)
     source = resolve_key(asset.file_key)
     strip = filmstrip_path(source.parent)
     if not strip.is_file():
-        generate_filmstrip(source, asset.kind, source.parent)
+        filmstrip.generate_filmstrip(source, asset.kind, source.parent)
     if not strip.is_file():
         raise HTTPException(status_code=404, detail="Filmstrip not available")
     return file_response(db, strip, media_type="image/jpeg")

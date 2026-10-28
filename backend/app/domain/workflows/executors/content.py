@@ -18,7 +18,7 @@ from app.domain.sequences._timeline import CANVAS_SIZE_RANGE, FPS_RANGE
 from app.domain.sequences.creation import create_sequence_scaffold
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import as_text
-from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
+from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX, declared_outputs, parse_node_type, resolve_instance
 from app.domain.workflows.executors.registry import (
     Preflight,
     PreflightNode,
@@ -30,13 +30,15 @@ from app.domain.workflows.executors.registry import (
 from app.domain.workflows.executors.common import provided
 from app.domain.workflows.id_values import id_list
 from app.domain.workflows.executors.numbers import whole_number
+from app.domain.assets.image_grid import ImageGridError, parse_grid, split_image_grid
+from app.domain.plugins import nodes as plugins_nodes, tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.tools import find, output_port
 
 
 def _run_plugin_tool(
     db: Session, instance_id: str, tool_name: str, payload: dict[str, Any], *, workspace_id: str
 ) -> dict[str, Any]:
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.tools import invoke
 
     # 只给宿主适配层调的工具(internal)图里存着也不跑 —— 那道门在 invoke 里(pluginErr_toolInternal)。
     # 收在这里而不是各节点里:插件节点和通用插件节点曾经一个过滤一个不过滤(见 common.provided)。
@@ -44,7 +46,7 @@ def _run_plugin_tool(
     try:
         # 带上工作区:插件交出的**文件**产出要收进这个工作区的素材库,输出里换成 asset_id。
         # 不带的话,一个从网盘拉文件的节点在工作流里跑不通 —— 它没地方放拿到的东西。
-        invocation = invoke(db, instance_id, tool_name, payload, workspace_id=workspace_id)
+        invocation = plugins_tools.invoke(db, instance_id, tool_name, payload, workspace_id=workspace_id)
     except PluginDomainError as exc:  # 停用 / 撤权 / 删掉 —— 是这次运行的失败,不是服务端故障
         raise WorkflowDomainError.from_error(exc) from exc
     if invocation.status != "succeeded":
@@ -74,8 +76,6 @@ def _connection_error(exc: Exception) -> WorkflowDomainError:
 
 def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str) -> str:
     """节点上选的连接,只在**跑这条流程的人**自己的连接里找(见 plugins.nodes.resolve_instance)。"""
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.nodes import resolve_instance
 
     try:
         return resolve_instance(db, package_id, tool_name, chosen, current_actor(db))
@@ -109,11 +109,8 @@ def plugin_node(node_type: str):
     `["output"]`)就把整份返回值装进 output。前者让下游直接引用 `{{node.title}}`,后者保证
     任何工具不写一个字也能用。
     """
-    from app.domain.plugins.nodes import parse_node_type
 
     def run(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-        from app.domain.plugins.nodes import declared_outputs
-        from app.domain.plugins.tools import find, output_port
 
         parsed = parse_node_type(node_type)
         if parsed is None:
@@ -138,9 +135,8 @@ def plugin_node_preflight(node_type: str) -> Preflight:
     放行之后要等前面的节点跑完(钱花完)才在这一步失败。判法和执行时同一条(plugins.nodes.check_plugin_node_instance)。"""
 
     def check(db: Session, config: dict[str, Any], actor: str | None, _place: PreflightNode) -> None:
-        from app.domain.plugins.nodes import check_plugin_node_instance
 
-        problem = check_plugin_node_instance(db, {"type": node_type, "config": config}, actor)
+        problem = plugins_nodes.check_plugin_node_instance(db, {"type": node_type, "config": config}, actor)
         if problem is not None:
             raise _connection_error(problem)
 
@@ -298,7 +294,6 @@ def asset_update(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 @register("image_grid_split")
 def image_grid_split(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """一张宫格拼图 → 几张单图(见 assets.image_grid)。`asset_id` 是第一张,下游多数节点只接一份。"""
-    from app.domain.assets.image_grid import ImageGridError, parse_grid, split_image_grid
 
     asset = db.get(Asset, str(config.get("asset_id") or ""))
     if asset is None or asset.workspace_id != scope.workspace_id:

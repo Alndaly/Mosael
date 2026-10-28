@@ -16,8 +16,9 @@ from app.domain.permissions import (
     require_asset,
     require_sequence_access,
 )
-from app.domain.voices import transcription, voices
-from app.domain.voices import errors
+from app.domain.voices import transcription, voices, errors, agent_voice, engine_catalog, remote, subtitle_dub
+from app.domain.voices.engine_catalog import speaking_engines as listed, voice_slot
+from app.domain.voices.subtitle_dub import dub_targets
 
 
 def readable(db: Session, user: User, voice_id: str) -> Voice:
@@ -53,7 +54,6 @@ def ensure_can_list(db: Session, user: User, workspace_id: str) -> None:
 def speaking_engines(db: Session, user: User, workspace_id: str) -> list[dict]:
     """念一句话能用的引擎和各自的音色(见 engine_catalog.speaking_engines)。克隆那一项列的是这个工作区的音色库,
     所以和列音色同一道闸:是成员就看得到。"""
-    from app.domain.voices.engine_catalog import speaking_engines as listed
 
     ensure_can_list(db, user, workspace_id)
     return listed(db, user.id, workspace_id)
@@ -82,7 +82,6 @@ def choose_agent_voice(
     说话输入那一格不在这里验就绪:验它要起子进程探测本机引擎,而这是每次保存都会走的路。界面上只列已经就绪的;
     哪天真用不了,听写那一刻由 capabilities.pick 带着原因拒绝(见 routes/asr 与 domain/voices/transcription)。
     """
-    from app.domain.voices import agent_voice, remote
 
     if voice_id:
         if not remote.clones_remotely(engine):
@@ -134,12 +133,10 @@ def dub_subtitles(
 
     `options` 是引擎那一套附加项(见 synthesis_params)。
     """
-    from app.domain.voices.engine_catalog import synthesis_params, voice_slot
-    from app.domain.voices.subtitle_dub import dub_targets, start_subtitle_dub
 
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
-    synthesis = synthesis_params(
+    synthesis = engine_catalog.synthesis_params(
         db,
         engine=engine,
         voice=voice_slot(engine, voice_id=voice_id, engine_voice=engine_voice),
@@ -148,7 +145,7 @@ def dub_subtitles(
         workspace_id=sequence.workspace_id,
         **options,
     )
-    return start_subtitle_dub(
+    return subtitle_dub.start_subtitle_dub(
         db,
         sequence_id=sequence_id,
         clip_ids=dub_targets(db, sequence_id, list(clip_ids), track_id),

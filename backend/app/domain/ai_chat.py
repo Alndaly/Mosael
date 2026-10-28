@@ -39,9 +39,16 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, fragment, tr
 from app.domain.providers.credentials import ResolvedConnection
 from app.core import http_retry, outbound_guard
-from app.domain.providers import models as provider_models
+from app.domain.providers import models as provider_models, model_limits, structured_output
 from app.domain.providers.presets import served_by_pi
 from app.domain.billing.usage import BillableCall
+from app.ai.sidecar import pi_client
+from app.ai.sidecar.pi_client import SidecarError
+from app.core.config import settings
+from app.core.security import find_session, mint_service_session, revoke_session
+from app.core.unit_of_work import unit_of_work
+from app.db.models import now
+from app.domain.providers.runtime import sidecar_provider
 
 logger = logging.getLogger(__name__)
 
@@ -145,9 +152,6 @@ def target_for(
             raise AiChatError("aiChat_agentOnly" if oauth else "aiChat_nativeOnly", name=profile.name)
         if oauth and (not profile.oauth_credential or not profile.owner_user_id):
             raise AiChatError("aiChat_oauthRequired", name=profile.name)
-        from app.core.config import settings
-        from app.core.security import mint_service_session
-        from app.domain.providers.runtime import sidecar_provider
 
         return ChatTarget(
             base_url="",
@@ -189,8 +193,6 @@ def _max_output_tokens(db: Session, profile: ResolvedConnection, model: str) -> 
     `resolve` 的文档写着「唯一的合并处」,那句话是成立的:问题从来不是有第二处合并,
     而是**有一条通道根本不经过它**。这个函数就是让它经过。
     """
-    from app.domain.providers import model_limits
-    from app.domain.providers import models as provider_models
 
     row = provider_models.get_model(db, profile.id, model)
     catalog = provider_models.catalog_entry(profile, model)
@@ -213,8 +215,6 @@ def _structured_output(db: Session, profile: ResolvedConnection, model: str) -> 
 
     取不到模型行也不算错 —— 没配置过的模型照样能用,只是没有任何覆盖。
     """
-    from app.domain.providers import models as provider_models
-    from app.domain.providers import structured_output
 
     row = provider_models.get_model(db, profile.id, model)
     return structured_output.effective_support(
@@ -411,7 +411,6 @@ def _chat_gateway(
     """
     if client is not None:
         raise AiChatError("aiChatErr_gatewayNoClient", label=label)
-    from app.ai.sidecar.pi_client import SidecarError, gateway_complete
 
     # **在发请求之前说清这条账是谁的**,和直连那条对齐。原先放在成功之后,于是调用失败时
     # 那条账没有 provider / model,会落进 `UsageSummary.unpriced` 里那堆"没能定价"的记录 ——
@@ -420,8 +419,6 @@ def _chat_gateway(
     if call is not None:
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
 
-    from app.core.security import revoke_session
-    from app.core.unit_of_work import unit_of_work
 
     token = _live_gateway_token(target)
     try:
@@ -443,7 +440,7 @@ def _chat_gateway(
             if sampling:
                 options["samplingParams"] = sampling
             try:
-                result = gateway_complete(
+                result = pi_client.gateway_complete(
                     system_prompt=system_prompt,
                     prompt=prompt,
                     images=images,
@@ -492,9 +489,6 @@ def _live_gateway_token(target: ChatTarget) -> str:
     第一次调用不在这里写库 —— 令牌在解析目标时已经在调用方的会话里铸好、提交了，这里另开会话写库会撞上调用方
     还没提交的写(SQLite 只有一个写者)。
     """
-    from app.core.security import find_session, mint_service_session
-    from app.core.unit_of_work import unit_of_work
-    from app.db.models import now
 
     with unit_of_work() as db:
         held = find_session(db, target.gateway_token)

@@ -18,11 +18,18 @@ from pydantic import ValidationError
 from app.core.i18n import fragment
 from sqlalchemy.orm import Session
 
-from app.db.models import Scene3D
+from app.db.models import Scene3D, Entity, Scene3DModel
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.id_values import id_list
 from app.domain.workflows.executors.numbers import whole_number
+from app.domain.scenes.operations import SceneDomainError, create_scene, list_models, model_file, render_shot_references
+from app.domain.scenes.render.model_mesh import UnsupportedModel, read_model
+from app.domain.scenes.types import SceneContent
+from app.domain.workflows.executors import ai
+from app.domain.workflows.field_options import split_chat_model
+from app.domain.workflows.templates_full_video import single_set_rules
+from app.domain.workflows.templates_schemas import _set_design_schema
 
 
 def _layout(value: Any) -> dict[str, Any]:
@@ -82,9 +89,6 @@ def scene_props(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     """
     import numpy as np
 
-    from app.db.models import Scene3DModel
-    from app.domain.scenes.render.model_mesh import read_model, UnsupportedModel
-    from app.domain.scenes.operations import list_models, model_file
 
     # 逗号串(选择器存的)或列表(整串引用上游输出)都合法 —— 和素材 id 同一份解析。
     wanted = id_list(config.get("model_ids"))
@@ -117,8 +121,6 @@ def scene_props(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
 
 @register("scene_create")
 def scene_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.scenes.types import SceneContent
-    from app.domain.scenes.operations import SceneDomainError, create_scene
 
     name = str(config.get("name") or "").strip() or scope.name
     try:
@@ -143,7 +145,6 @@ def scene_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 
 @register("scene_render")
 def scene_render(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.scenes.operations import SceneDomainError, render_shot_references
 
     scene_id = str(config.get("scene_id") or "").strip()
     scene = db.get(Scene3D, scene_id) if scene_id else None
@@ -168,7 +169,6 @@ SHOT_ASPECTS = ("16:9", "9:16", "1:1")
 
 def _library_characters(db: Session, workspace_id: str) -> dict[str, str]:
     """这个工作区资产库里的人物:id → 名字。交给写布景的模型,让人偶指向它演的那个人物(ADR 0029 §3)。"""
-    from app.db.models import Entity
 
     rows = db.query(Entity.id, Entity.name).filter(Entity.workspace_id == workspace_id, Entity.kind == "character")
     return {str(one_id): str(name) for one_id, name in rows.order_by(Entity.name).limit(60)}
@@ -182,10 +182,6 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     (templates.single_set_rules 里引的 `_camera_rules`);建场景的是 `scene_create`。和整片模板不同的是布景:
     那边是分镜,每镜一个布景台;这里是一个地方里的一段事,只搭一个(见 single_set_rules 的说明)。
     """
-    from app.domain.workflows.executors.ai import llm
-    from app.domain.workflows.field_options import split_chat_model
-    from app.domain.workflows.templates_schemas import _set_design_schema
-    from app.domain.workflows.templates_full_video import single_set_rules
 
     text = str(config.get("text") or "").strip()
     if not text:
@@ -209,7 +205,7 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         + "只输出符合 JSON Schema 的对象。"
     )
     profile_id, model = split_chat_model(str(config.get("model") or ""))
-    written = llm(db, scope, {
+    written = ai.llm(db, scope, {
         "profile_id": profile_id or None,
         "model": model,
         "preset": "precise",

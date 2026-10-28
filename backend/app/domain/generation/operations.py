@@ -27,13 +27,32 @@ from app.ai.providers import (
 from app.domain.generation_catalog import known_capabilities_for, outputs_per_run, prompt_mode
 from app.domain.generation_catalog.descriptors.shared import SOURCE_GROUP_DROPS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.generation.missing import explain_missing
-from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
+from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model, resolve_row
 from app.core.i18n import LocalizedError, fragment, tr
 from mosael_formats.i18n import pick_text
-from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
+from app.db.models import (
+    Asset,
+    GenerationJob,
+    GenerationSession,
+    ProviderProfile,
+    now,
+    Entity,
+    EntityReference,
+    ProviderModel,
+    Voice,
+)
 from app.domain.generation.origins import STUDIO, Origin
 from app.domain.generation.sessions import SESSION_FAMILIES, ensure_writable, has_records, new_session, same_family, session_at
 from app.domain.jobs import create_job
+from app.core.unit_of_work import unit_of_work
+from app.domain.assets.deletion import delete_asset
+from app.domain.consent import voice_usable_for_digital_human as voice_usable
+from app.domain.entities.catalog import usable_for_digital_human as entity_usable
+from app.domain.entities.library import EntityDomainError
+from app.domain.entities.mentions import attach_entities
+from app.domain.generation.public_links import NoUploader, public_url_for
+from app.domain.providers import models as provider_models
+from app.domain.scenes.operations import SceneDomainError, scene_reference as render_scene_reference
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +155,6 @@ def check_digital_human_rights(db: Session, workspace_id: str, source_assets: Se
 
     查不到出处的素材(自己上传的音频、不在资产库里的图)不拦:那一格「已取得授权」的确认就是为它们设的。
     """
-    from app.db.models import Entity, EntityReference, Voice
-    from app.domain.entities.catalog import usable_for_digital_human as entity_usable
-    from app.domain.consent import voice_usable_for_digital_human as voice_usable
 
     for entry in source_assets:
         role = str((entry or {}).get("role") or "")
@@ -178,9 +194,7 @@ def create_generation_job(db: Session, **request: Any) -> tuple[GenerationJob, A
 
 def _discard_rendered(db: Session, workspace_id: str, asset_ids: list[str]) -> None:
 
-    from app.domain.assets.deletion import delete_asset
 
-    from app.core.unit_of_work import unit_of_work
 
     db.rollback()
     # 每张各自一个事务:清理不成的那张不该拖着别的一起留下。
@@ -304,8 +318,6 @@ def _create_generation_job(
     )
     scene_receipt: dict[str, Any] | None = None
     if scene_reference:
-        from app.domain.scenes.operations import SceneDomainError
-        from app.domain.scenes.operations import scene_reference as render_scene_reference
 
         declared = allowed_parameter_keys(capabilities, kind) if capabilities and capabilities.get("parameter_keys") else None
         try:
@@ -324,8 +336,6 @@ def _create_generation_job(
         scene_receipt = rendered.receipt
 
     # `@资产` 在校验之前展开:拼进来的提示词描述和挂上的参考图,和手写、手挂的走同一套校验。
-    from app.domain.entities.library import EntityDomainError
-    from app.domain.entities.mentions import attach_entities
 
     try:
         expansion = attach_entities(
@@ -522,7 +532,6 @@ def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, st
     此前这段在三个入口里各抄一份,工作流节点则干脆不认;放在漏斗里,四个入口就是同一个答案。
     没有默认就直说,不替他挑一个(见 provider_models.resolve_default 的说明)。
     """
-    from app.domain.providers import models as provider_models
 
     default = provider_models.resolve_default(db, kind, user_id)
     if default is None or default.profile is None:
@@ -576,7 +585,6 @@ def _validate_source_assets(
             # 传不了的三种情形(没装 / 没配好 / 传失败)各说各的下一步,见 public_links。
             # 在这里做而不是在 runner 里,是因为**这一步要在提交之前完成**:一条传不上去的
             # 素材应当当场说清楚,而不是排进队列、几秒后变成一条任务失败。
-            from app.domain.generation.public_links import NoUploader, public_url_for
 
             try:
                 # 传到**发起人自己的**存储里 —— 桶和密钥是他的(见 public_links 的「用哪一家」)。
@@ -706,7 +714,6 @@ def _title_from_prompt(prompt: str) -> str:
 
 def _vendor_can_generate(db: Session, vendor: str, kind: str) -> bool:
     """有没有一条启用的连接,其下有启用的模型声明了这种生成能力。"""
-    from app.domain.providers import models as provider_models
 
     return any(
         model.profile is not None and model.profile.vendor == vendor
@@ -908,8 +915,6 @@ def capabilities_of_choice(
     **认不出来就是 None,不给兜底那份** —— 兜底那份是给界面渲染用的,拿它当"这个模型不收"的证据
     会把本来能用的东西挡在外面(见 catalog.capabilities_for)。
     """
-    from app.db.models import ProviderModel
-    from app.domain.generation.resolution import resolve_row
 
     if provider_profile_id:
         row = db.scalar(

@@ -32,6 +32,7 @@ from app.media.render_plan import (
     TextOverlayItem,
     Transform,
 )
+from app.media import text_render
 
 """
 RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
@@ -1119,9 +1120,8 @@ def _text_rasterizer_available() -> bool:
     """文字能不能走「浏览器按预览 CSS 渲成 PNG」那条路(不需要 libass)。Chromium 起不起得来要到用时才知道。"""
     if not settings.text_rasterize:
         return False
-    from app.media.text_render import find_frontend_dist
 
-    return find_frontend_dist() is not None
+    return text_render.find_frontend_dist() is not None
 
 
 def _has_text(plan: RenderPlan) -> bool:

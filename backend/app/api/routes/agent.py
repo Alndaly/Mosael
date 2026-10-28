@@ -14,13 +14,19 @@ from app.api.responses import event_stream, file_response
 from sqlalchemy import select
 
 from app.core.i18n import tr
-from app.domain.agent import autopilot, host
+from app.domain.agent import (
+    autopilot,
+    host,
+    replay as agent_replay,
+    stream as agent_stream,
+    use_cases as agent_use_cases,
+    places,
+    titles,
+    questions as agent_questions,
+)
 from app.ai.sidecar import pi_client
-from app.domain.agent import replay as agent_replay
-from app.domain.agent import stream as agent_stream
-from app.domain import sharing
+from app.domain import sharing, session_groups
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.domain.agent import use_cases as agent_use_cases
 from app.api.schemas import (
     AgentSpeechRequest,
     AgentManifestOut,
@@ -48,10 +54,8 @@ from app.api.schemas import (
 from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
 from app.domain.agent.toolsets import list_agent_toolsets
-from app.domain import session_groups
-from app.domain.agent import places, titles
-from app.domain.agent import questions as agent_questions
 from app.domain.agent.sessions import readable_session, writable_session
+from app.domain.voices import agent_voice
 
 router = APIRouter(tags=["agent"])
 
@@ -540,7 +544,6 @@ def read_aloud(body: AgentSpeechRequest, db: Tx, user: CurrentUser) -> Response:
 @contextmanager
 def _speech_errors() -> Iterator[None]:
     """两条发声路共用的错误翻译。闸与取配置在 agent/use_cases.speak_line。"""
-    from app.domain.voices import agent_voice
 
     try:
         yield

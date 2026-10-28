@@ -28,8 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import FeishuBot, Job
-from app.domain.feishu import gateway as feishu_gateway
-from app.domain.feishu import routing
+from app.domain.feishu import gateway as feishu_gateway, routing
 from app.domain.jobs import current_parent_job_id
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import as_text
@@ -39,6 +38,8 @@ from app.domain.workflows.executors.registry import (
     register,
     register_preflight,
 )
+from app.domain.assets import importer
+from app.domain.workflows.executors.numbers import at_least, whole_number
 
 #: 解不出目标时,`reason` → 说给用户听的那一句。**每一种都说得出是哪件事** ——
 #: 一句"发不出去"会让人挨个字段试,而这几种的修法完全不同(接机器人 / 选收件人 / 换通知方式)。
@@ -177,14 +178,13 @@ def feishu_take_resource(db: Session, scope: RunScope, config: dict[str, Any]) -
     走素材库那条路(`import_binary_asset`)而不是"把字节直接交给下游":飞书发来的附件此后在素材库里
     也找得到、能复用、能分析 —— 和入站那条链路同一个落点。
     """
-    from app.domain.assets.importer import import_binary_asset
 
     transport = _transport()
     bot = _bot_or_fail(db, scope.workspace_id, config)
     message_id = _required(config, "message_id", "wfErr_feishuEmptyMessageId")
     file_key = _required(config, "file_key", "wfErr_feishuEmptyFileKey")
     downloaded = transport.download(bot, message_id, file_key, str(config.get("resource_type") or "image"))
-    asset = import_binary_asset(
+    asset = importer.import_binary_asset(
         db,
         workspace_id=scope.workspace_id,
         project_id=None,
@@ -209,7 +209,6 @@ def feishu_reaction(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
 @register("feishu_chats")
 def feishu_chats(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """列出这个机器人所在的群(id 与名字)。「发到某个群」那几格的清单问的是同一份(见 field_options)。"""
-    from app.domain.workflows.executors.numbers import at_least, whole_number
 
     transport = _transport()
     bot = _bot_or_fail(db, scope.workspace_id, config)

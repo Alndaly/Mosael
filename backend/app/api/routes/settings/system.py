@@ -24,6 +24,9 @@ from app.domain import ai_runtime, deployment, media_tools, media_tools_install
 from app.domain.network import apply_to_process, get_config as get_network
 from app.domain.voices import tts_settings
 from app.domain.permissions import ensure_deployment_admin
+from app.ai.runtime import config as runtime_config, tts_daemon, tts_models
+from app.domain.local_services import sources as service_sources
+from app.domain.plugins import package_sources
 
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -159,9 +162,6 @@ def get_install_source(db: DbSession, user: CurrentUser) -> InstallSourceOut:
 MODEL_SOURCES = ("hf-mirror", "hf", "modelscope")
 
 def _install_source_out(db: Session) -> InstallSourceOut:
-    from app.ai.runtime import config as runtime_config
-    from app.domain.local_services import sources as service_sources
-    from app.domain.plugins import package_sources
 
     current = runtime_config.get()
     return InstallSourceOut(
@@ -183,9 +183,6 @@ def _install_source_out(db: Session) -> InstallSourceOut:
 def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUser) -> InstallSourceOut:
     # 往这台机器上装东西用哪个源,是部署级的设置 —— 和装引擎本身同一条权限。
     ensure_deployment_admin(db, user)
-    from app.ai.runtime import config as runtime_config
-    from app.domain.local_services import sources as service_sources
-    from app.domain.plugins import package_sources
 
     row = tts_settings.saved_row(db)
     try:
@@ -211,7 +208,6 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
     db.commit()
     runtime_config.refresh()
     if model_source_changed:
-        from app.ai.runtime import tts_daemon, tts_models
 
         # 和改克隆设置同一套收尾:探测缓存、上次失败的那句话按旧源算的;常驻的合成进程带着旧源的 env。
         tts_models.clear_runtime_probes()

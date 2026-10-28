@@ -13,6 +13,7 @@ from app.core.child_process import run_logged
 from app.core.config import settings
 from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line
+from app.media.probe import probe_media
 
 
 class VendorFormatError(LocalizedError, RuntimeError):
@@ -44,7 +45,6 @@ def video_sides_within(source: Path, target: Path, *, min_side: int, max_side: i
 
     百炼改口型只收每边 640–2048 像素的原视频,而说话照片交回的是 512×512 —— 两步接起来就被拒(真跑撞上过)。
     """
-    from app.media.probe import probe_media
 
     info = probe_media(source, measure_missing_duration=False)
     width, height = int(info.get("width") or 0), int(info.get("height") or 0)

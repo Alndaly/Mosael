@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.ai.runtime.config import SINGLETON_ID, TtsRuntimeConfig
 from app.core.config import settings
 from app.db.models import TtsConfig
+from app.core.db import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,6 @@ def load() -> TtsRuntimeConfig:
     """用户存的那一份;读不到就退回环境变量默认值。"""
     from sqlalchemy.exc import SQLAlchemyError
 
-    from app.core.db import SessionLocal
 
     try:
         with SessionLocal() as db:

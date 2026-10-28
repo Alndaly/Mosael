@@ -47,6 +47,13 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Board, PluginInstance
 from app.domain.boards.producer_ids import node_producer_id, node_type_of
+from app.ai.providers.contracts.generation import SOURCE_ROLES
+from app.domain.generation_catalog import GENERATION_KINDS
+from app.domain.plugins import dynamic_tools, moves
+from app.domain.plugins.nodes import parse_node_type
+from app.domain.providers import models as provider_models, moved_models
+from app.domain.providers.moved_models import renamed
+from app.domain.workflows.plugin_references import MISSING, moved_tools, replacements, rewrite_node
 
 #: 生成的产出者(boards.producers 里内置的那一个)。
 GENERATE_PRODUCER = "generate"
@@ -57,7 +64,6 @@ logger = logging.getLogger(__name__)
 def _rewrite_setting(item_id: Any, producer: str, setting: dict[str, Any], found: list[Any]
                      ) -> tuple[str, dict[str, Any]] | None:
     """一份 `{config, bindings}`(跑 `producer` 的)被取代时改成什么:`(新产出者, 新设置)`;不用改回 None。"""
-    from app.domain.workflows.plugin_references import MISSING, rewrite_node
 
     node_type = node_type_of(producer)
     if not node_type:
@@ -117,7 +123,6 @@ def _rewrite_item(item: dict[str, Any], found: list[Any]) -> dict[str, Any] | No
 
 def rewrite_replaced_tools(db: Session) -> int:
     """把库里所有画板上能改的老插件节点(生成器、能力)改掉。返回改了几块画板。"""
-    from app.domain.workflows.plugin_references import replacements
 
     changed = _rewrite_tool_cells(db, replacements(db))
     if changed:
@@ -153,14 +158,12 @@ def _rewrite_tool_cells(db: Session, found: list[Any]) -> int:
 def follow_moved_tools(db: Session, instance: PluginInstance, renames: dict[str, str], *, why: str = "moved") -> int:
     """画板上选着这个连接旧工具名的能力、生成器改到新名字(和工作流那边同一张「取代」表,见
     workflows.plugin_references.moved_tools)。不提交。返回改了几块画板。"""
-    from app.domain.workflows.plugin_references import moved_tools
 
     return _rewrite_tool_cells(db, moved_tools(db, instance, renames, why=why))
 
 
 def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str], *, why: str = "moved") -> int:
     """画板上选着这条连接旧模型名的格子(生成格、能力里按生成选项选的模型)改到新名字。不提交。返回改了几块画板。"""
-    from app.domain.providers.moved_models import renamed
 
     changed = 0
     for board in db.scalars(select(Board)):
@@ -200,8 +203,6 @@ def generation_index(db: Session, user_id: str | None, kinds: Any = None) -> Gen
     问的就是生成选择器问的那一个(provider_models.models_for_capability),不另判「能不能用」;只收插件连接
     (`plugin_instance_id` 指回实例)下的 —— 工具和模型要是**同一个连接**的才算同一件事。
     """
-    from app.domain.providers import models as provider_models
-    from app.domain.generation_catalog import GENERATION_KINDS
 
     index: GenerationIndex = {}
     for kind in kinds if kinds is not None else GENERATION_KINDS:
@@ -252,8 +253,6 @@ def as_generation_slot(item: dict[str, Any], by_id: dict[str, dict[str, Any]], f
 
     `any_kind`:这一格还不是一种素材格(升级前的工具格,见迁移 migrate-board-tool-cells-become-abilities)——
     改成生成的那一种素材的空格子。"""
-    from app.ai.providers.contracts.generation import SOURCE_ROLES
-    from app.domain.plugins.nodes import parse_node_type
 
     form = item.get("form") if isinstance(item.get("form"), dict) else None
     if form is None or item.get("asset_id"):
@@ -370,8 +369,6 @@ def _after_refresh(db: Session, instance: PluginInstance) -> None:
 
 
 def install() -> None:
-    from app.domain.plugins import dynamic_tools, moves
-    from app.domain.providers import moved_models
 
     dynamic_tools.on_refreshed(_after_refresh)
     moves.on_tools_moved(follow_moved_tools)

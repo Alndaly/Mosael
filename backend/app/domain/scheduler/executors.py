@@ -21,10 +21,19 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, t
 from app.core.unit_of_work import after_commit
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import TERMINAL_STATUSES, blame, failure_payload, finish_job, reset_parent_job, say, set_parent_job
+from app.domain import render
+from app.domain.generation import operations as generation_operations, runner as generation_runner
+from app.domain.generation.operations import parse_source_assets
+from app.domain.generation.origins import Origin, SCHEDULE
+from app.domain.notifications import notify
+from app.domain.workflows import engine as workflows_engine
+from app.domain.workflows.engine import check_runnable
+from app.domain.workflows.errors import WorkflowDomainError
+from mosael_formats.i18n import DEFAULT_LOCALE
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +55,6 @@ def bound_workflow(db: Session, *, workspace_id: str, payload: dict[str, Any] | 
 
 
 def _run_workflow(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
-    from app.domain.workflows.engine import start_workflow_job
 
     payload: dict[str, Any] = task.payload or {}
     workflow = bound_workflow(db, workspace_id=task.workspace_id, payload=payload)
@@ -56,19 +64,15 @@ def _run_workflow(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: 
     # 复用包装任务作为工作流任务:引擎直接在它上面推进度和终态。
     job.payload = {**job.payload, "workflow_id": workflow.id}
     run.status = "running"
-    start_workflow_job(db, workflow, created_by=task.owner_user_id, params=dict(payload.get("params") or {}), job=job)
+    workflows_engine.start_workflow_job(db, workflow, created_by=task.owner_user_id, params=dict(payload.get("params") or {}), job=job)
 
 
 def _run_generation(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
-    from app.domain.generation.operations import create_generation_job
-    from app.domain.generation.operations import parse_source_assets
-    from app.domain.generation.origins import SCHEDULE, Origin
-    from app.domain.generation.runner import start_generation_thread
 
     payload: dict[str, Any] = task.payload or {}
     kind = str(payload.get("kind", "image")).strip() or "image"
     # 没点名模型时漏斗用挂任务那个人的默认(generation.operations._default_model)。
-    generation, delegated = create_generation_job(
+    generation, delegated = generation_operations.create_generation_job(
         db,
         workspace_id=task.workspace_id,
         session_id=None,
@@ -90,14 +94,13 @@ def _run_generation(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job
     if _delegate(db, run, job, delegated.id, f"Dispatched generation {generation.id}"):
         # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起。
         generation_id = generation.id
-        after_commit(db, lambda: start_generation_thread(generation_id))
+        after_commit(db, lambda: generation_runner.start_generation_thread(generation_id))
 
 
 def _run_export(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
-    from app.domain.render import start_export
 
     payload: dict[str, Any] = task.payload or {}
-    delegated = start_export(db, str(payload.get("sequence_id", "")), created_by=task.owner_user_id)
+    delegated = render.start_export(db, str(payload.get("sequence_id", "")), created_by=task.owner_user_id)
     _delegate(db, run, job, delegated.id, f"Dispatched export {delegated.id}")
 
 
@@ -130,8 +133,6 @@ Readiness = Callable[[Session, str, dict[str, Any], "str | None"], LocalizedErro
 
 def _workflow_ready(db: Session, workspace_id: str, payload: dict[str, Any], owner: str | None) -> LocalizedError | None:
     """绑的工作流在,而且**带着任务的参数、替任务的主人**跑得起来 —— 和点运行同一套检查(workflows.engine.check_runnable)。"""
-    from app.domain.workflows.errors import WorkflowDomainError
-    from app.domain.workflows.engine import check_runnable
 
     workflow = bound_workflow(db, workspace_id=workspace_id, payload=payload)
     if workflow is None:
@@ -184,9 +185,6 @@ def notify_run_failed(
     db: Session, task: ScheduledTask, job: Job | None, reason: str, *, disabled: bool = False
 ) -> None:
     """定时任务这一次没跑起来(`disabled`:而且因此停用了):通知工作区。链接指向定时任务页,载荷里带着这一次的任务。"""
-    from app.core.i18n import t
-    from mosael_formats.i18n import DEFAULT_LOCALE
-    from app.domain.notifications import notify
 
     notify(
         db,

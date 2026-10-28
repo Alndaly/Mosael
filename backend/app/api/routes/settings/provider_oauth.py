@@ -8,8 +8,7 @@ from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import OAuthAnswerIn, OAuthLoginOut, OAuthPromptOut, ProviderModelOut, ProviderProfileOut, ProviderQuotaOut
 from app.core.config import settings as settings_config
 from app.db.models import ProviderProfile, new_id
-from app.domain.providers import credentials as provider_credentials
-from app.domain.providers import models as provider_models
+from app.domain.providers import credentials as provider_credentials, models as provider_models
 from app.domain.agent.host import mint_tool_token
 from app.domain.agent.login import (
     LoginError,
@@ -80,7 +79,6 @@ def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAut
     每个人都该能挂自己的。连接怎么配仍然是管理员的事,那是另一回事。
     """
     profile = _oauth_profile(db, profile_id, user)
-    from app.domain.agent.host import mint_tool_token
 
     try:
         session = start_login(

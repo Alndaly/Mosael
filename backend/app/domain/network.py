@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import NetworkConfig
+from app.core.db import SessionLocal
 
 #: 无论用户怎么填都要绕过代理的目标。localhost 变体全列出来:NO_PROXY 是逐项精确/后缀匹配,
 #: 不做等价推断,漏一个就是一类回连失败。
@@ -135,7 +136,6 @@ def subprocess_env_for_child(base: dict[str, str]) -> dict[str, str]:
     不该被卷进去。装配在 app/main.py:`adapters.use_proxy_source(subprocess_env_for_child)`
     —— 基础设施声明它要什么,领域把答案喂进去,而不是反过来让它认识这张表。
     """
-    from app.core.db import SessionLocal
 
     with SessionLocal() as db:
         return subprocess_env(db, base)

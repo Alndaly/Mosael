@@ -15,7 +15,7 @@ from typing import Any, TypeVar
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Clip, Sequence, Transcript
+from app.db.models import Asset, Clip, Sequence, Transcript, GenerationJob, Job, PublishAccount
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
@@ -25,6 +25,51 @@ from app.domain.workflows.executors.common import provided, text_lines, truthy, 
 from app.domain.workflows.id_values import id_list
 from app.domain.workflows.executors.numbers import whole_number
 from app.domain.workflows.executors.inputs import _asset_in, _sequence_in
+from app.ai.providers.contracts.denoise import DenoiseError
+from app.ai.providers.contracts.separation import SeparationError
+from app.ai.runtime import config as tts_config, tts_models
+from app.core.i18n import get_current_locale, t
+from app.domain import render
+from app.domain.assets import denoise, video_gif
+from app.domain.assets.from_url import UrlImportError, start_url_import
+from app.domain.assets.separation import start_separation_job
+from app.domain.assets.video_gif import VideoGifError
+from app.domain.capabilities import CapabilityUnavailable
+from app.domain.documents import LOCAL_PARSER
+from app.domain.documents.extraction import latest_extraction, read_sections, start_parse
+from app.domain.documents.local import DocumentParseError
+from app.domain.entities.catalog import parse_entity_ids
+from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
+from app.domain.generation import operations as generation_operations, runner as generation_runner
+from app.domain.generation.operations import (
+    GenerationDomainError,
+    check_parameters,
+    is_digital_human_request,
+    keep_source_group,
+    parse_source_assets,
+)
+from app.domain.generation.origins import of_run_scope
+from app.domain.publish import option_specs, start_publish
+from app.domain.sequences import placement
+from app.domain.sequences.append import asset_span, track_end, track_for_asset
+from app.domain.sequences.cutting import CutClipRanges, cut_clip_ranges
+from app.domain.sequences.fitting import TRACK_FOR_ASSET, fit_asset_on_track
+from app.domain.sequences.operations import apply_edit_operations
+from app.domain.sequences.overview import describe_sequence
+from app.domain.sequences.placement import DeleteClipsBatch, InsertClip, delete_clips_batch
+from app.domain.sequences.text import GenerateSubtitles, generate_subtitles as generate
+from app.domain.sequences.tracks import AddTrack, add_track
+from app.domain.voices import engine_catalog, subtitle_dub, transcription, voices
+from app.domain.voices.engine_catalog import voice_note
+from app.domain.voices.errors import VoiceError
+from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, OriginalAudioError, ensure_original_audio_mode
+from app.domain.voices.remote import RemoteConsentRequired
+from app.domain.voices.sentences import Segment, Token, sentences_for_editing
+from app.domain.voices.speech import CLONE_ENGINE
+from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, DubError
+from app.domain.workflows.authority import current_authority
+from app.domain.workflows.graph_rules import as_text
+from app.domain.workflows.node_types import NODE_TYPES, field_name
 
 logger = logging.getLogger(__name__)
 
@@ -87,11 +132,10 @@ def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
 
 @register("transcribe_asset")
 def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.voices.transcription import start_transcription
 
     # 收进工作区:转写结果会**返回到工作流输出里**,不挡等于让别的工作区的内容流出来。
     asset_id = _asset_in(db, scope, str(config.get("asset_id", "")).strip()).id
-    child = start_transcription(
+    child = transcription.start_transcription(
         db,
         asset_id,
         created_by=current_actor(db),
@@ -136,7 +180,6 @@ def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> di
 
 def export_params(config: dict[str, Any]) -> dict[str, Any] | None:
     """节点配置 → 导出参数(和剪辑页的导出对话框同形)。一样都没填就是 None:按默认档导出。"""
-    from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 
     params: dict[str, Any] = {}
     resolution = str(config.get("resolution") or "").strip()
@@ -162,10 +205,6 @@ def document_to_markdown(db: Session, scope: RunScope, config: dict[str, Any]) -
     """一份文档素材 → 解析出的 Markdown(ADR 0031)。`parser` 点名用哪一家(本地 / MinerU 这类插件连接):
     有这一家成功的解析就用它,没有就让它解析一遍、等它做完。不点名:用最新成功的那份,还没解析过(或上次
     失败了)就先用本地解析解一遍。`first` / `last` 只取那几段(页 / 幻灯片 / 表 / 章,1 起)。"""
-    from app.domain.capabilities import CapabilityUnavailable
-    from app.domain.documents import LOCAL_PARSER
-    from app.domain.documents.extraction import latest_extraction, read_sections, start_parse
-    from app.domain.documents.local import DocumentParseError
 
     asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
     if asset.kind != "document":
@@ -202,7 +241,6 @@ def document_to_markdown(db: Session, scope: RunScope, config: dict[str, Any]) -
 def _digital_human_needs_consent(config: dict[str, Any], place: PreflightNode) -> None:
     """挂了驱动音频(说话照片、对口型,即数字人)就要勾「已取得授权」—— 在任何节点花钱之前说,判据和生成漏斗同一个
     (is_digital_human_request)。素材常是引用(`{{配音.asset_id}}:driving_audio`),角色写在模板里,所以按原始配置认。"""
-    from app.domain.generation.operations import is_digital_human_request, parse_source_assets
 
     raw = place.node.get("config") or {}
     kind = str(raw.get("kind") or "image").strip() or "image"
@@ -215,12 +253,11 @@ def _digital_human_needs_consent(config: dict[str, Any], place: PreflightNode) -
 
 @register("export_sequence")
 def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.render import start_export
 
     # start_export 会把渲染任务建在**序列所属的那个工作区**(workspace_id=sequence.workspace_id),
     # 所以不挡的话,A 工作区的工作流能在 B 工作区里起一个渲染任务并拿到产出的 asset_id。
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
-    child = start_export(db, sequence.id, export_params(config), created_by=current_actor(db))
+    child = render.start_export(db, sequence.id, export_params(config), created_by=current_actor(db))
     final = wait_for_job(child.id, release=db)
     asset_id = str((final.result or {}).get("asset_id", ""))
     return {"asset_id": asset_id}
@@ -228,16 +265,11 @@ def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
 
 @register("ai_generate")
 def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.generation.operations import create_generation_job
-    from app.domain.generation.operations import GenerationDomainError, keep_source_group, parse_source_assets
-    from app.domain.generation.origins import of_run_scope
-    from app.domain.generation.runner import start_generation_thread
-    from app.domain.entities.catalog import parse_entity_ids
 
     kind = str(config.get("kind", "image")).strip() or "image"
     # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
     try:
-        generation, child = create_generation_job(
+        generation, child = generation_operations.create_generation_job(
             db,
             workspace_id=scope.workspace_id,
             session_id=None,
@@ -264,11 +296,10 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         raise WorkflowDomainError.from_error(exc) from exc
     db.commit()
     generation_id, child_id = generation.id, child.id
-    start_generation_thread(generation_id)
+    generation_runner.start_generation_thread(generation_id)
     wait_for_job(child_id, release=db)
     # 等待时交还了会话(release 会 close 它,里面的对象全部脱管)—— 按 id 重新取,不能 refresh 脱管的那两个:
     # 此前这里 refresh,生成跑完之后节点必然炸在「not persistent within this Session」。
-    from app.db.models import GenerationJob, Job
 
     generation = db.get(GenerationJob, generation_id)
     child = db.get(Job, child_id)
@@ -296,7 +327,6 @@ def _parameters_fit_the_model(db: Session, config: dict[str, Any], actor: str | 
     此前整片改成 1:1 交给 Veo(只收 16:9 / 9:16),要等前面五次对话、几张三视图和关键帧都付完钱,生成视频那一步
     才被拒。模型选择本身是引用的、或者参数全是运行时才知道的,不在这里判;模型解析不出来也不在这里说(漏斗会说)。
     """
-    from app.domain.generation.operations import GenerationDomainError, check_parameters
 
     choice = ("provider", "provider_profile_id", "model", "kind")
     parameters = config.get("parameters")
@@ -321,13 +351,12 @@ def _parameters_fit_the_model(db: Session, config: dict[str, Any], actor: str | 
 
 @register("video_to_gif")
 def video_to_gif(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.assets.video_gif import VideoGifError, start_video_to_gif
 
     asset = db.get(Asset, str(config.get("asset_id") or ""))
     if asset is None or asset.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_gifAssetNotInWorkspace")
     try:
-        child = start_video_to_gif(
+        child = video_gif.start_video_to_gif(
             db,
             asset=asset,
             created_by=current_actor(db),
@@ -354,9 +383,6 @@ def import_url(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     取消照样往上抛:那不是下载失败。
     """
     from app.domain import browser, sharing
-    from app.domain.assets.from_url import UrlImportError, start_url_import
-    from app.domain.workflows.graph_rules import as_text
-    from app.domain.workflows.authority import current_authority
 
     url = as_text(config.get("url")).strip()
     if not url:
@@ -398,11 +424,9 @@ def _speech_params(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
 
     音色的报错原样转述(带着它的 key):此前在前面拼一截「语音合成」/「字幕配音」,那截是
     写死的中文,而原因在落库那一刻就被翻成了字 —— 英文界面里读到的是两段中文。"""
-    from app.domain.voices.engine_catalog import synthesis_params
-    from app.domain.voices.errors import VoiceError
 
     try:
-        return synthesis_params(
+        return engine_catalog.synthesis_params(
             db,
             engine=str(config.get("engine") or ""),
             voice=str(config.get("voice") or ""),
@@ -420,9 +444,6 @@ def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> d
 
     `voice_note` 是按实际念的那一把说的一句「用的是哪把嗓子」(见 engine_catalog.voice_note),完成通知照它说 ——
     不在建图时替人写死。"""
-    from app.domain.voices import voices
-    from app.domain.voices.engine_catalog import voice_note
-    from app.domain.voices.remote import RemoteConsentRequired
 
     actor = current_actor(db)
     try:
@@ -453,9 +474,6 @@ def clone_engine_problem() -> WorkflowDomainError | None:
     模板预填音色、前置检查和下面的运行前检查用的是这一个判据(见 templates._cloned_voice_status)。只读已经
     测过的结果,不在请求里起探测(起子进程 import torch,要十几秒)—— 没测过的交给合成那一步再判。
     """
-    from app.ai.runtime import config as tts_config
-    from app.ai.runtime import tts_models
-    from app.domain.voices.errors import VoiceError
 
     engine = tts_config.get().engine
     label = next((item.label for item in tts_models.CATALOG if item.id == engine), engine)
@@ -473,7 +491,6 @@ def clone_engine_must_run(config: dict[str, Any]) -> None:
     此前要等前面的对话、出图、出视频都付完钱,念第一句时才说「F5-TTS 还没有运行环境」。音色是引用别的节点的、
     或者空着(整片 / 混剪不配音时就是空的,那一步整段跳过)都不在这里判。
     """
-    from app.domain.voices.speech import CLONE_ENGINE
 
     if "engine" not in config or "voice" not in config:
         return
@@ -492,8 +509,6 @@ def synthesize_speech_preflight(db: Session, config: dict[str, Any], actor: str 
 
 @register("publish")
 def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.db.models import Asset, PublishAccount
-    from app.domain.publish import option_specs, start_publish
 
     account = db.get(PublishAccount, str(config.get("account_id", "")))
     if account is None or account.workspace_id != scope.workspace_id:
@@ -521,7 +536,6 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
     #: 用的是**这次运行**的授权:操作人(手动运行是点运行的人,定时任务 / webhook 是任务主人,
     #: 见 scheduler.operations._open_run),加上被执行那一版图的担保人(见 workflows.authority)。
     #: 别人的私有账号、同事改过而主人没认可的那一版,都在 start_publish 里被拒。
-    from app.domain.workflows.authority import current_authority
 
     #: 平台选项:节点上存的是「这个平台认得的那几个键」的一个对象。**只交平台声明过的键** ——
     #: `normalize_options` 对不认识的键是报错而不是忽略(静默丢掉等于用户以为设了、其实没设),
@@ -568,7 +582,6 @@ def edit_timeline(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     操作的种类和智能体那边**是同一份**(domain/sequences/operations.EDIT_OP_KINDS)——
     不是抄一遍,是同一个清单。
     """
-    from app.domain.sequences.operations import apply_edit_operations
 
     # **过 _sequence_in,和这一族的其它节点一样。** 此前这里只判了非空就把 id 交下去,而
     # apply_edit_operations 没有工作区的概念 —— 于是 A 工作区的工作流能改 B 工作区的时间线。
@@ -607,7 +620,6 @@ def inspect_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     和智能体的 inspect_sequence 读的是**同一份**(domain/sequences/overview):片段用 clip_id、轨道用
     track_id,正好是 edit_timeline 的操作要的名字。
     """
-    from app.domain.sequences.overview import describe_sequence
 
     sequence_id = str(config.get("sequence_id", "")).strip()
     if not sequence_id:
@@ -663,7 +675,6 @@ def _write_timeline(db: Session, scope: RunScope, sequence_id: str, write: Calla
 
 def _seconds(config: dict[str, Any], key: str, node_type: str) -> float | None:
     """一格秒数:留空是 None;填了就得是有限的数(数字格式已由 check_number_fields 核过,这里挡 inf / nan)。"""
-    from app.domain.workflows.node_types import NODE_TYPES, field_name
 
     raw = config.get(key)
     if raw in (None, ""):
@@ -683,9 +694,6 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     `{"kind": "insert_clip", "timeline_start": …}` —— 那个 timeline_start 还得自己算,
     而"接到末尾"本来就该由机器算。
     """
-    from app.domain.sequences.append import asset_span, track_end, track_for_asset
-    from app.domain.sequences.fitting import TRACK_FOR_ASSET, fit_asset_on_track
-    from app.domain.sequences.placement import InsertClip, insert_clip
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
     asset = _asset_in(db, scope, str(config.get("asset_id", "")).strip())
@@ -735,7 +743,7 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         # 那一段也算在"末尾"里。
         start = at if at is not None else track_end(track)
         # 倍速随插入一起给:先按 1 倍放下再改速的话,放下那一刻多出来的那截已经按覆盖把后面的片段裁掉了。
-        clip = insert_clip(
+        clip = placement.insert_clip(
             db,
             sequence.id,
             InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=src_in, src_out=clip_out,
@@ -775,7 +783,6 @@ def _fit_speed(span: float, max_duration: Any) -> float | None:
 
 @register("timeline_add_track")
 def timeline_add_track(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.sequences.tracks import AddTrack, add_track
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
     kind = str(config.get("kind", "video")).strip() or "video"
@@ -799,7 +806,6 @@ def timeline_clear(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     **一次删完,记一条操作**(placement.delete_clips_batch):此前逐条 delete_clip,清掉 40 段就是 40 条
     撤销记录 —— 想在剪辑页里撤回这一次清空,得按 40 次 ⌘Z。
     """
-    from app.domain.sequences.placement import DeleteClipsBatch, delete_clips_batch
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
 
@@ -820,7 +826,6 @@ def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) ->
     不循环调用 cut_clip_range:范围都是**原片段**的源时间,一次交给批量算子,它先归并、再从后往前拿,
     正好承接逐字稿分析节点产出的多个停顿、口头禅和重录区间。
     """
-    from app.domain.sequences.cutting import CutClipRanges, cut_clip_ranges
 
     sequence = _sequence_in(db, scope, str(config.get("sequence_id") or "").strip())
     clip_id = str(config.get("clip_id") or "").strip()
@@ -941,7 +946,6 @@ def _within_cap(ranges: list[tuple[float, float]], confidences: list[float], bud
 
 def _skipped_note(skipped: list[dict[str, Any]], ratio: float) -> str:
     """超出删除上限、没有删的那几处:一句给人看的话(通知里用),没有就是空串。"""
-    from app.core.i18n import get_current_locale, t
 
     if not skipped:
         return ""
@@ -1095,7 +1099,6 @@ def _yes_no(config: dict[str, Any], key: str, *, default: bool) -> bool:
 
 def transcript_sentences(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """逐字稿段落(`{start, end, text, speaker, tokens}`)按剪辑台那一套切成一句一行,形状不变。"""
-    from app.domain.voices.sentences import Segment, Token, sentences_for_editing
 
     parsed = [
         Segment(
@@ -1173,7 +1176,6 @@ def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
     「没有就新建」不是省事,是这个节点在工作流里的常态 —— 上游 project_sequence_create 建出来的
     新时间线只有视频轨和音频轨,而逼用户先接一个「加轨道」节点,只是把机器能算的事推给人。
     """
-    from app.domain.sequences.tracks import AddTrack, add_track
 
     tracks = list(sequence.tracks or [])
     if track_id:
@@ -1207,8 +1209,6 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     条数对不上直接报错,不截断。少一条就意味着从那一条起**每一句字幕都配错了时间**,而截断后
     的成片看起来是完整的 —— 那种错要等到有人从头看一遍才发现。
     """
-    from app.domain.sequences.text import GenerateSubtitles
-    from app.domain.sequences.text import generate_subtitles as generate
 
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     segments = _segments_in(config.get("segments"))
@@ -1306,9 +1306,6 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     因此才谈得上「把配音压进原段落的长度」—— match_duration 改的是片段的 speed,渲染时由
     atempo 变速(见 media/render_executor),无损、可撤销、事后还能在检查器里手动微调。
     """
-    from app.core.i18n import get_current_locale, t
-    from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
-    from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, DubError, start_subtitle_dub
 
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     clip_ids = id_list(config.get("clip_ids"))
@@ -1329,7 +1326,7 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
 
     synthesis = _speech_params(db, scope, config)
     try:
-        job = start_subtitle_dub(
+        job = subtitle_dub.start_subtitle_dub(
             db,
             sequence_id=sequence.id,
             clip_ids=clip_ids,
@@ -1369,7 +1366,6 @@ def dub_subtitles_preflight(db: Session, config: dict[str, Any], actor: str | No
     此前这句只在配音节点开始时问(start_subtitle_dub):译配模板里它排在翻译之后,翻译的钱花完才说做不了。
     判据和配音那一步同一个(ensure_original_audio_mode,按跑的人挑提供方)。
     """
-    from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, OriginalAudioError, ensure_original_audio_mode
 
     mode = str(config.get("original_audio") or DEFAULT_ORIGINAL_AUDIO).strip().lower()
     try:
@@ -1389,8 +1385,6 @@ def separate_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) ->
     路占的 RENDER_SLOTS(循环里并行几个就一起把模型拉进内存),等待期间也一直攥着引擎的
     连接预算(见 wait_for_job)。
     """
-    from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.assets.separation import start_separation_job
 
     #: **收进工作区**,不是直接 db.get —— asset_id 常常来自上游节点,少了这一条,
     #: A 工作区的工作流能拆 B 工作区的素材,而产出的两份 stem 是要返回到工作流输出里的。
@@ -1415,13 +1409,11 @@ def denoise_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) -> 
 
     排成子任务再等它,理由同分离节点。
     """
-    from app.ai.providers.contracts.denoise import DenoiseError
-    from app.domain.assets.denoise import start_denoise_job
 
     # 收进工作区(同分离节点):asset_id 常常来自上游,不能让一个工作区的流程动另一个工作区的素材。
     asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
     try:
-        child = start_denoise_job(
+        child = denoise.start_denoise_job(
             db,
             asset=asset,
             created_by=current_actor(db),

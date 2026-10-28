@@ -30,9 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from app.ai.runtime import remote_size
-from app.ai.runtime import workers
-from app.core import interpreter, pip_install, run_log
+from app.ai.runtime import remote_size, workers, config as tts_config
+from app.core import interpreter, pip_install, run_log, http_retry
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
@@ -270,7 +269,6 @@ def pinned_url(one: PinnedFile) -> str:
     ModelScope 不在这一支:它不是 HF 兼容端点,这几个文件在那边也没有对应仓库,选了它照样走 HF
     (和 config.HF_ENDPOINTS 上面那段注释同一条道理)。
     """
-    from app.ai.runtime import config as tts_config
 
     endpoint = tts_config.HF_ENDPOINTS.get(tts_config.get().source)
     if not endpoint:
@@ -292,12 +290,11 @@ def _fetch_pinned(one: PinnedFile, target: Path, *, on_block: Callable[[], None]
     "允许往哪走"仍然只由那一道闸回答:一个把外网关掉的部署,这里该报出来的是那句"出站被拒",
     而不是一个 URLError。重试也在这一层(慢链路上一次 502 不该让用户白等 239MB)。
     """
-    from app.core.http_retry import RetryingClient
 
     partial = target.with_name(target.name + ".part")
     partial.parent.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
-    with RetryingClient(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
+    with http_retry.RetryingClient(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
         with client.stream("GET", pinned_url(one)) as response:
             response.raise_for_status()
             with partial.open("wb") as handle:
@@ -811,8 +808,6 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     # 超时给足:torch 在慢网络下很久。
     #
     # 这个设置存在 tts_config 里(历史上克隆先有了它),但它管的是 pip 而不是克隆 ——
-    # 两个引擎装依赖用的是同一个索引。在函数里 import:core/audio 不该在模块层依赖 domain。
-    from app.ai.runtime import config as tts_config
 
     try:
         pip_install.install(

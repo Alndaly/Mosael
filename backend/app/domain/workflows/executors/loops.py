@@ -22,6 +22,7 @@ from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, run_body_to_the_end, truthy
 from app.domain.workflows.executors.numbers import at_least, whole_number
 from app.domain.workflows.run_scope import halted, shared_halt
+from app.core.i18n import tr
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
 _NO_ITEM = object()
@@ -207,7 +208,6 @@ def _node_name(body: dict[str, Any], node_id: str) -> str:
 
 
 def _failure_line(index: int, failure: BaseException | _Incomplete) -> str:
-    from app.core.i18n import tr
 
     error = failure.error if isinstance(failure, _Incomplete) else failure
     reason = getattr(error, "params", {}).get("reason") or error

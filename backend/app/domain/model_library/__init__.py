@@ -33,18 +33,15 @@ from app.core.i18n import LocalizedError, fragment
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, ModelFileMark, PluginInstance, User
 from app.domain import capabilities
-from app.domain.model_library import nsfw_local as model_nsfw_local
-from app.domain.model_library import previews as model_previews
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.model_library import nsfw_local as model_nsfw_local, previews as model_previews
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say, was_cancelled
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.plugins import egress as plugin_egress
-from app.domain.plugins import host_capabilities
-from app.domain.plugins import instances as inst
-from app.domain.plugins import tools
+from app.domain.plugins import egress as plugin_egress, host_capabilities, instances as inst, tools
 from app.domain.plugins.errors import PluginDomainError
 from mosael_formats.plugin_manifest import MODEL_LIBRARY
 from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
+from app.core.db import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -695,8 +692,6 @@ def start_download(
 
 
 def _cancelled(job_id: str) -> bool:
-    from app.core.db import SessionLocal
-    from app.domain.jobs import was_cancelled
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)

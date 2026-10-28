@@ -16,6 +16,10 @@ from app.db.models import Asset, Note
 from app.domain.documents.extraction import extraction_dir, latest_extraction
 from app.domain.documents.local import DocumentParseError
 from app.domain.note_types import NoteContent, NoteSource
+from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import EXTRACT, derived
+from app.domain.documents.reading import document_text
+from app.domain.notes import create_note
 
 #: 笔记正文的上限(NoteContent.markdown)。超了截断并说一句 —— 几百页的 PDF 存成一篇笔记本来就读不完。
 NOTE_LIMIT = 480_000
@@ -23,11 +27,7 @@ _IMAGE = re.compile(r"!\[([^\]]*)\]\(((?:images|pages)/[^)\s]+)\)")
 
 
 def save_as_note(db: Session, asset: Asset, *, actor_id: str) -> Note:
-    from app.domain.assets.importer import register_file_asset
-    from app.domain.assets.lineage import EXTRACT, derived
-    from app.domain.notes import create_note
 
-    from app.domain.documents.reading import document_text
 
     extraction = latest_extraction(db, asset.id)
     body = document_text(db, asset.workspace_id, asset.id)

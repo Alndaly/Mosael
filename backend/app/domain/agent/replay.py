@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
+from app.db.models import AgentMessage, ToolConfirmation
 
 REPLAY_ROOT = "agent-replay"
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -97,7 +98,6 @@ def clear_session_files(session_id: str) -> None:
 
 def clear_replay(db: Session, session_id: str) -> None:
     """清空这个会话的回放:文件删掉,消息与确认卡里的元数据也去掉。调用方提交事务。"""
-    from app.db.models import AgentMessage, ToolConfirmation
 
     clear_session_files(session_id)
     for message in db.query(AgentMessage).filter(AgentMessage.session_id == session_id).all():

@@ -18,14 +18,15 @@ from uuid import UUID, uuid4
 from pydantic import ValidationError
 from app.core.config import settings
 from app.core.i18n import LocalizedError, get_current_locale, t
-from app.db.models import PluginInstance
+from app.db.models import PluginInstance, Scene3DModel
 from app.domain.plugins import instances, tools
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.scenes.render.gltf import LIGHT_UNIT
+from app.domain.scenes.render.gltf import LIGHT_UNIT, write_glb
 from app.domain.scenes.render.raster import kelvin_rgb, linear_to_hex
 from app.domain.scenes.types import SceneContent, SceneLighting, SceneObject, SceneShot
-from app.domain.scenes.operations import create_scene, import_model, validate_model_file
+from app.domain.scenes.operations import create_scene, import_model, validate_model_file, model_file
 from .scripts import command
+from app.domain.scenes.render import find_shot
 
 class BlenderDomainError(LocalizedError):
     """Blender 互通说不行。带文案 key(`blenderErr_*`,见 core/i18n),按请求方的语言翻;
@@ -458,11 +459,6 @@ def send(db, user, scene, instance_id, revision, shot_id):
     解开再编一遍毫无必要。生成的 GLB 里给每个模型物体留一个带 `mosael_object_id` 的空节点,
     Blender 那边把对应的文件导进来挂上去(见 worker.attach_models)。
     """
-    from app.db.models import Scene3DModel
-    from app.domain.scenes.render import find_shot
-    from app.domain.scenes.render.gltf import write_glb
-    from app.domain.scenes.types import SceneContent
-    from app.domain.scenes.operations import model_file
 
     instance = resolve(db, user, instance_id)
     if revision != scene.revision:

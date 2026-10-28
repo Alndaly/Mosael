@@ -12,8 +12,10 @@ from app.api.schemas import AssetExtractionOut, DocumentNoteOut, DocumentTextOut
 from app.db.models import AssetExtraction
 from app.domain.capabilities import CapabilityUnavailable
 from app.domain.documents import use_cases as documents
-from app.domain.documents.extraction import extraction_dir, read_sections
+from app.domain.documents.extraction import extraction_dir, read_sections, latest_extraction
 from app.domain.documents.local import DocumentParseError
+from app.domain.analysis.service import AnalysisError
+from app.domain.documents.reading import DocumentReadError, document_text, read
 
 router = APIRouter(tags=["documents"])
 
@@ -52,7 +54,6 @@ def read_document(asset_id: str, db: DbSession, user: CurrentUser,
                   offset: int = Query(0, ge=0)) -> dict:
     """给智能体读:目录 + 第 first–last 段的正文,从第 first 段的第 offset 个字起(有字数上限,超了 `next`
     说从哪接着读,可能是一段的中间)。还在解析会等一小会儿。"""
-    from app.domain.documents.reading import DocumentReadError, read
 
     asset = documents.readable_document(db, user, asset_id)
     try:
@@ -65,8 +66,6 @@ def read_document(asset_id: str, db: DbSession, user: CurrentUser,
 def document_full_text(asset_id: str, db: Tx, user: CurrentUser) -> dict:
     """画板上的文档格:解析出的全文(不带段标记)和解析的状态。连进写作 / 生成格时喂的就是它。"""
     #: 从没解析过的会在这里补一次本地解析(见 document_text),所以是 Tx:提交之后解析任务才开跑。
-    from app.domain.documents.extraction import latest_extraction
-    from app.domain.documents.reading import document_text
 
     asset = documents.readable_document(db, user, asset_id)
     text = document_text(db, asset.workspace_id, asset.id)
@@ -80,8 +79,6 @@ def document_full_text(asset_id: str, db: Tx, user: CurrentUser) -> dict:
 @router.post("/assets/{asset_id}/document/analyze")
 def analyze_document(asset_id: str, body: DocumentPagesRequest, db: DbSession, user: CurrentUser) -> dict:
     """那几页的页面图 + 文字交给视觉模型(看版式、图表、截图)。"""
-    from app.domain.analysis.service import AnalysisError
-    from app.domain.documents.reading import DocumentReadError
 
     try:
         return documents.analyze(db, user, asset_id, body.pages, body.question, body.profile_id)

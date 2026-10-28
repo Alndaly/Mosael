@@ -31,6 +31,7 @@ from app.ai.runtime import denoise_models
 from app.core.i18n import LocalizedError, tr
 from app.db.models import DenoiseConfig
 from app.domain import capabilities
+from app.domain.audio_capabilities import DENOISE
 
 #: 单例行只有一个 id。
 SINGLETON_ID = "default"
@@ -64,7 +65,6 @@ class DenoiseEngineNotReady(DenoiseDefaultError):
 def _denoise_capability() -> capabilities.Capability:
     """能力契约。**在函数里取**:audio_capabilities 会反过来用本模块的解析结果(见 denoise_adapter),
     写在模块顶上就是一个环。"""
-    from app.domain.audio_capabilities import DENOISE
 
     return DENOISE
 

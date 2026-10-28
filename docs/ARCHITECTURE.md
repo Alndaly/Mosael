@@ -96,6 +96,12 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `plugins.instances.on_tools_stale` | 启用 / 换服务器 / 换出站路线后重拉 MCP 工具清单 | `plugins.tools.pull_tools_quietly` |
 | `workflows.graph_runner.use` | 容器类执行器(循环体、子图、调用工作流)回头跑图 | 引擎在模块末尾自己登记 |
 
+**依赖写在模块开头**(`tests/test_imports_live_at_the_top.py`,只减不增):环没了之后,函数里的 `from app.… import`
+不再有理由存在,统一挪到顶部 —— 读一个模块的开头就知道它认识谁。测试会打补丁的名字按属性取(顶部 `from app.x import y`,
+调用处 `y.名字`),补丁打在定义处一个地方就够;其余名字直接导入。留在函数里的只有组装根、命令行、底层(`core/`、`db/`)
+分层允许的反向依赖,以及挪上去会改写意思的少数几处。**名字只从定义它的模块导入**(`tests/test_imports_come_from_where_names_live.py`):
+不转出、不借道,装配入口只有 `app.db.models`、`app.api.schemas`、`app.ai.providers` 三个。
+
 用例也按「做的是哪一域的事」放:看图分析、拆镜头在 `analysis/use_cases.py`,转写在 `voices/use_cases.py`,
 资产的补画 / 表情 / 说话在 `workflows/entity_drawing.py`(跑的是工作流节点)—— 闸都是素材 / 资产自己的那一道,
 只是入口不放在被读的那一层。

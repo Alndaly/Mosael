@@ -20,11 +20,21 @@ from sqlalchemy.orm import Session, aliased
 from app.core.i18n import LocalizedError, tr
 from app.core.token_digest import token_digest
 from app.core.unit_of_work import after_commit
-from app.db.models import InviteLink, Notification, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
-from app.domain import deployment
+from app.db.models import (
+    InviteLink,
+    Notification,
+    User,
+    Workspace,
+    WorkspaceInvitation,
+    WorkspaceMember,
+    now,
+    now as _now,
+)
+from app.domain import deployment, notifications as notifications_svc
 from app.domain.usernames import normalize_username
 from app.domain.permissions import PermissionDenied
-from app.domain import notifications as notifications_svc
+from app.domain.agent.skills.store import delete_workspace_files as delete_workspace_skills
+from app.domain.storage_cleanup import delete_workspace_files
 
 #: 成员变动的「先查再改」(最后一个所有者、重复邀请、邀请已处理)靠这把锁串行;删账号(accounts.delete_user_account)也拿它。**锁里的提交是有意的**:
 #: 锁放开之前就得落库 —— 只 flush 的话,下一个拿到锁的请求读到的还是提交前的样子,两人同时降级
@@ -260,7 +270,6 @@ def pending_invitations(db: Session, user_id: str) -> list[tuple[WorkspaceInvita
 def respond_invitation(db: Session, invitation_id: str, user: User, accept: bool) -> WorkspaceInvitation:
     """受邀人应答。接受 → 建成员行(成员行仍只在本域创建);拒绝 → 仅记状态。
     双向留痕:结果同样通知邀请人。"""
-    from app.db.models import now as _now
 
     with MEMBERSHIP_LOCK:
         invitation = db.get(WorkspaceInvitation, invitation_id)
@@ -523,8 +532,6 @@ def delete_workspace(db: Session, workspace_id: str) -> None:
     (都在 media/ 下按工作区分目录,见 media/paths.WORKSPACE_MEDIA_CATEGORIES)、技能文件夹,由这里显式清掉。
 
     此前只清了 3D 模型和技能:素材原件、代理、缩略图、音色样本全留在盘上,而确认框写着「永久移除」。"""
-    from app.domain.agent.skills.store import delete_workspace_files as delete_workspace_skills
-    from app.domain.storage_cleanup import delete_workspace_files
 
     workspace = db.get(Workspace, workspace_id)
     if workspace is None:

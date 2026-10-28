@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import Lut, new_id
-from app.media.paths import lut_dir, lut_key
+from app.media.paths import lut_dir, lut_key, resolve_key
 
 MAX_LUT_BYTES = 32 * 1024 * 1024  # generous: a 64³ cube is ~5 MB
 
@@ -98,7 +98,6 @@ def import_uploaded_lut(
 
 
 def delete_lut_files(lut: Lut) -> None:
-    from app.media.paths import resolve_key
 
     if lut.file_key:
         directory = resolve_key(lut.file_key).parent

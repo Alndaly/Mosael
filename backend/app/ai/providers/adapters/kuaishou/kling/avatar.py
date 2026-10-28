@@ -34,6 +34,8 @@ from app.ai.providers.contracts.generation import (
     GenerationRequest,
     source_url_values,
 )
+from app.media.probe import probe_media
+from app.media.vendor_formats import speech_mp3
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +86,6 @@ def _audio_bytes(path: Path) -> bytes:
     raw = path.read_bytes()
     if path.suffix.lower() in (".mp3", ".wav", ".m4a", ".aac") and len(raw) <= MAX_AUDIO_BYTES:
         return raw
-    from app.media.vendor_formats import speech_mp3
 
     with tempfile.TemporaryDirectory(prefix="mosael-kling-audio-") as folder:
         converted = speech_mp3(path, Path(folder) / "voice.mp3").read_bytes()
@@ -121,7 +122,6 @@ def audio_duration_ms(request: GenerationRequest) -> int:
     _url, path = _url_or_path(request, DRIVING_AUDIO)
     if path is None or not path.is_file():
         return 0
-    from app.media.probe import probe_media
 
     seconds = probe_media(path).get("duration")
     if not seconds:

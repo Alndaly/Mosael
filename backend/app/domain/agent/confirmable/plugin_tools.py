@@ -30,6 +30,11 @@ from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, conf
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.effects import needs_card, permission_for, warning_key
+from app.domain.agent.plugin_lookup import PluginLookupError, unknown_inputs
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.inputs import coerce
+from app.domain.plugins.runtime import PluginRuntimeError, check_required_input
 
 #: 卡上参数那一段最长多少字。完整的参数在卡的载荷里摊开着,这一句只给人扫一眼。
 _ARGS_BRIEF_CHARS = 160
@@ -43,11 +48,10 @@ def exposed_tool(db: Session, name: str, user_id: str | None) -> dict[str, Any] 
     (见 agent.tool_manifest.agent_tool_name)。只在他自己的连接里找:否则一个名字对得上的调用
     就会拿着别人的第三方密钥跑起来。
     """
-    from app.domain.plugins.tools import exposed
 
     if not user_id:
         return None
-    return next((tool for tool in exposed(db, user_id) if agent_tool_name(tool["instance_id"], tool["name"]) == name), None)
+    return next((tool for tool in plugins_tools.exposed(db, user_id) if agent_tool_name(tool["instance_id"], tool["name"]) == name), None)
 
 
 def _brief_value(value: Any) -> str:
@@ -77,9 +81,6 @@ def _bind(name: str) -> ConfirmableTool:
         effects 决定这次要不要问人、按哪一档问,它不能由调用方在 payload 里自己带 —— 所以 payload 里
         除了参数,别的一律按开卡这一刻的工具重写。
         """
-        from app.domain.plugins.errors import PluginDomainError
-        from app.domain.plugins.inputs import coerce
-        from app.domain.plugins.runtime import PluginRuntimeError, check_required_input
 
         tool = exposed_tool(db, name, actor)
         if tool is None:
@@ -157,14 +158,12 @@ def _run(db: Session, name: str, payload: dict[str, Any], workspace_id: str, act
     批准者能替他决定的。卡开出来之后连接停用了、工具被关了、换了人批,都在这里拒,卡记成失败。
     产出收进这张卡所在的工作区(和其它产素材的工具一样,输出里是 asset_id)。
     """
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.tools import invoke
 
     tool = exposed_tool(db, name, actor)
     if tool is None or tool["instance_id"] != payload.get("instance_id") or tool["name"] != payload.get("tool_name"):
         raise ConfirmationError("confirmErr_pluginToolUnavailable", name=name)
     try:
-        invocation = invoke(
+        invocation = plugins_tools.invoke(
             db, tool["instance_id"], tool["name"], dict(payload.get("arguments") or {}),
             workspace_id=workspace_id,
         )
@@ -179,7 +178,6 @@ def _run(db: Session, name: str, payload: dict[str, Any], workspace_id: str, act
 def _on_behalf_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     """`run_plugin_tool` 的卡:`tool` 是它替调的那个插件工具的展开名(mcp_server 开卡前已在这一处够得着的里认出)。入参名都得是
     它认得的,再走**那个工具自己的**开卡校验;卡上记着它的展开名。"""
-    from app.domain.agent.plugin_lookup import PluginLookupError, unknown_inputs
 
     name = str(payload.get("tool") or "")
     tool = exposed_tool(db, name, actor) if name.startswith(PLUGIN_TOOL_PREFIX) else None

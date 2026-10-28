@@ -35,7 +35,7 @@ from app.api.schemas import (
 from app.domain import people
 from app.domain.scheduler import use_cases as scheduler_uc
 from app.db.models import Job, Workflow, WorkflowRevision
-from app.domain.workflows import create_workflow, list_workflows, update_workflow
+from app.domain.workflows import create_workflow, list_workflows, update_workflow, use_cases as workflow_uc, approvals
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.failure_summary import detail_of, hint_of, summarize
 from app.domain.job_center import use_cases as job_center
@@ -47,7 +47,6 @@ from app.domain.workflows.file_export import (
     ascii_file_stem,
     export_payload,
 )
-from app.domain.workflows import use_cases as workflow_uc
 from app.domain.workflows.revisions import (
     WorkflowGraphConflict,
     WorkflowRevisionError,
@@ -58,7 +57,16 @@ from app.domain.workflows.revisions import (
     restore_workflow_revision,
     with_vouchers,
 )
-from app.domain.workflows.templates import built_in_template_graph
+from app.domain.workflows.templates import (
+    built_in_template_graph,
+    TEMPLATE_CATALOG,
+    current_template_versions,
+    rebuilt_from_template,
+    requirement_statuses,
+)
+from app.domain.workflows.ai_edit import ai_edit_graph
+from app.domain.workflows.field_options import FieldOptionsError, OptionContext, field_options
+from mosael_formats.i18n import DEFAULT_LOCALE, pick_text
 
 router = APIRouter(tags=["workflows"])
 
@@ -96,8 +104,6 @@ def workflow_templates() -> list[dict]:
     说明只有一份(domain/workflows/templates.TEMPLATE_CATALOG),应用的模板卡片和官网的模板页
     读的是同一份 —— 此前是三套各写各的。图标留在前端(和节点图标、任务种类同一条规矩)。
     """
-    from mosael_formats.i18n import pick_text
-    from app.domain.workflows.templates import TEMPLATE_CATALOG, current_template_versions
 
     locale = get_current_locale()
     versions = current_template_versions()
@@ -125,7 +131,6 @@ def workflow_template_checks(workspace_id: str, db: DbSession, user: CurrentUser
     和模板目录分开:目录是静态文案,能缓存五分钟;这个取决于他刚配没配模型、装没装引擎,
     每次打开模板库都该是新的。
     """
-    from app.domain.workflows.templates import requirement_statuses
 
     workflow_uc.ensure_can_browse(db, user, workspace_id)
     statuses = requirement_statuses(db, user_id=user.id, workspace_id=workspace_id)
@@ -135,7 +140,6 @@ def workflow_template_checks(workspace_id: str, db: DbSession, user: CurrentUser
 def _by_locale(value: object, locale: str) -> list:
     """一串按语言分的清单(`{"zh": [...], "en": [...]}`)。"""
     if isinstance(value, dict):
-        from mosael_formats.i18n import DEFAULT_LOCALE
 
         picked = value.get(locale) or value.get(DEFAULT_LOCALE) or next(iter(value.values()), [])
         return list(picked or [])
@@ -158,7 +162,6 @@ def workflow_field_options(
     包名在类型里);`workflow_id` 是正在编辑的那张图(可调用工作流要把自己排掉)。三样都是
     **上下文**,不是某个来源的专用参数 —— 前端因此不必知道每个来源各要什么。
     """
-    from app.domain.workflows.field_options import FieldOptionsError, OptionContext, field_options
 
     workflow_uc.ensure_can_browse(db, user, workspace_id)
     context = OptionContext(
@@ -238,7 +241,6 @@ def rebuild_from_template(workflow_id: str, db: Tx, user: CurrentUser) -> Workfl
 
     旧版模板建的图不迁移 —— 图一落库就是用户的数据,他可能改过,不替他悄悄改写(见 templates.rebuilt_from_template)。
     """
-    from app.domain.workflows.templates import rebuilt_from_template
 
     workflow = workflow_uc.readable(db, user, workflow_id)
     workflow_uc.ensure_can_edit(db, user, workflow.workspace_id)
@@ -386,7 +388,6 @@ def run_approvals(workflow_id: str, db: DbSession, user: CurrentUser) -> list[Ru
     读得到这张图的人就看得见(这是"这件事在等人处理",不是"谁的私事");**能不能批**在决定那一步
     按工作区成员校验。
     """
-    from app.domain.workflows import approvals
 
     workflow = workflow_uc.readable(db, user, workflow_id)
     return approvals.pending_for_workflow(db, workflow.id)
@@ -395,7 +396,6 @@ def run_approvals(workflow_id: str, db: DbSession, user: CurrentUser) -> list[Ru
 @router.get("/run-approvals", response_model=list[RunApprovalOut])
 def workspace_run_approvals(workspace_id: str, db: DbSession, user: CurrentUser) -> list[RunApprovalOut]:
     """这个工作区此刻所有在等确认的运行 —— 任务中心/通知面板那一格读它。"""
-    from app.domain.workflows import approvals
 
     workflow_uc.ensure_can_browse(db, user, workspace_id)
     return approvals.pending_for_workspace(db, workspace_id)
@@ -410,7 +410,6 @@ def decide_run_approval(
     `decide_and_wake` 用一条 CAS 保证两条路同时点只有一个算数(赢了的那一个才唤醒),
     所以这里不需要另加锁;唤醒在**提交之后**发生(jobs.dispatch_job 的约定)。
     """
-    from app.domain.workflows import approvals
 
     #: **权限和决定都在领域那一处**(workflow_uc.decide_run_approval):按工作区 edit 放行,再落决定、
     #: 唤醒那次运行。飞书卡片回调调的是同一个用例 —— 一个门不会因为在哪儿点而有两种权限。
@@ -526,7 +525,6 @@ def run_output(job_id: str, node_id: str, key: str, db: DbSession, user: Current
 @router.post("/workflows/{workflow_id}/ai-edit", response_model=WorkflowAiEditResponse)
 def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: CurrentUser) -> dict:
     workflow = workflow_uc.editable(db, user, workflow_id)
-    from app.domain.workflows.ai_edit import ai_edit_graph
 
     try:
         graph, summary = ai_edit_graph(

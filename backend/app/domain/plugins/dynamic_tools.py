@@ -29,14 +29,13 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
 from mosael_formats.effects import EFFECTS, NONE as NO_EFFECTS
-from app.domain.plugins import instances as inst
-from app.domain.plugins import moves as plugin_moves
-from app.domain.plugins import tools
+from app.domain.plugins import instances as inst, moves as plugin_moves, tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import clean_group
 #: 工具名的规矩和清单里声明的工具是同一条(见 manifest.TOOL_NAME_RE)。
 from mosael_formats.plugin_manifest import TOOL_NAME_RE, TOOLS
 from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError
+from app.domain.plugins.generation import EXPLAIN_TIMEOUT_SECONDS, MAX_EXPLAIN, localizable
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +248,6 @@ class ExplainedTool:
 def explain(db: Session, instance: PluginInstance, names: list[str]) -> list[ExplainedTool]:
     """问这个实例:这几个工具名(工作流节点记着、清单上没有)为什么不在 —— 工作流里用不了的插件节点据此说原因(ADR 0045 修订之二)。
     插件认不出的不回;回来的条目里认不出的丢掉。插件不支持这一问、或者这会儿问不到,照常抛(调用方退回自己能说的那一句)。"""
-    from app.domain.plugins.generation import EXPLAIN_TIMEOUT_SECONDS, MAX_EXPLAIN, localizable
 
     asked = [one for one in dict.fromkeys(names) if TOOL_NAME_RE.match(one)][:MAX_EXPLAIN]
     if not asked:

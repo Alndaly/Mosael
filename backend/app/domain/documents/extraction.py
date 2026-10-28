@@ -28,6 +28,8 @@ from app.domain.documents.local import DocumentParseError, Parsed, attach_page_i
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say, was_cancelled
 from app.media.paths import asset_dir, resolve_key
 from app.media.thumbnails import thumbnail_path, write_thumbnail
+from app.core.i18n import tr
+from app.domain.documents.plugin_parse import parse_with_plugin, parsed_from_output
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +180,6 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
 
 def _parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, source: Path, target: Path, progress) -> Parsed:
     """交给声明了 `document_parse` 的插件(MinerU……),协议见 documents/plugin_parse。"""
-    from app.domain.documents.plugin_parse import parse_with_plugin
 
     return parse_with_plugin(db, extraction, asset, source, target, progress)
 
@@ -224,7 +225,6 @@ def write_parsed(db: Session, extraction: AssetExtraction, asset: Asset, parsed:
 
 def reconcile_orphaned_extractions(db: Session) -> int:
     """重启之前还在排队、在解析的:进程没了,不会再有人把它做完 —— 判失败并说清是重启打断的,用户点「重新解析」就行。"""
-    from app.core.i18n import tr
 
     rows = list(db.scalars(select(AssetExtraction).where(AssetExtraction.status.in_(("queued", "running")))))
     for row in rows:
@@ -254,7 +254,6 @@ def finish_plugin_call(db: Session, call: Any) -> dict[str, Any]:
     `call` 是 plugins.host_capabilities.CapabilityCall;`payload["file"]` 是调用方给的素材 id。不提交:调用那一头
     (tools.invoke)连同调用记录一起提交;失败时这一行记成失败,同样随调用记录落库。
     """
-    from app.domain.documents.plugin_parse import parsed_from_output
 
     asset = db.get(Asset, str(call.payload.get("file") or ""))
     if asset is None or asset.kind != "document":

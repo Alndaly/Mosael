@@ -8,8 +8,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.domain.workflows.graph_rules import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES, interpolate
-from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate_json_text
+from app.domain.workflows.graph_rules import (
+    NESTED_BODY_RAW_KEYS,
+    NESTED_BODY_TYPES,
+    interpolate,
+    VARIABLE_RE,
+    interpolate_json_text,
+)
+from app.db.models import Asset
+from app.domain.generation.operations import takes_source_role
+from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_LABELS, SOURCE_ROLE_MEDIA
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.id_values import id_list
+from app.domain.workflows.node_types import NODE_TYPES, config_data_type, config_media, field_name, output_data_type
 
 # 内嵌子图的节点(循环体、subgraph)的 body/output/condition 引用的是**子作用域 / 子图内部节点**
 # ({{loop.*}}、{{input.*}}、{{body_node.x}}),绝不能在外层作用域解析——它们要留到执行器里对
@@ -95,8 +106,6 @@ def check_number_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any
     「快一点」、或者一个引用落成了一段文字,抛出来的是 `could not convert string to float` ——
     没有 key、只有英文、也不说是哪一格。留空不归这里管:没填是合法的,缺省值是节点自己的事。
     """
-    from app.domain.workflows.node_types import NODE_TYPES, field_name
-    from app.domain.workflows.errors import WorkflowDomainError
 
     fields = (NODE_TYPES.get(node_type) or {}).get("config") or {}
     for key, spec in fields.items():
@@ -126,8 +135,6 @@ def one_asset_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any]:
     看不出是接错了口。收一串的字段(`asset_ids`,按名字认,和 config_data_type 同一套命名)照收。插件节点的入参在
     plugins.inputs.materialize 按同一条规矩查(那边按 input_schema 认一份还是一串)。
     """
-    from app.domain.workflows.node_types import NODE_TYPES, config_data_type, field_name
-    from app.domain.workflows.errors import WorkflowDomainError
 
     fields = (NODE_TYPES.get(node_type) or {}).get("config") or {}
     for key, spec in fields.items():
@@ -153,7 +160,6 @@ def interpolate_node_config(
     代码字段不插值:`{{上游.输出}}` 是按文字拼进代码的,上游交来一段带引号的文字就能改写整段脚本
     (「执行脚本」在用户已登录的网页里跑)。上游的值走节点的入参(`input`),作为数据交进去。
     """
-    from app.domain.workflows.node_types import NODE_TYPES
 
     specs = (NODE_TYPES.get(node_type) or {}).get("config") or {}
     as_json = {
@@ -215,7 +221,6 @@ def _line_asset_ids(lines: list[str]) -> list[str]:
     角色名时才算角色 —— 模板串自己带冒号(`{{图.a:b}}`)不能被腰斩。这里只要 id 那一半:判
     「这一份已经在里面了,不要并第二遍」。
     """
-    from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_LABELS
 
     out: list[str] = []
     for line in lines:
@@ -226,7 +231,6 @@ def _line_asset_ids(lines: list[str]) -> list[str]:
 
 def _role_overrides(value: Any) -> dict[str, str]:
     """`<那一格>_roles`:用户把自动来的哪一条引用改成了什么角色(一条一个 `引用路径:角色`)。"""
-    from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_LABELS
 
     entries = value if isinstance(value, list) else [value]
     out: dict[str, str] = {}
@@ -243,7 +247,6 @@ def _generation_source_role(db: Any, config: dict[str, Any], role: str) -> bool:
     问的是节点上写的连接身份 / provider / model / kind 那几格;模型名本身可能来自上游 —— 引擎传进来的
     config 已经插过值、绑过数据边,所以这里问的就是**这一次真的要用的那个模型**。
     """
-    from app.domain.generation.operations import takes_source_role
 
     provider = str(config.get("provider") or "").strip()
     model = str(config.get("model") or "").strip()
@@ -308,10 +311,6 @@ def with_referenced_assets(
     不是素材的引用**跳过**,不报错也不硬塞:提示词里引用的多半是文字(`{{llm.text}}`)、也可能是一段
     视频。视频当参考图发出去只会当场 400,把整条工作流拦下来,而用户的提示词本身没有任何问题。
     """
-    from app.db.models import Asset
-    from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_MEDIA
-    from app.domain.workflows.id_values import id_list
-    from app.domain.workflows.node_types import NODE_TYPES, config_media, output_data_type
 
     specs = (NODE_TYPES.get(node_type) or {}).get("config") or {}
     declared = [

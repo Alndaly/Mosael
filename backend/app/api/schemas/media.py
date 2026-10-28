@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, computed_field, field_validator, model_serializer, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
+from app.domain.assets.proxies import proxies_possible
 
 class AssetDerivationOut(ApiModel):
     """一项出处:从哪份素材、经过什么操作(op 的取值见 domain/assets/lineage.OPS)。"""
@@ -99,7 +100,6 @@ class AssetOut(OrmModel):
         算出来而不是存进 `media_info`:这是一个服务端配置,存进去的话开关一翻就得带迁移,
         而且每份素材里存的都是同一句话。
         """
-        from app.domain.assets.proxies import proxies_possible
 
         return proxies_possible(self)
 

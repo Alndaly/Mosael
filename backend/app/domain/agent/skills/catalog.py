@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, tr
 from app.db.models import AgentSkill, PluginPackage
 from mosael_formats.agent_skill import (
     AGENT_INTERFACE_FILE,
@@ -44,6 +44,9 @@ from mosael_formats.agent_skill import (
     parse_skill_md,
     read_agent_interface,
 )
+from app.domain.plugins import bundled
+from app.domain.plugins.manifest import PATH_KEY
+from mosael_formats.plugin_manifest import text_of
 
 BUILTIN = "builtin"
 WORKSPACE = "workspace"
@@ -137,8 +140,6 @@ def default_enabled(source: str, *, shipped: bool = False) -> bool:
 
 def plugin_roots(db: Session) -> list[tuple[str, str, Path]]:
     """装着的插件包里的 `skills/` 目录:[(包 id, 显示名, 目录)]。"""
-    from app.domain.plugins.manifest import PATH_KEY
-    from mosael_formats.plugin_manifest import text_of
 
     out = []
     for package in db.scalars(select(PluginPackage).order_by(PluginPackage.id)):
@@ -222,7 +223,6 @@ def list_skills(db: Session, workspace_id: str) -> list[Skill]:
         for row in db.scalars(select(AgentSkill).where(AgentSkill.workspace_id == workspace_id))
     }
     builtin_names = {name for name, _ in _folders(BUILTIN_ROOT)}
-    from app.domain.plugins import bundled  # 用到才引:插件域不该在技能目录载入时就整个拉进来
 
     shipped = {one.id for one in bundled.plugins()}
 
@@ -278,7 +278,6 @@ def find(db: Session, workspace_id: str, ref: str) -> Skill | None:
 
 def source_label(skill: Skill) -> str:
     """来源,说给模型和人听的那一句(ADR 0040 §6:处处标来源)。"""
-    from app.core.i18n import tr
 
     if skill.source == BUILTIN:
         return tr("skillSource_builtin")

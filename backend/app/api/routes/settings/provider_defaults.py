@@ -8,19 +8,19 @@ from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
 from app.db.models import ProviderModel
-from app.domain.providers import thinking
-from app.domain.providers import models as provider_models
-from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default
+from app.domain.providers import thinking, models as provider_models
+from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default, get_row
 
 from app.domain.permissions import require_own_profile
 from app.domain.plugins.groups import readable_group
+from app.domain.voices import agent_voice, use_cases as voice_uc
+from app.domain.voices.errors import VoiceError
 
 router = APIRouter(tags=["settings"])
 
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
 def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
     """**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。"""
-    from app.domain.providers.defaults import get_row
 
     out: list[ProviderDefaultOut] = []
     for capability in DEFAULTABLE_CAPABILITIES:
@@ -126,7 +126,6 @@ def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
     和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载
     十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。
     """
-    from app.domain.voices import agent_voice
 
     row = agent_voice.get_row(db, user.id)
     if row is None:
@@ -150,8 +149,6 @@ def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentV
     """设**我自己**的对话音色,以及说话输入用哪一家。只有这一档 —— 没有部署默认(同 provider-defaults)。
 
     远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。"""
-    from app.domain.voices import use_cases as voice_uc
-    from app.domain.voices.errors import VoiceError
 
     try:
         row = voice_uc.choose_agent_voice(

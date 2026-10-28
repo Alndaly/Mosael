@@ -9,12 +9,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Board
+from app.db.models import Board, Asset, Job
 from app.domain.boards.errors import BoardRevisionConflict
 from app.domain.boards.outputs import _canvas_with_delivered_result, outputs_of, sibling_placeholders
 from app.domain.boards.persistence import get_board, update_board
 from app.domain.boards.producer_ids import derives_outputs
 from app.domain.boards.run_state import live_job
+from app.core.unit_of_work import unit_of_work
+from app.domain.boards.timelines import append_filled_media
+from app.domain.jobs import TERMINAL_STATUSES, register_receipt_deliverer, was_cancelled
 
 
 logger = logging.getLogger(__name__)
@@ -168,8 +171,6 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
     _canvas_with_delivered_result),而这个任务不会再有第二封。不补的话那一格永远转圈。
     和正常送到的那封撞在一起也没关系:先落库的收掉这一轮,后到的那封就不再是「这一轮」了。
     """
-    from app.db.models import Job
-    from app.domain.jobs import TERMINAL_STATUSES
 
     job_id = live_job(item)
     job = db.get(Job, job_id) if job_id else None
@@ -184,7 +185,6 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
 
 def _asset_facts(db: Session, workspace_id: str, outputs: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
     """产出里那些素材的种类和名字。**只认这个工作区里的** —— 别处的 id 当它不存在,不落到画布上。"""
-    from app.db.models import Asset
 
     ids = {str(one.get("asset_id")) for one in outputs if one.get("type") == "asset" and one.get("asset_id")}
     if not ids:
@@ -203,7 +203,6 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     **回执也遵守乐观并发。** 用户可能在任务完成的同一刻移动节点；冲突时重新读取最新画布，
     只把任务终态合并进去再 CAS，既不覆盖用户编辑，也不让已完成的结果丢失。
     """
-    from app.domain.jobs import was_cancelled
 
     board_id = str(receipt.get("board_id") or "")
     item_id = str(receipt.get("item_id") or "")
@@ -252,8 +251,6 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
 
 def _append_to_connected_timelines(board: Board, item_id: str) -> None:
     """产出落进了连着时间线格的那一格:接到时间线末尾(见 timelines.append_filled_media)。接不上不挡回执。"""
-    from app.core.unit_of_work import unit_of_work
-    from app.domain.boards.timelines import append_filled_media
 
     try:
         #: 回执那一次已经提交了(见 _merge_into_latest);接时间线是自己的一个事务,接不上不影响那一格。
@@ -282,8 +279,6 @@ def settle_revived_runs(db: Session, workspace_id: str, board_id: str, revived: 
     失败 / 取消的写上原因。和 receipts._deliver_if_already_settled(占位落下时任务已经结束)是同一件事。
     只认这个工作区里的任务:画布是客户端写的,别处任务的产出(一段写出来的字)不能借一个任务号落进来。
     """
-    from app.db.models import Job
-    from app.domain.jobs import TERMINAL_STATUSES
 
     jobs = {job.id: job for job in db.scalars(
         select(Job).where(Job.id.in_(set(revived.values())), Job.workspace_id == workspace_id)
@@ -301,6 +296,5 @@ def install() -> None:
     (见 domain/agent/receipts 开头那段)。登记在组合层(app/main._wire_seams)的**导入期**,
     不在 lifespan 里:不跑 lifespan 的入口(TestClient、脚本)照样要能把产出填回画布。
     """
-    from app.domain.jobs import register_receipt_deliverer
 
     register_receipt_deliverer(RECEIPT_KIND, deliver_generated)

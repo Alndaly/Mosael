@@ -20,6 +20,7 @@ from app.api.schemas import (
 )
 from app.domain.permissions import ensure_deployment_admin
 from app.domain import accounts, dashboard, deployment, host_files, members, outbound_allowlist
+from app.domain.storage_cleanup import delete_orphans, find_orphans
 
 router = APIRouter(tags=["admin"])
 
@@ -241,7 +242,6 @@ def list_storage_orphans(db: DbSession, user: CurrentUser) -> StorageOrphansOut:
     """数据目录里没人认领的文件:工作区 / 素材 / 音色 / LUT / 字体已经删了、文件还在的,没有账号在用的头像。
     **只列,不删**(见 domain/storage_cleanup:判据是此刻库里没有对应的行,而那可能是恢复到一半的库)。"""
     ensure_deployment_admin(db, user)
-    from app.domain.storage_cleanup import find_orphans
 
     items = [StorageOrphanOut(**vars(one)) for one in find_orphans(db)]
     return StorageOrphansOut(items=items, total_bytes=sum(one.bytes for one in items))
@@ -251,7 +251,6 @@ def list_storage_orphans(db: DbSession, user: CurrentUser) -> StorageOrphansOut:
 def delete_storage_orphans(body: StorageOrphanDelete, db: DbSession, user: CurrentUser) -> StorageOrphanDeleteOut:
     """删掉管理员看过、勾选的那些孤儿。删之前再判一遍:此刻已经有人认领、或者不在清单里的一律跳过。"""
     ensure_deployment_admin(db, user)
-    from app.domain.storage_cleanup import delete_orphans
 
     deleted, skipped = delete_orphans(db, body.keys)
     return StorageOrphanDeleteOut(deleted=deleted, skipped=skipped)

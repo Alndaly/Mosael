@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins import instances as inst
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,6 @@ def persist(
     """
     if not state:
         return
-    from app.domain.plugins import instances as inst
 
     manifest = inst.manifest_for(db, instance)
     credential_keys = {spec.key for spec in manifest.credentials}

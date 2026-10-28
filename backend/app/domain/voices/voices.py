@@ -16,16 +16,26 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.billing.usage import billable, once
-from app.ai.runtime import f5_models, tts_daemon, tts_models
+from app.ai.runtime import f5_models, tts_daemon, tts_models, config as tts_config, qwen_models
 from app.ai.runtime.f5_models import clone_supports
 from app.ai.runtime.tts_language import detect_script, edge_voice_language
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.domain.jobs import TTS_SLOTS, JobCancelled, blame, ensure_wanted, finish_job, say, start_job
-from app.db.models import Asset, Job, Voice
+from app.domain.jobs import (
+    TTS_SLOTS,
+    JobCancelled,
+    blame,
+    ensure_wanted,
+    finish_job,
+    say,
+    start_job,
+    create_job,
+    dispatch_job,
+    emit_job_event,
+)
+from app.db.models import Asset, Job, Voice, PluginInstance, Transcript, new_id
 from app.db.model_base import now
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.media_info import patch_media_info
-from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 from app.media.probe import probe_media
 from app.core.child_process import run_logged
@@ -46,6 +56,23 @@ from app.domain.voices.speech import (
 )
 from mosael_formats.plugin_manifest import SPEECH
 from app.domain.voices.target import speech_target
+from app.ai import providers
+from app.ai.providers import (
+    MAX_PODCAST_ROUNDS,
+    MAX_PODCAST_ROUND_CHARS,
+    PODCAST_SPEAKERS,
+    PodcastAction,
+    SpeechSynthesisError,
+    SpeechSynthesisRequest,
+    connection_vendor_for_speech_engine,
+)
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError
+from app.domain.plugins.tools import staged_artifact
+from app.domain.providers import selection as providers_selection
+from app.domain.voices import remote, transcription
+from app.domain.voices.voice_labels import builtin_voice_label
 
 if TYPE_CHECKING:
     from app.domain.voices.remote import DeleteFailure
@@ -89,7 +116,6 @@ def podcast_asset_name(subject: str) -> str:
 
 def _voice_label(engine_voice: str, given: str = "") -> str:
     """远端引擎的音色叫什么:调用方给的(界面上那份目录 —— 火山按账号现拉的音色只有它知道名字)→ 内置音色表 → 音色 id。"""
-    from app.domain.voices.voice_labels import builtin_voice_label
 
     return given.strip() or builtin_voice_label(engine_voice) or engine_voice
 #: 零样本克隆靠这几秒把音色条件化。给不够就条件化不起来,模型会一路漫游到 token 上限,
@@ -133,7 +159,6 @@ def resolve_clone_engine(requested: str = "") -> str:
     设置页那个是**默认**,不是唯一 —— 配音面板每次生成都可能想换一个(F5 快、Fish 支持情感
     标签),而此前想换只能跑去设置页改全局。请求带了就用请求的,没带才回落到默认。
     """
-    from app.ai.runtime import config as tts_config
 
     engine = (requested or "").strip() or tts_config.get().engine
     if engine not in {item.id for item in tts_models.CATALOG}:
@@ -198,7 +223,6 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
         # Qwen3-TTS 支持 10 种语言(含日韩俄),但**没有**阿拉伯文/天城文。念不了就现在说,
         # 别让它按自己的发音规则硬念一遍交出一段废音。日/韩/俄放行 —— 不要照抄克隆那条
         # 「日文要下权重」的判据(那是模型权重的限制,这里不是)。
-        from app.ai.runtime import qwen_models
 
         if script not in qwen_models.MODEL.languages:
             raise VoiceError("voiceErr_qwenUnsupportedLanguage")
@@ -278,7 +302,6 @@ def _declared(kind: str) -> str:
 
 def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: str, reference_text: str,
                        consent_kind: str, actor_id: str | None) -> Voice:
-    from app.db.models import new_id
 
     consent_kind = _declared(consent_kind)
 
@@ -313,7 +336,6 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
     """Clone a voice from a transcribed asset: pull up to ~8s of the given
     speaker's own audio (their transcript segments) as the reference clip, and
     their transcript text as the reference text."""
-    from app.db.models import Transcript, new_id
 
     consent_kind = _declared(consent_kind)
 
@@ -393,7 +415,6 @@ def recognize_reference_text(db: Session, voice: Voice, *, actor_id: str | None)
 
     转不了就明说(转写引擎没装),而不是留个空文本让合成出去丢人。
     """
-    from app.domain.voices import transcription
 
     reference = reference_path(voice)
     if not reference.is_file():
@@ -437,7 +458,6 @@ def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text:
 def delete_voice(db: Session, voice: Voice) -> list[DeleteFailure]:
     """删一把嗓子。**先删它在远端的副本**(ADR 0037):删不掉的(钥匙失效、网络)交回去告诉用户去控制台看,
     本机这一行照删 —— 留着它不会让远端那份消失,只会让人以为删不掉。"""
-    from app.domain.voices import remote
 
     failures = remote.delete_copies(db, voice)
     ref_dir = resolve_key(voice.reference_key).parent if voice.reference_key else None
@@ -534,7 +554,6 @@ def start_synthesis(
         label = _voice_label(engine_voice, voice_label) or engine
         if engine in LOCAL_SPEECH_ENGINES:
             # 本机念字引擎:音色是模型自带的预置发音人,名字由目录认(不在目录里就是调用方的错)。
-            from app.ai.runtime import qwen_models
 
             if engine_voice and qwen_models.speaker(engine_voice) is None:
                 raise VoiceError("voiceErr_qwenUnknownVoice", voice=engine_voice)
@@ -545,7 +564,6 @@ def start_synthesis(
         elif voice_id:
             # 配音库里的一把嗓子,用远端引擎念(ADR 0037):嗓子在这个工作区、声明过是谁的、这个账号同意过上传 ——
             # 建任务之前问,没同意就回 409 让界面弹确认框,而不是排上队再失败。
-            from app.domain.voices import remote
 
             if not remote.clones_remotely(engine):
                 raise VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
@@ -841,7 +859,6 @@ def _speak_locally(
     本机引擎不花第三方的钱,所以没有计费那一笔(和克隆相同);它也不产出"是谁的克隆"这种
     授权信息 —— 音色是模型自带的,不是谁的嗓子。
     """
-    from app.ai.runtime import qwen_models
 
     runtime = LOCAL_SPEECH_ENGINES[engine]
     _require_local_engine(runtime)
@@ -908,7 +925,6 @@ def speak_to_file(
     `voice_id`:念的是配音库里的一把克隆嗓子(ADR 0037)。它在这里被解析成「这个人的连接 + 这次的模型」下的远端副本,
     还没有就建(配音任务的进度写「正在百炼上复刻这把嗓子」);每个入口都经过这里,入口不用各自认识复刻。
     """
-    from app.ai.providers import SpeechSynthesisRequest, build_speech_adapter, connection_vendor_for_speech_engine
 
     #: **到引擎的第二扇门。** 对话朗读、免提、试听、笔记朗读都直接走这里;任务那条路(配音、画板音、
     #: 工作流、字幕逐句配音)在建任务时已经洗过一遍,这里再走一次是**幂等**的无操作 —— 两扇门都洗,
@@ -935,7 +951,7 @@ def speak_to_file(
     out = out_dir / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
 
     def speak(session, voice: str) -> None:
-        adapter = build_speech_adapter(engine, api_key=api_key, voice=voice, model=model, base_url=base_url)
+        adapter = providers.build_speech_adapter(engine, api_key=api_key, voice=voice, model=model, base_url=base_url)
         # 各家 TTS 普遍按**字符**计费,所以计量是字符数而不是 token —— 计量因供应商而异,
         # 正是 billable 留给调用方的那一半。
         with billable(
@@ -984,13 +1000,11 @@ def preview_podcast_to_file(
     ``READ`` 稿件,因此和正式「照稿念」经过同一个协议适配器；连接解析和计费也在这里
     收口,路由只负责把临时音频交回浏览器。
     """
-    from app.ai.providers import PodcastAction, synthesize_volcano_podcast
-    from app.domain.providers.selection import resolve_connection
 
     spoken = text.strip()
     if not spoken:
         raise VoiceError("providerErr_podcastReadNeedsText")
-    profile = resolve_connection(db, "volcano-podcast", user_id=user_id)
+    profile = providers_selection.resolve_connection(db, "volcano-podcast", user_id=user_id)
     token = (profile.api_key if profile else None) or ""
     appid = str((profile.extra if profile else {}).get("appid") or "")
     out = out_dir / "podcast-preview.mp3"
@@ -1007,7 +1021,7 @@ def preview_podcast_to_file(
         source_id=user_id or "",
     ) as call:
         call.meter(characters=len(spoken), speakers=1, requests=1)
-        synthesize_volcano_podcast(
+        providers.synthesize_volcano_podcast(
             appid,
             token,
             action=PodcastAction.READ,
@@ -1027,8 +1041,6 @@ def _speak_through_copy(speak, *, voice_id: str, engine: str, profile, user_id: 
     这条路上的账记在**自己的事务**里:复刻、标 missing 都要写那一行副本,而调用方的会话一旦记了账就攥着写锁,
     另开的事务会在它手里等到超时。
     """
-    from app.ai.providers import SpeechSynthesisError
-    from app.domain.voices import remote
 
     if not remote.clones_remotely(engine):
         raise VoiceError("voiceErr_remoteCloneUnsupported", engine=engine)
@@ -1076,10 +1088,6 @@ def _speak_with_plugin(db, engine: str, *, text: str, voice: str, speed: float, 
     用量归插件自己的账,宿主不替它记字符。"""
     import shutil
 
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.runtime import PluginRuntimeError
-    from app.domain.plugins.tools import invoke_host, staged_artifact
-    from app.db.models import PluginInstance
 
     instance = db.get(PluginInstance, engine)
     name = instance.name if instance is not None else engine
@@ -1097,7 +1105,7 @@ def _speak_with_plugin(db, engine: str, *, text: str, voice: str, speed: float, 
 
     #: 可用性(启用、配置、凭据、授权)由 invoke_host 判,不在这里再判一遍。
     try:
-        invoke_host(db, engine, SPEECH, {"op": "speak", "text": text, "voice": voice, "speed": speed}, collect=collect, record=True)
+        plugins_tools.invoke_host(db, engine, SPEECH, {"op": "speak", "text": text, "voice": voice, "speed": speed}, collect=collect, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise VoiceError("voiceErr_pluginFailed", plugin=name, detail=str(exc)[:500]) from exc
     return made[0]
@@ -1178,7 +1186,6 @@ def _synthesize_remote(
 
 def podcast_speakers(speakers: list[str] | None) -> list[str]:
     """播客的发音人:给了用给的,没给用目录里的前两位 —— 发音人不花钱,不是替人挑一个要付费的东西(ADR 0055 §6)。"""
-    from app.ai.providers import PODCAST_SPEAKERS
 
     return [voice for voice in (speakers or []) if voice] or [voice for voice, _ in PODCAST_SPEAKERS[:2]]
 
@@ -1211,7 +1218,6 @@ def start_podcast(
 
     `usage_source` / `on_asset`:同 start_synthesis。
     """
-    from app.ai.providers import MAX_PODCAST_ROUNDS, MAX_PODCAST_ROUND_CHARS, PodcastAction
 
     actions = {"summarize": PodcastAction.SUMMARIZE, "read": PodcastAction.READ, "research": PodcastAction.RESEARCH}
     if mode not in actions:
@@ -1303,9 +1309,6 @@ def _run_podcast_body(
     usage_source: tuple[str, str] | None = None,
     on_asset: OnAsset | None = None,
 ) -> None:
-    from app.ai.providers import synthesize_volcano_podcast
-    from app.domain.voices.voice_labels import builtin_voice_label
-    from app.domain.providers.selection import resolve_connection
 
     with unit_of_work() as db:
         job = db.get(Job, job_id)
@@ -1318,7 +1321,7 @@ def _run_podcast_body(
         # 「在做」先落库:一次播客合成要几分钟,界面要马上看得到。
         db.commit()
 
-        profile = resolve_connection(db, "volcano-podcast", provider_profile_id, user_id=job.created_by)
+        profile = providers_selection.resolve_connection(db, "volcano-podcast", provider_profile_id, user_id=job.created_by)
         # The token lives in api_key and the appid in extra — the podcast socket takes both,
         # and neither is the v3 speech API Key.
         token = (profile.api_key if profile else None) or ""
@@ -1345,7 +1348,7 @@ def _run_podcast_body(
             ) as call:
                 # 播客按输入文本量计费,和 TTS 同一类;说话人数会影响时长,一并记下来。
                 call.meter(characters=characters, speakers=len(speakers or []), requests=1)
-                result = synthesize_volcano_podcast(
+                result = providers.synthesize_volcano_podcast(
                     appid,
                     token,
                     action=action,

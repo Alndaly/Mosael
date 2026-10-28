@@ -8,12 +8,35 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import fragment, tr
+from app.core.i18n import fragment, tr, t
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
-from app.db.models import Project, Sequence
+from app.db.models import Project, Sequence, Asset
 from app.domain.sequences import operations as seq_ops
 from app.domain.sequences.errors import SequenceDomainError
+from app.ai.providers.contracts.denoise import DenoiseError, checked_strength
+from app.domain import render
+from app.domain.assets import denoise, video_gif
+from app.domain.assets.denoise import DENOISABLE_KINDS
+from app.domain.assets.from_url import UrlImportError, start_url_import
+from app.domain.assets.image_grid import GRIDS, ImageGridError, parse_grid, split_image_grid
+from app.domain.assets.masks import MaskAssetError, make_mask_asset
+from app.domain.assets.scrub.engine import ScrubError
+from app.domain.assets.scrub.task import require_video, start_scrub_job
+from app.domain.assets.separation import start_separation_job
+from app.domain.audio_capabilities import DENOISE, SEPARATION
+from app.domain.capabilities import CapabilityUnavailable
+from app.domain.documents import CAPABILITY
+from app.domain.documents.extraction import start_parse
+from app.domain.documents.local import DocumentParseError
+from app.domain.voices import engine_catalog, subtitle_dub
+from app.domain.voices.engine_catalog import pick_speech, voice_slot
+from app.domain.voices.errors import VoiceError
+from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, ORIGINAL_AUDIO_MODES
+from app.domain.voices.remote import RemoteConsentRequired, check_voice, speaks_library_voice
+from app.domain.voices.speech import CLONE_ENGINE, SpeechProviderUnavailable
+from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, dub_targets
+from app.media.masks import LUMINANCE, SOURCES
 
 #: 时间线操作的种类由**序列域**说了算 —— 那是「能对时间线做什么」的清单,不是智能体这一个入口的清单。
 EDIT_OP_KINDS = seq_ops.EDIT_OP_KINDS
@@ -142,9 +165,8 @@ def _summarize_render_sequence(db: Session, payload: dict[str, Any]) -> Summary:
 
 def _execute_render_sequence(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.render import start_export
 
-    job = start_export(db, str(payload["sequence_id"]))
+    job = render.start_export(db, str(payload["sequence_id"]))
     return {"job_id": job.id}
 
 
@@ -156,17 +178,12 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
     clip_ids = payload.get("clip_ids")
     if clip_ids is not None and not isinstance(clip_ids, list):
         raise ConfirmationError("confirmErr_clipIdsNotArray")
-    from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, ORIGINAL_AUDIO_MODES
 
     if str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO) not in ORIGINAL_AUDIO_MODES:
         raise ConfirmationError("confirmErr_badOriginalAudio", modes=" / ".join(ORIGINAL_AUDIO_MODES))
     #: 引擎和音色在**开卡时**就定成确定的一对、写回卡上,和 generate_audio 同一个认法(engine_catalog.pick_speech):
     #: 引擎按名字或 id 认,只给了音色就按音色认出是哪一家,点名的引擎现在就得用得上、克隆音色得在这个工作区。
     #: 此前这里只认引擎、不看音色:一个不存在的音色(或别的工作区的克隆音色)照样开卡,用户批了之后每一句都合成失败。
-    from app.domain.voices.engine_catalog import pick_speech
-    from app.domain.voices.remote import RemoteConsentRequired, check_voice, speaks_library_voice
-    from app.domain.voices.speech import CLONE_ENGINE, SpeechProviderUnavailable
-    from app.domain.voices.errors import VoiceError
 
     try:
         engine, voice = pick_speech(
@@ -199,8 +216,6 @@ def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
         scope = fragment("confirm_dubScopeTrack")
     else:
         scope = fragment("confirm_dubScopeTrackCounted", count=subtitle_cues)
-    from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
-    from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 
     fit = fragment("confirm_dubFit") if payload.get("match_duration", DEFAULT_MATCH_DURATION) else ""
 
@@ -210,23 +225,19 @@ def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
 
 def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.voices.engine_catalog import synthesis_params, voice_slot
-    from app.domain.voices.speech import CLONE_ENGINE
-    from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
-    from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, dub_targets, start_subtitle_dub
 
     sequence_id = str(payload.get("sequence_id") or "")
     named = [str(one) for one in (payload.get("clip_ids") or []) if str(one).strip()]
     clip_ids = dub_targets(db, sequence_id, named, str(payload.get("track_id") or ""))
     engine = str(payload.get("engine") or "").strip() or CLONE_ENGINE
-    job = start_subtitle_dub(
+    job = subtitle_dub.start_subtitle_dub(
         db,
         sequence_id=sequence_id,
         clip_ids=clip_ids,
         match_duration=bool(payload.get("match_duration", DEFAULT_MATCH_DURATION)),
         line=str(payload.get("line") or "all"),
         created_by=actor,
-        synthesis=synthesis_params(
+        synthesis=engine_catalog.synthesis_params(
             db,
             engine=engine,
             voice=voice_slot(engine, voice_id=str(payload.get("voice_id") or ""),
@@ -241,14 +252,12 @@ def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) ->
 
 
 def _validate_separate_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.db.models import Asset
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
         raise ConfirmationError("confirmErr_assetNotInWorkspace")
     if asset.kind not in {"audio", "video"}:
         raise ConfirmationError("confirmErr_separateNeedsAudio")
-    from app.domain.audio_capabilities import SEPARATION
 
     named = str(payload.get("engine") or "").strip()
     payload["engine"] = _named_provider(db, actor, SEPARATION, named).id if named and named != "auto" else ""
@@ -260,8 +269,6 @@ def _summarize_separate_audio(db: Session, payload: dict[str, Any]) -> Summary:
 
 def _execute_separate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.db.models import Asset
-    from app.domain.assets.separation import start_separation_job
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
@@ -273,10 +280,6 @@ def _execute_separate_audio(db: Session, confirmation: Any, actor: str | None) -
 
 
 def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.ai.providers.contracts.denoise import DenoiseError, checked_strength
-    from app.db.models import Asset
-    from app.core.i18n import t
-    from app.domain.assets.denoise import DENOISABLE_KINDS, ready_adapter
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
@@ -285,13 +288,12 @@ def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, A
         raise ConfirmationError("confirmErr_denoiseNeedsAudio")
     # 引擎和档位在**开卡之前**就判:批准一张注定失败的卡,只是把同一句话推迟到点完之后。
     #: 引擎按名字或 id 认(内置引擎、配好的降噪插件都行,ADR 0032),认出来就换成提供方 id 存下。
-    from app.domain.audio_capabilities import DENOISE
 
     named = str(payload.get("engine") or "").strip()
     payload["engine"] = _named_provider(db, actor, DENOISE, named).id if named and named != "auto" else ""
     try:
         payload["strength"] = checked_strength(str(payload.get("strength") or ""))
-        adapter = ready_adapter(db, actor, str(payload.get("engine") or ""))
+        adapter = denoise.ready_adapter(db, actor, str(payload.get("engine") or ""))
         # 卡上要说的话(用哪个、会不会去掉音乐)在这里就定下来 —— _summarize 不查注册表。
         payload["resolved_engine"] = adapter.engine_id
         payload["engine_name"] = t(adapter.label_key)
@@ -323,13 +325,11 @@ def _summarize_denoise_audio(db: Session, payload: dict[str, Any]) -> Summary:
 
 def _execute_denoise_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.db.models import Asset
-    from app.domain.assets.denoise import start_denoise_job
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
         raise ConfirmationError("confirmErr_assetNotFound")
-    job = start_denoise_job(
+    job = denoise.start_denoise_job(
         db,
         asset=asset,
         created_by=actor,
@@ -340,7 +340,6 @@ def _execute_denoise_audio(db: Session, confirmation: Any, actor: str | None) ->
 
 
 def _validate_convert_video_to_gif(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.db.models import Asset
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
@@ -370,14 +369,12 @@ def _summarize_convert_video_to_gif(db: Session, payload: dict[str, Any]) -> Sum
 
 def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.db.models import Asset
-    from app.domain.assets.video_gif import start_video_to_gif
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
         raise ConfirmationError("confirmErr_assetNotFound")
     duration = payload.get("duration")
-    job = start_video_to_gif(
+    job = video_gif.start_video_to_gif(
         db,
         asset=asset,
         created_by=actor,
@@ -389,9 +386,6 @@ def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | N
     return {"job_id": job.id, "source_asset_id": asset.id}
 
 def _validate_scrub_video_metadata(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.db.models import Asset
-    from app.domain.assets.scrub.task import require_video
-    from app.domain.assets.scrub.engine import ScrubError
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
@@ -414,8 +408,6 @@ def _summarize_scrub_video_metadata(db: Session, payload: dict[str, Any]) -> Sum
 
 def _execute_scrub_video_metadata(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.db.models import Asset
-    from app.domain.assets.scrub.task import start_scrub_job
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
@@ -426,8 +418,6 @@ def _execute_scrub_video_metadata(db: Session, confirmation: Any, actor: str | N
 
 
 def _validate_split_image_grid(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.db.models import Asset
-    from app.domain.assets.image_grid import ImageGridError, parse_grid
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
@@ -441,7 +431,6 @@ def _validate_split_image_grid(db: Session, workspace_id: str, payload: dict[str
 
 
 def _summarize_split_image_grid(db: Session, payload: dict[str, Any]) -> Summary:
-    from app.domain.assets.image_grid import GRIDS
 
     rows, cols = GRIDS.get(str(payload.get("grid") or "3x3"), (3, 3))
     return "confirm_splitImageGrid", {"rows": rows, "cols": cols, "count": rows * cols}
@@ -450,8 +439,6 @@ def _summarize_split_image_grid(db: Session, payload: dict[str, Any]) -> Summary
 def _execute_split_image_grid(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     """本机切,一两秒的事,不起后台任务:确认完直接交回切出来的那几张。"""
     payload = confirmation.payload
-    from app.db.models import Asset
-    from app.domain.assets.image_grid import ImageGridError, split_image_grid
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
@@ -492,7 +479,6 @@ def _mask_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
     卡上写的是补齐之后的这一份,批准时算的也是这一份 —— 两边各读一遍 payload 迟早分叉。
     """
-    from app.media.masks import LUMINANCE, SOURCES
 
     source = str(payload.get("source") or LUMINANCE)
     return {
@@ -506,8 +492,6 @@ def _mask_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _validate_create_mask(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.db.models import Asset
-    from app.media.masks import SOURCES
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
@@ -521,7 +505,6 @@ def _validate_create_mask(db: Session, workspace_id: str, payload: dict[str, Any
 
 
 def _summarize_create_mask(db: Session, payload: dict[str, Any]) -> Summary:
-    from app.db.models import Asset
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     basis = "confirm_maskBasisAlpha" if payload.get("source") == "alpha" else "confirm_maskBasisLuminance"
@@ -536,8 +519,6 @@ def _summarize_create_mask(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_create_mask(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     """本机算,一眨眼的事,不起后台任务:确认完直接交回那张新蒙版。原素材不动。"""
     payload = _mask_payload(confirmation.payload)
-    from app.db.models import Asset
-    from app.domain.assets.masks import MaskAssetError, make_mask_asset
 
     asset = db.get(Asset, payload["asset_id"])
     if asset is None or asset.workspace_id != confirmation.workspace_id:
@@ -563,13 +544,11 @@ def _named_provider(db: Session, actor: str | None, capability: Any, name_or_id:
 
 
 def _document_parser(db: Session, actor: str | None, name_or_id: str):
-    from app.domain.documents import CAPABILITY
 
     return _named_provider(db, actor, CAPABILITY, name_or_id)
 
 
 def _validate_reparse_document(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.db.models import Asset
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
@@ -587,10 +566,6 @@ def _summarize_reparse_document(db: Session, payload: dict[str, Any]) -> Summary
 def _execute_reparse_document(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     """起一次解析,交回解析任务;读正文用 read_document(它会等一小会儿,云端解析常要几分钟,还在解析就过一会儿再读)。"""
     payload = confirmation.payload
-    from app.db.models import Asset
-    from app.domain.capabilities import CapabilityUnavailable
-    from app.domain.documents.extraction import start_parse
-    from app.domain.documents.local import DocumentParseError
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
@@ -693,7 +668,6 @@ def _summarize_import_from_url(db: Session, payload: dict[str, Any]) -> Summary:
 
 def _execute_import_from_url(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     from app.domain import sharing
-    from app.domain.assets.from_url import UrlImportError, start_url_import
 
     payload = confirmation.payload
     profile_id = str(payload.get("profile_id") or "").strip()

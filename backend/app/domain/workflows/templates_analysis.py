@@ -38,6 +38,9 @@ from app.domain.workflows.template_requirements import (
     CheckStatus,
     requirement,
 )
+from app.db.models import PluginInstance, PluginPackage
+from app.domain.plugins import instances as inst
+from app.domain.plugins.nodes import instances_for_node, node_type_id
 
 ACCOUNT_ANALYSIS = "account_analysis"
 VIRAL_VIDEO_BREAKDOWN = "viral_video_breakdown"
@@ -99,7 +102,6 @@ def tikhub_status(db: Session, user_id: str, check: str) -> CheckStatus:
     和运行时同一条判据 —— 节点的连接留空,运行时由 `resolve_instance` 按「哪条连接上有这个工具」挑:
     一条都没有(没装、没接、工具没勾)跑不了,两条以上(同一个平台接了两次)它不猜、也跑不了。
     """
-    from app.domain.plugins.nodes import instances_for_node, node_type_id
 
     for platform in TIKHUB_PLATFORMS:
         tools = [TIKHUB_CALLS[platform][need][0] for need in TIKHUB_NEEDS[check]]
@@ -119,8 +121,6 @@ def tikhub_problem(db: Session, user_id: str, check: str) -> str | None:
         return None
     from sqlalchemy import select
 
-    from app.db.models import PluginInstance, PluginPackage
-    from app.domain.plugins import instances as inst
 
     if db.get(PluginPackage, TIKHUB_PLUGIN) is None:
         return tr("wfWhy_tikhubNotInstalled")

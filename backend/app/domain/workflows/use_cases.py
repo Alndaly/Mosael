@@ -14,9 +14,11 @@ from sqlalchemy.orm import Session
 from app.db.models import Job, User, Workflow, WorkflowRunApproval
 from app.domain.entities import library
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
-from app.domain.workflows import deletion, entity_drawing, list_workflows as _list
+from app.domain.workflows import deletion, entity_drawing, list_workflows as _list, approvals
 from app.domain.workflows.node_types import available_node_types
 from app.domain.workflows.node_catalog import describe_node_types
+from app.domain.plugins.nodes import unusable
+from app.domain.workflows.from_page import start_from_page as prepare
 
 
 def readable(db: Session, user: User, workflow_id: str) -> Workflow:
@@ -55,7 +57,6 @@ def start_from_page(
     和工作流运行时开浏览器那一步同一道闸(见 browser.usable_profile),建图时就拦,不留一张注定跑不起来的图。
     """
     from app.domain import browser
-    from app.domain.workflows.from_page import start_from_page as prepare
 
     ensure_workspace_perm(db, user, workspace_id, "edit")
     if profile_id:
@@ -83,7 +84,6 @@ MAX_UNUSABLE_QUERY = 100
 def unusable_node_types(db: Session, user: User, types: list[str]) -> list[dict[str, Any]]:
     """这些节点类型里他用不了的插件节点,各自为什么(见 plugins.nodes.unusable)。按请求方的语言说。修法是到某个连接的库里升级的
     (ComfyUI 上那张工作流的表单还是上一版格式)带上 `upgrade` 和那个连接:画布上标「用不了 · 需要升级」,检查器给「去工作流库升级」。"""
-    from app.domain.plugins.nodes import unusable
 
     out: list[dict[str, Any]] = []
     for node_type in dict.fromkeys(types[:MAX_UNUSABLE_QUERY]):
@@ -105,7 +105,6 @@ def decide_run_approval(
 
     返回是不是**我**落的决定(两条路同时点只有一个赢,见 approvals.decide_and_wake)。
     """
-    from app.domain.workflows import approvals
 
     ensure_workspace_perm(db, user, approval.workspace_id, "edit")
     return approvals.decide_and_wake(
@@ -121,7 +120,6 @@ def decide_run_approval_in_app(
 
     返回那张单的最新样子 —— 另一条路(飞书)在这一瞬间先到了也不是错误,决定已经落了,把最新那份给他看。
     """
-    from app.domain.workflows import approvals
 
     approval = db.get(WorkflowRunApproval, approval_id)
     if approval is None:

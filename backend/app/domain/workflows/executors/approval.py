@@ -49,6 +49,7 @@ from app.domain.workflows.executors.registry import (
     register_preflight,
 )
 from app.domain.workflows.run_scope import current_node
+from app.domain.workflows import approvals
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,6 @@ logger = logging.getLogger(__name__)
 @register("await_approval")
 def await_approval(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """决定已经下来就把它交给下游;还没下来就把这一轮停在暂停点上。"""
-    from app.domain.workflows import approvals
 
     node_id = current_node()
     job_id = current_parent_job_id()
@@ -121,7 +121,6 @@ def _node_name(db: Session, job: Job, node_id: str) -> str:
     同一份"钉住的那一版"读数(`approvals.pinned_node`)也在发卡那一步用 —— 飞书那三格
     (`channel` / `bot` / `to`)从同一个地方读,免得两处各解一遍、各有一个答案。
     """
-    from app.domain.workflows import approvals
 
     name = str(approvals.pinned_node(db, job, node_id).get("name") or "").strip()
     return name or node_id

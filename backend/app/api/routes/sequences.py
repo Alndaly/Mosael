@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
 
 from app.core.i18n import tr
-from app.domain.sequences import use_cases as sequence_use_cases
+from app.domain.sequences import use_cases as sequence_use_cases, concurrency, loading
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.unit_of_work import after_commit
 from app.api.schemas import (
@@ -55,8 +55,7 @@ from app.api.schemas import (
 )
 from app.db.models import Asset, Job, Sequence
 from app.domain.permissions import require_sequence_access
-from app.domain.render import start_export
-from app.domain.sequences import concurrency, loading
+from app.domain.render import start_export, grab_sequence_frame
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
 from app.domain.sequences.history import redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
@@ -133,6 +132,17 @@ from app.domain.sequences.clip_properties import (
     set_clip_transform as set_clip_transform_operation,
     set_sequence_reframe as set_sequence_reframe_operation,
 )
+from app.ai.providers.contracts.denoise import DenoiseError
+from app.domain.sequences.append import append_asset as append
+from app.domain.sequences.media_swap import ReplaceClipMedia, clips_using, replace_clip_media as replace_media
+from app.domain.sequences.subtitle_io import export_track, import_into_track
+from app.domain.voices import use_cases as voices
+from app.domain.voices.clip_audio import ClipAudioError, start_clip_audio_job
+from app.domain.voices.errors import VoiceError
+from app.domain.voices.subtitle_dub import DubError, dub_targets
+from app.domain.workflows.file_export import ascii_file_stem
+from app.media.render_executor import RenderExecutionError
+from app.media.subtitle_files import SubtitleFileError
 
 router = APIRouter(tags=["sequences"])
 
@@ -242,7 +252,6 @@ def append_asset(
     sequence_id: str, body: AppendAssetRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Response:
     """把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(sequences.append)。"""
-    from app.domain.sequences.append import append_asset as append
 
     require_sequence_access(db, user, sequence_id, perm="edit")
     actor = user.id
@@ -438,8 +447,6 @@ def export_subtitles(
     line: str = Query("all"),
 ) -> Response:
     """一条字幕轨导出成 .srt / .vtt。双语字幕(两行)用 `line` 选全写、只写原文(first)或只写译文(last)。"""
-    from app.domain.sequences.subtitle_io import export_track
-    from app.domain.workflows.file_export import ascii_file_stem
 
     sequence = require_sequence_access(db, user, sequence_id)
     try:
@@ -473,8 +480,6 @@ def import_subtitles(
 
     和别的编辑同一个并发协议(见 domain/sequences/concurrency):照着 `base_revision` 那一版做,落后了且和中间的
     改动对不上就 409 附最新序列。导入会建片段、覆盖落点,是依赖坐标的一步。"""
-    from app.domain.sequences.subtitle_io import import_into_track
-    from app.media.subtitle_files import SubtitleFileError
 
     require_sequence_access(db, user, sequence_id, perm="edit")
     # 同步读(上传已经落在临时文件里):这个端点要做一整串库操作,不能是 async —— 在事件循环上做,导入两千条
@@ -513,8 +518,6 @@ def replace_clip_media(
     sequence_id: str, body: ReplaceClipMediaRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Response:
     """片段换成另一份素材(位置、时长、属性都不动)。给 `from_asset_id` 就换掉这条时间线上用着它的全部片段。"""
-    from app.domain.sequences.media_swap import ReplaceClipMedia, clips_using
-    from app.domain.sequences.media_swap import replace_clip_media as replace_media
 
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     clip_ids = list(body.clip_ids) or (clips_using(sequence, body.from_asset_id) if body.from_asset_id else [])
@@ -527,8 +530,6 @@ def process_clip_audio(
     sequence_id: str, clip_id: str, body: ClipAudioRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Job:
     """对片段做声音处理(降噪 / 只留人声 / 拆成人声和背景音),做完直接换到时间线上。排成任务:要跑好几分钟。"""
-    from app.ai.providers.contracts.denoise import DenoiseError
-    from app.domain.voices.clip_audio import ClipAudioError, start_clip_audio_job
 
     require_sequence_access(db, user, sequence_id, perm="edit")
     _ensure_seen(db, user, sequence_id, base_revision, [clip_id])
@@ -695,9 +696,6 @@ def dub_subtitles(
     配哪几句是照着调用方看到的那一版选的(`base_revision`):那几条字幕(或那条字幕轨)在这之后被别人改过,
     就 409 附最新序列 —— 不按一份过时的选择去付费合成(见 _ensure_seen)。
     """
-    from app.domain.voices import use_cases as voices
-    from app.domain.voices.subtitle_dub import DubError, dub_targets
-    from app.domain.voices.errors import VoiceError
 
     require_sequence_access(db, user, sequence_id, perm="edit")
     # 「碰过没有」按要配的那几条字幕算:没点名就是整条轨上现在的那些(改字的记录里只有片段 id,没有轨道 id),
@@ -715,7 +713,6 @@ def dub_subtitles(
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)
 def export_sequence(sequence_id: str, db: Tx, user: CurrentUser, body: ExportRequest | None = None) -> Job:
-    from app.media.render_executor import RenderExecutionError
 
     sequence_use_cases.exportable(db, user, sequence_id)
     try:
@@ -735,8 +732,6 @@ def grab_sequence_frame_route(
     **走渲染那条路,不是抓预览的画布** —— 预览里花字和字幕是 DOM 叠上去的,画布抓不到它们:
     抓出来的画面看着对,只是少了一层字,而用户不会发现。
     """
-    from app.domain.render import grab_sequence_frame
-    from app.media.render_executor import RenderExecutionError
 
     sequence_use_cases.exportable(db, user, sequence_id)
     try:

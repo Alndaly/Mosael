@@ -30,6 +30,7 @@ from app.domain.workflows.templates_analysis import (
     COMMENT_INSIGHTS,
     VIRAL_VIDEO_BREAKDOWN,
 )
+from app.domain.workflows.templates import built_in_template_graph
 
 #: 能「用当前页开工」的模板 → 链接填进开始节点的哪一格。
 PAGE_TEMPLATES: dict[str, str] = {
@@ -92,7 +93,6 @@ def start_from_page(
             source="edit",
             created_by=user_id,
         )
-    from app.domain.workflows.templates import built_in_template_graph
 
     graph = built_in_template_graph(db, template_id, user_id=user_id, workspace_id=workspace_id, locale=locale)
     entry = next(one for one in ANALYSIS_TEMPLATE_CATALOG if one["id"] == template_id)

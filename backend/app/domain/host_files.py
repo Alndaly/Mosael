@@ -33,6 +33,7 @@ from app.db.models import Asset, User
 from app.domain import deployment
 from app.domain.authority import Actor, Voucher, ensure
 from app.domain.permissions import NotVisible, PermissionDenied
+from app.media.paths import resolve_key
 
 
 class HostFileError(LocalizedError, ValueError):
@@ -142,7 +143,6 @@ def upload_source(db: Session, *, workspace_id: str, asset_id: str, path: str, a
     if not asset.file_key:
         raise HostFileError("hostErr_uploadAssetNoFile")
     # 素材库按工作区授权,文件落在数据目录下,不是谁电脑上的私有路径 —— 上面查过工作区,不再判 actor。
-    from app.media.paths import resolve_key
 
     return HostFile(resolve_key(asset.file_key))
 

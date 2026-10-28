@@ -23,8 +23,15 @@ from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.authority import ensure_vouched_to_spend
 from mosael_formats.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
-from app.domain.plugins import artifacts, egress as plugin_egress, inputs as plugin_inputs, instances as inst, state as plugin_state
-from app.domain.plugins import service_gate
+from app.domain.plugins import (
+    artifacts,
+    egress as plugin_egress,
+    inputs as plugin_inputs,
+    instances as inst,
+    state as plugin_state,
+    service_gate,
+    host_capabilities,
+)
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import readable_group
@@ -188,7 +195,6 @@ def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True)
     插件页的「刷新」也走这里,所以顺带让替宿主做事的那一侧重新问一遍(`notify`,见
     host_capabilities):ComfyUI 里新存了一张工作流,点一下刷新它就该出现在模型选择器里。
     """
-    from app.domain.plugins import host_capabilities
 
     manifest = inst.manifest_for(db, instance)
     if not manifest.is_mcp:
@@ -544,7 +550,6 @@ def _run_process(
 
 def _finisher(tool: dict[str, Any]) -> Any:
     """这个工具认领的调用类能力登记的收尾(见 host_capabilities.finisher);没有就是 None,产出按通用规矩收。"""
-    from app.domain.plugins import host_capabilities
 
     for capability in sorted(_claims(tool) & CALL_CAPABILITIES):
         finish = host_capabilities.finisher(capability)

@@ -22,6 +22,7 @@ from app.domain.plugins.manifest import PATH_KEY
 from mosael_formats.plugin_manifest import ManifestError, parse
 from app.domain.plugins.migrations import CANONICAL_FILENAME, LEGACY_FILENAMES, migrate_directory
 from app.domain.plugins.runtime import data_dir_for
+from app.domain.plugins import bundled
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,6 @@ def uninstall(db: Session, package_id: str, plugins_dir: Path) -> None:
     package = db.get(PluginPackage, package_id)
     if package is None:
         raise PluginDomainError("pluginErr_notFound")
-    from app.domain.plugins import bundled
 
     # 随应用发的插件卸不掉:下次启动对账又会把它装回来(见 bundled),而「我删了它怎么又回来了」
     # 比「这个删不了」更让人困惑。不想用就停用它的连接。

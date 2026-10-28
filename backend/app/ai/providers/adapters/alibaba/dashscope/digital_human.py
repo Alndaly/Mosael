@@ -30,6 +30,7 @@ from app.ai.providers.contracts.generation import (
     source_url_values,
 )
 from app.core.http_retry import RetryingClient
+from app.media.vendor_formats import VendorFormatError, video_sides_within
 
 SUBMIT_PATH = "/api/v1/services/aigc/image2video/video-synthesis"
 DETECT_PATH = "/api/v1/services/aigc/image2video/face-detect"
@@ -84,7 +85,6 @@ def _upload_fitted_video(client: RetryingClient, model: str, path: Path) -> str:
     已经在范围里的原样传;缩放用的临时文件传完就删。"""
     import tempfile
 
-    from app.media.vendor_formats import VendorFormatError, video_sides_within
 
     low, high = RETALK_VIDEO_SIDES
     with tempfile.TemporaryDirectory(prefix="mosael-retalk-") as scratch:

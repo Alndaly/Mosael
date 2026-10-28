@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import Font, new_id
-from app.media.paths import font_dir, font_key
+from app.media.paths import font_dir, font_key, resolve_key
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,6 @@ def _is_readable_font(path: Path) -> bool:
 
 
 def delete_font_files(font: Font) -> None:
-    from app.media.paths import resolve_key
 
     if font.file_key:
         directory = resolve_key(font.file_key).parent

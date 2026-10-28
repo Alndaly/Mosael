@@ -31,6 +31,8 @@ from app.domain.browser import (
     report_action,
     settle_partition_move,
 )
+from app.domain.assets.use_cases import ActionArtifact, import_action_artifact
+from app.domain.assets.web_capture import RunOrigin, WebCaptureError
 
 router = APIRouter(tags=["browser-worker"])
 
@@ -157,8 +159,6 @@ def upload_artifact(
     下载地址,以及是哪次运行、哪个节点触发的;交回素材 id,执行器把它放进动作的结果里。闸各用各的那一套:
     下载走 assets/web_download,截图走 assets/web_capture(只收图片、40 MB 上限)。
     """
-    from app.domain.assets.use_cases import ActionArtifact, import_action_artifact
-    from app.domain.assets.web_capture import RunOrigin, WebCaptureError
 
     if kind not in ARTIFACT_KINDS:
         raise HTTPException(status_code=422, detail=f"unknown artifact kind {kind[:20]}")

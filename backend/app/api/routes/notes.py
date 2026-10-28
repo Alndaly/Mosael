@@ -14,6 +14,7 @@ from app.api.schemas.notes import (
 from app.domain.note_types import NoteContent
 from app.domain.agent import use_cases as agent_use_cases
 from app.domain.notes import use_cases
+from app.domain.documents import use_cases as documents
 
 router = APIRouter(tags=["notes"])
 
@@ -49,7 +50,6 @@ def create(body: NoteCreate, db: Tx, user: CurrentUser):
 @router.post("/notes/from-page", response_model=NoteOut)
 def create_from_page(body: NotePageCreate, db: Tx, user: CurrentUser):
     """内嵌浏览器顶栏「存成笔记」:整页正文或选中的文字,带着来源链接与页面标题(见 domain/documents/web_page)。"""
-    from app.domain.documents import use_cases as documents
 
     return documents.save_page_as_note(
         db, user, body.workspace_id, url=body.url, title=body.title, html=body.html, selection=body.selection,

@@ -64,15 +64,13 @@ from app.domain.local_services.supervisor import (
     LaunchSpec,
     ServiceProcess,
 )
-from app.domain.plugins import egress as plugin_egress
-from app.domain.plugins import host_capabilities
-from app.domain.plugins import instances as inst
-from app.domain.plugins import service_gate
+from app.domain.plugins import egress as plugin_egress, host_capabilities, instances as inst, service_gate
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import manifest_of
 from mosael_formats.plugin_manifest import SERVICE_ADDRESS_FIELD
 from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from mosael_formats.plugin_env import EGRESS_KEYS, HOST_PREFIX
+from app.ai.runtime import config as runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -559,7 +557,6 @@ def _service_env(db: Session, instance: PluginInstance, plugin_env: dict[str, st
     这个连接可能直连或走自己的代理 —— 由 egress 重新给)、PyInstaller 冻结版自己用的 `_PYI*` / `_MEI*`。
     插件给的盖不掉宿主决定的这几样。
     """
-    from app.ai.runtime import config as runtime_config
 
     def host_only(key: str) -> bool:
         upper = key.upper()

@@ -31,6 +31,11 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, AssetExtraction, Job
 from mosael_formats.plugin_manifest import DOCUMENT_PARSE
 from app.domain.documents.local import DocumentParseError, Parsed, Section, html_to_markdown, _split_by_headings
+from app.domain.jobs import was_cancelled
+from app.domain.plugins import tools as plugins_tools
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
+from app.domain.plugins.tools import staged_output
 
 _MARKER = re.compile(r"<!--\s*(page|slide|sheet|section)\s*:\s*(\d+)\s*-->")
 _TABLE = re.compile(r"<table\b.*?</table>", re.S | re.I)
@@ -38,7 +43,6 @@ _TABLE = re.compile(r"<table\b.*?</table>", re.S | re.I)
 
 def _inside(root: Path, relative: str) -> Path:
     """插件交回的路径必须落在暂存目录里 —— 不能借它读走别处的文件。"""
-    from app.domain.plugins.tools import staged_output
 
     target = staged_output(root, relative)
     if target is None:
@@ -65,7 +69,6 @@ def sections_from_markdown(markdown: str) -> tuple[str, list[Section]]:
 def _cancelled(job_id: str | None) -> bool:
     if not job_id:
         return False
-    from app.domain.jobs import was_cancelled
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -89,9 +92,6 @@ def parsed_from_output(output: dict[str, Any], scratch: Path, target: Path) -> P
 
 def parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, source: Path, target: Path, progress) -> Parsed:
     """解析任务里交给插件:原件经工具的 `file` 入参交(和素材 id 同一道暂存),产出在暂存目录删之前切好段。"""
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
-    from app.domain.plugins.tools import invoke_host
 
     parsed: dict[str, Parsed] = {}
 
@@ -107,7 +107,7 @@ def parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, so
         is_cancelled=lambda: _cancelled(extraction.job_id),
     )
     try:
-        invoke_host(db, extraction.parser, DOCUMENT_PARSE, {"filename": asset.original_filename or source.name},
+        plugins_tools.invoke_host(db, extraction.parser, DOCUMENT_PARSE, {"filename": asset.original_filename or source.name},
                     files={"file": source}, collect=collect, hooks=hooks, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise DocumentParseError("docErr_pluginFailed", plugin=extraction.parser_name, detail=str(exc)[:500]) from exc

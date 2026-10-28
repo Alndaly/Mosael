@@ -10,6 +10,22 @@ from sqlalchemy.orm import Session
 
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
+from app.ai.providers import split_podcast_rounds
+from app.core.unit_of_work import after_commit
+from app.domain.entities.catalog import parse_entity_ids
+from app.domain.generation import operations as generation_operations, runner as generation_runner, voiced
+from app.domain.generation.operations import (
+    GenerationDomainError,
+    check_digital_human_rights,
+    check_text_inputs,
+    is_digital_human_request,
+    parse_source_assets,
+)
+from app.domain.generation.origins import AGENT, Origin, STUDIO_ORIGIN
+from app.domain.voices.engine_catalog import pick_speech
+from app.domain.voices.errors import VoiceError
+from app.domain.voices.remote import RemoteConsentRequired, check_voice, speaks_library_voice
+from app.domain.voices.speech import SpeechProviderUnavailable
 
 
 def _asked_for(payload: dict[str, Any]) -> str:
@@ -25,7 +41,6 @@ def _asked_for(payload: dict[str, Any]) -> str:
 def _origin(confirmation: Any) -> Any:
     """智能体的生成按对话归(ADR 0052 §2,D43):一段对话里批准的几次生成都进那段对话的那条会话。卡没挂在哪段对话上
     (老卡)的,出处说不出 —— 和迁移同一个判据,记 `studio`。"""
-    from app.domain.generation.origins import AGENT, STUDIO_ORIGIN, Origin
 
     return Origin(AGENT, confirmation.session_id) if confirmation.session_id else STUDIO_ORIGIN
 
@@ -37,13 +52,8 @@ _GENERATION_KIND_BY_TOOL = {"generate_image": "image", "generate_video": "video"
 
 def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.generation.operations import create_generation_job
-    from app.domain.generation.operations import parse_source_assets
-    from app.core.unit_of_work import after_commit
-    from app.domain.generation.runner import start_generation_thread
-    from app.domain.entities.catalog import parse_entity_ids
     kind = _GENERATION_KIND_BY_TOOL[confirmation.tool]
-    generation, job = create_generation_job(
+    generation, job = generation_operations.create_generation_job(
         db,
         workspace_id=confirmation.workspace_id,
         session_id=None,
@@ -64,7 +74,7 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
     )
     # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起;执行体后面炸了、整个回滚,它就不起。
     generation_id = generation.id
-    after_commit(db, lambda: start_generation_thread(generation_id))
+    after_commit(db, lambda: generation_runner.start_generation_thread(generation_id))
     #: `session_id`:这一张落在哪条创作会话里(ADR 0055 §9)—— 模型据此告诉用户去 AI Studio 的创作里看哪一条。
     result: dict[str, Any] = {"job_id": job.id, "generation_id": generation.id, "session_id": generation.session_id}
     #: `@` 到的资产挂了哪几张参考图、哪几张没挂上(ADR 0027)—— 模型据此如实告诉用户,而不是以为全挂上了。
@@ -77,7 +87,6 @@ def _check_generation_text(db: Session, payload: dict[str, Any], actor: str | No
     """提示词 / 歌词按**选中模型的描述符**判(见 generation.operations.check_text_inputs),和执行时的漏斗
     同一套规矩:放大这类不收提示词的模型不写提示词是对的,写了反而当场说;文生图什么都不写照样拦。
     此前这里写死「必须有提示词」,于是智能体想替人跑一张放大工作流,卡都开不出来。"""
-    from app.domain.generation.operations import GenerationDomainError, check_text_inputs
 
     # 点名了资产、自己没写提示词:资产的提示词描述在执行时才拼进来(domain/entities/mentions),空着不算缺。
     if payload.get("entity_ids") and not str(payload.get("prompt") or "").strip():
@@ -104,7 +113,6 @@ def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateImage", {"asked": _asked_for(payload)}
 
 def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights, is_digital_human_request
 
     #: 数字人没声明授权、音色或人物缺声明:开卡时就说,不等人批准之后才在漏斗里被拒。
     sources = [one for one in payload.get("source_assets") or [] if isinstance(one, dict)]
@@ -134,10 +142,6 @@ def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, 
     于是只给音色的调用总是在批准之后才失败,报「没有配置真实供应商」—— 智能体据此让用户去设置里给 Edge 配一个
     引擎,而 Edge 是内置的、免费的、什么都不用配。怎么认见 engine_catalog.pick_speech。
     """
-    from app.domain.voices.engine_catalog import pick_speech
-    from app.domain.voices.remote import RemoteConsentRequired
-    from app.domain.voices.speech import SpeechProviderUnavailable
-    from app.domain.voices.errors import VoiceError
 
     if not str(payload.get("text") or "").strip():
         raise ConfirmationError("confirmErr_speechNeedsText")
@@ -157,7 +161,6 @@ def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, 
 def _check_remote_voice(db: Session, payload: dict[str, Any], *, workspace_id: str, actor: str | None) -> None:
     """远端引擎念配音库里的嗓子(ADR 0037):开卡时就问(声明过是谁的、这个账号同意过上传),不等批准之后任务才失败。
     没同意过的,卡开不出来,那句话告诉智能体请用户去配音库点「复刻到百炼」。"""
-    from app.domain.voices.remote import check_voice, speaks_library_voice
 
     engine, voice = str(payload.get("engine") or ""), str(payload.get("voice") or "")
     if speaks_library_voice(db, engine, voice):
@@ -171,9 +174,8 @@ def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -
     """念卡上定好的那一对,记进这段对话的那条创作会话(ADR 0055 §4、ADR 0052,和它出图一样)。参数经 synthesis_params 拼,和工作流、
     画板、字幕配音同一条路。"""
     payload = confirmation.payload
-    from app.domain.generation.voiced import create_speech
 
-    record, job = create_speech(
+    record, job = voiced.create_speech(
         db,
         workspace_id=confirmation.workspace_id,
         session_id=None,
@@ -206,8 +208,6 @@ def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None)
     """一段双人播客,记进这段对话的那条创作会话(ADR 0055 §4、ADR 0052)。「照读」给的是一段字(不是逐段的稿子):按句拆成两人轮流的几段
     再交进去 —— 领域只认逐段的稿子(`turns`)。"""
     payload = confirmation.payload
-    from app.ai.providers import split_podcast_rounds
-    from app.domain.generation.voiced import create_podcast
 
     mode = str(payload.get("mode") or "summarize")
     text = str(payload.get("text") or payload.get("prompt") or "")
@@ -217,7 +217,7 @@ def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None)
         dual = len(speakers) != 1
         turns = [{"speaker": index % 2 if dual else 0, "text": line}
                  for index, line in enumerate(split_podcast_rounds(text, dual=dual))]
-    record, job = create_podcast(
+    record, job = voiced.create_podcast(
         db,
         workspace_id=confirmation.workspace_id,
         session_id=None,

@@ -55,6 +55,7 @@ from app.domain import media_tools
 from app.domain.jobs import blame, create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.plugins.registry import secure_url
 from app.media.scratch import scratch_dir
+from app.media.render_executor import ffmpeg_has_libass
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +336,6 @@ def _verify(staging: Path, entry: dict[str, Any]) -> tuple[str, str]:
     ffmpeg = staging / wanted["ffmpeg"]
     if media_tools.version_of(str(ffmpeg)) is None:
         raise MediaToolError("mediaToolErr_notRunnable", path=str(ffmpeg))
-    from app.media.render_executor import ffmpeg_has_libass
 
     ffmpeg_has_libass.cache_clear()
     if not ffmpeg_has_libass(str(ffmpeg)):

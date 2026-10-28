@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 from app.domain.voices.speech import adapter_id
+from app.ai.providers import REMOTE_SPEECH_ADAPTERS, connection_vendor_for_speech_engine
+from app.domain.providers import models as provider_models, selection as providers_selection
 
 
 def speech_target(
@@ -25,16 +27,13 @@ def speech_target(
 
     返回 `(连接或 None, 模型)`。
     """
-    from app.ai.providers import REMOTE_SPEECH_ADAPTERS, connection_vendor_for_speech_engine
-    from app.domain.providers import models as provider_models
-    from app.domain.providers.selection import resolve_connection
 
     engine = adapter_id(engine)
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     # 引擎 id 通常就是 vendor id,百炼是唯一的例外:qwen-tts 与 CosyVoice 是两个引擎、
     # 一条连接、一把 Key(见 providers.registry.connection_vendor_for_speech_engine)。
-    profile = resolve_connection(
+    profile = providers_selection.resolve_connection(
         db, connection_vendor_for_speech_engine(engine), provider_profile_id, user_id=user_id
     )
     # **模型要按引擎那一族筛**。同一条连接下可以同时挂着 qwen-tts 和 cosyvoice-v2,

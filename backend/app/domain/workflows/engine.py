@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.i18n import get_current_locale, speaking, t, tr
+from app.core.i18n import get_current_locale, speaking, t, tr, fragment
 from mosael_formats.i18n import DEFAULT_LOCALE
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.db.models import Job, Workflow, WorkflowRevision
@@ -50,13 +50,13 @@ from app.domain.workflows.graph_rules import (
     topo_order,
     validate_graph,
     with_run_params,
+    run_params,
+    spending_nodes_in_graph,
 )
 from app.domain.workflows.errors import AwaitingApproval, WorkflowDomainError
-from app.domain.workflows.node_types import available_node_types
+from app.domain.workflows.node_types import available_node_types, node_title
 from app.domain.authority import Authority, Voucher
 from app.domain.workflows.authority import revision_voucher, run_authority
-from app.domain.workflows.graph_rules import run_params, spending_nodes_in_graph
-from app.domain.workflows.node_types import node_title
 from app.domain.workflows.binding import (
     apply_data_edges,
     check_number_fields,
@@ -66,11 +66,15 @@ from app.domain.workflows.binding import (
 )
 from app.domain.workflows.executors.registry import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
-from app.domain.workflows import node_budget
+from app.domain.workflows import node_budget, approvals
 from app.domain.workflows.graph_run import GraphResume, GraphRun
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import keep_full_texts, snapshot
 from app.domain.workflows.run_scope import halt_scope, halted, node_scope
+from app.domain.generation.operations import GenerationDomainError, check_text_inputs
+from app.domain.plugins import nodes as plugins_nodes
+from app.domain.plugins.nodes import why_unusable
+from app.domain.workflows.templates import requirement_problem
 
 logger = logging.getLogger(__name__)
 
@@ -323,9 +327,8 @@ def _check_graph_runnable(
     require_start: bool = True,
     allow_start: bool = False,
 ) -> None:
-    from app.domain.plugins.nodes import plugin_node_types
 
-    extra_types = plugin_node_types(db, actor)
+    extra_types = plugins_nodes.plugin_node_types(db, actor)
     errors = validate_graph(
         with_run_params(graph, params),
         require_start=require_start,
@@ -353,8 +356,6 @@ def _check_chosen_options(db: Session, graph: dict[str, Any], workspace_id: str,
     TikHub 没配好拦住(图里 TikHub 那几个节点是通用插件节点,本来就没有运行前检查)。判据和模板库的前置条件同一个
     (templates.requirement_problem)。`graph` 是叠过这一次参数的(with_run_params);值不在选项里的已由校验拦下。
     """
-    from app.core.i18n import tr
-    from app.domain.workflows.templates import requirement_problem
 
     for node in graph.get("nodes") or []:
         if not isinstance(node, dict) or node.get("type") != "start":
@@ -379,7 +380,6 @@ def _check_chosen_options(db: Session, graph: dict[str, Any], workspace_id: str,
 
 
 def _why_plugin_node_unusable(db: Session, node_type: str, actor: str | None) -> str | None:
-    from app.domain.plugins.nodes import why_unusable
 
     reason = why_unusable(db, node_type, actor)
     return str(reason) if reason is not None else None
@@ -494,8 +494,6 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
     漏斗照样会判;模型选择本身是引用的也跳过。模型解析不出来(没设默认、连接没了)不在这里说,那是执行时
     漏斗的事 —— 这里只管文字。
     """
-    from app.core.i18n import fragment
-    from app.domain.generation.operations import GenerationDomainError, check_text_inputs
 
     if not isinstance(graph, dict):
         return
@@ -1014,7 +1012,6 @@ def _park_at_approval(db: Session, job: Job, run: GraphRun) -> None:
     (jobs.cancel_job → 挂在 kind 上的取消监听把待批单一起撤了),重启接回来走的是 resumer 那条
     (见 domain/workflows/approvals.register_seams)。进度按已经落定的节点算,不回头。
     """
-    from app.domain.workflows import approvals
 
     approval = approvals.find(db, job.id, run.awaiting)
     if approval is None:
@@ -1092,7 +1089,6 @@ def continue_workflow_job(db: Session, job: Job, checkpoint: dict[str, Any]) -> 
         任务落终态之后才真正放下「恢复中」的标记(见 approvals.resume_finished);那之前同一个
         等待不会被第二条唤醒路再派一遍,而下一道门有自己那张单的 id,不靠清标记才派得出去。
         """
-        from app.domain.workflows import approvals
 
         try:
             _run_workflow_thread(

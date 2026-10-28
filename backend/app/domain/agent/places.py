@@ -26,6 +26,9 @@ from app.core.i18n import LocalizedError
 from app.db.models import AgentMessage, AgentSession, Board, Note, PluginInstance, Project, Scene3D, User, Workflow
 from app.domain.permissions import NotVisible
 from app.domain.place_names import DELETED, HIDDEN, OK, Described, comfy_parts, comfy_places, workspace_things
+from app.domain.plugins import instances as inst
+from app.domain.plugins.errors import PluginDomainError
+from mosael_formats.plugin_manifest import WORKFLOW_LIBRARY
 
 STUDIO = "studio"
 PROJECT = "project"
@@ -149,9 +152,6 @@ def _workspace_thing(model: Any, name_column: Any, words: tuple[str, str, str]) 
 
 def _comfy_connection(db: Session, user: User, connection_id: str) -> PluginInstance | None:
     """他自己接的、认领了工作流库的那个连接(和 workbench/agent.py 的 connection 同一条:连接归人)。"""
-    from app.domain.plugins import instances as inst
-    from app.domain.plugins.errors import PluginDomainError
-    from mosael_formats.plugin_manifest import WORKFLOW_LIBRARY
 
     instance = db.get(PluginInstance, connection_id)
     if instance is None or instance.owner_user_id != user.id:

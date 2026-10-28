@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
+from app.core.i18n import get_current_locale, is_message_key, render_message, stored_param
+from mosael_formats.i18n import DEFAULT_LOCALE
 
 
 class AwaitingApproval(Exception):
@@ -39,8 +41,6 @@ class WorkflowDomainError(RuntimeError):
 
     def __init__(self, message: str, *, params: dict[str, Any] | None = None,
                  details: dict[str, Any] | None = None) -> None:
-        from app.core.i18n import is_message_key, render_message, stored_param
-        from mosael_formats.i18n import DEFAULT_LOCALE
 
         #: **只有认得出的才是 key。** 此前无条件记成 key,于是十几处 `WorkflowDomainError(str(exc))`
         #: 把第三方报错原文当 key 落了库(见 core/i18n.is_message_key)。
@@ -59,7 +59,6 @@ class WorkflowDomainError(RuntimeError):
         而编辑器里同步报的那些(图操作、导入文件)是在请求里抛的,路由拿 str(exc)
         当 detail,此前永远给缺省语言 —— 英文界面里弹出一句中文。
         """
-        from app.core.i18n import get_current_locale, render_message
 
         return render_message(self.message, get_current_locale(), self.params)
 
@@ -72,7 +71,6 @@ class WorkflowDomainError(RuntimeError):
         改成 LocalizedError 之后,这条路是它们的 key 走进任务失败原因的唯一通道。
         认不出 key 的(第三方库的原话)照旧当字面量。
         """
-        from app.core.i18n import is_message_key
 
         # 别的领域带着的失败现场(如「这一版要主人认可」的 attest,见 domain/authority)跟着走。
         if details is None and isinstance(getattr(exc, "details", None), dict):

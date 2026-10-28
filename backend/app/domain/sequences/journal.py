@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Sequence, Track
 from app.domain.sequences._timeline import _clip_payload
+from app.domain.sequences.links import new_link_group
 
 
 class Journal:
@@ -44,7 +45,6 @@ class Journal:
         """
         if not group:
             return None
-        from app.domain.sequences.links import new_link_group
 
         return self._split_groups.setdefault((group, round(at, 6)), new_link_group())
 

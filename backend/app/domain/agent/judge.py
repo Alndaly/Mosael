@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.i18n import LocalizedError
+from app.core.db import SessionLocal, SessionLocal as _Session
+from app.domain import ai_chat
+from app.domain.ai_chat import target_for
+from app.domain.billing.usage import billable, once
+from app.domain.providers import models as provider_models
 
 """隔离判断者:auto 档下,规则没覆盖到的 `external` 调用要不要放行。
 
@@ -119,16 +124,12 @@ def ask(
     **压根没进那个上下文管理器**。`ai_chat` 的模块头把「用量:一条都不记」列为它当初存在的
     四个理由之一,而 judge 是在那之后新加的调用点,原样复现了被消灭的那个毛病。
     """
-    from app.core.db import SessionLocal
-    from app.domain.ai_chat import chat, target_for
 
     with SessionLocal() as db:
         profile = _pick_profile(db, user_id)
         if profile is None:
             raise JudgeUnavailable("agentErr_judgeNoModel")
         target = target_for(db, profile)
-    from app.core.db import SessionLocal as _Session
-    from app.domain.billing.usage import billable, once
 
     with _Session() as billing_db, billable(
         billing_db,
@@ -141,7 +142,7 @@ def ask(
         # 一张卡只判一次,卡 id 就是那个稳定的工作单元。
         idempotency_key=f"agent-judge:{source_id}" if source_id else once("agent_judge"),
     ) as call:
-        raw = chat(
+        raw = ai_chat.chat(
             target,
             request.as_messages(),
             temperature=0.0,
@@ -154,7 +155,6 @@ def ask(
 
 
 def _pick_profile(db, user_id: str | None):
-    from app.domain.providers import models as provider_models
 
     default = provider_models.resolve_default(db, "chat", user_id)
     return default.profile if default is not None else None

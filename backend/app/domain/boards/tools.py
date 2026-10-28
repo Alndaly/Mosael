@@ -27,11 +27,22 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Board
-from app.domain.boards.actions import BoardInputError, document_cell, upstream_cells
+from app.db.models import Board, Entity, Job
+from app.domain.boards.actions import BoardInputError, document_cell, upstream_cells, _ensure_slot_ready, _pending
 from app.domain.boards.persistence import get_board
 from app.domain.boards.receipts import receipt_to_item
-from app.domain.jobs import create_job, dispatch_job, reset_receipt, set_receipt
+from app.domain.jobs import create_job, dispatch_job, reset_receipt, set_receipt, run_job_inline
+from app.core.db import SessionLocal
+from app.core.i18n import get_current_locale, t
+from app.core.unit_of_work import unit_of_work
+from app.domain.boards.errors import item_not_found
+from app.domain.plugins.nodes import parse_node_type, resolve_instance
+from app.domain.plugins.tools import output_port
+from app.domain.workflows import node_budget
+from app.domain.workflows.binding import check_number_fields
+from app.domain.workflows.errors import WorkflowDomainError
+from app.domain.workflows.executors.registry import get_executor
+from app.domain.workflows.node_types import config_data_type, config_entity_kinds, config_media, output_data_type
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +80,6 @@ def binding_sink(key: str, spec: Any) -> str | None:
     **前端不另写一份**:产出者清单(`GET /api/boards/producers`)给每个字段带上 `board_sources`
     (见 bindable_kinds),面板照它列上游;能力挂在哪几种格子上(boards.transforms.board_hosts)也从它推。
     """
-    from app.domain.workflows.node_types import config_data_type
 
     if not isinstance(spec, dict):
         return None
@@ -92,7 +102,6 @@ def bindable_kinds(key: str, spec: Any) -> list[str]:
     素材字段声明了只收哪几种素材(`media`,见 workflows.config_media)时只接那几种格子:转写只吃
     音频和视频,接一张图片进去只会在运行时报错。
     """
-    from app.domain.workflows.node_types import config_media
 
     sink = binding_sink(key, spec)
     if not sink:
@@ -282,12 +291,10 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
     (插件交出的产出记在某个具名输出上,见 plugins.tools._collect_artifact)就是素材,不是一段写着 id 的字。
     落哪几个见 landing_outputs。空值不落 —— 一个没用上的「尾帧」不该在画布上占一格空便签。
     """
-    from app.domain.workflows.node_types import output_data_type
 
     #: 这一轮收进素材库的文件:一串(asset_ids)和单独交的那一份(asset_id —— 只交了一份 `artifact` 时没有 asset_ids)。
     collected = {str(one) for one in [*(output.get("asset_ids") or ()), output.get("asset_id")] if isinstance(one, str)}
     produced: list[dict[str, Any]] = []
-    from app.domain.plugins.tools import output_port
 
     for name in landing_outputs(meta):
         #: 按口取值走 output_port:插件把 `artifact` / `artifacts` 声明成输出口时,收产出已把它们换成了
@@ -340,15 +347,12 @@ def prepare_node_run(
     单独成一步,因为「开卡之前先干跑一遍」(智能体的 run_board_item)问的就是这些 —— 注定起不了
     任务的卡没有让人去批的道理;而它和真跑走的是同一个函数,两边说的不会是两套话。
     """
-    from app.domain.boards.actions import _ensure_slot_ready
-    from app.domain.workflows.binding import check_number_fields
 
     _ensure_slot_ready(db, request.workspace_id, request.slot)
     board = get_board(db, request.workspace_id, request.board_id)
     fixed: dict[str, Any] = {}
     if host_input is not None:
         key, sink = host_input
-        from app.domain.boards.errors import item_not_found
 
         host = next((one for one in (board.canvas or {}).get("items") or [] if one.get("id") == request.item_id), None)
         if host is None:
@@ -388,7 +392,6 @@ def run_node_on_board(
     · 空格子上的生成器:表单就是这一格自己的,产出填进这一格;
     · 3D 场景格渲白模:场景由宿主给(`host_input`),存回那一格的表单是它自己的形状(`draft`)。
     """
-    from app.domain.boards.actions import _pending
 
     board, resolved = prepare_node_run(db, request=request, node_type=node_type, meta=meta, config=config,
                                        bindings=bindings, host_input=host_input, label=label)
@@ -427,9 +430,6 @@ def _check_entity_kind(db: Session, workspace_id: str, entity_id: str, spec: Any
     """资产格上的能力得是这一种资产的(「生成表情」只有人物有):**起任务之前**说,不花一分钱。
     `spec` 是宿主那个字段的声明 —— 它点名了收哪一种(workflows.config_entity_kinds,和 transforms.host_entity_kinds
     读的是同一句)。"""
-    from app.core.i18n import get_current_locale, t
-    from app.db.models import Entity
-    from app.domain.workflows.node_types import config_entity_kinds
 
     kinds = config_entity_kinds(spec)
     entity = db.get(Entity, entity_id)
@@ -443,7 +443,6 @@ def _check_plugin_connection(db: Session, node_type: str, config: dict[str, Any]
     """插件工具:点运行的人得有自己的连接。**起任务之前就问** —— 没有的话说清楚是哪个插件、去哪儿建,
     而不是起一个任务再让它失败。解析出来的连接不写回表单:下一个人点运行,用的是他自己的。
     """
-    from app.domain.plugins.nodes import parse_node_type, resolve_instance
 
     parsed = parse_node_type(node_type)
     if parsed is None:
@@ -461,13 +460,6 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
     **先拿连接预算,再开会话**,和工作流引擎跑一个节点完全一样(见 workflows/node_budget):
     节点里的等待(wait_for_job(release=db))会把预算交还再拿回来 —— 没先拿的话那一还就多出一份。
     """
-    from app.core.db import SessionLocal
-    from app.core.unit_of_work import unit_of_work
-    from app.db.models import Job
-    from app.domain.jobs import run_job_inline
-    from app.domain.workflows.errors import WorkflowDomainError
-    from app.domain.workflows import node_budget
-    from app.domain.workflows.executors.registry import get_executor
 
     def body() -> dict[str, Any]:
         handler = get_executor(node_type)

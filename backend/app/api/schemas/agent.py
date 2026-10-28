@@ -8,6 +8,10 @@ from pydantic import Field, StrictBool, field_serializer, field_validator, model
 from app.api.schemas.base import ApiModel, OrmModel
 from app.domain.resources import Resource
 from app.api.schemas.failures import FailureReadout
+from app.core.i18n import get_current_locale, render_message
+from app.domain.agent.confirmable.registry import allowance_name, tool_spec
+from app.domain.agent.confirmations import card_parts
+from app.domain.failure_summary import detail_of, hint_of, summarize
 
 class AgentContextPart(ApiModel):
     """堆叠条里的一段。kind ∈ messages|tools|system|free。"""
@@ -308,8 +312,6 @@ class AgentMessageOut(OrmModel):
         error = str(payload.get("error") or "")
         if not key and not error:
             return payload
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import detail_of, hint_of, summarize
 
         locale = get_current_locale()
         params = payload.get("error_params") if isinstance(payload.get("error_params"), dict) else {}
@@ -387,9 +389,6 @@ class ConfirmationOut(FailureReadout, OrmModel):
         同一个坑还在(`JobSummaryOut` 的 `message_key` 就靠一句注释守着同样的顺序)。放到
         `mode="after"` 里,顺序就不再是任何东西的前提,以后谁重排字段都不会把语言弄丢。
         """
-        from app.core.i18n import get_current_locale, render_message
-        from app.domain.agent.confirmable.registry import allowance_name, tool_spec
-        from app.domain.agent.confirmations import card_parts
 
         locale = get_current_locale()
         #: 标题先算:老卡没有 key 时它回落到 `summary`,那正是下面还没翻的**原话**(有 key 才有

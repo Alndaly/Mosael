@@ -30,6 +30,27 @@ from app.domain.jobs import current_actor
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.domain.workflows.executors.common import stop_if_stopping, wait_for_job
+from app.core.child_process import run_logged
+from app.db.models import Asset, Voice
+from app.domain.assets.importer import register_file_asset
+from app.domain.assets.intermediates import DUB_LINE
+from app.domain.assets.lineage import CONCAT, PAD, derived
+from app.domain.consent import voice_usable_for_digital_human
+from app.domain.entities.catalog import usable_for_digital_human
+from app.domain.entities.library import EntityDomainError, get_entity, references_of
+from app.domain.entities.mentions import generation_profile
+from app.domain.generation import (
+    operations as generation_operations,
+    resolution as generation_resolution,
+    runner as generation_runner,
+)
+from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights
+from app.domain.generation.origins import of_run_scope
+from app.domain.voices.speech import CLONE_ENGINE
+from app.domain.workflows.executors import inputs as executors_inputs, subjobs
+from app.domain.workflows.executors.subjobs import clone_engine_must_run
+from app.media.paths import resolve_key
+from app.media.probe import probe_media
 
 SPEECH_TO_VIDEO = "speech-to-video"
 VIDEO_LIPSYNC = "video-lipsync"
@@ -43,10 +64,9 @@ def _text(value: Any) -> str:
 
 def talking_models(db: Session, mode: str, actor_id: str | None) -> list[dict[str, Any]]:
     """这个人能用的、声明了这种模式(说话照片 / 改口型)的视频模型。模式是描述符说了算(ADR 0013 的正面证据)。"""
-    from app.domain.generation.resolution import generation_options
 
     return [
-        one for one in generation_options(db, "video", user_id=actor_id)
+        one for one in generation_resolution.generation_options(db, "video", user_id=actor_id)
         if one.get("adapter_available") and mode in ((one.get("capabilities") or {}).get("modes") or ())
     ]
 
@@ -72,9 +92,6 @@ def _choose_model(options: list[dict[str, Any]], choice: str, mode: str) -> dict
 def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
     """克隆音色要有授权声明才能用于数字人(ADR 0028 §5)。引擎自带的嗓子(Edge、各家云端)不是谁的克隆,不问。
     在花钱之前问 —— 配完音才拒,那段配音就白付了。"""
-    from app.db.models import Voice
-    from app.domain.voices.speech import CLONE_ENGINE
-    from app.domain.consent import voice_usable_for_digital_human
 
     if (engine or CLONE_ENGINE) != CLONE_ENGINE or not voice:
         return
@@ -85,14 +102,13 @@ def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
 
 def _speak(db: Session, scope: RunScope, text: str, engine: str, voice: str) -> str:
     """稿子配成一段音频(和「配音」节点同一个执行器)。"""
-    from app.domain.workflows.executors.subjobs import synthesize_speech
 
     if not text:
         raise WorkflowDomainError("wfErr_talkingNeedsText")
     if not voice:
         raise WorkflowDomainError("wfErr_talkingNeedsVoice")
     _require_voice_consent(db, engine, voice)
-    return synthesize_speech(db, scope, {"text": text, "engine": engine, "voice": voice})["asset_id"]
+    return subjobs.synthesize_speech(db, scope, {"text": text, "engine": engine, "voice": voice})["asset_id"]
 
 
 def _resolution(model: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
@@ -116,13 +132,9 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
 
     **等生成的时候 `db` 会被交还**(wait_for_job 的 release:commit + close):调用方在这之前取到的 ORM 对象,
     之后都是脱离会话的,要用就按 id 重新取。`project_id`:产出挂在哪个项目下(译配对口型挂在译配项目里)。"""
-    from app.domain.generation.operations import create_generation_job
-    from app.domain.generation.operations import GenerationDomainError
-    from app.domain.generation.origins import of_run_scope
-    from app.domain.generation.runner import start_generation_thread
 
     try:
-        generation, child = create_generation_job(
+        generation, child = generation_operations.create_generation_job(
             db,
             workspace_id=scope.workspace_id,
             session_id=None,
@@ -144,7 +156,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
         raise WorkflowDomainError.from_error(exc) from exc
     db.commit()
     generation_id, child_id = generation.id, child.id
-    start_generation_thread(generation_id)
+    generation_runner.start_generation_thread(generation_id)
     final = wait_for_job(child_id, release=db)
     return [str(one) for one in ((final.result or {}).get("asset_ids") or []) if one]
 
@@ -156,8 +168,6 @@ def _require_consent(config: dict[str, Any]) -> None:
 
 def _portrait(db: Session, entity: Any) -> str:
     """人物说话用哪张脸:正面 > 全身 > 挑图先后的第一张(变体没有自己的图时用母体的)。"""
-    from app.domain.entities.mentions import generation_profile
-    from app.domain.entities.library import references_of
 
     _name, _descriptor, images = generation_profile(db, entity)
     if not images:
@@ -172,8 +182,6 @@ def _portrait(db: Session, entity: Any) -> str:
 
 def _speaking_entity(db: Session, workspace_id: str, entity_id: str) -> tuple[Any, str, str]:
     """要说话的人物资产,和它的(引擎, 音色):是人物、真人有授权声明、有音色、克隆音色有授权声明。不花钱、不写东西。"""
-    from app.domain.entities.library import EntityDomainError, get_entity
-    from app.domain.entities.catalog import usable_for_digital_human
 
     if not entity_id:
         raise WorkflowDomainError("wfErr_entityNeedsTarget")
@@ -208,7 +216,6 @@ def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], a
 def _require_face_rights(db: Session, workspace_id: str, asset_id: str, role: str) -> None:
     """这张脸(人像、原片)是某个真人人物资产的参考图时,要有本人或已获同意的声明 —— 和生成漏斗同一个判据
     (check_digital_human_rights)。在配音**之前**问:漏斗要到提交生成时才查,那时配音的钱已经花了。"""
-    from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights
 
     try:
         check_digital_human_rights(db, workspace_id, [{"asset_id": asset_id, "role": role}])
@@ -274,7 +281,6 @@ def entity_speak_preflight(db: Session, config: dict[str, Any], actor: str | Non
 def talking_segments_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
     """这些段都要交给数字人:字面量的克隆音色要有授权声明,会说话照片的模型挑得到;用配音库的音色时克隆引擎得跑得起来
     (和 synthesize_speech 同一个判据,见 subjobs.clone_engine_must_run)。"""
-    from app.domain.workflows.executors.subjobs import clone_engine_must_run
 
     clone_engine_must_run(config)
     if not place.deferred("engine") and not place.deferred("voice"):
@@ -288,7 +294,6 @@ def _spoken_cues(db: Session, text: str, video_id: str) -> list[dict[str, Any]]:
     时间是**这段视频里**的:铺上时间线时由「生成字幕」按片段映射(它的 clip_id),片段截短了、挪了位置都跟着走。
     此前出镜的人说的话没有字幕 —— 带货口播的出镜版只给中间各拍铺了屏幕短句,开场钩子、收尾号召那两句是主播对着镜头
     说的,反而一个字都没上屏(付费实测)。"""
-    from app.db.models import Asset
 
     asset = db.get(Asset, video_id) if video_id else None
     duration = (asset.media_info or {}).get("duration") if asset is not None else None
@@ -312,21 +317,20 @@ def entity_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 @register("image_speak")
 def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """一张人像说一段话:音频接上游的(比如长稿分段配好的一段),没接就用稿子和挑的嗓子当场配 → 这张图 + 这段音频做说话照片。"""
-    from app.domain.workflows.executors.inputs import _asset_in
 
     _require_consent(config)
     face = _text(config.get("asset_id"))
     if not face:
         raise WorkflowDomainError("wfErr_talkingNeedsFace")
     #: 收进本工作区:别处的 id 不能借这一步被拿去生成。
-    face = _asset_in(db, scope, face).id
+    face = executors_inputs._asset_in(db, scope, face).id
     #: 脸是没声明的真人人物资产:在配音之前拒(漏斗要到提交生成时才查,那时配音的钱已经花了)。
     _require_face_rights(db, scope.workspace_id, face, FIRST_FRAME)
     model = _pick_model(db, _text(config.get("model")), SPEECH_TO_VIDEO)
     parameters = _resolution(model, config)
     given = _text(config.get("audio_asset_id"))
     if given:
-        given = _asset_in(db, scope, given).id
+        given = executors_inputs._asset_in(db, scope, given).id
     audio = given or _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
     videos = _generate(db, scope, model, [{"asset_id": face, "role": FIRST_FRAME}, {"asset_id": audio, "role": DRIVING_AUDIO}],
                        parameters)
@@ -337,19 +341,18 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
 @register("video_lipsync")
 def video_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """一段片子对上新的话:音频接上游的,没接就用稿子当场配 → 改口型。"""
-    from app.domain.workflows.executors.inputs import _asset_in
 
     _require_consent(config)
     video = _text(config.get("asset_id"))
     if not video:
         raise WorkflowDomainError("wfErr_talkingNeedsVideo")
-    video = _asset_in(db, scope, video).id
+    video = executors_inputs._asset_in(db, scope, video).id
     #: 同上:原片里的人是没声明的真人人物资产,在配音之前拒。
     _require_face_rights(db, scope.workspace_id, video, SOURCE_VIDEO)
     model = _pick_model(db, _text(config.get("model")), VIDEO_LIPSYNC)
     given = _text(config.get("audio_asset_id"))
     if given:
-        given = _asset_in(db, scope, given).id
+        given = executors_inputs._asset_in(db, scope, given).id
     audio = given or _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
     videos = _generate(db, scope, model, [{"asset_id": video, "role": SOURCE_VIDEO}, {"asset_id": audio, "role": DRIVING_AUDIO}])
     #: 用的是上游现成的音频时不交回它 —— 画板上不多出一格重复的音频。
@@ -387,8 +390,6 @@ def split_script(text: str, max_seconds: float) -> list[str]:
 
 def _duration(asset: Any) -> float:
     """这段音频多长(秒):素材库登记时量过;没量到就现量一次。"""
-    from app.media.paths import resolve_key
-    from app.media.probe import probe_media
 
     seconds = (asset.media_info or {}).get("duration")
     if seconds is None and asset.file_key:
@@ -400,10 +401,6 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
     """几段配音首尾相接成一段(一组句子交给说话照片的那一段),登记进素材库。"""
     import tempfile
 
-    from app.core.child_process import run_logged
-    from app.domain.assets.importer import register_file_asset
-    from app.domain.assets.lineage import CONCAT, derived
-    from app.media.paths import resolve_key
 
     sources = [resolve_key(str(asset.file_key)) for asset in assets]
     with tempfile.TemporaryDirectory(prefix="mosael-talking-") as folder:
@@ -430,10 +427,6 @@ def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: s
     """一段配音末尾补静音到 `seconds`,登记成新的一段(原来那段不动)。克隆嗓子的出处照带(见 _concat_audio)。"""
     import tempfile
 
-    from app.core.child_process import run_logged
-    from app.domain.assets.importer import register_file_asset
-    from app.domain.assets.lineage import PAD, derived
-    from app.media.paths import resolve_key
 
     with tempfile.TemporaryDirectory(prefix="mosael-talking-") as folder:
         target = Path(folder) / "segment.wav"
@@ -453,8 +446,6 @@ def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: s
 def _mark_parts(db: Session, asset_ids: list[str]) -> None:
     """拼进一段(或补过静音)之后,前面那几份就只是零件了:标成逐句配音的一句(中间产物),素材库不列 ——
     交给说话照片、铺上时间线的是那一段。"""
-    from app.db.models import Asset
-    from app.domain.assets.intermediates import DUB_LINE
 
     for asset_id in asset_ids:
         asset = db.get(Asset, asset_id)
@@ -471,8 +462,6 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     一组的几句拼成一段音频交给一次说话照片。句子不从中间断开,接缝落在句子之间。字幕直接用稿子加这些实测时长,
     不再转写一遍。上限来自所选模型的描述符,不写死;`max_seconds` 只能往小里调。
     """
-    from app.domain.workflows.executors.subjobs import synthesize_speech
-    from app.domain.workflows.executors.inputs import _asset_in
 
     text = _text(config.get("text"))
     if not text:
@@ -496,7 +485,7 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     for sentence in split_script(text, ceiling):
         #: 每一句都是一次付费配音:这一轮在停就不再提交下一句。
         stop_if_stopping(db)
-        asset = _asset_in(db, scope, synthesize_speech(db, scope, {"text": sentence, "engine": engine, "voice": voice})["asset_id"])
+        asset = executors_inputs._asset_in(db, scope, subjobs.synthesize_speech(db, scope, {"text": sentence, "engine": engine, "voice": voice})["asset_id"])
         seconds = _duration(asset)
         if seconds > ceiling:
             raise WorkflowDomainError("wfErr_talkingSentenceTooLong",
@@ -529,7 +518,7 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
             #: 不够模型的下限(可灵数字人 2 秒起):末尾补静音补到下限。此前分组只看上限,一句「好的。」单独成段,
             #: 到提交时才被拒。并进邻居是做不到的 —— 分组是贪心的,一组收尾正是因为下一句放不进去。说话照片在
             #: 静音处闭着嘴,比被拒强;时间线上这一段按补过的长度排,后面几段接着往后。
-            audio = _pad_audio(db, scope, _asset_in(db, scope, audio), floor, name)
+            audio = _pad_audio(db, scope, executors_inputs._asset_in(db, scope, audio), floor, name)
             cursor = start + floor
         _mark_parts(db, [one for one in made if one != audio])
         #: 每段带上 end(字幕、时间线节点按 start/end 读段落)和挑定的模型:下游逐段「让它说话」留空模型时

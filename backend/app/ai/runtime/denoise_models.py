@@ -28,6 +28,7 @@ from typing import Any
 from app.ai.runtime.errors import RuntimeSetupError, failure_message
 from app.ai.runtime.install_state import FAILED, InstallProgress, InstallStore
 from app.core.config import settings
+from app.ai import media_transfer
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,6 @@ def _run_install(engine: str) -> None:
 
 
 def _install_deepfilter() -> Path:
-    from app.ai.media_transfer import download_to_path
 
     spec = deepfilter_binary_spec()
     if spec is None:
@@ -151,7 +151,7 @@ def _install_deepfilter() -> Path:
     staging = target.with_name(f"{target.name}.download")
     url = _RELEASE_URL.format(version=DEEPFILTER_VERSION, asset=spec.asset)
     try:
-        download_to_path(url, staging, timeout=600)
+        media_transfer.download_to_path(url, staging, timeout=600)
         digest = _sha256(staging)
         if digest != spec.sha256:
             # 不说"下载失败"—— 下载是成功的,只是下来的东西不是我们核对过的那一个。

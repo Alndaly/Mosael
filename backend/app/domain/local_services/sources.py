@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 from app.ai.runtime import config as runtime_config
 from app.core.i18n import tr
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins import package_sources
 
 _PYTORCH_LABELS = {"pytorch": "pkgSource_pytorchOfficial", "nju": "pkgSource_nju"}
 
@@ -35,7 +36,6 @@ def for_plugin() -> dict[str, str]:
 def labels() -> dict[str, str]:
     """三项此刻在界面上叫什么(安装计划在每个下载地址旁边写明它被哪一项改写了):`pip`、`pytorch` 是预设的名字或自填的地址,
     `github` 是前缀本身(空 = 没设,直连 GitHub)。"""
-    from app.domain.plugins import package_sources
 
     current = runtime_config.get()
     key = (current.pytorch_index or "").strip() or runtime_config.OFFICIAL_PYTORCH

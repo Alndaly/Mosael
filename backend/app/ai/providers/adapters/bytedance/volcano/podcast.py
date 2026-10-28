@@ -25,6 +25,8 @@ from pathlib import Path
 
 from app.core.i18n import LocalizedError
 from app.ai.providers.adapters.bytedance.volcano.podcast_protocol import EventType, PodcastProtocolMessage, MessageType, MessageFlags, parse_message
+from app.core import outbound_proxy
+from app.core.outbound_guard import Origin
 
 logger = logging.getLogger(__name__)
 
@@ -223,8 +225,6 @@ def probe_connection(profile) -> str:
     """
     import websockets
 
-    from app.core.outbound_guard import Origin
-    from app.core.outbound_proxy import ticket
 
     headers = {
         "X-Api-App-Id": str(profile.extra.get("appid") or ""),
@@ -242,7 +242,7 @@ def probe_connection(profile) -> str:
             # 握手被 HTTP 拒:401/403 是钥匙的事;别的状态(400/426 等)说明端点活着。
             return "credential_rejected" if exc.response.status_code in (401, 403) else "ok"
 
-    with ticket(Origin.CONFIGURED) as issued:
+    with outbound_proxy.ticket(Origin.CONFIGURED) as issued:
         return asyncio.run(_once(issued.url))
 
 
@@ -304,11 +304,9 @@ def synthesize_volcano_podcast(
         speech_rate=max(-50, min(100, round((max(0.2, min(3.0, speed)) - 1.0) * 100))),
         audio_format=audio_format,
     )
-    from app.core.outbound_guard import Origin
-    from app.core.outbound_proxy import ticket
 
     #: websocket 也过出站检查:经守卫代理连过去(core/outbound_proxy)。地址是连接里填的(或内置的)。
-    with ticket(Origin.CONFIGURED) as issued:
+    with outbound_proxy.ticket(Origin.CONFIGURED) as issued:
         try:
             result = asyncio.run(_run(appid, token, payload, endpoint=endpoint or ENDPOINT, proxy=issued.url))
         except Exception:

@@ -10,6 +10,7 @@ from typing import Any
 from app.core.i18n import is_message_key
 from app.domain.boards.errors import BoardDomainError, _field_error
 from app.domain.boards.producer_ids import is_producer_id, missing_slot_producer
+from app.domain.markers import MarkerError, normalize_markers
 
 
 #: 画板上能放什么。
@@ -627,7 +628,6 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
 
     # 标记和 items 平级,不混进去 —— 它不是画板项(没有素材、不生成、连不了线),
     # 混进去的话每一处遍历 items 的地方都要先分辨一次"这个是不是标记"。规则见 domain/markers。
-    from app.domain.markers import MarkerError, normalize_markers
 
     try:
         markers = normalize_markers(raw.get("markers"))

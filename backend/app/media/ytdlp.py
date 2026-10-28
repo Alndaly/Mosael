@@ -26,6 +26,12 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
+from app.core import outbound_proxy
+from app.core.i18n import t
+from app.core.outbound_guard import Origin
+from app.media import extractors
+from app.media.extractors.errors import SiteAdapterError, SiteAdapterPending
+from mosael_formats.i18n import DEFAULT_LOCALE
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +109,6 @@ class YtdlpError(RuntimeError):
     """
 
     def __init__(self, key: str, **params: object) -> None:
-        from app.core.i18n import t
-        from mosael_formats.i18n import DEFAULT_LOCALE
 
         self.key = key
         self.params = params
@@ -178,10 +182,8 @@ def _checked_media(path: Path, kind: str) -> Path:
 @contextmanager
 def _guarded(options: dict[str, Any]) -> Iterator[Any]:
     """这一次 yt-dlp 的出口:守卫代理的一张票(见模块说明)。交回那张票 —— 失败时看它记没记下被拒的那一句。"""
-    from app.core.outbound_guard import Origin
-    from app.core.outbound_proxy import ticket
 
-    with ticket(Origin.GIVEN) as issued:
+    with outbound_proxy.ticket(Origin.GIVEN) as issued:
         options["proxy"] = issued.url
         options["external_downloader"] = {"default": "native"}
         yield issued
@@ -214,7 +216,6 @@ def _custom_extractor_classes() -> tuple[type[Any], ...]:
     每次现读模块属性,不缓存、不在 import 时定格:测试会临时换掉这份集合来验证顺序,
     而要换的正是 `extractors.CUSTOM_EXTRACTORS` 本身。
     """
-    from app.media import extractors
 
     return extractors.CUSTOM_EXTRACTORS
 
@@ -667,7 +668,6 @@ def classify(exc: BaseException) -> YtdlpError:
     from yt_dlp.networking.exceptions import HTTPError, TransportError
     from yt_dlp.utils import GeoRestrictedError, UnsupportedError
 
-    from app.media.extractors.errors import SiteAdapterError, SiteAdapterPending
 
     chain = _causes(exc)
     #: 这几类已经带着「是哪一种」:yt-dlp 里的代码抛的 `YtdlpError` 带 key,站点适配器抛的

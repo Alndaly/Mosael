@@ -17,13 +17,13 @@ from sqlalchemy import delete, event, func, inspect, select, union_all
 from sqlalchemy.orm import Session
 
 from app.core import abort
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, Base
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.core.i18n import LocalizedError, fragment, t
+from app.core.i18n import LocalizedError, fragment, t, is_message_key, render_message, stored_param
 from mosael_formats.i18n import DEFAULT_LOCALE
-from app.db.models import Job, TaskEvent
-from app.db.models import now as models_now
+from app.db.models import Job, TaskEvent, now as models_now
 from app.domain.jobs import catalog as job_catalog
+from app.domain.collaboration import record_activity
 
 logger = logging.getLogger(__name__)
 
@@ -369,8 +369,6 @@ def say(job: Job, key: str, **params: object) -> None:
     为什么不只存 key:这一列**落库**,任务记录活得比一次请求久,写入时就翻会把语言冻死在那一刻 ——
     用户切成英文后历史任务仍是中文,而那正是这次要修的毛病。
     """
-    from app.core.i18n import is_message_key, render_message, stored_param
-    from mosael_formats.i18n import DEFAULT_LOCALE
 
     #: 有几处传进来的是一句现成的话(子任务转述的消息、第三方的原话)。它不是 key,不该当 key
     #: 落库 —— 否则读的时候会被当模板再填一遍(见 core/i18n.is_message_key)。
@@ -392,7 +390,6 @@ def blame(exc: Exception) -> dict[str, Any]:
     **那句话不按位置截**:`error` 是 Text 列,长短是界面排版的事。此前的 `[:500]` 把长一点的
     原因切成半句话 —— 切掉的恰好是后半截,而原因往往就写在后半截。
     """
-    from app.core.i18n import is_message_key, stored_param
 
     key = str(getattr(exc, "key", "") or "")
     if not is_message_key(key):
@@ -568,7 +565,6 @@ def _after_jobs_settled(job_ids: list[str]) -> None:
     """
     # 用**新的** session:调用方那个刚提交完,在它上面接着写会把这次送信卷进调用方的
     # 下一个事务里 —— 而调用方随时可能回滚。
-    from app.core.db import SessionLocal
 
     with SessionLocal() as fresh:
         for job_id in job_ids:
@@ -876,7 +872,6 @@ def create_job(
     say(job, message, **(message_params or {}))
     db.add(job)
     db.flush()
-    from app.domain.collaboration import record_activity
 
     record_activity(
         db,
@@ -1099,8 +1094,6 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
         if job is None:
             return None
         # 这里走的是 UPDATE 语句(不是 ORM 对象),所以不能用 say();两栏一起写,含义与它一致。
-        from app.core.i18n import t
-        from mosael_formats.i18n import DEFAULT_LOCALE
 
         claimed = db.execute(
             Job.__table__.update()
@@ -1306,7 +1299,6 @@ def _referenced_job_ids(db: Session) -> set[str]:
     那几列 —— 定时任务的运行记录、AI Studio 的生成记录、发布记录、用量事件。它们各自是一份「这一次是怎么跑的 / 花了多少」,
     任务删了就只剩一个空的 job_id。级联删除的那几张(任务事件、运行产出全文)本来就是任务的一部分,跟着任务走,不算。
     """
-    from app.core.db import Base
 
     kept: set[str] = set()
     for table in Base.metadata.tables.values():

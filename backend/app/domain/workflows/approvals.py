@@ -96,6 +96,7 @@ from app.db.models import Job, User, Workflow, WorkflowRevision, WorkflowRunAppr
 from app.domain.notifications import notify
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import as_text
+from app.domain.jobs import register_cancel_listener, register_resumer
 
 logger = logging.getLogger(__name__)
 
@@ -855,7 +856,6 @@ def resume_job(job_id: str) -> bool:
 
 def register_seams() -> None:
     """把这两条接缝登记到任务总线上。组装根调(app.main._wire_seams)—— 任务域不认识工作流。"""
-    from app.domain.jobs import register_cancel_listener, register_resumer
 
     register_resumer("workflow", can_resume=can_resume, resume=resume_job)
     register_cancel_listener("workflow", cancel_for_job)

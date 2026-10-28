@@ -35,15 +35,20 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.core.i18n import render_message
 from mosael_formats.i18n import DEFAULT_LOCALE
-from app.db.models import FeishuBot, Workflow, WorkflowRunApproval
-from app.domain.feishu import bindings, routing
+from app.db.models import FeishuBot, Workflow, WorkflowRunApproval, Job, ToolConfirmation
+from app.domain.feishu import bindings, routing, gateway as domain_gateway
 from app.domain.workflows.approvals import (
     DELIVERY_FAILED,
     DELIVERY_NOT_ATTEMPTED,
     DELIVERY_SENT,
     Delivery,
 )
-from app.integrations.feishu import client
+from app.integrations.feishu import client, cards, question_cards
+from app.domain.agent import confirmations
+from app.domain.agent.confirmations import authorize_and_reject
+from app.domain.agent.errors import ConfirmationError
+from app.domain.permissions import PermissionDenied
+from app.domain.workflows import approvals as run_approvals
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +177,6 @@ def approval_resolution(db: Session, approval: WorkflowRunApproval) -> routing.R
     和 `_node_name` 同一个出处。目标解析本身在 `domain/feishu/routing`:「等人确认」和 4 个
     飞书能力节点共用它,所以同一个写法不会给出发给谁的两个答案。
     """
-    from app.db.models import Job
-    from app.domain.workflows import approvals as run_approvals
 
     config = run_approvals.node_config(db, approval)
     job = db.get(Job, approval.job_id)
@@ -221,8 +224,6 @@ def send_approval_card(
     实现,而它们迟早会在详情上分家(重试、token 刷新、地址)。卡片**长什么样**仍然是两回事:
     确认卡带按钮回调(`cards.approval_card`),节点那张卡只带一个链接。
     """
-    from app.domain.feishu import gateway as domain_gateway
-    from app.integrations.feishu import cards
 
     transport = domain_gateway.transport()
     hours = int(round((approval.timeout_seconds or 0) / 3600)) if approval.timeout_seconds else None
@@ -304,8 +305,6 @@ def settle_run_approval(db: Session, approval: WorkflowRunApproval, outcome: str
     if bot is None:
         logger.info("approval %s was sent by a bot that is gone; nothing to retire", approval.id)
         return
-    from app.domain.feishu import gateway as domain_gateway
-    from app.integrations.feishu import cards
 
     try:
         transport = domain_gateway.transport()
@@ -382,8 +381,6 @@ def _handle_run_approval(open_id: str, action: str, value: dict[str, Any], bot_i
     认人按**发出这张卡的那台机器人**(回调带过来的 `bot_id`,没有就用单子上存着的
     `feishu_bot_id`)—— 那张码 / 那个 open_id 属于哪个应用,认人才算得住。
     """
-    from app.domain.permissions import PermissionDenied
-    from app.integrations.feishu import cards
 
     approval_id = str(value.get("approval_id") or "")
     if not approval_id:
@@ -448,10 +445,6 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
 
     失败一律回 toast:原卡保持可点,好让真正有权限的人接手。
     """
-    from app.db.models import ToolConfirmation
-    from app.domain.agent.confirmations import authorize_and_approve, authorize_and_reject
-    from app.domain.agent.errors import ConfirmationError
-    from app.integrations.feishu import cards, question_cards
 
     action = str(value.get("action") or "")
     confirmation_id = str(value.get("confirmation_id") or "")
@@ -488,7 +481,7 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             # 校验与执行都在 authorize_and_*(和 HTTP 路由共用同一份)。这一层只负责:
             # 把 open_id 认成人、把领域异常翻成 toast。
             if action == cards.ACTION_APPROVE:
-                authorize_and_approve(db, user, confirmation)
+                confirmations.authorize_and_approve(db, user, confirmation)
                 decision = "approved"
             else:
                 authorize_and_reject(db, user, confirmation)

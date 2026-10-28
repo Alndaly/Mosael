@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.domain.boards.errors import BoardDomainError
 from app.domain.boards.shape import _MEDIA_KINDS, normalize_canvas
+from app.db.models import Asset, Entity, Scene3D, Sequence
+from app.domain.notes import NoteDomainError, read_reference
 
 
 #: 一种格子的 `asset_id` 必须是哪种素材(见 _validate_asset_references)。
@@ -25,7 +27,6 @@ def _validate_references(
     `assets=False`:这一次写入是服务端自己落产出(回执)。那几份素材是产出者刚交回的,由回执那一侧
     按工作区查过(见 _asset_facts);在这里再拒一次的话,整封回执落不下,那一格就永远在转圈。
     """
-    from app.db.models import Scene3D
     ids = {item['scene_id'] for item in canvas['items'] if item.get('scene_id')}
     if ids:
         owned = set(db.scalars(select(Scene3D.id).where(Scene3D.workspace_id == workspace_id, Scene3D.id.in_(ids))))
@@ -33,7 +34,6 @@ def _validate_references(
             raise BoardDomainError("boardErr_sceneNotInWorkspace")
 
     # 时间线格引用的时间线:只查新引入的(同下面的资产格)—— 时间线在剪辑页被删了,那一格照样能挪、能删。
-    from app.db.models import Sequence
     retained_sequences = {item.get("sequence_id") for item in (existing or {}).get("items", []) if item["kind"] == "sequence"}
     fresh_sequences = {item["sequence_id"] for item in canvas["items"]
                        if item["kind"] == "sequence" and item["sequence_id"] not in retained_sequences}
@@ -44,7 +44,6 @@ def _validate_references(
             raise BoardDomainError("boardErr_sequenceNotInWorkspace")
 
     # 资产格引用的资产:**只查新引入的**,和文档、素材同一条 —— 资产删了之后那一格照样能挪、能删、能复制。
-    from app.db.models import Entity
     retained_entities = {item.get("entity_id") for item in (existing or {}).get("items", []) if item["kind"] == "entity"}
     fresh_entities = {item["entity_id"] for item in canvas["items"]
                       if item["kind"] == "entity" and item["entity_id"] not in retained_entities}
@@ -54,7 +53,6 @@ def _validate_references(
         if owned_entities != fresh_entities:
             raise BoardDomainError("boardErr_entityNotInWorkspace")
 
-    from app.domain.notes import NoteDomainError, read_reference
     # 板上已经有的引用不再重新校验:源文档删掉之后,坏掉的引用照样能挪、能删、能复制。
     # **按「引用的是哪篇的哪一版」认,不按格子的 id 认** —— 画布上复制出来的那一格、副本里的
     # 那一格,和原来那格是同一份引用;按 id 认的话它们被当成新引用去校验,整张板存不下、复制不出。
@@ -95,7 +93,6 @@ def _validate_asset_references(db: Session, workspace_id: str, canvas: dict, exi
     **只查新引入的**,和文档同一条:板上已经有的「这种格子放这份素材」不再重新校验 —— 素材从库里删掉之后,
     那一格照样能挪、能删、能复制。按「哪种格子放哪份素材」认,不按格子的 id 认(复制出来的那一格是同一份引用)。
     """
-    from app.db.models import Asset
 
     retained = {(item.get("kind"), item.get("asset_id"))
                 for item in (existing or {}).get("items", []) if item.get("asset_id")}

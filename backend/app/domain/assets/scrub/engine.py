@@ -34,11 +34,15 @@ from pathlib import Path
 
 from app.core.i18n import LocalizedError
 from app.media.scratch import scratch_dir
-from app.domain.assets.scrub import aac as aac_mod
-from app.domain.assets.scrub import canonical as canonical_mod
-from app.domain.assets.scrub import findings as findings_mod
-from app.domain.assets.scrub import mp4 as mp4_mod
-from app.domain.assets.scrub import nal as nal_mod
+from app.domain.assets.scrub import (
+    aac as aac_mod,
+    canonical as canonical_mod,
+    findings as findings_mod,
+    mp4 as mp4_mod,
+    nal as nal_mod,
+    gates,
+    report,
+)
 from app.domain.assets.scrub.findings import MediaFacts
 from app.domain.assets.scrub.mp4 import Mp4Error, Reader
 from app.domain.assets.scrub.verify import pcm_md5
@@ -420,13 +424,11 @@ def _verify_audio(
 
 def gate_report(outcome: ScrubOutcome) -> list[dict[str, object]]:
     """跑门禁(见 `gates.py`)。放在这里是为了让 job / 节点只 import 一个口。"""
-    from app.domain.assets.scrub import gates
 
     return gates.run_all(outcome)
 
 
 def render_report(outcome: ScrubOutcome, gates: list[dict[str, object]], *, lang: str = "zh") -> str:
-    from app.domain.assets.scrub import report
 
     return report.render(outcome, gates, lang=lang)
 

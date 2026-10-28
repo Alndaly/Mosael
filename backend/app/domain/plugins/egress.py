@@ -37,6 +37,7 @@ from app.db.models import PluginInstance
 from app.domain import network
 from app.domain.plugins.errors import PluginDomainError
 from mosael_formats.plugin_manifest import Manifest
+from app.domain.plugins import package_sources
 
 FOLLOW = "follow"
 DIRECT = "direct"
@@ -127,7 +128,6 @@ UNDECIDED = Egress()
 def resolve(db: Session, instance: PluginInstance, manifest: Manifest) -> Egress:
     """**唯一的决策**:连接自己的覆盖 > Mosael 的全局设置 —— 出站代理和包镜像都是。`manifest` 说它要从哪几个包
     生态装东西(清单的 `package_sources`),由调用方给:它们手里本来就有这个连接的清单。"""
-    from app.domain.plugins import package_sources
 
     mirrors = tuple(sorted(package_sources.child_env(manifest.package_sources, instance.package_sources).items()))
     if instance.network_mode == DIRECT:

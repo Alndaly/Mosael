@@ -23,9 +23,10 @@ from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.billing.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
-from app.domain.providers import models as provider_models
+from app.domain.providers import models as provider_models, credentials as provider_credentials
 from app.domain.providers.chat_connection import require_connection
 from app.core.i18n import LocalizedError
+from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 
 _LLM_TIMEOUT_SECONDS = 60.0
 
@@ -133,7 +134,6 @@ def guide_for(provider: str, model: str, dialect: str = "") -> PlatformGuide:
 
 def _dialect_of(db: Session, user_id: str | None, provider: str, model: str) -> str:
     """这个图像模型自己说它吃哪种写法(描述符的 `prompt_dialect`);说不出来就是空串。"""
-    from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 
     try:
         resolved = resolve_generation_model(db, user_id=user_id, provider=provider, model=model, kind="image")
@@ -211,7 +211,6 @@ def optimize_image_prompt(
     # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
     # 传入的 profile / 首个启用的供应商。
     default = provider_models.resolve_default(db, "chat", user_id)
-    from app.domain.providers import credentials as provider_credentials
 
     chat_profile = (
         provider_credentials.resolve_connection(db, default.profile, user_id) if default is not None else None

@@ -15,11 +15,13 @@ from sqlalchemy.orm import Session
 from app.core.i18n import fragment
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
+from app.domain.note_types import NoteContent
+from app.domain.notes import NoteDomainError, get_note, save_note, snapshot
+from app.domain.notes.passages import apply_passage_edits
 
 
 def _note_in(db: Session, workspace_id: str, payload: dict[str, Any]):
     """这次要改的那篇,**收进这个工作区**,而且不在回收站里。"""
-    from app.domain.notes import NoteDomainError, get_note
 
     try:
         note = get_note(db, workspace_id, str(payload.get("note_id") or ""))
@@ -31,8 +33,6 @@ def _note_in(db: Session, workspace_id: str, payload: dict[str, Any]):
 
 
 def _edited(markdown: str, payload: dict[str, Any]) -> str:
-    from app.domain.notes import NoteDomainError
-    from app.domain.notes.passages import apply_passage_edits
 
     try:
         return apply_passage_edits(markdown, payload.get("operations"))
@@ -62,8 +62,6 @@ def _summarize_edit_note(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute_edit_note(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    from app.domain.note_types import NoteContent
-    from app.domain.notes import NoteDomainError, save_note, snapshot
 
     payload = confirmation.payload
     note = _note_in(db, confirmation.workspace_id, payload)

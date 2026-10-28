@@ -39,14 +39,21 @@ from app.db.models import (
     now,
 )
 from app.domain.agent import origins
-from app.domain.agent.host import get_or_create_external_session, post_user_message
+from app.domain.agent.host import (
+    get_or_create_external_session,
+    post_user_message,
+    interrupted_external_sessions,
+    mark_interrupt_notified,
+)
 from app.domain.feishu import bindings
 from app.domain.jobs import register_settle_listener
 from app.domain.permissions import holds_workspace_perm
 from app.domain.triggers.matching import IncomingMessage
 from app.domain.triggers.dispatch import Outcome
 from app.domain.triggers import dispatch as trigger_dispatch
-from app.integrations.feishu import client
+from app.integrations.feishu import client, cards, question_cards
+from app.domain.assets import importer
+from app.integrations.feishu.approvals import _full_summary, announce_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +230,6 @@ def _ingest_attachments(
     冒到 `connections.dispatch` 起的 `feishu-inbound` 线程,而那条线程没有 wrapper:没有回执、
     没有事件行、连兜底那句都没有,`seen_recently` 却已经把它记成"见过"。
     """
-    from app.domain.assets.importer import import_binary_asset
 
     wanted: list[tuple[str, str, str, str]] = [
         (key, "image", "image/jpeg", f"feishu-{message_id[-8:]}-{index + 1}.jpg")
@@ -243,7 +249,7 @@ def _ingest_attachments(
         try:
             data = client.download_message_resource(bot, message_id, key, kind)
             with SessionLocal() as db:
-                asset = import_binary_asset(
+                asset = importer.import_binary_asset(
                     db,
                     workspace_id=workspace_id,
                     project_id=None,
@@ -671,13 +677,11 @@ def system_note(db: Session, session: AgentSession) -> str:
 
 
 def _announce(db: Session, confirmation) -> str | None:
-    from app.integrations.feishu.approvals import announce_confirmation
 
     return announce_confirmation(db, confirmation)
 
 
 def _settle_question(db: Session, question) -> None:
-    from app.integrations.feishu import question_cards
 
     origin = None
     if question.session_id:
@@ -690,8 +694,6 @@ def _settle_question(db: Session, question) -> None:
 
 
 def _settle_confirmation(db: Session, confirmation) -> None:
-    from app.integrations.feishu import cards
-    from app.integrations.feishu.approvals import _full_summary
 
     if confirmation.status not in {"approved", "executed", "rejected", "expired", "unknown"} or not confirmation.feishu_message_id:
         return
@@ -720,7 +722,6 @@ def _settle_confirmation(db: Session, confirmation) -> None:
 
 
 def _announce_question(db: Session, question) -> str | None:
-    from app.integrations.feishu import question_cards
 
     return question_cards.announce(db, question)
 
@@ -839,7 +840,6 @@ def notify_interrupted_chats(db: Session) -> int:
     只写进了库。桌面端看得到它,而在飞书里发消息的那个人只看到一片沉默,和"还在处理中"
     分辨不出来,于是一直等。开发时 --reload 尤其频繁,这就是"卡死"的另一半。
     """
-    from app.domain.agent.host import interrupted_external_sessions, mark_interrupt_notified
 
     sent = 0
     for external_key, notice, message_id in interrupted_external_sessions(db, "feishu"):

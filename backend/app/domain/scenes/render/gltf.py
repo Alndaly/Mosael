@@ -23,6 +23,8 @@ from app.domain.scenes import glb
 from app.domain.scenes.render.meshes import meshes_for
 from app.domain.scenes.render.raster import hex_to_linear
 from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
+from app.domain.scenes.render import _local_matrix, _visible
+from app.domain.scenes.render.sampling import sample_object
 
 #: 这些 kind 不产生几何,但仍然是场景树上的节点:分组带着孩子走,模型是给 Blender 挂文件的锚,
 #: 灯是光源。相机不写进 GLB —— 镜头由 worker 按 shots 另建(它要带上 Mosael 的目标距离)。
@@ -40,8 +42,6 @@ LIGHT_UNIT = 1000
 
 
 def _pose_matrix(obj: SceneObject, shot: SceneShot, time: float) -> np.ndarray:
-    from app.domain.scenes.render import _local_matrix
-    from app.domain.scenes.render.sampling import sample_object
 
     pose = sample_object(obj, shot, time)
     return _local_matrix(pose.position, pose.rotation, pose.scale)
@@ -88,7 +88,6 @@ def scene_document(content: SceneContent, shot: SceneShot, time: float = 0.0) ->
     lights: list[dict[str, Any]] = []
     index_of: dict[str, int] = {}
 
-    from app.domain.scenes.render import _visible
 
     # 隐藏的不导出,**连同它的后代** —— 只看自己那一位的话,藏起来的分组里的东西会掉出来变成根节点。
     catalogue = {obj.id: obj for obj in content.objects}

@@ -26,12 +26,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, get_current_locale, render_message
-from app.db.models import PluginInstance, User
+from app.db.models import PluginInstance, User, Job
 from app.domain import browser
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.plugins import instances as inst
-from app.domain.plugins import runtime, tools
+from app.domain.plugins import instances as inst, runtime, tools
 from mosael_formats.plugin_manifest import WORKFLOW_LIBRARY
+from app.core.db import SessionLocal
+from app.domain.job_center import use_cases as job_center
+from app.domain.jobs import TERMINAL_STATUSES
+from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.runtime import PluginRuntimeError
+from app.domain.server_workflows import WorkflowLibraryError
+from app.domain.workflows.executors.common import connection_handed_back
 
 #: 问插件的上限:取模板要把几张模板的整图取一遍、问下载地址多大;注册表在公网上。
 PLUGIN_TIMEOUT_SECONDS = 120
@@ -171,7 +177,6 @@ def locate(db: Session, user: User, workspace_id: str, node: str, subgraph: str 
 
 def _job_error(db: Session, user: User, job_id: str) -> str:
     """那次运行的失败原因(按读的人的语言);没失败是空串。"""
-    from app.domain.job_center import use_cases as job_center
 
     job = job_center.readable(db, user, job_id)
     if job.status != "failed":
@@ -560,10 +565,6 @@ def propose_node_install(db: Session, user: User, workspace_id: str, payload: di
 def _wait_job(db: Session, job_id: str, *, timeout: float) -> Any:
     """等一个后台任务落终态。**等待期间把会话交还**(connection_handed_back):
     派发登记在 after_commit 上的线程要先有那一次提交才起得来;装节点包可能几分钟,攥着事务也就攥着写锁。"""
-    from app.core.db import SessionLocal
-    from app.db.models import Job
-    from app.domain.jobs import TERMINAL_STATUSES
-    from app.domain.workflows.executors.common import connection_handed_back
 
     with connection_handed_back(db):
         deadline = time.monotonic() + timeout
@@ -599,9 +600,6 @@ def install_node_pack(db: Session, user: User, workspace_id: str, payload: dict[
         )
 
     from app.domain import server_workflows
-    from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.runtime import PluginRuntimeError
-    from app.domain.server_workflows import WorkflowLibraryError
 
     instance = connection(db, user, str(approved.get("instance_id") or ""))
     job = server_workflows.start_node_install(db, user, instance, workspace_id=workspace_id, packs=[pack],
@@ -693,7 +691,6 @@ def run_canvas(db: Session, user: User, workspace_id: str, payload: dict[str, An
     )
     #: 生成任务这一笔先落库:跑它的线程要读到这一行才起得来;而「运行」之后那一下是**另一个会话**里的工作台动作
     #: (browser 那条路自己开会话),攥着这笔写事务排它就会等到写锁超时(实测 31 秒,SQlite)。
-    from app.domain.workflows.executors.common import connection_handed_back
     db.flush()
     with connection_handed_back(db):
         pass

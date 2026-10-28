@@ -12,7 +12,7 @@ from typing import Any, Literal
 import httpx
 
 
-from app.domain.providers import models as provider_models
+from app.domain.providers import models as provider_models, credentials as provider_credentials
 from app.core import http_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
 from app.domain.ai_chat import AiChatError, chat, target_for
 from app.domain.billing.usage import BillableCall, billable, once
@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session
 from app.ai.providers.contracts.generation import sanitize_adapter_error
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, ProviderProfile
-from app.domain.providers import credentials as provider_credentials
 from app.domain.providers.credentials import ResolvedConnection
 from app.domain.providers.selection import find_enabled_connection, list_enabled_connections
 from app.media.image_preview import browser_compatible_image
@@ -29,6 +28,7 @@ from app.media.paths import resolve_key
 from app.core.child_process import run_logged
 from app.core.config import settings
 from app.media.probe import probe_media
+from app.domain.transcripts.operations import get_transcript_for_asset
 
 """Existing-asset visual analysis.
 
@@ -362,7 +362,6 @@ def build_messages(
 
 def asset_transcript_text(db: Session, asset_id: str) -> str | None:
     """把该素材已有转写拼成一段纯文本(按时间顺序);没有则 None。"""
-    from app.domain.transcripts.operations import get_transcript_for_asset
 
     transcript = get_transcript_for_asset(db, asset_id)
     if transcript is None:

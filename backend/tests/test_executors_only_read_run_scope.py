@@ -92,8 +92,12 @@ def _violations(modules: dict[str, ast.Module]) -> list[str]:
                     continue
                 if isinstance(parent, ast.keyword):
                     parent = parents.get(parent)
-                if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Name):
-                    callee = functions.get(parent.func.id)
+                #: 直接调(`_asset_in(...)`)和按模块属性调(`inputs._asset_in(...)`,测试要在定义处打补丁的名字这么写)同一回事。
+                callee_name = (parent.func.id if isinstance(parent.func, ast.Name)
+                               else parent.func.attr if isinstance(parent.func, ast.Attribute) else None) \
+                    if isinstance(parent, ast.Call) else None
+                if callee_name is not None:
+                    callee = functions.get(callee_name)
                     if callee is not None and _accepts_scope(callee, parent, node):
                         continue
                 problems.append(f"{where} 把 {node.id} 用在了 `{ast.unparse(parent) if parent else node.id}`")

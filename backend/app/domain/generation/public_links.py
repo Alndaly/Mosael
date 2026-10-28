@@ -51,9 +51,12 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from app.core.i18n import tr
+from app.core.i18n import tr, fragment
 from app.domain import capabilities
-from app.domain.capabilities import Capability, CapabilityUnavailable
+from app.domain.capabilities import Capability, CapabilityUnavailable, Use, register_use
+from app.db.models import PluginPublicLink, now
+from app.domain.plugins import tools as plugin_tools
+from app.domain.plugins.errors import PluginDomainError
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -88,8 +91,6 @@ CAPABILITY = Capability(
 
 def register_uses() -> None:
     """素材外链用在哪(ADR 0032 §4):它没有界面入口,是生成时自动走的一步。"""
-    from app.core.i18n import fragment
-    from app.domain.capabilities import Use, register_use
 
     register_use(Use(CAPABILITY.name, "app", fragment("capUse_generationPublicUrl")))
 
@@ -113,9 +114,6 @@ def public_url_for(
     db: "Session", *, owner_user_id: str | None, workspace_id: str, asset_id: str, asset_name: str,
 ) -> tuple[str, str]:
     """把这份素材传上去(或复用还没过期的那条),返回 `(直链, 用了哪个插件实例的名字)`。"""
-    from app.db.models import PluginPublicLink, now
-    from app.domain.plugins import tools as plugin_tools
-    from app.domain.plugins.errors import PluginDomainError
 
     instance, tool = choose_uploader(db, owner_user_id, asset_name)
 

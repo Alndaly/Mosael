@@ -26,6 +26,7 @@ from app.ai.providers import (
     SourceAsset,
     get_generation_adapter,
     watching_remote_tasks,
+    GenerationProgressCallbacks,
 )
 from app.ai.media_transfer import MediaDownloadError
 from app.ai.providers.contracts.generation import (
@@ -46,9 +47,9 @@ from app.core.http_retry import sent_but_unanswered
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import LocalizedError, t, tr
 from mosael_formats.i18n import DEFAULT_LOCALE
-from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now
-from app.domain.providers import models as provider_models
-from app.domain.generation.operations import prompt_for_provider
+from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now, ProviderUsageEvent
+from app.domain.providers import models as provider_models, selection as providers_selection
+from app.domain.generation.operations import prompt_for_provider, WORKBENCH_GRAPH
 from app.domain.jobs import (
     CANCELLED,
     CANCELLED_ERROR_KEY,
@@ -68,6 +69,7 @@ from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.media.scratch import GENERATION as GENERATION_SCRATCH, scratch_dir
 from app.domain.billing.usage import billable, price_usage, superseded_attempt, usage_mismatches
+from app.core import abort
 
 """
 Generation runner: executes a generation job off-thread. Results always land
@@ -487,7 +489,6 @@ def _settle_after_cancel(
     **不碰调用方的会话。**任务行用短会话读、标记用短会话写:跟到终态可能还要等几分钟到几小时,在长会话上读写会开一个
     事务、一直攥着连接池里的一条连接(见 _remote_task_watch)。撤掉了要发的那条事件由 `_record_settled` 发。
     """
-    from app.core import abort
 
     cancelled, poll_path = _job_state(job_id)
     if not cancelled:
@@ -524,10 +525,9 @@ def _settle_after_cancel(
 
 def _connection(db, generation: GenerationJob, job: Job):
     """这次生成用哪条连接、交给适配器的连接上下文。返回 (连接或 None, 上下文)。"""
-    from app.domain.providers.selection import resolve_connection
 
     # 这次生成替谁干:job 上记着(见 Job.created_by)—— 用他的钥匙、花他的额度。
-    profile = resolve_connection(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
+    profile = providers_selection.resolve_connection(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
     context = GenerationAdapterContext(
         connection_id=profile.id if profile is not None else None,
         vendor_id=profile.vendor if profile is not None else generation.provider,
@@ -595,8 +595,6 @@ def reconcile_unsettled_charges(db) -> int:
     它刚判了「后端重启中断」的那些。**不提交、不当场起线程**:重启收尾是一次用例(domain/restart.settle_previous_run),
     接着跟的线程登记成提交之后再起。
     """
-    from app.db.models import ProviderUsageEvent
-    from app.domain.jobs import RESTART_ERROR_KEY
 
     #: 上一步(jobs 的收尾)只改了对象、没提交;这个会话不自动 flush,不先 flush 的话查询看不到它刚判的失败。
     db.flush()
@@ -703,7 +701,6 @@ def _still_wanted(job_id: str) -> bool:
 
 def _workbench_graph(job: Job) -> dict | None:
     """工作台交来的那张图(见 operations.WORKBENCH_GRAPH);普通的生成没有。"""
-    from app.domain.generation.operations import WORKBENCH_GRAPH
 
     graph = (job.payload or {}).get(WORKBENCH_GRAPH)
     return graph if isinstance(graph, dict) else None
@@ -713,7 +710,6 @@ def _job_callbacks(db, job: Job):
     """Bridge an Adapter's poll loop to the job row: progress writes through (capped below
     1.0 — completion belongs to asset registration), cancellation reads the row back so a
     user cancel reaches the Adapter between round-trips."""
-    from app.ai.providers import GenerationProgressCallbacks
 
     def on_progress(fraction: float, message: str) -> None:
         if not finish_job(db, job, status="running"):

@@ -22,6 +22,9 @@ from app.domain.workflows.node_types import (
     output_label,
     reference_label,
 )
+from app.domain.markers import marker_errors
+from app.domain.plugins import nodes as plugins_nodes
+from app.domain.plugins.nodes import parse_node_type, PLUGIN_NODE_PREFIX as _PLUGIN_NODE_PREFIX
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
@@ -111,9 +114,8 @@ def _referencing_config(node: dict[str, Any]) -> dict[str, Any]:
 def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
     """当前可用的插件节点。延迟导入:plugins 域会反过来用到工作流的东西(插件工具执行器),
     顶层互相 import 就成了环。"""
-    from app.domain.plugins.nodes import plugin_node_types
 
-    return plugin_node_types(db)
+    return plugins_nodes.plugin_node_types(db)
 
 
 #: 整格只有一条引用(和前端 analyze 的同一个写法):one_of 的「引用在前、兜底在后」只认这种。
@@ -349,7 +351,6 @@ def validate_graph(
 
     # 标记(位置书签)不是节点:它不执行、不连线,只是"跳到这儿"。所以它在 graph 里自成一份
     # 列表,校验也自成一条 —— 规则见 domain/markers,画板那边用的是同一份。
-    from app.domain.markers import marker_errors
 
     errors.extend(marker_errors(graph.get("markers")))
 
@@ -370,7 +371,6 @@ def validate_graph(
 
     def _unknown_type_error(node: dict[str, Any]) -> str:
         # 插件节点在别人机器上会缺:说清楚是"缺哪个插件"、为什么用不了,而不是一句让人无从下手的"未知类型"。
-        from app.domain.plugins.nodes import parse_node_type
 
         node_type = str(node.get("type", ""))
         parsed = parse_node_type(node_type)
@@ -907,12 +907,10 @@ _MAX_GRAPH_SCAN_DEPTH = 16
 #: 插件节点的类型前缀(`plugin.<插件id>.<工具名>`)。类型是**运行时**才知道的,所以它进不了
 #: 上面那几张由声明派生的集合 —— 而它跑的是别人的代码,默认就该按"应用之外"算;用的是某人接的插件连接,
 #: 也该按"花他的钱"算。
-from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX as _PLUGIN_NODE_PREFIX
 
 
 def _is_plugin_node_type(node_type: str) -> bool:
     """`plugin.<包>.<工具>` 的样子(不管那个插件、那个工具此刻在不在)。"""
-    from app.domain.plugins.nodes import parse_node_type
 
     return parse_node_type(node_type) is not None
 

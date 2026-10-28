@@ -44,6 +44,8 @@ from app.domain.jobs import (
 )
 from app.media.audio_io import AudioIOError, as_audio, replace_audio
 from app.media.paths import resolve_key
+from app.domain import audio_capabilities
+from app.domain.audio_capabilities import BUILTIN_PREFIX, denoise_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +69,6 @@ def ready_adapter(db: Session, owner_user_id: str | None, engine: str = "") -> D
 
     **不替用户准备**(装依赖、拉权重)—— 那是设置里显式的一步(ADR-0016 同一条)。
     """
-    from app.domain.audio_capabilities import denoise_adapter
 
     return denoise_adapter(db, owner_user_id, resolve_denoise_engine(db, owner_user_id, explicit=engine))
 
@@ -80,10 +81,9 @@ def list_engines(db: Session, owner_user_id: str | None) -> list[dict]:
     那是运行时那一层的事,在这里合起来。
     """
     from app.domain import capabilities
-    from app.domain.audio_capabilities import BUILTIN_PREFIX, DENOISE
 
     rows = []
-    for provider in capabilities.providers(db, owner_user_id, DENOISE):
+    for provider in capabilities.providers(db, owner_user_id, audio_capabilities.DENOISE):
         if not provider.builtin:
             ready = not provider.missing
             rows.append({
@@ -117,7 +117,6 @@ def list_engines(db: Session, owner_user_id: str | None) -> list[dict]:
 
 def install_engine(db: Session, owner_user_id: str | None, engine: str) -> dict:
     """开始装这个内置引擎(提供方 id `builtin:<引擎>`)。装在后台跑;返回的是那一行的新状态。"""
-    from app.domain.audio_capabilities import BUILTIN_PREFIX
 
     denoise_models.start_install(engine.removeprefix(BUILTIN_PREFIX))
     return next(row for row in list_engines(db, owner_user_id) if row["engine"] == engine)

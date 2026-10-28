@@ -10,11 +10,14 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db import references
-from app.db.models import Board, now
+from app.db.models import Board, now, Job, Project, Sequence
 from app.domain.boards.errors import BoardDomainError, BoardNotFound, BoardRevisionConflict
 from app.domain.boards.run_state import _keep_running_cells, _keep_server_owned_state, live_job
 from app.domain.boards.shape import normalize_canvas
 from app.domain.boards.validation import _validate_references, check_canvas
+from app.domain.collaboration import record_activity
+from app.domain.projects import create_project
+from app.domain.sequences.creation import copy_sequence
 
 
 def list_boards(db: Session, workspace_id: str) -> list[Board]:
@@ -94,7 +97,6 @@ def create_board(
     )
     db.add(board)
     db.flush()
-    from app.domain.collaboration import record_activity
 
     record_activity(
         db,
@@ -112,8 +114,6 @@ def create_board(
 
 def board_project(db: Session, board: Board) -> Any:
     """这张画板的项目(放它的时间线格的时间线,ADR 0030):记着的那个还在就用它,不在就建一个同名的。"""
-    from app.db.models import Project
-    from app.domain.projects import create_project
 
     existing = db.get(Project, board.project_id) if board.project_id else None
     if existing is not None and existing.workspace_id == board.workspace_id:
@@ -126,8 +126,6 @@ def board_project(db: Session, board: Board) -> Any:
 def _copy_timelines(db: Session, board: Board) -> None:
     """副本上的时间线格各自复制一条时间线,放进副本自己的项目。**不和原板共用**:共用的话在副本里剪一刀,
     原板那一格跟着变,两边的撤销还会互相撤掉对方的步骤。原来那条已经不在的格子照原样留着(和原板一样是空的)。"""
-    from app.db.models import Sequence
-    from app.domain.sequences.creation import copy_sequence
 
     canvas = json.loads(json.dumps(board.canvas or {}))
     copied: dict[str, str] = {}
@@ -184,7 +182,6 @@ def duplicate_board(
 def _active_jobs(db: Session, workspace_id: str, stored: Any, incoming: dict[str, Any]) -> set[str]:
     """库里这一格在跑、客户端这一份里整格都没有的那几格:它们的任务里**还活着**的(排队 / 运行中)。
     见 run_state._keep_running_cells。"""
-    from app.db.models import Job
 
     present = {str(item.get("id")) for item in incoming.get("items") or []}
     candidates = {job for item in ((stored or {}).get("items") or [])
@@ -259,7 +256,6 @@ def update_board(
     #: 服务端自己对一格的合并(摆占位、回执落下产出)不是谁「编辑了画板」,不记活动;人的自动保存一次编辑就是
     #: 几十次,同一个人同一张板一段时间里只记一条(见 record_activity 的 coalesce_within)。
     if not server_write:
-        from app.domain.collaboration import record_activity
 
         action = "board.renamed" if name is not None and canvas is None else "board.updated"
         record_activity(
@@ -282,7 +278,6 @@ def update_board(
 
 def delete_board(db: Session, workspace_id: str, board_id: str, *, actor_id: str | None = None) -> None:
     board = get_board(db, workspace_id, board_id)
-    from app.domain.collaboration import record_activity
 
     record_activity(
         db,

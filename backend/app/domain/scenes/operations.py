@@ -15,7 +15,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, tr
 from app.core.unit_of_work import after_commit
-from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
+from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel, Asset, Board, Entity, GenerationJob
 from app.db.model_base import now
 from app.db import references
 from app.domain.referrers import referrers
@@ -25,6 +25,18 @@ from app.domain.scenes.types import SceneContent
 from app.media.paths import resolve_key, scene_model_dir, scene_model_key, scene_preview_dir
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable
+from app.domain.assets.importer import register_file_asset
+from app.domain.scenes.render import (
+    FREE_VIEWS,
+    SceneRenderError,
+    describe_camera_move,
+    figures_in_shot,
+    find_shot,
+    render_frame,
+    render_shot_video,
+    render_view,
+)
+from app.domain.scenes.render.model_mesh import ModelLibrary, library_for
 
 if TYPE_CHECKING:  # 渲染器带着 numpy,按这个文件一贯的做法留到函数里再导
     from app.domain.scenes.render.model_mesh import ModelLibrary
@@ -317,7 +329,6 @@ def scenes_using_model(db: Session, workspace_id: str, model_id: str) -> list[st
 
 def boards_using_scene(db: Session, workspace_id: str, scene_id: str) -> list[str]:
     """还有哪些画板摆着这个 3D 场景(名字)。"""
-    from app.db.models import Board
 
     return list(db.scalars(
         select(Board.name).where(Board.workspace_id == workspace_id, Board.id.in_(referrers("scene", scene_id, "board")))
@@ -368,7 +379,6 @@ def scene_overview_image(db: Session, scene: Scene3D) -> Path:
     任何东西。和出片参考同一个渲染器(scene_render),所以格子上看到的就是交给模型的白模。**按修订号缓存**:
     场景没改就不重渲;改了,旧修订那一张随手删掉(一个场景只留当前这一张)。
     """
-    from app.domain.scenes.render import SceneRenderError, render_view
 
     directory = scene_preview_dir(scene.workspace_id)
     path = directory / f"{scene.id}-{scene.revision}.jpg"
@@ -447,7 +457,6 @@ def model_library(db: Session, scene: Scene3D, content: SceneContent) -> ModelLi
     只读 content 里真的被引用的那几份:场景目录里可能还躺着换下来的旧模型,解一份没人看的
     GLB 是白花的时间。**一个模型都没引用时连库都不查** —— 绝大多数白模场景是这一档。
     """
-    from app.domain.scenes.render.model_mesh import ModelLibrary, library_for
 
     wanted = {obj.model_id for obj in content.objects if obj.kind == "model" and obj.model_id}
     if not wanted:
@@ -486,7 +495,6 @@ def view_scene(db: Session, scene: Scene3D, *, views: list[str], shot_id: str = 
     import base64
     import io
 
-    from app.domain.scenes.render import FREE_VIEWS, SceneRenderError, find_shot, render_frame, render_view
 
     wanted = list(dict.fromkeys(views or ["shot", "overview"]))[:VIEW_LIMIT]
     unknown = [one for one in wanted if one != "shot" and one not in FREE_VIEWS]
@@ -547,7 +555,6 @@ _REUSE_LOOKBACK = 50
 def _reusable_render(db: Session, workspace_id: str, key: dict[str, Any], roles: list[str]) -> list[dict[str, str]] | None:
     """同一个场景修订、同一个镜头、同一种用法、同一组角色之前渲过、素材还在:直接用那几份,不再渲一遍
     (运镜一渲半分钟;重新生成几次是常事)。场景一改修订就变,自然渲新的。"""
-    from app.db.models import Asset, GenerationJob
 
     rows = db.scalars(select(GenerationJob).where(GenerationJob.workspace_id == workspace_id)
                       .order_by(GenerationJob.created_at.desc()).limit(_REUSE_LOOKBACK))
@@ -579,11 +586,6 @@ def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: s
     """
     import tempfile
 
-    from app.db.models import Entity
-    from app.domain.assets.importer import register_file_asset
-    from app.domain.scenes.render import (
-        SceneRenderError, describe_camera_move, figures_in_shot, find_shot, render_frame, render_shot_video,
-    )
 
     if use not in REFERENCE_USES:
         raise SceneDomainError("sceneErr_badReferenceUse", choices=", ".join(REFERENCE_USES))
@@ -664,8 +666,6 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
     """
     import tempfile
 
-    from app.domain.assets.importer import register_file_asset
-    from app.domain.scenes.render import SceneRenderError, describe_camera_move, find_shot, render_frame, render_shot_video
 
     if render not in REFERENCE_RENDERS:
         raise SceneDomainError("sceneErr_badRender", choices=", ".join(REFERENCE_RENDERS))

@@ -18,6 +18,10 @@ from app.db.models import Sequence, Track
 from app.domain.sequences._timeline import _require_sequence, timeline_span
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.media.subtitle_files import Cue, decode, parse, resolve_overlaps, to_srt, to_vtt
+from app.domain.sequences.append import track_end
+from app.domain.sequences.grouping import OperationGroup
+from app.domain.sequences.text import GenerateSubtitles, generate_subtitles
+from app.domain.sequences.tracks import AddTrack, add_track
 
 FORMATS = ("srt", "vtt")
 #: 双语字幕导出哪一行:全部、第一行(原文)、最后一行(译文)。和配音的「念哪一行」同一组选项。
@@ -82,10 +86,6 @@ def import_into_track(
     """读一份 .srt / .vtt 落到字幕轨上。`offset` 秒整体平移(文件里的第 0 秒落在时间线的第几秒)。"""
     import math
 
-    from app.domain.sequences.append import track_end
-    from app.domain.sequences.grouping import OperationGroup
-    from app.domain.sequences.text import GenerateSubtitles, generate_subtitles
-    from app.domain.sequences.tracks import AddTrack, add_track
 
     if not math.isfinite(offset):
         raise SequenceDomainError("seqErr_cueNotFinite", index=0)

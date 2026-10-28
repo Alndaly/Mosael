@@ -14,12 +14,20 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import tr
-from app.domain.jobs import RENDER_SLOTS, dispatch_job, say
+from app.domain.jobs import (
+    RENDER_SLOTS,
+    dispatch_job,
+    say,
+    create_job,
+    emit_job_event,
+    finish_job,
+    register_job_child,
+    unregister_job_child,
+)
 from app.db.models import Asset, Clip, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import EXPORT, FRAME, derived
 from app.domain.export_presets import QUALITY_PRESETS, RESOLUTION_PRESETS
-from app.domain.jobs import create_job, emit_job_event, finish_job, register_job_child, unregister_job_child
 from app.media.paths import resolve_key
 from app.media.scratch import EXPORT as EXPORT_SCRATCH, scratch_dir
 from app.media.render_executor import (
@@ -33,9 +41,11 @@ from app.media.render_executor import (
     ensure_text_can_burn,
     execute_render,
     target_bitrate_kbps,
+    render_still,
 )
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
 from app.media.scene import assign_base_and_overlays, is_visual_clip, text_layers
+from app.domain.assets import lineage
 
 
 logger = logging.getLogger(__name__)
@@ -279,7 +289,6 @@ def ai_generated_assets(db: Session, asset_ids: set[str]) -> set[str]:
 
     判据只有一份:素材登记时定下、顺着出处继承的 ai_generated(assets/lineage)。时间线上片段的「AI」角标、
     导出对话框里那个开关出不出现,看的也是它 —— 两边各认各的,就会出现「角标亮着、成片没标」。"""
-    from app.domain.assets import lineage
 
     return lineage.ai_generated_assets(db, asset_ids)
 
@@ -334,7 +343,6 @@ def grab_sequence_frame(db: Session, sequence_id: str, at: float, *, created_by:
     产出走 register_file_asset(和渲染成片、AI 生成、配音同一条入库路),所以缩略图、探测、
     代理这些一样也不会少。
     """
-    from app.media.render_executor import render_still
 
     #: 取出来的这一帧是**素材**,不是要发布的成片:不烧「AI 生成」标识 —— 片头 3 秒里取一帧,正中就是一块大字。
     #: 它含不含 AI 由出处记着(lineage,登记时继承),拿它再导出的时候标识照加。

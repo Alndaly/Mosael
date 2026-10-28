@@ -38,21 +38,20 @@ from app.ai.providers import (
 )
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.i18n import LocalizedError, authored_text, get_current_locale
-from mosael_formats.i18n import pick_text
-from app.db.models import PluginInstance, ProviderProfile
+from app.core.i18n import LocalizedError, authored_text, get_current_locale, t
+from mosael_formats.i18n import pick_text, DEFAULT_LOCALE
+from app.db.models import PluginInstance, ProviderProfile, WorkspaceMember
 from app.domain import capabilities
-from app.domain.providers import models as provider_models
-from app.domain.providers import moved_models
+from app.domain.providers import models as provider_models, moved_models
 from app.domain.generation_catalog import GENERATION_KINDS, PROMPT_MODES
-from app.domain.plugins import instances as inst
-from app.domain.plugins import generation as plugin_generation
-from app.domain.plugins import moves as plugin_moves
+from app.domain.plugins import instances as inst, generation as plugin_generation, moves as plugin_moves
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import readable_group
 from mosael_formats.plugin_manifest import GENERATION
 from app.domain.plugins.runtime import PluginCancelled, PluginRuntimeError, PluginTimeout, StreamHooks
 from app.domain.providers.plugin_vendor import package_of, vendor_for
+from app.domain.notifications import notify
+from app.domain.providers.selection import adopt_plugin_connection
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +209,6 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
     if GENERATION not in manifest.provides:
         return
     usable = not inst.blocked_reason(db, instance)
-    from app.domain.providers.selection import adopt_plugin_connection
 
     profile = adopt_plugin_connection(
         db,
@@ -283,10 +281,6 @@ def _tell_about_upgrades(db: Session, instance: PluginInstance, count: int) -> N
     """这个连接的工作流库里有几张工作流的表单还是上一版的格式(ADR 0045 §7):升级之前它们的表单入口都不在,指着它们的格子、
     会话说「到工作流库里升级」。从没有到有的那一次通知连接的主人(他在的每个工作区一条;工作流库顶上另有一条横幅,确认
     一次整台改写)。不是每次刷新都发。"""
-    from app.core.i18n import t
-    from mosael_formats.i18n import DEFAULT_LOCALE
-    from app.db.models import WorkspaceMember
-    from app.domain.notifications import notify
 
     if not instance.owner_user_id:
         return

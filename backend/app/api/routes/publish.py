@@ -14,11 +14,9 @@ from app.api.schemas import (
     PublishPlatformOut,
     PublishTaskOut,
 )
-from app.domain.publish import use_cases as publish_uc
-from app.domain.publish import worker as publish_worker
-from app.db.models import Asset, PublishAccount
-from app.core.i18n import get_current_locale, t, tr
 from app.domain.publish import (
+    use_cases as publish_uc,
+    worker as publish_worker,
     content_kinds,
     content_limits,
     implemented_kinds,
@@ -33,6 +31,9 @@ from app.domain.publish import (
     task_with_status,
     update_account,
 )
+from app.db.models import Asset, PublishAccount
+from app.core.i18n import get_current_locale, t, tr
+from app.domain.publish.copy import generate_copy
 
 router = APIRouter(tags=["publish"])
 
@@ -184,7 +185,6 @@ def delete_publish_task(task_id: str, db: Tx, user: CurrentUser) -> Response:
 @router.post("/publish/copy", response_model=PublishCopyResponse)
 def generate_publish_copy(body: PublishCopyRequest, db: DbSession, user: CurrentUser) -> dict:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
-    from app.domain.publish.copy import generate_copy
 
     try:
         return generate_copy(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from app.domain.agent.confirmable import registry
 
 """放行准则:auto 档下,`external` 那一类调用要不要问人。
 
@@ -53,7 +54,6 @@ def gates() -> dict[str, str]:
     而它不该认识任何一个具体的第三方软件叫什么。现在每张确认卡自己声明 `gate` 和
     `gate_label`(见 confirmable/registry),这里只负责把它们收起来。
     """
-    from app.domain.agent.confirmable import registry
 
     found = {tool.gate: tool.gate_label for tool in registry.tool_specs().values() if tool.gate}
     return dict(sorted(found.items()))
@@ -92,7 +92,6 @@ def _tool_gate() -> dict[str, str]:
     一个能力可以自成一档:沙箱里跑和不隔离地跑就是两档 —— 对「算个数」放开,不该连带放开
     「动我的文件」。谁和谁分开,由那几张卡自己说了算。
     """
-    from app.domain.agent.confirmable import registry
 
     return {name: tool.gate for name, tool in registry.tool_specs().items() if tool.gate}
 

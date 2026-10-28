@@ -23,6 +23,7 @@ from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, conf
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.skills.catalog import SkillDomainError
 from app.domain.permissions import PermissionDenied
+from app.domain.agent.skills import catalog, use_cases
 
 
 def _user(db: Session, actor: str | None) -> User:
@@ -34,7 +35,6 @@ def _user(db: Session, actor: str | None) -> User:
 
 def _validator(action: str):
     def validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-        from app.domain.agent.skills import use_cases
 
         try:
             facts = use_cases.review(db, _user(db, actor), workspace_id, action, payload)
@@ -48,7 +48,6 @@ def _validator(action: str):
 
 def _executor(action: str):
     def execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-        from app.domain.agent.skills import use_cases
 
         try:
             return use_cases.apply(db, _user(db, actor), confirmation.workspace_id, action, dict(confirmation.payload or {}),
@@ -61,7 +60,6 @@ def _executor(action: str):
 
 def _in_use(db: Session, workspace_id: str, raw: Any) -> list[dict[str, str]]:
     """「在用的技能」名单 → 卡上要说的名字(显示名;找不到了就用原名)。"""
-    from app.domain.agent.skills import catalog
 
     refs = [str(one) for one in raw if isinstance(one, str) and one.strip()] if isinstance(raw, list) else []
     out = []

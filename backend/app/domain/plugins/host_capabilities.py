@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins.manifest import manifest_of
+from app.domain.plugins import service_gate
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,6 @@ def notify(db: Session, instance: PluginInstance, *, refresh: bool) -> None:
     (比如 ComfyUI 没开,目录刷不出来)要记在它自己的状态里(`capability_status`),而不是让
     「改配置」这个操作报错,那会让用户以为配置没存上。
     """
-    from app.domain.plugins import service_gate
 
     # 直接读包上的清单,不经 instances.manifest_for:实例那一层改完要通知这里,这里再回头 import 它就成了环。
     package = db.get(PluginPackage, instance.package_id)

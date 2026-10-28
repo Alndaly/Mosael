@@ -38,6 +38,7 @@ from app.core import interpreter, pip_install
 from app.core.child_process import run_logged
 from app.core.config import settings
 from app.core.text import blame_line
+from app.ai.runtime import config as runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +222,6 @@ def ensure_runtime(engine: str) -> None:
 
     # 和转写、克隆走同一个安装器,包括管理页「引擎」里那个 pip 镜像 —— 同一台机器上不该"一个走镜像、
     # 一个直连 PyPI",而那个设置项写的就是「装引擎依赖时用的 pip 索引」。
-    from app.ai.runtime import config as runtime_config
 
     try:
         pip_install.install(

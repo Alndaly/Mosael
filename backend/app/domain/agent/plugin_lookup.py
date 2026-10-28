@@ -26,6 +26,7 @@ from app.core.i18n import LocalizedError
 from app.db.models import User
 from app.domain.agent.plugin_schema import compact_property
 from app.domain.agent.tool_manifest import agent_plugin_tools, agent_tool_name, session_kits
+from app.domain.effects import needs_card
 
 #: 按字找一次最多回多少个。
 MAX_FOUND = 40
@@ -80,7 +81,6 @@ def _properties(tool: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
 
 
 def _asks(tool: dict[str, Any]) -> bool:
-    from app.domain.effects import needs_card
 
     return needs_card(tool["effects"])
 

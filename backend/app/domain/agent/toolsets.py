@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
+from app.domain.plugins import instances as inst, tools as plugins_tools
 
 
 CORE_TOOLSETS = [
@@ -88,12 +89,10 @@ def list_agent_toolsets(db: Session, user_id: str | None = None) -> list[dict[st
     插件说不进智能体工具表的(`agent: false`,ComfyUI 有表单的工作流,它的完整工作流,ADR 0045 §5)不列:此前照列,给别的
     智能体的是一个它调不到的工具名(PLG-15)。和智能体自己的工具表同一条规矩(tool_manifest.agent_plugin_tools)。
     """
-    from app.domain.plugins import instances as inst
-    from app.domain.plugins.tools import exposed
 
     toolsets = [dict(toolset) for toolset in CORE_TOOLSETS]
     by_instance: dict[str, list[dict[str, Any]]] = {}
-    for tool in exposed(db, user_id):
+    for tool in plugins_tools.exposed(db, user_id):
         if not tool["agent"]:
             continue
         by_instance.setdefault(tool["instance_id"], []).append(
