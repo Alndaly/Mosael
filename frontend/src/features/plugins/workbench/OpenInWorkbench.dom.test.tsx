@@ -29,10 +29,10 @@ function mount(model = "人像/古风.json") {
   );
 }
 
-function comfyPackage(provides = ["workflow_library"]) {
+function comfyPackage(provides = ["workflow_library"], address = "http://127.0.0.1:8189") {
   return {
     provides, summary_field: "base_url",
-    instances: [{ id: "i1", name: "ComfyUI · 本机", config: { base_url: "http://127.0.0.1:8189" }, blocked_reason: null }],
+    instances: [{ id: "i1", name: "ComfyUI · 本机", config: { base_url: address }, blocked_reason: null }],
   };
 }
 
@@ -53,19 +53,7 @@ afterEach(() => {
 });
 
 describe("AI 工作台里的「在工作台里打开」", () => {
-  it("选中的是这台 ComfyUI 上的一张工作流:点了在工作台里打开那一张", async () => {
-    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
-    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
-    mount();
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
-    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith({
-      connectionId: "i1", url: "http://127.0.0.1:8188", name: "ComfyUI · 本机", path: "人像/古风.json",
-    }));
-    expect(api.getWorkflowLibrary).toHaveBeenCalledWith("i1", "w1");
-  });
-
-  it("工作流库读不回来(本机服务停着、目录太大):照样摆,地址退到连接自己写的那个", async () => {
-    api.getWorkflowLibrary.mockRejectedValue(new Error("output budget exceeded"));
+  it("选中的是这台 ComfyUI 上的一张工作流:点了用连接自己的地址在工作台里打开那一张,不现问工作流库", async () => {
     const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
     mount();
@@ -73,6 +61,18 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith({
       connectionId: "i1", url: "http://127.0.0.1:8189", name: "ComfyUI · 本机", path: "人像/古风.json",
     }));
+    //: 维护者报的「一直 loading」:本机服务停着时,先问库会在服务起来之前一直等到插件超时。
+    expect(api.getWorkflowLibrary).not.toHaveBeenCalled();
+  });
+
+  it("连接没写地址:才去问工作流库,用它报的编辑器地址", async () => {
+    api.listPluginPackages.mockResolvedValue([comfyPackage(["workflow_library"], "")]);
+    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith(expect.objectContaining({ url: "http://127.0.0.1:8188" })));
+    expect(api.getWorkflowLibrary).toHaveBeenCalledWith("i1", "w1");
   });
 
   it("摆出来之前不去现问工作流库", async () => {
@@ -82,7 +82,8 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     expect(api.getWorkflowLibrary).not.toHaveBeenCalled();
   });
 
-  it("插件报的编辑器不是 ComfyUI:点了说打不开,不乱开", async () => {
+  it("连接没写地址、插件报的编辑器又不是 ComfyUI:点了说打不开,不乱开", async () => {
+    api.listPluginPackages.mockResolvedValue([comfyPackage(["workflow_library"], "")]);
     api.getWorkflowLibrary.mockResolvedValue({ workflows: [], editor: { kind: "other", url: "http://x" } });
     const openComfyWorkbench = vi.fn();
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
