@@ -19,6 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from cloud.api.auth import router as accounts_router
 from cloud.api.device_tokens import router as device_tokens_router
 from cloud.api.notifications import router as notifications_router
+from cloud.api.orders import router as orders_router
 from cloud.api.oauth import router as oauth_router
 from cloud.api.profile import router as profile_router
 from cloud.api.shares import router as shares_router
@@ -28,6 +29,8 @@ from cloud.db import Database
 from cloud.errors import CloudError, message
 from cloud.mailer import CodeSender, SmtpCodeSender
 from cloud.oauth import OAuthProvider, default_providers
+from cloud.payments.base import PaymentChannel
+from cloud.payments.registry import channels_from_config
 
 #: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸。
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -71,10 +74,12 @@ def create_app(
     code_sender: CodeSender | None = None,
     oauth_providers: Mapping[str, OAuthProvider] | None = None,
     upstream_transport: httpx2.BaseTransport | None = None,
+    payment_channels: Mapping[str, PaymentChannel] | None = None,
 ) -> FastAPI:
     """装配 HTTP 应用。
 
-    `code_sender` / `oauth_providers` / `upstream_transport`(网关连上游模型服务用的传输)是测试 / 嵌入用的注入点:
+    `code_sender` / `oauth_providers` / `upstream_transport`(网关连上游模型服务用的传输)/ `payment_channels`(支付渠道)
+    是测试 / 嵌入用的注入点:
     不传就用真实实现。**没有
     "开发环境自动跳过验证 / 自动连第三方"的开关** —— 没配 SMTP 时发码接口会明确报错,
     没配 OAuth 凭据时入口明确报"没启用";测试注入假实现,不连外网。
@@ -96,6 +101,10 @@ def create_app(
     app.state.db = database
     app.state.code_sender = code_sender or SmtpCodeSender(resolved)
     app.state.upstream_transport = upstream_transport
+    #: 配了商户凭据的支付渠道(见 payments/registry);一个都没有就是这个部署还没开在线购买。
+    app.state.payment_channels = (
+        dict(payment_channels) if payment_channels is not None else channels_from_config(resolved)
+    )
     app.state.oauth_providers = (
         dict(oauth_providers) if oauth_providers is not None else default_providers()
     )
@@ -143,4 +152,5 @@ def create_app(
     app.include_router(notifications_router, prefix=API_PREFIX)
     app.include_router(device_tokens_router, prefix=API_PREFIX)
     app.include_router(gateway_router, prefix=API_PREFIX)
+    app.include_router(orders_router, prefix=API_PREFIX)
     return app

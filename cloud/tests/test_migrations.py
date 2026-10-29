@@ -43,6 +43,7 @@ def test_migrations_build_the_full_schema(tmp_path):
             "cloud_gateway_models",
             "cloud_model_prices",
             "cloud_upstream_channels",
+            "cloud_orders",
         } <= tables
 
         # 0004 拆掉了设备绑定:两张表在 head 的库里不存在。
@@ -52,7 +53,7 @@ def test_migrations_build_the_full_schema(tmp_path):
         assert {"display_name", "handle", "avatar_seed"} <= columns
 
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert version == ("0010",)
+        assert version == ("0011",)
 
         unique_handle = [
             row[1]
@@ -86,7 +87,7 @@ def test_upgrading_a_0001_database_keeps_rows_and_leaves_identity_empty(tmp_path
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"cloud_shares", "cloud_share_likes", "cloud_share_favorites", "cloud_share_comments"} <= tables
         assert {"cloud_share_notifications"} <= tables
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0010",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0011",)
 
 
 def test_0004_drops_the_device_binding_tables(tmp_path):
@@ -117,7 +118,7 @@ def test_0004_drops_the_device_binding_tables(tmp_path):
         assert not ({"cloud_device_codes", "cloud_devices"} & tables)
         # 账号本身不受影响。
         assert connection.execute("SELECT email FROM cloud_users WHERE id = 'u1'").fetchone() == ("old@example.com",)
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0010",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0011",)
 
 
 def test_notification_table_shape_and_indexes(tmp_path):
@@ -213,7 +214,7 @@ def test_0005_allows_plugin_kind_and_0006_adds_official_and_seed_slug(tmp_path):
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0010",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0011",)
 
         # ① plugin 现在能建;非法值仍然被数据库兜住。
         connection.execute(_share_insert("plugin"), ("s1", "plugin"))
@@ -324,7 +325,7 @@ def test_0007_backfills_existing_rows_with_zh_cn_and_checks_two_locales(tmp_path
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0010",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0011",)
         columns = {row[1]: row for row in connection.execute("PRAGMA table_info(cloud_shares)")}
         assert columns["locale"][3] == 1  # NOT NULL
         # 既有行没有语言信息可推断 —— 迁移只能把它们都当中文,并在迁移里写明。
@@ -402,7 +403,7 @@ def test_0007_downgrade_round_trip_restores_the_0006_shape(tmp_path):
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0010",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0011",)
         assert connection.execute("SELECT id, locale FROM cloud_shares").fetchall() == [("s1", "zh-CN")]
 
 

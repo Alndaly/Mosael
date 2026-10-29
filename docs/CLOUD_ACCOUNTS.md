@@ -146,6 +146,10 @@ SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮)
 | GET | `/gateway/account` | 只认设备令牌:这个用户的积分、下一批、套餐(ADR 0088,详见 cloud/README「官方中转网关」) |
 | GET | `/gateway/v1/models` | 只认设备令牌:OpenAI 兼容的模型目录,价是积分 |
 | POST | `/gateway/v1/chat/completions` | 只认设备令牌:OpenAI 兼容的对话,预占 → 转发 → 按用量结算 |
+| GET | `/plans` | 在线能买的套餐与开着的支付渠道(ADR 0088 第 3 步,详见 cloud/README「在线购买」) |
+| POST | `/orders` | 下单拿二维码(会话或设备令牌) |
+| GET | `/orders`、`/orders/{id}` | 我的订单;读单个时还没到账就主动查单 |
+| POST | `/payments/{alipay\|wechat}/notify` | 支付渠道的异步通知,靠验签认渠道 |
 | DELETE | `/device-tokens/current` | **只认 Bearer**:令牌吊销自己(桌面端登出时用) |
 
 失败一律 `{error, message: {en, zh}}`;错误码稳定,文案中英各一份。OAuth 的浏览器入口例外:

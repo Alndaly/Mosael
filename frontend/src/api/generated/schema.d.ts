@@ -10109,6 +10109,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cloud Plans
+         * @description 在线能买的套餐、这个部署开了哪些支付渠道。公开读,照 Cloud 的原样交回。
+         */
+        get: operations["list_cloud_plans_api_cloud_v1_plans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Cloud Order
+         * @description 下单拿二维码。要先登录 MosaelCloud(用这台设备的令牌下单)。
+         */
+        post: operations["create_cloud_order_api_cloud_v1_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/orders/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cloud Order
+         * @description 订单状态。桌面端扫码后轮询它;还没到账时 Cloud 会顺手问一次支付渠道。
+         */
+        get: operations["get_cloud_order_api_cloud_v1_orders__order_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -12613,6 +12673,19 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * CloudOrderIn
+         * @description 在线购买下单(ADR 0088 第 3 步):哪个套餐(slug)、哪个渠道。原样转给 Cloud,由它校验。
+         */
+        CloudOrderIn: {
+            /** Plan */
+            plan: string;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "alipay" | "wechat";
         };
         /**
          * CloudSessionOut
@@ -42258,6 +42331,100 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cloud_plans_api_cloud_v1_plans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_cloud_order_api_cloud_v1_orders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_order_api_cloud_v1_orders__order_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

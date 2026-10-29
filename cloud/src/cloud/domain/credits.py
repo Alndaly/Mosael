@@ -82,15 +82,20 @@ def _grant(
 
 
 def subscribe(db: Session, user: CloudUser, plan: CloudPlan, *, at: datetime) -> CloudSubscription:
-    """开通一个套餐(第 2 步由管理员手动开通;支付在第 3 步)。同一时间只有一个有效订阅:旧的先结束,已发的积分照用。
+    """**管理员**开通一个套餐(`cloud.cli subscribe`):替换 —— 现有的有效订阅先结束(已发的积分照用),再开这一个。
 
-    第一批月度积分当场发。
+    这是运维动作(内测、补偿、纠错),不涉及用户付过的钱;花钱买的走 `purchase`,那里什么都不作废。第一批月度积分当场发。
     """
     for current in db.scalars(
         select(CloudSubscription).where(CloudSubscription.user_id == user.id, CloudSubscription.status == "active")
     ):
         current.status = "ended"
         current.ends_at = min(current.ends_at, at)
+    return _start(db, user, plan, at=at)
+
+
+def _start(db: Session, user: CloudUser, plan: CloudPlan, *, at: datetime) -> CloudSubscription:
+    """从此刻开一个订阅、当场发第一批月度积分。不碰别的订阅。"""
     subscription = CloudSubscription(
         user_id=user.id,
         plan_id=plan.id,
@@ -104,6 +109,30 @@ def subscribe(db: Session, user: CloudUser, plan: CloudPlan, *, at: datetime) ->
     db.flush()
     catch_up(db, user.id, at=at)
     return subscription
+
+
+def purchase(db: Session, user: CloudUser, plan: CloudPlan, *, at: datetime) -> CloudSubscription:
+    """买了这个套餐的一个周期(ADR 0088 第 3 步,预付)。**花钱买的什么都不作废**:
+
+    - **同一套餐还在有效期内** → 顺延:到期日往后加一个周期,月度批次照开通那天的日历继续发(不另起一条订阅);
+    - 另一个套餐、或这个套餐已经过期 → 从此刻再开一个订阅,**和现有的同时生效**,各自按月发积分、积分合在一个池子里用,
+      各自到期。升级补差价不做。(此前是「换套餐就结束旧的」—— 真界面实测时,刚顺延到两年后的年付套餐被一笔月付直接作废。)
+    """
+    catch_up(db, user.id, at=at)
+    current = db.scalars(
+        select(CloudSubscription).where(
+            CloudSubscription.user_id == user.id,
+            CloudSubscription.status == "active",
+            CloudSubscription.plan_id == plan.id,
+            CloudSubscription.ends_at > at,
+        )
+    ).first()
+    if current is None:
+        return _start(db, user, plan, at=at)
+    current.ends_at = add_months(current.ends_at, PERIOD_MONTHS[plan.period])
+    db.flush()
+    catch_up(db, user.id, at=at)
+    return current
 
 
 def gift(db: Session, user: CloudUser, *, amount: int, days: int, note: str, at: datetime) -> CloudCreditBatch:

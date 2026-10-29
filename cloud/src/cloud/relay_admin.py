@@ -1,7 +1,8 @@
 """官方中转的运维命令(ADR 0088 第 2 步:还没接支付,套餐、模型目录、上游通道都由维护者手动开通)。
 
     uv run python -m cloud.cli channel-key                                  生成一把 CLOUD_CHANNEL_KEY
-    uv run python -m cloud.cli plan-set --slug pro --name Pro --period month --monthly-credits 20000 --credit-ttl-days 60
+    uv run python -m cloud.cli plan-set --slug pro --name Pro --period month --monthly-credits 20000 --credit-ttl-days 60 \\
+        --price 29                                                          在线售价 ¥29(不给 = 只由管理员开通)
     uv run python -m cloud.cli subscribe --email a@b.com --plan pro         开通(当场发第一批月度积分)
     uv run python -m cloud.cli gift --email a@b.com --credits 500 --days 30 --note 内测
     uv run python -m cloud.cli model-set --id deepseek-chat --label "DeepSeek V3" --max-output-tokens 8000
@@ -27,6 +28,7 @@ from sqlalchemy.orm import Session
 from cloud.config import CloudConfig
 from cloud.domain import catalog, credits
 from cloud.domain.channel_keys import new_channel_key
+from cloud.payments.base import cents_from_yuan, yuan
 from cloud.models import CloudGatewayModel, CloudPlan, CloudUpstreamChannel, CloudUser, now
 
 
@@ -44,6 +46,7 @@ def register(commands: argparse._SubParsersAction) -> None:
     plan.add_argument("--period", required=True, choices=sorted(credits.PERIOD_MONTHS))
     plan.add_argument("--monthly-credits", required=True, type=int)
     plan.add_argument("--credit-ttl-days", required=True, type=int)
+    plan.add_argument("--price", help="在线售价,元(如 29 或 29.90);不给 = 不在线卖,只由管理员开通")
     plan.add_argument("--off-sale", action="store_true", help="下架(已订的不受影响)")
     plan.set_defaults(relay=_plan_set)
 
@@ -113,7 +116,14 @@ def _plan_set(args, _config: CloudConfig, db: Session) -> str:
     plan.monthly_credits = args.monthly_credits
     plan.credit_ttl_days = args.credit_ttl_days
     plan.on_sale = not args.off_sale
-    return f"套餐 {args.slug}:{args.name},{args.period},每月 {args.monthly_credits} 积分,每批有效 {args.credit_ttl_days} 天"
+    try:
+        plan.price_cents = cents_from_yuan(args.price) if args.price else None
+    except ValueError as exc:
+        raise AdminError(f"--price 要是元为单位的金额,如 29 或 29.90:{args.price}") from exc
+    if plan.price_cents == 0:
+        raise AdminError("--price 要大于 0;不在线卖就别给 --price")
+    price = f",在线售价 ¥{yuan(plan.price_cents)}" if plan.price_cents else ",不在线卖"
+    return f"套餐 {args.slug}:{args.name},{args.period},每月 {args.monthly_credits} 积分,每批有效 {args.credit_ttl_days} 天{price}"
 
 
 def _subscribe(args, _config: CloudConfig, db: Session) -> str:

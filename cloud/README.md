@@ -235,6 +235,24 @@ uv run python -m cloud.cli balance --email a@b.com
 
 上游 Key 不走命令行参数(会进 shell 历史):从 `CLOUD_UPSTREAM_KEY` 读,没有就在终端里问。
 
+## 在线购买(ADR 0088 第 3 步,国内二维码预付)
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/plans` | 在线能买的套餐(在售且标了价)和这个部署开了哪些支付渠道;公开读 |
+| POST | `/orders` | `{plan, channel}` 下单,回二维码内容 `code_url`(30 分钟有效);浏览器会话、设备令牌都认 |
+| GET | `/orders`、`/orders/{id}` | 我的订单。读单个订单时还没到账就主动问一次渠道(兜住丢了的回调),过期没付就关单 |
+| POST | `/payments/{alipay\|wechat}/notify` | 渠道的异步通知。**不认人,靠验签认渠道**;回给渠道它要的那句(支付宝 `success`、微信 204) |
+
+- **到账只有一个入口**:回调和查单都走 `domain/orders.settle_paid`,锁住订单行、幂等,一笔钱只发一次;金额必须和下单那一刻一致,
+  对不上不发放、记在订单 `note`;关了之后才到的付款照样发放。
+- **发放**:同一套餐在有效期内 → 顺延一个周期;另一个套餐 → 再开一个、和现有的同时生效。花钱买的什么都不作废。
+- **渠道**(`cloud/payments/`):支付宝当面付(precreate / query / 异步通知,RSA2)、微信支付 Native(APIv3 签名、微信支付公钥验签、
+  AES-GCM 解密、通知时间戳 5 分钟内)。配了商户凭据的才开;回调地址是 `<CLOUD_PUBLIC_URL>/api/cloud/v1/payments/<渠道>/notify`,
+  部署要保证它公网可达。
+- 套餐定价:`cloud.cli plan-set … --price 29`(元);不给 `--price` 就不在线卖,只能管理员开通。
+- 测试(`tests/test_payments.py`)跑真的签名 / 验签 / 解密代码,只把网络换成假网关;**还没有用真商户号或沙箱联调过**。
+
 ## 测试
 
 ```bash
@@ -301,6 +319,9 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 | `CLOUD_OFFICIAL_EMAIL` | `official@mosael.example` | 官方账号邮箱;**只在建号时使用**;验证码登录要求它是真实拥有的地址 |
 | `CLOUD_OFFICIAL_PASSWORD` | 空 | 官方账号密码。设了 → 每次种子都写回(轮换);空 → 不动密码(新号密码登录 401);短于 `CLOUD_PASSWORD_MIN_LENGTH` → 启动失败 |
 | `CLOUD_CHANNEL_KEY` | 空(网关未配置) | 上游 API Key 的落库加密钥(Fernet,`cli channel-key` 生成);空则网关对话 503、加通道的命令拒绝 |
+| `CLOUD_ALIPAY_APP_ID` / `_PRIVATE_KEY` / `_PUBLIC_KEY` | 空(不开) | 支付宝当面付:应用 id、**应用私钥**、**支付宝公钥**(RSA2;PEM 内容或 PEM 文件路径)。三项配齐才开 |
+| `CLOUD_ALIPAY_GATEWAY` | `https://openapi.alipay.com/gateway.do` | 沙箱联调时换成沙箱网关 |
+| `CLOUD_WECHATPAY_MCHID` / `_APPID` / `_SERIAL_NO` / `_PRIVATE_KEY` / `_APIV3_KEY` / `_PUBLIC_KEY` / `_PUBLIC_KEY_ID` | 空(不开) | 微信支付 Native(APIv3):商户号、AppID、商户证书序列号、商户私钥、APIv3 密钥(32 字节)、**微信支付公钥**与公钥 ID。七项配齐才开 |
 
 ### 第三方 OAuth 应用的填法
 

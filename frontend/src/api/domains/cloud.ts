@@ -107,3 +107,47 @@ export function syncCloudConnection(): Promise<{ profile_id: string; models: num
     method: "POST",
   });
 }
+
+// ---------------------------------------------------------------- 在线购买(ADR 0088 第 3 步)
+
+export type CloudPlan = {
+  slug: string;
+  name: string;
+  period: "month" | "quarter" | "year";
+  monthly_credits: number;
+  credit_ttl_days: number;
+  price_cents: number;
+  currency: string;
+};
+
+export type PaymentChannelName = "alipay" | "wechat";
+
+export type CloudOrder = {
+  id: string;
+  status: "pending" | "paid" | "closed";
+  plan: { slug: string; name: string; period: CloudPlan["period"] } | null;
+  amount_cents: number;
+  currency: string;
+  channel: PaymentChannelName;
+  /** 只在等付款时有:渠道给的二维码内容,界面把它画成码。 */
+  code_url: string | null;
+  created_at: string;
+  expires_at: string;
+  paid_at: string | null;
+  /** 到账后发放的那个订阅现在到哪天(续费是顺延,不会当场多一批积分)。 */
+  subscription_ends_at: string | null;
+};
+
+/** 在线能买的套餐,和这个部署开了哪些支付渠道(一个都没开就是还不能在线买)。 */
+export function listCloudPlans(): Promise<{ plans: CloudPlan[]; channels: PaymentChannelName[] }> {
+  return apiAllowingUnauthorized("/api/cloud/v1/plans");
+}
+
+export function createCloudOrder(plan: string, channel: PaymentChannelName): Promise<{ order: CloudOrder }> {
+  return apiAllowingUnauthorized("/api/cloud/v1/orders", { method: "POST", body: JSON.stringify({ plan, channel }) });
+}
+
+/** 订单状态。还没到账时 Cloud 会顺手问一次支付渠道,所以轮询它就能等到到账(回调丢了也一样)。 */
+export function getCloudOrder(orderId: string): Promise<{ order: CloudOrder }> {
+  return apiAllowingUnauthorized(`/api/cloud/v1/orders/${encodeURIComponent(orderId)}`);
+}

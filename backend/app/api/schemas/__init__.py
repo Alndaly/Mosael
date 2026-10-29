@@ -21,7 +21,7 @@ from app.api.schemas.browser import (  # noqa: F401
     BrowserSessionRunOut,
 )
 from app.api.schemas.capabilities import CapabilityChoicesOut, CapabilityDefaultUpdate, CapabilityProviderOut, CapabilityTermOut, CapabilityUseOut  # noqa: F401
-from app.api.schemas.cloud import CloudCodeIn, CloudConnectionSyncOut, CloudEmailIn, CloudLoginIn, CloudSessionOut  # noqa: F401
+from app.api.schemas.cloud import CloudCodeIn, CloudConnectionSyncOut, CloudEmailIn, CloudOrderIn, CloudLoginIn, CloudSessionOut  # noqa: F401
 from app.api.schemas.collaboration import ActivityOut, ActorOut, CanvasCommentAnchor, CommentAnchorUpdate, CommentContentUpdate, CommentCreate, CommentOut  # noqa: F401
 from app.api.schemas.dashboard import AdminOverviewOut, DailyActivityOut, DailyPublishOut, DailyUsageOut, DailyUsageTokensOut, DaySeriesPoint, UnpricedUsageOut, UserSpendPoint, WorkspaceSummaryOut  # noqa: F401
 from app.api.schemas.entities import AssetEntityOut, EntityCatalogOut, EntityConsentKindOut, EntityCreate, EntityDrawRequest, EntityKindOut, EntityLostReferenceOut, EntityOut, EntityReferenceAdd, EntityReferenceOrder, EntityReferenceOut, EntityReferenceUpdate, EntityRoleOut, EntitySummaryOut, EntityUpdate, EntityUsageBoardOut, EntityUsageGenerationOut, EntityUsageOut, EntityUsageWorkflowOut, EntityVariantCreate  # noqa: F401

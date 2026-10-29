@@ -29509,6 +29509,120 @@
           }
         }
       }
+    },
+    "/api/cloud/v1/plans": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "List Cloud Plans",
+        "description": "在线能买的套餐、这个部署开了哪些支付渠道。公开读,照 Cloud 的原样交回。",
+        "operationId": "list_cloud_plans_api_cloud_v1_plans_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/orders": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Create Cloud Order",
+        "description": "下单拿二维码。要先登录 MosaelCloud(用这台设备的令牌下单)。",
+        "operationId": "create_cloud_order_api_cloud_v1_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudOrderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/orders/{order_id}": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Get Cloud Order",
+        "description": "订单状态。桌面端扫码后轮询它;还没到账时 Cloud 会顺手问一次支付渠道。",
+        "operationId": "get_cloud_order_api_cloud_v1_orders__order_id__get",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Order Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -35054,6 +35168,31 @@
         ],
         "title": "CloudLoginIn",
         "description": "邮箱 + 密码。**这一份只存在这一次请求里**,不落库、不进日志。"
+      },
+      "CloudOrderIn": {
+        "properties": {
+          "plan": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Plan"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "alipay",
+              "wechat"
+            ],
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan",
+          "channel"
+        ],
+        "title": "CloudOrderIn",
+        "description": "在线购买下单(ADR 0088 第 3 步):哪个套餐(slug)、哪个渠道。原样转给 Cloud,由它校验。"
       },
       "CloudSessionOut": {
         "properties": {

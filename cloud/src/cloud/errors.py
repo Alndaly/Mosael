@@ -224,6 +224,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The model service rejected the request: {detail}",
         "zh": "模型服务拒绝了这次请求:{detail}",
     },
+    "plan_not_for_sale": {
+        "en": "That plan is not available for purchase.",
+        "zh": "这个套餐现在不能在线购买。",
+    },
+    "payment_channel_unavailable": {
+        "en": "That payment method is not available right now. Try another one or try again later.",
+        "zh": "这个支付方式暂时用不了,请换一种或稍后再试。",
+    },
+    "order_not_found": {
+        "en": "That order does not exist.",
+        "zh": "没有这笔订单。",
+    },
     "not_found": {
         "en": "No such endpoint.",
         "zh": "没有这个接口。",

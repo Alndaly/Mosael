@@ -83,3 +83,16 @@ def test_unknown_account_or_plan_is_a_clear_refusal(env, capsys):
         "--monthly-credits", "10", "--credit-ttl-days", "30")
     code, _, err = run(capsys, "subscribe", "--email", "nobody@example.com", "--plan", "pro")
     assert code == 2 and "没有这个账号" in err
+
+
+def test_a_plan_can_be_priced_for_online_purchase(env, capsys):
+    code, out, _ = run(capsys, "plan-set", "--slug", "pro", "--name", "Pro", "--period", "month",
+                       "--monthly-credits", "1000", "--credit-ttl-days", "60", "--price", "29.9")
+    assert code == 0 and "¥29.90" in out
+    with env.session() as db:
+        from cloud.models import CloudPlan
+
+        assert db.scalar(select(CloudPlan)).price_cents == 2990
+    code, _, err = run(capsys, "plan-set", "--slug", "pro", "--name", "Pro", "--period", "month",
+                       "--monthly-credits", "1000", "--credit-ttl-days", "60", "--price", "abc")
+    assert code == 2 and "--price" in err

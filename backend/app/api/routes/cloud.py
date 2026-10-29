@@ -21,7 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudEmailIn, CloudLoginIn, CloudSessionOut
+from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudSessionOut
 from app.core.i18n import get_current_locale, tr
 from mosael_formats.i18n import pick_text
 from app.db.models import CloudLogin, User
@@ -413,3 +413,30 @@ def mark_cloud_notifications_read(
     user: CurrentUser, db: DbSession, body: dict = Body(default_factory=dict)
 ) -> Response:
     return _session_relay("POST", "/notifications/read", body, user=user, db=db)
+
+
+# ---------------------------------------------------------------- 在线购买(ADR 0088 第 3 步)
+
+
+@router.get("/cloud/v1/plans")
+def list_cloud_plans(user: CurrentUser, db: DbSession) -> JSONResponse:
+    """在线能买的套餐、这个部署开了哪些支付渠道。公开读,照 Cloud 的原样交回。"""
+    return _public_read(user, db, "/plans")
+
+
+@router.post("/cloud/v1/orders", status_code=201)
+def create_cloud_order(body: CloudOrderIn, user: CurrentUser, db: DbSession) -> Response:
+    """下单拿二维码。要先登录 MosaelCloud(用这台设备的令牌下单)。"""
+    _ensure_configured()
+    if _load_login(db, user.id) is None:
+        raise _not_signed_in()
+    return _session_relay("POST", "/orders", body.model_dump(), user=user, db=db)
+
+
+@router.get("/cloud/v1/orders/{order_id}")
+def get_cloud_order(order_id: ShareId, user: CurrentUser, db: DbSession) -> Response:
+    """订单状态。桌面端扫码后轮询它;还没到账时 Cloud 会顺手问一次支付渠道。"""
+    _ensure_configured()
+    if _load_login(db, user.id) is None:
+        raise _not_signed_in()
+    return _session_relay("GET", f"/orders/{order_id}", None, user=user, db=db)

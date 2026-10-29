@@ -381,10 +381,14 @@ class CloudPlan(Base):
     #: 每一批月度积分从发放起活多少天(运营参数,如 60:当月没用完还能再用一个月)。
     credit_ttl_days: Mapped[int] = mapped_column(Integer, nullable=False)
     on_sale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    #: 在线买一个周期多少钱,**分**。空 = 不在线卖(只由管理员开通,如内测套餐)。国内版只收人民币(第 3 步)。
+    price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY", server_default="CNY")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
 
     __table_args__ = (
         CheckConstraint("period IN ('month', 'quarter', 'year')", name="ck_cloud_plans_period"),
+        CheckConstraint("price_cents IS NULL OR price_cents > 0", name="ck_cloud_plans_price"),
         CheckConstraint("monthly_credits > 0 AND credit_ttl_days > 0", name="ck_cloud_plans_positive"),
     )
 
@@ -560,3 +564,47 @@ class CloudUpstreamChannel(Base):
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     note: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+# ---------------------------------------------------------------- 订单与支付(ADR 0088 第 3 步)
+
+
+class CloudOrder(Base):
+    """一笔购买:谁、买哪个套餐的一个周期、多少钱、走哪个渠道、到没到账、发放了哪个订阅。
+
+    `id` 就是给渠道的商户订单号(32 位十六进制,支付宝 ≤64、微信 6–32 位字母数字都收)。**订单是账**:删号时不跟着删,
+    `user_id` 置空 —— 收过的钱要对得上。
+    """
+
+    __tablename__ = "cloud_orders"
+    __table_args__ = (
+        Index("idx_cloud_orders_user_created", "user_id", "created_at"),
+        CheckConstraint("status IN ('pending', 'paid', 'closed')", name="ck_cloud_orders_status"),
+        CheckConstraint("channel IN ('alipay', 'wechat')", name="ck_cloud_orders_channel"),
+        CheckConstraint("amount_cents > 0", name="ck_cloud_orders_amount"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="SET NULL"), nullable=True
+    )
+    plan_id: Mapped[str] = mapped_column(ForeignKey("cloud_plans.id", ondelete="RESTRICT"), nullable=False)
+    #: 下单那一刻的价(套餐之后调价不影响这一笔)。
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: `pending`(等付款)/ `paid`(到账并已发放)/ `closed`(过期没付)。关了之后才到的付款照样变 `paid`。
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    #: 渠道给的二维码内容(支付宝 `qr_code` / 微信 `code_url`),界面把它画成码。
+    code_url: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    #: 渠道那边的交易号,到账时记下,对账用。
+    channel_trade_no: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    #: 这一笔发放(开通或顺延)的是哪个订阅。
+    subscription_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_subscriptions.id", ondelete="SET NULL"), nullable=True, default=None
+    )
+    #: 不该发生却发生了的事(回调金额对不上等),给运营看,不进对外响应。
+    note: Mapped[str] = mapped_column(String(300), nullable=False, default="")

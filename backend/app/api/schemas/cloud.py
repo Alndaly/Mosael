@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel
@@ -42,3 +44,10 @@ class CloudConnectionSyncOut(ApiModel):
 
     profile_id: str
     models: int
+
+
+class CloudOrderIn(ApiModel):
+    """在线购买下单(ADR 0088 第 3 步):哪个套餐(slug)、哪个渠道。原样转给 Cloud,由它校验。"""
+
+    plan: str = Field(min_length=1, max_length=64)
+    channel: Literal["alipay", "wechat"]

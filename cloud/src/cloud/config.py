@@ -92,6 +92,19 @@ class CloudConfig:
     #: 上游通道 API Key 的落库加密钥(Fernet,`python -m cloud.cli channel-key` 生成)。**空 = 网关没配置**:
     #: 对话接口明确回 503 `gateway_not_configured`,加通道的命令拒绝执行 —— 不把 Key 明文落库。
     channel_key: str = ""
+    #: 支付宝当面付(ADR 0088 第 3 步)。三项配齐才开这个渠道;密钥可以是 PEM 内容,也可以是 PEM 文件的路径。
+    alipay_app_id: str = ""
+    alipay_private_key: str = ""
+    alipay_public_key: str = ""
+    alipay_gateway: str = "https://openapi.alipay.com/gateway.do"
+    #: 微信支付 Native(APIv3)。七项配齐才开;公钥用「微信支付公钥」(带公钥 id),不用平台证书。
+    wechatpay_mchid: str = ""
+    wechatpay_appid: str = ""
+    wechatpay_serial_no: str = ""
+    wechatpay_private_key: str = ""
+    wechatpay_apiv3_key: str = ""
+    wechatpay_public_key: str = ""
+    wechatpay_public_key_id: str = ""
     #: 从 `public_url` 推出来的同源校验名单(允许的 Origin)。
     #: 允许的 Origin。**默认就是 `public_url` 的那一个**;本地开发时官网(3100)和桌面后端(8000)
     #: 都要来调接口,而它们不是同一个 Origin —— 用 `CLOUD_ALLOWED_ORIGINS` 显式列出来。
@@ -194,5 +207,16 @@ class CloudConfig:
             official_handle=os.environ.get("CLOUD_OFFICIAL_HANDLE", "").strip() or "mosael",
             official_email=os.environ.get("CLOUD_OFFICIAL_EMAIL", "").strip() or "official@mosael.example",
             channel_key=os.environ.get("CLOUD_CHANNEL_KEY", "").strip(),
+            alipay_app_id=os.environ.get("CLOUD_ALIPAY_APP_ID", "").strip(),
+            alipay_private_key=os.environ.get("CLOUD_ALIPAY_PRIVATE_KEY", "").strip(),
+            alipay_public_key=os.environ.get("CLOUD_ALIPAY_PUBLIC_KEY", "").strip(),
+            alipay_gateway=os.environ.get("CLOUD_ALIPAY_GATEWAY", "").strip() or "https://openapi.alipay.com/gateway.do",
+            wechatpay_mchid=os.environ.get("CLOUD_WECHATPAY_MCHID", "").strip(),
+            wechatpay_appid=os.environ.get("CLOUD_WECHATPAY_APPID", "").strip(),
+            wechatpay_serial_no=os.environ.get("CLOUD_WECHATPAY_SERIAL_NO", "").strip(),
+            wechatpay_private_key=os.environ.get("CLOUD_WECHATPAY_PRIVATE_KEY", "").strip(),
+            wechatpay_apiv3_key=os.environ.get("CLOUD_WECHATPAY_APIV3_KEY", "").strip(),
+            wechatpay_public_key=os.environ.get("CLOUD_WECHATPAY_PUBLIC_KEY", "").strip(),
+            wechatpay_public_key_id=os.environ.get("CLOUD_WECHATPAY_PUBLIC_KEY_ID", "").strip(),
             official_password=os.environ.get("CLOUD_OFFICIAL_PASSWORD", ""),
         )

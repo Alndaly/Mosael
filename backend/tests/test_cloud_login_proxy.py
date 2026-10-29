@@ -613,3 +613,34 @@ def test_the_connection_counts_as_usable_exactly_while_signed_in(cloud: FakeClou
     cloud.reply_raw(httpx.Response(204))
     client.post("/api/cloud/v1/logout")
     assert cloud_row()["is_mine"] is False
+
+
+# ---------------------------------------------------------------- 在线购买(ADR 0088 第 3 步)
+
+
+def test_plans_orders_and_order_status_are_relayed_with_the_device_token(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    login(client, cloud)
+
+    cloud.reply(200, {"plans": [{"slug": "pro", "price_cents": 2900}], "channels": ["alipay"]})
+    assert client.get("/api/cloud/v1/plans").json()["channels"] == ["alipay"]
+    assert cloud.requests[-1].url.path == "/plans"
+
+    cloud.reply(201, {"order": {"id": "o1", "status": "pending", "code_url": "https://qr.alipay.com/x"}})
+    response = client.post("/api/cloud/v1/orders", json={"plan": "pro", "channel": "alipay"})
+    assert response.status_code == 201, response.text
+    sent = cloud.requests[-1]
+    assert (sent.method, sent.url.path) == ("POST", "/orders")
+    assert json.loads(sent.content) == {"plan": "pro", "channel": "alipay"}
+    assert sent.headers.get("authorization") == BEARER
+
+    cloud.reply(200, {"order": {"id": "o1", "status": "paid"}})
+    assert client.get("/api/cloud/v1/orders/o1").json()["order"]["status"] == "paid"
+    assert cloud.requests[-1].url.path == "/orders/o1"
+
+
+def test_ordering_without_signing_in_is_401_without_touching_cloud(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    assert client.post("/api/cloud/v1/orders", json={"plan": "pro", "channel": "alipay"}).status_code == 401
+    assert client.post("/api/cloud/v1/orders", json={"plan": "pro", "channel": "paypal"}).status_code == 422
+    assert cloud.requests == []

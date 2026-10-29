@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
+import { CloudPurchaseDialog } from "@/features/settings/CloudPurchaseDialog";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { gotoSettings } from "@/lib/deepLink";
@@ -67,6 +68,7 @@ function SignedInRow({
   const t = useI18n();
   const qc = useQueryClient();
   const [expanded, setExpanded] = React.useState(false);
+  const [buying, setBuying] = React.useState(false);
   //: 积分每调用一次就少一点:不缓存太久,但也不为它轮询 —— 打开这一页、点刷新时各问一次。
   const account = useQuery({ queryKey: cloudKeys.account(), queryFn: getCloudAccount, retry: false, staleTime: 15_000 });
   const sync = useMutation({
@@ -94,6 +96,7 @@ function SignedInRow({
         </div>
         <div className="flex items-center gap-1">
           {offersCapability || profile === null ? null : <Badge variant="outline">{t("providerMosaelCloudSoon")}</Badge>}
+          <Button variant="outline" size="sm" onClick={() => setBuying(true)}>{t("cloudBuy")}</Button>
           {showModels && (
             <IconButton
               size="icon-sm"
@@ -114,6 +117,7 @@ function SignedInRow({
           </div>
         )}
       </SettingsListItem>
+      <CloudPurchaseDialog open={buying} onOpenChange={setBuying} />
     </SettingsListBlock>
   );
 }

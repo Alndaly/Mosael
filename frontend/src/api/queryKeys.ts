@@ -137,6 +137,8 @@ export const cloudKeys = {
   session: () => ["cloud-session"] as const,
   /** 官方中转上的积分。调用一次就少一点,不缓存太久(见 MosaelCloudConnection)。 */
   account: () => ["cloud-account"] as const,
+  plans: () => ["cloud-plans"] as const,
+  order: (orderId: string) => ["cloud-order", orderId] as const,
 };
 
 /**

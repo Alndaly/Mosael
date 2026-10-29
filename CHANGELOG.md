@@ -20,6 +20,8 @@ commit list and downloadable artifacts.
 - **Mosael Cloud 成了一条能直接用的连接。** 登录 MosaelCloud 后,供应商列表顶上的「Mosael Cloud」能展开看官方提供的模型、
   显示剩余积分、点一下刷新;它的模型出现在默认模型、AI Studio、智能体、画板、工作流的选择器里,不用填任何密钥。
   用量与统计里花费按「积分」单独记,不和人民币、美元相加。没登录时,默认模型那一行会说「还没登录 MosaelCloud」并带你去登录。
+- **在 Mosael 里订阅 Mosael Cloud。** 「Mosael Cloud」那一行有「订阅 / 续费」:选套餐和支付宝 / 微信支付,扫码付款,到账后自动刷新。
+  同一套餐再买一个周期就往后顺延;买另一个套餐和现有的同时生效、积分合在一起用,预付的什么都不作废(ADR 0088 第 3 步,国内预付)。
 
 ### ComfyUI 工作台
 
