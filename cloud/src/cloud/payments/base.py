@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+from cryptography.hazmat.primitives import serialization
 from typing import Protocol
 
 
@@ -60,12 +64,41 @@ class PaymentChannel(Protocol):
     def ack(self, ok: bool) -> NotifyAck: ...
 
 
-def pem(value: str) -> bytes:
-    """配置里的密钥:直接是 PEM 内容,或者一个 PEM 文件的路径(部署时常把证书挂成文件)。"""
+def pem(value: str, *, kind: str) -> bytes:
+    """配置里的密钥 → PEM。三种写法都认:
+
+    - PEM 内容(带 `-----BEGIN …-----`);
+    - PEM 文件的路径(部署时常把密钥挂成文件);
+    - **不带头尾的一整串 base64** —— 支付宝开放平台(含沙箱)控制台和密钥工具给的就是这种,粘过来就能用。
+
+    `kind` 是没有头尾时补上的那一种:`"private"`(先按 PKCS#8,解不开再按 PKCS#1 —— 密钥工具按语言生成这两种)或 `"public"`。
+    """
     text = value.strip()
     if text.startswith("-----BEGIN"):
         return text.encode("ascii")
-    return Path(text).expanduser().read_bytes()
+    candidate = Path(text).expanduser()
+    if len(text) < 1024 and candidate.is_file():
+        return candidate.read_bytes()
+    body = "".join(text.split())
+    try:
+        der = base64.b64decode(body, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError(f"not a PEM, a PEM file or a base64 {kind} key") from exc
+    if kind == "public":
+        return _wrap(body, "PUBLIC KEY")
+    for label in ("PRIVATE KEY", "RSA PRIVATE KEY"):
+        wrapped = _wrap(body, label)
+        try:
+            serialization.load_pem_private_key(wrapped, password=None)
+        except ValueError:
+            continue
+        return wrapped
+    raise ValueError(f"base64 private key is neither PKCS#8 nor PKCS#1 ({len(der)} bytes)")
+
+
+def _wrap(body: str, label: str) -> bytes:
+    lines = "\n".join(body[index:index + 64] for index in range(0, len(body), 64))
+    return f"-----BEGIN {label}-----\n{lines}\n-----END {label}-----\n".encode("ascii")
 
 
 def cents_from_yuan(text: str) -> int:

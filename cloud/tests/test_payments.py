@@ -396,3 +396,33 @@ def test_a_lost_wechat_callback_is_caught_by_a_signed_query(shop, wechat):
     wechat.transactions[order["id"]] = wechat.transaction(order["id"], 2900)
     assert client.get(api(f"/orders/{order['id']}")).json()["order"]["status"] == "paid"
     assert credits_of(shop) == 1000
+
+
+# ---------------------------------------------------------------- 配置里的密钥写法
+
+
+def test_keys_are_read_as_pem_a_pem_file_or_a_bare_base64_string(tmp_path):
+    """支付宝控制台给的是不带头尾的一整串 base64:粘过来就能用;PKCS#8 和 PKCS#1 的私钥都认。"""
+    from cryptography.hazmat.primitives.asymmetric import rsa as rsa_keys
+
+    from cloud.payments.base import pem
+
+    key = rsa_keys.generate_private_key(public_exponent=65537, key_size=2048)
+    pkcs8 = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    pkcs1 = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL,
+                              serialization.NoEncryption())
+    public = key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+
+    def bare(pem_bytes: bytes) -> str:
+        return "".join(line for line in pem_bytes.decode().splitlines() if not line.startswith("-----"))
+
+    for private in (pkcs8, pkcs1):
+        for written in (private.decode(), bare(private)):
+            loaded = serialization.load_pem_private_key(pem(written, kind="private"), password=None)
+            assert loaded.private_numbers() == key.private_numbers()
+    assert serialization.load_pem_public_key(pem(bare(public), kind="public")).public_numbers() == key.public_key().public_numbers()
+    on_disk = tmp_path / "app.pem"
+    on_disk.write_bytes(pkcs8)
+    assert pem(str(on_disk), kind="private") == pkcs8
+    with pytest.raises(ValueError):
+        pem("not a key!", kind="private")

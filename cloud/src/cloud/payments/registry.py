@@ -18,8 +18,8 @@ def channels_from_config(config: CloudConfig) -> dict[str, PaymentChannel]:
     if config.alipay_app_id and config.alipay_private_key and config.alipay_public_key:
         channels["alipay"] = AlipayChannel(
             app_id=config.alipay_app_id,
-            app_private_key=pem(config.alipay_private_key),
-            alipay_public_key=pem(config.alipay_public_key),
+            app_private_key=pem(config.alipay_private_key, kind="private"),
+            alipay_public_key=pem(config.alipay_public_key, kind="public"),
             notify_url=notify_url(config, "alipay"),
             gateway=config.alipay_gateway,
         )
@@ -29,9 +29,9 @@ def channels_from_config(config: CloudConfig) -> dict[str, PaymentChannel]:
             mchid=config.wechatpay_mchid,
             appid=config.wechatpay_appid,
             merchant_serial_no=config.wechatpay_serial_no,
-            merchant_private_key=pem(config.wechatpay_private_key),
+            merchant_private_key=pem(config.wechatpay_private_key, kind="private"),
             apiv3_key=config.wechatpay_apiv3_key,
-            platform_public_key=pem(config.wechatpay_public_key),
+            platform_public_key=pem(config.wechatpay_public_key, kind="public"),
             platform_public_key_id=config.wechatpay_public_key_id,
             notify_url=notify_url(config, "wechat"),
         )
