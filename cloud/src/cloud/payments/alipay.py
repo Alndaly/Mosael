@@ -3,7 +3,10 @@
 签名照支付宝开放平台的 RSA2 规则(https://opendocs.alipay.com/common/02kf5q):
 
 - **请求**:除 `sign` 外所有非空参数按键名升序拼成 `k=v&k=v`,用**应用私钥** SHA256withRSA 签名,base64;
-- **同步响应**:签的是原始 JSON 里 `<method>_response` 那个节点的**原文子串**(不是解析后再序列化的),用**支付宝公钥**验;
+- **公共参数放 URL 查询串,只有 `biz_content` 放表单体**(和官方 SDK 一样):网关从查询串里读 `charset`,全塞进表单体的话
+  它按缺省的 GBK 回包(沙箱联调时撞到:回包是 GBK、验签对不上);
+- **同步响应**:签的是原始 JSON 里 `<method>_response` 那个节点的**原文子串**(不是解析后再序列化的),**按回包声明的编码取字节**,
+  用**支付宝公钥**验;
 - **异步通知**:表单参数去掉 `sign`、`sign_type` 后同样排序拼串,用支付宝公钥验;再核对 `app_id` 是我们的。
 
 时间一律北京时间(支付宝的 `timestamp`、`time_expire`、`gmt_payment` 都是)。
@@ -81,9 +84,9 @@ class AlipayChannel:
     def _sign(self, content: str) -> str:
         return base64.b64encode(self._private.sign(content.encode("utf-8"), padding.PKCS1v15(), hashes.SHA256())).decode()
 
-    def _verify(self, content: str, signature: str) -> bool:
+    def _verify(self, content: str, signature: str, *, charset: str = "utf-8") -> bool:
         try:
-            self._public.verify(base64.b64decode(signature), content.encode("utf-8"), padding.PKCS1v15(), hashes.SHA256())
+            self._public.verify(base64.b64decode(signature), content.encode(charset), padding.PKCS1v15(), hashes.SHA256())
         except (InvalidSignature, ValueError):
             return False
         return True
@@ -105,9 +108,10 @@ class AlipayChannel:
         if with_notify:
             params["notify_url"] = self.notify_url
         params["sign"] = self._sign(sign_content(params))
+        biz_content = params.pop("biz_content")
         try:
             with httpx2.Client(transport=self._transport, timeout=TIMEOUT_SECONDS) as client:
-                response = client.post(self.gateway, data=params)
+                response = client.post(self.gateway, params=params, data={"biz_content": biz_content})
         except httpx2.HTTPError as exc:
             raise ChannelUnavailable(f"alipay {method}: {type(exc).__name__}") from exc
         raw = response.text
@@ -118,7 +122,8 @@ class AlipayChannel:
         except ValueError as exc:
             raise ChannelUnavailable(f"alipay {method}: not JSON") from exc
         signature = whole.get("sign") if isinstance(whole, dict) else None
-        if node_text is None or not isinstance(signature, str) or not self._verify(node_text, signature):
+        charset = response.encoding or "utf-8"
+        if node_text is None or not isinstance(signature, str) or not self._verify(node_text, signature, charset=charset):
             raise ChannelUnavailable(f"alipay {method}: response signature did not verify")
         node = json.loads(node_text)
         if node.get("code") != "10000":

@@ -62,7 +62,10 @@ class FakeAlipay:
         self.trades: dict[str, dict[str, str]] = {}
 
     def handler(self, request: httpx2.Request) -> httpx2.Response:
-        params = dict(parse_qsl(request.content.decode()))
+        #: 公共参数在 URL 查询串里,只有 biz_content 在表单体(和官方 SDK 一样;网关从查询串读 charset)。
+        params = {**dict(request.url.params), **dict(parse_qsl(request.content.decode()))}
+        assert set(parse_qsl(request.content.decode())) and dict(parse_qsl(request.content.decode())).keys() == {"biz_content"}
+        assert request.url.params.get("charset") == "utf-8"
         self.requests.append(params)
         signature = params.pop("sign")
         rsa_verify(self.app_public, sign_content(params).encode(), signature)  # 我们发出去的签名必须验得过
@@ -426,3 +429,20 @@ def test_keys_are_read_as_pem_a_pem_file_or_a_bare_base64_string(tmp_path):
     assert pem(str(on_disk), kind="private") == pkcs8
     with pytest.raises(ValueError):
         pem("not a key!", kind="private")
+
+
+
+def test_an_alipay_response_in_gbk_still_verifies():
+    """网关没读到 charset 时会按 GBK 回包、并对 GBK 字节签名:验签按回包声明的编码取字节。"""
+    fake = FakeAlipay()
+    node = {"code": "40004", "msg": "Business Failed", "sub_code": "ACQ.TRADE_NOT_EXIST", "sub_msg": "交易不存在"}
+    node_text = json.dumps(node, ensure_ascii=False, separators=(",", ":"))
+    signature = rsa_sign(fake.platform_key, node_text.encode("gbk"))
+    raw = f'{{"alipay_trade_query_response":{node_text},"sign":"{signature}"}}'.encode("gbk")
+
+    def handler(request):
+        return httpx2.Response(200, content=raw, headers={"content-type": "text/html;charset=GBK"})
+
+    channel = AlipayChannel(app_id=APP_ID, app_private_key=fake.app_private, alipay_public_key=fake.platform_public,
+                            notify_url="https://x/notify", transport=httpx2.MockTransport(handler))
+    assert channel.query("o1") is None
