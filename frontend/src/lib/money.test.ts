@@ -4,8 +4,10 @@
  * **不同币种的钱不相加**:一组各币种的钱写成 `¥12.30 + US$4.50`,而不是加成一个数、再随便贴上
  * 其中一种单位。
  */
-import { describe, expect, it } from "vitest";
-import { formatCosts, formatMoney, microsIn, sumByCurrency } from "./money";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { loadMessages } from "@/app/messageTables";
+import { CREDITS, formatCosts, formatMoney, microsIn, sumByCurrency } from "./money";
 
 describe("formatMoney", () => {
   it("按界面语言的习惯写币种符号", () => {
@@ -80,4 +82,19 @@ it("microsIn 取某一币种那一笔,没有就是 0", () => {
   expect(microsIn(costs, "CNY")).toBe(5);
   expect(microsIn(costs, "USD")).toBe(0);
   expect(microsIn(undefined, "USD")).toBe(0);
+});
+
+describe("MosaelCloud 的积分", () => {
+  //: 积分的单位来自文案表(不是货币,没有 Intl 的符号可用):先把界面语言的那张表载进来。
+  beforeAll(() => loadMessages("zh-CN"));
+
+  it("不是货币:写成「N 积分」,小数照样留够精度", () => {
+    expect(formatMoney(998_000_000, CREDITS, "zh-CN")).toBe("998 积分");
+    expect(formatMoney(44_000, CREDITS, "zh-CN")).toBe("0.044 积分");
+  });
+
+  it("和别的币种并排时各写各的,不相加", () => {
+    expect(formatCosts([{ currency: "CNY", micros: 1_230_000 }, { currency: CREDITS, micros: 2_000_000 }], "zh-CN"))
+      .toBe("¥1.23 + 2.00 积分");
+  });
 });

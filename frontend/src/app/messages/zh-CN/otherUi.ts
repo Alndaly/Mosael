@@ -1004,4 +1004,6 @@ export const otherUi = {
   updateJobsRunning: "当前还有任务在跑，等任务结束后再重启更新",
   updateCheckFailed: "无法检查更新,请稍后再试",
   updateManualDownload: "去百度网盘手动下载",
+  //: MosaelCloud 官方中转的积分(ADR 0088):用量账本里单独的一种「币」,不是货币,不走 Intl 的货币格式(见 lib/money)。
+  moneyCredits: "{amount} 积分",
 } as const;

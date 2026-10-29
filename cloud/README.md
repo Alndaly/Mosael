@@ -198,13 +198,18 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/gateway/me` | 这枚令牌是谁、哪台设备 |
-| GET | `/gateway/catalog` | 此刻能用的模型(启用 + 有生效单价 + 至少一条启用通道)与积分单价;这个用户的积分(按批次、先到期在前)、下一批何时发、套餐 |
-| POST | `/gateway/chat` | 对话。OpenAI 形状的请求体,`model` 是目录里的 id;`stream` 缺省为真 |
+| GET | `/gateway/account` | 这个用户的积分(按批次、先到期在前)、下一批何时发、套餐 |
+| GET | `/gateway/v1/models` | **OpenAI 兼容**的模型目录:启用 + 有生效单价 + 至少一条启用通道的模型;每个带 `name`、`max_output_tokens`、`pricing`(每 token 的价,字符串,`currency: CREDITS`) |
+| POST | `/gateway/v1/chat/completions` | **OpenAI 兼容**的对话;`model` 是目录里的 id,`stream` 和 OpenAI 一样缺省为假 |
+
+桌面端把它当一条 OpenAI 兼容连接用(base_url = `…/gateway/v1`、Bearer = 设备令牌),所以直连对话、智能体、画板、工作流
+不另写一套。
 
 **一次对话的积分**:输入按**字数**当 token、输出按 `max_tokens`(缺省为模型上限)预占,先扣快到期的那批;不够回 402,
 `details` 里有 `needed` / `available` / `next_grant_at`。结束后按上游报的 `usage` 结算、多退;上游没报(或桌面端中途断开)
-按字数估(两个字一个 token)。流式时在上游的 `data: [DONE]` 之前多一个 `event: mosael.usage`(`call_id`、`charged`、
-token 数、`usage_reported`、`credits_left`);非流式回包多一格 `mosael`。响应头 `X-Mosael-Call-Id`。
+按字数估(两个字一个 token)。流照上游转回,每块的 `model` 换成网关的 id;**最后那块 usage**(`choices: []`)由网关结算后
+给出 —— `usage` 是结算用的 token 数,多一格 `mosael`(`call_id`、`charged`、token 数、`usage_reported`、`credits_left`);
+非流式回包同样多一格 `mosael`。响应头 `X-Mosael-Call-Id`。
 
 **上游通道**:对上游说 OpenAI 兼容(`<base_url>/chat/completions`,流式时带 `stream_options.include_usage`)。按优先级试;
 连不上 / 超时 / 429 / 5xx 把那条冷却 60 秒、换下一条 —— **只在上游开始生成之前换**,所以不会两条各收一次;其余 4xx 不换,

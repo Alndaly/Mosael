@@ -143,8 +143,9 @@ SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮)
 | GET | `/device-tokens` | 这个账号的设备令牌列表(名字、签发、最近使用;不含原文) |
 | DELETE | `/device-tokens/{id}` | 吊销自己的一枚;别人的 / 不存在的一律 404 |
 | GET | `/gateway/me` | **只认 `Authorization: Bearer mct_…`**,不认 cookie:这枚令牌属于谁、是哪台设备 |
-| GET | `/gateway/catalog` | 只认设备令牌:能用的模型与积分单价、这个用户的积分(ADR 0088 第 2 步,详见 cloud/README「官方中转网关」) |
-| POST | `/gateway/chat` | 只认设备令牌:OpenAI 形状的对话,预占 → 转发 → 按用量结算 |
+| GET | `/gateway/account` | 只认设备令牌:这个用户的积分、下一批、套餐(ADR 0088,详见 cloud/README「官方中转网关」) |
+| GET | `/gateway/v1/models` | 只认设备令牌:OpenAI 兼容的模型目录,价是积分 |
+| POST | `/gateway/v1/chat/completions` | 只认设备令牌:OpenAI 兼容的对话,预占 → 转发 → 按用量结算 |
 | DELETE | `/device-tokens/current` | **只认 Bearer**:令牌吊销自己(桌面端登出时用) |
 
 失败一律 `{error, message: {en, zh}}`;错误码稳定,文案中英各一份。OAuth 的浏览器入口例外:
@@ -391,6 +392,10 @@ provider 报错不外泄原始信息、唯一约束在库上。官网侧另有
   官方中转网关(`/gateway/*`)**只认这枚令牌**,浏览器会话在那里一律 401 `device_token_invalid`。
   账号接口(`api/deps.current_user`)两条路都认,但**一个请求只走一条**:带了 Bearer 就只认令牌,认不出直接
   `device_token_invalid`,不回头看 cookie。桌面端登录拿到会话 → 换令牌 → 立刻退掉那份会话,此后只拿令牌说话。
+- **桌面端的「Mosael Cloud」连接**(ADR 0088):登录后本地建一条 vendor 为 `mosael-cloud` 的供应商连接,端点是
+  `<MOSAEL_CLOUD_URL>/gateway/v1`、钥匙是上面那枚设备令牌(只存在 `cloud_login`,不进凭据表);模型清单与积分单价由
+  `domain/cloud_connection.sync` 从网关目录对齐(登录时、设置页那一行点「刷新」时)。它对直连对话、智能体、画板、工作流
+  就是一条普通的 OpenAI 兼容连接;用量账本里它的花费按「积分」单独记。
 
 ## 社区分享第①笔:身份、分享、互动
 

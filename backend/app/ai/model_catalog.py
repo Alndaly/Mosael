@@ -40,12 +40,17 @@ class CatalogModel:
     id: str
     context_window: int | None = None
     max_output_tokens: int | None = None
-    #: 单价,**美元 / 百万 token**。端点没给就是 None(多数 OpenAI 兼容端点不报价)。
+    #: 单价,**`currency` / 百万 token**。端点没给就是 None(多数 OpenAI 兼容端点不报价)。
     #: 单位刻意统一成「每百万」:计价规则表里本来就有 million_* 系列,换算一次即可对上。
     input_cost: float | None = None
     output_cost: float | None = None
     cache_read_cost: float | None = None
     cache_write_cost: float | None = None
+    #: 上面那几个价是什么币种。OpenRouter 与 pi 的 ModelCost 都按美元报,缺省就是它;MosaelCloud 网关报的是积分
+    #: (`pricing.currency: CREDITS`)—— 不带币种的话,积分会被当成美元写进计价规则。
+    currency: str = "USD"
+    #: 端点给的显示名(OpenRouter、MosaelCloud 的 `name`);没给是空串,界面用 id。
+    name: str = ""
 
 
 #: 缓存键:(端点, 钥匙, 说哪种话)。同一个地址按两种说法问出来的是两份目录,不能互相顶替。
@@ -86,7 +91,8 @@ def _per_million(value: object) -> float | None:
     return amount * 1_000_000 if amount >= 0 else None
 
 
-def _parse(rows: object) -> list[CatalogModel]:
+def parse_openai_catalog(rows: object) -> list[CatalogModel]:
+    """OpenAI 兼容 `/models` 回包里的 `data` → 目录。MosaelCloud 的连接取自己的目录时也用这一份(见 domain/cloud_connection)。"""
     if not isinstance(rows, list):
         return []
     models: dict[str, CatalogModel] = {}
@@ -111,6 +117,8 @@ def _parse(rows: object) -> list[CatalogModel]:
             output_cost=_per_million(pricing.get("completion")),
             cache_read_cost=_per_million(pricing.get("input_cache_read")),
             cache_write_cost=_per_million(pricing.get("input_cache_write")),
+            currency=str(pricing.get("currency") or "USD").strip().upper()[:8] or "USD",
+            name=str(row.get("name") or "").strip()[:160],
         )
     return [models[key] for key in sorted(models)]
 
@@ -178,7 +186,7 @@ def fetch_models(
             with RetryingClient(timeout=_FETCH_TIMEOUT, max_retries=0) as client:
                 resp = client.get(f"{base}/models", headers=auth_headers(api_key))
             resp.raise_for_status()
-            models = _parse(resp.json().get("data"))
+            models = parse_openai_catalog(resp.json().get("data"))
     except Exception:  # noqa: BLE001 - 端点不可达/不实现 /models 都只是「没有目录」,不是错误
         with _cache_lock:
             _cache[key] = (time.monotonic(), [], False)

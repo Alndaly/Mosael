@@ -365,7 +365,7 @@ def upsert(
 
 @dataclass(frozen=True)
 class DeclaredModel:
-    """连接**自己说**它有的一个模型(今天只有插件连接会说,见 ADR 0020)。
+    """连接**自己说**它有的一个模型(插件连接,ADR 0020;MosaelCloud 那条,ADR 0088)。
 
     `capabilities` 按 kind 分的生成参数描述符,和内置目录同形(parameter_keys / sizes / …);
     它会存进模型行的 `declared_capabilities`,解析时排在用户声明之后、内置目录之前。
@@ -379,8 +379,12 @@ class DeclaredModel:
     group: dict[str, Any] | None = None
 
 
-def replace_declared_catalog(db: Session, profile: ProviderProfile, entries: list[DeclaredModel]) -> int:
+def replace_declared_catalog(
+    db: Session, profile: ProviderProfile, entries: list[DeclaredModel], *, source: str
+) -> int:
     """连接自己声明的模型清单 → 这条连接下的模型行。**清单就是答案**:在的对齐,不在的删掉。
+
+    会自己声明清单的连接:插件连接(`source="plugin"`,ADR 0020)和 MosaelCloud 那条(`source="mosael-cloud"`,ADR 0088)。
 
     和供应商目录那条路不一样(那边「目录里没了也不删」,因为别名和私有部署仍要能用):这里的清单
     是连接自己的权威说法 —— ComfyUI 服务器上那张工作流删掉了,留着的那一行只会在选中时失败。
@@ -398,7 +402,7 @@ def replace_declared_catalog(db: Session, profile: ProviderProfile, entries: lis
         if row is None:
             row = ProviderModel(provider_profile_id=profile.id, model_id=model_id, enabled=True)
             db.add(row)
-        row.source = "plugin"
+        row.source = source
         row.display_name = (entry.display_name or "")[:160]
         row.capability_ids = normalize_capability_ids(entry.capability_ids) or []
         row.declared_capabilities = dict(entry.capabilities)
@@ -491,7 +495,7 @@ def profile_capabilities(db: Session, profile: ProviderProfile) -> list[str]:
 
 
 def catalog(connection: ResolvedConnection) -> list[CatalogModel]:
-    """这条连接的**目录**:供应商说它有什么模型,各自的窗口和单价(美元 / 百万 token)。
+    """这条连接的**目录**:供应商说它有什么模型,各自的窗口和单价(每百万 token,币种见 `CatalogModel.currency`)。
 
     两种来源:订阅计划的目录只有登录才知道(Copilot 随档位变、OpenRouter 有几百个),登录时由 pi
     带回、存在他自己那把钥匙上;API Key 连接现打 /models(带 TTL 缓存)。此前模型页和计价页各自

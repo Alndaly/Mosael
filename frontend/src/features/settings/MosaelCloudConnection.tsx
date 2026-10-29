@@ -1,24 +1,45 @@
-import { useQuery } from "@tanstack/react-query";
-import { Cloud } from "lucide-react";
+import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, Cloud, RotateCw } from "lucide-react";
+import { toast } from "sonner";
 
-import { describeCloudFailure, loadCloudSession } from "@/api/domains/cloud";
+import {
+  describeCloudFailure,
+  getCloudAccount,
+  loadCloudSession,
+  syncCloudConnection,
+} from "@/api/domains/cloud";
+import type { ProviderProfile } from "@/api/domains/providers";
+import { errorText } from "@/api/errorMessage";
 import { cloudKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
+import { ProviderModelList } from "@/features/settings/ProviderModelList";
+import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { gotoSettings } from "@/lib/deepLink";
+import { cn } from "@/lib/utils";
 
 /**
- * 供应商列表顶上那一行「Mosael Cloud」(ADR 0088 第 1 步;ADR 0039 待拍板 #7)。
+ * 供应商列表顶上那一行「Mosael Cloud」(ADR 0088)。
  *
- * **不是一条可增删的连接**:它跟着「设置 → 账户」里的 MosaelCloud 登录走 —— 登录即有,不需要填密钥。
- * 没登录时也列出来,点「去登录」跳到账户页;这个部署关掉了 Cloud(`cloud_not_configured`)就不出现,
- * 免得给一条点了只会错的路。网关的模型目录在第 2 步上线,在那之前右侧只说「即将开放」。
+ * **它是一条真的连接,但不在下面那张可编辑的列表里**:登录 MosaelCloud 时由后端建出来(`vendor = mosael-cloud`),
+ * 钥匙是登录换来的设备令牌、端点跟着部署配置走、模型清单和积分单价由网关目录对齐 —— 名字、地址、密钥都没有可改的。
+ * 所以它在这里单独画:登录了显示账号和积分,能展开模型、能「刷新」目录;没登录给「去登录」;这个部署关掉了 Cloud 就不出现。
+ *
+ * `profile` 是那条连接(还没建出来时为空 —— 登录那一刻网关没对上,点「刷新」就会建);`offersCapability` 说这一页的能力
+ * (对话 / 生图 / …)网关有没有。没有的那几页只说「这类模型即将开放」。
  */
-export function MosaelCloudConnection() {
-  const t = useI18n();
+export function MosaelCloudConnection({
+  profile,
+  offersCapability,
+}: {
+  profile?: ProviderProfile | null;
+  offersCapability: boolean;
+}) {
   const session = useQuery({
     queryKey: cloudKeys.session(),
     queryFn: loadCloudSession,
@@ -31,6 +52,34 @@ export function MosaelCloudConnection() {
     return null;
   }
   if (session.data === null) return <SignedOutRow />;
+  return <SignedInRow email={session.data.email} profile={profile ?? null} offersCapability={offersCapability} />;
+}
+
+function SignedInRow({
+  email,
+  profile,
+  offersCapability,
+}: {
+  email: string;
+  profile: ProviderProfile | null;
+  offersCapability: boolean;
+}) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const [expanded, setExpanded] = React.useState(false);
+  //: 积分每调用一次就少一点:不缓存太久,但也不为它轮询 —— 打开这一页、点刷新时各问一次。
+  const account = useQuery({ queryKey: cloudKeys.account(), queryFn: getCloudAccount, retry: false, staleTime: 15_000 });
+  const sync = useMutation({
+    mutationFn: syncCloudConnection,
+    onSuccess: ({ models }) => {
+      invalidateProviderDependents(qc);
+      void qc.invalidateQueries({ queryKey: cloudKeys.account() });
+      toast.success(t("providerMosaelCloudSynced").replace("{n}", String(models)));
+    },
+    onError: (error) => toast.error(errorText(error)),
+  });
+  const credits = account.data ? t("providerMosaelCloudCredits").replace("{credits}", account.data.credits.toLocaleString()) : "";
+  const showModels = offersCapability && profile !== null;
 
   return (
     <SettingsListBlock>
@@ -39,10 +88,31 @@ export function MosaelCloudConnection() {
         <div className="min-w-0">
           <Truncate as="strong" className="text-ui-md font-semibold">{t("providerMosaelCloud")}</Truncate>
           <Truncate as="small" className="text-ui-xs text-muted-foreground">
-            {t("providerMosaelCloudSignedIn").replace("{email}", session.data.email)}
+            {t("providerMosaelCloudSignedIn").replace("{email}", email)}
+            {credits && ` · ${credits}`}
           </Truncate>
         </div>
-        <Badge variant="outline">{t("providerMosaelCloudSoon")}</Badge>
+        <div className="flex items-center gap-1">
+          {offersCapability || profile === null ? null : <Badge variant="outline">{t("providerMosaelCloudSoon")}</Badge>}
+          {showModels && (
+            <IconButton
+              size="icon-sm"
+              label={t("modelListTitle")}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((open) => !open)}
+            >
+              <ChevronDown size={13} className={cn("transition-transform", expanded && "rotate-180")} />
+            </IconButton>
+          )}
+          <IconButton size="icon-sm" label={t("providerMosaelCloudRefresh")} loading={sync.isPending} onClick={() => sync.mutate()}>
+            <RotateCw size={13} />
+          </IconButton>
+        </div>
+        {showModels && expanded && (
+          <div className="col-span-full border-t border-border pt-2">
+            <ProviderModelList profileId={profile.id} vendor={profile.vendor} />
+          </div>
+        )}
       </SettingsListItem>
     </SettingsListBlock>
   );

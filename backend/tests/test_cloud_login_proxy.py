@@ -111,11 +111,18 @@ def cloud(monkeypatch) -> FakeCloud:
     return fake
 
 
-def queue_successful_login(cloud: FakeCloud, *, email: str = EMAIL) -> None:
-    """一次成功登录在云端那一侧的三跳:登录发 cookie → cookie 换设备令牌 → 退掉那份会话。"""
+GATEWAY_MODELS = {"object": "list", "data": [
+    {"id": "deepseek-chat", "object": "model", "name": "DeepSeek V3", "max_output_tokens": 8000,
+     "pricing": {"prompt": "0.002", "completion": "0.008", "currency": "CREDITS"}},
+]}
+
+
+def queue_successful_login(cloud: FakeCloud, *, email: str = EMAIL, models: dict | None = None) -> None:
+    """一次成功登录在云端那一侧的四跳:登录发 cookie → cookie 换设备令牌 → 退掉那份会话 → 问网关目录(对齐「Mosael Cloud」连接)。"""
     cloud.reply(200, {"user": {"email": email}}, headers={"set-cookie": LOGIN_COOKIE})
     cloud.reply(201, {"token": {"id": DEVICE_TOKEN_ID, "name": "host"}, "secret": DEVICE_TOKEN})
     cloud.reply_raw(httpx.Response(204, headers={"set-cookie": f"{COOKIE_NAME}=; Max-Age=0"}))
+    cloud.reply(200, models if models is not None else {"object": "list", "data": []})
 
 
 def login(client, cloud: FakeCloud, *, email: str = EMAIL, password: str = PASSWORD):
@@ -144,7 +151,7 @@ def test_login_exchanges_the_session_for_a_device_token_and_returns_only_the_ema
     assert COOKIE_VALUE not in response.text and DEVICE_TOKEN not in response.text
 
     #: 换令牌与退会话都带着登录拿到的 cookie;设备名是本机主机名。
-    _login, exchange, logout = cloud.requests
+    _login, exchange, logout, _catalog = cloud.requests
     assert (exchange.method, exchange.url.path) == ("POST", "/device-tokens")
     assert exchange.headers.get("cookie") == f"{COOKIE_NAME}={COOKIE_VALUE}"
     assert json.loads(exchange.content)["name"] == cloud_binding.device_name()
@@ -304,7 +311,8 @@ def _cloud_accepts(headers: httpx.Headers, allowed_origin: str) -> bool:
 def test_outbound_write_requests_pass_the_cloud_same_origin_gate(cloud: FakeCloud) -> None:
     client = fresh_client()
     login(client, cloud)
-    outbound = cloud.requests[-1]
+    #: 登录这一跳本身(之后还有换令牌、退会话、问目录)。
+    outbound = cloud.requests[0]
 
     assert outbound.method == "POST"
     # 比的是**站点根**(Origin 没有路径),不是带 `/api/cloud/v1` 的部署地址。
@@ -478,3 +486,130 @@ def test_a_cloud_address_the_outbound_guard_blocks_is_a_503_that_says_why(cloud:
     assert response.json()["detail"]["code"] == "cloud_blocked"
     assert "10.0.0.5" in response.json()["detail"]["message"]
     assert rows() == []
+
+
+# ---------------------------------------------------------------- 「Mosael Cloud」连接(ADR 0088)
+
+
+def _cloud_connection_rows():
+    with engine.begin() as connection:
+        profiles = list(connection.execute(text(
+            "SELECT id, name, vendor, base_url FROM provider_profiles WHERE vendor = 'mosael-cloud'"
+        )))
+        models = list(connection.execute(text(
+            "SELECT model_id, display_name, source FROM provider_models WHERE provider_profile_id IN "
+            "(SELECT id FROM provider_profiles WHERE vendor = 'mosael-cloud')"
+        )))
+        rules = list(connection.execute(text(
+            "SELECT model, billing_unit, unit_amount_micros, currency, effective_to IS NULL FROM provider_pricing_rules "
+            "WHERE source = 'mosael-cloud' ORDER BY model, billing_unit, effective_to IS NULL"
+        )))
+    return profiles, models, rules
+
+
+def test_signing_in_builds_the_mosael_cloud_connection_from_the_gateway_catalog(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    queue_successful_login(cloud, models=GATEWAY_MODELS)
+    assert client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD}).status_code == 200
+
+    catalog = cloud.requests[-1]
+    assert (catalog.method, catalog.url.path) == ("GET", "/gateway/v1/models")
+    assert catalog.headers.get("authorization") == BEARER
+
+    profiles, models, rules = _cloud_connection_rows()
+    #: 端点不存在连接上(跟着部署配置走);名字固定。
+    assert [(name, vendor, base_url) for _, name, vendor, base_url in profiles] == [("Mosael Cloud", "mosael-cloud", "")]
+    assert models == [("deepseek-chat", "DeepSeek V3", "mosael-cloud")]
+    #: 0.002 积分 / token = 2000 积分 / 百万 token;币种是积分。
+    assert rules == [
+        ("deepseek-chat", "million_input_token", 2000 * 1_000_000, "CREDITS", 1),
+        ("deepseek-chat", "million_output_token", 8000 * 1_000_000, "CREDITS", 1),
+    ]
+
+
+def test_the_connection_resolves_to_the_gateway_with_the_device_token_only_while_signed_in(cloud: FakeCloud) -> None:
+    from app.db.models import ProviderProfile
+    from app.domain.providers import credentials
+
+    client = fresh_client()
+    login(client, cloud)
+    with SessionLocal() as db:
+        profile = db.query(ProviderProfile).filter_by(vendor="mosael-cloud").one()
+        resolved = credentials.resolve_connection(db, profile, profile.owner_user_id)
+        assert resolved is not None
+        assert resolved.base_url == f"{CLOUD_URL}/gateway/v1"
+        assert resolved.api_key == DEVICE_TOKEN
+        profile_id, owner = profile.id, profile.owner_user_id
+
+    cloud.reply_raw(httpx.Response(204))
+    client.post("/api/cloud/v1/logout")
+    with SessionLocal() as db:
+        profile = db.get(ProviderProfile, profile_id)
+        #: 登出不删连接(默认模型、画板还指着它),只是解析不出钥匙了。
+        assert profile is not None
+        assert credentials.resolve_connection(db, profile, owner) is None
+
+
+def test_refresh_moves_a_changed_price_forward_and_drops_delisted_models(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    queue_successful_login(cloud, models=GATEWAY_MODELS)
+    client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD})
+
+    cloud.reply(200, {"object": "list", "data": [
+        {"id": "kimi-k2", "object": "model", "name": "Kimi K2",
+         "pricing": {"prompt": "0.001", "completion": "0.008", "currency": "CREDITS"}},
+    ]})
+    response = client.post("/api/cloud/v1/connection/sync")
+    assert response.status_code == 200, response.text
+    assert response.json()["models"] == 1
+
+    _profiles, models, rules = _cloud_connection_rows()
+    assert [one[0] for one in models] == ["kimi-k2"]
+    #: 下架的 deepseek-chat:规则截止(不删,过去的账还能对回去);kimi-k2 的规则从此刻起生效。
+    assert ("deepseek-chat", "million_input_token", 2000 * 1_000_000, "CREDITS", 0) in rules
+    assert ("kimi-k2", "million_input_token", 1000 * 1_000_000, "CREDITS", 1) in rules
+
+
+def test_a_revoked_token_on_refresh_signs_the_user_out(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    login(client, cloud)
+    cloud.reply(401, {"error": "device_token_invalid", "message": {"en": "x", "zh": "x"}})
+    assert client.post("/api/cloud/v1/connection/sync").status_code == 401
+    assert rows() == []
+
+
+def test_signing_in_still_works_when_the_gateway_is_not_there(cloud: FakeCloud) -> None:
+    """这个部署的 Cloud 还没有网关(404)、或网关一时不可用:登录照样成功,连接之后再刷新。"""
+    client = fresh_client()
+    cloud.reply(200, {"user": {"email": EMAIL}}, headers={"set-cookie": LOGIN_COOKIE})
+    cloud.reply(201, {"token": {"id": DEVICE_TOKEN_ID, "name": "host"}, "secret": DEVICE_TOKEN})
+    cloud.reply_raw(httpx.Response(204))
+    cloud.reply(404, {"error": "not_found"})
+    response = client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD})
+    assert response.status_code == 200, response.text
+    assert rows()
+
+
+def test_gateway_account_is_relayed_with_the_device_token(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    login(client, cloud)
+    cloud.reply(200, {"credits": 998, "batches": [], "next_grant_at": None, "plan": "Pro"})
+    response = client.get("/api/cloud/v1/gateway/account")
+    assert response.status_code == 200, response.text
+    assert response.json()["credits"] == 998
+    assert cloud.requests[-1].url.path == "/gateway/account"
+    assert cloud.requests[-1].headers.get("authorization") == BEARER
+
+
+def test_the_connection_counts_as_usable_exactly_while_signed_in(cloud: FakeCloud) -> None:
+    """连接列表上的 `is_mine`(界面据此判「能不能用」)和 resolve_connection 同一个判据:登着就算有钥匙。"""
+    client = fresh_client()
+    login(client, cloud)
+
+    def cloud_row() -> dict:
+        return next(one for one in client.get("/api/settings/providers").json() if one["vendor"] == "mosael-cloud")
+
+    assert cloud_row()["is_mine"] is True
+    cloud.reply_raw(httpx.Response(204))
+    client.post("/api/cloud/v1/logout")
+    assert cloud_row()["is_mine"] is False

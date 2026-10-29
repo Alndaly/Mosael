@@ -123,14 +123,18 @@ MOSAEL_CLOUD_URL』。后续打算官方接入常用的供应商作为中转,用
 - 平台成本另记一本:每次调用把上游的实际花费(适配器回包里的用量 × 上游价目)记下来,用来核对每个套餐、每个模型的毛利,
   不影响用户的积分。
 
-### 3. 网关:Cloud 里多一个模块,对外是 Mosael 自己的协议
+### 3. 网关:Cloud 里多一个模块,对话对外是标准的 OpenAI 兼容端点
 
 - 位置:`cloud/src/cloud/gateway/`,和账号同一个进程、同一个库(ADR 0039 让网关复用社区服务的账号;如今账号在 `cloud/`,网关就跟着
   `cloud/` 走)。前缀 `/api/cloud/v1/gateway`,鉴权只认 `device_tokens`。
-- 接口沿用 ADR 0039 §5:`GET /catalog`(模型、参数声明、**积分单价**,以及**这个用户的积分余额与模型卡**)、`POST /chat`(流式)、
-  `POST /jobs` / `GET /jobs/{id}` / `POST /jobs/{id}/cancel`(生成类,结果给短时效签名地址)。
-- 桌面端的 `mosael-cloud` 适配器很薄:参数声明照目录下发(ADR 0015)、任务等待与重启续等照 ADR 0019、用量账本记「积分 / 模型卡扣减」
-  —— 这家供应商**没有本地计价规则**,也不记人民币。
+- **对话**(2026-10-29 落地时定):`GET /v1/models`、`POST /v1/chat/completions`,**和 OpenAI 一个形状** —— 目录里每个模型带
+  `pricing`(积分 / token,`currency: CREDITS`),流里最后那块 usage 多一格 `mosael`(实扣、余额)。起初设想的是 Mosael 自己的
+  `/catalog`、`/chat`;改成标准端点是因为桌面端的直连对话、智能体(pi)、画板、工作流都已经会说 OpenAI 兼容,让「Mosael Cloud」
+  做一条这样的连接,它们一行不用改。余额另在 `GET /account`。
+- **生成类**(第 4 步):`POST /jobs` / `GET /jobs/{id}` / `POST /jobs/{id}/cancel`,结果给短时效签名地址;参数声明照目录下发
+  (ADR 0015)、任务等待与重启续等照 ADR 0019。
+- 桌面端记账:网关目录里的积分单价对齐成「Mosael Cloud」连接的计价规则,用量账本照常按规则计,币种是积分(不和人民币、美元相加);
+  每次实扣以 Cloud 的结算为准。
 
 ### 4. 上游通道:网关自己管,不接 new-api
 
@@ -187,7 +191,18 @@ ADR 0039 §8、§9 原样适用:国内版只上境内已备案的模型、ICP �
 2. **目录 + 对话 + 积分**:`plans` / `subscriptions` / `credit_batches` / `usage_entries`,外加模型目录与带生效时间的积分单价
    (`gateway_models` / `model_prices`)、`upstream_channels`(模型卡等生成类上了再加);网关 `/catalog`、`/chat`(OpenAI 兼容流式转发,
    预占 → 结算 → 释放,429 / 5xx / 超时在开始计费前换通道并冷却);套餐先由管理员用 `cloud.cli` 手动开通(不接支付),给内测用户。
-   月度发放与到期清零**在读余额 / 预占时按需补记**,不依赖定时任务。
+   月度发放与到期清零**在读余额 / 预占时按需补记**,不依赖定时任务。**已完成(2026-10-29)**。
+   **桌面端接入(2026-10-29 已完成)**,落地时定下的:
+   - 网关对外改成**标准的 OpenAI 兼容端点**:`/gateway/v1/models`(价是积分,`pricing.currency: CREDITS`)、
+     `/gateway/v1/chat/completions`(`stream` 和 OpenAI 一样缺省为假);结算信息放进流里本来就有的最后那块 usage(多一格 `mosael`),
+     不另起 SSE 事件 —— 任何 OpenAI 客户端(包括智能体背后的 pi)都读得懂。余额在 `/gateway/account`;
+   - 桌面端的「Mosael Cloud」**是一条真的连接**(vendor `mosael-cloud`,不在预设表、不能手建):登录时由
+     `selection.adopt_mosael_cloud_connection` 建出,钥匙不另存 —— `provider_credentials.resolve_connection` 从 `cloud_login` 取设备令牌、
+     端点由部署的 Cloud 地址推出;登出不删连接,只是解析不出钥匙。于是直连对话、智能体、画板、工作流**一行没改**就能用它;
+   - 模型清单与积分单价由 `domain/cloud_connection.sync` 对齐(登录时、点「刷新」时):清单是答案(`replace_declared_catalog`),
+     单价写成这条连接的计价规则、币种 `CREDITS`(`usage.align_listed_pricing`:变价时旧规则截止、新开一条;用户手填的不碰)。
+     用量账本因此和别的连接一样按规则计,积分是单独的一种「币」,不和人民币、美元相加;每次实扣以 Cloud 的结算为准
+     (网关按次向上取整,本地记的是同一份单价算出的估值)。
 3. **支付**:国内二维码预付、国际代收方订阅;订单、回调、发放与续期。
 4. **抽包 + 生成类**:先把 `backend/app/ai/providers` 抽成 `packages/mosael-providers`(桌面后端改依赖它、行为不变;要一并带走
    出网守卫与中止、i18n 文案键、媒体传输这几样底座),网关 `/jobs` 再接图片 / 视频 / 配音 / 音乐,按秒 / 张扣积分;

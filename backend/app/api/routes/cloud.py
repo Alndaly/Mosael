@@ -13,6 +13,7 @@ Cloud 的地址、客户端、超时、同源头与身份头都在 `domain/cloud
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Annotated
 
@@ -20,13 +21,14 @@ from fastapi import APIRouter, Body, HTTPException, Path, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CloudCodeIn, CloudEmailIn, CloudLoginIn, CloudSessionOut
+from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudEmailIn, CloudLoginIn, CloudSessionOut
 from app.core.i18n import get_current_locale, tr
 from mosael_formats.i18n import pick_text
 from app.db.models import CloudLogin, User
-from app.domain import cloud_binding
+from app.domain import cloud_binding, cloud_connection
 
 router = APIRouter(tags=["cloud"])
+logger = logging.getLogger(__name__)
 
 #: 社区分享 / 评论 id 的形状(外部输入):Cloud 的 id 是短 token,这里只收一个路径段能装下的字符。
 #: **先过这一道再拼进 URL** —— 不把用户给的东西直接接到云地址后面。
@@ -164,7 +166,19 @@ def _remember(db: DbSession, user: User, email: str, reply: cloud_binding.CloudR
     canonical = email.strip().lower()
     cloud_binding.save_login(db, user.id, email=canonical, token=token)
     db.commit()
+    _sync_connection_quietly(db, user)
     return CloudSessionOut(email=canonical)
+
+
+def _sync_connection_quietly(db: DbSession, user: User) -> None:
+    """登录之后把「Mosael Cloud」连接与网关目录对齐(ADR 0088)。**对不齐不让登录失败**:网关一时不可用、这个部署的 Cloud
+    还没有网关,登录本身照样成功;连接那一行有「刷新」,之后再对。"""
+    try:
+        cloud_connection.sync(db, user.id)
+        db.commit()
+    except (cloud_binding.CloudUnavailable, cloud_binding.CloudBindingError) as exc:
+        db.rollback()
+        logger.warning("登录 MosaelCloud 之后没能对齐网关目录:%s", exc)
 
 
 @router.post("/cloud/v1/login", response_model=CloudSessionOut)
@@ -213,6 +227,32 @@ def logout(user: CurrentUser, db: DbSession) -> Response:
         cloud_binding.drop_login(db, user.id)
         db.commit()
     return Response(status_code=204)
+
+
+@router.post("/cloud/v1/connection/sync", response_model=CloudConnectionSyncOut)
+def sync_connection(user: CurrentUser, db: DbSession) -> CloudConnectionSyncOut:
+    """「Mosael Cloud」连接上的「刷新」:重新问网关要模型清单和积分单价。没登录 401;令牌被吊销清掉本地登录、401。"""
+    _ensure_configured()
+    try:
+        synced = cloud_connection.sync(db, user.id)
+    except cloud_binding.CloudTimeout as exc:
+        raise HTTPException(status_code=504, detail=_CLOUD_TIMEOUT) from exc
+    except cloud_binding.CloudUnavailable as exc:
+        raise HTTPException(status_code=503, detail=_CLOUD_UNREACHABLE) from exc
+    except cloud_binding.CloudBindingError as exc:
+        db.commit()
+        raise _http_error(exc) from exc
+    db.commit()
+    return CloudConnectionSyncOut(profile_id=synced.profile.id, models=synced.models)
+
+
+@router.get("/cloud/v1/gateway/account")
+def gateway_account(user: CurrentUser, db: DbSession) -> Response:
+    """这个人在官方中转上的积分(按批次、先到期在前)、下一批何时发、套餐 —— 照 Cloud 的原样交回。"""
+    _ensure_configured()
+    if _load_login(db, user.id) is None:
+        raise _not_signed_in()
+    return _session_relay("GET", "/gateway/account", None, user=user, db=db)
 
 
 @router.get("/cloud/v1/me", response_model=CloudSessionOut)

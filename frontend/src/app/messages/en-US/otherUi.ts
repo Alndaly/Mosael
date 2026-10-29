@@ -1008,4 +1008,6 @@ export const otherUi = {
   updateJobsRunning: "Wait for running jobs to finish before restarting to update",
   updateCheckFailed: "Could not check for updates, try again later",
   updateManualDownload: "Download manually from Baidu Pan",
+  //: MosaelCloud 官方中转的积分(ADR 0088):用量账本里单独的一种「币」,不是货币,不走 Intl 的货币格式(见 lib/money)。
+  moneyCredits: "{amount} credits",
 } as const;

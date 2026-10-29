@@ -1,12 +1,14 @@
 import type { ProviderProfile } from "@/api/client";
+import { MOSAEL_CLOUD_VENDOR } from "@/api/domains/cloud";
 
 /**
  * 这条连接**对我**现在用不了的原因(没有就是能用)。连接列表那一行、默认模型那一行用同一份判断 ——
  * 此前列表上写着「未授权」,默认模型那一行却毫无提示,AI Studio、智能体用默认模型时才报错(体检 UM-23)。
  *
- * 插件管着的连接(ADR 0020)钥匙在插件实例上,这里不判。
+ * 插件管着的连接(ADR 0020)钥匙在插件实例上,这里不判。「Mosael Cloud」那条(ADR 0088)的钥匙在云端登录上:
+ * 没登录是它自己的一种(`cloudSignedOut`)—— 修它是去登录,不是去填密钥。
  */
-export type ProviderProblem = "disabled" | "unauthorized" | "expired" | "noKey";
+export type ProviderProblem = "disabled" | "unauthorized" | "expired" | "noKey" | "cloudSignedOut";
 
 export function providerProblem(profile: ProviderProfile): ProviderProblem | null {
   if (!profile.enabled) return "disabled";
@@ -15,6 +17,7 @@ export function providerProblem(profile: ProviderProfile): ProviderProblem | nul
     if (!profile.oauth_linked) return "unauthorized";
     return profile.oauth_expired ? "expired" : null;
   }
+  if (profile.vendor === MOSAEL_CLOUD_VENDOR) return profile.is_mine ? null : "cloudSignedOut";
   //: 看的是「有没有我自己的那份凭据」(`is_mine`),和后端放不放行同一个判据(providers/credentials.resolve_connection)。
   //: 不看尾四位:本机 Ollama 这类不要钥匙的端点,存下的是一份空钥匙 —— 没有尾数,却照样能用。
   return profile.is_mine ? null : "noKey";

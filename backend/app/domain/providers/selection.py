@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import ProviderProfile
-from app.domain.providers import credentials as provider_credentials
+from app.domain.providers import cloud_vendor, credentials as provider_credentials
 from app.domain.providers.presets import (
     KNOWN_AUTH_TYPES,
     KNOWN_CAPABILITY_IDS,
@@ -133,6 +133,35 @@ def adopt_plugin_connection(
         #: 实例还在,这条连接就得在。碑只由「删连接」立(见 connections.delete_connection),
         #: 而插件连接是实例在生成领域的把手 —— 实例在,把手拔掉没有意义。此前删掉的(实例删一半、
         #: 手写过库)在这里复活,免得一条看不见的连接永远当不了它的把手。
+        profile.deleted_at = None
+    db.flush()
+    return profile
+
+
+def adopt_mosael_cloud_connection(db: Session, *, owner_user_id: str) -> ProviderProfile:
+    """**登录了 MosaelCloud,就有一条「Mosael Cloud」连接**(ADR 0088)。建出或对齐它;一个人只有一条。
+
+    和插件连接同一个道理:选择器、默认模型、智能体、画板、工作流、用量都指向连接和模型行,让官方中转**有一条连接**,
+    那些地方一行都不用改。这一行只有身份:端点跟着部署配置走、钥匙在云端登录上(见 provider_credentials)。
+    登出时不删它 —— 默认模型、画板节点还指着它;没登录时它解析不出钥匙,用到时说「先登录」。
+    """
+    profile = db.scalars(
+        select(ProviderProfile).where(
+            ProviderProfile.owner_user_id == owner_user_id, ProviderProfile.vendor == cloud_vendor.VENDOR
+        )
+    ).first()
+    if profile is None:
+        profile = ProviderProfile(
+            owner_user_id=owner_user_id,
+            name=cloud_vendor.CONNECTION_NAME,
+            vendor=cloud_vendor.VENDOR,
+            base_url="",
+            auth_type=cloud_vendor.AUTH_TYPE,
+            extra={},
+            enabled=True,
+        )
+        db.add(profile)
+    else:
         profile.deleted_at = None
     db.flush()
     return profile

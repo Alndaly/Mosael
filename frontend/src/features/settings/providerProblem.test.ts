@@ -17,6 +17,12 @@ describe("这条连接对我现在能不能用", () => {
     expect(providerProblem(profile({ auth_type: "oauth", oauth_linked: true }))).toBeNull();
   });
 
+  it("「Mosael Cloud」的钥匙在云端登录上:没登录是单独一种,修它是去登录", () => {
+    const cloud = { vendor: "mosael-cloud", auth_type: "mosael_cloud", key_hint: "" };
+    expect(providerProblem(profile({ ...cloud, is_mine: true }))).toBeNull();
+    expect(providerProblem(profile({ ...cloud, is_mine: false }))).toBe("cloudSignedOut");
+  });
+
   it("插件管着的连接钥匙在插件实例上,这里不判", () => {
     expect(providerProblem(profile({ key_hint: "", is_mine: false, plugin_instance_id: "inst" }))).toBeNull();
   });

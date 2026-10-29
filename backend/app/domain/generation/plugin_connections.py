@@ -256,7 +256,7 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
         for model in found.models
         if model.kind in GENERATION_KINDS
     ]
-    count = provider_models.replace_declared_catalog(db, profile, entries)
+    count = provider_models.replace_declared_catalog(db, profile, entries, source="plugin")
     db.flush()
     if found.library_upgrades and not previous.get("library_upgrades"):
         _tell_about_upgrades(db, instance, found.library_upgrades)

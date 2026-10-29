@@ -448,7 +448,7 @@ def _declare_entries(db, instance_id: str, extra: list[tuple[str, str, str]]) ->
         entries.append(provider_models.DeclaredModel(
             model_id=model_id, display_name=model_id, capability_ids=["image"], capabilities={"image": {}},
             group={"id": group_id, "label": group_id, "entry": entry, "order": 1}))
-    provider_models.replace_declared_catalog(db, profile, entries)
+    provider_models.replace_declared_catalog(db, profile, entries, source="plugin")
     db.commit()
     return profile.id
 

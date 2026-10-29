@@ -27,7 +27,9 @@ from app.db.models import (
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import models as provider_models
 from app.domain.providers.auth import needs_reauthorization
+from app.domain import cloud_binding
 from app.domain.providers.plugin_vendor import package_of
+from app.domain.providers.cloud_vendor import is_cloud
 from app.domain.providers.presets import ProviderField, provider_definition
 from app.domain.providers.quota import supports_quota
 from app.domain.providers.selection import normalize_auth_type, pi_provider_id
@@ -190,7 +192,9 @@ def describe_connection(db: Session, profile: ProviderProfile, user_id: str) -> 
         # 连接出现在哪几个能力分区 = 它下面启用模型的能力 ∪ 供应商预设(见 profile_capabilities)。
         "capability_ids": provider_models.profile_capabilities(db, profile),
         "key_hint": provider_credentials.key_hint(credential),
-        "is_mine": credential is not None,
+        #: 「这条连接对我能不能用」—— 和 provider_credentials.resolve_connection 同一个判据。「Mosael Cloud」那条的钥匙
+        #: 在云端登录上,没有凭据行:登着就算有(ADR 0088)。
+        "is_mine": cloud_binding.load_login(db, user_id) is not None if is_cloud(profile.vendor) else credential is not None,
         "plugin_package_id": (package_of(profile.vendor) or None) if profile.plugin_instance_id else None,
         "extra": _masked_extra(profile, credential),
         "config": _masked_config(db, profile, credential),

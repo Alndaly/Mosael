@@ -35,3 +35,10 @@ class CloudSessionOut(ApiModel):
     """「现在登的是谁」 —— 只有邮箱。设备令牌**不在**这里。"""
 
     email: str
+
+
+class CloudConnectionSyncOut(ApiModel):
+    """「Mosael Cloud」连接对齐之后:哪一条连接、网关目录里有几个模型。"""
+
+    profile_id: str
+    models: int

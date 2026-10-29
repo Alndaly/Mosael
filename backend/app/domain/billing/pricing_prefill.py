@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from collections.abc import Collection
 from dataclasses import dataclass, field
 
@@ -32,7 +34,7 @@ from app.domain.providers.presets import provider_definition
 from app.domain.providers.presets import capability_ids_for_vendor
 from app.domain.billing.usage import CATALOG_PRICE_UNITS, PriceQuote, prefill_model_pricing
 
-#: 目录报价的币种。OpenRouter 一类端点与 pi 的 ModelCost 都按美元报。
+#: 目录没说币种时按美元:OpenRouter 一类端点与 pi 的 ModelCost 都按美元报。说了的(MosaelCloud 的积分)照它的。
 CATALOG_CURRENCY = "USD"
 
 
@@ -59,7 +61,7 @@ def prefill_profile_pricing(
     profile: ProviderProfile,
     *,
     base_url: str,
-    catalog: list[tuple[str, dict[str, float | None]]],
+    catalog: list[tuple[str, dict[str, Any]]],
     only_models: Collection[str] | None = None,
 ) -> PrefillOutcome:
     """按「目录 → 价目表」给这条连接的每个模型补缺失的规则。只补不改(见 usage.prefill_model_pricing)。
@@ -69,7 +71,7 @@ def prefill_profile_pricing(
     「这一版新增的参考价」用,用户没点过预填的其余型号不替他补。
     """
     rows = {row.model_id: row for row in list_models(db, profile.id)}
-    catalog_rates: dict[str, dict[str, float | None]] = {}
+    catalog_rates: dict[str, dict[str, Any]] = {}
     for model_id, rates in catalog:
         catalog_rates.setdefault(model_id, rates)
     #: 顺带会调的那几个(说话照片之前的人像预检)不在目录里、也不会配成模型行,跟着它们的「主模型」一起补(见 price_reference)。
@@ -127,8 +129,9 @@ def prefill_profile_pricing(
     )
 
 
-def _catalog_quotes(rates: dict[str, float | None]) -> list[PriceQuote]:
+def _catalog_quotes(rates: dict[str, Any]) -> list[PriceQuote]:
     quotes = []
+    currency = str(rates.get("currency") or CATALOG_CURRENCY)
     for key, unit in CATALOG_PRICE_UNITS.items():
         amount = rates.get(key)
         if not amount or amount <= 0:
@@ -138,7 +141,7 @@ def _catalog_quotes(rates: dict[str, float | None]) -> list[PriceQuote]:
                 capability="chat",
                 billing_unit=unit,
                 unit_amount_micros=int(round(amount * 1_000_000)),
-                currency=CATALOG_CURRENCY,
+                currency=currency,
                 source="catalog",
                 notes=tr("pricingNote_catalog"),
             )

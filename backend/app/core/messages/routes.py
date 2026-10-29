@@ -391,6 +391,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "按供应商模型目录的报价预填,可直接改",
         "en": "Prefilled from the provider's model catalog. Edit freely.",
     },
+    #: MosaelCloud 那条连接的规则:价是网关挂的积分单价,随目录同步,不是用户填的。
+    "pricingNote_mosaelCloud": {
+        "zh": "MosaelCloud 的积分单价,随它的目录同步;实扣以 MosaelCloud 结算为准",
+        "en": "MosaelCloud credit price, synced from its catalog. MosaelCloud's settlement is the final charge.",
+    },
     "pricingNote_reference": {
         "zh": "官方价目{region}{remark} · {source} · 查证于 {checked}",
         "en": "Official list price{region}{remark} · {source} · checked {checked}",

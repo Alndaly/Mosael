@@ -28738,6 +28738,68 @@
         }
       }
     },
+    "/api/cloud/v1/connection/sync": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Sync Connection",
+        "description": "「Mosael Cloud」连接上的「刷新」:重新问网关要模型清单和积分单价。没登录 401;令牌被吊销清掉本地登录、401。",
+        "operationId": "sync_connection_api_cloud_v1_connection_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudConnectionSyncOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/gateway/account": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Gateway Account",
+        "description": "这个人在官方中转上的积分(按批次、先到期在前)、下一批何时发、套餐 —— 照 Cloud 的原样交回。",
+        "operationId": "gateway_account_api_cloud_v1_gateway_account_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cloud/v1/me": {
       "get": {
         "tags": [
@@ -34934,6 +34996,25 @@
         ],
         "title": "CloudCodeIn",
         "description": "验证码登录的第二步:邮箱 + 6 位码。"
+      },
+      "CloudConnectionSyncOut": {
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "models": {
+            "type": "integer",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_id",
+          "models"
+        ],
+        "title": "CloudConnectionSyncOut",
+        "description": "「Mosael Cloud」连接对齐之后:哪一条连接、网关目录里有几个模型。"
       },
       "CloudEmailIn": {
         "properties": {

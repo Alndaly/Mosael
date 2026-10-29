@@ -12,7 +12,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import ProviderCredential, ProviderProfile
+from app.domain import cloud_binding
 from app.domain.authority import ensure_vouched_to_spend
+from app.domain.providers import cloud_vendor
 
 
 
@@ -81,6 +83,8 @@ def resolve_connection(
     # 在一次工作流运行里:用这条连接就是花主人的钥匙和额度,被执行的每一版图都要有主人担保(ADR 0047)。
     # 这是兜底 —— 开跑前已经按同一条判过(workflows.engine.start_workflow_job);运行中途才定下来的连接在这里拦。
     ensure_vouched_to_spend(db, profile.owner_user_id, connection=profile.name)
+    if cloud_vendor.is_cloud(profile.vendor):
+        return _cloud_connection(db, profile)
     credential = pick(db, profile.id, user_id)
     # **插件连接的钥匙在插件实例上**(ADR 0020):这条连接只是生成领域指向那个实例的把手,
     # 凭据、端点都由插件运行时只注入给那个插件自己。在这里要一把连接上的钥匙,等于要一把
@@ -107,6 +111,21 @@ def resolve_connection(
     )
 
 
+def _cloud_connection(db: Session, profile: ProviderProfile) -> ResolvedConnection | None:
+    """**MosaelCloud 那条连接的钥匙在云端登录上**(ADR 0088):设备令牌存在 `cloud_login`,端点是网关。没登录就是没有钥匙。
+
+    钥匙只有一份 —— 不再抄一份进凭据表,登出、被吊销时也就不会留下一把还以为能用的。
+    """
+    login = cloud_binding.load_login(db, profile.owner_user_id)
+    if login is None:
+        return None
+    return replace(
+        _without_key(profile),
+        base_url=cloud_vendor.gateway_base_url(),
+        api_key=cloud_binding.device_token_of(login) or "",
+    )
+
+
 def resolve_or_keyless(db: Session, profile: ProviderProfile, user_id: str) -> ResolvedConnection:
     """这条连接 + 我的钥匙;没有钥匙时给一个不带钥匙的 —— 读模型目录、探活用的。
 
@@ -127,7 +146,8 @@ def _without_key(profile: ProviderProfile) -> ResolvedConnection:
         id=profile.id,
         name=profile.name,
         vendor=profile.vendor,
-        base_url=profile.base_url or "",
+        #: MosaelCloud 那条不存端点(跟着部署配置走),没登录时也要说得出它在哪 —— 探活、界面都读它。
+        base_url=cloud_vendor.gateway_base_url() if cloud_vendor.is_cloud(profile.vendor) else profile.base_url or "",
         auth_type=profile.auth_type,
         enabled=profile.enabled,
         extra=dict(profile.extra or {}),

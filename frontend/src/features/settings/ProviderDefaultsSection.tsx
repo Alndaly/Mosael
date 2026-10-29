@@ -17,13 +17,15 @@ import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings
 import { formedGroups, generationPickerEntry } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { gotoSettings } from "@/lib/deepLink";
 import { PROVIDER_FIX_ATTR, providerProblem, providerRowId, type ProviderProblem } from "./providerProblem";
 
-const PROBLEM_TEXT: Record<ProviderProblem, "providerDefaultBroken_disabled" | "providerDefaultBroken_unauthorized" | "providerDefaultBroken_expired" | "providerDefaultBroken_noKey"> = {
+const PROBLEM_TEXT: Record<ProviderProblem, "providerDefaultBroken_disabled" | "providerDefaultBroken_unauthorized" | "providerDefaultBroken_expired" | "providerDefaultBroken_noKey" | "providerDefaultBroken_cloudSignedOut"> = {
   disabled: "providerDefaultBroken_disabled",
   unauthorized: "providerDefaultBroken_unauthorized",
   expired: "providerDefaultBroken_expired",
   noKey: "providerDefaultBroken_noKey",
+  cloudSignedOut: "providerDefaultBroken_cloudSignedOut",
 };
 
 /** 「去处理」:滚到那条连接、把焦点交给它那颗修它的按钮(授权 / 填密钥);停用的交给那一行本身。 */
@@ -146,7 +148,12 @@ function DefaultRow({
       {problem && connection && (
         <p data-default-broken={problem} className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-destructive">
           <span>{t(PROBLEM_TEXT[problem]).replace("{name}", connection.name)}</span>
-          <Button variant="outline" size="xs" onClick={() => goFixConnection(connection.id)}>
+          <Button
+            variant="outline"
+            size="xs"
+            //: 「Mosael Cloud」没登录:修它是去账户页登录,不是滚到连接那一行。
+            onClick={() => (problem === "cloudSignedOut" ? gotoSettings("account") : goFixConnection(connection.id))}
+          >
             {t("providerDefaultFix")}
           </Button>
         </p>

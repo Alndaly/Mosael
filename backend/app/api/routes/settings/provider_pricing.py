@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Response
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
@@ -23,8 +25,8 @@ from app.domain.permissions import require_own_profile
 
 router = APIRouter(tags=["settings"])
 
-def _catalog_rates(connection: ResolvedConnection) -> list[tuple[str, dict[str, float | None]]]:
-    """(模型 id, 每百万 token 报价)。多数 API Key 端点不报价,报价的(OpenRouter 一类)和订阅目录
+def _catalog_rates(connection: ResolvedConnection) -> list[tuple[str, dict[str, Any]]]:
+    """(模型 id, 每百万 token 报价 + 币种)。多数 API Key 端点不报价,报价的(OpenRouter 一类、MosaelCloud)和订阅目录
     都在这里对齐成同一个单位(来源见 provider_models.catalog)。"""
     return [
         (
@@ -34,6 +36,7 @@ def _catalog_rates(connection: ResolvedConnection) -> list[tuple[str, dict[str, 
                 "output": model.output_cost,
                 "cache_read": model.cache_read_cost,
                 "cache_write": model.cache_write_cost,
+                "currency": model.currency,
             },
         )
         for model in provider_models.catalog(connection)

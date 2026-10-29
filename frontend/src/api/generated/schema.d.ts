@@ -9825,6 +9825,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/connection/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Connection
+         * @description 「Mosael Cloud」连接上的「刷新」:重新问网关要模型清单和积分单价。没登录 401;令牌被吊销清掉本地登录、401。
+         */
+        post: operations["sync_connection_api_cloud_v1_connection_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/gateway/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gateway Account
+         * @description 这个人在官方中转上的积分(按批次、先到期在前)、下一批何时发、套餐 —— 照 Cloud 的原样交回。
+         */
+        get: operations["gateway_account_api_cloud_v1_gateway_account_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cloud/v1/me": {
         parameters: {
             query?: never;
@@ -12545,6 +12585,16 @@ export interface components {
              * @default
              */
             code: string;
+        };
+        /**
+         * CloudConnectionSyncOut
+         * @description 「Mosael Cloud」连接对齐之后:哪一条连接、网关目录里有几个模型。
+         */
+        CloudConnectionSyncOut: {
+            /** Profile Id */
+            profile_id: string;
+            /** Models */
+            models: number;
         };
         /**
          * CloudEmailIn
@@ -41591,6 +41641,64 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_connection_api_cloud_v1_connection_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudConnectionSyncOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gateway_account_api_cloud_v1_gateway_account_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {

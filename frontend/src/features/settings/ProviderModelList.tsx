@@ -65,6 +65,12 @@ function CapabilityChips({ ids, auto }: { ids: string[]; auto: boolean }) {
  * 什么(不该被目录冲掉)。已配置的排在前面 —— 那是实际在用的;目录里的其余项跟在后面,
  * 一键加入。目录查不到的模型(私有部署、别名)可以手填,和目录来的平权。
  */
+/**
+ * 模型行的 `source`:这几种来自**连接自己声明的清单**(backend providers/models.replace_declared_catalog)——
+ * 插件连接(ADR 0020)和「Mosael Cloud」(ADR 0088)。清单就是答案,行由下一次对齐增删,不由人删。
+ */
+const DECLARED_BY_CONNECTION = new Set(["plugin", "mosael-cloud"]);
+
 export function ProviderModelList({
   profileId,
   vendor,
@@ -278,14 +284,17 @@ export function ProviderModelList({
             <IconButton size="icon-xs" label={t("modelSettingsTitle")} onClick={() => setEditing(row.id)}>
               <SlidersHorizontal size={13} />
             </IconButton>
-            <IconButton
-              size="icon-xs"
-              label={t("delete")}
-              loading={remove.isPending && remove.variables === row.id}
-              onClick={() => remove.mutate(row.id)}
-            >
-              <Trash2 size={13} />
-            </IconButton>
+            {/* 清单由连接自己说了算的模型(插件、MosaelCloud):删了下次对齐又回来,不给这颗按钮。不想用就关开关。 */}
+            {!DECLARED_BY_CONNECTION.has(row.source) && (
+              <IconButton
+                size="icon-xs"
+                label={t("delete")}
+                loading={remove.isPending && remove.variables === row.id}
+                onClick={() => remove.mutate(row.id)}
+              >
+                <Trash2 size={13} />
+              </IconButton>
+            )}
           </div>
           </SettingsListItem>
         ))}

@@ -98,9 +98,17 @@ def desktop(app, credits_amount: int | None = 100_000) -> TestClient:
 
 
 def ask(client: TestClient, **extra):
-    return client.post(api("/gateway/chat"), json={
-        "model": "deepseek-chat", "messages": [{"role": "user", "content": "你好"}], **extra,
+    """缺省流式(这份测试主要测流);要整包的传 `stream=False`。"""
+    return client.post(api("/gateway/v1/chat/completions"), json={
+        "model": "deepseek-chat", "messages": [{"role": "user", "content": "你好"}], "stream": True, **extra,
     })
+
+
+def final_chunk(text: str) -> dict:
+    """流里最后那块 usage(网关结算后给的那块)。"""
+    chunks = [json.loads(line[5:]) for line in text.splitlines() if line.startswith("data:") and "[DONE]" not in line]
+    assert chunks[-1]["choices"] == []
+    return chunks[-1]
 
 
 def credits_left(app) -> int:
@@ -113,24 +121,34 @@ def only_call(app) -> CloudGatewayCall:
         return db.scalar(select(CloudGatewayCall))
 
 
-def test_catalog_lists_priced_models_and_the_users_credits(gateway):
+def test_models_are_an_openai_list_priced_in_credits(gateway):
     with gateway.state.db.session() as db:
         catalog.upsert_model(db, model_id="no-channel", label="x", kind="chat", max_output_tokens=10)
         catalog.set_price(db, model_id="no-channel", input_per_1k=1, output_per_1k=1, effective_from=now())
         db.commit()
     client = desktop(gateway, credits_amount=500)
-    body = client.get(api("/gateway/catalog")).json()
+    body = client.get(api("/gateway/v1/models")).json()
+    assert body["object"] == "list"
     #: 没有通道的模型不列。
-    assert [one["id"] for one in body["models"]] == ["deepseek-chat"]
-    assert body["models"][0]["price"] == {"input_per_1k": 2, "output_per_1k": 4}
-    assert body["credits"]["total"] == 500
-    assert body["credits"]["batches"][0]["source"] == "gift"
+    assert body["data"] == [{
+        "id": "deepseek-chat", "object": "model", "owned_by": "mosael", "name": "DeepSeek V3", "max_output_tokens": 4000,
+        "pricing": {"prompt": "0.002", "completion": "0.004", "currency": "CREDITS"},
+    }]
+
+
+def test_account_shows_the_users_credits(gateway):
+    client = desktop(gateway, credits_amount=500)
+    body = client.get(api("/gateway/account")).json()
+    assert body["credits"] == 500
+    assert body["batches"][0]["source"] == "gift"
+    assert body["plan"] is None
 
 
 def test_the_gateway_only_accepts_device_tokens(gateway):
     client = TestClient(gateway)
     signed_in(client)
-    assert client.get(api("/gateway/catalog")).status_code == 401
+    assert client.get(api("/gateway/v1/models")).status_code == 401
+    assert client.get(api("/gateway/account")).status_code == 401
 
 
 def test_a_streamed_chat_relays_the_upstream_and_charges_the_reported_usage(gateway, upstream):
@@ -141,9 +159,13 @@ def test_a_streamed_chat_relays_the_upstream_and_charges_the_reported_usage(gate
     assert response.status_code == 200, response.text
     text = response.text
     assert '"content": "你"' in text and '"content": "好"' in text
-    #: 结算事件在 [DONE] 之前,[DONE] 是最后一行。
-    usage_event = text.split("event: mosael.usage\ndata: ")[1].split("\n")[0]
-    settled = json.loads(usage_event)
+    #: 每一块的 model 是网关的 id,上游叫什么不漏出去。
+    assert "deepseek-v3" not in text
+    #: 最后一块是网关结算后的 usage,[DONE] 是最后一行。
+    final = final_chunk(text)
+    assert final["model"] == "deepseek-chat"
+    assert final["usage"] == {"prompt_tokens": 1000, "completion_tokens": 2000, "total_tokens": 3000}
+    settled = final["mosael"]
     #: 1000 × 2 / 1000 + 2000 × 4 / 1000 = 10
     assert settled["charged"] == 10 and settled["usage_reported"] is True
     assert settled["credits_left"] == 100_000 - 10
@@ -245,7 +267,7 @@ def test_max_tokens_above_the_model_ceiling_is_refused(gateway):
 
 def test_an_unknown_model_is_404(gateway):
     client = desktop(gateway)
-    response = client.post(api("/gateway/chat"), json={"model": "gpt-9", "messages": [{"role": "user", "content": "x"}]})
+    response = client.post(api("/gateway/v1/chat/completions"), json={"model": "gpt-9", "messages": [{"role": "user", "content": "x"}]})
     assert response.status_code == 404
     assert response.json()["error"] == "gateway_model_unknown"
 
@@ -271,6 +293,7 @@ def test_a_non_streamed_chat_carries_the_settlement_in_the_reply(gateway, upstre
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["choices"][0]["message"]["content"] == "你好"
+    assert body["model"] == "deepseek-chat"
     #: ceil((500×2 + 250×4)/1000) = 2
     assert body["mosael"]["charged"] == 2
     assert "stream_options" not in upstream.body()
@@ -280,7 +303,7 @@ def test_without_reported_usage_the_charge_is_estimated_from_the_text(gateway, u
     client = desktop(gateway)
     upstream.replies[PRIMARY_KEY].append(sse(chunk("x" * 3000), done=False))
     response = ask(client)
-    settled = json.loads(response.text.split("event: mosael.usage\ndata: ")[1].split("\n")[0])
+    settled = final_chunk(response.text)["mosael"]
     assert settled["usage_reported"] is False
     #: 输入 2 字 → 1 token;输出 3000 字 → 1500 token:ceil((1×2 + 1500×4)/1000) = 7
     assert (settled["input_tokens"], settled["output_tokens"], settled["charged"]) == (1, 1500, 7)
@@ -301,7 +324,7 @@ def test_a_stream_cut_off_midway_is_settled_for_what_was_generated(gateway, upst
         _channel, response = chat.connect(db, gateway.state.config, upstream_client, begun,
                                           body={"messages": [], "max_tokens": 4000, "stream": True}, at=now())
         call_id = begun.call.id
-    relay = gateway_api._relay(gateway.state.db, upstream_client, response, begun, call_id)
+    relay = gateway_api._relay(gateway.state.db, upstream_client, response, begun, call_id, model_id="deepseek-chat")
     assert "y" * 1000 in next(relay)
     relay.close()
 
@@ -319,3 +342,19 @@ def test_thinking_text_counts_toward_the_estimate_under_either_name():
     ollama = {"choices": [{"delta": {"content": "x", "reasoning": "abc"}}]}
     assert generated_chars(deepseek) == 4
     assert generated_chars(ollama) == 4
+
+
+def test_like_openai_a_request_without_stream_gets_one_json_reply(gateway, upstream):
+    """OpenAI 的 `stream` 缺省为假:不带这一格的请求(桌面端起标题、翻译)要的是一整个 JSON,不是 SSE。"""
+    client = desktop(gateway)
+    upstream.replies[PRIMARY_KEY].append(httpx2.Response(200, json={
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "标题"}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 2},
+    }))
+    response = client.post(api("/gateway/v1/chat/completions"), json={
+        "model": "deepseek-chat", "messages": [{"role": "user", "content": "起个标题"}],
+    })
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json()["choices"][0]["message"]["content"] == "标题"
+    assert upstream.body()["stream"] is False

@@ -357,6 +357,62 @@ def prefill_model_pricing(
     return created
 
 
+def align_listed_pricing(
+    db: Session,
+    *,
+    provider_profile_id: str,
+    provider: str,
+    source: str,
+    listed: dict[str, list[PriceQuote]],
+    at: datetime,
+) -> None:
+    """连接**自己挂的、权威的**价(今天只有 MosaelCloud,ADR 0088)→ 计价规则。和 `prefill_model_pricing` 正相反:
+
+    - prefill 是厂商的挂牌价,**只补不改**,用户填过的是他核对过的账;
+    - 这里的价就是这条连接真正扣的数(积分),**以它为准**:价变了,旧的那条在此刻截止(`effective_to`)、按新价从此刻起
+      新开一条 —— 不改旧行,过去的调用按发生时刻还能对回当时的价;清单里没了的模型,它的规则也在此刻截止。
+
+    只动 `source` 是这一个来源的那些规则(一个模型一种能力一个单位,同一时刻只有一条生效);用户在这条连接上手填的不碰。
+    """
+    current = {
+        (rule.model, rule.capability, rule.billing_unit): rule
+        for rule in db.scalars(
+            select(ProviderPricingRule).where(
+                ProviderPricingRule.provider_profile_id == provider_profile_id,
+                ProviderPricingRule.source == source,
+                ProviderPricingRule.effective_to.is_(None),
+            )
+        )
+    }
+    wanted: set[tuple[str, str, str]] = set()
+    for model, quotes in listed.items():
+        for quote in quotes:
+            key = (model, quote.capability, quote.billing_unit)
+            wanted.add(key)
+            rule = current.get(key)
+            if rule is not None and rule.unit_amount_micros == quote.unit_amount_micros and rule.currency == quote.currency:
+                continue
+            if rule is not None:
+                rule.effective_to = at
+            create_pricing_rule(
+                db,
+                provider_profile_id=provider_profile_id,
+                provider=provider,
+                capability=quote.capability,
+                model=model,
+                billing_unit=quote.billing_unit,
+                unit_amount_micros=quote.unit_amount_micros,
+                currency=quote.currency,
+                source=source,
+                notes=quote.notes,
+                effective_from=at,
+            )
+    for key, rule in current.items():
+        if key not in wanted:
+            rule.effective_to = at
+    db.flush()
+
+
 def update_pricing_rule(db: Session, rule: ProviderPricingRule, **patch: Any) -> ProviderPricingRule:
     # 时段和时区要**合在一起**校验:只改了时区,也得拿它去读原来那几个时段。
     if "time_prices" in patch or "time_zone" in patch:

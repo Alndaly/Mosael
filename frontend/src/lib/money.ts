@@ -12,6 +12,8 @@
  * `CN¥12.30`、`$4.50` —— 两种钱并排时各自带着自己的单位,不会认错。
  */
 
+import { translateNow } from "@/app/preferences";
+
 export type CostAmount = { currency: string; micros: number };
 
 function digitsFor(amount: number): Intl.NumberFormatOptions {
@@ -22,10 +24,19 @@ function digitsFor(amount: number): Intl.NumberFormatOptions {
   return { minimumFractionDigits: 0, maximumFractionDigits: 0 };
 }
 
+/**
+ * MosaelCloud 官方中转的积分(ADR 0088):用量账本里它是单独的一种「币」,和人民币、美元一样只在自己里面相加。
+ * 后端的代码是 `CREDITS`(见 backend domain/providers/cloud_vendor)。不是货币,所以不走 Intl 的 currency 格式。
+ */
+export const CREDITS = "CREDITS";
+
 /** 一个币种下的一笔钱。 */
 export function formatMoney(micros: number, currency: string, locale?: string): string {
   const amount = Math.max(0, micros) / 1_000_000;
   const digits = digitsFor(amount);
+  if (currency === CREDITS) {
+    return translateNow("moneyCredits").replace("{amount}", new Intl.NumberFormat(locale, digits).format(amount));
+  }
   try {
     return new Intl.NumberFormat(locale, { style: "currency", currency, ...digits }).format(amount);
   } catch {

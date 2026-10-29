@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
+import { MOSAEL_CLOUD_VENDOR } from "@/api/domains/cloud";
 import { MosaelCloudConnection } from "@/features/settings/MosaelCloudConnection";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
@@ -155,7 +156,14 @@ export function ProviderProfilesSection({
   }, [capability, profiles.data]);
   //: **插件提供的连接**(ComfyUI 这类,见 ADR 0020)不在这张可编辑的列表里:它的名字、地址、模型都跟着
   //: 插件实例走,在这里改了下次对齐就被冲掉(后端也拒)。单独列在下面,点过去是插件页。
-  const visibleProfiles = React.useMemo(() => inCapability.filter((profile) => !profile.plugin_instance_id), [inCapability]);
+  //: **「Mosael Cloud」那条**(ADR 0088)同样不在这张可编辑的列表里:登录 MosaelCloud 时建出来,名字、地址、钥匙都没有
+  //: 可改的;它在列表顶上单独画(见 MosaelCloudConnection)。
+  const cloudProfile = (profiles.data ?? []).find((profile) => profile.vendor === MOSAEL_CLOUD_VENDOR) ?? null;
+  const cloudOffersCapability = Boolean(cloudProfile && inCapability.some((profile) => profile.id === cloudProfile.id));
+  const visibleProfiles = React.useMemo(
+    () => inCapability.filter((profile) => !profile.plugin_instance_id && profile.vendor !== MOSAEL_CLOUD_VENDOR),
+    [inCapability],
+  );
   const pluginProfiles = React.useMemo(() => inCapability.filter((profile) => profile.plugin_instance_id), [inCapability]);
   const initialVendor = vendorOptions[0]?.vendor ?? "moonshot";
 
@@ -447,7 +455,7 @@ export function ProviderProfilesSection({
       />
 
       {/* 官方中转排在最前:它不用填密钥,登录 MosaelCloud 就有(ADR 0088)。 */}
-      <MosaelCloudConnection />
+      <MosaelCloudConnection profile={cloudProfile} offersCapability={cloudOffersCapability} />
 
       {profiles.isSuccess && visibleProfiles.length > 0 ? (
         <SettingsListBlock
@@ -611,7 +619,8 @@ export function ProviderProfilesSection({
             </SettingsListItem>
           ))}
         </SettingsListBlock>
-      ) : (
+      ) : /* 「Mosael Cloud」在顶上那一行提供了这项能力:不算「没有」,也就不画空状态那一块。 */
+      profiles.isSuccess && cloudOffersCapability ? null : (
         <SettingsBlock>
           {/* **「没有」和「没问出来」是两回事。** 空状态此前挂在 `profiles.data && …` 后面:
               请求失败(401、后端没起、网络断)时 data 是 undefined,那一行被短路掉,而外层容器
