@@ -1,5 +1,7 @@
 /**
- * 下载走哪条路:配了 R2 时国内优先直连,GitHub 是全球与自动备用,百度网盘只作人工备用。
+ * 下载走哪条路。**2026-10-30 起 R2 是境内外默认渠道** —— 维护者:「官网的境内外下载的默认渠道改为
+ * R2,百度网盘和 GitHub 只是兜底用」。所以只要 R2 可用,谁打开都默认走它;R2 没配时退回旧规则
+ * (国内走网盘、其余走 GitHub),两条都留着当兜底。
  * **按时区判,不按 IP 判。** IP 要么问第三方服务(把访客地址发出去、还多一个会挂的依赖),
  * 要么靠 CDN 的地理头(换了部署就没了)。时区是浏览器自己就知道的,不出网、不猜错大方向;
  * 在国内却把系统时区改成别处的人很少,而那种人通常也访问得了 GitHub。港澳台归 GitHub ——
@@ -44,16 +46,15 @@ export function detectChannel(
   mirror: ChinaMirror,
   direct: DirectMirror = { url: "" },
 ): Channel {
+  //: **R2 是主源**:只要有它,全球访客都走它(不按时区挑 —— 挑只会让一半人落到慢的那条)。
+  if (directAvailable(direct)) return "china";
   if (timeZone && CHINA_TIME_ZONES.has(timeZone)) {
-    if (directAvailable(direct)) return "china";
-    if (chinaAvailable(mirror)) return "baidu";
-    return "global";
+    return chinaAvailable(mirror) ? "baidu" : "global";
   }
   if (timeZone) return "global";
   // 拿不到时区时才看语言:简体中文(zh-CN / zh-Hans)算国内,繁体(zh-TW / zh-HK / zh-Hant)不算。
   const first = (languages ?? [])[0]?.toLowerCase() ?? "";
   if (first !== "zh" && first !== "zh-cn" && !first.startsWith("zh-hans")) return "global";
-  if (directAvailable(direct)) return "china";
   return chinaAvailable(mirror) ? "baidu" : "global";
 }
 
@@ -66,10 +67,10 @@ export function storedChannel(raw: string | null, mirror: ChinaMirror, direct: D
   return null;
 }
 
-/** 首屏(服务端渲染)用的默认值:只知道页面语言。中文页默认国内,英文页默认 GitHub。 */
+/** 首屏(服务端渲染)用的默认值:有 R2 就一律它;没有时才按页面语言分(中文网盘 / 英文 GitHub)。 */
 export function defaultChannel(locale: string, mirror: ChinaMirror, direct: DirectMirror = { url: "" }): Channel {
-  if (locale !== "zh") return "global";
   if (directAvailable(direct)) return "china";
+  if (locale !== "zh") return "global";
   return chinaAvailable(mirror) ? "baidu" : "global";
 }
 

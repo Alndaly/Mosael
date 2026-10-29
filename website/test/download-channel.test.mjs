@@ -13,7 +13,7 @@ const MIRROR = { url: "https://pan.baidu.com/s/1example", code: "ab12" };
 const NONE = { url: "", code: "" };
 const RELEASES = "https://github.com/Alndaly/Mosael/releases/latest";
 
-test("没配 R2 时中国大陆时区走网盘,其余走 GitHub", () => {
+test("没配 R2 时才退回旧规则:中国大陆时区走网盘,其余走 GitHub", () => {
   assert.equal(detectChannel({ timeZone: "Asia/Shanghai" }, MIRROR), "baidu");
   assert.equal(detectChannel({ timeZone: "Asia/Urumqi" }, MIRROR), "baidu");
   // 港澳台归 GitHub:那边访问 GitHub 通常没问题,网盘反而要多装一个客户端。
@@ -52,10 +52,15 @@ test("首屏默认值只看页面语言,链接按渠道给", () => {
   assert.equal(channelHref("global", MIRROR, RELEASES), RELEASES);
 });
 
-test("R2 是境内主源,GitHub 与网盘各自保留备用语义", () => {
+test("R2 是境内外默认渠道,GitHub 与网盘只作兜底", () => {
   const direct = { url: "https://dl.example.com/mosael/" };
+  // 2026-10-30:维护者要求"境内外默认都走 R2" —— 不能因为时区把海外访客推给 GitHub。
   assert.equal(detectChannel({ timeZone: "Asia/Shanghai" }, MIRROR, direct), "china");
+  assert.equal(detectChannel({ timeZone: "America/New_York" }, MIRROR, direct), "china");
+  assert.equal(detectChannel({ timeZone: "Europe/Berlin", languages: ["de"] }, MIRROR, direct), "china");
+  assert.equal(detectChannel({ languages: ["ja"] }, MIRROR, direct), "china");
   assert.equal(defaultChannel("zh", MIRROR, direct), "china");
+  assert.equal(defaultChannel("en", MIRROR, direct), "china");
   assert.equal(storedChannel("china", MIRROR, direct), "china");
   assert.equal(storedChannel("baidu", MIRROR, direct), "baidu");
   assert.equal(channelHref("china", MIRROR, RELEASES, direct), direct.url);

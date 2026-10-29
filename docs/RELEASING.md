@@ -119,7 +119,9 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 
 ### R2 主源与 GitHub 自动兜底
 
-正式分发采用 **R2 主源 + GitHub 自动兜底 + 百度网盘人工兜底**。R2 使用自己的 HTTPS 域名，不使用 `r2.dev` 公共测试域名。`latest/` 放当前版的全部产物，`v<tag>/` 再放一份不可变副本；`update_feed_url` 与插件索引 URL 都指到 `latest/`，索引内的版本包指向 `v<tag>/`。
+正式分发采用 **R2 主源 + GitHub 自动兜底 + 百度网盘人工兜底**，而且**官网的默认下载渠道也是 R2**
+（2026-10-30 起：境内外一律默认 R2，GitHub 与网盘只在 R2 打不开时用；官网 `lib/download-channel.ts`
+的规则与之一致，测试钉着"海外时区也走 R2"）。R2 使用自己的 HTTPS 域名，不使用 `r2.dev` 公共测试域名。`latest/` 放当前版的全部产物，`v<tag>/` 再放一份不可变副本；`update_feed_url` 与插件索引 URL 都指到 `latest/`，索引内的版本包指向 `v<tag>/`。
 
 当前生产配置：Bucket `mosael-releases`，公开域名 `https://dl.mosael.com`，对象前缀 `mosael`。自动更新根地址是 `https://dl.mosael.com/mosael/latest/`，插件索引是 `https://dl.mosael.com/mosael/latest/registry.json`，官网人工下载页是 `https://dl.mosael.com/mosael/latest/index.html`。
 
@@ -137,7 +139,16 @@ export R2_BUCKET=...
 node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
 ```
 
-  脚本分两阶段发布：先把全部文件写入不可变 `v<tag>/`，逐个回读校验 Content-Length 与 SHA-256；这一阶段全部成功后，才更新 `latest/` 并做同样校验。任何不可变文件失败都会立即停止，不会碰 `latest/`，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
+  **两条实操经验（2026-10-30 踩过）**：
+
+- Cloudflare 控制台**单文件上限 300 MB**，DMG/ZIP 超过它必须走 S3 API 的**分段上传**
+  （`CreateMultipartUpload → UploadPart → CompleteMultipartUpload`）；`publish-r2.mjs` 用的
+  `PutObject` 对这两件不适用。
+- Cloudflare 的 **IPv6** 在部分线路上会"接受连接但不回数据"，而 AWS SDK 默认**没有传输超时**，
+  进程会一直挂着看不出错。所有 R2 操作都要
+  `NODE_OPTIONS=--dns-result-order=ipv4first`（实测 IPv4 秒通、IPv6 死等）。
+
+脚本分两阶段发布：先把全部文件写入不可变 `v<tag>/`，逐个回读校验 Content-Length 与 SHA-256；这一阶段全部成功后，才更新 `latest/` 并做同样校验。任何不可变文件失败都会立即停止，不会碰 `latest/`，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。

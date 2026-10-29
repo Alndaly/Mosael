@@ -100,3 +100,8 @@ website/.next-old
 
 # 并发任务跑 next dev 时留下的构建目录(不该进仓库)
 website/.next-canvas-dev
+
+# 本地临时脚本 / 一次性发布脚本:它们是"当场用完就删"的,不该进仓库。
+# (2026-10-30 踩过:一次 R2 收尾写的 .tmp-*.mjs 被 `git add -A` 一起提交了。)
+scripts/.tmp-*
+*.tmp
