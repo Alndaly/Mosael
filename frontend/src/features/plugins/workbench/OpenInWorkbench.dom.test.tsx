@@ -13,9 +13,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   getWorkflowLibrary: vi.fn(), getLocalService: vi.fn(), ensureLocalService: vi.fn(), listPluginPackages: vi.fn(),
+  getPluginReachability: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+
+import { readHint } from "@/test/hint";
 
 import { OpenInWorkbench } from "./OpenInWorkbench";
 import { resetWorkbench } from "./workbenchSession";
@@ -40,6 +43,8 @@ beforeEach(() => {
   api.getLocalService.mockReset();
   api.getLocalService.mockResolvedValue(null);
   api.ensureLocalService.mockReset();
+  api.getPluginReachability.mockReset();
+  api.getPluginReachability.mockResolvedValue({ reachable: true, address: "http://127.0.0.1:8189" });
   api.listPluginPackages.mockReset();
   api.listPluginPackages.mockResolvedValue([comfyPackage()]);
   api.getWorkflowLibrary.mockReset();
@@ -91,6 +96,31 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(openComfyWorkbench).not.toHaveBeenCalled();
+  });
+
+  it("远端那台连不上:按钮是灰的,悬停说是哪个地址连不上;点不了也就不去开", async () => {
+    api.getPluginReachability.mockResolvedValue({ reachable: false, address: "http://127.0.0.1:8189" });
+    const openComfyWorkbench = vi.fn();
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+    mount();
+    //: 置灰之后 Hint 会给按钮多套一层(禁用的按钮自己收不到悬停),按钮重挂 —— 每次重新找。
+    const current = () => screen.getByRole("button", { name: "workflowOpenInWorkbench" });
+    await screen.findByRole("button", { name: "workflowOpenInWorkbench" });
+    await waitFor(() => expect(current().hasAttribute("disabled")).toBe(true));
+    const button = current();
+    expect(await readHint(button)).toContain("workbenchOpenUnreachable");
+    fireEvent.click(button);
+    expect(openComfyWorkbench).not.toHaveBeenCalled();
+  });
+
+  it("本机服务停着:照样能点(点了先起),悬停说会先启动;不去问远端通不通", async () => {
+    api.getLocalService.mockResolvedValue({ state: "stopped" });
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench: vi.fn(), onComfyWorkbench: () => () => undefined });
+    mount();
+    const button = await screen.findByRole("button", { name: "workflowOpenInWorkbench" });
+    await waitFor(async () => expect(await readHint(button)).toContain("workbenchOpenWillStart"));
+    expect(button.hasAttribute("disabled")).toBe(false);
+    expect(api.getPluginReachability).not.toHaveBeenCalled();
   });
 
   it("没认领工作流库的连接、网页版:都不摆", async () => {

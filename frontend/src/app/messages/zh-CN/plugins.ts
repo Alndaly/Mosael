@@ -512,7 +512,10 @@ export const plugins = {
   workflowOpenInComfy: "在 ComfyUI 里打开",
   comfyNavigationScope: "只在 Mosael 里这个连接上生效,不改那台 ComfyUI 上存的设置",
   comfyNavigationUnsupported: "这版 ComfyUI 前端没有画布操控方式的设置,没法在这里切换触控板 / 鼠标",
-  workflowOpenInWorkbench: "在工作台里打开",
+  workflowOpenInWorkbench: "在 ComfyUI 工作台里打开",
+  workbenchOpenUnreachable: "连不上这台 ComfyUI({address})。确认它在运行、地址填对,再回来点。",
+  workbenchOpenNoAddress: "这个连接没写 ComfyUI 的地址,打不开工作台。",
+  workbenchOpenWillStart: "这台本机 ComfyUI 现在没在运行:点了会先启动它(第一次可能要一两分钟),再打开这张工作流。",
   pluginConnOpenWorkbench: "打开工作台",
   pluginConnOpenWorkbenchHint: "跳到「{name}」的内嵌工作台:{url}。左边是它自己的画布,右边是 Mosael 的模型库、表单和运行结果",
   //: 网页版没有内嵌工作台:进的是这台 ComfyUI 自己的网页(新标签页)。说清开的是哪台、哪个地址

@@ -338,7 +338,8 @@ function Hint({
             </span>
           ) : null}
           {hint && hint !== label ? <span className="block whitespace-pre-line text-muted-foreground">{hint}</span> : null}
-          {disabledReason ? <span className={cn("block", label && "text-muted-foreground")}>{disabledReason}</span> : null}
+          {/* 点不了的原因用错误色,和上面「它是做什么的」那几行分开(维护者:原因和说明一个颜色,看不出哪句是为什么点不了) */}
+          {disabledReason ? <span className="block text-destructive">{disabledReason}</span> : null}
         </TooltipContent>
       </Tooltip>
     </EnsureProvider>

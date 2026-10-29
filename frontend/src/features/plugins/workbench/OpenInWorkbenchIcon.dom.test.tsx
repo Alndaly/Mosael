@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   getWorkflowLibrary: vi.fn(), getLocalService: vi.fn(), ensureLocalService: vi.fn(), listPluginPackages: vi.fn(),
+  getPluginReachability: vi.fn(),
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn() }));
 vi.mock("@/api/client", () => api);
@@ -35,6 +36,7 @@ beforeEach(() => {
   }]);
   api.getWorkflowLibrary.mockReset().mockResolvedValue({ workflows: [], editor: { kind: "comfyui", url: "http://10.0.0.2:8188" } });
   toast.error.mockReset();
+  api.getPluginReachability.mockReset().mockResolvedValue({ reachable: true, address: "http://10.0.0.2:8188" });
 });
 afterEach(() => {
   resetWorkbench();

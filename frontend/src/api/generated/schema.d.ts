@@ -7628,6 +7628,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Plugin Reachability
+         * @description 这个连接背后的服务现在通不通(按连接的关键地址发一次 3 秒的短请求)。「在 ComfyUI 工作台里打开」据此决定能不能点。
+         */
+        get: operations["get_plugin_reachability_api_plugins_instances__instance_id__reachability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/workflow-library": {
         parameters: {
             query?: never;
@@ -17360,6 +17380,16 @@ export interface components {
              * @default false
              */
             advanced: boolean;
+        };
+        /**
+         * PluginReachabilityOut
+         * @description 这个连接背后的服务现在通不通(见 domain/plugins/reachability)。`address` 是探的那个地址,没写地址时为空串。
+         */
+        PluginReachabilityOut: {
+            /** Reachable */
+            reachable: boolean;
+            /** Address */
+            address: string;
         };
         /**
          * PluginServiceOut
@@ -37474,6 +37504,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelNodeFoldersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plugin_reachability_api_plugins_instances__instance_id__reachability_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginReachabilityOut"];
                 };
             };
             /** @description Validation Error */

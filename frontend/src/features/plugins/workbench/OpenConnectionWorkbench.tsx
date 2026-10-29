@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, LayoutPanelLeft } from "lucide-react";
+import { ExternalLink, SquareArrowOutUpRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { getWorkflowLibrary, type PluginInstance, type PluginPackage } from "@/api/client";
@@ -104,7 +104,7 @@ export function OpenConnectionWorkbench({
       loading={opening}
       onClick={() => void open()}
     >
-      {embedded ? <LayoutPanelLeft size={13} /> : <ExternalLink size={13} />}
+      {embedded ? <SquareArrowOutUpRight size={13} /> : <ExternalLink size={13} />}
     </IconButton>
   );
 }

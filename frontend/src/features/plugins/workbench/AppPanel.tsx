@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { RefreshCcw } from "lucide-react";
+import { CircleAlert, RefreshCcw } from "lucide-react";
 
 import type { WorkflowApp } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -25,7 +25,7 @@ import {
 } from "@/features/plugins/workflowAppForm";
 import { readCanvasApp, writeCanvasApp } from "@/features/plugins/workbench/canvasMarks";
 import { FormsLocked } from "@/features/plugins/workbench/FormsLocked";
-import { PanelNote } from "@/features/plugins/workbench/workbenchParts";
+import { PANEL_ROOT, PanelEmpty, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { WorkbenchCallError, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 
 /**
@@ -85,6 +85,8 @@ export function AppPanel({ target, workflowKey, path = "", canvasModified, canEx
     return <PanelNote tone="warning">{t("workbenchUnsupported").replace("{what}", t(canExport ? "workbenchCapMarks" : "workbenchCapExport"))}</PanelNote>;
   }
   const failure = read.error ?? write.error;
+  const describe = (error: unknown) =>
+    error instanceof WorkbenchCallError ? t("workbenchCallFailed").replace("{why}", error.message) : errorText(error);
   const change = (next: FormsDraft) => {
     setWritten(false);
     setDraft(next);
@@ -99,6 +101,29 @@ export function AppPanel({ target, workflowKey, path = "", canvasModified, canEx
   const authoring = Boolean(draft && (draft.forms.length > 0 || dirty));
   //: 点得了才是实心(有改动、每张都起了标题):点不了的实心主按钮也在抢焦点 —— 那时焦点是起标题、挑项
   const canWrite = Boolean(draft) && dirty && nameless === 0;
+  const reload = () => {
+    setWritten(false);
+    load();
+  };
+  //: 一点数据都没读到(连不上 ComfyUI、桥不在):整块居中说清楚,「按画布重新读取」只在这里一颗。
+  if (read.error && !data) {
+    return (
+      <div className={PANEL_ROOT}>
+        <PanelEmpty
+          icon={CircleAlert}
+          tone="error"
+          action={(
+            <Button variant="outline" size="xs" loading={read.isPending} onClick={reload}>
+              <RefreshCcw size={12} />
+              {t("workbenchAppReload")}
+            </Button>
+          )}
+        >
+          {describe(read.error)}
+        </PanelEmpty>
+      </div>
+    );
+  }
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3">
       {authoring && <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground" data-app-hint="">{t("workbenchAppHint")}</p>}
@@ -109,10 +134,7 @@ export function AppPanel({ target, workflowKey, path = "", canvasModified, canEx
             {nameless > 0 ? t("workflowFormsUntitled").replace("{n}", String(nameless)) : t("workbenchAppDirty")}
           </span>
         )}
-        <Button variant="outline" size="xs" loading={read.isPending && !write.isPending} onClick={() => {
-          setWritten(false);
-          load();
-        }}>
+        <Button variant="outline" size="xs" loading={read.isPending && !write.isPending} onClick={reload}>
           <RefreshCcw size={12} />
           {t("workbenchAppReload")}
         </Button>
@@ -124,11 +146,7 @@ export function AppPanel({ target, workflowKey, path = "", canvasModified, canEx
         )}
       </div>
       {written && !dirty && canvasModified && <PanelNote>{t("workbenchAppWritten")}</PanelNote>}
-      {failure && (
-        <PanelNote tone="error">
-          {failure instanceof WorkbenchCallError ? t("workbenchCallFailed").replace("{why}", failure.message) : errorText(failure)}
-        </PanelNote>
-      )}
+      {failure && <PanelNote tone="error">{describe(failure)}</PanelNote>}
       {read.isPending && !data ? (
         <LoadingState label={t("workflowAppLoading")} className="h-auto min-h-0 flex-1" />
       ) : data && lock ? (

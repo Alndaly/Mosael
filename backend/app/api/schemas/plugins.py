@@ -1359,3 +1359,10 @@ class WorkflowPathOut(ApiModel):
     """改完之后它在哪(复制、改名、恢复是 workflows/ 里的路径,删除是回收目录里的路径)。"""
 
     path: str
+
+
+class PluginReachabilityOut(ApiModel):
+    """这个连接背后的服务现在通不通(见 domain/plugins/reachability)。`address` 是探的那个地址,没写地址时为空串。"""
+
+    reachable: bool
+    address: str

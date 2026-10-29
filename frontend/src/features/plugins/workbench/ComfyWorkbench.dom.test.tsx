@@ -234,6 +234,19 @@ afterEach(async () => {
 });
 
 describe("ComfyUI 工作台", () => {
+  it("表单:一点都没读到(连不上 ComfyUI):整块居中说清楚,「按画布重新读取」只在那一处", async () => {
+    api.getCanvasApp.mockRejectedValue(new Error("连不上这台 ComfyUI,确认它在运行、地址填对 http://127.0.0.1:8120"));
+    await mount();
+    tab("workbenchTabApp");
+    const failed = await waitFor(() => {
+      const found = shownPanel().querySelector<HTMLElement>("[data-panel-state='failed']");
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    expect(failed.textContent).toContain("http://127.0.0.1:8120");
+    expect(within(shownPanel()).getAllByRole("button", { name: /workbenchAppReload/ })).toHaveLength(1);
+  });
+
   it("从某张表单的入口打开(创作页、画板节点):直接到「表单」页,选中的是那一张,不是第一张", async () => {
     const form = (id: string, title: string) => ({ id, title, description: "", fields: 1, invalid: 0,
                                                    model: `人像/古风.json#${id}`, tool: "", items: [] });

@@ -19,26 +19,35 @@ import { cn } from "@/lib/utils";
 /** 面板的根:竖排、占满页签剩下的高(空态、在读的才能摆在正中)。 */
 export const PANEL_ROOT = "flex min-w-0 flex-1 flex-col";
 
-/** 整块面板只有一句话(还没选节点、什么都不缺、还没跑过):一个图标 + 一句,摆在剩下那块的正中。 */
+/**
+ * 整块面板只有一句话(还没选节点、什么都不缺、还没跑过,或者**一点数据都没读到**):一个图标 + 一句,摆在剩下那块的正中。
+ *
+ * `error` 是「这一页的数据没取回来」(连不上 ComfyUI、桥不在):同样居中 —— 维护者指出贴在顶上的那条错误、下面一大片空白
+ * 「是错误的空状态占位」。有下一步(重新读取)就给 `action`,**这一页只在这里出现这一颗**。
+ */
 export function PanelEmpty({
   icon: Icon,
   tone = "muted",
+  action,
   children,
 }: {
   icon: LucideIcon;
-  tone?: "muted" | "success";
+  tone?: "muted" | "success" | "error";
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div
-      data-panel-state="empty"
+      data-panel-state={tone === "error" ? "failed" : "empty"}
+      role={tone === "error" ? "alert" : undefined}
       className={cn(
         "flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 py-8 text-center text-ui-sm",
-        tone === "success" ? "text-success" : "text-muted-foreground",
+        tone === "success" ? "text-success" : tone === "error" ? "text-foreground" : "text-muted-foreground",
       )}
     >
-      <Icon size={20} aria-hidden />
-      <p className="m-0 max-w-[34ch] leading-relaxed">{children}</p>
+      <Icon size={20} aria-hidden className={tone === "error" ? "text-destructive" : undefined} />
+      <p className="m-0 max-w-[34ch] leading-relaxed [overflow-wrap:anywhere]">{children}</p>
+      {action}
     </div>
   );
 }

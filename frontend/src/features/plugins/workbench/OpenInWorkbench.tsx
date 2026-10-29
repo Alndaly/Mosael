@@ -1,4 +1,4 @@
-import { LayoutPanelLeft } from "lucide-react";
+import { SquareArrowOutUpRight } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ export function OpenInWorkbench({
   if (!workbench.offered) return null;
   return (
     <div className="grid gap-1">
-      <Hint label={workbench.blockedReason || t("workflowOpenInWorkbenchHint")}>
+      <Hint label={workbench.hint} disabledReason={workbench.blockedReason || undefined}>
         <Button
           variant="outline"
           size="xs"
@@ -35,7 +35,7 @@ export function OpenInWorkbench({
           loading={workbench.opening}
           onClick={() => void workbench.open()}
         >
-          <LayoutPanelLeft size={12} />
+          <SquareArrowOutUpRight size={12} />
           {workbench.starting ? t("localServiceOpenStarting") : t("workflowOpenInWorkbench")}
         </Button>
       </Hint>

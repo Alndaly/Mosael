@@ -22478,6 +22478,49 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/reachability": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Plugin Reachability",
+        "description": "这个连接背后的服务现在通不通(按连接的关键地址发一次 3 秒的短请求)。「在 ComfyUI 工作台里打开」据此决定能不能点。",
+        "operationId": "get_plugin_reachability_api_plugins_instances__instance_id__reachability_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginReachabilityOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/workflow-library": {
       "get": {
         "tags": [
@@ -44635,6 +44678,25 @@
           "key"
         ],
         "title": "PluginProvidedParameterOut"
+      },
+      "PluginReachabilityOut": {
+        "properties": {
+          "reachable": {
+            "type": "boolean",
+            "title": "Reachable"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reachable",
+          "address"
+        ],
+        "title": "PluginReachabilityOut",
+        "description": "这个连接背后的服务现在通不通(见 domain/plugins/reachability)。`address` 是探的那个地址,没写地址时为空串。"
       },
       "PluginServiceOut": {
         "properties": {

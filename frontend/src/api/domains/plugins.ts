@@ -259,6 +259,10 @@ export const getNodeFolders = (instanceId: string, nodes: components["schemas"][
 // --- 工作流库(ADR 0035) -------------------------------------------------------
 
 /** 现问插件:这个连接上存着的全部工作流;给了工作区就带上那个工作区里它最近的那一份产出、谁在用它。 */
+/** 这个连接背后的服务现在通不通(按连接的关键地址发一次 3 秒的短请求;有人应答就算通)。「在 ComfyUI 工作台里打开」据此决定能不能点。 */
+export const getPluginReachability = (instanceId: string) =>
+  api<{ reachable: boolean; address: string }>(`/api/plugins/instances/${instanceId}/reachability`);
+
 export const getWorkflowLibrary = (instanceId: string, workspaceId: string) =>
   api<WorkflowLibrary>(`/api/plugins/instances/${instanceId}/workflow-library?${new URLSearchParams({ workspace_id: workspaceId })}`);
 

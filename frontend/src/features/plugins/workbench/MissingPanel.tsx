@@ -132,6 +132,27 @@ export function MissingPanel({
   const models = missing?.missing_models ?? [];
   const groups = missingByPack(nodes);
   const workflow = missing?.workflow;
+  const describe = (error: unknown) =>
+    error instanceof WorkbenchCallError ? t("workbenchCallFailed").replace("{why}", error.message) : errorText(error);
+  //: 一次都没查成(连不上 ComfyUI、桥不在):整块居中说清楚,「检查」只在这里一颗。
+  if (check.isError && !missing) {
+    return (
+      <div className={PANEL_ROOT}>
+        <PanelEmpty
+          icon={CircleAlert}
+          tone="error"
+          action={(
+            <Button variant="outline" size="xs" loading={check.isPending} onClick={() => run()}>
+              <RefreshCcw size={12} />
+              {t("workbenchMissingCheck")}
+            </Button>
+          )}
+        >
+          {describe(check.error)}
+        </PanelEmpty>
+      </div>
+    );
+  }
   return (
     <div className={cn(PANEL_ROOT, "gap-4")}>
       <div className="flex items-center justify-between gap-2">
@@ -141,11 +162,6 @@ export function MissingPanel({
           {t("workbenchMissingCheck")}
         </Button>
       </div>
-      {check.isError && (
-        <PanelNote tone="error">
-          {check.error instanceof WorkbenchCallError ? t("workbenchCallFailed").replace("{why}", check.error.message) : errorText(check.error)}
-        </PanelNote>
-      )}
       {check.isPending && !missing && <PanelLoading label={t("workbenchMissingChecking")} />}
       {missing && nodes.length === 0 && models.length === 0 && (
         <PanelEmpty icon={CheckCircle2} tone="success">{t("workbenchMissingNone")}</PanelEmpty>

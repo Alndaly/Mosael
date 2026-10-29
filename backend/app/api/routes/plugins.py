@@ -78,6 +78,7 @@ from app.api.schemas import (
     WorkflowCanvasRunRequest,
     WorkflowLibrarySaveRequest,
     WorkflowTrashRequest,
+    PluginReachabilityOut,
 )
 from app.core.config import settings
 from app.domain.permissions import ensure_deployment_admin
@@ -98,6 +99,7 @@ from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain import plugin_page
 from app.domain.plugins import invocations
+from app.domain.plugins import reachability
 from app.domain.plugins import install as installer
 from app.domain.plugins import oauth as plugin_oauth
 from app.domain.plugins import packages as pkg
@@ -559,6 +561,13 @@ def _workflow_library_failed(exc: Exception) -> HTTPException:
 
 
 _WORKFLOW_LIBRARY_ERRORS = (server_workflows.WorkflowLibraryError, PluginDomainError, PluginRuntimeError)
+
+
+@router.get("/plugins/instances/{instance_id}/reachability", response_model=PluginReachabilityOut)
+def get_plugin_reachability(instance_id: str, db: DbSession, user: CurrentUser) -> PluginReachabilityOut:
+    """这个连接背后的服务现在通不通(按连接的关键地址发一次 3 秒的短请求)。「在 ComfyUI 工作台里打开」据此决定能不能点。"""
+    found = reachability.probe(db, my_instance(db, instance_id, user))
+    return PluginReachabilityOut(reachable=found.reachable, address=found.address)
 
 
 @router.get("/plugins/instances/{instance_id}/workflow-library", response_model=WorkflowLibraryOut)

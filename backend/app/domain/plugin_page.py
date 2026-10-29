@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from sqlalchemy import select
@@ -32,7 +31,7 @@ from app.domain.plugins import (
     tools as tools_domain,
 )
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import manifest_of
+from app.domain.plugins.manifest import manifest_of, summary_field
 from mosael_formats.plugin_manifest import text_of, web_url
 from app.domain.plugins.nodes import node_meta
 from app.domain.workflows.node_catalog import translated_spec, with_data_type
@@ -67,7 +66,7 @@ def packages(db: Session, user: User) -> list[dict[str, Any]]:
                 "author_url": manifest.author.url,
                 "docs": manifest.docs,
                 "config_fields": [_field(f) for f in manifest.config],
-                "summary_field": _summary_field(manifest),
+                "summary_field": summary_field(manifest),
                 "credential_fields": [_field(f) for f in manifest.credentials],
                 #: 声明了 OAuth 就给一个「去授权」的入口,不必手抄令牌(见 domain/plugins/oauth)。
                 #: 声明不全的当没声明 —— 半个声明会长出一个点了必然失败的按钮。
@@ -184,19 +183,6 @@ def _market_entry(
         "update_unreleased": update.unreleased,
         "bundled": entry.get("bundled") is True,
     }
-
-
-_TEMPLATE_KEY = re.compile(r"\{([A-Za-z0-9_]+)(?::label)?\}")
-
-
-def _summary_field(manifest) -> str:
-    """插件页上**收起的连接**那一行摆哪一项配置(「关键地址」):名字模板里引用的第一个配置项(ComfyUI 的
-    `{server_url}`、TikHub 的 `{platform:label}`);没写模板就是第一个必填的文本配置项;都没有就是空串(不摆)。"""
-    config = {field.key: field for field in manifest.config}
-    for key in _TEMPLATE_KEY.findall(manifest.name_template or ""):
-        if key in config:
-            return key
-    return next((field.key for field in manifest.config if field.required and field.type == "string"), "")
 
 
 def _field(spec) -> dict[str, Any]:

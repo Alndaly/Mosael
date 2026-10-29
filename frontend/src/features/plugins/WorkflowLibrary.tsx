@@ -18,7 +18,7 @@ import {
   FolderPlus,
   Info,
   LayoutGrid,
-  LayoutPanelLeft,
+  SquareArrowOutUpRight,
   MoreHorizontal,
   PackagePlus,
   PanelRightOpen,
@@ -697,7 +697,7 @@ export function WorkflowLibraryDialog({
       //: 只有一个:桌面版「在工作台里打开」,网页版「在 ComfyUI 里打开」(新标签页)
       {
         group: "open", label: t(workbench ? "workflowOpenInWorkbench" : "workflowOpenInComfy"),
-        icon: workbench ? <LayoutPanelLeft /> : <ExternalLink />, disabled: !editorTarget || editor.opening !== null,
+        icon: workbench ? <SquareArrowOutUpRight /> : <ExternalLink />, disabled: !editorTarget || editor.opening !== null,
         description: editorTarget ? undefined : t("workflowMenuNoEditor"),
         onSelect: () => { if (editorTarget) void editor.open(editorTarget, flow); },
       },
@@ -1718,7 +1718,7 @@ function WorkflowDetail({
         {editor && (embeddedWorkbench(editor) ? (
           <Hint label={t("workflowOpenInWorkbenchHint")}>
             <Button variant="outline" disabled={opening !== null} loading={opening === flow.path} onClick={() => onOpen(editor)}>
-              <LayoutPanelLeft size={13} />
+              <SquareArrowOutUpRight size={13} />
               {t("workflowOpenInWorkbench")}
             </Button>
           </Hint>

@@ -1,5 +1,5 @@
 import React from "react";
-import { LayoutPanelLeft } from "lucide-react";
+import { SquareArrowOutUpRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "@/app/preferences";
@@ -35,13 +35,13 @@ export function OpenInWorkbenchIcon({
       size="icon-sm"
       data-board-open-workbench=""
       label={workbench.starting ? t("localServiceOpenStarting") : t("workflowOpenInWorkbench")}
-      hint={t("workflowOpenInWorkbenchHint")}
+      hint={workbench.hint}
       disabled={Boolean(workbench.blockedReason)}
       disabledReason={workbench.blockedReason}
       loading={workbench.opening}
       onClick={() => void workbench.open()}
     >
-      <LayoutPanelLeft size={14} />
+      <SquareArrowOutUpRight size={14} />
     </IconButton>
   );
 }

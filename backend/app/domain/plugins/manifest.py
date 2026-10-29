@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import re
+
 from typing import TYPE_CHECKING
 
 from mosael_formats.plugin_manifest import (
@@ -38,3 +40,16 @@ __all__ = [
     "PATH_KEY",
     "manifest_of",
 ]
+
+
+_TEMPLATE_KEY = re.compile(r"\{([A-Za-z0-9_]+)(?::label)?\}")
+
+
+def summary_field(manifest: Manifest) -> str:
+    """一个连接的**关键地址**是哪一项配置:名字模板里引用的第一个配置项(ComfyUI 的 `{server_url}`、TikHub 的 `{platform:label}`);
+    没写模板就是第一个必填的文本配置项;都没有就是空串。插件页收起的连接那一行摆它,探「这台服务通不通」也问它。"""
+    config = {field.key: field for field in manifest.config}
+    for key in _TEMPLATE_KEY.findall(manifest.name_template or ""):
+        if key in config:
+            return key
+    return next((field.key for field in manifest.config if field.required and field.type == "string"), "")
