@@ -1233,11 +1233,14 @@ function createWindow() {
         bridgeError = error instanceof Error ? error.message : String(error);
       }
       markSmokeStage("bridge-checked");
+      // 安装版不注入 MOSAEL_CLOUD_URL:后端得自己默认接上官方 MosaelCloud(ADR 0088 §0)。只读后端报的部署事实,不出网。
+      const health = await probeBackend();
       reportSmoke({
         backendHealthy: true,
         rendererLoaded: true,
         desktopBridgeReady,
         platformAuthenticatorAvailable,
+        cloud: health?.cloud ?? null,
         ...(bridgeError ? { bridgeError } : {}),
       });
       markSmokeStage("quit-requested");

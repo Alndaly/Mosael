@@ -17,11 +17,13 @@ from urllib.parse import urlsplit
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.db import SessionLocal, engine
 from app.domain import cloud_binding
+from app.main import app
 from tests.util import fresh_client
 
 #: 必须带 `/api/cloud/v1` —— 转发是 `base + "/shares"` 拼的,少了后缀会打到站点根(见 require_configured)。
@@ -289,6 +291,34 @@ def test_without_cloud_url_every_new_route_says_not_configured(monkeypatch) -> N
         assert response.json()["detail"]["code"] == "cloud_not_configured"
         expected = expected or response.json()["detail"]["message"]
         assert response.json()["detail"]["message"] == expected
+    #: 这句话会原样到每个用户的设置页上:只说找谁,不教人设环境变量(ADR 0088 §0)。
+    assert expected and "MOSAEL_CLOUD_URL" not in expected
+
+
+def test_health_says_whether_this_deployment_has_cloud_without_signing_in(monkeypatch) -> None:
+    """`/api/health` 的 `cloud` 只读本地配置、不出网、不要登录:打包冒烟靠它确认安装版默认接上了 Cloud。"""
+    anonymous = TestClient(app)
+    monkeypatch.setattr(settings, "cloud_url", CLOUD_URL)
+    assert anonymous.get("/api/health").json()["cloud"] == "configured"
+    monkeypatch.setattr(settings, "cloud_url", "")
+    assert anonymous.get("/api/health").json()["cloud"] == "cloud_not_configured"
+    monkeypatch.setattr(settings, "cloud_url", "https://cloud.example")
+    assert anonymous.get("/api/health").json()["cloud"] == "cloud_misconfigured"
+
+
+def test_the_product_default_is_the_official_cloud(monkeypatch) -> None:
+    """安装版不注入任何环境变量:不设 `MOSAEL_CLOUD_URL` 时就该接官方 Cloud(ADR 0088 §0);显式设空 = 不接。
+
+    此前默认空串,每一个安装版都显示「没接 MosaelCloud,去设环境变量」。测试环境在 conftest 里把它显式设空(不出网),
+    所以这里先拿掉那个变量,只读代码里的默认值。"""
+    from app.core.config import OFFICIAL_CLOUD_URL, Settings
+
+    monkeypatch.delenv("MOSAEL_CLOUD_URL", raising=False)
+    assert Settings(_env_file=None).cloud_url == OFFICIAL_CLOUD_URL == "https://mosael.com/api/cloud/v1"
+    monkeypatch.setenv("MOSAEL_CLOUD_URL", "")
+    assert Settings(_env_file=None).cloud_url == ""
+    monkeypatch.setenv("MOSAEL_CLOUD_URL", "http://127.0.0.1:8000/api/cloud/v1")
+    assert Settings(_env_file=None).cloud_url == "http://127.0.0.1:8000/api/cloud/v1"
 
 
 def test_the_share_detail_proxy_still_reads(cloud: FakeCloud) -> None:

@@ -27,7 +27,8 @@ import { SettingsBlock, SettingsField, SettingsForm } from "@/components/setting
  * - 邮箱验证码:先发码,再填 6 位,再验证。
  *
  * 「这个部署接没接 MosaelCloud」在点之前就要知道:读 `/me` 的 503 `cloud_not_configured`
- * 就是这份部署事实。没接就把按钮关掉,并说清要设 `MOSAEL_CLOUD_URL` —— 不给一颗点了只会错的按钮。
+ * 就是这份部署事实。产品默认接官方 Cloud,只有部署管理员显式关掉才会走到这里(ADR 0088 §0):把按钮关掉,
+ * 说清该找谁 —— 不给一颗点了只会错的按钮,也不教用户去设环境变量(那是管理员的事,写在 docs/CLOUD_ACCOUNTS.md)。
  */
 export function CloudAccountSection() {
   const t = useI18n();

@@ -49,8 +49,18 @@ CLOUD_COOKIE_SECURE=false CLOUD_PUBLIC_URL=http://localhost:3000 \
 ```
 
 官网 `pnpm dev`(:3000)的 `next.config.ts` 会把 `/api/cloud/v1/*` 同源反代到
-`CLOUD_API_URL`(默认 `http://127.0.0.1:8901`)。本地后端要设 `MOSAEL_CLOUD_URL=
-http://127.0.0.1:8901/api/cloud/v1` 才能反代社区分享。
+`CLOUD_API_URL`(默认 `http://127.0.0.1:8901`)。
+
+**本地后端接哪个 Cloud**(`MOSAEL_CLOUD_URL`,ADR 0088 §0):
+
+| 设成 | 结果 |
+| --- | --- |
+| 不设(安装版就是这样) | 接官方的 `https://mosael.com/api/cloud/v1` |
+| 一个地址 | 接这个 Cloud:开发时指向本机(`http://127.0.0.1:8901/api/cloud/v1`),团队自部署指向自己的 |
+| 空串(`MOSAEL_CLOUD_URL=`) | 这个部署不接 Cloud(离线 / 内网);设置页说「这个部署关闭了 MosaelCloud,请联系部署管理员」 |
+
+`/api/health` 的 `cloud` 字段报当前状态(`configured` / `cloud_not_configured` / `cloud_misconfigured`),只看配置、不出网;
+打包冒烟要求它是 `configured`。界面上的提示只说找谁,**不教用户设环境变量** —— 那是部署管理员的事,写在这里。
 
 **后缀 `/api/cloud/v1` 不能省。** 转发是按 `base + "/shares"` 这样拼的:少了后缀请求会打到站点根,
 云端回 404 —— 表现为「登录完立刻被踢回登录页」,很难看出来。配错时 `require_configured()` 会直接

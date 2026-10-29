@@ -30,6 +30,8 @@ os.environ["MOSAEL_SCHEDULER_ENABLED"] = "0"
 # (test_registration_and_code_execution.py)显式把它们按回生产默认值,并单独断言**声明的默认值**
 # 是关的 —— 这样"默认关"这件事不会因为测试环境开着而失去保护。
 os.environ["MOSAEL_OPEN_REGISTRATION"] = "1"
+#: 产品默认连官方 MosaelCloud(ADR 0088 §0);测试一律不出网:显式设空 = 不接,要接的用例自己 monkeypatch 一个假地址。
+os.environ["MOSAEL_CLOUD_URL"] = ""
 os.environ["MOSAEL_SERVER_SIDE_CODE_EXECUTION"] = "1"
 os.environ["MOSAEL_FEISHU_AUTOSTART"] = "0"
 # Don't spawn ffmpeg proxy threads on every video import during the suite;

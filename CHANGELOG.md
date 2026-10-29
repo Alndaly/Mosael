@@ -5,6 +5,12 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### MosaelCloud
+
+- **安装版默认接上官方 MosaelCloud。** 此前后端默认不接、安装版又没人设 `MOSAEL_CLOUD_URL`,每个安装版的设置页都显示「去设环境变量」;
+  现在默认连 `mosael.com`,环境变量仍可覆盖,显式设空表示这个部署不接。关掉时的提示只说「请联系部署管理员」。
+  打包冒烟新增一项:安装版必须默认接上 Cloud(ADR 0088 §0)。
+
 ## [2.2.4] - 2026-10-29
 
 ### 配音与音色

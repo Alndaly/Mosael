@@ -19,6 +19,10 @@ def _prepare_data_dir() -> Path:
 DEFAULT_DATA_DIR = _prepare_data_dir()
 
 
+#: 官方 MosaelCloud 的 API 根地址(`cloud_url` 的默认值)。带 `/api/cloud/v1` 后缀:转发按 `base + "/me"` 这样拼。
+OFFICIAL_CLOUD_URL = "https://mosael.com/api/cloud/v1"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, env_file=".env", extra="ignore")
 
@@ -62,9 +66,10 @@ class Settings(BaseSettings):
     # 让渲染由团队服务器旁的独立 worker 机器承担)。默认全部 in_process。
     external_job_kinds: str = ""
 
-    #: MosaelCloud 的 API 根地址(例如 https://mosael.com/api/cloud/v1)。空 = 这个部署不提供
-    #: 「绑定 MosaelCloud」—— 没有它也能照常用本地账号。它和本地账号是两套,见 docs/CLOUD_ACCOUNTS.md。
-    cloud_url: str = ""
+    #: MosaelCloud 的 API 根地址。**默认就是官方的那一个**(ADR 0088 §0):安装版不注入任何环境变量,此前默认空串,
+    #: 于是每一个安装版都显示「没接 MosaelCloud」。`MOSAEL_CLOUD_URL` 照旧能覆盖(开发指向本机的 Cloud、团队指向自己部署的);
+    #: **显式设成空 = 这个部署不接 Cloud**(离线 / 内网)。它和本地账号是两套,见 docs/CLOUD_ACCOUNTS.md。
+    cloud_url: str = OFFICIAL_CLOUD_URL
 
     #: 额外允许的浏览器来源(逗号分隔),给**部署到服务器**用。
     #:

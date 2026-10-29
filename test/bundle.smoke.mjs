@@ -120,6 +120,11 @@ try {
   if (!result.packaged || !result.backendHealthy || !result.rendererLoaded || !result.desktopBridgeReady) {
     throw new Error(`incomplete packaged startup: ${JSON.stringify(result)}`);
   }
+  // 安装版没有任何人替它设 MOSAEL_CLOUD_URL:默认就得接上官方 MosaelCloud(ADR 0088 §0)。此前默认空串,
+  // 每一个安装版的设置页都写着「去设环境变量」。这里只看后端报的配置,不连云端(CI 不出网)。
+  if (result.cloud !== "configured") {
+    throw new Error(`packaged backend is not connected to MosaelCloud by default: cloud=${JSON.stringify(result.cloud)}`);
+  }
   if (process.platform === "darwin" && !result.platformAuthenticatorConfigured) {
     throw new Error(`signed macOS build did not configure Touch ID: ${JSON.stringify(result)}`);
   }

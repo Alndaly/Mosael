@@ -15,6 +15,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "账号不存在",
         "en": "Account not found.",
     },
+    #: 部署显式关掉了 MosaelCloud(`MOSAEL_CLOUD_URL` 设成空,ADR 0088 §0)。只说找谁,不教用户设环境变量。
+    "routeErr_cloudNotConfigured": {
+        "zh": "这个部署关闭了 MosaelCloud。需要的话请联系部署管理员。",
+        "en": "MosaelCloud is turned off for this deployment. Ask your administrator if you need it.",
+    },
+    "routeErr_cloudMisconfigured": {
+        "zh": "这个部署的 MosaelCloud 地址配置有误,请联系部署管理员修正。",
+        "en": "This deployment's MosaelCloud address is set up wrong. Ask your administrator to fix it.",
+    },
     "routeErr_cloudSignInRequired": {
         "zh": "需要先登录 MosaelCloud 才能继续。",
         "en": "Sign in to MosaelCloud to continue.",

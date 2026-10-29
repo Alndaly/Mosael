@@ -150,7 +150,7 @@ ADR 0039 §8、§9 原样适用:国内版只上境内已备案的模型、ICP �
 
 ### 8. 分阶段
 
-0. **先修打包版的 Cloud 地址**(Context 那三条):不依赖本 ADR 的其余部分,下一个版本就能带上。
+0. **先修打包版的 Cloud 地址**(Context 那三条):不依赖本 ADR 的其余部分,下一个版本就能带上。**已完成(2026-10-29)**:`cloud_url` 默认官方地址、显式空 = 不接;用户文案改为「请联系部署管理员」;`/api/health` 报 `cloud`,打包冒烟要求 `configured`。
 1. **设备令牌**:Cloud 加 `device_tokens`,桌面端登录后换一枚令牌存进本地密钥存储,「Mosael Cloud」连接出现在供应商列表里
    (未登录时也列出,点了引导登录 —— ADR 0039 待拍板 #7)。
 2. **目录 + 对话 + 额度**:`plans` / `plan_allowances` / `subscriptions` / `allowance_buckets` / `usage_entries`;

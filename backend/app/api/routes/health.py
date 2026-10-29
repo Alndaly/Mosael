@@ -7,19 +7,25 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from app.core import lifeline
 from app.core.config import app_version, settings
 from app.core.shell_origin import shell_token
+from app.domain import cloud_binding
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
 def health() -> dict[str, str]:
-    """活着,并且说得清自己是谁(见 core/lifeline):壳据此判断端口上那个后端能不能复用。"""
+    """活着,并且说得清自己是谁(见 core/lifeline):壳据此判断端口上那个后端能不能复用。
+
+    `cloud` 是这个部署接没接 MosaelCloud(`configured` / `cloud_not_configured` / `cloud_misconfigured`):**只看本地配置,
+    不出网**。它是和版本号同一类的部署事实,打包冒烟靠它确认安装版默认接上了官方 Cloud(ADR 0088 §0)。
+    """
     return {
         "status": "ok",
         "app": "mosael",
         "version": app_version(),
         "instance": lifeline.INSTANCE_ID,
         "data_dir_id": lifeline.data_dir_id(settings.data_dir),
+        "cloud": cloud_binding.configuration_problem() or "configured",
     }
 
 

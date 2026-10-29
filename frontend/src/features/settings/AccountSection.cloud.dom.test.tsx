@@ -3,8 +3,8 @@
  * 设置 → 账户里的「MosaelCloud 账号」:桌面端**自己**用邮箱登录云端。
  *
  * 两条路都要:邮箱 + 密码,以及「发码 → 填 6 位 → 验证」。登录之后只显示邮箱 + 退出登录;
- * cookie 值不在任何回包里,界面也就没有它可显示。没接 Cloud 时按钮禁用、说清要设
- * `MOSAEL_CLOUD_URL` —— 界面不摆一颗点了只会错的按钮。
+ * cookie 值不在任何回包里,界面也就没有它可显示。部署关掉了 Cloud 时按钮禁用、说清找谁 ——
+ * 界面不摆一颗点了只会错的按钮,也不教用户设环境变量(ADR 0088 §0)。
  */
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -128,14 +128,15 @@ describe("MosaelCloud 账号", () => {
     expect(await screen.findByText("alice@example.com")).toBeInTheDocument();
   });
 
-  it("没接 Cloud:按钮禁用,并说清要设 MOSAEL_CLOUD_URL", async () => {
+  it("部署关掉了 Cloud:按钮禁用,说清找部署管理员,不教用户设环境变量", async () => {
     api.loadCloudSession.mockRejectedValueOnce(
       apiError(503, "cloud_not_configured", "MosaelCloud is not configured for this deployment."),
     );
     render(<CloudAccountSection />);
 
-    expect(await screen.findByText("这个部署没有接 MosaelCloud。")).toBeInTheDocument();
-    expect(screen.getByText(/MOSAEL_CLOUD_URL/)).toBeInTheDocument();
+    expect(await screen.findByText("这个部署关闭了 MosaelCloud。")).toBeInTheDocument();
+    expect(screen.getByText("需要的话请联系部署管理员。")).toBeInTheDocument();
+    expect(screen.queryByText(/MOSAEL_CLOUD_URL/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "登录" })).toBeDisabled();
     expect(screen.queryByLabelText("密码")).not.toBeInTheDocument();
   });

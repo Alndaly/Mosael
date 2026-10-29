@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from http.cookies import CookieError, SimpleCookie
@@ -22,9 +23,12 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.i18n import tr
 from app.core.http_retry import RetryingClient
 from app.db.model_base import now
 from app.db.models import CloudLogin
+
+logger = logging.getLogger(__name__)
 
 #: 一次 Cloud 请求的等待上限。社区反代超时会翻成 504,不把前端的请求一起拖住。
 TIMEOUT_SECONDS = 10.0
@@ -128,25 +132,37 @@ def _session_cookie(headers: httpx.Headers) -> CloudCookie | None:
     return None
 
 
-def require_configured() -> None:
-    """这个部署接没接 Cloud。**空 = 没接**,调用方该把它变成 503 `cloud_not_configured`。
+def configuration_problem() -> str:
+    """这个部署的 Cloud 配置有什么问题:空串 = 没问题;否则是机器码。**只看本地配置,不出网、不写日志**
+    (`/api/health` 每秒级被壳轮询,也读它)。
 
-    和 `request_json` 共用同一处判断与同一句话 —— 不允许别的路由自己再拼一句。
+    - `cloud_not_configured`:`MOSAEL_CLOUD_URL` 被显式设成空 —— 这个部署不接 Cloud(产品默认接官方的,见 config);
+    - `cloud_misconfigured`:地址少了 `/api/cloud/v1` 后缀。转发是 `base + "/shares"` 这样拼的,少了后缀请求会打到
+      站点根、云端回 404,表现为「登录完就掉线」—— 宁可当场说清楚。
     """
-    if not settings.cloud_url.strip():
-        raise CloudBindingError(
-            503,
-            "cloud_not_configured",
-            "MosaelCloud is not configured for this deployment (MOSAEL_CLOUD_URL).",
+    url = settings.cloud_url.strip()
+    if not url:
+        return "cloud_not_configured"
+    if not url.rstrip("/").endswith("/api/cloud/v1"):
+        return "cloud_misconfigured"
+    return ""
+
+
+def require_configured() -> None:
+    """接了 Cloud 才往下走;没接就抛 503,`code` 是 `configuration_problem` 的那个机器码。
+
+    和 `request_json` 共用同一处判断与同一句话 —— 不允许别的路由自己再拼一句。**这句话会原样到界面上**,所以只说发生了什么、
+    找谁;「改哪个环境变量」是部署管理员的事,写在日志里(和 docs/CLOUD_ACCOUNTS.md),不教每个用户去设环境变量。
+    """
+    problem = configuration_problem()
+    if problem == "cloud_not_configured":
+        raise CloudBindingError(503, problem, tr("routeErr_cloudNotConfigured"))
+    if problem == "cloud_misconfigured":
+        logger.warning(
+            "MOSAEL_CLOUD_URL=%r 少了 /api/cloud/v1 后缀(例如 https://mosael.com/api/cloud/v1),MosaelCloud 不可用",
+            settings.cloud_url,
         )
-    # 地址必须带上 `/api/cloud/v1`:转发时是 `base + "/shares"` 这样拼的,少了后缀请求会打到站点根,
-    # 云端回 404 —— 表现为"登录完就掉线",排查很久。宁可当场 503 说清楚。
-    if not settings.cloud_url.strip().rstrip("/").endswith("/api/cloud/v1"):
-        raise CloudBindingError(
-            503,
-            "cloud_misconfigured",
-            "MOSAEL_CLOUD_URL must include the /api/cloud/v1 suffix, e.g. https://mosael.com/api/cloud/v1.",
-        )
+        raise CloudBindingError(503, problem, tr("routeErr_cloudMisconfigured"))
 
 
 def request_json(

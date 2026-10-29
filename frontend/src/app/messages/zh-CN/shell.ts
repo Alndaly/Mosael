@@ -147,8 +147,8 @@ export const shell = {
   settingsCloudSignOut: "退出登录",
   settingsCloudSignedIn: "已登录 MosaelCloud",
   settingsCloudChecking: "正在读取 MosaelCloud 登录状态…",
-  settingsCloudNotConfigured: "这个部署没有接 MosaelCloud。",
-  settingsCloudNotConfiguredHow: "要接,设置环境变量 MOSAEL_CLOUD_URL 指向你的 MosaelCloud 地址,然后重启 Mosael。",
+  settingsCloudNotConfigured: "这个部署关闭了 MosaelCloud。",
+  settingsCloudNotConfiguredHow: "需要的话请联系部署管理员。",
   //: 账户页的页头在「这是哪儿的账号、怎么登进来的」之外补的一句:这一页有**两个**账号。
   settingsUsernameDesc: "登录这台 Mosael 用的名字;同事邀请你进工作区时填的也是它。",
   usernameChange: "修改登录名",
