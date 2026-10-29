@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.3.0": {
+    zh: [
+      "**官方 MosaelCloud 成了一条能直接用的连接。** 安装版默认接上官方 Cloud；登录后，供应商列表顶上的「Mosael Cloud」列出官方提供的模型和剩余积分，默认模型、AI Studio、智能体、画板和工作流都能直接选，不用填任何密钥；用量按积分单独记。",
+      "**桌面端改用设备令牌登录 MosaelCloud。** 令牌不会像会话那样 30 天过期，登出时在 Cloud 上吊销。升级后已登录的需要在设置里重新登录一次。",
+      "**在 Mosael 里订阅。** 「Mosael Cloud」那一行有「订阅 / 续费」，支付宝或微信扫码预付；同一套餐顺延，换套餐并行生效、积分合在一起用。",
+      "**「在 ComfyUI 工作台里打开」更可靠。** 画板节点一键进工作台，表单入口直接停在那张表单；按钮不再时有时无或一直转圈，ComfyUI 连不上时置灰并说原因。",
+    ],
+    en: [
+      "**Official MosaelCloud is now a ready-to-use connection.** Installed builds connect to the official Cloud by default; once signed in, the \"Mosael Cloud\" row atop the provider list shows the official models and your remaining credits, selectable in default models, AI Studio, agents, boards and workflows with no keys to enter; usage is recorded in credits.",
+      "**The desktop app signs in to MosaelCloud with a device token.** Tokens don't expire after 30 days like sessions, and are revoked on the Cloud when you sign out. If you were signed in before upgrading, sign in again once in Settings.",
+      "**Subscribe inside Mosael.** The \"Mosael Cloud\" row has Subscribe / Renew with prepaid Alipay or WeChat Pay QR codes; buying the same plan extends it, a different plan runs alongside and its credits pool together.",
+      "**\"Open in ComfyUI workbench\" is more dependable.** Board nodes jump straight into the workbench and form entries land on their form; the button no longer flickers or spins forever, and is disabled with the reason when ComfyUI is unreachable.",
+    ],
+  },
   "v2.2.4": {
     zh: [
       "**ComfyUI 智能体能补全并运行工作流了。** 缺的模型可以搜索、核对后下载；缺的节点包会先查注册表和依赖风险再安装并重启；画布上已保存的工作流可以运行，也可以只运行指定输出节点及其上游，每一步都有确认卡。",

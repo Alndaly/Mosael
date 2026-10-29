@@ -810,7 +810,7 @@ def _recurring(phase: MigrationPhase, *operations: Any) -> tuple[MigrationStep, 
 
 
 def migration_plan() -> MigrationPlan:
-    """Startup migration plan inside the rolling v2.0.0+ support window.
+    """Startup migration plan inside the rolling v2.0.1+ support window.
 
     Only migrations added after the oldest supported Release remain one-time steps; older
     shapes are already reached by upgrading through that Release. Recurring reconciliation

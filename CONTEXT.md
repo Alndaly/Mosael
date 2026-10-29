@@ -206,7 +206,7 @@ _Avoid_: 说「加个 Alembic 迁移」——那套已随漂移移除
 **迁移退休判据**:
 一个 `_migrate_*` 的引入时间**早于最早仍支持的 Release** 时即可删除(它只服务从未公开的 dev 库)。
 晚于的必须留着——那是真实用户的升级路径。删错=用户打开看到空工作室。
-当前最早支持的 Release 是 **v2.0.0**(最新公开 v2.2.4 往前 8 个版本序号,含最新共 9 个 Release)。
+当前最早支持的 Release 是 **v2.0.1**(最新公开 v2.3.0 往前 8 个版本序号,含最新共 9 个 Release)。
 每次发版都要保持“最早支持与最新公开版相差不超过 8 个版本”,同步 Release Notes、
 `docs/adr/0006-migrate-instead-of-branching.md` 与 `test/upgrade_db_fixture.py`。
 _Avoid_: 凭「看起来很旧」删迁移;凭本机没有该目录就断定没人有
