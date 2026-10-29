@@ -47,7 +47,7 @@ class FakeCloud:
         self.responses = list(responses)
         self.calls: list[tuple[str, str, dict | None]] = []
 
-    def request(self, method: str, path: str, payload=None, *, session=None):
+    def request(self, method: str, path: str, payload=None, *, device_token=None):
         self.calls.append((method, path, payload))
         found = self.responses.pop(0)
         if isinstance(found, BaseException):

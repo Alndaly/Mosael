@@ -9813,10 +9813,10 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description 退出桌面端的云端登录:调 Cloud 撤掉那一份会话,再删本地那一行。
+         * @description 退出桌面端的云端登录:让 Cloud 吊销这枚设备令牌,再删本地那一行。
          *
-         *     **本地一定要退得掉**:Cloud 不可达时照样删本地那一行(会话到期会自己消失),不让"断网"
-         *     变成"退不出去"。没登录过就是一次幂等的 204。
+         *     **本地一定要退得掉**:Cloud 不可达时照样删本地那一行(令牌留在官网「我的设备」里,可以在那里删),
+         *     不让"断网"变成"退不出去"。没登录过就是一次幂等的 204。
          */
         post: operations["logout_api_cloud_v1_logout_post"];
         delete?: never;
@@ -9834,7 +9834,7 @@ export interface paths {
         };
         /**
          * Me
-         * @description 「现在登的是谁」。没登录 → 401(界面据此显示登录表单);会话过期 → 清行 + 401。
+         * @description 「现在登的是谁」。没登录 → 401(界面据此显示登录表单);令牌被吊销 → 清行 + 401。
          */
         get: operations["me_api_cloud_v1_me_get"];
         put?: never;
@@ -12566,7 +12566,7 @@ export interface components {
         };
         /**
          * CloudSessionOut
-         * @description 「现在登的是谁」 —— 只有邮箱。cookie 值**不在**这里。
+         * @description 「现在登的是谁」 —— 只有邮箱。设备令牌**不在**这里。
          */
         CloudSessionOut: {
             /** Email */

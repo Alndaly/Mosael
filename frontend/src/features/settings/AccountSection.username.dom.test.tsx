@@ -25,6 +25,7 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { AccountSection } from "./AccountSection";
+import { WithQueryClient } from "@/test/queryClient";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -34,12 +35,12 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 it("打开账户页时什么都没改,不说「资料已保存」", () => {
-  render(<AccountSection />);
+  render(<AccountSection />, { wrapper: WithQueryClient });
   expect(screen.queryByText("profileSaved")).toBeNull();
 });
 
 it("改登录名停顿再久也不自动存;点「修改登录名」、确认之后才存", async () => {
-  render(<AccountSection />);
+  render(<AccountSection />, { wrapper: WithQueryClient });
   fireEvent.change(screen.getByLabelText(/settingsUsername/), { target: { value: "ui" } });
   await act(async () => {
     vi.advanceTimersByTime(3000);
@@ -56,14 +57,14 @@ it("改登录名停顿再久也不自动存;点「修改登录名」、确认之
 });
 
 it("登录名太短时不给改,说要几个字", () => {
-  render(<AccountSection />);
+  render(<AccountSection />, { wrapper: WithQueryClient });
   fireEvent.change(screen.getByLabelText(/settingsUsername/), { target: { value: "x" } });
   expect(screen.getByRole("button", { name: "usernameChange" })).toBeDisabled();
   expect(screen.getByText("teamUsernameShort")).toBeInTheDocument();
 });
 
 it("昵称照旧边打边存,存的时候带的是原来的登录名", async () => {
-  render(<AccountSection />);
+  render(<AccountSection />, { wrapper: WithQueryClient });
   fireEvent.change(screen.getByLabelText(/settingsUsername/), { target: { value: "half" } });
   fireEvent.change(screen.getByLabelText(/displayName/), { target: { value: "New Name" } });
   await act(async () => {

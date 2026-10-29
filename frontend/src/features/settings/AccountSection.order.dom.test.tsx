@@ -39,6 +39,7 @@ vi.mock("@/app/preferences", async () => {
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { AccountSection } from "./AccountSection";
+import { WithQueryClient } from "@/test/queryClient";
 
 afterEach(cleanup);
 
@@ -49,7 +50,7 @@ function before(a: Element, b: Element): boolean {
 
 describe("账户页的块顺序", () => {
   it("MosaelCloud 账号在最上 → 本地账号 → 登录密码紧跟本地账号", async () => {
-    render(<AccountSection />);
+    render(<AccountSection />, { wrapper: WithQueryClient });
 
     const local = screen.getByText("本地账号", { selector: "strong" });
     const username = screen.getByText("用户名");
@@ -73,7 +74,7 @@ describe("账户页的块顺序", () => {
 
 describe("账户页的页头", () => {
   it("同时描述这一页的两套账号:本地账号与 MosaelCloud 账号", async () => {
-    render(<AccountSection />);
+    render(<AccountSection />, { wrapper: WithQueryClient });
 
     const description = document.querySelector('[data-slot="settings-group-description"]');
     const text = description?.textContent ?? "";

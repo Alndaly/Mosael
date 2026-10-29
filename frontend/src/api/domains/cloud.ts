@@ -4,8 +4,8 @@ import { errorText } from "@/api/errorMessage";
 /**
  * 桌面端的 MosaelCloud 账号(云端 `/api/cloud/v1/*`,经**本机后端**转发)。
  *
- * 为什么走本机后端而不是直接打 Cloud:Cloud 只接受官网同源、不开 CORS;而且桌面端登录云端的
- * 会话 cookie 由本机后端存着(加密列 `cloud_login`),**渲染层从头到尾看不到 cookie 值**。
+ * 为什么走本机后端而不是直接打 Cloud:Cloud 只接受官网同源、不开 CORS;而且桌面端在云端的凭据
+ * (登录时换来的设备令牌,ADR 0088)由本机后端存着(加密列 `cloud_login`),**渲染层从头到尾看不到它**。
  * 登录成功只回 `{email}`。
  *
  * 这些接口的 401 说的是「MosaelCloud 那边没登录」,**不是**这台机器上的账号退出了 —— 所以统一
@@ -57,7 +57,7 @@ export async function loadCloudSession(): Promise<CloudSession | null> {
   }
 }
 
-/** 邮箱 + 密码登录。成功只回邮箱;cookie 由本机后端落盘。 */
+/** 邮箱 + 密码登录。成功只回邮箱;设备令牌由本机后端落盘。 */
 export function loginWithPassword(email: string, password: string): Promise<CloudSession> {
   return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login", {
     method: "POST",

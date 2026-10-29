@@ -139,6 +139,11 @@ SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮)
 | GET | `/oauth/providers` | 哪些第三方登录已配置: `{providers:{github:bool, google:bool}}` |
 | GET | `/oauth/{provider}/start` | 生成 state / nonce / PKCE,302 到第三方;未配置 302 回官网报"没启用" |
 | GET | `/oauth/{provider}/callback` | 校验 state + nonce,换 token、取身份,走现有 `open_session`;成功后 302 到 `/account` |
+| POST | `/device-tokens` | 会话换一枚**设备令牌** `{token, secret}`;`secret`(`mct_…`)只在这一次响应里出现(ADR 0088) |
+| GET | `/device-tokens` | 这个账号的设备令牌列表(名字、签发、最近使用;不含原文) |
+| DELETE | `/device-tokens/{id}` | 吊销自己的一枚;别人的 / 不存在的一律 404 |
+| GET | `/gateway/me` | **只认 `Authorization: Bearer mct_…`**,不认 cookie:这枚令牌属于谁、是哪台设备 |
+| DELETE | `/device-tokens/current` | **只认 Bearer**:令牌吊销自己(桌面端登出时用) |
 
 失败一律 `{error, message: {en, zh}}`;错误码稳定,文案中英各一份。OAuth 的浏览器入口例外:
 它用 302 把用户送回官网的登录 / 注册页,错误码放在 `?oauth_error=` 里,官网再按当前语言显示
@@ -375,8 +380,15 @@ provider 报错不外泄原始信息、唯一约束在库上。官网侧另有
   `HttpOnly; Secure(生产); SameSite=Lax; Path=/api/cloud/v1`。登出删这一行;过期在读取时
   即删。没有把 token 返回给 JS。
 - **CSRF**:SameSite=Lax + 写请求的 Origin/Referer 同源校验 + `Sec-Fetch-Site: cross-site`
-  直接拒绝。所有写接口都走 cookie,没有需要豁免的本机进程入口。缺少 Origin 的非浏览器调用
+  直接拒绝。浏览器的写接口走 cookie;桌面端走 `Authorization: Bearer` 设备令牌(见下一条),浏览器不会替跨站页面带上它,同源闸照旧对两条路都生效。缺少 Origin 的非浏览器调用
   放行 —— 浏览器一定会带,缺头等于"不是浏览器"。
+- **设备令牌**(ADR 0088 第 1 步,表 `cloud_device_tokens`):桌面端登录拿到会话后,紧接着
+  `POST /device-tokens` 换一枚 `mct_` + 256 位随机串的令牌,库里只存 sha256。**它不是 0004 拆掉的
+  设备绑定**:没有设备码、没有官网确认配对 —— 换令牌和登录是同一次用户动作。令牌不过期,失效靠吊销
+  (桌面端登出、`DELETE /device-tokens/{id}`、删号级联);`last_used_at` 按分钟粒度写。
+  官方中转网关(`/gateway/*`)**只认这枚令牌**,浏览器会话在那里一律 401 `device_token_invalid`。
+  账号接口(`api/deps.current_user`)两条路都认,但**一个请求只走一条**:带了 Bearer 就只认令牌,认不出直接
+  `device_token_invalid`,不回头看 cookie。桌面端登录拿到会话 → 换令牌 → 立刻退掉那份会话,此后只拿令牌说话。
 
 ## 社区分享第①笔:身份、分享、互动
 

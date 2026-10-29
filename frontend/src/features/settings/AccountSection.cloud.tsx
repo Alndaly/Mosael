@@ -1,4 +1,5 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   describeCloudFailure,
@@ -9,6 +10,7 @@ import {
   verifyCloudLoginCode,
   type CloudSession,
 } from "@/api/domains/cloud";
+import { cloudKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { FailureCard } from "@/components/failure/FailureCard";
@@ -20,7 +22,7 @@ import { SettingsBlock, SettingsField, SettingsForm } from "@/components/setting
  *
  * 维护者说得明白:「桌面端和网站端本来就都可以独立登录」「桌面端也要可以通过邮箱账号密码等
  * 信息登录」。所以这里不是浏览器授权、也不是设备码:两条路都直接打本机后端的
- * `/api/cloud/v1/login*`,由本机后端把云端的会话 cookie 存下来(加密列),渲染层只拿得到邮箱。
+ * `/api/cloud/v1/login*`,由本机后端拿云端会话换一枚设备令牌存下来(加密列,ADR 0088),渲染层只拿得到邮箱。
  *
  * **两条路**:
  * - 邮箱 + 密码;
@@ -32,6 +34,7 @@ import { SettingsBlock, SettingsField, SettingsForm } from "@/components/setting
  */
 export function CloudAccountSection() {
   const t = useI18n();
+  const queryClient = useQueryClient();
   const [session, setSession] = React.useState<CloudSession | null>(null);
   const [loading, setLoading] = React.useState(true);
   //: 这个部署没接 Cloud。配置存的是环境变量,不重启不会变 —— 一旦知道就不再重置。
@@ -83,6 +86,8 @@ export function CloudAccountSection() {
           ? await loginWithPassword(email.trim(), password)
           : await verifyCloudLoginCode(email.trim(), code.trim());
       setSession(found);
+      //: 供应商列表顶上的「Mosael Cloud」那一行读的是同一份登录。
+      void queryClient.invalidateQueries({ queryKey: cloudKeys.session() });
       setEmail("");
       setPassword("");
       setCode("");
@@ -113,6 +118,7 @@ export function CloudAccountSection() {
     try {
       await logoutCloud();
       setSession(null);
+      void queryClient.invalidateQueries({ queryKey: cloudKeys.session() });
     } catch (error) {
       noteFailure(error);
     } finally {

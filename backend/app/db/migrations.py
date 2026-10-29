@@ -423,6 +423,18 @@ def _migrate_browser_profiles_pin_identity() -> None:
             conn.execute(text("ALTER TABLE browser_profiles ADD COLUMN identity VARCHAR(20)"))
 
 
+def _migrate_cloud_login_keeps_a_device_token() -> None:
+    """`cloud_login` 从「存会话 cookie」改为「存设备令牌」(ADR 0088 第 1 步)。
+
+    旧行里只有一枚 cookie,离线换不出令牌 —— **删表,由 create_all 按新形状建回**。代价是已登录
+    MosaelCloud 的用户要在设置里重新登录一次;本地账号、本地数据都不受影响。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(cloud_login)"))}
+        if "cookie_value" in columns:
+            conn.execute(text("DROP TABLE cloud_login"))
+
+
 # ---------------- 音色选择改存一个 VoiceRef(ADR 0087 第 2 步) ----------------
 #
 # 此前六处各存一种形状(`engine_voice` / `voice_id` / `engine_model` / `clone_engine` / `clone_model` /
@@ -820,6 +832,8 @@ def migration_plan() -> MigrationPlan:
             _migrate_character_voices_become_voice_refs,
             _migrate_speech_records_store_a_voice_ref,
             _migrate_dub_lines_use_the_voice_ref_identity,
+            # ADR 0088:旧形状的 cloud_login 先删,SCHEMA 阶段按新形状建回。
+            _migrate_cloud_login_keeps_a_device_token,
         ),
         *_recurring(
             MigrationPhase.SCHEMA,

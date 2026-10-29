@@ -1,6 +1,6 @@
 """桌面端登录 MosaelCloud 的请求 / 响应体(见 domain/cloud_binding)。
 
-**响应里没有 cookie**:登录成功只回 `{email}`;会话 cookie 落在本地 `cloud_login` 的加密列里,
+**响应里没有凭据**:登录成功只回 `{email}`;设备令牌落在本地 `cloud_login` 的加密列里,
 渲染层从头到尾看不到它。
 """
 
@@ -32,6 +32,6 @@ class CloudCodeIn(ApiModel):
 
 
 class CloudSessionOut(ApiModel):
-    """「现在登的是谁」 —— 只有邮箱。cookie 值**不在**这里。"""
+    """「现在登的是谁」 —— 只有邮箱。设备令牌**不在**这里。"""
 
     email: str

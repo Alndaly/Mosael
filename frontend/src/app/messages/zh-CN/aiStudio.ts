@@ -687,6 +687,11 @@ export const aiStudio = {
   //: 插件提供的连接(ComfyUI 这类):它的一切跟着插件实例走,在这里只读。
   providerManagedByPlugin: "由插件提供 · 在插件页管理",
   providerOpenPlugin: "去插件页",
+  providerMosaelCloud: "Mosael Cloud",
+  providerMosaelCloudSignedIn: "官方中转 · {email}",
+  providerMosaelCloudSignedOut: "官方中转 · 登录后在 Mosael 里直接用官方配好的模型",
+  providerMosaelCloudSignIn: "去登录",
+  providerMosaelCloudSoon: "模型即将开放",
   providerDefaultsNoProvider: "还没有连接 —— 先在下面添加一个供应商,再回来选默认模型。",
   providerDefaultsAllDisabled: "连接都停用了 —— 在下面启用一个,再回来选默认模型。",
   providerDefaultsDesc: "为当前能力选择默认供应商与模型;用到时可在对应界面覆盖。",

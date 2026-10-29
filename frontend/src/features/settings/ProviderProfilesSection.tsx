@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
+import { MosaelCloudConnection } from "@/features/settings/MosaelCloudConnection";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { PROVIDER_FIX_ATTR, providerProblem, providerRowId } from "@/features/settings/providerProblem";
@@ -444,6 +445,9 @@ export function ProviderProfilesSection({
         pending={bulkRemove.isPending}
         onConfirm={() => bulkRemove.mutate([...bulk.selectedIds])}
       />
+
+      {/* 官方中转排在最前:它不用填密钥,登录 MosaelCloud 就有(ADR 0088)。 */}
+      <MosaelCloudConnection />
 
       {profiles.isSuccess && visibleProfiles.length > 0 ? (
         <SettingsListBlock

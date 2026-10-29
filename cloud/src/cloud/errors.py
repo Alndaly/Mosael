@@ -188,6 +188,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This request came from another site. Open Mosael and try again.",
         "zh": "这个请求来自别的网站，请在 Mosael 里重试。",
     },
+    "device_token_invalid": {
+        "en": "This device is no longer signed in to MosaelCloud. Sign in again in Mosael.",
+        "zh": "这台设备在 MosaelCloud 的登录已失效，请在 Mosael 里重新登录。",
+    },
+    "device_token_not_found": {
+        "en": "That device does not exist, or it has already been removed.",
+        "zh": "这台设备不存在，或者已经被移除了。",
+    },
+    "device_name_invalid": {
+        "en": "The device name must be 1–{max} characters.",
+        "zh": "设备名需要 1–{max} 个字符。",
+    },
     "not_found": {
         "en": "No such endpoint.",
         "zh": "没有这个接口。",

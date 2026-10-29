@@ -26,6 +26,7 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { AccountSection } from "./AccountSection";
+import { WithQueryClient } from "@/test/queryClient";
 
 beforeEach(() => h.changePassword.mockClear());
 afterEach(cleanup);
@@ -39,14 +40,14 @@ async function fill(user: ReturnType<typeof userEvent.setup>, current: string, n
 describe("改密码", () => {
   it("确认密码那一格里敲回车就是「更新密码」", async () => {
     const user = userEvent.setup();
-    render(<AccountSection />);
+    render(<AccountSection />, { wrapper: WithQueryClient });
     await fill(user, "old1", "new-secret", "new-secret{Enter}");
     await waitFor(() => expect(h.changePassword).toHaveBeenCalledWith("old1", "new-secret"));
   });
 
   it("点「更新密码」同样交", async () => {
     const user = userEvent.setup();
-    render(<AccountSection />);
+    render(<AccountSection />, { wrapper: WithQueryClient });
     await fill(user, "old1", "new-secret", "new-secret");
     await user.click(screen.getByRole("button", { name: "updatePassword" }));
     await waitFor(() => expect(h.changePassword).toHaveBeenCalledTimes(1));
@@ -54,7 +55,7 @@ describe("改密码", () => {
 
   it("两次不一样时回车不交", async () => {
     const user = userEvent.setup();
-    render(<AccountSection />);
+    render(<AccountSection />, { wrapper: WithQueryClient });
     await fill(user, "old1", "new-secret", "new-secreX{Enter}");
     expect(h.changePassword).not.toHaveBeenCalled();
   });

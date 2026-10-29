@@ -1,11 +1,12 @@
 {
-  "version": 44,
+  "version": 45,
   "steps": [
     "migrate-agent-questions-feishu-message-id",
     "migrate-agent-voice-prefs-store-a-voice-ref",
     "migrate-bound-profiles-use-the-account-partition",
     "migrate-browser-profiles-pin-identity",
     "migrate-character-voices-become-voice-refs",
+    "migrate-cloud-login-keeps-a-device-token",
     "migrate-dub-lines-use-the-voice-ref-identity",
     "migrate-publish-tasks-get-content-shape",
     "migrate-speech-records-store-a-voice-ref",

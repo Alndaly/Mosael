@@ -331,3 +331,28 @@ class CloudShareNotification(Base):
     #: 读掉就填。NULL = 未读。
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudDeviceToken(Base):
+    """一台桌面端的长效凭据 —— 网关(ADR 0088)只认它,不认浏览器会话。
+
+    **不是 0004 拆掉的「设备绑定」**:没有设备码、没有在官网上确认配对那一步。桌面端先照常登录
+    (拿到会话),再用这份会话**自己**换一枚令牌;换令牌和登录是同一次用户动作。
+
+    和会话分开的理由:会话 30 天过期、是浏览器的东西,而网关调用来自桌面后端、要能长期用、要能
+    在官网的「我的设备」里一枚枚吊销。**只存令牌的 sha256**,原文只出现在签发的那一次响应里。
+    """
+
+    __tablename__ = "cloud_device_tokens"
+    __table_args__ = (Index("idx_cloud_device_tokens_user", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    #: 桌面端报上来的设备名(如「Kinda 的 MacBook Pro」),只给用户在设备列表里认。
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    #: 最近一次用它鉴权的时间。按分钟粒度写(见 `domain/device_tokens.touch`),不是每个请求一次写库。
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)

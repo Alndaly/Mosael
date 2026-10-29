@@ -1,11 +1,11 @@
-"""桌面端登录 MosaelCloud:**本地后端存云端会话 cookie,再替桌面端带上它**。
+"""桌面端登录 MosaelCloud:**登录那一跳用会话换设备令牌,之后只拿令牌说话**(ADR 0088 第 1 步)。
 
-维护者原话:「桌面端和网站端本来就都可以独立登录」「桌面端也要可以通过邮箱账号密码等信息登录」,
-存储方式定为「存 cookie」。于是这一层只做两件事:
+维护者原话:「桌面端和网站端本来就都可以独立登录」「桌面端也要可以通过邮箱账号密码等信息登录」。
+这一层只做两件事:
 
-1. **登录成功后把云端的 `Set-Cookie` 存进本地 `cloud_login`**(按本地用户一行,密文列),
-   **不存密码**;响应里只回 `{email}`,cookie 值绝不回给渲染层;
-2. 之后每一次转发**自动带上这一枚 cookie**(`_request_json` 那一条链),云端 401 就清行 + 回 401,
+1. **登录成功后用云端的 `Set-Cookie` 换一枚设备令牌**(`POST /device-tokens`),随即退掉那份会话;
+   令牌存进本地 `cloud_login`(按本地用户一行,密文列),**不存密码、不存 cookie**;响应里只回 `{email}`;
+2. 之后每一次转发**带 `Authorization: Bearer`**(`request_json` 那一条链),云端 401 就清行 + 回 401,
    让界面知道要重新登录。
 
 不碰网络:云端用 `httpx.MockTransport` 打桩,断言的是**真正发出去的那个请求**。
@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 from urllib.parse import urlsplit
 
 import httpx
@@ -38,6 +39,9 @@ LOGIN_COOKIE = (
     f"{COOKIE_NAME}={COOKIE_VALUE}; Path=/api/cloud/v1; Max-Age=2592000; "
     "HttpOnly; Secure; SameSite=lax"
 )
+DEVICE_TOKEN_ID = "dt-1"
+DEVICE_TOKEN = "mct_9c1d8e35a6079bc7f4b2"
+BEARER = f"Bearer {DEVICE_TOKEN}"
 CLOUD_ERROR = {
     "error": "invalid_credentials",
     "message": {
@@ -107,8 +111,15 @@ def cloud(monkeypatch) -> FakeCloud:
     return fake
 
 
-def login(client, cloud: FakeCloud, *, email: str = EMAIL, password: str = PASSWORD):
+def queue_successful_login(cloud: FakeCloud, *, email: str = EMAIL) -> None:
+    """一次成功登录在云端那一侧的三跳:登录发 cookie → cookie 换设备令牌 → 退掉那份会话。"""
     cloud.reply(200, {"user": {"email": email}}, headers={"set-cookie": LOGIN_COOKIE})
+    cloud.reply(201, {"token": {"id": DEVICE_TOKEN_ID, "name": "host"}, "secret": DEVICE_TOKEN})
+    cloud.reply_raw(httpx.Response(204, headers={"set-cookie": f"{COOKIE_NAME}=; Max-Age=0"}))
+
+
+def login(client, cloud: FakeCloud, *, email: str = EMAIL, password: str = PASSWORD):
+    queue_successful_login(cloud, email=email)
     response = client.post("/api/cloud/v1/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return response
@@ -119,18 +130,26 @@ def rows() -> list[tuple]:
         return list(connection.execute(text("SELECT * FROM cloud_login")))
 
 
-# ---------------------------------------------------------------- ① 登录:存 cookie、只回 email
+# ---------------------------------------------------------------- ① 登录:换令牌、存令牌、只回 email
 
 
-def test_login_stores_the_cloud_cookie_and_returns_only_the_email(cloud: FakeCloud) -> None:
+def test_login_exchanges_the_session_for_a_device_token_and_returns_only_the_email(cloud: FakeCloud) -> None:
     client = fresh_client()
     response = login(client, cloud)
 
-    #: 响应里只有邮箱 —— **cookie 值不在任何字段名、任何值里**。
+    #: 响应里只有邮箱 —— **cookie 与令牌都不在任何字段名、任何值里**。
     assert response.json() == {"email": EMAIL}
     strings = _all_strings(response.json())
-    assert not any(COOKIE_VALUE in one for one in strings), strings
-    assert COOKIE_VALUE not in response.text
+    assert not any(COOKIE_VALUE in one or DEVICE_TOKEN in one for one in strings), strings
+    assert COOKIE_VALUE not in response.text and DEVICE_TOKEN not in response.text
+
+    #: 换令牌与退会话都带着登录拿到的 cookie;设备名是本机主机名。
+    _login, exchange, logout = cloud.requests
+    assert (exchange.method, exchange.url.path) == ("POST", "/device-tokens")
+    assert exchange.headers.get("cookie") == f"{COOKIE_NAME}={COOKIE_VALUE}"
+    assert json.loads(exchange.content)["name"] == cloud_binding.device_name()
+    assert (logout.method, logout.url.path) == ("POST", "/logout")
+    assert logout.headers.get("cookie") == f"{COOKIE_NAME}={COOKIE_VALUE}"
     #: 连响应头里也不许把它带回来(Cloud 的 Set-Cookie 只该落进本地那一行)。
     assert "set-cookie" not in response.headers
     assert COOKIE_VALUE not in str(dict(response.headers))
@@ -141,9 +160,20 @@ def test_login_stores_the_cloud_cookie_and_returns_only_the_email(cloud: FakeClo
 
         stored = db.query(CloudLogin).one()
         assert stored.email == EMAIL
-        assert stored.cookie_name == COOKIE_NAME
-        assert stored.cookie_value == COOKIE_VALUE
-        assert COOKIE_VALUE not in str(rows()), "cookie 原文出现在盘上"
+        assert stored.device_token_id == DEVICE_TOKEN_ID
+        assert stored.device_token == DEVICE_TOKEN
+        assert DEVICE_TOKEN not in str(rows()), "令牌原文出现在盘上"
+        assert COOKIE_VALUE not in str(rows()), "cookie 落了盘"
+
+
+def test_a_login_that_cannot_get_a_device_token_stores_nothing(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    cloud.reply(200, {"user": {"email": EMAIL}}, headers={"set-cookie": LOGIN_COOKIE})
+    cloud.reply(500, {"error": "internal_error"})
+    response = client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD})
+
+    assert response.status_code == 502, response.text
+    assert rows() == []
 
 
 def test_login_never_stores_the_password(cloud: FakeCloud) -> None:
@@ -183,10 +213,10 @@ def test_a_rate_limited_login_keeps_its_message(cloud: FakeCloud) -> None:
     assert response.json()["detail"]["message"]
 
 
-# ---------------------------------------------------------------- ② 之后的读带上 cookie
+# ---------------------------------------------------------------- ② 之后的读带上令牌
 
 
-def test_logged_in_reads_carry_the_stored_cookie(cloud: FakeCloud) -> None:
+def test_logged_in_reads_carry_the_device_token(cloud: FakeCloud) -> None:
     client = fresh_client()
     login(client, cloud)
 
@@ -196,20 +226,22 @@ def test_logged_in_reads_carry_the_stored_cookie(cloud: FakeCloud) -> None:
     assert response.status_code == 200, response.text
     assert response.json() == {"email": EMAIL}
     outbound = cloud.requests[-1]
-    assert outbound.headers.get("cookie") == f"{COOKIE_NAME}={COOKIE_VALUE}"
+    assert outbound.headers.get("authorization") == BEARER
+    assert "cookie" not in outbound.headers
 
     #: 同样的断言走一条**公开读**的分享详情:登录之后它自动以登录身份读。
     cloud.reply(200, {"id": "share-1", "title": "Space Opera"})
     assert client.get("/api/cloud/v1/shares/share-1").status_code == 200
-    assert cloud.requests[-1].headers.get("cookie") == f"{COOKIE_NAME}={COOKIE_VALUE}"
+    assert cloud.requests[-1].headers.get("authorization") == BEARER
 
 
-def test_a_guest_read_does_not_invent_a_cookie(cloud: FakeCloud) -> None:
+def test_a_guest_read_does_not_invent_credentials(cloud: FakeCloud) -> None:
     client = fresh_client()
     cloud.reply(200, {"id": "share-1"})
 
     assert client.get("/api/cloud/v1/shares/share-1").status_code == 200
     assert "cookie" not in cloud.requests[-1].headers
+    assert "authorization" not in cloud.requests[-1].headers
 
 
 # ---------------------------------------------------------------- ③ 云端 401:清行 + 401
@@ -220,29 +252,39 @@ def test_a_cloud_401_clears_the_local_row_and_answers_401(cloud: FakeCloud) -> N
     login(client, cloud)
     assert rows()
 
-    cloud.reply(401, {"error": "not_authenticated", "message": {"en": "Sign in.", "zh": "请登录。"}})
+    cloud.reply(401, {"error": "device_token_invalid", "message": {"en": "Sign in again.", "zh": "请重新登录。"}})
     response = client.get("/api/cloud/v1/me")
 
     assert response.status_code == 401, response.text
     assert response.json()["detail"]["code"] == "not_authenticated"
-    assert rows() == [], "云端说会话没了,本地那一行还留着"
+    assert rows() == [], "云端说令牌已吊销,本地那一行还留着"
 
 
 # ---------------------------------------------------------------- ④ 退出登录
 
 
-def test_logout_calls_cloud_and_deletes_the_row(cloud: FakeCloud) -> None:
+def test_logout_revokes_the_device_token_and_deletes_the_row(cloud: FakeCloud) -> None:
     client = fresh_client()
     login(client, cloud)
 
-    cloud.reply_raw(httpx.Response(204, headers={"set-cookie": f"{COOKIE_NAME}=; Max-Age=0"}))
+    cloud.reply_raw(httpx.Response(204))
     response = client.post("/api/cloud/v1/logout")
 
     assert response.status_code == 204, response.text
     assert rows() == []
     outbound = cloud.requests[-1]
-    assert (outbound.method, outbound.url.path) == ("POST", "/logout")
-    assert outbound.headers.get("cookie") == f"{COOKIE_NAME}={COOKIE_VALUE}"
+    assert (outbound.method, outbound.url.path) == ("DELETE", "/device-tokens/current")
+    assert outbound.headers.get("authorization") == BEARER
+
+
+def test_logout_still_signs_out_locally_when_cloud_is_unreachable(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    login(client, cloud)
+
+    cloud.fail(httpx.ConnectError("offline"))
+    client.post("/api/cloud/v1/logout")
+
+    assert rows() == []
 
 
 # ---------------------------------------------------------------- ⑤ 同源头
@@ -369,7 +411,7 @@ def test_every_listed_endpoint_is_proxied(
     assert response.status_code == 200, (method, path, response.text)
     outbound = cloud.requests[-1]
     assert (outbound.method, outbound.url.path) == (out_method, out_path)
-    assert outbound.headers.get("cookie") == f"{COOKIE_NAME}={COOKIE_VALUE}"
+    assert outbound.headers.get("authorization") == BEARER
 
 
 def test_a_write_body_is_forwarded_field_for_field(cloud: FakeCloud) -> None:
@@ -398,13 +440,13 @@ def test_query_parameters_survive_the_relay(cloud: FakeCloud) -> None:
 # ---------------------------------------------------------------- 验证码两步
 
 
-def test_the_login_code_flow_stores_the_cookie_on_verify(cloud: FakeCloud) -> None:
+def test_the_login_code_flow_stores_a_device_token_on_verify(cloud: FakeCloud) -> None:
     client = fresh_client()
     cloud.reply(200, {"sent": True})
     assert client.post("/api/cloud/v1/login/code", json={"email": EMAIL}).status_code == 200
     assert (cloud.requests[-1].method, cloud.requests[-1].url.path) == ("POST", "/login/code")
 
-    cloud.reply(200, {"user": {"email": EMAIL}}, headers={"set-cookie": LOGIN_COOKIE})
+    queue_successful_login(cloud)
     response = client.post("/api/cloud/v1/login/code/verify", json={"email": EMAIL, "code": "123456"})
 
     assert response.status_code == 200, response.text
@@ -423,16 +465,16 @@ def test_me_without_a_stored_login_is_401_without_touching_cloud(cloud: FakeClou
     assert rows() == []
 
 
-def test_an_expired_stored_cookie_is_forgotten_before_it_is_used(cloud: FakeCloud) -> None:
+def test_a_cloud_address_the_outbound_guard_blocks_is_a_503_that_says_why(cloud: FakeCloud) -> None:
+    """服务端部署把 Cloud 配成内网地址、又没放行:说清是哪个地址被拦,不是 500。"""
+    from app.core.outbound_guard import OutboundBlocked
+
     client = fresh_client()
-    login(client, cloud)
-    with SessionLocal() as db:
-        from app.db.models import CloudLogin
+    cloud.fail(OutboundBlocked("outboundErr_privateConfigured", host="10.0.0.5", address="10.0.0.5",
+                               reason="", entry="10.0.0.5"))
+    response = client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD})
 
-        row = db.query(CloudLogin).one()
-        row.expires_at = row.created_at.replace(year=2000)
-        db.commit()
-
-    cloud.reply(401, {"error": "not_authenticated", "message": {"en": "Sign in.", "zh": "请登录。"}})
-    assert client.get("/api/cloud/v1/me").status_code == 401
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"]["code"] == "cloud_blocked"
+    assert "10.0.0.5" in response.json()["detail"]["message"]
     assert rows() == []

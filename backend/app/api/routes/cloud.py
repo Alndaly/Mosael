@@ -3,12 +3,12 @@
 桌面端打的是本机后端,而 Cloud 只接受官网同源、不开 CORS —— 没有这一层,真机上既登不进
 MosaelCloud,也打不开社区分享。这一层做两件事:
 
-1. **登录成功时把云端的会话 cookie 存进本地 `cloud_login`**(按本地用户一行、密文列),
-   之后的每一次转发自动带上它;渲染层只拿到 `{email}`,**看不到 cookie 值**;
+1. **登录成功时用云端会话换一枚设备令牌,存进本地 `cloud_login`**(按本地用户一行、密文列;ADR 0088),
+   之后的每一次转发带 `Authorization: Bearer`;渲染层只拿到 `{email}`,**看不到令牌**;
 2. 把 Cloud 的响应原样交回去(状态码、JSON 逐字段),4xx 的文案按请求方的语言挑一句给人看。
 
-云端 401 = 那个会话已经没了:清掉本地那一行,把 401 交回去,让界面回到"要重新登录"。
-Cloud 的地址、客户端、超时、同源头与 cookie 都在 `domain/cloud_binding` 里,这里只做转发。
+云端 401 = 那枚令牌已经被吊销:清掉本地那一行,把 401 交回去,让界面回到"要重新登录"。
+Cloud 的地址、客户端、超时、同源头与身份头都在 `domain/cloud_binding` 里,这里只做转发。
 """
 
 from __future__ import annotations
@@ -91,11 +91,12 @@ def _send(
     user: User,
     db: DbSession,
 ) -> tuple[cloud_binding.CloudReply, CloudLogin | None]:
-    """一次带身份的转发:自动带上本地存着的那枚 cookie,把转发层的异常翻成本地状态码。"""
+    """一次带身份的转发:自动带上本地存着的设备令牌,把转发层的异常翻成本地状态码。"""
     row = _load_login(db, user.id)
-    session = cloud_binding.cookie_of(row) if row is not None else None
     try:
-        reply = cloud_binding.request_json(method, path, payload, session=session)
+        reply = cloud_binding.request_json(
+            method, path, payload, device_token=cloud_binding.device_token_of(row)
+        )
     except cloud_binding.CloudTimeout as exc:
         raise HTTPException(status_code=504, detail=_CLOUD_TIMEOUT) from exc
     except cloud_binding.CloudUnavailable as exc:
@@ -139,21 +140,29 @@ def _with_query(path: str, request: Request) -> str:
 
 
 def _load_login(db: DbSession, user_id: str) -> CloudLogin | None:
-    """读本地那一行;过期的会被 `load_login` 删掉,这里把这次删除落库(否则一抛 401 就回滚了)。"""
-    row = cloud_binding.load_login(db, user_id)
-    db.commit()
-    return row
+    return cloud_binding.load_login(db, user_id)
 
 
 def _remember(db: DbSession, user: User, email: str, reply: cloud_binding.CloudReply) -> CloudSessionOut:
-    """登录成功才走到这里:存 cookie,回邮箱。**cookie 值不出这个函数**。"""
+    """登录成功才走到这里:拿会话换设备令牌、存令牌、回邮箱。**cookie 与令牌都不出这个函数**。"""
     if reply.cookie is None:
         # Cloud 说成功却没下发会话 cookie —— 那是它的故障,不是"登录成功了但没身份"。
         raise HTTPException(
             status_code=502, detail={**_CLOUD_UPSTREAM_ERROR, "upstream_status": reply.status}
         )
+    try:
+        token = cloud_binding.exchange_for_device_token(reply.cookie)
+    except cloud_binding.CloudTimeout as exc:
+        raise HTTPException(status_code=504, detail=_CLOUD_TIMEOUT) from exc
+    except cloud_binding.CloudUnavailable as exc:
+        raise HTTPException(status_code=503, detail=_CLOUD_UNREACHABLE) from exc
+    except cloud_binding.CloudBindingError as exc:
+        raise _http_error(exc) from exc
+    if token is None:
+        # 登录成功了却换不到令牌 —— 同样是 Cloud 那边的故障;本地什么都不存,用户再登一次即可。
+        raise HTTPException(status_code=502, detail=_CLOUD_UPSTREAM_ERROR)
     canonical = email.strip().lower()
-    cloud_binding.save_login(db, user.id, email=canonical, cookie=reply.cookie)
+    cloud_binding.save_login(db, user.id, email=canonical, token=token)
     db.commit()
     return CloudSessionOut(email=canonical)
 
@@ -189,17 +198,17 @@ def verify_login_code(body: CloudCodeIn, user: CurrentUser, db: DbSession) -> Cl
 
 @router.post("/cloud/v1/logout", status_code=204)
 def logout(user: CurrentUser, db: DbSession) -> Response:
-    """退出桌面端的云端登录:调 Cloud 撤掉那一份会话,再删本地那一行。
+    """退出桌面端的云端登录:让 Cloud 吊销这枚设备令牌,再删本地那一行。
 
-    **本地一定要退得掉**:Cloud 不可达时照样删本地那一行(会话到期会自己消失),不让"断网"
-    变成"退不出去"。没登录过就是一次幂等的 204。
+    **本地一定要退得掉**:Cloud 不可达时照样删本地那一行(令牌留在官网「我的设备」里,可以在那里删),
+    不让"断网"变成"退不出去"。没登录过就是一次幂等的 204。
     """
     _ensure_configured()
     row = _load_login(db, user.id)
     if row is None:
         return Response(status_code=204)
     try:
-        _send("POST", "/logout", {}, user=user, db=db)
+        _send("DELETE", "/device-tokens/current", None, user=user, db=db)
     finally:
         cloud_binding.drop_login(db, user.id)
         db.commit()
@@ -208,7 +217,7 @@ def logout(user: CurrentUser, db: DbSession) -> Response:
 
 @router.get("/cloud/v1/me", response_model=CloudSessionOut)
 def me(user: CurrentUser, db: DbSession) -> CloudSessionOut:
-    """「现在登的是谁」。没登录 → 401(界面据此显示登录表单);会话过期 → 清行 + 401。"""
+    """「现在登的是谁」。没登录 → 401(界面据此显示登录表单);令牌被吊销 → 清行 + 401。"""
     _ensure_configured()
     row = _load_login(db, user.id)
     if row is None:
@@ -253,11 +262,10 @@ def _forward(call: Callable[[], tuple[int, dict | list]]) -> JSONResponse:
 
 def _public_read(user: User, db: DbSession, path: str) -> JSONResponse:
     """公开读:**登录了就以登录身份读**(点赞 / 收藏的"我"才对得上),没登录就按游客读。"""
-    row = _load_login(db, user.id)
-    session = cloud_binding.cookie_of(row) if row is not None else None
+    device_token = cloud_binding.device_token_of(_load_login(db, user.id))
 
     def call() -> tuple[int, dict | list]:
-        reply = cloud_binding.request_json("GET", path, session=session)
+        reply = cloud_binding.request_json("GET", path, device_token=device_token)
         return reply.status, reply.body
 
     return _forward(call)

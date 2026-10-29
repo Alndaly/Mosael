@@ -35,6 +35,7 @@ vi.mock("@/api/domains/cloud", async (importOriginal) => {
 });
 
 import { CloudAccountSection } from "./AccountSection.cloud";
+import { WithQueryClient } from "@/test/queryClient";
 
 const api = vi.mocked(cloudApi);
 
@@ -51,7 +52,7 @@ afterEach(cleanup);
 
 describe("MosaelCloud 账号", () => {
   it("未登录:邮箱 + 密码,一条表单纯粹登录", async () => {
-    render(<CloudAccountSection />);
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
 
     const email = await screen.findByLabelText("邮箱");
     expect(screen.getByLabelText("密码")).toBeInTheDocument();
@@ -68,7 +69,7 @@ describe("MosaelCloud 账号", () => {
   });
 
   it("验证码那条:发码 → 填 6 位 → 验证", async () => {
-    render(<CloudAccountSection />);
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
 
     fireEvent.click(await screen.findByRole("button", { name: "用邮箱验证码登录" }));
     fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "bob@example.com" } });
@@ -89,7 +90,7 @@ describe("MosaelCloud 账号", () => {
 
   it("已登录:只显示邮箱 + 退出登录", async () => {
     api.loadCloudSession.mockResolvedValueOnce({ email: "carol@example.com" });
-    render(<CloudAccountSection />);
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
 
     expect(await screen.findByText("carol@example.com")).toBeInTheDocument();
     expect(screen.queryByLabelText("密码")).not.toBeInTheDocument();
@@ -101,7 +102,7 @@ describe("MosaelCloud 账号", () => {
   });
 
   it("错误原样显示后端文案,不只显示一个 code", async () => {
-    render(<CloudAccountSection />);
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
     fireEvent.change(await screen.findByLabelText("邮箱"), { target: { value: "alice@example.com" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "wrong" } });
     api.loginWithPassword.mockRejectedValueOnce(apiError(401, "invalid_credentials", "邮箱或密码不正确。"));
@@ -114,7 +115,7 @@ describe("MosaelCloud 账号", () => {
   });
 
   it("登录中禁用按钮", async () => {
-    render(<CloudAccountSection />);
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
     fireEvent.change(await screen.findByLabelText("邮箱"), { target: { value: "alice@example.com" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "secret" } });
     let release: (value: { email: string }) => void = () => {};
@@ -132,7 +133,7 @@ describe("MosaelCloud 账号", () => {
     api.loadCloudSession.mockRejectedValueOnce(
       apiError(503, "cloud_not_configured", "MosaelCloud is not configured for this deployment."),
     );
-    render(<CloudAccountSection />);
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
 
     expect(await screen.findByText("这个部署关闭了 MosaelCloud。")).toBeInTheDocument();
     expect(screen.getByText("需要的话请联系部署管理员。")).toBeInTheDocument();

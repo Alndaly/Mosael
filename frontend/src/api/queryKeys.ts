@@ -130,6 +130,14 @@ export const providerKeys = {
 };
 
 /**
+ * 桌面端的 MosaelCloud 登录(见 `api/domains/cloud`)。「设置 → 账户」登录 / 退出之后失效它,
+ * 供应商列表顶上那一行「Mosael Cloud」跟着变。
+ */
+export const cloudKeys = {
+  session: () => ["cloud-session"] as const,
+};
+
+/**
  * 宿主能力由谁提供(见 `api/domains/capabilities`):「设置 → 能力提供方」、文档的「重新解析」、字幕的「翻译」
  * 读的是同一份候选,设置里改了默认,那几处的菜单跟着变。
  */

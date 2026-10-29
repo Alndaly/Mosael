@@ -7,15 +7,17 @@
 云地址、`RetryingClient`、超时和异常映射只有 `request_json` 这一条链,`get_json` / `post_json`
 都从它出。**契约是"照 Cloud 的原样交回来"**:状态码是它的,JSON 也逐字段是它的,不替它翻译。
 
-登录成功后,Cloud 下发的会话 cookie 按本地用户存进 `cloud_login`(`cookie_value` 是加密列),
-之后每一次转发自动带上它 —— 渲染层从头到尾看不到 cookie 值。本地登录态与本地账号**完全不动**。
+**桌面端只拿一枚设备令牌说话**(ADR 0088 第 1 步)。登录那一刻 Cloud 下发会话 cookie,本地后端立刻用它
+换一枚设备令牌(`POST /device-tokens`),再退掉那份会话 —— cookie 只活在登录这一跳里。令牌按本地用户存进
+`cloud_login`(`device_token` 是加密列),之后每一次转发带 `Authorization: Bearer`,渲染层从头到尾看不到它。
+令牌不过期,失效靠吊销:Cloud 回 401 就清掉本地那一行。本地登录态与本地账号**完全不动**。
 """
 
 from __future__ import annotations
 
 import logging
+import socket
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from http.cookies import CookieError, SimpleCookie
 from urllib.parse import urlsplit
 
@@ -25,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.i18n import tr
 from app.core.http_retry import RetryingClient
+from app.core.outbound_guard import OutboundBlocked
 from app.db.model_base import now
 from app.db.models import CloudLogin
 
@@ -33,9 +36,8 @@ logger = logging.getLogger(__name__)
 #: 一次 Cloud 请求的等待上限。社区反代超时会翻成 504,不把前端的请求一起拖住。
 TIMEOUT_SECONDS = 10.0
 
-#: Cloud 的会话活 30 天(cloud/config.py 的 `session_ttl_days`)。`Set-Cookie` 没带 `Max-Age`
-#: 时按这个算 —— 不把"不知道"当成永不过期。
-DEFAULT_COOKIE_TTL = timedelta(days=30)
+#: Cloud 那边设备名的上限(cloud/domain/device_tokens.NAME_MAX)。
+DEVICE_NAME_MAX = 80
 
 
 class CloudBindingError(Exception):
@@ -62,11 +64,18 @@ class CloudTimeout(CloudUnavailable):
 
 @dataclass(frozen=True)
 class CloudCookie:
-    """Cloud 发下来的一枚会话 cookie。名字跟着 Cloud 走,不写死。"""
+    """Cloud 在登录响应里发下来的一枚会话 cookie。**只用来换设备令牌**,不落库。名字跟着 Cloud 走,不写死。"""
 
     name: str
     value: str
-    max_age: int | None = None
+
+
+@dataclass(frozen=True)
+class DeviceToken:
+    """Cloud 签给这台桌面端的设备令牌。`secret` 是原文(`mct_…`),只进加密列与 Bearer 头。"""
+
+    id: str
+    secret: str
 
 
 @dataclass(frozen=True)
@@ -75,7 +84,7 @@ class CloudReply:
 
     status: int
     body: dict | list
-    #: `Set-Cookie` 里那枚非空的 cookie。登录之外的接口一般没有;有了也只在登录那几条路上落库。
+    #: `Set-Cookie` 里那枚非空的 cookie。只有登录那几条路有,用来换设备令牌。
     cookie: CloudCookie | None = None
 
 
@@ -91,8 +100,8 @@ def _origin(base: str) -> str:
     return f"{split.scheme}://{split.netloc}"
 
 
-def _request_headers(base: str, session: CloudCookie | None) -> dict[str, str]:
-    """转发时必须带的头:同源头 + 已登录时的会话 cookie。
+def _request_headers(base: str, *, cookie: CloudCookie | None, device_token: str | None) -> dict[str, str]:
+    """转发时必须带的头:同源头 + 一份身份(登录那一跳是 cookie,之后都是设备令牌)。
 
     Cloud 的写请求过一道同源闸(`cloud/app.py::_cross_site`):`Sec-Fetch-Site: cross-site` 直接拒,
     `Origin` / `Referer` 落在别的站点也拒(缺头不拦,但那是"不是浏览器"的豁免,不该拿来当策略)。
@@ -103,8 +112,10 @@ def _request_headers(base: str, session: CloudCookie | None) -> dict[str, str]:
     if origin:
         headers["Origin"] = origin
         headers["Referer"] = f"{origin}/"
-    if session is not None:
-        headers["Cookie"] = f"{session.name}={session.value}"
+    if cookie is not None:
+        headers["Cookie"] = f"{cookie.name}={cookie.value}"
+    if device_token is not None:
+        headers["Authorization"] = f"Bearer {device_token}"
     return headers
 
 
@@ -123,12 +134,7 @@ def _session_cookie(headers: httpx.Headers) -> CloudCookie | None:
         for name, morsel in jar.items():
             if not morsel.value:
                 continue
-            raw_max_age = morsel["max-age"]
-            try:
-                max_age = int(raw_max_age) if raw_max_age else None
-            except ValueError:
-                max_age = None
-            return CloudCookie(name=name, value=morsel.value, max_age=max_age)
+            return CloudCookie(name=name, value=morsel.value)
     return None
 
 
@@ -170,18 +176,23 @@ def request_json(
     path: str,
     payload: dict | list | None = None,
     *,
-    session: CloudCookie | None = None,
+    cookie: CloudCookie | None = None,
+    device_token: str | None = None,
 ) -> CloudReply:
     """向 Cloud 发一次请求,把**远端原样的**状态码、JSON 和下发 cookie 交回来。
 
-    云地址、`RetryingClient`、超时、异常映射、同源头、会话 cookie 只写在这一条里 —— 多写一份,
+    身份最多一份:`cookie` 只在登录那一跳(换令牌、退会话)用,其余都是 `device_token`。
+
+    云地址、`RetryingClient`、超时、异常映射、同源头、身份头只写在这一条里 —— 多写一份,
     迟早一处改了、另一处没改。`payload is None` 时不带 JSON 体(读请求与无体的写请求)。
 
     远端不是 JSON(网关的 HTML 错误页)时回空 dict,状态码仍然照原样交出去。
     """
+    if cookie is not None and device_token is not None:
+        raise ValueError("pass either a cookie or a device token, not both")
     require_configured()
     base = settings.cloud_url.strip().rstrip("/")
-    headers = _request_headers(base, session)
+    headers = _request_headers(base, cookie=cookie, device_token=device_token)
     try:
         # 后端往外发 HTTP 一律经 RetryingClient:出站检查装在它的传输层上(见 core/outbound_guard)。
         with RetryingClient(timeout=TIMEOUT_SECONDS, max_retries=0) as client:
@@ -192,6 +203,10 @@ def request_json(
         raise CloudTimeout(str(exc)) from exc
     except httpx.HTTPError as exc:
         raise CloudUnavailable(str(exc)) from exc
+    except OutboundBlocked as exc:
+        # 服务端部署把 Cloud 配成了内网地址、又没在「管理 → 内网访问」里放行:是部署的事,说清是哪个地址、怎么放行,
+        # 不是一个 500。桌面版上部署配的地址不过这道检查(见 core/outbound_guard.checks)。
+        raise CloudBindingError(503, "cloud_blocked", str(exc)) from exc
     try:
         body = response.json()
     except ValueError:
@@ -224,36 +239,47 @@ def get_json(path: str) -> tuple[int, dict | list]:
     return _request_json("GET", path)
 
 
-# ---------------------------------------------------------------- 本地那一行会话
+# ---------------------------------------------------------------- 设备令牌与本地那一行
+
+
+def device_name() -> str:
+    """报给 Cloud 的设备名:本机主机名(去掉 mDNS 的 `.local`)。只给用户在「我的设备」里认。"""
+    host = socket.gethostname().strip().removesuffix(".local")
+    return (host or "Mosael")[:DEVICE_NAME_MAX]
+
+
+def exchange_for_device_token(cookie: CloudCookie) -> DeviceToken | None:
+    """用登录刚拿到的会话换一枚设备令牌,再退掉那份会话。换不到就是 None(调用方报 502)。
+
+    **退会话是尽力而为**:令牌已经到手,会话退不掉也只是在 Cloud 里多一行 30 天后自己过期的记录,
+    不该让一次成功的登录失败。
+    """
+    reply = request_json("POST", "/device-tokens", {"name": device_name()}, cookie=cookie)
+    token = reply.body.get("token") if isinstance(reply.body, dict) else None
+    secret = reply.body.get("secret") if isinstance(reply.body, dict) else None
+    if reply.status != 201 or not isinstance(token, dict) or not isinstance(secret, str) or not secret:
+        return None
+    try:
+        request_json("POST", "/logout", {}, cookie=cookie)
+    except CloudUnavailable:
+        logger.info("换到设备令牌后退登录会话失败;会话到期会自己失效")
+    return DeviceToken(id=str(token.get("id") or ""), secret=secret)
 
 
 def load_login(db: Session, user_id: str) -> CloudLogin | None:
-    """这个本地用户存着的云登录;过期了就**当场删掉**,当作没登录。
-
-    过期的那一行留着只会让下一次转发带上一枚必然被拒的 cookie —— 界面看到的 401 和"没登录"
-    一样,但库里多了一行没人清。
-    """
-    row = db.get(CloudLogin, user_id)
-    if row is None:
-        return None
-    if row.expires_at <= now():
-        db.delete(row)
-        db.flush()
-        return None
-    return row
+    """这个本地用户存着的云登录。令牌不过期 —— 没有"过期就删"这一步,失效由 Cloud 的 401 告诉我们。"""
+    return db.get(CloudLogin, user_id)
 
 
-def save_login(db: Session, user_id: str, *, email: str, cookie: CloudCookie) -> CloudLogin:
-    """登录成功后把这一枚 cookie 落库。**同一个本地用户只留一行**:重新登录就是覆盖。"""
-    ttl = timedelta(seconds=cookie.max_age) if cookie.max_age and cookie.max_age > 0 else DEFAULT_COOKIE_TTL
+def save_login(db: Session, user_id: str, *, email: str, token: DeviceToken) -> CloudLogin:
+    """登录成功后把设备令牌落库。**同一个本地用户只留一行**:重新登录就是覆盖。"""
     row = db.get(CloudLogin, user_id)
     if row is None:
         row = CloudLogin(user_id=user_id)
         db.add(row)
     row.email = email
-    row.cookie_name = cookie.name
-    row.cookie_value = cookie.value
-    row.expires_at = now() + ttl
+    row.device_token_id = token.id
+    row.device_token = token.secret
     row.created_at = now()
     db.flush()
     return row
@@ -268,10 +294,6 @@ def drop_login(db: Session, user_id: str) -> None:
     db.flush()
 
 
-def cookie_of(row: CloudLogin) -> CloudCookie:
-    """把库里那一行变回转发的 `Cookie` 头要的形状。"""
-    return CloudCookie(name=row.cookie_name, value=row.cookie_value)
-
-
-def expires_at_of(row: CloudLogin) -> datetime:
-    return row.expires_at
+def device_token_of(row: CloudLogin | None) -> str | None:
+    """转发要带的 Bearer 令牌;没登录就是 None(按游客转发)。"""
+    return row.device_token if row is not None else None

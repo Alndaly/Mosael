@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { AccountSection } from "./AccountSection";
+import { WithQueryClient } from "@/test/queryClient";
 
 vi.mock("@/app/auth", () => ({
   useAuth: () => ({
@@ -28,7 +29,7 @@ vi.mock("@/app/preferences", () => ({
 
 describe("account settings layout", () => {
   it("uses full-width profile rows and keeps the current password on its own row", () => {
-    const { container } = render(<AccountSection />);
+    const { container } = render(<AccountSection />, { wrapper: WithQueryClient });
 
     const username = screen.getByLabelText(/settingsUsername/).closest('[data-slot="settings-field"]');
     const displayName = screen.getByLabelText(/displayName/).closest('[data-slot="settings-field"]');

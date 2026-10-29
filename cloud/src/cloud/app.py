@@ -16,10 +16,12 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from cloud.api.auth import router as accounts_router
+from cloud.api.device_tokens import router as device_tokens_router
 from cloud.api.notifications import router as notifications_router
 from cloud.api.oauth import router as oauth_router
 from cloud.api.profile import router as profile_router
 from cloud.api.shares import router as shares_router
+from cloud.gateway.api import router as gateway_router
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.db import Database
 from cloud.errors import CloudError, message
@@ -135,4 +137,6 @@ def create_app(
     app.include_router(profile_router, prefix=API_PREFIX)
     app.include_router(shares_router, prefix=API_PREFIX)
     app.include_router(notifications_router, prefix=API_PREFIX)
+    app.include_router(device_tokens_router, prefix=API_PREFIX)
+    app.include_router(gateway_router, prefix=API_PREFIX)
     return app

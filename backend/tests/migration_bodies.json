@@ -4,6 +4,7 @@
   "migrate-bound-profiles-use-the-account-partition": "d4a40e65310bd20f",
   "migrate-browser-profiles-pin-identity": "d957b75417e51c8f",
   "migrate-character-voices-become-voice-refs": "15b741a4ce388b0c",
+  "migrate-cloud-login-keeps-a-device-token": "794dc05880e56d7d",
   "migrate-dub-lines-use-the-voice-ref-identity": "08bdd2edc76417a8",
   "migrate-publish-tasks-get-content-shape": "5fdb6a738dab692f",
   "migrate-speech-records-store-a-voice-ref": "e85b10b9990883f0",
