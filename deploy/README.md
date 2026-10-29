@@ -58,7 +58,7 @@ curl -fsS https://mosael.example.com/api/cloud/v1/health   # {"status":"ok"}
 | `website/Dockerfile` | pnpm 构建 Next.js;`output: "standalone"` 运行产物 + public/media,非 root,只暴露容器内 3000。 |
 | `cloud/Dockerfile.dockerignore`、`website/Dockerfile.dockerignore` | 构建上下文是**仓库根**(`context: ..`),这两个文件只放对应镜像真正需要的路径(等价于社区服务的 `Dockerfile.dockerignore`)。 |
 | `postgres/init.sql` | 只在数据卷为空时执行:校验 UTF8、把库默认时区钉成 UTC;表由 Cloud 启动时的 Alembic 迁移建。 |
-| `cron/cleanup.sh` | 每 `CLEANUP_INTERVAL_SECONDS` 删一次过期 `cloud_email_codes` / `cloud_sessions` / `cloud_oauth_states`。 |
+| `cron/cleanup.sh` | 每 `CLEANUP_INTERVAL_SECONDS` 删一次过期 `cloud_email_codes` / `cloud_phone_codes` / `cloud_sessions` / `cloud_oauth_states`。 |
 
 ## 首次部署清单
 
@@ -220,6 +220,7 @@ uv run python -m cloud.cli seed-official --bundle ../deploy/official-bundle.json
 
 ```sql
 DELETE FROM cloud_email_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
+DELETE FROM cloud_phone_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_sessions     WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_oauth_states WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 ```
@@ -235,6 +236,7 @@ docker compose logs -f cleanup
 ```bash
 docker compose exec -T postgres psql -U mosael -d mosael <<'SQL'
 DELETE FROM cloud_email_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
+DELETE FROM cloud_phone_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_sessions     WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_oauth_states WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 SQL

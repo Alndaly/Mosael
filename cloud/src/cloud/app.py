@@ -28,6 +28,7 @@ from cloud.config import API_PREFIX, CloudConfig
 from cloud.db import Database
 from cloud.errors import CloudError, message
 from cloud.mailer import CodeSender, SmtpCodeSender
+from cloud.sms import PhoneCodeSender, TencentSmsSender
 from cloud.oauth import OAuthProvider, default_providers
 from cloud.payments.base import PaymentChannel
 from cloud.payments.registry import channels_from_config
@@ -72,6 +73,7 @@ def create_app(
     config: CloudConfig | None = None,
     *,
     code_sender: CodeSender | None = None,
+    sms_sender: PhoneCodeSender | None = None,
     oauth_providers: Mapping[str, OAuthProvider] | None = None,
     upstream_transport: httpx2.BaseTransport | None = None,
     payment_channels: Mapping[str, PaymentChannel] | None = None,
@@ -100,6 +102,7 @@ def create_app(
     app.state.config = resolved
     app.state.db = database
     app.state.code_sender = code_sender or SmtpCodeSender(resolved)
+    app.state.sms_sender = sms_sender or TencentSmsSender(resolved)
     app.state.upstream_transport = upstream_transport
     #: 配了商户凭据的支付渠道(见 payments/registry);一个都没有就是这个部署还没开在线购买。
     app.state.payment_channels = (

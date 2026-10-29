@@ -61,6 +61,8 @@ def test_cloud_has_its_own_tables_and_no_local_identity_columns(tmp_path):
             "email",
             "password_hash",
             "email_verified_at",
+            "phone",
+            "phone_verified_at",
             "created_at",
             "display_name",
             "handle",

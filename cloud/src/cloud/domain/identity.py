@@ -80,6 +80,8 @@ def account_user(user: CloudUser) -> dict[str, object]:
         "id": user.id,
         "email": user.email,
         "email_verified_at": user.email_verified_at.isoformat() if user.email_verified_at else None,
+        "phone": user.phone,
+        "phone_verified_at": user.phone_verified_at.isoformat() if user.phone_verified_at else None,
         "created_at": user.created_at.isoformat(),
         **public_user(user),
     }

@@ -54,9 +54,31 @@ class RecordingSender:
         return found[-1]
 
 
-def build_app(config: CloudConfig, sender: RecordingSender | None = None):
-    """建一个注入了假发信器的 app。测试里所有 app 都必须经过这里(或显式注入)。"""
-    return create_app(config, code_sender=sender or RecordingSender())
+class RecordingSmsSender:
+    """测试用假短信发送器:**绝不真发**。"""
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, str]] = []
+
+    def ensure_ready(self) -> None:
+        """假 sender 永远可用。"""
+
+    def send_code(self, *, phone: str, purpose: str, code: str) -> None:
+        self.sent.append({"phone": phone, "purpose": purpose, "code": code})
+
+    def last_code(self, phone: str, purpose: str) -> str:
+        found = [item["code"] for item in self.sent if item["phone"] == phone and item["purpose"] == purpose]
+        assert found, f"没有向 {phone} 发过 {purpose} 验证码"
+        return found[-1]
+
+
+def build_app(
+    config: CloudConfig,
+    sender: RecordingSender | None = None,
+    sms_sender: RecordingSmsSender | None = None,
+):
+    """建一个注入了假发信器 / 假短信器的 app。测试里所有 app 都必须经过这里(或显式注入)。"""
+    return create_app(config, code_sender=sender or RecordingSender(), sms_sender=sms_sender or RecordingSmsSender())
 
 
 @pytest.fixture
@@ -74,8 +96,13 @@ def sender() -> RecordingSender:
 
 
 @pytest.fixture
-def app(config: CloudConfig, sender: RecordingSender):
-    return create_app(config, code_sender=sender)
+def sms_sender() -> RecordingSmsSender:
+    return RecordingSmsSender()
+
+
+@pytest.fixture
+def app(config: CloudConfig, sender: RecordingSender, sms_sender: RecordingSmsSender):
+    return create_app(config, code_sender=sender, sms_sender=sms_sender)
 
 
 @pytest.fixture
@@ -110,6 +137,19 @@ def signup(client: TestClient, email: str = "alice@example.com", password: str =
     code = request_signup_code(client, email)
     response = client.post(api("/signup"), json={"email": email, "code": code, "password": password})
     assert response.status_code == 201, response.text
+    return response.json()["user"]
+
+
+def request_phone_code(client: TestClient, phone: str = "13800138000") -> str:
+    response = client.post(api("/login/sms/code"), json={"phone": phone})
+    assert response.status_code == 200, response.text
+    return client.app.state.sms_sender.last_code("+8613800138000", "login")
+
+
+def login_phone(client: TestClient, phone: str = "13800138000") -> dict:
+    code = request_phone_code(client, phone)
+    response = client.post(api("/login/sms/verify"), json={"phone": phone, "code": code})
+    assert response.status_code == 200, response.text
     return response.json()["user"]
 
 
@@ -228,7 +268,12 @@ def oauth_config(tmp_path: Path) -> CloudConfig:
 
 @pytest.fixture
 def oauth_app(oauth_config: CloudConfig, sender: RecordingSender, oauth_providers):
-    return create_app(oauth_config, code_sender=sender, oauth_providers=oauth_providers)
+    return create_app(
+        oauth_config,
+        code_sender=sender,
+        sms_sender=RecordingSmsSender(),
+        oauth_providers=oauth_providers,
+    )
 
 
 @pytest.fixture

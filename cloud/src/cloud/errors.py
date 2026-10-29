@@ -56,6 +56,42 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The code could not be emailed. Try again in a moment.",
         "zh": "验证码邮件没有发出去，请稍后重试。",
     },
+    "phone_invalid": {
+        "en": "Enter a valid mobile number.",
+        "zh": "请输入有效的手机号。",
+    },
+    "phone_code_required": {
+        "en": "Enter the 6-digit code we texted you.",
+        "zh": "请输入手机收到的 6 位验证码。",
+    },
+    "phone_code_invalid": {
+        "en": "That code is not correct. Check the SMS and try again.",
+        "zh": "验证码不正确，请核对短信后重试。",
+    },
+    "phone_code_expired": {
+        "en": "That code has expired. Request a new one.",
+        "zh": "验证码已过期，请重新获取。",
+    },
+    "phone_code_used": {
+        "en": "That code has already been used. Request a new one.",
+        "zh": "验证码已经用过了，请重新获取。",
+    },
+    "phone_code_attempts_exhausted": {
+        "en": "Too many wrong codes. Request a new one.",
+        "zh": "验证码错误次数过多，请重新获取。",
+    },
+    "phone_code_cooldown": {
+        "en": "Wait {seconds} seconds before requesting another code.",
+        "zh": "请等 {seconds} 秒后再重新发送验证码。",
+    },
+    "sms_not_configured": {
+        "en": "SMS delivery is not configured on this service yet. Contact the administrator.",
+        "zh": "这台服务还没配置短信，请联系管理员。",
+    },
+    "sms_send_failed": {
+        "en": "The code could not be sent by SMS. Try again in a moment.",
+        "zh": "验证码短信没有发出去，请稍后重试。",
+    },
     "oauth_not_configured": {
         "en": "This sign-in method is not enabled on this MosaelCloud deployment yet. Contact the administrator.",
         "zh": "这个登录方式还没启用，请联系管理员。",

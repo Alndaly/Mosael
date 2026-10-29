@@ -44,7 +44,7 @@ function accountName(user: AccountIdentity): string {
   if (display) return display;
   const handle = user.handle?.trim();
   if (handle) return handle;
-  return user.email.split("@")[0]?.trim() ?? "";
+  return user.email?.split("@")[0]?.trim() ?? "";
 }
 
 /** 第一个字:按字形取(中文取第一个字、emoji 不会被截成半个),英文再大写。 */

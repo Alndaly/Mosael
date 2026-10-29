@@ -49,7 +49,12 @@ class CloudUser(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     #: 统一存小写。唯一索引保证"一个邮箱一个账号",并发注册靠数据库兜底。
-    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
+    #: **可空**:短信验证码登录会建只有手机号的账号;邮箱之后可自行绑定。
+    email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True, index=True)
+    #: E.164 手机号。唯一索引保证"一个手机号一个账号";空 = 这个账号还没绑手机。
+    phone: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, index=True)
+    #: 手机号验证时间。短信登录/绑定成功时写入。
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     #: argon2id 哈希(见 security.hash_password)。绝不存明文。
     #: **可空**:第三方登录新建的账号没有密码,只靠第三方身份或邮箱验证码登录。
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -104,6 +109,28 @@ class CloudEmailCode(Base):
     #: 验错次数。到上限即作废,逼用户重新发码。
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     #: 请求来源 IP,只用于"每 IP 每小时"限流;它和码一起过期,不是身份,也不进任何响应。
+    request_ip: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class CloudPhoneCode(Base):
+    """一次手机短信验证码。与邮箱码分开存,避免把两种收件人混在同一列里。"""
+
+    __tablename__ = "cloud_phone_codes"
+    __table_args__ = (
+        Index("idx_cloud_phone_codes_lookup", "phone", "purpose", "created_at"),
+        Index("idx_cloud_phone_codes_ip", "request_ip", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: E.164,例如 +8613800138000。
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    #: 目前支持 `login`(首次验证即建号)与后续可能的 `bind`。
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     request_ip: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

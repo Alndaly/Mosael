@@ -23,8 +23,9 @@ CLOUD_SMTP_HOST=localhost:1025 \
   uv run uvicorn cloud.main:app --host 127.0.0.1 --port 8901 --reload
 ```
 
-**没配 `CLOUD_SMTP_HOST` 时发码接口会明确回 `503 mail_not_configured`**,不会假装发出;
-测试注入假 sender,不连外网。
+**没配 `CLOUD_SMTP_HOST` 时邮件发码接口会明确回 `503 mail_not_configured`**,不会假装发出;
+没配齐腾讯云短信五项时,手机验证码接口回 `503 sms_not_configured`。邮件与短信都使用
+60 秒重发冷却。测试注入假 sender,不连外网。
 
 第三方登录同理:**没配 `CLOUD_GITHUB_CLIENT_ID/SECRET` 或 `CLOUD_GOOGLE_CLIENT_ID/SECRET`
 就当作没启用**,`/oauth/{provider}/start` 会 302 回官网并带 `oauth_error=oauth_not_configured`,
@@ -312,6 +313,9 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 | `CLOUD_SMTP_USERNAME` | 空 | 有用户名才登录 |
 | `CLOUD_SMTP_PASSWORD` | 空 | 只交给 SMTP,不进日志 |
 | `CLOUD_SMTP_FROM` | `no-reply@mosael.com` | 发件人 |
+| `CLOUD_TENCENT_SMS_SECRET_ID` / `_SECRET_KEY` | 空(未配置短信) | 腾讯云 CAM 子账号,只授短信发送权限 |
+| `CLOUD_TENCENT_SMS_SDK_APP_ID` / `_SIGN_NAME` / `_TEMPLATE_ID` | 空(未配置短信) | 短信应用、签名、模板;模板 `{1}`=验证码、`{2}`=分钟数 |
+| `CLOUD_TENCENT_SMS_REGION` / `_TEMPLATE_MINUTES` | `ap-guangzhou` / `10` | 发送地域与模板有效分钟数 |
 | `CLOUD_GITHUB_CLIENT_ID` / `_SECRET` | 空(未启用) | GitHub OAuth App 凭据;空则入口报"没启用" |
 | `CLOUD_GOOGLE_CLIENT_ID` / `_SECRET` | 空(未启用) | Google OAuth 客户端凭据;空则入口报"没启用" |
 | `CLOUD_OAUTH_STATE_TTL_SECONDS` | `600` | 一次 OAuth 登录的 state / nonce 有效期 |

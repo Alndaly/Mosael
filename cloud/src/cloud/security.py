@@ -42,6 +42,11 @@ def new_email_code() -> str:
     return "".join(secrets.choice("0123456789") for _ in range(6))
 
 
+def phone_code_digest(phone: str, purpose: str, code: str) -> str:
+    payload = f"{purpose}:{phone}:{code}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def email_code_digest(email: str, purpose: str, code: str) -> str:
     """验证码的 sha256。
 

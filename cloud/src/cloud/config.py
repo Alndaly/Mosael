@@ -71,6 +71,16 @@ class CloudConfig:
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_from: str = "no-reply@mosael.com"
+    #: 腾讯云短信(验证码登录)。SecretId/SecretKey 用 CAM 子账号,只授短信发送权限。
+    #: **空 = 短信入口没启用**,接口明确 503,不假装发出。
+    tencent_sms_secret_id: str = ""
+    tencent_sms_secret_key: str = ""
+    tencent_sms_sdk_app_id: str = ""
+    tencent_sms_sign_name: str = ""
+    tencent_sms_template_id: str = ""
+    tencent_sms_region: str = "ap-guangzhou"
+    #: 短信模板里 {2} 的分钟数;和验证码 TTL 共用一套口径。
+    tencent_sms_template_minutes: int = 10
     #: 第三方登录的 OAuth 应用凭据。**空 = 这个入口没启用**,接口会明确报错而不是假装能用。
     #: client id / secret 只从环境变量读,代码里不出现任何真实值。
     github_client_id: str = ""
@@ -126,6 +136,8 @@ class CloudConfig:
             raise ValueError("smtp_port must be between 1 and 65535")
         if self.oauth_state_ttl_seconds <= 0:
             raise ValueError("oauth_state_ttl_seconds must be positive")
+        if self.tencent_sms_template_minutes <= 0:
+            raise ValueError("tencent_sms_template_minutes must be positive")
         # 官方号是人类要登录的账号,它和人自己设的密码守同一条下限。**启动时失败**,不是等到
         # 第一次登录才说 —— 部署方会立刻看到配置有问题,而不是得到一个弱密码的运营账号。
         if self.official_password and len(self.official_password) < self.password_min_length:
@@ -141,6 +153,20 @@ class CloudConfig:
     def smtp_configured(self) -> bool:
         """有没有地方可以发信。**空 host = 没有**,调用方必须报错而不是吞掉。"""
         return bool(self.smtp_host.strip() and self.smtp_from.strip())
+
+    @property
+    def sms_configured(self) -> bool:
+        """腾讯云短信五项凭据/签名/模板齐了才启用。"""
+        return all(
+            value.strip()
+            for value in (
+                self.tencent_sms_secret_id,
+                self.tencent_sms_secret_key,
+                self.tencent_sms_sdk_app_id,
+                self.tencent_sms_sign_name,
+                self.tencent_sms_template_id,
+            )
+        )
 
     def oauth_credentials(self, provider: str) -> tuple[str, str] | None:
         """某个 provider 的 `(client_id, client_secret)`;任缺一项就当作没配置。"""
@@ -198,6 +224,13 @@ class CloudConfig:
             smtp_username=smtp_username,
             smtp_password=os.environ.get("CLOUD_SMTP_PASSWORD", ""),
             smtp_from=os.environ.get("CLOUD_SMTP_FROM", "no-reply@mosael.com").strip() or "no-reply@mosael.com",
+            tencent_sms_secret_id=os.environ.get("CLOUD_TENCENT_SMS_SECRET_ID", "").strip(),
+            tencent_sms_secret_key=os.environ.get("CLOUD_TENCENT_SMS_SECRET_KEY", "").strip(),
+            tencent_sms_sdk_app_id=os.environ.get("CLOUD_TENCENT_SMS_SDK_APP_ID", "").strip(),
+            tencent_sms_sign_name=os.environ.get("CLOUD_TENCENT_SMS_SIGN_NAME", "").strip(),
+            tencent_sms_template_id=os.environ.get("CLOUD_TENCENT_SMS_TEMPLATE_ID", "").strip(),
+            tencent_sms_region=os.environ.get("CLOUD_TENCENT_SMS_REGION", "ap-guangzhou").strip() or "ap-guangzhou",
+            tencent_sms_template_minutes=int(os.environ.get("CLOUD_TENCENT_SMS_TEMPLATE_MINUTES", "10")),
             github_client_id=os.environ.get("CLOUD_GITHUB_CLIENT_ID", "").strip(),
             github_client_secret=os.environ.get("CLOUD_GITHUB_CLIENT_SECRET", "").strip(),
             google_client_id=os.environ.get("CLOUD_GOOGLE_CLIENT_ID", "").strip(),

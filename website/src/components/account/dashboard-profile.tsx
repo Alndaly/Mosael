@@ -68,6 +68,7 @@ export function DashboardProfile({
   const currentViewer = viewerQuery.data ?? viewer;
   const email = viewerQuery.data?.email ?? null;
   const emailFailed = viewerQuery.isError || viewerQuery.data === null;
+  const emailUnbound = viewerQuery.isSuccess && !email;
 
   const hasHandle = Boolean(currentViewer.handle?.trim());
 
@@ -203,7 +204,7 @@ export function DashboardProfile({
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
             <dt className="m-0 font-medium text-muted-foreground">{copy.email}</dt>
             <dd className="m-0 min-w-0 font-mono [overflow-wrap:anywhere]">
-              {email ?? (emailFailed ? copy.emailUnavailable : "…")}
+              {email ?? (emailFailed ? copy.emailUnavailable : emailUnbound ? copy.emailUnbound : "…")}
             </dd>
           </div>
         </dl>

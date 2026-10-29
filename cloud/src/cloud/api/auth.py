@@ -17,6 +17,8 @@ from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.domain.identity import account_user, give_default_identity
 from cloud.email_codes import consume_code, issue_code
+from cloud.phone import normalize_phone
+from cloud.phone_codes import consume_phone_code, issue_phone_code
 from cloud.errors import CloudError
 from cloud.models import CloudSession, CloudUser, now
 from cloud.security import hash_password, new_token, token_digest, verify_password
@@ -44,6 +46,21 @@ class LoginIn(BaseModel):
 class LoginCodeIn(BaseModel):
     email: EmailStr
     code: str = Field(default="", max_length=12)
+
+
+class PhoneIn(BaseModel):
+    phone: str = Field(min_length=1, max_length=32)
+
+
+class PhoneCodeIn(PhoneIn):
+    code: str = Field(default="", max_length=12)
+
+
+def _phone(body: PhoneIn) -> str:
+    try:
+        return normalize_phone(body.phone)
+    except ValueError as exc:
+        raise CloudError(400, "phone_invalid") from exc
 
 
 def request_ip(request: Request) -> str:
@@ -192,6 +209,52 @@ def login_with_code(
         raise CloudError(400, "email_code_invalid")
     consume_code(db, email=email, purpose="login", code=code)
 
+    open_session(db, config, user, response)
+    return {"user": account_user(user)}
+
+
+@router.post("/login/sms/code")
+def send_login_sms_code(body: PhoneIn, db: DbSession, request: Request) -> dict[str, object]:
+    """短信登录第一步。号码未注册也回同一句:验证码验过后会自动建号。"""
+    phone = _phone(body)
+    issue_phone_code(
+        db,
+        phone=phone,
+        purpose="login",
+        request_ip=request_ip(request),
+        sender=request.app.state.sms_sender,
+    )
+    return {"sent": True}
+
+
+@router.post("/login/sms/verify")
+def login_with_sms(
+    body: PhoneCodeIn, db: DbSession, config: CurrentConfig, request: Request, response: Response
+) -> dict[str, object]:
+    """短信登录第二步:码换会话。号码首次登录时自动建一个手机号账号。"""
+    phone = _phone(body)
+    code = body.code.strip()
+    if not code:
+        raise CloudError(400, "phone_code_required")
+    consume_phone_code(db, phone=phone, purpose="login", code=code)
+    user = db.scalar(select(CloudUser).where(CloudUser.phone == phone))
+    if user is None:
+        user = CloudUser(email=None, phone=phone, phone_verified_at=now())
+        give_default_identity(user)
+        db.add(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            # 两个请求同时验证同一号码:唯一索引先撞上,读回已建的那一个。
+            db.rollback()
+            user = db.scalar(select(CloudUser).where(CloudUser.phone == phone))
+            if user is None:
+                raise
+        else:
+            user = db.scalar(select(CloudUser).where(CloudUser.id == user.id))
+    elif user.phone_verified_at is None:
+        user.phone_verified_at = now()
+        db.commit()
     open_session(db, config, user, response)
     return {"user": account_user(user)}
 

@@ -23,7 +23,7 @@ import { CloudApiError, cloudAccount } from "@/lib/cloud";
 import { oauthErrorCopyKey } from "@/lib/oauth";
 import { invalidateAfterAuth } from "@/lib/query-invalidation";
 
-type Mode = "password" | "code";
+type Mode = "password" | "code" | "sms";
 
 /**
  * 登录:**同一个页面里两个入口** —— 密码 / 验证码。
@@ -48,13 +48,16 @@ export function LoginForm({
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [error, setError] = useState("");
   const [sendingCode, setSendingCode] = useState(false);
   const [busy, setBusy] = useState(false);
-  const countdown = useResendCountdown();
+  const emailCountdown = useResendCountdown();
+  const smsCountdown = useResendCountdown();
   const oauthMessage = oauthError ? copy[oauthErrorCopyKey(oauthError)] : "";
 
   const switchMode = (next: Mode) => {
@@ -62,6 +65,7 @@ export function LoginForm({
     setError("");
     setCodeError("");
     setEmailError("");
+    setPhoneError("");
   };
 
   // 刚注册完带着 `?registered=1` 回来时,「账号已创建」同样是一过性通知 —— 弹一次 toast,
@@ -86,7 +90,27 @@ export function LoginForm({
       await cloudAccount.sendLoginCode(email.trim());
       // 后端对"注册过 / 没注册"回同一句,界面也只说这一句。
       toast({ title: copy.loginCodeSent });
-      countdown.start();
+      emailCountdown.start();
+    } catch (failure) {
+      setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const sendSmsCode = async () => {
+    setError("");
+    setCodeError("");
+    setPhoneError("");
+    if (!/^\+?[0-9][\d\s\-()]{5,}$/.test(phone.trim())) {
+      setPhoneError(copy.phoneRequired);
+      return;
+    }
+    setSendingCode(true);
+    try {
+      await cloudAccount.sendLoginSmsCode(phone.trim());
+      toast({ title: copy.smsCodeSent });
+      smsCountdown.start();
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
     } finally {
@@ -130,6 +154,26 @@ export function LoginForm({
     }
   };
 
+  const submitSms = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setCodeError("");
+    if (!/^\d{6}$/.test(code.trim())) {
+      setCodeError(copy.codeRequired);
+      return;
+    }
+    setBusy(true);
+    try {
+      await cloudAccount.loginWithSms(phone.trim(), code.trim());
+      await invalidateAfterAuth(queryClient);
+      router.push(`/${locale}/account`);
+    } catch (failure) {
+      setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // 表单错误通过 id 关联到验证码字段。
   const codeDescription = error ? "login-error" : undefined;
 
@@ -147,6 +191,7 @@ export function LoginForm({
         options={[
           { value: "password", label: copy.loginModePassword },
           { value: "code", label: copy.loginModeCode },
+          { value: "sms", label: copy.loginModeSms },
         ]}
         onChange={switchMode}
         disabled={busy}
@@ -186,7 +231,7 @@ export function LoginForm({
             <SubmitButton label={copy.signIn} busyLabel={copy.signingIn} busy={busy} />
           </div>
         </form>
-      ) : (
+      ) : mode === "code" ? (
         <form className="grid gap-5" onSubmit={submitCode} noValidate>
           {error && (
             <FormAlert id="login-error" title={copy.formErrorTitle}>
@@ -219,7 +264,7 @@ export function LoginForm({
                 sendingLabel={copy.sendingCode}
                 resendLabel={copy.resendCode}
                 sending={sendingCode}
-                cooldown={countdown.remaining}
+                cooldown={emailCountdown.remaining}
                 disabled={busy}
                 onClick={() => void sendCode()}
               />
@@ -227,6 +272,50 @@ export function LoginForm({
           />
           <div className="pt-1">
             <SubmitButton label={copy.loginWithCode} busyLabel={copy.verifying} busy={busy} />
+          </div>
+        </form>
+      ) : (
+        <form className="grid gap-5" onSubmit={submitSms} noValidate>
+          {error && (
+            <FormAlert id="login-error" title={copy.formErrorTitle}>
+              {error}
+            </FormAlert>
+          )}
+          <AccountField
+            id="login-phone"
+            label={copy.phone}
+            hint={copy.phoneHint}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            required
+            value={phone}
+            error={phoneError}
+            describedBy={error ? "login-error" : undefined}
+            onChange={(event) => setPhone(event.target.value)}
+          />
+          <CodeField
+            id="login-sms-code"
+            label={copy.codeLabel}
+            hint={copy.codeHint}
+            value={code}
+            error={codeError}
+            describedBy={codeDescription}
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            trailing={
+              <SendCodeButton
+                label={copy.sendCode}
+                sendingLabel={copy.sendingCode}
+                resendLabel={copy.resendCode}
+                sending={sendingCode}
+                cooldown={smsCountdown.remaining}
+                disabled={busy}
+                onClick={() => void sendSmsCode()}
+              />
+            }
+          />
+          <div className="pt-1">
+            <SubmitButton label={copy.loginWithSms} busyLabel={copy.verifying} busy={busy} />
           </div>
         </form>
       )}

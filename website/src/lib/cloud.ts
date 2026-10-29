@@ -30,8 +30,10 @@ export type CloudIdentity = {
 
 export type CloudUser = {
   id: string;
-  email: string;
+  email: string | null;
   email_verified_at: string | null;
+  phone: string | null;
+  phone_verified_at: string | null;
   created_at: string;
   display_name?: string | null;
   handle?: string | null;
@@ -307,6 +309,12 @@ function createClient(context: RequestContext = {}) {
       },
       loginWithCode(email: string, code: string): Promise<{ user: CloudUser }> {
         return request("/login/code/verify", { method: "POST", body: JSON.stringify({ email, code }) }, context);
+      },
+      sendLoginSmsCode(phone: string): Promise<{ sent: boolean }> {
+        return request("/login/sms/code", { method: "POST", body: JSON.stringify({ phone }) }, context);
+      },
+      loginWithSms(phone: string, code: string): Promise<{ user: CloudUser }> {
+        return request("/login/sms/verify", { method: "POST", body: JSON.stringify({ phone, code }) }, context);
       },
       logout(): Promise<void> {
         return request("/logout", { method: "POST" }, context);

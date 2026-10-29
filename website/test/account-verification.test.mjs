@@ -59,12 +59,15 @@ test("验证码控件:6 位数字、按码自动填充、发送中 / 冷却时�
   assert.match(controls, /aria-pressed=\{selected\}/, "分段控件没有 aria-pressed");
 });
 
-test("登录页:同一页两个入口(密码 / 验证码),不是两个页面", () => {
+test("登录页:同一页三个入口(密码 / 邮箱码 / 短信码),不是三个页面", () => {
   assert.match(login, /SegmentedControl/, "登录页没有分段切换控件");
   assert.match(login, /loginModePassword/, "登录页缺少密码入口");
-  assert.match(login, /loginModeCode/, "登录页缺少验证码入口");
-  assert.match(login, /sendLoginCode/, "验证码入口没有发送登录码");
-  assert.match(login, /loginWithCode/, "验证码入口没有用码登录");
+  assert.match(login, /loginModeCode/, "登录页缺少邮箱验证码入口");
+  assert.match(login, /loginModeSms/, "登录页缺少短信入口");
+  assert.match(login, /sendLoginCode/, "邮箱验证码入口没有发送登录码");
+  assert.match(login, /loginWithCode/, "邮箱验证码入口没有用码登录");
+  assert.match(login, /sendLoginSmsCode/, "短信入口没有发送登录码");
+  assert.match(login, /loginWithSms/, "短信入口没有用码登录");
   assert.match(login, /CodeField/, "验证码入口没有复用统一的验证码字段");
   assert.match(login, /SendCodeButton/, "验证码入口没有复用发送按钮");
   assert.match(login, /PasswordField/, "密码入口丢了密码字段");
@@ -75,6 +78,9 @@ test("倒计时是共享逻辑,且和弹层 / 动画一样尊重减少动效偏�
   assert.match(countdown, /RESEND_COOLDOWN_SECONDS/, "倒计时没有写死与服务端一致的冷却秒数");
   assert.match(countdown, /setTimeout/, "倒计时没有按秒推进");
   assert.match(countdown, /remaining/, "倒计时没有返回剩余秒数");
+  assert.match(countdown, /RESEND_COOLDOWN_SECONDS = 60/, "重发冷却不是 60 秒");
+  assert.match(login, /smsCountdown\.start\(\)/, "短信发送后没有启动 60 秒倒计时");
+  assert.match(login, /emailCountdown\.start\(\)/, "邮件发送后没有启动 60 秒倒计时");
   assert.match(controls, /motion-reduce:transition-none/, "分段控件 / 按钮没有 reduced-motion 回退");
   assert.match(controls, /motion-reduce:animate-none/, "发送中的 spinner 没有 reduced-motion 回退");
 });
@@ -96,6 +102,10 @@ test("浏览器客户端只新增同源的验证码端点,签名带上 code", ()
   assert.match(client, /"\/signup\/code"/, "客户端没有请求 /signup/code");
   assert.match(client, /"\/login\/code"/, "客户端没有请求 /login/code");
   assert.match(client, /"\/login\/code\/verify"/, "客户端没有请求 /login/code/verify");
+  assert.match(client, /sendLoginSmsCode/, "客户端没有 sendLoginSmsCode");
+  assert.match(client, /loginWithSms/, "客户端没有 loginWithSms");
+  assert.match(client, /"\/login\/sms\/code"/, "客户端没有请求 /login/sms/code");
+  assert.match(client, /"\/login\/sms\/verify"/, "客户端没有请求 /login/sms/verify");
   assert.match(client, /JSON\.stringify\(\{\s*email,\s*code,\s*password\s*\}\)/, "注册请求没有把 code 发给后端");
 });
 
@@ -118,6 +128,12 @@ test("登录码的提示不泄露邮箱是否注册,中英同键", () => {
     "loginModePassword",
     "loginModeCode",
     "loginWithCode",
+    "loginModeSms",
+    "loginWithSms",
+    "phone",
+    "phoneRequired",
+    "phoneHint",
+    "smsCodeSent",
     "verifying",
   ]) {
     assert.ok(zh[key], `中文缺 account.${key}`);

@@ -18,12 +18,13 @@ case "$interval" in
     ;;
 esac
 
-echo "cleanup: 每 ${interval} 秒删除一次过期的 cloud_email_codes / cloud_sessions / cloud_oauth_states"
+echo "cleanup: 每 ${interval} 秒删除一次过期的 cloud_email_codes / cloud_phone_codes / cloud_sessions / cloud_oauth_states"
 
 while :; do
   echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] deleting expired rows"
   psql -v ON_ERROR_STOP=1 -X <<'SQL'
 DELETE FROM cloud_email_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
+DELETE FROM cloud_phone_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_sessions     WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_oauth_states WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 SQL

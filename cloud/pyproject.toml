@@ -21,6 +21,7 @@ dependencies = [
   "httpx2>=2.16",
   # 上游通道的 API Key 落库前用 Fernet 加密(见 domain/channel_keys.py),不自己写对称加密。
   "cryptography>=46",
+  "tencentcloud-sdk-python-sms>=3.1.153",
 ]
 
 [dependency-groups]
