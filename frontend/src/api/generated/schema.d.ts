@@ -14,6 +14,9 @@ export interface paths {
         /**
          * Health
          * @description 活着,并且说得清自己是谁(见 core/lifeline):壳据此判断端口上那个后端能不能复用。
+         *
+         *     `cloud` 是这个部署接没接 MosaelCloud(`configured` / `cloud_not_configured` / `cloud_misconfigured`):**只看本地配置,
+         *     不出网**。它是和版本号同一类的部署事实,打包冒烟靠它确认安装版默认接上了官方 Cloud(ADR 0088 §0)。
          */
         get: operations["health_api_health_get"];
         put?: never;
