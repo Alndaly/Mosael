@@ -50,6 +50,12 @@ vi.mock("@/api/transport", async (importOriginal) => ({
   },
 }));
 
+//: 顶上那一行「Mosael Cloud」问的是云端登录:这里固定成「没登录」,不让它取决于一次真请求多快失败。
+vi.mock("@/api/domains/cloud", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/domains/cloud")>()),
+  loadCloudSession: async () => null,
+}));
+
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 
 function renderSection(capability = "chat") {
@@ -246,7 +252,8 @@ describe("供应商连接列表", () => {
     const { container } = renderSection();
 
     await waitFor(() => expect(container.textContent).toContain("停用的"));
-    const rows = [...container.querySelectorAll("[data-slot='settings-list-item']")];
+    //: 只比连接行:顶上那一行「Mosael Cloud」跟着云端登录走,不是一条连接。
+    const rows = [...container.querySelectorAll("[data-slot='settings-list-item']:not([data-mosael-cloud])")];
     expect(rows).toHaveLength(2);
     expect(rows[1].children.length).toBe(rows[0].children.length);
     //: 徽标确实还在,只是和那几个按钮同处一格。
