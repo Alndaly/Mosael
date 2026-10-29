@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     false,
+    true,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -356,3 +357,206 @@ class CloudDeviceToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
     #: 最近一次用它鉴权的时间。按分钟粒度写(见 `domain/device_tokens.touch`),不是每个请求一次写库。
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+
+# ---------------------------------------------------------------- 套餐与积分(ADR 0088 §2)
+#
+# 积分只有一本账:**余额是流水的结果**。`cloud_credit_batches` 记「这一批发了多少、何时到期」,每一笔进出
+# (发放、预占、释放、到期清零、人工调整)都是 `cloud_usage_entries` 里一行带符号的 `delta`,挂在它动的那一批上;
+# 某一批剩多少 = 这一批所有流水的和。没有可改写的「余额」列,所以也没有「余额和流水对不上」这种状态。
+
+
+class CloudPlan(Base):
+    """一个套餐。价格与支付在第 3 步(订单)加;这里只记它每月给多少积分、积分活多久。"""
+
+    __tablename__ = "cloud_plans"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: 运营与命令行认它用的短名(如 `pro-monthly`)。
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    #: 计费周期:`month` / `quarter` / `year`。**积分一律按月发**,周期只决定订阅多久(ADR 0088 待拍板 #2)。
+    period: Mapped[str] = mapped_column(String(16), nullable=False)
+    monthly_credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: 每一批月度积分从发放起活多少天(运营参数,如 60:当月没用完还能再用一个月)。
+    credit_ttl_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    on_sale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+    __table_args__ = (
+        CheckConstraint("period IN ('month', 'quarter', 'year')", name="ck_cloud_plans_period"),
+        CheckConstraint("monthly_credits > 0 AND credit_ttl_days > 0", name="ck_cloud_plans_positive"),
+    )
+
+
+class CloudSubscription(Base):
+    """一个用户订了哪个套餐、到什么时候。下一批月度积分何时发记在 `next_grant_at`,读余额时按需补发(不靠定时任务)。"""
+
+    __tablename__ = "cloud_subscriptions"
+    __table_args__ = (
+        Index("idx_cloud_subscriptions_user", "user_id"),
+        CheckConstraint("status IN ('active', 'ended')", name="ck_cloud_subscriptions_status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    plan_id: Mapped[str] = mapped_column(ForeignKey("cloud_plans.id", ondelete="RESTRICT"), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    #: 这个订阅到哪一刻为止(按周期算出来;续费在第 3 步)。过了这一刻不再发新批次,已发的照各自的有效期用完。
+    ends_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    #: 下一批月度积分该在何时发。等于或早于现在就补发一批并往后推一个月,直到超过现在或超过 `ends_at`。
+    next_grant_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudCreditBatch(Base):
+    """一批积分:来源、发了多少、何时到期。**不记余额** —— 余额是这一批流水的和。"""
+
+    __tablename__ = "cloud_credit_batches"
+    __table_args__ = (
+        Index("idx_cloud_credit_batches_user_expiry", "user_id", "expires_at"),
+        CheckConstraint("source IN ('plan', 'gift')", name="ck_cloud_credit_batches_source"),
+        CheckConstraint("amount > 0", name="ck_cloud_credit_batches_amount"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    #: `plan`(套餐月度)/ `gift`(赠送;以后的加购再加一种)。
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    subscription_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_subscriptions.id", ondelete="SET NULL"), nullable=True, default=None
+    )
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    #: 运营备注(赠送原因等)。不进任何对外响应。
+    note: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+
+
+class CloudUsageEntry(Base):
+    """积分的一笔进出,**只追加**。`delta` 带符号:发放 / 释放为正,预占 / 到期清零为负,人工调整两者皆可。"""
+
+    __tablename__ = "cloud_usage_entries"
+    __table_args__ = (
+        Index("idx_cloud_usage_entries_batch", "batch_id"),
+        Index("idx_cloud_usage_entries_user_created", "user_id", "created_at"),
+        Index("idx_cloud_usage_entries_call", "call_id"),
+        CheckConstraint(
+            "kind IN ('grant', 'reserve', 'release', 'expire', 'adjust')", name="ck_cloud_usage_entries_kind"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    batch_id: Mapped[str] = mapped_column(ForeignKey("cloud_credit_batches.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: 预占 / 释放属于哪一次网关调用;发放、到期、调整没有。
+    call_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_gateway_calls.id", ondelete="SET NULL"), nullable=True, default=None
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudGatewayCall(Base):
+    """网关的一次调用:谁、哪台设备、哪个模型、走的哪条通道,预占了多少、最后扣了多少、上游报的用量。
+
+    用户的「用量明细」和平台的成本账都从这里出;积分怎么动的在 `cloud_usage_entries`(按 `call_id` 对得上)。
+    """
+
+    __tablename__ = "cloud_gateway_calls"
+    __table_args__ = (
+        Index("idx_cloud_gateway_calls_user_created", "user_id", "created_at"),
+        CheckConstraint(
+            "status IN ('reserved', 'settled', 'released')", name="ck_cloud_gateway_calls_status"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    device_token_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_device_tokens.id", ondelete="SET NULL"), nullable=True
+    )
+    model_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: 实际走的那条上游通道(换过通道就是最后成的那条);没走成是空。
+    channel_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_upstream_channels.id", ondelete="SET NULL"), nullable=True, default=None
+    )
+    #: `reserved`(进行中)/ `settled`(按用量扣了)/ `released`(没成,全额退回)。
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="reserved")
+    reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    charged: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: 用量是不是上游报的。`False` = 上游没给(或流被中途掐断),按字数估的。
+    usage_reported: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+
+# ---------------------------------------------------------------- 网关的模型目录与上游通道(ADR 0088 §3、§4)
+
+
+class CloudGatewayModel(Base):
+    """网关对外列出的一个模型。`id` 就是桌面端选模型时用的那个名字(如 `deepseek-chat`)。"""
+
+    __tablename__ = "cloud_gateway_models"
+    __table_args__ = (CheckConstraint("kind IN ('chat')", name="ck_cloud_gateway_models_kind"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    label: Mapped[str] = mapped_column(String(80), nullable=False)
+    #: 第 2 步只有对话;生成类在第 4 步加进这道 CHECK。
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: 一次调用最多让上游生成多少 token。预占按它算上限,请求里的 `max_tokens` 不许超过它。
+    max_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudModelPrice(Base):
+    """一个模型的积分单价,**带生效时间**:调价是加一行,不改旧行;一次调用按它预占那一刻生效的那一行算。"""
+
+    __tablename__ = "cloud_model_prices"
+    __table_args__ = (
+        Index("idx_cloud_model_prices_model_effective", "model_id", "effective_from"),
+        CheckConstraint("input_per_1k >= 0 AND output_per_1k >= 0", name="ck_cloud_model_prices_nonnegative"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    model_id: Mapped[str] = mapped_column(ForeignKey("cloud_gateway_models.id", ondelete="CASCADE"), nullable=False)
+    #: 每千个输入 / 输出 token 多少积分。整数:积分是最小单位,一次调用按两项相加后向上取整。
+    input_per_1k: Mapped[int] = mapped_column(Integer, nullable=False)
+    output_per_1k: Mapped[int] = mapped_column(Integer, nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudUpstreamChannel(Base):
+    """一个模型背后的一条上游通道:哪家的端点、哪把 Key、对上游叫什么模型、优先级。
+
+    Key 用 `CLOUD_CHANNEL_KEY`(Fernet)加密后落库,只在网关发请求那一刻解开,不进日志、不进任何响应。
+    """
+
+    __tablename__ = "cloud_upstream_channels"
+    __table_args__ = (
+        Index("idx_cloud_upstream_channels_model", "model_id", "priority"),
+        CheckConstraint("protocol IN ('openai')", name="ck_cloud_upstream_channels_protocol"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    model_id: Mapped[str] = mapped_column(ForeignKey("cloud_gateway_models.id", ondelete="CASCADE"), nullable=False)
+    #: 对上游说哪种话。第一版只有 OpenAI 兼容(见 ADR 0088 §4)。
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False, default="openai")
+    #: 端点前缀,如 `https://api.deepseek.com/v1`;请求打到 `<base_url>/chat/completions`。
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    #: 上游那边这个模型叫什么(可能和网关对外的 id 不同)。
+    upstream_model: Mapped[str] = mapped_column(String(120), nullable=False)
+    api_key_encrypted: Mapped[str] = mapped_column(String(1000), nullable=False)
+    #: 小的先用。
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    #: 回过 429 / 5xx / 超时之后歇到这一刻;歇着的通道排到最后,全都歇着时照样按优先级试。
+    cooldown_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    note: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from urllib.parse import urlsplit
 
+import httpx2
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -69,10 +70,12 @@ def create_app(
     *,
     code_sender: CodeSender | None = None,
     oauth_providers: Mapping[str, OAuthProvider] | None = None,
+    upstream_transport: httpx2.BaseTransport | None = None,
 ) -> FastAPI:
     """装配 HTTP 应用。
 
-    `code_sender` / `oauth_providers` 是测试 / 嵌入用的注入点:不传就用真实实现。**没有
+    `code_sender` / `oauth_providers` / `upstream_transport`(网关连上游模型服务用的传输)是测试 / 嵌入用的注入点:
+    不传就用真实实现。**没有
     "开发环境自动跳过验证 / 自动连第三方"的开关** —— 没配 SMTP 时发码接口会明确报错,
     没配 OAuth 凭据时入口明确报"没启用";测试注入假实现,不连外网。
     """
@@ -92,6 +95,7 @@ def create_app(
     app.state.config = resolved
     app.state.db = database
     app.state.code_sender = code_sender or SmtpCodeSender(resolved)
+    app.state.upstream_transport = upstream_transport
     app.state.oauth_providers = (
         dict(oauth_providers) if oauth_providers is not None else default_providers()
     )

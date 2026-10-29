@@ -1,7 +1,7 @@
 [project]
 name = "mosael-cloud"
 version = "0.1.0"
-description = "MosaelCloud: the independent Mosael account service (accounts + desktop binding)."
+description = "MosaelCloud: the Mosael account service, community shares and the official model relay."
 requires-python = ">=3.14"
 dependencies = [
   "fastapi>=0.115",
@@ -17,13 +17,15 @@ dependencies = [
   "email-validator>=2.0",
   # 生产用 PostgreSQL;本地、测试用 SQLite。
   "psycopg[binary]>=3.2",
+  # 网关向上游模型服务发(流式)请求;TestClient 的传输也认它(Starlette 1.x 起)。
+  "httpx2>=2.16",
+  # 上游通道的 API Key 落库前用 Fernet 加密(见 domain/channel_keys.py),不自己写对称加密。
+  "cryptography>=46",
 ]
 
 [dependency-groups]
 dev = [
   "pytest>=8.0",
-  # TestClient 的传输(Starlette 1.x 起认 httpx2)。
-  "httpx2>=2.13",
   "ruff>=0.14",
 ]
 

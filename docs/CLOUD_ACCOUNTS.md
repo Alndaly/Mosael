@@ -143,6 +143,8 @@ SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮)
 | GET | `/device-tokens` | 这个账号的设备令牌列表(名字、签发、最近使用;不含原文) |
 | DELETE | `/device-tokens/{id}` | 吊销自己的一枚;别人的 / 不存在的一律 404 |
 | GET | `/gateway/me` | **只认 `Authorization: Bearer mct_…`**,不认 cookie:这枚令牌属于谁、是哪台设备 |
+| GET | `/gateway/catalog` | 只认设备令牌:能用的模型与积分单价、这个用户的积分(ADR 0088 第 2 步,详见 cloud/README「官方中转网关」) |
+| POST | `/gateway/chat` | 只认设备令牌:OpenAI 形状的对话,预占 → 转发 → 按用量结算 |
 | DELETE | `/device-tokens/current` | **只认 Bearer**:令牌吊销自己(桌面端登出时用) |
 
 失败一律 `{error, message: {en, zh}}`;错误码稳定,文案中英各一份。OAuth 的浏览器入口例外:

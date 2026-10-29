@@ -191,6 +191,45 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 - 结构不对 → 退出码 2、stderr 说明原因、**一行都不写**(先整份校验,再建账号)。
 - 同一个 `slug` 在同一个数组里只能出现一次;`plugins` 与 `workflows` 之间允许同名。
 
+## 官方中转网关(ADR 0088 第 2 步)
+
+桌面端登录后拿**设备令牌**(`Authorization: Bearer mct_…`)调网关;浏览器会话在这里一律不认。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/gateway/me` | 这枚令牌是谁、哪台设备 |
+| GET | `/gateway/catalog` | 此刻能用的模型(启用 + 有生效单价 + 至少一条启用通道)与积分单价;这个用户的积分(按批次、先到期在前)、下一批何时发、套餐 |
+| POST | `/gateway/chat` | 对话。OpenAI 形状的请求体,`model` 是目录里的 id;`stream` 缺省为真 |
+
+**一次对话的积分**:输入按**字数**当 token、输出按 `max_tokens`(缺省为模型上限)预占,先扣快到期的那批;不够回 402,
+`details` 里有 `needed` / `available` / `next_grant_at`。结束后按上游报的 `usage` 结算、多退;上游没报(或桌面端中途断开)
+按字数估(两个字一个 token)。流式时在上游的 `data: [DONE]` 之前多一个 `event: mosael.usage`(`call_id`、`charged`、
+token 数、`usage_reported`、`credits_left`);非流式回包多一格 `mosael`。响应头 `X-Mosael-Call-Id`。
+
+**上游通道**:对上游说 OpenAI 兼容(`<base_url>/chat/completions`,流式时带 `stream_options.include_usage`)。按优先级试;
+连不上 / 超时 / 429 / 5xx 把那条冷却 60 秒、换下一条 —— **只在上游开始生成之前换**,所以不会两条各收一次;其余 4xx 不换,
+全额释放后原话(抹掉 Key)回给调用方。全都不行回 503 `upstream_unavailable`,不扣积分。
+
+**账本**:`cloud_credit_batches` 只记一批发了多少、何时到期;每一笔进出是 `cloud_usage_entries` 里带符号的一行,余额是流水的和。
+月度批次(一律从开通那一刻往后数第 N 个月,日子不漂)和到期清零在读余额 / 预占时按需补记,不需要定时任务。
+每次调用一行 `cloud_gateway_calls`(预占、实扣、token、走的通道)。
+
+**开通**(还没接支付,由维护者用命令行):
+
+```bash
+uv run python -m cloud.cli channel-key                     # 生成 CLOUD_CHANNEL_KEY,写进部署 .env
+uv run python -m cloud.cli plan-set --slug pro --name Pro --period year --monthly-credits 20000 --credit-ttl-days 60
+uv run python -m cloud.cli subscribe --email a@b.com --plan pro
+uv run python -m cloud.cli model-set --id deepseek-chat --label "DeepSeek V3" --max-output-tokens 8000
+uv run python -m cloud.cli price-set --model deepseek-chat --input-per-1k 2 --output-per-1k 8
+CLOUD_UPSTREAM_KEY=sk-… uv run python -m cloud.cli channel-add --model deepseek-chat \
+  --base-url https://api.deepseek.com/v1 --upstream-model deepseek-chat --priority 0
+uv run python -m cloud.cli channel-list                    # 不显示 Key
+uv run python -m cloud.cli balance --email a@b.com
+```
+
+上游 Key 不走命令行参数(会进 shell 历史):从 `CLOUD_UPSTREAM_KEY` 读,没有就在终端里问。
+
 ## 测试
 
 ```bash
@@ -256,6 +295,7 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 | `CLOUD_OFFICIAL_HANDLE` | `mosael` | 官方账号短名;**只在建号时使用**,已存在不改 |
 | `CLOUD_OFFICIAL_EMAIL` | `official@mosael.example` | 官方账号邮箱;**只在建号时使用**;验证码登录要求它是真实拥有的地址 |
 | `CLOUD_OFFICIAL_PASSWORD` | 空 | 官方账号密码。设了 → 每次种子都写回(轮换);空 → 不动密码(新号密码登录 401);短于 `CLOUD_PASSWORD_MIN_LENGTH` → 启动失败 |
+| `CLOUD_CHANNEL_KEY` | 空(网关未配置) | 上游 API Key 的落库加密钥(Fernet,`cli channel-key` 生成);空则网关对话 503、加通道的命令拒绝 |
 
 ### 第三方 OAuth 应用的填法
 

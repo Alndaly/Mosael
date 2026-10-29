@@ -134,8 +134,12 @@ MOSAEL_CLOUD_URL』。后续打算官方接入常用的供应商作为中转,用
 
 ### 4. 上游通道:网关自己管,不接 new-api
 
-- **对话也走 Mosael 适配器**:和生成类同一套 `packages/mosael-providers`(ADR 0039 §5),不另起一个转发服务。
-  桌面端已有的对话适配器(OpenAI 兼容、Anthropic、Gemini 等)原样复用,流式、工具调用、思考档位这些能力不在中间丢一层。
+- **对话按协议转发,住网关自己的 `gateway/upstream`**(2026-10-29 修订):起初写的是「对话和生成类同一套 `packages/mosael-providers`」,
+  动手时查实 **`backend/app/ai/providers` 里没有对话适配器** —— 那里是生图 / 视频 / 配音 / 降噪;桌面端的对话在 `domain/ai_chat`,
+  一半是 OpenAI 兼容直连、一半由 pi sidecar 承载,且和本地库(连接、模型限额)绑在一起,搬不过来。国内外主流对话模型
+  (DeepSeek、通义、Kimi、豆包、智谱、OpenAI)都给 OpenAI 兼容端点,所以网关第一版只实现这一种协议的**流式转发**:
+  请求体按 Mosael 的形状收,向上游说 OpenAI 兼容,流照原样回给桌面端。Anthropic / Gemini 原生协议等真要接时在
+  `gateway/upstream` 里加一种,不影响账本。抽 `packages/mosael-providers` 挪到第 4 步(生成类),那时它才有用处。
 - **上游通道表** `upstream_channels`:每个模型挂若干条通道(哪家、哪把 Key、哪个端点、优先级、启用与否、备注);Key 加密存,只在网关里解开。
 - **故障切换只做最小的一版**:按优先级挑第一条可用通道;上游回 429 / 5xx / 超时就**在还没开始计费前**换下一条,
   并把那条通道冷却一会儿。权重分流、余额探测这些等真有多把 Key 跑满了再加,不预先做。
@@ -180,10 +184,14 @@ ADR 0039 §8、§9 原样适用:国内版只上境内已备案的模型、ICP �
      账号接口两条路都认(浏览器 cookie / 桌面 Bearer),**一个请求只走一条**;网关 `/gateway/*` 只认令牌;
    - 网关第 1 步只有 `GET /gateway/me`(这枚令牌是谁、哪台设备),目录与对话随第 2 步加;
    - 供应商列表顶上的「Mosael Cloud」那一行跟着登录走、不可增删;部署关掉 Cloud 时不出现。
-2. **抽包 + 目录 + 对话 + 积分**:先把 `backend/app/ai/providers` 抽成 `packages/mosael-providers`(桌面后端改依赖它、行为不变),网关才能复用对话适配器;`plans` / `subscriptions` / `credit_batches` / `usage_entries`(模型卡等生成类上了再加);
-   网关 `/catalog`、`/chat`,`upstream_channels` 接 2–3 家对话模型;套餐先由管理员手动开通(不接支付),给内测用户。
+2. **目录 + 对话 + 积分**:`plans` / `subscriptions` / `credit_batches` / `usage_entries`,外加模型目录与带生效时间的积分单价
+   (`gateway_models` / `model_prices`)、`upstream_channels`(模型卡等生成类上了再加);网关 `/catalog`、`/chat`(OpenAI 兼容流式转发,
+   预占 → 结算 → 释放,429 / 5xx / 超时在开始计费前换通道并冷却);套餐先由管理员用 `cloud.cli` 手动开通(不接支付),给内测用户。
+   月度发放与到期清零**在读余额 / 预占时按需补记**,不依赖定时任务。
 3. **支付**:国内二维码预付、国际代收方订阅;订单、回调、发放与续期。
-4. **生成类**:网关 `/jobs` 接图片 / 视频 / 配音 / 音乐,按秒 / 张扣积分;`plan_card_grants` / `model_cards` 随之上线。
+4. **抽包 + 生成类**:先把 `backend/app/ai/providers` 抽成 `packages/mosael-providers`(桌面后端改依赖它、行为不变;要一并带走
+   出网守卫与中止、i18n 文案键、媒体传输这几样底座),网关 `/jobs` 再接图片 / 视频 / 配音 / 音乐,按秒 / 张扣积分;
+   `plan_card_grants` / `model_cards` 随之上线。
 5. **上线前**:审核、标识、日志留存、投诉入口、用户协议与隐私政策;先内测,再开放。
 
 ## 待拍板

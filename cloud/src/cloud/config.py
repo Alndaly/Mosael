@@ -89,6 +89,9 @@ class CloudConfig:
     #: 官方号的密码。**空 = 不改密码**:新账号因此没有密码(密码登录 401),不是启动错误。
     #: 非空时短于 `password_min_length` 直接让配置构造失败 —— 不静默接受一个弱密码。
     official_password: str = ""
+    #: 上游通道 API Key 的落库加密钥(Fernet,`python -m cloud.cli channel-key` 生成)。**空 = 网关没配置**:
+    #: 对话接口明确回 503 `gateway_not_configured`,加通道的命令拒绝执行 —— 不把 Key 明文落库。
+    channel_key: str = ""
     #: 从 `public_url` 推出来的同源校验名单(允许的 Origin)。
     #: 允许的 Origin。**默认就是 `public_url` 的那一个**;本地开发时官网(3100)和桌面后端(8000)
     #: 都要来调接口,而它们不是同一个 Origin —— 用 `CLOUD_ALLOWED_ORIGINS` 显式列出来。
@@ -190,5 +193,6 @@ class CloudConfig:
             # 密码**不 strip**:前后空格就是密码的一部分,原样交给 hash_password。
             official_handle=os.environ.get("CLOUD_OFFICIAL_HANDLE", "").strip() or "mosael",
             official_email=os.environ.get("CLOUD_OFFICIAL_EMAIL", "").strip() or "official@mosael.example",
+            channel_key=os.environ.get("CLOUD_CHANNEL_KEY", "").strip(),
             official_password=os.environ.get("CLOUD_OFFICIAL_PASSWORD", ""),
         )

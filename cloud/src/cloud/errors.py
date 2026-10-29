@@ -200,6 +200,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The device name must be 1–{max} characters.",
         "zh": "设备名需要 1–{max} 个字符。",
     },
+    "insufficient_credits": {
+        "en": "Not enough credits: this call needs up to {needed}, you have {available}.",
+        "zh": "积分不够:这次调用最多需要 {needed},你还有 {available}。",
+    },
+    "gateway_not_configured": {
+        "en": "The MosaelCloud relay is not set up on this deployment yet.",
+        "zh": "这个部署还没有配置 MosaelCloud 官方中转。",
+    },
+    "gateway_model_unknown": {
+        "en": "MosaelCloud does not offer that model, or it is not available right now.",
+        "zh": "MosaelCloud 没有这个模型,或者它暂时不可用。",
+    },
+    "gateway_max_tokens_too_large": {
+        "en": "This model generates at most {max} tokens per call.",
+        "zh": "这个模型一次最多生成 {max} 个 token。",
+    },
+    "upstream_unavailable": {
+        "en": "The model service is busy or unreachable right now. No credits were used; try again in a moment.",
+        "zh": "模型服务这会儿忙或连不上,这次没有扣积分,请稍后再试。",
+    },
+    "upstream_rejected": {
+        "en": "The model service rejected the request: {detail}",
+        "zh": "模型服务拒绝了这次请求:{detail}",
+    },
     "not_found": {
         "en": "No such endpoint.",
         "zh": "没有这个接口。",
@@ -223,11 +247,16 @@ def message(code: str, **params: object) -> dict[str, str]:
 class CloudError(Exception):
     """一次可以照着说的失败:HTTP 状态 + 机器码 + 中英文各一句。"""
 
-    def __init__(self, status_code: int, code: str, **params: object) -> None:
+    def __init__(self, status_code: int, code: str, *, details: dict[str, object] | None = None, **params: object) -> None:
         self.status_code = status_code
         self.code = code
         self.message = message(code, **params)
+        #: 给程序看的数(如积分不够时差多少、下一批何时发):界面要自己排版时用,不必去拆那句话。
+        self.details = details or {}
         super().__init__(f"{code}: {self.message['en']}")
 
     def body(self) -> dict[str, object]:
-        return {"error": self.code, "message": self.message}
+        body: dict[str, object] = {"error": self.code, "message": self.message}
+        if self.details:
+            body["details"] = self.details
+        return body

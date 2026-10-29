@@ -5,6 +5,9 @@
     uv run python -m cloud.cli stamp 0001         把 create_all 时代的库标到基线(一次性)
     uv run python -m cloud.cli seed-official --bundle official-bundle.json   补官方账号的分享(幂等)
 
+官方中转的套餐、目录、上游通道命令见 `cloud/relay_admin.py`(channel-key、plan-set、subscribe、gift、model-set、
+price-set、channel-add、channel-list、balance)。
+
 配置从 `CLOUD_*` 环境变量读,和 uvicorn 启动时同一份(见 `cloud/config.py`)。
 """
 
@@ -14,6 +17,8 @@ import argparse
 import sys
 
 from cloud.config import CloudConfig
+from cloud.db import Database
+from cloud.relay_admin import AdminError, register
 from cloud.schema import stamp_database, upgrade_database
 
 
@@ -41,6 +46,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     seed.add_argument("--bundle", required=True, help="bundle JSON 的路径")
 
+    register(commands)
+
     args = parser.parse_args(argv)
     try:
         config = load_config()
@@ -49,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"配置错误: {exc}", file=sys.stderr)
         return 2
     url = config.resolved_database_url
+    if hasattr(args, "relay"):
+        return _run_relay(args, config, url)
     if args.command == "migrate":
         upgrade_database(url, args.revision)
         print(f"数据库已升级到 {args.revision}")
@@ -73,6 +82,27 @@ def main(argv: list[str] | None = None) -> int:
             print(f"种子命令失败: {exc}", file=sys.stderr)
             return 2
         print(report.summary())
+    return 0
+
+
+def _run_relay(args: argparse.Namespace, config: CloudConfig, url: str) -> int:
+    """官方中转的运维命令:先把库升到最新(和 uvicorn 启动一样),在一个事务里做完、提交。"""
+    if not getattr(args, "needs_db", True):
+        print(args.relay(args, config, None))
+        return 0
+    upgrade_database(url)
+    database = Database(url)
+    try:
+        with database.session() as db:
+            try:
+                print(args.relay(args, config, db))
+            except AdminError as exc:
+                db.rollback()
+                print(f"没做: {exc}", file=sys.stderr)
+                return 2
+            db.commit()
+    finally:
+        database.dispose()
     return 0
 
 

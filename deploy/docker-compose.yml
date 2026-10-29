@@ -65,6 +65,8 @@ services:
       CLOUD_OFFICIAL_HANDLE: ${CLOUD_OFFICIAL_HANDLE:-mosael}
       CLOUD_OFFICIAL_EMAIL: ${CLOUD_OFFICIAL_EMAIL:-official@mosael.example}
       CLOUD_OFFICIAL_PASSWORD: ${CLOUD_OFFICIAL_PASSWORD:-}
+      # 官方中转网关:上游 API Key 的落库加密钥(见 .env.example)。不设 = 网关对话不可用。
+      CLOUD_CHANNEL_KEY: ${CLOUD_CHANNEL_KEY:-}
     # 只绑回环:宿主机 nginx 的 /api/cloud/ 指向 127.0.0.1:${CLOUD_PORT}。
     ports:
       - "127.0.0.1:${CLOUD_PORT:-8901}:8000"
