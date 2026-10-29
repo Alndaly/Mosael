@@ -26,6 +26,7 @@ import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent
 import { ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
 import { IconButton } from "@/components/ui/icon-button";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
+import { OpenInWorkbenchIcon } from "@/features/plugins/workbench/OpenInWorkbenchIcon";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1213,6 +1214,18 @@ export function NodeComposer({
             )}
           </>
         )
+      }
+      beyondSettings={
+        /* 选的是某台 ComfyUI 上的一张工作流:「参数」只装表单那几项,整张图在工作台里调(ADR 0038) */
+        current?.plugin_instance_id ? (
+          <OpenInWorkbenchIcon
+            key={`${current.plugin_instance_id}:${current.model}`}
+            instanceId={current.plugin_instance_id}
+            path={current.group?.id ?? current.model}
+            form={current.group?.entry === "form" ? current.model : null}
+            workspaceId={workspaceId}
+          />
+        ) : null
       }
       settings={
         options.length > 0 && hasSettings

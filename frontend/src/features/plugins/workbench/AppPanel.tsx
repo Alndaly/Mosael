@@ -35,8 +35,10 @@ import { WorkbenchCallError, type WorkbenchTarget } from "@/features/plugins/wor
  * 不写文件,存盘是 ComfyUI 自己的保存(顶栏的「保存」或在画布里 Ctrl+S),和用户在 ComfyUI 里改别的东西是同一次保存。
  * 写完重新读一遍画布:新表单的 id 是插件起的,下次再写带着它,不会又起一个。
  */
-export function AppPanel({ target, workflowKey, path = "", canvasModified, canExport, canMark }: {
+export function AppPanel({ target, workflowKey, path = "", canvasModified, canExport, canMark, focusModel = "" }: {
   target: WorkbenchTarget;
+  /** 打开时点名的那张表单(它的模型 id):第一次读回来时选中它,而不是第一张 */
+  focusModel?: string;
   /** 画布上现在开着的那张认哪个 key(轮询报的;改名、第一次存盘跟着变):草稿只写给它,写的那一刻画布上换了一张就不写 */
   workflowKey: string;
   /** 画布开的是哪张(存过的路径;新建没存的是空串):插件据此说出每张表单的模型 id 和工具名,删之前数在用的几处 */
@@ -62,7 +64,8 @@ export function AppPanel({ target, workflowKey, path = "", canvasModified, canEx
       //: 读回来之后还停在原来那张(按位置认:新表单写进去之后有了 id,它的 key 换了)
       setSelected((was) => {
         const at = draft?.forms.findIndex((one) => one.key === was) ?? -1;
-        return fresh.forms[at]?.key ?? fresh.forms.find((one) => one.key === was)?.key ?? fresh.forms[0]?.key ?? "";
+        const focused = was ? undefined : fresh.forms.find((one) => focusModel && one.model === focusModel)?.key;
+        return focused ?? fresh.forms[at]?.key ?? fresh.forms.find((one) => one.key === was)?.key ?? fresh.forms[0]?.key ?? "";
       });
     },
   });

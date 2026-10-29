@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 
 /**
- * AI 工作台里选中的模型旁边的「在工作台里打开」(ADR 0038 §8):这个模型是那个连接的工作流库里的一张 ComfyUI 工作流、桌面版
- * 开得了工作台时才有;点了开的就是那一张。不是工作流的模型、插件没报 ComfyUI 编辑器的、网页版,都不摆。
+ * AI 工作台里选中的模型旁边的「在工作台里打开」(ADR 0038 §8):这个模型来自一个认领了工作流库的连接、桌面版开得了工作台时
+ * 就摆;点了开的就是那一张。**摆不摆不看现问的工作流库** —— 它读不回来(本机服务停着、目录太大、超时)时按钮曾悄悄消失。
+ * 没认领工作流库的连接、网页版,都不摆。
  */
 
 import React from "react";
@@ -10,7 +11,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ getWorkflowLibrary: vi.fn(), getLocalService: vi.fn(), ensureLocalService: vi.fn() }));
+const api = vi.hoisted(() => ({
+  getWorkflowLibrary: vi.fn(), getLocalService: vi.fn(), ensureLocalService: vi.fn(), listPluginPackages: vi.fn(),
+}));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
@@ -21,15 +24,24 @@ function mount(model = "人像/古风.json") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <OpenInWorkbench instanceId="i1" instanceName="ComfyUI · 本机" path={model} workspaceId="w1" />
+      <OpenInWorkbench instanceId="i1" path={model} workspaceId="w1" />
     </QueryClientProvider>,
   );
+}
+
+function comfyPackage(provides = ["workflow_library"]) {
+  return {
+    provides, summary_field: "base_url",
+    instances: [{ id: "i1", name: "ComfyUI · 本机", config: { base_url: "http://127.0.0.1:8189" }, blocked_reason: null }],
+  };
 }
 
 beforeEach(() => {
   api.getLocalService.mockReset();
   api.getLocalService.mockResolvedValue(null);
   api.ensureLocalService.mockReset();
+  api.listPluginPackages.mockReset();
+  api.listPluginPackages.mockResolvedValue([comfyPackage()]);
   api.getWorkflowLibrary.mockReset();
   api.getWorkflowLibrary.mockResolvedValue({
     workflows: [{ path: "人像/古风.json" }], editor: { kind: "comfyui", url: "http://127.0.0.1:8188" },
@@ -52,21 +64,46 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     expect(api.getWorkflowLibrary).toHaveBeenCalledWith("i1", "w1");
   });
 
-  it("不是工作流的模型、插件没报 ComfyUI 编辑器、网页版:都不摆", async () => {
+  it("工作流库读不回来(本机服务停着、目录太大):照样摆,地址退到连接自己写的那个", async () => {
+    api.getWorkflowLibrary.mockRejectedValue(new Error("output budget exceeded"));
+    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith({
+      connectionId: "i1", url: "http://127.0.0.1:8189", name: "ComfyUI · 本机", path: "人像/古风.json",
+    }));
+  });
+
+  it("摆出来之前不去现问工作流库", async () => {
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench: vi.fn(), onComfyWorkbench: () => () => undefined });
-    const builtin = mount("__builtin__");
-    await waitFor(() => expect(api.getWorkflowLibrary).toHaveBeenCalled());
+    mount();
+    expect(await screen.findByRole("button", { name: "workflowOpenInWorkbench" })).toBeTruthy();
+    expect(api.getWorkflowLibrary).not.toHaveBeenCalled();
+  });
+
+  it("插件报的编辑器不是 ComfyUI:点了说打不开,不乱开", async () => {
+    api.getWorkflowLibrary.mockResolvedValue({ workflows: [], editor: { kind: "other", url: "http://x" } });
+    const openComfyWorkbench = vi.fn();
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(openComfyWorkbench).not.toHaveBeenCalled();
+  });
+
+  it("没认领工作流库的连接、网页版:都不摆", async () => {
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench: vi.fn(), onComfyWorkbench: () => () => undefined });
+    api.listPluginPackages.mockResolvedValue([comfyPackage([])]);
+    const noLibrary = mount();
+    await waitFor(() => expect(api.listPluginPackages).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "workflowOpenInWorkbench" })).toBeNull();
-    builtin.unmount();
-    api.getWorkflowLibrary.mockResolvedValue({ workflows: [{ path: "人像/古风.json" }], editor: null });
-    const noEditor = mount();
-    await waitFor(() => expect(api.getWorkflowLibrary).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole("button", { name: "workflowOpenInWorkbench" })).toBeNull();
-    noEditor.unmount();
+    noLibrary.unmount();
     vi.unstubAllGlobals();
+    api.listPluginPackages.mockClear();
     mount();
     expect(screen.queryByRole("button", { name: "workflowOpenInWorkbench" })).toBeNull();
-    expect(api.getWorkflowLibrary, "网页版不去问").toHaveBeenCalledTimes(2);
+    expect(api.listPluginPackages, "网页版不去问").not.toHaveBeenCalled();
   });
 
   it("连接背后是停着的本机服务:先请宿主起好,按钮上写「正在启动」,就绪了才开", async () => {

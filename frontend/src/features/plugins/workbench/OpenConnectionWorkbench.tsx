@@ -8,6 +8,7 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { IconButton } from "@/components/ui/icon-button";
 import { explainOpenFailure } from "@/features/plugins/localServiceStatus";
+import { connectionAddress, hasWorkflowEditor } from "@/features/plugins/workbench/workbenchAddress";
 import { openWorkbench, workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
 
 /**
@@ -41,7 +42,7 @@ export function OpenConnectionWorkbench({
   const t = useI18n();
   const embedded = workbenchAvailable();
   //: 认领了工作流库的连接才有编辑界面(ADR 0035),才有「进它的界面」这回事
-  const hasEditor = (pkg.provides ?? []).includes("workflow_library");
+  const hasEditor = hasWorkflowEditor(pkg);
   const library = useQuery({
     queryKey: ["workflow-library", instance.id, workspaceId],
     queryFn: () => getWorkflowLibrary(instance.id, workspaceId),
@@ -108,19 +109,3 @@ export function OpenConnectionWorkbench({
   );
 }
 
-/**
- * 这个连接自己写的地址(清单的 `summary_field`;本机服务的连接是宿主写进去的那个)。**原样用**:不改写、不拼路径 ——
- * 只认能直接打开的 http(s),别的当没有(那就不摆能点的按钮,并说为什么)。
- */
-function connectionAddress(pkg: PluginPackage, instance: PluginInstance): string {
-  const key = pkg.summary_field ?? "";
-  if (!key) return "";
-  const raw = String(((instance.config ?? {}) as Record<string, unknown>)[key] ?? "").trim();
-  if (!raw) return "";
-  try {
-    const parsed = new URL(raw);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? raw : "";
-  } catch {
-    return "";
-  }
-}

@@ -1690,8 +1690,8 @@ export function GenerateWorkspace({
                 <OpenInWorkbench
                   key={`${selectedModel.plugin_instance_id}:${selectedModel.model}`}
                   instanceId={selectedModel.plugin_instance_id}
-                  instanceName={selectedModel.profile_name || selectedModel.provider}
                   path={selectedModel.group?.id ?? selectedModel.model}
+                  form={selectedModel.group?.entry === "form" ? selectedModel.model : null}
                   workspaceId={workspace.id}
                 />
               )}

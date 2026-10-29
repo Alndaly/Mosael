@@ -157,9 +157,9 @@ function desktop() {
   return { ...bridges, comfyWorkbench, emit, viewUp };
 }
 
-async function mount(first: ComfyWorkbenchState | null = state(), extra: React.ReactNode = null) {
+async function mount(first: ComfyWorkbenchState | null = state(), extra: React.ReactNode = null, form: string | null = null) {
   const bridge = desktop();
-  await openWorkbench(TARGET, { path: "人像/古风.json" });
+  await openWorkbench(TARGET, { path: "人像/古风.json", form });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
@@ -234,6 +234,17 @@ afterEach(async () => {
 });
 
 describe("ComfyUI 工作台", () => {
+  it("从某张表单的入口打开(创作页、画板节点):直接到「表单」页,选中的是那一张,不是第一张", async () => {
+    const form = (id: string, title: string) => ({ id, title, description: "", fields: 1, invalid: 0,
+                                                   model: `人像/古风.json#${id}`, tool: "", items: [] });
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "2", upgradable: false, results: [], invalid: 0,
+                                                        stray: 0, forms: [form("a1", "全身"), form("b2", "半身")] } }));
+    await mount(state(), null, "人像/古风.json#b2");
+    expect(await screen.findByRole("tab", { name: "workbenchTabApp", selected: true })).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: "半身", selected: true })).toBeTruthy();
+  });
+
+
   it("顶栏:连接、工作流名、没存的改动;右边那一列开着时网页让出那么宽;会话结束就不画了", async () => {
     const bridge = await mount(null);
     expect(bridge.mosaelBrowser.openComfyWorkbench).toHaveBeenCalledWith({

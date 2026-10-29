@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
  *   │ [上游芯片] [挂上的素材]          │  ← upstream(可选):连进来的东西,一排芯片
  *   │ 提示词 / 要念的字 / 剪辑轨 …      │  ← children:正文
  *   ├───────────────────────────────┤
- *   │ 模型▾ 目标语言▾  ⚙参数     (↑)  │  ← bar + settings + trailing + send:钉在底边
+ *   │ 模型▾ 目标语言▾  ⚙参数 ▣  (↑)  │  ← bar + settings + beyondSettings + trailing + send:钉在底边
  *   └───────────────────────────────┘
  *
  * **正文滚、底栏钉住**(`grid-rows-[minmax(0,1fr)_auto]`,两个轴都声明 —— 见 design/gridAxes):展开得再多,
@@ -69,6 +69,7 @@ export function BoardComposerShell({
   children,
   bar,
   settings,
+  beyondSettings,
   trailing,
   send,
   onPaste,
@@ -86,6 +87,8 @@ export function BoardComposerShell({
   bar?: React.ReactNode;
   /** 其余设置:收进「参数」弹层。`attention` = 里面有必填的还空着(按钮上一个点)。 */
   settings?: { content: React.ReactNode; attention?: boolean } | null;
+  /** 紧挨「参数」的那一格:弹层装不下、要到别处整套调的入口(ComfyUI 工作流 → 在工作台里打开)。 */
+  beyondSettings?: React.ReactNode;
   /** 发送键左边那一小格(一次几张)。 */
   trailing?: React.ReactNode;
   /** 圆形的发送键。不给 = 这会儿发不了(没有模型、工具用不了),底栏只留说明。 */
@@ -126,6 +129,7 @@ export function BoardComposerShell({
         <div data-board-composer-bar="" className="flex min-w-0 items-center gap-1 border-t border-divider px-3 py-2">
           {bar}
           {settings ? <SettingsButton attention={Boolean(settings.attention)}>{settings.content}</SettingsButton> : null}
+          {beyondSettings}
           <span className="ml-auto flex shrink-0 items-center gap-1">
             {trailing}
             {send ? <SendButton {...send} /> : null}

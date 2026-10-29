@@ -39,8 +39,17 @@ export interface WorkbenchRun {
   labels: [string, string][];
 }
 
+/**
+ * 打开时点名要看的那张表单(表单入口的模型 id,ADR 0045):工作台切到「表单」页、选中它。每次打开是一个新对象 ——
+ * 同一张表单再点一次也要再切一次(人可能已经切去了别的页签)。
+ */
+export interface WorkbenchFormFocus {
+  model: string;
+}
+
 export interface WorkbenchSnapshot {
   target: WorkbenchTarget | null;
+  focus: WorkbenchFormFocus | null;
   state: ComfyWorkbenchState | null;
   /** 画布上跑的事件(最近的若干条) */
   events: ComfyWorkbenchEvent[];
@@ -48,7 +57,7 @@ export interface WorkbenchSnapshot {
 }
 
 const MAX_EVENTS = 400;
-const EMPTY: WorkbenchSnapshot = { target: null, state: null, events: [], runs: [] };
+const EMPTY: WorkbenchSnapshot = { target: null, focus: null, state: null, events: [], runs: [] };
 
 let snapshot: WorkbenchSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -140,13 +149,13 @@ export type WorkbenchOpenOutcome = "opened" | "created" | "missing" | "unsupport
  */
 export async function openWorkbench(
   target: WorkbenchTarget,
-  open: { path?: string | null; fresh?: boolean } = {},
+  open: { path?: string | null; fresh?: boolean; form?: string | null } = {},
   onStarting: () => void = () => {},
 ): Promise<{ ok: true; outcome: WorkbenchOpenOutcome } | { ok: false; error: string }> {
   await readyLocalService(target.instanceId, onStarting);
   listen();
   const same = snapshot.target?.instanceId === target.instanceId;
-  set({ ...EMPTY, target, runs: same ? snapshot.runs : [] });
+  set({ ...EMPTY, target, focus: open.form ? { model: open.form } : null, runs: same ? snapshot.runs : [] });
   const result = await window.mosaelBrowser!.openComfyWorkbench({
     connectionId: target.instanceId,
     url: target.url,

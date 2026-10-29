@@ -5,6 +5,7 @@
 // 此前这一段写在 publish/publishWorker 里,RPA 动作「工作台调用」为此要 import 发布执行器。
 import type { BaseWindow } from "electron";
 
+import { plog } from "../log";
 import { hostedViews, openPoolLogin } from "../views/viewHost";
 import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
 import type { ComfyNavigation, NavigationOutcome } from "./comfyNavigation";
@@ -55,8 +56,15 @@ export async function openComfyWorkbench(opts: {
   const driver = await showComfyView(opts);
   if (!driver || !workbench) return "notReady";
   workbench.start(opts.partition, new URL(opts.url).origin);
-  if (opts.path) return openWorkflowInPage(driver, { url: opts.url, path: opts.path });
-  if (opts.fresh) return newWorkflowInPage(driver, { url: opts.url });
+  //: 到这里视图已经亮着、会话已经开始:打开那一张 / 新建没做成(页面里的脚本超时、抛错)是**这一步的结果**,不是整次失败。
+  //: 抛回去的话渲染层会撤掉工作台会话,而视图还亮着 —— 只剩普通内嵌浏览器的顶栏、ComfyUI 停在上次那一页(维护者报的)。
+  try {
+    if (opts.path) return await openWorkflowInPage(driver, { url: opts.url, path: opts.path });
+    if (opts.fresh) return await newWorkflowInPage(driver, { url: opts.url });
+  } catch (error) {
+    plog("[comfy] workbench is up but opening the workflow failed", opts.path ?? "(new)", error);
+    return "notReady";
+  }
   return "opened";
 }
 

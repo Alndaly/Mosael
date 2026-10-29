@@ -133,8 +133,12 @@ function useSameWorkflowKey(workflowKey: string): string {
  */
 export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const t = useI18n();
-  const { target, state, events, runs } = useWorkbench();
+  const { target, focus, state, events, runs } = useWorkbench();
   const [tab, setTab] = usePersistentTab<Tab>("comfy-workbench.tab", "models", TABS);
+  //: 从某张表单的入口打开的(创作页、画板节点):直接到「表单」页,AppPanel 选中那一张
+  React.useEffect(() => {
+    if (focus) setTab("app");
+  }, [focus, setTab]);
   const [open, setOpen] = usePersistentTab<"open" | "closed">("comfy-workbench.column", "open", ["open", "closed"]);
   //: 去过的面板留着(切回来不重读、跑的进度不断)
   const [visited, setVisited] = React.useState<Set<Tab>>(() => new Set([tab]));
@@ -384,6 +388,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
             )}
             {one === "app" && (
               <AppPanel key={formsKey} target={target} workflowKey={workflowKey} path={path} canvasModified={Boolean(workflow?.modified)}
+                        focusModel={focus?.model ?? ""}
                         canExport={capabilities ? capabilities.export : false}
                         canMark={capabilities ? capabilities.marks : false} />
             )}

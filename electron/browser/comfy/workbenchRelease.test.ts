@@ -35,6 +35,7 @@ vi.mock("./comfyEditor", () => ({ comfyReady: () => "true", openWorkflowInPage: 
 vi.mock("../log", () => ({ plog: vi.fn() }));
 
 import { openPoolLogin, startViewHost, stopViewHost } from "../views/viewHost";
+import { openWorkflowInPage } from "./comfyEditor";
 import { comfyWorkbenchCall, openComfyWorkbench, releaseWorkbenchView, startComfyHost, stopComfyHost } from "./comfyHost";
 
 const PARTITION = "persist:pool-comfyui-c1";
@@ -82,4 +83,14 @@ it("前台是普通网页(没有工作台会话):留着,它的顶栏照补播的
 it("什么都没亮着:什么都不做", () => {
   releaseWorkbenchView();
   expect(mocks.views.hide).not.toHaveBeenCalled();
+});
+
+it("视图已经亮着、打开那一张时页面脚本超时:是这一步没成(notReady),工作台会话留着 —— 不抛回去让渲染层撤掉工作台、只剩浏览器顶栏", async () => {
+  vi.mocked(openWorkflowInPage).mockRejectedValueOnce(new Error("evaluate timed out after 60000ms"));
+  const outcome = await openComfyWorkbench({
+    partition: PARTITION, url: "http://127.0.0.1:28188", name: "ComfyUI", path: "田园/krea2.json", fresh: false,
+  });
+  expect(outcome).toBe("notReady");
+  expect(mocks.views.visibleAccountId).toBe(PARTITION);
+  expect((await comfyWorkbenchCall({ partition: PARTITION, call: { op: "readGraph" } })).ok, "工作台会话还在").toBe(true);
 });
