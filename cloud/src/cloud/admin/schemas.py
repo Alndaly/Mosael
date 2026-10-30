@@ -25,7 +25,6 @@ class SubscribeIn(BaseModel):
 
 
 class ModelIn(BaseModel):
-    id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9._-]*$")
     label: str = Field(min_length=1, max_length=80)
     max_output_tokens: int = Field(gt=0, le=1_000_000)
     sort_order: int = 0

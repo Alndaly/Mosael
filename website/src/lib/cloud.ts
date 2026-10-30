@@ -526,6 +526,7 @@ export type AdminUser = {
 export type AdminModel = {
   id: string;
   label: string;
+  display_label: string;
   kind: string;
   max_output_tokens: number;
   enabled: boolean;
@@ -550,6 +551,7 @@ export type AdminProvider = {
 export type AdminChannel = {
   id: string;
   model_id: string;
+  model_label: string;
   provider_id: string;
   provider_name: string;
   base_url: string;
@@ -588,7 +590,7 @@ export type AdminUsage = {
   days: number;
   totals: { calls: number; charged: number; input_tokens: number; output_tokens: number };
   by_day: { date: string; calls: number; charged: number }[];
-  by_model: { model_id: string; calls: number; charged: number }[];
+  by_model: { model_id: string; label: string; calls: number; charged: number }[];
 };
 
 export type AdminAudit = {
@@ -613,7 +615,6 @@ export type AdminChannelTest = {
 };
 
 export type AdminModelInput = {
-  id?: string;
   label: string;
   max_output_tokens: number;
   sort_order: number;
@@ -649,7 +650,7 @@ export const cloudAdmin = {
   models: () => request<{ models: AdminModel[] }>("/admin/models"),
   createModel: (body: AdminModelInput) =>
     request<{ model: AdminModel }>("/admin/models", { method: "POST", body: JSON.stringify(body) }),
-  updateModel: (id: string, body: Omit<AdminModelInput, "id">) =>
+  updateModel: (id: string, body: AdminModelInput) =>
     request<{ model: AdminModel }>(`/admin/models/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(body),

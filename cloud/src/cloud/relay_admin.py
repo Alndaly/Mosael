@@ -30,7 +30,15 @@ from cloud.domain import admin, catalog, credits
 from cloud.domain.channel_keys import new_channel_key
 from cloud.mfa import new_fernet_key
 from cloud.payments.base import cents_from_yuan, yuan
-from cloud.models import CloudGatewayModel, CloudPlan, CloudUpstreamChannel, CloudUpstreamProvider, CloudUser, now
+from cloud.models import (
+    CloudGatewayModel,
+    CloudPlan,
+    CloudUpstreamChannel,
+    CloudUpstreamProvider,
+    CloudUser,
+    new_id,
+    now,
+)
 
 
 class AdminError(Exception):
@@ -66,13 +74,16 @@ def register(commands: argparse._SubParsersAction) -> None:
     gift.add_argument("--note", default="")
     gift.set_defaults(relay=_gift)
 
-    model = commands.add_parser("model-set", help="新建或修改网关目录里的一个对话模型")
-    model.add_argument("--id", required=True, help="对外的模型 id,桌面端选的就是它")
+    model = commands.add_parser("model-set", help="新增模型或按系统 ID 修改;新增时 ID 由系统生成")
+    model.add_argument("--id", help="已存在模型的系统 ID;新建时留空")
     model.add_argument("--label", required=True)
     model.add_argument("--max-output-tokens", required=True, type=int)
     model.add_argument("--sort", type=int, default=0)
     model.add_argument("--disable", action="store_true")
     model.set_defaults(relay=_model_set)
+
+    model_list = commands.add_parser("model-list", help="列出模型:系统 ID 与展示名")
+    model_list.set_defaults(relay=_model_list)
 
     price = commands.add_parser("price-set", help="给模型定积分单价(加一行,带生效时间;不改旧价)")
     price.add_argument("--model", required=True)
@@ -171,9 +182,36 @@ def _gift(args, _config: CloudConfig, db: Session) -> str:
 def _model_set(args, _config: CloudConfig, db: Session) -> str:
     if args.max_output_tokens <= 0:
         raise AdminError("--max-output-tokens 要大于 0")
-    catalog.upsert_model(db, model_id=args.id, label=args.label, kind="chat", max_output_tokens=args.max_output_tokens,
-                         enabled=not args.disable, sort_order=args.sort)
-    return f"模型 {args.id}({args.label}),一次最多 {args.max_output_tokens} token,{'停用' if args.disable else '启用'}"
+    model_id = args.id or new_id()
+    model = catalog.upsert_model(
+        db,
+        model_id=model_id,
+        label=args.label,
+        kind="chat",
+        max_output_tokens=args.max_output_tokens,
+        enabled=not args.disable,
+        sort_order=args.sort,
+    )
+    labels = catalog.display_labels(db.scalars(select(CloudGatewayModel)).all())
+    return (
+        f"模型 {model.id}({labels.get(model.id, model.label)}),一次最多 {model.max_output_tokens} token,"
+        f"{'停用' if args.disable else '启用'}"
+    )
+
+
+def _model_list(_args, _config: CloudConfig, db: Session) -> str:
+    rows = db.scalars(
+        select(CloudGatewayModel).order_by(
+            CloudGatewayModel.sort_order, CloudGatewayModel.label, CloudGatewayModel.created_at, CloudGatewayModel.id
+        )
+    ).all()
+    if not rows:
+        return "还没有模型"
+    labels = catalog.display_labels(rows)
+    return "\n".join(
+        f"{one.id}  {labels.get(one.id, one.label)}  {'启用' if one.enabled else '停用'}"
+        for one in rows
+    )
 
 
 def _price_set(args, _config: CloudConfig, db: Session) -> str:

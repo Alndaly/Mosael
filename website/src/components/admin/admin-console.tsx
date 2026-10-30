@@ -406,10 +406,10 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
       <Card className="bg-card/60 ring-border">
         <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabModels}</CardTitle><AButton onClick={() => setDialog({ model: null })}>{copy.addModel}</AButton></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.currentPrice}</TableHead><TableHead>{copy.channelsCount}</TableHead><TableHead>{copy.listed}</TableHead><TableHead /></TableRow></TableHeader>
+          <Table><TableHeader><TableRow><TableHead>{copy.label}</TableHead><TableHead>{copy.currentPrice}</TableHead><TableHead>{copy.channelsCount}</TableHead><TableHead>{copy.listed}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{models.map((model) => (
               <TableRow key={model.id}>
-                <TableCell><strong className="block">{model.id}</strong><span className="text-xs text-muted-foreground">{model.label}</span></TableCell>
+                <TableCell><strong className="block">{model.display_label}</strong><span className="text-xs text-muted-foreground">{model.max_output_tokens} token</span></TableCell>
                 <TableCell>{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</TableCell>
                 <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
                 <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.join(", ")}</Badge></TableCell>
@@ -429,7 +429,6 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
 function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   copy: Messages["admin"]; model: AdminModel | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
-  const [id, setId] = useState(model?.id ?? "");
   const [label, setLabel] = useState(model?.label ?? "");
   const [max, setMax] = useState(String(model?.max_output_tokens ?? 8000));
   const [sort, setSort] = useState(String(model?.sort_order ?? 0));
@@ -437,15 +436,14 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   const submit = async () => {
     try {
       if (model) await cloudAdmin.updateModel(model.id, { label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
-      else await cloudAdmin.createModel({ id, label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
+      else await cloudAdmin.createModel({ label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
       onSaved();
     } catch (failure) { onFailure(failure); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model ? model.id : copy.modelCreateDesc}</DialogDescription></DialogHeader>
+      <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model ? copy.modelEditDesc : copy.modelCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!model && <Field label={copy.id}><AInput value={id} onChange={(event) => setId(event.target.value)} /></Field>}
           <Field label={copy.label}><AInput value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
           <Field label={copy.maxOutput}><AInput value={max} onChange={(event) => setMax(event.target.value)} /></Field>
           <Field label={copy.sort}><AInput value={sort} onChange={(event) => setSort(event.target.value)} /></Field>
@@ -472,7 +470,7 @@ function PriceDialog({ copy, model, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{copy.addPrice}</DialogTitle><DialogDescription>{model.id}</DialogDescription></DialogHeader>
+      <DialogContent><DialogHeader><DialogTitle>{copy.addPrice}</DialogTitle><DialogDescription>{model.display_label}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           <Field label={copy.inputPer1k}><AInput value={input} onChange={(event) => setInput(event.target.value)} /></Field>
           <Field label={copy.outputPer1k}><AInput value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
@@ -583,10 +581,10 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
       <Card className="bg-card/60 ring-border">
         <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabChannels}</CardTitle><AButton onClick={() => setDialog({ channel: null })}>{copy.addChannel}</AButton></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.provider}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead>{copy.enabled}</TableHead><TableHead /></TableRow></TableHeader>
+          <Table><TableHeader><TableRow><TableHead>{copy.label}</TableHead><TableHead>{copy.provider}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead>{copy.enabled}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{channels.map((channel) => (
               <TableRow key={channel.id}>
-                <TableCell><strong className="block">{channel.model_id}</strong><span className="text-xs text-muted-foreground">{channel.upstream_model}</span></TableCell>
+                <TableCell><strong className="block">{channel.model_label}</strong><span className="text-xs text-muted-foreground">{channel.upstream_model}</span></TableCell>
                 <TableCell><strong className="block">{channel.provider_name}</strong><span className="block max-w-72 truncate text-xs text-muted-foreground">{channel.base_url}</span></TableCell>
                 <TableCell>{channel.priority}</TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
@@ -623,7 +621,7 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{copy.channelProviderHint}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
+          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.display_label}</SelectItem>)}</SelectContent></Select></Field>}
           {!channel && <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><SelectContent>{providers.map((one) => <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>)}</SelectContent></Select></Field>}
           {!channel && models.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noModelForChannel}</p>}
           {!channel && providers.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noProviderForChannel}</p>}
@@ -661,7 +659,7 @@ function ChannelEnabledSwitch({ copy, channel, onChanged, onFailure }: {
       setBusy(false);
     }
   };
-  return <Switch checked={channel.enabled} disabled={busy} onCheckedChange={(enabled) => void toggle(enabled)} aria-label={`${copy.enabled}: ${channel.model_id}`} />;
+  return <Switch checked={channel.enabled} disabled={busy} onCheckedChange={(enabled) => void toggle(enabled)} aria-label={`${copy.enabled}: ${channel.model_label}`} />;
 }
 
 function PlansPanel({ copy, plans, onChanged, onFailure }: {
@@ -707,6 +705,7 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
       <DialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan ? plan.slug : copy.planCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           {!plan && <Field label={copy.slug}><AInput value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>}
+          {!plan && <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.slugHint}</p>}
           <Field label={copy.label}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
           <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><ASelectTrigger className="w-full"><SelectValue /></ASelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
           <Field label={copy.monthlyCredits}><AInput value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
@@ -752,14 +751,14 @@ function OperationsPanel({ copy, orders, usage }: { copy: Messages["admin"]; ord
   return (
     <div className="grid gap-4">
       {usage && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[[copy.usageCalls, usage.totals.calls], [copy.usageCharged, usage.totals.charged], [copy.usageInput, usage.totals.input_tokens], [copy.usageOutput, usage.totals.output_tokens]].map(([label, value]) => <Card key={String(label)} className="bg-card/60 ring-border"><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-2xl">{value}</CardTitle></CardHeader></Card>)}</div>}
-      {usage && <div className="grid gap-4 lg:grid-cols-2"><UsageTable copy={copy} title={copy.usageByDay} rows={usage.by_day.map((r) => ({ key: r.date, label: r.date, calls: r.calls, charged: r.charged }))} /><UsageTable copy={copy} title={copy.usageByModel} rows={usage.by_model.map((r) => ({ key: r.model_id, label: r.model_id, calls: r.calls, charged: r.charged }))} /></div>}
+      {usage && <div className="grid gap-4 lg:grid-cols-2"><UsageTable copy={copy} title={copy.usageByDay} rows={usage.by_day.map((r) => ({ key: r.date, label: r.date, calls: r.calls, charged: r.charged }))} /><UsageTable copy={copy} title={copy.usageByModel} rows={usage.by_model.map((r) => ({ key: r.model_id, label: r.label, calls: r.calls, charged: r.charged }))} /></div>}
       <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{copy.orders}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.orderUser}</TableHead><TableHead>{copy.plan}</TableHead><TableHead>{copy.amount}</TableHead><TableHead>{copy.status}</TableHead><TableHead>{copy.channel}</TableHead><TableHead>{copy.createdAt}</TableHead></TableRow></TableHeader><TableBody>{orders.map((order) => <TableRow key={order.id}><TableCell>{order.user?.email || order.user?.handle || "—"}</TableCell><TableCell>{order.plan?.name || "—"}</TableCell><TableCell>{money(order.amount_cents)}</TableCell><TableCell>{order.status}</TableCell><TableCell>{order.channel}</TableCell><TableCell>{date(order.created_at)}</TableCell></TableRow>)}</TableBody></Table>{orders.length === 0 && <Empty>{copy.noOrders}</Empty>}</CardContent></Card>
     </div>
   );
 }
 
 function UsageTable({ copy, title, rows }: { copy: Messages["admin"]; title: string; rows: { key: string; label: string; calls: number; charged: number }[] }) {
-  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.usageCalls}</TableHead><TableHead>{copy.usageCharged}</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.key}><TableCell>{row.label}</TableCell><TableCell>{row.calls}</TableCell><TableCell>{row.charged}</TableCell></TableRow>)}</TableBody></Table>{rows.length === 0 && <Empty>{copy.noUsage}</Empty>}</CardContent></Card>;
+  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.models}</TableHead><TableHead>{copy.usageCalls}</TableHead><TableHead>{copy.usageCharged}</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.key}><TableCell>{row.label}</TableCell><TableCell>{row.calls}</TableCell><TableCell>{row.charged}</TableCell></TableRow>)}</TableBody></Table>{rows.length === 0 && <Empty>{copy.noUsage}</Empty>}</CardContent></Card>;
 }
 
 function AuditPanel({ copy, audit }: { copy: Messages["admin"]; audit: AdminAudit[] }) {

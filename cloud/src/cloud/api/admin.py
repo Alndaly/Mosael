@@ -113,13 +113,12 @@ def admin_models(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
 def admin_create_model(body: ModelIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     model = service.create_model(
         db,
-        model_id=body.id,
         label=body.label,
         max_output_tokens=body.max_output_tokens,
         sort_order=body.sort_order,
         enabled=body.enabled,
     )
-    audit.record(db, actor=actor, action="model.create", target_type="model", target_id=body.id,
+    audit.record(db, actor=actor, action="model.create", target_type="model", target_id=model["id"],
                  detail={"label": body.label, "max_output_tokens": body.max_output_tokens})
     db.commit()
     return {"model": model}

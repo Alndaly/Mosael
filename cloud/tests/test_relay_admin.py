@@ -10,7 +10,7 @@ from sqlalchemy import select
 from cloud.cli import main
 from cloud.db import Database
 from cloud.domain import catalog
-from cloud.models import CloudUpstreamProvider, CloudUser, now
+from cloud.models import CloudGatewayModel, CloudUpstreamProvider, CloudUser, now
 from cloud.schema import upgrade_database
 
 UPSTREAM_KEY = "sk-live-do-not-print-0123"
@@ -47,15 +47,21 @@ def test_open_a_working_relay_from_scratch(env, capsys, monkeypatch):
     code, out, _ = run(capsys, "subscribe", "--email", "Alice@Example.com", "--plan", "pro")
     assert code == 0 and "当前积分 20000" in out
 
-    assert run(capsys, "model-set", "--id", "deepseek-chat", "--label", "DeepSeek V3", "--max-output-tokens", "8000")[0] == 0
-    assert run(capsys, "price-set", "--model", "deepseek-chat", "--input-per-1k", "2", "--output-per-1k", "8")[0] == 0
+    code, created, _ = run(capsys, "model-set", "--label", "DeepSeek V3", "--max-output-tokens", "8000")
+    assert code == 0
+    with env.session() as db:
+        model = db.scalar(select(CloudGatewayModel))
+        assert len(model.id) == 32 and int(model.id, 16) >= 0
+        model_id = model.id
+    assert model_id in created and "DeepSeek V3" in created
+    assert run(capsys, "price-set", "--model", model_id, "--input-per-1k", "2", "--output-per-1k", "8")[0] == 0
     monkeypatch.setenv("CLOUD_UPSTREAM_KEY", UPSTREAM_KEY)
     code, out, _ = run(capsys, "provider-add", "--name", "DeepSeek", "--base-url", "https://api.deepseek.com/v1")
     assert code == 0 and UPSTREAM_KEY not in out
     with env.session() as db:
         provider_id = db.scalar(select(CloudUpstreamProvider)).id
 
-    code, out, _ = run(capsys, "channel-add", "--model", "deepseek-chat", "--provider", provider_id,
+    code, out, _ = run(capsys, "channel-add", "--model", model_id, "--provider", provider_id,
                        "--upstream-model", "deepseek-chat", "--priority", "0")
     assert code == 0 and UPSTREAM_KEY not in out
 
@@ -66,7 +72,7 @@ def test_open_a_working_relay_from_scratch(env, capsys, monkeypatch):
         stored = db.scalar(select(CloudUpstreamProvider))
         assert UPSTREAM_KEY not in stored.api_key_encrypted
         #: 网关此刻就能列出它。
-        assert [one.model.id for one in catalog.listed_models(db, at=now() + timedelta(seconds=1))] == ["deepseek-chat"]
+        assert [one.model.id for one in catalog.listed_models(db, at=now() + timedelta(seconds=1))] == [model_id]
 
     code, out, _ = run(capsys, "balance", "--email", "alice@example.com")
     assert "20000 积分" in out and "Pro" in out

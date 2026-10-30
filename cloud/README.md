@@ -230,12 +230,13 @@ uv run python -m cloud.cli admin-list                      # 列出管理员
 uv run python -m cloud.cli admin-revoke --email a@b.com    # 撤销(不能撤掉最后一名)
 uv run python -m cloud.cli plan-set --slug pro --name Pro --period year --monthly-credits 20000 --credit-ttl-days 60
 uv run python -m cloud.cli subscribe --email a@b.com --plan pro
-uv run python -m cloud.cli model-set --id deepseek-chat --label "DeepSeek V3" --max-output-tokens 8000
-uv run python -m cloud.cli price-set --model deepseek-chat --input-per-1k 2 --output-per-1k 8
+uv run python -m cloud.cli model-set --label "DeepSeek V3" --max-output-tokens 8000  # 模型 ID 由系统生成
+uv run python -m cloud.cli model-list                                                 # 拿系统 ID
+uv run python -m cloud.cli price-set --model <模型 UUID> --input-per-1k 2 --output-per-1k 8
 CLOUD_UPSTREAM_KEY=sk-… uv run python -m cloud.cli provider-add --name DeepSeek \
   --base-url https://api.deepseek.com/v1
 uv run python -m cloud.cli provider-list                    # 不显示 Key
-uv run python -m cloud.cli channel-add --model deepseek-chat --provider <供应商 id> \
+uv run python -m cloud.cli channel-add --model <模型 UUID> --provider <供应商 id> \
   --upstream-model deepseek-chat --priority 0
 uv run python -m cloud.cli channel-list                    # 不显示 Key
 uv run python -m cloud.cli balance --email a@b.com

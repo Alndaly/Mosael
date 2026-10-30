@@ -591,7 +591,10 @@ class CloudGatewayCall(Base):
 
 
 class CloudGatewayModel(Base):
-    """网关对外列出的一个模型。`id` 就是桌面端选模型时用的那个名字(如 `deepseek-chat`)。"""
+    """网关对外列出的一个模型。`id` 是系统生成的 UUID,`label` 才是给人看的名字。
+
+    `label` 允许重复;管理台和网关目录展示时由 `catalog.display_labels` 给同名项补 (1)/(2)。
+    """
 
     __tablename__ = "cloud_gateway_models"
     __table_args__ = (CheckConstraint("kind IN ('chat')", name="ck_cloud_gateway_models_kind"),)

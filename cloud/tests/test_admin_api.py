@@ -111,18 +111,21 @@ def test_admin_can_build_a_model_catalog_and_price(client):
     make_admin(client)
     created = client.post(
         api("/admin/models"),
-        json={"id": "deepseek-chat", "label": "DeepSeek V3", "max_output_tokens": 8000, "sort_order": 1},
+        json={"label": "DeepSeek V3", "max_output_tokens": 8000, "sort_order": 1},
     )
     assert created.status_code == 201, created.text
-    assert created.json()["model"]["listed"] is False
-    assert created.json()["model"]["not_listed_reasons"] == ["missing_price", "missing_channel"]
+    model = created.json()["model"]
+    assert len(model["id"]) == 32 and int(model["id"], 16) >= 0
+    assert model["display_label"] == "DeepSeek V3"
+    assert model["listed"] is False
+    assert model["not_listed_reasons"] == ["missing_price", "missing_channel"]
 
-    priced = client.post(api("/admin/models/deepseek-chat/prices"), json={"input_per_1k": 2, "output_per_1k": 8})
+    priced = client.post(api(f"/admin/models/{model['id']}/prices"), json={"input_per_1k": 2, "output_per_1k": 8})
     assert priced.status_code == 201, priced.text
     models = client.get(api("/admin/models")).json()["models"]
     assert models[0]["current_price"]["input_per_1k"] == 2
     assert models[0]["not_listed_reasons"] == ["missing_channel"]
-    prices = client.get(api("/admin/models/deepseek-chat/prices")).json()["prices"]
+    prices = client.get(api(f"/admin/models/{model['id']}/prices")).json()["prices"]
     assert len(prices) == 1
 
 
@@ -248,3 +251,33 @@ def test_admin_provider_routes_share_credentials_across_channels_and_never_retur
     assert patched.status_code == 200, patched.text
     assert patched.json()["channel"]["upstream_model"] == "m3-new"
     assert "sk-provider-secret" not in client.get(api("/admin/providers")).text
+
+
+def test_duplicate_model_names_get_stable_display_suffixes_and_channels_use_them(client):
+    make_admin(client)
+    client.app.state.config = replace(
+        client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
+    )
+    first = client.post(api("/admin/models"), json={"label": "DeepSeek V3", "max_output_tokens": 8000})
+    second = client.post(api("/admin/models"), json={"label": "DeepSeek V3", "max_output_tokens": 4000})
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+
+    models = client.get(api("/admin/models")).json()["models"]
+    assert [one["display_label"] for one in models] == ["DeepSeek V3 (1)", "DeepSeek V3 (2)"]
+
+    created = client.post(
+        api("/admin/providers"),
+        json={"name": "P", "base_url": "https://p.example/v1", "api_key": "sk-p", "note": ""},
+    )
+    provider_id = created.json()["provider"]["id"]
+    channel = client.post(
+        api("/admin/channels"),
+        json={
+            "model_id": first.json()["model"]["id"],
+            "provider_id": provider_id,
+            "upstream_model": "deepseek-v3",
+        },
+    )
+    assert channel.status_code == 201, channel.text
+    assert channel.json()["channel"]["model_label"] == "DeepSeek V3 (1)"

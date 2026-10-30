@@ -33,6 +33,7 @@ from cloud.models import (
     CloudUpstreamChannel,
     CloudUpstreamProvider,
     CloudUser,
+    new_id,
     now,
 )
 
@@ -184,7 +185,11 @@ def reset_password(db: Session, user_id: str, *, acting_user_id: str) -> str:
     return temporary
 
 
-def _model_view(db: Session, model: CloudGatewayModel, at: datetime) -> dict[str, object]:
+def _model_labels(db: Session) -> dict[str, str]:
+    return catalog.display_labels(db.scalars(select(CloudGatewayModel)).all())
+
+
+def _model_view(db: Session, model: CloudGatewayModel, at: datetime, display_label: str) -> dict[str, object]:
     price = catalog.current_price(db, model.id, at=at)
     channels = db.execute(
         select(CloudUpstreamChannel, CloudUpstreamProvider)
@@ -202,6 +207,7 @@ def _model_view(db: Session, model: CloudGatewayModel, at: datetime) -> dict[str
     return {
         "id": model.id,
         "label": model.label,
+        "display_label": display_label,
         "kind": model.kind,
         "max_output_tokens": model.max_output_tokens,
         "enabled": model.enabled,
@@ -224,27 +230,29 @@ def _model_view(db: Session, model: CloudGatewayModel, at: datetime) -> dict[str
 
 def list_models(db: Session) -> list[dict[str, object]]:
     at = now()
+    labels = _model_labels(db)
     return [
-        _model_view(db, one, at)
+        _model_view(db, one, at, labels[one.id])
         for one in db.scalars(
-            select(CloudGatewayModel).order_by(CloudGatewayModel.sort_order, CloudGatewayModel.id)
+            select(CloudGatewayModel).order_by(
+                CloudGatewayModel.sort_order, CloudGatewayModel.label, CloudGatewayModel.created_at, CloudGatewayModel.id
+            )
         ).all()
     ]
 
 
-def create_model(db: Session, *, model_id: str, label: str, max_output_tokens: int, sort_order: int, enabled: bool) -> dict[str, object]:
-    if db.get(CloudGatewayModel, model_id) is not None:
-        raise CloudError(409, "model_exists")
-    catalog.upsert_model(
+def create_model(db: Session, *, label: str, max_output_tokens: int, sort_order: int, enabled: bool) -> dict[str, object]:
+    model = catalog.upsert_model(
         db,
-        model_id=model_id,
+        model_id=new_id(),
         label=label,
         kind="chat",
         max_output_tokens=max_output_tokens,
         enabled=enabled,
         sort_order=sort_order,
     )
-    return _model_view(db, db.get(CloudGatewayModel, model_id), now())
+    labels = _model_labels(db)
+    return _model_view(db, model, now(), labels[model.id])
 
 
 def update_model(db: Session, model_id: str, *, label: str, max_output_tokens: int, sort_order: int, enabled: bool) -> dict[str, object]:
@@ -260,7 +268,8 @@ def update_model(db: Session, model_id: str, *, label: str, max_output_tokens: i
         enabled=enabled,
         sort_order=sort_order,
     )
-    return _model_view(db, model, now())
+    labels = _model_labels(db)
+    return _model_view(db, model, now(), labels[model.id])
 
 
 def _utc_naive(value: datetime) -> datetime:
@@ -352,10 +361,13 @@ def update_provider(
     return _provider_view(provider)
 
 
-def _channel_view(channel: CloudUpstreamChannel, provider: CloudUpstreamProvider) -> dict[str, object]:
+def _channel_view(
+    channel: CloudUpstreamChannel, provider: CloudUpstreamProvider, model_label: str
+) -> dict[str, object]:
     return {
         "id": channel.id,
         "model_id": channel.model_id,
+        "model_label": model_label,
         "provider_id": channel.provider_id,
         "provider_name": provider.name,
         "base_url": provider.base_url,
@@ -369,8 +381,9 @@ def _channel_view(channel: CloudUpstreamChannel, provider: CloudUpstreamProvider
 
 
 def list_channels(db: Session) -> list[dict[str, object]]:
+    labels = _model_labels(db)
     return [
-        _channel_view(channel, provider)
+        _channel_view(channel, provider, labels.get(channel.model_id, channel.model_id))
         for channel, provider in db.execute(
             select(CloudUpstreamChannel, CloudUpstreamProvider)
             .join(CloudUpstreamProvider, CloudUpstreamProvider.id == CloudUpstreamChannel.provider_id)
@@ -393,7 +406,8 @@ def create_channel(db: Session, *, model_id: str, provider_id: str, upstream_mod
         priority=priority,
         note=note,
     )
-    return _channel_view(channel, provider)
+    labels = _model_labels(db)
+    return _channel_view(channel, provider, labels[model_id])
 
 
 def update_channel(db: Session, channel_id: str, *, upstream_model: str, priority: int, note: str, enabled: bool) -> dict[str, object]:
@@ -408,7 +422,8 @@ def update_channel(db: Session, channel_id: str, *, upstream_model: str, priorit
     channel.note = note
     channel.enabled = enabled
     db.flush()
-    return _channel_view(channel, provider)
+    labels = _model_labels(db)
+    return _channel_view(channel, provider, labels.get(channel.model_id, channel.model_id))
 
 
 def _plan_view(plan: CloudPlan) -> dict[str, object]:
@@ -567,12 +582,13 @@ def usage_summary(db: Session, *, days: int = 7) -> dict[str, object]:
         by_day[day]["charged"] += call.charged
         by_model[call.model_id]["calls"] += 1
         by_model[call.model_id]["charged"] += call.charged
+    labels = _model_labels(db)
     return {
         "days": days,
         "totals": totals,
         "by_day": [{"date": key, **value} for key, value in sorted(by_day.items())],
         "by_model": [
-            {"model_id": key, **value}
+            {"model_id": key, "label": labels.get(key, key), **value}
             for key, value in sorted(by_model.items(), key=lambda item: -item[1]["charged"])
         ],
     }

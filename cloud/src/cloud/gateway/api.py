@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 import httpx2
 from fastapi import APIRouter, Request
+from sqlalchemy import select
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -30,7 +31,7 @@ from cloud.domain.identity import account_user
 from cloud.gateway import chat
 from cloud.gateway.deps import CurrentDevice
 from cloud.gateway.upstream import generated_chars, new_client, usage_of
-from cloud.models import now
+from cloud.models import CloudGatewayModel, now
 
 router = APIRouter(prefix="/gateway", tags=["gateway"])
 
@@ -64,6 +65,7 @@ CREDITS = "CREDITS"
 @router.get("/v1/models")
 def list_models(device: CurrentDevice, db: DbSession) -> dict[str, object]:
     """OpenAI 的 `/models` 形状。单价换成**每 token**(OpenRouter 的写法),字符串,免得浮点在 JSON 里变形。"""
+    labels = catalog.display_labels(db.scalars(select(CloudGatewayModel)).all())
     return {
         "object": "list",
         "data": [
@@ -71,7 +73,7 @@ def list_models(device: CurrentDevice, db: DbSession) -> dict[str, object]:
                 "id": one.model.id,
                 "object": "model",
                 "owned_by": "mosael",
-                "name": one.model.label,
+                "name": labels.get(one.model.id, one.model.label),
                 "max_output_tokens": one.model.max_output_tokens,
                 "pricing": {
                     "prompt": _per_token(one.price.input_per_1k),

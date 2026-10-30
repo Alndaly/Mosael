@@ -7,8 +7,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +21,25 @@ from cloud.models import CloudGatewayModel, CloudModelPrice, CloudUpstreamChanne
 
 #: 一条通道回了 429 / 5xx / 超时之后歇多久。
 CHANNEL_COOLDOWN = timedelta(seconds=60)
+
+
+def display_labels(models: Iterable[CloudGatewayModel]) -> dict[str, str]:
+    """模型的展示名。**同名时按创建顺序补 (1)/(2)**,不把内部 UUID 漏给界面。
+
+    下拉框只能靠展示名选;两个都叫「DeepSeek V3」时总得有个区分。编号按
+    `(created_at, id)` 排,新增同名模型只会往后追加,不会把已有编号打乱。
+    """
+    ordered = sorted(models, key=lambda one: (one.created_at, one.id))
+    counts = Counter(one.label for one in ordered)
+    seen: Counter[str] = Counter()
+    labels: dict[str, str] = {}
+    for model in ordered:
+        if counts[model.label] > 1:
+            seen[model.label] += 1
+            labels[model.id] = f"{model.label} ({seen[model.label]})"
+        else:
+            labels[model.id] = model.label
+    return labels
 
 
 def upsert_model(
