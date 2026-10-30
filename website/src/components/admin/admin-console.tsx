@@ -316,6 +316,20 @@ function UsersPanel({
                 ))}
               </div>
             )}
+            <div className="border-t border-border pt-3">
+              <strong className="text-sm">{copy.ordersTitle}</strong>
+              {selected.orders?.length ? (
+                <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                  {selected.orders.map((order) => (
+                    <p key={order.id} className="m-0">
+                      {order.plan?.name || "—"} · {order.status} · {money(order.amount_cents)} · {date(order.created_at)}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">{copy.noOrders}</p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -336,6 +350,7 @@ function ModelsPanel({
 }) {
   const [form, setForm] = useState({ id: "", label: "", max: "8000", sort: "0", enabled: true });
   const [selected, setSelected] = useState<AdminModel | null>(null);
+  const [edit, setEdit] = useState({ label: "", max: "", sort: "0", enabled: true });
   const [price, setPrice] = useState({ input: "0", output: "0", from: "" });
   const [prices, setPrices] = useState<{ input_per_1k: number; output_per_1k: number; effective_from: string }[]>([]);
 
@@ -357,8 +372,30 @@ function ModelsPanel({
   };
   const open = async (model: AdminModel) => {
     setSelected(model);
+    setEdit({
+      label: model.label,
+      max: String(model.max_output_tokens),
+      sort: String(model.sort_order),
+      enabled: model.enabled,
+    });
     try {
       setPrices((await cloudAdmin.prices(model.id)).prices);
+    } catch (failure) {
+      onFailure(failure);
+    }
+  };
+  const update = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    try {
+      const result = await cloudAdmin.updateModel(selected.id, {
+        label: edit.label,
+        max_output_tokens: Number(edit.max),
+        sort_order: Number(edit.sort),
+        enabled: edit.enabled,
+      });
+      setSelected(result.model);
+      onChanged();
     } catch (failure) {
       onFailure(failure);
     }
@@ -408,6 +445,18 @@ function ModelsPanel({
           <Button type="submit">{copy.create}</Button>
         </form>
         {selected && (
+          <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={update}>
+            <strong className="text-sm">{copy.modelEdit} · {selected.id}</strong>
+            <Label className={field}>{copy.label}<Input value={edit.label} onChange={(event) => setEdit({ ...edit, label: event.target.value })} /></Label>
+            <Label className={field}>{copy.maxOutput}<Input value={edit.max} onChange={(event) => setEdit({ ...edit, max: event.target.value })} /></Label>
+            <Label className={field}>{copy.sort}<Input value={edit.sort} onChange={(event) => setEdit({ ...edit, sort: event.target.value })} /></Label>
+            <Button type="button" variant={edit.enabled ? "default" : "outline"} aria-pressed={edit.enabled} onClick={() => setEdit({ ...edit, enabled: !edit.enabled })}>
+              {copy.enabled}
+            </Button>
+            <Button type="submit">{copy.save}</Button>
+          </form>
+        )}
+        {selected && (
           <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={addPrice}>
             <strong className="text-sm">{selected.id} · {copy.addPrice}</strong>
             <Label className={field}>{copy.inputPer1k}<Input value={price.input} onChange={(event) => setPrice({ ...price, input: event.target.value })} /></Label>
@@ -436,6 +485,8 @@ function ChannelsPanel({
   onFailure: (failure: unknown) => void;
 }) {
   const [form, setForm] = useState({ model: "", base: "", upstream: "", key: "", priority: "0", note: "" });
+  const [selected, setSelected] = useState<AdminChannel | null>(null);
+  const [edit, setEdit] = useState({ upstream: "", priority: "0", note: "", enabled: true, key: "" });
   const modelId = form.model || models[0]?.id || "";
   const create = async (event: FormEvent) => {
     event.preventDefault();
@@ -454,6 +505,34 @@ function ChannelsPanel({
       onFailure(failure);
     }
   };
+  const open = (channel: AdminChannel) => {
+    setSelected(channel);
+    setEdit({
+      upstream: channel.upstream_model,
+      priority: String(channel.priority),
+      note: channel.note,
+      enabled: channel.enabled,
+      key: "",
+    });
+  };
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    try {
+      const result = await cloudAdmin.updateChannel(selected.id, {
+        upstream_model: edit.upstream,
+        priority: Number(edit.priority),
+        note: edit.note,
+        enabled: edit.enabled,
+        api_key: edit.key,
+      });
+      setSelected(result.channel);
+      setEdit({ ...edit, key: "" });
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    }
+  };
   return (
     <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
       <div className={card}>
@@ -465,7 +544,7 @@ function ChannelsPanel({
             </thead>
             <tbody>
               {channels.map((channel) => (
-                <tr key={channel.id} className="border-t border-border">
+                <tr key={channel.id} className="cursor-pointer border-t border-border hover:bg-secondary/40" onClick={() => open(channel)}>
                   <td className="py-3"><strong className="block font-medium">{channel.model_id}</strong><small className="text-muted-foreground">{channel.upstream_model}</small></td>
                   <td className="py-3">{channel.base_url}</td>
                   <td className="py-3">{channel.priority} · {channel.enabled ? "on" : "off"}</td>
@@ -492,6 +571,22 @@ function ChannelsPanel({
           <p className="m-0 text-xs text-muted-foreground">{copy.apiKeyHint}</p>
           <Button type="submit">{copy.create}</Button>
         </form>
+        {selected && (
+          <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={save}>
+            <strong className="text-sm">{copy.channelEdit} · {selected.model_id}</strong>
+            <p className="m-0 text-xs text-muted-foreground">{selected.base_url}</p>
+            <p className="m-0 text-xs text-muted-foreground">{copy.baseUrlReadOnly}</p>
+            <Label className={field}>{copy.upstreamModel}<Input value={edit.upstream} onChange={(event) => setEdit({ ...edit, upstream: event.target.value })} /></Label>
+            <Label className={field}>{copy.priority}<Input value={edit.priority} onChange={(event) => setEdit({ ...edit, priority: event.target.value })} /></Label>
+            <Label className={field}>{copy.note}<Input value={edit.note} onChange={(event) => setEdit({ ...edit, note: event.target.value })} /></Label>
+            <Label className={field}>{copy.apiKey}<Input type="password" value={edit.key} onChange={(event) => setEdit({ ...edit, key: event.target.value })} /></Label>
+            <p className="m-0 text-xs text-muted-foreground">{copy.replaceKeyHint}</p>
+            <Button type="button" variant={edit.enabled ? "default" : "outline"} aria-pressed={edit.enabled} onClick={() => setEdit({ ...edit, enabled: !edit.enabled })}>
+              {copy.enabled}
+            </Button>
+            <Button type="submit">{copy.save}</Button>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -509,6 +604,37 @@ function PlansPanel({
   onFailure: (failure: unknown) => void;
 }) {
   const [form, setForm] = useState({ slug: "", name: "", period: "month", credits: "1000", ttl: "60", price: "" });
+  const [selected, setSelected] = useState<AdminPlan | null>(null);
+  const [edit, setEdit] = useState({ name: "", period: "month", credits: "1000", ttl: "60", price: "", onSale: false });
+  const open = (plan: AdminPlan) => {
+    setSelected(plan);
+    setEdit({
+      name: plan.name,
+      period: plan.period,
+      credits: String(plan.monthly_credits),
+      ttl: String(plan.credit_ttl_days),
+      price: plan.price_cents === null ? "" : String(plan.price_cents),
+      onSale: plan.on_sale,
+    });
+  };
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    try {
+      const result = await cloudAdmin.updatePlan(selected.slug, {
+        name: edit.name,
+        period: edit.period as AdminPlan["period"],
+        monthly_credits: Number(edit.credits),
+        credit_ttl_days: Number(edit.ttl),
+        on_sale: edit.onSale,
+        price_cents: edit.price ? Number(edit.price) : null,
+      });
+      setSelected(result.plan);
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    }
+  };
   const create = async (event: FormEvent) => {
     event.preventDefault();
     try {
@@ -538,7 +664,7 @@ function PlansPanel({
             </thead>
             <tbody>
               {plans.map((plan) => (
-                <tr key={plan.slug} className="border-t border-border">
+                <tr key={plan.slug} className="cursor-pointer border-t border-border hover:bg-secondary/40" onClick={() => open(plan)}>
                   <td className="py-3"><strong className="block font-medium">{plan.slug}</strong><small className="text-muted-foreground">{plan.name}</small></td>
                   <td className="py-3">{plan.monthly_credits} · {plan.period}</td>
                   <td className="py-3">{money(plan.price_cents)}</td>
@@ -567,6 +693,19 @@ function PlansPanel({
           <Label className={field}>{copy.priceCents}<Input value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></Label>
           <Button type="submit">{copy.create}</Button>
         </form>
+        {selected && (
+          <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={save}>
+            <strong className="text-sm">{copy.planEdit} · {selected.slug}</strong>
+            <Label className={field}>{copy.label}<Input value={edit.name} onChange={(event) => setEdit({ ...edit, name: event.target.value })} /></Label>
+            <Label className={field}>{copy.monthlyCredits}<Input value={edit.credits} onChange={(event) => setEdit({ ...edit, credits: event.target.value })} /></Label>
+            <Label className={field}>{copy.ttlDays}<Input value={edit.ttl} onChange={(event) => setEdit({ ...edit, ttl: event.target.value })} /></Label>
+            <Label className={field}>{copy.priceCents}<Input value={edit.price} onChange={(event) => setEdit({ ...edit, price: event.target.value })} /></Label>
+            <Button type="button" variant={edit.onSale ? "default" : "outline"} aria-pressed={edit.onSale} onClick={() => setEdit({ ...edit, onSale: !edit.onSale })}>
+              {copy.onSale}
+            </Button>
+            <Button type="submit">{copy.save}</Button>
+          </form>
+        )}
       </div>
     </div>
   );
