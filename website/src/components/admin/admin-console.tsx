@@ -15,12 +15,14 @@ import {
   type AdminChannel,
   type AdminChannelTest,
   type AdminModel,
+  type AdminOrder,
   type AdminOverview,
+  type AdminUsage,
   type AdminPlan,
   type AdminUser,
 } from "@/lib/cloud";
 
-type Tab = "overview" | "users" | "models" | "channels" | "plans" | "audit";
+type Tab = "overview" | "users" | "models" | "channels" | "plans" | "operations" | "audit";
 
 function failureText(error: unknown, copy: Messages["admin"], locale: Locale): string {
   return error instanceof CloudApiError ? error.text(locale) : copy.error;
@@ -46,6 +48,8 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
   const [channels, setChannels] = useState<AdminChannel[]>([]);
   const [plans, setPlans] = useState<AdminPlan[]>([]);
   const [audit, setAudit] = useState<AdminAudit[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [usage, setUsage] = useState<AdminUsage | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -54,20 +58,25 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
     setLoading(true);
     setError("");
     try {
-      const [nextOverview, nextUsers, nextModels, nextChannels, nextPlans, nextAudit] = await Promise.all([
-        cloudAdmin.overview(),
-        cloudAdmin.users(query),
-        cloudAdmin.models(),
-        cloudAdmin.channels(),
-        cloudAdmin.plans(),
-        cloudAdmin.audit(),
-      ]);
+      const [nextOverview, nextUsers, nextModels, nextChannels, nextPlans, nextAudit, nextOrders, nextUsage] =
+        await Promise.all([
+          cloudAdmin.overview(),
+          cloudAdmin.users(query),
+          cloudAdmin.models(),
+          cloudAdmin.channels(),
+          cloudAdmin.plans(),
+          cloudAdmin.audit(),
+          cloudAdmin.orders(),
+          cloudAdmin.usage(),
+        ]);
       setOverview(nextOverview);
       setUsers(nextUsers.users);
       setModels(nextModels.models);
       setChannels(nextChannels.channels);
       setPlans(nextPlans.plans);
       setAudit(nextAudit.events);
+      setOrders(nextOrders.orders);
+      setUsage(nextUsage);
     } catch (failure) {
       setError(failureText(failure, copy, locale));
     } finally {
@@ -112,6 +121,7 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
               ["models", copy.tabModels],
               ["channels", copy.tabChannels],
               ["plans", copy.tabPlans],
+              ["operations", copy.tabOperations],
               ["audit", copy.tabAudit],
             ] as const
           ).map(([value, label]) => (
@@ -182,11 +192,86 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
             onChanged={() => void refresh()}
             onFailure={(failure) => setError(failureText(failure, copy, locale))}
           />
+        ) : tab === "operations" ? (
+          <OperationsPanel copy={copy} orders={orders} usage={usage} />
         ) : (
           <AuditPanel copy={copy} audit={audit} />
         )}
       </div>
     </section>
+  );
+}
+
+function OperationsPanel({ copy, orders, usage }: { copy: Messages["admin"]; orders: AdminOrder[]; usage: AdminUsage | null }) {
+  return (
+    <div className="mt-6 grid gap-5">
+      {usage && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              [copy.usageCalls, usage.totals.calls],
+              [copy.usageCharged, usage.totals.charged],
+              [copy.usageInput, usage.totals.input_tokens],
+              [copy.usageOutput, usage.totals.output_tokens],
+            ].map(([label, value]) => (
+              <div key={String(label)} className={card}>
+                <p className="m-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                <p className="mt-2 font-display text-2xl font-semibold">{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className={card}>
+              <h2 className="m-0 text-lg font-semibold">{copy.usageByDay}</h2>
+              <table className="mt-3 w-full text-left text-[13px]">
+                <tbody>
+                  {usage.by_day.map((row) => (
+                    <tr key={row.date} className="border-t border-border">
+                      <td className="py-2">{row.date}</td><td className="py-2">{row.calls}</td><td className="py-2">{row.charged}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className={card}>
+              <h2 className="m-0 text-lg font-semibold">{copy.usageByModel}</h2>
+              <table className="mt-3 w-full text-left text-[13px]">
+                <tbody>
+                  {usage.by_model.map((row) => (
+                    <tr key={row.model_id} className="border-t border-border">
+                      <td className="py-2">{row.model_id}</td><td className="py-2">{row.calls}</td><td className="py-2">{row.charged}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <div className={card}>
+        <h2 className="m-0 text-lg font-semibold">{copy.orders}</h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-[13px]">
+            <thead className="text-xs text-muted-foreground">
+              <tr><th className="pb-2">{copy.orderUser}</th><th className="pb-2">{copy.plan}</th><th className="pb-2">{copy.amount}</th><th className="pb-2">{copy.status}</th><th className="pb-2">{copy.channel}</th><th className="pb-2">{copy.createdAt}</th></tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order.id} className="border-t border-border">
+                  <td className="py-3">{order.user?.email || order.user?.handle || "—"}</td>
+                  <td className="py-3">{order.plan?.name || "—"}</td>
+                  <td className="py-3">{money(order.amount_cents)}</td>
+                  <td className="py-3">{order.status}</td>
+                  <td className="py-3">{order.channel}</td>
+                  <td className="py-3">{date(order.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {orders.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{copy.noOrders}</p>}
+        </div>
+      </div>
+    </div>
   );
 }
 

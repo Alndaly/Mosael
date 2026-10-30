@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from cloud.admin import service
 from cloud.domain import admin as role_admin
-from cloud.models import CloudGatewayModel, CloudUser
+from cloud.models import CloudGatewayCall, CloudGatewayModel, CloudUser
 from conftest import PASSWORD, api, login, signup
 
 
@@ -144,3 +144,34 @@ def test_channel_connectivity_test_uses_the_stored_key_without_returning_it(clie
     assert result["status"] == 200
     assert seen["auth"] == "Bearer sk-test"
     assert "sk-test" not in str(result)
+
+
+def test_admin_can_read_orders_and_usage_summary(client):
+    make_admin(client)
+    signup(client, email="usage@example.com", password=PASSWORD)
+    login(client, email="admin@example.com", password=PASSWORD)
+    with client.app.state.db.session() as db:
+        user = db.scalar(select(CloudUser).where(CloudUser.email == "usage@example.com"))
+        db.add(
+            CloudGatewayCall(
+                user_id=user.id,
+                model_id="m1",
+                status="settled",
+                reserved=10,
+                charged=3,
+                input_tokens=10,
+                output_tokens=5,
+            )
+        )
+        db.commit()
+
+    orders = client.get(api("/admin/orders"))
+    assert orders.status_code == 200
+    assert orders.json() == {"orders": []}
+
+    usage = client.get(api("/admin/usage"), params={"days": 7})
+    assert usage.status_code == 200
+    body = usage.json()
+    assert body["totals"]["calls"] == 1
+    assert body["totals"]["charged"] == 3
+    assert body["by_model"][0]["model_id"] == "m1"

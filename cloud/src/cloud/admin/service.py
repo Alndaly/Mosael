@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import UTC, datetime
+from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 
 import httpx2
 
@@ -20,6 +21,7 @@ from cloud.gateway import upstream
 from cloud.errors import CloudError
 from cloud.models import (
     CloudAdminAudit,
+    CloudGatewayCall,
     CloudGatewayModel,
     CloudModelPrice,
     CloudOrder,
@@ -448,4 +450,49 @@ def test_channel(
         "upstream_model": channel.upstream_model,
         "input_tokens": usage.input_tokens if usage else None,
         "output_tokens": usage.output_tokens if usage else None,
+    }
+
+
+def list_orders(db: Session, *, limit: int = 100) -> list[dict[str, object]]:
+    events: list[dict[str, object]] = []
+    for order in db.scalars(
+        select(CloudOrder).order_by(CloudOrder.created_at.desc()).limit(limit)
+    ).all():
+        view = order_domain.order_view(db, order)
+        user = db.get(CloudUser, order.user_id) if order.user_id else None
+        view["user"] = {"email": user.email, "handle": user.handle} if user else None
+        events.append(view)
+    return events
+
+
+def usage_summary(db: Session, *, days: int = 7) -> dict[str, object]:
+    days = max(1, min(days, 90))
+    since = now() - timedelta(days=days)
+    calls = db.scalars(
+        select(CloudGatewayCall)
+        .where(CloudGatewayCall.created_at >= since)
+        .order_by(CloudGatewayCall.created_at.desc())
+        .limit(5000)
+    ).all()
+    totals = {"calls": 0, "charged": 0, "input_tokens": 0, "output_tokens": 0}
+    by_day: dict[str, dict[str, int]] = defaultdict(lambda: {"calls": 0, "charged": 0})
+    by_model: dict[str, dict[str, int]] = defaultdict(lambda: {"calls": 0, "charged": 0})
+    for call in calls:
+        totals["calls"] += 1
+        totals["charged"] += call.charged
+        totals["input_tokens"] += call.input_tokens
+        totals["output_tokens"] += call.output_tokens
+        day = call.created_at.date().isoformat()
+        by_day[day]["calls"] += 1
+        by_day[day]["charged"] += call.charged
+        by_model[call.model_id]["calls"] += 1
+        by_model[call.model_id]["charged"] += call.charged
+    return {
+        "days": days,
+        "totals": totals,
+        "by_day": [{"date": key, **value} for key, value in sorted(by_day.items())],
+        "by_model": [
+            {"model_id": key, **value}
+            for key, value in sorted(by_model.items(), key=lambda item: -item[1]["charged"])
+        ],
     }

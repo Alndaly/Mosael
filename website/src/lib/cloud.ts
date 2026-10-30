@@ -559,6 +559,25 @@ export type AdminPlan = {
   currency: string;
 };
 
+export type AdminOrder = {
+  id: string;
+  status: string;
+  plan: { slug: string; name: string; period: string } | null;
+  amount_cents: number;
+  currency: string;
+  channel: string;
+  created_at: string;
+  paid_at: string | null;
+  user: { email: string | null; handle: string | null } | null;
+};
+
+export type AdminUsage = {
+  days: number;
+  totals: { calls: number; charged: number; input_tokens: number; output_tokens: number };
+  by_day: { date: string; calls: number; charged: number }[];
+  by_model: { model_id: string; calls: number; charged: number }[];
+};
+
 export type AdminAudit = {
   id: string;
   actor_email: string;
@@ -591,6 +610,8 @@ export type AdminModelInput = {
 export const cloudAdmin = {
   overview: () => request<AdminOverview>("/admin/overview"),
   audit: () => request<{ events: AdminAudit[] }>("/admin/audit"),
+  orders: () => request<{ orders: AdminOrder[] }>("/admin/orders"),
+  usage: (days = 7) => request<AdminUsage>(`/admin/usage?days=${days}`),
   users: (q = "") => request<{ users: AdminUser[] }>(`/admin/users?${new URLSearchParams({ q })}`),
   user: (id: string) => request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}`),
   setRole: (id: string, role: "member" | "admin") =>

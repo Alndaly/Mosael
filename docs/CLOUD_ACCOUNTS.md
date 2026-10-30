@@ -360,6 +360,8 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | GET | `/admin/me` | 当前管理员身份 |
 | GET | `/admin/overview` | 账号 / 管理员 / 有效订阅 / 模型 / 通道 / 订单计数 |
 | GET | `/admin/audit` | 最近 100 条管理操作(不含密码 / Key) |
+| GET | `/admin/orders` | 最近 100 笔订单(含账号、套餐、金额、状态、渠道) |
+| GET | `/admin/usage?days=7` | 近 N 天调用数 / 积分 / token,按日与模型汇总 |
 | GET | `/admin/users?q=` | 搜索账号；返回订阅、积分、角色、official、MFA 状态 |
 | GET | `/admin/users/{id}` | 账号详情：积分批次、订阅、最近订单 |
 | POST | `/admin/users/{id}/role` | `member` / `admin`；不能撤销最后一名管理员 |

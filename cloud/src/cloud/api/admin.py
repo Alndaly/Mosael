@@ -79,6 +79,16 @@ def admin_user_subscription(user_id: str, body: SubscribeIn, actor: CurrentAdmin
     return {"user": user}
 
 
+@router.get("/admin/orders")
+def admin_orders(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    return {"orders": service.list_orders(db)}
+
+
+@router.get("/admin/usage")
+def admin_usage(_user: CurrentAdmin, db: DbSession, days: int = Query(default=7, ge=1, le=90)) -> dict[str, object]:
+    return service.usage_summary(db, days=days)
+
+
 @router.get("/admin/audit")
 def admin_audit(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
     return {"events": service.list_audit(db)}
