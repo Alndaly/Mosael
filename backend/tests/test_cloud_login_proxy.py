@@ -183,6 +183,20 @@ def test_a_login_that_cannot_get_a_device_token_stores_nothing(cloud: FakeCloud)
     assert rows() == []
 
 
+def test_phone_password_login_uses_the_same_device_token_path(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    queue_successful_login(cloud, email="+8613800138000")
+    response = client.post(
+        "/api/cloud/v1/login/phone",
+        json={"phone": "+8613800138000", "password": PASSWORD},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"email": "+8613800138000"}
+    assert len(rows()) == 1
+    assert PASSWORD not in str(rows())
+
+
 def test_login_never_stores_the_password(cloud: FakeCloud) -> None:
     client = fresh_client()
     response = login(client, cloud)
@@ -331,6 +345,7 @@ def test_without_cloud_url_every_new_route_says_not_configured(monkeypatch) -> N
     for method, path, body in (
         ("post", "/api/cloud/v1/login", {"email": EMAIL, "password": PASSWORD}),
         ("post", "/api/cloud/v1/login/code", {"email": EMAIL}),
+        ("post", "/api/cloud/v1/login/phone", {"phone": "+8613800138000", "password": PASSWORD}),
         ("post", "/api/cloud/v1/login/code/verify", {"email": EMAIL, "code": "123456"}),
         ("post", "/api/cloud/v1/login/sms/code", {"phone": "+8613800138000"}),
         ("post", "/api/cloud/v1/login/sms/verify", {"phone": "+8613800138000", "code": "123456"}),

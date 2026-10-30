@@ -56,6 +56,10 @@ class PhoneCodeIn(PhoneIn):
     code: str = Field(default="", max_length=12)
 
 
+class PhoneLoginIn(PhoneIn):
+    password: str = Field(min_length=1, max_length=512)
+
+
 class PasswordChangeIn(BaseModel):
     current_password: str = Field(default="", max_length=512)
     new_password: str = Field(min_length=1, max_length=512)
@@ -184,6 +188,22 @@ def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Respons
     return {"user": account_user(user)}
 
 
+@router.post("/login/phone")
+def login_with_phone(body: PhoneLoginIn, db: DbSession, config: CurrentConfig, response: Response) -> dict[str, object]:
+    """手机号 + 密码登录。和邮箱密码登录共用会话与同一句 `invalid_credentials`。"""
+    phone = _phone(body)
+    user = db.scalar(select(CloudUser).where(CloudUser.phone == phone))
+    if (
+        user is None
+        or user.phone_verified_at is None
+        or not user.password_hash
+        or not verify_password(body.password, user.password_hash)
+    ):
+        raise CloudError(401, "invalid_credentials")
+    open_session(db, config, user, response)
+    return {"user": account_user(user)}
+
+
 @router.post("/login/code")
 def send_login_code(body: EmailIn, db: DbSession, request: Request) -> dict[str, object]:
     """登录第一步:发码。**未注册邮箱也回同一句** `{"sent": true}`,不泄露这个邮箱有没有注册。"""
@@ -272,10 +292,8 @@ def change_password(
 
     邮箱码 / OAuth 登录的账号可以在这里第一次设密码;已有密码时必须先验旧密码。
     只改登录密码,不动当前会话——改完这台设备仍然是登录状态。
-    **没有邮箱的短信账号不设密码**:密码登录只认邮箱,设了也没有入口。
+    短信账号同样可以设置,之后走 `POST /login/phone` 用手机号 + 密码登录。
     """
-    if user.email is None:
-        raise CloudError(400, "email_required")
     if len(body.new_password) < config.password_min_length:
         raise CloudError(400, "password_too_short", min=config.password_min_length)
     if len(body.new_password) > config.password_max_length:

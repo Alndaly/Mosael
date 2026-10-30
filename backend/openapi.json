@@ -28674,6 +28674,48 @@
         }
       }
     },
+    "/api/cloud/v1/login/phone": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Login With Phone",
+        "description": "手机号 + 密码登录。Cloud 校验手机号与密码,本地照样换设备令牌、只回登录标识。",
+        "operationId": "login_with_phone_api_cloud_v1_login_phone_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudPhoneLoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cloud/v1/login/code": {
       "post": {
         "tags": [
@@ -35420,6 +35462,29 @@
         ],
         "title": "CloudPhoneIn",
         "description": "短信登录第一步:手机号。"
+      },
+      "CloudPhoneLoginIn": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "password"
+        ],
+        "title": "CloudPhoneLoginIn",
+        "description": "手机号 + 密码登录。和邮箱密码走同一条会话落库路径。"
       },
       "CloudSessionOut": {
         "properties": {

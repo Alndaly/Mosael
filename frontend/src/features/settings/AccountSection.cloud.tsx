@@ -6,6 +6,7 @@ import {
   changeCloudPassword,
   loadCloudSession,
   loginWithPassword,
+  loginWithPhonePassword,
   logoutCloud,
   requestCloudLoginCode,
   requestCloudLoginSmsCode,
@@ -27,9 +28,10 @@ import { SettingsBlock, SettingsField, SettingsForm } from "@/components/setting
  * 信息登录」。所以这里不是浏览器授权、也不是设备码:两条路都直接打本机后端的
  * `/api/cloud/v1/login*`,由本机后端拿云端会话换一枚设备令牌存下来(加密列,ADR 0088),渲染层只拿得到邮箱。
  *
- * **两条路**:
- * - 邮箱 + 密码;
- * - 邮箱验证码:先发码,再填 6 位,再验证。
+ * **三条路**:
+ * - 邮箱 + 密码,或手机号 + 密码;
+ * - 邮箱验证码:先发码,再填 6 位,再验证;
+ * - 手机短信验证码:同一个手机号首次验证会自动建 Cloud 账号。
  *
  * 「这个部署接没接 MosaelCloud」在点之前就要知道:读 `/me` 的 503 `cloud_not_configured`
  * 就是这份部署事实。产品默认接官方 Cloud,只有部署管理员显式关掉才会走到这里(ADR 0088 §0):把按钮关掉,
@@ -99,7 +101,9 @@ export function CloudAccountSection() {
     try {
       const found =
         mode === "password"
-          ? await loginWithPassword(email.trim(), password)
+          ? email.includes("@")
+            ? await loginWithPassword(email.trim(), password)
+            : await loginWithPhonePassword(email.trim(), password)
           : mode === "code"
             ? await verifyCloudLoginCode(email.trim(), code.trim())
             : await verifyCloudLoginSms(phone.trim(), code.trim());
@@ -228,8 +232,7 @@ export function CloudAccountSection() {
                 {t("settingsCloudSignOut")}
               </Button>
             </div>
-            {session.email?.includes("@") && (
-              <div className="grid gap-3 border-t border-border pt-4">
+            <div className="grid gap-3 border-t border-border pt-4">
                 <div className="grid gap-1">
                   <strong className="text-ui-md font-semibold">
                     {session.has_password ? t("settingsCloudChangePassword") : t("settingsCloudSetPassword")}
@@ -284,7 +287,6 @@ export function CloudAccountSection() {
                   </SettingsForm>
                 </form>
               </div>
-            )}
           </>
         ) : (
           <form
@@ -305,10 +307,11 @@ export function CloudAccountSection() {
                   />
                 </SettingsField>
               ) : (
-                <SettingsField label={t("settingsCloudEmail")}>
+                <SettingsField label={mode === "password" ? t("settingsCloudIdentifier") : t("settingsCloudEmail")}>
                   <Input
-                    type="email"
-                    autoComplete="email"
+                    type={mode === "password" ? "text" : "email"}
+                    inputMode={mode === "password" ? "text" : "email"}
+                    autoComplete={mode === "password" ? "username" : "email"}
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                   />

@@ -45,6 +45,12 @@ class CloudPhoneCodeIn(CloudPhoneIn):
     code: str = Field(default="", max_length=12)
 
 
+class CloudPhoneLoginIn(CloudPhoneIn):
+    """手机号 + 密码登录。和邮箱密码走同一条会话落库路径。"""
+
+    password: str = Field(min_length=1, max_length=512)
+
+
 class CloudSessionOut(ApiModel):
     """「现在登的是谁」 —— 登录标识(邮箱或 E.164 手机号)。设备令牌**不在**这里。"""
 

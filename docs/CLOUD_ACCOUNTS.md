@@ -15,7 +15,7 @@
 | | 本地 Mosael | MosaelCloud |
 | --- | --- | --- |
 | 谁在用 | 这台机器 / 这个部署 | 官网 |
-| 身份表 | `backend` 的 `users`(用户名 + 密码) | `cloud/` 的 `cloud_users`(邮箱 + 密码) |
+| 身份表 | `backend` 的 `users`(用户名 + 密码) | `cloud/` 的 `cloud_users`(邮箱 / 手机号 + 密码) |
 | 登录 | 本地后端签的会话(`auth_sessions`) | Cloud 的 HttpOnly cookie(`cloud_sessions`) |
 | 桌面端关系 | 本地账号照旧登录、照旧用 | 不绑定;社区分享的读请求经本地后端反代 |
 
@@ -130,12 +130,15 @@ SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮)
 | --- | --- | --- |
 | POST | `/signup/code` | 往邮箱发 6 位注册验证码;已注册的邮箱 409 |
 | POST | `/signup` | 邮箱 + **验证码** + 密码注册,成功即 `email_verified_at`;**不自动登录** |
-| POST | `/login` | 密码登录,Set-Cookie 会话 |
+| POST | `/login` | 邮箱 + 密码登录,Set-Cookie 会话 |
+| POST | `/login/phone` | 手机号 + 密码登录;短信账号设置密码后走这里 |
 | POST | `/login/code` | 往邮箱发登录验证码;未注册邮箱也回同一句 `{"sent": true}` |
 | POST | `/login/code/verify` | 邮箱 + 验证码换会话,cookie 与密码登录同一条路径 |
+| POST | `/login/sms/code` | 往手机号发登录验证码 |
+| POST | `/login/sms/verify` | 手机号 + 验证码换会话;首次验证自动建账号 |
 | POST | `/logout` | 撤销当前会话 |
 | GET | `/me` | 当前云端账号;`has_password` 表示是否设过密码 |
-| POST | `/me/password` | 已登录时设置 / 修改密码;已有密码必须带 `current_password`,没有邮箱的短信账号返回 `email_required` |
+| POST | `/me/password` | 已登录时设置 / 修改密码;已有密码必须带 `current_password` |
 | DELETE | `/me` | 删号(会话 / 身份 / 分享级联删除) |
 | GET | `/oauth/providers` | 哪些第三方登录已配置: `{providers:{github:bool, google:bool}}` |
 | GET | `/oauth/{provider}/start` | 生成 state / nonce / PKCE,302 到第三方;未配置 302 回官网报"没启用" |
@@ -313,16 +316,16 @@ cloud_oauth_states(
 > 账号。这是行业常见做法,也是这次明确选择的行为;但它意味着安全性依赖 GitHub / Google 的
 > 邮箱验证。我们只接这两家,不接任意 OIDC provider。
 
-**没有密码的账号怎么登录**:`/login/code`(邮箱验证码)对它们可用,所以第三方建的账号
-随时能回来。登录之后可以走 `POST /me/password` **第一次设置密码**:没有 `password_hash`
-时不要求当前密码,有密码时必须验旧密码;只改密码,不踢掉当前会话。**密码登录只认邮箱**,
-所以没有邮箱的短信账号不开放设置密码,接口返回 `email_required`,桌面端和官网都不显示这块
-表单。还没有"忘记密码"流程,密码登录失败也还没有限速。
+**没有密码的账号怎么登录**:`/login/code`(邮箱验证码)对邮箱账号可用,`/login/sms/code`
+(短信验证码)对手机号账号可用,所以第三方或短信建的账号随时能回来。登录之后可以走
+`POST /me/password` **第一次设置密码**:没有 `password_hash` 时不要求当前密码,有密码时必须
+验旧密码;只改密码,不踢掉当前会话。设置之后,邮箱账号走 `POST /login`,手机号账号走
+`POST /login/phone`。还没有"忘记密码"流程,密码登录失败也还没有限速。
 
 **入口**:官网在「我的 → 个人信息」的密码块;桌面端把 MosaelCloud 从「账户」页拆成独立的
 「MosaelCloud 账号」设置页(本地账号的密码仍留在「账户」),两处都读 `has_password` 决定是否
 显示「当前密码」。桌面端经本地后端 `POST /api/cloud/v1/me/password` 转发,不把云端密码写进
-本地库。
+本地库;密码登录的输入框接受邮箱或手机号,后者转发到 `/api/cloud/v1/login/phone`。
 
 ### 配置与"未启用"的表现
 

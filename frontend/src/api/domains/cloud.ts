@@ -57,7 +57,15 @@ export async function loadCloudSession(): Promise<CloudSession | null> {
   }
 }
 
-/** 邮箱 + 密码登录。成功只回邮箱;设备令牌由本机后端落盘。 */
+/** 手机号 + 密码登录。短信账号设置密码后走这条。 */
+export function loginWithPhonePassword(phone: string, password: string): Promise<CloudSession> {
+  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login/phone", {
+    method: "POST",
+    body: JSON.stringify({ phone, password }),
+  });
+}
+
+/** 邮箱 + 密码登录。成功只回登录标识;设备令牌由本机后端落盘。 */
 export function loginWithPassword(email: string, password: string): Promise<CloudSession> {
   return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login", {
     method: "POST",

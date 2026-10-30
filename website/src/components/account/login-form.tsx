@@ -28,8 +28,9 @@ type Mode = "password" | "code" | "sms";
 /**
  * 登录:**同一个页面里两个入口** —— 密码 / 验证码。
  *
- * 分段控件切换的是"怎么证明这个邮箱是你的",不是另一条鉴权路径:两种方式成功后都拿同一枚
- * HttpOnly 会话 cookie、都去账号页。切到验证码时邮箱留着,不用重填。
+ * 分段控件切换的是"怎么证明这个账号是你的",不是另一条鉴权路径:三种方式成功后都拿同一枚
+ * HttpOnly 会话 cookie、都去账号页。密码登录的标识可以是邮箱或手机号;切到验证码时输入留着,
+ * 不用重填。
  */
 export function LoginForm({
   locale,
@@ -123,7 +124,9 @@ export function LoginForm({
     setError("");
     setBusy(true);
     try {
-      await cloudAccount.login(email.trim(), password);
+      const identifier = email.trim();
+      if (identifier.includes("@")) await cloudAccount.login(identifier, password);
+      else await cloudAccount.loginWithPhone(identifier, password);
       // 登录态变了:站头那份 viewer 缓存必须失效,否则回到站内还显示「登录」。
       await invalidateAfterAuth(queryClient);
       router.push(`/${locale}/account`);
@@ -206,10 +209,10 @@ export function LoginForm({
           )}
           <AccountField
             id="login-email"
-            label={copy.email}
-            type="email"
-            inputMode="email"
-            autoComplete="email"
+            label={copy.identifier}
+            type="text"
+            inputMode="text"
+            autoComplete="username"
             required
             value={email}
             error={emailError}

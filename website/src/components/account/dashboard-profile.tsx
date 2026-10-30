@@ -212,9 +212,7 @@ export function DashboardProfile({
         <p className="mt-1 mb-0 text-xs leading-5 text-muted-foreground">{copy.emailHint}</p>
       </section>
 
-      {email && (
-        <DashboardPassword locale={locale} copy={copy} hasPassword={Boolean(currentViewer.has_password)} />
-      )}
+      <DashboardPassword locale={locale} copy={copy} hasPassword={Boolean(currentViewer.has_password)} />
 
       {!hasHandle && (
         <div>

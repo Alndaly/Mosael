@@ -306,6 +306,9 @@ function createClient(context: RequestContext = {}) {
       login(email: string, password: string): Promise<{ user: CloudUser }> {
         return request("/login", { method: "POST", body: JSON.stringify({ email, password }) }, context);
       },
+      loginWithPhone(phone: string, password: string): Promise<{ user: CloudUser }> {
+        return request("/login/phone", { method: "POST", body: JSON.stringify({ phone, password }) }, context);
+      },
       sendLoginCode(email: string): Promise<{ sent: boolean }> {
         return request("/login/code", { method: "POST", body: JSON.stringify({ email }) }, context);
       },

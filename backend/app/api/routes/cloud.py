@@ -21,7 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudPasswordIn, CloudPhoneCodeIn, CloudPhoneIn, CloudSessionOut
+from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudPasswordIn, CloudPhoneCodeIn, CloudPhoneIn, CloudPhoneLoginIn, CloudSessionOut
 from app.core.i18n import get_current_locale, tr
 from mosael_formats.i18n import pick_text
 from app.db.models import CloudLogin, User
@@ -196,6 +196,21 @@ def login(body: CloudLoginIn, user: CurrentUser, db: DbSession) -> CloudSessionO
     if reply.status != 200:
         raise _cloud_detail(reply)
     return _remember(db, user, body.email, reply)
+
+
+@router.post("/cloud/v1/login/phone", response_model=CloudSessionOut, response_model_exclude_defaults=True)
+def login_with_phone(body: CloudPhoneLoginIn, user: CurrentUser, db: DbSession) -> CloudSessionOut:
+    """手机号 + 密码登录。Cloud 校验手机号与密码,本地照样换设备令牌、只回登录标识。"""
+    reply, _row = _send(
+        "POST",
+        "/login/phone",
+        {"phone": body.phone, "password": body.password},
+        user=user,
+        db=db,
+    )
+    if not 200 <= reply.status < 300:
+        raise _cloud_detail(reply)
+    return _remember(db, user, body.phone, reply)
 
 
 @router.post("/cloud/v1/login/code")

@@ -26,12 +26,19 @@ def test_email_account_can_change_password_with_the_current_one(client):
     )
 
 
-def test_phone_only_account_is_told_to_link_an_email_first(client):
+def test_phone_account_can_set_a_password_and_then_log_in_with_it(client):
     user = login_phone(client, "13800138000")
     assert user["has_password"] is False
 
     response = client.post(api("/me/password"), json={"new_password": "Phone-Horse-9"})
-    assert response.status_code == 400
-    assert response.json()["error"] == "email_required"
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["has_password"] is True
 
-    assert client.get(api("/me")).json()["user"]["has_password"] is False
+    assert client.post(api("/logout")).status_code == 204
+    wrong = client.post(api("/login/phone"), json={"phone": "13800138000", "password": "Wrong-Horse-9"})
+    assert wrong.status_code == 401
+    assert wrong.json()["error"] == "invalid_credentials"
+
+    right = client.post(api("/login/phone"), json={"phone": "13800138000", "password": "Phone-Horse-9"})
+    assert right.status_code == 200, right.text
+    assert right.json()["user"]["has_password"] is True

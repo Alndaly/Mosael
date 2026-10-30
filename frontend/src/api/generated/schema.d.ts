@@ -9782,6 +9782,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/login/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login With Phone
+         * @description 手机号 + 密码登录。Cloud 校验手机号与密码,本地照样换设备令牌、只回登录标识。
+         */
+        post: operations["login_with_phone_api_cloud_v1_login_phone_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cloud/v1/login/code": {
         parameters: {
             query?: never;
@@ -12800,6 +12820,16 @@ export interface components {
         CloudPhoneIn: {
             /** Phone */
             phone: string;
+        };
+        /**
+         * CloudPhoneLoginIn
+         * @description 手机号 + 密码登录。和邮箱密码走同一条会话落库路径。
+         */
+        CloudPhoneLoginIn: {
+            /** Phone */
+            phone: string;
+            /** Password */
+            password: string;
         };
         /**
          * CloudSessionOut
@@ -41770,6 +41800,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CloudLoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_with_phone_api_cloud_v1_login_phone_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudPhoneLoginIn"];
             };
         };
         responses: {

@@ -2,7 +2,7 @@
 /**
  * 设置 → 账户里的「MosaelCloud 账号」:桌面端**自己**用邮箱登录云端。
  *
- * 两条路都要:邮箱 + 密码,以及「发码 → 填 6 位 → 验证」。登录之后只显示邮箱 + 退出登录;
+ * 三条路都要:邮箱 / 手机号 + 密码、邮箱验证码、手机短信验证码。登录之后显示登录标识、退出登录和密码设置;
  * cookie 值不在任何回包里,界面也就没有它可显示。部署关掉了 Cloud 时按钮禁用、说清找谁 ——
  * 界面不摆一颗点了只会错的按钮,也不教用户设环境变量(ADR 0088 §0)。
  */
@@ -28,6 +28,7 @@ vi.mock("@/api/domains/cloud", async (importOriginal) => {
     getCloudSession: vi.fn(),
     loadCloudSession: vi.fn(),
     loginWithPassword: vi.fn(),
+    loginWithPhonePassword: vi.fn(),
     requestCloudLoginCode: vi.fn(),
     verifyCloudLoginCode: vi.fn(),
     requestCloudLoginSmsCode: vi.fn(),
@@ -54,10 +55,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("MosaelCloud 账号", () => {
-  it("未登录:邮箱 + 密码,一条表单纯粹登录", async () => {
+  it("未登录:邮箱或手机号 + 密码,一条表单纯粹登录", async () => {
     render(<CloudAccountSection />, { wrapper: WithQueryClient });
 
-    const email = await screen.findByLabelText("邮箱");
+    const email = await screen.findByLabelText("邮箱或手机号");
     expect(screen.getByLabelText("密码")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
     fireEvent.change(email, { target: { value: "alice@example.com" } });
@@ -69,6 +70,21 @@ describe("MosaelCloud 账号", () => {
     await waitFor(() => expect(api.loginWithPassword).toHaveBeenCalledWith("alice@example.com", "secret"));
     expect(await screen.findByText("alice@example.com")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "退出登录" })).toBeInTheDocument();
+  });
+
+  it("密码那条:手机号走手机号密码接口", async () => {
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+
+    fireEvent.change(await screen.findByLabelText("邮箱或手机号"), { target: { value: "13800138000" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Phone-Horse-9" } });
+    api.loginWithPhonePassword.mockResolvedValueOnce({ email: "+8613800138000", has_password: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() =>
+      expect(api.loginWithPhonePassword).toHaveBeenCalledWith("13800138000", "Phone-Horse-9"),
+    );
+    expect(await screen.findByText("+8613800138000")).toBeInTheDocument();
   });
 
   it("验证码那条:发码 → 填 6 位 → 验证", async () => {
@@ -142,22 +158,37 @@ describe("MosaelCloud 账号", () => {
     await waitFor(() => expect(api.changeCloudPassword).toHaveBeenCalledWith("", "First-Horse-9"));
   });
 
-  it("已登录:只显示账号 + 退出登录", async () => {
-    api.loadCloudSession.mockResolvedValueOnce({ email: "carol@example.com" });
+  it("已登录且没有密码:显示设置密码,不要求当前密码", async () => {
+    api.loadCloudSession.mockResolvedValueOnce({ email: "carol@example.com", has_password: false });
     render(<CloudAccountSection />, { wrapper: WithQueryClient });
 
     expect(await screen.findByText("carol@example.com")).toBeInTheDocument();
-    expect(screen.queryByLabelText("密码")).not.toBeInTheDocument();
+    expect(screen.getByText("设置登录密码")).toBeInTheDocument();
+    expect(screen.queryByLabelText("当前密码")).not.toBeInTheDocument();
     api.logoutCloud.mockResolvedValueOnce(undefined);
     fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
 
     await waitFor(() => expect(api.logoutCloud).toHaveBeenCalled());
-    expect(await screen.findByLabelText("邮箱")).toBeInTheDocument();
+    expect(await screen.findByLabelText("邮箱或手机号")).toBeInTheDocument();
+  });
+
+  it("短信账号登录后同样能设置密码", async () => {
+    api.loadCloudSession.mockResolvedValueOnce({ email: "+8613800138000", has_password: false });
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+
+    expect(await screen.findByText("+8613800138000")).toBeInTheDocument();
+    expect(await screen.findByText("设置登录密码")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("新密码"), { target: { value: "Phone-Horse-9" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "Phone-Horse-9" } });
+    api.changeCloudPassword.mockResolvedValueOnce({ email: "+8613800138000", has_password: true });
+    fireEvent.click(screen.getByRole("button", { name: "更新密码" }));
+
+    await waitFor(() => expect(api.changeCloudPassword).toHaveBeenCalledWith("", "Phone-Horse-9"));
   });
 
   it("错误原样显示后端文案,不只显示一个 code", async () => {
     render(<CloudAccountSection />, { wrapper: WithQueryClient });
-    fireEvent.change(await screen.findByLabelText("邮箱"), { target: { value: "alice@example.com" } });
+    fireEvent.change(await screen.findByLabelText("邮箱或手机号"), { target: { value: "alice@example.com" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "wrong" } });
     api.loginWithPassword.mockRejectedValueOnce(apiError(401, "invalid_credentials", "邮箱或密码不正确。"));
 
@@ -170,7 +201,7 @@ describe("MosaelCloud 账号", () => {
 
   it("登录中禁用按钮", async () => {
     render(<CloudAccountSection />, { wrapper: WithQueryClient });
-    fireEvent.change(await screen.findByLabelText("邮箱"), { target: { value: "alice@example.com" } });
+    fireEvent.change(await screen.findByLabelText("邮箱或手机号"), { target: { value: "alice@example.com" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "secret" } });
     let release: (value: { email: string }) => void = () => {};
     api.loginWithPassword.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
