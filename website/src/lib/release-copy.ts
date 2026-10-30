@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.3.1": {
+    zh: [
+      "**MosaelCloud 管理台成为完整运营入口。** 供应商、模型、通道和套餐都能新增、编辑与启停；连接测试会显示上游原文；模型价格可查看历史；订单、用量与审计集中在一处。当前分区写进地址，刷新不会跳回概览。",
+      "**供应商和模型分开管理。** 同一供应商的多个模型共用一把 Key，换 Key 只改一处；模型 ID 由系统生成 UUID，界面只显示名称，同名模型自动用 (1)/(2) 区分。",
+      "**供应商没有模型时不再是一片空白。** 展开后直接显示空状态和「添加第一个模型」，打开的就是现有添加模型弹窗；支付方式选择铺满整行。",
+      "**官网通知改用 Sonner。** 跟 shadcn/ui 当前推荐和 Mosael App 保持一致：成功、失败和连接测试都用轻提示，不占版面。",
+    ],
+    en: [
+      "**The MosaelCloud admin console is now a complete operations surface.** Providers, models, channels and plans can be created, edited and toggled; connection tests show the upstream message; model prices keep a history; orders, usage and audit live in one place. The active section is stored in the URL, so a refresh stays put.",
+      "**Providers and models are managed separately.** Multiple models on one provider share a single key, so rotating it happens in one place; model IDs are server-generated UUIDs, the UI shows names, and duplicate names get (1)/(2) suffixes.",
+      "**A provider with no models no longer opens into blank space.** It shows an empty state with “Add first model”, opening the existing add-model dialog; the payment-method selector now fills its row.",
+      "**Website notifications now use Sonner.** This matches current shadcn/ui guidance and the Mosael app: success, failure and connection-test results are lightweight toasts instead of inline text.",
+    ],
+  },
   "v2.3.0": {
     zh: [
       "**官方 MosaelCloud 成了一条能直接用的连接。** 安装版默认接上官方 Cloud；登录后，供应商列表顶上的「Mosael Cloud」列出官方提供的模型和剩余积分，默认模型、AI Studio、智能体、画板和工作流都能直接选，不用填任何密钥；用量按积分单独记。",

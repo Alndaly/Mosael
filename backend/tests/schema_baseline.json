@@ -220,6 +220,7 @@
     "enabled",
     "last_used_at",
     "start_url",
+    "identity",
     "created_at",
     "updated_at"
   ],
