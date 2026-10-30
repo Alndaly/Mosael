@@ -443,7 +443,7 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model?.id ?? copy.id}</DialogDescription></DialogHeader>
+      <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model ? model.id : copy.modelCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           {!model && <Field label={copy.id}><AInput value={id} onChange={(event) => setId(event.target.value)} /></Field>}
           <Field label={copy.label}><AInput value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
@@ -529,7 +529,7 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{provider ? copy.providerEdit : copy.addProvider}</DialogTitle><DialogDescription>{provider?.base_url ?? copy.providerBaseReadOnly}</DialogDescription></DialogHeader>
+      <DialogContent><DialogHeader><DialogTitle>{provider ? copy.providerEdit : copy.addProvider}</DialogTitle><DialogDescription>{provider?.base_url ?? copy.providerCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           <Field label={copy.providerName}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
           {!provider && <Field label={copy.baseUrl}><AInput value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
@@ -704,7 +704,7 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan?.slug ?? copy.slug}</DialogDescription></DialogHeader>
+      <DialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan ? plan.slug : copy.planCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           {!plan && <Field label={copy.slug}><AInput value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>}
           <Field label={copy.label}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
