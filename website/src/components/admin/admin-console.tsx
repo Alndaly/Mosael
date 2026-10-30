@@ -315,25 +315,33 @@ function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
             <Button variant="outline" onClick={() => void role()} disabled={Boolean(busy)}>{current.role === "admin" ? copy.removeAdmin : copy.makeAdmin}</Button>
             <Button variant="outline" onClick={() => void reset()} disabled={Boolean(busy)}>{copy.resetPassword}</Button>
           </div>
-          {temporary && <div className="grid gap-1 rounded-xl border border-warning/30 bg-warning/5 p-3"><span className="text-xs text-muted-foreground">{copy.temporaryPassword}</span><code className="font-mono text-sm [overflow-wrap:anywhere]">{temporary}</code></div>}
-          <div className="grid gap-2 rounded-xl border border-border p-4">
-            <div className="flex items-center justify-between gap-2"><strong className="text-sm">{copy.plan}</strong><span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at)}` : copy.noPlan}</span></div>
+          {temporary && (
+            <div className="grid gap-1 rounded-lg bg-warning/10 p-3">
+              <span className="text-xs text-muted-foreground">{copy.temporaryPassword}</span>
+              <code className="font-mono text-sm [overflow-wrap:anywhere]">{temporary}</code>
+            </div>
+          )}
+          <div className="grid gap-2 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <strong className="text-sm">{copy.plan}</strong>
+              <span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at)}` : copy.noPlan}</span>
+            </div>
             <div className="flex gap-2">
-              <Select value={plan} onValueChange={setPlan}><SelectTrigger className="w-48"><SelectValue /></SelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={plan} onValueChange={setPlan}><SelectTrigger className="min-w-0 flex-1"><SelectValue /></SelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
               <Button variant="outline" onClick={() => void subscribe()} disabled={!plan || Boolean(busy)}>{copy.subscribe}</Button>
             </div>
           </div>
-          <div className="grid gap-3 rounded-xl border border-border p-4">
+          <div className="grid gap-3 border-t border-border pt-4">
             <strong className="text-sm">{copy.giftCredits}</strong>
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label={copy.credits}><Input value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
               <Field label={copy.days}><Input value={days} onChange={(event) => setDays(event.target.value)} /></Field>
               <Field label={copy.note}><Input value={note} onChange={(event) => setNote(event.target.value)} /></Field>
             </div>
-            <Button variant="outline" onClick={() => void gift()} disabled={Boolean(busy)}>{copy.grant}</Button>
+            <Button className="w-full" variant="outline" onClick={() => void gift()} disabled={Boolean(busy)}>{copy.grant}</Button>
           </div>
-          {current.credit_batches?.length ? <div className="text-xs text-muted-foreground">{current.credit_batches.map((batch, index) => <p key={`${batch.expires_at}-${index}`} className="m-0 py-1">{batch.remaining} · {batch.source} · {date(batch.expires_at)}</p>)}</div> : null}
-          <div className="border-t border-border pt-3">
+          {current.credit_batches?.length ? <div className="grid gap-1 border-t border-border pt-4 text-xs text-muted-foreground">{current.credit_batches.map((batch, index) => <p key={`${batch.expires_at}-${index}`} className="m-0">{batch.remaining} · {batch.source} · {date(batch.expires_at)}</p>)}</div> : null}
+          <div className="grid gap-1 border-t border-border pt-4">
             <strong className="text-sm">{copy.orders}</strong>
             {current.orders?.length ? current.orders.map((order) => <p key={order.id} className="m-0 py-1 text-xs text-muted-foreground">{order.plan?.name || "—"} · {order.status} · {money(order.amount_cents)} · {date(order.created_at)}</p>) : <p className="m-0 py-2 text-xs text-muted-foreground">{copy.noOrders}</p>}
           </div>
@@ -486,7 +494,7 @@ function ChannelDialog({ copy, models, channel, onClose, onSaved, onFailure }: {
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{channel?.base_url ?? copy.baseUrlReadOnly}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
+          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
           {!channel && <Field label={copy.baseUrl}><Input value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
           <Field label={copy.upstreamModel}><Input value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
           <Field label={copy.apiKey}><Input type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
@@ -545,7 +553,7 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
         <div className="grid gap-3">
           {!plan && <Field label={copy.slug}><Input value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>}
           <Field label={copy.label}><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
-          <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
+          <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
           <Field label={copy.monthlyCredits}><Input value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
           <Field label={copy.ttlDays}><Input value={ttl} onChange={(event) => setTtl(event.target.value)} /></Field>
           <Field label={copy.priceCents}><Input value={price} onChange={(event) => setPrice(event.target.value)} /></Field>
