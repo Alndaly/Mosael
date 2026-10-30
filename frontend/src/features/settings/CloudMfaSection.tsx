@@ -16,7 +16,7 @@ import { FailureCard } from "@/components/failure/FailureCard";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SettingsBlock, SettingsField, SettingsForm } from "@/components/settings/settings-layout";
+import { SETTINGS_FIELD_WIDTH, SettingsRow } from "@/components/settings/settings-layout";
 
 /**
  * 桌面端 MosaelCloud 账号的双因素设置。和官网「安全」分区共用 Cloud 的 /mfa 接口;
@@ -128,126 +128,129 @@ export function CloudMfaSection() {
   };
 
   return (
-    <SettingsBlock>
-      <div className="grid gap-3">
-        <div className="grid gap-1">
-          <strong className="text-ui-lg font-semibold leading-snug">{t("settingsCloudMfaTitle")}</strong>
-          <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsCloudMfaDesc")}</small>
-        </div>
-        {loading ? (
-          <small className="text-ui-sm text-muted-foreground">{t("settingsCloudMfaLoading")}</small>
-        ) : (
-          <>
-            {failure && (
-              <FailureCard
-                size="inline"
-                status="failed"
-                title={t("settingsCloudMfaTitle")}
-                summary={failure}
-                copyText={failure}
-              />
-            )}
-            {codes.length > 0 && (
-              <div className="grid gap-2 rounded-md border border-border bg-secondary/40 p-3">
-                <strong className="text-ui-sm font-medium">{t("settingsCloudMfaRecoveryTitle")}</strong>
-                <small className="text-ui-sm leading-[1.5] text-muted-foreground">
-                  {t("settingsCloudMfaRecoveryHint")}
-                </small>
-                <pre className="m-0 overflow-x-auto font-mono text-ui-sm">{codes.join("\n")}</pre>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => void navigator.clipboard.writeText(codes.join("\n")).catch(() => undefined)}
-                  >
-                    {t("settingsCloudMfaCopy")}
-                  </Button>
-                  <Button variant="ghost" onClick={() => setCodes([])}>
-                    {t("settingsCloudMfaSaved")}
-                  </Button>
-                </div>
-              </div>
-            )}
-            {!status?.enabled && !setup && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-ui-sm text-muted-foreground">{t("settingsCloudMfaOff")}</span>
+    <div className="grid [&>*+*]:border-t [&>*+*]:border-divider">
+        <SettingsRow label={t("settingsCloudMfaTitle")} description={t("settingsCloudMfaDesc")}>
+          {loading ? (
+            <small className="text-ui-sm text-muted-foreground">{t("settingsCloudMfaLoading")}</small>
+          ) : (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="text-ui-sm text-muted-foreground">
+                {status?.enabled ? t("settingsCloudMfaOn") : t("settingsCloudMfaOff")}
+              </span>
+              {!status?.enabled && !setup && (
                 <Button variant="outline" onClick={() => void startSetup()} loading={busy === "setup"}>
                   {t("settingsCloudMfaEnable")}
                 </Button>
-              </div>
-            )}
-            {setup && (
-              <div className="grid gap-3">
-                <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsCloudMfaScan")}</small>
-                {qr && (
-                  <FallbackImage
-                    src={qr}
-                    alt={t("settingsCloudMfaQrAlt")}
-                    width={170}
-                    height={170}
-                    className="rounded-md"
-                  />
-                )}
-                <small className="text-ui-sm leading-[1.5] text-muted-foreground">
-                  {t("settingsCloudMfaSecret")}
-                </small>
-                <code className="font-mono text-ui-sm [overflow-wrap:anywhere]">{setup.secret}</code>
-                <SettingsForm>
-                  <SettingsField label={t("settingsCloudMfaSetupCode")}>
-                    <Input
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      value={code}
-                      onChange={(event) => setCode(event.target.value)}
-                    />
-                  </SettingsField>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSetup(null);
-                        setQr("");
-                        setCode("");
-                        setFailure("");
-                      }}
-                    >
-                      {t("settingsCloudMfaCancel")}
-                    </Button>
-                    <Button onClick={() => void enable()} loading={busy === "enable"}>
-                      {t("settingsCloudMfaConfirm")}
-                    </Button>
-                  </div>
-                </SettingsForm>
-              </div>
-            )}
-            {status?.enabled && (
-              <div className="grid gap-3 border-t border-border pt-4">
-                <small className="text-ui-sm text-muted-foreground">
-                  {t("settingsCloudMfaRemaining").replace("{count}", String(status.recovery_codes_remaining))}
-                </small>
-                <SettingsField label={t("settingsCloudMfaSetupCode")}>
-                  <Input
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={code}
-                    onChange={(event) => setCode(event.target.value)}
-                  />
-                </SettingsField>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => void regenerate()} loading={busy === "recovery"}>
-                    {t("settingsCloudMfaRegenerate")}
-                  </Button>
-                  <Button variant="outline" onClick={() => void disable()} loading={busy === "disable"}>
-                    {t("settingsCloudMfaDisable")}
-                  </Button>
-                </div>
-                <small className="text-ui-sm leading-[1.5] text-muted-foreground">
-                  {t("settingsCloudMfaDisableHint")}
-                </small>
-              </div>
-            )}
+              )}
+            </div>
+          )}
+        </SettingsRow>
+
+        {failure && (
+          <div className="px-0.5 py-4">
+            <FailureCard
+              size="inline"
+              status="failed"
+              title={t("settingsCloudMfaTitle")}
+              summary={failure}
+              copyText={failure}
+            />
+          </div>
+        )}
+
+        {codes.length > 0 && (
+          <div className="grid gap-2 px-0.5 py-5">
+            <strong className="text-ui-md font-medium">{t("settingsCloudMfaRecoveryTitle")}</strong>
+            <small className="text-ui-sm leading-[1.5] text-muted-foreground">
+              {t("settingsCloudMfaRecoveryHint")}
+            </small>
+            <pre className="m-0 overflow-x-auto font-mono text-ui-sm">{codes.join("\n")}</pre>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => void navigator.clipboard.writeText(codes.join("\n")).catch(() => undefined)}
+              >
+                {t("settingsCloudMfaCopy")}
+              </Button>
+              <Button variant="ghost" onClick={() => setCodes([])}>
+                {t("settingsCloudMfaSaved")}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {setup && (
+          <>
+            <SettingsRow label={t("settingsCloudMfaScan")}>
+              {qr && (
+                <FallbackImage
+                  src={qr}
+                  alt={t("settingsCloudMfaQrAlt")}
+                  width={170}
+                  height={170}
+                  className="rounded-md"
+                />
+              )}
+            </SettingsRow>
+            <SettingsRow label={t("settingsCloudMfaSecret")}>
+              <code className="max-w-[360px] font-mono text-ui-sm [overflow-wrap:anywhere]">{setup.secret}</code>
+            </SettingsRow>
+            <SettingsRow label={t("settingsCloudMfaSetupCode")}>
+              <Input
+                aria-label={t("settingsCloudMfaSetupCode")}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className={`${SETTINGS_FIELD_WIDTH} shrink-0`}
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+              />
+            </SettingsRow>
+            <div className="flex flex-wrap items-center justify-end gap-2 px-0.5 py-5">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSetup(null);
+                  setQr("");
+                  setCode("");
+                  setFailure("");
+                }}
+              >
+                {t("settingsCloudMfaCancel")}
+              </Button>
+              <Button onClick={() => void enable()} loading={busy === "enable"}>
+                {t("settingsCloudMfaConfirm")}
+              </Button>
+            </div>
           </>
         )}
-      </div>
-    </SettingsBlock>
+
+        {status?.enabled && (
+          <>
+            <SettingsRow
+              label={t("settingsCloudMfaRecoveryTitle")}
+              description={t("settingsCloudMfaRemaining").replace("{count}", String(status.recovery_codes_remaining))}
+            >
+              <Button variant="outline" onClick={() => void regenerate()} loading={busy === "recovery"}>
+                {t("settingsCloudMfaRegenerate")}
+              </Button>
+            </SettingsRow>
+            <SettingsRow label={t("settingsCloudMfaSetupCode")} description={t("settingsCloudMfaDisableHint")}>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Input
+                  aria-label={t("settingsCloudMfaSetupCode")}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className={`${SETTINGS_FIELD_WIDTH} shrink-0`}
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                />
+                <Button variant="outline" onClick={() => void disable()} loading={busy === "disable"}>
+                  {t("settingsCloudMfaDisable")}
+                </Button>
+              </div>
+            </SettingsRow>
+          </>
+        )}
+    </div>
   );
 }

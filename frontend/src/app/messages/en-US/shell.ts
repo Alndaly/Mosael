@@ -149,6 +149,7 @@ export const shell = {
   settingsCloudMfaTitle: "Two-factor authentication",
   settingsCloudMfaDesc: "Add an authenticator code on top of your password; sign-in will need this second step.",
   settingsCloudMfaLoading: "Loading two-factor status…",
+  settingsCloudMfaOn: "On",
   settingsCloudMfaOff: "Off",
   settingsCloudMfaEnable: "Enable two-factor",
   settingsCloudMfaScan: "Scan the QR code with an authenticator app, or enter the secret below.",

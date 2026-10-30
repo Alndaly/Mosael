@@ -151,6 +151,7 @@ export const shell = {
   settingsCloudMfaTitle: "双因素认证",
   settingsCloudMfaDesc: "用认证器 App 的 6 位验证码再保护一层；开启后登录需要第二步验证。",
   settingsCloudMfaLoading: "正在读取双因素状态…",
+  settingsCloudMfaOn: "已开启",
   settingsCloudMfaOff: "未开启",
   settingsCloudMfaEnable: "开启双因素认证",
   settingsCloudMfaScan: "用认证器 App 扫描二维码，或手动输入下面的密钥。",
