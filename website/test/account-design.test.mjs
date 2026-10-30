@@ -55,7 +55,7 @@ test("表单控件有真实 label、聚焦环、密码可见性和错误关联",
   assert.match(controls, /hidePassword/, "没有隐藏密码的文案");
   assert.match(controls, /aria-pressed=\{visible\}/, "密码可见性按钮没有 aria-pressed");
   assert.match(controls, /role="alert"/, "错误区域没有 role=alert");
-  // 成功通知改走 toast(Radix 自带 role="status"/aria-live,见 toast.test.mjs ⑦):
+  // 成功通知改走 toast(Sonner 自带 live region,见 toast.test.mjs ⑦):
   // 表单零件里不再有第二块 live region,留下的只有错误的 role=alert。
   assert.doesNotMatch(controls, /<output/, "表单零件里还留着一条内联的成功提示");
   assert.match(controls, /LoaderCircle/, "提交按钮没有 loading 图标");

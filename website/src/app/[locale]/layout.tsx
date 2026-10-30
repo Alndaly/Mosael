@@ -12,7 +12,7 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "../globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 import { HTML_LANG, LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { QueryProvider } from "./query-provider";
 import { getMessages } from "@/i18n/messages";

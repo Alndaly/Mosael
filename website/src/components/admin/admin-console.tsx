@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -42,7 +42,6 @@ import {
   cloudAdmin,
   type AdminAudit,
   type AdminChannel,
-  type AdminChannelTest,
   type AdminModel,
   type AdminOrder,
   type AdminPlan,
@@ -228,7 +227,7 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
   const audit = auditQuery.data ?? [];
   const overview = overviewQuery.data ?? null;
   const failure = queryFailure ? failureText(queryFailure, copy, locale) : "";
-  const notifyFailure = (failure: unknown) => toast({ title: failureText(failure, copy, locale) });
+  const notifyFailure = (failure: unknown) => toast.error(failureText(failure, copy, locale));
 
   return (
     <SidebarProvider>
@@ -691,17 +690,15 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
   copy: Messages["admin"]; models: AdminModel[]; providers: AdminProvider[]; channels: AdminChannel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [dialog, setDialog] = useState<{ channel: AdminChannel | null } | null>(null);
-  const [tests, setTests] = useState<Record<string, AdminChannelTest>>({});
   const [testing, setTesting] = useState("");
   const test = async (channel: AdminChannel) => {
     setTesting(channel.id);
     try {
       const result = (await cloudAdmin.testChannel(channel.id)).result;
       if (result.ok) {
-        setTests((current) => ({ ...current, [channel.id]: result }));
+        toast.success(copy.testOk, { description: `${channel.model_label} · ${result.status}` });
       } else {
-        toast({
-          title: copy.testFailed,
+        toast.error(copy.testFailed, {
           description: `${result.status}${result.detail ? ` · ${result.detail}` : ""}`,
         });
       }
@@ -724,7 +721,7 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
                 <TableCell>{channel.priority}</TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ChannelEnabledSwitch copy={copy} channel={channel} onChanged={onChanged} onFailure={onFailure} /></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className="text-xs text-success">{copy.testOk} · {tests[channel.id].status}</span>}</TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>

@@ -92,7 +92,7 @@ test("错误和提示通过 aria-describedby 关联", () => {
   assert.match(login, /describedBy=\{codeDescription\}/, "登录表单的验证码字段没有关联提示 / 错误");
   // 「验证码已发送」是成功通知,走 toast(不占版面,也就不再有一条内联元素可关联);
   // 需要关联到字段的只剩错误。
-  assert.match(signup, /toast\(\{ title: copy\.codeSent \}\)/, "注册发码成功没有弹 toast");
+  assert.match(signup, /toast\.success\(copy\.codeSent\)/, "注册发码成功没有弹 toast");
 });
 
 test("浏览器客户端只新增同源的验证码端点,签名带上 code", () => {

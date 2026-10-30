@@ -15,7 +15,7 @@ import {
 } from "@/components/account/form-controls";
 import { OAuthButtons } from "@/components/account/oauth-buttons";
 import { useResendCountdown } from "@/components/account/use-email-code";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
@@ -68,7 +68,7 @@ export function SignupForm({
     try {
       await cloudAccount.sendSignupCode(email.trim());
       // 「发送成功」是一过性通知:弹一条 toast,表单里不留下占位的一条提示。
-      toast({ title: copy.codeSent });
+      toast.success(copy.codeSent);
       countdown.start();
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);

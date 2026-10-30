@@ -11,7 +11,7 @@ import { AccountField, FormAlert, SubmitButton } from "@/components/account/form
 
 import { InitialTile } from "@/components/community/tile";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount, cloudProfile } from "@/lib/cloud";
@@ -97,7 +97,7 @@ export function DashboardProfile({
       // 作者名一起变;个人页与 viewer 共用同一份缓存,一并刷新。
       await invalidateAfterProfileSave(queryClient);
       // 保存成功是一过性通知:弹一下就走,不在表单上方留一条常驻提示。
-      toast({ title: copy.saved });
+      toast.success(copy.saved);
     } catch (failure) {
       if (failure instanceof CloudApiError) {
         if (failure.code === "handle_taken" || failure.code === "handle_reserved") {

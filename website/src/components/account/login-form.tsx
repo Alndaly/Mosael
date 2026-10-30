@@ -17,7 +17,7 @@ import {
 import { MfaChallenge } from "@/components/account/mfa-challenge";
 import { OAuthButtons } from "@/components/account/oauth-buttons";
 import { useResendCountdown } from "@/components/account/use-email-code";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount, isMfaChallenge } from "@/lib/cloud";
@@ -77,7 +77,7 @@ export function LoginForm({
   useEffect(() => {
     if (!registered || registeredToasted.current) return;
     registeredToasted.current = true;
-    toast({ title: copy.registered });
+    toast.success(copy.registered);
   }, [registered, copy.registered]);
 
   const sendCode = async () => {
@@ -92,7 +92,7 @@ export function LoginForm({
     try {
       await cloudAccount.sendLoginCode(email.trim());
       // 后端对"注册过 / 没注册"回同一句,界面也只说这一句。
-      toast({ title: copy.loginCodeSent });
+      toast.success(copy.loginCodeSent);
       emailCountdown.start();
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
@@ -112,7 +112,7 @@ export function LoginForm({
     setSendingCode(true);
     try {
       await cloudAccount.sendLoginSmsCode(phone.trim());
-      toast({ title: copy.smsCodeSent });
+      toast.success(copy.smsCodeSent);
       smsCountdown.start();
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 
@@ -25,7 +25,7 @@ export function OAuthOutcomeToast({ locale, outcome }: { locale: Locale; outcome
     if (!outcome || shown.current) return;
     shown.current = true;
     const copy = getMessages(locale).account;
-    toast({ title: outcome === "created" ? copy.oauthCreated : copy.oauthExisting });
+    toast.success(outcome === "created" ? copy.oauthCreated : copy.oauthExisting);
   }, [locale, outcome]);
 
   return null;
