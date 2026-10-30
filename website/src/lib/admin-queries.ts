@@ -51,6 +51,13 @@ export function useAdminModels() {
   return useQuery({ queryKey: queryKeys.adminModels(), queryFn: async () => (await cloudAdmin.models()).models });
 }
 
+export function useAdminPrices(modelId: string) {
+  return useQuery({
+    queryKey: queryKeys.adminPrices(modelId),
+    queryFn: async () => (await cloudAdmin.prices(modelId)).prices,
+  });
+}
+
 export function useAdminProviders() {
   return useQuery({
     queryKey: queryKeys.adminProviders(),

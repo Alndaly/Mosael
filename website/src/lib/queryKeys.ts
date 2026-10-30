@@ -47,6 +47,7 @@ export const queryKeys = {
   adminOverview: () => ["admin", "overview"] as const,
   adminUsers: () => ["admin", "users"] as const,
   adminModels: () => ["admin", "models"] as const,
+  adminPrices: (modelId: string) => ["admin", "models", modelId, "prices"] as const,
   adminProviders: () => ["admin", "providers"] as const,
   adminChannels: () => ["admin", "channels"] as const,
   adminPlans: () => ["admin", "plans"] as const,

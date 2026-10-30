@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "@/components/ui/use-toast";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,6 +30,7 @@ import {
   useAdminOrders,
   useAdminOverview,
   useAdminPlans,
+  useAdminPrices,
   useAdminProviders,
   useAdminUsage,
   useAdminUsers,
@@ -176,7 +178,6 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
   const pathname = usePathname();
   const router = useRouter();
   const tab = readTab(searchParams.get("tab"));
-  const [error, setError] = useState("");
   const queryClient = useQueryClient();
   const overviewQuery = useAdminOverview();
   const usersQuery = useAdminUsers();
@@ -203,7 +204,6 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
   const queryFailure = queries.find((query) => query.error)?.error;
 
   const invalidate = (...keys: readonly (readonly unknown[])[]) => {
-    setError("");
     for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey });
   };
   const refresh = () => invalidate(...adminInvalidation.all);
@@ -227,7 +227,8 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
   const usage = usageQuery.data ?? null;
   const audit = auditQuery.data ?? [];
   const overview = overviewQuery.data ?? null;
-  const failure = error || (queryFailure ? failureText(queryFailure, copy, locale) : "");
+  const failure = queryFailure ? failureText(queryFailure, copy, locale) : "";
+  const notifyFailure = (failure: unknown) => toast({ title: failureText(failure, copy, locale) });
 
   return (
     <SidebarProvider>
@@ -266,11 +267,11 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
                 ))}
               </div>
             ) : <Empty>{loading ? copy.loading : copy.noUsers}</Empty>)}
-            {tab === "users" && <UsersPanel copy={copy} locale={locale} users={users} plans={plans} onChanged={() => invalidate(...adminInvalidation.user)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "models" && <ModelsPanel copy={copy} models={models} onChanged={() => invalidate(...adminInvalidation.model)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "providers" && <ProvidersPanel copy={copy} providers={providers} onChanged={() => invalidate(...adminInvalidation.provider)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "channels" && <ChannelsPanel copy={copy} models={models} providers={providers} channels={channels} onChanged={() => invalidate(...adminInvalidation.channel)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "plans" && <PlansPanel copy={copy} plans={plans} onChanged={() => invalidate(...adminInvalidation.plan)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "users" && <UsersPanel copy={copy} locale={locale} users={users} plans={plans} onChanged={() => invalidate(...adminInvalidation.user)} onFailure={notifyFailure} />}
+            {tab === "models" && <ModelsPanel copy={copy} locale={locale} models={models} onChanged={() => invalidate(...adminInvalidation.model)} onFailure={notifyFailure} />}
+            {tab === "providers" && <ProvidersPanel copy={copy} providers={providers} onChanged={() => invalidate(...adminInvalidation.provider)} onFailure={notifyFailure} />}
+            {tab === "channels" && <ChannelsPanel copy={copy} models={models} providers={providers} channels={channels} onChanged={() => invalidate(...adminInvalidation.channel)} onFailure={notifyFailure} />}
+            {tab === "plans" && <PlansPanel copy={copy} plans={plans} onChanged={() => invalidate(...adminInvalidation.plan)} onFailure={notifyFailure} />}
             {tab === "operations" && <OperationsPanel copy={copy} locale={locale} orders={orders} usage={usage} />}
             {tab === "audit" && <AuditPanel copy={copy} locale={locale} audit={audit} />}
           </div>
@@ -493,8 +494,8 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onFailure }: {
   );
 }
 
-function ModelsPanel({ copy, models, onChanged, onFailure }: {
-  copy: Messages["admin"]; models: AdminModel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
+function ModelsPanel({ copy, locale, models, onChanged, onFailure }: {
+  copy: Messages["admin"]; locale: Locale; models: AdminModel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [dialog, setDialog] = useState<{ model: AdminModel | null } | null>(null);
   const [priceFor, setPriceFor] = useState<AdminModel | null>(null);
@@ -510,7 +511,7 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
                 <TableCell>{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</TableCell>
                 <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
                 <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.map((reason) => modelReasonLabel(reason, copy)).join(", ")}</Badge></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="ghost" onClick={() => setPriceFor(model)}>{copy.addPrice}</AButton></div></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="ghost" onClick={() => setPriceFor(model)}>{model.current_price ? copy.priceHistory : copy.addPrice}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -518,7 +519,7 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
         </CardContent>
       </Card>
       {dialog && <ModelDialog copy={copy} model={dialog.model} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
-      {priceFor && <PriceDialog copy={copy} model={priceFor} onClose={() => setPriceFor(null)} onSaved={() => { setPriceFor(null); onChanged(); }} onFailure={onFailure} />}
+      {priceFor && <PriceDialog copy={copy} locale={locale} model={priceFor} onClose={() => setPriceFor(null)} onSaved={() => { setPriceFor(null); onChanged(); }} onFailure={onFailure} />}
     </>
   );
 }
@@ -557,25 +558,45 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   );
 }
 
-function PriceDialog({ copy, model, onClose, onSaved, onFailure }: {
-  copy: Messages["admin"]; model: AdminModel; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
+function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
+  copy: Messages["admin"]; locale: Locale; model: AdminModel; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
+  const queryClient = useQueryClient();
+  const prices = useAdminPrices(model.id);
   const [input, setInput] = useState("0");
   const [output, setOutput] = useState("0");
   const [from, setFrom] = useState("");
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     setSaving(true);
-    try { await cloudAdmin.addPrice(model.id, Number(input), Number(output), from || undefined); onSaved(); }
+    try {
+      await cloudAdmin.addPrice(model.id, Number(input), Number(output), from || undefined);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminPrices(model.id) });
+      onSaved();
+    }
     catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{copy.addPrice}</DialogTitle><DialogDescription>{model.display_label}</DialogDescription></DialogHeader>
-        <div className="grid gap-3">
-          <Field label={copy.inputPer1k}><AInput value={input} onChange={(event) => setInput(event.target.value)} /></Field>
-          <Field label={copy.outputPer1k}><AInput value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
-          <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
+      <DialogContent className="w-[min(40rem,calc(100vw-2rem))]"><DialogHeader><DialogTitle>{copy.priceHistory}</DialogTitle><DialogDescription>{model.display_label}</DialogDescription></DialogHeader>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            {prices.isPending ? (
+              <output className="m-0 block text-sm text-muted-foreground">{copy.loading}</output>
+            ) : prices.data?.length ? (
+              <Table><TableHeader><TableRow><TableHead>{copy.effectiveAt}</TableHead><TableHead>{copy.inputPer1k}</TableHead><TableHead>{copy.outputPer1k}</TableHead></TableRow></TableHeader>
+                <TableBody>{prices.data.map((price) => <TableRow key={price.effective_from}><TableCell>{new Date(price.effective_from).toLocaleString(locale === "zh" ? "zh-CN" : "en")}</TableCell><TableCell>{price.input_per_1k}</TableCell><TableCell>{price.output_per_1k}</TableCell></TableRow>)}</TableBody>
+              </Table>
+            ) : (
+              <p className="m-0 text-sm text-muted-foreground">{copy.noPriceHistory}</p>
+            )}
+          </div>
+          <div className="grid gap-3 border-t border-border pt-4">
+            <strong className="text-sm">{copy.addPrice}</strong>
+            <Field label={copy.inputPer1k}><AInput value={input} onChange={(event) => setInput(event.target.value)} /></Field>
+            <Field label={copy.outputPer1k}><AInput value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
+            <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
+          </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.addPrice}</AButton></DialogFooter>
       </DialogContent>
