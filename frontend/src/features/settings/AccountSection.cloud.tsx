@@ -19,7 +19,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { Input } from "@/components/ui/input";
-import { SettingsBlock, SettingsField, SettingsForm } from "@/components/settings/settings-layout";
+import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
 
 /**
  * 设置 → 账户里的「MosaelCloud 账号」:桌面端**自己**登录云端。
@@ -195,18 +195,23 @@ export function CloudAccountSection() {
   const canSend = !pending && identifier.length > 0 && cooldown === 0;
 
   return (
-    <SettingsBlock>
-      <div data-cloud-account="" className="grid gap-3">
-        <div className="grid gap-1">
-          <strong className="text-ui-lg font-semibold leading-snug">{t("settingsCloudAccount")}</strong>
-          <small className="text-ui-sm leading-[1.5] text-muted-foreground">
-            {t("settingsCloudAccountDesc")}
-          </small>
-        </div>
-
-        {loading ? (
+    <SettingsGroup
+      title={t("settingsCloudAccount")}
+      description={t("settingsCloudAccountDesc")}
+      actions={
+        session ? (
+          <Button variant="outline" size="sm" onClick={() => void signOut()} loading={pending === "logout"} disabled={Boolean(pending)}>
+            {t("settingsCloudSignOut")}
+          </Button>
+        ) : undefined
+      }
+    >
+      {loading ? (
+        <SettingsBlock>
           <small className="text-ui-sm text-muted-foreground">{t("settingsCloudChecking")}</small>
-        ) : notConfigured ? (
+        </SettingsBlock>
+      ) : notConfigured ? (
+        <SettingsBlock>
           <div className="grid gap-2">
             <small id={hintId} className="text-ui-sm leading-[1.5] text-muted-foreground">
               {t("settingsCloudNotConfigured")}
@@ -221,74 +226,84 @@ export function CloudAccountSection() {
               </Button>
             </div>
           </div>
-        ) : session ? (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="grid gap-0.5">
-                <strong className="text-sm font-[650]">{session.email}</strong>
-                <small className="text-ui-sm text-muted-foreground">{t("settingsCloudSignedIn")}</small>
-              </div>
-              <Button variant="outline" onClick={() => void signOut()} loading={pending === "logout"} disabled={Boolean(pending)}>
-                {t("settingsCloudSignOut")}
-              </Button>
+        </SettingsBlock>
+      ) : session ? (
+        <>
+          <SettingsBlock>
+            <div className="grid gap-0.5">
+              <strong className="text-sm font-[650]">{session.email}</strong>
+              <small className="text-ui-sm text-muted-foreground">{t("settingsCloudSignedIn")}</small>
             </div>
-            <div className="grid gap-3 border-t border-border pt-4">
-                <div className="grid gap-1">
-                  <strong className="text-ui-md font-semibold">
-                    {session.has_password ? t("settingsCloudChangePassword") : t("settingsCloudSetPassword")}
-                  </strong>
-                  <small className="text-ui-sm leading-[1.5] text-muted-foreground">
-                    {t("settingsCloudPasswordHint")}
-                  </small>
-                </div>
-                <form onSubmit={(event) => void savePassword(event)}>
-                  <SettingsForm>
-                    {session.has_password && (
-                      <SettingsField label={t("currentPassword")}>
-                        <Input
-                          type="password"
-                          autoComplete="current-password"
-                          value={currentPassword}
-                          onChange={(event) => setCurrentPassword(event.target.value)}
-                        />
-                      </SettingsField>
-                    )}
-                    <SettingsField label={t("newPassword")}>
-                      <Input
-                        type="password"
-                        autoComplete="new-password"
-                        value={newPassword}
-                        onChange={(event) => setNewPassword(event.target.value)}
-                      />
-                    </SettingsField>
-                    <SettingsField label={t("confirmPassword")}>
-                      <Input
-                        type="password"
-                        autoComplete="new-password"
-                        value={confirmPassword}
-                        onChange={(event) => setConfirmPassword(event.target.value)}
-                      />
-                    </SettingsField>
-                    <div className="flex items-center justify-between gap-3">
-                      <small role="alert" className="text-ui-sm leading-[1.5] text-destructive">
-                        {passwordFailure}
-                      </small>
-                      <Button
-                        type="submit"
-                        loading={pending === "password"}
-                        disabled={pending === "password" || !newPassword || !confirmPassword}
-                      >
-                        {t("updatePassword")}
-                      </Button>
-                    </div>
-                    {passwordSaved && (
-                      <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsCloudPasswordUpdated")}</small>
-                    )}
-                  </SettingsForm>
-                </form>
+            {failure && (
+              <FailureCard
+                size="inline"
+                status="failed"
+                title={t("settingsCloudSignInFailed")}
+                summary={failure}
+                copyText={failure}
+              />
+            )}
+          </SettingsBlock>
+          <SettingsBlock>
+            <div className="grid gap-3">
+              <div className="grid gap-1">
+                <strong className="text-ui-lg font-semibold leading-snug">
+                  {session.has_password ? t("settingsCloudChangePassword") : t("settingsCloudSetPassword")}
+                </strong>
+                <small className="text-ui-sm leading-[1.5] text-muted-foreground">
+                  {t("settingsCloudPasswordHint")}
+                </small>
               </div>
-          </>
-        ) : (
+              <form onSubmit={(event) => void savePassword(event)}>
+                <SettingsForm>
+                  {session.has_password && (
+                    <SettingsField label={t("currentPassword")}>
+                      <Input
+                        type="password"
+                        autoComplete="current-password"
+                        value={currentPassword}
+                        onChange={(event) => setCurrentPassword(event.target.value)}
+                      />
+                    </SettingsField>
+                  )}
+                  <SettingsField label={t("newPassword")}>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                    />
+                  </SettingsField>
+                  <SettingsField label={t("confirmPassword")}>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                    />
+                  </SettingsField>
+                  <div className="flex items-center justify-between gap-3">
+                    <small role="alert" className="text-ui-sm leading-[1.5] text-destructive">
+                      {passwordFailure}
+                    </small>
+                    <Button
+                      type="submit"
+                      loading={pending === "password"}
+                      disabled={pending === "password" || !newPassword || !confirmPassword}
+                    >
+                      {t("updatePassword")}
+                    </Button>
+                  </div>
+                  {passwordSaved && (
+                    <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsCloudPasswordUpdated")}</small>
+                  )}
+                </SettingsForm>
+              </form>
+            </div>
+          </SettingsBlock>
+        </>
+      ) : (
+        <SettingsBlock>
           <form
             data-cloud-login-form=""
             onSubmit={(event) => {
@@ -337,9 +352,7 @@ export function CloudAccountSection() {
                   />
                 </SettingsField>
               ) : null}
-              {/* 切换登录方式 = **和主动作并排的次要动作**,所以走 outline(和输入框同一种描边、同高)。
-                  以前是 ghost:没有轮廓、只有悬停底色,左侧像一行浮着的字,和右边的实心按钮凑不成一对
-                  (维护者:「现在怪怪的 好像多出间距一样」)。 */}
+              {/* 切换登录方式 = **和主动作并排的次要动作**,所以走 outline(和输入框同一种描边、同高)。 */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   {mode !== "password" && (
@@ -389,18 +402,17 @@ export function CloudAccountSection() {
               )}
             </SettingsForm>
           </form>
-        )}
-
-        {failure && (
-          <FailureCard
-            size="inline"
-            status="failed"
-            title={t("settingsCloudSignInFailed")}
-            summary={failure}
-            copyText={failure}
-          />
-        )}
-      </div>
-    </SettingsBlock>
+          {failure && (
+            <FailureCard
+              size="inline"
+              status="failed"
+              title={t("settingsCloudSignInFailed")}
+              summary={failure}
+              copyText={failure}
+            />
+          )}
+        </SettingsBlock>
+      )}
+    </SettingsGroup>
   );
 }
