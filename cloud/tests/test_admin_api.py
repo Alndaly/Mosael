@@ -60,6 +60,31 @@ def test_last_admin_cannot_be_demoted(client):
     assert response.json()["error"] == "last_admin"
 
 
+def test_admin_can_reset_a_members_password_and_invalidates_sessions(client):
+    make_admin(client)
+    signup(client, email="reset@example.com", password=PASSWORD)
+    login(client, email="admin@example.com", password=PASSWORD)
+    with client.app.state.db.session() as db:
+        customer_id = db.scalar(select(CloudUser.id).where(CloudUser.email == "reset@example.com"))
+
+    reset = client.post(api(f"/admin/users/{customer_id}/reset-password"))
+    assert reset.status_code == 200, reset.text
+    temporary = reset.json()["temporary_password"]
+    assert len(temporary) >= 8
+
+    old = client.post(api("/login"), json={"email": "reset@example.com", "password": PASSWORD})
+    assert old.status_code == 401
+    fresh = client.post(api("/login"), json={"email": "reset@example.com", "password": temporary})
+    assert fresh.status_code == 200, fresh.text
+    login(client, email="admin@example.com", password=PASSWORD)
+
+    with client.app.state.db.session() as db:
+        db_user = db.scalar(select(CloudUser).where(CloudUser.email == "admin@example.com"))
+        self_reset = client.post(api(f"/admin/users/{db_user.id}/reset-password"))
+    assert self_reset.status_code == 400
+    assert self_reset.json()["error"] == "cannot_reset_self"
+
+
 def test_admin_can_gift_credits_and_subscribe(client):
     make_admin(client)
     signup(client, email="customer@example.com", password=PASSWORD)

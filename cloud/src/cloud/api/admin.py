@@ -70,6 +70,14 @@ def admin_user_credits(user_id: str, body: GiftIn, actor: CurrentAdmin, db: DbSe
     return {"user": user}
 
 
+@router.post("/admin/users/{user_id}/reset-password")
+def admin_reset_user_password(user_id: str, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    temporary = service.reset_password(db, user_id, acting_user_id=actor.id)
+    audit.record(db, actor=actor, action="user.password_reset", target_type="user", target_id=user_id)
+    db.commit()
+    return {"temporary_password": temporary}
+
+
 @router.post("/admin/users/{user_id}/subscriptions")
 def admin_user_subscription(user_id: str, body: SubscribeIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     user = service.subscribe(db, user_id, plan_slug=body.plan)

@@ -276,6 +276,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "You cannot remove the last MosaelCloud administrator.",
         "zh": "不能撤销最后一名 MosaelCloud 管理员。",
     },
+    "cannot_reset_self": {
+        "en": "Change your own password under Settings → Account instead.",
+        "zh": "自己的密码请在「设置 → 账户」里修改。",
+    },
     "user_not_found": {
         "en": "No MosaelCloud account uses that handle.",
         "zh": "没有这个短名对应的账号。",

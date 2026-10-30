@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
@@ -19,12 +19,15 @@ from cloud.domain import orders as order_domain
 from cloud.domain.channel_keys import unseal
 from cloud.gateway import upstream
 from cloud.errors import CloudError
+from cloud.security import hash_password, new_token
 from cloud.models import (
     CloudAdminAudit,
+    CloudDeviceToken,
     CloudGatewayCall,
     CloudGatewayModel,
     CloudModelPrice,
     CloudOrder,
+    CloudSession,
     CloudPlan,
     CloudSubscription,
     CloudUpstreamChannel,
@@ -162,6 +165,21 @@ def subscribe(db: Session, user_id: str, *, plan_slug: str) -> dict[str, object]
         raise CloudError(404, "plan_not_found")
     credits.subscribe(db, user, plan, at=now())
     return _user_view(db, user, now())
+
+
+def reset_password(db: Session, user_id: str, *, acting_user_id: str) -> str:
+    user = db.get(CloudUser, user_id)
+    if user is None:
+        raise CloudError(404, "user_not_found")
+    if user.id == acting_user_id:
+        raise CloudError(400, "cannot_reset_self")
+    temporary = new_token(12)
+    user.password_hash = hash_password(temporary)
+    #: 密码变了,旧会话和桌面令牌都必须失效;管理员把临时密码交给本人后由本人改密码。
+    db.execute(delete(CloudSession).where(CloudSession.user_id == user.id))
+    db.execute(delete(CloudDeviceToken).where(CloudDeviceToken.user_id == user.id))
+    db.flush()
+    return temporary
 
 
 def _model_view(db: Session, model: CloudGatewayModel, at: datetime) -> dict[str, object]:

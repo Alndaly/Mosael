@@ -614,6 +614,10 @@ export const cloudAdmin = {
   usage: (days = 7) => request<AdminUsage>(`/admin/usage?days=${days}`),
   users: (q = "") => request<{ users: AdminUser[] }>(`/admin/users?${new URLSearchParams({ q })}`),
   user: (id: string) => request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}`),
+  resetPassword: (id: string) =>
+    request<{ temporary_password: string }>(`/admin/users/${encodeURIComponent(id)}/reset-password`, {
+      method: "POST",
+    }),
   setRole: (id: string, role: "member" | "admin") =>
     request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/role`, {
       method: "POST",

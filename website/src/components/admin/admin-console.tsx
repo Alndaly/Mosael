@@ -336,12 +336,24 @@ function UsersPanel({
   const [note, setNote] = useState("");
   const [plan, setPlan] = useState(plans[0]?.slug ?? "");
   const [busy, setBusy] = useState("");
+  const [temporary, setTemporary] = useState<{ id: string; value: string } | null>(null);
 
   const role = async () => {
     if (!selected) return;
     setBusy("role");
     try {
       onChanged((await cloudAdmin.setRole(selected.id, selected.role === "admin" ? "member" : "admin")).user);
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setBusy("");
+    }
+  };
+  const resetPassword = async () => {
+    if (!selected) return;
+    setBusy("reset");
+    try {
+      setTemporary({ id: selected.id, value: (await cloudAdmin.resetPassword(selected.id)).temporary_password });
     } catch (failure) {
       onFailure(failure);
     } finally {
@@ -416,6 +428,15 @@ function UsersPanel({
             <Button variant="outline" onClick={() => void role()} disabled={Boolean(busy)}>
               {selected.role === "admin" ? copy.removeAdmin : copy.makeAdmin}
             </Button>
+            <Button variant="outline" onClick={() => void resetPassword()} disabled={Boolean(busy)}>
+              {copy.resetPassword}
+            </Button>
+            {temporary?.id === selected.id && (
+              <div className="grid gap-1 rounded-xl border border-warning/30 bg-warning/5 px-3 py-2">
+                <small className="text-xs text-muted-foreground">{copy.temporaryPassword}</small>
+                <code className="font-mono text-sm [overflow-wrap:anywhere]">{temporary.value}</code>
+              </div>
+            )}
             <p className="m-0 text-sm">
               {copy.plan}: {selected.subscription ? `${selected.subscription.name} (${date(selected.subscription.ends_at)})` : copy.noPlan}
             </p>

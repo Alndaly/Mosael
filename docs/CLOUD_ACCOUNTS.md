@@ -367,6 +367,7 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | POST | `/admin/users/{id}/role` | `member` / `admin`；不能撤销最后一名管理员 |
 | POST | `/admin/users/{id}/credits` | 赠送积分 |
 | POST | `/admin/users/{id}/subscriptions` | 开通套餐 |
+| POST | `/admin/users/{id}/reset-password` | 生成一次性临时密码，撤销该账号全部会话和设备令牌；不能重置自己 |
 | GET/POST | `/admin/models` | 模型目录；新建 |
 | PATCH | `/admin/models/{id}` | 名称 / 最大输出 / 排序 / 启停；id 不可改 |
 | GET/POST | `/admin/models/{id}/prices` | 价格历史；追加生效价 |
