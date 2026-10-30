@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,17 +47,19 @@ export function Sidebar({ className, children }: { className?: string; children:
   );
 }
 
-export function SidebarTrigger({ className, children, ...props }: React.ComponentProps<"button">) {
+export function SidebarTrigger({ className, children, ...props }: Omit<React.ComponentProps<typeof Button>, "variant" | "size">) {
   const { setOpen } = useSidebar();
   return (
-    <button
+    <Button
       type="button"
-      className={cn("inline-flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground md:hidden", className)}
+      variant="outline"
+      size="icon"
+      className={cn("md:hidden", className)}
       onClick={() => setOpen(true)}
       {...props}
     >
       {children ?? "☰"}
-    </button>
+    </Button>
   );
 }
 
@@ -92,13 +95,14 @@ export function SidebarMenuButton({
   className,
   isActive = false,
   ...props
-}: React.ComponentProps<"button"> & { isActive?: boolean }) {
+}: Omit<React.ComponentProps<typeof Button>, "variant" | "size"> & { isActive?: boolean }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       data-active={isActive ? "" : undefined}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[active]:bg-secondary data-[active]:text-foreground",
+        "h-auto w-full justify-start gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-muted-foreground data-[active]:bg-secondary data-[active]:text-foreground",
         className,
       )}
       {...props}

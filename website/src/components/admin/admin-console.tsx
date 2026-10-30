@@ -53,7 +53,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-[280px] place-items-center rounded-xl border border-dashed border-border px-6 py-10 text-center">
+    <div className="mt-4 grid min-h-[280px] place-items-center rounded-xl border border-dashed border-border px-6 py-10 text-center">
       <div className="grid max-w-sm gap-2">
         <span className="mx-auto grid size-10 place-items-center rounded-full bg-secondary text-muted-foreground">·</span>
         <p className="m-0 text-sm text-muted-foreground">{children}</p>
