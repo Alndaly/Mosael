@@ -63,8 +63,9 @@ class TencentSmsSender:
         request.SignName = self.config.tencent_sms_sign_name
         request.TemplateId = self.config.tencent_sms_template_id
         request.PhoneNumberSet = [phone]
-        #: 模板约定 {1}=验证码、{2}=有效分钟数;模板正文由部署方在腾讯云控制台配。
-        request.TemplateParamSet = [code, str(self.config.tencent_sms_template_minutes)]
+        #: 模板正文由部署方在腾讯云控制台配;参数个数必须与模板完全一致。
+        #: 当前模板只有 {1}=验证码,多发一个分钟数会被腾讯判成内容不匹配。
+        request.TemplateParamSet = [code]
         try:
             response = self._client_or_build().SendSms(request)
         except TencentCloudSDKException as exc:

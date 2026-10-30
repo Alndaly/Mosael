@@ -41,13 +41,13 @@ def test_unconfigured_sms_is_an_explicit_503(tmp_path):
     assert raised.value.code == "sms_not_configured"
 
 
-def test_sends_code_and_ttl_with_the_configured_template(tmp_path):
+def test_sends_only_the_code_because_the_template_has_one_parameter(tmp_path):
     client = FakeClient()
     sender = TencentSmsSender(configured(tmp_path), client=client)
     sender.send_code(phone="+8613800138000", purpose="login", code="123456")
     request = client.requests[0]
     assert request.PhoneNumberSet == ["+8613800138000"]
-    assert request.TemplateParamSet == ["123456", "10"]
+    assert request.TemplateParamSet == ["123456"]
     assert request.SmsSdkAppId == "1400000000"
     assert request.SignName == "Mosael"
     assert request.TemplateId == "123456"

@@ -314,8 +314,8 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 | `CLOUD_SMTP_PASSWORD` | 空 | 只交给 SMTP,不进日志 |
 | `CLOUD_SMTP_FROM` | `no-reply@mosael.com` | 发件人 |
 | `CLOUD_TENCENT_SMS_SECRET_ID` / `_SECRET_KEY` | 空(未配置短信) | 腾讯云 CAM 子账号,只授短信发送权限 |
-| `CLOUD_TENCENT_SMS_SDK_APP_ID` / `_SIGN_NAME` / `_TEMPLATE_ID` | 空(未配置短信) | 短信应用、签名、模板;模板 `{1}`=验证码、`{2}`=分钟数 |
-| `CLOUD_TENCENT_SMS_REGION` / `_TEMPLATE_MINUTES` | `ap-guangzhou` / `10` | 发送地域与模板有效分钟数 |
+| `CLOUD_TENCENT_SMS_SDK_APP_ID` / `_SIGN_NAME` / `_TEMPLATE_ID` | 空(未配置短信) | 短信应用、签名、模板;模板只接受 `{1}`=验证码,参数个数必须与模板正文一致 |
+| `CLOUD_TENCENT_SMS_REGION` | `ap-guangzhou` | 发送地域 |
 | `CLOUD_GITHUB_CLIENT_ID` / `_SECRET` | 空(未启用) | GitHub OAuth App 凭据;空则入口报"没启用" |
 | `CLOUD_GOOGLE_CLIENT_ID` / `_SECRET` | 空(未启用) | Google OAuth 客户端凭据;空则入口报"没启用" |
 | `CLOUD_OAUTH_STATE_TTL_SECONDS` | `600` | 一次 OAuth 登录的 state / nonce 有效期 |
