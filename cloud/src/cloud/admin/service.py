@@ -13,6 +13,7 @@ from cloud.domain import admin as role_admin
 from cloud.domain import orders as order_domain
 from cloud.errors import CloudError
 from cloud.models import (
+    CloudAdminAudit,
     CloudGatewayModel,
     CloudModelPrice,
     CloudOrder,
@@ -375,3 +376,20 @@ def update_plan(db: Session, slug: str, *, name: str, period: str, monthly_credi
     plan.price_cents = price_cents
     db.flush()
     return _plan_view(plan)
+
+
+def list_audit(db: Session, *, limit: int = 100) -> list[dict[str, object]]:
+    return [
+        {
+            "id": one.id,
+            "actor_email": one.actor_email,
+            "action": one.action,
+            "target_type": one.target_type,
+            "target_id": one.target_id,
+            "detail": one.detail,
+            "created_at": one.created_at.isoformat(),
+        }
+        for one in db.scalars(
+            select(CloudAdminAudit).order_by(CloudAdminAudit.created_at.desc()).limit(limit)
+        ).all()
+    ]

@@ -88,6 +88,25 @@ class CloudUser(Base):
     )
 
 
+class CloudAdminAudit(Base):
+    """管理端的一次写操作。detail 只放白名单字段,绝不放密码 / Key 原文。"""
+
+    __tablename__ = "cloud_admin_audit"
+    __table_args__ = (Index("idx_cloud_admin_audit_created", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: 账号被删除后置空;actor_email 保留快照,审计仍然读得懂。
+    actor_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    detail: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
 class CloudMfaTicket(Base):
     """一次登录的第二因素票据。原始票据只回给客户端一次,库里只存 sha256。"""
 

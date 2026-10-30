@@ -23,7 +23,7 @@ def make_admin(client, email="admin@example.com"):
 
 
 def test_admin_overview_users_and_role_changes(client):
-    admin_id = make_admin(client)
+    make_admin(client)
     signup(client, email="member@example.com", password=PASSWORD)
     login(client, email="admin@example.com", password=PASSWORD)
     with client.app.state.db.session() as db:
@@ -42,9 +42,14 @@ def test_admin_overview_users_and_role_changes(client):
     assert promoted.status_code == 200
     assert promoted.json()["user"]["role"] == "admin"
 
-    demoted = client.post(api(f"/admin/users/{admin_id}/role"), json={"role": "member"})
+    demoted = client.post(api(f"/admin/users/{member_id}/role"), json={"role": "member"})
     assert demoted.status_code == 200
     assert demoted.json()["user"]["role"] == "member"
+
+    events = client.get(api("/admin/audit")).json()["events"]
+    assert [one["action"] for one in events[:2]] == ["user.role", "user.role"]
+    assert events[0]["actor_email"] == "admin@example.com"
+    assert "password" not in str(events).lower()
 
 
 def test_last_admin_cannot_be_demoted(client):

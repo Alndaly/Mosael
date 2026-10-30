@@ -11,6 +11,7 @@ import type { Messages } from "@/i18n/messages";
 import {
   CloudApiError,
   cloudAdmin,
+  type AdminAudit,
   type AdminChannel,
   type AdminModel,
   type AdminOverview,
@@ -18,7 +19,7 @@ import {
   type AdminUser,
 } from "@/lib/cloud";
 
-type Tab = "overview" | "users" | "models" | "channels" | "plans";
+type Tab = "overview" | "users" | "models" | "channels" | "plans" | "audit";
 
 function failureText(error: unknown, copy: Messages["admin"], locale: Locale): string {
   return error instanceof CloudApiError ? error.text(locale) : copy.error;
@@ -43,6 +44,7 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
   const [models, setModels] = useState<AdminModel[]>([]);
   const [channels, setChannels] = useState<AdminChannel[]>([]);
   const [plans, setPlans] = useState<AdminPlan[]>([]);
+  const [audit, setAudit] = useState<AdminAudit[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -51,18 +53,20 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
     setLoading(true);
     setError("");
     try {
-      const [nextOverview, nextUsers, nextModels, nextChannels, nextPlans] = await Promise.all([
+      const [nextOverview, nextUsers, nextModels, nextChannels, nextPlans, nextAudit] = await Promise.all([
         cloudAdmin.overview(),
         cloudAdmin.users(query),
         cloudAdmin.models(),
         cloudAdmin.channels(),
         cloudAdmin.plans(),
+        cloudAdmin.audit(),
       ]);
       setOverview(nextOverview);
       setUsers(nextUsers.users);
       setModels(nextModels.models);
       setChannels(nextChannels.channels);
       setPlans(nextPlans.plans);
+      setAudit(nextAudit.events);
     } catch (failure) {
       setError(failureText(failure, copy, locale));
     } finally {
@@ -107,6 +111,7 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
               ["models", copy.tabModels],
               ["channels", copy.tabChannels],
               ["plans", copy.tabPlans],
+              ["audit", copy.tabAudit],
             ] as const
           ).map(([value, label]) => (
             <Button key={value} variant={tab === value ? "default" : "ghost"} onClick={() => setTab(value)}>
@@ -169,16 +174,51 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
             onChanged={() => void refresh()}
             onFailure={(failure) => setError(failureText(failure, copy, locale))}
           />
-        ) : (
+        ) : tab === "plans" ? (
           <PlansPanel
             copy={copy}
             plans={plans}
             onChanged={() => void refresh()}
             onFailure={(failure) => setError(failureText(failure, copy, locale))}
           />
+        ) : (
+          <AuditPanel copy={copy} audit={audit} />
         )}
       </div>
     </section>
+  );
+}
+
+function AuditPanel({ copy, audit }: { copy: Messages["admin"]; audit: AdminAudit[] }) {
+  return (
+    <div className="mt-6">
+      <div className={card}>
+        <h2 className="m-0 text-lg font-semibold">{copy.tabAudit}</h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-[13px]">
+            <thead className="text-xs text-muted-foreground">
+              <tr>
+                <th className="pb-2">{copy.auditTime}</th>
+                <th className="pb-2">{copy.auditActor}</th>
+                <th className="pb-2">{copy.auditAction}</th>
+                <th className="pb-2">{copy.auditTarget}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {audit.map((event) => (
+                <tr key={event.id} className="border-t border-border">
+                  <td className="py-3">{date(event.created_at)}</td>
+                  <td className="py-3">{event.actor_email}</td>
+                  <td className="py-3 font-mono text-xs">{event.action}</td>
+                  <td className="py-3">{event.target_type}:{event.target_id}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {audit.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{copy.noAudit}</p>}
+        </div>
+      </div>
+    </div>
   );
 }
 

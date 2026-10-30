@@ -22,6 +22,7 @@ from cloud.admin.schemas import (
     SubscribeIn,
 )
 from cloud.api.deps import CurrentAdmin, CurrentConfig, DbSession
+from cloud.domain import audit
 
 router = APIRouter(tags=["admin"])
 
@@ -53,24 +54,34 @@ def admin_user(user_id: str, _user: CurrentAdmin, db: DbSession) -> dict[str, ob
 
 
 @router.post("/admin/users/{user_id}/role")
-def admin_user_role(user_id: str, body: RoleIn, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_user_role(user_id: str, body: RoleIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     user = service.set_role(db, user_id, body.role)
+    audit.record(db, actor=actor, action="user.role", target_type="user", target_id=user_id, detail={"role": body.role})
     db.commit()
     return {"user": user}
 
 
 @router.post("/admin/users/{user_id}/credits")
-def admin_user_credits(user_id: str, body: GiftIn, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_user_credits(user_id: str, body: GiftIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     user = service.gift(db, user_id, amount=body.credits, days=body.days, note=body.note)
+    audit.record(db, actor=actor, action="user.credits", target_type="user", target_id=user_id,
+                 detail={"credits": body.credits, "days": body.days, "note": body.note})
     db.commit()
     return {"user": user}
 
 
 @router.post("/admin/users/{user_id}/subscriptions")
-def admin_user_subscription(user_id: str, body: SubscribeIn, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_user_subscription(user_id: str, body: SubscribeIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     user = service.subscribe(db, user_id, plan_slug=body.plan)
+    audit.record(db, actor=actor, action="user.subscribe", target_type="user", target_id=user_id,
+                 detail={"plan": body.plan})
     db.commit()
     return {"user": user}
+
+
+@router.get("/admin/audit")
+def admin_audit(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    return {"events": service.list_audit(db)}
 
 
 @router.get("/admin/models")
@@ -79,7 +90,7 @@ def admin_models(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
 
 
 @router.post("/admin/models", status_code=201)
-def admin_create_model(body: ModelIn, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_create_model(body: ModelIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     model = service.create_model(
         db,
         model_id=body.id,
@@ -88,12 +99,14 @@ def admin_create_model(body: ModelIn, _user: CurrentAdmin, db: DbSession) -> dic
         sort_order=body.sort_order,
         enabled=body.enabled,
     )
+    audit.record(db, actor=actor, action="model.create", target_type="model", target_id=body.id,
+                 detail={"label": body.label, "max_output_tokens": body.max_output_tokens})
     db.commit()
     return {"model": model}
 
 
 @router.patch("/admin/models/{model_id}")
-def admin_update_model(model_id: str, body: ModelPatch, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_update_model(model_id: str, body: ModelPatch, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     model = service.update_model(
         db,
         model_id,
@@ -102,6 +115,8 @@ def admin_update_model(model_id: str, body: ModelPatch, _user: CurrentAdmin, db:
         sort_order=body.sort_order,
         enabled=body.enabled,
     )
+    audit.record(db, actor=actor, action="model.update", target_type="model", target_id=model_id,
+                 detail={"label": body.label, "max_output_tokens": body.max_output_tokens, "enabled": body.enabled})
     db.commit()
     return {"model": model}
 
@@ -112,7 +127,7 @@ def admin_prices(model_id: str, _user: CurrentAdmin, db: DbSession) -> dict[str,
 
 
 @router.post("/admin/models/{model_id}/prices", status_code=201)
-def admin_add_price(model_id: str, body: PriceIn, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_add_price(model_id: str, body: PriceIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     price = service.add_price(
         db,
         model_id,
@@ -120,6 +135,8 @@ def admin_add_price(model_id: str, body: PriceIn, _user: CurrentAdmin, db: DbSes
         output_per_1k=body.output_per_1k,
         effective_from=body.effective_from,
     )
+    audit.record(db, actor=actor, action="model.price", target_type="model", target_id=model_id,
+                 detail={"input_per_1k": body.input_per_1k, "output_per_1k": body.output_per_1k})
     db.commit()
     return {"price": price}
 
@@ -130,7 +147,7 @@ def admin_channels(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
 
 
 @router.post("/admin/channels", status_code=201)
-def admin_create_channel(body: ChannelIn, _user: CurrentAdmin, config: CurrentConfig, db: DbSession) -> dict[str, object]:
+def admin_create_channel(body: ChannelIn, actor: CurrentAdmin, config: CurrentConfig, db: DbSession) -> dict[str, object]:
     channel = service.create_channel(
         db,
         config,
@@ -141,6 +158,8 @@ def admin_create_channel(body: ChannelIn, _user: CurrentAdmin, config: CurrentCo
         priority=body.priority,
         note=body.note,
     )
+    audit.record(db, actor=actor, action="channel.create", target_type="channel", target_id=channel["id"],
+                 detail={"model_id": body.model_id, "base_url": body.base_url, "api_key_set": True})
     db.commit()
     return {"channel": channel}
 
@@ -149,7 +168,7 @@ def admin_create_channel(body: ChannelIn, _user: CurrentAdmin, config: CurrentCo
 def admin_update_channel(
     channel_id: str,
     body: ChannelPatch,
-    _user: CurrentAdmin,
+    actor: CurrentAdmin,
     config: CurrentConfig,
     db: DbSession,
 ) -> dict[str, object]:
@@ -163,6 +182,8 @@ def admin_update_channel(
         enabled=body.enabled,
         api_key=body.api_key,
     )
+    audit.record(db, actor=actor, action="channel.update", target_type="channel", target_id=channel_id,
+                 detail={"enabled": body.enabled, "api_key_replaced": bool(body.api_key)})
     db.commit()
     return {"channel": channel}
 
@@ -173,7 +194,7 @@ def admin_plans(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
 
 
 @router.post("/admin/plans", status_code=201)
-def admin_create_plan(body: PlanIn, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_create_plan(body: PlanIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     plan = service.create_plan(
         db,
         slug=body.slug,
@@ -184,12 +205,14 @@ def admin_create_plan(body: PlanIn, _user: CurrentAdmin, db: DbSession) -> dict[
         on_sale=body.on_sale,
         price_cents=body.price_cents,
     )
+    audit.record(db, actor=actor, action="plan.create", target_type="plan", target_id=body.slug,
+                 detail={"name": body.name, "monthly_credits": body.monthly_credits})
     db.commit()
     return {"plan": plan}
 
 
 @router.patch("/admin/plans/{slug}")
-def admin_update_plan(slug: str, body: PlanPatch, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+def admin_update_plan(slug: str, body: PlanPatch, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     plan = service.update_plan(
         db,
         slug,
@@ -200,5 +223,7 @@ def admin_update_plan(slug: str, body: PlanPatch, _user: CurrentAdmin, db: DbSes
         on_sale=body.on_sale,
         price_cents=body.price_cents,
     )
+    audit.record(db, actor=actor, action="plan.update", target_type="plan", target_id=slug,
+                 detail={"name": body.name, "on_sale": body.on_sale})
     db.commit()
     return {"plan": plan}

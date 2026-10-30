@@ -359,6 +359,7 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | --- | --- | --- |
 | GET | `/admin/me` | 当前管理员身份 |
 | GET | `/admin/overview` | 账号 / 管理员 / 有效订阅 / 模型 / 通道 / 订单计数 |
+| GET | `/admin/audit` | 最近 100 条管理操作(不含密码 / Key) |
 | GET | `/admin/users?q=` | 搜索账号；返回订阅、积分、角色、official、MFA 状态 |
 | GET | `/admin/users/{id}` | 账号详情：积分批次、订阅、最近订单 |
 | POST | `/admin/users/{id}/role` | `member` / `admin`；不能撤销最后一名管理员 |
@@ -374,7 +375,9 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 
 响应全部显式组装：不返回密码哈希、设备令牌或上游 API Key。管理端网页在 `/<locale>/admin`，未登录或非管理员直接 404；真实权限仍由 Cloud 路由的 `CurrentAdmin` 校验。
 
-管理端目前仍使用普通 Cloud 登录；管理员 MFA 强制、审计表和更严格的高危操作二次验证还没有接入。
+管理端写操作会写入 `cloud_admin_audit`：操作者邮箱快照、动作、对象、白名单 detail、时间；和业务写入在同一事务里提交。审计详情不记录密码、设备令牌或上游 Key 原文。
+
+管理端目前仍使用普通 Cloud 登录；管理员 MFA 强制、更严格的高危操作二次验证还没有接入。
 
 ### 可选双因素(TOTP)
 

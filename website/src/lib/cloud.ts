@@ -559,6 +559,16 @@ export type AdminPlan = {
   currency: string;
 };
 
+export type AdminAudit = {
+  id: string;
+  actor_email: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+};
+
 export type AdminModelInput = {
   id?: string;
   label: string;
@@ -569,6 +579,7 @@ export type AdminModelInput = {
 
 export const cloudAdmin = {
   overview: () => request<AdminOverview>("/admin/overview"),
+  audit: () => request<{ events: AdminAudit[] }>("/admin/audit"),
   users: (q = "") => request<{ users: AdminUser[] }>(`/admin/users?${new URLSearchParams({ q })}`),
   user: (id: string) => request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}`),
   setRole: (id: string, role: "member" | "admin") =>
