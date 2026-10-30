@@ -348,7 +348,7 @@ uv run python -m cloud.cli admin-list
 uv run python -m cloud.cli admin-revoke --email someone@example.com
 ```
 
-不能撤销最后一名管理员。注册、`PUT /me` 和 OAuth 都不会写 `role`；目前管理端只提供 `GET /admin/me` 验证身份，后续的模型、通道、套餐和用户管理都挂在这个前缀下。
+不能撤销最后一名管理员。注册、`PUT /me` 和 OAuth 都不会写 `role`。管理端网页在 `/<locale>/admin`，按概览、账号、模型、上游供应商、通道、套餐、运营、审计分区；未登录或非管理员直接 404。
 
 
 #### 管理端接口
@@ -358,7 +358,7 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/admin/me` | 当前管理员身份 |
-| GET | `/admin/overview` | 账号 / 管理员 / 有效订阅 / 模型 / 通道 / 订单计数 |
+| GET | `/admin/overview` | 账号 / 管理员 / 有效订阅 / 模型 / 供应商 / 通道 / 订单计数 |
 | GET | `/admin/audit` | 最近 100 条管理操作(不含密码 / Key) |
 | GET | `/admin/orders` | 最近 100 笔订单(含账号、套餐、金额、状态、渠道) |
 | GET | `/admin/usage?days=7` | 近 N 天调用数 / 积分 / token,按日与模型汇总 |
@@ -368,13 +368,14 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | POST | `/admin/users/{id}/credits` | 赠送积分 |
 | POST | `/admin/users/{id}/subscriptions` | 开通套餐 |
 | POST | `/admin/users/{id}/reset-password` | 生成一次性临时密码，撤销该账号全部会话和设备令牌；不能重置自己 |
-| GET/POST | `/admin/models` | 模型目录；新建 |
+| GET/POST | `/admin/models` | 模型目录；新建时 id 由系统生成 UUID，请求不接收 id |
 | PATCH | `/admin/models/{id}` | 名称 / 最大输出 / 排序 / 启停；id 不可改 |
 | GET/POST | `/admin/models/{id}/prices` | 价格历史；追加生效价 |
 | GET/POST | `/admin/providers` | 上游供应商（端点、加密 Key）；Key 只写不读 |
-| GET/POST | `/admin/channels` | 模型到供应商的路由；不再接收 Key |
-| PATCH | `/admin/channels/{id}` | 上游模型 / 优先级 / 启停 / 备注 / 替换 Key；地址和模型不可改 |
-| POST | `/admin/channels/{id}/test` | 用已存 Key 发一次最小对话，返回状态 / 延迟 / 用量；不回 Key |
+| PATCH | `/admin/providers/{id}` | 名称 / 备注 / 启停 / 替换 Key；端点不可改 |
+| GET/POST | `/admin/channels` | 模型到供应商的路由；只接收 model_id / provider_id / upstream_model |
+| PATCH | `/admin/channels/{id}` | 上游模型 / 优先级 / 启停 / 备注；不可换供应商或改端点 |
+| POST | `/admin/channels/{id}/test` | 用供应商已存 Key 发一次最小对话，返回状态 / 延迟 / 用量 / 上游 detail；不回 Key |
 | GET/POST | `/admin/plans` | 套餐列表 / 新建 |
 | PATCH | `/admin/plans/{slug}` | 修改套餐；slug 不可改 |
 
