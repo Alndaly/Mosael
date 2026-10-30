@@ -15,7 +15,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   return (
     <SidebarContext.Provider value={{ open, setOpen }}>
-      <div className="flex min-h-[calc(100dvh-3.5rem)] w-full">{children}</div>
+      <div className="flex min-h-dvh w-full">{children}</div>
     </SidebarContext.Provider>
   );
 }
@@ -35,7 +35,7 @@ export function Sidebar({ className, children }: { className?: string; children:
         data-slot="sidebar"
         className={cn(
           "z-40 w-64 shrink-0 border-r border-border bg-card/70",
-          "fixed inset-y-0 left-0 flex flex-col pt-14 transition-transform md:static md:translate-x-0 md:pt-0",
+          "fixed inset-y-0 left-0 flex flex-col transition-transform md:static md:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
           className,
         )}
