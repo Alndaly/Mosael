@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Menu, ScrollText, Users } from "lucide-react";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
+import { cn } from "@/lib/utils";
 import {
   CloudApiError,
   cloudAdmin,
@@ -40,6 +41,19 @@ function date(value: string | null): string {
 
 function money(cents: number | null): string {
   return cents === null ? "—" : `¥${(cents / 100).toFixed(2)}`;
+}
+
+/** 管理台采用 shadcn 的标准密度（36px），不继承官网营销页的 48px 大字段。 */
+function AButton({ className, ...props }: React.ComponentProps<typeof Button>) {
+  return <Button {...props} className={cn("h-9 rounded-md px-3 text-sm", className)} />;
+}
+
+function AInput({ className, ...props }: React.ComponentProps<typeof Input>) {
+  return <Input {...props} className={cn("h-9 rounded-md border-input bg-transparent px-3 py-1 text-sm shadow-sm", className)} />;
+}
+
+function ASelectTrigger({ className, ...props }: React.ComponentProps<typeof SelectTrigger>) {
+  return <SelectTrigger size="sm" {...props} className={cn("w-full rounded-md text-sm", className)} />;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -124,7 +138,7 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
                 <p className="mt-2 mb-0 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.lede}</p>
               </div>
             </div>
-            <Button variant="outline" onClick={() => void refresh()} disabled={loading}>{loading ? copy.loading : copy.refresh}</Button>
+            <AButton variant="outline" onClick={() => void refresh()} disabled={loading}>{loading ? copy.loading : copy.refresh}</AButton>
           </div>
 
           {error && <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
@@ -229,8 +243,8 @@ function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>{copy.users}</CardTitle>
           <div className="flex min-w-0 gap-2">
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.searchUsers} className="w-[min(22rem,50vw)]" />
-            <Button variant="outline" onClick={() => void search()}>{copy.search}</Button>
+            <AInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.searchUsers} className="w-[min(22rem,50vw)]" />
+            <AButton variant="outline" onClick={() => void search()}>{copy.search}</AButton>
           </div>
         </CardHeader>
         <CardContent>
@@ -243,7 +257,7 @@ function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
                   <TableCell><Badge variant={user.role === "admin" ? "default" : "secondary"}>{user.role}</Badge>{user.official && <Badge variant="outline" className="ml-1">{copy.official}</Badge>}</TableCell>
                   <TableCell>{user.credits}</TableCell>
                   <TableCell>{user.subscription?.name || "—"}</TableCell>
-                  <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setSelected(user)}>{copy.edit}</Button></TableCell>
+                  <TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setSelected(user)}>{copy.edit}</AButton></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -312,8 +326,8 @@ function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
         </DialogHeader>
         <div className="grid gap-5">
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void role()} disabled={Boolean(busy)}>{current.role === "admin" ? copy.removeAdmin : copy.makeAdmin}</Button>
-            <Button variant="outline" onClick={() => void reset()} disabled={Boolean(busy)}>{copy.resetPassword}</Button>
+            <AButton variant="outline" onClick={() => void role()} disabled={Boolean(busy)}>{current.role === "admin" ? copy.removeAdmin : copy.makeAdmin}</AButton>
+            <AButton variant="outline" onClick={() => void reset()} disabled={Boolean(busy)}>{copy.resetPassword}</AButton>
           </div>
           {temporary && (
             <div className="grid gap-1 rounded-lg bg-warning/10 p-3">
@@ -327,18 +341,18 @@ function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
               <span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at)}` : copy.noPlan}</span>
             </div>
             <div className="flex gap-2">
-              <Select value={plan} onValueChange={setPlan}><SelectTrigger className="min-w-0 flex-1"><SelectValue /></SelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
-              <Button variant="outline" onClick={() => void subscribe()} disabled={!plan || Boolean(busy)}>{copy.subscribe}</Button>
+              <Select value={plan} onValueChange={setPlan}><ASelectTrigger className="min-w-0 flex-1"><SelectValue /></ASelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
+              <AButton variant="outline" onClick={() => void subscribe()} disabled={!plan || Boolean(busy)}>{copy.subscribe}</AButton>
             </div>
           </div>
           <div className="grid gap-3 border-t border-border pt-4">
             <strong className="text-sm">{copy.giftCredits}</strong>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label={copy.credits}><Input value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
-              <Field label={copy.days}><Input value={days} onChange={(event) => setDays(event.target.value)} /></Field>
-              <Field label={copy.note}><Input value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+              <Field label={copy.credits}><AInput value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
+              <Field label={copy.days}><AInput value={days} onChange={(event) => setDays(event.target.value)} /></Field>
+              <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
             </div>
-            <Button className="w-full" variant="outline" onClick={() => void gift()} disabled={Boolean(busy)}>{copy.grant}</Button>
+            <AButton className="w-full" variant="outline" onClick={() => void gift()} disabled={Boolean(busy)}>{copy.grant}</AButton>
           </div>
           {current.credit_batches?.length ? <div className="grid gap-1 border-t border-border pt-4 text-xs text-muted-foreground">{current.credit_batches.map((batch, index) => <p key={`${batch.expires_at}-${index}`} className="m-0">{batch.remaining} · {batch.source} · {date(batch.expires_at)}</p>)}</div> : null}
           <div className="grid gap-1 border-t border-border pt-4">
@@ -359,7 +373,7 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
   return (
     <>
       <Card className="bg-card/60 ring-border">
-        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabModels}</CardTitle><Button onClick={() => setDialog({ model: null })}>{copy.addModel}</Button></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabModels}</CardTitle><AButton onClick={() => setDialog({ model: null })}>{copy.addModel}</AButton></CardHeader>
         <CardContent>
           <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.currentPrice}</TableHead><TableHead>{copy.channelsCount}</TableHead><TableHead>{copy.listed}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{models.map((model) => (
@@ -368,7 +382,7 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
                 <TableCell>{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</TableCell>
                 <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
                 <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.join(", ")}</Badge></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><Button size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</Button><Button size="sm" variant="ghost" onClick={() => setPriceFor(model)}>{copy.addPrice}</Button></div></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="ghost" onClick={() => setPriceFor(model)}>{copy.addPrice}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -400,13 +414,13 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model?.id ?? copy.id}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!model && <Field label={copy.id}><Input value={id} onChange={(event) => setId(event.target.value)} /></Field>}
-          <Field label={copy.label}><Input value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
-          <Field label={copy.maxOutput}><Input value={max} onChange={(event) => setMax(event.target.value)} /></Field>
-          <Field label={copy.sort}><Input value={sort} onChange={(event) => setSort(event.target.value)} /></Field>
-          <Button type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</Button>
+          {!model && <Field label={copy.id}><AInput value={id} onChange={(event) => setId(event.target.value)} /></Field>}
+          <Field label={copy.label}><AInput value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
+          <Field label={copy.maxOutput}><AInput value={max} onChange={(event) => setMax(event.target.value)} /></Field>
+          <Field label={copy.sort}><AInput value={sort} onChange={(event) => setSort(event.target.value)} /></Field>
+          <AButton type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</AButton>
         </div>
-        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.save}</Button></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -426,11 +440,11 @@ function PriceDialog({ copy, model, onClose, onSaved, onFailure }: {
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{copy.addPrice}</DialogTitle><DialogDescription>{model.id}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          <Field label={copy.inputPer1k}><Input value={input} onChange={(event) => setInput(event.target.value)} /></Field>
-          <Field label={copy.outputPer1k}><Input value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
-          <Field label={copy.effectiveFrom}><Input value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
+          <Field label={copy.inputPer1k}><AInput value={input} onChange={(event) => setInput(event.target.value)} /></Field>
+          <Field label={copy.outputPer1k}><AInput value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
+          <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
         </div>
-        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.addPrice}</Button></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.addPrice}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -452,7 +466,7 @@ function ChannelsPanel({ copy, models, channels, onChanged, onFailure }: {
   return (
     <>
       <Card className="bg-card/60 ring-border">
-        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabChannels}</CardTitle><Button onClick={() => setDialog({ channel: null })}>{copy.addChannel}</Button></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabChannels}</CardTitle><AButton onClick={() => setDialog({ channel: null })}>{copy.addChannel}</AButton></CardHeader>
         <CardContent>
           <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.baseUrl}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{channels.map((channel) => (
@@ -461,7 +475,7 @@ function ChannelsPanel({ copy, models, channels, onChanged, onFailure }: {
                 <TableCell className="max-w-72 truncate">{channel.base_url}</TableCell>
                 <TableCell>{channel.priority} · <Badge variant={channel.enabled ? "default" : "secondary"}>{channel.enabled ? "on" : "off"}</Badge></TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={() => void test(channel)}>{copy.testChannel}</Button><Button size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</Button></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}</span>}</TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)}>{copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}</span>}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -494,16 +508,16 @@ function ChannelDialog({ copy, models, channel, onClose, onSaved, onFailure }: {
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{channel?.base_url ?? copy.baseUrlReadOnly}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
-          {!channel && <Field label={copy.baseUrl}><Input value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
-          <Field label={copy.upstreamModel}><Input value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
-          <Field label={copy.apiKey}><Input type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
+          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel}><ASelectTrigger className="w-full"><SelectValue /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
+          {!channel && <Field label={copy.baseUrl}><AInput value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
+          <Field label={copy.upstreamModel}><AInput value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
+          <Field label={copy.apiKey}><AInput type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
           <p className="m-0 text-xs text-muted-foreground">{copy.replaceKeyHint}</p>
-          <Field label={copy.priority}><Input value={priority} onChange={(event) => setPriority(event.target.value)} /></Field>
-          <Field label={copy.note}><Input value={note} onChange={(event) => setNote(event.target.value)} /></Field>
-          <Button type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</Button>
+          <Field label={copy.priority}><AInput value={priority} onChange={(event) => setPriority(event.target.value)} /></Field>
+          <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+          <AButton type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</AButton>
         </div>
-        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.save}</Button></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -516,10 +530,10 @@ function PlansPanel({ copy, plans, onChanged, onFailure }: {
   return (
     <>
       <Card className="bg-card/60 ring-border">
-        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabPlans}</CardTitle><Button onClick={() => setDialog({ plan: null })}>{copy.addPlan}</Button></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabPlans}</CardTitle><AButton onClick={() => setDialog({ plan: null })}>{copy.addPlan}</AButton></CardHeader>
         <CardContent>
           <Table><TableHeader><TableRow><TableHead>{copy.slug}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.priceCents}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
-            <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {plan.period}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><Badge variant={plan.on_sale ? "default" : "secondary"}>{plan.on_sale ? "on" : "off"}</Badge></TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</Button></TableCell></TableRow>)}</TableBody>
+            <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {plan.period}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><Badge variant={plan.on_sale ? "default" : "secondary"}>{plan.on_sale ? "on" : "off"}</Badge></TableCell><TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</AButton></TableCell></TableRow>)}</TableBody>
           </Table>
           {plans.length === 0 && <Empty>{copy.noPlans}</Empty>}
         </CardContent>
@@ -551,15 +565,15 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan?.slug ?? copy.slug}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!plan && <Field label={copy.slug}><Input value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>}
-          <Field label={copy.label}><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
-          <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
-          <Field label={copy.monthlyCredits}><Input value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
-          <Field label={copy.ttlDays}><Input value={ttl} onChange={(event) => setTtl(event.target.value)} /></Field>
-          <Field label={copy.priceCents}><Input value={price} onChange={(event) => setPrice(event.target.value)} /></Field>
-          <Button type="button" variant={onSale ? "default" : "outline"} onClick={() => setOnSale(!onSale)} aria-pressed={onSale}>{copy.onSale}</Button>
+          {!plan && <Field label={copy.slug}><AInput value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>}
+          <Field label={copy.label}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
+          <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><ASelectTrigger className="w-full"><SelectValue /></ASelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
+          <Field label={copy.monthlyCredits}><AInput value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
+          <Field label={copy.ttlDays}><AInput value={ttl} onChange={(event) => setTtl(event.target.value)} /></Field>
+          <Field label={copy.priceCents}><AInput value={price} onChange={(event) => setPrice(event.target.value)} /></Field>
+          <AButton type="button" variant={onSale ? "default" : "outline"} onClick={() => setOnSale(!onSale)} aria-pressed={onSale}>{copy.onSale}</AButton>
         </div>
-        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.save}</Button></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
