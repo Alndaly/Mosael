@@ -41,6 +41,25 @@ def _host_and_port(value: str, default_port: int) -> tuple[str, int]:
     return value, default_port
 
 
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost"})
+
+
+def _loopback_aliases(origin: str) -> set[str]:
+    """本地开发时 `localhost` 与 `127.0.0.1` 是同一台机器,但浏览器按 Origin 字符串比较。
+
+    官网常用 `localhost:3100` 打开,而 Cloud 配置里可能只写了 `127.0.0.1:3100`;
+    两边都放行,免得同源闸把本机开发误判成跨站。非回环 Origin 一个都不扩展。
+    """
+    split = urlsplit(origin)
+    if split.scheme not in {"http", "https"} or split.hostname not in LOOPBACK_HOSTS:
+        return set()
+    port = split.port or (443 if split.scheme == "https" else 80)
+    return {
+        f"{split.scheme}://localhost:{port}",
+        f"{split.scheme}://127.0.0.1:{port}",
+    }
+
+
 @dataclass(frozen=True)
 class CloudConfig:
     #: 数据目录。默认库是它下面的 `cloud.db`。
@@ -126,10 +145,15 @@ class CloudConfig:
     def __post_init__(self) -> None:
         public = self.public_url.rstrip("/")
         object.__setattr__(self, "public_url", public)
-        if not self.allowed_origins:
+        origins = set(self.allowed_origins)
+        if not origins:
             split = urlsplit(public)
             if split.scheme and split.netloc:
-                object.__setattr__(self, "allowed_origins", frozenset({f"{split.scheme}://{split.netloc}"}))
+                origins.add(f"{split.scheme}://{split.netloc}")
+        expanded = set(origins)
+        for origin in origins:
+            expanded.update(_loopback_aliases(origin))
+        object.__setattr__(self, "allowed_origins", frozenset(expanded))
         if self.session_ttl_days <= 0:
             raise ValueError("session_ttl_days must be positive")
         if self.mfa_ticket_ttl_seconds <= 0:

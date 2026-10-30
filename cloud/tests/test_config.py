@@ -97,8 +97,17 @@ def test_allowed_origins_can_list_several(monkeypatch):
     monkeypatch.setenv("CLOUD_PUBLIC_URL", "http://127.0.0.1:3100")
     monkeypatch.delenv("CLOUD_ALLOWED_ORIGINS", raising=False)
     one = CloudConfig.from_env()
-    assert one.allowed_origins == frozenset({"http://127.0.0.1:3100"})
+    assert one.allowed_origins == frozenset(
+        {"http://127.0.0.1:3100", "http://localhost:3100"}
+    )
 
     monkeypatch.setenv("CLOUD_ALLOWED_ORIGINS", "http://127.0.0.1:3100, http://127.0.0.1:8000 ,")
     several = CloudConfig.from_env()
-    assert several.allowed_origins == frozenset({"http://127.0.0.1:3100", "http://127.0.0.1:8000"})
+    assert several.allowed_origins == frozenset(
+        {
+            "http://127.0.0.1:3100",
+            "http://localhost:3100",
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+        }
+    )
