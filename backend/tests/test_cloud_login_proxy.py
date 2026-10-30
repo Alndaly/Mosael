@@ -524,6 +524,24 @@ def test_the_sms_login_flow_stores_a_device_token_on_verify(cloud: FakeCloud) ->
     assert len(rows()) == 1
 
 
+def test_cloud_provider_failure_keeps_its_actionable_message(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    cloud.reply(
+        502,
+        {
+            "error": "sms_daily_limit",
+            "message": {"en": "This phone number reached today's SMS limit.", "zh": "这个手机号今天的验证码次数已达上限。"},
+        },
+    )
+    response = client.post("/api/cloud/v1/login/sms/code", json={"phone": "+8613800138000"})
+
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert detail["code"] == "sms_daily_limit"
+    assert detail["message"] == "这个手机号今天的验证码次数已达上限。"
+    assert detail["upstream_status"] == 502
+
+
 def test_desktop_password_change_is_proxied_and_reports_password_state(cloud: FakeCloud) -> None:
     client = fresh_client()
     login(client, cloud)

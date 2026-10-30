@@ -88,6 +88,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "SMS delivery is not configured on this service yet. Contact the administrator.",
         "zh": "这台服务还没配置短信，请联系管理员。",
     },
+    "sms_daily_limit": {
+        "en": "This phone number has reached today's SMS code limit. Try again tomorrow or use another sign-in method.",
+        "zh": "这个手机号今天收到的验证码已达上限，请明天再试或改用其他登录方式。",
+    },
+    "sms_rate_limited": {
+        "en": "Too many SMS requests for this phone number. Wait a moment and try again.",
+        "zh": "这个手机号的短信请求太频繁，请稍后再试。",
+    },
     "sms_send_failed": {
         "en": "The code could not be sent by SMS. Try again in a moment.",
         "zh": "验证码短信没有发出去，请稍后重试。",

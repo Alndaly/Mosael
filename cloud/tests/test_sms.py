@@ -25,13 +25,14 @@ def configured(tmp_path):
 
 
 class FakeClient:
-    def __init__(self, status="Ok"):
+    def __init__(self, status="Ok", message="x"):
         self.requests = []
         self.status = status
+        self.message = message
 
     def SendSms(self, request):
         self.requests.append(request)
-        return SimpleNamespace(SendStatusSet=[SimpleNamespace(Code=self.status, Message="x")])
+        return SimpleNamespace(SendStatusSet=[SimpleNamespace(Code=self.status, Message=self.message)])
 
 
 def test_unconfigured_sms_is_an_explicit_503(tmp_path):
@@ -54,7 +55,20 @@ def test_sends_only_the_code_because_the_template_has_one_parameter(tmp_path):
 
 
 def test_tencent_rejection_is_a_send_failure(tmp_path):
-    sender = TencentSmsSender(configured(tmp_path), client=FakeClient(status="LimitExceeded.PhoneNumberDailyLimit"))
+    sender = TencentSmsSender(configured(tmp_path), client=FakeClient(status="FailedOperation.SmsSendFailed"))
     with pytest.raises(CloudError) as raised:
         sender.send_code(phone="+8613800138000", purpose="login", code="123456")
     assert raised.value.code == "sms_send_failed"
+
+def test_daily_limit_is_an_actionable_error(tmp_path):
+    sender = TencentSmsSender(
+        configured(tmp_path),
+        client=FakeClient(
+            status="LimitExceeded.PhoneNumberDailyLimit",
+            message="the number of sms messages sent from a single mobile number every day exceeds the upper limit",
+        ),
+    )
+    with pytest.raises(CloudError) as raised:
+        sender.send_code(phone="+8613800138000", purpose="login", code="123456")
+    assert raised.value.status_code == 429
+    assert raised.value.code == "sms_daily_limit"

@@ -74,6 +74,14 @@ class TencentSmsSender:
         statuses = getattr(response, "SendStatusSet", None) or []
         if not statuses or getattr(statuses[0], "Code", "") != "Ok":
             reason = getattr(statuses[0], "Message", "empty SendStatusSet") if statuses else "empty SendStatusSet"
-            logger.warning("Tencent SMS rejected %s: %s", mask_phone(phone), reason)
+            provider_code = getattr(statuses[0], "Code", "") if statuses else ""
+            logger.warning(
+                "Tencent SMS rejected %s (%s): %s", mask_phone(phone), provider_code, reason
+            )
+            lowered = reason.lower()
+            if "DailyLimit" in provider_code or "every day" in lowered or "每日" in reason:
+                raise CloudError(429, "sms_daily_limit")
+            if "LimitExceeded" in provider_code:
+                raise CloudError(429, "sms_rate_limited")
             raise CloudError(502, "sms_send_failed")
         logger.info("sent %s sms code to %s", purpose, mask_phone(phone))

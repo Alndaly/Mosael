@@ -62,17 +62,24 @@ def _cloud_detail(reply: cloud_binding.CloudReply) -> HTTPException:
 
     Cloud 的 `message` 是中英两份(`cloud/errors.py`),按这次请求的 Accept-Language 挑一条。
     """
-    if reply.status >= 500:
-        return HTTPException(
-            status_code=502, detail={**_CLOUD_UPSTREAM_ERROR, "upstream_status": reply.status}
-        )
     body = reply.body if isinstance(reply.body, dict) else {}
     code = str(body.get("error") or "cloud_error")
     message = body.get("message")
     if isinstance(message, dict):
         message = pick_text(message, get_current_locale())
     if not isinstance(message, str) or not message.strip():
+        if reply.status >= 500:
+            return HTTPException(
+                status_code=502, detail={**_CLOUD_UPSTREAM_ERROR, "upstream_status": reply.status}
+            )
         message = tr("routeErr_cloudRejected")
+    #: Cloud 已经把 5xx 的原因翻成用户能读的一句(邮件 / 短信提供商失败);原样转述,
+    #: 不要再盖成「MosaelCloud returned a server error」——那会让用户不知道是邮箱、手机号还是网络。
+    if reply.status >= 500:
+        return HTTPException(
+            status_code=502,
+            detail={"code": code, "message": message, "upstream_status": reply.status},
+        )
     return HTTPException(status_code=reply.status, detail={"code": code, "message": message})
 
 
