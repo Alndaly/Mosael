@@ -9,8 +9,9 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Menu, ScrollText, Users } from "lucide-react";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import {
@@ -49,7 +50,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="m-0 py-8 text-center text-sm text-muted-foreground">{children}</p>;
+  return (
+    <div className="grid min-h-[280px] place-items-center rounded-xl border border-dashed border-border px-6 py-10 text-center">
+      <div className="grid max-w-sm gap-2">
+        <span className="mx-auto grid size-10 place-items-center rounded-full bg-secondary text-muted-foreground">·</span>
+        <p className="m-0 text-sm text-muted-foreground">{children}</p>
+      </div>
+    </div>
+  );
 }
 
 export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages["admin"] }) {
@@ -101,32 +109,26 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-[100rem] px-4 py-8 sm:px-6 lg:px-10">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="m-0 text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">MosaelCloud / Control</p>
-            <h1 className="mt-2 mb-0 font-display text-4xl font-semibold tracking-[-0.04em]">{copy.title}</h1>
-            <p className="mt-2 mb-0 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.lede}</p>
+    <SidebarProvider>
+      <AdminSidebar tab={tab} onSelect={setTab} copy={copy} />
+      <SidebarInset>
+        <div className="mx-auto max-w-[100rem] px-4 py-8 sm:px-6 lg:px-10">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <SidebarTrigger aria-label={copy.title} className="mt-1"><Menu className="size-4" /></SidebarTrigger>
+              <div>
+                <p className="m-0 text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">MosaelCloud / Control</p>
+                <h1 className="mt-2 mb-0 font-display text-4xl font-semibold tracking-[-0.04em]">{copy.title}</h1>
+                <p className="mt-2 mb-0 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.lede}</p>
+              </div>
+            </div>
+            <Button variant="outline" onClick={() => void refresh()} disabled={loading}>{loading ? copy.loading : copy.refresh}</Button>
           </div>
-          <Button variant="outline" onClick={() => void refresh()} disabled={loading}>{loading ? copy.loading : copy.refresh}</Button>
-        </div>
 
-        {error && <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
+          {error && <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
 
-        <Tabs value={tab} onValueChange={setTab} className="mt-8">
-          <TabsList className="w-full flex-wrap justify-start overflow-x-auto">
-            <TabsTrigger value="overview">{copy.tabOverview}</TabsTrigger>
-            <TabsTrigger value="users">{copy.tabUsers}</TabsTrigger>
-            <TabsTrigger value="models">{copy.tabModels}</TabsTrigger>
-            <TabsTrigger value="channels">{copy.tabChannels}</TabsTrigger>
-            <TabsTrigger value="plans">{copy.tabPlans}</TabsTrigger>
-            <TabsTrigger value="operations">{copy.tabOperations}</TabsTrigger>
-            <TabsTrigger value="audit">{copy.tabAudit}</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview">
-            {overview ? (
+          <div className="mt-8">
+            {tab === "overview" && (overview ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {[
                   [copy.users, overview.users],
@@ -141,30 +143,57 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
                   </Card>
                 ))}
               </div>
-            ) : <Empty>{loading ? copy.loading : copy.noUsers}</Empty>}
-          </TabsContent>
+            ) : <Empty>{loading ? copy.loading : copy.noUsers}</Empty>)}
+            {tab === "users" && <UsersPanel copy={copy} users={users} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "models" && <ModelsPanel copy={copy} models={models} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "channels" && <ChannelsPanel copy={copy} models={models} channels={channels} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "plans" && <PlansPanel copy={copy} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "operations" && <OperationsPanel copy={copy} orders={orders} usage={usage} />}
+            {tab === "audit" && <AuditPanel copy={copy} audit={audit} />}
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
 
-          <TabsContent value="users">
-            <UsersPanel copy={copy} users={users} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
-          </TabsContent>
-          <TabsContent value="models">
-            <ModelsPanel copy={copy} models={models} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
-          </TabsContent>
-          <TabsContent value="channels">
-            <ChannelsPanel copy={copy} models={models} channels={channels} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
-          </TabsContent>
-          <TabsContent value="plans">
-            <PlansPanel copy={copy} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
-          </TabsContent>
-          <TabsContent value="operations">
-            <OperationsPanel copy={copy} orders={orders} usage={usage} />
-          </TabsContent>
-          <TabsContent value="audit">
-            <AuditPanel copy={copy} audit={audit} />
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
+function AdminSidebar({ tab, onSelect, copy }: { tab: string; onSelect: (tab: string) => void; copy: Messages["admin"] }) {
+  const items = [
+    { id: "overview", label: copy.tabOverview, icon: LayoutDashboard },
+    { id: "users", label: copy.tabUsers, icon: Users },
+    { id: "models", label: copy.tabModels, icon: Boxes },
+    { id: "channels", label: copy.tabChannels, icon: Cable },
+    { id: "plans", label: copy.tabPlans, icon: CreditCard },
+    { id: "operations", label: copy.tabOperations, icon: Activity },
+    { id: "audit", label: copy.tabAudit, icon: ScrollText },
+  ];
+  return (
+    <Sidebar>
+      <SidebarHeader>
+        <div className="flex items-center gap-2">
+          <span className="grid size-8 place-items-center rounded-lg bg-foreground text-sm font-bold text-background">M</span>
+          <div className="grid gap-0.5">
+            <strong className="text-sm font-semibold">MosaelCloud</strong>
+            <span className="text-[11px] text-muted-foreground">Admin console</span>
+          </div>
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarMenu>
+            {items.map(({ id, label, icon: Icon }) => (
+              <SidebarMenuItem key={id}>
+                <SidebarMenuButton isActive={tab === id} onClick={() => onSelect(id)}>
+                  <Icon className="size-4" aria-hidden />
+                  {label}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
   );
 }
 
@@ -327,6 +356,7 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
               </TableRow>
             ))}</TableBody>
           </Table>
+          {models.length === 0 && <Empty>{copy.noModels}</Empty>}
         </CardContent>
       </Card>
       {dialog && <ModelDialog copy={copy} model={dialog.model} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
@@ -419,6 +449,7 @@ function ChannelsPanel({ copy, models, channels, onChanged, onFailure }: {
               </TableRow>
             ))}</TableBody>
           </Table>
+          {channels.length === 0 && <Empty>{copy.noChannels}</Empty>}
         </CardContent>
       </Card>
       {dialog && <ChannelDialog copy={copy} models={models} channel={dialog.channel} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
@@ -474,6 +505,7 @@ function PlansPanel({ copy, plans, onChanged, onFailure }: {
           <Table><TableHeader><TableRow><TableHead>{copy.slug}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.priceCents}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {plan.period}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><Badge variant={plan.on_sale ? "default" : "secondary"}>{plan.on_sale ? "on" : "off"}</Badge></TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</Button></TableCell></TableRow>)}</TableBody>
           </Table>
+          {plans.length === 0 && <Empty>{copy.noPlans}</Empty>}
         </CardContent>
       </Card>
       {dialog && <PlanDialog copy={copy} plan={dialog.plan} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
@@ -528,7 +560,7 @@ function OperationsPanel({ copy, orders, usage }: { copy: Messages["admin"]; ord
 }
 
 function UsageTable({ copy, title, rows }: { copy: Messages["admin"]; title: string; rows: { key: string; label: string; calls: number; charged: number }[] }) {
-  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.usageCalls}</TableHead><TableHead>{copy.usageCharged}</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.key}><TableCell>{row.label}</TableCell><TableCell>{row.calls}</TableCell><TableCell>{row.charged}</TableCell></TableRow>)}</TableBody></Table>{rows.length === 0 && <Empty>{copy.noAudit}</Empty>}</CardContent></Card>;
+  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.usageCalls}</TableHead><TableHead>{copy.usageCharged}</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.key}><TableCell>{row.label}</TableCell><TableCell>{row.calls}</TableCell><TableCell>{row.charged}</TableCell></TableRow>)}</TableBody></Table>{rows.length === 0 && <Empty>{copy.noUsage}</Empty>}</CardContent></Card>;
 }
 
 function AuditPanel({ copy, audit }: { copy: Messages["admin"]; audit: AdminAudit[] }) {
