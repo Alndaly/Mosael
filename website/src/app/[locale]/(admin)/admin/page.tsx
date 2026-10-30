@@ -28,5 +28,5 @@ export default async function AdminPage({ params }: { params: Params }) {
   const cookie = await cookieHeader();
   const viewer = await serverCloud(cookie).account.me().then((reply) => reply.user).catch(() => null);
   if (!viewer || viewer.role !== "admin") notFound();
-  return <AdminConsole locale={locale} copy={getMessages(locale).admin} />;
+  return <AdminConsole locale={locale} copy={getMessages(locale).admin} viewer={viewer} />;
 }

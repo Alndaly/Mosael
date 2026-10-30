@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,6 +31,7 @@ import {
   type AdminPlan,
   type AdminUsage,
   type AdminUser,
+  type CloudUser,
 } from "@/lib/cloud";
 
 function failureText(error: unknown, copy: Messages["admin"], locale: Locale): string {
@@ -76,7 +79,7 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages["admin"] }) {
+export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: Messages["admin"]; viewer: CloudUser }) {
   const [tab, setTab] = useState("overview");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -126,7 +129,7 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
 
   return (
     <SidebarProvider>
-      <AdminSidebar tab={tab} onSelect={setTab} copy={copy} locale={locale} />
+      <AdminSidebar tab={tab} onSelect={setTab} copy={copy} locale={locale} viewer={viewer} />
       <SidebarInset>
         <div className="mx-auto max-w-[100rem] px-4 py-8 sm:px-6 lg:px-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -173,7 +176,9 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
   );
 }
 
-function AdminSidebar({ tab, onSelect, copy, locale }: { tab: string; onSelect: (tab: string) => void; copy: Messages["admin"]; locale: Locale }) {
+function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; onSelect: (tab: string) => void; copy: Messages["admin"]; locale: Locale; viewer: CloudUser }) {
+  const name = viewer.display_name?.trim() || viewer.handle?.trim() || viewer.email?.trim() || viewer.phone || "Admin";
+  const initial = Array.from(name)[0]?.toUpperCase() ?? "A";
   const items = [
     { id: "overview", label: copy.tabOverview, icon: LayoutDashboard },
     { id: "users", label: copy.tabUsers, icon: Users },
@@ -210,6 +215,17 @@ function AdminSidebar({ tab, onSelect, copy, locale }: { tab: string; onSelect: 
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        <div className="mb-3 flex items-center gap-2.5">
+          <Avatar>
+            <AvatarFallback>{initial}</AvatarFallback>
+          </Avatar>
+          <div className="grid min-w-0 flex-1 gap-0.5">
+            <strong className="truncate text-xs font-semibold">{name}</strong>
+            <span className="truncate text-[11px] text-muted-foreground">{viewer.email || viewer.phone || viewer.id}</span>
+          </div>
+          <Badge variant="secondary">{viewer.role || "admin"}</Badge>
+        </div>
+        <Separator className="mb-3" />
         <div className="flex items-center justify-between gap-2">
           <LocaleSwitch locale={locale} label={copy.language} />
           <ThemeToggle label={copy.theme} />
