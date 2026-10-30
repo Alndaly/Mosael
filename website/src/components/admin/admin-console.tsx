@@ -9,7 +9,9 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { LocaleSwitch } from "@/components/locale-switch";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Menu, ScrollText, Users } from "lucide-react";
 import type { Locale } from "@/i18n/config";
@@ -110,7 +112,7 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
 
   return (
     <SidebarProvider>
-      <AdminSidebar tab={tab} onSelect={setTab} copy={copy} />
+      <AdminSidebar tab={tab} onSelect={setTab} copy={copy} locale={locale} />
       <SidebarInset>
         <div className="mx-auto max-w-[100rem] px-4 py-8 sm:px-6 lg:px-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -157,7 +159,7 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
   );
 }
 
-function AdminSidebar({ tab, onSelect, copy }: { tab: string; onSelect: (tab: string) => void; copy: Messages["admin"] }) {
+function AdminSidebar({ tab, onSelect, copy, locale }: { tab: string; onSelect: (tab: string) => void; copy: Messages["admin"]; locale: Locale }) {
   const items = [
     { id: "overview", label: copy.tabOverview, icon: LayoutDashboard },
     { id: "users", label: copy.tabUsers, icon: Users },
@@ -193,6 +195,12 @@ function AdminSidebar({ tab, onSelect, copy }: { tab: string; onSelect: (tab: st
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <div className="flex items-center justify-between gap-2">
+          <LocaleSwitch locale={locale} label={copy.language} />
+          <ThemeToggle label={copy.theme} />
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

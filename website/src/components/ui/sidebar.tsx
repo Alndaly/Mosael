@@ -68,6 +68,10 @@ export function SidebarContent({ className, ...props }: React.ComponentProps<"di
   return <div data-slot="sidebar-content" className={cn("flex-1 overflow-y-auto p-3", className)} {...props} />;
 }
 
+export function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="sidebar-footer" className={cn("border-t border-border p-3", className)} {...props} />;
+}
+
 export function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="sidebar-group" className={cn("grid gap-1", className)} {...props} />;
 }

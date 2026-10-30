@@ -18,7 +18,7 @@ export default async function AdminLayout({
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <main id="main">{children}</main>
     </div>
   );
