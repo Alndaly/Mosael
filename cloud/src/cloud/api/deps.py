@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from cloud.config import CloudConfig
 from cloud.domain import device_tokens
 from cloud.errors import CloudError
+from cloud.domain import admin as admin_domain
 from cloud.models import CloudSession, CloudUser, now
 from cloud.security import token_digest
 
@@ -44,6 +45,24 @@ def _device_user(db: Session, raw: str) -> CloudUser | None:
     return db.get(CloudUser, token.user_id) if token is not None else None
 
 
+def browser_user(request: Request, db: DbSession, config: CurrentConfig) -> CloudUser:
+    """只认浏览器会话 cookie,不认桌面设备令牌。"""
+    raw = request.cookies.get(config.cookie_name, "")
+    if not raw:
+        raise CloudError(401, "not_authenticated")
+    session = db.get(CloudSession, token_digest(raw))
+    if session is None:
+        raise CloudError(401, "not_authenticated")
+    if session.expires_at <= now():
+        db.delete(session)
+        db.commit()
+        raise CloudError(401, "not_authenticated")
+    user = db.get(CloudUser, session.user_id)
+    if user is None:
+        raise CloudError(401, "not_authenticated")
+    return user
+
+
 def current_user(request: Request, db: DbSession, config: CurrentConfig) -> CloudUser:
     """认人有两条路,**一个请求只走一条**:
 
@@ -59,24 +78,23 @@ def current_user(request: Request, db: DbSession, config: CurrentConfig) -> Clou
         if user is None:
             raise CloudError(401, "device_token_invalid")
         return user
-    raw = request.cookies.get(config.cookie_name, "")
-    if not raw:
-        raise CloudError(401, "not_authenticated")
-    session = db.get(CloudSession, token_digest(raw))
-    if session is None:
-        raise CloudError(401, "not_authenticated")
-    if session.expires_at <= now():
-        # 撞见就顺手删掉:过期的行不该在库里等着某次清理。
-        db.delete(session)
-        db.commit()
-        raise CloudError(401, "not_authenticated")
-    user = db.get(CloudUser, session.user_id)
-    if user is None:
-        raise CloudError(401, "not_authenticated")
-    return user
+    return browser_user(request, db, config)
 
 
 CurrentUser = Annotated[CloudUser, Depends(current_user)]
+
+
+def current_admin(request: Request, db: DbSession, config: CurrentConfig) -> CloudUser:
+    """管理端身份:必须是浏览器会话 + `role=admin`。设备令牌一律拒绝。"""
+    if bearer_token(request):
+        raise CloudError(403, "admin_requires_browser")
+    user = browser_user(request, db, config)
+    if not admin_domain.is_admin(user):
+        raise CloudError(403, "admin_required")
+    return user
+
+
+CurrentAdmin = Annotated[CloudUser, Depends(current_admin)]
 
 
 def optional_user(request: Request, db: DbSession, config: CurrentConfig) -> CloudUser | None:

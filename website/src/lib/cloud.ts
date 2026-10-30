@@ -40,6 +40,8 @@ export type CloudUser = {
   avatar_seed?: string | null;
   /** 是否已经设过密码;验证码登录新建的账号为 false。 */
   has_password?: boolean;
+  /** 本人角色；只有 `role=admin` 能进入 MosaelCloud 管理端。 */
+  role?: "member" | "admin";
   /** 是否开启了 TOTP 双因素(由本人 /me 返回,不进入公开身份)。 */
   mfa_enabled?: boolean;
 };
@@ -477,3 +479,156 @@ export const cloudNotifications = browser.notifications;
 export function cloudForServer(options: { baseUrl: string; cookie?: string }): ReturnType<typeof createClient> {
   return createClient(options);
 }
+
+// ---------------------------------------------------------------- 管理端
+
+export type AdminOverview = {
+  users: number;
+  admins: number;
+  subscriptions: number;
+  models: number;
+  channels: number;
+  orders: number;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  handle: string | null;
+  display_name: string | null;
+  role: "member" | "admin";
+  official: boolean;
+  has_password: boolean;
+  mfa_enabled: boolean;
+  created_at: string;
+  credits: number;
+  subscription: {
+    plan: string | null;
+    name: string | null;
+    ends_at: string | null;
+    next_grant_at: string | null;
+  } | null;
+  credit_batches?: { remaining: number; source: string; expires_at: string }[];
+  subscriptions?: { id: string; plan: string | null; status: string; started_at: string; ends_at: string }[];
+  orders?: {
+    id: string;
+    status: string;
+    plan: { slug: string; name: string; period: string } | null;
+    amount_cents: number;
+    currency: string;
+    channel: string;
+    created_at: string;
+  }[];
+};
+
+export type AdminModel = {
+  id: string;
+  label: string;
+  kind: string;
+  max_output_tokens: number;
+  enabled: boolean;
+  sort_order: number;
+  current_price: { input_per_1k: number; output_per_1k: number; effective_from: string } | null;
+  channel_count: number;
+  active_channel_count: number;
+  listed: boolean;
+  not_listed_reasons: string[];
+};
+
+export type AdminChannel = {
+  id: string;
+  model_id: string;
+  base_url: string;
+  upstream_model: string;
+  priority: number;
+  enabled: boolean;
+  cooldown_until: string | null;
+  note: string;
+  has_api_key: boolean;
+};
+
+export type AdminPlan = {
+  slug: string;
+  name: string;
+  period: "month" | "quarter" | "year";
+  monthly_credits: number;
+  credit_ttl_days: number;
+  on_sale: boolean;
+  price_cents: number | null;
+  currency: string;
+};
+
+export type AdminModelInput = {
+  id?: string;
+  label: string;
+  max_output_tokens: number;
+  sort_order: number;
+  enabled: boolean;
+};
+
+export const cloudAdmin = {
+  overview: () => request<AdminOverview>("/admin/overview"),
+  users: (q = "") => request<{ users: AdminUser[] }>(`/admin/users?${new URLSearchParams({ q })}`),
+  user: (id: string) => request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}`),
+  setRole: (id: string, role: "member" | "admin") =>
+    request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/role`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
+  gift: (id: string, credits: number, days: number, note: string) =>
+    request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/credits`, {
+      method: "POST",
+      body: JSON.stringify({ credits, days, note }),
+    }),
+  subscribe: (id: string, plan: string) =>
+    request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/subscriptions`, {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    }),
+  models: () => request<{ models: AdminModel[] }>("/admin/models"),
+  createModel: (body: AdminModelInput) =>
+    request<{ model: AdminModel }>("/admin/models", { method: "POST", body: JSON.stringify(body) }),
+  updateModel: (id: string, body: Omit<AdminModelInput, "id">) =>
+    request<{ model: AdminModel }>(`/admin/models/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  prices: (id: string) =>
+    request<{ prices: { input_per_1k: number; output_per_1k: number; effective_from: string }[] }>(
+      `/admin/models/${encodeURIComponent(id)}/prices`,
+    ),
+  addPrice: (id: string, input_per_1k: number, output_per_1k: number, effective_from?: string) =>
+    request<{ price: { input_per_1k: number; output_per_1k: number; effective_from: string } }>(
+      `/admin/models/${encodeURIComponent(id)}/prices`,
+      {
+        method: "POST",
+        body: JSON.stringify({ input_per_1k, output_per_1k, effective_from: effective_from || null }),
+      },
+    ),
+  channels: () => request<{ channels: AdminChannel[] }>("/admin/channels"),
+  createChannel: (body: {
+    model_id: string;
+    base_url: string;
+    upstream_model: string;
+    api_key: string;
+    priority: number;
+    note: string;
+  }) => request<{ channel: AdminChannel }>("/admin/channels", { method: "POST", body: JSON.stringify(body) }),
+  updateChannel: (
+    id: string,
+    body: { upstream_model: string; priority: number; note: string; enabled: boolean; api_key: string },
+  ) =>
+    request<{ channel: AdminChannel }>(`/admin/channels/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  plans: () => request<{ plans: AdminPlan[] }>("/admin/plans"),
+  createPlan: (body: Omit<AdminPlan, "currency">) =>
+    request<{ plan: AdminPlan }>("/admin/plans", { method: "POST", body: JSON.stringify(body) }),
+  updatePlan: (slug: string, body: Omit<AdminPlan, "slug" | "currency">) =>
+    request<{ plan: AdminPlan }>(`/admin/plans/${encodeURIComponent(slug)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+};

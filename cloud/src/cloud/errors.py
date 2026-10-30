@@ -132,6 +132,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The provider did not answer correctly. Try again in a moment.",
         "zh": "第三方服务暂时没有正常响应，请稍后重试。",
     },
+    "admin_required": {
+        "en": "This action is only available to MosaelCloud administrators.",
+        "zh": "这个操作只有 MosaelCloud 管理员可以做。",
+    },
+    "admin_requires_browser": {
+        "en": "Administration is only available from a browser session, not a desktop device token.",
+        "zh": "管理端只接受浏览器会话，桌面设备令牌不能管理部署。",
+    },
     "mfa_not_configured": {
         "en": "Two-factor authentication is not configured on this service yet.",
         "zh": "这个服务还没有配置双因素认证。",
@@ -239,6 +247,34 @@ MESSAGES: dict[str, dict[str, str]] = {
     "comment_not_found": {
         "en": "That comment does not exist.",
         "zh": "这条评论不存在。",
+    },
+    "model_not_found": {
+        "en": "No such model in the catalog.",
+        "zh": "目录里没有这个模型。",
+    },
+    "model_exists": {
+        "en": "A model with that id already exists.",
+        "zh": "这个模型 id 已经存在。",
+    },
+    "channel_not_found": {
+        "en": "No such upstream channel.",
+        "zh": "没有这条上游通道。",
+    },
+    "channel_url_invalid": {
+        "en": "The upstream URL must start with http:// or https://.",
+        "zh": "上游地址必须以 http:// 或 https:// 开头。",
+    },
+    "plan_not_found": {
+        "en": "No such plan.",
+        "zh": "没有这个套餐。",
+    },
+    "plan_exists": {
+        "en": "A plan with that slug already exists.",
+        "zh": "这个套餐 slug 已经存在。",
+    },
+    "last_admin": {
+        "en": "You cannot remove the last MosaelCloud administrator.",
+        "zh": "不能撤销最后一名 MosaelCloud 管理员。",
     },
     "user_not_found": {
         "en": "No MosaelCloud account uses that handle.",

@@ -16,6 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from cloud.api.admin import router as admin_router
 from cloud.api.auth import router as accounts_router
 from cloud.api.device_tokens import router as device_tokens_router
 from cloud.api.mfa import router as mfa_router
@@ -150,6 +151,7 @@ def create_app(
         return {"status": "ok"}
 
     app.include_router(accounts_router, prefix=API_PREFIX)
+    app.include_router(admin_router, prefix=API_PREFIX)
     app.include_router(oauth_router, prefix=API_PREFIX)
     app.include_router(profile_router, prefix=API_PREFIX)
     app.include_router(shares_router, prefix=API_PREFIX)

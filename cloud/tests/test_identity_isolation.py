@@ -60,6 +60,7 @@ def test_cloud_has_its_own_tables_and_no_local_identity_columns(tmp_path):
             "id",
             "email",
             "password_hash",
+            "role",
             "mfa_totp_secret_encrypted",
             "mfa_pending_secret_encrypted",
             "mfa_pending_expires_at",

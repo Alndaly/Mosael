@@ -81,6 +81,11 @@ def add_channel(
     return channel
 
 
+def replace_channel_key(db: Session, config: CloudConfig, channel: CloudUpstreamChannel, api_key: str) -> None:
+    channel.api_key_encrypted = seal(config, api_key)
+    db.flush()
+
+
 def channels_in_order(db: Session, model_id: str, *, at: datetime) -> list[CloudUpstreamChannel]:
     """这个模型可试的通道:没在冷却的按优先级在前,冷却中的按优先级排在后面。"""
     found = db.scalars(

@@ -334,6 +334,48 @@ cloud_oauth_states(
 本地库;密码登录的输入框接受邮箱或手机号,后者转发到 `/api/cloud/v1/login/phone`。
 
 
+
+### 管理员账号
+
+`cloud_users.role` 是 `member` / `admin`。它和 `official` **互相独立**：
+
+- `official` 是公开的内容发布标记，不自动获得管理权限；
+- `admin` 通过 CLI 引导，管理端 API 只接受 **浏览器会话 + admin**，桌面设备令牌一律拒绝。
+
+```bash
+uv run python -m cloud.cli admin-grant --email mosael@126.com
+uv run python -m cloud.cli admin-list
+uv run python -m cloud.cli admin-revoke --email someone@example.com
+```
+
+不能撤销最后一名管理员。注册、`PUT /me` 和 OAuth 都不会写 `role`；目前管理端只提供 `GET /admin/me` 验证身份，后续的模型、通道、套餐和用户管理都挂在这个前缀下。
+
+
+#### 管理端接口
+
+管理端统一在 `/api/cloud/v1/admin/*`，只接受浏览器会话 + `role=admin`，不接受桌面设备令牌。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/admin/me` | 当前管理员身份 |
+| GET | `/admin/overview` | 账号 / 管理员 / 有效订阅 / 模型 / 通道 / 订单计数 |
+| GET | `/admin/users?q=` | 搜索账号；返回订阅、积分、角色、official、MFA 状态 |
+| GET | `/admin/users/{id}` | 账号详情：积分批次、订阅、最近订单 |
+| POST | `/admin/users/{id}/role` | `member` / `admin`；不能撤销最后一名管理员 |
+| POST | `/admin/users/{id}/credits` | 赠送积分 |
+| POST | `/admin/users/{id}/subscriptions` | 开通套餐 |
+| GET/POST | `/admin/models` | 模型目录；新建 |
+| PATCH | `/admin/models/{id}` | 名称 / 最大输出 / 排序 / 启停；id 不可改 |
+| GET/POST | `/admin/models/{id}/prices` | 价格历史；追加生效价 |
+| GET/POST | `/admin/channels` | 上游通道；Key 只写不读 |
+| PATCH | `/admin/channels/{id}` | 上游模型 / 优先级 / 启停 / 备注 / 替换 Key；地址和模型不可改 |
+| GET/POST | `/admin/plans` | 套餐列表 / 新建 |
+| PATCH | `/admin/plans/{slug}` | 修改套餐；slug 不可改 |
+
+响应全部显式组装：不返回密码哈希、设备令牌或上游 API Key。管理端网页在 `/<locale>/admin`，未登录或非管理员直接 404；真实权限仍由 Cloud 路由的 `CurrentAdmin` 校验。
+
+管理端目前仍使用普通 Cloud 登录；管理员 MFA 强制、审计表和更严格的高危操作二次验证还没有接入。
+
 ### 可选双因素(TOTP)
 
 账号可以在官网「我的 → 安全」开启 TOTP 双因素;开启后密码、邮箱验证码、短信验证码和第三方登录**都**会在主认证后多问一次认证器验证码。

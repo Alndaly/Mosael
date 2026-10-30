@@ -79,7 +79,12 @@ export function SiteHeader({ locale }: { locale: Locale }) {
             <GithubMark className="size-4" />
           </a>
           {/* 账号紧贴「下载」左侧:主行动在最右,登录是它旁边那颗安静的次级按钮。 */}
-          <AccountNav locale={locale} loginLabel={t.account.login} accountLabel={t.account.account} />
+          <AccountNav
+            locale={locale}
+            loginLabel={t.account.login}
+            accountLabel={t.account.account}
+            adminLabel={t.admin.title}
+          />
           <DownloadLink
             locale={locale}
             className="hidden min-h-10 items-center rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/88 lg:inline-flex"

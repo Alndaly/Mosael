@@ -225,6 +225,9 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 ```bash
 uv run python -m cloud.cli channel-key                     # 生成 CLOUD_CHANNEL_KEY,写进部署 .env
 uv run python -m cloud.cli mfa-key                         # 生成 CLOUD_MFA_KEY(可选双因素)
+uv run python -m cloud.cli admin-grant --email a@b.com     # 把已有账号设为 MosaelCloud 管理员
+uv run python -m cloud.cli admin-list                      # 列出管理员
+uv run python -m cloud.cli admin-revoke --email a@b.com    # 撤销(不能撤掉最后一名)
 uv run python -m cloud.cli plan-set --slug pro --name Pro --period year --monthly-credits 20000 --credit-ttl-days 60
 uv run python -m cloud.cli subscribe --email a@b.com --plan pro
 uv run python -m cloud.cli model-set --id deepseek-chat --label "DeepSeek V3" --max-output-tokens 8000

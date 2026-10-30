@@ -5,8 +5,8 @@
     uv run python -m cloud.cli stamp 0001         把 create_all 时代的库标到基线(一次性)
     uv run python -m cloud.cli seed-official --bundle official-bundle.json   补官方账号的分享(幂等)
 
-官方中转的套餐、目录、上游通道命令见 `cloud/relay_admin.py`(channel-key、mfa-key、plan-set、subscribe、gift、
-model-set、price-set、channel-add、channel-list、balance)。
+官方中转 / 账号角色命令见 `cloud/relay_admin.py`(channel-key、mfa-key、admin-grant、admin-revoke、admin-list、
+plan-set、subscribe、gift、model-set、price-set、channel-add、channel-list、balance)。
 
 配置从 `CLOUD_*` 环境变量读,和 uvicorn 启动时同一份(见 `cloud/config.py`)。
 """

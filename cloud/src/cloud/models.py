@@ -74,10 +74,17 @@ class CloudUser(Base):
     handle: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, index=True, default=None)
     #: 头像种子:一个短字符串。P1 的头像 = 昵称首字母 + 由这个种子决定的颜色,**不存图片**。
     avatar_seed: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
+    #: 账号角色。`member` 是普通用户;`admin` 可以进入 MosaelCloud 管理端。
+    #: 只由 CLI / 管理端授予,注册与 `PUT /me` 都不读这个字段。
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="member", server_default="member")
     #: 官方账号标记。**只有部署脚本(`cloud.cli seed-official`)会把它写成 true**;
     #: 注册与 `PUT /me` 都不读这个字段。它是公开信息(`public_user()` 带出去),email 仍然不是。
     official: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
+    )
+
+    __table_args__ = (
+        CheckConstraint("role IN ('member', 'admin')", name="ck_cloud_users_role"),
     )
 
 

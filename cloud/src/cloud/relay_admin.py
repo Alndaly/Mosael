@@ -26,7 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
-from cloud.domain import catalog, credits
+from cloud.domain import admin, catalog, credits
 from cloud.domain.channel_keys import new_channel_key
 from cloud.mfa import new_fernet_key
 from cloud.payments.base import cents_from_yuan, yuan
@@ -91,6 +91,17 @@ def register(commands: argparse._SubParsersAction) -> None:
 
     listing = commands.add_parser("channel-list", help="列出上游通道(不显示 Key)")
     listing.set_defaults(relay=_channel_list)
+
+    admin_grant = commands.add_parser("admin-grant", help="把已有账号设为 MosaelCloud 管理员")
+    admin_grant.add_argument("--email", required=True)
+    admin_grant.set_defaults(relay=_admin_grant)
+
+    admin_revoke = commands.add_parser("admin-revoke", help="撤销一个 MosaelCloud 管理员(不能撤掉最后一名)")
+    admin_revoke.add_argument("--email", required=True)
+    admin_revoke.set_defaults(relay=_admin_revoke)
+
+    admin_list = commands.add_parser("admin-list", help="列出 MosaelCloud 管理员")
+    admin_list.set_defaults(relay=_admin_list)
 
     balance = commands.add_parser("balance", help="看一个账号此刻的积分")
     balance.add_argument("--email", required=True)
@@ -197,6 +208,30 @@ def _channel_list(_args, _config: CloudConfig, db: Session) -> str:
         f"{'  ' + one.note if one.note else ''}"
         for one in rows
     )
+
+
+def _admin_grant(args, _config: CloudConfig, db: Session) -> str:
+    user = _user(db, args.email)
+    changed = admin.grant(db, user)
+    return f"{user.email} {'已成为' if changed else '已经是'} MosaelCloud 管理员"
+
+
+def _admin_revoke(args, _config: CloudConfig, db: Session) -> str:
+    user = _user(db, args.email)
+    try:
+        changed = admin.revoke(db, user)
+    except admin.RoleError as exc:
+        if exc.code == "last_admin":
+            raise AdminError("不能撤销最后一名管理员;先授予另一个账号") from exc
+        raise
+    return f"{user.email} {'已撤销管理员' if changed else '本来就不是管理员'}"
+
+
+def _admin_list(_args, _config: CloudConfig, db: Session) -> str:
+    users = admin.admins(db)
+    if not users:
+        return "还没有 MosaelCloud 管理员"
+    return "\n".join(f"{user.email or user.phone or user.id}  @{user.handle or '-'}" for user in users)
 
 
 def _balance(args, _config: CloudConfig, db: Session) -> str:
