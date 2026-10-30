@@ -697,7 +697,14 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
     setTesting(channel.id);
     try {
       const result = (await cloudAdmin.testChannel(channel.id)).result;
-      setTests((current) => ({ ...current, [channel.id]: result }));
+      if (result.ok) {
+        setTests((current) => ({ ...current, [channel.id]: result }));
+      } else {
+        toast({
+          title: copy.testFailed,
+          description: `${result.status}${result.detail ? ` · ${result.detail}` : ""}`,
+        });
+      }
     } catch (failure) {
       onFailure(failure);
     } finally {
@@ -717,7 +724,7 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
                 <TableCell>{channel.priority}</TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ChannelEnabledSwitch copy={copy} channel={channel} onChanged={onChanged} onFailure={onFailure} /></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}{tests[channel.id].detail ? <span className="block max-w-72 truncate" title={tests[channel.id].detail}> · {tests[channel.id].detail}</span> : null}</span>}</TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className="text-xs text-success">{copy.testOk} · {tests[channel.id].status}</span>}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
