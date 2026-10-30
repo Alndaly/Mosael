@@ -370,6 +370,7 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | GET/POST | `/admin/models/{id}/prices` | 价格历史；追加生效价 |
 | GET/POST | `/admin/channels` | 上游通道；Key 只写不读 |
 | PATCH | `/admin/channels/{id}` | 上游模型 / 优先级 / 启停 / 备注 / 替换 Key；地址和模型不可改 |
+| POST | `/admin/channels/{id}/test` | 用已存 Key 发一次最小对话，返回状态 / 延迟 / 用量；不回 Key |
 | GET/POST | `/admin/plans` | 套餐列表 / 新建 |
 | PATCH | `/admin/plans/{slug}` | 修改套餐；slug 不可改 |
 

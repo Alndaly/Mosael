@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from cloud.admin import service
 from cloud.admin.schemas import (
@@ -186,6 +186,25 @@ def admin_update_channel(
                  detail={"enabled": body.enabled, "api_key_replaced": bool(body.api_key)})
     db.commit()
     return {"channel": channel}
+
+
+@router.post("/admin/channels/{channel_id}/test")
+def admin_test_channel(
+    channel_id: str, actor: CurrentAdmin, request: Request, config: CurrentConfig, db: DbSession
+) -> dict[str, object]:
+    result = service.test_channel(
+        db, config, channel_id, transport=request.app.state.upstream_transport
+    )
+    audit.record(
+        db,
+        actor=actor,
+        action="channel.test",
+        target_type="channel",
+        target_id=channel_id,
+        detail={"ok": result["ok"], "status": result["status"]},
+    )
+    db.commit()
+    return {"result": result}
 
 
 @router.get("/admin/plans")

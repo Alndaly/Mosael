@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import httpx2
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 
@@ -120,3 +121,26 @@ def test_admin_channel_api_never_returns_the_upstream_key(client):
         db.commit()
     assert channel["has_api_key"] is True
     assert "sk-never-return-this" not in str(channel)
+
+
+def test_channel_connectivity_test_uses_the_stored_key_without_returning_it(client):
+    make_admin(client)
+    with client.app.state.db.session() as db:
+        db.add(CloudGatewayModel(id="m2", label="M2", kind="chat", max_output_tokens=100))
+        db.commit()
+    config = replace(client.app.state.config, channel_key=Fernet.generate_key().decode("ascii"))
+    seen = {}
+    def handler(request):
+        seen["auth"] = request.headers.get("authorization")
+        return httpx2.Response(200, json={"choices": [], "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+    with client.app.state.db.session() as db:
+        channel = service.create_channel(
+            db, config, model_id="m2", base_url="https://upstream.example/v1",
+            upstream_model="m2", api_key="sk-test", priority=0, note="",
+        )
+        db.commit()
+        result = service.test_channel(db, config, channel["id"], transport=httpx2.MockTransport(handler))
+    assert result["ok"] is True
+    assert result["status"] == 200
+    assert seen["auth"] == "Bearer sk-test"
+    assert "sk-test" not in str(result)

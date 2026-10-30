@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import time
 from datetime import UTC, datetime
+
+import httpx2
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -11,6 +15,8 @@ from cloud.config import CloudConfig
 from cloud.domain import catalog, credits
 from cloud.domain import admin as role_admin
 from cloud.domain import orders as order_domain
+from cloud.domain.channel_keys import unseal
+from cloud.gateway import upstream
 from cloud.errors import CloudError
 from cloud.models import (
     CloudAdminAudit,
@@ -393,3 +399,53 @@ def list_audit(db: Session, *, limit: int = 100) -> list[dict[str, object]]:
             select(CloudAdminAudit).order_by(CloudAdminAudit.created_at.desc()).limit(limit)
         ).all()
     ]
+
+
+def test_channel(
+    db: Session,
+    config: CloudConfig,
+    channel_id: str,
+    *,
+    transport: httpx2.BaseTransport | None = None,
+) -> dict[str, object]:
+    """发一次最小对话请求验证上游。只回状态 / 延迟 / 用量,不回 Key。"""
+    channel = db.get(CloudUpstreamChannel, channel_id)
+    if channel is None:
+        raise CloudError(404, "channel_not_found")
+    started = time.monotonic()
+    body = {
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+        "stream": False,
+    }
+    try:
+        with upstream.new_client(transport) as client:
+            response = upstream.open_chat(
+                client, channel, api_key=unseal(config, channel.api_key_encrypted), body=body
+            )
+            try:
+                raw = response.read()
+            finally:
+                response.close()
+    except upstream.UpstreamFailure as failure:
+        return {
+            "ok": False,
+            "status": failure.status,
+            "detail": failure.detail,
+            "retryable": failure.retryable,
+            "latency_ms": int((time.monotonic() - started) * 1000),
+        }
+    latency = int((time.monotonic() - started) * 1000)
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        payload = None
+    usage = upstream.usage_of(payload)
+    return {
+        "ok": True,
+        "status": 200,
+        "latency_ms": latency,
+        "upstream_model": channel.upstream_model,
+        "input_tokens": usage.input_tokens if usage else None,
+        "output_tokens": usage.output_tokens if usage else None,
+    }

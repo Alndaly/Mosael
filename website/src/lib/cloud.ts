@@ -569,6 +569,17 @@ export type AdminAudit = {
   created_at: string;
 };
 
+export type AdminChannelTest = {
+  ok: boolean;
+  status: number;
+  detail?: string;
+  retryable?: boolean;
+  latency_ms: number;
+  upstream_model?: string;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+};
+
 export type AdminModelInput = {
   id?: string;
   label: string;
@@ -634,6 +645,8 @@ export const cloudAdmin = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  testChannel: (id: string) =>
+    request<{ result: AdminChannelTest }>(`/admin/channels/${encodeURIComponent(id)}/test`, { method: "POST" }),
   plans: () => request<{ plans: AdminPlan[] }>("/admin/plans"),
   createPlan: (body: Omit<AdminPlan, "currency">) =>
     request<{ plan: AdminPlan }>("/admin/plans", { method: "POST", body: JSON.stringify(body) }),

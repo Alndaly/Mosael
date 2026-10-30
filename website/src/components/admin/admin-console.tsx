@@ -13,6 +13,7 @@ import {
   cloudAdmin,
   type AdminAudit,
   type AdminChannel,
+  type AdminChannelTest,
   type AdminModel,
   type AdminOverview,
   type AdminPlan,
@@ -527,6 +528,8 @@ function ChannelsPanel({
   const [form, setForm] = useState({ model: "", base: "", upstream: "", key: "", priority: "0", note: "" });
   const [selected, setSelected] = useState<AdminChannel | null>(null);
   const [edit, setEdit] = useState({ upstream: "", priority: "0", note: "", enabled: true, key: "" });
+  const [test, setTest] = useState<AdminChannelTest | null>(null);
+  const [testing, setTesting] = useState(false);
   const modelId = form.model || models[0]?.id || "";
   const create = async (event: FormEvent) => {
     event.preventDefault();
@@ -547,6 +550,7 @@ function ChannelsPanel({
   };
   const open = (channel: AdminChannel) => {
     setSelected(channel);
+    setTest(null);
     setEdit({
       upstream: channel.upstream_model,
       priority: String(channel.priority),
@@ -554,6 +558,18 @@ function ChannelsPanel({
       enabled: channel.enabled,
       key: "",
     });
+  };
+  const runTest = async () => {
+    if (!selected) return;
+    setTesting(true);
+    setTest(null);
+    try {
+      setTest((await cloudAdmin.testChannel(selected.id)).result);
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setTesting(false);
+    }
   };
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -624,7 +640,18 @@ function ChannelsPanel({
             <Button type="button" variant={edit.enabled ? "default" : "outline"} aria-pressed={edit.enabled} onClick={() => setEdit({ ...edit, enabled: !edit.enabled })}>
               {copy.enabled}
             </Button>
-            <Button type="submit">{copy.save}</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="submit">{copy.save}</Button>
+              <Button type="button" variant="outline" onClick={() => void runTest()} disabled={testing}>
+                {testing ? copy.testing : copy.testChannel}
+              </Button>
+            </div>
+            {test && (
+              <p className={test.ok ? "m-0 text-xs text-success" : "m-0 text-xs text-destructive"}>
+                {test.ok ? copy.testOk : copy.testFailed} · {test.status} · {test.latency_ms}ms
+                {test.detail ? ` · ${test.detail}` : ""}
+              </p>
+            )}
           </form>
         )}
       </div>
