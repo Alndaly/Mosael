@@ -28756,6 +28756,88 @@
         }
       }
     },
+    "/api/cloud/v1/login/sms/code": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Send Login Sms Code",
+        "description": "短信登录第一步:让 Cloud 发短信验证码。",
+        "operationId": "send_login_sms_code_api_cloud_v1_login_sms_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudPhoneIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/login/sms/verify": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Verify Login Sms",
+        "description": "短信登录第二步。Cloud 在首次验证时会自动建手机号账号。",
+        "operationId": "verify_login_sms_api_cloud_v1_login_sms_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudPhoneCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cloud/v1/logout": {
       "post": {
         "tags": [
@@ -35237,6 +35319,44 @@
         "title": "CloudOrderIn",
         "description": "在线购买下单(ADR 0088 第 3 步):哪个套餐(slug)、哪个渠道。原样转给 Cloud,由它校验。"
       },
+      "CloudPhoneCodeIn": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 12,
+            "title": "Code",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone"
+        ],
+        "title": "CloudPhoneCodeIn",
+        "description": "短信登录第二步:手机号 + 6 位码。"
+      },
+      "CloudPhoneIn": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone"
+        ],
+        "title": "CloudPhoneIn",
+        "description": "短信登录第一步:手机号。"
+      },
       "CloudSessionOut": {
         "properties": {
           "email": {
@@ -35249,7 +35369,7 @@
           "email"
         ],
         "title": "CloudSessionOut",
-        "description": "「现在登的是谁」 —— 只有邮箱。设备令牌**不在**这里。"
+        "description": "「现在登的是谁」 —— 登录标识(邮箱或 E.164 手机号)。设备令牌**不在**这里。"
       },
       "CommentAnchorUpdate": {
         "properties": {

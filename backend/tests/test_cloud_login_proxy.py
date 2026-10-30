@@ -332,6 +332,8 @@ def test_without_cloud_url_every_new_route_says_not_configured(monkeypatch) -> N
         ("post", "/api/cloud/v1/login", {"email": EMAIL, "password": PASSWORD}),
         ("post", "/api/cloud/v1/login/code", {"email": EMAIL}),
         ("post", "/api/cloud/v1/login/code/verify", {"email": EMAIL, "code": "123456"}),
+        ("post", "/api/cloud/v1/login/sms/code", {"phone": "+8613800138000"}),
+        ("post", "/api/cloud/v1/login/sms/verify", {"phone": "+8613800138000", "code": "123456"}),
         ("post", "/api/cloud/v1/logout", None),
         ("get", "/api/cloud/v1/me", None),
         ("get", "/api/cloud/v1/shares/share-1", None),
@@ -386,6 +388,7 @@ def test_the_share_detail_proxy_still_reads(cloud: FakeCloud) -> None:
 
 PROXIED = [
     ("post", "/api/cloud/v1/login/code", {"email": EMAIL}, "POST", "/login/code"),
+    ("post", "/api/cloud/v1/login/sms/code", {"phone": "+8613800138000"}, "POST", "/login/sms/code"),
     ("get", "/api/cloud/v1/me", None, "GET", "/me"),
     ("get", "/api/cloud/v1/shares", None, "GET", "/shares"),
     ("post", "/api/cloud/v1/shares", {"kind": "workflow", "title": "T"}, "POST", "/shares"),
@@ -459,6 +462,23 @@ def test_the_login_code_flow_stores_a_device_token_on_verify(cloud: FakeCloud) -
 
     assert response.status_code == 200, response.text
     assert response.json() == {"email": EMAIL}
+    assert COOKIE_VALUE not in response.text
+    assert len(rows()) == 1
+
+
+def test_the_sms_login_flow_stores_a_device_token_on_verify(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    cloud.reply(200, {"sent": True})
+    assert client.post("/api/cloud/v1/login/sms/code", json={"phone": "+8613800138000"}).status_code == 200
+    assert (cloud.requests[-1].method, cloud.requests[-1].url.path) == ("POST", "/login/sms/code")
+
+    queue_successful_login(cloud)
+    response = client.post(
+        "/api/cloud/v1/login/sms/verify",
+        json={"phone": "+8613800138000", "code": "123456"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"email": "+8613800138000"}
     assert COOKIE_VALUE not in response.text
     assert len(rows()) == 1
 

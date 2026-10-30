@@ -9822,6 +9822,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/login/sms/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Login Sms Code
+         * @description 短信登录第一步:让 Cloud 发短信验证码。
+         */
+        post: operations["send_login_sms_code_api_cloud_v1_login_sms_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/login/sms/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Login Sms
+         * @description 短信登录第二步。Cloud 在首次验证时会自动建手机号账号。
+         */
+        post: operations["verify_login_sms_api_cloud_v1_login_sms_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cloud/v1/logout": {
         parameters: {
             query?: never;
@@ -12708,8 +12748,29 @@ export interface components {
             channel: "alipay" | "wechat";
         };
         /**
+         * CloudPhoneCodeIn
+         * @description 短信登录第二步:手机号 + 6 位码。
+         */
+        CloudPhoneCodeIn: {
+            /** Phone */
+            phone: string;
+            /**
+             * Code
+             * @default
+             */
+            code: string;
+        };
+        /**
+         * CloudPhoneIn
+         * @description 短信登录第一步:手机号。
+         */
+        CloudPhoneIn: {
+            /** Phone */
+            phone: string;
+        };
+        /**
          * CloudSessionOut
-         * @description 「现在登的是谁」 —— 只有邮箱。设备令牌**不在**这里。
+         * @description 「现在登的是谁」 —— 登录标识(邮箱或 E.164 手机号)。设备令牌**不在**这里。
          */
         CloudSessionOut: {
             /** Email */
@@ -41737,6 +41798,72 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CloudCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_login_sms_code_api_cloud_v1_login_sms_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudPhoneIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_login_sms_api_cloud_v1_login_sms_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudPhoneCodeIn"];
             };
         };
         responses: {

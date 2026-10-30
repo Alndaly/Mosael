@@ -27,7 +27,8 @@ class CloudLogin(Base):
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    #: 云端账号的邮箱。登录响应只回它;它也是界面上「你现在登的是谁」的唯一来源。
+    #: 云端账号的登录标识:有邮箱时是邮箱,短信账号是 E.164 手机号。
+    #: 登录响应只回它;它也是界面上「你现在登的是谁」的唯一来源。
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     #: 这枚令牌在 Cloud 上的 id —— 用户在官网「我的设备」里看到、吊销的就是它。
     device_token_id: Mapped[str] = mapped_column(String(64), nullable=False)

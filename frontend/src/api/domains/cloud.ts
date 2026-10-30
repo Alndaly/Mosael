@@ -81,6 +81,22 @@ export function verifyCloudLoginCode(email: string, code: string): Promise<Cloud
   });
 }
 
+/** 短信登录第一步:让 Cloud 发短信验证码到手机。 */
+export function requestCloudLoginSmsCode(phone: string): Promise<{ sent: boolean }> {
+  return apiAllowingUnauthorized<{ sent: boolean }>("/api/cloud/v1/login/sms/code", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+}
+
+/** 短信登录第二步:码换会话。手机号首次验证时 Cloud 自动建号。 */
+export function verifyCloudLoginSms(phone: string, code: string): Promise<CloudSession> {
+  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login/sms/verify", {
+    method: "POST",
+    body: JSON.stringify({ phone, code }),
+  });
+}
+
 /** 退出桌面端的云端登录:本机后端撤掉云端那一份会话,再删本地那一行。 */
 export function logoutCloud(): Promise<void> {
   return apiAllowingUnauthorized<void>("/api/cloud/v1/logout", { method: "POST" });

@@ -7,7 +7,9 @@ import {
   loginWithPassword,
   logoutCloud,
   requestCloudLoginCode,
+  requestCloudLoginSmsCode,
   verifyCloudLoginCode,
+  verifyCloudLoginSms,
   type CloudSession,
 } from "@/api/domains/cloud";
 import { cloudKeys } from "@/api/queryKeys";
@@ -40,14 +42,22 @@ export function CloudAccountSection() {
   //: 这个部署没接 Cloud。配置存的是环境变量,不重启不会变 —— 一旦知道就不再重置。
   const [notConfigured, setNotConfigured] = React.useState(false);
   const [failure, setFailure] = React.useState("");
-  const [mode, setMode] = React.useState<"password" | "code">("password");
+  const [mode, setMode] = React.useState<"password" | "code" | "sms">("password");
   const [email, setEmail] = React.useState("");
+  const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [code, setCode] = React.useState("");
   const [codeSent, setCodeSent] = React.useState(false);
+  const [cooldown, setCooldown] = React.useState(0);
   const [pending, setPending] = React.useState<"" | "login" | "code" | "verify" | "logout">("");
   const hintId = React.useId();
   const howId = React.useId();
+
+  React.useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
 
   React.useEffect(() => {
     let alive = true;
@@ -84,11 +94,14 @@ export function CloudAccountSection() {
       const found =
         mode === "password"
           ? await loginWithPassword(email.trim(), password)
-          : await verifyCloudLoginCode(email.trim(), code.trim());
+          : mode === "code"
+            ? await verifyCloudLoginCode(email.trim(), code.trim())
+            : await verifyCloudLoginSms(phone.trim(), code.trim());
       setSession(found);
       //: 供应商列表顶上的「Mosael Cloud」那一行读的是同一份登录。
       void queryClient.invalidateQueries({ queryKey: cloudKeys.session() });
       setEmail("");
+      setPhone("");
       setPassword("");
       setCode("");
       setCodeSent(false);
@@ -103,8 +116,10 @@ export function CloudAccountSection() {
     setFailure("");
     setPending("code");
     try {
-      await requestCloudLoginCode(email.trim());
+      if (mode === "sms") await requestCloudLoginSmsCode(phone.trim());
+      else await requestCloudLoginCode(email.trim());
       setCodeSent(true);
+      setCooldown(60);
     } catch (error) {
       noteFailure(error);
     } finally {
@@ -126,17 +141,19 @@ export function CloudAccountSection() {
     }
   };
 
-  const useCode = () => {
-    setMode((current) => (current === "password" ? "code" : "password"));
+  const switchMode = (next: "password" | "code" | "sms") => {
+    setMode(next);
     setFailure("");
     setCode("");
     setCodeSent(false);
   };
 
+  const identifier = mode === "sms" ? phone.trim() : email.trim();
   const canSubmit =
     !pending &&
-    email.trim().length > 0 &&
+    identifier.length > 0 &&
     (mode === "password" ? password.length > 0 : codeSent && code.trim().length === 6);
+  const canSend = !pending && identifier.length > 0 && cooldown === 0;
 
   return (
     <SettingsBlock>
@@ -184,14 +201,25 @@ export function CloudAccountSection() {
             }}
           >
             <SettingsForm>
-              <SettingsField label={t("settingsCloudEmail")}>
-                <Input
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </SettingsField>
+              {mode === "sms" ? (
+                <SettingsField label={t("settingsCloudPhone")}>
+                  <Input
+                    type="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                  />
+                </SettingsField>
+              ) : (
+                <SettingsField label={t("settingsCloudEmail")}>
+                  <Input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </SettingsField>
+              )}
               {mode === "password" ? (
                 <SettingsField label={t("settingsCloudPassword")}>
                   <Input
@@ -202,7 +230,7 @@ export function CloudAccountSection() {
                   />
                 </SettingsField>
               ) : codeSent ? (
-                <SettingsField label={t("settingsCloudCode")}>
+                <SettingsField label={mode === "sms" ? t("settingsCloudSmsCode") : t("settingsCloudCode")}>
                   <Input
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -216,17 +244,34 @@ export function CloudAccountSection() {
                   以前是 ghost:没有轮廓、只有悬停底色,左侧像一行浮着的字,和右边的实心按钮凑不成一对
                   (维护者:「现在怪怪的 好像多出间距一样」)。 */}
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <Button variant="outline" onClick={useCode}>
-                  {mode === "password" ? t("settingsCloudUseCode") : t("settingsCloudUsePassword")}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {mode !== "password" && (
+                    <Button variant="outline" onClick={() => switchMode("password")}>
+                      {t("settingsCloudUsePassword")}
+                    </Button>
+                  )}
+                  {mode !== "code" && (
+                    <Button variant="outline" onClick={() => switchMode("code")}>
+                      {t("settingsCloudUseCode")}
+                    </Button>
+                  )}
+                  {mode !== "sms" && (
+                    <Button variant="outline" onClick={() => switchMode("sms")}>
+                      {t("settingsCloudUseSms")}
+                    </Button>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
-                  {mode === "code" && !codeSent && (
+                  {mode !== "password" && (
                     <Button
+                      variant="outline"
                       onClick={() => void sendCode()}
                       loading={pending === "code"}
-                      disabled={!email.trim() || Boolean(pending)}
+                      disabled={!canSend}
                     >
-                      {t("settingsCloudSendCode")}
+                      {cooldown > 0
+                        ? t("settingsCloudResendIn").replace("{seconds}", String(cooldown))
+                        : t("settingsCloudSendCode")}
                     </Button>
                   )}
                   {(mode === "password" || codeSent) && (
@@ -235,13 +280,15 @@ export function CloudAccountSection() {
                       loading={pending === "login" || pending === "verify"}
                       disabled={!canSubmit}
                     >
-                      {mode === "code" ? t("settingsCloudVerify") : t("settingsCloudSignIn")}
+                      {mode === "password" ? t("settingsCloudSignIn") : t("settingsCloudVerify")}
                     </Button>
                   )}
                 </div>
               </div>
-              {mode === "code" && codeSent && (
-                <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsCloudCodeSent")}</small>
+              {mode !== "password" && codeSent && (
+                <small className="text-ui-sm leading-[1.5] text-muted-foreground">
+                  {mode === "sms" ? t("settingsCloudSmsSent") : t("settingsCloudCodeSent")}
+                </small>
               )}
             </SettingsForm>
           </form>

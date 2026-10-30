@@ -33,8 +33,20 @@ class CloudCodeIn(ApiModel):
     code: str = Field(default="", max_length=12)
 
 
+class CloudPhoneIn(ApiModel):
+    """短信登录第一步:手机号。"""
+
+    phone: str = Field(min_length=1, max_length=32)
+
+
+class CloudPhoneCodeIn(CloudPhoneIn):
+    """短信登录第二步:手机号 + 6 位码。"""
+
+    code: str = Field(default="", max_length=12)
+
+
 class CloudSessionOut(ApiModel):
-    """「现在登的是谁」 —— 只有邮箱。设备令牌**不在**这里。"""
+    """「现在登的是谁」 —— 登录标识(邮箱或 E.164 手机号)。设备令牌**不在**这里。"""
 
     email: str
 

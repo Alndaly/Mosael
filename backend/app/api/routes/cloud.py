@@ -21,7 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudSessionOut
+from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudPhoneCodeIn, CloudPhoneIn, CloudSessionOut
 from app.core.i18n import get_current_locale, tr
 from mosael_formats.i18n import pick_text
 from app.db.models import CloudLogin, User
@@ -208,6 +208,24 @@ def verify_login_code(body: CloudCodeIn, user: CurrentUser, db: DbSession) -> Cl
     if reply.status != 200:
         raise _cloud_detail(reply)
     return _remember(db, user, body.email, reply)
+
+
+@router.post("/cloud/v1/login/sms/code")
+def send_login_sms_code(body: CloudPhoneIn, user: CurrentUser, db: DbSession) -> Response:
+    """短信登录第一步:让 Cloud 发短信验证码。"""
+    reply, _row = _send("POST", "/login/sms/code", {"phone": body.phone}, user=user, db=db)
+    return _success(reply)
+
+
+@router.post("/cloud/v1/login/sms/verify", response_model=CloudSessionOut)
+def verify_login_sms(body: CloudPhoneCodeIn, user: CurrentUser, db: DbSession) -> CloudSessionOut:
+    """短信登录第二步。Cloud 在首次验证时会自动建手机号账号。"""
+    reply, _row = _send(
+        "POST", "/login/sms/verify", {"phone": body.phone, "code": body.code}, user=user, db=db
+    )
+    if reply.status != 200:
+        raise _cloud_detail(reply)
+    return _remember(db, user, body.phone, reply)
 
 
 @router.post("/cloud/v1/logout", status_code=204)

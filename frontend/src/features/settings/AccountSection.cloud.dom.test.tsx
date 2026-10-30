@@ -30,6 +30,8 @@ vi.mock("@/api/domains/cloud", async (importOriginal) => {
     loginWithPassword: vi.fn(),
     requestCloudLoginCode: vi.fn(),
     verifyCloudLoginCode: vi.fn(),
+    requestCloudLoginSmsCode: vi.fn(),
+    verifyCloudLoginSms: vi.fn(),
     logoutCloud: vi.fn(),
   };
 });
@@ -88,7 +90,28 @@ describe("MosaelCloud 账号", () => {
     expect(await screen.findByText("bob@example.com")).toBeInTheDocument();
   });
 
-  it("已登录:只显示邮箱 + 退出登录", async () => {
+  it("短信那条:发短信码 → 填 6 位 → 验证，并进入 60 秒冷却", async () => {
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+
+    fireEvent.click(await screen.findByRole("button", { name: "用手机验证码登录" }));
+    fireEvent.change(screen.getByLabelText("手机号"), { target: { value: "13800138000" } });
+    api.requestCloudLoginSmsCode.mockResolvedValueOnce({ sent: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "发送验证码" }));
+    await waitFor(() => expect(api.requestCloudLoginSmsCode).toHaveBeenCalledWith("13800138000"));
+    expect(await screen.findByText(/短信验证码已发出/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /重新发送（60s）/ })).toBeDisabled();
+
+    const code = screen.getByLabelText("短信验证码");
+    api.verifyCloudLoginSms.mockResolvedValueOnce({ email: "+8613800138000" });
+    fireEvent.change(code, { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "验证并登录" }));
+
+    await waitFor(() => expect(api.verifyCloudLoginSms).toHaveBeenCalledWith("13800138000", "123456"));
+    expect(await screen.findByText("+8613800138000")).toBeInTheDocument();
+  });
+
+  it("已登录:只显示账号 + 退出登录", async () => {
     api.loadCloudSession.mockResolvedValueOnce({ email: "carol@example.com" });
     render(<CloudAccountSection />, { wrapper: WithQueryClient });
 
