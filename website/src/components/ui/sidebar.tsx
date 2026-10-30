@@ -35,7 +35,7 @@ export function Sidebar({ className, children }: { className?: string; children:
         data-slot="sidebar"
         className={cn(
           "z-40 w-64 shrink-0 border-r border-border bg-card/70",
-          "fixed inset-y-0 left-0 flex flex-col transition-transform md:static md:translate-x-0",
+          "fixed inset-y-0 left-0 flex flex-col transition-transform md:sticky md:top-0 md:h-dvh md:self-start md:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
           className,
         )}
