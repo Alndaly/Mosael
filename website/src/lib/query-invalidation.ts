@@ -23,6 +23,8 @@ export type QueryKey = readonly unknown[];
 /** QueryClient 只需要这一个方法;接口窄一点,测试和组件都能传自己手里的那个。 */
 export type InvalidationClient = {
   invalidateQueries: (filters: { queryKey: QueryKey }) => Promise<unknown> | unknown;
+  /** 退出登录时管理台要**删掉**而不是标脏,避免下一个人从缓存里看到上一个管理员的账号。 */
+  removeQueries?: (filters: { queryKey: QueryKey }) => unknown;
 };
 
 type ShareKind = ShareListKind | "board";
@@ -45,13 +47,15 @@ export async function invalidateAfterPasswordChange(client: InvalidationClient):
  * 退出登录。**最不能省的一条**:不清 viewer 的话,站头还挂着上一个账号的头像,
  * 用户会以为根本没退出去;未读角标 / 通知列表 / 我的分享也都是上一个账号的。
  */
-export function invalidateAfterSignOut(client: InvalidationClient): Promise<void> {
-  return invalidate(client, [
+export async function invalidateAfterSignOut(client: InvalidationClient): Promise<void> {
+  await invalidate(client, [
     queryKeys.viewer(),
     queryKeys.unread(),
     queryKeys.notifications(),
     queryKeys.sharesByMe(),
   ]);
+  // 管理台缓存里有账号、订单和审计;**退出时直接移除**。
+  client.removeQueries?.({ queryKey: queryKeys.admin() });
 }
 
 /**

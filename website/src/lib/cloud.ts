@@ -487,6 +487,7 @@ export type AdminOverview = {
   admins: number;
   subscriptions: number;
   models: number;
+  providers: number;
   channels: number;
   orders: number;
 };
@@ -536,9 +537,21 @@ export type AdminModel = {
   not_listed_reasons: string[];
 };
 
+export type AdminProvider = {
+  id: string;
+  name: string;
+  protocol: "openai";
+  base_url: string;
+  enabled: boolean;
+  note: string;
+  has_api_key: boolean;
+};
+
 export type AdminChannel = {
   id: string;
   model_id: string;
+  provider_id: string;
+  provider_name: string;
   base_url: string;
   upstream_model: string;
   priority: number;
@@ -653,18 +666,25 @@ export const cloudAdmin = {
         body: JSON.stringify({ input_per_1k, output_per_1k, effective_from: effective_from || null }),
       },
     ),
+  providers: () => request<{ providers: AdminProvider[] }>("/admin/providers"),
+  createProvider: (body: { name: string; base_url: string; api_key: string; note: string }) =>
+    request<{ provider: AdminProvider }>("/admin/providers", { method: "POST", body: JSON.stringify(body) }),
+  updateProvider: (id: string, body: { name: string; note: string; enabled: boolean; api_key: string }) =>
+    request<{ provider: AdminProvider }>(`/admin/providers/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   channels: () => request<{ channels: AdminChannel[] }>("/admin/channels"),
   createChannel: (body: {
     model_id: string;
-    base_url: string;
+    provider_id: string;
     upstream_model: string;
-    api_key: string;
     priority: number;
     note: string;
   }) => request<{ channel: AdminChannel }>("/admin/channels", { method: "POST", body: JSON.stringify(body) }),
   updateChannel: (
     id: string,
-    body: { upstream_model: string; priority: number; note: string; enabled: boolean; api_key: string },
+    body: { upstream_model: string; priority: number; note: string; enabled: boolean },
   ) =>
     request<{ channel: AdminChannel }>(`/admin/channels/${encodeURIComponent(id)}`, {
       method: "PATCH",

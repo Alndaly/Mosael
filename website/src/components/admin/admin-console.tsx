@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +16,22 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Menu, ScrollText, Users } from "lucide-react";
+import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Menu, ScrollText, Server, Users } from "lucide-react";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
+import {
+  adminInvalidation,
+  useAdminAudit,
+  useAdminChannels,
+  useAdminModels,
+  useAdminOrders,
+  useAdminOverview,
+  useAdminPlans,
+  useAdminProviders,
+  useAdminUsage,
+  useAdminUsers,
+} from "@/lib/admin-queries";
+import { queryKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import {
   CloudApiError,
@@ -27,8 +41,8 @@ import {
   type AdminChannelTest,
   type AdminModel,
   type AdminOrder,
-  type AdminOverview,
   type AdminPlan,
+  type AdminProvider,
   type AdminUsage,
   type AdminUser,
   type CloudUser,
@@ -81,51 +95,48 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: Messages["admin"]; viewer: CloudUser }) {
   const [tab, setTab] = useState("overview");
-  const [overview, setOverview] = useState<AdminOverview | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [models, setModels] = useState<AdminModel[]>([]);
-  const [channels, setChannels] = useState<AdminChannel[]>([]);
-  const [plans, setPlans] = useState<AdminPlan[]>([]);
-  const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [usage, setUsage] = useState<AdminUsage | null>(null);
-  const [audit, setAudit] = useState<AdminAudit[]>([]);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const overviewQuery = useAdminOverview();
+  const usersQuery = useAdminUsers();
+  const modelsQuery = useAdminModels();
+  const providersQuery = useAdminProviders();
+  const channelsQuery = useAdminChannels();
+  const plansQuery = useAdminPlans();
+  const ordersQuery = useAdminOrders();
+  const usageQuery = useAdminUsage();
+  const auditQuery = useAdminAudit();
+  const queries = [
+    overviewQuery,
+    usersQuery,
+    modelsQuery,
+    providersQuery,
+    channelsQuery,
+    plansQuery,
+    ordersQuery,
+    usageQuery,
+    auditQuery,
+  ];
+  const loading = queries.some((query) => query.isLoading);
+  const fetching = useIsFetching({ queryKey: queryKeys.admin() }) > 0;
+  const queryFailure = queries.find((query) => query.error)?.error;
 
-  const refresh = async () => {
-    setLoading(true);
+  const invalidate = (...keys: readonly (readonly unknown[])[]) => {
     setError("");
-    try {
-      const [o, u, m, c, p, ord, use, a] = await Promise.all([
-        cloudAdmin.overview(),
-        cloudAdmin.users(),
-        cloudAdmin.models(),
-        cloudAdmin.channels(),
-        cloudAdmin.plans(),
-        cloudAdmin.orders(),
-        cloudAdmin.usage(),
-        cloudAdmin.audit(),
-      ]);
-      setOverview(o);
-      setUsers(u.users);
-      setModels(m.models);
-      setChannels(c.channels);
-      setPlans(p.plans);
-      setOrders(ord.orders);
-      setUsage(use);
-      setAudit(a.events);
-    } catch (failure) {
-      setError(failureText(failure, copy, locale));
-    } finally {
-      setLoading(false);
-    }
+    for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey });
   };
+  const refresh = () => invalidate(...adminInvalidation.all);
 
-  useEffect(() => {
-    void refresh();
-    // 首屏一次;动作完成后各自刷新。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const users = usersQuery.data ?? [];
+  const models = modelsQuery.data ?? [];
+  const providers = providersQuery.data ?? [];
+  const channels = channelsQuery.data ?? [];
+  const plans = plansQuery.data ?? [];
+  const orders = ordersQuery.data ?? [];
+  const usage = usageQuery.data ?? null;
+  const audit = auditQuery.data ?? [];
+  const overview = overviewQuery.data ?? null;
+  const failure = error || (queryFailure ? failureText(queryFailure, copy, locale) : "");
 
   return (
     <SidebarProvider>
@@ -141,10 +152,10 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
                 <p className="mt-2 mb-0 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.lede}</p>
               </div>
             </div>
-            <AButton variant="outline" onClick={() => void refresh()} disabled={loading}>{loading ? copy.loading : copy.refresh}</AButton>
+            <AButton variant="outline" onClick={refresh} disabled={fetching}>{fetching ? copy.loading : copy.refresh}</AButton>
           </div>
 
-          {error && <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
+          {failure && <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{failure}</div>}
 
           <div className="mt-8">
             {tab === "overview" && (overview ? (
@@ -154,6 +165,7 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
                   [copy.admins, overview.admins],
                   [copy.subscriptions, overview.subscriptions],
                   [copy.models, overview.models],
+                  [copy.providers, overview.providers],
                   [copy.channels, overview.channels],
                   [copy.orders, overview.orders],
                 ].map(([label, value]) => (
@@ -163,10 +175,11 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
                 ))}
               </div>
             ) : <Empty>{loading ? copy.loading : copy.noUsers}</Empty>)}
-            {tab === "users" && <UsersPanel copy={copy} users={users} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "models" && <ModelsPanel copy={copy} models={models} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "channels" && <ChannelsPanel copy={copy} models={models} channels={channels} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "plans" && <PlansPanel copy={copy} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "users" && <UsersPanel copy={copy} users={users} plans={plans} onChanged={() => invalidate(...adminInvalidation.user)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "models" && <ModelsPanel copy={copy} models={models} onChanged={() => invalidate(...adminInvalidation.model)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "providers" && <ProvidersPanel copy={copy} providers={providers} onChanged={() => invalidate(...adminInvalidation.provider)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "channels" && <ChannelsPanel copy={copy} models={models} providers={providers} channels={channels} onChanged={() => invalidate(...adminInvalidation.channel)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "plans" && <PlansPanel copy={copy} plans={plans} onChanged={() => invalidate(...adminInvalidation.plan)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
             {tab === "operations" && <OperationsPanel copy={copy} orders={orders} usage={usage} />}
             {tab === "audit" && <AuditPanel copy={copy} audit={audit} />}
           </div>
@@ -183,6 +196,7 @@ function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; on
     { id: "overview", label: copy.tabOverview, icon: LayoutDashboard },
     { id: "users", label: copy.tabUsers, icon: Users },
     { id: "models", label: copy.tabModels, icon: Boxes },
+    { id: "providers", label: copy.tabProviders, icon: Server },
     { id: "channels", label: copy.tabChannels, icon: Cable },
     { id: "plans", label: copy.tabPlans, icon: CreditCard },
     { id: "operations", label: copy.tabOperations, icon: Activity },
@@ -357,7 +371,7 @@ function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
               <span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at)}` : copy.noPlan}</span>
             </div>
             <div className="flex gap-2">
-              <Select value={plan} onValueChange={setPlan}><ASelectTrigger className="min-w-0 flex-1"><SelectValue /></ASelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={plan} onValueChange={setPlan} disabled={plans.length === 0}><ASelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={plans.length === 0 ? copy.noPlansYet : copy.choosePlan} /></ASelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
               <AButton variant="outline" onClick={() => void subscribe()} disabled={!plan || Boolean(busy)}>{copy.subscribe}</AButton>
             </div>
           </div>
@@ -466,8 +480,68 @@ function PriceDialog({ copy, model, onClose, onSaved, onFailure }: {
   );
 }
 
-function ChannelsPanel({ copy, models, channels, onChanged, onFailure }: {
-  copy: Messages["admin"]; models: AdminModel[]; channels: AdminChannel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
+function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
+  copy: Messages["admin"]; providers: AdminProvider[]; onChanged: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [dialog, setDialog] = useState<{ provider: AdminProvider | null } | null>(null);
+  return (
+    <>
+      <Card className="bg-card/60 ring-border">
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabProviders}</CardTitle><AButton onClick={() => setDialog({ provider: null })}>{copy.addProvider}</AButton></CardHeader>
+        <CardContent>
+          <Table><TableHeader><TableRow><TableHead>{copy.providerName}</TableHead><TableHead>{copy.baseUrl}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead>{copy.enabled}</TableHead><TableHead /></TableRow></TableHeader>
+            <TableBody>{providers.map((provider) => (
+              <TableRow key={provider.id}>
+                <TableCell><strong className="block">{provider.name}</strong><span className="text-xs text-muted-foreground">{provider.protocol}</span></TableCell>
+                <TableCell className="max-w-72 truncate">{provider.base_url}</TableCell>
+                <TableCell>{provider.has_api_key ? copy.hasKey : "—"}</TableCell>
+                <TableCell><Badge variant={provider.enabled ? "default" : "secondary"}>{provider.enabled ? "on" : "off"}</Badge></TableCell>
+                <TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ provider })}>{copy.edit}</AButton></TableCell>
+              </TableRow>
+            ))}</TableBody>
+          </Table>
+          {providers.length === 0 && <Empty>{copy.noProviders}</Empty>}
+        </CardContent>
+      </Card>
+      {dialog && <ProviderDialog copy={copy} provider={dialog.provider} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
+    </>
+  );
+}
+
+function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
+  copy: Messages["admin"]; provider: AdminProvider | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [name, setName] = useState(provider?.name ?? "");
+  const [base, setBase] = useState(provider?.base_url ?? "");
+  const [key, setKey] = useState("");
+  const [note, setNote] = useState(provider?.note ?? "");
+  const [enabled, setEnabled] = useState(provider?.enabled ?? true);
+  const submit = async () => {
+    try {
+      if (provider) await cloudAdmin.updateProvider(provider.id, { name, note, enabled, api_key: key });
+      else await cloudAdmin.createProvider({ name, base_url: base, api_key: key, note });
+      onSaved();
+    } catch (failure) { onFailure(failure); }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent><DialogHeader><DialogTitle>{provider ? copy.providerEdit : copy.addProvider}</DialogTitle><DialogDescription>{provider?.base_url ?? copy.providerBaseReadOnly}</DialogDescription></DialogHeader>
+        <div className="grid gap-3">
+          <Field label={copy.providerName}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
+          {!provider && <Field label={copy.baseUrl}><AInput value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
+          <Field label={copy.apiKey}><AInput type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
+          <p className="m-0 text-xs text-muted-foreground">{copy.apiKeyHint}</p>
+          <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+          <AButton type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</AButton>
+        </div>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure }: {
+  copy: Messages["admin"]; models: AdminModel[]; providers: AdminProvider[]; channels: AdminChannel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [dialog, setDialog] = useState<{ channel: AdminChannel | null } | null>(null);
   const [tests, setTests] = useState<Record<string, AdminChannelTest>>({});
@@ -484,11 +558,11 @@ function ChannelsPanel({ copy, models, channels, onChanged, onFailure }: {
       <Card className="bg-card/60 ring-border">
         <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabChannels}</CardTitle><AButton onClick={() => setDialog({ channel: null })}>{copy.addChannel}</AButton></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.baseUrl}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead /></TableRow></TableHeader>
+          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.provider}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{channels.map((channel) => (
               <TableRow key={channel.id}>
                 <TableCell><strong className="block">{channel.model_id}</strong><span className="text-xs text-muted-foreground">{channel.upstream_model}</span></TableCell>
-                <TableCell className="max-w-72 truncate">{channel.base_url}</TableCell>
+                <TableCell><strong className="block">{channel.provider_name}</strong><span className="block max-w-72 truncate text-xs text-muted-foreground">{channel.base_url}</span></TableCell>
                 <TableCell>{channel.priority} · <Badge variant={channel.enabled ? "default" : "secondary"}>{channel.enabled ? "on" : "off"}</Badge></TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)}>{copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}</span>}</TableCell>
@@ -498,42 +572,41 @@ function ChannelsPanel({ copy, models, channels, onChanged, onFailure }: {
           {channels.length === 0 && <Empty>{copy.noChannels}</Empty>}
         </CardContent>
       </Card>
-      {dialog && <ChannelDialog copy={copy} models={models} channel={dialog.channel} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
+      {dialog && <ChannelDialog copy={copy} models={models} providers={providers} channel={dialog.channel} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
     </>
   );
 }
 
-function ChannelDialog({ copy, models, channel, onClose, onSaved, onFailure }: {
-  copy: Messages["admin"]; models: AdminModel[]; channel: AdminChannel | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
+function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onFailure }: {
+  copy: Messages["admin"]; models: AdminModel[]; providers: AdminProvider[]; channel: AdminChannel | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [model, setModel] = useState(channel?.model_id ?? models[0]?.id ?? "");
-  const [base, setBase] = useState(channel?.base_url ?? "");
+  const [provider, setProvider] = useState(channel?.provider_id ?? providers[0]?.id ?? "");
   const [upstream, setUpstream] = useState(channel?.upstream_model ?? "");
-  const [key, setKey] = useState("");
   const [priority, setPriority] = useState(String(channel?.priority ?? 0));
   const [note, setNote] = useState(channel?.note ?? "");
   const [enabled, setEnabled] = useState(channel?.enabled ?? true);
   const submit = async () => {
     try {
-      if (channel) await cloudAdmin.updateChannel(channel.id, { upstream_model: upstream, priority: Number(priority), note, enabled, api_key: key });
-      else await cloudAdmin.createChannel({ model_id: model, base_url: base, upstream_model: upstream, api_key: key, priority: Number(priority), note });
+      if (channel) await cloudAdmin.updateChannel(channel.id, { upstream_model: upstream, priority: Number(priority), note, enabled });
+      else await cloudAdmin.createChannel({ model_id: model, provider_id: provider, upstream_model: upstream, priority: Number(priority), note });
       onSaved();
     } catch (failure) { onFailure(failure); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{channel?.base_url ?? copy.baseUrlReadOnly}</DialogDescription></DialogHeader>
+      <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{copy.channelProviderHint}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel}><ASelectTrigger className="w-full"><SelectValue /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
-          {!channel && <Field label={copy.baseUrl}><AInput value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
+          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
+          {!channel && <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><SelectContent>{providers.map((one) => <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>)}</SelectContent></Select></Field>}
+          {!channel && models.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noModelForChannel}</p>}
+          {!channel && providers.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noProviderForChannel}</p>}
           <Field label={copy.upstreamModel}><AInput value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
-          <Field label={copy.apiKey}><AInput type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
-          <p className="m-0 text-xs text-muted-foreground">{copy.replaceKeyHint}</p>
           <Field label={copy.priority}><AInput value={priority} onChange={(event) => setPriority(event.target.value)} /></Field>
           <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
           <AButton type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</AButton>
         </div>
-        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} disabled={!channel && (providers.length === 0 || models.length === 0)}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );

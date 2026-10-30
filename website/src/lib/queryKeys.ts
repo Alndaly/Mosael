@@ -39,6 +39,20 @@ export const queryKeys = {
   /** 某个人的公开分享(控制台的「我的分享」)。不传 handle = 分组前缀。 */
   sharesByMe: (handle?: string | null) =>
     handle ? (["shares", "by-me", handle] as const) : (["shares", "by-me"] as const),
+  /**
+   * 管理台整组前缀。管理员退出登录时**移除**这组缓存(不是标脏):
+   * 下一个人在同一浏览器登录时,不应从缓存里看到上一个管理员的账号 / 订单 / 审计。
+   */
+  admin: () => ["admin"] as const,
+  adminOverview: () => ["admin", "overview"] as const,
+  adminUsers: () => ["admin", "users"] as const,
+  adminModels: () => ["admin", "models"] as const,
+  adminProviders: () => ["admin", "providers"] as const,
+  adminChannels: () => ["admin", "channels"] as const,
+  adminPlans: () => ["admin", "plans"] as const,
+  adminOrders: () => ["admin", "orders"] as const,
+  adminUsage: (days = 7) => ["admin", "usage", days] as const,
+  adminAudit: () => ["admin", "audit"] as const,
   /** 列表页追加的用户分享,按 kind + 语言分开缓存。不传 = 分组前缀。 */
   shareList: (kind?: ShareListKind, locale?: Locale) =>
     kind

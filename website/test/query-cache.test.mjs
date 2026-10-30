@@ -74,11 +74,16 @@ const SHARES_PANEL = "src/components/account/dashboard-shares.tsx";
 /** 打桩的 QueryClient:只记下每次 invalidateQueries 收到的键。 */
 function stubClient() {
   const calls = [];
+  const removals = [];
   return {
     calls,
+    removals,
     invalidateQueries(filters) {
       calls.push(filters.queryKey);
       return Promise.resolve();
+    },
+    removeQueries(filters) {
+      removals.push(filters.queryKey);
     },
   };
 }
@@ -236,6 +241,10 @@ test("⑤ 退出登录 → invalidate viewer(不刷的话站头还挂着上一�
   const received = client.calls.map((key) => JSON.stringify(key));
   assert.ok(received.includes(JSON.stringify(keys.queryKeys.viewer())), `退出登录后没有 invalidate viewer,收到 ${received.join(" / ")}`);
   assert.ok(received.includes(JSON.stringify(keys.queryKeys.unread())), "退出登录后角标还留着上一个账号的未读数");
+  assert.ok(
+    client.removals.some((key) => JSON.stringify(key) === JSON.stringify(keys.queryKeys.admin())),
+    "退出登录后管理台缓存没有被移除(下一个人还能看到上一个管理员的账号 / 订单 / 审计)",
+  );
 
   // 个人信息里那个「退出」还要刷 viewer。
   const profile = read(PROFILE);
@@ -246,6 +255,37 @@ test("⑤ 退出登录 → invalidate viewer(不刷的话站头还挂着上一�
   const danger = read(DANGER_ZONE);
   assert.match(danger, /invalidateAfterSignOut\(/, "删号后没有刷新 viewer / 角标 / 通知 / 我的分享");
   assert.match(danger, /cloudAccount\.deleteAccount\([\s\S]{0,500}?invalidateAfterSignOut\(/, "删号请求回来了却没有刷新缓存");
+});
+
+test("⑤b 管理台走 react-query:分组键、按影响面失效、退出时移除", async () => {
+  const keys = await importSource("lib/queryKeys.ts");
+  assert.deepEqual(keys.queryKeys.admin(), ["admin"]);
+  assert.deepEqual(keys.queryKeys.adminUsers(), ["admin", "users"]);
+  assert.deepEqual(keys.queryKeys.adminProviders(), ["admin", "providers"]);
+  assert.deepEqual(keys.queryKeys.adminUsage(14), ["admin", "usage", 14]);
+
+  const hooks = read("src/lib/admin-queries.ts");
+  for (const hook of ["useAdminUsers", "useAdminProviders", "useAdminChannels", "useAdminUsage"]) {
+    assert.match(hooks, new RegExp(`export function ${hook}\\(`), `缺少 ${hook}`);
+  }
+  assert.match(hooks, /queryKey: queryKeys\.adminUsers\(\)/, "账号查询没有用集中定义的键");
+
+  const consoleSource = stripComments(read("src/components/admin/admin-console.tsx"));
+  assert.doesNotMatch(consoleSource, /useEffect/, "管理台还在用 useEffect 手写首屏取数");
+  assert.doesNotMatch(consoleSource, /Promise\.all\(\s*\[\s*cloudAdmin\./, "管理台还在用 Promise.all 自己拼取数");
+  assert.match(consoleSource, /useAdminOverview\(\)/, "概览没有走 useQuery");
+  assert.match(consoleSource, /useAdminProviders\(\)/, "供应商没有走 useQuery");
+  const { adminInvalidation } = await importSource("lib/admin-queries.ts");
+  assert.deepEqual(adminInvalidation.provider, [
+    ["admin", "providers"],
+    ["admin", "channels"],
+    ["admin", "models"],
+    ["admin", "overview"],
+    ["admin", "audit"],
+  ]);
+  assert.match(consoleSource, /invalidate\(\.\.\.adminInvalidation\.provider\)/, "改供应商没有走统一的失效表");
+  assert.match(consoleSource, /invalidateQueries/, "管理动作完成后没有失效缓存");
+  assert.match(consoleSource, /adminInvalidation\.all/, "刷新按钮没有用整组前缀");
 });
 
 test("⑥ 列表:失败不重试、成功不重复拉(staleTime),并且用 useQuery 包起来", async () => {
