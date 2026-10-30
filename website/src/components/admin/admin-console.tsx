@@ -510,7 +510,7 @@ function ModelsPanel({ copy, locale, models, onChanged, onFailure }: {
                 <TableCell>{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</TableCell>
                 <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
                 <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.map((reason) => modelReasonLabel(reason, copy)).join(", ")}</Badge></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="ghost" onClick={() => setPriceFor(model)}>{model.current_price ? copy.priceHistory : copy.addPrice}</AButton></div></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="outline" onClick={() => setPriceFor(model)}>{model.current_price ? copy.priceHistory : copy.addPrice}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -721,7 +721,7 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
                 <TableCell>{channel.priority}</TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ChannelEnabledSwitch copy={copy} channel={channel} onChanged={onChanged} onFailure={onFailure} /></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
