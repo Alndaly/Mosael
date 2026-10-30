@@ -138,6 +138,8 @@ export const shell = {
   settingsCloudPhone: "手机号",
   settingsCloudPassword: "密码",
   settingsCloudSignIn: "登录",
+  settingsCloudSendCodeFailed: "验证码没有发出去",
+  settingsCloudOperationFailed: "操作没有完成",
   settingsCloudSignInFailed: "MosaelCloud 登录失败",
   settingsCloudUseCode: "用邮箱验证码登录",
   settingsCloudUsePassword: "改用邮箱密码登录",

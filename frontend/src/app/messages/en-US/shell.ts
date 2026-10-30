@@ -136,6 +136,8 @@ export const shell = {
   settingsCloudPhone: "Mobile number",
   settingsCloudPassword: "Password",
   settingsCloudSignIn: "Sign in",
+  settingsCloudSendCodeFailed: "The code could not be sent",
+  settingsCloudOperationFailed: "That didn't work",
   settingsCloudSignInFailed: "MosaelCloud sign-in failed",
   settingsCloudUseCode: "Sign in with an email code",
   settingsCloudUsePassword: "Use email and password instead",

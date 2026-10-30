@@ -227,6 +227,19 @@ describe("MosaelCloud 账号", () => {
     await waitFor(() => expect(api.changeCloudPassword).toHaveBeenCalledWith("", "Phone-Horse-9"));
   });
 
+  it("发验证码失败时标题是「验证码没有发出去」,不是笼统的登录失败", async () => {
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+    fireEvent.click(await screen.findByRole("button", { name: "用手机验证码登录" }));
+    fireEvent.change(screen.getByLabelText("手机号"), { target: { value: "13800138000" } });
+    api.requestCloudLoginSmsCode.mockRejectedValueOnce(
+      apiError(502, "sms_daily_limit", "这个手机号今天的验证码次数已达上限，请明天再试。"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "发送验证码" }));
+
+    expect(await screen.findByText("验证码没有发出去")).toBeInTheDocument();
+    expect(await screen.findByText("这个手机号今天的验证码次数已达上限，请明天再试。")).toBeInTheDocument();
+  });
+
   it("错误原样显示后端文案,不只显示一个 code", async () => {
     render(<CloudAccountSection />, { wrapper: WithQueryClient });
     fireEvent.change(await screen.findByLabelText("邮箱或手机号"), { target: { value: "alice@example.com" } });

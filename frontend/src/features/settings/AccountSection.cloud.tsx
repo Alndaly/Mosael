@@ -48,6 +48,7 @@ export function CloudAccountSection() {
   //: 这个部署没接 Cloud。配置存的是环境变量,不重启不会变 —— 一旦知道就不再重置。
   const [notConfigured, setNotConfigured] = React.useState(false);
   const [failure, setFailure] = React.useState("");
+  const [failureTitle, setFailureTitle] = React.useState("");
   const [mode, setMode] = React.useState<"password" | "code" | "sms">("password");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
@@ -94,10 +95,13 @@ export function CloudAccountSection() {
     };
   }, []);
 
-  const noteFailure = (error: unknown) => {
+  const noteFailure = (error: unknown, title = t("settingsCloudSignInFailed")) => {
     const next = describeCloudFailure(error);
     if (next.notConfigured) setNotConfigured(true);
-    else setFailure(next.message);
+    else {
+      setFailureTitle(title);
+      setFailure(next.message);
+    }
   };
 
   const signIn = async () => {
@@ -141,7 +145,7 @@ export function CloudAccountSection() {
       setCodeSent(true);
       setCooldown(60);
     } catch (error) {
-      noteFailure(error);
+      noteFailure(error, t("settingsCloudSendCodeFailed"));
     } finally {
       setPending("");
     }
@@ -206,7 +210,7 @@ export function CloudAccountSection() {
       setSession(null);
       void queryClient.invalidateQueries({ queryKey: cloudKeys.session() });
     } catch (error) {
-      noteFailure(error);
+      noteFailure(error, t("settingsCloudOperationFailed"));
     } finally {
       setPending("");
     }
@@ -270,7 +274,7 @@ export function CloudAccountSection() {
               <FailureCard
                 size="inline"
                 status="failed"
-                title={t("settingsCloudSignInFailed")}
+                title={failureTitle || t("settingsCloudSignInFailed")}
                 summary={failure}
                 copyText={failure}
               />
@@ -380,7 +384,7 @@ export function CloudAccountSection() {
               <FailureCard
                 size="inline"
                 status="failed"
-                title={t("settingsCloudSignInFailed")}
+                title={failureTitle || t("settingsCloudSignInFailed")}
                 summary={failure}
                 copyText={failure}
               />
@@ -491,7 +495,7 @@ export function CloudAccountSection() {
             <FailureCard
               size="inline"
               status="failed"
-              title={t("settingsCloudSignInFailed")}
+              title={failureTitle || t("settingsCloudSignInFailed")}
               summary={failure}
               copyText={failure}
             />
