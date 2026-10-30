@@ -4,7 +4,16 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { argv, exit } from "node:process";
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  UploadPartCommand,
+} from "@aws-sdk/client-s3";
 import { renderDownloadPage } from "./r2-download-page.mjs";
 
 const CONTENT_TYPES = new Map([
@@ -47,6 +56,10 @@ if (files.length === 0) {
 const prefix = (process.env.R2_PREFIX || "mosael").replace(/^\/+|\/+$/g, "");
 const keyFor = (name, latest) => `${prefix ? `${prefix}/` : ""}${latest ? "latest" : options.tag}/${name}`;
 const downloadPage = renderDownloadPage(files, options.tag);
+//: Cloudflare 的单次 PutObject 上限是 300 MB;DMG/ZIP 都超过它。超过阈值走 S3 分段上传,
+//: 否则大文件会卡在连接上,既不报错也传不完。
+const MULTIPART_THRESHOLD = Number(process.env.R2_MULTIPART_THRESHOLD || 250 * 1024 * 1024);
+const PART_SIZE = Math.max(5 * 1024 * 1024, Number(process.env.R2_MULTIPART_PART_SIZE || 64 * 1024 * 1024));
 const plans = [];
 // 不可变目录是发布的第一阶段:其中任何一个对象上传或回读失败,都不会碰到 latest。
 for (const latest of [false, true]) {
@@ -81,17 +94,59 @@ if (options.dryRun) {
     exit(1);
   }
   const client = new S3Client({ region: "auto", endpoint, credentials: { accessKeyId, secretAccessKey } });
-  for (const plan of plans) {
-    const body = plan.body ?? readFileSync(plan.file);
-    const localSha = createHash("sha256").update(body).digest("hex");
-    await client.send(new PutObjectCommand({
+  const put = async (plan, body) => {
+    if (body.length < MULTIPART_THRESHOLD) {
+      await client.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: plan.key,
+        Body: body,
+        ContentLength: body.length,
+        ContentType: plan.contentType,
+        CacheControl: plan.cacheControl,
+      }));
+      return;
+    }
+    const created = await client.send(new CreateMultipartUploadCommand({
       Bucket: bucket,
       Key: plan.key,
-      Body: body,
-      ContentLength: body.length,
       ContentType: plan.contentType,
       CacheControl: plan.cacheControl,
     }));
+    if (!created.UploadId) throw new Error(`R2 multipart upload id missing: ${plan.key}`);
+    const parts = [];
+    try {
+      for (let offset = 0, partNumber = 1; offset < body.length; offset += PART_SIZE, partNumber += 1) {
+        const part = body.subarray(offset, Math.min(offset + PART_SIZE, body.length));
+        const uploaded = await client.send(new UploadPartCommand({
+          Bucket: bucket,
+          Key: plan.key,
+          UploadId: created.UploadId,
+          PartNumber: partNumber,
+          Body: part,
+          ContentLength: part.length,
+        }));
+        if (!uploaded.ETag) throw new Error(`R2 multipart part ETag missing: ${plan.key}#${partNumber}`);
+        parts.push({ ETag: uploaded.ETag, PartNumber: partNumber });
+      }
+      await client.send(new CompleteMultipartUploadCommand({
+        Bucket: bucket,
+        Key: plan.key,
+        UploadId: created.UploadId,
+        MultipartUpload: { Parts: parts },
+      }));
+    } catch (error) {
+      await client.send(new AbortMultipartUploadCommand({
+        Bucket: bucket,
+        Key: plan.key,
+        UploadId: created.UploadId,
+      })).catch(() => undefined);
+      throw error;
+    }
+  };
+  for (const plan of plans) {
+    const body = plan.body ?? readFileSync(plan.file);
+    const localSha = createHash("sha256").update(body).digest("hex");
+    await put(plan, body);
     const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: plan.key }));
     if (Number(head.ContentLength) !== body.length) throw new Error(`R2 size mismatch: ${plan.key}`);
     const remote = await client.send(new GetObjectCommand({ Bucket: bucket, Key: plan.key }));
