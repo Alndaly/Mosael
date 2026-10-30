@@ -207,7 +207,8 @@ export function SegmentedControl<T extends string>({
     <fieldset
       id={id}
       aria-label={label}
-      className="m-0 grid min-w-0 grid-cols-2 gap-1 rounded-full border border-border bg-card p-1"
+      className="m-0 grid min-w-0 gap-1 rounded-full border border-border bg-card p-1"
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       <legend className="sr-only">{label}</legend>
       {options.map((option) => {
@@ -220,7 +221,7 @@ export function SegmentedControl<T extends string>({
             disabled={disabled}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-11 min-w-0 rounded-full px-4 text-[14px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
+              "h-11 min-w-0 whitespace-nowrap rounded-full px-2 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none sm:px-4 sm:text-[14px]",
               selected
                 ? "bg-primary text-primary-foreground shadow-[0_8px_24px_-16px_color-mix(in_oklab,var(--primary)_80%,transparent)]"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
