@@ -108,6 +108,7 @@ function PickStep({
       )}
       {channels.length > 0 && (
         <Segmented
+          fill
           aria-label={t("cloudBuyChannel")}
           value={chosenChannel ?? channels[0]}
           onValueChange={setChannel}
