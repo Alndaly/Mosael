@@ -73,12 +73,10 @@ export function AccountNav({
   locale,
   loginLabel,
   accountLabel,
-  adminLabel,
 }: {
   locale: Locale;
   loginLabel: string;
   accountLabel: string;
-  adminLabel: string;
 }) {
   // undefined = 还在问 /me;null = 问过了,没登录。两份数据都走查询缓存:
   // 登录 / 退出 / 改资料之后由 invalidateQueries 通知,而不是只有挂载时问一次。
@@ -97,33 +95,23 @@ export function AccountNav({
     const badge = formatUnreadBadge(unread);
     const label = badge ? `${avatarLabel(accountLabel, name)} · ${badge}` : avatarLabel(accountLabel, name);
     return (
-      <span className="inline-flex items-center gap-2">
-        {user.role === "admin" && (
-          <Link
-            href={`/${locale}/admin`}
-            className="hidden text-xs font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:inline"
+      <Link
+        href={`/${locale}/dashboard`}
+        aria-label={label}
+        title={label}
+        className="relative inline-flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-ink transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+        style={avatarStyle(name || user.id)}
+      >
+        {initialOf(name)}
+        {badge && (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-background tabular-nums ring-2 ring-background"
           >
-            {adminLabel}
-          </Link>
+            {badge}
+          </span>
         )}
-        <Link
-          href={`/${locale}/dashboard`}
-          aria-label={label}
-          title={label}
-          className="relative inline-flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-ink transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
-          style={avatarStyle(name || user.id)}
-        >
-          {initialOf(name)}
-          {badge && (
-            <span
-              aria-hidden
-              className="absolute -top-0.5 -right-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-background tabular-nums ring-2 ring-background"
-            >
-              {badge}
-            </span>
-          )}
-        </Link>
-      </span>
+      </Link>
     );
   }
   return (

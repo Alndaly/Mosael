@@ -7,8 +7,8 @@ import { pathToFileURL } from "node:url";
 
 //: 官网的路由分组契约。
 //:
-//: 账号页(登录 / 注册 / 账号)不属于「站内」:顶部不该出现整站导航。这个意图由目录结构表达 ——
-//: `(auth)` 组有自己的 layout,`(site)` 组才有站头 / 站尾 —— 而不是在页面里条件隐藏 header。
+//: 账号页(登录 / 注册 / 账号)不属于「站内」;管理台也不属于公开站。这个意图由目录结构表达 ——
+//: `(auth)` / `(admin)` 各有自己的 layout,`(site)` 组才有站头 / 站尾 —— 而不是在页面里条件隐藏 header。
 //: 分组名带括号,不进入 URL;下面这几条同时钉住「地址没变」和「metadata / 静态参数没丢」。
 const SRC = path.resolve(import.meta.dirname, "..", "src");
 const APP = path.join(SRC, "app");
@@ -48,6 +48,7 @@ const SITE_ROUTES = [
   "workflows/[slug]/page.tsx",
 ];
 const AUTH_ROUTES = ["login/page.tsx", "signup/page.tsx", "account/page.tsx"];
+const ADMIN_ROUTES = ["admin/page.tsx"];
 
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -56,9 +57,10 @@ function walk(dir) {
   });
 }
 
-test("页面按 (site) / (auth) 分组,分组只有目录意义,页面一个都不少", () => {
+test("页面按 (site) / (auth) / (admin) 分组,分组只有目录意义,页面一个都不少", () => {
   assert.ok(fs.statSync(path.join(LOCALE, "(site)")).isDirectory(), "缺少 (site) 路由组");
   assert.ok(fs.statSync(path.join(LOCALE, "(auth)")).isDirectory(), "缺少 (auth) 路由组");
+  assert.ok(fs.statSync(path.join(LOCALE, "(admin)")).isDirectory(), "缺少 (admin) 路由组");
 
   for (const route of SITE_ROUTES) {
     assert.ok(exists(LOCALE, "(site)", route), `站内页面不在 (site) 组里: ${route}`);
@@ -67,17 +69,21 @@ test("页面按 (site) / (auth) 分组,分组只有目录意义,页面一个都�
     assert.ok(exists(LOCALE, "(auth)", route), `账号页面不在 (auth) 组里: ${route}`);
     assert.ok(!exists(LOCALE, "(site)", route), `账号页面混进了 (site) 组: ${route}`);
   }
+  for (const route of ADMIN_ROUTES) {
+    assert.ok(exists(LOCALE, "(admin)", route), `管理页面不在 (admin) 组里: ${route}`);
+    assert.ok(!exists(LOCALE, "(site)", route), `管理页面混进了 (site) 组: ${route}`);
+  }
 
-  // 分组之外不允许再有页面 —— 页面一旦落在两个组外面,它就既没有站头也没有账号壳。
+  // 分组之外不允许再有页面 —— 页面一旦落在三个组外面,它就既没有站头也没有自己的壳。
   const stray = walk(LOCALE)
     .filter((file) => file.endsWith("page.tsx"))
-    .filter((file) => !file.includes(`${path.sep}(site)${path.sep}`) && !file.includes(`${path.sep}(auth)${path.sep}`))
+    .filter((file) => !["(site)", "(auth)", "(admin)"].some((group) => file.includes(`${path.sep}${group}${path.sep}`)))
     .map((file) => path.relative(LOCALE, file));
-  assert.deepEqual(stray, [], "有页面落在 (site) / (auth) 分组之外");
+  assert.deepEqual(stray, [], "有页面落在 (site) / (auth) / (admin) 分组之外");
 });
 
 test("分组名不进 URL:每个页面还是原来的地址", () => {
-  const urls = [...SITE_ROUTES, ...AUTH_ROUTES]
+  const urls = [...SITE_ROUTES, ...AUTH_ROUTES, ...ADMIN_ROUTES]
     .map((route) => `/${route.replace(/\/?page\.tsx$/, "")}`.replace(/\/$/, ""))
     .map((url) => (url === "/" ? "" : url))
     .sort();
@@ -86,6 +92,7 @@ test("分组名不进 URL:每个页面还是原来的地址", () => {
     [
       "",
       "/account",
+      "/admin",
       "/boards",
       "/changelog",
       "/community",

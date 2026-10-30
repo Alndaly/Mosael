@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import {
@@ -17,12 +22,10 @@ import {
   type AdminModel,
   type AdminOrder,
   type AdminOverview,
-  type AdminUsage,
   type AdminPlan,
+  type AdminUsage,
   type AdminUser,
 } from "@/lib/cloud";
-
-type Tab = "overview" | "users" | "models" | "channels" | "plans" | "operations" | "audit";
 
 function failureText(error: unknown, copy: Messages["admin"], locale: Locale): string {
   return error instanceof CloudApiError ? error.text(locale) : copy.error;
@@ -36,21 +39,29 @@ function money(cents: number | null): string {
   return cents === null ? "—" : `¥${(cents / 100).toFixed(2)}`;
 }
 
-const card = "rounded-2xl border border-border bg-card p-5";
-const field = "grid min-w-0 gap-1.5 text-[13px] text-muted-foreground";
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+      {label}
+      {children}
+    </Label>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="m-0 py-8 text-center text-sm text-muted-foreground">{children}</p>;
+}
 
 export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages["admin"] }) {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState("overview");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [selected, setSelected] = useState<AdminUser | null>(null);
   const [models, setModels] = useState<AdminModel[]>([]);
   const [channels, setChannels] = useState<AdminChannel[]>([]);
   const [plans, setPlans] = useState<AdminPlan[]>([]);
-  const [audit, setAudit] = useState<AdminAudit[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [usage, setUsage] = useState<AdminUsage | null>(null);
-  const [query, setQuery] = useState("");
+  const [audit, setAudit] = useState<AdminAudit[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -58,25 +69,24 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
     setLoading(true);
     setError("");
     try {
-      const [nextOverview, nextUsers, nextModels, nextChannels, nextPlans, nextAudit, nextOrders, nextUsage] =
-        await Promise.all([
-          cloudAdmin.overview(),
-          cloudAdmin.users(query),
-          cloudAdmin.models(),
-          cloudAdmin.channels(),
-          cloudAdmin.plans(),
-          cloudAdmin.audit(),
-          cloudAdmin.orders(),
-          cloudAdmin.usage(),
-        ]);
-      setOverview(nextOverview);
-      setUsers(nextUsers.users);
-      setModels(nextModels.models);
-      setChannels(nextChannels.channels);
-      setPlans(nextPlans.plans);
-      setAudit(nextAudit.events);
-      setOrders(nextOrders.orders);
-      setUsage(nextUsage);
+      const [o, u, m, c, p, ord, use, a] = await Promise.all([
+        cloudAdmin.overview(),
+        cloudAdmin.users(),
+        cloudAdmin.models(),
+        cloudAdmin.channels(),
+        cloudAdmin.plans(),
+        cloudAdmin.orders(),
+        cloudAdmin.usage(),
+        cloudAdmin.audit(),
+      ]);
+      setOverview(o);
+      setUsers(u.users);
+      setModels(m.models);
+      setChannels(c.channels);
+      setPlans(p.plans);
+      setOrders(ord.orders);
+      setUsage(use);
+      setAudit(a.events);
     } catch (failure) {
       setError(failureText(failure, copy, locale));
     } finally {
@@ -86,800 +96,441 @@ export function AdminConsole({ locale, copy }: { locale: Locale; copy: Messages[
 
   useEffect(() => {
     void refresh();
-    // 首屏一次;后续动作各自刷新。
+    // 首屏一次;动作完成后各自刷新。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const search = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      const result = await cloudAdmin.users(query);
-      setUsers(result.users);
-    } catch (failure) {
-      setError(failureText(failure, copy, locale));
-    }
-  };
-
-  const selectUser = async (id: string) => {
-    try {
-      setSelected((await cloudAdmin.user(id)).user);
-    } catch (failure) {
-      setError(failureText(failure, copy, locale));
-    }
-  };
-
   return (
-    <section className="bg-paper">
-      <div className="mx-auto max-w-[88rem] px-5 py-12 sm:px-8">
-        <h1 className="m-0 font-display text-4xl font-bold tracking-[-0.035em]">{copy.title}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.lede}</p>
-        <nav className="mt-6 flex flex-wrap gap-2 border-b border-border pb-3">
-          {(
-            [
-              ["overview", copy.tabOverview],
-              ["users", copy.tabUsers],
-              ["models", copy.tabModels],
-              ["channels", copy.tabChannels],
-              ["plans", copy.tabPlans],
-              ["operations", copy.tabOperations],
-              ["audit", copy.tabAudit],
-            ] as const
-          ).map(([value, label]) => (
-            <Button key={value} variant={tab === value ? "default" : "ghost"} onClick={() => setTab(value)}>
-              {label}
-            </Button>
-          ))}
-          <Button variant="outline" className="ml-auto" onClick={() => void refresh()} disabled={loading}>
-            {loading ? copy.loading : copy.refresh}
-          </Button>
-        </nav>
-        {error && <p className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</p>}
-        {loading && !overview ? (
-          <p className="mt-8 text-sm text-muted-foreground">{copy.loading}</p>
-        ) : tab === "overview" && overview ? (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(
-              [
-                [copy.users, overview.users],
-                [copy.admins, overview.admins],
-                [copy.subscriptions, overview.subscriptions],
-                [copy.models, overview.models],
-                [copy.channels, overview.channels],
-                [copy.orders, overview.orders],
-              ] as const
-            ).map(([label, value]) => (
-              <div key={label} className={card}>
-                <p className="m-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className="mt-2 font-display text-3xl font-semibold">{value}</p>
-              </div>
-            ))}
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-[100rem] px-4 py-8 sm:px-6 lg:px-10">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="m-0 text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">MosaelCloud / Control</p>
+            <h1 className="mt-2 mb-0 font-display text-4xl font-semibold tracking-[-0.04em]">{copy.title}</h1>
+            <p className="mt-2 mb-0 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.lede}</p>
           </div>
-        ) : tab === "users" ? (
-          <UsersPanel
-            copy={copy}
-            users={users}
-            plans={plans}
-            selected={selected}
-            query={query}
-            onQuery={setQuery}
-            onSearch={search}
-            onSelect={selectUser}
-            onChanged={(next) => {
-              setSelected(next);
-              void refresh();
-            }}
-            onFailure={(failure) => setError(failureText(failure, copy, locale))}
-          />
-        ) : tab === "models" ? (
-          <ModelsPanel
-            copy={copy}
-            models={models}
-            onChanged={() => void refresh()}
-            onFailure={(failure) => setError(failureText(failure, copy, locale))}
-          />
-        ) : tab === "channels" ? (
-          <ChannelsPanel
-            copy={copy}
-            models={models}
-            channels={channels}
-            onChanged={() => void refresh()}
-            onFailure={(failure) => setError(failureText(failure, copy, locale))}
-          />
-        ) : tab === "plans" ? (
-          <PlansPanel
-            copy={copy}
-            plans={plans}
-            onChanged={() => void refresh()}
-            onFailure={(failure) => setError(failureText(failure, copy, locale))}
-          />
-        ) : tab === "operations" ? (
-          <OperationsPanel copy={copy} orders={orders} usage={usage} />
-        ) : (
-          <AuditPanel copy={copy} audit={audit} />
-        )}
+          <Button variant="outline" onClick={() => void refresh()} disabled={loading}>{loading ? copy.loading : copy.refresh}</Button>
+        </div>
+
+        {error && <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
+
+        <Tabs value={tab} onValueChange={setTab} className="mt-8">
+          <TabsList className="w-full flex-wrap justify-start overflow-x-auto">
+            <TabsTrigger value="overview">{copy.tabOverview}</TabsTrigger>
+            <TabsTrigger value="users">{copy.tabUsers}</TabsTrigger>
+            <TabsTrigger value="models">{copy.tabModels}</TabsTrigger>
+            <TabsTrigger value="channels">{copy.tabChannels}</TabsTrigger>
+            <TabsTrigger value="plans">{copy.tabPlans}</TabsTrigger>
+            <TabsTrigger value="operations">{copy.tabOperations}</TabsTrigger>
+            <TabsTrigger value="audit">{copy.tabAudit}</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview">
+            {overview ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  [copy.users, overview.users],
+                  [copy.admins, overview.admins],
+                  [copy.subscriptions, overview.subscriptions],
+                  [copy.models, overview.models],
+                  [copy.channels, overview.channels],
+                  [copy.orders, overview.orders],
+                ].map(([label, value]) => (
+                  <Card key={String(label)} className="bg-card/60 ring-border">
+                    <CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-3xl">{value}</CardTitle></CardHeader>
+                  </Card>
+                ))}
+              </div>
+            ) : <Empty>{loading ? copy.loading : copy.noUsers}</Empty>}
+          </TabsContent>
+
+          <TabsContent value="users">
+            <UsersPanel copy={copy} users={users} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
+          </TabsContent>
+          <TabsContent value="models">
+            <ModelsPanel copy={copy} models={models} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
+          </TabsContent>
+          <TabsContent value="channels">
+            <ChannelsPanel copy={copy} models={models} channels={channels} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
+          </TabsContent>
+          <TabsContent value="plans">
+            <PlansPanel copy={copy} plans={plans} onChanged={() => void refresh()} onFailure={(e) => setError(failureText(e, copy, locale))} />
+          </TabsContent>
+          <TabsContent value="operations">
+            <OperationsPanel copy={copy} orders={orders} usage={usage} />
+          </TabsContent>
+          <TabsContent value="audit">
+            <AuditPanel copy={copy} audit={audit} />
+          </TabsContent>
+        </Tabs>
       </div>
-    </section>
+    </div>
+  );
+}
+
+function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
+  copy: Messages["admin"];
+  users: AdminUser[];
+  plans: AdminPlan[];
+  onChanged: () => void;
+  onFailure: (failure: unknown) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<AdminUser[] | null>(null);
+  const [selected, setSelected] = useState<AdminUser | null>(null);
+  const search = async () => {
+    try {
+      setFound((await cloudAdmin.users(query)).users);
+    } catch (failure) {
+      onFailure(failure);
+    }
+  };
+  const visible = found ?? users;
+  return (
+    <>
+      <Card className="bg-card/60 ring-border">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>{copy.users}</CardTitle>
+          <div className="flex min-w-0 gap-2">
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.searchUsers} className="w-[min(22rem,50vw)]" />
+            <Button variant="outline" onClick={() => void search()}>{copy.search}</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader><TableRow><TableHead>{copy.users}</TableHead><TableHead>{copy.role}</TableHead><TableHead>{copy.credits}</TableHead><TableHead>{copy.plan}</TableHead><TableHead /></TableRow></TableHeader>
+            <TableBody>
+              {visible.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell><strong className="block font-medium">{user.display_name || user.handle || user.email || user.phone}</strong><span className="text-xs text-muted-foreground">{user.email || user.phone}</span></TableCell>
+                  <TableCell><Badge variant={user.role === "admin" ? "default" : "secondary"}>{user.role}</Badge>{user.official && <Badge variant="outline" className="ml-1">{copy.official}</Badge>}</TableCell>
+                  <TableCell>{user.credits}</TableCell>
+                  <TableCell>{user.subscription?.name || "—"}</TableCell>
+                  <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setSelected(user)}>{copy.edit}</Button></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {visible.length === 0 && <Empty>{copy.noUsers}</Empty>}
+        </CardContent>
+      </Card>
+      {selected && (
+        <UserDialog
+          key={selected.id}
+          copy={copy}
+          user={selected}
+          plans={plans}
+          onClose={() => setSelected(null)}
+          onUser={(next) => { setSelected(next); onChanged(); }}
+          onFailure={onFailure}
+        />
+      )}
+    </>
+  );
+}
+
+function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
+  copy: Messages["admin"];
+  user: AdminUser;
+  plans: AdminPlan[];
+  onClose: () => void;
+  onUser: (user: AdminUser) => void;
+  onFailure: (failure: unknown) => void;
+}) {
+  const [current, setCurrent] = useState(user);
+  const [credits, setCredits] = useState("100");
+  const [days, setDays] = useState("30");
+  const [note, setNote] = useState("");
+  const [plan, setPlan] = useState(plans[0]?.slug ?? "");
+  const [temporary, setTemporary] = useState("");
+  const [busy, setBusy] = useState("");
+  const update = (next: AdminUser) => { setCurrent(next); onUser(next); };
+  const role = async () => {
+    setBusy("role");
+    try { update((await cloudAdmin.setRole(current.id, current.role === "admin" ? "member" : "admin")).user); }
+    catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const reset = async () => {
+    setBusy("reset");
+    try { setTemporary((await cloudAdmin.resetPassword(current.id)).temporary_password); }
+    catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const gift = async () => {
+    setBusy("gift");
+    try { update((await cloudAdmin.gift(current.id, Number(credits), Number(days), note)).user); }
+    catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const subscribe = async () => {
+    if (!plan) return;
+    setBusy("subscribe");
+    try { update((await cloudAdmin.subscribe(current.id, plan)).user); }
+    catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="w-[min(40rem,calc(100vw-2rem))]">
+        <DialogHeader>
+          <DialogTitle>{current.display_name || current.handle || current.email || current.phone}</DialogTitle>
+          <DialogDescription>{current.email || current.phone || current.id} · {current.role} · {copy.credits} {current.credits}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-5">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void role()} disabled={Boolean(busy)}>{current.role === "admin" ? copy.removeAdmin : copy.makeAdmin}</Button>
+            <Button variant="outline" onClick={() => void reset()} disabled={Boolean(busy)}>{copy.resetPassword}</Button>
+          </div>
+          {temporary && <div className="grid gap-1 rounded-xl border border-warning/30 bg-warning/5 p-3"><span className="text-xs text-muted-foreground">{copy.temporaryPassword}</span><code className="font-mono text-sm [overflow-wrap:anywhere]">{temporary}</code></div>}
+          <div className="grid gap-2 rounded-xl border border-border p-4">
+            <div className="flex items-center justify-between gap-2"><strong className="text-sm">{copy.plan}</strong><span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at)}` : copy.noPlan}</span></div>
+            <div className="flex gap-2">
+              <Select value={plan} onValueChange={setPlan}><SelectTrigger className="w-48"><SelectValue /></SelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
+              <Button variant="outline" onClick={() => void subscribe()} disabled={!plan || Boolean(busy)}>{copy.subscribe}</Button>
+            </div>
+          </div>
+          <div className="grid gap-3 rounded-xl border border-border p-4">
+            <strong className="text-sm">{copy.giftCredits}</strong>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label={copy.credits}><Input value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
+              <Field label={copy.days}><Input value={days} onChange={(event) => setDays(event.target.value)} /></Field>
+              <Field label={copy.note}><Input value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+            </div>
+            <Button variant="outline" onClick={() => void gift()} disabled={Boolean(busy)}>{copy.grant}</Button>
+          </div>
+          {current.credit_batches?.length ? <div className="text-xs text-muted-foreground">{current.credit_batches.map((batch, index) => <p key={`${batch.expires_at}-${index}`} className="m-0 py-1">{batch.remaining} · {batch.source} · {date(batch.expires_at)}</p>)}</div> : null}
+          <div className="border-t border-border pt-3">
+            <strong className="text-sm">{copy.orders}</strong>
+            {current.orders?.length ? current.orders.map((order) => <p key={order.id} className="m-0 py-1 text-xs text-muted-foreground">{order.plan?.name || "—"} · {order.status} · {money(order.amount_cents)} · {date(order.created_at)}</p>) : <p className="m-0 py-2 text-xs text-muted-foreground">{copy.noOrders}</p>}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ModelsPanel({ copy, models, onChanged, onFailure }: {
+  copy: Messages["admin"]; models: AdminModel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [dialog, setDialog] = useState<{ model: AdminModel | null } | null>(null);
+  const [priceFor, setPriceFor] = useState<AdminModel | null>(null);
+  return (
+    <>
+      <Card className="bg-card/60 ring-border">
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabModels}</CardTitle><Button onClick={() => setDialog({ model: null })}>{copy.addModel}</Button></CardHeader>
+        <CardContent>
+          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.currentPrice}</TableHead><TableHead>{copy.channelsCount}</TableHead><TableHead>{copy.listed}</TableHead><TableHead /></TableRow></TableHeader>
+            <TableBody>{models.map((model) => (
+              <TableRow key={model.id}>
+                <TableCell><strong className="block">{model.id}</strong><span className="text-xs text-muted-foreground">{model.label}</span></TableCell>
+                <TableCell>{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</TableCell>
+                <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
+                <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.join(", ")}</Badge></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><Button size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</Button><Button size="sm" variant="ghost" onClick={() => setPriceFor(model)}>{copy.addPrice}</Button></div></TableCell>
+              </TableRow>
+            ))}</TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      {dialog && <ModelDialog copy={copy} model={dialog.model} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
+      {priceFor && <PriceDialog copy={copy} model={priceFor} onClose={() => setPriceFor(null)} onSaved={() => { setPriceFor(null); onChanged(); }} onFailure={onFailure} />}
+    </>
+  );
+}
+
+function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
+  copy: Messages["admin"]; model: AdminModel | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [id, setId] = useState(model?.id ?? "");
+  const [label, setLabel] = useState(model?.label ?? "");
+  const [max, setMax] = useState(String(model?.max_output_tokens ?? 8000));
+  const [sort, setSort] = useState(String(model?.sort_order ?? 0));
+  const [enabled, setEnabled] = useState(model?.enabled ?? true);
+  const submit = async () => {
+    try {
+      if (model) await cloudAdmin.updateModel(model.id, { label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
+      else await cloudAdmin.createModel({ id, label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
+      onSaved();
+    } catch (failure) { onFailure(failure); }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model?.id ?? copy.id}</DialogDescription></DialogHeader>
+        <div className="grid gap-3">
+          {!model && <Field label={copy.id}><Input value={id} onChange={(event) => setId(event.target.value)} /></Field>}
+          <Field label={copy.label}><Input value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
+          <Field label={copy.maxOutput}><Input value={max} onChange={(event) => setMax(event.target.value)} /></Field>
+          <Field label={copy.sort}><Input value={sort} onChange={(event) => setSort(event.target.value)} /></Field>
+          <Button type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</Button>
+        </div>
+        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.save}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PriceDialog({ copy, model, onClose, onSaved, onFailure }: {
+  copy: Messages["admin"]; model: AdminModel; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [input, setInput] = useState("0");
+  const [output, setOutput] = useState("0");
+  const [from, setFrom] = useState("");
+  const submit = async () => {
+    try { await cloudAdmin.addPrice(model.id, Number(input), Number(output), from || undefined); onSaved(); }
+    catch (failure) { onFailure(failure); }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent><DialogHeader><DialogTitle>{copy.addPrice}</DialogTitle><DialogDescription>{model.id}</DialogDescription></DialogHeader>
+        <div className="grid gap-3">
+          <Field label={copy.inputPer1k}><Input value={input} onChange={(event) => setInput(event.target.value)} /></Field>
+          <Field label={copy.outputPer1k}><Input value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
+          <Field label={copy.effectiveFrom}><Input value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
+        </div>
+        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.addPrice}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChannelsPanel({ copy, models, channels, onChanged, onFailure }: {
+  copy: Messages["admin"]; models: AdminModel[]; channels: AdminChannel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [dialog, setDialog] = useState<{ channel: AdminChannel | null } | null>(null);
+  const [tests, setTests] = useState<Record<string, AdminChannelTest>>({});
+  const test = async (channel: AdminChannel) => {
+    try {
+      const result = (await cloudAdmin.testChannel(channel.id)).result;
+      setTests((current) => ({ ...current, [channel.id]: result }));
+    } catch (failure) {
+      onFailure(failure);
+    }
+  };
+  return (
+    <>
+      <Card className="bg-card/60 ring-border">
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabChannels}</CardTitle><Button onClick={() => setDialog({ channel: null })}>{copy.addChannel}</Button></CardHeader>
+        <CardContent>
+          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.baseUrl}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead /></TableRow></TableHeader>
+            <TableBody>{channels.map((channel) => (
+              <TableRow key={channel.id}>
+                <TableCell><strong className="block">{channel.model_id}</strong><span className="text-xs text-muted-foreground">{channel.upstream_model}</span></TableCell>
+                <TableCell className="max-w-72 truncate">{channel.base_url}</TableCell>
+                <TableCell>{channel.priority} · <Badge variant={channel.enabled ? "default" : "secondary"}>{channel.enabled ? "on" : "off"}</Badge></TableCell>
+                <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={() => void test(channel)}>{copy.testChannel}</Button><Button size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</Button></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}</span>}</TableCell>
+              </TableRow>
+            ))}</TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      {dialog && <ChannelDialog copy={copy} models={models} channel={dialog.channel} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
+    </>
+  );
+}
+
+function ChannelDialog({ copy, models, channel, onClose, onSaved, onFailure }: {
+  copy: Messages["admin"]; models: AdminModel[]; channel: AdminChannel | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [model, setModel] = useState(channel?.model_id ?? models[0]?.id ?? "");
+  const [base, setBase] = useState(channel?.base_url ?? "");
+  const [upstream, setUpstream] = useState(channel?.upstream_model ?? "");
+  const [key, setKey] = useState("");
+  const [priority, setPriority] = useState(String(channel?.priority ?? 0));
+  const [note, setNote] = useState(channel?.note ?? "");
+  const [enabled, setEnabled] = useState(channel?.enabled ?? true);
+  const submit = async () => {
+    try {
+      if (channel) await cloudAdmin.updateChannel(channel.id, { upstream_model: upstream, priority: Number(priority), note, enabled, api_key: key });
+      else await cloudAdmin.createChannel({ model_id: model, base_url: base, upstream_model: upstream, api_key: key, priority: Number(priority), note });
+      onSaved();
+    } catch (failure) { onFailure(failure); }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{channel?.base_url ?? copy.baseUrlReadOnly}</DialogDescription></DialogHeader>
+        <div className="grid gap-3">
+          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}</SelectContent></Select></Field>}
+          {!channel && <Field label={copy.baseUrl}><Input value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
+          <Field label={copy.upstreamModel}><Input value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
+          <Field label={copy.apiKey}><Input type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
+          <p className="m-0 text-xs text-muted-foreground">{copy.replaceKeyHint}</p>
+          <Field label={copy.priority}><Input value={priority} onChange={(event) => setPriority(event.target.value)} /></Field>
+          <Field label={copy.note}><Input value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+          <Button type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</Button>
+        </div>
+        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.save}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PlansPanel({ copy, plans, onChanged, onFailure }: {
+  copy: Messages["admin"]; plans: AdminPlan[]; onChanged: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [dialog, setDialog] = useState<{ plan: AdminPlan | null } | null>(null);
+  return (
+    <>
+      <Card className="bg-card/60 ring-border">
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabPlans}</CardTitle><Button onClick={() => setDialog({ plan: null })}>{copy.addPlan}</Button></CardHeader>
+        <CardContent>
+          <Table><TableHeader><TableRow><TableHead>{copy.slug}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.priceCents}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
+            <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {plan.period}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><Badge variant={plan.on_sale ? "default" : "secondary"}>{plan.on_sale ? "on" : "off"}</Badge></TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</Button></TableCell></TableRow>)}</TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      {dialog && <PlanDialog copy={copy} plan={dialog.plan} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
+    </>
+  );
+}
+
+function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
+  copy: Messages["admin"]; plan: AdminPlan | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [slug, setSlug] = useState(plan?.slug ?? "");
+  const [name, setName] = useState(plan?.name ?? "");
+  const [period, setPeriod] = useState<AdminPlan["period"]>(plan?.period ?? "month");
+  const [credits, setCredits] = useState(String(plan?.monthly_credits ?? 1000));
+  const [ttl, setTtl] = useState(String(plan?.credit_ttl_days ?? 60));
+  const [price, setPrice] = useState(plan?.price_cents ? String(plan.price_cents) : "");
+  const [onSale, setOnSale] = useState(plan?.on_sale ?? false);
+  const submit = async () => {
+    try {
+      const payload = { name, period, monthly_credits: Number(credits), credit_ttl_days: Number(ttl), on_sale: onSale, price_cents: price ? Number(price) : null };
+      if (plan) await cloudAdmin.updatePlan(plan.slug, payload);
+      else await cloudAdmin.createPlan({ ...payload, slug });
+      onSaved();
+    } catch (failure) { onFailure(failure); }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan?.slug ?? copy.slug}</DialogDescription></DialogHeader>
+        <div className="grid gap-3">
+          {!plan && <Field label={copy.slug}><Input value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>}
+          <Field label={copy.label}><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
+          <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
+          <Field label={copy.monthlyCredits}><Input value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
+          <Field label={copy.ttlDays}><Input value={ttl} onChange={(event) => setTtl(event.target.value)} /></Field>
+          <Field label={copy.priceCents}><Input value={price} onChange={(event) => setPrice(event.target.value)} /></Field>
+          <Button type="button" variant={onSale ? "default" : "outline"} onClick={() => setOnSale(!onSale)} aria-pressed={onSale}>{copy.onSale}</Button>
+        </div>
+        <DialogFooter><DialogClose asChild><Button variant="ghost">{copy.cancel}</Button></DialogClose><Button onClick={() => void submit()}>{copy.save}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function OperationsPanel({ copy, orders, usage }: { copy: Messages["admin"]; orders: AdminOrder[]; usage: AdminUsage | null }) {
   return (
-    <div className="mt-6 grid gap-5">
-      {usage && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              [copy.usageCalls, usage.totals.calls],
-              [copy.usageCharged, usage.totals.charged],
-              [copy.usageInput, usage.totals.input_tokens],
-              [copy.usageOutput, usage.totals.output_tokens],
-            ].map(([label, value]) => (
-              <div key={String(label)} className={card}>
-                <p className="m-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className="mt-2 font-display text-2xl font-semibold">{value}</p>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-5 lg:grid-cols-2">
-            <div className={card}>
-              <h2 className="m-0 text-lg font-semibold">{copy.usageByDay}</h2>
-              <table className="mt-3 w-full text-left text-[13px]">
-                <tbody>
-                  {usage.by_day.map((row) => (
-                    <tr key={row.date} className="border-t border-border">
-                      <td className="py-2">{row.date}</td><td className="py-2">{row.calls}</td><td className="py-2">{row.charged}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className={card}>
-              <h2 className="m-0 text-lg font-semibold">{copy.usageByModel}</h2>
-              <table className="mt-3 w-full text-left text-[13px]">
-                <tbody>
-                  {usage.by_model.map((row) => (
-                    <tr key={row.model_id} className="border-t border-border">
-                      <td className="py-2">{row.model_id}</td><td className="py-2">{row.calls}</td><td className="py-2">{row.charged}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.orders}</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-[13px]">
-            <thead className="text-xs text-muted-foreground">
-              <tr><th className="pb-2">{copy.orderUser}</th><th className="pb-2">{copy.plan}</th><th className="pb-2">{copy.amount}</th><th className="pb-2">{copy.status}</th><th className="pb-2">{copy.channel}</th><th className="pb-2">{copy.createdAt}</th></tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order.id} className="border-t border-border">
-                  <td className="py-3">{order.user?.email || order.user?.handle || "—"}</td>
-                  <td className="py-3">{order.plan?.name || "—"}</td>
-                  <td className="py-3">{money(order.amount_cents)}</td>
-                  <td className="py-3">{order.status}</td>
-                  <td className="py-3">{order.channel}</td>
-                  <td className="py-3">{date(order.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {orders.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{copy.noOrders}</p>}
-        </div>
-      </div>
+    <div className="grid gap-4">
+      {usage && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[[copy.usageCalls, usage.totals.calls], [copy.usageCharged, usage.totals.charged], [copy.usageInput, usage.totals.input_tokens], [copy.usageOutput, usage.totals.output_tokens]].map(([label, value]) => <Card key={String(label)} className="bg-card/60 ring-border"><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-2xl">{value}</CardTitle></CardHeader></Card>)}</div>}
+      {usage && <div className="grid gap-4 lg:grid-cols-2"><UsageTable copy={copy} title={copy.usageByDay} rows={usage.by_day.map((r) => ({ key: r.date, label: r.date, calls: r.calls, charged: r.charged }))} /><UsageTable copy={copy} title={copy.usageByModel} rows={usage.by_model.map((r) => ({ key: r.model_id, label: r.model_id, calls: r.calls, charged: r.charged }))} /></div>}
+      <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{copy.orders}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.orderUser}</TableHead><TableHead>{copy.plan}</TableHead><TableHead>{copy.amount}</TableHead><TableHead>{copy.status}</TableHead><TableHead>{copy.channel}</TableHead><TableHead>{copy.createdAt}</TableHead></TableRow></TableHeader><TableBody>{orders.map((order) => <TableRow key={order.id}><TableCell>{order.user?.email || order.user?.handle || "—"}</TableCell><TableCell>{order.plan?.name || "—"}</TableCell><TableCell>{money(order.amount_cents)}</TableCell><TableCell>{order.status}</TableCell><TableCell>{order.channel}</TableCell><TableCell>{date(order.created_at)}</TableCell></TableRow>)}</TableBody></Table>{orders.length === 0 && <Empty>{copy.noOrders}</Empty>}</CardContent></Card>
     </div>
   );
+}
+
+function UsageTable({ copy, title, rows }: { copy: Messages["admin"]; title: string; rows: { key: string; label: string; calls: number; charged: number }[] }) {
+  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.usageCalls}</TableHead><TableHead>{copy.usageCharged}</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.key}><TableCell>{row.label}</TableCell><TableCell>{row.calls}</TableCell><TableCell>{row.charged}</TableCell></TableRow>)}</TableBody></Table>{rows.length === 0 && <Empty>{copy.noAudit}</Empty>}</CardContent></Card>;
 }
 
 function AuditPanel({ copy, audit }: { copy: Messages["admin"]; audit: AdminAudit[] }) {
-  return (
-    <div className="mt-6">
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.tabAudit}</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-[13px]">
-            <thead className="text-xs text-muted-foreground">
-              <tr>
-                <th className="pb-2">{copy.auditTime}</th>
-                <th className="pb-2">{copy.auditActor}</th>
-                <th className="pb-2">{copy.auditAction}</th>
-                <th className="pb-2">{copy.auditTarget}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {audit.map((event) => (
-                <tr key={event.id} className="border-t border-border">
-                  <td className="py-3">{date(event.created_at)}</td>
-                  <td className="py-3">{event.actor_email}</td>
-                  <td className="py-3 font-mono text-xs">{event.action}</td>
-                  <td className="py-3">{event.target_type}:{event.target_id}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {audit.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{copy.noAudit}</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function UsersPanel({
-  copy,
-  users,
-  plans,
-  selected,
-  query,
-  onQuery,
-  onSearch,
-  onSelect,
-  onChanged,
-  onFailure,
-}: {
-  copy: Messages["admin"];
-  users: AdminUser[];
-  plans: AdminPlan[];
-  selected: AdminUser | null;
-  query: string;
-  onQuery: (value: string) => void;
-  onSearch: (event: FormEvent) => void;
-  onSelect: (id: string) => void;
-  onChanged: (user: AdminUser) => void;
-  onFailure: (failure: unknown) => void;
-}) {
-  const [credits, setCredits] = useState("100");
-  const [days, setDays] = useState("30");
-  const [note, setNote] = useState("");
-  const [plan, setPlan] = useState(plans[0]?.slug ?? "");
-  const [busy, setBusy] = useState("");
-  const [temporary, setTemporary] = useState<{ id: string; value: string } | null>(null);
-
-  const role = async () => {
-    if (!selected) return;
-    setBusy("role");
-    try {
-      onChanged((await cloudAdmin.setRole(selected.id, selected.role === "admin" ? "member" : "admin")).user);
-    } catch (failure) {
-      onFailure(failure);
-    } finally {
-      setBusy("");
-    }
-  };
-  const resetPassword = async () => {
-    if (!selected) return;
-    setBusy("reset");
-    try {
-      setTemporary({ id: selected.id, value: (await cloudAdmin.resetPassword(selected.id)).temporary_password });
-    } catch (failure) {
-      onFailure(failure);
-    } finally {
-      setBusy("");
-    }
-  };
-  const gift = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selected) return;
-    setBusy("gift");
-    try {
-      onChanged((await cloudAdmin.gift(selected.id, Number(credits), Number(days), note)).user);
-    } catch (failure) {
-      onFailure(failure);
-    } finally {
-      setBusy("");
-    }
-  };
-  const subscribe = async () => {
-    if (!selected || !plan) return;
-    setBusy("subscribe");
-    try {
-      onChanged((await cloudAdmin.subscribe(selected.id, plan)).user);
-    } catch (failure) {
-      onFailure(failure);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  return (
-    <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-      <div className={card}>
-        <form className="flex gap-2" onSubmit={onSearch}>
-          <Input value={query} onChange={(event) => onQuery(event.target.value)} placeholder={copy.searchUsers} />
-          <Button type="submit" variant="outline">{copy.search}</Button>
-        </form>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[560px] text-left text-[13px]">
-            <thead className="text-xs text-muted-foreground">
-              <tr><th className="pb-2">{copy.users}</th><th className="pb-2">{copy.role}</th><th className="pb-2">{copy.credits}</th><th className="pb-2">{copy.plan}</th></tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="cursor-pointer border-t border-border hover:bg-secondary/40" onClick={() => onSelect(user.id)}>
-                  <td className="py-3">
-                    <strong className="block font-medium">{user.display_name || user.handle || user.email || user.phone}</strong>
-                    <small className="text-muted-foreground">{user.email || user.phone || user.id}</small>
-                  </td>
-                  <td className="py-3">{user.role}{user.official ? ` · ${copy.official}` : ""}</td>
-                  <td className="py-3">{user.credits}</td>
-                  <td className="py-3">{user.subscription?.name || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {users.length === 0 && <p className="mt-4 text-sm text-muted-foreground">{copy.noUsers}</p>}
-        </div>
-      </div>
-      <div className={card}>
-        {!selected ? (
-          <p className="m-0 text-sm text-muted-foreground">{copy.selectUser}</p>
-        ) : (
-          <div className="grid gap-4">
-            <div>
-              <p className="m-0 font-semibold">{selected.display_name || selected.handle || selected.email || selected.phone}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{selected.email || selected.phone || selected.id}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {selected.role} · {copy.credits} {selected.credits} · {selected.mfa_enabled ? copy.mfaOn : copy.passwordSet}
-              </p>
-            </div>
-            <Button variant="outline" onClick={() => void role()} disabled={Boolean(busy)}>
-              {selected.role === "admin" ? copy.removeAdmin : copy.makeAdmin}
-            </Button>
-            <Button variant="outline" onClick={() => void resetPassword()} disabled={Boolean(busy)}>
-              {copy.resetPassword}
-            </Button>
-            {temporary?.id === selected.id && (
-              <div className="grid gap-1 rounded-xl border border-warning/30 bg-warning/5 px-3 py-2">
-                <small className="text-xs text-muted-foreground">{copy.temporaryPassword}</small>
-                <code className="font-mono text-sm [overflow-wrap:anywhere]">{temporary.value}</code>
-              </div>
-            )}
-            <p className="m-0 text-sm">
-              {copy.plan}: {selected.subscription ? `${selected.subscription.name} (${date(selected.subscription.ends_at)})` : copy.noPlan}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Select value={plan} onValueChange={setPlan}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" onClick={() => void subscribe()} disabled={!plan || Boolean(busy)}>{copy.subscribe}</Button>
-            </div>
-            <form className="grid gap-3" onSubmit={gift}>
-              <strong className="text-sm">{copy.giftCredits}</strong>
-              <Label className={field}>{copy.credits}<Input value={credits} onChange={(event) => setCredits(event.target.value)} /></Label>
-              <Label className={field}>{copy.days}<Input value={days} onChange={(event) => setDays(event.target.value)} /></Label>
-              <Label className={field}>{copy.note}<Input value={note} onChange={(event) => setNote(event.target.value)} /></Label>
-              <Button type="submit" disabled={Boolean(busy)}>{copy.grant}</Button>
-            </form>
-            {selected.credit_batches && (
-              <div className="text-xs text-muted-foreground">
-                {selected.credit_batches.map((batch, index) => (
-                  <p key={`${batch.expires_at}-${index}`} className="m-0">{batch.remaining} · {batch.source} · {date(batch.expires_at)}</p>
-                ))}
-              </div>
-            )}
-            <div className="border-t border-border pt-3">
-              <strong className="text-sm">{copy.ordersTitle}</strong>
-              {selected.orders?.length ? (
-                <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                  {selected.orders.map((order) => (
-                    <p key={order.id} className="m-0">
-                      {order.plan?.name || "—"} · {order.status} · {money(order.amount_cents)} · {date(order.created_at)}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">{copy.noOrders}</p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ModelsPanel({
-  copy,
-  models,
-  onChanged,
-  onFailure,
-}: {
-  copy: Messages["admin"];
-  models: AdminModel[];
-  onChanged: () => void;
-  onFailure: (failure: unknown) => void;
-}) {
-  const [form, setForm] = useState({ id: "", label: "", max: "8000", sort: "0", enabled: true });
-  const [selected, setSelected] = useState<AdminModel | null>(null);
-  const [edit, setEdit] = useState({ label: "", max: "", sort: "0", enabled: true });
-  const [price, setPrice] = useState({ input: "0", output: "0", from: "" });
-  const [prices, setPrices] = useState<{ input_per_1k: number; output_per_1k: number; effective_from: string }[]>([]);
-
-  const create = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      await cloudAdmin.createModel({
-        id: form.id.trim(),
-        label: form.label.trim(),
-        max_output_tokens: Number(form.max),
-        sort_order: Number(form.sort),
-        enabled: form.enabled,
-      });
-      setForm({ id: "", label: "", max: "8000", sort: "0", enabled: true });
-      onChanged();
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-  const open = async (model: AdminModel) => {
-    setSelected(model);
-    setEdit({
-      label: model.label,
-      max: String(model.max_output_tokens),
-      sort: String(model.sort_order),
-      enabled: model.enabled,
-    });
-    try {
-      setPrices((await cloudAdmin.prices(model.id)).prices);
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-  const update = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selected) return;
-    try {
-      const result = await cloudAdmin.updateModel(selected.id, {
-        label: edit.label,
-        max_output_tokens: Number(edit.max),
-        sort_order: Number(edit.sort),
-        enabled: edit.enabled,
-      });
-      setSelected(result.model);
-      onChanged();
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-  const addPrice = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selected) return;
-    try {
-      await cloudAdmin.addPrice(selected.id, Number(price.input), Number(price.output), price.from || undefined);
-      setPrice({ input: "0", output: "0", from: "" });
-      setPrices((await cloudAdmin.prices(selected.id)).prices);
-      onChanged();
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-
-  return (
-    <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)]">
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.tabModels}</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[620px] text-left text-[13px]">
-            <thead className="text-xs text-muted-foreground">
-              <tr><th className="pb-2">{copy.id}</th><th className="pb-2">{copy.currentPrice}</th><th className="pb-2">{copy.channelsCount}</th><th className="pb-2">{copy.listed}</th></tr>
-            </thead>
-            <tbody>
-              {models.map((model) => (
-                <tr key={model.id} className="cursor-pointer border-t border-border hover:bg-secondary/40" onClick={() => void open(model)}>
-                  <td className="py-3"><strong className="block font-medium">{model.id}</strong><small className="text-muted-foreground">{model.label}</small></td>
-                  <td className="py-3">{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</td>
-                  <td className="py-3">{model.active_channel_count}/{model.channel_count}</td>
-                  <td className="py-3">{model.listed ? copy.listed : model.not_listed_reasons.join(", ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.addModel}</h2>
-        <form className="mt-3 grid gap-3" onSubmit={create}>
-          <Label className={field}>{copy.id}<Input value={form.id} onChange={(event) => setForm({ ...form, id: event.target.value })} /></Label>
-          <Label className={field}>{copy.label}<Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} /></Label>
-          <Label className={field}>{copy.maxOutput}<Input value={form.max} onChange={(event) => setForm({ ...form, max: event.target.value })} /></Label>
-          <Label className={field}>{copy.sort}<Input value={form.sort} onChange={(event) => setForm({ ...form, sort: event.target.value })} /></Label>
-          <Button type="submit">{copy.create}</Button>
-        </form>
-        {selected && (
-          <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={update}>
-            <strong className="text-sm">{copy.modelEdit} · {selected.id}</strong>
-            <Label className={field}>{copy.label}<Input value={edit.label} onChange={(event) => setEdit({ ...edit, label: event.target.value })} /></Label>
-            <Label className={field}>{copy.maxOutput}<Input value={edit.max} onChange={(event) => setEdit({ ...edit, max: event.target.value })} /></Label>
-            <Label className={field}>{copy.sort}<Input value={edit.sort} onChange={(event) => setEdit({ ...edit, sort: event.target.value })} /></Label>
-            <Button type="button" variant={edit.enabled ? "default" : "outline"} aria-pressed={edit.enabled} onClick={() => setEdit({ ...edit, enabled: !edit.enabled })}>
-              {copy.enabled}
-            </Button>
-            <Button type="submit">{copy.save}</Button>
-          </form>
-        )}
-        {selected && (
-          <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={addPrice}>
-            <strong className="text-sm">{selected.id} · {copy.addPrice}</strong>
-            <Label className={field}>{copy.inputPer1k}<Input value={price.input} onChange={(event) => setPrice({ ...price, input: event.target.value })} /></Label>
-            <Label className={field}>{copy.outputPer1k}<Input value={price.output} onChange={(event) => setPrice({ ...price, output: event.target.value })} /></Label>
-            <Label className={field}>{copy.effectiveFrom}<Input value={price.from} onChange={(event) => setPrice({ ...price, from: event.target.value })} /></Label>
-            <Button type="submit">{copy.addPrice}</Button>
-            {prices.map((one) => <p key={one.effective_from} className="m-0 text-xs text-muted-foreground">{one.input_per_1k} / {one.output_per_1k} · {date(one.effective_from)}</p>)}
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ChannelsPanel({
-  copy,
-  models,
-  channels,
-  onChanged,
-  onFailure,
-}: {
-  copy: Messages["admin"];
-  models: AdminModel[];
-  channels: AdminChannel[];
-  onChanged: () => void;
-  onFailure: (failure: unknown) => void;
-}) {
-  const [form, setForm] = useState({ model: "", base: "", upstream: "", key: "", priority: "0", note: "" });
-  const [selected, setSelected] = useState<AdminChannel | null>(null);
-  const [edit, setEdit] = useState({ upstream: "", priority: "0", note: "", enabled: true, key: "" });
-  const [test, setTest] = useState<AdminChannelTest | null>(null);
-  const [testing, setTesting] = useState(false);
-  const modelId = form.model || models[0]?.id || "";
-  const create = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      await cloudAdmin.createChannel({
-        model_id: modelId,
-        base_url: form.base.trim(),
-        upstream_model: form.upstream.trim(),
-        api_key: form.key,
-        priority: Number(form.priority),
-        note: form.note,
-      });
-      setForm({ ...form, base: "", upstream: "", key: "", note: "" });
-      onChanged();
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-  const open = (channel: AdminChannel) => {
-    setSelected(channel);
-    setTest(null);
-    setEdit({
-      upstream: channel.upstream_model,
-      priority: String(channel.priority),
-      note: channel.note,
-      enabled: channel.enabled,
-      key: "",
-    });
-  };
-  const runTest = async () => {
-    if (!selected) return;
-    setTesting(true);
-    setTest(null);
-    try {
-      setTest((await cloudAdmin.testChannel(selected.id)).result);
-    } catch (failure) {
-      onFailure(failure);
-    } finally {
-      setTesting(false);
-    }
-  };
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selected) return;
-    try {
-      const result = await cloudAdmin.updateChannel(selected.id, {
-        upstream_model: edit.upstream,
-        priority: Number(edit.priority),
-        note: edit.note,
-        enabled: edit.enabled,
-        api_key: edit.key,
-      });
-      setSelected(result.channel);
-      setEdit({ ...edit, key: "" });
-      onChanged();
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-  return (
-    <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.tabChannels}</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[620px] text-left text-[13px]">
-            <thead className="text-xs text-muted-foreground">
-              <tr><th className="pb-2">{copy.id}</th><th className="pb-2">{copy.baseUrl}</th><th className="pb-2">{copy.priority}</th><th className="pb-2">{copy.apiKey}</th></tr>
-            </thead>
-            <tbody>
-              {channels.map((channel) => (
-                <tr key={channel.id} className="cursor-pointer border-t border-border hover:bg-secondary/40" onClick={() => open(channel)}>
-                  <td className="py-3"><strong className="block font-medium">{channel.model_id}</strong><small className="text-muted-foreground">{channel.upstream_model}</small></td>
-                  <td className="py-3">{channel.base_url}</td>
-                  <td className="py-3">{channel.priority} · {channel.enabled ? "on" : "off"}</td>
-                  <td className="py-3">{channel.has_api_key ? copy.hasKey : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.addChannel}</h2>
-        <form className="mt-3 grid gap-3" onSubmit={create}>
-          <Label className={field}>{copy.models}<Select value={modelId} onValueChange={(value) => setForm({ ...form, model: value })}>
-            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {models.map((one) => <SelectItem key={one.id} value={one.id}>{one.id}</SelectItem>)}
-            </SelectContent>
-          </Select></Label>
-          <Label className={field}>{copy.baseUrl}<Input value={form.base} onChange={(event) => setForm({ ...form, base: event.target.value })} /></Label>
-          <Label className={field}>{copy.upstreamModel}<Input value={form.upstream} onChange={(event) => setForm({ ...form, upstream: event.target.value })} /></Label>
-          <Label className={field}>{copy.apiKey}<Input type="password" value={form.key} onChange={(event) => setForm({ ...form, key: event.target.value })} /></Label>
-          <Label className={field}>{copy.priority}<Input value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} /></Label>
-          <p className="m-0 text-xs text-muted-foreground">{copy.apiKeyHint}</p>
-          <Button type="submit">{copy.create}</Button>
-        </form>
-        {selected && (
-          <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={save}>
-            <strong className="text-sm">{copy.channelEdit} · {selected.model_id}</strong>
-            <p className="m-0 text-xs text-muted-foreground">{selected.base_url}</p>
-            <p className="m-0 text-xs text-muted-foreground">{copy.baseUrlReadOnly}</p>
-            <Label className={field}>{copy.upstreamModel}<Input value={edit.upstream} onChange={(event) => setEdit({ ...edit, upstream: event.target.value })} /></Label>
-            <Label className={field}>{copy.priority}<Input value={edit.priority} onChange={(event) => setEdit({ ...edit, priority: event.target.value })} /></Label>
-            <Label className={field}>{copy.note}<Input value={edit.note} onChange={(event) => setEdit({ ...edit, note: event.target.value })} /></Label>
-            <Label className={field}>{copy.apiKey}<Input type="password" value={edit.key} onChange={(event) => setEdit({ ...edit, key: event.target.value })} /></Label>
-            <p className="m-0 text-xs text-muted-foreground">{copy.replaceKeyHint}</p>
-            <Button type="button" variant={edit.enabled ? "default" : "outline"} aria-pressed={edit.enabled} onClick={() => setEdit({ ...edit, enabled: !edit.enabled })}>
-              {copy.enabled}
-            </Button>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="submit">{copy.save}</Button>
-              <Button type="button" variant="outline" onClick={() => void runTest()} disabled={testing}>
-                {testing ? copy.testing : copy.testChannel}
-              </Button>
-            </div>
-            {test && (
-              <p className={test.ok ? "m-0 text-xs text-success" : "m-0 text-xs text-destructive"}>
-                {test.ok ? copy.testOk : copy.testFailed} · {test.status} · {test.latency_ms}ms
-                {test.detail ? ` · ${test.detail}` : ""}
-              </p>
-            )}
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PlansPanel({
-  copy,
-  plans,
-  onChanged,
-  onFailure,
-}: {
-  copy: Messages["admin"];
-  plans: AdminPlan[];
-  onChanged: () => void;
-  onFailure: (failure: unknown) => void;
-}) {
-  const [form, setForm] = useState({ slug: "", name: "", period: "month", credits: "1000", ttl: "60", price: "" });
-  const [selected, setSelected] = useState<AdminPlan | null>(null);
-  const [edit, setEdit] = useState({ name: "", period: "month", credits: "1000", ttl: "60", price: "", onSale: false });
-  const open = (plan: AdminPlan) => {
-    setSelected(plan);
-    setEdit({
-      name: plan.name,
-      period: plan.period,
-      credits: String(plan.monthly_credits),
-      ttl: String(plan.credit_ttl_days),
-      price: plan.price_cents === null ? "" : String(plan.price_cents),
-      onSale: plan.on_sale,
-    });
-  };
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selected) return;
-    try {
-      const result = await cloudAdmin.updatePlan(selected.slug, {
-        name: edit.name,
-        period: edit.period as AdminPlan["period"],
-        monthly_credits: Number(edit.credits),
-        credit_ttl_days: Number(edit.ttl),
-        on_sale: edit.onSale,
-        price_cents: edit.price ? Number(edit.price) : null,
-      });
-      setSelected(result.plan);
-      onChanged();
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-  const create = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      await cloudAdmin.createPlan({
-        slug: form.slug,
-        name: form.name,
-        period: form.period as AdminPlan["period"],
-        monthly_credits: Number(form.credits),
-        credit_ttl_days: Number(form.ttl),
-        on_sale: Boolean(form.price),
-        price_cents: form.price ? Number(form.price) : null,
-      });
-      setForm({ slug: "", name: "", period: "month", credits: "1000", ttl: "60", price: "" });
-      onChanged();
-    } catch (failure) {
-      onFailure(failure);
-    }
-  };
-  return (
-    <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.tabPlans}</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[560px] text-left text-[13px]">
-            <thead className="text-xs text-muted-foreground">
-              <tr><th className="pb-2">{copy.slug}</th><th className="pb-2">{copy.monthlyCredits}</th><th className="pb-2">{copy.priceCents}</th><th className="pb-2">{copy.onSale}</th></tr>
-            </thead>
-            <tbody>
-              {plans.map((plan) => (
-                <tr key={plan.slug} className="cursor-pointer border-t border-border hover:bg-secondary/40" onClick={() => open(plan)}>
-                  <td className="py-3"><strong className="block font-medium">{plan.slug}</strong><small className="text-muted-foreground">{plan.name}</small></td>
-                  <td className="py-3">{plan.monthly_credits} · {plan.period}</td>
-                  <td className="py-3">{money(plan.price_cents)}</td>
-                  <td className="py-3">{plan.on_sale ? "yes" : "no"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div className={card}>
-        <h2 className="m-0 text-lg font-semibold">{copy.addPlan}</h2>
-        <form className="mt-3 grid gap-3" onSubmit={create}>
-          <Label className={field}>{copy.slug}<Input value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} /></Label>
-          <Label className={field}>{copy.label}<Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Label>
-          <Label className={field}>{copy.period}<Select value={form.period} onValueChange={(value) => setForm({ ...form, period: value })}>
-            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">{copy.month}</SelectItem>
-              <SelectItem value="quarter">{copy.quarter}</SelectItem>
-              <SelectItem value="year">{copy.year}</SelectItem>
-            </SelectContent>
-          </Select></Label>
-          <Label className={field}>{copy.monthlyCredits}<Input value={form.credits} onChange={(event) => setForm({ ...form, credits: event.target.value })} /></Label>
-          <Label className={field}>{copy.ttlDays}<Input value={form.ttl} onChange={(event) => setForm({ ...form, ttl: event.target.value })} /></Label>
-          <Label className={field}>{copy.priceCents}<Input value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></Label>
-          <Button type="submit">{copy.create}</Button>
-        </form>
-        {selected && (
-          <form className="mt-6 grid gap-3 border-t border-border pt-4" onSubmit={save}>
-            <strong className="text-sm">{copy.planEdit} · {selected.slug}</strong>
-            <Label className={field}>{copy.label}<Input value={edit.name} onChange={(event) => setEdit({ ...edit, name: event.target.value })} /></Label>
-            <Label className={field}>{copy.monthlyCredits}<Input value={edit.credits} onChange={(event) => setEdit({ ...edit, credits: event.target.value })} /></Label>
-            <Label className={field}>{copy.ttlDays}<Input value={edit.ttl} onChange={(event) => setEdit({ ...edit, ttl: event.target.value })} /></Label>
-            <Label className={field}>{copy.priceCents}<Input value={edit.price} onChange={(event) => setEdit({ ...edit, price: event.target.value })} /></Label>
-            <Button type="button" variant={edit.onSale ? "default" : "outline"} aria-pressed={edit.onSale} onClick={() => setEdit({ ...edit, onSale: !edit.onSale })}>
-              {copy.onSale}
-            </Button>
-            <Button type="submit">{copy.save}</Button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
+  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{copy.tabAudit}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.auditTime}</TableHead><TableHead>{copy.auditActor}</TableHead><TableHead>{copy.auditAction}</TableHead><TableHead>{copy.auditTarget}</TableHead></TableRow></TableHeader><TableBody>{audit.map((event) => <TableRow key={event.id}><TableCell>{date(event.created_at)}</TableCell><TableCell>{event.actor_email}</TableCell><TableCell className="font-mono text-xs">{event.action}</TableCell><TableCell>{event.target_type}:{event.target_id}</TableCell></TableRow>)}</TableBody></Table>{audit.length === 0 && <Empty>{copy.noAudit}</Empty>}</CardContent></Card>;
 }
