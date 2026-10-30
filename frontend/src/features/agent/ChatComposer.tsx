@@ -188,6 +188,8 @@ export function ChatComposer({
   workspaceRef.current = workspaceId;
   const submitRef = React.useRef(onSubmit);
   submitRef.current = onSubmit;
+  const changeRef = React.useRef(onChange);
+  changeRef.current = onChange;
   const searchRef = React.useRef(search);
   searchRef.current = search;
   const skillsRef = React.useRef(skills);
@@ -211,6 +213,14 @@ export function ChatComposer({
   menuOpenRef.current = Boolean(menu.menu || skillMenu.menu);
 
   const emitted = React.useRef(JSON.stringify(value));
+  const syncCompositionDocument = (view: { composing: boolean; state: { doc: { toJSON(): JSONContent } } }) => {
+    if (view.composing) return;
+    const next = view.state.doc.toJSON();
+    const encoded = JSON.stringify(next);
+    if (encoded === emitted.current) return;
+    emitted.current = encoded;
+    changeRef.current(next);
+  };
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -314,7 +324,13 @@ export function ChatComposer({
           if (view.composing && event.key === "Backspace") pauseCompositionObserver(view);
           return false;
         },
-        compositionend: resumeCompositionObserver,
+        compositionend: (view) => {
+          resumeCompositionObserver(view);
+          //: onUpdate 在组词期间是跳过的；组词结束这一拍必须把最终文档交给父层，
+          //: 否则紧接着点发送时 `draft.text()` 还是组词前的旧稿（消息会少一段中文）。
+          queueMicrotask(() => syncCompositionDocument(view));
+          return false;
+        },
       },
       handleKeyDown: (_view, event) => {
         if (!sendsOnEnter(event, menuOpenRef.current)) return false;

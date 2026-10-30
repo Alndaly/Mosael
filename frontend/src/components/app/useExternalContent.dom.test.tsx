@@ -2,8 +2,8 @@
 //: 四个可编辑的 TipTap 编辑器从外面接内容:输入法组词期间一律不回灌(回灌就打断组词、
 //: 拼音字母上屏),组词结束后外面那份真的不一样才换上。
 import React from "react";
-import { act, cleanup, render, waitFor } from "@testing-library/react";
-import type { Editor } from "@tiptap/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import type { Editor, JSONContent } from "@tiptap/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({
@@ -62,6 +62,30 @@ describe.each(Object.keys(EDITORS))("%s:组词期间不从外面回灌", (name) 
       editor.view.dom.dispatchEvent(new CompositionEvent("compositionend", { data: "", bubbles: true }));
     });
     await waitFor(() => expect(editor.getText()).toBe("外面改的"), { timeout: COMPOSE_SETTLE_MS * 10 });
+  });
+});
+
+
+describe("ChatComposer:组词结束把最终文档交给父层", () => {
+  it("组词期间被跳过的 onUpdate，在 compositionend 后补交", async () => {
+    function Controlled() {
+      const [value, setValue] = React.useState<JSONContent>(doc(""));
+      const text = (value.content?.[0]?.content?.[0] as { text?: string } | undefined)?.text ?? "";
+      return (
+        <>
+          <ChatComposer workspaceId="w1" value={value} onChange={setValue} onSubmit={() => undefined} search={async () => NO_REFERENCES} />
+          <output data-testid="saved">{text}</output>
+        </>
+      );
+    }
+    const view = render(<Controlled />);
+    const editor = await editorOf(view.container);
+    act(() => {
+      editor.view.dom.dispatchEvent(new CompositionEvent("compositionstart", { data: "", bubbles: true }));
+      editor.commands.insertContent("分析");
+      editor.view.dom.dispatchEvent(new CompositionEvent("compositionend", { data: "分析", bubbles: true }));
+    });
+    await waitFor(() => expect(screen.getByTestId("saved").textContent).toBe("分析"));
   });
 });
 
