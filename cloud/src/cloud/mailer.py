@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import smtplib
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 from typing import Protocol
 
 from cloud.config import CloudConfig
@@ -78,6 +79,9 @@ class SmtpCodeSender:
         message["From"] = config.smtp_from
         message["To"] = email
         message["Subject"] = _subject(purpose)
+        #: 很多收件方会把缺少 Date / Message-ID 的自动邮件直接判成垃圾邮件。
+        message["Date"] = formatdate(localtime=True)
+        message["Message-ID"] = make_msgid(domain=config.smtp_from.rpartition("@")[2] or None)
         message.set_content(_body(purpose, code))
 
         try:
@@ -97,6 +101,7 @@ class SmtpCodeSender:
                 if config.smtp_username:
                     client.login(config.smtp_username, config.smtp_password)
                 client.send_message(message)
+            logger.info("sent %s code to %s", purpose, mask_email(email))
         except (OSError, smtplib.SMTPException) as failure:
             # 只有脱敏后的收件人和异常类型 —— 验证码本身绝不进日志。
             logger.warning(
