@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Switch } from "@/components/ui/switch";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -448,7 +449,10 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
           <Field label={copy.label}><AInput value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
           <Field label={copy.maxOutput}><AInput value={max} onChange={(event) => setMax(event.target.value)} /></Field>
           <Field label={copy.sort}><AInput value={sort} onChange={(event) => setSort(event.target.value)} /></Field>
-          <AButton type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</AButton>
+          <div className="flex items-center justify-between gap-4 py-1">
+            <span className="text-sm font-medium">{copy.enabled}</span>
+            <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={copy.enabled} />
+          </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
@@ -495,7 +499,7 @@ function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
                 <TableCell><strong className="block">{provider.name}</strong><span className="text-xs text-muted-foreground">{provider.protocol}</span></TableCell>
                 <TableCell className="max-w-72 truncate">{provider.base_url}</TableCell>
                 <TableCell>{provider.has_api_key ? copy.hasKey : "—"}</TableCell>
-                <TableCell><Badge variant={provider.enabled ? "default" : "secondary"}>{provider.enabled ? "on" : "off"}</Badge></TableCell>
+                <TableCell><ProviderEnabledSwitch copy={copy} provider={provider} onChanged={onChanged} onFailure={onFailure} /></TableCell>
                 <TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ provider })}>{copy.edit}</AButton></TableCell>
               </TableRow>
             ))}</TableBody>
@@ -532,12 +536,33 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
           <Field label={copy.apiKey}><AInput type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
           <p className="m-0 text-xs text-muted-foreground">{copy.apiKeyHint}</p>
           <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
-          <AButton type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</AButton>
+          <div className="flex items-center justify-between gap-4 py-1">
+            <span className="text-sm font-medium">{copy.enabled}</span>
+            <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={copy.enabled} />
+          </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function ProviderEnabledSwitch({ copy, provider, onChanged, onFailure }: {
+  copy: Messages["admin"]; provider: AdminProvider; onChanged: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const toggle = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      await cloudAdmin.updateProvider(provider.id, { name: provider.name, note: provider.note, enabled, api_key: "" });
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Switch checked={provider.enabled} disabled={busy} onCheckedChange={(enabled) => void toggle(enabled)} aria-label={`${copy.enabled}: ${provider.name}`} />;
 }
 
 function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure }: {
@@ -558,13 +583,14 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
       <Card className="bg-card/60 ring-border">
         <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabChannels}</CardTitle><AButton onClick={() => setDialog({ channel: null })}>{copy.addChannel}</AButton></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.provider}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead /></TableRow></TableHeader>
+          <Table><TableHeader><TableRow><TableHead>{copy.id}</TableHead><TableHead>{copy.provider}</TableHead><TableHead>{copy.priority}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead>{copy.enabled}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{channels.map((channel) => (
               <TableRow key={channel.id}>
                 <TableCell><strong className="block">{channel.model_id}</strong><span className="text-xs text-muted-foreground">{channel.upstream_model}</span></TableCell>
                 <TableCell><strong className="block">{channel.provider_name}</strong><span className="block max-w-72 truncate text-xs text-muted-foreground">{channel.base_url}</span></TableCell>
-                <TableCell>{channel.priority} · <Badge variant={channel.enabled ? "default" : "secondary"}>{channel.enabled ? "on" : "off"}</Badge></TableCell>
+                <TableCell>{channel.priority}</TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
+                <TableCell><ChannelEnabledSwitch copy={copy} channel={channel} onChanged={onChanged} onFailure={onFailure} /></TableCell>
                 <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)}>{copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}</span>}</TableCell>
               </TableRow>
             ))}</TableBody>
@@ -604,12 +630,38 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
           <Field label={copy.upstreamModel}><AInput value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
           <Field label={copy.priority}><AInput value={priority} onChange={(event) => setPriority(event.target.value)} /></Field>
           <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
-          <AButton type="button" variant={enabled ? "default" : "outline"} onClick={() => setEnabled(!enabled)} aria-pressed={enabled}>{copy.enabled}</AButton>
+          <div className="flex items-center justify-between gap-4 py-1">
+            <span className="text-sm font-medium">{copy.enabled}</span>
+            <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={copy.enabled} />
+          </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} disabled={!channel && (providers.length === 0 || models.length === 0)}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function ChannelEnabledSwitch({ copy, channel, onChanged, onFailure }: {
+  copy: Messages["admin"]; channel: AdminChannel; onChanged: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const toggle = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      await cloudAdmin.updateChannel(channel.id, {
+        upstream_model: channel.upstream_model,
+        priority: channel.priority,
+        note: channel.note,
+        enabled,
+      });
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Switch checked={channel.enabled} disabled={busy} onCheckedChange={(enabled) => void toggle(enabled)} aria-label={`${copy.enabled}: ${channel.model_id}`} />;
 }
 
 function PlansPanel({ copy, plans, onChanged, onFailure }: {
@@ -622,7 +674,7 @@ function PlansPanel({ copy, plans, onChanged, onFailure }: {
         <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabPlans}</CardTitle><AButton onClick={() => setDialog({ plan: null })}>{copy.addPlan}</AButton></CardHeader>
         <CardContent>
           <Table><TableHeader><TableRow><TableHead>{copy.slug}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.priceCents}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
-            <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {plan.period}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><Badge variant={plan.on_sale ? "default" : "secondary"}>{plan.on_sale ? "on" : "off"}</Badge></TableCell><TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</AButton></TableCell></TableRow>)}</TableBody>
+            <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {plan.period}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><PlanOnSaleSwitch copy={copy} plan={plan} onChanged={onChanged} onFailure={onFailure} /></TableCell><TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</AButton></TableCell></TableRow>)}</TableBody>
           </Table>
           {plans.length === 0 && <Empty>{copy.noPlans}</Empty>}
         </CardContent>
@@ -660,12 +712,40 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
           <Field label={copy.monthlyCredits}><AInput value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
           <Field label={copy.ttlDays}><AInput value={ttl} onChange={(event) => setTtl(event.target.value)} /></Field>
           <Field label={copy.priceCents}><AInput value={price} onChange={(event) => setPrice(event.target.value)} /></Field>
-          <AButton type="button" variant={onSale ? "default" : "outline"} onClick={() => setOnSale(!onSale)} aria-pressed={onSale}>{copy.onSale}</AButton>
+          <div className="flex items-center justify-between gap-4 py-1">
+            <span className="text-sm font-medium">{copy.onSale}</span>
+            <Switch checked={onSale} onCheckedChange={setOnSale} aria-label={copy.onSale} />
+          </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function PlanOnSaleSwitch({ copy, plan, onChanged, onFailure }: {
+  copy: Messages["admin"]; plan: AdminPlan; onChanged: () => void; onFailure: (failure: unknown) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const toggle = async (onSale: boolean) => {
+    setBusy(true);
+    try {
+      await cloudAdmin.updatePlan(plan.slug, {
+        name: plan.name,
+        period: plan.period,
+        monthly_credits: plan.monthly_credits,
+        credit_ttl_days: plan.credit_ttl_days,
+        on_sale: onSale,
+        price_cents: plan.price_cents,
+      });
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Switch checked={plan.on_sale} disabled={busy} onCheckedChange={(onSale) => void toggle(onSale)} aria-label={`${copy.onSale}: ${plan.name}`} />;
 }
 
 function OperationsPanel({ copy, orders, usage }: { copy: Messages["admin"]; orders: AdminOrder[]; usage: AdminUsage | null }) {
