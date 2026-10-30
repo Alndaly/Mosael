@@ -138,6 +138,12 @@ SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮)
 | POST | `/login/sms/verify` | 手机号 + 验证码换会话;首次验证自动建账号 |
 | POST | `/logout` | 撤销当前会话 |
 | GET | `/me` | 当前云端账号;`has_password` 表示是否设过密码 |
+| GET | `/mfa` | 当前账号的双因素状态与剩余恢复码 |
+| POST | `/mfa/setup` | 生成待验证的 TOTP secret / otpauth URI |
+| POST | `/mfa/enable` | 验证 TOTP 后开启,返回一次性恢复码 |
+| POST | `/mfa/disable` | 用当前 TOTP / 恢复码关闭 |
+| POST | `/mfa/recovery-codes` | 重新生成恢复码(需当前 TOTP) |
+| POST | `/mfa/verify` | 登录第二步:票据 + TOTP / 恢复码换会话 |
 | POST | `/me/password` | 已登录时设置 / 修改密码;已有密码必须带 `current_password` |
 | DELETE | `/me` | 删号(会话 / 身份 / 分享级联删除) |
 | GET | `/oauth/providers` | 哪些第三方登录已配置: `{providers:{github:bool, google:bool}}` |
@@ -326,6 +332,27 @@ cloud_oauth_states(
 「MosaelCloud 账号」设置页(本地账号的密码仍留在「账户」),两处都读 `has_password` 决定是否
 显示「当前密码」。桌面端经本地后端 `POST /api/cloud/v1/me/password` 转发,不把云端密码写进
 本地库;密码登录的输入框接受邮箱或手机号,后者转发到 `/api/cloud/v1/login/phone`。
+
+
+### 可选双因素(TOTP)
+
+账号可以在官网「我的 → 安全」开启 TOTP 双因素;开启后密码、邮箱验证码、短信验证码和第三方登录**都**会在主认证后多问一次认证器验证码。
+
+- secret 用独立的 `CLOUD_MFA_KEY`(Fernet)加密落库,和上游 Key 的 `CLOUD_CHANNEL_KEY` 分开
+- 登录第一步不再直接发会话,而是回一次性 `ticket`;`POST /mfa/verify` 用 TOTP 或恢复码换会话
+- 恢复码只显示一次,库里只存 sha256;用过即作废
+- 同一个 TOTP 时间步不能重放
+- OAuth 回调在开启 MFA 时回到 `/<locale>/mfa?ticket=...`,不直接回账号页
+- 关闭或重新生成恢复码都需要当前认证器验证码
+
+**部署配置**:
+
+```bash
+# 生成 CLOUD_MFA_KEY
+uv run python -m cloud.cli mfa-key
+```
+
+缺这把钥匙时,用户仍可正常登录,但不能开启 MFA;已经开启的账号会得到 `mfa_not_configured`。换钥匙后需要先关闭/重设这些账号的 MFA。
 
 ### 配置与"未启用"的表现
 

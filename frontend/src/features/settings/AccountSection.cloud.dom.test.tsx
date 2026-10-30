@@ -29,6 +29,12 @@ vi.mock("@/api/domains/cloud", async (importOriginal) => {
     loadCloudSession: vi.fn(),
     loginWithPassword: vi.fn(),
     loginWithPhonePassword: vi.fn(),
+    verifyCloudMfa: vi.fn(),
+    getCloudMfaStatus: vi.fn(),
+    setupCloudMfa: vi.fn(),
+    enableCloudMfa: vi.fn(),
+    disableCloudMfa: vi.fn(),
+    regenerateCloudMfaRecoveryCodes: vi.fn(),
     requestCloudLoginCode: vi.fn(),
     verifyCloudLoginCode: vi.fn(),
     requestCloudLoginSmsCode: vi.fn(),
@@ -50,6 +56,7 @@ function apiError(status: number, code: string, message: string): ApiError {
 beforeEach(() => {
   vi.clearAllMocks();
   api.loadCloudSession.mockResolvedValue(null);
+  api.getCloudMfaStatus.mockResolvedValue({ enabled: false, recovery_codes_remaining: 0 });
 });
 
 afterEach(cleanup);
@@ -85,6 +92,27 @@ describe("MosaelCloud 账号", () => {
       expect(api.loginWithPhonePassword).toHaveBeenCalledWith("13800138000", "Phone-Horse-9"),
     );
     expect(await screen.findByText("+8613800138000")).toBeInTheDocument();
+  });
+
+  it("开了双因素:密码通过后还要输入认证码", async () => {
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+
+    fireEvent.change(await screen.findByLabelText("邮箱或手机号"), { target: { value: "alice@example.com" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "secret" } });
+    api.loginWithPassword.mockResolvedValueOnce({
+      mfa_required: true,
+      ticket: "mfa-ticket",
+      methods: ["totp", "recovery"],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    expect(await screen.findByText("双因素认证")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("验证码或恢复码"), { target: { value: "123456" } });
+    api.verifyCloudMfa.mockResolvedValueOnce({ email: "alice@example.com" });
+    fireEvent.click(screen.getByRole("button", { name: "验证并登录" }));
+
+    await waitFor(() => expect(api.verifyCloudMfa).toHaveBeenCalledWith("mfa-ticket", "123456"));
+    expect(await screen.findByText("alice@example.com")).toBeInTheDocument();
   });
 
   it("验证码那条:发码 → 填 6 位 → 验证", async () => {
@@ -170,6 +198,19 @@ describe("MosaelCloud 账号", () => {
 
     await waitFor(() => expect(api.logoutCloud).toHaveBeenCalled());
     expect(await screen.findByLabelText("邮箱或手机号")).toBeInTheDocument();
+  });
+
+  it("云端密码不足 8 位时提示的是 8 位,不是本地账号的 4 位", async () => {
+    api.loadCloudSession.mockResolvedValueOnce({ email: "+8613800138000", has_password: false });
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+
+    await screen.findByText("设置登录密码");
+    fireEvent.change(screen.getByLabelText("新密码"), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "更新密码" }));
+
+    expect(await screen.findByText("MosaelCloud 密码至少 8 个字符。")).toBeInTheDocument();
+    expect(api.changeCloudPassword).not.toHaveBeenCalled();
   });
 
   it("短信账号登录后同样能设置密码", async () => {

@@ -183,6 +183,30 @@ def test_a_login_that_cannot_get_a_device_token_stores_nothing(cloud: FakeCloud)
     assert rows() == []
 
 
+def test_mfa_login_returns_a_ticket_without_storing_a_device_token(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    cloud.reply(200, {"mfa_required": True, "ticket": "mfa-ticket", "methods": ["totp", "recovery"]})
+    response = client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"mfa_required": True, "ticket": "mfa-ticket", "methods": ["totp", "recovery"]}
+    assert rows() == []
+
+
+def test_mfa_verify_exchanges_the_ticket_for_a_device_token(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    cloud.reply(200, {"mfa_required": True, "ticket": "mfa-ticket", "methods": ["totp", "recovery"]})
+    assert client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD}).status_code == 200
+
+    queue_successful_login(cloud)
+    response = client.post("/api/cloud/v1/mfa/verify", json={"ticket": "mfa-ticket", "code": "123456"})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"email": EMAIL}
+    assert cloud.requests[-4].url.path == "/mfa/verify"
+    assert len(rows()) == 1
+
+
 def test_phone_password_login_uses_the_same_device_token_path(cloud: FakeCloud) -> None:
     client = fresh_client()
     queue_successful_login(cloud, email="+8613800138000")

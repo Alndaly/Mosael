@@ -18,6 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from cloud.api.auth import router as accounts_router
 from cloud.api.device_tokens import router as device_tokens_router
+from cloud.api.mfa import router as mfa_router
 from cloud.api.notifications import router as notifications_router
 from cloud.api.orders import router as orders_router
 from cloud.api.oauth import router as oauth_router
@@ -154,6 +155,7 @@ def create_app(
     app.include_router(shares_router, prefix=API_PREFIX)
     app.include_router(notifications_router, prefix=API_PREFIX)
     app.include_router(device_tokens_router, prefix=API_PREFIX)
+    app.include_router(mfa_router, prefix=API_PREFIX)
     app.include_router(gateway_router, prefix=API_PREFIX)
     app.include_router(orders_router, prefix=API_PREFIX)
     return app

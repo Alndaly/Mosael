@@ -74,6 +74,8 @@ services:
       CLOUD_OFFICIAL_PASSWORD: ${CLOUD_OFFICIAL_PASSWORD:-}
       # 官方中转网关:上游 API Key 的落库加密钥(见 .env.example)。不设 = 网关对话不可用。
       CLOUD_CHANNEL_KEY: ${CLOUD_CHANNEL_KEY:-}
+      # 可选 TOTP 双因素 secret 的落库加密钥(见 .env.example)。不设 = 无法开启 MFA。
+      CLOUD_MFA_KEY: ${CLOUD_MFA_KEY:-}
       # 在线购买(见 .env.example):配齐哪个渠道开哪个。
       CLOUD_ALIPAY_APP_ID: ${CLOUD_ALIPAY_APP_ID:-}
       CLOUD_ALIPAY_PRIVATE_KEY: ${CLOUD_ALIPAY_PRIVATE_KEY:-}

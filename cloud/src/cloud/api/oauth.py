@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from cloud.api.auth import open_session
 from cloud.api.deps import CurrentConfig, DbSession
 from cloud.config import OAUTH_PROVIDERS, CloudConfig
+from cloud.domain import mfa as mfa_domain
 from cloud.domain.identity import give_default_identity
 from cloud.errors import CloudError
 from cloud.models import CloudIdentity, CloudOAuthState, CloudSession, CloudUser, now
@@ -65,6 +66,10 @@ def _failure_url(config: CloudConfig, locale: str, page: str, code: str) -> str:
 
 def _success_url(config: CloudConfig, locale: str, outcome: str) -> str:
     return f"{config.public_url}/{locale}/account?{urlencode({'oauth': outcome})}"
+
+
+def _mfa_url(config: CloudConfig, locale: str, ticket: str) -> str:
+    return f"{config.public_url}/{locale}/mfa?{urlencode({'ticket': ticket})}"
 
 
 def _set_nonce_cookie(response: RedirectResponse, config: CloudConfig, nonce: str) -> None:
@@ -254,6 +259,13 @@ def oauth_callback(
         )
     except CloudError as failure:
         return _failure(config, locale, page, failure.code)
+
+    if mfa_domain.enabled(user):
+        ticket = mfa_domain.create_ticket(db, user, config)
+        db.commit()
+        response = RedirectResponse(_mfa_url(config, locale, ticket), status_code=302)
+        _clear_nonce_cookie(response, config)
+        return response
 
     response = RedirectResponse(_success_url(config, locale, outcome), status_code=302)
     # **复用现有的 open_session** —— 第三方登录没有第二条鉴权路径。

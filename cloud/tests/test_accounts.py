@@ -13,7 +13,7 @@ def test_signup_login_me_logout_round_trip(client, db_path):
     assert user["email"] == "alice@example.com"
     # 注册这一步现在会验邮箱验证码,成功即视为已验证。
     assert user["email_verified_at"] is not None
-    assert set(user) == {"id", "email", "email_verified_at", "phone", "phone_verified_at", "has_password", "created_at", "display_name", "handle", "avatar_seed", "official"}
+    assert set(user) == {"id", "email", "email_verified_at", "phone", "phone_verified_at", "has_password", "mfa_enabled", "created_at", "display_name", "handle", "avatar_seed", "official"}
 
     response = client.post(api("/login"), json={"email": "alice@example.com", "password": PASSWORD})
     assert response.status_code == 200, response.text

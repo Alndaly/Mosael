@@ -4,10 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   describeCloudFailure,
   changeCloudPassword,
+  isMfaChallenge,
   loadCloudSession,
   loginWithPassword,
   loginWithPhonePassword,
   logoutCloud,
+  verifyCloudMfa,
   requestCloudLoginCode,
   requestCloudLoginSmsCode,
   verifyCloudLoginCode,
@@ -20,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { Input } from "@/components/ui/input";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
+import { CloudMfaSection } from "@/features/settings/CloudMfaSection";
 
 /**
  * 设置 → 账户里的「MosaelCloud 账号」:桌面端**自己**登录云端。
@@ -52,7 +55,9 @@ export function CloudAccountSection() {
   const [code, setCode] = React.useState("");
   const [codeSent, setCodeSent] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(0);
-  const [pending, setPending] = React.useState<"" | "login" | "code" | "verify" | "logout" | "password">("");
+  const [pending, setPending] = React.useState<"" | "login" | "code" | "verify" | "mfa" | "logout" | "password">("");
+  const [mfaTicket, setMfaTicket] = React.useState("");
+  const [mfaCode, setMfaCode] = React.useState("");
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -107,6 +112,11 @@ export function CloudAccountSection() {
           : mode === "code"
             ? await verifyCloudLoginCode(email.trim(), code.trim())
             : await verifyCloudLoginSms(phone.trim(), code.trim());
+      if (isMfaChallenge(found)) {
+        setMfaTicket(found.ticket);
+        setMfaCode("");
+        return;
+      }
       setSession(found);
       //: 供应商列表顶上的「Mosael Cloud」那一行读的是同一份登录。
       void queryClient.invalidateQueries({ queryKey: cloudKeys.session() });
@@ -142,7 +152,7 @@ export function CloudAccountSection() {
     setPasswordFailure("");
     setPasswordSaved(false);
     if (newPassword.length < 8) {
-      setPasswordFailure(t("passwordTooShort"));
+      setPasswordFailure(t("settingsCloudPasswordTooShort"));
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -161,6 +171,28 @@ export function CloudAccountSection() {
     } catch (error) {
       noteFailure(error);
       setPasswordFailure(describeCloudFailure(error).message);
+    } finally {
+      setPending("");
+    }
+  };
+
+  const verifyMfa = async () => {
+    if (!mfaTicket || !mfaCode.trim()) return;
+    setFailure("");
+    setPending("mfa");
+    try {
+      const found = await verifyCloudMfa(mfaTicket, mfaCode.trim());
+      setSession(found);
+      setMfaTicket("");
+      setMfaCode("");
+      setEmail("");
+      setPhone("");
+      setPassword("");
+      setCode("");
+      setCodeSent(false);
+      void queryClient.invalidateQueries({ queryKey: cloudKeys.session() });
+    } catch (error) {
+      noteFailure(error);
     } finally {
       setPending("");
     }
@@ -244,6 +276,7 @@ export function CloudAccountSection() {
               />
             )}
           </SettingsBlock>
+          <CloudMfaSection />
           <SettingsBlock>
             <div className="grid gap-3">
               <div className="grid gap-1">
@@ -302,6 +335,58 @@ export function CloudAccountSection() {
             </div>
           </SettingsBlock>
         </>
+      ) : mfaTicket ? (
+        <SettingsBlock>
+          <div className="grid gap-3">
+            <div className="grid gap-1">
+              <strong className="text-ui-lg font-semibold leading-snug">{t("settingsCloudMfaTitle")}</strong>
+              <small className="text-ui-sm leading-[1.5] text-muted-foreground">
+                {t("settingsCloudMfaHint")}
+              </small>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void verifyMfa();
+              }}
+            >
+              <SettingsForm>
+                <SettingsField label={t("settingsCloudMfaCode")}>
+                  <Input
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    value={mfaCode}
+                    onChange={(event) => setMfaCode(event.target.value)}
+                  />
+                </SettingsField>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setMfaTicket("");
+                      setMfaCode("");
+                      setFailure("");
+                    }}
+                  >
+                    {t("settingsCloudMfaBack")}
+                  </Button>
+                  <Button type="submit" loading={pending === "mfa"} disabled={pending === "mfa" || !mfaCode.trim()}>
+                    {t("settingsCloudVerify")}
+                  </Button>
+                </div>
+              </SettingsForm>
+            </form>
+            {failure && (
+              <FailureCard
+                size="inline"
+                status="failed"
+                title={t("settingsCloudSignInFailed")}
+                summary={failure}
+                copyText={failure}
+              />
+            )}
+          </div>
+        </SettingsBlock>
       ) : (
         <SettingsBlock>
           <form

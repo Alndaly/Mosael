@@ -40,7 +40,18 @@ export type CloudUser = {
   avatar_seed?: string | null;
   /** 是否已经设过密码;验证码登录新建的账号为 false。 */
   has_password?: boolean;
+  /** 是否开启了 TOTP 双因素(由本人 /me 返回,不进入公开身份)。 */
+  mfa_enabled?: boolean;
 };
+
+export type CloudLoginResult = { user: CloudUser } | { mfa_required: true; ticket: string; methods: string[] };
+
+export function isMfaChallenge(value: CloudLoginResult): value is { mfa_required: true; ticket: string; methods: string[] } {
+  return "mfa_required" in value && value.mfa_required === true;
+}
+
+export type CloudMfaStatus = { enabled: boolean; recovery_codes_remaining: number };
+export type CloudMfaSetup = { secret: string; otpauth_uri: string };
 
 export type CloudMessage = { en: string; zh: string };
 
@@ -303,22 +314,22 @@ function createClient(context: RequestContext = {}) {
       signup(email: string, code: string, password: string): Promise<{ user: CloudUser }> {
         return request("/signup", { method: "POST", body: JSON.stringify({ email, code, password }) }, context);
       },
-      login(email: string, password: string): Promise<{ user: CloudUser }> {
+      login(email: string, password: string): Promise<CloudLoginResult> {
         return request("/login", { method: "POST", body: JSON.stringify({ email, password }) }, context);
       },
-      loginWithPhone(phone: string, password: string): Promise<{ user: CloudUser }> {
+      loginWithPhone(phone: string, password: string): Promise<CloudLoginResult> {
         return request("/login/phone", { method: "POST", body: JSON.stringify({ phone, password }) }, context);
       },
       sendLoginCode(email: string): Promise<{ sent: boolean }> {
         return request("/login/code", { method: "POST", body: JSON.stringify({ email }) }, context);
       },
-      loginWithCode(email: string, code: string): Promise<{ user: CloudUser }> {
+      loginWithCode(email: string, code: string): Promise<CloudLoginResult> {
         return request("/login/code/verify", { method: "POST", body: JSON.stringify({ email, code }) }, context);
       },
       sendLoginSmsCode(phone: string): Promise<{ sent: boolean }> {
         return request("/login/sms/code", { method: "POST", body: JSON.stringify({ phone }) }, context);
       },
-      loginWithSms(phone: string, code: string): Promise<{ user: CloudUser }> {
+      loginWithSms(phone: string, code: string): Promise<CloudLoginResult> {
         return request("/login/sms/verify", { method: "POST", body: JSON.stringify({ phone, code }) }, context);
       },
       logout(): Promise<void> {
@@ -326,6 +337,25 @@ function createClient(context: RequestContext = {}) {
       },
       me(): Promise<{ user: CloudUser }> {
         return request("/me", {}, context);
+      },
+      /** 第二因素换会话;ticket 由登录响应给出。 */
+      verifyMfa(ticket: string, code: string): Promise<{ user: CloudUser }> {
+        return request("/mfa/verify", { method: "POST", body: JSON.stringify({ ticket, code }) }, context);
+      },
+      mfaStatus(): Promise<CloudMfaStatus> {
+        return request("/mfa", {}, context);
+      },
+      setupMfa(): Promise<CloudMfaSetup> {
+        return request("/mfa/setup", { method: "POST" }, context);
+      },
+      enableMfa(code: string): Promise<{ enabled: true; recovery_codes: string[] }> {
+        return request("/mfa/enable", { method: "POST", body: JSON.stringify({ code }) }, context);
+      },
+      disableMfa(code: string): Promise<{ enabled: false }> {
+        return request("/mfa/disable", { method: "POST", body: JSON.stringify({ code }) }, context);
+      },
+      regenerateMfaRecoveryCodes(code: string): Promise<{ recovery_codes: string[] }> {
+        return request("/mfa/recovery-codes", { method: "POST", body: JSON.stringify({ code }) }, context);
       },
       /** 设置 / 修改密码。已有密码必须给当前密码,否则只给新密码。 */
       changePassword(currentPassword: string, newPassword: string): Promise<{ user: CloudUser }> {

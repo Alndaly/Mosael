@@ -58,6 +58,22 @@ class CloudSessionOut(ApiModel):
     has_password: bool = False
 
 
+class CloudMfaRequiredOut(ApiModel):
+    """主认证成功但账号开了双因素:客户端拿票据去换真正的会话。"""
+
+    mfa_required: Literal[True]
+    ticket: str
+    methods: list[str]
+
+
+class CloudMfaCodeIn(ApiModel):
+    code: str = Field(min_length=1, max_length=64)
+
+
+class CloudMfaVerifyIn(CloudMfaCodeIn):
+    ticket: str = Field(min_length=1, max_length=512)
+
+
 class CloudPasswordIn(ApiModel):
     """设置 / 修改云端密码。第一次设置没有旧密码;已有密码时必须给当前密码。"""
 

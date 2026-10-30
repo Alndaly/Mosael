@@ -83,6 +83,7 @@ def account_user(user: CloudUser) -> dict[str, object]:
         "phone": user.phone,
         "phone_verified_at": user.phone_verified_at.isoformat() if user.phone_verified_at else None,
         "has_password": bool(user.password_hash),
+        "mfa_enabled": bool(user.mfa_enabled_at and user.mfa_totp_secret_encrypted),
         "created_at": user.created_at.isoformat(),
         **public_user(user),
     }

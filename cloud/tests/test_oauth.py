@@ -12,6 +12,9 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
 
+import time
+
+from cloud.mfa import totp_code
 from cloud.oauth import code_challenge
 from conftest import api, execute, rows, scalar, signup, signed_in
 
@@ -143,6 +146,35 @@ def test_code_to_token_to_userinfo_then_existing_session_path_opens(oauth_client
     from conftest import login_code
 
     assert login_code(client, email="alice@example.com")["email"] == "alice@example.com"
+
+
+def test_oauth_redirects_to_mfa_when_the_account_has_it_enabled(oauth_client, oauth_providers):
+    client = oauth_client
+    query = start_flow(client)
+    state = query["state"][0]
+    assert callback(client, "github", state, oauth_providers["github"].issue_code(state)).status_code == 302
+
+    started = client.post(api("/mfa/setup"))
+    secret = started.json()["secret"]
+    enabled = client.post(api("/mfa/enable"), json={"code": totp_code(secret, step=int(time.time() // 30))})
+    assert enabled.status_code == 200, enabled.text
+    client.post(api("/logout"))
+
+    query = start_flow(client)
+    state = query["state"][0]
+    response = callback(client, "github", state, oauth_providers["github"].issue_code(state))
+    assert response.status_code == 302, response.text
+    location = urlsplit(response.headers["location"])
+    assert location.path == "/en/mfa"
+    ticket = parse_qs(location.query)["ticket"][0]
+    assert "mosael_cloud_session=" not in response.headers.get("set-cookie", "")
+
+    done = client.post(
+        api("/mfa/verify"),
+        json={"ticket": ticket, "code": totp_code(secret, step=int(time.time() // 30) + 1)},
+    )
+    assert done.status_code == 200, done.text
+    assert client.get(api("/me")).status_code == 200
 
 
 def test_state_mismatch_and_replay_are_refused(oauth_client, oauth_providers, oauth_db_path):

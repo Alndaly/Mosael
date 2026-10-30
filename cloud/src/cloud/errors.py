@@ -124,6 +124,34 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The provider did not answer correctly. Try again in a moment.",
         "zh": "第三方服务暂时没有正常响应，请稍后重试。",
     },
+    "mfa_not_configured": {
+        "en": "Two-factor authentication is not configured on this service yet.",
+        "zh": "这个服务还没有配置双因素认证。",
+    },
+    "mfa_already_enabled": {
+        "en": "Two-factor authentication is already enabled.",
+        "zh": "双因素认证已经开启了。",
+    },
+    "mfa_not_enabled": {
+        "en": "Two-factor authentication is not enabled.",
+        "zh": "双因素认证还没有开启。",
+    },
+    "mfa_setup_required": {
+        "en": "Start two-factor setup before entering a code.",
+        "zh": "请先发起双因素设置，再输入验证码。",
+    },
+    "mfa_code_invalid": {
+        "en": "That code is not valid. Check the authenticator and try again.",
+        "zh": "验证码不正确，请查看认证器后重试。",
+    },
+    "mfa_ticket_invalid": {
+        "en": "This sign-in attempt has expired. Sign in again.",
+        "zh": "这次登录已经过期，请重新登录。",
+    },
+    "mfa_attempts_exceeded": {
+        "en": "Too many incorrect codes. Sign in again.",
+        "zh": "验证码错误次数过多，请重新登录。",
+    },
     "password_too_short": {
         "en": "The password must be at least {min} characters.",
         "zh": "密码至少要 {min} 个字符。",

@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
 from cloud.config import API_PREFIX, CloudConfig
+from cloud.domain import mfa as mfa_domain
 from cloud.domain.identity import account_user, give_default_identity
 from cloud.email_codes import consume_code, issue_code
 from cloud.phone import normalize_phone
@@ -120,6 +121,17 @@ def open_session(db, config: CloudConfig, user: CloudUser, response: Response) -
     response.headers["Cache-Control"] = "no-store"
 
 
+def login_result(db, config: CloudConfig, user: CloudUser, response: Response) -> dict[str, object]:
+    """一次主认证成功之后:开了 MFA 就发一次性票据,否则直接发会话。"""
+    response.headers["Cache-Control"] = "no-store"
+    if mfa_domain.enabled(user):
+        ticket = mfa_domain.create_ticket(db, user, config)
+        db.commit()
+        return {"mfa_required": True, "ticket": ticket, "methods": ["totp", "recovery"]}
+    open_session(db, config, user, response)
+    return {"user": account_user(user)}
+
+
 @router.post("/signup/code")
 def signup_code(body: EmailIn, db: DbSession, request: Request) -> dict[str, object]:
     """注册第一步:把 6 位码发到这个邮箱。已注册的邮箱直接 409(注册页本来就会说)。"""
@@ -184,8 +196,7 @@ def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Respons
     ):
         raise CloudError(401, "invalid_credentials")
 
-    open_session(db, config, user, response)
-    return {"user": account_user(user)}
+    return login_result(db, config, user, response)
 
 
 @router.post("/login/phone")
@@ -200,8 +211,7 @@ def login_with_phone(body: PhoneLoginIn, db: DbSession, config: CurrentConfig, r
         or not verify_password(body.password, user.password_hash)
     ):
         raise CloudError(401, "invalid_credentials")
-    open_session(db, config, user, response)
-    return {"user": account_user(user)}
+    return login_result(db, config, user, response)
 
 
 @router.post("/login/code")
@@ -234,8 +244,7 @@ def login_with_code(
         raise CloudError(400, "email_code_invalid")
     consume_code(db, email=email, purpose="login", code=code)
 
-    open_session(db, config, user, response)
-    return {"user": account_user(user)}
+    return login_result(db, config, user, response)
 
 
 @router.post("/login/sms/code")
@@ -280,8 +289,7 @@ def login_with_sms(
     elif user.phone_verified_at is None:
         user.phone_verified_at = now()
         db.commit()
-    open_session(db, config, user, response)
-    return {"user": account_user(user)}
+    return login_result(db, config, user, response)
 
 
 @router.post("/me/password")

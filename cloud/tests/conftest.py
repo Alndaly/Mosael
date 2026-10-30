@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from cloud.app import create_app
@@ -87,6 +88,7 @@ def config(tmp_path: Path) -> CloudConfig:
         data_dir=tmp_path,
         public_url="https://mosael.test",
         cookie_secure=False,
+        mfa_key=Fernet.generate_key().decode("ascii"),
     )
 
 
@@ -263,6 +265,7 @@ def oauth_config(tmp_path: Path) -> CloudConfig:
         github_client_secret="fake-github-secret",
         google_client_id="fake-google-client",
         google_client_secret="fake-google-secret",
+        mfa_key=Fernet.generate_key().decode("ascii"),
     )
 
 

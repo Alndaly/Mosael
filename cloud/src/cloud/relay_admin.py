@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from cloud.config import CloudConfig
 from cloud.domain import catalog, credits
 from cloud.domain.channel_keys import new_channel_key
+from cloud.mfa import new_fernet_key
 from cloud.payments.base import cents_from_yuan, yuan
 from cloud.models import CloudGatewayModel, CloudPlan, CloudUpstreamChannel, CloudUser, now
 
@@ -39,6 +40,9 @@ class AdminError(Exception):
 def register(commands: argparse._SubParsersAction) -> None:
     key = commands.add_parser("channel-key", help="生成一把新的 CLOUD_CHANNEL_KEY(上游 Key 的落库加密钥)")
     key.set_defaults(relay=_channel_key, needs_db=False)
+
+    mfa_key = commands.add_parser("mfa-key", help="生成一把新的 CLOUD_MFA_KEY(TOTP secret 的落库加密钥)")
+    mfa_key.set_defaults(relay=lambda _args, _config, _db: new_fernet_key(), needs_db=False)
 
     plan = commands.add_parser("plan-set", help="新建或修改一个套餐")
     plan.add_argument("--slug", required=True)

@@ -14,12 +14,13 @@ import {
   SendCodeButton,
   SubmitButton,
 } from "@/components/account/form-controls";
+import { MfaChallenge } from "@/components/account/mfa-challenge";
 import { OAuthButtons } from "@/components/account/oauth-buttons";
 import { useResendCountdown } from "@/components/account/use-email-code";
 import { toast } from "@/components/ui/use-toast";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
-import { CloudApiError, cloudAccount } from "@/lib/cloud";
+import { CloudApiError, cloudAccount, isMfaChallenge } from "@/lib/cloud";
 import { oauthErrorCopyKey } from "@/lib/oauth";
 import { invalidateAfterAuth } from "@/lib/query-invalidation";
 
@@ -55,6 +56,7 @@ export function LoginForm({
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [error, setError] = useState("");
+  const [mfaTicket, setMfaTicket] = useState("");
   const [sendingCode, setSendingCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const emailCountdown = useResendCountdown();
@@ -119,17 +121,26 @@ export function LoginForm({
     }
   };
 
+  const finishLogin = async (result: Awaited<ReturnType<typeof cloudAccount.login>>) => {
+    if (isMfaChallenge(result)) {
+      setMfaTicket(result.ticket);
+      return;
+    }
+    // 登录态变了:站头那份 viewer 缓存必须失效,否则回到站内还显示「登录」。
+    await invalidateAfterAuth(queryClient);
+    router.push(`/${locale}/account`);
+  };
+
   const submitPassword = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
     setBusy(true);
     try {
       const identifier = email.trim();
-      if (identifier.includes("@")) await cloudAccount.login(identifier, password);
-      else await cloudAccount.loginWithPhone(identifier, password);
-      // 登录态变了:站头那份 viewer 缓存必须失效,否则回到站内还显示「登录」。
-      await invalidateAfterAuth(queryClient);
-      router.push(`/${locale}/account`);
+      const result = identifier.includes("@")
+        ? await cloudAccount.login(identifier, password)
+        : await cloudAccount.loginWithPhone(identifier, password);
+      await finishLogin(result);
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
     } finally {
@@ -147,9 +158,8 @@ export function LoginForm({
     }
     setBusy(true);
     try {
-      await cloudAccount.loginWithCode(email.trim(), code.trim());
-      await invalidateAfterAuth(queryClient);
-      router.push(`/${locale}/account`);
+      const result = await cloudAccount.loginWithCode(email.trim(), code.trim());
+      await finishLogin(result);
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
     } finally {
@@ -167,9 +177,8 @@ export function LoginForm({
     }
     setBusy(true);
     try {
-      await cloudAccount.loginWithSms(phone.trim(), code.trim());
-      await invalidateAfterAuth(queryClient);
-      router.push(`/${locale}/account`);
+      const result = await cloudAccount.loginWithSms(phone.trim(), code.trim());
+      await finishLogin(result);
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
     } finally {
@@ -200,7 +209,19 @@ export function LoginForm({
         disabled={busy}
       />
 
-      {mode === "password" ? (
+      {mfaTicket ? (
+        <MfaChallenge
+          locale={locale}
+          copy={copy}
+          ticket={mfaTicket}
+          onCancel={() => {
+            setMfaTicket("");
+            setCode("");
+            setPassword("");
+            setError("");
+          }}
+        />
+      ) : mode === "password" ? (
         <form className="grid gap-5" onSubmit={submitPassword} noValidate>
           {error && (
             <FormAlert id="login-error" title={copy.formErrorTitle}>

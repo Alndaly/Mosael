@@ -21,7 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudPasswordIn, CloudPhoneCodeIn, CloudPhoneIn, CloudPhoneLoginIn, CloudSessionOut
+from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudMfaCodeIn, CloudMfaRequiredOut, CloudMfaVerifyIn, CloudPasswordIn, CloudPhoneCodeIn, CloudPhoneIn, CloudPhoneLoginIn, CloudSessionOut
 from app.core.i18n import get_current_locale, tr
 from mosael_formats.i18n import pick_text
 from app.db.models import CloudLogin, User
@@ -151,6 +151,20 @@ def _has_password(reply: cloud_binding.CloudReply) -> bool:
     return bool(user.get("has_password"))
 
 
+def _remember_or_challenge(
+    db: DbSession, user: User, email: str, reply: cloud_binding.CloudReply
+) -> CloudSessionOut | CloudMfaRequiredOut:
+    """主认证成功:开了 MFA 就原样把票据交给桌面端,不落设备令牌。"""
+    body = reply.body if isinstance(reply.body, dict) else {}
+    if body.get("mfa_required") is True:
+        return CloudMfaRequiredOut(
+            mfa_required=True,
+            ticket=str(body.get("ticket") or ""),
+            methods=[str(one) for one in body.get("methods", []) if isinstance(one, str)],
+        )
+    return _remember(db, user, email, reply)
+
+
 def _remember(db: DbSession, user: User, email: str, reply: cloud_binding.CloudReply) -> CloudSessionOut:
     """登录成功才走到这里:拿会话换设备令牌、存令牌、回邮箱。**cookie 与令牌都不出这个函数**。"""
     if reply.cookie is None:
@@ -187,19 +201,19 @@ def _sync_connection_quietly(db: DbSession, user: User) -> None:
         logger.warning("登录 MosaelCloud 之后没能对齐网关目录:%s", exc)
 
 
-@router.post("/cloud/v1/login", response_model=CloudSessionOut, response_model_exclude_defaults=True)
-def login(body: CloudLoginIn, user: CurrentUser, db: DbSession) -> CloudSessionOut:
+@router.post("/cloud/v1/login", response_model=CloudSessionOut | CloudMfaRequiredOut, response_model_exclude_defaults=True)
+def login(body: CloudLoginIn, user: CurrentUser, db: DbSession) -> CloudSessionOut | CloudMfaRequiredOut:
     """邮箱 + 密码登录。**密码只活在这一跳里**:不落库、不进日志、不进响应。"""
     reply, _row = _send(
         "POST", "/login", {"email": body.email, "password": body.password}, user=user, db=db
     )
     if reply.status != 200:
         raise _cloud_detail(reply)
-    return _remember(db, user, body.email, reply)
+    return _remember_or_challenge(db, user, body.email, reply)
 
 
-@router.post("/cloud/v1/login/phone", response_model=CloudSessionOut, response_model_exclude_defaults=True)
-def login_with_phone(body: CloudPhoneLoginIn, user: CurrentUser, db: DbSession) -> CloudSessionOut:
+@router.post("/cloud/v1/login/phone", response_model=CloudSessionOut | CloudMfaRequiredOut, response_model_exclude_defaults=True)
+def login_with_phone(body: CloudPhoneLoginIn, user: CurrentUser, db: DbSession) -> CloudSessionOut | CloudMfaRequiredOut:
     """手机号 + 密码登录。Cloud 校验手机号与密码,本地照样换设备令牌、只回登录标识。"""
     reply, _row = _send(
         "POST",
@@ -210,7 +224,7 @@ def login_with_phone(body: CloudPhoneLoginIn, user: CurrentUser, db: DbSession) 
     )
     if not 200 <= reply.status < 300:
         raise _cloud_detail(reply)
-    return _remember(db, user, body.phone, reply)
+    return _remember_or_challenge(db, user, body.phone, reply)
 
 
 @router.post("/cloud/v1/login/code")
@@ -220,15 +234,15 @@ def send_login_code(body: CloudEmailIn, user: CurrentUser, db: DbSession) -> Res
     return _success(reply)
 
 
-@router.post("/cloud/v1/login/code/verify", response_model=CloudSessionOut, response_model_exclude_defaults=True)
-def verify_login_code(body: CloudCodeIn, user: CurrentUser, db: DbSession) -> CloudSessionOut:
+@router.post("/cloud/v1/login/code/verify", response_model=CloudSessionOut | CloudMfaRequiredOut, response_model_exclude_defaults=True)
+def verify_login_code(body: CloudCodeIn, user: CurrentUser, db: DbSession) -> CloudSessionOut | CloudMfaRequiredOut:
     """验证码登录第二步:码换会话。和密码登录落库的形状完全一样。"""
     reply, _row = _send(
         "POST", "/login/code/verify", {"email": body.email, "code": body.code}, user=user, db=db
     )
     if reply.status != 200:
         raise _cloud_detail(reply)
-    return _remember(db, user, body.email, reply)
+    return _remember_or_challenge(db, user, body.email, reply)
 
 
 @router.post("/cloud/v1/login/sms/code")
@@ -238,15 +252,15 @@ def send_login_sms_code(body: CloudPhoneIn, user: CurrentUser, db: DbSession) ->
     return _success(reply)
 
 
-@router.post("/cloud/v1/login/sms/verify", response_model=CloudSessionOut, response_model_exclude_defaults=True)
-def verify_login_sms(body: CloudPhoneCodeIn, user: CurrentUser, db: DbSession) -> CloudSessionOut:
+@router.post("/cloud/v1/login/sms/verify", response_model=CloudSessionOut | CloudMfaRequiredOut, response_model_exclude_defaults=True)
+def verify_login_sms(body: CloudPhoneCodeIn, user: CurrentUser, db: DbSession) -> CloudSessionOut | CloudMfaRequiredOut:
     """短信登录第二步。Cloud 在首次验证时会自动建手机号账号。"""
     reply, _row = _send(
         "POST", "/login/sms/verify", {"phone": body.phone, "code": body.code}, user=user, db=db
     )
     if reply.status != 200:
         raise _cloud_detail(reply)
-    return _remember(db, user, body.phone, reply)
+    return _remember_or_challenge(db, user, body.phone, reply)
 
 
 @router.post("/cloud/v1/me/password", response_model=CloudSessionOut, response_model_exclude_defaults=True)
@@ -310,6 +324,50 @@ def gateway_account(user: CurrentUser, db: DbSession) -> Response:
     if _load_login(db, user.id) is None:
         raise _not_signed_in()
     return _session_relay("GET", "/gateway/account", None, user=user, db=db)
+
+
+@router.post("/cloud/v1/mfa/verify", response_model=CloudSessionOut, response_model_exclude_defaults=True)
+def verify_cloud_mfa(body: CloudMfaVerifyIn, user: CurrentUser, db: DbSession) -> CloudSessionOut:
+    """双因素登录第二步:票据 + 验证码/恢复码换设备令牌。"""
+    reply, _row = _send(
+        "POST", "/mfa/verify", {"ticket": body.ticket, "code": body.code}, user=user, db=db
+    )
+    if not 200 <= reply.status < 300:
+        raise _cloud_detail(reply)
+    payload = reply.body if isinstance(reply.body, dict) else {}
+    account = payload.get("user") if isinstance(payload.get("user"), dict) else {}
+    label = str(account.get("email") or account.get("phone") or "")
+    return _remember(db, user, label, reply)
+
+
+@router.get("/cloud/v1/mfa")
+def cloud_mfa_status(user: CurrentUser, db: DbSession) -> Response:
+    _ensure_configured()
+    return _session_relay("GET", "/mfa", None, user=user, db=db)
+
+
+@router.post("/cloud/v1/mfa/setup")
+def cloud_mfa_setup(user: CurrentUser, db: DbSession) -> Response:
+    reply, _row = _send("POST", "/mfa/setup", None, user=user, db=db)
+    return _success(reply)
+
+
+@router.post("/cloud/v1/mfa/enable")
+def cloud_mfa_enable(body: CloudMfaCodeIn, user: CurrentUser, db: DbSession) -> Response:
+    reply, _row = _send("POST", "/mfa/enable", {"code": body.code}, user=user, db=db)
+    return _success(reply)
+
+
+@router.post("/cloud/v1/mfa/disable")
+def cloud_mfa_disable(body: CloudMfaCodeIn, user: CurrentUser, db: DbSession) -> Response:
+    reply, _row = _send("POST", "/mfa/disable", {"code": body.code}, user=user, db=db)
+    return _success(reply)
+
+
+@router.post("/cloud/v1/mfa/recovery-codes")
+def cloud_mfa_recovery_codes(body: CloudMfaCodeIn, user: CurrentUser, db: DbSession) -> Response:
+    reply, _row = _send("POST", "/mfa/recovery-codes", {"code": body.code}, user=user, db=db)
+    return _success(reply)
 
 
 @router.get("/cloud/v1/me", response_model=CloudSessionOut, response_model_exclude_defaults=True)

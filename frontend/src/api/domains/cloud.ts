@@ -14,6 +14,18 @@ import { errorText } from "@/api/errorMessage";
 
 export type CloudSession = { email: string; has_password?: boolean };
 
+/** 主认证成功但账号开了双因素:拿 ticket 去换真正的设备令牌。 */
+export type CloudMfaChallenge = { mfa_required: true; ticket: string; methods: string[] };
+
+export type CloudLoginResult = CloudSession | CloudMfaChallenge;
+
+export function isMfaChallenge(value: CloudLoginResult): value is CloudMfaChallenge {
+  return "mfa_required" in value && value.mfa_required === true;
+}
+
+export type CloudMfaStatus = { enabled: boolean; recovery_codes_remaining: number };
+export type CloudMfaSetup = { secret: string; otpauth_uri: string };
+
 /** 一次云端失败的形状:后端给的人话 + 机器码 + 是不是"这个部署没接 Cloud"。 */
 export type CloudFailure = {
   status: number;
@@ -58,16 +70,16 @@ export async function loadCloudSession(): Promise<CloudSession | null> {
 }
 
 /** 手机号 + 密码登录。短信账号设置密码后走这条。 */
-export function loginWithPhonePassword(phone: string, password: string): Promise<CloudSession> {
-  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login/phone", {
+export function loginWithPhonePassword(phone: string, password: string): Promise<CloudLoginResult> {
+  return apiAllowingUnauthorized<CloudLoginResult>("/api/cloud/v1/login/phone", {
     method: "POST",
     body: JSON.stringify({ phone, password }),
   });
 }
 
 /** 邮箱 + 密码登录。成功只回登录标识;设备令牌由本机后端落盘。 */
-export function loginWithPassword(email: string, password: string): Promise<CloudSession> {
-  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login", {
+export function loginWithPassword(email: string, password: string): Promise<CloudLoginResult> {
+  return apiAllowingUnauthorized<CloudLoginResult>("/api/cloud/v1/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
@@ -82,8 +94,8 @@ export function requestCloudLoginCode(email: string): Promise<{ sent: boolean }>
 }
 
 /** 验证码登录第二步:码换会话。 */
-export function verifyCloudLoginCode(email: string, code: string): Promise<CloudSession> {
-  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login/code/verify", {
+export function verifyCloudLoginCode(email: string, code: string): Promise<CloudLoginResult> {
+  return apiAllowingUnauthorized<CloudLoginResult>("/api/cloud/v1/login/code/verify", {
     method: "POST",
     body: JSON.stringify({ email, code }),
   });
@@ -98,10 +110,47 @@ export function requestCloudLoginSmsCode(phone: string): Promise<{ sent: boolean
 }
 
 /** 短信登录第二步:码换会话。手机号首次验证时 Cloud 自动建号。 */
-export function verifyCloudLoginSms(phone: string, code: string): Promise<CloudSession> {
-  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login/sms/verify", {
+export function verifyCloudLoginSms(phone: string, code: string): Promise<CloudLoginResult> {
+  return apiAllowingUnauthorized<CloudLoginResult>("/api/cloud/v1/login/sms/verify", {
     method: "POST",
     body: JSON.stringify({ phone, code }),
+  });
+}
+
+/** 双因素登录第二步:票据 + TOTP / 恢复码换设备令牌。 */
+export function verifyCloudMfa(ticket: string, code: string): Promise<CloudSession> {
+  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/mfa/verify", {
+    method: "POST",
+    body: JSON.stringify({ ticket, code }),
+  });
+}
+
+export function getCloudMfaStatus(): Promise<CloudMfaStatus> {
+  return apiAllowingUnauthorized<CloudMfaStatus>("/api/cloud/v1/mfa");
+}
+
+export function setupCloudMfa(): Promise<CloudMfaSetup> {
+  return apiAllowingUnauthorized<CloudMfaSetup>("/api/cloud/v1/mfa/setup", { method: "POST" });
+}
+
+export function enableCloudMfa(code: string): Promise<{ enabled: true; recovery_codes: string[] }> {
+  return apiAllowingUnauthorized<{ enabled: true; recovery_codes: string[] }>("/api/cloud/v1/mfa/enable", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function disableCloudMfa(code: string): Promise<{ enabled: false }> {
+  return apiAllowingUnauthorized<{ enabled: false }>("/api/cloud/v1/mfa/disable", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function regenerateCloudMfaRecoveryCodes(code: string): Promise<{ recovery_codes: string[] }> {
+  return apiAllowingUnauthorized<{ recovery_codes: string[] }>("/api/cloud/v1/mfa/recovery-codes", {
+    method: "POST",
+    body: JSON.stringify({ code }),
   });
 }
 

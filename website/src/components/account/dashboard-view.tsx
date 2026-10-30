@@ -13,6 +13,7 @@ import { DashboardHeader } from "./dashboard-header";
 import { DashboardNotifications } from "./dashboard-notifications";
 import { DashboardOverview } from "./dashboard-overview";
 import { DashboardProfile } from "./dashboard-profile";
+import { DashboardSecurity } from "./dashboard-security";
 import { DashboardShares } from "./dashboard-shares";
 import { dashboardTabHref, withoutShare, type DashboardTab } from "./dashboard-utils";
 
@@ -109,6 +110,7 @@ export function DashboardView({
           {tab === "profile" && (
             <DashboardProfile locale={locale} copy={copy} viewer={currentViewer ?? viewer} onSelect={select} />
           )}
+          {tab === "security" && <DashboardSecurity locale={locale} copy={copy} />}
           {tab === "notifications" && <DashboardNotifications locale={locale} copy={copy} />}
         </div>
       </section>

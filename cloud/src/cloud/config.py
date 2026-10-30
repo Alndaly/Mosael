@@ -61,6 +61,10 @@ class CloudConfig:
     #: 密码长度下限。上限只是挡住拿超长串做 DoS 的请求,不是强度策略。
     password_min_length: int = 8
     password_max_length: int = 128
+    #: 可选 TOTP 双因素 secret 的落库加密钥(Fernet)。和上游 Key 的 `CLOUD_CHANNEL_KEY` 分开。
+    mfa_key: str = ""
+    mfa_ticket_ttl_seconds: int = 300
+    mfa_max_attempts: int = 5
     #: 发信(SMTP)。**没配 `smtp_host` 时发码接口明确报错**,不假装发出。
     #: `CLOUD_SMTP_HOST` 可以写成 `host:port`(开发时就是 `localhost:1025`,即 Mailpit)。
     smtp_host: str = ""
@@ -128,6 +132,10 @@ class CloudConfig:
                 object.__setattr__(self, "allowed_origins", frozenset({f"{split.scheme}://{split.netloc}"}))
         if self.session_ttl_days <= 0:
             raise ValueError("session_ttl_days must be positive")
+        if self.mfa_ticket_ttl_seconds <= 0:
+            raise ValueError("mfa_ticket_ttl_seconds must be positive")
+        if self.mfa_max_attempts <= 0:
+            raise ValueError("mfa_max_attempts must be positive")
         if self.smtp_tls not in SMTP_TLS_MODES:
             raise ValueError(f"smtp_tls must be one of {sorted(SMTP_TLS_MODES)}")
         if not 0 < self.smtp_port < 65536:
@@ -214,6 +222,9 @@ class CloudConfig:
             cookie_path=os.environ.get("CLOUD_COOKIE_PATH", "/").strip() or "/",
             session_ttl_days=int(os.environ.get("CLOUD_SESSION_TTL_DAYS", "30")),
             password_min_length=int(os.environ.get("CLOUD_PASSWORD_MIN_LENGTH", "8")),
+            mfa_key=os.environ.get("CLOUD_MFA_KEY", "").strip(),
+            mfa_ticket_ttl_seconds=int(os.environ.get("CLOUD_MFA_TICKET_TTL_SECONDS", "300")),
+            mfa_max_attempts=int(os.environ.get("CLOUD_MFA_MAX_ATTEMPTS", "5")),
             smtp_host=smtp_host,
             smtp_port=smtp_port,
             smtp_tls=smtp_tls,

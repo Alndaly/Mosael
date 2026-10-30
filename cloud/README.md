@@ -224,6 +224,7 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 
 ```bash
 uv run python -m cloud.cli channel-key                     # 生成 CLOUD_CHANNEL_KEY,写进部署 .env
+uv run python -m cloud.cli mfa-key                         # 生成 CLOUD_MFA_KEY(可选双因素)
 uv run python -m cloud.cli plan-set --slug pro --name Pro --period year --monthly-credits 20000 --credit-ttl-days 60
 uv run python -m cloud.cli subscribe --email a@b.com --plan pro
 uv run python -m cloud.cli model-set --id deepseek-chat --label "DeepSeek V3" --max-output-tokens 8000
@@ -307,6 +308,9 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 | `CLOUD_COOKIE_SECURE` | `true` | 本地 http 开发设 `false` |
 | `CLOUD_SESSION_TTL_DAYS` | `30` | 登录会话有效期 |
 | `CLOUD_PASSWORD_MIN_LENGTH` | `8` | 密码下限 |
+| `CLOUD_MFA_KEY` | 空(未启用 MFA) | TOTP secret 的 Fernet 加密钥;空时用户不能开启 MFA |
+| `CLOUD_MFA_TICKET_TTL_SECONDS` | `300` | 登录第二步票据有效期 |
+| `CLOUD_MFA_MAX_ATTEMPTS` | `5` | 一张票据最多错几次 |
 | `CLOUD_SMTP_HOST` | 空(未配置发信) | 可写 `host:port`;空则发码接口 503 |
 | `CLOUD_SMTP_PORT` | `587` | host 里没写端口时用它 |
 | `CLOUD_SMTP_TLS` | 有用户名时 `starttls`,否则 `none` | `starttls` / `ssl` / `none` |

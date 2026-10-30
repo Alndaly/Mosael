@@ -46,7 +46,7 @@ export function parseOAuthOutcome(value: string | string[] | undefined): OAuthOu
 
 
 /** 四个分区。顺序 = tab 栏的顺序;地址是 `?tab=` 的取值。 */
-export const DASHBOARD_TABS = ["overview", "shares", "profile", "notifications"] as const;
+export const DASHBOARD_TABS = ["overview", "shares", "profile", "security", "notifications"] as const;
 
 export type DashboardTab = (typeof DASHBOARD_TABS)[number];
 

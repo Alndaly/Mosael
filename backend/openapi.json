@@ -28656,7 +28656,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CloudSessionOut"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CloudSessionOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CloudMfaRequiredOut"
+                    }
+                  ],
+                  "title": "Response Login Api Cloud V1 Login Post"
                 }
               }
             }
@@ -28698,7 +28706,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CloudSessionOut"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CloudSessionOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CloudMfaRequiredOut"
+                    }
+                  ],
+                  "title": "Response Login With Phone Api Cloud V1 Login Phone Post"
                 }
               }
             }
@@ -28780,7 +28796,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CloudSessionOut"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CloudSessionOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CloudMfaRequiredOut"
+                    }
+                  ],
+                  "title": "Response Verify Login Code Api Cloud V1 Login Code Verify Post"
                 }
               }
             }
@@ -28862,7 +28886,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CloudSessionOut"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CloudSessionOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CloudMfaRequiredOut"
+                    }
+                  ],
+                  "title": "Response Verify Login Sms Api Cloud V1 Login Sms Verify Post"
                 }
               }
             }
@@ -28987,6 +29019,223 @@
         "summary": "Gateway Account",
         "description": "这个人在官方中转上的积分(按批次、先到期在前)、下一批何时发、套餐 —— 照 Cloud 的原样交回。",
         "operationId": "gateway_account_api_cloud_v1_gateway_account_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/mfa/verify": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Verify Cloud Mfa",
+        "description": "双因素登录第二步:票据 + 验证码/恢复码换设备令牌。",
+        "operationId": "verify_cloud_mfa_api_cloud_v1_mfa_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudMfaVerifyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/mfa": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Cloud Mfa Status",
+        "operationId": "cloud_mfa_status_api_cloud_v1_mfa_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/mfa/setup": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Cloud Mfa Setup",
+        "operationId": "cloud_mfa_setup_api_cloud_v1_mfa_setup_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/mfa/enable": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Cloud Mfa Enable",
+        "operationId": "cloud_mfa_enable_api_cloud_v1_mfa_enable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudMfaCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/mfa/disable": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Cloud Mfa Disable",
+        "operationId": "cloud_mfa_disable_api_cloud_v1_mfa_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudMfaCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/mfa/recovery-codes": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Cloud Mfa Recovery Codes",
+        "operationId": "cloud_mfa_recovery_codes_api_cloud_v1_mfa_recovery_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudMfaCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -35377,6 +35626,71 @@
         ],
         "title": "CloudLoginIn",
         "description": "邮箱 + 密码。**这一份只存在这一次请求里**,不落库、不进日志。"
+      },
+      "CloudMfaCodeIn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "CloudMfaCodeIn"
+      },
+      "CloudMfaRequiredOut": {
+        "properties": {
+          "mfa_required": {
+            "type": "boolean",
+            "const": true,
+            "title": "Mfa Required"
+          },
+          "ticket": {
+            "type": "string",
+            "title": "Ticket"
+          },
+          "methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Methods"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mfa_required",
+          "ticket",
+          "methods"
+        ],
+        "title": "CloudMfaRequiredOut",
+        "description": "主认证成功但账号开了双因素:客户端拿票据去换真正的会话。"
+      },
+      "CloudMfaVerifyIn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          },
+          "ticket": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Ticket"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "ticket"
+        ],
+        "title": "CloudMfaVerifyIn"
       },
       "CloudOrderIn": {
         "properties": {

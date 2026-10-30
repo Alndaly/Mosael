@@ -18,7 +18,7 @@ case "$interval" in
     ;;
 esac
 
-echo "cleanup: 每 ${interval} 秒删除一次过期的 cloud_email_codes / cloud_phone_codes / cloud_sessions / cloud_oauth_states"
+echo "cleanup: 每 ${interval} 秒删除一次过期的 cloud_email_codes / cloud_phone_codes / cloud_sessions / cloud_oauth_states / cloud_mfa_tickets"
 
 while :; do
   echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] deleting expired rows"
@@ -27,6 +27,7 @@ DELETE FROM cloud_email_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZON
 DELETE FROM cloud_phone_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_sessions     WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_oauth_states WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
+DELETE FROM cloud_mfa_tickets  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 SQL
   sleep "$interval"
 done

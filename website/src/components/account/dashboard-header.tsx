@@ -35,6 +35,7 @@ const TAB_LABELS: Record<DashboardTab, keyof Messages["dashboard"]> = {
   overview: "tabOverview",
   shares: "tabShares",
   profile: "tabProfile",
+  security: "tabSecurity",
   notifications: "tabNotifications",
 };
 

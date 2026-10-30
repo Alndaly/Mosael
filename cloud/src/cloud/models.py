@@ -58,6 +58,13 @@ class CloudUser(Base):
     #: argon2id 哈希(见 security.hash_password)。绝不存明文。
     #: **可空**:第三方登录新建的账号没有密码,只靠第三方身份或邮箱验证码登录。
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: 可选 TOTP 双因素。secret 用 `CLOUD_MFA_KEY`(Fernet)加密;启用前先放在 pending 列里等用户验证。
+    mfa_totp_secret_encrypted: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    mfa_pending_secret_encrypted: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    mfa_pending_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    mfa_enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    #: 最后一次被接受的 TOTP 时间步;同一个 30 秒窗口的码不能重放。
+    mfa_last_used_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: 注册时要先验邮箱验证码,验过即写这个时间;更早的账号可能是空,不做回填。
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
@@ -72,6 +79,34 @@ class CloudUser(Base):
     official: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
+
+
+class CloudMfaTicket(Base):
+    """一次登录的第二因素票据。原始票据只回给客户端一次,库里只存 sha256。"""
+
+    __tablename__ = "cloud_mfa_tickets"
+    __table_args__ = (Index("idx_cloud_mfa_tickets_expires", "expires_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    ticket_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class CloudMfaRecoveryCode(Base):
+    """一次性恢复码。只存 sha256;用过即标 used_at,不能再次登录。"""
+
+    __tablename__ = "cloud_mfa_recovery_codes"
+    __table_args__ = (Index("idx_cloud_mfa_recovery_user", "user_id"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class CloudSession(Base):
