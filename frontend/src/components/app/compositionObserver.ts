@@ -15,12 +15,19 @@ type ObservedView = EditorView & {
   domObserver: { stop(): void; start(): void; flush(): void };
 };
 
+const paused = new WeakSet<EditorView>();
+
 export function pauseCompositionObserver(view: EditorView): boolean {
+  paused.add(view);
   (view as ObservedView).domObserver.stop();
   return false;
 }
 
 export function resumeCompositionObserver(view: EditorView): boolean {
+  //: 只有退格缩短候选时我们才停过观察。普通中文组词不停 —— 停了会丢 ProseMirror 的选区映射,
+  //: 组词结束后光标会卡在第一段文字末尾。
+  if (!paused.has(view)) return false;
+  paused.delete(view);
   const observer = (view as ObservedView).domObserver;
   //: ProseMirror 的 compositionend 处理会先把 composing 置回 false;下一拍再恢复观察,
   //: 让最终 DOM(用户确认的字)作为一次变更被读入。

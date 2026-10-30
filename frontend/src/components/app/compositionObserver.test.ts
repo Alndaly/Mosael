@@ -28,6 +28,15 @@ describe("组词观察保护", () => {
     expect(observer.flush).toHaveBeenCalledOnce();
   });
 
+  it("没有因退格暂停过时，组词结束不动观察（不打断普通中文输入）", () => {
+    vi.useFakeTimers();
+    const { view, observer } = viewWith(document.createElement("div"));
+    expect(resumeCompositionObserver(view)).toBe(false);
+    vi.runAllTimers();
+    expect(observer.start).not.toHaveBeenCalled();
+    expect(observer.flush).not.toHaveBeenCalled();
+  });
+
   it("已有正文时清掉组词期间粘住的占位符空态类", () => {
     vi.useFakeTimers();
     const dom = document.createElement("div");
@@ -36,7 +45,9 @@ describe("组词观察保护", () => {
     paragraph.textContent = "你";
     dom.append(paragraph);
 
-    resumeCompositionObserver(viewWith(dom).view);
+    const view = viewWith(dom).view;
+    pauseCompositionObserver(view);
+    resumeCompositionObserver(view);
     vi.runAllTimers();
 
     expect(paragraph.classList.contains("is-empty")).toBe(false);
@@ -50,7 +61,9 @@ describe("组词观察保护", () => {
     paragraph.className = "is-empty is-editor-empty";
     dom.append(paragraph);
 
-    resumeCompositionObserver(viewWith(dom).view);
+    const view = viewWith(dom).view;
+    pauseCompositionObserver(view);
+    resumeCompositionObserver(view);
     vi.runAllTimers();
 
     expect(paragraph.classList.contains("is-empty")).toBe(true);

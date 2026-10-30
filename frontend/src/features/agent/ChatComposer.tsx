@@ -308,8 +308,12 @@ export function ChatComposer({
       //: 附件拖放(见 composerAttachments)。编辑器里自己挪一段字(moved)照旧归它。
       handleDrop: (_view, event, _slice, moved) => !moved && Array.from(event.dataTransfer?.types ?? []).includes("Files"),
       handleDOMEvents: {
-        //: 中文 IME 组词时不能逐拍把候选写进文档(退格会留下拼音),见 compositionObserver。
-        compositionstart: pauseCompositionObserver,
+        //: 只有「组词中按退格缩短候选」才停 DOM 观察（Chrome 会把残留拼音写进正文）。
+        //: 普通中文组词必须让 ProseMirror 自己跟，否则组词结束后选区映射会卡在第一段末尾。
+        keydown: (view, event) => {
+          if (view.composing && event.key === "Backspace") pauseCompositionObserver(view);
+          return false;
+        },
         compositionend: resumeCompositionObserver,
       },
       handleKeyDown: (_view, event) => {
