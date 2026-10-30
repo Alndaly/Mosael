@@ -22,6 +22,7 @@ export type AdminSetting = Searchable & { id: string; tab: AdminTab };
 
 export const SETTINGS_SEARCH: readonly SettingsSearchEntry[] = [
   { id: "account", label: "settingsAccount", keywords: ["settingsUsername", "displayName", "signature", "settingsPassword", "avatarChange", "signOut"] },
+  { id: "cloud", label: "settingsCloudAccount", keywords: ["settingsCloudEmail", "settingsCloudSetPassword", "settingsCloudChangePassword", "settingsCloudSignIn", "settingsCloudSignOut"] },
   { id: "team", label: "teamTitle", keywords: ["teamInvite", "teamRole", "teamActivity", "renameWorkspace", "deleteWorkspace", "teamLeave"] },
   { id: "appearance", label: "settingsAppearance", keywords: ["settingsTheme", "settingsLanguage", "settingsFont", "appearanceBgTitle", "customCssTitle"], terms: ["settingsSearchTermsAppearance"] },
   { id: "dubbing", label: "settingsDubbingTitle", keywords: ["builtinTtsTitle", "voiceLibrary"] },

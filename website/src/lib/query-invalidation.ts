@@ -36,6 +36,11 @@ export function invalidateAfterAuth(client: InvalidationClient): Promise<void> {
   return invalidate(client, [queryKeys.viewer(), queryKeys.unread()]);
 }
 
+/** 密码设置 / 修改只改 viewer 里的 `has_password`。 */
+export async function invalidateAfterPasswordChange(client: InvalidationClient): Promise<void> {
+  return invalidate(client, [queryKeys.viewer()]);
+}
+
 /**
  * 退出登录。**最不能省的一条**:不清 viewer 的话,站头还挂着上一个账号的头像,
  * 用户会以为根本没退出去;未读角标 / 通知列表 / 我的分享也都是上一个账号的。

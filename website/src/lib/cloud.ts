@@ -38,6 +38,8 @@ export type CloudUser = {
   display_name?: string | null;
   handle?: string | null;
   avatar_seed?: string | null;
+  /** 是否已经设过密码;验证码登录新建的账号为 false。 */
+  has_password?: boolean;
 };
 
 export type CloudMessage = { en: string; zh: string };
@@ -321,6 +323,17 @@ function createClient(context: RequestContext = {}) {
       },
       me(): Promise<{ user: CloudUser }> {
         return request("/me", {}, context);
+      },
+      /** 设置 / 修改密码。已有密码必须给当前密码,否则只给新密码。 */
+      changePassword(currentPassword: string, newPassword: string): Promise<{ user: CloudUser }> {
+        return request(
+          "/me/password",
+          {
+            method: "POST",
+            body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+          },
+          context,
+        );
       },
       deleteAccount(): Promise<void> {
         return request("/me", { method: "DELETE" }, context);

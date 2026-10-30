@@ -334,6 +334,7 @@ def test_without_cloud_url_every_new_route_says_not_configured(monkeypatch) -> N
         ("post", "/api/cloud/v1/login/code/verify", {"email": EMAIL, "code": "123456"}),
         ("post", "/api/cloud/v1/login/sms/code", {"phone": "+8613800138000"}),
         ("post", "/api/cloud/v1/login/sms/verify", {"phone": "+8613800138000", "code": "123456"}),
+        ("post", "/api/cloud/v1/me/password", {"current_password": PASSWORD, "new_password": "New-Horse-9"}),
         ("post", "/api/cloud/v1/logout", None),
         ("get", "/api/cloud/v1/me", None),
         ("get", "/api/cloud/v1/shares/share-1", None),
@@ -389,6 +390,7 @@ def test_the_share_detail_proxy_still_reads(cloud: FakeCloud) -> None:
 PROXIED = [
     ("post", "/api/cloud/v1/login/code", {"email": EMAIL}, "POST", "/login/code"),
     ("post", "/api/cloud/v1/login/sms/code", {"phone": "+8613800138000"}, "POST", "/login/sms/code"),
+    ("post", "/api/cloud/v1/me/password", {"current_password": PASSWORD, "new_password": "New-Horse-9"}, "POST", "/me/password"),
     ("get", "/api/cloud/v1/me", None, "GET", "/me"),
     ("get", "/api/cloud/v1/shares", None, "GET", "/shares"),
     ("post", "/api/cloud/v1/shares", {"kind": "workflow", "title": "T"}, "POST", "/shares"),
@@ -481,6 +483,21 @@ def test_the_sms_login_flow_stores_a_device_token_on_verify(cloud: FakeCloud) ->
     assert response.json() == {"email": "+8613800138000"}
     assert COOKIE_VALUE not in response.text
     assert len(rows()) == 1
+
+
+def test_desktop_password_change_is_proxied_and_reports_password_state(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    login(client, cloud)
+    cloud.reply(200, {"user": {"email": EMAIL, "has_password": True}})
+
+    response = client.post(
+        "/api/cloud/v1/me/password",
+        json={"current_password": PASSWORD, "new_password": "New-Horse-9"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"email": EMAIL, "has_password": True}
+    assert cloud.requests[-1].url.path == "/me/password"
 
 
 def test_me_without_a_stored_login_is_401_without_touching_cloud(cloud: FakeCloud) -> None:

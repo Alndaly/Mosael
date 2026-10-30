@@ -6,6 +6,7 @@ import { LogOut, PenLine } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { AccountDangerZone } from "@/components/account/account-danger-zone";
+import { DashboardPassword } from "@/components/account/dashboard-password";
 import { AccountField, FormAlert, SubmitButton } from "@/components/account/form-controls";
 
 import { InitialTile } from "@/components/community/tile";
@@ -20,7 +21,7 @@ import { useViewer } from "@/lib/queries";
 import type { DashboardTab } from "./dashboard-utils";
 
 /** 个人信息只读这两列;服务端给的公开身份与 `/me` 的完整用户都满足这个形状。 */
-type ProfileViewer = { display_name?: string | null; handle?: string | null };
+type ProfileViewer = { display_name?: string | null; handle?: string | null; has_password?: boolean };
 
 /**
  * 个人信息:公开身份的两列 + 头像预览 + 保存 / 退出 + 最底下的危险区。
@@ -210,6 +211,10 @@ export function DashboardProfile({
         </dl>
         <p className="mt-1 mb-0 text-xs leading-5 text-muted-foreground">{copy.emailHint}</p>
       </section>
+
+      {email && (
+        <DashboardPassword locale={locale} copy={copy} hasPassword={Boolean(currentViewer.has_password)} />
+      )}
 
       {!hasHandle && (
         <div>

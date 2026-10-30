@@ -16,7 +16,10 @@ describe("设置搜索", () => {
   it("分区里那一行的名字搜得到,并说出是哪一行", () => {
     expect(sections("语言")).toEqual([["appearance", "settingsLanguage"]]);
     expect(sections("主题")).toEqual([["appearance", "settingsTheme"]]);
-    expect(sections("密码")).toEqual([["account", "settingsPassword"]]);
+    expect(sections("密码")).toEqual([
+      ["account", "settingsPassword"],
+      ["cloud", "settingsCloudSetPassword"],
+    ]);
     expect(sections("默认模型").map(([id]) => id)).toEqual(["provider-chat", "provider-image", "provider-video", "provider-audio"]);
   });
 
@@ -34,7 +37,10 @@ describe("设置搜索", () => {
   });
 
   it("英文界面同样搜得到", () => {
-    expect(sections("password", en)).toEqual([["account", "settingsPassword"]]);
+    expect(sections("password", en)).toEqual([
+      ["account", "settingsPassword"],
+      ["cloud", "settingsCloudSetPassword"],
+    ]);
     expect(sections("language", en)).toEqual([["appearance", "settingsLanguage"]]);
     expect(admin("proxy", en)).toEqual([["proxy", "deployment"]]);
   });

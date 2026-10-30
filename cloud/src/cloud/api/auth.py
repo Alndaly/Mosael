@@ -56,6 +56,11 @@ class PhoneCodeIn(PhoneIn):
     code: str = Field(default="", max_length=12)
 
 
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(default="", max_length=512)
+    new_password: str = Field(min_length=1, max_length=512)
+
+
 def _phone(body: PhoneIn) -> str:
     try:
         return normalize_phone(body.phone)
@@ -256,6 +261,31 @@ def login_with_sms(
         user.phone_verified_at = now()
         db.commit()
     open_session(db, config, user, response)
+    return {"user": account_user(user)}
+
+
+@router.post("/me/password")
+def change_password(
+    body: PasswordChangeIn, user: CurrentUser, db: DbSession, config: CurrentConfig
+) -> dict[str, object]:
+    """设置或修改 MosaelCloud 密码。
+
+    邮箱码 / OAuth 登录的账号可以在这里第一次设密码;已有密码时必须先验旧密码。
+    只改登录密码,不动当前会话——改完这台设备仍然是登录状态。
+    **没有邮箱的短信账号不设密码**:密码登录只认邮箱,设了也没有入口。
+    """
+    if user.email is None:
+        raise CloudError(400, "email_required")
+    if len(body.new_password) < config.password_min_length:
+        raise CloudError(400, "password_too_short", min=config.password_min_length)
+    if len(body.new_password) > config.password_max_length:
+        raise CloudError(400, "password_too_long", max=config.password_max_length)
+    if user.password_hash and (
+        not body.current_password or not verify_password(body.current_password, user.password_hash)
+    ):
+        raise CloudError(401, "current_password_invalid")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
     return {"user": account_user(user)}
 
 

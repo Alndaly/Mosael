@@ -2,6 +2,7 @@ import React from "react";
 import {
   AudioLines,
   Brain,
+  Cloud,
   Link2,
   ImageIcon,
   MessageSquare,
@@ -20,6 +21,7 @@ import type { Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { SettingsPageHeader } from "@/components/settings/settings-layout";
 import { AccountSection } from "@/features/settings/AccountSection";
+import { CloudAccountSection } from "@/features/settings/AccountSection.cloud";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AgentSkillsSection } from "@/features/settings/AgentSkillsSection";
 import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
@@ -122,6 +124,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     title: "studioSettingsPersonal",
     sections: [
       { id: "account", label: "settingsAccount", icon: <UserRound size={14} />, render: () => <AccountSection /> },
+      { id: "cloud", label: "settingsCloudAccount", icon: <Cloud size={14} />, render: () => <CloudAccountSection /> },
       {
         id: "team",
         label: "teamTitle",

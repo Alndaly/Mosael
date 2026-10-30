@@ -49,37 +49,28 @@ function before(a: Element, b: Element): boolean {
 }
 
 describe("账户页的块顺序", () => {
-  it("MosaelCloud 账号在最上 → 本地账号 → 登录密码紧跟本地账号", async () => {
+  it("本地账号 → 登录密码紧跟本地账号", async () => {
     render(<AccountSection />, { wrapper: WithQueryClient });
 
     const local = screen.getByText("本地账号", { selector: "strong" });
     const username = screen.getByText("用户名");
     const password = screen.getByText("登录密码", { selector: "strong" });
-    const cloud = screen.getByText("MosaelCloud 账号", { selector: "strong" });
-
-    //: **云账号是第一块**(维护者:别放在底部)。
-    const firstBlock = document.querySelector('[data-slot="settings-group-content"] > [data-slot="settings-block"]');
-    expect(firstBlock?.contains(cloud), "MosaelCloud 账号应是第一块").toBe(true);
 
     expect(before(local, username), "本地账号的资料应在本地账号标题之后").toBe(true);
     expect(before(username, password), "登录密码应在本地账号资料之后").toBe(true);
-    //: 密码紧跟本地账号:中间不再夹着别的账号块。
-    expect(before(local, password), "登录密码应在本地账号之后").toBe(true);
-    //: 本地账号在云账号之后:先看见"这台机器上还有另一套身份",再看见本地这一套。
-    expect(before(cloud, local), "MosaelCloud 账号应在本地账号之前").toBe(true);
-    //: 渲染出来的整页文字里也不许再有方位指代。
+    expect(screen.queryByText("MosaelCloud 账号", { selector: "strong" })).not.toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toMatch(/上面|下面|如上|上述/);
   });
 });
 
 describe("账户页的页头", () => {
-  it("同时描述这一页的两套账号:本地账号与 MosaelCloud 账号", async () => {
+  it("只描述本地账号,MosaelCloud 在独立页", async () => {
     render(<AccountSection />, { wrapper: WithQueryClient });
 
     const description = document.querySelector('[data-slot="settings-group-description"]');
     const text = description?.textContent ?? "";
     expect(text, "页头要说是哪个账号").toContain("本地账号");
-    expect(text, "这一页有 MosaelCloud 账号块,页头不能只讲本地账号").toContain("MosaelCloud");
+    expect(text, "MosaelCloud 已经拆到独立设置页").toContain("MosaelCloud");
   });
 });
 
@@ -109,22 +100,6 @@ const ACCOUNT_KEYS = [
   "signaturePlaceholder",
   "settingsPassword",
   "settingsAccountScope",
-  "settingsCloudAccount",
-  "settingsCloudAccountDesc",
-  "settingsCloudEmail",
-  "settingsCloudPassword",
-  "settingsCloudSignIn",
-  "settingsCloudUseCode",
-  "settingsCloudUsePassword",
-  "settingsCloudSendCode",
-  "settingsCloudCode",
-  "settingsCloudCodeSent",
-  "settingsCloudVerify",
-  "settingsCloudSignOut",
-  "settingsCloudSignedIn",
-  "settingsCloudChecking",
-  "settingsCloudNotConfigured",
-  "settingsCloudNotConfiguredHow",
   "settingsPasswordDesc",
   "currentPassword",
   "newPassword",

@@ -32,6 +32,7 @@ vi.mock("@/api/domains/cloud", async (importOriginal) => {
     verifyCloudLoginCode: vi.fn(),
     requestCloudLoginSmsCode: vi.fn(),
     verifyCloudLoginSms: vi.fn(),
+    changeCloudPassword: vi.fn(),
     logoutCloud: vi.fn(),
   };
 });
@@ -109,6 +110,36 @@ describe("MosaelCloud 账号", () => {
 
     await waitFor(() => expect(api.verifyCloudLoginSms).toHaveBeenCalledWith("13800138000", "123456"));
     expect(await screen.findByText("+8613800138000")).toBeInTheDocument();
+  });
+
+  it("已登录且已有密码:验证当前密码后修改", async () => {
+    api.loadCloudSession.mockResolvedValueOnce({ email: "dave@example.com", has_password: true });
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+
+    expect(await screen.findByText("修改登录密码")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("当前密码"), { target: { value: "old-password" } });
+    fireEvent.change(screen.getByLabelText("新密码"), { target: { value: "New-Horse-9" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "New-Horse-9" } });
+    api.changeCloudPassword.mockResolvedValueOnce({ email: "dave@example.com", has_password: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "更新密码" }));
+
+    await waitFor(() => expect(api.changeCloudPassword).toHaveBeenCalledWith("old-password", "New-Horse-9"));
+    expect(await screen.findByText(/密码已更新/)).toBeInTheDocument();
+  });
+
+  it("邮箱验证码登录且没有密码:不要求当前密码，可直接设置", async () => {
+    api.loadCloudSession.mockResolvedValueOnce({ email: "erin@example.com", has_password: false });
+    render(<CloudAccountSection />, { wrapper: WithQueryClient });
+
+    expect(await screen.findByText("设置登录密码")).toBeInTheDocument();
+    expect(screen.queryByLabelText("当前密码")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("新密码"), { target: { value: "First-Horse-9" } });
+    fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "First-Horse-9" } });
+    api.changeCloudPassword.mockResolvedValueOnce({ email: "erin@example.com", has_password: true });
+    fireEvent.click(screen.getByRole("button", { name: "更新密码" }));
+
+    await waitFor(() => expect(api.changeCloudPassword).toHaveBeenCalledWith("", "First-Horse-9"));
   });
 
   it("已登录:只显示账号 + 退出登录", async () => {

@@ -9862,6 +9862,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Cloud Password
+         * @description 设置 / 修改云端密码。已有密码时必须带当前密码;新密码由 Cloud 按同一套长度策略校验。
+         */
+        post: operations["change_cloud_password_api_cloud_v1_me_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cloud/v1/logout": {
         parameters: {
             query?: never;
@@ -12748,6 +12768,19 @@ export interface components {
             channel: "alipay" | "wechat";
         };
         /**
+         * CloudPasswordIn
+         * @description 设置 / 修改云端密码。第一次设置没有旧密码;已有密码时必须给当前密码。
+         */
+        CloudPasswordIn: {
+            /**
+             * Current Password
+             * @default
+             */
+            current_password: string;
+            /** New Password */
+            new_password: string;
+        };
+        /**
          * CloudPhoneCodeIn
          * @description 短信登录第二步:手机号 + 6 位码。
          */
@@ -12775,6 +12808,11 @@ export interface components {
         CloudSessionOut: {
             /** Email */
             email: string;
+            /**
+             * Has Password
+             * @default false
+             */
+            has_password: boolean;
         };
         /** CommentAnchorUpdate */
         CommentAnchorUpdate: {
@@ -41864,6 +41902,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CloudPhoneCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_cloud_password_api_cloud_v1_me_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudPasswordIn"];
             };
         };
         responses: {

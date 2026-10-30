@@ -26,6 +26,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 //: 只要声明层 —— 各页组件是桩,免得为了读一张表去拉整个界面(同 settingsSections.test.ts 那套)。
 vi.mock("@/features/settings/AccountSection", () => ({ AccountSection: () => null }));
+vi.mock("@/features/settings/AccountSection.cloud", () => ({ CloudAccountSection: () => null }));
 vi.mock("@/features/settings/AgentMemorySection", () => ({ AgentMemorySection: () => null }));
 vi.mock("@/features/settings/AgentSkillsSection", () => ({ AgentSkillsSection: () => null }));
 vi.mock("@/features/settings/AgentVoiceSection", () => ({ AgentVoiceSection: () => null }));
@@ -61,6 +62,7 @@ const workspace = { id: "w1", name: "W" } as never;
  */
 const HEADER_IN_COMPONENT = new Set([
   "account", // AccountSection
+  "cloud", // CloudAccountSection
   "team", // TeamSection
   "appearance", // AppearanceSection
   "agent-voice", // AgentVoiceSection

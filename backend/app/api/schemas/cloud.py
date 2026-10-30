@@ -49,6 +49,14 @@ class CloudSessionOut(ApiModel):
     """「现在登的是谁」 —— 登录标识(邮箱或 E.164 手机号)。设备令牌**不在**这里。"""
 
     email: str
+    has_password: bool = False
+
+
+class CloudPasswordIn(ApiModel):
+    """设置 / 修改云端密码。第一次设置没有旧密码;已有密码时必须给当前密码。"""
+
+    current_password: str = Field(default="", max_length=512)
+    new_password: str = Field(min_length=1, max_length=512)
 
 
 class CloudConnectionSyncOut(ApiModel):

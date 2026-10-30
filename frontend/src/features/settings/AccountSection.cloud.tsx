@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   describeCloudFailure,
+  changeCloudPassword,
   loadCloudSession,
   loginWithPassword,
   logoutCloud,
@@ -49,7 +50,12 @@ export function CloudAccountSection() {
   const [code, setCode] = React.useState("");
   const [codeSent, setCodeSent] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(0);
-  const [pending, setPending] = React.useState<"" | "login" | "code" | "verify" | "logout">("");
+  const [pending, setPending] = React.useState<"" | "login" | "code" | "verify" | "logout" | "password">("");
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [passwordFailure, setPasswordFailure] = React.useState("");
+  const [passwordSaved, setPasswordSaved] = React.useState(false);
   const hintId = React.useId();
   const howId = React.useId();
 
@@ -127,6 +133,35 @@ export function CloudAccountSection() {
     }
   };
 
+  const savePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordFailure("");
+    setPasswordSaved(false);
+    if (newPassword.length < 8) {
+      setPasswordFailure(t("passwordTooShort"));
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordFailure(t("passwordMismatch"));
+      return;
+    }
+    setPending("password");
+    try {
+      const updated = await changeCloudPassword(session?.has_password ? currentPassword : "", newPassword);
+      setSession(updated);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSaved(true);
+      void queryClient.invalidateQueries({ queryKey: cloudKeys.session() });
+    } catch (error) {
+      noteFailure(error);
+      setPasswordFailure(describeCloudFailure(error).message);
+    } finally {
+      setPending("");
+    }
+  };
+
   const signOut = async () => {
     setFailure("");
     setPending("logout");
@@ -183,15 +218,74 @@ export function CloudAccountSection() {
             </div>
           </div>
         ) : session ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="grid gap-0.5">
-              <strong className="text-sm font-[650]">{session.email}</strong>
-              <small className="text-ui-sm text-muted-foreground">{t("settingsCloudSignedIn")}</small>
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="grid gap-0.5">
+                <strong className="text-sm font-[650]">{session.email}</strong>
+                <small className="text-ui-sm text-muted-foreground">{t("settingsCloudSignedIn")}</small>
+              </div>
+              <Button variant="outline" onClick={() => void signOut()} loading={pending === "logout"} disabled={Boolean(pending)}>
+                {t("settingsCloudSignOut")}
+              </Button>
             </div>
-            <Button variant="outline" onClick={() => void signOut()} loading={pending === "logout"} disabled={Boolean(pending)}>
-              {t("settingsCloudSignOut")}
-            </Button>
-          </div>
+            {session.email?.includes("@") && (
+              <div className="grid gap-3 border-t border-border pt-4">
+                <div className="grid gap-1">
+                  <strong className="text-ui-md font-semibold">
+                    {session.has_password ? t("settingsCloudChangePassword") : t("settingsCloudSetPassword")}
+                  </strong>
+                  <small className="text-ui-sm leading-[1.5] text-muted-foreground">
+                    {t("settingsCloudPasswordHint")}
+                  </small>
+                </div>
+                <form onSubmit={(event) => void savePassword(event)}>
+                  <SettingsForm>
+                    {session.has_password && (
+                      <SettingsField label={t("currentPassword")}>
+                        <Input
+                          type="password"
+                          autoComplete="current-password"
+                          value={currentPassword}
+                          onChange={(event) => setCurrentPassword(event.target.value)}
+                        />
+                      </SettingsField>
+                    )}
+                    <SettingsField label={t("newPassword")}>
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                      />
+                    </SettingsField>
+                    <SettingsField label={t("confirmPassword")}>
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                      />
+                    </SettingsField>
+                    <div className="flex items-center justify-between gap-3">
+                      <small role="alert" className="text-ui-sm leading-[1.5] text-destructive">
+                        {passwordFailure}
+                      </small>
+                      <Button
+                        type="submit"
+                        loading={pending === "password"}
+                        disabled={pending === "password" || !newPassword || !confirmPassword}
+                      >
+                        {t("updatePassword")}
+                      </Button>
+                    </div>
+                    {passwordSaved && (
+                      <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsCloudPasswordUpdated")}</small>
+                    )}
+                  </SettingsForm>
+                </form>
+              </div>
+            )}
+          </>
         ) : (
           <form
             data-cloud-login-form=""

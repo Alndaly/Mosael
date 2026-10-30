@@ -44,6 +44,7 @@ describe("设置页结构", () => {
     const actual = Object.fromEntries(SETTINGS_SEARCH.map((one) => [one.id, [...one.keywords].sort()]));
     const expected: Record<string, readonly string[]> = {
       account: ["settingsUsername", "displayName", "signature", "settingsPassword", "avatarChange", "signOut"],
+      cloud: ["settingsCloudEmail", "settingsCloudSetPassword", "settingsCloudChangePassword", "settingsCloudSignIn", "settingsCloudSignOut"],
       team: ["teamInvite", "teamRole", "teamActivity", "renameWorkspace", "deleteWorkspace", "teamLeave"],
       appearance: ["settingsTheme", "settingsLanguage", "settingsFont", "appearanceBgTitle", "customCssTitle"],
       dubbing: ["builtinTtsTitle", "voiceLibrary"],

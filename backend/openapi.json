@@ -28838,6 +28838,48 @@
         }
       }
     },
+    "/api/cloud/v1/me/password": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Change Cloud Password",
+        "description": "设置 / 修改云端密码。已有密码时必须带当前密码;新密码由 Cloud 按同一套长度策略校验。",
+        "operationId": "change_cloud_password_api_cloud_v1_me_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudPasswordIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cloud/v1/logout": {
       "post": {
         "tags": [
@@ -35319,6 +35361,28 @@
         "title": "CloudOrderIn",
         "description": "在线购买下单(ADR 0088 第 3 步):哪个套餐(slug)、哪个渠道。原样转给 Cloud,由它校验。"
       },
+      "CloudPasswordIn": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Current Password",
+            "default": ""
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "new_password"
+        ],
+        "title": "CloudPasswordIn",
+        "description": "设置 / 修改云端密码。第一次设置没有旧密码;已有密码时必须给当前密码。"
+      },
       "CloudPhoneCodeIn": {
         "properties": {
           "phone": {
@@ -35362,6 +35426,11 @@
           "email": {
             "type": "string",
             "title": "Email"
+          },
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password",
+            "default": false
           }
         },
         "type": "object",

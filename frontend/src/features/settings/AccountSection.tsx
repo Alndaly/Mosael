@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { accountOrigin } from "@/components/layout/accountOrigin";
 import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
-import { CloudAccountSection } from "@/features/settings/AccountSection.cloud";
 import { cn } from "@/lib/utils";
 
 export function AccountSection() {
@@ -131,8 +130,7 @@ export function AccountSection() {
   return (
     <SettingsGroup
       title={t("settingsAccount")}
-      // 页头要同时讲两套账号:本地账号(这台机器上的身份)和 MosaelCloud 账号(云端的)。
-      // 「是哪儿的账号」那一半来自 origin;页面自己补上另外半句(云账号、两者独立登录)。
+      // 「是哪儿的账号」来自 origin;MosaelCloud 是单独的设置页,这里只讲本地账号。
       description={`${origin}${t("settingsAccountScope")}`}
       actions={
         <Button variant="outline" size="sm" onClick={() => void logout()}>
@@ -140,14 +138,9 @@ export function AccountSection() {
         </Button>
       }
     >
-      {/* 顺序:MosaelCloud 账号 → 本地账号(身份、资料)→ 登录密码紧跟本地账号。
-          云账号置顶:它是"这台机器上还有另一套身份"这件事的第一句(维护者:别放底部);
-          密码仍然紧贴本地账号 —— 云账号不能夹在密码和本地账号之间,否则密码看起来像云账号的。 */}
-      <CloudAccountSection />
       <SettingsBlock>
         <div className="grid gap-3">
-          {/* 本地账号这一块的标题就是「这是哪儿的账号、怎么登进来的」那句 —— 和页头、账号菜单同一个来源。
-              云账号置顶之后,这一行把紧随其后的身份/资料认领回本地账号;连着团队服务器时它显示的是那台服务器。 */}
+          {/* 本地账号这一块的标题就是「这是哪儿的账号、怎么登进来的」那句 —— 和页头、账号菜单同一个来源。 */}
           <strong className="text-ui-lg font-semibold leading-snug">{origin}</strong>
           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
             <IconButton

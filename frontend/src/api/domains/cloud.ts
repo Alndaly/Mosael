@@ -12,7 +12,7 @@ import { errorText } from "@/api/errorMessage";
  * 走 `apiAllowingUnauthorized`,不触发本地的 401 处理。
  */
 
-export type CloudSession = { email: string };
+export type CloudSession = { email: string; has_password?: boolean };
 
 /** 一次云端失败的形状:后端给的人话 + 机器码 + 是不是"这个部署没接 Cloud"。 */
 export type CloudFailure = {
@@ -94,6 +94,14 @@ export function verifyCloudLoginSms(phone: string, code: string): Promise<CloudS
   return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/login/sms/verify", {
     method: "POST",
     body: JSON.stringify({ phone, code }),
+  });
+}
+
+/** 设置或修改云端密码。已有密码必须带当前密码;新密码由 Cloud 校验长度。 */
+export function changeCloudPassword(currentPassword: string, newPassword: string): Promise<CloudSession> {
+  return apiAllowingUnauthorized<CloudSession>("/api/cloud/v1/me/password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
 }
 
