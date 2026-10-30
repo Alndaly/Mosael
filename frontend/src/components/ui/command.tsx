@@ -78,6 +78,14 @@ const CommandList = React.forwardRef<
   React.useLayoutEffect(() => {
     if (listRef.current) listRef.current.scrollTop = 0
   }, [search])
+  // cmdk 会在同一轮里把当前选中项（可能是过滤后的第二项）滚进视野。同步归零会被它随后覆盖，
+  // 于是输入「krea」时列表仍停在中间，看起来像没有结果。等这一轮布局结束再归零一次。
+  React.useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (listRef.current) listRef.current.scrollTop = 0
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [search])
   const ref = React.useCallback(
     (node: HTMLDivElement | null) => {
       listRef.current = node

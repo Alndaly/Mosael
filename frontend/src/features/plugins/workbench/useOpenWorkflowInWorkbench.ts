@@ -12,8 +12,9 @@ import { openWorkbench, workbenchAvailable } from "@/features/plugins/workbench/
  * 「在工作台里打开这张工作流」的状态与动作(ADR 0038 §8)。创作页的「引擎参数」和画板生成节点用同一份。
  *
  * **能不能点**(维护者:ComfyUI 连不上时按钮该是灰的、说清为什么):
- * - 宿主起停的本机服务(ADR 0041):停着也能点 —— 点了先请宿主把它起起来;悬停说一声「会先启动」;
- * - 别的(远端那台):问一次后端「通不通」(`/reachability`,3 秒),连不上就置灰、说是哪个地址;还没问出来时照常能点。
+ * - 默认置灰,直到确认这一连接真的可用;
+ * - 宿主起停的本机服务(ADR 0041):`state === "running"` 才可点;停着 / 启动中 / 起不来都置灰;
+ * - 远端那台:问一次后端「通不通」(`/reachability`,3 秒),只有 `reachable` 为真才可点。
  *
  * **摆不摆只看静态事实**:桌面壳有工作台桥、这个连接认领了工作流库、手上有那张工作流的路径。**不为了一颗按钮去现问整份
  * 工作流库** —— 那是一次随工作流数线性变大的插件调用,ComfyUI 没起、目录太大超出预算、超时,按钮就悄悄消失(维护者报的
@@ -68,6 +69,12 @@ export function useOpenWorkflowInWorkbench({
 
   const offered = embedded && Boolean(path) && Boolean(owner && instance && hasWorkflowEditor(owner));
 
+  const local = localService.data;
+  const localRunning = local?.state === "running";
+  const localStarting = local?.state === "starting" || local?.state === "restarting";
+  const checking = localService.isPending || (remote && reachable.isPending);
+  const checkFailed = localService.isError || (remote && reachable.isError);
+
   const open = async () => {
     if (!owner || !instance) return;
     setFailure("");
@@ -94,19 +101,27 @@ export function useOpenWorkflowInWorkbench({
     }
   };
 
-  const unreachable = reachable.data && !reachable.data.reachable
+  const unreachable = remote && reachable.data && !reachable.data.reachable
     ? reachable.data.address
       ? t("workbenchOpenUnreachable").replace("{address}", reachable.data.address)
       : t("workbenchOpenNoAddress")
     : "";
-  const willStart = Boolean(localService.data && localService.data.state !== "running");
+  const localBlocked = local && !localRunning
+    ? localStarting
+      ? t("workbenchOpenServiceStarting")
+      : t("workbenchOpenServiceStopped")
+    : "";
 
   return {
     offered,
-    //: 点不了的原因(按钮置灰、悬停说它):连接被停用,或者远端那台连不上。
-    blockedReason: instance?.blocked_reason || unreachable,
-    //: 能点时悬停说什么:本机服务停着就说会先启动,否则是工作台本身的说明。
-    hint: willStart ? t("workbenchOpenWillStart") : t("workflowOpenInWorkbenchHint"),
+    //: 点不了的原因(按钮置灰、悬停说它):连接被停用、检查中,或任何一侧还没确认可用。
+    blockedReason:
+      instance?.blocked_reason ||
+      (checking ? t("workbenchOpenChecking") : "") ||
+      (checkFailed ? t("workbenchOpenCheckFailed") : "") ||
+      localBlocked ||
+      unreachable,
+    hint: t("workflowOpenInWorkbenchHint"),
     open,
     opening,
     starting,

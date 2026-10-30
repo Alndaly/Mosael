@@ -12,7 +12,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
-  getWorkflowLibrary: vi.fn(), getLocalService: vi.fn(), ensureLocalService: vi.fn(), listPluginPackages: vi.fn(),
+  getWorkflowLibrary: vi.fn(), getLocalService: vi.fn(), listPluginPackages: vi.fn(),
   getPluginReachability: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
@@ -32,6 +32,17 @@ function mount(model = "人像/古风.json") {
   );
 }
 
+async function clickReady() {
+  let button = await screen.findByRole("button", { name: "workflowOpenInWorkbench" });
+  //: 检查中按钮套着禁用壳，确认可用后 React 会把它重挂 —— 每次重新找，别握住旧节点。
+  await waitFor(() => {
+    button = screen.getByRole("button", { name: "workflowOpenInWorkbench" });
+    expect(button.hasAttribute("disabled")).toBe(false);
+  });
+  fireEvent.click(button);
+  return button;
+}
+
 function comfyPackage(provides = ["workflow_library"], address = "http://127.0.0.1:8189") {
   return {
     provides, summary_field: "base_url",
@@ -42,7 +53,6 @@ function comfyPackage(provides = ["workflow_library"], address = "http://127.0.0
 beforeEach(() => {
   api.getLocalService.mockReset();
   api.getLocalService.mockResolvedValue(null);
-  api.ensureLocalService.mockReset();
   api.getPluginReachability.mockReset();
   api.getPluginReachability.mockResolvedValue({ reachable: true, address: "http://127.0.0.1:8189" });
   api.listPluginPackages.mockReset();
@@ -62,7 +72,7 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await clickReady();
     await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith({
       connectionId: "i1", url: "http://127.0.0.1:8189", name: "ComfyUI · 本机", path: "人像/古风.json",
     }));
@@ -75,7 +85,7 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await clickReady();
     await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith(expect.objectContaining({ url: "http://127.0.0.1:8188" })));
     expect(api.getWorkflowLibrary).toHaveBeenCalledWith("i1", "w1");
   });
@@ -93,7 +103,7 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     const openComfyWorkbench = vi.fn();
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await clickReady();
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(openComfyWorkbench).not.toHaveBeenCalled();
   });
@@ -113,13 +123,16 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     expect(openComfyWorkbench).not.toHaveBeenCalled();
   });
 
-  it("本机服务停着:照样能点(点了先起),悬停说会先启动;不去问远端通不通", async () => {
+  it("本机服务停着:默认置灰,悬停说要先启动;不去问远端通不通", async () => {
     api.getLocalService.mockResolvedValue({ state: "stopped" });
-    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench: vi.fn(), onComfyWorkbench: () => () => undefined });
+    const openComfyWorkbench = vi.fn();
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
     mount();
     const button = await screen.findByRole("button", { name: "workflowOpenInWorkbench" });
-    await waitFor(async () => expect(await readHint(button)).toContain("workbenchOpenWillStart"));
-    expect(button.hasAttribute("disabled")).toBe(false);
+    await waitFor(async () => expect(await readHint(button)).toContain("workbenchOpenServiceStopped"));
+    expect(button.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(button);
+    expect(openComfyWorkbench).not.toHaveBeenCalled();
     expect(api.getPluginReachability).not.toHaveBeenCalled();
   });
 
@@ -137,20 +150,13 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     expect(api.listPluginPackages, "网页版不去问").not.toHaveBeenCalled();
   });
 
-  it("连接背后是停着的本机服务:先请宿主起好,按钮上写「正在启动」,就绪了才开", async () => {
-    let ready: (value: unknown) => void = () => undefined;
-    api.getLocalService.mockResolvedValue({ state: "stopped" });
-    api.ensureLocalService.mockReturnValue(new Promise((resolve) => (ready = resolve)));
-    const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
-    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
+  it("本机服务正在启动:置灰并说明还在启动", async () => {
+    api.getLocalService.mockResolvedValue({ state: "starting" });
+    vi.stubGlobal("mosaelBrowser", { openComfyWorkbench: vi.fn(), onComfyWorkbench: () => () => undefined });
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
-    expect(await screen.findByRole("button", { name: "localServiceOpenStarting" })).toBeTruthy();
-    expect(api.ensureLocalService).toHaveBeenCalledWith("i1");
-    expect(openComfyWorkbench, "等它就绪再开").not.toHaveBeenCalled();
-    ready({ state: "running" });
-    await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalled());
-    expect(await screen.findByRole("button", { name: "workflowOpenInWorkbench" })).toBeTruthy();
+    const button = await screen.findByRole("button", { name: "workflowOpenInWorkbench" });
+    await waitFor(async () => expect(await readHint(button)).toContain("workbenchOpenServiceStarting"));
+    expect(button.hasAttribute("disabled")).toBe(true);
   });
 
   it("本机服务已经在跑:不等、不摆「正在启动」", async () => {
@@ -160,6 +166,5 @@ describe("AI 工作台里的「在工作台里打开」", () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
     await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalled());
-    expect(api.ensureLocalService).not.toHaveBeenCalled();
   });
 });

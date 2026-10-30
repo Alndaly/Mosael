@@ -19,6 +19,15 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 import { OpenInWorkbenchIcon } from "./OpenInWorkbenchIcon";
 import { resetWorkbench, workbenchSnapshot } from "./workbenchSession";
 
+async function clickReady() {
+  let button = await screen.findByRole("button", { name: "workflowOpenInWorkbench" });
+  await waitFor(() => {
+    button = screen.getByRole("button", { name: "workflowOpenInWorkbench" });
+    expect(button.hasAttribute("disabled")).toBe(false);
+  });
+  fireEvent.click(button);
+}
+
 function mount(form: string | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -48,7 +57,7 @@ describe("画板节点的「在工作台里打开」", () => {
     const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await clickReady();
     await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith({
       connectionId: "i1", url: "http://10.0.0.2:8188", name: "4090", path: "田园/krea2.json",
     }));
@@ -59,7 +68,7 @@ describe("画板节点的「在工作台里打开」", () => {
       openComfyWorkbench: vi.fn().mockResolvedValue({ ok: true, outcome: "missing" }), onComfyWorkbench: () => () => undefined,
     });
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await clickReady();
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("workflowEditorMissing"));
   });
 
@@ -67,7 +76,7 @@ describe("画板节点的「在工作台里打开」", () => {
     const openComfyWorkbench = vi.fn().mockResolvedValue({ ok: true, outcome: "opened" });
     vi.stubGlobal("mosaelBrowser", { openComfyWorkbench, onComfyWorkbench: () => () => undefined });
     mount("田园/krea2.json#k20");
-    fireEvent.click(await screen.findByRole("button", { name: "workflowOpenInWorkbench" }));
+    await clickReady();
     await waitFor(() => expect(openComfyWorkbench).toHaveBeenCalledWith(expect.objectContaining({ path: "田园/krea2.json" })));
     expect(workbenchSnapshot().focus).toEqual({ model: "田园/krea2.json#k20" });
   });

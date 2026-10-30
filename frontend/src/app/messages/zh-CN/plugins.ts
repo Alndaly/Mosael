@@ -515,7 +515,10 @@ export const plugins = {
   workflowOpenInWorkbench: "在 ComfyUI 工作台里打开",
   workbenchOpenUnreachable: "连不上这台 ComfyUI({address})。确认它在运行、地址填对,再回来点。",
   workbenchOpenNoAddress: "这个连接没写 ComfyUI 的地址,打不开工作台。",
-  workbenchOpenWillStart: "这台本机 ComfyUI 现在没在运行:点了会先启动它(第一次可能要一两分钟),再打开这张工作流。",
+  workbenchOpenChecking: "正在确认这台 ComfyUI 是否可用…",
+  workbenchOpenCheckFailed: "没能确认这台 ComfyUI 的连接,先检查它是否在运行。",
+  workbenchOpenServiceStopped: "这台本机 ComfyUI 没有运行;先启动它,再打开工作台。",
+  workbenchOpenServiceStarting: "这台本机 ComfyUI 正在启动;等它运行起来再打开工作台。",
   pluginConnOpenWorkbench: "打开工作台",
   pluginConnOpenWorkbenchHint: "跳到「{name}」的内嵌工作台:{url}。左边是它自己的画布,右边是 Mosael 的模型库、表单和运行结果",
   //: 网页版没有内嵌工作台:进的是这台 ComfyUI 自己的网页(新标签页)。说清开的是哪台、哪个地址
