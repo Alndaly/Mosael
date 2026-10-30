@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Menu, ScrollText, Server, Users } from "lucide-react";
+import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, Menu, ScrollText, Server, Users } from "lucide-react";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import {
@@ -53,17 +54,86 @@ function failureText(error: unknown, copy: Messages["admin"], locale: Locale): s
   return error instanceof CloudApiError ? error.text(locale) : copy.error;
 }
 
-function date(value: string | null): string {
-  return value ? new Date(value).toLocaleDateString() : "—";
+function date(value: string | null, locale: Locale): string {
+  return value ? new Date(value).toLocaleDateString(locale === "zh" ? "zh-CN" : "en") : "—";
 }
 
 function money(cents: number | null): string {
   return cents === null ? "—" : `¥${(cents / 100).toFixed(2)}`;
 }
 
+function roleLabel(role: string, copy: Messages["admin"]): string {
+  return role === "admin" ? copy.roleAdmin : copy.roleMember;
+}
+
+function modelReasonLabel(reason: string, copy: Messages["admin"]): string {
+  if (reason === "disabled") return copy.reasonDisabled;
+  if (reason === "missing_price") return copy.reasonMissingPrice;
+  if (reason === "missing_channel") return copy.reasonMissingChannel;
+  return reason;
+}
+
+function periodLabel(period: AdminPlan["period"], copy: Messages["admin"]): string {
+  if (period === "month") return copy.month;
+  if (period === "quarter") return copy.quarter;
+  return copy.year;
+}
+
+function orderStatusLabel(status: string, copy: Messages["admin"]): string {
+  if (status === "pending") return copy.statusPending;
+  if (status === "paid") return copy.statusPaid;
+  if (status === "closed") return copy.statusClosed;
+  return status;
+}
+
+function orderChannelLabel(channel: string, copy: Messages["admin"]): string {
+  if (channel === "alipay") return copy.channelAlipay;
+  if (channel === "wechat") return copy.channelWechat;
+  return channel;
+}
+
+function protocolLabel(protocol: string, copy: Messages["admin"]): string {
+  return protocol === "openai" ? copy.protocolOpenai : protocol;
+}
+
+function auditTargetLabel(target: string, copy: Messages["admin"]): string {
+  const labels: Record<string, string> = {
+    user: copy.targetUser,
+    model: copy.targetModel,
+    provider: copy.targetProvider,
+    channel: copy.targetChannel,
+    plan: copy.targetPlan,
+  };
+  return labels[target] ?? target;
+}
+
+function auditActionLabel(action: string, copy: Messages["admin"]): string {
+  const labels: Record<string, string> = {
+    "user.role": copy.auditUserRole,
+    "user.reset_password": copy.auditUserResetPassword,
+    "user.credits": copy.auditUserCredits,
+    "user.subscribe": copy.auditUserSubscribe,
+    "model.create": copy.auditModelCreate,
+    "model.update": copy.auditModelUpdate,
+    "model.price": copy.auditModelPrice,
+    "provider.create": copy.auditProviderCreate,
+    "provider.update": copy.auditProviderUpdate,
+    "channel.create": copy.auditChannelCreate,
+    "channel.update": copy.auditChannelUpdate,
+    "plan.create": copy.auditPlanCreate,
+    "plan.update": copy.auditPlanUpdate,
+  };
+  return labels[action] ?? action;
+}
+
 /** 管理台采用 shadcn 的标准密度（36px），不继承官网营销页的 48px 大字段。 */
-function AButton({ className, ...props }: React.ComponentProps<typeof Button>) {
-  return <Button {...props} className={cn("h-9 rounded-md px-3 text-sm", className)} />;
+function AButton({ className, loading = false, disabled, children, ...props }: React.ComponentProps<typeof Button> & { loading?: boolean }) {
+  return (
+    <Button {...props} disabled={loading || disabled} className={cn("h-9 rounded-md px-3 text-sm", className)}>
+      {loading && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+      {children}
+    </Button>
+  );
 }
 
 function AInput({ className, ...props }: React.ComponentProps<typeof Input>) {
@@ -94,8 +164,18 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
+const ADMIN_TABS = ["overview", "users", "providers", "models", "channels", "plans", "operations", "audit"] as const;
+type AdminTab = (typeof ADMIN_TABS)[number];
+
+function readTab(value: string | null): AdminTab {
+  return ADMIN_TABS.includes(value as AdminTab) ? (value as AdminTab) : "overview";
+}
+
 export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: Messages["admin"]; viewer: CloudUser }) {
-  const [tab, setTab] = useState("overview");
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const tab = readTab(searchParams.get("tab"));
   const [error, setError] = useState("");
   const queryClient = useQueryClient();
   const overviewQuery = useAdminOverview();
@@ -127,6 +207,16 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
     for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey });
   };
   const refresh = () => invalidate(...adminInvalidation.all);
+  const selectTab = (next: string) => {
+    const target = readTab(next);
+    if (target === tab) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (target === "overview") params.delete("tab");
+    else params.set("tab", target);
+    const query = params.toString();
+    // 把「当前在哪一页」写进地址:刷新 / 回到这一页 / 分享链接都还停在同一个分区。
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   const users = usersQuery.data ?? [];
   const models = modelsQuery.data ?? [];
@@ -141,19 +231,19 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
 
   return (
     <SidebarProvider>
-      <AdminSidebar tab={tab} onSelect={setTab} copy={copy} locale={locale} viewer={viewer} />
+      <AdminSidebar tab={tab} onSelect={selectTab} copy={copy} locale={locale} viewer={viewer} />
       <SidebarInset>
         <div className="mx-auto max-w-[100rem] px-4 py-8 sm:px-6 lg:px-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-start gap-3">
               <SidebarTrigger aria-label={copy.title} className="mt-1"><Menu className="size-4" /></SidebarTrigger>
               <div>
-                <p className="m-0 text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">MosaelCloud / Control</p>
+                <p className="m-0 text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">{copy.controlEyebrow}</p>
                 <h1 className="mt-2 mb-0 font-display text-4xl font-semibold tracking-[-0.04em]">{copy.title}</h1>
                 <p className="mt-2 mb-0 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.lede}</p>
               </div>
             </div>
-            <AButton variant="outline" onClick={refresh} disabled={fetching}>{fetching ? copy.loading : copy.refresh}</AButton>
+            <AButton variant="outline" onClick={refresh} loading={fetching}>{fetching ? copy.loading : copy.refresh}</AButton>
           </div>
 
           {failure && <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{failure}</div>}
@@ -176,13 +266,13 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
                 ))}
               </div>
             ) : <Empty>{loading ? copy.loading : copy.noUsers}</Empty>)}
-            {tab === "users" && <UsersPanel copy={copy} users={users} plans={plans} onChanged={() => invalidate(...adminInvalidation.user)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
+            {tab === "users" && <UsersPanel copy={copy} locale={locale} users={users} plans={plans} onChanged={() => invalidate(...adminInvalidation.user)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
             {tab === "models" && <ModelsPanel copy={copy} models={models} onChanged={() => invalidate(...adminInvalidation.model)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
             {tab === "providers" && <ProvidersPanel copy={copy} providers={providers} onChanged={() => invalidate(...adminInvalidation.provider)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
             {tab === "channels" && <ChannelsPanel copy={copy} models={models} providers={providers} channels={channels} onChanged={() => invalidate(...adminInvalidation.channel)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
             {tab === "plans" && <PlansPanel copy={copy} plans={plans} onChanged={() => invalidate(...adminInvalidation.plan)} onFailure={(e) => setError(failureText(e, copy, locale))} />}
-            {tab === "operations" && <OperationsPanel copy={copy} orders={orders} usage={usage} />}
-            {tab === "audit" && <AuditPanel copy={copy} audit={audit} />}
+            {tab === "operations" && <OperationsPanel copy={copy} locale={locale} orders={orders} usage={usage} />}
+            {tab === "audit" && <AuditPanel copy={copy} locale={locale} audit={audit} />}
           </div>
         </div>
       </SidebarInset>
@@ -191,13 +281,13 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
 }
 
 function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; onSelect: (tab: string) => void; copy: Messages["admin"]; locale: Locale; viewer: CloudUser }) {
-  const name = viewer.display_name?.trim() || viewer.handle?.trim() || viewer.email?.trim() || viewer.phone || "Admin";
+  const name = viewer.display_name?.trim() || viewer.handle?.trim() || viewer.email?.trim() || viewer.phone || copy.adminFallback;
   const initial = Array.from(name)[0]?.toUpperCase() ?? "A";
   const items = [
     { id: "overview", label: copy.tabOverview, icon: LayoutDashboard },
     { id: "users", label: copy.tabUsers, icon: Users },
-    { id: "models", label: copy.tabModels, icon: Boxes },
     { id: "providers", label: copy.tabProviders, icon: Server },
+    { id: "models", label: copy.tabModels, icon: Boxes },
     { id: "channels", label: copy.tabChannels, icon: Cable },
     { id: "plans", label: copy.tabPlans, icon: CreditCard },
     { id: "operations", label: copy.tabOperations, icon: Activity },
@@ -210,13 +300,13 @@ function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; on
           <span className="grid size-8 place-items-center rounded-lg bg-foreground text-sm font-bold text-background">M</span>
           <div className="grid gap-0.5">
             <strong className="text-sm font-semibold">MosaelCloud</strong>
-            <span className="text-[11px] text-muted-foreground">Admin console</span>
+            <span className="text-[11px] text-muted-foreground">{copy.sidebarSubtitle}</span>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarGroupLabel>{copy.sidebarWorkspace}</SidebarGroupLabel>
           <SidebarMenu>
             {items.map(({ id, label, icon: Icon }) => (
               <SidebarMenuItem key={id}>
@@ -238,7 +328,7 @@ function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; on
             <strong className="truncate text-xs font-semibold">{name}</strong>
             <span className="truncate text-[11px] text-muted-foreground">{viewer.email || viewer.phone || viewer.id}</span>
           </div>
-          <Badge variant="secondary">{viewer.role || "admin"}</Badge>
+          <Badge variant="secondary">{roleLabel(viewer.role || "admin", copy)}</Badge>
         </div>
         <Separator className="mb-3" />
         <div className="flex items-center justify-between gap-2">
@@ -250,8 +340,9 @@ function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; on
   );
 }
 
-function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
+function UsersPanel({ copy, locale, users, plans, onChanged, onFailure }: {
   copy: Messages["admin"];
+  locale: Locale;
   users: AdminUser[];
   plans: AdminPlan[];
   onChanged: () => void;
@@ -260,11 +351,15 @@ function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<AdminUser[] | null>(null);
   const [selected, setSelected] = useState<AdminUser | null>(null);
+  const [searching, setSearching] = useState(false);
   const search = async () => {
+    setSearching(true);
     try {
       setFound((await cloudAdmin.users(query)).users);
     } catch (failure) {
       onFailure(failure);
+    } finally {
+      setSearching(false);
     }
   };
   const visible = found ?? users;
@@ -275,7 +370,7 @@ function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
           <CardTitle>{copy.users}</CardTitle>
           <div className="flex min-w-0 gap-2">
             <AInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.searchUsers} className="w-[min(22rem,50vw)]" />
-            <AButton variant="outline" onClick={() => void search()}>{copy.search}</AButton>
+            <AButton variant="outline" onClick={() => void search()} loading={searching}>{copy.search}</AButton>
           </div>
         </CardHeader>
         <CardContent>
@@ -285,7 +380,7 @@ function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
               {visible.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell><strong className="block font-medium">{user.display_name || user.handle || user.email || user.phone}</strong><span className="text-xs text-muted-foreground">{user.email || user.phone}</span></TableCell>
-                  <TableCell><Badge variant={user.role === "admin" ? "default" : "secondary"}>{user.role}</Badge>{user.official && <Badge variant="outline" className="ml-1">{copy.official}</Badge>}</TableCell>
+                  <TableCell><Badge variant={user.role === "admin" ? "default" : "secondary"}>{roleLabel(user.role, copy)}</Badge>{user.official && <Badge variant="outline" className="ml-1">{copy.official}</Badge>}</TableCell>
                   <TableCell>{user.credits}</TableCell>
                   <TableCell>{user.subscription?.name || "—"}</TableCell>
                   <TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setSelected(user)}>{copy.edit}</AButton></TableCell>
@@ -300,6 +395,7 @@ function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
         <UserDialog
           key={selected.id}
           copy={copy}
+          locale={locale}
           user={selected}
           plans={plans}
           onClose={() => setSelected(null)}
@@ -311,8 +407,9 @@ function UsersPanel({ copy, users, plans, onChanged, onFailure }: {
   );
 }
 
-function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
+function UserDialog({ copy, locale, user, plans, onClose, onUser, onFailure }: {
   copy: Messages["admin"];
+  locale: Locale;
   user: AdminUser;
   plans: AdminPlan[];
   onClose: () => void;
@@ -353,12 +450,12 @@ function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
       <DialogContent className="w-[min(40rem,calc(100vw-2rem))]">
         <DialogHeader>
           <DialogTitle>{current.display_name || current.handle || current.email || current.phone}</DialogTitle>
-          <DialogDescription>{current.email || current.phone || current.id} · {current.role} · {copy.credits} {current.credits}</DialogDescription>
+          <DialogDescription>{current.email || current.phone || current.id} · {roleLabel(current.role, copy)} · {copy.credits} {current.credits}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-5">
           <div className="flex flex-wrap gap-2">
-            <AButton variant="outline" onClick={() => void role()} disabled={Boolean(busy)}>{current.role === "admin" ? copy.removeAdmin : copy.makeAdmin}</AButton>
-            <AButton variant="outline" onClick={() => void reset()} disabled={Boolean(busy)}>{copy.resetPassword}</AButton>
+            <AButton variant="outline" onClick={() => void role()} loading={busy === "role"} disabled={Boolean(busy)}>{current.role === "admin" ? copy.removeAdmin : copy.makeAdmin}</AButton>
+            <AButton variant="outline" onClick={() => void reset()} loading={busy === "reset"} disabled={Boolean(busy)}>{copy.resetPassword}</AButton>
           </div>
           {temporary && (
             <div className="grid gap-1 rounded-lg bg-warning/10 p-3">
@@ -369,11 +466,11 @@ function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
           <div className="grid gap-2 border-t border-border pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <strong className="text-sm">{copy.plan}</strong>
-              <span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at)}` : copy.noPlan}</span>
+              <span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at, locale)}` : copy.noPlan}</span>
             </div>
             <div className="flex gap-2">
               <Select value={plan} onValueChange={setPlan} disabled={plans.length === 0}><ASelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={plans.length === 0 ? copy.noPlansYet : copy.choosePlan} /></ASelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
-              <AButton variant="outline" onClick={() => void subscribe()} disabled={!plan || Boolean(busy)}>{copy.subscribe}</AButton>
+              <AButton variant="outline" onClick={() => void subscribe()} loading={busy === "subscribe"} disabled={!plan || Boolean(busy)}>{copy.subscribe}</AButton>
             </div>
           </div>
           <div className="grid gap-3 border-t border-border pt-4">
@@ -383,12 +480,12 @@ function UserDialog({ copy, user, plans, onClose, onUser, onFailure }: {
               <Field label={copy.days}><AInput value={days} onChange={(event) => setDays(event.target.value)} /></Field>
               <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
             </div>
-            <AButton className="w-full" variant="outline" onClick={() => void gift()} disabled={Boolean(busy)}>{copy.grant}</AButton>
+            <AButton className="w-full" variant="outline" onClick={() => void gift()} loading={busy === "gift"} disabled={Boolean(busy)}>{copy.grant}</AButton>
           </div>
-          {current.credit_batches?.length ? <div className="grid gap-1 border-t border-border pt-4 text-xs text-muted-foreground">{current.credit_batches.map((batch, index) => <p key={`${batch.expires_at}-${index}`} className="m-0">{batch.remaining} · {batch.source} · {date(batch.expires_at)}</p>)}</div> : null}
+          {current.credit_batches?.length ? <div className="grid gap-1 border-t border-border pt-4 text-xs text-muted-foreground">{current.credit_batches.map((batch, index) => <p key={`${batch.expires_at}-${index}`} className="m-0">{batch.remaining} · {batch.source} · {date(batch.expires_at, locale)}</p>)}</div> : null}
           <div className="grid gap-1 border-t border-border pt-4">
             <strong className="text-sm">{copy.orders}</strong>
-            {current.orders?.length ? current.orders.map((order) => <p key={order.id} className="m-0 py-1 text-xs text-muted-foreground">{order.plan?.name || "—"} · {order.status} · {money(order.amount_cents)} · {date(order.created_at)}</p>) : <p className="m-0 py-2 text-xs text-muted-foreground">{copy.noOrders}</p>}
+            {current.orders?.length ? current.orders.map((order) => <p key={order.id} className="m-0 py-1 text-xs text-muted-foreground">{order.plan?.name || "—"} · {orderStatusLabel(order.status, copy)} · {money(order.amount_cents)} · {date(order.created_at, locale)}</p>) : <p className="m-0 py-2 text-xs text-muted-foreground">{copy.noOrders}</p>}
           </div>
         </div>
       </DialogContent>
@@ -412,7 +509,7 @@ function ModelsPanel({ copy, models, onChanged, onFailure }: {
                 <TableCell><strong className="block">{model.display_label}</strong><span className="text-xs text-muted-foreground">{model.max_output_tokens} token</span></TableCell>
                 <TableCell>{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</TableCell>
                 <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
-                <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.join(", ")}</Badge></TableCell>
+                <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.map((reason) => modelReasonLabel(reason, copy)).join(", ")}</Badge></TableCell>
                 <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="ghost" onClick={() => setPriceFor(model)}>{copy.addPrice}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
@@ -433,12 +530,14 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   const [max, setMax] = useState(String(model?.max_output_tokens ?? 8000));
   const [sort, setSort] = useState(String(model?.sort_order ?? 0));
   const [enabled, setEnabled] = useState(model?.enabled ?? true);
+  const [saving, setSaving] = useState(false);
   const submit = async () => {
+    setSaving(true);
     try {
       if (model) await cloudAdmin.updateModel(model.id, { label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
       else await cloudAdmin.createModel({ label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
       onSaved();
-    } catch (failure) { onFailure(failure); }
+    } catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -452,7 +551,7 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
             <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={copy.enabled} />
           </div>
         </div>
-        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -464,9 +563,11 @@ function PriceDialog({ copy, model, onClose, onSaved, onFailure }: {
   const [input, setInput] = useState("0");
   const [output, setOutput] = useState("0");
   const [from, setFrom] = useState("");
+  const [saving, setSaving] = useState(false);
   const submit = async () => {
+    setSaving(true);
     try { await cloudAdmin.addPrice(model.id, Number(input), Number(output), from || undefined); onSaved(); }
-    catch (failure) { onFailure(failure); }
+    catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -476,7 +577,7 @@ function PriceDialog({ copy, model, onClose, onSaved, onFailure }: {
           <Field label={copy.outputPer1k}><AInput value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
           <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
         </div>
-        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.addPrice}</AButton></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.addPrice}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -494,7 +595,7 @@ function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
           <Table><TableHeader><TableRow><TableHead>{copy.providerName}</TableHead><TableHead>{copy.baseUrl}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead>{copy.enabled}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{providers.map((provider) => (
               <TableRow key={provider.id}>
-                <TableCell><strong className="block">{provider.name}</strong><span className="text-xs text-muted-foreground">{provider.protocol}</span></TableCell>
+                <TableCell><strong className="block">{provider.name}</strong><span className="text-xs text-muted-foreground">{protocolLabel(provider.protocol, copy)}</span></TableCell>
                 <TableCell className="max-w-72 truncate">{provider.base_url}</TableCell>
                 <TableCell>{provider.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ProviderEnabledSwitch copy={copy} provider={provider} onChanged={onChanged} onFailure={onFailure} /></TableCell>
@@ -518,12 +619,14 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   const [key, setKey] = useState("");
   const [note, setNote] = useState(provider?.note ?? "");
   const [enabled, setEnabled] = useState(provider?.enabled ?? true);
+  const [saving, setSaving] = useState(false);
   const submit = async () => {
+    setSaving(true);
     try {
       if (provider) await cloudAdmin.updateProvider(provider.id, { name, note, enabled, api_key: key });
       else await cloudAdmin.createProvider({ name, base_url: base, api_key: key, note });
       onSaved();
-    } catch (failure) { onFailure(failure); }
+    } catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -539,7 +642,7 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
             <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={copy.enabled} />
           </div>
         </div>
-        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -568,12 +671,16 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
 }) {
   const [dialog, setDialog] = useState<{ channel: AdminChannel | null } | null>(null);
   const [tests, setTests] = useState<Record<string, AdminChannelTest>>({});
+  const [testing, setTesting] = useState("");
   const test = async (channel: AdminChannel) => {
+    setTesting(channel.id);
     try {
       const result = (await cloudAdmin.testChannel(channel.id)).result;
       setTests((current) => ({ ...current, [channel.id]: result }));
     } catch (failure) {
       onFailure(failure);
+    } finally {
+      setTesting("");
     }
   };
   return (
@@ -589,7 +696,7 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
                 <TableCell>{channel.priority}</TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ChannelEnabledSwitch copy={copy} channel={channel} onChanged={onChanged} onFailure={onFailure} /></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)}>{copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}</span>}</TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-1"><AButton size="sm" variant="ghost" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div>{tests[channel.id] && <span className={tests[channel.id].ok ? "text-xs text-success" : "text-xs text-destructive"}>{tests[channel.id].ok ? copy.testOk : copy.testFailed} · {tests[channel.id].status}</span>}</TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -610,12 +717,14 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
   const [priority, setPriority] = useState(String(channel?.priority ?? 0));
   const [note, setNote] = useState(channel?.note ?? "");
   const [enabled, setEnabled] = useState(channel?.enabled ?? true);
+  const [saving, setSaving] = useState(false);
   const submit = async () => {
+    setSaving(true);
     try {
       if (channel) await cloudAdmin.updateChannel(channel.id, { upstream_model: upstream, priority: Number(priority), note, enabled });
       else await cloudAdmin.createChannel({ model_id: model, provider_id: provider, upstream_model: upstream, priority: Number(priority), note });
       onSaved();
-    } catch (failure) { onFailure(failure); }
+    } catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -633,7 +742,7 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
             <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={copy.enabled} />
           </div>
         </div>
-        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} disabled={!channel && (providers.length === 0 || models.length === 0)}>{copy.save}</AButton></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving} disabled={!channel && (providers.length === 0 || models.length === 0)}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -671,8 +780,8 @@ function PlansPanel({ copy, plans, onChanged, onFailure }: {
       <Card className="bg-card/60 ring-border">
         <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabPlans}</CardTitle><AButton onClick={() => setDialog({ plan: null })}>{copy.addPlan}</AButton></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow><TableHead>{copy.slug}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.priceCents}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
-            <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {plan.period}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><PlanOnSaleSwitch copy={copy} plan={plan} onChanged={onChanged} onFailure={onFailure} /></TableCell><TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</AButton></TableCell></TableRow>)}</TableBody>
+          <Table><TableHeader><TableRow><TableHead>{copy.planCode}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.priceCents}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
+            <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {periodLabel(plan.period, copy)}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><PlanOnSaleSwitch copy={copy} plan={plan} onChanged={onChanged} onFailure={onFailure} /></TableCell><TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</AButton></TableCell></TableRow>)}</TableBody>
           </Table>
           {plans.length === 0 && <Empty>{copy.noPlans}</Empty>}
         </CardContent>
@@ -692,20 +801,22 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
   const [ttl, setTtl] = useState(String(plan?.credit_ttl_days ?? 60));
   const [price, setPrice] = useState(plan?.price_cents ? String(plan.price_cents) : "");
   const [onSale, setOnSale] = useState(plan?.on_sale ?? false);
+  const [saving, setSaving] = useState(false);
   const submit = async () => {
+    setSaving(true);
     try {
       const payload = { name, period, monthly_credits: Number(credits), credit_ttl_days: Number(ttl), on_sale: onSale, price_cents: price ? Number(price) : null };
       if (plan) await cloudAdmin.updatePlan(plan.slug, payload);
       else await cloudAdmin.createPlan({ ...payload, slug });
       onSaved();
-    } catch (failure) { onFailure(failure); }
+    } catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan ? plan.slug : copy.planCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!plan && <Field label={copy.slug}><AInput value={slug} onChange={(event) => setSlug(event.target.value)} /></Field>}
-          {!plan && <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.slugHint}</p>}
+          {!plan && <Field label={copy.planCode}><AInput value={slug} placeholder="pro" onChange={(event) => setSlug(event.target.value)} /></Field>}
+          {!plan && <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.planCodeHint}</p>}
           <Field label={copy.label}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
           <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><ASelectTrigger className="w-full"><SelectValue /></ASelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
           <Field label={copy.monthlyCredits}><AInput value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
@@ -716,7 +827,7 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
             <Switch checked={onSale} onCheckedChange={setOnSale} aria-label={copy.onSale} />
           </div>
         </div>
-        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()}>{copy.save}</AButton></DialogFooter>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -747,12 +858,12 @@ function PlanOnSaleSwitch({ copy, plan, onChanged, onFailure }: {
   return <Switch checked={plan.on_sale} disabled={busy} onCheckedChange={(onSale) => void toggle(onSale)} aria-label={`${copy.onSale}: ${plan.name}`} />;
 }
 
-function OperationsPanel({ copy, orders, usage }: { copy: Messages["admin"]; orders: AdminOrder[]; usage: AdminUsage | null }) {
+function OperationsPanel({ copy, locale, orders, usage }: { copy: Messages["admin"]; locale: Locale; orders: AdminOrder[]; usage: AdminUsage | null }) {
   return (
     <div className="grid gap-4">
       {usage && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[[copy.usageCalls, usage.totals.calls], [copy.usageCharged, usage.totals.charged], [copy.usageInput, usage.totals.input_tokens], [copy.usageOutput, usage.totals.output_tokens]].map(([label, value]) => <Card key={String(label)} className="bg-card/60 ring-border"><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="text-2xl">{value}</CardTitle></CardHeader></Card>)}</div>}
       {usage && <div className="grid gap-4 lg:grid-cols-2"><UsageTable copy={copy} title={copy.usageByDay} rows={usage.by_day.map((r) => ({ key: r.date, label: r.date, calls: r.calls, charged: r.charged }))} /><UsageTable copy={copy} title={copy.usageByModel} rows={usage.by_model.map((r) => ({ key: r.model_id, label: r.label, calls: r.calls, charged: r.charged }))} /></div>}
-      <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{copy.orders}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.orderUser}</TableHead><TableHead>{copy.plan}</TableHead><TableHead>{copy.amount}</TableHead><TableHead>{copy.status}</TableHead><TableHead>{copy.channel}</TableHead><TableHead>{copy.createdAt}</TableHead></TableRow></TableHeader><TableBody>{orders.map((order) => <TableRow key={order.id}><TableCell>{order.user?.email || order.user?.handle || "—"}</TableCell><TableCell>{order.plan?.name || "—"}</TableCell><TableCell>{money(order.amount_cents)}</TableCell><TableCell>{order.status}</TableCell><TableCell>{order.channel}</TableCell><TableCell>{date(order.created_at)}</TableCell></TableRow>)}</TableBody></Table>{orders.length === 0 && <Empty>{copy.noOrders}</Empty>}</CardContent></Card>
+      <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{copy.orders}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.orderUser}</TableHead><TableHead>{copy.plan}</TableHead><TableHead>{copy.amount}</TableHead><TableHead>{copy.status}</TableHead><TableHead>{copy.channel}</TableHead><TableHead>{copy.createdAt}</TableHead></TableRow></TableHeader><TableBody>{orders.map((order) => <TableRow key={order.id}><TableCell>{order.user?.email || order.user?.handle || "—"}</TableCell><TableCell>{order.plan?.name || "—"}</TableCell><TableCell>{money(order.amount_cents)}</TableCell><TableCell>{orderStatusLabel(order.status, copy)}</TableCell><TableCell>{orderChannelLabel(order.channel, copy)}</TableCell><TableCell>{date(order.created_at, locale)}</TableCell></TableRow>)}</TableBody></Table>{orders.length === 0 && <Empty>{copy.noOrders}</Empty>}</CardContent></Card>
     </div>
   );
 }
@@ -761,6 +872,6 @@ function UsageTable({ copy, title, rows }: { copy: Messages["admin"]; title: str
   return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.models}</TableHead><TableHead>{copy.usageCalls}</TableHead><TableHead>{copy.usageCharged}</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.key}><TableCell>{row.label}</TableCell><TableCell>{row.calls}</TableCell><TableCell>{row.charged}</TableCell></TableRow>)}</TableBody></Table>{rows.length === 0 && <Empty>{copy.noUsage}</Empty>}</CardContent></Card>;
 }
 
-function AuditPanel({ copy, audit }: { copy: Messages["admin"]; audit: AdminAudit[] }) {
-  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{copy.tabAudit}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.auditTime}</TableHead><TableHead>{copy.auditActor}</TableHead><TableHead>{copy.auditAction}</TableHead><TableHead>{copy.auditTarget}</TableHead></TableRow></TableHeader><TableBody>{audit.map((event) => <TableRow key={event.id}><TableCell>{date(event.created_at)}</TableCell><TableCell>{event.actor_email}</TableCell><TableCell className="font-mono text-xs">{event.action}</TableCell><TableCell>{event.target_type}:{event.target_id}</TableCell></TableRow>)}</TableBody></Table>{audit.length === 0 && <Empty>{copy.noAudit}</Empty>}</CardContent></Card>;
+function AuditPanel({ copy, locale, audit }: { copy: Messages["admin"]; locale: Locale; audit: AdminAudit[] }) {
+  return <Card className="bg-card/60 ring-border"><CardHeader><CardTitle>{copy.tabAudit}</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>{copy.auditTime}</TableHead><TableHead>{copy.auditActor}</TableHead><TableHead>{copy.auditAction}</TableHead><TableHead>{copy.auditTarget}</TableHead></TableRow></TableHeader><TableBody>{audit.map((event) => <TableRow key={event.id}><TableCell>{date(event.created_at, locale)}</TableCell><TableCell>{event.actor_email}</TableCell><TableCell>{auditActionLabel(event.action, copy)}</TableCell><TableCell>{auditTargetLabel(event.target_type, copy)}:{event.target_id}</TableCell></TableRow>)}</TableBody></Table>{audit.length === 0 && <Empty>{copy.noAudit}</Empty>}</CardContent></Card>;
 }
