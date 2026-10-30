@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
 from cloud.domain.channel_keys import seal
-from cloud.models import CloudGatewayModel, CloudModelPrice, CloudUpstreamChannel
+from cloud.models import CloudGatewayModel, CloudModelPrice, CloudUpstreamChannel, CloudUpstreamProvider
 
 #: 一条通道回了 429 / 5xx / 超时之后歇多久。
 CHANNEL_COOLDOWN = timedelta(seconds=60)
@@ -56,23 +56,45 @@ def current_price(db: Session, model_id: str, *, at: datetime) -> CloudModelPric
     ).first()
 
 
-def add_channel(
+def add_provider(
     db: Session,
     config: CloudConfig,
     *,
-    model_id: str,
+    name: str,
     base_url: str,
-    upstream_model: str,
     api_key: str,
+    note: str = "",
+) -> CloudUpstreamProvider:
+    provider = CloudUpstreamProvider(
+        name=name,
+        protocol="openai",
+        base_url=base_url.rstrip("/"),
+        api_key_encrypted=seal(config, api_key),
+        note=note,
+    )
+    db.add(provider)
+    db.flush()
+    return provider
+
+
+def replace_provider_key(db: Session, config: CloudConfig, provider: CloudUpstreamProvider, api_key: str) -> None:
+    provider.api_key_encrypted = seal(config, api_key)
+    db.flush()
+
+
+def add_channel(
+    db: Session,
+    *,
+    model_id: str,
+    provider_id: str,
+    upstream_model: str,
     priority: int = 0,
     note: str = "",
 ) -> CloudUpstreamChannel:
     channel = CloudUpstreamChannel(
         model_id=model_id,
-        protocol="openai",
-        base_url=base_url.rstrip("/"),
+        provider_id=provider_id,
         upstream_model=upstream_model,
-        api_key_encrypted=seal(config, api_key),
         priority=priority,
         note=note,
     )
@@ -81,20 +103,27 @@ def add_channel(
     return channel
 
 
-def replace_channel_key(db: Session, config: CloudConfig, channel: CloudUpstreamChannel, api_key: str) -> None:
-    channel.api_key_encrypted = seal(config, api_key)
-    db.flush()
+@dataclass(frozen=True)
+class RoutedChannel:
+    channel: CloudUpstreamChannel
+    provider: CloudUpstreamProvider
 
 
-def channels_in_order(db: Session, model_id: str, *, at: datetime) -> list[CloudUpstreamChannel]:
+def channels_in_order(db: Session, model_id: str, *, at: datetime) -> list[RoutedChannel]:
     """这个模型可试的通道:没在冷却的按优先级在前,冷却中的按优先级排在后面。"""
-    found = db.scalars(
-        select(CloudUpstreamChannel)
-        .where(CloudUpstreamChannel.model_id == model_id, CloudUpstreamChannel.enabled.is_(True))
+    found = db.execute(
+        select(CloudUpstreamChannel, CloudUpstreamProvider)
+        .join(CloudUpstreamProvider, CloudUpstreamProvider.id == CloudUpstreamChannel.provider_id)
+        .where(
+            CloudUpstreamChannel.model_id == model_id,
+            CloudUpstreamChannel.enabled.is_(True),
+            CloudUpstreamProvider.enabled.is_(True),
+        )
         .order_by(CloudUpstreamChannel.priority, CloudUpstreamChannel.created_at)
     ).all()
-    cooling = [one for one in found if one.cooldown_until is not None and one.cooldown_until > at]
-    return [one for one in found if one not in cooling] + cooling
+    routes = [RoutedChannel(channel=channel, provider=provider) for channel, provider in found]
+    cooling = [one for one in routes if one.channel.cooldown_until is not None and one.channel.cooldown_until > at]
+    return [one for one in routes if one not in cooling] + cooling
 
 
 def cool_down(channel: CloudUpstreamChannel, *, at: datetime) -> None:

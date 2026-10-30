@@ -624,27 +624,36 @@ class CloudModelPrice(Base):
     effective_from: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
 
 
-class CloudUpstreamChannel(Base):
-    """一个模型背后的一条上游通道:哪家的端点、哪把 Key、对上游叫什么模型、优先级。
+class CloudUpstreamProvider(Base):
+    """一个上游供应商账号:协议、端点、加密 Key。多个模型可以共用同一份凭据。"""
 
-    Key 用 `CLOUD_CHANNEL_KEY`(Fernet)加密后落库,只在网关发请求那一刻解开,不进日志、不进任何响应。
-    """
+    __tablename__ = "cloud_upstream_providers"
+    __table_args__ = (CheckConstraint("protocol IN ('openai')", name="ck_cloud_upstream_providers_protocol"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False, default="openai")
+    #: 端点前缀,如 `https://api.deepseek.com/v1`;网关请求打到 `<base_url>/chat/completions`。
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    api_key_encrypted: Mapped[str] = mapped_column(String(1000), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    note: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudUpstreamChannel(Base):
+    """一个对外模型经过某个供应商账号到某个上游模型名的路由。"""
 
     __tablename__ = "cloud_upstream_channels"
-    __table_args__ = (
-        Index("idx_cloud_upstream_channels_model", "model_id", "priority"),
-        CheckConstraint("protocol IN ('openai')", name="ck_cloud_upstream_channels_protocol"),
-    )
+    __table_args__ = (Index("idx_cloud_upstream_channels_model", "model_id", "priority"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     model_id: Mapped[str] = mapped_column(ForeignKey("cloud_gateway_models.id", ondelete="CASCADE"), nullable=False)
-    #: 对上游说哪种话。第一版只有 OpenAI 兼容(见 ADR 0088 §4)。
-    protocol: Mapped[str] = mapped_column(String(16), nullable=False, default="openai")
-    #: 端点前缀,如 `https://api.deepseek.com/v1`;请求打到 `<base_url>/chat/completions`。
-    base_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    provider_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_upstream_providers.id", ondelete="CASCADE"), nullable=False
+    )
     #: 上游那边这个模型叫什么(可能和网关对外的 id 不同)。
     upstream_model: Mapped[str] = mapped_column(String(120), nullable=False)
-    api_key_encrypted: Mapped[str] = mapped_column(String(1000), nullable=False)
     #: 小的先用。
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())

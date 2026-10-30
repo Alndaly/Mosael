@@ -133,13 +133,14 @@ def test_admin_channel_api_never_returns_the_upstream_key(client):
         db.commit()
     config = replace(client.app.state.config, channel_key=Fernet.generate_key().decode("ascii"))
     with client.app.state.db.session() as db:
+        provider = service.create_provider(
+            db, config, name="upstream", base_url="https://upstream.example/v1", api_key="sk-never-return-this", note=""
+        )
         channel = service.create_channel(
             db,
-            config,
             model_id="m1",
-            base_url="https://upstream.example/v1",
+            provider_id=provider["id"],
             upstream_model="m1",
-            api_key="sk-never-return-this",
             priority=0,
             note="",
         )
@@ -159,9 +160,12 @@ def test_channel_connectivity_test_uses_the_stored_key_without_returning_it(clie
         seen["auth"] = request.headers.get("authorization")
         return httpx2.Response(200, json={"choices": [], "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
     with client.app.state.db.session() as db:
+        provider = service.create_provider(
+            db, config, name="upstream", base_url="https://upstream.example/v1", api_key="sk-test", note=""
+        )
         channel = service.create_channel(
-            db, config, model_id="m2", base_url="https://upstream.example/v1",
-            upstream_model="m2", api_key="sk-test", priority=0, note="",
+            db, model_id="m2", provider_id=provider["id"],
+            upstream_model="m2", priority=0, note="",
         )
         db.commit()
         result = service.test_channel(db, config, channel["id"], transport=httpx2.MockTransport(handler))
@@ -200,3 +204,47 @@ def test_admin_can_read_orders_and_usage_summary(client):
     assert body["totals"]["calls"] == 1
     assert body["totals"]["charged"] == 3
     assert body["by_model"][0]["model_id"] == "m1"
+
+
+def test_admin_provider_routes_share_credentials_across_channels_and_never_return_them(client):
+    make_admin(client)
+    client.app.state.config = replace(
+        client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
+    )
+    with client.app.state.db.session() as db:
+        db.add(CloudGatewayModel(id="m3", label="M3", kind="chat", max_output_tokens=100))
+        db.commit()
+
+    created = client.post(
+        api("/admin/providers"),
+        json={
+            "name": "Primary",
+            "base_url": "https://upstream.example/v1",
+            "api_key": "sk-provider-secret",
+            "note": "",
+        },
+    )
+    assert created.status_code == 201, created.text
+    provider = created.json()["provider"]
+    assert provider["has_api_key"] is True
+    assert "sk-provider-secret" not in created.text
+
+    channel = client.post(
+        api("/admin/channels"),
+        json={"model_id": "m3", "provider_id": provider["id"], "upstream_model": "m3", "priority": 0, "note": ""},
+    )
+    assert channel.status_code == 201, channel.text
+    assert channel.json()["channel"]["provider_name"] == "Primary"
+    assert "sk-provider-secret" not in channel.text
+
+    listed = client.get(api("/admin/channels")).json()["channels"]
+    assert listed[0]["provider_id"] == provider["id"]
+    assert listed[0]["base_url"] == "https://upstream.example/v1"
+
+    patched = client.patch(
+        api(f"/admin/channels/{channel.json()['channel']['id']}"),
+        json={"upstream_model": "m3-new", "priority": 1, "note": "backup", "enabled": True},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["channel"]["upstream_model"] == "m3-new"
+    assert "sk-provider-secret" not in client.get(api("/admin/providers")).text

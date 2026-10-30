@@ -114,9 +114,16 @@ def connect(
 ) -> tuple[CloudUpstreamChannel, httpx2.Response]:
     """按顺序试通道,交回第一条接通的和它还没读的响应。都不行就全额释放并抛错。"""
     last: UpstreamFailure | None = None
-    for channel in catalog.channels_in_order(db, begun.model_id, at=at):
+    for routed in catalog.channels_in_order(db, begun.model_id, at=at):
+        channel = routed.channel
         try:
-            response = open_chat(client, channel, api_key=unseal(config, channel.api_key_encrypted), body=body)
+            response = open_chat(
+                client,
+                routed.provider,
+                upstream_model=channel.upstream_model,
+                api_key=unseal(config, routed.provider.api_key_encrypted),
+                body=body,
+            )
         except UpstreamFailure as failure:
             last = failure
             if failure.retryable:

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 import httpx2
 
-from cloud.models import CloudUpstreamChannel
+from cloud.models import CloudUpstreamProvider
 
 #: 连接上游的等待上限;读的上限按「一个 token 都没来」算,长回答本身不受它限制(流是一段段来的)。
 CONNECT_TIMEOUT_SECONDS = 10.0
@@ -44,13 +44,13 @@ def new_client(transport: httpx2.BaseTransport | None = None) -> httpx2.Client:
 
 
 def open_chat(
-    client: httpx2.Client, channel: CloudUpstreamChannel, *, api_key: str, body: dict[str, object]
+    client: httpx2.Client, provider: CloudUpstreamProvider, *, upstream_model: str, api_key: str, body: dict[str, object]
 ) -> httpx2.Response:
     """发出一次 `/chat/completions`,成功(200)就把还没读的响应交回去(流式或整包都由调用方读)。"""
     request = client.build_request(
         "POST",
-        f"{channel.base_url}/chat/completions",
-        json={**body, "model": channel.upstream_model},
+        f"{provider.base_url}/chat/completions",
+        json={**body, "model": upstream_model},
         headers={"Authorization": f"Bearer {api_key}", "Accept": "text/event-stream, application/json"},
     )
     try:

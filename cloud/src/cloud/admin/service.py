@@ -31,6 +31,7 @@ from cloud.models import (
     CloudPlan,
     CloudSubscription,
     CloudUpstreamChannel,
+    CloudUpstreamProvider,
     CloudUser,
     now,
 )
@@ -47,6 +48,7 @@ def overview(db: Session) -> dict[str, int]:
             select(func.count()).select_from(CloudSubscription).where(CloudSubscription.status == "active")
         ),
         "models": count(select(func.count()).select_from(CloudGatewayModel)),
+        "providers": count(select(func.count()).select_from(CloudUpstreamProvider)),
         "channels": count(select(func.count()).select_from(CloudUpstreamChannel)),
         "orders": count(select(func.count()).select_from(CloudOrder)),
     }
@@ -184,10 +186,12 @@ def reset_password(db: Session, user_id: str, *, acting_user_id: str) -> str:
 
 def _model_view(db: Session, model: CloudGatewayModel, at: datetime) -> dict[str, object]:
     price = catalog.current_price(db, model.id, at=at)
-    channels = db.scalars(
-        select(CloudUpstreamChannel).where(CloudUpstreamChannel.model_id == model.id)
+    channels = db.execute(
+        select(CloudUpstreamChannel, CloudUpstreamProvider)
+        .join(CloudUpstreamProvider, CloudUpstreamProvider.id == CloudUpstreamChannel.provider_id)
+        .where(CloudUpstreamChannel.model_id == model.id)
     ).all()
-    active = [one for one in channels if one.enabled]
+    active = [one for one in channels if one[0].enabled and one[1].enabled]
     reasons = []
     if not model.enabled:
         reasons.append("disabled")
@@ -297,63 +301,114 @@ def list_prices(db: Session, model_id: str) -> list[dict[str, object]]:
     ]
 
 
-def _channel_view(channel: CloudUpstreamChannel) -> dict[str, object]:
+def _provider_view(provider: CloudUpstreamProvider) -> dict[str, object]:
+    return {
+        "id": provider.id,
+        "name": provider.name,
+        "protocol": provider.protocol,
+        "base_url": provider.base_url,
+        "enabled": provider.enabled,
+        "note": provider.note,
+        "has_api_key": bool(provider.api_key_encrypted),
+    }
+
+
+def list_providers(db: Session) -> list[dict[str, object]]:
+    return [
+        _provider_view(one)
+        for one in db.scalars(
+            select(CloudUpstreamProvider).order_by(CloudUpstreamProvider.name, CloudUpstreamProvider.id)
+        ).all()
+    ]
+
+
+def create_provider(
+    db: Session, config: CloudConfig, *, name: str, base_url: str, api_key: str, note: str
+) -> dict[str, object]:
+    if not base_url.startswith(("https://", "http://")):
+        raise CloudError(400, "channel_url_invalid")
+    if not config.channel_key:
+        raise CloudError(503, "gateway_not_configured")
+    provider = catalog.add_provider(
+        db, config, name=name, base_url=base_url, api_key=api_key, note=note
+    )
+    return _provider_view(provider)
+
+
+def update_provider(
+    db: Session, config: CloudConfig, provider_id: str, *, name: str, note: str, enabled: bool, api_key: str
+) -> dict[str, object]:
+    provider = db.get(CloudUpstreamProvider, provider_id)
+    if provider is None:
+        raise CloudError(404, "provider_not_found")
+    provider.name = name
+    provider.note = note
+    provider.enabled = enabled
+    if api_key:
+        if not config.channel_key:
+            raise CloudError(503, "gateway_not_configured")
+        catalog.replace_provider_key(db, config, provider, api_key)
+    db.flush()
+    return _provider_view(provider)
+
+
+def _channel_view(channel: CloudUpstreamChannel, provider: CloudUpstreamProvider) -> dict[str, object]:
     return {
         "id": channel.id,
         "model_id": channel.model_id,
-        "base_url": channel.base_url,
+        "provider_id": channel.provider_id,
+        "provider_name": provider.name,
+        "base_url": provider.base_url,
         "upstream_model": channel.upstream_model,
         "priority": channel.priority,
         "enabled": channel.enabled,
         "cooldown_until": channel.cooldown_until.isoformat() if channel.cooldown_until else None,
         "note": channel.note,
-        "has_api_key": bool(channel.api_key_encrypted),
+        "has_api_key": bool(provider.api_key_encrypted),
     }
 
 
 def list_channels(db: Session) -> list[dict[str, object]]:
     return [
-        _channel_view(one)
-        for one in db.scalars(
-            select(CloudUpstreamChannel).order_by(CloudUpstreamChannel.model_id, CloudUpstreamChannel.priority)
+        _channel_view(channel, provider)
+        for channel, provider in db.execute(
+            select(CloudUpstreamChannel, CloudUpstreamProvider)
+            .join(CloudUpstreamProvider, CloudUpstreamProvider.id == CloudUpstreamChannel.provider_id)
+            .order_by(CloudUpstreamChannel.model_id, CloudUpstreamChannel.priority)
         ).all()
     ]
 
 
-def create_channel(db: Session, config: CloudConfig, *, model_id: str, base_url: str, upstream_model: str, api_key: str, priority: int, note: str) -> dict[str, object]:
+def create_channel(db: Session, *, model_id: str, provider_id: str, upstream_model: str, priority: int, note: str) -> dict[str, object]:
     if db.get(CloudGatewayModel, model_id) is None:
         raise CloudError(404, "model_not_found")
-    if not base_url.startswith(("https://", "http://")):
-        raise CloudError(400, "channel_url_invalid")
-    if not config.channel_key:
-        raise CloudError(503, "gateway_not_configured")
+    provider = db.get(CloudUpstreamProvider, provider_id)
+    if provider is None:
+        raise CloudError(404, "provider_not_found")
     channel = catalog.add_channel(
         db,
-        config,
         model_id=model_id,
-        base_url=base_url,
+        provider_id=provider_id,
         upstream_model=upstream_model,
-        api_key=api_key,
         priority=priority,
         note=note,
     )
-    return _channel_view(channel)
+    return _channel_view(channel, provider)
 
 
-def update_channel(db: Session, config: CloudConfig, channel_id: str, *, upstream_model: str, priority: int, note: str, enabled: bool, api_key: str) -> dict[str, object]:
+def update_channel(db: Session, channel_id: str, *, upstream_model: str, priority: int, note: str, enabled: bool) -> dict[str, object]:
     channel = db.get(CloudUpstreamChannel, channel_id)
     if channel is None:
         raise CloudError(404, "channel_not_found")
+    provider = db.get(CloudUpstreamProvider, channel.provider_id)
+    if provider is None:
+        raise CloudError(404, "provider_not_found")
     channel.upstream_model = upstream_model
     channel.priority = priority
     channel.note = note
     channel.enabled = enabled
-    if api_key:
-        if not config.channel_key:
-            raise CloudError(503, "gateway_not_configured")
-        catalog.replace_channel_key(db, config, channel, api_key)
     db.flush()
-    return _channel_view(channel)
+    return _channel_view(channel, provider)
 
 
 def _plan_view(plan: CloudPlan) -> dict[str, object]:
@@ -432,6 +487,9 @@ def test_channel(
     channel = db.get(CloudUpstreamChannel, channel_id)
     if channel is None:
         raise CloudError(404, "channel_not_found")
+    provider = db.get(CloudUpstreamProvider, channel.provider_id)
+    if provider is None:
+        raise CloudError(404, "provider_not_found")
     started = time.monotonic()
     body = {
         "messages": [{"role": "user", "content": "ping"}],
@@ -441,7 +499,11 @@ def test_channel(
     try:
         with upstream.new_client(transport) as client:
             response = upstream.open_chat(
-                client, channel, api_key=unseal(config, channel.api_key_encrypted), body=body
+                client,
+                provider,
+                upstream_model=channel.upstream_model,
+                api_key=unseal(config, provider.api_key_encrypted),
+                body=body,
             )
             try:
                 raw = response.read()

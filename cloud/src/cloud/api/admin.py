@@ -18,6 +18,8 @@ from cloud.admin.schemas import (
     PlanIn,
     PlanPatch,
     PriceIn,
+    ProviderIn,
+    ProviderPatch,
     RoleIn,
     SubscribeIn,
 )
@@ -159,25 +161,52 @@ def admin_add_price(model_id: str, body: PriceIn, actor: CurrentAdmin, db: DbSes
     return {"price": price}
 
 
+@router.get("/admin/providers")
+def admin_providers(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    return {"providers": service.list_providers(db)}
+
+
+@router.post("/admin/providers", status_code=201)
+def admin_create_provider(body: ProviderIn, actor: CurrentAdmin, config: CurrentConfig, db: DbSession) -> dict[str, object]:
+    provider = service.create_provider(
+        db, config, name=body.name, base_url=body.base_url, api_key=body.api_key, note=body.note
+    )
+    audit.record(db, actor=actor, action="provider.create", target_type="provider", target_id=provider["id"],
+                 detail={"name": body.name, "base_url": body.base_url, "api_key_set": True})
+    db.commit()
+    return {"provider": provider}
+
+
+@router.patch("/admin/providers/{provider_id}")
+def admin_update_provider(
+    provider_id: str, body: ProviderPatch, actor: CurrentAdmin, config: CurrentConfig, db: DbSession
+) -> dict[str, object]:
+    provider = service.update_provider(
+        db, config, provider_id, name=body.name, note=body.note, enabled=body.enabled, api_key=body.api_key
+    )
+    audit.record(db, actor=actor, action="provider.update", target_type="provider", target_id=provider_id,
+                 detail={"enabled": body.enabled, "api_key_replaced": bool(body.api_key)})
+    db.commit()
+    return {"provider": provider}
+
+
 @router.get("/admin/channels")
 def admin_channels(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
     return {"channels": service.list_channels(db)}
 
 
 @router.post("/admin/channels", status_code=201)
-def admin_create_channel(body: ChannelIn, actor: CurrentAdmin, config: CurrentConfig, db: DbSession) -> dict[str, object]:
+def admin_create_channel(body: ChannelIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     channel = service.create_channel(
         db,
-        config,
         model_id=body.model_id,
-        base_url=body.base_url,
+        provider_id=body.provider_id,
         upstream_model=body.upstream_model,
-        api_key=body.api_key,
         priority=body.priority,
         note=body.note,
     )
     audit.record(db, actor=actor, action="channel.create", target_type="channel", target_id=channel["id"],
-                 detail={"model_id": body.model_id, "base_url": body.base_url, "api_key_set": True})
+                 detail={"model_id": body.model_id, "provider_id": body.provider_id})
     db.commit()
     return {"channel": channel}
 
@@ -187,21 +216,18 @@ def admin_update_channel(
     channel_id: str,
     body: ChannelPatch,
     actor: CurrentAdmin,
-    config: CurrentConfig,
     db: DbSession,
 ) -> dict[str, object]:
     channel = service.update_channel(
         db,
-        config,
         channel_id,
         upstream_model=body.upstream_model,
         priority=body.priority,
         note=body.note,
         enabled=body.enabled,
-        api_key=body.api_key,
     )
     audit.record(db, actor=actor, action="channel.update", target_type="channel", target_id=channel_id,
-                 detail={"enabled": body.enabled, "api_key_replaced": bool(body.api_key)})
+                 detail={"enabled": body.enabled})
     db.commit()
     return {"channel": channel}
 

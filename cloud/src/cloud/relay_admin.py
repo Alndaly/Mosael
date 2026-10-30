@@ -30,7 +30,7 @@ from cloud.domain import admin, catalog, credits
 from cloud.domain.channel_keys import new_channel_key
 from cloud.mfa import new_fernet_key
 from cloud.payments.base import cents_from_yuan, yuan
-from cloud.models import CloudGatewayModel, CloudPlan, CloudUpstreamChannel, CloudUser, now
+from cloud.models import CloudGatewayModel, CloudPlan, CloudUpstreamChannel, CloudUpstreamProvider, CloudUser, now
 
 
 class AdminError(Exception):
@@ -81,9 +81,18 @@ def register(commands: argparse._SubParsersAction) -> None:
     price.add_argument("--from", dest="effective_from", help="生效时间(ISO,UTC),缺省立即")
     price.set_defaults(relay=_price_set)
 
-    channel = commands.add_parser("channel-add", help="给模型加一条上游通道(Key 从 CLOUD_UPSTREAM_KEY 或终端读)")
+    provider = commands.add_parser("provider-add", help="新建上游供应商账号(Key 从 CLOUD_UPSTREAM_KEY 或终端读)")
+    provider.add_argument("--name", required=True)
+    provider.add_argument("--base-url", required=True, help="OpenAI 兼容端点前缀,如 https://api.deepseek.com/v1")
+    provider.add_argument("--note", default="")
+    provider.set_defaults(relay=_provider_add)
+
+    provider_list = commands.add_parser("provider-list", help="列出上游供应商(不显示 Key)")
+    provider_list.set_defaults(relay=_provider_list)
+
+    channel = commands.add_parser("channel-add", help="给模型加一条上游通道(引用已有供应商)")
     channel.add_argument("--model", required=True)
-    channel.add_argument("--base-url", required=True, help="OpenAI 兼容端点前缀,如 https://api.deepseek.com/v1")
+    channel.add_argument("--provider", required=True, help="供应商 id")
     channel.add_argument("--upstream-model", required=True, help="上游那边这个模型叫什么")
     channel.add_argument("--priority", type=int, default=0, help="小的先用")
     channel.add_argument("--note", default="")
@@ -178,35 +187,62 @@ def _price_set(args, _config: CloudConfig, db: Session) -> str:
     return f"{args.model}:每千输入 {args.input_per_1k}、每千输出 {args.output_per_1k} 积分,{effective:%Y-%m-%d %H:%M} 起"
 
 
-def _channel_add(args, config: CloudConfig, db: Session) -> str:
+def _provider_add(args, config: CloudConfig, db: Session) -> str:
     if not config.channel_key:
-        raise AdminError("没配 CLOUD_CHANNEL_KEY:先 `channel-key` 生成一把、写进部署配置,再加通道(Key 不明文落库)")
-    if db.get(CloudGatewayModel, args.model) is None:
-        raise AdminError(f"目录里没有这个模型:{args.model}(先 model-set)")
+        raise AdminError("没配 CLOUD_CHANNEL_KEY:先 `channel-key` 生成一把、写进部署配置,再加供应商")
     if not args.base_url.startswith(("https://", "http://")):
         raise AdminError("--base-url 要是 http(s) 地址")
     api_key = os.environ.get("CLOUD_UPSTREAM_KEY", "").strip() or getpass.getpass("上游 API Key:").strip()
     if not api_key:
         raise AdminError("没拿到上游 API Key")
-    channel = catalog.add_channel(db, config, model_id=args.model, base_url=args.base_url,
-                                  upstream_model=args.upstream_model, api_key=api_key, priority=args.priority,
-                                  note=args.note)
-    return f"通道 {channel.id}:{args.model} → {channel.base_url}({args.upstream_model}),优先级 {args.priority}"
+    provider = catalog.add_provider(
+        db, config, name=args.name, base_url=args.base_url, api_key=api_key, note=args.note
+    )
+    return f"供应商 {provider.id}:{provider.name} → {provider.base_url}"
+
+
+def _provider_list(_args, _config: CloudConfig, db: Session) -> str:
+    rows = db.scalars(select(CloudUpstreamProvider).order_by(CloudUpstreamProvider.name)).all()
+    if not rows:
+        return "还没有上游供应商"
+    return "\n".join(
+        f"{one.id}  {one.name}  {one.base_url}  {'启用' if one.enabled else '停用'}"
+        for one in rows
+    )
+
+
+def _channel_add(args, config: CloudConfig, db: Session) -> str:
+    if db.get(CloudGatewayModel, args.model) is None:
+        raise AdminError(f"目录里没有这个模型:{args.model}(先 model-set)")
+    provider = db.get(CloudUpstreamProvider, args.provider)
+    if provider is None:
+        raise AdminError(f"没有这个供应商:{args.provider}(先 provider-add)")
+    channel = catalog.add_channel(
+        db,
+        model_id=args.model,
+        provider_id=args.provider,
+        upstream_model=args.upstream_model,
+        priority=args.priority,
+        note=args.note,
+    )
+    return f"通道 {channel.id}:{args.model} → {provider.name}/{args.upstream_model},优先级 {args.priority}"
 
 
 def _channel_list(_args, _config: CloudConfig, db: Session) -> str:
-    rows = db.scalars(
-        select(CloudUpstreamChannel).order_by(CloudUpstreamChannel.model_id, CloudUpstreamChannel.priority)
+    rows = db.execute(
+        select(CloudUpstreamChannel, CloudUpstreamProvider)
+        .join(CloudUpstreamProvider, CloudUpstreamProvider.id == CloudUpstreamChannel.provider_id)
+        .order_by(CloudUpstreamChannel.model_id, CloudUpstreamChannel.priority)
     ).all()
     if not rows:
         return "还没有上游通道"
     at = now()
     return "\n".join(
-        f"{one.id}  {one.model_id}  p{one.priority}  {one.base_url}  ({one.upstream_model})"
-        f"  {'启用' if one.enabled else '停用'}"
-        f"{'  冷却到 ' + f'{one.cooldown_until:%H:%M:%S}' if one.cooldown_until and one.cooldown_until > at else ''}"
-        f"{'  ' + one.note if one.note else ''}"
-        for one in rows
+        f"{channel.id}  {channel.model_id}  p{channel.priority}  {provider.name}  ({channel.upstream_model})"
+        f"  {'启用' if channel.enabled else '停用'}"
+        f"{'  冷却到 ' + f'{channel.cooldown_until:%H:%M:%S}' if channel.cooldown_until and channel.cooldown_until > at else ''}"
+        f"{'  ' + channel.note if channel.note else ''}"
+        for channel, provider in rows
     )
 
 

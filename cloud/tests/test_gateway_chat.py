@@ -18,7 +18,14 @@ from cloud.domain import catalog, credits
 from cloud.domain.channel_keys import new_channel_key
 from cloud.gateway import api as gateway_api
 from cloud.gateway import chat
-from cloud.models import CloudDeviceToken, CloudGatewayCall, CloudUpstreamChannel, CloudUser, now
+from cloud.models import (
+    CloudDeviceToken,
+    CloudGatewayCall,
+    CloudUpstreamChannel,
+    CloudUpstreamProvider,
+    CloudUser,
+    now,
+)
 from conftest import RecordingSender, api, signed_in
 
 PRIMARY_KEY = "sk-primary-0123456789"
@@ -74,10 +81,16 @@ def gateway(tmp_path, upstream):
         catalog.upsert_model(db, model_id="deepseek-chat", label="DeepSeek V3", kind="chat", max_output_tokens=4000)
         catalog.set_price(db, model_id="deepseek-chat", input_per_1k=2, output_per_1k=4,
                           effective_from=now() - timedelta(days=1))
-        catalog.add_channel(db, config, model_id="deepseek-chat", base_url="https://primary.example/v1/",
-                            upstream_model="deepseek-v3", api_key=PRIMARY_KEY, priority=0)
-        catalog.add_channel(db, config, model_id="deepseek-chat", base_url="https://backup.example/v1",
-                            upstream_model="deepseek-v3-backup", api_key=BACKUP_KEY, priority=1)
+        primary = catalog.add_provider(
+            db, config, name="primary", base_url="https://primary.example/v1/", api_key=PRIMARY_KEY
+        )
+        backup = catalog.add_provider(
+            db, config, name="backup", base_url="https://backup.example/v1", api_key=BACKUP_KEY
+        )
+        catalog.add_channel(db, model_id="deepseek-chat", provider_id=primary.id,
+                            upstream_model="deepseek-v3", priority=0)
+        catalog.add_channel(db, model_id="deepseek-chat", provider_id=backup.id,
+                            upstream_model="deepseek-v3-backup", priority=1)
         db.commit()
     return app
 
@@ -182,6 +195,15 @@ def test_a_streamed_chat_relays_the_upstream_and_charges_the_reported_usage(gate
     assert credits_left(gateway) == 100_000 - 10
     call = only_call(gateway)
     assert (call.status, call.input_tokens, call.output_tokens) == ("settled", 1000, 2000)
+
+
+def test_disabling_a_provider_removes_all_of_its_routes(gateway):
+    with gateway.state.db.session() as db:
+        provider = db.scalar(select(CloudUpstreamProvider).where(CloudUpstreamProvider.name == "primary"))
+        provider.enabled = False
+        db.commit()
+        routes = catalog.channels_in_order(db, "deepseek-chat", at=now())
+    assert [route.provider.name for route in routes] == ["backup"]
 
 
 def test_a_busy_channel_is_cooled_down_and_the_next_one_serves_the_call(gateway, upstream):

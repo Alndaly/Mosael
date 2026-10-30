@@ -45,11 +45,24 @@ class PriceIn(BaseModel):
     effective_from: datetime | None = None
 
 
+class ProviderIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    base_url: str = Field(min_length=1, max_length=500)
+    api_key: str = Field(min_length=1, max_length=1000)
+    note: str = Field(default="", max_length=200)
+
+
+class ProviderPatch(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    note: str = Field(default="", max_length=200)
+    enabled: bool = True
+    api_key: str = Field(default="", max_length=1000)
+
+
 class ChannelIn(BaseModel):
     model_id: str = Field(min_length=1, max_length=64)
-    base_url: str = Field(min_length=1, max_length=500)
+    provider_id: str = Field(min_length=1, max_length=64)
     upstream_model: str = Field(min_length=1, max_length=120)
-    api_key: str = Field(min_length=1, max_length=1000)
     priority: int = 0
     note: str = Field(default="", max_length=200)
 
@@ -59,7 +72,6 @@ class ChannelPatch(BaseModel):
     priority: int = 0
     note: str = Field(default="", max_length=200)
     enabled: bool = True
-    api_key: str = Field(default="", max_length=1000)
 
 
 class PlanPatch(BaseModel):

@@ -256,6 +256,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "A model with that id already exists.",
         "zh": "这个模型 id 已经存在。",
     },
+    "provider_not_found": {
+        "en": "No such upstream provider.",
+        "zh": "没有这个上游供应商。",
+    },
     "channel_not_found": {
         "en": "No such upstream channel.",
         "zh": "没有这条上游通道。",

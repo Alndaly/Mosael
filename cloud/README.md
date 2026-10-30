@@ -232,13 +232,16 @@ uv run python -m cloud.cli plan-set --slug pro --name Pro --period year --monthl
 uv run python -m cloud.cli subscribe --email a@b.com --plan pro
 uv run python -m cloud.cli model-set --id deepseek-chat --label "DeepSeek V3" --max-output-tokens 8000
 uv run python -m cloud.cli price-set --model deepseek-chat --input-per-1k 2 --output-per-1k 8
-CLOUD_UPSTREAM_KEY=sk-… uv run python -m cloud.cli channel-add --model deepseek-chat \
-  --base-url https://api.deepseek.com/v1 --upstream-model deepseek-chat --priority 0
+CLOUD_UPSTREAM_KEY=sk-… uv run python -m cloud.cli provider-add --name DeepSeek \
+  --base-url https://api.deepseek.com/v1
+uv run python -m cloud.cli provider-list                    # 不显示 Key
+uv run python -m cloud.cli channel-add --model deepseek-chat --provider <供应商 id> \
+  --upstream-model deepseek-chat --priority 0
 uv run python -m cloud.cli channel-list                    # 不显示 Key
 uv run python -m cloud.cli balance --email a@b.com
 ```
 
-上游 Key 不走命令行参数(会进 shell 历史):从 `CLOUD_UPSTREAM_KEY` 读,没有就在终端里问。
+上游 Key 不走命令行参数(会进 shell 历史):从 `CLOUD_UPSTREAM_KEY` 读,没有就在终端里问。同一供应商的多个模型共用一把 Key,换 Key 只改供应商一处。
 
 ## 在线购买(ADR 0088 第 3 步,国内二维码预付)
 
