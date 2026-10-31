@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { downloadF5Model, dubSubtitles, listF5Models, ORIGINAL_AUDIO_MODES, type OriginalAudio, type Sequence } from "@/api/client";
 import { useIsDeploymentAdmin } from "@/app/auth";
+import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,8 @@ export function SubtitleDub({
   const [selectedOnly, setSelectedOnly] = React.useState(true);
   const pool = focused ? [focused] : selectedOnly && selected.length > 0 ? selected : onTrack;
   const targets = pool.filter((clip) => (clip.text_override ?? "").trim());
+  //: 「配音」为什么点不了(文案 key);null = 点得了。按钮的 disabled 和悬停说明都只看它。
+  const dubBlocker: MessageKey | null = targets.length === 0 ? "subtitleDubBlockedNoText" : voice.voiceBlocker;
 
   // 双语字幕是「原文\n译文」两行。整段念 = 先念原文再念译文,一条 3 秒的字幕配出 12 秒的音。
   // 默认全念(单语字幕就该全念),真有多行时才把这个选择摆出来。
@@ -328,14 +331,16 @@ export function SubtitleDub({
           )}
         </div>
       )}
-      <Button
-        className="w-full"
-        disabled={targets.length === 0 || !voice.ready}
-        loading={run.isPending || job.running}
-        onClick={() => run.mutate()}
-      >
-        <AudioLines size={13} /> {t("subtitleDubApply").replace("{n}", String(targets.length))}
-      </Button>
+      <Hint disabledReason={dubBlocker ? t(dubBlocker) : undefined} className="flex w-full">
+        <Button
+          className="w-full"
+          disabled={dubBlocker !== null}
+          loading={run.isPending || job.running}
+          onClick={() => run.mutate()}
+        >
+          <AudioLines size={13} /> {t("subtitleDubApply").replace("{n}", String(targets.length))}
+        </Button>
+      </Hint>
       <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>
     </div>
   );

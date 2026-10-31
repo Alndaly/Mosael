@@ -182,9 +182,11 @@ export function speechRequest(voice: SpeechVoice, text: string): Omit<SpeechCrea
   };
 }
 
-/** 这一段念得出来吗:有字、不超长、谁来念定好了(克隆要有音色且引擎装好,远端要有音色)、引擎能用。 */
-export function speechReady(voice: SpeechVoice, text: string): boolean {
-  return Boolean(text.trim()) && text.length <= SPEECH_MAX_CHARS && voice.ready && voice.activeEngine?.ready !== false;
+/** 这一段还念不出来的原因(文案 key);null = 念得出来:有字、不超长、谁来念定好了(见 useSpeechVoice 的 voiceBlocker)。 */
+export function speechBlocker(voice: SpeechVoice, text: string): MessageKey | null {
+  if (!text.trim()) return "speechBlockedNeedsText";
+  if (text.length > SPEECH_MAX_CHARS) return "speechBlockedTooLong";
+  return voice.voiceBlocker;
 }
 
 /** 右栏「音色」那一块。没配好的情况用和「还没有可用的生成模型」同一种提示条说,带去处。 */
@@ -320,14 +322,19 @@ export function usePodcastDraft(enabled: boolean, last: GenerationJob | null) {
 }
 export type PodcastDraft = ReturnType<typeof usePodcastDraft>;
 
-/** 这一次交得出去吗。照稿念看稿子;改写、讨论要两位不同的发音人和一段字。 */
-export function podcastReady(draft: PodcastDraft, text: string, engine: TtsEngineChoice | undefined): boolean {
-  if (engine?.ready === false) return false;
+/** 这一次还交不出去的原因(文案 key);null = 交得出去。照稿念看稿子;提炼、调研要两位不同的发音人和一段字。 */
+export function podcastBlocker(draft: PodcastDraft, text: string, engine: TtsEngineChoice | undefined): MessageKey | null {
+  if (engine?.ready === false) return "createEngineNotReady";
   if (draft.mode === "read") {
     const problems = scriptProblems(draft.turns);
-    return !problems.empty && !problems.tooMany && problems.tooLong.length === 0 && Boolean(draft.pair[0]);
+    if (problems.empty) return "podcastBlockedEmptyScript";
+    if (problems.tooMany) return "podcastBlockedTooManyTurns";
+    if (problems.tooLong.length > 0) return "podcastBlockedTurnTooLong";
+    return draft.pair[0] ? null : "podcastBlockedPickSpeaker";
   }
-  return Boolean(text.trim()) && Boolean(draft.pair[0] && draft.pair[1]) && draft.pair[0] !== draft.pair[1];
+  if (!text.trim()) return "podcastBlockedNeedsTopic";
+  if (!draft.pair[0] || !draft.pair[1]) return "podcastBlockedPickTwoSpeakers";
+  return draft.pair[0] === draft.pair[1] ? "podcastBlockedSameSpeakers" : null;
 }
 
 export function podcastRequest(draft: PodcastDraft, text: string): Omit<PodcastCreate, "workspace_id" | "session_id"> {

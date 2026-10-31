@@ -49,6 +49,7 @@ import {
 import { jobSettled } from "@/components/jobs/runStatus";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
+import type { MessageKey } from "@/app/messages";
 import { MissingModelNotice, UpgradeInLibraryButton } from "@/features/plugins/MissingModelNotice";
 import { GenerationDeletedCard, GenerationFailureCard, GenerationStoppedCard } from "@/features/ai-studio/GenerationFailureCard";
 import { OpenInWorkbench } from "@/features/plugins/workbench/OpenInWorkbench";
@@ -120,7 +121,7 @@ import {
   sourceLabels,
   sourceLimit,
   exclusiveSourceGroups,
-  hasEnoughText,
+  promptBlocker,
   promptDefault,
   promptMode,
   promptToSend,
@@ -171,9 +172,9 @@ import {
   defaultVoicedOption,
   isAudibleKind,
   isVoicedKind,
-  podcastReady,
+  podcastBlocker,
   podcastRequest,
-  speechReady,
+  speechBlocker,
   speechRequest,
   useVoiceLabels,
   useSpeechDraft,
@@ -689,7 +690,6 @@ export function GenerateWorkspace({
             : kind === "podcast"
               ? t("createKindPodcast")
               : kind;
-  const canSubmitText = hasEnoughText(selectedModel, prompt, generationConfig.lyrics, generationConfig.instrumental);
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
   const setFrames = (role: SourceRole, slots: FrameSlot[]) =>
@@ -859,11 +859,23 @@ export function GenerateWorkspace({
   const lastOf = (kind: string) => [...(sessionJobs.data ?? [])].reverse().find((generation) => generation.kind === kind) ?? null;
   const speech = useSpeechDraft(workspace.id, voicedChoice?.kind === "speech" ? voicedChoice.engine.id : null, lastOf("speech"));
   const podcast = usePodcastDraft(voicedOptions.options.some((option) => option.kind === "podcast"), lastOf("podcast"));
-  const voicedCanSubmit = voicedChoice
+  //: 发送键为什么点不了(文案 key);null = 点得了。按钮的 disabled 和悬停说明都只看它,不再各判一套 ——
+  //: 此前 disabled 有四个条件,而说明只覆盖其中「会话记着的模型用不了」那一个,其余几种灰着却什么都不说。
+  const submitBlocker: MessageKey | null = voicedChoice
     ? voicedChoice.kind === "speech"
-      ? speechReady(speech, prompt)
-      : podcastReady(podcast, prompt, voicedChoice.engine)
-    : false;
+      ? speechBlocker(speech, prompt)
+      : podcastBlocker(podcast, prompt, voicedChoice.engine)
+    : !selectedModel
+      ? missingEngine
+        ? "genModelMissingCannotSend"
+        : generationModelsLoading
+          ? "genBlockedModelsLoading"
+          : noGenerationModels
+            ? "generationNoModels"
+            : "genBlockedPickModel"
+      : !selectedAdapterAvailable
+        ? "genBlockedAdapterUnavailable"
+        : promptBlocker(selectedModel, prompt, generationConfig.lyrics, generationConfig.instrumental);
   //: 念 / 做播客:没带会话就由后端现开一条(回执里的 session_id),这边接着开着它。远端引擎念配音库里的嗓子、这个账号
   //: 第一次用时先问要不要传上去(ADR 0037)。
   const createVoiced = useMutation({
@@ -1026,12 +1038,12 @@ export function GenerateWorkspace({
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (voicedChoice) {
-      if (readOnly || !voicedCanSubmit || createVoiced.isPending) return;
+      if (readOnly || submitBlocker || createVoiced.isPending) return;
       stick.scrollToBottom();
       createVoiced.mutate();
       return;
     }
-    if (readOnly || !canSubmitText || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
+    if (readOnly || submitBlocker || createGeneration.isPending) return;
     if (needsDigitalHumanConsent && !digitalHumanConsent) {
       toast.error(t("genDigitalHumanConsentNeeded"));
       return;
@@ -1578,9 +1590,9 @@ export function GenerateWorkspace({
                   className="shrink-0 rounded-full"
                   label={t("generate")}
                   shortcut={formatCombo(SUBMIT_COMBO)}
-                  disabled={voicedChoice ? !voicedCanSubmit : !canSubmitText || !selectedModel || !selectedAdapterAvailable}
+                  disabled={submitBlocker !== null}
                   loading={voicedChoice ? createVoiced.isPending : createGeneration.isPending}
-                  disabledReason={missingEngine && !selectedModel ? t("genModelMissingCannotSend") : undefined}
+                  disabledReason={submitBlocker ? t(submitBlocker) : undefined}
                 >
                   <Send size={15} />
                 </IconButton>

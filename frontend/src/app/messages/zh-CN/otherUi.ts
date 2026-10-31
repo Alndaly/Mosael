@@ -393,6 +393,7 @@ export const otherUi = {
   subtitleDubLineFirst: "第一行",
   subtitleDubLineLast: "第二行",
   subtitleDubApply: "给 {n} 条配音",
+  subtitleDubBlockedNoText: "这些字幕里没有要念的文字",
   subtitleDubMatch: "缩放到段落长度",
   subtitleDubMatchHint: "把配音在 0.9–1.5 倍速之间缩放,对齐字幕段落的时长;1.5 倍还念不完时,先占用到下一条字幕开始之前的空当。用的是片段自己的倍速,无损、可撤销、事后还能在检查器里微调。",
   subtitleDubTrack: "配哪条字幕轨",

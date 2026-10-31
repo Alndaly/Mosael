@@ -345,9 +345,10 @@ describe("给字幕配音", () => {
     const user = userEvent.setup();
     const { dubRequests } = renderPanel({ texts: ["第一条", "第二条"] });
     expect(await screen.findByText("subtitleTranslateSelectedOnly")).toBeInTheDocument();
-    const apply = await screen.findByRole("button", { name: /subtitleDubApply/ });
-    await waitFor(() => expect(apply).toBeEnabled());
-    await user.click(apply);
+    //: 按钮灰着时外面套着一层说明壳,可点了壳就拿掉、按钮换了一个节点 —— 现查,别攥着旧的。
+    const apply = () => screen.getByRole("button", { name: /subtitleDubApply/ });
+    await waitFor(() => expect(apply()).toBeEnabled());
+    await user.click(apply());
     await waitFor(() => expect(dubRequests).toHaveLength(1));
     expect(dubRequests[0]).toMatchObject({
       clip_ids: ["c1"], voice: { engine: "builtin:clone", cloned_voice: "v1", model: "f5-tts" }, speed: 1,
@@ -368,9 +369,10 @@ describe("给字幕配音", () => {
     const user = userEvent.setup();
     const { dubRequests } = renderPanel({ sequence });
     expect(await screen.findByRole("combobox", { name: "subtitleDubTrack" })).toBeInTheDocument();
-    const apply = await screen.findByRole("button", { name: /subtitleDubApply/ });
-    await waitFor(() => expect(apply).toBeEnabled());
-    await user.click(apply);
+    //: 按钮灰着时外面套着一层说明壳,可点了壳就拿掉、按钮换了一个节点 —— 现查,别攥着旧的。
+    const apply = () => screen.getByRole("button", { name: /subtitleDubApply/ });
+    await waitFor(() => expect(apply()).toBeEnabled());
+    await user.click(apply());
     await waitFor(() => expect(dubRequests).toHaveLength(1));
     expect(dubRequests[0]).toMatchObject({ clip_ids: ["e1"], track_id: "en" });
   });
@@ -380,9 +382,10 @@ describe("给字幕配音", () => {
     const user = userEvent.setup();
     const { dubRequests } = renderPanel({ texts: ["第一条", "第二条"], focusClipId: "c1" });
     expect(await screen.findByText("subtitleDubFocused")).toBeInTheDocument();
-    const apply = await screen.findByRole("button", { name: /subtitleDubApply/ });
-    await waitFor(() => expect(apply).toBeEnabled());
-    await user.click(apply);
+    //: 按钮灰着时外面套着一层说明壳,可点了壳就拿掉、按钮换了一个节点 —— 现查,别攥着旧的。
+    const apply = () => screen.getByRole("button", { name: /subtitleDubApply/ });
+    await waitFor(() => expect(apply()).toBeEnabled());
+    await user.click(apply());
     await waitFor(() => expect(dubRequests).toHaveLength(1));
     expect(dubRequests[0]).toMatchObject({ clip_ids: ["c1"], track_id: "t1" });
   });

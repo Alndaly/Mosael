@@ -252,19 +252,21 @@ export function promptToSend(model: GenerationOption | null, prompt: string): st
 }
 
 /**
- * 字够不够提交。和后端 validate_text_inputs 是同一套判据(后端仍会再判一遍):
+ * 字够不够提交;不够时说缺的是什么(文案 key),够了是 null。和后端 validate_text_inputs 是同一套判据(后端仍会再判一遍):
  * 提示词按 `promptMode`;要描述的模型里,会唱歌词的只给歌词也行;纯音乐只剩描述可依,所以要描述。
+ *
+ * 返回原因而不是布尔:发送键「点不点得了」和悬停时「为什么点不了」由这同一个答案给,两边不会各判一套。
  */
-export function hasEnoughText(
+export function promptBlocker(
   model: GenerationOption | null,
   prompt: string,
   lyrics = "",
   instrumental = false,
-): boolean {
-  const mode = promptMode(model);
-  if (mode !== "required") return true;
-  if (prompt.trim()) return true;
-  return !instrumental && Boolean(lyrics.trim()) && supportsParameter(model, "lyrics");
+): MessageKey | null {
+  if (promptMode(model) !== "required" || prompt.trim()) return null;
+  const singsLyrics = !instrumental && supportsParameter(model, "lyrics");
+  if (singsLyrics && lyrics.trim()) return null;
+  return singsLyrics ? "genBlockedNeedsPromptOrLyrics" : "genBlockedNeedsPrompt";
 }
 
 /** 需要开关控件的参数。参数类型也是能力契约的一部分，不能在各页面各抄一张名单。 */

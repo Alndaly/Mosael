@@ -19,7 +19,7 @@ import {
   defaultDuration,
   durationChoices,
   durationOptions,
-  hasEnoughText,
+  promptBlocker,
   parseCustomSize,
   parseGenerationParameterInput,
   parameterChoiceEntries,
@@ -219,15 +219,16 @@ describe("提示词要不要写(描述符的 prompt)", () => {
     expect(promptMode(withPrompt("none"))).toBe("none");
   });
 
-  it("够不够提交:和后端 validate_text_inputs 同一套判据", () => {
-    expect(hasEnoughText(withPrompt("none"), "")).toBe(true);
-    expect(hasEnoughText(withPrompt("optional"), "")).toBe(true);
-    expect(hasEnoughText(withPrompt(), "  ")).toBe(false);
-    expect(hasEnoughText(withPrompt(), "一只猫")).toBe(true);
+  it("够不够提交:和后端 validate_text_inputs 同一套判据,不够时说缺什么", () => {
+    expect(promptBlocker(withPrompt("none"), "")).toBeNull();
+    expect(promptBlocker(withPrompt("optional"), "")).toBeNull();
+    expect(promptBlocker(withPrompt(), "  ")).toBe("genBlockedNeedsPrompt");
+    expect(promptBlocker(withPrompt(), "一只猫")).toBeNull();
     // 会唱歌词的模型只给歌词也行;不会唱的给了也不算;纯音乐要描述
-    expect(hasEnoughText(withPrompt(undefined, ["lyrics"]), "", "[Verse] 啦")).toBe(true);
-    expect(hasEnoughText(withPrompt(), "", "[Verse] 啦")).toBe(false);
-    expect(hasEnoughText(withPrompt(undefined, ["lyrics"]), "", "啦", true)).toBe(false);
+    expect(promptBlocker(withPrompt(undefined, ["lyrics"]), "", "[Verse] 啦")).toBeNull();
+    expect(promptBlocker(withPrompt(undefined, ["lyrics"]), "", "")).toBe("genBlockedNeedsPromptOrLyrics");
+    expect(promptBlocker(withPrompt(), "", "[Verse] 啦")).toBe("genBlockedNeedsPrompt");
+    expect(promptBlocker(withPrompt(undefined, ["lyrics"]), "", "啦", true)).toBe("genBlockedNeedsPrompt");
   });
 
   it("不收提示词的模型发空串 —— 换模型之前框里写过的字不跟着发出去", () => {

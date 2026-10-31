@@ -25,6 +25,7 @@ vi.mock("@/app/preferences", () => ({
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { voiceOption } from "@/test/voiceOption";
+import { readHint } from "@/test/hint";
 
 beforeAll(() => {
   Object.assign(Element.prototype, {
@@ -209,10 +210,12 @@ describe("语音", () => {
     expect(screen.queryByText("genSectionOutput")).toBeNull();
     const send = screen.getByRole("button", { name: "generate" });
     expect(send).toBeDisabled();
+    expect(await readHint(send)).toContain("speechBlockedNeedsText");
     await user.type(text, "欢迎来到 Mosael");
     expect(document.querySelector("[data-voiced-count]")?.textContent).toBe("createSpeechCount");
-    await waitFor(() => expect(send).toBeEnabled());
-    await user.click(send);
+    //: 可点之后按钮换了一个节点(说明壳拿掉了),现查
+    await waitFor(() => expect(screen.getByRole("button", { name: "generate" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "generate" }));
     await waitFor(() => expect(posts.some((one) => one.url.endsWith("/api/generation/speech"))).toBe(true));
     const body = posts.find((one) => one.url.endsWith("/api/generation/speech"))!.body!;
     expect(body).toMatchObject({

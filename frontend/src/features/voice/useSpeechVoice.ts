@@ -7,6 +7,7 @@ import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { speechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
 import { CLONE_ENGINE, clonedVoiceRef, isClonedVoice, voiceRefOf, type VoiceRef } from "@/api/domains/speech";
+import type { MessageKey } from "@/app/messages";
 
 /** 合成请求里「谁来念、念多快」那两格。/tts/synthesize、字幕配音、创作页的语音收的都是它。
  *  `voice` 是一把嗓子(ADR 0087 的 `VoiceRef`);还没选好时是 `null`。 */
@@ -78,7 +79,7 @@ export function useSpeechVoice(workspaceId: string) {
   const cloneRuntime = cloneRuntimes.find((item) => item.id === cloneEngine);
   // 能出声要两件事都成立:有解释器能 import 它,权重在盘上。还在探测时也不给点 —— 那一刻
   // 确实不知道跑不跑得起来,而按下去的代价是一次必然失败的合成(下拉里同时写着「检测中」)。
-  const cloneUsable = runtimeState(cloneRuntime) === "ready";
+  const cloneState = runtimeState(cloneRuntime);
 
   const activeEngine = engines.data?.find((item) => item.id === engine);
   const voiceChoices = engineVoices.data ?? [];
@@ -96,11 +97,22 @@ export function useSpeechVoice(workspaceId: string) {
   const speedSupported =
     engine === CLONE_ENGINE ? Boolean(cloneRuntime?.supports_speed) : activeEngine?.supports_speed !== false;
 
-  // 克隆要有音色且引擎装好;远端引擎要么有目录,要么它自己说需要手填 id 而用户填了(或点了一把克隆音色)。
-  const ready =
+  // 还念不了的原因(文案 key);null = 谁来念已经定好。按钮「点不点得了」和悬停时「为什么」都用它,不各判一套。
+  // 克隆要有音色且引擎装好;远端引擎要能用,并且要么有目录,要么它自己说需要手填 id 而用户填了(或点了一把克隆音色)。
+  const voiceBlocker: MessageKey | null =
     engine === CLONE_ENGINE
-      ? Boolean(voiceId) && cloneUsable
-      : stockVoices.length > 0 || !activeEngine?.needs_voice_id || Boolean(engineVoiceChoice.trim());
+      ? !voiceId
+        ? "speechBlockedPickVoice"
+        : cloneState === "checking"
+          ? "speechBlockedCheckingClone"
+          : cloneState === "unready"
+            ? "createCloneNotInstalled"
+            : null
+      : activeEngine?.ready === false
+        ? "createEngineNotReady"
+        : stockVoices.length > 0 || !activeEngine?.needs_voice_id || engineVoiceChoice.trim()
+          ? null
+          : "speechBlockedNeedsVoiceId";
 
   // 本机克隆的引擎 / 权重写在嗓子的 `model` 里(`f5-tts/fr`);权重只有 F5 才分。
   const cloneModel = [cloneEngine, cloneEngine === "f5-tts" ? cloneWeights : ""].filter(Boolean).join("/");
@@ -149,7 +161,7 @@ export function useSpeechVoice(workspaceId: string) {
     speed,
     setSpeed,
     speedSupported,
-    ready,
+    voiceBlocker,
     choice,
   };
 }

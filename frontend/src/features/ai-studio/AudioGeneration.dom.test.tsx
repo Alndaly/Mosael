@@ -22,6 +22,7 @@ vi.mock("@/app/preferences", () => ({
 
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { readHint } from "@/test/hint";
 
 beforeAll(() => {
   Object.assign(Element.prototype, {
@@ -143,13 +144,16 @@ describe("音频生成的控件", () => {
     // 什么字都没有时不能提交
     const submit = screen.getByRole("button", { name: "generate" });
     expect(submit).toBeDisabled();
+    //: 会唱歌词的模型:说的是「提示词或歌词」,不是只要提示词
+    expect(await readHint(submit)).toContain("genBlockedNeedsPromptOrLyrics");
 
     // user-event 里 `[` 是按键描述的开头,字面的方括号写成 `[[`。
     await user.type(lyrics, "[[Verse] 啦啦啦");
     // 字数与上限
     expect(screen.getByText("11 / 5000")).toBeInTheDocument();
-    await waitFor(() => expect(submit).toBeEnabled());
-    await user.click(submit);
+    //: 可点之后按钮换了一个节点(说明壳拿掉了),现查
+    await waitFor(() => expect(screen.getByRole("button", { name: "generate" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "generate" }));
 
     await waitFor(() => expect(posts.some((one) => one.url.includes("/api/generation/jobs"))).toBe(true));
     const sent = posts.find((one) => one.url.includes("/api/generation/jobs"))!.body;

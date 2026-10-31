@@ -47,7 +47,7 @@ import {
   defaultDuration,
   durationChoices,
   exclusiveSourceGroups,
-  hasEnoughText,
+  promptBlocker,
   maxImages,
   countsRuns,
   outputsPerRun,
@@ -835,19 +835,34 @@ export function NodeComposer({
   const referencedScene = useReferencedScene(workspaceId, upstreamScene);
   //: 这次用哪个镜头(挑过的还在场景里 / 只有一个镜头)。好几个镜头却没挑、场景还没查到时发不出去 —— 服务端不猜镜头。
   const sceneShot = resolvedShot(referencedScene, sceneReference.shot_id);
-  const sceneReady = !upstreamScene || (sceneUses.length > 0 && Boolean(referencedScene) && Boolean(sceneShot));
+  //: 引用了场景时还缺什么:这个模型用不了场景 / 场景还没查到 / 好几个镜头却没挑。
+  const sceneBlocker: MessageKey | null = !upstreamScene
+    ? null
+    : sceneUses.length === 0
+      ? "boardBlockedSceneUnsupported"
+      : !referencedScene
+        ? "boardBlockedSceneLoading"
+        : sceneShot
+          ? null
+          : "boardBlockedPickShot";
   //: 挂了驱动音频 = 数字人生成:要勾上授权才发得出去(后端生成漏斗同一条)。不存进格子的表单 —— 每次发都要本人勾。
   //: 按**发出去的**那一份判:正文里 `@` 到的一段音频也会落进驱动音频的槽(见 mergeSourceAssets)。
   const [digitalHumanConsent, setDigitalHumanConsent] = React.useState(false);
   const outgoingSources = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, [...referenced.byId.values()], slots);
   const needsDigitalHumanConsent = outgoingSources.some((one) => one.role === "driving_audio");
-  const canSend =
-    Boolean(current) && hasEnoughText(current, prompt) && sceneReady && (!needsDigitalHumanConsent || digitalHumanConsent);
+  //: 「生成」为什么点不了(文案 key);null = 点得了。按钮的 disabled 和悬停说明都只看它。
+  const sendBlocker: MessageKey | null = !current
+    ? missingEngine
+      ? "genModelMissingCannotSend"
+      : "genBlockedPickModel"
+    : (promptBlocker(current, prompt) ??
+      sceneBlocker ??
+      (needsDigitalHumanConsent && !digitalHumanConsent ? "genDigitalHumanConsentNeeded" : null));
 
   const send = () => {
     //: 不收提示词的模型:编辑器里残留的字(换模型之前写的)不跟着发出去。
     const text = currentPromptMode === "none" ? "" : prompt.trim();
-    if (!canSend || !current || working) return;
+    if (sendBlocker || !current || working) return;
     //: 只发这个模型**认的**那几项 —— 多发一项会被校验器当场拦下(它照描述符判)。
     const parameters = formParameters;
     //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
@@ -1428,8 +1443,8 @@ export function NodeComposer({
       }
       send={
         options.length > 0
-          ? { label: t("boardGenerate"), onSend: send, disabled: !canSend || busy, working, shortcut: true,
-              disabledReason: missingEngine ? t("genModelMissingCannotSend") : undefined }
+          ? { label: t("boardGenerate"), onSend: send, disabled: sendBlocker !== null || busy, working, shortcut: true,
+              disabledReason: sendBlocker ? t(sendBlocker) : undefined }
           : null
       }
     >

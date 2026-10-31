@@ -5,6 +5,7 @@ import { expect, it, vi } from "vitest";
 import type { BoardItem, GenerationOption } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { NodeComposer } from "./NodeComposer";
+import { readHint } from "@/test/hint";
 
 /**
  * 数字人的授权(ADR 0028 §5):生成格挂了驱动音频,就要本人勾上「已取得画面中人物的授权」才发得出去;
@@ -51,13 +52,15 @@ function mount(sources: { asset_id: string; role: string }[]) {
   return { onSubmit };
 }
 
-it("挂了驱动音频:不勾授权发不出去,勾上之后发出去的带着它", () => {
+it("挂了驱动音频:不勾授权发不出去(悬停说为什么),勾上之后发出去的带着它", async () => {
   const { onSubmit } = mount([{ asset_id: "face", role: "first_frame" }, { asset_id: "line", role: "driving_audio" }]);
   const generate = screen.getByRole("button", { name: "boardGenerate" });
   expect(generate).toBeDisabled();
+  expect(await readHint(generate)).toContain("genDigitalHumanConsentNeeded");
   fireEvent.click(screen.getByRole("checkbox", { name: /genDigitalHumanConsent/ }));
-  expect(generate).not.toBeDisabled();
-  fireEvent.click(generate);
+  //: 可点之后按钮换了一个节点(说明壳拿掉了),现查
+  expect(screen.getByRole("button", { name: "boardGenerate" })).not.toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ digitalHumanConsent: true }));
 });
 

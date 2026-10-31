@@ -149,9 +149,9 @@ describe("提示词要不要写,照模型说的摆", () => {
     const user = userEvent.setup();
     const { posts } = renderStudio({ modes: ["text-to-image"], parameter_keys: [], prompt: "optional",
                                     prompt_default: "工作流里存着的那句" });
-    const submit = screen.getByRole("button", { name: "generate" });
-    await waitFor(() => expect(submit).toBeEnabled());
-    await user.click(submit);
+    //: 按钮灰着时外面套着一层说明壳,可点了壳就拿掉、按钮换了一个节点 —— 每次现查,别攥着旧的。
+    await waitFor(() => expect(screen.getByRole("button", { name: "generate" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "generate" }));
     expect(await sentBody(posts)).toMatchObject({ prompt: "工作流里存着的那句" });
   });
 
@@ -164,8 +164,10 @@ describe("提示词要不要写,照模型说的摆", () => {
     await waitFor(() => expect(screen.getAllByText("upscale.json").length).toBeGreaterThan(0));
     const submit = screen.getByRole("button", { name: "generate" });
     expect(submit).toBeDisabled();
+    //: 灰着就要说为什么(悬停说明),和 disabled 是同一个判据给的
+    expect(await readHint(submit)).toContain("genBlockedNeedsPrompt");
     await user.type(box, "一只猫");
-    await waitFor(() => expect(submit).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "generate" })).toBeEnabled());
   });
 });
 

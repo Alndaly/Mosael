@@ -395,6 +395,7 @@ export const otherUi = {
   subtitleDubLineFirst: "First line",
   subtitleDubLineLast: "Second line",
   subtitleDubApply: "Dub {n} cue(s)",
+  subtitleDubBlockedNoText: "None of these cues have text to read",
   subtitleDubMatch: "Fit to cue length",
   subtitleDubMatchHint: "Speed the voiceover between 0.9× and 1.5× to fit the cue's duration; if 1.5× still isn't enough, it runs on into the gap before the next cue. It uses the clip's own speed — lossless, undoable, and still adjustable in the inspector afterwards.",
   subtitleDubTrack: "Subtitle track to dub",
