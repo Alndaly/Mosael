@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { compileMDX } from "next-mdx-remote/rsc";
 import { ArrowUpRight, Code2, KeyRound, Shield } from "lucide-react";
@@ -65,6 +66,11 @@ export default async function PluginDetailPage({
     .sort((a, b) => Number(b.kind === plugin.kind) - Number(a.kind === plugin.kind))
     .slice(0, 3);
   const author = plugin.author.name || "—";
+  // 仓库里的插件都是官方清单(Mosael 写),署名应进公开创作者主页;
+  // 只有非官方来源才继续用清单里的外站地址。
+  const authorHref = plugin.official
+    ? localePath(locale, `/users/${SITE.officialHandle}`)
+    : plugin.author.url;
 
   return (
     <>
@@ -168,10 +174,16 @@ export default async function PluginDetailPage({
                 rows={[
                   {
                     label: t.community.by,
-                    value: plugin.author.url ? (
-                      <a className="text-primary hover:underline" href={plugin.author.url} target="_blank" rel="noreferrer">
-                        {author}
-                      </a>
+                    value: authorHref ? (
+                      plugin.official ? (
+                        <Link className="text-primary hover:underline" href={authorHref}>
+                          {author}
+                        </Link>
+                      ) : (
+                        <a className="text-primary hover:underline" href={authorHref} target="_blank" rel="noreferrer">
+                          {author}
+                        </a>
+                      )
                     ) : (
                       author
                     ),

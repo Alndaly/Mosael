@@ -15,6 +15,11 @@ const { LOCALES } = await import("../src/i18n/config.ts");
 const { README_FILE, listPlugins, readPluginDoc } = await import("../src/lib/registry.ts");
 const { mdxOptions } = await import("../src/lib/mdx-options.ts");
 const { pluginDocSource } = await import("../src/lib/plugin-doc.ts");
+const { SITE } = await import("../src/lib/site.ts");
+const fs = await import("node:fs");
+const path = await import("node:path");
+
+const PLUGIN_PAGE = path.resolve(import.meta.dirname, "..", "src/app/[locale]/(site)/plugins/[slug]/page.tsx");
 
 test("每个插件的 README(两种语言)都按详情页那一套编得过 MDX", async () => {
   const failures = [];
@@ -35,4 +40,12 @@ test("每个插件的 README(两种语言)都按详情页那一套编得过 MDX"
   }
   assert.deepEqual(failures, [], `这些 README 在官网插件页上编不过(裸的 <…> 写成反引号或去掉尖括号):\n${failures.join("\n")}`);
   assert.ok(compiled > 0, "一份 README 都没编到 —— 读 README 的路子变了,这条测试也得跟着改");
+});
+
+
+test("官方插件详情的作者署名进公开创作者主页,不是站点首页", () => {
+  const page = fs.readFileSync(PLUGIN_PAGE, "utf8");
+  assert.match(page, /plugin\.official[\s\S]*localePath\(locale, `\/users\/\$\{SITE\.officialHandle\}`\)/, "官方插件作者没有指向公开主页");
+  assert.match(page, /plugin\.official \? \([\s\S]*<Link[\s\S]*href=\{authorHref\}/, "官方插件作者还在走外站 <a>");
+  assert.equal(SITE.officialHandle, "mosael", "站点常量里的官方短名不对");
 });
