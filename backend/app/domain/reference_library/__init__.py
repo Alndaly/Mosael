@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, get_current_locale
+from app.core.i18n import LocalizedError, fragment, get_current_locale
 from app.db.models import PluginInstance, PluginPackage, User
 from app.domain import capabilities
 from app.domain.assets.deletion import delete_asset
@@ -276,8 +276,6 @@ CAPABILITY = capabilities.Capability(
 
 
 def register_uses() -> None:
-    from app.core.i18n import fragment
-
     capabilities.register_use(capabilities.Use(REFERENCE_LIBRARY, "app", fragment("capUse_referenceLibrary")))
 
 
