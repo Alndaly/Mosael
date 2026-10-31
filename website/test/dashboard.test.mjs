@@ -140,6 +140,8 @@ test("①b 公开主页:控制台右上角有入口,页面真的能打开", () =
   assert.match(page, /loadUserShares\(/, "公开主页没有读 /users/{handle}/shares");
   assert.match(page, /<ShareCard/, "公开主页没有复用社区分享卡片");
   assert.match(page, /InitialTile/, "公开主页没有作者头像");
+  assert.match(page, /BadgeCheck/, "公开主页没有官方身份标识");
+  assert.match(page, /identity\.official/, "官方身份标识没有按 official 决定");
 
   const header = read(DASHBOARD_HEADER);
   assert.match(header, /localePath\(locale, `\/users\/\$\{handle\}`\)/, "控制台右上角没有指向公开主页");

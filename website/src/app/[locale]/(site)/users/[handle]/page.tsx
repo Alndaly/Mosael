@@ -62,8 +62,8 @@ export default async function CreatorPage({ params }: { params: Params }) {
   const t = getMessages(locale).community;
   const name = identity.display_name?.trim() || identity.handle || key;
   const seed = identity.avatar_seed || identity.handle || key;
-  // 昵称本身已经带「官方」时不再重复画一枚徽标。
-  const showOfficial = Boolean(identity.official) && !name.includes(t.official);
+  // 昵称可能本身就叫「Mosael 官方」;这里只画一枚无文字的认证图标,不重复「官方」两个字。
+  const showOfficial = Boolean(identity.official);
   const stats = [
     { key: "downloads" as const, label: t.downloads, value: totals.downloads },
     { key: "likes" as const, label: t.likes, value: totals.likes },
@@ -91,9 +91,13 @@ export default async function CreatorPage({ params }: { params: Params }) {
               <h1 className="mt-2 mb-0 flex flex-wrap items-center gap-2 font-display text-4xl font-bold tracking-[-0.035em] text-balance sm:text-5xl">
                 {name}
                 {showOfficial && (
-                  <span className="inline-flex items-center gap-1 text-base font-medium text-primary">
-                    <BadgeCheck className="size-5" aria-hidden />
-                    {t.official}
+                  <span
+                    role="img"
+                    aria-label={t.official}
+                    title={t.official}
+                    className="inline-flex shrink-0 text-primary"
+                  >
+                    <BadgeCheck className="size-6" aria-hidden />
                   </span>
                 )}
               </h1>
