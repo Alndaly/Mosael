@@ -78,3 +78,38 @@ def test_the_failure_path_itself_does_not_crash() -> None:
                 isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "logger" for t in n.targets)
                 for n in tree.body
             ), f"{path} 用了 logger 却没定义 —— 只在失败时才炸的那种"
+
+
+TORCHCODEC_MISSING = '''Traceback (most recent call last):
+  File "/x/torchaudio/_torchcodec.py", line 82, in load_with_torchcodec
+    from torchcodec.decoders import AudioDecoder
+ModuleNotFoundError: No module named 'torchcodec'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/me/.mosael/tts/fish-speech-src/fish_speech/inference_engine/reference_loader.py", line 120, in load_audio
+    waveform, sample_rate = torchaudio.load(reference_audio)
+ImportError: TorchCodec is required for load_with_torchcodec. Please install torchcodec to use this function.
+'''
+
+
+def test_torchcodec_not_installed_is_a_missing_dependency_not_an_ffmpeg_mismatch() -> None:
+    """没装 torchcodec 和「装了但配不上 FFmpeg」是两回事,出路也不同。
+
+    此前按「最后一行提到 torchcodec」判,把前者也说成 FFmpeg 版本对不上(用户截图:Fish Speech S2 Pro),
+    让人去装 Homebrew 的 ffmpeg —— 而真正缺的是一个 pip 包,「下载」就能补上。
+    """
+    error = voices.worker_failure(TORCHCODEC_MISSING)
+
+    assert error.key == "voiceErr_synthMissingModule"
+    assert "TorchCodec is required" in error.params["detail"]
+
+
+def test_torchcodec_that_cannot_load_its_ffmpeg_still_says_so() -> None:
+    error = voices.worker_failure(
+        "RuntimeError: Could not load libtorchcodec.\n"
+        "ImportError: libavutil.59.dylib not found\n[end of libtorchcodec loading traceback]."
+    )
+
+    assert error.key == "voiceErr_synthTorchcodec"

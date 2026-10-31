@@ -195,10 +195,13 @@ def worker_failure(stderr: str) -> VoiceError:
     last = blame_line(text)
     if not last:
         return VoiceError("voiceErr_synthNoReason")  # 全是进度条 / 分隔线时,说不出原因就别硬编一个
-    if "libtorchcodec" in text or "torchcodec" in last:
-        # 这个错在 macOS 上有确定的成因:torchcodec 的 dylib 按 FFmpeg 大版本编译,而 0.16 起
-        # 它们不带 rpath,dlopen 自己找不到 libavutil。应用会在启动 worker 时把可用的 FFmpeg
-        # 库目录注进去(见 tts_models._ffmpeg_runtime_dir);走到这儿说明没找到能配对的那一份。
+    if "libtorchcodec" in text:
+        # **装了、加载不起来**:torchcodec 的 dylib 按 FFmpeg 大版本编译,而 0.16 起它们不带 rpath,
+        # dlopen 自己找不到 libavutil。应用会在启动 worker 时把可用的 FFmpeg 库目录注进去
+        # (见 tts_models._ffmpeg_runtime_dir);走到这儿说明没找到能配对的那一份。
+        # 只认这条加载失败的 traceback(它带着 `libtorchcodec`)。**没装**是另一回事 —— torchaudio 2.9+
+        # 报的是 `ImportError: TorchCodec is required for load_with_torchcodec`,那是缺依赖,
+        # 落到下面那条:此前按「最后一行提到 torchcodec」判,把缺包说成 FFmpeg 版本对不上,指错了方向。
         return VoiceError("voiceErr_synthTorchcodec")
     if "ModuleNotFoundError" in last or "ImportError" in last:
         # 缺依赖是**能行动**的:光扔一个模块名,用户只能去搜。

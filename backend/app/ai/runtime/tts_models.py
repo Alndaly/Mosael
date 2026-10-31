@@ -97,7 +97,9 @@ CATALOG: tuple[TtsEngine, ...] = (
         # 所以这条路是"大的走快路,小的还走 HF" —— 在 46 KB/s 的网络上,那 1.35 GB
         # 是八小时和三分钟的区别,而 55 MB 就算慢也只有二十分钟。
         modelscope_repo="AI-ModelScope/F5-TTS",
-        imports=("f5_tts.api",),
+        # torchcodec:F5 读参考音频、写结果都经 torchaudio → torchcodec。只 import 包本身(不加载 FFmpeg 库),
+        # 缺了就判不就绪;FFmpeg 配不配得上是合成时由 _worker_env 注库目录解决的另一件事。
+        imports=("f5_tts.api", "torchcodec.decoders"),
         contract_check="f5_driver.check_contract",
         needs_reference_text=False,
         supports_speed=True,
@@ -126,9 +128,13 @@ CATALOG: tuple[TtsEngine, ...] = (
                           "descript-audiotools", "descript-audio-codec",
                           # 走 ModelScope 下权重要用它。用户机器上实测 ~9 MB/s,
                           # 而 HuggingFace 与 hf-mirror 都是 46 KB/s —— 两百倍。
-                          "modelscope"),
+                          "modelscope",
+                          # torchaudio 2.9 起读写音频都交给 torchcodec,而它只是**间接**依赖(同 F5 那条)。
+                          # 漏了它:torchaudio 一升级,fish 读参考音频就 `TorchCodec is required`。
+                          "torchcodec"),
         modelscope_repo="fishaudio/s2-pro",
-        imports=("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager"),
+        imports=("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager",
+                 "torchcodec.decoders"),
         needs_reference_text=True,
         supports_speed=False,
     ),

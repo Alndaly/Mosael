@@ -95,3 +95,16 @@ def test_the_requirements_cover_what_the_probe_needs() -> None:
 
     for package in ("natsort", "descript-audiotools", "descript-audio-codec", "pytorch-lightning"):
         assert package in fish.pip_requirements, f"{package} 不在依赖表里"
+
+
+def test_engines_that_read_audio_through_torchaudio_need_torchcodec() -> None:
+    """torchaudio 2.9 起读写音频都交给 torchcodec,而它只是间接依赖。
+
+    Fish 的依赖表此前漏了它:torchaudio 一升到 2.11,读参考音频就 `TorchCodec is required`,
+    而探测只 import fish 自己的模块,照样说「已就绪」。所以依赖表要列,探测也要 import ——
+    缺了才会判不就绪,「安装运行环境」才会去补。
+    """
+    for engine_id in ("f5-tts", "fish-speech"):
+        engine = tts_models._BY_ID[engine_id]
+        assert "torchcodec" in engine.pip_requirements, engine_id
+        assert "torchcodec.decoders" in engine.imports, engine_id
