@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 from app.api.schemas.plugins import PackageSourcePresetOut
 from app.api.schemas.base import ApiModel
-from app.ai.providers.contracts.speech import SpeedControl
+from app.ai.speech_speed import SpeedControl
 
 
 class NetworkConfigOut(ApiModel):

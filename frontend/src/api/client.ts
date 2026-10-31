@@ -26,6 +26,7 @@ export * from "@/api/domains/notifications";
 export * from "@/api/domains/plugins";
 export * from "@/api/domains/providers";
 export * from "@/api/domains/publish";
+export * from "@/api/domains/referenceLibrary";
 export * from "@/api/domains/scenes";
 export * from "@/api/domains/scheduler";
 export * from "@/api/domains/sessions";

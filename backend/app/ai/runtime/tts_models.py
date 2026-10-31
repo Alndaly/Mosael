@@ -30,7 +30,7 @@ from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
 
-from app.ai.providers.contracts.speech import SpeedControl
+from app.ai.speech_speed import SpeedControl
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
 from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure, with_log
 from app.core.i18n import get_current_locale, t

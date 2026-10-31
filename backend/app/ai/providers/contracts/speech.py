@@ -10,7 +10,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 from collections.abc import Mapping
 from typing import Any, Protocol
 
@@ -48,8 +47,9 @@ class SpeechSynthesisRequest:
     extra: Mapping[str, str] = field(default_factory=dict)
 
 
-#: 语速的两种实现方式,见 SpeechAdapter.speed_control。
-SpeedControl = Literal["native", "stretch"]
+#: 语速的两种实现方式,见 SpeechAdapter.speed_control。叶子类型单独住一个模块:runtime 也要用,
+#: 但不能从 providers 引,否则本地适配器(providers → runtime)会成环。
+from app.ai.speech_speed import SpeedControl
 
 
 class SpeechAdapter(Protocol):
