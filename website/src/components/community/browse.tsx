@@ -92,12 +92,15 @@ function Empty({ locale, onClear }: { locale: Locale; onClear: () => void }) {
 export function Byline({
   locale,
   author,
+  authorHref,
   version,
   official,
   builtIn = false,
 }: {
   locale: Locale;
   author: string;
+  /** 作者公开主页;只在详情页传,卡片整张已是链接,不能再套一层。 */
+  authorHref?: string;
   version: string;
   official: boolean;
   builtIn?: boolean;
@@ -105,7 +108,13 @@ export function Byline({
   const t = getMessages(locale).community;
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-      <span className="truncate">{author}</span>
+      {authorHref ? (
+        <Link href={authorHref} className="truncate font-medium hover:text-foreground hover:underline">
+          {author}
+        </Link>
+      ) : (
+        <span className="truncate">{author}</span>
+      )}
       {official && (
         <span className="inline-flex items-center gap-0.5 font-medium text-primary">
           <BadgeCheck className="size-3.5" aria-hidden />

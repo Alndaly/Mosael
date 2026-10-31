@@ -10,6 +10,7 @@ import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
 import { findWorkflow, listWorkflows } from "@/lib/registry";
+import { SITE } from "@/lib/site";
 import { META_DESCRIPTION_MAX, pageMetadata } from "@/lib/seo";
 import { breadcrumbLd } from "@/lib/structured-data";
 import { JsonLd } from "@/components/json-ld";
@@ -46,6 +47,8 @@ export default async function WorkflowDetailPage({
   const workflow = findWorkflow(slug, locale);
   if (!workflow) notFound();
   const t = getMessages(locale);
+  const official = workflow.author === "Mosael";
+  const authorHref = official ? localePath(locale, `/users/${SITE.officialHandle}`) : "";
   const more = listWorkflows(locale)
     .filter((other) => other.slug !== workflow.slug)
     .slice(0, 3);
@@ -65,8 +68,9 @@ export default async function WorkflowDetailPage({
         tile={<WorkflowTile id={workflow.id} size="lg" />}
         name={workflow.name}
         author={workflow.author}
+        authorHref={authorHref || undefined}
         version={`${t.workflows.templateVersion} ${workflow.version}`}
-        official={workflow.author === "Mosael"}
+        official={official}
         summary={workflow.summary}
         actions={
           <>
@@ -130,7 +134,16 @@ export default async function WorkflowDetailPage({
             <SideCard title={t.community.info}>
               <InfoList
                 rows={[
-                  { label: t.community.by, value: workflow.author },
+                  {
+                    label: t.community.by,
+                    value: authorHref ? (
+                      <Link className="text-primary hover:underline" href={authorHref}>
+                        {workflow.author}
+                      </Link>
+                    ) : (
+                      workflow.author
+                    ),
+                  },
                   { label: t.workflows.templateVersion, value: <span className="font-mono">{workflow.version}</span> },
                   { label: t.workflows.stagesTitle, value: `${workflow.stages.length} ${t.workflows.steps} · ${workflow.nodes} ${t.workflows.nodes}` },
                 ]}

@@ -87,6 +87,7 @@ export default async function PluginDetailPage({
         tile={<PluginTile seed={plugin.id} name={plugin.name} size="lg" />}
         name={plugin.name}
         author={author}
+        authorHref={authorHref}
         version={`v${plugin.version}`}
         official={plugin.official}
         builtIn={plugin.bundled}

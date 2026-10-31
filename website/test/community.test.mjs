@@ -101,6 +101,11 @@ test("② 详情:深链、下载成 .json、统计、404 可读文案与下一�
   // 只是看一眼详情不该把统计刷上去(预览见 test/share-preview.test.mjs)。
   assert.match(page, /loadSharePayload/, "详情页没有为预览取 payload");
   assert.doesNotMatch(page, /\.download\(/, "详情页走了下载接口(下载数会被预览带涨)");
+  // 官方分享带 slug 时收敛到静态详情页,不能和 /workflows/<slug> 渲染两套详情。
+  assert.match(page, /officialDetailHref/, "官方分享没有规范详情页判断");
+  assert.match(page, /permanentRedirect\(canonical\)/, "官方分享没有重定向到静态详情页");
+  assert.match(page, /findWorkflow/, "工作流官方分享没有对回静态模板");
+  assert.match(page, /findPlugin/, "插件官方分享没有对回静态模板");
 
   const ui = maybeRead(DETAIL_UI);
   assert.ok(ui, "缺少分享详情的交互组件");

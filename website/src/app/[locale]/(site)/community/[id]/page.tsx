@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { AlertCircle, ArrowLeft, ChevronRight, Upload } from "lucide-react";
 import { Suspense } from "react";
 
@@ -19,12 +19,34 @@ import { shareKindLabel } from "@/lib/shareKind";
 import { getMessages } from "@/i18n/messages";
 import { CloudApiError, type CloudCommentPage, type CloudIdentity, type CloudShare } from "@/lib/cloud";
 import { toPlainText } from "@/lib/inline-markdown";
+import { findPlugin, findWorkflow } from "@/lib/registry";
 import { pageMetadata } from "@/lib/seo";
 
 type Params = Promise<{ locale: string; id: string }>;
 
 function fallbackMessage(locale: Locale, error: unknown, fallback: string): string {
   return error instanceof CloudApiError ? error.text(locale) : fallback;
+}
+
+/**
+ * 官方分享的规范详情页。
+ *
+ * 官方内容在云端也有一条 share（带 `slug`），但官网已经有 `/workflows/<slug>` /
+ * `/plugins/<slug>` 的静态详情页。两个地址都渲染同一件东西就是重复内容，也会让
+ * 用户看到两套不同的详情布局；列表已经按 slug 去重（listed-shares.ts），直接打开
+ * 旧分享地址时也必须收敛到静态页。
+ *
+ * 用户分享的 slug 是 null，画布没有静态页，这两种都留在 `/community/<id>`。
+ */
+function officialDetailHref(locale: Locale, share: CloudShare): string {
+  if (!share.slug) return "";
+  if (share.kind === "workflow" && findWorkflow(share.slug, locale)) {
+    return localePath(locale, `/workflows/${share.slug}`);
+  }
+  if (share.kind === "plugin" && findPlugin(share.slug, locale)) {
+    return localePath(locale, `/plugins/${share.slug}`);
+  }
+  return "";
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
@@ -98,26 +120,16 @@ function ShareLoadError({ locale, message }: { locale: Locale; message: string }
 }
 
 /**
- * 详情页的取数 / 渲染。和列表一样放在 Suspense 里:站头站尾先出,正文随云端返回补上。
+ * 详情页的正文 / 交互。分享本身已经在页面顶层取好（官方分享要先返回 308）；
+ * 这里只把评论、点赞身份和预览并行取回来，再交给 Suspense 补上。
  *
  * 列表和详情都不取工程文件内容;只有「下载」按钮才 `POST /download` 把它拿出来。
  */
-async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }) {
+async function ShareDetailSection({ locale, share, cookie }: { locale: Locale; share: CloudShare; cookie: string }) {
   const t = getMessages(locale).community;
-  const cookie = await cookieHeader();
-
-  let share: CloudShare;
-  try {
-    share = await loadShare(id, cookie);
-  } catch (error) {
-    if (error instanceof CloudApiError && error.status === 404) {
-      return <ShareMissing locale={locale} message={error.text(locale)} />;
-    }
-    return <ShareLoadError locale={locale} message={fallbackMessage(locale, error, t.loadFailed)} />;
-  }
 
   const [commentsResult, viewerResult, previewResult] = await Promise.allSettled([
-    loadComments(id),
+    loadComments(share.id),
     loadViewer(cookie),
     // 只有工作流 / 画布才值得取 payload:插件的 payload 是 manifest,没有坐标,不做预览。
     share.kind === "workflow" || share.kind === "board"
@@ -268,12 +280,32 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
 
 export const dynamic = "force-dynamic";
 
+/**
+ * 这里**故意没有 loading.tsx**:官方分享的 `permanentRedirect` 必须在站头/骨架发送前
+ * 执行，才能返回真正的 308；一旦有 loading 边界，Next 会先发 200 外壳，再让客户端跳转。
+ */
 export default async function CommunitySharePage({ params }: { params: Params }) {
   const { locale, id } = await params;
   if (!isLocale(locale)) notFound();
+
+  const t = getMessages(locale).community;
+  const cookie = await cookieHeader();
+  let share: CloudShare;
+  try {
+    share = await loadShare(id, cookie);
+  } catch (error) {
+    if (error instanceof CloudApiError && error.status === 404) {
+      return <ShareMissing locale={locale} message={error.text(locale)} />;
+    }
+    return <ShareLoadError locale={locale} message={fallbackMessage(locale, error, t.loadFailed)} />;
+  }
+
+  const canonical = officialDetailHref(locale, share);
+  if (canonical) permanentRedirect(canonical);
+
   return (
     <Suspense fallback={<DetailSkeleton />}>
-      <ShareDetailSection locale={locale} id={id} />
+      <ShareDetailSection locale={locale} share={share} cookie={cookie} />
     </Suspense>
   );
 }
