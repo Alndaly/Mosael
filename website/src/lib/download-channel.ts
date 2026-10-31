@@ -29,8 +29,13 @@ export const CHINA_TIME_ZONES = new Set([
   "PRC",
 ]);
 
-/** 访客自己选过的渠道存在这里(localStorage)。 */
-export const STORAGE_KEY = "mosael-download-channel";
+/**
+ * 访客自己选过的渠道存在这里(localStorage)。
+ *
+ * **R2 成为境内外主源时换过一次 key**:旧 key 里可能存着切换前默认的 `global`,
+ * 不换的话老访客会一直绕过 R2 落到 GitHub。新 key 只记新规则下的选择。
+ */
+export const STORAGE_KEY = "mosael-download-channel-v2";
 
 /** 国内渠道**有链接**才算可用 —— 没配好之前不给访客一个点了打不开的按钮。 */
 

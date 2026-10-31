@@ -7,6 +7,7 @@ import {
   defaultChannel,
   detectChannel,
   storedChannel,
+  STORAGE_KEY,
 } from "../src/lib/download-channel.ts";
 
 const MIRROR = { url: "https://pan.baidu.com/s/1example", code: "ab12" };
@@ -40,6 +41,7 @@ test("网盘链接没配好时,谁都走 GitHub —— 不给一个点了打不�
 
 test("访客自己选过的优先,认不出的值当没选过", () => {
   assert.equal(storedChannel("global", MIRROR), "global");
+  assert.match(STORAGE_KEY, /-v2$/, "R2 主源切换后应使用新的存储键，旧 global 选择不能继续压过默认");
   assert.equal(storedChannel("china", MIRROR), "china");
   assert.equal(storedChannel("mars", MIRROR), null);
   assert.equal(storedChannel(null, MIRROR), null);
