@@ -91,13 +91,9 @@ export default async function CreatorPage({ params }: { params: Params }) {
               <h1 className="mt-2 mb-0 flex flex-wrap items-center gap-2 font-display text-4xl font-bold tracking-[-0.035em] text-balance sm:text-5xl">
                 {name}
                 {showOfficial && (
-                  <span
-                    role="img"
-                    aria-label={t.official}
-                    title={t.official}
-                    className="inline-flex shrink-0 text-primary"
-                  >
+                  <span title={t.official} className="inline-flex shrink-0 items-center text-primary">
                     <BadgeCheck className="size-6" aria-hidden />
+                    <span className="sr-only">{t.official}</span>
                   </span>
                 )}
               </h1>
