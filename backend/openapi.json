@@ -49119,6 +49119,25 @@
             "minLength": 1,
             "pattern": "^[\\w-]+$",
             "title": "Camera Id"
+          },
+          "camera_angle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "front",
+                  "three_quarter",
+                  "side",
+                  "back",
+                  "high_angle",
+                  "low_angle"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Angle"
           }
         },
         "additionalProperties": false,

@@ -55,8 +55,6 @@ ATTACH_PRIORITY: dict[str, tuple[str, ...]] = {
     "character": ("turnaround", "front", "full_body"),
     "location": ("wide", "concept"),
     "prop": ("turnaround", "front"),
-    #: 姿势:正面 > 斜侧 > 侧面。ADR 0091 想要的是「跟着这一镜的机位挑」—— 生成请求里还没有机位这一项,先按固定先后。
-    "pose": ("front", "three_quarter", "side"),
     "costume": ("front", "back"),
 }
 
@@ -211,16 +209,9 @@ def usable_for_digital_human(attributes: dict[str, Any]) -> bool:
     return bool(consent) and consent.get("kind") in ("self", "authorized")
 
 
-def attach_order(kind: str, roles: list[tuple[str, str]], preferred: str = "") -> list[str]:
-    """`[(素材 id, 角度)]` → 生成时挑图的先后。
-
-    默认按这种资产的 `ATTACH_PRIORITY`，其余照原顺序。`preferred` 是**这一镜的机位**
-    (姿势用):同机位的那张排最前，再回落到原来的先后(ADR 0091)。
-    """
-    priority = ATTACH_PRIORITY.get(kind, ())
-    if preferred:
-        priority = (preferred, *(role for role in priority if role != preferred))
-    rank = {role: index for index, role in enumerate(priority)}
+def attach_order(kind: str, roles: list[tuple[str, str]]) -> list[str]:
+    """`[(素材 id, 角度)]`(已按资产里的顺序排好)→ 生成时挑图的先后(按这种资产的 ATTACH_PRIORITY,其余照原顺序)。"""
+    rank = {role: index for index, role in enumerate(ATTACH_PRIORITY.get(kind, ()))}
     ordered = sorted(enumerate(roles), key=lambda pair: (rank.get(pair[1][1], len(rank)), pair[0]))
     return [asset_id for _, (asset_id, _) in ordered]
 

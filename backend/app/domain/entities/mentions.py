@@ -49,6 +49,8 @@ NOTE_EXCLUSIVE = "exclusive"
 NOTE_SUBJECT_TOO_FEW = "subject_too_few"
 NOTE_PROMPT_SKIPPED = "prompt_skipped"
 NOTE_POSE_ROLE = "pose_reference_unsupported"
+NOTE_POSE_ANGLE = "pose_angle_required"
+NOTE_POSE_ANGLE_MISSING = "pose_angle_missing"
 
 
 @dataclass
@@ -74,7 +76,7 @@ class Expansion:
     receipt: list[dict[str, Any]]
 
 
-def _mention(db: Session, entity: Entity, pose_angle: str = "") -> _Mention:
+def _mention(db: Session, entity: Entity) -> _Mention:
     """一个资产在生成里的样子。**变体继承母体的提示词描述**(ADR 0027 §1),只换参考图;
     变体自己一张参考图都没有时用母体的 —— 「张三 · 冬装」还没画好冬装那一套时,至少脸是张三的。"""
     parent = db.get(Entity, entity.parent_id) if entity.parent_id else None
@@ -88,7 +90,7 @@ def _mention(db: Session, entity: Entity, pose_angle: str = "") -> _Mention:
         entity=entity,
         name=name,
         descriptor=descriptor.strip(),
-        images=attach_order(entity.kind, images, preferred=pose_angle if entity.kind == "pose" else ""),
+        images=attach_order(entity.kind, images),
         roles=dict(images),
     )
 
@@ -176,14 +178,15 @@ def attach_entities(
     明说改成 ``reference_image`` 再提交,不由这里悄悄降级(ADR 0091 §5)。
 
     `pose_angle`:这一镜的机位(``front`` / ``three_quarter`` / ``side`` / ``back`` /
-    ``high_angle`` / ``low_angle``)。给了就把同机位的姿势参考排在前面;没给就按原来的固定先后。
+    ``high_angle`` / ``low_angle``)。姿势参考**只挂同机位的那一张**:没给机位、或这个姿势
+    没有该机位的图,就不挂 —— 不拿正面图去冒充俯拍(旧行为)。
     """
     ids = parse_entity_ids(entity_ids)
     if not ids:
         return Expansion(note="", source_assets=list(source_assets), receipt=[])
     if pose_role not in (POSE_ROLE, REFERENCE_ROLE):
         raise EntityDomainError("entityErr_unknownRole", role=pose_role)
-    mentions = [_mention(db, entity, pose_angle) for entity in resolve_mentions(db, workspace_id, ids)]
+    mentions = [_mention(db, entity) for entity in resolve_mentions(db, workspace_id, ids)]
 
     # 提示词描述。不收提示词的模型(放大、抠图)不拼 —— 拼了提交会被拒,照实记一笔。
     lines = [f"{mention.name}: {mention.descriptor}" for mention in mentions if mention.descriptor]
@@ -239,9 +242,24 @@ def attach_entities(
                 entry["subject"] = mention.entity.id
             added.append(entry)
 
-    pose_budget, _ = budgets[POSE_ROLE]
-    _round_robin(groups[POSE_ROLE], pose_budget, already)
-    for mention in groups[POSE_ROLE]:
+    pose_budget = budgets[POSE_ROLE][0]
+    pose_mentions = groups[POSE_ROLE]
+    if not pose_angle:
+        for mention in pose_mentions:
+            if mention.images and not mention.notes:
+                mention.notes.append(NOTE_POSE_ANGLE)
+    else:
+        #: 暂时把候选换成「这个机位的图」跑名额；跑完换回全量，回执才能列清哪些角度没发。
+        original = {mention.entity.id: mention.images for mention in pose_mentions}
+        for mention in pose_mentions:
+            exact = [one for one in mention.images if mention.roles.get(one) == pose_angle]
+            mention.images = exact
+            if not exact and original[mention.entity.id] and not mention.notes:
+                mention.notes.append(NOTE_POSE_ANGLE_MISSING)
+        _round_robin(pose_mentions, pose_budget, already)
+        for mention in pose_mentions:
+            mention.images = original[mention.entity.id]
+    for mention in pose_mentions:
         added.extend({"asset_id": asset_id, "role": POSE_ROLE} for asset_id in mention.attached)
 
     #: 两个资产共用一张图时,它被前一个挂上了 —— 对后一个来说也不算「没挂上」。

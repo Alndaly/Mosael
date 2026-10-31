@@ -156,6 +156,8 @@ class SceneShot(SceneValue):
     easing: Literal["linear", "smooth"] = "smooth"
     #: 拍它的那台相机物体。由 SceneContent 校验它确实存在、确实是相机。
     camera_id: Identifier
+    #: 这一镜的归一化机位；引用姿势资产时用它挑同机位的参考图(ADR 0091)。None = 还没标。
+    camera_angle: Literal["front", "three_quarter", "side", "back", "high_angle", "low_angle"] | None = None
 
 
 class SceneLighting(SceneValue):

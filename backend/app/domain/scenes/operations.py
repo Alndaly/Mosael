@@ -652,7 +652,8 @@ def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: s
         lines.append(tr("sceneRef_cameraMove", move=describe_camera_move(first.camera, last.camera)))
     return SceneReference(
         source_assets=sources, prompt="\n".join(lines), entity_ids=entity_ids,
-        receipt={**key, "asset_ids": [one["asset_id"] for one in sources], "entity_ids": entity_ids},
+        receipt={**key, "asset_ids": [one["asset_id"] for one in sources], "entity_ids": entity_ids,
+                 "camera_angle": shot.camera_angle or ""},
         rendered_asset_ids=[] if reused is not None else [one["asset_id"] for one in sources],
     )
 

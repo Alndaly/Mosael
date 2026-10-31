@@ -19299,6 +19299,8 @@ export interface components {
             easing: "linear" | "smooth";
             /** Camera Id */
             camera_id: string;
+            /** Camera Angle */
+            camera_angle?: ("front" | "three_quarter" | "side" | "back" | "high_angle" | "low_angle") | null;
         };
         /** SceneUpdate */
         SceneUpdate: {

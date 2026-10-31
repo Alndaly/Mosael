@@ -38,7 +38,9 @@ export type SceneObject = Omit<
   pose?: FigurePose | null;
 };
 /** 镜头 = 用哪台机位、拍多久。运镜是那台相机物体的 track,见 docs/design/scene-time-and-cameras.md。 */
-export type SceneShot = Required<components["schemas"]["SceneShot"]>;
+export type SceneShot = Omit<Required<components["schemas"]["SceneShot"]>, "camera_angle"> & {
+  camera_angle?: components["schemas"]["SceneShot"]["camera_angle"];
+};
 export type SceneContent = Omit<
   Required<components["schemas"]["SceneContent"]>,
   "objects" | "shots"

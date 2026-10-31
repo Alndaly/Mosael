@@ -337,6 +337,8 @@ def _create_generation_job(
         entity_ids = [*(entity_ids or []), *(one for one in rendered.entity_ids if one not in (entity_ids or []))]
         scene_receipt = rendered.receipt
 
+    #: 明说的机位优先；否则用这一镜（3D 参考）的归一化机位。两者都没有就不挂姿势参考 —— 不猜。
+    effective_pose_angle = pose_angle or str((scene_receipt or {}).get("camera_angle") or "")
     # `@资产` 在校验之前展开:拼进来的提示词描述和挂上的参考图,和手写、手挂的走同一套校验。
 
     try:
@@ -349,7 +351,7 @@ def _create_generation_job(
             kind=kind,
             capabilities=resolved.capabilities if resolved.capabilities_known else None,
             pose_role=pose_mentions_role,
-            pose_angle=pose_angle or "",
+            pose_angle=effective_pose_angle,
         )
     except EntityDomainError as exc:
         raise GenerationDomainError(exc.key, **exc.params) from exc
@@ -405,8 +407,8 @@ def _create_generation_job(
     if pose_mentions_role == "reference_image":
         #: 用户明说「改成参考图发送」才记这一笔；默认的姿势参考不占请求字段。
         request["pose_mentions_role"] = "reference_image"
-    if pose_angle:
-        request["pose_angle"] = pose_angle
+    if effective_pose_angle:
+        request["pose_angle"] = effective_pose_angle
     if scene_receipt:
         request["scene_reference"] = scene_receipt
     if talking:

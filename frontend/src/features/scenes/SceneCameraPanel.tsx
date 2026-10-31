@@ -122,6 +122,23 @@ export function SceneCameraPanel({
             }
           />
         </label>
+        <label className="scene-number">
+          <span>{t("sceneCameraAngle")}</span>
+          <Pick
+            label={t("sceneCameraAngle")}
+            value={shot.camera_angle ?? ""}
+            options={[
+              ["", t("sceneCameraAngleNone")],
+              ["front", t("sceneCameraAngleFront")],
+              ["three_quarter", t("sceneCameraAngleThreeQuarter")],
+              ["side", t("sceneCameraAngleSide")],
+              ["back", t("sceneCameraAngleBack")],
+              ["high_angle", t("sceneCameraAngleHigh")],
+              ["low_angle", t("sceneCameraAngleLow")],
+            ]}
+            onChange={(angle) => onPatch({ camera_angle: (angle || null) as SceneShot["camera_angle"] })}
+          />
+        </label>
       </div>
       <SceneSubsection expanded title={t("sceneCameraFraming")}>
         <Button variant="outline" disabled={preview} onClick={applyView}>

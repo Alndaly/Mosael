@@ -286,17 +286,17 @@ POSE_CAPS = {
 def test_姿势资产以_pose_reference_发送_不混进参考图(ws) -> None:
     zhang = _entity(ws, "张三", "", [("a-front", "front")])
     sitting = _entity(ws, "抱膝坐", "", [("b-front", "front"), ("b-sheet", "three_quarter")], kind="pose")
-    expansion = _expand(ws, [zhang, sitting], POSE_CAPS)
+    expansion = _expand(ws, [zhang, sitting], POSE_CAPS, pose_angle="front")
     entries = {(entry["asset_id"], entry["role"]) for entry in expansion.source_assets}
     assert ("a-front", "reference_image") in entries
     assert ("b-front", "pose_reference") in entries
-    assert ("b-sheet", "pose_reference") in entries
+    assert ("b-sheet", "pose_reference") not in entries
 
 
 def test_姿势和参考图各用各的名额(ws) -> None:
     zhang = _entity(ws, "张三", "", [("a-sheet", "turnaround"), ("a-front", "front"), ("a-body", "full_body")])
-    sitting = _entity(ws, "坐姿", "", [("b-front", "front"), ("b-sheet", "three_quarter"), ("c-front", "side")], kind="pose")
-    expansion = _expand(ws, [zhang, sitting], POSE_CAPS)
+    sitting = _entity(ws, "坐姿", "", [("b-front", "front"), ("b-sheet", "front"), ("c-front", "side")], kind="pose")
+    expansion = _expand(ws, [zhang, sitting], POSE_CAPS, pose_angle="front")
     attached = [entry for entry in expansion.source_assets if entry["role"] in ("reference_image", "pose_reference")]
     assert [one["asset_id"] for one in attached if one["role"] == "reference_image"] == ["a-sheet", "a-front", "a-body"]
     assert [one["asset_id"] for one in attached if one["role"] == "pose_reference"] == ["b-front", "b-sheet"]
@@ -305,7 +305,7 @@ def test_姿势和参考图各用各的名额(ws) -> None:
 
 def test_模型不收姿势参考_不悄悄降级(ws) -> None:
     sitting = _entity(ws, "坐姿", "", [("b-front", "front")], kind="pose")
-    expansion = _expand(ws, [sitting], OPENAI_IMAGE_CAPABILITIES)
+    expansion = _expand(ws, [sitting], OPENAI_IMAGE_CAPABILITIES, pose_angle="front")
     assert expansion.source_assets == []
     assert expansion.receipt[0]["notes"] == ["pose_reference_unsupported"]
 
@@ -366,10 +366,13 @@ def test_这一镜机位决定先挑哪张姿势图(ws) -> None:
         kind="pose",
     )
     three = {**POSE_CAPS, "source_limits": {**POSE_CAPS["source_limits"], "pose_reference": 3}}
-    low = _expand(ws, [sitting], three, pose_angle="high_angle")
-    assert [entry["asset_id"] for entry in low.source_assets if entry["role"] == "pose_reference"] == [
-        "c-front", "b-front", "b-sheet",
-    ]
-    # 没给机位 = 原来的固定先后，不猜。
+    high = _expand(ws, [sitting], three, pose_angle="high_angle")
+    assert [entry["asset_id"] for entry in high.source_assets if entry["role"] == "pose_reference"] == ["c-front"]
+    # 没给机位 = 一张都不挂，不再拿正面图冒充。
     default = _expand(ws, [sitting], POSE_CAPS)
-    assert [entry["asset_id"] for entry in default.source_assets if entry["role"] == "pose_reference"][0] == "b-front"
+    assert not [entry for entry in default.source_assets if entry["role"] == "pose_reference"]
+    assert default.receipt[0]["notes"] == ["pose_angle_required"]
+    # 这个姿势没有该机位的图时不拿别的角度顶上。
+    missing = _expand(ws, [sitting], POSE_CAPS, pose_angle="low_angle")
+    assert not [entry for entry in missing.source_assets if entry["role"] == "pose_reference"]
+    assert missing.receipt[0]["notes"] == ["pose_angle_missing"]

@@ -42,7 +42,7 @@ def _setup():
              "entity_id": passer},
             CAMERA,
         ],
-        "shots": [{"id": "shot-1", "name": "推近", "duration": 5, "camera_id": "cam-1"}],
+        "shots": [{"id": "shot-1", "name": "推近", "duration": 5, "camera_id": "cam-1", "camera_angle": "high_angle"}],
     }
     scene = client.post("/api/scenes", json={"workspace_id": ws, "name": "草原", "content": content})
     assert scene.status_code == 200, scene.text
@@ -61,6 +61,7 @@ def test_构图参考_现渲一张_镜头里的人偶带上它演的人物_没�
     assert "草原" in ref.prompt and "#c0504d" in ref.prompt and "「小美」" in ref.prompt and "路人" not in ref.prompt
     assert "运镜" not in ref.prompt, "图片不说运镜"
     assert ref.receipt["revision"] == 1 and ref.receipt["shot_id"] == "shot-1"
+    assert ref.receipt["camera_angle"] == "high_angle"
 
 
 def test_首尾帧给视频_模型不收尾帧就只给首帧_并说运镜() -> None:
@@ -132,6 +133,8 @@ def test_生成漏斗挂上渲出来的素材_说明并进提示词_回执记下
     # 白模说明是补给模型的一段,不写进他那句话里。
     assert request["prompt"] == "她在草原上奔跑" and "白模" in request["prompt_notes"][0]
     assert request["scene_reference"]["scene_id"] == scene_id and request["scene_reference"]["entity_ids"] == [mei]
+    assert request["scene_reference"]["camera_angle"] == "high_angle"
+    assert request["pose_angle"] == "high_angle", "3D 镜头的机位要随请求进入姿势挑图"
 
 
 def _generate(ws: str, profile: str, scene_id: str, **extra):
