@@ -21,6 +21,11 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 
 
+def script_dir() -> Path:
+    """这些脚本所在的目录。引擎的就绪探测要把它挂上 sys.path,才能调 worker 侧的接口核对。"""
+    return _HERE
+
+
 def tts_script() -> Path:
     """语音合成 worker。由引擎 venv 的解释器跑。"""
     return _HERE / "tts.py"

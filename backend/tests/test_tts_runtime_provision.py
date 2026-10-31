@@ -119,7 +119,8 @@ def test_provision_installs_declared_requirements(monkeypatch: pytest.MonkeyPatc
     # (ensurepip 里那个是打包 CPython 时冻结的,见 core/pip_install._upgrade_pip),
     # 数次数的话,每加一步准备动作这条测试就假红一次。
     assert not any("venv" in part for call in calls for part in call), "venv 已存在时不该再建一次"
-    installs = [call for call in calls if call[1:4] == ["-m", "pip", "install"] and "f5-tts" in call]
+    declared = tts_models._BY_ID["f5-tts"].pip_requirements
+    installs = [call for call in calls if call[1:4] == ["-m", "pip", "install"] and set(declared) <= set(call)]
     assert len(installs) == 1
     assert installs[0][0] == str(venv_python)
 

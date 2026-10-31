@@ -62,6 +62,21 @@ def test_f5_probes_the_class_it_actually_constructs() -> None:
     assert "f5_tts.api" in code, code
 
 
+def test_f5_ready_also_means_the_internals_we_drive_are_there() -> None:
+    """长文本绕开了 `F5TTS.infer`、直接用它的内部函数(workers/f5_driver)。
+
+    版本漂了的话只 import 照样成功,念的时候才 TypeError —— 所以探测要把接口核对一起跑,
+    对不上就判不就绪,装运行环境会按依赖表把它装回兼容的版本。
+    """
+    from app.ai.runtime import workers
+
+    code = tts_models._probe_code("f5-tts")
+
+    assert "f5_driver.check_contract()" in code, code
+    assert repr(str(workers.script_dir())) in code, code
+    assert (workers.script_dir() / "f5_driver.py").is_file()
+
+
 def test_every_engine_declares_what_synthesis_imports() -> None:
     """新加引擎时,这张表必须跟着写 —— 否则它的探测又会退化成"包在不在"。"""
     for engine in tts_models.CATALOG:

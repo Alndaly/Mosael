@@ -387,6 +387,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The previous download did not finish (its process is gone — usually the app quit or the backend restarted). Partial files are still on disk; downloading again starts over.",
     },
     "runtimeErr_f5NoTarget": {"zh": "没有指定权重目录", "en": "No weights directory was given"},
+    "runtimeErr_f5Incompatible": {
+        "zh": "装着的 F5-TTS 是 {version},和 Mosael 对不上(需要 {supported})。请部署管理员在「管理 → 引擎 → 本地语音合成引擎」里重新安装 F5-TTS 运行环境。",
+        "en": "The installed F5-TTS is {version}, which Mosael can't drive (needs {supported}). A deployment admin reinstalls the F5-TTS runtime under Admin → Engines → Speech synthesis engines.",
+    },
     "runtimeErr_qwenModelMissing": {
         "zh": "Qwen3-TTS 不可用:权重还没下。部署管理员在「管理 → 引擎 → 本地语音合成引擎」里点 Qwen3-TTS 那一行的「下载」,或把 MOSAEL_QWEN_MODEL_DIR 指到一个含有 model.safetensors 与 speech_tokenizer/model.safetensors 的目录。",
         "en": "Qwen3-TTS is unavailable: its weights aren't downloaded. A deployment admin downloads it under Admin → Engines → Speech synthesis engines, or points MOSAEL_QWEN_MODEL_DIR at a directory holding model.safetensors and speech_tokenizer/model.safetensors.",

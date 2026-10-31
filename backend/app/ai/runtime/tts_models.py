@@ -58,6 +58,9 @@ class TtsEngine:
     #: 合成**真正**会 import 的模块。探测跑的就是这几行 —— 写顶层包名等于没探
     #: (`import fish_speech` 命中一个空的 __init__,永远成功,而合成 import 的是它的子模块)。
     imports: tuple[str, ...] = ()
+    #: worker 侧的接口核对(`模块.函数`,在 workers/ 目录里)。合成依赖了引擎的**内部**函数时写它:
+    #: 探测除了 import,还要它不抛错才算就绪 —— 版本漂了就判成不就绪,装运行环境会按依赖表装回兼容的版本。
+    contract_check: str = ""
     #: 需不需要参考文本。F5 不需要(它自己会转写参考音频);Fish Speech 需要 —— 我们用
     #: `mode="tts"` 构造它,不带 ASR,空文本就是空文本,合成出来听不懂。
     needs_reference_text: bool = False
@@ -85,13 +88,17 @@ CATALOG: tuple[TtsEngine, ...] = (
         # `pip install --upgrade f5-tts` 不会带着它升。而它恰恰是最容易过期的一环 ——
         # 每个版本只支持到当时的 FFmpeg,系统 ffmpeg 一升级就集体加载失败(0.15 支持到
         # FFmpeg 8,而这台机器上是 9)。不钉版本:要的就是当下最新的那个。
-        pip_requirements=("f5-tts", "modelscope", "torchcodec"),
+        #
+        # f5-tts 钉在 1.1.x:长文本绕开了 `F5TTS.infer`,直接用它的内部函数(见 workers/f5_driver)。
+        # 内部函数不受语义化版本保护,所以只放开补丁号;升小版本前先在真机上跑一遍长文本。
+        pip_requirements=("f5-tts~=1.1.22", "modelscope", "torchcodec"),
         # 检查点(1.35 GB)和 vocab 在 ModelScope 上;声码器 vocos(约 55 MB)只在 HF
         # (AI-ModelScope / charactr / iic 三个命名空间都查过,都是 404)。
         # 所以这条路是"大的走快路,小的还走 HF" —— 在 46 KB/s 的网络上,那 1.35 GB
         # 是八小时和三分钟的区别,而 55 MB 就算慢也只有二十分钟。
         modelscope_repo="AI-ModelScope/F5-TTS",
         imports=("f5_tts.api",),
+        contract_check="f5_driver.check_contract",
         needs_reference_text=False,
         supports_speed=True,
     ),
@@ -560,6 +567,9 @@ def _probe_code(engine_id: str) -> str | None:
     if not imports:
         return None
     body = "; ".join(f"import {module}" for module in imports)
+    if engine.contract_check:
+        module, _, function = engine.contract_check.rpartition(".")
+        body += f"; import sys; sys.path.insert(0, {str(workers.script_dir())!r}); import {module}; {module}.{function}()"
     if engine_id != "fish-speech":
         return body
 
