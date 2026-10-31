@@ -7,8 +7,8 @@ import { pathToFileURL } from "node:url";
 
 //: 官网的路由分组契约。
 //:
-//: 账号页(登录 / 注册 / 账号)不属于「站内」;管理台也不属于公开站。这个意图由目录结构表达 ——
-//: `(auth)` / `(admin)` 各有自己的 layout,`(site)` 组才有站头 / 站尾 —— 而不是在页面里条件隐藏 header。
+//: 账号页(登录 / 注册 / 账号)、个人控制台、管理台都不属于公开站。这个意图由目录结构表达 ——
+//: `(auth)` / `(dashboard)` / `(admin)` 各有自己的 layout,`(site)` 组才有站头 / 站尾 —— 而不是在页面里条件隐藏 header。
 //: 分组名带括号,不进入 URL;下面这几条同时钉住「地址没变」和「metadata / 静态参数没丢」。
 const SRC = path.resolve(import.meta.dirname, "..", "src");
 const APP = path.join(SRC, "app");
@@ -39,7 +39,6 @@ const SITE_ROUTES = [
   "community/page.tsx",
   "community/[id]/page.tsx",
   "community/upload/page.tsx",
-  "dashboard/page.tsx",
   "docs/page.tsx",
   "docs/[section]/[name]/page.tsx",
   "plugins/page.tsx",
@@ -48,6 +47,7 @@ const SITE_ROUTES = [
   "workflows/[slug]/page.tsx",
 ];
 const AUTH_ROUTES = ["login/page.tsx", "signup/page.tsx", "account/page.tsx"];
+const DASHBOARD_ROUTES = ["dashboard/page.tsx"];
 const ADMIN_ROUTES = ["admin/page.tsx"];
 
 function walk(dir) {
@@ -57,9 +57,10 @@ function walk(dir) {
   });
 }
 
-test("页面按 (site) / (auth) / (admin) 分组,分组只有目录意义,页面一个都不少", () => {
+test("页面按 (site) / (auth) / (dashboard) / (admin) 分组,分组只有目录意义,页面一个都不少", () => {
   assert.ok(fs.statSync(path.join(LOCALE, "(site)")).isDirectory(), "缺少 (site) 路由组");
   assert.ok(fs.statSync(path.join(LOCALE, "(auth)")).isDirectory(), "缺少 (auth) 路由组");
+  assert.ok(fs.statSync(path.join(LOCALE, "(dashboard)")).isDirectory(), "缺少 (dashboard) 路由组");
   assert.ok(fs.statSync(path.join(LOCALE, "(admin)")).isDirectory(), "缺少 (admin) 路由组");
 
   for (const route of SITE_ROUTES) {
@@ -69,6 +70,10 @@ test("页面按 (site) / (auth) / (admin) 分组,分组只有目录意义,页面
     assert.ok(exists(LOCALE, "(auth)", route), `账号页面不在 (auth) 组里: ${route}`);
     assert.ok(!exists(LOCALE, "(site)", route), `账号页面混进了 (site) 组: ${route}`);
   }
+  for (const route of DASHBOARD_ROUTES) {
+    assert.ok(exists(LOCALE, "(dashboard)", route), `个人控制台不在 (dashboard) 组里: ${route}`);
+    assert.ok(!exists(LOCALE, "(site)", route), `个人控制台混进了 (site) 组: ${route}`);
+  }
   for (const route of ADMIN_ROUTES) {
     assert.ok(exists(LOCALE, "(admin)", route), `管理页面不在 (admin) 组里: ${route}`);
     assert.ok(!exists(LOCALE, "(site)", route), `管理页面混进了 (site) 组: ${route}`);
@@ -77,13 +82,13 @@ test("页面按 (site) / (auth) / (admin) 分组,分组只有目录意义,页面
   // 分组之外不允许再有页面 —— 页面一旦落在三个组外面,它就既没有站头也没有自己的壳。
   const stray = walk(LOCALE)
     .filter((file) => file.endsWith("page.tsx"))
-    .filter((file) => !["(site)", "(auth)", "(admin)"].some((group) => file.includes(`${path.sep}${group}${path.sep}`)))
+    .filter((file) => !["(site)", "(auth)", "(dashboard)", "(admin)"].some((group) => file.includes(`${path.sep}${group}${path.sep}`)))
     .map((file) => path.relative(LOCALE, file));
-  assert.deepEqual(stray, [], "有页面落在 (site) / (auth) / (admin) 分组之外");
+  assert.deepEqual(stray, [], "有页面落在 (site) / (auth) / (dashboard) / (admin) 分组之外");
 });
 
 test("分组名不进 URL:每个页面还是原来的地址", () => {
-  const urls = [...SITE_ROUTES, ...AUTH_ROUTES, ...ADMIN_ROUTES]
+  const urls = [...SITE_ROUTES, ...AUTH_ROUTES, ...DASHBOARD_ROUTES, ...ADMIN_ROUTES]
     .map((route) => `/${route.replace(/\/?page\.tsx$/, "")}`.replace(/\/$/, ""))
     .map((url) => (url === "/" ? "" : url))
     .sort();
@@ -155,6 +160,13 @@ test("(auth) 布局没有整站导航,只留一个可跳转的 main", () => {
     }
     assert.match(page, /AccountShell/, `${route} 没有走账号壳`);
   }
+});
+
+test("(dashboard) 布局不套公开站头 / 站尾,只留一个 main 和返回入口", () => {
+  const layout = read(LOCALE, "(dashboard)", "layout.tsx");
+  assert.doesNotMatch(layout, /SiteHeader|SiteFooter|site-header|site-footer/, "(dashboard) 布局又套回了公开站导航");
+  assert.match(layout, /<main id="main"/, "(dashboard) 布局缺少 main,跳到正文的链接会落空");
+  assert.match(layout, /backToCommunity/, "(dashboard) 布局缺少返回社区入口");
 });
 
 test("账号壳里有一条回到 mosael.com 的小链接,站内布局的站头也还在", () => {

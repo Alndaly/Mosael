@@ -20,7 +20,7 @@ import { dashboardTabHref, withoutShare, type DashboardTab } from "./dashboard-u
 /**
  * 「我的」控制台:页头 + 四个分区。
  *
- * 身份门禁在服务端(`app/[locale]/(site)/dashboard/page.tsx`)—— 未登录根本到不了这里;
+ * 身份门禁在服务端(`app/[locale]/(dashboard)/dashboard/page.tsx`)—— 未登录根本到不了这里;
  * 这一层只管「切分区」和「删掉一条之后列表与统计一起变」。
  *
  * 分区状态不是一次性的:换 tab 会 `replaceState` 改地址栏(`?tab=`),刷新、收藏、发给别人

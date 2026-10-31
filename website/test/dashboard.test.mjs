@@ -46,7 +46,7 @@ function dashboardUtils() {
   return utils;
 }
 
-const DASHBOARD_PAGE = "src/app/[locale]/(site)/dashboard/page.tsx";
+const DASHBOARD_PAGE = "src/app/[locale]/(dashboard)/dashboard/page.tsx";
 const ACCOUNT_PAGE = "src/app/[locale]/(auth)/account/page.tsx";
 const ACCOUNT_NAV = "src/components/account/account-nav.tsx";
 const DASHBOARD_HEADER = "src/components/account/dashboard-header.tsx";

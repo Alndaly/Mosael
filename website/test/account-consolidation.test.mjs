@@ -41,7 +41,7 @@ function readSource(relative) {
 }
 
 const ACCOUNT_PAGE = "src/app/[locale]/(auth)/account/page.tsx";
-const DASHBOARD_PAGE = "src/app/[locale]/(site)/dashboard/page.tsx";
+const DASHBOARD_PAGE = "src/app/[locale]/(dashboard)/dashboard/page.tsx";
 const DASHBOARD_VIEW = "src/components/account/dashboard-view.tsx";
 const DASHBOARD_HEADER = "src/components/account/dashboard-header.tsx";
 const DASHBOARD_PROFILE = "src/components/account/dashboard-profile.tsx";

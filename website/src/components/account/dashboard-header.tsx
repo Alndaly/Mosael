@@ -65,9 +65,9 @@ export function DashboardHeader({
   const officialLabel = getMessages(locale).community.official;
 
   return (
-    <section className="relative isolate -mt-20 overflow-hidden border-b border-border bg-paper">
+    <section className="relative isolate overflow-hidden border-b border-border bg-paper">
       <PageGlow />
-      <div className="mx-auto max-w-[76rem] px-5 pt-32 sm:px-8 sm:pt-36">
+      <div className="mx-auto max-w-[76rem] px-5 pt-12 sm:px-8 sm:pt-16">
         <p className="m-0 font-mono text-xs font-bold tracking-widest text-primary uppercase">{copy.eyebrow}</p>
         <div className="mt-3 min-w-0 max-w-2xl">
           <h1 className="m-0 font-display text-4xl font-bold tracking-[-0.035em] text-balance sm:text-5xl">{copy.title}</h1>
