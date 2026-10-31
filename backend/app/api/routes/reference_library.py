@@ -10,7 +10,6 @@ from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas.base import ApiModel
 from app.core.i18n import tr
 from app.domain import reference_library
-from app.domain.permissions import ensure_workspace_perm
 from app.domain.plugins import instances as inst
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
@@ -90,8 +89,6 @@ def get_reference_item(
 
 @router.post("/reference-library/{instance_id}/use")
 def use_reference_item(instance_id: str, body: ReferenceUseIn, db: Tx, user: CurrentUser) -> dict:
-    #: 写闸在路由上点名:取一条外部参考会在工作区里建素材 / 资产。
-    ensure_workspace_perm(db, user, body.workspace_id, "upload")
     try:
         return reference_library.use(
             db, user, _instance(db, user, instance_id),

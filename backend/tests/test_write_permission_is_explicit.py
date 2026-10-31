@@ -108,6 +108,9 @@ GATED_IN_THE_DOMAIN = {
     "agent_skills.py:unpack_agent_bundle",
     # 部署级:闸在 accounts.reset_member_password(ensure_deployment_admin),不作用在某个工作区上
     "admin.py:reset_user_password",
+    # 闸在 reference_library.use(ensure_workspace_perm "upload"):路由只做归属与实例校验,
+    # 取一条外部参考会在工作区里建素材 / 资产,领域函数自己把关。
+    "reference_library.py:use_reference_item",
 }
 
 
