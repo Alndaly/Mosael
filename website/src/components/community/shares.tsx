@@ -44,14 +44,36 @@ export function ShareCard({ locale, share }: { locale: Locale; share: CloudShare
   const summary = share.summary?.trim() ? toPlainText(share.summary) : "";
   // 官方插件分享也要说清是「插件」,不能因为原先把 board 以外的都当工作流而标错。
 
+  const authorHref = share.author.handle ? localePath(locale, `/users/${share.author.handle}`) : "";
+
   return (
-    <Link href={localePath(locale, `/community/${share.id}`)} className={CARD}>
+    <article className={cn(CARD, "relative")}>
       <div className="flex min-w-0 items-center gap-3.5">
         <InitialTile seed={share.author.avatar_seed || share.author.handle || share.id} name={name} size="md" />
         <div className="grid min-w-0 gap-0.5">
-          <h3 className="m-0 line-clamp-2 text-base font-semibold tracking-tight group-hover:text-primary">{share.title}</h3>
+          <h3 className="m-0 line-clamp-2 text-base font-semibold tracking-tight group-hover:text-primary">
+            {/*
+              整张卡可点:标题链接的伪元素铺满 article;作者链接再抬到上层,
+              这样「点作者」不会被「点这条分享」抢走。
+            */}
+            <Link
+              href={localePath(locale, `/community/${share.id}`)}
+              className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {share.title}
+            </Link>
+          </h3>
           <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-            <span className="truncate">{name}</span>
+            {authorHref ? (
+              <Link
+                href={authorHref}
+                className="relative z-10 truncate font-medium hover:text-foreground hover:underline"
+              >
+                {name}
+              </Link>
+            ) : (
+              <span className="truncate">{name}</span>
+            )}
             {share.author.official && (
               <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-primary">
                 <BadgeCheck className="size-3.5" aria-hidden />
@@ -77,6 +99,6 @@ export function ShareCard({ locale, share }: { locale: Locale; share: CloudShare
         <Stat icon={Bookmark} label={t.favorites} value={share.stats.favorites} />
         <Stat icon={MessageSquare} label={t.comments} value={share.stats.comments} />
       </div>
-    </Link>
+    </article>
   );
 }

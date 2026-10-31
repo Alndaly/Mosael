@@ -168,12 +168,16 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
                   {share.title}
                 </h1>
                 <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{author}</span>
-                  {share.author.handle && (
-                    <>
-                      <span aria-hidden>·</span>
+                  {share.author.handle ? (
+                    <Link
+                      href={localePath(locale, `/users/${share.author.handle}`)}
+                      className="inline-flex min-w-0 items-baseline gap-x-2 font-medium text-foreground hover:text-primary"
+                    >
+                      <span className="truncate">{author}</span>
                       <span className="font-mono text-xs">@{share.author.handle}</span>
-                    </>
+                    </Link>
+                  ) : (
+                    <span className="font-medium text-foreground">{author}</span>
                   )}
                   <span aria-hidden>·</span>
                   <span>{kindLabel}</span>
@@ -221,15 +225,26 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
         aside={
           <>
             <SideCard title={t.authorTitle}>
-              <div className="flex min-w-0 items-center gap-3">
-                <InitialTile seed={avatarSeed} name={author} size="md" />
-                <div className="grid min-w-0 gap-0.5">
-                  <span className="truncate text-sm font-semibold">{author}</span>
-                  {share.author.handle && (
+              {share.author.handle ? (
+                <Link
+                  href={localePath(locale, `/users/${share.author.handle}`)}
+                  className="flex min-w-0 items-center gap-3 rounded-lg transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  <InitialTile seed={avatarSeed} name={author} size="md" />
+                  <div className="grid min-w-0 gap-0.5">
+                    <span className="truncate text-sm font-semibold">{author}</span>
                     <span className="truncate font-mono text-xs text-muted-foreground">@{share.author.handle}</span>
-                  )}
+                  </div>
+                  <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
+              ) : (
+                <div className="flex min-w-0 items-center gap-3">
+                  <InitialTile seed={avatarSeed} name={author} size="md" />
+                  <div className="grid min-w-0 gap-0.5">
+                    <span className="truncate text-sm font-semibold">{author}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </SideCard>
             <SideCard title={t.fileTitle}>
               <InfoList

@@ -74,6 +74,17 @@ test("① 社区首页:插件 / 工作流两组,官方静态卡片在前、当�
   }
   // 列表不取 payload —— 内容只在下载 / 深链时取。
   assert.doesNotMatch(ui, /payload/i, "列表组件碰了 payload");
+  // 作者名是独立链接,不能被整卡链接吞掉。
+  assert.match(ui, /localePath\(locale, `\/users\/\$\{share\.author\.handle\}`\)/, "卡片作者没有指向公开主页");
+  assert.match(ui, /relative z-10/, "作者链接没有抬到整卡链接之上");
+});
+
+test("①b 作者可点:卡片与详情页都跳到 /users/{handle}", () => {
+  const ui = maybeRead(LIST_UI);
+  const page = maybeRead(DETAIL_PAGE);
+  assert.match(ui, /\/users\//, "分享卡片没有作者公开页地址");
+  assert.match(page, /\/users\//, "详情页没有作者公开页地址");
+  assert.match(page, /localePath\(locale, `\/users\/\$\{share\.author\.handle\}`\)/, "详情页作者没有指向公开主页");
 });
 
 test("② 详情:深链、下载成 .json、统计、404 可读文案与下一步", async () => {
