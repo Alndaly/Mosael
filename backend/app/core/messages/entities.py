@@ -182,6 +182,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The references just changed. Refresh and reorder again.",
     },
     "entityErr_tooManyMentions": {"zh": "一次最多点名 {limit} 个资产", "en": "At most {limit} assets can be mentioned at once."},
+    "entityErr_unknownRole": {"zh": "不认识的姿势参考角色:{role}", "en": "Unknown pose reference role: {role}"},
     "entityErr_mentionGone": {
         "zh": "点名的资产 {id} 不在这个工作区里(可能已经删了)",
         "en": "The mentioned asset {id} isn't in this workspace (it may have been deleted).",

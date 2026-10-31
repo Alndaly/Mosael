@@ -58,6 +58,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Skeleton, SkeletonLine } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EntityMentionButton, entityMentionChips } from "@/features/entities/EntityMention";
@@ -406,6 +407,8 @@ export function GenerateWorkspace({
   const [prompt, setPrompt] = React.useState("");
   //: 这一次 `@` 到的资产(ADR 0027):提示词描述和参考图由服务端按所选模型收得下的张数挂上。
   const [mentionedEntities, setMentionedEntities] = React.useState<EntitySummary[]>([]);
+  //: 姿势资产默认发 ``pose_reference``；模型不收时，用户必须明说才改成普通参考图(ADR 0091 §5)。
+  const [poseMentionsAsReference, setPoseMentionsAsReference] = React.useState(false);
   const [modelId, setModelId] = React.useState<string | null>(null);
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
   
@@ -843,6 +846,7 @@ export function GenerateWorkspace({
             (role) => supportsParameter(selectedModel, role),
           ),
           entity_ids: mentionedEntities.map((one) => one.id),
+          pose_mentions_role: poseMentionsAsReference ? "reference_image" : "pose_reference",
           digital_human_consent: needsDigitalHumanConsent && digitalHumanConsent,
         }),
       });
@@ -851,6 +855,7 @@ export function GenerateWorkspace({
     onSuccess: (targetSessionId) => {
       setPrompt("");
       setMentionedEntities([]);
+      setPoseMentionsAsReference(false);
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
     },
@@ -1471,6 +1476,22 @@ export function GenerateWorkspace({
                 此前挑中的资产和「@ 资产」按钮自成一行,夹在正文和底栏中间(用户截图:位置很怪)。 */}
             {!voicedChoice && (
               <ComposerChips chips={entityMentionChips(mentionedEntities, setMentionedEntities)} className="px-0.5" />
+            )}
+            {!voicedChoice && mentionedEntities.some((one) => one.kind === "pose") && (
+              <div className="grid gap-0.5 px-0.5 pb-1">
+                <label className="flex cursor-pointer items-center gap-1.5 text-ui-xs text-muted-foreground">
+                  <Checkbox
+                    checked={poseMentionsAsReference}
+                    onCheckedChange={(value) => setPoseMentionsAsReference(value === true)}
+                  />
+                  {t("genPoseAsReference")}
+                </label>
+                <p className="m-0 text-ui-2xs leading-4 text-muted-foreground">
+                  {selectedModel && !supportsParameter(selectedModel, "pose_reference")
+                    ? t("genPoseReferenceUnsupported")
+                    : t("genPoseAsReferenceHint")}
+                </p>
+              </div>
             )}
             {/* 语音、播客:同一个输入卡,里面换成要念的字 / 播客的三档(ADR 0055) */}
             {voicedChoice?.kind === "speech" ? (

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { exclusiveSourceGroups, sourceLimit } from "@/lib/generationCapabilities";
 import {
+  ROLE_COPY,
   SOURCE_PANEL_ORDER,
   SOURCE_ROLES,
   filledCount,
@@ -151,5 +152,16 @@ describe("面板上画的角色和提交时发的角色是同一组", () => {
     const frames = { ...emptyFrames(), reference_image: [slot("img")], mask: [slot("m")] };
     //: 画出来的每一格都发得出去,发出去的每一格都画得出来。
     expect(sourceAssetsFrom(frames, supported).map((one) => one.role).sort()).toEqual(panelSourceRoles(supported).sort());
+  });
+});
+
+
+describe("姿势参考是独立的图片角色", () => {
+  it("有文案、默认空槽,并按 source_assets 发送 pose_reference", () => {
+    expect(ROLE_COPY.pose_reference.accept).toBe("image/*");
+    expect(emptyFrames().pose_reference).toEqual([{ url: "", assetId: "", assetName: "" }]);
+    const frames = emptyFrames();
+    frames.pose_reference = [slot("pose")];
+    expect(sourceAssetsFrom(frames, anyRole)).toEqual([{ asset_id: "pose", role: "pose_reference" }]);
   });
 });

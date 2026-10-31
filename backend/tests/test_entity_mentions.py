@@ -268,3 +268,85 @@ class Test可灵按资产建主体:
         elements = [one for one in sent["body"]["contents"] if one["type"] == "element"]
         assert [one["element_id"] for one in elements] == [f"el-{element_name_for(group)}" for group in built]
         assert sent["path"].startswith("/omni-video/")
+
+
+# ---------------------------------------------------------------------------
+# ADR 0091 §5:姿势参考
+# ---------------------------------------------------------------------------
+
+POSE_CAPS = {
+    **OPENAI_IMAGE_CAPABILITIES,
+    "parameter_keys": [*OPENAI_IMAGE_CAPABILITIES["parameter_keys"], "pose_reference"],
+    "source_limits": {**OPENAI_IMAGE_CAPABILITIES["source_limits"], "pose_reference": 2},
+}
+
+
+def test_姿势资产以_pose_reference_发送_不混进参考图(ws) -> None:
+    zhang = _entity(ws, "张三", "", [("a-front", "front")])
+    sitting = _entity(ws, "抱膝坐", "", [("b-front", "front"), ("b-sheet", "three_quarter")], kind="pose")
+    expansion = _expand(ws, [zhang, sitting], POSE_CAPS)
+    entries = {(entry["asset_id"], entry["role"]) for entry in expansion.source_assets}
+    assert ("a-front", "reference_image") in entries
+    assert ("b-front", "pose_reference") in entries
+    assert ("b-sheet", "pose_reference") in entries
+
+
+def test_姿势和参考图各用各的名额(ws) -> None:
+    zhang = _entity(ws, "张三", "", [("a-sheet", "turnaround"), ("a-front", "front"), ("a-body", "full_body")])
+    sitting = _entity(ws, "坐姿", "", [("b-front", "front"), ("b-sheet", "three_quarter"), ("c-front", "side")], kind="pose")
+    expansion = _expand(ws, [zhang, sitting], POSE_CAPS)
+    attached = [entry for entry in expansion.source_assets if entry["role"] in ("reference_image", "pose_reference")]
+    assert [one["asset_id"] for one in attached if one["role"] == "reference_image"] == ["a-sheet", "a-front", "a-body"]
+    assert [one["asset_id"] for one in attached if one["role"] == "pose_reference"] == ["b-front", "b-sheet"]
+    assert expansion.receipt[1]["dropped"] == ["c-front"]
+
+
+def test_模型不收姿势参考_不悄悄降级(ws) -> None:
+    sitting = _entity(ws, "坐姿", "", [("b-front", "front")], kind="pose")
+    expansion = _expand(ws, [sitting], OPENAI_IMAGE_CAPABILITIES)
+    assert expansion.source_assets == []
+    assert expansion.receipt[0]["notes"] == ["pose_reference_unsupported"]
+
+
+def test_用户明说改成参考图才降级(ws) -> None:
+    sitting = _entity(ws, "坐姿", "", [("b-front", "front")], kind="pose")
+    with SessionLocal() as db:
+        expansion = attach_entities(
+            db, ws, [sitting],
+            source_assets=[], parameters={}, kind="image",
+            capabilities=OPENAI_IMAGE_CAPABILITIES,
+            pose_role="reference_image",
+        )
+    assert expansion.source_assets == [{"asset_id": "b-front", "role": "reference_image"}]
+    assert expansion.receipt[0]["notes"] == []
+
+
+def test_自定义参数组可以声明姿势参考() -> None:
+    from app.domain.generation.custom_profiles import canonical_parameters, validate_capabilities
+
+    assert "pose_reference" in canonical_parameters("image")
+    clean = validate_capabilities(
+        {"parameter_keys": ["reference_image", "pose_reference"], "source_limits": {"pose_reference": 1}},
+        "image",
+    )
+    assert "pose_reference" in clean["parameter_keys"]
+    assert "pose_reference" not in canonical_parameters("audio")
+
+
+def test_生成接口接受姿势参考角色与显式降级开关() -> None:
+    from pydantic import ValidationError
+
+    from app.api.schemas import GenerationCreate, SourceAssetRef
+
+    assert SourceAssetRef(asset_id="p", role="pose_reference").role == "pose_reference"
+    body = GenerationCreate(
+        workspace_id="w", provider="comfyui", model="x", kind="image",
+        pose_mentions_role="reference_image",
+    )
+    assert body.pose_mentions_role == "reference_image"
+    assert GenerationCreate(
+        workspace_id="w", provider="comfyui", model="x", kind="image",
+    ).pose_mentions_role == "pose_reference"
+    with pytest.raises(ValidationError):
+        GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
+                         pose_mentions_role="whatever")

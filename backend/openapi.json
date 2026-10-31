@@ -38611,6 +38611,15 @@
             "maxItems": 8,
             "title": "Entity Ids"
           },
+          "pose_mentions_role": {
+            "type": "string",
+            "enum": [
+              "pose_reference",
+              "reference_image"
+            ],
+            "title": "Pose Mentions Role",
+            "default": "pose_reference"
+          },
           "digital_human_consent": {
             "type": "boolean",
             "title": "Digital Human Consent",
@@ -50418,7 +50427,7 @@
           },
           "role": {
             "type": "string",
-            "pattern": "^(first_frame|last_frame|reference_image|reference_video|reference_audio|source_video|first_clip|driving_audio|mask)$",
+            "pattern": "^(first_frame|last_frame|reference_image|pose_reference|reference_video|reference_audio|source_video|first_clip|driving_audio|mask)$",
             "title": "Role",
             "default": "first_frame"
           }

@@ -69,11 +69,15 @@ DRIVING_AUDIO = "driving_audio"
 #: 蒙版说「只动这一块」;混成参考图的话,整张图都会被重画。
 MASK = "mask"
 
+#: **姿势参考**:只约束体态与构图，不传画风与长相(ADR 0091 §5)。
+POSE_REFERENCE = "pose_reference"
+
 #: 全部角色。描述符(domain/generation_catalog)声明某个模型认哪几种,界面和智能体都读它。
 SOURCE_ROLES = (
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,
+    POSE_REFERENCE,
     REFERENCE_VIDEO,
     REFERENCE_AUDIO,
     SOURCE_VIDEO,
@@ -553,6 +557,7 @@ ROLE_URL_PARAMETERS = {
     FIRST_FRAME: ("first_frame_url",),
     LAST_FRAME: ("last_frame_url",),
     REFERENCE_IMAGE: ("reference_image_url",),
+    POSE_REFERENCE: ("pose_reference_url",),
     REFERENCE_VIDEO: ("reference_video_url",),
     REFERENCE_AUDIO: ("reference_audio_url",),
     SOURCE_VIDEO: ("source_video_url", "video_url"),

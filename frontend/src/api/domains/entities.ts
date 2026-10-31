@@ -22,7 +22,7 @@ export interface EntityAttachReceipt {
   kind: EntityKind;
   attached: string[];
   dropped: string[];
-  /** `limit` / `no_reference_role` / `unknown_limits` / `exclusive` / `subject_too_few` / `prompt_skipped` */
+  /** `limit` / `no_reference_role` / `unknown_limits` / `exclusive` / `subject_too_few` / `prompt_skipped` / `pose_reference_unsupported` */
   notes: string[];
 }
 

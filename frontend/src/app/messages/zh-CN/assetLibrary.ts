@@ -176,6 +176,7 @@ export const assetLibrary = {
   entityNote_exclusive: "已经挂了首尾帧,这个模型不能同时用参考图",
   entityNote_subject_too_few: "建主体至少要两张参考图",
   entityNote_prompt_skipped: "这个模型不收提示词,提示词描述没有拼",
+  entityNote_pose_reference_unsupported: "这个模型不收姿势参考;要发这张图,请勾选「按普通参考图发送」后重试",
   entityReceiptLine: "@{name}:挂了 {attached} 张参考图,{dropped} 张没挂上",
   entityReceiptTitle: "有参考图没挂上",
   assetEntitiesTitle: "属于哪些资产",

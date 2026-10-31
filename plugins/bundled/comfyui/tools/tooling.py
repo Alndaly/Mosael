@@ -54,6 +54,7 @@ tool_names = tool_registry.tool_names
 
 _ROLE_LABELS = {
     "reference_image": ("图", "Image"),
+    "pose_reference": ("姿势", "Pose"),
     "first_frame": ("首帧", "First frame"),
     "last_frame": ("尾帧", "Last frame"),
     "mask": ("蒙版", "Mask"),

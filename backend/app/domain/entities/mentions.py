@@ -39,6 +39,7 @@ from app.domain.generation_catalog import prompt_mode
 MAX_MENTIONS = 8
 
 REFERENCE_ROLE = "reference_image"
+POSE_ROLE = "pose_reference"
 
 #: 回执里的几种「为什么没挂」(界面按它说一句话,见前端 entityNote_*)。
 NOTE_LIMIT = "limit"
@@ -47,6 +48,7 @@ NOTE_UNKNOWN = "unknown_limits"
 NOTE_EXCLUSIVE = "exclusive"
 NOTE_SUBJECT_TOO_FEW = "subject_too_few"
 NOTE_PROMPT_SKIPPED = "prompt_skipped"
+NOTE_POSE_ROLE = "pose_reference_unsupported"
 
 
 @dataclass
@@ -111,25 +113,30 @@ def resolve_mentions(db: Session, workspace_id: str, entity_ids: list[str]) -> l
     return out
 
 
-def _budget(capabilities: dict[str, Any] | None, source_assets: list[dict[str, str]],
-            parameters: dict[str, Any], kind: str) -> tuple[int, str]:
-    """这一次还能挂几张参考图,以及挂不了时的原因。"""
+def _budget(
+    capabilities: dict[str, Any] | None,
+    source_assets: list[dict[str, str]],
+    parameters: dict[str, Any],
+    kind: str,
+    role: str,
+) -> tuple[int, str]:
+    """这一次还能为这个角色挂几张,以及挂不了时的原因。参考图和姿势参考各有各的额度。"""
     if capabilities is None:
         return 0, NOTE_UNKNOWN
-    if REFERENCE_ROLE not in (capabilities.get("parameter_keys") or ()):
-        return 0, NOTE_NO_ROLE
-    cap = (capabilities.get("source_limits") or {}).get(REFERENCE_ROLE)
+    if role not in (capabilities.get("parameter_keys") or ()):
+        return 0, NOTE_POSE_ROLE if role == POSE_ROLE else NOTE_NO_ROLE
+    cap = (capabilities.get("source_limits") or {}).get(role)
     if cap is None:
         return 0, NOTE_UNKNOWN
     via_url = roles_supplied_via_url(parameters, kind)
     used_roles = {str(entry.get("role") or "") for entry in source_assets}
     used_roles |= {role for role, count in via_url.items() if count}
     for group in capabilities.get("exclusive_source_groups") or []:
-        # 已经挂上的角色落在另一组里,而参考图不在那一组 —— 这两组不能混用(火山原话见 catalog)。
-        if REFERENCE_ROLE not in group and used_roles & set(group):
+        # 已经挂上的角色落在另一组里,而这个角色不在那一组 —— 这两组不能混用(火山原话见 catalog)。
+        if role not in group and used_roles & set(group):
             return 0, NOTE_EXCLUSIVE
-    taken = sum(1 for entry in source_assets if entry.get("role") == REFERENCE_ROLE)
-    taken += via_url.get(REFERENCE_ROLE, 0)
+    taken = sum(1 for entry in source_assets if entry.get("role") == role)
+    taken += via_url.get(role, 0)
     return max(0, int(cap) - taken), NOTE_LIMIT
 
 
@@ -158,14 +165,20 @@ def attach_entities(
     parameters: dict[str, Any],
     kind: str,
     capabilities: dict[str, Any] | None,
+    pose_role: str = POSE_ROLE,
 ) -> Expansion:
     """把点名的资产展开成提示词描述和参考素材。没点名就原样返回(回执为空)。
 
     `capabilities` 是这个模型的描述符;查不到时是 None —— 那就不挂任何参考图(不知道它收几张)。
+
+    `pose_role`:姿势资产这一次用哪种角色。默认 ``pose_reference``;模型不收它时,界面可以
+    明说改成 ``reference_image`` 再提交,不由这里悄悄降级(ADR 0091 §5)。
     """
     ids = parse_entity_ids(entity_ids)
     if not ids:
         return Expansion(note="", source_assets=list(source_assets), receipt=[])
+    if pose_role not in (POSE_ROLE, REFERENCE_ROLE):
+        raise EntityDomainError("entityErr_unknownRole", role=pose_role)
     mentions = [_mention(db, entity) for entity in resolve_mentions(db, workspace_id, ids)]
 
     # 提示词描述。不收提示词的模型(放大、抠图)不拼 —— 拼了提交会被拒,照实记一笔。
@@ -176,15 +189,29 @@ def attach_entities(
                 mention.notes.append(NOTE_PROMPT_SKIPPED)
         lines = []
 
-    budget, reason = _budget(capabilities, source_assets, parameters, kind)
+    def role_of(mention: _Mention) -> str:
+        return POSE_ROLE if mention.entity.kind == "pose" and pose_role == POSE_ROLE else REFERENCE_ROLE
+
+    groups: dict[str, list[_Mention]] = {REFERENCE_ROLE: [], POSE_ROLE: []}
+    for mention in mentions:
+        groups[role_of(mention)].append(mention)
+    budgets: dict[str, tuple[int, str]] = {
+        role: _budget(capabilities, source_assets, parameters, kind, role)
+        for role in (REFERENCE_ROLE, POSE_ROLE)
+    }
     already = {str(entry.get("asset_id") or "") for entry in source_assets}
+    added: list[dict[str, str]] = []
+
+    # 主体模型(可灵)的建主体只适用于普通参考图;姿势参考不参与建主体。
+    reference_group = groups[REFERENCE_ROLE]
+    budget, _ = budgets[REFERENCE_ROLE]
     subjects = (capabilities or {}).get("reference_subjects") if budget else None
     if subjects:
         floor = int((capabilities or {}).get("min_reference_images") or 1)
         manual = sum(1 for entry in source_assets if entry.get("role") == REFERENCE_ROLE)
         room = int(subjects.get("max_subjects") or 1) - (1 if manual else 0)
         eligible: list[_Mention] = []
-        for mention in mentions:
+        for mention in reference_group:
             usable = [one for one in mention.images if one not in already]
             if 0 < len(usable) < floor:
                 mention.notes.append(NOTE_SUBJECT_TOO_FEW)
@@ -194,10 +221,9 @@ def attach_entities(
         _round_robin(eligible[:fits], budget, already)
         chosen = eligible[:fits]
     else:
-        chosen = mentions
-        _round_robin(mentions, budget, already)
+        chosen = reference_group
+        _round_robin(reference_group, budget, already)
 
-    added: list[dict[str, str]] = []
     for mention in chosen:
         order = mention.attached
         if subjects:
@@ -209,6 +235,11 @@ def attach_entities(
                 entry["subject"] = mention.entity.id
             added.append(entry)
 
+    pose_budget, _ = budgets[POSE_ROLE]
+    _round_robin(groups[POSE_ROLE], pose_budget, already)
+    for mention in groups[POSE_ROLE]:
+        added.extend({"asset_id": asset_id, "role": POSE_ROLE} for asset_id in mention.attached)
+
     #: 两个资产共用一张图时,它被前一个挂上了 —— 对后一个来说也不算「没挂上」。
     sent = already | {one for mention in mentions for one in mention.attached}
     receipt: list[dict[str, Any]] = []
@@ -216,7 +247,7 @@ def attach_entities(
         dropped = [one for one in mention.images if one not in sent]
         notes = list(mention.notes)
         if dropped and not notes:
-            notes.append(reason)
+            notes.append(budgets[role_of(mention)][1])
         receipt.append({
             "id": mention.entity.id,
             "name": mention.name,
@@ -234,4 +265,3 @@ __all__ = [
     "attach_entities",
     "resolve_mentions",
 ]
-

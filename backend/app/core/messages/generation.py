@@ -11,6 +11,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genRole_first_frame": {"zh": "首帧", "en": "first frame"},
     "genRole_last_frame": {"zh": "尾帧", "en": "last frame"},
     "genRole_reference_image": {"zh": "参考图", "en": "reference image"},
+    "genRole_pose_reference": {"zh": "姿势参考", "en": "pose reference"},
     "genRole_reference_video": {"zh": "参考视频", "en": "reference video"},
     "genRole_reference_audio": {"zh": "参考音频", "en": "reference audio"},
     "genRole_source_video": {"zh": "待编辑的视频", "en": "video to edit"},

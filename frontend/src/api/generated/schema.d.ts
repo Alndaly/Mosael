@@ -14234,6 +14234,12 @@ export interface components {
             /** Entity Ids */
             entity_ids?: string[];
             /**
+             * Pose Mentions Role
+             * @default pose_reference
+             * @enum {string}
+             */
+            pose_mentions_role: "pose_reference" | "reference_image";
+            /**
              * Digital Human Consent
              * @default false
              */

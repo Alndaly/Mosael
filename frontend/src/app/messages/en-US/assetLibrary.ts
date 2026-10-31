@@ -176,6 +176,7 @@ export const assetLibrary = {
   entityNote_exclusive: "a first/last frame is attached, and this model can't combine it with reference images",
   entityNote_subject_too_few: "building a subject needs at least two reference images",
   entityNote_prompt_skipped: "this model takes no prompt, so the prompt descriptor wasn't added",
+  entityNote_pose_reference_unsupported: "this model doesn't accept pose references; choose “Send as a regular reference” to send the image anyway",
   entityReceiptLine: "@{name}: {attached} reference image(s) attached, {dropped} left out",
   entityReceiptTitle: "Some reference images were left out",
   assetEntitiesTitle: "Used by assets",

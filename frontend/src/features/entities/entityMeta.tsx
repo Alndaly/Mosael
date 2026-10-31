@@ -83,6 +83,7 @@ const NOTE_KEYS: Record<string, MessageKey> = {
   exclusive: "entityNote_exclusive",
   subject_too_few: "entityNote_subject_too_few",
   prompt_skipped: "entityNote_prompt_skipped",
+  pose_reference_unsupported: "entityNote_pose_reference_unsupported",
 };
 
 /**

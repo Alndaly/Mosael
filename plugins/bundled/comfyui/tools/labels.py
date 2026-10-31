@@ -128,6 +128,7 @@ def model_folder(class_type: str, name: str) -> str:
 #: 读素材的槽位按宿主的素材角色叫什么(能填的项的名字、应用表单编辑器里列的那一行,见 graph.items)。
 ROLE_NAMES: dict[str, tuple[str, str]] = {
     "reference_image": ("参考图", "Reference image"),
+    "pose_reference": ("姿势参考", "Pose reference"),
     "first_frame": ("首帧", "First frame"),
     "last_frame": ("尾帧", "Last frame"),
     "mask": ("蒙版", "Mask"),

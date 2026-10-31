@@ -24,6 +24,7 @@ from app.domain.generation_catalog import (
     adapter_parameter_surface,
     profile_id_for,
 )
+from app.ai.providers.contracts.generation import POSE_REFERENCE
 from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_LABELS
 
@@ -188,9 +189,16 @@ def canonical_parameters(kind: str) -> list[str]:
     **按 kind 分**:image 的可选里不该有 duration_seconds,声明一个这个 kind 没人会发的
     参数,只会让用户以为界面会多一个旋钮(见 validate_capabilities)。
     """
-    return sorted(
-        {parameter for capabilities in _builtin_capabilities(kind) for parameter in (capabilities.get("parameter_keys") or [])}
-    )
+    names = {
+        parameter
+        for capabilities in _builtin_capabilities(kind)
+        for parameter in (capabilities.get("parameter_keys") or [])
+    }
+    #: 姿势参考是宿主的角色、不是某一家内置 API 的参数：ComfyUI / 自定义工作流可以声明它，
+    #: 内置商业模型不会用。只在这两种「会挂图」的能力里放开(ADR 0091 §5)。
+    if kind in ("image", "video"):
+        names.add(POSE_REFERENCE)
+    return sorted(names)
 
 
 def profile_form_schema(kind: str) -> dict[str, Any]:
@@ -210,6 +218,8 @@ def profile_form_schema(kind: str) -> dict[str, Any]:
         for role in SOURCE_ROLE_LABELS
         if any(role in (caps.get("parameter_keys") or []) for caps in capabilities)
     ]
+    if kind in ("image", "video") and POSE_REFERENCE not in roles:
+        roles.append(POSE_REFERENCE)
     return {
         "parameters": canonical_parameters(kind),
         "enum_parameters": enum_parameters,

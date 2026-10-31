@@ -164,6 +164,11 @@ ADR 0038 §9 已有的预览图设置(`show` / `blur` / `hidden`,`modelPreviewSe
 
 ## 实施记录
 
+- **第 3 步(2026-11-01)**:新增素材角色 `pose_reference`(标签 / 帮助 / 介质 / URL 参数 / 运行期素材类型),
+  自定义 ComfyUI / 工作流参数组可以声明它;`@姿势` 改用这个角色并和 `reference_image` 分开算名额。
+  模型不收时不再静默降级:回执写 `pose_reference_unsupported`,输入卡提供「按普通参考图发送」开关,
+  只有用户勾选后才以 `reference_image` 发送。ComfyUI 的角色名表同步。挑姿势参考图仍暂按固定机位先后,
+  因为生成请求里还没有当前镜头机位这一项(第 2 步记录的出入仍未解决)。
 - **第 2 步(2026-11-01)**:`catalog.KINDS` 加 `pose`、`costume`;角度词表加 `three_quarter` / `high_angle` / `low_angle`;
   姿势的专有字段 `posture`(站 / 坐 / 跪趴 / 卧)、`people`(单人 / 双人)走新的 `ATTRIBUTE_CHOICES`(取值与名字由词表接口
   `attribute_choices` 交给界面);缺省角度改由词表接口的 `default_role` 给,前端不再另抄一份;API 的种类校验与工作流
