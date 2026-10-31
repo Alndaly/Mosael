@@ -114,6 +114,8 @@ class GenerationCreate(ApiModel):
     entity_ids: list[str] = Field(default_factory=list, max_length=8)
     #: 姿势资产用哪种角色。默认姿势参考；模型不收它时，界面可以在用户明说后改成普通参考图(ADR 0091 §5)。
     pose_mentions_role: Literal["pose_reference", "reference_image"] = "pose_reference"
+    #: 这一镜的机位：给姿势参考排序(ADR 0091)。不传 = 用固定先后。
+    pose_angle: Literal["front", "three_quarter", "side", "back", "high_angle", "low_angle"] | None = None
     #: 数字人(带驱动音频的说话照片、对口型)必须勾上「已取得画面中人物的授权」,否则 422(ADR 0028 §5)。
     digital_human_consent: bool = False
 

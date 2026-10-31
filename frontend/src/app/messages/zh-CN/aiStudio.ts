@@ -229,6 +229,8 @@ export const aiStudio = {
   genPoseReferenceUpload: "上传姿势参考",
   genPoseReferenceUploading: "上传中",
   genPoseReferenceUrl: "姿势参考 URL",
+  genPoseAngle: "镜头机位",
+  genPoseAngleAuto: "自动（正面 > 斜侧 > 侧面）",
   genPoseAsReference: "按普通参考图发送",
   genPoseReferenceUnsupported: "这个模型不收姿势参考;勾选后才会把姿势图当普通参考图发送。",
   genPoseAsReferenceHint: "普通参考图可能把灰色线稿的画风带进成片。",

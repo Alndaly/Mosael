@@ -45,10 +45,12 @@ def _entity(ws: str, name: str, prompt: str, refs: list[tuple[str, str]], *, par
 
 
 def _expand(ws: str, ids: list[str], capabilities: dict[str, Any] | None, *,
-            sources: list[dict[str, str]] | None = None, kind: str = "image", parameters: dict | None = None):
+            sources: list[dict[str, str]] | None = None, kind: str = "image", parameters: dict | None = None,
+            pose_angle: str = ""):
     with SessionLocal() as db:
         return attach_entities(db, ws, ids, source_assets=list(sources or []),
-                               parameters=dict(parameters or {}), kind=kind, capabilities=capabilities)
+                               parameters=dict(parameters or {}), kind=kind, capabilities=capabilities,
+                               pose_angle=pose_angle)
 
 
 def _attached(expansion) -> list[str]:
@@ -350,3 +352,24 @@ def test_生成接口接受姿势参考角色与显式降级开关() -> None:
     with pytest.raises(ValidationError):
         GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
                          pose_mentions_role="whatever")
+    assert GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
+                            pose_angle="high_angle").pose_angle == "high_angle"
+    with pytest.raises(ValidationError):
+        GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
+                         pose_angle="from_above")
+
+
+def test_这一镜机位决定先挑哪张姿势图(ws) -> None:
+    sitting = _entity(
+        ws, "坐姿", "",
+        [("b-front", "front"), ("b-sheet", "three_quarter"), ("c-front", "high_angle")],
+        kind="pose",
+    )
+    three = {**POSE_CAPS, "source_limits": {**POSE_CAPS["source_limits"], "pose_reference": 3}}
+    low = _expand(ws, [sitting], three, pose_angle="high_angle")
+    assert [entry["asset_id"] for entry in low.source_assets if entry["role"] == "pose_reference"] == [
+        "c-front", "b-front", "b-sheet",
+    ]
+    # 没给机位 = 原来的固定先后，不猜。
+    default = _expand(ws, [sitting], POSE_CAPS)
+    assert [entry["asset_id"] for entry in default.source_assets if entry["role"] == "pose_reference"][0] == "b-front"

@@ -74,7 +74,7 @@ class Expansion:
     receipt: list[dict[str, Any]]
 
 
-def _mention(db: Session, entity: Entity) -> _Mention:
+def _mention(db: Session, entity: Entity, pose_angle: str = "") -> _Mention:
     """一个资产在生成里的样子。**变体继承母体的提示词描述**(ADR 0027 §1),只换参考图;
     变体自己一张参考图都没有时用母体的 —— 「张三 · 冬装」还没画好冬装那一套时,至少脸是张三的。"""
     parent = db.get(Entity, entity.parent_id) if entity.parent_id else None
@@ -88,7 +88,7 @@ def _mention(db: Session, entity: Entity) -> _Mention:
         entity=entity,
         name=name,
         descriptor=descriptor.strip(),
-        images=attach_order(entity.kind, images),
+        images=attach_order(entity.kind, images, preferred=pose_angle if entity.kind == "pose" else ""),
         roles=dict(images),
     )
 
@@ -166,6 +166,7 @@ def attach_entities(
     kind: str,
     capabilities: dict[str, Any] | None,
     pose_role: str = POSE_ROLE,
+    pose_angle: str = "",
 ) -> Expansion:
     """把点名的资产展开成提示词描述和参考素材。没点名就原样返回(回执为空)。
 
@@ -173,13 +174,16 @@ def attach_entities(
 
     `pose_role`:姿势资产这一次用哪种角色。默认 ``pose_reference``;模型不收它时,界面可以
     明说改成 ``reference_image`` 再提交,不由这里悄悄降级(ADR 0091 §5)。
+
+    `pose_angle`:这一镜的机位(``front`` / ``three_quarter`` / ``side`` / ``back`` /
+    ``high_angle`` / ``low_angle``)。给了就把同机位的姿势参考排在前面;没给就按原来的固定先后。
     """
     ids = parse_entity_ids(entity_ids)
     if not ids:
         return Expansion(note="", source_assets=list(source_assets), receipt=[])
     if pose_role not in (POSE_ROLE, REFERENCE_ROLE):
         raise EntityDomainError("entityErr_unknownRole", role=pose_role)
-    mentions = [_mention(db, entity) for entity in resolve_mentions(db, workspace_id, ids)]
+    mentions = [_mention(db, entity, pose_angle) for entity in resolve_mentions(db, workspace_id, ids)]
 
     # 提示词描述。不收提示词的模型(放大、抠图)不拼 —— 拼了提交会被拒,照实记一笔。
     lines = [f"{mention.name}: {mention.descriptor}" for mention in mentions if mention.descriptor]

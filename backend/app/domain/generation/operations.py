@@ -227,6 +227,7 @@ def _create_generation_job(
     provider_profile_id: str | None = None,
     entity_ids: list[str] | None = None,
     pose_mentions_role: str = "pose_reference",
+    pose_angle: str | None = None,
     scene_reference: dict[str, str] | None = None,
     name_sources: bool = False,
     documents: Sequence[ReferenceDocument] = (),
@@ -348,6 +349,7 @@ def _create_generation_job(
             kind=kind,
             capabilities=resolved.capabilities if resolved.capabilities_known else None,
             pose_role=pose_mentions_role,
+            pose_angle=pose_angle or "",
         )
     except EntityDomainError as exc:
         raise GenerationDomainError(exc.key, **exc.params) from exc
@@ -403,6 +405,8 @@ def _create_generation_job(
     if pose_mentions_role == "reference_image":
         #: 用户明说「改成参考图发送」才记这一笔；默认的姿势参考不占请求字段。
         request["pose_mentions_role"] = "reference_image"
+    if pose_angle:
+        request["pose_angle"] = pose_angle
     if scene_receipt:
         request["scene_reference"] = scene_receipt
     if talking:

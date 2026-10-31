@@ -38620,6 +38620,25 @@
             "title": "Pose Mentions Role",
             "default": "pose_reference"
           },
+          "pose_angle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "front",
+                  "three_quarter",
+                  "side",
+                  "back",
+                  "high_angle",
+                  "low_angle"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pose Angle"
+          },
           "digital_human_consent": {
             "type": "boolean",
             "title": "Digital Human Consent",

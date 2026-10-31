@@ -64,7 +64,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EntityMentionButton, entityMentionChips } from "@/features/entities/EntityMention";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
-import { EntityReceiptNote } from "@/features/entities/entityMeta";
+import { EntityReceiptNote, useCatalogLabels } from "@/features/entities/entityMeta";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/app/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -409,6 +409,10 @@ export function GenerateWorkspace({
   const [mentionedEntities, setMentionedEntities] = React.useState<EntitySummary[]>([]);
   //: 姿势资产默认发 ``pose_reference``；模型不收时，用户必须明说才改成普通参考图(ADR 0091 §5)。
   const [poseMentionsAsReference, setPoseMentionsAsReference] = React.useState(false);
+  //: 这一镜的机位；空 = 自动按固定先后挑姿势参考图。
+  const [poseAngle, setPoseAngle] = React.useState("");
+  const hasPoseMention = mentionedEntities.some((one) => one.kind === "pose");
+  const entityLabels = useCatalogLabels(hasPoseMention);
   const [modelId, setModelId] = React.useState<string | null>(null);
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
   
@@ -562,6 +566,7 @@ export function GenerateWorkspace({
   const selectedModel = voicedChoice || sessionVoicedKind
     ? pickedOption
     : pickedOption ?? sessionChoice.option ?? (sessionEngine ? null : pickGenerationOption(pickerModelOptions));
+  const poseReferenceSupported = Boolean(selectedModel && supportsParameter(selectedModel, "pose_reference"));
   //: 会话记着的那个现在用不了(这次也没挑别的):它叫什么、为什么、怎么修
   const missingEngine = pickedOption || voicedChoice ? null : sessionChoice.missing;
   const missingModel = useMissingModel(missingEngine);
@@ -847,6 +852,7 @@ export function GenerateWorkspace({
           ),
           entity_ids: mentionedEntities.map((one) => one.id),
           pose_mentions_role: poseMentionsAsReference ? "reference_image" : "pose_reference",
+          ...(poseAngle && !poseMentionsAsReference ? { pose_angle: poseAngle } : {}),
           digital_human_consent: needsDigitalHumanConsent && digitalHumanConsent,
         }),
       });
@@ -856,6 +862,7 @@ export function GenerateWorkspace({
       setPrompt("");
       setMentionedEntities([]);
       setPoseMentionsAsReference(false);
+      setPoseAngle("");
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
     },
@@ -1477,8 +1484,24 @@ export function GenerateWorkspace({
             {!voicedChoice && (
               <ComposerChips chips={entityMentionChips(mentionedEntities, setMentionedEntities)} className="px-0.5" />
             )}
-            {!voicedChoice && mentionedEntities.some((one) => one.kind === "pose") && (
-              <div className="grid gap-0.5 px-0.5 pb-1">
+            {!voicedChoice && hasPoseMention && (
+              <div className="grid gap-1 px-0.5 pb-1">
+                {poseReferenceSupported && !poseMentionsAsReference && (
+                  <label className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
+                    {t("genPoseAngle")}
+                    <Select value={poseAngle || "auto"} onValueChange={(value) => setPoseAngle(value === "auto" ? "" : value)}>
+                      <SelectTrigger size="sm" className="w-fit min-w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">{t("genPoseAngleAuto")}</SelectItem>
+                        {(["front", "three_quarter", "side", "back", "high_angle", "low_angle"] as const).map((angle) => (
+                          <SelectItem key={angle} value={angle}>{entityLabels.role(angle)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
                 <label className="flex cursor-pointer items-center gap-1.5 text-ui-xs text-muted-foreground">
                   <Checkbox
                     checked={poseMentionsAsReference}
@@ -1487,7 +1510,7 @@ export function GenerateWorkspace({
                   {t("genPoseAsReference")}
                 </label>
                 <p className="m-0 text-ui-2xs leading-4 text-muted-foreground">
-                  {selectedModel && !supportsParameter(selectedModel, "pose_reference")
+                  {selectedModel && !poseReferenceSupported
                     ? t("genPoseReferenceUnsupported")
                     : t("genPoseAsReferenceHint")}
                 </p>

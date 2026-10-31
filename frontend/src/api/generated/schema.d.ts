@@ -14239,6 +14239,8 @@ export interface components {
              * @enum {string}
              */
             pose_mentions_role: "pose_reference" | "reference_image";
+            /** Pose Angle */
+            pose_angle?: ("front" | "three_quarter" | "side" | "back" | "high_angle" | "low_angle") | null;
             /**
              * Digital Human Consent
              * @default false

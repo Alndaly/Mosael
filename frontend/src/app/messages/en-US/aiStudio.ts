@@ -227,6 +227,8 @@ export const aiStudio = {
   genPoseReferenceUpload: "Upload pose reference",
   genPoseReferenceUploading: "Uploading",
   genPoseReferenceUrl: "Pose reference URL",
+  genPoseAngle: "Shot angle",
+  genPoseAngleAuto: "Auto (front > three-quarter > side)",
   genPoseAsReference: "Send as a regular reference",
   genPoseReferenceUnsupported: "This model doesn't accept pose references; the pose image is only sent if you choose a regular reference.",
   genPoseAsReferenceHint: "A regular reference may carry the grey mannequin line-art style into the output.",
