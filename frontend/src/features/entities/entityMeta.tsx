@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, Package, UserRound, type LucideIcon } from "lucide-react";
+import { MapPin, Package, PersonStanding, Shirt, UserRound, type LucideIcon } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -24,6 +24,8 @@ export const ENTITY_KIND_ICONS: Record<EntityKind, LucideIcon> = {
   character: UserRound,
   location: MapPin,
   prop: Package,
+  pose: PersonStanding,
+  costume: Shirt,
 };
 
 export function entityKindIcon(kind: string): LucideIcon {
@@ -43,6 +45,10 @@ export type CatalogLabels = {
   consent: EntityCatalog["consent_kinds"];
   /** 这种资产生成时挑参考图的先后(角度的名字),其余排在后面:人物三视图 > 正面 > 全身,场景全景 > 设定图。 */
   priorityFor: (kind: string) => string[];
+  /** 新挂一张参考图、没说角度时按种类给的缺省(后端 catalog.DEFAULT_ROLE,不在这里另抄一份)。 */
+  defaultRole: (kind: string) => string;
+  /** 取值有限的专有字段能选什么(姿势的体位、人数),名字已经按界面语言翻好。 */
+  choicesFor: (kind: string, field: string) => { value: string; label: string }[];
 };
 
 /** 词表还没到的时候用原值兜底 —— 一格空白比一个英文标识符更让人以为坏了。 */
@@ -55,6 +61,8 @@ export function catalogLabels(catalog: EntityCatalog | undefined): CatalogLabels
     rolesFor: (kind) => (catalog?.roles_by_kind[kind] ?? []).map((role) => ({ value: role, label: roles.get(role) ?? role })),
     consent: catalog?.consent_kinds ?? [],
     priorityFor: (kind) => (catalog?.attach_priority[kind] ?? []).map((role) => roles.get(role) ?? role),
+    defaultRole: (kind) => catalog?.default_role[kind] ?? "",
+    choicesFor: (kind, field) => catalog?.attribute_choices[kind]?.[field] ?? [],
   };
 }
 

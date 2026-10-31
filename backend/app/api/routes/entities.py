@@ -32,7 +32,15 @@ from app.core.i18n import get_current_locale, t, render_message
 from app.db.models import Entity, Job
 from app.domain.entities import library as entities_library, catalog, use_cases
 from app.domain.consent import CONSENT_KINDS
-from app.domain.entities.catalog import ATTACH_PRIORITY, ATTRIBUTE_KEYS, KINDS, ROLES, ROLES_BY_KIND
+from app.domain.entities.catalog import (
+    ATTACH_PRIORITY,
+    ATTRIBUTE_CHOICES,
+    ATTRIBUTE_KEYS,
+    DEFAULT_ROLE,
+    KINDS,
+    ROLES,
+    ROLES_BY_KIND,
+)
 from app.domain.workflows import use_cases as workflow_use_cases
 from app.domain.workflows.errors import WorkflowDomainError
 
@@ -108,6 +116,14 @@ def entity_catalog(db: DbSession, user: CurrentUser) -> dict[str, Any]:
         "roles_by_kind": {kind: list(roles) for kind, roles in ROLES_BY_KIND.items()},
         "attach_priority": {kind: list(order) for kind, order in ATTACH_PRIORITY.items()},
         "attributes": {kind: list(keys) for kind, keys in ATTRIBUTE_KEYS.items()},
+        "default_role": dict(DEFAULT_ROLE),
+        "attribute_choices": {
+            kind: {
+                field: [{"value": value, "label": t(f"entityChoice_{field}_{value}", locale)} for value in values]
+                for field, values in fields.items()
+            }
+            for kind, fields in ATTRIBUTE_CHOICES.items()
+        },
     }
 
 

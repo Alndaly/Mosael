@@ -418,6 +418,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_kind_character": {"zh": "人物", "en": "Character"},
     "wfOpt_kind_location": {"zh": "场景", "en": "Location"},
     "wfOpt_kind_prop": {"zh": "道具", "en": "Prop"},
+    "wfOpt_kind_pose": {"zh": "姿势", "en": "Pose"},
+    "wfOpt_kind_costume": {"zh": "服装", "en": "Costume"},
     "wfOpt_aspect_16:9": {"zh": "16:9 横屏", "en": "16:9 landscape"},
     "wfOpt_aspect_9:16": {"zh": "9:16 竖屏", "en": "9:16 portrait"},
     "wfOpt_aspect_1:1": {"zh": "1:1 方形", "en": "1:1 square"},

@@ -385,6 +385,7 @@ function PanelGroup({ title, wide = false, children }: { title: string; wide?: b
  */
 function Facts({ entity, workspaceId }: { entity: Entity; workspaceId: string }) {
   const t = useI18n();
+  const labels = useCatalogLabels();
   const attributes = entity.attributes as Record<string, unknown>;
   const chosen = voiceOf(attributes);
   const voiceId = chosen ? spokenId(chosen) : "";
@@ -412,6 +413,12 @@ function Facts({ entity, workspaceId }: { entity: Entity; workspaceId: string })
     );
   }
   if (entity.kind === "location" && attributes.time_of_day) items.push(String(attributes.time_of_day));
+  if (entity.kind === "pose") {
+    for (const field of ["posture", "people"]) {
+      const choice = labels.choicesFor("pose", field).find((one) => one.value === attributes[field]);
+      if (choice) items.push(choice.label);
+    }
+  }
   return (
     <ul className="m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-1 px-2 pt-1 text-ui-xs text-muted-foreground" data-entity-facts="">
       {items.map((item, index) => (
@@ -431,7 +438,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-/** 种类的专有字段:人物的音色、人偶颜色、真人 / 虚构与授权声明;场景的 3D 场景、时间;道具的 3D 模型。 */
+/** 种类的专有字段:人物的音色、人偶颜色、真人 / 虚构与授权声明;场景的 3D 场景、时间;道具的 3D 模型;姿势的体位、人数(服装没有)。 */
 function KindFields({
   entity,
   workspaceId,
@@ -489,10 +496,48 @@ function KindFields({
       </PanelGroup>
     );
   }
+  if (entity.kind === "pose") {
+    return (
+      <PanelGroup title={t("entityGroupPose")}>
+        <ChoiceField kind="pose" field="posture" label={t("entityPosture")} value={String(attributes.posture ?? "")} onChange={(posture) => save({ posture })} />
+        <ChoiceField kind="pose" field="people" label={t("entityPeople")} value={String(attributes.people ?? "")} onChange={(people) => save({ people })} />
+      </PanelGroup>
+    );
+  }
+  //: 服装没有专有字段:颜色、材质、版型写在提示词描述里。
+  if (entity.kind === "costume") return null;
   return (
     <PanelGroup title={t("entityGroupProp")}>
       <ModelField workspaceId={workspaceId} value={String(attributes.model_asset_id ?? "")} onChange={(model_asset_id) => save({ model_asset_id })} />
     </PanelGroup>
+  );
+}
+
+/** 取值有限的专有字段(姿势的体位、人数):选项和名字都从后端词表来,「未设」可以选回去。 */
+function ChoiceField({
+  kind,
+  field,
+  label,
+  value,
+  onChange,
+}: {
+  kind: string;
+  field: string;
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const t = useI18n();
+  const labels = useCatalogLabels();
+  return (
+    <Field label={label}>
+      <OptionPicker
+        ariaLabel={label}
+        value={value || NONE}
+        onChange={(next) => onChange(next === NONE ? "" : next)}
+        options={[{ value: NONE, label: t("entityNone") }, ...labels.choicesFor(kind, field)]}
+      />
+    </Field>
   );
 }
 

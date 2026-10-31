@@ -8,7 +8,6 @@ import {
   listAssetEntities,
   listEntities,
   type Asset,
-  type EntityKind,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
@@ -59,8 +58,6 @@ export function AssetEntitiesList({ asset }: { asset: Pick<Asset, "id" | "worksp
   );
 }
 
-const DEFAULT_ROLE: Record<EntityKind, string> = { character: "front", location: "concept", prop: "front" };
-
 /**
  * 素材库右键「设为某个资产的参考图…」:挑一个资产、挑角度(可以顺手设成封面)。
  * 同一张图已经是它的参考图时,效果是换个角度 —— 和详情页里挂图同一个接口。
@@ -93,7 +90,7 @@ export function SetAsReferenceDialog({
   const chosen = (entities.data ?? []).find((one) => one.id === entityId);
   //: 角度按这个资产的种类列:换了一个资产(人物换成场景),原来挑的「正面」场景没有,落回它的缺省。
   const roleOptions = chosen ? labels.rolesFor(chosen.kind) : [];
-  const effectiveRole = roleOptions.some((one) => one.value === role) ? role : chosen ? DEFAULT_ROLE[chosen.kind] : "";
+  const effectiveRole = roleOptions.some((one) => one.value === role) ? role : chosen ? labels.defaultRole(chosen.kind) : "";
 
   const attach = useMutation({
     mutationFn: () => addEntityReference(entityId, { asset_id: asset!.id, role: effectiveRole, cover: cover && asset?.kind === "image" }),

@@ -15,8 +15,9 @@ from app.db.references import split_ids
 from app.domain.consent import CONSENT_KINDS
 from app.domain.voices.voice_ref import VoiceRef, VoiceRefInvalid
 
-#: 三种资产。「风格」那一种先不做(ADR 0027「以后再议」)。
-KINDS: tuple[str, ...] = ("character", "location", "prop")
+#: 几种资产。人物 / 场景 / 道具是「一个有名字的东西」(ADR 0027);姿势 / 服装是「能套在任何人物身上的参考」
+#: (ADR 0091 §2):一个体态、一套衣服,张三能用,李四也能用。「风格」那一种先不做(ADR 0027「以后再议」)。
+KINDS: tuple[str, ...] = ("character", "location", "prop", "pose", "costume")
 
 #: 参考图的角度 / 用途,全部的。每一种资产用得上的是其中几种(ROLES_BY_KIND)。
 ROLES: tuple[str, ...] = (
@@ -30,6 +31,9 @@ ROLES: tuple[str, ...] = (
     "wide",
     "reverse",
     "overhead",
+    "three_quarter",
+    "high_angle",
+    "low_angle",
     "concept",
     "detail",
 )
@@ -40,6 +44,9 @@ ROLES_BY_KIND: dict[str, tuple[str, ...]] = {
     "character": ("front", "side", "back", "turnaround", "closeup", "full_body", "expression", "concept", "detail"),
     "location": ("wide", "reverse", "overhead", "concept", "detail"),
     "prop": ("front", "side", "back", "turnaround", "closeup", "concept", "detail"),
+    #: 姿势的角度是**机位**:同一个体态从正面、斜侧、侧面、背面、俯拍、仰拍看(ADR 0091 §2)。
+    "pose": ("front", "three_quarter", "side", "back", "high_angle", "low_angle", "detail"),
+    "costume": ("front", "back", "side", "detail", "concept"),
 }
 
 #: 生成时从参考图里挑的先后(ADR 0027 §3),按种类:人物三视图 > 正面 > 全身,道具三视图 > 正面,
@@ -48,10 +55,23 @@ ATTACH_PRIORITY: dict[str, tuple[str, ...]] = {
     "character": ("turnaround", "front", "full_body"),
     "location": ("wide", "concept"),
     "prop": ("turnaround", "front"),
+    #: 姿势:正面 > 斜侧 > 侧面。ADR 0091 想要的是「跟着这一镜的机位挑」—— 生成请求里还没有机位这一项,先按固定先后。
+    "pose": ("front", "three_quarter", "side"),
+    "costume": ("front", "back"),
 }
 
 #: 新挂一张参考图、没说角度时按种类给的缺省:人物和道具先当正面,场景先当设定图。
-DEFAULT_ROLE: dict[str, str] = {"character": "front", "location": "concept", "prop": "front"}
+DEFAULT_ROLE: dict[str, str] = {
+    "character": "front", "location": "concept", "prop": "front", "pose": "front", "costume": "front",
+}
+
+#: 姿势的专有字段可以取的值:体位、人数(ADR 0091 §2)。名字是文案 `entityChoice_<字段>_<值>`。
+ATTRIBUTE_CHOICES: dict[str, dict[str, tuple[str, ...]]] = {
+    "pose": {
+        "posture": ("standing", "sitting", "kneeling", "lying"),
+        "people": ("single", "couple"),
+    },
+}
 
 #: 一个资产最多挂几张参考图。参考图墙是一面墙,不是一个素材库;再多就该拆成变体。
 MAX_REFERENCES = 60
@@ -159,6 +179,13 @@ def normalize_attributes(
         model = _text(raw.get("model_asset_id"), "model_asset_id", 64)
         if model:
             out["model_asset_id"] = model
+    for key, choices in ATTRIBUTE_CHOICES.get(kind, {}).items():
+        value = _text(raw.get(key), key, 32)
+        if not value:
+            continue
+        if value not in choices:
+            raise AttributeProblem("entityErr_attributeChoice", field=key, allowed=" / ".join(choices))
+        out[key] = value
     return out
 
 
@@ -167,6 +194,9 @@ ATTRIBUTE_KEYS: dict[str, tuple[str, ...]] = {
     "character": ("voice", "blockout_color", "real_person", "consent"),
     "location": ("scene_id", "time_of_day"),
     "prop": ("model_asset_id",),
+    "pose": ("posture", "people"),
+    #: 服装没有专有字段:颜色、材质、版型写在提示词描述里,生成时随 `@服装` 拼进去。
+    "costume": (),
 }
 
 

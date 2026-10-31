@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
+from app.domain.entities.catalog import KINDS as ENTITY_KINDS
 from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation_catalog.descriptors.shared import SOURCE_GROUPS, SOURCE_ROLE_LABELS
@@ -2199,7 +2200,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             #: 两样都空在运行前就拦住 —— 数字人出镜带货里「挑一位主播」空着的话,此前要等脚本那次对话计完费才失败。
             "entity_id": {"type": "template", "one_of": "target", "options_from": "entities",
                           "description": "wfNode_entity_get_entity_id"},
-            "kind": {"type": "string", "options": ["character", "location", "prop"], "description": "wfNode_entity_get_kind"},
+            "kind": {"type": "string", "options": list(ENTITY_KINDS), "description": "wfNode_entity_get_kind"},
             "name": {"type": "template", "one_of": "target", "description": "wfNode_entity_get_name"},
             "limit": {"advanced": True, "type": "number", "description": "wfNode_entity_get_limit"},
         },
@@ -2213,7 +2214,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_entity_list",
         "description": "wfNode_entity_list_desc",
         "config": {
-            "kind": {"type": "string", "options": ["character", "location", "prop"], "description": "wfNode_entity_list_kind"},
+            "kind": {"type": "string", "options": list(ENTITY_KINDS), "description": "wfNode_entity_list_kind"},
             "tag": {"type": "template", "description": "wfNode_entity_list_tag"},
             "query": {"type": "template", "description": "wfNode_entity_list_query"},
             "limit": {"advanced": True, "type": "number", "description": "wfNode_entity_list_limit"},
@@ -2228,7 +2229,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_entity_save",
         "description": "wfNode_entity_save_desc",
         "config": {
-            "kind": {"type": "string", "required": True, "options": ["character", "location", "prop"], "description": "wfNode_entity_save_kind"},
+            "kind": {"type": "string", "required": True, "options": list(ENTITY_KINDS), "description": "wfNode_entity_save_kind"},
             "name": {"type": "template", "required": True, "description": "wfNode_entity_save_name"},
             "prompt": {"type": "template", "description": "wfNode_entity_save_prompt"},
             "description": {"type": "template", "description": "wfNode_entity_save_description"},

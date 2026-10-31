@@ -7,10 +7,12 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # -- 社区(ADR 0026):账号、画板分享、发布到社区 --
-    # ---- 资产库(ADR 0027):人物 / 场景 / 道具 ----
+    # ---- 资产库(ADR 0027):人物 / 场景 / 道具;姿势 / 服装(ADR 0091)----
     "entityKind_character": {"zh": "人物", "en": "Character"},
     "entityKind_location": {"zh": "场景", "en": "Location"},
     "entityKind_prop": {"zh": "道具", "en": "Prop"},
+    "entityKind_pose": {"zh": "姿势", "en": "Pose"},
+    "entityKind_costume": {"zh": "服装", "en": "Costume"},
     "entityRole_front": {"zh": "正面", "en": "Front"},
     "entityRole_side": {"zh": "侧面", "en": "Side"},
     "entityRole_back": {"zh": "背面", "en": "Back"},
@@ -21,6 +23,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     "entityRole_wide": {"zh": "全景", "en": "Wide shot"},
     "entityRole_reverse": {"zh": "反打", "en": "Reverse angle"},
     "entityRole_overhead": {"zh": "俯视", "en": "Overhead"},
+    "entityRole_three_quarter": {"zh": "斜侧", "en": "Three-quarter"},
+    "entityRole_high_angle": {"zh": "俯拍", "en": "High angle"},
+    "entityRole_low_angle": {"zh": "仰拍", "en": "Low angle"},
+    "entityChoice_posture_standing": {"zh": "站姿", "en": "Standing"},
+    "entityChoice_posture_sitting": {"zh": "坐姿", "en": "Sitting"},
+    "entityChoice_posture_kneeling": {"zh": "跪姿 / 趴姿", "en": "Kneeling / all fours"},
+    "entityChoice_posture_lying": {"zh": "卧姿", "en": "Lying"},
+    "entityChoice_people_single": {"zh": "单人", "en": "Single"},
+    "entityChoice_people_couple": {"zh": "双人", "en": "Couple"},
     "entityRole_concept": {"zh": "设定图", "en": "Concept"},
     "entityRole_detail": {"zh": "细节", "en": "Detail"},
     "entityConsent_self": {"zh": "这是我本人", "en": "This is me"},
@@ -52,6 +63,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "entityErr_attributeNotText": {"zh": "{field} 要是一段字", "en": "{field} must be text."},
     "entityErr_attributeNotBool": {"zh": "{field} 要是真或假", "en": "{field} must be true or false."},
+    "entityErr_attributeChoice": {"zh": "{field} 只能是 {allowed} 之一", "en": "{field} must be one of {allowed}."},
     "entityErr_attributeTooLong": {"zh": "{field} 最长 {limit} 字", "en": "{field} can be at most {limit} characters."},
     "entityErr_colorFormat": {"zh": "人偶颜色要写成 #RRGGBB", "en": "The blockout color must be written as #RRGGBB."},
     "entityErr_consentKind": {"zh": "授权声明只能是 {kinds}", "en": "The consent declaration must be one of {kinds}."},
@@ -145,6 +157,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "entityErr_role_location": {
         "zh": "场景的参考图只能标成全景、反打、俯视、设定图或细节 —— 场景没有正面、侧面",
         "en": "A location's reference can be a wide shot, reverse angle, overhead, concept or detail — locations have no front or side.",
+    },
+    "entityErr_role_pose": {
+        "zh": "姿势的参考图只能标成正面、斜侧、侧面、背面、俯拍、仰拍或细节",
+        "en": "A pose's reference can be front, three-quarter, side, back, high angle, low angle or detail.",
+    },
+    "entityErr_role_costume": {
+        "zh": "服装的参考图只能标成正面、背面、侧面、细节或设定图",
+        "en": "A costume's reference can be front, back, side, detail or concept.",
     },
     "entityErr_role_prop": {
         "zh": "道具的参考图只能标成正面、侧面、背面、三视图、特写、设定图或细节",

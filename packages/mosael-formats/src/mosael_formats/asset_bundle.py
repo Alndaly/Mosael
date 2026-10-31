@@ -36,7 +36,8 @@ from mosael_formats.i18n import FormatError
 
 SCHEMA = "mosael.asset/1"
 
-#: 三种资产。和桌面端 domain/entities/catalog.KINDS 同一组。
+#: 分享包收的三种资产。桌面端 domain/entities/catalog.KINDS 另有姿势、服装(ADR 0091):它们常常来自外部参考库,
+#: 带外部出处的不能随包分发(ADR 0091 §3),所以分享包要不要收这两种,等社区分享重新开放时再定。
 KINDS: tuple[str, ...] = ("character", "location", "prop")
 
 #: 参考图的角度 / 用途。和桌面端 domain/entities/catalog.ROLES 同一组、同一个顺序。

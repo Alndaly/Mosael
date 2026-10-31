@@ -36919,6 +36919,26 @@
             },
             "type": "object",
             "title": "Attributes"
+          },
+          "default_role": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Default Role"
+          },
+          "attribute_choices": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {
+                  "$ref": "#/components/schemas/EntityChoiceOut"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Attribute Choices"
           }
         },
         "type": "object",
@@ -36928,10 +36948,30 @@
           "roles_by_kind",
           "consent_kinds",
           "attach_priority",
-          "attributes"
+          "attributes",
+          "default_role",
+          "attribute_choices"
         ],
         "title": "EntityCatalogOut",
         "description": "资产的词表,按请求方的语言翻好:几种资产、参考图的角度、授权声明的选项、生成时挑图的先后。"
+      },
+      "EntityChoiceOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "EntityChoiceOut"
       },
       "EntityConsentKindOut": {
         "properties": {
@@ -36964,7 +37004,7 @@
           },
           "kind": {
             "type": "string",
-            "pattern": "^(character|location|prop)$",
+            "pattern": "^(character|location|prop|pose|costume)$",
             "title": "Kind"
           },
           "name": {

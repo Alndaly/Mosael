@@ -368,7 +368,7 @@ def clear_lost_references(db: Session, entity: Entity) -> Entity:
 
 
 #: 标错角度时按种类说能标成什么(名字写在文案里,按读的人的语言;不把词表的键拼进句子)。
-_ROLE_ERRORS = {"character": "entityErr_role_character", "location": "entityErr_role_location", "prop": "entityErr_role_prop"}
+_ROLE_ERRORS = {kind: f"entityErr_role_{kind}" for kind in KINDS}
 
 
 def _role(value: Any, entity: Entity) -> str:

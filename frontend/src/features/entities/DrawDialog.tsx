@@ -22,8 +22,8 @@ import { useWatchedJob } from "@/lib/useWatchedJob";
 export type DrawAbility = Exclude<EntityDrawRequest["ability"], "speak">;
 
 /**
- * 这种资产能让 AI 补画什么。**三种不是一个模板**:人物补角度、画表情;场景的角度是机位(全景 / 反打 / 俯视),
- * 没有表情;道具补角度。和画板上资产格的能力是同一件事(后端 entity_angles / entity_expressions 两个节点)。
+ * 这种资产能让 AI 补画什么。**几种不是一个模板**:人物补角度、画表情;场景的角度是机位(全景 / 反打 / 俯视),
+ * 没有表情;道具、服装补角度;姿势补机位(同一个体态换个角度看)。和画板上资产格的能力是同一件事(后端 entity_angles / entity_expressions 两个节点)。
  */
 export function drawAbilitiesFor(kind: Entity["kind"]): DrawAbility[] {
   return kind === "character" ? ["angles", "expressions"] : ["angles"];
@@ -36,9 +36,13 @@ const ABILITY_HINTS: Record<`${DrawAbility}_${Entity["kind"]}`, MessageKey> = {
   angles_character: "entityDrawAnglesHint_character",
   angles_location: "entityDrawAnglesHint_location",
   angles_prop: "entityDrawAnglesHint_prop",
+  angles_pose: "entityDrawAnglesHint_pose",
+  angles_costume: "entityDrawAnglesHint_costume",
   expressions_character: "entityDrawExpressionsHint",
   expressions_location: "entityDrawExpressionsHint",
   expressions_prop: "entityDrawExpressionsHint",
+  expressions_pose: "entityDrawExpressionsHint",
+  expressions_costume: "entityDrawExpressionsHint",
 };
 
 const DEFAULT_MODEL = "__default__";

@@ -58,7 +58,7 @@ vi.mock("@/api/domains/speech", async (importOriginal) => ({
 
 vi.mock("@/api/client", () => ({
   ...api,
-  ENTITY_KINDS: ["character", "location", "prop"],
+  ENTITY_KINDS: ["character", "location", "prop", "pose", "costume"],
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
   assetFileUrl: (id: string) => `/file/${id}`,
@@ -114,6 +114,8 @@ const CATALOG = {
   ],
   attach_priority: { character: ["turnaround", "front", "full_body"], location: ["wide", "concept"], prop: ["turnaround", "front"] },
   attributes: { character: ["voice_id"], location: [], prop: [] },
+  default_role: { character: "front", location: "concept", prop: "front", pose: "front", costume: "front" },
+  attribute_choices: {},
 };
 
 function summary(over: Partial<EntitySummary> = {}): EntitySummary {

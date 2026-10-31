@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel
+from app.domain.entities.catalog import KINDS
 
 
 class EntityKindOut(ApiModel):
@@ -17,6 +18,11 @@ class EntityKindOut(ApiModel):
 
 class EntityRoleOut(ApiModel):
     role: str
+    label: str
+
+
+class EntityChoiceOut(ApiModel):
+    value: str
     label: str
 
 
@@ -40,6 +46,10 @@ class EntityCatalogOut(ApiModel):
     attach_priority: dict[str, list[str]]
     #: 每种资产有哪些专有字段。
     attributes: dict[str, list[str]]
+    #: 新挂一张参考图、没说角度时按种类给的缺省(人物、道具、姿势、服装先当正面,场景先当设定图)。
+    default_role: dict[str, str]
+    #: 取值有限的专有字段能选什么(种类 → 字段 → 选项),例如姿势的体位、人数。
+    attribute_choices: dict[str, dict[str, list[EntityChoiceOut]]]
 
 
 class EntityReferenceOut(ApiModel):
@@ -98,7 +108,7 @@ class EntityOut(ApiModel):
 
 class EntityCreate(ApiModel):
     workspace_id: str
-    kind: str = Field(pattern="^(character|location|prop)$")
+    kind: str = Field(pattern=f"^({'|'.join(KINDS)})$")
     name: str = Field(min_length=1, max_length=160)
     description: str = ""
     prompt: str = ""

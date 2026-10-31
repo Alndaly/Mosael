@@ -5,8 +5,8 @@ import { api } from "@/api/transport";
  * 资产库(ADR 0027):人物 / 场景 / 道具。和「素材」(一个文件)不是一回事 —— 一个资产是「一个有名字的东西」,
  * 参考图是素材库里的素材,这里只引用它们。
  */
-export type EntityKind = "character" | "location" | "prop";
-export const ENTITY_KINDS: readonly EntityKind[] = ["character", "location", "prop"];
+export type EntityKind = "character" | "location" | "prop" | "pose" | "costume";
+export const ENTITY_KINDS: readonly EntityKind[] = ["character", "location", "prop", "pose", "costume"];
 
 export type EntitySummary = Omit<components["schemas"]["EntitySummaryOut"], "kind"> & { kind: EntityKind };
 export type Entity = Omit<components["schemas"]["EntityOut"], "kind" | "variants"> & { kind: EntityKind; variants: EntitySummary[] };

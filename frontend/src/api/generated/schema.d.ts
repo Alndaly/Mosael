@@ -13493,6 +13493,23 @@ export interface components {
             attributes: {
                 [key: string]: string[];
             };
+            /** Default Role */
+            default_role: {
+                [key: string]: string;
+            };
+            /** Attribute Choices */
+            attribute_choices: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["EntityChoiceOut"][];
+                };
+            };
+        };
+        /** EntityChoiceOut */
+        EntityChoiceOut: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
         };
         /** EntityConsentKindOut */
         EntityConsentKindOut: {

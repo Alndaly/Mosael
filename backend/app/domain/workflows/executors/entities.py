@@ -214,6 +214,25 @@ ANGLE_VIEWS: dict[str, tuple[tuple[str, str], ...]] = {
         ("reverse", "Reverse angle of the same place, the camera turned around to look the other way."),
         ("overhead", "High-angle view of the same place from above, showing its layout."),
     ),
+    #: 姿势:同一个体态换机位看(ADR 0091 §2)。画成去脸的中性人台,只表达体态 —— 它要套在别的人物身上。
+    "pose": (
+        ("front", "The same body pose seen from the front, faceless neutral grey mannequin, full body, "
+                  "plain white background, clean line art."),
+        ("three_quarter", "The same body pose seen from a three-quarter angle, faceless neutral grey mannequin, "
+                          "full body, plain white background, clean line art."),
+        ("side", "The same body pose seen from the side, faceless neutral grey mannequin, full body, "
+                 "plain white background, clean line art."),
+        ("high_angle", "The same body pose seen from a high camera angle looking down, faceless neutral grey mannequin, "
+                       "full body, plain white background, clean line art."),
+        ("low_angle", "The same body pose seen from a low camera angle looking up, faceless neutral grey mannequin, "
+                      "full body, plain white background, clean line art."),
+    ),
+    #: 服装:没有人体的整身穿搭,正背面 + 细节(ADR 0091 §2)。
+    "costume": (
+        ("front", "Front view of the same complete outfit, flat lay without a person, plain light grey background."),
+        ("back", "Back view of the same complete outfit, flat lay without a person, plain light grey background."),
+        ("detail", "Close-up detail of the same outfit's fabric, stitching and accessories, plain light grey background."),
+    ),
 }
 #: 每一张都要守的那一句:和参考图是同一个,不要变样。
 SAME_AS_REFERENCE = ("Keep it identical to the reference images: same face, hairstyle, outfit, materials and colors. "

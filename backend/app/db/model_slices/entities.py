@@ -25,7 +25,7 @@ class Entity(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    #: `character` / `location` / `prop`(见 domain/entities/catalog.KINDS)。
+    #: `character` / `location` / `prop` / `pose` / `costume`(见 domain/entities/catalog.KINDS)。
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     #: 变体的母体。变体只有一层 —— 「张三 · 冬装」下面不再挂「张三 · 冬装 · 雪地」。
     #: 母体删掉时外键兜底把变体一起带走;界面和接口在那之前会先问(见 domain/entities.delete_entity)。
