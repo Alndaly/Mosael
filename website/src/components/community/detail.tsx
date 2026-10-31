@@ -27,6 +27,7 @@ export function DetailHeader({
   builtIn = false,
   summary,
   actions,
+  engagement,
 }: {
   locale: Locale;
   section: { label: string; href: string };
@@ -42,6 +43,8 @@ export function DetailHeader({
   /** 数据里的简介,行内 markdown。 */
   summary: string;
   actions: React.ReactNode;
+  /** 点赞 / 收藏与统计；静态官方详情页传入，社区分享页不传。 */
+  engagement?: React.ReactNode;
 }) {
   const t = getMessages(locale).community;
   return (
@@ -80,7 +83,10 @@ export function DetailHeader({
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2.5 lg:shrink-0">{actions}</div>
+          <div className="grid gap-3 lg:shrink-0">
+            <div className="flex flex-wrap gap-2.5">{actions}</div>
+            {engagement}
+          </div>
         </div>
       </div>
     </section>

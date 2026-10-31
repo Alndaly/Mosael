@@ -107,6 +107,18 @@ test("② 详情:深链、下载成 .json、统计、404 可读文案与下一�
   assert.match(page, /findWorkflow/, "工作流官方分享没有对回静态模板");
   assert.match(page, /findPlugin/, "插件官方分享没有对回静态模板");
 
+  // 静态详情页仍要有点赞 / 收藏 / 评论,不能因为收敛就把互动丢掉。
+  const workflow = maybeRead("src/app/[locale]/(site)/workflows/[slug]/page.tsx");
+  const plugin = maybeRead("src/app/[locale]/(site)/plugins/[slug]/page.tsx");
+  const activity = maybeRead("src/components/community/official-share-activity.tsx");
+  for (const [name, source] of [["workflow", workflow], ["plugin", plugin]]) {
+    assert.match(source, /OfficialShareEngagement/, `${name} 静态页没有接回点赞收藏`);
+    assert.match(source, /OfficialShareComments/, `${name} 静态页没有接回评论`);
+  }
+  assert.match(activity, /ShareEngagement/, "官方互动岛没有复用分享互动组件");
+  assert.match(activity, /showShareActions=\{false\}/, "静态页已有下载 / 打开按钮,互动岛又重复画了一遍");
+  assert.match(activity, /item\.locale === shareLocale/, "官方互动没有按当前语言匹配分享");
+
   const ui = maybeRead(DETAIL_UI);
   assert.ok(ui, "缺少分享详情的交互组件");
   assert.match(ui, /mosael:\/\/import\?share=/, "没有生成 mosael://import?share=<id> 深链");

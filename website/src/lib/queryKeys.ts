@@ -54,6 +54,8 @@ export const queryKeys = {
   adminOrders: () => ["admin", "orders"] as const,
   adminUsage: (days = 7) => ["admin", "usage", days] as const,
   adminAudit: () => ["admin", "audit"] as const,
+  /** 某条分享的评论第一页(官方静态详情页复用)。 */
+  shareComments: (shareId: string) => ["shares", "comments", shareId] as const,
   /** 列表页追加的用户分享,按 kind + 语言分开缓存。不传 = 分组前缀。 */
   shareList: (kind?: ShareListKind, locale?: Locale) =>
     kind

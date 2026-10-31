@@ -5,6 +5,7 @@ import { CheckCircle2, Download } from "lucide-react";
 
 import { WorkflowCard } from "@/components/community/browse";
 import { ActionLink, DetailBody, DetailHeader, InfoList, Section, SideCard, Steps } from "@/components/community/detail";
+import { OfficialShareComments, OfficialShareEngagement } from "@/components/community/official-share-activity";
 import { WorkflowTile } from "@/components/community/tile";
 import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -72,6 +73,7 @@ export default async function WorkflowDetailPage({
         version={`${t.workflows.templateVersion} ${workflow.version}`}
         official={official}
         summary={workflow.summary}
+        engagement={<OfficialShareEngagement locale={locale} slug={workflow.slug} kind="workflow" />}
         actions={
           <>
             <ActionLink href={workflow.graph} primary download>
@@ -117,6 +119,8 @@ export default async function WorkflowDetailPage({
                 ))}
               </ul>
             </Section>
+
+            <OfficialShareComments locale={locale} slug={workflow.slug} kind="workflow" />
           </>
         }
         aside={

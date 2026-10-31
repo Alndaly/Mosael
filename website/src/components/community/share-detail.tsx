@@ -91,10 +91,13 @@ export function ShareEngagement({
   locale,
   share,
   signedIn,
+  showShareActions = true,
 }: {
   locale: Locale;
   share: CloudShare;
   signedIn: boolean;
+  /** 静态官方详情页自己已有下载 / 打开按钮：只保留点赞、收藏与统计。 */
+  showShareActions?: boolean;
 }) {
   const t = getMessages(locale).community;
   const detailPath = localePath(locale, `/community/${share.id}`);
@@ -192,18 +195,22 @@ export function ShareEngagement({
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap gap-2.5">
-        <a href={`mosael://import?share=${share.id}`} className={actionClass(true)}>
-          <ArrowUpRight className="size-4" aria-hidden />
-          {t.openInApp}
-        </a>
-        <button type="button" onClick={() => void download()} disabled={downloading} className={actionClass(false)}>
-          {downloading ? (
-            <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-          ) : (
-            <Download className="size-4" aria-hidden />
-          )}
-          {downloading ? t.downloading : t.download}
-        </button>
+        {showShareActions && (
+          <>
+            <a href={`mosael://import?share=${share.id}`} className={actionClass(true)}>
+              <ArrowUpRight className="size-4" aria-hidden />
+              {t.openInApp}
+            </a>
+            <button type="button" onClick={() => void download()} disabled={downloading} className={actionClass(false)}>
+              {downloading ? (
+                <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+              ) : (
+                <Download className="size-4" aria-hidden />
+              )}
+              {downloading ? t.downloading : t.download}
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={() => void toggleLike()}

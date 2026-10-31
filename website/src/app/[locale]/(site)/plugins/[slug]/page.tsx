@@ -6,6 +6,7 @@ import { ArrowUpRight, Code2, KeyRound, Shield } from "lucide-react";
 
 import { PluginCard } from "@/components/community/browse";
 import { ActionLink, DetailBody, DetailHeader, InfoList, Section, SideCard, Steps } from "@/components/community/detail";
+import { OfficialShareComments, OfficialShareEngagement } from "@/components/community/official-share-activity";
 import { PluginTile } from "@/components/community/tile";
 import { mdxComponents } from "@/components/mdx";
 import { LOCALES, isLocale, localePath } from "@/i18n/config";
@@ -92,6 +93,7 @@ export default async function PluginDetailPage({
         official={plugin.official}
         builtIn={plugin.bundled}
         summary={plugin.summary}
+        engagement={<OfficialShareEngagement locale={locale} slug={plugin.slug} kind="plugin" />}
         actions={
           <>
             {/* 深链只导航、不执行(electron/system/deepLink.ts):装过了就打开它的插件页,没装就
@@ -152,6 +154,8 @@ export default async function PluginDetailPage({
                 {plugin.permissions.length > 0 ? t.plugins.permissionsNote : t.plugins.noPermissionsNote}
               </p>
             </Section>
+
+            <OfficialShareComments locale={locale} slug={plugin.slug} kind="plugin" />
           </>
         }
         aside={
