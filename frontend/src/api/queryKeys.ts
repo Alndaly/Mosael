@@ -270,3 +270,12 @@ export const generationKeys = {
   missing: (providerProfileId: string, model: string, kind: string) =>
     ["generation-options", "__missing", providerProfileId, model, kind] as const,
 };
+
+/** 参考库(ADR 0091 §3):连接、图集清单、搜索结果和单条详情。 */
+export const referenceKeys = {
+  connections: () => ["reference-library", "connections"] as const,
+  collections: (instanceId: string) => ["reference-library", "collections", instanceId] as const,
+  search: (instanceId: string, collection: string, q: string, filters: Record<string, string>) =>
+    ["reference-library", "search", instanceId, collection, q, filters] as const,
+  item: (instanceId: string, itemId: string) => ["reference-library", "item", instanceId, itemId] as const,
+};

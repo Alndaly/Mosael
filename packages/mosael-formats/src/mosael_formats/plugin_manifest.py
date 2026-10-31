@@ -85,9 +85,12 @@ MODEL_LIBRARY = "model_library"
 #: 工作流文件(`copy_workflow` / `rename_workflow` / `trash_workflow` / `restore_workflow`,不覆盖、删除进回收目录)。
 #: 都在宿主的「工作流库」里,不是给智能体调的。
 WORKFLOW_LIBRARY = "workflow_library"
+#: `reference_library`:**只读的外部参考图集**(ADR 0091 §3)。认领它的工具按 `op` 回答目录、搜索、条目详情,
+#: 并在用户点「用这一张」时把原图交到暂存目录。浏览只拉缩略图,取用是单条、由人发起。
+REFERENCE_LIBRARY = "reference_library"
 #: **目录类能力**(ADR 0033 §1):认领它们的工具回答「这个连接有哪些模型 / 哪些工具 / 哪些模型文件 / 哪些工作流」,本身不是
 #: 一次能交给人的调用 —— 模型、工具、模型库、工作流库各自出现在该出现的地方。只有它们的工具不进工具表。
-CATALOG_CAPABILITIES = frozenset({GENERATION, TOOLS, MODEL_LIBRARY, WORKFLOW_LIBRARY})
+CATALOG_CAPABILITIES = frozenset({GENERATION, TOOLS, MODEL_LIBRARY, WORKFLOW_LIBRARY, REFERENCE_LIBRARY})
 #: **调用类能力**:认领它们的工具是一个普通工具,智能体、工作流、画板照样点得到;能力只是加在它上面的一份契约
 #: (`CALL_CONTRACTS`),宿主自己的入口(文档「重新解析」、降噪按钮……)调的也是它。
 CALL_CAPABILITIES = frozenset({DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION, SPEECH})
@@ -927,6 +930,7 @@ __all__ = [
     "CALL_CAPABILITIES",
     "CALL_CONTRACTS",
     "CATALOG_CAPABILITIES",
+    "REFERENCE_LIBRARY",
     "MODEL_LIBRARY",
     "WORKFLOW_LIBRARY",
     "CLAIMED_CAPABILITIES",

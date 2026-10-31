@@ -164,6 +164,12 @@ ADR 0038 §9 已有的预览图设置(`show` / `blur` / `hidden`,`modelPreviewSe
 
 ## 实施记录
 
+- **第 4 步(2026-11-01)**:新增目录类能力 `reference_library`(manifest 常量、能力表、宿主路由与领域层);
+  资产页加「资产库 | 参考库」;参考库支持 collections / search / item / fetch 四个 `op`,浏览只拉插件给的缩略图,
+  单条取用时才把原图交进工作区并写入 `external_source` 出处(作者、原链接、许可、目录/条目 id)。
+  「存为资产」在同一份素材上建姿势 / 服装资产并设为封面;NSFW 走现有 `modelPreviewSettings`,
+  模糊 / 隐藏时条目名称只显示编号。外部素材不进入 `mosael.asset/1`(姿势 / 服装本来就不在该包的 KINDS 里)。
+  实际 PoseAtlas 插件属于第 5 步。
 - **第 3 步(2026-11-01)**:新增素材角色 `pose_reference`(标签 / 帮助 / 介质 / URL 参数 / 运行期素材类型),
   自定义 ComfyUI / 工作流参数组可以声明它;`@姿势` 改用这个角色并和 `reference_image` 分开算名额。
   模型不收时不再静默降级:回执写 `pose_reference_unsupported`,输入卡提供「按普通参考图发送」开关,

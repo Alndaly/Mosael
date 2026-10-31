@@ -589,11 +589,13 @@ MESSAGES: dict[str, dict[str, str]] = {
     "capability_tools": {"zh": "给智能体和工作流的工具", "en": "Tools for the agent and workflows"},
     "capability_model_library": {"zh": "模型库", "en": "Model library"},
     "capability_workflow_library": {"zh": "工作流库", "en": "Workflow library"},
+    "capability_reference_library": {"zh": "参考库", "en": "Reference library"},
     "capUse_generationPublicUrl": {"zh": "生成时:只收链接的模型(方舟 Seedance 的参考视频等)自动把本地素材传上去换链接", "en": "When generating: for models that only take links (Seedance reference video, etc.), local assets are uploaded for a link automatically"},
     "capUse_generationModels": {"zh": "各处生成的模型下拉:AI 工作室、画板、工作流的生成节点", "en": "Model pickers wherever you generate: AI studio, boards, workflow generation nodes"},
     "capUse_pluginTools": {"zh": "智能体和工作流的工具表(在插件页勾选开放哪几个)", "en": "Tool lists of the agent and workflows (choose which to expose on the Plugins page)"},
     "capUse_workflowLibrary": {"zh": "插件页上那个连接的「工作流库」:看存着哪些工作流、复制、改名、删除、导出", "en": "The connection's Workflow library on the Plugins page: browse its saved workflows, copy, rename, delete, export"},
     "capUse_modelLibrary": {"zh": "插件页上那个连接的「模型库」:看有哪些模型、下载缺的模型", "en": "The connection's Model library on the Plugins page: browse its models and download missing ones"},
+    "capUse_referenceLibrary": {"zh": "资产页的「参考库」:浏览外部图集,按条取用", "en": "The Reference library on the Assets page: browse external collections and use single items"},
     "capability_transcription": {"zh": "转写", "en": "Transcription"},
     "capability_transcription_desc": {
         "zh": "把一段语音转成带时间的逐字稿。输入框里的语音输入默认也走它,并在「语音对话」里可以单独选。本机引擎之外,装了转写插件的也能在这里选;没定默认时用装好了运行环境的本机引擎。",

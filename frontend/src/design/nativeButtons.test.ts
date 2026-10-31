@@ -106,6 +106,8 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/entities/EntityDetail.tsx": 2,
   "features/entities/EntityMention.tsx": 1,
   "features/entities/ReferenceWall.tsx": 1,
+  //: 参考库的一张卡片:整张是打开条目的点击面,没有按钮的档位(高度由缩略图决定);不复用 Button。
+  "features/entities/ReferenceLibraryView.tsx": 1,
   "features/entities/SpeakDialog.tsx": 1,
   "features/home/HomeView.tsx": 2,
   "features/markers/MarkerPin.tsx": 1,

@@ -30,10 +30,13 @@ import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { Hint } from "@/components/ui/tooltip";
 import { EntityDetail } from "@/features/entities/EntityDetail";
+import { ReferenceLibraryView } from "@/features/entities/ReferenceLibraryView";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 import { cn } from "@/lib/utils";
 
 type SortKey = "updated" | "name" | "references";
+const LIBRARY_MODES = ["assets", "references"] as const;
+type LibraryMode = (typeof LIBRARY_MODES)[number];
 const SORT_KEYS: readonly SortKey[] = ["updated", "name", "references"];
 
 /** 深链:`#/entities?entity=<id>`(mosael:// 深链、别处的「在哪里用过」都这么进来)。 */
@@ -61,6 +64,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
   const labels = useCatalogLabels();
+  const [mode, setMode] = usePersistentTab<LibraryMode>("entities-mode", "assets", LIBRARY_MODES);
   const [kind, setKind] = usePersistentTab<EntityKind>("entities-kind", "character", ENTITY_KINDS);
   const [sortKey, setSortKey] = usePersistentTab<SortKey>("entities-sort", "updated", SORT_KEYS);
   const [search, setSearch] = React.useState("");
@@ -128,6 +132,24 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     replaceHash("entities", readHash().projectId, params);
   }, [openId]);
 
+  if (mode === "references") {
+    return (
+      <div className={STUDIO_PAGE} data-entities-page="">
+        <CollectionTabs
+          value={mode}
+          onChange={setMode}
+          label={t("navEntities")}
+          items={[
+            { value: "assets", label: t("referenceLibraryAssetsTab") },
+            { value: "references", label: t("referenceLibraryTab") },
+          ]}
+        />
+        <PageHeading title={t("referenceLibraryTab")} description={t("referenceLibraryDesc")} />
+        <ReferenceLibraryView workspace={workspace} />
+      </div>
+    );
+  }
+
   if (openId) {
     return (
       <div className={STUDIO_PAGE}>
@@ -151,6 +173,15 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
       }}
     >
+      <CollectionTabs
+        value={mode}
+        onChange={setMode}
+        label={t("navEntities")}
+        items={[
+          { value: "assets", label: t("referenceLibraryAssetsTab") },
+          { value: "references", label: t("referenceLibraryTab") },
+        ]}
+      />
       <PageHeading
         title={t("navEntities")}
         description={t("entitiesDesc")}

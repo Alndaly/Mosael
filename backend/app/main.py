@@ -44,6 +44,7 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.fonts import router as fonts_router
 from app.api.routes.luts import router as luts_router
 from app.api.routes.plugins import router as plugins_router
+from app.api.routes.reference_library import router as reference_library_router
 from app.api.routes.local_services import router as local_services_router
 from app.api.routes.projects import router as projects_router
 from app.api.routes.scenes import router as scenes_router
@@ -427,9 +428,10 @@ def _wire_seams() -> None:
     from mosael_formats.plugin_manifest import GENERATION, TOOLS
 
     capabilities.register(plugin_connections.CAPABILITY)
-    from app.domain import model_library
+    from app.domain import model_library, reference_library
 
     capabilities.register(model_library.CAPABILITY)
+    capabilities.register(reference_library.CAPABILITY)
     from app.domain import server_workflows
 
     capabilities.register(server_workflows.CAPABILITY)
@@ -484,6 +486,7 @@ def _wire_seams() -> None:
     capabilities.register_use(capabilities.Use(GENERATION, "app", fragment("capUse_generationModels")))
     capabilities.register_use(capabilities.Use(TOOLS, "app", fragment("capUse_pluginTools")))
     model_library.register_uses()
+    reference_library.register_uses()
     server_workflows.register_uses()
     from app.domain.agent.confirmable import registry as confirmable_registry
     from app.domain import workbench  # noqa: F401  (registration)
@@ -657,6 +660,7 @@ def create_app() -> FastAPI:
     app.include_router(confirmations_router, prefix="/api", dependencies=protected)
     app.include_router(feishu_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
+    app.include_router(reference_library_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
     app.include_router(agent_skills_router, prefix="/api", dependencies=protected)
     app.include_router(session_groups_router, prefix="/api", dependencies=protected)
