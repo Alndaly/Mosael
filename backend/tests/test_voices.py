@@ -240,6 +240,7 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
 
     class _Spy:
         free_of_charge = False
+        speed_control = "native"
 
         def synthesize(self, request, _out):
             seen.update(voice=request.voice, extra=dict(request.extra))

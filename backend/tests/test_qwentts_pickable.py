@@ -69,8 +69,8 @@ def test_its_capabilities_match_what_its_description_says(
     assert row["voices"] == [speaker.id for speaker in qwen_models.MODEL.speakers]
     # 它不是能复刻嗓子到远端的那一类,更不是本地克隆。
     assert row["clones_voices"] is False
-    # 它的 API 没有语速参数 —— 摆一个拨不动的旋钮比不摆更糟。
-    assert row["supports_speed"] is False
+    # 它的 API 没有语速参数 —— 语速由宿主合成之后变速。
+    assert row["speed_control"] == "stretch"
 
     # 装好之后挑引擎的那一刻读到的就是这句 note:讲预置音色,不讲克隆。
     monkeypatch.setattr(voices.tts_models, "runtime_status", lambda engine_id: (True, True))

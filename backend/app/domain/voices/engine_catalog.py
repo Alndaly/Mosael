@@ -111,9 +111,9 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "id": CLONE_ENGINE,
             "label": "ttsProvider_clone",
             "needs_key": False,
-            # 本地克隆按**模型**定(F5 的 infer 吃 speed,fish 的请求里根本没这项),
-            # 所以这里不表态,由 tts_models 那份 supports_speed 说了算。
-            "supports_speed": True,
+            # 本地克隆按**模型**定(F5 的 infer 吃 speed,fish 的请求里根本没这项),真正的答案在
+            # tts_models 那份 speed_control(界面读克隆运行环境那一行);这一行只是占位,不当判据。
+            "speed_control": "native",
             "needs_voice_id": False,
             "voices": [],
             "ready": clone_ready,
@@ -125,8 +125,8 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "id": QWEN_ENGINE,
             "label": "ttsProvider_qwen",
             "needs_key": False,
-            # generate_custom_voice 没有语速参数(它靠 instruct 控节奏,而界面没有这一格)。
-            "supports_speed": False,
+            # generate_custom_voice 没有语速参数(它靠 instruct 控节奏,而界面没有这一格):宿主合成之后变速。
+            "speed_control": tts_models._BY_ID[qwen_models.ENGINE_ID].speed_control,
             "needs_voice_id": False,
             "voices": [voice.id for voice in _preset_voices()],
             "ready": qwen_ready,
@@ -138,7 +138,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
                 "id": f"{BUILTIN_PREFIX}{engine.engine_id}",
                 "label": engine.label_key,
                 "needs_key": engine.needs_key,
-                "supports_speed": engine.supports_speed,
+                "speed_control": engine.speed_control,
                 "needs_voice_id": engine.needs_voice_id,
                 #: 音色随模型变的那几家(百炼)按这个人那条连接上配的模型给;认不出的模型回空,界面退回填 id。
                 #: 这里只要 id、不按账号现拉(那要一次签名请求):整份清单在 list_engine_voices。
@@ -151,7 +151,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "id": PODCAST_ENGINE,
             "label": podcast_engine().label_key,
             "needs_key": True,
-            "supports_speed": True,
+            "speed_control": "native",
             "needs_voice_id": False,
             "voices": [speaker.id for speaker in podcast_engine().speakers],
             "note": podcast_engine().note_key,
@@ -192,7 +192,8 @@ def _plugin_engines(db: Session | None, user_id: str | None) -> list[dict[str, o
             "id": provider.id,
             "label": provider.name,
             "needs_key": False,
-            "supports_speed": True,
+            #: 插件的 `speak` 收 `speed`(协议见 voices.speech),由插件自己调。
+            "speed_control": "native",
             "needs_voice_id": False,
             "voices": [voice.id for voice in _plugin_voices(db, provider)] if ready else [],
             "ready": ready,

@@ -29,7 +29,7 @@ class OpenAISpeechAdapter:
     free_of_charge = False
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
     needs_key = True
-    supports_speed = True
+    speed_control = "native"
     needs_voice_id = False
     note_key = "ttsProviderNote_openai"
 

@@ -41,7 +41,7 @@ class VolcanoSpeechAdapter:
     supports_parallel_synthesis = True
     free_of_charge = False
     needs_key = True
-    supports_speed = True
+    speed_control = "native"
     #: 音色清单随账号变,但总是一张清单:现拉的(配了 AK/SK)或内置的,面板给下拉而不是让人填一串看不懂的 id。
     needs_voice_id = False
     note_key = "ttsProviderNote_volcano"

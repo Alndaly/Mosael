@@ -74,8 +74,8 @@ def test_it_appears_in_the_engine_picker(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert row["label"] == "ttsProvider_qwen"
     assert row["needs_key"] is False
-    # Qwen3-TTS 的 API 没有语速参数:摆一个拨不动的旋钮比不摆更糟。
-    assert row["supports_speed"] is False
+    # Qwen3-TTS 的 API 没有语速参数:按原速念,宿主合成之后变速。
+    assert row["speed_control"] == "stretch"
     # 9 个预置音色,不需要用户手打 id。
     assert row["needs_voice_id"] is False
     assert row["voices"] == [speaker.id for speaker in qwen_models.MODEL.speakers]

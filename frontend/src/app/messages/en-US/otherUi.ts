@@ -625,6 +625,7 @@ export const otherUi = {
   voicePodcastNeedTwo: "A dialogue needs two different speakers",
   voiceEngineVoice: "Voice",
   voiceSpeed: "Speed",
+  voiceSpeedStretched: "Speed (adjusted after synthesis)",
   //: The "built-in voice engines" group (title + description + three "Ready to use" rows) is gone: which
   //: engines this machine can use now sits under the Default row of Capability providers → Dubbing
   //: (CapabilityProvidersSection). The title key still has one reader: the settings search index

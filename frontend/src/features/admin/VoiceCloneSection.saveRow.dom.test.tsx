@@ -43,7 +43,7 @@ const base = {
   detail: "d", status: "installed", runtime_ready: true, runtime_checked: true,
   downloaded_bytes: 0, total_bytes: 0, expected_bytes: 1_000_000_000, total_is_estimate: true,
   speed_bps: 0, eta_seconds: null, message: "已安装", needs_source: false, source_ready: false,
-  source_dir: "", sources: ["hf"], supports_speed: false,
+  source_dir: "", sources: ["hf"], speed_control: "stretch",
 };
 //: 两个克隆引擎都装好,默认下拉里的两项才都能选(没装的会被禁用)。
 const models = [

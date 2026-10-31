@@ -30,7 +30,7 @@ const QWEN = {
   needs_key: false,
   needs_voice_id: false,
   voices: ["vivian", "serena", "uncle_fu", "dylan", "eric", "ryan", "aiden", "ono_anna", "sohee"],
-  supports_speed: false,
+  speed_control: "stretch",
   note: "本机运行,不联网、不花钱;9 个预置音色,不需要参考音频。",
   ready: true,
   clones_voices: false,
@@ -41,7 +41,7 @@ const CLONE = {
   needs_key: false,
   needs_voice_id: false,
   voices: [],
-  supports_speed: true,
+  speed_control: "native",
   note: "",
   ready: true,
   clones_voices: false,
@@ -159,7 +159,7 @@ describe("Qwen3-TTS 在配音/合成的引擎选择器里", () => {
     expect(screen.queryByLabelText("voiceLibraryPick")).toBeNull();
   });
 
-  it("交出去的请求是 qwentts + engine_voice,不带 voice_id / clone_engine / speed", async () => {
+  it("交出去的请求是 qwentts + engine_voice,不带 voice_id / clone_engine;语速照带(后端合成之后变速)", async () => {
     const user = userEvent.setup();
     renderHarness();
 
@@ -173,7 +173,9 @@ describe("Qwen3-TTS 在配音/合成的引擎选择器里", () => {
     // 引擎 id 就是能力表里的 `builtin:qwentts`;音色是预置音色的 id,默认落到第一个(vivian)。
     // **不带参考音频**:这把嗓子是引擎音色(`voice`),不是配音库里的克隆音色(`cloned_voice`)。
     expect(choice.voice).toEqual({ engine: "builtin:qwentts", voice: "vivian" });
-    // Qwen3-TTS 的 API 没有语速参数 —— 摆一个拨不动的旋钮比不摆更糟。
-    expect(choice).not.toHaveProperty("speed");
+    // Qwen3-TTS 的 API 没有语速参数:语速照样交出去,由后端按原速念完再变速(speed_control = stretch),
+    // 语速那一格标成「合成后变速」。
+    expect(choice.speed).toBe(1);
+    expect(screen.getByText("voiceSpeedStretched")).toBeInTheDocument();
   });
 });

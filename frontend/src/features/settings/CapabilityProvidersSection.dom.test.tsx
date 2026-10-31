@@ -104,9 +104,9 @@ import { voiceOption } from "@/test/voiceOption";
 
 /** 配音默认那一对的候选项:Edge 装好了、OpenAI 还没配连接;/tts/voices 给 Edge 的两把嗓子。 */
 const engines = [
-  { id: "builtin:edge", label: "Edge", needs_key: false, needs_voice_id: false, voices: [], supports_speed: true,
+  { id: "builtin:edge", label: "Edge", needs_key: false, needs_voice_id: false, voices: [], speed_control: "native",
     note: "ttsProviderNote_edge", ready: true, clones_voices: false, is_default: true },
-  { id: "builtin:openai", label: "OpenAI", needs_key: true, needs_voice_id: false, voices: [], supports_speed: true,
+  { id: "builtin:openai", label: "OpenAI", needs_key: true, needs_voice_id: false, voices: [], speed_control: "native",
     note: "ttsProviderNote_openai", ready: false, clones_voices: false, is_default: false },
 ];
 const edgeVoices = [
@@ -635,7 +635,7 @@ it("「还用不了」和「只属于某个人」各收一行:收起各一行,�
   speechApi.listTtsEngines.mockResolvedValue([
     ...engines,
     { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: true, voices: [],
-      supports_speed: true, note: "ttsNote_clone", ready: true, clones_voices: true, is_default: false },
+      speed_control: "native", note: "ttsNote_clone", ready: true, clones_voices: true, is_default: false },
   ]);
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -686,7 +686,7 @@ it("两行的数字各按自己的数据数:还用不了 1 家、只属于某个
   speechApi.listTtsEngines.mockResolvedValue([
     ...engines,
     { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: true, voices: [],
-      supports_speed: true, note: "ttsNote_clone", ready: true, clones_voices: true, is_default: false },
+      speed_control: "native", note: "ttsNote_clone", ready: true, clones_voices: true, is_default: false },
   ]);
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -756,7 +756,7 @@ it("只选了一个(引擎)不写:默认必须是一对,而且没有可以手动
   //: 这一台还有第二个能用的引擎(它自己的音色列表里没有 is_default,所以音色那一格是空的)。
   speechApi.listTtsEngines.mockResolvedValue([
     ...engines,
-    { id: "builtin:volcano", label: "火山", needs_key: false, needs_voice_id: false, voices: [], supports_speed: true,
+    { id: "builtin:volcano", label: "火山", needs_key: false, needs_voice_id: false, voices: [], speed_control: "native",
       note: "", ready: true, clones_voices: false, is_default: false },
   ]);
   speechApi.listTtsVoices.mockImplementation(async (engineId: string) =>

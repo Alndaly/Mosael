@@ -194,8 +194,8 @@ export function SpeechVoiceFields({
                 <Input value="" disabled readOnly aria-label={t("voiceLibraryPick")} placeholder={t("voiceLibraryPickEmpty")} />
               ))}
             </VoiceField>
-            {voice.speedSupported && !speedOwnRow && (
-              <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")} className={FIELD_SPEED}>
+            {!speedOwnRow && (
+              <VoiceField labelClassName={labelClassName} label={t(voice.speedStretched ? "voiceSpeedStretched" : "voiceSpeed")} className={FIELD_SPEED}>
                 <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
               </VoiceField>
             )}
@@ -205,7 +205,7 @@ export function SpeechVoiceFields({
 
       {engine !== CLONE_ENGINE && remote.choices.length > 0 && (
         <FieldRow className="flex-nowrap">
-          {/* 语速藏起来时音色独占一行 —— flex-1 自然铺满,不必另给宽度。 */}
+          {/* 语速另起一行(speedOwnRow)或挪去手填 id 那一行时,音色独占一行 —— flex-1 自然铺满,不必另给宽度。 */}
           <VoiceField labelClassName={labelClassName} label={t("voiceEngineVoice")} className="min-w-0 flex-1">
             {withAction(
               <VoicePicker
@@ -216,8 +216,8 @@ export function SpeechVoiceFields({
               />,
             )}
           </VoiceField>
-          {voice.speedSupported && !remote.showInput && !speedOwnRow && (
-            <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")} className={FIELD_SPEED}>
+          {!remote.showInput && !speedOwnRow && (
+            <VoiceField labelClassName={labelClassName} label={t(voice.speedStretched ? "voiceSpeedStretched" : "voiceSpeed")} className={FIELD_SPEED}>
               <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
             </VoiceField>
           )}
@@ -227,7 +227,7 @@ export function SpeechVoiceFields({
       {/* 目录拉不到、需要手填发音人 id 的引擎。两样都没有就**整行不渲染** ——
           此前这里会剩下一个 76px 宽、孤零零的语速下拉。 */}
       {engine !== CLONE_ENGINE &&
-        (remote.showInput || (remote.choices.length === 0 && voice.speedSupported && !speedOwnRow)) && (
+        (remote.showInput || (remote.choices.length === 0 && !speedOwnRow)) && (
         <FieldRow className="flex-nowrap">
           {remote.showInput && (
             <VoiceField labelClassName={labelClassName} label={t("voiceEngineVoiceId")} className="min-w-0 flex-1">
@@ -242,8 +242,8 @@ export function SpeechVoiceFields({
               )}
             </VoiceField>
           )}
-          {voice.speedSupported && !speedOwnRow && (
-            <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")} className={remote.showInput ? FIELD_SPEED : "min-w-0 flex-1"}>
+          {!speedOwnRow && (
+            <VoiceField labelClassName={labelClassName} label={t(voice.speedStretched ? "voiceSpeedStretched" : "voiceSpeed")} className={remote.showInput ? FIELD_SPEED : "min-w-0 flex-1"}>
               <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
             </VoiceField>
           )}
@@ -260,8 +260,8 @@ export function SpeechVoiceFields({
         </p>
       )}
       {/* 语速自成一行(speedOwnRow):排在说音色的那几句后面,不把「要填音色 id」那句和音色那一格隔开 */}
-      {speedOwnRow && voice.speedSupported && (
-        <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")}>
+      {speedOwnRow && (
+        <VoiceField labelClassName={labelClassName} label={t(voice.speedStretched ? "voiceSpeedStretched" : "voiceSpeed")}>
           <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
         </VoiceField>
       )}

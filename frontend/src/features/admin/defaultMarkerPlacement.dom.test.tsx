@@ -49,7 +49,7 @@ const ttsEngine = (over: Record<string, unknown> = {}) => ({
   id: "f5-tts", label: "F5-TTS", detail: "克隆", status: "installed", runtime_ready: true,
   runtime_checked: true, downloaded_bytes: 0, total_bytes: 0, expected_bytes: 1_500_000_000,
   total_is_estimate: true, speed_bps: 0, eta_seconds: null, message: "", needs_source: false,
-  source_ready: false, source_dir: "", sources: ["hf"], supports_speed: false,
+  source_ready: false, source_dir: "", sources: ["hf"], speed_control: "stretch",
   ...over,
 });
 

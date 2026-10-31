@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.media.tempo import stretch_in_place
 from app.domain.billing.usage import billable, once
 from app.ai.runtime import f5_models, tts_daemon, tts_models, config as tts_config, qwen_models
 from app.ai.runtime.f5_models import clone_supports
@@ -699,9 +700,10 @@ def _run_synthesis_body(
                 # 有多份的引擎自己回答(f5_models.weights_for),没有的返回空,原样跑。
                 request.update(f5_models.weights_for(engine, text, weights))
                 request["output_path"] = str(out_wav)
-                # 语速按引擎传:fish 的请求结构里没有这一项,塞进去只会被忽略,
-                # 而"传了却没用"正是今天反复出现的那种谎。
-                if tts_models._BY_ID[engine].supports_speed:
+                # 语速由谁来调按引擎定(speed_control):F5 的 infer 吃,随请求带过去;fish 的请求结构里没有这一项,
+                # 塞进去只会被忽略 —— 它按原速念,念完由下面的 stretch_in_place 变速。
+                native_speed = tts_models._BY_ID[engine].speed_control == "native"
+                if native_speed:
                     request["speed"] = speed
 
                 # 进度从 worker 一路报回来。此前这里只有一个开头写死的 0.2 —— 用户看到的
@@ -717,6 +719,8 @@ def _run_synthesis_body(
                     raise worker_failure(str(exc)) from exc
                 if not out_wav.exists():
                     raise VoiceError("voiceErr_synthNoAudio")
+                if not native_speed:
+                    stretch_in_place(out_wav, speed)
                 used = result.get("engine", engine)
                 job = db.get(Job, job_id)
                 job.progress = 0.95
@@ -858,10 +862,14 @@ def speak_to_file(
     if is_plugin(voice.engine):
         return _speak_with_plugin(db, voice.engine, text=text, voice=voice.voice, speed=speed, out_dir=out_dir)
     if voice.engine in LOCAL_SPEECH_ENGINES:
-        return _speak_locally(
+        spoken_out = _speak_locally(
             voice.engine, text=text, engine_voice=voice.voice, out_dir=out_dir,
             job_id=job_id, on_progress=on_progress,
         )
+        # 本机念字引擎(Qwen3-TTS)没有语速参数:按原速念,这里补上(见 TtsEngine.speed_control)。
+        if tts_models._BY_ID[LOCAL_SPEECH_ENGINES[voice.engine]].speed_control == "stretch":
+            stretch_in_place(spoken_out, speed)
+        return spoken_out
     #: 能力表里是 `builtin:edge`,`ai` 层的适配器认裸名 `edge`。
     engine = adapter_id(voice.engine)
     profile, model = speech_target(db, voice, user_id=user_id)
@@ -872,6 +880,9 @@ def speak_to_file(
 
     def speak(session, spoken: str) -> None:
         adapter = providers.build_speech_adapter(engine, api_key=api_key, voice=spoken, model=model, base_url=base_url)
+        #: 语速由谁来调按这一次的 Adapter 定(百炼按模型分,见 SpeechAdapter.speed_control):不吃语速的按原速念,
+        #: 记完账再由宿主变速 —— 变速失败不改变「这次合成已经付过费」这件事。
+        native_speed = adapter.speed_control == "native"
         # 各家 TTS 普遍按**字符**计费,所以计量是字符数而不是 token —— 计量因供应商而异,
         # 正是 billable 留给调用方的那一半。
         with billable(
@@ -894,7 +905,11 @@ def speak_to_file(
             call.meter(characters=len(text), requests=1)
             if adapter.free_of_charge:
                 call.mark_free()
-            adapter.synthesize(SpeechSynthesisRequest(text=text, voice=spoken, speed=speed, extra=voice.extra), out)
+            adapter.synthesize(
+                SpeechSynthesisRequest(text=text, voice=spoken, speed=speed if native_speed else 1.0, extra=voice.extra), out,
+            )
+        if not native_speed:
+            stretch_in_place(out, speed)
 
     if not voice.cloned_voice:
         speak(db, voice.voice)

@@ -58,14 +58,14 @@ beforeEach(() => {
 });
 
 const ENGINES = [
-  { id: "builtin:clone", label: "本机克隆", needs_key: false, needs_voice_id: false, voices: [], supports_speed: true,
+  { id: "builtin:clone", label: "本机克隆", needs_key: false, needs_voice_id: false, voices: [], speed_control: "native",
     note: "", ready: false, clones_voices: false },
   { id: "builtin:edge", label: "Edge 语音", needs_key: false, needs_voice_id: false,
-    voices: ["zh-CN-XiaoxiaoNeural", "zh-CN-YunxiNeural"], supports_speed: true, note: "免费", ready: true, clones_voices: false },
+    voices: ["zh-CN-XiaoxiaoNeural", "zh-CN-YunxiNeural"], speed_control: "native", note: "免费", ready: true, clones_voices: false },
   { id: "builtin:openai", label: "OpenAI 语音", needs_key: true, needs_voice_id: false, voices: ["alloy", "nova"],
-    supports_speed: true, note: "", ready: true, clones_voices: false },
+    speed_control: "native", note: "", ready: true, clones_voices: false },
   { id: "builtin:volcano-podcast", label: "火山播客", needs_key: true, needs_voice_id: false,
-    voices: ["voice-a", "voice-b"], supports_speed: true, note: "", ready: true, clones_voices: false },
+    voices: ["voice-a", "voice-b"], speed_control: "native", note: "", ready: true, clones_voices: false },
 ];
 const EDGE_VOICES = [voiceOption("zh-CN-XiaoxiaoNeural", "晓晓(女·温暖)"), voiceOption("zh-CN-YunxiNeural", "云希(男·阳光)")];
 const PODCAST_VOICES = [voiceOption("voice-a", "大壹先生"), voiceOption("voice-b", "咪仔同学")];

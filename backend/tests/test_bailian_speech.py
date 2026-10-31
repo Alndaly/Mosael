@@ -100,7 +100,8 @@ def test_引擎目录声明了要能填音色id() -> None:
 
     entry = next(e for e in describe_engines(None) if e["id"] == "builtin:alibaba")
     assert entry["needs_voice_id"] is True, "认不出的模型会得到一个空下拉,而不是输入框"
-    assert entry["supports_speed"] is False
+    #: qwen-tts 家族没有语速参数:宿主合成之后变速,界面标成「后处理」。
+    assert entry["speed_control"] == "stretch"
 
 
 # ---------------- CosyVoice:同一个引擎里的第二套 API ----------------
@@ -231,8 +232,8 @@ def test_两个引擎各自的音色和语速() -> None:
     from app.domain.voices.engine_catalog import describe_engines
 
     entries = {e["id"]: e for e in describe_engines(None)}
-    assert entries["builtin:alibaba"]["supports_speed"] is False
-    assert entries[f"builtin:{CosyVoiceSpeechAdapter.engine_id}"]["supports_speed"] is True
+    assert entries["builtin:alibaba"]["speed_control"] == "stretch"
+    assert entries[f"builtin:{CosyVoiceSpeechAdapter.engine_id}"]["speed_control"] == "native"
     # 音色两边完全不同,混用会被拒。
     assert not set(entries["builtin:alibaba"]["voices"]) & set(entries[f"builtin:{CosyVoiceSpeechAdapter.engine_id}"]["voices"])
 

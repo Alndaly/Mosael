@@ -1,6 +1,7 @@
 # 语音引擎在契约上声明目录信息，播客由 Registry 交出，公共接口不转出任何一家 Adapter
 
 - 状态：Accepted（2026-10-28）；音色那一半（`builtin_voices`、`AccountVoiceCatalog`、`account_voices`）已由 [ADR 0087](0087-voice-option-catalog-and-ref.md) 取代为音色目录 `voices(context) -> list[VoiceOption]`
+- 修订（2026-10-31）：`supports_speed: bool` 改为 `speed_control: "native" | "stretch"`。没有语速参数的引擎（fish、Qwen3-TTS、百炼 qwen-tts）不再「不支持语速」，而是按原速念、由宿主在合成之后用 atempo 变速（`media.tempo.stretch_in_place`）；百炼按这一次的模型在实例上定，CosyVoice 模型不会被变两次速
 - 相关：[ADR 0010](0010-provider-contracts-adapters-registry.md)（Provider 的契约 / Adapter / Registry 三层）
 
 ## Context
@@ -25,7 +26,7 @@ ADR 0010 定下：`app.ai.providers` 是领域使用供应商的稳定公共 Int
 ## Decision
 
 1. **语音 Adapter 在契约上声明目录信息**（`backend/app/ai/providers/contracts/speech.py` 的 `SpeechAdapter`）：
-   - 在原有 `engine_id`、`label_key` 之外，新增 `needs_key`、`supports_speed`、`needs_voice_id`、`note_key`；
+   - 在原有 `engine_id`、`label_key` 之外，新增 `needs_key`、`supports_speed`（已改为 `speed_control`，见上方修订）、`needs_voice_id`、`note_key`；
    - 新增 `builtin_voices(model) -> ((id, 名字), …)`。音色随模型变的（百炼）按模型给，认不出的模型回空。
 2. **音色随账号变的那几家另实现 `AccountVoiceCatalog.account_voices(连接的附加字段)`**（今天只有火山）。
    拉失败抛契约层的 `SpeechCatalogError`，调用方退回内置清单。

@@ -58,8 +58,8 @@ afterEach(() => { globalThis.fetch = originalFetch; });
 beforeEach(() => useEditorStore.getState().selectClip(null));
 
 const localEngines = [
-  { id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: true, clones_voices: true },
-  { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: false, clones_voices: true },
+  { id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, speed_control: "native", clones_voices: true },
+  { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, runtime_checked: true, speed_control: "stretch", clones_voices: true },
 ];
 
 //: 默认只装了中英基础模型 —— 这台机器上最常见的样子,也是「日文念不了」的那个前提。

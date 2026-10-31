@@ -42,6 +42,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "语音合成失败:音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。升级引擎依赖通常就能解决(管理 → 引擎 →「本地语音合成引擎」→ 下载,需要部署管理员);若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。",
         "en": "Speech synthesis failed: the audio decoding library (torchcodec) couldn't load — it needs a matching FFmpeg version. Upgrading the engine's dependencies usually fixes it (Admin → Engines → Speech synthesis engines → Download, deployment admins only); if not, install ffmpeg from Homebrew — the system copy is left untouched.",
     },
+    "tempoErr_outOfRange": {
+        "zh": "语速 {speed} 倍超出了合成之后变速的范围({low}–{high} 倍)。",
+        "en": "A speed of {speed}× is outside the post-synthesis tempo range ({low}–{high}×).",
+    },
+    "tempoErr_failed": {
+        "zh": "合成好的音频变速失败(FFmpeg 没有处理成功)。可以先用原速,或在管理 → 引擎里检查 FFmpeg。",
+        "en": "Changing the speed of the synthesized audio failed (FFmpeg couldn't process it). Use the original speed, or check FFmpeg under Admin → Engines.",
+    },
     "voiceErr_synthMissingModule": {
         "zh": "语音合成失败:{detail} —— 引擎的运行环境不完整。部署管理员在「管理 → 引擎 → 本地语音合成引擎」里点「下载」,它会把缺的依赖补上。",
         "en": "Speech synthesis failed: {detail} — the engine's runtime is incomplete. A deployment admin clicks Download under Admin → Engines → Speech synthesis engines to add the missing dependencies.",

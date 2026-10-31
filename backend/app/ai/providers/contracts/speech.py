@@ -10,6 +10,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 from collections.abc import Mapping
 from typing import Any, Protocol
 
@@ -47,6 +48,10 @@ class SpeechSynthesisRequest:
     extra: Mapping[str, str] = field(default_factory=dict)
 
 
+#: 语速的两种实现方式,见 SpeechAdapter.speed_control。
+SpeedControl = Literal["native", "stretch"]
+
+
 class SpeechAdapter(Protocol):
     engine_id: str
     label_key: str
@@ -58,8 +63,10 @@ class SpeechAdapter(Protocol):
     #: 下面几项是**目录信息**:领域层照它列引擎、摆控件,不再逐家手写一段(ADR 0086)。
     #: 要不要一条带钥匙的连接(Edge 不要)。
     needs_key: bool
-    #: 有没有语速可调。摆一个拨不动的旋钮比不摆更糟。
-    supports_speed: bool
+    #: 语速由谁来调。`native`:请求里带上,引擎自己按这个语速念;`stretch`:引擎没有这个参数,
+    #: 按原速念,由宿主在合成之后变速(`media.tempo.stretch_in_place`,音高不变)。语速因此对每个引擎都可调,
+    #: 差别只在「怎么调」—— 界面据此标明哪些是后处理变速。
+    speed_control: SpeedControl
     #: 音色是开放集合、认不出的要手填 id(百炼),还是一定从下拉里选。
     needs_voice_id: bool
     #: 设置页上这一家底下那句说明的文案 key。

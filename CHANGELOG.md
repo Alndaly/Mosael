@@ -15,6 +15,9 @@ commit list and downloadable artifacts.
 
 ### 配音与音色
 
+- **每个配音引擎都能调语速了。** Fish Speech S2 Pro、Qwen3-TTS(本机)、百炼 qwen-tts 自己没有语速参数(Fish 的开源推理接口里确实没有这一项;
+  它的官方云 API 有),此前界面直接不给语速。现在它们按原速念完、再由应用变速(音高不变),语速那一格标成「语速(合成后变速)」;
+  F5、CosyVoice、Edge、火山、OpenAI 这些自己支持的,照旧交给引擎调。
 - **Fish Speech S2 Pro 合成报「torchcodec 加载不了、需要对得上的 FFmpeg」修好了。** 真正的原因是运行环境里**没装** torchcodec:
   torchaudio 2.9 起读写音频都交给它,而 Fish 的依赖表漏了这一项(F5 早就列了)。现在依赖表补上、就绪探测也会检查它 ——
   缺了引擎显示为「运行环境不就绪」,点「下载」即补齐;报错也分开说:没装是「运行环境不完整」,装了配不上 FFmpeg 才说 FFmpeg。

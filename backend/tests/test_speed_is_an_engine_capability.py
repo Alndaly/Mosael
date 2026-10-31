@@ -1,4 +1,4 @@
-"""语速支不支持,按引擎说 —— 我之前一句话把两个引擎一起判了。
+"""语速由谁来调,按引擎说 —— 我之前一句话把两个引擎一起判了。
 
 删语速控件时我写的理由是「本地克隆的 worker 不吃这个参数」。实测:
 
@@ -9,6 +9,10 @@
 的话被当成普遍真理",只不过这次是我自己说的。
 
 判据落回同一条:能力是**引擎的属性**,写在目录里;界面照着渲染,而不是照着一句概括。
+
+后来(2026-10-31,维护者问「Fish Speech S2 Pro 没办法调节语速吗」)把「支不支持」改成了「由谁来调」:
+`native` 随请求交给引擎;`stretch` 的引擎按原速念,宿主合成之后用 atempo 变速(音高不变)。
+于是语速对每个引擎都可调,不再有「不支持」这一档(media/tempo.stretch_in_place)。
 """
 
 from __future__ import annotations
@@ -17,21 +21,20 @@ from app.ai.runtime import tts_models
 from app.domain.voices.voice_ref import VoiceRef
 
 
-def test_f5_supports_speed() -> None:
-    assert tts_models._BY_ID["f5-tts"].supports_speed is True
+def test_f5_takes_speed_natively() -> None:
+    assert tts_models._BY_ID["f5-tts"].speed_control == "native"
 
 
-def test_fish_does_not() -> None:
-    """ServeTTSRequest 里没有这个字段 —— 给它一个语速等于假装能调。"""
-    assert tts_models._BY_ID["fish-speech"].supports_speed is False
+def test_fish_and_qwen_are_stretched_by_the_host() -> None:
+    """ServeTTSRequest(本机检出与上游 main)、generate_custom_voice 里都没有语速 —— 交给宿主变速。"""
+    assert tts_models._BY_ID["fish-speech"].speed_control == "stretch"
+    assert tts_models._BY_ID["qwen-tts"].speed_control == "stretch"
 
 
 def test_the_capability_reaches_the_ui() -> None:
-    """界面据此决定显不显示那个下拉,而不是自己猜。"""
-    row = tts_models.get_status("f5-tts")
-
-    assert row["supports_speed"] is True
-    assert tts_models.get_status("fish-speech")["supports_speed"] is False
+    """界面据此标明哪些是后处理变速,而不是自己猜。"""
+    assert tts_models.get_status("f5-tts")["speed_control"] == "native"
+    assert tts_models.get_status("fish-speech")["speed_control"] == "stretch"
 
 
 def test_speed_rides_along_to_the_worker(monkeypatch) -> None:

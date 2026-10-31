@@ -5,6 +5,8 @@ from __future__ import annotations
 from pydantic import Field
 from app.api.schemas.plugins import PackageSourcePresetOut
 from app.api.schemas.base import ApiModel
+from app.ai.providers.contracts.speech import SpeedControl
+
 
 class NetworkConfigOut(ApiModel):
     """出站代理设置。空 proxy_url = 直连。"""
@@ -97,8 +99,8 @@ class TtsEngineOut(ApiModel):
     #: 这个引擎**真的**能用的下载源,按顺序给。界面据此渲染,而不是自己猜哪个引擎配哪些源
     #: —— 让界面猜的下场就是「ModelScope」最早的样子:列在那里、选得中、却什么都不改变。
     sources: list[str] = []
-    #: 这个引擎吃不吃语速。界面据此决定显不显示那个下拉 —— 摆一个拨不动的旋钮比不摆更糟。
-    supports_speed: bool = False
+    #: 语速由谁来调:引擎自己(`native`),还是宿主合成之后变速(`stretch`)。界面据此标明后处理变速。
+    speed_control: SpeedControl = "stretch"
     #: **权重在不在盘上,和跑不跑得起来是两件事。** status 说前者,这个说后者:有没有一个
     #: Python 解释器能 import 这个引擎。两者完全可以一真一假(权重是别的工具下的、或者
     #: 托管 venv 被删了),而把它们合成一句「已安装,声音克隆可用」正是这一页说谎的方式。
@@ -119,9 +121,8 @@ class TtsEngineChoiceOut(ApiModel):
     needs_key: bool
     needs_voice_id: bool
     voices: list[str] = []
-    #: 这个引擎接不接语速。接不了就别在界面上摆那个旋钮 —— 拨得动却不生效,
-    #: 比没有更糟(配音要的正是"塞进原时长",用户会以为自己调过了)。
-    supports_speed: bool = True
+    #: 语速由谁来调,同上。语速对每个引擎都可调;`stretch` 的那几家是合成之后变速,界面会标出来。
+    speed_control: SpeedControl = "native"
     note: str = ""
     #: 这台机器上现在就能跑吗。远程引擎恒真(能不能跑取决于档案,那是另一件事);
     #: 本地克隆按解释器探测结果给,好让界面在**挑引擎**时就说清楚。

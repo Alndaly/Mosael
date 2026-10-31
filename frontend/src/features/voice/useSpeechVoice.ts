@@ -13,7 +13,7 @@ import type { MessageKey } from "@/app/messages";
  *  `voice` 是一把嗓子(ADR 0087 的 `VoiceRef`);还没选好时是 `null`。 */
 export type SpeechChoice = {
   voice: VoiceRef | null;
-  speed?: number;
+  speed: number;
 };
 
 type LocalRuntime = { status: string; runtime_ready: boolean; runtime_checked: boolean };
@@ -92,10 +92,10 @@ export function useSpeechVoice(workspaceId: string) {
   const chosenVoice = voiceChoices.find((item) => item.id === engineVoice);
   const speaksClonedVoice = isClonedVoice(chosenVoice);
 
-  // 语速跟着**引擎能力**走:F5 吃 speed,fish 的请求里根本没有这一项;百炼的 qwen-tts 也没有。
-  // 远端引擎缺这个字段时按支持处理(老引擎行为不变)。
-  const speedSupported =
-    engine === CLONE_ENGINE ? Boolean(cloneRuntime?.supports_speed) : activeEngine?.supports_speed !== false;
+  // 语速对每个引擎都可调,差别在**由谁来调**:F5、CosyVoice 这类自己吃 speed(`native`);fish、Qwen3-TTS、
+  // 百炼 qwen-tts 没有这一项,按原速念、由后端合成之后变速(`stretch`,音高不变)。后者在界面上标出来。
+  const speedStretched =
+    engine === CLONE_ENGINE ? cloneRuntime?.speed_control !== "native" : activeEngine?.speed_control === "stretch";
 
   // 还念不了的原因(文案 key);null = 谁来念已经定好。按钮「点不点得了」和悬停时「为什么」都用它,不各判一套。
   // 克隆要有音色且引擎装好;远端引擎要能用,并且要么有目录,要么它自己说需要手填 id 而用户填了(或点了一把克隆音色)。
@@ -125,8 +125,7 @@ export function useSpeechVoice(workspaceId: string) {
         ? // 目录里那一项(带着只有目录知道的 extra,火山的资源族);手填的 id 没有目录行,就是一个裸的引擎音色。
           voiceRefOf(engine, chosenVoice ?? { id: engineVoice, source: "builtin", extra: {} })
         : null;
-  // 不支持语速时**不发** —— 发了也只会被忽略,而"传了却没用"正是那种谎。
-  const choice: SpeechChoice = { voice: voiceRef, ...(speedSupported ? { speed } : {}) };
+  const choice: SpeechChoice = { voice: voiceRef, speed };
 
   return {
     engine,
@@ -160,7 +159,8 @@ export function useSpeechVoice(workspaceId: string) {
     setEngineVoice: setEngineVoiceChoice,
     speed,
     setSpeed,
-    speedSupported,
+    /** 语速是合成之后变速的(引擎自己没有语速参数)。界面据此标明,而不是藏起语速。 */
+    speedStretched,
     voiceBlocker,
     choice,
   };

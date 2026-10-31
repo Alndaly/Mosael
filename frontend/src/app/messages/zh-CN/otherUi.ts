@@ -623,6 +623,7 @@ export const otherUi = {
   voicePodcastNeedTwo: "对谈需要两个不同的发音人",
   voiceEngineVoice: "音色",
   voiceSpeed: "语速",
+  voiceSpeedStretched: "语速(合成后变速)",
   //: 设置里「内置配音引擎」那一组(标题 + 说明 + 三条「即开即用」)删掉了:「这台机器上哪几个引擎能用」
   //: 现在写在「能力提供方 → 配音」那张卡的默认行下面(`CapabilityProvidersSection`)。
   //: 标题这个键留着还有一处读者:设置搜索的索引关键词(`lib/settingsSearch.ts` 的 dubbing 那一行,

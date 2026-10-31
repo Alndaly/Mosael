@@ -182,8 +182,8 @@ class SynthesizeRequest(ApiModel):
     workspace_id: str
     text: str = Field(min_length=1, max_length=2000)
     voice: VoiceRefBody
-    #: 语速。**只有声明支持的引擎会用它**(见 TtsEngine.supports_speed):F5 的 infer 吃,
-    #: fish 的请求结构里根本没有这一项。收下但不转发,好过让界面以为发了就生效。
+    #: 语速。引擎自己吃的(`speed_control == "native"`,如 F5、CosyVoice)随请求带过去;
+    #: 不吃的(fish、Qwen3-TTS、百炼 qwen-tts)按原速念,宿主合成之后变速(media.tempo.stretch_in_place)。
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
     project_id: str | None = None
 

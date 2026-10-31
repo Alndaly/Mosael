@@ -30,6 +30,7 @@ from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
 
+from app.ai.providers.contracts.speech import SpeedControl
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
 from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure, with_log
 from app.core.i18n import get_current_locale, t
@@ -64,10 +65,10 @@ class TtsEngine:
     #: 需不需要参考文本。F5 不需要(它自己会转写参考音频);Fish Speech 需要 —— 我们用
     #: `mode="tts"` 构造它,不带 ASR,空文本就是空文本,合成出来听不懂。
     needs_reference_text: bool = False
-    #: 吃不吃语速。实测:`F5TTS.infer(..., speed=...)` 吃;fish 的 `ServeTTSRequest` 字段里
-    #: 根本没有这一项 —— 给它一个语速等于假装能调。此前我用一句「本地克隆的 worker 不吃这个
-    #: 参数」把两个引擎一起判了,而那句话只对 fish 成立。
-    supports_speed: bool = False
+    #: 语速由谁来调(同 SpeechAdapter.speed_control)。实测:`F5TTS.infer(..., speed=...)` 吃,是 `native`;
+    #: fish 的 `ServeTTSRequest`(本机检出与上游 main 都核过)和 Qwen3-TTS 的 generate_custom_voice 都没有这一项,
+    #: 是 `stretch` —— 按原速念,宿主合成之后再变速。不再有「不支持语速」:任何一段音频都能在合成之后变速。
+    speed_control: SpeedControl = "stretch"
     #: 能不能拿一段参考音频克隆出一把嗓子(配音库的音色走它)。F5 / Fish 能;Qwen3-TTS 只念自带的预置音色,
     #: 它是另一个念字引擎(`builtin:qwentts`),不是克隆引擎的一种 —— 界面的「克隆引擎」下拉、合成时解析
     #: `VoiceRef.model` 都只认能克隆的这几个。
@@ -102,7 +103,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         imports=("f5_tts.api", "torchcodec.decoders"),
         contract_check="f5_driver.check_contract",
         needs_reference_text=False,
-        supports_speed=True,
+        speed_control="native",
     ),
     TtsEngine(
         id="fish-speech",
@@ -136,7 +137,6 @@ CATALOG: tuple[TtsEngine, ...] = (
         imports=("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager",
                  "torchcodec.decoders"),
         needs_reference_text=True,
-        supports_speed=False,
     ),
     TtsEngine(
         # 本机念字引擎(不是克隆):文本 + 9 个预置音色之一 → 音频。版本/文件/sha256 钉在
@@ -159,8 +159,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         imports=("qwen_tts.inference.qwen3_tts_model",),
         # CustomVoice 拿的是预置音色,不需要参考音频。
         needs_reference_text=False,
-        # generate_custom_voice 没有语速参数(它靠 instruct 控语气/节奏,而界面没有这一格)。
-        supports_speed=False,
+        # generate_custom_voice 没有语速参数(它靠 instruct 控语气/节奏):语速走宿主变速(speed_control 缺省 stretch)。
     ),
 )
 
@@ -786,7 +785,7 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     base = {"id": engine.id, "label": engine.label, "detail": engine.detail,
             "expected_bytes": total, "total_is_estimate": estimated,
             "sources": list(sources_for(engine.id)),
-            "supports_speed": engine.supports_speed, "clones_voices": engine.clones_voices,
+            "speed_control": engine.speed_control, "clones_voices": engine.clones_voices,
             **_source_fields(engine)}
     if live is not None and live.status == "downloading":
         # **实测越过估计值 = 这个估计已经被证伪**,那一刻起就不该再拿它当分母:界面会画出一根

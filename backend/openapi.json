@@ -51395,10 +51395,14 @@
             "title": "Voices",
             "default": []
           },
-          "supports_speed": {
-            "type": "boolean",
-            "title": "Supports Speed",
-            "default": true
+          "speed_control": {
+            "type": "string",
+            "enum": [
+              "native",
+              "stretch"
+            ],
+            "title": "Speed Control",
+            "default": "native"
           },
           "note": {
             "type": "string",
@@ -51523,10 +51527,14 @@
             "title": "Sources",
             "default": []
           },
-          "supports_speed": {
-            "type": "boolean",
-            "title": "Supports Speed",
-            "default": false
+          "speed_control": {
+            "type": "string",
+            "enum": [
+              "native",
+              "stretch"
+            ],
+            "title": "Speed Control",
+            "default": "stretch"
           },
           "runtime_ready": {
             "type": "boolean",

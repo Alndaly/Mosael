@@ -20408,10 +20408,11 @@ export interface components {
              */
             voices: string[];
             /**
-             * Supports Speed
-             * @default true
+             * Speed Control
+             * @default native
+             * @enum {string}
              */
-            supports_speed: boolean;
+            speed_control: "native" | "stretch";
             /**
              * Note
              * @default
@@ -20506,10 +20507,11 @@ export interface components {
              */
             sources: string[];
             /**
-             * Supports Speed
-             * @default false
+             * Speed Control
+             * @default stretch
+             * @enum {string}
              */
-            supports_speed: boolean;
+            speed_control: "native" | "stretch";
             /**
              * Runtime Ready
              * @default false

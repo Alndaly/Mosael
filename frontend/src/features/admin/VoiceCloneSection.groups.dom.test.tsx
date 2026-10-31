@@ -29,7 +29,7 @@ const base = {
   detail: "d", status: "missing", runtime_ready: false, runtime_checked: true, downloaded_bytes: 0,
   total_bytes: 0, expected_bytes: 1_000_000_000, total_is_estimate: true, speed_bps: 0,
   eta_seconds: null, message: "未下载", needs_source: false, source_ready: false, source_dir: "",
-  sources: ["hf"], supports_speed: false,
+  sources: ["hf"], speed_control: "stretch",
 };
 const models = [
   { ...base, id: "f5-tts", label: "F5-TTS" },

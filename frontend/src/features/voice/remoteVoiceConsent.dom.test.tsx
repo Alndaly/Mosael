@@ -92,14 +92,14 @@ function serve() {
       : url.includes("/tts/f5-models")
         ? []
         : url.includes("/api/tts/models")
-          ? [{ id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: true, clones_voices: true }]
+          ? [{ id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, speed_control: "native", clones_voices: true }]
           : url.includes("/api/settings/tts")
             ? { engine: "f5-tts", python_path: "", source: "modelscope" }
             : url.includes("/tts/engines")
               ? [
                   { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], ready: true },
                   { id: COSY, label: "百炼 CosyVoice", needs_key: true, needs_voice_id: true, voices: [], ready: true,
-                    supports_speed: true, clones_voices: true },
+                    speed_control: "native", clones_voices: true },
                 ]
               : url.includes("/tts/voices")
                 ? url.includes("workspace_id=w1")

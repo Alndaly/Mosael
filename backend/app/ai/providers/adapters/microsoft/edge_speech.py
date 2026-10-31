@@ -59,7 +59,7 @@ class EdgeSpeechAdapter:
     supports_parallel_synthesis = True
     free_of_charge = True
     needs_key = False
-    supports_speed = True
+    speed_control = "native"
     needs_voice_id = False
     note_key = "ttsProviderNote_edge"
 

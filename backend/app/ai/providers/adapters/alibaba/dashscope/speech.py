@@ -86,8 +86,9 @@ class BailianSpeechAdapter:
     #: 取不到模型时的兜底:两族的交集,哪个模型都认。
     VOICES = ("Cherry", "Serena", "Ethan", "Chelsie")
     needs_key = True
-    #: qwen-tts 家族没有语速参数。
-    supports_speed = False
+    #: qwen-tts 家族没有语速参数:按原速念,宿主再变速。实例上按这次的模型改写(见 __init__)——
+    #: 同一个 Adapter 配的是 CosyVoice 模型时,语速由 `rate` 原生生效,宿主不能再变一遍。
+    speed_control = "stretch"
     #: 模型是开放集合(日期快照、instruct / vd / vc 变体),百炼又没有列音色的接口:认得出的模型走下拉,认不出的退回填 id。
     needs_voice_id = True
     note_key = "ttsProviderNote_bailian"
@@ -123,6 +124,9 @@ class BailianSpeechAdapter:
         self._model = model or "qwen-tts"
         self._base = connection.native_base(base_url)  # 语音走原生 API,不是对话那个 compatible-mode
         self._default_voice = voice
+        #: 这一次用的模型吃不吃 `rate`,决定语速由谁来调(见 SpeechAdapter.speed_control):类上那份给目录看,
+        #: 实例上这份给合成用 —— 否则 CosyVoice 模型会被 `rate` 和宿主各变一次速。
+        self.speed_control = "native" if self.supports_speed_for(self._model) else "stretch"
 
     def _request_for(self, request: SpeechSynthesisRequest) -> tuple[dict, str]:
         """百炼的语音有**两套 API**,按模型分派。
@@ -214,7 +218,7 @@ class CosyVoiceSpeechAdapter(BailianSpeechAdapter):
     engine_id = "alibaba-cosyvoice"
     label_key = "ttsProvider_cosyvoice"
     #: 实测 rate=1.5 把 2.25 秒的句子变成 1.50 秒,是真变速。
-    supports_speed = True
+    speed_control = "native"
     note_key = "ttsProviderNote_cosyvoice"
     MODEL_PREFIXES = ("cosyvoice",)
     DEFAULT_MODEL = "cosyvoice-v2"
