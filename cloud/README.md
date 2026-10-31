@@ -66,6 +66,7 @@ POST/DELETE /shares/{id}/favorite → 204(幂等)
 GET    /shares/{id}/comments      ?limit=&cursor= → {items,next_cursor}
 POST   /shares/{id}/comments      body {body} → {comment} (201)
 DELETE /shares/{id}/comments/{cid} → 204(仅评论本人)
+GET    /users/{handle}            → {user}(公开四列;不存在 404)
 GET    /users/{handle}/shares     → {items,next_cursor}
 GET    /notifications             ?limit=&cursor= → {items,next_cursor,unread}(需登录)
 GET    /notifications/unread-count → {count}(需登录)

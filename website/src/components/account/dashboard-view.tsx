@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { sumShareStats, type CloudIdentity, type CloudShare } from "@/lib/cloud";
@@ -10,6 +11,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useMyShares, useViewer } from "@/lib/queries";
 
 import { DashboardHeader } from "./dashboard-header";
+import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardNotifications } from "./dashboard-notifications";
 import { DashboardOverview } from "./dashboard-overview";
 import { DashboardProfile } from "./dashboard-profile";
@@ -18,10 +20,10 @@ import { DashboardShares } from "./dashboard-shares";
 import { dashboardTabHref, withoutShare, type DashboardTab } from "./dashboard-utils";
 
 /**
- * 「我的」控制台:页头 + 四个分区。
+ * 「我的」控制台:左侧分区导航 + 内容区。
  *
  * 身份门禁在服务端(`app/[locale]/(dashboard)/dashboard/page.tsx`)—— 未登录根本到不了这里;
- * 这一层只管「切分区」和「删掉一条之后列表与统计一起变」。
+ * 这一层只管「切分区」「删掉一条之后列表与统计一起变」和侧栏工作区的组合。
  *
  * 分区状态不是一次性的:换 tab 会 `replaceState` 改地址栏(`?tab=`),刷新、收藏、发给别人
  * 都还能打开同一个分区;tab 本身仍是 `<Link>`,新标签打开也成立。
@@ -80,40 +82,50 @@ export function DashboardView({
   };
 
   return (
-    <>
-      <DashboardHeader locale={locale} active={tab} copy={copy} identity={currentViewer} onSelect={select} />
-      <section className="bg-paper">
-        <div className="mx-auto max-w-[76rem] px-5 py-10 sm:px-8 sm:pb-24">
-          {tab === "overview" && (
-            <DashboardOverview
-              locale={locale}
-              copy={copy}
-              shares={shares}
-              totals={totals}
-              hasHandle={hasHandle}
-              loadError={loadError}
-              onGoToProfile={() => select("profile")}
-              onSelect={select}
-            />
-          )}
-          {tab === "shares" && (
-            <DashboardShares
-              locale={locale}
-              copy={copy}
-              shares={shares}
-              hasHandle={hasHandle}
-              loadError={loadError}
-              onRemoved={removeShare}
-              onGoToProfile={() => select("profile")}
-            />
-          )}
-          {tab === "profile" && (
-            <DashboardProfile locale={locale} copy={copy} viewer={currentViewer ?? viewer} onSelect={select} />
-          )}
-          {tab === "security" && <DashboardSecurity locale={locale} copy={copy} />}
-          {tab === "notifications" && <DashboardNotifications locale={locale} copy={copy} />}
+    <SidebarProvider>
+      <DashboardSidebar
+        locale={locale}
+        active={tab}
+        copy={copy}
+        identity={currentViewer ?? viewer}
+        shareCount={shares.length}
+        onSelect={select}
+      />
+      <SidebarInset className="min-h-dvh bg-background">
+        <div className="mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <DashboardHeader locale={locale} active={tab} copy={copy} identity={currentViewer} />
+          <div className="mt-6">
+            {tab === "overview" && (
+              <DashboardOverview
+                locale={locale}
+                copy={copy}
+                shares={shares}
+                totals={totals}
+                hasHandle={hasHandle}
+                loadError={loadError}
+                onGoToProfile={() => select("profile")}
+                onSelect={select}
+              />
+            )}
+            {tab === "shares" && (
+              <DashboardShares
+                locale={locale}
+                copy={copy}
+                shares={shares}
+                hasHandle={hasHandle}
+                loadError={loadError}
+                onRemoved={removeShare}
+                onGoToProfile={() => select("profile")}
+              />
+            )}
+            {tab === "profile" && (
+              <DashboardProfile locale={locale} copy={copy} viewer={currentViewer ?? viewer} onSelect={select} />
+            )}
+            {tab === "security" && <DashboardSecurity locale={locale} copy={copy} />}
+            {tab === "notifications" && <DashboardNotifications locale={locale} copy={copy} />}
+          </div>
         </div>
-      </section>
-    </>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

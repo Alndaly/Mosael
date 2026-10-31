@@ -3,7 +3,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
-import { AccountField, FormAlert, PasswordField, SubmitButton } from "@/components/account/form-controls";
+import { AccountField, FormAlert, PasswordField } from "@/components/account/form-controls";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
@@ -61,56 +63,60 @@ export function DashboardPassword({
   };
 
   return (
-    <section aria-labelledby="dashboard-password" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
-      <h2 id="dashboard-password" className="m-0 font-display text-xl font-semibold tracking-[-0.03em]">
-        {copy.passwordTitle}
-      </h2>
-      <p className="mt-1 mb-0 text-[13px] leading-6 text-muted-foreground">{copy.passwordLede}</p>
-
-      {error && (
-        <FormAlert id="dashboard-password-error" title={copy.passwordTitle}>
-          {error}
-        </FormAlert>
-      )}
-
-      <form className="mt-5 grid gap-5" onSubmit={save} noValidate>
-        {hasPassword && (
-          <AccountField
-            id="dashboard-current-password"
-            label={copy.passwordCurrent}
-            type="password"
-            autoComplete="current-password"
-            value={current}
-            onChange={(event) => setCurrent(event.target.value)}
-          />
+    <Card className="bg-card/60 ring-border">
+      <CardHeader>
+        <CardTitle id="dashboard-password">{copy.passwordTitle}</CardTitle>
+        <CardDescription>{copy.passwordLede}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        {error && (
+          <FormAlert id="dashboard-password-error" title={copy.passwordTitle}>
+            {error}
+          </FormAlert>
         )}
-        <PasswordField
-          id="dashboard-new-password"
-          label={copy.passwordNew}
-          autoComplete="new-password"
-          value={next}
-          onChange={(event) => setNext(event.target.value)}
-          showPassword={copy.passwordShow}
-          hidePassword={copy.passwordHide}
-        />
-        <PasswordField
-          id="dashboard-confirm-password"
-          label={copy.passwordConfirm}
-          autoComplete="new-password"
-          value={confirm}
-          onChange={(event) => setConfirm(event.target.value)}
-          showPassword={copy.passwordShow}
-          hidePassword={copy.passwordHide}
-        />
-        <div className="flex flex-wrap items-center gap-3">
-          <SubmitButton
-            label={hasPassword ? copy.passwordChange : copy.passwordSet}
-            busyLabel={copy.saving}
-            busy={busy}
-          />
-          {saved && <p className="m-0 text-[13px] leading-5 text-muted-foreground">{copy.passwordSaved}</p>}
-        </div>
-      </form>
-    </section>
+
+        <form className="grid gap-4" onSubmit={save} noValidate>
+          {hasPassword && (
+            <AccountField
+              id="dashboard-current-password"
+              label={copy.passwordCurrent}
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(event) => setCurrent(event.target.value)}
+              className="h-9 rounded-md text-sm"
+            />
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <PasswordField
+              id="dashboard-new-password"
+              label={copy.passwordNew}
+              autoComplete="new-password"
+              value={next}
+              onChange={(event) => setNext(event.target.value)}
+              showPassword={copy.passwordShow}
+              hidePassword={copy.passwordHide}
+              className="h-9 rounded-md text-sm"
+            />
+            <PasswordField
+              id="dashboard-confirm-password"
+              label={copy.passwordConfirm}
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(event) => setConfirm(event.target.value)}
+              showPassword={copy.passwordShow}
+              hidePassword={copy.passwordHide}
+              className="h-9 rounded-md text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" size="sm" disabled={busy} aria-busy={busy}>
+              {busy ? copy.saving : hasPassword ? copy.passwordChange : copy.passwordSet}
+            </Button>
+            {saved && <p className="m-0 text-[13px] leading-5 text-muted-foreground">{copy.passwordSaved}</p>}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

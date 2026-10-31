@@ -7,10 +7,11 @@ import { useState, type FormEvent } from "react";
 
 import { AccountDangerZone } from "@/components/account/account-danger-zone";
 import { DashboardPassword } from "@/components/account/dashboard-password";
-import { AccountField, FormAlert, SubmitButton } from "@/components/account/form-controls";
+import { AccountField, FormAlert } from "@/components/account/form-controls";
 
 import { InitialTile } from "@/components/community/tile";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
@@ -131,12 +132,13 @@ export function DashboardProfile({
 
   const previewSeed = displayName.trim() || handle.trim() || currentViewer.handle?.trim() || "mosael";
   const previewName = displayName.trim() || handle.trim() || "?";
+  const previewHandle = handle.trim() || currentViewer.handle?.trim() || "";
 
   return (
     <div className="grid gap-4">
       {!hasHandle && (
-        <output className="flex flex-wrap items-start gap-3 rounded-2xl border border-primary/30 bg-brand-soft px-4 py-3.5">
-          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-card text-accent">
+        <output className="flex flex-wrap items-start gap-3 rounded-xl border border-primary/30 bg-brand-soft px-4 py-3.5">
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-card text-accent">
             <PenLine className="size-4" aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
@@ -152,71 +154,78 @@ export function DashboardProfile({
         </FormAlert>
       )}
 
-      <section aria-labelledby="dashboard-profile" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
-        <div className="flex flex-wrap items-start gap-4">
-          <InitialTile seed={previewSeed} name={previewName} size="lg" />
-          <div className="min-w-0 flex-1">
-            <h2 id="dashboard-profile" className="m-0 font-display text-xl font-semibold tracking-[-0.03em]">
-              {copy.tabProfile}
-            </h2>
-            <p className="mt-1 mb-0 text-[13px] leading-6 text-muted-foreground">{copy.profileLede}</p>
+      <Card className="bg-card/60 ring-border">
+        <CardContent className="grid gap-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <InitialTile seed={previewSeed} name={previewName} size="lg" />
+              <div className="grid min-w-0 gap-0.5">
+                <strong className="truncate text-sm font-semibold">{previewName}</strong>
+                <span className="truncate font-mono text-xs text-muted-foreground">
+                  {previewHandle ? `@${previewHandle}` : copy.noHandleTitle}
+                </span>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy === "logout"}
+              aria-busy={busy === "logout"}
+              onClick={() => void signOut()}
+            >
+              <LogOut className="size-3.5" aria-hidden />
+              {busy === "logout" ? copy.signingOut : copy.signOut}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            disabled={busy === "logout"}
-            aria-busy={busy === "logout"}
-            onClick={() => void signOut()}
-            className="min-h-10 w-full rounded-full px-4 text-[13px] font-semibold sm:ml-auto sm:w-auto"
-          >
-            <LogOut className="size-3.5" aria-hidden />
-            {busy === "logout" ? copy.signingOut : copy.signOut}
-          </Button>
-        </div>
 
-        <form className="mt-6 grid gap-5" onSubmit={save} noValidate>
-          <AccountField
-            id="dashboard-display-name"
-            label={copy.displayName}
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            autoComplete="nickname"
-            maxLength={40}
-            error={displayError}
-          />
-          <AccountField
-            id="dashboard-handle"
-            label={copy.handle}
-            value={handle}
-            onChange={(event) => setHandle(event.target.value)}
-            hint={copy.handleHint}
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            maxLength={24}
-            error={handleError}
-            className="font-mono"
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton label={copy.save} busyLabel={copy.saving} busy={busy === "save"} />
-          </div>
-        </form>
+          <form className="grid gap-4" onSubmit={save} noValidate>
+            <AccountField
+              id="dashboard-display-name"
+              label={copy.displayName}
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              autoComplete="nickname"
+              maxLength={40}
+              error={displayError}
+              className="h-9 rounded-md text-sm"
+            />
+            <AccountField
+              id="dashboard-handle"
+              label={copy.handle}
+              value={handle}
+              onChange={(event) => setHandle(event.target.value)}
+              hint={copy.handleHint}
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={24}
+              error={handleError}
+              className="h-9 rounded-md font-mono text-sm"
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" size="sm" disabled={busy === "save"} aria-busy={busy === "save"}>
+                {busy === "save" ? copy.saving : copy.save}
+              </Button>
+            </div>
+          </form>
 
-        <dl className="m-0 mt-6 grid gap-1 border-t border-border pt-5 text-[13px]">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
-            <dt className="m-0 font-medium text-muted-foreground">{copy.email}</dt>
-            <dd className="m-0 min-w-0 font-mono [overflow-wrap:anywhere]">
-              {email ?? (emailFailed ? copy.emailUnavailable : emailUnbound ? copy.emailUnbound : "…")}
-            </dd>
+          <div className="grid gap-1 border-t border-border pt-4">
+            <dl className="m-0 flex min-w-0 flex-wrap items-baseline gap-x-3 text-[13px]">
+              <dt className="m-0 font-medium text-muted-foreground">{copy.email}</dt>
+              <dd className="m-0 min-w-0 font-mono [overflow-wrap:anywhere]">
+                {email ?? (emailFailed ? copy.emailUnavailable : emailUnbound ? copy.emailUnbound : "…")}
+              </dd>
+            </dl>
+            <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.emailHint}</p>
           </div>
-        </dl>
-        <p className="mt-1 mb-0 text-xs leading-5 text-muted-foreground">{copy.emailHint}</p>
-      </section>
+        </CardContent>
+      </Card>
 
       <DashboardPassword locale={locale} copy={copy} hasPassword={Boolean(currentViewer.has_password)} />
 
       {!hasHandle && (
         <div>
-          <Button variant="ghost" onClick={() => onSelect("overview")} className="min-h-10 rounded-full px-4 text-[13px]">
+          <Button variant="ghost" size="sm" onClick={() => onSelect("overview")}>
             {copy.tabOverview}
           </Button>
         </div>

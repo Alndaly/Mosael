@@ -5,7 +5,9 @@ import Image from "next/image";
 import QRCode from "qrcode";
 
 import { AccountField, FormAlert } from "@/components/account/form-controls";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount, type CloudMfaStatus } from "@/lib/cloud";
@@ -123,135 +125,152 @@ export function DashboardSecurity({
   };
 
   return (
-    <section aria-labelledby="dashboard-security" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="dashboard-security" className="m-0 font-display text-xl font-semibold tracking-[-0.03em]">
-            {copy.mfaTitle}
-          </h2>
-          <p className="mt-1 mb-0 max-w-2xl text-[13px] leading-6 text-muted-foreground">{copy.mfaLede}</p>
+    <Card className="bg-card/60 ring-border">
+      <CardHeader className="flex flex-row items-start justify-between gap-3">
+        <div className="min-w-0">
+          <CardTitle id="dashboard-security">{copy.mfaTitle}</CardTitle>
+          <CardDescription>{copy.mfaLede}</CardDescription>
         </div>
         {!loading && status && (
-          <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
+          <Badge variant={status.enabled ? "default" : "secondary"}>
             {status.enabled ? copy.mfaOn : copy.mfaOff}
-          </span>
+          </Badge>
         )}
-      </div>
+      </CardHeader>
 
-      {loading ? (
-        <p className="mt-5 text-[13px] text-muted-foreground">{copy.mfaLoading}</p>
-      ) : (
-        <div className="mt-5 grid gap-5">
-          {error && (
-            <FormAlert id="dashboard-mfa-error" title={copy.mfaTitle}>
-              {error}
-            </FormAlert>
-          )}
+      <CardContent>
+        {loading ? (
+          <p className="m-0 text-sm text-muted-foreground">{copy.mfaLoading}</p>
+        ) : (
+          <div className="grid gap-4">
+            {error && (
+              <FormAlert id="dashboard-mfa-error" title={copy.mfaTitle}>
+                {error}
+              </FormAlert>
+            )}
 
-          {codes.length > 0 && (
-            <div className="grid gap-3 rounded-2xl border border-primary/30 bg-brand-soft px-4 py-4">
-              <strong className="text-sm font-semibold">{copy.mfaRecoveryTitle}</strong>
-              <p className="m-0 text-[13px] leading-6 text-muted-foreground">{copy.mfaRecoveryOnce}</p>
-              <pre className="m-0 overflow-x-auto rounded-xl bg-card px-4 py-3 font-mono text-[13px] leading-6">
-                {codes.join("\n")}
-              </pre>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => void navigator.clipboard.writeText(codes.join("\n")).catch(() => undefined)}
-                >
-                  {copy.mfaCopy}
-                </Button>
-                <Button variant="ghost" type="button" onClick={() => setCodes([])}>
-                  {copy.mfaSaved}
+            {codes.length > 0 && (
+              <div className="grid gap-3 rounded-xl border border-primary/30 bg-brand-soft px-4 py-4">
+                <strong className="text-sm font-semibold">{copy.mfaRecoveryTitle}</strong>
+                <p className="m-0 text-[13px] leading-6 text-muted-foreground">{copy.mfaRecoveryOnce}</p>
+                <pre className="m-0 overflow-x-auto rounded-lg border border-border bg-card px-3 py-2.5 font-mono text-[13px] leading-6">
+                  {codes.join("\n")}
+                </pre>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(codes.join("\n")).catch(() => undefined)}
+                  >
+                    {copy.mfaCopy}
+                  </Button>
+                  <Button variant="ghost" size="sm" type="button" onClick={() => setCodes([])}>
+                    {copy.mfaSaved}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {!status?.enabled && !setup && (
+              <div>
+                <Button type="button" size="sm" onClick={() => void startSetup()} disabled={Boolean(busy)}>
+                  {busy === "setup" ? copy.mfaStarting : copy.mfaEnable}
                 </Button>
               </div>
-            </div>
-          )}
+            )}
 
-          {!status?.enabled && !setup && (
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" onClick={() => void startSetup()} disabled={Boolean(busy)}>
-                {busy === "setup" ? copy.mfaStarting : copy.mfaEnable}
-              </Button>
-            </div>
-          )}
+            {setup && (
+              <div className="grid gap-4 rounded-xl border border-border p-4">
+                <p className="m-0 text-[13px] leading-6 text-muted-foreground">{copy.mfaScan}</p>
+                <div className="grid gap-4 sm:grid-cols-[190px_1fr]">
+                  {qr && (
+                    <Image
+                      src={qr}
+                      alt={copy.mfaQrAlt}
+                      width={190}
+                      height={190}
+                      unoptimized
+                      className="rounded-lg border border-border bg-white p-1"
+                    />
+                  )}
+                  <div className="grid content-start gap-3">
+                    <div className="min-w-0">
+                      <p className="m-0 text-xs font-medium text-muted-foreground">{copy.mfaSecret}</p>
+                      <code className="mt-1 block font-mono text-[13px] [overflow-wrap:anywhere]">{setup.secret}</code>
+                    </div>
+                    <AccountField
+                      id="dashboard-mfa-setup-code"
+                      label={copy.mfaCode}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={code}
+                      onChange={(event) => setCode(event.target.value)}
+                      className="h-9 rounded-md font-mono text-sm"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" onClick={() => void enable()} disabled={busy === "enable"}>
+                        {busy === "enable" ? copy.mfaStarting : copy.mfaConfirm}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setSetup(null);
+                          setQr("");
+                          setCode("");
+                          setError("");
+                        }}
+                      >
+                        {copy.mfaCancel}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {setup && (
-            <div className="grid gap-4 rounded-2xl border border-border px-4 py-4">
-              <p className="m-0 text-[13px] leading-6 text-muted-foreground">{copy.mfaScan}</p>
-              {qr && (
-                <Image src={qr} alt={copy.mfaQrAlt} width={190} height={190} unoptimized className="rounded-xl" />
-              )}
-              <div className="min-w-0">
-                <p className="m-0 text-xs font-medium text-muted-foreground">{copy.mfaSecret}</p>
-                <code className="mt-1 block font-mono text-[13px] [overflow-wrap:anywhere]">{setup.secret}</code>
+            {status?.enabled && (
+              <div className="grid gap-4 border-t border-border pt-4">
+                <p className="m-0 text-[13px] leading-6 text-muted-foreground">
+                  {copy.mfaRecoveryRemaining.replace("{count}", String(status.recovery_codes_remaining))}
+                </p>
+                <AccountField
+                  id="dashboard-mfa-code"
+                  label={copy.mfaCode}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  className="h-9 rounded-md font-mono text-sm"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void regenerate()}
+                    disabled={Boolean(busy)}
+                  >
+                    {busy === "recovery" ? copy.mfaRegenerating : copy.mfaRegenerate}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void disable()}
+                    disabled={Boolean(busy)}
+                  >
+                    {busy === "disable" ? copy.mfaDisabling : copy.mfaDisable}
+                  </Button>
+                </div>
+                <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.mfaDisableHint}</p>
               </div>
-              <AccountField
-                id="dashboard-mfa-setup-code"
-                label={copy.mfaCode}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={() => void enable()} disabled={busy === "enable"}>
-                  {busy === "enable" ? copy.mfaStarting : copy.mfaConfirm}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setSetup(null);
-                    setQr("");
-                    setCode("");
-                    setError("");
-                  }}
-                >
-                  {copy.mfaCancel}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {status?.enabled && (
-            <div className="grid gap-4 border-t border-border pt-4">
-              <p className="m-0 text-[13px] leading-6 text-muted-foreground">
-                {copy.mfaRecoveryRemaining.replace("{count}", String(status.recovery_codes_remaining))}
-              </p>
-              <AccountField
-                id="dashboard-mfa-code"
-                label={copy.mfaCode}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void regenerate()}
-                  disabled={Boolean(busy)}
-                >
-                  {busy === "recovery" ? copy.mfaRegenerating : copy.mfaRegenerate}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void disable()}
-                  disabled={Boolean(busy)}
-                >
-                  {busy === "disable" ? copy.mfaDisabling : copy.mfaDisable}
-                </Button>
-              </div>
-              <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.mfaDisableHint}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </section>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -8,7 +8,9 @@ import { useState } from "react";
 
 import { formatShareDate } from "@/components/community/share-utils";
 import { InitialTile } from "@/components/community/tile";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import { CloudApiError, cloudNotifications, type CloudIdentity, type CloudNotification } from "@/lib/cloud";
@@ -143,25 +145,28 @@ export function DashboardNotifications({ locale, copy }: { locale: Locale; copy:
 
   if (loading) {
     return (
-      <output className="block rounded-3xl border border-dashed border-border bg-card px-6 py-12 text-center text-sm leading-7 text-muted-foreground">
-        {copy.notificationsLoading}
-      </output>
+      <Card className="bg-card/60 ring-border">
+        <CardContent>
+          <p className="m-0 text-sm text-muted-foreground">{copy.notificationsLoading}</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="grid gap-4">
+    <Card className="bg-card/60 ring-border">
+      <CardContent className="grid gap-4">
       {error && (
         <div
           role="alert"
-          className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
           <AlertCircle className="size-4 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">{error}</span>
           <button
             type="button"
             onClick={retry}
-            className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 px-3 py-1.5 font-semibold hover:bg-destructive/10"
+            className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1 font-semibold hover:bg-destructive/10"
           >
             <RotateCcw className="size-3.5" aria-hidden />
             {copy.retry}
@@ -171,8 +176,8 @@ export function DashboardNotifications({ locale, copy }: { locale: Locale; copy:
 
       {items.length === 0 ? (
         !error && (
-          <div className="rounded-3xl border border-dashed border-border bg-card px-6 py-16 text-center">
-            <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-border px-6 py-16 text-center">
+            <span className="inline-flex size-10 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
               <Bell className="size-5" aria-hidden />
             </span>
             <p className="mx-auto mt-4 mb-0 max-w-[34ch] text-sm leading-7 text-muted-foreground">
@@ -182,25 +187,25 @@ export function DashboardNotifications({ locale, copy }: { locale: Locale; copy:
         )
       ) : (
         <>
-          {unread > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="m-0 inline-flex items-baseline gap-1.5 text-sm text-muted-foreground">
-                <span className="font-mono text-foreground tabular-nums">{unread}</span>
-                <span>{copy.notificationUnread}</span>
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="m-0 inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <Badge variant={unread > 0 ? "default" : "secondary"} className="font-mono tabular-nums">{unread}</Badge>
+              <span>{copy.notificationUnread}</span>
+            </p>
+            {unread > 0 && (
               <Button
                 variant="outline"
+                size="sm"
                 disabled={marking}
                 aria-busy={marking}
                 onClick={() => void markAll()}
-                className="min-h-9 rounded-full px-3.5 text-[13px] font-semibold"
               >
                 {marking ? copy.markingRead : copy.markAllRead}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
-          <ul className="m-0 grid list-none gap-2.5 p-0">
+          <ul className="m-0 grid list-none divide-y divide-border p-0">
             {items.map((item) => {
               const isUnread = !item.read_at;
               const name = notificationName(item.actor);
@@ -215,10 +220,8 @@ export function DashboardNotifications({ locale, copy }: { locale: Locale; copy:
                       open(item);
                     }}
                     className={cn(
-                      "group flex min-w-0 items-start gap-3 rounded-2xl border p-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                      isUnread
-                        ? "border-primary/30 bg-primary/[0.04] hover:border-primary/50"
-                        : "border-border bg-card hover:border-foreground/20",
+                      "group -mx-2 flex min-w-0 items-start gap-3 rounded-lg px-2 py-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                      isUnread ? "bg-primary/[0.03] hover:bg-primary/[0.06]" : "hover:bg-muted/50",
                     )}
                   >
                     {/* 未读的第二通道:左边那颗色点。已读也占位,行首不跳。 */}
@@ -258,21 +261,23 @@ export function DashboardNotifications({ locale, copy }: { locale: Locale; copy:
 
           {notifications.hasNextPage && (
             <div className="flex justify-center">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => void loadMore()}
                 disabled={loadingMore}
-                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold transition-colors hover:border-primary/50 hover:text-primary disabled:opacity-60"
               >
                 {loadingMore ? (
-                  <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+                  <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
                 ) : null}
                 {loadingMore ? t.loadingMore : t.loadMore}
-              </button>
+              </Button>
             </div>
           )}
         </>
       )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

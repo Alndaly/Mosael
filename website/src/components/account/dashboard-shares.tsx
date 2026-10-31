@@ -5,7 +5,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Bookmark, Download, ExternalLink, Heart, MessageSquare, PackageOpen, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import { CloudApiError, cloudShares, type CloudShare } from "@/lib/cloud";
@@ -17,18 +20,20 @@ import { formatShareDate } from "@/components/community/share-utils";
 import { NamePrompt } from "./dashboard-name-prompt";
 
 /**
- * 我的分享:一条一行,带四项统计和两个操作。
+ * 我的分享:管理台里的一张表 —— 分享、数据、发布时间、操作各一列。
  *
- * 删除是**先确认再发请求**:`DELETE /shares/{id}` 在云端是软删(作者以外一律 404),删错了
- * 没有后悔药。成功后就地移除(父组件持有的列表跟着变,概览的数字也一起变);失败把后端
- * 那句话原样放在行上方,不清空列表、不假装成功。
+ * 删除仍是**先确认再发请求**:`DELETE /shares/{id}` 在云端是软删(作者以外一律 404),
+ * 删错了没有后悔药。成功后就地移除(父组件持有的列表跟着变,概览的数字也一起变);失败
+ * 把后端那句话原样放在表上方,不清空列表、不假装成功。
+ *
+ * 视觉沿用管理台的用户表:白底 `Card` + 36px 操作 + 分隔线，不再是一叠圆角卡片。
  */
 function Stat({ label, value, icon: Icon }: { label: string; value: number; icon: typeof Download }) {
   return (
-    <span className="inline-flex items-center gap-1" title={label}>
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title={label}>
       <Icon className="size-3.5 shrink-0" aria-hidden />
       <span className="sr-only">{label}</span>
-      <span className="font-mono tabular-nums">{value}</span>
+      <span className="font-mono tabular-nums text-foreground">{value}</span>
     </span>
   );
 }
@@ -84,89 +89,114 @@ export function DashboardShares({
       {(error || loadError) && (
         <div
           role="alert"
-          className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
           <AlertCircle className="size-4 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">{error || loadError}</span>
         </div>
       )}
 
-      {shares.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-border bg-card px-6 py-16 text-center">
-          <PackageOpen className="mx-auto size-6 text-muted-foreground" aria-hidden />
-          <p className="mt-4 mb-0 font-semibold">{copy.noShares}</p>
-          <p className="mt-1 mb-0 text-sm leading-6 text-muted-foreground">{copy.noSharesHint}</p>
-          <Button asChild className="mt-5 min-h-10 rounded-full px-4 text-sm font-semibold">
-            <Link href={localePath(locale, "/community/upload")}>
-              <Upload className="size-4" aria-hidden />
-              {copy.goUpload}
-            </Link>
-          </Button>
-        </div>
-      ) : (
-        <ul className="m-0 grid list-none gap-3 p-0">
-          {shares.map((share) => (
-            <li key={share.id} className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
-              <div className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-3">
-                <div className="min-w-0 flex-1">
-                  <h2 className="m-0 text-base font-semibold tracking-tight [overflow-wrap:anywhere]">{share.title}</h2>
-                  <p className="mt-1 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                    <span>{shareKindLabel(share.kind, t)}</span>
-                    <span aria-hidden>·</span>
-                    <time dateTime={share.created_at}>{formatShareDate(share.created_at, locale)}</time>
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
-                    <Stat label={t.downloads} value={share.stats.downloads} icon={Download} />
-                    <Stat label={t.likes} value={share.stats.likes} icon={Heart} />
-                    <Stat label={t.favorites} value={share.stats.favorites} icon={Bookmark} />
-                    <Stat label={t.comments} value={share.stats.comments} icon={MessageSquare} />
-                  </div>
-                </div>
+      <Card className="bg-card/60 ring-border">
+        <CardContent className="grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="m-0 text-sm text-muted-foreground">
+              <span className="font-mono text-foreground tabular-nums">{shares.length}</span> {copy.sharesCount}
+            </p>
+            <Button asChild size="sm">
+              <Link href={localePath(locale, "/community/upload")}>
+                <Upload className="size-3.5" aria-hidden />
+                {copy.goUpload}
+              </Link>
+            </Button>
+          </div>
 
-                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                  <Button asChild variant="outline" className="min-h-9 rounded-full px-3.5 text-[13px] font-semibold">
-                    <Link href={localePath(locale, `/community/${share.id}`)}>
-                      <ExternalLink className="size-3.5" aria-hidden />
-                      {copy.view}
-                    </Link>
-                  </Button>
-                  {confirming === share.id ? (
-                    <>
-                      <Button
-                        variant="destructive"
-                        disabled={busy === share.id}
-                        aria-busy={busy === share.id}
-                        onClick={() => void remove(share)}
-                        className="min-h-9 rounded-full px-3.5 text-[13px] font-semibold"
-                      >
-                        <Trash2 className="size-3.5" aria-hidden />
-                        {busy === share.id ? copy.deleting : copy.confirmDelete}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        disabled={busy === share.id}
-                        onClick={() => setConfirming("")}
-                        className="min-h-9 rounded-full px-3 text-[13px]"
-                      >
-                        {copy.cancel}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      onClick={() => setConfirming(share.id)}
-                      className="min-h-9 rounded-full px-3.5 text-[13px] font-semibold text-destructive"
-                    >
-                      <Trash2 className="size-3.5" aria-hidden />
-                      {copy.delete}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+          {shares.length === 0 ? (
+            <div className="grid place-items-center rounded-xl border border-dashed border-border px-6 py-16 text-center">
+              <PackageOpen className="size-6 text-muted-foreground" aria-hidden />
+              <p className="mt-4 mb-0 font-semibold">{copy.noShares}</p>
+              <p className="mt-1 mb-0 max-w-sm text-sm leading-6 text-muted-foreground">{copy.noSharesHint}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{copy.columnShare}</TableHead>
+                    <TableHead>{copy.columnStats}</TableHead>
+                    <TableHead>{copy.columnPublished}</TableHead>
+                    <TableHead className="text-right">{copy.columnActions}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {shares.map((share) => (
+                    <TableRow key={share.id}>
+                      <TableCell className="max-w-[22rem] min-w-[14rem]">
+                        <div className="grid gap-1">
+                          <span className="truncate font-medium [overflow-wrap:anywhere]">{share.title}</span>
+                          <Badge variant="outline" className="w-fit">{shareKindLabel(share.kind, t)}</Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <Stat label={t.downloads} value={share.stats.downloads} icon={Download} />
+                          <Stat label={t.likes} value={share.stats.likes} icon={Heart} />
+                          <Stat label={t.favorites} value={share.stats.favorites} icon={Bookmark} />
+                          <Stat label={t.comments} value={share.stats.comments} icon={MessageSquare} />
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        <time dateTime={share.created_at}>{formatShareDate(share.created_at, locale)}</time>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button asChild variant="ghost" size="sm">
+                            <Link href={localePath(locale, `/community/${share.id}`)}>
+                              <ExternalLink className="size-3.5" aria-hidden />
+                              {copy.view}
+                            </Link>
+                          </Button>
+                          {confirming === share.id ? (
+                            <>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={busy === share.id}
+                                aria-busy={busy === share.id}
+                                onClick={() => void remove(share)}
+                              >
+                                <Trash2 className="size-3.5" aria-hidden />
+                                {busy === share.id ? copy.deleting : copy.confirmDelete}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={busy === share.id}
+                                onClick={() => setConfirming("")}
+                              >
+                                {copy.cancel}
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setConfirming(share.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="size-3.5" aria-hidden />
+                              {copy.delete}
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

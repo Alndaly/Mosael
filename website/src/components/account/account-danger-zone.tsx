@@ -58,16 +58,16 @@ export function AccountDangerZone({ locale, copy }: { locale: Locale; copy: Mess
 
       <section
         aria-labelledby="dashboard-danger"
-        className="rounded-3xl border border-destructive/25 bg-destructive/[0.04] p-6 sm:p-7"
+        className="rounded-xl border border-destructive/25 bg-destructive/[0.04] p-5"
       >
         <div className="flex items-start gap-3">
-          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
             <ShieldAlert className="size-5" aria-hidden />
           </span>
           <div className="min-w-0">
             <h2
               id="dashboard-danger"
-              className="font-display text-xl font-semibold tracking-[-0.03em] text-destructive"
+              className="font-display text-lg font-semibold tracking-[-0.02em] text-destructive"
             >
               {copy.dangerZone}
             </h2>
@@ -75,13 +75,13 @@ export function AccountDangerZone({ locale, copy }: { locale: Locale; copy: Mess
           </div>
         </div>
         {confirming ? (
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Button
               variant="destructive"
               disabled={busy}
               aria-busy={busy}
               onClick={() => void remove()}
-              className="min-h-11 rounded-full px-5 text-sm font-semibold"
+              size="sm"
             >
               <Trash2 className="size-4" aria-hidden />
               {busy ? copy.deleting : copy.confirmDelete}
@@ -89,7 +89,7 @@ export function AccountDangerZone({ locale, copy }: { locale: Locale; copy: Mess
             <Button
               variant="ghost"
               onClick={() => setConfirming(false)}
-              className="min-h-11 rounded-full px-5 text-sm font-semibold"
+              size="sm"
             >
               {copy.cancel}
             </Button>
@@ -98,7 +98,7 @@ export function AccountDangerZone({ locale, copy }: { locale: Locale; copy: Mess
           <Button
             variant="destructive"
             onClick={() => setConfirming(true)}
-            className="mt-5 min-h-11 rounded-full px-5 text-sm font-semibold"
+            size="sm" className="mt-5"
           >
             <Trash2 className="size-4" aria-hidden />
             {copy.deleteAccount}

@@ -24,22 +24,22 @@ export function NamePrompt({
     <div
       className={
         compact
-          ? "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-border bg-card px-4 py-3.5"
-          : "rounded-3xl border border-border bg-card p-6 sm:p-8"
+          ? "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-border bg-card px-4 py-3.5"
+          : "rounded-xl border border-border bg-card p-5 sm:p-6"
       }
     >
-      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-accent">
+      <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-accent">
         <PenLine className="size-5" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <h2 className={compact ? "m-0 text-sm font-semibold" : "m-0 font-display text-xl font-semibold tracking-[-0.03em]"}>
+        <h2 className={compact ? "m-0 text-sm font-semibold" : "m-0 font-display text-lg font-semibold tracking-[-0.02em]"}>
           {copy.noHandleTitle}
         </h2>
         <p className={compact ? "mt-1 mb-0 text-[13px] leading-6 text-muted-foreground" : "mt-2 mb-0 text-sm leading-7 text-muted-foreground"}>
           {copy.noHandleBody}
         </p>
       </div>
-      <Button onClick={onGoToProfile} className="min-h-10 rounded-full px-4 text-[13px] font-semibold">
+      <Button onClick={onGoToProfile} size="sm">
         {copy.goToProfile}
       </Button>
     </div>

@@ -12,14 +12,23 @@ import { LOCALE_SHORT, LOCALES, type Locale } from "@/i18n/config";
  * 目标页缺失时会 404,这是双语站的老问题;当前 24 页是同构的,等社区页开始出现单语内容
  * 再考虑回退。
  */
-export function LocaleSwitch({ locale, label }: { locale: Locale; label: string }) {
+export function LocaleSwitch({
+  locale,
+  label,
+  href,
+}: {
+  locale: Locale;
+  label: string;
+  /** 指定目标地址;不传时按当前路径换掉语言前缀。 */
+  href?: string;
+}) {
   const pathname = usePathname();
   const other = LOCALES.find((item) => item !== locale) ?? locale;
   const rest = pathname.split("/").slice(2).join("/");
 
   return (
     <Link
-      href={`/${other}${rest ? `/${rest}` : ""}`}
+      href={href ?? `/${other}${rest ? `/${rest}` : ""}`}
       hrefLang={other}
       aria-label={label}
       title={label}

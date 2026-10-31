@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 //:     viewer / unread / notifications / sharesByMe 全部失效,再回首页(站头立刻变成「登录」)。
 //:     —— 这里用只记录调用的桩 QueryClient **真的跑一遍** invalidation,不看注释。
 //:  ② `/account` 只剩一个永久跳转,页脚改指控制台,但路由仍留在 `(auth)` 组(地址不拆)。
-//:  ③ 官方账号在控制台页头带「官方」徽标 —— 与分享卡片同一枚(BadgeCheck + 同一个词);
+//:  ③ 官方账号在控制台侧栏带「官方」徽标 —— 与分享卡片同一枚(BadgeCheck + 同一个词);
 //:     普通账号不带。仓库里没有 JSX 运行器,组件看源码结构,判断逻辑真的跑一遍。
 //:
 //: 「先红后绿」:这份文件是在实现之前写的 —— 缺文件 / 缺函数 / 缺跳转时,下面的断言先红。
@@ -44,6 +44,7 @@ const ACCOUNT_PAGE = "src/app/[locale]/(auth)/account/page.tsx";
 const DASHBOARD_PAGE = "src/app/[locale]/(dashboard)/dashboard/page.tsx";
 const DASHBOARD_VIEW = "src/components/account/dashboard-view.tsx";
 const DASHBOARD_HEADER = "src/components/account/dashboard-header.tsx";
+const DASHBOARD_SIDEBAR = "src/components/account/dashboard-sidebar.tsx";
 const DASHBOARD_PROFILE = "src/components/account/dashboard-profile.tsx";
 const DANGER_ZONE = "src/components/account/account-danger-zone.tsx";
 const FOOTER = "src/components/site-footer.tsx";
@@ -129,18 +130,23 @@ test("③ 官方账号显示「官方」徽标,普通账号不显示", async () 
     assert.equal(utils.showsOfficialBadge(ordinary), false, `普通账号被当成了官方:${JSON.stringify(ordinary)}`);
   }
 
-  const header = readSource(DASHBOARD_HEADER);
-  assert.match(header, /showsOfficialBadge\(/, "页头没有按 official 决定要不要画徽标");
+  // 身份只在侧栏底部出现一次;页头右上角只留「查看公开主页」,不重复昵称与徽标。
+  const sidebar = readSource(DASHBOARD_SIDEBAR);
+  assert.match(sidebar, /showsOfficialBadge\(/, "侧栏没有按 official 决定要不要画徽标");
   // 视觉语言照分享卡片那枚:同一个 BadgeCheck、同一句 community.official。
-  assert.match(header, /BadgeCheck/, "官方徽标没有沿用分享卡片的 BadgeCheck 图标");
-  assert.match(header, /getMessages\(locale\)\.community\.official/, "官方徽标没有复用社区里那枚「官方」的文字");
-  assert.match(header, /aria-hidden/, "徽标的图标没有对读屏隐藏(读屏只该念文字「官方」)");
+  assert.match(sidebar, /BadgeCheck/, "官方徽标没有沿用分享卡片的 BadgeCheck 图标");
+  assert.match(sidebar, /getMessages\(locale\)\.community\.official/, "官方徽标没有复用社区里那枚「官方」的文字");
+  assert.match(sidebar, /aria-hidden/, "徽标的图标没有对读屏隐藏(读屏只该念文字「官方」)");
   // 徽标是「文字」不是纯图标,而且排在名字之后:读屏按自然顺序念「名字 官方」。
-  assert.match(header, /\{officialLabel\}/, "徽标里没有文字,只是纯图标");
-  assert.match(header, /identity\?\.display_name[\s\S]*\{officialLabel\}/, "徽标没有排在名字之后");
+  assert.match(sidebar, /\{officialLabel\}/, "徽标里没有文字,只是纯图标");
+  assert.match(sidebar, /identity\.display_name[\s\S]*\{officialLabel\}/, "徽标没有排在名字之后");
+
+  const header = readSource(DASHBOARD_HEADER);
+  assert.doesNotMatch(header, /display_name/, "页头右上角又重复展示了昵称");
+  assert.doesNotMatch(header, /BadgeCheck/, "页头右上角又重复画了官方徽标");
 
   const view = readSource(DASHBOARD_VIEW);
-  assert.match(view, /identity=\{currentViewer\}/, "控制台页头没有拿到当前身份(官方标记来自 /me)");
+  assert.match(view, /identity=\{currentViewer\}/, "控制台页头没有拿到当前身份");
 });
 
 test("④ 只给账号页用的 account* 文案键删掉了(中英同删)", () => {

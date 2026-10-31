@@ -113,6 +113,14 @@ const MAX_USER_SHARE_PAGES = 10;
  * 尽量取全,不能只拿第一页就把数字当总数。**只用已有的 `GET /users/{handle}/shares`** ——
  * 它只回 listed 的公开分享,和别的访客看到的完全一致;没有为控制台另开接口。
  */
+/** 公开主页的身份。只回公开四列(display_name / handle / avatar_seed / official)。 */
+export const loadPublicIdentity = cache(
+  async (handle: string, cookie: string): Promise<CloudIdentity> => {
+    const { user } = await serverCloud(cookie).profile.byHandle(handle);
+    return user;
+  },
+);
+
 export const loadUserShares = cache(
   async (handle: string, cookie: string): Promise<{ shares: CloudShare[]; totals: CloudShareStats }> => {
     const client = serverCloud(cookie);

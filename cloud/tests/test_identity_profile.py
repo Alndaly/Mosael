@@ -113,3 +113,23 @@ def test_put_me_requires_a_session(client):
     response = client.put(api("/me"), json=identity_body("Alice"))
     assert response.status_code == 401
     assert response.json()["error"] == "not_authenticated"
+
+
+def test_public_profile_is_public_shape_and_404_for_unknown(client):
+    signup(client)
+    updated = client.put(api("/me"), json=identity_body("Alice", "alice-profile")).json()["user"]
+
+    response = client.get(api("/users/alice-profile"))
+    assert response.status_code == 200, response.text
+    public = response.json()["user"]
+    assert public == {
+        "display_name": "Alice",
+        "handle": "alice-profile",
+        "avatar_seed": updated["avatar_seed"],
+        "official": False,
+    }
+    assert "email" not in public
+
+    missing = client.get(api("/users/nobody-here"))
+    assert missing.status_code == 404
+    assert missing.json()["error"] == "user_not_found"

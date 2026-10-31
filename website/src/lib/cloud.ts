@@ -375,6 +375,10 @@ function createClient(context: RequestContext = {}) {
       },
     },
     profile: {
+      /** 公开主页的公开身份;短名不存在时 404。 */
+      byHandle(handle: string): Promise<{ user: CloudIdentity }> {
+        return request(`/users/${encodeURIComponent(handle)}`, {}, context);
+      },
       /** `PUT /me`:第一次设置昵称 / 短名时用。 */
       update(patch: { display_name?: string; handle?: string }): Promise<{ user: CloudUser }> {
         return request("/me", { method: "PUT", body: JSON.stringify(patch) }, context);

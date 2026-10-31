@@ -50,14 +50,17 @@ const DASHBOARD_PAGE = "src/app/[locale]/(dashboard)/dashboard/page.tsx";
 const ACCOUNT_PAGE = "src/app/[locale]/(auth)/account/page.tsx";
 const ACCOUNT_NAV = "src/components/account/account-nav.tsx";
 const DASHBOARD_HEADER = "src/components/account/dashboard-header.tsx";
+const DASHBOARD_SIDEBAR = "src/components/account/dashboard-sidebar.tsx";
 const DASHBOARD_VIEW = "src/components/account/dashboard-view.tsx";
 const DASHBOARD_OVERVIEW = "src/components/account/dashboard-overview.tsx";
 const DASHBOARD_SHARES = "src/components/account/dashboard-shares.tsx";
 const DASHBOARD_PROFILE = "src/components/account/dashboard-profile.tsx";
 const DASHBOARD_NOTIFICATIONS = "src/components/account/dashboard-notifications.tsx";
+const PUBLIC_PROFILE = "src/app/[locale]/(site)/users/[handle]/page.tsx";
 
 const DASHBOARD_COMPONENTS = [
   DASHBOARD_HEADER,
+  DASHBOARD_SIDEBAR,
   DASHBOARD_VIEW,
   DASHBOARD_OVERVIEW,
   DASHBOARD_SHARES,
@@ -116,13 +119,30 @@ test("① 四个 tab 都在,未登录 307 到 login?next=dashboard", () => {
   assert.equal(lib.dashboardLoginHref("en"), "/en/login?next=%2Fen%2Fdashboard");
 
   // 四个 tab 由同一份清单渲染,地址可直接打开(Link 带 href,不是只换 state)。
-  const header = read(DASHBOARD_HEADER);
-  assert.match(header, /DASHBOARD_TABS\.map/, "tab 不是从同一份清单渲染的");
-  assert.match(header, /href=\{dashboardTabHref\(/, "tab 只有 onClick、没有可打开的地址");
-  assert.match(header, /aria-current=\{/, "当前 tab 没有 aria-current");
+  const sidebar = read(DASHBOARD_SIDEBAR);
+  assert.match(sidebar, /DASHBOARD_TABS\.map/, "侧栏 tab 不是从同一份清单渲染的");
+  assert.match(sidebar, /href=\{dashboardTabHref\(/, "侧栏 tab 只有 onClick、没有可打开的地址");
+  assert.match(sidebar, /aria-current=\{/, "当前 tab 没有 aria-current");
+  assert.match(sidebar, /SidebarProvider|SidebarMenu/, "控制台没有使用管理台那套侧栏");
+  // 管理页独立之后仍要在原地换语言 / 换深浅色,不能把这两项留给公开站头。
+  assert.match(sidebar, /LocaleSwitch/, "侧栏没有语言切换");
+  assert.match(sidebar, /ThemeToggle/, "侧栏没有深浅色切换");
   for (const tab of ["overview", "shares", "profile", "notifications"]) {
     assert.match(page + read(DASHBOARD_VIEW), new RegExp(tab), `页面没有渲染 ${tab} 分区`);
   }
+});
+
+test("①b 公开主页:控制台右上角有入口,页面真的能打开", () => {
+  assert.ok(exists(PUBLIC_PROFILE), `缺少公开主页 ${PUBLIC_PROFILE}`);
+  const page = read(PUBLIC_PROFILE);
+  assert.match(page, /pageMetadata\(/, "公开主页没有自己的 head");
+  assert.match(page, /loadPublicIdentity\(/, "公开主页没有读公开身份");
+  assert.match(page, /loadUserShares\(/, "公开主页没有读 /users/{handle}/shares");
+  assert.match(page, /<ShareCard/, "公开主页没有复用社区分享卡片");
+  assert.match(page, /InitialTile/, "公开主页没有作者头像");
+
+  const header = read(DASHBOARD_HEADER);
+  assert.match(header, /localePath\(locale, `\/users\/\$\{handle\}`\)/, "控制台右上角没有指向公开主页");
 });
 
 test("② 概览的五个数字 = 分享 stats 求和(不是编的)", () => {
@@ -199,7 +219,7 @@ test("④ 个人信息:PUT /me,409 两种 handle 冲突都显示后端原话", (
 
   for (const locale of LOCALES) {
     const copy = getMessages(locale).dashboard;
-    for (const key of ["displayName", "handle", "save", "saving", "saved", "email", "signOut"]) {
+    for (const key of ["displayName", "handle", "save", "saving", "saved", "email", "signOut", "language", "theme"]) {
       assert.ok(copy[key], `${locale} 缺 dashboard.${key}`);
     }
   }

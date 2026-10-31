@@ -162,11 +162,14 @@ test("(auth) 布局没有整站导航,只留一个可跳转的 main", () => {
   }
 });
 
-test("(dashboard) 布局不套公开站头 / 站尾,只留一个 main 和返回入口", () => {
+test("(dashboard) 布局不套公开站头 / 站尾,只留一个 main;导航在侧栏", () => {
   const layout = read(LOCALE, "(dashboard)", "layout.tsx");
   assert.doesNotMatch(layout, /SiteHeader|SiteFooter|site-header|site-footer/, "(dashboard) 布局又套回了公开站导航");
   assert.match(layout, /<main id="main"/, "(dashboard) 布局缺少 main,跳到正文的链接会落空");
-  assert.match(layout, /backToCommunity/, "(dashboard) 布局缺少返回社区入口");
+
+  const sidebar = read(SRC, "components", "account", "dashboard-sidebar.tsx");
+  assert.match(sidebar, /backToCommunity/, "(dashboard) 侧栏缺少返回社区入口");
+  assert.match(sidebar, /DASHBOARD_TABS\.map/, "(dashboard) 侧栏没有渲染分区导航");
 });
 
 test("账号壳里有一条回到 mosael.com 的小链接,站内布局的站头也还在", () => {
