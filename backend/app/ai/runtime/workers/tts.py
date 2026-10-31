@@ -88,6 +88,83 @@ def write_marker_wav(path: str, text: str, sr: int = 24000) -> None:
         handle.writeframes(bytes(frames))
 
 
+def _f5_text_chunks(ref_file: str, ref_text: str, text: str, speed: float) -> list[str]:
+    """把长文本切成**一次只跑一个 batch** 的小段。
+
+    F5 自己会对 gen_text 分批，但在 macOS/MPS 上多 batch 的
+    `infer_batch_process` 会直接段错误(exit 139)，短文本(单 batch)正常。
+    这里先按 F5 同一条公式算出它允许的 max_chars，再自己切；每一段单独调
+    `model.infer`，避开它内部的多 batch 路径。
+    """
+    from f5_tts.infer.utils_infer import chunk_text
+
+    max_chars = 135
+    try:
+        import torchaudio
+
+        audio, sample_rate = torchaudio.load(ref_file)
+        duration = float(audio.shape[-1]) / float(sample_rate)
+        if duration > 0 and ref_text:
+            max_chars = int(len(ref_text.encode("utf-8")) / duration * (22.0 - duration) * speed)
+    except Exception as exc:  # noqa: BLE001 — 读不出参考时长就退回保守值
+        print(f"F5 切分读不到参考音频时长,用 {max_chars} 字节上限:{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+    max_chars = max(40, min(80, max_chars))
+
+    chunks: list[str] = []
+    for chunk in chunk_text(text, max_chars=max_chars):
+        if len(chunk.encode("utf-8")) <= max_chars:
+            chunks.append(chunk)
+            continue
+        # 单个句子本身就超过上限(没有标点可切):按字节硬切，避免交给 F5 再分批。
+        current = ""
+        for char in chunk:
+            if current and len((current + char).encode("utf-8")) > max_chars:
+                chunks.append(current)
+                current = char
+            else:
+                current += char
+        if current:
+            chunks.append(current)
+    return chunks or [text]
+
+
+def _concat_wavs(parts: list[Path], output_path: str) -> None:
+    """把逐段生成的 WAV 接成一条，并在接缝处做 120ms 线性交叉淡化，避免爆音。"""
+    import numpy as np
+
+    params = None
+    samples = None
+    for part in parts:
+        with wave.open(str(part), "rb") as handle:
+            current = handle.getparams()
+            if params is None:
+                params = current
+            elif (
+                current.nchannels,
+                current.sampwidth,
+                current.framerate,
+            ) != (params.nchannels, params.sampwidth, params.framerate):
+                raise RuntimeError("F5 分段音频格式不一致,无法拼接")
+            data = np.frombuffer(handle.readframes(handle.getnframes()), dtype="<i2").copy()
+        if samples is None:
+            samples = data
+            continue
+        fade = min(int(0.12 * params.framerate), len(samples) // 2, len(data) // 2)
+        if fade <= 0:
+            samples = np.concatenate([samples, data])
+            continue
+        ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
+        samples[-fade:] = (
+            samples[-fade:].astype(np.float32) * (1.0 - ramp) + data[:fade].astype(np.float32) * ramp
+        ).astype("<i2")
+        samples = np.concatenate([samples, data[fade:]])
+    if samples is None or params is None:
+        raise RuntimeError("F5 没有产出可拼接的音频")
+    with wave.open(output_path, "wb") as handle:
+        handle.setparams(params)
+        handle.writeframes(samples.tobytes())
+
+
 def run_f5(request: dict[str, Any], output_path: str) -> str:
     from f5_tts.api import F5TTS  # heavy, only in the TTS interpreter
 
@@ -113,16 +190,47 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
         else:
             model = F5TTS(device=device)
         _LOADED[cache_key] = model
-    _progress("generate", 0.35, "生成中")
-    model.infer(
-        ref_file=request["reference_wav"],
-        ref_text=request.get("reference_text") or "",  # empty → F5 auto-transcribes the ref
-        gen_text=request["text"],
-        speed=float(request.get("speed") or 1.0),
-        file_wave=output_path,
-        remove_silence=False,
-        seed=0,
+    speed = float(request.get("speed") or 1.0)
+    #: 长文本一次交给 F5 会在 MPS 上走多 batch 路径并段错误；逐段推理。
+    chunks = _f5_text_chunks(
+        request["reference_wav"],
+        request.get("reference_text") or "",
+        request["text"],
+        speed,
     )
+    if len(chunks) == 1:
+        _progress("generate", 0.35, "生成中")
+        model.infer(
+            ref_file=request["reference_wav"],
+            ref_text=request.get("reference_text") or "",  # empty → F5 auto-transcribes the ref
+            gen_text=chunks[0],
+            speed=speed,
+            file_wave=output_path,
+            remove_silence=False,
+            seed=0,
+        )
+        return "f5-tts"
+
+    parts: list[Path] = []
+    try:
+        for index, chunk in enumerate(chunks):
+            _progress("generate", 0.35 + 0.5 * index / len(chunks), f"生成中 {index + 1}/{len(chunks)}")
+            part = Path(output_path).with_name(f".f5-part-{index}.wav")
+            model.infer(
+                ref_file=request["reference_wav"],
+                ref_text=request.get("reference_text") or "",
+                gen_text=chunk,
+                speed=speed,
+                file_wave=str(part),
+                remove_silence=False,
+                seed=0,
+            )
+            parts.append(part)
+        _progress("encode", 0.9, "拼接音频")
+        _concat_wavs(parts, output_path)
+    finally:
+        for part in parts:
+            part.unlink(missing_ok=True)
     return "f5-tts"
 
 
