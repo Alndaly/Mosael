@@ -1472,7 +1472,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 
 #### `reference_library` —— 一套只读的外部参考图集(姿势、服装)
 
-决策见 [ADR 0091](adr/0091-reference-library-pose-and-costume.md),范例是 `plugins/examples/poseatlas/tools/main.py`。目录类:
+决策见 [ADR 0091](adr/0091-reference-library-pose-and-costume.md),范例是 `plugins/bundled/poseatlas/tools/main.py`。目录类:
 认领它的工具不进工具表;资产页的「参考库」页签按连接列出它,智能体经 `search_references` / `use_reference` 用它。
 宿主按 `op` 问:
 

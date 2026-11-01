@@ -123,7 +123,8 @@ ADR 0038 §9 已有的预览图设置(`show` / `blur` / `hidden`,`modelPreviewSe
 
 ### 7. PoseAtlas 本身怎么接
 
-做成一个**可安装、不内置**的插件(插件 id 暂定 `dev.mosael.poseatlas`):认领 `reference_library`,
+做成一个~~可安装、不内置~~**随应用内置**的插件(`dev.mosael.poseatlas`,修订 2026-11-01:维护者「这个插件作为内建插件吧」,
+放在 `plugins/bundled/` 下,随应用装好、卸不掉,不用连接时停用即可):认领 `reference_library`,
 从原站读 `poses.json` / `costumes.json` 与缩略图,在插件自己的数据目录里缓存;只接姿势与服装两本。
 
 ~~**上架官方插件市场之前,先取得许可。**~~ **修订(2026-11-01)**:维护者判断「这种情况下其实也不是分发,
@@ -166,13 +167,17 @@ ADR 0038 §9 已有的预览图设置(`show` / `blur` / `hidden`,`modelPreviewSe
 
 ## 实施记录
 
+- **改为内置(2026-11-01)**:维护者「这个插件作为内建插件吧」。目录从示例挪到 `plugins/bundled/poseatlas`,随应用装好、卸不掉;
+  它有配置项(成人内容开关)又要联网权限,所以和 MinerU 一样**不自动建连接**,每个人在插件页接一次(授予 `network:github`)。
+  参考库的空态因此改成直接指路:「随应用内置的 PoseAtlas 在插件页接一下就能用」,并带一颗去插件页的按钮。
+
 - **第 6 步(2026-11-01)**:智能体两个工具,只发给接了参考库的人(`needs="reference_library"`)。
   `search_references`(只读):在这个人每个参考库、每本图集里找,返回名字、标签、机位、缩略图和出处;**标了成人内容的
   条目一条都不交给智能体**(循环在领域层 `reference_library.search_everywhere`,工具只是转一手)。
   `use_reference`(确认卡,档位 edit):取一条进工作区、可选存成姿势 / 服装资产 —— 「由人发起」由这张卡兑现,
   卡上写清取的是哪一张、出自谁、存不存成资产。系统提示把资产库的种类补上姿势 / 服装(长度仍在 5000 字以内);
   `list_entities` / `get_entity` / `create_entity` / `attach_entity_reference` 的说明同步新种类和机位词。
-- **第 5 步(2026-11-01)**:`plugins/examples/poseatlas`(`dev.mosael.poseatlas`)。纯标准库进程插件,认领
+- **第 5 步(2026-11-01)**:插件 `dev.mosael.poseatlas`(先放在示例目录,同日改为内置,见下一条)。纯标准库进程插件,认领
   `reference_library`;两本图集(姿势 / 服装),原站机位 front / diagonal / side / high / low 落成资产库的
   front / three_quarter / side / high_angle / low_angle;中英日名称、编号、分类、标签都能搜;服装名字和标签借原站的三语词表
   `costume-tags.js` 翻成中文(取不到照英文)。索引在 `MOSAEL_PLUGIN_DATA_DIR` 缓存一天,刷新失败用旧的。

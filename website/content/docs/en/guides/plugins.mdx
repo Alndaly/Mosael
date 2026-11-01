@@ -83,7 +83,7 @@ package is fetched, its manifest read, and **the permissions it declares (groupe
 are laid out for you** before anything lands; **Docs** at the bottom left shows how it is used first. Installing a plugin
 puts code that will be executed on your machine; that list is worth a look.
 
-**Built-in plugins** (ComfyUI, Object Storage and MinerU document parsing) show up in the market too, marked **Built in**: they are
+**Built-in plugins** (ComfyUI, Object Storage, MinerU document parsing and the PoseAtlas reference library) show up in the market too, marked **Built in**: they are
 already installed and update with the app (the header says **Updates with Mosael**), so there is no Install button and they cannot be
 uninstalled — hit **Manage** to open it on the Plugins page and add a connection to start using it.
 
@@ -252,11 +252,7 @@ These live under `plugins/examples/` in the repository — examples and official
 - `manim` — **teaching animations with Manim** (the community edition of 3Blue1Brown's maths
   animation engine), at no generation cost: derivations, geometry, function plots, algorithm
   steps, code walk-throughs. See “Manim teaching animations” below.
-- `poseatlas` — a **read-only reference atlas**: brings RuiC-PoseAtlas's pose atlas (multi-angle
-  mannequin line art) and costume atlas into the Reference library tab of the Assets page — browse,
-  search and take just the image you need. It shows the `reference_library` catalog capability:
-  the plugin ships no images and only references the original site, and imported media keeps its
-  provenance; adult content is off by default in the connection settings.
+
 
 ## Object storage (built in)
 
@@ -298,6 +294,23 @@ analysis, OCR, table and formula recognition — far better than local parsing f
 Imports are always parsed locally first; sending a document to MinerU only happens when you name it — the document is uploaded to MinerU.
 Files are limited to 200 MB and 200 pages, and the free quota caps pages per day. MinerU only serves mainland China; from abroad or behind a
 global proxy, see the **Network** setting under Credentials above. Importing and reading documents is covered in [Documents](/docs/guides/documents).
+
+## PoseAtlas reference library (built in)
+
+Brings RuiC-PoseAtlas's pose atlas (multi-angle mannequin line art) and costume atlas into the Reference library tab of the
+Assets page: browse and search (Chinese, English and Japanese names all match), **Use this one** to take an image into your
+media, or **Save as asset** to also create a pose / costume asset you can @ in a generation — a pose goes to the model as a
+pose reference, constraining only the body pose and composition.
+
+1. On the Plugins page, create a PoseAtlas connection and grant it network access (it reads the original site,
+   `hruiccc.github.io`).
+2. Back on the Assets page, the Reference library tab shows both atlases. The agent can search them too with
+   `search_references`; taking an item in needs your approval on a confirmation card.
+
+The plugin ships no images: browsing shows the site's own thumbnails, and taking one downloads just that image. Imported media
+keeps the original author, site and license note (images belong to their author, for reference and creative use only — no
+redistribution). **Include adult content** in the connection settings is off by default; while off, the site's Sexy and Couples
+series never appear.
 
 ## Manim teaching animations
 

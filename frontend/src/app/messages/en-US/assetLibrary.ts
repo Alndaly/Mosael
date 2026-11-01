@@ -196,7 +196,7 @@ export const assetLibrary = {
   referenceLibraryAssetsTab: "Assets",
   referenceLibraryDesc: "Browse read-only external collections; only what you use is brought into the workspace.",
   referenceLibraryNone: "No reference library connected",
-  referenceLibraryNoneHint: "Connect a plugin that provides a reference library and it will appear here.",
+  referenceLibraryNoneHint: "PoseAtlas (pose and costume atlases) comes built in — connect it on the Plugins page to use it. Other reference library plugins show up here once connected.",
   referenceLibraryConnection: "Library connection",
   referenceLibraryCollection: "Collection",
   referenceLibrarySearch: "Search poses, costumes or tags",

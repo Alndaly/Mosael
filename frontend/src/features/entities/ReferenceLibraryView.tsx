@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, ImageOff, Plus, Search, Sparkles } from "lucide-react";
+import { ExternalLink, ImageOff, Plug, Plus, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -181,7 +181,15 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
   if (connections.isPending) return <Skeleton className="h-48 w-full" />;
   if (connections.isError) return <EmptyState icon={<ImageOff />} title={t("referenceLibraryFailed")} />;
   if (!connections.data?.length) {
-    return <EmptyState icon={<Sparkles />} title={t("referenceLibraryNone")} body={t("referenceLibraryNoneHint")} />;
+    //: PoseAtlas 随应用内置(ADR 0091 §7),但它有配置、要联网权限,不会自动建连接 —— 空态直接指到插件页去接一下。
+    return (
+      <EmptyState
+        icon={<Sparkles />}
+        title={t("referenceLibraryNone")}
+        body={t("referenceLibraryNoneHint")}
+        action={<Button asChild><a href="#/plugins"><Plug />{t("capabilityGoPlugins")}</a></Button>}
+      />
+    );
   }
 
   const rows = items.data?.pages.flatMap((page) => page.items) ?? [];

@@ -14,7 +14,7 @@ import pytest
 
 from mosael_formats.plugin_manifest import REFERENCE_LIBRARY, parse
 
-PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "examples" / "poseatlas"
+PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "poseatlas"
 
 POSES = {
     "series": [

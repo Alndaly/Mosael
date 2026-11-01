@@ -407,6 +407,10 @@ def test_远端索引拉不到_内置插件照样在_原因也交给界面(monke
     response = client.get("/api/plugins/market")
     assert response.status_code == 200, response.text
     listing = response.json()
-    assert sorted(one["id"] for one in listing["plugins"]) == ["dev.mosael.comfyui", "dev.mosael.mineru", "dev.mosael.object-storage"]
+    from app.domain.plugins import bundled
+
+    #: 这一版带了哪些就该列哪些 —— 名单不手抄(加一个内置插件不该回来改这条测试)。
+    assert sorted(one["id"] for one in listing["plugins"]) == sorted(plugin.id for plugin in bundled.plugins())
+    assert "dev.mosael.comfyui" in {one["id"] for one in listing["plugins"]}
     assert all(one["bundled"] for one in listing["plugins"])
     assert "timeout" in listing["index_error"], "拉不到的原因要说出来,不然人会以为市场里就这一个"

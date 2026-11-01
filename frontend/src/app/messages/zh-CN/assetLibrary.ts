@@ -196,7 +196,7 @@ export const assetLibrary = {
   referenceLibraryAssetsTab: "资产库",
   referenceLibraryDesc: "浏览外部只读图集,取用哪一张才存进工作区。",
   referenceLibraryNone: "还没有可用的参考库连接",
-  referenceLibraryNoneHint: "在插件里接入一个提供参考库的连接,它就会出现在这里。",
+  referenceLibraryNoneHint: "随应用内置的 PoseAtlas(姿势、服装图鉴)在插件页接一下就能用;别的参考库插件接上之后也会出现在这里。",
   referenceLibraryConnection: "参考库连接",
   referenceLibraryCollection: "图集",
   referenceLibrarySearch: "搜索姿势、服装或标签",

@@ -80,6 +80,14 @@ describe("参考库", () => {
     expect(screen.queryByText("three_quarter")).toBeNull();
   });
 
+  it("一个参考库都没接时,指到插件页去接随应用内置的 PoseAtlas", async () => {
+    api.listReferenceConnections.mockResolvedValue([]);
+    renderView();
+
+    expect(await screen.findByText("referenceLibraryNone")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /capabilityGoPlugins/ }).getAttribute("href")).toBe("#/plugins");
+  });
+
   it("图集取不出来时只说一次,不再叠一句「没有匹配的条目」", async () => {
     api.listReferenceCollections.mockRejectedValue(new Error("boom"));
     renderView();

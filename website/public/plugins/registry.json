@@ -479,7 +479,7 @@
         "en": "https://mosael.com/en/plugins/poseatlas"
       },
       "homepage": "https://hruiccc.github.io/RuiC-PoseAtlas/",
-      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.poseatlas.zip",
+      "download": "",
       "permissions": [
         "network:github"
       ],
@@ -501,7 +501,7 @@
           "effects": "none"
         }
       ],
-      "bundled": false
+      "bundled": true
     },
     {
       "id": "dev.mosael.remotion",
