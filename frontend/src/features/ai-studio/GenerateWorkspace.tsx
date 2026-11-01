@@ -58,10 +58,10 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Skeleton, SkeletonLine } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EntityMentionButton, entityMentionChips } from "@/features/entities/EntityMention";
+import { EntityPreviewDialog } from "@/features/entities/EntityPreviewDialog";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
 import { EntityReceiptNote, useCatalogLabels } from "@/features/entities/entityMeta";
@@ -407,6 +407,7 @@ export function GenerateWorkspace({
   const [prompt, setPrompt] = React.useState("");
   //: 这一次 `@` 到的资产(ADR 0027):提示词描述和参考图由服务端按所选模型收得下的张数挂上。
   const [mentionedEntities, setMentionedEntities] = React.useState<EntitySummary[]>([]);
+  const [previewEntity, setPreviewEntity] = React.useState<EntitySummary | null>(null);
   //: 姿势资产默认发 ``pose_reference``；模型不收时，用户必须明说才改成普通参考图(ADR 0091 §5)。
   const [poseMentionsAsReference, setPoseMentionsAsReference] = React.useState(false);
   //: 这一镜的机位；空 = 自动按固定先后挑姿势参考图。
@@ -1482,38 +1483,34 @@ export function GenerateWorkspace({
             {/* 这一次带上的资产排在输入卡顶上 —— 和对话页的附件同一排、同一种小条(ComposerChips)。
                 此前挑中的资产和「@ 资产」按钮自成一行,夹在正文和底栏中间(用户截图:位置很怪)。 */}
             {!voicedChoice && (
-              <ComposerChips chips={entityMentionChips(mentionedEntities, setMentionedEntities)} className="px-0.5" />
+              <ComposerChips
+                chips={entityMentionChips(mentionedEntities, setMentionedEntities, {
+                  pose: {
+                    checked: poseMentionsAsReference,
+                    supported: poseReferenceSupported,
+                    onChange: setPoseMentionsAsReference,
+                  },
+                  onPreview: setPreviewEntity,
+                })}
+                className="px-0.5"
+              />
             )}
-            {!voicedChoice && hasPoseMention && (
+            {!voicedChoice && hasPoseMention && poseReferenceSupported && !poseMentionsAsReference && (
               <div className="grid gap-1 px-0.5 pb-1">
-                {poseReferenceSupported && !poseMentionsAsReference && (
-                  <label className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-                    {t("genPoseAngle")}
-                    <Select value={poseAngle || "auto"} onValueChange={(value) => setPoseAngle(value === "auto" ? "" : value)}>
-                      <SelectTrigger size="sm" className="w-fit min-w-24">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">{t("genPoseAngleAuto")}</SelectItem>
-                        {(["front", "three_quarter", "side", "back", "high_angle", "low_angle"] as const).map((angle) => (
-                          <SelectItem key={angle} value={angle}>{entityLabels.role(angle)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                )}
-                <label className="flex cursor-pointer items-center gap-1.5 text-ui-xs text-muted-foreground">
-                  <Checkbox
-                    checked={poseMentionsAsReference}
-                    onCheckedChange={(value) => setPoseMentionsAsReference(value === true)}
-                  />
-                  {t("genPoseAsReference")}
+                <label className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
+                  {t("genPoseAngle")}
+                  <Select value={poseAngle || "auto"} onValueChange={(value) => setPoseAngle(value === "auto" ? "" : value)}>
+                    <SelectTrigger size="sm" className="w-fit min-w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">{t("genPoseAngleAuto")}</SelectItem>
+                      {(["front", "three_quarter", "side", "back", "high_angle", "low_angle"] as const).map((angle) => (
+                        <SelectItem key={angle} value={angle}>{entityLabels.role(angle)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
-                <p className="m-0 text-ui-2xs leading-4 text-muted-foreground">
-                  {selectedModel && !poseReferenceSupported
-                    ? t("genPoseReferenceUnsupported")
-                    : t("genPoseAsReferenceHint")}
-                </p>
               </div>
             )}
             {/* 语音、播客:同一个输入卡,里面换成要念的字 / 播客的三档(ADR 0055) */}
@@ -1988,6 +1985,7 @@ export function GenerateWorkspace({
         </div>
       </aside>
       {/* 蒙版编辑器:画出来的是**一份新素材**,存好就进蒙版那一格(ADR 0056 决定 5)。 */}
+      <EntityPreviewDialog workspaceId={workspace.id} entity={previewEntity} onClose={() => setPreviewEntity(null)} />
       <MaskEditor
         open={maskEditing !== null}
         onOpenChange={(next) => {

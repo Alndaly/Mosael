@@ -8,6 +8,8 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Truncate } from "@/components/ui/truncate";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Hint } from "@/components/ui/tooltip";
 import type { ComposerChip } from "@/lib/composerChip";
 import { cn } from "@/lib/utils";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
@@ -77,17 +79,51 @@ export function matchEntities(entities: EntitySummary[] | undefined, query: stri
 export function entityMentionChips(
   value: EntitySummary[],
   onChange: (next: EntitySummary[]) => void,
+  options?: {
+    pose?: {
+      /** 「按普通参考图发送」是否选中。 */
+      checked: boolean;
+      /** 当前模型收不收 `pose_reference`;决定提示文案。 */
+      supported: boolean;
+      onChange: (checked: boolean) => void;
+    };
+    /** 点小条打开预览;不给就保持不可点。 */
+    onPreview?: (entity: EntitySummary) => void;
+  },
 ): ComposerChip[] {
-  return value.map((one) => {
+  //: 一次请求只有一档姿势发送方式(`pose_mentions_role`),所以开关挂在第一条姿势引用上;
+  //: 多个姿势引用共用这一档,再各挂一个只会让人以为它们能分开设。
+  const firstPose = value.findIndex((one) => one.kind === "pose");
+  return value.map((one, index) => {
     const Icon = entityKindIcon(one.kind);
     return {
       id: `entity-${one.id}`,
       label: `@${entityDisplayName(one)}`,
       thumbnail: one.cover_asset_id ? assetThumbnailUrl(one.cover_asset_id) : undefined,
       icon: <Icon size={11} />,
+      accessory: index === firstPose && options?.pose ? (
+        <PoseReferenceToggle checked={options.pose.checked} supported={options.pose.supported} onChange={options.pose.onChange} />
+      ) : undefined,
+      onOpen: options?.onPreview ? () => options.onPreview!(one) : undefined,
       onRemove: () => onChange(value.filter((other) => other.id !== one.id)),
     };
   });
+}
+
+/** 姿势引用里的小勾选:勾上就把这张姿势图当普通参考图发。悬停说明由 Hint 给。 */
+function PoseReferenceToggle({ checked, supported, onChange }: { checked: boolean; supported: boolean; onChange: (checked: boolean) => void }) {
+  const t = useI18n();
+  return (
+    <Hint label={t("genPoseAsReference")} hint={supported ? t("genPoseAsReferenceHint") : t("genPoseReferenceUnsupported")}>
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(value) => onChange(value === true)}
+        aria-label={t("genPoseAsReference")}
+        data-pose-reference-toggle=""
+        className="ml-1 mr-2 size-4 rounded-full border-border-strong bg-transparent data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+      />
+    </Hint>
+  );
 }
 
 /** 底栏里的 `@` 按钮:挑一个资产加进这一次的引用。 */

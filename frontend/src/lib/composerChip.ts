@@ -18,5 +18,7 @@ export interface ComposerChip {
   onOpen?: () => void;
   /** 一段读一读的字(文本附件、笔记正文)。交给下面那个共用的只读弹层,不必各开一个。 */
   text?: { title: string; body: string };
+  /** 小条内部的附加控件(例如姿势引用的发送方式开关);它有自己的点击语义,不触发打开/移除。 */
+  accessory?: React.ReactNode;
   onRemove: () => void;
 }

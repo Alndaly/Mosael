@@ -69,6 +69,7 @@ export function ComposerChips({
                 </span>
                 <Truncate>{chip.label}</Truncate>
               </button>
+              {chip.accessory}
               <IconButton
                 unstyled
                 className="inline-flex cursor-pointer border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground"
