@@ -1,20 +1,21 @@
 ---
-title: Asset library: characters, locations, props
-description: Save characters, places and objects as named assets with reference images and a prompt descriptor, then @-mention them in generations and on boards.
-seo_title: Asset library: characters, locations and props
-keywords: character reference images, character assets, locations, props
+title: Asset library: characters, locations, props, poses, outfits
+description: Save characters, places, objects, poses and outfits as named assets with reference images and a prompt descriptor, then @-mention them in generations and on boards; the reference library brings in external atlases.
+seo_title: Asset library: characters, poses, outfits and references
+keywords: character reference images, character assets, locations, props, pose reference, outfit reference, reference library, PoseAtlas
 order: 19
-updated: 2026-10-05
+updated: 2026-11-01
 version: 2.4.0
 ---
 
 The media library answers "what is this file"; the asset library answers "who is this". An **asset** is a named thing — a
-character, a location, a prop — whose reference images are images from your media library: the asset only points at them,
+character, a location, a prop, or a **pose** or **outfit** that fits any character — whose reference images are images from your media library: the asset only points at them,
 it never copies the files. The same character usually appears across projects, so assets belong to the **workspace**, not
 to a project; tags keep them organised.
 
-Open **Assets** next to **Media** in the sidebar. Tabs at the top switch between characters, locations and props; each card
-is an asset's cover.
+Open **Assets** next to **Media** in the sidebar. Tabs at the top switch between characters, locations, props, poses and
+outfits; each card is an asset's cover. Once a reference library is connected, a
+**Assets / Reference library** switch appears at the right of the filter bar (see the last section).
 
 ![The asset library: characters, locations and props apart; each card shows an asset’s cover, tag and reference count](/media/screens/en/entities.png)
 
@@ -60,6 +61,8 @@ Each reference image is labelled with its angle or purpose, and **each kind has 
 | Character | front, side, back, turnaround, close-up, full body, expression, concept, detail |
 | Location | wide shot, reverse angle, overhead, concept, detail — a location's "angles" are camera set-ups, with no front or side |
 | Prop | front, side, back, turnaround, close-up, concept, detail |
+| Pose | front, three-quarter, side, back, high angle, low angle, detail — a pose's angles are **camera set-ups** |
+| Outfit | front, back, side, detail, concept |
 
 - **Add from media library** opens a picker: search by name, filter images or videos, click to select several and attach
   them at once — in the order you picked them. Images already attached are listed too, marked **Attached**.
@@ -76,6 +79,8 @@ attaches them back by angle:
 
 - **Fill in angles**: for characters and props, the front, side, back and turnaround views it doesn't have yet; for
   locations, the wide shot, reverse angle and overhead view. You can choose to redraw every angle instead.
+- For a pose it fills in the missing camera angles as a **faceless neutral mannequin** (posture only, no likeness or art
+  style); for an outfit, the front and back.
 - **Generate expressions** (characters only): list a few expressions (comma-separated, up to 8; empty draws smiling,
   laughing, surprised, angry and sad) — one image each, attached as Expression.
 
@@ -98,6 +103,21 @@ descriptor (characters also inherit the voice); only the references and this ver
 "Zhang San · Winter" is the same person as "Zhang San". A variant without references of its own uses its parent's in generations.
 Deleting an asset that has variants asks you to confirm that they go too.
 
+## Poses and outfits
+
+Characters, locations and props are each one specific thing; **poses** and **outfits** aren't — they are references that fit
+any character.
+
+- **Pose**: a set of reference images of one posture seen from different camera angles (grey mannequin line art works best).
+  Its settings also record **posture** (standing, sitting, kneeling, lying) and **people** (single, couple). When you @ a
+  pose, workflows that accept pose references send it as a dedicated **pose reference** — it constrains posture and
+  composition without carrying the line-art style into the result. With a pose attached you pick this shot's **camera
+  angle** (front / three-quarter / side / back / high angle / low angle) and only the matching image is sent; if there is no
+  image for that angle, or the chosen workflow doesn't take pose references, the generation record says it wasn't sent
+  instead of quietly turning it into an ordinary reference (the input card has an explicit "send as an ordinary reference"
+  option). The camera panel in 3D scenes can tag a shot's angle too, and it comes along when you generate from the scene.
+- **Outfit**: front, back and detail references; @ it together with a character for "this person wearing this".
+
 ## Real people and consent
 
 A character is declared **fictional** or **a real person**. A real person needs "This is me" or "The person has given
@@ -108,7 +128,7 @@ consent that deep-synthesis regulations require.
 
 ## @-mention assets in generations
 
-When you write a prompt in a board's generation item, the `@` menu lists characters, locations and props from the asset
+When you write a prompt in a board's generation item, the `@` menu lists characters, locations, props, poses and outfits from the asset
 library (with cover and kind) alongside media; AI Studio has an **@ Asset** button under its prompt; the workflow **AI
 generate** node has an **Assets** field; the agent's `generate_image` / `generate_video` take `entity_ids`. All four do the
 same thing:
@@ -162,3 +182,19 @@ a turnaround or concept art, which is then saved to the library. The same charac
 
 The **Where it's used** tab lists **where the asset is used**: boards that hold its asset item or mention it in a
 prompt, generations that named it, and workflows whose generation nodes use it. Click a row to go there.
+
+## Reference library
+
+Switch the Assets page to **Reference library** (right of the filter bar) to browse external atlases read-only: browse by atlas, keyword and filter,
+with thumbnails following your NSFW preview setting. **Use as media** takes that one original image into your media library;
+**Save as asset** also saves it as a pose or outfit asset — the media keeps its author, source link and licence. Items from
+external atlases are **not** redistributed in share packages or cloud sync.
+
+Reference libraries come from plugins. **PoseAtlas** (RuiC-PoseAtlas's pose and outfit atlases) ships with the app: connect it
+on the [Plugins page](/docs/guides/plugins) and grant network access; with no reference-library connection at all, the Assets page hides the switch.
+PoseAtlas only links to the original site and ships no images; adult content is off by default in the connection settings.
+
+The agent can search it too: with a reference library connected it uses `search_references` to find poses and outfits for
+you (adult content is never offered to it), then `use_reference` to take one in — you approve which image, and whose it is,
+on a confirmation card.
+

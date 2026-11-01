@@ -100,6 +100,7 @@ agents can edit the same timeline at once, and ⌘Z undoes only your own step. [
 
 Dub a subtitle track line by line with a voice cloned **locally** (F5-TTS or Fish Speech), with a copy of that voice in
 your own Alibaba Cloud Bailian account for **CosyVoice**, with free Edge voices, or with OpenAI and Volcengine voices.
+Every engine has speed control (engines without their own speed parameter are time-stretched after synthesis, keeping pitch).
 Split a clip into voice and background, denoise it, or keep only the voice. The translated-dubbing templates transcribe,
 translate, subtitle and dub a whole video, and can re-sync the speaker's lips. [Voice-over](https://mosael.com/en/docs/guides/editing#voiceover)
 
@@ -140,7 +141,9 @@ The agent reads project context and uses tools across media, notes, boards, scen
 need approval show a confirmation card. Import footage, record your screen or camera, or download a supported video
 URL; PDFs, Word files, slides and spreadsheets are parsed into text on your machine. Notes keep scripts and research,
 and a selected passage can be polished, rewritten or translated with each change shown for approval. Recurring
-characters, locations and props live in the asset library — `@` one while generating and its references come along.
+characters, locations and props live in the asset library, along with poses and outfits that fit any character — `@`
+one while generating and its references come along; a pose is sent as a dedicated pose reference for the shot's camera
+angle. The Assets page's reference library brings in external atlases, with the PoseAtlas pose and outfit atlas built in.
 [AI Studio & agents](https://mosael.com/en/docs/guides/ai-studio) · [Media library](https://mosael.com/en/docs/guides/media) · [Notes](https://mosael.com/en/docs/guides/notes) · [Asset library](https://mosael.com/en/docs/guides/assets)
 
 ### Publish to Douyin, TikTok, Bilibili, Xiaohongshu and YouTube
@@ -153,7 +156,7 @@ submitting, then track the result.
 
 ### Plugins and the Chrome companion
 
-ComfyUI, object storage and MinerU document parsing ship with the app; Blender, Manim, Remotion, TikHub, Baidu Netdisk
+ComfyUI, object storage, MinerU document parsing and the PoseAtlas reference library ship with the app; Blender, Manim, Remotion, TikHub, Baidu Netdisk
 and more are in the [plugin market](https://mosael.com/en/plugins). Plugins connect local scripts or MCP servers to the
 agent and workflows. The Chrome video companion reads transcripts in the side panel, translates and imports media.
 [Using plugins](https://mosael.com/en/docs/guides/plugins) · [Writing a plugin](https://mosael.com/en/docs/guides/writing-plugins) · [Chrome companion](browser-extension/README.md)

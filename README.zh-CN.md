@@ -90,7 +90,7 @@ AI 工作台用文字、首尾帧或参考图生成图片、视频、音乐和�
 ### 声音克隆、AI 配音与视频翻译
 
 给字幕轨逐句配音：用**本机**克隆的音色(F5-TTS 或 Fish Speech)，用复刻到你自己百炼账号里的 **CosyVoice**，用免费的 Edge 音色，
-或者 OpenAI、火山引擎的音色。右键片段可以拆成人声和背景、降噪、只留人声。视频译配模板把整条视频逐句转写、翻译、铺字幕、配音，
+或者 OpenAI、火山引擎的音色;语速每个引擎都能调(自己没有语速参数的,合成后由应用变速、音高不变)。右键片段可以拆成人声和背景、降噪、只留人声。视频译配模板把整条视频逐句转写、翻译、铺字幕、配音，
 还可以改口型。[剪辑与配音](https://mosael.com/zh/docs/guides/editing)
 
 ![剪辑页里用本机克隆音色给字幕轨逐句配音](website/public/media/screens/subtitle-dub.png)
@@ -123,7 +123,8 @@ AI 工作台用文字、首尾帧或参考图生成图片、视频、音乐和�
 
 智能体读得懂工程上下文，能调用素材、笔记、画板、场景、剪辑和工作流里的工具；需要批准的操作先弹确认卡。导入素材、录屏录像、
 从支持的链接下载视频；PDF、Word、PPT、表格在本机解析成可读全文。笔记保存脚本和研究资料，选中一段就能让 AI 润色、改写、翻译，
-每处改动先给你看。反复出现的人物、场景、道具存进资产库，生成时 `@` 一下，参考图和描述就跟着带上。
+每处改动先给你看。反复出现的人物、场景、道具存进资产库，能套在任何人物身上的姿势和服装也存进去，生成时 `@` 一下，参考图和描述
+就跟着带上；姿势按镜头机位单独作为姿势参考发送。资产页的「参考库」接外部图集，随应用内置 PoseAtlas 姿势与服装图鉴。
 [AI Studio 与智能体](https://mosael.com/zh/docs/guides/ai-studio) · [素材库](https://mosael.com/zh/docs/guides/media) · [笔记](https://mosael.com/zh/docs/guides/notes) · [资产库](https://mosael.com/zh/docs/guides/assets)
 
 ### 发布到抖音、小红书、B 站、TikTok、YouTube
@@ -134,7 +135,7 @@ AI 工作台用文字、首尾帧或参考图生成图片、视频、音乐和�
 
 ### 插件与 Chrome 视频助手
 
-ComfyUI、对象存储和 MinerU 文档解析随应用内置；Blender、Manim、Remotion、TikHub、百度网盘等在[插件市场](https://mosael.com/zh/plugins)。
+ComfyUI、对象存储、MinerU 文档解析和 PoseAtlas 参考库随应用内置；Blender、Manim、Remotion、TikHub、百度网盘等在[插件市场](https://mosael.com/zh/plugins)。
 插件能把本地脚本或 MCP 服务接给智能体和工作流。Chrome 视频助手在浏览器侧栏里读逐字稿、翻译、导入素材。
 [安装与使用插件](https://mosael.com/zh/docs/guides/plugins) · [开发插件](https://mosael.com/zh/docs/guides/writing-plugins) · [Chrome 视频助手](browser-extension/README.md)
 

@@ -4,7 +4,7 @@ description: Cut video on a multi-track timeline, edit from transcripts, work wi
 seo_title: AI video editor with subtitles and voice cloning
 keywords: AI video editor, transcript editing, bilingual subtitles, voice cloning, AI dubbing, F5-TTS, CosyVoice, LUT color grading
 order: 2
-updated: 2026-10-05
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -185,6 +185,8 @@ Tone levels (highlights / shadows / whites / blacks), sharpen and the LUT take f
 <Loop src="/media/videos/en/subtitle-dub.mp4" poster="/media/screens/en/subtitles.png" alt="Demo: inspect subtitle dubbing settings and open Transcript" />
 
 The **Voice** tab of the left panel dubs subtitles: **engine, voice and speed** at the top, how to dub these cues below. The scope follows the timeline selection — dub just the cues you selected (**Selected only (N)**), or the whole track when nothing is selected. The dub button beside each cue on the Subtitles tab selects that cue and switches to Voice; the tab then reads "Only the cue at 0:12" with **Whole track instead**. With several subtitle tracks, choose the **Subtitle track to dub** (the selected cue's track by default, otherwise the top one).
+
+**Every engine has speed control.** Engines with their own speed parameter (F5, CosyVoice, Edge, Volcengine, OpenAI and so on) still handle it themselves; Fish Speech S2 Pro, local Qwen3-TTS and Bailian qwen-tts have none, so they read at normal speed and the app time-stretches the result afterwards, keeping the pitch — the control reads **Speed (adjusted after synthesis)**.
 
 The audio lands on a dedicated **dub track**: the original audio is untouched, delete the track and you are back where you started, and dubbing again returns to that same track. **Re-dubbing a cue replaces it instead of stacking**; a cue already dubbed with the same text and voice is skipped, and the done message says how many were. A whole dubbing run undoes in one step.
 

@@ -2,7 +2,7 @@
 title: Writing a plugin
 description: Write a manifest, declare tools and permissions, and test file inputs and outputs.
 order: 11
-updated: 2026-10-05
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -113,6 +113,12 @@ A config field's `type` can be `string` (the default), `enum`, `number`, `boolea
 editor highlighted by `language`). Don't declare a JSON snippet as a multiline text box: users would only see its
 first line and learn about a missing comma when the plugin runs. The value is still stored as a string for you to
 parse. Write placeholders in `help` as inline code with backticks.
+
+**Required fields and defaults.** Config fields are required unless you write `"required": false`; a required field with
+no value holds the connection at "missing config". Only an empty or missing value counts as none — a switch turned off or
+a number set to `0` is a value. A `boolean` is never required. A field with a `default` counts as that value even before the
+user has saved anything, and that is what your process receives. Switches are injected as `true` / `false`, and whole numbers
+without a decimal point (`3`, not `3.0`).
 
 **Environment injection is not a sandbox.** Mosael passes a minimal environment and the declared credentials. Local plugins still run with the current user’s operating-system permissions and may read accessible files. Declare the permissions your tools need and keep credentials out of logs.
 

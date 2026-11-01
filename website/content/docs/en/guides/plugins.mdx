@@ -4,7 +4,7 @@ description: Connect local tools or MCP services and configure permissions for a
 seo_title: Plugins: ComfyUI, Blender, Manim and MCP servers
 keywords: Mosael plugins, ComfyUI plugin, Blender MCP, Manim, MCP server
 order: 10
-updated: 2026-10-05
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -297,14 +297,14 @@ global proxy, see the **Network** setting under Credentials above. Importing and
 
 ## PoseAtlas reference library (built in)
 
-Brings RuiC-PoseAtlas's pose atlas (multi-angle mannequin line art) and costume atlas into the Reference library tab of the
-Assets page: browse and search (Chinese, English and Japanese names all match), **Use this one** to take an image into your
+Brings RuiC-PoseAtlas's pose atlas (multi-angle mannequin line art) and costume atlas into the Reference library of the
+Assets page: browse and search (Chinese, English and Japanese names all match), **Use as media** to take an image into your
 media, or **Save as asset** to also create a pose / costume asset you can @ in a generation — a pose goes to the model as a
 pose reference, constraining only the body pose and composition.
 
 1. On the Plugins page, create a PoseAtlas connection and grant it network access (it reads the original site,
    `hruiccc.github.io`).
-2. Back on the Assets page, the Reference library tab shows both atlases. The agent can search them too with
+2. Back on the Assets page, switch to **Reference library** at the right of the filter bar to browse both atlases. The agent can search them too with
    `search_references`; taking an item in needs your approval on a confirmation card.
 
 The plugin ships no images: browsing shows the site's own thumbnails, and taking one downloads just that image. Imported media
