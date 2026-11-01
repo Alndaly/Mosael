@@ -38,6 +38,8 @@ export const PLUGIN_DEPENDENT_KEYS = [
   boardKeys.everywhere(),
   ["workflows"],
   ["scheduled-tasks"],
+  //: 参考库整块(连接、图集、条目)都从插件能力来:插件停用/卸载后,资产页的「参考库」切换器要当场消失。
+  ["reference-library"],
 ] as const;
 
 export function invalidatePluginDependents(qc: QueryClient): void {

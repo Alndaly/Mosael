@@ -40,6 +40,7 @@ function itemTitle(item: ReferenceItem, locale: string, settings: ReturnType<typ
 
 function Thumb({ item, className }: { item: ReferenceItem; className?: string }) {
   const [settings] = useModelPreviewSettings();
+  const [loaded, setLoaded] = React.useState(false);
   const treatment = previewTreatment(settings, item.nsfw);
   if (!item.thumbnail || treatment === "hidden") {
     return (
@@ -50,12 +51,15 @@ function Thumb({ item, className }: { item: ReferenceItem; className?: string })
   }
   return (
     <span className={cn("relative block overflow-hidden bg-secondary", className)}>
+      {!loaded && <Skeleton aria-hidden data-thumb-loading="" className="absolute inset-0 rounded-none" />}
       <img
         src={item.thumbnail}
         alt=""
         loading="lazy"
+        onLoad={() => setLoaded(true)}
+        data-loaded={loaded ? "" : undefined}
         className={cn(
-          "h-full w-full object-cover",
+          "h-full w-full object-cover opacity-0 transition-opacity duration-160 data-[loaded]:opacity-100 motion-reduce:transition-none",
           treatment === "light" && "blur-[2px]",
           treatment === "heavy" && "blur-md",
         )}
@@ -103,6 +107,8 @@ function ItemDetail({
     onError: (error) => toast.error(errorText(error) || t("referenceLibraryUseFailed")),
   });
 
+  const usingMedia = ingest.isPending && ingest.variables === false;
+  const savingAsset = ingest.isPending && ingest.variables === true;
   return (
     <ModalShell
       open
@@ -110,10 +116,10 @@ function ItemDetail({
       title={itemTitle(shown, locale, settings)}
       footer={
         <>
-          <Button variant="outline" loading={ingest.isPending} onClick={() => void ingest.mutate(false)}>
+          <Button variant="outline" loading={usingMedia} disabled={savingAsset} onClick={() => void ingest.mutate(false)}>
             <Plus />{t("referenceLibraryUse")}
           </Button>
-          <Button loading={ingest.isPending} onClick={() => void ingest.mutate(true)}>
+          <Button loading={savingAsset} disabled={usingMedia} onClick={() => void ingest.mutate(true)}>
             <Sparkles />{t("referenceLibrarySave")}
           </Button>
         </>
@@ -150,7 +156,7 @@ function ItemDetail({
 }
 
 /** 参考库:只读外部图集;浏览只拉缩略图,点「用作素材 / 存为资产」才把单条原图取进工作区。 */
-export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
+export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Workspace; modeSwitch?: React.ReactNode }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const [connectionId, setConnectionId] = React.useState("");
@@ -158,6 +164,9 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
   const [filters, setFilters] = React.useState<Record<string, string>>({});
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<ReferenceItem | null>(null);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+  const toolbarRef = React.useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = React.useState(false);
   const [settings] = useModelPreviewSettings();
 
   const connections = useQuery({ queryKey: referenceKeys.connections(), queryFn: listReferenceConnections });
@@ -179,6 +188,34 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
     enabled: Boolean(activeConnection && activeCollection),
   });
 
+  //: 滚到底部自动取下一页。IntersectionObserver 用的是视口;这一页的滚动容器在祖先上,但卡片被祖先裁切,
+  //: 哨兵进入视口就说明真的滚到了末尾 —— 不用监听某个具体容器的 scrollTop。
+  React.useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !items.hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting) && !items.isFetchingNextPage) void items.fetchNextPage();
+      },
+      { rootMargin: "320px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [items.hasNextPage, items.isFetchingNextPage, items.fetchNextPage]);
+
+  //: 和素材页同一个吸顶判据:滚动容器一动,筛栏贴顶时就打开底色 / 磨砂。
+  React.useEffect(() => {
+    const bar = toolbarRef.current;
+    const scroller = bar?.closest("[data-entities-scroll]");
+    if (!bar || !scroller) return;
+    const update = () => setStuck(
+      scroller.scrollTop > 0 && bar.getBoundingClientRect().top <= scroller.getBoundingClientRect().top + 1,
+    );
+    update();
+    scroller.addEventListener("scroll", update, { passive: true });
+    return () => scroller.removeEventListener("scroll", update);
+  }, [connections.data?.length]);
+
   if (connections.isPending) return <Skeleton className="h-48 w-full" />;
   if (connections.isError) return <EmptyState icon={<ImageOff />} title={t("referenceLibraryFailed")} />;
   if (!connections.data?.length) {
@@ -196,52 +233,59 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
   const rows = items.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <div className="grid min-w-0 gap-4" data-reference-library="">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        {connections.data.length > 1 && (
-          <OptionPicker ariaLabel={t("referenceLibraryConnection")} value={activeConnection} onChange={(value) => { setConnectionId(value); setCollectionId(""); setFilters({}); }} options={connections.data.map((one) => ({ value: one.id, label: one.name }))} className="min-w-40" />
-        )}
-        <SearchInput
-          aria-label={t("referenceLibrarySearch")}
-          value={query}
-          placeholder={t("referenceLibrarySearch")}
-          onChange={(event) => setQuery(event.target.value)}
-          className="min-w-52 flex-1"
-        />
-        <ModelPreviewSettingsButton />
+      <div
+        ref={toolbarRef}
+        data-stuck={stuck}
+        className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9"
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-reference-filter-row="">
+          <CollectionTabs
+            value={activeCollection}
+            onChange={(next) => { setCollectionId(next); setFilters({}); }}
+            label={t("referenceLibraryCollection")}
+            items={(collections.data ?? []).map((one) => ({ value: one.id, label: localized(one.name, locale), count: one.count }))}
+          />
+          {modeSwitch && <div className="ml-auto">{modeSwitch}</div>}
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
+          {connections.data.length > 1 && (
+            <OptionPicker ariaLabel={t("referenceLibraryConnection")} value={activeConnection} onChange={(value) => { setConnectionId(value); setCollectionId(""); setFilters({}); }} options={connections.data.map((one) => ({ value: one.id, label: one.name }))} className="min-w-40" />
+          )}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <SearchInput
+              aria-label={t("referenceLibrarySearch")}
+              value={query}
+              placeholder={t("referenceLibrarySearch")}
+              onChange={(event) => setQuery(event.target.value)}
+              className="min-w-40 flex-1"
+            />
+            {activeCollectionInfo && activeCollectionInfo.filters.map((filter) => (
+              <OptionPicker
+                key={filter.key}
+                ariaLabel={filter.label}
+                value={filters[filter.key] ?? "__all"}
+                onChange={(value) => setFilters((current) => {
+                  const next = { ...current };
+                  if (value === "__all") delete next[filter.key];
+                  else next[filter.key] = value;
+                  return next;
+                })}
+                options={[{ value: "__all", label: filter.label }, ...filter.values]}
+                className="w-auto min-w-28"
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
+            <ModelPreviewSettingsButton />
+          </div>
+        </div>
       </div>
-
-      <CollectionTabs
-        value={activeCollection}
-        onChange={(next) => { setCollectionId(next); setFilters({}); }}
-        label={t("referenceLibraryCollection")}
-        items={(collections.data ?? []).map((one) => ({ value: one.id, label: localized(one.name, locale), count: one.count }))}
-      />
 
       {collections.isError && <EmptyState icon={<ImageOff />} title={t("referenceLibraryFailed")} />}
 
       {/* 取失败时上面那一条已经说了;这里只管「取到了,但一本图集都没有」—— 一屏只说一次。 */}
       {collections.isSuccess && !activeCollection && (
         <EmptyState icon={<Search />} title={t("referenceLibraryNoItems")} />
-      )}
-
-      {activeCollectionInfo && activeCollectionInfo.filters.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {activeCollectionInfo.filters.map((filter) => (
-            <OptionPicker
-              key={filter.key}
-              ariaLabel={filter.label}
-              value={filters[filter.key] ?? "__all"}
-              onChange={(value) => setFilters((current) => {
-                const next = { ...current };
-                if (value === "__all") delete next[filter.key];
-                else next[filter.key] = value;
-                return next;
-              })}
-              options={[{ value: "__all", label: filter.label }, ...filter.values]}
-              className="w-44"
-            />
-          ))}
-        </div>
       )}
 
       {!activeCollection ? null : items.isPending ? (
@@ -267,11 +311,13 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
               </button>
             ))}
           </div>
-          {items.hasNextPage && (
-            <Button variant="outline" className="mx-auto" loading={items.isFetchingNextPage} onClick={() => void items.fetchNextPage()}>
-              {t("referenceLibraryLoadMore")}
-            </Button>
+          {items.isFetchingNextPage && (
+            <div role="status" aria-busy="true" className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+              <span className="sr-only">{t("pageLoading")}</span>
+              {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="aspect-[3/4] w-full" />)}
+            </div>
           )}
+          {items.hasNextPage && <div ref={sentinelRef} className="h-px" aria-hidden />}
         </>
       )}
 

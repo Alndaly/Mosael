@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ReferenceItem, Workspace } from "@/api/client";
@@ -52,7 +52,7 @@ const CATALOG = {
 
 function renderView() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  return render(
     <QueryClientProvider client={client}>
       <ReferenceLibraryView workspace={WORKSPACE} />
     </QueryClientProvider>,
@@ -94,5 +94,16 @@ describe("参考库", () => {
 
     expect(await screen.findByText("referenceLibraryFailed")).toBeTruthy();
     expect(screen.queryByText("referenceLibraryNoItems")).toBeNull();
+  });
+
+  it("缩略图载好之前先占一块骨架，载好再撤掉", async () => {
+    const { container } = renderView();
+    await screen.findByText("后仰坐・单膝立起");
+
+    expect(container.querySelector("[data-thumb-loading]")).toBeTruthy();
+    const image = container.querySelector('img[src="https://example.test/front.jpg"]') as HTMLImageElement;
+    fireEvent.load(image);
+
+    await waitFor(() => expect(container.querySelector("[data-thumb-loading]")).toBeNull());
   });
 });

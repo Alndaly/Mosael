@@ -30,6 +30,7 @@ const api = vi.hoisted(() => ({
   getEntityUsage: vi.fn(),
   listAssetEntities: vi.fn(),
   getEntityCatalog: vi.fn(),
+  listReferenceConnections: vi.fn(),
   importAsset: vi.fn(),
   listAssetPage: vi.fn(),
   fetchWorkflowFieldOptions: vi.fn(),
@@ -178,6 +179,7 @@ const servedAssets = (rows: { id: string; kind: string; name: string }[]) => asy
 beforeEach(() => {
   for (const one of Object.values(api)) one.mockReset();
   api.getEntityCatalog.mockResolvedValue(CATALOG);
+  api.listReferenceConnections.mockResolvedValue([]);
   api.listAssetPage.mockImplementation(servedAssets([]));
   api.fetchWorkflowFieldOptions.mockImplementation(async (source: string, _ws: string, parent?: string) => {
     if (source === "speech_engines") return [{ value: "builtin:clone", label: "本地克隆" }, { value: "builtin:edge", label: "Edge" }];
@@ -200,6 +202,30 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("资产页", () => {
+  it("没接参考库(插件关着)时不画资产库 / 参考库切换器", async () => {
+    api.listEntities.mockResolvedValue([summary()]);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    await screen.findByText("张三");
+    await waitFor(() => expect(api.listReferenceConnections).toHaveBeenCalled());
+    expect(screen.queryByRole("radio", { name: "referenceLibraryTab" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "referenceLibraryAssetsTab" })).toBeNull();
+  });
+
+  it("接着参考库时才出现切换器", async () => {
+    api.listEntities.mockResolvedValue([summary()]);
+    api.listReferenceConnections.mockResolvedValue([{ id: "c1", name: "PoseAtlas" }]);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    expect(await screen.findByRole("radio", { name: "referenceLibraryTab" })).toBeTruthy();
+  });
+
+  it("上次停在参考库、这次插件已经关掉:退回资产库", async () => {
+    window.localStorage.setItem("mosael:tab:entities-mode", "references");
+    api.listEntities.mockResolvedValue([summary()]);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    expect(await screen.findByRole("textbox", { name: "entitiesSearch" })).toBeTruthy();
+    await waitFor(() => expect(window.localStorage.getItem("mosael:tab:entities-mode")).toBe("assets"));
+  });
+
   it("按人物 / 场景 / 道具分页签,卡片是封面 + 名字 + 张数", async () => {
     api.listEntities.mockResolvedValue([
       summary(),

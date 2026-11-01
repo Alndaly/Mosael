@@ -201,7 +201,6 @@ export const assetLibrary = {
   referenceLibraryCollection: "图集",
   referenceLibrarySearch: "搜索姿势、服装或标签",
   referenceLibraryNoItems: "没有匹配的条目",
-  referenceLibraryLoadMore: "加载更多",
   referenceLibraryFailed: "参考库没有加载出来,请重试。",
   referenceLibraryUse: "用作素材",
   referenceLibrarySave: "存为资产",

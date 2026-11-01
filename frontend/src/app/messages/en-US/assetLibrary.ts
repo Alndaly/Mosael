@@ -201,7 +201,6 @@ export const assetLibrary = {
   referenceLibraryCollection: "Collection",
   referenceLibrarySearch: "Search poses, costumes or tags",
   referenceLibraryNoItems: "No matching items",
-  referenceLibraryLoadMore: "Load more",
   referenceLibraryFailed: "Couldn't load the reference library. Try again.",
   referenceLibraryUse: "Use as media",
   referenceLibrarySave: "Save as asset",

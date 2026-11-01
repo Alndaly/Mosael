@@ -8,17 +8,19 @@ import {
   createEntity,
   entityKeys,
   listEntities,
+  listReferenceConnections,
   type EntityKind,
   type EntitySummary,
   type Workspace,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import { referenceKeys } from "@/api/queryKeys";
 import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import { TagFilter } from "@/components/app/TagFilter";
 import { RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { CARD_GRID, CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,6 +41,8 @@ type SortKey = "updated" | "name" | "references";
 const LIBRARY_MODES = ["assets", "references"] as const;
 type LibraryMode = (typeof LIBRARY_MODES)[number];
 const SORT_KEYS: readonly SortKey[] = ["updated", "name", "references"];
+/** 资产库是目录,不是项目封面墙:一张卡比 StudioPage 的 280px 更窄,一行多看几件。 */
+const ASSET_CARD_GRID = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-x-6 gap-y-7";
 
 /** 深链:`#/entities?entity=<id>`(mosael:// 深链、别处的「在哪里用过」都这么进来)。 */
 function entityFromHash(): string | null {
@@ -92,6 +96,14 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     queryKey: entityKeys.list(workspace.id),
     queryFn: () => listEntities(workspace.id),
   });
+  //: 参考库是插件能力,连接列表就是「这一页要不要出现参考库」的唯一判据。
+  //: 插件关掉时后端这里返回空,切换器和参考库整块一起消失。
+  const references = useQuery({ queryKey: referenceKeys.connections(), queryFn: listReferenceConnections });
+  const referenceMode = mode === "references" && Boolean(references.data?.length);
+  const activeMode: LibraryMode = referenceMode ? "references" : "assets";
+  React.useEffect(() => {
+    if (mode === "references" && (references.isError || (references.data && references.data.length === 0))) setMode("assets");
+  }, [mode, references.data, references.isError, setMode]);
   const keyword = search.trim();
   const found = useQuery({
     queryKey: entityKeys.list(workspace.id, { q: keyword }),
@@ -133,7 +145,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     replaceHash("entities", readHash().projectId, params);
   }, [openId]);
 
-  if (mode === "assets" && openId) {
+  if (activeMode === "assets" && openId) {
     return (
       <div className={STUDIO_PAGE}>
         <EntityDetail workspaceId={workspace.id} entityId={openId} onBack={close} onOpen={setOpenId} />
@@ -146,11 +158,25 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
   //: 这一类一个都没有(不是筛没了)时,「新建」只在正中的空状态里摆一颗,页头不再摆第二颗同一件事的实心按钮。
   const emptyKind = !filtering && listing.isSuccess && visible.length === 0;
   const sortLabel: Record<SortKey, string> = { updated: t("sortUpdated"), name: t("sortName"), references: t("entitiesSortReferences") };
+  const modeSwitch = (
+    <Segmented
+      aria-label={t("navEntities")}
+      size="sm"
+      value={mode}
+      onValueChange={setMode}
+      options={[
+        { value: "assets", label: t("referenceLibraryAssetsTab") },
+        { value: "references", label: t("referenceLibraryTab") },
+      ]}
+    />
+  );
+  const availableModeSwitch = references.data?.length ? modeSwitch : undefined;
 
   return (
     <div
       className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
       data-entities-page=""
+      data-entities-scroll=""
       onScroll={(event) => {
         const filters = filtersRef.current;
         setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
@@ -158,36 +184,24 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     >
       <PageHeading
         title={t("navEntities")}
-        description={mode === "assets" ? t("entitiesDesc") : t("referenceLibraryDesc")}
-        count={mode === "assets" ? all.data?.length : undefined}
+        description={activeMode === "assets" ? t("entitiesDesc") : t("referenceLibraryDesc")}
+        count={activeMode === "assets" ? all.data?.length : undefined}
         className="py-7 xl:py-8"
         actions={
-          <>
-            <Segmented
-              aria-label={t("navEntities")}
-              size="sm"
-              value={mode}
-              onValueChange={setMode}
-              options={[
-                { value: "assets", label: t("referenceLibraryAssetsTab") },
-                { value: "references", label: t("referenceLibraryTab") },
-              ]}
-            />
-            {mode === "assets" && !emptyKind && (
-              <Hint disabledReason={writeBlocked?.reason}>
-                <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
-                  <Plus />
-                  {t("entitiesNew").replace("{kind}", labels.kind(kind))}
-                </Button>
-              </Hint>
-            )}
-          </>
+          activeMode === "assets" && !emptyKind ? (
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                <Plus />
+                {t("entitiesNew").replace("{kind}", labels.kind(kind))}
+              </Button>
+            </Hint>
+          ) : undefined
         }
       />
 
       {/* 吸顶工具条,照素材库:底色和分割线由 .workspace-sticky 按「有没有东西从下面滚过去」淡入淡出
           (data-stuck),静止时不画线;负外边距和外壳的内边距是同一个数。 */}
-      {mode === "assets" && (
+      {activeMode === "assets" && (
       <div
         ref={filtersRef}
         data-stuck={filtersStuck}
@@ -207,6 +221,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
               count: (all.data ?? []).filter((entity) => entity.kind === one).length,
             }))}
           />
+          {availableModeSwitch && <div className="ml-auto">{availableModeSwitch}</div>}
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <SearchInput className="min-w-40 flex-1"
                 aria-label={t("entitiesSearch")}
@@ -240,8 +257,8 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
       </div>
       )}
 
-      {mode === "references" ? (
-        <ReferenceLibraryView workspace={workspace} />
+      {activeMode === "references" ? (
+        <ReferenceLibraryView workspace={workspace} modeSwitch={modeSwitch} />
       ) : (
       <>
       {/* 空态要落在**剩下的那块空间**中间,和工作台同一个做法:根容器是列方向的 flex,
@@ -250,7 +267,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
           于是永远贴在上边 —— 这就是「资产页空态没居中」的根子。 */}
       <div className={cn(visible.length === 0 || listing.isPending || listing.isError ? "flex flex-1 items-center justify-center" : "pt-5")}>
         {listing.isPending ? (
-          <div role="status" aria-busy="true" className={CARD_GRID}>
+          <div role="status" aria-busy="true" className={ASSET_CARD_GRID}>
             <span className="sr-only">{t("pageLoading")}</span>
             {Array.from({ length: 6 }, (_, index) => (
               <div key={index} className="grid gap-3" aria-hidden="true">
@@ -283,7 +300,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
             }
           />
         ) : (
-          <EntityGrid collection={collection} rows={visible} className={CARD_GRID} />
+          <EntityGrid collection={collection} rows={visible} className={ASSET_CARD_GRID} />
         )}
       </div>
       </>
