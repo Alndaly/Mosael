@@ -188,6 +188,8 @@ test("③ 我的分享:先确认、成功后移除、失败显示后端文案", 
   assert.match(panel, /查看|view/i, "分享行没有「查看」入口");
   assert.match(panel, /localePath\(locale, `\/community\/\$\{/, "「查看」没有指向这条分享");
   assert.match(panel, /localePath\(locale, "\/community\/upload"\)/, "没有分享时没有去上传的入口");
+  //: 表格自带圆角描边;外层再套一张 Card 就是同一件事画两遍(维护者截图里的双框)。
+  assert.doesNotMatch(panel, /<Card[\s\S]*?<Table/, "我的分享又用外层卡片包住了表格");
 });
 
 test("④ 个人信息:PUT /me,409 两种 handle 冲突都显示后端原话", () => {
