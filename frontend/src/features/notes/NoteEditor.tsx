@@ -9,7 +9,8 @@ import { useNoteStrings } from "./strings";
 import { noteExtensions, notePlaceholder } from "./editorExtensions";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
-import { useExternalContent } from "@/components/app/useExternalContent";
+import { COMPOSE_SETTLE_MS, useExternalContent } from "@/components/app/useExternalContent";
+import { pauseCompositionObserver, resumeCompositionObserver } from "@/components/app/compositionObserver";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { importAsset } from "@/api/domains/assets";
@@ -85,6 +86,24 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     content: markdown, contentType: "markdown", editable,
     editorProps: { attributes: { class: "note-prose outline-none", "aria-label": s.content },
       handleKeyDown: (_view, event) => toolbarKeys.current?.(event) ?? false,
+      handleDOMEvents: {
+        //: 和智能体输入框同一个修法:组词中按退格缩短候选时,Chrome 会把残留拼音写进正文;
+        //: 普通组词不要动 DOM 观察,否则组词结束后选区会卡在第一段末尾。
+        keydown: (view, event) => {
+          if (view.composing && event.key === "Backspace") pauseCompositionObserver(view);
+          return false;
+        },
+        compositionend: (view) => {
+          resumeCompositionObserver(view);
+          //: onUpdate 在组词期间是跳过的,组词结束这一拍必须把最终 Markdown 交给父层 ——
+          //: 否则自动保存拿到的还是组词前的旧稿。等 ProseMirror 把组词收尾(20ms)之后读,
+          //: 和 useExternalContent 补判用的是同一条界线。
+          window.setTimeout(() => {
+            if (editor && !editor.isDestroyed) change.current(editor.getMarkdown());
+          }, COMPOSE_SETTLE_MS);
+          return false;
+        },
+      },
       handlePaste: (view, event) => {
         const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith("image/"));
         if (files.length) { event.preventDefault(); upload.current(files); return true; }
@@ -109,7 +128,12 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     //: (TrailingNode),它挂在随便哪个事务后面(代码高亮挂装饰的那一下、聚焦就够)。那一下文档变了、update 照发,
     //: 可它不是谁写的字 —— 当成改动的话,只是打开一篇就按编辑器的排版(表格补齐空格、空行数)重写、自动保存,
     //: 多出一版看不出改动的「手动编辑」。补上的结构和排版跟着下一次真改动一起存。
-    onUpdate: ({ editor: e, transaction }) => { if (transaction.docChanged) change.current(e.getMarkdown()); },
+    onUpdate: ({ editor: e, transaction }) => {
+      //: 组词中的 DOM 只是输入法的候选,不是确认的正文;交给父层再经 useExternalContent 回灌,
+      //: 退格后的残留拼音就会被当成正文追加(和智能体输入框同一个 bug)。
+      if (e.view.composing) return;
+      if (transaction.docChanged) change.current(e.getMarkdown());
+    },
   });
   React.useEffect(() => {
     const element = sentinel.current;
