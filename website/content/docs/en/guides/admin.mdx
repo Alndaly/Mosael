@@ -2,7 +2,7 @@
 title: Admin console & statistics
 description: Deployment admins use Admin to watch usage, manage members and sign-up, install local engines, set mirrors and the outbound proxy, and back up data; everyone gets their own numbers in Statistics.
 order: 22
-updated: 2026-10-17
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -88,6 +88,10 @@ The things that run locally — transcription, voice cloning, voice separation, 
 of several GB, installed on the computer the backend runs on, so only deployment admins install them. Other members see "installed
 by a deployment admin" where they would need one (the transcript, the denoise dialog, subtitle dubbing).
 
+- **FFmpeg**: export, thumbnails, waveforms and transcription all rely on it. The row shows which one is in use, its version and whether
+  it can burn in subtitles (has libass); enter a full path to use another, or **Let Mosael install a full build** — a static build with
+  libass, checked against its sha256 and verified to burn text before it's switched in (installed in Mosael's data folder, not the system).
+  When an environment variable pins the path, the row says where to change it.
 - **Download sources**: which mirrors packages come from. **Dependency source (pip index)** serves the local engines' Python
   dependencies — each pulls 2–3 GB, and the official PyPI is often too slow from mainland China; **npm registry** serves plugins that
   install npm packages (such as Remotion). A plugin connection can pick its own; otherwise it follows these. The last row, **Model
@@ -97,7 +101,9 @@ by a deployment admin" where they would need one (the transcript, the denoise di
   selectable under **Settings → Capability providers → Transcription**. **FunASR and sherpa-onnx run the same SenseVoice model**
   (FunASR on torch, sherpa-onnx on ONNX): the latter installs no torch and carries ~230 MB of weights instead of ~900 MB, so it installs
   and starts far faster — the price is **no speaker diarisation**, so pick FunASR to tell speakers apart. FunASR is still the default.
-- **Voice cloning**: runtime and weights for local cloning (F5-TTS, Fish Speech); weights come from the **Model download source** above.
+- **Local speech synthesis engines**: two groups — **Clone engines** (F5-TTS, Fish Speech: give a reference clip, synthesize that voice)
+  and **Preset-voice engines** (Qwen3-TTS: no cloning, the model's own voices). This only installs runtimes and weights (from the **Model
+  download source** above); which one to use is picked in the engine menu on the editor's Voice tab or the Create page's Speech.
 - **Voice and background separation**: Demucs. A long asset takes many minutes on a CPU.
 - **Noise reduction**: the built-in method needs nothing; DeepFilterNet downloads once here (about 30 MB); RNNoise ships with the app.
 

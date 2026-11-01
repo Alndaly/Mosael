@@ -1,0 +1,44 @@
+---
+title: Community sharing
+description: Share workflows and boards with the Mosael community, or import someone else's into your workspace in one click.
+seo_title: "Community sharing: share and import workflows and boards"
+keywords: Mosael community, share a workflow, share a board, import a workflow, mosael://
+order: 25
+updated: 2026-11-01
+version: 2.4.0
+---
+
+The website's [community](/community) holds publicly shared **workflows** and **boards**, alongside three market pages for
+[plugins](/plugins), [workflows](/workflows) and [boards](/boards). Each share is a `.json` project file: a workflow is a set of wired
+nodes, a board holds its media, positions and links; open it, swap in your own models and media, and carry on. Shared files **don't**
+include account keys or private media.
+
+## Find one
+
+The community page filters by kind (workflow / board), sorts by newest or popular, and searches. A share's page shows:
+
+- a **preview**: the workflow's node graph or the board's layout — **Open in canvas** lets you pan around the whole thing;
+- **What is this**, file size, **license**, publish date and the author (click the name for their creator page and other public shares);
+- download, like and favorite counts, and comments. Liking, favoriting and commenting need a MosaelCloud sign-in.
+
+## Import into Mosael
+
+- **Workflows**: choose **Open in Mosael**. The desktop app shows **Import a community share** with the author, kind, size and download
+  count; nothing is imported until you choose **Import into workspace**, and it then confirms the name. This goes through a
+  `mosael://import?share=…` link, so the desktop app needs to be installed.
+- **Boards** can't be imported in one click yet. **Download** the `.json`, then use **Import** on the Boards page.
+- You can also download first and use **Import workflow** on the Workflows page.
+
+Then open it: pick your own provider and model for model nodes, fill the start node's required inputs, and run once the readiness
+check passes (see [Workflows](/docs/guides/workflows)). If a share can't be read, it says which case it is: the link is wrong or the
+share was deleted, MosaelCloud is unreachable (check your network and proxy), or the file isn't a usable workflow.
+
+## Share your work
+
+1. Export from Mosael: **Export as file** on the Workflows page, **Export** on the Boards page — you get a `.json`.
+2. Sign in on the website and choose **Share your work** in the page header. The first time, pick a **display name** (and an optional
+   **handle**); it appears next to your shares and comments and can be changed any time.
+3. Choose the kind, upload the `.json`, write a clear **title, summary and license** — that's how people tell whether it's what they
+   need — and **Publish**.
+
+It then shows up in the community and on your creator page; the **My shares** area of your website console manages what you've published.

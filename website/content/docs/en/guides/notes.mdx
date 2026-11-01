@@ -4,7 +4,7 @@ description: Collect scripts and research, rework text with the selection toolba
 seo_title: AI notes: polish, rewrite and translate scripts
 keywords: AI notes, AI rewrite, AI translation, script writing
 order: 8
-updated: 2026-10-05
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -69,12 +69,13 @@ A few things worth calling out:
   `==text==` or pasting it also turns into a highlight. Exported Markdown keeps the `==`, and a literal `==` already in the text
   does not suddenly become a highlight.
 - **Type `@`** to reference another note. The reference **pins the revision it was made against**,
-  but opens the latest content by default; use **View referenced version** to see the pinned one.
-- **Markdown** is a toggle you can press: pressed shows the source (the formatting buttons fold away), pressed again goes back to editing.
+  but opens the latest content by default; use **View referenced version** to see the pinned one. Hovering a reference in the text shows a preview of that note.
+- **Markdown** is a toggle you can press: pressed shows the source (the formatting buttons fold away), pressed again goes back to editing; the shortcut is <kbd>⌘/</kbd>.
 
 ![Markdown pressed: the note's source](/media/screens/en/notes-markdown.png)
 
-The save status on the right of the top bar says where you stand: `Saved` / `Saving…` / `Unsaved draft`. **Closing
+The save status on the right of the top bar is one icon whose shape changes with the state (check / spinner / pencil / warning); hover it
+for the name: `Saved` / `Saving…` / `Changed, not saved yet` / `Save failed. You can retry.` (with **Retry save** right there). **Closing
 the page loses nothing** — an unsaved draft stays on this device and comes back the next time you
 open the note.
 

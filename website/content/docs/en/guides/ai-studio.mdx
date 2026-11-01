@@ -119,6 +119,11 @@ The embedded Node.js agent runtime uses pi-agent-core / pi-ai. Requires [model p
 
 ### The composer keeps only what you look at every turn
 
+**You can keep talking while the agent is still working.** A message sent mid-turn waits in a queue above the composer and runs as its
+own turn afterwards; **Steer** next to it inserts it into **the turn that's running**, taking effect the next time the model reads
+messages (the reply splits into a part before and after it). While it waits you see "Waiting to steer this turn…"; if the turn ends
+first, it runs on its own next. While you speak into the microphone, a three-bar level meter shows it's hearing you.
+
 The composer row carries just the things you touch on every message: attachments, microphone, the **model**, and send. Mode switching stays in the top toolbar. Everything else lives behind the slider icon in **session
 settings** — the set-once-and-forget things:
 
@@ -195,6 +200,22 @@ conversation receives the answer instead of the rummaging.
 Agents in different sessions can also **@-notify each other**. An idle recipient starts immediately;
 a busy one queues the message and picks it up when it is free. Messages that arrive this way carry a
 "from another agent" badge, so a conversation never looks like it talked to itself.
+
+### Computer Use: letting the agent operate the screen
+
+The agent can **look at the interface and act**, at two levels:
+
+- **Mosael's own window**: take a screenshot of it (saved to the media library and shown in the reply), click, type text and scroll inside
+  it. These go through confirmation cards, "always allow in this conversation" and autopilot rules like any other tool.
+- **Other apps on this Mac** (macOS only): first read-only — list windows, capture one, read its accessibility tree; every click, typing or
+  scroll **opens a confirmation card first**. The first time it needs the system's Screen Recording and Accessibility permissions: Mosael
+  only asks when you choose "request from the system" in its guide, and opening System Settings is a separate button. Protected apps —
+  password managers, Keychain, System Settings, Terminal — are always refused, and their screenshots are redacted before reaching the model.
+
+While it works you can always see it: a red frame around the window, a pointer where it clicks, and a "Computer Use is operating Mosael"
+bar with **Stop**; **<kbd>⌘⇧Esc</kbd> stops it anytime**, even when Mosael isn't in front. Each action in another app keeps a small
+screenshot before and after (**Action replay**): expand that tool row to see it. Replays stay on this computer, aren't team-synced, and are
+deleted with **Clear conversation replay** or when you delete the conversation.
 
 ## Create: image, video, speech, podcast, music
 
@@ -289,7 +310,7 @@ What each vendor supports, and what is wired from documentation only, is in the 
   Speech) or any remote engine; a new speech session starts on Edge (built in, free, nothing to set up). Every engine has speed
   control: those without a speed parameter (Fish Speech, local Qwen3-TTS, Bailian qwen-tts) are time-stretched after synthesis, keeping
   the pitch, and the control reads **Speed (adjusted after synthesis)**.
-- Local cloning needs a voice first — without one, a notice on the right takes you to Settings → Dubbing & voices to upload or record a
+- Local cloning needs a voice first — without one, a notice on the right takes you to Settings → My voices to upload or record a
   reference clip; it also says when the local cloning engine isn't installed. With **Alibaba Bailian (CosyVoice)** you can also pick a
   library voice, spoken from its copy in your Bailian account; the first time, you're asked whether its reference clip may be uploaded —
   see [Editing → Your own voice through Bailian](/docs/guides/editing).
@@ -339,7 +360,7 @@ cross-application data communication"), so the same person is two different ids 
 A binding therefore records **which bot (which Feishu app) × which open_id**, and the same person
 binding a second bot has to bind again.
 
-- **There is only one direction to pair**: pick **that** bot under Settings → Feishu bots, generate a
+- **There is only one direction to pair**: pick **that** bot under Settings → Feishu bot, generate a
   bind code (good for 10 minutes, single use) and send it to that bot. **The bot will never send you a
   code** — a code means "become that member's Feishu identity", so handing one to someone who is not
   bound yet would be publishing a member's credential. To get it to act for you, you generate the code.

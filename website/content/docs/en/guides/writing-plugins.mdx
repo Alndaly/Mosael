@@ -365,6 +365,29 @@ When a parameter is an array whose items are structured (each step of an explain
 node form shows one card per item with a field for each — add, remove, move up and down — instead of a box of hand-written JSON. Parameter
 and tool names can be written as `{"zh": "…", "en": "…"}` and follow the interface language.
 
+## Bundling skills
+
+Tools answer "what can be called"; **skills** answer "how to string them together" — which tool first, how to fill its parameters, what
+to check. Put `skills/<name>/SKILL.md` in the package (the open Agent Skills format: `name` and `description` in the YAML header, a
+display name in `metadata.mosael-title`); **nothing goes in the manifest**:
+
+```
+my-plugin/
+  mosael.plugin.json
+  skills/
+    batch-upscale/
+      SKILL.md
+      references/parameters.md   ← optional: read by the agent on demand
+```
+
+- The folder name is the `name` (lowercase letters, digits and hyphens); the `description` says what it does and when to use it.
+  Installing a package and community submission both validate this; a bad package won't install, and the error names the skill and line.
+- Once installed, skills appear under **Settings → Agent → Skills** in the **From plugins** group, named with the plugin id, and are
+  **off in every workspace by default** until someone reads the full text and turns them on (plugins bundled with the app are the exception).
+- Scripts inside are read as reference only, never executed; a skill doesn't change your tools' `effects` — confirmation cards still open.
+
+The full rules are in `docs/PLUGIN_MANIFEST.md`, section 「带技能:`skills/` 目录」 (bundling skills).
+
 ## Writing the readme
 
 Put a `README.md` in the plugin directory. It is **rendered as-is on the plugin's detail page**

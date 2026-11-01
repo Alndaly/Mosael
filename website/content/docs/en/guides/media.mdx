@@ -4,7 +4,7 @@ description: Import, record and download media, then find it with previews, tags
 seo_title: Media library: import, record and download video
 keywords: media library, video downloader, screen recording, asset tags
 order: 7
-updated: 2026-10-05
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -50,10 +50,12 @@ stays visible as an actionable state with links to the relevant system settings 
 system-audio consent is requested by the operating system's sharing picker, as required by macOS.
 
 Once capture starts, the recorder collapses into a controller in the bottom-right corner without covering or
-locking the app. You can browse media, enter the editor, or use other features while recording continues. When
+locking the app; **Minimize** on the controller shrinks it further into a small floating chip with just the red dot and the timer
+(click it to expand). The controller shows level meters (system audio / microphone), so you can see there is sound while recording. You can browse media, enter the editor, or use other features while recording continues. When
 stopped, the files still return to the workspace or project where the recording was started.
 
-**System audio** is enabled by default for screen recordings and captures sound playing on the computer. If the
+Screen recordings can also turn on **Microphone**: your narration is recorded along with the screen and mixed into the same
+audio track with its sound; turn it off to record only the screen's sound. **System audio** is enabled by default for screen recordings and captures sound playing on the computer. If the
 system sharing picker also presents a **Share audio** option, allow it there as well; turn the switch off for
 picture-only capture. If the picker returns no live audio track, Mosael stops the capture and asks you to retry
 instead of silently creating a mute asset. In **Screen + camera** mode, system audio stays with the screen asset while microphone audio
@@ -131,6 +133,31 @@ count by the title is always the library's. When you upgrade, the parts that can
 sentence, synthesis started by a dubbing task, lip-sync chunks…) are marked automatically; anything that can't be told apart
 stays in the library.
 
+## Break down shots
+
+A video's details panel has a **Shots** block. **Break down shots** splits the video shot by shot:
+
+- **Cuts, shot lengths and motion are measured by code** (ffmpeg frames and frame differences) — seconds to tens of seconds, free.
+- With a vision model configured, it then **judges the picture in batches** (up to 25 shots per call; this step costs money): shot size,
+  category, camera move, transition, rhythm and a one-line description, alongside that shot's dialogue. Without a vision model the table
+  holds only the measured half and says the picture hasn't been judged.
+- Each row has a thumbnail, time, size and camera move, description and dialogue; click a row to jump to that shot. The **Pace strip**
+  above draws the whole motion curve with its cuts, highlights the current shot, and jumps on click.
+- **Reconciliation notes** say what not to trust: a camera move the model claimed while the frames barely moved is removed with a note; no hook in
+  the first 5 seconds, several shots in a row at one rhythm, or a payoff with no setup are flagged too.
+- **Copy storyboard prompts** to reshoot or regenerate; **Save to notes** saves the shot list (with stats and notes) or the storyboard prompts.
+- An asset keeps one shot list; breaking it down again replaces it.
+
+In workflows these are three nodes — **Detect shots**, **Judge shots** and **Shot report** — and the official template **Break down a
+reference video: shot list, contact sheets, report** starts from a video in your library, breaks it down, optionally transcribes the
+voice-over, judges each shot and writes a breakdown creators can follow, saved as a note.
+
+## Make a mask
+
+An image's ⋯ menu has **Make a mask…**: compute a black-and-white mask from the image by luminance or alpha (white is what to change), with
+threshold, invert, grow and feather. It produces a new asset and leaves the original alone; it's the same kind of mask you paint for
+inpainting, and records which image it came from.
+
 ## Where an asset came from: provenance
 
 Every asset remembers **where it came from**. Cards and the detail view carry an origin tag: **Imported**, **AI generated**,
@@ -189,5 +216,9 @@ Click an asset to open its preview. Video has dedicated playback controls; audio
 ![Audio preview and waveform](/media/screens/en/media-audio.png)
 
 <Recording src="/media/videos/en/media-preview.mp4" poster="/media/screens/en/media.png" caption="Live capture: link import and video, audio and image previews" />
+
+The bottom of the details panel holds the asset's actions: rename, tag, download, set as an asset's reference image, delete — the same
+set as the card's ⋯ and right-click menus. Image, video and audio previews can all save a copy to disk. Once an asset is deleted, places
+that referenced it show an **Asset deleted** placeholder instead of a broken image.
 
 The filter toolbar keeps search and filter controls aligned. Its translucent background changes smoothly while scrolling. Only one card menu opens at a time; click outside or press Escape to dismiss it.

@@ -4,7 +4,7 @@ description: Connect a ComfyUI server on this machine or your LAN; every saved w
 seo_title: ComfyUI client: workflows as models, model library
 keywords: ComfyUI client, ComfyUI desktop, ComfyUI workflows, ComfyUI model manager, LoRA trigger words, ComfyUI app
 order: 18
-updated: 2026-10-17
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -79,7 +79,7 @@ Mosael asks the plugin to check the folder or plan the install, and without them
   downloaded**: once it's installed, choose Open model library and pick the ones you need.
 - On a slow network, switch the pip source under Admin → Engines → Download sources; on Windows pick a PyTorch source mirror for
   the CUDA build of PyTorch, and if GitHub is slow set a GitHub mirror prefix (the archives are checked by sha256, so a mirror
-  can't change their content). Downloads use the proxy from Settings → Network.
+  can't change their content). Downloads use the proxy from Admin → Deployment → Outbound proxy.
 - When a Mosael update ships a different Python version, the connection card says the environment needs a rebuild; one click
   reinstalls only the Python environment, leaving the source and models alone.
 - **Linux servers**: an NVIDIA GPU with its proprietary driver (`nvidia-smi` works; in a container, pass the GPU in, for example
@@ -370,7 +370,8 @@ Good to know:
   `ComfyUI/user/__manager/config.ini`, set `network_mode` to `personal_cloud` and restart ComfyUI (the library spells out the
   reason and this step).
 - When ComfyUI runs on **this computer**, Mosael writes straight into its models folder, with progress, cancel and a
-  free-space check first.
+  free-space check first. A download cancelled or cut off keeps its partial file; **Resume from N** under Downloads picks it up
+  later (if the URL or file changed it says so and starts over), and refreshing the page no longer loses the download state.
 - For gated HuggingFace repositories, Civitai models that need a login, or private ModelScope models, enter a
   "HuggingFace token", "Civitai token" or "ModelScope token" in the connection's credentials. Each token is sent only to
   its own site; when a download through ComfyUI-Manager needs the Civitai token, the download dialog warns that it stays
@@ -429,12 +430,12 @@ appends them (skipping any already there).
 - **Latest output** and **Used in Mosael by**: the workflow nodes and board items in this workspace that pick it, linked.
 
 The header has **Generate with it** (jumps to AI Studio with this workflow selected; disabled with the reason when it isn't a
-generation model), **Open in workbench** (**Open in ComfyUI** in the web app) and **More actions**.
+generation model), **Open in ComfyUI workbench** (**Open in ComfyUI** in the web app) and **More actions**.
 
 ![A workflow missing a node and models: the node graph on the left; the right column scrolled down a little — what you can tune, what it produces, models it uses (missing ones flagged), missing nodes (from Frame Tools, not installed, Install), missing models (one with a huggingface.co address, one without), and what in Mosael uses it](/media/screens/en/workflow-library-detail.png)
 
 **The context menu**: right-click a card (or a row in the list), click the **⋯** that appears in its corner on hover, or select it
-and press Shift+F10 / the menu key — it's the same menu: Open details, Open in workbench (Open in ComfyUI in the web app) | Edit forms… |
+and press Shift+F10 / the menu key — it's the same menu: Open details, Open in ComfyUI workbench (Open in ComfyUI in the web app) | Edit forms… |
 Copy…, Rename…, Move to…, Export JSON | Copy path | Download missing models, Install missing nodes (only when something is missing;
 they open the details at that section) | Delete…. Items that can't be used right now are greyed out with the reason underneath
 (the connection didn't report ComfyUI's address, a workflow that can't be converted has no forms to edit yet…). **More actions** in the details
@@ -481,7 +482,7 @@ After any change the workflow library, the generation models and the tool list r
 machine again: a workflow that's no longer there, a taken target, a folder that's no longer empty — each is reported as it is,
 nothing is forced, and the list is read again.
 
-**One button opens a workflow**: in the desktop app it's **Open in workbench**, which opens this ComfyUI's canvas in the
+**One button opens a workflow**: in the desktop app it's **Open in ComfyUI workbench**, which opens this ComfyUI's canvas in the
 connection's own built-in browser and opens this workflow (the same as clicking it under Workflows on ComfyUI's left side; unsaved
 changes already open there are kept), with Mosael's panels beside it (see Workbench below; collapse them and it's a plain ComfyUI
 canvas). The web app has no workbench, so it's **Open in ComfyUI**: ComfyUI opens in a new tab and you're told which workflow to
@@ -603,8 +604,9 @@ the model library (see above).
 
 ## Workbench: Mosael's panels beside ComfyUI's own canvas
 
-In the desktop app, **Open in workbench** at the top of a workflow's detail in the workflow library, **New** in the library toolbar, and
-**Open in workbench** under a selected ComfyUI workflow in AI Studio's engine settings all open the **workbench** full screen: the left
+In the desktop app, **Open in ComfyUI workbench** at the top of a workflow's detail in the workflow library, **New** in the library toolbar, and
+**Open in ComfyUI workbench** under a selected ComfyUI workflow in AI Studio's engine settings, and the same button on a board's ComfyUI
+generation item (entries opened from a form land on that form), all open the **workbench** full screen: the left
 side is this ComfyUI's own canvas (its own interface, with every custom node working as usual), and everything from Mosael is drawn
 beside it:
 

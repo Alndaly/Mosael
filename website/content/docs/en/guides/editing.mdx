@@ -172,6 +172,8 @@ Tone levels (highlights / shadows / whites / blacks), sharpen and the LUT take f
 
 **Translate** on the Subtitles tab: pick a target language (English, Simplified or Traditional Chinese, Japanese, Korean, French, German, Spanish, Russian), optionally **Selected only (N)**, and turn on **Keep original (bilingual)** for "original / translation" two-line cues. The engine list follows **Settings → Capability providers → Translation**: **Google Translate (free)** needs no setup and translates cue by cue; **Chat model** uses your own chat connection and reads the context (it costs money); translation plugins appear there too. Google is the default.
 
+To translate just one cue, use the 🌐 button in that cue's header: it translates only that one, and a second click cancels.
+
 **Bilingual subtitles can also live on two tracks**: the original on one subtitle track and the translation on another (for example, import a second `.srt`). When several subtitle tracks have text at the same moment they are drawn in one box at the bottom, the higher track's text on top — identical, pixel for pixel, in preview and export.
 
 ![Chinese and English subtitle tracks with cues at the same moment: the monitor stacks them in one box at the bottom, the upper track’s line first](/media/screens/en/subtitle-bilingual.png)
@@ -201,7 +203,10 @@ None of the four deletes anything: they flip the track's mute/duck switch, or pl
 
 - **Fit to cue length** (on by default): when a line runs long it is sped up between 0.9× and 1.5× to fit the cue; if 1.5× still isn't enough it runs into the gap before the next cue. It uses the clip's own speed — lossless, undoable, and still adjustable in the inspector.
 - **Text to dub**: bilingual cues ask whether to read the **Full cue (both lines)**, the **First line** or the **Second line**. Feeding the whole cue reads the source and then the translation.
-- **Engines**: local voice cloning, Edge free voices, OpenAI, Volcano, Alibaba Bailian, plus any voiceover plugin. Remote voices are fetched per engine (Volcano's catalogue follows your account). Local cloning also picks a **Clone engine** (F5-TTS / Fish Speech); the voice library is under **Settings → Dubbing & voices**.
+- **Engines**: local voice cloning, Edge free voices, OpenAI, Volcano, Alibaba Bailian, plus any voiceover plugin. Remote voices are fetched per engine (Volcano's catalogue follows your account). Local cloning also picks a **Clone engine** (F5-TTS / Fish Speech); the voice library is under **Settings → My voices**. There's also a local **preset-voice engine, Qwen3-TTS**: no cloning and no
+  reference clip, just the model's own voices (on the GPU on Apple silicon); a deployment admin installs it under **Admin → Engines**.
+- **Default**: a deployment admin can set this computer's default dubbing under **Settings → Capability providers → Speech** — a pair of
+  engine + voice, used whenever an entry point doesn't name one.
 
 Reading arbitrary text aloud and making a podcast produce standalone audio assets that have nothing to do with the timeline; they live in [AI Studio → Create](/docs/guides/ai-studio).
 
@@ -219,7 +224,7 @@ Japanese, Korean, Russian, Arabic and Hindi are recognised from the script itsel
 
 A voice from the library can also be spoken by **Alibaba Cloud Bailian's CosyVoice**: pick the engine **Alibaba Bailian (CosyVoice)** and the voice dropdown gains a **My cloned voices** group under the stock voices. What speaks is a copy of that voice cloned into **your own Bailian account** — no local engine to install, no gigabytes of weights; in exchange it is billed at CosyVoice's per-character price (the cloning step itself is free). Local cloning keeps working: the same voice is spoken from its reference clip locally, or from its copy on CosyVoice.
 
-- **You agree once, the first time.** The reference clip (the 5–15 seconds you created the voice from) is uploaded to your Bailian account; the dialog says which connection and which model it goes to, and nothing is uploaded until you agree. Cloning runs in the background (about ten seconds) and the dub waits for it. After that, a new model or a copy Bailian deleted (copies unused for a year are removed automatically) is rebuilt as needed without asking again. You can also clone ahead of time with **Clone on Bailian** on the voice under **Settings → Dubbing & voices** (it runs as a task, and the task center tells you when it's ready).
+- **You agree once, the first time.** The reference clip (the 5–15 seconds you created the voice from) is uploaded to your Bailian account; the dialog says which connection and which model it goes to, and nothing is uploaded until you agree. Cloning runs in the background (about ten seconds) and the dub waits for it. After that, a new model or a copy Bailian deleted (copies unused for a year are removed automatically) is rebuilt as needed without asking again. You can also clone ahead of time with **Clone on Bailian** on the voice under **Settings → My voices** (it runs as a task, and the task center tells you when it's ready).
 - **A voice nobody has declared ownership of is never cloned** (the same line as [digital humans](/docs/guides/digital-humans)) and is not listed — add the declaration in the voice library first.
 - Each cloned voice in the library shows where it can speak: **This computer**, **Bailian · cosyvoice-v3-flash**; cloning, failed (hover for the reason) and deleted-by-Bailian are shown there too.
 - **Deleting the voice in Mosael deletes its copies on Bailian.** Any that can't be removed (an expired key, no network) are listed so you can check Voice Cloning in the Bailian console.
@@ -233,7 +238,10 @@ To see what CosyVoice costs in your usage, run **Prefill prices** once for the B
 
 ## Export
 
-**Export** in the command bar opens **Export settings** and renders the current timeline into a new asset:
+**Export** in the command bar opens **Export settings** and renders the current timeline into a new asset. First choose **Export as**
+video or audio, then a format (video: mp4 / mov / webm; audio: mp3 / wav / m4a), remembered with the other settings. Audio export hides
+resolution, frame rate, quality and the AI label; when the video tracks are empty and there's no text, exporting video first warns that it
+would be all black and offers to switch to audio in one click. The video options:
 
 | Option | Choices | Default |
 | --- | --- | --- |

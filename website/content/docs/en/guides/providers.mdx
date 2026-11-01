@@ -4,7 +4,7 @@ description: Connect your model services with an API key or a subscription sign-
 seo_title: Bring your own API keys: Seedance, Kling, Veo, Wan
 keywords: bring your own API key, Seedance API, Kling API, Veo, Gemini API, Wan, DeepSeek, OpenRouter, Ollama
 order: 1
-updated: 2026-10-17
+updated: 2026-11-01
 version: 2.4.0
 ---
 
@@ -28,6 +28,23 @@ At the top of each section is the **default model**: the default provider and mo
 **Configure providers per capability** — Chat / Image / Video / Audio each have their own section; after "Add provider" the UI renders exactly the fields that provider declares, and keys are stored locally:
 
 <Loop src="/media/videos/en/providers.mp4" poster="/media/screens/en/settings.png" alt="Demo: from AI chat and AI image to Capability providers" />
+
+## Mosael Cloud: the official relay
+
+Installed builds come connected to the official **Mosael Cloud**: the "Mosael Cloud" row at the top of the provider list. Once you sign in
+it lists the models Mosael has set up and your remaining credits, selectable in default models, AI Studio, agents, boards and workflows
+with no keys to enter; usage is recorded in **credits**, kept apart from the money spent on your own connections. Signed out, the row
+says **Sign in**; if a default model points at it while you're signed out, you're warned that places using the default will fail.
+**Refresh models and credit prices** pulls the catalog again.
+
+- **Sign in** under **Settings → MosaelCloud account**: email + password, an email code, or an SMS code (an unregistered phone number gets
+  an account after the code checks out). Once signed in you can set or change a password and turn on **two-factor authentication**
+  (6-digit authenticator codes plus one-time recovery codes). The desktop app signs in with a **device token**, which doesn't expire after
+  30 days like a web session; signing out revokes it on the Cloud and only unlinks this computer. Your Cloud password is never stored locally.
+- **Subscribe** with **Subscribe / renew** on the "Mosael Cloud" row: pick a plan and a payment method (Alipay / WeChat Pay) and scan to
+  prepay; the dialog refreshes once paid. Buying the same plan while it's active extends it; a different plan runs alongside and the
+  credits pool together. If the deployment hasn't enabled online purchase, it says so.
+- A deployment admin can turn Mosael Cloud off (self-hosted or intranet setups); the row and the account page then say so.
 
 ## One connection is one endpoint plus one credential
 
@@ -231,6 +248,11 @@ When AI Studio analyzes an existing image or video with a subscription model, it
 sends images or sampled video frames through a tool-free, stateless Gateway. This is not a public
 reverse proxy and it needs no `base_url`. Native whole-video input is not available through this
 Gateway; choose Auto or Frames + transcript instead.
+
+**Command Code** is a different kind of subscription: the plan is bought in its own Studio and the credential is an API key. Adding it
+under AI chat opens a browser sign-in straight away, and the key comes back to this computer on its own (or close the sign-in and paste a
+key into the connection later). Its catalog only lists models this app can actually call; balance and usage windows are visible only in
+its Studio (it has no query API).
 
 ### Checking your quota
 
