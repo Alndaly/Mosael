@@ -23,7 +23,7 @@ vi.mock("@/api/client", () => api);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh" }) }));
 
-import type { LocalService, PluginInstance, PluginPackage } from "@/api/client";
+import type { LocalService, PluginInstance } from "@/api/client";
 import { ConnectionFailureActions, KEEP_AWAKE_MS, explainOpenFailure, serviceIssue, useKeepServiceAwake } from "./localServiceStatus";
 import { GenerationModelsRow } from "./ProvidedModels";
 import { connectionIssue } from "./PluginsView";
@@ -43,8 +43,6 @@ function service(kind: Kind | null, overrides: Partial<LocalService> = {}): Loca
   };
 }
 
-const PKG = { id: "dev.mosael.comfyui", name: "ComfyUI", config_fields: [], services: [{ key: "comfyui", title: "ComfyUI" }] } as unknown as PluginPackage;
-
 function instance(error = ""): PluginInstance {
   return {
     id: "c1", name: "本机", enabled: true, config: {}, blocked_reason: "", pending_permissions: [], authorization: null,
@@ -63,8 +61,16 @@ beforeEach(() => {
 });
 
 describe("连接卡片标题行", () => {
+  it("缺不缺配置按后端给的键定位,不在前端另判:关着的开关、写了默认值的项不算缺", () => {
+    const missing = { ...instance(), missing_config: ["server_url"], blocked_reason: "缺少配置:服务器地址" } as PluginInstance;
+    expect(connectionIssue(missing, null)).toMatchObject({ label: "pluginConnStateAction", target: "config:server_url" });
+
+    const switchedOff = { ...instance(), config: { adult: false }, missing_config: [] } as PluginInstance;
+    expect(connectionIssue(switchedOff, null).label).toBe("pluginConnStateOk");
+  });
+
   it("连一台服务器:照插件说的(检查地址那句就是对的)", () => {
-    const issue = connectionIssue(PKG, instance(UNREACHABLE), null);
+    const issue = connectionIssue(instance(UNREACHABLE), null);
     expect(issue.label).toBe("pluginConnStateError");
     expect(issue.detail).toBe(UNREACHABLE);
   });
@@ -77,20 +83,20 @@ describe("连接卡片标题行", () => {
     ["not_installed", "warning", "localServiceIssueNotInstalled"],
     ["rebuild", "warning", "localServiceRebuildTitle"],
   ] as const)("目录没刷出来、背后的本机服务 %s:按它的状态说,不说检查地址", (kind, tone, label) => {
-    const issue = connectionIssue(PKG, instance(UNREACHABLE), service(kind));
+    const issue = connectionIssue(instance(UNREACHABLE), service(kind));
     expect([issue.tone, issue.label, issue.target]).toEqual([tone, label, "local-service"]);
     expect(issue.detail).toBe(`本机的 ComfyUI:${kind}`);
     expect(issue.detail).not.toContain("地址");
   });
 
   it("没出过错:停着、正在起是常态,照「可用」说;起不来、不应答、没装好、要重建不等出错也说", () => {
-    expect(connectionIssue(PKG, instance(), service("stopped")).label).toBe("pluginConnStateOk");
-    expect(connectionIssue(PKG, instance(), service("starting")).label).toBe("pluginConnStateOk");
-    expect(connectionIssue(PKG, instance(), service("failed")).label).toBe("localServiceStateFailed");
-    expect(connectionIssue(PKG, instance(), service("unresponsive")).label).toBe("localServiceIssueUnresponsive");
-    expect(connectionIssue(PKG, instance(), service(null)).label).toBe("pluginConnStateOk");
+    expect(connectionIssue(instance(), service("stopped")).label).toBe("pluginConnStateOk");
+    expect(connectionIssue(instance(), service("starting")).label).toBe("pluginConnStateOk");
+    expect(connectionIssue(instance(), service("failed")).label).toBe("localServiceStateFailed");
+    expect(connectionIssue(instance(), service("unresponsive")).label).toBe("localServiceIssueUnresponsive");
+    expect(connectionIssue(instance(), service(null)).label).toBe("pluginConnStateOk");
     expect(serviceIssue(service("stopped"), false)).toBeNull();
-    expect(connectionIssue(PKG, instance(), service("updating")).label, "正在换版本:不等出错也说,不当错误摆").toBe("localServiceIssueUpdating");
+    expect(connectionIssue(instance(), service("updating")).label, "正在换版本:不等出错也说,不当错误摆").toBe("localServiceIssueUpdating");
     expect(serviceIssue(service("updating"), false)?.tone).toBe("primary");
   });
 });
@@ -217,12 +223,12 @@ describe("ComfyUI 的视图亮着时告诉宿主「还在用」(闲置自动停)
 describe("开关点下去到服务端那句话回来之间", () => {
   it("说「正在启用…」,不照旧态说(开着却说未启用、或者沿用上一态的原因)", () => {
     const one = { ...instance(), enabled: true, blocked_reason: "未启用" };
-    const idle = connectionIssue(PKG, one, null);
+    const idle = connectionIssue(one, null);
     expect(idle.label, "重问还没回来:那句原因是上一态的").toBe("pluginConnStateAction");
 
-    const pending = connectionIssue(PKG, one, null, "pluginConnStateEnabling");
+    const pending = connectionIssue(one, null, "pluginConnStateEnabling");
     expect(pending).toMatchObject({ tone: "primary", label: "pluginConnStateEnabling", detail: "" });
-    expect(connectionIssue(PKG, one, null, "pluginConnStateDisabling").label).toBe("pluginConnStateDisabling");
+    expect(connectionIssue(one, null, "pluginConnStateDisabling").label).toBe("pluginConnStateDisabling");
   });
 });
 });

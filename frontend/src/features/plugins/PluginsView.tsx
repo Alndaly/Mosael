@@ -973,7 +973,7 @@ export function ConnectionCard({
   const pendingState: MessageKey | null = patch.isPending
     ? (patch.variables as { enabled?: boolean } | undefined)?.enabled === false ? "pluginConnStateDisabling" : "pluginConnStateEnabling"
     : null;
-  const issue = connectionIssue(pkg, instance, localService.data, pendingState);
+  const issue = connectionIssue(instance, localService.data, pendingState);
   const summaryText = ((): string => {
     if (generates && tools.length === 0) {
       const models = instance.capability_status?.generation?.models;
@@ -1256,7 +1256,6 @@ function capabilityError(instance: PluginInstance): string {
  * 只适合「连一台服务器」)→ 目录没刷出来(连不上 ComfyUI 之类,定位到生成模型那一行或工具表)→ 可用。
  */
 export function connectionIssue(
-  pkg: PluginPackage,
   instance: PluginInstance,
   service?: LocalService | null,
   pending?: MessageKey | null,
@@ -1265,10 +1264,10 @@ export function connectionIssue(
   //: 那一段里**别照旧态说**(开着却说未启用、或者沿用上一态的原因),说「正在…」。
   if (pending) return { tone: "primary", label: pending, detail: "", target: "" };
   if (!instance.enabled) return { tone: "muted", label: "pluginConnStateOff", detail: "", target: "" };
-  const config = (instance.config ?? {}) as Record<string, unknown>;
-  const missing = (pkg.config_fields ?? []).find((field) => field.required && !String(config[field.key] ?? "").trim());
+  //: 缺不缺由后端判(关着的开关、写了默认值的项都不算缺,见 instances.missing_config_fields),这里只取第一格去定位。
+  const missing = instance.missing_config?.[0];
   if (missing) {
-    return { tone: "warning", label: "pluginConnStateAction", detail: instance.blocked_reason ?? "", target: `config:${missing.key}` };
+    return { tone: "warning", label: "pluginConnStateAction", detail: instance.blocked_reason ?? "", target: `config:${missing}` };
   }
   if (instance.authorization === "unauthorized" || instance.authorization === "rejected") {
     return {

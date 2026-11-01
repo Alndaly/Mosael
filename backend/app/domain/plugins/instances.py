@@ -206,6 +206,29 @@ def _fit_config(manifest: Manifest, values: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def effective_config(manifest: Manifest, config: dict[str, Any] | None) -> dict[str, Any]:
+    """清单声明的每一项**此刻生效**的值:保存过的用保存的,从没保存过的用清单的 `default`。
+
+    写入时 `_fit_config` 已经把默认值落进库;这里管的是还没保存过配置的连接(刚装好、插件更新后新加的项)——
+    判断缺不缺、注入插件进程都按同一份值,不会出现「界面上显示默认值、插件却拿不到」。"""
+    stored = config or {}
+    return {spec.key: stored[spec.key] if spec.key in stored else _coerce(spec, spec.default) for spec in manifest.config}
+
+
+def _blank(value: Any) -> bool:
+    return value is None or value == ""
+
+
+def _env_text(value: Any) -> str:
+    """配置值 → 注入插件进程的字符串。布尔写成 `true` / `false`(与清单 default 的写法一致,`str(False)` 是 `"False"`);
+    整数值的数字不带 `.0`(保存时按 float 存,`str(3.0)` 是 `"3.0"`)。"""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 def _coerce(spec: Field, raw: Any) -> Any:
     if spec.type == "boolean":
         return raw is True or str(raw).lower() in ("true", "1", "yes")
@@ -322,10 +345,19 @@ def _pull_tools(db: Session, instance: PluginInstance) -> None:
         puller(db, instance)
 
 
-def missing_config(db: Session, instance: PluginInstance) -> list[str]:
+def missing_config_fields(db: Session, instance: PluginInstance) -> list[Field]:
+    """必填而**没有值**的配置项:只有没填、`None`、空串才算缺。
+
+    关着的开关(`False`)、填了 0 的数字是用户给的值,不是没填;清单写了 `default` 的项从没保存过时用默认值,
+    也不算缺(见 effective_config)。插件页定位「去填哪一格」也读这份(plugin_page.instance_view),规则只在这里。"""
     manifest = manifest_for(db, instance)
-    config = instance.config or {}
-    return [spec.label for spec in manifest.config if spec.required and not config.get(spec.key)]
+    values = effective_config(manifest, instance.config)
+    return [spec for spec in manifest.config if spec.required and _blank(values[spec.key])]
+
+
+def missing_config(db: Session, instance: PluginInstance) -> list[str]:
+    """缺的配置项的显示名(「缺少配置:…」那句话用)。"""
+    return [spec.label for spec in missing_config_fields(db, instance)]
 
 
 # --- 凭据 ---------------------------------------------------------------
@@ -392,12 +424,11 @@ def secrets_for(db: Session, instance: PluginInstance) -> dict[str, str]:
     """`${...}` 展开与进程注入用的值:清单**现在**声明的配置和凭据里填了的那几项。
 
     只按声明的键取:插件更新后去掉的凭据键,那一行还在库里 —— 插件页照清单列凭据,看不到它、也删不掉;此前它照样每次注入
-    插件进程(PLG-15)。配置写的时候就只收声明的键(_fit_config),老版本留下的照样在这里挡一道。"""
+    插件进程(PLG-15)。配置写的时候就只收声明的键(_fit_config),老版本留下的照样在这里挡一道。
+    配置按 effective_config 取(从没保存过的项用清单的默认值),值按 _env_text 写成字符串。"""
     manifest = manifest_for(db, instance)
-    config_keys = {spec.key for spec in manifest.config}
     credential_keys = {spec.key for spec in manifest.credentials}
-    merged = {key: str(value) for key, value in (instance.config or {}).items()
-              if key in config_keys and value not in (None, "")}
+    merged = {key: _env_text(value) for key, value in effective_config(manifest, instance.config).items() if not _blank(value)}
     merged.update({key: value for key, value in credential_values(db, instance.id).items() if key in credential_keys and value})
     return merged
 
@@ -645,6 +676,7 @@ __all__ = [
     "list_permissions",
     "manifest_for",
     "missing_config",
+    "missing_config_fields",
     "missing_credentials",
     "note_authorization",
     "permissions_granted",

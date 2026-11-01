@@ -44837,6 +44837,13 @@
             "title": "Blocked Reason",
             "default": ""
           },
+          "missing_config": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Config"
+          },
           "pending_permissions": {
             "items": {
               "type": "string"

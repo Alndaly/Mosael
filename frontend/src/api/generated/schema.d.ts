@@ -17313,6 +17313,8 @@ export interface components {
              * @default
              */
             blocked_reason: string;
+            /** Missing Config */
+            missing_config?: string[];
             /** Pending Permissions */
             pending_permissions?: string[];
             /**

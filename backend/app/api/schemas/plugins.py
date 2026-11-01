@@ -151,6 +151,9 @@ class PluginInstanceOut(ApiModel):
     config: dict = Field(default_factory=dict)
     #: 为什么还不能用(未启用 / 缺配置 / 缺凭据 / 未授权)。空串 = 可用。
     blocked_reason: str = ""
+    #: 必填而还没有值的配置项的键(按清单里的先后;规则见 instances.missing_config_fields)。界面据此定位「去填哪一格」,
+    #: 不在前端另判一遍。
+    missing_config: list[str] = Field(default_factory=list)
     #: 清单声明了、还没授予的权限(按清单里的先后)。界面据此在连接上摆一条「授予这几项」。
     pending_permissions: list[str] = Field(default_factory=list)
     #: 还缺的权限是插件更新后多要的(这个连接之前授予过别的):界面说「插件多要了权限」,不是「还没授权」。

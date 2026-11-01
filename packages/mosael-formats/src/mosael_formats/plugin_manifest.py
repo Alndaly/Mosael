@@ -455,13 +455,15 @@ def _fields(raw: Any, *, secret: bool, pick: Callable[[Any], str] = text_of) -> 
                 elif isinstance(option, str):
                     options.append({"value": option, "label": option})
         declared_type = str(entry.get("type") or ("string" if not options else "enum"))
+        field_type = declared_type if declared_type in FIELD_TYPES else "string"
         out.append(
             Field(
                 key=key,
                 label=pick(entry.get("label")) or key,
-                type=declared_type if declared_type in FIELD_TYPES else "string",
+                type=field_type,
                 help=pick(entry.get("help")),
-                required=entry.get("required") is not False,
+                #: 开关只有开 / 关两种,「关」就是一个填好了的值 —— 布尔项从不算必填,写不写 `required` 都一样。
+                required=field_type != "boolean" and entry.get("required") is not False,
                 # 凭据默认按密文对待,漏标不该导致明文回显;配置默认明文。
                 secret=bool(entry.get("secret", secret)),
                 options=options,

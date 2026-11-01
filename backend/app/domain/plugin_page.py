@@ -101,6 +101,7 @@ def instance_view(db: Session, instance: PluginInstance) -> dict[str, Any]:
         "enabled": instance.enabled,
         "config": instance.config or {},
         "blocked_reason": inst.blocked_reason(db, instance),
+        "missing_config": [spec.key for spec in inst.missing_config_fields(db, instance)],
         "pending_permissions": inst.pending_permissions(db, instance),
         "permissions_added": inst.permissions_added(db, instance),
         "authorization": inst.authorization_state(db, instance),

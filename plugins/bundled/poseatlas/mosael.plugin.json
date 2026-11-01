@@ -36,7 +36,6 @@
           "en": "Include adult content"
         },
         "type": "boolean",
-        "required": false,
         "default": false,
         "help": {
           "zh": "原站的「性感」「双人」系列、上半身里的两类,以及服装的「内衣」「性感」两类。关着时这些条目根本不出现;打开后它们标为 NSFW,按预览图设置模糊或隐藏。",

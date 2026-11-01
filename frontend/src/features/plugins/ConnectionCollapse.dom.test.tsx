@@ -144,7 +144,7 @@ describe("收起的连接", () => {
   });
 
   it("缺必填配置:收起时说要处理,展开后定位到那一项", async () => {
-    const instance = connection({ config: { server_url: "" }, blocked_reason: "缺少配置: 服务器地址" });
+    const instance = connection({ config: { server_url: "" }, missing_config: ["server_url"], blocked_reason: "缺少配置: 服务器地址" });
     wrap(<Toggled instance={instance} />);
     expect(screen.getByRole("button", { name: /本机/ }).textContent).toContain("pluginConnStateAction");
     fireEvent.click(screen.getByRole("button", { name: /本机/ }));
