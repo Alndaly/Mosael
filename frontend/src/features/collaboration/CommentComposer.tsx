@@ -12,11 +12,12 @@ import { Send, X } from "lucide-react";
 
 import type { WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { compositionDOMEvents } from "@/components/app/compositionObserver";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
-import { formatCombo } from "@/lib/shortcuts";
+import { formatCombo, isImeKeystroke, isSubmitChord } from "@/lib/shortcuts";
 
 export type CommentDocument = JSONContent;
 
@@ -107,19 +108,25 @@ export function CommentComposer({
         "aria-label": t("commentCanvasPlaceholder"),
       },
       handleKeyDown: (_view, event) => {
+        //: 组词中的 Esc 是放弃候选、Enter 是上屏，都不是这里的关闭 / 提交。
+        if (isImeKeystroke(event)) return false;
         if (event.key === "Escape") {
           onCancel();
           return true;
         }
-        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        if (isSubmitChord(event)) {
           event.preventDefault();
           submitRef.current();
           return true;
         }
         return false;
       },
+      handleDOMEvents: compositionDOMEvents(),
     },
-    onUpdate: ({ editor: instance }) => setEmpty(!instance.getText().trim()),
+    onUpdate: ({ editor: instance }) => {
+      if (instance.view.composing) return;
+      setEmpty(!instance.getText().trim());
+    },
   });
 
   const submit = React.useCallback(() => {

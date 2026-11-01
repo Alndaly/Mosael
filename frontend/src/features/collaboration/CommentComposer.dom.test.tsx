@@ -70,6 +70,24 @@ describe("画布评论编辑器", () => {
     expect(onCanvasWheel).toHaveBeenCalledTimes(1);
   });
 
+  it("组词中的 Esc / ⌘Enter 不关评论框、不提交", async () => {
+    const onCancel = vi.fn();
+    const onSubmit = vi.fn();
+    const view = render(
+      <CommentComposer members={[]} onSubmit={onSubmit} onCancel={onCancel} />,
+    );
+    const editor = await waitFor(() => view.container.querySelector<HTMLElement>("[contenteditable='true']"));
+    expect(editor).toBeTruthy();
+
+    fireEvent.keyDown(editor as HTMLElement, { key: "Escape", isComposing: true, keyCode: 229 });
+    fireEvent.keyDown(editor as HTMLElement, { key: "Enter", metaKey: true, isComposing: true, keyCode: 229 });
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(editor as HTMLElement, { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
   it("提交结构化正文与纯文本摘要", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const view = render(

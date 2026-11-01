@@ -51,6 +51,14 @@ describe("富文本输入框的名字", () => {
     expect(fixed, "已经有名字了 —— 从 KNOWN 里删掉").toEqual([]);
   });
 
+  it("可编辑的 tiptap 都接了组词隔离", () => {
+    //: 组词中的 DOM 是输入法的，不是正文；任何一个可编辑编辑器漏接，中文退格就会在那里复发。
+    const offenders = files
+      .filter(({ calls }) => calls.some((call) => editable(call) && !call.includes("compositionDOMEvents(")))
+      .map(({ rel }) => rel);
+    expect(offenders, "在 editorProps 里接 compositionDOMEvents()（见 components/app/compositionObserver）").toEqual([]);
+  });
+
   it("扫得到东西 —— 别变成空转", () => {
     const all = files.flatMap(({ calls }) => calls);
     expect(all.length).toBeGreaterThanOrEqual(6);

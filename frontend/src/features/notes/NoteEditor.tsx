@@ -10,7 +10,7 @@ import { noteExtensions, notePlaceholder } from "./editorExtensions";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { COMPOSE_SETTLE_MS, useExternalContent } from "@/components/app/useExternalContent";
-import { holdComposition, releaseComposition } from "@/components/app/compositionObserver";
+import { compositionDOMEvents } from "@/components/app/compositionObserver";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { importAsset } from "@/api/domains/assets";
@@ -86,20 +86,12 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     content: markdown, contentType: "markdown", editable,
     editorProps: { attributes: { class: "note-prose outline-none", "aria-label": s.content },
       handleKeyDown: (_view, event) => toolbarKeys.current?.(event) ?? false,
-      handleDOMEvents: {
-        //: 组词整段不读中间 DOM;输入法在 DOM 里退格 / 缩短候选都不会被 ProseMirror 当成正文。
-        compositionstart: (view) => { holdComposition(view); return false; },
-        compositionend: (view) => {
-          releaseComposition(view);
-          //: onUpdate 在组词期间是跳过的,组词结束这一拍必须把最终 Markdown 交给父层 ——
-          //: 否则自动保存拿到的还是组词前的旧稿。等 ProseMirror 把组词收尾(20ms)之后读,
-          //: 和 useExternalContent 补判用的是同一条界线。
-          window.setTimeout(() => {
-            if (editor && !editor.isDestroyed) change.current(editor.getMarkdown());
-          }, COMPOSE_SETTLE_MS);
-          return false;
-        },
-      },
+      //: 组词整段不读中间 DOM;组词结束按同一套收尾时间把最终 Markdown 交给父层。
+      handleDOMEvents: compositionDOMEvents(() => {
+        window.setTimeout(() => {
+          if (editor && !editor.isDestroyed) change.current(editor.getMarkdown());
+        }, COMPOSE_SETTLE_MS);
+      }),
       handlePaste: (view, event) => {
         const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith("image/"));
         if (files.length) { event.preventDefault(); upload.current(files); return true; }

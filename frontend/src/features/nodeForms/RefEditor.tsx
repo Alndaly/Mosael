@@ -15,6 +15,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { useI18n } from "@/app/preferences";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { Hint } from "@/components/ui/tooltip";
+import { compositionDOMEvents } from "@/components/app/compositionObserver";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { cn } from "@/lib/utils";
 
@@ -182,8 +183,10 @@ export function RefEditor({
         role: "textbox",
         "aria-multiline": "true",
       },
+      handleDOMEvents: compositionDOMEvents(),
     },
     onUpdate: ({ editor: instance }) => {
+      if (instance.view.composing) return;
       const next = docToString(instance.getJSON());
       emitted.current = next;
       onChange(next);

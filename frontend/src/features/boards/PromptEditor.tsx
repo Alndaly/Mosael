@@ -20,6 +20,7 @@ import type { MessageKey } from "@/app/messages";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
+import { compositionDOMEvents } from "@/components/app/compositionObserver";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { isSubmitChord } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -428,8 +429,10 @@ export function PromptEditor({
         }
         return false;
       },
+      handleDOMEvents: compositionDOMEvents(),
     },
     onUpdate: ({ editor: instance }) => {
+      if (instance.view.composing) return;
       const next = instance.getText();
       const nextDocument = instance.getJSON() as PromptDocument;
       emitted.current = { value: next, document: JSON.stringify(nextDocument) };

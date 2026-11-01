@@ -39,6 +39,7 @@ export function releaseComposition(view: EditorView): void {
   //: ProseMirror 的 compositionend 处理会先把 composing 置回 false；下一拍再恢复观察，
   //: 读到的才是用户最终确认的 DOM（不是 preedit）。
   window.setTimeout(() => {
+    if (view.isDestroyed) return;
     observer.start();
     observer.flush();
     //: 组词期间没有 transaction，选区映射停在组词开始的位置。最终 DOM 已经落进文档后，
@@ -52,6 +53,21 @@ export function releaseComposition(view: EditorView): void {
       }
     }
   }, 0);
+}
+
+/** 所有可编辑 TipTap 共用的一份 DOM 组词事件；`onEnd` 在最终 DOM flush 后自己安排补交。 */
+export function compositionDOMEvents(onEnd?: (view: EditorView) => void) {
+  return {
+    compositionstart: (view: EditorView) => {
+      holdComposition(view);
+      return false;
+    },
+    compositionend: (view: EditorView) => {
+      releaseComposition(view);
+      onEnd?.(view);
+      return false;
+    },
+  };
 }
 
 /** 组词结束：DOM 光标在最终文档里的位置就是用户看到的位置。 */

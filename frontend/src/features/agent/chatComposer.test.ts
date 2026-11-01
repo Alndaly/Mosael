@@ -89,6 +89,8 @@ describe("回车归谁", () => {
   it("输入法组字中的回车是选词,不是发送", () => {
     // 中文选词时按回车 —— 把它当成发送的话,候选词上不了屏,消息还先飞出去了。
     expect(sendsOnEnter(enter({ isComposing: true }), false)).toBe(false);
+    // 开始组词的那一下 isComposing 还可能是 false，但 keyCode 已经是 229。
+    expect(sendsOnEnter(enter({ keyCode: 229 }), false)).toBe(false);
   });
 
   it("别的键一律不管", () => {

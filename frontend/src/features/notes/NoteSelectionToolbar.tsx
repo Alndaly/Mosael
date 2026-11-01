@@ -111,6 +111,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
   React.useEffect(() => {
     if (!visible) return;
     keys.current = (event) => {
+      if (isImeKeystroke(event)) return false;
       if (event.key === "Tab" && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey) {
         buttons()[0]?.focus();
         return true;

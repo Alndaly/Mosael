@@ -5,10 +5,10 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { PluginKey } from "@tiptap/pm/state";
 
 import { useI18n } from "@/app/preferences";
-import { holdComposition, releaseComposition } from "@/components/app/compositionObserver";
+import { compositionDOMEvents } from "@/components/app/compositionObserver";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
-import { useExternalContent } from "@/components/app/useExternalContent";
+import { COMPOSE_SETTLE_MS, useExternalContent } from "@/components/app/useExternalContent";
 import { ReferenceChip, ReferenceThumb, REFERENCE_NODE } from "@/features/agent/ReferenceChip";
 import { MAX_FORCED_SKILLS, SKILL_NODE, SkillChip, collectSkills, searchSkills, type SkillOption } from "@/features/agent/SkillChip";
 import {
@@ -23,6 +23,7 @@ import {
 import { Truncate } from "@/components/ui/truncate";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { cn } from "@/lib/utils";
+import { isImeKeystroke } from "@/lib/shortcuts";
 
 /** 还没摆出来的条数。菜单底部那行说它 —— **按类成段给的那份候选已经截过断**,真数只有查的时候知道
  *  (`matched`;素材是服务端按 limit 取的,`items.length` 根本不是匹配数)。 */
@@ -67,11 +68,11 @@ export function collectReferences(document: JSONContent | undefined): AgentRefer
  * Shift+回车是换行;输入法组字中的回车是选词,两者都不发送。
  */
 export function sendsOnEnter(
-  event: Pick<KeyboardEvent, "key" | "shiftKey" | "isComposing">,
+  event: Pick<KeyboardEvent, "key" | "shiftKey" | "isComposing" | "keyCode">,
   menuOpen: boolean,
 ): boolean {
-  if (menuOpen) return false;
-  return event.key === "Enter" && !event.shiftKey && !event.isComposing;
+  if (menuOpen || isImeKeystroke(event)) return false;
+  return event.key === "Enter" && !event.shiftKey;
 }
 
 export const emptyDocument: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
@@ -317,17 +318,10 @@ export function ChatComposer({
       //: 会把它当正文插进来。认领下来(它只 preventDefault、不拦冒泡),文件交给外面整块对话区上的
       //: 附件拖放(见 composerAttachments)。编辑器里自己挪一段字(moved)照旧归它。
       handleDrop: (_view, event, _slice, moved) => !moved && Array.from(event.dataTransfer?.types ?? []).includes("Files"),
-      handleDOMEvents: {
-        //: 组词整段不读中间 DOM;输入法在 DOM 里退格 / 缩短候选都不会被 ProseMirror 当成正文。
-        compositionstart: (view) => { holdComposition(view); return false; },
-        compositionend: (view) => {
-          releaseComposition(view);
-          //: onUpdate 在组词期间是跳过的；组词结束这一拍必须把最终文档交给父层，
-          //: 否则紧接着点发送时 `draft.text()` 还是组词前的旧稿（消息会少一段中文）。
-          queueMicrotask(() => syncCompositionDocument(view));
-          return false;
-        },
-      },
+      //: 组词整段不读中间 DOM;组词结束后沿用同一套收尾时间把最终文档交给父层。
+      handleDOMEvents: compositionDOMEvents((view) => {
+        window.setTimeout(() => syncCompositionDocument(view), COMPOSE_SETTLE_MS);
+      }),
       handleKeyDown: (_view, event) => {
         if (!sendsOnEnter(event, menuOpenRef.current)) return false;
         event.preventDefault();
