@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { assetPreviewUrl, assetThumbnailUrl, entityKeys, getEntity, type EntitySummary } from "@/api/client";
+import { useImagePreview } from "@/components/app/image-preview";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Truncate } from "@/components/ui/truncate";
+import { isImeKeystroke } from "@/lib/shortcuts";
 import { entityDisplayName, useCatalogLabels } from "./entityMeta";
 
 /**
@@ -26,6 +28,7 @@ export function EntityPreviewDialog({
   onClose: () => void;
 }) {
   const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   const labels = useCatalogLabels(Boolean(entity));
   const detail = useQuery({
     queryKey: entityKeys.detail(workspaceId, entity?.id ?? ""),
@@ -35,6 +38,11 @@ export function EntityPreviewDialog({
   const shown = detail.data ?? entity;
   const cover = detail.data?.display_cover_asset_id || shown?.cover_asset_id || "";
   const references = (detail.data?.references ?? []).filter((one) => one.asset_kind === "image");
+  const gallery = references.map((one) => ({
+    src: assetPreviewUrl(one.asset_id),
+    title: one.asset_name,
+    assetId: one.asset_id,
+  }));
   const referenceCount = detail.data ? detail.data.references.length : entity?.reference_count ?? 0;
   const openDetail = () => {
     if (!entity) return;
@@ -58,7 +66,20 @@ export function EntityPreviewDialog({
       {entity && (
         <div className="grid gap-4" data-entity-preview="">
           {cover && (
-            <div className="relative aspect-[16/9] overflow-hidden rounded-lg border border-border bg-panel-inset">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={t("imagePreviewTitle")}
+              onClick={() => openImagePreview({ src: assetPreviewUrl(cover), title: shown ? entityDisplayName(shown) : "", assetId: cover })}
+              onKeyDown={(event) => {
+                if (isImeKeystroke(event)) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openImagePreview({ src: assetPreviewUrl(cover), title: shown ? entityDisplayName(shown) : "", assetId: cover });
+                }
+              }}
+              className="relative aspect-[16/9] cursor-zoom-in overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <FallbackImage src={assetPreviewUrl(cover)} alt="" className="h-full w-full object-cover" />
             </div>
           )}
@@ -99,8 +120,22 @@ export function EntityPreviewDialog({
                 <section className="grid gap-1.5">
                   <h3 className="m-0 text-ui-xs font-medium text-muted-foreground">{t("entityReferences")}</h3>
                   <div className="grid grid-cols-4 gap-2">
-                    {references.slice(0, 8).map((one) => (
-                      <div key={one.asset_id} className="relative aspect-square overflow-hidden rounded-md border border-border bg-panel-inset">
+                    {references.slice(0, 8).map((one, index) => (
+                      <div
+                        key={one.asset_id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${t("imagePreviewTitle")} ${one.asset_name}`}
+                        onClick={() => openImagePreview({ ...gallery[index], gallery })}
+                        onKeyDown={(event) => {
+                          if (isImeKeystroke(event)) return;
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openImagePreview({ ...gallery[index], gallery });
+                          }
+                        }}
+                        className="relative aspect-square cursor-zoom-in overflow-hidden rounded-md border border-border bg-panel-inset hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
                         <FallbackImage src={assetThumbnailUrl(one.asset_id)} alt="" className="h-full w-full object-cover" loading="lazy" />
                         <Truncate className="absolute inset-x-0 bottom-0 bg-[rgba(10,12,15,0.72)] px-1 py-0.5 text-[10px] text-[#e8eaed]">
                           {labels.role(one.role)}

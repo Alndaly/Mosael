@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AtSign } from "lucide-react";
+import { AtSign, CircleAlert } from "lucide-react";
 
 import { assetThumbnailUrl, entityKeys, listEntities, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -115,13 +115,21 @@ function PoseReferenceToggle({ checked, supported, onChange }: { checked: boolea
   const t = useI18n();
   return (
     <Hint label={t("genPoseAsReference")} hint={supported ? t("genPoseAsReferenceHint") : t("genPoseReferenceUnsupported")}>
-      <Checkbox
-        checked={checked}
-        onCheckedChange={(value) => onChange(value === true)}
-        aria-label={t("genPoseAsReference")}
-        data-pose-reference-toggle=""
-        className="ml-1 mr-2 size-4 rounded-full border-border-strong bg-transparent data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-      />
+      <span className="relative ml-1 mr-2 grid size-4 shrink-0 place-items-center">
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(value) => onChange(value === true)}
+          aria-label={t("genPoseAsReference")}
+          data-pose-reference-toggle=""
+          className={cn(
+            "size-4 rounded-full bg-transparent",
+            supported
+              ? "border-border-strong data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+              : "border-transparent bg-transparent hover:border-warning/50 data-[state=checked]:border-warning data-[state=checked]:bg-warning/15 data-[state=checked]:text-warning",
+          )}
+        />
+        {!supported && !checked && <CircleAlert size={14} aria-hidden className="pointer-events-none absolute text-warning" />}
+      </span>
     </Hint>
   );
 }

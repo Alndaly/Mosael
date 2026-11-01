@@ -37,6 +37,8 @@ describe("资产引用小条", () => {
 
     const toggle = screen.getByRole("checkbox", { name: "genPoseAsReference" });
     expect(toggle).toHaveAttribute("aria-checked", "false");
+    //: 模型不收姿势参考时不是普通空圈,而是一枚警告图标;点击它才明确改成普通参考图。
+    expect(toggle.parentElement?.querySelector(".lucide-circle-alert")).toBeTruthy();
     await userEvent.click(toggle);
     expect(onChange).toHaveBeenCalledWith(true);
   });
