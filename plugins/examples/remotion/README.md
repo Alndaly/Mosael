@@ -58,7 +58,7 @@ export default function Scene({ data }: { data: { word: string } }) {
 }
 ```
 
-Only `react`, `remotion` and `katex` can be imported. If bundling or rendering fails, the error (file, line, column) is returned as is; fix it and call again.
+Only `react`, `remotion`, `katex` (including `katex/dist/katex.min.css`) can be imported. If bundling or rendering fails, the error (file, line, column) is returned as is; fix it and call again.
 
 ## Permissions
 

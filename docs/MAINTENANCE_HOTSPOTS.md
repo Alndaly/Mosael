@@ -112,7 +112,7 @@ Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`�
 
 ## 2. 前端全局样式 — ✅ 已解决(2026-07-22)
 
-原 10k 行 `styles.css` 已全部内联为 TSX Tailwind v4 类(仅剩 ~40 行 portal 覆盖)。
+原 10k 行 `styles.css` 已全部内联为 TSX Tailwind v4 类(仅剩 ~100 行:portal / 层级覆盖、媒体预览滑杆与 TipTap 空态占位)。
 Interface 从「全局 class 名 + cascade」变成了「设计刻度」——间距/圆角/色板约定见
 `docs/ARCHITECTURE.md` 的前端关键约定。遗留风险转移到下面第 3 条(Tailwind v4 行为陷阱)。
 
@@ -182,7 +182,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 | `backend/app/domain/generation_catalog/__init__.py` | 1,717 | 364 | 能力描述符数据分到 `generation_catalog/descriptors/` |
 | `backend/app/domain/workflows/templates.py` | 2,050 | 346 | 三张大图模板与模型选择、schema 各成一个 `templates_*.py` |
 
-**没拆**:`backend/app/db/migrations.py` 2026-10-27 已按滚动窗口退休到约 600 行,保留窗口内的一次性迁移与对账步骤;不按行数拆,因为「这一步在谁之前」比文件长度重要。
+**没拆**:`backend/app/db/migrations.py` 2026-10-27 已按滚动窗口退休到约 860 行,保留窗口内的一次性迁移与对账步骤;不按行数拆,因为「这一步在谁之前」比文件长度重要。
 
 ### 4.1 三个数据装配文件 — ✅ 已完成（2026-09-01，第二阶段 2026-10-28）
 
@@ -311,8 +311,8 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 ## 12. 同一个常量在 sidecar 和后端各写了一份 — ✅ 已由契约钉住
 
 四个回退常量在 `agent-sidecar/src/{pi,compaction}.ts` 与 `backend/app/domain/providers/model_limits.py`
-各有一份:`FALLBACK_CONTEXT_WINDOW = 128000`、`LOCAL_FALLBACK_CONTEXT_WINDOW = 64000`
-(本机/LAN 端点;它是智能体固定开销装得下的最小窗口,别往回调 —— 见 `test_tool_definitions_budget`)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 32768`,
+各有一份:`FALLBACK_CONTEXT_WINDOW = 128000`、`LOCAL_FALLBACK_CONTEXT_WINDOW = 128000`
+(本机/LAN 端点;2026-10-22 从 64K 调到 128K;固定开销仍受 `test_tool_definitions_budget` 的六成上限约束 —— 见 `test_tool_definitions_budget`)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 32768`,
 以及 `CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
 
 不是疏忽:整理决策必须在 sidecar 里做(它才拿得到消息与 usage),而水位显示必须在后端算(前端只认
@@ -503,10 +503,10 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 
 ## Verification rule
 
-完整的门禁清单只有一份:README「测试与检查」那一段,和 CI(`.github/workflows/tests.yml`,三组并行)跑的是同样的几步。
+完整的门禁清单只有一份:README「测试与检查」那一段,和 CI(`.github/workflows/tests.yml`,五组并行(checks / frontend / backend / cloud / formats))跑的是同样的几步。
 每个 slice 至少跑:
 
-- `pnpm lint`(仓库根)**每次都跑** —— 它是 oxlint(frontend、website)加三处 ruff(backend、community、
+- `pnpm lint`(仓库根)**每次都跑** —— 它是 oxlint(frontend、website)加三处 ruff(backend、cloud、
   packages/mosael-formats),是 CI 的第一步。只跑 frontend 那半漏过 F401,CI 连红过三次
 - `pnpm build:browser` when touching `electron/browser/**`
 - `pnpm --dir frontend build && pnpm --dir frontend exec vitest run` when touching frontend(`build` = `tsc --noEmit` +

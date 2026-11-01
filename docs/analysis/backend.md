@@ -1,5 +1,7 @@
 # Mosael 后端与 agent-sidecar 深度分析
 
+> **版本提示（2026-11-01）**：本文是 2026-09 的架构分析快照（基准 1.4.2）。代码行号、模块数量、路由 / 工具 / ADR 计数会随时间变化，引用前请以当前代码与 `docs/ARCHITECTURE.md` / `CONTEXT.md` 为准；不要拿本文的数字做门禁。
+
 > 分析对象:`backend/`(FastAPI 事实源,348 个 Python 文件,`backend/tests/` 374 个测试文件)与 `agent-sidecar/`(Node/TypeScript 智能体卫星进程,9 个源文件约 2351 行)。
 > 依据:`CONTEXT.md`、`docs/ARCHITECTURE.md`、`docs/adr/`(18 份 ADR)与源码逐文件核对;所有论断均给出文件路径与代码证据。
 

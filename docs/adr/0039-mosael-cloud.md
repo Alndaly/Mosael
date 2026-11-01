@@ -25,7 +25,8 @@ Mosael Cloud 要做的,是让用户登录后充一笔钱,直接用平台挑好�
 - **参数来自适配器**([ADR 0015](0015-generation-parameters-come-from-the-adapter.md)):界面上能填什么,由适配器的声明决定,
   不在前端写死。适配器、契约、注册表在 `backend/app/ai/providers/`([ADR 0010](0010-provider-contracts-adapters-registry.md))。
 - **社区服务 `community/` 有账号,但桌面端已经不接它了。** 社区服务里有短信 / 密码登录、轮换的刷新令牌、设备授权
-  ([ADR 0026](0026-community-service.md))。不过 **ADR 0026 同日的修订把桌面端的接入整体拿掉了**:社区账号、分享、发布
+  ([ADR 0026](0026-community-service.md))。`community/` 已在 2026-10-21 整体删除;本文下面提到的账号与数据库现在指
+  `cloud/`,见 ADR 0088。不过 **ADR 0026 同日的修订把桌面端的接入整体拿掉了**:社区账号、分享、发布
   一起移除,接入时加的表和列由迁移 `migrate-drop-the-community-integration` 删掉
   标着暂不可用。所以 Cloud 的账号要**重新接**,不是「已经能登录」。
 - **合规上已有的两块**:成片导出时,用了 AI 素材就加显式和隐式标识(`domain/render.py`,[ADR 0028](0028-digital-humans.md) §5);

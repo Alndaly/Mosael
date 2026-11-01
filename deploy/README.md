@@ -223,6 +223,7 @@ DELETE FROM cloud_email_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZON
 DELETE FROM cloud_phone_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_sessions     WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_oauth_states WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
+DELETE FROM cloud_mfa_tickets  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 ```
 
 **只删已过期的行**,不动用户、设备、绑定,也不动还没过期的验证码/会话。查看日志:
@@ -239,11 +240,12 @@ DELETE FROM cloud_email_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZON
 DELETE FROM cloud_phone_codes  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_sessions     WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 DELETE FROM cloud_oauth_states WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
+DELETE FROM cloud_mfa_tickets  WHERE expires_at < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC');
 SQL
 ```
 
 如果不想跑这个容器,可以在 `.env` 里把间隔调大,或删掉 compose 里的 `cleanup` 服务;
-但那样三张短期表会一直长,建议保留。
+但那样这几张短期表会一直长,建议保留。
 
 ## 常见故障对照
 

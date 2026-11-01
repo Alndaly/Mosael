@@ -1,13 +1,13 @@
 # PoseAtlas
 
 Brings the two atlases from [RuiC-PoseAtlas](https://hruiccc.github.io/RuiC-PoseAtlas/) into Mosael's **reference library**
-(the Reference library tab on the Assets page, ADR 0091):
+(switch the Assets page to **Reference library** at the right of the filter bar, ADR 0091):
 
 - **Pose atlas** — faceless grey mannequin line art, five camera angles per pose (front, three-quarter, side, high, low);
 - **Costume atlas** — complete outfits without a person, by spring / summer / autumn / winter / swimwear / party and more,
   with color, material and item tags.
 
-Browse and search it (Chinese, English and Japanese names and ids all match), then **Use this one** to take the original
+Browse and search it (Chinese, English and Japanese names and ids all match), then **Use as media** to take the original
 image into your workspace as media. **Save as asset** also creates a pose / costume asset you can `@` in a generation —
 a pose goes to the model as a *pose reference*, constraining only the body pose and composition.
 

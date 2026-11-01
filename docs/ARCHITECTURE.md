@@ -7,7 +7,7 @@
 
 `open "Mosael.app"` 一条命令背后是三件事,顺序由 `electron/main.cjs` 编排:
 
-1. **拉起后端** — spawn 打包的 `mosael-backend` 二进制(开发模式则是 `uvicorn`),轮询 `/api/health` 等它就绪(30s 超时)。
+1. **拉起后端** — spawn 打包的 `mosael-backend` 二进制(开发模式则是 `uvicorn`),轮询 `/api/health` 等它就绪:只要进程还活着就一直等(冷启动 / 迁移可能要几分钟),只有进程退出才算没起来;冒烟跑例外 120s。
    若 8800 已有健康后端(如 dev server),**复用它**,不再起新进程(`ensureBackend()` 里的 `isHealthy()` 检查)。
 2. **开窗加载前端** — 打包版 `loadFile(frontend/dist/index.html)`,开发版 `loadURL(localhost:5173)`。
    hash 路由(`#/editor?p=<id>`)——因为 `file://` 下 path 路由不可用。
@@ -63,7 +63,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
 | `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
-| `assets/listing.py`(配 `assets/intermediates.py`) | 素材列表:按游标一页页给(排序键 + id 做游标,翻到一半有人导入也不重复不漏),种类 / 来源 / 搜索 / 标签 / 排序都在服务端做,只带卡片字段(`AssetCardOut`);页签数字另取 facets,剪辑台按时间线取完整字段。**中间产物**(`assets.intermediate`:逐句配音的一句、对口型的一块)由做零件的那道工序在登记时说,列表、挑素材的弹窗、剪辑台素材池、智能体 `list_assets` 默认不列([ADR-0036](adr/0036-intermediate-assets-stay-out-of-the-library.md)) |
+| `assets/listing.py`(配 `assets/intermediates.py`) | 素材列表:按游标一页页给(排序键 + id 做游标,翻到一半有人导入也不重复不漏),种类 / 来源 / 搜索 / 标签 / 排序都在服务端做,只带卡片字段(`AssetCardOut`);页签数字另取 facets,剪辑台按时间线取完整字段。**中间产物**(`assets/intermediates.py`:逐句配音的一句、对口型的一块)由做零件的那道工序在登记时说,列表、挑素材的弹窗、剪辑台素材池、智能体 `list_assets` 默认不列([ADR-0036](adr/0036-intermediate-assets-stay-out-of-the-library.md)) |
 | `assets/web_capture.py` / `assets/web_download.py` | 浏览器会话交来的东西入库:顶栏截屏、采集图片、下载视频(`POST /api/assets/capture`,看文件头只收图片)和网页里点的下载(`/api/assets/web-download`,只收素材库认得的类型);出处记在 `media_info`(来源页、标题、截取时间、哪种截法),不冒充 `source_url`。自动化里触发的下载和「浏览器·截图」经执行器的产物入口(`/api/browser/worker/actions/{id}/artifact`,带那条动作的租约令牌)入库,出处另记运行和节点 |
 | `model_library/` / `server_workflows.py` | 两项**目录类能力**的宿主一侧([ADR-0034](adr/0034-model-library.md)、[ADR-0035](adr/0035-workflow-library.md)):按 `op` 问认领它的插件工具,规整回答(路径、图摘要、预览地址都先过一遍)、补上「Mosael 里谁在用它」(引用表的 `generation_model`);下载模型、装节点包是能取消的后台任务,写操作一律不覆盖、撞名 409 带建议名,改成了让这个连接的目录重拉。唯一的例外是应用表单([ADR-0038](adr/0038-comfyui-workbench.md) §2)的 `annotate`:只改工作流里 `mosael` 那几处标记、带着读到时的改动时间覆盖写,在这之间被改过回 409 `stale`。ComfyUI 工作台(ADR-0038 §3、§6)在这里多四个口子,都不写那台机器上的文件:画布上那张图的应用表单(`app/live`)、写进画布要改的标记(`app/marks`)、选中节点那一格的模型目录(`model-library/node-folders`),和跑画布上的图(`run`:建一个普通的生成任务,图放在任务载荷的 `workbench_graph` 里交给插件,不进生成参数,任务出口不带它) |
 | `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露;市场索引与安装(`registry.py`)、文件双向搬运(`artifacts.py` 交出 / `inputs.py` 收下)、跨调用状态(`state.py`)。**不认识素材库** —— `media_bridge.py` 只定义来源与落点的契约,由 `domain/assets/plugin_bridge` 在组装根登记(同 jobs 不认识智能体) |
@@ -73,7 +73,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `core/run_log.py` | 子进程的完整输出落盘(`~/.mosael/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
 | `core/text.blame_line` | 从子进程输出里挑出**说明失败原因**的那一行。**不取最后一行**:那常常是收尾提示、分隔线,或者一根 tqdm 进度条(这个坑踩过三次,判据因此收在一处) |
 | `ai/runtime/remote_size.py` | 问下载源要**实际的**文件大小(HuggingFace `?blobs=true` / ModelScope `/repo/files?Recursive=True`),按这次真正要取的文件算而不是整仓。问不到就退回目录里的估算**并说出它是估算** |
-| `billing/` | 用量台账:按服务商回报的用量 / 扣费记账,失败没回报的记 0,免费的(Edge 配音)记 0 且标 `free`、不进花费汇总;**记账的 `provider` 是连接的厂商**(价目规则按它配):语音合成记 `connection_vendor_for_speech_engine(engine)`,百炼一条连接下的 qwen-tts 和 CosyVoice 都记 `alibaba` —— 此前 CosyVoice 记成引擎 id `alibaba-cosyvoice`,永远对不上价,老账由迁移 `migrate-speech-usage-follows-todays-booking` 改过来;复刻音色记一笔免费的 `tts / enroll_voice`([ADR-0037](adr/0037-cosyvoice-remote-voice-clone.md));回包里的用量另作核对(`ReportedUsage.observed`),对不上只记日志和依据不改账。没给 `job_id` 的调用挂在当前正在执行的任务上,`run_costs` 顺着 `parent_job_id` 把一次工作流运行的整棵任务树按币种加起来,记进运行结果 |
+| `billing/` | 用量台账:按服务商回报的用量 / 扣费记账,失败没回报的记 0,免费的(Edge 配音)记 0 且标 `free`、不进花费汇总;**记账的 `provider` 是连接的厂商**(价目规则按它配):语音合成记 `connection_vendor_for_speech_engine(engine)`,百炼一条连接下的 qwen-tts 和 CosyVoice 都记 `alibaba` —— 此前 CosyVoice 记成引擎 id `alibaba-cosyvoice`,永远对不上价,老账当年由迁移 `migrate-speech-usage-follows-todays-booking` 改过来(该迁移现已随支持窗口退休);复刻音色记一笔免费的 `tts / enroll_voice`([ADR-0037](adr/0037-cosyvoice-remote-voice-clone.md));回包里的用量另作核对(`ReportedUsage.observed`),对不上只记日志和依据不改账。没给 `job_id` 的调用挂在当前正在执行的任务上,`run_costs` 顺着 `parent_job_id` 把一次工作流运行的整棵任务树按币种加起来,记进运行结果 |
 | `jobs/` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events`;终态时按 payload 里的 `receipt` 回执给发起方(监听状态变化,不认某个函数 —— 各处写法不一) |
 | `accounts.py` / `members.py` / `usernames.py` | **账号**和**工作区成员**分开:`accounts` 管一个人的账号行从建出来到删掉(注册与第三方登录建号同一个 `create_account`、认人、资料与头像、改密与重置、删号、部署管理员名单与授予);`members` 管谁在哪个工作区、怎么被邀请进来(邀请链接、按用户名邀请、角色、移出、最后一个所有者不变量、删工作区);用户名怎么规整在叶子 `usernames` 里,两边都用它。`accounts` 依赖 `members`(建号时用邀请码、删号时处理独占的工作区),反过来不行 |
 | `notifications.py` | 站内通知:按用户投递,团队模式扇出给工作区成员 |
@@ -125,7 +125,7 @@ TaskEvent 行只在总线创建。
 - `dispatch_job` 在它起的线程里把"当前父任务"设成这个任务,于是执行体里建的任务(字幕配音
   逐句的合成、导出收尾排的预览代理)都是它的子任务,取消会一并级联。两档:工作流引擎和调度器
   是**严格**的(父任务已结束就拒绝派生);执行体自己是**派生**的(父任务刚落终态也照样挂上)。
-- 每种任务在界面上的样子在 `domain/job_catalog.py` 声明一次:名字、做完要不要说
+- 每种任务在界面上的样子在 `domain/jobs/catalog.py` 声明一次:名字、做完要不要说
   (`always` / `failures` / `never`)、可能改动的资源、在哪一页看它的记录;`GET /api/jobs/kinds`
   发给前端。前端只补图标和"资源 → 缓存键"两张表(`components/jobs/jobKinds.tsx`)。
   `create_job` 用到的每个种类都得在目录里、每个种类都得有图标,都有测试守着。
@@ -155,8 +155,8 @@ TaskEvent 行只在总线创建。
 旧的社区服务(`community/`,ADR 0026)连同它的 `deploy/community/` 在 2026-10-21 整体删掉了 ——
 它给的是"账号 + 提交审核 + 画板分享"一整套,而产品现在用的是 **Mosael Cloud**(`cloud/`,ADR 0039):
 账号、插件 / 工作流 / 画板的分享与浏览、评论点赞收藏、通知。**官网和桌面端都只跟 Cloud 通信**,
-仓库里不再有第二套账号或第二套分享模型。桌面端接入当年那批列和表,由迁移
-`_migrate_drop_the_community_integration` 删过;社区那侧的会话与设备授权随之作废。
+仓库里不再有第二套账号或第二套分享模型。桌面端接入当年那批列和表,当年由迁移
+`_migrate_drop_the_community_integration` 删过(现已随支持窗口退休);社区那侧的会话与设备授权随之作废。
 
 ### 资产库(ADR 0027)
 
@@ -561,9 +561,8 @@ Gateway 的边界与安全不变量见
 ## 智能体的上下文:预算与整理
 
 **窗口来自模型**:模型行的 `context_window` → 供应商目录 → **内置查证表** → 双档回退:云端 **128K**,
-本机/LAN **64K**(按 base_url 判定)。本机那一档不是「最常见的小窗口」,而是**智能体还转得动的最小窗口**:工具定义加
-系统提示每轮重发、压不掉,本身就 ≈32.5K;按 32K 回退时第一次工具调用之后 max_tokens 被夹到 1。这块固定开销不得
-超过本机回退窗口的六成,由 `backend/tests/test_tool_definitions_budget.py` 盯着。本机端点里只有 vLLM 的 `/v1/models`
+本机/LAN **128K**(按 base_url 判定;本机档 2026-10-22 从 64K 调上来)。工具定义加系统提示每轮重发、压不掉,
+本身就 ≈32.5K;这块固定开销不得超过回退窗口的六成,由 `backend/tests/test_tool_definitions_budget.py` 盯着。本机端点里只有 vLLM 的 `/v1/models`
 报得出服务端真实窗口(`max_model_len`),目录会认它;Ollama / LM Studio 的 OpenAI 兼容目录只给 id。四层合并**只在 `backend/app/domain/providers/model_limits.py` 的 `resolve()`
 一处发生**,**三条执行通道**都经过它:智能体那条(`domain/providers/runtime`)、直连 HTTP 那条
 (`domain/ai_chat.target_for`,翻译/素材分析/工作流 LLM/AI 编排/发布文案/提示词优化/画板写作/放行判断
@@ -721,8 +720,8 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 ### 关键约定
 
 - **时间线几何**是纯函数(`domain/timeline/geometry.ts`),组件绝不内联几何计算。吸附是**两级**的:目标轨片段边缘优先,播放头/零点/跨轨边缘只在本轨无命中时参与(单一候选池会让字幕 cue 边界劫持同轨对接)。
-- **样式全部内联为 TSX Tailwind 类**,`styles.css` 只剩 portal 覆盖(~40 行);禁手写全局 class、禁共享类字符串文件。刻度:昼「暖纸面」`#f6f4f0`+`#6a5cd8` / 夜「暖檀黑」`#141218`+`#8a7bf0`(独立调校非翻转),`--radius: 8px` 派生 sm=6/md=8/lg=10/xl=14,分段控件一律药丸形,表单填充用 `--field` 实底。
-- **全平面无阴影**:分层靠发丝边框 + 底色层级(`--shadow-*` 解析为 none);焦点环/inset 不算。
+- **样式全部内联为 TSX Tailwind 类**,`styles.css` 只剩 portal / 层级覆盖、媒体预览滑杆与 TipTap 空态占位(~100 行);禁手写全局 class、禁共享类字符串文件。刻度:昼 `#f6f8fb`+`#4466a5` / 夜 `#141517`+`#91a9da`(独立调校非翻转),`--radius: 8px` 派生 sm=6/md=8/lg=12/xl=16,分段控件一律药丸形,表单填充用 `--field` 实底。
+- **阴影只做层级暗示**:只有真正脱离画布的浮层有阴影,单层、alpha ≤ 0.34;停靠面板不加。分层仍靠发丝边框 + 底色层级。
 - **控件一律用 Radix/shadcn**(`components/ui/`),禁原生 `select`/`alert`/`confirm`/手写弹层;**动态长列表下拉一律可搜索 Combobox**(`components/app/combobox.tsx`)。
 - **业务弹窗统一三段式**(`components/app/modals.tsx` 的 `ModalShell`):顶栏与动作栏 sticky 并复用
   中段的半透明 `popover` 表面 + backdrop blur,中间 body
@@ -758,7 +757,7 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
   `no-drag`** —— 只有显式的 `no-drag` 能从拖拽区里减掉一块。见 MAINTENANCE_HOTSPOTS.md 第 10 条。
 
 **悬浮层级**:工作流的悬浮面板与画布节点都支持 `Cmd/Ctrl + [` / `]` 升降层级
-(`features/workflows/useFloatingPanel.tsx` 持模块级 z 序表,`Z_BASE = 55`)。**节点永远不得高于悬浮
+(`components/app/useFloatingPanel.tsx` 持模块级 z 序表,`Z_BASE = 55`)。**节点永远不得高于悬浮
 面板** —— React Flow 的 `.react-flow__viewport` 带 `transform`、自成一个层叠上下文,节点的 z-index
 在那个上下文内部生效,天然低于外层 fixed 面板,这条约束由结构而非纪律保证。焦点用
 `onPointerDownCapture` 记(捕获阶段:拖拽与缩放都会 `stopPropagation`)。
@@ -956,8 +955,8 @@ Adapter 声明 `surface_depends_on_model = False` 要同时满足两条:不按�
 **导入的模型归工作区,不归某个场景**(1.4.2)。此前它挂在 `scene_id` 上,而**工作流每跑一次都
 新建一个场景** —— 于是在 Blender 里建好的产品模型在结构上永远进不了自动成片:那个场景还不存在,
 模型没处挂。归工作区之后,`create_scene` 里那句「建完场景再导模型」和专为 Blender 接回而设的
-`create_scene_with_model` 特例一起消失了 —— 它们都是那个错位边界的产物。老数据由
-`_migrate_scene_models_to_workspace` 自动搬(表结构 + 文件目录,可重入)。
+`create_scene_with_model` 特例一起消失了 —— 它们都是那个错位边界的产物。当年的老数据由
+`_migrate_scene_models_to_workspace` 自动搬过;该迁移现已随支持窗口退休,仍在旧版本的用户需要先升到带它的版本。
 
 **后端也能渲白模**(`domain/scenes/render`):几何、机位采样、投影、光照逐项对照工作台的 three.js,
 所以工作流和智能体(跑在后端)也能拿 3D 场景当生成参考。**导入的模型也画得出**

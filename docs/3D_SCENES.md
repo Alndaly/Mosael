@@ -15,6 +15,12 @@
 - 分组只带着孩子走,自己没有几何;相机和灯在**渲染与导出**里没有几何 —— 工作台画的机位模型
   和灯泡标记是编辑辅助物,不是场景内容。
 - 导出走 `cloneSceneForExport`,把嵌套的编辑辅助物摘掉,不改实时场景。
+- **人偶(`kind="figure"`)可摆姿势**:几何是 19 个关节的 FK 层级(髋 → 脊柱 → 胸 → 颈 → 头,胸 → 肩 → 上臂 → 前臂 → 手,
+  髋 → 大腿 → 小腿 → 脚),姿势存在对象自己的 `pose`(`FigurePose`:关节名 → `[x, y, z]` 度,外加 `hips_drop`)。前端
+  `mannequin/mannequinRig.ts` 与后端 `scenes/render/meshes.py` 是同一套关节和默认直立尺寸,由语料里 `parts=19` 的那几例钉住;
+  摆好的姿势自然进白模参考帧。视口里点关节段切到关节旋转,检查器有五个预设(站 / 走 / 坐 / 蹲 / 举手)。
+- **镜头的机位**:`SceneShot.camera_angle` 取 `front / three_quarter / side / back / high_angle / low_angle` 或不标,
+  `scene_reference` 的回执带上它;生成时挂了姿势参考(`pose_reference`,ADR 0091)只发同机位的那张,不拿正面图冒充。
 
 ## 同一份几何,三个消费者
 
@@ -105,8 +111,8 @@ schema 里的 `kind: "model"` + `model_id` 才有东西可填(见 `templates.SET
 模型就没处挂。`create_scene` 里那句"建完场景再导模型"、以及专为 Blender 接回而设的
 `create_scene_with_model` 特例,都是同一个错位的产物,改归工作区之后一起消失了。
 
-老数据由 `_migrate_scene_models_to_workspace` 自动搬(表结构 + 文件目录,可重入),
-见 `tests/test_scene_models_move_to_workspace_migration.py`。
+当年的老数据由 `_migrate_scene_models_to_workspace` 自动搬过(表结构 + 文件目录,可重入);
+这条一次性迁移现已随八版本支持窗口退休,仍停在旧版本的环境要先升到带它的版本。
 
 ## 其他约束
 

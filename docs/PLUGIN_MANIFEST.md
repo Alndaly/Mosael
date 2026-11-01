@@ -83,7 +83,7 @@ except Exception as exc:
 
 请求里的 `accepts` 是**宿主这一版收得下哪些回答扩展**(没有这一格就是都不收):今天只有一个 `shared_tables`
 (见下)。照它决定怎么交,**别假定宿主一定认得** —— 插件可能比应用新(从市场升上来的),那时收到的是交得多的那一份,
-`1MB` 的线照旧。
+普通工具调用仍是 `1MB`;目录类回答(`op: tools` / `models` / 工作流库 / 节点包 / 声音)宿主放宽到 `8MB`。
 
 `error` 的**第一行是给人看的那句话**(出了什么事、下一步怎么办),原文(异常、errno、对方回的正文)换行写在
 后面:界面把第一行当正文,其余收进「详情」或悬停说明。`连不上这台 ComfyUI,确认它在运行、地址填对` 后面一行
@@ -98,8 +98,9 @@ except Exception as exc:
 
 一份**目录类**的回答(`op: tools` 的工具清单、`op: models` 的模型清单)常常带着同一张大表几十遍:ComfyUI 每个节点的
 输入里有一类几百项的下拉(LoRA、大模型、VAE、文本编码器),一张图里好几个节点共用同一张,每张工作流又是一个工具、
-每个工具的每一格都带着自己那张。维护者那台(42 个工具)的工具清单因此 1.06MB,撞上 1MB 的线 —— 整份不收,而里面
-58 万字节是重复的同一批表(403 份、只有 77 张不同的表)。
+每个工具的每一格都带着自己那张。维护者那台(42 个工具)的工具清单因此 1.06MB,而里面
+58 万字节是重复的同一批表(403 份、只有 77 张不同的表)。目录类回答现在放宽到 8MB,但共享表仍值得做:
+去掉重复后那份清单约 480KB,传输和解析都更省。
 
 宿主在请求里说了 `accepts` 里有 `shared_tables` 时,可以把**重复的**表挪到 `output` 顶层一次,格子上指过去:
 
@@ -1091,7 +1092,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | `instance.config` | 明文配置:`key` `label` `type` `options` `required` `help` `default`;`type` 见「配置项的类型」(`json` / `code` 给代码编辑器,`code` 另写 `language`);`multiline: true` 给多行框 |
 | `instance.credentials` | 密钥,字段同上;`secret` 默认 true |
 | `permissions` | 自由字符串,逐项授权 |
-| `provides` | 这个插件能替宿主做成哪几件事:`public_url` / `generation` / `tools`(见「声明『我能替宿主做成什么』」「运行时报出的工具」) |
+| `provides` | 这个插件能替宿主做成哪几件事:完整的能力名见下面「声明『我能替宿主做成什么』」一节的表(`public_url` / `generation` / `tools` / `document_parse` / `audio_denoise` / `audio_separation` / `transcription` / `translation` / `speech` / `model_library` / `workflow_library` / `reference_library`) |
 | `toolsets` | 给别的智能体看的高层描述;第一条的 `description` 是市场里的长介绍(版本 7 之前叫 `skills`) |
 | `services` | 清单版本 8:这个插件能让宿主在本机起停的常驻服务,每条 `{key, title, tool}`(见「本机服务」) |
 | 包里的 `skills/` 目录 | 不是清单字段:插件带的技能(SKILL.md 文件夹),装包时校验,见「带技能」 |
@@ -1128,7 +1129,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 那次发版的 tag 上(见 [RELEASING.md「插件市场索引」](RELEASING.md#插件市场索引));只合进 main 的话,
 官网插件页上的版本号会变,应用里不会出现「有新版」。
 
-另有 `plugins/bundled/` 下**随应用一起发**的插件(今天是 **comfyui** 和 **object-storage**):它们随后端一起打包,每次启动对账
+另有 `plugins/bundled/` 下**随应用一起发**的插件(今天有 **comfyui**、**mineru**、**object-storage**、**poseatlas**;以目录里的清单为准):它们随后端一起打包,每次启动对账
 装进插件目录(按内容指纹,见 `domain/plugins/bundled`;新版本多了工具时,已经接好的连接按 `recommended` 补上开关),卸不掉。它们**也在市场索引里**(标
 `bundled: true`、没有 `download`),应用内的市场和官网插件页都列出它们、标「内置」,只是不给安装 ——
 新版跟着应用来;远端索引拉不到时,市场照样由本机清单列出它们。ComfyUI 插件是
@@ -1319,7 +1320,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
       "source": {"page": "https://civitai.com/models/…", "site": "civitai",
                  "how": "sha256"}                                 // 可选:原站上那一页和怎么知道的(download / sha256 / filename / metadata)
     }],
-    "preview_base": "http://…/experiment/models/preview/",      // 相对预览地址的前缀(可选;几千个文件时省体积,一次回答最多 1 MB)
+    "preview_base": "http://…/experiment/models/preview/",      // 相对预览地址的前缀(可选;几千个文件时省体积,一次目录类回答最多 8 MB)
     "preview_headers": {"Authorization": "…"},                  // 取预览图要带的头(可选)
     "sidecar_base": "http://…/pysssss/view/",                    // 相对 sidecars 的前缀(可选)
     "preview_tools": {"lookup": "sha256", "save": true,          // 可选:找出处的路(sha256 / filename / 空)、能不能写回预览图、
@@ -1388,7 +1389,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   }
   ```
   `role` 是着色用的:`input` / `model` / `sampler` / `text` / `output` / `note` / `missing` / `other`。
-  `editor` 有了,详情上才有打开它的那一个按钮:桌面版是「在工作台里打开」(这个连接自己的内嵌浏览器里开这个地址,旁边是 Mosael 的
+  `editor` 有了,详情上才有打开它的那一个按钮:桌面版是「在 ComfyUI 工作台里打开」(这个连接自己的内嵌浏览器里开这个地址,旁边是 Mosael 的
   面板),网页版是「在 ComfyUI 里打开」(开一个新标签页)。宿主只认简单的
   种类名(小写字母开头,`[a-z0-9-]`)和不带「用户名:密码@」的 http(s) 地址,不对就当没有编辑器。打开具体哪一张是宿主按种类做的
   (ComfyUI:页面就绪后经它前端自己的工作流列表打开那一张),插件只报地址。
@@ -1482,7 +1483,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 #### `reference_library` —— 一套只读的外部参考图集(姿势、服装)
 
 决策见 [ADR 0091](adr/0091-reference-library-pose-and-costume.md),范例是 `plugins/bundled/poseatlas/tools/main.py`。目录类:
-认领它的工具不进工具表;资产页的「参考库」页签按连接列出它,智能体经 `search_references` / `use_reference` 用它。
+认领它的工具不进工具表;资产页的「参考库」(筛选条右侧的切换,没有这类连接时不出现)按连接列出它,智能体经 `search_references` / `use_reference` 用它。
 宿主按 `op` 问:
 
 - `{"op": "collections", "locale": "zh"}` → 有哪几本图集:
@@ -1512,7 +1513,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   ```
 
 - `{"op": "fetch", "item_id": "…", "collection": "…"}` → 把这个条目**第一张**原图下到 `MOSAEL_PLUGIN_OUTPUT_DIR`,
-  交回 `{"artifact": {"path": "文件名"}}`。只有用户点「用这一张 / 存为资产」(或批准智能体的 `use_reference` 卡)时才会问。
+  交回 `{"artifact": {"path": "文件名"}}`。只有用户点「用作素材 / 存为资产」(或批准智能体的 `use_reference` 卡)时才会问。
 
 几条规矩:
 

@@ -67,7 +67,7 @@ CLOUD_COOKIE_SECURE=false CLOUD_PUBLIC_URL=http://localhost:3000 \
 503 `cloud_misconfigured` 并说明要补什么。
 
 本地同时跑官网和桌面端时,Cloud 那边用 `CLOUD_ALLOWED_ORIGINS` 把两个 Origin 都列上
-(官网 `http://127.0.0.1:3000` / 桌面后端 `http://127.0.0.1:8901`),否则桌面端直连会被同源闸挡住。
+(官网 `http://127.0.0.1:3100` / 桌面后端 `http://127.0.0.1:8800`),否则桌面端直连会被同源闸挡住。
 
 ### 生产
 

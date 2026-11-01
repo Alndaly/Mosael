@@ -348,7 +348,7 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
 - 家在 AI Studio、最新一条消息在工作台说的 → 这一轮有 `comfy_*`、没有 `canvas`;再在 AI Studio 说一句 → 反过来;
 - 没有对话的调用方(MCP 直连)全给;没接 ComfyUI 的人,在工作台那一处也没有 `comfy_*`。
 
-**DOM**(新增 `CanvasAgentChat.places.dom.test.tsx`,扩写 `useAgentNavigation.dom.test.tsx`、`VoiceDock.dom.test.tsx`):断言**面板里画出来的那段对话**
+**DOM**(新增 `CanvasAgentChat.places.dom.test.tsx`,扩写 `VoiceDock.dom.test.tsx`(`useAgentNavigation.dom.test.tsx` 已随 ADR 0060 删除)):断言**面板里画出来的那段对话**
 (消息正文)和**消息发进了哪段**(POST 的地址、带的 `place`),不只看键 —— 标记落在空容器上,断言天然成立:
 - 换页不带对话:在剪辑 A 聊着 s1 → 打开笔记 B,B 的面板是空态、没有 s1 的消息;在 B 发第一句,建会话的请求带 `home={note, B}`;回到 A 还是 s1;
 - 智能体带着走:A 的当前 s1 上出现 `pending_view = notes:B` → 跳到 B,B 的面板显示 s1,下一句发进 s1、带 `place={note, B}`;接着**自己**点开笔记 C

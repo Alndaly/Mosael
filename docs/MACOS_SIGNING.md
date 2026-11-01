@@ -44,7 +44,7 @@ App 专用密码撤销后，重新生成密码并再次运行同名 `store-crede
 
 ## GitHub Actions
 
-全自动云端发布需要以下五项 Actions secrets，缺少任一项会在创建发布草稿前失败。本机公证交接模式仅需要前三项：
+全自动云端发布需要以下五项 Actions secrets。前三项（`CSC_*` / 描述文件）缺失时签名 job 直接失败；`APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` 只影响云端公证 —— 缺它们时工作流不红，只发 notice 并跳过后续 job。本机公证交接模式仅需要前三项：
 
 | 名称 | 内容 |
 | --- | --- |
@@ -56,7 +56,7 @@ App 专用密码撤销后，重新生成密码并再次运行同名 `store-crede
 
 签名与公证凭据仅传给 macOS 打包步骤。Windows 构建不会获得这些凭据。私钥通过加密的 Actions secret 进入临时构建环境；不要将整个登录钥匙串导出到 CI。维护者撤销或更新证书、密码时，同步更新 secrets 和描述文件。
 
-`app-builder-lib@26.15.3` 导入证书时，误将 PKCS#12 密码用于临时钥匙串的访问控制设置，导致 `SecKeychainUnlock` 失败；仓库曾为此保留一个 pnpm 补丁。上游 26.16.1 已修复（改为传入创建钥匙串时生成的独立密码），升到 26.16.1 时补丁已删除。`electron/mac-signing.test.ts` 直接运行已安装的 `app-builder-lib` 源码，覆盖两份独立加密证书的导入；以后升级打包工具时，这条测试失败就说明回归又出现了。
+`app-builder-lib` 26.15.x 导入证书时会误将 PKCS#12 密码用于临时钥匙串的访问控制设置，导致 `SecKeychainUnlock` 失败；26.16.1 起修复（改为传入创建钥匙串时生成的独立密码），仓库当时删除了补丁。当前使用 `electron-builder ^26.18.0`，补丁不存在。`electron/mac-signing.test.ts` 直接运行已安装的 `app-builder-lib` 源码，覆盖两份独立加密证书的导入；以后升级打包工具时，这条测试失败就说明回归又出现了。
 
 ## 使用本机钥匙串公证
 
@@ -72,7 +72,7 @@ gh workflow run release.yml --ref main -f notarization=local
 
 ```bash
 node scripts/verify-mac-signing.cjs /path/to/Mosael.app --signature-only
-xcrun notarytool submit /path/to/Mosael-1.2.0-mac-signed.zip \
+xcrun notarytool submit /path/to/Mosael-VERSION-mac-signed.zip \
   --keychain-profile mosael-release --wait
 xcrun stapler staple /path/to/Mosael.app
 node scripts/verify-mac-signing.cjs /path/to/Mosael.app
@@ -80,6 +80,8 @@ node scripts/verify-mac-signing.cjs /path/to/Mosael.app
 
 必须收到 Apple 的 Accepted 结果，完成票据、Gatekeeper 与完整应用验证后，才能将应用封装成最终 DMG 并发布。最终分发容器也应提交公证并附加票据。此流程不使用关闭时间戳的本地 QA 包作为分发产物。
 应用内更新还要发布 `latest-mac.yml` / `latest.yml`:DMG 是首次安装包,Squirrel 更新读取的是同一个已签名、已公证 `.app` 的 ZIP 和对应 sha512 元数据。元数据由 `scripts/write-update-metadata.mjs` 从最终二进制生成,不从旧版本复制。
+
+本机交接要特别注意:构建 artifact 里的 `latest-mac.yml` / `*.blockmap` 是在公证与 `stapler staple` **之前**生成的;装订会改变 `.app` 字节,所以拿到最终 ZIP 后要重跑一次 `scripts/write-update-metadata.mjs`,不要直接上传 artifact 里那两份。
 macOS 差分更新使用同一份最终 ZIP 生成的 `.blockmap`;它和 `latest-mac.yml` 必须与 ZIP 一起上传,Windows NSIS 同理。ZIP 由 `scripts/pack-mac-update.mjs` 生成,`app.asar` 以 `Copy` 存储,避免普通压缩 ZIP 的后续流全部变化。缺了 blockmap 时更新器只会回退完整下载,无法节省流量。
 包内 `Contents/Resources/app-update.yml` 同样不可缺：它声明更新源和缓存目录，由 `build/app-update.yml` 在打包时写入；打包冒烟会拒绝缺少这份配置的产物。
 

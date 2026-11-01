@@ -33,7 +33,7 @@ Mosael 是一款把视频从构思做到发布的桌面软件：**AI 生成、�
 | 平台 | 安装包 | 说明 |
 | --- | --- | --- |
 | macOS | `Mosael-<版本>-arm64.dmg` | Apple 芯片(M 系列)，已签名并通过 Apple 公证 |
-| Windows | `Mosael.Setup.<版本>.exe` | Windows 10 / 11，x64 |
+| Windows | `Mosael Setup <版本>.exe` | Windows 10 / 11，x64 |
 
 国内用户走 **[百度网盘](https://mosael.com/zh/docs/start/download)**，其他地区从
 **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)** 下载，两边是同一份安装包。
@@ -130,7 +130,7 @@ AI 工作台用文字、首尾帧或参考图生成图片、视频、音乐和�
 ### 发布到抖音、小红书、B 站、TikTok、YouTube
 
 浏览器池为多个账号保存登录状态和代理。每个平台发它自己认的内容 —— 视频各平台都有,**图文**在抖音 / 小红书 /
-视频号 / TikTok / X,**专栏**在 B站;发布表单按各平台支持的选项显示,提交前核对素材、账号和文案,之后追踪发布结果。
+视频号 / B站 / TikTok / X / YouTube,**专栏**在抖音 / 小红书 / X / B站;发布表单按各平台支持的选项显示,提交前核对素材、账号和文案,之后追踪发布结果。
 [发布作品](https://mosael.com/zh/docs/guides/publishing) · [浏览器池](https://mosael.com/zh/docs/guides/browser-pool)
 
 ### 插件与 Chrome 视频助手
@@ -141,8 +141,8 @@ ComfyUI、对象存储、MinerU 文档解析和 PoseAtlas 参考库随应用内�
 
 ### AI 生成内容标识
 
-导出的成片里只要用到 AI 生成或合成的内容，文件里总会写入标准的隐式标识(AIGC 标记)，画面上默认加「AI 生成」显式标识，
-对应《人工智能生成合成内容标识办法》的要求。关掉画面标识由你决定，导出框里会写明后果。
+导出的成片里只要用到 AI 生成或合成的内容，文件里总会写入标准的隐式标识(AIGC 标记)。画面上「AI 生成」显式标识
+**默认关闭**，开不开由你决定，导出框里会写明，对应《人工智能生成合成内容标识办法》的要求。
 
 ## 支持的模型与服务商
 
@@ -219,6 +219,7 @@ ComfyUI、对象存储、MinerU 文档解析和 PoseAtlas 参考库随应用内�
 
 ```bash
 pnpm install
+pnpm --dir website install   # website/ 是独立 pnpm 工作区
 cd backend && uv sync && cd ..
 pnpm fetch:tts-python   # 本机引擎(声音克隆、转写、分离)建环境用的解释器,和安装包里带的是同一个
 ```
@@ -272,7 +273,9 @@ pnpm --dir agent-sidecar typecheck && pnpm --dir agent-sidecar build && pnpm --d
 pnpm typecheck:electron
 pnpm --dir browser-extension test && pnpm --dir browser-extension typecheck && pnpm build:extension
 pnpm --dir website test && pnpm --dir website build
-pnpm test:scripts                           # 发版链路(node:test):下载页、TTS 解释器的资产清单与 sha256 校验
+pnpm test:scripts                           # 发版链路(node:test):下载页、R2 发布、platform-smoke、发布 CI、TTS 解释器资产清单与 sha256 校验
+python3 scripts/sync-ratchet-docs.py --check
+xvfb-run -a ./node_modules/.bin/electron --no-sandbox test/differential-update.smoke.cjs  # Linux CI;需要 xvfb
 ```
 
 以上命令从仓库根目录运行。本地跑 `pnpm lint` 加上改动涉及的那几行就够,CI 每次全跑。最新检查结果以 [GitHub Actions](https://github.com/Alndaly/Mosael/actions) 为准，用例数量随项目变化。
@@ -311,6 +314,7 @@ pnpm dist:mac    # 构建 macOS DMG
 | 命令 | 产物 |
 | --- | --- |
 | `pnpm build:frontend` | `frontend/dist` |
+| `pnpm build:preload` | `electron/preload.bundle.cjs` |
 | `pnpm build:browser` | `electron/browser.bundle.cjs` |
 | `pnpm build:system` | `electron/system.bundle.cjs` |
 | `pnpm build:sidecar` | `agent-sidecar/dist/sidecar.cjs` |

@@ -166,6 +166,6 @@ def check(code: str, scene: str, locale: str, *, unrestricted: bool = False) -> 
                 "确实需要的话,在插件配置里打开「不限制代码」。",
                 "The code uses things that are not allowed (custom animations may draw, not read or write files, start processes or run dynamic code):\n"
                 + listed + f"\nAllowed imports: {', '.join(sorted(ALLOWED_MODULES))}. "
-                "If you really need more, turn on \"Unrestricted code\" in the plugin settings.",
+                "If you really need more, turn on \"Unrestricted custom code\" in the plugin settings.",
             ))
     return CheckedCode(scene=wanted, scenes=scenes)

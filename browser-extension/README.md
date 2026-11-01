@@ -57,9 +57,8 @@ time to remove the stored session.
 | `sidePanel` | Open Chrome's native side panel |
 | `tabs` | Follow the active tab and send seek commands to the current video |
 | `activeTab` | Capture the currently visible video frame |
-| `<all_urls>` | Discover HTML5 players on any HTTP(S) video page and perform clean video-region fallback capture when Canvas is cross-origin restricted |
+| `<all_urls>` | Discover HTML5 players on any HTTP(S) video page and perform clean video-region fallback capture when Canvas is cross-origin restricted; also call the local Mosael API at `127.0.0.1:8800` (no separate host permission) |
 | `storage` | Store the Mosael session and destination workspace |
-| `127.0.0.1` / `localhost` host access | Call the local Mosael API |
 
 The extension does not request the `cookies` permission and never reads or exports Chrome login state.
 The panel can select an identity already managed by Mosael and sends only its ID to the backend;

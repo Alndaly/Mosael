@@ -123,7 +123,7 @@ libass 与 PNG 的外圈一不一样宽。只比 CSS 字符串验不出「字芯
 
 | 实现 | 位置 | 测试 |
 | --- | --- | --- |
-| 决定压不压 | `agent-sidecar/src/compaction.ts` | `test/context-meter.parity.test.mjs` |
+| 决定压不压 | `agent-sidecar/src/compaction.ts` | `agent-sidecar/test/context-meter.parity.test.mjs` |
 | 显示还能聊多久 | `backend/app/domain/context_meter.py` | `backend/tests/test_context_meter_parity.py` |
 
 **为什么不共用一份实现**:压缩发生在 Node 侧的 pi 循环里,展示发生在 Python 侧的 HTTP 响应里,
@@ -147,13 +147,13 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 
 | 实现 | 位置 | 测试 |
 | --- | --- | --- |
-| 预览 | `frontend/src/features/editor/TransformOverlay.ts` + `keyframes.ts` | `transform.parity.test.ts` |
+| 预览 | `frontend/src/features/editor/TransformOverlay.tsx` + `keyframes.ts` | `transform.parity.test.ts` |
 | 导出 | `backend/app/media/render_plan.py` + `render_executor._kf_sample` | `backend/tests/test_transform_parity.py` |
 
 **建立契约时它已经是四份互不相同的答案**:写入钳到 `scale≤4`、导出读取钳到 `scale≤10`、
 关键帧那份 `rotation` 允许 ±3600,而预览**一处都不钳**、数字字符串还会静默退回默认值。
 写入那份最严,所以另外几份从来没咬到过 —— 但那是「上游恰好挡住」,不是两侧一致。合法范围
-现在只有一份(`domain.sequences.operations.TRANSFORM_BOUNDS`),两侧跑同一份语料。
+现在只有一份(`app/media/render_plan.py` 的 `TRANSFORM_BOUNDS`,`domain/sequences/clip_properties.py` 从这里引用),两侧跑同一份语料。
 
 ### `clip-appearance-cases.json` —— 片段外观契约
 
@@ -174,7 +174,7 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 
 | 实现 | 位置 | 测试 |
 | --- | --- | --- |
-| 预览 | `frontend/src/features/editor/playback/freeElementGeometry.ts` | `freeElementGeometry.parity.test.ts` |
+| 预览 | `frontend/src/features/editor/playback/scenePaint.ts` | `freeElementGeometry.parity.test.ts` |
 | 导出 | `backend/app/media/render_executor.py` 的 `_appearance_filters` | `backend/tests/test_free_element_geometry_parity.py` |
 
 **这份契约是两次用户可见的事故换来的**:先是成片里的圆比预览小 1.78 倍;修好大小之后,

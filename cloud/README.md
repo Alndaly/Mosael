@@ -257,7 +257,7 @@ uv run python -m cloud.cli balance --email a@b.com
 - **到账只有一个入口**:回调和查单都走 `domain/orders.settle_paid`,锁住订单行、幂等,一笔钱只发一次;金额必须和下单那一刻一致,
   对不上不发放、记在订单 `note`;关了之后才到的付款照样发放。
 - **发放**:同一套餐在有效期内 → 顺延一个周期;另一个套餐 → 再开一个、和现有的同时生效。花钱买的什么都不作废。
-- **渠道**(`cloud/payments/`):支付宝当面付(precreate / query / 异步通知,RSA2)、微信支付 Native(APIv3 签名、微信支付公钥验签、
+- **渠道**(`cloud/src/cloud/payments/`):支付宝当面付(precreate / query / 异步通知,RSA2)、微信支付 Native(APIv3 签名、微信支付公钥验签、
   AES-GCM 解密、通知时间戳 5 分钟内)。配了商户凭据的才开;回调地址是 `<CLOUD_PUBLIC_URL>/api/cloud/v1/payments/<渠道>/notify`,
   部署要保证它公网可达。
 - 套餐定价:`cloud.cli plan-set … --price 29`(元);不给 `--price` 就不在线卖,只能管理员开通。
@@ -283,7 +283,7 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 - `CLOUD_COOKIE_SECURE=true`
 - `CLOUD_GITHUB_CLIENT_ID` / `CLOUD_GITHUB_CLIENT_SECRET`(可选)
 - `CLOUD_GOOGLE_CLIENT_ID` / `CLOUD_GOOGLE_CLIENT_SECRET`(可选)
-- 反向代理与官网同源(见 docs 里的 Caddy 片段),不要开 CORS。
+- 反向代理与官网同源(见 `docs/CLOUD_ACCOUNTS.md` 与 `deploy/nginx/mosael.conf`;机器上已有 nginx,不用 Caddy),不要开 CORS。
 - **表结构只由 `migrations/`(`alembic.ini`)演进,启动时自动升到 head**;没有 `create_all`
   那条平行路径。表结构变化 = 改 `models.py` + 写一条新迁移,旧数据不写兼容分支。
 - 部署升级:镜像会带上 `migrations/`,启动即升级;也可以显式跑
@@ -346,4 +346,4 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 | GitHub | `https://mosael.com/api/cloud/v1/oauth/github/callback` | `read:user user:email`(要读 `/user/emails` 的 `verified`) |
 | Google | `https://mosael.com/api/cloud/v1/oauth/google/callback` | `openid email profile`(读 userinfo 的 `email_verified`) |
 
-本地开发把域名换成 `http://localhost:3000` 即可(官网同源反代到 Cloud,与生产 Caddy 等价)。
+本地开发把域名换成 `http://localhost:3000` 即可(官网同源反代到 Cloud,与生产 nginx 反代等价)。

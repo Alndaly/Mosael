@@ -60,7 +60,13 @@ gh run watch RUN_ID --interval 45 --exit-status
 
 若以后配置了全部五项 GitHub secrets（另含 `APPLE_ID` 和 `APPLE_APP_SPECIFIC_PASSWORD`），可按 `release.yml` 的 tag 自动发布路径操作。不要在缺少云端 Apple 凭据时先推 tag 再期待自动发布成功。不要为了让门禁通过关闭签名、时间戳或测试。
 
-发版前 `release.yml` 会执行 `scripts/check-support-window.py`，要求最早支持版本恰好比本次版本落后 8 个稳定 Release。当前门槛写在 `backend/app/db/support_window.py`；推进门槛时同步重新生成 `backend/tests/schema_baseline.json` 和 `test/upgrade_db_fixture.py`。
+支持窗口检查要求最早支持版本恰好比本次版本落后 8 个稳定 Release。当前门槛写在 `backend/app/db/support_window.py`；推进门槛时同步重新生成 `backend/tests/schema_baseline.json` 和 `test/upgrade_db_fixture.py`。
+
+这条闸只挂在 tag push 的 `draft` job 上，而且需要五项 secrets 齐全；本机交接（`-f notarization=local`）不会走它。发版前手工跑一次：
+
+```bash
+GITHUB_TOKEN=$(gh auth token) python3 scripts/check-support-window.py --repo Alndaly/Mosael --latest vVERSION
+```
 
 ## 3. 下载、验证与公证
 
@@ -113,6 +119,7 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 - 应用内更新产物:macOS `Mosael-VERSION-mac-signed.zip`(同一份已签名/公证的 `.app` ZIP,不是 DMG)和 Windows NSIS 安装包。`latest-mac.yml` / `latest.yml` 由 `scripts/write-update-metadata.mjs` 从**最终二进制**生成并上传;缺了它们,`electron-updater` 找不到更新。
   每个 `.app` / NSIS 包还必须内嵌 `resources/app-update.yml`（由 `build/app-update.yml` 经 `extraResources` 拷入），声明 GitHub owner/repo 和 updater 缓存目录；`test/bundle.smoke.mjs` 会在启动前检查它。只上传元数据而漏掉包内配置，会在下载开始时报 `ENOENT: …/app-update.yml`。
   差分更新还要发布 macOS `Mosael-VERSION-mac-signed.zip.blockmap` 和 Windows `Mosael Setup VERSION.exe.blockmap`。它们由 `write-update-metadata.mjs` 与元数据同时从最终二进制生成;工作流会检查文件存在并上传。旧版本首次升级时会同时取新旧两份 blockmap,之后更新器按 Range 下载变化块,失败才回退完整包。
+  本机交接注意:artifact 里的 `latest-mac.yml` / `*.blockmap` 是**公证前** ZIP 生成的;`stapler staple` 会改变 `.app` 字节,拿到最终 ZIP 后要重跑 `scripts/write-update-metadata.mjs`,不要直接上传 artifact 里那两份。
   手动交接时:macOS ZIP 用与公证相同的 `Mosael.app` 经 `scripts/pack-mac-update.mjs` 生成,其中 `Contents/Resources/app.asar` 以 `Copy` 存储,其他成员正常压缩并保留符号链接;不要用普通 `ditto` ZIP 替代,否则压缩流变化会让差分退化成整包下载。Windows 用同一次构建的 NSIS 安装包。`write-update-metadata.mjs` 会把 sha512 写进元数据;不要手抄或从旧版复制。
   `SHA256SUMS` 也要覆盖这些 `.blockmap`,不能只核对安装包本体。
   本地最终发布目录 `dist/VERSION/` 也应包含 `latest-mac.yml` / `latest.yml`,Release 的下载地址才能被应用内更新读到。
@@ -137,18 +144,30 @@ export R2_SECRET_ACCESS_KEY=...
 export R2_BUCKET=...
 # 可选:R2_PREFIX=mosael、R2_ENDPOINT=https://<account>.r2.cloudflarestorage.com
 node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
+curl -fsSL https://dl.mosael.com/mosael/latest/latest-mac.yml | grep -qx 'version: VERSION'
+curl -fsI https://dl.mosael.com/mosael/vVERSION/SHA256SUMS | head -1   # 200
 ```
+
+**R2 上传未完成 = 这一版没发完。** `site.ts` 的 `r2.url` 非空时，官网默认下载就是 R2 的 `latest/`；镜像没跟上时用户拿到的还是上一版。
+
+若 AWS SDK 的单连接在本机网络下长时间停住（大件尤其明显），可以用 rclone 作等价上传：4 路 transfers / upload-concurrency、16MB 分段，先写不可变 `v<tag>/`，再用 `rclone copy` 做 server-side copy 到 `latest/`，最后仍按 `SHA256SUMS` 逐个回读公网对象。不要因为换了客户端就跳过回读。
 
   **两条实操经验（2026-10-30 踩过）**：
 
-- Cloudflare 控制台**单文件上限 300 MB**，DMG/ZIP 超过它必须走 S3 API 的**分段上传**
-  （`CreateMultipartUpload → UploadPart → CompleteMultipartUpload`）；`publish-r2.mjs` 用的
-  `PutObject` 对这两件不适用。
+- Cloudflare 单次 `PutObject` 上限 300 MB；`publish-r2.mjs` 对 ≥250 MB 的对象**自动**走 S3 分段上传
+  （`CreateMultipartUpload → UploadPart → CompleteMultipartUpload`），阈值与分片大小可用
+  `R2_MULTIPART_THRESHOLD` / `R2_MULTIPART_PART_SIZE` 调。不要手写分段上传。
 - Cloudflare 的 **IPv6** 在部分线路上会"接受连接但不回数据"，而 AWS SDK 默认**没有传输超时**，
   进程会一直挂着看不出错。所有 R2 操作都要
   `NODE_OPTIONS=--dns-result-order=ipv4first`（实测 IPv4 秒通、IPv6 死等）。
 
-脚本分两阶段发布：先把全部文件写入不可变 `v<tag>/`，逐个回读校验 Content-Length 与 SHA-256；这一阶段全部成功后，才更新 `latest/` 并做同样校验。任何不可变文件失败都会立即停止，不会碰 `latest/`，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引用 `scripts/sync-plugin-registry.py --download-base <R2根地址>` 生成，确保包 URL 落在 `v<tag>/`。
+脚本分两阶段发布：先把全部文件写入不可变 `v<tag>/`，逐个回读校验 Content-Length 与 SHA-256；这一阶段全部成功后，才更新 `latest/` 并做同样校验。任何不可变文件失败都会立即停止，不会碰 `latest/`，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引不能只加 `--download-base`：那样会忽略镜像参数并覆盖 `website/public/plugins/registry.json`。R2 的索引要同时给 `--release` / `--packages`，并把 base 指到带 `mosael` 前缀的根地址：
+
+```bash
+mkdir -p dist/r2-VERSION && cp dist/plugins-VERSION/*.zip dist/r2-VERSION/
+python3 scripts/sync-plugin-registry.py --release vVERSION --repo Alndaly/Mosael \
+  --packages dist/r2-VERSION --download-base https://dl.mosael.com/mosael
+```
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。
@@ -171,7 +190,7 @@ node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
 
 ### 插件市场索引
 
-应用里的插件市场默认读 `https://github.com/Alndaly/Mosael/releases/latest/download/registry.json` —— **最新一次正式发版附带的那一份**（`backend/app/api/routes/plugins.py` 的 `DEFAULT_REGISTRY_URL`）。它是发版产物：和插件 ZIP 同一次发版、同一份源码生成，每条的下载地址钉在**这次的 tag** 上（`releases/download/vVERSION/<id>.zip`），所以许的版本就是包里的版本；读索引的那一刻恰好发了新版，拿到的也是「那一版的索引 + 那一版的包」。预发版不设为 latest，应用不会读到它的索引。tag 推上去时 `release.yml` 的 draft 任务也会打一遍插件包、生成并上传这份索引（`--clobber`，内容相同）。
+应用里的插件市场默认读 `https://github.com/Alndaly/Mosael/releases/latest/download/registry.json` —— **最新一次正式发版附带的那一份**（`backend/app/domain/plugins/registry.py` 的 `DEFAULT_REGISTRY_URL`）。它是发版产物：和插件 ZIP 同一次发版、同一份源码生成，每条的下载地址钉在**这次的 tag** 上（`releases/download/vVERSION/<id>.zip`），所以许的版本就是包里的版本；读索引的那一刻恰好发了新版，拿到的也是「那一版的索引 + 那一版的包」。预发版不设为 latest，应用不会读到它的索引。tag 推上去时 `release.yml` 的 draft 任务也会打一遍插件包、生成并上传这份索引（`--clobber`，内容相同）。
 
 `website/public/plugins/registry.json`（官网上的 `https://mosael.com/plugins/registry.json`）是**另一份**：由 main 上的清单生成（`python3 scripts/sync-plugin-registry.py`，标 `"channel": "main"`），说的是仓库里的源码现在是哪一版。新版本应用**不从它装**。它的下载地址仍是 `releases/latest/download/<id>.zip`，只因为 1.5.x 及更早的应用把它写死成了默认索引：main 上改了插件版本、还没发版时，那些应用照旧会看到「有新版」而装回旧版 —— 这正是改读发版产物的原因，它们升级之后就好了（等不及的可以在部署配置 `plugin_registry_url` 里改成上面那个地址）。
 
@@ -183,7 +202,8 @@ node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
 
 ```bash
 mkdir -p dist/VERSION && cp /path/to/verified/assets/* dist/VERSION/
-(cd dist/VERSION && shasum -a 256 $(ls | grep -v SHA256SUMS) > SHA256SUMS)
+(cd dist/VERSION && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
+  | sort -z | xargs -0 shasum -a 256 > SHA256SUMS)
 ```
 
 这个目录就是这一版交付的全部东西：下面建 Release 传的是它，国内网盘传的也是它。本机留着，以后要核对某一版
@@ -191,7 +211,7 @@ mkdir -p dist/VERSION && cp /path/to/verified/assets/* dist/VERSION/
 
 ### 国内下载（百度网盘）
 
-官网给中国大陆的访客指向百度网盘上的**一个文件夹的永久分享**（`website/src/lib/site.ts` 的 `baiduPan`），
+百度网盘是**兜底**：R2 打不开、或访客手动切换时才去。`website/src/lib/site.ts` 的 `baiduPan` 指向一个文件夹的永久分享，
 文件夹里**每版一个子文件夹**（`2.0.1/`，和本地的 `dist/2.0.1/` 同构，含 `SHA256SUMS`）。
 
 **不再打整包 zip（维护者 2026-10-22）。** 以前是每版一个 `VERSION.zip` 传到分享文件夹根；现在把
@@ -204,14 +224,16 @@ SHA-256 与本地 `SHA256SUMS` 一致。**官网的链接不用改。**
 
 ## 5. 创建草稿并正式发布
 
-安装包验证完成后,**先在本地打 tag 并推上去**,再用那个 tag 建草稿。
+安装包验证完成后,**先在本地打 tag 并推上去**,再用那个 tag 建草稿。推 tag 在五项 secrets 齐全时会触发 `release.yml` 的 `publish` 自动转正；只有确认这版不走云端自动发布时才先推 tag，否则先建草稿再推 tag。
 
 ```bash
 git tag -a vVERSION BUILD_SHA -m 'Mosael vVERSION'
 git push origin vVERSION
 git tag -l vVERSION && git rev-parse vVERSION   # 与 BUILD_SHA 核对
-gh release create vVERSION --draft --title 'Mosael vVERSION' \
-  --notes-file /path/to/release-notes.md $(ls dist/VERSION/* | grep -v SHA256SUMS)
+files=()
+while IFS= read -r f; do files+=("$f"); done < <(find dist/VERSION -maxdepth 1 -type f ! -name SHA256SUMS -print)
+gh release create vVERSION --draft --title "Mosael vVERSION" \
+  --notes-file /path/to/release-notes.md "${files[@]}"
 gh release view vVERSION --json isDraft,assets,targetCommitish,url
 ```
 

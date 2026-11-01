@@ -890,7 +890,7 @@ untouched; a template opened in a new tab stayed temporary and no file appeared 
 subgraph, adding an output and wiring it, promoting and unpromoting a widget, removing an input, packing and unpacking all changed the
 definition.
 
-## The agent in the workbench: downloading, installing, running (1.24.0)
+## The agent in the workbench: downloading, installing, running (host tools in Mosael 2.4.0)
 
 Step three of ADR 0042. The Assistant can now finish what it starts: search for a missing model and download it, install a missing
 custom node pack and restart ComfyUI, and run a workflow — including the one on the canvas. These are host tools

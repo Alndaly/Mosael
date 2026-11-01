@@ -34,7 +34,7 @@ already pay for — Mosael doesn't resell credits — and keeps your projects an
 | Platform | Installer | Notes |
 | --- | --- | --- |
 | macOS | `Mosael-<version>-arm64.dmg` | Apple silicon (M-series); signed and notarized |
-| Windows | `Mosael.Setup.<version>.exe` | Windows 10 / 11, x64 |
+| Windows | `Mosael Setup <version>.exe` | Windows 10 / 11, x64 |
 
 Get the latest stable build from **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)** (users in
 mainland China can use the [Baidu Netdisk mirror](https://mosael.com/zh/docs/start/download)). Free for personal,
@@ -149,9 +149,9 @@ angle. The Assets page's reference library brings in external atlases, with the 
 ### Publish to Douyin, TikTok, Bilibili, Xiaohongshu and YouTube
 
 Browser Pool keeps persistent sign-ins and proxies for several accounts. Each platform takes the content it supports —
-video on every one of them, **image-text** on Douyin, Xiaohongshu, WeChat Channels, TikTok and X, and **articles
-(columns)** on Bilibili. Publishing forms follow each destination's options; review the media, account and copy before
-submitting, then track the result.
+video on every one of them, **image-text** on Douyin, Xiaohongshu, WeChat Channels, Bilibili, TikTok, X and YouTube, and
+**articles (columns)** on Douyin, Xiaohongshu, X and Bilibili. Publishing forms follow each destination's options;
+review the media, account and copy before submitting, then track the result.
 [Publishing](https://mosael.com/en/docs/guides/publishing) · [Browser profiles](https://mosael.com/en/docs/guides/browser-pool)
 
 ### Plugins and the Chrome companion
@@ -163,9 +163,9 @@ agent and workflows. The Chrome video companion reads transcripts in the side pa
 
 ### AI-generated content labels
 
-When an export contains AI-generated or AI-altered content, Mosael writes the standard implicit AIGC label into the
-file and, by default, a visible "AI-generated" mark — in line with China's rules on labelling synthetic content.
-Turning the visible mark off is your call and is stated in the export dialog.
+When an export contains AI-generated or AI-altered content, Mosael always writes the standard implicit AIGC label into
+the file. A visible "AI-generated" mark at the head and in a corner is off by default — turning it on is your call and
+is stated in the export dialog, in line with China's rules on labelling synthetic content.
 
 ## Supported models and providers
 
@@ -248,6 +248,7 @@ Install dependencies:
 
 ```bash
 pnpm install
+pnpm --dir website install   # website/ is its own pnpm workspace
 cd backend && uv sync && cd ..
 pnpm fetch:tts-python   # the interpreter local engines' environments are built with — same one the app ships
 ```
@@ -305,7 +306,9 @@ pnpm --dir agent-sidecar typecheck && pnpm --dir agent-sidecar build && pnpm --d
 pnpm typecheck:electron
 pnpm --dir browser-extension test && pnpm --dir browser-extension typecheck && pnpm build:extension
 pnpm --dir website test && pnpm --dir website build
-pnpm test:scripts                           # release tooling (download page, TTS interpreter manifest + sha256) via node:test
+pnpm test:scripts                           # release tooling (download page, R2 publish, platform-smoke, release CI, TTS interpreter manifest + sha256) via node:test
+python3 scripts/sync-ratchet-docs.py --check
+xvfb-run -a ./node_modules/.bin/electron --no-sandbox test/differential-update.smoke.cjs  # Linux CI; needs xvfb
 ```
 
 Run checks from the repository root. Locally it is enough to run `pnpm lint` plus the lines for what you changed; CI runs all of them.

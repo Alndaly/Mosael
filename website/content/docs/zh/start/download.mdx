@@ -14,12 +14,12 @@ Mosael 是本地优先的桌面应用：本地素材剪辑与导出可离线。�
 
 <DownloadChoice />
 
-两条路下载的是同一份安装包:
+三条路下载的是同一份安装包 —— Cloudflare R2(默认,应用内更新也走它)、GitHub Releases、百度网盘镜像:
 
 | 平台 | 产物 | 说明 |
 | --- | --- | --- |
 | macOS | `Mosael-<版本>-arm64.dmg` | Apple Silicon(M 系列) |
-| Windows | `Mosael.Setup.<版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
+| Windows | `Mosael Setup <版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
 
 应用启动后会静默比对 Releases 的最新稳定版，发现新版会提示前往下载；设置 → 本机应用 → 版本 里也有
 「检查更新」按钮。GitHub 预发布版不会主动推送，需要从 Releases 页面明确选择下载。
@@ -32,7 +32,7 @@ Windows 安装包暂未签名，SmartScreen 可能提示未知发布者；继续
 
 </Aside>
 
-- 内置后端引擎与 ffmpeg，开箱即用。
+- 内置后端引擎。ffmpeg 取自系统 `PATH`；缺失或没有 libass 时，在「管理 → 引擎 → FFmpeg」装完整版(字幕与烧字需要 libass)。
 - 本地转写 / 声音克隆 / 人声分离的运行环境由部署管理员在「管理 → 引擎」里装(桌面版上你就是部署管理员)，部分模型权重首次使用时按需下载；合计数百 MB 至数 GB，建议预留 **10GB+** 磁盘。
 
 ## 从源码运行(开发)

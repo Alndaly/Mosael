@@ -82,9 +82,11 @@ didn't drift apart. Yet the only differences between them fit in one table in `t
 default endpoint, presign limit and addressing style. Now the main body (`tools/storage.py`) doesn't know a single
 thing about "Alibaba Cloud", and adding a provider means adding a row to the table.
 
-On upgrade, the old four plugins are merged in place by the `merge-object-storage-plugins` migration: connection ids
-stay the same, and the config, keys (not decrypted, only renamed), grants, tool switches, the "Asset links" default,
-the direct link cache, and nodes in workflows and on boards all move over; the old packages' folders are deleted.
+Upgrading from a release that still shipped the four legacy plugins ran the one-off `merge-object-storage-plugins`
+migration: connection ids stayed the same, and the config, keys (not decrypted, only renamed), grants, tool switches,
+the "Asset links" default, the direct link cache, and nodes in workflows and on boards all moved over; the old
+packages' folders were deleted. That migration has since been retired with the eight-release support window — a setup
+still on those old releases must first upgrade through a release that carried it.
 
 ## Permissions and keys
 

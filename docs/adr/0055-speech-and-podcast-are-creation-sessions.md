@@ -224,7 +224,7 @@ GenerationTurn 的失败卡那一块没动(ADR 0045 那一路在改);只在它�
 
 ### 迁移怎么验的
 
-- `tests/test_speech_podcast_join_creation_sessions.py`:照真实形状造的老任务行 —— payload 截断(400 字的旁白只剩 200、720 字的材料只剩 500)、
+- `backend/tests/test_creation_speech_and_podcast.py`:照真实形状造的老任务行;迁移后的 `audio_page` 老行由 `test_generation_sessions_remember_where_they_came_from.py` 断言 —— payload 截断(400 字的旁白只剩 200、720 字的材料只剩 500)、
   `result.texts`、本机克隆(`voice_id` → 配音库名字)、零件(任务标了素材没标、素材标了任务没标两种)、工作流派的子任务、失败的、产出删了的、
   没人发起的、已经有记录的、同事的、素材上已经有对谈稿的、任务行被清掉的孤儿;跑两遍和一遍一样;任务行之后被清掉,记录、产出、对谈稿还在。
 - 隔离环境的演示库(scratch,从迁移前的副本起,塞进 3 条老 tts、2 条老 podcast 任务):启动时迁移跑过,两个工作区各开出「以前的语音」「以前的播客」,

@@ -188,8 +188,10 @@ url + 请求头让宿主去下。
 上面三条旁路都是「插件的工具被别人调」。还有反方向的:宿主自己缺一样本事,由某一类插件补上 ——
 清单里写 `provides`,一个工具认领它。最早只有两项:`public_url`(本地素材换一条公网地址)和
 `generation`(当一家生成供应商,[ADR 0020](adr/0020-plugins-can-be-generation-providers.md));现在还有运行时报工具的 `tools`、
-能力表里那几项(文档解析、降噪、分离、转写、翻译、配音,[ADR 0032](adr/0032-plugin-capabilities-everywhere.md)),以及两项给连接带来
-目录的 `model_library` / `workflow_library`([ADR 0034](adr/0034-model-library.md)、[ADR 0035](adr/0035-workflow-library.md))。
+能力表里那几项(文档解析、降噪、分离、转写、翻译、配音,[ADR 0032](adr/0032-plugin-capabilities-everywhere.md)),以及三项给连接带来
+目录的 `model_library` / `workflow_library` / `reference_library`([ADR 0034](adr/0034-model-library.md)、[ADR 0035](adr/0035-workflow-library.md)、
+[ADR 0091](adr/0091-reference-library-pose-and-costume.md):只读的外部参考图集,随应用内置的 PoseAtlas 是第一个)。插件包还可以带
+`skills/`(智能体按需读的做法,ADR 0040)和 `services`(由宿主起停的本机服务,ADR 0041)。
 全表和每一项的协议见 [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md)。下面以生成为例。
 
 **生成这一项的形状是「插件连接就是一条供应商连接」**,而不是在生成链路里开一条插件分支:

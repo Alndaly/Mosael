@@ -18,7 +18,7 @@
 | preload 桥 | `window.mosaelDesktop` |
 | 深链事件通道 | `mosael:open-*` |
 | 浏览器分区前缀 | `mosael` |
-| MCP 环境变量 | `MOSAEL_API` / `MOSAEL_TOKEN` |
+| 工具通道 | `GET /api/agent/tools` / `POST /api/agent/tools/{name}`(进程内,无 stdio MCP) |
 
 ### 进程与协议
 
@@ -47,7 +47,7 @@ _Avoid_: 队列服务、调度中心
 `dispatch_job`:领域描述「怎么跑」,总线决定「由谁跑」。
 
 **准入槽**:
-按 kind 的信号量并发上限(render 2 / ASR 1 / TTS 1 / 生成 4),防单机 OOM;external 模式下等价于 worker 侧并发容量。
+按 kind 的信号量并发上限(render 2 / ASR 1 / TTS 1 / 插件工具调用 4),防单机 OOM;external 模式下等价于 worker 侧并发容量。
 
 **远端回执(remote task)**:
 一个已经提交给供应商的异步生成任务的轮询路径,存在 `Job.payload.remote_task`。从提交那一刻起它在花钱;
@@ -219,7 +219,7 @@ _Avoid_: 把费用写进 `task_events`、把供应商账单逻辑散落在各 ad
 ### 智能体
 
 **工具注册表**:
-`mcp_server.py` 是唯一工具定义处;`/api/agent/tools` manifest 派生它,所有 runtime(pi sidecar / MCP 客户端 / 飞书)从 manifest 生成工具,不再手写第二份。
+`mcp_server.py` 是唯一工具定义处;`/api/agent/tools` manifest 派生它,所有 runtime(pi sidecar / 飞书)从 manifest 生成工具,不再手写第二份。
 
 **确认门控**:
 变更工具的属性(manifest 的 `confirmation: true`):调用只创建待确认卡,用户批准后才执行;sidecar 对此类工具统一阻塞轮询。
@@ -227,8 +227,8 @@ _Avoid_: 按工具名硬编码确认逻辑
 
 **上下文预算**:
 一次对话还能塞多少 token,由**模型的上下文窗口**决定(模型行的 `context_window` → 目录 → 双档回退:
-云端 128K,本机/LAN 64K,由 `fallback_context_window` 按 base_url 判定)。本机那一档是**智能体还转得动的最小窗口**:
-每轮重发的工具定义加系统提示本身就 ≈32.5K,它们合计不得超过本机回退窗口的六成(`test_tool_definitions_budget`)。
+云端 128K,本机/LAN 128K(本机档 2026-10-22 从 64K 调上来),由 `fallback_context_window` 按 base_url 判定)。
+每轮重发的工具定义加系统提示本身就 ≈32.5K,它们合计不得超过回退窗口的六成(`test_tool_definitions_budget`)。
 估算锚定在**最后一条带 usage 的助手消息**(供应商回的真实 input+output),此后的新消息按
 `CHARS_PER_TOKEN = 3.5` 估。sidecar(`compaction.ts`)与后端(`domain/context_meter.py`)各有一份实现,
 **回退值与估算规则必须逐字一致**——不一致时用户看到的水位和真正触发压缩的时机会对不上。
