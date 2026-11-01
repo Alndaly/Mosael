@@ -46,6 +46,8 @@ ARGS: dict[str, dict[str, Any]] = {
     "read_note": {"note_id": "no-such-note"},
     "list_scenes": {},
     "list_entities": {"kind": "character"},
+    #: 没接参考库时就是空的(不起插件、不联网);接了时的行为见 test_mcp_read_tools_with_data。
+    "search_references": {"query": "坐", "kind": "pose"},
     "get_entity": {"entity_id": "no-such-entity"},
     "create_entity": {"kind": "character", "name": "冒烟人物", "prompt": "黑色短发"},
     "attach_entity_reference": {"entity_id": "no-such-entity", "asset_id": "no-such-asset", "role": "front"},

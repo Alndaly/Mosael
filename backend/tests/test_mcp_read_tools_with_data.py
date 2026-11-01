@@ -30,6 +30,27 @@ from tests.util import fresh_client, insert_asset
 UNSEEDED: dict[str, str] = {}
 
 
+def _seed_reference_library(monkeypatch) -> None:
+    """接一个参考库(ADR 0091):插件那一侧换成固定的答复 —— 真插件要联网,而这里验的是宿主这一侧跑得通。
+    一条姿势、一条标了成人内容的姿势(不该交给智能体)。"""
+    from types import SimpleNamespace
+
+    from app.domain import reference_library
+
+    view = {"role": "front", "thumbnail": "https://example.test/t.jpg", "original": "https://example.test/o.png"}
+    entry = {"collection": "poses", "kind": "pose", "tags": ["坐姿"], "views": [view], "thumbnail": view["thumbnail"],
+             "provenance": {"author": "作者", "url": "https://example.test/", "license": "仅供参考"}}
+    monkeypatch.setattr(reference_library, "connections", lambda db, user_id: [{"id": "ref-1", "name": "PoseAtlas"}])
+    monkeypatch.setattr(reference_library, "inst", SimpleNamespace(
+        owned=lambda db, instance_id, user_id: SimpleNamespace(id=instance_id, name="PoseAtlas")))
+    monkeypatch.setattr(reference_library, "collections", lambda db, instance: [
+        {"id": "poses", "kind": "pose", "name": {"zh": "姿势"}, "count": 2, "filters": []}])
+    monkeypatch.setattr(reference_library, "search", lambda db, instance, **kwargs: {"next_cursor": "", "items": [
+        {**entry, "id": "p1", "name": {"zh": "坐姿・单膝立起"}, "nsfw": False},
+        {**entry, "id": "p2", "name": {"zh": "成人"}, "nsfw": True},
+    ]})
+
+
 def _seed(client, monkeypatch) -> dict[str, str]:
     """每一类各建一条;返回各自的 id。"""
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -49,6 +70,7 @@ def _seed(client, monkeypatch) -> dict[str, str]:
     ids["note"] = mcp_server.create_note(title="脚本", markdown="第一场:清晨")["id"]
     ids["scene"] = mcp_server.create_scene(name="客厅")["id"]
     ids["entity"] = mcp_server.create_entity(kind="character", name="小林", prompt="黑色短发")["id"]
+    _seed_reference_library(monkeypatch)
     ids["session"] = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
     with SessionLocal() as db:
         db.add(Scene3DModel(workspace_id=ws, name="沙发", format="glb", file_key="", size=10))
@@ -77,6 +99,7 @@ READS: dict[str, tuple[Callable[[dict[str, str]], dict[str, Any]], int]] = {
     "search_notes": (lambda ids: {"query": "脚本"}, 1),
     "list_scenes": (lambda ids: {}, 1),
     "list_entities": (lambda ids: {}, 1),
+    "search_references": (lambda ids: {"query": "坐"}, 1),
     "list_scene_models": (lambda ids: {}, 1),
     "list_agent_sessions": (lambda ids: {}, 1),
     "list_jobs": (lambda ids: {}, 1),
@@ -141,3 +164,11 @@ def test_每个列表类只读工具都在有数据的工作区上跑过() -> No
     assert missing == [], "这些列表类只读工具没在有数据的工作区上跑过:\n  " + "\n  ".join(missing)
     stale = sorted((set(READS) | set(UNSEEDED)) - tools)
     assert stale == [], f"登记了不存在的工具: {stale}"
+
+
+def test_search_references_不把成人内容交给智能体(monkeypatch) -> None:
+    client = fresh_client()
+    _seed(client, monkeypatch)
+    result = mcp_server.search_references(query="坐")
+    assert [one["id"] for one in result["items"]] == ["p1"]
+    assert result["items"][0]["provenance"]["author"] == "作者" and result["items"][0]["angles"] == ["front"]

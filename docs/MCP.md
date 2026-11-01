@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **142** 个工具,其中 **49** 个走确认卡、**1** 个停下来等用户作答。
+共 **144** 个工具,其中 **50** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -67,7 +67,7 @@
 | `computer_type` | 确认卡 | Confirmation required: type text into Mosael's app window (into the focused field). |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
-| `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
+| `create_entity` | 直接执行 | Create a character, location, prop, pose or costume in the asset library (a workspace edit, no confirmation). |
 | `create_mask` | 确认卡 | Confirmation required: turn an EXISTING image asset into a NEW greyscale mask asset (inpainting). |
 | `create_note` | 直接执行 | Create a persistent note when the user asks to save research or writing. Preserve factual |
 | `create_project` | 直接执行 | Runs directly: create a project; returns its id. timeline=true also gives it an empty VIDEO TIMELINE. |
@@ -109,7 +109,7 @@
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace, newest first, one page at a time. |
 | `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — abilities and slot generators. |
 | `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |
-| `list_entities` | 直接执行 | Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace. |
+| `list_entities` | 直接执行 | Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace, |
 | `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video / generate_sound. |
 | `list_jobs` | 直接执行 | Read-only: list recent background jobs (renders, transcriptions, generations, imports). |
 | `list_memories` | 直接执行 | Read-only: list what you already remember in this workspace. |
@@ -142,6 +142,7 @@
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
 | `scrub_video_metadata` | 确认卡 | Confirmation required: strip metadata from an EXISTING video asset into a NEW asset. |
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
+| `search_references` | 直接执行 | Read-only: search the user's external REFERENCE LIBRARIES (read-only atlases from plugins, such as |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |
 | `set_skill_enabled` | 确认卡 | Confirmation required, every time: turn a skill on or off in this workspace (on shows its full text). |
 | `show_widget` | 直接执行 | Show a sandboxed HTML view (map, chart, a small page) IN YOUR ANSWER, right where you called it. |
@@ -154,6 +155,7 @@
 | `update_plan` | 直接执行 | Runs directly: publish/refresh your task plan for the current conversation. |
 | `update_skill` | 确认卡 | Confirmation required, every time: change one of this workspace's own skills; the card shows before → after. |
 | `update_workflow` | 确认卡 | Confirmation required: rename a workflow or replace its ENTIRE graph. |
+| `use_reference` | 确认卡 | Confirmation required: take ONE entry from a reference library into this workspace as media, |
 | `use_skill` | 直接执行 | Read-only: load a skill — a written procedure for one kind of task — before doing that task. |
 | `view_scene` | 直接执行 | Read-only: LOOK at a 3D scene — returns rendered images you can see. Free, local, ~1 s per view. |
 | `web_search` | 直接执行 | Read-only: search the public web for up-to-date external information. |

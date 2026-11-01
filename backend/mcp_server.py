@@ -2064,12 +2064,13 @@ def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] 
 
 @tool(effect="reads")
 def list_entities(kind: str = "", query: str = "", tag: str = "", workspace_id: str = "") -> list[dict[str, Any]]:
-    """Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace.
+    """Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace,
+    plus POSES and COSTUMES (references any character can use: a body pose, an outfit).
 
     An asset ("资产") is a named thing with reference images, not a file: "张三" with his
     front / side / turnaround images, a prompt descriptor and (for characters) a voice. Media
-    files ("素材") are what list_assets returns. kind is "character", "location" or "prop"
-    (empty = all); query matches name, description and prompt descriptor; tag filters by tag.
+    files ("素材") are what list_assets returns. kind is "character", "location", "prop", "pose" or
+    "costume" (empty = all); query matches name, description and prompt descriptor; tag filters by tag.
     Variants (张三 · 冬装) are listed under their parent — read get_entity for them.
 
     To use one in a generation, pass its id in entity_ids of generate_image / generate_video
@@ -2089,9 +2090,9 @@ def list_entities(kind: str = "", query: str = "", tag: str = "", workspace_id: 
 def get_entity(entity_id: str) -> dict[str, Any]:
     """Read-only: one asset from the asset library — its description, prompt descriptor, reference
     images (each with its angle: front / side / back / turnaround / closeup / full_body / expression /
-    concept / detail), cover, per-kind attributes (a character's voice_id, blockout color, whether it is
-    a real person and the consent declared; a location's 3D scene and time of day; a prop's 3D model)
-    and its variants."""
+    three_quarter / high_angle / low_angle / concept / detail), cover, per-kind attributes (a character's
+    voice_id, blockout color, whether it is a real person and the consent declared; a location's 3D scene
+    and time of day; a prop's 3D model; a pose's posture and number of people) and its variants."""
     from app.api.routes.entities import entity_out
     from app.domain.entities import use_cases
 
@@ -2108,9 +2109,10 @@ def create_entity(
     parent_id: str = "",
     workspace_id: str = "",
 ) -> dict[str, Any]:
-    """Create a character, location or prop in the asset library (a workspace edit, no confirmation).
+    """Create a character, location, prop, pose or costume in the asset library (a workspace edit, no confirmation).
 
-    kind: "character" / "location" / "prop". description is for people; prompt is the
+    kind: "character" / "location" / "prop" / "pose" / "costume". A pose's prompt describes the body pose
+    only (no looks or clothing); a costume's prompt describes each piece. description is for people; prompt is the
     descriptor models read (appearance, clothing, materials) and is appended whenever the asset
     is mentioned in a generation. parent_id makes it a VARIANT of an existing asset (张三 · 冬装):
     a variant inherits the parent's prompt descriptor — write only what differs.
@@ -2144,7 +2146,8 @@ def attach_entity_reference(entity_id: str, asset_id: str, role: str = "", cover
     (a workspace edit, no confirmation). The media file is referenced, not copied.
 
     role is the angle / purpose: front, side, back, turnaround, closeup, full_body, expression,
-    concept or detail (empty = front for characters and props, concept for locations). Attaching
+    concept or detail; poses use camera angles (front, three_quarter, side, back, high_angle, low_angle,
+    detail) and costumes front, back, side, detail or concept (empty = front, concept for locations). Attaching
     the same asset again changes its role. cover=true also makes it the cover image.
     """
     from app.api.routes.entities import entity_out
@@ -2157,6 +2160,57 @@ def attach_entity_reference(entity_id: str, asset_id: str, role: str = "", cover
             db, use_cases.add_reference(db, user, entity_id, request.asset_id, request.role, cover=request.cover)
         ).model_dump(mode="json")
     )
+
+
+@tool(effect="reads", needs="reference_library")
+def search_references(
+    query: Annotated[str, Field(description="Keywords; Chinese, English and Japanese names, ids and tags all match.")] = "",
+    kind: Annotated[str, Field(description='"pose" or "costume" (empty = both).')] = "",
+    connection_id: Annotated[str, Field(description="One reference library connection (empty = all of yours).")] = "",
+    limit: Annotated[int, Field(description="At most this many entries per collection (1-40).")] = 12,
+) -> dict[str, Any]:
+    """Read-only: search the user's external REFERENCE LIBRARIES (read-only atlases from plugins, such as
+    PoseAtlas: multi-angle mannequin poses and outfits without a person). Nothing is downloaded.
+
+    Each entry: connection_id, collection, id, kind (pose / costume), name, tags, the camera angles it has,
+    a thumbnail URL and its provenance (author, source, license). Entries flagged as adult content are never
+    returned. To use one, call use_reference with its connection_id, collection and id — the user approves
+    taking it into the workspace; with save_as_asset it becomes a pose / costume asset you can pass in
+    entity_ids of a generation (a pose goes to the model as a pose reference: body pose only, not style).
+    """
+    from app.core.i18n import get_current_locale
+    from app.domain import reference_library
+
+    lang = "zh" if get_current_locale().startswith("zh") else "en"
+    return _use_case(lambda db, user: reference_library.search_everywhere(
+        db, user.id, query=query, kind=kind, connection_id=connection_id, limit=limit, lang=lang,
+    ))
+
+
+@tool(effect="confirms", needs="reference_library")
+def use_reference(
+    connection_id: Annotated[str, Field(description="connection_id from search_references.")],
+    item_id: Annotated[str, Field(description="id from search_references.")],
+    collection: Annotated[str, Field(description="collection from search_references.")] = "",
+    save_as_asset: Annotated[bool, Field(description="Also create a pose / costume asset from it (to @ in generations).")] = True,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: take ONE entry from a reference library into this workspace as media,
+    with its provenance recorded; save_as_asset also creates a pose / costume asset (cover = that image).
+
+    Taking an item is always initiated by the user: this opens a card they approve. Search first with
+    search_references; never guess ids. The result (after approval) has asset_id and entity_id.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "use_reference",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"connection_id": connection_id, "item_id": item_id, "collection": collection,
+                        "save_as_asset": bool(save_as_asset)},
+        },
+    )
+    return _confirmation_reply(confirmation)
 
 
 @tool(effect="reads", kit="canvas")

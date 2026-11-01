@@ -11,6 +11,7 @@
 
 #: 登记的副作用发生在 import 时,所以这些模块必须被引到(和 workflows 的执行器同一个做法)。
 from app.domain.agent.confirmable import (  # noqa: F401,E402  (registration)
-    automation, blender, computer_desktop, computer_use, deletion, external, generation, media, notes, plugin_tools, skills,
+    automation, blender, computer_desktop, computer_use, deletion, external, generation, media, notes, plugin_tools, references,
+    skills,
 )
 

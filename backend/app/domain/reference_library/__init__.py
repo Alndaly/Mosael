@@ -198,6 +198,48 @@ def item(db: Session, instance: PluginInstance, *, item_id: str, collection: str
     return found
 
 
+def search_everywhere(
+    db: Session,
+    user_id: str,
+    *,
+    query: str = "",
+    kind: str = "",
+    connection_id: str = "",
+    limit: int = 12,
+    lang: str = "zh",
+) -> dict[str, Any]:
+    """在这个人接的每个参考库(或指定的那一个)、每本图集里找,给智能体用(`search_references`,ADR 0091 §6)。
+
+    **标了成人内容的条目一条都不交给智能体** —— 插件的开关只管图集里出不出现,界面另有预览图设置兜着;
+    智能体读的是文字和链接,没有「模糊」可言。一个连接出错不挡别的连接,出错的那句照实放进 `notes`。
+    """
+    cap = max(1, min(int(limit or 12), 40))
+    items: list[dict[str, Any]] = []
+    notes: list[str] = []
+    chosen = [one for one in connections(db, user_id) if not connection_id or one["id"] == connection_id]
+    for connection in chosen:
+        instance = inst.owned(db, connection["id"], user_id)
+        if instance is None:
+            continue
+        try:
+            for collection in collections(db, instance):
+                if kind and collection["kind"] != kind:
+                    continue
+                for found in search(db, instance, collection=collection["id"], q=query, limit=cap)["items"]:
+                    if found["nsfw"]:
+                        continue
+                    items.append({
+                        "connection_id": connection["id"], "library": connection["name"],
+                        "collection": found["collection"], "id": found["id"], "kind": found["kind"],
+                        "name": found["name"].get(lang) or found["name"].get("en") or found["id"],
+                        "tags": found["tags"][:8], "angles": [view["role"] for view in found["views"]],
+                        "thumbnail": found["thumbnail"], "provenance": found["provenance"],
+                    })
+        except (ReferenceLibraryError, PluginDomainError, PluginRuntimeError) as exc:
+            notes.append(f"{connection['name']}: {exc}")
+    return {"items": items, "connections": len(chosen), **({"notes": notes} if notes else {})}
+
+
 def use(
     db: Session,
     user: User,
@@ -279,4 +321,6 @@ def register_uses() -> None:
     capabilities.register_use(capabilities.Use(REFERENCE_LIBRARY, "app", fragment("capUse_referenceLibrary")))
 
 
-__all__ = ["ReferenceLibraryError", "collections", "connections", "item", "search", "use", "register_uses"]
+__all__ = [
+    "ReferenceLibraryError", "collections", "connections", "item", "search", "search_everywhere", "use", "register_uses",
+]

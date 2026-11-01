@@ -725,6 +725,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirm_workflowNamed": {"zh": "「{name}」", "en": " \u300c{name}\u300d"},
     "confirm_editBoard": {"zh": "{count} 个画板编辑: {kinds}", "en": "{count} board edits: {kinds}"},
     "confirm_editNote": {"zh": "修改笔记「{title}」:{changes}", "en": "Edit note “{title}”: {changes}"},
+    "confirm_useReference": {
+        "zh": "从参考库「{library}」取「{title}」进素材库(出处:{author})",
+        "en": "Take “{title}” from the reference library “{library}” into your media (source: {author})",
+    },
+    "confirm_useReferenceAsAsset": {
+        "zh": "从参考库「{library}」取「{title}」,并存成{kind}资产(出处:{author})",
+        "en": "Take “{title}” from the reference library “{library}” and save it as a {kind} asset (source: {author})",
+    },
+    "confirm_referenceAuthorUnknown": {"zh": "未注明", "en": "not stated"},
+    "confirmErr_referenceConnectionGone": {
+        "zh": "这个参考库连接不在了(或不是你接的),重新搜一次再取",
+        "en": "That reference library connection is gone (or isn't yours); search again before taking an item.",
+    },
     "confirm_noteReplaces": {"zh": "替换 {count} 处", "en": "replace {count} passage(s)"},
     "confirm_noteInserts": {"zh": "插入 {count} 处", "en": "insert at {count} place(s)"},
     "confirm_noteUntitled": {"zh": "未命名笔记", "en": "Untitled note"},
