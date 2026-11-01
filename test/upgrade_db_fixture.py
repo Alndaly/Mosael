@@ -1,7 +1,7 @@
-"""Build and verify the oldest supported (v2.1.1) database for the packaged upgrade smoke.
+"""Build and verify the oldest supported (v2.2.0) database for the packaged upgrade smoke.
 
 The fixture owns only facts required by the remaining rolling-window migrations. Table shapes
-come from the real v2.1.1 schema baseline; explicit rows exercise the migrations that still
+come from the real v2.2.0 schema baseline; explicit rows exercise the migrations that still
 transform old data, rather than succeeding only on an empty install.
 """
 
@@ -29,9 +29,10 @@ def seed(data_dir: Path) -> None:
 
         db.execute(
             "INSERT INTO publish_tasks (id, workspace_id, account_id, asset_id, title, description, tags, "
-            "short_title, options, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "short_title, options, status, created_at, updated_at, content_kind, asset_ids, body, media_meta) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             ("legacy-task", "legacy-workspace", "legacy-account", "legacy-asset", "Legacy title", "",
-             "[]", "", "{}", "prepared", NOW, NOW),
+             "[]", "", "{}", "prepared", NOW, NOW, "video", '["legacy-asset"]', "", "{}"),
         )
         graph = {"nodes": [{"id": "publish-1", "type": "publish", "config": {}}], "edges": []}
         db.execute(

@@ -105,7 +105,7 @@ graph TD
 
 - 改表 = 改 `model_slices/*.py` **且** 加一个 `_migrate_*`,少一步就是"新装机好、老用户崩";
 - Alembic 已整体移除——"30 个迁移文件从不被执行,且自 2026-07-23 起与 models.py 漂移(模型改 6 次、迁移 0 次)"(ARCHITECTURE.md:184-185);
-- 迁移退休判据:引入时间早于最早仍支持的 Release(当前 v2.1.1;最新公开 v2.4.0 往前 8 个版本序号)才可删(ADR-0006);
+- 迁移退休判据:引入时间早于最早仍支持的 Release(当前 v2.1.1;最新公开 v2.4.1 往前 8 个版本序号)才可删(ADR-0006);
 - 发版 CI 的 `test/bundle.smoke.mjs` 用 `test/upgrade_db_fixture.py` 造旧库、真正启动打包 Electron 验证升级路径,不是只检查产物存在。
 
 ### 3.4 数据归属棘轮

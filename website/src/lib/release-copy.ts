@@ -1,5 +1,15 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.4.1": {
+    zh: [
+      "**资产引用更好用。** `@资产` 小条里的「按普通参考图发送」收进姿势引用内部；模型不收姿势参考时换成琥珀警告图标，悬停说明风险。",
+      "**点引用先看预览，图还能放大。** 点 `@资产` 小条看到封面、描述、提示词和参考图；封面与参考缩略图接上全局图片灯箱，可在同一组参考图里左右翻。",
+    ],
+    en: [
+      "**Asset references are easier to use.** “Send as a regular reference” now lives inside the pose chip; when the model does not accept pose references it becomes an amber warning icon with the trade-off on hover.",
+      "**Preview before you commit, and zoom into the images.** Clicking an @asset chip shows its cover, description, prompt descriptor and references; covers and thumbnails open in the global image lightbox, with the reference set paged left and right.",
+    ],
+  },
   "v2.4.0": {
     zh: [
       "**参考库上线，内置 PoseAtlas 姿势与服装图鉴。** 资产页多了「参考库」：浏览、搜索多机位人台线稿和服装，「存为资产」后生成时就能 @ 它；只引用原站、不带图，取进来的素材记着原作者与许可。智能体也能替你在里面找，取哪一张要你在确认卡上点头。",
