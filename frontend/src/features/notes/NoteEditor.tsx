@@ -10,7 +10,7 @@ import { noteExtensions, notePlaceholder } from "./editorExtensions";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { COMPOSE_SETTLE_MS, useExternalContent } from "@/components/app/useExternalContent";
-import { pauseCompositionObserver, resumeCompositionObserver } from "@/components/app/compositionObserver";
+import { isImeBackspace, isSyntheticImeBackspace } from "@/components/app/compositionKeydown";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { importAsset } from "@/api/domains/assets";
@@ -85,16 +85,15 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     } })],
     content: markdown, contentType: "markdown", editable,
     editorProps: { attributes: { class: "note-prose outline-none", "aria-label": s.content },
-      handleKeyDown: (_view, event) => toolbarKeys.current?.(event) ?? false,
+      handleKeyDown: (view, event) => {
+        //: Tiptap 的退格快捷键会为空操作 dispatch 一个事务,组词中那一下会把 preedit 重画回 DOM。
+        if (isSyntheticImeBackspace(view, event)) return true;
+        return toolbarKeys.current?.(event) ?? false;
+      },
       handleDOMEvents: {
-        //: 和智能体输入框同一个修法:组词中按退格缩短候选时,Chrome 会把残留拼音写进正文;
-        //: 普通组词不要动 DOM 观察,否则组词结束后选区会卡在第一段末尾。
-        keydown: (view, event) => {
-          if (view.composing && event.key === "Backspace") pauseCompositionObserver(view);
-          return false;
-        },
-        compositionend: (view) => {
-          resumeCompositionObserver(view);
+        //: 组词中真实的退格归输入法:认领掉(不 preventDefault),别让 Tiptap 的快捷键看见它。
+        keydown: (view, event) => isImeBackspace(view, event),
+        compositionend: () => {
           //: onUpdate 在组词期间是跳过的,组词结束这一拍必须把最终 Markdown 交给父层 ——
           //: 否则自动保存拿到的还是组词前的旧稿。等 ProseMirror 把组词收尾(20ms)之后读,
           //: 和 useExternalContent 补判用的是同一条界线。

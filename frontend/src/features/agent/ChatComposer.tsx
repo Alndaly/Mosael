@@ -5,7 +5,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { PluginKey } from "@tiptap/pm/state";
 
 import { useI18n } from "@/app/preferences";
-import { pauseCompositionObserver, resumeCompositionObserver } from "@/components/app/compositionObserver";
+import { isImeBackspace, isSyntheticImeBackspace } from "@/components/app/compositionKeydown";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { useExternalContent } from "@/components/app/useExternalContent";
@@ -318,21 +318,18 @@ export function ChatComposer({
       //: 附件拖放(见 composerAttachments)。编辑器里自己挪一段字(moved)照旧归它。
       handleDrop: (_view, event, _slice, moved) => !moved && Array.from(event.dataTransfer?.types ?? []).includes("Files"),
       handleDOMEvents: {
-        //: 只有「组词中按退格缩短候选」才停 DOM 观察（Chrome 会把残留拼音写进正文）。
-        //: 普通中文组词必须让 ProseMirror 自己跟，否则组词结束后选区映射会卡在第一段末尾。
-        keydown: (view, event) => {
-          if (view.composing && event.key === "Backspace") pauseCompositionObserver(view);
-          return false;
-        },
+        //: 组词中真实的退格归输入法:认领掉(不 preventDefault),别让 Tiptap 的快捷键看见它。
+        keydown: (view, event) => isImeBackspace(view, event),
         compositionend: (view) => {
-          resumeCompositionObserver(view);
           //: onUpdate 在组词期间是跳过的；组词结束这一拍必须把最终文档交给父层，
           //: 否则紧接着点发送时 `draft.text()` 还是组词前的旧稿（消息会少一段中文）。
           queueMicrotask(() => syncCompositionDocument(view));
           return false;
         },
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
+        //: Tiptap 的退格快捷键会为空操作 dispatch 一个事务,组词中那一下会把 preedit 重画回 DOM。
+        if (isSyntheticImeBackspace(view, event)) return true;
         if (!sendsOnEnter(event, menuOpenRef.current)) return false;
         event.preventDefault();
         submitRef.current();
