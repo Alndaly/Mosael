@@ -1,0 +1,72 @@
+{
+  "id": "dev.mosael.poseatlas",
+  "manifest_version": 8,
+  "name": "PoseAtlas",
+  "summary": {
+    "zh": "RuiC-PoseAtlas 的姿势图鉴(多机位人台线稿)与服装图鉴接进参考库:浏览、搜索,用到哪张取哪张。",
+    "en": "RuiC-PoseAtlas pose atlas (multi-angle mannequin line art) and costume atlas in the reference library: browse, search, take one."
+  },
+  "default_locale": "zh",
+  "version": "0.1.0",
+  "homepage": "https://hruiccc.github.io/RuiC-PoseAtlas/",
+  "author": {
+    "name": "Mosael",
+    "url": "https://mosael.com"
+  },
+  "docs": {
+    "zh": "https://mosael.com/zh/plugins/poseatlas",
+    "en": "https://mosael.com/en/plugins/poseatlas"
+  },
+  "runtime": {
+    "kind": "process",
+    "entry": "tools/main.py"
+  },
+  "permissions": [
+    "network:github"
+  ],
+  "provides": [
+    "reference_library"
+  ],
+  "instance": {
+    "config": [
+      {
+        "key": "POSEATLAS_ADULT",
+        "label": {
+          "zh": "包含成人内容",
+          "en": "Include adult content"
+        },
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "help": {
+          "zh": "原站的「性感」「双人」系列、上半身里的两类,以及服装的「内衣」「性感」两类。关着时这些条目根本不出现;打开后它们标为 NSFW,按预览图设置模糊或隐藏。",
+          "en": "The site's Sexy and Couples series, two upper-body categories, and the Lingerie and Sexy costume categories. While off, these entries never appear; when on, they are marked NSFW and blurred or hidden per your preview settings."
+        }
+      }
+    ]
+  },
+  "tools": {
+    "expose": "all",
+    "declare": [
+      {
+        "name": "poseatlas_library",
+        "label": {
+          "zh": "PoseAtlas 参考库",
+          "en": "PoseAtlas reference library"
+        },
+        "provides": [
+          "reference_library"
+        ],
+        "timeout_seconds": 900,
+        "read_only": true,
+        "description": {
+          "zh": "替 Mosael 的参考库回答 PoseAtlas 有哪几本图集、按关键词和分类找条目、一个条目的各机位图与出处,以及把选中的那张原图取回来。图片一律从原站取,插件不带图。只给宿主调。",
+          "en": "Answers Mosael's reference library: which atlases PoseAtlas has, finding entries by keyword and category, an entry's views and provenance, and fetching the original image the user picked. Images always come from the original site; the plugin ships none. Host-only."
+        },
+        "input_schema": {
+          "type": "object"
+        }
+      }
+    ]
+  }
+}

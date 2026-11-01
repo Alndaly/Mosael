@@ -25,6 +25,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
+import { useCatalogLabels } from "@/features/entities/entityMeta";
 import { cn } from "@/lib/utils";
 
 function localized(value: Record<string, string>, locale: string): string {
@@ -78,6 +79,8 @@ function ItemDetail({
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const [settings] = useModelPreviewSettings();
+  //: 机位名(正面、斜侧、俯拍……)读资产库的词表 —— 插件交的是角度的键,不是给人看的字。
+  const labels = useCatalogLabels();
   const detail = useQuery({
     queryKey: referenceKeys.item(instanceId, item.id),
     queryFn: () => getReferenceItem(instanceId, item.id, item.collection),
@@ -120,7 +123,7 @@ function ItemDetail({
           {shown.views.map((view) => (
             <figure key={`${view.role}-${view.thumbnail}`} className="m-0 grid gap-1">
               <Thumb item={{ ...shown, thumbnail: view.thumbnail }} className="aspect-[3/4] rounded-md" />
-              <figcaption className="text-ui-2xs text-muted-foreground">{view.role}</figcaption>
+              <figcaption className="text-ui-2xs text-muted-foreground">{labels.role(view.role)}</figcaption>
             </figure>
           ))}
         </div>
@@ -206,7 +209,8 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
 
       {collections.isError && <EmptyState icon={<ImageOff />} title={t("referenceLibraryFailed")} />}
 
-      {!collections.isPending && !activeCollection && (
+      {/* 取失败时上面那一条已经说了;这里只管「取到了,但一本图集都没有」—— 一屏只说一次。 */}
+      {collections.isSuccess && !activeCollection && (
         <EmptyState icon={<Search />} title={t("referenceLibraryNoItems")} />
       )}
 
@@ -224,7 +228,7 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
                 return next;
               })}
               options={[{ value: "__all", label: filter.label }, ...filter.values]}
-              className="min-w-28"
+              className="w-44"
             />
           ))}
         </div>

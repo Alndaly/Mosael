@@ -1188,8 +1188,8 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 能力的地方(文档「重新解析」、工作流节点的引擎下拉、画板的能力、智能体的工具参数、素材库的操作)都能**点名你这一家**,
 而它们调的就是这个工具。插件页上这类工具的行上有一枚能力徽标,展开能看到「用在哪」。
 
-只有**目录类能力**(`generation`、`tools`、`model_library`、`workflow_library`)的那个工具不进工具表:它回答的是「这个
-连接有哪些模型 / 哪些工具 / 哪些模型文件 / 哪些工作流」,本身不是一次能交给人的调用。
+只有**目录类能力**(`generation`、`tools`、`model_library`、`workflow_library`、`reference_library`)的那个工具不进工具表:
+它回答的是「这个连接有哪些模型 / 哪些工具 / 哪些模型文件 / 哪些工作流 / 哪些参考图」,本身不是一次能交给人的调用。
 
 | 能力 | 宿主自带 | 没定默认时 | 类别 |
 | --- | --- | --- | --- |
@@ -1204,6 +1204,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 | `tools` | —— | 每个连接报自己的工具 | 目录类 |
 | `model_library` | —— | 每个连接报自己那台服务器上的模型文件(见下面「模型库」) | 目录类 |
 | `workflow_library` | —— | 每个连接报自己那台服务器上存着的工作流(见下面「工作流库」) | 目录类 |
+| `reference_library` | —— | 每个连接报一套只读的外部参考图集(见下面「参考库」) | 目录类 |
 
 认领调用类 / 目录类能力的,装的时候就查:只给进程形态、有且只有一个工具认领;调用类的那个工具**入参要按契约写**
 (见下面各节 —— 宿主的入口和智能体、工作流调的是同一个工具,形状只有一种)。
@@ -1468,6 +1469,49 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 
 宿主先查过路径(`workflows/` 里的相对路径、`.json`、没有 `..` 和反斜杠;回收目录里的只认上面那种形状),你写之前仍要再查一遍;
 每次改成了,宿主让这个连接重新拉一遍模型和工具目录。
+
+#### `reference_library` —— 一套只读的外部参考图集(姿势、服装)
+
+决策见 [ADR 0091](adr/0091-reference-library-pose-and-costume.md),范例是 `plugins/examples/poseatlas/tools/main.py`。目录类:
+认领它的工具不进工具表;资产页的「参考库」页签按连接列出它,智能体经 `search_references` / `use_reference` 用它。
+宿主按 `op` 问:
+
+- `{"op": "collections", "locale": "zh"}` → 有哪几本图集:
+
+  ```jsonc
+  {"collections": [{
+    "id": "poses", "kind": "pose",                     // kind 只认 pose / costume(资产库里对应的两种)
+    "name": {"zh": "姿势图鉴", "en": "Pose atlas"}, "count": 98,
+    "filters": [{"key": "series", "label": "系列", "values": [{"value": "full_std", "label": "标准全身"}]}]
+  }]}
+  ```
+
+- `{"op": "search", "collection": "poses", "q": "坐", "filters": {"series": "full_std"}, "cursor": "", "limit": 40}` →
+  `{"items": [条目…], "next_cursor": "40"}`(没有下一页给空串);
+- `{"op": "item", "item_id": "…", "collection": "poses"}` → `{"item": 条目}`。一个条目:
+
+  ```jsonc
+  {
+    "id": "full_single_P001", "collection": "poses", "kind": "pose",
+    "name": {"zh": "后仰坐・单膝立起", "en": "Reclining sit, one knee up"},
+    "tags": ["坐姿", "Sitting"],
+    "views": [{"role": "front", "thumbnail": "https://…/thumb.jpg", "original": "https://…/full.png"}],
+    // role 用资产库的角度词:姿势是 front / three_quarter / side / back / high_angle / low_angle / detail
+    "nsfw": false,
+    "provenance": {"author": "原作者", "url": "https://原站/", "license": "一句给人看的许可说明"}
+  }
+  ```
+
+- `{"op": "fetch", "item_id": "…", "collection": "…"}` → 把这个条目**第一张**原图下到 `MOSAEL_PLUGIN_OUTPUT_DIR`,
+  交回 `{"artifact": {"path": "文件名"}}`。只有用户点「用这一张 / 存为资产」(或批准智能体的 `use_reference` 卡)时才会问。
+
+几条规矩:
+
+- **浏览只拉缩略图**,宿主不镜像、不打包、不替插件缓存原图;取用是单条、由人发起,出处(`provenance` 连同连接、条目 id)
+  写进素材的 `external_source`。带外部出处的素材不进分享包,也不随 MosaelCloud 同步。
+- **插件包里不要带图**:图从原站来。索引可以缓存在 `MOSAEL_PLUGIN_DATA_DIR`。
+- 成人内容要么不返回,要么标 `nsfw: true` —— 宿主按「预览图」设置模糊或隐藏,并且**从不交给智能体**。
+  PoseAtlas 的做法是连接配置里一个默认关闭的开关:关着时根本不返回这些条目。
 
 ## 替宿主做生成
 
