@@ -24,6 +24,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Truncate } from "@/components/ui/truncate";
 import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreviewSettingsButton";
 import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { useCatalogLabels } from "@/features/entities/entityMeta";
 import { cn } from "@/lib/utils";
@@ -206,6 +207,7 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
           onChange={(event) => setQuery(event.target.value)}
           className="min-w-52 flex-1"
         />
+        <ModelPreviewSettingsButton />
       </div>
 
       <CollectionTabs

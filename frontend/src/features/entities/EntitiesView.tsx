@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Segmented } from "@/components/ui/segmented";
 import { useOpenRequest } from "@/lib/deepLink";
 import { TAG_MATCHES, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -132,25 +133,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     replaceHash("entities", readHash().projectId, params);
   }, [openId]);
 
-  if (mode === "references") {
-    return (
-      <div className={STUDIO_PAGE} data-entities-page="">
-        <CollectionTabs
-          value={mode}
-          onChange={setMode}
-          label={t("navEntities")}
-          items={[
-            { value: "assets", label: t("referenceLibraryAssetsTab") },
-            { value: "references", label: t("referenceLibraryTab") },
-          ]}
-        />
-        <PageHeading title={t("referenceLibraryTab")} description={t("referenceLibraryDesc")} />
-        <ReferenceLibraryView workspace={workspace} />
-      </div>
-    );
-  }
-
-  if (openId) {
+  if (mode === "assets" && openId) {
     return (
       <div className={STUDIO_PAGE}>
         <EntityDetail workspaceId={workspace.id} entityId={openId} onBack={close} onOpen={setOpenId} />
@@ -173,34 +156,38 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
       }}
     >
-      <CollectionTabs
-        value={mode}
-        onChange={setMode}
-        label={t("navEntities")}
-        items={[
-          { value: "assets", label: t("referenceLibraryAssetsTab") },
-          { value: "references", label: t("referenceLibraryTab") },
-        ]}
-      />
       <PageHeading
         title={t("navEntities")}
-        description={t("entitiesDesc")}
-        count={all.data?.length}
+        description={mode === "assets" ? t("entitiesDesc") : t("referenceLibraryDesc")}
+        count={mode === "assets" ? all.data?.length : undefined}
         className="py-7 xl:py-8"
         actions={
-          emptyKind ? undefined : (
-            <Hint disabledReason={writeBlocked?.reason}>
-              <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
-                <Plus />
-                {t("entitiesNew").replace("{kind}", labels.kind(kind))}
-              </Button>
-            </Hint>
-          )
+          <>
+            <Segmented
+              aria-label={t("navEntities")}
+              size="sm"
+              value={mode}
+              onValueChange={setMode}
+              options={[
+                { value: "assets", label: t("referenceLibraryAssetsTab") },
+                { value: "references", label: t("referenceLibraryTab") },
+              ]}
+            />
+            {mode === "assets" && !emptyKind && (
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                  <Plus />
+                  {t("entitiesNew").replace("{kind}", labels.kind(kind))}
+                </Button>
+              </Hint>
+            )}
+          </>
         }
       />
 
       {/* 吸顶工具条,照素材库:底色和分割线由 .workspace-sticky 按「有没有东西从下面滚过去」淡入淡出
           (data-stuck),静止时不画线;负外边距和外壳的内边距是同一个数。 */}
+      {mode === "assets" && (
       <div
         ref={filtersRef}
         data-stuck={filtersStuck}
@@ -251,7 +238,12 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         </div>
         <EntitySelectionBar collection={collection} rows={visible} className="border-t border-divider pt-3" />
       </div>
+      )}
 
+      {mode === "references" ? (
+        <ReferenceLibraryView workspace={workspace} />
+      ) : (
+      <>
       {/* 空态要落在**剩下的那块空间**中间,和工作台同一个做法:根容器是列方向的 flex,
           这一格在有内容时只是普通容器(`pt-5`),在空 / 载入中 / 出错时**自己长满剩余高度**并把
           里面的空态居中。此前它只是一个 `pt-5` 的普通块,空态的 `m-auto` 没有可分配的余量,
@@ -294,6 +286,8 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
           <EntityGrid collection={collection} rows={visible} className={CARD_GRID} />
         )}
       </div>
+      </>
+      )}
 
       <RenameDialog
         open={creating}
