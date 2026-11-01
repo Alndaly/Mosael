@@ -12,7 +12,7 @@ import { Send, X } from "lucide-react";
 
 import type { WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { compositionDOMEvents } from "@/components/app/compositionObserver";
+import { ImeComposition } from "@/components/app/imeComposition";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { IconButton } from "@/components/ui/icon-button";
@@ -66,6 +66,7 @@ export function CommentComposer({
     content: initialContent,
     onCreate: ({ editor: instance }) => setEmpty(!instance.getText().trim()),
     extensions: [
+      ImeComposition,
       ...commentExtensions(),
       Placeholder.configure({ placeholder: t("commentCanvasPlaceholder") }),
       RefSuggestion.configure({
@@ -121,9 +122,9 @@ export function CommentComposer({
         }
         return false;
       },
-      handleDOMEvents: compositionDOMEvents(),
     },
     onUpdate: ({ editor: instance }) => {
+      //: 组词中的候选不交出去;组词结束由 ImeComposition 补发一次 update。
       if (instance.view.composing) return;
       setEmpty(!instance.getText().trim());
     },

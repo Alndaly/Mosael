@@ -15,7 +15,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { useI18n } from "@/app/preferences";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { Hint } from "@/components/ui/tooltip";
-import { compositionDOMEvents } from "@/components/app/compositionObserver";
+import { ImeComposition } from "@/components/app/imeComposition";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { cn } from "@/lib/utils";
 
@@ -129,6 +129,7 @@ export function RefEditor({
 
   const editor = useEditor({
     extensions: [
+      ImeComposition,
       // 这些字段是**一段文本**,不是文档:标题、列表、引用块之类一概关掉,免得用户不小心
       // 敲出一个二级标题存进配置里。
       StarterKit.configure({
@@ -183,9 +184,9 @@ export function RefEditor({
         role: "textbox",
         "aria-multiline": "true",
       },
-      handleDOMEvents: compositionDOMEvents(),
     },
     onUpdate: ({ editor: instance }) => {
+      //: 组词中的候选不交出去;组词结束由 ImeComposition 补发一次 update。
       if (instance.view.composing) return;
       const next = docToString(instance.getJSON());
       emitted.current = next;

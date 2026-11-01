@@ -20,7 +20,7 @@ import type { MessageKey } from "@/app/messages";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
-import { compositionDOMEvents } from "@/components/app/compositionObserver";
+import { ImeComposition } from "@/components/app/imeComposition";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { isSubmitChord } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -348,6 +348,7 @@ export function PromptEditor({
 
   const editor = useEditor({
     extensions: [
+      ImeComposition,
       // 这是**一段提示词**,不是文档:标题、列表、加粗之类一概关掉。
       AssetChip,
       EntityChip,
@@ -429,9 +430,9 @@ export function PromptEditor({
         }
         return false;
       },
-      handleDOMEvents: compositionDOMEvents(),
     },
     onUpdate: ({ editor: instance }) => {
+      //: 组词中的候选不交出去;组词结束由 ImeComposition 补发一次 update。
       if (instance.view.composing) return;
       const next = instance.getText();
       const nextDocument = instance.getJSON() as PromptDocument;

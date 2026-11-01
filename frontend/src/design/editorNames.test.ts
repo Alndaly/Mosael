@@ -51,12 +51,12 @@ describe("富文本输入框的名字", () => {
     expect(fixed, "已经有名字了 —— 从 KNOWN 里删掉").toEqual([]);
   });
 
-  it("可编辑的 tiptap 都接了组词隔离", () => {
-    //: 组词中的 DOM 是输入法的，不是正文；任何一个可编辑编辑器漏接，中文退格就会在那里复发。
+  it("可编辑的 tiptap 都接了 ImeComposition", () => {
+    //: 组词中 Tiptap 的空事务会打断输入法、组词结束要补发 update；任何一个可编辑编辑器漏接，中文退格就会在那里复发。
     const offenders = files
-      .filter(({ calls }) => calls.some((call) => editable(call) && !call.includes("compositionDOMEvents(")))
+      .filter(({ calls }) => calls.some((call) => editable(call) && !/\bImeComposition\b/.test(call)))
       .map(({ rel }) => rel);
-    expect(offenders, "在 editorProps 里接 compositionDOMEvents()（见 components/app/compositionObserver）").toEqual([]);
+    expect(offenders, "在 extensions 里接 ImeComposition（见 components/app/imeComposition）").toEqual([]);
   });
 
   it("扫得到东西 —— 别变成空转", () => {

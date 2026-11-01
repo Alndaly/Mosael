@@ -5,10 +5,10 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { PluginKey } from "@tiptap/pm/state";
 
 import { useI18n } from "@/app/preferences";
-import { compositionDOMEvents } from "@/components/app/compositionObserver";
+import { ImeComposition } from "@/components/app/imeComposition";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
-import { COMPOSE_SETTLE_MS, useExternalContent } from "@/components/app/useExternalContent";
+import { useExternalContent } from "@/components/app/useExternalContent";
 import { ReferenceChip, ReferenceThumb, REFERENCE_NODE } from "@/features/agent/ReferenceChip";
 import { MAX_FORCED_SKILLS, SKILL_NODE, SkillChip, collectSkills, searchSkills, type SkillOption } from "@/features/agent/SkillChip";
 import {
@@ -214,16 +214,9 @@ export function ChatComposer({
   menuOpenRef.current = Boolean(menu.menu || skillMenu.menu);
 
   const emitted = React.useRef(JSON.stringify(value));
-  const syncCompositionDocument = (view: { composing: boolean; state: { doc: { toJSON(): JSONContent } } }) => {
-    if (view.composing) return;
-    const next = view.state.doc.toJSON();
-    const encoded = JSON.stringify(next);
-    if (encoded === emitted.current) return;
-    emitted.current = encoded;
-    changeRef.current(next);
-  };
   const editor = useEditor({
     extensions: [
+      ImeComposition,
       StarterKit.configure({
         heading: false,
         bulletList: false,
@@ -318,10 +311,6 @@ export function ChatComposer({
       //: 会把它当正文插进来。认领下来(它只 preventDefault、不拦冒泡),文件交给外面整块对话区上的
       //: 附件拖放(见 composerAttachments)。编辑器里自己挪一段字(moved)照旧归它。
       handleDrop: (_view, event, _slice, moved) => !moved && Array.from(event.dataTransfer?.types ?? []).includes("Files"),
-      //: 组词整段不读中间 DOM;组词结束后沿用同一套收尾时间把最终文档交给父层。
-      handleDOMEvents: compositionDOMEvents((view) => {
-        window.setTimeout(() => syncCompositionDocument(view), COMPOSE_SETTLE_MS);
-      }),
       handleKeyDown: (_view, event) => {
         if (!sendsOnEnter(event, menuOpenRef.current)) return false;
         event.preventDefault();
@@ -332,6 +321,7 @@ export function ChatComposer({
     onUpdate: ({ editor: instance }) => {
       //: 组词中的 DOM 只是输入法的候选,不是用户确认的正文。把它 emit 给父层,父层再经
       //: useExternalContent 回灌时,退格后残留的拼音会被当成正文追加(中文输入法 + Backspace)。
+      //: 组词结束由 ImeComposition 补发一次 update,最终的字在那时交出去。
       if (instance.view.composing) return;
       const next = instance.getJSON();
       emitted.current = JSON.stringify(next);

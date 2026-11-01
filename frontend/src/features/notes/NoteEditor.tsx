@@ -9,8 +9,8 @@ import { useNoteStrings } from "./strings";
 import { noteExtensions, notePlaceholder } from "./editorExtensions";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
-import { COMPOSE_SETTLE_MS, useExternalContent } from "@/components/app/useExternalContent";
-import { compositionDOMEvents } from "@/components/app/compositionObserver";
+import { useExternalContent } from "@/components/app/useExternalContent";
+import { ImeComposition } from "@/components/app/imeComposition";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { importAsset } from "@/api/domains/assets";
@@ -74,7 +74,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   const upload = React.useRef<(files: File[], at?: number) => void>(() => {});
   const markdownPaste = React.useRef<(text: string) => void>(() => {});
   const editor = useEditor({
-    extensions: [...noteExtensions(!editable, locale, { previewImages: true, workspaceId }), InactiveSelection, Placeholder.configure({ placeholder: notePlaceholder(s.placeholder) }), RefSuggestion.configure({ suggestion: {
+    extensions: [...noteExtensions(!editable, locale, { previewImages: true, workspaceId }), InactiveSelection, ImeComposition, Placeholder.configure({ placeholder: notePlaceholder(s.placeholder) }), RefSuggestion.configure({ suggestion: {
       char: "@", allowedPrefixes: null,
       items: async ({ query }) => { try { return (await listNotes(workspaceId, query)).filter(n => n.id !== noteId).slice(0, 12); } catch { return []; } },
       command: ({ editor: instance, range, props }) => {
@@ -86,12 +86,6 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     content: markdown, contentType: "markdown", editable,
     editorProps: { attributes: { class: "note-prose outline-none", "aria-label": s.content },
       handleKeyDown: (_view, event) => toolbarKeys.current?.(event) ?? false,
-      //: 组词整段不读中间 DOM;组词结束按同一套收尾时间把最终 Markdown 交给父层。
-      handleDOMEvents: compositionDOMEvents(() => {
-        window.setTimeout(() => {
-          if (editor && !editor.isDestroyed) change.current(editor.getMarkdown());
-        }, COMPOSE_SETTLE_MS);
-      }),
       handlePaste: (view, event) => {
         const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith("image/"));
         if (files.length) { event.preventDefault(); upload.current(files); return true; }
@@ -118,7 +112,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     //: 多出一版看不出改动的「手动编辑」。补上的结构和排版跟着下一次真改动一起存。
     onUpdate: ({ editor: e, transaction }) => {
       //: 组词中的 DOM 只是输入法的候选,不是确认的正文;交给父层再经 useExternalContent 回灌,
-      //: 退格后的残留拼音就会被当成正文追加(和智能体输入框同一个 bug)。
+      //: 退格后的残留拼音就会被当成正文追加(和智能体输入框同一个 bug)。组词结束由 ImeComposition 补发一次 update。
       if (e.view.composing) return;
       if (transaction.docChanged) change.current(e.getMarkdown());
     },
