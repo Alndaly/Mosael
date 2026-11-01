@@ -1,6 +1,10 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@tiptap/pm/state", () => ({
+  TextSelection: { create: vi.fn((_doc: unknown, from: number, to: number) => ({ from, to })) },
+}));
+
 import { holdComposition, releaseComposition } from "./compositionObserver";
 
 function viewWith(dom: HTMLElement) {
@@ -15,6 +19,7 @@ function viewWith(dom: HTMLElement) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -51,6 +56,39 @@ describe("组词观察保护", () => {
     releaseComposition(view);
     vi.runAllTimers();
     expect(observer.start).not.toHaveBeenCalled();
+  });
+
+  it("组词结束后按 DOM 光标恢复选区，不把光标留在组出来的字前面", () => {
+    vi.useFakeTimers();
+    const dom = document.createElement("div");
+    const paragraph = document.createElement("p");
+    const text = document.createTextNode("你好");
+    paragraph.append(text);
+    dom.append(paragraph);
+
+    const tr = { setSelection: vi.fn(), setMeta: vi.fn() };
+    tr.setSelection.mockReturnValue(tr);
+    tr.setMeta.mockReturnValue(tr);
+    const view = {
+      dom,
+      domObserver: { flush: vi.fn(), forceFlush: vi.fn(), stop: vi.fn(), start: vi.fn() },
+      isDestroyed: false,
+      state: { doc: {}, selection: { eq: vi.fn(() => false) }, tr },
+      posAtDOM: vi.fn((_node: Node, offset: number) => offset),
+      dispatch: vi.fn(),
+    };
+
+    vi.spyOn(document, "getSelection").mockReturnValue({
+      anchorNode: text, anchorOffset: 2, focusNode: text, focusOffset: 2,
+    } as unknown as Selection);
+
+    holdComposition(view as never);
+    releaseComposition(view as never);
+    vi.runAllTimers();
+
+    expect(view.posAtDOM).toHaveBeenCalledWith(text, 2);
+    expect(tr.setSelection).toHaveBeenCalledWith({ from: 2, to: 2 });
+    expect(view.dispatch).toHaveBeenCalledOnce();
   });
 
   it("已有正文时清掉组词期间粘住的占位符空态类", () => {

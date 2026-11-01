@@ -1,3 +1,4 @@
+import { TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
 /**
@@ -40,6 +41,9 @@ export function releaseComposition(view: EditorView): void {
   window.setTimeout(() => {
     observer.start();
     observer.flush();
+    //: 组词期间没有 transaction，选区映射停在组词开始的位置。最终 DOM 已经落进文档后，
+    //: 按 DOM 光标重设一次选区，否则光标会卡在刚组出来的字前面。
+    restoreSelectionFromDom(view);
     //: 组词期间没有 transaction，placeholder 的空态类可能还粘在已经有字的段落上；
     //: 清掉它，下一次正常 transaction 会按真实文档重新算。
     if (view.dom.textContent?.trim()) {
@@ -48,4 +52,20 @@ export function releaseComposition(view: EditorView): void {
       }
     }
   }, 0);
+}
+
+/** 组词结束：DOM 光标在最终文档里的位置就是用户看到的位置。 */
+function restoreSelectionFromDom(view: EditorView): void {
+  if (view.isDestroyed) return;
+  const range = view.dom.ownerDocument.getSelection();
+  if (!range || !range.anchorNode || !range.focusNode || !view.dom.contains(range.focusNode)) return;
+  try {
+    const anchor = view.posAtDOM(range.anchorNode, range.anchorOffset);
+    const head = view.posAtDOM(range.focusNode, range.focusOffset);
+    const selection = TextSelection.create(view.state.doc, anchor, head);
+    if (view.state.selection.eq(selection)) return;
+    view.dispatch(view.state.tr.setSelection(selection).setMeta("addToHistory", false));
+  } catch {
+    //: 组词期间 DOM 被输入法改到文档外（极少见）时不动状态，交给 ProseMirror 下一次正常事务。
+  }
 }
