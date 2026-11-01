@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.4.0": {
+    zh: [
+      "**参考库上线，内置 PoseAtlas 姿势与服装图鉴。** 资产页多了「参考库」：浏览、搜索多机位人台线稿和服装，「存为资产」后生成时就能 @ 它；只引用原站、不带图，取进来的素材记着原作者与许可。智能体也能替你在里面找，取哪一张要你在确认卡上点头。",
+      "**资产库新增「姿势」和「服装」。** 能套在任何人物身上的参考：姿势按镜头机位挑图、单独作为姿势参考发送，只约束体态和构图，不把线稿画风带进成片。",
+      "**每个配音引擎都能调语速。** Fish Speech S2 Pro、本机 Qwen3-TTS、百炼 qwen-tts 合成后由应用变速（音高不变）；Fish Speech 缺依赖、F5 念长文本中途崩溃也一并修好。",
+      "**中文输入法更顺手。** 组词后光标不再停在字前面，退格不再留下裸拼音，组完字立刻点「生成」也不会少最后一个词；生成键灰着时悬停会说清原因。",
+    ],
+    en: [
+      "**A reference library, with the PoseAtlas pose and outfit atlas built in.** The Assets page gains a Reference library: browse and search multi-angle mannequin line art and outfits, then save one as an asset to @ it while generating. It only links to the original site and ships no images; anything you take in keeps its author and licence. The agent can search it for you, and you approve each pick on a confirmation card.",
+      "**Assets gain Pose and Outfit kinds.** References that fit any character: a pose is picked by camera angle and sent as a dedicated pose reference, constraining posture and composition without carrying the line-art style into the result.",
+      "**Every voice engine now has speed control.** Fish Speech S2 Pro, local Qwen3-TTS and Bailian qwen-tts are time-stretched by the app after synthesis, keeping pitch; a missing Fish Speech dependency and F5 crashing midway through long text are fixed too.",
+      "**Chinese input methods behave.** The caret no longer lands before freshly composed characters, Backspace no longer leaves stray pinyin, and clicking Generate right after composing keeps the last word; a greyed-out Generate button now explains why on hover.",
+    ],
+  },
   "v2.3.1": {
     zh: [
       "**MosaelCloud 管理台成为完整运营入口。** 供应商、模型、通道和套餐都能新增、编辑与启停；连接测试会显示上游原文；模型价格可查看历史；订单、用量与审计集中在一处。当前分区写进地址，刷新不会跳回概览。",
