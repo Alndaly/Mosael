@@ -13,6 +13,7 @@ import { NodeComposer } from "./NodeComposer";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
 const actualQuery = vi.hoisted(() => vi.importActual<typeof import("@tanstack/react-query")>("@tanstack/react-query"));
+vi.mock("@/features/entities/EntityPreviewDialog", () => ({ EntityPreviewDialog: () => null }));
 vi.mock("@tanstack/react-query", async () => ({
   QueryClientContext: (await actualQuery).QueryClientContext,
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => {
@@ -25,8 +26,11 @@ vi.mock("@tanstack/react-query", async () => ({
   useQueries: ({ combine }: { combine: (results: unknown[]) => unknown }) => combine([]),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
+//: 正文里的 `@姿势` 小条由 PromptEditor 画;这里只看这一格交给小条的那颗附加控件挂没挂对。
 vi.mock("./PromptEditor", () => ({
-  PromptEditor: () => <div data-testid="prompt-editor" />,
+  PromptEditor: ({ entityChip }: { entityChip?: { accessory?: (id: string) => React.ReactNode } }) => (
+    <div data-testid="prompt-editor">{entityChip?.accessory?.("pose-1")}{entityChip?.accessory?.("zhang")}</div>
+  ),
   restorePromptDocument: vi.fn(),
   textDocument: vi.fn(),
   collect: () => [],
@@ -64,9 +68,10 @@ it("@ 了姿势、模型收姿势参考:摆机位;存着的机位还原,发出�
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pose: { shot_angle: "side", as_reference: false } }));
 });
 
-it("模型不收姿势参考:不摆机位,勾「按普通参考图发送」后发出去的是 as_reference", () => {
-  const { onSubmit } = mount(["reference_image"], { mentioned_entity_ids: ["pose-1"] });
-  expect(document.querySelector("[data-pose-use] [data-shot-angle]")).toBeNull();
+it("模型不收姿势参考:不摆机位;「按普通参考图发送」只挂在姿势那条引用里,勾上后发出去的是 as_reference", () => {
+  const { onSubmit } = mount(["reference_image"], { mentioned_entity_ids: ["pose-1", "zhang"] });
+  expect(document.querySelector("[data-pose-use]")).toBeNull();
+  expect(screen.getAllByRole("checkbox", { name: "genPoseAsReference" })).toHaveLength(1);
   fireEvent.click(screen.getByRole("checkbox", { name: "genPoseAsReference" }));
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pose: { shot_angle: null, as_reference: true } }));

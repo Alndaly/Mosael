@@ -8,7 +8,7 @@ import { useGenerationOptions, useMissingModel } from "@/lib/generationOptions";
 import { MissingModelNotice } from "@/features/plugins/MissingModelNotice";
 
 
-import { type BoardItem, type GenerationOption, type PoseUse, type SceneReferenceForm } from "@/api/client";
+import { type BoardItem, type EntitySummary, type GenerationOption, type PoseUse, type SceneReferenceForm } from "@/api/client";
 import { resolvedShot, SceneReferencePicker, sceneReferenceUses, useReferencedScene } from "@/features/boards/SceneReferencePicker";
 import {
   collect,
@@ -74,6 +74,7 @@ import { AssetUploadStatus, fileKind, namedFile, useAssetUpload, wrongKindText }
 import { useFileDrop } from "@/lib/useFileDrop";
 import { EntityThumb, PoseReferenceToggle, ShotAngleSelect, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
+import { EntityPreviewDialog } from "@/features/entities/EntityPreviewDialog";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 
 /**
@@ -931,6 +932,28 @@ export function NodeComposer({
     (id) => mentionable.data?.find((one) => one.id === id)?.kind === "pose",
   );
   const poseSupported = Boolean(current && supportsParameter(current, "pose_reference"));
+  //: 「按普通参考图发送」挂在**第一个姿势引用**的小条里(和 AI Studio 同一个位置):一次请求只有一档,
+  //: 多个姿势共用它。正文里 `@` 的排在前,没有才挂到连进来的那个资产格小条上。
+  const poseChipId = [...mentionedEntities, ...(upstreamEntities ?? [])].find(
+    (id) => mentionable.data?.find((one) => one.id === id)?.kind === "pose",
+  );
+  const poseToggle = (
+    <PoseReferenceToggle
+      checked={Boolean(pose.as_reference)}
+      supported={poseSupported}
+      onChange={(as_reference) => setPose({ ...pose, as_reference })}
+      className="mr-0"
+    />
+  );
+  const [previewEntity, setPreviewEntity] = React.useState<EntitySummary | null>(null);
+  const openEntity = (id: string) => {
+    const found = mentionable.data?.find((one) => one.id === id);
+    if (found) setPreviewEntity(found);
+  };
+  const entityChip = {
+    onOpen: openEntity,
+    accessory: (id: string) => (id === poseChipId ? poseToggle : null),
+  };
 
   //: 连进来却用不上的素材:就地说一句,不让那根线看起来像是起了作用(见 unusedUpstreamKinds)。
   const unused = unusedUpstreamKinds(current, activeMode?.roles, feed);
@@ -1096,10 +1119,24 @@ export function NodeComposer({
           <Hint key={entity.id} label={t("boardLinkedEntityHint")}>
             <span
               data-linked-entity={entity.id}
-              className="inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
+              className="inline-flex h-8 max-w-[14rem] shrink-0 items-center rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
             >
-              <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
-              <Truncate>{entityDisplayName(entity)}</Truncate>
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={entityDisplayName(entity)}
+                onClick={() => setPreviewEntity(entity)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setPreviewEntity(entity);
+                }}
+                className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 hover:text-foreground"
+              >
+                <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
+                <Truncate>{entityDisplayName(entity)}</Truncate>
+              </span>
+              {entity.id === poseChipId && poseToggle}
             </span>
           </Hint>
         ))}
@@ -1495,25 +1532,20 @@ export function NodeComposer({
             //: 资产库里的人物 / 场景 / 道具也在同一个 `@` 菜单里;连进来的资产格排在最前。
             entities={entityCandidates}
             linkedEntities={upstreamEntities}
+            entityChip={entityChip}
             onSubmit={send}
             emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
           />
         </div>
       )}
-      {hasPose && (
+      {/* 机位只在模型收姿势参考、又没改成按普通参考图发时才有意义;「按普通参考图发送」在引用小条里。 */}
+      {hasPose && poseSupported && !pose.as_reference && (
         <div className="flex flex-wrap items-center gap-2 px-1" data-pose-use="">
-          {poseSupported && !pose.as_reference && (
-            <ShotAngleSelect value={pose.shot_angle} onChange={(shot_angle) => setPose({ ...pose, shot_angle })} />
-          )}
-          <label className="flex items-center text-ui-xs text-muted-foreground">
-            <PoseReferenceToggle
-              checked={Boolean(pose.as_reference)}
-              supported={poseSupported}
-              onChange={(as_reference) => setPose({ ...pose, as_reference })}
-            />
-            {t("genPoseAsReference")}
-          </label>
+          <ShotAngleSelect value={pose.shot_angle} onChange={(shot_angle) => setPose({ ...pose, shot_angle })} />
         </div>
+      )}
+      {previewEntity && (
+        <EntityPreviewDialog workspaceId={workspaceId} entity={previewEntity} onClose={() => setPreviewEntity(null)} />
       )}
       {needsDigitalHumanConsent && (
         <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />

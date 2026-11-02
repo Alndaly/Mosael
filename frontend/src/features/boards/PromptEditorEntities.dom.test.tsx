@@ -127,3 +127,36 @@ describe("@ 菜单里有资产", () => {
     await waitFor(() => expect(menuRows().map((row) => row.dataset.mention)).toEqual(["entity", "entity", "entity"]));
   });
 });
+
+describe("正文里的资产 chip:点开预览、挂附加控件(和 AI Studio 引用小条同一套)", () => {
+  it("点 chip 交出资产 id;附加控件只挂在调用方指定的那个资产第一次出现的那条里", async () => {
+    const onOpen = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <PromptEditor
+          value=""
+          document={{ type: "doc", content: [{ type: "paragraph", content: [
+            { type: "entityRef", attrs: { entityId: "e-zhang", name: "张三", kind: "character", cover: "" } },
+            { type: "entityRef", attrs: { entityId: "e-street", name: "老街", kind: "location", cover: "" } },
+            { type: "entityRef", attrs: { entityId: "e-street", name: "老街", kind: "location", cover: "" } },
+          ] }] }}
+          onChange={vi.fn()}
+          placeholder="写点什么"
+          candidates={async () => []}
+          onSubmit={vi.fn()}
+          emptyHint={() => ""}
+          entityChip={{ onOpen, accessory: (id) => (id === "e-street" ? <i data-testid="pose-toggle" /> : null) }}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(view.container.querySelectorAll("[data-entity-ref][data-entity-id]")).toHaveLength(3));
+    const streets = view.container.querySelectorAll('[data-entity-id="e-street"]');
+    //: 同一个资产 `@` 了两次:控件只挂在第一条上。
+    expect(streets[0].querySelector('[data-testid="pose-toggle"]')).not.toBeNull();
+    expect(streets[1].querySelector('[data-testid="pose-toggle"]')).toBeNull();
+    expect(view.container.querySelector('[data-entity-id="e-zhang"] [data-testid="pose-toggle"]')).toBeNull();
+    fireEvent.click(view.container.querySelector('[data-entity-id="e-zhang"] [role="button"]')!);
+    expect(onOpen).toHaveBeenCalledWith("e-zhang");
+  });
+});

@@ -4,6 +4,8 @@ import {
   EditorContent,
   type JSONContent,
   Node,
+  type Editor,
+  type NodeViewProps,
   NodeViewWrapper,
   ReactNodeViewRenderer,
   mergeAttributes,
@@ -178,6 +180,73 @@ const AssetChip = Node.create({
     )),
 });
 
+/**
+ * 正文里资产 chip 的「装饰」:由用这个编辑器的那一格决定,和 AI Studio 引用小条(`entityMentionChips`)同一套 ——
+ * `onOpen` 点小条看预览,`accessory` 挂在名字后面的那颗小控件(姿势引用的「按普通参考图发送」)。
+ *
+ * 走 context 而不是节点属性:它们是这一格此刻的状态(模型收不收姿势、勾没勾),不是文档内容,
+ * 不该存进 TipTap JSON。节点视图经 portal 渲染在 EditorContent 底下,读得到外面这层 context。
+ */
+export interface EntityChipDecor {
+  onOpen?: (entityId: string) => void;
+  /** 只挂在这个资产在正文里**第一次**出现的那条上:同一个姿势 `@` 两次,开关也只有一档。 */
+  accessory?: (entityId: string) => React.ReactNode;
+}
+const NO_DECOR: EntityChipDecor = {};
+const EntityChipDecorContext = React.createContext<EntityChipDecor>(NO_DECOR);
+
+/** 正文里第一个指向 `entityId` 的 chip 在哪。 */
+function firstChipAt(editor: Editor, entityId: string): number | null {
+  let found: number | null = null;
+  editor.state.doc.descendants((child, pos) => {
+    if (found !== null) return false;
+    if (child.type.name === "entityRef" && String(child.attrs.entityId) === entityId) found = pos;
+    return undefined;
+  });
+  return found;
+}
+
+function EntityChipView({ node, editor, getPos }: NodeViewProps) {
+  //: context 每次这一格重渲染都换一份,所有 chip 跟着重画 —— 「哪一条是第一个」随之重算。
+  const decor = React.useContext(EntityChipDecorContext);
+  const entityId = String(node.attrs.entityId);
+  const accessory = decor.accessory && firstChipAt(editor, entityId) === getPos() ? decor.accessory(entityId) : null;
+  const name = String(node.attrs.name ?? "");
+  const open = decor.onOpen;
+  return (
+    <NodeViewWrapper
+      as="span"
+      data-entity-ref=""
+      data-entity-id={entityId}
+      className="inline-flex max-w-[220px] items-center gap-1 rounded-md bg-accent px-1 py-0.5 align-baseline text-ui-2xs text-foreground"
+    >
+      <span
+        {...(open
+          ? {
+              role: "button",
+              tabIndex: 0,
+              "aria-label": name,
+              onClick: () => open(entityId),
+              onKeyDown: (event: React.KeyboardEvent) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                open(entityId);
+              },
+            }
+          : {})}
+        className={cn("inline-flex min-w-0 items-center gap-1", open && "cursor-pointer hover:text-primary")}
+      >
+        <EntityThumb
+          entity={{ kind: String(node.attrs.kind || "character") as EntitySummary["kind"], cover_asset_id: String(node.attrs.cover || "") || null }}
+          className="h-3.5 w-3.5 rounded-[3px]"
+        />
+        <Truncate>{name}</Truncate>
+      </span>
+      {accessory}
+    </NodeViewWrapper>
+  );
+}
+
 /** 正文里的资产 chip(ADR 0027)。序列化成资产的名字 —— 「张三站在街口」读起来是一句话;
  *  资产本身(提示词描述、参考图)由服务端按 `entity_ids` 挂上,见 collectEntities。 */
 const EntityChip = Node.create({
@@ -193,21 +262,7 @@ const EntityChip = Node.create({
     mergeAttributes(HTMLAttributes, { "data-entity-ref": "" }),
   ],
   renderText: ({ node }: { node: { attrs: Record<string, unknown> } }) => String(node.attrs.name ?? ""),
-  addNodeView: () =>
-    ReactNodeViewRenderer(({ node }: { node: { attrs: Record<string, unknown> } }) => (
-      <NodeViewWrapper
-        as="span"
-        data-entity-ref=""
-        data-entity-id={String(node.attrs.entityId)}
-        className="inline-flex max-w-[180px] items-center gap-1 rounded-md bg-accent px-1 py-0.5 align-baseline text-ui-2xs text-foreground"
-      >
-        <EntityThumb
-          entity={{ kind: String(node.attrs.kind || "character") as EntitySummary["kind"], cover_asset_id: String(node.attrs.cover || "") || null }}
-          className="h-3.5 w-3.5 rounded-[3px]"
-        />
-        <Truncate>{String(node.attrs.name ?? "")}</Truncate>
-      </NodeViewWrapper>
-    )),
+  addNodeView: () => ReactNodeViewRenderer(EntityChipView),
 });
 
 /** 文档里所有资产 chip 引用到的资产 id,按出现顺序、去重。 */
@@ -250,6 +305,7 @@ export function PromptEditor({
   linked,
   entities,
   linkedEntities,
+  entityChip,
 }: {
   value: string;
   /** 节点表单里保存的 TipTap JSON；没有时按旧版纯文本打开。 */
@@ -274,6 +330,8 @@ export function PromptEditor({
   entities?: (query: string) => EntitySummary[];
   /** 连进这个节点的资产格引用的资产 —— 和连进来的素材一起排在最前。 */
   linkedEntities?: string[];
+  /** 正文里资产 chip 的点击预览与附加控件(见 EntityChipDecor)。 */
+  entityChip?: EntityChipDecor;
 }) {
   //: 最后一次自己发出去的值。外面改了(上游便签填进来、撤销)才回灌,否则每敲一个字都会被
   //: prop 回流重建文档,光标跳到开头。
@@ -452,7 +510,9 @@ export function PromptEditor({
 
   return (
     <>
-      <EditorContent editor={editor} />
+      <EntityChipDecorContext.Provider value={entityChip ?? NO_DECOR}>
+        <EditorContent editor={editor} />
+      </EntityChipDecorContext.Provider>
       <menu.Portal
         className="fixed left-0 top-0 z-50 max-h-[min(360px,calc(100dvh-16px))] w-[360px] max-w-[calc(100vw-16px)] rounded-xl p-1.5"
         header={
