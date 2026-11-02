@@ -62,7 +62,7 @@ def test_a_half_written_shard_is_not_installed(tmp_path, monkeypatch) -> None:
         total_size=12000,  # 应该是 6000 + 6000
     )
     monkeypatch.setattr(tts_models, "_fish_model_dir", lambda: model)
-    tiny = dataclasses.replace(tts_models._BY_ID["fish-speech"], expected_bytes=1000)
+    tiny = dataclasses.replace(tts_models.MODELS_BY_ID["fish-speech"], expected_bytes=1000)
 
     assert tts_models._measure(tiny) >= tiny.expected_bytes * 0.6, "体积判据在这里必须说'装好了'"
     assert tts_models._is_installed(tiny) is False
@@ -76,7 +76,7 @@ def test_all_shards_present_and_whole_is_installed(tmp_path, monkeypatch) -> Non
     )
     monkeypatch.setattr(tts_models, "_fish_model_dir", lambda: model)
 
-    assert tts_models._is_installed(tts_models._BY_ID["fish-speech"]) is True
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["fish-speech"]) is True
 
 
 def test_a_missing_shard_is_not_installed(tmp_path, monkeypatch) -> None:
@@ -95,7 +95,7 @@ def test_a_missing_shard_is_not_installed(tmp_path, monkeypatch) -> None:
     )
     monkeypatch.setattr(tts_models, "_fish_model_dir", lambda: model)
 
-    assert tts_models._is_installed(tts_models._BY_ID["fish-speech"]) is False
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["fish-speech"]) is False
 
 
 def test_a_missing_codec_is_not_installed(tmp_path, monkeypatch) -> None:
@@ -108,7 +108,7 @@ def test_a_missing_codec_is_not_installed(tmp_path, monkeypatch) -> None:
     )
     monkeypatch.setattr(tts_models, "_fish_model_dir", lambda: model)
 
-    assert tts_models._is_installed(tts_models._BY_ID["fish-speech"]) is False
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["fish-speech"]) is False
 
 
 def test_no_index_falls_back_to_the_old_ratio(tmp_path, monkeypatch) -> None:
@@ -120,7 +120,7 @@ def test_no_index_falls_back_to_the_old_ratio(tmp_path, monkeypatch) -> None:
     _sized(model / "weights.bin", 8_000_000_000)
     monkeypatch.setattr(tts_models, "_fish_model_dir", lambda: model)
 
-    assert tts_models._is_installed(tts_models._BY_ID["fish-speech"]) is True
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["fish-speech"]) is True
 
 
 def test_an_in_flight_hf_download_is_not_installed(tmp_path, monkeypatch) -> None:
@@ -135,7 +135,7 @@ def test_an_in_flight_hf_download_is_not_installed(tmp_path, monkeypatch) -> Non
     (cache / "def.incomplete").write_bytes(b"z" * 1000)
     monkeypatch.setattr(tts_models, "_hf_roots", lambda: [root])
 
-    assert tts_models._is_installed(tts_models._BY_ID["f5-tts"]) is False
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["f5-tts"]) is False
 
 
 def test_a_finished_hf_download_is_installed(tmp_path, monkeypatch) -> None:
@@ -145,4 +145,4 @@ def test_a_finished_hf_download_is_installed(tmp_path, monkeypatch) -> None:
     _sized(cache / "abc", 1_400_000_000)
     monkeypatch.setattr(tts_models, "_hf_roots", lambda: [root])
 
-    assert tts_models._is_installed(tts_models._BY_ID["f5-tts"]) is True
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["f5-tts"]) is True

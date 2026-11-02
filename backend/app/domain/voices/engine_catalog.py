@@ -126,7 +126,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "label": "ttsProvider_qwen",
             "needs_key": False,
             # generate_custom_voice 没有语速参数(它靠 instruct 控节奏,而界面没有这一格):宿主合成之后变速。
-            "speed_control": tts_models._BY_ID[qwen_models.ENGINE_ID].speed_control,
+            "speed_control": tts_models.MODELS_BY_ID[qwen_models.ENGINE_ID].speed_control,
             "needs_voice_id": False,
             "voices": [voice.id for voice in _preset_voices()],
             "ready": qwen_ready,

@@ -7,6 +7,7 @@
   "migrate-cloud-login-keeps-a-device-token": "794dc05880e56d7d",
   "migrate-dub-lines-use-the-voice-ref-identity": "08bdd2edc76417a8",
   "migrate-publish-tasks-get-content-shape": "5fdb6a738dab692f",
+  "migrate-shot-angle-replaces-camera-angle": "0b619d45093e6972",
   "migrate-speech-records-store-a-voice-ref": "e85b10b9990883f0",
   "migrate-tool-confirmations-feishu-message-id": "8449e28b6f789c21",
   "migrate-tool-confirmations-make-tool-calls-idempotent": "3caa4e9d573bd279",

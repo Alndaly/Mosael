@@ -18899,6 +18899,11 @@ export interface components {
              */
             collection: string;
             /**
+             * Role
+             * @default
+             */
+            role: string;
+            /**
              * Save Entity
              * @default false
              */

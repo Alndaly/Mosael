@@ -423,22 +423,22 @@ class Test示范工作流要挑得动的模型:
         """此前只看参数键:说话照片、改口型、改视频也收首帧 / 参考素材,被当成镜头模型;参考那条路一镜交 8 张,
         可灵 kling-v3-omni 只收 4 张照样算能走;万相 wan2.7-r2v 要求参考图或参考视频至少一种,首帧那条路注定被拒,
         照样算能走首帧。"""
-        from app.domain.workflows.templates_models import _can_shoot_from_references, _video_plan
+        from app.domain.workflows.templates_models import _can_shoot_from_references, video_plan_for
 
         for vendor, model in (("alibaba", "wan2.2-s2v"), ("alibaba", "videoretalk"), ("alibaba", "wan2.7-videoedit")):
             assert not _can_shoot_from_references(None, ModelChoice(provider=vendor, model=model)), model
-        assert _video_plan(None, ModelChoice(provider="kuaishou", model="kling-v3-omni")).modes == ["keyframes"]
-        assert "keyframes" not in _video_plan(None, ModelChoice(provider="alibaba", model="wan2.7-r2v")).modes
-        assert _video_plan(None, SEEDANCE).modes == ["keyframes", "references"], "Seedance 2.0 两条路都走得通"
+        assert video_plan_for(None, ModelChoice(provider="kuaishou", model="kling-v3-omni")).modes == ["keyframes"]
+        assert "keyframes" not in video_plan_for(None, ModelChoice(provider="alibaba", model="wan2.7-r2v")).modes
+        assert video_plan_for(None, SEEDANCE).modes == ["keyframes", "references"], "Seedance 2.0 两条路都走得通"
 
     def test_尺寸表里写的是画幅比的模型_建整片模板不崩(self) -> None:
         """Evolink 的 gpt-image-1.5 尺寸表是 "1:1"、"16:9" 这种画幅比,此前按 x 拆开转整数,建图 500。"""
         from app.core.db import SessionLocal
         from app.domain.providers.defaults import set_default
-        from app.domain.workflows.templates_models import _image_plan
+        from app.domain.workflows.templates_models import image_plan_for
         from tests.util import fresh_client
 
-        assert _image_plan(None, ModelChoice(provider="evolink", model="gpt-image-1.5")).frame_sizes.keys() <= {"16:9", "9:16", "1:1"}
+        assert image_plan_for(None, ModelChoice(provider="evolink", model="gpt-image-1.5")).frame_sizes.keys() <= {"16:9", "9:16", "1:1"}
         fresh_client()
         with SessionLocal() as db:
             image = self._model(db, "u1", "evolink", "gpt-image-1.5", "image")

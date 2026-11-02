@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import ModelChoice, _capabilities, _image_plan, _video_plan
+from app.domain.workflows.templates_models import ModelChoice, model_capabilities, image_plan_for, video_plan_for
 from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
@@ -62,7 +62,7 @@ def _vertical_image_parameters(db: Session | None, image: ModelChoice) -> dict[s
     不传尺寸的话模型按自己的默认出 —— Seedream 4 是 2048 的方图,铺进竖屏时间线时两侧被裁掉,商品常常就在被裁的
     那一边。认不出的模型(没有尺寸表)不传,交给它自己。
     """
-    size = _image_plan(db, image).frame_sizes.get(VERTICAL_ASPECT, "")
+    size = image_plan_for(db, image).frame_sizes.get(VERTICAL_ASPECT, "")
     return {"size": size} if size else {}
 
 
@@ -81,8 +81,8 @@ def _vertical_clip(
     模型留下它(前端 carriedParameters)。认不出的模型不写 —— 不知道它认不认这个键。没有开关的(Veo 总是出声)
     照旧靠时间线上的静音。
     """
-    plan = _video_plan(db, video)
-    capabilities = _capabilities(db, video, "video") or {}
+    plan = video_plan_for(db, video)
+    capabilities = model_capabilities(db, video, "video") or {}
     ratios = [str(one) for one in capabilities.get("aspect_ratios") or ()]
     if not ratios or VERTICAL_ASPECT in ratios:
         aspect = VERTICAL_ASPECT

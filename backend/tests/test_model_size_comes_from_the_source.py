@@ -43,7 +43,7 @@ def test_unknown_is_none_not_zero() -> None:
 
 
 def test_the_real_total_replaces_the_hardcoded_guess(monkeypatch) -> None:
-    engine = tts_models._BY_ID["f5-tts"]
+    engine = tts_models.MODELS_BY_ID["f5-tts"]
     monkeypatch.setattr(
         remote_size, "cached_files",
         lambda source, repo: MODELSCOPE_FILES if source == "modelscope" else VOCODER_FILES,
@@ -56,7 +56,7 @@ def test_the_real_total_replaces_the_hardcoded_guess(monkeypatch) -> None:
 
 def test_a_missing_answer_falls_back_and_says_so(monkeypatch) -> None:
     """离线时仍要能用 —— 但**不能把估算说成实测**。"""
-    engine = tts_models._BY_ID["f5-tts"]
+    engine = tts_models.MODELS_BY_ID["f5-tts"]
     monkeypatch.setattr(remote_size, "cached_files", lambda source, repo: None)
     total, estimated = tts_models.measured_total(engine, "modelscope")
     assert estimated is True
@@ -65,7 +65,7 @@ def test_a_missing_answer_falls_back_and_says_so(monkeypatch) -> None:
 
 def test_a_partial_answer_is_not_passed_off_as_measured(monkeypatch) -> None:
     """一半问到、一半没问到时,报那一半的和**比报估算更糟**:它看起来精确,而进度条会提前走满。"""
-    engine = tts_models._BY_ID["f5-tts"]
+    engine = tts_models.MODELS_BY_ID["f5-tts"]
     monkeypatch.setattr(
         remote_size, "cached_files",
         lambda source, repo: MODELSCOPE_FILES if source == "modelscope" else None,

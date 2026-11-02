@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, _capabilities, _image_plan, _video_plan
+from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, model_capabilities, image_plan_for, video_plan_for
 from app.domain.workflows.templates_schemas import (
     _creative_brief_schema,
     _narrative_script_schema,
@@ -147,8 +147,8 @@ def full_video_generation_graph(
 
     ``db`` 让模型的默认参数能读到用户自定义的参数声明;官网导出等无库上下文留空,退回内置目录。
     """
-    video_plan = _video_plan(db, video)
-    image_plan = _image_plan(db, image)
+    video_plan = video_plan_for(db, video)
+    image_plan = image_plan_for(db, image)
     #: **每镜几秒只有一处说了算**:开始节点的「每镜秒数」(建图时按所选视频模型取它能出的、最接近默认的那一档)。
     #: 视频那一步的时长、上时间线截到哪、分镜和布景的提示词都在运行时引用它。此前建图那一刻算成一个数写死进这几处:
     #: 把视频那一步改成 4 秒,时间线、分镜照样按 5 秒;所选模型出不了的时长由运行前检查在花钱之前拦下(和画幅同一道)。
@@ -157,7 +157,7 @@ def full_video_generation_graph(
     video_parameters = dict(video_plan.parameters or {})
     if "duration_seconds" in video_parameters:
         video_parameters["duration_seconds"] = "{{input.shot_seconds}}"
-    ratios = [str(one) for one in (_capabilities(db, video, "video") or {}).get("aspect_ratios") or ()]
+    ratios = [str(one) for one in (model_capabilities(db, video, "video") or {}).get("aspect_ratios") or ()]
     if "aspect_ratio" in video_parameters and ratios and aspect not in ratios:
         #: 这个模型不收白模那三种画幅里的任何一种(比如只收 adaptive,画幅跟着首帧走):视频那一步交它认的那一档,
         #: 白模、关键帧和时间线照旧按 `aspect`。
@@ -394,7 +394,7 @@ JSON Schema 的对象。"""
         ("last_frame_prompt", "paint_last_frame", "image", image),
         ("generation_prompt", "generate_clip", "video", video),
     ):
-        limit = int((_capabilities(db, choice, kind) or {}).get("max_prompt_chars") or 0)
+        limit = int((model_capabilities(db, choice, kind) or {}).get("max_prompt_chars") or 0)
         if limit:
             prompt = next(node for node in generate_body["nodes"] if node["id"] == node_id)["config"]["prompt"]
             fixed = len(prompt.replace(f"{{{{loop.item.{key}}}}}", ""))

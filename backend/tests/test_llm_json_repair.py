@@ -23,7 +23,7 @@ from app.domain.workflows.executors.ai import (
     JSON_REPAIR_ATTEMPTS,
     _BadJson,
     _json_result,
-    _parse_json_response,
+    parse_json_response,
     _schema_failure,
 )
 
@@ -33,20 +33,20 @@ BROKEN = '{"subject_bible":"两个人","continuity_rules":"["水杯全程同一�
 
 def test_坏掉的大对象不许被捞成碎片() -> None:
     with pytest.raises(json.JSONDecodeError):
-        _parse_json_response(BROKEN)
+        parse_json_response(BROKEN)
 
 
 def test_散文里裹着的那个值照样捞得回来() -> None:
     """这个兜底是为**文本模式**存在的:不认 response_format 的端点会被网关退回纯文本,
     那些模型常常在 JSON 外面加一句话或一圈围栏。这条不能因为上面那条一起被掐掉。"""
-    assert _parse_json_response('好的,结果如下:\n{"a": 1}\n希望有用') == {"a": 1}
-    assert _parse_json_response('```json\n{"a": 2}\n```') == {"a": 2}
+    assert parse_json_response('好的,结果如下:\n{"a": 1}\n希望有用') == {"a": 1}
+    assert parse_json_response('```json\n{"a": 2}\n```') == {"a": 2}
 
 
 def test_围栏里坏掉的一样照实报() -> None:
     """带围栏但内容本身坏了 —— 它仍然是"在返回 JSON,只是返回坏了",不该去捞碎片。"""
     with pytest.raises(json.JSONDecodeError):
-        _parse_json_response('```json\n' + BROKEN + '\n```')
+        parse_json_response('```json\n' + BROKEN + '\n```')
 
 
 def test_报错要说出是哪一格() -> None:

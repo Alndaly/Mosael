@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, User
 from app.domain.agent import autopilot, origins
-from app.domain.agent.confirmations import _prepare_confirmation
+from app.domain.agent.confirmations import prepare_confirmation
 from app.domain.permissions import ensure_workspace_perm
 
 
@@ -59,7 +59,7 @@ def propose(
         return existing
     # validate 可能经独立连接写入(例如工作台连接),所以先在 SAVEPOINT 外完成;
     # 只有真正 insert 进保存点,唯一键冲突时回滚这一点,调用方其余事务不受影响。
-    confirmation = _prepare_confirmation(
+    confirmation = prepare_confirmation(
         db, workspace_id=workspace_id, tool=tool, payload=payload, actor_id=user.id,
         requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id,
     )

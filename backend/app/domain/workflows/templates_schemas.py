@@ -13,7 +13,7 @@ from app.domain.entities.shot_angles import SHOT_ANGLES
 from app.domain.workflows.templates_models import VideoPlan
 
 
-def _object(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
+def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
     return {
         "type": "object",
         "properties": properties,
@@ -37,7 +37,7 @@ def _creative_brief_schema() -> dict[str, Any]:
             "description": "不得凭空断言、需要用户复核的事实边界",
         },
     }
-    return _object(fields, list(fields))
+    return object_schema(fields, list(fields))
 
 
 def _narrative_script_schema() -> dict[str, Any]:
@@ -52,9 +52,9 @@ def _narrative_script_schema() -> dict[str, Any]:
         "opening_hook": {"type": "string"},
         "narrative_arc": {"type": "string"},
         "full_narration": {"type": "string"},
-        "beats": {"type": "array", "minItems": 1, "items": _object(beat_fields, list(beat_fields))},
+        "beats": {"type": "array", "minItems": 1, "items": object_schema(beat_fields, list(beat_fields))},
     }
-    return _object(fields, list(fields))
+    return object_schema(fields, list(fields))
 
 
 #: 白模里给人物上的颜色。视觉圣经给每个角色分一个,布景照着上色,关键帧提示词照着说"红色人偶是谁"。
@@ -90,11 +90,11 @@ def _visual_bible_schema() -> dict[str, Any]:
         "continuity_rules": {"type": "array", "items": {"type": "string"}},
         "global_negative_prompt": {"type": "string"},
         "characters": {
-            "type": "array", "maxItems": 4, "items": _object(character, list(character)),
+            "type": "array", "maxItems": 4, "items": object_schema(character, list(character)),
             "description": "出镜的角色(最多 4 个);纯物件/风景的片子可以为空",
         },
         "locations": {
-            "type": "array", "maxItems": 3, "items": _object(location, list(location)),
+            "type": "array", "maxItems": 3, "items": object_schema(location, list(location)),
             "description": "全片用到的场景(最多 3 个)",
         },
         "style_prompt": {"type": "string", "description": "英文一句话的全片画风,每张图、每段视频都会带上"},
@@ -103,7 +103,7 @@ def _visual_bible_schema() -> dict[str, Any]:
             "description": "英文,说明白模里各颜色人偶分别是谁,如 'red mannequin = Lin (class president), blue mannequin = Kai'",
         },
     }
-    return _object(fields, list(fields))
+    return object_schema(fields, list(fields))
 
 
 SHOT_SIZES = ["extreme wide", "wide", "full", "medium", "medium close-up", "close-up", "extreme close-up"]
@@ -173,7 +173,7 @@ def _shot_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -
             "type": "string",
             "description": "英文,这一镜最后一帧的完整描述;只在结束构图必须精确(大幅运镜、落版、衔接下一镜)时写,否则写空字符串",
         }, "last_frame_prompt")
-    return _object(fields, list(fields))
+    return object_schema(fields, list(fields))
 
 
 #: 分镜**最多**能有几镜。这是 schema 上的硬天花板,不是用户那个数 —— 两者分工不同:
@@ -194,7 +194,7 @@ def _storyboard_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = N
         "continuity_bible": {"type": "string", "description": "所有镜头共享的人物、场景、风格连续性约束"},
         "shots": {"type": "array", "minItems": 1, "maxItems": MAX_SHOTS_CEILING, "items": _shot_schema(plan, prompt_limits)},
     }
-    return _object(fields, list(fields))
+    return object_schema(fields, list(fields))
 
 
 #: 布景用得到的物体种类 —— SceneObject.kind 里除了导入模型(没有文件)和灯之外的那些。
@@ -236,10 +236,10 @@ def _set_design_schema() -> dict[str, Any]:
         "model_id": {"type": "string"},
         #: 只有 figure 用得上:它演的是资产库里哪个人物(ADR 0029 §3)。没有就写空字符串。
         "entity_id": {"type": "string"},
-        "parameters": _object(parameters, list(parameters)),
+        "parameters": object_schema(parameters, list(parameters)),
         "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
         "target": vec3, "fov": {"type": "number", "minimum": 10, "maximum": 120},
-        "track": {"type": "array", "items": _object(keyframe, list(keyframe))},
+        "track": {"type": "array", "items": object_schema(keyframe, list(keyframe))},
     }
     shot = {
         "id": {"type": "string"}, "name": {"type": "string"},
@@ -259,10 +259,10 @@ def _set_design_schema() -> dict[str, Any]:
         "softness": {"type": "number", "minimum": 0, "maximum": 1},
     }
     fields = {
-        "objects": {"type": "array", "maxItems": 480, "items": _object(obj, list(obj))},
-        "shots": {"type": "array", "minItems": 1, "maxItems": 32, "items": _object(shot, list(shot))},
-        "lighting": _object(lighting, list(lighting)),
+        "objects": {"type": "array", "maxItems": 480, "items": object_schema(obj, list(obj))},
+        "shots": {"type": "array", "minItems": 1, "maxItems": 32, "items": object_schema(shot, list(shot))},
+        "lighting": object_schema(lighting, list(lighting)),
         "background": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
         "ambient": {"type": "number", "minimum": 0, "maximum": 10},
     }
-    return _object(fields, list(fields))
+    return object_schema(fields, list(fields))

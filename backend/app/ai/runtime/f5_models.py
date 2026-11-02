@@ -529,7 +529,7 @@ def _run_download(model_id: str) -> None:
         try:
             tts_daemon.pool().request(
                 ENGINE_ID, python, request,
-                on_progress=report, timeout=7200, env=tts_models._worker_env(python),
+                on_progress=report, timeout=7200, env=tts_models.worker_env(python),
             )
         finally:
             watcher.stop()

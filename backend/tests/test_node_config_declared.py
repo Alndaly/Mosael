@@ -382,7 +382,7 @@ def test_下拉选项都有中英文名字() -> None:
     键名 `wfOpt_<字段>_<值>`,通用的是/否用 `wfOpt__<值>`。HTTP 方法这类专业术语例外
     (`LITERAL_OPTION_FIELDS`)—— 把 GET 翻成中文只会更难懂。
     """
-    from app.domain.workflows.node_catalog import LITERAL_OPTION_FIELDS
+    from app.domain.workflows.node_catalog import LITERAL_OPTION_FIELDS, SHARED_OPTION_KEYS
     from app.core.i18n import MESSAGES
     from mosael_formats.i18n import LOCALES
     from app.domain.workflows.node_types import NODE_TYPES
@@ -392,8 +392,9 @@ def test_下拉选项都有中英文名字() -> None:
         for field, meta in (spec.get("config") or {}).items():
             if not isinstance(meta, dict) or field in LITERAL_OPTION_FIELDS:
                 continue
+            shared = SHARED_OPTION_KEYS.get(field)
             for option in meta.get("options") or []:
-                keys = [f"wfOpt_{field}_{option}", f"wfOpt__{option}"]
+                keys = ([shared.format(value=option)] if shared else []) + [f"wfOpt_{field}_{option}", f"wfOpt__{option}"]
                 entry = next((MESSAGES[key] for key in keys if key in MESSAGES), None)
                 if entry is None or not all(entry.get(locale) for locale in LOCALES):
                     missing.append(f"{node}.{field} = {option}(要一条 {keys[0]})")

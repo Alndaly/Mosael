@@ -19,7 +19,7 @@ from app.ai.runtime import asr_models, tts_models
     ids=["asr", "tts"],
 )
 def test_a_crashing_download_releases_the_flag(module, any_id, monkeypatch) -> None:
-    model_id = next(iter(module._BY_ID))
+    model_id = module.CATALOG[0].id
 
     def explode(_id: str) -> None:
         raise RuntimeError("worker could not start")
@@ -38,7 +38,7 @@ def test_a_crashing_download_releases_the_flag(module, any_id, monkeypatch) -> N
 @pytest.mark.parametrize(("module",), [(asr_models,), (tts_models,)], ids=["asr", "tts"])
 def test_the_failure_reason_reaches_the_user(module, monkeypatch) -> None:
     """A silent failure here is indistinguishable from a download that is merely slow."""
-    model_id = next(iter(module._BY_ID))
+    model_id = module.CATALOG[0].id
 
     monkeypatch.setattr(
         module, "_download_body", lambda _id: (_ for _ in ()).throw(OSError("No space left on device"))

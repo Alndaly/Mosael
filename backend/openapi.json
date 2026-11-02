@@ -48407,6 +48407,11 @@
             "title": "Collection",
             "default": ""
           },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": ""
+          },
           "save_entity": {
             "type": "boolean",
             "title": "Save Entity",

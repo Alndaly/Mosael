@@ -22,13 +22,13 @@ from app.domain.voices.voice_ref import VoiceRef
 
 
 def test_f5_takes_speed_natively() -> None:
-    assert tts_models._BY_ID["f5-tts"].speed_control == "native"
+    assert tts_models.MODELS_BY_ID["f5-tts"].speed_control == "native"
 
 
 def test_fish_and_qwen_are_stretched_by_the_host() -> None:
     """ServeTTSRequest(本机检出与上游 main)、generate_custom_voice 里都没有语速 —— 交给宿主变速。"""
-    assert tts_models._BY_ID["fish-speech"].speed_control == "stretch"
-    assert tts_models._BY_ID["qwen-tts"].speed_control == "stretch"
+    assert tts_models.MODELS_BY_ID["fish-speech"].speed_control == "stretch"
+    assert tts_models.MODELS_BY_ID["qwen-tts"].speed_control == "stretch"
 
 
 def test_the_capability_reaches_the_ui() -> None:

@@ -58,7 +58,7 @@ def test_认得出的_key_照旧翻() -> None:
 def test_迁移把库里的坏_key_改掉_还救回被截掉的原因() -> None:
     """改正之前落下的行:error_key 是被截成 80 字的原话,error 只剩花括号之前那一截。
 
-    读取端不为这种行留分支(见 _rendered),由迁移一次改掉:key 清空,error 换成那 80 字 ——
+    读取端不为这种行留分支(见 rendered_message),由迁移一次改掉:key 清空,error 换成那 80 字 ——
     它比残留的 error 完整。"""
     from app.core.db import SessionLocal
     from app.db.migrations import _migrate_job_keys_are_keys

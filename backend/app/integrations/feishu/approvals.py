@@ -62,7 +62,7 @@ def _feishu_origin(db: Session, session_id: str | None) -> tuple[FeishuBot, str]
     return routing.session_origin(db, session_id)
 
 
-def _full_summary(confirmation: Any) -> str:
+def full_summary(confirmation: Any) -> str:
     """按完整参数重新渲染,不用 `summary` 那个按列宽收口的快照 —— 飞书卡要给人读全文。"""
     key = str(getattr(confirmation, "summary_key", "") or "")
     if key:
@@ -102,7 +102,7 @@ def announce_confirmation(db: Session, confirmation: Any) -> str | None:
                 cards.confirmation_card(
                     confirmation_id=confirmation.id,
                     tool=confirmation.tool,
-                    summary=_full_summary(confirmation),
+                    summary=full_summary(confirmation),
                     requested_by=confirmation.requested_by,
                 ),
             )
@@ -111,7 +111,7 @@ def announce_confirmation(db: Session, confirmation: Any) -> str | None:
             missing_capability = CARD_CAPABILITY_ERROR in str(exc)
             logger.warning("feishu card send failed, falling back to text: %s", exc)
 
-        summary = _full_summary(confirmation) or confirmation.tool
+        summary = full_summary(confirmation) or confirmation.tool
         tail = f"\n\n(飞书内直接批准需要:{_CARD_SETUP_HINT})" if missing_capability else ""
         client.send_text(bot, chat_id, f"有一个变更等待确认:{summary}\n请到 Mosael 里批准。{tail}")
         if missing_capability:
@@ -476,7 +476,7 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
         if user is None:
             return _toast("请先在 Mosael 的「飞书机器人」里绑定你的账号")
 
-        summary, tool = _full_summary(confirmation), confirmation.tool
+        summary, tool = full_summary(confirmation), confirmation.tool
         try:
             # 校验与执行都在 authorize_and_*(和 HTTP 路由共用同一份)。这一层只负责:
             # 把 open_id 认成人、把领域异常翻成 toast。

@@ -18,7 +18,7 @@ import pytest
 from app.domain.workflows import templates_models
 from app.domain.workflows.templates_models import ModelChoice
 from app.domain.workflows.templates_full_video import full_video_generation_graph
-from app.domain.workflows.templates_models import _video_plan
+from app.domain.workflows.templates_models import video_plan_for
 
 CHAT = ModelChoice(profile_id="chat", provider="openai", model="chat-model")
 SEEDREAM = ModelChoice(profile_id="image", provider="bytedance", model="doubao-seedream-4-0-250828")
@@ -38,8 +38,8 @@ SHOT = "{{start.shot_seconds}}"
 ], ids=["默认那档在里面", "没写默认取最接近5秒", "平手取短的那档", "都比默认长取最近", "最近的不是第一档", "平手取短的那档_不是第一档",
      "区间夹到下限", "区间里的默认"])
 def test_每镜秒数取模型能出的_最接近默认的那一档(monkeypatch, capabilities: dict[str, Any], expected: int) -> None:
-    monkeypatch.setattr(templates_models, "_capabilities", lambda db, choice, kind: {"parameter_keys": ["duration_seconds"], **capabilities})
-    assert _video_plan(None, ModelChoice(profile_id="v", provider="x", model="m")).clip_seconds == expected
+    monkeypatch.setattr(templates_models, "model_capabilities", lambda db, choice, kind: {"parameter_keys": ["duration_seconds"], **capabilities})
+    assert video_plan_for(None, ModelChoice(profile_id="v", provider="x", model="m")).clip_seconds == expected
 
 
 def _body(graph: dict[str, Any], loop_id: str, node_id: str) -> dict[str, Any]:

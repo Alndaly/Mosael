@@ -29,14 +29,14 @@ from app.ai.runtime import download_state
 
 def test_the_fish_estimate_matches_the_real_repo() -> None:
     """fishaudio/s2-pro 在 Hub 上实测 11.01 GB(2025-08 查)。差三倍的估计不是估计。"""
-    fish = tts_models._BY_ID["fish-speech"]
+    fish = tts_models.MODELS_BY_ID["fish-speech"]
 
     assert fish.expected_bytes >= 10_000_000_000, f"还是那个拍出来的数:{fish.expected_bytes}"
 
 
 def test_the_f5_estimate_is_left_alone() -> None:
     """F5 只下一个 1.35 GB 的检查点 + 0.05 GB 的 vocos —— 1.5 GB 是对的,别顺手改坏。"""
-    f5 = tts_models._BY_ID["f5-tts"]
+    f5 = tts_models.MODELS_BY_ID["f5-tts"]
 
     assert 1_000_000_000 <= f5.expected_bytes <= 2_000_000_000
 
@@ -44,7 +44,7 @@ def test_the_f5_estimate_is_left_alone() -> None:
 def test_a_disproven_estimate_stops_being_a_denominator(monkeypatch) -> None:
     """实测越过估计值 = 估计被证伪。那一刻起不再报分母,免得画出一根满的条。"""
     monkeypatch.setattr(tts_models, "_is_installed", lambda engine: False)
-    engine = tts_models._BY_ID["fish-speech"]
+    engine = tts_models.MODELS_BY_ID["fish-speech"]
     monkeypatch.setattr(tts_models, "_measure", lambda item: engine.expected_bytes + 1_000_000_000)
     tts_models._store.set(
         "fish-speech",
@@ -61,7 +61,7 @@ def test_a_disproven_estimate_stops_being_a_denominator(monkeypatch) -> None:
 
 def test_a_sane_estimate_still_draws_the_bar() -> None:
     """这道闸只挡"已经被证伪"的那一段,正常下载照常有进度条。"""
-    engine = tts_models._BY_ID["fish-speech"]
+    engine = tts_models.MODELS_BY_ID["fish-speech"]
     tts_models._store.set(
         "fish-speech",
         download_state.DownloadProgress(status="downloading", downloaded=engine.expected_bytes // 3,

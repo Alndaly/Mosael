@@ -91,7 +91,7 @@ def test_the_requirements_cover_what_the_probe_needs() -> None:
 
     其中两个连 fish 上游的 pyproject 都没声明,所以这张表不能只从 pyproject 生成。
     """
-    fish = tts_models._BY_ID["fish-speech"]
+    fish = tts_models.MODELS_BY_ID["fish-speech"]
 
     for package in ("natsort", "descript-audiotools", "descript-audio-codec", "pytorch-lightning"):
         assert package in fish.pip_requirements, f"{package} 不在依赖表里"
@@ -105,6 +105,6 @@ def test_engines_that_read_audio_through_torchaudio_need_torchcodec() -> None:
     缺了才会判不就绪,「安装运行环境」才会去补。
     """
     for engine_id in ("f5-tts", "fish-speech"):
-        engine = tts_models._BY_ID[engine_id]
+        engine = tts_models.MODELS_BY_ID[engine_id]
         assert "torchcodec" in engine.pip_requirements, engine_id
         assert "torchcodec.decoders" in engine.imports, engine_id

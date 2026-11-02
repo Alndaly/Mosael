@@ -11,7 +11,7 @@ from mosael_formats.i18n import pick_text
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_schemas import _object
+from app.domain.workflows.templates_schemas import object_schema
 
 
 TRANSCRIPT_VIDEO_CLEANUP = "transcript_video_cleanup"
@@ -45,12 +45,12 @@ def _cleanup_schema() -> dict[str, Any]:
     fields = {
         "editorial_summary": {"type": "string", "description": "素材问题、整理策略和预期改善"},
         "revised_outline": {"type": "array", "items": {"type": "string"}},
-        "issues": {"type": "array", "items": _object(issue_fields, list(issue_fields))},
-        "remove_ranges": {"type": "array", "items": _object(range_fields, list(range_fields))},
+        "issues": {"type": "array", "items": object_schema(issue_fields, list(issue_fields))},
+        "remove_ranges": {"type": "array", "items": object_schema(range_fields, list(range_fields))},
         "review_notes": {"type": "array", "items": {"type": "string"}},
         "estimated_removed_seconds": {"type": "number", "minimum": 0},
     }
-    return _object(fields, list(fields))
+    return object_schema(fields, list(fields))
 
 
 def transcript_video_cleanup_graph(*, chat: ModelChoice, locale: str | None = None) -> dict[str, Any]:

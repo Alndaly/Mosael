@@ -106,7 +106,7 @@ def tool_cost(tool: str) -> str:
     return spec.cost if spec is not None else "none"
 
 
-def _prepare_confirmation(
+def prepare_confirmation(
     db: Session,
     *,
     workspace_id: str,
@@ -153,7 +153,7 @@ def request_confirmation(
     tool_call_id: str | None = None,
 ) -> ToolConfirmation:
     """开一张卡。`actor_id` 是开卡的人(发起这次调用的凭据是谁的),校验里因人而异的事实按他算。"""
-    confirmation = _prepare_confirmation(
+    confirmation = prepare_confirmation(
         db, workspace_id=workspace_id, tool=tool, payload=payload, actor_id=actor_id,
         requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id,
     )

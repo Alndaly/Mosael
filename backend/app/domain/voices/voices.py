@@ -686,7 +686,7 @@ def _run_synthesis_body(
             # 要的检出目录和权重目录 —— 于是装好了 fish 的机器也照样导不进引擎、照样出占位音。
             # 把**这次要跑的解释器**交出去:torchcodec 的 FFmpeg 库路径按那个 venv 里装的版本定,
             # 而不同引擎的 venv 装的 torchcodec 可以不是一个版本。
-            worker_env = tts_models._worker_env(python)
+            worker_env = tts_models.worker_env(python)
             with tempfile.TemporaryDirectory(prefix="mosael-tts-") as tmp:
                 out_wav = Path(tmp) / "speech.wav"
                 request = {
@@ -702,7 +702,7 @@ def _run_synthesis_body(
                 request["output_path"] = str(out_wav)
                 # 语速由谁来调按引擎定(speed_control):F5 的 infer 吃,随请求带过去;fish 的请求结构里没有这一项,
                 # 塞进去只会被忽略 —— 它按原速念,念完由下面的 stretch_in_place 变速。
-                native_speed = tts_models._BY_ID[engine].speed_control == "native"
+                native_speed = tts_models.MODELS_BY_ID[engine].speed_control == "native"
                 if native_speed:
                     request["speed"] = speed
 
@@ -814,7 +814,7 @@ def _speak_locally(
         request,
         on_progress=on_progress,
         timeout=TTS_TIMEOUT_SECONDS,
-        env=tts_models._worker_env(python),
+        env=tts_models.worker_env(python),
     )
     if not out.is_file() or out.stat().st_size == 0:
         raise VoiceError("voiceErr_synthNoAudio")
@@ -867,7 +867,7 @@ def speak_to_file(
             job_id=job_id, on_progress=on_progress,
         )
         # 本机念字引擎(Qwen3-TTS)没有语速参数:按原速念,这里补上(见 TtsEngine.speed_control)。
-        if tts_models._BY_ID[LOCAL_SPEECH_ENGINES[voice.engine]].speed_control == "stretch":
+        if tts_models.MODELS_BY_ID[LOCAL_SPEECH_ENGINES[voice.engine]].speed_control == "stretch":
             stretch_in_place(spoken_out, speed)
         return spoken_out
     #: 能力表里是 `builtin:edge`,`ai` 层的适配器认裸名 `edge`。

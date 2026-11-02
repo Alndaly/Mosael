@@ -52,7 +52,7 @@ def test_every_engine_can_always_fall_back_to_huggingface() -> None:
 def test_the_worker_is_told_which_source_to_use(monkeypatch) -> None:
     """下载跑在 worker 子进程里,它得知道这一次走哪条路。"""
     monkeypatch.setattr(tts_config, "_cached", None, raising=False)
-    env = tts_models._worker_env()
+    env = tts_models.worker_env()
 
     assert "MOSAEL_MODEL_SOURCE" in env
 

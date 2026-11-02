@@ -56,7 +56,7 @@ def test_engine_id_follows_the_builtin_convention() -> None:
     assert QWEN_ENGINE == "builtin:qwentts"
     #: 能力表里的 id → 运行时目录里的引擎名;两边必须是同一个,否则「选中了」和「跑哪个」会各说各的。
     assert LOCAL_SPEECH_ENGINES[QWEN_ENGINE] == qwen_models.ENGINE_ID
-    assert qwen_models.ENGINE_ID in tts_models._BY_ID
+    assert qwen_models.ENGINE_ID in tts_models.MODELS_BY_ID
 
 
 def test_it_is_registered_in_the_capability_table() -> None:
@@ -147,7 +147,7 @@ _HF_FILES = {
 def test_the_size_comes_from_the_source_and_matches_the_pinned_files(monkeypatch: pytest.MonkeyPatch) -> None:
     """体积问源要,不和目录里写死的估算各说各的(那条路在 F5 上走过一次)。"""
     monkeypatch.setattr(tts_models.remote_size, "files_for", lambda source, repo: dict(_HF_FILES))
-    total, estimated = tts_models.measured_total(tts_models._BY_ID[qwen_models.ENGINE_ID], "hf", blocking=True)
+    total, estimated = tts_models.measured_total(tts_models.MODELS_BY_ID[qwen_models.ENGINE_ID], "hf", blocking=True)
 
     assert estimated is False
     assert total == qwen_models.MODEL.total_bytes == 4_520_218_951

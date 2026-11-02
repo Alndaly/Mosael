@@ -145,7 +145,7 @@ def test_a_connection_failure_says_which_source_and_what_to_do(monkeypatch: pyte
     monkeypatch.setattr(f5_models, "measured_total", lambda model, blocking=False: (1_000, False))
     monkeypatch.setattr(f5_models, "_POLL_SECONDS", 0.01)
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python")
-    monkeypatch.setattr(tts_models, "_worker_env", lambda python="": {})
+    monkeypatch.setattr(tts_models, "worker_env", lambda python="": {})
     monkeypatch.setattr(tts_config, "get", lambda: SimpleNamespace(hf_endpoint="https://hf-mirror.com"))
 
     class _Pool:

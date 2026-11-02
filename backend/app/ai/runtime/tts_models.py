@@ -99,7 +99,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         # 是八小时和三分钟的区别,而 55 MB 就算慢也只有二十分钟。
         modelscope_repo="AI-ModelScope/F5-TTS",
         # torchcodec:F5 读参考音频、写结果都经 torchaudio → torchcodec。只 import 包本身(不加载 FFmpeg 库),
-        # 缺了就判不就绪;FFmpeg 配不配得上是合成时由 _worker_env 注库目录解决的另一件事。
+        # 缺了就判不就绪;FFmpeg 配不配得上是合成时由 worker_env 注库目录解决的另一件事。
         imports=("f5_tts.api", "torchcodec.decoders"),
         contract_check="f5_driver.check_contract",
         needs_reference_text=False,
@@ -163,7 +163,7 @@ CATALOG: tuple[TtsEngine, ...] = (
     ),
 )
 
-_BY_ID = {engine.id: engine for engine in CATALOG}
+MODELS_BY_ID = {engine.id: engine for engine in CATALOG}
 
 #: 谁都能走的那几条(HuggingFace 官方 + 它的镜像)。ModelScope 按引擎有没有对应仓库来加。
 _UNIVERSAL_SOURCES = ("hf", "hf-mirror")
@@ -175,7 +175,7 @@ def sources_for(engine_id: str) -> tuple[str, ...]:
     界面据此渲染下拉,而不是自己猜。让界面猜的下场就是这个选项最早的样子:列在那里、选得中、
     却什么都不改变。
     """
-    engine = _BY_ID.get(engine_id)
+    engine = MODELS_BY_ID.get(engine_id)
     if engine is None or not engine.modelscope_repo:
         return _UNIVERSAL_SOURCES
     return (*_UNIVERSAL_SOURCES, "modelscope")
@@ -504,7 +504,7 @@ def _ffmpeg_runtime_dir(engine_python: str) -> str:
     return ""
 
 
-def _worker_env(engine_python: str = "") -> dict[str, str]:
+def worker_env(engine_python: str = "") -> dict[str, str]:
     """Env for the TTS worker subprocess: point HuggingFace at the configured
     mirror so first-use model downloads work (e.g. hf-mirror in CN), and pass the
     resolved Fish Speech source-checkout + weights dirs the worker runs from."""
@@ -567,7 +567,7 @@ def _probe_code(engine_id: str) -> str | None:
     此前 fish 探的是 `import fish_speech`(一个空的 __init__,永远成功),f5 探的是
     `import f5_tts`(同理)。于是设置页说「已就绪」,而一点合成就 ModuleNotFoundError。
     """
-    engine = _BY_ID.get(engine_id)
+    engine = MODELS_BY_ID.get(engine_id)
     imports = engine.imports if engine else ()
     if not imports:
         return None
@@ -831,14 +831,14 @@ def list_status() -> list[dict[str, Any]]:
 
 
 def get_status(engine_id: str) -> dict[str, Any]:
-    engine = _BY_ID.get(engine_id)
+    engine = MODELS_BY_ID.get(engine_id)
     if engine is None:
         raise KeyError(engine_id)
     return _status_dict(engine)
 
 
 def is_installed(engine_id: str) -> bool:
-    engine = _BY_ID.get(engine_id)
+    engine = MODELS_BY_ID.get(engine_id)
     return bool(engine and _is_installed(engine))
 
 
@@ -907,7 +907,7 @@ def _fmt_eta(seconds: float | None) -> tuple[str, dict[str, str]]:
 
 
 def start_download(engine_id: str) -> dict[str, Any]:
-    engine = _BY_ID.get(engine_id)
+    engine = MODELS_BY_ID.get(engine_id)
     if engine is None:
         raise KeyError(engine_id)
     # **"权重都在了"不等于"没事可做"**:还可能缺运行环境,而界面上「安装运行环境」那颗按钮
@@ -941,7 +941,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
     失败一律抛 RuntimeError 并带上可读原因;调用方把它落到下载状态上显示给用户。
     """
 
-    engine = _BY_ID[engine_id]
+    engine = MODELS_BY_ID[engine_id]
     if not engine.pip_requirements:
         return
     # 已经有解释器能 import 它了(托管 venv 装过,或用户自带环境)→ 什么都不用做。
@@ -980,7 +980,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
             engine.pip_requirements,
             what="安装克隆运行依赖",
             index_url=tts_config.get().pip_index_url,
-            env=_worker_env(),
+            env=worker_env(),
         )
     except pip_install.PipInstallError as exc:
         raise RuntimeSetupError("runtimeErr_depsFailed", engine=engine.label, detail=str(exc)) from exc
@@ -1044,14 +1044,14 @@ def _run_download(engine_id: str) -> None:
 
 
 def _download_body(engine_id: str) -> None:
-    engine = _BY_ID[engine_id]
+    engine = MODELS_BY_ID[engine_id]
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     # 先备好运行环境(建 venv + 装引擎依赖),再拉权重。顺序不能反:权重是用那个环境里的
     # huggingface_hub 拉的,环境不在就只能退回本后端解释器,拉下来也跑不了合成。
     ensure_engine_runtime(engine_id)
     output_path = settings.data_dir / f"tts-warmup-{engine_id}.wav"
 
-    env = _worker_env(resolve_engine_python(engine_id) or "")
+    env = worker_env(resolve_engine_python(engine_id) or "")
     progress_dir: Path | None = None
     if engine_id == "fish-speech":
 

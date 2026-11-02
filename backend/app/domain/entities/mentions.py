@@ -65,7 +65,7 @@ class PoseUse(BaseModel):
     - `as_reference`:用户明说「当普通参考图发」。模型不收姿势参考时由人决定降级,不由宿主悄悄改(ADR 0091 §5)。
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
 
     shot_angle: ShotAngle | None = None
     as_reference: bool = False

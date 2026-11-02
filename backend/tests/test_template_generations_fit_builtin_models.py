@@ -34,7 +34,7 @@ from app.domain.workflows.templates_models import (
     SINGLE_REFERENCE,
     _can_shoot_from_references,
     _can_take_references,
-    _video_plan,
+    video_plan_for,
 )
 
 CHAT = ModelChoice(profile_id="chat", provider="openai", model="chat-model")
@@ -137,7 +137,7 @@ def _business(image: ModelChoice, video: ModelChoice) -> dict[str, dict[str, Any
 
 def _full_video_walks(video: ModelChoice) -> list[tuple[set[str], dict[str, Any]]]:
     """整片生成一镜的几种走法:走首帧(有 / 没有尾帧),或走参考 —— 只列这个视频模型让分镜选得到的那几种。"""
-    plan = _video_plan(None, video)
+    plan = video_plan_for(None, video)
     walks: list[tuple[set[str], dict[str, Any]]] = []
     if "keyframes" in plan.modes:
         walks.append(({"paint_last_frame"}, {"reference_mode": "keyframes"}))

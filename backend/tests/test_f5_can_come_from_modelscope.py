@@ -30,7 +30,7 @@ def test_modelscope_is_offered_for_f5_now() -> None:
 
 def test_the_repo_id_is_the_modelscope_one() -> None:
     """两边的仓库 id 不同名(fish 恰好同名,别把它当规律)。"""
-    assert tts_models._BY_ID["f5-tts"].modelscope_repo == "AI-ModelScope/F5-TTS"
+    assert tts_models.MODELS_BY_ID["f5-tts"].modelscope_repo == "AI-ModelScope/F5-TTS"
 
 
 def test_the_worker_fetches_the_checkpoint_from_modelscope(monkeypatch, tmp_path) -> None:
@@ -70,7 +70,7 @@ def test_a_managed_checkpoint_counts_as_installed(tmp_path, monkeypatch) -> None
     (weights / "vocab.txt").write_text("a\nb\n", encoding="utf-8")
     monkeypatch.setattr(tts_models, "_f5_model_dir", lambda: weights)
 
-    assert tts_models._is_installed(tts_models._BY_ID["f5-tts"]) is True
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["f5-tts"]) is True
 
 
 def test_a_managed_dir_without_the_checkpoint_is_not_installed(tmp_path, monkeypatch) -> None:
@@ -80,7 +80,7 @@ def test_a_managed_dir_without_the_checkpoint_is_not_installed(tmp_path, monkeyp
     monkeypatch.setattr(tts_models, "_f5_model_dir", lambda: weights)
     monkeypatch.setattr(tts_models, "_hf_roots", lambda: [])
 
-    assert tts_models._is_installed(tts_models._BY_ID["f5-tts"]) is False
+    assert tts_models._is_installed(tts_models.MODELS_BY_ID["f5-tts"]) is False
 
 
 def test_an_engine_offering_modelscope_can_actually_talk_to_it() -> None:

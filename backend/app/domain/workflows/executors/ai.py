@@ -144,7 +144,7 @@ def _unfenced(text: str) -> str:
     return body
 
 
-def _parse_json_response(text: str) -> Any:
+def parse_json_response(text: str) -> Any:
     """Parse one JSON value even when a text-only model wraps it in prose.
 
     Providers that reject ``response_format`` are retried in plain-text mode by
@@ -340,7 +340,7 @@ def _json_result(
         "raw_response": raw_text,
     }
     try:
-        value = _parse_json_response(text)
+        value = parse_json_response(text)
     except json.JSONDecodeError as exc:
         raise _BadJson(
             "wfErr_llmNotJson",

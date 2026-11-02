@@ -16,7 +16,7 @@ from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.template_requirements import CHAT_MODEL, TRANSCRIPTION_ENGINE, requirement
 from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_schemas import _object
+from app.domain.workflows.templates_schemas import object_schema
 
 REFERENCE_VIDEO_SHOTS = "reference_video_shots"
 
@@ -155,7 +155,7 @@ def reference_video_shots_graph(*, chat: ModelChoice, locale: str | None = None)
                   "## 口播逐字稿(可能为空)\n{{transcript.text}}",
         "response_format": "json_schema",
         "json_schema_name": "reference_video_breakdown",
-        "json_schema": _object(_SUMMARY_FIELDS, list(_SUMMARY_FIELDS)),
+        "json_schema": object_schema(_SUMMARY_FIELDS, list(_SUMMARY_FIELDS)),
         "json_schema_strict": "true",
         "temperature": 0.3,
         "max_tokens": 12000,

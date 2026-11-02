@@ -155,7 +155,7 @@
 | `update_plan` | 直接执行 | Runs directly: publish/refresh your task plan for the current conversation. |
 | `update_skill` | 确认卡 | Confirmation required, every time: change one of this workspace's own skills; the card shows before → after. |
 | `update_workflow` | 确认卡 | Confirmation required: rename a workflow or replace its ENTIRE graph. |
-| `use_reference` | 确认卡 | Confirmation required: take ONE entry from a reference library into this workspace as media, |
+| `use_reference` | 确认卡 | Confirmation required: take ONE entry from a reference library into this workspace, |
 | `use_skill` | 直接执行 | Read-only: load a skill — a written procedure for one kind of task — before doing that task. |
 | `view_scene` | 直接执行 | Read-only: LOOK at a 3D scene — returns rendered images you can see. Free, local, ~1 s per view. |
 | `web_search` | 直接执行 | Read-only: search the public web for up-to-date external information. |

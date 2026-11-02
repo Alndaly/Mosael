@@ -9,7 +9,7 @@ from pydantic import Field, ValidationInfo, computed_field, field_validator
 
 from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel
 from app.api.schemas.failures import FailureReadout
-from app.api.schemas.jobs import JobOut, _rendered
+from app.api.schemas.jobs import JobOut, rendered_message
 from app.api.schemas.plugins import EntryGroupOut
 from app.api.schemas.voices import VoiceRefBody
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
@@ -209,7 +209,7 @@ class GenerationJobOut(FailureReadout, OrmModel):
     @field_validator("error", mode="before")
     @classmethod
     def _translate_error(cls, value: object, info: ValidationInfo) -> object:
-        return _rendered(value, info, "error_key", "error_params")
+        return rendered_message(value, info, "error_key", "error_params")
 
     @computed_field  # type: ignore[prop-decorator]
     @property

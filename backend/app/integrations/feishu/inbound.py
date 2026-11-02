@@ -53,7 +53,7 @@ from app.domain.triggers.dispatch import Outcome
 from app.domain.triggers import dispatch as trigger_dispatch
 from app.integrations.feishu import client, cards, question_cards
 from app.domain.assets import importer
-from app.integrations.feishu.approvals import _full_summary, announce_confirmation
+from app.integrations.feishu.approvals import full_summary, announce_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -706,14 +706,14 @@ def _settle_confirmation(db: Session, confirmation) -> None:
         return
     if confirmation.status == "unknown":
         # 批过、执行到一半后端没了:不能写「已同意」(读起来像做完了),也不能写「已失效」(读起来像没做)。
-        settled = cards.interrupted_card(summary=_full_summary(confirmation), tool=confirmation.tool)
+        settled = cards.interrupted_card(summary=full_summary(confirmation), tool=confirmation.tool)
     elif confirmation.status == "expired":
-        settled = cards.expired_card(summary=_full_summary(confirmation), tool=confirmation.tool)
+        settled = cards.expired_card(summary=full_summary(confirmation), tool=confirmation.tool)
     else:
         decision = "approved" if confirmation.status in {"approved", "executed"} else "rejected"
         decided_by = db.get(User, confirmation.decided_by) if confirmation.decided_by else None
         settled = cards.settled_card(
-            summary=_full_summary(confirmation),
+            summary=full_summary(confirmation),
             tool=confirmation.tool,
             decision=decision,
             by=decided_by.username if decided_by is not None else "",

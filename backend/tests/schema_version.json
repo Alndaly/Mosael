@@ -1,5 +1,5 @@
 {
-  "version": 45,
+  "version": 46,
   "steps": [
     "migrate-agent-questions-feishu-message-id",
     "migrate-agent-voice-prefs-store-a-voice-ref",
@@ -9,6 +9,7 @@
     "migrate-cloud-login-keeps-a-device-token",
     "migrate-dub-lines-use-the-voice-ref-identity",
     "migrate-publish-tasks-get-content-shape",
+    "migrate-shot-angle-replaces-camera-angle",
     "migrate-speech-records-store-a-voice-ref",
     "migrate-tool-confirmations-feishu-message-id",
     "migrate-tool-confirmations-make-tool-calls-idempotent",

@@ -74,7 +74,7 @@ def _default_model(db: Session, capability: str, user_id: str) -> ModelChoice:
     )
 
 
-def _capabilities(db: Session | None, choice: ModelChoice, kind: str) -> dict[str, Any] | None:
+def model_capabilities(db: Session | None, choice: ModelChoice, kind: str) -> dict[str, Any] | None:
     """这个模型在这种生成能力下的描述符;认不出返回 None(**不猜**)。
 
     点了名连接且有库可查时走逐模型解析 —— 用户自定义的声明(见 generation/resolution.py)
@@ -107,7 +107,7 @@ def _can_take_references(db: Session | None, choice: ModelChoice, *, needed: int
 
     `needed` 由模板自己说:此前门槛写死 9 张(整片生成的关键帧),商品图 / 面料图模板复用了它 —— 每次只带一张图,
     却把只收 3 张的百炼 qwen-image-edit 判成缺。"""
-    capabilities = _capabilities(db, choice, "image")
+    capabilities = model_capabilities(db, choice, "image")
     if capabilities is None:
         return bool(choice.model)
     limit = int((capabilities.get("source_limits") or {}).get(REFERENCE_IMAGE) or 0)
@@ -119,7 +119,7 @@ def _can_shoot_from_references(db: Session | None, choice: ModelChoice, *, refer
 
     `references` 是参考那条路一次交几张图,由模板自己说:整片一镜交一整组(SHOT_REFERENCE_IMAGES),上身图动起来
     只交那一张上身图。此前门槛写死整片那一组 —— 只收 5 张、又必须给参考的万相 wan2.7-r2v 永远挑不中。"""
-    plan = _video_plan(db, choice, references=references)
+    plan = video_plan_for(db, choice, references=references)
     return bool(choice.model) and (plan.keyframes or plan.references)
 
 
@@ -194,9 +194,9 @@ def size_for_aspect(sizes: Any, aspect: str, *, pick: str = "smallest", near_are
     return ""
 
 
-def _image_plan(db: Session | None, choice: ModelChoice) -> ImagePlan:
+def image_plan_for(db: Session | None, choice: ModelChoice) -> ImagePlan:
     """从图像模型的尺寸表里挑:关键帧和成片同画幅,三视图取最宽的横幅。认不出、或不收 `size` 的不传尺寸。"""
-    capabilities = _capabilities(db, choice, "image") or {}
+    capabilities = model_capabilities(db, choice, "image") or {}
     keys = capabilities.get("parameter_keys")
     #: 声明了参数却不收 size 的(百炼 qwen-image-edit 只收参考图,出图跟着参考图的比例):尺寸表再全也不传。
     sizes = capabilities.get("sizes") if not keys or "size" in keys else ()
@@ -224,12 +224,12 @@ def _route_allowed(capabilities: dict[str, Any], sources: frozenset[str]) -> boo
     return all(set(group) & sources for group in capabilities.get("requires_source") or () if group)
 
 
-def _video_plan(db: Session | None, choice: ModelChoice, *, references: int | None = None) -> VideoPlan:
+def video_plan_for(db: Session | None, choice: ModelChoice, *, references: int | None = None) -> VideoPlan:
     """从模型能力目录挑一组肯定合法的默认值；未知模型只给生成契约的通用时长。
 
     `references`:参考那条路一次交几张图(缺省是整片一镜的 SHOT_REFERENCE_IMAGES),收不下的不走这条路。"""
     needed = SHOT_REFERENCE_IMAGES if references is None else references
-    capabilities = _capabilities(db, choice, "video")
+    capabilities = model_capabilities(db, choice, "video")
     if capabilities is None:
         #: 认不出的模型只按最通用的那条走:首帧生视频。不猜它收参考素材。
         parameters: dict[str, Any] = {"duration_seconds": 5}

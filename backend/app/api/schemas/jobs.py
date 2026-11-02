@@ -107,13 +107,13 @@ class JobSummaryOut(FailureReadout, OrmModel):
     @field_validator("message", mode="before")
     @classmethod
     def _translate(cls, value: object, info: ValidationInfo) -> object:
-        return _rendered(value, info, "message_key", "message_params")
+        return rendered_message(value, info, "message_key", "message_params")
 
     @field_validator("error", mode="before")
     @classmethod
     def _translate_error(cls, value: object, info: ValidationInfo) -> object:
         """失败原因同样按请求方的语言翻。没有 key 的(第三方原话)原样返回。"""
-        return _rendered(value, info, "error_key", "error_params")
+        return rendered_message(value, info, "error_key", "error_params")
 
 
 class JobOut(JobSummaryOut):
@@ -122,7 +122,7 @@ class JobOut(JobSummaryOut):
     result: dict
 
 
-def _rendered(value: object, info: ValidationInfo, key_field: str, params_field: str) -> object:
+def rendered_message(value: object, info: ValidationInfo, key_field: str, params_field: str) -> object:
 
     data = info.data if isinstance(info.data, dict) else {}
     key = data.get(key_field) or ""
