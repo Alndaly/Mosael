@@ -14,6 +14,12 @@ export interface EntityChipDecor {
   onOpen?: (entityId: string) => void;
   /** 只挂在这个资产在正文里**第一次**出现的那条上:同一个姿势 `@` 两次,开关也只有一档。 */
   accessory?: (entityId: string) => ReactNode;
+  /** 资产 chip 上的警告(例如参考图没有名额);返回一句给人看的话,空 = 不警告。 */
+  warning?: (entityId: string) => string | null;
+  /** 正文里素材 chip 上的警告(例如槽位已满,这张不会发送)。 */
+  assetWarning?: (assetId: string) => string | null;
+  /** 点正文里的素材 chip:打开素材预览(图片灯箱 / 视频 / 音频详情)。 */
+  assetOpen?: (assetId: string) => void;
 }
 
 export const NO_DECOR: EntityChipDecor = {};

@@ -32,8 +32,18 @@ vi.mock("@tanstack/react-query", async () => ({
 }));
 //: 正文里的 `@姿势` 小条由 PromptEditor 画;这里只看这一格交给小条的那颗附加控件挂没挂对。
 vi.mock("./PromptEditor", () => ({
-  PromptEditor: ({ entityChip }: { entityChip?: { accessory?: (id: string) => React.ReactNode } }) => (
-    <div data-testid="prompt-editor">{entityChip?.accessory?.("pose-1")}{entityChip?.accessory?.("zhang")}</div>
+  PromptEditor: ({ entityChip }: {
+    entityChip?: {
+      accessory?: (id: string) => React.ReactNode;
+      warning?: (id: string) => string | null;
+      assetWarning?: (id: string) => string | null;
+    };
+  }) => (
+    <div data-testid="prompt-editor">
+      {entityChip?.accessory?.("pose-1")}{entityChip?.accessory?.("zhang")}
+      {entityChip?.assetWarning?.("img2") && <span data-asset-warning>{entityChip.assetWarning("img2")}</span>}
+      {entityChip?.warning?.("zhang") && <span data-entity-warning>{entityChip.warning("zhang")}</span>}
+    </div>
   ),
   restorePromptDocument: vi.fn(),
   textDocument: vi.fn(),
@@ -77,9 +87,9 @@ it("正文引用装不进模型的槽位时,在引用块里提示哪些不会发
     source_assets: [{ asset_id: "img1", role: "reference_image" }],
     mentioned_asset_ids: ["img2"],
   });
-  const warning = document.querySelector("[data-mention-not-sent]");
+  const warning = document.querySelector("[data-asset-warning]");
   expect(warning).not.toBeNull();
-  expect(warning?.textContent).toContain("boardMentionNotSent");
+  expect(warning?.textContent).toContain("boardMentionNotSentTip");
 });
 
 it("资产参考图没有名额时,在引用块里提示描述仍会发送", () => {
@@ -87,9 +97,9 @@ it("资产参考图没有名额时,在引用块里提示描述仍会发送", () 
     source_assets: [{ asset_id: "img1", role: "reference_image" }],
     mentioned_entity_ids: ["zhang"],
   });
-  const warning = document.querySelector("[data-entity-image-not-sent]");
+  const warning = document.querySelector("[data-entity-warning]");
   expect(warning).not.toBeNull();
-  expect(warning?.textContent).toContain("boardEntityImageNotSent");
+  expect(warning?.textContent).toContain("boardEntityImageNotSentTip");
 });
 
 it("模型不收姿势参考:不摆机位;「按普通参考图发送」只挂在姿势那条引用里,勾上后发出去的是 as_reference", () => {

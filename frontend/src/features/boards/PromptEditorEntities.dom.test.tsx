@@ -146,7 +146,11 @@ describe("正文里的资产 chip:点开预览、挂附加控件(和 AI Studio �
           candidates={async () => []}
           onSubmit={vi.fn()}
           emptyHint={() => ""}
-          entityChip={{ onOpen, accessory: (id) => (id === "e-street" ? <i data-testid="pose-toggle" /> : null) }}
+          entityChip={{
+            onOpen,
+            accessory: (id) => (id === "e-street" ? <i data-testid="pose-toggle" /> : null),
+            warning: (id) => (id === "e-zhang" ? "warn-zhang" : null),
+          }}
         />
       </QueryClientProvider>,
     );
@@ -156,7 +160,33 @@ describe("正文里的资产 chip:点开预览、挂附加控件(和 AI Studio �
     expect(streets[0].querySelector('[data-testid="pose-toggle"]')).not.toBeNull();
     expect(streets[1].querySelector('[data-testid="pose-toggle"]')).toBeNull();
     expect(view.container.querySelector('[data-entity-id="e-zhang"] [data-testid="pose-toggle"]')).toBeNull();
+    expect(view.container.querySelector('[data-entity-id="e-zhang"] [data-entity-warning]')).not.toBeNull();
     fireEvent.click(view.container.querySelector('[data-entity-id="e-zhang"] [role="button"]')!);
     expect(onOpen).toHaveBeenCalledWith("e-zhang");
+  });
+
+  it("素材 chip 也能带警告 tip,点开走素材预览", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onAssetOpen = vi.fn();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <PromptEditor
+          value=""
+          document={{ type: "doc", content: [{ type: "paragraph", content: [
+            { type: "assetRef", attrs: { assetId: "a-photo", name: "海报.png" } },
+          ] }] }}
+          onChange={vi.fn()}
+          placeholder="写点什么"
+          candidates={async () => []}
+          onSubmit={vi.fn()}
+          emptyHint={() => ""}
+          entityChip={{ assetWarning: (id) => (id === "a-photo" ? "warn-photo" : null), assetOpen: onAssetOpen }}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(view.container.querySelector("[data-asset-ref]")).not.toBeNull());
+    expect(view.container.querySelector("[data-asset-warning]")).not.toBeNull();
+    fireEvent.click(view.container.querySelector("[data-asset-ref][role='button']")!);
+    expect(onAssetOpen).toHaveBeenCalledWith("a-photo");
   });
 });

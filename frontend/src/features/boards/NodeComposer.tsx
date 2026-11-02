@@ -76,6 +76,7 @@ import { useFileDrop } from "@/lib/useFileDrop";
 import { EntityThumb, PoseReferenceToggle, ShotAngleSelect, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
 import { EntityPreviewDialog } from "@/features/entities/EntityPreviewDialog";
+import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 
 /**
@@ -864,9 +865,6 @@ export function NodeComposer({
     const sent = new Set(outgoingSources.map((one) => one.asset_id));
     return mentioned.filter((id) => !sent.has(id));
   }, [currentPromptMode, mentioned, outgoingSources]);
-  const omittedMentionNames = omittedMentions
-    .map((id) => referenced.byId.get(id)?.name ?? id)
-    .join(t("listSeparator"));
   //: 正文 @ 的资产自己带的参考图也可能没名额(提示词描述仍会发)。人数按资产算,不按图片张数。
   const entityImagesNotSent = React.useMemo(() => {
     const known = new Map((mentionable.data ?? []).map((one) => [one.id, one]));
@@ -877,10 +875,9 @@ export function NodeComposer({
       if (!entity || entity.reference_count <= 0) return [];
       const role = entity.kind === "pose" && !pose.as_reference ? "pose_reference" : "reference_image";
       const slot = slots.find((one) => one.role === role);
-      return slot && (used.get(role) ?? 0) < slot.limit ? [] : [entity.name];
+      return slot && (used.get(role) ?? 0) < slot.limit ? [] : [{ id, name: entity.name }];
     });
   }, [mentionedEntities, mentionable.data, outgoingSources, pose.as_reference, slots]);
-  const entityImageNames = entityImagesNotSent.join(t("listSeparator"));
   const needsDigitalHumanConsent = outgoingSources.some((one) => one.role === "driving_audio");
   //: 「生成」为什么点不了(文案 key);null = 点得了。按钮的 disabled 和悬停说明都只看它。
   const sendBlocker: MessageKey | null = !current
@@ -971,6 +968,7 @@ export function NodeComposer({
     />
   );
   const [previewEntity, setPreviewEntity] = React.useState<EntitySummary | null>(null);
+  const [previewAsset, setPreviewAsset] = React.useState<string | null>(null);
   const openEntity = (id: string) => {
     const found = mentionable.data?.find((one) => one.id === id);
     if (found) setPreviewEntity(found);
@@ -978,6 +976,11 @@ export function NodeComposer({
   const entityChip = {
     onOpen: openEntity,
     accessory: (id: string) => (id === poseChipId ? poseToggle : null),
+    //: 警告跟着具体 chip 走,而不是在引用块顶上另起一条 —— 用户看的是「这一条」到底发不发。
+    warning: (id: string) =>
+      entityImagesNotSent.some((one) => one.id === id) ? t("boardEntityImageNotSentTip") : null,
+    assetWarning: (id: string) => (omittedMentions.includes(id) ? t("boardMentionNotSentTip") : null),
+    assetOpen: setPreviewAsset,
   };
 
   //: 连进来却用不上的素材:就地说一句,不让那根线看起来像是起了作用(见 unusedUpstreamKinds)。
@@ -985,7 +988,7 @@ export function NodeComposer({
 
   //: 上面那一排:连进来的资产、挂上的参考素材(按模型声明出的槽)和连进来的文档。
   const upstreamChips =
-    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene || unused.length || omittedMentions.length || entityImagesNotSent.length ? (
+    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene || unused.length ? (
       <>
         {unused.map(({ kind, elsewhere }) => (
           <span
@@ -997,30 +1000,6 @@ export function NodeComposer({
             {t(elsewhere ? UNUSED_UPSTREAM_COPY[kind].mode : UNUSED_UPSTREAM_COPY[kind].model)}
           </span>
         ))}
-        {omittedMentions.length > 0 && (
-          <Hint label={t("boardMentionNotSentHint").replace("{names}", omittedMentionNames)}>
-            <span
-              role="status"
-              data-mention-not-sent=""
-              className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-md bg-warning/10 px-2 py-1 text-ui-xs leading-snug text-warning"
-            >
-              <TriangleAlert size={12} className="shrink-0" aria-hidden />
-              {t("boardMentionNotSent").replace("{n}", String(omittedMentions.length))}
-            </span>
-          </Hint>
-        )}
-        {entityImagesNotSent.length > 0 && (
-          <Hint label={t("boardEntityImageNotSentHint").replace("{names}", entityImageNames)}>
-            <span
-              role="status"
-              data-entity-image-not-sent=""
-              className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-md bg-warning/10 px-2 py-1 text-ui-xs leading-snug text-warning"
-            >
-              <TriangleAlert size={12} className="shrink-0" aria-hidden />
-              {t("boardEntityImageNotSent").replace("{n}", String(entityImagesNotSent.length))}
-            </span>
-          </Hint>
-        )}
         {upstreamScene && (
           <SceneReferencePicker
             scene={referencedScene}
@@ -1597,6 +1576,7 @@ export function NodeComposer({
       {previewEntity && (
         <EntityPreviewDialog workspaceId={workspaceId} entity={previewEntity} onClose={() => setPreviewEntity(null)} />
       )}
+      {previewAsset && <AssetPreviewModalById id={previewAsset} onClose={() => setPreviewAsset(null)} />}
       {needsDigitalHumanConsent && (
         <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />
       )}

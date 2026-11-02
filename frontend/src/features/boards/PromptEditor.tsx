@@ -1,5 +1,5 @@
 import React from "react";
-import { Music2 } from "lucide-react";
+import { CircleAlert, Music2 } from "lucide-react";
 import {
   EditorContent,
   type JSONContent,
@@ -18,6 +18,7 @@ import { assetThumbnailUrl, type Asset, type EntitySummary } from "@/api/client"
 import { useI18n } from "@/app/preferences";
 import { EntityChipDecorContext, NO_DECOR, type EntityChipDecor } from "@/features/boards/entityChipDecor";
 import { Truncate } from "@/components/ui/truncate";
+import { Hint } from "@/components/ui/tooltip";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import type { MessageKey } from "@/app/messages";
 import type { MediaKind } from "@/features/boards/boardNodes";
@@ -25,7 +26,7 @@ import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { ImeComposition } from "@/components/app/imeComposition";
 import { useExternalContent } from "@/components/app/useExternalContent";
-import { isSubmitChord } from "@/lib/shortcuts";
+import { isImeKeystroke, isSubmitChord } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { EntityMentionRow, EntityThumb } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
@@ -164,22 +165,54 @@ const AssetChip = Node.create({
   //: 而 id 是给 source_assets 用的(从文档里另收,见 collect)。
   renderText: ({ node }: { node: { attrs: Record<string, unknown> } }) => String(node.attrs.name ?? ""),
   addNodeView: () =>
-    ReactNodeViewRenderer(({ node }: { node: { attrs: Record<string, unknown> } }) => (
-      <NodeViewWrapper
-        as="span"
-        data-asset-ref=""
-        data-asset-id={String(node.attrs.assetId)}
-        className="inline-flex max-w-[180px] items-center gap-1 rounded-md bg-secondary px-1 py-0.5 align-baseline text-ui-2xs text-foreground"
-      >
-        <img
-          src={assetThumbnailUrl(String(node.attrs.assetId))}
-          alt=""
-          className="h-3.5 w-3.5 shrink-0 rounded-[3px] object-cover"
-        />
-        <Truncate>{String(node.attrs.name ?? "")}</Truncate>
-      </NodeViewWrapper>
-    )),
+    ReactNodeViewRenderer(({ node }: { node: { attrs: Record<string, unknown> } }) => <AssetChipView node={node} />),
 });
+
+function AssetChipView({ node }: { node: { attrs: Record<string, unknown> } }) {
+  const decor = React.useContext(EntityChipDecorContext);
+  const assetId = String(node.attrs.assetId);
+  const warning = decor.assetWarning?.(assetId);
+  const open = decor.assetOpen;
+  return (
+    <NodeViewWrapper
+      as="span"
+      data-asset-ref=""
+      data-asset-id={assetId}
+      {...(open
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-label": String(node.attrs.name ?? ""),
+            onClick: () => open(assetId),
+            onKeyDown: (event: React.KeyboardEvent) => {
+              if (isImeKeystroke(event)) return;
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              open(assetId);
+            },
+          }
+        : {})}
+      className={cn(
+        "inline-flex max-w-[180px] items-center gap-1 rounded-md bg-secondary px-1 py-0.5 align-baseline text-ui-2xs text-foreground",
+        open && "cursor-pointer",
+      )}
+    >
+      <img
+        src={assetThumbnailUrl(assetId)}
+        alt=""
+        className="h-3.5 w-3.5 shrink-0 rounded-[3px] object-cover"
+      />
+      <Truncate>{String(node.attrs.name ?? "")}</Truncate>
+      {warning && (
+        <Hint label={warning}>
+          <span data-asset-warning="" className="flex shrink-0 items-center self-center leading-none text-warning">
+            <CircleAlert size={14} aria-hidden />
+          </span>
+        </Hint>
+      )}
+    </NodeViewWrapper>
+  );
+}
 
 /** 正文里第一个指向 `entityId` 的 chip 在哪。 */
 function firstChipAt(editor: Editor, entityId: string): number | null {
@@ -198,6 +231,7 @@ function EntityChipView({ node, editor, getPos }: NodeViewProps) {
   const entityId = String(node.attrs.entityId);
   const accessory = decor.accessory && firstChipAt(editor, entityId) === getPos() ? decor.accessory(entityId) : null;
   const name = String(node.attrs.name ?? "");
+  const warning = decor.warning?.(entityId);
   const open = decor.onOpen;
   return (
     <NodeViewWrapper
@@ -220,13 +254,20 @@ function EntityChipView({ node, editor, getPos }: NodeViewProps) {
               },
             }
           : {})}
-        className={cn("inline-flex min-w-0 items-center gap-1", open && "cursor-pointer hover:text-primary")}
+        className={cn("inline-flex min-w-0 items-center gap-1", open && "cursor-pointer")}
       >
         <EntityThumb
           entity={{ kind: String(node.attrs.kind || "character") as EntitySummary["kind"], cover_asset_id: String(node.attrs.cover || "") || null }}
           className="h-3.5 w-3.5 rounded-[3px]"
         />
         <Truncate>{name}</Truncate>
+        {warning && (
+          <Hint label={warning}>
+            <span data-entity-warning="" className="flex shrink-0 items-center self-center leading-none text-warning">
+              <CircleAlert size={14} aria-hidden />
+            </span>
+          </Hint>
+        )}
       </span>
       {accessory}
     </NodeViewWrapper>
