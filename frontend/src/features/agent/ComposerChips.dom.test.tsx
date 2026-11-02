@@ -57,6 +57,11 @@ describe("输入框里那排东西", () => {
     expect(onOpen).toHaveBeenCalled();
   });
 
+  it("引用可能不发送时带警告图标", () => {
+    render(<ComposerChips chips={[chip({ label: "资产", warning: "这张图不会发送" })]} />);
+    expect(document.querySelector("[data-composer-warning]")).not.toBeNull();
+  });
+
   it("点不开的就不给按下去的样子", () => {
     render(<ComposerChips chips={[chip({ label: "音频" })]} />);
     expect(screen.getByRole("button", { name: "音频" })).toBeDisabled();

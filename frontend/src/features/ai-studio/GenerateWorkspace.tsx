@@ -568,6 +568,46 @@ export function GenerateWorkspace({
     ? pickedOption
     : pickedOption ?? sessionChoice.option ?? (sessionEngine ? null : pickGenerationOption(pickerModelOptions));
   const poseReferenceSupported = Boolean(selectedModel && supportsParameter(selectedModel, "pose_reference"));
+  //: 与画板同一条判据：正文 @ 的资产参考图会不会被模型的角色/名额接住。
+  const entityReferenceWarnings = React.useMemo(() => {
+    if (!selectedModel) return [];
+    const used = new Map<string, number>();
+    const sentIds = new Set<string>();
+    for (const [role, slots] of Object.entries(generationConfig.frames)) {
+      for (const slot of slots) {
+        if (!slot.assetId && !slot.url) continue;
+        used.set(role, (used.get(role) ?? 0) + 1);
+        if (slot.assetId) sentIds.add(slot.assetId);
+      }
+    }
+    return mentionedEntities.flatMap((entity) => {
+      if (entity.reference_count <= 0) return [];
+      const needed = entity.reference_count - (entity.cover_asset_id && sentIds.has(entity.cover_asset_id) ? 1 : 0);
+      if (needed <= 0) return [];
+      const role = entity.kind === "pose" && !poseMentionsAsReference ? "pose_reference" : "reference_image";
+      if (!supportsParameter(selectedModel, role)) {
+        return [{
+          id: entity.id,
+          reason: role === "pose_reference" ? "pose_unsupported" : "role_unsupported",
+          room: 0,
+          missing: needed,
+        }];
+      }
+      const room = Math.max(0, sourceLimit(selectedModel, role) - (used.get(role) ?? 0));
+      return room >= needed ? [] : [{ id: entity.id, reason: "capacity", room, missing: needed - room }];
+    });
+  }, [generationConfig.frames, mentionedEntities, poseMentionsAsReference, selectedModel]);
+  const entityReferenceWarning = (entity: EntitySummary): string | null => {
+    const warning = entityReferenceWarnings.find((one) => one.id === entity.id);
+    if (!warning) return null;
+    if (warning.reason === "pose_unsupported") return t("boardEntityPoseReferenceUnsupportedTip");
+    if (warning.reason === "role_unsupported") return t("boardEntityImageRoleUnsupportedTip");
+    return warning.room === 0
+      ? t("boardEntityImageNotSentTip")
+      : t("boardEntityImagePartlySentTip")
+          .replace("{room}", String(warning.room))
+          .replace("{n}", String(warning.missing));
+  };
   //: 会话记着的那个现在用不了(这次也没挑别的):它叫什么、为什么、怎么修
   const missingEngine = pickedOption || voicedChoice ? null : sessionChoice.missing;
   const missingModel = useMissingModel(missingEngine);
@@ -1490,6 +1530,7 @@ export function GenerateWorkspace({
                     onChange: setPoseMentionsAsReference,
                   },
                   onPreview: setPreviewEntity,
+                  warning: entityReferenceWarning,
                 })}
                 className="px-0.5"
               />

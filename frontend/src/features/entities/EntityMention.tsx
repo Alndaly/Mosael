@@ -90,6 +90,8 @@ export function entityMentionChips(
     };
     /** 点小条打开预览;不给就保持不可点。 */
     onPreview?: (entity: EntitySummary) => void;
+    /** 这条资产引用不会按预期发送时的说明。 */
+    warning?: (entity: EntitySummary) => string | null;
   },
 ): ComposerChip[] {
   //: 一次请求只有一档姿势发送方式(`pose_mentions_role`),所以开关挂在第一条姿势引用上;
@@ -106,6 +108,7 @@ export function entityMentionChips(
         <PoseReferenceToggle checked={options.pose.checked} supported={options.pose.supported} onChange={options.pose.onChange} />
       ) : undefined,
       onOpen: options?.onPreview ? () => options.onPreview!(one) : undefined,
+      warning: options?.warning?.(one) ?? null,
       onRemove: () => onChange(value.filter((other) => other.id !== one.id)),
     };
   });

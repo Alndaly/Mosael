@@ -1,11 +1,12 @@
 import React from "react";
-import { X } from "lucide-react";
+import { CircleAlert, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -56,7 +57,7 @@ export function ComposerChips({
                 onClick={() => (chip.text ? setReading(chip.text) : chip.onOpen?.())}
                 className={cn(
                   "inline-flex min-w-0 items-center gap-1.5 rounded-l-md border-0 bg-transparent py-0.5 pl-0.5 pr-1 text-left text-inherit",
-                  openable ? "cursor-pointer hover:text-primary" : "cursor-default",
+                  openable ? "cursor-pointer" : "cursor-default",
                 )}
               >
                 {/* 缩略图和图标占同一个方格 —— 一排里有图有文件时,名字仍然从同一列开始。 */}
@@ -69,6 +70,13 @@ export function ComposerChips({
                 </span>
                 <Truncate>{chip.label}</Truncate>
               </button>
+              {chip.warning && (
+                <Hint label={chip.warning}>
+                  <span data-composer-warning="" className="ml-1 grid size-4 shrink-0 place-items-center text-warning">
+                    <CircleAlert size={14} aria-hidden />
+                  </span>
+                </Hint>
+              )}
               {chip.accessory}
               <IconButton
                 unstyled

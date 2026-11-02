@@ -20,5 +20,7 @@ export interface ComposerChip {
   text?: { title: string; body: string };
   /** 小条内部的附加控件(例如姿势引用的发送方式开关);它有自己的点击语义,不触发打开/移除。 */
   accessory?: React.ReactNode;
+  /** 这条引用不会按预期发送时的说明;悬停显示。空 = 不警告。 */
+  warning?: string | null;
   onRemove: () => void;
 }
