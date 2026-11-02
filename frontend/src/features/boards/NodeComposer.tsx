@@ -867,7 +867,9 @@ export function NodeComposer({
     return mentioned.filter((id) => !sent.has(id));
   }, [currentPromptMode, mentioned, outgoingSources, referenced.settled]);
   //: 正文 @ 的资产自己带的参考图也可能没名额(提示词描述仍会发)。人数按资产算,不按图片张数。
-  const entityImagesNotSent = React.useMemo(() => {
+  //: `missing` 是最多可能被丢掉的张数:前端只知道 reference_count 与剩余名额,不知道机位过滤后的张数,
+  //: 所以文案说“最多”。
+  const entityImageWarnings = React.useMemo(() => {
     const known = new Map((mentionable.data ?? []).map((one) => [one.id, one]));
     const used = new Map<string, number>();
     const sentIds = new Set(outgoingSources.map((one) => one.asset_id));
@@ -875,11 +877,22 @@ export function NodeComposer({
     return mentionedEntities.flatMap((id) => {
       const entity = known.get(id);
       if (!entity || entity.reference_count <= 0) return [];
-      //: 资产封面已经作为正文素材发出去时，模型手里已经有这张图；不要再报“资产参考图没发送”。
-      if (entity.cover_asset_id && sentIds.has(entity.cover_asset_id)) return [];
+      //: 资产封面已经作为正文素材发出去时，模型手里已经有这张图；从待发张数里扣掉。
+      const needed = entity.reference_count - (entity.cover_asset_id && sentIds.has(entity.cover_asset_id) ? 1 : 0);
+      if (needed <= 0) return [];
       const role = entity.kind === "pose" && !pose.as_reference ? "pose_reference" : "reference_image";
       const slot = slots.find((one) => one.role === role);
-      return slot && (used.get(role) ?? 0) < slot.limit ? [] : [{ id, name: entity.name }];
+      if (!slot) {
+        return [{
+          id,
+          name: entity.name,
+          room: 0,
+          missing: needed,
+          reason: role === "pose_reference" ? "pose_unsupported" : "role_unsupported",
+        }];
+      }
+      const room = Math.max(0, slot.limit - (used.get(role) ?? 0));
+      return room >= needed ? [] : [{ id, name: entity.name, room, missing: needed - room, reason: "capacity" }];
     });
   }, [mentionedEntities, mentionable.data, outgoingSources, pose.as_reference, slots]);
   const needsDigitalHumanConsent = outgoingSources.some((one) => one.role === "driving_audio");
@@ -982,8 +995,17 @@ export function NodeComposer({
     onOpen: openEntity,
     accessory: (id: string) => (id === poseChipId ? poseToggle : null),
     //: 警告跟着具体 chip 走,而不是在引用块顶上另起一条 —— 用户看的是「这一条」到底发不发。
-    warning: (id: string) =>
-      entityImagesNotSent.some((one) => one.id === id) ? t("boardEntityImageNotSentTip") : null,
+    warning: (id: string) => {
+      const warning = entityImageWarnings.find((one) => one.id === id);
+      if (!warning) return null;
+      if (warning.reason === "pose_unsupported") return t("boardEntityPoseReferenceUnsupportedTip");
+      if (warning.reason === "role_unsupported") return t("boardEntityImageRoleUnsupportedTip");
+      return warning.room === 0
+        ? t("boardEntityImageNotSentTip")
+        : t("boardEntityImagePartlySentTip")
+            .replace("{room}", String(warning.room))
+            .replace("{n}", String(warning.missing));
+    },
     assetWarning: (id: string) => (omittedMentions.includes(id) ? t("boardMentionNotSentTip") : null),
     assetOpen: setPreviewAsset,
   };

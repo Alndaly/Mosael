@@ -24,6 +24,7 @@ vi.mock("@tanstack/react-query", async () => ({
     if (queryKey[0] === "entities") return { data: [
       { id: "pose-1", kind: "pose", name: "坐姿", reference_count: 1 },
       { id: "zhang", kind: "character", name: "张三", reference_count: 1 },
+      { id: "multi", kind: "character", name: "多图", reference_count: 3 },
     ] };
     return { data: [] };
   },
@@ -43,6 +44,8 @@ vi.mock("./PromptEditor", () => ({
       {entityChip?.accessory?.("pose-1")}{entityChip?.accessory?.("zhang")}
       {entityChip?.assetWarning?.("img2") && <span data-asset-warning>{entityChip.assetWarning("img2")}</span>}
       {entityChip?.warning?.("zhang") && <span data-entity-warning>{entityChip.warning("zhang")}</span>}
+      {entityChip?.warning?.("pose-1") && <span data-pose-warning>{entityChip.warning("pose-1")}</span>}
+      {entityChip?.warning?.("multi") && <span data-entity-partial-warning>{entityChip.warning("multi")}</span>}
     </div>
   ),
   restorePromptDocument: vi.fn(),
@@ -102,11 +105,20 @@ it("资产参考图没有名额时,在引用块里提示描述仍会发送", () 
   expect(warning?.textContent).toContain("boardEntityImageNotSentTip");
 });
 
-it("模型不收姿势参考:不摆机位;「按普通参考图发送」只挂在姿势那条引用里,勾上后发出去的是 as_reference", () => {
+it("资产有多张参考图、名额不够时提示最多发几张", () => {
+  mount(["reference_image"], { mentioned_entity_ids: ["multi"] });
+  const warning = document.querySelector("[data-entity-partial-warning]");
+  expect(warning).not.toBeNull();
+  expect(warning?.textContent).toContain("boardEntityImagePartlySentTip");
+});
+
+it("模型不收姿势参考:说清原因,不谎报名额已满;勾上后按普通参考图发送", () => {
   const { onSubmit } = mount(["reference_image"], { mentioned_entity_ids: ["pose-1", "zhang"] });
   expect(document.querySelector("[data-pose-use]")).toBeNull();
   expect(screen.getAllByRole("checkbox", { name: "genPoseAsReference" })).toHaveLength(1);
+  expect(document.querySelector("[data-pose-warning]")?.textContent).toContain("boardEntityPoseReferenceUnsupportedTip");
   fireEvent.click(screen.getByRole("checkbox", { name: "genPoseAsReference" }));
+  expect(document.querySelector("[data-pose-warning]")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pose: { shot_angle: null, as_reference: true } }));
 });
