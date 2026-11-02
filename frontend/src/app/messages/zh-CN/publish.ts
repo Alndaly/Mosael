@@ -176,6 +176,8 @@ export const publish = {
   boardAddSourceHint: "参考素材只影响风格与主体,不会有一帧出现在成片里。挑一类继续:",
   boardSourceRemaining: "还能加 {n} 份",
   boardSourceFull: "已挂满",
+  boardMentionNotSent: "有 {n} 张正文引用没有发出去",
+  boardMentionNotSentHint: "上方槽位已满时优先保留槽位里的素材。被跳过的:{names}。移除一张,或换一个收得下它们的模型。",
   boardRemove: "移除",
   boardPreviewSource: "预览{name}",
   boardWithSound: "有声",

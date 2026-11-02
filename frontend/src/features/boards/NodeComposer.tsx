@@ -857,6 +857,16 @@ export function NodeComposer({
   //: 按**发出去的**那一份判:正文里 `@` 到的一段音频也会落进驱动音频的槽(见 mergeSourceAssets)。
   const [digitalHumanConsent, setDigitalHumanConsent] = React.useState(false);
   const outgoingSources = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, [...referenced.byId.values()], slots);
+  //: 正文里 @ 到、但当前模型的槽位已经装不下的素材。它们不会被发出去,所以要在引用块里说一声,
+  //: 不能等用户发完再猜为什么少了一张。
+  const omittedMentions = React.useMemo(() => {
+    if (currentPromptMode === "none") return [];
+    const sent = new Set(outgoingSources.map((one) => one.asset_id));
+    return mentioned.filter((id) => !sent.has(id));
+  }, [currentPromptMode, mentioned, outgoingSources]);
+  const omittedMentionNames = omittedMentions
+    .map((id) => referenced.byId.get(id)?.name ?? id)
+    .join(t("listSeparator"));
   const needsDigitalHumanConsent = outgoingSources.some((one) => one.role === "driving_audio");
   //: 「生成」为什么点不了(文案 key);null = 点得了。按钮的 disabled 和悬停说明都只看它。
   const sendBlocker: MessageKey | null = !current
@@ -961,7 +971,7 @@ export function NodeComposer({
 
   //: 上面那一排:连进来的资产、挂上的参考素材(按模型声明出的槽)和连进来的文档。
   const upstreamChips =
-    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene || unused.length ? (
+    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene || unused.length || omittedMentions.length ? (
       <>
         {unused.map(({ kind, elsewhere }) => (
           <span
@@ -973,6 +983,18 @@ export function NodeComposer({
             {t(elsewhere ? UNUSED_UPSTREAM_COPY[kind].mode : UNUSED_UPSTREAM_COPY[kind].model)}
           </span>
         ))}
+        {omittedMentions.length > 0 && (
+          <Hint label={t("boardMentionNotSentHint").replace("{names}", omittedMentionNames)}>
+            <span
+              role="status"
+              data-mention-not-sent=""
+              className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-md bg-warning/10 px-2 py-1 text-ui-xs leading-snug text-warning"
+            >
+              <TriangleAlert size={12} className="shrink-0" aria-hidden />
+              {t("boardMentionNotSent").replace("{n}", String(omittedMentions.length))}
+            </span>
+          </Hint>
+        )}
         {upstreamScene && (
           <SceneReferencePicker
             scene={referencedScene}

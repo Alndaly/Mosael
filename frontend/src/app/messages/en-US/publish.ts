@@ -176,6 +176,8 @@ export const publish = {
   boardAddSourceHint: "Reference material shapes style and subject; not one frame of it appears in the result. Pick a kind:",
   boardSourceRemaining: "{n} left",
   boardSourceFull: "Full",
+  boardMentionNotSent: "{n} prompt reference(s) won't be sent",
+  boardMentionNotSentHint: "Materials in the slots above take priority when the model's inputs are full. Skipped: {names}. Remove one, or pick a model that accepts them.",
   boardRemove: "Remove",
   boardPreviewSource: "Preview {name}",
   boardWithSound: "With sound",

@@ -14,6 +14,7 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
 const actualQuery = vi.hoisted(() => vi.importActual<typeof import("@tanstack/react-query")>("@tanstack/react-query"));
 vi.mock("@/features/entities/EntityPreviewDialog", () => ({ EntityPreviewDialog: () => null }));
+vi.mock("./SourceAssetSlotPreview", () => ({ SourceAssetSlotPreview: () => null }));
 vi.mock("@tanstack/react-query", async () => ({
   QueryClientContext: (await actualQuery).QueryClientContext,
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => {
@@ -66,6 +67,16 @@ it("@ 了姿势、模型收姿势参考:摆机位;存着的机位还原,发出�
   expect(document.querySelector("[data-pose-use] [data-shot-angle]")).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pose: { shot_angle: "side", as_reference: false } }));
+});
+
+it("正文引用装不进模型的槽位时,在引用块里提示哪些不会发送", () => {
+  mount(["reference_image"], {
+    source_assets: [{ asset_id: "img1", role: "reference_image" }],
+    mentioned_asset_ids: ["img2"],
+  });
+  const warning = document.querySelector("[data-mention-not-sent]");
+  expect(warning).not.toBeNull();
+  expect(warning?.textContent).toContain("boardMentionNotSent");
 });
 
 it("模型不收姿势参考:不摆机位;「按普通参考图发送」只挂在姿势那条引用里,勾上后发出去的是 as_reference", () => {
