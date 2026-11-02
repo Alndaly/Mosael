@@ -21,6 +21,8 @@ class ReferenceUseIn(ApiModel):
     workspace_id: str
     item_id: str
     collection: str = ""
+    #: 「用作素材」取哪个视角(`views[].role`);空 = 第一张。「存为资产」每个视角各取一张,不看它。
+    role: str = ""
     save_entity: bool = False
 
 
@@ -93,7 +95,7 @@ def use_reference_item(instance_id: str, body: ReferenceUseIn, db: Tx, user: Cur
         return reference_library.use(
             db, user, _instance(db, user, instance_id),
             workspace_id=body.workspace_id, item_id=body.item_id,
-            collection=body.collection, save_entity=body.save_entity,
+            collection=body.collection, role=body.role, save_entity=body.save_entity,
         )
     except (reference_library.ReferenceLibraryError, PluginDomainError, PluginRuntimeError) as exc:
         raise _fail(exc) from exc

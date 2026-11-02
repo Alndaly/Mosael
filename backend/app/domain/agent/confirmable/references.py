@@ -14,7 +14,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import fragment, get_current_locale
+from app.core.i18n import fragment
 from app.db.models import User
 from app.domain import reference_library
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
@@ -41,8 +41,7 @@ def _validate_use_reference(db: Session, workspace_id: str, payload: dict[str, A
     except (reference_library.ReferenceLibraryError, PluginDomainError, PluginRuntimeError) as exc:
         raise ConfirmationError.relay(exc) from exc
     #: 卡上那句话要用的事实。下划线开头:参数表里不再列一遍(见前端 confirmationPayload)。
-    names = item["name"]
-    payload["_title"] = names.get("zh" if get_current_locale().startswith("zh") else "en") or names.get("en") or item["id"]
+    payload["_title"] = reference_library.display_name(item)
     payload["_library"] = instance.name
     payload["_author"] = item["provenance"].get("author", "")
     payload["_kind"] = item["kind"]
@@ -69,11 +68,12 @@ def _execute_use_reference(db: Session, confirmation: Any, actor: str | None) ->
         used = reference_library.use(
             db, user, instance, workspace_id=confirmation.workspace_id,
             item_id=str(payload.get("item_id") or ""), collection=str(payload.get("collection") or ""),
-            save_entity=bool(payload.get("save_as_asset")),
+            role=str(payload.get("angle") or ""), save_entity=bool(payload.get("save_as_asset")),
         )
     except (reference_library.ReferenceLibraryError, PluginDomainError, PluginRuntimeError) as exc:
         raise ConfirmationError.relay(exc) from exc
-    return {"asset_id": used["asset_id"], "entity_id": used["entity_id"], "provenance": used["provenance"]}
+    return {"asset_id": used["asset_id"], "asset_ids": used["asset_ids"], "entity_id": used["entity_id"],
+            "provenance": used["provenance"]}
 
 
 confirmable_tool(ConfirmableTool(

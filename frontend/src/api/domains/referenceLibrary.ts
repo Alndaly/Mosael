@@ -60,7 +60,8 @@ export const getReferenceItem = (instanceId: string, itemId: string, collection 
 
 export const ingestReferenceItem = (
   instanceId: string,
-  body: { workspace_id: string; item_id: string; collection?: string; save_entity?: boolean },
+  //: `role`:「用作素材」取哪个视角(空 = 第一张);「存为资产」每个视角各取一张,不看它。
+  body: { workspace_id: string; item_id: string; collection?: string; role?: string; save_entity?: boolean },
 ) => api<ReferenceUseResult>(`/api/reference-library/${encodeURIComponent(instanceId)}/use`, {
   method: "POST",
   body: JSON.stringify(body),

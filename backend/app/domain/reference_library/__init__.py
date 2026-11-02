@@ -22,13 +22,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, fragment, get_current_locale
+from app.core.i18n import LocalizedError, fragment, get_current_locale, tr
 from app.db.models import PluginInstance, PluginPackage, User
 from app.domain import capabilities
 from app.domain.assets.deletion import delete_asset
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.media_info import patch_media_info
-from app.domain.entities.catalog import DEFAULT_ROLE, KINDS, ROLES_BY_KIND
+from app.domain.entities.catalog import DEFAULT_ROLE, KINDS, ROLES, ROLES_BY_KIND
 from app.domain.entities.library import add_reference, create_entity
 from app.domain.permissions import ensure_workspace_perm
 from app.domain.plugins import instances as inst, tools
@@ -137,6 +137,20 @@ def _item(raw: Any, collection: str = "") -> dict[str, Any] | None:
     }
 
 
+def _output(output: Any) -> dict[str, Any]:
+    """插件交回的必须是一个对象;别的形状是插件的错,照实说,不在宿主这一侧炸成 500。"""
+    if not isinstance(output, dict):
+        raise ReferenceLibraryError("referenceLibErr_badItem")
+    return output
+
+
+def display_name(item: dict[str, Any]) -> str:
+    """一条参考按请求方的语言叫什么(插件给中英两种);确认卡、取进来的素材和资产都用这一个名字。"""
+    names = item.get("name") or {}
+    preferred = "zh" if get_current_locale().startswith("zh") else "en"
+    return str(names.get(preferred) or names.get("en") or names.get("zh") or item.get("id") or "")
+
+
 def connections(db: Session, user_id: str) -> list[dict[str, str]]:
     """这个人接的、启用着且认领了 `reference_library` 的连接。"""
     out: list[dict[str, str]] = []
@@ -160,8 +174,8 @@ def collections(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
         db, instance.id, REFERENCE_LIBRARY, {"op": "collections", "locale": get_current_locale()},
         timeout=QUICK_TIMEOUT_SECONDS, record=False, output_budget=CATALOG_OUTPUT_BYTES,
     )
-    raw = output.get("collections") if isinstance(output, dict) else None
-    return [one for one in (_collection(v) for v in raw or []) if one][:50]
+    raw = _output(output).get("collections")
+    return [one for one in (_collection(v) for v in raw) if one][:50] if isinstance(raw, list) else []
 
 
 def search(
@@ -181,6 +195,7 @@ def search(
          "cursor": cursor, "limit": max(1, min(limit, MAX_ITEMS)), "locale": get_current_locale()},
         timeout=QUICK_TIMEOUT_SECONDS, record=False, output_budget=CATALOG_OUTPUT_BYTES,
     )
+    output = _output(output)
     items = [one for one in (_item(raw, collection) for raw in (output.get("items") or [])) if one]
     return {"items": items[:MAX_ITEMS], "next_cursor": _text(output.get("next_cursor"), 500)}
 
@@ -192,6 +207,7 @@ def item(db: Session, instance: PluginInstance, *, item_id: str, collection: str
         {"op": "item", "item_id": item_id, "collection": collection, "locale": get_current_locale()},
         timeout=QUICK_TIMEOUT_SECONDS, record=False,
     )
+    output = _output(output)
     found = _item(output.get("item") if isinstance(output.get("item"), dict) else output, collection)
     if found is None:
         raise ReferenceLibraryError("referenceLibErr_badItem")
@@ -206,9 +222,9 @@ def search_everywhere(
     kind: str = "",
     connection_id: str = "",
     limit: int = 12,
-    lang: str = "zh",
 ) -> dict[str, Any]:
     """在这个人接的每个参考库(或指定的那一个)、每本图集里找,给智能体用(`search_references`,ADR 0091 §6)。
+    `limit` 是**总共**最多几条(不是每本图集各几条):够数就不再问下一本。
 
     **标了成人内容的条目一条都不交给智能体** —— 插件的开关只管图集里出不出现,界面另有预览图设置兜着;
     智能体读的是文字和链接,没有「模糊」可言。一个连接出错不挡别的连接,出错的那句照实放进 `notes`。
@@ -225,13 +241,15 @@ def search_everywhere(
             for collection in collections(db, instance):
                 if kind and collection["kind"] != kind:
                     continue
-                for found in search(db, instance, collection=collection["id"], q=query, limit=cap)["items"]:
-                    if found["nsfw"]:
+                if len(items) >= cap:
+                    break
+                for found in search(db, instance, collection=collection["id"], q=query, limit=cap - len(items))["items"]:
+                    if found["nsfw"] or len(items) >= cap:
                         continue
                     items.append({
                         "connection_id": connection["id"], "library": connection["name"],
                         "collection": found["collection"], "id": found["id"], "kind": found["kind"],
-                        "name": found["name"].get(lang) or found["name"].get("en") or found["id"],
+                        "name": display_name(found),
                         "tags": found["tags"][:8], "angles": [view["role"] for view in found["views"]],
                         "thumbnail": found["thumbnail"], "provenance": found["provenance"],
                     })
@@ -248,62 +266,89 @@ def use(
     workspace_id: str,
     item_id: str,
     collection: str = "",
+    role: str = "",
     save_entity: bool = False,
 ) -> dict[str, Any]:
-    """把一条外部参考取进工作区:登记成素材,可选再建一个姿势 / 服装资产。
+    """把一条外部参考取进工作区。
 
-    原图由插件下载到自己的暂存目录,宿主在 `collect` 里拷走 —— 宿主不去直接请求插件给的任意 URL。
+    - **用作素材**(`save_entity=False`):取 `role` 那一个视角(空 = 第一张),登记成一份素材;
+    - **存为资产**(`save_entity=True`):**每个视角各取一张**,按视角挂成一个姿势 / 服装资产的参考图(第一张当封面)。
+      姿势按机位挑图(entities.mentions):只挂一张正面的话,斜侧、俯拍的镜头里这个姿势永远发不出去。
+
+    原图由插件下载到自己的暂存目录,宿主在 `collect` 里收走 —— 宿主不去直接请求插件给的任意 URL。出处随每一份素材写进
+    `external_source`。中途有一张失败,已经登记的这几份照样留着,失败的原样报出来(插件的错误不吞)。
     """
     ensure_workspace_perm(db, user, workspace_id, "upload")
     _require(db, instance)
     found = item(db, instance, item_id=item_id, collection=collection)
+    views = [view for view in found["views"] if view["original"]]
+    if save_entity:
+        wanted = views
+    else:
+        chosen = next((view for view in views if view["role"] == role), None) if role else (views[0] if views else None)
+        if chosen is None:
+            raise ReferenceLibraryError("referenceLibErr_noSuchView", role=role or "-")
+        wanted = [chosen]
+    if not wanted:
+        raise ReferenceLibraryError("referenceLibErr_fetchFailed")
+    name = display_name(found)[:160]
+    assets = [(view["role"], _fetch_view(db, instance, found, view["role"], workspace_id=workspace_id, name=name))
+              for view in wanted]
+    entity_id = ""
+    if save_entity:
+        entity = create_entity(
+            db, workspace_id=workspace_id, kind=found["kind"], name=name,
+            description="; ".join(found["tags"]), prompt="; ".join(found["tags"]),
+            tags=found["tags"], actor_id=user.id,
+        )
+        allowed = ROLES_BY_KIND.get(found["kind"], ())
+        for position, (view_role, asset_id) in enumerate(assets):
+            add_reference(db, entity, asset_id, view_role if view_role in allowed else DEFAULT_ROLE.get(found["kind"], "front"),
+                          cover=position == 0)
+        entity_id = entity.id
+    return {"asset_id": assets[0][1], "asset_ids": [asset_id for _role, asset_id in assets], "entity_id": entity_id,
+            "item": found, "provenance": {"instance_id": instance.id, "item_id": found["id"],
+                                          "collection": found["collection"], **found["provenance"]}}
+
+
+def _fetch_view(db: Session, instance: PluginInstance, found: dict[str, Any], role: str, *, workspace_id: str, name: str) -> str:
+    """让插件下一个视角的原图,登记成素材、写上出处,交回素材 id。"""
     held: dict[str, Path] = {}
 
     def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
         staged = staged_artifact(scratch, output.get("artifact"))
         if staged is None:
             raise ReferenceLibraryError("referenceLibErr_fetchFailed")
+        #: 暂存目录随这次调用清掉,先挪到自己的临时文件;登记时再整份搬进素材库(move,不再复制第二遍)。
         with tempfile.NamedTemporaryFile(prefix="mosael-reference-", suffix=staged.suffix or ".img", delete=False) as handle:
             target = Path(handle.name)
-        shutil.copyfile(staged, target)
+        shutil.move(staged, target)
         held["path"] = target
-        return {"artifact": staged.name}
+        return {"artifact": target.name}
 
     try:
         tools.invoke_host(
             db, instance.id, REFERENCE_LIBRARY,
-            {"op": "fetch", "item_id": found["id"], "collection": found["collection"], "locale": get_current_locale()},
+            {"op": "fetch", "item_id": found["id"], "collection": found["collection"], "role": role,
+             "locale": get_current_locale()},
             collect=collect, timeout=FETCH_TIMEOUT_SECONDS, record=True,
         )
         if "path" not in held:
             raise ReferenceLibraryError("referenceLibErr_fetchFailed")
-        name = (found["name"].get("zh") or found["name"].get("en") or found["id"])[:160]
         asset = register_file_asset(
             db, workspace_id=workspace_id, project_id=None, source_path=held["path"],
-            name=name, source="reference_library",
+            #: 存成资产时一个条目有好几张:素材名带上视角(「坐姿 · 斜侧」),素材库里分得开。
+            name=f"{name} · {tr(f'entityRole_{role}')}"[:160] if role in ROLES else name, source="reference_library", move=True,
         )
         if asset.kind != "image":
             delete_asset(db, asset)
             raise ReferenceLibraryError("referenceLibErr_badItem")
         #: 出处就是边界:这个键在分享包 / 云同步里都要被看见(ADR 0091 §3)。
         patch_media_info(db, asset.id, {"external_source": {
-            "library": "reference_library", "instance_id": instance.id, "item_id": found["id"],
+            "library": "reference_library", "instance_id": instance.id, "item_id": found["id"], "role": role,
             "collection": found["collection"], "title": found["name"], **found["provenance"],
         }})
-        entity_id = ""
-        if save_entity:
-            entity = create_entity(
-                db, workspace_id=workspace_id, kind=found["kind"], name=name,
-                description="; ".join(found["tags"]), prompt="; ".join(found["tags"]),
-                tags=found["tags"], actor_id=user.id,
-            )
-            role = found["views"][0]["role"] if found["views"] else DEFAULT_ROLE.get(found["kind"], "front")
-            if role not in ROLES_BY_KIND.get(found["kind"], ()):
-                role = DEFAULT_ROLE.get(found["kind"], "front")
-            add_reference(db, entity, asset.id, role, cover=True)
-            entity_id = entity.id
-        return {"asset_id": asset.id, "entity_id": entity_id, "item": found, "provenance": {"instance_id": instance.id,
-                "item_id": found["id"], "collection": found["collection"], **found["provenance"]}}
+        return asset.id
     finally:
         if "path" in held:
             held["path"].unlink(missing_ok=True)
@@ -322,5 +367,6 @@ def register_uses() -> None:
 
 
 __all__ = [
-    "ReferenceLibraryError", "collections", "connections", "item", "search", "search_everywhere", "use", "register_uses",
+    "ReferenceLibraryError", "collections", "connections", "display_name", "item", "search", "search_everywhere", "use",
+    "register_uses",
 ]

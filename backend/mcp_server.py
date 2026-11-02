@@ -2204,12 +2204,10 @@ def search_references(
     taking it into the workspace; with save_as_asset it becomes a pose / costume asset you can pass in
     entity_ids of a generation (a pose goes to the model as a pose reference: body pose only, not style).
     """
-    from app.core.i18n import get_current_locale
     from app.domain import reference_library
 
-    lang = "zh" if get_current_locale().startswith("zh") else "en"
     return _use_case(lambda db, user: reference_library.search_everywhere(
-        db, user.id, query=query, kind=kind, connection_id=connection_id, limit=limit, lang=lang,
+        db, user.id, query=query, kind=kind, connection_id=connection_id, limit=limit,
     ))
 
 
@@ -2219,10 +2217,13 @@ def use_reference(
     item_id: Annotated[str, Field(description="id from search_references.")],
     collection: Annotated[str, Field(description="collection from search_references.")] = "",
     save_as_asset: Annotated[bool, Field(description="Also create a pose / costume asset from it (to @ in generations).")] = True,
+    angle: Annotated[str, Field(description="Without save_as_asset: which view to take (one of the entry's angles from search_references); empty = the first.")] = "",
     workspace_id: str = "",
 ) -> dict[str, Any]:
-    """Confirmation required: take ONE entry from a reference library into this workspace as media,
-    with its provenance recorded; save_as_asset also creates a pose / costume asset (cover = that image).
+    """Confirmation required: take ONE entry from a reference library into this workspace,
+    with its provenance recorded. save_as_asset takes EVERY view and creates a pose / costume asset with
+    each view attached by its angle (a pose is matched to a shot by angle, so one view is not enough);
+    without it, only the view named by angle is taken as media.
 
     Taking an item is always initiated by the user: this opens a card they approve. Search first with
     search_references; never guess ids. The result (after approval) has asset_id and entity_id.
@@ -2233,7 +2234,7 @@ def use_reference(
             "tool": "use_reference",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {"connection_id": connection_id, "item_id": item_id, "collection": collection,
-                        "save_as_asset": bool(save_as_asset)},
+                        "save_as_asset": bool(save_as_asset), **({"angle": angle} if angle and not save_as_asset else {})},
         },
     )
     return _confirmation_reply(confirmation)

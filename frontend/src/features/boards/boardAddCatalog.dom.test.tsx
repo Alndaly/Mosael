@@ -60,7 +60,7 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
     expect(byLabel["便签"]).toBe("随手写，或让 AI 写");
     expect(byLabel["文档"]).toBe("引用一篇笔记,或让 AI 写一篇");
     expect(byLabel["素材"]).toBe("从素材库挑一张图片、一段视频或音频放上来");
-    expect(byLabel["资产"]).toBe("资产库里的一个人物、场景或道具");
+    expect(byLabel["资产"]).toBe("资产库里的一个人物、场景、道具、姿势或服装");
     expect(byLabel["3D 场景"]).toBe("引用一个 3D 场景");
     expect(byLabel["时间线"]).toBe("把几段视频、图片、音频拼成一条:连进来就接到末尾");
     expect(byLabel["分组"]).toBe("把几格圈在一起");

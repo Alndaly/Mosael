@@ -31,7 +31,7 @@ def library(monkeypatch: pytest.MonkeyPatch):
 
     def use(db, user, instance, **kwargs):
         calls.append(kwargs)
-        return {"asset_id": "a1", "entity_id": "e1" if kwargs["save_entity"] else "", "item": ITEM,
+        return {"asset_id": "a1", "asset_ids": ["a1"], "entity_id": "e1" if kwargs["save_entity"] else "", "item": ITEM,
                 "provenance": {"instance_id": instance.id, **ITEM["provenance"]}}
 
     monkeypatch.setattr(references.reference_library, "use", use)
@@ -73,4 +73,4 @@ def test_批准之后走参考库的取用_交回素材和资产(library, monkey
     result = spec.execute(_Db(), confirmation, "me")
 
     assert result["asset_id"] == "a1" and result["entity_id"] == "e1"
-    assert library == [{"workspace_id": "ws", "item_id": ITEM["id"], "collection": "poses", "save_entity": True}]
+    assert library == [{"workspace_id": "ws", "item_id": ITEM["id"], "collection": "poses", "role": "", "save_entity": True}]

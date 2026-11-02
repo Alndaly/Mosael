@@ -1512,8 +1512,10 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   }
   ```
 
-- `{"op": "fetch", "item_id": "…", "collection": "…"}` → 把这个条目**第一张**原图下到 `MOSAEL_PLUGIN_OUTPUT_DIR`,
-  交回 `{"artifact": {"path": "文件名"}}`。只有用户点「用作素材 / 存为资产」(或批准智能体的 `use_reference` 卡)时才会问。
+- `{"op": "fetch", "item_id": "…", "collection": "…", "role": "three_quarter"}` → 把这个条目里**那个视角**(`views[].role`)
+  的原图下到 `MOSAEL_PLUGIN_OUTPUT_DIR`,交回 `{"artifact": {"path": "文件名"}}`;`role` 为空就是第一张,条目里没有这个视角就报错。
+  只有用户点「用作素材 / 存为资产」(或批准智能体的 `use_reference` 卡)时才会问:「用作素材」取用户在详情里选中的那一张;
+  「存为资产」**每个视角各取一张**,按 `role` 挂成资产的参考图 —— 姿势按机位挑图,只有正面的姿势在斜侧、俯拍的镜头里发不出去。
 
 几条规矩:
 

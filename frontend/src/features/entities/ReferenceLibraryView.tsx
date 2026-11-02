@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, ImageOff, Plug, Plus, Search, Sparkles } from "lucide-react";
+import { ExternalLink, ImageOff, Plus, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -13,6 +13,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 import { referenceKeys } from "@/api/queryKeys";
 import { invalidateResources } from "@/api/resourceKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -27,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreviewSettingsButton";
 import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { useCatalogLabels } from "@/features/entities/entityMeta";
+import { RadioGroup } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 
 function localized(value: Record<string, string>, locale: string): string {
@@ -91,12 +93,17 @@ function ItemDetail({
     queryFn: () => getReferenceItem(instanceId, item.id, item.collection),
   });
   const shown = detail.data ?? item;
+  //: 「用作素材」取哪一张:点详情里的视角来选,默认第一张。「存为资产」每个视角各取一张、按视角挂上 ——
+  //: 姿势按镜头机位挑图,只存一张正面的话,斜侧、俯拍的镜头里这个姿势发不出去。
+  const [chosenRole, setChosenRole] = React.useState("");
+  const role = shown.views.some((view) => view.role === chosenRole) ? chosenRole : (shown.views[0]?.role ?? "");
   const ingest = useMutation({
     mutationFn: (saveEntity: boolean) =>
       ingestReferenceItem(instanceId, {
         workspace_id: workspace.id,
         item_id: shown.id,
         collection: shown.collection,
+        ...(saveEntity ? {} : { role }),
         save_entity: saveEntity,
       }),
     onSuccess: (_result, saveEntity) => {
@@ -126,14 +133,22 @@ function ItemDetail({
       }
     >
       <div className="grid gap-4" data-reference-item={shown.id}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {shown.views.map((view) => (
-            <figure key={`${view.role}-${view.thumbnail}`} className="m-0 grid gap-1">
-              <Thumb item={{ ...shown, thumbnail: view.thumbnail }} className="aspect-[3/4] rounded-md" />
-              <figcaption className="text-ui-2xs text-muted-foreground">{labels.role(view.role)}</figcaption>
-            </figure>
-          ))}
-        </div>
+        {/* 视角是单选:「用作素材」取选中的那一张。「存为资产」每张都取,不看它。 */}
+        <RadioGroup
+          aria-label={t("referenceLibraryViews")}
+          orientation="horizontal"
+          value={role || null}
+          onValueChange={setChosenRole}
+          options={shown.views.map((view) => ({
+            value: view.role,
+            label: (
+              <span className="grid w-24 gap-1" data-reference-view={view.role}>
+                <Thumb item={{ ...shown, thumbnail: view.thumbnail }} className="aspect-[3/4] rounded-md" />
+                <span className="text-ui-2xs text-muted-foreground">{labels.role(view.role)}</span>
+              </span>
+            ),
+          }))}
+        />
         {shown.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {shown.tags.map((tag) => <span key={tag} className="rounded-full bg-secondary px-2 py-0.5 text-ui-2xs">{tag}</span>)}
@@ -152,6 +167,18 @@ function ItemDetail({
         </div>
       </div>
     </ModalShell>
+  );
+}
+
+/**
+ * 图集 / 条目取不出来:照后端那句说为什么(没授权、插件报错、连不上原站……)。此前一律只说「没有加载出来,请重试」,
+ * 而最常见的原因 —— 连接还没授予联网权限 —— 重试一百次也一样。
+ */
+function LibraryFailure({ error }: { error: unknown }) {
+  const t = useI18n();
+  const fields = rawFailureFields(errorText(error), t("referenceLibraryFailed"));
+  return (
+    <FailureCard status="failed" title={t("referenceLibraryFailed")} summary={fields.summary} detail={fields.detail} copyText={fields.copyText} />
   );
 }
 
@@ -216,19 +243,9 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
     return () => scroller.removeEventListener("scroll", update);
   }, [connections.data?.length]);
 
-  if (connections.isPending) return <Skeleton className="h-48 w-full" />;
-  if (connections.isError) return <EmptyState icon={<ImageOff />} title={t("referenceLibraryFailed")} />;
-  if (!connections.data?.length) {
-    //: PoseAtlas 随应用内置(ADR 0091 §7),但它有配置、要联网权限,不会自动建连接 —— 空态直接指到插件页去接一下。
-    return (
-      <EmptyState
-        icon={<Sparkles />}
-        title={t("referenceLibraryNone")}
-        body={t("referenceLibraryNoneHint")}
-        action={<Button asChild><a href="#/plugins"><Plug />{t("capabilityGoPlugins")}</a></Button>}
-      />
-    );
-  }
+  //: 「有没有参考库」由资产页判(EntitiesView:一个连接都没有、或连接列表取不出来,参考库整块不出现),
+  //: 走到这里连接列表一定有 —— 不在这里另画一个空态。
+  if (!connections.data) return <Skeleton className="h-48 w-full" />;
 
   const rows = items.data?.pages.flatMap((page) => page.items) ?? [];
   return (
@@ -281,7 +298,7 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
         </div>
       </div>
 
-      {collections.isError && <EmptyState icon={<ImageOff />} title={t("referenceLibraryFailed")} />}
+      {collections.isError && <LibraryFailure error={collections.error} />}
 
       {/* 取失败时上面那一条已经说了;这里只管「取到了,但一本图集都没有」—— 一屏只说一次。 */}
       {collections.isSuccess && !activeCollection && (
@@ -293,7 +310,7 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
           {Array.from({ length: 12 }).map((_, index) => <Skeleton key={index} className="aspect-[3/4] w-full" />)}
         </div>
       ) : items.isError ? (
-        <EmptyState icon={<ImageOff />} title={t("referenceLibraryFailed")} />
+        <LibraryFailure error={items.error} />
       ) : rows.length === 0 ? (
         <EmptyState icon={<Search />} title={t("referenceLibraryNoItems")} />
       ) : (

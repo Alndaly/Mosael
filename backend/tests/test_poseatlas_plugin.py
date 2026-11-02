@@ -184,6 +184,17 @@ def test_取用下的是原站那一张_落在这次调用的暂存目录(plugin
     assert plugin.downloaded[-1] == plugin.BASE + "img/a_front.png"
 
 
+def test_取用按视角取_没有的视角报错(plugin, tmp_path: Path) -> None:
+    """「存为资产」宿主每个视角各问一次(`role`),「用作素材」问用户选中的那一个。"""
+    views = _call(plugin, "item", item_id="full_single_P001", collection="poses")["item"]["views"]
+    other = views[1]["role"]
+    output = _call(plugin, "fetch", item_id="full_single_P001", collection="poses", role=other)
+    assert output["artifact"] == {"path": f"full_single_P001_{other}.png"}
+    assert plugin.downloaded[-1] == views[1]["original"]
+    with pytest.raises(plugin.ToolError):
+        _call(plugin, "fetch", item_id="full_single_P001", collection="poses", role="no_such_view")
+
+
 def test_索引缓存一天_原站连不上时用旧的_一份都没有才报错(plugin, monkeypatch: pytest.MonkeyPatch) -> None:
     _call(plugin, "collections")
     fetched = len(plugin.downloaded)

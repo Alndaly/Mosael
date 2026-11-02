@@ -466,7 +466,7 @@
     {
       "id": "dev.mosael.poseatlas",
       "name": "PoseAtlas",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "summary": {
         "zh": "RuiC-PoseAtlas 的姿势图鉴(多机位人台线稿)与服装图鉴接进参考库:浏览、搜索,用到哪张取哪张。",
         "en": "RuiC-PoseAtlas pose atlas (multi-angle mannequin line art) and costume atlas in the reference library: browse, search, take one."

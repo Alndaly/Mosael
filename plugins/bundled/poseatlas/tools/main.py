@@ -294,11 +294,15 @@ def item(payload: dict[str, Any], locale: str) -> dict[str, Any]:
 
 
 def fetch(payload: dict[str, Any], locale: str) -> dict[str, Any]:
-    """把条目的第一张原图下到这次调用的暂存目录。宿主收走后登记成素材、写上出处。"""
+    """把条目里点名的那个视角(`role`,空 = 第一张)的原图下到这次调用的暂存目录。宿主收走后登记成素材、写上出处。
+    「存为资产」时宿主每个视角各问一次,按视角挂成参考图。"""
     found = _find(payload, locale)
     if not found["views"]:
         raise ToolError(_line(locale, "这一条没有图", "This entry has no image"))
-    view = found["views"][0]
+    role = str(payload.get("role") or "").strip()
+    view = next((one for one in found["views"] if one["role"] == role), None) if role else found["views"][0]
+    if view is None:
+        raise ToolError(_line(locale, f"这一条没有这个视角:{role}", f"This entry has no {role} view"))
     out_dir = Path(os.environ.get("MOSAEL_PLUGIN_OUTPUT_DIR") or ".")
     suffix = Path(view["original"]).suffix or ".png"
     target = out_dir / f"{found['id']}_{view['role']}{suffix}"

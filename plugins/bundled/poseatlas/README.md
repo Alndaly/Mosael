@@ -8,7 +8,8 @@ Brings the two atlases from [RuiC-PoseAtlas](https://hruiccc.github.io/RuiC-Pose
   with color, material and item tags.
 
 Browse and search it (Chinese, English and Japanese names and ids all match), then **Use as media** to take the original
-image into your workspace as media. **Save as asset** also creates a pose / costume asset you can `@` in a generation —
+image of the view selected in the details into your workspace as media. **Save as asset** takes **every view** and creates a
+pose / costume asset with each view attached by its angle, which you can `@` in a generation —
 a pose goes to the model as a *pose reference*, constraining only the body pose and composition.
 
 ## Provenance and license

@@ -29,9 +29,9 @@ MANIFEST = {
 }
 
 
-def _png() -> bytes:
+def _png(shade: int = 120) -> bytes:
     buffer = io.BytesIO()
-    Image.new("RGB", (48, 64), (120, 130, 140)).save(buffer, "PNG")
+    Image.new("RGB", (48, 64), (shade, 130, 140)).save(buffer, "PNG")
     return buffer.getvalue()
 
 
@@ -56,8 +56,8 @@ def _fake_tools(monkeypatch):
         "id": "P024", "collection": "poses", "kind": "pose",
         "name": {"zh": "抱膝坐", "en": "Knees to chest"},
         "tags": ["坐", "抱膝"], "thumbnail": "https://example.test/thumb.jpg",
-        "views": [{"role": "front", "thumbnail": "https://example.test/thumb.jpg",
-                   "original": "https://example.test/full.png"}],
+        "views": [{"role": role, "thumbnail": f"https://example.test/{role}.jpg", "original": f"https://example.test/{role}.png"}
+                  for role in ("front", "three_quarter", "high_angle")],
         "nsfw": False,
         "provenance": {"author": "作者", "url": "https://example.test/poses", "license": "仅供创作,禁止再分发"},
     }
@@ -80,7 +80,8 @@ def _fake_tools(monkeypatch):
             assert collect is not None
             with tempfile.TemporaryDirectory(prefix="ref-test-") as folder:
                 root = Path(folder)
-                (root / "item.png").write_bytes(_png())
+                #: 每个视角一张不同的图:取对了哪一张,从登记的素材上看得出来。
+                (root / "item.png").write_bytes(_png(10 + 40 * ["front", "three_quarter", "high_angle"].index(payload["role"] or "front")))
                 collect({"artifact": {"path": "item.png"}}, root)
             return {}
         raise AssertionError(op)
@@ -121,11 +122,75 @@ def test_用一条_登记素材并写下来源_可选存成姿势资产(monkeypa
         assert media.source == "reference_library"
         assert entity.kind == "pose" and entity.cover_asset_id == saved["asset_id"]
         from app.db.models import EntityReference
-        refs = db.scalars(select(EntityReference).where(EntityReference.entity_id == entity.id)).all()
-        assert [ref.asset_id for ref in refs] == [saved["asset_id"]]
+        refs = db.scalars(select(EntityReference).where(EntityReference.entity_id == entity.id)
+                          .order_by(EntityReference.position)).all()
+        #: 存成资产 = 每个视角各一张、按视角挂上:姿势按机位挑图,只挂一张正面的话斜侧、俯拍的镜头里发不出去。
+        assert [(ref.asset_id, ref.role) for ref in refs] == list(zip(saved["asset_ids"], ["front", "three_quarter", "high_angle"]))
+        assert len(set(saved["asset_ids"])) == 3
 
 
 def test_连接列表只列认领参考库且启用的连接(monkeypatch):
     client, _ws, _instance = _setup()
     rows = client.get("/api/reference-library/connections").json()
     assert [row["name"] for row in rows] == ["姿势图集"]
+
+
+def test_用作素材取详情里选中的那个视角_没有这个视角就说(monkeypatch):
+    from app.domain.reference_library import ReferenceLibraryError
+
+    _client, ws, instance = _setup()
+    seen = _fake_tools(monkeypatch)
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == "tester"))
+        used = reference_library.use(db, user, instance, workspace_id=ws, item_id="P024", collection="poses",
+                                     role="three_quarter")
+        assert [one["role"] for one in seen if one["op"] == "fetch"] == ["three_quarter"]
+        assert db.get(Asset, used["asset_id"]).media_info["external_source"]["role"] == "three_quarter"
+        try:
+            reference_library.use(db, user, instance, workspace_id=ws, item_id="P024", collection="poses", role="back")
+        except ReferenceLibraryError as exc:
+            assert exc.key == "referenceLibErr_noSuchView"
+        else:
+            raise AssertionError("没有的视角应当说清")
+
+
+def test_取进来的名字跟着请求方的语言(monkeypatch):
+    from app.core.i18n import set_current_locale
+
+    _client, ws, instance = _setup()
+    _fake_tools(monkeypatch)
+    set_current_locale("en")
+    try:
+        with SessionLocal() as db:
+            user = db.scalar(select(User).where(User.username == "tester"))
+            used = reference_library.use(db, user, instance, workspace_id=ws, item_id="P024", collection="poses")
+            assert db.get(Asset, used["asset_id"]).name.startswith("Knees to chest")
+    finally:
+        set_current_locale("zh")
+
+
+def test_智能体找参考_limit_是总数(monkeypatch):
+    _client, _ws, instance = _setup()
+    _fake_tools(monkeypatch)
+    monkeypatch.setattr(reference_library, "collections", lambda db, inst: [
+        {"id": "poses", "kind": "pose"}, {"id": "more", "kind": "pose"}])
+    with SessionLocal() as db:
+        found = reference_library.search_everywhere(db, instance.owner_user_id, limit=1)
+    assert len(found["items"]) == 1
+
+
+def test_插件交回的不是对象_照实说不炸(monkeypatch):
+    from app.domain.reference_library import ReferenceLibraryError
+
+    _client, _ws, instance = _setup()
+    monkeypatch.setattr(reference_library.tools, "invoke_host", lambda *args, **kwargs: ["not", "an", "object"])
+    with SessionLocal() as db:
+        for call in (lambda: reference_library.search(db, instance), lambda: reference_library.item(db, instance, item_id="x"),
+                     lambda: reference_library.collections(db, instance)):
+            try:
+                call()
+            except ReferenceLibraryError as exc:
+                assert exc.key == "referenceLibErr_badItem"
+            else:
+                raise AssertionError("插件交回的形状不对应当说清")
+

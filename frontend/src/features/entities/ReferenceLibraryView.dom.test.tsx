@@ -80,19 +80,23 @@ describe("参考库", () => {
     expect(screen.queryByText("three_quarter")).toBeNull();
   });
 
-  it("一个参考库都没接时,指到插件页去接随应用内置的 PoseAtlas", async () => {
-    api.listReferenceConnections.mockResolvedValue([]);
+  it("用作素材取选中的那个视角;存为资产不点名视角(每个视角各取一张)", async () => {
+    api.ingestReferenceItem.mockResolvedValue({ asset_id: "a1", asset_ids: ["a1"], entity_id: "" });
     renderView();
-
-    expect(await screen.findByText("referenceLibraryNone")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /capabilityGoPlugins/ }).getAttribute("href")).toBe("#/plugins");
+    fireEvent.click(await screen.findByText("后仰坐・单膝立起"));
+    const side = await screen.findByRole("radio", { name: /斜侧/ });
+    fireEvent.click(side);
+    expect((side as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /referenceLibraryUse/ }));
+    await waitFor(() => expect(api.ingestReferenceItem).toHaveBeenCalledWith("c1", expect.objectContaining({ role: "three_quarter", save_entity: false })));
   });
 
-  it("图集取不出来时只说一次,不再叠一句「没有匹配的条目」", async () => {
-    api.listReferenceCollections.mockRejectedValue(new Error("boom"));
+  it("图集取不出来时只说一次,并照实说为什么(不是一句「请重试」)", async () => {
+    api.listReferenceCollections.mockRejectedValue(new Error("「PoseAtlas」不可用:还没授予权限:network:github"));
     renderView();
 
     expect(await screen.findByText("referenceLibraryFailed")).toBeTruthy();
+    expect(screen.getByText(/还没授予权限:network:github/)).toBeTruthy();
     expect(screen.queryByText("referenceLibraryNoItems")).toBeNull();
   });
 

@@ -7,7 +7,7 @@
     "en": "RuiC-PoseAtlas pose atlas (multi-angle mannequin line art) and costume atlas in the reference library: browse, search, take one."
   },
   "default_locale": "zh",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homepage": "https://hruiccc.github.io/RuiC-PoseAtlas/",
   "author": {
     "name": "Mosael",

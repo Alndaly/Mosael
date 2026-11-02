@@ -32,6 +32,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "“{name}” has no reference library: its plugin does not provide reference_library",
     },
     "referenceLibErr_badFilters": {"zh": "筛选条件格式不对", "en": "The filter format is invalid."},
+    "referenceLibErr_noSuchView": {"zh": "这一条没有这个视角:{role}", "en": "This entry has no {role} view."},
     "referenceLibErr_badItem": {"zh": "插件交回的条目形状不对,或取回来的不是图片", "en": "The plugin returned an invalid item, or the fetched file is not an image."},
     "referenceLibErr_fetchFailed": {"zh": "参考库没有交回原图", "en": "The reference library did not return the original image."},
     "pluginErr_notFound": {
