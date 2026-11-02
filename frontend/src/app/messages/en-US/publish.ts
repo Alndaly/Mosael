@@ -178,6 +178,8 @@ export const publish = {
   boardSourceFull: "Full",
   boardMentionNotSent: "{n} prompt reference(s) won't be sent",
   boardMentionNotSentHint: "Materials in the slots above take priority when the model's inputs are full. Skipped: {names}. Remove one, or pick a model that accepts them.",
+  boardEntityImageNotSent: "Reference images for {n} asset(s) won't be sent",
+  boardEntityImageNotSentHint: "Their prompt descriptions still go into the prompt, but there is no room for their reference images: {names}. Remove a slot material or pick another model.",
   boardRemove: "Remove",
   boardPreviewSource: "Preview {name}",
   boardWithSound: "With sound",

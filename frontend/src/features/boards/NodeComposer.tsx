@@ -867,6 +867,20 @@ export function NodeComposer({
   const omittedMentionNames = omittedMentions
     .map((id) => referenced.byId.get(id)?.name ?? id)
     .join(t("listSeparator"));
+  //: 正文 @ 的资产自己带的参考图也可能没名额(提示词描述仍会发)。人数按资产算,不按图片张数。
+  const entityImagesNotSent = React.useMemo(() => {
+    const known = new Map((mentionable.data ?? []).map((one) => [one.id, one]));
+    const used = new Map<string, number>();
+    for (const source of outgoingSources) used.set(source.role, (used.get(source.role) ?? 0) + 1);
+    return mentionedEntities.flatMap((id) => {
+      const entity = known.get(id);
+      if (!entity || entity.reference_count <= 0) return [];
+      const role = entity.kind === "pose" && !pose.as_reference ? "pose_reference" : "reference_image";
+      const slot = slots.find((one) => one.role === role);
+      return slot && (used.get(role) ?? 0) < slot.limit ? [] : [entity.name];
+    });
+  }, [mentionedEntities, mentionable.data, outgoingSources, pose.as_reference, slots]);
+  const entityImageNames = entityImagesNotSent.join(t("listSeparator"));
   const needsDigitalHumanConsent = outgoingSources.some((one) => one.role === "driving_audio");
   //: 「生成」为什么点不了(文案 key);null = 点得了。按钮的 disabled 和悬停说明都只看它。
   const sendBlocker: MessageKey | null = !current
@@ -971,7 +985,7 @@ export function NodeComposer({
 
   //: 上面那一排:连进来的资产、挂上的参考素材(按模型声明出的槽)和连进来的文档。
   const upstreamChips =
-    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene || unused.length || omittedMentions.length ? (
+    slots.length > 0 || upstreamDocuments?.length || linkedEntities.length || upstreamScene || unused.length || omittedMentions.length || entityImagesNotSent.length ? (
       <>
         {unused.map(({ kind, elsewhere }) => (
           <span
@@ -992,6 +1006,18 @@ export function NodeComposer({
             >
               <TriangleAlert size={12} className="shrink-0" aria-hidden />
               {t("boardMentionNotSent").replace("{n}", String(omittedMentions.length))}
+            </span>
+          </Hint>
+        )}
+        {entityImagesNotSent.length > 0 && (
+          <Hint label={t("boardEntityImageNotSentHint").replace("{names}", entityImageNames)}>
+            <span
+              role="status"
+              data-entity-image-not-sent=""
+              className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-md bg-warning/10 px-2 py-1 text-ui-xs leading-snug text-warning"
+            >
+              <TriangleAlert size={12} className="shrink-0" aria-hidden />
+              {t("boardEntityImageNotSent").replace("{n}", String(entityImagesNotSent.length))}
             </span>
           </Hint>
         )}

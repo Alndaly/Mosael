@@ -21,7 +21,10 @@ vi.mock("@tanstack/react-query", async () => ({
     if (queryKey[0] === "entity-catalog") {
       return { data: { roles: [{ role: "side", label: "侧面" }], shot_angles: ["side"], kinds: [], roles_by_kind: {} } };
     }
-    if (queryKey[0] === "entities") return { data: [{ id: "pose-1", kind: "pose", name: "坐姿" }, { id: "zhang", kind: "character", name: "张三" }] };
+    if (queryKey[0] === "entities") return { data: [
+      { id: "pose-1", kind: "pose", name: "坐姿", reference_count: 1 },
+      { id: "zhang", kind: "character", name: "张三", reference_count: 1 },
+    ] };
     return { data: [] };
   },
   useQueries: ({ combine }: { combine: (results: unknown[]) => unknown }) => combine([]),
@@ -77,6 +80,16 @@ it("正文引用装不进模型的槽位时,在引用块里提示哪些不会发
   const warning = document.querySelector("[data-mention-not-sent]");
   expect(warning).not.toBeNull();
   expect(warning?.textContent).toContain("boardMentionNotSent");
+});
+
+it("资产参考图没有名额时,在引用块里提示描述仍会发送", () => {
+  mount(["reference_image"], {
+    source_assets: [{ asset_id: "img1", role: "reference_image" }],
+    mentioned_entity_ids: ["zhang"],
+  });
+  const warning = document.querySelector("[data-entity-image-not-sent]");
+  expect(warning).not.toBeNull();
+  expect(warning?.textContent).toContain("boardEntityImageNotSent");
 });
 
 it("模型不收姿势参考:不摆机位;「按普通参考图发送」只挂在姿势那条引用里,勾上后发出去的是 as_reference", () => {
