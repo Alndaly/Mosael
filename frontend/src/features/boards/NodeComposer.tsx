@@ -1,5 +1,6 @@
 import type { NoteReference } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
+import { isImeKeystroke } from "@/lib/shortcuts";
 import React from "react";
 
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
@@ -1127,6 +1128,7 @@ export function NodeComposer({
                 aria-label={entityDisplayName(entity)}
                 onClick={() => setPreviewEntity(entity)}
                 onKeyDown={(event) => {
+                  if (isImeKeystroke(event)) return;
                   if (event.key !== "Enter" && event.key !== " ") return;
                   event.preventDefault();
                   setPreviewEntity(entity);

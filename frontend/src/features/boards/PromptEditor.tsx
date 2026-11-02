@@ -16,6 +16,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 
 import { assetThumbnailUrl, type Asset, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { EntityChipDecorContext, NO_DECOR, type EntityChipDecor } from "@/features/boards/entityChipDecor";
 import { Truncate } from "@/components/ui/truncate";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import type { MessageKey } from "@/app/messages";
@@ -179,21 +180,6 @@ const AssetChip = Node.create({
       </NodeViewWrapper>
     )),
 });
-
-/**
- * 正文里资产 chip 的「装饰」:由用这个编辑器的那一格决定,和 AI Studio 引用小条(`entityMentionChips`)同一套 ——
- * `onOpen` 点小条看预览,`accessory` 挂在名字后面的那颗小控件(姿势引用的「按普通参考图发送」)。
- *
- * 走 context 而不是节点属性:它们是这一格此刻的状态(模型收不收姿势、勾没勾),不是文档内容,
- * 不该存进 TipTap JSON。节点视图经 portal 渲染在 EditorContent 底下,读得到外面这层 context。
- */
-export interface EntityChipDecor {
-  onOpen?: (entityId: string) => void;
-  /** 只挂在这个资产在正文里**第一次**出现的那条上:同一个姿势 `@` 两次,开关也只有一档。 */
-  accessory?: (entityId: string) => React.ReactNode;
-}
-const NO_DECOR: EntityChipDecor = {};
-const EntityChipDecorContext = React.createContext<EntityChipDecor>(NO_DECOR);
 
 /** 正文里第一个指向 `entityId` 的 chip 在哪。 */
 function firstChipAt(editor: Editor, entityId: string): number | null {
