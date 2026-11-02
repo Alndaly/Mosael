@@ -103,9 +103,9 @@ export function entityMentionChips(
       id: `entity-${one.id}`,
       label: `@${entityDisplayName(one)}`,
       thumbnail: one.cover_asset_id ? assetThumbnailUrl(one.cover_asset_id) : undefined,
-      icon: <Icon size={11} />,
+      icon: <Icon size={14} />,
       accessory: index === firstPose && options?.pose ? (
-        <PoseReferenceToggle checked={options.pose.checked} supported={options.pose.supported} onChange={options.pose.onChange} />
+        <PoseReferenceToggle checked={options.pose.checked} supported={options.pose.supported} onChange={options.pose.onChange} compact />
       ) : undefined,
       onOpen: options?.onPreview ? () => options.onPreview!(one) : undefined,
       warning: options?.warning?.(one) ?? null,
