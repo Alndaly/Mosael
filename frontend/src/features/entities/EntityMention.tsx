@@ -112,24 +112,27 @@ export function entityMentionChips(
 }
 
 /** 姿势引用的小勾选:勾上就把姿势图当普通参考图发。悬停说明由 Hint 给。AI Studio 和画板都挂在第一条姿势引用的小条里。 */
-export function PoseReferenceToggle({ checked, supported, onChange, className }: {
+export function PoseReferenceToggle({ checked, supported, onChange, className, compact = false }: {
   checked: boolean;
   supported: boolean;
   onChange: (checked: boolean) => void;
   /** 外边距由所在的小条定:AI Studio 后面还跟着一颗 ×,画板正文里的小条到它就收尾了。 */
   className?: string;
+  /** 画板正文的小条更窄,和旁边的警告圆点同尺寸。 */
+  compact?: boolean;
 }) {
   const t = useI18n();
   return (
     <Hint label={t("genPoseAsReference")} hint={supported ? t("genPoseAsReferenceHint") : t("genPoseReferenceUnsupported")}>
-      <span className={cn("relative ml-1 mr-2 grid size-4 shrink-0 place-items-center", className)}>
+      <span className={cn("relative ml-1 mr-2 grid shrink-0 place-items-center", compact ? "size-3.5" : "size-4", className)}>
         <Checkbox
           checked={checked}
           onCheckedChange={(value) => onChange(value === true)}
           aria-label={t("genPoseAsReference")}
           data-pose-reference-toggle=""
           className={cn(
-            "size-4 rounded-full bg-transparent",
+            "rounded-full bg-transparent",
+            compact ? "size-3.5 [&_svg]:size-2.5" : "size-4",
             supported
               ? "border-border-strong data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
               : "border-transparent bg-transparent hover:border-warning/50 data-[state=checked]:border-warning data-[state=checked]:bg-warning/15 data-[state=checked]:text-warning",

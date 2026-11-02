@@ -964,7 +964,8 @@ export function NodeComposer({
       checked={Boolean(pose.as_reference)}
       supported={poseSupported}
       onChange={(as_reference) => setPose({ ...pose, as_reference })}
-      className="mr-0"
+      className="ml-0 mr-0"
+      compact
     />
   );
   const [previewEntity, setPreviewEntity] = React.useState<EntitySummary | null>(null);
