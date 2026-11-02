@@ -8,8 +8,12 @@
 - `fetch` —— 把用户点中的那一张原图下载到插件暂存目录,宿主收走并登记成素材。
 
 **宿主不镜像、不打包、不替插件缓存原图**:浏览只加载插件给的缩略图地址;取用是单条、由人发起,
-登记进工作区时把出处一起写进素材的 `media_info`。分享包和 MosaelCloud 同步永远不带这些素材
-(姿势 / 服装目前不在 `mosael.asset/1` 的 KINDS 里;以后加也要先看 `external_source`)。
+登记进工作区时把出处一起写进素材的 `media_info.external_source`。
+
+**这些素材不随分享 / 同步分发**(ADR 0091 §3)。今天没有代码守这道边界,因为也没有一条会带素材文件出去的路:
+画板文件只有画布结构(`boardTransfer.ts`)、资产分享包 `mosael.asset/1` 在应用侧没有实现、MosaelCloud
+不同步素材。**哪天加了这样一条路,由它读 `external_source` 并拒掉带出处的素材** —— 这是写那条路的人的
+验收条件,不是这里能预先做的。
 """
 
 from __future__ import annotations
@@ -343,7 +347,7 @@ def _fetch_view(db: Session, instance: PluginInstance, found: dict[str, Any], ro
         if asset.kind != "image":
             delete_asset(db, asset)
             raise ReferenceLibraryError("referenceLibErr_badItem")
-        #: 出处就是边界:这个键在分享包 / 云同步里都要被看见(ADR 0091 §3)。
+        #: 出处就是边界:将来任何把素材文件带出工作区的路都按这个键拒(见模块说明,ADR 0091 §3)。
         patch_media_info(db, asset.id, {"external_source": {
             "library": "reference_library", "instance_id": instance.id, "item_id": found["id"], "role": role,
             "collection": found["collection"], "title": found["name"], **found["provenance"],
