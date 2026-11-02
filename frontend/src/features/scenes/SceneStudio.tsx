@@ -22,6 +22,7 @@ import { lightingPrompt, presetById } from "./lighting";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
+import { SceneModelLibrary } from "./SceneModelLibrary";
 import { SceneObjectTree } from "./SceneObjectTree";
 import { moveObject, siblingsOf, type DropZone } from "./sceneDrag";
 import { SceneCameraPanel } from "./SceneCameraPanel";
@@ -51,6 +52,7 @@ import {
   HelpCircle,
   History,
   Image as ImageIcon,
+  Library,
   Loader2,
   Magnet,
   Maximize,
@@ -371,6 +373,7 @@ function SceneEditor({
     queryKey: ["scene-models", initial.workspace_id],
     queryFn: () => listSceneModels(initial.workspace_id),
   });
+  const [modelLibrary, setModelLibrary] = React.useState(false);
   const addOptions = React.useMemo(
     () => [
       ...ADD_OPTIONS.map((option) => ({
@@ -398,6 +401,10 @@ function SceneEditor({
     })),
     current = React.useRef(draft);
   current.current = draft;
+  const modelsInDraft = React.useMemo(
+    () => new Set(draft.content.objects.flatMap((o) => (o.model_id ? [o.model_id] : []))),
+    [draft.content.objects],
+  );
   //: 顶栏的路径:3D 场景 / 这一个(点名字改名,点「3D 场景」回清单)。
   usePageTrail({ onRoot: onBack, segments: [{ label: draft.name, onRename: () => setRenaming(true), renameLabel: t("sceneRenameTitle") }] });
   /** 有孩子的那些物体(组,以及任何被当成父级用的东西)—— 一键收拢要作用在它们身上。 */
@@ -967,6 +974,13 @@ function SceneEditor({
       className="scene-studio"
       data-screen-mode={fullscreen.active ? "editor" : undefined}
     >
+      <SceneModelLibrary
+        workspaceId={initial.workspace_id}
+        models={sceneModels.data ?? []}
+        inDraft={modelsInDraft}
+        open={modelLibrary}
+        onOpenChange={setModelLibrary}
+      />
       <RenameDialog open={renaming} title={t("sceneRenameTitle")} initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
       <header className="scene-header">
         {/* 「回清单 · 这是哪一个」在顶栏的路径里(3D 场景 / 片场,点名字改名,见 components/layout/pageTrail);
@@ -1561,6 +1575,12 @@ function SceneEditor({
                         onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groupIds))}
                       >
                         {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
+                      </IconButton>
+                    )}
+                    {/* 导入过的模型在「添加」里能摆、在这里能删(还有场景摆着就不让删)。一份都没有时不出现。 */}
+                    {!!sceneModels.data?.length && (
+                      <IconButton variant="ghost" size="icon-sm" label={t("sceneModelLibrary")} onClick={() => setModelLibrary(true)}>
+                        <Library size={15} />
                       </IconButton>
                     )}
                     {/* 用 SearchableSelect 而不是手写弹层:物体种类只会越来越多,而手写那个

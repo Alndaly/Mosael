@@ -104,6 +104,8 @@ schema 里的 `kind: "model"` + `model_id` 才有东西可填(见 `templates.SET
 
 导入的 3D 模型是**工作区级的素材**,不属于某个场景:`POST /api/scene-models` 传,
 `GET /api/scene-models` 列,`DELETE` 删(**还有场景摆着它就不让删**,并说出是哪几个)。
+界面上的入口是物体面板顶部的「模型库」(`SceneModelLibrary`,导入过模型才出现):一行一份,在那里删;
+后端拒了就照实弹出原因。眼前这个场景还没保存的改动里摆着的那份直接不给删 —— 后端只看得见已保存的场景。
 删场景不删模型;删工作区才连文件一起清(`delete_workspace_model_files`,和字体、LUT 同一套)。
 
 此前它挂在 `scene_id` 上,于是同一件道具每个场景都要重新导一份,而**工作流每跑一次都新建
