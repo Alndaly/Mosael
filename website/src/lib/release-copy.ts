@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.4.2": {
+    zh: [
+      "**引用图片发不发，生成前就告诉你。** AI Studio 与画板的 `@资产` / `@素材` 小条会在参考图没名额、只发一部分、模型不支持姿势参考时直接标出原因；点小条还能先看素材预览。",
+      "**参考图名额按真实顺序分配。** 多个资产共用一张参考图时，按正文先后轮流占名额，不再把后一个资产误报成还能发；封面已作为素材发送时也不会重复警告。",
+      "**参考库与 3D 场景补完。** 没接参考库时也能从资产页进入并看到插件入口；「存为资产」按每个视角各取一张；导入的 3D 模型现在能在场景里找到并删除。",
+    ],
+    en: [
+      "**Know before generating whether a reference will be sent.** @asset and @media chips in AI Studio and boards now explain when a reference has no slot, will only be partly sent, or the model has no pose-reference input; clicking a chip also previews it.",
+      "**Reference slots follow the real order.** When several assets share one reference image, they take turns in prompt order, so a later asset is no longer wrongly reported as still having room; a cover already sent as media no longer triggers a duplicate warning.",
+      "**Reference library and 3D scenes filled in.** Without a reference library connected, the Assets page still exposes the plugin entry; “Save as asset” fetches every view; imported 3D models can now be found and deleted from a scene.",
+    ],
+  },
   "v2.4.1": {
     zh: [
       "**资产引用更好用。** `@资产` 小条里的「按普通参考图发送」收进姿势引用内部；模型不收姿势参考时换成琥珀警告图标，悬停说明风险。",
