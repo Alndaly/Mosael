@@ -137,6 +137,7 @@ function ItemDetail({
         <RadioGroup
           aria-label={t("referenceLibraryViews")}
           orientation="horizontal"
+          indicator="corner"
           value={role || null}
           onValueChange={setChosenRole}
           options={shown.views.map((view) => ({

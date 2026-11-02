@@ -23,6 +23,7 @@ export function RadioGroup<T extends string>({
   options,
   name,
   orientation = "vertical",
+  indicator = "inline",
   disabled = false,
   "aria-label": ariaLabel,
   "aria-labelledby": ariaLabelledBy,
@@ -34,6 +35,11 @@ export function RadioGroup<T extends string>({
   /** 同一组的名字(表单提交时用);不给就生成一个。 */
   name?: string
   orientation?: "vertical" | "horizontal"
+  /**
+   * 圆放在哪。`inline`:名字左边(默认)。`corner`:叠在选项内容的左上角里 —— 选项本身是一张图(参考图的几个视角)时用,
+   * 圆在图外会多占一列、和图隔着一道缝,看着像两件东西。
+   */
+  indicator?: "inline" | "corner"
   disabled?: boolean
   "aria-label"?: string
   "aria-labelledby"?: string
@@ -56,9 +62,17 @@ export function RadioGroup<T extends string>({
           <label
             key={option.value}
             data-radio-option={option.value}
-            className={cn("flex min-w-0 items-start gap-2.5", off ? "cursor-not-allowed opacity-50" : "cursor-pointer")}
+            className={cn(
+              indicator === "corner" ? "relative block min-w-0" : "flex min-w-0 items-start gap-2.5",
+              off ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+            )}
           >
-            <span className="relative mt-0.5 grid size-4 shrink-0 place-items-center">
+            <span
+              className={cn(
+                "grid size-4 shrink-0 place-items-center",
+                indicator === "corner" ? "absolute left-2 top-2 z-10" : "relative mt-0.5",
+              )}
+            >
               <input
                 type="radio"
                 name={group}
