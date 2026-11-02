@@ -29,7 +29,7 @@ When the user asks to build or publish a release, read [docs/RELEASING.md](docs/
 维护者反复提的一条:**同类页面里,同一个动作要出现在同一个位置、用同一个形状、写同一种措辞**。改一处之前先看同类页里其余几个是怎么做的:
 
 - **社区四个市场页**(`/community`、`/plugins`、`/workflows`、`/boards`):页头都走 `CommunityHeader` 的 `contribute`,右上角、胶囊形、和 `min-h-10` 同高;
-  - 能上传的类型写「**分享你的工作流 / 画布 / 作品**」,指向 `/community/upload`;
+  - 能上传的类型写「**分享你的工作流 / 画板 / 作品**」,指向 `/community/upload`;
   - **不能上传的(`/plugins`)指文档**是对的,措辞也随之不同(「写一个插件」)—— 那是另一件事,不是不一致;
 - **一屏只出现一处同一个动作**(例如「去上传」):页头给了,列表工具条和空态就只写文字指路,不再放第二颗按钮;
 - **按钮变体按语义挑**,不要凭手感:`default` 主作用、`outline` 并排的次要作用、`ghost` 工具栏/卡片角上、`inline` 挨着某个值的小动作(见 `components/ui/button.tsx` 的注释与 `frontend/src/design/` 下的棘轮);

@@ -175,9 +175,9 @@ test("③ 站头「社区」的匹配范围包含 /boards,页脚「社区」列�
 test("④ 一条画布都没有:一句人话 + 去上传,沿用现有空态样式", async () => {
   const zh = getMessages("zh").boards;
   const en = getMessages("en").boards;
-  assert.match(zh.empty, /还没有人分享画布/, "中文空态没有说清「还没有人分享画布」");
+  assert.match(zh.empty, /还没有人分享画板/, "中文空态没有说清「还没有人分享画板」");
   // 空态仍然要指路,但**不再自己放一颗按钮**(那会和页头那颗重复):它说的是"点右上角那颗"。
-  assert.match(zh.emptyHint, /右上角/, "中文空态没有指到页头那颗「分享你的画布」");
+  assert.match(zh.emptyHint, /右上角/, "中文空态没有指到页头那颗「分享你的画板」");
   assert.match(en.emptyHint, /top right/i, "英文空态没有指到页头那颗按钮");
   assert.ok(en.empty && en.emptyHint, "英文空态缺文案");
 
