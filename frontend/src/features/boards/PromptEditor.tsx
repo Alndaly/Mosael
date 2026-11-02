@@ -205,7 +205,7 @@ function AssetChipView({ node }: { node: { attrs: Record<string, unknown> } }) {
       <Truncate>{String(node.attrs.name ?? "")}</Truncate>
       {warning && (
         <Hint label={warning}>
-          <span data-asset-warning="" className="grid size-4 shrink-0 place-items-center self-center leading-none text-warning">
+          <span data-asset-warning="" className="grid size-3.5 shrink-0 place-items-center self-center leading-none text-warning">
             <CircleAlert size={14} aria-hidden />
           </span>
         </Hint>
@@ -263,7 +263,7 @@ function EntityChipView({ node, editor, getPos }: NodeViewProps) {
         <Truncate>{name}</Truncate>
         {warning && (
           <Hint label={warning}>
-            <span data-entity-warning="" className="grid size-4 shrink-0 place-items-center self-center leading-none text-warning">
+            <span data-entity-warning="" className="grid size-3.5 shrink-0 place-items-center self-center leading-none text-warning">
               <CircleAlert size={14} aria-hidden />
             </span>
           </Hint>

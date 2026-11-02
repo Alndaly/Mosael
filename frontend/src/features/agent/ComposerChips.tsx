@@ -72,7 +72,7 @@ export function ComposerChips({
               </button>
               {chip.warning && (
                 <Hint label={chip.warning}>
-                  <span data-composer-warning="" className="ml-1 grid size-4 shrink-0 place-items-center text-warning">
+                  <span data-composer-warning="" className="ml-1 grid size-3.5 shrink-0 place-items-center text-warning">
                     <CircleAlert size={14} aria-hidden />
                   </span>
                 </Hint>
