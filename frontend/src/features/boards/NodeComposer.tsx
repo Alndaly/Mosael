@@ -861,18 +861,22 @@ export function NodeComposer({
   //: 正文里 @ 到、但当前模型的槽位已经装不下的素材。它们不会被发出去,所以要在引用块里说一声,
   //: 不能等用户发完再猜为什么少了一张。
   const omittedMentions = React.useMemo(() => {
-    if (currentPromptMode === "none") return [];
+    //: 素材详情还在路上时，`mergeSourceAssets` 认不出类别，不能据此报“不会发送”—— 那会闪一下假警告。
+    if (currentPromptMode === "none" || !referenced.settled) return [];
     const sent = new Set(outgoingSources.map((one) => one.asset_id));
     return mentioned.filter((id) => !sent.has(id));
-  }, [currentPromptMode, mentioned, outgoingSources]);
+  }, [currentPromptMode, mentioned, outgoingSources, referenced.settled]);
   //: 正文 @ 的资产自己带的参考图也可能没名额(提示词描述仍会发)。人数按资产算,不按图片张数。
   const entityImagesNotSent = React.useMemo(() => {
     const known = new Map((mentionable.data ?? []).map((one) => [one.id, one]));
     const used = new Map<string, number>();
+    const sentIds = new Set(outgoingSources.map((one) => one.asset_id));
     for (const source of outgoingSources) used.set(source.role, (used.get(source.role) ?? 0) + 1);
     return mentionedEntities.flatMap((id) => {
       const entity = known.get(id);
       if (!entity || entity.reference_count <= 0) return [];
+      //: 资产封面已经作为正文素材发出去时，模型手里已经有这张图；不要再报“资产参考图没发送”。
+      if (entity.cover_asset_id && sentIds.has(entity.cover_asset_id)) return [];
       const role = entity.kind === "pose" && !pose.as_reference ? "pose_reference" : "reference_image";
       const slot = slots.find((one) => one.role === role);
       return slot && (used.get(role) ?? 0) < slot.limit ? [] : [{ id, name: entity.name }];
