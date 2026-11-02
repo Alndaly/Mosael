@@ -19,8 +19,8 @@
   髋 → 大腿 → 小腿 → 脚),姿势存在对象自己的 `pose`(`FigurePose`:关节名 → `[x, y, z]` 度,外加 `hips_drop`)。前端
   `mannequin/mannequinRig.ts` 与后端 `scenes/render/meshes.py` 是同一套关节和默认直立尺寸,由语料里 `parts=19` 的那几例钉住;
   摆好的姿势自然进白模参考帧。视口里点关节段切到关节旋转,检查器有五个预设(站 / 走 / 坐 / 蹲 / 举手)。
-- **镜头的机位**:`SceneShot.camera_angle` 取 `front / three_quarter / side / back / high_angle / low_angle` 或不标,
-  `scene_reference` 的回执带上它;生成时挂了姿势参考(`pose_reference`,ADR 0091)只发同机位的那张,不拿正面图冒充。
+- **镜头的机位**:`SceneShot.shot_angle`(词表见 `entities/shot_angles.py`)取 `front / three_quarter / side / back / high_angle /
+  low_angle` 或不标,`scene_reference` 的回执带上它;「按文字搭 3D 场景」的布景 schema 让模型逐镜标它(空串 = 不标);生成时挂了姿势参考(`pose_reference`,ADR 0091)只发同机位的那张,不拿正面图冒充。
 
 ## 同一份几何,三个消费者
 

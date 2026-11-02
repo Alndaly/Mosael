@@ -7,9 +7,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from pydantic import ValidationError
+
 from app.core.i18n import is_message_key
 from app.domain.boards.errors import BoardDomainError, _field_error
 from app.domain.boards.producer_ids import is_producer_id, missing_slot_producer
+from app.domain.entities.mentions import PoseUse
 from app.domain.markers import MarkerError, normalize_markers
 
 
@@ -166,6 +169,13 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
             raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="form.scene_reference")
         form["scene_reference"] = {"shot_id": str(reference.get("shot_id") or "").strip()[:128],
                                    "use": str(reference.get("use") or "composition")}
+    #: `@` 姿势怎么发(机位、是否当参考图):和生成表单(producers.GenerateForm.pose)同形,不对就拒。
+    pose = form.get("pose")
+    if pose is not None:
+        try:
+            form["pose"] = PoseUse.model_validate(pose).record()
+        except ValidationError as exc:
+            raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="form.pose") from exc
     trim = form.get("trim")
     if trim is not None:
         form["trim"] = _normalize_trim(trim, item_id)

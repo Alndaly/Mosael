@@ -171,6 +171,14 @@ ADR 0038 §9 已有的预览图设置(`show` / `blur` / `hidden`,`modelPreviewSe
   它有配置项(成人内容开关)又要联网权限,所以和 MinerU 一样**不自动建连接**,每个人在插件页接一次(授予 `network:github`)。
   参考库的空态因此改成直接指路:「随应用内置的 PoseAtlas 在插件页接一下就能用」,并带一颗去插件页的按钮。
 
+- **补齐每个生成入口(2026-11-02)**:审计发现姿势参考只在 AI Studio 接通了 —— 画板生成格、工作流「AI 生成素材」节点、
+  智能体 `generate_image` / `generate_video` 都不发机位,而漏斗没有机位就不挂姿势,这三处 `@` 姿势永远发不出去。
+  改为一个共同形状 `entities.mentions.PoseUse`(`shot_angle` + `as_reference`):生成接口的 `pose`、画板生成表单的 `pose`、
+  工作流节点的「这一镜的机位」「姿势当参考图发」、智能体工具的 `shot_angle` / `pose_as_reference` 交的都是它;
+  `create_generation_job` / `attach_entities` 只收这一样。「机位」词表收成 `entities.shot_angles` 一处,3D 场景镜头的字段改名
+  `shot_angle`(和故事板 schema 里摄影术语的 `camera_angle` 分开),「按文字搭 3D 场景」的布景 schema 也让模型逐镜标它;
+  老场景和老生成记录由迁移 `shot-angle-replaces-camera-angle` 改到新名字。回执里没发姿势的两种原因(没选机位、
+  这个姿势没有这一机位的图)补上了界面文案。
 - **第 6 步(2026-11-01)**:智能体两个工具,只发给接了参考库的人(`needs="reference_library"`)。
   `search_references`(只读):在这个人每个参考库、每本图集里找,返回名字、标签、机位、缩略图和出处;**标了成人内容的
   条目一条都不交给智能体**(循环在领域层 `reference_library.search_everywhere`,工具只是转一手)。

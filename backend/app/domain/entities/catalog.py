@@ -13,6 +13,7 @@ from typing import Any
 
 from app.db.references import split_ids
 from app.domain.consent import CONSENT_KINDS
+from app.domain.entities.shot_angles import SHOT_ANGLES
 from app.domain.voices.voice_ref import VoiceRef, VoiceRefInvalid
 
 #: 几种资产。人物 / 场景 / 道具是「一个有名字的东西」(ADR 0027);姿势 / 服装是「能套在任何人物身上的参考」
@@ -44,8 +45,8 @@ ROLES_BY_KIND: dict[str, tuple[str, ...]] = {
     "character": ("front", "side", "back", "turnaround", "closeup", "full_body", "expression", "concept", "detail"),
     "location": ("wide", "reverse", "overhead", "concept", "detail"),
     "prop": ("front", "side", "back", "turnaround", "closeup", "concept", "detail"),
-    #: 姿势的角度是**机位**:同一个体态从正面、斜侧、侧面、背面、俯拍、仰拍看(ADR 0091 §2)。
-    "pose": ("front", "three_quarter", "side", "back", "high_angle", "low_angle", "detail"),
+    #: 姿势的角度是**机位**:同一个体态从正面、斜侧、侧面、背面、俯拍、仰拍看(ADR 0091 §2,词表见 shot_angles)。
+    "pose": (*SHOT_ANGLES, "detail"),
     "costume": ("front", "back", "side", "detail", "concept"),
 }
 

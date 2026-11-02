@@ -32,6 +32,7 @@ from app.core.i18n import get_current_locale, t, render_message
 from app.db.models import Entity, Job
 from app.domain.entities import library as entities_library, catalog, use_cases
 from app.domain.consent import CONSENT_KINDS
+from app.domain.entities.shot_angles import SHOT_ANGLES
 from app.domain.entities.catalog import (
     ATTACH_PRIORITY,
     ATTRIBUTE_CHOICES,
@@ -124,6 +125,7 @@ def entity_catalog(db: DbSession, user: CurrentUser) -> dict[str, Any]:
             }
             for kind, fields in ATTRIBUTE_CHOICES.items()
         },
+        "shot_angles": list(SHOT_ANGLES),
     }
 
 

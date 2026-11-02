@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { messages, type MessageKey } from "@/app/messages";
 import { SceneCameraPanel } from "./SceneCameraPanel";
@@ -8,6 +9,15 @@ import { Num } from "./SceneControls";
 import { makeShot } from "./sceneGraph";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: MessageKey) => messages["zh-CN"][key] }));
+//: 机位的选项和名字读资产目录(后端 entities.shot_angles),这里给一份只有两档的,看它是不是照着列。
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/client")>()),
+  getEntityCatalog: vi.fn(async () => ({
+    kinds: [], consent_kinds: [], roles_by_kind: {}, attach_priority: {}, attributes: {}, default_role: {}, attribute_choices: {},
+    roles: [{ role: "front", label: "正面" }, { role: "high_angle", label: "俯拍" }],
+    shot_angles: ["front", "high_angle"],
+  })),
+}));
 afterEach(cleanup);
 const live = {
   position: [8, 3, 6] as [number, number, number],
@@ -32,7 +42,12 @@ function setup(preview = false) {
     observe: vi.fn(),
     camera: vi.fn(() => live),
   };
-  render(<SceneCameraPanel {...props} />);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <SceneCameraPanel {...props} />
+    </QueryClientProvider>,
+  );
   return props;
 }
 it("creates a push from the composition being edited, then shows the resulting shot", () => {
@@ -74,4 +89,14 @@ it("applying a view is a pose edit, separate from inserting animation keys", () 
   fireEvent.blur(field);
   expect(p.onPose).toHaveBeenCalledWith({ fov: 60 });
   expect(p.onRig).not.toHaveBeenCalled();
+});
+
+it("这一镜的机位照资产目录列、改了写进 shot_angle", async () => {
+  const p = setup();
+  const picker = screen.getByRole("combobox", { name: "这一镜的机位" });
+  fireEvent.click(picker);
+  const high = await screen.findByRole("option", { name: "俯拍" });
+  expect(screen.queryByRole("option", { name: "侧面" })).toBeNull();
+  fireEvent.click(high);
+  await waitFor(() => expect(p.onPatch).toHaveBeenCalledWith({ shot_angle: "high_angle" }));
 });

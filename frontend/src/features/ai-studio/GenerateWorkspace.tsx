@@ -40,6 +40,7 @@ import {
   retrieveGeneration,
   type Asset,
   type EntitySummary,
+  type ShotAngle,
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationOption,
@@ -60,11 +61,11 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { EntityMentionButton, entityMentionChips } from "@/features/entities/EntityMention";
+import { EntityMentionButton, ShotAngleSelect, entityMentionChips } from "@/features/entities/EntityMention";
 import { EntityPreviewDialog } from "@/features/entities/EntityPreviewDialog";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
-import { EntityReceiptNote, useCatalogLabels } from "@/features/entities/entityMeta";
+import { EntityReceiptNote } from "@/features/entities/entityMeta";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/app/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -410,10 +411,9 @@ export function GenerateWorkspace({
   const [previewEntity, setPreviewEntity] = React.useState<EntitySummary | null>(null);
   //: 姿势资产默认发 ``pose_reference``；模型不收时，用户必须明说才改成普通参考图(ADR 0091 §5)。
   const [poseMentionsAsReference, setPoseMentionsAsReference] = React.useState(false);
-  //: 这一镜的机位；空 = 自动按固定先后挑姿势参考图。
-  const [poseAngle, setPoseAngle] = React.useState("");
+  //: 这一镜的机位:姿势参考只发同机位的那张,不选(null)就不发(后端 entities.mentions.PoseUse)。
+  const [poseAngle, setPoseAngle] = React.useState<ShotAngle | null>(null);
   const hasPoseMention = mentionedEntities.some((one) => one.kind === "pose");
-  const entityLabels = useCatalogLabels(hasPoseMention);
   const [modelId, setModelId] = React.useState<string | null>(null);
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
   
@@ -852,8 +852,7 @@ export function GenerateWorkspace({
             (role) => supportsParameter(selectedModel, role),
           ),
           entity_ids: mentionedEntities.map((one) => one.id),
-          pose_mentions_role: poseMentionsAsReference ? "reference_image" : "pose_reference",
-          ...(poseAngle && !poseMentionsAsReference ? { pose_angle: poseAngle } : {}),
+          pose: { shot_angle: poseMentionsAsReference ? null : poseAngle, as_reference: poseMentionsAsReference },
           digital_human_consent: needsDigitalHumanConsent && digitalHumanConsent,
         }),
       });
@@ -863,7 +862,7 @@ export function GenerateWorkspace({
       setPrompt("");
       setMentionedEntities([]);
       setPoseMentionsAsReference(false);
-      setPoseAngle("");
+      setPoseAngle(null);
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
     },
@@ -1497,20 +1496,7 @@ export function GenerateWorkspace({
             )}
             {!voicedChoice && hasPoseMention && poseReferenceSupported && !poseMentionsAsReference && (
               <div className="grid gap-1 px-0.5 pb-1">
-                <label className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-                  {t("genPoseAngle")}
-                  <Select value={poseAngle || "auto"} onValueChange={(value) => setPoseAngle(value === "auto" ? "" : value)}>
-                    <SelectTrigger size="sm" className="w-fit min-w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">{t("genPoseAngleAuto")}</SelectItem>
-                      {(["front", "three_quarter", "side", "back", "high_angle", "low_angle"] as const).map((angle) => (
-                        <SelectItem key={angle} value={angle}>{entityLabels.role(angle)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
+                <ShotAngleSelect value={poseAngle} onChange={setPoseAngle} />
               </div>
             )}
             {/* 语音、播客:同一个输入卡,里面换成要念的字 / 播客的三档(ADR 0055) */}

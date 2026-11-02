@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.domain.entities.shot_angles import SHOT_ANGLES
 from app.domain.workflows.templates_models import VideoPlan
 
 
@@ -246,6 +247,9 @@ def _set_design_schema() -> dict[str, Any]:
         "aspect": {"type": "string", "enum": ["16:9", "9:16", "1:1"]},
         "easing": {"type": "string", "enum": ["smooth", "linear"]},
         "camera_id": {"type": "string"},
+        #: 这一镜的机位(entities.shot_angles):从主体哪个方向拍。生成时挂了姿势参考,只发同机位的那张;
+        #: 严格模式要每一格都在,说不清的写空字符串 = 不标(scene_from_text._canonical 当作没有)。
+        "shot_angle": {"type": "string", "enum": [*SHOT_ANGLES, ""]},
     }
     lighting = {
         "preset": {"type": "string", "enum": ["custom"]},

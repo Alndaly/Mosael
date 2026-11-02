@@ -14,6 +14,13 @@ export type EntityReference = components["schemas"]["EntityReferenceOut"];
 export type EntityCatalog = components["schemas"]["EntityCatalogOut"];
 export type EntityUsage = components["schemas"]["EntityUsageOut"];
 export type AssetEntity = Omit<components["schemas"]["AssetEntityOut"], "kind"> & { kind: EntityKind };
+/**
+ * `@` 到的姿势怎么发(后端 entities.mentions.PoseUse,ADR 0091 §5):这一镜的机位(姿势参考只发同机位那张,
+ * 不给就不发)、是否当普通参考图发。AI Studio、画板生成格、工作流节点、智能体交的都是这一个形状。
+ */
+export type PoseUse = components["schemas"]["PoseUse"];
+/** 「这一镜的机位」(后端 entities.shot_angles)。有哪几档读资产目录的 `shot_angles`,不在前端另抄。 */
+export type ShotAngle = NonNullable<PoseUse["shot_angle"]>;
 
 /** 一次生成里 `@` 到的一个资产挂了哪几张参考图(后端 domain/entities/mentions 的回执,存在 `request.entities`)。 */
 export interface EntityAttachReceipt {

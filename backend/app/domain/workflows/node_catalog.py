@@ -167,12 +167,16 @@ def translated_spec(key: str, spec: dict, locale: str) -> dict:
 #: 这些字段的选项是专业术语,原样显示比翻译清楚(HTTP 方法)。
 LITERAL_OPTION_FIELDS = frozenset({"method"})
 
+#: 选项名借用别处已有词表的字段:机位和参考图角度是同一份词(entities.shot_angles),名字也只有 `entityRole_*` 那一套。
+SHARED_OPTION_KEYS = {"shot_angle": "entityRole_{value}"}
+
 
 def option_label(field: str, value: str, locale: str) -> str:
     """下拉里这一项显示成什么。见 translated_spec 的说明。"""
     if field in LITERAL_OPTION_FIELDS:
         return value
-    for key in (f"wfOpt_{field}_{value}", f"wfOpt__{value}"):
+    shared = SHARED_OPTION_KEYS.get(field)
+    for key in ((shared.format(value=value),) if shared else ()) + (f"wfOpt_{field}_{value}", f"wfOpt__{value}"):
         if key in MESSAGES:
             return t(key, locale)
     return value

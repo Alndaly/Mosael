@@ -177,6 +177,8 @@ export const assetLibrary = {
   entityNote_subject_too_few: "building a subject needs at least two reference images",
   entityNote_prompt_skipped: "this model takes no prompt, so the prompt descriptor wasn't added",
   entityNote_pose_reference_unsupported: "this model doesn't accept pose references; choose “Send as a regular reference” to send the image anyway",
+  entityNote_pose_angle_required: "No shot angle chosen, so the pose reference wasn't sent",
+  entityNote_pose_angle_missing: "This pose has no reference image for this shot's angle, so it wasn't sent",
   entityReceiptLine: "@{name}: {attached} reference image(s) attached, {dropped} left out",
   entityReceiptTitle: "Some reference images were left out",
   assetEntitiesTitle: "Used by assets",

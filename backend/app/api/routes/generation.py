@@ -164,9 +164,9 @@ def optimize_prompt(body: PromptOptimizeRequest, db: Tx, user: CurrentUser) -> P
 
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
 def create_generation(body: GenerationCreate, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
-    fields = body.model_dump()
+    fields = body.model_dump(exclude={"pose"})
     try:
-        created, job = generation.generate(db, user, fields.pop("workspace_id"), origin=STUDIO_ORIGIN, **fields)
+        created, job = generation.generate(db, user, fields.pop("workspace_id"), origin=STUDIO_ORIGIN, pose=body.pose, **fields)
     except GenerationDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return GenerationCreateResponse(

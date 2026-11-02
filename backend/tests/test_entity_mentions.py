@@ -12,7 +12,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Entity, EntityReference
-from app.domain.entities.mentions import attach_entities
+from app.domain.entities.mentions import PoseUse, attach_entities
 from app.domain.generation_catalog.descriptors.video import (
     KLING_V3_OMNI_VIDEO_CAPABILITIES,
     SEEDANCE_2_VIDEO_CAPABILITIES,
@@ -46,11 +46,11 @@ def _entity(ws: str, name: str, prompt: str, refs: list[tuple[str, str]], *, par
 
 def _expand(ws: str, ids: list[str], capabilities: dict[str, Any] | None, *,
             sources: list[dict[str, str]] | None = None, kind: str = "image", parameters: dict | None = None,
-            pose_angle: str = ""):
+            shot_angle: str | None = None):
     with SessionLocal() as db:
         return attach_entities(db, ws, ids, source_assets=list(sources or []),
                                parameters=dict(parameters or {}), kind=kind, capabilities=capabilities,
-                               pose_angle=pose_angle)
+                               pose=PoseUse(shot_angle=shot_angle))
 
 
 def _attached(expansion) -> list[str]:
@@ -286,7 +286,7 @@ POSE_CAPS = {
 def test_姿势资产以_pose_reference_发送_不混进参考图(ws) -> None:
     zhang = _entity(ws, "张三", "", [("a-front", "front")])
     sitting = _entity(ws, "抱膝坐", "", [("b-front", "front"), ("b-sheet", "three_quarter")], kind="pose")
-    expansion = _expand(ws, [zhang, sitting], POSE_CAPS, pose_angle="front")
+    expansion = _expand(ws, [zhang, sitting], POSE_CAPS, shot_angle="front")
     entries = {(entry["asset_id"], entry["role"]) for entry in expansion.source_assets}
     assert ("a-front", "reference_image") in entries
     assert ("b-front", "pose_reference") in entries
@@ -296,7 +296,7 @@ def test_姿势资产以_pose_reference_发送_不混进参考图(ws) -> None:
 def test_姿势和参考图各用各的名额(ws) -> None:
     zhang = _entity(ws, "张三", "", [("a-sheet", "turnaround"), ("a-front", "front"), ("a-body", "full_body")])
     sitting = _entity(ws, "坐姿", "", [("b-front", "front"), ("b-sheet", "front"), ("c-front", "side")], kind="pose")
-    expansion = _expand(ws, [zhang, sitting], POSE_CAPS, pose_angle="front")
+    expansion = _expand(ws, [zhang, sitting], POSE_CAPS, shot_angle="front")
     attached = [entry for entry in expansion.source_assets if entry["role"] in ("reference_image", "pose_reference")]
     assert [one["asset_id"] for one in attached if one["role"] == "reference_image"] == ["a-sheet", "a-front", "a-body"]
     assert [one["asset_id"] for one in attached if one["role"] == "pose_reference"] == ["b-front", "b-sheet"]
@@ -305,7 +305,7 @@ def test_姿势和参考图各用各的名额(ws) -> None:
 
 def test_模型不收姿势参考_不悄悄降级(ws) -> None:
     sitting = _entity(ws, "坐姿", "", [("b-front", "front")], kind="pose")
-    expansion = _expand(ws, [sitting], OPENAI_IMAGE_CAPABILITIES, pose_angle="front")
+    expansion = _expand(ws, [sitting], OPENAI_IMAGE_CAPABILITIES, shot_angle="front")
     assert expansion.source_assets == []
     assert expansion.receipt[0]["notes"] == ["pose_reference_unsupported"]
 
@@ -317,7 +317,7 @@ def test_用户明说改成参考图才降级(ws) -> None:
             db, ws, [sitting],
             source_assets=[], parameters={}, kind="image",
             capabilities=OPENAI_IMAGE_CAPABILITIES,
-            pose_role="reference_image",
+            pose=PoseUse(as_reference=True),
         )
     assert expansion.source_assets == [{"asset_id": "b-front", "role": "reference_image"}]
     assert expansion.receipt[0]["notes"] == []
@@ -335,28 +335,22 @@ def test_自定义参数组可以声明姿势参考() -> None:
     assert "pose_reference" not in canonical_parameters("audio")
 
 
-def test_生成接口接受姿势参考角色与显式降级开关() -> None:
+def test_生成接口收的是同一个姿势形状() -> None:
     from pydantic import ValidationError
 
     from app.api.schemas import GenerationCreate, SourceAssetRef
 
     assert SourceAssetRef(asset_id="p", role="pose_reference").role == "pose_reference"
-    body = GenerationCreate(
-        workspace_id="w", provider="comfyui", model="x", kind="image",
-        pose_mentions_role="reference_image",
-    )
-    assert body.pose_mentions_role == "reference_image"
-    assert GenerationCreate(
-        workspace_id="w", provider="comfyui", model="x", kind="image",
-    ).pose_mentions_role == "pose_reference"
+    body = GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
+                            pose={"shot_angle": "high_angle", "as_reference": True})
+    assert body.pose == PoseUse(shot_angle="high_angle", as_reference=True)
+    assert GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image").pose == PoseUse()
     with pytest.raises(ValidationError):
-        GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
-                         pose_mentions_role="whatever")
-    assert GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
-                            pose_angle="high_angle").pose_angle == "high_angle"
+        GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image", pose={"shot_angle": "from_above"})
     with pytest.raises(ValidationError):
-        GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image",
-                         pose_angle="from_above")
+        GenerationCreate(workspace_id="w", provider="comfyui", model="x", kind="image", pose={"role": "whatever"})
+    #: 生成记录只留不是缺省的那几项。
+    assert PoseUse().record() == {} and PoseUse(shot_angle="side").record() == {"shot_angle": "side"}
 
 
 def test_这一镜机位决定先挑哪张姿势图(ws) -> None:
@@ -366,13 +360,13 @@ def test_这一镜机位决定先挑哪张姿势图(ws) -> None:
         kind="pose",
     )
     three = {**POSE_CAPS, "source_limits": {**POSE_CAPS["source_limits"], "pose_reference": 3}}
-    high = _expand(ws, [sitting], three, pose_angle="high_angle")
+    high = _expand(ws, [sitting], three, shot_angle="high_angle")
     assert [entry["asset_id"] for entry in high.source_assets if entry["role"] == "pose_reference"] == ["c-front"]
     # 没给机位 = 一张都不挂，不再拿正面图冒充。
     default = _expand(ws, [sitting], POSE_CAPS)
     assert not [entry for entry in default.source_assets if entry["role"] == "pose_reference"]
     assert default.receipt[0]["notes"] == ["pose_angle_required"]
     # 这个姿势没有该机位的图时不拿别的角度顶上。
-    missing = _expand(ws, [sitting], POSE_CAPS, pose_angle="low_angle")
+    missing = _expand(ws, [sitting], POSE_CAPS, shot_angle="low_angle")
     assert not [entry for entry in missing.source_assets if entry["role"] == "pose_reference"]
     assert missing.receipt[0]["notes"] == ["pose_angle_missing"]

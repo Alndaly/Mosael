@@ -2,11 +2,12 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AtSign, CircleAlert } from "lucide-react";
 
-import { assetThumbnailUrl, entityKeys, listEntities, type EntitySummary } from "@/api/client";
+import { assetThumbnailUrl, entityKeys, listEntities, type EntitySummary, type ShotAngle } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Truncate } from "@/components/ui/truncate";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Hint } from "@/components/ui/tooltip";
@@ -110,8 +111,8 @@ export function entityMentionChips(
   });
 }
 
-/** 姿势引用里的小勾选:勾上就把这张姿势图当普通参考图发。悬停说明由 Hint 给。 */
-function PoseReferenceToggle({ checked, supported, onChange }: { checked: boolean; supported: boolean; onChange: (checked: boolean) => void }) {
+/** 姿势引用的小勾选:勾上就把姿势图当普通参考图发。悬停说明由 Hint 给。AI Studio 挂在引用小条里,画板挂在机位旁边。 */
+export function PoseReferenceToggle({ checked, supported, onChange }: { checked: boolean; supported: boolean; onChange: (checked: boolean) => void }) {
   const t = useI18n();
   return (
     <Hint label={t("genPoseAsReference")} hint={supported ? t("genPoseAsReferenceHint") : t("genPoseReferenceUnsupported")}>
@@ -131,6 +132,34 @@ function PoseReferenceToggle({ checked, supported, onChange }: { checked: boolea
         {!supported && !checked && <CircleAlert size={14} aria-hidden className="pointer-events-none absolute text-warning" />}
       </span>
     </Hint>
+  );
+}
+
+//: Radix 的 Select 不收空串当值:「不选」用一个哨兵。
+const NO_ANGLE = "none";
+
+/**
+ * 「这一镜的机位」下拉:`@` 了姿势时摆出来,姿势参考只发同机位的那张、不选就不发(后端 entities.mentions.PoseUse)。
+ * 选项来自资产目录的 `shot_angles`,名字和参考图角度共用一份 —— AI Studio 和画板的生成格是同一个控件。
+ */
+export function ShotAngleSelect({ value, onChange }: { value: ShotAngle | null | undefined; onChange: (next: ShotAngle | null) => void }) {
+  const t = useI18n();
+  const labels = useCatalogLabels();
+  return (
+    <label className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
+      {t("genPoseAngle")}
+      <Select value={value ?? NO_ANGLE} onValueChange={(next) => onChange(next === NO_ANGLE ? null : (next as ShotAngle))}>
+        <SelectTrigger size="sm" className="w-fit min-w-24" data-shot-angle="">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_ANGLE}>{t("genPoseAngleNone")}</SelectItem>
+          {labels.shotAngles.map((one) => (
+            <SelectItem key={one.value} value={one.value}>{one.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </label>
   );
 }
 

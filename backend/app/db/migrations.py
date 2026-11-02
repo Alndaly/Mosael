@@ -660,6 +660,77 @@ def _migrate_speech_records_store_a_voice_ref() -> None:
                              {"parameters": json.dumps(parameters, ensure_ascii=False), "job": job_id})
 
 
+def _shots_use_shot_angle(content: Any) -> bool:
+    """场景内容里每个镜头的 `camera_angle` 改名 `shot_angle`(就地改)。改了返回 True。"""
+    changed = False
+    shots = content.get("shots") if isinstance(content, dict) else None
+    for shot in shots if isinstance(shots, list) else []:
+        if isinstance(shot, dict) and "camera_angle" in shot:
+            angle = shot.pop("camera_angle")
+            if angle and not shot.get("shot_angle"):
+                shot["shot_angle"] = angle
+            changed = True
+    return changed
+
+
+def _migrate_shot_angle_replaces_camera_angle() -> None:
+    """「这一镜的机位」统一叫 `shot_angle`(entities.shot_angles,ADR 0091):
+
+    - 3D 场景的镜头(`scenes_3d.content`、`scene_3d_revisions.snapshot` 的 `shots[].camera_angle`)改名 —— 场景的值类型
+      `extra="forbid"`,不改的话老场景一打开就校验失败;
+    - 生成记录(`generation_jobs.request`)和产出那一行的副本(`generated_assets.parameters`)里的 `pose_mentions_role` /
+      `pose_angle` 并成一笔 `pose`,3D 参考回执里的 `camera_angle` 改名 `shot_angle`。
+
+    只在 2.4.0 起的数据里出现(这两个字段 2026-11-01 才有)。幂等:已经是新键的跳过。
+    """
+    with engine.begin() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+        for table, column, key in (("scenes_3d", "content", "id"), ("scene_3d_revisions", "snapshot", "scene_id, revision")):
+            if table not in tables:
+                continue
+            for row in conn.execute(text(f"SELECT {key}, {column} FROM {table} WHERE {column} LIKE '%\"camera_angle\"%'")).fetchall():
+                content = _json_value(row[-1])
+                if not _shots_use_shot_angle(content):
+                    continue
+                where = "id = :a" if table == "scenes_3d" else "scene_id = :a AND revision = :b"
+                conn.execute(text(f"UPDATE {table} SET {column} = :value WHERE {where}"),
+                             {"value": json.dumps(content, ensure_ascii=False), "a": row[0], "b": row[1] if len(row) > 2 else None})
+        if "generation_jobs" not in tables:
+            return
+        rows = conn.execute(text(
+            "SELECT id, job_id, request FROM generation_jobs WHERE request LIKE '%\"pose_angle\"%' "
+            "OR request LIKE '%\"pose_mentions_role\"%' OR request LIKE '%\"camera_angle\"%'"
+        )).fetchall()
+        for record_id, job_id, raw in rows:
+            request = _json_value(raw)
+            if not isinstance(request, dict):
+                continue
+            pose: dict[str, Any] = {}
+            if request.get("pose_angle"):
+                pose["shot_angle"] = request["pose_angle"]
+            if request.get("pose_mentions_role") == "reference_image":
+                pose["as_reference"] = True
+            had_old = "pose_angle" in request or "pose_mentions_role" in request
+            request.pop("pose_angle", None)
+            request.pop("pose_mentions_role", None)
+            if pose:
+                request["pose"] = pose
+            reference = request.get("scene_reference")
+            renamed = isinstance(reference, dict) and "camera_angle" in reference
+            if renamed:
+                angle = reference.pop("camera_angle")
+                if angle:
+                    reference["shot_angle"] = angle
+            if not had_old and not renamed:
+                continue
+            conn.execute(text("UPDATE generation_jobs SET request = :request WHERE id = :id"),
+                         {"request": json.dumps(request, ensure_ascii=False), "id": record_id})
+            if job_id and "generated_assets" in tables:
+                parameters = {key: value for key, value in request.items() if key != "prompt"}
+                conn.execute(text("UPDATE generated_assets SET parameters = :parameters WHERE job_id = :job"),
+                             {"parameters": json.dumps(parameters, ensure_ascii=False), "job": job_id})
+
+
 def _legacy_dub_identity(identity: str, library: set[str]) -> str:
     """字幕配音记在音频上的旧「嗓子身份」串(`engine=…|engine_voice=…|speed=1.0`)→ 新的(`voice_ref.voice_identity`)。"""
     fields = dict(part.split("=", 1) for part in identity.split("|") if "=" in part)
@@ -851,6 +922,8 @@ def migration_plan() -> MigrationPlan:
         *_steps(
             MigrationPhase.AFTER_SCHEMA,
             _migrate_bound_profiles_use_the_account_partition,
+            # ADR 0091:「这一镜的机位」统一叫 shot_angle(3D 场景的镜头、生成记录)。
+            _migrate_shot_angle_replaces_camera_angle,
         ),
         *_recurring(
             MigrationPhase.AFTER_SCHEMA,

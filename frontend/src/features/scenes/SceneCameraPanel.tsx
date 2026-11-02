@@ -7,6 +7,7 @@ import type { SceneObject, SceneShot, Vec3 } from "@/api/domains/scenes";
 import { Num, Pick, Vector } from "./SceneControls";
 import { cameraPreset, sampleCamera } from "./sceneGraph";
 import { useI18n } from "@/app/preferences";
+import { useCatalogLabels } from "@/features/entities/entityMeta";
 
 export function SceneCameraPanel({
   shot,
@@ -41,6 +42,7 @@ export function SceneCameraPanel({
   camera: () => { position: Vec3; target: Vec3; fov: number };
 }) {
   const t = useI18n();
+  const { shotAngles } = useCatalogLabels();
   const current = pose ?? sampleCamera(rig, shot, time);
   function preset(kind: "orbit" | "push" | "still") {
     const from = preview ? current : camera();
@@ -124,19 +126,12 @@ export function SceneCameraPanel({
         </label>
         <label className="scene-number">
           <span>{t("sceneCameraAngle")}</span>
+          {/* 选项和名字读资产目录的 shot_angles(和参考图角度共用一份名字),不在这里另抄 —— 见后端 entities.shot_angles。 */}
           <Pick
             label={t("sceneCameraAngle")}
-            value={shot.camera_angle ?? ""}
-            options={[
-              ["", t("sceneCameraAngleNone")],
-              ["front", t("sceneCameraAngleFront")],
-              ["three_quarter", t("sceneCameraAngleThreeQuarter")],
-              ["side", t("sceneCameraAngleSide")],
-              ["back", t("sceneCameraAngleBack")],
-              ["high_angle", t("sceneCameraAngleHigh")],
-              ["low_angle", t("sceneCameraAngleLow")],
-            ]}
-            onChange={(angle) => onPatch({ camera_angle: (angle || null) as SceneShot["camera_angle"] })}
+            value={shot.shot_angle ?? ""}
+            options={[["", t("sceneCameraAngleNone")], ...shotAngles.map((one): [string, string] => [one.value, one.label])]}
+            onChange={(angle) => onPatch({ shot_angle: (angle || null) as SceneShot["shot_angle"] })}
           />
         </label>
       </div>

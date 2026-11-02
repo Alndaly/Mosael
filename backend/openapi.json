@@ -37237,6 +37237,13 @@
             },
             "type": "object",
             "title": "Attribute Choices"
+          },
+          "shot_angles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shot Angles"
           }
         },
         "type": "object",
@@ -37248,7 +37255,8 @@
           "attach_priority",
           "attributes",
           "default_role",
-          "attribute_choices"
+          "attribute_choices",
+          "shot_angles"
         ],
         "title": "EntityCatalogOut",
         "description": "资产的词表,按请求方的语言翻好:几种资产、参考图的角度、授权声明的选项、生成时挑图的先后。"
@@ -38909,33 +38917,8 @@
             "maxItems": 8,
             "title": "Entity Ids"
           },
-          "pose_mentions_role": {
-            "type": "string",
-            "enum": [
-              "pose_reference",
-              "reference_image"
-            ],
-            "title": "Pose Mentions Role",
-            "default": "pose_reference"
-          },
-          "pose_angle": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "front",
-                  "three_quarter",
-                  "side",
-                  "back",
-                  "high_angle",
-                  "low_angle"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pose Angle"
+          "pose": {
+            "$ref": "#/components/schemas/PoseUse"
           },
           "digital_human_consent": {
             "type": "boolean",
@@ -45944,6 +45927,38 @@
         "title": "PoemOut",
         "description": "首页那句诗。取不到时前端回落本地精选 —— 断网不该让首页空一格。"
       },
+      "PoseUse": {
+        "properties": {
+          "shot_angle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "front",
+                  "three_quarter",
+                  "side",
+                  "back",
+                  "high_angle",
+                  "low_angle"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot Angle"
+          },
+          "as_reference": {
+            "type": "boolean",
+            "title": "As Reference",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PoseUse",
+        "description": "姿势资产这一次怎么发(ADR 0091 §5)。**每个生成入口都交这同一样东西**:AI Studio、画板的生成格、工作流的\n「AI 生成素材」节点、智能体的 generate_image / generate_video —— 少一处,那一处 `@` 姿势就发不出去。\n接口和画板的表单直接收它(和场景的值类型一样,一个形状不抄第二份)。\n\n- `shot_angle`:这一镜的机位(词表见 shot_angles)。姿势参考**只发同机位的那张**;不给 = 一张都不发,\n  回执写 `pose_angle_required`。从 3D 场景取参考时,没给就用那一镜标的机位(generation.operations)。\n- `as_reference`:用户明说「当普通参考图发」。模型不收姿势参考时由人决定降级,不由宿主悄悄改(ADR 0091 §5)。"
+      },
       "PricingPrefillOut": {
         "properties": {
           "created": {
@@ -49453,7 +49468,7 @@
             "pattern": "^[\\w-]+$",
             "title": "Camera Id"
           },
-          "camera_angle": {
+          "shot_angle": {
             "anyOf": [
               {
                 "type": "string",
@@ -49470,7 +49485,7 @@
                 "type": "null"
               }
             ],
-            "title": "Camera Angle"
+            "title": "Shot Angle"
           }
         },
         "additionalProperties": false,

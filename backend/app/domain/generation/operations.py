@@ -49,7 +49,7 @@ from app.domain.assets.deletion import delete_asset
 from app.domain.consent import voice_usable_for_digital_human as voice_usable
 from app.domain.entities.catalog import usable_for_digital_human as entity_usable
 from app.domain.entities.library import EntityDomainError
-from app.domain.entities.mentions import attach_entities
+from app.domain.entities.mentions import NO_POSE, PoseUse, attach_entities
 from app.domain.generation.public_links import NoUploader, public_url_for
 from app.domain.providers import models as provider_models
 from app.domain.scenes.operations import SceneDomainError, scene_reference as render_scene_reference
@@ -226,8 +226,7 @@ def _create_generation_job(
     source_assets: list[dict[str, str]],
     provider_profile_id: str | None = None,
     entity_ids: list[str] | None = None,
-    pose_mentions_role: str = "pose_reference",
-    pose_angle: str | None = None,
+    pose: PoseUse = NO_POSE,
     scene_reference: dict[str, str] | None = None,
     name_sources: bool = False,
     documents: Sequence[ReferenceDocument] = (),
@@ -243,6 +242,9 @@ def _create_generation_job(
     `scene_reference`(`scene_id` / `shot_id` / `use`)是这次的「3D 参考」(ADR 0029):在这里**现渲**成素材挂上,
     提示词里并进白模说明;镜头里看得见的人偶演的人物并进 `entity_ids`,和 `@` 同一条路。用了哪个修订、渲出了哪几份
     记进请求的 `scene_reference`。
+
+    `pose`:`@` 到的姿势资产这一次怎么发(机位、是否当普通参考图,见 entities.mentions.PoseUse)。**每个入口都要交它** ——
+    AI 工作台、画板、工作流的「AI 生成素材」节点、智能体;用了 3D 参考而没指定机位时,用那一镜标的机位。
 
     `name_sources`:在提示词后面告诉模型每份素材叫什么、是那一种里的第几份(见 `source_legend`)。
 
@@ -337,8 +339,9 @@ def _create_generation_job(
         entity_ids = [*(entity_ids or []), *(one for one in rendered.entity_ids if one not in (entity_ids or []))]
         scene_receipt = rendered.receipt
 
-    #: 明说的机位优先；否则用这一镜（3D 参考）的归一化机位。两者都没有就不挂姿势参考 —— 不猜。
-    effective_pose_angle = pose_angle or str((scene_receipt or {}).get("camera_angle") or "")
+    #: 明说的机位优先;否则用这一镜(3D 参考)标的机位。两者都没有就不挂姿势参考 —— 不猜。
+    if not pose.shot_angle and (scene_receipt or {}).get("shot_angle"):
+        pose = pose.model_copy(update={"shot_angle": scene_receipt["shot_angle"]})
     # `@资产` 在校验之前展开:拼进来的提示词描述和挂上的参考图,和手写、手挂的走同一套校验。
 
     try:
@@ -350,8 +353,7 @@ def _create_generation_job(
             parameters=parameters,
             kind=kind,
             capabilities=resolved.capabilities if resolved.capabilities_known else None,
-            pose_role=pose_mentions_role,
-            pose_angle=effective_pose_angle,
+            pose=pose,
         )
     except EntityDomainError as exc:
         raise GenerationDomainError(exc.key, **exc.params) from exc
@@ -404,11 +406,9 @@ def _create_generation_job(
     }
     if expansion.receipt:
         request["entities"] = expansion.receipt
-    if pose_mentions_role == "reference_image":
-        #: 用户明说「改成参考图发送」才记这一笔；默认的姿势参考不占请求字段。
-        request["pose_mentions_role"] = "reference_image"
-    if effective_pose_angle:
-        request["pose_angle"] = effective_pose_angle
+    if pose.record():
+        #: 姿势怎么发的(机位、是否当参考图发);都是缺省就不占字段。
+        request["pose"] = pose.record()
     if scene_receipt:
         request["scene_reference"] = scene_receipt
     if talking:

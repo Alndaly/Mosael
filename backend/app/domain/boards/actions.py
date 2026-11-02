@@ -35,7 +35,7 @@ from app.domain.analysis.service import AnalysisError, image_part
 from app.domain.billing.usage import billable
 from app.domain.boards.trim import start_trim
 from app.domain.documents.reading import document_text
-from app.domain.entities.mentions import generation_profile, resolve_mentions
+from app.domain.entities.mentions import NO_POSE, PoseUse, generation_profile, resolve_mentions
 from app.domain.generation import operations as generation_operations, runner as generation_runner
 from app.domain.generation.operations import ReferenceDocument, parse_source_assets, planned_outputs
 from app.domain.generation.origins import BOARD, Origin
@@ -241,6 +241,7 @@ def generate_on_board(
     form: dict[str, Any],
     entity_ids: list[str] | None = None,
     scene_reference: dict[str, str] | None = None,
+    pose: PoseUse = NO_POSE,
     digital_human_consent: bool = False,
 ) -> Board:
     """在画板上出图出片。没点名模型时由漏斗用这个人的默认。
@@ -280,6 +281,7 @@ def generate_on_board(
             source_assets=parse_source_assets(source_assets, kind=kind),
             entity_ids=mentioned,
             scene_reference=reference,
+            pose=pose,
             #: 画板上的正文会按名字 `@` 素材,而模型收到的素材没有名字 —— 让漏斗在提示词后面补一段对照。
             name_sources=True,
             documents=documents,
@@ -310,6 +312,8 @@ def generate_on_board(
             #: 正文里 @ 到的资产(不含连进来的资产格 —— 那由连线说,线在它就在)。
             **({"mentioned_entity_ids": list(form.get("mentioned_entity_ids") or entity_ids or [])}
                if form.get("mentioned_entity_ids") or entity_ids else {}),
+            #: 姿势怎么发的,重新打开这一格时照它还原(都是缺省就不写)。
+            **({"pose": pose.record()} if pose.record() else {}),
         },
     )
     # 生成线程重开会话去读刚建的行(和这一格的占位):等入口提交之后再起。

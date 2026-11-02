@@ -36,6 +36,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "  ⚠️ 这是在用技能{skills}时提出的",
         "en": "  ⚠️ Proposed while following the skill {skills}",
     },
+    "confirmErr_poseInvalid": {
+        "zh": "姿势的发送方式不对:机位只能是正面、斜侧、侧面、背面、俯拍、仰拍之一",
+        "en": "The pose settings are invalid: the shot angle must be front, three-quarter, side, back, high angle or low angle.",
+    },
     "confirmErr_unknownChoice": {
         "zh": "这张卡上没有这几个开关:{keys}",
         "en": "This card has no such switches: {keys}",

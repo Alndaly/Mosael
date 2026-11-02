@@ -70,6 +70,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     # ---- 工作流执行期的失败原因(WorkflowDomainError 的 key) ----
     "wfErr_cancelled": {"zh": "已取消", "en": "Cancelled"},
     "wfErr_assetNotInWorkspace": {"zh": "素材不在这个工作区里", "en": "That asset is not in this workspace"},
+    "wfErr_shotAngleInvalid": {
+        "zh": "「这一镜的机位」只能是正面、斜侧、侧面、背面、俯拍、仰拍之一,收到的是「{value}」",
+        "en": "Shot angle must be front, three-quarter, side, back, high angle or low angle; got “{value}”",
+    },
     "wfErr_sequenceNotInWorkspace": {"zh": "序列不在这个工作区里", "en": "That timeline is not in this workspace"},
     "wfErr_assetIdMissing": {"zh": "缺少 asset_id", "en": "asset_id is missing"},
     "wfErr_trackNotOnSequence": {"zh": "这条时间线上没有那条轨道", "en": "That track is not on this timeline"},

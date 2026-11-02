@@ -50,6 +50,9 @@ class EntityCatalogOut(ApiModel):
     default_role: dict[str, str]
     #: 取值有限的专有字段能选什么(种类 → 字段 → 选项),例如姿势的体位、人数。
     attribute_choices: dict[str, dict[str, list[EntityChoiceOut]]]
+    #: 「这一镜的机位」有哪几档、按什么顺序(entities.shot_angles)。名字和参考图角度共用 `roles` 里那一份。
+    #: 生成时挑姿势参考的机位、3D 场景镜头标的机位,界面上都从这里取。
+    shot_angles: list[str]
 
 
 class EntityReferenceOut(ApiModel):

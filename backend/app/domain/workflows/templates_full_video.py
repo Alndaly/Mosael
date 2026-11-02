@@ -55,7 +55,8 @@ def _camera_rules(clip: int | str, *, source: str) -> str:
 跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。
 
 shots:每镜一条 {{id:"shot-<n>", name:"镜头 <n>", duration:{clip}, aspect:画幅, easing:"smooth",
-camera_id:"cam-<n>"}}。lighting 按{source}的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、
+camera_id:"cam-<n>", shot_angle:这台相机从主体哪个方向拍}}。shot_angle 从 front(正面)、three_quarter(斜侧,
+约 45°)、side(侧面)、back(背面)、high_angle(明显俯拍)、low_angle(明显仰拍)里选;没有主要人物、说不清的写空字符串。lighting 按{source}的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、
 高度角、强度(2~5)、色温和软硬;preset 写 "custom"。background 写 "#20242c",ambient 写 1.5。
 """
 

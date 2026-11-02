@@ -1,5 +1,6 @@
 import { api } from "@/api/transport";
 import type { components } from "@/api/generated/schema";
+import type { PoseUse } from "@/api/domains/entities";
 
 /** 一格上一项**能力**上次用的设置(和后端 producers.NodeForm 同形):节点配置 + 哪些字段接连进这一格的上游。
  *  就是一次运行发的那一份(`BoardRunForms["node"]`),两样都可以还没有。 */
@@ -51,6 +52,8 @@ export interface BoardItem {
     mentioned_asset_ids?: string[];
     /** 提示词里 `@` 到的资产(ADR 0027)。生成时服务端把它们的提示词描述和参考图挂上。 */
     mentioned_entity_ids?: string[];
+    /** `@` 到的姿势怎么发(机位、是否当参考图;后端 entities.mentions.PoseUse)。重新打开这一格时照它还原。 */
+    pose?: PoseUse;
     /** 连进来的 3D 场景怎么用(ADR 0029 §2):镜头(空 = 场景只有一个时用它)、用法。和后端 canvas 同形。 */
     scene_reference?: SceneReferenceForm;
     /** 这一格是**从哪份素材截的哪一段**(剪一段的产出)。和后端 canvas._normalize_trim 同形。 */
@@ -260,6 +263,8 @@ export interface BoardRunForms {
     entity_ids?: string[];
     /** 连进来的 3D 场景怎么用(ADR 0029):镜头(空 = 场景只有一个时用它)、用法;场景本身由服务端按连线取。 */
     scene_reference?: { shot_id: string; use: SceneReferenceUse };
+    /** `@` 到的姿势怎么发(后端 producers.GenerateForm.pose,和 AI Studio、工作流节点、智能体同一个形状)。 */
+    pose?: PoseUse;
     /** 挂了驱动音频(数字人)时本人勾上的授权(ADR 0028 §5);不勾时服务端的生成漏斗拒。 */
     digital_human_consent?: boolean;
     /** 落在这一格上、用户可再次编辑的表单(不含运行时追加的图例)。 */

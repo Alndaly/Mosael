@@ -13,6 +13,7 @@ from app.api.schemas.jobs import JobOut, _rendered
 from app.api.schemas.plugins import EntryGroupOut
 from app.api.schemas.voices import VoiceRefBody
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
+from app.domain.entities.mentions import PoseUse
 from app.domain.jobs import CANCELLED_ERROR_KEY
 
 
@@ -112,10 +113,9 @@ class GenerationCreate(ApiModel):
     #: 这次 `@` 到的资产(ADR 0027):提示词描述拼进提示词,参考图按模型收得下的张数挂上。
     #: 挂了哪几张、哪几张没挂上,回在 `request.entities` 里。
     entity_ids: list[str] = Field(default_factory=list, max_length=8)
-    #: 姿势资产用哪种角色。默认姿势参考；模型不收它时，界面可以在用户明说后改成普通参考图(ADR 0091 §5)。
-    pose_mentions_role: Literal["pose_reference", "reference_image"] = "pose_reference"
-    #: 这一镜的机位：给姿势参考排序(ADR 0091)。不传 = 用固定先后。
-    pose_angle: Literal["front", "three_quarter", "side", "back", "high_angle", "low_angle"] | None = None
+    #: `@` 到的姿势资产怎么发:这一镜的机位(姿势参考只发同机位那张,不给就不发)、是否当普通参考图发(ADR 0091 §5)。
+    #: 画板的生成格、工作流节点、智能体交的是同一个形状(entities.mentions.PoseUse)。
+    pose: PoseUse = Field(default_factory=PoseUse)
     #: 数字人(带驱动音频的说话照片、对口型)必须勾上「已取得画面中人物的授权」,否则 422(ADR 0028 §5)。
     digital_human_consent: bool = False
 

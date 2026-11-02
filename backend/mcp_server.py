@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from app.domain.generation_catalog.descriptors.shared import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
+from app.domain.entities.shot_angles import SHOT_ANGLES
 import contextlib
 import contextvars
 import json
@@ -928,15 +929,25 @@ def generate_image(
     source_asset_ids: list[str] | None = None,
     parameters: dict[str, Any] | None = None,
     entity_ids: list[str] | None = None,
+    shot_angle: str = "",
+    pose_as_reference: bool = False,
 ) -> dict[str, Any]:
     """Confirmation required: generate or edit an image asset.
 
-    entity_ids @-mentions characters / locations / props from the asset library
-    (list_entities): each one's prompt descriptor is appended to the prompt and its
-    reference images are attached, as many as the model accepts (turnaround first,
-    then front, full body, the rest). Write the character's NAME in the prompt where
-    it appears ("张三站在老街口") and pass its id here — do not pick reference images
-    by hand. The result says which images were attached and which did not fit.
+    entity_ids @-mentions assets from the asset library (list_entities) — characters,
+    locations, props, poses, outfits: each one's prompt descriptor is appended to the
+    prompt and its reference images are attached, as many as the model accepts
+    (turnaround first, then front, full body, the rest). Write the character's NAME in
+    the prompt where it appears ("张三站在老街口") and pass its id here — do not pick
+    reference images by hand. The result says which images were attached and which
+    did not fit.
+
+    A mentioned pose is sent as a pose reference (posture and composition only), and
+    only its image for this shot's angle: pass shot_angle (front, three_quarter, side,
+    back, high_angle, low_angle) or no pose image is sent. If the model does not take
+    pose references, pose_as_reference=true sends it as an ordinary reference image
+    instead — only when the user agrees, since the line-art style can leak into the
+    result.
 
     Use without source_asset_ids for text-to-image. Use source_asset_ids with
     existing image asset ids when the user asks to edit/transform/continue from
@@ -977,10 +988,20 @@ def generate_image(
                     {"asset_id": str(one), "role": "reference_image"} for one in (source_asset_ids or [])
                 ],
                 "entity_ids": [str(one) for one in (entity_ids or [])],
+                **_pose_payload(shot_angle, pose_as_reference),
             },
         },
     )
     return _confirmation_reply(confirmation)
+
+
+def _pose_payload(shot_angle: str, as_reference: bool) -> dict[str, Any]:
+    """`@` 到的姿势怎么发(entities.mentions.PoseUse 的形状)。机位填错当场拒、说出合法值 —— 等到漏斗里才 422,
+    模型只会换个词再试。"""
+    if shot_angle and shot_angle not in SHOT_ANGLES:
+        raise ValueError(f"unknown shot_angle {shot_angle!r}; valid values are {list(SHOT_ANGLES)}")
+    pose = {**({"shot_angle": shot_angle} if shot_angle else {}), **({"as_reference": True} if as_reference else {})}
+    return {"pose": pose} if pose else {}
 
 
 #: 执行面的合法取值。后端那一侧是 Literal,填错只会换回一个 422 —— 而模型看到 422 不会说
@@ -1188,13 +1209,17 @@ def generate_video(
     source_assets: list[dict[str, str]] | None = None,
     entity_ids: list[str] | None = None,
     digital_human_consent: bool = False,
+    shot_angle: str = "",
+    pose_as_reference: bool = False,
 ) -> dict[str, Any]:
     """Confirmation required: generate a NEW video asset from a text prompt.
 
-    entity_ids @-mentions characters / locations / props from the asset library
-    (list_entities), exactly like generate_image: prompt descriptors appended,
-    reference images attached up to what the model accepts. Models that build a
-    reusable subject first (Kling Omni) get one subject per mentioned character.
+    entity_ids @-mentions assets from the asset library (list_entities) — characters,
+    locations, props, poses, outfits — exactly like generate_image: prompt descriptors
+    appended, reference images attached up to what the model accepts. Models that build
+    a reusable subject first (Kling Omni) get one subject per mentioned character. A
+    mentioned pose needs shot_angle (and optionally pose_as_reference), exactly as in
+    generate_image.
 
     Use when the user asks to create new footage/animation/B-roll as a media
     asset. The prompt describes the shot; models whose "prompt" in
@@ -1250,6 +1275,7 @@ def generate_video(
                 "source_assets": source_assets or [],
                 "entity_ids": [str(one) for one in (entity_ids or [])],
                 "digital_human_consent": bool(digital_human_consent),
+                **_pose_payload(shot_angle, pose_as_reference),
             },
         },
     )

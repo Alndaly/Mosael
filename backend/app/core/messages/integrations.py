@@ -1188,6 +1188,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_ai_label": {"zh": "「AI 生成」标识", "en": "“AI generated” label"},
     "wfField_source_group": {"zh": "用哪一组素材", "en": "Which sources to use"},
     "wfField_entity_ids": {"zh": "资产", "en": "Assets"},
+    "wfField_shot_angle": {"zh": "这一镜的机位", "en": "Shot angle"},
+    "wfField_pose_as_reference": {"zh": "姿势当参考图发", "en": "Pose as reference"},
     #: 节点面板的分组名。
     "wfCat_flow": {"zh": "流程", "en": "Flow"},
     "wfCat_ai": {"zh": "AI", "en": "AI"},
@@ -1409,7 +1411,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Some models (such as Seedance) cannot combine first/last frames with reference media. With both connected, choose which group this run uses and the other is ignored; All passes everything to the model",
     },
     "wfNode_ai_generate_entity_ids": {
-        "zh": "资产库里的人物 / 场景 / 道具:它们的提示词描述拼进提示词,参考图按这个模型收得下的张数挂上(三视图 > 正面 > 全身 > 其余)。挂了哪几张记在生成记录里",
-        "en": "Characters, locations or props from the asset library: their prompt descriptors are appended and their reference images attached, as many as this model accepts (turnaround > front > full body > the rest). Which ones were attached is recorded on the generation",
+        "zh": "资产库里的人物 / 场景 / 道具 / 姿势 / 服装:它们的提示词描述拼进提示词,参考图按这个模型收得下的张数挂上(三视图 > 正面 > 全身 > 其余)。挂了哪几张记在生成记录里",
+        "en": "Characters, locations, props, poses or outfits from the asset library: their prompt descriptors are appended and their reference images attached, as many as this model accepts (turnaround > front > full body > the rest). Which ones were attached is recorded on the generation",
+    },
+    "wfNode_ai_generate_shot_angle": {
+        "zh": "点名了姿势时,这一镜的机位:姿势参考只发同机位的那张,不填就不发。逐镜不同时接上游的值",
+        "en": "When a pose is mentioned, this shot's angle: only the pose image for that angle is sent, and none if left empty. Connect an upstream value when it varies per shot",
+    },
+    "wfNode_ai_generate_pose_as_reference": {
+        "zh": "模型不收姿势参考时,选「是」把姿势图当普通参考图发(线稿的画风可能带进成片)",
+        "en": "When the model doesn't take pose references, choose Yes to send the pose image as an ordinary reference (its line-art style may carry into the result)",
     },
 }

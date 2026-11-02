@@ -96,6 +96,20 @@
           "en": "Assets"
         }
       },
+      "shot_angle": {
+        "type": "string",
+        "label": {
+          "zh": "这一镜的机位",
+          "en": "Shot angle"
+        }
+      },
+      "pose_as_reference": {
+        "type": "string",
+        "label": {
+          "zh": "姿势当参考图发",
+          "en": "Pose as reference"
+        }
+      },
       "consent": {
         "type": "string",
         "label": {

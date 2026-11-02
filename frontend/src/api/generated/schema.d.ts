@@ -13588,6 +13588,8 @@ export interface components {
                     [key: string]: components["schemas"]["EntityChoiceOut"][];
                 };
             };
+            /** Shot Angles */
+            shot_angles: string[];
         };
         /** EntityChoiceOut */
         EntityChoiceOut: {
@@ -14318,14 +14320,7 @@ export interface components {
             source_assets?: components["schemas"]["SourceAssetRef"][];
             /** Entity Ids */
             entity_ids?: string[];
-            /**
-             * Pose Mentions Role
-             * @default pose_reference
-             * @enum {string}
-             */
-            pose_mentions_role: "pose_reference" | "reference_image";
-            /** Pose Angle */
-            pose_angle?: ("front" | "three_quarter" | "side" | "back" | "high_angle" | "low_angle") | null;
+            pose?: components["schemas"]["PoseUse"];
             /**
              * Digital Human Consent
              * @default false
@@ -17928,6 +17923,25 @@ export interface components {
             dynasty: string;
         };
         /**
+         * PoseUse
+         * @description 姿势资产这一次怎么发(ADR 0091 §5)。**每个生成入口都交这同一样东西**:AI Studio、画板的生成格、工作流的
+         *     「AI 生成素材」节点、智能体的 generate_image / generate_video —— 少一处,那一处 `@` 姿势就发不出去。
+         *     接口和画板的表单直接收它(和场景的值类型一样,一个形状不抄第二份)。
+         *
+         *     - `shot_angle`:这一镜的机位(词表见 shot_angles)。姿势参考**只发同机位的那张**;不给 = 一张都不发,
+         *       回执写 `pose_angle_required`。从 3D 场景取参考时,没给就用那一镜标的机位(generation.operations)。
+         *     - `as_reference`:用户明说「当普通参考图发」。模型不收姿势参考时由人决定降级,不由宿主悄悄改(ADR 0091 §5)。
+         */
+        PoseUse: {
+            /** Shot Angle */
+            shot_angle?: ("front" | "three_quarter" | "side" | "back" | "high_angle" | "low_angle") | null;
+            /**
+             * As Reference
+             * @default false
+             */
+            as_reference: boolean;
+        };
+        /**
          * PricingPrefillOut
          * @description 一键预填计价规则的结果。几个数分开报,是为了让「建了几条、还差什么」可解释:
          *     是端点目录报的价还是官方价目表补的,是本来就配齐了还是确实查不到价。
@@ -19403,8 +19417,8 @@ export interface components {
             easing: "linear" | "smooth";
             /** Camera Id */
             camera_id: string;
-            /** Camera Angle */
-            camera_angle?: ("front" | "three_quarter" | "side" | "back" | "high_angle" | "low_angle") | null;
+            /** Shot Angle */
+            shot_angle?: ("front" | "three_quarter" | "side" | "back" | "high_angle" | "low_angle") | null;
         };
         /** SceneUpdate */
         SceneUpdate: {

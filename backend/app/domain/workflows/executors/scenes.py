@@ -74,7 +74,12 @@ def _canonical(layout: dict[str, Any]) -> dict[str, Any]:
             obj = {key: value for key, value in obj.items()
                    if not (key in _OPTIONAL_REFERENCES and isinstance(value, str) and not value.strip())}
         objects.append(obj)
-    return {**layout, "objects": objects}
+    #: 镜头的机位同理:严格模式下写成空字符串的 = 没标(scenes.types.SceneShot.shot_angle 是可选的)。
+    canonical = {**layout, "objects": objects}
+    if isinstance(layout.get("shots"), list):
+        canonical["shots"] = [{key: value for key, value in shot.items() if not (key == "shot_angle" and value == "")}
+                              if isinstance(shot, dict) else shot for shot in layout["shots"]]
+    return canonical
 
 
 @register("scene_props")

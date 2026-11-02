@@ -13,6 +13,7 @@ import re
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, Transcript, GenerationJob, Job, PublishAccount
@@ -39,6 +40,7 @@ from app.domain.documents import LOCAL_PARSER
 from app.domain.documents.extraction import latest_extraction, read_sections, start_parse
 from app.domain.documents.local import DocumentParseError
 from app.domain.entities.catalog import parse_entity_ids
+from app.domain.entities.mentions import PoseUse
 from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 from app.domain.generation import operations as generation_operations, runner as generation_runner
 from app.domain.generation.operations import (
@@ -264,6 +266,17 @@ def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     return {"asset_id": asset_id}
 
 
+def _pose_of(config: dict[str, Any]) -> PoseUse:
+    """节点上的「机位」「姿势当参考图发」→ 姿势怎么发。机位可能是上游给的(`{{…}}` 已展开),不在词表里就按工作流错误报。"""
+    try:
+        return PoseUse(
+            shot_angle=str(config.get("shot_angle") or "").strip() or None,
+            as_reference=str(config.get("pose_as_reference") or "").strip() == "yes",
+        )
+    except ValidationError as exc:
+        raise WorkflowDomainError("wfErr_shotAngleInvalid", params={"value": str(config.get("shot_angle") or "")}) from exc
+
+
 @register("ai_generate")
 def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
 
@@ -289,6 +302,7 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
             ),
             #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
             entity_ids=parse_entity_ids(config.get("entity_ids")),
+            pose=_pose_of(config),
             digital_human_consent=str(config.get("consent") or "").strip() == "yes",
             #: 这张工作流(画板上跑的是那块画板、资产详情页上的是那个资产)的那条会话(ADR 0052)
             origin=of_run_scope(scope.id),

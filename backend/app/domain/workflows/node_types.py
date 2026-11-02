@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.domain.entities.catalog import KINDS as ENTITY_KINDS
+from app.domain.entities.shot_angles import SHOT_ANGLES
 from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation_catalog.descriptors.shared import SOURCE_GROUPS, SOURCE_ROLE_LABELS
@@ -350,6 +351,8 @@ _FIELD_LABELS = {
     "ai_label": "wfField_ai_label",
     "source_group": "wfField_source_group",
     "entity_ids": "wfField_entity_ids",
+    "shot_angle": "wfField_shot_angle",
+    "pose_as_reference": "wfField_pose_as_reference",
     "entity_id": "wfField_entity_id",
     "entities": "wfField_entities",
     "max_shots": "wfField_max_shots",
@@ -1090,12 +1093,22 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "advanced": True, "type": "string", "default": "all", "options": list(SOURCE_GROUPS),
                 "allow_custom": True, "description": "wfNode_ai_generate_source_group",
             },
-            #: 点名资产库里的人物 / 场景 / 道具(ADR 0027 的 `@资产`):提示词描述拼进提示词,参考图按模型收得下的
+            #: 点名资产库里的资产(ADR 0027 的 `@资产`):提示词描述拼进提示词,参考图按模型收得下的
             #: 张数挂上 —— 和 AI 工作台、画板、智能体同一条路(domain/entities/mentions)。挑几个就是一串 id;
             #: 也可以是上游给的一串(`{{…}}`)。
             "entity_ids": {
                 "type": "template", "options_from": "entities", "editor": "id_list",
                 "description": "wfNode_ai_generate_entity_ids",
+            },
+            #: 点名的姿势怎么发(ADR 0091 §5,和 AI 工作台、画板、智能体同一个形状 entities.mentions.PoseUse):
+            #: 这一镜的机位 —— 姿势参考只发同机位那张,不填就不发;整片流程里逐镜不同,所以收上游的值(`{{…}}`)。
+            "shot_angle": {
+                "advanced": True, "type": "string", "options": list(SHOT_ANGLES), "allow_custom": True,
+                "description": "wfNode_ai_generate_shot_angle",
+            },
+            #: 模型不收姿势参考时,用户明说「当普通参考图发」才降级。
+            "pose_as_reference": {
+                "advanced": True, "type": "string", "options": ["yes"], "description": "wfNode_ai_generate_pose_as_reference",
             },
             #: 挂了驱动音频(说话照片、对口型,即数字人)时必须选上,生成漏斗才放行(ADR 0028 §5)。别的生成用不上,
             #: 所以不标必填、收在高级里;挂了驱动音频时,检查器把它提到第一屏并标必填(见前端 NodeInspector 的 drivesDigitalHuman)。

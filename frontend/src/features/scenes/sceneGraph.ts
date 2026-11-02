@@ -79,7 +79,7 @@ export function makeShot(name: string): { camera: SceneObject; shot: SceneShot }
   const camera = makeObject("camera", { name, position: [8, 5, 8], target: [0, 1, 0], fov: 45 });
   return {
     camera,
-    shot: { id: uid(), name, duration: 5, aspect: "16:9", easing: "smooth", camera_id: camera.id, camera_angle: null },
+    shot: { id: uid(), name, duration: 5, aspect: "16:9", easing: "smooth", camera_id: camera.id, shot_angle: null },
   };
 }
 

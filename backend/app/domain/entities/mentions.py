@@ -27,12 +27,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.ai.providers import roles_supplied_via_url
 from app.db.models import Entity
 from app.domain.entities.catalog import attach_order, parse_entity_ids
 from app.domain.entities.library import EntityDomainError, references_of
+from app.domain.entities.shot_angles import ShotAngle
 from app.domain.generation_catalog import prompt_mode
 
 #: 一次生成最多点名几个资产。
@@ -51,6 +53,34 @@ NOTE_PROMPT_SKIPPED = "prompt_skipped"
 NOTE_POSE_ROLE = "pose_reference_unsupported"
 NOTE_POSE_ANGLE = "pose_angle_required"
 NOTE_POSE_ANGLE_MISSING = "pose_angle_missing"
+
+
+class PoseUse(BaseModel):
+    """姿势资产这一次怎么发(ADR 0091 §5)。**每个生成入口都交这同一样东西**:AI Studio、画板的生成格、工作流的
+    「AI 生成素材」节点、智能体的 generate_image / generate_video —— 少一处,那一处 `@` 姿势就发不出去。
+    接口和画板的表单直接收它(和场景的值类型一样,一个形状不抄第二份)。
+
+    - `shot_angle`:这一镜的机位(词表见 shot_angles)。姿势参考**只发同机位的那张**;不给 = 一张都不发,
+      回执写 `pose_angle_required`。从 3D 场景取参考时,没给就用那一镜标的机位(generation.operations)。
+    - `as_reference`:用户明说「当普通参考图发」。模型不收姿势参考时由人决定降级,不由宿主悄悄改(ADR 0091 §5)。
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    shot_angle: ShotAngle | None = None
+    as_reference: bool = False
+
+    @property
+    def role(self) -> str:
+        return REFERENCE_ROLE if self.as_reference else POSE_ROLE
+
+    def record(self) -> dict[str, Any]:
+        """生成记录(`request.pose`)里留的那一笔;都是缺省就不占字段。"""
+        return self.model_dump(exclude_defaults=True)
+
+
+#: 都是缺省的那一份(没 `@` 姿势、或没给机位)。冻结的值,当参数缺省用。
+NO_POSE = PoseUse()
 
 
 @dataclass
@@ -167,25 +197,18 @@ def attach_entities(
     parameters: dict[str, Any],
     kind: str,
     capabilities: dict[str, Any] | None,
-    pose_role: str = POSE_ROLE,
-    pose_angle: str = "",
+    pose: PoseUse = NO_POSE,
 ) -> Expansion:
     """把点名的资产展开成提示词描述和参考素材。没点名就原样返回(回执为空)。
 
     `capabilities` 是这个模型的描述符;查不到时是 None —— 那就不挂任何参考图(不知道它收几张)。
 
-    `pose_role`:姿势资产这一次用哪种角色。默认 ``pose_reference``;模型不收它时,界面可以
-    明说改成 ``reference_image`` 再提交,不由这里悄悄降级(ADR 0091 §5)。
-
-    `pose_angle`:这一镜的机位(``front`` / ``three_quarter`` / ``side`` / ``back`` /
-    ``high_angle`` / ``low_angle``)。姿势参考**只挂同机位的那一张**:没给机位、或这个姿势
-    没有该机位的图,就不挂 —— 不拿正面图去冒充俯拍(旧行为)。
+    `pose`:姿势资产这一次怎么发(见 PoseUse)。姿势参考**只挂同机位的那一张**:没给机位、或这个姿势没有该机位的图,
+    就不挂 —— 不拿正面图去冒充俯拍;用户明说当普通参考图发时,姿势和人物、道具一样按参考图挑。
     """
     ids = parse_entity_ids(entity_ids)
     if not ids:
         return Expansion(note="", source_assets=list(source_assets), receipt=[])
-    if pose_role not in (POSE_ROLE, REFERENCE_ROLE):
-        raise EntityDomainError("entityErr_unknownRole", role=pose_role)
     mentions = [_mention(db, entity) for entity in resolve_mentions(db, workspace_id, ids)]
 
     # 提示词描述。不收提示词的模型(放大、抠图)不拼 —— 拼了提交会被拒,照实记一笔。
@@ -197,7 +220,7 @@ def attach_entities(
         lines = []
 
     def role_of(mention: _Mention) -> str:
-        return POSE_ROLE if mention.entity.kind == "pose" and pose_role == POSE_ROLE else REFERENCE_ROLE
+        return POSE_ROLE if mention.entity.kind == "pose" and pose.role == POSE_ROLE else REFERENCE_ROLE
 
     groups: dict[str, list[_Mention]] = {REFERENCE_ROLE: [], POSE_ROLE: []}
     for mention in mentions:
@@ -244,7 +267,7 @@ def attach_entities(
 
     pose_budget = budgets[POSE_ROLE][0]
     pose_mentions = groups[POSE_ROLE]
-    if not pose_angle:
+    if not pose.shot_angle:
         for mention in pose_mentions:
             if mention.images and not mention.notes:
                 mention.notes.append(NOTE_POSE_ANGLE)
@@ -252,7 +275,7 @@ def attach_entities(
         #: 暂时把候选换成「这个机位的图」跑名额；跑完换回全量，回执才能列清哪些角度没发。
         original = {mention.entity.id: mention.images for mention in pose_mentions}
         for mention in pose_mentions:
-            exact = [one for one in mention.images if mention.roles.get(one) == pose_angle]
+            exact = [one for one in mention.images if mention.roles.get(one) == pose.shot_angle]
             mention.images = exact
             if not exact and original[mention.entity.id] and not mention.notes:
                 mention.notes.append(NOTE_POSE_ANGLE_MISSING)
@@ -283,6 +306,8 @@ def attach_entities(
 
 __all__ = [
     "Expansion",
+    "NO_POSE",
+    "PoseUse",
     "MAX_MENTIONS",
     "attach_entities",
     "resolve_mentions",

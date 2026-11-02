@@ -8,7 +8,7 @@ import { useGenerationOptions, useMissingModel } from "@/lib/generationOptions";
 import { MissingModelNotice } from "@/features/plugins/MissingModelNotice";
 
 
-import { type BoardItem, type GenerationOption, type SceneReferenceForm } from "@/api/client";
+import { type BoardItem, type GenerationOption, type PoseUse, type SceneReferenceForm } from "@/api/client";
 import { resolvedShot, SceneReferencePicker, sceneReferenceUses, useReferencedScene } from "@/features/boards/SceneReferencePicker";
 import {
   collect,
@@ -72,7 +72,7 @@ import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
 import { AssetUploadStatus, fileKind, namedFile, useAssetUpload, wrongKindText } from "@/features/boards/assetUpload";
 import { useFileDrop } from "@/lib/useFileDrop";
-import { EntityThumb, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
+import { EntityThumb, PoseReferenceToggle, ShotAngleSelect, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 
@@ -481,6 +481,8 @@ export function NodeComposer({
     entityIds: string[];
     /** 连进来的 3D 场景怎么用(ADR 0029);没连场景时不给。 */
     sceneReference?: SceneReferenceForm;
+    /** `@` 到的姿势怎么发(机位、是否当参考图);没有姿势时不给。 */
+    pose?: PoseUse;
     /** 挂了驱动音频(数字人)时,本人勾上的「已取得画面中人物的授权」。 */
     digitalHumanConsent: boolean;
     form: NonNullable<BoardItem["form"]>;
@@ -734,6 +736,9 @@ export function NodeComposer({
   //: 正文里 `@` 到的资产(ADR 0027):它们的提示词描述和参考图由服务端挂上,这里只记是哪几个。
   const [mentionedEntities, setMentionedEntities] = React.useState<string[]>(saved.mentioned_entity_ids ?? []);
   const mentionable = useMentionableEntities(workspaceId);
+  //: `@` 到(或连进来)的姿势怎么发 —— 和 AI Studio 同一个形状、同一组控件(ADR 0091 §5):机位决定发哪一张,
+  //: 不选就不发;模型不收姿势参考时由人勾「按普通参考图发送」。存进这一格的表单,重新打开照它还原。
+  const [pose, setPose] = React.useState<PoseUse>(saved.pose ?? { shot_angle: null, as_reference: false });
   const entityCandidates = React.useCallback(
     (query: string) => matchEntities(mentionable.data, query).slice(0, 6),
     [mentionable.data],
@@ -816,8 +821,9 @@ export function NodeComposer({
       mentioned_asset_ids: mentioned,
       ...(mentionedEntities.length > 0 || saved.mentioned_entity_ids ? { mentioned_entity_ids: mentionedEntities } : {}),
       ...(upstreamScene || saved.scene_reference ? { scene_reference: sceneReference } : {}),
+      ...(pose.shot_angle || pose.as_reference || saved.pose ? { pose } : {}),
     }),
-    [prompt, promptDocument, prefilled, current, saved.provider, saved.provider_profile_id, saved.model, saved.mode, savedParameters, missingEngine, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids, upstreamScene, saved.scene_reference, sceneReference],
+    [prompt, promptDocument, prefilled, current, saved.provider, saved.provider_profile_id, saved.model, saved.mode, savedParameters, missingEngine, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids, upstreamScene, saved.scene_reference, sceneReference, pose, saved.pose],
   );
   const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
@@ -883,6 +889,7 @@ export function NodeComposer({
         sourceAssets,
         entityIds: mentionedEntities,
         ...(upstreamScene && sceneUse ? { sceneReference: { shot_id: sceneShot, use: sceneUse } } : {}),
+        ...(hasPose ? { pose: { shot_angle: pose.as_reference ? null : (pose.shot_angle ?? null), as_reference: Boolean(pose.as_reference) } } : {}),
         digitalHumanConsent: needsDigitalHumanConsent && digitalHumanConsent,
         form: editableForm,
       }),
@@ -918,6 +925,12 @@ export function NodeComposer({
   //: 连进来的资产格引用的资产。生成时服务端按连线把它们当成 `@` 了一样挂上(提示词描述 + 参考图),
   //: 所以这里**摆出来**:连了一个人物进来却什么都看不到,就像连线没起作用。
   const linkedEntities = (upstreamEntities ?? []).flatMap((id) => mentionable.data?.find((one) => one.id === id) ?? []);
+
+  //: 这一格要发的资产里有没有姿势(正文里 `@` 的 + 连进来的资产格):有才摆机位和「按普通参考图发送」。
+  const hasPose = [...mentionedEntities, ...(upstreamEntities ?? [])].some(
+    (id) => mentionable.data?.find((one) => one.id === id)?.kind === "pose",
+  );
+  const poseSupported = Boolean(current && supportsParameter(current, "pose_reference"));
 
   //: 连进来却用不上的素材:就地说一句,不让那根线看起来像是起了作用(见 unusedUpstreamKinds)。
   const unused = unusedUpstreamKinds(current, activeMode?.roles, feed);
@@ -1485,6 +1498,21 @@ export function NodeComposer({
             onSubmit={send}
             emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
           />
+        </div>
+      )}
+      {hasPose && (
+        <div className="flex flex-wrap items-center gap-2 px-1" data-pose-use="">
+          {poseSupported && !pose.as_reference && (
+            <ShotAngleSelect value={pose.shot_angle} onChange={(shot_angle) => setPose({ ...pose, shot_angle })} />
+          )}
+          <label className="flex items-center text-ui-xs text-muted-foreground">
+            <PoseReferenceToggle
+              checked={Boolean(pose.as_reference)}
+              supported={poseSupported}
+              onChange={(as_reference) => setPose({ ...pose, as_reference })}
+            />
+            {t("genPoseAsReference")}
+          </label>
         </div>
       )}
       {needsDigitalHumanConsent && (

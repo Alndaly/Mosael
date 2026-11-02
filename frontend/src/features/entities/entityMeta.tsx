@@ -12,6 +12,7 @@ import {
   type EntityAttachReceipt,
   type EntityCatalog,
   type EntityKind,
+  type ShotAngle,
 } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -45,6 +46,8 @@ export type CatalogLabels = {
   consent: EntityCatalog["consent_kinds"];
   /** 这种资产生成时挑参考图的先后(角度的名字),其余排在后面:人物三视图 > 正面 > 全身,场景全景 > 设定图。 */
   priorityFor: (kind: string) => string[];
+  /** 「这一镜的机位」有哪几档(后端 entities.shot_angles),名字和参考图角度共用一份。 */
+  shotAngles: { value: ShotAngle; label: string }[];
   /** 新挂一张参考图、没说角度时按种类给的缺省(后端 catalog.DEFAULT_ROLE,不在这里另抄一份)。 */
   defaultRole: (kind: string) => string;
   /** 取值有限的专有字段能选什么(姿势的体位、人数),名字已经按界面语言翻好。 */
@@ -61,6 +64,7 @@ export function catalogLabels(catalog: EntityCatalog | undefined): CatalogLabels
     rolesFor: (kind) => (catalog?.roles_by_kind[kind] ?? []).map((role) => ({ value: role, label: roles.get(role) ?? role })),
     consent: catalog?.consent_kinds ?? [],
     priorityFor: (kind) => (catalog?.attach_priority[kind] ?? []).map((role) => roles.get(role) ?? role),
+    shotAngles: (catalog?.shot_angles ?? []).map((angle) => ({ value: angle as ShotAngle, label: roles.get(angle) ?? angle })),
     defaultRole: (kind) => catalog?.default_role[kind] ?? "",
     choicesFor: (kind, field) => catalog?.attribute_choices[kind]?.[field] ?? [],
   };
@@ -84,6 +88,8 @@ const NOTE_KEYS: Record<string, MessageKey> = {
   subject_too_few: "entityNote_subject_too_few",
   prompt_skipped: "entityNote_prompt_skipped",
   pose_reference_unsupported: "entityNote_pose_reference_unsupported",
+  pose_angle_required: "entityNote_pose_angle_required",
+  pose_angle_missing: "entityNote_pose_angle_missing",
 };
 
 /**

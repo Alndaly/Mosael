@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
@@ -13,6 +14,7 @@ from app.domain.agent.errors import ConfirmationError
 from app.ai.providers import podcast_engine, split_to_rounds
 from app.core.unit_of_work import after_commit
 from app.domain.entities.catalog import parse_entity_ids
+from app.domain.entities.mentions import PoseUse
 from app.domain.generation import operations as generation_operations, runner as generation_runner, voiced
 from app.domain.generation.operations import (
     GenerationDomainError,
@@ -70,6 +72,7 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
         parameters=dict(payload.get("parameters") or {}),
         source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
         entity_ids=parse_entity_ids(payload.get("entity_ids")),
+        pose=_pose_of(payload),
         #: 智能体声明的授权(generate_video 的 digital_human_consent);卡片由人批准时一并过目。
         digital_human_consent=payload.get("digital_human_consent") is True,
         origin=_origin(confirmation),
@@ -108,7 +111,20 @@ def _check_generation_text(db: Session, payload: dict[str, Any], actor: str | No
         raise ConfirmationError.relay(exc) from exc
 
 
+def _pose_of(payload: dict[str, Any]) -> PoseUse:
+    """卡上的 `pose`(姿势怎么发,见 PoseUse)。开卡时已经验过,这里只是取。"""
+    return PoseUse.model_validate(payload.get("pose") or {})
+
+
+def _check_pose(payload: dict[str, Any]) -> None:
+    try:
+        _pose_of(payload)
+    except ValidationError as exc:
+        raise ConfirmationError("confirmErr_poseInvalid") from exc
+
+
 def _validate_generate_image(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    _check_pose(payload)
     _check_generation_text(db, payload, actor, "image")
 
 def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
@@ -125,6 +141,7 @@ def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, 
             check_digital_human_rights(db, workspace_id, sources)
         except GenerationDomainError as exc:
             raise ConfirmationError.relay(exc) from exc
+    _check_pose(payload)
     _check_generation_text(db, payload, actor, "video")
 
 def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> Summary:

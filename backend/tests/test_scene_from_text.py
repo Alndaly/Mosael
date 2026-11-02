@@ -167,3 +167,27 @@ def test_人偶指向资产库里的人物_编的_id_当没写(written) -> None:
     by_id = {one["id"]: one for one in content["objects"]}
     assert by_id["hero"]["entity_id"] == mei_id
     assert by_id["ghost"].get("entity_id") is None and by_id["room"].get("entity_id") is None
+
+
+def test_搭场景的模型给每镜标机位_空串当没标(written) -> None:
+    """按文字搭的场景此前从不带机位(布景的 schema 里没有这一格),姿势参考在这条链上永远发不出去(ADR 0091)。
+    机位的取值就是 entities.shot_angles 那一份;严格模式下的空字符串 = 不标。"""
+    from app.domain.entities.shot_angles import SHOT_ANGLES
+    from app.domain.workflows.templates_schemas import _set_design_schema
+
+    shot_schema = _set_design_schema()["properties"]["shots"]["items"]
+    assert "shot_angle" in shot_schema["required"]
+    assert shot_schema["properties"]["shot_angle"]["enum"] == [*SHOT_ANGLES, ""]
+
+    two = {**LAYOUT, "shots": [
+        {**LAYOUT["shots"][0], "shot_angle": "high_angle"},
+        {**LAYOUT["shots"][0], "id": "shot-2", "shot_angle": ""},
+    ]}
+    written["reply"] = two
+    scope = _scope()
+    with SessionLocal() as db:
+        out = scene_from_text(db, scope, {"text": "她坐在台阶上", "max_shots": 2})
+        db.commit()
+        shots = db.get(Scene3D, out["scene_id"]).content["shots"]
+    assert [shot.get("shot_angle") for shot in shots] == ["high_angle", None]
+    assert "shot_angle" in written["system"], "规矩里说清每镜的机位怎么标"
