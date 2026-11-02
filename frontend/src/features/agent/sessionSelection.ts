@@ -34,10 +34,6 @@ function draftSettingsKey(workspaceId: string, place: AgentPlace): string {
   return `${DRAFT_PREFIX}${workspaceId}.${placeKey(place)}`;
 }
 
-export function generationSessionSelectionKey(workspaceId: string): string {
-  return `mosael.generation.session.${workspaceId}`;
-}
-
 // —— 存储:sessionStorage;拿不到(隐私模式、被禁用)时退回这个窗口的内存 —— 至少这一个窗口里各处一致 ——
 
 const memory = new Map<string, string>();

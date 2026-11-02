@@ -481,25 +481,3 @@ def write_at(path: Path, offset: int, data: bytes) -> None:
             raise Mp4Error("short write target")
         handle.seek(offset)
         handle.write(data)
-
-
-def append_box(path: Path, typ: str, payload: bytes, usertype: bytes = b"") -> int:
-    """把一个盒子**追加到文件尾**。
-
-    `uuid` 盒子的收留走这条路:放文件尾不动任何已有偏移(mp4 的顶层盒子顺序无约束,
-    读 C2PA 的人扫的是顶层盒子而不是位置)。返回写进去的字节数。
-    """
-    body = (usertype + payload) if typ == "uuid" else payload
-    header = struct.pack(">I", 8 + len(body)) + typ.encode("latin-1")
-    with Path(path).open("ab") as handle:
-        handle.write(header + body)
-    return 8 + len(body)
-
-
-def ftyp_compatible(path: Path) -> bool:
-    try:
-        with Path(path).open("rb") as handle:
-            head = handle.read(12)
-    except OSError:
-        return False
-    return len(head) >= 12 and head[4:8] == b"ftyp"

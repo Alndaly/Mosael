@@ -202,28 +202,29 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("资产页", () => {
-  it("没接参考库(插件关着)时不画资产库 / 参考库切换器", async () => {
+  it("没接参考库时仍能进参考库,空态指向插件页", async () => {
     api.listEntities.mockResolvedValue([summary()]);
     mount(<EntitiesView workspace={WORKSPACE} />);
     await screen.findByText("张三");
+    fireEvent.click(await screen.findByRole("radio", { name: "referenceLibraryTab" }));
     await waitFor(() => expect(api.listReferenceConnections).toHaveBeenCalled());
-    expect(screen.queryByRole("radio", { name: "referenceLibraryTab" })).toBeNull();
-    expect(screen.queryByRole("radio", { name: "referenceLibraryAssetsTab" })).toBeNull();
+    expect(await screen.findByText("referenceLibraryNoConnection")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "referenceLibraryGoPlugins" }).getAttribute("href")).toBe("#/plugins");
   });
 
-  it("接着参考库时才出现切换器", async () => {
+  it("接着参考库时切换器照常可用", async () => {
     api.listEntities.mockResolvedValue([summary()]);
     api.listReferenceConnections.mockResolvedValue([{ id: "c1", name: "PoseAtlas" }]);
     mount(<EntitiesView workspace={WORKSPACE} />);
     expect(await screen.findByRole("radio", { name: "referenceLibraryTab" })).toBeTruthy();
   });
 
-  it("上次停在参考库、这次插件已经关掉:退回资产库", async () => {
+  it("上次停在参考库、这次插件已经关掉:保留入口并说明去插件页", async () => {
     window.localStorage.setItem("mosael:tab:entities-mode", "references");
     api.listEntities.mockResolvedValue([summary()]);
     mount(<EntitiesView workspace={WORKSPACE} />);
-    expect(await screen.findByRole("textbox", { name: "entitiesSearch" })).toBeTruthy();
-    await waitFor(() => expect(window.localStorage.getItem("mosael:tab:entities-mode")).toBe("assets"));
+    expect(await screen.findByText("referenceLibraryNoConnection")).toBeTruthy();
+    expect(window.localStorage.getItem("mosael:tab:entities-mode")).toBe("references");
   });
 
   it("按人物 / 场景 / 道具分页签,卡片是封面 + 名字 + 张数", async () => {

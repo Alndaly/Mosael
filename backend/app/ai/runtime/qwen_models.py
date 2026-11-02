@@ -169,11 +169,6 @@ def installed() -> bool:
     return all((base / name).is_file() for name in MODEL.required_files)
 
 
-def revision_for(source: str) -> str:
-    """这个下载源上要取哪一版。两个源的 revision 不是同一个哈希,分开钉。"""
-    return MODEL.modelscope_revision if source == "modelscope" else MODEL.hf_revision
-
-
 def speaker(name: str) -> QwenSpeaker | None:
     """按名字认音色。大小写、空格、连字符都容得下(`Uncle_Fu` / `uncle fu` → `uncle_fu`)。"""
     key = (name or "").strip().lower().replace(" ", "_").replace("-", "_")

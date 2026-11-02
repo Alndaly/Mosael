@@ -899,28 +899,6 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     )
 
 
-def _best_price_rule(
-    db: Session,
-    *,
-    workspace_id: str,
-    provider_profile_id: str | None,
-    provider: str,
-    capability: str,
-    model: str,
-    moment: datetime | None = None,
-) -> ProviderPricingRule | None:
-    rules = _best_price_rules(
-        db,
-        workspace_id=workspace_id,
-        provider_profile_id=provider_profile_id,
-        provider=provider,
-        capability=capability,
-        model=model,
-        moment=moment,
-    )
-    return rules[0] if rules else None
-
-
 def _best_price_rules(
     db: Session,
     *,

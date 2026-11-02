@@ -23,8 +23,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -35,69 +33,6 @@ from app.domain.billing.usage import Pricing, price_usage
 
 #: 补算的范围:有生成适配器的能力(回包由适配器读,`reported_usage`)。对话不补,理由见模块说明。
 _GENERATION_CAPABILITIES = ("image", "video", "audio")
-
-
-@dataclass(frozen=True)
-class BackfillOutcome:
-    #: 补上费用的条数。
-    backfilled: int = 0
-    #: 失败、当时按请求侧计量估了价、服务商什么都没回 → 改成不计费的条数。
-    unbilled_failures: int = 0
-
-
-def backfill_usage_costs(db: Session) -> BackfillOutcome:
-    unbilled = 0
-    for event in db.scalars(
-        select(ProviderUsageEvent).where(
-            ProviderUsageEvent.capability.in_(_GENERATION_CAPABILITIES),
-            ProviderUsageEvent.status == "failed",
-            ProviderUsageEvent.cost_confidence == "estimated",
-            ProviderUsageEvent.cost_micros.is_not(None),
-        )
-    ):
-        if event.raw_usage:
-            continue
-        event.cost_micros = 0
-        event.cost_confidence = "not_billed"
-        event.pricing_rule_id = None
-        unbilled += 1
-
-    backfilled = 0
-    for event in db.scalars(
-        select(ProviderUsageEvent).where(
-            ProviderUsageEvent.capability.in_(_GENERATION_CAPABILITIES), ProviderUsageEvent.cost_micros.is_(None)
-        )
-    ):
-        if event.status == "failed" and not event.raw_usage:
-            continue
-        reported = _reported(event)
-        units = with_reported(dict(event.units or {}), reported.units)
-        if reported.cost_micros is not None:
-            event.cost_micros = reported.cost_micros
-            event.currency = reported.currency or event.currency
-            event.pricing_rule_id = None
-        else:
-            pricing = price_usage(
-                db,
-                workspace_id=event.workspace_id,
-                provider_profile_id=event.provider_profile_id,
-                provider=event.provider,
-                capability=event.capability,
-                model=event.model,
-                units=units,
-                moment=event.created_at,
-            )
-            if pricing.cost_micros is None:
-                continue
-            event.cost_micros = pricing.cost_micros
-            event.currency = pricing.currency or event.currency
-            event.pricing_rule_id = pricing.rules[0].id if len(pricing.rules) == 1 else None
-        event.units = units
-        event.cost_confidence = "backfilled"
-        event.unpriced_reason = None
-        backfilled += 1
-    db.flush()
-    return BackfillOutcome(backfilled=backfilled, unbilled_failures=unbilled)
 
 
 def reprice_estimated_prompt_only(db: Session) -> int:

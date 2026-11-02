@@ -32,19 +32,6 @@ export function usePersistentTab<T extends string>(key: string, initial: T, allo
 const tabStorageKey = (key: string) => `mosael:tab:${key}`;
 
 /**
- * 从别处把某一页**下次打开时**停在哪个 tab 写好(模型库的「用它生成」把 AI 工作台切到「生成」页再跳过去)。
- * 那一页挂载时照常读、照常校验;写不进存储就算了,那一页停在它自己记着的那个。
- */
-export function writePersistentTab(key: string, value: string): void {
-  try {
-    localStorage.setItem(tabStorageKey(key), value);
-  } catch {
-    // 隐私模式 / 无 storage
-  }
-}
-
-
-/**
  * 会**活过导航**的「选中了哪一个」—— 工作流、插件、发布记录、定时任务都是这个形状。
  *
  * 和 `usePersistentTab` 的区别在于合法值是**动态的**:tab 的候选写死在代码里,而选中的那一项来自

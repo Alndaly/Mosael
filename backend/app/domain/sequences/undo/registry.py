@@ -56,10 +56,6 @@ def undoable_kinds() -> frozenset[str]:
     return frozenset(_REGISTRY)
 
 
-def is_bookkeeping(kind: str) -> bool:
-    return kind in NOT_UNDOABLE
-
-
 def apply_inverse(db: Session, sequence: Sequence, kind: str, payload: dict[str, Any]) -> None:
     _pair(kind).inverse(db, sequence, payload)
 

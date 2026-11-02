@@ -723,15 +723,6 @@ def _title_from_prompt(prompt: str) -> str:
     return title[:40] or "新生成"
 
 
-def _vendor_can_generate(db: Session, vendor: str, kind: str) -> bool:
-    """有没有一条启用的连接,其下有启用的模型声明了这种生成能力。"""
-
-    return any(
-        model.profile is not None and model.profile.vendor == vendor
-        for model in provider_models.models_for_capability(db, kind)
-    )
-
-
 #: 没写角色时按生成类型兜底:图生视频的那张图是首帧,图生图的那张图是参考,生成音乐时挂的
 #: 那段音频是参考(「照这首的风格来」)。这是**每种介质里最常见的那个意思**,不是随便挑的默认值。
 DEFAULT_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE, "audio": REFERENCE_AUDIO}

@@ -101,11 +101,6 @@ def tool_permission(tool: str) -> str:
     return spec.permission
 
 
-def tool_cost(tool: str) -> str:
-    spec = tool_spec(tool)
-    return spec.cost if spec is not None else "none"
-
-
 def prepare_confirmation(
     db: Session,
     *,

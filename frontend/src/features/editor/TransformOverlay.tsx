@@ -52,15 +52,6 @@ export function readTransform(raw: Record<string, unknown> | undefined | null): 
   };
 }
 
-/** CSS the preview media uses — kept identical here and in Monitor so the box tracks the media. */
-export function transformCss(tf: Transform): React.CSSProperties {
-  if (tf.scale === 1 && tf.rotation === 0 && tf.opacity === 1 && tf.x === 0 && tf.y === 0) return {};
-  return {
-    transform: `translate(${tf.x * 50}%, ${tf.y * 50}%) scale(${tf.scale}) rotate(${tf.rotation}deg)`,
-    opacity: tf.opacity,
-  };
-}
-
 const HANDLES = [
   ["nw", 0, 0],
   ["ne", 1, 0],

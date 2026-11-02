@@ -124,8 +124,3 @@ class StripPlan:
     @classmethod
     def for_codec(cls, codec: str, *, provenance: bool = False) -> "StripPlan":
         return cls(provenance=provenance, codec=codec, bitstream=codec in ("h264", "hevc"))
-
-
-def default_strip_list() -> dict[str, tuple[str, ...]]:
-    """给文档/界面用:默认剥掉的确切清单(按类别)。"""
-    return dict(DEFAULT_STRIP_KEYS)

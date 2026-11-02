@@ -191,15 +191,6 @@ export function deleteClip(sequence: SequenceRef, clipId: string, options: LinkO
   return edit(sequence, `/clips/${clipId}${query}`, { method: "DELETE" });
 }
 
-export function cutClipRanges(
-  sequence: SequenceRef,
-  clipId: string,
-  ranges: Array<{ src_start: number; src_end: number }>,
-  options: LinkOption = {},
-): Promise<Sequence> {
-  return edit(sequence, `/clips/${clipId}/cut-ranges`, { method: "POST", body: JSON.stringify({ ranges, ...options }) });
-}
-
 export function cutClipRangesBatch(
   sequence: SequenceRef,
   cuts: Array<{ clip_id: string; ranges: Array<{ src_start: number; src_end: number }> }>,
@@ -244,18 +235,6 @@ export function setSequenceReframe(
   return edit(sequence, "/reframe", { method: "PATCH", body: JSON.stringify(reframe) });
 }
 
-export function rippleDeleteClip(
-  sequence: SequenceRef,
-  clipId: string,
-  options: RippleDeleteOptions = {},
-): Promise<Sequence> {
-  const query = new URLSearchParams();
-  if (options.linked === false) query.set("linked", "false");
-  if (options.all_tracks) query.set("all_tracks", "true");
-  const suffix = query.size ? `?${query}` : "";
-  return edit(sequence, `/clips/${clipId}/ripple${suffix}`, { method: "DELETE" });
-}
-
 export function splitClip(
   sequence: SequenceRef,
   clipId: string,
@@ -265,18 +244,6 @@ export function splitClip(
   return edit(sequence, `/clips/${clipId}/split`, {
     method: "POST",
     body: JSON.stringify({ src_time: srcTime, ...options }),
-  });
-}
-
-export function splitClipAtPoints(
-  sequence: SequenceRef,
-  clipId: string,
-  srcTimes: number[],
-  options: LinkOption = {},
-): Promise<Sequence> {
-  return edit(sequence, `/clips/${clipId}/split-points`, {
-    method: "POST",
-    body: JSON.stringify({ src_times: srcTimes, ...options }),
   });
 }
 

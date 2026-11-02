@@ -244,9 +244,25 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
     return () => scroller.removeEventListener("scroll", update);
   }, [connections.data?.length]);
 
-  //: 「有没有参考库」由资产页判(EntitiesView:一个连接都没有、或连接列表取不出来,参考库整块不出现),
-  //: 走到这里连接列表一定有 —— 不在这里另画一个空态。
   if (!connections.data) return <Skeleton className="h-48 w-full" />;
+  if (connections.isError) return <LibraryFailure error={connections.error} />;
+  if (connections.data.length === 0) {
+    return (
+      <div className="grid min-w-0 gap-4" data-reference-library="">
+        {modeSwitch && <div className="flex justify-end">{modeSwitch}</div>}
+        <EmptyState
+          icon={<Sparkles />}
+          title={t("referenceLibraryNoConnection")}
+          body={t("referenceLibraryNoConnectionBody")}
+          action={
+            <Button asChild variant="outline">
+              <a href="#/plugins">{t("referenceLibraryGoPlugins")}</a>
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   const rows = items.data?.pages.flatMap((page) => page.items) ?? [];
   return (

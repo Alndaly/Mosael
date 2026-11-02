@@ -26,7 +26,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { takePlayback } from "@/lib/audioPlayback";
 import { gotoAsset } from "@/lib/deepLink";
 import { saveAssetToDisk } from "@/lib/download";
-import { capabilityNumber, supportsParameter } from "@/lib/generationCapabilities";
+import { capabilityNumber } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
 /** 音频模型能挂的输入素材,按在面板上出现的顺序:要配声的视频、参考音频、图生音乐的图。 */
@@ -39,12 +39,6 @@ export const AUDIO_SOURCE_HINTS: Record<AudioSourceRole, MessageKey> = {
   reference_audio: "genAudioReferenceAudioHint",
   reference_image: "genAudioReferenceImageHint",
 };
-
-/** 这个音频模型挂得了哪几种素材。 */
-export function audioSourceRoles(model: GenerationOption | null): AudioSourceRole[] {
-  if (model?.kind !== "audio") return [];
-  return AUDIO_SOURCE_ROLES.filter((role) => supportsParameter(model, role));
-}
 
 /** 歌词最多几个字;描述符没说就是 0(不限,由后端和供应商把关)。 */
 export function lyricsLimit(model: GenerationOption | null): number {

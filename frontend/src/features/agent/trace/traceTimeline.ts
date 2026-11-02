@@ -167,12 +167,3 @@ function durationTimeline(turns: TraceTurn[]): TraceTimelineModel | null {
 export function deriveTraceTimeline(turns: TraceTurn[], mode: TraceTimelineMode): TraceTimelineModel | null {
   return mode === "duration" ? durationTimeline(turns) : sequenceTimeline(turns);
 }
-
-/** 落在选中区间里的记录 key —— 概览条上刷一段,下面的列表跟着高亮。 */
-export function spansInRange(model: TraceTimelineModel | null, start: number, end: number): Set<string> {
-  const keys = new Set<string>();
-  for (const span of model?.spans ?? []) {
-    if (span.eventKey && span.start <= end && span.end >= start) keys.add(span.eventKey);
-  }
-  return keys;
-}

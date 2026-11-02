@@ -209,10 +209,6 @@ export function listWorkflowRevisions(workflowId: string): Promise<WorkflowRevis
   return api<WorkflowRevision[]>(`/api/workflows/${workflowId}/revisions`);
 }
 
-export function getWorkflowRevision(workflowId: string, revision: number): Promise<WorkflowRevisionDetail> {
-  return api<WorkflowRevisionDetail>(`/api/workflows/${workflowId}/revisions/${revision}`);
-}
-
 /** 恢复会追加一个新修订，不会覆盖目标或当前历史。 */
 export function restoreWorkflowRevision(workflowId: string, revision: number): Promise<Workflow> {
   return api<Workflow>(`/api/workflows/${workflowId}/revisions/${revision}/restore`, { method: "POST" });

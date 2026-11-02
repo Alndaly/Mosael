@@ -1,5 +1,5 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { FileText, FileWarning, FolderOpen, Loader2, Music } from "lucide-react";
+import { FileWarning, FolderOpen, Loader2, Music } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, getAsset, type Asset } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
@@ -146,108 +146,6 @@ export function MediaPreviewGrid({
         </span>
       )}
     </div>
-  );
-}
-
-/**
- * 「做出来的」媒体在**答案文档流里**的内嵌渲染:不是附件卡,是 markdown 文档里的一张图/一段视频
- * (维护者定:结果本身就是回答 markdown 的一部分)—— 图按自然尺寸走、文档栏宽封顶,不摆 240px
- * 一排的卡,也不带「结果区」那一圈边框caption 排。点开仍进同一盏灯箱(整批左右翻)。
- */
-export function InlineProducedMedia({ assetIds, className }: { assetIds: string[]; className?: string }) {
-  const t = useI18n();
-  const queries = useQueries({
-    queries: assetIds.map((id) => ({
-      queryKey: assetKeys.detail(id),
-      queryFn: () => getAsset(id),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
-  const gallery: ImagePreviewItem[] = queries
-    .map((query) => query.data)
-    .filter((asset): asset is Asset => Boolean(asset))
-    .filter((asset) => asset.kind === "image" || asset.kind === "video")
-    .map((asset) => ({
-      src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
-      title: asset.name,
-      video: asset.kind === "video",
-      assetId: asset.id,
-    }));
-  // 与 MediaPreviewGrid 同一份取舍:取不到的不占一张卡,收成一行小字。
-  const resolved = assetIds.filter((_, index) => queries[index].data);
-  const missing = queries.filter((query) => query.isError).length;
-  if (resolved.length === 0 && missing === 0) return null;
-  return (
-    <div className={cn("flex min-w-0 flex-col items-start gap-2", className)}>
-      {resolved.map((id) => (
-        <InlineMediaFigure key={id} assetId={id} gallery={gallery} />
-      ))}
-      {missing > 0 && (
-        <span className="flex items-center gap-1 text-ui-xs text-muted-foreground">
-          <FileWarning size={12} /> {t("agentMediaDeleted").replace("{n}", String(missing))}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** 文档流里的一张「做出来的」媒体:图按自然尺寸(栏宽封顶),点开进灯箱;角上悬停给「在素材库中打开」。 */
-function InlineMediaFigure({ assetId, gallery }: { assetId: string; gallery?: ImagePreviewItem[] }) {
-  const t = useI18n();
-  const { openImagePreview } = useImagePreview();
-  const asset = useQuery({
-    queryKey: assetKeys.detail(assetId),
-    queryFn: () => getAsset(assetId),
-    staleTime: 60_000,
-    retry: false,
-  });
-  if (asset.isLoading) {
-    return (
-      <div className="m-0 flex items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
-        <Loader2 size={13} className="animate-mosael-spin" />
-      </div>
-    );
-  }
-  if (asset.isError || !asset.data) return null;
-  const data = asset.data;
-  const src = data.kind === "image" ? assetPreviewUrl(data.id) : assetFileUrl(data.id);
-  return (
-    <figure className="group/media relative m-0 flex min-w-0 max-w-full flex-col gap-1" data-media-inline={data.id}>
-      {data.kind === "image" ? (
-        <MediaImageButton
-          asset={data}
-          src={src}
-          onOpen={() => openImagePreview({ src, title: data.name, assetId: data.id, gallery })}
-          imgClassName="h-auto max-h-[320px] w-auto max-w-full"
-        />
-      ) : data.kind === "video" ? (
-        <VideoPlayer
-          assetSrc={src}
-          className="aspect-video w-full max-w-[480px] rounded-lg border border-border"
-          onExpand={() => openImagePreview({ src, title: data.name, video: true, assetId: data.id, gallery })}
-        />
-      ) : data.kind === "audio" ? (
-        <div className="flex w-full max-w-[480px] items-center rounded-lg border border-border bg-muted px-2 py-1.5">
-          <AudioPlayerBar src={src} showIcon className="min-w-0 flex-1" />
-        </div>
-      ) : (
-        // 文档类(网页/PDF…):文档流里就是一行文件名,不占画面位。
-        <span className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
-          <FileText size={13} /> {data.name}
-        </span>
-      )}
-      <Truncate as="figcaption" className="text-ui-2xs text-muted-foreground">{data.name}</Truncate>
-      <IconButton
-        label={t("agentOutputOpenInLibrary")}
-        variant="secondary"
-        size="icon-xs"
-        className="absolute right-1.5 top-1.5 opacity-0 transition-opacity duration-100 focus-visible:opacity-100 group-hover/media:opacity-100"
-        onClick={() => gotoAsset(data.id)}
-      >
-        <FolderOpen />
-      </IconButton>
-    </figure>
   );
 }
 

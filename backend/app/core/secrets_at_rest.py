@@ -153,21 +153,6 @@ def decrypt(token: str) -> str | None:
         return None
 
 
-def looks_encrypted(value: str) -> bool:
-    """这串是不是本模块加密出来的。
-
-    只在**迁移**里用,用来分辨老库里的明文与已经加密过的密文;运行时不做这种判断 —— 那就成了
-    读取期的两路兼容,而那正是 ADR 0006 要避免的。
-    """
-    if not value.startswith("gAAAAA"):
-        return False
-    try:
-        Fernet(master_key()).decrypt(value.encode())
-    except (InvalidToken, ValueError):
-        return False
-    return True
-
-
 class EncryptedText(TypeDecorator):
     """落盘加密的字符串列。空串不加密(它不是秘密,加密只会让"没配"看起来像"配了")。"""
 

@@ -8,13 +8,11 @@ import {
   createEntity,
   entityKeys,
   listEntities,
-  listReferenceConnections,
   type EntityKind,
   type EntitySummary,
   type Workspace,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
-import { referenceKeys } from "@/api/queryKeys";
 import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import { TagFilter } from "@/components/app/TagFilter";
@@ -96,14 +94,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     queryKey: entityKeys.list(workspace.id),
     queryFn: () => listEntities(workspace.id),
   });
-  //: 参考库是插件能力,连接列表就是「这一页要不要出现参考库」的唯一判据。
-  //: 插件关掉时后端这里返回空,切换器和参考库整块一起消失。
-  const references = useQuery({ queryKey: referenceKeys.connections(), queryFn: listReferenceConnections });
-  const referenceMode = mode === "references" && Boolean(references.data?.length);
-  const activeMode: LibraryMode = referenceMode ? "references" : "assets";
-  React.useEffect(() => {
-    if (mode === "references" && (references.isError || (references.data && references.data.length === 0))) setMode("assets");
-  }, [mode, references.data, references.isError, setMode]);
+  //: 参考库是插件能力,但入口一直摆着:没有连接时进去看到「去插件页」,而不是整块消失 ——
+  //: 否则用户根本不知道这里还有一本外部图集可接(REPORT R6)。
+  const activeMode: LibraryMode = mode === "references" ? "references" : "assets";
   const keyword = search.trim();
   const found = useQuery({
     queryKey: entityKeys.list(workspace.id, { q: keyword }),
@@ -170,8 +163,6 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
       ]}
     />
   );
-  const availableModeSwitch = references.data?.length ? modeSwitch : undefined;
-
   return (
     <div
       className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
@@ -221,7 +212,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
               count: (all.data ?? []).filter((entity) => entity.kind === one).length,
             }))}
           />
-          {availableModeSwitch && <div className="ml-auto">{availableModeSwitch}</div>}
+          <div className="ml-auto">{modeSwitch}</div>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">

@@ -92,7 +92,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, t
 from mosael_formats.i18n import DEFAULT_LOCALE
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.db.models import Job, User, Workflow, WorkflowRevision, WorkflowRunApproval, now
+from app.db.models import Job, Workflow, WorkflowRevision, WorkflowRunApproval, now
 from app.domain.notifications import notify
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import as_text
@@ -211,16 +211,6 @@ def find(db: Session, job_id: str, node_id: str) -> WorkflowRunApproval | None:
     return db.scalar(
         select(WorkflowRunApproval).where(
             WorkflowRunApproval.job_id == job_id, WorkflowRunApproval.node_id == node_id
-        )
-    )
-
-
-def for_job(db: Session, job_id: str) -> list[WorkflowRunApproval]:
-    return list(
-        db.scalars(
-            select(WorkflowRunApproval)
-            .where(WorkflowRunApproval.job_id == job_id)
-            .order_by(WorkflowRunApproval.created_at)
         )
     )
 
@@ -862,12 +852,6 @@ def register_seams() -> None:
 
 
 # ---------------- 列表出口用的小数据 ----------------
-
-
-def requester_name(db: Session, job: Job | None) -> str:
-    """这次运行是谁发起的(失败 / 等待的说明里要提到人时用)。"""
-    user = db.get(User, job.created_by) if job is not None and job.created_by else None
-    return (user.display_name or user.username) if user is not None else ""
 
 
 def pinned_node(db: Session, job: Job, node_id: str) -> dict[str, Any]:

@@ -135,15 +135,6 @@ def interrupted_card(*, summary: str, tool: str) -> dict[str, Any]:
     }
 
 
-def notice_card(message: str) -> dict[str, Any]:
-    """点击被拒时的提示卡(未绑定、无权限、卡已失效)。原卡保持可点,便于有权限的人接手。"""
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {"template": "red", "title": {"tag": "plain_text", "content": "无法处理"}},
-        "elements": [_text(message)],
-    }
-
-
 # ---------------- 工作流「等人确认」 ----------------
 #
 # 和工具确认卡同一个形状(同一处回调、同一条授权、同样靠响应里的新卡片就地替换),但决定落的是

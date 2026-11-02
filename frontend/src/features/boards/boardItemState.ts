@@ -86,10 +86,6 @@ export function itemIsRunning(item: BoardItem): boolean {
   return Boolean(itemJobId(item)) && (status === "queued" || status === "running");
 }
 
-export function runningState(jobId: string): NonNullable<BoardItem["run"]> {
-  return { status: "running", job_id: jobId };
-}
-
 /** 这一格这一轮(或上一轮)跑的是它的哪一项能力;不是能力的运行回 undefined(见后端 producer_ids.ability_of)。 */
 export function runningAbility(item: BoardItem): BoardProducer | undefined {
   return item.run?.ability;

@@ -618,14 +618,6 @@ _UNTYPED_IMAGE_URL = "image_url"
 _UNTYPED_IMAGE_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE}
 
 
-def _untyped_image_url(request: GenerationRequest, role: str) -> str | None:
-    """`image_url` 在这次请求里算不算这个角色。"""
-    if _UNTYPED_IMAGE_ROLE_BY_KIND.get(request.kind) != role:
-        return None
-    value = request.parameters.get(_UNTYPED_IMAGE_URL)
-    return str(value) if value else None
-
-
 def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
     """取某个角色的**全部**素材。
 
