@@ -96,9 +96,11 @@ def test_chat_uses_gateway_adapter_for_an_automation_target(monkeypatch) -> None
     assert text == "from oauth"
     assert captured["system_prompt"] == "只给 JSON"
     assert "写一句" in captured["prompt"]
-    assert captured["options"]["temperature"] == 0.6
+    #: k3 把 temperature/top_p 钉死(官方要求不要显式传);公共请求层已经拿掉,
+    #: 网关这条也不能把 None 或旧值补回去。
+    assert "temperature" not in captured["options"]
+    assert "top_p" not in captured["options"].get("samplingParams", {})
     assert captured["options"]["maxTokens"] == 64
-    assert captured["options"]["samplingParams"]["top_p"] == 0.8
 
 
 def test_automation_target_resolves_oauth_identity_without_a_base_url(monkeypatch) -> None:
