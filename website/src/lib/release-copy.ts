@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.4.3": {
+    zh: [
+      "**引擎可以删、下载可以停。** 管理 → 引擎里已安装的转写模型和语音引擎能直接删除，ASR/TTS 下载中可以取消；取消后先等进程停下再允许重试，并清理半截 venv 与权重。",
+      "**F5-TTS 不再被 FFmpeg 卡住。** 参考音频改用 soundfile 读取，不再要求用户机器上有一套共享 FFmpeg；普通用户装完就能合成。",
+      "**MFA 不再假装可用。** Cloud 没配置 `CLOUD_MFA_KEY` 时不再显示「开启双因素认证」；OpenAI 兼容连接创建时「初始模型」也改为可选。",
+    ],
+    en: [
+      "**Engines can be removed and downloads stopped.** Installed transcription models and speech engines can be deleted, and ASR/TTS downloads can be cancelled; retry waits for the process to stop and partial venvs or weights are cleaned up.",
+      "**F5-TTS no longer depends on a shared FFmpeg.** Reference audio is read through soundfile, so ordinary installs can synthesize without Homebrew FFmpeg.",
+      "**MFA no longer pretends to be available.** The enable button stays hidden when Cloud has no `CLOUD_MFA_KEY`; the initial model on an OpenAI-compatible connection is now optional.",
+    ],
+  },
   "v2.4.2": {
     zh: [
       "**引用图片发不发，生成前就告诉你。** AI Studio 与画板的 `@资产` / `@素材` 小条会在参考图没名额、只发一部分、模型不支持姿势参考时直接标出原因；点小条还能先看素材预览。",
