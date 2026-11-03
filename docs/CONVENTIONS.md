@@ -7,6 +7,32 @@
 
 ---
 
+## 提交信息
+
+`type(scope): 一句话说清这次改了什么`,正文三段都写,缺一段不能提交:
+
+```text
+fix(engines): 同一 ASR 引擎的运行环境安装与删除串行
+
+## 背景
+
+为什么改;不改会怎样。
+
+## 改动
+
+具体动了哪些文件/行为。
+
+## 验证
+
+真跑过什么;没跑什么、为什么。
+```
+
+钩子由 `.githooks/commit-msg` 和 `scripts/check_commit_message.py` 组成。`pnpm install` 的
+`prepare` 会把当前 clone 的 `core.hooksPath` 指到 `.githooks`;已有 clone 可以手动跑
+`pnpm hooks:install`。合并提交和 autosquash 的 `fixup!` / `squash!` 跳过正文检查。
+
+---
+
 ## 前端约定
 
 ### 样式
