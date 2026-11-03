@@ -129,7 +129,9 @@
 - 本机引擎下载的取消开关:`app/ai/runtime/tts_models.py:_download_scopes`(每个引擎一个
   `AbortScope`,负责停掉 pip / git / worker 的进程树)和
   `app/ai/runtime/tts_models.py:_cancel_pending`、`app/ai/runtime/asr_models.py:_download_scopes`
-  与 `app/ai/runtime/asr_models.py:_cancel_pending`(取消后到线程清完半截文件之间的短窗口)。它们只属于发起下载的那个进程;重启后线程与开关一起消失,
+  与 `app/ai/runtime/asr_models.py:_cancel_pending`(取消后到线程清完半截文件之间的短窗口)、
+  `app/ai/runtime/asr_models.py:_engine_locks` 与 `app/ai/runtime/asr_models.py:_engine_locks_guard`
+  (同一 ASR 引擎共用一个托管 venv,安装运行环境与删除 venv 按引擎串行)。它们只属于发起下载的那个进程;重启后线程与开关一起消失,
   盘上残留由下一次安装接管。第二个进程看不见另一个的下载,取消请求必须落回原进程。
 - `app/ai/runtime/f5_models.py:_failed_at` — 语言包上一次**失败**发生的时刻(UTC ISO),只给
   界面上那句「最后一次 …」用;状态和原因本身在那条 `_store` 记录里。重启后是空的:下载线程本来

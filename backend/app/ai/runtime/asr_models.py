@@ -586,6 +586,24 @@ _store = DownloadStore()
 #: 下载取消开关与清理窗口(同 tts_models)。
 _download_scopes: dict[str, abort.AbortScope] = {}
 _cancel_pending: set[str] = set()
+#: 同一 ASR 引擎共用一个托管 venv:运行环境安装、删除 venv 必须串行。
+_engine_locks: dict[str, threading.Lock] = {}
+_engine_locks_guard = threading.Lock()
+
+
+def _engine_lock(engine: str) -> threading.Lock:
+    with _engine_locks_guard:
+        return _engine_locks.setdefault(engine, threading.Lock())
+
+
+def _engine_active(engine: str, *, exclude: str = "") -> bool:
+    for model_id in _download_scopes:
+        if model_id == exclude:
+            continue
+        entry = _BY_ID.get(model_id)
+        if entry is not None and entry.engine == engine:
+            return True
+    return False
 
 
 def resolve_engine_python(engine: str) -> str | None:
@@ -759,6 +777,12 @@ def _resolve_python(engine: str) -> str:
 
 
 def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> None:
+    """串行化同一引擎的 venv 安装:两个模型可能同时点下载,venv 只有一份。"""
+    with _engine_lock(engine):
+        _ensure_engine_runtime_unlocked(engine, progress_key=progress_key)
+
+
+def _ensure_engine_runtime_unlocked(engine: str, *, progress_key: str | None = None) -> None:
     """确保有一个解释器能 `import <engine>`;没有就建一个托管 venv 并装进去。
 
     这一步的存在,就是为了让用户**不必**去设置里指定 Python 解释器 —— 和 TTS 那边同一个做法
@@ -903,13 +927,17 @@ def _run_download(model_id: str, scope: abort.AbortScope | None = None) -> None:
 
 def _cleanup_cancelled(model_id: str) -> None:
     entry = _BY_ID[model_id]
-    for sub in entry.sub_models:
-        found = _find_sub_dir(entry.engine, sub.cache_dir)
-        if found is not None:
-            shutil.rmtree(found, ignore_errors=True)
-    if not any(_is_installed(other) for other in CATALOG if other.engine == entry.engine):
-        shutil.rmtree(managed_venv_dir(entry.engine), ignore_errors=True)
-    clear_runtime_probes()
+    with _engine_lock(entry.engine):
+        for sub in entry.sub_models:
+            found = _find_sub_dir(entry.engine, sub.cache_dir)
+            if found is not None:
+                shutil.rmtree(found, ignore_errors=True)
+        #: 另一个模型还在用同一个引擎的 venv 时不能删它。
+        if not _engine_active(entry.engine, exclude=model_id) and not any(
+            _is_installed(other) for other in CATALOG if other.engine == entry.engine
+        ):
+            shutil.rmtree(managed_venv_dir(entry.engine), ignore_errors=True)
+        clear_runtime_probes()
 
 
 def _download_body(model_id: str) -> None:
@@ -1036,13 +1064,16 @@ def remove(model_id: str) -> None:
     live = _store.get(entry.id)
     if live is not None and live.status == "downloading":
         raise RuntimeError("currently downloading")
-    found = [sub for sub in (_find_sub_dir(entry.engine, one.cache_dir) for one in entry.sub_models) if sub is not None]
-    if not found:
-        raise RuntimeError("not installed")
-    for path in found:
-        shutil.rmtree(path, ignore_errors=True)
-    _store.clear(entry.id)
-    #: 同引擎还有其他已安装模型时,运行环境还有用;最后一份删掉才清 venv。
-    if not any(_is_installed(other) for other in CATALOG if other.engine == entry.engine):
-        shutil.rmtree(managed_venv_dir(entry.engine), ignore_errors=True)
-    clear_runtime_probes()
+    with _engine_lock(entry.engine):
+        if _engine_active(entry.engine, exclude=entry.id):
+            raise RuntimeError("engine is downloading another model")
+        found = [sub for sub in (_find_sub_dir(entry.engine, one.cache_dir) for one in entry.sub_models) if sub is not None]
+        if not found:
+            raise RuntimeError("not installed")
+        for path in found:
+            shutil.rmtree(path, ignore_errors=True)
+        _store.clear(entry.id)
+        #: 同引擎还有其他已安装模型时,运行环境还有用;最后一份删掉才清 venv。
+        if not any(_is_installed(other) for other in CATALOG if other.engine == entry.engine):
+            shutil.rmtree(managed_venv_dir(entry.engine), ignore_errors=True)
+        clear_runtime_probes()

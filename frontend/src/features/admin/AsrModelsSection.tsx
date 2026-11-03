@@ -65,6 +65,7 @@ export function AsrModelsSection() {
     //: 设默认看的是**权重在不在盘上**(status),不是运行环境探没探完 —— 后者只是还没答。
     installed: model.status === "installed",
   }));
+  const busyEngines = new Set((models.data ?? []).filter((model) => model.status === "downloading").map((model) => model.engine));
   const defaultModel = models.data?.find((model) => model.is_default);
   const canSetDefault = hasDefaultChoice(models.data?.length);
 
@@ -104,7 +105,7 @@ export function AsrModelsSection() {
             tags={canSetDefault && model.is_default ? <AdminDefaultMarker /> : null}
             onDownload={() => download.mutate(model.id)}
             onCancel={model.status === "downloading" ? () => cancel.mutate(model.id) : undefined}
-            onRemove={model.status === "installed" ? () => setRemoveTarget(model.id) : undefined}
+            onRemove={model.status === "installed" && !busyEngines.has(model.engine) ? () => setRemoveTarget(model.id) : undefined}
           />
         ))}
         {models.isLoading && <AdminRow label={t("connecting")} />}
