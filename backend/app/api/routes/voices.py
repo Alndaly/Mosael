@@ -463,6 +463,23 @@ def download_tts_model(engine_id: str, db: DbSession, user: CurrentUser) -> dict
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.delete("/tts/models/{engine_id}", response_model=TtsEngineOut)
+def remove_tts_model(engine_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """删除本机引擎权重/源码与托管 venv;如果它是当前默认克隆引擎,默认清空。"""
+    ensure_deployment_admin(db, user)
+    try:
+        if tts_config.get().engine == engine_id:
+            tts_settings.saved_row(db).engine = ""
+            db.commit()
+            tts_config.refresh()
+        tts_models.remove(engine_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownEngine")) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return tts_models.get_status(engine_id)
+
+
 @router.post("/tts/models/{engine_id}/cancel", response_model=TtsEngineOut)
 def cancel_tts_model(engine_id: str, db: DbSession, user: CurrentUser) -> dict:
     """取消本机引擎下载/安装;线程退出后清掉半截 venv 与权重。"""

@@ -70,6 +70,23 @@ def download_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.delete("/asr/models/{model_id}", response_model=AsrModelOut)
+def remove_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """删除本机的一份转写权重;最后一份同引擎模型删掉时连运行环境一起清。"""
+    ensure_deployment_admin(db, user)
+    try:
+        asr_models.remove(model_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownModel")) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    asr_defaults.clear_default_model(db, model_id)
+    db.commit()
+    locale = get_current_locale()
+    row = next(one for one in _status_rows(db) if one["id"] == model_id)
+    return translate_fields(row, ("label", "detail", "message"), locale)
+
+
 #: 一次听写最多收多少字节。**上限要在读之前就有** —— 先收进内存再判等于把这道闸交给上传方。
 #: 120 秒的 opus 大约 1 MB,给到 12 MB 已经把各种码率都罩住了。
 DICTATION_MAX_BYTES = 12 * 1024 * 1024

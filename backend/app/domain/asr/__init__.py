@@ -85,6 +85,14 @@ def default_model_id(db: Session) -> str:
     return row.default_model if row is not None else ""
 
 
+def clear_default_model(db: Session, model_id: str) -> None:
+    """删掉这一份权重时,别让默认还指向一个已经不在盘上的 id。"""
+    row = db.get(AsrConfig, SINGLETON_ID)
+    if row is not None and row.default_model == model_id:
+        row.default_model = ""
+        db.flush()
+
+
 def is_default(db: Session, model_id: str) -> bool:
     return bool(model_id) and default_model_id(db) == model_id
 
@@ -166,6 +174,7 @@ __all__ = [
     "ResolvedAsr",
     "SINGLETON_ID",
     "UnknownAsrModel",
+    "clear_default_model",
     "default_model_id",
     "is_default",
     "model_entry",

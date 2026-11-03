@@ -2,12 +2,13 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { downloadAsrModel, listAsrModels, setDefaultAsrModel } from "@/api/client";
+import { downloadAsrModel, listAsrModels, removeAsrModel, setDefaultAsrModel } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 import { AdminDefaultMarker, AdminDefaultSelect, hasDefaultChoice } from "./defaultRow";
 import { ModelDownloadRow } from "./ModelDownloadRow";
+import { ConfirmDialog } from "@/components/app/modals";
 
 /**
  * 管理 → 引擎 → 转写:预下载 funasr / sherpa-onnx / whisperx 权重、装运行环境,展示进度、百分比、速度与剩余时间,
@@ -31,6 +32,16 @@ export function AsrModelsSection() {
   const download = useMutation({
     mutationFn: (id: string) => downloadAsrModel(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["asr-models"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const [removeTarget, setRemoveTarget] = React.useState<string | null>(null);
+  const remove = useMutation({
+    mutationFn: (id: string) => removeAsrModel(id),
+    onSuccess: () => {
+      setRemoveTarget(null);
+      void qc.invalidateQueries({ queryKey: ["asr-models"] });
+      toast.success(t("modelRemoved"));
+    },
     onError: (error: Error) => toast.error(error.message),
   });
   const setDefault = useMutation({
@@ -87,10 +98,20 @@ export function AsrModelsSection() {
             // (唯一可写处)。整个"默认"只在这一节有 ≥2 个候选时才摆(见 defaultRow);只有一种实现时它没有意义。
             tags={canSetDefault && model.is_default ? <AdminDefaultMarker /> : null}
             onDownload={() => download.mutate(model.id)}
+            onRemove={model.status === "installed" ? () => setRemoveTarget(model.id) : undefined}
           />
         ))}
         {models.isLoading && <AdminRow label={t("connecting")} />}
       </div>
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title={t("modelRemoveTitle")}
+        body={t("asrModelRemoveBody")}
+        pending={remove.isPending}
+        confirmLabel={t("delete")}
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => removeTarget && remove.mutate(removeTarget)}
+      />
     </AdminSection>
   );
 }

@@ -4688,6 +4688,49 @@
         }
       }
     },
+    "/api/asr/models/{model_id}": {
+      "delete": {
+        "tags": [
+          "asr"
+        ],
+        "summary": "Remove Asr Model",
+        "description": "删除本机的一份转写权重;最后一份同引擎模型删掉时连运行环境一起清。",
+        "operationId": "remove_asr_model_api_asr_models__model_id__delete",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsrModelOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/asr/dictate": {
       "post": {
         "tags": [
@@ -6436,6 +6479,49 @@
         ],
         "summary": "Download Tts Model",
         "operationId": "download_tts_model_api_tts_models__engine_id__download_post",
+        "parameters": [
+          {
+            "name": "engine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Engine Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tts/models/{engine_id}": {
+      "delete": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Remove Tts Model",
+        "description": "删除本机引擎权重/源码与托管 venv;如果它是当前默认克隆引擎,默认清空。",
+        "operationId": "remove_tts_model_api_tts_models__engine_id__delete",
         "parameters": [
           {
             "name": "engine_id",

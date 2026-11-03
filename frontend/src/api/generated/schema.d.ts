@@ -1805,6 +1805,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asr/models/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Asr Model
+         * @description 删除本机的一份转写权重;最后一份同引擎模型删掉时连运行环境一起清。
+         */
+        delete: operations["remove_asr_model_api_asr_models__model_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/asr/dictate": {
         parameters: {
             query?: never;
@@ -2552,6 +2572,26 @@ export interface paths {
         /** Download Tts Model */
         post: operations["download_tts_model_api_tts_models__engine_id__download_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tts/models/{engine_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Tts Model
+         * @description 删除本机引擎权重/源码与托管 venv;如果它是当前默认克隆引擎,默认清空。
+         */
+        delete: operations["remove_tts_model_api_tts_models__engine_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -26286,6 +26326,37 @@ export interface operations {
             };
         };
     };
+    remove_asr_model_api_asr_models__model_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsrModelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     dictate_api_asr_dictate_post: {
         parameters: {
             query?: never;
@@ -27511,6 +27582,37 @@ export interface operations {
         };
     };
     download_tts_model_api_tts_models__engine_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engine_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TtsEngineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_tts_model_api_tts_models__engine_id__delete: {
         parameters: {
             query?: never;
             header?: never;

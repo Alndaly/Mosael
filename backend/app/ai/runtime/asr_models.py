@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 
 import hashlib
+import shutil
 import json
 import os
 import subprocess
@@ -971,4 +972,28 @@ __all__ = [
     "entry_for_transcribe",
     "measure_fraction",
     "is_installed",
+    "remove",
 ]
+
+
+def remove(model_id: str) -> None:
+    """删除这一份转写权重;这个引擎没有别的已装模型时,连运行环境一起删。
+
+    只删目录索引认得的那个模型目录,不扫缓存根 —— WhisperX 的其他型号和别的引擎共用缓存根,
+    按根删会把用户没点的那几份一起带走。默认模型由调用方在提交前清掉。
+    """
+    entry = _BY_ID.get(model_id)
+    if entry is None:
+        raise KeyError(model_id)
+    live = _store.get(entry.id)
+    if live is not None and live.status == "downloading":
+        raise RuntimeError("currently downloading")
+    found = [sub for sub in (_find_sub_dir(entry.engine, one.cache_dir) for one in entry.sub_models) if sub is not None]
+    if not found:
+        raise RuntimeError("not installed")
+    for path in found:
+        shutil.rmtree(path, ignore_errors=True)
+    _store.clear(entry.id)
+    #: 同引擎还有其他已安装模型时,运行环境还有用;最后一份删掉才清 venv。
+    if not any(_is_installed(other) for other in CATALOG if other.engine == entry.engine):
+        shutil.rmtree(managed_venv_dir(entry.engine), ignore_errors=True)

@@ -1,8 +1,9 @@
 import React from "react";
-import { AlertCircle, CheckCircle2, Download, Loader2, RotateCw } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Loader2, RotateCw, Trash2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -41,6 +42,7 @@ export function ModelDownloadRow({
   tags,
   onDownload,
   onCancel,
+  onRemove,
 }: {
   model: DownloadableModel;
   /** 名字后面、大小前面的元信息,比如引擎族。 */
@@ -58,6 +60,8 @@ export function ModelDownloadRow({
   onDownload: () => void;
   /** 正在下载/安装时取消;不给就没有取消入口。 */
   onCancel?: () => void;
+  /** 删除已安装的权重;不给就没有删除入口。 */
+  onRemove?: () => void;
 }) {
   const t = useI18n();
   const pct = model.total_bytes > 0 ? Math.min(100, Math.round((model.downloaded_bytes / model.total_bytes) * 100)) : 0;
@@ -142,6 +146,16 @@ export function ModelDownloadRow({
           {t("asrModelInstalled")}
         </AdminRowState>
       )}
+      {installed && onRemove && (
+        <IconButton
+          variant="ghost"
+          size="icon-xs"
+          label={t("delete")}
+          onClick={onRemove}
+        >
+          <Trash2 size={13} />
+        </IconButton>
+      )}
       {installed && model.runtime_checked && !model.runtime_ready && action(<Download size={13} />, t("asrModelInstallRuntime"))}
       {model.status === "missing" && action(<Download size={13} />, t("asrModelDownload"))}
       {downloading && (
@@ -150,6 +164,7 @@ export function ModelDownloadRow({
           {model.total_bytes > 0 ? `${pct}%` : null}
         </AdminRowState>
       )}
+
       {model.status === "failed" && action(<RotateCw size={13} />, t("asrModelRetry"))}
     </AdminRow>
   );

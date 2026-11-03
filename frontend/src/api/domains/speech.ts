@@ -43,6 +43,10 @@ export function downloadAsrModel(id: string): Promise<AsrModel> {
   return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
 
+export function removeAsrModel(id: string): Promise<AsrModel> {
+  return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 /**
  * 把这一个设成**这台机器**的默认转写模型(管理 → 引擎 → 转写模型;只有部署管理员能调)。
  * 回包是改完之后的那一行 —— 界面照它再向后端问一次整张列表,不自己把别的行改掉。
@@ -326,6 +330,10 @@ export function downloadTtsModel(id: string): Promise<TtsEngine> {
 
 export function cancelTtsModel(id: string): Promise<TtsEngine> {
   return api<TtsEngine>(`/api/tts/models/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}
+
+export function removeTtsModel(id: string): Promise<TtsEngine> {
+  return api<TtsEngine>(`/api/tts/models/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export type InstallSource = components["schemas"]["InstallSourceOut"];

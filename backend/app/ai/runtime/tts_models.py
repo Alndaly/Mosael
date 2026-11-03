@@ -934,6 +934,27 @@ def start_download(engine_id: str) -> dict[str, Any]:
     return _status_dict(engine)
 
 
+def remove(engine_id: str) -> None:
+    """删除这个本机引擎的权重、Fish 源码和托管 venv;自定义路径不碰。"""
+    engine = MODELS_BY_ID.get(engine_id)
+    if engine is None:
+        raise KeyError(engine_id)
+    live = _store.get(engine.id)
+    if live is not None and live.status == "downloading" or engine.id in _cancel_pending:
+        raise RuntimeError("currently downloading")
+    if engine_id == "fish-speech":
+        shutil.rmtree(tts_config.MANAGED_FISH_MODEL, ignore_errors=True)
+        shutil.rmtree(tts_config.MANAGED_FISH_REPO, ignore_errors=True)
+    elif engine_id == qwen_models.ENGINE_ID:
+        shutil.rmtree(qwen_models.root(), ignore_errors=True)
+    else:
+        shutil.rmtree(tts_config.MANAGED_F5_MODEL, ignore_errors=True)
+    shutil.rmtree(tts_config.managed_venv_dir(engine_id), ignore_errors=True)
+    _store.clear(engine_id)
+    clear_runtime_probes()
+    forget_failures()
+
+
 def cancel_download(engine_id: str) -> dict[str, Any]:
     """停掉这个引擎正在跑的下载/安装,并让线程在退出后删掉半截文件。
 
@@ -1205,6 +1226,6 @@ def _download_body(engine_id: str) -> None:
             pass
 
 
-__all__ = ["CATALOG", "list_status", "get_status", "start_download", "cancel_download", "is_installed",
+__all__ = ["CATALOG", "list_status", "get_status", "start_download", "cancel_download", "remove", "is_installed",
            "resolve_engine_python", "clear_runtime_probes", "sources_for", "effective_source",
            "bytes_on_disk"]

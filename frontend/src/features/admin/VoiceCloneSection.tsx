@@ -11,6 +11,7 @@ import {
   downloadTtsModel,
   getTtsConfig,
   listTtsModels,
+  removeTtsModel,
   updateTtsConfig,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -24,6 +25,7 @@ import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 import { AdminDefaultMarker, AdminDefaultSelect, AdminOnlyOneNote, hasDefaultChoice } from "./defaultRow";
 import { ModelDownloadRow } from "./ModelDownloadRow";
+import { ConfirmDialog } from "@/components/app/modals";
 
 
 type ConfigForm = { engine: string; python_path: string; fish_repo_dir: string; fish_model_dir: string };
@@ -169,6 +171,17 @@ export function VoiceCloneSection() {
   });
   // **只看这一个引擎自己在不在下**,不看别人。它们各有各的 venv 和权重目录、跑在各自的
   // 一次性子进程里,同时装不会互相弄坏 —— 而"一个在下,所有按钮都变灰"此前正是这么来的。
+  const [removeTarget, setRemoveTarget] = React.useState<string | null>(null);
+  const remove = useMutation({
+    mutationFn: (id: string) => removeTtsModel(id),
+    onSuccess: () => {
+      setRemoveTarget(null);
+      void qc.invalidateQueries({ queryKey: ["tts-models"] });
+      void qc.invalidateQueries({ queryKey: ["tts-config"] });
+      toast.success(t("modelRemoved"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   const cancel = useMutation({
     mutationFn: (id: string) => cancelTtsModel(id),
     onSuccess: () => {
@@ -239,6 +252,7 @@ export function VoiceCloneSection() {
           tags={canSetDefault && config.data?.engine === model.id ? <AdminDefaultMarker /> : null}
           onDownload={() => download.mutate(model.id)}
           onCancel={busy ? () => cancel.mutate(model.id) : undefined}
+          onRemove={model.status === "installed" ? () => setRemoveTarget(model.id) : undefined}
         />
         {/* 预置音色引擎**不在这里切换**。不写这句的话,用户装好 Qwen3-TTS、在这张表里看到
             「已安装」,却只在「默认克隆引擎」里找它 —— 那个名字按后端只收 f5-tts/fish-speech,
@@ -347,6 +361,15 @@ export function VoiceCloneSection() {
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title={t("modelRemoveTitle")}
+        body={t("ttsModelRemoveBody")}
+        pending={remove.isPending}
+        confirmLabel={t("delete")}
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => removeTarget && remove.mutate(removeTarget)}
+      />
     </AdminSection>
   );
 }
