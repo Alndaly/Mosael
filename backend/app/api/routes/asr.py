@@ -70,6 +70,21 @@ def download_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.post("/asr/models/{model_id}/cancel", response_model=AsrModelOut)
+def cancel_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """取消转写模型下载/运行环境安装;线程退出后清理半截文件。"""
+    ensure_deployment_admin(db, user)
+    try:
+        row = asr_models.cancel_download(model_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownModel")) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    locale = get_current_locale()
+    row["is_default"] = asr_defaults.is_default(db, model_id)
+    return translate_fields(row, ("label", "detail", "message"), locale)
+
+
 @router.delete("/asr/models/{model_id}", response_model=AsrModelOut)
 def remove_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
     """删除本机的一份转写权重;最后一份同引擎模型删掉时连运行环境一起清。"""

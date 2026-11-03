@@ -158,7 +158,7 @@ describe("转写模型", () => {
     expect(within(footer as HTMLElement).getByRole("progressbar")).toBeInTheDocument();
     expect(footer).toHaveTextContent("/");
     expect(row.querySelector("[data-admin-row-state]")).toHaveTextContent("50%");
-    expect(within(row).queryByRole("button")).toBeNull();
+    expect(within(row).getByRole("button", { name: "cancel" })).toBeInTheDocument();
   });
 
   it("没有分母(装运行环境)时不画进度条、不报 0%,在说明下面说正在做什么", async () => {

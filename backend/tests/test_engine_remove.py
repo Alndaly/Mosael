@@ -15,11 +15,14 @@ def test_remove_asr_model_deletes_weights_and_last_runtime(tmp_path, monkeypatch
     monkeypatch.setattr(asr_models, "_find_sub_dir", lambda _engine, _cache: weights)
     monkeypatch.setattr(asr_models, "managed_venv_dir", lambda _engine: venv)
     monkeypatch.setattr(asr_models, "_is_installed", lambda _entry: False)
+    cleared: list[bool] = []
+    monkeypatch.setattr(asr_models, "clear_runtime_probes", lambda: cleared.append(True))
 
     asr_models.remove(entry.id)
 
     assert not weights.exists()
     assert not venv.exists()
+    assert cleared == [True], "删掉 venv 后要让探测缓存失效，否则重下会拿旧解释器路径"
 
 
 def test_remove_tts_engine_deletes_weights_and_runtime(tmp_path, monkeypatch) -> None:

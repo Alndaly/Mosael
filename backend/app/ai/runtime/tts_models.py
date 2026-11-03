@@ -970,7 +970,7 @@ def cancel_download(engine_id: str) -> dict[str, Any]:
         raise RuntimeError("not downloading")
     _cancel_pending.add(engine.id)
     scope.kill()
-    _store.set(engine.id, DownloadProgress(status="failed", message="dlMsg_cancelled"))
+    _store.set(engine.id, DownloadProgress(status="downloading", message="dlMsg_cancelling"))
     return _status_dict(engine)
 
 
@@ -1087,10 +1087,12 @@ def _run_download(engine_id: str, scope: abort.AbortScope | None = None) -> None
             _download_body(engine_id)
         if scope.aborted:
             _cleanup_cancelled(engine_id)
+            _store.set(engine_id, DownloadProgress(status="failed", message="dlMsg_cancelled"))
     except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
         if scope.aborted:
             logger.info("model download cancelled: %s", engine_id)
             _cleanup_cancelled(engine_id)
+            _store.set(engine_id, DownloadProgress(status="failed", message="dlMsg_cancelled"))
         else:
             logger.exception("model download failed")
             message, params = failure_message(exc)

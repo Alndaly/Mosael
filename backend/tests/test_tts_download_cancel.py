@@ -28,13 +28,14 @@ def test_cancel_download_stops_status_and_cleans_partial_files(monkeypatch) -> N
         tts_models.start_download("f5-tts")
         assert started.wait(5)
         status = tts_models.cancel_download("f5-tts")
-        assert status["status"] == "failed"
-        assert status["message"] == "dlMsg_cancelled"
+        assert status["status"] == "downloading"
+        assert status["message"] == "dlMsg_cancelling"
         release.set()
         deadline = time.monotonic() + 5
         while "f5-tts" in tts_models._download_scopes and time.monotonic() < deadline:
             time.sleep(0.01)
         assert cleaned == ["f5-tts"]
+        assert tts_models.get_status("f5-tts")["message"] == "dlMsg_cancelled"
         assert "f5-tts" not in tts_models._download_scopes
     finally:
         release.set()
@@ -58,3 +59,41 @@ def test_cancelled_download_removes_partial_venv_and_weights(tmp_path, monkeypat
 
     assert not venv.exists()
     assert not weights.exists()
+
+
+def test_cancel_asr_download_stops_and_cleans(monkeypatch) -> None:
+    from app.ai.runtime import asr_models
+
+    asr_models._store.reset()
+    asr_models._download_scopes.clear()
+    asr_models._cancel_pending.clear()
+    started = threading.Event()
+    release = threading.Event()
+    cleaned: list[str] = []
+    entry = asr_models.CATALOG[0]
+    monkeypatch.setattr(asr_models, "_is_installed", lambda _entry: False)
+    monkeypatch.setattr(asr_models, "runtime_ready", lambda _engine: False)
+    monkeypatch.setattr(asr_models, "_cleanup_cancelled", lambda model_id: cleaned.append(model_id))
+
+    def body(_model_id: str) -> None:
+        started.set()
+        release.wait(5)
+
+    monkeypatch.setattr(asr_models, "_download_body", body)
+    try:
+        asr_models.start_download(entry.id)
+        assert started.wait(5)
+        status = asr_models.cancel_download(entry.id)
+        assert status["status"] == "downloading"
+        assert status["message"] == "dlMsg_cancelling"
+        release.set()
+        deadline = time.monotonic() + 5
+        while entry.id in asr_models._download_scopes and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert cleaned == [entry.id]
+        assert asr_models.get_status(entry.id)["message"] == "dlMsg_cancelled"
+    finally:
+        release.set()
+        asr_models._store.reset()
+        asr_models._download_scopes.clear()
+        asr_models._cancel_pending.clear()

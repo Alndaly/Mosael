@@ -493,10 +493,9 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
             {
                 "key": "default_model",
-                "label": "初始模型",
+                "label": "初始模型(可选)",
                 "storage": "default_model",
-                "required": True,
-                "hint": "创建连接时至少加入一个模型；之后可在模型列表继续添加，能力默认值在页面顶部单独设置。",
+                "hint": "创建连接时可以先加入一个模型；留空也能保存，之后在模型列表里添加。",
             },
         ],
     },

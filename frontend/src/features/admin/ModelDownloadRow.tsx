@@ -115,13 +115,8 @@ export function ModelDownloadRow({
         </>
       }
       footer={
-        downloading && (model.total_bytes > 0 || onCancel) ? (
+        downloading && model.total_bytes > 0 ? (
           <div className="grid gap-1.5">
-            {downloading && onCancel && (
-              <Button size="sm" variant="outline" onClick={onCancel} className="justify-self-start">
-                {t("cancel")}
-              </Button>
-            )}
             <Progress value={pct} className="h-1" />
             <div className="flex items-center justify-between gap-2 text-ui-xs tabular-nums text-muted-foreground">
               <span>
@@ -163,6 +158,11 @@ export function ModelDownloadRow({
         <AdminRowState icon={<Loader2 size={13} className="animate-mosael-spin" />}>
           {model.total_bytes > 0 ? `${pct}%` : null}
         </AdminRowState>
+      )}
+      {downloading && onCancel && model.message !== "dlMsg_cancelling" && (
+        <Button size="sm" variant="outline" onClick={onCancel}>
+          {t("cancel")}
+        </Button>
       )}
 
       {model.status === "failed" && action(<RotateCw size={13} />, t("asrModelRetry"))}

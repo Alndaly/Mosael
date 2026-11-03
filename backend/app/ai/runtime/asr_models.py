@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.ai.runtime import remote_size, workers, config as tts_config
-from app.core import interpreter, pip_install, run_log, http_retry
+from app.core import abort, interpreter, pip_install, run_log, http_retry
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
@@ -583,6 +583,9 @@ def _is_installed(entry: ModelEntry) -> bool:
 
 #: 「正在下 / 刚下失败」的那一半(静息时盘上的文件才是事实源)。见 runtime/download_state。
 _store = DownloadStore()
+#: 下载取消开关与清理窗口(同 tts_models)。
+_download_scopes: dict[str, abort.AbortScope] = {}
+_cancel_pending: set[str] = set()
 
 
 def resolve_engine_python(engine: str) -> str | None:
@@ -839,8 +842,25 @@ def start_download(model_id: str) -> dict[str, Any]:
     if live is not None and live.status == "downloading":
         raise RuntimeSetupError("runtimeErr_alreadyDownloading", name=tr(entry.label))
     # 分母先留空:接下来可能是"装运行环境"(pip,量纲完全不同),真正开始拉模型时再填上。
+    scope = abort.AbortScope()
+    _download_scopes[model_id] = scope
     _store.set(model_id, DownloadProgress(status="downloading", message="dlMsg_preparingShort"))
-    threading.Thread(target=_run_download, args=(model_id,), daemon=True).start()
+    threading.Thread(target=_run_download, args=(model_id, scope), daemon=True).start()
+    return _status_dict(entry)
+
+
+def cancel_download(model_id: str) -> dict[str, Any]:
+    """停掉转写模型下载/运行环境安装;线程退出后清理半截文件。"""
+    entry = _BY_ID.get(model_id)
+    if entry is None:
+        raise KeyError(model_id)
+    scope = _download_scopes.get(model_id)
+    live = _store.get(model_id)
+    if scope is None or live is None or live.status != "downloading":
+        raise RuntimeError("not downloading")
+    _cancel_pending.add(model_id)
+    scope.kill()
+    _store.set(model_id, DownloadProgress(status="downloading", message="dlMsg_cancelling"))
     return _status_dict(entry)
 
 
@@ -852,7 +872,7 @@ def _fmt_eta(seconds: float | None) -> tuple[str, dict[str, str]]:
     return ("dlMsg_etaMinutes", {"m": str(m), "s": f"{s:02d}"}) if m else ("dlMsg_etaSeconds", {"s": str(s)})
 
 
-def _run_download(model_id: str) -> None:
+def _run_download(model_id: str, scope: abort.AbortScope | None = None) -> None:
     """Wrapped so the "downloading" flag can never outlive the thread that set it.
 
     start_download refuses while _store.downloading() is true. Anything escaping the body
@@ -860,12 +880,36 @@ def _run_download(model_id: str) -> None:
     set for the life of the process, so EVERY later download was rejected with
     「已有模型正在下载」 and only a restart cleared it.
     """
+    scope = scope or abort.AbortScope()
     try:
-        _download_body(model_id)
+        with abort.scope(scope):
+            _download_body(model_id)
+        if scope.aborted:
+            _cleanup_cancelled(model_id)
+            _store.set(model_id, DownloadProgress(status="failed", message="dlMsg_cancelled"))
     except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
-        logger.exception("model download failed")
-        message, params = failure_message(exc)
-        _store.set(model_id, DownloadProgress(status="failed", message=message, params=params))
+        if scope.aborted:
+            logger.info("asr model download cancelled: %s", model_id)
+            _cleanup_cancelled(model_id)
+            _store.set(model_id, DownloadProgress(status="failed", message="dlMsg_cancelled"))
+        else:
+            logger.exception("model download failed")
+            message, params = failure_message(exc)
+            _store.set(model_id, DownloadProgress(status="failed", message=message, params=params))
+    finally:
+        _download_scopes.pop(model_id, None)
+        _cancel_pending.discard(model_id)
+
+
+def _cleanup_cancelled(model_id: str) -> None:
+    entry = _BY_ID[model_id]
+    for sub in entry.sub_models:
+        found = _find_sub_dir(entry.engine, sub.cache_dir)
+        if found is not None:
+            shutil.rmtree(found, ignore_errors=True)
+    if not any(_is_installed(other) for other in CATALOG if other.engine == entry.engine):
+        shutil.rmtree(managed_venv_dir(entry.engine), ignore_errors=True)
+    clear_runtime_probes()
 
 
 def _download_body(model_id: str) -> None:
@@ -892,6 +936,9 @@ def _download_body(model_id: str) -> None:
         [python, str(WORKER_PATH), str(output_path)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
+    #: ASR worker 是流式 Popen,不在 run_logged 里;取消时手动停它。
+    stop = abort.current()
+    detach = stop.on_abort(proc.kill) if stop is not None else None
     assert proc.stdin is not None
     proc.stdin.write(json.dumps(entry.request))
     proc.stdin.close()
@@ -973,6 +1020,7 @@ __all__ = [
     "measure_fraction",
     "is_installed",
     "remove",
+    "cancel_download",
 ]
 
 
@@ -997,3 +1045,4 @@ def remove(model_id: str) -> None:
     #: 同引擎还有其他已安装模型时,运行环境还有用;最后一份删掉才清 venv。
     if not any(_is_installed(other) for other in CATALOG if other.engine == entry.engine):
         shutil.rmtree(managed_venv_dir(entry.engine), ignore_errors=True)
+    clear_runtime_probes()

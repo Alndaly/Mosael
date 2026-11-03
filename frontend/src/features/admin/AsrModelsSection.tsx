@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { downloadAsrModel, listAsrModels, removeAsrModel, setDefaultAsrModel } from "@/api/client";
+import { cancelAsrModel, downloadAsrModel, listAsrModels, removeAsrModel, setDefaultAsrModel } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
@@ -35,6 +35,11 @@ export function AsrModelsSection() {
     onError: (error: Error) => toast.error(error.message),
   });
   const [removeTarget, setRemoveTarget] = React.useState<string | null>(null);
+  const cancel = useMutation({
+    mutationFn: (id: string) => cancelAsrModel(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["asr-models"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
   const remove = useMutation({
     mutationFn: (id: string) => removeAsrModel(id),
     onSuccess: () => {
@@ -98,6 +103,7 @@ export function AsrModelsSection() {
             // (唯一可写处)。整个"默认"只在这一节有 ≥2 个候选时才摆(见 defaultRow);只有一种实现时它没有意义。
             tags={canSetDefault && model.is_default ? <AdminDefaultMarker /> : null}
             onDownload={() => download.mutate(model.id)}
+            onCancel={model.status === "downloading" ? () => cancel.mutate(model.id) : undefined}
             onRemove={model.status === "installed" ? () => setRemoveTarget(model.id) : undefined}
           />
         ))}

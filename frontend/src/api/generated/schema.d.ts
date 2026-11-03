@@ -1805,6 +1805,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asr/models/{model_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Asr Model
+         * @description 取消转写模型下载/运行环境安装;线程退出后清理半截文件。
+         */
+        post: operations["cancel_asr_model_api_asr_models__model_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/asr/models/{model_id}": {
         parameters: {
             query?: never;
@@ -26296,6 +26316,37 @@ export interface operations {
         };
     };
     download_asr_model_api_asr_models__model_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsrModelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_asr_model_api_asr_models__model_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;

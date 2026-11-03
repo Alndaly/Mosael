@@ -4688,6 +4688,49 @@
         }
       }
     },
+    "/api/asr/models/{model_id}/cancel": {
+      "post": {
+        "tags": [
+          "asr"
+        ],
+        "summary": "Cancel Asr Model",
+        "description": "取消转写模型下载/运行环境安装;线程退出后清理半截文件。",
+        "operationId": "cancel_asr_model_api_asr_models__model_id__cancel_post",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsrModelOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/asr/models/{model_id}": {
       "delete": {
         "tags": [

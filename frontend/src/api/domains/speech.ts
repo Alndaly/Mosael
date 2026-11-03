@@ -43,6 +43,10 @@ export function downloadAsrModel(id: string): Promise<AsrModel> {
   return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
 
+export function cancelAsrModel(id: string): Promise<AsrModel> {
+  return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}
+
 export function removeAsrModel(id: string): Promise<AsrModel> {
   return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
