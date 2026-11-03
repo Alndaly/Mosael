@@ -134,34 +134,27 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 
 在管理页「引擎 → 下载源」分别配置 R2 更新根地址和插件索引地址；留空时仍保持 GitHub-only，不改变已有部署。官网 `website/src/lib/site.ts` 的 `r2.url` 留空时也保持原有百度/GitHub 分流。
 
-发布前先用 dry-run 核对布局，再上传并逐个回读校验：
+**R2 上传统一用 rclone 的分段上传**（2026-11-03 起）。`publish-r2.mjs --dry-run` 只用来核对布局；实际上传不要再用 AWS SDK 单连接 —— 本机遇到过连续 `SSL alert bad record mac`。凭据放本机 `~/.mosael-release-r2.env`，不要写进仓库或聊天。
 
 ```bash
+# 先用发布脚本核对布局（不写远端）
 node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION --dry-run
-export R2_ACCOUNT_ID=...
-export R2_ACCESS_KEY_ID=...
-export R2_SECRET_ACCESS_KEY=...
-export R2_BUCKET=...
-# 可选:R2_PREFIX=mosael、R2_ENDPOINT=https://<account>.r2.cloudflarestorage.com
-node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION
-curl -fsSL https://dl.mosael.com/mosael/latest/latest-mac.yml | grep -qx 'version: VERSION'
-curl -fsI https://dl.mosael.com/mosael/vVERSION/SHA256SUMS | head -1   # 200
+
+# 统一入口：生成 index.html、4 路分段上传不可变 v<tag>/、server-side copy 到
+# latest/，并回读 latest-mac.yml / latest.yml / index.html / SHA256SUMS。
+scripts/publish-r2-rclone.sh VERSION
 ```
+
+脚本使用 4 路 `--transfers` / `--s3-upload-concurrency`、`--s3-upload-cutoff 16M` / `--s3-chunk-size 16M`，并为 `latest/` 加 `--ignore-times`：`latest-mac.yml` / `latest.yml` 改版时大小可能不变，size-only 会把旧元数据留在 `latest/`。上传后仍要逐项回读公网对象，不能只凭 PutObject 成功就宣称镜像已发布。
 
 **R2 上传未完成 = 这一版没发完。** `site.ts` 的 `r2.url` 非空时，官网默认下载就是 R2 的 `latest/`；镜像没跟上时用户拿到的还是上一版。
 
-若 AWS SDK 的单连接在本机网络下长时间停住（大件尤其明显），可以用 rclone 作等价上传：4 路 transfers / upload-concurrency、16MB 分段，先写不可变 `v<tag>/`，再用 `rclone copy` 做 server-side copy 到 `latest/`，最后仍按 `SHA256SUMS` 逐个回读公网对象。不要因为换了客户端就跳过回读。
+  **两条实操经验**：
 
-  **两条实操经验（2026-10-30 踩过）**：
+- Cloudflare 单次 `PutObject` 上限 300 MB；`publish-r2-rclone.sh` 用 `--s3-upload-cutoff 16M` 让大件直接从 16MB 起走分段上传，不要改回单次 PutObject。
+- Cloudflare 的 **IPv6** 在部分线路上会"接受连接但不回数据"。rclone 走系统解析；遇到大件卡死先确认解析/路由，不要用关闭 TLS 校验之类的方式绕过。
 
-- Cloudflare 单次 `PutObject` 上限 300 MB；`publish-r2.mjs` 对 ≥250 MB 的对象**自动**走 S3 分段上传
-  （`CreateMultipartUpload → UploadPart → CompleteMultipartUpload`），阈值与分片大小可用
-  `R2_MULTIPART_THRESHOLD` / `R2_MULTIPART_PART_SIZE` 调。不要手写分段上传。
-- Cloudflare 的 **IPv6** 在部分线路上会"接受连接但不回数据"，而 AWS SDK 默认**没有传输超时**，
-  进程会一直挂着看不出错。所有 R2 操作都要
-  `NODE_OPTIONS=--dns-result-order=ipv4first`（实测 IPv4 秒通、IPv6 死等）。
-
-脚本分两阶段发布：先把全部文件写入不可变 `v<tag>/`，逐个回读校验 Content-Length 与 SHA-256；这一阶段全部成功后，才更新 `latest/` 并做同样校验。任何不可变文件失败都会立即停止，不会碰 `latest/`，不能只凭 PutObject 成功就宣称镜像已发布。R2 没有目录列表，所以脚本还在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引不能只加 `--download-base`：那样会忽略镜像参数并覆盖 `website/public/plugins/registry.json`。R2 的索引要同时给 `--release` / `--packages`，并把 base 指到带 `mosael` 前缀的根地址：
+发布脚本分两阶段：先把全部文件写入不可变 `v<tag>/`，`rclone check --size-only` 核对；这一阶段全部成功后，才 server-side copy 到 `latest/` 并同样核对。任何不可变文件失败都会立即停止，不会碰 `latest/`。R2 没有目录列表，所以脚本在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引不能只加 `--download-base`：那样会忽略镜像参数并覆盖 `website/public/plugins/registry.json`。R2 的索引要同时给 `--release` / `--packages`，并把 base 指到带 `mosael` 前缀的根地址：
 
 ```bash
 mkdir -p dist/r2-VERSION && cp dist/plugins-VERSION/*.zip dist/r2-VERSION/
