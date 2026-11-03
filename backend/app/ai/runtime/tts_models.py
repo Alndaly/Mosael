@@ -13,6 +13,7 @@ import logging
 import json
 import os
 import sys
+import shutil
 import subprocess
 import threading
 import time
@@ -24,7 +25,7 @@ from pathlib import Path
 from app.ai.runtime import workers, remote_size, qwen_models, config as tts_config
 from typing import Any
 
-from app.core import interpreter, pip_install, run_log
+from app.core import abort, interpreter, pip_install, run_log
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.transfer_rate import DownloadRate
 from app.core.config import settings
@@ -98,9 +99,9 @@ CATALOG: tuple[TtsEngine, ...] = (
         # 所以这条路是"大的走快路,小的还走 HF" —— 在 46 KB/s 的网络上,那 1.35 GB
         # 是八小时和三分钟的区别,而 55 MB 就算慢也只有二十分钟。
         modelscope_repo="AI-ModelScope/F5-TTS",
-        # torchcodec:F5 读参考音频、写结果都经 torchaudio → torchcodec。只 import 包本身(不加载 FFmpeg 库),
-        # 缺了就判不就绪;FFmpeg 配不配得上是合成时由 worker_env 注库目录解决的另一件事。
-        imports=("f5_tts.api", "torchcodec.decoders"),
+        # F5 的参考音频读取走 workers/f5_driver 的 soundfile shim,不再经过
+        # torchaudio → torchcodec;因此就绪探测也不该要求 torchcodec 的共享 FFmpeg。
+        imports=("f5_tts.api",),
         contract_check="f5_driver.check_contract",
         needs_reference_text=False,
         speed_control="native",
@@ -682,6 +683,9 @@ def probe_interpreter(engine_id: str) -> dict[str, Any]:
 
 #: 「正在下 / 刚下失败」的那一半(静息时盘上的文件才是事实源)。见 runtime/download_state。
 _store = DownloadStore()
+#: 正在下载的取消开关。取消时 kill 掉子进程树,线程退出后再清理半截文件。
+_download_scopes: dict[str, abort.AbortScope] = {}
+_cancel_pending: set[str] = set()
 
 
 def _source_fields(engine: TtsEngine) -> dict[str, Any]:
@@ -921,10 +925,31 @@ def start_download(engine_id: str) -> dict[str, Any]:
     # 此前这里拒绝一切并发,理由是两个引擎共用一个 venv(装一边弄坏另一边);venv 后来按引擎
     # 拆开了,那个理由就没了,而限制留了下来。
     live = _store.get(engine.id)
-    if live is not None and live.status == "downloading":
+    if live is not None and live.status == "downloading" or engine.id in _cancel_pending:
         raise RuntimeSetupError("runtimeErr_alreadyDownloading", name=engine.label)
+    scope = abort.AbortScope()
+    _download_scopes[engine.id] = scope
     _store.set(engine.id, DownloadProgress(status="downloading", message="dlMsg_preparing"))
-    threading.Thread(target=_run_download, args=(engine.id,), daemon=True).start()
+    threading.Thread(target=_run_download, args=(engine.id, scope), daemon=True).start()
+    return _status_dict(engine)
+
+
+def cancel_download(engine_id: str) -> dict[str, Any]:
+    """停掉这个引擎正在跑的下载/安装,并让线程在退出后删掉半截文件。
+
+    `AbortScope` 会通过 child_process 停掉 pip / git / worker 的整棵进程树;这里只负责
+    把状态先翻成「不在下」并阻止同一引擎立刻再起一个线程。
+    """
+    engine = MODELS_BY_ID.get(engine_id)
+    if engine is None:
+        raise KeyError(engine_id)
+    scope = _download_scopes.get(engine.id)
+    live = _store.get(engine.id)
+    if scope is None or live is None or live.status != "downloading":
+        raise RuntimeError("not downloading")
+    _cancel_pending.add(engine.id)
+    scope.kill()
+    _store.set(engine.id, DownloadProgress(status="failed", message="dlMsg_cancelled"))
     return _status_dict(engine)
 
 
@@ -1027,7 +1052,7 @@ def _download_python(engine_id: str) -> str:
     return interpreter.base_python()
 
 
-def _run_download(engine_id: str) -> None:
+def _run_download(engine_id: str, scope: abort.AbortScope | None = None) -> None:
     """Wrapped so the "downloading" flag can never outlive the thread that set it.
 
     start_download refuses while _store.downloading() is true. Anything escaping the body
@@ -1035,12 +1060,42 @@ def _run_download(engine_id: str) -> None:
     set for the life of the process, so EVERY later download was rejected with
     「已有模型正在下载」 and only a restart cleared it.
     """
+    scope = scope or abort.AbortScope()
     try:
-        _download_body(engine_id)
+        with abort.scope(scope):
+            _download_body(engine_id)
+        if scope.aborted:
+            _cleanup_cancelled(engine_id)
     except Exception as exc:  # noqa: BLE001 — the flag must be released whatever happened
-        logger.exception("model download failed")
-        message, params = failure_message(exc)
-        _store.set(engine_id, DownloadProgress(status="failed", message=message, params=params))
+        if scope.aborted:
+            logger.info("model download cancelled: %s", engine_id)
+            _cleanup_cancelled(engine_id)
+        else:
+            logger.exception("model download failed")
+            message, params = failure_message(exc)
+            _store.set(engine_id, DownloadProgress(status="failed", message=message, params=params))
+    finally:
+        _download_scopes.pop(engine_id, None)
+        _cancel_pending.discard(engine_id)
+
+
+def _cleanup_cancelled(engine_id: str) -> None:
+    """把取消时留在盘上的半截环境/权重删掉;已经完整的权重不动。"""
+    engine = MODELS_BY_ID[engine_id]
+    #: 托管 venv 是这次安装建/改的;用户自带解释器不归我们删。
+    venv_dir = tts_config.managed_venv_dir(engine_id)
+    if venv_dir.is_dir():
+        shutil.rmtree(venv_dir, ignore_errors=True)
+    if _is_installed(engine):
+        return
+    if engine_id == "fish-speech":
+        shutil.rmtree(tts_config.MANAGED_FISH_MODEL, ignore_errors=True)
+        if not (tts_config.MANAGED_FISH_REPO / tts_config.FISH_REPO_MARKER).is_file():
+            shutil.rmtree(tts_config.MANAGED_FISH_REPO, ignore_errors=True)
+    elif engine_id == qwen_models.ENGINE_ID:
+        shutil.rmtree(qwen_models.root(), ignore_errors=True)
+    else:
+        shutil.rmtree(tts_config.MANAGED_F5_MODEL, ignore_errors=True)
 
 
 def _download_body(engine_id: str) -> None:
@@ -1150,6 +1205,6 @@ def _download_body(engine_id: str) -> None:
             pass
 
 
-__all__ = ["CATALOG", "list_status", "get_status", "start_download", "is_installed",
+__all__ = ["CATALOG", "list_status", "get_status", "start_download", "cancel_download", "is_installed",
            "resolve_engine_python", "clear_runtime_probes", "sources_for", "effective_source",
            "bytes_on_disk"]

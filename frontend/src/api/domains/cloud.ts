@@ -23,7 +23,7 @@ export function isMfaChallenge(value: CloudLoginResult): value is CloudMfaChalle
   return "mfa_required" in value && value.mfa_required === true;
 }
 
-export type CloudMfaStatus = { enabled: boolean; recovery_codes_remaining: number };
+export type CloudMfaStatus = { available: boolean; enabled: boolean; recovery_codes_remaining: number };
 export type CloudMfaSetup = { secret: string; otpauth_uri: string };
 
 /** 一次云端失败的形状:后端给的人话 + 机器码 + 是不是"这个部署没接 Cloud"。 */

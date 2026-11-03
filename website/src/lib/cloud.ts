@@ -52,7 +52,7 @@ export function isMfaChallenge(value: CloudLoginResult): value is { mfa_required
   return "mfa_required" in value && value.mfa_required === true;
 }
 
-export type CloudMfaStatus = { enabled: boolean; recovery_codes_remaining: number };
+export type CloudMfaStatus = { available: boolean; enabled: boolean; recovery_codes_remaining: number };
 export type CloudMfaSetup = { secret: string; otpauth_uri: string };
 
 export type CloudMessage = { en: string; zh: string };

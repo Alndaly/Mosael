@@ -156,6 +156,8 @@ export const shell = {
   settingsCloudMfaOn: "已开启",
   settingsCloudMfaOff: "未开启",
   settingsCloudMfaEnable: "开启双因素认证",
+  ttsDownloadCancelled: "已取消下载,半截文件会在后台清理。",
+  settingsCloudMfaUnavailable: "当前 Cloud 服务没有配置双因素认证。",
   settingsCloudMfaScan: "用认证器 App 扫描二维码，或手动输入下面的密钥。",
   settingsCloudMfaQrAlt: "双因素认证二维码",
   settingsCloudMfaSecret: "手动输入密钥",

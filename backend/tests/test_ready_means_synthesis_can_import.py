@@ -98,13 +98,14 @@ def test_the_requirements_cover_what_the_probe_needs() -> None:
 
 
 def test_engines_that_read_audio_through_torchaudio_need_torchcodec() -> None:
-    """torchaudio 2.9 起读写音频都交给 torchcodec,而它只是间接依赖。
+    """Fish 仍经 torchaudio → torchcodec 读参考音频,依赖表和探测都要列。
 
-    Fish 的依赖表此前漏了它:torchaudio 一升到 2.11,读参考音频就 `TorchCodec is required`,
-    而探测只 import fish 自己的模块,照样说「已就绪」。所以依赖表要列,探测也要 import ——
-    缺了才会判不就绪,「安装运行环境」才会去补。
+    F5 的参考音频读取已经换成 workers/f5_driver 里的 soundfile shim,不再要求共享 FFmpeg;
+    它仍通过 f5-tts 间接装 torchcodec,但就绪探测不应再 import 它。
     """
-    for engine_id in ("f5-tts", "fish-speech"):
-        engine = tts_models.MODELS_BY_ID[engine_id]
-        assert "torchcodec" in engine.pip_requirements, engine_id
-        assert "torchcodec.decoders" in engine.imports, engine_id
+    fish = tts_models.MODELS_BY_ID["fish-speech"]
+    assert "torchcodec" in fish.pip_requirements
+    assert "torchcodec.decoders" in fish.imports
+    f5 = tts_models.MODELS_BY_ID["f5-tts"]
+    assert "torchcodec" in f5.pip_requirements
+    assert "torchcodec.decoders" not in f5.imports

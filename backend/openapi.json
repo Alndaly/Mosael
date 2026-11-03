@@ -6471,6 +6471,49 @@
         }
       }
     },
+    "/api/tts/models/{engine_id}/cancel": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Cancel Tts Model",
+        "description": "取消本机引擎下载/安装;线程退出后清掉半截 venv 与权重。",
+        "operationId": "cancel_tts_model_api_tts_models__engine_id__cancel_post",
+        "parameters": [
+          {
+            "name": "engine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Engine Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/translate": {
       "post": {
         "tags": [

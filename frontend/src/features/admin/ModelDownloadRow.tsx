@@ -40,6 +40,7 @@ export function ModelDownloadRow({
   actionHint,
   tags,
   onDownload,
+  onCancel,
 }: {
   model: DownloadableModel;
   /** 名字后面、大小前面的元信息,比如引擎族。 */
@@ -55,6 +56,8 @@ export function ModelDownloadRow({
    *  它不可点:设默认在节顶那个选择器里,列表行不再承担这个动作。 */
   tags?: React.ReactNode;
   onDownload: () => void;
+  /** 正在下载/安装时取消;不给就没有取消入口。 */
+  onCancel?: () => void;
 }) {
   const t = useI18n();
   const pct = model.total_bytes > 0 ? Math.min(100, Math.round((model.downloaded_bytes / model.total_bytes) * 100)) : 0;
@@ -108,8 +111,13 @@ export function ModelDownloadRow({
         </>
       }
       footer={
-        downloading && model.total_bytes > 0 ? (
+        downloading && (model.total_bytes > 0 || onCancel) ? (
           <div className="grid gap-1.5">
+            {downloading && onCancel && (
+              <Button size="sm" variant="outline" onClick={onCancel} className="justify-self-start">
+                {t("cancel")}
+              </Button>
+            )}
             <Progress value={pct} className="h-1" />
             <div className="flex items-center justify-between gap-2 text-ui-xs tabular-nums text-muted-foreground">
               <span>

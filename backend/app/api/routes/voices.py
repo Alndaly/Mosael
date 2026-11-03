@@ -461,3 +461,15 @@ def download_tts_model(engine_id: str, db: DbSession, user: CurrentUser) -> dict
         raise HTTPException(status_code=404, detail=tr("routeErr_unknownEngine")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/tts/models/{engine_id}/cancel", response_model=TtsEngineOut)
+def cancel_tts_model(engine_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """取消本机引擎下载/安装;线程退出后清掉半截 venv 与权重。"""
+    ensure_deployment_admin(db, user)
+    try:
+        return tts_models.cancel_download(engine_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownEngine")) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

@@ -324,6 +324,10 @@ export function downloadTtsModel(id: string): Promise<TtsEngine> {
   return api<TtsEngine>(`/api/tts/models/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
 
+export function cancelTtsModel(id: string): Promise<TtsEngine> {
+  return api<TtsEngine>(`/api/tts/models/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}
+
 export type InstallSource = components["schemas"]["InstallSourceOut"];
 
 /** 本机引擎(转写 / 声音克隆 / 人声分离)装依赖时用哪个 pip 索引。三个引擎共用这一份。 */

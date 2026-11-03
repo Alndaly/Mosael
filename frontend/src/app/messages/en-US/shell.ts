@@ -154,6 +154,8 @@ export const shell = {
   settingsCloudMfaOn: "On",
   settingsCloudMfaOff: "Off",
   settingsCloudMfaEnable: "Enable two-factor",
+  ttsDownloadCancelled: "Download cancelled; partial files will be cleaned up in the background.",
+  settingsCloudMfaUnavailable: "This Cloud service has not configured two-factor authentication.",
   settingsCloudMfaScan: "Scan the QR code with an authenticator app, or enter the secret below.",
   settingsCloudMfaQrAlt: "Two-factor setup QR code",
   settingsCloudMfaSecret: "Secret for manual entry",

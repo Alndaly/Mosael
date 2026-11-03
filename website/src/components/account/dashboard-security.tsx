@@ -73,7 +73,7 @@ export function DashboardSecurity({
     try {
       const result = await cloudAccount.enableMfa(code.trim());
       setCodes(result.recovery_codes);
-      setStatus({ enabled: true, recovery_codes_remaining: result.recovery_codes.length });
+      setStatus((current) => ({ available: current?.available ?? true, enabled: true, recovery_codes_remaining: result.recovery_codes.length }));
       setSetup(null);
       setQr("");
       setCode("");
@@ -93,7 +93,7 @@ export function DashboardSecurity({
     setError("");
     try {
       await cloudAccount.disableMfa(code.trim());
-      setStatus({ enabled: false, recovery_codes_remaining: 0 });
+      setStatus((current) => ({ available: current?.available ?? true, enabled: false, recovery_codes_remaining: 0 }));
       setCodes([]);
       setCode("");
     } catch (failure) {
@@ -172,12 +172,15 @@ export function DashboardSecurity({
               </div>
             )}
 
-            {!status?.enabled && !setup && (
+            {!status?.enabled && !setup && status?.available === true && (
               <div>
                 <Button type="button" size="sm" onClick={() => void startSetup()} disabled={Boolean(busy)}>
                   {busy === "setup" ? copy.mfaStarting : copy.mfaEnable}
                 </Button>
               </div>
+            )}
+            {status && status.available !== true && (
+              <p className="m-0 text-[13px] leading-6 text-muted-foreground">{copy.mfaUnavailable}</p>
             )}
 
             {setup && (

@@ -630,6 +630,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "安装 {engine} 运行依赖(数 GB,首次较慢)…",
         "en": "Installing the {engine} runtime dependencies (several GB; the first time is slow)…",
     },
+    "dlMsg_cancelled": {"zh": "已取消下载;半截文件会清理。", "en": "Download cancelled; partial files will be cleaned up."},
     "dlMsg_fetchingFishSource": {"zh": "拉取 Fish Speech 源码…", "en": "Fetching the Fish Speech source…"},
     "dlMsg_etaMinutes": {"zh": "剩余 {m}分{s}秒", "en": "{m}m {s}s left"},
     "dlMsg_etaSeconds": {"zh": "剩余 {s}秒", "en": "{s}s left"},

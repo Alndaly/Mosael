@@ -159,6 +159,17 @@ def crossfade_join(waves: list[Any], sample_rate: int, seconds: float = CROSSFAD
     return joined
 
 
+def _soundfile_load(path: Any, *args: Any, **kwargs: Any) -> tuple[Any, int]:
+    """用 soundfile 读 wav,替代 torchaudio.load —— 后者 2.9+ 依赖 torchcodec,
+    而 torchcodec 又要求机器上有一套 ABI 对得上的共享 FFmpeg。参考音频已经是 wav,
+    soundfile 就够;这样用户不需要为了配音装 Homebrew ffmpeg。"""
+    import soundfile as sf
+    import torch
+
+    audio, rate = sf.read(str(path), dtype="float32", always_2d=True)
+    return torch.from_numpy(audio.T).clone().contiguous(), int(rate)
+
+
 def synthesize(
     model: Any,
     *,
@@ -175,13 +186,18 @@ def synthesize(
     """
     import torchaudio
 
+    #: F5 只拿 torchaudio.load 读一段已经转成 wav 的参考音频。torchaudio 2.9+
+    #: 把 load 交给 torchcodec,后者再 dlopen 一套共享 FFmpeg;用户机器上常常没有,
+    #: 于是「F5 已就绪」却一合成就说 FFmpeg 不匹配。soundfile 已随 F5 依赖装好。
+    torchaudio.load = _soundfile_load  # type: ignore[method-assign]
+
     check_contract()
     f5 = _contract()
     f5["seed_everything"](0)
 
     # ①只做一次:截短、听写都在这里。之后的段长和推理用的都是这一份,和 F5 自己看到的一致。
     ref_file, ref_text = f5["preprocess_ref_audio_text"](reference_wav, reference_text, show_info=_log)
-    ref_audio, ref_rate = torchaudio.load(ref_file)
+    ref_audio, ref_rate = _soundfile_load(ref_file)
     budget = segment_budget(ref_audio.shape[-1] / ref_rate, ref_text, speed)
     segments = split_for_synthesis(text, budget)
     if not segments:

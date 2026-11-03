@@ -56,7 +56,7 @@ function apiError(status: number, code: string, message: string): ApiError {
 beforeEach(() => {
   vi.clearAllMocks();
   api.loadCloudSession.mockResolvedValue(null);
-  api.getCloudMfaStatus.mockResolvedValue({ enabled: false, recovery_codes_remaining: 0 });
+  api.getCloudMfaStatus.mockResolvedValue({ available: true, enabled: false, recovery_codes_remaining: 0 });
 });
 
 afterEach(cleanup);

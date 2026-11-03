@@ -29,7 +29,7 @@ def login_challenge(client, email: str = "alice@example.com") -> dict:
 def test_mfa_is_optional_and_a_totp_code_finishes_login(client):
     user = signup(client)
     assert user["mfa_enabled"] is False
-    assert client.get(api("/mfa")).json() == {"enabled": False, "recovery_codes_remaining": 0}
+    assert client.get(api("/mfa")).json() == {"available": True, "enabled": False, "recovery_codes_remaining": 0}
 
     secret, recovery = enable_mfa(client)
     assert len(recovery) == 10

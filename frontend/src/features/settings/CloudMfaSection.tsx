@@ -76,7 +76,7 @@ export function CloudMfaSection() {
     try {
       const result = await enableCloudMfa(code.trim());
       setCodes(result.recovery_codes);
-      setStatus({ enabled: true, recovery_codes_remaining: result.recovery_codes.length });
+      setStatus((current) => ({ available: current?.available ?? true, enabled: true, recovery_codes_remaining: result.recovery_codes.length }));
       setSetup(null);
       setQr("");
       setCode("");
@@ -96,7 +96,7 @@ export function CloudMfaSection() {
     setBusy("disable");
     try {
       await disableCloudMfa(code.trim());
-      setStatus({ enabled: false, recovery_codes_remaining: 0 });
+      setStatus((current) => ({ available: current?.available ?? true, enabled: false, recovery_codes_remaining: 0 }));
       setCodes([]);
       setCode("");
     } catch (error) {
@@ -137,10 +137,13 @@ export function CloudMfaSection() {
               <span className="text-ui-sm text-muted-foreground">
                 {status?.enabled ? t("settingsCloudMfaOn") : t("settingsCloudMfaOff")}
               </span>
-              {!status?.enabled && !setup && (
+              {!status?.enabled && !setup && status?.available === true && (
                 <Button variant="outline" onClick={() => void startSetup()} loading={busy === "setup"}>
                   {t("settingsCloudMfaEnable")}
                 </Button>
+              )}
+              {status && status.available !== true && (
+                <small className="text-ui-sm text-muted-foreground">{t("settingsCloudMfaUnavailable")}</small>
               )}
             </div>
           )}

@@ -7,6 +7,7 @@ import { CheckCircle2, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  cancelTtsModel,
   downloadTtsModel,
   getTtsConfig,
   listTtsModels,
@@ -168,6 +169,14 @@ export function VoiceCloneSection() {
   });
   // **只看这一个引擎自己在不在下**,不看别人。它们各有各的 venv 和权重目录、跑在各自的
   // 一次性子进程里,同时装不会互相弄坏 —— 而"一个在下,所有按钮都变灰"此前正是这么来的。
+  const cancel = useMutation({
+    mutationFn: (id: string) => cancelTtsModel(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tts-models"] });
+      toast.success(t("ttsDownloadCancelled"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   const startingId = download.isPending ? download.variables : null;
   // **上面选的 ≠ 已经生效的。** 下载用的是后端存着的那份配置,而不是这个表单里选中的。
   // 用户把「模型下载源」从镜像换成别的、没点保存就去点「重试」—— 跑的还是旧源,失败消息
@@ -229,6 +238,7 @@ export function VoiceCloneSection() {
           // 选择器里(唯一可写处)。
           tags={canSetDefault && config.data?.engine === model.id ? <AdminDefaultMarker /> : null}
           onDownload={() => download.mutate(model.id)}
+          onCancel={busy ? () => cancel.mutate(model.id) : undefined}
         />
         {/* 预置音色引擎**不在这里切换**。不写这句的话,用户装好 Qwen3-TTS、在这张表里看到
             「已安装」,却只在「默认克隆引擎」里找它 —— 那个名字按后端只收 f5-tts/fish-speech,

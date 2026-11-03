@@ -39,8 +39,9 @@ def _label(user: CloudUser) -> str:
 
 
 @router.get("/mfa")
-def mfa_status(user: CurrentUser, db: DbSession) -> dict[str, object]:
+def mfa_status(user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[str, object]:
     return {
+        "available": bool(config.mfa_key),
         "enabled": mfa_domain.enabled(user),
         "recovery_codes_remaining": mfa_domain.recovery_codes_remaining(db, user.id),
     }

@@ -73,6 +73,11 @@ def f5(monkeypatch: pytest.MonkeyPatch) -> FakeF5:
     model_utils.seed_everything = fake.seed_everything
     torchaudio = types.ModuleType("torchaudio")
     torchaudio.load = lambda path: (np.zeros((1, REF_SECONDS * RATE), dtype=np.float32), RATE)
+    monkeypatch.setattr(
+        f5_driver,
+        "_soundfile_load",
+        lambda *_args, **_kwargs: (np.zeros((1, REF_SECONDS * RATE), dtype=np.float32), RATE),
+    )
     for name, module in {
         "f5_tts": types.ModuleType("f5_tts"),
         "f5_tts.infer": types.ModuleType("f5_tts.infer"),

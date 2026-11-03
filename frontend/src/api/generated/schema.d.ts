@@ -2557,6 +2557,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tts/models/{engine_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Tts Model
+         * @description 取消本机引擎下载/安装;线程退出后清掉半截 venv 与权重。
+         */
+        post: operations["cancel_tts_model_api_tts_models__engine_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/translate": {
         parameters: {
             query?: never;
@@ -27491,6 +27511,37 @@ export interface operations {
         };
     };
     download_tts_model_api_tts_models__engine_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engine_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TtsEngineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_tts_model_api_tts_models__engine_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;
