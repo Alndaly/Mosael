@@ -72,5 +72,8 @@ def test_转写和分离装依赖读的就是这一份() -> None:
 
     from app.ai.runtime import asr_models, separation_models
 
+    #: ASR 的 `ensure_engine_runtime` 只是按引擎串行化的外壳;真正装依赖的那一段在 `_unlocked`。
+    #: 契约要钉的是"装的时候读这份安装源",不是"哪一层函数名"。
     for module in (asr_models, separation_models):
-        assert "pip_index_url" in inspect.getsource(module.ensure_engine_runtime if module is asr_models else module.ensure_runtime)
+        install = module._ensure_engine_runtime_unlocked if module is asr_models else module.ensure_runtime
+        assert "pip_index_url" in inspect.getsource(install)
