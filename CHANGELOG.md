@@ -19,6 +19,11 @@ commit list and downloadable artifacts.
 - **F5-TTS 不再依赖共享 FFmpeg。** 参考音频读取改用 soundfile，避免普通用户因 torchcodec/FFmpeg 无法合成。
 - **MFA 不再假可用。** Cloud 未配置 `CLOUD_MFA_KEY` 时，桌面与官网都隐藏开启入口；配置后由 `/mfa` 的 `available` 决定。
 
+### 修复
+
+- **Kimi K3 / K2.7 / K2.6 的请求不再被采样参数打回。** 这些模型把 temperature 等参数钉死；公共请求层不再发送它们，素材分析、标题、工作流 LLM 节点不再报 `invalid temperature`。
+- **智能体可以添加插件工作流节点。** `edit_workflow` 的 add_node 不再拿静态节点表把 `plugin.<包>.<工具>` 判成未知类型，插件节点仍由真实注册表校验。
+
 ## [2.4.2] - 2026-11-03
 
 ### AI Studio 与画板

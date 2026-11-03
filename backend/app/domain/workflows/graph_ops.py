@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from app.domain.plugins.nodes import parse_node_type
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.errors import WorkflowDomainError
 
@@ -62,7 +63,10 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
             if not node_type:
                 # 模型在长 JSON 里丢键时,空引号帮不了它:点破缺的是哪个键、去哪查、形状长什么样。
                 raise WorkflowDomainError("wfErr_addNodeTypeMissing", params={"index": index})
-            if node_type not in NODE_TYPES:
+            #: 插件节点类型是运行时才知道的(`plugin.<包>.<工具>`),不能拿静态的 NODE_TYPES 判。
+            #: 这里只认**形状**;是否真的装了这个插件、这条连接可不可以用,由下一步
+            #: `validate_graph(extra_types=plugin_node_types(db))` 说,那一步才带着真实的注册表。
+            if node_type not in NODE_TYPES and parse_node_type(node_type) is None:
                 raise WorkflowDomainError("wfErr_unknownNodeType", params={"type": node_type, "index": index})
             if node_type == "start" and any(str(node.get("type")) == "start" for node in nodes):
                 raise WorkflowDomainError("wfErr_startExists")

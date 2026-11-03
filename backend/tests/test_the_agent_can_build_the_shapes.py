@@ -86,6 +86,18 @@ def test_it_can_call_another_workflow() -> None:
     assert node["config"]["workflow_id"] == "wf-callee"
 
 
+def test_it_can_add_a_plugin_node_type() -> None:
+    """插件节点类型是运行时才有的(`plugin.<包>.<工具>`),不能拿静态 NODE_TYPES 判成未知。
+
+    这一条真实撞过:ComfyUI 的表单节点 `plugin.dev.mosael.comfyui.wf_…_app` 被 add_node 拒在
+    第一道形状检查,而下一步的 validate_graph 本来就会带上真实的插件注册表。
+    """
+    graph = apply_graph_ops(EMPTY, [
+        {"kind": "add_node", "type": "plugin.dev.mosael.comfyui.wf_0ef16828a002_app", "node_id": "comfy"},
+    ])
+    assert graph["nodes"][0]["type"] == "plugin.dev.mosael.comfyui.wf_0ef16828a002_app"
+
+
 def test_the_node_catalogue_tells_the_agent_these_exist() -> None:
     """智能体是从这份清单认识节点的 —— 三种形状都得在里面,而且描述要说清什么时候用。"""
     from app.domain.workflows.node_types import NODE_TYPES

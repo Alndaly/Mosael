@@ -40,6 +40,7 @@ from app.core.i18n import LocalizedError, fragment, tr
 from app.domain.providers.credentials import ResolvedConnection
 from app.core import http_retry, outbound_guard
 from app.domain.providers import models as provider_models, model_limits, structured_output
+from app.domain.providers.parameter_constraints import fixed_sampling_parameters
 from app.domain.providers.presets import served_by_pi
 from app.domain.billing.usage import BillableCall
 from app.ai.sidecar import pi_client
@@ -257,6 +258,11 @@ def chat(
     # 与其把十来个参数提到签名上,不如让需要的那一处显式传进来。
     if extra:
         payload.update({k: v for k, v in extra.items() if k not in ("model", "messages")})
+    #: 有些供应商把这些参数钉死(Kimi K3/K2.7/K2.6 固定 temperature=1.0;官方要求不要显式传)。
+    #: 我们默认的 0.2 会让整轮请求 400 —— 在**唯一的请求构造处**拿掉,而不是让每个调用点
+    #: (分析、标题、工作流节点……)各记一遍例外。
+    for name in fixed_sampling_parameters(target.vendor, target.model):
+        payload.pop(name, None)
     # DeepSeek V4 默认开启 high thinking，而 max_tokens 同时覆盖推理与最终正文。长逐字稿的
     # 结构化任务会出现“推理耗尽预算、HTTP 200、content 为空”；这种调用的契约是最终 JSON，
     # 不是展示思考过程，所以默认关闭思考，把预算完整留给可解析结果。显式传入 thinking 时尊重调用方。
@@ -430,10 +436,12 @@ def _chat_gateway(
                 if key not in {"model", "messages", "temperature", "max_tokens", "max_completion_tokens"}
             }
             options: dict[str, Any] = {
-                "temperature": payload.get("temperature"),
                 "maxRetries": max_retries if max_retries is not None else http_retry.current_max_retries(),
                 "timeoutMs": max(1, int(timeout * 1000)),
             }
+            #: temperature 被供应商钉死时 payload 里已经没有它了;不要在这里补一个 None 回去。
+            if "temperature" in payload:
+                options["temperature"] = payload["temperature"]
             max_tokens = payload.get("max_tokens") or payload.get("max_completion_tokens")
             if max_tokens is not None:
                 options["maxTokens"] = int(max_tokens)
