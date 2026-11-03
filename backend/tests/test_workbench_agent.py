@@ -776,6 +776,7 @@ def test_试跑_只跑一个输出节点_确认卡写节点_提交带部分执�
         assert "只跑输出节点 #9" in card["summary"]
         approved = client.post(f"/api/confirmations/{out['confirmation_id']}/approve").json()
     assert approved["status"] == "executed", approved
+    assert wait_status(client, approved["result"]["job_id"]) == "succeeded"
     submitted = comfy.posted("/prompt")[0]
     assert submitted["partial_execution_targets"] == ["9"], "只执行这个输出节点和它的上游"
     assert submitted["prompt"] == EXPORTED_PROMPT
