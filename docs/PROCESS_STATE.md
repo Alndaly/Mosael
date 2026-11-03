@@ -143,6 +143,10 @@
   重启后状态回到 missing,再点一次即可,不会出现"页面说装好了其实没装"。
   多进程下各算各的:A 进程在装,B 进程看到的是 missing。它不构成部署约束,但两个进程同时装
   同一个 venv 会互相踩 —— 当前部署是单后端进程(见第一节),真要起第二个时这一条要一起想。
+- `app/ai/runtime/separation_models.py:_install_guard`、`app/ai/runtime/denoise_models.py:_install_guard` —
+  分离和降噪引擎的「开始装」与「删除」互斥:下载线程在跑时删除会看到 `installing` 并拒绝,
+  删除进行时也不允许再起一个安装。锁本身不存状态,重启后是空的;多进程下各锁各的,
+  只靠上面那份 `_store` 判断「正在装」,所以两个进程仍可能同时动同一个目录 —— 当前部署是单后端进程。
 - `app/ai/runtime/workers/tts.py:_LOADED` — 已加载的模型。
 - `app/ai/runtime/workers/asr.py:_SHERPA_RECOGNIZER` — sherpa-onnx 建好的识别器(**按语种留最近
   一个**:SenseVoice 的语种是构造参数,换语种要另建一个)。一个约 240MB,所以只留一个 —— 重启后
