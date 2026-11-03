@@ -966,7 +966,7 @@ def _download_body(model_id: str) -> None:
     )
     #: ASR worker 是流式 Popen,不在 run_logged 里;取消时手动停它。
     stop = abort.current()
-    detach = stop.on_abort(proc.kill) if stop is not None else None
+    stop.on_abort(proc.kill) if stop is not None else None
     assert proc.stdin is not None
     proc.stdin.write(json.dumps(entry.request))
     proc.stdin.close()
