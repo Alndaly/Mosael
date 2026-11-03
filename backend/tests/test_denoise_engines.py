@@ -80,6 +80,8 @@ class TestDeepFilterNet安装:
         monkeypatch.setattr(dm, "MANAGED_DENOISE_ROOT", tmp_path / "denoise")
         dm.deepfilter_ready.cache_clear()
         yield dm
+        for engine in dm.INSTALLABLE:
+            dm._store.clear(engine)
         dm.deepfilter_ready.cache_clear()
 
     def _pretend_platform(self, monkeypatch, dm, content: bytes) -> None:
@@ -135,6 +137,28 @@ class TestDeepFilterNet安装:
     def test_只有要装的引擎能装(self, runtime) -> None:
         with pytest.raises(KeyError):
             runtime.start_install("ffmpeg")
+
+    def test_删除已装引擎_文件消失且状态回到未安装(self, runtime) -> None:
+        binary = runtime.deepfilter_path()
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        binary.write_bytes(b"binary")
+        runtime.deepfilter_ready.cache_clear()
+
+        row = runtime.remove(runtime.DEEPFILTER)
+
+        assert not binary.exists()
+        assert row["status"] == "missing"
+
+    def test_正在下载时不许删除(self, runtime) -> None:
+        from app.ai.runtime.install_state import InstallProgress
+
+        runtime._store.set(runtime.DEEPFILTER, InstallProgress("installing"))
+        with pytest.raises(RuntimeError, match="已经在安装"):
+            runtime.remove(runtime.DEEPFILTER)
+
+    def test_只有要装的引擎能删(self, runtime) -> None:
+        with pytest.raises(KeyError):
+            runtime.remove("ffmpeg")
 
     def test_四个平台都有核对过的哈希(self) -> None:
         from app.ai.runtime.denoise_models import _DEEPFILTER_BINARIES

@@ -933,6 +933,7 @@ export const otherUi = {
   defaultNotInstalled: "Not installed yet — download it first",
   denoiseInstall: "Download",
   denoiseRetry: "Retry",
+  denoiseRemoveBody: "This deletes the local DeepFilterNet executable; the next noise reduction will need to download it again.",
   denoiseInstalled: "Installed",
   denoiseReadyLabel: "Available",
   denoiseUnavailableLabel: "Unavailable",

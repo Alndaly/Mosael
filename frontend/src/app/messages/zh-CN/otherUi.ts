@@ -929,6 +929,7 @@ export const otherUi = {
   defaultNotInstalled: "还没安装,先下载",
   denoiseInstall: "下载",
   denoiseRetry: "重试",
+  denoiseRemoveBody: "会删除 DeepFilterNet 的本地可执行文件;下一次降噪需要重新下载。",
   denoiseInstalled: "已安装",
   denoiseReadyLabel: "可用",
   denoiseUnavailableLabel: "不可用",

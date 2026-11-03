@@ -59,6 +59,13 @@ let separationEngines: Array<Record<string, unknown>> = [];
 let ttsConfig: Record<string, unknown> = {};
 const updateTtsConfig = vi.fn();
 const setDefaultAsrModel = vi.fn();
+const removeSeparationCalls: string[] = [];
+//: 函数声明在工厂里可以先用;它真正读 `separationEngines` 是在点击之后。
+function removeSeparationEngine(engine: string) {
+  removeSeparationCalls.push(engine);
+  separationEngines = separationEngines.map((one) => (one.engine === engine ? { ...one, status: "missing", runtime_checked: true } : one));
+  return Promise.resolve(separationEngines.find((one) => one.engine === engine));
+}
 //: 数据"还没到":接口一直不答。用来钉「undefined 不画控件」。
 let holdAsr = false;
 let holdTtsConfig = false;
@@ -92,6 +99,7 @@ vi.mock("@/api/client", () => ({
   downloadTtsModel: (id: string) => Promise.resolve(ttsModels.find((one) => one.id === id)),
   listSeparationEngines: () => Promise.resolve(separationEngines),
   installSeparationEngine: () => Promise.resolve(separationEngines[0]),
+  removeSeparationEngine,
 }));
 
 import { AsrModelsSection } from "./AsrModelsSection";
@@ -374,6 +382,23 @@ describe("人声与背景音分离:只有一种引擎", () => {
     expect(line.previousElementSibling).toBe(box.querySelector("header"));
     expect(line.nextElementSibling?.querySelector("[data-admin-row]")).not.toBeNull();
     expect(within(box).queryByRole("combobox")).toBeNull();
+  });
+
+  it("已安装的引擎可以删除;确认后行回到未安装", async () => {
+    const user = userEvent.setup();
+    separationEngines = [separationEngine()];
+    removeSeparationCalls.length = 0;
+    renderWithClient(<SeparationEnginesSection />);
+    await screen.findByText("Demucs");
+    const row = rowByLabel(section("engine-separation"), "Demucs");
+
+    await user.click(within(row).getByRole("button", { name: zhCN.delete }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(zhCN.separationRemoveBody);
+    await user.click(within(dialog).getByRole("button", { name: zhCN.delete }));
+
+    await waitFor(() => expect(removeSeparationCalls).toEqual(["demucs"]));
+    await waitFor(() => expect(rowByLabel(section("engine-separation"), "Demucs")).toHaveTextContent(zhCN.separationInstall));
   });
 
   it("单实现也用整行:那句话在行的说明里,右边没有控件", async () => {

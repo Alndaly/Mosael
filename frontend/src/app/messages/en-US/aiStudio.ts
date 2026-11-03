@@ -429,6 +429,7 @@ export const aiStudio = {
   separationInstall: "Install",
   separationInstalled: "Installed",
   separationRetry: "Retry",
+  separationRemoveBody: "This deletes Demucs's managed runtime and downloaded model weights; the next separation will need to install them again.",
   asrModelsTitle: "Transcription models",
   asrModelsDesc: "Speech models for transcript generation. Model weights download automatically on the first transcribe; the runtime (a few GB of Python dependencies) has to be installed here once — transcribing will not pull something that large on your behalf.",
   asrModelInstalled: "Installed",

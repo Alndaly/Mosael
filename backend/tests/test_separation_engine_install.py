@@ -133,6 +133,32 @@ def test_已经在装的不许再点一次(monkeypatch) -> None:
 def test_不认识的引擎报_KeyError() -> None:
     with pytest.raises(KeyError):
         sm.start_install("没有这个引擎")
+    with pytest.raises(KeyError):
+        sm.remove("没有这个引擎")
+
+
+def test_删除运行环境和权重(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "separation"
+    monkeypatch.setattr(sm, "MANAGED_SEPARATION_ROOT", root)
+    monkeypatch.setattr(sm, "TORCH_HOME", root / "torch")
+    python = sm.managed_venv_python("demucs")
+    python.parent.mkdir(parents=True, exist_ok=True)
+    python.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(sm, "probe_runtime", lambda engine: (False, ""))
+    sm._probes.invalidate()
+
+    row = sm.remove("demucs")
+
+    assert not sm.managed_venv_dir("demucs").exists()
+    assert not sm.TORCH_HOME.exists()
+    assert row["status"] == "missing"
+
+
+def test_正在安装时不许删除(monkeypatch) -> None:
+    _says(monkeypatch, ready=True)
+    sm._store.set("demucs", InstallProgress("installing"))
+    with pytest.raises(RuntimeError, match="已经在安装"):
+        sm.remove("demucs")
 
 
 def test_失败的原因原样留着(monkeypatch) -> None:
@@ -171,3 +197,21 @@ def test_装东西到后端主机上要部署管理员() -> None:
 
     source = inspect.getsource(route.install_separation_engine)
     assert "ensure_deployment_admin" in source
+
+
+def test_删除接口会把运行环境从盘上拿走(monkeypatch, tmp_path: Path) -> None:
+    from tests.util import fresh_client
+
+    monkeypatch.setattr(sm, "MANAGED_SEPARATION_ROOT", tmp_path / "separation")
+    monkeypatch.setattr(sm, "TORCH_HOME", tmp_path / "separation" / "torch")
+    python = sm.managed_venv_python("demucs")
+    python.parent.mkdir(parents=True, exist_ok=True)
+    python.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr(sm, "probe_runtime", lambda engine: (False, ""))
+    sm._probes.invalidate()
+
+    reply = fresh_client().delete("/api/separation/engines/demucs")
+
+    assert reply.status_code == 200, reply.text
+    assert reply.json()["status"] == "missing"
+    assert not sm.managed_venv_dir("demucs").exists()

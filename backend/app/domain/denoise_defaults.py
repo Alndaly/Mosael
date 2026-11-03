@@ -116,6 +116,18 @@ def set_default_engine(db: Session, engine: str) -> str:
     return found.id
 
 
+def clear_default_engine(db: Session, provider_id: str) -> None:
+    """删掉一个引擎之前:如果它正是这台机器的默认,把默认清空。
+
+    不清的话,下一次降噪会拿一个已经不在盘上的 id 去解析;默认要说的正是"现在就能用"。
+    不提交,由入口提交(和 `set_default_engine` 同一套)。
+    """
+    row = db.get(DenoiseConfig, SINGLETON_ID)
+    if row is not None and row.default_engine == provider_id:
+        row.default_engine = ""
+        db.flush()
+
+
 def resolve_denoise_engine(db: Session, owner_user_id: str | None, *, explicit: str = "") -> str:
     """这一次用哪一家(提供方 id);空串 = 交给 `capabilities.choose` 按内置兜底挑。
 
@@ -147,6 +159,7 @@ __all__ = [
     "DenoiseEngineNotReady",
     "SINGLETON_ID",
     "UnknownDenoiseEngine",
+    "clear_default_engine",
     "default_engine",
     "is_default",
     "resolve_denoise_engine",

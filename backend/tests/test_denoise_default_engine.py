@@ -212,6 +212,20 @@ def test_部署默认不改按人选择那套(deepfilter_installed) -> None:
     assert _adapter_engine() == "deepfilternet"
 
 
+def test_删除引擎会清掉指向它的部署默认(deepfilter_installed) -> None:
+    """默认要说的正是"现在就能用";引擎文件删了,默认必须跟着回到没设。"""
+    client = _client()
+    assert _set_default(client, DEEPFILTER).status_code == 200
+    assert _defaults(client) == [DEEPFILTER]
+
+    reply = client.delete(f"/api/denoise/engines/{DEEPFILTER}")
+
+    assert reply.status_code == 200, reply.text
+    assert reply.json()["status"] == "missing"
+    assert not deepfilter_installed.deepfilter_path().exists()
+    assert _defaults(client) == []
+
+
 # ---------------------------------------------------------------------------
 # ④ 一处解析:有效引擎只能由一个函数决定
 # ---------------------------------------------------------------------------

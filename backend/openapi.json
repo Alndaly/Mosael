@@ -4899,6 +4899,49 @@
         }
       }
     },
+    "/api/separation/engines/{engine}": {
+      "delete": {
+        "tags": [
+          "separation"
+        ],
+        "summary": "Remove Separation Engine",
+        "description": "删掉这个分离引擎的托管运行环境与权重。\n\n和安装同一道门:删的是**后端主机**上的东西,不属于任何工作区。",
+        "operationId": "remove_separation_engine_api_separation_engines__engine__delete",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeparationEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/denoise/engines": {
       "get": {
         "tags": [
@@ -4985,6 +5028,49 @@
         "summary": "Install Denoise Engine",
         "description": "下载并装上这个引擎(后台跑)。\n\n往**后端主机**上放一个可执行文件是部署级动作,要部署管理员 —— 和装分离引擎、下转写模型同一条。",
         "operationId": "install_denoise_engine_api_denoise_engines__engine__install_post",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Engine"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DenoiseEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/denoise/engines/{engine}": {
+      "delete": {
+        "tags": [
+          "denoise"
+        ],
+        "summary": "Remove Denoise Engine",
+        "description": "删掉一个要下载的降噪引擎的本地文件(DeepFilterNet),并清掉指向它的部署默认。\n\n和安装同一道门:删的是**后端主机**上的东西。不需要下载的内置引擎、插件连接不走这条\n(它们没有\"我们装的文件\"可删)。",
+        "operationId": "remove_denoise_engine_api_denoise_engines__engine__delete",
         "parameters": [
           {
             "name": "engine",

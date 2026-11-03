@@ -1,11 +1,18 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Download, Loader2, RotateCw } from "lucide-react";
+import { CheckCircle2, Download, Loader2, RotateCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { type SeparationEngine, installSeparationEngine, listSeparationEngines } from "@/api/client";
+import {
+  type SeparationEngine,
+  installSeparationEngine,
+  listSeparationEngines,
+  removeSeparationEngine,
+} from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminRowNote, AdminRowState, AdminSection } from "./adminLayout";
 import { AdminOnlyOneNote } from "./defaultRow";
@@ -19,7 +26,8 @@ import { AdminOnlyOneNote } from "./defaultRow";
  * 装只给部署管理员(routes/separation.install_separation_engine),所以在管理页。
  *
  * 和转写那一节共用同一套形状,但只有**一件**事要说:跑不跑得起来。权重是第一次分离时
- * 引擎自己拉的,所以这里没有"文件在不在盘上"那一半。
+ * 引擎自己拉的,所以这里没有"文件在不在盘上"那一半。装好之后给一个删除入口:几 GB 的运行环境
+ * 和权重都落在这台机器上,不想留的时候要能整个拿走(删除会连权重一起清)。
  */
 export function SeparationEnginesSection() {
   const t = useI18n();
@@ -32,6 +40,16 @@ export function SeparationEnginesSection() {
   const install = useMutation({
     mutationFn: (engine: string) => installSeparationEngine(engine),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["separation-engines"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const [removeTarget, setRemoveTarget] = React.useState<string | null>(null);
+  const remove = useMutation({
+    mutationFn: (engine: string) => removeSeparationEngine(engine),
+    onSuccess: () => {
+      setRemoveTarget(null);
+      void qc.invalidateQueries({ queryKey: ["separation-engines"] });
+      toast.success(t("modelRemoved"));
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -47,10 +65,20 @@ export function SeparationEnginesSection() {
             engine={engine}
             busy={(install.isPending && install.variables === engine.engine) || engine.status === "installing"}
             onInstall={() => install.mutate(engine.engine)}
+            onRemove={() => setRemoveTarget(engine.engine)}
           />
         ))}
         {engines.isLoading && <AdminRow label={t("connecting")} />}
       </div>
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title={t("modelRemoveTitle")}
+        body={t("separationRemoveBody")}
+        pending={remove.isPending}
+        confirmLabel={t("delete")}
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => removeTarget && remove.mutate(removeTarget)}
+      />
     </AdminSection>
   );
 }
@@ -59,10 +87,12 @@ function EngineRow({
   engine,
   busy,
   onInstall,
+  onRemove,
 }: {
   engine: SeparationEngine;
   busy?: boolean;
   onInstall: () => void;
+  onRemove: () => void;
 }) {
   const t = useI18n();
   return (
@@ -88,6 +118,11 @@ function EngineRow({
         <AdminRowState tone="success" icon={<CheckCircle2 size={14} />}>
           {t("separationInstalled")}
         </AdminRowState>
+      )}
+      {engine.status === "installed" && (
+        <IconButton variant="ghost" size="icon-xs" label={t("delete")} onClick={onRemove}>
+          <Trash2 size={13} />
+        </IconButton>
       )}
       {/* 没有分母就不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样(转写那一节同款)。
           没测过也不摆按钮:这一刻还不知道它装没装,而「安装」和「已安装」都是结论。 */}

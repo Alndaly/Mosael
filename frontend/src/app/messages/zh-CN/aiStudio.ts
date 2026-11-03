@@ -432,6 +432,7 @@ export const aiStudio = {
   separationInstall: "安装",
   separationInstalled: "已安装",
   separationRetry: "重试",
+  separationRemoveBody: "会删除 Demucs 的托管运行环境、已下载的模型权重;下一次分离需要重新安装。",
   asrModelsTitle: "转写模型",
   asrModelsDesc: "逐字稿转写用的语音模型。模型权重在首次转写时会自动下载;运行环境(几 GB 的 Python 依赖)要在这里点一次装好 —— 转写不会替你装那么大的东西。",
   asrModelInstalled: "已安装",

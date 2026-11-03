@@ -32,3 +32,19 @@ def install_separation_engine(engine: str, db: DbSession, user: CurrentUser) -> 
         raise HTTPException(status_code=404, detail=tr("routeErr_unknownSeparationEngine")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/separation/engines/{engine}", response_model=SeparationEngineOut)
+def remove_separation_engine(engine: str, db: DbSession, user: CurrentUser) -> dict:
+    """删掉这个分离引擎的托管运行环境与权重。
+
+    和安装同一道门:删的是**后端主机**上的东西,不属于任何工作区。
+    """
+    ensure_deployment_admin(db, user)
+    try:
+        row = separation_models.remove(engine)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=tr("routeErr_unknownSeparationEngine")) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return translate_fields(row, ("label", "message"), get_current_locale())

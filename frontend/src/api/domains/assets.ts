@@ -259,6 +259,11 @@ export function installDenoiseEngine(engine: string): Promise<DenoiseEngine> {
   return api<DenoiseEngine>(`/api/denoise/engines/${encodeURIComponent(engine)}/install`, { method: "POST" });
 }
 
+/** 删掉这个降噪引擎装在本机的文件;指向它的部署默认会一起清掉。 */
+export function removeDenoiseEngine(engine: string): Promise<DenoiseEngine> {
+  return api<DenoiseEngine>(`/api/denoise/engines/${encodeURIComponent(engine)}`, { method: "DELETE" });
+}
+
 /**
  * 把这**一种**设成这台机器的默认降噪引擎(管理 → 引擎 → 降噪;只有部署管理员能调)。
  * 回包是改完之后的那一行 —— 界面照它再向后端问一次整张列表,不自己把别的行改掉。

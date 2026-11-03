@@ -31,7 +31,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import DENOISE, derived
-from app.domain.denoise_defaults import resolve_denoise_engine
+from app.domain.denoise_defaults import clear_default_engine, resolve_denoise_engine
 from app.domain.jobs import (
     RENDER_SLOTS,
     create_job,
@@ -119,6 +119,17 @@ def install_engine(db: Session, owner_user_id: str | None, engine: str) -> dict:
     """开始装这个内置引擎(提供方 id `builtin:<引擎>`)。装在后台跑;返回的是那一行的新状态。"""
 
     denoise_models.start_install(engine.removeprefix(BUILTIN_PREFIX))
+    return next(row for row in list_engines(db, owner_user_id) if row["engine"] == engine)
+
+
+def remove_engine(db: Session, owner_user_id: str | None, engine: str) -> dict:
+    """删掉这个内置引擎的本体文件,并清掉指向它的部署默认。
+
+    删除的写入口和安装同一道门:它动的是**这台机器**上的文件,不属于任何工作区。回包是那一行
+    的新状态,界面据此重读整张列表 —— 不自己把其他行改掉。
+    """
+    denoise_models.remove(engine.removeprefix(BUILTIN_PREFIX))
+    clear_default_engine(db, engine)
     return next(row for row in list_engines(db, owner_user_id) if row["engine"] == engine)
 
 

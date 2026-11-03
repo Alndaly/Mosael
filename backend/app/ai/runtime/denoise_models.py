@@ -73,6 +73,10 @@ MANAGED_DENOISE_ROOT = settings.data_dir / "denoise"
 
 _store = InstallStore()
 
+#: 「开始装」和「删掉」互斥。只互斥这两个动作:下载本身在锁外跑,状态里的 `installing`
+#: 已经让另一次安装或删除落在确定的一边。
+_install_guard = threading.Lock()
+
 
 def _this_platform() -> tuple[str, str]:
     machine = platform.machine().lower()
@@ -125,10 +129,33 @@ def start_install(engine: str) -> dict[str, Any]:
         raise KeyError(engine)
     if deepfilter_binary_spec() is None:
         raise RuntimeSetupError("runtimeErr_deepfilterUnsupportedPlatform")
-    if runtime_ready(engine):
-        return install_status(engine)
-    _store.begin(engine, "dlMsg_downloading")
+    with _install_guard:
+        if runtime_ready(engine):
+            return install_status(engine)
+        _store.begin(engine, "dlMsg_downloading")
     threading.Thread(target=_run_install, args=(engine,), daemon=True).start()
+    return install_status(engine)
+
+
+def remove(engine: str) -> dict[str, Any]:
+    """删掉这个要下载的引擎文件。**只删我们装的那一份**,不碰用户自己放的东西。
+
+    正在下载时拒绝:下载线程最后会把校验过的文件换到正式路径,先删了它也会再回来,
+    屏幕上却已经写着「未安装」—— 两句话互相矛盾。删除是显式动作,等它下完再删。
+    """
+    if engine not in INSTALLABLE:
+        raise KeyError(engine)
+    target = deepfilter_path()
+    with _install_guard:
+        live = _store.get(engine)
+        if live is not None and live.status == "installing":
+            raise RuntimeSetupError("runtimeErr_alreadyInstalling")
+        if not target.is_file():
+            raise RuntimeSetupError("runtimeErr_engineNotInstalled")
+        target.unlink()
+        target.with_name(f"{target.name}.download").unlink(missing_ok=True)
+        deepfilter_ready.cache_clear()
+        _store.clear(engine)
     return install_status(engine)
 
 

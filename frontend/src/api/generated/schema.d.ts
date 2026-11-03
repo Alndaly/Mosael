@@ -1915,6 +1915,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/separation/engines/{engine}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Separation Engine
+         * @description 删掉这个分离引擎的托管运行环境与权重。
+         *
+         *     和安装同一道门:删的是**后端主机**上的东西,不属于任何工作区。
+         */
+        delete: operations["remove_separation_engine_api_separation_engines__engine__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/denoise/engines": {
         parameters: {
             query?: never;
@@ -1978,6 +2000,29 @@ export interface paths {
          */
         post: operations["install_denoise_engine_api_denoise_engines__engine__install_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/denoise/engines/{engine}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Denoise Engine
+         * @description 删掉一个要下载的降噪引擎的本地文件(DeepFilterNet),并清掉指向它的部署默认。
+         *
+         *     和安装同一道门:删的是**后端主机**上的东西。不需要下载的内置引擎、插件连接不走这条
+         *     (它们没有"我们装的文件"可删)。
+         */
+        delete: operations["remove_denoise_engine_api_denoise_engines__engine__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -26503,6 +26548,37 @@ export interface operations {
             };
         };
     };
+    remove_separation_engine_api_separation_engines__engine__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engine: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeparationEngineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_denoise_engines_api_denoise_engines_get: {
         parameters: {
             query?: never;
@@ -26566,6 +26642,37 @@ export interface operations {
         };
     };
     install_denoise_engine_api_denoise_engines__engine__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engine: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DenoiseEngineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_denoise_engine_api_denoise_engines__engine__delete: {
         parameters: {
             query?: never;
             header?: never;

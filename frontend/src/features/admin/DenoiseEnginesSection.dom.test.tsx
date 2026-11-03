@@ -52,6 +52,7 @@ const defaultLine = (): HTMLElement | null => document.querySelector("[data-admi
 function renderSection(deepfilter: Record<string, unknown> = {}, rnnoise: Record<string, unknown> = {}) {
   let data = rows(deepfilter, rnnoise);
   const posts: string[] = [];
+  const deletes: string[] = [];
   const puts: Array<{ url: string; body: unknown }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -66,6 +67,12 @@ function renderSection(deepfilter: Record<string, unknown> = {}, rnnoise: Record
       posts.push(url);
       return json(rows({ status: "installing" })[2]);
     }
+    if (init?.method === "DELETE") {
+      deletes.push(url);
+      const target = data.find((row) => url.includes(String(row.engine).replace(":", "%3A")));
+      data = data.map((row) => (row === target ? { ...row, status: "missing", ready: false } : row));
+      return json({ ...target, status: "missing", ready: false });
+    }
     return json(data);
   }) as never;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -74,7 +81,7 @@ function renderSection(deepfilter: Record<string, unknown> = {}, rnnoise: Record
       <DenoiseEnginesSection />
     </QueryClientProvider>,
   );
-  return { posts, puts };
+  return { posts, deletes, puts };
 }
 
 /** 引擎自己那一行 —— 默认行里也有引擎名(下拉的当前值),得先把它排除掉。
@@ -145,6 +152,20 @@ describe("降噪引擎", () => {
   it("装好了显示已安装", async () => {
     renderSection({ status: "installed", ready: true });
     expect(await rowOf("DeepFilterNet")).toHaveTextContent("denoiseInstalled");
+  });
+
+  it("已安装的引擎可以删除;确认后删文件,行回到未安装", async () => {
+    const user = userEvent.setup();
+    const { deletes } = renderSection({ status: "installed", ready: true });
+    const row = await rowOf("DeepFilterNet");
+
+    await user.click(within(row).getByRole("button", { name: "delete" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("denoiseRemoveBody");
+    await user.click(within(dialog).getByRole("button", { name: "delete" }));
+
+    await waitFor(() => expect(deletes).toEqual([expect.stringContaining("/api/denoise/engines/builtin%3Adeepfilternet")]));
+    await waitFor(async () => expect(await rowOf("DeepFilterNet")).not.toHaveTextContent("denoiseInstalled"));
   });
 });
 

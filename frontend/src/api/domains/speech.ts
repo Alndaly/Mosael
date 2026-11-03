@@ -68,6 +68,11 @@ export function installSeparationEngine(engine: string): Promise<SeparationEngin
   return api<SeparationEngine>(`/api/separation/engines/${encodeURIComponent(engine)}/install`, { method: "POST" });
 }
 
+/** 删掉这个分离引擎的托管运行环境与权重;下一次分离要重装。 */
+export function removeSeparationEngine(engine: string): Promise<SeparationEngine> {
+  return api<SeparationEngine>(`/api/separation/engines/${encodeURIComponent(engine)}`, { method: "DELETE" });
+}
+
 export function listVoices(workspaceId: string): Promise<Voice[]> {
   return api<Voice[]>(`/api/voices?workspace_id=${workspaceId}`);
 }

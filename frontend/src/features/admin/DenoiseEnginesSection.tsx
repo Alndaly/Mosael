@@ -1,17 +1,20 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Download, Loader2, RotateCw } from "lucide-react";
+import { CheckCircle2, Download, Loader2, RotateCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   type DenoiseEngine,
   installDenoiseEngine,
   listDenoiseEngines,
+  removeDenoiseEngine,
   setDefaultDenoiseEngine,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
+import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { formatBytes } from "@/lib/bytes";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminRowNote, AdminRowState, AdminSection, AdminTag } from "./adminLayout";
@@ -21,8 +24,8 @@ import { AdminDefaultMarker, AdminDefaultSelect } from "./defaultRow";
  * 管理 → 引擎 → 降噪(ADR-0017)。
  *
  * 一节看全这台机器上的**本机**降噪方式:哪些随应用带着、哪个要下载、哪些会去掉音乐。
- * 只有要下载的那种有按钮 —— 往这台机器上放一个可执行文件是显式的一步,不藏在"点一下降噪"后面,
- * 而且只给部署管理员(routes/denoise.install_denoise_engine),所以在管理页。
+ * 只有要下载的那种有按钮(下载 / 重试 / 已装后的删除)—— 往这台机器上放进或拿走一个可执行文件
+ * 都是显式的一步,不藏在"点一下降噪"后面,而且只给部署管理员(routes/denoise),所以在管理页。
  *
  * **降噪有三种实现,所以有默认可设。** 默认行放在节说明之后、列表之前(`AdminDefaultSelect`,
  * 和转写模型同一个零件、同一条规则),整节只有那一处能改;列表行只负责下载/状态,已默认的那一行
@@ -49,6 +52,16 @@ export function DenoiseEnginesSection() {
     //: **从后端重新读整张列表**:默认只有一个,原来那一个也得跟着改口(回包只是改完的那一行)。
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["denoise-engines"] }),
     //: 后端会拒(没装好 / 不认识的 id)—— 原因原样说出来,点了没反应的控件等于坏了。
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const [removeTarget, setRemoveTarget] = React.useState<string | null>(null);
+  const remove = useMutation({
+    mutationFn: (engine: string) => removeDenoiseEngine(engine),
+    onSuccess: () => {
+      setRemoveTarget(null);
+      void qc.invalidateQueries({ queryKey: ["denoise-engines"] });
+      toast.success(t("modelRemoved"));
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -86,10 +99,20 @@ export function DenoiseEnginesSection() {
             engine={engine}
             busy={(install.isPending && install.variables === engine.engine) || engine.status === "installing"}
             onInstall={() => install.mutate(engine.engine)}
+            onRemove={() => setRemoveTarget(engine.engine)}
           />
         ))}
         {engines.isLoading && <AdminRow label={t("connecting")} />}
       </div>
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title={t("modelRemoveTitle")}
+        body={t("denoiseRemoveBody")}
+        pending={remove.isPending}
+        confirmLabel={t("delete")}
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => removeTarget && remove.mutate(removeTarget)}
+      />
     </AdminSection>
   );
 }
@@ -99,7 +122,17 @@ function isInstalled(engine: DenoiseEngine): boolean {
   return engine.installable ? engine.status === "installed" : engine.ready;
 }
 
-function EngineRow({ engine, busy, onInstall }: { engine: DenoiseEngine; busy: boolean; onInstall: () => void }) {
+function EngineRow({
+  engine,
+  busy,
+  onInstall,
+  onRemove,
+}: {
+  engine: DenoiseEngine;
+  busy: boolean;
+  onInstall: () => void;
+  onRemove: () => void;
+}) {
   const t = useI18n();
   const installed = isInstalled(engine);
   return (
@@ -136,6 +169,11 @@ function EngineRow({ engine, busy, onInstall }: { engine: DenoiseEngine; busy: b
         <AdminRowState tone="success" icon={<CheckCircle2 size={14} />}>
           {t(engine.installable ? "denoiseInstalled" : "denoiseReadyLabel")}
         </AdminRowState>
+      )}
+      {engine.installable && installed && (
+        <IconButton variant="ghost" size="icon-xs" label={t("delete")} onClick={onRemove}>
+          <Trash2 size={13} />
+        </IconButton>
       )}
       {!engine.installable && !engine.ready && <AdminRowState>{t("denoiseUnavailableLabel")}</AdminRowState>}
       {engine.status === "installing" && <AdminRowState icon={<Loader2 size={13} className="animate-mosael-spin" />} />}

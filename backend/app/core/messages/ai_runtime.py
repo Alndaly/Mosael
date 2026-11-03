@@ -358,6 +358,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "runtimeErr_unknownSeparationEngine": {"zh": "不认识的分离引擎:{engine}", "en": "Unknown separation engine: {engine}"},
     "runtimeErr_alreadyDownloading": {"zh": "{name} 已经在下载中", "en": "{name} is already downloading"},
     "runtimeErr_alreadyInstalling": {"zh": "这个引擎已经在安装中", "en": "This engine is already being installed"},
+    "runtimeErr_engineNotInstalled": {"zh": "这个引擎没有安装,没有可删除的文件", "en": "This engine isn't installed, so there are no files to remove"},
     "runtimeErr_deepfilterUnsupportedPlatform": {
         "zh": "这个平台没有 DeepFilterNet 的发布文件",
         "en": "DeepFilterNet has no release build for this platform",

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import threading
 from dataclasses import dataclass
@@ -92,6 +93,9 @@ DEFAULT_MODEL = "htdemucs"
 
 #: 安装进度(内存那一半;盘上那个 venv 跑不跑得起来才是静息时的事实源)。
 _store = InstallStore()
+
+#: 「开始装」和「删掉」互斥;和降噪那一份同一个理由。
+_install_guard = threading.Lock()
 
 #: 探过没探过(见 runtime/download_state.ProbeCache)。装完之后 clear_runtime_probes()。
 _probes = ProbeCache()
@@ -280,10 +284,11 @@ def start_install(engine: str) -> dict[str, Any]:
     """在后台线程里装。**不阻塞请求** —— 建 venv 加装 torch 是几分钟到几十分钟的事。"""
     if engine not in ENGINES:
         raise KeyError(engine)
-    #: 这里**现探**(不是读缓存):用户刚点了按钮,等一次探测好过给一个凭旧答案的早返回。
-    if refresh_runtime_status(engine):
-        return _status_dict(engine)
-    _store.begin(engine, "dlMsg_creatingRuntime")
+    with _install_guard:
+        #: 这里**现探**(不是读缓存):用户刚点了按钮,等一次探测好过给一个凭旧答案的早返回。
+        if refresh_runtime_status(engine):
+            return _status_dict(engine)
+        _store.begin(engine, "dlMsg_creatingRuntime")
     threading.Thread(target=_run_install, args=(engine,), daemon=True).start()
     return _status_dict(engine)
 
@@ -298,3 +303,32 @@ def _run_install(engine: str) -> None:
         _store.set(engine, InstallProgress(FAILED, *failure_message(exc)))
         return
     _store.clear(engine)
+
+
+def remove(engine: str) -> dict[str, Any]:
+    """删掉这个分离引擎的托管 venv 与权重。
+
+    权重落在 `TORCH_HOME`(本应用自己的数据目录,见模块说明),但它是**这几个引擎共用**的;
+    还有别的引擎装着时只删这一个的 venv,等最后一个也删掉才清权重 —— 否则删 demucs 会把
+    另一个引擎已经下好的模型一起带走。
+
+    正在安装时拒绝:安装线程还在往这个目录里写,先删掉只会留下一个半截环境,而屏幕上已经
+    写着「未安装」。删除是显式动作,等它装完再删。
+    """
+    if engine not in ENGINES:
+        raise KeyError(engine)
+    venv = managed_venv_dir(engine)
+    with _install_guard:
+        live = _store.get(engine)
+        if live is not None and live.status == "installing":
+            raise RuntimeSetupError("runtimeErr_alreadyInstalling")
+        if not venv.exists() and not TORCH_HOME.exists():
+            raise RuntimeSetupError("runtimeErr_engineNotInstalled")
+        shutil.rmtree(venv, ignore_errors=True)
+        if not any(managed_venv_dir(other).exists() for other in ENGINES if other != engine):
+            #: 驱动目录下只有权重;没有别的引擎在用时可以整块删,下一次分离会重新拉。
+            shutil.rmtree(TORCH_HOME, ignore_errors=True)
+        _store.clear(engine)
+        clear_runtime_probes()
+        refresh_runtime_status(engine)
+    return _status_dict(engine)

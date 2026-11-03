@@ -6,7 +6,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import DenoiseDefaultUpdate, DenoiseEngineOut
 from app.core.i18n import get_current_locale, tr, translate_fields
 from app.domain import denoise_defaults
-from app.domain.assets.denoise import install_engine, list_engines
+from app.domain.assets.denoise import install_engine, list_engines, remove_engine
 from app.domain.permissions import ensure_deployment_admin
 
 router = APIRouter(tags=["denoise"])
@@ -71,4 +71,22 @@ def install_denoise_engine(engine: str, db: DbSession, user: CurrentUser) -> dic
         raise HTTPException(status_code=404, detail=tr("routeErr_denoiseEngineNotInstallable")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return translate_fields(row, _TRANSLATED, get_current_locale())
+
+
+@router.delete("/denoise/engines/{engine}", response_model=DenoiseEngineOut)
+def remove_denoise_engine(engine: str, db: DbSession, user: CurrentUser) -> dict:
+    """删掉一个要下载的降噪引擎的本地文件(DeepFilterNet),并清掉指向它的部署默认。
+
+    和安装同一道门:删的是**后端主机**上的东西。不需要下载的内置引擎、插件连接不走这条
+    (它们没有"我们装的文件"可删)。
+    """
+    ensure_deployment_admin(db, user)
+    try:
+        row = remove_engine(db, user.id, engine)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=tr("routeErr_denoiseEngineNotInstallable")) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
     return translate_fields(row, _TRANSLATED, get_current_locale())
