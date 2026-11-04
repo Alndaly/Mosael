@@ -12,6 +12,7 @@ from app.db.models import Asset
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import FRAME, derived
 from app.media.paths import resolve_key
+from app.media.probe import probe_picture_seconds
 from app.media.still import grab_frame
 
 
@@ -25,7 +26,8 @@ def last_frame_time(asset: Asset) -> float:
     duration = float(info.get("duration") or 0)
     if not duration:
         raise AssetFrameError("assetErr_frameNoDuration")
-    return max(0.0, duration - 1.5 / float(info.get("fps") or 24))
+    picture = probe_picture_seconds(resolve_key(asset.file_key)) if asset.file_key else None
+    return max(0.0, min(duration, picture or duration) - 1.5 / float(info.get("fps") or 24))
 
 
 def save_frame_as_asset(db: Session, asset: Asset, at: float, *, project_id: str | None) -> Asset:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from typing import Iterable
 from pathlib import Path
@@ -118,6 +119,18 @@ def probe_media(path: Path, *, measure_missing_duration: bool = True) -> dict[st
             info["fps"] = _frame_rate(path, stream, info.get("duration"))
             break
     return {k: v for k, v in info.items() if v is not None}
+
+
+def probe_picture_seconds(path: Path) -> float | None:
+    """画面有多长。容器时长取的是最长的那一轨,生成的片子音轨常比画面长一截:按它算「最后一帧」,时间点落在画面结束之后。"""
+    try:
+        proc = run_logged(
+            [settings.ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=duration", "-of", "json", str(path)],
+            check=True, capture_output=True, text=True, timeout=20, what="画面时长探测", level=logging.DEBUG)
+        streams = json.loads(proc.stdout).get("streams") or []
+        return float(streams[0]["duration"]) if streams else None
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        return None
 
 
 def measure_duration(path: Path) -> float | None:

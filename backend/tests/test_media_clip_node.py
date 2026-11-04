@@ -91,3 +91,21 @@ def test_取一帧_不填时间是最后一帧_存成图片素材(tmp_path: Path
     with SessionLocal() as db:
         frame = db.get(Asset, context["last"]["asset_id"])
         assert frame.kind == "image" and frame.derived_from == [{"asset_id": asset_id, "op": "frame"}]
+
+
+def test_音轨比画面长_最后一帧照样取得到(tmp_path, monkeypatch) -> None:
+    """万相的片子画面 6.000 秒、音轨 6.037 秒:按容器时长算,时间点落在画面结束之后,取帧失败(实测)。"""
+    import subprocess
+    from types import SimpleNamespace
+
+    from app.core.config import settings
+    from app.domain.assets import frames
+    from app.media.still import grab_frame
+
+    clip = tmp_path / "longer-audio.mp4"
+    subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64:r=30:d=1",
+                    "-f", "lavfi", "-i", "sine=d=1.3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(clip)], check=True)
+    monkeypatch.setattr(frames, "resolve_key", lambda key: clip)
+    moment = frames.last_frame_time(SimpleNamespace(media_info={"duration": 1.3, "fps": 30}, file_key="clip"))
+    assert moment < 1.0
+    assert grab_frame(clip, moment, tmp_path / "last.jpg").stat().st_size > 0
