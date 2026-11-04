@@ -92,6 +92,12 @@ def condition(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str,
         if left_num is None or right_num is None:
             raise WorkflowDomainError("wfErr_conditionNeedsNumbers", params={"op": op, "left": left_text, "right": right_text})
         result = left_num > right_num if op == "gt" else left_num < right_num
+    elif op == "every":
+        #: 循环里「每 N 轮一次」:左边是 `{{loop.index}}`(从 0 数),第 N、2N… 轮为真。N 是 0 就是不做。
+        left_num, right_num = _as_number(left), _as_number(right)
+        if left_num is None or right_num is None:
+            raise WorkflowDomainError("wfErr_conditionNeedsNumbers", params={"op": op, "left": left_text, "right": right_text})
+        result = right_num > 0 and (left_num + 1) % right_num == 0
     else:
         raise WorkflowDomainError("wfErr_unknownConditionOp", params={"op": op})
     return {"result": result}

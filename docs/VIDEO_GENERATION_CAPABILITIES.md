@@ -70,3 +70,4 @@ Evolink 原先只有 `seedance-2.0-text-to-video`，因此 UI 只能呈现纯文
 
 单次生成最多十几秒,更长靠逐段续写:模板「任意长度的连续视频」(`long_take_video`),AI Studio 视频模式的「更长的视频」是它的入口。
 段与段的接法、实测的续写语义见 [ADR 0092](adr/0092-workflow-runs-continue-from-where-they-stopped.md)。
+模型收尾帧时可以设「每几段画一张锚点帧」(`anchor_every`,默认不画),防止越拍越走样。

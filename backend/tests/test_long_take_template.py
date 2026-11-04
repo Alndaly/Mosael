@@ -17,6 +17,7 @@ CHAT = ModelChoice("c", "anthropic", "claude")
 WAN_T2V = ModelChoice("a", "alibaba", "wan2.7-t2v")
 WAN_I2V = ModelChoice("a", "alibaba", "wan2.7-i2v")
 SEEDANCE = ModelChoice("b", "bytedance", "doubao-seedance-2-0-260128")
+IMAGE = ModelChoice("a", "alibaba", "wan2.7-image")
 
 
 def _node(graph: dict, node_id: str) -> dict:
@@ -104,6 +105,44 @@ def test_真跑一遍_每段接着上一段的尾巴(fake_run) -> None:
     assert [start for _, start in fake_run["appended"]][1:] == [1.5, 1.5]
     assert fake_run["seams"] == [("seg1", "seg2"), ("seg2", "seg3")], "接缝要拿前一段和这一段比"
     assert context["export_final"]["asset_id"] == "final"
+
+
+def test_模型收尾帧才有锚点帧_没有出图模型也没有() -> None:
+    graph = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V, image=IMAGE)
+    assert _body(graph, "segments", "extend")["config"]["source_assets"] == [
+        "{{tail.asset_id}}:first_clip", "{{anchor.asset_id}}:last_frame",
+    ]
+    assert _node(graph, "start")["config"]["params"]["anchor_every"] == 0, "默认不开:每张都是一次付费出图"
+    bare = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V)
+    assert "anchor_every" not in _node(bare, "start")["config"]["params"]
+    assert all(node["id"] != "anchor" for node in _node(bare, "segments")["config"]["body"]["nodes"])
+
+
+@pytest.mark.parametrize("every,anchored", [(0, []), (2, [2])])
+def test_到了那一轮才画锚点帧_当这一段的尾帧(fake_run, monkeypatch, every: int, anchored: list[int]) -> None:
+    from app.core.db import SessionLocal
+    from app.db.models import Workflow
+    from app.domain.workflows.engine import execute_graph
+
+    monkeypatch.setitem(registry._REGISTRY, "video_frame", lambda db, scope, config: {"asset_id": f"frame-of-{config['asset_id']}"})
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        workflow = Workflow(workspace_id=ws, name="长片", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.commit()
+        wf_id = workflow.id
+    graph = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V, image=IMAGE)
+    execute_graph(graph, wf_id=wf_id, params={"idea": "走路", "anchor_every": every})
+    wait_for_idle_jobs()
+    videos = [one for one in fake_run["generated"] if "The last moment" not in one["prompt"]]
+    paints = [one for one in fake_run["generated"] if "The last moment" in one["prompt"]]
+    assert len(videos) == 3 and len(paints) == len(anchored)
+    with_anchor = [index for index, one in enumerate(videos)
+                   if any(str(source).endswith(":last_frame") and source != ":last_frame" for source in one["sources"] or [])]
+    assert with_anchor == anchored, videos
+    if paints:
+        assert paints[0]["sources"] == ["frame-of-seg2:reference_image"], "照上一段的最后一帧画"
 
 
 def _estimate(monkeypatch, cost_micros: int | None, **config: Any) -> dict:

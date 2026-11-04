@@ -1478,7 +1478,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "type": "string",
                 "required": True,
                 "description": "wfNode_condition_op",
-                "options": ["equals", "not_equals", "contains", "not_contains", "empty", "not_empty", "gt", "lt"],
+                "options": ["equals", "not_equals", "contains", "not_contains", "empty", "not_empty", "gt", "lt", "every"],
             },
             "right": {"type": "template", "description": "wfNode_condition_right"},
         },

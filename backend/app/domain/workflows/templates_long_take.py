@@ -8,6 +8,9 @@
 
 第一段没有上一段可接,用另一个模型一格(`opening`)从文字出:续写模型多半做不了这件事。
 
+**越拍越不像时拉回来。** 段段相接,走样也段段相传。模型收尾帧的,开始参数里可以设「每几段画一张锚点帧」:照上一段的最后
+一帧和点名的资产画一张,当这一段的尾帧,这一段就落回人物本来的样子。默认不开,每张都是一次付费出图。
+
 **生成和上时间线分成两个循环。** 重做某一段时,时间线清掉重新摆一遍,不会把新的一段接到旧的后面(见 ADR 0092 的重做)。
 """
 
@@ -19,7 +22,14 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import CONTINUATION_TAIL_SECONDS, FRAME_ASPECTS, ModelChoice, video_plan_for
+from app.domain.workflows.templates_models import (
+    CONTINUATION_TAIL_SECONDS,
+    FRAME_ASPECTS,
+    ModelChoice,
+    VideoPlan,
+    image_plan_for,
+    video_plan_for,
+)
 from app.domain.workflows.templates_schemas import object_schema
 
 LONG_TAKE_VIDEO = "long_take_video"
@@ -30,8 +40,58 @@ def _segments_schema() -> dict[str, Any]:
     return object_schema({"opening": text, "next": {"type": "array", "items": text}}, ["opening", "next"])
 
 
-def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: ModelChoice, db: Session | None = None) -> dict[str, Any]:
+def _anchor_nodes(image: ModelChoice, plan: VideoPlan, db: Session | None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """循环体里画锚点帧的那几个节点和它们的边:到了该画的那一轮才走(`anchor_due`),其余轮次整段跳过。"""
+    size = image_plan_for(db, image).frame_sizes.get(plan.aspect_ratio)
+    #: 交一段尾巴的还要从上一段取一帧;只交一帧的,交出去的那一帧就是。
+    frame = "{{anchor_frame.asset_id}}" if plan.extends else "{{tail.asset_id}}"
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "anchor_due", "type": "condition",
+            "name": {"zh": "这一段要不要锚点帧", "en": "Does this segment get an anchor frame"},
+            "position": {"x": 390, "y": -60},
+            "config": {"left": "{{loop.index}}", "op": "every", "right": "{{input.anchor_every}}"},
+        },
+        {
+            "id": "anchor", "type": "ai_generate",
+            "name": {"zh": "画锚点帧", "en": "Paint the anchor frame"},
+            "position": {"x": 1010, "y": -60},
+            "config": {
+                "provider": image.provider, "provider_profile_id": image.profile_id, "model": image.model, "kind": "image",
+                "prompt": "{{input.style}} {{loop.item}} The last moment of this shot: same place, light and camera as the "
+                          "reference frame, sharp and clean, with every named character exactly as in their references.",
+                "parameters": {"size": size} if size else {},
+                "source_assets": [f"{frame}:reference_image"],
+                "entity_ids": "{{input.entity_ids}}",
+            },
+        },
+    ]
+    edges = [
+        {"id": "tail_anchor_due", "source": "tail", "target": "anchor_due"},
+        {"id": "anchor_extend", "source": "anchor", "target": "extend"},
+    ]
+    if plan.extends:
+        nodes.append({
+            "id": "anchor_frame", "type": "video_frame",
+            "name": {"zh": "取上一段的最后一帧", "en": "Take the last frame of the previous segment"},
+            "position": {"x": 700, "y": -60},
+            "config": {"asset_id": "{{loop.previous}}"},
+        })
+        edges += [
+            {"id": "anchor_due_frame", "source": "anchor_due", "target": "anchor_frame", "source_handle": "true"},
+            {"id": "anchor_frame_paint", "source": "anchor_frame", "target": "anchor"},
+        ]
+    else:
+        edges.append({"id": "anchor_due_paint", "source": "anchor_due", "target": "anchor", "source_handle": "true"})
+    return nodes, edges
+
+
+def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: ModelChoice,
+                          image: ModelChoice | None = None, db: Session | None = None) -> dict[str, Any]:
     plan = video_plan_for(db, video, references=0)
+    #: 模型不收尾帧、或者这台机器上没有收参考图的图片模型:没有这一格,图里也没有这几个节点。
+    anchors = plan.last_frame and image is not None and bool(image.model)
+    anchor_nodes, anchor_edges = _anchor_nodes(image, plan, db) if anchors else ([], [])
     first_plan = video_plan_for(db, opening, references=0)
     width, height = FRAME_ASPECTS.get(plan.aspect_ratio, FRAME_ASPECTS["16:9"])
     parameters = dict(plan.parameters or {})
@@ -74,12 +134,13 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "provider": video.provider, "provider_profile_id": video.profile_id, "model": video.model, "kind": "video",
                     "prompt": "{{input.style}} {{loop.item}}",
                     "parameters": parameters,
-                    "source_assets": [handed_over],
+                    "source_assets": [handed_over, *(["{{anchor.asset_id}}:last_frame"] if anchors else [])],
                     "entity_ids": "{{input.entity_ids}}",
                 },
             },
+            *anchor_nodes,
         ],
-        "edges": [{"id": "tail_extend", "source": "tail", "target": "extend"}],
+        "edges": [{"id": "tail_extend", "source": "tail", "target": "extend"}, *anchor_edges],
     }
     append_segment: dict[str, Any] = {
         "id": "append_segment", "type": "timeline_append",
@@ -108,7 +169,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
         "edges": [{"id": "seam_append", "source": "seam", "target": "append_segment"}] if plan.extends else [],
     }
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 3, "source": "official"},
+        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 4, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -128,6 +189,8 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                         "style": "",
                         #: 点名的资产(人物、场景,逗号分隔):每一段都带上它们,防止越拍越不像。模型不收参考时生成回执会说。
                         "entity_ids": "",
+                        #: 每几段画一张锚点帧把人物拉回来,0 是不画。
+                        **({"anchor_every": 0} if anchors else {}),
                         "aspect_ratio": plan.aspect_ratio,
                         "resolution": plan.resolution,
                     },
@@ -192,6 +255,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                         "overlap_seconds": "{{start.overlap_seconds}}",
                         "segment_seconds": "{{start.segment_seconds}}",
                         "entity_ids": "{{start.entity_ids}}",
+                        **({"anchor_every": "{{start.anchor_every}}"} if anchors else {}),
                         "aspect_ratio": "{{start.aspect_ratio}}",
                         "resolution": "{{start.resolution}}",
                     },

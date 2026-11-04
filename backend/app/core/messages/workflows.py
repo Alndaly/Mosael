@@ -494,6 +494,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_op_not_contains": {"zh": "不包含", "en": "Does not contain"},
     "wfOpt_op_empty": {"zh": "为空", "en": "Is empty"},
     "wfOpt_op_not_empty": {"zh": "不为空", "en": "Is not empty"},
+    "wfOpt_op_every": {"zh": "每 N 轮一次(左边填轮次)", "en": "Every Nth round (round on the left)"},
     "wfOpt_op_gt": {"zh": "大于", "en": "Greater than"},
     "wfOpt_op_lt": {"zh": "小于", "en": "Less than"},
     "wfOpt_op_trim": {"zh": "去掉首尾空白", "en": "Trim"},

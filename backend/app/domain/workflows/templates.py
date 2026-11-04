@@ -306,7 +306,8 @@ def built_in_template_graph(
     if template_id == LONG_TAKE_VIDEO:
         video = _continuation_video_model(db, user_id)
         return localised_names(locale, long_take_video_graph(
-            chat=chat, opening=_opening_video_model(db, user_id, continuing=video), video=video, db=db,
+            chat=chat, opening=_opening_video_model(db, user_id, continuing=video), video=video,
+            image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE), db=db,
         ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return localised_names(locale, transcript_video_cleanup_graph(chat=chat, locale=locale))
