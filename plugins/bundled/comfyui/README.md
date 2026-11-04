@@ -988,3 +988,5 @@ search/info → refuse unsafe ones → confirm → poll → restart → check ag
 
 For the protocol, see `docs/PLUGIN_MANIFEST.md` in the Mosael repository: the sections on doing generation for the host,
 streaming tools, and returning several results at once.
+
+While running a task, dropped connections are retried after a short wait (a submit first asks whether it arrived, so nothing is queued twice); listings and health checks do not wait.

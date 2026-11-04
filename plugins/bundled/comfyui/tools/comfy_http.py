@@ -24,6 +24,7 @@ import json
 import os
 import sys
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -46,10 +47,16 @@ _REDIRECTS = (301, 302, 303, 307, 308)
 #: 连接被对方断开、读到一半断了:换一条新连接重来一次就好的那几种(只对 GET、HEAD)。
 _RETRYABLE = (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError, http.client.IncompleteRead)
 _IDEMPOTENT = ("GET", "HEAD")
+#: 跑任务时连接断了隔多久再试。隧道、反向代理抖一下不该让一条跑了很久的运行失败;这几次都不通才算连不上。
+DROP_WAITS_SECONDS = (2.0, 5.0, 10.0, 20.0, 30.0)
 #: 和此前 urllib 发的一样:有的反向代理、登录插件按它认人,换了没有好处。
 _USER_AGENT = "Python-urllib/%d.%d" % sys.version_info[:2]
 
 T = TypeVar("T")
+
+
+class ComfyUnreachable(ComfyError):
+    """这个请求没到 ComfyUI、或者没等到回答。"""
 
 
 class HTTPStatusError(Exception):
@@ -95,6 +102,7 @@ class Comfy:
                                  "Don't put a user name and password in the server URL. Enter “user:password” as the connection's access credential."))
         self.base = base
         self.locale = locale
+        self.rides_out_drops = False
         #: 每个请求(含 WebSocket 握手)都带的头:ComfyUI 放在要登录的反向代理 / ComfyUI-Login 后面时要它
         self.headers = auth_headers(access_token)
         split = parse.urlsplit(base)
@@ -143,9 +151,27 @@ class Comfy:
         if connection is not None:
             connection.close()
 
+    def ride_out_drops(self) -> None:
+        """这个客户端接下来在跑任务:连接断了等一等再试。列表、探活这类要立刻说清连不连得上的不开它。"""
+        self.rides_out_drops = True
+
     def exchange(self, method: str, path: str, consume: Callable[[http.client.HTTPResponse], T], *,
                  params: dict[str, Any] | None = None, body: bytes | None = None, headers: dict[str, str] | None = None,
-                 timeout: float = TIMEOUT_SECONDS) -> T:
+                 timeout: float = TIMEOUT_SECONDS, resendable: bool = False) -> T:
+        """`_exchange` 加上跑任务时的等待。`resendable`:POST 再发一遍也不会多做一件事(传文件)。
+
+        其余的 POST 不在这里重发:没等到回答不等于没收到,`/prompt` 由 run.submit 先问过再决定。"""
+        waits = DROP_WAITS_SECONDS if self.rides_out_drops and (method in _IDEMPOTENT or resendable) else ()
+        for wait in waits:
+            try:
+                return self._exchange(method, path, consume, params=params, body=body, headers=headers, timeout=timeout)
+            except ComfyUnreachable:
+                time.sleep(wait)
+        return self._exchange(method, path, consume, params=params, body=body, headers=headers, timeout=timeout)
+
+    def _exchange(self, method: str, path: str, consume: Callable[[http.client.HTTPResponse], T], *,
+                  params: dict[str, Any] | None = None, body: bytes | None = None, headers: dict[str, str] | None = None,
+                  timeout: float = TIMEOUT_SECONDS) -> T:
         """发一个请求,把 2xx 的回答交给 `consume` 读(它读多少由它定),交回它的结果。
 
         回 4xx / 5xx 抛 `HTTPStatusError`(带着正文);连不上、被断开抛给人看的 ComfyError。GET、HEAD 碰上连接被断开、
@@ -235,7 +261,7 @@ class Comfy:
     def _unreachable(self, exc: BaseException) -> ComfyError:
         # 第一行是给人看的那句(该做什么),地址和原文(errno)换到下一行:界面把第一行当正文,其余收进「详情」
         reason = getattr(exc, "reason", None) or exc
-        return ComfyError(
+        return ComfyUnreachable(
             say(self.locale, f"连不上这台 ComfyUI,确认它在运行、地址填对\n{self.base}:{reason}",
                 f"Can't reach this ComfyUI. Make sure it is running and the URL is right\n{self.base}: {reason}")
         )
@@ -505,7 +531,7 @@ class Comfy:
         headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
         try:
             answer = json.loads(self.exchange("POST", "/upload/image", lambda response: response.read(),
-                                              body=b"".join(parts), headers=headers).decode("utf-8") or "{}")
+                                              body=b"".join(parts), headers=headers, resendable=True).decode("utf-8") or "{}")
         except HTTPStatusError as exc:
             raise self._http_error(exc) from exc
         return {"name": str(answer.get("name") or name), "subfolder": str(answer.get("subfolder") or "")}

@@ -28,7 +28,7 @@ import convert
 import graph
 import known_failures
 import models
-from comfy_http import Comfy
+from comfy_http import Comfy, ComfyUnreachable
 from lines import ComfyError, say
 from ws import WebSocket, WebSocketClosed
 
@@ -254,15 +254,38 @@ def required_inputs(prompt: dict[str, Any], object_info: dict[str, Any], locale:
         "save — or pick another workflow."))
 
 
+#: 提交撞上断连时最多发几遍。
+SUBMIT_ATTEMPTS = 3
+
+
+def _arrived(comfy: Comfy, prompt_id: str) -> bool:
+    """这个任务到 ComfyUI 了吗。没等到回答不等于没收到:先问,不重复提交。"""
+    running, pending = comfy.queue()
+    return prompt_id in running or prompt_id in pending or bool(comfy.history(prompt_id))
+
+
+def _post_prompt(comfy: Comfy, body: dict[str, Any]) -> Any:
+    for attempt in range(1, SUBMIT_ATTEMPTS + 1):
+        try:
+            return comfy.post("/prompt", body)
+        except ComfyUnreachable:
+            if not comfy.rides_out_drops or attempt == SUBMIT_ATTEMPTS:
+                raise
+        if _arrived(comfy, body["prompt_id"]):
+            return {"prompt_id": body["prompt_id"]}
+    raise AssertionError("unreachable")
+
+
 def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str,
            extra_data: dict[str, Any] | None = None, targets: list[str] | None = None) -> str:
-    body: dict[str, Any] = {"prompt": prompt, "client_id": client_id}
+    #: 任务号我们定:断连之后才问得出「刚才那一张到了没有」。
+    body: dict[str, Any] = {"prompt": prompt, "client_id": client_id, "prompt_id": str(uuid.uuid4())}
     if extra_data:
         body["extra_data"] = extra_data
     if targets:
         body["partial_execution_targets"] = targets
     try:
-        answer = comfy.post("/prompt", body)
+        answer = _post_prompt(comfy, body)
     except ComfyError as exc:
         if exc.status == 400:
             try:
@@ -715,6 +738,7 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
     这个任务、跑完了没有产出),就是「交出去了、没等到或没拿到」:连不上 ComfyUI、取产出文件时断了 —— 远端可能照样做完,
     交给宿主的失败的样子标 `remote: pending`,宿主据此摆「重新取回」(见 lines.ComfyError.failure)。还没交出去就出的错不标。
     两段的失败原因(第一行给人看,下面是地址和底层原话)拆成一句人话和原话。"""
+    comfy.ride_out_drops()
     resume = request.get("resume")
     submitted = {"yes": isinstance(resume, dict) and bool(resume.get("prompt_id"))}
 
