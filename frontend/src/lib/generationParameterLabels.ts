@@ -39,6 +39,11 @@ export const GENERATION_PARAMETER_HINTS: Record<string, MessageKey> = {
 
 /** 宿主给了专门控件的那几个参数(比例、尺寸、分辨率、张数、时长、歌词、种子)叫什么。 */
 const HOST_PARAMETER_LABELS: Record<string, MessageKey> = {
+  //: 潜空间续写的工作流按段号存取(templates_models.LATENT_LOAD_SCENE):节点号是工作流里定好的。
+  "50.project_folder": "genLatentReadFolder",
+  "50.scene_number": "genLatentReadScene",
+  "52.project_folder": "genLatentSaveFolder",
+  "52.scene_number": "genLatentSaveScene",
   aspect_ratio: "wfGenAspectRatio",
   size: "wfGenSize",
   resolution: "wfGenResolution",

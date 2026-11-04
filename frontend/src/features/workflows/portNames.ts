@@ -142,6 +142,9 @@ export function inputPortName(context: PortNameContext, node: PortNode, key: str
   const fieldName = spec?.label?.trim() || field;
   if (entry === undefined) return fieldName;
   const source = spec?.entry_labels ?? "";
+  //: 工作流节点的参数键自带一个点(`52.scene_number`),整个键才是一项。
+  const whole = source === "generation_parameters" && deeper.length > 0 ? ENTRY_NAMES[source](context, node, field, [entry, ...deeper].join(".")) : "";
+  if (whole) return whole;
   const named = Object.hasOwn(ENTRY_NAMES, source) ? ENTRY_NAMES[source](context, node, field, entry) : "";
   const shape = fieldShape(spec);
   if (shape === "items" && /^\d+$/.test(entry)) {

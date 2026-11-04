@@ -66,6 +66,10 @@ export const nodeToolbar = {
   wfAssetGridRoleNone: "No role",
   wfAssetGridRoleUnsupported: "This model does not take it",
   wfAssetGridNothingAccepted: "This model takes no input assets",
+  genLatentReadFolder: "Latent folder to read",
+  genLatentReadScene: "Segment to read",
+  genLatentSaveFolder: "Latent folder to save",
+  genLatentSaveScene: "Segment to save",
   wfAssetGridLinkRemove: "Unlink “{name}”",
   wfAssetGridWrongKind: "Not the kind of media this role wants; it will not be sent",
   //: The automatically included references (“a reference means it gets sent”): media referenced in the prompt
