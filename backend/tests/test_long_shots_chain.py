@@ -37,8 +37,9 @@ def _plan(**config: Any) -> dict:
 @pytest.mark.parametrize("config,segment,rounds", [
     ({"target_seconds": 8, "longest_seconds": 15}, 8, []),
     ({"target_seconds": 15, "longest_seconds": 15}, 15, []),
-    ({"target_seconds": 20, "longest_seconds": 15, "overlap_seconds": 2}, 15, [1]),
-    ({"target_seconds": 60, "longest_seconds": 15, "overlap_seconds": 2}, 15, [1, 2, 3, 4]),
+    ({"target_seconds": 20, "longest_seconds": 15, "overlap_seconds": 2}, 11, [1]),
+    ({"target_seconds": 35, "longest_seconds": 30}, 18, [1]),
+    ({"target_seconds": 60, "longest_seconds": 15, "overlap_seconds": 2}, 14, [1, 2, 3, 4]),
     ({"target_seconds": 1, "longest_seconds": 15, "shortest_seconds": 2}, 2, []),
     ({"target_seconds": 7, "longest_seconds": 10, "allowed_seconds": "5,10"}, 10, []),
     ({"target_seconds": 25, "longest_seconds": 10, "allowed_seconds": "5,10"}, 10, [1, 2]),

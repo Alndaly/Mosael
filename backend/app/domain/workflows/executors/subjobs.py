@@ -431,6 +431,9 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     if target > segment and overlap >= segment:
         raise WorkflowDomainError("wfErr_chainOverlapTooLong", params={"overlap": f"{overlap:g}", "segment": f"{segment:g}"})
     rounds = math.ceil((target - segment) / (segment - overlap)) if target > segment else 0
+    if rounds and not allowed:
+        #: 时长连续的模型把几段拉平:35 秒拍两个 18 秒,不是 30 + 30 再截掉 25 秒 —— 截掉的那些也是付了钱的。
+        segment = max(math.ceil((target + rounds * overlap) / (rounds + 1)), float(config.get("shortest_seconds") or 0))
     return {
         #: 生成接口的时长是整数秒。
         "segment_seconds": int(segment) if segment == int(segment) else segment,
