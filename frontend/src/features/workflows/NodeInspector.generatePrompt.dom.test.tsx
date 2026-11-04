@@ -235,7 +235,8 @@ describe("AI 生成节点的输入素材", () => {
     renderInspector({ parameter_keys: ["seed"] });
     await waitFor(() => expect(askedPaths.some((path) => path.endsWith("/generation/options"))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(document.querySelector("[data-add-tile]")).not.toBeNull();
+    expect(document.querySelector("[data-add-tile]")).toBeNull();
+    expect(document.querySelector("[data-asset-grid-nothing]")).not.toBeNull();
     expect(askedPaths).not.toContain("/api/assets");
   });
 });

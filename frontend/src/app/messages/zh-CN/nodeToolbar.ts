@@ -66,6 +66,7 @@ export const nodeToolbar = {
   wfAssetGridRole: "角色",
   wfAssetGridRoleNone: "未指定角色",
   wfAssetGridRoleUnsupported: "这个模型不收",
+  wfAssetGridNothingAccepted: "这个模型不收输入素材",
   wfAssetGridWrongKind: "不是这个角色要的那类素材,不会被送进去",
   //: 自动来的那几处引用(「引用即发送」):提示词里引用了素材,运行时自动带上,来源要看得见。
   wfAssetGridAutoTitle: "提示词里引用到的:",

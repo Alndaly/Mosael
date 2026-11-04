@@ -248,7 +248,7 @@ export function AssetGridField({
     () => (accepted === null ? (roles ?? []) : (roles ?? []).filter((one) => accepted.includes(one.value))),
     [accepted, roles],
   );
-  //: 一个角色都不收时(认不出的模型):挑的清单按声明里的全部算,别让整格变成点不动。
+  //: 一个角色都不收、却还留着挑过的:挑的清单按声明里的全部算,别让整格变成点不动。
   const rolesForKinds = pickableRoles.length > 0 ? pickableRoles : (roles ?? []);
 
   /** 这一格收哪几类素材:声明优先,否则按角色(每个角色要的那一类),都没有就是什么都收。 */
@@ -374,6 +374,11 @@ export function AssetGridField({
    */
   const tileGrid =
     tiles <= tileColumns ? "grid-flow-col auto-cols-fr" : roleAware ? "grid-cols-2" : "grid-cols-4";
+  //: 这个模型什么都不收(文生视频):一句话说清,不摆上传格和一排「不收」。已经挑了的留着,好让人移除。
+  if (accepted?.length === 0 && picked.length === 0) {
+    return <p data-asset-grid-nothing="" className="text-ui-2xs text-muted-foreground">{t("wfAssetGridNothingAccepted")}</p>;
+  }
+
   return (
     <div className="relative" data-asset-grid="" data-asset-grid-mode={lines ? "lines" : "ids"} {...drop.handlers}>
       <DndContext
@@ -443,7 +448,7 @@ export function AssetGridField({
       {/* 一行一项的格子:还能**手填一处上游输出**(整组素材、或上游那一刻给的那一份)—— 此前是按角色
           一条可手填的下拉,现在是一个「再加一份」的输入:挑完接在末尾、带上默认角色。 */}
       {lines && variables.length > 0 && !full && (
-        <div className="mt-1.5 flex min-w-0 items-center gap-1.5" data-asset-grid-ref="">
+        <div className="mt-2 flex min-w-0 items-center gap-1" data-asset-grid-ref="">
           <Link2 size={11} strokeWidth={1.8} className="shrink-0 text-muted-foreground" />
           <RefCombobox
             value=""
@@ -519,12 +524,11 @@ export function AssetGridField({
           × 去掉一处 = 写进 `<字段>_excluded`,运行时的取图认它;点回来即可恢复(不是删了就回不来)。
           带角色的格子还各有一枚角色角标:默认是声明里的那个,改过的记进 `<字段>_roles`。 */}
       {refs.length > 0 && (
-        <div className="mt-1.5 grid gap-1" data-auto-images="">
-          <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <span className="inline-flex shrink-0 items-center gap-1 text-ui-2xs font-medium text-muted-foreground">
-              <Wand2 size={11} strokeWidth={1.8} />
-              {t("wfAssetGridAutoTitle")}
-            </span>
+        <div className="mt-2 grid gap-1" data-auto-images="">
+          <span className="inline-flex items-center gap-1 text-ui-2xs font-medium text-muted-foreground">
+            <Wand2 size={11} strokeWidth={1.8} />
+            {t("wfAssetGridAutoTitle")}
+          </span>
             {refs.map((ref) => {
               const on = !excluded.includes(ref.path);
               const role = roleAware ? roleOverrides[ref.path] || defaultRole : "";
@@ -534,17 +538,15 @@ export function AssetGridField({
               const asset = ref.assetId ? details.byId.get(ref.assetId) : undefined;
               const wrongKind = asset !== undefined && !kindAllowedFor(String(asset.kind), role);
               return (
-                <span
+                //: 一处引用一行,不画框:行里只有角色那枚控件有边,再包一圈就是同一件事画了两遍。
+                <div
                   key={ref.path}
                   data-auto-image-ref={ref.path}
                   data-auto-image-on={on ? "true" : "false"}
                   data-auto-image-role={roleAware ? role : undefined}
-                  className={cn(
-                    "inline-flex min-w-0 items-center gap-1 rounded-full border py-px pl-2 pr-0.5 text-ui-2xs",
-                    on ? "border-border bg-muted/40 text-foreground" : "border-dashed border-border text-muted-foreground",
-                  )}
+                  className={cn("flex min-w-0 items-center gap-1 text-ui-2xs", on ? "text-foreground" : "text-muted-foreground")}
                 >
-                  <Truncate className="max-w-[9rem]" as="span">
+                  <Truncate className="min-w-0 flex-1" as="span">
                     {ref.label}
                   </Truncate>
                   {on && wrongKind && (
@@ -581,10 +583,9 @@ export function AssetGridField({
                   >
                     {on ? <X size={11} /> : <RotateCcw size={11} />}
                   </IconButton>
-                </span>
+                </div>
               );
             })}
-          </div>
           {/* 到顶了说清:自动来的也要占那 max 个位置,不然用户只会看到运行时一句「最多 N 份」。 */}
           {picked.length + refs.filter((one) => !excluded.includes(one.path)).length > max && (
             <p role="alert" data-auto-images-over="" className="text-ui-2xs text-destructive">

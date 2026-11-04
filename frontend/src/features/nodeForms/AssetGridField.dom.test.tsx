@@ -643,3 +643,22 @@ describe("声明 → 控件参数(纯函数)", () => {
     expect(assetGridMax(assetGridRoles("source_roles", { accepted: ["first_frame", "last_frame"] }, keyText))).toBe(2);
   });
 });
+
+describe("模型什么都不收", () => {
+  const none = [
+    { value: "first_frame", label: "首帧", accepted: false },
+    { value: "reference_image", label: "参考图", accepted: false },
+  ];
+
+  it("一句话说清,不摆上传格和角色清单", () => {
+    renderLines({ value: [], roles: none, defaultRole: "reference_image", refs: [{ path: "pic.asset_id", label: "图", assetId: null }] });
+    expect(document.querySelector("[data-asset-grid-nothing]")).toBeTruthy();
+    expect(document.querySelector("[data-upload-tile]")).toBeNull();
+    expect(document.querySelector("[data-auto-images]")).toBeNull();
+  });
+
+  it("已经挑了的留着,好让人移除", () => {
+    renderLines({ value: ["a:reference_image"], roles: none, defaultRole: "reference_image" });
+    expect(document.querySelector("[data-asset-grid-nothing]")).toBeNull();
+  });
+});

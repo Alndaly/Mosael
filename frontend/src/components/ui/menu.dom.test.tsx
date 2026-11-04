@@ -59,6 +59,15 @@ describe("菜单项", () => {
     expect(within(menu).getByRole("menuitem").querySelector("kbd")?.textContent).toBe("⌘Z");
   });
 
+  it("单选一组里没勾的行也留着勾的位置,说明才对得齐", () => {
+    render(
+      <div>
+        <MenuItemBody label="没勾" hint="说明" checked={false} />
+      </div>,
+    );
+    expect(screen.getByText("说明").nextElementSibling).toBeTruthy();
+  });
+
   it("勾选态画在行尾;没有图标的行用 inset 和有图标的行对齐", () => {
     render(
       <div>

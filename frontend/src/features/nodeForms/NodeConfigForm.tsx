@@ -766,7 +766,8 @@ export function NodeConfigForm({
                   onChange={(event) => typeConfig(key)(event.target.value)}
                 />
               )}
-              {spec?.description && !compact && (
+              {/* 一行一项的素材格:声明里那段说的是手填时的行格式,这里挑素材用不上。 */}
+              {spec?.description && !compact && !(spec.editor === "asset_grid" && spec.lines) && (
                 <small>
                   <InlineMarkdown text={spec.description} />
                 </small>

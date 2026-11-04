@@ -47,6 +47,18 @@ const nodes = graph(
 );
 
 describe("哪几处引用会成为图片", () => {
+  it("写在提示词里的文字不算:开始参数、往 JSON 里取一层的都不是图", () => {
+    const withStart = graph(...[["start", "start", {}], ["ask", "llm", {}]] as Array<[string, string, Record<string, unknown>]>);
+    const found = referencedImages(SPECS, { prompt: "{{start.style}} {{ask.json.opening}}" }, REGISTRY, withStart);
+    expect(found).toEqual({});
+  });
+
+  it("名字说明是素材的照样算:开始参数里的素材、JSON 里的素材 id", () => {
+    const withStart = graph(...[["start", "start", {}], ["ask", "llm", {}]] as Array<[string, string, Record<string, unknown>]>);
+    const found = referencedImages(SPECS, { prompt: "{{start.hero_asset_id}} {{ask.json.asset_id}}" }, REGISTRY, withStart);
+    expect(found.image_asset_ids.map((one) => one.path)).toEqual(["start.hero_asset_id", "ask.json.asset_id"]);
+  });
+
   it("提示词里引用素材的输出 → 一处;静态知道是「素材」节点时连素材 id 一起给出来", () => {
     const found = referencedImages(SPECS, { prompt: "看图 {{pic.asset_id}}" }, REGISTRY, nodes);
     expect(found).toEqual({ image_asset_ids: [{ path: "pic.asset_id", assetId: "img-a" }] });

@@ -246,15 +246,10 @@ describe("生成节点的「输入素材」:共用的格子控件", () => {
     expect(rejected.textContent).toContain("不会被送进去");
   });
 
-  it("模型什么角色都不收(认不出的模型):也说清", async () => {
+  it("模型什么角色都不收:一句话说清,不摆自动来的引用和一排「不收」", async () => {
     renderGen({ parameterKeys: [] });
-    const rejected = await waitFor(() => {
-      const found = autoChip()!.querySelector("[data-auto-image-rejected]");
-      expect(found).not.toBeNull();
-      return found!;
-    });
-    //: 一个角色都不收:角标照在(声明里有角色),但点开的菜单里每一项都标着「这个模型不收」。
-    expect(rejected.textContent).toContain("不会被送进去");
+    await waitFor(() => expect(document.querySelector("[data-asset-grid-nothing]")).not.toBeNull());
+    expect(document.querySelector("[data-auto-images]")).toBeNull();
   });
 
   it("引用到的是一段视频:当场标出它不是这个角色要的那类素材", () => {

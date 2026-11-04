@@ -119,7 +119,10 @@ function MenuItemBody({ icon, inset, label, description, truncate, hint, shortcu
           {typeof shortcut === "string" ? <Kbd>{shortcut}</Kbd> : <KbdGroup keys={shortcut} />}
         </span>
       ) : null}
-      {checked ? <Check className="mt-0.5 shrink-0 self-start" aria-hidden /> : null}
+      {/* 单选的一组里勾的位置总留着:勾只出现在一行上时,那一行的说明被挤开,和别的行对不齐。 */}
+      {checked !== undefined ? (
+        <span aria-hidden className="mt-0.5 grid size-4 shrink-0 place-items-center self-start">{checked ? <Check /> : null}</span>
+      ) : null}
     </>
   )
 }

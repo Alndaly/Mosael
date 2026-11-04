@@ -52,16 +52,28 @@ export function referencedImages(
         const from = byId.get(sourceId);
         if (!output || !from || seen.has(path)) continue;
         seen.add(path);
-        //: 读的是注册表里**原样的**声明值(后端 `output_data_type` 交出来的那一份),不是 outputType 归一化
-        //: 之后的那几个 —— 归一化把 `scene` 收成 any,而场景和 text 一样不可能装素材。两边同一个集合。
-        const declared = registry.get(from.type)?.output_types?.[output];
-        if (typeof declared === "string" && NOT_ASSETS.has(declared)) continue;
+        if (!mayHoldAnAsset(from, output, registry)) continue;
         refs.push({ path, assetId: staticAssetId(from, output) });
       }
     }
     if (refs.length > 0) found[key] = refs;
   }
   return found;
+}
+
+/**
+ * 这个输出装得下素材吗。读的是注册表里**原样的**声明值(后端 `output_data_type` 交出来的那一份),不是 outputType
+ * 归一化之后的那几个 —— 归一化把 `scene` 收成 any,而场景和 text 一样不可能装素材。两边同一个集合。
+ *
+ * 判不准的两种按名字认(和后端同一条:`asset_id` 或 `*_asset_id`):`json.opening` 这样往里取一层的,看的是
+ * `json`;开始节点的参数没有声明类型。此前它们都算素材,写在提示词里的文字被摆成「引用的图」。
+ */
+function mayHoldAnAsset(from: WorkflowGraph["nodes"][number], output: string, registry: RegistryLike): boolean {
+  const named = /(^|[._])asset_id$/.test(output);
+  if (from.type === "start") return named;
+  const declared = registry.get(from.type)?.output_types ?? {};
+  const type = declared[output] ?? declared[output.split(".")[0]];
+  return !(typeof type === "string" && NOT_ASSETS.has(type)) || named;
 }
 
 /** 源节点是「素材」、而它指的是写死的一份素材时,静态就知道这一处引用指向哪一张(判得了它是不是图片)。 */

@@ -351,7 +351,7 @@ it("选中项的勾还在行尾(没挪到左边),切换照常", async () => {
   const tick = selected.querySelector("svg");
   expect(tick).toBeTruthy();
   // 勾是这一行的最后一格;行首没有图标槽。
-  expect(selected.lastElementChild).toBe(tick);
+  expect(selected.lastElementChild?.contains(tick)).toBe(true);
   expect(selected.querySelector("[data-menu-icon]")).toBeNull();
   fireEvent.click(other);
   expect(switchTo).toHaveBeenCalledWith("b");
