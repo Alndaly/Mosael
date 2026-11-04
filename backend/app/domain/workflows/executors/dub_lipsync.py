@@ -330,7 +330,7 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 results = _generate(db, scope, model, [
                     {"asset_id": keep(piece, f"{label}(原片)", derived(TRIM, video_id)), "role": SOURCE_VIDEO},
                     {"asset_id": keep(speech, f"{label}(配音)", derived(MIX, *said)), "role": DRIVING_AUDIO},
-                ], project_id=project_id)
+                ], project_id=project_id, order=key)
                 if not results:
                     raise WorkflowDomainError("wfErr_dubLipsyncNoResult", params={"index": index})
                 done = executors_inputs._asset_in(db, scope, results[0]).id

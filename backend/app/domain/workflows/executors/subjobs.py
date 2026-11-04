@@ -146,13 +146,13 @@ def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> di
 
     # 收进工作区:转写结果会**返回到工作流输出里**,不挡等于让别的工作区的内容流出来。
     asset_id = _asset_in(db, scope, str(config.get("asset_id", "")).strip()).id
-    child = transcription.start_transcription(
+    child_id = run_steps.ordered(db, config, lambda: transcription.start_transcription(
         db,
         asset_id,
         created_by=current_actor(db),
         engine=str(config.get("engine") or ""),
-    )
-    final = wait_for_job(child.id, release=db)
+    ).id)
+    final = wait_for_job(child_id, release=db)
     # **取这一单转出来的那份**,不是这份素材最新的那份:同一份素材同时被两处转写(并行分支、另一条
     # 工作流、剪辑页里点了一下)时,「最新」是谁先写完谁算 —— 拿到的可能是别的引擎、别的语言的那份。
     transcript_id = str((final.result or {}).get("transcript_id") or "")
@@ -268,8 +268,8 @@ def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     # start_export 会把渲染任务建在**序列所属的那个工作区**(workspace_id=sequence.workspace_id),
     # 所以不挡的话,A 工作区的工作流能在 B 工作区里起一个渲染任务并拿到产出的 asset_id。
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
-    child = render.start_export(db, sequence.id, export_params(config), created_by=current_actor(db))
-    final = wait_for_job(child.id, release=db)
+    child_id = run_steps.ordered(db, config, lambda: render.start_export(db, sequence.id, export_params(config), created_by=current_actor(db)).id)
+    final = wait_for_job(child_id, release=db)
     asset_id = str((final.result or {}).get("asset_id", ""))
     return {"asset_id": asset_id}
 
@@ -290,7 +290,7 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
 
     kind = str(config.get("kind", "image")).strip() or "image"
     #: 从失败处继续:上回交出去的那张单还在的话接着等它,不下第二次单(见 run_steps)。
-    held = run_steps.held_generation(db)
+    held = run_steps.held_generation(db, config)
     if held is not None:
         generation_id, child_id = held
     else:
@@ -322,7 +322,7 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
             )
         except GenerationDomainError as exc:
             raise WorkflowDomainError.from_error(exc) from exc
-        run_steps.hold_generation(db, generation.id, child.id)
+        run_steps.hold(db, config, child.id)
         db.commit()
         generation_id, child_id = generation.id, child.id
         generation_runner.start_generation_thread(generation_id)
@@ -483,10 +483,10 @@ def media_clip(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
             asset, last_seconds=float(config.get("last_seconds") or 0), start=float(config.get("start") or 0),
             end=float(end) if end not in (None, "") else None,
         )
-        child = start_trim(db, asset=asset, start=start, end=end, created_by=current_actor(db))
+        child_id = run_steps.ordered(db, config, lambda: start_trim(db, asset=asset, start=start, end=end, created_by=current_actor(db)).id)
     except TrimError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    final = wait_for_job(child.id, release=db)
+    final = wait_for_job(child_id, release=db)
     return {
         "asset_id": str((final.result or {}).get("asset_id") or ""),
         "source_asset_id": asset.id,
@@ -503,7 +503,7 @@ def video_to_gif(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     if asset is None or asset.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_gifAssetNotInWorkspace")
     try:
-        child = video_gif.start_video_to_gif(
+        child_id = run_steps.ordered(db, config, lambda: video_gif.start_video_to_gif(
             db,
             asset=asset,
             created_by=current_actor(db),
@@ -511,10 +511,10 @@ def video_to_gif(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             width=whole_number(config, "width", node_type="video_to_gif", default=720),
             start=float(config.get("start") or 0),
             duration=float(config["duration"]) if config.get("duration") not in (None, "") else None,
-        )
+        ).id)
     except VideoGifError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    final = wait_for_job(child.id, release=db)
+    final = wait_for_job(child_id, release=db)
     return {
         "asset_id": str((final.result or {}).get("asset_id") or ""),
         "source_asset_id": asset.id,
@@ -542,7 +542,7 @@ def import_url(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
             #: 借的是档案主人的登录态:跑的人和被执行那一版图的担保人都要过得了闸(见 workflows.authority)。
             #: 任务自己跑的时候还会按发起人再查一次。
             browser.usable_profile(db, scope.workspace_id, profile_id, actor=current_authority(db))
-        child = start_url_import(
+        child_id = run_steps.ordered(db, config, lambda: start_url_import(
             db,
             workspace_id=scope.workspace_id,
             project_id=None,
@@ -551,8 +551,8 @@ def import_url(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
             created_by=current_actor(db),
             profile_id=profile_id or None,
             max_height=whole_number(config, "max_height", node_type="import_url", default=1080),
-        )
-        final = wait_for_job(child.id, release=db)
+        ).id)
+        final = wait_for_job(child_id, release=db)
     except (UrlImportError, sharing.NotUsableError, browser.BrowserDomainError) as exc:
         if must_succeed:
             raise WorkflowDomainError.from_error(exc) from exc
@@ -593,7 +593,7 @@ def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> d
     actor = current_actor(db)
     voice = _speech_voice(db, scope, config)
     try:
-        child = voices.start_synthesis(
+        child_id = run_steps.ordered(db, config, lambda: voices.start_synthesis(
             db,
             text=str(config.get("text", "")),
             voice=voice,
@@ -601,12 +601,12 @@ def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> d
             workspace_id=scope.workspace_id,
             project_id=None,
             created_by=actor,
-        )
+        ).id)
     except RemoteConsentRequired as exc:
         #: 远端引擎念配音库里的嗓子、这个账号还没同意上传(ADR 0037):工作流里没人能当场点头,
         #: 那句话说清去配音库点「复刻到百炼」。
         raise WorkflowDomainError.from_error(exc) from exc
-    final = wait_for_job(child.id, release=db)
+    final = wait_for_job(child_id, release=db)
     try:
         note = voice_note(db, voice, workspace_id=scope.workspace_id, user_id=actor)
     except Exception:  # noqa: BLE001 — 说明是旁路:说不出来不该让已经念好、付过钱的这一段作废
@@ -700,7 +700,7 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
     tags = [one.strip().lstrip("#") for one in re.split(r"[,，、\s]+", raw_tags) if one.strip().lstrip("#")]
 
     description = str(config.get("description", ""))
-    task = start_publish(
+    child_id = run_steps.ordered(db, config, lambda: start_publish(
         db,
         workspace_id=scope.workspace_id,
         account=account,
@@ -712,8 +712,8 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
         tags=tags,
         options=options,
         body=str(config.get("body", "")) if kind != "video" else "",
-    )
-    final = wait_for_job(task.job_id or "", release=db)
+    ).job_id or "")
+    final = wait_for_job(child_id, release=db)
     result = final.result or {}
     post = result.get("post") if isinstance(result.get("post"), dict) else {}
     return {"post_id": str(post.get("post_id") or ""), "post_url": str(post.get("url") or ""), "result": result}
@@ -1473,7 +1473,7 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
 
     voice = _speech_voice(db, scope, config)
     try:
-        job = subtitle_dub.start_subtitle_dub(
+        child_id = run_steps.ordered(db, config, lambda: subtitle_dub.start_subtitle_dub(
             db,
             sequence_id=sequence.id,
             clip_ids=clip_ids,
@@ -1483,10 +1483,10 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
             voice=voice,
             speed=float(config.get("speed") or 1.0),
             original_audio=str(config.get("original_audio") or DEFAULT_ORIGINAL_AUDIO).strip().lower(),
-        )
+        ).id)
     except DubError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    final = wait_for_job(job.id, release=db)
+    final = wait_for_job(child_id, release=db)
     result = final.result or {}
     #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。历史任务可能留有
     #: mute_fallback；新任务对用户明确选择的 separate 不再静默降级。
@@ -1538,12 +1538,12 @@ def separate_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) ->
     #: A 工作区的工作流能拆 B 工作区的素材,而产出的两份 stem 是要返回到工作流输出里的。
     asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
     try:
-        child = start_separation_job(
+        child_id = run_steps.ordered(db, config, lambda: start_separation_job(
             db, asset=asset, created_by=current_actor(db), engine=str(config.get("engine") or "")
-        )
+        ).id)
     except SeparationError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    result = wait_for_job(child.id, release=db).result or {}
+    result = wait_for_job(child_id, release=db).result or {}
     return {
         "vocals_asset_id": str(result.get("vocals_asset_id") or ""),
         "background_asset_id": str(result.get("background_asset_id") or ""),
@@ -1561,16 +1561,16 @@ def denoise_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     # 收进工作区(同分离节点):asset_id 常常来自上游,不能让一个工作区的流程动另一个工作区的素材。
     asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
     try:
-        child = denoise.start_denoise_job(
+        child_id = run_steps.ordered(db, config, lambda: denoise.start_denoise_job(
             db,
             asset=asset,
             created_by=current_actor(db),
             engine=str(config.get("engine") or ""),
             strength=str(config.get("strength") or ""),
-        )
+        ).id)
     except DenoiseError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    result = wait_for_job(child.id, release=db).result or {}
+    result = wait_for_job(child_id, release=db).result or {}
     return {"asset_id": str(result.get("asset_id") or ""), "engine": str(result.get("engine") or "")}
 
 

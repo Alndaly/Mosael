@@ -29,6 +29,7 @@ from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import current_actor
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
+from app.domain.workflows import run_steps
 from app.domain.workflows.executors.common import stop_if_stopping, wait_for_job
 from app.core.child_process import run_logged
 from app.db.models import Asset, Voice
@@ -128,12 +129,20 @@ def _resolution(model: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]
 
 
 def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list[dict[str, str]],
-              parameters: dict[str, Any] | None = None, *, project_id: str | None = None) -> list[str]:
+              parameters: dict[str, Any] | None = None, *, project_id: str | None = None,
+              order: Any = None) -> list[str]:
     """一次视频生成,交回出的视频。不收提示词的模型(说话照片、改口型)提示词就空着 —— 描述符说了算。
 
     **等生成的时候 `db` 会被交还**(wait_for_job 的 release:commit + close):调用方在这之前取到的 ORM 对象,
-    之后都是脱离会话的,要用就按 id 重新取。`project_id`:产出挂在哪个项目下(译配对口型挂在译配项目里)。"""
+    之后都是脱离会话的,要用就按 id 重新取。`project_id`:产出挂在哪个项目下(译配对口型挂在译配项目里)。
+    `order`:这张单是什么(见 run_steps),素材每次现切、id 不稳定的调用方自己给;其余按模型、素材和参数认。"""
 
+    what = order or [model["provider"], model["model"], sources, parameters]
+    #: 从失败处继续:这一张上回交出去了就接着等,不再付一次钱。
+    held = run_steps.held_generation(db, what)
+    if held is not None:
+        final = wait_for_job(held[1], release=db)
+        return [str(one) for one in ((final.result or {}).get("asset_ids") or []) if one]
     try:
         generation, child = generation_operations.create_generation_job(
             db,
@@ -155,6 +164,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
+    run_steps.hold(db, what, child.id)
     db.commit()
     generation_id, child_id = generation.id, child.id
     generation_runner.start_generation_thread(generation_id)

@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import ast
 from collections import Counter
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -198,6 +200,9 @@ def test_成功的运行和点两下_都不让继续() -> None:
     assert client.post(f"/api/workflows/{wf_id}/runs/{job['id']}/continue", json={}).status_code == 422
 
 
+ASKED = {"prompt": "雨夜"}
+
+
 def _held_step(ws: str, status: str) -> tuple[str, str]:
     with SessionLocal() as db:
         parent = Job(workspace_id=ws, kind="workflow", status="failed")
@@ -207,8 +212,7 @@ def _held_step(ws: str, status: str) -> tuple[str, str]:
         generation = GenerationJob(workspace_id=ws, job_id=child.id, provider="p", model="m", kind="video")
         db.add(generation)
         db.flush()
-        db.add(WorkflowRunStep(job_id=parent.id, scope="", node_id="gen",
-                               held={"generation_id": generation.id, "job_id": child.id}))
+        db.add(WorkflowRunStep(job_id=parent.id, scope="", node_id="gen", held={run_steps._order_key(ASKED): child.id}))
         db.commit()
         return parent.id, generation.id
 
@@ -223,7 +227,7 @@ def test_交出去的生成单_还在就接回来_失败了才重新下(monkeypa
     token = set_parent_job(parent_id)
     try:
         with SessionLocal() as db, continuing_run(True), node_scope("gen"):
-            held = run_steps.held_generation(db)
+            held = run_steps.held_generation(db, ASKED)
     finally:
         reset_parent_job(token)
     assert (held is not None) is reattached
@@ -240,7 +244,7 @@ def test_不是继续时_不接回任何单() -> None:
     token = set_parent_job(parent_id)
     try:
         with SessionLocal() as db, node_scope("gen"):
-            assert run_steps.held_generation(db) is None
+            assert run_steps.held_generation(db, ASKED) is None
     finally:
         reset_parent_job(token)
 
@@ -254,10 +258,101 @@ def test_生成节点接回单时不再下单(monkeypatch) -> None:
         raise AssertionError("又下了一次单")
 
     monkeypatch.setattr(subjobs.generation_operations, "create_generation_job", create)
-    monkeypatch.setattr(subjobs.run_steps, "held_generation", lambda db: ("g", "c"))
+    monkeypatch.setattr(subjobs.run_steps, "held_generation", lambda db, what: ("g", "c"))
     waited: list[str] = []
     monkeypatch.setattr(subjobs, "wait_for_job", lambda job_id, release: waited.append(job_id))
     db = SimpleNamespace(get=lambda model, _id: SimpleNamespace(
         id="g", result_asset_id="接回来的", result={"asset_ids": ["接回来的"]}))
     assert subjobs.ai_generate(db, None, {"kind": "video"})["asset_id"] == "接回来的"
     assert fresh["created"] == 0 and waited == ["c"] and client is not None
+
+
+def _in_node(ws: str, status: str = "running") -> tuple[str, str]:
+    """一条断了的运行,节点 gen 为 ASKED 下过一张单。交回 (运行 id, 单的 id)。"""
+    with SessionLocal() as db:
+        parent = Job(workspace_id=ws, kind="workflow", status="failed")
+        child = Job(workspace_id=ws, kind="voice_synthesis", status=status)
+        db.add_all([parent, child])
+        db.flush()
+        db.add(WorkflowRunStep(job_id=parent.id, scope="", node_id="gen", held={run_steps._order_key(ASKED): child.id}))
+        db.commit()
+        return parent.id, child.id
+
+
+def _order_again(parent_id: str, what: Any, place: Any) -> str:
+    from app.domain.jobs import reset_parent_job, set_parent_job
+
+    token = set_parent_job(parent_id)
+    try:
+        with SessionLocal() as db, continuing_run(True), node_scope("gen"):
+            job_id = run_steps.ordered(db, what, place)
+            db.commit()
+            return job_id
+    finally:
+        reset_parent_job(token)
+
+
+def test_同样的要求接回上回那张单_不再下单() -> None:
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    parent_id, child_id = _in_node(ws)
+    assert _order_again(parent_id, dict(ASKED), lambda: pytest.fail("又下了一次单")) == child_id
+
+
+def test_调整过参数的节点_旧单认不上_下新单() -> None:
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    parent_id, _ = _in_node(ws)
+    assert _order_again(parent_id, {"prompt": "晴天"}, lambda: "新单") == "新单"
+
+
+@pytest.mark.parametrize("status", ["failed", "cancelled"])
+def test_失败或取消的单_重新下一张(status: str) -> None:
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    parent_id, _ = _in_node(ws, status)
+    assert _order_again(parent_id, ASKED, lambda: "新单") == "新单"
+
+
+def test_一个节点下的几张单各认各的_和走到它们的先后无关() -> None:
+    """改口型那样的节点:第二遍时前面的块走了缓存不下单,后面的块不能认到第一块的单上。"""
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    parent_id, first = _in_node(ws)
+    with SessionLocal() as db:
+        chunk = Job(workspace_id=ws, kind="ai_generation", status="running")
+        db.add(chunk)
+        db.commit()
+        chunk_id = chunk.id
+    second = _order_again(parent_id, "第二块", lambda: chunk_id)
+    assert _order_again(parent_id, "第二块", lambda: pytest.fail("又下了一次单")) == second
+    assert _order_again(parent_id, ASKED, lambda: pytest.fail("又下了一次单")) == first
+
+
+def test_一个事务里连下两张单_都记得住() -> None:
+    from app.domain.jobs import reset_parent_job, set_parent_job
+
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    parent_id, _ = _in_node(ws)
+    token = set_parent_job(parent_id)
+    try:
+        with SessionLocal() as db, node_scope("画角度"):
+            run_steps.hold(db, "正面", "单一")
+            run_steps.hold(db, "侧面", "单二")
+            db.commit()
+            assert len(run_steps._row(db, parent_id, "", "画角度").held) == 2
+    finally:
+        reset_parent_job(token)
+
+
+def test_节点里等子任务的地方都认得出上回的单() -> None:
+    """等子任务的节点要是自己下单不记账,断了再接着跑就是第二次付钱 —— 新节点照这里的样子走 run_steps。"""
+    #: 解析文档认的是素材上那条进行中的解析,不用另外记。
+    exempt = {"document_to_markdown"}
+    missing = []
+    for path in Path(subjobs.__file__).parent.glob("*.py"):
+        if path.name == "common.py":
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.FunctionDef) or node.name in exempt:
+                continue
+            calls = {sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name)}
+            if "wait_for_job" in calls and "run_steps" not in calls:
+                missing.append(f"{path.name}:{node.name}")
+    assert not missing, missing

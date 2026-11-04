@@ -87,10 +87,10 @@ def call_workflow(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     # start_workflow_job 建的子 job 经 create_job 读 contextvar,parent = 当前工作流 job → 自动收纳。
     try:
         #: 从失败处继续:上回调起的那条子运行接着跑,它跑完的节点不再跑一遍(见 run_steps)。
-        called = run_steps.held_called_run(db)
+        called = run_steps.held_job(db, params)
         if called is None:
             child = graph_runner.start_workflow_job(db, target, created_by=current_actor(db), params=params)
-            run_steps.hold_called_run(db, child.id)
+            run_steps.hold(db, params, child.id)
         elif called.status in ("failed", CANCELLED):
             child = graph_runner.continue_called_run(db, target, called)
         else:

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.domain.jobs import current_actor, cancel_job_tree
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows import run_steps
 from app.domain.workflows.executors.common import wait_for_job
 from app.domain.workflows.id_values import id_list
 from app.core.unit_of_work import unit_of_work
@@ -345,8 +346,14 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
 
     model = drawing.model
     started: list[tuple[str, str, str]] = []
+    placed: list[str] = []
     try:
         for role, prompt in drawing.shots:
+            #: 从失败处继续:上回交出去的那几张接着等,没画成的才重画(见 run_steps)。
+            held = run_steps.held_generation(db, [role, prompt])
+            if held is not None:
+                started.append((role, *held))
+                continue
             generation, child = generation_operations.create_generation_job(
                 db,
                 workspace_id=scope.workspace_id,
@@ -364,7 +371,9 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
                 entity_ids=[drawing.entity_id],
                 origin=of_run_scope(scope.id),
             )
+            run_steps.hold(db, [role, prompt], child.id)
             started.append((role, generation.id, child.id))
+            placed.append(generation.id)
     except BaseException as exc:
         #: 第 N 张被拒(模型不收、额度不够……)时,前面几张漏斗已经建好、提交了,却还没起线程 —— 不收拾的话,
         #: 就是一排永远停在 queued 的任务。先放掉这个会话手里半截的写,再把它们取消。
@@ -374,7 +383,7 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
             raise WorkflowDomainError.from_error(exc) from exc
         raise
     db.commit()
-    for _role, generation_id, _child in started:
+    for generation_id in placed:
         generation_runner.start_generation_thread(generation_id)
 
     drawn: list[tuple[str, str]] = []
