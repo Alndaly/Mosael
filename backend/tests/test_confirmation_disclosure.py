@@ -68,6 +68,8 @@ def test_同一张卡英文用户也读得懂() -> None:
         ("edit_board", {"operations": [{"kind": "add_card"}]}),
         ("denoise_audio", {"engine_name": "X", "has_strengths": True, "strength": "light"}),
         ("convert_video_to_gif", {"fps": 12, "width": 720, "duration": 3}),
+        ("clip_media", {"last_seconds": 2}),
+        ("clip_media", {"start": 1, "end": 3}),
     ]
     for tool, payload in cases:
         english = _summarize(tool, payload, locale="en")

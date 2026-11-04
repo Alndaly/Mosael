@@ -63,7 +63,7 @@ adds that step when you have a video model.
   | Flow | Start, Condition, Delay, Loop · for each, Loop · while, Call workflow, Output, Subgraph |
   | AI | LLM, AI generate, Translate, Translate lines, Fill in angles, Generate expressions, Make it talk (character / image), Lip sync, Lip-sync a dubbed timeline, Voice a long script in segments, Fit narration to its length |
   | Audio | Transcribe asset, Text to speech, Separate voice and background, Reduce noise, Dub subtitles |
-  | Assets | Export timeline, Asset, Download from a link, Inspect timeline, Append to timeline, Add a track, Clear timeline, Clean up time ranges, Timeline advanced operations, Video to GIF, Split grid, Generate subtitles, Find assets, Get from asset library, List library assets, Save to asset library, Tag assets, Organize assets, Create project, Create video project |
+  | Assets | Export timeline, Asset, Download from a link, Inspect timeline, Append to timeline, Add a track, Clear timeline, Clean up time ranges, Timeline advanced operations, Clip media, Video to GIF, Split grid, Generate subtitles, Find assets, Get from asset library, List library assets, Save to asset library, Tag assets, Organize assets, Create project, Create video project |
   | 3D | Available 3D props, Build a 3D blockout scene, Build a 3D scene from text, Render blockout references |
   | Knowledge | Search notes, Read note, Save as note, Document to Markdown |
   | Data | HTTP request, Code, Text template, JSON extract, Split into batches, Text transform, Read a social media link, Tidy post and comment data, Check quotes |
@@ -256,7 +256,7 @@ A few node details:
   marked "(paraphrased)"; it outputs the checked text, counts, the list not found and a one-line summary. Put the fetched data
   (comments, video data, transcripts…) in **Sources**; what the model wrote itself doesn't count.
 - **Available 3D props** lists this workspace's 3D models as a catalogue (id, name, measured width/height/depth) to feed into the node that designs the blockout, so a set can hold real props.
-- **Video to GIF** and **Split grid** always output **new assets** and never overwrite their input.
+- **Clip media**, **Video to GIF** and **Split grid** always output **new assets** and never overwrite their input. **Clip media** can take just the last few seconds.
 - LLM nodes use the **Style** selector (Precise / Balanced / Creative) instead of a raw temperature, and a node's max output tokens never exceed the model's output limit.
 
 ### Browser nodes

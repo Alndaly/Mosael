@@ -1547,7 +1547,7 @@ def test_截取范围写错时当场拒绝_而不是让_ffmpeg_去发现() -> No
 
     from app.core.db import SessionLocal
     from app.db.models import Asset
-    from app.domain.boards.trim import TrimError, start_trim
+    from app.domain.assets.trim import TrimError, start_trim
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1578,7 +1578,7 @@ def test_音频不能去掉声音_当场拒绝而不是剪出一个空文件() -
 
     from app.core.db import SessionLocal
     from app.db.models import Asset, Job
-    from app.domain.boards.trim import TrimError, start_trim
+    from app.domain.assets.trim import TrimError, start_trim
 
     client = fresh_client()
     ws = _workspace(client)

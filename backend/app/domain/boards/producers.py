@@ -82,7 +82,7 @@ from app.domain.ai_chat import AiChatError
 from app.domain.boards.persistence import get_board
 from app.domain.boards.plugin_references import generation_index, mirrored_model
 from app.domain.boards.tools import bindable_kinds, check_bindings, prepare_node_run, run_node_on_board
-from app.domain.boards.trim import TrimError
+from app.domain.assets.trim import TrimError
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.resolution import KINDS as GENERATION_KINDS
 from app.domain.notes import NoteDomainError

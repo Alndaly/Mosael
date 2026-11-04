@@ -1,4 +1,4 @@
-"""画板上的「剪一段」:把一段视频/音频截出起止,产出一份新素材。
+"""「截一段」:把一段视频/音频截出起止,产出一份新素材。画板的「剪一段」和工作流的「截取片段」节点都走这里。
 
 **为什么不建时间线。** 这个应用真正的剪辑台是序列(sequence),而序列必须挂在项目下 ——
 为画板上的一次「掐头去尾」凭空造一个项目,会往用户的项目列表里塞进一堆他没建过的东西。
@@ -34,6 +34,18 @@ logger = logging.getLogger(__name__)
 
 class TrimError(LocalizedError, ValueError):
     pass
+
+
+def clip_range(asset: Asset, *, last_seconds: float = 0, start: float = 0, end: float | None = None) -> tuple[float, float]:
+    """截哪一段。填了「末尾几秒」就从片尾往前数(比片子长就是整段);否则按起止,`end` 不给就到片尾。"""
+    length = float((asset.media_info or {}).get("duration") or 0)
+    if last_seconds < 0:
+        raise TrimError("trimErr_lastSecondsNegative")
+    if not length and (last_seconds or end is None):
+        raise TrimError("trimErr_noDuration")
+    if last_seconds:
+        return max(0.0, length - last_seconds), length
+    return start, length if end is None else end
 
 
 def start_trim(

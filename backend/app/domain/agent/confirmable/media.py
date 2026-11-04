@@ -24,6 +24,7 @@ from app.domain.assets.masks import MaskAssetError, make_mask_asset
 from app.domain.assets.scrub.engine import ScrubError
 from app.domain.assets.scrub.task import require_video, start_scrub_job
 from app.domain.assets.separation import start_separation_job
+from app.domain.assets.trim import TrimError, clip_range, start_trim
 from app.domain.audio_capabilities import DENOISE, SEPARATION
 from app.domain.capabilities import CapabilityUnavailable
 from app.domain.documents import CAPABILITY
@@ -383,6 +384,46 @@ def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | N
     )
     return {"job_id": job.id, "source_asset_id": asset.id}
 
+def _clip_span(payload: dict[str, Any]) -> dict[str, Any]:
+    """卡上那几个数 → `clip_range` 的参数。"""
+    end = payload.get("end")
+    return {
+        "last_seconds": float(payload.get("last_seconds") or 0),
+        "start": float(payload.get("start") or 0),
+        "end": float(end) if end not in (None, "") else None,
+    }
+
+
+def _validate_clip_media(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotInWorkspace")
+    #: 截不了的在开卡之前就拒:范围不对、读不出时长,都是一张注定执行不了的卡。
+    try:
+        clip_range(asset, **_clip_span(payload))
+    except (TypeError, ValueError) as exc:
+        raise ConfirmationError(exc.key if isinstance(exc, TrimError) else "trimErr_endBeforeStart") from exc
+
+
+def _summarize_clip_media(db: Session, payload: dict[str, Any]) -> Summary:
+    last_seconds = payload.get("last_seconds")
+    span = (
+        fragment("confirm_clipLast", seconds=last_seconds) if last_seconds
+        else fragment("confirm_clipSpan", start=payload.get("start") or 0, end=payload.get("end") or "…")
+    )
+    return "confirm_clipMedia", {"span": span}
+
+
+def _execute_clip_media(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    asset = db.get(Asset, str(payload["asset_id"]))
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    start, end = clip_range(asset, **_clip_span(payload))
+    job = start_trim(db, asset=asset, start=start, end=end, created_by=actor)
+    return {"job_id": job.id, "source_asset_id": asset.id}
+
+
 def _validate_scrub_video_metadata(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
@@ -694,6 +735,18 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_import_from_url,
     execute=_execute_import_from_url,
     validate=_validate_import_from_url,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="clip_media",
+    permission="render-cost",
+    cost="render",
+    #: 只起任务
+    writes=(),
+    summarize=_summarize_clip_media,
+    execute=_execute_clip_media,
+    validate=_validate_clip_media,
 ))
 
 

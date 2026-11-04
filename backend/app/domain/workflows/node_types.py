@@ -174,6 +174,7 @@ _FIELD_LABELS = {
     "max_duration": "wfField_max_duration",
     "max_items": "wfField_max_items",
     "on_item_error": "wfField_on_item_error",
+    "last_seconds": "wfField_last_seconds",
     "previous_initial": "wfField_previous_initial",
     "failure_note": "wfField_failure_note",
     "dropped": "wfField_dropped",
@@ -1158,6 +1159,22 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "duration": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_duration"},
         },
         "outputs": ["asset_id", "source_asset_id"],
+    },
+    #: 截一段出来存成新素材。`last_seconds` 取末尾几秒:逐段续写时把上一段的尾巴交给下一段。
+    "media_clip": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_media_clip",
+        "description": "wfNode_media_clip_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": ["video", "audio"], "description": "wfNode_media_clip_asset_id"},
+            "last_seconds": {"type": "number", "description": "wfNode_media_clip_last_seconds"},
+            "start": {"advanced": True, "type": "number", "description": "wfNode_media_clip_start"},
+            "end": {"advanced": True, "type": "number", "description": "wfNode_media_clip_end"},
+        },
+        "outputs": ["asset_id", "source_asset_id", "start", "end", "duration"],
+        "output_types": {"start": "number", "end": "number"},
     },
     #: 图片格的一项能力:把一张宫格拼图(九宫格表情包、四格分镜、多角度设定图)等分切成几张单图。本机处理、不花钱;
     #: 画板上切出来的几格照原来的宫格排在右边(`board_columns` 点名交出列数的那个输出,见 boards.canvas._derive)。

@@ -233,7 +233,7 @@ def test_a_podcast_cancelled_while_queued_never_calls_the_provider(monkeypatch) 
 
 
 def test_a_trim_cancelled_while_queued_never_runs_ffmpeg(monkeypatch) -> None:
-    from app.domain.boards import trim
+    from app.domain.assets import trim
 
     ws = _workspace()
     video = _media_asset(ws, "video", "片子", b"not-a-video", "clip.mp4")

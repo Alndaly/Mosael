@@ -34,6 +34,7 @@ from app.domain import render
 from app.domain.assets import denoise, video_gif
 from app.domain.assets.from_url import UrlImportError, start_url_import
 from app.domain.assets.separation import start_separation_job
+from app.domain.assets.trim import TrimError, clip_range, start_trim
 from app.domain.assets.video_gif import VideoGifError
 from app.domain.capabilities import CapabilityUnavailable
 from app.domain.documents import LOCAL_PARSER
@@ -281,8 +282,44 @@ def _pose_of(config: dict[str, Any]) -> PoseUse:
 @register("ai_generate")
 def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
 
+    kind = str(config.get("kind", "image")).strip() or "image"
     #: 从失败处继续:上回交出去的那张单还在的话接着等它,不下第二次单(见 run_steps)。
-    generation_id, child_id = run_steps.held_generation(db) or _order_generation(db, scope, config)
+    held = run_steps.held_generation(db)
+    if held is not None:
+        generation_id, child_id = held
+    else:
+        # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
+        try:
+            generation, child = generation_operations.create_generation_job(
+                db,
+                workspace_id=scope.workspace_id,
+                session_id=None,
+                project_id=None,
+                created_by=current_actor(db),
+                provider=str(config.get("provider", "")),
+                provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
+                model=str(config.get("model", "")),
+                kind=kind,
+                prompt=str(config.get("prompt", "")),
+                negative_prompt=str(config.get("negative_prompt", "")),
+                parameters=provided(dict(config.get("parameters") or {})),
+                source_assets=keep_source_group(
+                    parse_source_assets(config.get("source_assets"), kind=kind),
+                    str(config.get("source_group") or "all").strip(),
+                ),
+                #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
+                entity_ids=parse_entity_ids(config.get("entity_ids")),
+                pose=_pose_of(config),
+                digital_human_consent=str(config.get("consent") or "").strip() == "yes",
+                #: 这张工作流(画板上跑的是那块画板、资产详情页上的是那个资产)的那条会话(ADR 0052)
+                origin=of_run_scope(scope.id),
+            )
+        except GenerationDomainError as exc:
+            raise WorkflowDomainError.from_error(exc) from exc
+        run_steps.hold_generation(db, generation.id, child.id)
+        db.commit()
+        generation_id, child_id = generation.id, child.id
+        generation_runner.start_generation_thread(generation_id)
     wait_for_job(child_id, release=db)
     # 等待时交还了会话(release 会 close 它,里面的对象全部脱管)—— 按 id 重新取,不能 refresh 脱管的那两个:
     # 此前这里 refresh,生成跑完之后节点必然炸在「not persistent within this Session」。
@@ -297,44 +334,6 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         "asset_ids": asset_ids,
         "generation_id": generation.id,
     }
-
-
-def _order_generation(db: Session, scope: RunScope, config: dict[str, Any]) -> tuple[str, str]:
-    """下一张生成单,交回(生成记录 id, 子任务 id)。单和「这个节点交出去了这张单」同一次提交。"""
-    kind = str(config.get("kind", "image")).strip() or "image"
-    # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
-    try:
-        generation, child = generation_operations.create_generation_job(
-            db,
-            workspace_id=scope.workspace_id,
-            session_id=None,
-            project_id=None,
-            created_by=current_actor(db),
-            provider=str(config.get("provider", "")),
-            provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
-            model=str(config.get("model", "")),
-            kind=kind,
-            prompt=str(config.get("prompt", "")),
-            negative_prompt=str(config.get("negative_prompt", "")),
-            parameters=provided(dict(config.get("parameters") or {})),
-            source_assets=keep_source_group(
-                parse_source_assets(config.get("source_assets"), kind=kind),
-                str(config.get("source_group") or "all").strip(),
-            ),
-            #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
-            entity_ids=parse_entity_ids(config.get("entity_ids")),
-            pose=_pose_of(config),
-            digital_human_consent=str(config.get("consent") or "").strip() == "yes",
-            #: 这张工作流(画板上跑的是那块画板、资产详情页上的是那个资产)的那条会话(ADR 0052)
-            origin=of_run_scope(scope.id),
-        )
-    except GenerationDomainError as exc:
-        raise WorkflowDomainError.from_error(exc) from exc
-    run_steps.hold_generation(db, generation.id, child.id)
-    db.commit()
-    generation_id, child_id = generation.id, child.id
-    generation_runner.start_generation_thread(generation_id)
-    return generation_id, child_id
 
 
 @register_preflight("ai_generate")
@@ -371,6 +370,30 @@ def _parameters_fit_the_model(db: Session, config: dict[str, Any], actor: str | 
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
+
+
+@register("media_clip")
+def media_clip(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    asset = db.get(Asset, str(config.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != scope.workspace_id:
+        raise WorkflowDomainError("wfErr_clipAssetNotInWorkspace")
+    end = config.get("end")
+    try:
+        start, end = clip_range(
+            asset, last_seconds=float(config.get("last_seconds") or 0), start=float(config.get("start") or 0),
+            end=float(end) if end not in (None, "") else None,
+        )
+        child = start_trim(db, asset=asset, start=start, end=end, created_by=current_actor(db))
+    except TrimError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    final = wait_for_job(child.id, release=db)
+    return {
+        "asset_id": str((final.result or {}).get("asset_id") or ""),
+        "source_asset_id": asset.id,
+        "start": start,
+        "end": end,
+        "duration": end - start,
+    }
 
 
 @register("video_to_gif")

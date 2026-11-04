@@ -58,7 +58,7 @@ def _done(client, job_id: str, timeout: float = 90) -> dict:
 
 
 def _trim(client, asset_id: str) -> str:
-    from app.domain.boards.trim import start_trim
+    from app.domain.assets.trim import start_trim
 
     with SessionLocal() as db:
         job_id = start_trim(db, asset=db.get(Asset, asset_id), start=0.2, end=1.2, created_by=user_id()).id

@@ -3160,6 +3160,72 @@
     }
   },
   {
+    "type": "media_clip",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "media": [
+          "video",
+          "audio"
+        ],
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "last_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "末尾几秒",
+          "en": "Last seconds"
+        }
+      },
+      "start": {
+        "type": "number",
+        "label": {
+          "zh": "起始位置",
+          "en": "Start"
+        }
+      },
+      "end": {
+        "type": "number",
+        "label": {
+          "zh": "结束位置",
+          "en": "End"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "source_asset_id",
+      "start",
+      "end",
+      "duration"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "source_asset_id": {
+        "zh": "来源素材",
+        "en": "Source media"
+      },
+      "start": {
+        "zh": "起始位置",
+        "en": "Start"
+      },
+      "end": {
+        "zh": "结束位置",
+        "en": "End"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
+      }
+    }
+  },
+  {
     "type": "note_create",
     "config": {
       "title": {

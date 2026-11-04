@@ -779,6 +779,31 @@ def denoise_audio(asset_id: str, strength: str = "medium", engine: str = "", wor
 
 
 @tool(effect="confirms")
+def clip_media(
+    asset_id: str,
+    last_seconds: float = 0,
+    start: float = 0,
+    end: float | None = None,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: cut a stretch of an EXISTING video or audio asset into a NEW asset.
+
+    The source is never changed. last_seconds takes the final few seconds and ignores start and
+    end; otherwise start and end are in seconds, and leaving end empty runs to the end of the file.
+    This starts a background job and the clip lands in the media library with lineage to the source.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "clip_media",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "last_seconds": last_seconds, "start": start, "end": end},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def convert_video_to_gif(
     asset_id: str,
     fps: int = 12,

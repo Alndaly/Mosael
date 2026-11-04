@@ -176,6 +176,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   dub_subtitles: Mic,
   inspect_sequence: Search,
   video_to_gif: FileVideo,
+  media_clip: Scissors,
   image_grid_split: Grid3x3,
   //: 自媒体分析:认链接、整理数据算指标、从链接下载(和「导出」的下载箭头区分开)。
   social_link: Link2,

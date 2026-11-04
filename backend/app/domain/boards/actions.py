@@ -7,7 +7,7 @@
 而画板的第二个入口(智能体、工作流)想做同样的事就得再抄一遍。现在路由只认人、翻错误。
 
 **都不自己实现能力**:生成走 create_generation_job,念字走 voices.start_synthesis,截取走
-boards.trim,写字走 ai_chat —— 描述符校验、计量记账、任务中心全都白拿。画板只多做自己那件事:
+assets.trim,写字走 ai_chat —— 描述符校验、计量记账、任务中心全都白拿。画板只多做自己那件事:
 先在画布上摆一个「正在做」的占位,再让回执把产出填回那一格。
 """
 
@@ -33,7 +33,7 @@ from app.domain.ai_chat import AiChatError, target_for
 from app.domain.analysis import service as analysis
 from app.domain.analysis.service import AnalysisError, image_part
 from app.domain.billing.usage import billable
-from app.domain.boards.trim import start_trim
+from app.domain.assets.trim import start_trim
 from app.domain.documents.reading import document_text
 from app.domain.entities.mentions import NO_POSE, PoseUse, generation_profile, resolve_mentions
 from app.domain.generation import operations as generation_operations, runner as generation_runner
