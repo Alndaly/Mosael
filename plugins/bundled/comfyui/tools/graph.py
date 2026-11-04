@@ -355,6 +355,31 @@ _IMAGE_PASSES = frozenset({"image", "images"})
 _FRAME_HOPS = 4
 
 
+#: 把一段视频锚在成片某一帧上的节点:锚在第 0 帧就是「接着这段往下拍」(MiniMax H3 续写)。
+_CLIP_GUIDES = frozenset({"MiniMaxH3AddGuide"})
+#: 视频读进来常先拆成画面和声音(`GetVideoComponents`),顺着它的第一个输出往下找。
+_VIDEO_PASSES = frozenset({"video", "image", "images"})
+
+
+def _continues_this_clip(api: dict[str, Any], node_id: str) -> bool:
+    """这段读进来的视频是不是被锚在了成片的第 0 帧:是的话成片接着它往下拍,它是 `first_clip`,不是要改的那一段。"""
+    frontier, seen = [node_id], {node_id}
+    for _ in range(_FRAME_HOPS):
+        following: list[str] = []
+        for consumer, node in api.items():
+            for name, value in (node.get("inputs") or {}).items():
+                if not (isinstance(value, list) and len(value) >= 2 and str(value[0]) in frontier and value[1] == 0):
+                    continue
+                if str(node.get("class_type", "")) in _CLIP_GUIDES:
+                    if name == "image" and node["inputs"].get("frame_idx") == 0:
+                        return True
+                elif name in _VIDEO_PASSES and consumer not in seen:
+                    seen.add(consumer)
+                    following.append(consumer)
+        frontier = following
+    return False
+
+
 def _frame_role(api: dict[str, Any], node_id: str) -> str:
     """视频图里一张读进来的图是首帧、尾帧还是参考图:看它(或它缩放、裁切之后的那张)接进了哪一格。"""
     downstream: dict[str, list[tuple[str, str, str, int]]] = {}
@@ -438,7 +463,7 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None,
       **MASK 输出接进了别人的 MASK 输入**的(见 wired_mask_sources),除了它原来那个角色**另有一格蒙版槽** ——
       一个节点两用(`LoadImage` 的 IMAGE 喂参考图、MASK 喂局部重绘那一格)时两个槽位并存,不是一个顶掉另一个;
     - LoadImageMask:蒙版;
-    - 视频(LoadVideo / VHS_LoadVideo):被改的那一段(源视频);
+    - 视频(LoadVideo / VHS_LoadVideo):被改的那一段(源视频);锚在成片第 0 帧上的是被接着往下拍的那一段(`first_clip`);
     - 音频:视频图里是驱动音频(口型、卡点),别的图里是参考音频;
     - 接在**参考**那几格上的(MiniMax H3 多参考生视频的 `ref_images.*` / `ref_videos.*` / `ref_audios.*`,
       `reference_video` 这类)就是参考:参考视频不是要改的那一段(那是必给的),参考音频也不是驱动口型的音频
@@ -470,7 +495,7 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None,
         elif media == "mask":
             role = "mask"
         elif media == "video":
-            role = "reference_video" if referenced else "source_video"
+            role = "reference_video" if referenced else "first_clip" if _continues_this_clip(api, node_id) else "source_video"
         elif media == "audio":
             role = "driving_audio" if kind == "video" and not referenced else "reference_audio"
         slot = {
@@ -1742,13 +1767,15 @@ def describe(
         if role == "first_frame":
             # 图生视频:首帧接在生成节点上,不给的话 ComfyUI 拿工作流里存着的那张图生成一段(模式里也没有文生视频)
             entry["required"] = True
-        if role in ("mask", "source_video") and role in {slot["role"] for slot in found_slots}:
+        if role in ("mask", "source_video", "first_clip") and role in {slot["role"] for slot in found_slots}:
             if role != "mask" or mask_nodes - derived_masks:
                 entry["required"] = True
         inputs.append(entry)
 
     if kind == "video":
-        if "source_video" in counts:
+        if "first_clip" in counts:
+            modes = ["video-extend"]
+        elif "source_video" in counts:
             modes = ["video-edit"]
         elif "first_frame" in counts and "last_frame" in counts:
             modes = ["keyframes-to-video"]

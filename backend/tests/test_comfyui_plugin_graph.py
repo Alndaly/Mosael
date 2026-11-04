@@ -1187,6 +1187,30 @@ def test_视频输入是待编辑的视频_音频是驱动音频(graph) -> None:
     assert {"role": "source_video", "max": 1, "required": True} in roles(model)
 
 
+H3_CONTINUE = {
+    "1": {"class_type": "LoadVideo", "inputs": {"file": "tail.mp4"}},
+    "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+    "7": {"class_type": "MiniMaxH3ImageToVideo", "inputs": {"prompt": "接着走", "width": 1344, "height": 768, "length": 243}},
+    "8": {"class_type": "MiniMaxH3AddGuide", "inputs": {
+        "positive": ["7", 0], "latent": ["7", 1], "image": ["2", 0], "audio": ["2", 1], "frame_idx": 0,
+    }},
+    "9": {"class_type": "SaveVideo", "inputs": {"video": ["8", 0]}},
+}
+
+
+def test_锚在第0帧的视频是待续写的片段_不是要改的那一段(graph) -> None:
+    assert [(slot["role"], slot["field"]) for slot in graph.slots(H3_CONTINUE, "video")] == [("first_clip", "file")]
+    model = graph.describe("h3.json", "h3", H3_CONTINUE, OBJECT_INFO)
+    assert model["modes"] == ["video-extend"]
+    assert {"role": "first_clip", "max": 1, "required": True} in roles(model)
+    assert graph.wire_inputs(H3_CONTINUE, "video", {"first_clip": ["mosael/tail.mp4"]})["1"]["inputs"]["file"] == "mosael/tail.mp4"
+
+
+def test_锚在别的帧上的视频_还是要改的那一段(graph) -> None:
+    api = {**H3_CONTINUE, "8": {**H3_CONTINUE["8"], "inputs": {**H3_CONTINUE["8"]["inputs"], "frame_idx": 40}}}
+    assert [slot["role"] for slot in graph.slots(api, "video")] == ["source_video"]
+
+
 def test_核心的_Advanced_保存节点也是成品_文生音乐是音频模型(graph) -> None:
     """维护者真实的「minimax+music3+文生音乐」:唯一的输出是 ComfyUI 0.39 核心的 SaveAudioAdvanced(选格式的保存节点)。
     此前它不在音频输出里,整张图被兜成图像模型、输出是 any。SaveImageAdvanced 同理。"""
