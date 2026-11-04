@@ -249,11 +249,14 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
       {d.runSummary && (
         // **名字在前**:此前这里只有值,于是「分离人声与背景音」跑完,卡片上孤零零一个
         // `demucs` —— 它是引擎名、是文件名还是别的什么,只能猜。名字由节点自己声明。
-        <Truncate as="p" lines={2} className={cn("m-0 whitespace-pre-wrap border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5 text-ui-2xs leading-[1.45] text-muted-foreground", !showIo && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
-          <span className="font-medium text-foreground">{d.runSummary.label}</span>
-          {" "}
-          {d.runSummary.text}
-        </Truncate>
+        //: 内边距在外面这一层:写在截断的元素上,第三行会从下内边距里露出半截。
+        <div className={cn("border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5", !showIo && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
+          <Truncate as="p" lines={2} className="m-0 whitespace-pre-wrap text-ui-2xs leading-[1.45] text-muted-foreground">
+            <span className="font-medium text-foreground">{d.runSummary.label}</span>
+            {" "}
+            {d.runSummary.text}
+          </Truncate>
+        </div>
       )}
       {badge && (
         <Hint label={badge.title}>
