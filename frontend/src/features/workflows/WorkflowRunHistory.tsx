@@ -5,6 +5,7 @@ import { Ban, CheckCircle2, ChevronDown, CircleDashed, Clock, Hand, History, Loa
 
 import { attestRequestOf, listJobEvents, listRunApprovals, listWorkflowRuns, runApprovalsKey, type Job, type RunApproval } from "@/api/client";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
+import { canContinueRun, ContinueRunButton } from "@/features/workflows/ContinueRunButton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
@@ -207,6 +208,15 @@ export function WorkflowRunHistory({
   // 数据 2s 一轮询,但耗时显示要每秒走字:运行中的 run/节点用 now 与开始时间实时求差,
   // 而不是等下一次轮询把 updated_at 带回来。没有任何东西在跑时不启动定时器。
   const anyRunning = (runs.data ?? []).some((j) => RUNNING.has(j.status));
+  //: 这一轮停下之后能做的事:认可那一版、从中断处继续。没有就是 null,不摆一行空的。
+  const attest = selected ? runAttest(selected) : null;
+  const continuable = selected != null && canContinueRun(selected);
+  const runActions = attest || continuable ? (
+    <>
+      {attest && <AttestRevisionButton attest={attest} />}
+      {continuable && <ContinueRunButton workflowId={workflowId} jobId={selected.id} />}
+    </>
+  ) : undefined;
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
     if (!anyRunning) return;
@@ -382,15 +392,11 @@ export function WorkflowRunHistory({
                 <FailureCard
                   title={t("wfRunFailed")}
                   {...failureFields(selected, selected.error)}
-                  actions={runAttest(selected) ? <AttestRevisionButton attest={runAttest(selected)!} /> : undefined}
+                  actions={runActions}
                   data-run-failed=""
                 />
               )}
-              {!selected.error && runAttest(selected) && (
-                <div className="flex justify-end">
-                  <AttestRevisionButton attest={runAttest(selected)!} />
-                </div>
-              )}
+              {!selected.error && runActions && <div className="flex justify-end gap-2">{runActions}</div>}
               {steps.length > 0 && (
                 /* 步骤是一行一行的状态清单,和运行列表同一套图标语言;展开体挂在它自己那一步的下面、
                    顺着名字那一列缩进。 */

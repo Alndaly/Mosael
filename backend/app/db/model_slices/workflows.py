@@ -92,6 +92,30 @@ class WorkflowRunOutput(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
+class WorkflowRunStep(Base):
+    """一次运行里**一个已经落定的节点**:从失败处继续时它不再跑第二遍(ADR 0092)。
+
+    `scope` 是这个节点在哪一层图里:顶层是空串,循环体第 4 轮是 `loop1/#3`,嵌套就接着往下写。同一个节点在每一轮是不同的
+    一步,所以循环跑到一半断了,前面那几轮一步都不用重做。
+
+    `outputs` 是完整的产物(不是事件里那份有界快照):下游插值要用的就是完整值。空着的行是**还没落定**、但已经
+    把一个生成任务交了出去的节点,`held` 记着那张单,接着跑时接回它,不再下第二次单。
+
+    运行成功就删掉(用不上了);随任务一起删(外键级联)。
+    """
+
+    __tablename__ = "workflow_run_steps"
+    __table_args__ = (UniqueConstraint("job_id", "scope", "node_id", name="uq_workflow_run_steps_job_scope_node"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    node_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    outputs: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    held: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
 class WorkflowRunApproval(Base):
     """工作流跑到「等人确认」节点时**落库**的那一次等待:问题、超时怎么算、谁批的、批成什么。
 

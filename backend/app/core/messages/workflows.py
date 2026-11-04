@@ -81,6 +81,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_sequenceNotInWorkspace": {"zh": "序列不在这个工作区里", "en": "That timeline is not in this workspace"},
     "wfErr_assetIdMissing": {"zh": "缺少 asset_id", "en": "asset_id is missing"},
     "wfErr_trackNotOnSequence": {"zh": "这条时间线上没有那条轨道", "en": "That track is not on this timeline"},
+    "wfErr_runNotContinuable": {
+        "zh": "这次运行不能继续:只有失败或被取消的、不是别的工作流调起来的运行才能从中断处继续",
+        "en": "This run can't be continued: only a failed or cancelled run that no other workflow started can resume",
+    },
     "wfErr_revisionMissing": {"zh": "工作流执行绑定的修订快照不存在", "en": "The revision this run is bound to no longer exists"},
     "wfErr_startExists": {"zh": "已有开始节点,不能再添加 start 节点", "en": "There is already a start node"},
     "wfErr_connectDataNeedsPorts": {"zh": "connect_data 需要 source_output 和 target_input", "en": "connect_data needs source_output and target_input"},

@@ -166,6 +166,11 @@ export function fetchUnusableNodeTypes(types: string[]): Promise<WorkflowUnusabl
   return api<WorkflowUnusableNode[]>(`/api/workflows/node-types/unusable?${params.toString()}`);
 }
 
+/** 失败或被取消的运行从中断处接着跑:落定的节点不再执行。交回的是同一条运行。 */
+export function continueWorkflowRun(workflowId: string, jobId: string): Promise<Job> {
+  return api<Job>(`/api/workflows/${workflowId}/runs/${jobId}/continue`, { method: "POST" });
+}
+
 /** Execution history — this workflow's run jobs, newest first. */
 export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
   return api<Job[]>(`/api/workflows/${workflowId}/runs`);

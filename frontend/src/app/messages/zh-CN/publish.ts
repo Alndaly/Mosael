@@ -525,6 +525,8 @@ export const publish = {
   wfHistoryPartialRun: "部分运行(目标:{node})",
   wfHistoryEmpty: "暂无执行记录",
   wfHistoryPick: "选择一次运行查看步骤",
+  wfRunContinue: "从中断处继续",
+  wfRunContinueHint: "跑完的步骤不再执行、不再花钱,失败的那一步重跑。用的还是这次运行当时那一版图",
   wfHistoryCost: "花费 {cost} · {calls} 次计费调用",
   wfHistoryCostUnpriced: "(其中 {count} 次没能定价,没算进去)",
   wfHistoryCostNone: "未定价",

@@ -34,6 +34,7 @@ from app.domain.jobs import (
     emit_job_event,
     finish_job,
     listening_for_progress,
+    reopen_job,
     reset_parent_job,
     say,
     set_parent_job,
@@ -70,7 +71,8 @@ from app.domain.workflows import node_budget, approvals
 from app.domain.workflows.graph_run import GraphResume, GraphRun
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import keep_full_texts, snapshot
-from app.domain.workflows.run_scope import halt_scope, halted, node_scope
+from app.domain.workflows import run_steps
+from app.domain.workflows.run_scope import continuing_run, halt_scope, halted, is_continuing, node_scope, step_frame, step_scope
 from app.domain.generation.operations import GenerationDomainError, check_text_inputs
 from app.domain.plugins import nodes as plugins_nodes
 from app.domain.plugins.nodes import why_unusable
@@ -537,7 +539,7 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
 
 def _run_workflow_thread(
     workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any], *, locale: str | None = None,
-    target_node: str | None = None, resume: GraphResume | None = None,
+    target_node: str | None = None, resume: GraphResume | None = None, continuing: bool = False,
 ) -> None:
     # 线程就是入口:正常走完提交(失败也记在任务上、正常走完),真抛出去才回滚。
     with speaking(locale), unit_of_work() as db:
@@ -550,7 +552,7 @@ def _run_workflow_thread(
             if revision is None or revision.workflow_id != workflow.id:
                 raise WorkflowDomainError("wfErr_revisionMissing")
             logger.info("workflow job %s: running '%s'", job_id, workflow.name)
-            run_workflow(db, workflow, revision, job, params, target_node=target_node, resume=resume)
+            run_workflow(db, workflow, revision, job, params, target_node=target_node, resume=resume, continuing=continuing)
             db.refresh(job)
             #: 停在「等人确认」上也是正常收场(见 _park_at_approval):这一句说"finished"只是日志,
             #: 任务那时仍是 running。别在这一句上读终态。
@@ -664,6 +666,16 @@ def run_graph(
         context.update(resume.context)
         executed |= set(resume.executed)
         done |= set(resume.done)
+    #: 这一层图在哪(见 run_steps):落定的节点按它记,从失败处继续时按它读回来。
+    scope_key = step_scope()
+    #: **从失败处继续**:这一层已经落定的节点读回来,同样跳过。被条件分支跳过的不用记,调度时照原来的产物算出同一个结果。
+    #: 循环的每一轮、子图都走到这里:跑完的轮次里节点全部落定,这一轮瞬间走完,交出的还是当时那份。
+    if is_continuing() and wf_job_id is not None:
+        with SessionLocal() as steps_db:
+            settled = run_steps.recorded(steps_db, wf_job_id, scope_key)
+        context.update(settled)
+        executed |= set(settled)
+        done |= set(settled)
     lock = threading.Lock()
 
     def is_cancelled(db: Session | None = None) -> bool:
@@ -822,7 +834,7 @@ def run_graph(
                     #: **容器节点跑体的时候不占连接,也不占预算。** 它的活儿全在体里,体里的节点从同一份
                     #: 预算里自己拿;容器攥着不放,嵌套几层、并行几项就把预算吃光,体里的叶子永远拿不到
                     #: —— 死锁,取消也叫不醒(叶子卡在拿预算上)。和节点里的「等」同一个做法。
-                    with connection_handed_back(node_db), node_scope(nid):
+                    with connection_handed_back(node_db), node_scope(nid), step_frame(nid):
                         outputs = handler(node_db, wf, config)
                 else:
                     with node_scope(nid):
@@ -830,6 +842,9 @@ def run_graph(
                 # **节点跑完就是它的事务边界。** 只在成功时提交:失败节点半途 flush 的东西不该留下。
                 # 账不在此列 —— 付过费的调用在调用方回滚之后由记账那一层补写(见 domain/billing/usage
                 # 的 _settle_usage),这里不用为它破例。
+                #: 「这个节点落定了」跟着同一次提交:产物和这一行要么都在、要么都不在(见 run_steps)。
+                if wf_job_id is not None:
+                    run_steps.record(node_db, wf_job_id, scope_key, nid, outputs)
                 node_db.commit()
                 return outputs
         finally:
@@ -1100,6 +1115,33 @@ def continue_workflow_job(db: Session, job: Job, checkpoint: dict[str, Any]) -> 
     dispatch_job(db, job, run_resumed)
 
 
+def continue_failed_run(db: Session, workflow: Workflow, job: Job) -> Job:
+    """**把一个失败或被取消的运行从中断处接着跑**(ADR 0092)。
+
+    和开跑同一个任务、同一版钉住的修订:已经落定的节点不再执行(见 run_steps),花掉的钱、执行历史都接在这一条上。
+    失败的那个节点重跑一遍 —— 这正是要做的事;它当时交出去的生成任务还在的话接回来,不再下单。
+    别的工作流调起来的子运行不在这里继续:它的外层接着跑时会重新调它。
+    """
+    payload = job.payload or {}
+    if job.kind != "workflow" or job.parent_job_id or payload.get("workflow_id") != workflow.id:
+        raise WorkflowDomainError("wfErr_runNotContinuable")
+    revision_id = str(payload.get("workflow_revision_id") or "")
+    revision = db.get(WorkflowRevision, revision_id) if revision_id else None
+    if revision is None or revision.workflow_id != workflow.id:
+        raise WorkflowDomainError("wfErr_revisionMissing")
+    if not reopen_job(db, job):
+        raise WorkflowDomainError("wfErr_runNotContinuable")
+    say(job, "jobMsg_workflowContinuing", name=workflow.name)
+    emit_job_event(db, job.id, "workflow.continued", {})
+    workflow_id, job_id, params = workflow.id, job.id, dict(payload.get("params") or {})
+    locale = payload.get("locale")
+    target_node = str(payload.get("target_node_id") or "") or None
+    dispatch_job(db, job, lambda: _run_workflow_thread(
+        workflow_id, revision_id, job_id, params, locale=locale, target_node=target_node, continuing=True,
+    ))
+    return job
+
+
 def run_workflow(
     db: Session,
     workflow: Workflow,
@@ -1109,22 +1151,29 @@ def run_workflow(
     *,
     target_node: str | None = None,
     resume: GraphResume | None = None,
+    continuing: bool = False,
 ) -> dict[str, Any]:
     """执行固定修订；编辑当前工作流不会改变已排队任务的图。`target_node` 给定时单跑这一个节点
     (只执行它及其上游闭包,见 run_graph)。
 
     `resume` 给定时是**从「等人确认」的暂停点接着跑**:前面已经落定的节点直接跳过(见 GraphResume)。
+    `continuing` 时是**从失败处接着跑**(见 continue_failed_run):每一层图读回自己落定的节点(见 run_steps)。
     """
     graph = revision.graph
     node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
     if not finish_job(db, job, status="running"):
         db.commit()
         return {}
-    if resume is None:
+    if resume is None and not continuing:
         say(job, "jobMsg_workflowRunning", name=workflow.name)
         db.commit()
+    if resume is not None:
+        #: 「等人确认」那个节点是决定下来时落定的,没走过节点的那一步:这里补上。之后再失败、接着跑,它不会再问一遍人。
+        for nid in resume.executed:
+            run_steps.record(db, job.id, "", nid, resume.context.get(nid))
 
-    run = run_graph(graph, wf_id=workflow.id, params=params, job=job, db=db, target_node=target_node, resume=resume)
+    with continuing_run(continuing):
+        run = run_graph(graph, wf_id=workflow.id, params=params, job=job, db=db, target_node=target_node, resume=resume)
     context = run.context
     if run.cancelled:
         return context
@@ -1158,6 +1207,7 @@ def run_workflow(
         db.commit()
         return context
     job.progress = 1.0
+    run_steps.forget(db, job.id)
     say(job, "jobMsg_workflowDone", name=workflow.name)
     job.result = {
         "workflow_revision_id": revision.id,

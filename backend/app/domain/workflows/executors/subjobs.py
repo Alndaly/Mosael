@@ -70,6 +70,7 @@ from app.domain.voices.sentences import Segment, Token, sentences_for_editing
 from app.domain.voices.speech import CLONE_ENGINE
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, DubError
 from app.domain.voices.voice_ref import VoiceRef
+from app.domain.workflows import run_steps
 from app.domain.workflows.authority import current_authority
 from app.domain.workflows.graph_rules import as_text
 from app.domain.workflows.node_types import NODE_TYPES, field_name
@@ -280,6 +281,26 @@ def _pose_of(config: dict[str, Any]) -> PoseUse:
 @register("ai_generate")
 def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
 
+    #: 从失败处继续:上回交出去的那张单还在的话接着等它,不下第二次单(见 run_steps)。
+    generation_id, child_id = run_steps.held_generation(db) or _order_generation(db, scope, config)
+    wait_for_job(child_id, release=db)
+    # 等待时交还了会话(release 会 close 它,里面的对象全部脱管)—— 按 id 重新取,不能 refresh 脱管的那两个:
+    # 此前这里 refresh,生成跑完之后节点必然炸在「not persistent within this Session」。
+
+    generation = db.get(GenerationJob, generation_id)
+    child = db.get(Job, child_id)
+    #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是全部 —— 生成一次可能出多张
+    #: (图像接口的 n),只往下游传第一张的话,其余的在工作流里就没人看得见了。
+    asset_ids = [str(one) for one in ((child.result or {}).get("asset_ids") or []) if one]
+    return {
+        "asset_id": generation.result_asset_id or "",
+        "asset_ids": asset_ids,
+        "generation_id": generation.id,
+    }
+
+
+def _order_generation(db: Session, scope: RunScope, config: dict[str, Any]) -> tuple[str, str]:
+    """下一张生成单,交回(生成记录 id, 子任务 id)。单和「这个节点交出去了这张单」同一次提交。"""
     kind = str(config.get("kind", "image")).strip() or "image"
     # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
     try:
@@ -309,23 +330,11 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
+    run_steps.hold_generation(db, generation.id, child.id)
     db.commit()
     generation_id, child_id = generation.id, child.id
     generation_runner.start_generation_thread(generation_id)
-    wait_for_job(child_id, release=db)
-    # 等待时交还了会话(release 会 close 它,里面的对象全部脱管)—— 按 id 重新取,不能 refresh 脱管的那两个:
-    # 此前这里 refresh,生成跑完之后节点必然炸在「not persistent within this Session」。
-
-    generation = db.get(GenerationJob, generation_id)
-    child = db.get(Job, child_id)
-    #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是全部 —— 生成一次可能出多张
-    #: (图像接口的 n),只往下游传第一张的话,其余的在工作流里就没人看得见了。
-    asset_ids = [str(one) for one in ((child.result or {}).get("asset_ids") or []) if one]
-    return {
-        "asset_id": generation.result_asset_id or "",
-        "asset_ids": asset_ids,
-        "generation_id": generation.id,
-    }
+    return generation_id, child_id
 
 
 @register_preflight("ai_generate")

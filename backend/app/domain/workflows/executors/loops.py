@@ -21,7 +21,7 @@ from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, run_body_to_the_end, truthy
 from app.domain.workflows.executors.numbers import at_least, whole_number
-from app.domain.workflows.run_scope import halted, shared_halt
+from app.domain.workflows.run_scope import halted, shared_halt, step_frame
 from app.core.i18n import tr
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
@@ -121,7 +121,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         raise WorkflowDomainError("wfErr_loopPreviousNeedsOrder")
 
     def iterate(index: int, item: Any) -> Any:
-        with _blame_iteration(index, total, item=item):
+        with _blame_iteration(index, total, item=item), step_frame(f"#{index}"):
             run = run_body_to_the_end(
                 "loop_foreach",
                 body,
@@ -385,7 +385,7 @@ def loop_while(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     # Do-while: the condition references body outputs, so it can only be evaluated after a run.
     while index < max_iter:
         _stop_if_halted()
-        with _blame_iteration(index, max_iter):
+        with _blame_iteration(index, max_iter), step_frame(f"#{index}"):
             ctx = run_body("loop_while", body, {"loop": {"index": index, "previous": previous}}, workflow_id=scope.id)
         previous = interpolate(output_tpl, ctx) if output_tpl else {nid: out for nid, out in ctx.items() if nid != "loop"}
         results.append(previous)

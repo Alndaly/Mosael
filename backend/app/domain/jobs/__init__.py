@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, event, func, inspect, select, union_all
+from sqlalchemy import delete, event, func, inspect, select, union_all, update
 from sqlalchemy.orm import Session
 
 from app.core import abort
@@ -477,6 +477,24 @@ def start_job(db: Session, job: Job, **fields: Any) -> bool:
     任务,轮到它时被写回 running、照跑到底、最后记成成功 —— 付费的配音照样调用,落终态的收拾和回执各跑两遍。
     """
     return finish_job(db, job, status="running", **fields)
+
+
+def reopen_job(db: Session, job: Job) -> bool:
+    """把一个失败或被取消的任务拨回排队:它要接着跑(见 workflows.engine.continue_failed_run)。不提交。
+
+    一条带条件的 UPDATE:同一个任务被点两下时只有一次拨得动,不会起两条线程跑同一轮。返回 False = 它已经不在这两种状态了。
+    进度留着,接着跑的那一轮从这里往上走。失败原因清掉:这一轮还没失败。
+    """
+    reopened = db.execute(
+        update(Job).where(Job.id == job.id, Job.status.in_(("failed", CANCELLED))).values(
+            status="queued", error=None, error_key="", error_params={},
+        )
+    )
+    if reopened.rowcount != 1:
+        return False
+    db.refresh(job)
+    db.add(TaskEvent(job_id=job.id, type="job.reopened", payload={}))
+    return True
 
 
 class JobStateError(RuntimeError):

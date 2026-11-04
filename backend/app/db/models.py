@@ -24,6 +24,7 @@ from app.db.model_slices.workflows import (  # noqa: E402,F401
     WorkflowRevisionAttestation,
     WorkflowRunApproval,
     WorkflowRunOutput,
+    WorkflowRunStep,
 )
 from app.db.model_slices.triggers import WorkflowTrigger, WorkflowTriggerEvent  # noqa: E402,F401
 from app.db.model_slices.boards import Board  # noqa: E402,F401

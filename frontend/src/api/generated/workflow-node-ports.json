@@ -3039,6 +3039,13 @@
           "en": "Max items"
         }
       },
+      "previous_initial": {
+        "type": "template",
+        "label": {
+          "zh": "第一轮的值",
+          "en": "First round's value"
+        }
+      },
       "on_item_error": {
         "type": "string",
         "label": {
@@ -3079,7 +3086,8 @@
     "body_scope": {
       "loop": [
         "item",
-        "index"
+        "index",
+        "previous"
       ],
       "input": [
         "*inputs"
@@ -3116,6 +3124,13 @@
           "zh": "对外输出",
           "en": "Output"
         }
+      },
+      "previous_initial": {
+        "type": "template",
+        "label": {
+          "zh": "第一轮的值",
+          "en": "First round's value"
+        }
       }
     },
     "outputs": [
@@ -3139,7 +3154,8 @@
     },
     "body_scope": {
       "loop": [
-        "index"
+        "index",
+        "previous"
       ]
     }
   },

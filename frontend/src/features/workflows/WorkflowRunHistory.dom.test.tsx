@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   listJobEvents: vi.fn(),
   listJobChildren: vi.fn(),
   listRunApprovals: vi.fn(),
+  continueWorkflowRun: vi.fn(),
 }));
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -233,4 +234,26 @@ it("待批单属于另一次运行:详情里不出现审批卡", async () => {
 
   await screen.findByText("较早一次");
   expect(screen.queryByText("测试1")).toBeNull();
+});
+
+const STOPPED_RUN = { id: "j1", kind: "workflow", status: "failed", progress: 0.5, message: "", error: "坏了", payload: {}, result: {},
+  created_at: "2026-11-04T10:00:00", updated_at: "2026-11-04T10:01:00" };
+
+it("失败的运行:能从中断处继续,点下去带着这次运行", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([STOPPED_RUN]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  apiMocks.continueWorkflowRun.mockResolvedValue({ ...STOPPED_RUN, status: "queued" });
+  renderHistory();
+  fireEvent.click(await screen.findByRole("button", { name: "wfRunContinue" }));
+  await vi.waitFor(() => expect(apiMocks.continueWorkflowRun).toHaveBeenCalledWith("wf1", "j1"));
+});
+
+it("别的工作流调起来的子运行、成功的运行:没有继续这一项", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([{ ...STOPPED_RUN, parent_job_id: "outer" }, { ...STOPPED_RUN, id: "j2", status: "succeeded", error: null }]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory();
+  await screen.findByText("wfRunFailed");
+  expect(screen.queryByRole("button", { name: "wfRunContinue" })).toBeNull();
 });

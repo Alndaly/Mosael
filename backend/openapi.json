@@ -15621,6 +15621,58 @@
         }
       }
     },
+    "/api/workflows/{workflow_id}/runs/{job_id}/continue": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Continue Run",
+        "description": "失败或被取消的运行从中断处接着跑:已经落定的节点不再执行(ADR 0092)。",
+        "operationId": "continue_run_api_workflows__workflow_id__runs__job_id__continue_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/runs": {
       "get": {
         "tags": [

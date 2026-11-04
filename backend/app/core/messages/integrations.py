@@ -963,6 +963,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_claimed": {"zh": "执行器已认领", "en": "Claimed by a worker"},
     "jobMsg_workflowQueued": {"zh": "工作流排队中: {name}", "en": "Workflow queued: {name}"},
     "jobMsg_workflowRunning": {"zh": "工作流运行中: {name}", "en": "Workflow running: {name}"},
+    "jobMsg_workflowContinuing": {"zh": "从中断处继续: {name}", "en": "Continuing from where it stopped: {name}"},
     "jobMsg_workflowDone": {"zh": "工作流完成: {name}", "en": "Workflow complete: {name}"},
     "jobMsg_workflowFailed": {"zh": "工作流失败: {name}", "en": "Workflow failed: {name}"},
     #: 「等人确认」节点把这一轮停下时任务卡上那句话。**状态仍是 running**:这回运行是活的,只是在等 ——
@@ -1169,6 +1170,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_max_items": {"zh": "最多取前几项", "en": "Max items"},
     "wfField_dropped": {"zh": "没跑的项数", "en": "Items not run"},
     "wfField_on_item_error": {"zh": "一项失败时", "en": "When an item fails"},
+    "wfField_previous_initial": {"zh": "第一轮的值", "en": "First round's value"},
     "wfField_failure_note": {"zh": "失败说明", "en": "Failure note"},
     "wfField_trim_overflow": {"zh": "放不下就裁掉尾巴", "en": "Trim what doesn't fit"},
     "wfField_until": {"zh": "最晚到第几秒", "en": "Until (seconds)"},

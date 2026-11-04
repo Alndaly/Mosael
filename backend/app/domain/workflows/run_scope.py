@@ -69,3 +69,41 @@ def node_scope(node_id: str) -> Iterator[None]:
 def current_node() -> str:
     """当前在跑的节点 id;不在节点里是空串。"""
     return _NODE.get()
+
+
+#: 正在跑的这一层图在哪:从顶层往里经过的容器节点和第几轮(`loop1`、`#3`)。落定的节点按它分层记(见 run_steps),
+#: 同一个循环体节点的每一轮是不同的一步。和「停」信号一样用上下文变量:节点在线程池里带着提交时的上下文跑。
+_FRAMES: contextvars.ContextVar[tuple[str, ...]] = contextvars.ContextVar("mosael_workflow_frames", default=())
+
+
+@contextmanager
+def step_frame(frame: str) -> Iterator[None]:
+    """往里走一层:进一个容器节点、进循环的第几轮。"""
+    token = _FRAMES.set((*_FRAMES.get(), frame))
+    try:
+        yield
+    finally:
+        _FRAMES.reset(token)
+
+
+def step_scope() -> str:
+    """当前这一层图的位置。顶层是空串。"""
+    return "/".join(_FRAMES.get())
+
+
+#: 这一轮是不是「从失败处继续」:是的话,每一层图开跑前读回已经落定的节点(见 engine.run_graph)。
+_CONTINUING: contextvars.ContextVar[bool] = contextvars.ContextVar("mosael_workflow_continuing", default=False)
+
+
+@contextmanager
+def continuing_run(continuing: bool) -> Iterator[None]:
+    """引擎在跑「从失败处继续」的那一轮时压它。"""
+    token = _CONTINUING.set(continuing)
+    try:
+        yield
+    finally:
+        _CONTINUING.reset(token)
+
+
+def is_continuing() -> bool:
+    return _CONTINUING.get()

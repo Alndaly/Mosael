@@ -39,7 +39,7 @@ from app.domain.workflows import create_workflow, list_workflows, update_workflo
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.failure_summary import detail_of, hint_of, summarize
 from app.domain.job_center import use_cases as job_center
-from app.domain.workflows.engine import start_workflow_job
+from app.domain.workflows.engine import continue_failed_run, start_workflow_job
 from app.domain.workflows.graph_upgrade import upgrade_graph
 from app.domain.workflows.run_outputs import full_text
 from app.domain.workflows.file_export import (
@@ -469,6 +469,23 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: Tx, user: CurrentUser) -
         return start_workflow_job(
             db, workflow, created_by=user.id, params=body.params, target_node=body.target_node_id,
         )
+    except WorkflowRevisionError as exc:
+        raise _run_refused(WorkflowDomainError.from_error(exc)) from exc
+    except WorkflowDomainError as exc:
+        raise _run_refused(exc) from exc
+
+
+@router.post("/workflows/{workflow_id}/runs/{job_id}/continue", response_model=JobOut)
+def continue_run(workflow_id: str, job_id: str, db: Tx, user: CurrentUser) -> Job:
+    """失败或被取消的运行从中断处接着跑:已经落定的节点不再执行(ADR 0092)。"""
+    workflow = workflow_uc.editable(db, user, workflow_id)
+    job = job_center.readable(db, user, job_id)
+    try:
+        revision = int((job.payload or {}).get("workflow_revision") or 0)
+        #: 点继续和点运行一样是人在现场,认可的是这次运行钉住的那一版(ADR 0047 D6)。
+        if revision:
+            attest_revision(db, workflow, revision, attested_by=user.id)
+        return continue_failed_run(db, workflow, job)
     except WorkflowRevisionError as exc:
         raise _run_refused(WorkflowDomainError.from_error(exc)) from exc
     except WorkflowDomainError as exc:

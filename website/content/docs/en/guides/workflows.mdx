@@ -223,6 +223,8 @@ node that fails only because of the cancellation is recorded as cancelled in the
 
 When a run fails partway, **the outputs of the nodes that already finished stay in the result** instead of disappearing with the last step.
 
+When a run fails, is stopped or is cut off by a restart, click **Continue from here** in the run history. Finished steps don't run or cost again, including finished rounds of a loop. The failed step runs again, and generation jobs already submitted are picked back up. It stays the same run on the graph version it started with, even if you edited the graph since.
+
 ![Run history: every node of one real run and its time (asset query, tagging, text template, save as note — all local)](/media/screens/en/workflow-runs.png)
 
 Each run in the history also says **what it cost** — "Cost $1.20 · 5 billed calls" — including the sub-jobs it started (LLM calls inside the workflow, generation, voice-over…); calls that couldn't be priced are noted as not included. The free Edge voice records 0, not unpriced.

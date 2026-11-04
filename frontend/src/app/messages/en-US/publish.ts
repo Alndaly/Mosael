@@ -524,6 +524,8 @@ export const publish = {
   wfHistoryPartialRun: "Partial run (target: {node})",
   wfHistoryEmpty: "No runs yet",
   wfHistoryPick: "Pick a run to see its steps",
+  wfRunContinue: "Continue from here",
+  wfRunContinueHint: "Finished steps don't run or cost again; the failed step runs again. It uses the graph version this run started with",
   wfHistoryCost: "Cost {cost} · {calls} billed calls",
   wfHistoryCostUnpriced: "({count} could not be priced and are not included)",
   wfHistoryCostNone: "unpriced",
