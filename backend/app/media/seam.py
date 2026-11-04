@@ -18,6 +18,8 @@ from app.core.i18n import LocalizedError
 
 #: 比画面用的小图。够分出构图,抖动和压缩噪声又都被平均掉了。
 _WIDTH, _HEIGHT = 96, 54
+#: 差别不超过最小值这么多倍,算同一幅画面。
+_SAME_PICTURE = 1.25
 
 
 class SeamError(LocalizedError, ValueError):
@@ -39,13 +41,22 @@ def _frames(args: list[str], what: str) -> np.ndarray:
     return np.frombuffer(done.stdout[: count * size], np.uint8).reshape(count, size).astype(np.float32)
 
 
+def _end_of_best_match(differences: np.ndarray) -> int:
+    """最像的那一段的最后一帧。尾巴几乎不动时一长段都差不多像,最小值落在哪一帧是噪声:
+    取到前头的话,接上去就把这段重放一遍(实测 0.53 秒,真接缝在 1.9 秒)。"""
+    best = int(differences.argmin())
+    limit = differences[best] * _SAME_PICTURE
+    while best + 1 < len(differences) and differences[best + 1] <= limit:
+        best += 1
+    return best
+
+
 def find_seam(previous: Path, following: Path, *, search_seconds: float, fps: float) -> float:
     """`following` 从第几秒开始是新内容:紧跟在和 `previous` 末帧最像的那一帧后面。"""
     #: 只读最后半秒,取最后一帧:`-sseof` 比整段解码快得多。
     last = _frames(["-sseof", "-0.5", "-i", str(previous)], "读上一段末帧")[-1]
     opening = _frames(["-t", f"{search_seconds:.3f}", "-i", str(following)], "读下一段开头")
-    best = int(np.abs(opening - last).mean(axis=1).argmin())
-    return (best + 1) / fps
+    return (_end_of_best_match(np.abs(opening - last).mean(axis=1)) + 1) / fps
 
 
 __all__ = ["SeamError", "find_seam"]
