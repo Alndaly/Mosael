@@ -31,6 +31,10 @@ class ModelChoice:
     model: str = ""
 
 
+#: 续写的尾巴留多长。H3 按 17k+5 帧取片段,22 帧正好是 24fps 下的 0.92 秒:写成 1 秒的话多出来的两帧被裁掉。
+CONTINUATION_TAIL_SECONDS = 0.92
+
+
 @dataclass(frozen=True)
 class VideoPlan:
     clip_seconds: int = 5
@@ -52,8 +56,21 @@ class VideoPlan:
     shortest_tail: float = 0
     #: 一段最长几秒。续写时每段都有一截是重叠,段越长重叠占的比例越小。没声明就是 0。
     longest_clip: int = 0
+    shortest_clip: int = 0
+    #: 只有几档固定时长的模型:这几档。
+    allowed_clips: tuple[int, ...] = ()
     references: bool = False
     reference_video: bool = False
+
+    @property
+    def chains(self) -> bool:
+        """一镜比一次能出的长时,这个模型接得下去:知道一次最长多少,又收待续写片段或首帧。"""
+        return self.longest_clip > 0 and (self.extends or self.keyframes)
+
+    @property
+    def tail_seconds(self) -> float:
+        """续写时交给下一段的尾巴多长。只交一帧时没有重叠。"""
+        return max(CONTINUATION_TAIL_SECONDS, self.shortest_tail) if self.extends else 0.0
 
     @property
     def modes(self) -> list[str]:
@@ -324,7 +341,9 @@ def video_plan_for(db: Session | None, choice: ModelChoice, *, references: int |
         keyframes=shoots and FIRST_FRAME in keys and _route_allowed(capabilities, _KEYFRAME_SOURCES),
         last_frame=shoots and LAST_FRAME in keys,
         extends=FIRST_CLIP in keys,
-        longest_clip=int(capabilities.get("max_duration_seconds") or 0),
+        longest_clip=max(durations) if durations else int(capabilities.get("max_duration_seconds") or 0),
+        shortest_clip=int(capabilities.get("min_duration_seconds") or 0),
+        allowed_clips=tuple(durations),
         shortest_tail=float(((capabilities.get("source_duration_seconds") or {}).get(FIRST_CLIP) or (0,))[0]),
         #: 参考那条路一次交 `needed` 张:收不下的(整片一镜 8 张,可灵 kling-v3-omni 只收 4 张)不走这条路。
         #: 没写上限的按收得下算(和图像模型那边「认不出的算能」同一条)。

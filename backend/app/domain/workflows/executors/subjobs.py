@@ -36,6 +36,7 @@ from app.media.seam import SeamError, find_seam
 from app.media.still import StillError
 from app.domain.assets import denoise, video_gif
 from app.domain.billing.usage import price_usage
+from app.domain.assets.joining import JoinError, join_segments
 from app.domain.assets.frames import AssetFrameError, last_frame_time, save_frame_as_asset
 from app.domain.assets.from_url import UrlImportError, start_url_import
 from app.domain.assets.separation import start_separation_job
@@ -78,7 +79,7 @@ from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, DubError
 from app.domain.voices.voice_ref import VoiceRef
 from app.domain.workflows import run_steps
 from app.domain.workflows.authority import current_authority
-from app.domain.workflows.graph_rules import as_text
+from app.domain.workflows.graph_rules import VARIABLE_RE, as_text
 from app.domain.workflows.node_types import NODE_TYPES, field_name
 
 logger = logging.getLogger(__name__)
@@ -360,7 +361,8 @@ def _parameters_fit_the_model(db: Session, config: dict[str, Any], actor: str | 
     parameters = config.get("parameters")
     if any(key not in config for key in choice) or not isinstance(parameters, dict):
         return
-    known = provided(dict(parameters))
+    #: 引用同一层上游的值(这一镜分几段算出来的时长)要跑到那一步才知道,这里不判。
+    known = {key: value for key, value in provided(dict(parameters)).items() if not VARIABLE_RE.search(str(value))}
     if not known:
         return
     try:
@@ -413,6 +415,42 @@ def video_frame(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     except (AssetFrameError, StillError) as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     return {"asset_id": frame.id, "source_asset_id": asset.id, "at": moment}
+
+
+@register("chain_plan")
+def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    target = float(config.get("target_seconds") or 0)
+    longest = float(config.get("longest_seconds") or 0)
+    overlap = float(config.get("overlap_seconds") or 0)
+    allowed = sorted(float(one) for one in str(config.get("allowed_seconds") or "").split(",") if one.strip())
+    if allowed:
+        #: 只有几档时长的:够长的最短那一档(多出来的上时间线时截掉),一档都不够就按最长的拍。
+        segment = next((one for one in allowed if one >= target), allowed[-1])
+    else:
+        segment = max(min(target, longest), float(config.get("shortest_seconds") or 0))
+    if target > segment and overlap >= segment:
+        raise WorkflowDomainError("wfErr_chainOverlapTooLong", params={"overlap": f"{overlap:g}", "segment": f"{segment:g}"})
+    rounds = math.ceil((target - segment) / (segment - overlap)) if target > segment else 0
+    return {
+        #: 生成接口的时长是整数秒。
+        "segment_seconds": int(segment) if segment == int(segment) else segment,
+        "rounds": list(range(1, rounds + 1)),
+        "count": rounds + 1,
+    }
+
+
+@register("video_join")
+def video_join(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    following = config.get("following")
+    ids = [str(config.get("asset_id") or ""), *(following if isinstance(following, list) else text_lines(following))]
+    segments = [db.get(Asset, one) for one in ids if one]
+    if not segments or any(one is None or one.workspace_id != scope.workspace_id for one in segments):
+        raise WorkflowDomainError("wfErr_clipAssetNotInWorkspace")
+    try:
+        joined = join_segments(db, segments, search_seconds=float(config.get("search_seconds") or 0), name=str(config.get("name") or ""))
+    except (JoinError, SeamError) as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    return {"asset_id": joined.id, "count": len(segments)}
 
 
 @register("video_seam")

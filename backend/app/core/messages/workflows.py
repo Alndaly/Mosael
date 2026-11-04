@@ -137,6 +137,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这段视频读不出时长,算不出最后一帧在哪:填上具体的时间",
         "en": "This video's duration can't be read, so the last frame can't be found: fill in a time",
     },
+    "joinErr_failed": {"zh": "这几段视频接不起来,可能是尺寸或编码差太多", "en": "These segments couldn't be joined; their sizes or codecs may differ too much"},
+    "wfErr_chainOverlapTooLong": {
+        "zh": "重叠 {overlap} 秒不比一段的 {segment} 秒短,续写不会往前走",
+        "en": "An overlap of {overlap} s isn't shorter than a {segment} s segment, so continuing would never move forward",
+    },
     "seamErr_unreadable": {"zh": "这段视频读不出画面,找不到接缝", "en": "This video's frames can't be read, so the seam can't be found"},
     "trimErr_lastSecondsNegative": {"zh": "「末尾几秒」不能是负数", "en": "“Last seconds” can't be negative"},
     "trimErr_noDuration": {

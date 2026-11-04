@@ -779,13 +779,21 @@ def validate_body_graph(
     return errors
 
 
+def reads_previous(body: dict[str, Any]) -> bool:
+    """这一层循环体有没有读 `loop.previous`。**嵌套循环的体不算**:那里的 `loop` 是内层自己的。"""
+    for node in body.get("nodes") or []:
+        config = node.get("config") or {}
+        if node.get("type") in NESTED_BODY_TYPES:
+            config = {key: value for key, value in config.items() if key not in NESTED_BODY_RAW_KEYS}
+        if any(ref.strip().split(".")[:2] == ["loop", "previous"] for ref in VARIABLE_RE.findall(json.dumps(config, ensure_ascii=False))):
+            return True
+    return False
+
+
 def _reads_previous_concurrently(container: dict[str, Any], body: dict[str, Any]) -> bool:
     """循环选了几项同时跑,体里又读上一轮(`loop.previous`):同时跑就没有「上一轮」。并发数写成引用的,运行时由执行器再判。"""
     concurrency = container.get("concurrency")
-    if not isinstance(concurrency, (int, float)) or concurrency <= 1:
-        return False
-    return any(ref.strip().split(".")[:2] == ["loop", "previous"]
-               for ref in VARIABLE_RE.findall(json.dumps(body, ensure_ascii=False)))
+    return isinstance(concurrency, (int, float)) and concurrency > 1 and reads_previous(body)
 
 
 def _container_output_errors(

@@ -22,6 +22,7 @@ from app.domain.generation.operations import keep_source_group, parse_source_ass
 from app.domain.workflows.executors.basic import json_extract
 from app.domain.workflows.graph_rules import interpolate
 from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.executors.subjobs import chain_plan
 from app.domain.workflows.templates_full_video import full_video_generation_graph
 from app.domain.workflows.templates_business import (
     fabric_lookbook_graph,
@@ -105,6 +106,10 @@ def _generations(graph: dict[str, Any], *, skipped: set[str], item: dict[str, An
                 inner["loop"] = {"item": _Anything("item", **item), "index": 0}
                 for one in body["nodes"]:
                     inner[one["id"]] = {} if one["id"] in skipped else _Anything(one["id"])
+                #: 「算分段」不花钱:真算一遍,生成节点拿到的就是运行时那个时长。
+                for one in body["nodes"]:
+                    if one["type"] == "chain_plan":
+                        inner[one["id"]] = chain_plan(None, None, interpolate(one["config"], inner))
                 visit(body["nodes"], inner)
             if node["type"] == "ai_generate" and node["id"] not in skipped:
                 found.append((node["id"], interpolate(config, context)))
@@ -184,7 +189,8 @@ def test_会被挑中的视频模型_收得下整片生成的每一种走法(vid
     walks = _full_video_walks(video)
     assert walks, "这个模型一条路都走不了,却被挑来拍整片"
     for skipped, item in walks:
-        assert _check(_generations(graph, skipped=skipped, item=item), "video") == ["generate_clip"], item
+        checked = _check(_generations(graph, skipped=skipped, item=item), "video")
+        assert checked in (["generate_clip"], ["generate_clip", "extend"]), item
 
 
 @pytest.mark.parametrize("image", _image_params(SINGLE_REFERENCE))

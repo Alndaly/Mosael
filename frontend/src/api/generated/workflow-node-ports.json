@@ -1094,6 +1094,65 @@
     }
   },
   {
+    "type": "chain_plan",
+    "config": {
+      "target_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "目标时长",
+          "en": "Target length"
+        }
+      },
+      "longest_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "最长几秒",
+          "en": "Longest seconds"
+        }
+      },
+      "shortest_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "最短几秒",
+          "en": "Shortest seconds"
+        }
+      },
+      "allowed_seconds": {
+        "type": "template",
+        "label": {
+          "zh": "可选时长",
+          "en": "Allowed lengths"
+        }
+      },
+      "overlap_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "重叠几秒",
+          "en": "Overlap seconds"
+        }
+      }
+    },
+    "outputs": [
+      "segment_seconds",
+      "rounds",
+      "count"
+    ],
+    "output_labels": {
+      "segment_seconds": {
+        "zh": "每段几秒",
+        "en": "Seconds per segment"
+      },
+      "rounds": {
+        "zh": "续写几次",
+        "en": "Continuations"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      }
+    }
+  },
+  {
     "type": "code",
     "config": {
       "code": {
@@ -5043,6 +5102,54 @@
       "at": {
         "zh": "落点",
         "en": "Position"
+      }
+    }
+  },
+  {
+    "type": "video_join",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "media": "video",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "following": {
+        "type": "template",
+        "label": {
+          "zh": "后面的几段",
+          "en": "Following segments"
+        }
+      },
+      "search_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "找多久",
+          "en": "Search seconds"
+        }
+      },
+      "name": {
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "count"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
       }
     }
   },

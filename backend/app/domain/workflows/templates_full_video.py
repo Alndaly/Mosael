@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, model_capabilities, image_plan_for, video_plan_for
+from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, VideoPlan, model_capabilities, image_plan_for, video_plan_for
 from app.domain.workflows.templates_schemas import (
     _creative_brief_schema,
     _narrative_script_schema,
@@ -127,6 +127,85 @@ def single_set_rules(clip: int | str, *, source: str) -> str:
 {_camera_rules(clip, source=source)}"""
 
 
+def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, parameters: dict[str, Any]) -> None:
+    """**一镜比模型一次能出的长时,接着往下拍**:算分段 → 第一段(`generate_clip`)→ 逐段续写 → 接成一份素材。
+
+    接成一份之后,时间线、口播对齐、字幕都还是「一镜一份素材」。放得下的镜头续写循环一轮都不跑,接成一条就是它自己。
+    """
+    extending = {key: value.replace("{{shot_chain.segment_seconds}}", "{{input.segment_seconds}}") if isinstance(value, str) else value
+                 for key, value in parameters.items()}
+    inner_inputs = {
+        "prompt": "{{loop.item.generation_prompt}}",
+        "style": "{{input.style}}",
+        "segment_seconds": "{{shot_chain.segment_seconds}}",
+        "tail_seconds": plan.tail_seconds,
+        **{key: f"{{{{input.{key}}}}}" for key, value in parameters.items()
+           if isinstance(value, str) and value == f"{{{{input.{key}}}}}"},
+    }
+    tail: dict[str, Any] = {
+        "id": "tail", "position": {"x": 80, "y": 140},
+        **({"type": "media_clip", "name": {"zh": "取上一段的尾巴", "en": "Take the tail of the last segment"},
+            "config": {"asset_id": "{{loop.previous}}", "last_seconds": "{{input.tail_seconds}}"}} if plan.extends else
+           {"type": "video_frame", "name": {"zh": "取上一段的最后一帧", "en": "Take the last frame of the last segment"},
+            "config": {"asset_id": "{{loop.previous}}"}}),
+    }
+    body["nodes"] += [
+        {
+            "id": "shot_chain", "type": "chain_plan",
+            "name": {"zh": "这一镜分几段", "en": "How many segments this shot takes"},
+            "position": {"x": 1010, "y": 420},
+            "config": {
+                "target_seconds": "{{input.shot_seconds}}",
+                "longest_seconds": plan.longest_clip,
+                "shortest_seconds": plan.shortest_clip,
+                "allowed_seconds": ",".join(str(one) for one in plan.allowed_clips),
+                "overlap_seconds": plan.tail_seconds,
+            },
+        },
+        {
+            "id": "extend_shot", "type": "loop_foreach",
+            "name": {"zh": "接着往下拍", "en": "Carry the shot on"},
+            "position": {"x": 1630, "y": 420},
+            "config": {
+                "items": "{{shot_chain.rounds}}",
+                "inputs": inner_inputs,
+                "previous_initial": "{{generate_clip.asset_id}}",
+                "output": "{{extend.asset_id}}",
+                "body": {
+                    "nodes": [tail, {
+                        "id": "extend", "type": "ai_generate",
+                        "name": {"zh": "拍下一段", "en": "Shoot the next segment"},
+                        "position": {"x": 390, "y": 140},
+                        "config": {
+                            "provider": video.provider, "provider_profile_id": video.profile_id, "model": video.model, "kind": "video",
+                            "prompt": "{{input.prompt}} Continue the same shot without a cut. {{input.style}}",
+                            "parameters": extending,
+                            "source_assets": ["{{tail.asset_id}}:first_clip" if plan.extends else "{{tail.asset_id}}:first_frame"],
+                        },
+                    }],
+                    "edges": [{"id": "tail_extend", "source": "tail", "target": "extend"}],
+                },
+            },
+        },
+        {
+            "id": "join_shot", "type": "video_join",
+            "name": {"zh": "接成这一镜", "en": "Join into this shot"},
+            "position": {"x": 1940, "y": 420},
+            "config": {
+                "asset_id": "{{generate_clip.asset_id}}",
+                "following": "{{extend_shot.results}}",
+                #: 尾巴可能被拉长或压缩,在整段里找。只交一帧的没有重叠。
+                "search_seconds": "{{shot_chain.segment_seconds}}" if plan.extends else 0,
+            },
+        },
+    ]
+    body["edges"] += [
+        {"id": "chain_generate", "source": "shot_chain", "target": "generate_clip"},
+        {"id": "generate_extend", "source": "generate_clip", "target": "extend_shot"},
+        {"id": "extend_join", "source": "extend_shot", "target": "join_shot"},
+    ]
+
+
 def full_video_generation_graph(
     *, chat: ModelChoice, image: ModelChoice, video: ModelChoice, voice_id: str = "", db: Session | None = None
 ) -> dict[str, Any]:
@@ -156,7 +235,8 @@ def full_video_generation_graph(
     aspect = video_plan.aspect_ratio if video_plan.aspect_ratio in ("16:9", "9:16", "1:1") else "16:9"
     video_parameters = dict(video_plan.parameters or {})
     if "duration_seconds" in video_parameters:
-        video_parameters["duration_seconds"] = "{{input.shot_seconds}}"
+        #: 模型接得下去的,时长由「算分段」给:每镜秒数超过它一次能出的,这一镜接着往下拍(见 _shot_chain)。
+        video_parameters["duration_seconds"] = "{{shot_chain.segment_seconds}}" if video_plan.chains else "{{input.shot_seconds}}"
     ratios = [str(one) for one in (model_capabilities(db, video, "video") or {}).get("aspect_ratios") or ()]
     if "aspect_ratio" in video_parameters and ratios and aspect not in ratios:
         #: 这个模型不收白模那三种画幅里的任何一种(比如只收 adaptive,画幅跟着首帧走):视频那一步交它认的那一档,
@@ -226,6 +306,8 @@ JSON Schema 的对象。"""
         "described above appear. {{input.style}}"
     )
 
+    #: 这一镜交给下游的是哪个节点的素材:接得下去的模型是接好的那一条。
+    shot_asset = "join_shot" if video_plan.chains else "generate_clip"
     generate_body = {
         "nodes": [
             {
@@ -343,7 +425,7 @@ JSON Schema 的对象。"""
                 "name": {"zh": "归档并命名镜头素材", "en": "File and name the shot's asset"},
                 "position": {"x": 1630, "y": 260},
                 "config": {
-                    "asset_ids": "{{generate_clip.asset_id}}",
+                    "asset_ids": "{{%s.asset_id}}" % shot_asset,
                     "name": "镜头 {{loop.item.shot_number}}",
                     "project_id": "{{input.project_id}}",
                 },
@@ -380,11 +462,13 @@ JSON Schema 的对象。"""
             #: 生成视频只挂在白模之后:首尾帧那两个节点在参考那条路上会被跳过,而它们被引用 ——
             #: 引用即依赖,生成会等它们落定(跑完或被跳过)再开始。
             {"id": "shot_blockout_generate", "source": "render_blockout", "target": "generate_clip"},
-            {"id": "shot_generate_organize", "source": "generate_clip", "target": "organize_clip"},
+            {"id": "shot_generate_organize", "source": shot_asset, "target": "organize_clip"},
             {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "source_handle": "true"},
             {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "source_handle": "true"},
         ],
     }
+    if video_plan.chains:
+        _shot_chain(generate_body, video, video_plan, video_parameters)
     #: 分镜里模型写的那几段提示词各自最多多少字:所选模型的提示词上限,减去模板固定拼上的那几句(白模说明、
     #: 「保持角色一致」……),再给运行时才插进来的画风、白模图例、运镜各留一段余量。此前不限:首帧那条固定的
     #: 白模说明就有近 500 字,Evolink 的图像模型只收 2000 字,模型写长一点整条提示词就超了。模型没声明上限的不限。
@@ -410,7 +494,7 @@ JSON Schema 的对象。"""
                 "position": {"x": 80, "y": 140},
                 "config": {
                     "sequence_id": "{{input.sequence_id}}",
-                    "asset_id": "{{loop.item.generate_clip.asset_id}}",
+                    "asset_id": "{{loop.item.%s.asset_id}}" % shot_asset,
                     "track_id": "{{input.video_track_id}}",
                     "start": 0,
                     #: 截到每镜秒数(模型交回的比它短时夹到片子末尾)。
@@ -963,8 +1047,9 @@ JSON Schema 的对象。"""
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
+        #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 13, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 14, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

@@ -55,7 +55,12 @@ def test_每镜秒数只有开始节点那一格说了算(video: ModelChoice) ->
     assert nodes["start"]["config"]["params"]["shot_seconds"] == 5
 
     generate = _body(graph, "generate_shots", "generate_clip")
-    assert generate["config"]["parameters"]["duration_seconds"] == "{{input.shot_seconds}}"
+    #: 知道模型一次最长多少、又接得下去的,时长走「算分段」;别的直接用每镜秒数。两条路的源头都是这一格。
+    if any(node["id"] == "shot_chain" for node in nodes["generate_shots"]["config"]["body"]["nodes"]):
+        assert generate["config"]["parameters"]["duration_seconds"] == "{{shot_chain.segment_seconds}}"
+        assert _body(graph, "generate_shots", "shot_chain")["config"]["target_seconds"] == "{{input.shot_seconds}}"
+    else:
+        assert generate["config"]["parameters"]["duration_seconds"] == "{{input.shot_seconds}}"
     assert not any(char.isdigit() for char in json.dumps(generate["name"], ensure_ascii=False)), generate["name"]
     assert nodes["generate_shots"]["config"]["inputs"]["shot_seconds"] == SHOT
     assert nodes["assemble_timeline"]["config"]["inputs"]["shot_seconds"] == SHOT
@@ -69,10 +74,9 @@ def test_每镜秒数只有开始节点那一格说了算(video: ModelChoice) ->
     assert "maximum" not in shot["duration_seconds"], "Schema 不再写死建图那一刻的秒数"
 
 
-def test_所选模型出不了那个时长_运行前就拦() -> None:
-    """Seedance 2.0 收 4–15 秒:每镜 20 秒的话,在任何一次付费调用之前就说清(和画幅同一道检查)。"""
+def test_比模型一次能出的长_不拦_这一镜接着往下拍() -> None:
+    """Seedance 2.0 收 4–15 秒:每镜 20 秒时分两段,运行前检查不拦(见 test_long_shots_chain)。"""
     from app.core.db import SessionLocal
-    from app.domain.workflows.errors import WorkflowDomainError
     from app.domain.workflows.executors.registry import run_preflights
     from tests.util import add_provider, fresh_client, user_id
 
@@ -85,5 +89,5 @@ def test_所选模型出不了那个时长_运行前就拦() -> None:
     graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=video)
     with SessionLocal() as db:
         run_preflights(db, graph, user_id(), workspace_id=workspace, params={"shot_seconds": 6})
-        with pytest.raises(WorkflowDomainError):
-            run_preflights(db, graph, user_id(), workspace_id=workspace, params={"shot_seconds": 20})
+        #: 比模型一次能出的长:这一镜接着往下拍,不拦。
+        run_preflights(db, graph, user_id(), workspace_id=workspace, params={"shot_seconds": 20})

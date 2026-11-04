@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 13,
+        "template_version": 14,
         "source": "official",
     }
 
@@ -511,7 +511,7 @@ class Test分镜写了口播就要真的配上:
         generate, assemble = self._loops()
         placed = {n["id"]: n for n in assemble["body"]["nodes"]}
         assert placed["append_clip"]["config"]["track_id"] == "{{input.video_track_id}}"
-        assert placed["append_clip"]["config"]["asset_id"] == "{{loop.item.generate_clip.asset_id}}"
+        assert placed["append_clip"]["config"]["asset_id"] == "{{loop.item.join_shot.asset_id}}"
         # 画面和口播在生成那一轮里是两条互不依赖的支路 —— 口播失败不会拖住画面的顺序。
         # 画面那条从白模开始(白模 → 首帧/尾帧 → 视频)。
         roots = {n["id"] for n in generate["body"]["nodes"]} - {e["target"] for e in generate["body"]["edges"]}

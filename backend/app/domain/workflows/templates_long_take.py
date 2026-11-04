@@ -19,13 +19,10 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, video_plan_for
+from app.domain.workflows.templates_models import CONTINUATION_TAIL_SECONDS, FRAME_ASPECTS, ModelChoice, video_plan_for
 from app.domain.workflows.templates_schemas import object_schema
 
 LONG_TAKE_VIDEO = "long_take_video"
-
-#: 尾巴留多长。H3 按 17k+5 帧取片段,22 帧正好是 24fps 下的 0.92 秒:写成 1 秒的话多出来的两帧被裁掉,时间线上差两帧。
-OVERLAP_SECONDS = 0.92
 
 
 def _segments_schema() -> dict[str, Any]:
@@ -123,7 +120,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                         "target_seconds": 60,
                         #: 收待续写片段的按最长的拍:每段都有一截重叠,段越长浪费的比例越小。
                         "segment_seconds": plan.longest_clip if plan.extends and plan.longest_clip else plan.clip_seconds,
-                        "overlap_seconds": max(OVERLAP_SECONDS, plan.shortest_tail),
+                        "overlap_seconds": plan.tail_seconds or CONTINUATION_TAIL_SECONDS,
                         #: 成本的闸门:每一段都是一次付费生成。超过的段不跑。
                         "max_segments": 12,
                         #: 累计花到这个数就停,0 是不限。停下之后调高它再点「从中断处继续」。

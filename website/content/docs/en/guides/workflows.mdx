@@ -223,6 +223,8 @@ node that fails only because of the cancellation is recorded as cancelled in the
 
 When a run fails partway, **the outputs of the nodes that already finished stay in the result** instead of disappearing with the last step.
 
+In “Topic to finished video”, **shot seconds** can exceed what the model makes at once: the shot carries on automatically and is joined into one clip, so it's still one shot on the timeline. Every extra segment is another paid generation.
+
 When a run fails, is stopped or is cut off by a restart, click **Continue from here** in the run history. Finished steps don't run or cost again, including finished rounds of a loop. The failed step runs again, and generation jobs already submitted are picked back up. It stays the same run on the graph version it started with, even if you edited the graph since.
 
 To change something first, click **Adjust and continue**: edit the start values (raise a spending limit), or pick a loop to redo from a given round and replace that round's content, keeping the rounds before it. A finished run can redo a segment the same way.

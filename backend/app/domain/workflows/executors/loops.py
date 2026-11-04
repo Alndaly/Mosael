@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Job
 from app.domain.billing.usage import run_costs
 from app.domain.jobs import current_parent_job_id
-from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate
+from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate, reads_previous
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, run_body_to_the_end, truthy
@@ -122,7 +122,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     total = len(items)
     #: 上一轮交出的东西:这一轮接着上一轮做(续写视频、滚动摘要)时读它。第一轮读 `previous_initial`。
     previous = config.get("previous_initial", "")
-    if concurrency > 1 and _reads_previous(body):
+    if concurrency > 1 and reads_previous(body):
         raise WorkflowDomainError("wfErr_loopPreviousNeedsOrder")
 
     def iterate(index: int, item: Any) -> Any:
@@ -234,12 +234,6 @@ def _without_previous(made: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(loop, dict):
         return made
     return {**made, "loop": {key: value for key, value in loop.items() if key != "previous"}}
-
-
-def _reads_previous(body: dict[str, Any]) -> bool:
-    """循环体里有没有引用 `loop.previous`。几项同时跑时没有「上一轮」,这种体不能并发。"""
-    return any(ref.strip().split(".")[:2] == ["loop", "previous"]
-               for ref in VARIABLE_RE.findall(json.dumps(body, ensure_ascii=False)))
 
 
 def _what_was_made(context: dict[str, Any], body: dict[str, Any], output_tpl: Any) -> Any:

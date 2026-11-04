@@ -180,6 +180,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   video_to_gif: FileVideo,
   media_clip: Scissors,
   video_seam: Combine,
+  video_join: Combine,
+  chain_plan: Calculator,
   video_cost_estimate: Calculator,
   video_frame: Camera,
   image_grid_split: Grid3x3,
