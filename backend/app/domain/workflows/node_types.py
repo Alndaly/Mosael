@@ -174,6 +174,7 @@ _FIELD_LABELS = {
     "max_duration": "wfField_max_duration",
     "max_items": "wfField_max_items",
     "on_item_error": "wfField_on_item_error",
+    "previous_initial": "wfField_previous_initial",
     "failure_note": "wfField_failure_note",
     "dropped": "wfField_dropped",
     "trim_overflow": "wfField_trim_overflow",
@@ -2152,6 +2153,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_loop_foreach_concurrency",
             },
             "max_items": {"advanced": True, "type": "number", "description": "wfNode_loop_foreach_max_items"},
+            "previous_initial": {"advanced": True, "type": "template", "description": "wfNode_loop_previous_initial"},
             "on_item_error": {
                 "advanced": True,
                 "type": "string",
@@ -2165,7 +2167,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_labels": {"failed": "wfOut_loop_failed"},
         #: 体内看得见什么 —— 执行器给体播种的正是这些(见 executors/loops)。
         #: 校验、画布就绪检查、引用选择器都读这一格,见 NESTED_BODY_TYPES 上那段。
-        "body_scope": {"loop": ["item", "index"], "input": ["*inputs"]},
+        "body_scope": {"loop": ["item", "index", "previous"], "input": ["*inputs"]},
     },
     "loop_while": {
         "external": False,
@@ -2181,10 +2183,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "max_iterations": {"advanced": True, "type": "number", "description": "wfNode_loop_while_max_iterations"},
             "output": {"type": "template", "description": "wfNode_loop_while_output"},
+            "previous_initial": {"advanced": True, "type": "template", "description": "wfNode_loop_previous_initial"},
         },
         "outputs": ["results", "count", "iterations"],
-        #: 没有 `input`,`loop` 底下也没有 `item`:条件循环没有「逐项」这回事,执行器只播 `loop.index`。
-        "body_scope": {"loop": ["index"]},
+        #: 没有 `input`,`loop` 底下也没有 `item`:条件循环没有「逐项」这回事,执行器只播 `loop.index` 和 `loop.previous`。
+        "body_scope": {"loop": ["index", "previous"]},
     },
     "asset_query": {
         "external": False,

@@ -115,13 +115,17 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     #: 每组上身图、每种面料效果图)一项失败不该让已经付了钱的其余几项白做。跳过的那几项不进 results。
     skip = str(config.get("on_item_error") or "stop").strip().lower() == "skip"
     total = len(items)
+    #: 上一轮交出的东西:这一轮接着上一轮做(续写视频、滚动摘要)时读它。第一轮读 `previous_initial`。
+    previous = config.get("previous_initial", "")
+    if concurrency > 1 and _reads_previous(body):
+        raise WorkflowDomainError("wfErr_loopPreviousNeedsOrder")
 
     def iterate(index: int, item: Any) -> Any:
         with _blame_iteration(index, total, item=item):
             run = run_body_to_the_end(
                 "loop_foreach",
                 body,
-                {"loop": {"item": item, "index": index}, "input": shared_inputs},
+                {"loop": {"item": item, "index": index, "previous": previous}, "input": shared_inputs},
                 workflow_id=scope.id,
             )
             made = _what_was_made(run.context, body, output_tpl) if run.error is not None and skip else _NOTHING
@@ -138,11 +142,15 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         for index, item in enumerate(items):
             _stop_if_halted()
             try:
-                outcomes.append((index, iterate(index, item)))
+                outcome = iterate(index, item)
             except Exception as exc:  # noqa: BLE001 — 只有 skip 时才记下继续,其余原样抛出
                 if not skip or halted():
                     raise
+                #: 跳过的那一项什么都没交出来:下一轮接着的还是最后一份交出来的东西。
                 failures.append((index, exc))
+                continue
+            outcomes.append((index, outcome))
+            previous = outcome.made if isinstance(outcome, _Incomplete) else outcome
     else:
         outcomes, failures = _iterate_concurrently(iterate, items, concurrency, skip=skip)
     results: list[Any] = []
@@ -182,7 +190,21 @@ def _delivered(context: dict[str, Any], output_tpl: Any) -> Any:
         return interpolate(output_tpl, context)
     # 不写 output 时交出这一次的全部产物,**连同这一项本身**(`loop.item` / `loop.index`)——
     # 下游再遍历这份结果时,常常还要用到当初那一项的数据。共享输入每项都一样,不重复带。
-    return {nid: out for nid, out in context.items() if nid != "input"}
+    return _without_previous({nid: out for nid, out in context.items() if nid != "input"})
+
+
+def _without_previous(made: dict[str, Any]) -> dict[str, Any]:
+    """这一轮交出的整份产物里去掉 `loop.previous`:它是上一轮交出的,再带上就一轮套一轮,第 N 项里装着前面全部。"""
+    loop = made.get("loop")
+    if not isinstance(loop, dict):
+        return made
+    return {**made, "loop": {key: value for key, value in loop.items() if key != "previous"}}
+
+
+def _reads_previous(body: dict[str, Any]) -> bool:
+    """循环体里有没有引用 `loop.previous`。几项同时跑时没有「上一轮」,这种体不能并发。"""
+    return any(ref.strip().split(".")[:2] == ["loop", "previous"]
+               for ref in VARIABLE_RE.findall(json.dumps(body, ensure_ascii=False)))
 
 
 def _what_was_made(context: dict[str, Any], body: dict[str, Any], output_tpl: Any) -> Any:
@@ -359,15 +381,14 @@ def loop_while(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     max_iter = min(at_least(max_iter, 1, key="max_iterations", node_type="loop_while"), LOOP_WHILE_HARD_CAP)
     results: list[Any] = []
     index = 0
+    previous = config.get("previous_initial", "")
     # Do-while: the condition references body outputs, so it can only be evaluated after a run.
     while index < max_iter:
         _stop_if_halted()
         with _blame_iteration(index, max_iter):
-            ctx = run_body("loop_while", body, {"loop": {"index": index}}, workflow_id=scope.id)
-        if output_tpl:
-            results.append(interpolate(output_tpl, ctx))
-        else:
-            results.append({nid: out for nid, out in ctx.items() if nid != "loop"})
+            ctx = run_body("loop_while", body, {"loop": {"index": index, "previous": previous}}, workflow_id=scope.id)
+        previous = interpolate(output_tpl, ctx) if output_tpl else {nid: out for nid, out in ctx.items() if nid != "loop"}
+        results.append(previous)
         index += 1
         if not condition_tpl:
             break  # no condition → run exactly once

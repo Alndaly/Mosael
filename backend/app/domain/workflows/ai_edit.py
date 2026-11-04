@@ -33,6 +33,7 @@ _SYSTEM = """你是 Mosael 视频创作工作台的工作流编辑器。工作�
 1. 必须恰好一个 start 节点;图必须无环;连线两端必须存在。
 2. 节点 config 的字符串值可用 {{节点id.输出名}} 引用上游输出;start 的参数用 {{start.参数名}}。
    循环 / 子图的体内用 {{loop.item}} / {{loop.index}} 取当前项和序号(loop_while 只有 {{loop.index}}),
+   {{loop.previous}} 取上一轮的输出(第一轮是 previous_initial;用它时循环只能一项一项跑),
    {{input.名}} 取 inputs 传进来的值;容器自己的 output / condition 引用体内节点的输出。
    (注册表里的说明是给人看的,不写这种写法,以这里为准。)
 3. 布局:position 从左到右按执行顺序排,x 间隔约 240,y 错开避免重叠。

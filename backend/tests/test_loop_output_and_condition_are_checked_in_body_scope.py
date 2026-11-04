@@ -33,7 +33,7 @@ def test_遍历循环的输出引用外层节点_运行前就报() -> None:
 def test_条件循环里没有_loop_item() -> None:
     """条件循环只播 `loop.index` —— 输出写 `{{loop.item}}` 运行时就是空串。"""
     errors = validate_graph(_graph({"type": "loop_while", "config": {"body": BODY, "output": "{{loop.item}}"}}))
-    assert errors == ["「循环·条件」用到的 loop · item 这里没有:只提供 loop · index"]
+    assert errors == ["「循环·条件」用到的 loop · item 这里没有:只提供 loop · index、loop · previous"]
 
 
 def test_引用体内节点和作用域名的都合法() -> None:

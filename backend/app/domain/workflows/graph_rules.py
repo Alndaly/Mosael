@@ -770,11 +770,22 @@ def validate_body_graph(
         if isinstance(node, dict) and node.get("type") == "output"
     )
     errors.extend(_unresolvable_body_refs(nodes, node_type, title))
+    if container and _reads_previous_concurrently(container, body):
+        errors.append(tr("wfCheck_loopPreviousNeedsOrder", node=container_title))
     if container:
         inner = {key: container[key] for key in NESTED_BODY_RAW_KEYS if key != "body" and key in container}
         errors.extend(_unresolvable_container_refs(inner, nodes, node_type, container_title))
         errors.extend(_container_output_errors(inner, nodes, container_title, titles, known))
     return errors
+
+
+def _reads_previous_concurrently(container: dict[str, Any], body: dict[str, Any]) -> bool:
+    """循环选了几项同时跑,体里又读上一轮(`loop.previous`):同时跑就没有「上一轮」。并发数写成引用的,运行时由执行器再判。"""
+    concurrency = container.get("concurrency")
+    if not isinstance(concurrency, (int, float)) or concurrency <= 1:
+        return False
+    return any(ref.strip().split(".")[:2] == ["loop", "previous"]
+               for ref in VARIABLE_RE.findall(json.dumps(body, ensure_ascii=False)))
 
 
 def _container_output_errors(

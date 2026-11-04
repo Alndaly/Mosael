@@ -107,6 +107,7 @@ The start node lists one parameter per row — **Name** and **Default** — with
   output it hands over is the failed step itself). Without an iteration output, each item returns everything that round produced plus
   the item itself (`loop.item`).
 - **Loop · while** stops after 50 rounds by default (adjustable, at most 1000).
+- **Building on the previous round**: inside both loops the body can read `{{loop.previous}}`, the previous round's output; the first round reads “first round's value” from the advanced options. Extending a video segment by segment or a rolling summary both rely on it. A loop that uses it runs one item at a time.
 - **Split into batches** divides a list into fixed-size, non-overlapping batches in the original order, ready for a for-each loop. Use it for comments and other long result sets instead of putting the entire list into one model call; it also outputs batch count and original item count.
 - **Text to speech and Dub subtitles** ask for the engine first, then the voice: with "Cloned voice" the voice list is your
   voice library; pick an engine and the list becomes that engine's voices. Changing the engine clears the chosen voice.

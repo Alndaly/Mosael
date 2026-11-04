@@ -145,8 +145,8 @@ def test_作用域的字段随节点类型发到画布() -> None:
     """画布给体里的引用选择器列 {{loop.item}} 还是只列 {{loop.index}},读的就是这一格 ——
     此前前端按「是不是 subgraph」自己写了一份,条件循环体里也列出了它根本拿不到的 loop.item。"""
     rows = {row["type"]: row for row in fresh_client().get("/api/workflows/node-types").json()}
-    assert rows["loop_while"]["body_scope"] == {"loop": ["index"]}
-    assert rows["loop_foreach"]["body_scope"] == {"loop": ["item", "index"], "input": ["*inputs"]}
+    assert rows["loop_while"]["body_scope"] == {"loop": ["index", "previous"]}
+    assert rows["loop_foreach"]["body_scope"] == {"loop": ["item", "index", "previous"], "input": ["*inputs"]}
     assert rows["subgraph"]["body_scope"] == {"input": ["*inputs"]}
     assert rows["template"]["body_scope"] == {}
 
@@ -157,4 +157,4 @@ def test_条件循环体里的_loop_item_在启动前就被拒() -> None:
     workflow = _saved(_graph("loop_while", "x={{loop.item}}", output="{{say.text}}"))
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
         start_workflow_job(db, db.get(Workflow, workflow.id), created_by=None)
-    assert str(caught.value) == "「循环·条件 › 文本模板」用到的 loop · item 这里没有:只提供 loop · index"
+    assert str(caught.value) == "「循环·条件 › 文本模板」用到的 loop · item 这里没有:只提供 loop · index、loop · previous"

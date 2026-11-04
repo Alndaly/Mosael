@@ -29,6 +29,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "“{node}” references a start parameter that doesn't exist: {refs}. Declare it in the start node's parameters, or pass it in when running",
     },
     "wfCheck_bodyEmpty": {"zh": "「{node}」里面还没有节点:至少放一个", "en": "“{node}” has nothing inside yet: add at least one node"},
+    "wfCheck_loopPreviousNeedsOrder": {
+        "zh": "「{node}」:循环体用了上一轮的产物,只能一项一项跑,把「同时跑几项」改成 1",
+        "en": "“{node}”: the loop body reads the previous round, so items must run one at a time — set concurrency to 1",
+    },
     "wfCheck_outputInBody": {
         "zh": "「{node}」:「输出」节点只在最外层算数,放在循环体或子图里,调用方拿不到它的产出",
         "en": "“{node}”: an Output node only counts at the top level — inside a loop or subgraph, nobody receives what it produces",
@@ -123,6 +127,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_browserSessionMissing": {"zh": "缺少浏览器会话:先用「打开浏览器」节点,并把它的 session 输出连过来", "en": "No browser session: add an Open browser node and connect its session output"},
     "wfErr_pickPoolProfile": {"zh": "请选择浏览器池档案(session_mode=pool)", "en": "Pick a browser-pool profile (session_mode=pool)"},
     "wfErr_waitNeedsCondition": {"zh": "等待节点需要 selector / url_contains / text 之一", "en": "The wait node needs one of selector, url_contains or text"},
+    "wfErr_loopPreviousNeedsOrder": {
+        "zh": "循环体用了上一轮的产物,只能一项一项跑:把「同时跑几项」改成 1",
+        "en": "The loop body reads the previous round, so items must run one at a time: set concurrency to 1",
+    },
     "wfErr_loopItems": {"zh": "循环·遍历的 items 必须是列表(或 JSON 数组文本、多行文本)", "en": "For-each items must be a list (or a JSON array as text, or multi-line text)"},
     "wfErr_notifyTitleEmpty": {"zh": "通知标题不能为空", "en": "The notification title cannot be empty"},
     #: 「等人确认」。

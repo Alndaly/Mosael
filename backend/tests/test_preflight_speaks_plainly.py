@@ -131,7 +131,7 @@ def test_循环体里引用作用域没有的字段() -> None:
     graph = _graph(_start(), _shoot_beats([
         {"id": "say", "type": "template", "name": "拼台词", "config": {"template": "{{loop.itme}}"}},
     ]))
-    assert _errors(graph) == ["「逐镜生成 › 拼台词」用到的 loop · itme 这里没有:只提供 loop · item、loop · index"]
+    assert _errors(graph) == ["「逐镜生成 › 拼台词」用到的 loop · itme 这里没有:只提供 loop · item、loop · index、loop · previous"]
 
 
 def test_循环体是空的_和输出节点放进循环体() -> None:
