@@ -1232,9 +1232,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "advanced": True, "type": "template", "media": "image", "description": "wfNode_chain_plan_last_frame_asset_id",
             },
         },
-        "outputs": ["segment_seconds", "opening_seconds", "opening_last_frame", "rounds", "count"],
-        "output_labels": {"opening_seconds": "wfOut_chain_opening_seconds", "opening_last_frame": "wfOut_chain_opening_last_frame"},
-        "output_types": {"segment_seconds": "number", "opening_seconds": "number", "rounds": "json", "count": "number"},
+        "outputs": ["segment_seconds", "opening_seconds", "opening_last_frame", "rounds", "following", "count"],
+        "output_labels": {"opening_seconds": "wfOut_chain_opening_seconds", "opening_last_frame": "wfOut_chain_opening_last_frame",
+                          "following": "wfOut_chain_following"},
+        "output_types": {"segment_seconds": "number", "opening_seconds": "number", "rounds": "json", "following": "number",
+                         "count": "number"},
     },
     #: 把续写的几段接成一份素材。接缝在画面里找,见 assets/joining。
     "video_join": {

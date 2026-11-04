@@ -394,6 +394,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": " {overlaps} dubbed line(s) ran over into the next one even at 1.5×, {seconds}s in total; adjust them on the timeline or shorten the translation.",
     },
     "wfOut_overlaps": {"zh": "压到下一句上的条数", "en": "Lines running into the next"},
+    "wfOut_chain_following": {"zh": "第一段之后还要几段", "en": "Segments after the first"},
     "wfOut_chain_opening_seconds": {"zh": "第一段演到第几秒", "en": "Where the first segment ends"},
     "wfOut_chain_opening_last_frame": {"zh": "第一段的尾帧", "en": "First segment's last frame"},
     "wfOut_overlap_seconds": {"zh": "压到下一句上的秒数", "en": "Seconds running into the next line"},

@@ -77,6 +77,7 @@ def fake_run(monkeypatch):
         "project_sequence_create": lambda db, scope, config: {"project_id": "p", "sequence_id": "s", "video_track_id": "v", "audio_track_id": "a", "name": "n"},
         "timeline_clear": lambda db, scope, config: {"removed": 0, "sequence_id": "s"},
         "export_sequence": lambda db, scope, config: {"asset_id": "final"},
+        "chain_plan": lambda db, scope, config: {"segment_seconds": 5, "following": 2, "count": 3},
         "video_seam": lambda db, scope, config: seen["seams"].append((config["previous_asset_id"], config["asset_id"])) or {"start": 1.5},
         "video_cost_estimate": lambda db, scope, config: {"count": 3, "seconds": 15, "estimate": None, "currency": "", "text": ""},
     }.items():
@@ -105,6 +106,12 @@ def test_真跑一遍_每段接着上一段的尾巴(fake_run) -> None:
     assert [start for _, start in fake_run["appended"]][1:] == [1.5, 1.5]
     assert fake_run["seams"] == [("seg1", "seg2"), ("seg2", "seg3")], "接缝要拿前一段和这一段比"
     assert context["export_final"]["asset_id"] == "final"
+
+
+def test_段数算好了写进提示词_不靠模型心算() -> None:
+    graph = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V)
+    assert _node(graph, "plan")["type"] == "chain_plan"
+    assert "{{plan.following}}" in _node(graph, "split")["config"]["prompt"]
 
 
 def test_模型收尾帧才有锚点帧_没有出图模型也没有() -> None:

@@ -132,7 +132,10 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "position": {"x": 390, "y": 140},
                 "config": {
                     "provider": video.provider, "provider_profile_id": video.profile_id, "model": video.model, "kind": "video",
-                    "prompt": "{{input.style}} {{loop.item}}",
+                    #: 只写「接着发生什么」时,模型会切到那个地方、人也换一个样子(实测 H3 每段都在尾巴结束处硬切)。
+                    #: 每段都带上开场那段:同一个人、同一个地方,这一段只往前走一点。
+                    "prompt": "{{input.style}} {{input.scene}} One continuous shot with no cut, the same person in the same "
+                              "place, carrying on from the given clip. What happens now: {{loop.item}}",
                     "parameters": parameters,
                     "source_assets": [handed_over, *(["{{anchor.asset_id}}:last_frame"] if anchors else [])],
                     "entity_ids": "{{input.entity_ids}}",
@@ -169,7 +172,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
         "edges": [{"id": "seam_append", "source": "seam", "target": "append_segment"}] if plan.extends else [],
     }
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 4, "source": "official"},
+        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 5, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -198,6 +201,17 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 },
             },
             {
+                #: 段数由这里算,不靠模型心算:只说「总时长约多少」时它交回过空的 next,要 18 秒的片子只出了第一段(实测)。
+                "id": "plan", "type": "chain_plan",
+                "name": {"zh": "算要拍几段", "en": "Work out how many segments"},
+                "position": {"x": 40, "y": 620},
+                "config": {
+                    "target_seconds": "{{start.target_seconds}}",
+                    "longest_seconds": "{{start.segment_seconds}}",
+                    "overlap_seconds": "{{start.overlap_seconds}}",
+                },
+            },
+            {
                 "id": "split", "type": "llm",
                 "name": {"zh": "把想法拆成一段一段", "en": "Split the idea into segments"},
                 "position": {"x": 340, "y": 300},
@@ -205,8 +219,9 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "profile_id": chat.profile_id, "model": chat.model, "preset": "precise",
                     "system": "你是分镜导演。这是一条不切镜头的连续长片,一段接一段往下拍:同一场景、同一人物、同一机位逻辑。"
                               "只写下一段**接着发生什么**,不重复外观描述,不写切镜、转场。用英文写,每段一两句。",
-                    "prompt": "想法:{{start.idea}}\n总时长约 {{start.target_seconds}} 秒,每段 {{start.segment_seconds}} 秒,"
-                              "最多 {{start.max_segments}} 段。opening 写第一段(要交代人物、场景、光线、机位),next 写后面每一段。",
+                    "prompt": "想法:{{start.idea}}\n总时长约 {{start.target_seconds}} 秒,每段 {{start.segment_seconds}} 秒。"
+                              "opening 写第一段(要交代人物、场景、光线、机位),next 写后面每一段:"
+                              "**next 要写满 {{plan.following}} 段**,超过 {{start.max_segments}} 段时写到这个数为止。",
                     "response_format": "json_schema",
                     "json_schema_name": "long_take_segments",
                     "json_schema": _segments_schema(),
@@ -252,6 +267,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "items": "{{split.json.next}}",
                     "inputs": {
                         "style": "{{start.style}}",
+                        "scene": "{{split.json.opening}}",
                         "overlap_seconds": "{{start.overlap_seconds}}",
                         "segment_seconds": "{{start.segment_seconds}}",
                         "entity_ids": "{{start.entity_ids}}",
@@ -304,7 +320,8 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
             },
         ],
         "edges": [
-            {"id": "start_split", "source": "start", "target": "split"},
+            {"id": "start_plan", "source": "start", "target": "plan"},
+            {"id": "plan_split", "source": "plan", "target": "split"},
             {"id": "split_project", "source": "split", "target": "video_project"},
             {"id": "split_estimate", "source": "split", "target": "estimate"},
             {"id": "estimate_opening", "source": "estimate", "target": "opening"},

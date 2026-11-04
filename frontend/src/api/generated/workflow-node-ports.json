@@ -1145,6 +1145,7 @@
       "opening_seconds",
       "opening_last_frame",
       "rounds",
+      "following",
       "count"
     ],
     "output_labels": {
@@ -1163,6 +1164,10 @@
       "rounds": {
         "zh": "续写几次",
         "en": "Continuations"
+      },
+      "following": {
+        "zh": "第一段之后还要几段",
+        "en": "Segments after the first"
       },
       "count": {
         "zh": "数量",

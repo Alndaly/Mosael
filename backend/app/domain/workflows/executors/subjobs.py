@@ -456,6 +456,7 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
             }
             for index in range(1, rounds + 1)
         ],
+        "following": rounds,
         "count": rounds + 1,
     }
 
