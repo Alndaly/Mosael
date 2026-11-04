@@ -65,22 +65,17 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
             {"id": "voice_extend", "source": "voice", "target": "extend"},
         ],
     }
+    #: 按尾巴的长度接,不在画面里找:人一直在说话,差几帧就是声音重叠或缺一截(实测按画面找到 0.79–1.08 秒,尾巴是 0.917)。
     assemble_body = {
         "nodes": [
             {
-                "id": "seam", "type": "video_seam",
-                "name": {"zh": "找接缝", "en": "Find the seam"},
-                "position": {"x": 80, "y": 140},
-                "config": {"previous_asset_id": "{{loop.previous}}", "asset_id": "{{loop.item}}", "search_seconds": "{{input.search_seconds}}"},
-            },
-            {
                 "id": "append_segment", "type": "timeline_append",
                 "name": {"zh": "接到时间线上", "en": "Add it to the timeline"},
-                "position": {"x": 390, "y": 140},
-                "config": {"sequence_id": "{{input.sequence_id}}", "asset_id": "{{loop.item}}", "start": "{{seam.start}}"},
+                "position": {"x": 80, "y": 140},
+                "config": {"sequence_id": "{{input.sequence_id}}", "asset_id": "{{loop.item}}", "start": "{{input.overlap_seconds}}"},
             },
         ],
-        "edges": [{"id": "seam_append", "source": "seam", "target": "append_segment"}],
+        "edges": [],
     }
     graph: dict[str, Any] = {
         "meta": {"template_id": LONG_TALK_VIDEO, "template_version": 1, "source": "official"},
@@ -187,10 +182,9 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "position": {"x": 2740, "y": 300},
                 "config": {
                     "items": "{{segments.results}}",
-                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "search_seconds": "{{start.segment_seconds}}"},
+                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "overlap_seconds": "{{start.overlap_seconds}}"},
                     "body": assemble_body,
                     "output": "{{loop.item}}",
-                    "previous_initial": "{{opening.asset_id}}",
                 },
             },
             {

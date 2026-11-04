@@ -26,7 +26,7 @@ def test_图是合法的_授权是必填的() -> None:
 
 @pytest.fixture
 def fake_run(monkeypatch):
-    seen: dict[str, Any] = {"generated": [], "clips": [], "seams": []}
+    seen: dict[str, Any] = {"generated": [], "clips": [], "starts": []}
 
     def generate(db, scope, config):
         seen["generated"].append({"model": config["model"], "sources": config["source_assets"], "consent": config["consent"]})
@@ -42,9 +42,8 @@ def fake_run(monkeypatch):
         "asset": lambda db, scope, config: {"asset_id": "voice", "name": "", "kind": "audio", "duration": 11.0, "width": 0, "height": 0, "fps": 0},
         "project_sequence_create": lambda db, scope, config: {"project_id": "p", "sequence_id": "s", "video_track_id": "v", "audio_track_id": "a", "name": "n"},
         "timeline_clear": lambda db, scope, config: {"removed": 0, "sequence_id": "s"},
-        "timeline_append": lambda db, scope, config: {"clip_id": "c", "timeline_start": 0, "timeline_end": 1, "duration": 1, "trimmed": 0, "sequence_id": "s"},
+        "timeline_append": lambda db, scope, config: seen["starts"].append(config.get("start")) or {"clip_id": "c", "timeline_start": 0, "timeline_end": 1, "duration": 1, "trimmed": 0, "sequence_id": "s"},
         "export_sequence": lambda db, scope, config: {"asset_id": "final"},
-        "video_seam": lambda db, scope, config: seen["seams"].append(config["asset_id"]) or {"start": 0.917},
     }.items():
         monkeypatch.setitem(registry._REGISTRY, node_type, handler)
     return seen
@@ -72,5 +71,5 @@ def test_真跑一遍_每段配到自己那一截音频_带上尾巴和人物(fa
     voices = [one for one in fake_run["clips"] if one["asset_id"] == "voice"]
     assert [float(one["start"]) for one in voices] == pytest.approx([0, 3.541, 7.082], abs=0.01)
     assert [float(one["end"]) for one in voices] == pytest.approx([4.458, 7.999, 11.0], abs=0.01)
-    assert fake_run["seams"] == ["seg2", "seg3"]
+    assert [float(one) for one in fake_run["starts"][1:]] == [0.917, 0.917], "按尾巴长度接,声音才不重叠"
     assert context["export_final"]["asset_id"] == "final"

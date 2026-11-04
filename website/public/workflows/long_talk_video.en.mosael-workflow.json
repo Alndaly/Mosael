@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Digital human of any length",
   "description": "One portrait and one script: it voices the script, cuts it into segments and has the person speak on from the tail of the last, joined into one unbroken video. Needs consent for the face and voice.",
-  "graph_hash": "0fe9bf7364a5f0fc0e21a29894c1f93203a357a8779c927959140397092ecd19",
+  "graph_hash": "c452ef7171e15d3c65116404ddb3dfb0990d9d3693ac07fd82bd451244fe2a4d",
   "graph": {
     "meta": {
       "template_id": "long_talk_video",
@@ -281,64 +281,31 @@
           "items": "",
           "inputs": {
             "sequence_id": "{{video_project.sequence_id}}",
-            "search_seconds": "{{start.segment_seconds}}"
+            "overlap_seconds": "{{start.overlap_seconds}}"
           },
           "body": {
             "nodes": [
-              {
-                "id": "seam",
-                "type": "video_seam",
-                "name": "Find the seam",
-                "position": {
-                  "x": 80,
-                  "y": 140
-                },
-                "config": {
-                  "previous_asset_id": "{{loop.previous}}",
-                  "asset_id": "{{loop.item}}",
-                  "search_seconds": "{{input.search_seconds}}"
-                }
-              },
               {
                 "id": "append_segment",
                 "type": "timeline_append",
                 "name": "Add it to the timeline",
                 "position": {
-                  "x": 390,
+                  "x": 80,
                   "y": 140
                 },
                 "config": {
                   "sequence_id": "{{input.sequence_id}}",
                   "asset_id": "{{loop.item}}",
-                  "start": ""
-                },
-                "inputs": [
-                  "start"
-                ]
+                  "start": "{{input.overlap_seconds}}"
+                }
               }
             ],
-            "edges": [
-              {
-                "id": "seam_append",
-                "source": "seam",
-                "target": "append_segment"
-              },
-              {
-                "id": "d-seam-start-append_segment-start",
-                "source": "seam",
-                "target": "append_segment",
-                "kind": "data",
-                "source_output": "start",
-                "target_input": "start"
-              }
-            ]
+            "edges": []
           },
-          "output": "{{loop.item}}",
-          "previous_initial": ""
+          "output": "{{loop.item}}"
         },
         "inputs": [
-          "items",
-          "previous_initial"
+          "items"
         ]
       },
       {
@@ -512,14 +479,6 @@
         "kind": "data",
         "source_output": "results",
         "target_input": "items"
-      },
-      {
-        "id": "d-opening-asset_id-assemble-previous_initial",
-        "source": "opening",
-        "target": "assemble",
-        "kind": "data",
-        "source_output": "asset_id",
-        "target_input": "previous_initial"
       },
       {
         "id": "d-video_project-sequence_id-export_final-sequence_id",
