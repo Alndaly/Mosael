@@ -123,7 +123,16 @@ def test_真接三段_重叠去掉_来源记着每一段(tmp_path: Path) -> None
 def test_每一段知道自己演哪一截_尾帧落在最后一段() -> None:
     made = _plan(target_seconds=35, longest_seconds=30, overlap_seconds=0, last_frame_asset_id="尾帧")
     assert made["opening_seconds"] == 18 and made["opening_last_frame"] == ""
-    assert made["rounds"] == [{"from_seconds": 18, "to_seconds": 35, "last_frame": "尾帧"}]
+    assert made["rounds"] == [{"from_seconds": 18, "clip_from": 18, "to_seconds": 35, "last_frame": "尾帧", "beat": ""}]
+
+
+def test_语言模型写少了_铺满算好的段数() -> None:
+    rounds = _plan(target_seconds=50, longest_seconds=10, overlap_seconds=0, beats=["甲", "乙"])["rounds"]
+    assert [one["beat"] for one in rounds] == ["甲", "甲", "乙", "乙"]
+
+
+def test_一段都没写_也照样拍够() -> None:
+    assert len(_plan(target_seconds=50, longest_seconds=10, overlap_seconds=0, beats=[])["rounds"]) == 4
 
 
 def test_放得下的一镜_尾帧还在这一段() -> None:

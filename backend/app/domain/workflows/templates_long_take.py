@@ -58,7 +58,7 @@ def _anchor_nodes(image: ModelChoice, plan: VideoPlan, db: Session | None) -> tu
             "position": {"x": 1010, "y": -60},
             "config": {
                 "provider": image.provider, "provider_profile_id": image.profile_id, "model": image.model, "kind": "image",
-                "prompt": "{{input.style}} {{loop.item}} The last moment of this shot: same place, light and camera as the "
+                "prompt": "{{input.style}} {{loop.item.beat}} The last moment of this shot: same place, light and camera as the "
                           "reference frame, sharp and clean, with every named character exactly as in their references.",
                 "parameters": {"size": size} if size else {},
                 "source_assets": [f"{frame}:reference_image"],
@@ -135,7 +135,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     #: 只写「接着发生什么」时,模型会切到那个地方、人也换一个样子(实测 H3 每段都在尾巴结束处硬切)。
                     #: 每段都带上开场那段:同一个人、同一个地方,这一段只往前走一点。
                     "prompt": "{{input.style}} {{input.scene}} One continuous shot with no cut, the same person in the same "
-                              "place, carrying on from the given clip. What happens now: {{loop.item}}",
+                              "place, carrying on from the given clip. What happens now: {{loop.item.beat}}",
                     "parameters": parameters,
                     "source_assets": [handed_over, *(["{{anchor.asset_id}}:last_frame"] if anchors else [])],
                     "entity_ids": "{{input.entity_ids}}",
@@ -227,7 +227,19 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "json_schema": _segments_schema(),
                     "json_schema_strict": "true",
                     "temperature": 0.6,
-                    "max_tokens": 4000,
+                    "max_tokens": 16000,
+                },
+            },
+            {
+                #: 段数以 `plan` 为准;语言模型写的这几段铺到每一段上,写少了也不缩水。
+                "id": "beats", "type": "chain_plan",
+                "name": {"zh": "把每段要演的铺开", "en": "Spread the beats over the segments"},
+                "position": {"x": 340, "y": 620},
+                "config": {
+                    "target_seconds": "{{start.target_seconds}}",
+                    "longest_seconds": "{{start.segment_seconds}}",
+                    "overlap_seconds": "{{start.overlap_seconds}}",
+                    "beats": "{{split.json.next}}",
                 },
             },
             {
@@ -236,7 +248,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "position": {"x": 660, "y": 620},
                 "config": {
                     "provider": video.provider, "provider_profile_id": video.profile_id, "model": video.model,
-                    "items": "{{split.json.next}}", "extra_items": 1,
+                    "items": "{{beats.rounds}}", "extra_items": 1,
                     "seconds_each": "{{start.segment_seconds}}",
                     "resolution": plan.resolution,
                     "max_spend": "{{start.max_spend}}",
@@ -264,7 +276,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "name": {"zh": "一段接一段往下拍", "en": "Shoot segment after segment"},
                 "position": {"x": 980, "y": 420},
                 "config": {
-                    "items": "{{split.json.next}}",
+                    "items": "{{beats.rounds}}",
                     "inputs": {
                         "style": "{{start.style}}",
                         "scene": "{{split.json.opening}}",
@@ -323,7 +335,8 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
             {"id": "start_plan", "source": "start", "target": "plan"},
             {"id": "plan_split", "source": "plan", "target": "split"},
             {"id": "split_project", "source": "split", "target": "video_project"},
-            {"id": "split_estimate", "source": "split", "target": "estimate"},
+            {"id": "split_beats", "source": "split", "target": "beats"},
+            {"id": "beats_estimate", "source": "beats", "target": "estimate"},
             {"id": "estimate_opening", "source": "estimate", "target": "opening"},
             {"id": "opening_segments", "source": "opening", "target": "segments"},
             {"id": "segments_clear", "source": "segments", "target": "clear_timeline"},

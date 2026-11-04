@@ -21,6 +21,7 @@ from app.domain.workflows.template_requirements import (
     DIGITAL_HUMAN_VOICE,
     MULTI_REFERENCE_IMAGE_MODEL,
     CONTINUATION_VIDEO_MODEL,
+    TALKING_CHAIN_MODEL,
     MULTI_REFERENCE_VIDEO_MODEL,
     REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
@@ -73,6 +74,7 @@ from app.domain.workflows.templates_models import (
     _continuation_video_model,
     _opening_video_model,
     _shot_video_model,
+    _talking_video_model,
     _reference_image_model,
 )
 from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP, transcript_video_cleanup_graph
@@ -83,6 +85,7 @@ from app.domain.workflows.templates_dub import (
 )
 from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
 from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO, long_take_video_graph
+from app.domain.workflows.templates_long_talk import LONG_TALK_VIDEO, long_talk_video_graph
 from app.domain.workflows.templates_shots import (
     REFERENCE_VIDEO_SHOTS,
     SHOTS_TEMPLATE_CATALOG,
@@ -174,6 +177,29 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "stages": {
             "zh": ["输入想法与总时长", "拆成一段一段", "估算费用", "拍第一段", "一段接一段往下拍", "接到时间线上", "导出"],
             "en": ["Enter the idea and length", "Split into segments", "Estimate the cost", "Shoot the first segment", "Shoot segment after segment", "Lay them on the timeline", "Export"]
+        }
+    },
+    {
+        "id": "long_talk_video",
+        "name": {
+            "zh": "任意时长的数字人",
+            "en": "Digital human of any length"
+        },
+        "summary": {
+            "zh": "一张人物照片加一篇稿子：配成音频，切成一段段，人物接着上一段的尾巴往下说，接成一条不切镜头的长片。要有肖像和声音的授权。",
+            "en": "One portrait and one script: it voices the script, cuts it into segments and has the person speak on from the tail of the last, joined into one unbroken video. Needs consent for the face and voice."
+        },
+        "requires": [
+            requirement(
+                TALKING_CHAIN_MODEL,
+                zh="收驱动音频的两条视频工作流（如 ComfyUI 的 H3 数字人第一段和续写）",
+                en="Two audio-driven video workflows (e.g. the H3 digital human opening and continuation in ComfyUI)",
+            ),
+            requirement(DIGITAL_HUMAN_VOICE, zh="声明过是谁的克隆音色", en="A cloned voice declared as someone's"),
+        ],
+        "stages": {
+            "zh": ["输入稿子和人物", "配成音频", "算要几段", "说第一段", "一段接一段往下说", "接到时间线上", "导出成片"],
+            "en": ["Enter the script and person", "Voice the script", "Work out the segments", "Speak the first segment", "Speak segment after segment", "Add them to the timeline", "Export the video"]
         }
     },
     {
@@ -309,6 +335,11 @@ def built_in_template_graph(
             chat=chat, opening=_opening_video_model(db, user_id, continuing=video), video=video,
             image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE), db=db,
         ))
+    if template_id == LONG_TALK_VIDEO:
+        return localised_names(locale, long_talk_video_graph(
+            opening=_talking_video_model(db, user_id, continuing=False), video=_talking_video_model(db, user_id, continuing=True),
+            voice_id=_prefilled_voice_id(db, workspace_id, digital_human=True),
+        ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return localised_names(locale, transcript_video_cleanup_graph(chat=chat, locale=locale))
     if template_id in (TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC):
@@ -384,6 +415,7 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
         FULL_VIDEO_GENERATION: full_video_generation_graph(chat=blank, image=blank, video=blank),
         LONG_TAKE_VIDEO: long_take_video_graph(chat=blank, opening=blank, video=blank),
+        LONG_TALK_VIDEO: long_talk_video_graph(opening=blank, video=blank),
         TRANSCRIPT_VIDEO_CLEANUP: transcript_video_cleanup_graph(chat=blank, locale=locale),
         # 音色按工作区取,不带任何本机资源的那份留空,由用的人自己挑。
         TRANSLATED_DUB: translated_dub_graph(chat=blank, voice_id="", locale=locale),
@@ -589,6 +621,8 @@ def _status_checks(db: Session, *, user_id: str, workspace_id: str) -> dict[str,
         REFERENCE_VIDEO_MODEL: lambda: met(_shot_video_model(db, user_id, references=SINGLE_REFERENCE).model),
         MULTI_REFERENCE_VIDEO_MODEL: lambda: met(_shot_video_model(db, user_id).model),
         CONTINUATION_VIDEO_MODEL: lambda: met(_continuation_video_model(db, user_id).model),
+        TALKING_CHAIN_MODEL: lambda: met(_talking_video_model(db, user_id, continuing=True).model
+                                         and _talking_video_model(db, user_id, continuing=False).model),
         CLONED_VOICE: lambda: _cloned_voice_status(db, workspace_id, digital_human=False),
         DIGITAL_HUMAN_VOICE: lambda: _cloned_voice_status(db, workspace_id, digital_human=True),
         TRANSCRIPTION_ENGINE: lambda: _provider_status(db, user_id, transcription.CAPABILITY, asr_models.runtime_status),

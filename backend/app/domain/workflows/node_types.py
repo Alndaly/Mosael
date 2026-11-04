@@ -216,6 +216,7 @@ _FIELD_LABELS = {
     "json_schema_name": "wfField_json_schema_name",
     "json_schema_strict": "wfField_json_schema_strict",
     "break_long_lines": "wfField_break_long_lines",
+    "beats": "wfField_beats",
     "keep_original": "wfField_keep_original",
     "last_frame_asset_id": "wfField_last_frame_asset_id",
     "kind": "wfField_kind",
@@ -1231,6 +1232,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "last_frame_asset_id": {
                 "advanced": True, "type": "template", "media": "image", "description": "wfNode_chain_plan_last_frame_asset_id",
             },
+            "beats": {"advanced": True, "type": "template", "description": "wfNode_chain_plan_beats"},
         },
         "outputs": ["segment_seconds", "opening_seconds", "opening_last_frame", "rounds", "following", "count"],
         "output_labels": {"opening_seconds": "wfOut_chain_opening_seconds", "opening_last_frame": "wfOut_chain_opening_last_frame",

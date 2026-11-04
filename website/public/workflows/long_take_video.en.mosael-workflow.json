@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Continuous video of any length",
   "description": "Give an idea and a total length: it splits them into segments and shoots each one on from the tail of the last, joined into one uncut video. Every segment is a paid video generation, so the cost is estimated first and max_segments and max_spend set the limits. If it stops, continue from where it stopped.",
-  "graph_hash": "a780ffdc7dfec361875bf321bbbbc2639ca389850c06beae560d079443d182fb",
+  "graph_hash": "6f421ae7d9de6cf17d3aae025d1ee9a0ce355342ec2139bcb497d799f9bccf81",
   "graph": {
     "meta": {
       "template_id": "long_take_video",
@@ -89,7 +89,22 @@
           },
           "json_schema_strict": "true",
           "temperature": 0.6,
-          "max_tokens": 4000
+          "max_tokens": 16000
+        }
+      },
+      {
+        "id": "beats",
+        "type": "chain_plan",
+        "name": "Spread the beats over the segments",
+        "position": {
+          "x": 340,
+          "y": 620
+        },
+        "config": {
+          "target_seconds": "{{start.target_seconds}}",
+          "longest_seconds": "{{start.segment_seconds}}",
+          "overlap_seconds": "{{start.overlap_seconds}}",
+          "beats": "{{split.json.next}}"
         }
       },
       {
@@ -104,12 +119,15 @@
           "provider": "",
           "provider_profile_id": "",
           "model": "",
-          "items": "{{split.json.next}}",
+          "items": "",
           "extra_items": 1,
           "seconds_each": "{{start.segment_seconds}}",
           "resolution": "720p",
           "max_spend": "{{start.max_spend}}"
-        }
+        },
+        "inputs": [
+          "items"
+        ]
       },
       {
         "id": "video_project",
@@ -157,7 +175,7 @@
           "y": 420
         },
         "config": {
-          "items": "{{split.json.next}}",
+          "items": "",
           "inputs": {
             "style": "{{start.style}}",
             "scene": "{{split.json.opening}}",
@@ -194,7 +212,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
-                  "prompt": "{{input.style}} {{input.scene}} One continuous shot with no cut, the same person in the same place, carrying on from the given clip. What happens now: {{loop.item}}",
+                  "prompt": "{{input.style}} {{input.scene}} One continuous shot with no cut, the same person in the same place, carrying on from the given clip. What happens now: {{loop.item.beat}}",
                   "parameters": {
                     "duration_seconds": "{{input.segment_seconds}}",
                     "aspect_ratio": "{{input.aspect_ratio}}",
@@ -221,6 +239,7 @@
           "max_spend": "{{start.max_spend}}"
         },
         "inputs": [
+          "items",
           "previous_initial"
         ]
       },
@@ -345,8 +364,13 @@
         "target": "video_project"
       },
       {
-        "id": "split_estimate",
+        "id": "split_beats",
         "source": "split",
+        "target": "beats"
+      },
+      {
+        "id": "beats_estimate",
+        "source": "beats",
         "target": "estimate"
       },
       {
@@ -383,6 +407,22 @@
         "id": "export_output",
         "source": "export_final",
         "target": "output"
+      },
+      {
+        "id": "d-beats-rounds-estimate-items",
+        "source": "beats",
+        "target": "estimate",
+        "kind": "data",
+        "source_output": "rounds",
+        "target_input": "items"
+      },
+      {
+        "id": "d-beats-rounds-segments-items",
+        "source": "beats",
+        "target": "segments",
+        "kind": "data",
+        "source_output": "rounds",
+        "target_input": "items"
       },
       {
         "id": "d-opening-asset_id-segments-previous_initial",

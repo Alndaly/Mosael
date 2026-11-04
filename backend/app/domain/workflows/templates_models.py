@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.providers import FIRST_CLIP, FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
+from app.ai.providers import DRIVING_AUDIO, FIRST_CLIP, FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from app.db.models import ProviderModel
 from app.domain.generation_catalog import known_capabilities_for
 from app.domain.generation.resolution import resolve_row
@@ -190,6 +190,16 @@ def _opening_video_model(db: Session, user_id: str, *, continuing: ModelChoice) 
 
     same_vendor = _pick(db, user_id, "video", lambda db_, choice: choice.provider == continuing.provider and from_text(db_, choice))
     return same_vendor if same_vendor.model else _pick(db, user_id, "video", from_text)
+
+
+def _talking_video_model(db: Session, user_id: str, *, continuing: bool) -> ModelChoice:
+    """数字人长片用哪个模型:都收驱动音频,续写的那条还收上一段的尾巴,第一段的不收。"""
+
+    def usable(db_: Session | None, choice: ModelChoice) -> bool:
+        keys = _parameter_keys(db_, choice)
+        return DRIVING_AUDIO in keys and (FIRST_CLIP in keys) == continuing
+
+    return _pick(db, user_id, "video", usable)
 
 
 def _parameter_keys(db: Session | None, choice: ModelChoice) -> list[str]:

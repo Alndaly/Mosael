@@ -32,6 +32,8 @@ REFERENCE_VIDEO_MODEL = "reference_video_model"
 MULTI_REFERENCE_VIDEO_MODEL = "multi_reference_video_model"
 #: 能接着一段视频或一帧往下拍的视频模型(任意长度的连续视频)。
 CONTINUATION_VIDEO_MODEL = "continuation_video_model"
+#: 能接着一段片子、按一段音频往下说的视频模型(收 first_clip 和 driving_audio),和它配对的第一段模型。
+TALKING_CHAIN_MODEL = "talking_chain_model"
 #: 一把克隆音色,而且本机克隆引擎跑得起来(模板里配音节点的引擎写的是 builtin:clone)。
 CLONED_VOICE = "cloned_voice"
 #: 同上,而且这把嗓子声明过是谁的(数字人用,ADR 0028 §5:未声明的克隆音色不能拿去让一张脸说话)。
@@ -55,6 +57,7 @@ CHECKS: tuple[str, ...] = (
     REFERENCE_VIDEO_MODEL,
     MULTI_REFERENCE_VIDEO_MODEL,
     CONTINUATION_VIDEO_MODEL,
+    TALKING_CHAIN_MODEL,
     CLONED_VOICE,
     DIGITAL_HUMAN_VOICE,
     TRANSCRIPTION_ENGINE,

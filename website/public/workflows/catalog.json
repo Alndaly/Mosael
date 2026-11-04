@@ -95,10 +95,58 @@
     },
     "author": "Mosael",
     "version": 5,
-    "nodes": 12,
+    "nodes": 13,
     "download": {
       "zh": "/workflows/long_take_video.zh.mosael-workflow.json",
       "en": "/workflows/long_take_video.en.mosael-workflow.json"
+    }
+  },
+  {
+    "id": "long_talk_video",
+    "name": {
+      "zh": "任意时长的数字人",
+      "en": "Digital human of any length"
+    },
+    "summary": {
+      "zh": "一张人物照片加一篇稿子：配成音频，切成一段段，人物接着上一段的尾巴往下说，接成一条不切镜头的长片。要有肖像和声音的授权。",
+      "en": "One portrait and one script: it voices the script, cuts it into segments and has the person speak on from the tail of the last, joined into one unbroken video. Needs consent for the face and voice."
+    },
+    "requires": {
+      "zh": [
+        "收驱动音频的两条视频工作流（如 ComfyUI 的 H3 数字人第一段和续写）",
+        "声明过是谁的克隆音色"
+      ],
+      "en": [
+        "Two audio-driven video workflows (e.g. the H3 digital human opening and continuation in ComfyUI)",
+        "A cloned voice declared as someone's"
+      ]
+    },
+    "stages": {
+      "zh": [
+        "输入稿子和人物",
+        "配成音频",
+        "算要几段",
+        "说第一段",
+        "一段接一段往下说",
+        "接到时间线上",
+        "导出成片"
+      ],
+      "en": [
+        "Enter the script and person",
+        "Voice the script",
+        "Work out the segments",
+        "Speak the first segment",
+        "Speak segment after segment",
+        "Add them to the timeline",
+        "Export the video"
+      ]
+    },
+    "author": "Mosael",
+    "version": 1,
+    "nodes": 13,
+    "download": {
+      "zh": "/workflows/long_talk_video.zh.mosael-workflow.json",
+      "en": "/workflows/long_talk_video.en.mosael-workflow.json"
     }
   },
   {

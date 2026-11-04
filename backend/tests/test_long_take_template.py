@@ -77,7 +77,8 @@ def fake_run(monkeypatch):
         "project_sequence_create": lambda db, scope, config: {"project_id": "p", "sequence_id": "s", "video_track_id": "v", "audio_track_id": "a", "name": "n"},
         "timeline_clear": lambda db, scope, config: {"removed": 0, "sequence_id": "s"},
         "export_sequence": lambda db, scope, config: {"asset_id": "final"},
-        "chain_plan": lambda db, scope, config: {"segment_seconds": 5, "following": 2, "count": 3},
+        "chain_plan": lambda db, scope, config: {"segment_seconds": 5, "following": 2, "count": 3,
+                                                 "rounds": [{"beat": one} for one in config.get("beats") or ["甲", "乙"]]},
         "video_seam": lambda db, scope, config: seen["seams"].append((config["previous_asset_id"], config["asset_id"])) or {"start": 1.5},
         "video_cost_estimate": lambda db, scope, config: {"count": 3, "seconds": 15, "estimate": None, "currency": "", "text": ""},
     }.items():

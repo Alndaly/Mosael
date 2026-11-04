@@ -443,6 +443,8 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     #: 这一镜的尾帧落在**最后一段**:交给第一段,它会在第一段里就把整镜走完,后面无戏可拍(实测 35 秒的一镜,18 秒就到了门口)。
     last_frame = str(config.get("last_frame_asset_id") or "")
     fresh = segment - overlap
+    #: 这几段各演什么。段数以这里算的为准:语言模型写少了(要 65 段写了 55 段、甚至一段没写),把它写的均匀铺开,片子长度不打折。
+    beats = text_lines(config.get("beats")) if not isinstance(config.get("beats"), list) else [str(one) for one in config["beats"]]
     return {
         "segment_seconds": segment,
         "opening_seconds": seconds(min(segment, target)),
@@ -451,8 +453,11 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
         "rounds": [
             {
                 "from_seconds": seconds(segment + (index - 1) * fresh),
+                #: 这一段成片开头是上一段的尾巴,配音要从尾巴那一刻取,声音和口型才对得上。
+                "clip_from": seconds(segment + (index - 1) * fresh - overlap),
                 "to_seconds": seconds(min(segment + index * fresh, target)),
                 "last_frame": last_frame if index == rounds else "",
+                "beat": beats[(index - 1) * len(beats) // rounds] if beats else "",
             }
             for index in range(1, rounds + 1)
         ],

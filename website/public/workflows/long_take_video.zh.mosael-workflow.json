@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "任意长度的连续视频",
   "description": "输入一个想法和总时长，拆成一段一段，每段接着上一段的尾巴往下拍，接成一条不切镜头的长片。每段都是一次付费视频生成：开跑前按段数估算费用，max_segments 和 max_spend 是上限；断了可以从中断处继续。",
-  "graph_hash": "4406bbab7e89d1a385684ab65beeb56b079f02d730ba8eaf862bc5bbb26856b7",
+  "graph_hash": "3d5bebe31178d03295c63919a6fd584b3cb5612bccb3759418bebe6802dfb4f3",
   "graph": {
     "meta": {
       "template_id": "long_take_video",
@@ -89,7 +89,22 @@
           },
           "json_schema_strict": "true",
           "temperature": 0.6,
-          "max_tokens": 4000
+          "max_tokens": 16000
+        }
+      },
+      {
+        "id": "beats",
+        "type": "chain_plan",
+        "name": "把每段要演的铺开",
+        "position": {
+          "x": 340,
+          "y": 620
+        },
+        "config": {
+          "target_seconds": "{{start.target_seconds}}",
+          "longest_seconds": "{{start.segment_seconds}}",
+          "overlap_seconds": "{{start.overlap_seconds}}",
+          "beats": "{{split.json.next}}"
         }
       },
       {
@@ -104,12 +119,15 @@
           "provider": "",
           "provider_profile_id": "",
           "model": "",
-          "items": "{{split.json.next}}",
+          "items": "",
           "extra_items": 1,
           "seconds_each": "{{start.segment_seconds}}",
           "resolution": "720p",
           "max_spend": "{{start.max_spend}}"
-        }
+        },
+        "inputs": [
+          "items"
+        ]
       },
       {
         "id": "video_project",
@@ -157,7 +175,7 @@
           "y": 420
         },
         "config": {
-          "items": "{{split.json.next}}",
+          "items": "",
           "inputs": {
             "style": "{{start.style}}",
             "scene": "{{split.json.opening}}",
@@ -194,7 +212,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
-                  "prompt": "{{input.style}} {{input.scene}} One continuous shot with no cut, the same person in the same place, carrying on from the given clip. What happens now: {{loop.item}}",
+                  "prompt": "{{input.style}} {{input.scene}} One continuous shot with no cut, the same person in the same place, carrying on from the given clip. What happens now: {{loop.item.beat}}",
                   "parameters": {
                     "duration_seconds": "{{input.segment_seconds}}",
                     "aspect_ratio": "{{input.aspect_ratio}}",
@@ -221,6 +239,7 @@
           "max_spend": "{{start.max_spend}}"
         },
         "inputs": [
+          "items",
           "previous_initial"
         ]
       },
@@ -345,8 +364,13 @@
         "target": "video_project"
       },
       {
-        "id": "split_estimate",
+        "id": "split_beats",
         "source": "split",
+        "target": "beats"
+      },
+      {
+        "id": "beats_estimate",
+        "source": "beats",
         "target": "estimate"
       },
       {
@@ -383,6 +407,22 @@
         "id": "export_output",
         "source": "export_final",
         "target": "output"
+      },
+      {
+        "id": "d-beats-rounds-estimate-items",
+        "source": "beats",
+        "target": "estimate",
+        "kind": "data",
+        "source_output": "rounds",
+        "target_input": "items"
+      },
+      {
+        "id": "d-beats-rounds-segments-items",
+        "source": "beats",
+        "target": "segments",
+        "kind": "data",
+        "source_output": "rounds",
+        "target_input": "items"
       },
       {
         "id": "d-opening-asset_id-segments-previous_initial",
