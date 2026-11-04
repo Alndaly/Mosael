@@ -33,6 +33,12 @@ class ModelChoice:
 
 #: 续写的尾巴留多长。H3 按 17k+5 帧取片段,22 帧正好是 24fps 下的 0.92 秒:写成 1 秒的话多出来的两帧被裁掉。
 CONTINUATION_TAIL_SECONDS = 0.92
+#: 工作流按段号存取潜空间时的两个参数(节点 50 读上一段,节点 52 存这一段):有它们的就是潜空间续写。
+#: 尾巴不解码、不重新编码,颜色不漂,还在动的东西接得住(实测);这两个数是工作流里写死的 243 帧和 39 帧上文。
+LATENT_LOAD_SCENE = "50.scene_number"
+LATENT_SAVE_SCENE = "52.scene_number"
+LATENT_SEGMENT_SECONDS = 10.125
+LATENT_CONTEXT_SECONDS = 1.625
 #: 模型要尾巴至少几秒时多留这一点:按帧截,截出来总比要的短一丝,卡在下限上供应商未必认。
 TAIL_MARGIN_SECONDS = 0.1
 
@@ -54,6 +60,8 @@ class VideoPlan:
     last_frame: bool = False
     #: 收待续写的片段(`first_clip`):接着一段视频往下拍,而不只是从一帧动起来。
     extends: bool = False
+    #: 按段号接潜空间(见 LATENT_LOAD_SCENE),不走 `first_clip`。
+    latent_chain: bool = False
     #: 交给下一段的尾巴至少几秒(描述符的 `source_duration_seconds`)。没声明就是 0,由模板定。
     shortest_tail: float = 0
     #: 一段最长几秒。续写时每段都有一截是重叠,段越长重叠占的比例越小。没声明就是 0。
@@ -67,7 +75,7 @@ class VideoPlan:
     @property
     def chains(self) -> bool:
         """一镜比一次能出的长时,这个模型接得下去:知道一次最长多少,又收待续写片段或首帧。"""
-        return self.longest_clip > 0 and (self.extends or self.keyframes)
+        return self.longest_clip > 0 and (self.extends or self.keyframes) and not self.latent_chain
 
     @property
     def tail_seconds(self) -> float:
@@ -177,13 +185,22 @@ def _shot_video_model(db: Session, user_id: str, *, references: int | None = Non
 
 
 def _continuation_video_model(db: Session, user_id: str) -> ModelChoice:
-    """逐段往下拍用哪个模型:收待续写片段的优先,其次收首帧的。"""
+    """逐段往下拍用哪个模型:接潜空间的优先,其次收待续写片段的,再次收首帧的。"""
+    latent = _pick(db, user_id, "video", lambda db_, choice: LATENT_LOAD_SCENE in _parameter_keys(db_, choice)
+                   and DRIVING_AUDIO not in _parameter_keys(db_, choice))
+    if latent.model:
+        return latent
     extends = _pick(db, user_id, "video", lambda db_, choice: FIRST_CLIP in _parameter_keys(db_, choice))
     return extends if extends.model else _pick(db, user_id, "video", lambda db_, choice: FIRST_FRAME in _parameter_keys(db_, choice))
 
 
 def _opening_video_model(db: Session, user_id: str, *, continuing: ModelChoice) -> ModelChoice:
     """第一段用哪个模型:从一段文字就能出片的,和续写同一家的优先 —— 同一家的画风接得更顺。"""
+
+    if LATENT_LOAD_SCENE in _parameter_keys(db, continuing):
+        #: 第一段要把潜空间存下来给续写用。
+        return _pick(db, user_id, "video", lambda db_, choice: {LATENT_SAVE_SCENE} <= set(_parameter_keys(db_, choice))
+                     and LATENT_LOAD_SCENE not in _parameter_keys(db_, choice) and DRIVING_AUDIO not in _parameter_keys(db_, choice))
 
     def from_text(db_: Session | None, choice: ModelChoice) -> bool:
         return "text-to-video" in ((model_capabilities(db_, choice, "video") or {}).get("modes") or ())
@@ -193,11 +210,11 @@ def _opening_video_model(db: Session, user_id: str, *, continuing: ModelChoice) 
 
 
 def _talking_video_model(db: Session, user_id: str, *, continuing: bool) -> ModelChoice:
-    """数字人长片用哪个模型:都收驱动音频,续写的那条还收上一段的尾巴,第一段的不收。"""
+    """数字人长片用哪个模型:都收驱动音频、都存潜空间,续写的那条还读上一段的。"""
 
     def usable(db_: Session | None, choice: ModelChoice) -> bool:
         keys = _parameter_keys(db_, choice)
-        return DRIVING_AUDIO in keys and (FIRST_CLIP in keys) == continuing
+        return DRIVING_AUDIO in keys and LATENT_SAVE_SCENE in keys and (LATENT_LOAD_SCENE in keys) == continuing
 
     return _pick(db, user_id, "video", usable)
 
@@ -355,6 +372,7 @@ def video_plan_for(db: Session | None, choice: ModelChoice, *, references: int |
         keyframes=shoots and FIRST_FRAME in keys and _route_allowed(capabilities, _KEYFRAME_SOURCES),
         last_frame=shoots and LAST_FRAME in keys,
         extends=FIRST_CLIP in keys,
+        latent_chain=LATENT_LOAD_SCENE in keys,
         longest_clip=max(durations) if durations else int(capabilities.get("max_duration_seconds") or 0),
         shortest_clip=int(capabilities.get("min_duration_seconds") or 0),
         allowed_clips=tuple(durations),

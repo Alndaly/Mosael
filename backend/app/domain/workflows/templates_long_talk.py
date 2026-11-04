@@ -3,8 +3,9 @@
 一次生成只出几秒,要更长只能分段。和「任意长度的连续视频」不同的是,这里每一段的内容不靠语言模型编,**靠音频定**:
 
 - 段数由配音时长算(`plan`);每一段配到它自己那一截音频,音频里含上一段尾巴那一截,接缝处声音和口型都对得上;
-- 每段都把人物照片当参考带上:只靠尾巴接,说久了人会变样;
-- 第一段和续写是两条工作流(`opening`、`video`):续写的那条还收上一段的尾巴。
+- 每段都把人物照片当参考带上:只靠上文接,说久了人会变样;
+- 段与段接在潜空间里:续写读上一段存下的潜空间,不解码、不重新编码,颜色不漂;
+- 第一段和续写是两条工作流(`opening`、`video`):续写的那条还读上一段的潜空间。
 
 数字人要有授权确认:`consent` 是必填的开始参数,没选不跑。
 """
@@ -15,29 +16,23 @@ from typing import Any
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice
+from app.domain.workflows.templates_models import FRAME_ASPECTS, LATENT_CONTEXT_SECONDS, LATENT_SEGMENT_SECONDS, ModelChoice
 
 LONG_TALK_VIDEO = "long_talk_video"
 
-#: H3 工作流一段 107 帧、24 帧每秒;尾巴 22 帧。时长写在工作流里,这两个数要和它一致。
-SEGMENT_SECONDS = 4.458
-TAIL_SECONDS = 0.917
-
-
 def _speaking_prompt(scene: str) -> str:
-    return f"{scene} <Picture 1> speaks to the camera, the lips exactly matching <Audio 1>. One continuous shot, no cut."
+    """嘴动不动主要看提示词:不把「一直在说」写成最高优先级,就有稿子在念、人却闭着嘴的段落(实测)。"""
+    return (f"<Picture 1> is the person in the reference photo; keep the face, hair and clothes exactly. {scene} "
+            "Highest priority: whenever the person is on screen the mouth keeps speaking, the lips, jaw and cheeks follow <Audio 1> "
+            "syllable by syllable, opening and closing naturally every half second, teeth and the inside of the mouth visible. "
+            "Photorealistic documentary footage, real skin with pores, natural micro-expressions, eye blinks, subtle breathing, "
+            "natural available light, film grain, no beauty filter, no CGI look. One continuous shot, the camera stays still, no cut.")
 
 
 def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id: str = "") -> dict[str, Any]:
     width, height = FRAME_ASPECTS["16:9"]
     segment_body = {
         "nodes": [
-            {
-                "id": "tail", "type": "media_clip",
-                "name": {"zh": "取上一段的尾巴", "en": "Take the tail of the previous segment"},
-                "position": {"x": 80, "y": 60},
-                "config": {"asset_id": "{{loop.previous}}", "last_seconds": "{{input.overlap_seconds}}"},
-            },
             {
                 "id": "voice", "type": "media_clip",
                 "name": {"zh": "取这一段的配音", "en": "Take the voice for this segment"},
@@ -51,8 +46,11 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "config": {
                     "provider": video.provider, "provider_profile_id": video.profile_id, "model": video.model, "kind": "video",
                     "prompt": _speaking_prompt("{{input.scene}}"),
+                    "parameters": {
+                        "50.project_folder": "{{input.latent_folder}}", "50.scene_number": "{{loop.item.previous_scene}}",
+                        "52.project_folder": "{{input.latent_folder}}", "52.scene_number": "{{loop.item.scene}}",
+                    },
                     "source_assets": [
-                        "{{tail.asset_id}}:first_clip",
                         "{{input.face_asset_id}}:reference_image",
                         "{{voice.asset_id}}:driving_audio",
                     ],
@@ -61,7 +59,6 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
             },
         ],
         "edges": [
-            {"id": "tail_extend", "source": "tail", "target": "extend"},
             {"id": "voice_extend", "source": "voice", "target": "extend"},
         ],
     }
@@ -78,7 +75,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
         "edges": [],
     }
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TALK_VIDEO, "template_version": 1, "source": "official"},
+        "meta": {"template_id": LONG_TALK_VIDEO, "template_version": 2, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -92,8 +89,8 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                         "scene": "",
                         #: 《互联网信息服务深度合成管理规定》第十四条要求的单独同意:选了才跑。
                         "consent": "",
-                        "segment_seconds": SEGMENT_SECONDS,
-                        "overlap_seconds": TAIL_SECONDS,
+                        "segment_seconds": LATENT_SEGMENT_SECONDS,
+                        "overlap_seconds": LATENT_CONTEXT_SECONDS,
                     },
                     "required_params": ["script", "face_asset_id", "voice_id", "consent"],
                     "param_options": {"consent": [{"value": "yes", "label": "已取得授权 / Consent obtained"}]},
@@ -142,6 +139,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "config": {
                     "provider": opening.provider, "provider_profile_id": opening.profile_id, "model": opening.model, "kind": "video",
                     "prompt": _speaking_prompt("{{start.scene}}"),
+                    "parameters": {"52.project_folder": "mosael/{{video_project.project_id}}", "52.scene_number": 1},
                     "source_assets": ["{{start.face_asset_id}}:reference_image", "{{voice_open.asset_id}}:driving_audio"],
                     "consent": "{{start.consent}}",
                 },
@@ -157,6 +155,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                         "consent": "{{start.consent}}",
                         "face_asset_id": "{{start.face_asset_id}}",
                         "voice_asset_id": "{{speak.asset_id}}",
+                        "latent_folder": "mosael/{{video_project.project_id}}",
                         "overlap_seconds": "{{start.overlap_seconds}}",
                     },
                     "body": segment_body,
@@ -206,6 +205,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
             {"id": "info_plan", "source": "voice_info", "target": "plan"},
             {"id": "plan_project", "source": "plan", "target": "video_project"},
             {"id": "plan_voice", "source": "plan", "target": "voice_open"},
+            {"id": "project_opening", "source": "video_project", "target": "opening"},
             {"id": "voice_opening", "source": "voice_open", "target": "opening"},
             {"id": "opening_segments", "source": "opening", "target": "segments"},
             {"id": "segments_clear", "source": "segments", "target": "clear_timeline"},

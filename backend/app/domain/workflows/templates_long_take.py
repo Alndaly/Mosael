@@ -25,6 +25,8 @@ from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import (
     CONTINUATION_TAIL_SECONDS,
     FRAME_ASPECTS,
+    LATENT_CONTEXT_SECONDS,
+    LATENT_SEGMENT_SECONDS,
     ModelChoice,
     VideoPlan,
     image_plan_for,
@@ -107,6 +109,11 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
     #: 清晰度的写法各家不同(万相 `720P`、Seedance `720p`):开始参数那一格是续写模型的,写法不同的第一段写它自己的。
     if "resolution" in first_parameters and opening.provider != video.provider:
         first_parameters["resolution"] = first_plan.resolution
+    if plan.latent_chain:
+        #: 段与段接在潜空间里:读上一段、存这一段,不用截尾巴。文件夹按项目分,一次运行一份。
+        parameters.update({"50.project_folder": "{{input.latent_folder}}", "50.scene_number": "{{loop.item.previous_scene}}",
+                           "52.project_folder": "{{input.latent_folder}}", "52.scene_number": "{{loop.item.scene}}"})
+        first_parameters.update({"52.project_folder": "mosael/{{video_project.project_id}}", "52.scene_number": 1})
     if plan.extends:
         tail_node: dict[str, Any] = {
             "id": "tail", "type": "media_clip",
@@ -125,7 +132,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
         handed_over = "{{tail.asset_id}}:first_frame"
     segment_body = {
         "nodes": [
-            tail_node,
+            *([] if plan.latent_chain else [tail_node]),
             {
                 "id": "extend", "type": "ai_generate",
                 "name": {"zh": "接着往下拍", "en": "Carry on from there"},
@@ -137,13 +144,13 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "prompt": "{{input.style}} {{input.scene}} One continuous shot with no cut, the same person in the same "
                               "place, carrying on from the given clip. What happens now: {{loop.item.beat}}",
                     "parameters": parameters,
-                    "source_assets": [handed_over, *(["{{anchor.asset_id}}:last_frame"] if anchors else [])],
+                    "source_assets": [] if plan.latent_chain else [handed_over, *(["{{anchor.asset_id}}:last_frame"] if anchors else [])],
                     "entity_ids": "{{input.entity_ids}}",
                 },
             },
             *anchor_nodes,
         ],
-        "edges": [{"id": "tail_extend", "source": "tail", "target": "extend"}, *anchor_edges],
+        "edges": [] if plan.latent_chain else [{"id": "tail_extend", "source": "tail", "target": "extend"}, *anchor_edges],
     }
     append_segment: dict[str, Any] = {
         "id": "append_segment", "type": "timeline_append",
@@ -152,8 +159,8 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
         "config": {
             "sequence_id": "{{input.sequence_id}}",
             "asset_id": "{{loop.item}}",
-            #: 成片以交过去的那段尾巴开头:这一截上一段已经有了。只交了一帧的不用去掉。
-            "start": "{{seam.start}}" if plan.extends else 0,
+            #: 成片以交过去的那段尾巴开头:这一截上一段已经有了。只交了一帧的不用去掉。潜空间的上文长度是准的,不用在画面里找。
+            "start": "{{input.overlap_seconds}}" if plan.latent_chain else "{{seam.start}}" if plan.extends else 0,
         },
     }
     seam: dict[str, Any] = {
@@ -168,11 +175,11 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
         },
     }
     assemble_body = {
-        "nodes": [seam, append_segment] if plan.extends else [append_segment],
-        "edges": [{"id": "seam_append", "source": "seam", "target": "append_segment"}] if plan.extends else [],
+        "nodes": [seam, append_segment] if plan.extends and not plan.latent_chain else [append_segment],
+        "edges": [{"id": "seam_append", "source": "seam", "target": "append_segment"}] if plan.extends and not plan.latent_chain else [],
     }
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 5, "source": "official"},
+        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 6, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -183,8 +190,9 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                         "idea": "",
                         "target_seconds": 60,
                         #: 收待续写片段的按最长的拍:每段都有一截重叠,段越长浪费的比例越小。
-                        "segment_seconds": plan.longest_clip if plan.extends and plan.longest_clip else plan.clip_seconds,
-                        "overlap_seconds": plan.tail_seconds or CONTINUATION_TAIL_SECONDS,
+                        "segment_seconds": LATENT_SEGMENT_SECONDS if plan.latent_chain else
+                        plan.longest_clip if plan.extends and plan.longest_clip else plan.clip_seconds,
+                        "overlap_seconds": LATENT_CONTEXT_SECONDS if plan.latent_chain else plan.tail_seconds or CONTINUATION_TAIL_SECONDS,
                         #: 成本的闸门:每一段都是一次付费生成。超过的段不跑。
                         "max_segments": 12,
                         #: 累计花到这个数就停,0 是不限。停下之后调高它再点「从中断处继续」。
@@ -280,6 +288,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "inputs": {
                         "style": "{{start.style}}",
                         "scene": "{{split.json.opening}}",
+                        **({"latent_folder": "mosael/{{video_project.project_id}}"} if plan.latent_chain else {}),
                         "overlap_seconds": "{{start.overlap_seconds}}",
                         "segment_seconds": "{{start.segment_seconds}}",
                         "entity_ids": "{{start.entity_ids}}",
@@ -312,7 +321,8 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "position": {"x": 1900, "y": 300},
                 "config": {
                     "items": "{{segments.results}}",
-                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "search_seconds": "{{start.segment_seconds}}"},
+                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "search_seconds": "{{start.segment_seconds}}",
+                               "overlap_seconds": "{{start.overlap_seconds}}"},
                     "body": assemble_body,
                     "output": "{{loop.item}}",
                     "previous_initial": "{{opening.asset_id}}",
@@ -335,6 +345,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
             {"id": "start_plan", "source": "start", "target": "plan"},
             {"id": "plan_split", "source": "plan", "target": "split"},
             {"id": "split_project", "source": "split", "target": "video_project"},
+            {"id": "project_opening", "source": "video_project", "target": "opening"},
             {"id": "split_beats", "source": "split", "target": "beats"},
             {"id": "beats_estimate", "source": "beats", "target": "estimate"},
             {"id": "estimate_opening", "source": "estimate", "target": "opening"},

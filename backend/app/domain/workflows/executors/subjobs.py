@@ -458,6 +458,9 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
                 "to_seconds": seconds(min(segment + index * fresh, target)),
                 "last_frame": last_frame if index == rounds else "",
                 "beat": beats[(index - 1) * len(beats) // rounds] if beats else "",
+                #: 潜空间续写的工作流按段号存取:第一段是 1。
+                "previous_scene": index,
+                "scene": index + 1,
             }
             for index in range(1, rounds + 1)
         ],

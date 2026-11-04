@@ -109,6 +109,19 @@ def test_真跑一遍_每段接着上一段的尾巴(fake_run) -> None:
     assert context["export_final"]["asset_id"] == "final"
 
 
+def test_潜空间续写_不截尾巴_按段号存取_按上文长度接(monkeypatch) -> None:
+    from app.domain.workflows import templates_long_take
+    from app.domain.workflows.templates_models import VideoPlan
+
+    monkeypatch.setattr(templates_long_take, "video_plan_for", lambda db, choice, references=0: VideoPlan(latent_chain=True, parameters={}))
+    graph = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V)
+    body = _node(graph, "segments")["config"]["body"]
+    assert [node["id"] for node in body["nodes"]] == ["extend"]
+    assert _body(graph, "segments", "extend")["config"]["parameters"]["50.scene_number"] == "{{loop.item.previous_scene}}"
+    assert _node(graph, "opening")["config"]["parameters"]["52.scene_number"] == 1
+    assert _body(graph, "assemble", "append_segment")["config"]["start"] == "{{input.overlap_seconds}}"
+
+
 def test_段数算好了写进提示词_不靠模型心算() -> None:
     graph = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V)
     assert _node(graph, "plan")["type"] == "chain_plan"

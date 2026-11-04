@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Digital human of any length",
   "description": "One portrait and one script: it voices the script, cuts it into segments and has the person speak on from the tail of the last, joined into one unbroken video. Needs consent for the face and voice.",
-  "graph_hash": "c452ef7171e15d3c65116404ddb3dfb0990d9d3693ac07fd82bd451244fe2a4d",
+  "graph_hash": "6de809bb903309738f135826d4b2f7cdff5b52ce67f5d88ee9f58aeed39d6529",
   "graph": {
     "meta": {
       "template_id": "long_talk_video",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -27,8 +27,8 @@
             "voice_id": "",
             "scene": "",
             "consent": "",
-            "segment_seconds": 4.458,
-            "overlap_seconds": 0.917
+            "segment_seconds": 10.125,
+            "overlap_seconds": 1.625
           },
           "required_params": [
             "script",
@@ -139,7 +139,11 @@
           "provider_profile_id": "",
           "model": "",
           "kind": "video",
-          "prompt": "{{start.scene}} <Picture 1> speaks to the camera, the lips exactly matching <Audio 1>. One continuous shot, no cut.",
+          "prompt": "<Picture 1> is the person in the reference photo; keep the face, hair and clothes exactly. {{start.scene}} Highest priority: whenever the person is on screen the mouth keeps speaking, the lips, jaw and cheeks follow <Audio 1> syllable by syllable, opening and closing naturally every half second, teeth and the inside of the mouth visible. Photorealistic documentary footage, real skin with pores, natural micro-expressions, eye blinks, subtle breathing, natural available light, film grain, no beauty filter, no CGI look. One continuous shot, the camera stays still, no cut.",
+          "parameters": {
+            "52.project_folder": "mosael/{{video_project.project_id}}",
+            "52.scene_number": 1
+          },
           "source_assets": [
             "{{start.face_asset_id}}:reference_image",
             "{{voice_open.asset_id}}:driving_audio"
@@ -162,23 +166,11 @@
             "consent": "{{start.consent}}",
             "face_asset_id": "{{start.face_asset_id}}",
             "voice_asset_id": "{{speak.asset_id}}",
+            "latent_folder": "mosael/{{video_project.project_id}}",
             "overlap_seconds": "{{start.overlap_seconds}}"
           },
           "body": {
             "nodes": [
-              {
-                "id": "tail",
-                "type": "media_clip",
-                "name": "Take the tail of the previous segment",
-                "position": {
-                  "x": 80,
-                  "y": 60
-                },
-                "config": {
-                  "asset_id": "{{loop.previous}}",
-                  "last_seconds": "{{input.overlap_seconds}}"
-                }
-              },
               {
                 "id": "voice",
                 "type": "media_clip",
@@ -206,9 +198,14 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
-                  "prompt": "{{input.scene}} <Picture 1> speaks to the camera, the lips exactly matching <Audio 1>. One continuous shot, no cut.",
+                  "prompt": "<Picture 1> is the person in the reference photo; keep the face, hair and clothes exactly. {{input.scene}} Highest priority: whenever the person is on screen the mouth keeps speaking, the lips, jaw and cheeks follow <Audio 1> syllable by syllable, opening and closing naturally every half second, teeth and the inside of the mouth visible. Photorealistic documentary footage, real skin with pores, natural micro-expressions, eye blinks, subtle breathing, natural available light, film grain, no beauty filter, no CGI look. One continuous shot, the camera stays still, no cut.",
+                  "parameters": {
+                    "50.project_folder": "{{input.latent_folder}}",
+                    "50.scene_number": "{{loop.item.previous_scene}}",
+                    "52.project_folder": "{{input.latent_folder}}",
+                    "52.scene_number": "{{loop.item.scene}}"
+                  },
                   "source_assets": [
-                    "{{tail.asset_id}}:first_clip",
                     "{{input.face_asset_id}}:reference_image",
                     "{{voice.asset_id}}:driving_audio"
                   ],
@@ -217,11 +214,6 @@
               }
             ],
             "edges": [
-              {
-                "id": "tail_extend",
-                "source": "tail",
-                "target": "extend"
-              },
               {
                 "id": "voice_extend",
                 "source": "voice",
@@ -364,6 +356,11 @@
         "id": "plan_voice",
         "source": "plan",
         "target": "voice_open"
+      },
+      {
+        "id": "project_opening",
+        "source": "video_project",
+        "target": "opening"
       },
       {
         "id": "voice_opening",

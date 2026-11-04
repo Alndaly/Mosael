@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "任意长度的连续视频",
   "description": "输入一个想法和总时长，拆成一段一段，每段接着上一段的尾巴往下拍，接成一条不切镜头的长片。每段都是一次付费视频生成：开跑前按段数估算费用，max_segments 和 max_spend 是上限；断了可以从中断处继续。",
-  "graph_hash": "3d5bebe31178d03295c63919a6fd584b3cb5612bccb3759418bebe6802dfb4f3",
+  "graph_hash": "bacd33303721d89ad71084a47ea857bfc1cefa5541ed0b24483ab71344f76c86",
   "graph": {
     "meta": {
       "template_id": "long_take_video",
-      "template_version": 5,
+      "template_version": 6,
       "source": "official"
     },
     "nodes": [
@@ -287,7 +287,8 @@
           "items": "",
           "inputs": {
             "sequence_id": "{{video_project.sequence_id}}",
-            "search_seconds": "{{start.segment_seconds}}"
+            "search_seconds": "{{start.segment_seconds}}",
+            "overlap_seconds": "{{start.overlap_seconds}}"
           },
           "body": {
             "nodes": [
@@ -362,6 +363,11 @@
         "id": "split_project",
         "source": "split",
         "target": "video_project"
+      },
+      {
+        "id": "project_opening",
+        "source": "video_project",
+        "target": "opening"
       },
       {
         "id": "split_beats",
