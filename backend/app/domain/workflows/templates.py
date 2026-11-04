@@ -49,6 +49,7 @@ from app.domain.workflows.templates_business import (
     product_pitch_short_graph,
     talking_script_video_graph,
 )
+from app.domain.workflows.normalization import localised_names
 from app.domain.workflows.templates_analysis import (
     ACCOUNT_ANALYSIS,
     ANALYSIS_TEMPLATE_CATALOG,
@@ -93,7 +94,6 @@ from app.domain.voices import transcription
 from app.domain.voices.engine_catalog import cloned_voice_status
 from app.domain.workflows.executors import talking
 from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC
-from mosael_formats.i18n import pick_text
 
 
 #: 官方模板的**说明**:叫什么、干什么、分几步、跑之前要备好什么。图由上面那几个函数造,
@@ -467,22 +467,6 @@ def _carry_picks(fresh: dict[str, Any], old: dict[str, Any]) -> None:
             if value in (None, "") and key not in bound and isinstance(kept, (str, int, float)) and kept != "" \
                     and "{{" not in str(kept):
                 config[key] = kept
-
-
-def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]:
-    """把图里每个节点的名字定成一种语言(循环体/子图里的也算)。
-
-    **只动名字**:config 里的值是数据(提示词、模板串),不是给人看的标签 —— 翻它们等于改这条
-    工作流要做的事。
-    """
-
-    for node in graph.get("nodes") or []:
-        if isinstance(node, dict) and isinstance(node.get("name"), dict):
-            node["name"] = pick_text(node["name"], locale)
-        body = (node.get("config") or {}).get("body") if isinstance(node, dict) else None
-        if isinstance(body, dict):
-            localised_names(locale, body)
-    return graph
 
 
 def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:

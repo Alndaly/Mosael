@@ -12,6 +12,8 @@ from copy import deepcopy
 import re
 from typing import Any
 
+from mosael_formats.i18n import pick_text
+
 from app.domain.workflows.graph_rules import NESTED_BODY_RAW_KEYS
 
 PURE_REFERENCE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
@@ -26,6 +28,22 @@ def normalize_graph(graph: dict[str, Any], *, node_types: dict[str, dict[str, An
     """
     lists = canonicalize_list_fields(canonicalize_line_fields(graph, node_types=node_types), node_types=node_types)
     return canonicalize_data_bindings(canonicalize_start_params(lists), node_types=node_types)
+
+
+def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]:
+    """把图里每个节点的名字定成一种语言(循环体/子图里的也算)。
+
+    **只动名字**:config 里的值是数据(提示词、模板串),不是给人看的标签 —— 翻它们等于改这条
+    工作流要做的事。
+    """
+
+    for node in graph.get("nodes") or []:
+        if isinstance(node, dict) and isinstance(node.get("name"), dict):
+            node["name"] = pick_text(node["name"], locale)
+        body = (node.get("config") or {}).get("body") if isinstance(node, dict) else None
+        if isinstance(body, dict):
+            localised_names(locale, body)
+    return graph
 
 
 def canonicalize_start_params(graph: dict[str, Any]) -> dict[str, Any]:

@@ -23,9 +23,10 @@ from sqlalchemy.orm import Session
 from app.db.models import Workflow
 
 from app.domain.workflows.errors import WorkflowDomainError
+from app.core.i18n import get_current_locale
 from app.domain.workflows.graph_rules import _plugin_types, validate_graph
 from app.domain.workflows.node_types import NODE_TYPES
-from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.normalization import localised_names, normalize_graph
 from app.domain.workflows.revisions import commit_graph_revision, create_initial_revision, replace_graph
 
 
@@ -48,13 +49,7 @@ def create_workflow(
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
 
-    extra_types = _plugin_types(db)
-    graph = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
-    # 保存放行「还没配完」:必填缺失交给就绪检查与运行时,否则新节点存不下来。此刻用不了的插件节点同理(见 validate_graph)。
-    errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=extra_types,
-                            unusable_plugin_nodes_ok=True)
-    if errors:
-        raise WorkflowDomainError("；".join(errors))
+    graph = _checked_graph(db, graph)
     workflow = Workflow(workspace_id=workspace_id, name=name, description=description, graph=graph)
     db.add(workflow)
 
@@ -75,6 +70,9 @@ def _checked_graph(db: Session, graph: Any) -> dict[str, Any]:
 
     extra_types = _plugin_types(db)
     normalized = normalize_graph(graph, node_types={**NODE_TYPES, **extra_types})
+    #: 节点名字到这里定成一种语言:`{zh, en}` 的名字落了库,打开工作流页就崩,整页都进不去(实测)。
+    localised_names(get_current_locale(), normalized)
+    # 保存放行「还没配完」:必填缺失交给就绪检查与运行时,否则新节点存不下来。此刻用不了的插件节点同理(见 validate_graph)。
     errors = validate_graph(normalized, require_config=False, allow_missing_start=True, extra_types=extra_types,
                             unusable_plugin_nodes_ok=True)
     if errors:
