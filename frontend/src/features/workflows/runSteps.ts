@@ -62,6 +62,12 @@ export function toSteps(events: TaskEvent[]): Step[] {
   let terminalAt: number | undefined;
   let terminal: "failed" | "cancelled" | undefined;
   for (const e of sorted) {
+    //: 从中断处继续:同一条运行又跑起来了,之前那次失败已经翻篇。留着的话,此刻在跑的步骤会被收口成「失败」。
+    if (e.type === "workflow.continued") {
+      terminal = undefined;
+      terminalAt = undefined;
+      continue;
+    }
     if (TERMINAL_RUN_EVENTS.has(e.type)) {
       terminalAt = e.created_at ? parseServerTime(e.created_at).getTime() : undefined;
       //: 取消和失败一样要收口在跑的那一步,但说法不同:此前一律标成 failed,

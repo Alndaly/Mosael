@@ -141,3 +141,31 @@ describe("工作流失败步骤", () => {
     expect(steps[1].ms).toBe(10_000);
   });
 });
+
+describe("从中断处继续", () => {
+  const event = (id: string, type: string, at: string, payload: Record<string, unknown> = {}) =>
+    ({ id, job_id: "j", type, created_at: at, payload }) as unknown as TaskEvent;
+
+  it("继续之后在跑的步骤是「运行中」,不被上一次的失败收口", () => {
+    const steps = toSteps([
+      event("1", "workflow.node.started", "2026-11-05T00:00:00", { node_id: "a", name: "第一段" }),
+      event("2", "workflow.node.failed", "2026-11-05T00:01:00", { node_id: "a", error: "断了" }),
+      event("3", "workflow.failed", "2026-11-05T00:01:01"),
+      event("4", "workflow.continued", "2026-11-05T00:02:00"),
+      event("5", "workflow.node.started", "2026-11-05T00:02:01", { node_id: "a", name: "第一段" }),
+      event("6", "workflow.node.finished", "2026-11-05T00:03:00", { node_id: "a" }),
+      event("7", "workflow.node.started", "2026-11-05T00:03:01", { node_id: "b", name: "循环" }),
+    ]);
+    expect(steps.map((step) => step.status)).toEqual(["done", "running"]);
+  });
+
+  it("继续之后又失败了,在跑的那一步照样收口", () => {
+    const steps = toSteps([
+      event("1", "workflow.failed", "2026-11-05T00:01:01"),
+      event("2", "workflow.continued", "2026-11-05T00:02:00"),
+      event("3", "workflow.node.started", "2026-11-05T00:02:01", { node_id: "b", name: "循环" }),
+      event("4", "workflow.failed", "2026-11-05T00:03:00"),
+    ]);
+    expect(steps[0].status).toBe("failed");
+  });
+});
