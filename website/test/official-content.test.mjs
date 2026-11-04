@@ -33,7 +33,7 @@ const BROWSE = "components/community/browse.tsx";
 const HELPER = "components/community/listed-shares.ts";
 const UPLOAD_FORM = "components/community/upload-form.tsx";
 
-const PNG_COUNT = { plugins: 10, workflows: 16 };
+const PNG_COUNT = { plugins: 10, workflows: 17 };
 
 function tmpdir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));

@@ -1138,6 +1138,13 @@
           "zh": "尾帧",
           "en": "Last frame"
         }
+      },
+      "beats": {
+        "type": "template",
+        "label": {
+          "zh": "每段演什么",
+          "en": "What each segment shows"
+        }
       }
     },
     "outputs": [

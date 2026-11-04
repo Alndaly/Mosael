@@ -2059,3 +2059,13 @@ def test_读进来的视频不算产出(graph) -> None:
         "17": {"images": [{"filename": "h3_continue_00001_.mp4", "subfolder": "video", "type": "output"}], "animated": [True]},
     }, "prompt": [0, "p", {"1": {"class_type": "LoadVideo"}, "17": {"class_type": "SaveVideo"}}, {}, []]}
     assert [one["item"]["filename"] for one in graph.collect_outputs(entry, "video")] == ["h3_continue_00001_.mp4"]
+
+
+def test_接在音频驱动上的音频是驱动音频_接了参考也是(graph) -> None:
+    api = {
+        "41": {"class_type": "LoadAudio", "inputs": {"audio": "voice.wav"}},
+        "7": {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {"ref_audios.ref_audio_0": ["41", 0]}},
+        "42": {"class_type": "VRGDG_MiniMaxH3AudioDrive", "inputs": {"source_audio": ["41", 0]}},
+    }
+    assert graph._drives_the_video(api, "41")
+    assert not graph._drives_the_video({key: value for key, value in api.items() if key != "42"}, "41")

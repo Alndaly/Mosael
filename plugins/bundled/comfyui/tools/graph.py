@@ -361,6 +361,16 @@ _CLIP_GUIDES = frozenset({"MiniMaxH3AddGuide"})
 _VIDEO_PASSES = frozenset({"video", "image", "images"})
 
 
+def _drives_the_video(api: dict[str, Any], node_id: str) -> bool:
+    """这段音频是不是驱动成片的那一段(接在音频驱动节点上)。H3 要它同时当参考,接了参考也还是驱动音频。"""
+    return any(
+        isinstance(value, list) and value and str(value[0]) == node_id
+        for node in api.values()
+        if "AudioDrive" in str(node.get("class_type", ""))
+        for value in (node.get("inputs") or {}).values()
+    )
+
+
 def _continues_this_clip(api: dict[str, Any], node_id: str) -> bool:
     """这段读进来的视频是不是被锚在了成片的第 0 帧:是的话成片接着它往下拍,它是 `first_clip`,不是要改的那一段。"""
     frontier, seen = [node_id], {node_id}
@@ -497,7 +507,7 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None,
         elif media == "video":
             role = "reference_video" if referenced else "first_clip" if _continues_this_clip(api, node_id) else "source_video"
         elif media == "audio":
-            role = "driving_audio" if kind == "video" and not referenced else "reference_audio"
+            role = "driving_audio" if kind == "video" and (not referenced or _drives_the_video(api, node_id)) else "reference_audio"
         slot = {
             "node": node_id,
             "class_type": class_type,
