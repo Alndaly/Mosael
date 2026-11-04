@@ -2050,3 +2050,12 @@ def test_校验错误_主句是中文_原话另放_三类认得(graph) -> None:
     assert "#4 Value not in list: ckpt_name: 'x' not in [...]" in raw
     assert "#8 Required input is missing: vae" in raw and "#12 Node not found" in raw, "原话一字不动地留着"
     assert "not among" in graph.validation_errors(detail, "en")
+
+
+def test_读进来的视频不算产出(graph) -> None:
+    """ComfyUI 把 LoadVideo 读的那段也列在历史里(`type: input`):当成产出,续写交回的就是交进去的尾巴。"""
+    entry = {"outputs": {
+        "1": {"images": [{"filename": "tail.mp4", "subfolder": "mosael", "type": "input"}], "animated": [True]},
+        "17": {"images": [{"filename": "h3_continue_00001_.mp4", "subfolder": "video", "type": "output"}], "animated": [True]},
+    }, "prompt": [0, "p", {"1": {"class_type": "LoadVideo"}, "17": {"class_type": "SaveVideo"}}, {}, []]}
+    assert [one["item"]["filename"] for one in graph.collect_outputs(entry, "video")] == ["h3_continue_00001_.mp4"]

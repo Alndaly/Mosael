@@ -2043,7 +2043,9 @@ def all_outputs(history_entry: dict[str, Any], *, include_previews: bool = False
         class_type = str((prompt.get(str(node_id)) or {}).get("class_type", ""))
         for key in OUTPUT_KEYS:
             for item in node_output.get(key) or []:
-                if isinstance(item, dict) and item.get("filename"):
+                #: `type: input` 是读进来的素材:新版 ComfyUI 把 LoadVideo 读的那段也列在这里。当成产出的话,续写交回的就是
+                #: 交进去的尾巴(实测 H3 每段都是 22 帧),成片排在它后面反而没人要。
+                if isinstance(item, dict) and item.get("filename") and item.get("type") != "input":
                     media = media_of(str(item["filename"]))
                     if media == "animated":
                         media = "video" if key in ("gifs", "videos") or class_type in _VIDEO_OUTPUT_TYPES else "image"
