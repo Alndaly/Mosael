@@ -33,6 +33,8 @@ class ModelChoice:
 
 #: 续写的尾巴留多长。H3 按 17k+5 帧取片段,22 帧正好是 24fps 下的 0.92 秒:写成 1 秒的话多出来的两帧被裁掉。
 CONTINUATION_TAIL_SECONDS = 0.92
+#: 模型要尾巴至少几秒时多留这一点:按帧截,截出来总比要的短一丝,卡在下限上供应商未必认。
+TAIL_MARGIN_SECONDS = 0.1
 
 
 @dataclass(frozen=True)
@@ -70,7 +72,9 @@ class VideoPlan:
     @property
     def tail_seconds(self) -> float:
         """续写时交给下一段的尾巴多长。只交一帧时没有重叠。"""
-        return max(CONTINUATION_TAIL_SECONDS, self.shortest_tail) if self.extends else 0.0
+        if not self.extends:
+            return 0.0
+        return self.shortest_tail + TAIL_MARGIN_SECONDS if self.shortest_tail else CONTINUATION_TAIL_SECONDS
 
     @property
     def modes(self) -> list[str]:

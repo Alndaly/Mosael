@@ -65,7 +65,7 @@ def _inner(graph: dict, node_id: str) -> dict:
 
 def test_收待续写片段的模型_尾巴接着拍_还能三镜同时跑() -> None:
     graph = full_video_generation_graph(chat=CHAT, image=IMAGE, video=WAN)
-    assert _inner(graph, "shot_chain")["config"]["overlap_seconds"] == 2.0
+    assert _inner(graph, "shot_chain")["config"]["overlap_seconds"] == 2.1
     extend = _inner(graph, "extend_shot")["config"]["body"]["nodes"]
     assert [node["type"] for node in extend] == ["media_clip", "ai_generate"]
     assert extend[1]["config"]["source_assets"] == ["{{tail.asset_id}}:first_clip", "{{loop.item.last_frame}}:last_frame"]
