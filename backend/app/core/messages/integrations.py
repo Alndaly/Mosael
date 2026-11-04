@@ -1160,7 +1160,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_sentences": {"zh": "逐句", "en": "Sentences"},
     "wfField_texts": {"zh": "逐条文本", "en": "Per-segment lines"},
     "wfField_clip_ids": {"zh": "片段", "en": "Clips"},
+    "wfField_break_long_lines": {"zh": "长句切开", "en": "Break long lines"},
     "wfField_keep_original": {"zh": "保留原文", "en": "Keep the original"},
+    "wfField_last_frame_asset_id": {"zh": "尾帧", "en": "Last frame"},
     "wfField_match_duration": {"zh": "压回原长度", "en": "Fit to original length"},
     "wfField_line": {"zh": "配音文本", "en": "Text to dub"},
     "wfField_original_audio": {"zh": "原声", "en": "Original audio"},
@@ -1363,6 +1365,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_chain_plan_longest_seconds": {"zh": "模型一次最长几秒", "en": "The longest the model makes at once"},
     "wfNode_chain_plan_shortest_seconds": {"zh": "模型一次最短几秒", "en": "The shortest the model makes at once"},
     "wfNode_chain_plan_allowed_seconds": {"zh": "模型只有这几档时长时填,逗号分隔", "en": "Fill in when the model only offers these lengths, comma separated"},
+    "wfNode_chain_plan_last_frame_asset_id": {"zh": "这一镜的尾帧,落在最后一段", "en": "This shot's last frame, used on the final segment"},
     "wfNode_chain_plan_overlap_seconds": {"zh": "每段开头有几秒是上一段的尾巴", "en": "Seconds at the start of each segment that repeat the last one"},
     "wfNode_video_join": {"zh": "接成一条", "en": "Join into one video"},
     "wfNode_video_join_desc": {

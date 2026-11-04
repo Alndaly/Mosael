@@ -132,6 +132,11 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
 
     接成一份之后,时间线、口播对齐、字幕都还是「一镜一份素材」。放得下的镜头续写循环一轮都不跑,接成一条就是它自己。
     """
+    opening = next(node for node in body["nodes"] if node["id"] == "generate_clip")["config"]
+    #: 分镜提示词写的是整镜的动作。每一段不说清只演哪一截,模型就从头演一遍:第一段把整镜走完,第二段又回到开头(实测)。
+    opening["prompt"] += " This clip is seconds 0 to {{shot_chain.opening_seconds}} of the {{input.shot_seconds}}-second action above: end where that second falls."
+    opening["source_assets"] = [one.replace("{{paint_last_frame.asset_id}}", "{{shot_chain.opening_last_frame}}")
+                                for one in opening["source_assets"]]
     extending = {key: value.replace("{{shot_chain.segment_seconds}}", "{{input.segment_seconds}}") if isinstance(value, str) else value
                  for key, value in parameters.items()}
     inner_inputs = {
@@ -160,6 +165,7 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
                 "shortest_seconds": plan.shortest_clip,
                 "allowed_seconds": ",".join(str(one) for one in plan.allowed_clips),
                 "overlap_seconds": plan.tail_seconds,
+                "last_frame_asset_id": "{{paint_last_frame.asset_id}}",
             },
         },
         {
@@ -178,9 +184,14 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
                         "position": {"x": 390, "y": 140},
                         "config": {
                             "provider": video.provider, "provider_profile_id": video.profile_id, "model": video.model, "kind": "video",
-                            "prompt": "{{input.prompt}} Continue the same shot without a cut. {{input.style}}",
+                            "prompt": "{{input.prompt}} This clip continues the same shot without a cut, from the given "
+                                      "start: seconds {{loop.item.from_seconds}} to {{loop.item.to_seconds}} of the action above. "
+                                      "Do not replay anything before that. {{input.style}}",
                             "parameters": extending,
-                            "source_assets": ["{{tail.asset_id}}:first_clip" if plan.extends else "{{tail.asset_id}}:first_frame"],
+                            "source_assets": [
+                                "{{tail.asset_id}}:first_clip" if plan.extends else "{{tail.asset_id}}:first_frame",
+                                *(["{{loop.item.last_frame}}:last_frame"] if plan.last_frame else []),
+                            ],
                         },
                     }],
                     "edges": [{"id": "tail_extend", "source": "tail", "target": "extend"}],
@@ -200,6 +211,8 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
         },
     ]
     body["edges"] += [
+        #: 它引用尾帧,而不画尾帧的镜头那个节点被跳过:没有这条边,它会跟着被跳过,这一镜的时长就成了空的。
+        {"id": "blockout_chain", "source": "render_blockout", "target": "shot_chain"},
         {"id": "chain_generate", "source": "shot_chain", "target": "generate_clip"},
         {"id": "generate_extend", "source": "generate_clip", "target": "extend_shot"},
         {"id": "extend_join", "source": "extend_shot", "target": "join_shot"},
@@ -960,6 +973,8 @@ JSON Schema 的对象。"""
                 "start_field": "append_narration.timeline_start",
                 "end_field": "append_narration.timeline_end",
                 "text_field": "caption.text",
+                #: 一镜可以有几十秒,口播一条上屏就出了画面。
+                "break_long_lines": "yes",
                 # 整片没有口播(没选音色)时交出 0 条,不让一条已经生成完的片子在这里失败。
                 "allow_empty": "yes",
             },
@@ -1048,8 +1063,9 @@ JSON Schema 的对象。"""
     ]
     graph = {
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
+        #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 14, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 15, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

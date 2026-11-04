@@ -215,7 +215,9 @@ _FIELD_LABELS = {
     "json_schema": "wfField_json_schema",
     "json_schema_name": "wfField_json_schema_name",
     "json_schema_strict": "wfField_json_schema_strict",
+    "break_long_lines": "wfField_break_long_lines",
     "keep_original": "wfField_keep_original",
+    "last_frame_asset_id": "wfField_last_frame_asset_id",
     "kind": "wfField_kind",
     "left": "wfField_left",
     "limit": "wfField_limit",
@@ -1226,9 +1228,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "shortest_seconds": {"advanced": True, "type": "number", "description": "wfNode_chain_plan_shortest_seconds"},
             "allowed_seconds": {"advanced": True, "type": "template", "description": "wfNode_chain_plan_allowed_seconds"},
             "overlap_seconds": {"advanced": True, "type": "number", "description": "wfNode_chain_plan_overlap_seconds"},
+            "last_frame_asset_id": {
+                "advanced": True, "type": "template", "media": "image", "description": "wfNode_chain_plan_last_frame_asset_id",
+            },
         },
-        "outputs": ["segment_seconds", "rounds", "count"],
-        "output_types": {"segment_seconds": "number", "rounds": "json", "count": "number"},
+        "outputs": ["segment_seconds", "opening_seconds", "opening_last_frame", "rounds", "count"],
+        "output_labels": {"opening_seconds": "wfOut_chain_opening_seconds", "opening_last_frame": "wfOut_chain_opening_last_frame"},
+        "output_types": {"segment_seconds": "number", "opening_seconds": "number", "rounds": "json", "count": "number"},
     },
     #: 把续写的几段接成一份素材。接缝在画面里找,见 assets/joining。
     "video_join": {
@@ -2162,6 +2168,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "default": "no",
                 "options": ["yes", "no"],
                 "description": "wfNode_generate_subtitles_keep_original",
+            },
+            "break_long_lines": {
+                "advanced": True,
+                "type": "string",
+                "default": "no",
+                "options": ["yes", "no"],
+                "description": "wfNode_generate_subtitles_break_long_lines",
             },
             "offset": {"advanced": True, "type": "number", "description": "wfNode_generate_subtitles_offset"},
             #: 段落是哪个片段的素材转出来的:给了就按片段的入点和倍速映射到时间线(offset 不再用)。

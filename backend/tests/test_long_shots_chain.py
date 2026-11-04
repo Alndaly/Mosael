@@ -46,7 +46,7 @@ def _plan(**config: Any) -> dict:
 ])
 def test_算分段(config: dict, segment: int, rounds: list[int]) -> None:
     made = _plan(**config)
-    assert (made["segment_seconds"], made["rounds"], made["count"]) == (segment, rounds, len(rounds) + 1)
+    assert (made["segment_seconds"], list(range(1, len(made["rounds"]) + 1)), made["count"]) == (segment, rounds, len(rounds) + 1)
 
 
 def test_重叠不比一段短_永远走不完_当场说() -> None:
@@ -68,7 +68,7 @@ def test_收待续写片段的模型_尾巴接着拍_还能三镜同时跑() -> 
     assert _inner(graph, "shot_chain")["config"]["overlap_seconds"] == 2.0
     extend = _inner(graph, "extend_shot")["config"]["body"]["nodes"]
     assert [node["type"] for node in extend] == ["media_clip", "ai_generate"]
-    assert extend[1]["config"]["source_assets"] == ["{{tail.asset_id}}:first_clip"]
+    assert extend[1]["config"]["source_assets"] == ["{{tail.asset_id}}:first_clip", "{{loop.item.last_frame}}:last_frame"]
     assert not [one for one in validate_graph(graph) if "一项一项" in one], "内层循环读上一轮,不该拦外层同时跑"
 
 
@@ -77,7 +77,7 @@ def test_只收首帧的模型_接最后一帧_没有重叠() -> None:
     assert _inner(graph, "shot_chain")["config"]["overlap_seconds"] == 0
     extend = _inner(graph, "extend_shot")["config"]["body"]["nodes"]
     assert extend[0]["type"] == "video_frame"
-    assert extend[1]["config"]["source_assets"] == ["{{tail.asset_id}}:first_frame"]
+    assert extend[1]["config"]["source_assets"] == ["{{tail.asset_id}}:first_frame", "{{loop.item.last_frame}}:last_frame"]
 
 
 def test_下游还是一镜一份素材() -> None:
@@ -120,6 +120,46 @@ def test_真接三段_重叠去掉_来源记着每一段(tmp_path: Path) -> None
         assert [one["asset_id"] for one in joined.derived_from] == ids
 
 
+def test_每一段知道自己演哪一截_尾帧落在最后一段() -> None:
+    made = _plan(target_seconds=35, longest_seconds=30, overlap_seconds=0, last_frame_asset_id="尾帧")
+    assert made["opening_seconds"] == 18 and made["opening_last_frame"] == ""
+    assert made["rounds"] == [{"from_seconds": 18, "to_seconds": 35, "last_frame": "尾帧"}]
+
+
+def test_放得下的一镜_尾帧还在这一段() -> None:
+    made = _plan(target_seconds=5, longest_seconds=15, last_frame_asset_id="尾帧")
+    assert made["opening_last_frame"] == "尾帧" and made["rounds"] == [] and made["opening_seconds"] == 5
+
+
+def test_续写时重叠的那截不算新戏() -> None:
+    rounds = _plan(target_seconds=20, longest_seconds=15, overlap_seconds=2)["rounds"]
+    assert [(one["from_seconds"], one["to_seconds"]) for one in rounds] == [(11, 20)]
+
+
+def test_整片模板_第一段不接尾帧_后面的段说清只演哪一截() -> None:
+    body = _body(full_video_generation_graph(chat=CHAT, image=IMAGE, video=SEEDANCE))
+    clip = next(node for node in body["nodes"] if node["id"] == "generate_clip")["config"]
+    assert "{{paint_last_frame.asset_id}}:last_frame" not in clip["source_assets"]
+    assert "{{shot_chain.opening_last_frame}}:last_frame" in clip["source_assets"]
+    assert "{{shot_chain.opening_seconds}}" in clip["prompt"]
+    extend = next(node for node in next(node for node in body["nodes"] if node["id"] == "extend_shot")["config"]["body"]["nodes"]
+                  if node["id"] == "extend")["config"]
+    assert "{{loop.item.from_seconds}}" in extend["prompt"] and "Do not replay" in extend["prompt"]
+
+
+def test_长口播切成一行放得下的几条_时间按字数分() -> None:
+    text = "雨把街面洗得发蓝，他走得不急，像认得这条空路。积水晃一下，远处的暖黄就亮一下。然后，他停住，收伞，抬头。雨声忽然低了。"
+    cues = subjobs._short_cues(text, 2.0, 20.0)
+    assert len(cues) > 1 and "".join(line for line, _, _ in cues) == text
+    assert all(subjobs._text_width(line) <= subjobs.SUBTITLE_LINE_WIDTH for line, _, _ in cues)
+    assert cues[0][1] == 2.0 and sum(length for _, _, length in cues) == pytest.approx(20)
+    assert cues[-1][1] + cues[-1][2] == pytest.approx(22)
+
+
+def test_短句不切() -> None:
+    assert subjobs._short_cues("雨停了。", 1.0, 2.0) == [("雨停了。", 1.0, 2.0)]
+
+
 def test_只有一段就是它自己(tmp_path: Path) -> None:
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     ids = _assets(tmp_path, ws, (0, 2))
@@ -134,7 +174,10 @@ def test_真跑一镜_超长时续写后接成一条(monkeypatch, tmp_path: Path
     ids = iter(_assets(tmp_path, ws, (0, 4), (2.5, 4), (5, 4)))
     tails: list[str] = []
 
+    asked: list[dict] = []
+
     def generate(db, scope, config):
+        asked.append(config)
         return {"asset_id": next(ids), "asset_ids": [], "generation_id": "g"}
 
     def clip(db, scope, config):
@@ -151,7 +194,7 @@ def test_真跑一镜_超长时续写后接成一条(monkeypatch, tmp_path: Path
         "edges": [edge for edge in body["edges"] if edge["source"] in keep and edge["target"] in keep],
     }
     chain = next(node for node in only["nodes"] if node["id"] == "shot_chain")
-    chain["config"].update({"longest_seconds": 4, "overlap_seconds": 1.5})
+    chain["config"].update({"longest_seconds": 4, "overlap_seconds": 1.5, "last_frame_asset_id": "尾帧"})
     with SessionLocal() as db:
         workflow = Workflow(workspace_id=ws, name="长镜头", graph={"nodes": [], "edges": []})
         db.add(workflow)
@@ -164,8 +207,13 @@ def test_真跑一镜_超长时续写后接成一条(monkeypatch, tmp_path: Path
     context, _ = execute_graph({"nodes": [{"id": "start", "type": "start", "config": {}}, loop],
                                 "edges": [{"id": "e", "source": "start", "target": "L"}]}, wf_id=wf_id, params={})
     made = context["L"]["results"][0]
-    assert made["shot_chain"]["rounds"] == [1, 2]
+    assert len(made["shot_chain"]["rounds"]) == 2
     assert len(tails) == 2 and made["join_shot"]["count"] == 3
+    #: 第一段不接尾帧,最后一段才接;每段的提示词里是真的秒数,不是没展开的引用。
+    assert ":last_frame" in asked[0]["source_assets"] and "尾帧:last_frame" not in asked[0]["source_assets"]
+    assert "尾帧:last_frame" not in asked[1]["source_assets"] and "尾帧:last_frame" in asked[2]["source_assets"]
+    assert "seconds 0 to 4 of the 9-second action" in asked[0]["prompt"]
+    assert "seconds 4 to 6.5 of the action" in asked[1]["prompt"] and "seconds 6.5 to 9 of the action" in asked[2]["prompt"]
     with SessionLocal() as db:
         joined = db.get(Asset, made["join_shot"]["asset_id"])
         assert probe_media(resolve_key(joined.file_key))["duration"] == pytest.approx(9, abs=0.3)

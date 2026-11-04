@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import re
+import unicodedata
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -434,10 +435,27 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     if rounds and not allowed:
         #: 时长连续的模型把几段拉平:35 秒拍两个 18 秒,不是 30 + 30 再截掉 25 秒 —— 截掉的那些也是付了钱的。
         segment = max(math.ceil((target + rounds * overlap) / (rounds + 1)), float(config.get("shortest_seconds") or 0))
+    #: 生成接口的时长是整数秒,提示词里也不写 18.0 秒。
+    def seconds(value: float) -> float:
+        return int(value) if value == int(value) else value
+
+    segment = seconds(segment)
+    #: 这一镜的尾帧落在**最后一段**:交给第一段,它会在第一段里就把整镜走完,后面无戏可拍(实测 35 秒的一镜,18 秒就到了门口)。
+    last_frame = str(config.get("last_frame_asset_id") or "")
+    fresh = segment - overlap
     return {
-        #: 生成接口的时长是整数秒。
-        "segment_seconds": int(segment) if segment == int(segment) else segment,
-        "rounds": list(range(1, rounds + 1)),
+        "segment_seconds": segment,
+        "opening_seconds": seconds(min(segment, target)),
+        "opening_last_frame": "" if rounds else last_frame,
+        #: 每一段接着这一镜的第几秒拍到第几秒,提示词靠它说清这一段只演哪一截。
+        "rounds": [
+            {
+                "from_seconds": seconds(segment + (index - 1) * fresh),
+                "to_seconds": seconds(min(segment + index * fresh, target)),
+                "last_frame": last_frame if index == rounds else "",
+            }
+            for index in range(1, rounds + 1)
+        ],
         "count": rounds + 1,
     }
 
@@ -1274,6 +1292,32 @@ def transcript_sentences(segments: list[dict[str, Any]]) -> list[dict[str, Any]]
     ]
 
 
+#: 一条字幕一行放得下的宽度(一个汉字算 2)。
+SUBTITLE_LINE_WIDTH = 44
+_CLAUSE_END = re.compile("(?<=[。！？；，、…!?;,.])\\s*")
+
+
+def _text_width(text: str) -> int:
+    return sum(2 if unicodedata.east_asian_width(char) in "WF" else 1 for char in text)
+
+
+def _short_cues(text: str, start: float, length: float) -> list[tuple[str, float, float]]:
+    """一段长话切成一行放得下的几条,在标点处切,时间按字数分。没有词级时间,这是拿得到的最好的估计。"""
+    lines: list[str] = []
+    for clause in (one for one in _CLAUSE_END.split(text) if one):
+        if lines and _text_width(lines[-1] + clause) <= SUBTITLE_LINE_WIDTH:
+            lines[-1] += clause
+        else:
+            lines.append(clause)
+    total = sum(_text_width(line) for line in lines)
+    cues: list[tuple[str, float, float]] = []
+    for line in lines:
+        share = length * _text_width(line) / total
+        cues.append((line.strip(), start, share))
+        start += share
+    return cues
+
+
 def _segments_in(value: Any) -> list[dict[str, Any]]:
     """上游给的逐字稿段落。接列表,也接一串 JSON —— 手填时它只能是文本。"""
     if isinstance(value, str):
@@ -1379,6 +1423,7 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     if lines and len(lines) != len(segments):
         raise WorkflowDomainError("wfErr_linesSegmentsMismatch", params={"lines": len(lines), "segments": len(segments)})
     keep_original = _yes_no(config, "keep_original", default=False)
+    break_long_lines = _yes_no(config, "break_long_lines", default=False)
     try:
         offset = float(config.get("offset") or 0.0)
     except (TypeError, ValueError):
@@ -1418,7 +1463,7 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
         if until is not None:
             finish = min(finish, until)
         if text and finish > begin:
-            cues.append((text, begin, finish - begin))
+            cues.extend(_short_cues(text, begin, finish - begin) if break_long_lines else [(text, begin, finish - begin)])
     if not cues:
         if allow_empty:
             # 提前返回:连字幕轨都不建 —— 一条空轨挂在时间线上只会让人以为字幕丢了。

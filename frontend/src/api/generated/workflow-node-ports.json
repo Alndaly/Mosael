@@ -1130,10 +1130,20 @@
           "zh": "重叠几秒",
           "en": "Overlap seconds"
         }
+      },
+      "last_frame_asset_id": {
+        "type": "template",
+        "media": "image",
+        "label": {
+          "zh": "尾帧",
+          "en": "Last frame"
+        }
       }
     },
     "outputs": [
       "segment_seconds",
+      "opening_seconds",
+      "opening_last_frame",
       "rounds",
       "count"
     ],
@@ -1141,6 +1151,14 @@
       "segment_seconds": {
         "zh": "每段几秒",
         "en": "Seconds per segment"
+      },
+      "opening_seconds": {
+        "zh": "第一段演到第几秒",
+        "en": "Where the first segment ends"
+      },
+      "opening_last_frame": {
+        "zh": "第一段的尾帧",
+        "en": "First segment's last frame"
       },
       "rounds": {
         "zh": "续写几次",
@@ -2438,6 +2456,13 @@
         "label": {
           "zh": "保留原文",
           "en": "Keep the original"
+        }
+      },
+      "break_long_lines": {
+        "type": "string",
+        "label": {
+          "zh": "长句切开",
+          "en": "Break long lines"
         }
       },
       "offset": {
