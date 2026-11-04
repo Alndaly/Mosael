@@ -68,7 +68,7 @@ from app.domain.workflows.binding import (
 from app.domain.workflows.executors.registry import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
 from app.domain.workflows import node_budget, approvals
-from app.domain.workflows.graph_run import GraphResume, GraphRun
+from app.domain.workflows.graph_run import GraphResume, GraphRun, RedoRound
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import keep_full_texts, snapshot
 from app.domain.workflows import run_steps
@@ -1115,31 +1115,78 @@ def continue_workflow_job(db: Session, job: Job, checkpoint: dict[str, Any]) -> 
     dispatch_job(db, job, run_resumed)
 
 
-def continue_failed_run(db: Session, workflow: Workflow, job: Job) -> Job:
-    """**把一个失败或被取消的运行从中断处接着跑**(ADR 0092)。
+#: 能从第几轮重做的节点。
+LOOP_NODE_TYPES = ("loop_foreach", "loop_while")
+
+
+def _downstream(graph: dict[str, Any], node_id: str) -> set[str]:
+    """顶层这张图里排在 `node_id` 后面的节点:连线和引用都算。"""
+    followers: dict[str, set[str]] = {}
+    for edge in graph.get("edges") or []:
+        followers.setdefault(str(edge.get("source")), set()).add(str(edge.get("target")))
+    for target, sources in reference_dependencies(graph).items():
+        for source in sources:
+            followers.setdefault(source, set()).add(target)
+    found: set[str] = set()
+    frontier = [node_id]
+    while frontier:
+        for one in followers.get(frontier.pop(), ()):
+            if one not in found:
+                found.add(one)
+                frontier.append(one)
+    return found
+
+
+def continue_run(
+    db: Session, workflow: Workflow, job: Job, *, params: dict[str, Any] | None = None, redo: RedoRound | None = None,
+    called: bool = False,
+) -> Job:
+    """**把一个运行从中断处接着跑**(ADR 0092)。
 
     和开跑同一个任务、同一版钉住的修订:已经落定的节点不再执行(见 run_steps),花掉的钱、执行历史都接在这一条上。
     失败的那个节点重跑一遍 —— 这正是要做的事;它当时交出去的生成任务还在的话接回来,不再下单。
-    别的工作流调起来的子运行不在这里继续:它的外层接着跑时会重新调它。
+
+    - `params`:改开始参数(调高花费上限、换尾巴长度)。**只影响还没落定的节点。**
+    - `redo`:从顶层某个循环的第几轮重做,成功的运行也可以;`item` 换掉那一轮的内容。之前的几轮留着。
+    - `called`:外层接着跑时重新接上它调起的子运行。别的时候子运行不单独继续。
     """
-    payload = job.payload or {}
-    if job.kind != "workflow" or job.parent_job_id or payload.get("workflow_id") != workflow.id:
+    payload = dict(job.payload or {})
+    if job.kind != "workflow" or (job.parent_job_id and not called) or payload.get("workflow_id") != workflow.id:
         raise WorkflowDomainError("wfErr_runNotContinuable")
     revision_id = str(payload.get("workflow_revision_id") or "")
     revision = db.get(WorkflowRevision, revision_id) if revision_id else None
     if revision is None or revision.workflow_id != workflow.id:
         raise WorkflowDomainError("wfErr_revisionMissing")
-    if not reopen_job(db, job):
+    if redo is not None and not any(
+        str(node.get("id")) == redo.node_id and node.get("type") in LOOP_NODE_TYPES for node in revision.graph.get("nodes") or []
+    ):
+        raise WorkflowDomainError("wfErr_redoNeedsLoop")
+    if not reopen_job(db, job, finished_too=redo is not None):
         raise WorkflowDomainError("wfErr_runNotContinuable")
+    if params:
+        payload["params"] = {**(payload.get("params") or {}), **params}
+    if redo is not None:
+        run_steps.forget_from(db, job.id, redo.node_id, redo.index, _downstream(revision.graph, redo.node_id))
+        if redo.item is not None:
+            payload["round_items"] = {
+                **(payload.get("round_items") or {}),
+                redo.node_id: {**((payload.get("round_items") or {}).get(redo.node_id) or {}), str(redo.index): redo.item},
+            }
+    job.payload = payload
     say(job, "jobMsg_workflowContinuing", name=workflow.name)
-    emit_job_event(db, job.id, "workflow.continued", {})
-    workflow_id, job_id, params = workflow.id, job.id, dict(payload.get("params") or {})
+    emit_job_event(db, job.id, "workflow.continued", {"redo": redo.node_id if redo else None})
+    workflow_id, job_id, run_params = workflow.id, job.id, dict(payload.get("params") or {})
     locale = payload.get("locale")
     target_node = str(payload.get("target_node_id") or "") or None
     dispatch_job(db, job, lambda: _run_workflow_thread(
-        workflow_id, revision_id, job_id, params, locale=locale, target_node=target_node, continuing=True,
+        workflow_id, revision_id, job_id, run_params, locale=locale, target_node=target_node, continuing=True,
     ))
     return job
+
+
+def continue_called_run(db: Session, workflow: Workflow, job: Job) -> Job:
+    """外层接着跑时,把它调起的那条失败的子运行也接着跑。"""
+    return continue_run(db, workflow, job, called=True)
 
 
 def run_workflow(
@@ -1157,7 +1204,7 @@ def run_workflow(
     (只执行它及其上游闭包,见 run_graph)。
 
     `resume` 给定时是**从「等人确认」的暂停点接着跑**:前面已经落定的节点直接跳过(见 GraphResume)。
-    `continuing` 时是**从失败处接着跑**(见 continue_failed_run):每一层图读回自己落定的节点(见 run_steps)。
+    `continuing` 时是**从失败处接着跑**(见 continue_run):每一层图读回自己落定的节点(见 run_steps)。
     """
     graph = revision.graph
     node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
@@ -1207,7 +1254,6 @@ def run_workflow(
         db.commit()
         return context
     job.progress = 1.0
-    run_steps.forget(db, job.id)
     say(job, "jobMsg_workflowDone", name=workflow.name)
     job.result = {
         "workflow_revision_id": revision.id,
@@ -1239,4 +1285,4 @@ _approvals.use_resume_dispatcher(continue_workflow_job)
 #: 容器类执行器(循环体、子图、调用另一个工作流)回头跑图也经同一个方向的登记(见 graph_runner)。
 from app.domain.workflows import graph_runner as _graph_runner  # noqa: E402
 
-_graph_runner.use(run_graph=run_graph, start_workflow_job=start_workflow_job)
+_graph_runner.use(run_graph=run_graph, start_workflow_job=start_workflow_job, continue_called_run=continue_called_run)

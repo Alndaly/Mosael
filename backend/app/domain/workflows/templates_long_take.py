@@ -3,7 +3,7 @@
 视频模型一次最多出十几秒,要更长只能分段。段与段之间怎么接由模型能力定(见 `video_plan_for`):
 
 - 收待续写片段(`first_clip`,万相 2.7、Seedance 续写、ComfyUI 的 H3 续写工作流)的,把上一段的尾巴交给下一段。
-  成片以这段尾巴开头,上时间线时去掉它;
+  成片以这段尾巴开头,上时间线时在画面里找到接缝,从那里接(`video_seam`)。`duration_seconds` 是含尾巴的总长;
 - 只收首帧的,把上一段的最后一帧交给下一段。构图接得上,动作会顿一下。
 
 第一段没有上一段可接,用另一个模型一格(`opening`)从文字出:续写模型多半做不了这件事。
@@ -47,6 +47,9 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
     #: 出片计划写的是 `input.*`(给循环体用);第一段在顶层,读开始参数。
     first_parameters = {key: value.replace("{{input.", "{{start.") if isinstance(value, str) else value
                         for key, value in first_parameters.items()}
+    #: 清晰度的写法各家不同(万相 `720P`、Seedance `720p`):开始参数那一格是续写模型的,写法不同的第一段写它自己的。
+    if "resolution" in first_parameters and opening.provider != video.provider:
+        first_parameters["resolution"] = first_plan.resolution
     if plan.extends:
         tail_node: dict[str, Any] = {
             "id": "tail", "type": "media_clip",
@@ -75,27 +78,40 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "prompt": "{{input.style}} {{loop.item}}",
                     "parameters": parameters,
                     "source_assets": [handed_over],
+                    "entity_ids": "{{input.entity_ids}}",
                 },
             },
         ],
         "edges": [{"id": "tail_extend", "source": "tail", "target": "extend"}],
     }
+    append_segment: dict[str, Any] = {
+        "id": "append_segment", "type": "timeline_append",
+        "name": {"zh": "接到时间线上", "en": "Add it to the timeline"},
+        "position": {"x": 390, "y": 140},
+        "config": {
+            "sequence_id": "{{input.sequence_id}}",
+            "asset_id": "{{loop.item}}",
+            #: 成片以交过去的那段尾巴开头:这一截上一段已经有了。只交了一帧的不用去掉。
+            "start": "{{seam.start}}" if plan.extends else 0,
+        },
+    }
+    seam: dict[str, Any] = {
+        "id": "seam", "type": "video_seam",
+        "name": {"zh": "找接缝", "en": "Find the seam"},
+        "position": {"x": 80, "y": 140},
+        "config": {
+            "previous_asset_id": "{{loop.previous}}",
+            "asset_id": "{{loop.item}}",
+            #: 尾巴可能被拉长或压缩,多找一截。
+            "search_seconds": "{{input.search_seconds}}",
+        },
+    }
     assemble_body = {
-        "nodes": [{
-            "id": "append_segment", "type": "timeline_append",
-            "name": {"zh": "接到时间线上", "en": "Add it to the timeline"},
-            "position": {"x": 80, "y": 140},
-            "config": {
-                "sequence_id": "{{input.sequence_id}}",
-                "asset_id": "{{loop.item}}",
-                #: 成片以交过去的那段尾巴开头:这一截上一段已经有了。只交了一帧的不用去掉。
-                "start": "{{input.overlap_seconds}}" if plan.extends else 0,
-            },
-        }],
-        "edges": [],
+        "nodes": [seam, append_segment] if plan.extends else [append_segment],
+        "edges": [{"id": "seam_append", "source": "seam", "target": "append_segment"}] if plan.extends else [],
     }
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 1, "source": "official"},
+        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 3, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -105,13 +121,16 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "params": {
                         "idea": "",
                         "target_seconds": 60,
-                        "segment_seconds": plan.clip_seconds,
-                        "overlap_seconds": OVERLAP_SECONDS,
+                        #: 收待续写片段的按最长的拍:每段都有一截重叠,段越长浪费的比例越小。
+                        "segment_seconds": plan.longest_clip if plan.extends and plan.longest_clip else plan.clip_seconds,
+                        "overlap_seconds": max(OVERLAP_SECONDS, plan.shortest_tail),
                         #: 成本的闸门:每一段都是一次付费生成。超过的段不跑。
                         "max_segments": 12,
                         #: 累计花到这个数就停,0 是不限。停下之后调高它再点「从中断处继续」。
                         "max_spend": 0,
                         "style": "",
+                        #: 点名的资产(人物、场景,逗号分隔):每一段都带上它们,防止越拍越不像。模型不收参考时生成回执会说。
+                        "entity_ids": "",
                         "aspect_ratio": plan.aspect_ratio,
                         "resolution": plan.resolution,
                     },
@@ -162,6 +181,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                     "provider": opening.provider, "provider_profile_id": opening.profile_id, "model": opening.model, "kind": "video",
                     "prompt": "{{start.style}} {{split.json.opening}}",
                     "parameters": first_parameters,
+                    "entity_ids": "{{start.entity_ids}}",
                 },
             },
             {
@@ -174,6 +194,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                         "style": "{{start.style}}",
                         "overlap_seconds": "{{start.overlap_seconds}}",
                         "segment_seconds": "{{start.segment_seconds}}",
+                        "entity_ids": "{{start.entity_ids}}",
                         "aspect_ratio": "{{start.aspect_ratio}}",
                         "resolution": "{{start.resolution}}",
                     },
@@ -202,8 +223,10 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "position": {"x": 1900, "y": 300},
                 "config": {
                     "items": "{{segments.results}}",
-                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "overlap_seconds": "{{start.overlap_seconds}}"},
+                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "search_seconds": "{{start.segment_seconds}}"},
                     "body": assemble_body,
+                    "output": "{{loop.item}}",
+                    "previous_initial": "{{opening.asset_id}}",
                 },
             },
             {
@@ -211,6 +234,12 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "name": {"zh": "导出成片", "en": "Export the finished video"},
                 "position": {"x": 2200, "y": 300},
                 "config": {"sequence_id": "{{video_project.sequence_id}}"},
+            },
+            {
+                "id": "output", "type": "output",
+                "name": {"zh": "交付成片", "en": "Hand over the finished video"},
+                "position": {"x": 2500, "y": 300},
+                "config": {"values": {"video_asset_id": "{{export_final.asset_id}}", "segments": "{{segments.results}}"}},
             },
         ],
         "edges": [
@@ -220,10 +249,10 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
             {"id": "estimate_opening", "source": "estimate", "target": "opening"},
             {"id": "opening_segments", "source": "opening", "target": "segments"},
             {"id": "segments_clear", "source": "segments", "target": "clear_timeline"},
-            {"id": "project_clear", "source": "video_project", "target": "clear_timeline"},
             {"id": "clear_opening", "source": "clear_timeline", "target": "append_opening"},
             {"id": "opening_assemble", "source": "append_opening", "target": "assemble"},
             {"id": "assemble_export", "source": "assemble", "target": "export_final"},
+            {"id": "export_output", "source": "export_final", "target": "output"},
         ],
     }
     return normalize_graph(graph, node_types=NODE_TYPES)

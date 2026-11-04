@@ -5314,10 +5314,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Continue Run
-         * @description 失败或被取消的运行从中断处接着跑:已经落定的节点不再执行(ADR 0092)。
+         * Continue Workflow Run
+         * @description 运行从中断处接着跑,或从某个循环的第几轮重做:已经落定的节点不再执行(ADR 0092)。
          */
-        post: operations["continue_run_api_workflows__workflow_id__runs__job_id__continue_post"];
+        post: operations["continue_workflow_run_api_workflows__workflow_id__runs__job_id__continue_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -21559,6 +21559,17 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * WorkflowContinueRequest
+         * @description 接着跑一次运行。`params` 改开始参数,只影响还没落定的节点;`redo` 从某个循环的第几轮重做。
+         */
+        WorkflowContinueRequest: {
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            redo?: components["schemas"]["WorkflowRedoRoundIn"] | null;
+        };
         /** WorkflowCopyRequest */
         WorkflowCopyRequest: {
             /** Path */
@@ -22426,6 +22437,18 @@ export interface components {
              * @default false
              */
             more: boolean;
+        };
+        /**
+         * WorkflowRedoRoundIn
+         * @description 从顶层某个循环的第几轮重做(从 0 数)。`item` 给了就换掉那一轮的内容。
+         */
+        WorkflowRedoRoundIn: {
+            /** Node Id */
+            node_id: string;
+            /** Index */
+            index: number;
+            /** Item */
+            item?: unknown;
         };
         /** WorkflowRenameRequest */
         WorkflowRenameRequest: {
@@ -33292,7 +33315,7 @@ export interface operations {
             };
         };
     };
-    continue_run_api_workflows__workflow_id__runs__job_id__continue_post: {
+    continue_workflow_run_api_workflows__workflow_id__runs__job_id__continue_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -33302,7 +33325,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowContinueRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

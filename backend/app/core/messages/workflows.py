@@ -81,6 +81,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_sequenceNotInWorkspace": {"zh": "序列不在这个工作区里", "en": "That timeline is not in this workspace"},
     "wfErr_assetIdMissing": {"zh": "缺少 asset_id", "en": "asset_id is missing"},
     "wfErr_trackNotOnSequence": {"zh": "这条时间线上没有那条轨道", "en": "That track is not on this timeline"},
+    "wfErr_redoNeedsLoop": {"zh": "只能从主流程里的循环重做", "en": "Only a loop in the main flow can be redone"},
     "wfErr_runNotContinuable": {
         "zh": "这次运行不能继续:只有失败或被取消的、不是别的工作流调起来的运行才能从中断处继续",
         "en": "This run can't be continued: only a failed or cancelled run that no other workflow started can resume",
@@ -136,6 +137,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这段视频读不出时长,算不出最后一帧在哪:填上具体的时间",
         "en": "This video's duration can't be read, so the last frame can't be found: fill in a time",
     },
+    "seamErr_unreadable": {"zh": "这段视频读不出画面,找不到接缝", "en": "This video's frames can't be read, so the seam can't be found"},
     "trimErr_lastSecondsNegative": {"zh": "「末尾几秒」不能是负数", "en": "“Last seconds” can't be negative"},
     "trimErr_noDuration": {
         "zh": "这份素材读不出时长,没法从片尾算:填上具体的结束时间",

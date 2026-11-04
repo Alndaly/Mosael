@@ -48,6 +48,10 @@ class VideoPlan:
     last_frame: bool = False
     #: 收待续写的片段(`first_clip`):接着一段视频往下拍,而不只是从一帧动起来。
     extends: bool = False
+    #: 交给下一段的尾巴至少几秒(描述符的 `source_duration_seconds`)。没声明就是 0,由模板定。
+    shortest_tail: float = 0
+    #: 一段最长几秒。续写时每段都有一截是重叠,段越长重叠占的比例越小。没声明就是 0。
+    longest_clip: int = 0
     references: bool = False
     reference_video: bool = False
 
@@ -157,9 +161,14 @@ def _continuation_video_model(db: Session, user_id: str) -> ModelChoice:
     return extends if extends.model else _pick(db, user_id, "video", lambda db_, choice: FIRST_FRAME in _parameter_keys(db_, choice))
 
 
-def _opening_video_model(db: Session, user_id: str) -> ModelChoice:
-    """第一段用哪个模型:从一段文字就能出片的。"""
-    return _pick(db, user_id, "video", lambda db_, choice: "text-to-video" in ((model_capabilities(db_, choice, "video") or {}).get("modes") or ()))
+def _opening_video_model(db: Session, user_id: str, *, continuing: ModelChoice) -> ModelChoice:
+    """第一段用哪个模型:从一段文字就能出片的,和续写同一家的优先 —— 同一家的画风接得更顺。"""
+
+    def from_text(db_: Session | None, choice: ModelChoice) -> bool:
+        return "text-to-video" in ((model_capabilities(db_, choice, "video") or {}).get("modes") or ())
+
+    same_vendor = _pick(db, user_id, "video", lambda db_, choice: choice.provider == continuing.provider and from_text(db_, choice))
+    return same_vendor if same_vendor.model else _pick(db, user_id, "video", from_text)
 
 
 def _parameter_keys(db: Session | None, choice: ModelChoice) -> list[str]:
@@ -315,6 +324,8 @@ def video_plan_for(db: Session | None, choice: ModelChoice, *, references: int |
         keyframes=shoots and FIRST_FRAME in keys and _route_allowed(capabilities, _KEYFRAME_SOURCES),
         last_frame=shoots and LAST_FRAME in keys,
         extends=FIRST_CLIP in keys,
+        longest_clip=int(capabilities.get("max_duration_seconds") or 0),
+        shortest_tail=float(((capabilities.get("source_duration_seconds") or {}).get(FIRST_CLIP) or (0,))[0]),
         #: 参考那条路一次交 `needed` 张:收不下的(整片一镜 8 张,可灵 kling-v3-omni 只收 4 张)不走这条路。
         #: 没写上限的按收得下算(和图像模型那边「认不出的算能」同一条)。
         references=shoots and REFERENCE_IMAGE in keys and _route_allowed(capabilities, _REFERENCE_SOURCES)

@@ -16,6 +16,7 @@ from typing import Any, Iterator
 
 from sqlalchemy.orm import Session
 
+from app.db.models import Job
 from app.domain.billing.usage import run_costs
 from app.domain.jobs import current_parent_job_id
 from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate
@@ -23,7 +24,7 @@ from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, run_body_to_the_end, truthy
 from app.domain.workflows.executors.numbers import at_least, whole_number
-from app.domain.workflows.run_scope import halted, shared_halt, step_frame
+from app.domain.workflows.run_scope import current_node, halted, is_continuing, shared_halt, step_frame
 from app.core.i18n import tr
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
@@ -112,6 +113,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         raise WorkflowDomainError(
             "wfErr_loopTooMany", params={"count": len(items), "cap": LOOP_FOREACH_HARD_CAP}
         )
+    items = _with_replaced_rounds(db, items)
     concurrency = _concurrency(config)
     max_spend = _max_spend(config)
     #: 一项失败怎么办:stop(默认)整条循环失败;skip 记下这一项、接着跑别的 —— 各项彼此独立时(每条切片、
@@ -195,6 +197,16 @@ def _delivered(context: dict[str, Any], output_tpl: Any) -> Any:
     # 不写 output 时交出这一次的全部产物,**连同这一项本身**(`loop.item` / `loop.index`)——
     # 下游再遍历这份结果时,常常还要用到当初那一项的数据。共享输入每项都一样,不重复带。
     return _without_previous({nid: out for nid, out in context.items() if nid != "input"})
+
+
+def _with_replaced_rounds(db: Session, items: list[Any]) -> list[Any]:
+    """重做时换掉的那几轮内容(见 engine.continue_run 的 `redo`)。记在任务载荷上:之后再继续,换过的内容还在。"""
+    job_id = current_parent_job_id()
+    job = db.get(Job, job_id) if job_id and is_continuing() else None
+    replaced = ((job.payload or {}).get("round_items") or {}).get(current_node()) if job is not None else None
+    if not replaced:
+        return items
+    return [replaced.get(str(index), item) for index, item in enumerate(items)]
 
 
 def _max_spend(config: dict[str, Any]) -> float:

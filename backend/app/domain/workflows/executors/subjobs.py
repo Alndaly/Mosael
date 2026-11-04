@@ -31,6 +31,8 @@ from app.ai.providers.contracts.separation import SeparationError
 from app.ai.runtime import config as tts_config, tts_models
 from app.core.i18n import get_current_locale, t, tr
 from app.domain import render
+from app.media.paths import resolve_key
+from app.media.seam import SeamError, find_seam
 from app.media.still import StillError
 from app.domain.assets import denoise, video_gif
 from app.domain.billing.usage import price_usage
@@ -411,6 +413,22 @@ def video_frame(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     except (AssetFrameError, StillError) as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     return {"asset_id": frame.id, "source_asset_id": asset.id, "at": moment}
+
+
+@register("video_seam")
+def video_seam(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    previous = db.get(Asset, str(config.get("previous_asset_id") or ""))
+    following = db.get(Asset, str(config.get("asset_id") or ""))
+    if previous is None or following is None or {previous.workspace_id, following.workspace_id} != {scope.workspace_id}:
+        raise WorkflowDomainError("wfErr_clipAssetNotInWorkspace")
+    try:
+        start = find_seam(
+            resolve_key(previous.file_key), resolve_key(following.file_key),
+            search_seconds=float(config.get("search_seconds") or 0), fps=float((following.media_info or {}).get("fps") or 24),
+        )
+    except SeamError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    return {"start": start}
 
 
 @register("media_clip")

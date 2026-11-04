@@ -246,7 +246,7 @@ it("失败的运行:能从中断处继续,点下去带着这次运行", async ()
   apiMocks.continueWorkflowRun.mockResolvedValue({ ...STOPPED_RUN, status: "queued" });
   renderHistory();
   fireEvent.click(await screen.findByRole("button", { name: "wfRunContinue" }));
-  await vi.waitFor(() => expect(apiMocks.continueWorkflowRun).toHaveBeenCalledWith("wf1", "j1"));
+  await vi.waitFor(() => expect(apiMocks.continueWorkflowRun).toHaveBeenCalledWith("wf1", "j1", {}));
 });
 
 it("别的工作流调起来的子运行、成功的运行:没有继续这一项", async () => {
@@ -256,4 +256,16 @@ it("别的工作流调起来的子运行、成功的运行:没有继续这一项
   renderHistory();
   await screen.findByText("wfRunFailed");
   expect(screen.queryByRole("button", { name: "wfRunContinue" })).toBeNull();
+});
+
+it("成功的运行里有循环:能打开重做一段,没选循环时不让提交", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([{ ...STOPPED_RUN, status: "succeeded", error: null }]);
+  apiMocks.listJobEvents.mockResolvedValue([
+    { type: "workflow.node.started", created_at: "2026-11-04T10:00:00", payload: { node_id: "L", name: "循环", node_type: "loop_foreach" } },
+    { type: "workflow.node.finished", created_at: "2026-11-04T10:00:01", payload: { node_id: "L", name: "循环", outputs: { results: [] } } },
+  ]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory();
+  fireEvent.click(await screen.findByRole("button", { name: "wfRunRedo" }));
+  expect((await screen.findByRole("button", { name: "wfRunAdjustSubmit" }) as HTMLButtonElement).disabled).toBe(true);
 });

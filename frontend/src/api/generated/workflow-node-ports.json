@@ -3171,10 +3171,7 @@
     "config": {
       "asset_id": {
         "type": "template",
-        "media": [
-          "video",
-          "audio"
-        ],
+        "media": "video",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -5121,6 +5118,43 @@
       "audio_asset_id": {
         "zh": "音频",
         "en": "Audio"
+      }
+    }
+  },
+  {
+    "type": "video_seam",
+    "config": {
+      "previous_asset_id": {
+        "type": "template",
+        "media": "video",
+        "label": {
+          "zh": "上一段",
+          "en": "Previous segment"
+        }
+      },
+      "asset_id": {
+        "type": "template",
+        "media": "video",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "search_seconds": {
+        "type": "number",
+        "label": {
+          "zh": "找多久",
+          "en": "Search seconds"
+        }
+      }
+    },
+    "outputs": [
+      "start"
+    ],
+    "output_labels": {
+      "start": {
+        "zh": "起始位置",
+        "en": "Start"
       }
     }
   },

@@ -1,4 +1,4 @@
-"""失败或被打断的运行从中断处接着跑:落定的节点不再执行,循环跑到一半不从头来(ADR 0092)。
+"""运行从中断处接着跑、从循环的第几轮重做:落定的节点不再执行,循环跑到一半不从头来(ADR 0092)。
 
 30 段的续写跑到第 20 段断了,此前只能全部重跑,前面花的钱白花。这里用一个数调用次数的节点类型当「花钱的节点」:
 每多跑一次都是多买一次。
@@ -57,7 +57,7 @@ def _run(client, wf_id: str) -> dict:
 
 
 def _continue(client, wf_id: str, job_id: str) -> dict:
-    resumed = client.post(f"/api/workflows/{wf_id}/runs/{job_id}/continue")
+    resumed = client.post(f"/api/workflows/{wf_id}/runs/{job_id}/continue", json={})
     assert resumed.status_code == 200, resumed.text
     wait_for_idle_jobs()
     return client.get(f"/api/jobs/{job_id}").json()
@@ -126,20 +126,76 @@ def test_接力循环_继续之后上一轮的产物还接得上() -> None:
     assert done["result"]["context"]["L"]["results"] == ["一", "一二", "一二三"]
 
 
-def test_成功之后记录清掉() -> None:
+def test_继续时改开始参数_只影响还没落定的节点() -> None:
+    client = fresh_client()
+    wf_id, _ = _workflow(client, {"nodes": [
+        {"id": "start", "type": "start", "config": {"params": {"tail": "短"}}},
+        {"id": "a", "type": "template", "config": {"template": "甲{{start.tail}}"}},
+        {"id": "b", "type": "template", "config": {"template": "乙{{start.tail}}"}},
+    ], "edges": [{"id": "e1", "source": "start", "target": "a"}, {"id": "e2", "source": "a", "target": "b"}]})
+    BROKEN.add("乙短")
+    failed = _run(client, wf_id)
+    resumed = client.post(f"/api/workflows/{wf_id}/runs/{failed['id']}/continue", json={"params": {"tail": "长"}})
+    assert resumed.status_code == 200, resumed.text
+    wait_for_idle_jobs()
+    done = client.get(f"/api/jobs/{failed['id']}").json()
+    assert done["status"] == "succeeded"
+    assert CALLS["甲短"] == 1 and CALLS["甲长"] == 0, "落定的节点不该因为改了参数重跑"
+    assert CALLS["乙长"] == 1
+
+
+def test_重做第二轮_换掉内容_前面留着_后面和下游重跑() -> None:
+    client = fresh_client()
+    wf_id, _ = _workflow(client, _chain("一\n二\n三"))
+    job = _run(client, wf_id)
+    assert job["status"] == "succeeded"
+    redo = client.post(f"/api/workflows/{wf_id}/runs/{job['id']}/continue",
+                       json={"redo": {"node_id": "L", "index": 1, "item": "新二"}})
+    assert redo.status_code == 200, redo.text
+    wait_for_idle_jobs()
+    done = client.get(f"/api/jobs/{job['id']}").json()
+    assert done["status"] == "succeeded"
+    assert done["result"]["context"]["L"]["results"] == ["一", "新二", "三"]
+    assert (CALLS["一"], CALLS["二"], CALLS["新二"], CALLS["三"]) == (1, 1, 1, 2)
+    assert CALLS["收尾"] == 2, "循环下游的节点要跟着重跑"
+
+
+def test_重做的节点不是循环_拒() -> None:
     client = fresh_client()
     wf_id, _ = _workflow(client, LINE)
     job = _run(client, wf_id)
-    assert job["status"] == "succeeded"
-    with SessionLocal() as db:
-        assert db.query(WorkflowRunStep).filter_by(job_id=job["id"]).count() == 0
+    assert client.post(f"/api/workflows/{wf_id}/runs/{job['id']}/continue",
+                       json={"redo": {"node_id": "a", "index": 0}}).status_code == 422
+
+
+def test_子工作流断了_外层继续时它也接着跑_跑完的节点不重跑() -> None:
+    client = fresh_client()
+    inner_id, ws = _workflow(client, {"nodes": [
+        {"id": "start", "type": "start", "config": {}},
+        {"id": "x", "type": "template", "config": {"template": "内甲"}},
+        {"id": "y", "type": "template", "config": {"template": "内乙"}},
+        {"id": "out", "type": "output", "config": {"outputs": {"text": "{{y.text}}"}}},
+    ], "edges": [{"id": "e1", "source": "start", "target": "x"}, {"id": "e2", "source": "x", "target": "y"},
+                 {"id": "e3", "source": "y", "target": "out"}]})
+    outer = client.post("/api/workflows", json={"workspace_id": ws, "name": "外层", "graph": {"nodes": [
+        {"id": "start", "type": "start", "config": {}},
+        {"id": "call", "type": "call_workflow", "config": {"workflow_id": inner_id}},
+    ], "edges": [{"id": "e1", "source": "start", "target": "call"}]}})
+    assert outer.status_code == 200, outer.text
+    BROKEN.add("内乙")
+    failed = _run(client, outer.json()["id"])
+    assert failed["status"] == "failed" and CALLS["内甲"] == 1
+    BROKEN.clear()
+    done = _continue(client, outer.json()["id"], failed["id"])
+    assert done["status"] == "succeeded", done["error"]
+    assert CALLS["内甲"] == 1 and CALLS["内乙"] == 2
 
 
 def test_成功的运行和点两下_都不让继续() -> None:
     client = fresh_client()
     wf_id, _ = _workflow(client, LINE)
     job = _run(client, wf_id)
-    assert client.post(f"/api/workflows/{wf_id}/runs/{job['id']}/continue").status_code == 422
+    assert client.post(f"/api/workflows/{wf_id}/runs/{job['id']}/continue", json={}).status_code == 422
 
 
 def _held_step(ws: str, status: str) -> tuple[str, str]:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -85,6 +85,21 @@ class WorkflowRunRequest(ApiModel):
 
     params: dict = Field(default_factory=dict)
     target_node_id: str | None = Field(default=None, max_length=120)
+
+
+class WorkflowRedoRoundIn(ApiModel):
+    """从顶层某个循环的第几轮重做(从 0 数)。`item` 给了就换掉那一轮的内容。"""
+
+    node_id: str = Field(max_length=120)
+    index: int = Field(ge=0)
+    item: Any = None
+
+
+class WorkflowContinueRequest(ApiModel):
+    """接着跑一次运行。`params` 改开始参数,只影响还没落定的节点;`redo` 从某个循环的第几轮重做。"""
+
+    params: dict = Field(default_factory=dict)
+    redo: WorkflowRedoRoundIn | None = None
 
 
 class WorkflowRunOutputOut(ApiModel):

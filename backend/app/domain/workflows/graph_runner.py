@@ -23,14 +23,17 @@ if TYPE_CHECKING:
 RunGraph = Callable[..., "GraphRun"]
 StartWorkflowJob = Callable[..., "Job"]
 
+ContinueCalledRun = Callable[..., "Job"]
+
 _run_graph: RunGraph | None = None
 _start_workflow_job: StartWorkflowJob | None = None
+_continue_called_run: ContinueCalledRun | None = None
 
 
-def use(*, run_graph: RunGraph, start_workflow_job: StartWorkflowJob) -> None:
-    """引擎登记它自己的两个入口。"""
-    global _run_graph, _start_workflow_job
-    _run_graph, _start_workflow_job = run_graph, start_workflow_job
+def use(*, run_graph: RunGraph, start_workflow_job: StartWorkflowJob, continue_called_run: ContinueCalledRun) -> None:
+    """引擎登记它自己的三个入口。"""
+    global _run_graph, _start_workflow_job, _continue_called_run
+    _run_graph, _start_workflow_job, _continue_called_run = run_graph, start_workflow_job, continue_called_run
 
 
 def run_graph(graph: dict[str, Any], *, wf_id: str, initial_context: dict[str, Any] | None = None,
@@ -49,4 +52,11 @@ def start_workflow_job(db: Session, workflow: Workflow, *, created_by: str | Non
     return _start_workflow_job(db, workflow, created_by=created_by, params=params)
 
 
-__all__ = ["run_graph", "start_workflow_job", "use"]
+def continue_called_run(db: Session, workflow: Workflow, job: Job) -> Job:
+    """外层接着跑时,把它调起的那条失败的子运行也接着跑(见 engine.continue_called_run)。"""
+    if _continue_called_run is None:
+        raise RuntimeError("workflow engine not registered: import app.domain.workflows.engine first")
+    return _continue_called_run(db, workflow, job)
+
+
+__all__ = ["continue_called_run", "run_graph", "start_workflow_job", "use"]

@@ -31,7 +31,8 @@ def test_收待续写片段的模型_交尾巴_上时间线去掉重叠() -> Non
     graph = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V)
     assert _body(graph, "segments", "tail")["type"] == "media_clip"
     assert _body(graph, "segments", "extend")["config"]["source_assets"] == ["{{tail.asset_id}}:first_clip"]
-    assert _body(graph, "assemble", "append_segment")["config"]["start"] == "{{input.overlap_seconds}}"
+    wired = _node(graph, "assemble")["config"]["body"]["edges"]
+    assert any(edge.get("source") == "seam" and edge.get("target_input") == "start" for edge in wired), "时间线要从找到的接缝接"
 
 
 def test_只收首帧的模型_交最后一帧_不用去掉什么() -> None:
@@ -53,7 +54,7 @@ def test_图是合法的_循环只能一段一段跑() -> None:
 @pytest.fixture
 def fake_run(monkeypatch):
     """生成、截取、时间线都换成记账的假执行器:只看每一段接的是不是上一段。"""
-    seen: dict[str, list[Any]] = {"generated": [], "tails": [], "appended": []}
+    seen: dict[str, list[Any]] = {"generated": [], "tails": [], "appended": [], "seams": []}
 
     def llm(db, scope, config):
         return {"text": "", "json": {"opening": "开场", "next": ["甲", "乙"]}}
@@ -75,6 +76,7 @@ def fake_run(monkeypatch):
         "project_sequence_create": lambda db, scope, config: {"project_id": "p", "sequence_id": "s", "video_track_id": "v", "audio_track_id": "a", "name": "n"},
         "timeline_clear": lambda db, scope, config: {"removed": 0, "sequence_id": "s"},
         "export_sequence": lambda db, scope, config: {"asset_id": "final"},
+        "video_seam": lambda db, scope, config: seen["seams"].append((config["previous_asset_id"], config["asset_id"])) or {"start": 1.5},
         "video_cost_estimate": lambda db, scope, config: {"count": 3, "seconds": 15, "estimate": None, "currency": "", "text": ""},
     }.items():
         monkeypatch.setitem(registry._REGISTRY, node_type, handler)
@@ -99,7 +101,8 @@ def test_真跑一遍_每段接着上一段的尾巴(fake_run) -> None:
     assert fake_run["tails"] == ["seg1", "seg2"]
     assert ["tail-of-seg1" in str(fake_run["generated"][1]["sources"]), "tail-of-seg2" in str(fake_run["generated"][2]["sources"])] == [True, True]
     assert [asset for asset, _ in fake_run["appended"]] == ["seg1", "seg2", "seg3"]
-    assert [start for _, start in fake_run["appended"]][1:] == [0.92, 0.92]
+    assert [start for _, start in fake_run["appended"]][1:] == [1.5, 1.5]
+    assert fake_run["seams"] == [("seg1", "seg2"), ("seg2", "seg3")], "接缝要拿前一段和这一段比"
     assert context["export_final"]["asset_id"] == "final"
 
 

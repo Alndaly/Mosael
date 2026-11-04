@@ -479,14 +479,14 @@ def start_job(db: Session, job: Job, **fields: Any) -> bool:
     return finish_job(db, job, status="running", **fields)
 
 
-def reopen_job(db: Session, job: Job) -> bool:
-    """把一个失败或被取消的任务拨回排队:它要接着跑(见 workflows.engine.continue_failed_run)。不提交。
+def reopen_job(db: Session, job: Job, *, finished_too: bool = False) -> bool:
+    """把一个失败或被取消的任务拨回排队:它要接着跑(见 workflows.engine.continue_run)。`finished_too`:成功的也拨(重做其中一段)。不提交。
 
     一条带条件的 UPDATE:同一个任务被点两下时只有一次拨得动,不会起两条线程跑同一轮。返回 False = 它已经不在这两种状态了。
     进度留着,接着跑的那一轮从这里往上走。失败原因清掉:这一轮还没失败。
     """
     reopened = db.execute(
-        update(Job).where(Job.id == job.id, Job.status.in_(("failed", CANCELLED))).values(
+        update(Job).where(Job.id == job.id, Job.status.in_(("failed", CANCELLED, *(("succeeded",) if finished_too else ())))).values(
             status="queued", error=None, error_key="", error_params={},
         )
     )

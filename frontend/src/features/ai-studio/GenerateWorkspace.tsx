@@ -52,6 +52,7 @@ import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
 import { MissingModelNotice, UpgradeInLibraryButton } from "@/features/plugins/MissingModelNotice";
+import { LongTakeButton } from "@/features/ai-studio/LongTakeButton";
 import { GenerationDeletedCard, GenerationFailureCard, GenerationStoppedCard } from "@/features/ai-studio/GenerationFailureCard";
 import { OpenInWorkbench } from "@/features/plugins/workbench/OpenInWorkbench";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
@@ -1584,6 +1585,7 @@ export function GenerateWorkspace({
                 {selectedModel && selectedModel.kind !== "audio" && (
                   <EntityMentionButton workspaceId={workspace.id} value={mentionedEntities} onChange={setMentionedEntities} />
                 )}
+                {selectedModel?.kind === "video" && <LongTakeButton workspaceId={workspace.id} prompt={prompt} />}
                 {selectedModel?.kind === "image" && selectedPromptMode !== "none" && (
                   <PromptTemplateButton onPick={(template) => setPrompt((current) => withTemplate(current, template))} />
                 )}

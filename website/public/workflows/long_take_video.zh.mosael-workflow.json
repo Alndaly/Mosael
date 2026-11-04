@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "任意长度的连续视频",
   "description": "输入一个想法和总时长，拆成一段一段，每段接着上一段的尾巴往下拍，接成一条不切镜头的长片。每段都是一次付费视频生成：开跑前按段数估算费用，max_segments 和 max_spend 是上限；断了可以从中断处继续。",
-  "graph_hash": "301331246dc8cec955d8be87bcfac2f8b12c19fbc2c5dbc3cd6ad94ee4899704",
+  "graph_hash": "1c5aaba6019d1446793583b560774f949ba4ce0cd5403bc8b2724c3961c37f37",
   "graph": {
     "meta": {
       "template_id": "long_take_video",
-      "template_version": 1,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [
@@ -29,6 +29,7 @@
             "max_segments": 12,
             "max_spend": 0,
             "style": "",
+            "entity_ids": "",
             "aspect_ratio": "16:9",
             "resolution": "720p"
           },
@@ -129,7 +130,8 @@
             "duration_seconds": "{{start.segment_seconds}}",
             "aspect_ratio": "{{start.aspect_ratio}}",
             "resolution": "{{start.resolution}}"
-          }
+          },
+          "entity_ids": "{{start.entity_ids}}"
         }
       },
       {
@@ -146,6 +148,7 @@
             "style": "{{start.style}}",
             "overlap_seconds": "{{start.overlap_seconds}}",
             "segment_seconds": "{{start.segment_seconds}}",
+            "entity_ids": "{{start.entity_ids}}",
             "aspect_ratio": "{{start.aspect_ratio}}",
             "resolution": "{{start.resolution}}"
           },
@@ -184,7 +187,8 @@
                   },
                   "source_assets": [
                     "{{tail.asset_id}}:first_frame"
-                  ]
+                  ],
+                  "entity_ids": "{{input.entity_ids}}"
                 }
               }
             ],
@@ -249,7 +253,7 @@
           "items": "",
           "inputs": {
             "sequence_id": "{{video_project.sequence_id}}",
-            "overlap_seconds": "{{start.overlap_seconds}}"
+            "search_seconds": "{{start.segment_seconds}}"
           },
           "body": {
             "nodes": [
@@ -258,7 +262,7 @@
                 "type": "timeline_append",
                 "name": "接到时间线上",
                 "position": {
-                  "x": 80,
+                  "x": 390,
                   "y": 140
                 },
                 "config": {
@@ -269,10 +273,13 @@
               }
             ],
             "edges": []
-          }
+          },
+          "output": "{{loop.item}}",
+          "previous_initial": ""
         },
         "inputs": [
-          "items"
+          "items",
+          "previous_initial"
         ]
       },
       {
@@ -289,6 +296,21 @@
         "inputs": [
           "sequence_id"
         ]
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "交付成片",
+        "position": {
+          "x": 2500,
+          "y": 300
+        },
+        "config": {
+          "values": {
+            "video_asset_id": "{{export_final.asset_id}}",
+            "segments": "{{segments.results}}"
+          }
+        }
       }
     ],
     "edges": [
@@ -323,11 +345,6 @@
         "target": "clear_timeline"
       },
       {
-        "id": "project_clear",
-        "source": "video_project",
-        "target": "clear_timeline"
-      },
-      {
         "id": "clear_opening",
         "source": "clear_timeline",
         "target": "append_opening"
@@ -341,6 +358,11 @@
         "id": "assemble_export",
         "source": "assemble",
         "target": "export_final"
+      },
+      {
+        "id": "export_output",
+        "source": "export_final",
+        "target": "output"
       },
       {
         "id": "d-opening-asset_id-segments-previous_initial",
@@ -381,6 +403,14 @@
         "kind": "data",
         "source_output": "results",
         "target_input": "items"
+      },
+      {
+        "id": "d-opening-asset_id-assemble-previous_initial",
+        "source": "opening",
+        "target": "assemble",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "previous_initial"
       },
       {
         "id": "d-video_project-sequence_id-export_final-sequence_id",

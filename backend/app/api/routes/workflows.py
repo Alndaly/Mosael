@@ -27,6 +27,7 @@ from app.api.schemas import (
     WorkflowOut,
     WorkflowRevisionDetailOut,
     WorkflowRevisionOut,
+    WorkflowContinueRequest,
     WorkflowRunOutputOut,
     WorkflowRunRequest,
     WorkflowUnusableNodeOut,
@@ -39,7 +40,8 @@ from app.domain.workflows import create_workflow, list_workflows, update_workflo
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.failure_summary import detail_of, hint_of, summarize
 from app.domain.job_center import use_cases as job_center
-from app.domain.workflows.engine import continue_failed_run, start_workflow_job
+from app.domain.workflows.engine import continue_run, start_workflow_job
+from app.domain.workflows.graph_run import RedoRound
 from app.domain.workflows.graph_upgrade import upgrade_graph
 from app.domain.workflows.run_outputs import full_text
 from app.domain.workflows.file_export import (
@@ -476,8 +478,8 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: Tx, user: CurrentUser) -
 
 
 @router.post("/workflows/{workflow_id}/runs/{job_id}/continue", response_model=JobOut)
-def continue_run(workflow_id: str, job_id: str, db: Tx, user: CurrentUser) -> Job:
-    """失败或被取消的运行从中断处接着跑:已经落定的节点不再执行(ADR 0092)。"""
+def continue_workflow_run(workflow_id: str, job_id: str, body: WorkflowContinueRequest, db: Tx, user: CurrentUser) -> Job:
+    """运行从中断处接着跑,或从某个循环的第几轮重做:已经落定的节点不再执行(ADR 0092)。"""
     workflow = workflow_uc.editable(db, user, workflow_id)
     job = job_center.readable(db, user, job_id)
     try:
@@ -485,7 +487,8 @@ def continue_run(workflow_id: str, job_id: str, db: Tx, user: CurrentUser) -> Jo
         #: 点继续和点运行一样是人在现场,认可的是这次运行钉住的那一版(ADR 0047 D6)。
         if revision:
             attest_revision(db, workflow, revision, attested_by=user.id)
-        return continue_failed_run(db, workflow, job)
+        redo = RedoRound(body.redo.node_id, body.redo.index, body.redo.item) if body.redo else None
+        return continue_run(db, workflow, job, params=body.params, redo=redo)
     except WorkflowRevisionError as exc:
         raise _run_refused(WorkflowDomainError.from_error(exc)) from exc
     except WorkflowDomainError as exc:

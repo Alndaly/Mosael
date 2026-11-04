@@ -5,7 +5,7 @@ import { Ban, CheckCircle2, ChevronDown, CircleDashed, Clock, Hand, History, Loa
 
 import { attestRequestOf, listJobEvents, listRunApprovals, listWorkflowRuns, runApprovalsKey, type Job, type RunApproval } from "@/api/client";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
-import { canContinueRun, ContinueRunButton } from "@/features/workflows/ContinueRunButton";
+import { ContinueRunActions } from "@/features/workflows/ContinueRunButton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
@@ -210,11 +210,11 @@ export function WorkflowRunHistory({
   const anyRunning = (runs.data ?? []).some((j) => RUNNING.has(j.status));
   //: 这一轮停下之后能做的事:认可那一版、从中断处继续。没有就是 null,不摆一行空的。
   const attest = selected ? runAttest(selected) : null;
-  const continuable = selected != null && canContinueRun(selected);
-  const runActions = attest || continuable ? (
+  const settled = selected != null && !RUNNING.has(selected.status);
+  const runActions = attest || settled ? (
     <>
       {attest && <AttestRevisionButton attest={attest} />}
-      {continuable && <ContinueRunButton workflowId={workflowId} jobId={selected.id} />}
+      {settled && <ContinueRunActions workflowId={workflowId} job={selected} steps={steps} />}
     </>
   ) : undefined;
   const [now, setNow] = React.useState(() => Date.now());
@@ -396,7 +396,7 @@ export function WorkflowRunHistory({
                   data-run-failed=""
                 />
               )}
-              {!selected.error && runActions && <div className="flex justify-end gap-2">{runActions}</div>}
+              {!selected.error && runActions && <div className="flex justify-end gap-2 empty:hidden">{runActions}</div>}
               {steps.length > 0 && (
                 /* 步骤是一行一行的状态清单,和运行列表同一套图标语言;展开体挂在它自己那一步的下面、
                    顺着名字那一列缩进。 */

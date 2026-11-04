@@ -200,7 +200,7 @@
   (见 ADR 0069)。它排成 `after_commit`,所以失败也只影响那张卡,不影响已经落库的取消 / 超时。
 - `app/domain/workflows/approvals.py:_RESUME_DISPATCHER` — 「把暂停在等人确认上的运行接着派发出去」的实现。
   引擎在 import 时登记自己,运行时只读 —— 反过来让领域去 import 引擎就成了环(tests/test_import_layering 一个环都不许有)。
-- `app/domain/workflows/graph_runner.py:_run_graph`、`app/domain/workflows/graph_runner.py:_start_workflow_job` —— 容器类执行器
+- `app/domain/workflows/graph_runner.py:_run_graph`、`app/domain/workflows/graph_runner.py:_start_workflow_job`、`app/domain/workflows/graph_runner.py:_continue_called_run` —— 容器类执行器
   (循环体、子图、调用另一个工作流)回头跑图的入口。引擎在模块末尾登记自己,运行时只读;执行器只认识这道缝。
 - `app/domain/assets/deletion.py:_guards`、`app/domain/assets/deletion.py:_cleanups` —— 删素材之前的拦截(还在发布的不删)
   与善后(资产库摘掉参考图)。组装根在导入期登记,运行时只读;素材域不认识发布和资产库。

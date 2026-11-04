@@ -17,6 +17,8 @@ import { parseServerTime } from "@/lib/time";
 export type Step = {
   nid: string;
   name: string;
+  /** 节点类型(开始事件带的)。 */
+  nodeType?: string;
   /** cancelled:总任务被取消时还在跑的那一步 —— 它没有出错,是被停下的。 */
   status: "running" | "done" | "skipped" | "failed" | "cancelled";
   ms?: number;
@@ -70,6 +72,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
     const p = (e.payload ?? {}) as {
       node_id?: string;
       name?: string;
+      node_type?: string;
       outputs?: Record<string, unknown>;
       truncated?: Record<string, number>;
       error?: string;
@@ -84,7 +87,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
     if (!nid) continue;
     if (e.type === "workflow.node.started") {
       if (!byNode.has(nid)) order.push(nid);
-      byNode.set(nid, { nid, name: p.name ?? nid, status: "running", startAt: e.created_at ? parseServerTime(e.created_at).getTime() : undefined });
+      byNode.set(nid, { nid, name: p.name ?? nid, nodeType: p.node_type, status: "running", startAt: e.created_at ? parseServerTime(e.created_at).getTime() : undefined });
     } else if (e.type === "workflow.node.finished") {
       let s = byNode.get(nid);
       if (!s) {

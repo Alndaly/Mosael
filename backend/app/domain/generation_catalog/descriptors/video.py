@@ -111,7 +111,8 @@ WAN_27_I2V_CAPABILITIES = {
     "supports_audio": True,
     #: 驱动音频(ADR 0028):文档写音频 2–30 秒;比所选时长长的部分**自动截掉**、成片不跟着音频走 ——
     #: 界面在所选时长短于音频时提醒「后 N 秒会被截掉」。
-    "source_duration_seconds": {"driving_audio": [2, 30]},
+    #: 待续写的片段最短 2 秒(2026-11-04 真机:`duration should be at least 2s, got 0.92s`)。上限文档没写,按单次最长的 15 秒算。
+    "source_duration_seconds": {"driving_audio": [2, 30], "first_clip": [2, 15]},
     "truncates_role": "driving_audio",
 }
 

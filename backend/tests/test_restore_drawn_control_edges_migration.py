@@ -48,6 +48,8 @@ from app.domain.workflows.templates import TEMPLATE_CATALOG, blank_template_grap
 from tests.util import fresh_client
 
 TEMPLATE_IDS = [card["id"] for card in TEMPLATE_CATALOG]
+#: 折边撤掉之后才有的模板:当年的旧数据里没有它们,不进那份审计。
+BORN_AFTER_THE_FOLD = {"long_take_video"}
 
 #: 模板建图函数最后一步都过 normalize_graph;把它换成原样交回,拿到的就是作者画的那一张
 #: (和 tests/test_drawn_control_edges_are_never_folded.py 取原图同一条路)。
@@ -233,6 +235,8 @@ def test_当年的折边折掉了作者画的控制边_这份旧数据符合当�
     folded_edges = 0
     broken: list[str] = []
     for template_id, graph in raw.items():
+        if template_id in BORN_AFTER_THE_FOLD:
+            continue
         stored = _stored_by_the_old_normalizer(graph)
         folded_edges += len(set(_control_wires(graph)) - set(_control_wires(stored)))
         start, output = _start_and_output(stored)

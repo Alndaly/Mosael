@@ -45,6 +45,7 @@ EXEMPT: dict[str, str] = {
     #: 和 provider / model 是**一次**选择:工作流检查器的生成专区从生成目录里挑一个模型,三格一起写
     #: (WorkflowsView 的 GENERATE_SPECIAL_CONFIG_KEYS),通用表单不渲染它。
     "ai_generate.provider_profile_id": "picked together with provider/model from the generation catalog",
+    "video_cost_estimate.provider_profile_id": "written by the template together with provider/model; the node only reads a price",
     #: 片段是同一次运行里上游那一步刚放上去的(timeline_append.clip_id / generate_subtitles.clip_ids):
     #: 编辑那一刻列出来的,是这次运行要替掉的旧片段。值只该从上游接。
     "timeline_cut_ranges.clip_id": "clips come from the upstream step of the same run",

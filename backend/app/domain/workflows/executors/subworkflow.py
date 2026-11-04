@@ -11,8 +11,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
-from app.domain.jobs import current_parent_job_id
-from app.domain.workflows import graph_runner
+from app.domain.jobs import CANCELLED, current_parent_job_id
+from app.domain.workflows import graph_runner, run_steps
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import interpolate
 from app.domain.jobs import current_actor
@@ -86,7 +86,15 @@ def call_workflow(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     params = dict(inputs) if isinstance(inputs, dict) else {}
     # start_workflow_job 建的子 job 经 create_job 读 contextvar,parent = 当前工作流 job → 自动收纳。
     try:
-        child = graph_runner.start_workflow_job(db, target, created_by=current_actor(db), params=params)
+        #: 从失败处继续:上回调起的那条子运行接着跑,它跑完的节点不再跑一遍(见 run_steps)。
+        called = run_steps.held_called_run(db)
+        if called is None:
+            child = graph_runner.start_workflow_job(db, target, created_by=current_actor(db), params=params)
+            run_steps.hold_called_run(db, child.id)
+        elif called.status in ("failed", CANCELLED):
+            child = graph_runner.continue_called_run(db, target, called)
+        else:
+            child = called
     except WorkflowDomainError as exc:
         #: 开跑前那一道说的是**子工作流自己**的话(「节点 start 缺少必填配置 …」),挂在这个节点上读的人会去
         #: 调用方的开始节点里找。说清是调的哪一张跑不起来。

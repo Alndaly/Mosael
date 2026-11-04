@@ -15626,9 +15626,9 @@
         "tags": [
           "workflows"
         ],
-        "summary": "Continue Run",
-        "description": "失败或被取消的运行从中断处接着跑:已经落定的节点不再执行(ADR 0092)。",
-        "operationId": "continue_run_api_workflows__workflow_id__runs__job_id__continue_post",
+        "summary": "Continue Workflow Run",
+        "description": "运行从中断处接着跑,或从某个循环的第几轮重做:已经落定的节点不再执行(ADR 0092)。",
+        "operationId": "continue_workflow_run_api_workflows__workflow_id__runs__job_id__continue_post",
         "parameters": [
           {
             "name": "workflow_id",
@@ -15649,6 +15649,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowContinueRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -53677,6 +53687,28 @@
         ],
         "title": "WorkflowContentOut"
       },
+      "WorkflowContinueRequest": {
+        "properties": {
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "redo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowRedoRoundIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "WorkflowContinueRequest",
+        "description": "接着跑一次运行。`params` 改开始参数,只影响还没落定的节点;`redo` 从某个循环的第几轮重做。"
+      },
       "WorkflowCopyRequest": {
         "properties": {
           "path": {
@@ -55203,6 +55235,30 @@
         "type": "object",
         "title": "WorkflowRecentOutputsOut",
         "description": "详情里那一组:新的在前,最多 server_workflows.RECENT_OUTPUTS 份;`more` 是更早的还有(在素材库里)。"
+      },
+      "WorkflowRedoRoundIn": {
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Node Id"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Index"
+          },
+          "item": {
+            "title": "Item"
+          }
+        },
+        "type": "object",
+        "required": [
+          "node_id",
+          "index"
+        ],
+        "title": "WorkflowRedoRoundIn",
+        "description": "从顶层某个循环的第几轮重做(从 0 数)。`item` 给了就换掉那一轮的内容。"
       },
       "WorkflowRenameRequest": {
         "properties": {

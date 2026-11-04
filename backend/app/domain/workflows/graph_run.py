@@ -10,6 +10,15 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class RedoRound:
+    """从顶层某个循环的第几轮重做(从 0 数)。`item` 给了就换掉那一轮的内容(改一段的提示词);None 是照原样重来。"""
+
+    node_id: str
+    index: int
+    item: Any = None
+
+
+@dataclass(frozen=True)
 class GraphResume:
     """**从暂停的那一个节点接着跑**:哪些节点已经落定、它们的产物是什么。
 

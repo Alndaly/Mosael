@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import GenerationJob, Job, WorkflowRunStep
@@ -55,17 +55,22 @@ def recorded(db: Session, job_id: str, scope: str) -> dict[str, Any]:
     return {row.node_id: row.outputs for row in rows if row.outputs is not None}
 
 
-def forget(db: Session, job_id: str) -> None:
-    """运行成功了,这些记录用不上了。"""
-    db.execute(delete(WorkflowRunStep).where(WorkflowRunStep.job_id == job_id))
+def forget_from(db: Session, job_id: str, loop_node: str, index: int, downstream: set[str]) -> None:
+    """重做:忘掉循环 `loop_node` 第 `index` 轮及之后的步骤、循环自己、和它下游的节点。之前的那几轮留着。"""
+    prefix = f"{loop_node}/#"
+    rows = db.scalars(select(WorkflowRunStep).where(WorkflowRunStep.job_id == job_id))
+    for row in rows:
+        here = row.scope == "" and (row.node_id == loop_node or row.node_id in downstream)
+        round_text = row.scope[len(prefix):].split("/", 1)[0] if row.scope.startswith(prefix) else ""
+        inside = row.scope.split("/", 1)[0] in downstream if row.scope else False
+        if here or inside or (round_text.isdigit() and int(round_text) >= index):
+            db.delete(row)
 
 
-def hold_generation(db: Session, generation_id: str, child_job_id: str) -> None:
-    """当前节点把这张生成单交了出去。**不提交**,和下单同一个事务:单落了库,这一行也落了。不在运行里(直接调执行器)时什么都不做。"""
+def _hold(db: Session, held: dict[str, str]) -> None:
     job_id, node_id = current_parent_job_id(), current_node()
     if not job_id or not node_id:
         return
-    held = {"generation_id": generation_id, "job_id": child_job_id}
     row = _row(db, job_id, step_scope(), node_id)
     if row is None:
         db.add(WorkflowRunStep(job_id=job_id, scope=step_scope(), node_id=node_id, held=held))
@@ -73,16 +78,36 @@ def hold_generation(db: Session, generation_id: str, child_job_id: str) -> None:
         row.held = held
 
 
+def _held(db: Session) -> dict[str, str] | None:
+    job_id, node_id = current_parent_job_id(), current_node()
+    if not is_continuing() or not job_id or not node_id:
+        return None
+    row = _row(db, job_id, step_scope(), node_id)
+    return row.held if row is not None else None
+
+
+def hold_generation(db: Session, generation_id: str, child_job_id: str) -> None:
+    """当前节点把这张生成单交了出去。**不提交**,和下单同一个事务:单落了库,这一行也落了。不在运行里(直接调执行器)时什么都不做。"""
+    _hold(db, {"generation_id": generation_id, "job_id": child_job_id})
+
+
+def hold_called_run(db: Session, child_job_id: str) -> None:
+    """当前节点调起了这条子工作流。不提交。"""
+    _hold(db, {"job_id": child_job_id})
+
+
+def held_called_run(db: Session) -> Job | None:
+    """接着跑时,当前节点上回调起的那条子工作流。"""
+    held = _held(db)
+    return db.get(Job, held["job_id"]) if held else None
+
+
 def held_generation(db: Session) -> tuple[str, str] | None:
     """接着跑时,当前节点上回交出去、还用得上的那张单:(生成记录 id, 子任务 id)。
 
     失败或被取消的单不算:节点再跑一遍就是要重新下单。
     """
-    job_id, node_id = current_parent_job_id(), current_node()
-    if not is_continuing() or not job_id or not node_id:
-        return None
-    row = _row(db, job_id, step_scope(), node_id)
-    held = row.held if row is not None else None
+    held = _held(db)
     if not held:
         return None
     child = db.get(Job, held["job_id"])
@@ -91,4 +116,4 @@ def held_generation(db: Session) -> tuple[str, str] | None:
     return held["generation_id"], held["job_id"]
 
 
-__all__ = ["forget", "held_generation", "hold_generation", "record", "recorded"]
+__all__ = ["forget_from", "held_called_run", "held_generation", "hold_called_run", "hold_generation", "record", "recorded"]
