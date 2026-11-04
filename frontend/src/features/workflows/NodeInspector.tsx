@@ -540,6 +540,7 @@ export function NodeInspector({
       binding={binding}
       renderOwnField={renderOwnField}
       autoImages={autoImages}
+      refName={(reference) => refLabel(refCatalog.look(bareRef(reference)))}
       assetGridModels={assetGridModels}
       references
     />

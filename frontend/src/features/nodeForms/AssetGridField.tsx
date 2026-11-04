@@ -182,7 +182,10 @@ export function AssetGridField({
   roleOverrides = {},
   onRoleOverrideChange,
   variables = [],
+  refName,
 }: {
+  /** 一处上游引用在界面上叫什么(宿主有引用目录,控件不认识图);没给就写引用本身。 */
+  refName?: (reference: string) => string;
   /** 逗号分隔的素材 id 串(**声明了 `lines` 时**是行的列表:一行一条 `素材id:角色`)。 */
   value: unknown;
   workspaceId: string;
@@ -360,8 +363,10 @@ export function AssetGridField({
   const roleName = (role: string) => (roles ?? []).find((one) => one.value === role)?.label ?? role;
 
   const full = picked.length >= max;
-  /** 这一格真画出来的瓦片数:已挑的 + 还没满时那两格虚线格(上传 / 从素材库挑)。 */
-  const tiles = picked.length + (full ? 0 : 2);
+  const linked = picked.filter((one) => hasReference(one.value));
+  const stored = picked.filter((one) => !hasReference(one.value));
+  /** 这一格真画出来的瓦片数:挑的素材 + 还没满时那两格虚线格(上传 / 从素材库挑)。 */
+  const tiles = stored.length + (full ? 0 : 2);
   /** 这一格的设计列数:带角色两列、不带角色四列(见 ROLE_TILE_COLUMNS 上那段)。 */
   const tileColumns = roleAware ? ROLE_TILE_COLUMNS : PLAIN_TILE_COLUMNS;
   /**
@@ -387,12 +392,43 @@ export function AssetGridField({
         collisionDetection={closestCenter}
         onDragEnd={onDragEnd}
       >
-        <SortableContext items={picked.map((one) => one.value)} strategy={rectSortingStrategy}>
+        <SortableContext items={stored.map((one) => one.value)} strategy={rectSortingStrategy}>
           {/* 一排怎么分列见上面 `tileGrid`:瓦片不到设计列数时按实际枚数各占一等份(整行占满),
               到了以上就是设计列数。带角色的那一版**两列**的理由:角色角标要写下一个角色名
               (「参考图」/「Reference image」),四列一格(~80px)放不下它,而角色必须看得见。 */}
+          {/* 接上游的那几处没有图可看,一处一行写清接的是谁;瓦片只画真的素材。 */}
+          {linked.length > 0 && (
+            <div className="mb-2 grid gap-1" data-asset-grid-links="">
+              {linked.map((item) => (
+                <div key={item.value} data-asset-link={item.value} className="flex min-w-0 items-center gap-1 text-ui-2xs">
+                  <Link2 size={11} strokeWidth={1.8} className="shrink-0 text-muted-foreground" />
+                  <Truncate className="min-w-0 flex-1" as="span">
+                    {refName?.(item.value) ?? item.value}
+                  </Truncate>
+                  {roleAware && (
+                    <RoleBadge
+                      role={item.role}
+                      roles={roles ?? []}
+                      onPick={(role) => write(picked.map((one) => (one.value === item.value ? { ...one, role } : one)))}
+                      label={t("wfAssetGridRole")}
+                      className="shrink-0"
+                    />
+                  )}
+                  <IconButton
+                    size="icon-xs"
+                    variant="ghost"
+                    label={t("wfAssetGridLinkRemove").replace("{name}", refName?.(item.value) ?? item.value)}
+                    onClick={() => write(picked.filter((one) => one.value !== item.value))}
+                    className="shrink-0 text-muted-foreground"
+                  >
+                    <X size={11} />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+          )}
           <div className={cn("grid gap-1", tileGrid)}>
-            {picked.map((item, index) => (
+            {stored.map((item, index) => (
               <PickedTile
                 key={item.value}
                 id={item.value}
@@ -407,10 +443,8 @@ export function AssetGridField({
                       !kindAllowedFor(String(details.byId.get(item.value)?.kind ?? ""), item.role)
                     : false
                 }
-                onRoleChange={(role) =>
-                  write(picked.map((one, at) => (at === index ? { ...one, role } : one)))
-                }
-                onRemove={() => write(picked.filter((_, at) => at !== index))}
+                onRoleChange={(role) => write(picked.map((one) => (one.value === item.value ? { ...one, role } : one)))}
+                onRemove={() => write(picked.filter((one) => one.value !== item.value))}
               />
             ))}
             {/* 满 max 份:两格虚线格消失,格子就此定死(先移除再改)。 */}
@@ -692,6 +726,8 @@ function RoleBadge({
   const t = useI18n();
   const current = roles.find((one) => one.value === role);
   const shown = current?.label ?? t("wfAssetGridRoleNone");
+  //: 只列这个模型收的,一串选不了的项只是噪音;手上这个它不收的话留着并标出来,好换走。
+  const offered = roles.filter((one) => one.accepted !== false || one.value === role);
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -706,7 +742,7 @@ function RoleBadge({
         </Chip>
       </PopoverTrigger>
       <MenuContent label={label} align="start">
-        {roles.map((one) => (
+        {offered.map((one) => (
           <MenuItem
             key={one.value}
             role="menuitemradio"
@@ -747,8 +783,7 @@ function PickedTile({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const [imgFailed, setImgFailed] = React.useState(false);
   //: 详情查得到 → 名字是它的;查不到(可能还没回来) → 先写 id。都 settled 了还没有 = 被删了。
-  const asReference = hasReference(id);
-  const missing = settled && !asset && !asReference;
+  const missing = settled && !asset;
   const failed = missing || imgFailed;
   const name = asset?.name || asset?.original_filename || id;
   const roleName = roles.find((one) => one.value === role)?.label;
@@ -777,11 +812,6 @@ function PickedTile({
         {failed ? (
           <span className="grid size-full place-items-center">
             <ImageOff size={14} strokeWidth={1.6} />
-          </span>
-        ) : asReference ? (
-          //: 值是一段 `{{…}}` 引用(上游这一刻给的那一份、或一整组素材):没有缩略图可画。
-          <span className="grid size-full place-items-center">
-            <Link2 size={14} strokeWidth={1.6} />
           </span>
         ) : (
           <img

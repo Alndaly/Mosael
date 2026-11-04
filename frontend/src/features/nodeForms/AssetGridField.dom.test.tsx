@@ -488,9 +488,16 @@ describe("一行一条 `素材id:角色`(生成节点的「输入素材」)", ()
     expect(onChange).toHaveBeenCalledWith(["img-a:first_frame"]);
   });
 
-  it("模型收不下的角色在菜单里标出来,但**照样列着**(换一个收得下的就能发)", () => {
+  it("菜单只列模型收的角色,不摆一串选不了的", () => {
     const { container } = renderLines({ value: ["img-a:reference_image"] });
     fireEvent.click(container.querySelector("[data-role-badge='reference_image']")!);
+    const items = screen.getAllByRole("menuitemradio");
+    expect(items.map((one) => one.textContent)).toEqual(["首帧", "参考图"]);
+  });
+
+  it("手上这个角色模型不收:留着并标出来,好换走", () => {
+    const { container } = renderLines({ value: ["img-a:reference_video"] });
+    fireEvent.click(container.querySelector("[data-role-badge='reference_video']")!);
     const items = screen.getAllByRole("menuitemradio");
     expect(items.map((one) => one.textContent)).toEqual(["首帧", "参考图", "参考视频wfAssetGridRoleUnsupported"]);
   });
@@ -660,5 +667,15 @@ describe("模型什么都不收", () => {
   it("已经挑了的留着,好让人移除", () => {
     renderLines({ value: ["a:reference_image"], roles: none, defaultRole: "reference_image" });
     expect(document.querySelector("[data-asset-grid-nothing]")).toBeNull();
+  });
+});
+
+describe("接上游的那几处", () => {
+  it("一处一行,不画成图片格;能移除", () => {
+    const { container, onChange } = renderLines({ value: ["{{tail.asset_id}}:first_clip", "img-a:reference_image"] });
+    expect(container.querySelector("[data-asset-link='{{tail.asset_id}}']")).toBeTruthy();
+    expect(container.querySelectorAll("[data-asset-tile]")).toHaveLength(1);
+    fireEvent.click(container.querySelector("[data-asset-link] button:last-child")!);
+    expect(onChange).toHaveBeenCalledWith(["img-a:reference_image"]);
   });
 });

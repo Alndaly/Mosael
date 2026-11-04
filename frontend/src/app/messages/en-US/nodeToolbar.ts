@@ -66,6 +66,7 @@ export const nodeToolbar = {
   wfAssetGridRoleNone: "No role",
   wfAssetGridRoleUnsupported: "This model does not take it",
   wfAssetGridNothingAccepted: "This model takes no input assets",
+  wfAssetGridLinkRemove: "Unlink “{name}”",
   wfAssetGridWrongKind: "Not the kind of media this role wants; it will not be sent",
   //: The automatically included references (“a reference means it gets sent”): media referenced in the prompt
   //: are sent at run time, and where they come from must stay visible.

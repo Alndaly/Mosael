@@ -358,6 +358,7 @@ export function NodeConfigForm({
   binding,
   renderOwnField,
   autoImages = {},
+  refName,
   assetGridModels = {},
   references = false,
   compact = false,
@@ -384,6 +385,8 @@ export function NodeConfigForm({
   /** 「引用即发送」自动来的那几处引用,按字段给(见 workflows/referencedImages)。只有宿主认识这张图,
    *  所以由它算好交下来;这一层只管把它摆到对应那一格的控件上。 */
   autoImages?: Record<string, readonly AutoImageRef[]>;
+  /** 素材格里一处上游引用叫什么,用的是宿主的引用目录。 */
+  refName?: (reference: string) => string;
   /** 「一次挑一组素材」那一格(声明 `editor: "asset_grid"`)按**所选模型**算出来的角色事实:
    *  哪几种角色收得下(声明里的 `ref_assets_gate`)、每个角色最多几份、槽位叫什么。控件不认识模型,
    *  所以由宿主算好交下来 —— 和 `autoImages` 同一种交法。没给 = 认不出模型(角色一律不下结论)。 */
@@ -456,6 +459,7 @@ export function NodeConfigForm({
         defaultRole={defaultRole}
         max={assetGridMax(roles)}
         refs={autoImages[key] ?? NO_REFS}
+        refName={refName}
         excluded={storedIds(config[`${key}_excluded`])}
         onExcludedChange={(next) => onPatchConfig(key, { [`${key}_excluded`]: next }, false)}
         roleOverrides={overrides}
