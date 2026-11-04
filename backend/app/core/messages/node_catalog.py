@@ -487,6 +487,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_loop_foreach_items": {"zh": "要逐项跑的列表:选上游交回的一串;也接受一段 JSON 数组文本(如 LLM 的回答),或多行文本(按行拆分)", "en": "The list to go through: pick a list handed back upstream; a JSON array as text (such as an LLM reply) or multi-line text (split by line) is also accepted"},
     "wfNode_loop_foreach_inputs": {"zh": "每行一个传进循环体的共享值:左边起名,右边填值或选上游的输出;循环体里的节点在 input 下按这个名字取", "en": "One shared value per row passed into the loop body: name it on the left, type a value or pick an upstream output on the right; nodes inside find it under input by that name"},
     "wfNode_loop_foreach_body": {"zh": "循环体子流程(在节点内编辑;里面的节点在 loop 下取当前元素和序号)", "en": "The loop body sub-flow (edited inside the node; its nodes take the current item and index under loop)"},
+    "wfNode_loop_foreach_max_spend": {
+        "zh": "这次运行累计花到多少就不再开始下一项;留空不限。不同币种分开算,没定价的调用算不进来",
+        "en": "Stop starting new items once this run has spent this much; blank means no limit. Currencies count separately and unpriced calls aren't included",
+    },
     "wfNode_loop_previous_initial": {
         "zh": "循环体读「上一轮的产物」时,第一轮读到什么(之后每一轮读到的都是上一轮的输出);留空就是空",
         "en": "What the loop body reads as “the previous round” on the first round (afterwards it is the previous round's output); blank means empty",

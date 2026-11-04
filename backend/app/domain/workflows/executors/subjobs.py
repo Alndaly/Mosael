@@ -16,7 +16,7 @@ from typing import Any, TypeVar
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Clip, Sequence, Transcript, GenerationJob, Job, PublishAccount
+from app.db.models import Asset, Clip, Sequence, Transcript, GenerationJob, Job, PublishAccount, now
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
@@ -29,9 +29,12 @@ from app.domain.workflows.executors.inputs import _asset_in, _sequence_in
 from app.ai.providers.contracts.denoise import DenoiseError
 from app.ai.providers.contracts.separation import SeparationError
 from app.ai.runtime import config as tts_config, tts_models
-from app.core.i18n import get_current_locale, t
+from app.core.i18n import get_current_locale, t, tr
 from app.domain import render
+from app.media.still import StillError
 from app.domain.assets import denoise, video_gif
+from app.domain.billing.usage import price_usage
+from app.domain.assets.frames import AssetFrameError, last_frame_time, save_frame_as_asset
 from app.domain.assets.from_url import UrlImportError, start_url_import
 from app.domain.assets.separation import start_separation_job
 from app.domain.assets.trim import TrimError, clip_range, start_trim
@@ -370,6 +373,44 @@ def _parameters_fit_the_model(db: Session, config: dict[str, Any], actor: str | 
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
+
+
+@register("video_cost_estimate")
+def video_cost_estimate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    items = config.get("items")
+    count = (len(items) if isinstance(items, list) else len(text_lines(items))) + int(config.get("extra_items") or 0)
+    seconds = count * float(config.get("seconds_each") or 0)
+    priced = price_usage(
+        db, workspace_id=scope.workspace_id, provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
+        provider=str(config.get("provider") or ""), capability="video", model=str(config.get("model") or ""),
+        units={"video_seconds": seconds, "resolution": str(config.get("resolution") or "")}, moment=now(),
+    )
+    estimate = priced.cost_micros / 1_000_000 if priced.cost_micros is not None else None
+    limit = float(config.get("max_spend") or 0)
+    if limit and estimate is not None and estimate > limit:
+        raise WorkflowDomainError("wfErr_estimateOverBudget", params={"estimate": f"{estimate:.2f}", "limit": f"{limit:g}", "count": count})
+    return {
+        "count": count,
+        "seconds": seconds,
+        "estimate": estimate,
+        "currency": priced.currency or "",
+        "text": tr("wfEstimate_priced", count=count, seconds=f"{seconds:g}", estimate=f"{estimate:.2f}", currency=priced.currency or "")
+        if estimate is not None else tr("wfEstimate_unpriced", count=count, seconds=f"{seconds:g}"),
+    }
+
+
+@register("video_frame")
+def video_frame(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    asset = db.get(Asset, str(config.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != scope.workspace_id:
+        raise WorkflowDomainError("wfErr_clipAssetNotInWorkspace")
+    at = config.get("at")
+    try:
+        moment = float(at) if at not in (None, "") else last_frame_time(asset)
+        frame = save_frame_as_asset(db, asset, moment, project_id=None)
+    except (AssetFrameError, StillError) as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    return {"asset_id": frame.id, "source_asset_id": asset.id, "at": moment}
 
 
 @register("media_clip")

@@ -132,10 +132,22 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_pickPoolProfile": {"zh": "请选择浏览器池档案(session_mode=pool)", "en": "Pick a browser-pool profile (session_mode=pool)"},
     "wfErr_waitNeedsCondition": {"zh": "等待节点需要 selector / url_contains / text 之一", "en": "The wait node needs one of selector, url_contains or text"},
     "wfErr_clipAssetNotInWorkspace": {"zh": "要截取的素材不在这个工作区里", "en": "The asset to clip isn't in this workspace"},
+    "assetErr_frameNoDuration": {
+        "zh": "这段视频读不出时长,算不出最后一帧在哪:填上具体的时间",
+        "en": "This video's duration can't be read, so the last frame can't be found: fill in a time",
+    },
     "trimErr_lastSecondsNegative": {"zh": "「末尾几秒」不能是负数", "en": "“Last seconds” can't be negative"},
     "trimErr_noDuration": {
         "zh": "这份素材读不出时长,没法从片尾算:填上具体的结束时间",
         "en": "This asset's duration can't be read, so the end can't be worked out: fill in an end time",
+    },
+    "wfErr_estimateOverBudget": {
+        "zh": "{count} 段估算要 {estimate},超过上限 {limit}。还没花这笔钱:调高上限或减少段数",
+        "en": "{count} segments are estimated at {estimate}, over the limit of {limit}. Nothing has been spent on them: raise the limit or use fewer segments",
+    },
+    "wfErr_budgetReached": {
+        "zh": "这次运行已经花了 {spent},到了上限 {limit}。调高上限后可以从中断处继续",
+        "en": "This run has spent {spent}, reaching the limit of {limit}. Raise the limit to continue from here",
     },
     "wfErr_loopPreviousNeedsOrder": {
         "zh": "循环体用了上一轮的产物,只能一项一项跑:把「同时跑几项」改成 1",

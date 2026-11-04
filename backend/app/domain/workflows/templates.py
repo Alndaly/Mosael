@@ -20,6 +20,7 @@ from app.domain.workflows.template_requirements import (
     CheckStatus,
     DIGITAL_HUMAN_VOICE,
     MULTI_REFERENCE_IMAGE_MODEL,
+    CONTINUATION_VIDEO_MODEL,
     MULTI_REFERENCE_VIDEO_MODEL,
     REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
@@ -68,6 +69,8 @@ from app.domain.workflows.templates_models import (
     REFERENCE_IMAGES_NEEDED,
     SINGLE_REFERENCE,
     _chat_model,
+    _continuation_video_model,
+    _opening_video_model,
     _shot_video_model,
     _reference_image_model,
 )
@@ -78,6 +81,7 @@ from app.domain.workflows.templates_dub import (
     translated_dub_graph,
 )
 from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
+from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO, long_take_video_graph
 from app.domain.workflows.templates_shots import (
     REFERENCE_VIDEO_SHOTS,
     SHOTS_TEMPLATE_CATALOG,
@@ -147,6 +151,29 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                 "Assemble in order with captions",
                 "Export"
             ]
+        }
+    },
+    {
+        "id": "long_take_video",
+        "name": {
+            "zh": "任意长度的连续视频",
+            "en": "Continuous video of any length"
+        },
+        "summary": {
+            "zh": "输入一个想法和总时长，拆成一段一段，每段接着上一段的尾巴往下拍，接成一条不切镜头的长片。每段都是一次付费视频生成：开跑前按段数估算费用，max_segments 和 max_spend 是上限；断了可以从中断处继续。",
+            "en": "Give an idea and a total length: it splits them into segments and shoots each one on from the tail of the last, joined into one uncut video. Every segment is a paid video generation, so the cost is estimated first and max_segments and max_spend set the limits. If it stops, continue from where it stopped."
+        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(
+                CONTINUATION_VIDEO_MODEL,
+                zh="能接着一段视频或一帧往下拍的视频模型（如万相 2.7 图生视频、ComfyUI 的 H3 续写工作流）",
+                en="Video model that carries on from a clip or a frame (e.g. Wan 2.7 image-to-video, the H3 continuation workflow on ComfyUI)",
+            ),
+        ],
+        "stages": {
+            "zh": ["输入想法与总时长", "拆成一段一段", "估算费用", "拍第一段", "一段接一段往下拍", "接到时间线上", "导出"],
+            "en": ["Enter the idea and length", "Split into segments", "Estimate the cost", "Shoot the first segment", "Shoot segment after segment", "Lay them on the timeline", "Export"]
         }
     },
     {
@@ -276,6 +303,10 @@ def built_in_template_graph(
             voice_id=_prefilled_voice_id(db, workspace_id),
             db=db,
         ))
+    if template_id == LONG_TAKE_VIDEO:
+        return localised_names(locale, long_take_video_graph(
+            chat=chat, opening=_opening_video_model(db, user_id), video=_continuation_video_model(db, user_id), db=db,
+        ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return localised_names(locale, transcript_video_cleanup_graph(chat=chat, locale=locale))
     if template_id in (TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC):
@@ -350,6 +381,7 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         #: 照样接到开始参数(templates_models._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
         #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
         FULL_VIDEO_GENERATION: full_video_generation_graph(chat=blank, image=blank, video=blank),
+        LONG_TAKE_VIDEO: long_take_video_graph(chat=blank, opening=blank, video=blank),
         TRANSCRIPT_VIDEO_CLEANUP: transcript_video_cleanup_graph(chat=blank, locale=locale),
         # 音色按工作区取,不带任何本机资源的那份留空,由用的人自己挑。
         TRANSLATED_DUB: translated_dub_graph(chat=blank, voice_id="", locale=locale),
@@ -570,6 +602,7 @@ def _status_checks(db: Session, *, user_id: str, workspace_id: str) -> dict[str,
         MULTI_REFERENCE_IMAGE_MODEL: lambda: met(_reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED).model),
         REFERENCE_VIDEO_MODEL: lambda: met(_shot_video_model(db, user_id, references=SINGLE_REFERENCE).model),
         MULTI_REFERENCE_VIDEO_MODEL: lambda: met(_shot_video_model(db, user_id).model),
+        CONTINUATION_VIDEO_MODEL: lambda: met(_continuation_video_model(db, user_id).model),
         CLONED_VOICE: lambda: _cloned_voice_status(db, workspace_id, digital_human=False),
         DIGITAL_HUMAN_VOICE: lambda: _cloned_voice_status(db, workspace_id, digital_human=True),
         TRANSCRIPTION_ENGINE: lambda: _provider_status(db, user_id, transcription.CAPABILITY, asr_models.runtime_status),

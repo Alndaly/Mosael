@@ -16,6 +16,8 @@ from typing import Any, Iterator
 
 from sqlalchemy.orm import Session
 
+from app.domain.billing.usage import run_costs
+from app.domain.jobs import current_parent_job_id
 from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
@@ -111,6 +113,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             "wfErr_loopTooMany", params={"count": len(items), "cap": LOOP_FOREACH_HARD_CAP}
         )
     concurrency = _concurrency(config)
+    max_spend = _max_spend(config)
     #: 一项失败怎么办:stop(默认)整条循环失败;skip 记下这一项、接着跑别的 —— 各项彼此独立时(每条切片、
     #: 每组上身图、每种面料效果图)一项失败不该让已经付了钱的其余几项白做。跳过的那几项不进 results。
     skip = str(config.get("on_item_error") or "stop").strip().lower() == "skip"
@@ -141,6 +144,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         outcomes: list[tuple[int, Any]] = []
         for index, item in enumerate(items):
             _stop_if_halted()
+            _stop_at_budget(db, max_spend)
             try:
                 outcome = iterate(index, item)
             except Exception as exc:  # noqa: BLE001 — 只有 skip 时才记下继续,其余原样抛出
@@ -191,6 +195,25 @@ def _delivered(context: dict[str, Any], output_tpl: Any) -> Any:
     # 不写 output 时交出这一次的全部产物,**连同这一项本身**(`loop.item` / `loop.index`)——
     # 下游再遍历这份结果时,常常还要用到当初那一项的数据。共享输入每项都一样,不重复带。
     return _without_previous({nid: out for nid, out in context.items() if nid != "input"})
+
+
+def _max_spend(config: dict[str, Any]) -> float:
+    """累计花到多少就停;空、0 是不限。"""
+    value = config.get("max_spend")
+    return float(value) if value not in (None, "") else 0.0
+
+
+def _stop_at_budget(db: Session, max_spend: float) -> None:
+    """这次运行已经花到上限就不再开始下一项。停下是失败,调高上限之后从中断处继续(ADR 0092)。
+
+    不同币种不相加(见 billing.usage.costs_by_currency):哪一种先到上限就停在哪。没定价的调用算不进来。
+    """
+    job_id = current_parent_job_id()
+    if not max_spend or job_id is None:
+        return
+    spent = max((amount["micros"] for amount in run_costs(db, job_id)["amounts"]), default=0) / 1_000_000
+    if spent >= max_spend:
+        raise WorkflowDomainError("wfErr_budgetReached", params={"spent": f"{spent:.2f}", "limit": f"{max_spend:g}"})
 
 
 def _without_previous(made: dict[str, Any]) -> dict[str, Any]:

@@ -55457,6 +55457,7 @@
             "type": "string",
             "enum": [
               "full_video_generation",
+              "long_take_video",
               "transcript_video_cleanup",
               "translated_dub",
               "translated_dub_lipsync",

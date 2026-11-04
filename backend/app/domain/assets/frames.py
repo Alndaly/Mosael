@@ -19,6 +19,15 @@ class AssetFrameError(LocalizedError, ValueError):
     """这份素材取不了帧。api 回 400。"""
 
 
+def last_frame_time(asset: Asset) -> float:
+    """这段视频最后一帧在第几秒。留一帧半的余量:取帧的时间点压在片尾上时 ffmpeg 什么都取不到。"""
+    info = asset.media_info or {}
+    duration = float(info.get("duration") or 0)
+    if not duration:
+        raise AssetFrameError("assetErr_frameNoDuration")
+    return max(0.0, duration - 1.5 / float(info.get("fps") or 24))
+
+
 def save_frame_as_asset(db: Session, asset: Asset, at: float, *, project_id: str | None) -> Asset:
     """取 `at` 秒处那一帧,存成新的一份(原素材不动)。`project_id` 没给就放进原素材所在的项目。
     取不出来抛 media.still.StillError。"""

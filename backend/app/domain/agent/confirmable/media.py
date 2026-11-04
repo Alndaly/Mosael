@@ -18,6 +18,7 @@ from app.ai.providers.contracts.denoise import DenoiseError, checked_strength
 from app.domain import render
 from app.domain.assets import denoise, video_gif
 from app.domain.assets.denoise import DENOISABLE_KINDS
+from app.domain.assets.frames import AssetFrameError, last_frame_time, save_frame_as_asset
 from app.domain.assets.from_url import UrlImportError, start_url_import
 from app.domain.assets.image_grid import GRIDS, ImageGridError, parse_grid, split_image_grid
 from app.domain.assets.masks import MaskAssetError, make_mask_asset
@@ -384,6 +385,36 @@ def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | N
     )
     return {"job_id": job.id, "source_asset_id": asset.id}
 
+def _validate_grab_video_frame(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotInWorkspace")
+    if asset.kind != "video":
+        raise ConfirmationError("assetErr_framesOnlyFromVideo")
+    if payload.get("at") in (None, ""):
+        try:
+            last_frame_time(asset)
+        except AssetFrameError as exc:
+            raise ConfirmationError(exc.key) from exc
+
+
+def _summarize_grab_video_frame(db: Session, payload: dict[str, Any]) -> Summary:
+    at = payload.get("at")
+    return "confirm_grabVideoFrame", {
+        "moment": fragment("confirm_frameLast") if at in (None, "") else fragment("confirm_frameAt", at=at),
+    }
+
+
+def _execute_grab_video_frame(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    asset = db.get(Asset, str(payload["asset_id"]))
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    at = payload.get("at")
+    frame = save_frame_as_asset(db, asset, float(at) if at not in (None, "") else last_frame_time(asset), project_id=None)
+    return {"asset_id": frame.id, "source_asset_id": asset.id}
+
+
 def _clip_span(payload: dict[str, Any]) -> dict[str, Any]:
     """卡上那几个数 → `clip_range` 的参数。"""
     end = payload.get("end")
@@ -735,6 +766,17 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_import_from_url,
     execute=_execute_import_from_url,
     validate=_validate_import_from_url,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="grab_video_frame",
+    permission="render-cost",
+    cost="render",
+    writes=("assets",),
+    summarize=_summarize_grab_video_frame,
+    execute=_execute_grab_video_frame,
+    validate=_validate_grab_video_frame,
 ))
 
 

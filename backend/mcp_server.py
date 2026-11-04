@@ -779,6 +779,23 @@ def denoise_audio(asset_id: str, strength: str = "medium", engine: str = "", wor
 
 
 @tool(effect="confirms")
+def grab_video_frame(asset_id: str, at: float | None = None, workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: save one frame of an EXISTING video asset as a NEW image asset.
+
+    The video is never changed. at is the time in seconds; leave it empty for the last frame.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "grab_video_frame",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "at": at},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def clip_media(
     asset_id: str,
     last_seconds: float = 0,

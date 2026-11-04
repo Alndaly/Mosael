@@ -175,6 +175,11 @@ _FIELD_LABELS = {
     "max_items": "wfField_max_items",
     "on_item_error": "wfField_on_item_error",
     "last_seconds": "wfField_last_seconds",
+    "currency": "wfField_currency",
+    "estimate": "wfField_estimate",
+    "extra_items": "wfField_extra_items",
+    "max_spend": "wfField_max_spend",
+    "seconds_each": "wfField_seconds_each",
     "previous_initial": "wfField_previous_initial",
     "failure_note": "wfField_failure_note",
     "dropped": "wfField_dropped",
@@ -1159,6 +1164,41 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "duration": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_duration"},
         },
         "outputs": ["asset_id", "source_asset_id"],
+    },
+    #: 开跑前的闸门:这一批视频按价目大概花多少,超了上限就在花钱之前停下。
+    "video_cost_estimate": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_flow",
+        "label": "wfNode_video_cost_estimate",
+        "description": "wfNode_video_cost_estimate_desc",
+        "config": {
+            "provider_profile_id": {"type": "string"},
+            "provider": {"type": "string", "required": True},
+            "model": {"type": "string", "required": True, "depends_on": "provider"},
+            "items": {"type": "template", "required": True, "description": "wfNode_video_cost_estimate_items"},
+            "extra_items": {"advanced": True, "type": "number", "description": "wfNode_video_cost_estimate_extra_items"},
+            "seconds_each": {"type": "number", "required": True, "description": "wfNode_video_cost_estimate_seconds_each"},
+            "resolution": {"advanced": True, "type": "template", "description": "wfNode_video_cost_estimate_resolution"},
+            "max_spend": {"type": "number", "description": "wfNode_loop_foreach_max_spend"},
+        },
+        "outputs": ["count", "seconds", "estimate", "currency", "text"],
+        "output_types": {"count": "number", "seconds": "number", "estimate": "number", "currency": "text", "text": "text"},
+    },
+    #: 取一帧存成图片素材,不填时间就是最后一帧:只收首帧的模型靠它接着上一段往下拍。
+    "video_frame": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_video_frame",
+        "description": "wfNode_video_frame_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "video", "description": "wfNode_video_frame_asset_id"},
+            "at": {"advanced": True, "type": "number", "description": "wfNode_video_frame_at"},
+        },
+        "outputs": ["asset_id", "source_asset_id", "at"],
+        "output_media": {"asset_id": "image"},
+        "output_types": {"at": "number"},
     },
     #: 截一段出来存成新素材。`last_seconds` 取末尾几秒:逐段续写时把上一段的尾巴交给下一段。
     "media_clip": {
@@ -2171,6 +2211,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "max_items": {"advanced": True, "type": "number", "description": "wfNode_loop_foreach_max_items"},
             "previous_initial": {"advanced": True, "type": "template", "description": "wfNode_loop_previous_initial"},
+            "max_spend": {"advanced": True, "type": "number", "description": "wfNode_loop_foreach_max_spend"},
             "on_item_error": {
                 "advanced": True,
                 "type": "string",

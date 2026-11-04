@@ -3046,6 +3046,13 @@
           "en": "First round's value"
         }
       },
+      "max_spend": {
+        "type": "number",
+        "label": {
+          "zh": "花费上限",
+          "en": "Spending limit"
+        }
+      },
       "on_item_error": {
         "type": "string",
         "label": {
@@ -4910,6 +4917,135 @@
       "count": {
         "zh": "数量",
         "en": "Count"
+      }
+    }
+  },
+  {
+    "type": "video_cost_estimate",
+    "config": {
+      "provider_profile_id": {
+        "type": "string",
+        "label": {
+          "zh": "供应商配置",
+          "en": "Provider connection"
+        }
+      },
+      "provider": {
+        "type": "string",
+        "label": {
+          "zh": "服务商",
+          "en": "Provider"
+        }
+      },
+      "model": {
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
+      },
+      "items": {
+        "type": "template",
+        "label": {
+          "zh": "要遍历的列表",
+          "en": "List to iterate"
+        }
+      },
+      "extra_items": {
+        "type": "number",
+        "label": {
+          "zh": "另外几段",
+          "en": "Extra segments"
+        }
+      },
+      "seconds_each": {
+        "type": "number",
+        "label": {
+          "zh": "每段几秒",
+          "en": "Seconds each"
+        }
+      },
+      "resolution": {
+        "type": "template",
+        "label": {
+          "zh": "分辨率",
+          "en": "Resolution"
+        }
+      },
+      "max_spend": {
+        "type": "number",
+        "label": {
+          "zh": "花费上限",
+          "en": "Spending limit"
+        }
+      }
+    },
+    "outputs": [
+      "count",
+      "seconds",
+      "estimate",
+      "currency",
+      "text"
+    ],
+    "output_labels": {
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      },
+      "seconds": {
+        "zh": "秒数",
+        "en": "Seconds"
+      },
+      "estimate": {
+        "zh": "估算费用",
+        "en": "Estimated cost"
+      },
+      "currency": {
+        "zh": "币种",
+        "en": "Currency"
+      },
+      "text": {
+        "zh": "文本",
+        "en": "Text"
+      }
+    }
+  },
+  {
+    "type": "video_frame",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "media": "video",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "at": {
+        "type": "number",
+        "label": {
+          "zh": "落点",
+          "en": "Position"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "source_asset_id",
+      "at"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "source_asset_id": {
+        "zh": "来源素材",
+        "en": "Source media"
+      },
+      "at": {
+        "zh": "落点",
+        "en": "Position"
       }
     }
   },

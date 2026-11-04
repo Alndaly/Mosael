@@ -78,3 +78,19 @@ def test_并发数写成引用时_运行时再拒() -> None:
     with pytest.raises(WorkflowDomainError) as caught:
         _run({"type": "loop_foreach", "config": {"items": "甲\n乙", "body": CHAIN, "concurrency": "2"}})
     assert caught.value.key == "wfErr_loopPreviousNeedsOrder"
+
+
+def test_花到上限就不再开始下一项(monkeypatch) -> None:
+    from app.domain.jobs import reset_parent_job, set_parent_job
+    from app.domain.workflows.executors import loops
+
+    monkeypatch.setattr(loops, "run_costs", lambda db, job_id: {"amounts": [{"currency": "CNY", "micros": 5_000_000}]})
+    token = set_parent_job("job")
+    try:
+        with pytest.raises(WorkflowDomainError) as caught:
+            loops._stop_at_budget(None, 5.0)
+        assert caught.value.key == "wfErr_budgetReached"
+        loops._stop_at_budget(None, 6.0)
+        loops._stop_at_budget(None, 0.0)
+    finally:
+        reset_parent_job(token)

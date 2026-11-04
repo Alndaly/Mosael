@@ -867,10 +867,11 @@ def test_模板卡片和图一一对应() -> None:
     from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP
     from app.domain.workflows.templates_dub import TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC
     from app.domain.workflows.templates_analysis import ACCOUNT_ANALYSIS, COMMENT_INSIGHTS, VIRAL_VIDEO_BREAKDOWN
+    from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO
     from app.domain.workflows.templates_shots import REFERENCE_VIDEO_SHOTS
 
     known = {
-        FULL_VIDEO_GENERATION, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
+        FULL_VIDEO_GENERATION, LONG_TAKE_VIDEO, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
         HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK, FOOTAGE_MONTAGE,
         TALKING_SCRIPT_VIDEO, TRANSLATED_DUB_LIPSYNC, PRODUCT_PITCH_PRESENTER,
         ACCOUNT_ANALYSIS, VIRAL_VIDEO_BREAKDOWN, COMMENT_INSIGHTS, REFERENCE_VIDEO_SHOTS,

@@ -1,0 +1,395 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "任意长度的连续视频",
+  "description": "输入一个想法和总时长，拆成一段一段，每段接着上一段的尾巴往下拍，接成一条不切镜头的长片。每段都是一次付费视频生成：开跑前按段数估算费用，max_segments 和 max_spend 是上限；断了可以从中断处继续。",
+  "graph_hash": "301331246dc8cec955d8be87bcfac2f8b12c19fbc2c5dbc3cd6ad94ee4899704",
+  "graph": {
+    "meta": {
+      "template_id": "long_take_video",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "开始",
+        "position": {
+          "x": 40,
+          "y": 300
+        },
+        "config": {
+          "params": {
+            "idea": "",
+            "target_seconds": 60,
+            "segment_seconds": 5,
+            "overlap_seconds": 0.92,
+            "max_segments": 12,
+            "max_spend": 0,
+            "style": "",
+            "aspect_ratio": "16:9",
+            "resolution": "720p"
+          },
+          "required_params": [
+            "idea"
+          ]
+        }
+      },
+      {
+        "id": "split",
+        "type": "llm",
+        "name": "把想法拆成一段一段",
+        "position": {
+          "x": 340,
+          "y": 300
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "precise",
+          "system": "你是分镜导演。这是一条不切镜头的连续长片,一段接一段往下拍:同一场景、同一人物、同一机位逻辑。只写下一段**接着发生什么**,不重复外观描述,不写切镜、转场。用英文写,每段一两句。",
+          "prompt": "想法:{{start.idea}}\n总时长约 {{start.target_seconds}} 秒,每段 {{start.segment_seconds}} 秒,最多 {{start.max_segments}} 段。opening 写第一段(要交代人物、场景、光线、机位),next 写后面每一段。",
+          "response_format": "json_schema",
+          "json_schema_name": "long_take_segments",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "opening": {
+                "type": "string"
+              },
+              "next": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "opening",
+              "next"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.6,
+          "max_tokens": 4000
+        }
+      },
+      {
+        "id": "estimate",
+        "type": "video_cost_estimate",
+        "name": "估算费用",
+        "position": {
+          "x": 660,
+          "y": 620
+        },
+        "config": {
+          "provider": "",
+          "provider_profile_id": "",
+          "model": "",
+          "items": "{{split.json.next}}",
+          "extra_items": 1,
+          "seconds_each": "{{start.segment_seconds}}",
+          "resolution": "720p",
+          "max_spend": "{{start.max_spend}}"
+        }
+      },
+      {
+        "id": "video_project",
+        "type": "project_sequence_create",
+        "name": "建立项目与时间线",
+        "position": {
+          "x": 660,
+          "y": 120
+        },
+        "config": {
+          "name": "长片",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24
+        }
+      },
+      {
+        "id": "opening",
+        "type": "ai_generate",
+        "name": "拍第一段",
+        "position": {
+          "x": 660,
+          "y": 420
+        },
+        "config": {
+          "provider": "",
+          "provider_profile_id": "",
+          "model": "",
+          "kind": "video",
+          "prompt": "{{start.style}} {{split.json.opening}}",
+          "parameters": {
+            "duration_seconds": "{{start.segment_seconds}}",
+            "aspect_ratio": "{{start.aspect_ratio}}",
+            "resolution": "{{start.resolution}}"
+          }
+        }
+      },
+      {
+        "id": "segments",
+        "type": "loop_foreach",
+        "name": "一段接一段往下拍",
+        "position": {
+          "x": 980,
+          "y": 420
+        },
+        "config": {
+          "items": "{{split.json.next}}",
+          "inputs": {
+            "style": "{{start.style}}",
+            "overlap_seconds": "{{start.overlap_seconds}}",
+            "segment_seconds": "{{start.segment_seconds}}",
+            "aspect_ratio": "{{start.aspect_ratio}}",
+            "resolution": "{{start.resolution}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "tail",
+                "type": "video_frame",
+                "name": "取上一段的最后一帧",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "asset_id": "{{loop.previous}}"
+                }
+              },
+              {
+                "id": "extend",
+                "type": "ai_generate",
+                "name": "接着往下拍",
+                "position": {
+                  "x": 390,
+                  "y": 140
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "video",
+                  "prompt": "{{input.style}} {{loop.item}}",
+                  "parameters": {
+                    "duration_seconds": "{{input.segment_seconds}}",
+                    "aspect_ratio": "{{input.aspect_ratio}}",
+                    "resolution": "{{input.resolution}}"
+                  },
+                  "source_assets": [
+                    "{{tail.asset_id}}:first_frame"
+                  ]
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "tail_extend",
+                "source": "tail",
+                "target": "extend"
+              }
+            ]
+          },
+          "output": "{{extend.asset_id}}",
+          "previous_initial": "",
+          "max_items": "{{start.max_segments}}",
+          "max_spend": "{{start.max_spend}}"
+        },
+        "inputs": [
+          "previous_initial"
+        ]
+      },
+      {
+        "id": "clear_timeline",
+        "type": "timeline_clear",
+        "name": "清空时间线",
+        "position": {
+          "x": 1300,
+          "y": 300
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
+        "id": "append_opening",
+        "type": "timeline_append",
+        "name": "摆上第一段",
+        "position": {
+          "x": 1600,
+          "y": 300
+        },
+        "config": {
+          "sequence_id": "",
+          "asset_id": ""
+        },
+        "inputs": [
+          "sequence_id",
+          "asset_id"
+        ]
+      },
+      {
+        "id": "assemble",
+        "type": "loop_foreach",
+        "name": "把后面每一段接上去",
+        "position": {
+          "x": 1900,
+          "y": 300
+        },
+        "config": {
+          "items": "",
+          "inputs": {
+            "sequence_id": "{{video_project.sequence_id}}",
+            "overlap_seconds": "{{start.overlap_seconds}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "append_segment",
+                "type": "timeline_append",
+                "name": "接到时间线上",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "{{loop.item}}",
+                  "start": 0
+                }
+              }
+            ],
+            "edges": []
+          }
+        },
+        "inputs": [
+          "items"
+        ]
+      },
+      {
+        "id": "export_final",
+        "type": "export_sequence",
+        "name": "导出成片",
+        "position": {
+          "x": 2200,
+          "y": 300
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_split",
+        "source": "start",
+        "target": "split"
+      },
+      {
+        "id": "split_project",
+        "source": "split",
+        "target": "video_project"
+      },
+      {
+        "id": "split_estimate",
+        "source": "split",
+        "target": "estimate"
+      },
+      {
+        "id": "estimate_opening",
+        "source": "estimate",
+        "target": "opening"
+      },
+      {
+        "id": "opening_segments",
+        "source": "opening",
+        "target": "segments"
+      },
+      {
+        "id": "segments_clear",
+        "source": "segments",
+        "target": "clear_timeline"
+      },
+      {
+        "id": "project_clear",
+        "source": "video_project",
+        "target": "clear_timeline"
+      },
+      {
+        "id": "clear_opening",
+        "source": "clear_timeline",
+        "target": "append_opening"
+      },
+      {
+        "id": "opening_assemble",
+        "source": "append_opening",
+        "target": "assemble"
+      },
+      {
+        "id": "assemble_export",
+        "source": "assemble",
+        "target": "export_final"
+      },
+      {
+        "id": "d-opening-asset_id-segments-previous_initial",
+        "source": "opening",
+        "target": "segments",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "previous_initial"
+      },
+      {
+        "id": "d-video_project-sequence_id-clear_timeline-sequence_id",
+        "source": "video_project",
+        "target": "clear_timeline",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-video_project-sequence_id-append_opening-sequence_id",
+        "source": "video_project",
+        "target": "append_opening",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-opening-asset_id-append_opening-asset_id",
+        "source": "opening",
+        "target": "append_opening",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-segments-results-assemble-items",
+        "source": "segments",
+        "target": "assemble",
+        "kind": "data",
+        "source_output": "results",
+        "target_input": "items"
+      },
+      {
+        "id": "d-video_project-sequence_id-export_final-sequence_id",
+        "source": "video_project",
+        "target": "export_final",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      }
+    ]
+  }
+}

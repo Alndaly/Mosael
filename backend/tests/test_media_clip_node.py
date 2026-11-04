@@ -69,3 +69,25 @@ def test_真截一段_尾巴是新素材_来源记着原片(tmp_path: Path) -> N
         clip = db.get(Asset, made["asset_id"])
         assert clip.derived_from == [{"asset_id": asset_id, "op": "trim"}]
         assert probe_media(resolve_key(clip.file_key))["duration"] == pytest.approx(1.0, abs=0.1)
+
+
+def test_取一帧_不填时间是最后一帧_存成图片素材(tmp_path: Path) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    source = tmp_path / "shot.mp4"
+    subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=64x64:rate=24:duration=2",
+                    "-pix_fmt", "yuv420p", str(source)], check=True)
+    with SessionLocal() as db:
+        asset = register_file_asset(db, workspace_id=ws, project_id=None, source_path=source, name="上一段", source="generated")
+        workflow = Workflow(workspace_id=ws, name="取帧", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.commit()
+        asset_id, wf_id = asset.id, workflow.id
+    graph = {"nodes": [{"id": "start", "type": "start", "config": {}},
+                       {"id": "last", "type": "video_frame", "config": {"asset_id": asset_id}}],
+             "edges": [{"id": "e", "source": "start", "target": "last"}]}
+    context, _ = execute_graph(graph, wf_id=wf_id, params={})
+    assert 1.9 < context["last"]["at"] < 2.0
+    with SessionLocal() as db:
+        frame = db.get(Asset, context["last"]["asset_id"])
+        assert frame.kind == "image" and frame.derived_from == [{"asset_id": asset_id, "op": "frame"}]

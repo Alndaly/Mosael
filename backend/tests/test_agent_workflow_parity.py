@@ -48,6 +48,7 @@ NODE_TO_TOOL: dict[str, str] = {
     "document_to_markdown": "read_document",
     "video_to_gif": "convert_video_to_gif",
     "media_clip": "clip_media",
+    "video_frame": "grab_video_frame",
     # 清除元数据(ADR 0062):节点和工具是同一件事的两个入口 —— 工具开确认卡(会多出一份素材),
     # 节点在工作流里跑,两边都落在 domain/assets/scrub。
     "scrub_metadata": "scrub_video_metadata",
@@ -120,6 +121,7 @@ NODE_TO_TOOL: dict[str, str] = {
 #: 给它们造一个工具只会多一层没人用的间接。
 NOT_A_TOOL: dict[str, str] = {
     "start": "图的入口,不是一个动作 —— 对话里由用户开口就是开始。",
+    "video_cost_estimate": "运行里的闸门:超预算就在花钱之前停下。智能体的生成走确认卡,花多少由人当场看。",
     "output": "声明工作流的返回值。对话的返回值就是模型的回复。",
     "condition": "分支。模型自己会按结果决定下一步,这正是它比固定图强的地方。",
     "loop_foreach": "循环。同上 —— 模型自己会对一组东西逐个处理。",

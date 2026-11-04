@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.providers import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
+from app.ai.providers import FIRST_CLIP, FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from app.db.models import ProviderModel
 from app.domain.generation_catalog import known_capabilities_for
 from app.domain.generation.resolution import resolve_row
@@ -46,6 +46,8 @@ class VideoPlan:
     #: 首帧(+尾帧)锁构图,或者参考图/参考视频锁人物与运镜。
     keyframes: bool = True
     last_frame: bool = False
+    #: 收待续写的片段(`first_clip`):接着一段视频往下拍,而不只是从一帧动起来。
+    extends: bool = False
     references: bool = False
     reference_video: bool = False
 
@@ -147,6 +149,21 @@ def _chat_model(db: Session, user_id: str) -> ModelChoice:
 
 def _shot_video_model(db: Session, user_id: str, *, references: int | None = None) -> ModelChoice:
     return _pick(db, user_id, "video", lambda db_, choice: _can_shoot_from_references(db_, choice, references=references))
+
+
+def _continuation_video_model(db: Session, user_id: str) -> ModelChoice:
+    """逐段往下拍用哪个模型:收待续写片段的优先,其次收首帧的。"""
+    extends = _pick(db, user_id, "video", lambda db_, choice: FIRST_CLIP in _parameter_keys(db_, choice))
+    return extends if extends.model else _pick(db, user_id, "video", lambda db_, choice: FIRST_FRAME in _parameter_keys(db_, choice))
+
+
+def _opening_video_model(db: Session, user_id: str) -> ModelChoice:
+    """第一段用哪个模型:从一段文字就能出片的。"""
+    return _pick(db, user_id, "video", lambda db_, choice: "text-to-video" in ((model_capabilities(db_, choice, "video") or {}).get("modes") or ()))
+
+
+def _parameter_keys(db: Session | None, choice: ModelChoice) -> list[str]:
+    return list((model_capabilities(db, choice, "video") or {}).get("parameter_keys") or ())
 
 
 def _reference_image_model(db: Session, user_id: str, *, needed: int) -> ModelChoice:
@@ -297,6 +314,7 @@ def video_plan_for(db: Session | None, choice: ModelChoice, *, references: int |
         sizes=sizes or None,
         keyframes=shoots and FIRST_FRAME in keys and _route_allowed(capabilities, _KEYFRAME_SOURCES),
         last_frame=shoots and LAST_FRAME in keys,
+        extends=FIRST_CLIP in keys,
         #: 参考那条路一次交 `needed` 张:收不下的(整片一镜 8 张,可灵 kling-v3-omni 只收 4 张)不走这条路。
         #: 没写上限的按收得下算(和图像模型那边「认不出的算能」同一条)。
         references=shoots and REFERENCE_IMAGE in keys and _route_allowed(capabilities, _REFERENCE_SOURCES)

@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **145** 个工具,其中 **51** 个走确认卡、**1** 个停下来等用户作答。
+共 **146** 个工具,其中 **52** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -101,6 +101,7 @@
 | `get_scene` | 直接执行 | Read the current editable 3D scene, objects, materials, camera shots and revision. |
 | `get_transcript` | 直接执行 | Read-only: read the transcript/subtitles of an asset — timed segments with speakers. |
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
+| `grab_video_frame` | 确认卡 | Confirmation required: save one frame of an EXISTING video asset as a NEW image asset. |
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
 | `import_from_url` | 确认卡 | Confirmation required: download a video (kind=audio: its audio) from a web link into the media library. |
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |

@@ -54,6 +54,54 @@
     }
   },
   {
+    "id": "long_take_video",
+    "name": {
+      "zh": "任意长度的连续视频",
+      "en": "Continuous video of any length"
+    },
+    "summary": {
+      "zh": "输入一个想法和总时长，拆成一段一段，每段接着上一段的尾巴往下拍，接成一条不切镜头的长片。每段都是一次付费视频生成：开跑前按段数估算费用，max_segments 和 max_spend 是上限；断了可以从中断处继续。",
+      "en": "Give an idea and a total length: it splits them into segments and shoots each one on from the tail of the last, joined into one uncut video. Every segment is a paid video generation, so the cost is estimated first and max_segments and max_spend set the limits. If it stops, continue from where it stopped."
+    },
+    "requires": {
+      "zh": [
+        "AI 对话模型",
+        "能接着一段视频或一帧往下拍的视频模型（如万相 2.7 图生视频、ComfyUI 的 H3 续写工作流）"
+      ],
+      "en": [
+        "Chat model",
+        "Video model that carries on from a clip or a frame (e.g. Wan 2.7 image-to-video, the H3 continuation workflow on ComfyUI)"
+      ]
+    },
+    "stages": {
+      "zh": [
+        "输入想法与总时长",
+        "拆成一段一段",
+        "估算费用",
+        "拍第一段",
+        "一段接一段往下拍",
+        "接到时间线上",
+        "导出"
+      ],
+      "en": [
+        "Enter the idea and length",
+        "Split into segments",
+        "Estimate the cost",
+        "Shoot the first segment",
+        "Shoot segment after segment",
+        "Lay them on the timeline",
+        "Export"
+      ]
+    },
+    "author": "Mosael",
+    "version": 1,
+    "nodes": 10,
+    "download": {
+      "zh": "/workflows/long_take_video.zh.mosael-workflow.json",
+      "en": "/workflows/long_take_video.en.mosael-workflow.json"
+    }
+  },
+  {
     "id": "transcript_video_cleanup",
     "name": {
       "zh": "口播与访谈智能整理",

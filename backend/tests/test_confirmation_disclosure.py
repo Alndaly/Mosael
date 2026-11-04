@@ -69,6 +69,8 @@ def test_同一张卡英文用户也读得懂() -> None:
         ("denoise_audio", {"engine_name": "X", "has_strengths": True, "strength": "light"}),
         ("convert_video_to_gif", {"fps": 12, "width": 720, "duration": 3}),
         ("clip_media", {"last_seconds": 2}),
+        ("grab_video_frame", {}),
+        ("grab_video_frame", {"at": 2}),
         ("clip_media", {"start": 1, "end": 3}),
     ]
     for tool, payload in cases:
