@@ -35,10 +35,11 @@ class ModelChoice:
 CONTINUATION_TAIL_SECONDS = 0.92
 #: 工作流按段号存取潜空间时的两个参数(节点 50 读上一段,节点 52 存这一段):有它们的就是潜空间续写。
 #: 尾巴不解码、不重新编码,颜色不漂,还在动的东西接得住(实测);这两个数是工作流里写死的 243 帧和 39 帧上文。
+#: 切到第 40 帧:低分辨率的上文放进高分辨率潜空间是一片网格,第 0–39 帧都不能露出来(第 39 帧也是坏的,实测)。
 LATENT_LOAD_SCENE = "50.scene_number"
 LATENT_SAVE_SCENE = "52.scene_number"
 LATENT_SEGMENT_SECONDS = 10.125
-LATENT_CONTEXT_SECONDS = 1.625
+LATENT_CONTEXT_SECONDS = 40 / 24
 #: 模型要尾巴至少几秒时多留这一点:按帧截,截出来总比要的短一丝,卡在下限上供应商未必认。
 TAIL_MARGIN_SECONDS = 0.1
 

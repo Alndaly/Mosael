@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Continuous video of any length",
   "description": "Give an idea and a total length: it splits them into segments and shoots each one on from the tail of the last, joined into one uncut video. Every segment is a paid video generation, so the cost is estimated first and max_segments and max_spend set the limits. If it stops, continue from where it stopped.",
-  "graph_hash": "c75ee735f5f722a7cf39db5e9effded537c8259fdb458d127f20eaab7d9d9692",
+  "graph_hash": "c2e88e865dcdb9c706a8608f88a61da41d8a1f670c5a81f48f3801921dc34d1c",
   "graph": {
     "meta": {
       "template_id": "long_take_video",
@@ -326,7 +326,8 @@
           "y": 300
         },
         "config": {
-          "sequence_id": ""
+          "sequence_id": "",
+          "quality": "high"
         },
         "inputs": [
           "sequence_id"

@@ -40,7 +40,7 @@ def fake_run(monkeypatch):
     for node_type, handler in {
         "ai_generate": generate, "media_clip": clip,
         "synthesize_speech": lambda db, scope, config: {"asset_id": "voice", "voice_note": ""},
-        "asset": lambda db, scope, config: {"asset_id": "voice", "name": "", "kind": "audio", "duration": 18.625, "width": 0, "height": 0, "fps": 0},
+        "asset": lambda db, scope, config: {"asset_id": "voice", "name": "", "kind": "audio", "duration": 18.583, "width": 0, "height": 0, "fps": 0},
         "project_sequence_create": lambda db, scope, config: {"project_id": "p", "sequence_id": "s", "video_track_id": "v", "audio_track_id": "a", "name": "n"},
         "timeline_clear": lambda db, scope, config: {"removed": 0, "sequence_id": "s"},
         "timeline_append": lambda db, scope, config: seen["starts"].append(config.get("start")) or {"clip_id": "c", "timeline_start": 0, "timeline_end": 1, "duration": 1, "trimmed": 0, "sequence_id": "s"},
@@ -70,8 +70,8 @@ def test_真跑一遍_每段配到自己那一截音频_带上尾巴和人物(fa
     assert all(one["consent"] == "yes" for one in videos)
     assert all("face:reference_image" in one["sources"] for one in videos), "每段都带人物,说久了才不走样"
     voices = [one for one in fake_run["clips"] if one["asset_id"] == "voice"]
-    assert [float(one["start"]) for one in voices] == pytest.approx([0, 8.5], abs=0.01)
-    assert [float(one["end"]) for one in voices] == pytest.approx([10.125, 18.625], abs=0.01)
+    assert [float(one["start"]) for one in voices] == pytest.approx([0, 8.458], abs=0.01)
+    assert [float(one["end"]) for one in voices] == pytest.approx([10.125, 18.583], abs=0.01)
     assert videos[1]["parameters"]["50.scene_number"] == 1 and videos[1]["parameters"]["52.scene_number"] == 2, "续写读上一段、存这一段"
-    assert [float(one) for one in fake_run["starts"][1:]] == [1.625], "按上文长度接,声音才不重叠"
+    assert [float(one) for one in fake_run["starts"][1:]] == pytest.approx([40 / 24]), "切掉上文,声音才不重叠"
     assert context["export_final"]["asset_id"] == "final"

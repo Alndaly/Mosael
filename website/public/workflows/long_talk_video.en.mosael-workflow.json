@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Digital human of any length",
   "description": "One portrait and one script: it voices the script, cuts it into segments and has the person speak on from the tail of the last, joined into one unbroken video. Needs consent for the face and voice.",
-  "graph_hash": "6de809bb903309738f135826d4b2f7cdff5b52ce67f5d88ee9f58aeed39d6529",
+  "graph_hash": "9bcd41a8f8d975f50e431cff496f86f2bfbff02b972618589962e8682a250410",
   "graph": {
     "meta": {
       "template_id": "long_talk_video",
@@ -28,7 +28,7 @@
             "scene": "",
             "consent": "",
             "segment_seconds": 10.125,
-            "overlap_seconds": 1.625
+            "overlap_seconds": 1.6666666666666667
           },
           "required_params": [
             "script",
@@ -309,7 +309,8 @@
           "y": 300
         },
         "config": {
-          "sequence_id": ""
+          "sequence_id": "",
+          "quality": "high"
         },
         "inputs": [
           "sequence_id"

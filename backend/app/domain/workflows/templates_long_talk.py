@@ -190,7 +190,8 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "id": "export_final", "type": "export_sequence",
                 "name": {"zh": "导出成片", "en": "Export the finished video"},
                 "position": {"x": 3040, "y": 300},
-                "config": {"sequence_id": "{{video_project.sequence_id}}"},
+                #: 默认档走硬件编码,码率低、关键帧密,成片每隔半秒糊一下;生成的片子值得高画质。
+                "config": {"sequence_id": "{{video_project.sequence_id}}", "quality": "high"},
             },
             {
                 "id": "output", "type": "output",

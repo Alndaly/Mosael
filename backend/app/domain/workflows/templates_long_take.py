@@ -332,7 +332,8 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "id": "export_final", "type": "export_sequence",
                 "name": {"zh": "导出成片", "en": "Export the finished video"},
                 "position": {"x": 2200, "y": 300},
-                "config": {"sequence_id": "{{video_project.sequence_id}}"},
+                #: 默认档走硬件编码,码率低、关键帧密,成片每隔半秒糊一下;生成的片子值得高画质。
+                "config": {"sequence_id": "{{video_project.sequence_id}}", "quality": "high"},
             },
             {
                 "id": "output", "type": "output",
