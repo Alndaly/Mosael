@@ -581,6 +581,26 @@ def get_workflow_library(instance_id: str, db: DbSession, user: CurrentUser, wor
         raise _workflow_library_failed(exc) from exc
 
 
+@router.get("/plugins/instances/{instance_id}/workflow-library/bundled")
+def get_bundled_workflows(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """随插件发布的 H3 长片工作流:装了没有、各缺哪些节点和模型(只读)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return server_workflows.bundled(db, instance)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/bundled/install")
+def install_bundled_workflows(instance_id: str, db: Tx, user: CurrentUser, folder: str = "") -> dict:
+    """把缺的 H3 长片工作流写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return server_workflows.install_bundled(db, instance, folder=folder)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
 @router.get("/plugins/instances/{instance_id}/workflow-library/outputs", response_model=WorkflowRecentOutputsOut)
 def get_workflow_outputs(instance_id: str, path: str, workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
     """一张工作流在这个工作区里最近的产出(详情里那一组图):用它生成的、当工具跑的,一批出的每一张都算,新的在前;每份带着

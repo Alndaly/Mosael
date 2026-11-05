@@ -42,8 +42,10 @@ import {
   assetThumbnailUrl,
   copyWorkflow,
   createWorkflowFolder,
+  getBundledWorkflows,
   getWorkflowContent,
   getWorkflowLibrary,
+  installBundledWorkflows,
   rebootWorkflowServer,
   renameWorkflow,
   renameWorkflowFolder,
@@ -51,6 +53,7 @@ import {
   startNodeInstall,
   trashWorkflow,
   trashWorkflowFolder,
+  type BundledWorkflows,
   type Job,
   type PluginInstance,
   type WorkflowFile,
@@ -335,6 +338,23 @@ export function WorkflowLibraryDialog({
     },
   });
   const qc = useQueryClient();
+  //: 随插件发布的 H3 长片工作流:先只读检查(缺哪张、缺哪些节点/模型),确认目标服务器后再写。
+  const [bundled, setBundled] = React.useState<BundledWorkflows | null>(null);
+  const checkBundled = useMutation({
+    mutationFn: () => getBundledWorkflows(instance.id),
+    onSuccess: setBundled,
+    onError: (error: Error) => toast.error(errorText(error)),
+  });
+  const installBundled = useMutation({
+    mutationFn: (folder: string) => installBundledWorkflows(instance.id, folder),
+    onSuccess: (result) => {
+      //: 留在弹窗里:写进去以后还要看缺的节点 / 模型;全齐了确认键自然变灰。
+      setBundled((now) => now && { ...now, workflows: result.workflows });
+      void qc.invalidateQueries({ queryKey: libraryKey });
+      toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
+    },
+    onError: (error: Error) => toast.error(errorText(error)),
+  });
   //: 改完一张:工作流库那份列表重新问一遍(跟着连接走的那一份,含表单、能填什么);生成选项、工具清单里的那张也跟着变
   //: (宿主已经让这个连接的目录重拉过)。这里改了工作流(存了精简表单、导入、改名、复制、恢复):模型下拉里它叫什么、
   //: 能填什么都跟着变。那份目录是后端按这个连接存着的,只让界面重问拿到的还是旧的 —— 画板里搜不到刚起的表单标题。
@@ -477,6 +497,15 @@ export function WorkflowLibraryDialog({
       <span className={TOOLBAR_FOLD.wide}>{t("workflowImport")}</span>
     </IconButton>
   );
+  //: H3 长片工作流随插件发布:先检查缺什么;装之前会确认目标服务器。不是 ComfyUI 的库会报「没有这份资源」。
+  const bundleButton = instance.package_id === "dev.mosael.comfyui" ? (
+    <Hint label={t("workflowBundleInstallHint")}>
+      <Button variant="outline" size="sm" loading={checkBundled.isPending} onClick={() => checkBundled.mutate()}>
+        <PackagePlus size={13} />
+        <span className={TOOLBAR_FOLD.wide}>{t("workflowBundleInstall")}</span>
+      </Button>
+    </Hint>
+  ) : null;
   //: 「新建」:在这台 ComfyUI 自己的画布上开一张新的(插件报了编辑器才有)
   const newButton = editorTarget ? (
     <Hint label={t(embeddedWorkbench(editorTarget) ? "workflowNewInWorkbenchHint" : "workflowNewHintTab")}>
@@ -777,6 +806,7 @@ export function WorkflowLibraryDialog({
           </span>
           <WorkflowViewMenu className={TOOLBAR_FOLD.narrow} sort={sort} onSort={setSort} density={density} onDensity={setDensity} />
           {newButton}
+          {bundleButton}
           {importButton}
           {refresh}
         </>
@@ -938,6 +968,62 @@ export function WorkflowLibraryDialog({
       }
       dialogs={
         <>
+          {bundled && (
+            <ModalShell
+              open
+              onOpenChange={(next) => !next && setBundled(null)}
+              title={t("workflowBundleTitle").replace("{name}", bundled.title || t("workflowBundleInstall"))}
+              footer={
+                <>
+                  <Button variant="outline" size="sm" disabled={installBundled.isPending} onClick={() => setBundled(null)}>
+                    {t("cancel")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    loading={installBundled.isPending}
+                    disabled={bundled.workflows.every((one) => one.installed)}
+                    onClick={() => installBundled.mutate(bundled.folder)}
+                  >
+                    {t("workflowBundleInstallConfirm")}
+                  </Button>
+                </>
+              }
+            >
+              <div className="grid gap-3 text-ui-sm">
+                <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
+                  {t("workflowBundleBody").replace("{server}", instance.name).replace("{folder}", bundled.folder)}
+                </p>
+                {bundled.workflows.map((flow) => (
+                  <div key={flow.path} className="grid gap-1 rounded-md border border-border px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">{flow.name}</span>
+                      <span className="text-ui-xs text-muted-foreground">
+                        {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleMissingWorkflow")}
+                      </span>
+                    </div>
+                    <code className="text-ui-xs text-muted-foreground">{flow.path}</code>
+                    {flow.missing_nodes.length > 0 && (
+                      <div className="text-ui-xs text-destructive">
+                        {t("workflowBundleMissingNodes").replace("{n}", String(flow.missing_nodes.length))}:
+                        {" "}{flow.missing_nodes.map((one) => one.type).join(t("listSeparator"))}
+                      </div>
+                    )}
+                    {flow.missing_models.length > 0 && (
+                      <div className="text-ui-xs text-destructive">
+                        {t("workflowBundleMissingModels").replace("{n}", String(flow.missing_models.length))}:
+                        {" "}{flow.missing_models.map((one) => one.name).join(t("listSeparator"))}
+                      </div>
+                    )}
+                    {flow.problem && <div className="text-ui-xs text-muted-foreground">{flow.problem}</div>}
+                  </div>
+                ))}
+                {bundled.workflows.every((one) => one.installed) && (
+                  <p className="m-0 text-ui-xs text-success">{t("workflowBundleAllInstalled")}</p>
+                )}
+                <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowBundleAfter")}</p>
+              </div>
+            </ModalShell>
+          )}
           {installAsk && (
             <ConfirmDialog
               open

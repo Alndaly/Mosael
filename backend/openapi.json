@@ -22894,6 +22894,106 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/workflow-library/bundled": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Get Bundled Workflows",
+        "description": "随插件发布的 H3 长片工作流:装了没有、各缺哪些节点和模型(只读)。",
+        "operationId": "get_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Bundled Workflows Api Plugins Instances  Instance Id  Workflow Library Bundled Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/bundled/install": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Install Bundled Workflows",
+        "description": "把缺的 H3 长片工作流写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。",
+        "operationId": "install_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_install_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Install Bundled Workflows Api Plugins Instances  Instance Id  Workflow Library Bundled Install Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/workflow-library/outputs": {
       "get": {
         "tags": [

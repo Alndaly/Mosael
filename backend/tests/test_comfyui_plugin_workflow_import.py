@@ -32,7 +32,7 @@ from tests.fake_comfyui import MANAGER_POLICY_MESSAGE, OBJECT_INFO, FakeComfyUI
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
 _MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "service", "shared_models", "workflows",
-            "tooling", "library", "sources", "install", "model_files", "families", "workflow_library", "workflow_import")
+            "tooling", "library", "sources", "install", "model_files", "families", "workflow_library", "workflow_import", "bundled")
 
 #: 文生图的 API 格式(ComfyUI「导出 (API)」那种):没有位置,值和连线都在 inputs 里。
 TXT2IMG_API: dict[str, Any] = {
@@ -489,3 +489,32 @@ def test_图上写了要哪一版_装的时候交给_Manager_git_commit_或没�
     tasks = [one[2] for one in comfy.state.calls if one[1] == "/v2/manager/queue/task"]
     assert tasks[-1]["params"]["version"] == "latest", "图上没写要哪一版:装 latest"
     assert any("latest" in (one.get("message") or "") for one in events), "不能选版本时明说会装 latest"
+
+
+def test_随插件的长片工作流_列出四张和缺项(plugin, comfy) -> None:
+    _module, Comfy, _convert = plugin
+    import bundled
+
+    status = bundled.status(Comfy(comfy.url), "zh")
+
+    assert status["id"] == "h3_long_video"
+    assert status["folder"] == "mosael/long-video"
+    assert len(status["workflows"]) == 4
+    assert all(one["path"].startswith("mosael/long-video/") and not one["installed"] for one in status["workflows"])
+    #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG 节点,所以每张都应报缺——这正是运行前要说的东西。
+    assert all(one["missing_nodes"] for one in status["workflows"])
+    assert all("problem" in one for one in status["workflows"])
+
+
+def test_一键安装只写缺的_再装不会覆盖(plugin, comfy) -> None:
+    _module, Comfy, _convert = plugin
+    import bundled
+
+    first = bundled.install({}, Comfy(comfy.url), "zh")
+    assert len(first["installed"]) == 4
+    assert first["skipped"] == []
+    assert all(comfy.state.userdata_get(f"workflows/mosael/long-video/{Path(path).name}") for path in first["installed"])
+
+    second = bundled.install({}, Comfy(comfy.url), "zh")
+    assert second["installed"] == []
+    assert len(second["skipped"]) == 4

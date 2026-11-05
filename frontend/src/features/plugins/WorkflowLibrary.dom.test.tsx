@@ -35,6 +35,8 @@ import { readHint } from "@/test/hint";
 
 const api = vi.hoisted(() => ({
   getWorkflowLibrary: vi.fn(),
+  getBundledWorkflows: vi.fn(),
+  installBundledWorkflows: vi.fn(),
   getWorkflowContent: vi.fn(),
   copyWorkflow: vi.fn(),
   renameWorkflow: vi.fn(),
@@ -92,7 +94,7 @@ import { ConnectionLibraries } from "./ConnectionLibraries";
 import { WORKFLOW_LIBRARY_NAV_WIDTH, WorkflowLibraryDialog } from "./WorkflowLibrary";
 import { resetWorkbench } from "./workbench/workbenchSession";
 
-const instance = { id: "i1", name: "ComfyUI · 192.168.3.15", blocked_reason: "" } as PluginInstance;
+const instance = { id: "i1", package_id: "dev.mosael.comfyui", name: "ComfyUI · 192.168.3.15", blocked_reason: "" } as PluginInstance;
 
 function flow(overrides: Partial<WorkflowFile>): WorkflowFile {
   return {
@@ -196,7 +198,8 @@ beforeEach(() => {
   handoff.mockReset();
   api.refreshPluginInstance.mockReset();
   api.refreshPluginInstance.mockResolvedValue({});
-  for (const fn of [api.startNodeInstall, api.rebootWorkflowServer, api.getJob]) fn.mockReset();
+  for (const fn of [api.startNodeInstall, api.rebootWorkflowServer, api.getJob, api.getBundledWorkflows,
+                    api.installBundledWorkflows]) fn.mockReset();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Element.prototype.scrollIntoView ??= () => {};
 });
@@ -226,6 +229,33 @@ function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
 }
 
 describe("工作流库", () => {
+  it("H3 长片工作流:先列出缺的工作流/节点/模型,确认目标服务器后才安装", async () => {
+    api.getBundledWorkflows.mockResolvedValue({
+      id: "h3_long_video", title: "H3 长片工作流", description: "长片", folder: "mosael/long-video",
+      workflows: [
+        { path: "mosael/long-video/minimax_h3_open.json", name: "H3 长片 · 第一段", installed: false,
+          missing_nodes: [{ type: "VRGDG_MiniMaxH3SaveLatent", count: 1, core: false, packs: [] }],
+          missing_models: [{ folder: "diffusion_models", name: "minimax_h3_hybrid.safetensors" }], problem: "" },
+        { path: "mosael/long-video/minimax_h3_continue.json", name: "H3 长片 · 续写", installed: false,
+          missing_nodes: [], missing_models: [], problem: "" },
+      ],
+    });
+    api.installBundledWorkflows.mockResolvedValue({
+      folder: "mosael/long-video", installed: ["mosael/long-video/a.json"], skipped: [],
+      workflows: [],
+    });
+    await openLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "workflowBundleInstall" }));
+    const dialog = await screen.findByRole("dialog", { name: /workflowBundleTitle/ });
+    expect(dialog).toHaveTextContent("mosael/long-video");
+    expect(dialog).toHaveTextContent("VRGDG_MiniMaxH3SaveLatent");
+    expect(dialog).toHaveTextContent("minimax_h3_hybrid.safetensors");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "workflowBundleInstallConfirm" }));
+    await waitFor(() => expect(api.installBundledWorkflows).toHaveBeenCalledWith("i1", "mosael/long-video"));
+  });
+
   it("左边一列:全部、文件夹(按名字排),钉在底部的「缺节点或模型」;一张卡一个节点图缩略预览", async () => {
     await openLibrary();
     expect(api.getWorkflowLibrary).toHaveBeenCalledWith("i1", "w1");
@@ -303,7 +333,7 @@ describe("工作流库", () => {
               : el.tagName.toLowerCase();
     expect([...row.children].map(shape)).toEqual([
       "search", "workflowLibraryKind", "workflowLibraryModel", "workflowLibrarySort", "libraryDensity",
-      "workflowLibraryView", "workflowNew", "workflowImport", "workflowLibraryRefresh",
+      "workflowLibraryView", "workflowNew", "workflowBundleInstall", "workflowImport", "workflowLibraryRefresh",
     ]);
     //: 搜索框吃掉剩下的宽度;别的按内容宽(再有一个 flex-1 就和它抢了)
     const search = row.querySelector<HTMLElement>("[data-search-input]")!;

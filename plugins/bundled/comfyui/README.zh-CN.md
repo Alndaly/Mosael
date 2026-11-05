@@ -273,6 +273,20 @@ ModelScope AIGC 专区的模型按登记的类型定;HuggingFace / ModelScope �
 
 ## 工作流库(1.11.0)
 
+### 随插件发布的 H3 长片工作流
+
+「H3 长片工作流」按钮把 Mosael 长片模板需要的四张 ComfyUI H3 工作流装进当前连接:
+
+```text
+minimax_h3_open.json
+minimax_h3_continue.json
+minimax_h3_talk_open.json
+minimax_h3_talk_continue.json
+```
+
+先只读检查:哪张已经存在、每张缺哪些节点和模型;确认目标服务器后才写入 `workflows/mosael/long-video/`。只新建、不覆盖。
+节点包和模型仍要在工作流详情里补 —— 安装框会把缺项列出来,不自动装节点、也不自动下模型。
+
 插件页上这个连接的「工作流库」:这台 ComfyUI 上存着的全部工作流(ADR 0035),和模型库同一套界面 —— 左边按子目录,
 上面搜索、按种类筛、排序、三档显示方式。每张一张卡:节点图的缩略预览(照工作流里节点的位置和连线画,不截 ComfyUI 的图;
 API 格式的图没有位置,按依赖自动排)、识别出的输入 / 参数 / 输出、用到的模型(在不在)、缺的节点(和它出自哪个节点包,

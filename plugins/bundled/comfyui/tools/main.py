@@ -88,6 +88,7 @@ import sys
 import traceback
 from typing import Any, Callable
 
+import bundled
 import canvas
 import canvas_edit
 import diagnose
@@ -160,6 +161,10 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return previews.save(payload, comfy, locale)
     if op == "install_nodes":
         return workflow_import.install_nodes(payload, comfy, locale, emit)
+    if op == "bundled_workflows":
+        return bundled.status(comfy, locale)
+    if op == "install_bundled_workflows":
+        return bundled.install(payload, comfy, locale)
     if op in _WORKFLOW_LIBRARY:
         return _WORKFLOW_LIBRARY[op](payload, comfy, locale)
     if op in _AGENT:

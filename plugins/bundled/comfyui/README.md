@@ -360,6 +360,22 @@ fetches and caches the media, and confirms before writing anything back.
 
 ## Workflow library (1.11.0)
 
+### Bundled H3 long-video workflows
+
+The "H3 long-video workflows" button installs the four ComfyUI H3 workflows used by Mosael's long-video templates:
+
+```text
+minimax_h3_open.json
+minimax_h3_continue.json
+minimax_h3_talk_open.json
+minimax_h3_talk_continue.json
+```
+
+It first checks, without writing, which files already exist and which node types and model files each one needs. After
+you confirm the target server it writes only the missing files under `workflows/mosael/long-video/`; it never overwrites.
+Node packs and models are still installed from each workflow's details — the check lists them, but this action does not
+install nodes or download models automatically.
+
 The connection's "Workflow library" on the Plugins page: every workflow saved on this ComfyUI (ADR 0035), in the same
 layout as the model library — subfolders on the left, search, kind filter, sorting and three view densities on top. Each
 workflow gets a card: a thumbnail of its node graph (drawn from the nodes' positions and links in the workflow, not a
