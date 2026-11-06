@@ -46,6 +46,7 @@ describe("设置页结构", () => {
       account: ["settingsUsername", "displayName", "signature", "settingsPassword", "avatarChange", "signOut"],
       cloud: ["settingsCloudEmail", "settingsCloudSetPassword", "settingsCloudChangePassword", "settingsCloudSignIn", "settingsCloudSignOut"],
       team: ["teamInvite", "teamRole", "teamActivity", "renameWorkspace", "deleteWorkspace", "teamLeave"],
+      "sidebar-shortcuts": ["sidebarShortcutsDesc", "sidebarShortcutsAdd", "sidebarShortcutsEmpty"],
       appearance: ["settingsTheme", "settingsLanguage", "settingsFont", "appearanceBgTitle", "customCssTitle"],
       dubbing: ["builtinTtsTitle", "voiceLibrary"],
       "provider-chat": ["providerDefaultsTitle"],

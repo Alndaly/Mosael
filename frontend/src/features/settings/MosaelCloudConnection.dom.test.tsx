@@ -92,7 +92,7 @@ describe("供应商列表里的 Mosael Cloud", () => {
     session = async () => null;
     renderRow();
     await userEvent.click(await screen.findByRole("button", { name: "去登录" }));
-    expect(gotoSettings).toHaveBeenCalledWith("account");
+    expect(gotoSettings).toHaveBeenCalledWith("cloud");
     expect(cloud.getCloudAccount).not.toHaveBeenCalled();
   });
 

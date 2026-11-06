@@ -70,6 +70,7 @@ const TRAIL_LINK =
 export function AppShell({
   view,
   onViewChange,
+  shortcutBar,
   workspaceId,
   workspaceName,
   workspaces = [],
@@ -87,6 +88,8 @@ export function AppShell({
 }: {
   view: StudioView;
   onViewChange: (view: StudioView) => void;
+  /** 侧栏快捷方式由 app 层注入 —— components 层不 import features(见 design/layering)。 */
+  shortcutBar?: (compact: boolean) => React.ReactNode;
   workspaceId?: string;
   workspaceName: string;
   workspaces?: Workspace[];
@@ -313,6 +316,7 @@ export function AppShell({
         <div className="mb-4 shrink-0">
           <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
         </div>
+        {shortcutBar?.(compact)}
         <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 [@media(max-height:850px)]:gap-0.5 overflow-y-auto overflow-x-hidden">
           {PRIMARY_NAV.map((item) => (
             <React.Fragment key={item.view}>

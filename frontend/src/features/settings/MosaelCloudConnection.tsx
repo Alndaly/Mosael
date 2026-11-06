@@ -132,7 +132,7 @@ function SignedOutRow() {
           <Truncate as="strong" className="text-ui-md font-semibold">{t("providerMosaelCloud")}</Truncate>
           <Truncate as="small" className="text-ui-xs text-muted-foreground">{t("providerMosaelCloudSignedOut")}</Truncate>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => gotoSettings("account")}>
+        <Button variant="ghost" size="sm" onClick={() => gotoSettings("cloud")}>
           {t("providerMosaelCloudSignIn")}
         </Button>
       </SettingsListItem>

@@ -40,6 +40,7 @@ import {
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
+import { SidebarShortcutButtons } from "@/features/shell/SidebarShortcutButtons";
 import { projectAfterHashChange, readHash, writeHash } from "@/app/hashRoute";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
@@ -666,6 +667,7 @@ function Studio({
       <AppShell
         view={view}
         onViewChange={navigate}
+        shortcutBar={(compact) => <SidebarShortcutButtons workspaceId={workspace.id} onViewChange={navigate} compact={compact} />}
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         workspaces={workspaces}

@@ -6,6 +6,7 @@ import {
   Link2,
   ImageIcon,
   MessageSquare,
+  PanelLeft,
   Monitor,
   Palette,
   Server,
@@ -33,6 +34,7 @@ import { LocalAppSection } from "@/features/settings/LocalAppSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { CapabilityProvidersSection } from "@/features/settings/CapabilityProvidersSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
+import { SidebarShortcutsSection } from "@/features/settings/SidebarShortcutsSection";
 import { TeamSection } from "@/features/settings/TeamSection";
 import { VoiceLibrarySection } from "@/features/settings/VoiceLibrarySection";
 
@@ -130,6 +132,12 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "teamTitle",
         icon: <Users size={14} />,
         render: ({ workspace }) => <TeamSection workspace={workspace} />,
+      },
+      {
+        id: "sidebar-shortcuts",
+        label: "sidebarShortcutsTitle",
+        icon: <PanelLeft size={14} />,
+        render: () => <SidebarShortcutsSection />,
       },
       {
         id: "appearance",

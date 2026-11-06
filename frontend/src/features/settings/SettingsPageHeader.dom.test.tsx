@@ -42,6 +42,7 @@ vi.mock("@/features/settings/FeishuSection", () => ({ FeishuSection: () => null 
 vi.mock("@/features/settings/LocalAppSection", () => ({ LocalAppSection: () => null }));
 vi.mock("@/features/settings/ProviderDefaultsSection", () => ({ ProviderDefaultsSection: () => null }));
 vi.mock("@/features/settings/ProviderProfilesSection", () => ({ ProviderProfilesSection: () => null }));
+vi.mock("@/features/settings/SidebarShortcutsSection", () => ({ SidebarShortcutsSection: () => null }));
 vi.mock("@/features/settings/TeamSection", () => ({ TeamSection: () => null }));
 vi.mock("@/features/settings/VoiceLibrarySection", () => ({ VoiceLibrarySection: () => null }));
 
@@ -72,6 +73,7 @@ const HEADER_IN_COMPONENT = new Set([
   "feishu", // FeishuSection
   "backend", // BackendSection
   "local-app", // LocalAppSection
+  "sidebar-shortcuts", // SidebarShortcutsSection
 ]);
 
 afterEach(cleanup);
