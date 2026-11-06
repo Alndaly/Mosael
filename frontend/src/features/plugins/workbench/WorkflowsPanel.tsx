@@ -83,41 +83,8 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
           <Plus size={13} /> {t("workbenchWorkflowsNew")}
         </Button>
       </div>
-      {library.isPending ? (
-        <LoadingState label={t("workflowLibraryLoading")} className="flex-1" />
-      ) : library.isError ? (
-        <EmptyState size="compact" icon={<SearchX size={16} />} title={t("workflowLibraryErrorTitle")} body={errorText(library.error)} />
-      ) : rows.length === 0 ? (
-        <EmptyState size="compact" icon={<Workflow size={16} />} title={query ? t("workflowLibraryNoMatchTitle") : t("workflowLibraryEmpty")} />
-      ) : (
-        <ul role="list" aria-label={t("workbenchWorkflows")} className="m-0 grid list-none gap-1 p-0">
-          {rows.map((flow) => {
-            const missing = (flow.missing_nodes ?? []).length + (flow.missing_models ?? []).length;
-            return (
-              <li key={flow.path}>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => void open(flow)}
-                  disabled={opening !== null}
-                >
-                  <span className="grid min-w-0 flex-1 gap-0.5 text-left">
-                    <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.label}</Truncate>
-                    <Truncate className="min-w-0 text-ui-xs text-muted-foreground">{flow.path}</Truncate>
-                  </span>
-                  {missing > 0 && (
-                    <span className="text-ui-xs text-warning">
-                      {t("workbenchWorkflowsMissing").replace("{n}", String(missing))}
-                    </span>
-                  )}
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
       {bundled.data && bundled.data.workflows.length > 0 && (
-        <section className="grid gap-2 border-t border-divider pt-3" data-bundled-workflows="">
+        <section className="grid gap-2 border-b border-divider pb-3" data-bundled-workflows="">
           <h4 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">
             <PackagePlus size={14} /> {bundled.data.title || t("workflowBundleInstall")}
           </h4>
@@ -145,6 +112,42 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
             ))}
           </ul>
         </section>
+      )}
+      {library.isPending ? (
+        <LoadingState label={t("workflowLibraryLoading")} className="flex-1" />
+      ) : library.isError ? (
+        <EmptyState size="compact" icon={<SearchX size={16} />} title={t("workflowLibraryErrorTitle")} body={errorText(library.error)} />
+      ) : rows.length === 0 ? (
+        <EmptyState size="compact" icon={<Workflow size={16} />} title={query ? t("workflowLibraryNoMatchTitle") : t("workflowLibraryEmpty")} />
+      ) : (
+        <>
+          <h4 className="m-0 border-t border-divider pt-3 text-ui-sm font-semibold text-foreground">{t("workbenchWorkflows")}</h4>
+        <ul role="list" aria-label={t("workbenchWorkflows")} className="m-0 grid list-none gap-1 p-0">
+          {rows.map((flow) => {
+            const missing = (flow.missing_nodes ?? []).length + (flow.missing_models ?? []).length;
+            return (
+              <li key={flow.path}>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => void open(flow)}
+                  disabled={opening !== null}
+                >
+                  <span className="grid min-w-0 flex-1 gap-0.5 text-left">
+                    <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.label}</Truncate>
+                    <Truncate className="min-w-0 text-ui-xs text-muted-foreground">{flow.path}</Truncate>
+                  </span>
+                  {missing > 0 && (
+                    <span className="text-ui-xs text-warning">
+                      {t("workbenchWorkflowsMissing").replace("{n}", String(missing))}
+                    </span>
+                  )}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+        </>
       )}
     </div>
   );
