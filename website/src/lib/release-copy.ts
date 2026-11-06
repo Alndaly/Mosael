@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.4.4": {
+    zh: [
+      "**ComfyUI 工作台新增「工作流」页签和官方范例安装。** 当前连接的工作流可直接打开/新建，官方范例吸底收起、点击展开，每张单独安装；切换工作流直接走现有画布桥，不再整页重开。",
+      "**侧栏快捷方式可配置。** 设置 → 侧栏快捷方式按页面、插件、能力、连接逐级选择，数量变化自动分栏；ComfyUI 工作台也能直接从侧栏打开。",
+      "**工作流与范例卡片统一。** 去掉列表视图、卡片补改动时间，范例与已有工作流共用边框、底色和动作区，加载与空态统一居中。",
+      "**插话在模型消费边界切段。** Steer 只有在真正进入模型上下文时才切 assistant 段，避免点击时提前切段；AI Studio 继续 ComfyUI 对话时也能调用 ComfyUI 和画布工具。",
+    ],
+    en: [
+      "**ComfyUI workbench gains a Workflows tab and official example installation.** Open or create workflows on the current connection, expand the official examples at the bottom, and install each card individually. Switching workflows uses the existing canvas bridge instead of reopening the whole workbench.",
+      "**Sidebar shortcuts are configurable.** Choose page → plugin → capability → connection in Settings; the grid expands with the number of shortcuts, and a ComfyUI workbench can be opened directly from the sidebar.",
+      "**Workflow and example cards share one layout.** List view is removed, cards show modification time, examples and existing workflows use the same border, background and actions, and loading/empty states stay centered.",
+      "**Steering splits at model consumption.** Assistant segments split only when a steer message actually enters model context; continuing a ComfyUI conversation in AI Studio still exposes ComfyUI and canvas tools.",
+    ],
+  },
   "v2.4.3": {
     zh: [
       "**引擎可以删、下载可以停。** 管理 → 引擎里已安装的转写模型和语音引擎能直接删除，ASR/TTS 下载中可以取消；取消后先等进程停下再允许重试，并清理半截 venv 与权重。",
