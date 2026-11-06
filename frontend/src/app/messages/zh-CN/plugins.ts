@@ -529,6 +529,7 @@ export const plugins = {
   workbenchWorkflows: "工作流",
   workbenchWorkflowsSearch: "搜索工作流",
   workbenchWorkflowsRefresh: "刷新工作流",
+  workbenchWorkflowsOpen: "打开",
   workbenchWorkflowsNew: "新建工作流",
   workbenchWorkflowsMissing: "缺 {n} 项",
   workbenchOpenFailed: "工作台打开失败",

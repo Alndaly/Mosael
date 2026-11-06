@@ -517,6 +517,7 @@ export const plugins = {
   workbenchWorkflows: "Workflows",
   workbenchWorkflowsSearch: "Search workflows",
   workbenchWorkflowsRefresh: "Refresh workflows",
+  workbenchWorkflowsOpen: "Open",
   workbenchWorkflowsNew: "New workflow",
   workbenchWorkflowsMissing: "{n} missing",
   workbenchOpenFailed: "Could not open the workbench",

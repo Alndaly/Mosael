@@ -15,6 +15,15 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 
+function WorkflowRow({ children, action }: { children: React.ReactNode; action: React.ReactNode }) {
+  return (
+    <li className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-subtle px-4 py-2">
+      {children}
+      <span className="shrink-0">{action}</span>
+    </li>
+  );
+}
+
 /**
  * 工作台右栏的「工作流」:当前连接上保存的工作流清单,点开就用同一个工作台打开,不必先回 Mosael 的插件页。
  * 一个入口同时给「新建」和刷新;列表沿用 `/workflow-library`,模型/节点缺失直接标出来。
@@ -85,7 +94,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
         </Button>
       </div>
       {bundled.data && bundled.data.workflows.length > 0 && (
-        <section className="grid gap-2 border-t border-divider pt-3" data-bundled-workflows="">
+        <section className="sticky bottom-0 z-10 grid gap-2 border-t border-divider bg-panel pt-3" data-bundled-workflows="">
           <Button
             variant="ghost"
             size="sm"
@@ -99,25 +108,29 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
           {examplesOpen && (
             <ul role="list" aria-label={bundled.data.title} className="m-0 grid list-none gap-2 p-0">
               {bundled.data.workflows.map((flow) => (
-                <li key={flow.file} className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-subtle px-4 py-2">
-                  <div className="grid min-w-0 flex-1 gap-0.5">
+                <WorkflowRow
+                  key={flow.file}
+                  action={(
+                    <Button
+                      size="default"
+                      variant={flow.installed ? "outline" : "default"}
+                      disabled={flow.installed || installing !== ""}
+                      loading={installing === flow.file}
+                      onClick={() => void install(flow)}
+                    >
+                      {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
+                    </Button>
+                  )}
+                >
+                  <span className="grid min-w-0 flex-1 gap-0.5">
                     <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</Truncate>
                     {flow.description && (
                       <span className="min-w-0 text-ui-xs text-muted-foreground">
                         <InlineMarkdown text={flow.description} links={false} />
                       </span>
                     )}
-                  </div>
-                  <Button
-                    size="default"
-                    variant={flow.installed ? "outline" : "default"}
-                    disabled={flow.installed || installing !== ""}
-                    loading={installing === flow.file}
-                    onClick={() => void install(flow)}
-                  >
-                    {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
-                  </Button>
-                </li>
+                  </span>
+                </WorkflowRow>
               ))}
             </ul>
           )}
@@ -136,24 +149,29 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
           {rows.map((flow) => {
             const missing = (flow.missing_nodes ?? []).length + (flow.missing_models ?? []).length;
             return (
-              <li key={flow.path}>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => void open(flow)}
-                  disabled={opening !== null}
-                >
-                  <span className="grid min-w-0 flex-1 gap-0.5 text-left">
-                    <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.label}</Truncate>
-                    <Truncate className="min-w-0 text-ui-xs text-muted-foreground">{flow.path}</Truncate>
-                  </span>
+              <WorkflowRow
+                key={flow.path}
+                action={(
+                  <Button
+                    variant="outline"
+                    aria-label={`${t("workbenchWorkflowsOpen")}「${flow.label}」`}
+                    onClick={() => void open(flow)}
+                    disabled={opening !== null}
+                  >
+                    {t("workbenchWorkflowsOpen")}
+                  </Button>
+                )}
+              >
+                <span className="grid min-w-0 flex-1 gap-0.5 text-left">
+                  <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.label}</Truncate>
+                  <Truncate className="min-w-0 text-ui-xs text-muted-foreground">{flow.path}</Truncate>
                   {missing > 0 && (
                     <span className="text-ui-xs text-warning">
                       {t("workbenchWorkflowsMissing").replace("{n}", String(missing))}
                     </span>
                   )}
-                </Button>
-              </li>
+                </span>
+              </WorkflowRow>
             );
           })}
         </ul>
