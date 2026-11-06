@@ -695,31 +695,48 @@ export function NewConnectionDialog({
           // 代码字段不能包在 <label> 里:编辑器不是可被 label 关联的控件,而它的工具栏里有按钮 ——
           // label 会把点击转给它里面**第一个按钮**,于是点一下字段标题就等于点了「格式化」。
           const Row = isCodeField(field) ? "div" : "label";
+          const control = isCodeField(field) ? (
+            <CodeFieldEditor
+              field={field}
+              value={draft[field.key] ?? field.default}
+              onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+              minHeight={120}
+              maxHeight={280}
+            />
+          ) : (
+            <FieldInput
+              field={field}
+              value={draft[field.key] ?? field.default}
+              onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+            />
+          );
+          const help = field.help ? (
+            // 清单里的 help 此前一个字都没显示。Blender 插件那条正是用户会撞到的限制:
+            // 「互通要求 Blender 与后端在同一台电脑」。
+            <small className="text-ui-xs leading-[1.5] text-muted-foreground">
+              <InlineMarkdown text={field.help} />
+            </small>
+          ) : null;
+          if (field.type === "boolean") {
+            return (
+              <Row
+                key={field.key}
+                className="flex min-w-0 items-center justify-between gap-4 rounded-lg border border-border bg-panel-subtle px-3 py-3"
+                data-connection-toggle-row=""
+              >
+                <span className="grid min-w-0 gap-1">
+                  <span className="text-ui-sm font-medium text-foreground">{field.label}</span>
+                  {help}
+                </span>
+                <span className="shrink-0">{control}</span>
+              </Row>
+            );
+          }
           return (
             <Row key={field.key} className="grid min-w-0 gap-1.5">
               <span className="text-ui-sm font-medium text-foreground">{field.label}</span>
-              {isCodeField(field) ? (
-                <CodeFieldEditor
-                  field={field}
-                  value={draft[field.key] ?? field.default}
-                  onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-                  minHeight={120}
-                  maxHeight={280}
-                />
-              ) : (
-                <FieldInput
-                  field={field}
-                  value={draft[field.key] ?? field.default}
-                  onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-                />
-              )}
-              {/* 清单里的 help 此前一个字都没显示。Blender 插件那条正是用户会撞到的限制:
-                  「互通要求 Blender 与后端在同一台电脑」。 */}
-              {field.help && (
-                <small className="text-ui-xs leading-[1.5] text-muted-foreground">
-                  <InlineMarkdown text={field.help} />
-                </small>
-              )}
+              {control}
+              {help}
             </Row>
           );
         })}
