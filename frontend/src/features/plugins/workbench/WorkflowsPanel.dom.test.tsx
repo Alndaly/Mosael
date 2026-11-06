@@ -51,6 +51,8 @@ describe("工作流面板", () => {
     });
     installBundledWorkflows.mockResolvedValue({ folder: "mosael/examples", installed: ["mosael/examples/h3.json"], skipped: [], workflows: [] });
     renderPanel();
+    expect(screen.queryByRole("button", { name: "workflowBundleInstallOne" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: /官方工作流范例|workflowBundleInstall/ }));
     fireEvent.click(await screen.findByRole("button", { name: "workflowBundleInstallOne" }));
     await waitFor(() => expect(installBundledWorkflows).toHaveBeenCalledWith("i1", ["h3.json"], "mosael/examples"));
   });
