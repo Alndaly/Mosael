@@ -6,12 +6,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowsPanel } from "./WorkflowsPanel";
 
 const getWorkflowLibrary = vi.hoisted(() => vi.fn());
-const openWorkbench = vi.hoisted(() => vi.fn());
+const openWorkflow = vi.hoisted(() => vi.fn());
 vi.mock("@/api/client", () => ({ getWorkflowLibrary: (...args: unknown[]) => getWorkflowLibrary(...args) }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("./workbenchSession", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./workbenchSession")>()),
-  openWorkbench: (...args: unknown[]) => openWorkbench(...args),
+  workbenchCall: (...args: unknown[]) => openWorkflow(...args),
 }));
 
 const TARGET = { instanceId: "i1", instanceName: "ComfyUI", workspaceId: "w1", url: "http://127.0.0.1:8188" };
@@ -25,7 +25,7 @@ describe("工作流面板", () => {
   afterEach(() => {
     cleanup();
     getWorkflowLibrary.mockReset();
-    openWorkbench.mockReset().mockResolvedValue({ ok: true, outcome: "opened" });
+    openWorkflow.mockReset().mockResolvedValue({ ok: true });
   });
 
   it("列出当前连接的工作流,点开一张时用同一个工作台打开;新建走 fresh", async () => {
@@ -35,9 +35,13 @@ describe("工作流面板", () => {
     });
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: /人像/ }));
-    await waitFor(() => expect(openWorkbench).toHaveBeenCalledWith(TARGET, { path: "portrait.json" }));
+    await waitFor(() => expect(openWorkflow).toHaveBeenCalledWith({
+      op: "openWorkflow", graph: null, name: "", path: "portrait.json", ops: [],
+    }));
 
     fireEvent.click(screen.getByRole("button", { name: /workbenchWorkflowsNew/ }));
-    await waitFor(() => expect(openWorkbench).toHaveBeenCalledWith(TARGET, { fresh: true }));
+    await waitFor(() => expect(openWorkflow).toHaveBeenCalledWith({
+      op: "openWorkflow", graph: { nodes: [] }, name: "", path: null, ops: [],
+    }));
   });
 });

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 import { listPluginPackages, type PluginPackage } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { NAV_ITEMS, type StudioView } from "@/components/layout/navLabels";
 import {
@@ -20,6 +21,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Truncate } from "@/components/ui/truncate";
 import { connectionAddress } from "@/features/plugins/workbench/workbenchAddress";
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 
 function comfyTargets(packages: readonly PluginPackage[]): SidebarShortcut[] {
   return packages.flatMap((pkg) => {
@@ -169,7 +171,11 @@ export function SidebarShortcutsSection() {
             <small className="basis-full text-ui-xs text-muted-foreground">{t("sidebarShortcutsAlreadyAdded")}</small>
           )}
           {!alreadyAdded && !chosen && page === "plugins" && packages.isError && (
-            <small className="basis-full text-ui-xs text-destructive">{t("sidebarShortcutsPluginsError")}</small>
+            <FailureCard
+              size="compact"
+              title={t("sidebarShortcutsPluginsError")}
+              {...rawFailureFields(errorText(packages.error), t("sidebarShortcutsPluginsError"))}
+            />
           )}
           {!alreadyAdded && !chosen && isComfy && !packages.isPending && !packages.isError && (
             <small className="basis-full text-ui-xs text-muted-foreground">{t("sidebarShortcutsNoTargets")}</small>

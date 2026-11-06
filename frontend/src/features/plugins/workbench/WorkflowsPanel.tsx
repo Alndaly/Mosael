@@ -11,7 +11,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { IconButton } from "@/components/ui/icon-button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
-import { openWorkbench, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
+import { workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 
 /**
  * 工作台右栏的「工作流」:当前连接上保存的工作流清单,点开就用同一个工作台打开,不必先回 Mosael 的插件页。
@@ -35,7 +35,13 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
     const path = flow?.path ?? "";
     setOpening(path);
     try {
-      const result = await openWorkbench(target, flow ? { path } : { fresh: true });
+      const result = await workbenchCall({
+        op: "openWorkflow",
+        graph: flow ? null : { nodes: [] },
+        name: "",
+        path: flow ? flow.path : null,
+        ops: [],
+      });
       if (!result.ok) toast.error(result.error || t("workbenchOpenFailed"));
     } catch (error) {
       toast.error(errorText(error));
