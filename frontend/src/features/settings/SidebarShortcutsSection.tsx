@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 import { listPluginPackages, type PluginPackage } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { NAV_ITEMS } from "@/components/layout/navLabels";
+import { NAV_ITEMS, type StudioView } from "@/components/layout/navLabels";
 import {
   setSidebarShortcuts,
   shortcutForComfy,
@@ -14,56 +14,78 @@ import {
   useSidebarShortcuts,
   type SidebarShortcut,
 } from "@/components/layout/sidebarShortcuts";
-import { connectionAddress } from "@/features/plugins/workbench/workbenchAddress";
 import { SettingsGroup } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Truncate } from "@/components/ui/truncate";
+import { connectionAddress } from "@/features/plugins/workbench/workbenchAddress";
 
-/**
- * 设置 → 侧栏快捷方式。
- *
- * 候选只来自两处:页面清单(和导航同一份 `NAV_ITEMS`)和 ComfyUI 连接的「工作台」。不让人手填 URL ——
- * 快捷方式要能在这个工作区里打开一个东西,不是一张书签。排序就是侧栏上从左到右的顺序。
- */
-function comfyCandidates(packages: readonly PluginPackage[]): SidebarShortcut[] {
+function comfyTargets(packages: readonly PluginPackage[]): SidebarShortcut[] {
   return packages.flatMap((pkg) => {
     if (pkg.id !== "dev.mosael.comfyui") return [];
     return (pkg.instances ?? []).flatMap((instance) => {
+      //: 只认连接自己的权威地址。拿不到有效地址时回空,由设置页说明原因;不拿 server_url 兜底,
+      //: 免得把一份不完整的配置静默修成看似可用的快捷方式。
       const url = connectionAddress(pkg, instance);
       return url ? [shortcutForComfy(instance.id, instance.name, url)] : [];
     });
   });
 }
 
+type PageGroup = { id: StudioView; page: SidebarShortcut };
+
 export function SidebarShortcutsSection() {
   const t = useI18n();
   const shortcuts = useSidebarShortcuts();
   const packages = useQuery({ queryKey: ["plugins"], queryFn: () => listPluginPackages(), retry: false });
-  const [picked, setPicked] = React.useState("");
-  const candidates = React.useMemo(() => {
-    const views = NAV_ITEMS
-      .filter((item) => item.placement !== "admin" && item.view !== "settings")
-      .map((item) => shortcutForView(item.view));
-    //: 插件能力放在页面之前 —— 「ComfyUI 工作台」是这项功能最想要的那一类,别让它埋在页面清单底下。
-    return [...(packages.data ? comfyCandidates(packages.data) : []), ...views];
-  }, [packages.data]);
+  const [page, setPage] = React.useState("");
+  const [pluginId, setPluginId] = React.useState("page");
+  const [capability, setCapability] = React.useState("comfyui-workbench");
+  const [target, setTarget] = React.useState("");
+  const groups = React.useMemo<PageGroup[]>(() => NAV_ITEMS
+    .filter((item) => item.placement !== "admin" && item.view !== "settings")
+    .map((item) => ({ id: item.view, page: shortcutForView(item.view) })), []);
+  const group = groups.find((one) => one.id === page);
+  const isComfy = page === "plugins" && pluginId === "dev.mosael.comfyui" && capability === "comfyui-workbench";
+  const candidates = isComfy && packages.data ? comfyTargets(packages.data) : group ? [group.page] : [];
   const available = candidates.filter((one) => !shortcuts.some((current) => current.id === one.id));
+  const selected = candidates.find((one) => one.id === target) ?? candidates[0];
+  const chosen = available.find((one) => one.id === target) ?? available[0];
+  const alreadyAdded = Boolean(selected && shortcuts.some((one) => one.id === selected.id));
 
-  const commit = (next: readonly SidebarShortcut[]) => setSidebarShortcuts(next);
+  const pickPage = (view: string) => {
+    setPage(view);
+    //: 先选插件,再选这个插件提供的能力,最后选连接;工作台仍归在插件下。
+    setPluginId(view === "plugins" ? "dev.mosael.comfyui" : "page");
+    setCapability("comfyui-workbench");
+    const nextGroup = groups.find((one) => one.id === view);
+    const options = view === "plugins" && packages.data ? comfyTargets(packages.data) : nextGroup ? [nextGroup.page] : [];
+    setTarget(options.find((one) => !shortcuts.some((current) => current.id === one.id))?.id ?? "");
+  };
+  const pickPlugin = (id: string) => {
+    setPluginId(id);
+    setCapability("comfyui-workbench");
+    const options = id === "dev.mosael.comfyui" && packages.data ? comfyTargets(packages.data) : group ? [group.page] : [];
+    setTarget(options.find((one) => !shortcuts.some((current) => current.id === one.id))?.id ?? "");
+  };
+  const pickCapability = (kind: string) => {
+    setCapability(kind);
+    const options = kind === "comfyui-workbench" && packages.data ? comfyTargets(packages.data) : group ? [group.page] : [];
+    setTarget(options.find((one) => !shortcuts.some((current) => current.id === one.id))?.id ?? "");
+  };
   const add = () => {
-    const candidate = candidates.find((one) => one.id === picked);
-    if (!candidate) return;
-    commit([...shortcuts, candidate]);
-    setPicked("");
+    if (!chosen) return;
+    setSidebarShortcuts([...shortcuts, chosen]);
+    const rest = available.filter((one) => one.id !== chosen.id);
+    setTarget(rest[0]?.id ?? "");
   };
   const move = (index: number, delta: number) => {
-    const target = index + delta;
-    if (target < 0 || target >= shortcuts.length) return;
+    const nextIndex = index + delta;
+    if (nextIndex < 0 || nextIndex >= shortcuts.length) return;
     const next = [...shortcuts];
-    [next[index], next[target]] = [next[target], next[index]];
-    commit(next);
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    setSidebarShortcuts(next);
   };
 
   return (
@@ -94,29 +116,64 @@ export function SidebarShortcutsSection() {
                   <ArrowDown size={14} />
                 </IconButton>
                 <IconButton size="icon-sm" label={t("sidebarShortcutsRemove").replace("{name}", label)}
-                            onClick={() => commit(shortcuts.filter((one) => one.id !== shortcut.id))}>
+                            onClick={() => setSidebarShortcuts(shortcuts.filter((one) => one.id !== shortcut.id))}>
                   <Trash2 size={14} />
                 </IconButton>
               </div>
             );
           })
         )}
-        <div className="flex min-w-0 flex-wrap items-center gap-2 pt-1">
-          <Select value={picked} onValueChange={setPicked}>
-            <SelectTrigger className="min-w-52 flex-1" aria-label={t("sidebarShortcutsPick")}>
-              <SelectValue placeholder={t("sidebarShortcutsPick")} />
-            </SelectTrigger>
-            <SelectContent>
-              {available.map((candidate) => (
-                <SelectItem key={candidate.id} value={candidate.id}>
-                  {shortcutLabel(candidate, t)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" disabled={!picked} onClick={add}>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 pt-1" data-sidebar-shortcut-picker="">
+          <SearchableSelect
+            ariaLabel={t("sidebarShortcutsPickPage")}
+            value={page}
+            onValueChange={pickPage}
+            options={groups.map((one) => ({ value: one.id, label: shortcutLabel(one.page, t) }))}
+            placeholder={t("sidebarShortcutsPickPage")}
+            className="min-w-40 flex-1"
+          />
+          <SearchableSelect
+            ariaLabel={t("sidebarShortcutsPickPlugin")}
+            value={pluginId}
+            onValueChange={pickPlugin}
+            options={[
+              { value: "page", label: group ? `${shortcutLabel(group.page, t)}${t("sidebarShortcutsPageSuffix")}` : t("sidebarShortcutsPageItself") },
+              ...(packages.data?.filter((pkg) => pkg.id === "dev.mosael.comfyui").map((pkg) => ({ value: pkg.id, label: pkg.name })) ?? []),
+            ]}
+            placeholder={packages.isPending && page === "plugins" ? t("sidebarShortcutsLoadingPlugins") : t("sidebarShortcutsPickPlugin")}
+            disabled={!group || page !== "plugins"}
+            className="min-w-40 flex-1"
+          />
+          <SearchableSelect
+            ariaLabel={t("sidebarShortcutsPickCapability")}
+            value={capability}
+            onValueChange={pickCapability}
+            options={[{ value: "comfyui-workbench", label: t("sidebarShortcutsComfyWorkbench") }]}
+            placeholder={t("sidebarShortcutsPickCapability")}
+            disabled={!isComfy}
+            className="min-w-40 flex-1"
+          />
+          <SearchableSelect
+            ariaLabel={t("sidebarShortcutsPickTarget")}
+            value={chosen?.id ?? ""}
+            onValueChange={setTarget}
+            options={available.map((one) => ({ value: one.id, label: shortcutLabel(one, t) }))}
+            placeholder={packages.isPending && isComfy ? t("sidebarShortcutsLoadingTargets") : t("sidebarShortcutsPickTarget")}
+            disabled={!isComfy}
+            className="min-w-48 flex-1"
+          />
+          <Button variant="outline" disabled={!chosen} onClick={add}>
             <Plus size={13} /> {t("sidebarShortcutsAdd")}
           </Button>
+          {alreadyAdded && !chosen && (
+            <small className="basis-full text-ui-xs text-muted-foreground">{t("sidebarShortcutsAlreadyAdded")}</small>
+          )}
+          {!alreadyAdded && !chosen && page === "plugins" && packages.isError && (
+            <small className="basis-full text-ui-xs text-destructive">{t("sidebarShortcutsPluginsError")}</small>
+          )}
+          {!alreadyAdded && !chosen && isComfy && !packages.isPending && !packages.isError && (
+            <small className="basis-full text-ui-xs text-muted-foreground">{t("sidebarShortcutsNoTargets")}</small>
+          )}
         </div>
       </div>
     </SettingsGroup>
