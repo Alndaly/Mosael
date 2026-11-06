@@ -635,6 +635,8 @@ export function NewConnectionDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t("pluginNewConnection")}
+      //: 这句是弹窗自己的说明,不是表单第一格;放进 header 才和标题同一组,不会隔着 body 的间距。
+      header={<p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">{hint}</p>}
       // 配置项的说明常是两三行(地域、接入点的例子),420px 宽时一条说明折成五行,表单读起来像一列窄条。
       className={cn(fields.some(isCodeField) ? "w-[640px]" : "w-[520px]", "max-w-[calc(100vw-32px)]")}
       footer={
@@ -656,7 +658,6 @@ export function NewConnectionDialog({
           submit();
         }}
       >
-        <p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">{hint}</p>
         {declared && <NewConnectionWhere title={title} where={where} onChoose={setWhere} />}
         {local && where === "directory" && (
           <>
