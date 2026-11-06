@@ -373,9 +373,9 @@ minimax_h3_talk_continue.json
 ```
 
 Each entry has a name and a one-line description. It first checks, without writing, which files already exist and which
-node types and model files each one needs. Every uninstalled entry starts ticked; after you confirm the target server it
-writes only the selected files under `workflows/mosael/examples/`, never overwriting. Node packs and models are still
-installed from each workflow's details — the check lists them, but this action does not install nodes or download models
+node types and model files each one needs. Cards are laid out in a grid and each has its own Install button; installing
+one card writes only that file under `workflows/mosael/examples/`, never overwriting. Node packs and models are still
+installed from each workflow's details — the cards list them, but this action does not install nodes or download models
 automatically.
 
 The connection's "Workflow library" on the Plugins page: every workflow saved on this ComfyUI (ADR 0035), in the same

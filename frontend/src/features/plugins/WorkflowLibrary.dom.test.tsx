@@ -80,10 +80,9 @@ const FORM_TEXT = vi.hoisted((): Record<string, string> => ({
   //: 节点包那一行要拼进版本号才看得出说的是哪两版
   workflowPackVersionUpgrade: "图上要 {wanted},装着 {installed}:需要升级",
   workflowPackVersionCommit: "图上写的是 {version}(git commit)",
-  //: 官方工作流范例:勾选框和安装键都把名字/数量带出来,测试才分得清是哪一张。
-  workflowBundleSelectOne: "选择「{name}」",
-  workflowBundleSelected: "已选中 {n} 张",
-  workflowBundleInstallConfirm: "安装选中的 {n} 张",
+  //: 官方工作流范例:每张卡片的安装键把名字带出来,测试才分得清是哪一张。
+  workflowBundleInstallOne: "安装",
+  workflowBundleInstallOneNamed: "安装「{name}」",
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => FORM_TEXT[key] ?? key,
@@ -233,7 +232,7 @@ function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
 }
 
 describe("工作流库", () => {
-  it("官方工作流范例:先列出每张缺的节点/模型,再按用户勾选安装", async () => {
+  it("官方工作流范例:每张卡片自己安装,只写这一张", async () => {
     api.getBundledWorkflows.mockResolvedValue({
       id: "official_comfyui_examples", title: "官方工作流范例", description: "官方范例",
       folder: "mosael/examples",
@@ -254,15 +253,14 @@ describe("工作流库", () => {
     await openLibrary();
 
     fireEvent.click(screen.getByRole("button", { name: "workflowBundleInstall" }));
-    const dialog = await screen.findByRole("dialog", { name: /workflowBundleTitle/ });
+    const dialog = await screen.findByRole("dialog", { name: "workflowBundleInstall" });
     expect(dialog).toHaveTextContent("mosael/examples");
     expect(dialog).toHaveTextContent("VRGDG_MiniMaxH3SaveLatent");
     expect(dialog).toHaveTextContent("minimax_h3_hybrid.safetensors");
-    expect(within(dialog).getByRole("checkbox", { name: "选择「H3 长片 · 第一段」" })).toBeChecked();
+    expect(dialog.innerHTML).toContain("sm:grid-cols-2");
 
-    //: 取消第二张:只装用户勾上的那一张,不把整组都写进去。
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "选择「H3 长片 · 续写」" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "安装选中的 1 张" }));
+    //: 点第一张自己的安装键:只写这一张,不把整组都写进去。
+    fireEvent.click(within(dialog).getByRole("button", { name: "安装「H3 长片 · 第一段」" }));
     await waitFor(() => expect(api.installBundledWorkflows).toHaveBeenCalledWith(
       "i1", ["minimax_h3_open.json"], "mosael/examples",
     ));
@@ -274,11 +272,11 @@ describe("工作流库", () => {
     await openLibrary();
 
     fireEvent.click(screen.getByRole("button", { name: "workflowBundleInstall" }));
-    const dialog = await screen.findByRole("dialog", { name: /workflowBundleTitle/ });
+    const dialog = await screen.findByRole("dialog", { name: "workflowBundleInstall" });
 
     expect(dialog.className).toContain("w-[min(60rem");
     expect(dialog.querySelectorAll("[data-slot=skeleton]").length).toBeGreaterThan(0);
-    expect(within(dialog).queryByRole("button", { name: /workflowBundleInstallConfirm/ })).toBeNull();
+    expect(dialog.innerHTML).toContain("sm:grid-cols-2");
   });
 
   it("左边一列:全部、文件夹(按名字排),钉在底部的「缺节点或模型」;一张卡一个节点图缩略预览", async () => {
