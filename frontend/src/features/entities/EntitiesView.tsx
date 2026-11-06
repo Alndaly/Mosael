@@ -253,10 +253,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
       ) : (
       <>
       {/* 空态要落在**剩下的那块空间**中间,和工作台同一个做法:根容器是列方向的 flex,
-          这一格在有内容时只是普通容器(`pt-5`),在空 / 载入中 / 出错时**自己长满剩余高度**并把
-          里面的空态居中。此前它只是一个 `pt-5` 的普通块,空态的 `m-auto` 没有可分配的余量,
-          于是永远贴在上边 —— 这就是「资产页空态没居中」的根子。 */}
-      <div className={cn(visible.length === 0 || listing.isPending || listing.isError ? "flex flex-1 items-center justify-center" : "pt-5")}>
+          这一格在空 / 载入中 / 出错时**自己长满剩余高度**并把里面的空态居中;有内容时不再加
+          上内边距 —— 筛选栏自己的 `mb-7` 已经把「筛选组 → 卡片」定成 28px。 */}
+      <div className={visible.length === 0 || listing.isPending || listing.isError ? "flex flex-1 items-center justify-center" : undefined}>
         {listing.isPending ? (
           <div role="status" aria-busy="true" className={ASSET_CARD_GRID}>
             <span className="sr-only">{t("pageLoading")}</span>
