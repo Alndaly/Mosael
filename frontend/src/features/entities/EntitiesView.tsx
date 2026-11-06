@@ -33,7 +33,6 @@ import { Hint } from "@/components/ui/tooltip";
 import { EntityDetail } from "@/features/entities/EntityDetail";
 import { ReferenceLibraryView } from "@/features/entities/ReferenceLibraryView";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
-import { cn } from "@/lib/utils";
 
 type SortKey = "updated" | "name" | "references";
 const LIBRARY_MODES = ["assets", "references"] as const;

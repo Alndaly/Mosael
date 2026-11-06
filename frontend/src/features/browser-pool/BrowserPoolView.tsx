@@ -1,6 +1,6 @@
 import React from "react";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
-import { PageHeading, STUDIO_LIST_PAGE } from "@/components/layout/StudioPage";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Boxes, Eraser, ExternalLink, Globe, KeyRound, LogIn, LogOut, Pencil, Plus, RefreshCcw, SquarePen, Trash2, Users, Users2 } from "lucide-react";
@@ -261,7 +261,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   //: 取不回来不是「0 个」:此前只剩标题和一个「0」,让人以为账号都没了、去重建(体检 UM-21)。
   if (profiles.isError && items.length === 0) {
     return (
-      <div className={STUDIO_LIST_PAGE} data-pool-load-error="">
+      <div className={STUDIO_PAGE} data-pool-load-error="">
         <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} />
         <PageLoadError icon={<Boxes size={22} />} error={profiles.error} retrying={profiles.isFetching} onRetry={() => void profiles.refetch()} />
       </div>
@@ -270,7 +270,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
 
   if (profiles.isSuccess && items.length === 0) {
     return (
-      <div className={STUDIO_LIST_PAGE}>
+      <div className={STUDIO_PAGE}>
         <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} />
         <EmptyState
           icon={<Boxes size={22} />}
@@ -304,7 +304,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className={STUDIO_LIST_PAGE}>
+    <div className={STUDIO_PAGE}>
       <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} count={items.length} actions={<>
         <Hint disabledReason={writeBlocked?.reason}>
           <Button variant="outline" disabled={Boolean(writeBlocked)} onClick={() => setAddingAccount(true)}>

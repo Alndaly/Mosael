@@ -21,10 +21,7 @@ export function PageHeading({ title, description, count, actions, className }: {
  *  外加一个 margin-top 叠在页面自己的间距上),于是它的卡片更窄、列更多、离页头更远。 */
 export const CARD_GRID = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8";
 
-const STUDIO_PAGE_LAYOUT = "flex h-full min-h-0 flex-col overflow-auto px-6 py-7 xl:px-9 xl:py-8 [&>*]:shrink-0";
-export const STUDIO_PAGE = `${STUDIO_PAGE_LAYOUT} gap-7`;
-/** 页头下面直接就是列表:页头与列表之间用 16px(和统计/管理页里 PageHeading → 页签的距离同一档)。 */
-export const STUDIO_LIST_PAGE = `${STUDIO_PAGE_LAYOUT} gap-4`;
+export const STUDIO_PAGE = "flex h-full min-h-0 flex-col gap-7 overflow-auto px-6 py-7 xl:px-9 xl:py-8 [&>*]:shrink-0";
 
 /** A compact, keyboard-accessible choice strip; selection is explicit even without color. */
 /**
