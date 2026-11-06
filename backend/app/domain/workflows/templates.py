@@ -171,7 +171,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(
                 CONTINUATION_VIDEO_MODEL,
                 zh="能接着一段视频或一帧往下拍的视频模型（如万相 2.7 图生视频、ComfyUI 的 H3 续写工作流；用 ComfyUI 时到插件页 → 工作流库点「官方工作流范例」,勾选 H3 长片两张安装）",
-                en="Video model that carries on from a clip or a frame (e.g. Wan 2.7 image-to-video, the H3 continuation workflow on ComfyUI; for ComfyUI, open Plugins → Workflow library → “H3 long-video workflows” to check and install it)",
+                en="Video model that carries on from a clip or a frame (e.g. Wan 2.7 image-to-video, the H3 continuation workflow on ComfyUI; for ComfyUI, open Plugins → Workflow library → “Official workflow examples” and install it from its card)",
             ),
         ],
         "stages": {
@@ -193,7 +193,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(
                 TALKING_CHAIN_MODEL,
                 zh="收驱动音频的两条视频工作流（如 ComfyUI 的 H3 数字人第一段和续写；到插件页 → 工作流库点「官方工作流范例」,勾选 H3 数字人两张安装）",
-                en="Two audio-driven video workflows (e.g. the H3 digital human opening and continuation in ComfyUI; open Plugins → Workflow library → “H3 long-video workflows” to check and install them)",
+                en="Two audio-driven video workflows (e.g. the H3 digital human opening and continuation in ComfyUI; open Plugins → Workflow library → “Official workflow examples” and install them from their cards)",
             ),
             requirement(DIGITAL_HUMAN_VOICE, zh="声明过是谁的克隆音色", en="A cloned voice declared as someone's"),
         ],

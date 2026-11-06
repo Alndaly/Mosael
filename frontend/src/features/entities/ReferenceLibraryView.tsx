@@ -248,31 +248,33 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
   if (connections.isError) return <LibraryFailure error={connections.error} />;
   if (connections.data.length === 0) {
     return (
-      <div className="grid min-w-0 gap-4" data-reference-library="">
-        {modeSwitch && <div className="flex justify-end">{modeSwitch}</div>}
-        <EmptyState
-          icon={<Sparkles />}
-          title={t("referenceLibraryNoConnection")}
-          body={t("referenceLibraryNoConnectionBody")}
-          action={
-            <Button asChild variant="outline">
-              <a href="#/plugins">{t("referenceLibraryGoPlugins")}</a>
-            </Button>
-          }
-        />
+      <div className="flex min-w-0 flex-1 flex-col" data-reference-library="">
+        {modeSwitch && <div className="flex min-h-10 items-center justify-end">{modeSwitch}</div>}
+        <div className="flex flex-1 items-center justify-center">
+          <EmptyState
+            icon={<Sparkles />}
+            title={t("referenceLibraryNoConnection")}
+            body={t("referenceLibraryNoConnectionBody")}
+            action={
+              <Button asChild variant="outline">
+                <a href="#/plugins">{t("referenceLibraryGoPlugins")}</a>
+              </Button>
+            }
+          />
+        </div>
       </div>
     );
   }
 
   const rows = items.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <div className="grid min-w-0 gap-4" data-reference-library="">
+    <div className="flex min-w-0 flex-1 flex-col" data-reference-library="">
       <div
         ref={toolbarRef}
         data-stuck={stuck}
-        className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9"
+        className="workspace-sticky sticky top-0 z-20 -mx-6 mb-7 flex flex-col gap-3 border-b border-divider px-6 xl:-mx-9 xl:px-9"
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-reference-filter-row="">
+        <div className="flex min-h-10 min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-reference-filter-row="">
           <CollectionTabs
             value={activeCollection}
             onChange={(next) => { setCollectionId(next); setFilters({}); }}
@@ -319,7 +321,9 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
 
       {/* 取失败时上面那一条已经说了;这里只管「取到了,但一本图集都没有」—— 一屏只说一次。 */}
       {collections.isSuccess && !activeCollection && (
-        <EmptyState icon={<Search />} title={t("referenceLibraryNoItems")} />
+        <div className="flex flex-1 items-center justify-center">
+          <EmptyState icon={<Search />} title={t("referenceLibraryNoItems")} />
+        </div>
       )}
 
       {!activeCollection ? null : items.isPending ? (
@@ -329,7 +333,9 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
       ) : items.isError ? (
         <LibraryFailure error={items.error} />
       ) : rows.length === 0 ? (
-        <EmptyState icon={<Search />} title={t("referenceLibraryNoItems")} />
+        <div className="flex flex-1 items-center justify-center">
+          <EmptyState icon={<Search />} title={t("referenceLibraryNoItems")} />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">

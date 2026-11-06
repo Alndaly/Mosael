@@ -165,7 +165,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
   );
   return (
     <div
-      className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
+      className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 pt-7 xl:px-9 xl:pb-8 xl:pt-8 [&>*]:shrink-0"
       data-entities-page=""
       data-entities-scroll=""
       onScroll={(event) => {
@@ -177,7 +177,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         title={t("navEntities")}
         description={activeMode === "assets" ? t("entitiesDesc") : t("referenceLibraryDesc")}
         count={activeMode === "assets" ? all.data?.length : undefined}
-        className="py-7 xl:py-8"
+        className="mb-4"
         actions={
           activeMode === "assets" && !emptyKind ? (
             <Hint disabledReason={writeBlocked?.reason}>
@@ -196,7 +196,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
       <div
         ref={filtersRef}
         data-stuck={filtersStuck}
-        className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9"
+        className="workspace-sticky sticky top-0 z-20 -mx-6 mb-7 flex flex-col gap-3 border-b border-divider px-6 xl:-mx-9 xl:px-9"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
           <CollectionTabs

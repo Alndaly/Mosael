@@ -37,7 +37,7 @@ it("opens and filters projects in both presentations and draws the cover the bac
   const create = vi.fn();
   const view = render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={open} onCreateProject={create} />));
   const header = screen.getByRole("banner");
-  expect(view.container.firstElementChild?.firstElementChild).toBe(header);
+  expect(view.container.firstElementChild?.querySelector('[data-slot="page-heading"]')).toBe(header);
   expect(within(header).queryByText("Studio A")).toBeNull();
   expect(await within(header).findByText("A quiet moment")).toBeVisible();
   expect(within(header).getByRole("button", { name: "homePoemRefresh" })).toBeEnabled();

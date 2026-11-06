@@ -144,7 +144,7 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/plugins/workbench/RunPanel.tsx": 1,
   "features/plugins/workbench/WorkbenchTabs.tsx": 1,
   "features/plugins/WorkflowAppEditor.tsx": 1,
-  "features/plugins/WorkflowLibrary.tsx": 3,
+  "features/plugins/WorkflowLibrary.tsx": 2,
   "features/publish/PublishView.tsx": 3,
   "features/scenes/SceneAxisGizmo.tsx": 1,
   "features/scenes/SceneBlender.tsx": 2,

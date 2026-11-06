@@ -1,6 +1,6 @@
 import { RenameDialog } from "@/components/app/modals";
 import { usePageTrail } from "@/components/layout/pageTrail";
-import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { PageHeading, STUDIO_LIST_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { formatBytes } from "@/lib/bytes";
@@ -248,7 +248,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
     );
   }
   return (
-    <div className={cn("scene-library", STUDIO_PAGE)}>
+    <div className={cn("scene-library", STUDIO_LIST_PAGE)}>
       {/* 页头用**和画板/工作流同一个** PageHeading:此前这里是一套手写的 header,于是三个
           同级列表页的标题字号、按钮对齐(居中 vs 与描述行齐平)、页面内距各不相同,并排一看就
           知道不是一家的。计数徽章也是它带来的 —— 另外两页都有,只有这页没有。 */}

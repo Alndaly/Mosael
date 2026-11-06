@@ -8,7 +8,7 @@
  *   「缺节点或模型」;选一个文件夹只看它和它下面的,搜索框说在哪个文件夹里、几张;顶上搜索、按种类筛、排序、三档显示方式;
  * - 文件夹:新建、改名(里面几张跟着换路径)、删除(只删空的;不空的点不了、说为什么;后端现查到不空照实说);卡片拖到
  *   左边的文件夹上就是移过去(先确认);
- * - 卡片 / 列表的一行:右键、悬停出现的 ⋯、Shift+F10 / 菜单键打开同一份菜单,分组摆好,点不了的写着为什么;
+ * - 卡片:右键、悬停出现的 ⋯、Shift+F10 / 菜单键打开同一份菜单,分组摆好,点不了的写着为什么;
  *   「移动到…」挑文件夹;「下载缺的模型」「装缺的节点」打开详情停到那一节;
  * - 一张卡:节点图缩略预览(照图摘要画成 SVG)、名字、种类、节点数、缺什么;
  * - 点开是详情:用到的模型(在不在)、缺的节点(出自哪个节点包、装没装)和缺的模型、最近的产出、
@@ -231,21 +231,25 @@ function desktop(result: { ok: boolean; outcome?: string; error?: string }) {
   return { openComfyWorkbench, emit };
 }
 
+function bundledExamples() {
+  return {
+    id: "official_comfyui_examples", title: "官方工作流范例", description: "官方范例",
+    folder: "mosael/examples",
+    workflows: [
+      { path: "mosael/examples/minimax_h3_open.json", file: "minimax_h3_open.json",
+        name: "H3 长片 · 第一段", description: "第一段", category: "long_video", installed: false,
+        missing_nodes: [{ type: "VRGDG_MiniMaxH3SaveLatent", count: 1, core: false, packs: [] }],
+        missing_models: [{ folder: "diffusion_models", name: "minimax_h3_hybrid.safetensors" }], problem: "" },
+      { path: "mosael/examples/minimax_h3_continue.json", file: "minimax_h3_continue.json",
+        name: "H3 长片 · 续写", description: "续写", category: "long_video", installed: false,
+        missing_nodes: [], missing_models: [], problem: "" },
+    ],
+  };
+}
+
 describe("工作流库", () => {
   it("官方工作流范例:每张卡片自己安装,只写这一张", async () => {
-    api.getBundledWorkflows.mockResolvedValue({
-      id: "official_comfyui_examples", title: "官方工作流范例", description: "官方范例",
-      folder: "mosael/examples",
-      workflows: [
-        { path: "mosael/examples/minimax_h3_open.json", file: "minimax_h3_open.json",
-          name: "H3 长片 · 第一段", description: "第一段", category: "long_video", installed: false,
-          missing_nodes: [{ type: "VRGDG_MiniMaxH3SaveLatent", count: 1, core: false, packs: [] }],
-          missing_models: [{ folder: "diffusion_models", name: "minimax_h3_hybrid.safetensors" }], problem: "" },
-        { path: "mosael/examples/minimax_h3_continue.json", file: "minimax_h3_continue.json",
-          name: "H3 长片 · 续写", description: "续写", category: "long_video", installed: false,
-          missing_nodes: [], missing_models: [], problem: "" },
-      ],
-    });
+    api.getBundledWorkflows.mockResolvedValue(bundledExamples());
     api.installBundledWorkflows.mockResolvedValue({
       folder: "mosael/examples", installed: ["mosael/examples/minimax_h3_open.json"], skipped: [],
       workflows: [],
@@ -264,6 +268,37 @@ describe("工作流库", () => {
     await waitFor(() => expect(api.installBundledWorkflows).toHaveBeenCalledWith(
       "i1", ["minimax_h3_open.json"], "mosael/examples",
     ));
+  });
+
+  it("一张卡片在安装时,其他卡片的安装键仍然可用", async () => {
+    api.getBundledWorkflows.mockResolvedValue(bundledExamples());
+    //: 第一张的请求一直不回答:看的是别的卡片有没有被一起锁住。
+    api.installBundledWorkflows.mockReturnValue(new Promise(() => undefined));
+    await openLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "workflowBundleInstall" }));
+    const dialog = await screen.findByRole("dialog", { name: "workflowBundleInstall" });
+    const first = within(dialog).getByRole("button", { name: "安装「H3 长片 · 第一段」" });
+    fireEvent.click(first);
+
+    await waitFor(() => expect(api.installBundledWorkflows).toHaveBeenCalledWith(
+      "i1", ["minimax_h3_open.json"], "mosael/examples",
+    ));
+    expect(first).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "安装「H3 长片 · 续写」" })).toBeEnabled();
+  });
+
+  it("已安装的卡片:按钮显示已安装并禁用", async () => {
+    const data = bundledExamples();
+    data.workflows[0].installed = true;
+    api.getBundledWorkflows.mockResolvedValue(data);
+    await openLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "workflowBundleInstall" }));
+    const dialog = await screen.findByRole("dialog", { name: "workflowBundleInstall" });
+    const installed = within(dialog).getByRole("button", { name: "「H3 长片 · 第一段」workflowBundleInstalled" });
+    expect(installed).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "安装「H3 长片 · 续写」" })).toBeEnabled();
   });
 
   it("官方工作流范例:点按钮就开宽弹窗,清单没到时先摆对应数量的卡片骨架", async () => {
@@ -293,6 +328,9 @@ describe("工作流库", () => {
     expect(svg.querySelectorAll("[data-graph-link]")).toHaveLength(2);
     expect(svg.querySelector("[data-graph-node][data-muted]")).toBeTruthy();
     expect(portrait.textContent).toContain("workflowKind_image");
+    //: 列表视图删掉以后,卡片自己得把改动时间摆出来。
+    expect(portrait.querySelector('[aria-label^="modelModified"]')).toBeTruthy();
+    expect(portrait.textContent).toMatch(/\d{4}\/\d{1,2}\/\d{1,2}/);
     const sketch = cards()[1];
     expect(sketch.textContent).toContain("workflowLibraryMissingNodes");
 
@@ -302,7 +340,7 @@ describe("工作流库", () => {
     expect(names()).toEqual(["wan"]);
   });
 
-  it("搜索、按种类筛、排序;列表一行一张", async () => {
+  it("搜索、按种类筛、排序;卡片顺序跟着变", async () => {
     await openLibrary();
     //: 搜索只管卡上看得见的字(名字、路径、表单标题):「CR Prompt Text」是 sketch 缺的节点类型,只在点开之后的详情
     //: 里、卡面上没有 —— 缺的归左栏「缺节点或模型」那一页,搜索里不再认它
@@ -320,11 +358,6 @@ describe("工作流库", () => {
     fireEvent.click(await screen.findByRole("option", { name: "workflowLibrarySortNodes" }));
     expect(names()).toEqual(["sketch", "wan", "portrait"]);
 
-    fireEvent.click(screen.getByRole("radio", { name: "libraryDensityList" }));
-    const table = screen.getByRole("table", { name: "workflowLibraryTitle" });
-    const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows.map((row) => within(row).getAllByRole("cell")[1].textContent)).toEqual(["sketch", "wan", "portrait"]);
-    expect(window.localStorage.getItem("mosael:tab:workflow-library.density")).toBe("list");
   });
 
   /**
@@ -359,6 +392,9 @@ describe("工作流库", () => {
     ]);
     expect([...actions.children].map(shape)).toEqual([
       "workflowNew", "workflowBundleInstall", "workflowImport", "workflowLibraryRefresh",
+    ]);
+    expect(within(row).getAllByRole("radio").map((one) => one.getAttribute("aria-label"))).toEqual([
+      "libraryDensityLarge", "libraryDensitySmall",
     ]);
     //: 搜索框吃掉剩下的宽度;别的按内容宽(再有一个 flex-1 就和它抢了)
     const search = row.querySelector<HTMLElement>("[data-search-input]")!;
@@ -396,16 +432,16 @@ describe("工作流库", () => {
     const menu = await screen.findByRole("menu", { name: "workflowLibraryView" });
     expect(within(menu).getAllByRole("menuitemradio").map((one) => one.textContent)).toEqual([
       "workflowLibrarySortName", "workflowLibrarySortModified", "workflowLibrarySortNodes",
-      "libraryDensityLarge", "libraryDensitySmall", "libraryDensityList",
+      "libraryDensityLarge", "libraryDensitySmall",
     ]);
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "workflowLibrarySortModified" }));
     //: **同一份状态**:菜单里选的那个,就是拉开窗口之后那颗排序下拉上写的那个 —— 不是两套设置
     expect(within(row).getByRole("combobox", { name: "workflowLibrarySort" }).textContent).toBe("workflowLibrarySortModified");
-    fireEvent.click(within(row).getByRole("radio", { name: "libraryDensityList" }));
+    fireEvent.click(within(row).getByRole("radio", { name: "libraryDensitySmall" }));
     fireEvent.click(within(row).getByRole("button", { name: "workflowLibraryView", hidden: true }));
     expect(
       within(await screen.findByRole("menu", { name: "workflowLibraryView" }))
-        .getByRole("menuitemradio", { name: "libraryDensityList" }).getAttribute("aria-checked"),
+        .getByRole("menuitemradio", { name: "libraryDensitySmall" }).getAttribute("aria-checked"),
     ).toBe("true");
 
     //: 收成图标也点得到:点了照样开导入框(这一步放最后 —— 那个框是模态的,开着的时候后面那几处找不着了)
@@ -496,49 +532,6 @@ describe("工作流库", () => {
 
     fireEvent.change(search, { target: { value: "" } });
     expect(cards()[0].querySelectorAll("mark"), "查询清空了:一个字都不标").toHaveLength(0);
-  });
-
-  it("列表:表头不透明、压在行上面;每行一样高,缺东西的只摆一枚;种类一律灰字;全在根目录时不摆「目录」那一列", async () => {
-    const data = library();
-    data.workflows![0].missing_nodes = [{ type: "A", count: 1, core: false, packs: [] }, { type: "B", count: 1, core: false, packs: [] }];
-    data.workflows![0].missing_models = [{ folder: "loras", name: "m.safetensors", url: "", hash: "", hash_type: "" }];
-    api.getWorkflowLibrary.mockResolvedValue(data);
-    await openLibrary();
-    fireEvent.click(screen.getByRole("radio", { name: "libraryDensityList" }));
-    const table = screen.getByRole("table", { name: "workflowLibraryTitle" });
-    for (const th of within(table).getAllByRole("columnheader")) {
-      //: 弹窗表面是半透明的(磨砂):表头用它,滚上去的那一行会透过来。用实心那一档、层级压过行里的角标
-      expect(th.className).toContain("bg-[var(--modal-solid)]");
-      expect(th.className).not.toContain("--modal-surface");
-      expect(th.className).toContain("sticky");
-      expect(th.className).toContain("z-20");
-    }
-    //: 钉在滚动区的上沿:内容区上面留的那条缝(pt-1)由表头往上挪同样多(-top-1)盖住,滚上去的那一行不从表头上面露出来
-    const scroller = table.closest<HTMLElement>("[data-library-content]")!;
-    expect(scroller.className).toContain("pt-1");
-    expect(within(table).getAllByRole("columnheader")[0].className).toMatch(/(^| )-top-1( |$)/);
-    const rows = within(table).getAllByRole("row").slice(1);
-    const heights = new Set(rows.flatMap((row) => within(row).getAllByRole("cell").map((td) => td.className.match(/\bh-\[\d+px\]/)?.[0])));
-    expect([...heights], "每一格同一个高度").toEqual(["h-[53px]"]);
-    const portrait = rows.find((row) => row.textContent?.includes("portrait"))!;
-    const chips = portrait.querySelectorAll("[data-lack-chip]");
-    expect(chips, "缺节点又缺模型:一枚,不叠两行").toHaveLength(1);
-    expect(chips[0].textContent).toBe("workflowLibraryMissingBoth");
-    for (const kind of table.querySelectorAll<HTMLElement>("td[data-col=kind]")) {
-      expect(kind.className, "种类不按「缺不缺」上色 —— 那是「缺什么」那一列的事").toContain("text-muted-foreground");
-      expect(kind.className).not.toContain("text-warning");
-    }
-    expect(table.querySelector("th[data-col=folder]"), "有子目录的才摆「目录」").toBeTruthy();
-
-    cleanup();
-    const flat = library();
-    for (const one of flat.workflows!) one.folder = "";
-    api.getWorkflowLibrary.mockResolvedValue(flat);
-    //: 显示方式记着是列表
-    wrap(<ConnectionLibraries instance={instance} workspaceId="w1" workflows />);
-    fireEvent.click(screen.getByRole("button", { name: "workflowLibraryOpen" }));
-    expect((await screen.findByRole("table", { name: "workflowLibraryTitle" })).querySelector("th[data-col=folder]"),
-           "全在根目录:一整列空着就不摆").toBeNull();
   });
 
   it("详情:用到的模型在不在、缺的模型、最近的产出、谁在用它(点了跳过去)", async () => {
@@ -1110,7 +1103,7 @@ describe("工作流库 · 文件夹", () => {
     await waitFor(() => expect(folderTab("video/workflowFolderDefaultName (1) 0").getAttribute("aria-selected")).toBe("true"));
   });
 
-  it("文件夹的右键菜单(⋯、Shift+F10 也是它):新建子文件夹、改名、删除;里面有文件的删不了,说为什么", async () => {
+  it("文件夹的右键菜单(Shift+F10 也是它):新建子文件夹、改名、删除;里面有文件的删不了,说为什么", async () => {
     api.getWorkflowLibrary.mockResolvedValue(WITH_FOLDERS());
     await openLibrary();
     fireEvent.contextMenu(folderTab("video 1"));
@@ -1124,13 +1117,7 @@ describe("工作流库 · 文件夹", () => {
     expect(menuRows(keyboard)).toEqual(["workflowFolderNewInside", "workflowFolderRename", "|", "workflowFolderDelete"]);
     fireEvent.keyDown(keyboard, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-    fireEvent.click(folderTab("空的 0"));
-    const more = within(folderTab("空的 0").parentElement!).getByRole("button", { name: "workflowFolderActions" });
-    expect(more.tabIndex, "选中的那一项的 ⋯ 进 Tab 顺序").toBe(0);
-    expect(within(folderTab("video 1").parentElement!).getByRole("button", { name: "workflowFolderActions" }).tabIndex).toBe(-1);
-    fireEvent.click(more);
-    expect(menuRows(screen.getByRole("menu", { name: "workflowFolderActions" })))
-      .toEqual(["workflowFolderNewInside", "workflowFolderRename", "|", "workflowFolderDelete"]);
+    expect(within(folderTab("空的 0").parentElement!).queryAllByRole("button"), "行上不再摆 ⋯").toEqual([]);
   });
 
   it("文件夹改名:里面几张跟着换路径要说;改成了停到新名字", async () => {
@@ -1492,24 +1479,6 @@ describe("工作流库 · 卡片的菜单", () => {
     await waitFor(() => expect(document.activeElement).toBe(nodes.querySelector("h4")));
   });
 
-  it("列表的一行:右键、行尾的 ⋯ 一样的菜单;也能拖", async () => {
-    api.getWorkflowLibrary.mockResolvedValue(WITH_FOLDERS());
-    await openLibrary();
-    fireEvent.click(screen.getByRole("radio", { name: "libraryDensityList" }));
-    const row = within(screen.getByRole("table", { name: "workflowLibraryTitle" })).getAllByRole("row")
-      .find((one) => one.textContent?.includes("portrait"))!;
-    fireEvent.contextMenu(row);
-    expect(menuRows(await screen.findByRole("menu"))).toEqual(CARD_MENU);
-    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-    fireEvent.click(within(row).getByRole("button", { name: "workflowActions" }));
-    expect(screen.queryByRole("button", { name: "workflowLibraryBack" }), "点 ⋯ 不打开这一行").toBeNull();
-    fireEvent.click(within(screen.getByRole("menu", { name: "workflowActions" })).getByRole("menuitem", { name: "workflowMove" }));
-    expect(await screen.findByRole("dialog", { name: "workflowMoveTitle" })).toBeTruthy();
-    const data = transfer();
-    fireEvent.dragStart(row, { dataTransfer: data });
-    expect(data.getData("application/x-mosael-workflow")).toBe("portrait.json");
-  });
 });
 
 describe("上一版格式的表单(ADR 0045 §7)", () => {
@@ -1525,11 +1494,6 @@ describe("上一版格式的表单(ADR 0045 §7)", () => {
     const banner = document.querySelector("[data-forms-upgrade-banner]") as HTMLElement;
     expect(banner.textContent).toContain("workflowFormsUpgradeBanner");
     expect(within(cardOf("krea2")).getByText("workflowFormsOldBadge"), "卡片上标着旧格式").toBeTruthy();
-    fireEvent.click(screen.getByRole("radio", { name: "libraryDensityList" }));
-    const row = within(screen.getByRole("table", { name: "workflowLibraryTitle" })).getAllByRole("row")
-      .find((one) => one.textContent?.includes("krea2"))!;
-    expect(within(row).getByText("workflowFormsOldBadge"), "列表里也标着(PLG-13:此前只有卡片上有)").toBeTruthy();
-    fireEvent.click(screen.getByRole("radio", { name: "libraryDensitySmall" }));
     fireEvent.click(within(banner).getByRole("button", { name: "workflowFormsUpgradeOpen" }));
     const dialog = await screen.findByRole("dialog", { name: "workflowFormsUpgradeTitle" });
     expect(within(dialog).getByText("workflowFormsUpgradeBody")).toBeTruthy();

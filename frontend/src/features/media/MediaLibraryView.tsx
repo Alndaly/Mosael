@@ -483,13 +483,13 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           </span>
         </div>
       )}
-      <div ref={scrollerRef} data-media-scroll className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
+      <div ref={scrollerRef} data-media-scroll className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 pt-7 xl:px-9 xl:pb-8 xl:pt-8 [&>*]:shrink-0"
         onScroll={(event) => {
           const filters = filtersRef.current;
           setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
         }}
       >
-      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={libraryFacets.data?.total} className="py-7 xl:py-8" actions={<>
+      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={libraryFacets.data?.total} className="mb-4" actions={<>
               <input
                 ref={importInputRef}
                 type="file"
@@ -528,7 +528,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       {!nothingAtAll && (
-        <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9">
+        <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 mb-7 flex flex-col gap-3 border-b border-divider px-6 xl:-mx-9 xl:px-9">
           {/* **一行,按"这是哪一类动作"分三段。**
               类型标签是最粗的那一刀,锚在左边 —— 它的下划线指示器需要一条稳定的左基线;
               搜索/排序/标签是在这一刀之内再筛再排,占中间那段弹性宽度(搜索吃掉全部余量,
@@ -537,6 +537,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
               **窄了就换行,不横向滚。** 这一行里全是要读的标签和要打字的输入框,滚动条会把
               其中一半藏起来 —— 而它们没有主次之分,藏哪一半都是错的。 */}
+          {/* 两行:第一行是「看哪些」(类型 + 中间产物),第二行是搜索 / 排序 / 标签和视图动作。
+              原来挤成一行,1440 宽时搜索框和标签筛选被压得很紧;拆开后和别处的列表页同一套节奏。 */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-media-filter-row>
             <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: kindCount(kind) }))} />
             {/* 中间产物的入口:素材库默认不列它们,在这里按下去看(再按一下回到素材库)。数字是那一种一共几份。
@@ -556,9 +558,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 <span className="text-ui-xs tabular-nums text-muted-foreground">{count}</span>
               </Button>
             ))}
-            {/* 多了「配音片段」那一枚,一行就放不下了(1440 宽的窗口里差一百多像素):搜索那一段整段换到第二行、铺满,
-                视图切换留在第一行最右 —— 不把搜索框和标签筛选挤到压在一起,竖线也不会悬在第二行的行首。 */}
-            <div className={cn("flex min-w-0 flex-1 items-center gap-2", intermediates.length > 0 && "order-last basis-full")}>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-media-filter-actions>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <SearchInput className="min-w-40 flex-1" aria-label={t("searchAssets")} value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
               <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
                 <SelectTrigger className="w-auto min-w-32" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
@@ -571,9 +573,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               </Select>
               {allTags.length > 0 && <TagFilter counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
             </div>
-            {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
-            <div className={cn("flex items-center gap-2 border-divider max-lg:w-full", intermediates.length > 0 ? "lg:ml-auto" : "lg:border-l lg:pl-4")}>
-<Segmented
+            {/* 视图和选择改的是「怎么看 / 要不要动它们」,不是筛掉哪几张,所以单独靠右。 */}
+            <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
+              <Segmented
                 aria-label={t("studioGridView")}
                 value={display}
                 onValueChange={setDisplay}
@@ -664,7 +666,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       ) : visible.length === 0 ? <EmptyState icon={<FolderOpen />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} /> : (
         //: 只画看得见的那几行(加上下各一段缓冲),其余的用留白占着高度 —— 滚动条说的还是整份清单(见 useVirtualRows)。
         //: 网格一行几张按网格的宽度算,和此前 `repeat(auto-fill, minmax(220px, 1fr))` 同一条规则。
-        <div ref={attachRows} data-media-rows className="py-6">
+        <div ref={attachRows} data-media-rows className="pb-6">
           {virtual.padTop > 0 && <div data-pad-top aria-hidden="true" style={{ height: virtual.padTop }} />}
           {rows.slice(virtual.start, virtual.end).map((row, offset) => {
             const key = rowKeys[virtual.start + offset];

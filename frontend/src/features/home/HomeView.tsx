@@ -211,6 +211,7 @@ export function HomeView({
 
   return (
     <div className={STUDIO_PAGE}>
+      <div className="grid min-w-0 gap-4">
       <HomeHero
         actions={empty ? undefined : (
           <Hint disabledReason={writeBlocked?.reason}>
@@ -265,6 +266,7 @@ export function HomeView({
             </SelectContent>
           </Select>
         </div>
+      </div>
       </div>
 
       {/* 「还没有项目」只在真取回来一个空列表时说:后端瞬断、升级重启时取不回来,此前也是这一句 + 「新建一个项目」,

@@ -53,6 +53,8 @@ import {
   startNodeInstall,
   trashWorkflow,
   trashWorkflowFolder,
+  type BundledWorkflow,
+  type BundledWorkflowInstallResult,
   type BundledWorkflows,
   type Job,
   type PluginInstance,
@@ -69,18 +71,15 @@ import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Highlight } from "@/components/app/Highlight";
 import {
-  LIBRARY_DENSITIES,
   LIBRARY_DENSITY_ICONS,
   LIBRARY_DENSITY_LABELS,
   LIBRARY_NARROW_QUERY,
-  LIBRARY_TABLE_HEAD,
   LibraryDensitySwitch,
   LibraryDetail,
   LibraryDialog,
   LibraryFilterChips,
   LibrarySection,
   type LibraryChip,
-  type LibraryDensity,
   type LibraryNavItem,
 } from "@/components/app/LibraryBrowser";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
@@ -180,10 +179,9 @@ import { cn } from "@/lib/utils";
  * 工具条上的「新建」在 ComfyUI 自己的画布上开一张新的(桌面版在工作台里,网页版开新标签页,见 workflowEditor;存盘是 ComfyUI
  * 自己的,回来时刷新,新存的那张就出现在列表里);「导入」(或者往库上拖一个文件)导入别处的工作流,见 WorkflowImport。
  *
- * **文件夹**(见 WorkflowFolders):左栏顶上「新建文件夹」;文件夹上右键(或 ⋯、Shift+F10)新建子文件夹、改名、删除(只删空的);
+ * **文件夹**(见 WorkflowFolders):左栏顶上「新建文件夹」;文件夹上右键 / Shift+F10 新建子文件夹、改名、删除(只删空的);
  * 卡片拖到左边的文件夹上就是「移动到…」那个文件夹(先确认)。有子文件夹的分组前面一颗三角能展开 / 收拢(默认展开,
- * 状态只活在这次打开里);名字长了在那一格里截断、悬停看全文,不把左列撑出横向滚动。**右键菜单**:卡片和列表的一行上右键、
- * 悬停 / 聚焦时出现的 ⋯、Shift+F10 / 菜单键都打开同一份菜单 —— 打开详情、在工作台里打开(网页版是在 ComfyUI 里打开)、
+ * 状态只活在这次打开里);名字长了在那一格里截断、悬停看全文,不把左列撑出横向滚动。**右键菜单**:卡片上右键、悬停 / 聚焦时右上角出现的 ⋯、Shift+F10 / 菜单键都打开同一份菜单 —— 打开详情、在工作台里打开(网页版是在 ComfyUI 里打开)、
  * 编辑应用表单、复制 / 改名 / 移动 / 导出、复制路径、
  * 去补缺的模型 / 节点、删除;点不了的写着为什么。
  *
@@ -223,7 +221,7 @@ type WorkflowNavItem = LibraryNavItem & {
  * **第二行是“做什么”**(新建、安装官方工作流范例、导入、刷新)。动作排到第二行之后,搜索和动作
  * 不再互相争宽度,一行里的控件也不会被挤成不同高度。
  */
-const TOOLBAR = "flex min-w-0 flex-1 flex-col gap-3 pb-2 @container/workflow-toolbar";
+const TOOLBAR = "flex min-w-0 flex-1 flex-col gap-3 @container/workflow-toolbar";
 const TOOLBAR_ROW = "flex min-w-0 items-center gap-2";
 const TOOLBAR_ACTIONS = "flex min-w-0 flex-wrap items-center justify-end gap-2";
 
@@ -243,6 +241,75 @@ const TOOLBAR_FOLD = {
    */
   narrow: "hidden @max-[880px]/workflow-toolbar:inline-flex",
 } as const;
+
+/** 工作流库只保留两种卡片:大卡片、小卡片。列表视图已删除。 */
+const WORKFLOW_DENSITIES = ["large", "small"] as const;
+type WorkflowDensity = (typeof WORKFLOW_DENSITIES)[number];
+
+/**
+ * 官方范例的一张卡片。**每张卡自己的安装请求**:一张在装,别的仍能点 —— 四张是两个配套的工作流
+ * (第一段 / 续写),不该因为其中一张在写就把另一张也锁住。
+ *
+ * 已安装的卡片保留那颗按钮,改成禁用的「已安装」;不要用消失来表达状态,否则卡片会突然少一块。
+ */
+function BundledWorkflowCard({
+  instanceId,
+  folder,
+  flow,
+  onInstalled,
+}: {
+  instanceId: string;
+  folder: string;
+  flow: BundledWorkflow;
+  onInstalled: (result: BundledWorkflowInstallResult) => void;
+}) {
+  const t = useI18n();
+  const install = useMutation({
+    mutationFn: () => installBundledWorkflows(instanceId, [flow.file], folder),
+    onSuccess: onInstalled,
+    onError: (error: Error) => toast.error(errorText(error)),
+  });
+  return (
+    <article className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-panel-subtle p-3.5">
+      <h3 className="m-0 min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</h3>
+      {flow.description && (
+        <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
+          <InlineMarkdown text={flow.description} links={false} />
+        </p>
+      )}
+      <code className="text-ui-xs text-muted-foreground">{flow.path}</code>
+      {flow.missing_nodes.length > 0 && (
+        <div className="text-ui-xs text-destructive">
+          {t("workflowBundleMissingNodes").replace("{n}", String(flow.missing_nodes.length))}:
+          {" "}{flow.missing_nodes.map((one) => one.type).join(t("listSeparator"))}
+        </div>
+      )}
+      {flow.missing_models.length > 0 && (
+        <div className="text-ui-xs text-destructive">
+          {t("workflowBundleMissingModels").replace("{n}", String(flow.missing_models.length))}:
+          {" "}{flow.missing_models.map((one) => one.name).join(t("listSeparator"))}
+        </div>
+      )}
+      {flow.problem && <div className="text-ui-xs text-muted-foreground">{flow.problem}</div>}
+      <div className="mt-auto flex justify-end pt-1">
+        <Button
+          size="sm"
+          variant={flow.installed ? "outline" : "default"}
+          disabled={flow.installed}
+          loading={install.isPending}
+          aria-label={
+            flow.installed
+              ? `「${flow.name}」${t("workflowBundleInstalled")}`
+              : t("workflowBundleInstallOneNamed").replace("{name}", flow.name)
+          }
+          onClick={() => install.mutate()}
+        >
+          {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
+        </Button>
+      </div>
+    </article>
+  );
+}
 
 /** 三种排序的名字:那颗下拉和它收进「视图」菜单时的条目用同一份。 */
 const SORT_LABELS = {
@@ -292,7 +359,7 @@ export function WorkflowLibraryDialog({
   const [model, setModel] = React.useState<string>(ALL_MODELS);
   const [sort, setSort] = React.useState<WorkflowSort>("name");
   //: 显示方式记在本机,和模型库各记各的
-  const [density, setDensity] = usePersistentTab<LibraryDensity>("workflow-library.density", "small", LIBRARY_DENSITIES);
+  const [density, setDensity] = usePersistentTab<WorkflowDensity>("workflow-library.density", "small", WORKFLOW_DENSITIES);
   const [detailKey, setDetailKey] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (focus) setDetailKey(focus.path);
@@ -355,16 +422,12 @@ export function WorkflowLibraryDialog({
       toast.error(errorText(error));
     },
   });
-  const installBundled = useMutation({
-    mutationFn: (file: string) => installBundledWorkflows(instance.id, [file], bundled?.folder),
-    onSuccess: (result) => {
-      //: 留在弹窗里:这一张装完,缺的节点 / 模型状态跟着刷新。
-      setBundled((now) => now && { ...now, workflows: result.workflows });
-      void qc.invalidateQueries({ queryKey: libraryKey });
-      toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
-    },
-    onError: (error: Error) => toast.error(errorText(error)),
-  });
+  //: 一张卡片装完:把最新的整份状态放回去(其余卡片的缺项也一起刷新),再让工作流库重问。
+  const bundleInstalled = (result: BundledWorkflowInstallResult) => {
+    setBundled((now) => now && { ...now, workflows: result.workflows });
+    void qc.invalidateQueries({ queryKey: libraryKey });
+    toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
+  };
   //: 改完一张:工作流库那份列表重新问一遍(跟着连接走的那一份,含表单、能填什么);生成选项、工具清单里的那张也跟着变
   //: (宿主已经让这个连接的目录重拉过)。这里改了工作流(存了精简表单、导入、改名、复制、恢复):模型下拉里它叫什么、
   //: 能填什么都跟着变。那份目录是后端按这个连接存着的,只让界面重问拿到的还是旧的 —— 画板里搜不到刚起的表单标题。
@@ -493,6 +556,7 @@ export function WorkflowLibraryDialog({
            onRemove: () => setModel(ALL_MODELS) }]
       : []),
   ];
+  const upgradeCount = upgradableWorkflows(workflows).length;
 
   const importButton = (
     <IconButton
@@ -648,7 +712,6 @@ export function WorkflowLibraryDialog({
       );
     }
     const actions = folderActions(folder);
-    const label = t("workflowFolderActions").replace("{name}", folder);
     return (
       <ContextMenu>
         <div
@@ -659,18 +722,6 @@ export function WorkflowLibraryDialog({
         >
           {expander}
           <ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>{row}</ContextMenuTrigger>
-          {/* 悬停 / 聚焦时出现的 ⋯(盖住数量):只有选中的那一项进 Tab 顺序,别的用右键或 Shift+F10 */}
-          <span className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded-md bg-secondary opacity-0 transition-opacity focus-within:opacity-100 group-hover/folder:opacity-100 has-[[data-state=open]]:opacity-100">
-            <ActionMenu
-              label={label}
-              actions={actions}
-              trigger={
-                <IconButton variant="ghost" size="icon-xs" label={label} aria-haspopup="menu" tabIndex={item.value === current ? 0 : -1}>
-                  <MoreHorizontal />
-                </IconButton>
-              }
-            />
-          </span>
         </div>
         <ContextMenuContent>
           <ActionContextMenuItems actions={actions} />
@@ -829,7 +880,11 @@ export function WorkflowLibraryDialog({
             options={WORKFLOW_SORTS.map((one) => ({ value: one, label: t(SORT_LABELS[one]) }))}
           />
           <span className={cn("flex items-center", TOOLBAR_FOLD.wide)}>
-            <LibraryDensitySwitch value={density} onChange={setDensity} />
+            <LibraryDensitySwitch
+              value={density}
+              onChange={(next) => setDensity(next === "list" ? "small" : next)}
+              densities={WORKFLOW_DENSITIES}
+            />
           </span>
             <WorkflowViewMenu className={TOOLBAR_FOLD.narrow} sort={sort} onSort={setSort} density={density} onDensity={setDensity} />
           </div>
@@ -874,18 +929,6 @@ export function WorkflowLibraryDialog({
       label: t("workflowActions").replace("{name}", flow.label),
       actions: cardActions(flow, openItem),
     });
-    if (density === "list") {
-      return (
-        <WorkflowTable
-          label={listLabel}
-          workflows={shown}
-          menuOf={menuOf}
-          query={query}
-          onDragEnd={() => setDropTarget(null)}
-          onOpen={(flow) => openItem(keyOf(flow))}
-        />
-      );
-    }
     return (
       <ul
         role="list"
@@ -942,10 +985,10 @@ export function WorkflowLibraryDialog({
           : undefined
       }
       chips={
-        library.data ? (
+        library.data && (upgradeCount > 0 || listNote || chips.length > 0) ? (
           <>
-            {upgradableWorkflows(workflows).length > 0 && (
-              <FormsUpgradeBanner count={upgradableWorkflows(workflows).length} onOpen={() => setUpgrading(true)} />
+            {upgradeCount > 0 && (
+              <FormsUpgradeBanner count={upgradeCount} onOpen={() => setUpgrading(true)} />
             )}
             {listNote}
             <LibraryFilterChips
@@ -1002,20 +1045,6 @@ export function WorkflowLibraryDialog({
                 setBundled(null);
               }}
               title={bundled?.title || t("workflowBundleInstall")}
-              footer={
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setBundleOpen(false);
-                      setBundled(null);
-                    }}
-                  >
-                    {t("close")}
-                  </Button>
-                </>
-              }
             >
               {!bundled ? (
                 <div className="grid gap-3" aria-busy="true">
@@ -1043,66 +1072,19 @@ export function WorkflowLibraryDialog({
                     {t("workflowBundleBody").replace("{server}", instance.name).replace("{folder}", bundled.folder)}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {bundled.workflows.map((flow) => {
-                      const installing = installBundled.isPending && installBundled.variables === flow.file;
-                      return (
-                        <article
-                          key={flow.path}
-                          className={cn(
-                            "flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-panel-subtle p-3.5",
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="m-0 min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</h3>
-                            <span
-                              className={cn(
-                                "shrink-0 text-ui-xs",
-                                flow.installed ? "text-success" : "text-muted-foreground",
-                              )}
-                            >
-                              {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleMissingWorkflow")}
-                            </span>
-                          </div>
-                          {flow.description && (
-                            <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
-                              <InlineMarkdown text={flow.description} links={false} />
-                            </p>
-                          )}
-                          <code className="text-ui-xs text-muted-foreground">{flow.path}</code>
-                          {flow.missing_nodes.length > 0 && (
-                            <div className="text-ui-xs text-destructive">
-                              {t("workflowBundleMissingNodes").replace("{n}", String(flow.missing_nodes.length))}:
-                              {" "}{flow.missing_nodes.map((one) => one.type).join(t("listSeparator"))}
-                            </div>
-                          )}
-                          {flow.missing_models.length > 0 && (
-                            <div className="text-ui-xs text-destructive">
-                              {t("workflowBundleMissingModels").replace("{n}", String(flow.missing_models.length))}:
-                              {" "}{flow.missing_models.map((one) => one.name).join(t("listSeparator"))}
-                            </div>
-                          )}
-                          {flow.problem && <div className="text-ui-xs text-muted-foreground">{flow.problem}</div>}
-                          {!flow.installed && (
-                            <div className="mt-auto flex justify-end pt-1">
-                              <Button
-                                size="sm"
-                                loading={installing}
-                                disabled={installBundled.isPending}
-                                aria-label={t("workflowBundleInstallOneNamed").replace("{name}", flow.name)}
-                                onClick={() => installBundled.mutate(flow.file)}
-                              >
-                                {t("workflowBundleInstallOne")}
-                              </Button>
-                            </div>
-                          )}
-                        </article>
-                      );
-                    })}
+                    {bundled.workflows.map((flow) => (
+                      <BundledWorkflowCard
+                        key={flow.path}
+                        instanceId={instance.id}
+                        folder={bundled.folder}
+                        flow={flow}
+                        onInstalled={bundleInstalled}
+                      />
+                    ))}
                   </div>
                   {bundled.workflows.every((one) => one.installed) && (
                     <p className="m-0 text-ui-xs text-success">{t("workflowBundleAllInstalled")}</p>
                   )}
-                  <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowBundleAfter")}</p>
                 </div>
                 )}
             </ModalShell>
@@ -1316,8 +1298,8 @@ export function WorkflowLibraryDialog({
 function WorkflowViewMenu({ sort, onSort, density, onDensity, className }: {
   sort: WorkflowSort;
   onSort: (next: WorkflowSort) => void;
-  density: LibraryDensity;
-  onDensity: (next: LibraryDensity) => void;
+  density: WorkflowDensity;
+  onDensity: (next: WorkflowDensity) => void;
   className?: string;
 }) {
   const t = useI18n();
@@ -1351,7 +1333,7 @@ function WorkflowViewMenu({ sort, onSort, density, onDensity, className }: {
         ))}
         <MenuSeparator />
         <MenuLabel>{t("libraryDensity")}</MenuLabel>
-        {LIBRARY_DENSITIES.map((one) => (
+        {WORKFLOW_DENSITIES.map((one) => (
           <MenuItem
             key={one}
             role="menuitemradio"
@@ -1486,6 +1468,7 @@ function WorkflowCard({ flow, large, menu, query, onOpen, onDragEnd }: {
   onDragEnd: () => void;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const used = flow.used_by?.length ?? 0;
   return (
     <ContextMenu>
@@ -1530,6 +1513,15 @@ function WorkflowCard({ flow, large, menu, query, onOpen, onDragEnd }: {
             {t("workflowLibraryNodes").replace("{n}", String(flow.node_count))}
           </span>
         </div>
+        {flow.modified != null && (
+          <div
+            className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground"
+            aria-label={`${t("modelModified")} ${new Date(flow.modified * 1000).toLocaleDateString(locale)}`}
+          >
+            <span className="shrink-0">{t("modelModified")}</span>
+            <span className="tabular-nums">{new Date(flow.modified * 1000).toLocaleDateString(locale)}</span>
+          </div>
+        )}
         <LackBadges flow={flow} />
         {large && (flow.last_output || used > 0) && (
           <div className="flex min-w-0 items-center justify-between gap-2 text-ui-xs text-muted-foreground">
@@ -1558,129 +1550,6 @@ function WorkflowCard({ flow, large, menu, query, onOpen, onDragEnd }: {
 }
 
 /**
- * 列表:一行一张,扫一大批工作流时比卡片快。名字是行里那颗按钮;整行也点得开。一行和一张卡片同一份菜单(右键、行尾悬停出现
- * 的 ⋯、Shift+F10),也能拖到左边的文件夹上。
- *
- * 维护者:「这个弹窗列表模式下似乎UI有点问题」——
- * - 表头钉在顶上、**不透明**(LIBRARY_TABLE_HEAD):滚上去的那一行不再透过表头;
- * - **每行一样高**(WORKFLOW_ROW_HEIGHT):缺东西的只摆一枚「缺 4 种节点 · 3 个模型」,缺的是哪几样在悬停里;此前两枚叠成两行,
- *   那几行高出一截;
- * - 种类一律灰字:此前转不过来的那几行是橙色,和「缺什么」那一列说的是同一件事。转不过来、又不是缺东西的(别的原因),
- *   「缺什么」那一列摆一枚「转不过来」,原因在悬停里;
- * - 全在根目录时不摆「目录」那一列(一整列空着);窄的时候先收掉「目录」「节点」「改动时间」,名字那一列留着。
- */
-function WorkflowTable({ label, workflows, menuOf, query, onOpen, onDragEnd }: {
-  label: string;
-  workflows: WorkflowFile[];
-  menuOf: (flow: WorkflowFile) => CardMenu;
-  query: string;
-  onOpen: (flow: WorkflowFile) => void;
-  onDragEnd: () => void;
-}) {
-  const t = useI18n();
-  const { locale } = usePreferences();
-  const head = LIBRARY_TABLE_HEAD;
-  const cell = cn("border-b border-divider px-2 py-1.5 align-middle", WORKFLOW_ROW_HEIGHT);
-  //: 全在根目录:没有可看的目录,这一列不摆
-  const folders = workflows.some((flow) => flow.folder);
-  //: 窄的时候先收掉的几列(名字、种类、缺什么、在用留着)
-  const wide = "max-lg:hidden";
-  return (
-    <table aria-label={label} className="w-full min-w-[560px] table-fixed border-separate border-spacing-0 text-ui-sm">
-      <thead>
-        <tr>
-          <th scope="col" className={cn(head, "w-[76px]")}>
-            <span className="sr-only">{t("workflowLibraryColPreview")}</span>
-          </th>
-          <th scope="col" className={head}>{t("workflowLibraryColName")}</th>
-          {folders && <th scope="col" data-col="folder" className={cn(head, "w-[120px]", wide)}>{t("workflowLibraryColFolder")}</th>}
-          <th scope="col" className={cn(head, "w-[80px]")}>{t("workflowLibraryKind")}</th>
-          <th scope="col" className={cn(head, "w-[64px] text-right", wide)}>{t("workflowLibraryColNodes")}</th>
-          <th scope="col" className={cn(head, "w-[108px]", wide)}>{t("modelModified")}</th>
-          <th scope="col" className={cn(head, "w-[176px]")}>{t("workflowLibraryColMissing")}</th>
-          <th scope="col" className={cn(head, "w-[56px] text-right")}>{t("modelLibraryColUsed")}</th>
-          <th scope="col" className={cn(head, "w-[44px]")}>
-            <span className="sr-only">{t("workflowLibraryColActions")}</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {workflows.map((flow) => {
-          const used = flow.used_by?.length ?? 0;
-          const menu = menuOf(flow);
-          return (
-            <ContextMenu key={keyOf(flow)}>
-              <ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
-            <tr
-              data-library-item={keyOf(flow)}
-              draggable
-              onDragStart={(event) => dragWorkflow(event, keyOf(flow))}
-              onDragEnd={onDragEnd}
-              onClick={() => onOpen(flow)}
-              className="group cursor-pointer transition-colors hover:bg-panel-subtle has-[[data-library-open]:focus-visible]:bg-panel-subtle data-[state=open]:bg-panel-subtle"
-            >
-              <td className={cell}>
-                <WorkflowGraphView graph={flow.graph} label={t("workflowGraphLabel").replace("{name}", flow.label)}
-                                   className="h-10 w-[60px] rounded-md" />
-              </td>
-              <td className={cell}>
-                <button
-                  type="button"
-                  data-library-open
-                  className="block max-w-full cursor-pointer rounded-sm text-left font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpen(flow);
-                  }}
-                >
-                  <Truncate text={flow.label} hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>
-                    <Highlight text={flow.label} query={query} />
-                  </Truncate>
-                </button>
-                <FormTitleLine flow={flow} query={query} />
-                {/* 卡片上那枚「标记是旧格式」列表里写在名字下面那一行(和「表单:…」同一处,行高不变):不然这一档里看不出哪几张要升级 */}
-                {flow.app?.upgradable && (
-                  <span data-workflow-old-marks="" className="block min-w-0 text-ui-2xs text-warning">
-                    <Truncate>{t("workflowFormsOldBadge")}</Truncate>
-                  </span>
-                )}
-              </td>
-              {folders && (
-                <td className={cn(cell, "text-ui-xs text-muted-foreground", wide)}>
-                  <Truncate>{flow.folder}</Truncate>
-                </td>
-              )}
-              <td data-col="kind" className={cn(cell, "text-ui-xs text-muted-foreground")}>{kindName(t, flow.kind)}</td>
-              <td className={cn(cell, "text-right text-ui-xs tabular-nums text-muted-foreground", wide)}>{flow.node_count}</td>
-              <td className={cn(cell, "text-ui-xs tabular-nums text-muted-foreground", wide)}>
-                {flow.modified != null ? new Date(flow.modified * 1000).toLocaleDateString(locale) : ""}
-              </td>
-              <td className={cell}>
-                <LackChip flow={flow} />
-              </td>
-              <td className={cn(cell, "text-right text-ui-xs tabular-nums", used > 0 ? "text-success" : "text-muted-foreground")}>
-                {used > 0 ? used : ""}
-              </td>
-              <td className={cn(cell, "text-right")}>
-                <CardMenuButton menu={menu} />
-              </td>
-            </tr>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ActionContextMenuItems actions={menu.actions} />
-              </ContextMenuContent>
-            </ContextMenu>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-/** 列表的一行多高:预览(40px)上下各留 6px。缺东西、名字长短都不改它。 */
-const WORKFLOW_ROW_HEIGHT = "h-[53px]";
-
-/**
  * 详情左栏那张节点图的盒子:**吃满左栏的宽**,高由图自己的比例给(见 WorkflowGraphView 的 `hug`)。
  *
  * 高度两道上限,都是防"撑破"的:`640px` 和模型库详情那张预览同一个数(这一栏最宽也就 536−48,正常比例够不着它);
@@ -1690,35 +1559,6 @@ const WORKFLOW_ROW_HEIGHT = "h-[53px]";
  */
 const WORKFLOW_GRAPH_FRAME =
   "max-h-[min(640px,calc(100dvh-230px))] w-full rounded-xl [[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
-
-/**
- * 列表「缺什么」那一格:**只摆一枚**(「缺 4 种节点 · 3 个模型」「缺 2 种节点」),缺的是哪几样在悬停里 —— 两枚叠成两行
- * 会把那一行撑高。不缺东西、却转不过来的(别的原因)摆一枚「转不过来」,原因在悬停里。
- */
-function LackChip({ flow }: { flow: WorkflowFile }) {
-  const t = useI18n();
-  const nodes = flow.missing_nodes ?? [];
-  const models = flow.missing_models ?? [];
-  const text =
-    nodes.length && models.length
-      ? t("workflowLibraryMissingBoth").replace("{nodes}", String(nodes.length)).replace("{models}", String(models.length))
-      : nodes.length
-        ? t("workflowLibraryMissingNodes").replace("{n}", String(nodes.length))
-        : models.length
-          ? t("workflowLibraryMissingModels").replace("{n}", String(models.length))
-          : "";
-  const detail = [...nodes.map((one) => one.type), ...models.map((one) => one.name)].join(" · ");
-  if (!text && !flow.problem) return null;
-  return (
-    <Hint label={text || t("workflowLibraryBroken")} hint={(text ? detail : flow.problem) || undefined}>
-      <span data-lack-chip="" tabIndex={-1} className="inline-flex max-w-full">
-        <CatalogBadge tone="warning" icon={text ? <CircleAlert /> : <TriangleAlert />}>
-          <Truncate>{text || t("workflowLibraryBroken")}</Truncate>
-        </CatalogBadge>
-      </span>
-    </Hint>
-  );
-}
 
 /** 打开一张 /「新建」之后留下的那句话:没打开成那一张、开了新标签页要自己点开、这版前端不能新建、或者出了错。 */
 function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () => void }) {

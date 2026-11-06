@@ -105,7 +105,7 @@ export function HomeHero({
     <header data-slot="page-heading" className="relative flex flex-wrap items-center justify-between gap-x-8 gap-y-5">
       {holiday ? <HolidayParticles holiday={holiday} /> : <IdleDecor />}
 
-      <div className="relative flex min-w-0 flex-col justify-center gap-0.5">
+      <div className="relative flex min-w-0 flex-col justify-center">
         <h2 className="m-0 flex flex-wrap items-baseline gap-x-2 text-ui-title font-semibold leading-tight tracking-tight">
           {greeting}
           {holiday && HolidayIcon && (
@@ -118,7 +118,7 @@ export function HomeHero({
             </span>
           )}
         </h2>
-        <small className="mt-2 text-ui-xs tabular-nums text-muted-foreground">
+        <small className="mt-2 text-ui-sm leading-relaxed tabular-nums text-muted-foreground">
           {now.toLocaleDateString(dateLocale, { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
           {"  "}
           {now.toLocaleTimeString(dateLocale, { hour12: false })}

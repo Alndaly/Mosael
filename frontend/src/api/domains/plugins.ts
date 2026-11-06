@@ -278,6 +278,12 @@ export type BundledWorkflows = {
   folder: string;
   workflows: BundledWorkflow[];
 };
+export type BundledWorkflowInstallResult = {
+  folder: string;
+  installed: string[];
+  skipped: string[];
+  workflows: BundledWorkflow[];
+};
 
 /** 只读检查;不会改那台 ComfyUI。 */
 export const getBundledWorkflows = (instanceId: string) =>
@@ -285,7 +291,7 @@ export const getBundledWorkflows = (instanceId: string) =>
 
 /** 把选中的工作流范例写进那台 ComfyUI 的 workflows/(只新建、不覆盖)。 */
 export const installBundledWorkflows = (instanceId: string, files: string[], folder = "") =>
-  api<{ folder: string; installed: string[]; skipped: string[]; workflows: BundledWorkflow[] }>(
+  api<BundledWorkflowInstallResult>(
     `/api/plugins/instances/${instanceId}/workflow-library/bundled/install`,
     { method: "POST", body: JSON.stringify({ files, ...(folder ? { folder } : {}) }) },
   );

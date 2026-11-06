@@ -4,7 +4,7 @@ import { ActionMenu } from "@/components/app/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
 import { BOARD_ITEM_EVENT, OPEN_BOARD_EVENT, parseBoardItem, useHashOpenRequest, useOpenRequest } from "@/lib/deepLink";
-import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CARD_GRID, PageHeading, STUDIO_LIST_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Bot, Check, CheckSquare, Copy, FileOutput, Import, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
@@ -303,7 +303,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 会让空状态的视觉中心下移，也让同一动作出现两遍；工作流空页已经给出了统一模式。
   if (boards.isSuccess && list.length === 0) {
     return (
-      <div className={STUDIO_PAGE}>
+      <div className={STUDIO_LIST_PAGE}>
         <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} />
         <EmptyState
           icon={<LayoutGrid size={22} />}
@@ -338,7 +338,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 容器、内边距、卡片栅格都跟着工作流列表页走 —— 同一层级的两个页面长得不一样,
   // 用户会以为自己切到了别的应用里。
   return (
-    <div className={STUDIO_PAGE}>
+    <div className={STUDIO_LIST_PAGE}>
       <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} count={boards.data?.length} actions={
         // 与工作流列表页同一条标题栏:平时是「选择」+「新建」,进了选择模式换成批量动作。
         <span className="flex flex-wrap items-center gap-2">

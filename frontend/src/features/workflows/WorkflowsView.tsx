@@ -24,7 +24,7 @@ import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
-import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CARD_GRID, PageHeading, STUDIO_LIST_PAGE } from "@/components/layout/StudioPage";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { Hint } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -311,7 +311,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
-      <div className={STUDIO_PAGE}>
+      <div className={STUDIO_LIST_PAGE}>
         <PageHeading title={t("navWorkflows")} description={t("studioWorkflowsDesc")} />
         <EmptyState
           icon={<WorkflowIcon size={22} />}
@@ -398,7 +398,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // ── 列表页:卡片 grid。卡面上给的是**判断"是不是这一条"所需的**:名字、说明、
   //     多少个节点、上次改动是什么时候。
   return (
-    <div className={STUDIO_PAGE}>
+    <div className={STUDIO_LIST_PAGE}>
       <PageHeading title={t("navWorkflows")} description={t("studioWorkflowsDesc")} count={workflows.data?.length} actions={
         <span className="flex flex-wrap items-center gap-2">
           {selectMode ? (

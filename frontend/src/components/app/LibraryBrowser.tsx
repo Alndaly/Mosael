@@ -239,13 +239,14 @@ export function LibraryDialog({
             aria-labelledby={showColumn ? labelledBy : undefined}
             className="flex min-h-0 min-w-0 flex-col"
           >
-            {/* 工具条是一个容器:按钮上的字收不收看它自己有多宽(见 LibraryToolbarLabel)。 */}
-            <div data-library-toolbar="" className="@container/library-toolbar flex shrink-0 flex-wrap items-center gap-2 px-6 pb-3 pt-1">
+            {/* 工具条是一个容器:按钮上的字收不收看它自己有多宽(见 LibraryToolbarLabel)。
+                正文自己带 `pt-1`;这里留 `pb-2`,两层加起来 12px —— 和工具条内部两行之间的间距同一档。 */}
+            <div data-library-toolbar="" className="@container/library-toolbar flex shrink-0 flex-wrap items-center gap-2 px-6 pb-2 pt-1">
               {navPicker}
               {narrow && nav?.action}
               {toolbar}
             </div>
-            {chips && <div className="shrink-0 px-6 pb-3">{chips}</div>}
+            {chips && <div className="shrink-0 px-6 pb-2">{chips}</div>}
             <div
               ref={scrollerRef}
               data-library-content=""
@@ -526,12 +527,16 @@ export const LIBRARY_DENSITY_ICONS: Record<LibraryDensity, React.ReactNode> = {
   list: <List />,
 };
 
-/** 三档显示方式:一组单选的图标按钮。选了哪一档由调用方记(各个库各记各的,见 usePersistentTab)。 */
-export function LibraryDensitySwitch({ value, onChange }: { value: LibraryDensity; onChange: (value: LibraryDensity) => void }) {
+/** 显示方式:一组单选的图标按钮。选了哪一档由调用方记(各个库各记各的,见 usePersistentTab);调用方可以只给其中几档。 */
+export function LibraryDensitySwitch({ value, onChange, densities = LIBRARY_DENSITIES }: {
+  value: LibraryDensity;
+  onChange: (value: LibraryDensity) => void;
+  densities?: readonly LibraryDensity[];
+}) {
   const t = useI18n();
   return (
     <div role="radiogroup" aria-label={t("libraryDensity")} className="flex h-10 shrink-0 items-center gap-0.5 rounded-md border border-border p-1">
-      {LIBRARY_DENSITIES.map((one) => (
+      {densities.map((one) => (
         <IconButton
           key={one}
           role="radio"

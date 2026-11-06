@@ -1,6 +1,6 @@
 import { LoadingState } from "@/components/layout/LoadingState";
 import React from "react";
-import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
+import { CollectionTabs, PageHeading, STUDIO_LIST_PAGE } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCircle2, CircleAlert, ExternalLink, ListChecks, Loader2, Plus, Rocket, Sparkles, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
@@ -325,7 +325,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className={STUDIO_PAGE}>
+      <div className={STUDIO_LIST_PAGE}>
         <PageHeading title={t("navPublish")} description={t("studioPublishDesc")} />
         <EmptyState
           icon={<Rocket size={22} />}
@@ -352,7 +352,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className={STUDIO_PAGE}>
+    <div className={STUDIO_LIST_PAGE}>
       <div className="flex h-full min-h-0 flex-col gap-7">
       {seg}
       {executorOffline && (
