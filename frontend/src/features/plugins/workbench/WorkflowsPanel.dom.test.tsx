@@ -6,8 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowsPanel } from "./WorkflowsPanel";
 
 const getWorkflowLibrary = vi.hoisted(() => vi.fn());
+const getBundledWorkflows = vi.hoisted(() => vi.fn());
+const installBundledWorkflows = vi.hoisted(() => vi.fn());
 const openWorkflow = vi.hoisted(() => vi.fn());
-vi.mock("@/api/client", () => ({ getWorkflowLibrary: (...args: unknown[]) => getWorkflowLibrary(...args) }));
+vi.mock("@/api/client", () => ({
+  getWorkflowLibrary: (...args: unknown[]) => getWorkflowLibrary(...args),
+  getBundledWorkflows: (...args: unknown[]) => getBundledWorkflows(...args),
+  installBundledWorkflows: (...args: unknown[]) => installBundledWorkflows(...args),
+}));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("./workbenchSession", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./workbenchSession")>()),
@@ -31,7 +37,22 @@ describe("工作流面板", () => {
   afterEach(() => {
     cleanup();
     getWorkflowLibrary.mockReset();
+    getBundledWorkflows.mockReset();
+    installBundledWorkflows.mockReset();
     openWorkflow.mockReset().mockResolvedValue({ ok: true });
+  });
+
+  it("官方范例:每张单独安装,只发这一张的文件名", async () => {
+    getWorkflowLibrary.mockResolvedValue({ workflows: [], others: [], folders: [], trash: [], manager: { version: "" }, editor: null });
+    getBundledWorkflows.mockResolvedValue({
+      id: "official", title: "官方工作流范例", folder: "mosael/examples", description: "",
+      workflows: [{ path: "mosael/examples/h3.json", file: "h3.json", name: "H3", description: "长片", category: "video",
+        installed: false, missing_nodes: [], missing_models: [], problem: "" }],
+    });
+    installBundledWorkflows.mockResolvedValue({ folder: "mosael/examples", installed: ["mosael/examples/h3.json"], skipped: [], workflows: [] });
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "workflowBundleInstallOne" }));
+    await waitFor(() => expect(installBundledWorkflows).toHaveBeenCalledWith("i1", ["h3.json"], "mosael/examples"));
   });
 
   it("列出当前连接的工作流,点开一张时用同一个工作台打开;新建走 fresh", async () => {

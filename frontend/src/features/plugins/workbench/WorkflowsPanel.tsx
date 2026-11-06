@@ -1,9 +1,9 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, RefreshCw, SearchX, Workflow } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PackagePlus, Plus, RefreshCw, SearchX, Workflow } from "lucide-react";
 import { toast } from "sonner";
 
-import { getWorkflowLibrary, type WorkflowFile } from "@/api/client";
+import { getBundledWorkflows, getWorkflowLibrary, installBundledWorkflows, type BundledWorkflow, type WorkflowFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -26,6 +26,26 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
     queryFn: () => getWorkflowLibrary(target.instanceId, target.workspaceId),
     retry: false,
   });
+  const bundled = useQuery({
+    queryKey: ["workflows-bundled", target.instanceId],
+    queryFn: () => getBundledWorkflows(target.instanceId),
+    retry: false,
+  });
+  const qc = useQueryClient();
+  const [installing, setInstalling] = React.useState("");
+  const install = async (flow: BundledWorkflow) => {
+    setInstalling(flow.file);
+    try {
+      const result = await installBundledWorkflows(target.instanceId, [flow.file], bundled.data?.folder);
+      await bundled.refetch();
+      await qc.invalidateQueries({ queryKey: ["workflows-panel", target.instanceId, target.workspaceId] });
+      toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
+    } catch (error) {
+      toast.error(errorText(error));
+    } finally {
+      setInstalling("");
+    }
+  };
   const rows = (library.data?.workflows ?? []).filter((flow) => {
     const text = `${flow.label} ${flow.path}`.toLowerCase();
     return text.includes(query.trim().toLowerCase());
@@ -91,6 +111,32 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
             );
           })}
         </ul>
+      )}
+      {bundled.data && bundled.data.workflows.length > 0 && (
+        <section className="grid gap-2 border-t border-divider pt-3" data-bundled-workflows="">
+          <h4 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">
+            <PackagePlus size={14} /> {bundled.data.title || t("workflowBundleInstall")}
+          </h4>
+          <ul role="list" aria-label={bundled.data.title} className="m-0 grid list-none gap-1 p-0">
+            {bundled.data.workflows.map((flow) => (
+              <li key={flow.file} className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-subtle px-3 py-2">
+                <div className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="min-w-0 truncate text-ui-sm font-medium text-foreground">{flow.name}</span>
+                  <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{flow.description}</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant={flow.installed ? "outline" : "default"}
+                  disabled={flow.installed || installing !== ""}
+                  loading={installing === flow.file}
+                  onClick={() => void install(flow)}
+                >
+                  {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
