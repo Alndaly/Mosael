@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "任意时长的数字人",
   "description": "一张人物照片加一篇稿子：配成音频，切成一段段，人物接着上一段的尾巴往下说，接成一条不切镜头的长片。要有肖像和声音的授权。",
-  "graph_hash": "426b6540a6a99bebd1cce08349d37bdf7d1b1262ee4ac4c898daefb63daef6dd",
+  "graph_hash": "3b34b0808091f7199cd55c018c32e3909deac982ca22676c0e58c73e4b3ddddf",
   "graph": {
     "meta": {
       "template_id": "long_talk_video",
@@ -28,7 +28,7 @@
             "scene": "",
             "consent": "",
             "segment_seconds": 10.125,
-            "overlap_seconds": 1.625
+            "overlap_seconds": 1.6666666666666667
           },
           "required_params": [
             "script",
