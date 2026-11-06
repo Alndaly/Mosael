@@ -22,6 +22,12 @@ function renderPanel() {
 }
 
 describe("工作流面板", () => {
+  it("清单还在读时,加载占位吃满右栏剩余高度", () => {
+    getWorkflowLibrary.mockReturnValue(new Promise(() => undefined));
+    renderPanel();
+    expect(screen.getByRole("status").className).toContain("flex-1");
+  });
+
   afterEach(() => {
     cleanup();
     getWorkflowLibrary.mockReset();

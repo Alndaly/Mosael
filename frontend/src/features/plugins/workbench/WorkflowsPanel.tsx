@@ -51,7 +51,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
   };
 
   return (
-    <div className="grid min-w-0 gap-3" data-workflows-panel="">
+    <div className="flex min-h-0 flex-1 flex-col gap-3" data-workflows-panel="">
       <div className="flex min-w-0 items-center gap-2">
         <SearchInput className="min-w-0 flex-1" value={query} placeholder={t("workbenchWorkflowsSearch")} onChange={(event) => setQuery(event.target.value)} />
         <IconButton size="icon-sm" label={t("workbenchWorkflowsRefresh")} loading={library.isFetching} onClick={() => void library.refetch()}>
@@ -62,7 +62,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
         </Button>
       </div>
       {library.isPending ? (
-        <LoadingState label={t("workflowLibraryLoading")} className="h-40" />
+        <LoadingState label={t("workflowLibraryLoading")} className="flex-1" />
       ) : library.isError ? (
         <EmptyState size="compact" icon={<SearchX size={16} />} title={t("workflowLibraryErrorTitle")} body={errorText(library.error)} />
       ) : rows.length === 0 ? (
