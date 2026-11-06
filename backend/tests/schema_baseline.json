@@ -38,7 +38,8 @@
     "answers",
     "status",
     "created_at",
-    "answered_at"
+    "answered_at",
+    "feishu_message_id"
   ],
   "agent_sessions": [
     "id",
@@ -350,6 +351,12 @@
     "status",
     "status_detail",
     "created_at",
+    "updated_at"
+  ],
+  "feishu_inbound_messages": [
+    "bot_id",
+    "message_id",
+    "status",
     "updated_at"
   ],
   "fonts": [
@@ -924,6 +931,7 @@
     "workspace_id",
     "session_id",
     "tool_call_id",
+    "feishu_message_id",
     "tool",
     "permission",
     "summary",
