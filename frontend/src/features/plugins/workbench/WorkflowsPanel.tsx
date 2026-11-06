@@ -96,14 +96,15 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
             return (
               <li key={flow.path}>
                 <Button
-                  type="button"
                   variant="outline"
-                  className="grid h-auto w-full min-w-0 cursor-pointer justify-start gap-0.5 rounded-lg px-3 py-2 text-left hover:border-primary"
+                  className="w-full justify-start"
                   onClick={() => void open(flow)}
                   disabled={opening !== null}
                 >
-                  <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.label}</Truncate>
-                  <Truncate className="min-w-0 text-ui-xs text-muted-foreground">{flow.path}</Truncate>
+                  <span className="grid min-w-0 flex-1 gap-0.5 text-left">
+                    <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.label}</Truncate>
+                    <Truncate className="min-w-0 text-ui-xs text-muted-foreground">{flow.path}</Truncate>
+                  </span>
                   {missing > 0 && (
                     <span className="text-ui-xs text-warning">
                       {t("workbenchWorkflowsMissing").replace("{n}", String(missing))}
