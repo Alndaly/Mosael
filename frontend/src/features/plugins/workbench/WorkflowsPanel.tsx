@@ -9,6 +9,8 @@ import { useI18n } from "@/app/preferences";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
@@ -22,7 +24,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
   const [query, setQuery] = React.useState("");
   const [opening, setOpening] = React.useState<string | null>(null);
   const library = useQuery({
-    queryKey: ["workflows-panel", target.instanceId, target.workspaceId],
+    queryKey: ["workflow-library", target.instanceId, target.workspaceId],
     queryFn: () => getWorkflowLibrary(target.instanceId, target.workspaceId),
     retry: false,
   });
@@ -38,7 +40,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
     try {
       const result = await installBundledWorkflows(target.instanceId, [flow.file], bundled.data?.folder);
       await bundled.refetch();
-      await qc.invalidateQueries({ queryKey: ["workflows-panel", target.instanceId, target.workspaceId] });
+      await qc.invalidateQueries({ queryKey: ["workflow-library", target.instanceId, target.workspaceId] });
       toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
     } catch (error) {
       toast.error(errorText(error));
@@ -74,10 +76,10 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
     <div className="flex min-h-0 flex-1 flex-col gap-3" data-workflows-panel="">
       <div className="flex min-w-0 items-center gap-2">
         <SearchInput className="min-w-0 flex-1" value={query} placeholder={t("workbenchWorkflowsSearch")} onChange={(event) => setQuery(event.target.value)} />
-        <IconButton size="icon-sm" label={t("workbenchWorkflowsRefresh")} loading={library.isFetching} onClick={() => void library.refetch()}>
+        <IconButton size="icon" label={t("workbenchWorkflowsRefresh")} loading={library.isFetching} onClick={() => void library.refetch()}>
           <RefreshCw size={13} />
         </IconButton>
-        <Button size="sm" disabled={opening !== null} loading={opening === ""} onClick={() => void open()}>
+        <Button size="default" disabled={opening !== null} loading={opening === ""} onClick={() => void open()}>
           <Plus size={13} /> {t("workbenchWorkflowsNew")}
         </Button>
       </div>
@@ -93,20 +95,21 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
             const missing = (flow.missing_nodes ?? []).length + (flow.missing_models ?? []).length;
             return (
               <li key={flow.path}>
-                <button
+                <Button
                   type="button"
-                  className="grid w-full min-w-0 cursor-pointer gap-0.5 rounded-lg border border-border bg-panel-subtle px-3 py-2 text-left hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  variant="outline"
+                  className="grid h-auto w-full min-w-0 cursor-pointer justify-start gap-0.5 rounded-lg px-3 py-2 text-left hover:border-primary"
                   onClick={() => void open(flow)}
                   disabled={opening !== null}
                 >
-                  <span className="min-w-0 truncate text-ui-sm font-medium text-foreground">{flow.label}</span>
-                  <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{flow.path}</span>
+                  <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.label}</Truncate>
+                  <Truncate className="min-w-0 text-ui-xs text-muted-foreground">{flow.path}</Truncate>
                   {missing > 0 && (
                     <span className="text-ui-xs text-warning">
                       {t("workbenchWorkflowsMissing").replace("{n}", String(missing))}
                     </span>
                   )}
-                </button>
+                </Button>
               </li>
             );
           })}
@@ -121,11 +124,15 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
             {bundled.data.workflows.map((flow) => (
               <li key={flow.file} className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-subtle px-3 py-2">
                 <div className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="min-w-0 truncate text-ui-sm font-medium text-foreground">{flow.name}</span>
-                  <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{flow.description}</span>
+                  <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</Truncate>
+                  {flow.description && (
+                    <span className="min-w-0 text-ui-xs text-muted-foreground">
+                      <InlineMarkdown text={flow.description} links={false} />
+                    </span>
+                  )}
                 </div>
                 <Button
-                  size="sm"
+                  size="default"
                   variant={flow.installed ? "outline" : "default"}
                   disabled={flow.installed || installing !== ""}
                   loading={installing === flow.file}
