@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, RefreshCw, Save, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, RefreshCw, Save, TriangleAlert, Workflow } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ChromeStatusSlot } from "@/components/app/chromeStatusSlot";
@@ -33,13 +33,14 @@ import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
 import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { onWorkbenchPlaces, useWorkbench, workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
+import { WorkflowsPanel } from "@/features/plugins/workbench/WorkflowsPanel";
 import { comboFromEvent, formatCombo, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
 
-const TABS = ["models", "missing", "app", "run", "assistant"] as const;
+const TABS = ["models", "workflows", "missing", "app", "run", "assistant"] as const;
 type Tab = (typeof TABS)[number];
 const BAR_REGION = { side: "bottom" as const };
 //: 等桥多久才说「连不上」:第一次打开要下整套前端,慢的机器上要好几十秒
@@ -248,6 +249,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   };
   const tabLabel: Record<Tab, string> = {
     models: t("workbenchTabModels"),
+    workflows: t("workbenchTabWorkflows"),
     missing: t("workbenchTabMissing"),
     app: t("workbenchTabApp"),
     run: t("workbenchTabRun"),
@@ -381,6 +383,9 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
             {one === "models" && (
               <ModelsPanel key={workflowKey} target={target} node={state.selection.node} capabilities={capabilities} />
             )}
+            {one === "workflows" && (
+              <WorkflowsPanel key={workflowKey} target={target} />
+            )}
             {one === "missing" && (
               //: 不管有没有切到这一页都挂着:打开一张工作流就先查一遍,缺东西时页签上挂数字(见 MissingPanel 的 onMissing)。
               <MissingPanel key={workflowKey} target={target} capabilities={capabilities} active={tab === "missing"}
@@ -439,6 +444,6 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
 
 /** 页签前面的图标(大小跟着页签那一档,16px)。 */
 function TabIcon({ tab }: { tab: (typeof TABS)[number] }) {
-  const Icon = { models: Boxes, missing: TriangleAlert, app: ListChecks, run: Play, assistant: Bot }[tab];
+  const Icon = { models: Boxes, workflows: Workflow, missing: TriangleAlert, app: ListChecks, run: Play, assistant: Bot }[tab];
   return <Icon aria-hidden />;
 }

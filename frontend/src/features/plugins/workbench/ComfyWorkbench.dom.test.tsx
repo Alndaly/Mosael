@@ -272,7 +272,7 @@ describe("ComfyUI 工作台", () => {
     expect(within(bar).getByRole("img", { name: "workbenchUnsavedChanges" })).toBeTruthy();
     await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_DEFAULT }));
     expect(within(column()).getAllByRole("tab").map((one) => one.textContent)).toEqual([
-      "workbenchTabModels", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant",
+      "workbenchTabModels", "workbenchTabWorkflows", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant",
     ]);
     fireEvent.click(within(bar).getByRole("button", { name: "workbenchColumnHide" }));
     await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: false, width: 0 }));
@@ -1443,7 +1443,7 @@ describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () =>
   it("第五个页签;面板停靠在列里、不浮也不关,会话在开工作台的那个工作区", async () => {
     await mount();
     expect(screen.getAllByRole("tab").map((one) => one.textContent)).toEqual(
-      ["workbenchTabModels", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant"]);
+      ["workbenchTabModels", "workbenchTabWorkflows", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant"]);
     expect(agent.props, "没去过的页签不挂").toBeNull();
     tab("workbenchTabAssistant");
     expect(shownPanel().querySelector("[data-agent-chat]")).toBeTruthy();
