@@ -1303,6 +1303,13 @@ class WorkflowLibraryImportOut(ApiModel):
     missing_models: list[WorkflowMissingModelOut] = Field(default_factory=list)
 
 
+class WorkflowBundleInstallRequest(ApiModel):
+    #: 只写用户选中的这几张;插件按清单里的 file 名校验，别的一律不碰。
+    files: list[str] = Field(min_length=1)
+    #: 写进 workflows/ 下的哪个文件夹;空 = 清单里的默认目录。
+    folder: str = Field(default="", max_length=400)
+
+
 class WorkflowLibrarySaveRequest(ApiModel):
     path: str
     #: 界面格式的工作流

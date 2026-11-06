@@ -491,30 +491,35 @@ def test_图上写了要哪一版_装的时候交给_Manager_git_commit_或没�
     assert any("latest" in (one.get("message") or "") for one in events), "不能选版本时明说会装 latest"
 
 
-def test_随插件的长片工作流_列出四张和缺项(plugin, comfy) -> None:
+def test_随插件的官方工作流范例_列出四张和缺项(plugin, comfy) -> None:
     _module, Comfy, _convert = plugin
     import bundled
 
     status = bundled.status(Comfy(comfy.url), "zh")
 
-    assert status["id"] == "h3_long_video"
-    assert status["folder"] == "mosael/long-video"
+    assert status["id"] == "official_comfyui_examples"
+    assert status["folder"] == "mosael/examples"
     assert len(status["workflows"]) == 4
-    assert all(one["path"].startswith("mosael/long-video/") and not one["installed"] for one in status["workflows"])
+    assert all(one["path"].startswith("mosael/examples/") and not one["installed"] for one in status["workflows"])
+    assert all(one["file"] and one["description"] for one in status["workflows"])
     #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG 节点,所以每张都应报缺——这正是运行前要说的东西。
     assert all(one["missing_nodes"] for one in status["workflows"])
     assert all("problem" in one for one in status["workflows"])
 
 
-def test_一键安装只写缺的_再装不会覆盖(plugin, comfy) -> None:
+def test_按选择安装只写选中的_再装不会覆盖(plugin, comfy) -> None:
     _module, Comfy, _convert = plugin
     import bundled
 
-    first = bundled.install({}, Comfy(comfy.url), "zh")
-    assert len(first["installed"]) == 4
+    picked = ["minimax_h3_open.json", "minimax_h3_talk_open.json"]
+    first = bundled.install({"files": picked}, Comfy(comfy.url), "zh")
+    assert len(first["installed"]) == 2
     assert first["skipped"] == []
-    assert all(comfy.state.userdata_get(f"workflows/mosael/long-video/{Path(path).name}") for path in first["installed"])
+    assert all(comfy.state.userdata_get(f"workflows/mosael/examples/{Path(path).name}") for path in first["installed"])
 
-    second = bundled.install({}, Comfy(comfy.url), "zh")
+    second = bundled.install({"files": picked}, Comfy(comfy.url), "zh")
     assert second["installed"] == []
-    assert len(second["skipped"]) == 4
+    assert len(second["skipped"]) == 2
+
+    #: 没勾的不会因为“整组安装”顺手写进去。
+    assert not comfy.state.userdata_get("workflows/mosael/examples/minimax_h3_continue.json")

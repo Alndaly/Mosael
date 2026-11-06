@@ -1,0 +1,66 @@
+{
+  "id": "official_comfyui_examples",
+  "title": {
+    "zh": "官方工作流范例",
+    "en": "Official workflow examples"
+  },
+  "description": {
+    "zh": "随 Mosael 发布的 ComfyUI 工作流范例。先检查每张缺哪些节点和模型，再选择要安装的那几张；只新建、不覆盖。",
+    "en": "ComfyUI workflow examples bundled with Mosael. Check every workflow's missing nodes and models first, then choose which ones to install; files are created, never overwritten."
+  },
+  "folder": "mosael/examples",
+  "workflows": [
+    {
+      "file": "minimax_h3_open.json",
+      "role": "long_take_opening",
+      "category": "long_video",
+      "name": {
+        "zh": "H3 长片 · 第一段",
+        "en": "H3 long video · opening"
+      },
+      "description": {
+        "zh": "「任意长度的连续视频」的第一段：从文字生成开场，并把第一段潜空间存下来。",
+        "en": "The opening segment of “Continuous video of any length”: generate from text and save the first latent."
+      }
+    },
+    {
+      "file": "minimax_h3_continue.json",
+      "role": "long_take_continue",
+      "category": "long_video",
+      "name": {
+        "zh": "H3 长片 · 续写",
+        "en": "H3 long video · continuation"
+      },
+      "description": {
+        "zh": "读取上一段潜空间继续拍，保存当前段潜空间；和第一段配套使用。",
+        "en": "Continue from the previous latent and save the current one; use it with the opening workflow."
+      }
+    },
+    {
+      "file": "minimax_h3_talk_open.json",
+      "role": "long_talk_opening",
+      "category": "digital_human",
+      "name": {
+        "zh": "H3 数字人 · 第一段",
+        "en": "H3 digital human · opening"
+      },
+      "description": {
+        "zh": "「任意时长的数字人」的第一段：人物照片和驱动音频生成开场，并保存潜空间。",
+        "en": "The opening segment of the digital-human long video: portrait plus driving audio, saving the first latent."
+      }
+    },
+    {
+      "file": "minimax_h3_talk_continue.json",
+      "role": "long_talk_continue",
+      "category": "digital_human",
+      "name": {
+        "zh": "H3 数字人 · 续写",
+        "en": "H3 digital human · continuation"
+      },
+      "description": {
+        "zh": "读取上一段数字人潜空间继续说话，保存当前段潜空间；和第一段配套使用。",
+        "en": "Continue the digital human from the previous latent and save the current one; use it with the opening workflow."
+      }
+    }
+  ]
+}

@@ -66,6 +66,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Highlight } from "@/components/app/Highlight";
 import {
   LIBRARY_DENSITIES,
@@ -87,7 +88,9 @@ import { previewBlurClass } from "@/components/generation/ModelThumb";
 import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger, openContextMenuFromKeyboard } from "@/components/ui/context-menu";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuContent, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/menu";
@@ -218,7 +221,7 @@ type WorkflowNavItem = LibraryNavItem & {
 
 /**
  * 工具条分两行,和素材库一样:**第一行是“看哪些”**(搜索、种类、模型、排序、显示方式),
- * **第二行是“做什么”**(新建、安装 H3 长片工作流、导入、刷新)。动作排到第二行之后,搜索和动作
+ * **第二行是“做什么”**(新建、安装官方工作流范例、导入、刷新)。动作排到第二行之后,搜索和动作
  * 不再互相争宽度,一行里的控件也不会被挤成不同高度。
  */
 const TOOLBAR = "flex min-w-0 flex-1 flex-col gap-3 pb-2 @container/workflow-toolbar";
@@ -341,23 +344,36 @@ export function WorkflowLibraryDialog({
     },
   });
   const qc = useQueryClient();
-  //: 随插件发布的 H3 长片工作流:先只读检查(缺哪张、缺哪些节点/模型),确认目标服务器后再写。
+  //: 随插件发布的官方工作流范例:点按钮**立刻**开弹窗,清单在弹窗里加载;先只读检查每张缺什么。
+  const [bundleOpen, setBundleOpen] = React.useState(false);
   const [bundled, setBundled] = React.useState<BundledWorkflows | null>(null);
+  //: 选中的 file 名。清单到齐时默认勾上所有还没安装的,用户可以取消其中任意几张。
+  const [bundleSelection, setBundleSelection] = React.useState<Set<string>>(() => new Set());
   const checkBundled = useMutation({
     mutationFn: () => getBundledWorkflows(instance.id),
-    onSuccess: setBundled,
-    onError: (error: Error) => toast.error(errorText(error)),
+    onSuccess: (next) => {
+      setBundled(next);
+      setBundleSelection(new Set(next.workflows.filter((one) => !one.installed).map((one) => one.file)));
+    },
+    onError: (error: Error) => {
+      setBundleOpen(false);
+      setBundled(null);
+      toast.error(errorText(error));
+    },
   });
   const installBundled = useMutation({
-    mutationFn: (folder: string) => installBundledWorkflows(instance.id, folder),
+    mutationFn: (files: string[]) => installBundledWorkflows(instance.id, files, bundled?.folder),
     onSuccess: (result) => {
-      //: 留在弹窗里:写进去以后还要看缺的节点 / 模型;全齐了确认键自然变灰。
+      //: 留在弹窗里:写进去以后还要看缺的节点 / 模型;只剩没装成的那些保持勾选。
       setBundled((now) => now && { ...now, workflows: result.workflows });
+      setBundleSelection(new Set(result.workflows.filter((one) => !one.installed).map((one) => one.file)));
       void qc.invalidateQueries({ queryKey: libraryKey });
       toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
     },
     onError: (error: Error) => toast.error(errorText(error)),
   });
+  const bundleInstallable = bundled?.workflows.filter((one) => !one.installed) ?? [];
+  const bundleSelected = bundleInstallable.filter((one) => bundleSelection.has(one.file));
   //: 改完一张:工作流库那份列表重新问一遍(跟着连接走的那一份,含表单、能填什么);生成选项、工具清单里的那张也跟着变
   //: (宿主已经让这个连接的目录重拉过)。这里改了工作流(存了精简表单、导入、改名、复制、恢复):模型下拉里它叫什么、
   //: 能填什么都跟着变。那份目录是后端按这个连接存着的,只让界面重问拿到的还是旧的 —— 画板里搜不到刚起的表单标题。
@@ -500,10 +516,18 @@ export function WorkflowLibraryDialog({
       <span className={TOOLBAR_FOLD.wide}>{t("workflowImport")}</span>
     </IconButton>
   );
-  //: H3 长片工作流随插件发布:先检查缺什么;装之前会确认目标服务器。不是 ComfyUI 的库会报「没有这份资源」。
+  //: 官方工作流范例随插件发布:先检查每张缺什么;用户勾选、确认目标服务器后才写。不是 ComfyUI 的库会报「没有这份资源」。
   const bundleButton = instance.package_id === "dev.mosael.comfyui" ? (
     <Hint label={t("workflowBundleInstallHint")}>
-      <Button variant="outline" loading={checkBundled.isPending} onClick={() => checkBundled.mutate()}>
+      <Button
+        variant="outline"
+        loading={checkBundled.isPending}
+        onClick={() => {
+          setBundled(null);
+          setBundleOpen(true);
+          checkBundled.mutate();
+        }}
+      >
         <PackagePlus size={13} />
         <span className={TOOLBAR_FOLD.wide}>{t("workflowBundleInstall")}</span>
       </Button>
@@ -977,60 +1001,151 @@ export function WorkflowLibraryDialog({
       }
       dialogs={
         <>
-          {bundled && (
+          {bundleOpen && (
             <ModalShell
               open
-              onOpenChange={(next) => !next && setBundled(null)}
-              title={t("workflowBundleTitle").replace("{name}", bundled.title || t("workflowBundleInstall"))}
+              className="w-[min(60rem,calc(100vw-2rem))]"
+              onOpenChange={(next) => {
+                if (next) return;
+                setBundleOpen(false);
+                setBundled(null);
+              }}
+              title={t("workflowBundleTitle").replace("{name}", bundled?.title || t("workflowBundleInstall"))}
               footer={
                 <>
-                  <Button variant="outline" size="sm" disabled={installBundled.isPending} onClick={() => setBundled(null)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={installBundled.isPending}
+                    onClick={() => {
+                      setBundleOpen(false);
+                      setBundled(null);
+                    }}
+                  >
                     {t("cancel")}
                   </Button>
-                  <Button
-                    size="sm"
-                    loading={installBundled.isPending}
-                    disabled={bundled.workflows.every((one) => one.installed)}
-                    onClick={() => installBundled.mutate(bundled.folder)}
-                  >
-                    {t("workflowBundleInstallConfirm")}
-                  </Button>
+                  {bundled && (
+                    <Button
+                      size="sm"
+                      loading={installBundled.isPending}
+                      disabled={!bundleSelected.length}
+                      onClick={() => installBundled.mutate(bundleSelected.map((one) => one.file))}
+                    >
+                      {t("workflowBundleInstallConfirm").replace("{n}", String(bundleSelected.length))}
+                    </Button>
+                  )}
                 </>
               }
             >
-              <div className="grid gap-3 text-ui-sm">
-                <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
-                  {t("workflowBundleBody").replace("{server}", instance.name).replace("{folder}", bundled.folder)}
-                </p>
-                {bundled.workflows.map((flow) => (
-                  <div key={flow.path} className="grid gap-1 rounded-md border border-border px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-foreground">{flow.name}</span>
-                      <span className="text-ui-xs text-muted-foreground">
-                        {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleMissingWorkflow")}
-                      </span>
-                    </div>
-                    <code className="text-ui-xs text-muted-foreground">{flow.path}</code>
-                    {flow.missing_nodes.length > 0 && (
-                      <div className="text-ui-xs text-destructive">
-                        {t("workflowBundleMissingNodes").replace("{n}", String(flow.missing_nodes.length))}:
-                        {" "}{flow.missing_nodes.map((one) => one.type).join(t("listSeparator"))}
-                      </div>
-                    )}
-                    {flow.missing_models.length > 0 && (
-                      <div className="text-ui-xs text-destructive">
-                        {t("workflowBundleMissingModels").replace("{n}", String(flow.missing_models.length))}:
-                        {" "}{flow.missing_models.map((one) => one.name).join(t("listSeparator"))}
-                      </div>
-                    )}
-                    {flow.problem && <div className="text-ui-xs text-muted-foreground">{flow.problem}</div>}
+              {!bundled ? (
+                <div className="grid gap-3" aria-busy="true">
+                  <Skeleton className="h-4 w-3/5" />
+                  <div className="flex items-center justify-between gap-3">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-8 w-44" />
                   </div>
-                ))}
-                {bundled.workflows.every((one) => one.installed) && (
-                  <p className="m-0 text-ui-xs text-success">{t("workflowBundleAllInstalled")}</p>
+                  <div className="grid gap-2">
+                    {[0, 1, 2, 3].map((one) => (
+                      <div key={one} className="rounded-md border border-border px-3 py-2.5">
+                        <div className="flex items-start gap-2">
+                          <Skeleton className="mt-0.5 size-4 rounded-[4px]" />
+                          <div className="grid min-w-0 flex-1 gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Skeleton className="h-4 w-40 max-w-full" />
+                              <Skeleton className="h-3 w-14" />
+                            </div>
+                            <Skeleton className="h-3 w-4/5" />
+                            <Skeleton className="h-3 w-2/5" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-3 text-ui-sm">
+                  <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
+                    {t("workflowBundleBody").replace("{server}", instance.name).replace("{folder}", bundled.folder)}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-ui-xs text-muted-foreground">
+                      {t("workflowBundleSelected").replace("{n}", String(bundleSelected.length))}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!bundleInstallable.length || bundleSelected.length === bundleInstallable.length}
+                        onClick={() => setBundleSelection(new Set(bundleInstallable.map((one) => one.file)))}
+                      >
+                        {t("workflowBundleSelectAll")}
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled={!bundleSelected.length} onClick={() => setBundleSelection(new Set())}>
+                        {t("workflowBundleClear")}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    {bundled.workflows.map((flow) => {
+                      const checked = flow.installed || bundleSelection.has(flow.file);
+                      return (
+                        <div
+                          key={flow.path}
+                          className={cn("grid gap-1 rounded-md border border-border px-3 py-2", flow.installed && "opacity-70")}
+                        >
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              className="mt-0.5"
+                              checked={checked}
+                              disabled={flow.installed}
+                              aria-label={t("workflowBundleSelectOne").replace("{name}", flow.name)}
+                              onCheckedChange={(next) => {
+                                setBundleSelection((now) => {
+                                  const picking = new Set(now);
+                                  if (next === true) picking.add(flow.file);
+                                  else picking.delete(flow.file);
+                                  return picking;
+                                });
+                              }}
+                            />
+                            <div className="grid min-w-0 flex-1 gap-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-foreground">{flow.name}</span>
+                                <span className="text-ui-xs text-muted-foreground">
+                                  {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleMissingWorkflow")}
+                                </span>
+                              </div>
+                              {flow.description && (
+                                <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
+                                  <InlineMarkdown text={flow.description} links={false} />
+                                </p>
+                              )}
+                              <code className="text-ui-xs text-muted-foreground">{flow.path}</code>
+                              {flow.missing_nodes.length > 0 && (
+                                <div className="text-ui-xs text-destructive">
+                                  {t("workflowBundleMissingNodes").replace("{n}", String(flow.missing_nodes.length))}:
+                                  {" "}{flow.missing_nodes.map((one) => one.type).join(t("listSeparator"))}
+                                </div>
+                              )}
+                              {flow.missing_models.length > 0 && (
+                                <div className="text-ui-xs text-destructive">
+                                  {t("workflowBundleMissingModels").replace("{n}", String(flow.missing_models.length))}:
+                                  {" "}{flow.missing_models.map((one) => one.name).join(t("listSeparator"))}
+                                </div>
+                              )}
+                              {flow.problem && <div className="text-ui-xs text-muted-foreground">{flow.problem}</div>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {bundled.workflows.every((one) => one.installed) && (
+                    <p className="m-0 text-ui-xs text-success">{t("workflowBundleAllInstalled")}</p>
+                  )}
+                  <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowBundleAfter")}</p>
+                </div>
                 )}
-                <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowBundleAfter")}</p>
-              </div>
             </ModalShell>
           )}
           {installAsk && (

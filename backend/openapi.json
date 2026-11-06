@@ -22900,7 +22900,7 @@
           "plugins"
         ],
         "summary": "Get Bundled Workflows",
-        "description": "随插件发布的 H3 长片工作流:装了没有、各缺哪些节点和模型(只读)。",
+        "description": "随插件发布的官方工作流范例:装了没有、各缺哪些节点和模型(只读)。",
         "operationId": "get_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_get",
         "parameters": [
           {
@@ -22945,7 +22945,7 @@
           "plugins"
         ],
         "summary": "Install Bundled Workflows",
-        "description": "把缺的 H3 长片工作流写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。",
+        "description": "把选中的工作流范例写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。",
         "operationId": "install_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_install_post",
         "parameters": [
           {
@@ -22956,18 +22956,18 @@
               "type": "string",
               "title": "Instance Id"
             }
-          },
-          {
-            "name": "folder",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "",
-              "title": "Folder"
-            }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowBundleInstallRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -53632,6 +53632,29 @@
         "type": "object",
         "title": "WorkflowAppSummaryOut",
         "description": "一张工作流的表单:有没有标记、版本认不认(能不能升级)、每张表单、标成结果的节点。"
+      },
+      "WorkflowBundleInstallRequest": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Files"
+          },
+          "folder": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Folder",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "WorkflowBundleInstallRequest"
       },
       "WorkflowCanvasMarksOut": {
         "properties": {

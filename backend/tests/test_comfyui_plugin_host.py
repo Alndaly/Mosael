@@ -11,6 +11,7 @@ import copy
 import hashlib
 import json
 import time
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -367,22 +368,29 @@ def test_工作台跑画布上的图_从头到尾_普通的生成任务_产出�
     assert [(one["origin_kind"], one["origin_name"]) for one in listed] == [("comfyui", "portrait")], "会话按那张工作流的名字叫"
 
 
-def test_长片工作流包可以检查并一键装进当前ComfyUI(connected) -> None:
-    """插件的资源随包发布:状态接口先列出缺的工作流/节点/模型;安装只写 workflows/,随后工作流库能看到它们。"""
+def test_官方工作流范例可以检查并按选择安装(connected) -> None:
+    """插件的资源随包发布:状态接口先列出每张范例缺的节点/模型;安装只写用户勾选的那几张。"""
     client, _comfy, instance_id = connected
 
     status = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/bundled")
     assert status.status_code == 200, status.text
     body = status.json()
-    assert body["id"] == "h3_long_video" and body["folder"] == "mosael/long-video"
+    assert body["id"] == "official_comfyui_examples" and body["folder"] == "mosael/examples"
     assert len(body["workflows"]) == 4
     assert all(not one["installed"] for one in body["workflows"])
+    assert all(one["description"] for one in body["workflows"]), "列表里每张都说清它是什么"
 
-    installed = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/bundled/install")
+    installed = client.post(
+        f"/api/plugins/instances/{instance_id}/workflow-library/bundled/install",
+        json={"files": ["minimax_h3_open.json", "minimax_h3_talk_open.json"]},
+    )
     assert installed.status_code == 200, installed.text
-    assert len(installed.json()["installed"]) == 4
+    assert {Path(path).name for path in installed.json()["installed"]} == {
+        "minimax_h3_open.json", "minimax_h3_talk_open.json",
+    }
 
     paths = {one["path"] for one in client.get(
         f"/api/plugins/instances/{instance_id}/workflow-library").json()["workflows"]}
-    assert "mosael/long-video/minimax_h3_open.json" in paths
-    assert "mosael/long-video/minimax_h3_continue.json" in paths
+    assert "mosael/examples/minimax_h3_open.json" in paths
+    assert "mosael/examples/minimax_h3_talk_open.json" in paths
+    assert "mosael/examples/minimax_h3_continue.json" not in paths

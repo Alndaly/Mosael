@@ -552,7 +552,7 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
 
 
 def bundled(db: Session, instance: PluginInstance) -> dict[str, Any]:
-    """随插件发布的长视频 ComfyUI 工作流:当前这台 ComfyUI 上装了没有、各缺哪些节点和模型。
+    """随插件发布的官方 ComfyUI 工作流范例:当前这台 ComfyUI 上装了没有、各缺哪些节点和模型。
 
     只读,不改那台机器。插件没带这份资源时原样回空清单,由界面决定要不要显示安装入口。
     """
@@ -563,12 +563,12 @@ def bundled(db: Session, instance: PluginInstance) -> dict[str, Any]:
     )
 
 
-def install_bundled(db: Session, instance: PluginInstance, folder: str = "") -> dict[str, Any]:
-    """把缺的长视频工作流写进当前 ComfyUI 的 workflows/。只新建、不覆盖;写完重拉生成目录。"""
+def install_bundled(db: Session, instance: PluginInstance, files: list[str], folder: str = "") -> dict[str, Any]:
+    """把选中的工作流范例写进当前 ComfyUI 的 workflows/。只新建、不覆盖;写完重拉生成目录。"""
     _require(db, instance)
     output = tools.invoke_host(
         db, instance.id, WORKFLOW_LIBRARY,
-        {"op": "install_bundled_workflows", **({"folder": folder} if folder else {})},
+        {"op": "install_bundled_workflows", "files": files, **({"folder": folder} if folder else {})},
         timeout=QUICK_TIMEOUT_SECONDS, record=True,
     )
     if output.get("installed"):

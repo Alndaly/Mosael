@@ -7823,7 +7823,7 @@ export interface paths {
         };
         /**
          * Get Bundled Workflows
-         * @description 随插件发布的 H3 长片工作流:装了没有、各缺哪些节点和模型(只读)。
+         * @description 随插件发布的官方工作流范例:装了没有、各缺哪些节点和模型(只读)。
          */
         get: operations["get_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_get"];
         put?: never;
@@ -7845,7 +7845,7 @@ export interface paths {
         put?: never;
         /**
          * Install Bundled Workflows
-         * @description 把缺的 H3 长片工作流写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。
+         * @description 把选中的工作流范例写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。
          */
         post: operations["install_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_install_post"];
         delete?: never;
@@ -21519,6 +21519,16 @@ export interface components {
              * @default 0
              */
             stray: number;
+        };
+        /** WorkflowBundleInstallRequest */
+        WorkflowBundleInstallRequest: {
+            /** Files */
+            files: string[];
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
         };
         /**
          * WorkflowCanvasMarksOut
@@ -38459,16 +38469,18 @@ export interface operations {
     };
     install_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_install_post: {
         parameters: {
-            query?: {
-                folder?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 instance_id: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowBundleInstallRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

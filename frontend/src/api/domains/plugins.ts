@@ -258,10 +258,14 @@ export const getNodeFolders = (instanceId: string, nodes: components["schemas"][
 
 // --- 工作流库(ADR 0035) -------------------------------------------------------
 
-/** 随插件发布的 H3 长片 ComfyUI 工作流:每张在当前服务器上有没有、缺哪些节点和模型。 */
+/** 随插件发布的官方 ComfyUI 工作流范例:每张在当前服务器上有没有、缺哪些节点和模型。 */
 export type BundledWorkflow = {
   path: string;
+  /** 清单里的文件名;安装时用它指定选中哪几张。 */
+  file: string;
   name: string;
+  description: string;
+  category: string;
   installed: boolean;
   missing_nodes: Array<{ type: string; count: number; core: boolean; packs: unknown[] }>;
   missing_models: Array<{ folder: string; name: string }>;
@@ -279,11 +283,11 @@ export type BundledWorkflows = {
 export const getBundledWorkflows = (instanceId: string) =>
   api<BundledWorkflows>(`/api/plugins/instances/${instanceId}/workflow-library/bundled`);
 
-/** 把缺的 H3 长片工作流写进那台 ComfyUI 的 workflows/(只新建、不覆盖)。 */
-export const installBundledWorkflows = (instanceId: string, folder = "") =>
+/** 把选中的工作流范例写进那台 ComfyUI 的 workflows/(只新建、不覆盖)。 */
+export const installBundledWorkflows = (instanceId: string, files: string[], folder = "") =>
   api<{ folder: string; installed: string[]; skipped: string[]; workflows: BundledWorkflow[] }>(
-    `/api/plugins/instances/${instanceId}/workflow-library/bundled/install${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`,
-    { method: "POST" },
+    `/api/plugins/instances/${instanceId}/workflow-library/bundled/install`,
+    { method: "POST", body: JSON.stringify({ files, ...(folder ? { folder } : {}) }) },
   );
 
 /** 这个连接背后的服务现在通不通(按连接的关键地址发一次 3 秒的短请求;有人应答就算通)。「在 ComfyUI 工作台里打开」据此决定能不能点。 */
