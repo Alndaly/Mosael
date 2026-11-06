@@ -155,7 +155,7 @@ export function CatalogDialog<T, F extends string = string>({
         )
       }
     >
-      <div ref={rootRef} className={detail ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-h-full min-w-0"}>
+      <div ref={rootRef} className={detail ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex min-h-full min-w-0 flex-col"}>
         {!detail && notice && <div className="mb-3">{notice}</div>}
         {detail ? (
           <CatalogBack.Provider value={<DetailBackButton ref={backRef} label={backLabel} onClick={back} />}>
@@ -174,7 +174,7 @@ export function CatalogDialog<T, F extends string = string>({
             ))}
           </ul>
         ) : (
-          <div className="grid min-h-[320px] place-items-center">{placeholder}</div>
+          <div className="flex min-h-[320px] flex-1 items-center justify-center">{placeholder}</div>
         )}
       </div>
       {children}

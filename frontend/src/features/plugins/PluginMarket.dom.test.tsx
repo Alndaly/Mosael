@@ -345,6 +345,8 @@ describe("随应用内置的插件", () => {
     renderMarket();
     expect(await screen.findByText("pluginMarketFailed")).toBeTruthy();
     expect(screen.getByText("连不上 mosael.com:timeout")).toBeTruthy();
+    const empty = screen.getByText("pluginMarketFailed").closest(".empty-state");
+    expect(empty?.parentElement?.className, "空态吃满弹窗剩下的高度并居中").toContain("flex-1");
   });
 });
 
