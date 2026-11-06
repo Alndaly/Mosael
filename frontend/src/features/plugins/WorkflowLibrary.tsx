@@ -221,7 +221,7 @@ type WorkflowNavItem = LibraryNavItem & {
  * **第二行是“做什么”**(新建、安装 H3 长片工作流、导入、刷新)。动作排到第二行之后,搜索和动作
  * 不再互相争宽度,一行里的控件也不会被挤成不同高度。
  */
-const TOOLBAR = "flex min-w-0 flex-1 flex-col gap-2 @container/workflow-toolbar";
+const TOOLBAR = "flex min-w-0 flex-1 flex-col gap-3 pb-2 @container/workflow-toolbar";
 const TOOLBAR_ROW = "flex min-w-0 items-center gap-2";
 const TOOLBAR_ACTIONS = "flex min-w-0 flex-wrap items-center justify-end gap-2";
 
@@ -763,6 +763,12 @@ export function WorkflowLibraryDialog({
         </div>
       ) : (
         <>
+          <div data-workflow-toolbar-actions="" className={TOOLBAR_ACTIONS}>
+            {newButton}
+            {bundleButton}
+            {importButton}
+            {refresh}
+          </div>
           <div data-workflow-toolbar-row="" className={TOOLBAR_ROW}>
             <SearchInput className="min-w-0 flex-1"
                 placeholder={searchLabel}
@@ -811,12 +817,6 @@ export function WorkflowLibraryDialog({
             <LibraryDensitySwitch value={density} onChange={setDensity} />
           </span>
             <WorkflowViewMenu className={TOOLBAR_FOLD.narrow} sort={sort} onSort={setSort} density={density} onDensity={setDensity} />
-          </div>
-          <div data-workflow-toolbar-actions="" className={TOOLBAR_ACTIONS}>
-            {newButton}
-            {bundleButton}
-            {importButton}
-            {refresh}
           </div>
         </>
       )}
