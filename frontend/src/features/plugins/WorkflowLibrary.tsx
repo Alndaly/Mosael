@@ -217,10 +217,13 @@ type WorkflowNavItem = LibraryNavItem & {
 };
 
 /**
- * 工具条那一行:一排、**不换行**,搜索框吃掉剩下的宽度,别的按内容宽(维护者:加了「用到模型」之后
- * 「导入」「刷新」被挤到了第二行)。换成 `flex-wrap` 就又回去了,所以这一条是写死的 `flex-nowrap`。
+ * 工具条分两行,和素材库一样:**第一行是“看哪些”**(搜索、种类、模型、排序、显示方式),
+ * **第二行是“做什么”**(新建、安装 H3 长片工作流、导入、刷新)。动作排到第二行之后,搜索和动作
+ * 不再互相争宽度,一行里的控件也不会被挤成不同高度。
  */
-const TOOLBAR_ROW = "flex min-w-0 flex-1 flex-nowrap items-center gap-2 @container/workflow-toolbar";
+const TOOLBAR = "flex min-w-0 flex-1 flex-col gap-2 @container/workflow-toolbar";
+const TOOLBAR_ROW = "flex min-w-0 items-center gap-2";
+const TOOLBAR_ACTIONS = "flex min-w-0 flex-wrap items-center justify-end gap-2";
 
 /**
  * 一行放不下时怎么退让。看的是**这一行自己**有多宽(它是 `@container/workflow-toolbar`),不是窗口:
@@ -500,7 +503,7 @@ export function WorkflowLibraryDialog({
   //: H3 长片工作流随插件发布:先检查缺什么;装之前会确认目标服务器。不是 ComfyUI 的库会报「没有这份资源」。
   const bundleButton = instance.package_id === "dev.mosael.comfyui" ? (
     <Hint label={t("workflowBundleInstallHint")}>
-      <Button variant="outline" size="sm" loading={checkBundled.isPending} onClick={() => checkBundled.mutate()}>
+      <Button variant="outline" loading={checkBundled.isPending} onClick={() => checkBundled.mutate()}>
         <PackagePlus size={13} />
         <span className={TOOLBAR_FOLD.wide}>{t("workflowBundleInstall")}</span>
       </Button>
@@ -745,21 +748,24 @@ export function WorkflowLibraryDialog({
   //: 别的按内容宽;一行放不下时按优先级退让,见 TOOLBAR_FOLD。容器是**这一行自己**(不是窗口,也不是工具条):
   //: 左边那列目录、窄窗口下目录收成的那个下拉各占掉多少,只有这一行知道。
   const toolbar = (
-    <div data-workflow-toolbar-row="" className={TOOLBAR_ROW}>
+    <div className={TOOLBAR}>
       {current === TRASH_VIEW ? (
-        <>
+        <div data-workflow-toolbar-row="" className={TOOLBAR_ROW}>
           <div className="grid min-w-0 flex-1 gap-0.5">
             <h3 className="m-0 text-ui-md font-semibold text-foreground">{t("workflowLibraryTrash")}</h3>
             <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowLibraryTrashDesc")}</p>
           </div>
           {refresh}
-        </>
+        </div>
       ) : !library.data ? (
-        <SearchInput className="min-w-0 flex-1" disabled placeholder={t("workflowLibrarySearchPending")} aria-label={t("workflowLibrarySearchPending")} />
+        <div data-workflow-toolbar-row="" className={TOOLBAR_ROW}>
+          <SearchInput className="min-w-0 flex-1" disabled placeholder={t("workflowLibrarySearchPending")} aria-label={t("workflowLibrarySearchPending")} />
+        </div>
       ) : (
         <>
-          <SearchInput className="min-w-0 flex-1"
-              placeholder={searchLabel}
+          <div data-workflow-toolbar-row="" className={TOOLBAR_ROW}>
+            <SearchInput className="min-w-0 flex-1"
+                placeholder={searchLabel}
               aria-label={searchLabel}
               value={query}
               onChange={(event) => setQuery(event.target.value)} />
@@ -804,11 +810,14 @@ export function WorkflowLibraryDialog({
           <span className={cn("flex items-center", TOOLBAR_FOLD.wide)}>
             <LibraryDensitySwitch value={density} onChange={setDensity} />
           </span>
-          <WorkflowViewMenu className={TOOLBAR_FOLD.narrow} sort={sort} onSort={setSort} density={density} onDensity={setDensity} />
-          {newButton}
-          {bundleButton}
-          {importButton}
-          {refresh}
+            <WorkflowViewMenu className={TOOLBAR_FOLD.narrow} sort={sort} onSort={setSort} density={density} onDensity={setDensity} />
+          </div>
+          <div data-workflow-toolbar-actions="" className={TOOLBAR_ACTIONS}>
+            {newButton}
+            {bundleButton}
+            {importButton}
+            {refresh}
+          </div>
         </>
       )}
     </div>

@@ -317,14 +317,13 @@ describe("工作流库", () => {
     await openLibrary();
     const bar = document.querySelector<HTMLElement>("[data-library-toolbar]")!;
     const row = bar.querySelector<HTMLElement>("[data-workflow-toolbar-row]")!;
-    //: 这一行自己就是那个容器:「窄了才收」看的是**它**有多宽,不是窗口(左边那列目录、窄窗口下目录收成的
-    //: 那个下拉各占掉多少,窗口宽度看不出来)。
-    expect(row.className).toContain("@container/workflow-toolbar");
-    expect(row.className, "一行 = 一个不换行的 flex 行").toContain("flex");
-    expect(row.className).toContain("flex-nowrap");
-    expect(row.className, "写成 flex-wrap 就又会折到第二行").not.toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
-    expect(row.className, "自己占掉剩下的宽(工具条里那条目录下拉排在外面)").toContain("flex-1");
-    //: 搜索框 + 八样控件排成这一排 —— 谁被裹进另一层盒子里,谁就可能自己另起一行
+    const actions = bar.querySelector<HTMLElement>("[data-workflow-toolbar-actions]")!;
+    //: 两行:**看哪些**一行的容器查询决定什么时候收排序 / 显示方式;动作在新的一行。
+    expect(row.parentElement?.className).toContain("@container/workflow-toolbar");
+    expect(row.className, "筛选行只排筛选控件,不再把动作挤进来").not.toContain("flex-nowrap");
+    expect(row.className).toContain("flex");
+    expect(row.parentElement?.className, "工具条自己占掉剩下的宽(目录下拉排在外面)").toContain("flex-1");
+    //: 筛选控件排成第一行 —— 谁被裹进另一层盒子里,谁就可能自己另起一行
     const shape = (el: Element) =>
       el.matches("[data-search-input]") ? "search"
         : el.getAttribute("role") === "combobox" ? el.getAttribute("aria-label")
@@ -333,7 +332,10 @@ describe("工作流库", () => {
               : el.tagName.toLowerCase();
     expect([...row.children].map(shape)).toEqual([
       "search", "workflowLibraryKind", "workflowLibraryModel", "workflowLibrarySort", "libraryDensity",
-      "workflowLibraryView", "workflowNew", "workflowBundleInstall", "workflowImport", "workflowLibraryRefresh",
+      "workflowLibraryView",
+    ]);
+    expect([...actions.children].map(shape)).toEqual([
+      "workflowNew", "workflowBundleInstall", "workflowImport", "workflowLibraryRefresh",
     ]);
     //: 搜索框吃掉剩下的宽度;别的按内容宽(再有一个 flex-1 就和它抢了)
     const search = row.querySelector<HTMLElement>("[data-search-input]")!;
@@ -349,14 +351,15 @@ describe("工作流库", () => {
     }
     //: 「导入」「刷新」各让出一截宽(收窄、导入的字在窄的一档才收),但功能一点不少:名字、悬停说明、
     //: 点了会怎样,都还在(见下面那条「收成图标也点得到」)。
-    expect(within(row).getByRole("button", { name: "workflowLibraryRefresh" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "workflowImport" })).toBeTruthy();
+    expect(within(actions).getByRole("button", { name: "workflowLibraryRefresh" })).toBeTruthy();
+    expect(within(actions).getByRole("button", { name: "workflowImport" })).toBeTruthy();
   });
 
   it("工具条窄了:「导入」只剩图标但点得到(名字、说明都在);排序和显示方式收进「视图」,状态还是同一份", async () => {
     await openLibrary();
     const row = document.querySelector<HTMLElement>("[data-workflow-toolbar-row]")!;
-    const imports = within(row).getByRole("button", { name: "workflowImport" });
+    const actionRow = document.querySelector<HTMLElement>("[data-workflow-toolbar-actions]")!;
+    const imports = within(actionRow).getByRole("button", { name: "workflowImport" });
     //: 宽的一档带着「导入」两个字;窄的一档只剩图标 —— 字收在哪一档由**这一行**自己有多宽说(容器查询)。
     //: 收起来之后名字仍在:读屏念 aria-label,悬停说明第一行也是它,第二行接着说这是干什么的。
     expect(imports.querySelector("span")!.className).toContain("@max-[880px]/workflow-toolbar:hidden");
