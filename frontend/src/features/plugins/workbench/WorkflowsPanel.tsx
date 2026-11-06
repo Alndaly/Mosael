@@ -86,7 +86,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
     <div className="flex min-h-0 flex-1 flex-col gap-3" data-workflows-panel="">
       <div className="flex min-w-0 items-center gap-2">
         <SearchInput className="min-w-0 flex-1" value={query} placeholder={t("workbenchWorkflowsSearch")} onChange={(event) => setQuery(event.target.value)} />
-        <IconButton size="icon" label={t("workbenchWorkflowsRefresh")} loading={library.isFetching} onClick={() => void library.refetch()}>
+        <IconButton size="icon" label={t("workbenchWorkflowsRefresh")} loading={library.isRefetching} onClick={() => void library.refetch()}>
           <RefreshCw size={13} />
         </IconButton>
         <Button size="default" disabled={opening !== null} loading={opening === ""} onClick={() => void open()}>
