@@ -85,6 +85,7 @@ from app.domain.workflows.templates_dub import (
 )
 from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
 from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO, long_take_video_graph
+from app.domain.workflows.templates_upscale import upscale_model
 from app.domain.workflows.templates_long_talk import LONG_TALK_VIDEO, long_talk_video_graph
 from app.domain.workflows.templates_shots import (
     REFERENCE_VIDEO_SHOTS,
@@ -333,12 +334,12 @@ def built_in_template_graph(
         video = _continuation_video_model(db, user_id)
         return localised_names(locale, long_take_video_graph(
             chat=chat, opening=_opening_video_model(db, user_id, continuing=video), video=video,
-            image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE), db=db,
+            image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE), upscale=upscale_model(db, user_id), db=db,
         ))
     if template_id == LONG_TALK_VIDEO:
         return localised_names(locale, long_talk_video_graph(
             opening=_talking_video_model(db, user_id, continuing=False), video=_talking_video_model(db, user_id, continuing=True),
-            voice_id=_prefilled_voice_id(db, workspace_id, digital_human=True),
+            voice_id=_prefilled_voice_id(db, workspace_id, digital_human=True), upscale=upscale_model(db, user_id),
         ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return localised_names(locale, transcript_video_cleanup_graph(chat=chat, locale=locale))

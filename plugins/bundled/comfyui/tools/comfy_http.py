@@ -476,12 +476,17 @@ class Comfy:
 
     def queue(self) -> tuple[list[str], list[str]]:
         """(在跑的任务号, 排队的任务号)。"""
+        running, pending = self.queue_entries()
+        return [str(item[1]) for item in running], [str(item[1]) for item in pending]
+
+    def queue_entries(self) -> tuple[list[list[Any]], list[list[Any]]]:
+        """(在跑的, 排队的)原样的队列条目:`[序号, 任务号, API 图, extra_data, 输出节点]`。要看图或 client_id 时用它。"""
         queue = self.get("/queue") or {}
 
-        def ids(entries: Any) -> list[str]:
-            return [str(item[1]) for item in entries or [] if isinstance(item, list) and len(item) > 1]
+        def entries(raw: Any) -> list[list[Any]]:
+            return [item for item in raw or [] if isinstance(item, list) and len(item) > 1]
 
-        return ids(queue.get("queue_running")), ids(queue.get("queue_pending"))
+        return entries(queue.get("queue_running")), entries(queue.get("queue_pending"))
 
     def history(self, prompt_id: str | None = None, *, max_items: int | None = None) -> dict[str, Any]:
         """一个任务的历史(`{任务号: 条目}`),或最近的几条(给了 `max_items`)。"""

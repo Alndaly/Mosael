@@ -563,6 +563,59 @@ def history_entry(comfy: Comfy, prompt_id: str) -> dict[str, Any] | None:
     return None
 
 
+#: VHS 分批(`VHS_BatchManager`)时,视频合成节点在没收尾的那几批里只交回这个标记。
+_UNFINISHED_BATCH = "unfinished_batch"
+#: 往回找接着跑的那一批时看最近几条历史:一批跑完到我们来问,中间最多夹着几批(一批几十帧,几分钟一批)。
+_BATCH_HISTORY_ITEMS = 32
+
+
+def unfinished_batch(entry: dict[str, Any] | None) -> bool:
+    """这条历史是分批里没收尾的一批吗。"""
+    return any(isinstance(output, dict) and _UNFINISHED_BATCH in output for output in ((entry or {}).get("outputs") or {}).values())
+
+
+def _batch_marks(item: list[Any] | tuple[Any, ...]) -> tuple[float, str] | None:
+    """一个队列 / 历史条目(`[序号, 任务号, 图, extra_data, …]`)若是分批的一批:(序号, client_id);否则 None。"""
+    if len(item) < 4 or not isinstance(item[2], dict) or not isinstance(item[3], dict):
+        return None
+    if not any(isinstance(node, dict) and node.get("class_type") == "VHS_BatchManager" for node in item[2].values()):
+        return None
+    number = item[0] if isinstance(item[0], (int, float)) else 0
+    return float(number), str(item[3].get("client_id") or "")
+
+
+def next_batch(comfy: Comfy, entry: dict[str, Any], seen: set[str]) -> str | None:
+    """分批里没收尾的这一批,接着它跑的那一批的任务号;还没排上回 None。
+
+    VHS 每跑完一批,把**同一张图、同一个 client_id** 用一个新任务号重新排进队列,序号取负、越来越小(插到队头),
+    视频只在最后一批的历史里。所以按 client_id 认、按序号排在它后面认,跑过的(`seen`)不再认:先看队列,
+    已经跑完的再看最近的历史。
+    """
+    marks = _batch_marks(entry.get("prompt") or [])
+    if marks is None or not marks[1]:
+        return None
+    number, client_id = marks
+
+    def follows(item: Any) -> bool:
+        found = _batch_marks(item) if isinstance(item, (list, tuple)) else None
+        return (found is not None and found[1] == client_id and str(item[1]) not in seen
+                and found[0] < min(number, 0))
+
+    running, pending = comfy.queue_entries()
+    for item in running + pending:
+        if follows(item):
+            return str(item[1])
+    later = []
+    for task_id, value in comfy.history(max_items=_BATCH_HISTORY_ITEMS).items():
+        submitted = list((value or {}).get("prompt") or []) if isinstance(value, dict) else []
+        if len(submitted) > 1:
+            submitted[1] = task_id
+            if follows(submitted):
+                later.append(submitted)
+    #: 最先排上的那一批(序号最大的那个负数)才是紧接着的。
+    return str(max(later, key=lambda item: item[0])[1]) if later else None
+
+
 def follow_poll(comfy: Comfy, prompt_id: str, emit: Emit, locale: str, *, deadline: float | None = None) -> dict[str, Any] | None:
     """没有 WebSocket 时的等法:轮询历史和队列。只看得到排队和结束,中间按时间爬坡。
 
@@ -570,13 +623,22 @@ def follow_poll(comfy: Comfy, prompt_id: str, emit: Emit, locale: str, *, deadli
     """
     started = time.monotonic()
     missing = 0
+    #: 分批时任务号一批一换(见 next_batch);对外仍是提交时的那一个,这里跟着当前那一批。
+    seen = {prompt_id}
     while True:
         if cancelled():
             stop(comfy, prompt_id)
             raise ComfyError(say(locale, "已取消", "Cancelled"))
         entry = history_entry(comfy, prompt_id)
-        if entry:
+        if entry and not unfinished_batch(entry):
             return entry
+        if entry:
+            following = next_batch(comfy, entry, seen)
+            if following:
+                prompt_id = following
+                seen.add(following)
+                missing = 0
+                continue
         running, pending = comfy.queue()
         elapsed = int(time.monotonic() - started)
         if prompt_id in pending:
@@ -589,7 +651,7 @@ def follow_poll(comfy: Comfy, prompt_id: str, emit: Emit, locale: str, *, deadli
             missing = 0
         else:
             # 队列里没有、历史里也没有:ComfyUI 多半重启过,这个任务已经没了。给它几次机会
-            # (刚提交的那一瞬间两边都可能还没登记)。
+            # (刚提交的那一瞬间两边都可能还没登记;分批时一批跑完、下一批还没排上也是这样)。
             missing += 1
             if missing >= 5:
                 lost = say(locale, f"ComfyUI 里已经找不到任务 {prompt_id}(它可能重启过)",
@@ -622,7 +684,9 @@ def run_prompt(comfy: Comfy, prompt: dict[str, Any], emit: Emit, locale: str,
         progress(emit, 0.02, tracker.message())
         if socket is not None:
             try:
-                return prompt_id, _follow_ws(comfy, socket, prompt_id, tracker, emit, locale)
+                entry = _follow_ws(comfy, socket, prompt_id, tracker, emit, locale)
+                #: WebSocket 只跟提交的那一个任务;分批的后面几批由轮询接着跟。
+                return prompt_id, follow_poll(comfy, prompt_id, emit, locale) if unfinished_batch(entry) else entry
             except WebSocketClosed:
                 pass
         return prompt_id, follow_poll(comfy, prompt_id, emit, locale)
@@ -696,7 +760,7 @@ def run_repeated(comfy: Comfy, build: Callable[[int], dict[str, Any]], count: in
             runs.append((prompt_id, entry, seeds[index]))
 
     for index, prompt_id in enumerate(done):  # 重启之前已经跑完的那几次:历史里取
-        settle(index, prompt_id, lambda pid=prompt_id: history_entry(comfy, pid))
+        settle(index, prompt_id, lambda pid=prompt_id: follow_poll(comfy, pid, step_emit(index), locale))
     start = len(done)
     if state and resume.get("prompt_id"):  # 重启时在跑的那一次:接着等,不再提交
         current = str(resume["prompt_id"])

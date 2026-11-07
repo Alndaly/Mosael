@@ -33,6 +33,7 @@ from app.domain.workflows.templates_models import (
     video_plan_for,
 )
 from app.domain.workflows.templates_schemas import object_schema
+from app.domain.workflows.templates_upscale import DEFAULT_OUTPUT_RESOLUTION, frame_plan_node, resolution_options, upscale_node
 
 LONG_TAKE_VIDEO = "long_take_video"
 
@@ -89,8 +90,11 @@ def _anchor_nodes(image: ModelChoice, plan: VideoPlan, db: Session | None) -> tu
 
 
 def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: ModelChoice,
-                          image: ModelChoice | None = None, db: Session | None = None) -> dict[str, Any]:
+                          image: ModelChoice | None = None, upscale: ModelChoice | None = None,
+                          db: Session | None = None) -> dict[str, Any]:
+    """`upscale`:配好的超分工作流(见 templates_upscale)。有它,每段上时间线前超分到开始参数选的清晰度。"""
     plan = video_plan_for(db, video, references=0)
+    upscaling = upscale is not None and bool(upscale.model)
     #: 模型不收尾帧、或者这台机器上没有收参考图的图片模型:没有这一格,图里也没有这几个节点。
     anchors = plan.last_frame and image is not None and bool(image.model)
     anchor_nodes, anchor_edges = _anchor_nodes(image, plan, db) if anchors else ([], [])
@@ -158,7 +162,7 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
         "position": {"x": 390, "y": 140},
         "config": {
             "sequence_id": "{{input.sequence_id}}",
-            "asset_id": "{{loop.item}}",
+            "asset_id": "{{upscale.asset_id}}" if upscaling else "{{loop.item}}",
             #: 成片以交过去的那段尾巴开头:这一截上一段已经有了。只交了一帧的不用去掉。潜空间的上文长度是准的,不用在画面里找。
             "start": "{{input.overlap_seconds}}" if plan.latent_chain else "{{seam.start}}" if plan.extends else 0,
         },
@@ -174,12 +178,17 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
             "search_seconds": "{{input.search_seconds}}",
         },
     }
-    assemble_body = {
+    assemble_body: dict[str, Any] = {
         "nodes": [seam, append_segment] if plan.extends and not plan.latent_chain else [append_segment],
         "edges": [{"id": "seam_append", "source": "seam", "target": "append_segment"}] if plan.extends and not plan.latent_chain else [],
     }
+    if upscaling:
+        #: 超分只改尺寸不改时长:接缝、上文的长度照旧按原片算。
+        assemble_body["nodes"].insert(0, upscale_node("upscale", upscale, asset="{{loop.item}}", width="{{input.frame_width}}",
+                                                      height="{{input.frame_height}}", position={"x": 80, "y": 360}))
+        assemble_body["edges"].append({"id": "upscale_append", "source": "upscale", "target": "append_segment"})
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 6, "source": "official"},
+        "meta": {"template_id": LONG_TAKE_VIDEO, "template_version": 7, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -204,8 +213,10 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                         **({"anchor_every": 0} if anchors else {}),
                         "aspect_ratio": plan.aspect_ratio,
                         "resolution": plan.resolution,
+                        **({"output_resolution": DEFAULT_OUTPUT_RESOLUTION} if upscaling else {}),
                     },
                     "required_params": ["idea"],
+                    **({"param_options": {"output_resolution": resolution_options()}} if upscaling else {}),
                 },
             },
             {
@@ -266,7 +277,9 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "id": "video_project", "type": "project_sequence_create",
                 "name": {"zh": "建立项目与时间线", "en": "Create the project and timeline"},
                 "position": {"x": 660, "y": 120},
-                "config": {"name": "长片", "width": width, "height": height, "fps": 24},
+                "config": {"name": "长片", "fps": 24,
+                           **({"width": "{{frame_plan.value.width}}", "height": "{{frame_plan.value.height}}"} if upscaling
+                              else {"width": width, "height": height})},
             },
             {
                 "id": "opening", "type": "ai_generate",
@@ -313,7 +326,8 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "id": "append_opening", "type": "timeline_append",
                 "name": {"zh": "摆上第一段", "en": "Lay down the first segment"},
                 "position": {"x": 1600, "y": 300},
-                "config": {"sequence_id": "{{video_project.sequence_id}}", "asset_id": "{{opening.asset_id}}"},
+                "config": {"sequence_id": "{{video_project.sequence_id}}",
+                           "asset_id": "{{upscale_opening.asset_id}}" if upscaling else "{{opening.asset_id}}"},
             },
             {
                 "id": "assemble", "type": "loop_foreach",
@@ -322,7 +336,9 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
                 "config": {
                     "items": "{{segments.results}}",
                     "inputs": {"sequence_id": "{{video_project.sequence_id}}", "search_seconds": "{{start.segment_seconds}}",
-                               "overlap_seconds": "{{start.overlap_seconds}}"},
+                               "overlap_seconds": "{{start.overlap_seconds}}",
+                               **({"frame_width": "{{frame_plan.value.width}}", "frame_height": "{{frame_plan.value.height}}"}
+                                  if upscaling else {})},
                     "body": assemble_body,
                     "output": "{{loop.item}}",
                     "previous_initial": "{{opening.asset_id}}",
@@ -358,4 +374,16 @@ def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: Mod
             {"id": "export_output", "source": "export_final", "target": "output"},
         ],
     }
+    if upscaling:
+        graph["nodes"] += [
+            frame_plan_node({"x": 340, "y": 120}),
+            upscale_node("upscale_opening", upscale, asset="{{opening.asset_id}}", width="{{frame_plan.value.width}}",
+                         height="{{frame_plan.value.height}}", position={"x": 1300, "y": 120}),
+        ]
+        graph["edges"] += [
+            {"id": "start_frame_plan", "source": "start", "target": "frame_plan"},
+            {"id": "frame_plan_project", "source": "frame_plan", "target": "video_project"},
+            {"id": "opening_upscale", "source": "opening", "target": "upscale_opening"},
+            {"id": "upscale_append_opening", "source": "upscale_opening", "target": "append_opening"},
+        ]
     return normalize_graph(graph, node_types=NODE_TYPES)

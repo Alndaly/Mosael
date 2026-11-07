@@ -17,6 +17,7 @@ from typing import Any
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import FRAME_ASPECTS, LATENT_CONTEXT_SECONDS, LATENT_SEGMENT_SECONDS, ModelChoice
+from app.domain.workflows.templates_upscale import DEFAULT_OUTPUT_RESOLUTION, frame_plan_node, resolution_options, upscale_node
 
 LONG_TALK_VIDEO = "long_talk_video"
 
@@ -29,8 +30,11 @@ def _speaking_prompt(scene: str) -> str:
             "natural available light, film grain, no beauty filter, no CGI look. One continuous shot, the camera stays still, no cut.")
 
 
-def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id: str = "") -> dict[str, Any]:
+def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id: str = "",
+                          upscale: ModelChoice | None = None) -> dict[str, Any]:
+    """`upscale`:配好的超分工作流(见 templates_upscale)。有它,每段上时间线前超分到开始参数选的清晰度。"""
     width, height = FRAME_ASPECTS["16:9"]
+    upscaling = upscale is not None and bool(upscale.model)
     segment_body = {
         "nodes": [
             {
@@ -69,13 +73,19 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "id": "append_segment", "type": "timeline_append",
                 "name": {"zh": "接到时间线上", "en": "Add it to the timeline"},
                 "position": {"x": 80, "y": 140},
-                "config": {"sequence_id": "{{input.sequence_id}}", "asset_id": "{{loop.item}}", "start": "{{input.overlap_seconds}}"},
+                "config": {"sequence_id": "{{input.sequence_id}}", "start": "{{input.overlap_seconds}}",
+                           "asset_id": "{{upscale.asset_id}}" if upscaling else "{{loop.item}}"},
             },
         ],
         "edges": [],
     }
+    if upscaling:
+        #: 超分只改尺寸不改时长:上文的长度照旧按原片算,配音也照旧对得上。
+        assemble_body["nodes"].insert(0, upscale_node("upscale", upscale, asset="{{loop.item}}", width="{{input.frame_width}}",
+                                                      height="{{input.frame_height}}", position={"x": 80, "y": 360}))
+        assemble_body["edges"].append({"id": "upscale_append", "source": "upscale", "target": "append_segment"})
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TALK_VIDEO, "template_version": 2, "source": "official"},
+        "meta": {"template_id": LONG_TALK_VIDEO, "template_version": 3, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -91,9 +101,11 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                         "consent": "",
                         "segment_seconds": LATENT_SEGMENT_SECONDS,
                         "overlap_seconds": LATENT_CONTEXT_SECONDS,
+                        **({"aspect_ratio": "16:9", "output_resolution": DEFAULT_OUTPUT_RESOLUTION} if upscaling else {}),
                     },
                     "required_params": ["script", "face_asset_id", "voice_id", "consent"],
-                    "param_options": {"consent": [{"value": "yes", "label": "已取得授权 / Consent obtained"}]},
+                    "param_options": {"consent": [{"value": "yes", "label": "已取得授权 / Consent obtained"}],
+                                      **({"output_resolution": resolution_options()} if upscaling else {})},
                 },
             },
             {
@@ -124,7 +136,9 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "id": "video_project", "type": "project_sequence_create",
                 "name": {"zh": "建立项目与时间线", "en": "Create the project and timeline"},
                 "position": {"x": 940, "y": 60},
-                "config": {"name": "数字人", "width": width, "height": height, "fps": 24},
+                "config": {"name": "数字人", "fps": 24,
+                           **({"width": "{{frame_plan.value.width}}", "height": "{{frame_plan.value.height}}"} if upscaling
+                              else {"width": width, "height": height})},
             },
             {
                 "id": "voice_open", "type": "media_clip",
@@ -173,7 +187,8 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "id": "append_opening", "type": "timeline_append",
                 "name": {"zh": "摆上第一段", "en": "Lay down the first segment"},
                 "position": {"x": 2440, "y": 300},
-                "config": {"sequence_id": "{{video_project.sequence_id}}", "asset_id": "{{opening.asset_id}}"},
+                "config": {"sequence_id": "{{video_project.sequence_id}}",
+                           "asset_id": "{{upscale_opening.asset_id}}" if upscaling else "{{opening.asset_id}}"},
             },
             {
                 "id": "assemble", "type": "loop_foreach",
@@ -181,7 +196,9 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "position": {"x": 2740, "y": 300},
                 "config": {
                     "items": "{{segments.results}}",
-                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "overlap_seconds": "{{start.overlap_seconds}}"},
+                    "inputs": {"sequence_id": "{{video_project.sequence_id}}", "overlap_seconds": "{{start.overlap_seconds}}",
+                               **({"frame_width": "{{frame_plan.value.width}}", "frame_height": "{{frame_plan.value.height}}"}
+                                  if upscaling else {})},
                     "body": assemble_body,
                     "output": "{{loop.item}}",
                 },
@@ -216,4 +233,16 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
             {"id": "export_output", "source": "export_final", "target": "output"},
         ],
     }
+    if upscaling:
+        graph["nodes"] += [
+            frame_plan_node({"x": 640, "y": 60}),
+            upscale_node("upscale_opening", upscale, asset="{{opening.asset_id}}", width="{{frame_plan.value.width}}",
+                         height="{{frame_plan.value.height}}", position={"x": 2140, "y": 60}),
+        ]
+        graph["edges"] += [
+            {"id": "start_frame_plan", "source": "start", "target": "frame_plan"},
+            {"id": "frame_plan_project", "source": "frame_plan", "target": "video_project"},
+            {"id": "opening_upscale", "source": "opening", "target": "upscale_opening"},
+            {"id": "upscale_append_opening", "source": "upscale_opening", "target": "append_opening"},
+        ]
     return normalize_graph(graph, node_types=NODE_TYPES)
