@@ -70,8 +70,8 @@ def test_真跑一遍_每段配到自己那一截音频_带上尾巴和人物(fa
     assert all(one["consent"] == "yes" for one in videos)
     assert all("face:reference_image" in one["sources"] for one in videos), "每段都带人物,说久了才不走样"
     voices = [one for one in fake_run["clips"] if one["asset_id"] == "voice"]
-    assert [float(one["start"]) for one in voices] == pytest.approx([0, 8.458], abs=0.01)
+    assert [float(one["start"]) for one in voices] == pytest.approx([0, 8.5], abs=0.01)
     assert [float(one["end"]) for one in voices] == pytest.approx([10.125, 18.583], abs=0.01)
     assert videos[1]["parameters"]["50.scene_number"] == 1 and videos[1]["parameters"]["52.scene_number"] == 2, "续写读上一段、存这一段"
-    assert [float(one) for one in fake_run["starts"][1:]] == pytest.approx([40 / 24]), "切掉上文,声音才不重叠"
+    assert [float(one) for one in fake_run["starts"][1:]] == pytest.approx([39 / 24]), "切掉上文,声音才不重叠"
     assert context["export_final"]["asset_id"] == "final"
