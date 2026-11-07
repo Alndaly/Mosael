@@ -74,19 +74,19 @@
       }
     },
     "win32-x86_64": {
-      "version": "autobuild-2026-11-01-12-49",
+      "version": "autobuild-2026-11-06-12-50",
       "source": "github.com/BtbN/FFmpeg-Builds",
       "archives": [
         {
-          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-01-12-49/ffmpeg-N-128273-g836436cfb9-win64-gpl.zip",
-          "sha256": "ad99b0b94e68f2932391ad982c193b847c93ba41f17b7cafbf50710e15d45185"
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-06-12-50/ffmpeg-N-128532-g5d85b7bfb2-win64-gpl.zip",
+          "sha256": "b027eb661954382e86a29ea8b04b4944b32bb66fa029006823acbd058cf4bbda"
         }
       ],
       "binaries": {
         "ffmpeg": "bin/ffmpeg.exe",
         "ffprobe": "bin/ffprobe.exe"
       },
-      "release_asset": "ffmpeg-N-128273-g836436cfb9-win64-gpl.zip"
+      "release_asset": "ffmpeg-N-128532-g5d85b7bfb2-win64-gpl.zip"
     }
   }
 }
