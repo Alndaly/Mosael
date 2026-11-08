@@ -236,5 +236,23 @@ argument 'attention'`),所以那个补丁去掉。Spark-H3 的稀疏注意力声
 
 **Spark-H3**(维护者装上 v0.2.0,SM120):同一段、同一种子,第二遍 Spark speed、topk 0.2 是 305 秒(含第一次加载),
 topk 0.1 是 258 秒,自带 sol-attn 是 242 秒,清晰度相近。这台机器、这个长度上它不比自带的快,工作流先用自带的。
-KJNodes 1.5.0 的分组注意力补丁没有 `attention` 参数(上游 2026-09-06 修过,1.5.3),接任何注意力补丁都报错;升级后
-再比「分组注意力 + Spark」。
+KJNodes 1.5.0 的分组注意力补丁没有 `attention` 参数(上游 2026-09-06 修过,1.5.3),接任何注意力补丁都报错。
+
+**升级之后再比(2026-11-08)**:5090 用 ComfyUI Manager 升了全部插件(KJNodes 1.5.3),同时 torch 从 2.9.1 整体升到
+2.11.0(torchvision 0.26、torchaudio 2.11,nunchaku 换成 torch2.11 的包;Spark-H3 的后端不绑 torch 版本,沿用)。
+同一段、同一种子:自带 sol-attn 256 秒(含重启后第一次加载),Spark topk 0.2 是 278 秒,「分组注意力 + 前馈分块 +
+Spark」能跑了,但 310 秒;三者清晰度、闪烁都在误差内,看帧也一样。**结论不变:继续用自带的 sol-attn。**
+
+升级时踩到的两件事,记下免得再踩:
+
+- **torchaudio 必须和 torch 同版本**。它的 DLL 加载失败时,所有 `import torchaudio` 的插件整包不注册;vrgamedevgirl
+  新版把 `VRGDG_MiniMaxH3AudioDrive` 挪进了顶部就 import torchaudio 的 `minimax/nodes.py`,数字人因此缺节点。torchaudio
+  最高只到 2.11(之后由 torchcodec 接手),再往上升 torch 时要先确认插件不再依赖它;
+- **vrgamedevgirl 的 `VRGDG_MiniMaxH3SaveLatent` 在 `fps` 后面插了 `pass1` 开关**。生成脚本按位置写控件,旧的 `-1`
+  落进 `pass1`,上一段存成 `scene_NNN.pass1.latent`,下一段读 `scene_NNN.latent` 找不到,长片和数字人从第二段起
+  全失败。生成脚本已显式写 `pass1=False`;Mosael 读的是 ComfyUI 用户目录 `workflows/` 里的副本,插件更新后这份副本
+  也要跟着更新。
+
+修完之后重跑「H3 数字人 2K」(开场加四段续写,约 44 秒,2560×1440):四段接缝都平滑,链路正常。但第四段在大约
+3.5 秒处自己硬切成了大特写,特写里的皮肤满是麻点。超分前的原始段里就是这样,所以问题出在生成,不是 SeedVR2;
+和这次升级无关,是续写到最后一段时镜头漂了,另开一条跟进。
