@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Digital human of any length",
   "description": "One portrait and one script: it voices the script, cuts it into segments and has the person speak on from the tail of the last, joined into one unbroken video. Needs consent for the face and voice.",
-  "graph_hash": "08ec3f4fbdb5c1f6997ca067f4a060f8dfabc4ea27bf0e7882e7320540a890c3",
+  "graph_hash": "31aa15082ed5f1464ba060b69ff8ed66765d145accdf06309ac864e2cd23e0fb",
   "graph": {
     "meta": {
       "template_id": "long_talk_video",
-      "template_version": 3,
+      "template_version": 5,
       "source": "official"
     },
     "nodes": [
@@ -61,6 +61,22 @@
         }
       },
       {
+        "id": "tighten",
+        "type": "tighten_pauses",
+        "name": "Tighten the pauses",
+        "position": {
+          "x": 490,
+          "y": 460
+        },
+        "config": {
+          "asset_id": "",
+          "max_pause": 0.6
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
         "id": "voice_info",
         "type": "asset",
         "name": "How long the voice runs",
@@ -87,7 +103,9 @@
           "target_seconds": "",
           "longest_seconds": "{{start.segment_seconds}}",
           "allowed_seconds": "{{start.segment_seconds}}",
-          "overlap_seconds": "{{start.overlap_seconds}}"
+          "overlap_seconds": "{{start.overlap_seconds}}",
+          "fps": 24,
+          "shortest_seconds": 5.166666666666667
         },
         "inputs": [
           "target_seconds"
@@ -142,7 +160,8 @@
           "prompt": "<Picture 1> is the person in the reference photo; keep the face, hair and clothes exactly. {{start.scene}} Highest priority: whenever the person is on screen the mouth keeps speaking, the lips, jaw and cheeks follow <Audio 1> syllable by syllable, opening and closing naturally every half second, teeth and the inside of the mouth visible. Photorealistic documentary footage, real skin with pores, natural micro-expressions, eye blinks, subtle breathing, natural available light, film grain, no beauty filter, no CGI look. One continuous shot, the camera stays still, no cut.",
           "parameters": {
             "52.project_folder": "mosael/{{video_project.project_id}}",
-            "52.scene_number": 1
+            "52.scene_number": 1,
+            "7.length": "{{plan.opening_frames}}"
           },
           "source_assets": [
             "{{start.face_asset_id}}:reference_image",
@@ -165,7 +184,7 @@
             "scene": "{{start.scene}}",
             "consent": "{{start.consent}}",
             "face_asset_id": "{{start.face_asset_id}}",
-            "voice_asset_id": "{{speak.asset_id}}",
+            "voice_asset_id": "{{tighten.asset_id}}",
             "latent_folder": "mosael/{{video_project.project_id}}",
             "overlap_seconds": "{{start.overlap_seconds}}"
           },
@@ -203,7 +222,8 @@
                     "50.project_folder": "{{input.latent_folder}}",
                     "50.scene_number": "{{loop.item.previous_scene}}",
                     "52.project_folder": "{{input.latent_folder}}",
-                    "52.scene_number": "{{loop.item.scene}}"
+                    "52.scene_number": "{{loop.item.scene}}",
+                    "7.length": "{{loop.item.frames}}"
                   },
                   "source_assets": [
                     "{{input.face_asset_id}}:reference_image",
@@ -339,8 +359,13 @@
         "target": "speak"
       },
       {
-        "id": "speak_info",
+        "id": "speak_tighten",
         "source": "speak",
+        "target": "tighten"
+      },
+      {
+        "id": "tighten_info",
+        "source": "tighten",
         "target": "voice_info"
       },
       {
@@ -399,8 +424,16 @@
         "target": "output"
       },
       {
-        "id": "d-speak-asset_id-voice_info-asset_id",
+        "id": "d-speak-asset_id-tighten-asset_id",
         "source": "speak",
+        "target": "tighten",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-tighten-asset_id-voice_info-asset_id",
+        "source": "tighten",
         "target": "voice_info",
         "kind": "data",
         "source_output": "asset_id",
@@ -415,8 +448,8 @@
         "target_input": "target_seconds"
       },
       {
-        "id": "d-speak-asset_id-voice_open-asset_id",
-        "source": "speak",
+        "id": "d-tighten-asset_id-voice_open-asset_id",
+        "source": "tighten",
         "target": "voice_open",
         "kind": "data",
         "source_output": "asset_id",

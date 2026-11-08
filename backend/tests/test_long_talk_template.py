@@ -26,7 +26,7 @@ def test_图是合法的_授权是必填的() -> None:
 
 @pytest.fixture
 def fake_run(monkeypatch):
-    seen: dict[str, Any] = {"generated": [], "clips": [], "starts": []}
+    seen: dict[str, Any] = {"generated": [], "clips": [], "starts": [], "tightened": [], "measured": []}
 
     def generate(db, scope, config):
         seen["generated"].append({"model": config["model"], "sources": config["source_assets"], "consent": config["consent"],
@@ -40,7 +40,10 @@ def fake_run(monkeypatch):
     for node_type, handler in {
         "ai_generate": generate, "media_clip": clip,
         "synthesize_speech": lambda db, scope, config: {"asset_id": "voice", "voice_note": ""},
-        "asset": lambda db, scope, config: {"asset_id": "voice", "name": "", "kind": "audio", "duration": 18.583, "width": 0, "height": 0, "fps": 0},
+        "tighten_pauses": lambda db, scope, config: seen["tightened"].append(config) or {
+            "asset_id": "tight", "source_asset_id": config["asset_id"], "removed_seconds": 0.7, "duration": 18.583},
+        "asset": lambda db, scope, config: seen["measured"].append(config["asset_id"]) or {
+            "asset_id": config["asset_id"], "name": "", "kind": "audio", "duration": 18.583, "width": 0, "height": 0, "fps": 0},
         "project_sequence_create": lambda db, scope, config: {"project_id": "p", "sequence_id": "s", "video_track_id": "v", "audio_track_id": "a", "name": "n"},
         "timeline_clear": lambda db, scope, config: {"removed": 0, "sequence_id": "s"},
         "timeline_append": lambda db, scope, config: seen["starts"].append(config.get("start")) or {"clip_id": "c", "timeline_start": 0, "timeline_end": 1, "duration": 1, "trimmed": 0, "sequence_id": "s"},
@@ -69,9 +72,14 @@ def test_真跑一遍_每段配到自己那一截音频_带上尾巴和人物(fa
     assert [one["model"] for one in videos] == [OPEN.model, CONTINUE.model]
     assert all(one["consent"] == "yes" for one in videos)
     assert all("face:reference_image" in one["sources"] for one in videos), "每段都带人物,说久了才不走样"
-    voices = [one for one in fake_run["clips"] if one["asset_id"] == "voice"]
+    assert [one["asset_id"] for one in fake_run["tightened"]] == ["voice"], "配音念完先压一遍停顿"
+    assert fake_run["measured"] == ["tight"], "段数按压完的那份算"
+    assert all(one["asset_id"] == "tight" for one in fake_run["clips"]), "每段截的都是压完停顿的那份配音"
+    voices = fake_run["clips"]
     assert [float(one["start"]) for one in voices] == pytest.approx([0, 8.5], abs=0.01)
     assert [float(one["end"]) for one in voices] == pytest.approx([10.125, 18.583], abs=0.01)
     assert videos[1]["parameters"]["50.scene_number"] == 1 and videos[1]["parameters"]["52.scene_number"] == 2, "续写读上一段、存这一段"
+    assert videos[0]["parameters"]["7.length"] == 243, "第一段是整段"
+    assert videos[1]["parameters"]["7.length"] == 242, "最后一段只生成配音那么长(18.583 − 8.5 秒),不补一截静音画面"
     assert [float(one) for one in fake_run["starts"][1:]] == pytest.approx([39 / 24]), "切掉上文,声音才不重叠"
     assert context["export_final"]["asset_id"] == "final"

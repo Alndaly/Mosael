@@ -1145,11 +1145,19 @@
           "zh": "每段演什么",
           "en": "What each segment shows"
         }
+      },
+      "fps": {
+        "type": "number",
+        "label": {
+          "zh": "帧率",
+          "en": "Frame rate"
+        }
       }
     },
     "outputs": [
       "segment_seconds",
       "opening_seconds",
+      "opening_frames",
       "opening_last_frame",
       "rounds",
       "following",
@@ -1163,6 +1171,10 @@
       "opening_seconds": {
         "zh": "第一段演到第几秒",
         "en": "Where the first segment ends"
+      },
+      "opening_frames": {
+        "zh": "第一段要几帧",
+        "en": "Frames for the first segment"
       },
       "opening_last_frame": {
         "zh": "第一段的尾帧",
@@ -4586,6 +4598,50 @@
       "length": {
         "zh": "长度",
         "en": "Length"
+      }
+    }
+  },
+  {
+    "type": "tighten_pauses",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "media": "audio",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "max_pause": {
+        "type": "number",
+        "label": {
+          "zh": "停顿上限",
+          "en": "Max pause"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "source_asset_id",
+      "removed_seconds",
+      "duration"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "source_asset_id": {
+        "zh": "来源素材",
+        "en": "Source media"
+      },
+      "removed_seconds": {
+        "zh": "剪掉了几秒",
+        "en": "Seconds removed"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
       }
     }
   },

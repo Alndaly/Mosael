@@ -60,6 +60,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   clip_audio: AudioWaveform,
   document_parse: FileText,
   trim: Scissors,
+  tighten_pauses: AudioWaveform,
   board_write: PenLine,
   board_run: Wrench,
   entity_draw: Rotate3d,

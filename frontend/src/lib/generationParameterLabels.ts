@@ -44,6 +44,8 @@ const HOST_PARAMETER_LABELS: Record<string, MessageKey> = {
   "50.scene_number": "genLatentReadScene",
   "52.project_folder": "genLatentSaveFolder",
   "52.scene_number": "genLatentSaveScene",
+  //: 这一段生成多少帧(templates_models.LATENT_LENGTH):最后一段按配音长度给,不补一截静音画面。
+  "7.length": "genLatentFrames",
   aspect_ratio: "wfGenAspectRatio",
   size: "wfGenSize",
   resolution: "wfGenResolution",

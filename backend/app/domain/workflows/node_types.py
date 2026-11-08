@@ -1233,11 +1233,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "advanced": True, "type": "template", "media": "image", "description": "wfNode_chain_plan_last_frame_asset_id",
             },
             "beats": {"advanced": True, "type": "template", "description": "wfNode_chain_plan_beats"},
+            "fps": {"advanced": True, "type": "number", "description": "wfNode_chain_plan_fps"},
         },
-        "outputs": ["segment_seconds", "opening_seconds", "opening_last_frame", "rounds", "following", "count"],
-        "output_labels": {"opening_seconds": "wfOut_chain_opening_seconds", "opening_last_frame": "wfOut_chain_opening_last_frame",
+        "outputs": ["segment_seconds", "opening_seconds", "opening_frames", "opening_last_frame", "rounds", "following", "count"],
+        "output_labels": {"opening_seconds": "wfOut_chain_opening_seconds", "opening_frames": "wfOut_chain_opening_frames",
+                          "opening_last_frame": "wfOut_chain_opening_last_frame",
                           "following": "wfOut_chain_following"},
-        "output_types": {"segment_seconds": "number", "opening_seconds": "number", "rounds": "json", "following": "number",
+        "output_types": {"segment_seconds": "number", "opening_seconds": "number", "opening_frames": "number", "rounds": "json",
+                         "following": "number",
                          "count": "number"},
     },
     #: 把续写的几段接成一份素材。接缝在画面里找,见 assets/joining。
@@ -1291,6 +1294,24 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["asset_id", "source_asset_id", "start", "end", "duration"],
         "output_types": {"start": "number", "end": "number"},
+    },
+    #: 把一段话里过长的停顿压到上限(domain/assets/pauses):视频模型拿音频驱动口型时,一秒多的静音会被读成「换镜头」。
+    #: 数字人模板在配音之后过一遍;本机 ffmpeg,不花钱。只收音频 —— 视频压停顿画面也得跟着剪,那是剪辑台的「删静音」。
+    "tighten_pauses": {
+        "external": False,
+        "spends": False,
+        "output_media": {"asset_id": "audio"},
+        "category": "wfCat_audio",
+        "label": "wfNode_tighten_pauses",
+        "description": "wfNode_tighten_pauses_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "audio", "description": "wfNode_tighten_pauses_asset_id"},
+            "max_pause": {"type": "number", "default": 0.6, "label": "wfField_max_pause",
+                          "description": "wfNode_tighten_pauses_max_pause"},
+        },
+        "outputs": ["asset_id", "source_asset_id", "removed_seconds", "duration"],
+        "output_types": {"removed_seconds": "number", "duration": "number"},
+        "output_labels": {"removed_seconds": "wfOut_tighten_pauses_removed_seconds"},
     },
     #: 图片格的一项能力:把一张宫格拼图(九宫格表情包、四格分镜、多角度设定图)等分切成几张单图。本机处理、不花钱;
     #: 画板上切出来的几格照原来的宫格排在右边(`board_columns` 点名交出列数的那个输出,见 boards.canvas._derive)。

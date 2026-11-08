@@ -40,6 +40,11 @@ LATENT_LOAD_SCENE = "50.scene_number"
 LATENT_SAVE_SCENE = "52.scene_number"
 LATENT_SEGMENT_SECONDS = 10.125
 LATENT_CONTEXT_SECONDS = 39 / 24
+#: 这一段生成多少帧(节点 7 的 length):工作流里写死的是一整段 243 帧,最后一段按它真要的长度改小(见 chain_plan 的 `fps`)。
+#: H3 按 17k+5 帧取,填进去的帧数由节点自己向上对齐;最短不少于它训练过的 124 帧(约 5.2 秒)。
+LATENT_FPS = 24
+LATENT_LENGTH = "7.length"
+LATENT_SHORTEST_SECONDS = 124 / 24
 #: 模型要尾巴至少几秒时多留这一点:按帧截,截出来总比要的短一丝,卡在下限上供应商未必认。
 TAIL_MARGIN_SECONDS = 0.1
 

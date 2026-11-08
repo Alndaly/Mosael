@@ -179,6 +179,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   inspect_sequence: Search,
   video_to_gif: FileVideo,
   media_clip: Scissors,
+  tighten_pauses: AudioWaveform,
   video_seam: Combine,
   video_join: Combine,
   chain_plan: Calculator,

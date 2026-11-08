@@ -71,6 +71,7 @@ export const nodeToolbar = {
   genLatentReadScene: "读取第几段",
   genLatentSaveFolder: "存放的潜空间文件夹",
   genLatentSaveScene: "存成第几段",
+  genLatentFrames: "这一段几帧",
   wfAssetGridLinkRemove: "断开「{name}」",
   wfAssetGridWrongKind: "不是这个角色要的那类素材,不会被送进去",
   //: 自动来的那几处引用(「引用即发送」):提示词里引用了素材,运行时自动带上,来源要看得见。

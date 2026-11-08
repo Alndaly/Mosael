@@ -123,8 +123,8 @@ def test_真接三段_重叠去掉_来源记着每一段(tmp_path: Path) -> None
 def test_每一段知道自己演哪一截_尾帧落在最后一段() -> None:
     made = _plan(target_seconds=35, longest_seconds=30, overlap_seconds=0, last_frame_asset_id="尾帧")
     assert made["opening_seconds"] == 18 and made["opening_last_frame"] == ""
-    assert made["rounds"] == [{"from_seconds": 18, "clip_from": 18, "to_seconds": 35, "last_frame": "尾帧", "beat": "",
-                               "previous_scene": 1, "scene": 2}]
+    assert made["rounds"] == [{"from_seconds": 18, "clip_from": 18, "to_seconds": 35, "seconds": 17, "frames": 0,
+                               "last_frame": "尾帧", "beat": "", "previous_scene": 1, "scene": 2}]
 
 
 def test_语言模型写少了_铺满算好的段数() -> None:
@@ -144,6 +144,27 @@ def test_放得下的一镜_尾帧还在这一段() -> None:
 def test_续写时重叠的那截不算新戏() -> None:
     rounds = _plan(target_seconds=20, longest_seconds=15, overlap_seconds=2)["rounds"]
     assert [(one["from_seconds"], one["to_seconds"]) for one in rounds] == [(11, 20)]
+
+
+def test_按帧定长_满段整段帧数_最后一段只要配音那么长() -> None:
+    """数字人的潜空间续写:每段 10.125 秒 = 243 帧,上文 39 帧。41.85 秒的配音,最后一段只剩 7.85 秒(含上文)。"""
+    made = _plan(target_seconds=41.85, longest_seconds=10.125, allowed_seconds="10.125", overlap_seconds=39 / 24,
+                 fps=24, shortest_seconds=124 / 24)
+    assert made["opening_frames"] == 243
+    assert [one["frames"] for one in made["rounds"]] == [243, 243, 243, 189]
+    assert made["rounds"][-1]["seconds"] == pytest.approx(7.85)
+
+
+def test_按帧定长_最后一段太短时不短于模型训练过的长度() -> None:
+    made = _plan(target_seconds=10.125 + 1, longest_seconds=10.125, allowed_seconds="10.125", overlap_seconds=39 / 24,
+                 fps=24, shortest_seconds=124 / 24)
+    assert made["rounds"][-1]["seconds"] == pytest.approx(1 + 39 / 24)
+    assert made["rounds"][-1]["frames"] == 124
+
+
+def test_不按帧定长的模型_帧数是零() -> None:
+    made = _plan(target_seconds=20, longest_seconds=15, overlap_seconds=2)
+    assert made["opening_frames"] == 0 and [one["frames"] for one in made["rounds"]] == [0]
 
 
 def test_整片模板_第一段不接尾帧_后面的段说清只演哪一截() -> None:

@@ -142,8 +142,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 3,
-    "nodes": 13,
+    "version": 5,
+    "nodes": 14,
     "download": {
       "zh": "/workflows/long_talk_video.zh.mosael-workflow.json",
       "en": "/workflows/long_talk_video.en.mosael-workflow.json"

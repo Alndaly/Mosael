@@ -396,6 +396,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_overlaps": {"zh": "压到下一句上的条数", "en": "Lines running into the next"},
     "wfOut_chain_following": {"zh": "第一段之后还要几段", "en": "Segments after the first"},
     "wfOut_chain_opening_seconds": {"zh": "第一段演到第几秒", "en": "Where the first segment ends"},
+    "wfOut_chain_opening_frames": {"zh": "第一段要几帧", "en": "Frames for the first segment"},
     "wfOut_chain_opening_last_frame": {"zh": "第一段的尾帧", "en": "First segment's last frame"},
     "wfOut_overlap_seconds": {"zh": "压到下一句上的秒数", "en": "Seconds running into the next line"},
     "wfOut_overlap_note": {"zh": "念不完的说明", "en": "Overrun note"},

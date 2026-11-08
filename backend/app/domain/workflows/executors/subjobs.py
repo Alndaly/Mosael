@@ -33,6 +33,7 @@ from app.ai.runtime import config as tts_config, tts_models
 from app.core.i18n import get_current_locale, t, tr
 from app.domain import render
 from app.media.paths import resolve_key
+from app.media.pauses import DEFAULT_MAX_PAUSE, PauseError
 from app.media.seam import SeamError, find_seam
 from app.media.still import StillError
 from app.domain.assets import denoise, video_gif
@@ -41,6 +42,7 @@ from app.domain.assets.joining import JoinError, join_segments
 from app.domain.assets.frames import AssetFrameError, last_frame_time, save_frame_as_asset
 from app.domain.assets.from_url import UrlImportError, start_url_import
 from app.domain.assets.separation import start_separation_job
+from app.domain.assets.pauses import start_tighten_pauses
 from app.domain.assets.trim import TrimError, clip_range, start_trim
 from app.domain.assets.video_gif import VideoGifError
 from app.domain.capabilities import CapabilityUnavailable
@@ -440,6 +442,16 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
         return int(value) if value == int(value) else value
 
     segment = seconds(segment)
+    #: 按帧定长的模型(`fps` 给了):每段只生成它真要的那么长。最后一段的配音常常不够一整段,
+    #: 补齐的是一截静音 —— 数字人实测,配音和画面一样长的续写段一段都没切镜头,硬切只出在末段那截静音里(ADR 0092)。
+    #: 不短于 `shortest_seconds`(模型训练过的最短长度);帧数向上取整,模型自己的步长(H3 是 17k+5)由它自己再向上对齐。
+    fps = float(config.get("fps") or 0)
+    shortest = float(config.get("shortest_seconds") or 0)
+
+    def frames(length: float) -> int:
+        return math.ceil(round(max(length, shortest) * fps, 6)) if fps else 0
+
+    opening = seconds(min(segment, target))
     #: 这一镜的尾帧落在**最后一段**:交给第一段,它会在第一段里就把整镜走完,后面无戏可拍(实测 35 秒的一镜,18 秒就到了门口)。
     last_frame = str(config.get("last_frame_asset_id") or "")
     fresh = segment - overlap
@@ -447,7 +459,8 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     beats = text_lines(config.get("beats")) if not isinstance(config.get("beats"), list) else [str(one) for one in config["beats"]]
     return {
         "segment_seconds": segment,
-        "opening_seconds": seconds(min(segment, target)),
+        "opening_seconds": opening,
+        "opening_frames": frames(opening),
         "opening_last_frame": "" if rounds else last_frame,
         #: 每一段接着这一镜的第几秒拍到第几秒,提示词靠它说清这一段只演哪一截。
         "rounds": [
@@ -456,6 +469,9 @@ def chain_plan(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
                 #: 这一段成片开头是上一段的尾巴,配音要从尾巴那一刻取,声音和口型才对得上。
                 "clip_from": seconds(segment + (index - 1) * fresh - overlap),
                 "to_seconds": seconds(min(segment + index * fresh, target)),
+                #: 这一段真要多长(含开头那截上文):最后一段可能比整段短。
+                "seconds": seconds(min(segment + index * fresh, target) - (segment + (index - 1) * fresh - overlap)),
+                "frames": frames(min(segment + index * fresh, target) - (segment + (index - 1) * fresh - overlap)),
                 "last_frame": last_frame if index == rounds else "",
                 "beat": beats[(index - 1) * len(beats) // rounds] if beats else "",
                 #: 潜空间续写的工作流按段号存取:第一段是 1。
@@ -520,6 +536,28 @@ def media_clip(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
         "start": start,
         "end": end,
         "duration": end - start,
+    }
+
+
+@register("tighten_pauses")
+def tighten_pauses(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """把一段话里过长的停顿压到上限(见 domain/assets/pauses)。交出压完的那份、剪掉了几秒、压完多长。"""
+    asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
+    max_pause = config.get("max_pause")
+    try:
+        child_id = run_steps.ordered(db, config, lambda: start_tighten_pauses(
+            db, asset=asset, max_pause=float(max_pause) if max_pause not in (None, "") else DEFAULT_MAX_PAUSE,
+            created_by=current_actor(db),
+        ).id)
+    except PauseError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    final = wait_for_job(child_id, release=db)
+    result = final.result or {}
+    return {
+        "asset_id": str(result.get("asset_id") or ""),
+        "source_asset_id": asset.id,
+        "removed_seconds": float(result.get("removed_seconds") or 0.0),
+        "duration": float(result.get("duration") or 0.0),
     }
 
 

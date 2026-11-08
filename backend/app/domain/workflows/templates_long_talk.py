@@ -2,7 +2,9 @@
 
 一次生成只出几秒,要更长只能分段。和「任意长度的连续视频」不同的是,这里每一段的内容不靠语言模型编,**靠音频定**:
 
-- 段数由配音时长算(`plan`);每一段配到它自己那一截音频,音频里含上一段尾巴那一截,接缝处声音和口型都对得上;
+- 配音里的长静音会诱使视频模型换镜头(ADR 0092):配音先压一遍停顿(`tighten`,见 domain/assets/pauses),
+  最后一段只生成它配音那么长(`plan` 按帧给长度),不补一截静音画面;
+- 段数由压完的配音时长算(`plan`);每一段配到它自己那一截音频,音频里含上一段尾巴那一截,接缝处声音和口型都对得上;
 - 每段都把人物照片当参考带上:只靠上文接,说久了人会变样;
 - 段与段接在潜空间里:续写读上一段存下的潜空间,不解码、不重新编码,颜色不漂;
 - 第一段和续写是两条工作流(`opening`、`video`):续写的那条还读上一段的潜空间。
@@ -16,7 +18,11 @@ from typing import Any
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import FRAME_ASPECTS, LATENT_CONTEXT_SECONDS, LATENT_SEGMENT_SECONDS, ModelChoice
+from app.domain.workflows.templates_models import (
+    FRAME_ASPECTS, LATENT_CONTEXT_SECONDS, LATENT_FPS, LATENT_LENGTH, LATENT_SEGMENT_SECONDS, LATENT_SHORTEST_SECONDS,
+    ModelChoice,
+)
+from app.media.pauses import DEFAULT_MAX_PAUSE
 from app.domain.workflows.templates_upscale import DEFAULT_OUTPUT_RESOLUTION, frame_plan_node, resolution_options, upscale_node
 
 LONG_TALK_VIDEO = "long_talk_video"
@@ -53,6 +59,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                     "parameters": {
                         "50.project_folder": "{{input.latent_folder}}", "50.scene_number": "{{loop.item.previous_scene}}",
                         "52.project_folder": "{{input.latent_folder}}", "52.scene_number": "{{loop.item.scene}}",
+                        LATENT_LENGTH: "{{loop.item.frames}}",
                     },
                     "source_assets": [
                         "{{input.face_asset_id}}:reference_image",
@@ -85,7 +92,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                                                       height="{{input.frame_height}}", position={"x": 80, "y": 360}))
         assemble_body["edges"].append({"id": "upscale_append", "source": "upscale", "target": "append_segment"})
     graph: dict[str, Any] = {
-        "meta": {"template_id": LONG_TALK_VIDEO, "template_version": 3, "source": "official"},
+        "meta": {"template_id": LONG_TALK_VIDEO, "template_version": 5, "source": "official"},
         "nodes": [
             {
                 "id": "start", "type": "start",
@@ -115,10 +122,18 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "config": {"text": "{{start.script}}", "engine": "builtin:clone", "voice": "{{start.voice_id}}"},
             },
             {
+                #: 配音里的长静音会诱使视频模型换镜头(ADR 0092):硬切都落在静音里。句间停顿压到上限,
+                #: 末段那截补齐的静音由 plan 按帧给长度去掉。后面分段、截每段的配音都用压完的这一份。
+                "id": "tighten", "type": "tighten_pauses",
+                "name": {"zh": "压缩停顿", "en": "Tighten the pauses"},
+                "position": {"x": 490, "y": 460},
+                "config": {"asset_id": "{{speak.asset_id}}", "max_pause": DEFAULT_MAX_PAUSE},
+            },
+            {
                 "id": "voice_info", "type": "asset",
                 "name": {"zh": "配音有多长", "en": "How long the voice runs"},
                 "position": {"x": 640, "y": 300},
-                "config": {"asset_id": "{{speak.asset_id}}"},
+                "config": {"asset_id": "{{tighten.asset_id}}"},
             },
             {
                 "id": "plan", "type": "chain_plan",
@@ -130,6 +145,9 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                     #: 一段的长度写死在工作流里,按这一档算,不拉平。
                     "allowed_seconds": "{{start.segment_seconds}}",
                     "overlap_seconds": "{{start.overlap_seconds}}",
+                    #: 每段按帧给长度:配音不够一整段的最后一段不再补一截静音画面(见 LATENT_LENGTH)。
+                    "fps": LATENT_FPS,
+                    "shortest_seconds": LATENT_SHORTEST_SECONDS,
                 },
             },
             {
@@ -144,7 +162,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "id": "voice_open", "type": "media_clip",
                 "name": {"zh": "取第一段的配音", "en": "Take the voice for the first segment"},
                 "position": {"x": 1240, "y": 300},
-                "config": {"asset_id": "{{speak.asset_id}}", "start": 0, "end": "{{plan.opening_seconds}}"},
+                "config": {"asset_id": "{{tighten.asset_id}}", "start": 0, "end": "{{plan.opening_seconds}}"},
             },
             {
                 "id": "opening", "type": "ai_generate",
@@ -153,7 +171,8 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                 "config": {
                     "provider": opening.provider, "provider_profile_id": opening.profile_id, "model": opening.model, "kind": "video",
                     "prompt": _speaking_prompt("{{start.scene}}"),
-                    "parameters": {"52.project_folder": "mosael/{{video_project.project_id}}", "52.scene_number": 1},
+                    "parameters": {"52.project_folder": "mosael/{{video_project.project_id}}", "52.scene_number": 1,
+                                   LATENT_LENGTH: "{{plan.opening_frames}}"},
                     "source_assets": ["{{start.face_asset_id}}:reference_image", "{{voice_open.asset_id}}:driving_audio"],
                     "consent": "{{start.consent}}",
                 },
@@ -168,7 +187,7 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
                         "scene": "{{start.scene}}",
                         "consent": "{{start.consent}}",
                         "face_asset_id": "{{start.face_asset_id}}",
-                        "voice_asset_id": "{{speak.asset_id}}",
+                        "voice_asset_id": "{{tighten.asset_id}}",
                         "latent_folder": "mosael/{{video_project.project_id}}",
                         "overlap_seconds": "{{start.overlap_seconds}}",
                     },
@@ -219,7 +238,8 @@ def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id:
         ],
         "edges": [
             {"id": "start_speak", "source": "start", "target": "speak"},
-            {"id": "speak_info", "source": "speak", "target": "voice_info"},
+            {"id": "speak_tighten", "source": "speak", "target": "tighten"},
+            {"id": "tighten_info", "source": "tighten", "target": "voice_info"},
             {"id": "info_plan", "source": "voice_info", "target": "plan"},
             {"id": "plan_project", "source": "plan", "target": "video_project"},
             {"id": "plan_voice", "source": "plan", "target": "voice_open"},
