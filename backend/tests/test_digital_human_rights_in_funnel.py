@@ -45,7 +45,7 @@ def _character(ws: str, name: str, attributes: dict, *, image: str, parent: str 
 def test_未声明的克隆音色配的音_哪个入口都做不了数字人() -> None:
     ws = _workspace()
     voice = make_voice(ws, "老王的嗓子")
-    line = insert_asset(ws, kind="audio", name="开场.wav", media_info={"voice_id": voice})
+    line = insert_asset(ws, kind="audio", name="开场.wav", voices=[voice])
     face = insert_asset(ws, kind="image", name="脸.png")
     sources = [{"asset_id": face, "role": "first_frame"}, {"asset_id": line, "role": "driving_audio"}]
     assert _submit(ws, sources) == "genErr_voiceConsentMissing"
@@ -54,6 +54,45 @@ def test_未声明的克隆音色配的音_哪个入口都做不了数字人() -
         db.get(Voice, voice).consent_kind = "fictional"
         db.commit()
     assert _submit(ws, sources) != "genErr_voiceConsentMissing", "声明过是谁的就放行(虚构也算)"
+
+
+def test_从克隆配音截出拼出的音频_照样查每一把嗓子(tmp_path) -> None:
+    """数字人长片每段的驱动音频都是截出来的:截出来的、几句拼起来的都继承出处的嗓子(ADR 0093)。
+    此前只查素材自己记的那一把,截一刀就查不到了;拼两把嗓子时干脆一把都不记。"""
+    import subprocess
+
+    from app.core.config import settings
+    from app.domain.assets.importer import register_file_asset
+    from app.domain.assets.lineage import CONCAT, TRIM, derived
+
+    ws = _workspace()
+    wav = tmp_path / "line.wav"
+    subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "sine=duration=1", str(wav)], check=True)
+    undeclared = make_voice(ws, "老王的嗓子")
+    declared = make_voice(ws, "小李的嗓子")
+    with SessionLocal() as db:
+        db.get(Voice, declared).consent_kind = "self"
+        db.commit()
+        wang = register_file_asset(db, workspace_id=ws, project_id=None, source_path=wav, name="老王", source="tts",
+                                   ai_generated=True, voices=[undeclared])
+        li = register_file_asset(db, workspace_id=ws, project_id=None, source_path=wav, name="小李", source="tts",
+                                 ai_generated=True, voices=[declared])
+        cut = register_file_asset(db, workspace_id=ws, project_id=None, source_path=wav, name="截一段",
+                                  source="generated", derived_from=derived(TRIM, wang.id))
+        both = register_file_asset(db, workspace_id=ws, project_id=None, source_path=wav, name="两人拼一段",
+                                   source="tts", derived_from=derived(CONCAT, li.id, wang.id))
+        assert cut.voices == [undeclared] and sorted(both.voices) == sorted([declared, undeclared])
+        cut_id, both_id = cut.id, both.id
+    face = insert_asset(ws, kind="image", name="脸.png")
+    for line in (cut_id, both_id):
+        assert _submit(ws, [{"asset_id": face, "role": "first_frame"}, {"asset_id": line, "role": "driving_audio"}]) \
+            == "genErr_voiceConsentMissing"
+    with SessionLocal() as db:
+        db.get(Voice, undeclared).consent_kind = "fictional"
+        db.commit()
+    for line in (cut_id, both_id):
+        assert _submit(ws, [{"asset_id": face, "role": "first_frame"}, {"asset_id": line, "role": "driving_audio"}]) \
+            != "genErr_voiceConsentMissing"
 
 
 def test_真人人物的参考图当脸_要本人或已获同意的声明_变体连同母体一起看() -> None:
@@ -100,7 +139,7 @@ def test_智能体开卡时就说_不等人批准之后才被拒() -> None:
 
     ws = _workspace()
     voice = make_voice(ws, "老王的嗓子")
-    line = insert_asset(ws, kind="audio", name="开场.wav", media_info={"voice_id": voice})
+    line = insert_asset(ws, kind="audio", name="开场.wav", voices=[voice])
     face = insert_asset(ws, kind="image", name="脸.png")
     payload = {"source_assets": [{"asset_id": face, "role": "first_frame"}, {"asset_id": line, "role": "driving_audio"}],
                "digital_human_consent": True, "prompt": "", "kind": "video"}

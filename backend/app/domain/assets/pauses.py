@@ -5,8 +5,8 @@
 
 **只收音频。** 视频的停顿压了画面也得跟着剪,那是剪辑台的事(删静音),不是这一步。
 
-**授权的出处跟着走。** 克隆音色配出来的那份素材上记着 `voice_id`(数字人的授权检查按它查,见
-generation.operations.check_digital_human_rights);压完的这份还是那把嗓子,照样记上。
+**授权的出处跟着走。** 压完的这份记着来源(`tighten`),用到的克隆嗓子登记时从出处继承(ADR 0093),
+数字人的授权检查照查不误。
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import TIGHTEN, derived
-from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, ensure_wanted, finish_job, say, start_job
 from app.media.pauses import MAX_PAUSE_RANGE, PauseError, find_pauses, join_spans, kept_spans
 from app.media.paths import resolve_key
@@ -68,7 +67,6 @@ class _Source:
     path: Path
     duration: float
     intermediate: str
-    voice_id: str
 
 
 def _tighten_body(job_id: str, asset_id: str, max_pause: float) -> None:
@@ -86,7 +84,7 @@ def _tighten_body(job_id: str, asset_id: str, max_pause: float) -> None:
         source = _Source(
             id=asset.id, workspace_id=asset.workspace_id, project_id=asset.project_id, name=asset.name,
             path=resolve_key(asset.file_key), duration=float(info.get("duration") or 0.0),
-            intermediate=asset.intermediate, voice_id=str(info.get("voice_id") or ""),
+            intermediate=asset.intermediate,
         )
 
     #: 找停顿、剪拼在事务之外;失败原样抛出,由派发处(jobs.run_job_guarded)落成失败。
@@ -119,8 +117,6 @@ def _tighten_body(job_id: str, asset_id: str, max_pause: float) -> None:
                 intermediate=source.intermediate,
                 move=True,
             )
-            if source.voice_id:
-                patch_media_info(db, made.id, {"voice_id": source.voice_id})
             result = {"asset_id": made.id, "removed_seconds": removed, "duration": round(source.duration - removed, 3)}
             if finish_job(db, job, status="succeeded", progress=1.0, result=result):
                 say(job, "jobMsg_tightenPausesDone", seconds=removed)

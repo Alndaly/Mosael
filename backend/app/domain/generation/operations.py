@@ -150,7 +150,8 @@ def check_digital_human_rights(db: Session, workspace_id: str, source_assets: Se
     此前只有数字人工作流节点查(`executors/talking`),别的入口勾一个「已取得授权」就放行 —— 一段用未声明的克隆音色
     配的音、一张真人人物资产的参考图,换个入口就能拿去做数字人。
 
-    - **驱动音频**是用克隆音色配出来的(素材上记着 `voice_id`,见 voices 的配音登记):那把嗓子要声明过是谁的;
+    - **驱动音频**里有克隆音色(素材的 `voices`:配音登记时记下,截取、拼接等派生素材从出处继承,ADR 0093):
+      每一把嗓子都要声明过是谁的;
     - **脸**(人像、原片)是某个人物资产的参考图:真人要有「本人」或「已获同意」的声明,变体连同它的母体一起看。
 
     查不到出处的素材(自己上传的音频、不在资产库里的图)不拦:那一格「已取得授权」的确认就是为它们设的。
@@ -162,10 +163,10 @@ def check_digital_human_rights(db: Session, workspace_id: str, source_assets: Se
         if asset is None or asset.workspace_id != workspace_id:
             continue
         if role == DRIVING_AUDIO:
-            voice_id = str((asset.media_info or {}).get("voice_id") or "")
-            voice = db.get(Voice, voice_id) if voice_id else None
-            if voice is not None and not voice_usable(voice):
-                raise GenerationDomainError("genErr_voiceConsentMissing", name=voice.name)
+            for voice_id in asset.voices or []:
+                voice = db.get(Voice, str(voice_id))
+                if voice is not None and not voice_usable(voice):
+                    raise GenerationDomainError("genErr_voiceConsentMissing", name=voice.name)
         elif role in _FACE_ROLES:
             owners = db.scalars(
                 select(Entity).join(EntityReference, EntityReference.entity_id == Entity.id)

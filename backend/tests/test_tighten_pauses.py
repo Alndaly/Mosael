@@ -11,7 +11,6 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Workflow
 from app.domain.assets.importer import register_file_asset
-from app.domain.assets.media_info import patch_media_info
 from app.domain.workflows.engine import execute_graph
 from app.domain.workflows.errors import WorkflowDomainError
 from app.media.paths import resolve_key
@@ -70,8 +69,7 @@ def test_真压一遍_停顿压到上限_新素材记着来源和音色(tmp_path
     _speech_with_pause(source)
     with SessionLocal() as db:
         voice = register_file_asset(db, workspace_id=ws, project_id=None, source_path=source, name="配音", source="tts",
-                                    ai_generated=True)
-        patch_media_info(db, voice.id, {"voice_id": "cloned-voice"})
+                                    ai_generated=True, voices=["cloned-voice"])
         workflow = Workflow(workspace_id=ws, name="压", graph={"nodes": [], "edges": []})
         db.add(workflow)
         db.commit()
@@ -86,7 +84,7 @@ def test_真压一遍_停顿压到上限_新素材记着来源和音色(tmp_path
         assert tight.kind == "audio"
         assert tight.derived_from == [{"asset_id": voice_id, "op": "tighten"}]
         assert tight.ai_generated, "合成的配音压完还是合成的"
-        assert tight.media_info["voice_id"] == "cloned-voice", "数字人的授权检查按它查"
+        assert tight.voices == ["cloned-voice"], "嗓子从出处继承,数字人的授权检查按它查"
         assert probe_media(resolve_key(tight.file_key))["duration"] == pytest.approx(2.5, abs=0.05)
 
 

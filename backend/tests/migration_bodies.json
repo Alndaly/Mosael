@@ -1,6 +1,7 @@
 {
   "migrate-agent-questions-feishu-message-id": "79ade469ef85a1b6",
   "migrate-agent-voice-prefs-store-a-voice-ref": "282c6b436d958675",
+  "migrate-assets-record-their-voices": "9a411ef0b7215e13",
   "migrate-bound-profiles-use-the-account-partition": "d4a40e65310bd20f",
   "migrate-browser-profiles-pin-identity": "d957b75417e51c8f",
   "migrate-character-voices-become-voice-refs": "15b741a4ce388b0c",

@@ -42,6 +42,10 @@ class Asset(Base):
     derived_from: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     #: 含 AI 生成 / 合成的内容:自己是 AI 做的,或任一出处含 AI。登记时定下(继承),导出按它加标识。
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 这份素材里有哪几把克隆嗓子(配音库 `voices.id`,ADR 0093):克隆音色配出来的那份登记时说,派生的(截取、拼接、
+    #: 补静音、压停顿……)继承全部出处的。做数字人时授权检查按它查每一把 —— 和 `ai_generated` 同一个理由登记时就定下:
+    #: 出处被删了,它还在。
+    voices: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     #: 中间产物:某道工序逐条做出来的零件是哪一种(逐句配音的一句……,取值见 domain/assets/intermediates),
     #: 素材库默认不列;空串 = 素材库里的正常素材。登记时由做它的那道工序说。
     intermediate: Mapped[str] = mapped_column(String(24), nullable=False, default="")

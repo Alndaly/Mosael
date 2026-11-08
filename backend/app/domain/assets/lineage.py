@@ -94,6 +94,17 @@ def inherits_ai(db: Session, derived_from: Iterable[Derivation]) -> bool:
     return db.scalar(select(Asset.id).where(Asset.id.in_(ids), Asset.ai_generated.is_(True)).limit(1)) is not None
 
 
+def inherited_voices(db: Session, derived_from: Iterable[Derivation]) -> list[str]:
+    """出处里用到的克隆嗓子(全部,去重、按 id 排)。一份配音截一段、几句拼一段,做出来的还是那几把嗓子(ADR 0093)。"""
+    ids = {one.asset_id for one in derived_from}
+    if not ids:
+        return []
+    found: set[str] = set()
+    for voices in db.scalars(select(Asset.voices).where(Asset.id.in_(ids))):
+        found.update(str(one) for one in voices or [] if one)
+    return sorted(found)
+
+
 def ai_generated_assets(db: Session, asset_ids: Iterable[str]) -> set[str]:
     """这几份素材里哪些含 AI 生成 / 合成的内容 —— 成片里有它们,导出就加标识。
 
@@ -162,6 +173,7 @@ __all__ = [
     "TRIM",
     "ai_generated_assets",
     "derived",
+    "inherited_voices",
     "inherits_ai",
     "lineage_tree",
     "made_by",

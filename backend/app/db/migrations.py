@@ -673,6 +673,68 @@ def _shots_use_shot_angle(content: Any) -> bool:
     return changed
 
 
+def _migrate_assets_record_their_voices() -> None:
+    """素材记下自己用到了哪几把克隆嗓子(`assets.voices`,ADR 0093),派生素材从出处继承。
+
+    此前只有克隆音色的配音产出在 `media_info.voice_id` 里记了一把,截取、拼接、补静音出来的素材要靠每道工序手抄,
+    多数没抄:数字人长片每段的驱动音频都是截出来的,授权检查读到的是空,等于没查。迁移之后只有一种形状:
+    - 加列(`JSON NOT NULL DEFAULT '[]'`);
+    - 每份素材的 `voices` = 它自己 `media_info.voice_id` 记的那把 ∪ 全部出处的 `voices`(顺着 `derived_from`,
+      反复传到不再变 —— 出处总是先登记的,一两轮就停;坏数据成环也会停);
+    - `media_info.voice_id` 去掉:不留两份。
+
+    规则抄在这里,不调领域代码:迁移不跟着领域代码变。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(assets)"))}
+        if not columns:
+            return
+        if "voices" not in columns:
+            conn.execute(text("ALTER TABLE assets ADD COLUMN voices JSON NOT NULL DEFAULT '[]'"))
+
+        def loads(raw: Any, default: Any) -> Any:
+            if not isinstance(raw, str):
+                return raw if raw is not None else default
+            try:
+                return json.loads(raw)
+            except ValueError:
+                return default
+
+        rows = conn.execute(text("SELECT id, media_info, derived_from, voices FROM assets")).fetchall()
+        info: dict[str, dict[str, Any]] = {}
+        parents: dict[str, list[str]] = {}
+        voices: dict[str, set[str]] = {}
+        for asset_id, raw_info, raw_derived, raw_voices in rows:
+            media = loads(raw_info, {})
+            info[asset_id] = media if isinstance(media, dict) else {}
+            derived = loads(raw_derived, [])
+            parents[asset_id] = [str(one["asset_id"]) for one in derived if isinstance(one, dict) and one.get("asset_id")] \
+                if isinstance(derived, list) else []
+            own = loads(raw_voices, [])
+            voices[asset_id] = {str(one) for one in own if one} if isinstance(own, list) else set()
+            if info[asset_id].get("voice_id"):
+                voices[asset_id].add(str(info[asset_id]["voice_id"]))
+        changed = True
+        while changed:
+            changed = False
+            for asset_id, sources in parents.items():
+                inherited = set().union(*(voices.get(one, set()) for one in sources)) if sources else set()
+                if not inherited <= voices[asset_id]:
+                    voices[asset_id] |= inherited
+                    changed = True
+        for asset_id, media in info.items():
+            updates: dict[str, Any] = {"voices": json.dumps(sorted(voices[asset_id]))}
+            if "voice_id" in media:
+                updates["media_info"] = json.dumps({key: value for key, value in media.items() if key != "voice_id"},
+                                                   ensure_ascii=False)
+            assignments = ", ".join(f"{key} = :{key}" for key in updates)
+            conn.execute(text(f"UPDATE assets SET {assignments} WHERE id = :id"), {**updates, "id": asset_id})
+        leftovers = conn.execute(text("SELECT COUNT(*) FROM assets WHERE json_extract(media_info, '$.voice_id') IS NOT NULL")).scalar()
+        if leftovers:
+            #: 迁移内部的硬失败:旧键留着就是两份出处,宁可启动时就炸。
+            raise RuntimeError(f"assets voices migration incomplete: {leftovers} row(s) still carry media_info.voice_id")
+
+
 def _migrate_shot_angle_replaces_camera_angle() -> None:
     """「这一镜的机位」统一叫 `shot_angle`(entities.shot_angles,ADR 0091):
 
@@ -905,6 +967,8 @@ def migration_plan() -> MigrationPlan:
             _migrate_dub_lines_use_the_voice_ref_identity,
             # ADR 0088:旧形状的 cloud_login 先删,SCHEMA 阶段按新形状建回。
             _migrate_cloud_login_keeps_a_device_token,
+            # ADR 0093:ORM 上 assets 多了 voices 一列,排在 SCHEMA 之前。
+            _migrate_assets_record_their_voices,
         ),
         *_recurring(
             MigrationPhase.SCHEMA,

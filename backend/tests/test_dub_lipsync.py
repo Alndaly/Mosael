@@ -208,12 +208,12 @@ def test_失败重跑不再买已经改好的块(dubbed) -> None:
 
 
 def test_配音轨上是未声明的克隆音色_花钱之前就拒(dubbed) -> None:
-    """配音混成一段新 wav 交给改口型,新素材上不记 voice_id —— 漏斗查不到;得拿配音轨上原来那几句查。"""
+    """配音轨上那几句里有未声明的克隆音色:切片、花钱之前就拿原来那几句查(混出来的新 wav 也继承嗓子,ADR 0093)。"""
     ids, calls = dubbed
     voice = make_voice(ids.ws, "老王的嗓子")
     with unit_of_work() as db:
         line = db.get(Asset, ids.line)
-        line.media_info = {**(line.media_info or {}), "voice_id": voice}
+        line.voices = [voice]
         db.commit()
     with pytest.raises(WorkflowDomainError) as refused:
         _run(ids)

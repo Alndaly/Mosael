@@ -736,11 +736,11 @@ def _run_synthesis_body(
                     source="tts",
                     #: 合成人声(克隆的嗓子也是):成片里有它就要加 AI 标识(《深度合成管理规定》第十七条)。
                     ai_generated=True,
+                    #: 记下是哪把克隆嗓子配的:这段音频(和从它截出、拼出的)拿去做数字人时,生成漏斗照它查音色的授权声明
+                    #: (generation.operations.check_digital_human_rights,ADR 0093)。
+                    voices=[cloned.id],
                     intermediate=_intermediate_of(job),
                 )
-                #: 记下是哪把克隆嗓子配的:这段音频拿去做数字人时,生成漏斗照它查音色的授权声明
-                #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
-                patch_media_info(db, asset.id, {"voice_id": cloned.id})
                 if on_asset is not None:
                     on_asset(db, asset.id)
             job = db.get(Job, job_id)
@@ -1095,11 +1095,10 @@ def _synthesize_remote(
             name=asset_name or speech_asset_name(cloned.name if cloned is not None else _voice_label(voice.voice) or voice.engine, text),
             source="tts",
             ai_generated=True,
+            #: 配音库里的嗓子(远端念它的副本)和本机克隆一样记下:做数字人时照它查授权声明(ADR 0093)。
+            voices=[cloned.id] if cloned is not None else [],
             intermediate=_intermediate_of(job),
         )
-        if cloned is not None:
-            # 和本机克隆那条同一个记法:这段音频是这把嗓子的克隆,拿去做数字人时照它查授权声明。
-            patch_media_info(db, asset.id, {"voice_id": cloned.id})
         if on_asset is not None:
             on_asset(db, asset.id)
     job = db.get(Job, job.id)

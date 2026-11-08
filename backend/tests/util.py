@@ -200,6 +200,7 @@ def insert_asset(
     source: str = "imported",
     created_at: datetime | None = None,
     intermediate: str = "",
+    voices: list[str] | None = None,
 ) -> str:
     """直接在库里放一行素材,返回 id。产品里素材只由导入 / 生成的领域函数建(文件落进数据目录、
     键由服务端生成);测试要的常常只是「有这么一行、指着这个文件」。"""
@@ -210,7 +211,7 @@ def insert_asset(
         asset = Asset(
             workspace_id=workspace_id, project_id=project_id, kind=kind, name=name,
             file_key=file_key, media_info=media_info or {}, original_filename=original_filename,
-            tags=tags or [], source=source, intermediate=intermediate,
+            tags=tags or [], source=source, intermediate=intermediate, voices=voices or [],
             **({"created_at": created_at, "updated_at": created_at} if created_at else {}),
         )
         db.add(asset)

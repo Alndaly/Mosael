@@ -1,8 +1,9 @@
 {
-  "version": 46,
+  "version": 47,
   "steps": [
     "migrate-agent-questions-feishu-message-id",
     "migrate-agent-voice-prefs-store-a-voice-ref",
+    "migrate-assets-record-their-voices",
     "migrate-bound-profiles-use-the-account-partition",
     "migrate-browser-profiles-pin-identity",
     "migrate-character-voices-become-voice-refs",

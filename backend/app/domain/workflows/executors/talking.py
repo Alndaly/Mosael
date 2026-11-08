@@ -25,7 +25,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, SOURCE_VIDEO
-from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import current_actor
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
@@ -426,16 +425,12 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
         #: 合成的配音拼起来还是合成的:含 AI 跟着出处走(见 assets/lineage)。
         joined = register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
                                      name=name, source="tts", derived_from=derived(CONCAT, *(one.id for one in assets)))
-    #: 几句是同一把克隆嗓子配的:拼好的这段也记着它 —— 拿去别处做数字人时,漏斗照它查授权声明
-    #: (generation.operations.check_digital_human_rights)。
-    voices = {str((asset.media_info or {}).get("voice_id") or "") for asset in assets}
-    if len(voices) == 1 and "" not in voices:
-        patch_media_info(db, joined.id, {"voice_id": voices.pop()})
+    #: 用到的克隆嗓子登记时从出处继承(全部,不止同一把的情形),授权检查照它查(ADR 0093)。
     return joined.id
 
 
 def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: str) -> str:
-    """一段配音末尾补静音到 `seconds`,登记成新的一段(原来那段不动)。克隆嗓子的出处照带(见 _concat_audio)。"""
+    """一段配音末尾补静音到 `seconds`,登记成新的一段(原来那段不动)。克隆嗓子登记时从出处继承(ADR 0093)。"""
     import tempfile
 
 
@@ -448,9 +443,6 @@ def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: s
             raise WorkflowDomainError("wfErr_talkingConcatFailed")
         padded = register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
                                      name=name, source="tts", derived_from=derived(PAD, asset.id))
-    voice = str((asset.media_info or {}).get("voice_id") or "")
-    if voice:
-        patch_media_info(db, padded.id, {"voice_id": voice})
     return padded.id
 
 

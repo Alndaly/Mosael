@@ -179,9 +179,9 @@ def _lines_on(db: Session, scope: RunScope, voice_track: Any, clip_start: float,
 def _require_rights(db: Session, workspace_id: str, video_id: str, lines: list[Line]) -> None:
     """数字人的两道声明,在花第一分钱之前查(ADR 0028 §4、§5)。
 
-    交给改口型的是**切出来的新素材**:混成一段的配音不再记着是哪把克隆嗓子配的,切出来的原片也不再是哪个人物
-    资产的参考图 —— 漏斗里的 check_digital_human_rights 查它们什么都查不到。所以拿**原来的**素材走同一套判据:
-    配音轨上每一句的音频(克隆音色要有授权声明)、原片(真人人物资产要有本人或已获同意的声明)。
+    交给改口型的是**切出来的新素材**:混成一段的配音会继承那几句的克隆嗓子(ADR 0093),漏斗照样查得到;但切出来的
+    原片不再是哪个人物资产的参考图,漏斗查不到它。所以在切片、花钱之前拿**原来的**素材走同一套判据:配音轨上每一句的
+    音频(克隆音色要有授权声明)、原片(真人人物资产要有本人或已获同意的声明)—— 不合格的不必等切完再拒。
     """
 
     entries = [{"asset_id": video_id, "role": SOURCE_VIDEO},

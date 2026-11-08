@@ -210,7 +210,7 @@ def test_同意之后复刻一份_配音直接用它_记一条免费的用量(ba
     with SessionLocal() as db:
         result = db.get(Job, job.json()["id"]).result
         asset = db.get(Asset, result["asset_id"])
-        assert (asset.media_info or {}).get("voice_id") == env.voice_id, "和本机克隆一样记下是哪把嗓子的克隆"
+        assert asset.voices == [env.voice_id], "和本机克隆一样记下是哪把嗓子的克隆"
 
 
 def test_解析副本幂等_同一份不建第二个(bailian) -> None:

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, new_id
-from app.domain.assets.lineage import Derivation, inherits_ai
+from app.domain.assets.lineage import Derivation, inherited_voices, inherits_ai
 from app.domain.assets.project_scope import asset_project
 from app.media.paths import asset_dir, asset_key, resolve_key
 from app.core.i18n import LocalizedError
@@ -105,6 +105,7 @@ def register_file_asset(
     source: str = "exported",
     derived_from: Sequence[Derivation] = (),
     ai_generated: bool = False,
+    voices: Sequence[str] = (),
     intermediate: str = "",
     move: bool = False,
     repackage: bool = True,
@@ -117,7 +118,8 @@ def register_file_asset(
 
     `derived_from`:它是从哪几份素材做出来的(见 domain/assets/lineage —— 截取、转 GIF、导出成片……
     **产出派生素材的地方都要说**,否则 AI 内容加工一道就认不出来了)。`ai_generated`:它自己就是 AI 生成 /
-    合成的(生成任务的产出、合成配音);出处里有 AI 内容的不用说,登记时自己继承。`intermediate`:它是某道工序逐条
+    合成的(生成任务的产出、合成配音);出处里有 AI 内容的不用说,登记时自己继承。`voices`:它自己是用哪几把克隆嗓子
+    配出来的(克隆音色的配音产出说;同理,出处里的嗓子登记时自己继承,见 ADR 0093)。`intermediate`:它是某道工序逐条
     做出来的零件(逐句配音的一句、对口型的一块……,见 domain/assets/intermediates)—— **做它的那道工序在这里说**,
     素材库就默认不列它。`repackage`:.mov 照导入的规矩原样换成 mp4(见 media/probe.repackage_as_mp4);导出成片时
     用户点名要的就是 mov,传 False。"""
@@ -133,6 +135,7 @@ def register_file_asset(
             source=source,
             derived_from=derived_from,
             ai_generated=ai_generated,
+            voices=voices,
             intermediate=intermediate,
             repackage=repackage,
         )
@@ -148,6 +151,7 @@ def register_file_asset(
             source=source,
             derived_from=derived_from,
             ai_generated=ai_generated,
+            voices=voices,
             intermediate=intermediate,
             repackage=repackage,
         )
@@ -214,6 +218,7 @@ def _import_stream(
     source: str = "imported",
     derived_from: Sequence[Derivation] = (),
     ai_generated: bool = False,
+    voices: Sequence[str] = (),
     intermediate: str = "",
     repackage: bool = True,
 ) -> Asset:
@@ -240,8 +245,8 @@ def _import_stream(
     try:
         asset = _store(db, target_dir, asset_id, workspace_id=workspace_id, project_id=project_id, stream=stream,
                        move_from=move_from, original=original, content_type=content_type, name=name, source=source,
-                       derived_from=derived_from, ai_generated=ai_generated, intermediate=intermediate,
-                       repackage=repackage)
+                       derived_from=derived_from, ai_generated=ai_generated, voices=voices,
+                       intermediate=intermediate, repackage=repackage)
     except BaseException:
         shutil.rmtree(target_dir, ignore_errors=True)
         raise
@@ -268,6 +273,7 @@ def _store(
     source: str,
     derived_from: Sequence[Derivation],
     ai_generated: bool,
+    voices: Sequence[str],
     intermediate: str,
     repackage: bool,
 ) -> Asset:
@@ -309,6 +315,8 @@ def _store(
         derived_from=[one.as_json() for one in derived_from],
         #: 含 AI 在这一刻定下:自己是 AI 做的,或继承出处的(见 lineage —— 导出时不再顺着来源链查库)。
         ai_generated=ai_generated or inherits_ai(db, derived_from),
+        #: 用到的克隆嗓子同样在这一刻定下:自己说的,加上出处的(ADR 0093)。
+        voices=sorted({*(one for one in voices if one), *inherited_voices(db, derived_from)}),
         intermediate=intermediate,
     )
     db.add(asset)
