@@ -483,13 +483,13 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           </span>
         </div>
       )}
-      <div ref={scrollerRef} data-media-scroll className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 pt-7 xl:px-9 xl:pb-8 xl:pt-8 [&>*]:shrink-0"
+      <div ref={scrollerRef} data-media-scroll className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
         onScroll={(event) => {
           const filters = filtersRef.current;
           setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
         }}
       >
-      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={libraryFacets.data?.total} className="mb-4" actions={<>
+      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={libraryFacets.data?.total} className="mb-4 pt-7 xl:pt-8" actions={<>
               <input
                 ref={importInputRef}
                 type="file"
@@ -519,8 +519,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 </Button>
               </Hint>
       </>} />
-      {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
-          (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,底色盖住滚上来的卡片。 */}
+      {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。**滚动容器不留上内边距**(页顶那 28px 在页头上):
+          sticky 的 top-0 从滚动容器的内边距边缘算起,容器留了 pt,栏就停在离顶 28px 处 —— 上面那条缝里卡片照样露出来,
+          而且「贴顶才算吸住」的判定永远不成立,data-stuck 一直是 false,底色和模糊都不出现(11-06 把 pt 挪到容器上踩过)。
+          栏自己 py-3:吸住时控件上下各留 12px;静止时 -mt-3 让上面那 12px 和页头的 mb-4 重叠,页头→筛选组仍是 16px,
+          筛选组→内容是 12 + mb-4 = 28px。-mx 铺满宽度,底色盖住滚上来的卡片。 */}
       {/* **底色不写在这儿。** `data-stuck` 一交出去,底色和分割线就由 .workspace-sticky 按
           "有没有东西从下面滚过去"淡入淡出(见 design/tokens.css)—— 页面还没动过的时候,
           这条栏不该先把背景切掉一块。写死一个 bg-* 会盖过那条规则,等于把开关按住不放。 */}
@@ -528,7 +531,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       {!nothingAtAll && (
-        <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 mb-7 flex flex-col gap-3 border-b border-divider px-6 xl:-mx-9 xl:px-9">
+        <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 -mt-3 mb-4 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9">
           {/* **一行,按"这是哪一类动作"分三段。**
               类型标签是最粗的那一刀,锚在左边 —— 它的下划线指示器需要一条稳定的左基线;
               搜索/排序/标签是在这一刀之内再筛再排,占中间那段弹性宽度(搜索吃掉全部余量,

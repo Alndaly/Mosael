@@ -272,7 +272,7 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
       <div
         ref={toolbarRef}
         data-stuck={stuck}
-        className="workspace-sticky sticky top-0 z-20 -mx-6 mb-7 flex flex-col gap-3 border-b border-divider px-6 xl:-mx-9 xl:px-9"
+        className="workspace-sticky sticky top-0 z-20 -mx-6 -mt-3 mb-4 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9"
       >
         <div className="flex min-h-10 min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-reference-filter-row="">
           <CollectionTabs
