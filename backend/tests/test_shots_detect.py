@@ -195,6 +195,19 @@ def test_measure_without_motion_only_reads_cuts(tmp_path: Path) -> None:
     assert len(measured.cuts) == 3
 
 
+@pytest.mark.parametrize("motion", [True, False])
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_一镜到底没有刀口_量出空列表而不是失败(tmp_path: Path, motion: bool) -> None:
+    """没有一处够得上阈值的刀口(一镜到底、镜头间全用叠化):挑刀口那一路一帧都不放行,
+    ffmpeg 9 会因为那一路「没收到任何帧」整条命令失败(实测「雨夜归灯」叠化成片就这样)。"""
+    video = tmp_path / "one-take.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=320x180:r=25:d=2",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)], check=True, timeout=60)
+    measured = detect.measure(video, motion=motion)
+    assert measured.cuts == []
+    assert bool(measured.motion) is motion
+
+
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_measure_moving_segment_has_real_motion(tmp_path: Path) -> None:
     video = tmp_path / "moving.mp4"

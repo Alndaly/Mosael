@@ -95,7 +95,9 @@ def _parse_motion(text: str) -> list[float]:
 
 def measure(path: Path, *, threshold: float = DEFAULT_THRESHOLD, motion: bool = True) -> Measured:
     """一遍 ffmpeg 量出刀口(和动静曲线)。`motion=False` 只量刀口 —— 分析抽帧时只要知道镜头在哪。"""
-    scene = f"scale={SCENE_WIDTH}:-2,select='gt(scene,{threshold:.3f})',metadata=print:file=cuts.txt"
+    #: 第 0 帧总放行:否则一镜到底(或镜头间全是叠化)时这一路一帧都没有,ffmpeg 9 会因为
+    #: 「这一路没收到任何帧」让整条命令失败。它的 scene 是 0,下面按阈值筛掉,不算刀口。
+    scene = f"scale={SCENE_WIDTH}:-2,select='eq(n\\,0)+gt(scene\\,{threshold:.3f})',metadata=print:file=cuts.txt"
     with tempfile.TemporaryDirectory(prefix="mosael-shots-") as tmp:
         if motion:
             graph = (f"[0:v]split=2[s][m];[s]{scene}[so];"
@@ -114,7 +116,8 @@ def measure(path: Path, *, threshold: float = DEFAULT_THRESHOLD, motion: bool = 
         except (OSError, subprocess.SubprocessError) as exc:
             raise ShotDetectError("shotsErr_detectFailed") from exc
         cuts_file, motion_file = Path(tmp) / "cuts.txt", Path(tmp) / "motion.txt"
-        cuts = _parse_cuts(cuts_file.read_text(encoding="utf-8", errors="replace")) if cuts_file.is_file() else []
+        printed = _parse_cuts(cuts_file.read_text(encoding="utf-8", errors="replace")) if cuts_file.is_file() else []
+        cuts = [cut for cut in printed if cut["score"] > threshold]
         track = (_parse_motion(motion_file.read_text(encoding="utf-8", errors="replace"))
                  if motion and motion_file.is_file() else [])
     return Measured(cuts=cuts, motion=track)
