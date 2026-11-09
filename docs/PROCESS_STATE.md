@@ -61,7 +61,7 @@
 | `app/domain/agent/stream.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的)。 |
 | `app/domain/jobs/__init__.py:_KILLED` | 取消已经掐过、执行体还在跑的任务 | 取消在提交之前就掐子进程;执行体恰好在那一刻起的新子进程去库里查还是 running,没人掐它。登记时先看这里。执行体结束就忘掉,重启后没有执行体可言。 |
 | `app/domain/jobs/__init__.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
-| `app/domain/jobs/__init__.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |
+| `app/domain/jobs/__init__.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额(其中后台道最多 4 个,见 register_background_kind)。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |
 | `app/domain/jobs/__init__.py:RENDER_SLOTS`、`app/domain/jobs/__init__.py:ASR_SLOTS`、`app/domain/jobs/__init__.py:TTS_SLOTS`、`app/domain/jobs/__init__.py:PLUGIN_SLOTS`、`app/media/proxy.py:TRANSCODE_SLOTS`、`app/domain/workflows/node_budget.py:NODE_CONNECTIONS` | 几类重活同时跑几份(导出、识别、合成、插件进程、代理转码),以及工作流引擎能同时占几条库连接 | 名额按进程算:第二个进程再给一份,同时跑的 ffmpeg、模型进程翻倍,机器被压满;引擎那份本来就按本进程的连接池算,不出错。重启后归零,没有要恢复的。 |
 | `app/integrations/feishu/inbound.py:_awaiting_replies` | 每个会话里还在等回复的飞书消息(收尾时摘 Typing 反应) | 一轮在哪个进程跑完,就在哪个进程收尾;第二个进程看不见别人贴的反应。重启丢了它,只是那几条消息上的「码字中」不会被摘掉 —— 回复照样发。 |
 | `app/integrations/feishu/inbound.py:_paused_typing` | 智能体等选择卡/确认卡时,被暂存的原消息 id(等完再贴回 Typing) | 和 `_awaiting_replies` 同属一个进程;重启丢了它,等待中的 Typing 不会再贴回,回复照样发。第二个进程各存各的。 |
@@ -183,6 +183,7 @@
 - `app/domain/agent/confirmable/registry.py:_TOOLS` — 确认卡工具的登记表。
 - `app/domain/agent/confirmable/registry.py:_FAMILIES` — 按名字前缀认领的一族确认卡(插件工具 `plugin__…`),同样在 import 时登记。
 - `app/domain/jobs/__init__.py:_EXECUTION_MODES`(每个 kind 在进程内跑还是交给外部执行器)、
+  `app/domain/jobs/__init__.py:_BACKGROUND_KINDS`(哪些 kind 是没人在等的维护活,在派发器里走后台道;目前是预览代理)、
   `app/domain/jobs/__init__.py:_RECEIPT_DELIVERERS`、
   `app/domain/jobs/__init__.py:_SETTLE_LISTENERS`(任务落终态后谁跟着收拾,目前是浏览器:工作流一次运行开的会话随它关)、
   `app/domain/jobs/__init__.py:_CANCEL_LISTENERS`(某种任务被取消时,外面跟着要撤的那张单,和取消同一个事务 —— 目前是发布单)、

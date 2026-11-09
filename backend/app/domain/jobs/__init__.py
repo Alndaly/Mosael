@@ -653,6 +653,19 @@ def execution_mode(kind: str) -> str:
     return _EXECUTION_MODES.get(kind, "in_process")
 
 
+#: 后台维护活(没人在等它的结果,比如预览代理):在派发器里走**后台道**,最多占 MAX_BACKGROUND_JOBS 个名额,
+#: 而且有人点出来的活(工作流、生成……)永远先放行。见 JobRunner。
+_BACKGROUND_KINDS: set[str] = set()
+
+
+def register_background_kind(kind: str) -> None:
+    _BACKGROUND_KINDS.add(kind)
+
+
+def is_background_kind(kind: str) -> bool:
+    return kind in _BACKGROUND_KINDS
+
+
 def external_kinds() -> tuple[str, ...]:
     return tuple(sorted(k for k, mode in _EXECUTION_MODES.items() if mode == "external"))
 
@@ -666,6 +679,10 @@ JOB_THREAD_NAME = "job-run"
 #: 同时**在干活**的进程内任务上限。此前每派发一个任务就起一个线程,不设上限:一次批量补字幕、一个
 #: 工作流循环 × 并行分支,就是几百个线程同时在跑(或在各自的资源名额上睡着)。
 MAX_ACTIVE_JOBS = 16
+#: 其中后台道最多占几个。代理转码自己还有 2 个 ffmpeg 名额(media.proxy.TRANSCODE_SLOTS):多给的两个只是
+#: 让下一个先读好库、排在转码名额门口。此前后台活和别的活挤一条队、先来先放:一次补齐扫描排进来两三百个
+#: 代理,16 个名额里 14 个在门口睡着,工作流点了运行就一直「排队中」(2026-11-09 实测)。
+MAX_BACKGROUND_JOBS = 4
 
 
 class JobRunner:
@@ -674,26 +691,40 @@ class JobRunner:
     **不能是一个普通的定长线程池。** 工作流这类任务会等自己的子任务(workflows.executors.common.wait_until):
     池子被一群「等子任务」的父任务占满时,子任务永远排不上 —— 死锁。所以等的时候**把名额让出来**
     (`parked`),等完再拿回去(可以暂时超额:回来的父任务不该排在自己的子任务后面)。
+
+    **两条道。** 后台维护活(`background=True`,见 register_background_kind)另排一队:同时最多
+    `background_limit` 个,有名额空出来时先放前台那队。维护活再多也压不住人点出来的活。
     """
 
-    def __init__(self, limit: int) -> None:
+    def __init__(self, limit: int, *, background_limit: int | None = None) -> None:
         self.limit = limit
+        self.background_limit = limit if background_limit is None else background_limit
         self._lock = threading.Lock()
         self._active = 0
+        self._background_active = 0
         self._queue: deque[tuple[str, Callable[[], None]]] = deque()
+        self._background_queue: deque[tuple[str, Callable[[], None]]] = deque()
         self._running: set[str] = set()
+        self._running_background: set[str] = set()
         self._parked: dict[str, int] = {}
 
-    def submit(self, job_id: str, body: Callable[[], None]) -> None:
+    def submit(self, job_id: str, body: Callable[[], None], *, background: bool = False) -> None:
         with self._lock:
-            self._queue.append((job_id, body))
+            (self._background_queue if background else self._queue).append((job_id, body))
             admitted = self._admit_locked()
         self._start(admitted)
 
     def _admit_locked(self) -> list[tuple[str, Callable[[], None]]]:
         admitted = []
-        while self._queue and self._active < self.limit:
-            job_id, body = self._queue.popleft()
+        while self._active < self.limit:
+            if self._queue:
+                job_id, body = self._queue.popleft()
+            elif self._background_queue and self._background_active < self.background_limit:
+                job_id, body = self._background_queue.popleft()
+                self._background_active += 1
+                self._running_background.add(job_id)
+            else:
+                break
             self._active += 1
             self._running.add(job_id)
             admitted.append((job_id, body))
@@ -711,6 +742,9 @@ class JobRunner:
             with self._lock:
                 self._running.discard(job_id)
                 self._active -= 1
+                if job_id in self._running_background:
+                    self._running_background.discard(job_id)
+                    self._background_active -= 1
                 admitted = self._admit_locked()
             self._start(admitted)
 
@@ -738,17 +772,17 @@ class JobRunner:
 
     def idle(self) -> bool:
         with self._lock:
-            return not self._running and not self._queue
+            return not self._running and not self._queue and not self._background_queue
 
 
-_runner = JobRunner(MAX_ACTIVE_JOBS)
+_runner = JobRunner(MAX_ACTIVE_JOBS, background_limit=MAX_BACKGROUND_JOBS)
 
 
 def reset_runner() -> None:
     """换一个空的派发器。**给测试框架用**,和 wait_for_idle_jobs 同一个性质:替身线程不会执行
     任务体,它占的名额永远不还,不换的话会串到后面的测试里。生产里没有理由调它。"""
     global _runner
-    _runner = JobRunner(MAX_ACTIVE_JOBS)
+    _runner = JobRunner(MAX_ACTIVE_JOBS, background_limit=MAX_BACKGROUND_JOBS)
 
 
 def waiting_on_other_jobs():
@@ -834,8 +868,10 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
             forget_job_kill(job_id)
             reset_parent_job(token)
 
+    background = is_background_kind(kind)
+
     def submit() -> None:
-        _runner.submit(job_id, run_as_job)
+        _runner.submit(job_id, run_as_job, background=background)
         logger.info("job %s [%s] dispatched in-process", job_id, kind)
 
     after_commit(db, submit)

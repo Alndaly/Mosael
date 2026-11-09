@@ -34,6 +34,7 @@ from app.domain.jobs import (
     emit_job_event,
     ensure_wanted,
     finish_job,
+    register_background_kind,
     register_job_child,
     say,
     start_job,
@@ -55,6 +56,9 @@ from app.media.proxy import (
 )
 
 #: 这些状态下不用(再)转:已经有了、正在转。音频还多一个 silent —— 没有音轨,转不出东西。
+#: 预览代理是没人在等的维护活:走派发器的后台道,一次导入或补齐几百个也压不住工作流(见 jobs.JobRunner)。
+register_background_kind("proxy")
+
 _VIDEO_SETTLED = ("ready", "pending")
 _AUDIO_SETTLED = ("ready", "pending", "silent")
 
@@ -384,12 +388,11 @@ def reconcile_missing_proxies(db: Session) -> int:
         directory = resolve_key(asset.file_key).parent
         video = False
         if proxies_possible(asset):
-            if (
-                proxy_path(directory).is_file()
-                and proxy_is_current(asset)
-                and proxy_key_for(asset) != (asset.media_info or {}).get("proxy_key")
-            ):
-                _set_proxy_meta(db, asset.id, "ready", key=proxy_key_for(asset))
+            #: 现成的、当前规格的代理:只补记丢了的路径,**不重转**。此前「路径也记对了」这种最平常的情况
+            #: 掉进了下面要重转的那一支,每次重启把库里所有视频重转一遍(一次两三百个任务压住队列)。
+            if proxy_path(directory).is_file() and proxy_is_current(asset):
+                if proxy_key_for(asset) != (asset.media_info or {}).get("proxy_key"):
+                    _set_proxy_meta(db, asset.id, "ready", key=proxy_key_for(asset))
             # failed 是**判定过的终态**,不是"还没跑":源文件坏的素材每次转必败,启动扫描再替它
             # 排队只会无限重试 —— dev 模式每次热重启跑一轮,两个坏素材曾这样滚出上千条失败任务。
             # 这里只救 pending 孤儿(重启害死的)、从没跑过的,以及规格过期的旧代理。

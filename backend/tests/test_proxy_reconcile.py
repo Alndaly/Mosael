@@ -21,6 +21,7 @@ def _make_asset(
     *,
     spec_version: int | None = None,
     with_proxy: bool = False,
+    keyed: bool = False,
 ) -> str:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     from app.core.db import SessionLocal
@@ -39,6 +40,9 @@ def _make_asset(
         )
         db.add(asset)
         db.commit()
+        if keyed:
+            asset.media_info = {**info, "proxy_key": proxies.proxy_key_for(asset)}
+            db.commit()
         if with_proxy:
             directory = resolve_key(asset.file_key).parent
             directory.mkdir(parents=True, exist_ok=True)
@@ -92,3 +96,25 @@ def test_规格过期的ready代理会被重建_当前规格不重转(monkeypatc
 
     assert current_id not in queued, "当前规格的现成代理不该重转"
     assert stale_id in queued, "720p 时代的旧代理必须按新规格重建,不能继续被复用"
+
+
+def test_好好的现成代理_重启时不重转(monkeypatch) -> None:
+    """回归:文件在、规格当前、记的路径也对 —— 最平常的一种 —— 曾掉进「要重转」那一支:
+    每次重启(开发模式下每保存一次后端文件)把库里所有视频重转一遍,一次两三百个任务压住队列。"""
+    client = fresh_client()
+    settled_id = _make_asset(
+        client, "settled", "ready", spec_version=PROXY_SPEC_VERSION, with_proxy=True, keyed=True
+    )
+
+    queued: list[str] = []
+    monkeypatch.setattr(config.settings, "generate_proxies", True)
+    monkeypatch.setattr(
+        proxies, "queue_proxy_job",
+        lambda db, asset, **kw: kw["video"] and (queued.append(asset.id) or object()),
+    )
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        proxies.reconcile_missing_proxies(db)
+
+    assert settled_id not in queued

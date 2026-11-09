@@ -97,3 +97,46 @@ def test_waiting_outside_a_dispatched_job_changes_nothing() -> None:
     with runner.parked(None), runner.parked("not-running"):
         assert runner._active == 0  # noqa: SLF001
     assert runner.idle()
+
+
+def test_后台活再多_前台活也先放行() -> None:
+    """一次补齐扫描排进来几百个代理,工作流点了运行一直「排队中」(2026-11-09 实测)。"""
+    runner = JobRunner(4, background_limit=2)
+    release = threading.Event()
+    started: list[str] = []
+    lock = threading.Lock()
+
+    def body(name: str):
+        def run() -> None:
+            with lock:
+                started.append(name)
+            release.wait(5)
+
+        return run
+
+    for index in range(10):
+        runner.submit(f"proxy{index}", body(f"proxy{index}"), background=True)
+    assert len(runner._running) == 2, "后台道最多占两个名额"
+    runner.submit("workflow", body("workflow"))
+    assert "workflow" in runner._running, "前台活不排在后台活后面"
+    assert _until(lambda: "workflow" in started)
+    release.set()
+    assert _until(runner.idle)
+    assert len(started) == 11
+
+
+def test_后台道不受限时等同先来先放() -> None:
+    runner = JobRunner(1)
+    done: list[str] = []
+    for name in ("a", "b"):
+        runner.submit(name, lambda name=name: done.append(name), background=True)
+    assert _until(runner.idle)
+    assert done == ["a", "b"]
+
+
+def test_代理是后台活() -> None:
+    from app.domain.assets import proxies  # noqa: F401 —— 导入时登记
+    from app.domain.jobs import is_background_kind
+
+    assert is_background_kind("proxy")
+    assert not is_background_kind("workflow")
