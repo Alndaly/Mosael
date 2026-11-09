@@ -465,6 +465,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_aspect_16:9": {"zh": "16:9 横屏", "en": "16:9 landscape"},
     "wfOpt_aspect_9:16": {"zh": "9:16 竖屏", "en": "9:16 portrait"},
     "wfOpt_aspect_1:1": {"zh": "1:1 方形", "en": "1:1 square"},
+    "wfOpt_aspect_4:3": {"zh": "4:3 横向", "en": "4:3 landscape"},
+    "wfOpt_aspect_3:4": {"zh": "3:4 竖向", "en": "3:4 portrait"},
     "wfOpt_consent_yes": {"zh": "已取得授权", "en": "Consent obtained"},
     "wfOpt_scope_missing": {"zh": "只补还没有的", "en": "Only missing angles"},
     "wfOpt_scope_all": {"zh": "每个角度都重画", "en": "Redraw every angle"},

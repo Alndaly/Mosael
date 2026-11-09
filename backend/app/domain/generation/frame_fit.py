@@ -3,7 +3,7 @@
 出图那一步交回的画幅和视频要的不一样时(方图当竖屏视频的首帧),模型各有各的处理 —— ComfyUI 的 H3 工作流
 把图直接缩放到目标宽高,画面被压扁。漏斗在提交之前居中裁满,模型收到的就是目标画幅的那一张。
 
-- 目标画幅从这次的参数里读(`target_aspect`),读不到就不动 —— 不猜;
+- 目标画幅从这次的参数里读,参数没说时按节点要的画幅(`target_aspect`);都没有就不动 —— 不猜;
 - 只摆首帧、尾帧:参考图是「看着它画」,模型自己会构图;
 - 差 `TOLERANCE` 以内不动(按 32 的倍数取整那点偏差);
 - 裁好的一份登记成派生素材(来源链 `fit`、工序零件 `fitted_frame`),替换请求里原来那份;
@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -28,6 +27,7 @@ from app.db.models import Asset
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.intermediates import FITTED_FRAME
 from app.domain.assets.lineage import FIT, derived
+from app.domain.generation.aspect import aspect_of_parameters, is_aspect_key, ratio_of
 from app.media.paths import resolve_key
 
 logger = logging.getLogger(__name__)
@@ -36,50 +36,15 @@ logger = logging.getLogger(__name__)
 FIT_ROLES = (FIRST_FRAME, LAST_FRAME)
 #: 画幅差多少以内不动(相对差)。
 TOLERANCE = 0.01
-#: 参数值开头的「宽:高」(`9:16`、`9:16 (Portrait Widescreen)`)。
-_RATIO = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)")
-#: `宽x高`。
-_SIZE = re.compile(r"^\s*(\d+)\s*[x×*]\s*(\d+)\s*$")
-#: 视频跟着首帧走,不用摆。
-_FOLLOWS_THE_FRAME = "adaptive"
 
 
-def _aspect_values(parameters: Mapping[str, Any]) -> list[str]:
-    """这次参数里说画幅的那几格的值,按先后:宿主的 `aspect_ratio`,再是名字就叫 `aspect_ratio` 的节点输入
-    (`115.aspect_ratio`)。空的不算。"""
-    named = [parameters.get("aspect_ratio")] + [
-        value for key, value in parameters.items() if isinstance(key, str) and key.endswith(".aspect_ratio")
-    ]
-    return [str(value) for value in named if value not in (None, "")]
-
-
-def target_aspect(parameters: Mapping[str, Any]) -> float | None:
-    """这次视频要的画幅(宽 / 高)。先后:宿主的 `aspect_ratio` → 名字就叫 `aspect_ratio` 的节点输入
-    (`115.aspect_ratio`)→ 宿主的 `size`。读不到、或是 `adaptive`,返回 None。"""
-    for value in _aspect_values(parameters):
-        if value.strip().lower() == _FOLLOWS_THE_FRAME:
-            return None
-        if (ratio := _ratio(value)) is not None:
-            return ratio
-    size = _SIZE.match(str(parameters.get("size") or ""))
-    if size and int(size.group(2)):
-        return int(size.group(1)) / int(size.group(2))
-    return None
-
-
-def _ratio(value: str) -> float | None:
-    match = _RATIO.match(value)
-    if not match or not float(match.group(2)):
-        return None
-    return float(match.group(1)) / float(match.group(2))
-
-
-def aspect_label(parameters: Mapping[str, Any]) -> str:
-    """记进生成记录的那句画幅:参数里怎么写的就怎么记(只取「宽:高」或「宽x高」那一段)。"""
-    for value in _aspect_values(parameters):
-        if match := _RATIO.match(value):
-            return f"{match.group(1)}:{match.group(2)}"
-    return str(parameters.get("size") or "").strip()
+def target_aspect(parameters: Mapping[str, Any], wanted: str = "") -> tuple[float | None, str]:
+    """这次视频要的画幅(宽 / 高)和写法:参数里说的优先(见 aspect.aspect_of_parameters,`adaptive` = 不摆);
+    参数没说、节点说了要几比几(`wanted`)时按它。都没有返回 (None, "")。"""
+    if any(is_aspect_key(key) for key, value in parameters.items() if value not in (None, "")) or parameters.get("size"):
+        return aspect_of_parameters(parameters)
+    ratio = ratio_of(wanted)
+    return (ratio, wanted.strip()) if ratio is not None else (None, "")
 
 
 @dataclass
@@ -98,14 +63,14 @@ def fit_frames(
     project_id: str | None,
     source_assets: Sequence[dict[str, str]],
     parameters: Mapping[str, Any],
+    wanted: str = "",
 ) -> FittedFrames:
-    """把首帧、尾帧按这次的目标画幅居中裁满。读不到画幅、画幅已经对、图读不了的,原样留着。"""
+    """把首帧、尾帧按这次的目标画幅(见 `target_aspect`)居中裁满。读不到画幅、画幅已经对、图读不了的,原样留着。"""
     sources = [dict(entry) for entry in source_assets]
-    aspect = target_aspect(parameters)
+    aspect, label = target_aspect(parameters, wanted)
     fitted = FittedFrames(source_assets=sources)
     if aspect is None:
         return fitted
-    label = aspect_label(parameters)
     for entry in sources:
         if entry.get("role") not in FIT_ROLES:
             continue
@@ -162,4 +127,4 @@ def _centered_box(width: int, height: int, aspect: float) -> tuple[int, int, int
     return 0, top, width, top + new_height
 
 
-__all__ = ["FIT_ROLES", "FittedFrames", "aspect_label", "fit_frames", "target_aspect"]
+__all__ = ["FIT_ROLES", "FittedFrames", "fit_frames", "target_aspect"]

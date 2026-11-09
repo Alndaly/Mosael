@@ -32,8 +32,14 @@ from tests.util import fresh_client
     ({}, None),
 ])
 def test_目标画幅从参数里读_读不到就是None(parameters: dict, expected: float | None) -> None:
-    got = target_aspect(parameters)
+    got, _label = target_aspect(parameters)
     assert got == pytest.approx(expected) if expected is not None else got is None
+
+
+def test_参数没说画幅时按节点要的画幅_参数说了以参数为准() -> None:
+    assert target_aspect({}, "9:16") == (pytest.approx(9 / 16), "9:16")
+    assert target_aspect({"aspect_ratio": "16:9"}, "9:16")[1] == "16:9"
+    assert target_aspect({"aspect_ratio": "adaptive"}, "9:16") == (None, "")
 
 
 def _image(tmp_path: Path, ws: str, name: str, size: tuple[int, int]) -> str:
@@ -117,3 +123,23 @@ def test_首尾帧都摆_参考图不动(seedance, tmp_path: Path) -> None:
                         {"aspect_ratio": "16:9"})
     assert [one["role"] for one in request["fitted_frames"]] == ["first_frame", "last_frame"]
     assert all(one["to_size"][0] * 9 == one["to_size"][1] * 16 for one in request["fitted_frames"])
+
+
+def test_节点只说要几比几_翻成模型认的那一格_首帧也按它摆(seedance, tmp_path: Path) -> None:
+    """模板写死在参数里的尺寸一换模型就清掉;节点上的「画幅」留着,漏斗按选中的模型翻(ADR 0094 第二步)。"""
+    from app.domain.generation.operations import create_generation_job
+
+    ws, profile = seedance
+    square = _image(tmp_path, ws, "方图", (1024, 1024))
+    with SessionLocal() as db:
+        generation, _job = create_generation_job(
+            db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=None,
+            provider="bytedance", provider_profile_id=profile, model="doubao-seedance-2-0-260128", kind="video",
+            prompt="衬衫挂在窗边", negative_prompt="", parameters={}, frame_aspect="9:16",
+            source_assets=[{"asset_id": square, "role": "first_frame"}],
+        )
+        db.commit()
+        request = generation.request
+    assert request["parameters"]["aspect_ratio"] == "9:16"
+    assert request["frame_aspect"] == {"wanted": "9:16", "applied": {"aspect_ratio": "9:16"}}
+    assert request["fitted_frames"][0]["to_size"] == [576, 1024]

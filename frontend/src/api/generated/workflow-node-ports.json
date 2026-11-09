@@ -81,6 +81,13 @@
           "en": "Roles for referenced media"
         }
       },
+      "frame_aspect": {
+        "type": "string",
+        "label": {
+          "zh": "目标画幅",
+          "en": "Target aspect"
+        }
+      },
       "source_group": {
         "type": "string",
         "label": {

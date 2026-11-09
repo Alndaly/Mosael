@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
   "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion). This copy includes “Put this scene in motion”. Without a video model, delete “Put this scene in motion” and “File this scene's clip” on the canvas after importing and it shoots stills only — the loop hands over the on-model images and doesn't depend on those two.",
-  "graph_hash": "2b9bcf94cfa2e30fa4ff7739a0920e377f52da8739d2c1673295ab2b1ec23d7e",
+  "graph_hash": "1143df17ce419de1263ca8753a0a4e3b6a65e4ee65e8c7701395f158983369bd",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
-      "template_version": 4,
+      "template_version": 5,
       "source": "official"
     },
     "nodes": [
@@ -181,6 +181,7 @@
                   "kind": "image",
                   "prompt": "{{loop.item.image_prompt}} Model: {{loop.item.model_brief}}. Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. The reference image is the product itself, photographed flat. Full-length framing. Vertical 9:16 portrait-orientation photograph, full-bleed: the scene fills the frame edge to edge. Photorealistic commercial fashion photography, no text, no watermark.",
                   "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs, phone, smartphone, device frame, screen bezel, mockup, app interface",
+                  "frame_aspect": "9:16",
                   "parameters": {},
                   "source_assets": [
                     "{{input.product_asset_id}}:reference_image"
@@ -219,6 +220,7 @@
                   "kind": "video",
                   "prompt": "{{loop.item.video_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Subtle, natural motion only; the garment must stay readable throughout.",
                   "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs, phone, smartphone, device frame, screen bezel, mockup, app interface",
+                  "frame_aspect": "9:16",
                   "parameters": {
                     "duration_seconds": 5,
                     "aspect_ratio": "{{input.aspect_ratio}}",

@@ -319,6 +319,8 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
                 entity_ids=parse_entity_ids(config.get("entity_ids")),
                 pose=_pose_of(config),
+                #: 要几比几:节点上记的是画幅,漏斗按选中的模型翻(换模型不丢,ADR 0094)。
+                frame_aspect=str(config.get("frame_aspect") or "").strip(),
                 digital_human_consent=str(config.get("consent") or "").strip() == "yes",
                 #: 这张工作流(画板上跑的是那块画板、资产详情页上的是那个资产)的那条会话(ADR 0052)
                 origin=of_run_scope(scope.id),

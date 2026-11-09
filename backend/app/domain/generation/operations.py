@@ -26,6 +26,7 @@ from app.ai.providers import (
 )
 from app.domain.generation_catalog import known_capabilities_for, outputs_per_run, prompt_mode
 from app.domain.generation_catalog.descriptors.shared import SOURCE_GROUP_DROPS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
+from app.domain.generation.aspect import parameters_for_aspect
 from app.domain.generation.frame_fit import fit_frames
 from app.domain.generation.missing import explain_missing
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model, resolve_row
@@ -236,6 +237,7 @@ def _create_generation_job(
     workbench_graph: dict[str, Any] | None = None,
     carried_notes: Sequence[str] = (),
     lock_family: bool = False,
+    frame_aspect: str = "",
     origin: Origin,
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
@@ -258,6 +260,9 @@ def _create_generation_job(
 
     `lock_family`:点了名的会话锁「族」(ADR 0055 §2)—— 创作页的规矩,只有创作页的入口传 True。别处(画板、工作流、智能体、
     按出处归的会话,ADR 0052)往自己那条会话里放什么种类都行:一块画板的会话本来就有图有歌。
+
+    `frame_aspect`:这次要几比几(「9:16」,ADR 0094)。按所选模型的描述符翻成它认的那一格(见 aspect.parameters_for_aspect),
+    写明了尺寸 / 画幅的以写明的为准;视频的首帧、尾帧也按它摆正。工作流节点上记的是这一格而不是某个模型的尺寸 —— 换模型不丢。
 
     `origin`:这一次是在哪一处发起的(ADR 0052,见 generation.origins)。**必传**:每个入口说自己是哪儿 —— 漏斗不猜。没点名会话时
     按它找那一处的会话(别处一处一条,创作页每次新开);点了名的会话照旧,出处是那条会话开的时候定的。
@@ -312,6 +317,12 @@ def _create_generation_job(
                                         or documents):
         raise GenerationDomainError("genErr_workbenchGraphAlone")
     #: 从这里往下(校验、请求记录、交给适配器、按参数估价)看的都是**真要发出去的**那一份参数。
+    #: 要几比几先翻成这个模型认的那一格,再补声明的默认值 —— 反过来的话,模型自带的默认尺寸先占了位,就成了「写明了的」。
+    aspect_receipt: dict[str, Any] | None = None
+    if workbench_graph is None and frame_aspect.strip():
+        applied = parameters_for_aspect(capabilities, frame_aspect, parameters)
+        parameters = {**parameters, **applied}
+        aspect_receipt = {"wanted": frame_aspect.strip(), "applied": applied}
     if workbench_graph is None:
         parameters = with_declared_defaults(parameters, capabilities, kind)
     #: 素材对照只说**调用方给的**那几份:后面 3D 参考渲出来的、`@` 资产挂上的,各自在自己那段说明里交代。
@@ -365,7 +376,7 @@ def _create_generation_job(
     fitted = None
     if kind == "video" and workbench_graph is None:
         fitted = fit_frames(db, workspace_id=workspace_id, project_id=project_id,
-                            source_assets=source_assets, parameters=parameters)
+                            source_assets=source_assets, parameters=parameters, wanted=frame_aspect)
         source_assets = fitted.source_assets
         rendered_ids.extend(fitted.made_ids)
     notes.extend(note for note in (expansion.note, tr("genPromptSourceLegend", legend=legend) if legend else "") if note)
@@ -421,6 +432,9 @@ def _create_generation_job(
         request["pose"] = pose.record()
     if scene_receipt:
         request["scene_reference"] = scene_receipt
+    if aspect_receipt is not None:
+        #: 要的画幅翻成了哪一格(翻不了是空的 —— 这个模型没有说画幅的地方)。
+        request["frame_aspect"] = aspect_receipt
     if fitted is not None and fitted.receipt:
         #: 哪几张按画幅裁过、裁成多大:模型收到的不是原图,生成记录要说得清。
         request["fitted_frames"] = fitted.receipt

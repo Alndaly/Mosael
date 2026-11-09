@@ -516,6 +516,8 @@ def product_on_model_graph(
                     "Photorealistic commercial fashion photography, no text, no watermark."
                 ),
                 "negative_prompt": _NEGATIVE_PRODUCT,
+                #: 竖屏成片:按 9:16 出,换模型也不丢(节点上的「画幅」,ADR 0094)。
+                "frame_aspect": VERTICAL_ASPECT,
                 "parameters": _vertical_image_parameters(db, image),
                 "source_assets": [f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}"],
             },
@@ -559,6 +561,8 @@ def product_on_model_graph(
                     ),
                     "negative_prompt": _NEGATIVE_PRODUCT,
                     #: 时长、画幅、分辨率按这个视频模型的能力表挑(见 _vertical_clip),不写死。
+                    #: 竖屏成片:按 9:16 出,换模型也不丢(节点上的「画幅」,ADR 0094)。
+                    "frame_aspect": VERTICAL_ASPECT,
                     "parameters": clip_parameters,
                     #: 只给刚出的那张上身图(一般当首帧)—— 视频和静图因此必然是同一套衣服、同一个人。见函数说明。
                     "source_assets": [f"{{{{on_model.asset_id}}}}:{still_role}"],
@@ -749,7 +753,7 @@ def product_on_model_graph(
     return normalize_graph(
         {
             #: v4:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
-            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 4, "source": "official"},
+            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 5, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -848,6 +852,8 @@ def _beat_body(
                     "no text, no logo overlay, no watermark."
                 ),
                 "negative_prompt": _NEGATIVE_PRODUCT,
+                #: 竖屏成片:按 9:16 出,换模型也不丢(节点上的「画幅」,ADR 0094)。
+                "frame_aspect": VERTICAL_ASPECT,
                 "parameters": _vertical_image_parameters(db, image),
                 "source_assets": [f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}"],
             },
@@ -975,6 +981,8 @@ def _beat_body(
                 "negative_prompt": _NEGATIVE_PRODUCT,
                 #: 时长接开始参数 `beat_seconds`(经循环的 inputs),画幅、分辨率按这个视频模型的能力表挑(见 _vertical_clip)。
                 #: 时长是开始参数,所以选的模型出不了这个时长时,运行前检查在任何付费调用之前就拦下。
+                #: 竖屏成片:按 9:16 出,换模型也不丢(节点上的「画幅」,ADR 0094)。
+                "frame_aspect": VERTICAL_ASPECT,
                 "parameters": motion.parameters,
                 #: 只给这一拍的画面(一般当首帧)—— 视频和画面因此必然是同一件商品、同一个构图。不另挂商品图:
                 #: 首帧加参考图,内置视频模型没有一个接得住(见 product_on_model_graph)。
@@ -1339,7 +1347,7 @@ def product_pitch_short_graph(
                 #: v6:有视频模型时每一拍动起来(见函数说明)。旧图按新版重建时按现在的设置挑视频模型。
                 #: v7:动起来那一步关掉视频自己的声音(铺上去本来就静音,有声的贵,见 _vertical_clip 的 silent);
                 #:     拍数按目标时长卡住(fit_beats 的 max_total_seconds,模型多写的从中间去掉)。
-                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 7, "source": "official"},
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 8, "source": "official"},
                 "nodes": nodes,
                 "edges": edges,
             },
@@ -1937,7 +1945,7 @@ def _with_presenter(nodes: list[dict[str, Any]], text: Any) -> dict[str, Any]:
             #: v6:有视频模型时中间各拍动起来(开场、收尾本来就是主播出镜的视频)。
             #: v7:动起来那一步关掉视频自己的声音;拍数按目标时长卡住,主播说的开场和收尾也算在里面(同不出镜那一版);
             #:     主播说的开场、收尾也上字幕。
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 7, "source": "official"},
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 8, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },

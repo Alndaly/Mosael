@@ -372,6 +372,7 @@ _FIELD_LABELS = {
     "source_group": "wfField_source_group",
     "entity_ids": "wfField_entity_ids",
     "shot_angle": "wfField_shot_angle",
+    "frame_aspect": "wfField_frame_aspect",
     "pose_as_reference": "wfField_pose_as_reference",
     "entity_id": "wfField_entity_id",
     "entities": "wfField_entities",
@@ -1109,6 +1110,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             #: 首尾帧组和参考素材组互斥时用哪一组(见 generation_catalog.SOURCE_GROUPS)。
             #: 允许手填:整片流程里是逐镜决定的,值来自上游(`{{…}}`)。
+            #: 要几比几(ADR 0094):**画幅,不是某个模型的尺寸** —— 生成漏斗按选中的模型翻成它认的那一格(画幅选项、尺寸表、
+            #: ComfyUI 工作流里的 aspect_ratio 输入),视频的首帧、尾帧也按它摆正。模板建图时写死在 `parameters` 里的尺寸
+            #: 一换模型就清掉了,这一格是节点自己的,换模型不丢。参数里写明了尺寸 / 画幅的以写明的为准。
+            "frame_aspect": {
+                "type": "string", "options": ["16:9", "9:16", "1:1", "4:3", "3:4"], "allow_custom": True,
+                "description": "wfNode_ai_generate_frame_aspect",
+            },
             "source_group": {
                 "advanced": True, "type": "string", "default": "all", "options": list(SOURCE_GROUPS),
                 "allow_custom": True, "description": "wfNode_ai_generate_source_group",

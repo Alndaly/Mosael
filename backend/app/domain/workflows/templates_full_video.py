@@ -144,6 +144,8 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
         "style": "{{input.style}}",
         "segment_seconds": "{{shot_chain.segment_seconds}}",
         "tail_seconds": plan.tail_seconds,
+        #: 续写的那几段也按成片画幅出(节点上的「画幅」,换模型不丢,ADR 0094)。
+        "aspect_ratio": "{{input.aspect_ratio}}",
         **{key: f"{{{{input.{key}}}}}" for key, value in parameters.items()
            if isinstance(value, str) and value == f"{{{{input.{key}}}}}"},
     }
@@ -188,6 +190,7 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
                                       "start: seconds {{loop.item.from_seconds}} to {{loop.item.to_seconds}} of the action above. "
                                       "Do not replay anything before that. {{input.style}}",
                             "parameters": extending,
+                            "frame_aspect": "{{input.aspect_ratio}}",
                             "source_assets": [
                                 "{{tail.asset_id}}:first_clip" if plan.extends else "{{tail.asset_id}}:first_frame",
                                 *(["{{loop.item.last_frame}}:last_frame"] if plan.last_frame else []),
@@ -355,6 +358,8 @@ JSON Schema 的对象。"""
                     "kind": "image",
                     "prompt": "{{loop.item.first_frame_prompt}}" + frame_prompt_tail,
                     "parameters": image_parameters,
+                    #: 关键帧按成片画幅出:后面它当视频的首帧 / 尾帧,画幅不对会被压扁或裁掉(ADR 0094)。
+                    "frame_aspect": "{{input.aspect_ratio}}",
                     "source_assets": [
                         "{{render_blockout.first_frame_asset_id}}:reference_image",
                         "{{input.sheets}}",
@@ -396,6 +401,8 @@ JSON Schema 的对象。"""
                               "is the second reference image — keep characters, wardrobe, lighting and set continuous."
                               + frame_prompt_tail,
                     "parameters": image_parameters,
+                    #: 关键帧按成片画幅出:后面它当视频的首帧 / 尾帧,画幅不对会被压扁或裁掉(ADR 0094)。
+                    "frame_aspect": "{{input.aspect_ratio}}",
                     "source_assets": [
                         "{{render_blockout.last_frame_asset_id}}:reference_image",
                         "{{paint_first_frame.asset_id}}:reference_image",
@@ -418,6 +425,7 @@ JSON Schema 的对象。"""
                               "Keep every character exactly as in the references. {{input.style}}",
                     "negative_prompt": "{{loop.item.negative_prompt}}",
                     "parameters": video_parameters,
+                    "frame_aspect": "{{input.aspect_ratio}}",
                     #: 两组都接上,由 source_group 逐镜选一组(Seedance 上两组互斥)。没跑的首尾帧是空行,
                     #: 自然消失;`{{input.sheets}}` 这样的整组引用在运行时摊平。
                     "source_assets": [
@@ -1065,7 +1073,7 @@ JSON Schema 的对象。"""
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 15, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 16, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

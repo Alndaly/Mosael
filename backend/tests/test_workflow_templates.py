@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 15,
+        "template_version": 16,
         "source": "official",
     }
 
@@ -814,7 +814,7 @@ def test_带货口播_动起来_第七版关掉视频自己的声音_两条卡�
     from app.domain.workflows.templates import current_template_versions
 
     versions = current_template_versions()
-    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 7
+    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 8
     for template_id in ("product_pitch_short", "product_pitch_presenter"):
         card = next(one for one in TEMPLATE_CATALOG if one["id"] == template_id)
         video = next(one for one in card["requires"] if one["check"] == "reference_video_model")
@@ -1136,7 +1136,7 @@ class Test旧版模板建的图:
         response = client.post(f"/api/workflows/{old['id']}/rebuild-from-template")
         assert response.status_code == 200, response.text
         rebuilt = response.json()["graph"]
-        assert rebuilt["meta"]["template_version"] == 7
+        assert rebuilt["meta"]["template_version"] == 8
         assert {"beat_clip", "file_clip", "mute_clip"} <= set(_beats_body(rebuilt))
         assert _beats_body(rebuilt)["beat_clip"]["config"]["parameters"]["generate_audio"] is False, "按新版重建的也不出声"
         params = _node(rebuilt, "start")["config"]["params"]

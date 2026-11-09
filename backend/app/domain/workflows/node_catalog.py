@@ -168,7 +168,8 @@ def translated_spec(key: str, spec: dict, locale: str) -> dict:
 LITERAL_OPTION_FIELDS = frozenset({"method"})
 
 #: 选项名借用别处已有词表的字段:机位和参考图角度是同一份词(entities.shot_angles),名字也只有 `entityRole_*` 那一套。
-SHARED_OPTION_KEYS = {"shot_angle": "entityRole_{value}"}
+#: 「画幅」和别处的画幅选项同一套名字(16:9 横屏、9:16 竖屏……)。
+SHARED_OPTION_KEYS = {"shot_angle": "entityRole_{value}", "frame_aspect": "wfOpt_aspect_{value}"}
 
 
 def option_label(field: str, value: str, locale: str) -> str:

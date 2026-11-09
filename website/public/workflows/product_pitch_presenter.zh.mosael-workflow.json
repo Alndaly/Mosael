@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。视频模型可用时中间各拍动起来(和「带货口播短视频」同一个做法,开场和收尾本来就是主播出镜的视频):每拍多一次付费视频生成,拍数约为目标时长减去开场和收尾、再除以开始节点的 beat_seconds(每拍几秒)。这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
-  "graph_hash": "395999208839704ecb18f17f298cd427e3b1b7668d79ac4bc81f885aca228917",
+  "graph_hash": "5a52d1e00efd974f97c6a3450552ba868be668ac05c30e7a135d122f0ddfa8cb",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
-      "template_version": 7,
+      "template_version": 8,
       "source": "official"
     },
     "nodes": [
@@ -420,6 +420,7 @@
                   "kind": "image",
                   "prompt": "{{loop.item.visual_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Vertical 9:16 portrait-orientation photograph, full-bleed: the scene fills the frame edge to edge. Photorealistic, no text, no logo overlay, no watermark.",
                   "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs, phone, smartphone, device frame, screen bezel, mockup, app interface",
+                  "frame_aspect": "9:16",
                   "parameters": {},
                   "source_assets": [
                     "{{input.product_asset_id}}:reference_image"
@@ -458,6 +459,7 @@
                   "kind": "video",
                   "prompt": "{{loop.item.motion_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Subtle, natural motion only; the product stays whole, undistorted and readable throughout. No text, no logo overlay, no watermark.",
                   "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs, phone, smartphone, device frame, screen bezel, mockup, app interface",
+                  "frame_aspect": "9:16",
                   "parameters": {
                     "duration_seconds": "{{input.beat_seconds}}",
                     "aspect_ratio": "{{input.aspect_ratio}}",

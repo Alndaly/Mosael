@@ -1217,6 +1217,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_source_group": {"zh": "用哪一组素材", "en": "Which sources to use"},
     "wfField_entity_ids": {"zh": "资产", "en": "Assets"},
     "wfField_shot_angle": {"zh": "这一镜的机位", "en": "Shot angle"},
+    "wfField_frame_aspect": {"zh": "目标画幅", "en": "Target aspect"},
     "wfField_pose_as_reference": {"zh": "姿势当参考图发", "en": "Pose as reference"},
     #: 节点面板的分组名。
     "wfCat_flow": {"zh": "流程", "en": "Flow"},
@@ -1508,6 +1509,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_ai_generate_entity_ids": {
         "zh": "资产库里的人物 / 场景 / 道具 / 姿势 / 服装:它们的提示词描述拼进提示词,参考图按这个模型收得下的张数挂上(三视图 > 正面 > 全身 > 其余)。挂了哪几张记在生成记录里",
         "en": "Characters, locations, props, poses or outfits from the asset library: their prompt descriptors are appended and their reference images attached, as many as this model accepts (turnaround > front > full body > the rest). Which ones were attached is recorded on the generation",
+    },
+    "wfNode_ai_generate_frame_aspect": {
+        "zh": "要几比几(如 9:16)。按选中的模型换成它认的那一格(画幅选项、尺寸、工作流里的画幅输入),换模型不用重填;视频的首帧、尾帧也按它居中裁好再交。参数里写明了尺寸或画幅的以写明的为准。",
+        "en": "The aspect ratio you want (e.g. 9:16). It is turned into whatever the chosen model takes (an aspect option, a size, or a workflow's aspect input), so switching models keeps it; a video's first and last frames are center-cropped to it before they are sent. An explicit size or aspect in the parameters wins.",
     },
     "wfNode_ai_generate_shot_angle": {
         "zh": "点名了姿势时,这一镜的机位:姿势参考只发同机位的那张,不填就不发。逐镜不同时接上游的值",
