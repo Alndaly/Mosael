@@ -29,6 +29,7 @@ import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { Hint } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { needsRunParams, RunParamsDialog } from "@/features/workflows/RunParamsDialog";
 import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 import { WorkflowCard } from "@/features/workflows/WorkflowCard";
 import { ShareImportDialog } from "@/features/workflows/ShareImportDialog";
@@ -51,6 +52,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const writeBlocked = useWriteBlocked(workspace.role);
   const qc = useQueryClient();
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
+  //: 卡片上点了运行、要先问参数的那一张(见 RunParamsDialog)。
+  const [askingParamsFor, setAskingParamsFor] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
   //: 在配触发器的那条工作流(null = 没开这个弹窗)。
   const [triggersFor, setTriggersFor] = React.useState<Workflow | null>(null);
@@ -178,9 +181,15 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       const registry = new Map(types.map((item) => [item.type, item]));
       const analysis = await analyzeWorkflowNow(qc, workflow.graph as unknown as WorkflowGraph, registry);
       if (!analysis.runnable) return { blocked: analysis.errorCount };
+      //: 开始节点有必填又没有默认值的参数:先问(和编辑器的运行键同一张弹窗),填好了由 runListedWithParams 发。
+      if (needsRunParams(workflow.graph)) return { ask: true as const };
       return { job: await runWorkflow(workflow.id) };
     },
     onSuccess: (result, workflow) => {
+      if ("ask" in result) {
+        setAskingParamsFor(workflow);
+        return;
+      }
       if ("blocked" in result) {
         toast.error(t("wfRunBlockedInList").replace("{name}", workflow.name).replace("{n}", String(result.blocked)), {
           action: { label: t("wfOpenEditorToFix"), onClick: () => setSelectedId(workflow.id) },
@@ -190,6 +199,16 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       toast.success(t("wfRunQueued"));
       // Without this the history panel, if already open with nothing in flight, never polls
       // and never refetches — the run appears only after navigating away and back.
+      void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
+    },
+    onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
+  });
+  /** 问过参数之后带着这一次的参数跑(不改工作流里的默认值)。 */
+  const runListedWithParams = useMutation({
+    mutationFn: ({ workflow, params }: { workflow: Workflow; params: Record<string, unknown> }) => runWorkflow(workflow.id, params),
+    onSuccess: (_job, { workflow }) => {
+      setAskingParamsFor(null);
+      toast.success(t("wfRunQueued"));
       void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
     },
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
@@ -482,6 +501,13 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       {importControl}
       {communityDialog}
       {shareImportDialog}
+      <RunParamsDialog
+        graph={askingParamsFor?.graph}
+        open={askingParamsFor !== null}
+        onOpenChange={(open) => !open && setAskingParamsFor(null)}
+        onRun={(params) => askingParamsFor && runListedWithParams.mutate({ workflow: askingParamsFor, params })}
+        running={runListedWithParams.isPending}
+      />
       <RenameDialog
         open={menuRenaming !== null}
         title={t("rename")}

@@ -248,6 +248,8 @@ export function workflowIssueText(
         const spec = registry.get(issue.nodeType)?.config?.[issue.configKey] as { label?: unknown } | undefined;
         return String(spec?.label ?? "").trim() || issue.configKey;
       })());
+    case "start-param-ask-at-run":
+      return t("wfIssueAskAtRun").replace("{k}", issue.configKey ?? "");
     case "one-of-both":
       return t("wfIssueOneOfBoth").replace("{k}", fieldLabels(issue, registry));
     case "one-of-missing":

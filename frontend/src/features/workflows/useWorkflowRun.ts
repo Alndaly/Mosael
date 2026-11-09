@@ -18,6 +18,7 @@ import type { useI18n } from "@/app/preferences";
 import { issuesAtLayer } from "@/features/workflows/analyze";
 import { boundRunId, RUN_ACTIVE, viewedRunId } from "@/features/workflows/boundRun";
 import { useWorkflowAnalysis } from "@/features/workflows/readiness";
+import { needsRunParams } from "@/features/workflows/RunParamsDialog";
 import { type RunRefusal, runRefusalOf } from "@/features/workflows/runRefusal";
 import { runEventIsTerminal, stepsByNode } from "@/features/workflows/runSteps";
 import type { ScopePath } from "@/features/workflows/scope";
@@ -114,7 +115,8 @@ export function useWorkflowRun({
     onError: (error: Error) => toast.error(errorText(error)),
   });
   const run = useMutation({
-    mutationFn: (targetNodeId?: string) => runWorkflow(workflow.id, {}, targetNodeId),
+    mutationFn: ({ targetNodeId, params = {} }: { targetNodeId?: string; params?: Record<string, unknown> }) =>
+      runWorkflow(workflow.id, params, targetNodeId),
     onMutate: () => setRefusal(null),
     onSuccess: (job) => {
       setStartedJobId(job.id);
@@ -157,6 +159,8 @@ export function useWorkflowRun({
   //: 就绪清单开没开。有阻断问题时按运行(⌘Enter;运行键这时是灰的)就把清单打开 —— 此前这一下
   //: 什么都不发生,按的人不知道是没按到、还是有问题、问题在哪。
   const [checklistOpen, setChecklistOpen] = React.useState(false);
+  //: 运行前要问参数的那一次:整图运行是 `{}`,单跑一个节点带着它的 id;null = 没在问。
+  const [askingParams, setAskingParams] = React.useState<{ targetNodeId?: string } | null>(null);
   const startRun = React.useCallback(async () => {
     if (launchingRef.current || run.isPending) return;
     if (running) {
@@ -179,12 +183,17 @@ export function useWorkflowRun({
           setLaunching(false);
         }
       }
+      // 开始节点有必填又没有默认值的参数:先问(画布上那一格写的就是「运行时填」),填好了在 runWithParams 里发。
+      if (needsRunParams(rootGraph)) {
+        setAskingParams({});
+        return;
+      }
       // 失败提示在 run 自己的 onError 里给,这里只等它落定再开闸。
-      await run.mutateAsync().catch(() => undefined);
+      await run.mutateAsync({}).catch(() => undefined);
     } finally {
       launchingRef.current = false;
     }
-  }, [run, save, analysis.runnable, running, t]);
+  }, [run, save, analysis.runnable, running, t, rootGraph]);
   /**
    * 单跑一个节点(节点上的「▶ 运行此节点」)。和 startRun 同一套闸:先落没存完的改动(跑的
    * 是服务端那一版)、一次只起一个;**不看整图的就绪清单** —— 预检只查目标的上游闭包,闭包外的
@@ -208,11 +217,20 @@ export function useWorkflowRun({
           setLaunching(false);
         }
       }
-      await run.mutateAsync(nodeId).catch(() => undefined);
+      if (needsRunParams(rootGraph)) {
+        setAskingParams({ targetNodeId: nodeId });
+        return;
+      }
+      await run.mutateAsync({ targetNodeId: nodeId }).catch(() => undefined);
     } finally {
       launchingRef.current = false;
     }
-  }, [run, save, running, t]);
+  }, [run, save, running, t, rootGraph]);
+  /** 运行前问参数那张弹窗填好了:带着这一次的参数跑(整图,或单跑那一个节点),成了就收起弹窗。 */
+  const runWithParams = React.useCallback(async (params: Record<string, unknown>) => {
+    const target = askingParams?.targetNodeId;
+    await run.mutateAsync({ targetNodeId: target, params }).then(() => setAskingParams(null)).catch(() => undefined);
+  }, [run, askingParams]);
   const checklistCount = analysis.errorCount + analysis.warnCount;
   const checklistLabel = analysis.errorCount
     ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
@@ -239,6 +257,9 @@ export function useWorkflowRun({
     setChecklistOpen,
     refusal,
     dismissRefusal,
+    askingParams,
+    setAskingParams,
+    runWithParams,
   };
 }
 

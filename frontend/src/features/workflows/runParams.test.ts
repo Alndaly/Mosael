@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { formValuesFrom, missingRequired, runParamsFrom, startParamsOf } from "./taskParams";
+import { formValuesFrom, missingRequired, runParamsFrom, startParamsOf } from "./runParams";
 
 const GRAPH = {
   nodes: [

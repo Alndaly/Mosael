@@ -278,7 +278,7 @@ describe("analyzeWorkflow", () => {
     ]);
   });
 
-  it("开始节点勾了必填的参数空着是阻塞错误,说清是哪一个;数字 0 不算空", () => {
+  it("开始节点勾了必填的参数没有默认值:不拦运行(点运行时会问),只提醒是哪一个;数字 0 不算空", () => {
     const make = (params: Record<string, unknown>) =>
       graph(
         [
@@ -290,9 +290,10 @@ describe("analyzeWorkflow", () => {
     const filled = analyzeWorkflow(make({ product_name: "开衫", selling_points: "不起球", count: 0 }), registry, fullCtx);
     expect(filled.runnable).toBe(true);
     const blank = analyzeWorkflow(make({ product_name: "开衫", selling_points: "  ", count: 0 }), registry, fullCtx);
-    expect(blank.runnable).toBe(false);
+    //: 画布上那一格写的是「运行时填」:运行键不灰,点下去由 RunParamsDialog 问(此前这里是阻断错误)。
+    expect(blank.runnable).toBe(true);
     expect(issuesAtLayer(blank.issues, []).get("start")).toEqual([
-      expect.objectContaining({ code: "required-missing", configKey: "selling_points", severity: "error" }),
+      expect.objectContaining({ code: "start-param-ask-at-run", configKey: "selling_points", severity: "warn" }),
     ]);
   });
 

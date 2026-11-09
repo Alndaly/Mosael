@@ -43,6 +43,7 @@ import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { useNodePicker } from "@/features/nodeForms/nodePicker";
 import { NodeInspector } from "@/features/workflows/NodeInspector";
 import { WORKFLOW_CANVAS_EDGE_TYPES } from "@/features/workflows/ReferenceHintEdge";
+import { RunParamsDialog } from "@/features/workflows/RunParamsDialog";
 import { useReferenceHintEdges } from "@/features/workflows/referenceHints";
 import { highlightAtLayer, nodeSearchEntryId, nodeSearchTargets } from "@/features/workflows/nodeSearch";
 import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
@@ -403,6 +404,9 @@ export function WorkflowEditor({
     setChecklistOpen,
     refusal,
     dismissRefusal,
+    askingParams,
+    setAskingParams,
+    runWithParams,
   } = useWorkflowRun({ workflow, qc, t, rootGraph, registry, scopePath, save, pendingSaveRef });
   /** 失败卡上点了「去这个节点」:检查器翻到出问题的那一格所在的那一档(见 NodeInspector 的 revealField)。 */
   const [revealField, setRevealField] = React.useState<{ nodeId: string; field: string } | null>(null);
@@ -977,6 +981,14 @@ export function WorkflowEditor({
         onCancel={() => setDeleting(false)}
         pending={remove.isPending}
         onConfirm={() => remove.mutate()}
+      />
+      {/* 开始节点的必填参数没有默认值:点运行(或单跑一个节点)先问,填好的只带给这一次。 */}
+      <RunParamsDialog
+        graph={rootGraph}
+        open={askingParams !== null}
+        onOpenChange={(open) => !open && setAskingParams(null)}
+        onRun={(params) => void runWithParams(params)}
+        running={run.isPending}
       />
       <WorkflowRevisionHistory
         workflow={workflow}

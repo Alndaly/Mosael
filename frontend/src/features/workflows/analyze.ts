@@ -18,6 +18,7 @@ export type IssueSeverity = "error" | "warn";
 export type IssueCode =
   | "missing-start" // 工作流没有开始节点
   | "required-missing" // 必填字段为空
+  | "start-param-ask-at-run" // 开始节点勾了必填的参数没有默认值:点运行时会问(RunParamsDialog),只是提醒
   | "one-of-both" // 同组(one_of)的字段填了不止一个
   | "one-of-missing" // 同组(one_of)的字段一个都没填
   | "disconnected" // 一定不会被执行(没接进流程),也没有会跑的节点引用它 —— 只是提醒
@@ -672,13 +673,14 @@ function collect(
       }
     }
 
-    // 开始节点勾了「必填」的参数(required_params,参数名的列表)一个都不能空 —— 与后端 validate_graph 的
-    // _start_param_errors 同一条规矩。参数被别处用 {{start.x}} 引用,引用本身在上面的必填检查里算"填了"。
+    // 开始节点勾了「必填」的参数(required_params)没有默认值:**不拦运行** —— 点运行时会问(RunParamsDialog),填好的
+    // 只带给这一次;后端拿合并了这次参数之后的值按 _start_param_errors 判。此前这里是阻断错误,运行键灰着,
+    // 而那一格写的是「运行时填」—— 写着的事做不到。这里只留一句提醒。
     if (node.type === "start") {
       const params = (config.params ?? {}) as Record<string, unknown>;
       const required = Array.isArray(config.required_params) ? config.required_params : [];
       for (const name of required) {
-        if (typeof name === "string" && isEmpty(params[name])) push("error", "required-missing", { configKey: name });
+        if (typeof name === "string" && isEmpty(params[name])) push("warn", "start-param-ask-at-run", { configKey: name });
       }
       // 只能从几项里选的参数(param_options),值不在选项里 —— 后端运行前拒(wfErr_startParamNotAnOption)。
       for (const name of startOptionViolations(config)) {

@@ -4,27 +4,30 @@ import { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Truncate } from "@/components/ui/truncate";
-import type { StartParamSpec } from "./taskParams";
+import type { StartParamSpec } from "./runParams";
 
 /** 空着的选项参数「跟着默认值走」,和输入框空着同一个意思。 */
 const USE_DEFAULT = "\u0000default";
 
 /**
- * 定时任务带给工作流的参数:开始节点的每一项一行。空着就用工作流里的默认值(写在占位里);必填又没有默认值的,
- * 不填就建不成,`showMissing` 时在那一行说出来。选项参数是下拉。
+ * 一次运行带给工作流的参数(定时任务存着的、点运行时当场填的):开始节点的每一项一行。空着就用工作流里的默认值
+ * (写在占位里);必填又没有默认值的,不填就跑不起来,`showMissing` 时在那一行说出来。选项参数是下拉。
+ * `hint`:格子下面那句说明 —— 定时任务说「到点按这里填的跑」,点运行说「只带给这一次」。
  */
-export function TaskParamsForm({
+export function RunParamsForm({
   specs,
   values,
   onChange,
   showMissing,
   missing,
+  hint,
 }: {
   specs: StartParamSpec[];
   values: Record<string, string>;
   onChange: (next: Record<string, string>) => void;
   showMissing: boolean;
   missing: string[];
+  hint: string;
 }) {
   const t = useI18n();
   if (specs.length === 0) return null;
@@ -68,7 +71,7 @@ export function TaskParamsForm({
           );
         })}
       </div>
-      <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("taskParamsHint")}</small>
+      <small className="text-ui-xs leading-[1.5] text-muted-foreground">{hint}</small>
     </div>
   );
 }

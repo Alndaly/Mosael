@@ -49,8 +49,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BoundWorkflowRow as BoundWorkflowRowView, isBoundWorkflowGone } from "./boundWorkflowRow";
 import { hasActiveRun, TaskRunControls } from "./taskRunControls";
 import { localTimeZone, nextRunText, scheduleText, scheduleUsesClock } from "./scheduleText";
-import { TaskParamsForm } from "./TaskParamsForm";
-import { formValuesFrom, missingRequired, runParamsFrom, startParamsOf } from "./taskParams";
+import { RunParamsForm } from "@/features/workflows/RunParamsForm";
+import { formValuesFrom, missingRequired, runParamsFrom, startParamsOf } from "@/features/workflows/runParams";
 import { errorText } from "@/api/errorMessage";
 import { Hint } from "@/components/ui/tooltip";
 import { SettingsRow } from "@/components/settings/settings-layout";
@@ -458,7 +458,7 @@ function CreateTaskDialog({
   const [trigger, setTrigger] = React.useState<"manual" | "scheduled" | "webhook">("manual");
   const [schedKind, setSchedKind] = React.useState<"hourly" | "daily">("hourly");
   const [dailyTime, setDailyTime] = React.useState("09:00");
-  //: 工作流开始节点的参数(见 taskParams):换了工作流就从头填。
+  //: 工作流开始节点的参数(见 workflows/runParams):换了工作流就从头填。
   const [paramValues, setParamValues] = React.useState<Record<string, string>>({});
   const [attempted, setAttempted] = React.useState(false);
 
@@ -542,7 +542,7 @@ function CreateTaskDialog({
             </small>
           )}
         </div>
-        <TaskParamsForm specs={specs} values={paramValues} onChange={setParamValues} showMissing={attempted} missing={missing} />
+        <RunParamsForm specs={specs} values={paramValues} onChange={setParamValues} showMissing={attempted} missing={missing} hint={t("taskParamsHint")} />
         <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("taskTriggerLabel")}</span>
           <Select value={trigger} onValueChange={(value) => setTrigger(value as typeof trigger)}>
@@ -806,7 +806,7 @@ function TaskParamsRow({ task, workspaceId }: { task: ScheduledTask; workspaceId
     <div className="grid gap-2 py-4" data-task-params-row="">
       {editing ? (
         <>
-          <TaskParamsForm specs={specs} values={values} onChange={setValues} showMissing={attempted} missing={missing} />
+          <RunParamsForm specs={specs} values={values} onChange={setValues} showMissing={attempted} missing={missing} hint={t("taskParamsHint")} />
           {save.isError && <p role="alert" className="m-0 text-ui-xs leading-[1.5] text-destructive">{errorText(save.error)}</p>}
           <div className="flex gap-1.5">
             <Button
