@@ -264,6 +264,21 @@ export function AssetGridField({
   /** 一份素材放进这个角色合不合法(带角色的格子按那个角色要的那一类)。 */
   const kindAllowedFor = (kind: string, role: string) =>
     roleAware && role ? roleMedia(role) === kind : kindAllowed(kind);
+  /**
+   * 自动来的每一处引用这一轮发不发、为什么不发 —— 列表上的角标和「超上限」那一句**读同一份**,和运行时同一条规矩
+   * (后端 binding.with_referenced_assets):去掉了的不发;模型收不下这个角色的不并;静态就知道类型不对的跳过。
+   * 此前「超上限」把不会被送进去的也算进名额,首帧加尾帧刚好两份就红着说「超过 2 份」(真跑整片时误报)。
+   */
+  const refStatuses = refs.map((ref) => {
+    const on = !excluded.includes(ref.path);
+    const role = roleAware ? roleOverrides[ref.path] || defaultRole : "";
+    //: 这个模型收不下这个角色时明说(能力闸的判据和运行时同一份);认不出模型时不下结论。
+    const rejected = on && roleAware && accepted !== null && !accepted.includes(role);
+    //: 静态就知道是哪份素材时,顺手判一眼它是不是这个角色要的那一类 —— 不是的那些运行时会被跳过。
+    const asset = ref.assetId ? details.byId.get(ref.assetId) : undefined;
+    const wrongKind = asset !== undefined && !kindAllowedFor(String(asset.kind), role);
+    return { ref, on, role, rejected, asset, wrongKind, sent: on && !rejected && !wrongKind };
+  });
   /** 新挑一份(素材库 / 上传)时它该挂哪个角色:那个角色要的那一类正好对得上,优先声明里的默认角色。 */
   const roleForKind = (kind: string): string => {
     if (!roleAware) return "";
@@ -563,14 +578,7 @@ export function AssetGridField({
             <Wand2 size={11} strokeWidth={1.8} />
             {t("wfAssetGridAutoTitle")}
           </span>
-            {refs.map((ref) => {
-              const on = !excluded.includes(ref.path);
-              const role = roleAware ? roleOverrides[ref.path] || defaultRole : "";
-              //: 这个模型收不下这个角色时明说(能力闸的判据和运行时同一份);认不出模型时不下结论。
-              const rejected = on && roleAware && accepted !== null && !accepted.includes(role);
-              //: 静态就知道是哪份素材时,顺手判一眼它是不是这个角色要的那一类 —— 不是的那些运行时会被跳过。
-              const asset = ref.assetId ? details.byId.get(ref.assetId) : undefined;
-              const wrongKind = asset !== undefined && !kindAllowedFor(String(asset.kind), role);
+            {refStatuses.map(({ ref, on, role, rejected, asset, wrongKind }) => {
               return (
                 //: 一处引用一行,不画框:行里只有角色那枚控件有边,再包一圈就是同一件事画了两遍。
                 <div
@@ -620,8 +628,8 @@ export function AssetGridField({
                 </div>
               );
             })}
-          {/* 到顶了说清:自动来的也要占那 max 个位置,不然用户只会看到运行时一句「最多 N 份」。 */}
-          {picked.length + refs.filter((one) => !excluded.includes(one.path)).length > max && (
+          {/* 到顶了说清:真会发出去的自动来的也要占那 max 个位置,不然用户只会看到运行时一句「最多 N 份」。 */}
+          {picked.length + refStatuses.filter((one) => one.sent).length > max && (
             <p role="alert" data-auto-images-over="" className="text-ui-2xs text-destructive">
               {t("wfAssetGridAutoTooMany").replace("{max}", String(max))}
             </p>

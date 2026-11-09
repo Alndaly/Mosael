@@ -426,6 +426,16 @@ describe("自动来的引用(「引用即发送」)", () => {
     const { container } = renderAuto({ refs: [REF] });
     expect(container.querySelector("[data-auto-images-over]")).toBeNull();
   });
+
+  it("不会被送进去的引用(静态知道不是图片)不占名额:不报超上限", () => {
+    const { container } = renderAuto({
+      value: "img-a,img-b",
+      refs: [{ path: "clip.asset_id", label: "一段片 · 素材", assetId: "clip-v" }],
+      max: 2,
+    });
+    expect(container.querySelector("[data-auto-image-skipped]")).not.toBeNull();
+    expect(container.querySelector("[data-auto-images-over]")).toBeNull();
+  });
 });
 
 describe("素材库挑图", () => {
@@ -535,6 +545,21 @@ describe("一行一条 `素材id:角色`(生成节点的「输入素材」)", ()
     const rejected = container.querySelector("[data-auto-image-rejected]")!;
     expect(rejected).not.toBeNull();
     expect(rejected.textContent).toBe("这个模型不接受参考图,不会被送进去");
+  });
+
+  it("模型不收那个角色的引用不占名额:首帧加尾帧刚好两份,不报超上限(真跑整片时误报过)", () => {
+    const { container } = renderLines({
+      value: ["head:first_frame", "tail:last_frame"],
+      refs: [REF],
+      max: 2,
+      roles: [
+        { value: "first_frame", label: "首帧", accepted: true, limit: 1 },
+        { value: "last_frame", label: "尾帧", accepted: true, limit: 1 },
+        { value: "reference_image", label: "参考图", accepted: false, limit: 1 },
+      ],
+    });
+    expect(container.querySelector("[data-auto-image-rejected]")).not.toBeNull();
+    expect(container.querySelector("[data-auto-images-over]")).toBeNull();
   });
 
   it("每个角色能挂几份 / 槽位叫什么:写在格子下面(描述符的 source_limits / source_labels)", () => {
