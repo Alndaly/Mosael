@@ -70,6 +70,7 @@ type SortKey = (typeof SORT_KEYS)[number];
 const INTERMEDIATE_COPY: Record<string, { label: MessageKey; notice: MessageKey }> = {
   dub_line: { label: "mediaIntermediate_dub_line", notice: "mediaIntermediateHint_dub_line" },
   lipsync_chunk: { label: "mediaIntermediate_lipsync_chunk", notice: "mediaIntermediateHint_lipsync_chunk" },
+  fitted_frame: { label: "mediaIntermediate_fitted_frame", notice: "mediaIntermediateHint_fitted_frame" },
 };
 
 /** 网格:一张卡片至少这么宽,一行能放几张就放几张(此前的 `repeat(auto-fill, minmax(220px, 1fr))`)。 */

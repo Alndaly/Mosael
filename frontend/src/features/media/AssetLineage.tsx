@@ -22,6 +22,7 @@ const OP_LABELS: Record<string, MessageKey> = {
   mask: "assetLineageOpMask",
   scrub: "assetLineageOpScrub",
   tighten: "assetLineageOpTighten",
+  fit: "assetLineageOpFit",
   plugin: "assetLineageOpPlugin",
 };
 

@@ -18,4 +18,7 @@ DUB_LINE = "dub_line"
 #: 对口型的一块:切出来交给改口型的原片块、配音块,和改好口型、还没接回整段的那一块。
 LIPSYNC_CHUNK = "lipsync_chunk"
 
-INTERMEDIATE_KINDS: tuple[str, ...] = (DUB_LINE, LIPSYNC_CHUNK)
+#: 按画幅摆正的首帧 / 尾帧:交给视频模型之前按视频的画幅居中裁满的那一张(ADR 0094)。原图在素材库里。
+FITTED_FRAME = "fitted_frame"
+
+INTERMEDIATE_KINDS: tuple[str, ...] = (DUB_LINE, LIPSYNC_CHUNK, FITTED_FRAME)

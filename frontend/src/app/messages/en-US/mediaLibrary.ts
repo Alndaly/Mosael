@@ -71,6 +71,7 @@ export const mediaLibrary = {
   assetLineageOpMask: "mask",
   assetLineageOpScrub: "metadata stripped",
   assetLineageOpTighten: "pauses tightened",
+  assetLineageOpFit: "fitted to the video aspect",
   assetLineageOpPlugin: "plugin",
   // Strip metadata (ADR 0062): one action on a video's detail modal — a small confirmation panel, then a background job.
   // The provenance consequence is the same sentence as the backend's domain/assets/scrub/policy.PROVENANCE.

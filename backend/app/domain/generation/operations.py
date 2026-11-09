@@ -26,6 +26,7 @@ from app.ai.providers import (
 )
 from app.domain.generation_catalog import known_capabilities_for, outputs_per_run, prompt_mode
 from app.domain.generation_catalog.descriptors.shared import SOURCE_GROUP_DROPS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
+from app.domain.generation.frame_fit import fit_frames
 from app.domain.generation.missing import explain_missing
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model, resolve_row
 from app.core.i18n import LocalizedError, fragment, tr
@@ -359,6 +360,14 @@ def _create_generation_job(
     except EntityDomainError as exc:
         raise GenerationDomainError(exc.key, **exc.params) from exc
     source_assets = expansion.source_assets
+    #: 首帧、尾帧按视频的画幅摆正(ADR 0094):方图当竖屏视频的首帧,模型会把它压扁。裁出来的那份和 3D 参考渲出来的
+    #: 一样,这次生成被拒时删掉。工作台跑画布那条路不碰 —— 图就是用户要跑的样子。
+    fitted = None
+    if kind == "video" and workbench_graph is None:
+        fitted = fit_frames(db, workspace_id=workspace_id, project_id=project_id,
+                            source_assets=source_assets, parameters=parameters)
+        source_assets = fitted.source_assets
+        rendered_ids.extend(fitted.made_ids)
     notes.extend(note for note in (expansion.note, tr("genPromptSourceLegend", legend=legend) if legend else "") if note)
     request_text = {"prompt": prompt, **({"prompt_notes": notes} if notes else {})}
 
@@ -412,6 +421,9 @@ def _create_generation_job(
         request["pose"] = pose.record()
     if scene_receipt:
         request["scene_reference"] = scene_receipt
+    if fitted is not None and fitted.receipt:
+        #: 哪几张按画幅裁过、裁成多大:模型收到的不是原图,生成记录要说得清。
+        request["fitted_frames"] = fitted.receipt
     if talking:
         #: 谁、在这一次声明了授权:生成记录上留底(提交的人就是 created_by)。
         request["digital_human_consent"] = True

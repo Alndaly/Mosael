@@ -72,6 +72,7 @@ export const mediaLibrary = {
   assetLineageOpMask: "生成蒙版",
   assetLineageOpScrub: "清除元数据",
   assetLineageOpTighten: "压缩停顿",
+  assetLineageOpFit: "按画幅裁",
   assetLineageOpPlugin: "插件加工",
   // 清除元数据(ADR 0062):素材详情(视频)的一个动作 —— 点开是一张小确认面板,确认后排一条后台任务。
   // provenance 那一段的后果与后端 domain/assets/scrub/policy.PROVENANCE 同一句(必须写在开关旁边)。
