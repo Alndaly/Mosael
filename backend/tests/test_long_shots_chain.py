@@ -12,6 +12,7 @@ import pytest
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Workflow
+from app.media import line_breaks
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.joining import join_segments
 from app.domain.workflows.engine import execute_graph
@@ -182,7 +183,7 @@ def test_长口播切成一行放得下的几条_时间按字数分() -> None:
     text = "雨把街面洗得发蓝，他走得不急，像认得这条空路。积水晃一下，远处的暖黄就亮一下。然后，他停住，收伞，抬头。雨声忽然低了。"
     cues = subjobs._short_cues(text, 2.0, 20.0)
     assert len(cues) > 1 and "".join(line for line, _, _ in cues) == text
-    assert all(subjobs._text_width(line) <= subjobs.SUBTITLE_LINE_WIDTH for line, _, _ in cues)
+    assert all(line_breaks.columns(line) <= subjobs.SUBTITLE_LINE_WIDTH for line, _, _ in cues)
     assert cues[0][1] == 2.0 and sum(length for _, _, length in cues) == pytest.approx(20)
     assert cues[-1][1] + cues[-1][2] == pytest.approx(22)
 
@@ -248,3 +249,9 @@ def test_真跑一镜_超长时续写后接成一条(monkeypatch, tmp_path: Path
     with SessionLocal() as db:
         joined = db.get(Asset, made["join_shot"]["asset_id"])
         assert probe_media(resolve_key(joined.file_key))["duration"] == pytest.approx(9, abs=0.3)
+
+
+def test_一整句没有标点的长话也切得开() -> None:
+    text = "雨" * 60
+    cues = subjobs._short_cues(text, 0.0, 6.0)
+    assert len(cues) == 3 and "".join(line for line, _, _ in cues) == text

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from app.media.render_executor import _text_overlay_dialogues, build_ffmpeg_command
 from app.media.render_plan import (
     DEFAULT_TEXT_STYLE,
@@ -246,3 +248,54 @@ def test_build_command_falls_back_to_ass_without_text_pngs(tmp_path):
     )
     cmd = build_ffmpeg_command(plan, lambda k: Path(k), tmp_path / "o.mp4")  # text_pngs=None
     assert "subtitles=" in " ".join(cmd)  # 回落 ASS
+
+
+class TestLongSubtitleWrapsInsideTheFrame:
+    """回归:一整句中文没有空格,libass 不会自己断,导出时一行冲出画面左右两边(「雨夜归灯」成片实测)。"""
+
+    NARRATION = "一盏往后退。脚步声不急，也不停，像认得这条空路。积水晃一下，远处的暖黄就亮一下。然后，他停住，收伞，抬头。雨声忽然低了。"
+
+    def _ass(self, width: int = 1280, height: int = 720) -> str:
+        from app.media.render_executor import _build_ass
+
+        plan = build_render_plan(
+            sequence_id="s", revision=1, width=width, height=height, fps=30,
+            clips=[{"id": "c", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 3}],
+            assets={"a": {"file_key": "/x.png"}},
+            subtitle_clips=[{"id": "s1", "timeline_start": 0, "src_in": 0, "src_out": 3, "text_override": self.NARRATION}],
+            subtitle_style={"font_size": 40, "bg_opacity": 0.6, "color": "#ffffff"},
+        )
+        return _build_ass(plan)
+
+    def test_长句插好换行_字一个不少(self) -> None:
+        line = next(ln for ln in self._ass().splitlines() if ln.startswith("Dialogue:") and ",Default," in ln)
+        text = line.split(",,", 1)[1].split(",,", 1)[1]
+        assert "\\N" in text
+        assert text.replace("\\N", "") == self.NARRATION
+
+    def test_竖屏更窄_断成更多行(self) -> None:
+        def count(ass: str) -> int:
+            line = next(ln for ln in ass.splitlines() if ln.startswith("Dialogue:") and ",Default," in ln)
+            return line.count("\\N") + 1
+        assert count(self._ass(720, 1280)) > count(self._ass(1280, 720))
+
+    def test_真用_libass_渲一帧_字都在画面里(self, tmp_path) -> None:
+        import subprocess
+
+        from PIL import Image
+
+        from app.core.config import settings
+
+        ffmpeg = settings.ffmpeg
+        filters = subprocess.run([ffmpeg, "-hide_banner", "-filters"], capture_output=True, text=True).stdout
+        if " ass " not in filters:
+            pytest.skip("这台机器的 ffmpeg 没有 libass")
+        ass = tmp_path / "s.ass"
+        ass.write_text(self._ass(), encoding="utf-8")
+        frame = tmp_path / "f.png"
+        subprocess.run([ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=1280x720:d=1",
+                        "-vf", f"ass={ass.name}", "-frames:v", "1", str(frame)], check=True, cwd=tmp_path)
+        ink = Image.open(frame).convert("L").point(lambda v: 255 if v > 40 else 0).getbbox()
+        assert ink is not None
+        left, _, right, _ = ink
+        assert left > 0 and right < 1280, f"字幕出了画面: {ink}"

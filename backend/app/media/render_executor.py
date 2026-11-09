@@ -32,7 +32,7 @@ from app.media.render_plan import (
     TextOverlayItem,
     Transform,
 )
-from app.media import text_render
+from app.media import line_breaks, text_render
 
 """
 RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
@@ -729,6 +729,7 @@ def _build_ass(plan: RenderPlan) -> str:
         "ScriptType: v4.00+\n"
         f"PlayResX: {w}\n"
         f"PlayResY: {h}\n"
+        # 2 = libass 不自己换行:字幕的断行由 _subtitle_line_columns + line_breaks 插好(它只会在空格处断)。
         "WrapStyle: 2\n"
         "ScaledBorderAndShadow: yes\n\n"
         "[V4+ Styles]\n"
@@ -752,9 +753,10 @@ def _build_ass(plan: RenderPlan) -> str:
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
+    width = _subtitle_line_columns(style.font_size, w, margin=40 + outline)
     lines = [
         f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
-        f"Default,,0,0,0,,{_ass_text(item.text)}"
+        f"Default,,0,0,0,,{_ass_text(chr(10).join(line_breaks.wrap(item.text, width)))}"
         for item in plan.subtitles
     ]
     lines += [line for item in plan.text_overlays for line in _text_overlay_dialogues(item, w, h)]
@@ -766,6 +768,16 @@ def _build_ass(plan: RenderPlan) -> str:
 _LABEL_BOX = "&H73000000"
 #: 底框比字多出来的边(相对字号),两条路一样。
 _LABEL_PAD = 0.25
+
+
+def _subtitle_line_columns(font_size: float, frame_w: int, *, margin: float) -> int:
+    """一行字幕放得下几栏(见 line_breaks):和浏览器那条路同一个宽度 —— 盒子最宽 86% 画面、
+    左右各 0.55em 内边距;也不越过 ASS 两侧的边距。实测 libass 下一个汉字 ≈ `font_size` 像素宽
+    (字号已乘过 _ASS_FONTSIZE_SCALE 对齐浏览器),一栏就是半个字号。
+
+    libass 只在空格处换行(`WrapStyle` 救不了一整句中文),所以断行由我们插好 `\\N` 再交给它。"""
+    text_px = min(frame_w * 0.86 - 1.1 * font_size, frame_w - 2 * margin)
+    return max(int(text_px // (font_size / 2)), 2)
 
 
 def _ai_label_dialogue(item: AiLabelItem, w: int, h: int) -> str:

@@ -10,7 +10,6 @@ import json
 import logging
 import math
 import re
-import unicodedata
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -32,6 +31,7 @@ from app.ai.providers.contracts.separation import SeparationError
 from app.ai.runtime import config as tts_config, tts_models
 from app.core.i18n import get_current_locale, t, tr
 from app.domain import render
+from app.media import line_breaks
 from app.media.paths import resolve_key
 from app.media.pauses import DEFAULT_MAX_PAUSE, PauseError
 from app.media.seam import SeamError, find_seam
@@ -1341,26 +1341,17 @@ def transcript_sentences(segments: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 #: 一条字幕一行放得下的宽度(一个汉字算 2)。
 SUBTITLE_LINE_WIDTH = 44
-_CLAUSE_END = re.compile("(?<=[。！？；，、…!?;,.])\\s*")
-
-
-def _text_width(text: str) -> int:
-    return sum(2 if unicodedata.east_asian_width(char) in "WF" else 1 for char in text)
 
 
 def _short_cues(text: str, start: float, length: float) -> list[tuple[str, float, float]]:
-    """一段长话切成一行放得下的几条,在标点处切,时间按字数分。没有词级时间,这是拿得到的最好的估计。"""
-    lines: list[str] = []
-    for clause in (one for one in _CLAUSE_END.split(text) if one):
-        if lines and _text_width(lines[-1] + clause) <= SUBTITLE_LINE_WIDTH:
-            lines[-1] += clause
-        else:
-            lines.append(clause)
-    total = sum(_text_width(line) for line in lines)
+    """一段长话切成一行放得下的几条,优先在标点处切(见 media.line_breaks),时间按字数分。
+    没有词级时间,这是拿得到的最好的估计。一整句没有标点的长话也切得开(此前在标点处才切,它会原样一条出画)。"""
+    lines = line_breaks.wrap(text, SUBTITLE_LINE_WIDTH)
+    total = sum(line_breaks.columns(line) for line in lines)
     cues: list[tuple[str, float, float]] = []
     for line in lines:
-        share = length * _text_width(line) / total
-        cues.append((line.strip(), start, share))
+        share = length * line_breaks.columns(line) / total
+        cues.append((line, start, share))
         start += share
     return cues
 
