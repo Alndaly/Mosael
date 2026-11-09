@@ -167,6 +167,11 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         else:
             results.append(outcome)
     failures.sort(key=lambda one: one[0])
+    failure_note = "\n".join(_failure_line(index, failure) for index, failure in failures)
+    #: 跳过是为了「一项失败不让其余几项白做」;一项都没做成就没有其余几项 —— 照「完成」往下走只会交出一个空结果、
+    #: 发一条「已完成」的通知,还没有「从中断处继续」可点(上身图那条实测:唯一一组被服务商断开,报完成、0 张图)。
+    if skip and total and not results:
+        raise WorkflowDomainError("wfErr_loopEveryItemFailed", params={"failures": failure_note})
     return {
         "results": results,
         "count": len(results),
@@ -174,7 +179,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         #: 有一步失败的那几项是第几项(从 1 数),和给人看的一句话(一项一行;没有就是空串,可以直接拼进通知)。
         #: 其中做出了要交的东西的(出好了图、视频那一步失败),那份东西照样在 results 里,这里只说哪一步没成。
         "failed": [index + 1 for index, _ in failures],
-        "failure_note": "\n".join(_failure_line(index, failure) for index, failure in failures),
+        "failure_note": failure_note,
     }
 
 

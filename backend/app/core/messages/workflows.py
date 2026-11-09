@@ -339,6 +339,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "it comes from the tool {tool} of the plugin “{plugin}”, which can't be used here (the plugin isn't installed, has no usable connection, or doesn't have this tool enabled)",
     },
     "wfErr_integerRange": {"zh": "{field}必须是 {min} 到 {max} 之间的整数", "en": "{field} must be a whole number between {min} and {max}"},
+    "wfErr_loopEveryItemFailed": {"zh": "循环·遍历的每一项都没做成:\n{failures}", "en": "Every item of the for-each failed:\n{failures}"},
     "wfErr_loopTooMany": {"zh": "循环·遍历拿到 {count} 项,超过上限 {cap};请先筛选或分批", "en": "The for-each got {count} items, over the {cap} cap; filter or split them first"},
     "wfErr_loopIterationsFailed": {
         # 几项一起失败时**全部**说出来:只报第一项,用户会以为其余的都好 —— 而每一项都可能是一笔花出去的钱。

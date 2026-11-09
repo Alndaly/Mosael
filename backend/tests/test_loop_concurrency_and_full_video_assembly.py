@@ -460,3 +460,27 @@ def test_一项失败时选跳过_其余照跑_失败的那几项连同原因交
     with pytest.raises(WorkflowDomainError):
         execute_graph({"nodes": [loop], "edges": []}, wf_id=_workflow(ws).id, entry_is_root=True)
 
+
+
+@pytest.mark.parametrize("concurrency", [1, 3])
+def test_跳过失败项_可一项都没做成时循环失败_不报成功(concurrency: int) -> None:
+    """上身图那条实测:唯一一组被服务商断开,循环跳过它、整条运行报「完成」,交出 0 张图 0 条视频 ——
+    一个空的「完成」比失败更糟:没有「从中断处继续」可点,还以为做好了。"""
+    from app.domain.workflows.engine import execute_graph
+
+    ws = _workspace()
+    loop = {
+        "id": "each", "type": "loop_foreach",
+        "config": {
+            "items": ["不是数", "也不是"],
+            "on_item_error": "skip",
+            "concurrency": concurrency,
+            "body": {"nodes": [{"id": "big", "type": "condition",
+                                "config": {"left": "{{loop.item}}", "op": "gt", "right": "2"}}], "edges": []},
+            "output": "{{loop.item}}",
+        },
+    }
+    with pytest.raises(WorkflowDomainError) as caught:
+        execute_graph({"nodes": [loop], "edges": []}, wf_id=_workflow(ws).id, entry_is_root=True)
+    assert caught.value.key == "wfErr_loopEveryItemFailed"
+    assert "第 1 项" in str(caught.value.params["failures"]) and "第 2 项" in str(caught.value.params["failures"])
