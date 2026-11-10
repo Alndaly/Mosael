@@ -139,7 +139,7 @@ def test_让它说话接上游的一段音频_不再配音(monkeypatch) -> None:
     sources: list = []
     monkeypatch.setattr(subjobs, "synthesize_speech", lambda db, scope, config: spoken.append(config) or {"asset_id": "x"})
     monkeypatch.setattr(talking, "_pick_model", lambda db, choice, mode: S2V)
-    monkeypatch.setattr(talking, "_generate", lambda db, scope, model, src, parameters=None: sources.append(src) or ["talk"])
+    monkeypatch.setattr(talking, "_generate", lambda db, scope, model, src, parameters=None, prompt="": sources.append(src) or ["talk"])
     scope = SimpleNamespace(workspace_id=ws, id="wf:1", name="口播")
     with SessionLocal() as db:
         out = talking.image_speak(db, scope, {"asset_id": "face", "audio_asset_id": "seg", "consent": "yes"})

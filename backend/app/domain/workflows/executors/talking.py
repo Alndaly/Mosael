@@ -33,6 +33,7 @@ from app.domain.workflows.executors.common import stop_if_stopping, wait_for_job
 from app.core.child_process import run_logged
 from app.db.models import Asset, Voice
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.trim import TrimError, start_trim
 from app.domain.assets.intermediates import DUB_LINE
 from app.domain.assets.lineage import CONCAT, PAD, derived
 from app.domain.consent import voice_usable_for_digital_human
@@ -97,6 +98,45 @@ def face_role(model: dict[str, Any]) -> str:
     return REFERENCE_IMAGE if REFERENCE_IMAGE in limits and FIRST_FRAME not in limits else FIRST_FRAME
 
 
+#: 收提示词的说话照片模型(ComfyUI 上的 H3 数字人)拿到的那句。不给它就用工作流里存着的示例提示词 —— 实测画成了
+#: 一张只拍到嘴的真人特写,和参考图里的国风人物不是一个人(维护者那次「让它说话」)。
+_SPEAKING_PROMPT = (
+    "The reference image shows this person — it may be a character sheet with several views of the same ONE person; "
+    "draw them once. Keep the face, hair, clothes and art style of the reference exactly. Medium close-up, the person "
+    "faces the camera and speaks; the lips, jaw and cheeks follow the audio syllable by syllable, with natural blinks "
+    "and small head movements. One continuous shot, the camera stays still, no cut."
+)
+
+
+def speaking_prompt(model: dict[str, Any], look: str = "") -> str:
+    """说话照片交给模型的提示词:描述符说不收(`prompt: none`,百炼 s2v 这类)就空着;收的,交这一句,人物资产带着它的
+    长相描述(`look`)。"""
+    if ((model.get("capabilities") or {}).get("prompt") or "none") == "none":
+        return ""
+    return f"{look.strip()} {_SPEAKING_PROMPT}".strip()
+
+
+#: 视频比配音长出这么多以上才剪(秒):编码对齐差的零点几帧不算。
+_FIT_TOLERANCE = 0.25
+
+
+def _fit_to_audio(db: Session, video_id: str, audio_id: str) -> str:
+    """说话照片的长度就是配音的长度:模型出得比配音长(ComfyUI 工作流的帧数是写死的,H3 数字人一段 10 秒、配音 4.7 秒,
+    后半截人闭着嘴),剪到配音那么长;不比它长就原样交回。剪出来的那份交下去,原片是中间产物。"""
+    video, audio = db.get(Asset, video_id), db.get(Asset, audio_id)
+    length = lambda asset: (asset.media_info or {}).get("duration") if asset is not None else None  # noqa: E731
+    have, want = length(video), length(audio)
+    if not isinstance(have, (int, float)) or not isinstance(want, (int, float)) or have <= want + _FIT_TOLERANCE:
+        return video_id
+    try:
+        child_id = run_steps.ordered(db, ["fit_to_audio", video_id, audio_id],
+                                     lambda: start_trim(db, asset=video, start=0.0, end=float(want), created_by=current_actor(db)).id)
+    except TrimError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    final = wait_for_job(child_id, release=db)
+    return str((final.result or {}).get("asset_id") or video_id)
+
+
 def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
     """克隆音色要有授权声明才能用于数字人(ADR 0028 §5)。引擎自带的嗓子(Edge、各家云端)不是谁的克隆,不问。
     在花钱之前问 —— 配完音才拒,那段配音就白付了。"""
@@ -136,14 +176,14 @@ def _resolution(model: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]
 
 def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list[dict[str, str]],
               parameters: dict[str, Any] | None = None, *, project_id: str | None = None,
-              order: Any = None) -> list[str]:
-    """一次视频生成,交回出的视频。不收提示词的模型(说话照片、改口型)提示词就空着 —— 描述符说了算。
+              order: Any = None, prompt: str = "") -> list[str]:
+    """一次视频生成,交回出的视频。`prompt`:收提示词的说话照片模型那一句(见 speaking_prompt),其余空着。
 
     **等生成的时候 `db` 会被交还**(wait_for_job 的 release:commit + close):调用方在这之前取到的 ORM 对象,
     之后都是脱离会话的,要用就按 id 重新取。`project_id`:产出挂在哪个项目下(译配对口型挂在译配项目里)。
     `order`:这张单是什么(见 run_steps),素材每次现切、id 不稳定的调用方自己给;其余按模型、素材和参数认。"""
 
-    what = order or [model["provider"], model["model"], sources, parameters]
+    what = order or [model["provider"], model["model"], sources, parameters, prompt]
     #: 从失败处继续:这一张上回交出去了就接着等,不再付一次钱。
     held = run_steps.held_generation(db, what)
     if held is not None:
@@ -160,7 +200,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
             provider_profile_id=model["provider_profile_id"],
             model=model["model"],
             kind="video",
-            prompt="",
+            prompt=prompt,
             negative_prompt="",
             parameters=dict(parameters or {}),
             source_assets=sources,
@@ -226,7 +266,9 @@ def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], a
     if not _text(config.get("text")):
         raise WorkflowDomainError("wfErr_talkingNeedsText")
     model = _choose_model(talking_models(db, SPEECH_TO_VIDEO, actor_id), _text(config.get("model")), SPEECH_TO_VIDEO)
+    _name, look, _images = generation_profile(db, entity)
     return {"face": _portrait(db, entity), "engine": engine, "voice": voice, "model": model,
+            "prompt": speaking_prompt(model, look),
             "parameters": _resolution(model, config)}
 
 
@@ -326,7 +368,9 @@ def entity_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     text = _text(config.get("text"))
     audio = _speak(db, scope, text, plan["engine"], plan["voice"])
     videos = _generate(db, scope, plan["model"], [{"asset_id": plan["face"], "role": face_role(plan["model"])},
-                                                   {"asset_id": audio, "role": DRIVING_AUDIO}], plan["parameters"])
+                                                   {"asset_id": audio, "role": DRIVING_AUDIO}], plan["parameters"],
+                       prompt=plan["prompt"])
+    videos = [_fit_to_audio(db, one, audio) for one in videos]
     video = videos[0] if videos else ""
     return {"asset_id": video, "asset_ids": videos, "audio_asset_id": audio, "cues": _spoken_cues(db, text, video)}
 
@@ -350,7 +394,9 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         given = executors_inputs._asset_in(db, scope, given).id
     audio = given or _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
     videos = _generate(db, scope, model, [{"asset_id": face, "role": face_role(model)},
-                                          {"asset_id": audio, "role": DRIVING_AUDIO}], parameters)
+                                          {"asset_id": audio, "role": DRIVING_AUDIO}], parameters,
+                       prompt=speaking_prompt(model))
+    videos = [_fit_to_audio(db, one, audio) for one in videos]
     #: 用的是上游现成的音频时不交回它(和对口型同一条)。
     return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": "" if given else audio}
 
