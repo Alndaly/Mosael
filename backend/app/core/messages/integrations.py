@@ -1494,8 +1494,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfNode_timeline_background_music": {"zh": "铺背景音乐", "en": "Lay background music"},
     "wfNode_timeline_background_music_desc": {
-        "zh": "把一首配乐从头铺到时间线现有内容的末尾,垫在旁白底下:按这首曲子实际多响定音量、有旁白时再自动压低、开头淡入结尾淡出;按出点截,不加速变调。再铺一次换掉原来那首。放在内容都铺好之后、导出之前。",
-        "en": "Lay one track of music from the start to the end of what's on the timeline, under the narration: leveled by how loud the track actually is, ducked further while someone speaks, faded in and out; cut at the end rather than sped up. Laying it again replaces the previous one. Place it after the content is laid and before export.",
+        "zh": "把一首配乐从头铺到时间线现有内容的末尾,垫在旁白底下:按这首曲子实际多响定音量、有旁白时再自动压低、开头淡入结尾淡出;曲子长了按出点截、短了首尾接着再铺一遍,不加速变调。再铺一次换掉原来那首。放在内容都铺好之后、导出之前。",
+        "en": "Lay one track of music from the start to the end of what's on the timeline, under the narration: leveled by how loud the track actually is, ducked further while someone speaks, faded in and out; a long track is cut at the end and a short one repeats, never sped up. Laying it again replaces the previous one. Place it after the content is laid and before export.",
     },
     "wfNode_timeline_background_music_sequence_id": {"zh": "铺在哪条时间线上", "en": "Which timeline to lay it on"},
     "wfNode_timeline_background_music_asset_id": {"zh": "配乐(一份音频素材)", "en": "The music (an audio asset)"},

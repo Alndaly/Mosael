@@ -1014,7 +1014,7 @@ def timeline_background_music(db: Session, scope: RunScope, config: dict[str, An
         fade_out=DEFAULT_FADE_OUT if fade_out is None else max(fade_out, 0.0),
         actor_id=actor,
     ))
-    return {"clip_id": laid.clip_id, "track_id": laid.track_id, "duration": laid.duration, "sequence_id": sequence_id}
+    return {"clip_ids": list(laid.clip_ids), "track_id": laid.track_id, "duration": laid.duration, "sequence_id": sequence_id}
 
 
 @register("timeline_add_track")

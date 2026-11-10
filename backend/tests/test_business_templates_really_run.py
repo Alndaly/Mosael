@@ -342,6 +342,8 @@ class Test混剪真跑:
 # --------------------------------------------------------------------------------------
 
 LONG_NARRATION = "这一拍的话写得太长了一点,念出来远远超过这一拍给的四秒钟"
+#: 字幕按一行放得下的宽度切开(media.line_breaks):上面那句长话上屏是两条。
+LONG_NARRATION_LINES = ["这一拍的话写得太长了一点,念出来远远超过这一", "拍给的四秒钟"]
 BEATS = [
     {"narration": "别再买起球的毛衣", "seconds": 3, "visual_prompt": "sweater on a chair", "caption": "不起球"},
     {"narration": LONG_NARRATION, "seconds": 4, "visual_prompt": "close-up of the knit", "caption": "细密针织"},
@@ -393,9 +395,12 @@ class Test带货口播真跑:
         assert [clip.timeline_start for clip in audio] == [0.0, 3.0, 7.0]
         assert _span(audio[1]) < len(LONG_NARRATION) / 4, "念得比这一拍长的那段要加速,不能压到下一拍的话上"
 
+        #: 字幕就是念出来的那句画外音(不是脚本另写的屏幕短句),落在画外音实际的那一段上;长句切成两条。
         subtitles = _clips(sequence_id, "subtitle")
-        assert [(clip.timeline_start, clip.text_override) for clip in subtitles] == [
-            (0.0, "不起球"), (3.0, "细密针织"), (7.0, "链接在下面")]
+        assert [clip.text_override for clip in subtitles] == ["别再买起球的毛衣", *LONG_NARRATION_LINES, "点下面链接带走它"]
+        assert [subtitles[0].timeline_start, subtitles[1].timeline_start, subtitles[3].timeline_start] == [0.0, 3.0, 7.0]
+        assert subtitles[2].timeline_start + _span(subtitles[2]) == pytest.approx(audio[1].timeline_start + _span(audio[1])), \
+            "加速过的那句,字幕也在它念完时收住"
         #: 竖屏成片的画面按竖屏那一档出图 —— 不传尺寸时 Seedream 出 2048 的方图,两侧被裁掉。
         assert {one["parameters"].get("size") for one in studio.calls["ai_generate"]} == {"720x1280"}
         #: 每一拍的画面都是付过钱的素材,归进这条短片的项目。
@@ -494,10 +499,11 @@ class Test带货口播真跑:
         assert {one["voice"] for one in studio.calls["synthesize_speech"]} == {"voice-of-presenter"}
         assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [6.0, 9.0, 13.0]
         #: 主播说的开场和收尾也上字幕(付费实测时这两句一个字都没上屏),落在它们那两个片段上。
-        subtitles = [(clip.timeline_start, _span(clip), clip.text_override) for clip in _clips(sequence_id, "subtitle")]
-        assert [(start, span) for start, span, _ in subtitles] == [(0.0, 6.0), (6.0, 3.0), (9.0, 4.0), (13.0, 3.0), (16.0, 6.0)]
-        assert (subtitles[0][2], subtitles[-1][2]) == (script["hook_line"], script["call_to_action"])
-        assert studio.calls["export_sequence"][0]["subtitles_at_export"] == 5, "三步字幕都铺完了才导出"
+        subtitles = [(clip.timeline_start, clip.text_override) for clip in _clips(sequence_id, "subtitle")]
+        assert [text for _, text in subtitles] == [
+            script["hook_line"], "别再买起球的毛衣", *LONG_NARRATION_LINES, "点下面链接带走它", script["call_to_action"]]
+        assert [subtitles[index][0] for index in (0, 1, 2, 4, 5)] == [0.0, 6.0, 9.0, 13.0, 16.0]
+        assert studio.calls["export_sequence"][0]["subtitles_at_export"] == 6, "三步字幕都铺完了才导出"
 
     def test_某一拍没有画外音_这一拍只铺画面_整条照样成片(self, monkeypatch) -> None:
         from app.domain.workflows.executors.subjobs import synthesize_speech as real_speak
@@ -518,7 +524,8 @@ class Test带货口播真跑:
         assert [clip.timeline_start for clip in _clips(sequence_id, "video")] == [0.0, 3.0, 7.0]
         assert [one["text"] for one in studio.calls["synthesize_speech"]] == [BEATS[0]["narration"], BEATS[2]["narration"]]
         assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [0.0, 7.0]
-        assert len(_clips(sequence_id, "subtitle")) == 3, "没有画外音的那一拍,屏幕短句照铺"
+        assert [clip.text_override for clip in _clips(sequence_id, "subtitle")] == [BEATS[0]["narration"], BEATS[2]["narration"]], \
+            "没有画外音的那一拍不上字幕"
 
     @pytest.mark.parametrize("empty", ["hook_line", "call_to_action"])
     def test_出镜版_开场或收尾那句是空的_那一段跳过_其余照样成片(self, monkeypatch, empty: str) -> None:
@@ -547,8 +554,10 @@ class Test带货口播真跑:
         #: 由「放收尾」之前那道条件说了算;这一段守的判据没变。
         assert [one["sequence_id"] for one in studio.calls["export_sequence"]] == [sequence_id]
         subtitles = [clip.text_override for clip in _clips(sequence_id, "subtitle")]
-        assert len(subtitles) == 4, "每拍的字幕照样配上,说了的那一句也有,空的那一句不加"
-        assert (script["hook_line"] or script["call_to_action"]) in subtitles
+        spoken = script["hook_line"] or script["call_to_action"]
+        beats = ["别再买起球的毛衣", *LONG_NARRATION_LINES, "点下面链接带走它"]
+        assert subtitles == ([*beats, spoken] if empty == "hook_line" else [spoken, *beats]), \
+            "每拍的字幕照样配上,说了的那一句也有,空的那一句不加"
         assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
 
     def test_脚本的目标时长跟着开始参数走_不是写死的一个区间(self, monkeypatch) -> None:
@@ -708,7 +717,7 @@ class Test带货口播每一拍动起来:
 
         assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [0.0, 5.0, 10.0]
         assert [(clip.timeline_start, clip.text_override) for clip in _clips(sequence_id, "subtitle")] == [
-            (0.0, "不起球"), (5.0, "细密针织"), (10.0, "链接在下面")]
+            (0.0, "别再买起球的毛衣"), (5.0, "细密针织不变形"), (10.0, "点下面链接带走它")], "字幕是念出来的那句"
         #: 画面和视频都是付过钱的素材,都归进这条短片的项目。
         with unit_of_work() as db:
             filed = db.query(Asset).filter(Asset.project_id == context["pitch_project"]["project_id"]).all()
@@ -777,8 +786,11 @@ class Test带货口播每一拍动起来:
         assert [clip.timeline_start for clip in audio] == pytest.approx([0.0, 5.0, 9.6]), "画外音落在这一拍实际的起点"
         assert _span(audio[2]) <= 4.2 + 1e-6, "最长就是这一拍实际占的秒数"
         assert max(clip.timeline_start + _span(clip) for clip in audio) <= 13.8 + 1e-6, "画外音比画面长,成片尾是一截黑屏"
-        subtitles = [(clip.timeline_start, _span(clip)) for clip in _clips(sequence_id, "subtitle")]
-        assert subtitles == [(0.0, 5.0), (5.0, pytest.approx(4.6)), (pytest.approx(9.6), pytest.approx(4.2))], "字幕用实际的起止"
+        subtitles = _clips(sequence_id, "subtitle")
+        assert subtitles[0].timeline_start == 0.0 and subtitles[1].timeline_start == pytest.approx(5.0)
+        assert subtitles[2].timeline_start == pytest.approx(9.6), "字幕跟着画外音实际的起点"
+        assert subtitles[-1].timeline_start + _span(subtitles[-1]) == pytest.approx(audio[2].timeline_start + _span(audio[2])), \
+            "裁过尾巴的那句,字幕也到裁完为止"
         with unit_of_work() as db:
             titles = [one.title for one in db.query(Notification).filter(Notification.workspace_id == ws)]
         assert "带货短片:有一拍的画外音念不完" in titles

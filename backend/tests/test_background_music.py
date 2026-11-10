@@ -12,7 +12,10 @@ from app.core.db import SessionLocal
 from app.db.models import Clip, Sequence, Track
 from app.domain.sequences.background_music import (
     BED_LOUDNESS,
+    DEFAULT_FADE_IN,
+    DEFAULT_FADE_OUT,
     GAIN_RANGE,
+    SEAM_FADE,
     MUSIC_ROLE,
     UNMEASURED_GAIN,
     bed_gain,
@@ -60,6 +63,7 @@ def test_铺到成片末尾_不加速_压低_闪避_淡入淡出() -> None:
     music = insert_asset(ws, kind="audio", name="配乐", media_info={"duration": 60.0})
     laid = _lay(sequence_id, music)
     assert laid.duration == pytest.approx(10.0) and laid.content_end == pytest.approx(10.0)
+    assert len(laid.clip_ids) == 1, "够长就一段"
     [clip] = _music_clips(sequence_id)
     assert clip.timeline_start == 0 and clip.src_in == 0 and clip.src_out == pytest.approx(10.0)
     assert clip.speed == 1.0, "音乐不能被加速,会变调"
@@ -78,10 +82,26 @@ def test_再铺一次换掉原来那首_不叠第二首() -> None:
     assert [clip.asset_id for clip in _music_clips(sequence_id)] == [second]
 
 
-def test_配乐比成片短_放完为止不循环() -> None:
+def test_配乐比成片短_首尾接着再铺_铺满到末尾() -> None:
+    """同一个模型一次出 20 秒、一次出 6 秒;起初「放完为止」,10 秒的成片后 4 秒没了配乐。"""
     ws, sequence_id = _timeline_with_narration(10.0)
     short = insert_asset(ws, kind="audio", name="短的", media_info={"duration": 4.0})
-    assert _lay(sequence_id, short).duration == pytest.approx(4.0)
+    laid = _lay(sequence_id, short)
+    assert laid.duration == pytest.approx(10.0)
+    clips = sorted(_music_clips(sequence_id), key=lambda clip: clip.timeline_start)
+    assert [(clip.timeline_start, round(clip.src_out - clip.src_in, 3)) for clip in clips] == [(0.0, 4.0), (4.0, 4.0), (8.0, 2.0)]
+    assert all(clip.speed == 1.0 for clip in clips), "接着铺,不拉长"
+    assert clips[0].effects["fade_in"] == DEFAULT_FADE_IN and clips[-1].effects["fade_out"] == DEFAULT_FADE_OUT
+    assert clips[0].effects["fade_out"] == clips[1].effects["fade_in"] == SEAM_FADE, "接缝两边短淡,不硬切"
+
+
+def test_最后剩一小截不再起一遍() -> None:
+    ws, sequence_id = _timeline_with_narration(8.5)
+    short = insert_asset(ws, kind="audio", name="四秒", media_info={"duration": 4.0})
+    laid = _lay(sequence_id, short)
+    assert laid.duration == pytest.approx(8.0), "剩 0.5 秒(不到 MIN_TAIL)就让上一遍淡出收尾"
+    clips = sorted(_music_clips(sequence_id), key=lambda clip: clip.timeline_start)
+    assert len(clips) == 2 and clips[-1].effects["fade_out"] == DEFAULT_FADE_OUT
 
 
 def test_空时间线和不是音频的素材当场拒() -> None:

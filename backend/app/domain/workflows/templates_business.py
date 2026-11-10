@@ -778,7 +778,7 @@ def _pitch_schema(*, presenter: bool, motion: bool) -> dict[str, Any]:
                 "narration": _str("这一拍要念的口播原文,中文;念出来不超过一拍的时长"),
                 "visual_prompt": _str("这一拍的第一帧画面,英文;商品必须在画面里"),
                 "motion_prompt": _str("这一拍的画面怎么动,英文:镜头的缓慢运动、光线在商品上的变化、轻微的动作"),
-                "caption": _str("屏幕上的短句,不超过 14 字"),
+                "caption": _str("这一拍的小标题,不超过 14 字(给素材起名用,不上屏)"),
             },
             ["narration", "visual_prompt", "motion_prompt", "caption"],
         )
@@ -788,7 +788,7 @@ def _pitch_schema(*, presenter: bool, motion: bool) -> dict[str, Any]:
                 "narration": _str("这一拍要念的口播原文,中文;念出来不超过本拍时长"),
                 "seconds": {"type": "number", "minimum": 2, "maximum": 8, "description": "这一拍多长"},
                 "visual_prompt": _str("这一拍的画面,英文;商品必须在画面里"),
-                "caption": _str("屏幕上的短句,不超过 14 字"),
+                "caption": _str("这一拍的小标题,不超过 14 字(给素材起名用,不上屏)"),
             },
             ["narration", "seconds", "visual_prompt", "caption"],
         )
@@ -1119,7 +1119,7 @@ def product_pitch_short_graph(
   生成文字、logo 或水印；也不要把画面写成「手机屏幕里的画面」、不要加设备边框或 App 界面 ——
   成片本来就在手机上看。{motion_rule}
 - 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。
-- caption 是屏幕上的短句，不是把 narration 原样抄一遍。
+- caption 是这一拍的小标题（给素材起名用，不上屏；字幕就是 narration）。
 - 最多 {MAX_VARIANTS} 拍：{cost_rule}
 
 只输出符合 JSON Schema 的对象。"""
@@ -1271,21 +1271,27 @@ def product_pitch_short_graph(
                 "body": body,
                 # 画面要按拍的顺序首尾相接,所以**不能并发** —— 并发的落位顺序是谁先回来谁在前。
                 "concurrency": 1,
-                #: 不写 output:每一项交出这一拍的全部产物连同这一拍本身,下一步按它的落点和屏幕短句铺字幕。
+                #: 不写 output:每一项交出这一拍的全部产物连同这一拍本身,下一步按画外音的落点铺字幕。
                 "output": "",
             },
         },
         {
+            #: **字幕就是念出来的那句画外音**,按画外音实际落在时间线上的那一段铺(加速过就是加速后的起止),
+            #: 长句按一行放得下的宽度切开。起初铺的是脚本另写的「屏幕短句」(caption):听到的是「夏天最怕闷?这件
+            #: 亚麻衬衫透气还藏肉」,屏幕上写的是「宽松不挑身材」—— 维护者一看就说字幕是错的。没有画外音的那一拍
+            #: 起止都是空的,不上屏;一拍都没有画外音就一条都不加(allow_empty)。
             "id": "beat_captions",
             "type": "generate_subtitles",
-            "name": {"zh": "按每一拍的落点铺屏幕短句", "en": "Lay each beat's on-screen line"},
+            "name": {"zh": "按画外音的落点铺字幕", "en": "Caption the voice-over where it plays"},
             "position": {"x": 1290, "y": 260},
             "config": {
                 "sequence_id": "{{pitch_project.sequence_id}}",
                 "segments": "{{shoot_beats.results}}",
-                "start_field": "beat_on_timeline.timeline_start",
-                "end_field": "beat_on_timeline.timeline_end",
-                "text_field": "loop.item.caption",
+                "start_field": "beat_voice_place.timeline_start",
+                "end_field": "beat_voice_place.timeline_end",
+                "text_field": "loop.item.narration",
+                "break_long_lines": "yes",
+                "allow_empty": "yes",
             },
         },
         {
@@ -1351,7 +1357,8 @@ def product_pitch_short_graph(
                 #:     拍数按目标时长卡住(fit_beats 的 max_total_seconds,模型多写的从中间去掉)。
                 #: v8:画面和动起来那一步写上「目标画幅 9:16」(ADR 0094)。
                 #: v9:有能从文字出音乐的模型时生成一首配乐,铺在旁白底下(见 _with_background_music)。
-                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 9, "source": "official"},
+                #: v10:字幕铺念出来的画外音(按它的落点),不再铺脚本另写的屏幕短句。
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 10, "source": "official"},
                 "nodes": nodes,
                 "edges": edges,
             },
@@ -1947,7 +1954,7 @@ def _with_presenter(
             "config": {"sequence_id": "{{pitch_project.sequence_id}}", "asset_id": "{{cta_talk.asset_id}}",
                        "track_id": "{{pitch_project.video_track_id}}"},
         },
-        #: **主播说的话也上字幕。** 此前只有中间各拍有屏幕短句,开场钩子、收尾号召是主播对着镜头说的,反而一个字都没上屏
+        #: **主播说的话也上字幕。** 此前只有中间各拍有字幕,开场钩子、收尾号召是主播对着镜头说的,反而一个字都没上屏
         #: (付费实测)。字幕是这段话自己交出来的(entity_speak 的 cues,时间在这段视频里),按它在时间线上的那个片段
         #: 映射过去(clip_id)—— 片段挪了、截了都跟着走。那一句是空的(出镜那步跳过了)就一条都不加(allow_empty)。
         {
@@ -2023,7 +2030,8 @@ def _with_presenter(
             #: v7:动起来那一步关掉视频自己的声音;拍数按目标时长卡住,主播说的开场和收尾也算在里面(同不出镜那一版);
             #:     主播说的开场、收尾也上字幕。
             #: v8:画面和动起来那一步写上「目标画幅 9:16」(ADR 0094)。v9:有音乐模型时铺一首配乐(同不出镜那一版)。
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 9, "source": "official"},
+            #: v10:中间各拍的字幕铺念出来的画外音(同不出镜那一版)。
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 10, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },
@@ -2107,8 +2115,8 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": PRODUCT_PITCH_SHORT,
         "name": {"zh": "商品 → 带货口播短视频", "en": "Product into a narrated short"},
         "summary": {
-            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。视频模型可用时每一拍动起来:这一拍的画面当首帧出一段视频,铺上时间线的是视频,每拍一样长(开始节点的 beat_seconds,建图时取这个模型出得了的那一档)。花费量级:每一拍一次付费出图,动起来时每一拍再加一次付费视频生成 —— 拍数约为目标时长 ÷ beat_seconds,默认 30 秒、每拍 5 秒约 6 拍,就是 6 张图加 6 段视频。",
-            "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures. Where a video model is available, every beat moves: its frame becomes the first frame of a clip, the clip is what goes on the timeline, and every beat is the same length (the start node's beat_seconds, a length that model can make). Cost: one paid image per beat, plus one paid video generation per beat when beats move — about target length ÷ beat_seconds beats, so 30 seconds at 5 seconds a beat is about 6 images and 6 clips.",
+            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),按画外音铺字幕,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。视频模型可用时每一拍动起来:这一拍的画面当首帧出一段视频,铺上时间线的是视频,每拍一样长(开始节点的 beat_seconds,建图时取这个模型出得了的那一档)。花费量级:每一拍一次付费出图,动起来时每一拍再加一次付费视频生成 —— 拍数约为目标时长 ÷ beat_seconds,默认 30 秒、每拍 5 秒约 6 拍,就是 6 张图加 6 段视频。",
+            "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat lined up with its start (your cloned voice if you have one, otherwise a free Edge voice), caption the voice-over, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures. Where a video model is available, every beat moves: its frame becomes the first frame of a clip, the clip is what goes on the timeline, and every beat is the same length (the start node's beat_seconds, a length that model can make). Cost: one paid image per beat, plus one paid video generation per beat when beats move — about target length ÷ beat_seconds beats, so 30 seconds at 5 seconds a beat is about 6 images and 6 clips.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -2127,9 +2135,9 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         ],
         "stages": {
             "zh": ["填商品名与卖点(一行一条,只写你能负责的)", "写分拍口播脚本", "逐拍出画面、配画外音并铺上时间线", "可选:每一拍动起来",
-                   "按每拍的落点铺屏幕短句", "导出竖屏成片"],
+                   "按画外音的落点铺字幕", "导出竖屏成片"],
             "en": ["Product name and selling points (one per line, only claims you can stand behind)", "Write the beat-by-beat script",
-                   "Paint and voice each beat onto the timeline", "Optional: put each beat in motion", "Lay each beat's on-screen line",
+                   "Paint and voice each beat onto the timeline", "Optional: put each beat in motion", "Caption the voice-over where it plays",
                    "Export the vertical short"],
         },
         "download_note": _MOVING_BEATS_DOWNLOAD_NOTE,
@@ -2195,7 +2203,7 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": PRODUCT_PITCH_PRESENTER,
         "name": {"zh": "商品 → 数字人出镜带货口播", "en": "Product into a presenter-led short"},
         "summary": {
-            "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。视频模型可用时中间各拍动起来(和「带货口播短视频」同一个做法,开场和收尾本来就是主播出镜的视频):每拍多一次付费视频生成,拍数约为目标时长减去开场和收尾、再除以开始节点的 beat_seconds(每拍几秒)。",
+            "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,按画外音铺字幕,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。视频模型可用时中间各拍动起来(和「带货口播短视频」同一个做法,开场和收尾本来就是主播出镜的视频):每拍多一次付费视频生成,拍数约为目标时长减去开场和收尾、再除以开始节点的 beat_seconds(每拍几秒)。",
             "en": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too. Where a video model is available, the beats in between move, as in the narrated short (the hook and call to action are already presenter video): one more paid video generation per beat, with about (target length minus hook and call to action) ÷ the start node's beat_seconds beats.",
         },
         "requires": [

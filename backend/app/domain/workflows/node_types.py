@@ -966,7 +966,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "fade_in": {"advanced": True, "type": "number", "description": "wfNode_timeline_background_music_fade_in"},
             "fade_out": {"advanced": True, "type": "number", "description": "wfNode_timeline_background_music_fade_out"},
         },
-        "outputs": ["clip_id", "track_id", "duration", "sequence_id"],
+        "outputs": ["clip_ids", "track_id", "duration", "sequence_id"],
     },
     "timeline_add_track": {
         "external": False,

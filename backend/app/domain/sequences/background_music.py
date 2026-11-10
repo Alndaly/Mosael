@@ -5,8 +5,9 @@
 
 - **一条「配乐」轨**(`Track.role == "music"`,和配音轨按用途认、不按名字认同一个理由):再铺一次(重跑、
   从中断处继续)换掉轨上原来那首,不叠第二条;
-- **按出点截到成片末尾**,不加速 —— 音乐被拉快就变调了(`timeline_append` 的「最长占几秒」是给口播用的,会加速);
-  音乐比成片短就放完为止,不循环;
+- **铺满到成片末尾**,不加速 —— 音乐被拉快就变调了(`timeline_append` 的「最长占几秒」是给口播用的,会加速)。
+  曲子比成片长就按出点截;**比成片短就首尾接着再铺一遍**,接缝两边各淡一小段(`SEAM_FADE`)。起初是「放完为止、
+  不循环」:同一个音乐模型、同一段描述,一次出 20 秒、一次出 6 秒,10 秒的成片后 4 秒就没了配乐,维护者听出来了;
 - **垫在下面,按听感定音量**:量这首曲子实际铺上的那一段有多响,把增益定到 `BED_LOUDNESS`;这条轨标「闪避」
   (`duck`)—— 有旁白的地方渲染时再压低 `DUCK_GAIN`(约 10.5 dB)。不乘固定倍数:生成的曲子响度差得很远,
   起初的「× 0.35 再闪避」在一首拆掉人声的伴奏(−22.8 LUFS)上把它压到了旁白底下 22 dB,成片里等于没有;
@@ -42,13 +43,18 @@ UNMEASURED_GAIN = 1.0
 GAIN_RANGE = (0.1, 4.0)
 DEFAULT_FADE_IN = 0.5
 DEFAULT_FADE_OUT = 1.5
+#: 曲子不够长、接着再铺一遍时,接缝两边各淡多少秒:短到不像停顿,长到听不出硬切。
+SEAM_FADE = 0.25
+#: 最后剩下不到这么长就不再起一遍了(起一遍、刚淡入就淡出,听着是一声杂音),上一遍淡出收尾。
+MIN_TAIL = 1.0
 
 
 @dataclass(frozen=True)
 class LaidMusic:
-    clip_id: str
+    #: 按时间先后:曲子够长就一段,不够长就首尾接着的几段。
+    clip_ids: tuple[str, ...]
     track_id: str
-    #: 配乐实际铺了几秒(比成片短时就是音乐自己的长度)。
+    #: 配乐实际铺了几秒(最后剩下不到 `MIN_TAIL` 时会比成片短那么一点)。
     duration: float
     #: 成片现有内容到第几秒(配乐铺到这里为止)。
     content_end: float
@@ -83,19 +89,43 @@ def lay_background_music(
     end = content_end(sequence)
     if end <= 0:
         raise SequenceDomainError("seqErr_nothingToScore")
-    track = _music_track(db, sequence, actor_id)
-    src_out = fit_asset_on_track(asset, track, 0.0, min(asset_span(asset), end))
-    clip = insert_clip(
-        db, sequence.id,
-        InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=0.0, src_in=0.0, src_out=src_out, actor_id=actor_id),
-    )
+    span = asset_span(asset)
+    if span <= 0:
+        raise SequenceDomainError("seqErr_musicNotAudio")
     if gain is None:
-        gain = bed_gain(integrated_loudness(resolve_key(asset.file_key), seconds=src_out))
-    set_clip_gain(db, sequence.id, SetClipGain(clip_id=clip.id, gain=gain, actor_id=actor_id))
-    set_clip_effects(db, sequence.id, SetClipEffects(
-        clip_id=clip.id, effects={**(clip.effects or {}), "fade_in": fade_in, "fade_out": fade_out}, actor_id=actor_id,
-    ))
-    return LaidMusic(clip_id=clip.id, track_id=track.id, duration=src_out, content_end=end, gain=gain)
+        gain = bed_gain(integrated_loudness(resolve_key(asset.file_key), seconds=min(span, end)))
+    track = _music_track(db, sequence, actor_id)
+    passes = _passes(span, end)
+    clip_ids: list[str] = []
+    for index, (start, length) in enumerate(passes):
+        src_out = fit_asset_on_track(asset, track, 0.0, length)
+        clip = insert_clip(db, sequence.id, InsertClip(
+            track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=0.0, src_out=src_out, actor_id=actor_id,
+        ))
+        set_clip_gain(db, sequence.id, SetClipGain(clip_id=clip.id, gain=gain, actor_id=actor_id))
+        fades = {
+            "fade_in": fade_in if index == 0 else SEAM_FADE,
+            "fade_out": fade_out if index == len(passes) - 1 else SEAM_FADE,
+        }
+        set_clip_effects(db, sequence.id, SetClipEffects(
+            clip_id=clip.id, effects={**(clip.effects or {}), **fades}, actor_id=actor_id,
+        ))
+        clip_ids.append(clip.id)
+    laid = sum(length for _start, length in passes)
+    return LaidMusic(clip_ids=tuple(clip_ids), track_id=track.id, duration=laid, content_end=end, gain=gain)
+
+
+def _passes(span: float, end: float) -> list[tuple[float, float]]:
+    """一首 `span` 秒的曲子铺满 `end` 秒要铺哪几遍:每遍 (从第几秒起, 铺几秒)。最后剩不到 `MIN_TAIL` 的不起。"""
+    passes: list[tuple[float, float]] = []
+    start = 0.0
+    while start < end:
+        length = min(span, end - start)
+        if passes and length < MIN_TAIL:
+            break
+        passes.append((start, length))
+        start += length
+    return passes
 
 
 def bed_gain(loudness: float | None) -> float:
@@ -125,5 +155,5 @@ def _music_track(db: Session, sequence: Sequence, actor_id: str | None) -> Track
     return track
 
 
-__all__ = ["BED_LOUDNESS", "DEFAULT_FADE_IN", "DEFAULT_FADE_OUT", "MUSIC_ROLE", "LaidMusic", "bed_gain", "content_end",
-           "lay_background_music"]
+__all__ = ["BED_LOUDNESS", "DEFAULT_FADE_IN", "DEFAULT_FADE_OUT", "MIN_TAIL", "MUSIC_ROLE", "SEAM_FADE", "LaidMusic", "bed_gain",
+           "content_end", "lay_background_music"]

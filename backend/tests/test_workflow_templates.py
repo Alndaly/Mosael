@@ -755,10 +755,10 @@ def test_带货口播_有视频模型时每一拍动起来_画面当首帧_铺�
     assert ("beat_on_timeline", None, "mute_clip", None) in wires
     assert json.loads(body["mute_clip"]["config"]["operations"].replace("{{beat_on_timeline.clip_id}}", "c")) == [
         {"kind": "set_clip_gain", "clip_id": "c", "muted": True}]
-    #: 画外音、字幕照旧按这一拍在时间线上的实际起止。
+    #: 画外音照旧按这一拍在时间线上的实际起止;字幕跟着画外音落下的那一段。
     assert ("beat_on_timeline", "timeline_start", "beat_voice_place", "at") in wires
     assert ("beat_on_timeline", "duration", "beat_voice_place", "max_duration") in wires
-    assert _node(graph, "beat_captions")["config"]["end_field"] == "beat_on_timeline.timeline_end"
+    assert _node(graph, "beat_captions")["config"]["end_field"] == "beat_voice_place.timeline_end"
     if presenter:
         #: 开场和收尾本来就是主播出镜的视频,只有循环里的各拍动。
         assert _node(graph, "hook_talk")["type"] == _node(graph, "cta_talk")["type"] == "entity_speak"
@@ -814,7 +814,7 @@ def test_带货口播_动起来_第七版关掉视频自己的声音_两条卡�
     from app.domain.workflows.templates import current_template_versions
 
     versions = current_template_versions()
-    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 9
+    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 10
     for template_id in ("product_pitch_short", "product_pitch_presenter"):
         card = next(one for one in TEMPLATE_CATALOG if one["id"] == template_id)
         video = next(one for one in card["requires"] if one["check"] == "reference_video_model")
@@ -1136,7 +1136,7 @@ class Test旧版模板建的图:
         response = client.post(f"/api/workflows/{old['id']}/rebuild-from-template")
         assert response.status_code == 200, response.text
         rebuilt = response.json()["graph"]
-        assert rebuilt["meta"]["template_version"] == 9
+        assert rebuilt["meta"]["template_version"] == 10
         assert {"beat_clip", "file_clip", "mute_clip"} <= set(_beats_body(rebuilt))
         assert _beats_body(rebuilt)["beat_clip"]["config"]["parameters"]["generate_audio"] is False, "按新版重建的也不出声"
         params = _node(rebuilt, "start")["config"]["params"]
@@ -1217,3 +1217,16 @@ def test_会唱的音乐模型_先拆掉人声再铺伴奏() -> None:
     assert ("bgm_music", "bgm_backing") in control and ("bgm_backing", "bgm_lay") in control
     data = {(edge["source"], edge["source_output"], edge["target"]) for edge in graph["edges"] if edge.get("kind") == "data"}
     assert ("bgm_backing", "background_asset_id", "bgm_lay") in data, "铺的是伴奏,不是原曲"
+
+
+@pytest.mark.parametrize("presenter", [False, True])
+def test_带货口播_字幕就是念出来的画外音_按它的落点铺(presenter: bool) -> None:
+    """起初铺的是脚本另写的屏幕短句:听到「夏天最怕闷?这件亚麻衬衫透气还藏肉」,屏幕上是「宽松不挑身材」。"""
+    graph = _pitch(presenter=presenter, video=None)
+    captions = next(node for node in graph["nodes"] if node["id"] == "beat_captions")["config"]
+    assert captions["text_field"] == "loop.item.narration"
+    assert (captions["start_field"], captions["end_field"]) == (
+        "beat_voice_place.timeline_start", "beat_voice_place.timeline_end",
+    ), "按画外音实际落点(加速过就是加速后的起止),不按画面那一拍"
+    assert captions["break_long_lines"] == "yes"
+    assert captions["allow_empty"] == "yes", "一拍都没有画外音时不该让整条失败"

@@ -4820,15 +4820,15 @@
       }
     },
     "outputs": [
-      "clip_id",
+      "clip_ids",
       "track_id",
       "duration",
       "sequence_id"
     ],
     "output_labels": {
-      "clip_id": {
+      "clip_ids": {
         "zh": "片段",
-        "en": "Clip"
+        "en": "Clips"
       },
       "track_id": {
         "zh": "轨道",

@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
-  "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。视频模型可用时每一拍动起来:这一拍的画面当首帧出一段视频,铺上时间线的是视频,每拍一样长(开始节点的 beat_seconds,建图时取这个模型出得了的那一档)。花费量级:每一拍一次付费出图,动起来时每一拍再加一次付费视频生成 —— 拍数约为目标时长 ÷ beat_seconds,默认 30 秒、每拍 5 秒约 6 拍,就是 6 张图加 6 段视频。这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
-  "graph_hash": "0f03acfc1345495ce5e69c88dc10aa0bae853e3acd93b5434a99a4e35ffbe056",
+  "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,念这一拍的画外音、对齐这一拍的开头(有克隆音色优先用,没有就用免费的 Edge 音色),按画外音铺字幕,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。视频模型可用时每一拍动起来:这一拍的画面当首帧出一段视频,铺上时间线的是视频,每拍一样长(开始节点的 beat_seconds,建图时取这个模型出得了的那一档)。花费量级:每一拍一次付费出图,动起来时每一拍再加一次付费视频生成 —— 拍数约为目标时长 ÷ beat_seconds,默认 30 秒、每拍 5 秒约 6 拍,就是 6 张图加 6 段视频。这一份带着「把这一拍动起来」:开始节点的 beat_seconds 是每一拍几秒,挑的视频模型要出得了这个时长。没有视频模型的话,导入后在画布上打开逐拍的那个循环,删掉「把这一拍动起来」「归档这一拍的视频」「这一拍的视频不出声」三个节点,再把「出这一拍的画面」的结果连到「按这一拍的时长铺上去」的素材那一格 —— 每一拍就按 beat_seconds 铺一张静图。也可以在应用的模板库里直接添加:没有视频模型时建出来的就是静图版。",
+  "graph_hash": "2fb0f13ab0a7a698a71553f9d79a4590f9f8452386772bcf6cf5d2b417718533",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
-      "template_version": 9,
+      "template_version": 10,
       "source": "official"
     },
     "nodes": [
@@ -61,7 +61,7 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{start.target_duration_seconds}} 秒、\n能直接拍的口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍正好 {{start.beat_seconds}} 秒（视频模型一段就出这么长），每一拍的 narration 念出来不能超过它：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的第一帧画面（这一拍的视频从它开始动），**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印；也不要把画面写成「手机屏幕里的画面」、不要加设备边框或 App 界面 ——\n  成片本来就在手机上看。\n- motion_prompt 用英文写这 {{start.beat_seconds}} 秒里画面怎么动：镜头缓慢推近、平移或环绕，光线在商品表面\n  流动，场景里轻微的动作；动作要小、在这几秒内完成，商品始终完整、清楚、不变形、不换样子。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面、再出一段视频，是两次付费生成。\n\n只输出符合 JSON Schema 的对象。\n\n这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,\n首尾不另加。",
+          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{start.target_duration_seconds}} 秒、\n能直接拍的口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍正好 {{start.beat_seconds}} 秒（视频模型一段就出这么长），每一拍的 narration 念出来不能超过它：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的第一帧画面（这一拍的视频从它开始动），**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印；也不要把画面写成「手机屏幕里的画面」、不要加设备边框或 App 界面 ——\n  成片本来就在手机上看。\n- motion_prompt 用英文写这 {{start.beat_seconds}} 秒里画面怎么动：镜头缓慢推近、平移或环绕，光线在商品表面\n  流动，场景里轻微的动作；动作要小、在这几秒内完成，商品始终完整、清楚、不变形、不换样子。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是这一拍的小标题（给素材起名用，不上屏；字幕就是 narration）。\n- 最多 12 拍：每一拍都要出一张画面、再出一段视频，是两次付费生成。\n\n只输出符合 JSON Schema 的对象。\n\n这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,\n首尾不另加。",
           "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。每拍 {{start.beat_seconds}} 秒，拍数 × 每拍秒数就是成片时长：拍数取目标时长 ÷ 每拍秒数（四舍五入，至少 2 拍）。",
           "response_format": "json_schema",
           "json_schema_name": "product_pitch_script",
@@ -87,7 +87,7 @@
                     },
                     "caption": {
                       "type": "string",
-                      "description": "屏幕上的短句,不超过 14 字"
+                      "description": "这一拍的小标题,不超过 14 字(给素材起名用,不上屏)"
                     }
                   },
                   "required": [
@@ -490,7 +490,7 @@
       {
         "id": "beat_captions",
         "type": "generate_subtitles",
-        "name": "按每一拍的落点铺屏幕短句",
+        "name": "按画外音的落点铺字幕",
         "position": {
           "x": 1290,
           "y": 260
@@ -498,9 +498,11 @@
         "config": {
           "sequence_id": "",
           "segments": "",
-          "start_field": "beat_on_timeline.timeline_start",
-          "end_field": "beat_on_timeline.timeline_end",
-          "text_field": "loop.item.caption"
+          "start_field": "beat_voice_place.timeline_start",
+          "end_field": "beat_voice_place.timeline_end",
+          "text_field": "loop.item.narration",
+          "break_long_lines": "yes",
+          "allow_empty": "yes"
         },
         "inputs": [
           "sequence_id",
