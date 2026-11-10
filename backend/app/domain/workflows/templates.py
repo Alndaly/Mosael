@@ -88,6 +88,7 @@ from app.domain.workflows.templates_dub import (
 )
 from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
 from app.domain.workflows.templates_music import BackgroundMusic
+from app.domain.workflows.templates_series import SERIES_SETUP, series_setup_graph
 from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO, long_take_video_graph
 from app.domain.workflows.templates_upscale import upscale_model
 from app.domain.workflows.templates_long_talk import LONG_TALK_VIDEO, long_talk_video_graph
@@ -159,6 +160,26 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                 "Assemble in order with captions",
                 "Export"
             ]
+        }
+    },
+    {
+        "id": "series_setup",
+        "name": {
+            "zh": "连续剧 · 系列设定",
+            "en": "Series bible for an episodic show"
+        },
+        "summary": {
+            "zh": "做漫剧、连续剧的第一步：填剧名、梗概和集数，角色和场景想自己定就一行一个写上（名字、身份、长相、想要什么嗓子都行），不写就由 AI 按梗概补。生成分集大纲和画风，给每个角色画三视图、配一把嗓子，给每个场景画设定图，全部存进资产库，设定文档存成笔记。之后每一集用「从主题到完整视频」拍：角色和场景按名字从库里认出来，同一张脸、同一把嗓子。花费量级：1 次对话，外加每个新角色一张三视图、每个新场景一张设定图（库里已有的不再画）。",
+            "en": "The first step of an episodic show: give the title, premise and number of episodes, and list your own characters and locations one per line if you want to (name, role, looks, the voice you want) — anything left out is filled in from the premise. It writes the episode outline and the look, draws a turnaround and picks a voice for each character, paints concept art for each location, saves them all to the asset library and saves the bible as a note. Then shoot each episode with \"Topic to finished video\": characters and locations are recognised by name, with the same face and the same voice. Cost: one chat call, plus one turnaround per new character and one concept image per new location (none for those already in the library)."
+        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(REFERENCE_IMAGE_MODEL, zh="图像模型", en="Image model"),
+        ],
+        "stages": {
+            "zh": ["填剧名、梗概、集数，角色和场景选填", "系列设定与分集大纲", "角色三视图与嗓子、场景设定图存进资产库", "设定文档存成笔记"],
+            "en": ["Title, premise and episode count; characters and locations optional", "Series bible and episode outline",
+                   "Turnarounds with voices and location art saved to the library", "Bible saved as a note"]
         }
     },
     {
@@ -336,6 +357,10 @@ def built_in_template_graph(
             music=_background_music(db, user_id, workspace_id),
             db=db,
         ))
+    if template_id == SERIES_SETUP:
+        #: 三视图和整片画的是同一种图,用同一个挑法(整片里库里认出来的就是这一张)。
+        return localised_names(locale, series_setup_graph(
+            chat=chat, image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE), db=db))
     if template_id == LONG_TAKE_VIDEO:
         video = _continuation_video_model(db, user_id)
         return localised_names(locale, long_take_video_graph(
@@ -424,6 +449,7 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         #: 照样接到开始参数(templates_models._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
         #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
         FULL_VIDEO_GENERATION: full_video_generation_graph(chat=blank, image=blank, video=blank),
+        SERIES_SETUP: series_setup_graph(chat=blank, image=blank),
         LONG_TAKE_VIDEO: long_take_video_graph(chat=blank, opening=blank, video=blank),
         LONG_TALK_VIDEO: long_talk_video_graph(opening=blank, video=blank),
         TRANSCRIPT_VIDEO_CLEANUP: transcript_video_cleanup_graph(chat=blank, locale=locale),

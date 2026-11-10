@@ -2450,6 +2450,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "role": {"type": "string", "options_from": "entity_roles", "depends_on": "kind", "description": "wfNode_entity_save_role"},
             "tags": {"advanced": True, "type": "template", "description": "wfNode_entity_save_tags"},
             "if_exists": {"advanced": True, "type": "string", "default": "merge", "options": ["merge", "new"], "description": "wfNode_entity_save_if_exists"},
+            #: 人物的嗓子(人物资产的 `voice`,ADR 0087):「引擎 + 音色」一对,和念稿节点同一个控件。音色空着 = 不设;
+            #: 合并时只在它还没有嗓子时填(同提示词描述:人手选过的不被一次运行覆盖)。整片按说话的角色配音读的就是它(ADR 0096)。
+            "engine": {"advanced": True, "type": "string", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
+            "voice": {"advanced": True, "type": "template", "depends_on": "engine", "options_from": "speech_voices",
+                      "description": "wfNode_entity_save_voice"},
         },
         "outputs": ["entity_id", "created", "added", "name"],
         "output_types": {"created": "number", "added": "number", "name": "text"},

@@ -102,6 +102,26 @@ def test_存成资产_新建_再存同名的是合并_不覆盖人手改过的()
             entity_save(db, _scope(ws), {"kind": "robot", "name": "x"})
 
 
+def test_存成资产_带上嗓子_合并时只给还没有嗓子的人物填() -> None:
+    """系列设定里给每个角色配好嗓子,整片按说话的角色配音读的就是它(ADR 0096);人手选过的嗓子不被一次运行覆盖。"""
+    client, ws = _setup()
+    with SessionLocal() as db:
+        made = entity_save(db, _scope(ws), {"kind": "character", "name": "沈青禾",
+                                            "engine": "builtin:edge", "voice": "zh-CN-XiaoyiNeural"})
+        bare = entity_save(db, _scope(ws), {"kind": "character", "name": "小满"})
+        db.commit()
+    voice = client.get(f"/api/entities/{made['entity_id']}").json()["attributes"]["voice"]
+    assert (voice["engine"], voice["voice"]) == ("builtin:edge", "zh-CN-XiaoyiNeural")
+    assert not client.get(f"/api/entities/{bare['entity_id']}").json()["attributes"].get("voice"), "音色空着不设"
+
+    with SessionLocal() as db:
+        entity_save(db, _scope(ws), {"kind": "character", "name": "沈青禾", "engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"})
+        entity_save(db, _scope(ws), {"kind": "character", "name": "小满", "engine": "builtin:edge", "voice": "zh-CN-YunxiaNeural"})
+        db.commit()
+    assert client.get(f"/api/entities/{made['entity_id']}").json()["attributes"]["voice"]["voice"] == "zh-CN-XiaoyiNeural", "已有嗓子不覆盖"
+    assert client.get(f"/api/entities/{bare['entity_id']}").json()["attributes"]["voice"]["voice"] == "zh-CN-YunxiaNeural"
+
+
 def test_在工作流里跑_存下来再按上游的_id_取() -> None:
     client, ws = _setup()
     graph = {

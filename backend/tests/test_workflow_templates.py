@@ -898,12 +898,13 @@ def test_模板卡片和图一一对应() -> None:
     from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO
     from app.domain.workflows.templates_long_talk import LONG_TALK_VIDEO
     from app.domain.workflows.templates_shots import REFERENCE_VIDEO_SHOTS
+    from app.domain.workflows.templates_series import SERIES_SETUP
 
     known = {
         FULL_VIDEO_GENERATION, LONG_TAKE_VIDEO, LONG_TALK_VIDEO, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
         HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK, FOOTAGE_MONTAGE,
         TALKING_SCRIPT_VIDEO, TRANSLATED_DUB_LIPSYNC, PRODUCT_PITCH_PRESENTER,
-        ACCOUNT_ANALYSIS, VIRAL_VIDEO_BREAKDOWN, COMMENT_INSIGHTS, REFERENCE_VIDEO_SHOTS,
+        ACCOUNT_ANALYSIS, VIRAL_VIDEO_BREAKDOWN, COMMENT_INSIGHTS, REFERENCE_VIDEO_SHOTS, SERIES_SETUP,
     }
     assert {card["id"] for card in TEMPLATE_CATALOG} == known
     for card in BUSINESS_TEMPLATE_CATALOG:

@@ -54,6 +54,48 @@
     }
   },
   {
+    "id": "series_setup",
+    "name": {
+      "zh": "连续剧 · 系列设定",
+      "en": "Series bible for an episodic show"
+    },
+    "summary": {
+      "zh": "做漫剧、连续剧的第一步：填剧名、梗概和集数，角色和场景想自己定就一行一个写上（名字、身份、长相、想要什么嗓子都行），不写就由 AI 按梗概补。生成分集大纲和画风，给每个角色画三视图、配一把嗓子，给每个场景画设定图，全部存进资产库，设定文档存成笔记。之后每一集用「从主题到完整视频」拍：角色和场景按名字从库里认出来，同一张脸、同一把嗓子。花费量级：1 次对话，外加每个新角色一张三视图、每个新场景一张设定图（库里已有的不再画）。",
+      "en": "The first step of an episodic show: give the title, premise and number of episodes, and list your own characters and locations one per line if you want to (name, role, looks, the voice you want) — anything left out is filled in from the premise. It writes the episode outline and the look, draws a turnaround and picks a voice for each character, paints concept art for each location, saves them all to the asset library and saves the bible as a note. Then shoot each episode with \"Topic to finished video\": characters and locations are recognised by name, with the same face and the same voice. Cost: one chat call, plus one turnaround per new character and one concept image per new location (none for those already in the library)."
+    },
+    "requires": {
+      "zh": [
+        "AI 对话模型",
+        "图像模型"
+      ],
+      "en": [
+        "Chat model",
+        "Image model"
+      ]
+    },
+    "stages": {
+      "zh": [
+        "填剧名、梗概、集数，角色和场景选填",
+        "系列设定与分集大纲",
+        "角色三视图与嗓子、场景设定图存进资产库",
+        "设定文档存成笔记"
+      ],
+      "en": [
+        "Title, premise and episode count; characters and locations optional",
+        "Series bible and episode outline",
+        "Turnarounds with voices and location art saved to the library",
+        "Bible saved as a note"
+      ]
+    },
+    "author": "Mosael",
+    "version": 1,
+    "nodes": 8,
+    "download": {
+      "zh": "/workflows/series_setup.zh.mosael-workflow.json",
+      "en": "/workflows/series_setup.en.mosael-workflow.json"
+    }
+  },
+  {
     "id": "long_take_video",
     "name": {
       "zh": "任意长度的连续视频",

@@ -2014,6 +2014,20 @@
           "zh": "同名时",
           "en": "When it exists"
         }
+      },
+      "engine": {
+        "type": "string",
+        "label": {
+          "zh": "引擎",
+          "en": "Engine"
+        }
+      },
+      "voice": {
+        "type": "template",
+        "label": {
+          "zh": "音色",
+          "en": "Voice"
+        }
       }
     },
     "outputs": [

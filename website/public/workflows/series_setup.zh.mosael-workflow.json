@@ -1,0 +1,541 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "连续剧 · 系列设定",
+  "description": "做漫剧、连续剧的第一步：填剧名、梗概和集数，角色和场景想自己定就一行一个写上（名字、身份、长相、想要什么嗓子都行），不写就由 AI 按梗概补。生成分集大纲和画风，给每个角色画三视图、配一把嗓子，给每个场景画设定图，全部存进资产库，设定文档存成笔记。之后每一集用「从主题到完整视频」拍：角色和场景按名字从库里认出来，同一张脸、同一把嗓子。花费量级：1 次对话，外加每个新角色一张三视图、每个新场景一张设定图（库里已有的不再画）。",
+  "graph_hash": "003631b1d726fae7a40bc6de986e737d93bd42a3e485cc77f5a9d8ed48afe2d6",
+  "graph": {
+    "meta": {
+      "template_id": "series_setup",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "填写这部剧",
+        "position": {
+          "x": 40,
+          "y": 300
+        },
+        "config": {
+          "params": {
+            "title": "",
+            "premise": "",
+            "episodes": 10,
+            "characters": "",
+            "locations": "",
+            "style": "Chinese guofeng anime style, 2D cel-shaded illustration with soft ink-wash textures, cinematic lighting, delicate line art.",
+            "language": "简体中文"
+          },
+          "required_params": [
+            "title",
+            "premise"
+          ]
+        }
+      },
+      {
+        "id": "library_characters",
+        "type": "entity_list",
+        "name": "资产库里已有的人物",
+        "position": {
+          "x": 340,
+          "y": 120
+        },
+        "config": {
+          "kind": "character",
+          "limit": 30
+        }
+      },
+      {
+        "id": "library_locations",
+        "type": "entity_list",
+        "name": "资产库里已有的地点",
+        "position": {
+          "x": 340,
+          "y": 480
+        },
+        "config": {
+          "kind": "location",
+          "limit": 30
+        }
+      },
+      {
+        "id": "series_bible",
+        "type": "llm",
+        "name": "定下系列设定与分集大纲",
+        "position": {
+          "x": 660,
+          "y": 300
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "creative",
+          "system": "你是连续剧的总编剧兼美术总监。按用户给的剧名、梗概和集数，定下整部剧的系列设定。\n\n- **集数照用户填的写**，episodes 恰好那么多集，number 从 1 连续编号；每集有自己的冲突，结尾留钩子，整部剧有完整的弧线。\n- **角色、场景以用户填的为准**：用户列了的，name 一字不差、写了的特征照办，appearance / description 补成英文的画图描述；\n  用户没列或没列全时，按梗概补上故事必需的主要角色(最多 8 个)、常用场景(最多 6 个)。\n- 资产库里已经有的人物、地点会一并给你：故事里的就是其中某一个时，name 一字不差地沿用(它的图直接拿来用，不再重画)，\n  appearance / description 照它的描述写；只是相像的不要硬套。\n- 每个角色挑一把嗓子(voice)，按年龄、性别、性格挑，主要角色尽量不重样；用户写了想要哪把的照办。旁白另挑一把。\n  可选的嗓子：\n- zh-CN-XiaoxiaoNeural:晓晓(女·温暖)\n- zh-CN-XiaoyiNeural:晓伊(女·活泼)\n- zh-CN-YunxiNeural:云希(男·阳光)\n- zh-CN-YunjianNeural:云健(男·解说)\n- zh-CN-YunyangNeural:云扬(男·新闻)\n- zh-CN-YunxiaNeural:云夏(男·少年)\n- zh-CN-liaoning-XiaobeiNeural:晓北(女·东北)\n- zh-CN-shaanxi-XiaoniNeural:晓妮(女·陕西)\n- style_prompt 用户写了画风就照它写成一句英文；没写就按题材定。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "剧名：{{start.title}}\n梗概：{{start.premise}}\n集数：{{start.episodes}}\n语言：{{start.language}}\n画风：{{start.style}}\n\n用户定的角色(可能为空)：\n{{start.characters}}\n\n用户定的场景(可能为空)：\n{{start.locations}}\n\n资产库里已有的人物：\n{{library_characters.text}}\n\n资产库里已有的地点：\n{{library_locations.text}}",
+          "response_format": "json_schema",
+          "json_schema_name": "series_bible",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "logline": {
+                "type": "string",
+                "description": "一句话故事"
+              },
+              "style_prompt": {
+                "type": "string",
+                "description": "英文一句话的全剧画风,每一集每张图都带上"
+              },
+              "narrator_voice": {
+                "type": "string",
+                "enum": [
+                  "zh-CN-XiaoxiaoNeural",
+                  "zh-CN-XiaoyiNeural",
+                  "zh-CN-YunxiNeural",
+                  "zh-CN-YunjianNeural",
+                  "zh-CN-YunyangNeural",
+                  "zh-CN-YunxiaNeural",
+                  "zh-CN-liaoning-XiaobeiNeural",
+                  "zh-CN-shaanxi-XiaoniNeural"
+                ],
+                "description": "旁白的嗓子"
+              },
+              "episodes": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 60,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "synopsis": {
+                      "type": "string",
+                      "description": "这一集发生了什么:起因、冲突、结尾的钩子,150 字以内"
+                    }
+                  },
+                  "required": [
+                    "number",
+                    "title",
+                    "synopsis"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "characters": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "description": "在故事里是谁:年龄、身份、性格"
+                    },
+                    "appearance": {
+                      "type": "string",
+                      "description": "英文,交给图像模型画三视图:年龄、脸型发型、服装与配色、体型与身高、标志性道具"
+                    },
+                    "voice": {
+                      "type": "string",
+                      "enum": [
+                        "zh-CN-XiaoxiaoNeural",
+                        "zh-CN-XiaoyiNeural",
+                        "zh-CN-YunxiNeural",
+                        "zh-CN-YunjianNeural",
+                        "zh-CN-YunyangNeural",
+                        "zh-CN-YunxiaNeural",
+                        "zh-CN-liaoning-XiaobeiNeural",
+                        "zh-CN-shaanxi-XiaoniNeural"
+                      ],
+                      "description": "这个角色的嗓子"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "role",
+                    "appearance",
+                    "voice"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "locations": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 6,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "英文,交给图像模型画设定图:空间、时代、材质、关键陈设、光源、大致尺寸"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "description"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "bible_markdown": {
+                "type": "string",
+                "description": "给人读的系列设定文档(Markdown):一句话故事、画风、角色表(名字/身份/嗓子)、场景表、分集大纲"
+              }
+            },
+            "required": [
+              "title",
+              "logline",
+              "style_prompt",
+              "narrator_voice",
+              "episodes",
+              "characters",
+              "locations",
+              "bible_markdown"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.8,
+          "max_tokens": 16000
+        }
+      },
+      {
+        "id": "character_assets",
+        "type": "loop_foreach",
+        "name": "每个角色:库里没有就画三视图,存进资产库并配嗓子",
+        "position": {
+          "x": 980,
+          "y": 160
+        },
+        "config": {
+          "items": "{{series_bible.json.characters}}",
+          "inputs": {
+            "style": "{{series_bible.json.style_prompt}}",
+            "title": "{{series_bible.json.title}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "find",
+                "type": "entity_get",
+                "name": "在资产库里找",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.name}}",
+                  "limit": 1
+                }
+              },
+              {
+                "id": "has_art",
+                "type": "condition",
+                "name": "库里有它的图吗",
+                "position": {
+                  "x": 380,
+                  "y": 140
+                },
+                "config": {
+                  "left": "{{find.asset_ids.0}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "sheet",
+                "type": "ai_generate",
+                "name": "画这个角色的三视图",
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "Character turnaround reference sheet for {{loop.item.name}}: {{loop.item.appearance}}. Three full-body views of the same character side by side — front, side profile, back — identical outfit and proportions, relaxed A-pose, plain white background, soft even studio light, no text, no labels, no borders. {{input.style}}",
+                  "parameters": {}
+                },
+                "position": {
+                  "x": 680,
+                  "y": 240
+                }
+              },
+              {
+                "id": "save",
+                "type": "entity_save",
+                "name": "存成人物资产,配上嗓子",
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.name}}",
+                  "prompt": "{{loop.item.appearance}}",
+                  "description": "{{loop.item.role}}",
+                  "asset_ids": "",
+                  "role": "turnaround",
+                  "engine": "builtin:edge",
+                  "voice": "{{loop.item.voice}}",
+                  "tags": "{{input.title}}"
+                },
+                "position": {
+                  "x": 980,
+                  "y": 140
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "id": "find_check",
+                "source": "find",
+                "target": "has_art"
+              },
+              {
+                "id": "missing_draw",
+                "source": "has_art",
+                "target": "sheet",
+                "source_handle": "false"
+              },
+              {
+                "id": "find_save",
+                "source": "find",
+                "target": "save"
+              },
+              {
+                "id": "d-sheet-asset_id-save-asset_ids",
+                "source": "sheet",
+                "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
+          },
+          "output": "{{save.entity_id}}",
+          "concurrency": 2
+        }
+      },
+      {
+        "id": "location_assets",
+        "type": "loop_foreach",
+        "name": "每个场景:库里没有就画设定图,存进资产库",
+        "position": {
+          "x": 980,
+          "y": 440
+        },
+        "config": {
+          "items": "{{series_bible.json.locations}}",
+          "inputs": {
+            "style": "{{series_bible.json.style_prompt}}",
+            "title": "{{series_bible.json.title}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "find",
+                "type": "entity_get",
+                "name": "在资产库里找",
+                "position": {
+                  "x": 80,
+                  "y": 140
+                },
+                "config": {
+                  "kind": "location",
+                  "name": "{{loop.item.name}}",
+                  "limit": 1
+                }
+              },
+              {
+                "id": "has_art",
+                "type": "condition",
+                "name": "库里有它的图吗",
+                "position": {
+                  "x": 380,
+                  "y": 140
+                },
+                "config": {
+                  "left": "{{find.asset_ids.0}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "art",
+                "type": "ai_generate",
+                "name": "画这个场景的设定图",
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "image",
+                  "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
+                  "parameters": {}
+                },
+                "position": {
+                  "x": 680,
+                  "y": 240
+                }
+              },
+              {
+                "id": "save",
+                "type": "entity_save",
+                "name": "存成场景资产",
+                "config": {
+                  "kind": "location",
+                  "name": "{{loop.item.name}}",
+                  "prompt": "{{loop.item.description}}",
+                  "asset_ids": "",
+                  "tags": "{{input.title}}"
+                },
+                "position": {
+                  "x": 980,
+                  "y": 140
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "id": "find_check",
+                "source": "find",
+                "target": "has_art"
+              },
+              {
+                "id": "missing_draw",
+                "source": "has_art",
+                "target": "art",
+                "source_handle": "false"
+              },
+              {
+                "id": "find_save",
+                "source": "find",
+                "target": "save"
+              },
+              {
+                "id": "d-art-asset_id-save-asset_ids",
+                "source": "art",
+                "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              }
+            ]
+          },
+          "output": "{{save.entity_id}}",
+          "concurrency": 2
+        }
+      },
+      {
+        "id": "bible_note",
+        "type": "note_create",
+        "name": "设定文档存成笔记",
+        "position": {
+          "x": 980,
+          "y": 680
+        },
+        "config": {
+          "title": "{{series_bible.json.title}} · 系列设定",
+          "markdown": "{{series_bible.json.bible_markdown}}",
+          "tags": "{{series_bible.json.title}}"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "交付系列设定",
+        "position": {
+          "x": 1300,
+          "y": 300
+        },
+        "config": {
+          "values": {
+            "title": "{{series_bible.json.title}}",
+            "style_prompt": "{{series_bible.json.style_prompt}}",
+            "narrator_voice": "{{series_bible.json.narrator_voice}}",
+            "episodes": "{{series_bible.json.episodes}}",
+            "characters": "{{character_assets.results}}",
+            "locations": "{{location_assets.results}}",
+            "note_id": "{{bible_note.note_id}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start_library_characters",
+        "source": "start",
+        "target": "library_characters"
+      },
+      {
+        "id": "start_library_locations",
+        "source": "start",
+        "target": "library_locations"
+      },
+      {
+        "id": "start_bible",
+        "source": "start",
+        "target": "series_bible"
+      },
+      {
+        "id": "library_characters_bible",
+        "source": "library_characters",
+        "target": "series_bible"
+      },
+      {
+        "id": "library_locations_bible",
+        "source": "library_locations",
+        "target": "series_bible"
+      },
+      {
+        "id": "bible_characters",
+        "source": "series_bible",
+        "target": "character_assets"
+      },
+      {
+        "id": "bible_locations",
+        "source": "series_bible",
+        "target": "location_assets"
+      },
+      {
+        "id": "bible_to_note",
+        "source": "series_bible",
+        "target": "bible_note"
+      },
+      {
+        "id": "characters_output",
+        "source": "character_assets",
+        "target": "output"
+      },
+      {
+        "id": "locations_output",
+        "source": "location_assets",
+        "target": "output"
+      },
+      {
+        "id": "note_output",
+        "source": "bible_note",
+        "target": "output"
+      }
+    ]
+  }
+}

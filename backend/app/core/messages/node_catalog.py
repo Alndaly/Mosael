@@ -635,6 +635,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_entity_save_prompt": {"zh": "提示词描述(给模型看的外貌、服装、材质)", "en": "Prompt descriptor (appearance, clothing, materials — for models)"},
     "wfNode_entity_save_description": {"zh": "描述(给人看的)", "en": "Description (for people)"},
     "wfNode_entity_save_asset_ids": {"zh": "挂成参考图的素材;常接上游画出来的三视图、设定图", "en": "Media to attach as references; usually the turnaround or concept art drawn upstream"},
+    "wfNode_entity_save_voice": {"zh": "人物的嗓子;留空不设,已有嗓子的人物不覆盖", "en": "The character's voice; empty sets none, and a character that already has one keeps it"},
     "wfNode_entity_save_role": {"zh": "这些图是什么角度;留空按种类的默认(人物是正面)", "en": "What angle these images are; empty uses the kind's default (front for characters)"},
     "wfNode_entity_save_tags": {"zh": "标签,逗号分开", "en": "Tags, separated by commas"},
     "wfNode_entity_save_if_exists": {"zh": "同种类同名的已经有了怎么办", "en": "What to do when one with that kind and name exists"},

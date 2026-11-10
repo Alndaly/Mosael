@@ -128,6 +128,20 @@ def single_set_rules(clip: int | str, *, source: str) -> str:
 {_camera_rules(clip, source=source)}"""
 
 
+#: 角色三视图、场景设定图怎么画(循环里每一项有 name / appearance 或 description,画风在 `input.style`)。
+#: 整片和系列设定(templates_series)画的是同一种图 —— 系列里先画好的那张,整片到库里认出来就直接用。
+TURNAROUND_PROMPT = (
+    "Character turnaround reference sheet for {{loop.item.name}}: {{loop.item.appearance}}. "
+    "Three full-body views of the same character side by side — front, side profile, back — "
+    "identical outfit and proportions, relaxed A-pose, plain white background, soft even studio "
+    "light, no text, no labels, no borders. {{input.style}}"
+)
+LOCATION_ART_PROMPT = (
+    "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. "
+    "Wide view of the empty set, no people, no text. {{input.style}}"
+)
+
+
 #: 整片的配乐:创意简报一定下(片名、基调有了)就开始生成,和三视图、逐镜出片同时跑;字幕铺好之后、导出之前铺上去。
 #: 要 60 秒:一场戏常常比它长,铺的时候首尾接着铺(sequences.background_music)。
 FULL_VIDEO_MUSIC_SLOT = MusicSlot(
@@ -670,10 +684,7 @@ JSON Schema 的对象。"""
                 "provider_profile_id": image.profile_id,
                 "model": image.model,
                 "kind": "image",
-                "prompt": "Character turnaround reference sheet for {{loop.item.name}}: {{loop.item.appearance}}. "
-                          "Three full-body views of the same character side by side — front, side profile, back — "
-                          "identical outfit and proportions, relaxed A-pose, plain white background, soft even studio "
-                          "light, no text, no labels, no borders. {{input.style}}",
+                "prompt": TURNAROUND_PROMPT,
                 "parameters": sheet_parameters,
             },
         },
@@ -703,8 +714,7 @@ JSON Schema 的对象。"""
                 "provider_profile_id": image.profile_id,
                 "model": image.model,
                 "kind": "image",
-                "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. "
-                          "Wide view of the empty set, no people, no text. {{input.style}}",
+                "prompt": LOCATION_ART_PROMPT,
                 "parameters": sheet_parameters,
             },
         },

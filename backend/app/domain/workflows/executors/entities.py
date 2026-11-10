@@ -38,6 +38,8 @@ from app.domain.generation import (
 )
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.origins import of_run_scope
+from app.domain.voices import engine_catalog
+from app.domain.voices.errors import VoiceError
 from app.domain.voices.voice_ref import VoiceRef
 
 #: 取资产时最多交出几张参考图(按挑图的先后)。
@@ -143,6 +145,7 @@ def entity_save(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     role = _text(config.get("role"))
     asset_ids = list(dict.fromkeys(id_list(config.get("asset_ids"))))
     actor = current_actor(db)
+    voice = _voice_to_save(db, config, actor)
     try:
         existing = find_by_name(db, scope.workspace_id, kind, name) if mode == "merge" else None
         if existing is None:
@@ -154,6 +157,7 @@ def entity_save(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 description=description,
                 prompt=prompt,
                 tags=id_list(config.get("tags")),
+                attributes={"voice": voice.to_json()} if voice else None,
                 actor_id=actor,
             )
             created = True
@@ -167,6 +171,8 @@ def entity_save(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
             tags = id_list(config.get("tags"))
             if tags and not set(tags) <= set(entity.tags or []):
                 fill["tags"] = [*(entity.tags or []), *(tag for tag in tags if tag not in (entity.tags or []))]
+            if voice is not None and not (entity.attributes or {}).get("voice"):
+                fill["attributes"] = {**(entity.attributes or {}), "voice": voice.to_json()}
             if fill:
                 entity = update_entity(db, entity, actor_id=actor, **fill)
             created = False
@@ -181,6 +187,18 @@ def entity_save(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     except EntityDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     return {"entity_id": entity.id, "created": 1 if created else 0, "added": added, "name": entity.name}
+
+
+def _voice_to_save(db: Session, config: dict[str, Any], actor: str | None) -> VoiceRef | None:
+    """「存成资产」上的「引擎 + 音色」→ 要存的那把嗓子;音色空着是 None(不设)。属不属于这个引擎由资产库存的时候查
+    (entities.library 的 check_voice),这里只把两格拼成一个选择 —— 和念稿节点同一个入口(engine_catalog.voice_choice)。"""
+    voice = _text(config.get("voice"))
+    if not voice:
+        return None
+    try:
+        return engine_catalog.voice_choice(db, engine=_text(config.get("engine")), voice=voice, user_id=actor)
+    except VoiceError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
 
 
 # ── 资产格的能力:补全多角度、生成表情(ADR 0027 §3「画板」)────────────────────────────────
