@@ -44,7 +44,7 @@
 | LoadImage 节点 | 参考图;视频图里接到 `start_image` / `first_frame` / `start_frame` / `first_frame_image`…的是首帧,`end_image` / `last_frame` / `end_frame`…的是尾帧(先过一道缩放、裁切再接进去的也算;图生视频的首帧必须给,1.6.1);一个角色几个读图节点时(或者给节点起过名),每个槽位按顺序带名字(节点标题,没起名的是「加载图像 #10」这种节点名加节点号),AI 工作台、画板、工作流节点上标着(1.13.0) |
 | LoadImageMask,或只用了 LoadImage 蒙版那一路的 | 蒙版(`mask`) |
 | LoadVideo / VHS_LoadVideo | 待编辑的视频(`source_video`,模式 `video-edit`);锚在 `MiniMaxH3AddGuide` 第 0 帧上的是待续写的片段(`first_clip`,模式 `video-extend`,见 ComfyUI-Mosael-Plugins 的 `minimax_h3_continue` 示例);接在 `ref_videos.*` 这类**参考**口上的是参考视频 |
-| LoadAudio / VHS_LoadAudioUpload | 驱动音频(视频图)/ 参考音频;接在参考口上的是参考音频 |
+| LoadAudio / VHS_LoadAudioUpload | 驱动音频(视频图)/ 参考音频;接在参考口上的是参考音频。视频图里**恰好一张人像(首帧或参考图)+ 一段驱动音频**、别的素材都不收、也不读上一段存下的潜空间的,再声明模式 `speech-to-video`(说话照片):资产页「让它说话」、数字人节点挑得到它(1.26.1) |
 | 视频输出节点(VHS_VideoCombine、SaveVideo…;CreateVideo 只是把帧合成一段交下去,不算) | 这是一个视频模型 |
 
 没有提示词、也没有画布的图(放大、抠图):图是必须给的,模式只有 `image-to-image`。文件名前缀这类

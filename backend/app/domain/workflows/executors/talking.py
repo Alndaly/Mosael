@@ -24,7 +24,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, SOURCE_VIDEO
+from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, REFERENCE_IMAGE, SOURCE_VIDEO
 from app.domain.jobs import current_actor
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
@@ -88,6 +88,13 @@ def _choose_model(options: list[dict[str, Any]], choice: str, mode: str) -> dict
     if picked is None:
         raise WorkflowDomainError("wfErr_talkingNoModel" if mode == SPEECH_TO_VIDEO else "wfErr_lipsyncNoModel")
     return picked
+
+
+def face_role(model: dict[str, Any]) -> str:
+    """说话照片的人像交在这个模型声明的哪一格:收首帧的交首帧(百炼 s2v、OmniHuman、HeyGen),只收参考图的交参考图
+    (ComfyUI 上的 H3 数字人工作流把脸接在参考那一路)。描述符说了算,不按厂商分。"""
+    limits = (model.get("capabilities") or {}).get("source_limits") or {}
+    return REFERENCE_IMAGE if REFERENCE_IMAGE in limits and FIRST_FRAME not in limits else FIRST_FRAME
 
 
 def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
@@ -318,7 +325,7 @@ def entity_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     plan = check_entity_speak(db, scope.workspace_id, config, current_actor(db))
     text = _text(config.get("text"))
     audio = _speak(db, scope, text, plan["engine"], plan["voice"])
-    videos = _generate(db, scope, plan["model"], [{"asset_id": plan["face"], "role": FIRST_FRAME},
+    videos = _generate(db, scope, plan["model"], [{"asset_id": plan["face"], "role": face_role(plan["model"])},
                                                    {"asset_id": audio, "role": DRIVING_AUDIO}], plan["parameters"])
     video = videos[0] if videos else ""
     return {"asset_id": video, "asset_ids": videos, "audio_asset_id": audio, "cues": _spoken_cues(db, text, video)}
@@ -342,8 +349,8 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     if given:
         given = executors_inputs._asset_in(db, scope, given).id
     audio = given or _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
-    videos = _generate(db, scope, model, [{"asset_id": face, "role": FIRST_FRAME}, {"asset_id": audio, "role": DRIVING_AUDIO}],
-                       parameters)
+    videos = _generate(db, scope, model, [{"asset_id": face, "role": face_role(model)},
+                                          {"asset_id": audio, "role": DRIVING_AUDIO}], parameters)
     #: 用的是上游现成的音频时不交回它(和对口型同一条)。
     return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": "" if given else audio}
 

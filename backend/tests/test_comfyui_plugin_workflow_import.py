@@ -568,3 +568,20 @@ def test_按选择安装只写选中的_再装不会覆盖(plugin, comfy) -> Non
 
     #: 没勾的不会因为“整组安装”顺手写进去。
     assert not comfy.state.userdata_get("workflows/mosael/examples/minimax_h3_continue.json")
+
+
+def test_一张人像加一段驱动音频的视频图_声明说话照片_读上一段状态的不算(plugin) -> None:
+    """资产页「让它说话」只列声明了 speech-to-video 的模型(ADR 0028)。ComfyUI 上的 H3 数字人工作流一张人像 + 一段音频
+    就能说话,此前却只声明了文生视频 / 参考生视频,对话框说「还没有会说话照片的视频模型」(维护者截图)。"""
+    import graph
+
+    plain = {"1": {"class_type": "LoadImage", "inputs": {}}, "2": {"class_type": "LoadAudio", "inputs": {}}}
+    assert graph.speaks_a_photo(plain, {"reference_image": 1, "driving_audio": 1})
+    assert graph.speaks_a_photo(plain, {"first_frame": 1, "driving_audio": 1})
+    #: 接着上一段说的(读潜空间):单独一张图 + 一段音频跑不起来
+    continuing = {**plain, "3": {"class_type": "VRGDG_MiniMaxH3LoadLatent", "inputs": {}}}
+    assert not graph.speaks_a_photo(continuing, {"reference_image": 1, "driving_audio": 1})
+    #: 没有驱动音频、两张图、还要一段原片的,都不是说话照片
+    assert not graph.speaks_a_photo(plain, {"reference_image": 1})
+    assert not graph.speaks_a_photo(plain, {"reference_image": 2, "driving_audio": 1})
+    assert not graph.speaks_a_photo(plain, {"reference_image": 1, "driving_audio": 1, "source_video": 1})

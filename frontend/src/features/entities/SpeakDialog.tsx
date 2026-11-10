@@ -103,7 +103,7 @@ function SpeakDialog({
           />
         </label>
         <label className="grid gap-1.5">
-          <span className="text-ui-sm font-medium">{t("entityDrawModel")}</span>
+          <span className="text-ui-sm font-medium">{t("entitySpeakModel")}</span>
           {noModels ? (
             <span className="text-ui-sm leading-relaxed text-muted-foreground">
               {t("entitySpeakNoModel")}{" "}
@@ -113,7 +113,7 @@ function SpeakDialog({
             </span>
           ) : (
             <OptionPicker
-              ariaLabel={t("entityDrawModel")}
+              ariaLabel={t("entitySpeakModel")}
               value={model}
               onChange={setModel}
               options={[{ value: DEFAULT_MODEL, label: t("entitySpeakDefaultModel") }, ...(models.data ?? [])]}

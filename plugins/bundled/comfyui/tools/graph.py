@@ -461,6 +461,24 @@ def loader_inputs(api: dict[str, Any], object_info: dict[str, Any] | None = None
     return found
 
 
+#: 读「上一段存下的状态」的节点(潜空间续写这类):它的输出取决于此前跑过的那一段,不是一张图 + 一段音频就定得下来的。
+_SAVED_STATE_LOADERS = re.compile(r"LoadLatent", re.IGNORECASE)
+
+
+def speaks_a_photo(api: dict[str, Any], counts: dict[str, int]) -> bool:
+    """这张视频图是不是「说话照片」(宿主的 `speech-to-video`,ADR 0028):**恰好一张人像 + 一段驱动音频**,别的素材都不收,
+    也不读上一段存下的状态。人像是首帧还是参考图都算 —— 那是这张图把脸接在哪儿,宿主按声明的那一格交(见 talking)。
+
+    此前只有云端的说话照片模型(百炼 s2v、OmniHuman、HeyGen)声明这一种:ComfyUI 上的 H3 数字人工作流一张人像 + 一段
+    音频就能说话,资产页「让它说话」却说「还没有会说话照片的视频模型」(维护者截图)。接着上一段说的那张(读潜空间)
+    单独跑不起来,不算。"""
+    faces = counts.get("first_frame", 0) + counts.get("reference_image", 0)
+    others = set(counts) - {"first_frame", "reference_image", "driving_audio"}
+    if counts.get("driving_audio") != 1 or faces != 1 or others:
+        return False
+    return not any(_SAVED_STATE_LOADERS.search(str(node.get("class_type", ""))) for node in api.values())
+
+
 def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None,
           object_info: dict[str, Any] | None = None) -> list[dict[str, str]]:
     """读素材的节点 → 输入槽位 `{node, class_type, title, media, field, role}`,按节点顺序。
@@ -1794,6 +1812,8 @@ def describe(
         else:
             modes = ["text-to-video"] + (
                 ["reference-to-video"] if "reference_image" in counts or "reference_video" in counts else [])
+        if speaks_a_photo(api, counts):
+            modes.append("speech-to-video")
     elif kind == "audio":
         # 音乐 / 音效 / 配音(ADR 0022):宿主的音频模式里通用的那一个
         modes = ["text-to-audio"]
