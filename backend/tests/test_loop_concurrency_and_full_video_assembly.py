@@ -341,6 +341,8 @@ class Test整片生成的中段:
             video = sorted(db.query(Clip).filter(Clip.track_id == video_track).all(), key=lambda c: c.timeline_start)
             names = [db.get(Asset, clip.asset_id).name for clip in video]
             assert names == ["p1", "p2", "p3"], "并发生成之后,上时间线仍要按镜头顺序"
+            #: 视频模型自带的声音不混进成片(H3 边出画面边出声,出的是听不清的人声,压在配音底下就听不懂)。
+            assert all(clip.muted for clip in video), "每一镜的视频都静音,声音只来自配音"
             assert [clip.timeline_start for clip in video] == [0.0, seconds, seconds * 2]
 
             audio = sorted(db.query(Clip).filter(Clip.track_id == audio_track).all(), key=lambda c: c.timeline_start)

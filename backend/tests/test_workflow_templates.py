@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 19,
+        "template_version": 20,
         "source": "official",
     }
 
@@ -1263,6 +1263,18 @@ def test_会唱的音乐模型_先拆掉人声再铺伴奏() -> None:
     assert ("bgm_music", "bgm_backing") in control and ("bgm_backing", "bgm_lay") in control
     data = {(edge["source"], edge["source_output"], edge["target"]) for edge in graph["edges"] if edge.get("kind") == "data"}
     assert ("bgm_backing", "background_asset_id", "bgm_lay") in data, "铺的是伴奏,不是原曲"
+
+
+def test_整片_叙事脚本和分镜都看得到主题原文_给了逐镜剧本就照它() -> None:
+    """漫剧第一集第 1 场:主题是一份逐镜剧本,写分镜那次对话只看得到创意简报和叙事脚本的转述,10 句旁白只有第 1 句是原文。"""
+    from app.domain.workflows.templates_full_video import SCRIPT_GIVEN_RULE
+
+    graph = _full_video()
+    for node_id in ("narrative_script", "storyboard"):
+        prompt = _node(graph, node_id)["config"]["prompt"]
+        assert "{{start.topic}}" in prompt, node_id
+        assert SCRIPT_GIVEN_RULE in prompt, node_id
+    assert "逐字照抄" in SCRIPT_GIVEN_RULE and "不改写" in SCRIPT_GIVEN_RULE
 
 
 def test_整片_有音乐模型时铺一首配乐_字幕之后导出之前() -> None:

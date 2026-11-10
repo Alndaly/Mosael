@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Each line is voiced by the speaker the storyboard names: a character that carries a voice in the asset library speaks in it, the narrator and characters without one use the start node's voice; with a music model, a background score is generated and laid under the dialogue. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls, per-shot voicing and one music track — the most expensive template here; max_shots on the start node caps the shot count, and shot_seconds sets each shot's length (preset to the length the chosen video model can make that is closest to its default).",
-  "graph_hash": "92eb63e5cfb14c68a15a50ba5745fe5a6c2024c646894a70104be70677d3520c",
+  "graph_hash": "93950f1364e6e60e1c90779b61d34e16e0ab869bd4d8064f992b8a651f3a8e53",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 19,
+      "template_version": 20,
       "source": "official"
     },
     "nodes": [
@@ -31,7 +31,7 @@
             "language": "简体中文",
             "aspect_ratio": "16:9",
             "resolution": "720p",
-            "fps": 30,
+            "fps": 24,
             "voice_id": ""
           },
           "required_params": [
@@ -136,7 +136,7 @@
           "model": "",
           "preset": "precise",
           "system": "你是资深编剧和旁白导演。围绕唯一核心主旨规划完整叙事，不引入创意简报之外\n的事实。按目标时长拆成首尾连续的叙事节拍：开头尽快建立观看理由，中段用因果而不是信息堆砌推进，\n结尾回收主旨。口播要自然、可说、符合指定语言。只输出符合 JSON Schema 的对象。",
-          "prompt": "创意简报：\n{{creative_brief.text}}\n\n目标时长：{{start.target_duration_seconds}} 秒\n成片语言：{{start.language}}\n请输出完整口播，并把叙事拆成按时间连续的 beats。每个 beat 必须有明确叙事任务。",
+          "prompt": "创意简报：\n{{creative_brief.text}}\n\n用户给的原始主题(原文)：\n{{start.topic}}\n\n目标时长：{{start.target_duration_seconds}} 秒\n成片语言：{{start.language}}\n请输出完整口播，并把叙事拆成按时间连续的 beats。每个 beat 必须有明确叙事任务。\n如果用户的原始主题里已经写好了逐镜的分场剧本(一条一镜:画面、谁说话、台词),就**严格照它**:镜数、顺序、每一镜的台词逐字照抄、说话人照写,不增、不减、不改写、不合并;其余要你补的(机位、表演、光线、提示词)按它的画面去补。没给剧本时按创意简报自己写。",
           "response_format": "json_schema",
           "json_schema_name": "professional_video_narrative_script",
           "json_schema": {
@@ -705,7 +705,7 @@
           "model": "",
           "preset": "creative",
           "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n{{start.shot_seconds}} 秒镜头。每镜给出精确起止时间、口播、场景(location_id,以及它的 name 写进 location_name)、出镜角色(首帧里最主要的那个的 name 写进 first_frame_subject)、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 {{start.shot_seconds}} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。narration 可以是旁白，也可以是某个角色的台词：**一镜只写一个人说的话**，speaker 写说话的\n角色在视觉圣经里的 name(一字不差，配音按它找这个角色的嗓子)，旁白写空字符串；两人对话就拆成几镜，一镜一句(正反打)。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 {{start.shot_seconds}} 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
-          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 {{start.shot_seconds}} 秒。镜头数 = 目标时长 ÷ {{start.shot_seconds}} 向上取整，\n但**最多 {{start.max_shots}} 镜**；两者冲突时以上限为准，把成片做短一点，\n**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 {{start.shot_seconds}} 秒。时间码从 0 开始连续编号。",
+          "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n用户给的原始主题(原文)：\n{{start.topic}}\n\n如果用户的原始主题里已经写好了逐镜的分场剧本(一条一镜:画面、谁说话、台词),就**严格照它**:镜数、顺序、每一镜的台词逐字照抄、说话人照写,不增、不减、不改写、不合并;其余要你补的(机位、表演、光线、提示词)按它的画面去补。没给剧本时按创意简报自己写。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 {{start.shot_seconds}} 秒。镜头数 = 目标时长 ÷ {{start.shot_seconds}} 向上取整，\n但**最多 {{start.max_shots}} 镜**；两者冲突时以上限为准，把成片做短一点，\n**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 {{start.shot_seconds}} 秒。时间码从 0 开始连续编号。",
           "response_format": "json_schema",
           "json_schema_name": "professional_timed_storyboard",
           "json_schema": {
@@ -1765,6 +1765,19 @@
                 }
               },
               {
+                "id": "mute_clip",
+                "type": "edit_timeline",
+                "name": "Mute this shot's clip",
+                "position": {
+                  "x": 80,
+                  "y": 320
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "operations": "[{\"kind\": \"set_clip_gain\", \"clip_id\": \"{{append_clip.clip_id}}\", \"muted\": true}]"
+                }
+              },
+              {
                 "id": "has_audio",
                 "type": "condition",
                 "name": "Did this shot get narration?",
@@ -1812,8 +1825,13 @@
             ],
             "edges": [
               {
-                "id": "assemble_clip_gate",
+                "id": "assemble_clip_mute",
                 "source": "append_clip",
+                "target": "mute_clip"
+              },
+              {
+                "id": "assemble_clip_gate",
+                "source": "mute_clip",
                 "target": "has_audio"
               },
               {

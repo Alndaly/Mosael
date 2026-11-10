@@ -142,6 +142,16 @@ LOCATION_ART_PROMPT = (
 )
 
 
+#: **用户给了逐镜剧本时照它来。** 主题可以是一句话,也可以是一份分场剧本(一行一镜:画面、谁说、台词原文)。分镜那次对话
+#: 此前只看得到创意简报和叙事脚本 —— 两次对话的转述,「台词逐字照用」在转两手之后就没了(漫剧第一集第 1 场 10 句旁白
+#: 只有第 1 句是原文)。叙事脚本和分镜两次都带上原文,并且守这一条。
+SCRIPT_GIVEN_RULE = (
+    "如果用户的原始主题里已经写好了逐镜的分场剧本(一条一镜:画面、谁说话、台词),就**严格照它**:镜数、顺序、"
+    "每一镜的台词逐字照抄、说话人照写,不增、不减、不改写、不合并;其余要你补的(机位、表演、光线、提示词)按它的画面去补。"
+    "没给剧本时按创意简报自己写。"
+)
+
+
 #: 整片的配乐:创意简报一定下(片名、基调有了)就开始生成,和三视图、逐镜出片同时跑;字幕铺好之后、导出之前铺上去。
 #: 要 60 秒:一场戏常常比它长,铺的时候首尾接着铺(sequences.background_music)。
 FULL_VIDEO_MUSIC_SLOT = MusicSlot(
@@ -635,6 +645,18 @@ JSON Schema 的对象。"""
                 },
             },
             {
+                #: 视频模型自带的声音(H3 这类边出画面边出声的)不混进成片:台词和旁白是配音念的,模型自己出的是听不清的
+                #: 人声和杂音,压在配音底下就「听不懂」(漫剧第一集真跑)。和带货口播每一拍静音同一个做法。
+                "id": "mute_clip",
+                "type": "edit_timeline",
+                "name": {"zh": "这一镜的视频不出声", "en": "Mute this shot's clip"},
+                "position": {"x": 80, "y": 320},
+                "config": {
+                    "sequence_id": "{{input.sequence_id}}",
+                    "operations": '[{"kind": "set_clip_gain", "clip_id": "{{append_clip.clip_id}}", "muted": true}]',
+                },
+            },
+            {
                 "id": "has_audio",
                 "type": "condition",
                 "name": {"zh": "这一镜合成了口播吗", "en": "Did this shot get narration?"},
@@ -668,7 +690,9 @@ JSON Schema 的对象。"""
             },
         ],
         "edges": [
-            {"id": "assemble_clip_gate", "source": "append_clip", "target": "has_audio"},
+            #: 静音和接口播改的是同一条时间线:一步接一步,同时提交的话后到的那个撞上版本号。
+            {"id": "assemble_clip_mute", "source": "append_clip", "target": "mute_clip"},
+            {"id": "assemble_clip_gate", "source": "mute_clip", "target": "has_audio"},
             {"id": "assemble_gate_narration", "source": "has_audio", "target": "append_narration", "source_handle": "true"},
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
@@ -802,7 +826,9 @@ JSON Schema 的对象。"""
                     #: 运行前就拦,不等关键帧付完钱。resolution 是清晰度档位,一般不用动。
                     "aspect_ratio": aspect,
                     "resolution": video_plan.resolution,
-                    "fps": 30,
+                    #: 成片帧率。缺省 24:视频模型大多出 24 帧(H3、Seedance、Veo、可灵);24 帧的素材放进 30 帧的时间线,
+                    #: 每 4 帧重复 1 帧,动作一顿一顿(漫剧第一集真跑,维护者「帧率很低、很卡顿」)。模型出 30 帧的改成 30。
+                    "fps": 24,
                     # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败。
                     "voice_id": voice_id,
                 },
@@ -855,9 +881,13 @@ JSON Schema 的对象。"""
                 "prompt": """创意简报：
 {{creative_brief.text}}
 
+用户给的原始主题(原文)：
+{{start.topic}}
+
 目标时长：{{start.target_duration_seconds}} 秒
 成片语言：{{start.language}}
-请输出完整口播，并把叙事拆成按时间连续的 beats。每个 beat 必须有明确叙事任务。""",
+请输出完整口播，并把叙事拆成按时间连续的 beats。每个 beat 必须有明确叙事任务。
+""" + SCRIPT_GIVEN_RULE,
                 "response_format": "json_schema",
                 "json_schema_name": "professional_video_narrative_script",
                 "json_schema": _narrative_script_schema(),
@@ -960,6 +990,11 @@ JSON Schema 的对象。"""
                 "preset": "creative",
                 "system": storyboard_system,
                 "prompt": f"""请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。
+
+用户给的原始主题(原文)：
+{{{{start.topic}}}}
+
+{SCRIPT_GIVEN_RULE}
 
 创意简报：
 {{{{creative_brief.text}}}}
@@ -1182,13 +1217,14 @@ JSON Schema 的对象。"""
     ]
     add_background_music(nodes, edges, music, FULL_VIDEO_MUSIC_SLOT, db)
     graph = {
+        #: v20:成片帧率缺省 24(和多数视频模型一致);镜头接上时间线后静音(视频自带的声音不混进成片);叙事脚本与分镜带上主题原文,给了逐镜剧本就照它。
         #: v19:分镜、白模两次对话的输出上限提到 32000(20 镜的分镜写到 3.7 万字,12000 截断)。
         #: v18:关键帧的参考图按先后排(主角 → 地点 → 白模 → 其余),按模型收得下的张数取(source_overflow)。
         #: v17:每镜写明谁在说(speaker),角色带着音色就用它的嗓子念;有音乐模型时铺一首配乐(templates_music)。
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 19, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 20, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
