@@ -57,8 +57,17 @@ def _camera_rules(clip: int | str, *, source: str) -> str:
 
 shots:每镜一条 {{id:"shot-<n>", name:"镜头 <n>", duration:{clip}, aspect:画幅, easing:"smooth",
 camera_id:"cam-<n>", shot_angle:这台相机从主体哪个方向拍}}。shot_angle 从 front(正面)、three_quarter(斜侧,
-约 45°)、side(侧面)、back(背面)、high_angle(明显俯拍)、low_angle(明显仰拍)里选;没有主要人物、说不清的写空字符串。lighting 按{source}的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、
-高度角、强度(2~5)、色温和软硬;preset 写 "custom"。background 写 "#20242c",ambient 写 1.5。
+约 45°)、side(侧面)、back(背面)、high_angle(明显俯拍)、low_angle(明显仰拍)里选;没有主要人物、说不清的写空字符串。
+
+**白模只交代形状、机位和站位,不交代气氛。** 渲出来的那张交给画关键帧的模型照着取景;夜色、色调、天气由画关键帧那一步
+按提示词画。所以:
+- room、地面、陈设、远景体块一律用中性灰,按离相机由近到远分三档:近 "#c8c8c8"、中 "#9a9a9a"、远 "#6e6e6e"
+  —— 夜景、雨天也**不调暗、不上色**;人物照旧用各自的颜色(它们是图例),灯笼、烛火这类本身发光的小件可以留它的颜色;
+- background 写 "#b8bcc2",ambient 写 2.5;
+- lighting 只取{source}光线方案里的**方向**:方位角(0=相机默认一侧,90=右侧,180=逆光)和高度角;强度写 3.5、
+  色温 6500、softness 0.5,preset 写 "custom"。
+此前跟着视觉圣经把背景、墙面都调成近黑的深蓝灰、灯光按夜色压暗:渲出来几乎一片黑,形状看不出来,画关键帧的模型
+只好照着场景设定图的构图画。
 """
 
 
@@ -359,17 +368,19 @@ JSON Schema 的对象。"""
 
 {blockout_rules(clip, source="视觉圣经")}只输出符合 JSON Schema 的对象。"""
 
-    #: 关键帧的参考图**按先后排**:本镜白模 → (尾帧时)首帧 → 主角三视图 → 地点设定图 → 其余角色与地点;出图节点按所选
+    #: 关键帧的参考图**按先后排**:本镜白模 → (尾帧时)首帧 → 主角三视图 → 地点设定图,**只这几张**;出图节点按所选
     #: 模型收得下的张数取前几张(`source_overflow = keep_first`)。**白模永远第一张**:每一镜都渲了它,它定机位、构图和站位;
     #: 排在主角、地点后面时,收两张的模型永远拿不到它,关键帧照着设定图的构图画(ADR 0097 修订二);没有主角的镜头其余几张
     #: 往前挪,第一张的意思也不变 —— 白模排第三时那样一挪,模型把地点和白模拼成一张上下两截的图。
+    #: **不再在后面挂全部角色和场景**:没有主角的镜头空出一位,被全部三视图里的第一张补上,剧本写着「空无一人」的长街
+    #: 画出四个灰袍人(ADR 0097 修订三)。主角、地点在库里按名字认得出来,用不着那一串兜底。
     frame_prompt_tail = (
         " Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, "
         "lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render "
         "them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main "
         "character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's concept "
-        "art, then other characters and locations; any of these may be missing. Output one single finished picture, "
-        "never a collage of the references. Only the characters described above appear. {{input.style}}"
+        "art; either may be missing. Output one single finished picture, never a collage of the references. Only the "
+        "characters described above appear; if none are described, the place is empty of people. {{input.style}}"
     )
 
     #: 这一镜交给下游的是哪个节点的素材:接得下去的模型是接好的那一条。
@@ -414,8 +425,6 @@ JSON Schema 的对象。"""
                         "{{render_blockout.first_frame_asset_id}}:reference_image",
                         "{{find_subject.asset_id}}:reference_image",
                         "{{find_location.asset_id}}:reference_image",
-                        "{{input.sheets}}",
-                        "{{input.locations}}",
                     ],
                     "source_overflow": "keep_first",
                 },
@@ -462,8 +471,6 @@ JSON Schema 的对象。"""
                         "{{paint_first_frame.asset_id}}:reference_image",
                         "{{find_subject.asset_id}}:reference_image",
                         "{{find_location.asset_id}}:reference_image",
-                        "{{input.sheets}}",
-                        "{{input.locations}}",
                     ],
                 },
             },
@@ -1226,7 +1233,7 @@ JSON Schema 的对象。"""
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 21, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 22, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
