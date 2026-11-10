@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.templates_music import BackgroundMusic, MusicSlot, add_background_music
 from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, VideoPlan, model_capabilities, image_plan_for, video_plan_for
 from app.domain.workflows.templates_schemas import (
     _creative_brief_schema,
@@ -127,6 +128,19 @@ def single_set_rules(clip: int | str, *, source: str) -> str:
 {_camera_rules(clip, source=source)}"""
 
 
+#: 整片的配乐:创意简报一定下(片名、基调有了)就开始生成,和三视图、逐镜出片同时跑;字幕铺好之后、导出之前铺上去。
+#: 要 60 秒:一场戏常常比它长,铺的时候首尾接着铺(sequences.background_music)。
+FULL_VIDEO_MUSIC_SLOT = MusicSlot(
+    description=(
+        "Instrumental film score for \"{{creative_brief.json.title}}\". Mood: {{creative_brief.json.tone}}. "
+        "Cinematic and restrained with a steady pulse; clean mix; no vocals, no lyrics; leaves room for dialogue "
+        "and voice-over."
+    ),
+    seconds=60, sequence_id="{{video_project.sequence_id}}", starts_after="creative_brief",
+    export_node="export_final", origin=(1400, -320),
+)
+
+
 def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, parameters: dict[str, Any]) -> None:
     """**一镜比模型一次能出的长时,接着往下拍**:算分段 → 第一段(`generate_clip`)→ 逐段续写 → 接成一份素材。
 
@@ -223,7 +237,8 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
 
 
 def full_video_generation_graph(
-    *, chat: ModelChoice, image: ModelChoice, video: ModelChoice, voice_id: str = "", db: Session | None = None
+    *, chat: ModelChoice, image: ModelChoice, video: ModelChoice, voice_id: str = "", music: BackgroundMusic | None = None,
+    db: Session | None = None,
 ) -> dict[str, Any]:
     """主题 → 主旨 → 脚本 / 视觉圣经 → 角色三视图 + 场景设定图 → 分镜 → 3D 白模布景 → 逐镜:
     白模参考 → 首帧(需要时加尾帧)→ 视频 → 按序上时间线 → 口播字幕 → 导出。
@@ -239,6 +254,11 @@ def full_video_generation_graph(
       `keyframes` 先按白模机位画首帧(需要时加尾帧)再出片,构图最稳;`references` 把三视图、
       设定图、白模帧和运镜视频直接交给视频模型,适合复杂运镜。走哪条由分镜逐镜决定,能选哪几条
       由视频模型的能力决定(见 VideoPlan.modes)。
+
+    **谁说话就用谁的嗓子**:分镜每镜写明说话的角色(`speaker`),配音按名字到资产库里找这个人物,它带着音色就用它的,
+    旁白和没带音色的角色用开始节点那一把 —— 漫剧这种几个角色对话的片子,此前所有台词都是同一个旁白在念。
+
+    ``music`` 给了就生成一首配乐、在字幕之后导出之前铺上去(见 templates_music;有人说话时压低)。
 
     ``db`` 让模型的默认参数能读到用户自定义的参数声明;官网导出等无库上下文留空,退回内置目录。
     """
@@ -299,7 +319,8 @@ appearance / description 照它的提示词描述写（它的参考图会直接�
 机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须
 首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来
 不得超过 {clip} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进
-这一镜，听起来会很赶。
+这一镜，听起来会很赶。narration 可以是旁白，也可以是某个角色的台词：**一镜只写一个人说的话**，speaker 写说话的
+角色在视觉圣经里的 name(一字不差，配音按它找这个角色的嗓子)，旁白写空字符串；两人对话就拆成几镜，一镜一句(正反打)。
 
 每镜选一条出片路径(reference_mode,可选:{modes_text}):keyframes 先按白模机位画首帧再生成,
 构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,
@@ -452,24 +473,55 @@ JSON Schema 的对象。"""
                 },
             },
             {
+                "id": "has_narration",
+                "type": "condition",
+                "name": {"zh": "这一镜有人说话吗", "en": "Does anyone speak in this shot?"},
+                "position": {"x": 80, "y": 420},
+                "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
+            },
+            {
+                "id": "has_speaker",
+                "type": "condition",
+                "name": {"zh": "是角色在说吗", "en": "Is a character speaking?"},
+                "position": {"x": 390, "y": 420},
+                "config": {"left": "{{loop.item.speaker}}", "op": "not_empty"},
+            },
+            {
+                #: 说话的角色在资产库里叫这个名字(视觉圣经沿用库里的名字;新画的角色这时也已经存进库)。
+                "id": "find_speaker",
+                "type": "entity_get",
+                "name": {"zh": "在资产库里找说话的角色", "en": "Look the speaking character up in the asset library"},
+                "position": {"x": 700, "y": 420},
+                "config": {"kind": "character", "name": "{{loop.item.speaker}}", "limit": 1},
+            },
+            {
+                #: 引用即依赖:旁白那一镜「找说话的角色」被跳过,这里照样等它落定,引用出来是空串 → 走默认那把嗓子。
+                "id": "speaker_has_voice",
+                "type": "condition",
+                "name": {"zh": "这个角色带着音色吗", "en": "Does this character carry a voice?"},
+                "position": {"x": 1010, "y": 420},
+                "config": {"left": "{{find_speaker.voice_id}}", "op": "not_empty"},
+            },
+            {
+                "id": "speak_as_character",
+                "type": "synthesize_speech",
+                "name": {"zh": "用这个角色的嗓子念", "en": "Speak the line in this character's voice"},
+                "position": {"x": 1320, "y": 420},
+                "config": {"text": "{{loop.item.narration}}", "engine": "{{find_speaker.voice_engine}}",
+                           "voice": "{{find_speaker.voice_id}}"},
+            },
+            {
                 "id": "has_voice",
                 "type": "condition",
                 "name": {"zh": "选了配音音色吗", "en": "Was a voice picked?"},
-                "position": {"x": 80, "y": 420},
+                "position": {"x": 1320, "y": 580},
                 "config": {"left": "{{input.voice_id}}", "op": "not_empty"},
-            },
-            {
-                "id": "has_narration",
-                "type": "condition",
-                "name": {"zh": "这一镜有口播吗", "en": "Does this shot have narration?"},
-                "position": {"x": 390, "y": 420},
-                "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
             },
             {
                 "id": "narrate",
                 "type": "synthesize_speech",
-                "name": {"zh": "合成该镜口播", "en": "Synthesise this shot's narration"},
-                "position": {"x": 700, "y": 420},
+                "name": {"zh": "用旁白的嗓子念", "en": "Speak the line in the narrator's voice"},
+                "position": {"x": 1630, "y": 580},
                 # 开始节点里填的是配音库音色的 id,所以引擎是克隆;想用引擎音色,改这里的两格。
                 "config": {"text": "{{loop.item.narration}}", "engine": "builtin:clone", "voice": "{{input.voice_id}}"},
             },
@@ -484,8 +536,14 @@ JSON Schema 的对象。"""
             #: 引用即依赖,生成会等它们落定(跑完或被跳过)再开始。
             {"id": "shot_blockout_generate", "source": "render_blockout", "target": "generate_clip"},
             {"id": "shot_generate_organize", "source": shot_asset, "target": "organize_clip"},
-            {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "source_handle": "true"},
-            {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "source_handle": "true"},
+            #: **谁说就用谁的嗓子**:角色带着音色(人物资产上的 voice)就用它的;旁白、没带音色的角色用开始节点那一把,
+            #: 那一把也空着就不配音。两支只会跑一支,下游把两支的产物拼在一起取(没跑的那支引用出来是空串)。
+            {"id": "shot_narration_speaker", "source": "has_narration", "target": "has_speaker", "source_handle": "true"},
+            {"id": "shot_speaker_find", "source": "has_speaker", "target": "find_speaker", "source_handle": "true"},
+            {"id": "shot_narration_voice_gate", "source": "has_narration", "target": "speaker_has_voice", "source_handle": "true"},
+            {"id": "shot_character_speak", "source": "speaker_has_voice", "target": "speak_as_character", "source_handle": "true"},
+            {"id": "shot_fallback_voice", "source": "speaker_has_voice", "target": "has_voice", "source_handle": "false"},
+            {"id": "shot_narrator_speak", "source": "has_voice", "target": "narrate", "source_handle": "true"},
         ],
     }
     if video_plan.chains:
@@ -527,7 +585,7 @@ JSON Schema 的对象。"""
                 "type": "condition",
                 "name": {"zh": "这一镜合成了口播吗", "en": "Did this shot get narration?"},
                 "position": {"x": 390, "y": 140},
-                "config": {"left": "{{loop.item.narrate.asset_id}}", "op": "not_empty"},
+                "config": {"left": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}", "op": "not_empty"},
             },
             {
                 "id": "append_narration",
@@ -536,7 +594,8 @@ JSON Schema 的对象。"""
                 "position": {"x": 700, "y": 140},
                 "config": {
                     "sequence_id": "{{input.sequence_id}}",
-                    "asset_id": "{{loop.item.narrate.asset_id}}",
+                    #: 两支(角色的嗓子 / 旁白的嗓子)只跑了一支,拼在一起正好是跑了的那一支。
+                    "asset_id": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}",
                     "track_id": "{{input.audio_track_id}}",
                     # **放在这一镜画面开始的那一秒**,不是接在上一段口播后面。用的是画面片段**实际**
                     # 落下的位置,不是分镜里写的 start_seconds。
@@ -1069,11 +1128,13 @@ JSON Schema 的对象。"""
         {"id": "export_notice", "source": "export_final", "target": "done_notice"},
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
+    add_background_music(nodes, edges, music, FULL_VIDEO_MUSIC_SLOT, db)
     graph = {
+        #: v17:每镜写明谁在说(speaker),角色带着音色就用它的嗓子念;有音乐模型时铺一首配乐(templates_music)。
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 16, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 17, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

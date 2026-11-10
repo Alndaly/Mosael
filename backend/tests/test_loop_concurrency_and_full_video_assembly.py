@@ -381,6 +381,49 @@ class Test整片生成的中段:
             assert db.query(Clip).filter(Clip.track_id == video_track).count() == 1
 
 
+    def test_谁说话用谁的嗓子_旁白和没带音色的角色用开始节点那一把(self, fake_node) -> None:
+        """漫剧几个角色对话:台词按 speaker 到资产库里找这个人物,带着音色就用它的;旁白、没带音色的角色退回开始节点那一把。
+        找人物、判音色走的是真的节点(entity_get / condition),只有合成是假的。"""
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        voiced = {"engine": "builtin:edge", "voice": "zh-CN-YunxiNeural"}
+        assert client.post("/api/entities", json={"workspace_id": ws, "kind": "character", "name": "顾长夜",
+                                                  "attributes": {"voice": voiced}}).status_code == 200
+        assert client.post("/api/entities", json={"workspace_id": ws, "kind": "character", "name": "小满"}).status_code == 200
+        sequence_id, video_track, audio_track = _sequence(ws)
+        seconds = _assemble_seconds()
+        spoken: dict[str, tuple[str, str]] = {}
+
+        def fake_speech(db, workflow, config):
+            spoken[config["text"]] = (config.get("engine", ""), config.get("voice", ""))
+            return {"asset_id": _asset(ws, "audio", seconds * 0.5, config["text"])}
+
+        fake_node("ai_generate", lambda db, workflow, config: {"asset_id": _asset(ws, "video", 20.0, config["prompt"].split()[0])})
+        fake_node("asset_update", lambda db, workflow, config: {})
+        fake_node("synthesize_speech", fake_speech)
+        context, cancelled = _middle_of_full_video(
+            fake_node,
+            shots=[
+                {"shot_number": 1, "generation_prompt": "p1", "negative_prompt": "", "narration": "这盏灯我要了。", "speaker": "顾长夜"},
+                {"shot_number": 2, "generation_prompt": "p2", "negative_prompt": "", "narration": "姐姐,外面有人!", "speaker": "小满"},
+                {"shot_number": 3, "generation_prompt": "p3", "negative_prompt": "", "narration": "临川城的雨下了三天。", "speaker": ""},
+            ],
+            voice_id="narrator-voice",
+            project={"workspace_id": ws, "project_id": "", "sequence_id": sequence_id,
+                     "video_track_id": video_track, "audio_track_id": audio_track},
+        )
+        assert not cancelled
+        assert spoken == {
+            "这盏灯我要了。": ("builtin:edge", "zh-CN-YunxiNeural"),
+            "姐姐,外面有人!": ("builtin:clone", "narrator-voice"),
+            "临川城的雨下了三天。": ("builtin:clone", "narrator-voice"),
+        }
+        assert context["narration_subtitles"]["count"] == 3
+        with unit_of_work() as db:
+            audio = sorted(db.query(Clip).filter(Clip.track_id == audio_track).all(), key=lambda c: c.timeline_start)
+            assert [clip.timeline_start for clip in audio] == [0.0, seconds, seconds * 2], "两支哪支念的都接上了"
+
+
 class Test数据边不决定该不该跑:
     def test_条件为假时_另有数据边的节点也跳过(self, fake_node) -> None:
         """挂在条件"真"出口上的节点,另从别处用数据边取值 —— 条件为假时它不该跑。

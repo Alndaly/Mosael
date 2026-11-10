@@ -87,6 +87,7 @@ from app.domain.workflows.templates_dub import (
     translated_dub_graph,
 )
 from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
+from app.domain.workflows.templates_music import BackgroundMusic
 from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO, long_take_video_graph
 from app.domain.workflows.templates_upscale import upscale_model
 from app.domain.workflows.templates_long_talk import LONG_TALK_VIDEO, long_talk_video_graph
@@ -120,8 +121,8 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": "Topic to finished video"
         },
         "summary": {
-            "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话和逐镜配音——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
-            "en": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count, and shot_seconds sets each shot's length (preset to the length the chosen video model can make that is closest to its default)."
+            "zh": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。台词按分镜写的说话人配音：角色在资产库里带着音色就用它的嗓子，旁白和没带音色的角色用开始节点的那一把；有能出音乐的模型时再生成一首配乐，垫在对白底下。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话、逐镜配音和一首配乐——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
+            "en": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Each line is voiced by the speaker the storyboard names: a character that carries a voice in the asset library speaks in it, the narrator and characters without one use the start node's voice; with a music model, a background score is generated and laid under the dialogue. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls, per-shot voicing and one music track — the most expensive template here; max_shots on the start node caps the shot count, and shot_seconds sets each shot's length (preset to the length the chosen video model can make that is closest to its default)."
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -331,6 +332,8 @@ def built_in_template_graph(
             video=_shot_video_model(db, user_id),
             # 音色是工作区的(克隆音色存在工作区名下),所以按工作区取,不按人。
             voice_id=_prefilled_voice_id(db, workspace_id),
+            #: 有能从文字出音乐的模型就生成一首配乐、铺在对白和旁白底下;没有就不加(同带货口播)。
+            music=_background_music(db, user_id, workspace_id),
             db=db,
         ))
     if template_id == LONG_TAKE_VIDEO:
@@ -377,7 +380,7 @@ def built_in_template_graph(
             voice_id=_prefilled_voice_id(db, workspace_id),
             #: 成片配乐:有能从文字出音乐的模型就生成一首、铺在旁白底下;没有就不加这几步(和「动起来」同一个挑法)。
             #: 会唱的模型要先拆掉人声,本机没有分离引擎就不加 —— 半路失败比没有配乐更糟。
-            **_pitch_music(db, user_id, workspace_id),
+            music=_background_music(db, user_id, workspace_id),
             presenter=template_id == PRODUCT_PITCH_PRESENTER,
             db=db,
             locale=locale,
@@ -508,15 +511,20 @@ def _carry_picks(fresh: dict[str, Any], old: dict[str, Any]) -> None:
                 config[key] = kept
 
 
-def _pitch_music(db: Session, user_id: str, workspace_id: str) -> dict[str, Any]:
-    """带货口播的配乐用哪个模型、要不要先拆掉人声(见 templates_models.music_may_sing)。"""
+def _background_music(db: Session, user_id: str, workspace_id: str) -> BackgroundMusic | None:
+    """成片配乐用哪个模型、要不要先拆掉人声(见 templates_music);没有能用的音乐模型就是 None,模板不加配乐那几步
+    (和「动起来」同一个挑法,不让整条模板用不了)。
+
+    会唱的模型要先拆掉人声(见 templates_models.music_may_sing):分离引擎**明说缺了**才连配乐一起不加(和
+    requirement_problem 同一条线:还没探测过的照常加,真缺时那一步说清)—— 铺一首带人声的歌在旁白、对白底下,比不铺更糟。
+    """
     music = _music_model(db, user_id)
+    if not music.model:
+        return None
     strip = music_may_sing(model_capabilities(db, music, "audio"))
-    #: 和 requirement_problem 同一条线:明说缺了才不加;还没探测过(unknown)照常加,真缺时那一步说清。
-    if music.model and strip and requirement_status(db, user_id=user_id, workspace_id=workspace_id,
-                                                     check=SEPARATION_ENGINE) == "missing":
-        return {"music": None, "strip_vocals": False}
-    return {"music": music, "strip_vocals": strip}
+    if strip and requirement_status(db, user_id=user_id, workspace_id=workspace_id, check=SEPARATION_ENGINE) == "missing":
+        return None
+    return BackgroundMusic(model=music, strip_vocals=strip)
 
 
 def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:

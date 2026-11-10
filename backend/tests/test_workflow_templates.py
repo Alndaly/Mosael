@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 16,
+        "template_version": 17,
         "source": "official",
     }
 
@@ -469,8 +469,8 @@ class Test分镜写了口播就要真的配上:
         # 接的是**音轨**,不是画面那条 —— 接错轨道的话口播会把画面顶掉。
         assert placed["append_narration"]["config"]["track_id"] == "{{input.audio_track_id}}"
         assert assemble["inputs"]["audio_track_id"] == "{{video_project.audio_track_id}}"
-        # 上时间线那一轮遍历的是生成那一轮的结果:口播素材就是那一项里 narrate 的产物。
-        assert placed["append_narration"]["config"]["asset_id"] == "{{loop.item.narrate.asset_id}}"
+        # 上时间线那一轮遍历的是生成那一轮的结果:口播素材是那一项里跑了的那一支(角色的嗓子 / 旁白的嗓子)。
+        assert placed["append_narration"]["config"]["asset_id"] == "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}"
 
     def test_口播不按镜头定长裁(self) -> None:
         """画面每镜定长,口播不是。硬裁到 clip_seconds 会把话切掉半句 —— 太长就加速,不裁。"""
@@ -491,9 +491,9 @@ class Test分镜写了口播就要真的配上:
         # 合成只挂在 true 分支上。
         to_narration = [e for e in generate["body"]["edges"] if e["source"] == "has_voice"]
         assert to_narration and all(e.get("source_handle") == "true" for e in to_narration)
-        # 上时间线那一轮:没合成出口播的镜头不去接口播。
+        # 上时间线那一轮:没合成出口播的镜头不去接口播(两支都没跑才算没有)。
         placed = {n["id"]: n for n in assemble["body"]["nodes"]}
-        assert placed["has_audio"]["config"] == {"left": "{{loop.item.narrate.asset_id}}", "op": "not_empty"}
+        assert placed["has_audio"]["config"] == {"left": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}", "op": "not_empty"}
         gated = [e for e in assemble["body"]["edges"] if e["source"] == "has_audio"]
         assert gated and all(e.get("source_handle") == "true" for e in gated)
 
@@ -515,7 +515,35 @@ class Test分镜写了口播就要真的配上:
         # 画面和口播在生成那一轮里是两条互不依赖的支路 —— 口播失败不会拖住画面的顺序。
         # 画面那条从白模开始(白模 → 首帧/尾帧 → 视频)。
         roots = {n["id"] for n in generate["body"]["nodes"]} - {e["target"] for e in generate["body"]["edges"]}
-        assert {"render_blockout", "has_voice"} <= roots
+        assert {"render_blockout", "has_narration"} <= roots
+
+    def test_谁说话就用谁的嗓子_旁白和没带音色的角色用开始节点那一把(self) -> None:
+        """漫剧几个角色对话,此前所有台词都是同一个旁白在念。分镜每镜写明 speaker,按名字到资产库里找这个人物,
+        它带着音色就用它的;旁白(speaker 空)、没带音色的角色走开始节点那一把。"""
+        from app.domain.workflows.templates_schemas import _storyboard_schema
+        from app.domain.workflows.templates_models import VideoPlan
+
+        generate, _ = self._loops()
+        nodes = {n["id"]: n for n in generate["body"]["nodes"]}
+        edges = {(e["source"], e["target"]): e.get("source_handle") for e in generate["body"]["edges"]
+                 if e.get("kind") != "data"}
+        assert nodes["find_speaker"]["type"] == "entity_get"
+        assert nodes["find_speaker"]["config"]["name"] == "{{loop.item.speaker}}"
+        assert nodes["find_speaker"]["config"]["kind"] == "character"
+        assert edges[("has_speaker", "find_speaker")] == "true", "旁白那一镜不去找(按名字找要有名字)"
+        #: 纯引用规整成数据边。
+        data = {(e["source"], e["source_output"], e["target"], e["target_input"])
+                for e in generate["body"]["edges"] if e.get("kind") == "data"}
+        assert ("find_speaker", "voice_engine", "speak_as_character", "engine") in data
+        assert ("find_speaker", "voice_id", "speak_as_character", "voice") in data
+        assert edges[("speaker_has_voice", "speak_as_character")] == "true"
+        assert edges[("speaker_has_voice", "has_voice")] == "false", "角色没带音色就退回旁白那一把"
+        assert edges[("has_voice", "narrate")] == "true"
+        assert nodes["narrate"]["config"]["voice"] == "{{input.voice_id}}" or "voice" in nodes["narrate"].get("inputs", [])
+        assert edges[("has_narration", "speaker_has_voice")] == "true", "旁白那一镜也要走到退回那一支"
+
+        shot = _storyboard_schema(VideoPlan())["properties"]["shots"]["items"]
+        assert "speaker" in shot["properties"] and "speaker" in shot["required"]
 
 
 def test_模板里的节点名跟着界面语言走() -> None:
@@ -1160,13 +1188,14 @@ def test_带货口播_有音乐模型时铺一首配乐_没有就不加(presente
     内容和字幕都铺好之后、导出之前铺上去;没有音乐模型这两步一步都不加。"""
     from app.domain.workflows.templates_business import product_pitch_short_graph
     from app.domain.workflows.templates_models import ModelChoice
+    from app.domain.workflows.templates_music import BackgroundMusic
 
     blank = ModelChoice()
-    music = ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax-music.json#e2gn2t")
+    music = BackgroundMusic(ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax-music.json#e2gn2t"))
     with_music = product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="",
                                            music=music, presenter=presenter)
     nodes = {node["id"]: node for node in with_music["nodes"]}
-    assert nodes["bgm_music"]["config"]["kind"] == "audio" and nodes["bgm_music"]["config"]["model"] == music.model
+    assert nodes["bgm_music"]["config"]["kind"] == "audio" and nodes["bgm_music"]["config"]["model"] == music.model.model
     assert nodes["bgm_lay"]["type"] == "timeline_background_music"
     data = {(edge["source"], edge["source_output"], edge["target"], edge["target_input"])
             for edge in with_music["edges"] if edge.get("kind") == "data"}
@@ -1207,16 +1236,44 @@ def test_会唱的音乐模型_先拆掉人声再铺伴奏() -> None:
     assert music_may_sing({"parameter_keys": ["44.caption", "44.lyrics"]})
     assert not music_may_sing({"parameter_keys": ["instrumental", "lyrics"], "modes": ["text-to-music"]})
 
+    from app.domain.workflows.templates_music import BackgroundMusic
+
     blank = ModelChoice()
-    music = ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax+music3.json")
-    graph = product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="",
-                                      music=music, strip_vocals=True)
+    music = BackgroundMusic(ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax+music3.json"),
+                            strip_vocals=True)
+    graph = product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="", music=music)
     nodes = {node["id"]: node for node in graph["nodes"]}
     assert nodes["bgm_backing"]["type"] == "separate_audio"
     control = [(edge["source"], edge["target"]) for edge in graph["edges"] if edge.get("kind") != "data"]
     assert ("bgm_music", "bgm_backing") in control and ("bgm_backing", "bgm_lay") in control
     data = {(edge["source"], edge["source_output"], edge["target"]) for edge in graph["edges"] if edge.get("kind") == "data"}
     assert ("bgm_backing", "background_asset_id", "bgm_lay") in data, "铺的是伴奏,不是原曲"
+
+
+def test_整片_有音乐模型时铺一首配乐_字幕之后导出之前() -> None:
+    """漫剧一场戏只有对白和旁白,两句之间是空白。和带货口播同一组节点(templates_music):创意简报定下就生成,
+    字幕铺好之后、导出之前铺;没有音乐模型就不加。"""
+    from app.domain.workflows.templates_full_video import full_video_generation_graph
+    from app.domain.workflows.templates_models import ModelChoice
+    from app.domain.workflows.templates_music import BackgroundMusic
+
+    blank = ModelChoice()
+    music = BackgroundMusic(ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax+music3.json"),
+                            strip_vocals=True)
+    graph = full_video_generation_graph(chat=blank, image=blank, video=blank, music=music)
+    nodes = {node["id"]: node for node in graph["nodes"]}
+    data = {(edge["source"], edge["source_output"], edge["target"], edge["target_input"])
+            for edge in graph["edges"] if edge.get("kind") == "data"}
+    assert ("video_project", "sequence_id", "bgm_lay", "sequence_id") in data
+    assert ("bgm_backing", "background_asset_id", "bgm_lay", "asset_id") in data
+    assert "{{creative_brief.json.title}}" in nodes["bgm_music"]["config"]["prompt"]
+    control = [(edge["source"], edge["target"]) for edge in graph["edges"] if edge.get("kind") != "data"]
+    assert ("creative_brief", "bgm_music") in control, "简报一定下就开始生成,和逐镜出片同时跑"
+    assert ("narration_subtitles", "bgm_lay") in control
+    assert [source for source, target in control if target == "export_final"] == ["bgm_lay"], "导出只在铺好配乐之后"
+
+    without = full_video_generation_graph(chat=blank, image=blank, video=blank)
+    assert not {"bgm_music", "bgm_lay", "bgm_backing"} & {node["id"] for node in without["nodes"]}
 
 
 @pytest.mark.parametrize("presenter", [False, True])

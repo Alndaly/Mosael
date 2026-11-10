@@ -136,7 +136,12 @@ def _shot_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -
         "story_beat": {"type": "string", "description": "该镜头推进叙事的唯一任务"},
         "narration": {
             "type": "string",
-            "description": f"该时间段的口播或对白，念出来不超过 {clip} 秒；无则写空字符串",
+            "description": f"该时间段的口播或对白，只写一个人说的话，念出来不超过 {clip} 秒；无则写空字符串",
+        },
+        #: 谁说这句:按名字到资产库里找这个角色,它带着音色就用它的嗓子念(见 templates_full_video 的逐镜循环)。
+        "speaker": {
+            "type": "string",
+            "description": "说这句 narration 的角色：视觉圣经里这个角色的 name，一字不差；旁白或没有人说话写空字符串",
         },
         "location_id": {"type": "string", "description": "视觉圣经里的场景 id"},
         "characters": {"type": "array", "items": {"type": "string"}, "description": "这一镜出镜的角色 id"},

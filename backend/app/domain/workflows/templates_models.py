@@ -249,7 +249,7 @@ def music_caption_key(capabilities: dict[str, Any] | None) -> str:
 def music_may_sing(capabilities: dict[str, Any] | None) -> bool:
     """这个音乐模型交回来的可能带人声:曲子写在 `caption` 里的那类工作流(MiniMax Music / ACE-Step)。真跑时
     MiniMax Music 3 的歌词写成空、`[Inst]`、`[Instrumental]`、`[Intro][Inst][Outro]` 五种,拆出来人声那一轨都不小 ——
-    写法管不住它,配乐要先拆掉人声再铺(见 templates_business._with_background_music)。有「纯器乐」开关的服务不算。"""
+    写法管不住它,配乐要先拆掉人声再铺(见 templates_music)。有「纯器乐」开关的服务不算。"""
     caps = capabilities or {}
     return bool(music_caption_key(caps)) and "instrumental" not in set(caps.get("parameter_keys") or ())
 

@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "从主题到完整视频",
-  "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话和逐镜配音——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
-  "graph_hash": "493660582563c9f5ed9faa99afe6ad53027fcf5b898bd9590a26757d8e238e05",
+  "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。台词按分镜写的说话人配音：角色在资产库里带着音色就用它的嗓子，旁白和没带音色的角色用开始节点的那一把；有能出音乐的模型时再生成一首配乐，垫在对白底下。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话、逐镜配音和一首配乐——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
+  "graph_hash": "1ec49ca2d4b1215ce724a73a99b71f139d66ada707204b5a349bce9b7875cd19",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 16,
+      "template_version": 17,
       "source": "official"
     },
     "nodes": [
@@ -704,7 +704,7 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n{{start.shot_seconds}} 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 {{start.shot_seconds}} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 {{start.shot_seconds}} 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
+          "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n{{start.shot_seconds}} 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 {{start.shot_seconds}} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。narration 可以是旁白，也可以是某个角色的台词：**一镜只写一个人说的话**，speaker 写说话的\n角色在视觉圣经里的 name(一字不差，配音按它找这个角色的嗓子)，旁白写空字符串；两人对话就拆成几镜，一镜一句(正反打)。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 {{start.shot_seconds}} 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。",
           "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 {{start.shot_seconds}} 秒。镜头数 = 目标时长 ÷ {{start.shot_seconds}} 向上取整，\n但**最多 {{start.max_shots}} 镜**；两者冲突时以上限为准，把成片做短一点，\n**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 {{start.shot_seconds}} 秒。时间码从 0 开始连续编号。",
           "response_format": "json_schema",
           "json_schema_name": "professional_timed_storyboard",
@@ -751,7 +751,11 @@
                     },
                     "narration": {
                       "type": "string",
-                      "description": "该时间段的口播或对白，念出来不超过 {{start.shot_seconds}} 秒；无则写空字符串"
+                      "description": "该时间段的口播或对白，只写一个人说的话，念出来不超过 {{start.shot_seconds}} 秒；无则写空字符串"
+                    },
+                    "speaker": {
+                      "type": "string",
+                      "description": "说这句 narration 的角色：视觉圣经里这个角色的 name，一字不差；旁白或没有人说话写空字符串"
                     },
                     "location_id": {
                       "type": "string",
@@ -861,6 +865,7 @@
                     "duration_seconds",
                     "story_beat",
                     "narration",
+                    "speaker",
                     "location_id",
                     "characters",
                     "blocking",
@@ -1429,24 +1434,11 @@
                 ]
               },
               {
-                "id": "has_voice",
-                "type": "condition",
-                "name": "选了配音音色吗",
-                "position": {
-                  "x": 80,
-                  "y": 420
-                },
-                "config": {
-                  "left": "{{input.voice_id}}",
-                  "op": "not_empty"
-                }
-              },
-              {
                 "id": "has_narration",
                 "type": "condition",
-                "name": "这一镜有口播吗",
+                "name": "这一镜有人说话吗",
                 "position": {
-                  "x": 390,
+                  "x": 80,
                   "y": 420
                 },
                 "config": {
@@ -1455,12 +1447,86 @@
                 }
               },
               {
-                "id": "narrate",
-                "type": "synthesize_speech",
-                "name": "合成该镜口播",
+                "id": "has_speaker",
+                "type": "condition",
+                "name": "是角色在说吗",
+                "position": {
+                  "x": 390,
+                  "y": 420
+                },
+                "config": {
+                  "left": "{{loop.item.speaker}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "find_speaker",
+                "type": "entity_get",
+                "name": "在资产库里找说话的角色",
                 "position": {
                   "x": 700,
                   "y": 420
+                },
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.speaker}}",
+                  "limit": 1
+                }
+              },
+              {
+                "id": "speaker_has_voice",
+                "type": "condition",
+                "name": "这个角色带着音色吗",
+                "position": {
+                  "x": 1010,
+                  "y": 420
+                },
+                "config": {
+                  "left": "",
+                  "op": "not_empty"
+                },
+                "inputs": [
+                  "left"
+                ]
+              },
+              {
+                "id": "speak_as_character",
+                "type": "synthesize_speech",
+                "name": "用这个角色的嗓子念",
+                "position": {
+                  "x": 1320,
+                  "y": 420
+                },
+                "config": {
+                  "text": "{{loop.item.narration}}",
+                  "engine": "",
+                  "voice": ""
+                },
+                "inputs": [
+                  "engine",
+                  "voice"
+                ]
+              },
+              {
+                "id": "has_voice",
+                "type": "condition",
+                "name": "选了配音音色吗",
+                "position": {
+                  "x": 1320,
+                  "y": 580
+                },
+                "config": {
+                  "left": "{{input.voice_id}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "narrate",
+                "type": "synthesize_speech",
+                "name": "用旁白的嗓子念",
+                "position": {
+                  "x": 1630,
+                  "y": 580
                 },
                 "config": {
                   "text": "{{loop.item.narration}}",
@@ -1508,14 +1574,38 @@
                 "target": "organize_clip"
               },
               {
-                "id": "shot_voice_gate_narration",
-                "source": "has_voice",
-                "target": "has_narration",
+                "id": "shot_narration_speaker",
+                "source": "has_narration",
+                "target": "has_speaker",
                 "source_handle": "true"
               },
               {
-                "id": "shot_narration_speak",
+                "id": "shot_speaker_find",
+                "source": "has_speaker",
+                "target": "find_speaker",
+                "source_handle": "true"
+              },
+              {
+                "id": "shot_narration_voice_gate",
                 "source": "has_narration",
+                "target": "speaker_has_voice",
+                "source_handle": "true"
+              },
+              {
+                "id": "shot_character_speak",
+                "source": "speaker_has_voice",
+                "target": "speak_as_character",
+                "source_handle": "true"
+              },
+              {
+                "id": "shot_fallback_voice",
+                "source": "speaker_has_voice",
+                "target": "has_voice",
+                "source_handle": "false"
+              },
+              {
+                "id": "shot_narrator_speak",
+                "source": "has_voice",
                 "target": "narrate",
                 "source_handle": "true"
               },
@@ -1526,6 +1616,30 @@
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_ids"
+              },
+              {
+                "id": "d-find_speaker-voice_id-speaker_has_voice-left",
+                "source": "find_speaker",
+                "target": "speaker_has_voice",
+                "kind": "data",
+                "source_output": "voice_id",
+                "target_input": "left"
+              },
+              {
+                "id": "d-find_speaker-voice_engine-speak_as_character-engine",
+                "source": "find_speaker",
+                "target": "speak_as_character",
+                "kind": "data",
+                "source_output": "voice_engine",
+                "target_input": "engine"
+              },
+              {
+                "id": "d-find_speaker-voice_id-speak_as_character-voice",
+                "source": "find_speaker",
+                "target": "speak_as_character",
+                "kind": "data",
+                "source_output": "voice_id",
+                "target_input": "voice"
               }
             ]
           },
@@ -1577,7 +1691,7 @@
                   "y": 140
                 },
                 "config": {
-                  "left": "{{loop.item.narrate.asset_id}}",
+                  "left": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}",
                   "op": "not_empty"
                 }
               },
@@ -1591,7 +1705,7 @@
                 },
                 "config": {
                   "sequence_id": "{{input.sequence_id}}",
-                  "asset_id": "{{loop.item.narrate.asset_id}}",
+                  "asset_id": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}",
                   "track_id": "{{input.audio_track_id}}",
                   "at": "",
                   "max_duration": ""

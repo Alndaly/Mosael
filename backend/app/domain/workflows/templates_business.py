@@ -23,7 +23,8 @@ from sqlalchemy.orm import Session
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import ModelChoice, model_capabilities, image_plan_for, music_request, video_plan_for
+from app.domain.workflows.templates_models import ModelChoice, model_capabilities, image_plan_for, video_plan_for
+from app.domain.workflows.templates_music import BackgroundMusic, MusicSlot, add_background_music
 from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
@@ -1044,7 +1045,7 @@ def _pitch_voice(voice_id: str) -> tuple[str, str]:
 
 def product_pitch_short_graph(
     *, chat: Any, image: Any, video: Any = None, motion: bool | None = None, voice_id: str = "",
-    music: ModelChoice | None = None, strip_vocals: bool = False, presenter: bool = False, db: Session | None = None,
+    music: BackgroundMusic | None = None, presenter: bool = False, db: Session | None = None,
     locale: str | None = None,
 ) -> dict[str, Any]:
     """商品图 + 几条卖点 → 分拍口播脚本 → 每拍出一张画面、配一段画外音 → 组装 → 字幕 → 导出。
@@ -1347,7 +1348,7 @@ def product_pitch_short_graph(
             {"id": "export_notice", "source": "export_short", "target": "done_notice"},
             {"id": "notice_output", "source": "done_notice", "target": "output"},
         ]
-        _with_background_music(nodes, edges, music, db, strip_vocals=strip_vocals)
+        add_background_music(nodes, edges, music, PITCH_MUSIC_SLOT, db)
         return normalize_graph(
             {
                 #: v4:没有能用的克隆音色时用免费的 Edge 音色念(此前那一格空着,运行前拦住、跑不了)。
@@ -1356,7 +1357,7 @@ def product_pitch_short_graph(
                 #: v7:动起来那一步关掉视频自己的声音(铺上去本来就静音,有声的贵,见 _vertical_clip 的 silent);
                 #:     拍数按目标时长卡住(fit_beats 的 max_total_seconds,模型多写的从中间去掉)。
                 #: v8:画面和动起来那一步写上「目标画幅 9:16」(ADR 0094)。
-                #: v9:有能从文字出音乐的模型时生成一首配乐,铺在旁白底下(见 _with_background_music)。
+                #: v9:有能从文字出音乐的模型时生成一首配乐,铺在旁白底下(见 templates_music)。
                 #: v10:字幕铺念出来的画外音(按它的落点),不再铺脚本另写的屏幕短句。
                 "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 10, "source": "official"},
                 "nodes": nodes,
@@ -1364,7 +1365,7 @@ def product_pitch_short_graph(
             },
             node_types=NODE_TYPES,
         )
-    return _with_presenter(nodes, text, music=music, strip_vocals=strip_vocals, db=db)
+    return _with_presenter(nodes, text, music=music, db=db)
 
 
 # --------------------------------------------------------------------------------------
@@ -1773,70 +1774,15 @@ PITCH_MUSIC_PROMPT = (
     "aimed at {{start.audience}}. Light, modern and upbeat with a steady rhythm; clean mix; no vocals, "
     "no lyrics; leaves room for a voice-over."
 )
-
-
-def _with_background_music(
-    nodes: list[dict[str, Any]], edges: list[dict[str, Any]], music: ModelChoice | None, db: Session | None,
-    *, strip_vocals: bool = False,
-) -> None:
-    """带货口播的成片配乐(维护者:「背景音乐也没了」—— 每一拍的视频静音、只剩旁白):有音乐模型时,脚本写好就
-    生成一首(和逐拍出图同时跑),内容和字幕都铺好之后、导出之前铺上去(sequences.background_music:从头铺到末尾、
-    整体压低、有旁白时再压低、淡入淡出)。没有音乐模型就什么都不加 —— 和「动起来」同一个挑法,不让整条模板用不了。
-    官网导出的那份不带这两步(模型是空的,导入的人得先删掉它们才跑得起来)。
-
-    `strip_vocals`:这个模型交回来的可能带人声(见 templates_models.music_may_sing),生成之后先拆掉人声、只铺伴奏 ——
-    写法管不住它会不会唱,拆一遍管得住。"""
-    if music is None or not music.model:
-        return
-    #: 纯器乐、照描述写、一分钟以内(带货短片不超过一分钟,比成片长的部分铺的时候截掉)。曲子写在哪、歌词怎么空着,
-    #: 见 music_request。
-    prompt, parameters = music_request(model_capabilities(db, music, "audio"), PITCH_MUSIC_PROMPT, seconds=PITCH_MUSIC_SECONDS)
-    nodes.extend([
-        {
-            "id": "bgm_music",
-            "type": "ai_generate",
-            "name": {"zh": "生成一首配乐", "en": "Generate the background music"},
-            "position": {"x": 900, "y": -160},
-            "config": {
-                "provider": music.provider, "provider_profile_id": music.profile_id, "model": music.model,
-                "kind": "audio", "prompt": prompt,
-                "parameters": parameters,
-            },
-        },
-        {
-            "id": "bgm_lay",
-            "type": "timeline_background_music",
-            "name": {"zh": "铺上配乐", "en": "Lay the background music"},
-            "position": {"x": 1610, "y": -160},
-            "config": {"sequence_id": "{{pitch_project.sequence_id}}",
-                       "asset_id": "{{bgm_backing.background_asset_id}}" if strip_vocals else "{{bgm_music.asset_id}}"},
-        },
-    ])
-    if strip_vocals:
-        nodes.append({
-            "id": "bgm_backing",
-            "type": "separate_audio",
-            "name": {"zh": "配乐只留伴奏", "en": "Keep only the music's backing"},
-            "position": {"x": 1250, "y": -160},
-            "config": {"asset_id": "{{bgm_music.asset_id}}"},
-        })
-    #: 原来接到导出的那一步改成先接配乐、再导出:配乐按「内容铺好那一刻」的末尾截。
-    into_export = next(edge for edge in edges if edge["target"] == "export_short")
-    edges.remove(into_export)
-    music_ready = "bgm_backing" if strip_vocals else "bgm_music"
-    if strip_vocals:
-        edges.append({"id": "music_backing", "source": "bgm_music", "target": "bgm_backing"})
-    edges.extend([
-        {"id": "script_music", "source": "pitch_script", "target": "bgm_music"},
-        {"id": "music_lay", "source": music_ready, "target": "bgm_lay"},
-        {"id": "content_lay", "source": into_export["source"], "target": "bgm_lay"},
-        {"id": "lay_export", "source": "bgm_lay", "target": "export_short"},
-    ])
+#: 带货口播的配乐接在哪:脚本写好就开始生成(和逐拍出图同时跑),字幕铺好之后、导出之前铺上去。
+PITCH_MUSIC_SLOT = MusicSlot(
+    description=PITCH_MUSIC_PROMPT, seconds=PITCH_MUSIC_SECONDS, sequence_id="{{pitch_project.sequence_id}}",
+    starts_after="pitch_script", export_node="export_short", origin=(900, -160),
+)
 
 
 def _with_presenter(
-    nodes: list[dict[str, Any]], text: Any, *, music: ModelChoice | None = None, strip_vocals: bool = False,
-    db: Session | None = None,
+    nodes: list[dict[str, Any]], text: Any, *, music: BackgroundMusic | None = None, db: Session | None = None,
 ) -> dict[str, Any]:
     """带货口播换成「数字人出镜」(见 product_pitch_short_graph 的 `presenter`):加一个挑主播的节点、开场和收尾两段
     出镜说话;逐拍的循环体已经按主播的嗓子配好(见 _beat_body)。
@@ -2022,7 +1968,7 @@ def _with_presenter(
         {"id": "export_notice", "source": "export_short", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
-    _with_background_music(kept, edges, music, db, strip_vocals=strip_vocals)
+    add_background_music(kept, edges, music, PITCH_MUSIC_SLOT, db)
     return normalize_graph(
         {
             #: v5:竖构图只说构图(此前「for a phone screen」让出图模型画出手机外框)。
