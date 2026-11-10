@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too. Where a video model is available, the beats in between move, as in the narrated short (the hook and call to action are already presenter video): one more paid video generation per beat, with about (target length minus hook and call to action) ÷ the start node's beat_seconds beats. This copy includes “Put this beat in motion”: the start node's beat_seconds is every beat's length, and the video model you pick has to make that length. Without a video model, open the per-beat loop on the canvas after importing, delete “Put this beat in motion”, “File this beat's clip” and “Mute this beat's clip”, then wire the output of “Paint this beat” into the asset of “Lay it down for this beat's length” — every beat then lays a still for beat_seconds. Or add the template from the in-app gallery: without a video model it is built with stills.",
-  "graph_hash": "6010151a8353ea3e1c621f738b5e50d3f3af1defbc215cc887dac7515ab819de",
+  "graph_hash": "d69883a67a62c2116e5d328506d6604c5c19c9b6327f103fa5c6659887423b18",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
-      "template_version": 8,
+      "template_version": 9,
       "source": "official"
     },
     "nodes": [

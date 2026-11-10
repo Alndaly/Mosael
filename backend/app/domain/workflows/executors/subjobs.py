@@ -63,6 +63,7 @@ from app.domain.generation.operations import (
 from app.domain.generation.origins import of_run_scope
 from app.domain.publish import option_specs, start_publish
 from app.domain.sequences import placement
+from app.domain.sequences.background_music import DEFAULT_FADE_IN, DEFAULT_FADE_OUT, lay_background_music
 from app.domain.sequences.append import asset_span, track_end, track_for_asset
 from app.domain.sequences.cutting import CutClipRanges, cut_clip_ranges
 from app.domain.sequences.fitting import TRACK_FOR_ASSET, fit_asset_on_track
@@ -993,6 +994,27 @@ def _fit_speed(span: float, max_duration: Any) -> float | None:
     #: **往上取**到三位小数:倍速往下取(四舍五入成 1.189)的话,放下之后比位置长出不到一毫秒,被当成「念不完」裁掉
     #: 尾巴、还发一条「加速到 1.5 倍仍放不下」的通知 —— 真跑时那一拍只要 1.19 倍。
     return min(MAX_FIT_SPEEDUP, math.ceil(span / limit * 1000 - 1e-9) / 1000)
+
+
+@register("timeline_background_music")
+def timeline_background_music(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """给时间线铺一首配乐:从头铺到现有内容的末尾、垫在旁白底下(见 sequences.background_music)。
+    放在「内容都铺好之后、导出之前」—— 它按那一刻的末尾截。"""
+
+    sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
+    asset = _asset_in(db, scope, str(config.get("asset_id", "")).strip())
+    gain = _seconds(config, "gain", "timeline_background_music")
+    fade_in = _seconds(config, "fade_in", "timeline_background_music")
+    fade_out = _seconds(config, "fade_out", "timeline_background_music")
+    actor = current_actor(db)
+    laid = _write_timeline(db, scope, sequence_id, lambda sequence: lay_background_music(
+        db, sequence, asset,
+        gain=None if gain is None else max(0.0, gain),
+        fade_in=DEFAULT_FADE_IN if fade_in is None else max(fade_in, 0.0),
+        fade_out=DEFAULT_FADE_OUT if fade_out is None else max(fade_out, 0.0),
+        actor_id=actor,
+    ))
+    return {"clip_id": laid.clip_id, "track_id": laid.track_id, "duration": laid.duration, "sequence_id": sequence_id}
 
 
 @register("timeline_add_track")

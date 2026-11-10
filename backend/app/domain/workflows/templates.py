@@ -72,6 +72,9 @@ from app.domain.workflows.templates_models import (
     SINGLE_REFERENCE,
     _chat_model,
     _continuation_video_model,
+    _music_model,
+    model_capabilities,
+    music_may_sing,
     _opening_video_model,
     _shot_video_model,
     _talking_video_model,
@@ -372,6 +375,9 @@ def built_in_template_graph(
             # 就每拍出一段视频,没有就和此前一样每拍一张静图。只交这一拍的画面一张,门槛是 1 张。
             video=_shot_video_model(db, user_id, references=SINGLE_REFERENCE),
             voice_id=_prefilled_voice_id(db, workspace_id),
+            #: 成片配乐:有能从文字出音乐的模型就生成一首、铺在旁白底下;没有就不加这几步(和「动起来」同一个挑法)。
+            #: 会唱的模型要先拆掉人声,本机没有分离引擎就不加 —— 半路失败比没有配乐更糟。
+            **_pitch_music(db, user_id, workspace_id),
             presenter=template_id == PRODUCT_PITCH_PRESENTER,
             db=db,
             locale=locale,
@@ -500,6 +506,17 @@ def _carry_picks(fresh: dict[str, Any], old: dict[str, Any]) -> None:
             if value in (None, "") and key not in bound and isinstance(kept, (str, int, float)) and kept != "" \
                     and "{{" not in str(kept):
                 config[key] = kept
+
+
+def _pitch_music(db: Session, user_id: str, workspace_id: str) -> dict[str, Any]:
+    """带货口播的配乐用哪个模型、要不要先拆掉人声(见 templates_models.music_may_sing)。"""
+    music = _music_model(db, user_id)
+    strip = music_may_sing(model_capabilities(db, music, "audio"))
+    #: 和 requirement_problem 同一条线:明说缺了才不加;还没探测过(unknown)照常加,真缺时那一步说清。
+    if music.model and strip and requirement_status(db, user_id=user_id, workspace_id=workspace_id,
+                                                     check=SEPARATION_ENGINE) == "missing":
+        return {"music": None, "strip_vocals": False}
+    return {"music": music, "strip_vocals": strip}
 
 
 def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:

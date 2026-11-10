@@ -156,6 +156,9 @@ _FIELD_LABELS = {
     "description": "wfField_description",
     "original_audio": "wfField_original_audio",
     "duration": "wfField_duration",
+    "gain": "wfField_gain",
+    "fade_in": "wfField_fade_in",
+    "fade_out": "wfField_fade_out",
     "dy": "wfField_dy",
     "end": "wfField_end",
     "engine": "wfField_engine",
@@ -946,6 +949,24 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         #: duration 是这一段在时间线上**实际**占几秒(timeline_end − timeline_start):素材比截取范围短时出点被夹到
         #: 素材末尾,比计划的短 —— 下游按它定旁白最长多久、字幕裁到哪,不按计划里写的秒数。
         "outputs": ["clip_id", "timeline_start", "timeline_end", "duration", "trimmed", "sequence_id"],
+    },
+    #: 铺一首配乐(sequences.background_music):一条「配乐」轨、从头铺到现有内容末尾、按出点截不加速、
+    #: 整体压低 + 闪避 + 淡入淡出。再铺一次换掉原来那首。放在内容铺好之后、导出之前。
+    "timeline_background_music": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_timeline_background_music",
+        "description": "wfNode_timeline_background_music_desc",
+        "config": {
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences",
+                            "description": "wfNode_timeline_background_music_sequence_id"},
+            "asset_id": {"type": "template", "required": True, "description": "wfNode_timeline_background_music_asset_id"},
+            "gain": {"advanced": True, "type": "number", "description": "wfNode_timeline_background_music_gain"},
+            "fade_in": {"advanced": True, "type": "number", "description": "wfNode_timeline_background_music_fade_in"},
+            "fade_out": {"advanced": True, "type": "number", "description": "wfNode_timeline_background_music_fade_out"},
+        },
+        "outputs": ["clip_id", "track_id", "duration", "sequence_id"],
     },
     "timeline_add_track": {
         "external": False,

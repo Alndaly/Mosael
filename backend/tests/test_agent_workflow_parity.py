@@ -33,6 +33,8 @@ NODE_TO_TOOL: dict[str, str] = {
     # 而智能体不需要这层 —— 它本来就是在写那条操作。都由 edit_timeline 承担。
     "timeline_append": "edit_timeline",
     "timeline_add_track": "edit_timeline",
+    #: 铺配乐 = 加一条音轨、插一段、设音量 / 淡变 / 闪避,智能体用 edit_timeline 的这几条操作就写得出来。
+    "timeline_background_music": "edit_timeline",
     "timeline_clear": "edit_timeline",
     "timeline_cut_ranges": "edit_timeline",
     # 同上:一条字幕就是一段文本片段(edit_timeline 的 insert_text_clip)。画布上"按逐字稿

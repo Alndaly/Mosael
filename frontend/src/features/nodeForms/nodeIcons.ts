@@ -172,6 +172,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   // 一排本该成套的节点里三个顶着"T",看起来像它们不是同一类东西。
   timeline_append: ListPlus,
   timeline_add_track: Rows3,
+  timeline_background_music: AudioLines,
   timeline_clear: Eraser,
   edit_timeline: SlidersHorizontal,
   generate_subtitles: Captions,

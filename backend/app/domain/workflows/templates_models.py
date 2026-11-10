@@ -225,6 +225,75 @@ def _talking_video_model(db: Session, user_id: str, *, continuing: bool) -> Mode
     return _pick(db, user_id, "video", usable)
 
 
+#: 明说自己出音乐的模式(内置的音乐服务)。
+_MUSIC_MODES = frozenset({"text-to-music", "text-to-bgm"})
+
+
+#: 歌词那一格写什么表示「纯器乐」(MiniMax Music / ACE-Step 的段落标记写法)。
+INSTRUMENTAL_LYRICS = "[Instrumental]"
+
+
+def _music_key(capabilities: dict[str, Any] | None, name: str) -> str:
+    """音乐工作流里名字就叫 `name` 的那一格(`1.caption`、`44.lyrics`、`44.max_duration`)—— 和画幅按 `aspect_ratio`
+    认是同一个约定:按节点输入的名字认,不猜。没有返回空串。"""
+    caps = capabilities or {}
+    keys = list((caps.get("parameter_schema") or {}).keys()) + list(caps.get("parameter_keys") or ())
+    return next((key for key in keys if isinstance(key, str) and key.split(".")[-1] == name), "")
+
+
+def music_caption_key(capabilities: dict[str, Any] | None) -> str:
+    """写「这首曲子什么样」的那一格(`caption`)。"""
+    return _music_key(capabilities, "caption")
+
+
+def music_may_sing(capabilities: dict[str, Any] | None) -> bool:
+    """这个音乐模型交回来的可能带人声:曲子写在 `caption` 里的那类工作流(MiniMax Music / ACE-Step)。真跑时
+    MiniMax Music 3 的歌词写成空、`[Inst]`、`[Instrumental]`、`[Intro][Inst][Outro]` 五种,拆出来人声那一轨都不小 ——
+    写法管不住它,配乐要先拆掉人声再铺(见 templates_business._with_background_music)。有「纯器乐」开关的服务不算。"""
+    caps = capabilities or {}
+    return bool(music_caption_key(caps)) and "instrumental" not in set(caps.get("parameter_keys") or ())
+
+
+def music_request(capabilities: dict[str, Any] | None, description: str, *, seconds: int) -> tuple[str, dict[str, Any]]:
+    """要一首 `seconds` 秒左右、纯器乐、照 `description` 写的配乐:交回(提示词, 参数)。
+
+    ComfyUI 的音乐工作流(MiniMax Music / ACE-Step)把曲子写在 `caption`、歌词写在 `lyrics`,而表单版的「提示词」
+    常常接的是**歌词** —— 真跑时配乐描述写进提示词,会被当歌词唱出来,caption 还是默认的「女声抒情歌」;完整工作流
+    的歌词默认是一段示例说唱、时长默认 240 秒。所以有 caption 的:描述写 caption、提示词留空、`lyrics` 写纯器乐、
+    `max_duration` 写成要的秒数。没有 caption 的(内置音乐服务)走提示词,有「纯器乐」开关就打开。"""
+    caption = music_caption_key(capabilities)
+    parameters: dict[str, Any] = {}
+    if caption:
+        parameters[caption] = description
+        if lyrics := _music_key(capabilities, "lyrics"):
+            parameters[lyrics] = INSTRUMENTAL_LYRICS
+        if duration := _music_key(capabilities, "max_duration"):
+            parameters[duration] = seconds
+    if "instrumental" in set((capabilities or {}).get("parameter_keys") or ()):
+        parameters["instrumental"] = True
+    return ("" if caption else description), parameters
+
+
+def _music_model(db: Session, user_id: str) -> ModelChoice:
+    """成片配乐用哪个模型(见 sequences.background_music):明说出音乐的优先;没有时退一步,挑「从文字出音频」且
+    写得进曲子描述的 —— ComfyUI 的音乐工作流都报成 text-to-audio(插件的缺省模式),描述写进它的 `caption` 输入
+    (见 music_caption_key),没有 caption 的才走提示词。一个都没有就留空,模板不加配乐那两步。"""
+
+    def modes(db_: Session | None, choice: ModelChoice) -> tuple[set[str], dict[str, Any]]:
+        caps = model_capabilities(db_, choice, "audio") or {}
+        return set(caps.get("modes") or ()), caps
+
+    def says_music(db_: Session | None, choice: ModelChoice) -> bool:
+        return bool(modes(db_, choice)[0] & _MUSIC_MODES)
+
+    def takes_a_prompt(db_: Session | None, choice: ModelChoice) -> bool:
+        found, caps = modes(db_, choice)
+        return "text-to-audio" in found and (bool(music_caption_key(caps)) or caps.get("prompt") not in (None, "none"))
+
+    music = _pick(db, user_id, "audio", says_music)
+    return music if music.model else _pick(db, user_id, "audio", takes_a_prompt)
+
+
 def _parameter_keys(db: Session | None, choice: ModelChoice) -> list[str]:
     return list((model_capabilities(db, choice, "video") or {}).get("parameter_keys") or ())
 

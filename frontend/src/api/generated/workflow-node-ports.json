@@ -4781,6 +4781,70 @@
     }
   },
   {
+    "type": "timeline_background_music",
+    "config": {
+      "sequence_id": {
+        "type": "template",
+        "label": {
+          "zh": "时间线",
+          "en": "Timeline"
+        }
+      },
+      "asset_id": {
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "gain": {
+        "type": "number",
+        "label": {
+          "zh": "音量",
+          "en": "Volume"
+        }
+      },
+      "fade_in": {
+        "type": "number",
+        "label": {
+          "zh": "淡入",
+          "en": "Fade in"
+        }
+      },
+      "fade_out": {
+        "type": "number",
+        "label": {
+          "zh": "淡出",
+          "en": "Fade out"
+        }
+      }
+    },
+    "outputs": [
+      "clip_id",
+      "track_id",
+      "duration",
+      "sequence_id"
+    ],
+    "output_labels": {
+      "clip_id": {
+        "zh": "片段",
+        "en": "Clip"
+      },
+      "track_id": {
+        "zh": "轨道",
+        "en": "Track"
+      },
+      "duration": {
+        "zh": "时长",
+        "en": "Duration"
+      },
+      "sequence_id": {
+        "zh": "时间线",
+        "en": "Timeline"
+      }
+    }
+  },
+  {
     "type": "timeline_clear",
     "config": {
       "sequence_id": {

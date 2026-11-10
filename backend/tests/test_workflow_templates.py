@@ -814,7 +814,7 @@ def test_带货口播_动起来_第七版关掉视频自己的声音_两条卡�
     from app.domain.workflows.templates import current_template_versions
 
     versions = current_template_versions()
-    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 8
+    assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 9
     for template_id in ("product_pitch_short", "product_pitch_presenter"):
         card = next(one for one in TEMPLATE_CATALOG if one["id"] == template_id)
         video = next(one for one in card["requires"] if one["check"] == "reference_video_model")
@@ -1136,7 +1136,7 @@ class Test旧版模板建的图:
         response = client.post(f"/api/workflows/{old['id']}/rebuild-from-template")
         assert response.status_code == 200, response.text
         rebuilt = response.json()["graph"]
-        assert rebuilt["meta"]["template_version"] == 8
+        assert rebuilt["meta"]["template_version"] == 9
         assert {"beat_clip", "file_clip", "mute_clip"} <= set(_beats_body(rebuilt))
         assert _beats_body(rebuilt)["beat_clip"]["config"]["parameters"]["generate_audio"] is False, "按新版重建的也不出声"
         params = _node(rebuilt, "start")["config"]["params"]
@@ -1152,3 +1152,68 @@ class Test旧版模板建的图:
         mine = client.post("/api/workflows", json={"workspace_id": workspace, "name": "自己搭的",
                                                     "graph": {"nodes": [], "edges": []}}).json()
         assert client.post(f"/api/workflows/{mine['id']}/rebuild-from-template").status_code == 422
+
+
+@pytest.mark.parametrize("presenter", [False, True])
+def test_带货口播_有音乐模型时铺一首配乐_没有就不加(presenter: bool) -> None:
+    """成片只剩旁白(每一拍的视频静音),维护者说「背景音乐也没了」:有音乐模型时脚本写好就生成一首,
+    内容和字幕都铺好之后、导出之前铺上去;没有音乐模型这两步一步都不加。"""
+    from app.domain.workflows.templates_business import product_pitch_short_graph
+    from app.domain.workflows.templates_models import ModelChoice
+
+    blank = ModelChoice()
+    music = ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax-music.json#e2gn2t")
+    with_music = product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="",
+                                           music=music, presenter=presenter)
+    nodes = {node["id"]: node for node in with_music["nodes"]}
+    assert nodes["bgm_music"]["config"]["kind"] == "audio" and nodes["bgm_music"]["config"]["model"] == music.model
+    assert nodes["bgm_lay"]["type"] == "timeline_background_music"
+    data = {(edge["source"], edge["source_output"], edge["target"], edge["target_input"])
+            for edge in with_music["edges"] if edge.get("kind") == "data"}
+    assert ("bgm_music", "asset_id", "bgm_lay", "asset_id") in data, "铺的是刚生成的那一首(纯引用规整成数据边)"
+    control = [(edge["source"], edge["target"]) for edge in with_music["edges"] if edge.get("kind") != "data"]
+    assert ("pitch_script", "bgm_music") in control, "脚本写好就开始生成,和逐拍同时跑"
+    assert ("bgm_lay", "export_short") in control
+    assert [source for source, target in control if target == "export_short"] == ["bgm_lay"], "导出只在铺好配乐之后"
+    assert validate_graph(with_run_params(with_music, {"product_name": "衬衫", "selling_points": "透气"}),
+                          require_config=False) == []
+
+    without = product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="", presenter=presenter)
+    assert not {"bgm_music", "bgm_lay"} & {node["id"] for node in without["nodes"]}
+
+
+def test_音乐工作流的曲子描述写进_caption_歌词写纯器乐_时长按要的写() -> None:
+    """真跑时 MiniMax Music 表单版的「提示词」接的是 Lyrics:配乐描述写进提示词会被唱出来,caption 还是默认的
+    「女声抒情歌」;完整工作流的歌词默认是一段示例说唱、时长 240 秒。按名字认(和 aspect_ratio 同一个约定)。"""
+    from app.domain.workflows.templates_models import INSTRUMENTAL_LYRICS, music_request
+
+    full = {"parameter_keys": ["seed", "44.caption", "44.lyrics", "44.max_duration"],
+            "parameter_schema": {"44.caption": {}, "44.lyrics": {}, "44.max_duration": {}}}
+    assert music_request(full, "light pop", seconds=60) == (
+        "", {"44.caption": "light pop", "44.lyrics": INSTRUMENTAL_LYRICS, "44.max_duration": 60})
+    form = {"parameter_keys": ["1.caption"], "parameter_schema": {"1.caption": {}}, "prompt": "optional"}
+    assert music_request(form, "light pop", seconds=60) == ("", {"1.caption": "light pop"}), "提示词接的是歌词,留空"
+    service = {"parameter_keys": ["instrumental", "lyrics"], "modes": ["text-to-music"]}
+    assert music_request(service, "light pop", seconds=60) == ("light pop", {"instrumental": True})
+    assert music_request(None, "light pop", seconds=60) == ("light pop", {})
+
+
+def test_会唱的音乐模型_先拆掉人声再铺伴奏() -> None:
+    """真跑时 MiniMax Music 3 的歌词写成空 / [Inst] / [Instrumental] / 段落标记,拆出来人声那一轨都不小:写法管不住,
+    生成之后先拆一遍人声,铺的是伴奏那一轨。"""
+    from app.domain.workflows.templates_business import product_pitch_short_graph
+    from app.domain.workflows.templates_models import ModelChoice, music_may_sing
+
+    assert music_may_sing({"parameter_keys": ["44.caption", "44.lyrics"]})
+    assert not music_may_sing({"parameter_keys": ["instrumental", "lyrics"], "modes": ["text-to-music"]})
+
+    blank = ModelChoice()
+    music = ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax+music3.json")
+    graph = product_pitch_short_graph(chat=blank, image=blank, video=blank, motion=True, voice_id="",
+                                      music=music, strip_vocals=True)
+    nodes = {node["id"]: node for node in graph["nodes"]}
+    assert nodes["bgm_backing"]["type"] == "separate_audio"
+    control = [(edge["source"], edge["target"]) for edge in graph["edges"] if edge.get("kind") != "data"]
+    assert ("bgm_music", "bgm_backing") in control and ("bgm_backing", "bgm_lay") in control
+    data = {(edge["source"], edge["source_output"], edge["target"]) for edge in graph["edges"] if edge.get("kind") == "data"}
+    assert ("bgm_backing", "background_asset_id", "bgm_lay") in data, "铺的是伴奏,不是原曲"

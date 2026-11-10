@@ -350,6 +350,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This is the last video track; without it there is nowhere to put picture. Add another video track first.",
     },
     "seqErr_clipTooShort": {"zh": "片段要长于 {min} 秒", "en": "A clip must be longer than {min}s."},
+    "seqErr_musicNotAudio": {"zh": "配乐要是一份音频素材", "en": "The background music must be an audio asset."},
+    "seqErr_nothingToScore": {
+        "zh": "时间线上还没有内容,配乐不知道铺多长:先把画面或旁白铺上",
+        "en": "The timeline is empty, so there's nothing to set the music's length by. Lay the picture or narration first.",
+    },
     "seqErr_trackIndexRange": {
         "zh": "新轨的位置要在 0 到 {count} 之间(0 是最上面)",
         "en": "The new track's position must be between 0 and {count} (0 is the top).",
