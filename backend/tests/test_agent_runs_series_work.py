@@ -117,8 +117,8 @@ def test_中断的运行_智能体看得到停在哪_批准后从中断处接着
     with SessionLocal() as db:
         job = db.get(Job, run["id"])
         job.status, job.message = "failed", "已中断"
+        #: 开始节点不留落定记录(它交的是开始参数);中断时还没落定「写一句」。
         db.query(WorkflowRunStep).filter(WorkflowRunStep.job_id == job.id).delete()
-        db.add(WorkflowRunStep(job_id=job.id, scope="", node_id="start", outputs={"topic": "雨夜"}))
         db.commit()
 
     with mcp_server.calling_as(user_id=user_id(), requested_by="mcp"):

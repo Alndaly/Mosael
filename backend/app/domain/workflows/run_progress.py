@@ -34,23 +34,28 @@ def _descendants(db: Session, job_id: str) -> list[Job]:
     return found
 
 
-def _node_names(db: Session, job: Job) -> dict[str, str]:
-    """这次运行钉住的那一版图里,顶层节点 id → 名字(给人看的那个)。"""
+def _top_nodes(db: Session, job: Job) -> tuple[dict[str, str], set[str]]:
+    """这次运行钉住的那一版图里:顶层节点 id → 名字(给人看的那个),以及开始节点的 id(它交的是开始参数,
+    不留落定记录 —— 运行起来了它就算做完)。"""
     revision = db.get(WorkflowRevision, str((job.payload or {}).get("workflow_revision_id") or ""))
     names: dict[str, str] = {}
+    starts: set[str] = set()
     for node in ((revision.graph if revision else None) or {}).get("nodes") or []:
         name = node.get("name")
         if isinstance(name, dict):
             name = name.get("zh") or next(iter(name.values()), "")
-        names[str(node.get("id"))] = str(name or node.get("id"))
-    return names
+        node_id = str(node.get("id"))
+        names[node_id] = str(name or node_id)
+        if node.get("type") == "start":
+            starts.add(node_id)
+    return names, starts
 
 
 def run_progress(db: Session, job: Job) -> dict[str, Any]:
     """`job` 是一次工作流运行(`kind == "workflow"`)。交回:状态、进度、顶层做完了哪几步 / 还剩哪几步、
     子任务按种类和状态的计数、最近几条失败原因、花费。运行成功后落定记录会被清掉,这时「做完的步骤」就是全部。"""
-    names = _node_names(db, job)
-    done = [
+    names, starts = _top_nodes(db, job)
+    done = [node_id for node_id in names if node_id in starts and job.status != "queued"] + [
         row.node_id for row in db.scalars(
             select(WorkflowRunStep).where(WorkflowRunStep.job_id == job.id, WorkflowRunStep.scope == "",
                                           WorkflowRunStep.outputs.is_not(None))
