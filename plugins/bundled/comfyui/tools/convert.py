@@ -437,10 +437,16 @@ class _Converter:
             names += [one for one in defs if one not in names]
             for name in names:
                 definition = defs[name]
-                if name in marked or self._is_widget(definition):
+                dynamic = isinstance(definition, list) and bool(definition) and definition[0] == _V3_DYNAMIC
+                if name in marked or dynamic or self._is_widget(definition):
                     add(name, definition)
                     #: 这一格是模板时,紧跟它后面、以 `名字.` 开头的标记就是它这次展开出来的子输入。
-                    for sub in self._v3_children(marked, name):
+                    children = self._v3_children(marked, name)
+                    if dynamic and not children:
+                        #: 文件里没标(新版前端存的图不标):按 `widgets_values` 里这一格**选中的那一项**展开 ——
+                        #: 「Set Reference Multi Latent」的 resolution 选 resize 就多一格 megapixels(官方模板,真机)。
+                        children = self._dynamic_children(node, name, definition, found)
+                    for sub in children:
                         if sub not in seen:
                             add(sub, self._definition_of(node.type, sub))
             if section == "required":
@@ -453,6 +459,21 @@ class _Converter:
             if name not in seen:
                 add(name, None)
         return found
+
+    def _dynamic_children(self, node: _Node, base: str, definition: Any, found: list[tuple[str, Any, int]]) -> list[str]:
+        """动态下拉 `base` 这次选中的那一项展开出来的子输入(`base.子名`,按选项里声明的先后)。选中的是哪一项,
+        看 `widgets_values` 里排在它这一格的值(前面已经排好的格子各占 1 + 多占的格数);读不到就当没有子输入。"""
+        stored = node.raw.get("widgets_values")
+        if not isinstance(stored, list):
+            return []
+        index = sum(1 + extra for _name, _definition, extra in found) - 1
+        chosen = stored[index] if 0 <= index < len(stored) else None
+        for option in self._options(definition).get("options") or []:
+            if isinstance(option, dict) and option.get("key") == chosen:
+                inputs = option.get("inputs") or {}
+                names = [*(inputs.get("required") or {}), *(inputs.get("optional") or {})]
+                return [f"{base}.{one}" for one in names]
+        return []
 
     @staticmethod
     def _v3_children(marked: list[str], base: str) -> list[str]:

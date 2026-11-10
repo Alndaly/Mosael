@@ -63,29 +63,29 @@
       }
     },
     {
-      "file": "krea2_keyframe_character.json",
-      "role": "keyframe_from_character",
+      "file": "flux3_keyframe_scene_character.json",
+      "role": "keyframe_scene_character",
       "category": "image",
       "name": {
-        "zh": "Krea2 关键帧 · 人物三视图 + 文字",
-        "en": "Krea2 keyframe · character turnaround + text"
+        "zh": "FLUX.3 关键帧 · 人物三视图 + 场景图",
+        "en": "FLUX.3 keyframe · character turnaround + scene"
       },
       "description": {
-        "zh": "给一张人物三视图(自动只取正面那一格)和一段画面描述,画出同一个人在新场景、新机位里的一帧 —— 「从主题到完整视频」逐镜画首帧用它。",
-        "en": "Give a character turnaround (only its front view is used) and a description: draws the same person in a new scene and camera angle — what “Topic to finished video” uses for each shot's first frame."
+        "zh": "整张人物三视图和一张场景设定图一起参考,按文字画这个人在这个地方的一帧:长相服装、场景陈设都跟着参考图,景别、机位、动作跟着文字 —— 「从主题到完整视频」逐镜画首帧推荐用它。",
+        "en": "References a whole character turnaround and a location concept image at once, and draws that person in that place as the text describes: looks, outfit and set follow the references, shot size, camera and action follow the text — the recommended first-frame model for “Topic to finished video”."
       }
     },
     {
-      "file": "krea2_keyframe_scene_character.json",
-      "role": "place_character_in_scene",
+      "file": "moss_keyframe_scene_character.json",
+      "role": "keyframe_scene_character_moss",
       "category": "image",
       "name": {
-        "zh": "Krea2 · 把人物放进场景图",
-        "en": "Krea2 · place a character into a scene"
+        "zh": "MOSS-Image 关键帧 · 人物三视图 + 场景图",
+        "en": "MOSS-Image keyframe · character turnaround + scene"
       },
       "description": {
-        "zh": "一张场景图加一张人物三视图(只取正面),把这个人放进这张场景里;构图跟着场景图走,适合定场、换装后的同一机位。",
-        "en": "A scene image plus a character turnaround (front view only): puts the person into that scene; the framing follows the scene image — for establishing shots or the same camera set-up."
+        "zh": "同样的两张参考图交给 MOSS-Image 编辑 LoRA:只画一个人、机位跟得上文字;实测人物服装和场景的贴合不如 FLUX.3 那张,商用许可更宽(Apache 2.0)。",
+        "en": "The same two references through the MOSS-Image edit LoRA: one person, camera follows the text; measured looks and set fidelity are below the FLUX.3 one, with a more permissive licence (Apache 2.0)."
       }
     }
   ]

@@ -370,8 +370,8 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
-krea2_keyframe_character.json
-krea2_keyframe_scene_character.json
+flux3_keyframe_scene_character.json
+moss_keyframe_scene_character.json
 ```
 
 Each entry has a name and a one-line description. It first checks, without writing, which files already exist and which
@@ -510,21 +510,32 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
   every form to have a title.
 
 
-## Krea2 keyframe examples (1.25.0)
+## Keyframe examples: character turnaround + scene (1.26.0, replacing the two Krea2 ones of 1.25.0)
 
-Two image workflows join the official examples (free first frames for "Topic to finished video", no paid multi-reference
-model needed):
+A first frame for "Topic to finished video" has to reference the character **and** the location. Each 1.25.0 Krea2 example
+missed one: the single-image one used only the turnaround's front view (losing side and back), the two-image one kept the
+scene image's framing (a close-up still came out wide), and leaving the scene out lost the set. 1.26.0 hands over the **whole
+turnaround and the scene image together**:
 
-- `krea2_keyframe_character.json` "Krea2 keyframe · character turnaround + text": a character turnaround plus a description →
-  the same person in a new scene and camera angle. The turnaround is scaled to 1536×864 and only its left (front) third is
-  handed to Krea2 edit — given the whole sheet, the model draws the same person two or three times (measured). Scene and
-  camera come from the text, so each shot's size and angle follow the storyboard.
-- `krea2_keyframe_scene_character.json` "Krea2 · place a character into a scene": a scene image plus a turnaround (front only)
-  → the person in that scene. Krea2 edit keeps the scene image's framing — for establishing shots or one fixed set-up.
+- `flux3_keyframe_scene_character.json` "FLUX.3 keyframe · character turnaround + scene" (recommended): FLUX.3 Image Klein edit
+  (`Set Reference Multi Latent`, two references), 16 steps, cfg 1. Measured (5090, lantern shop + Shen Qinghe's turnaround):
+  one person, braid, jacket pattern, apron and the shop's props all match; a wide shot from the door kneeling at the altar and
+  an over-the-shoulder medium shot follow the text. Models: `flux3-image-klein-int8-convrot`, `qwen3vl_4b_int8_convrot`
+  (CLIP type flux3), `flux2-vae`.
+- `moss_keyframe_scene_character.json` "MOSS-Image keyframe · character turnaround + scene": MOSS-Image SFT + the edit LoRA
+  (`Text Encode MOSS-Image Edit`, edit_format Moss-Image-Edit), 30 steps, cfg 4. One person and the camera follows, but looks
+  and set fidelity are below FLUX.3; more permissive licence (Apache 2.0). Models: `moss_image_sft_int8_convrot`,
+  `qwen3.5_9b_w4a8_gptq` (CLIP type moss_image), `flux2-vae_small`, `moss_image_edit_lora_rank_64_bf16`. Needs ComfyUI 0.43+.
 
-Both use `krea2_turbo_int8_convrot`, `krea2_identity_edit_v1_2` (LoRA), `qwen3vl_4b_bf16` and `qwen_image_vae`; when a file
-sits in a subfolder, the workflow details offer to point at it. The front-view crop assumes a 16:9 "front · side · back"
-turnaround (what Mosael draws); an ordinary portrait only has its left third used.
+Both have exactly two reference slots ("character turnaround", "scene"); prompts need no `<ref_image_0>` tokens (measured:
+the model still tells the person from the place).
+
+## Dynamic combos expand by the chosen option (1.26.0)
+
+Graphs saved by the newer frontend do not mark a `COMFY_DYNAMICCOMBO_V3` (e.g. `Set Reference Multi Latent`'s `resolution`)
+as a widget in `node.inputs`. Only marked ones were read, so the input and its sub-inputs went missing and ComfyUI answered
+"execute() missing 1 required positional argument" (even for the official template). Dynamic combos are now always widgets,
+and their sub-inputs expand from the option chosen in `widgets_values`.
 
 ## Fixes (1.21.4)
 

@@ -316,6 +316,33 @@ def test_动态下拉展开出来的子输入_读值时就排在模板那一格�
         "模板之后的那三格拿的是自己的值"
 
 
+def test_文件里没标的动态下拉_也按选中的那一项展开子输入(plugin, comfy) -> None:
+    """真机(2026-11-10,ComfyUI 0.44 官方模板 image_flux3_klein_distilled_image_edit):「Set Reference Multi Latent」的
+    `resolution` 是 COMFY_DYNAMICCOMBO_V3,新版前端存的图里它**不在 node.inputs 里标 widget**,`widgets_values` 是
+    `["resize", 1]`。此前只认标了的模板,这一格整个漏掉,ComfyUI 回「execute() missing 1 required positional argument:
+    'resolution'」。没标的动态下拉照样是一格 widget,子输入按选中那一项的声明展开。"""
+    comfy.state.object_info["ReferenceMultiLatent"] = {"input": {
+        "required": {"positive": ["CONDITIONING", {}],
+                     "resolution": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+                         {"key": "keep resolution", "inputs": {"required": {}}},
+                         {"key": "resize", "inputs": {"required": {"megapixels": ["FLOAT", {"default": 1.0}]}}}]}]},
+        "optional": {"vae": ["VAE", {}]}}, "output": ["CONDITIONING"]}
+    comfy.state.object_info["Cond"] = {"input": {"required": {}}, "output": ["CONDITIONING"]}
+    ui = {"nodes": [
+        {"id": 1, "type": "Cond", "pos": [0, 0], "size": [100, 60], "flags": {}, "order": 0, "mode": 0,
+         "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [1]}], "widgets_values": []},
+        {"id": 17, "type": "ReferenceMultiLatent", "pos": [200, 0], "size": [200, 100], "flags": {}, "order": 1, "mode": 0,
+         "inputs": [{"name": "positive", "type": "CONDITIONING", "link": 1}],
+         "outputs": [{"name": "positive", "type": "CONDITIONING", "links": []}], "widgets_values": ["resize", 1.5]}],
+        "links": [[1, 1, 0, 17, 0, "CONDITIONING"]]}
+    _module, _Comfy, convert = plugin
+    inputs = convert.to_api(ui, comfy.state.object_info)["17"]["inputs"]
+    assert inputs["resolution"] == "resize" and inputs["resolution.megapixels"] == 1.5
+    ui["nodes"][1]["widgets_values"] = ["keep resolution"]
+    inputs = convert.to_api(ui, comfy.state.object_info)["17"]["inputs"]
+    assert inputs["resolution"] == "keep resolution" and "resolution.megapixels" not in inputs
+
+
 def test_缺节点的API格式_值和连线也留着(plugin, comfy) -> None:
     api = {"1": {"class_type": "CR Prompt Text", "inputs": {"prompt": "猫", "extra": 3}},
            "2": {"class_type": "CLIPTextEncode", "inputs": {"text": ["1", 0], "clip": ["3", 1]}},
@@ -499,14 +526,14 @@ def test_随插件的官方工作流范例_列出全部和缺项(plugin, comfy) 
 
     assert status["id"] == "official_comfyui_examples"
     assert status["folder"] == "mosael/examples"
-    #: H3 长片 / 数字人四张,Krea2 关键帧两张(1.25.0)。
+    #: H3 长片 / 数字人四张,人物三视图 + 场景图的关键帧两张(1.26.0)。
     assert [one["file"] for one in status["workflows"]] == [
         "minimax_h3_open.json", "minimax_h3_continue.json", "minimax_h3_talk_open.json", "minimax_h3_talk_continue.json",
-        "krea2_keyframe_character.json", "krea2_keyframe_scene_character.json",
+        "flux3_keyframe_scene_character.json", "moss_keyframe_scene_character.json",
     ]
     assert all(one["path"].startswith("mosael/examples/") and not one["installed"] for one in status["workflows"])
     assert all(one["file"] and one["description"] for one in status["workflows"])
-    #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG/Krea2 节点,所以每张都应报缺——这正是运行前要说的东西。
+    #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG/FLUX.3/MOSS 节点,所以每张都应报缺——这正是运行前要说的东西。
     assert all(one["missing_nodes"] for one in status["workflows"])
     assert all("problem" in one for one in status["workflows"])
 

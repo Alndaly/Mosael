@@ -282,8 +282,8 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
-krea2_keyframe_character.json
-krea2_keyframe_scene_character.json
+flux3_keyframe_scene_character.json
+moss_keyframe_scene_character.json
 ```
 
 每张都带名字和一句说明;先只读检查哪张已经存在、每张缺哪些节点和模型。卡片按 grid 排列,每张自己有一颗「安装」,
@@ -392,19 +392,28 @@ HTTP 404。
   「Mosael 里有几处在用它」,删表单之前说给作者听。
 - 没起标题的表单(上一版改写过来、当初没起的那张)主名叫「未命名表单」;编辑器要求每张表单都起标题。
 
-## Krea2 关键帧范例(1.25.0)
+## 关键帧范例:人物三视图 + 场景图(1.26.0,替换 1.25.0 的两张 Krea2)
 
-官方范例多两张出图工作流(「从主题到完整视频」免费画首帧用,不必再走付费的多参考图模型):
+「从主题到完整视频」逐镜画首帧要**同时**参考人物和场景。1.25.0 的两张 Krea2 各缺一样:单图版只截三视图的正面
+(侧面、背面的信息丢了),双图版保留场景图的构图(要特写也还是大全景)、不给场景图又对不上场景。1.26.0 换成两张
+**整张三视图 + 场景图**一起交的:
 
-- `krea2_keyframe_character.json`「Krea2 关键帧 · 人物三视图 + 文字」:一张人物三视图 + 一段画面描述 → 同一个人在新场景、
-  新机位里的一帧。三视图先缩到 1536×864、只截左边正面那一格再交给 Krea2 编辑(整张三视图交进去,模型会把同一个人画两三遍,
-  实测);场景和机位全由文字定,所以每镜的景别、角度跟得上分镜。
-- `krea2_keyframe_scene_character.json`「Krea2 · 把人物放进场景图」:场景图 + 人物三视图(同样只取正面)→ 人放进这张场景;
-  Krea2 编辑会保留场景图的构图,适合定场、同一机位。
+- `flux3_keyframe_scene_character.json`「FLUX.3 关键帧 · 人物三视图 + 场景图」(推荐):FLUX.3 Image Klein 编辑
+  (`Set Reference Multi Latent`,两张参考图),16 步、cfg 1。实测(5090,灯铺 + 沈青禾三视图):只画一个人,辫子、
+  短襦花纹、围裙和灯铺的陈设都对得上;门口全景跪供桌、过肩中景这些机位和动作照文字来。
+  模型:`flux3-image-klein-int8-convrot`、`qwen3vl_4b_int8_convrot`(CLIP 类型 flux3)、`flux2-vae`。
+- `moss_keyframe_scene_character.json`「MOSS-Image 关键帧 · 人物三视图 + 场景图」:MOSS-Image SFT + 编辑 LoRA
+  (`Text Encode MOSS-Image Edit`,edit_format = Moss-Image-Edit),30 步、cfg 4。只画一个人、机位跟得上,但人物服装和
+  场景的贴合不如 FLUX.3;许可更宽(Apache 2.0)。模型:`moss_image_sft_int8_convrot`、`qwen3.5_9b_w4a8_gptq`
+  (CLIP 类型 moss_image)、`flux2-vae_small`、`moss_image_edit_lora_rank_64_bf16`。要 ComfyUI 0.43 以上。
 
-两张都用 `krea2_turbo_int8_convrot`、`krea2_identity_edit_v1_2`(LoRA)、`qwen3vl_4b_bf16`、`qwen_image_vae`;
-文件放在子目录里的,工作流详情会提示改成那一个。只截正面那一步假定人物图是「正面 · 侧面 · 背面」并排的 16:9 三视图
-(Mosael 画的三视图就是这样);给普通人像时它只会用到左边三分之一。
+两张都只有「人物三视图」「场景」两个参考位,提示词不必写 `<ref_image_0>` 这类标记(实测照样认得出哪张是人、哪张是地方)。
+
+## 动态下拉的子输入按选中项展开(1.26.0)
+
+新版前端存的图里,`COMFY_DYNAMICCOMBO_V3`(如 `Set Reference Multi Latent` 的 `resolution`)不在 `node.inputs` 里标 widget。
+此前只认标了的,这一格连同它展开的子输入整个漏掉,ComfyUI 回「execute() missing 1 required positional argument」
+(官方模板原样也是)。现在动态下拉一律当 widget,子输入按 `widgets_values` 里选中那一项的声明展开。
 
 ## 修补(1.21.1)
 
