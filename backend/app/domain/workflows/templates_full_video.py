@@ -359,15 +359,17 @@ JSON Schema 的对象。"""
 
 {blockout_rules(clip, source="视觉圣经")}只输出符合 JSON Schema 的对象。"""
 
-    #: 关键帧的参考图**按先后排**:主角三视图 → (尾帧时)首帧 → 地点设定图 → 白模 → 其余角色与地点;出图节点按所选模型
-    #: 收得下的张数取前几张(`source_overflow = keep_first`)。收两张的 krea2 拿到主角和地点(或首帧),收十六张的全拿到。
-    #: 此前白模排第一、全部角色和场景一股脑挂上:模型只收几张时整步报错,收得下时主角也淹没在一排三视图里。
+    #: 关键帧的参考图**按先后排**:本镜白模 → (尾帧时)首帧 → 主角三视图 → 地点设定图 → 其余角色与地点;出图节点按所选
+    #: 模型收得下的张数取前几张(`source_overflow = keep_first`)。**白模永远第一张**:每一镜都渲了它,它定机位、构图和站位;
+    #: 排在主角、地点后面时,收两张的模型永远拿不到它,关键帧照着设定图的构图画(ADR 0097 修订二);没有主角的镜头其余几张
+    #: 往前挪,第一张的意思也不变 —— 白模排第三时那样一挪,模型把地点和白模拼成一张上下两截的图。
     frame_prompt_tail = (
-        " Reference images, most important first: the main character's turnaround sheet (front, side and back of ONE "
-        "person — draw them once), then the location's concept art, then a grey 3D blockout of this exact shot — match "
-        "its camera angle, lens, framing and the placement of the coloured mannequins ({{input.legend}}); the mannequins "
-        "are stand-ins, render them as the real characters. Any further images are other characters and locations. "
-        "Some of these may be missing. Only the characters described above appear. {{input.style}}"
+        " Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, "
+        "lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render "
+        "them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main "
+        "character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's concept "
+        "art, then other characters and locations; any of these may be missing. Output one single finished picture, "
+        "never a collage of the references. Only the characters described above appear. {{input.style}}"
     )
 
     #: 这一镜交给下游的是哪个节点的素材:接得下去的模型是接好的那一条。
@@ -409,9 +411,9 @@ JSON Schema 的对象。"""
                     #: 关键帧按成片画幅出:后面它当视频的首帧 / 尾帧,画幅不对会被压扁或裁掉(ADR 0094)。
                     "frame_aspect": "{{input.aspect_ratio}}",
                     "source_assets": [
+                        "{{render_blockout.first_frame_asset_id}}:reference_image",
                         "{{find_subject.asset_id}}:reference_image",
                         "{{find_location.asset_id}}:reference_image",
-                        "{{render_blockout.first_frame_asset_id}}:reference_image",
                         "{{input.sheets}}",
                         "{{input.locations}}",
                     ],
@@ -449,17 +451,17 @@ JSON Schema 的对象。"""
                     "model": image.model,
                     "kind": "image",
                     "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame "
-                              "is the reference image right after the main character's sheet — keep characters, wardrobe, "
+                              "is the reference image right after the blockout — keep characters, wardrobe, "
                               "lighting and set continuous." + frame_prompt_tail,
                     "parameters": image_parameters,
                     #: 关键帧按成片画幅出:后面它当视频的首帧 / 尾帧,画幅不对会被压扁或裁掉(ADR 0094)。
                     "frame_aspect": "{{input.aspect_ratio}}",
                     "source_overflow": "keep_first",
                     "source_assets": [
-                        "{{find_subject.asset_id}}:reference_image",
-                        "{{paint_first_frame.asset_id}}:reference_image",
-                        "{{find_location.asset_id}}:reference_image",
                         "{{render_blockout.last_frame_asset_id}}:reference_image",
+                        "{{paint_first_frame.asset_id}}:reference_image",
+                        "{{find_subject.asset_id}}:reference_image",
+                        "{{find_location.asset_id}}:reference_image",
                         "{{input.sheets}}",
                         "{{input.locations}}",
                     ],
@@ -1224,7 +1226,7 @@ JSON Schema 的对象。"""
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 20, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 21, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

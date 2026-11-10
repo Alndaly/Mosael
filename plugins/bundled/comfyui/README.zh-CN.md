@@ -282,6 +282,7 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
+flux3_keyframe_blockout.json
 flux3_keyframe_scene_character.json
 moss_keyframe_scene_character.json
 ```
@@ -398,7 +399,7 @@ HTTP 404。
 (侧面、背面的信息丢了),双图版保留场景图的构图(要特写也还是大全景)、不给场景图又对不上场景。1.26.0 换成两张
 **整张三视图 + 场景图**一起交的:
 
-- `flux3_keyframe_scene_character.json`「FLUX.3 关键帧 · 人物三视图 + 场景图」(推荐):FLUX.3 Image Klein 编辑
+- `flux3_keyframe_scene_character.json`「FLUX.3 关键帧 · 人物三视图 + 场景图」:FLUX.3 Image Klein 编辑
   (`Set Reference Multi Latent`,两张参考图),16 步、cfg 1。实测(5090,灯铺 + 沈青禾三视图):只画一个人,辫子、
   短襦花纹、围裙和灯铺的陈设都对得上;门口全景跪供桌、过肩中景这些机位和动作照文字来。
   模型:`flux3-image-klein-int8-convrot`、`qwen3vl_4b_int8_convrot`(CLIP 类型 flux3)、`flux2-vae`。
@@ -408,6 +409,19 @@ HTTP 404。
   (CLIP 类型 moss_image)、`flux2-vae_small`、`moss_image_edit_lora_rank_64_bf16`。要 ComfyUI 0.43 以上。
 
 两张都只有「人物三视图」「场景」两个参考位,提示词不必写 `<ref_image_0>` 这类标记(实测照样认得出哪张是人、哪张是地方)。
+
+## 关键帧范例:白模机位 + 人物 + 场景(1.26.1)
+
+上面两张的机位只能照文字来。整片每一镜都先渲了白模(ADR 0029),白模才是机位、构图和站位的依据 —— 而白模排在主角、
+地点后面第三张,收两张的工作流永远拿不到它,关键帧照着设定图的原构图画,和白模、视频三者对不上(维护者看第 1 场时指出)。
+
+- `flux3_keyframe_blockout.json`「FLUX.3 关键帧 · 白模机位 + 人物 + 场景」(「从主题到完整视频」推荐):同一套 FLUX.3
+  Klein 编辑,三个参考位按先后是 **白模机位(必填)→ 参考图 1 → 参考图 2**(后两位是 `Optional Load Image`,可空)。
+  白模**永远第一张**:没有主角的镜头只交「白模 + 地点」,意思也不变。此前试过把白模放第三位(主角 → 地点 → 白模),
+  没主角时地点和白模往前挪,提示词说的顺序就错了,模型把两张图上下拼成一张(实测第 1 镜)。
+- 实测(5090,第 1 场第 1、3 镜,同一 seed):远景长街只交白模 + 雨夜长街设定图,出一整张、街道朝纵深延伸;背影中景交
+  白模 + 灰袍路人三视图 + 石桥设定图,背影、石桥在左、人站的位置都照白模,画面里没有灰色人偶。
+- 模型和上面 FLUX.3 那张相同。
 
 ## 动态下拉的子输入按选中项展开(1.26.0)
 

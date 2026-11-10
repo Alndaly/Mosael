@@ -526,16 +526,30 @@ def test_随插件的官方工作流范例_列出全部和缺项(plugin, comfy) 
 
     assert status["id"] == "official_comfyui_examples"
     assert status["folder"] == "mosael/examples"
-    #: H3 长片 / 数字人四张,人物三视图 + 场景图的关键帧两张(1.26.0)。
+    #: H3 长片 / 数字人四张;关键帧三张:白模机位 + 人物 + 场景(1.26.1),人物三视图 + 场景图两张(1.26.0)。
     assert [one["file"] for one in status["workflows"]] == [
         "minimax_h3_open.json", "minimax_h3_continue.json", "minimax_h3_talk_open.json", "minimax_h3_talk_continue.json",
-        "flux3_keyframe_scene_character.json", "moss_keyframe_scene_character.json",
+        "flux3_keyframe_blockout.json", "flux3_keyframe_scene_character.json", "moss_keyframe_scene_character.json",
     ]
     assert all(one["path"].startswith("mosael/examples/") and not one["installed"] for one in status["workflows"])
     assert all(one["file"] and one["description"] for one in status["workflows"])
     #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG/FLUX.3/MOSS 节点,所以每张都应报缺——这正是运行前要说的东西。
     assert all(one["missing_nodes"] for one in status["workflows"])
     assert all("problem" in one for one in status["workflows"])
+
+
+def test_白模关键帧范例_白模必填且排第一_其余两位可选_都接进参考节点() -> None:
+    """整片按「白模 → 主角 → 地点」交参考图(ADR 0097 修订二)。插件按读图节点的 id 先后排参考位,所以钉住:
+    白模那一位 id 最小、必填;后两位可选(没有主角的镜头只交白模 + 地点);三个都接进 `ReferenceMultiLatent`。"""
+    path = Path(__file__).resolve().parents[2] / "plugins/bundled/comfyui/workflows/examples/flux3_keyframe_blockout.json"
+    graph = json.loads(path.read_text(encoding="utf-8"))
+    loaders = sorted((n for n in graph["nodes"] if n["type"] in ("LoadImage", "Optional Load Image")), key=lambda n: n["id"])
+
+    assert [n["type"] for n in loaders] == ["LoadImage", "Optional Load Image", "Optional Load Image"]
+    assert loaders[0]["title"].startswith("白模机位")
+    reference = next(n for n in graph["nodes"] if n["type"] == "ReferenceMultiLatent")
+    wired = {link[1] for link in graph["links"] if link[3] == reference["id"] and link[5] == "IMAGE"}
+    assert wired == {n["id"] for n in loaders}
 
 
 def test_按选择安装只写选中的_再装不会覆盖(plugin, comfy) -> None:

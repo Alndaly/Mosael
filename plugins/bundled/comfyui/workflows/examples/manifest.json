@@ -63,6 +63,19 @@
       }
     },
     {
+      "file": "flux3_keyframe_blockout.json",
+      "role": "keyframe_blockout",
+      "category": "image",
+      "name": {
+        "zh": "FLUX.3 关键帧 · 白模机位 + 人物 + 场景",
+        "en": "FLUX.3 keyframe · blockout camera + character + scene"
+      },
+      "description": {
+        "zh": "第一张必须是这一镜的灰色白模:机位、构图、人站在哪照它来,画出来是成片质感、不留灰色人偶;后面两张可选,是人物三视图和场景设定图,管长相服装和陈设。「从主题到完整视频」逐镜画首尾帧推荐用它。",
+        "en": "The first image must be the shot's grey blockout: camera, framing and staging follow it while the picture comes out finished, with no grey mannequins left. The next two are optional, a character turnaround and a location concept image for looks, outfit and set. The recommended keyframe model for “Topic to finished video”."
+      }
+    },
+    {
       "file": "flux3_keyframe_scene_character.json",
       "role": "keyframe_scene_character",
       "category": "image",
@@ -71,8 +84,8 @@
         "en": "FLUX.3 keyframe · character turnaround + scene"
       },
       "description": {
-        "zh": "整张人物三视图和一张场景设定图一起参考,按文字画这个人在这个地方的一帧:长相服装、场景陈设都跟着参考图,景别、机位、动作跟着文字 —— 「从主题到完整视频」逐镜画首帧推荐用它。",
-        "en": "References a whole character turnaround and a location concept image at once, and draws that person in that place as the text describes: looks, outfit and set follow the references, shot size, camera and action follow the text — the recommended first-frame model for “Topic to finished video”."
+        "zh": "整张人物三视图和一张场景设定图一起参考,按文字画这个人在这个地方的一帧:长相服装、场景陈设都跟着参考图,景别、机位、动作跟着文字。手里没有白模、只想按文字定机位时用它。",
+        "en": "References a whole character turnaround and a location concept image at once, and draws that person in that place as the text describes: looks, outfit and set follow the references, shot size, camera and action follow the text. Use it when there is no blockout and the text sets the camera."
       }
     },
     {

@@ -370,6 +370,7 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
+flux3_keyframe_blockout.json
 flux3_keyframe_scene_character.json
 moss_keyframe_scene_character.json
 ```
@@ -517,7 +518,7 @@ missed one: the single-image one used only the turnaround's front view (losing s
 scene image's framing (a close-up still came out wide), and leaving the scene out lost the set. 1.26.0 hands over the **whole
 turnaround and the scene image together**:
 
-- `flux3_keyframe_scene_character.json` "FLUX.3 keyframe · character turnaround + scene" (recommended): FLUX.3 Image Klein edit
+- `flux3_keyframe_scene_character.json` "FLUX.3 keyframe · character turnaround + scene": FLUX.3 Image Klein edit
   (`Set Reference Multi Latent`, two references), 16 steps, cfg 1. Measured (5090, lantern shop + Shen Qinghe's turnaround):
   one person, braid, jacket pattern, apron and the shop's props all match; a wide shot from the door kneeling at the altar and
   an over-the-shoulder medium shot follow the text. Models: `flux3-image-klein-int8-convrot`, `qwen3vl_4b_int8_convrot`
@@ -529,6 +530,24 @@ turnaround and the scene image together**:
 
 Both have exactly two reference slots ("character turnaround", "scene"); prompts need no `<ref_image_0>` tokens (measured:
 the model still tells the person from the place).
+
+## Keyframe example: blockout camera + character + scene (1.26.1)
+
+With the two above the camera can only follow the text. Every full-video shot already renders a blockout first (ADR 0029),
+and the blockout is what decides camera, framing and staging. It used to come third, after the subject and the location, so a
+two-slot workflow never received it: keyframes copied the concept art's framing and the blockout, the keyframe and the video
+disagreed (spotted by the maintainer on scene 1).
+
+- `flux3_keyframe_blockout.json` "FLUX.3 keyframe · blockout camera + character + scene" (recommended for "Topic to finished
+  video"): the same FLUX.3 Klein edit with three slots in order, **blockout camera (required) → reference 1 → reference 2**
+  (the last two are `Optional Load Image` and may be empty). The blockout is **always first**, so a shot without a subject
+  passes "blockout + location" and nothing changes meaning. Putting it third (subject → location → blockout) was tried:
+  without a subject the location and blockout moved up, the prompt's order was wrong, and the model stacked both images into
+  one collage (measured on shot 1).
+- Measured (5090, scene 1 shots 1 and 3, same seed): the wide street with only blockout + rainy-street art comes out as one
+  picture receding into depth; the medium back shot with blockout + grey-robed passer-by + stone-bridge art follows the
+  blockout's back view, bridge on the left and staging, with no grey mannequins left.
+- Same models as the FLUX.3 example above.
 
 ## Dynamic combos expand by the chosen option (1.26.0)
 
