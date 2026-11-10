@@ -979,7 +979,8 @@ JSON Schema 的对象。"""
                 "json_schema": _storyboard_schema(video_plan, prompt_limits),
                 "json_schema_strict": "true",
                 "temperature": 0.65,
-                "max_tokens": 12000,
+                #: 每镜十几格的英文提示词与中文说明,20 镜实测写到 3.7 万字:12000 在中途截断、整步交回半截 JSON。
+                "max_tokens": 32000,
             },
         },
         {
@@ -1016,7 +1017,8 @@ JSON Schema 的对象。"""
                 "json_schema": _set_design_schema(),
                 "json_schema_strict": "true",
                 "temperature": 0.2,
-                "max_tokens": 16000,
+                #: 每镜一个布景台(房间、陈设、人偶、相机与轨迹),20 镜同样写得很长;和分镜同一个上限。
+                "max_tokens": 32000,
             },
         },
         {
@@ -1180,12 +1182,13 @@ JSON Schema 的对象。"""
     ]
     add_background_music(nodes, edges, music, FULL_VIDEO_MUSIC_SLOT, db)
     graph = {
+        #: v19:分镜、白模两次对话的输出上限提到 32000(20 镜的分镜写到 3.7 万字,12000 截断)。
         #: v18:关键帧的参考图按先后排(主角 → 地点 → 白模 → 其余),按模型收得下的张数取(source_overflow)。
         #: v17:每镜写明谁在说(speaker),角色带着音色就用它的嗓子念;有音乐模型时铺一首配乐(templates_music)。
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 18, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 19, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

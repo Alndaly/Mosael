@@ -2209,6 +2209,28 @@ def create_entity(
 
 
 @tool(effect="writes")
+def set_entity_voice(entity_id: str, engine: str, voice: str) -> dict[str, Any]:
+    """Give a CHARACTER in the asset library its voice (a workspace edit, no confirmation). engine and voice come from
+    list_speech_engines (e.g. "builtin:edge" + "zh-CN-XiaoyiNeural"). Workflows then speak that character's lines in it
+    (Topic to finished video voices each line by its speaker). Empty voice clears it."""
+    from app.api.routes.entities import entity_out
+    from app.domain.entities import use_cases
+    from app.domain.voices import engine_catalog
+
+    def apply(db, user) -> dict[str, Any]:
+        entity = use_cases.entity(db, user, entity_id)
+        if entity.kind != "character":
+            raise ValueError(f"{entity.name} is a {entity.kind}; only characters have a voice")
+        attributes = {key: value for key, value in (entity.attributes or {}).items() if key != "voice"}
+        if voice.strip():
+            choice = engine_catalog.voice_choice(db, engine=engine, voice=voice, user_id=user.id)
+            attributes["voice"] = choice.to_json()
+        return entity_out(db, use_cases.update(db, user, entity_id, attributes=attributes)).model_dump(mode="json")
+
+    return _use_case(apply)
+
+
+@tool(effect="writes")
 def attach_entity_reference(entity_id: str, asset_id: str, role: str = "", cover: bool = False) -> dict[str, Any]:
     """Attach an existing image (or video) asset to an asset-library entry as a reference image
     (a workspace edit, no confirmation). The media file is referenced, not copied.
@@ -2904,7 +2926,9 @@ def list_workflow_node_types(node_type: str = "") -> list[dict[str, Any]] | dict
 
 
 @tool(effect="confirms")
-def create_workflow(name: str, graph: dict[str, Any] | None = None, description: str = "", workspace_id: str = "") -> dict[str, Any]:
+def create_workflow(
+    name: str, graph: dict[str, Any] | None = None, description: str = "", workspace_id: str = "", template_id: str = "",
+) -> dict[str, Any]:
     """Confirmation required: create a NEW visual workflow.
 
     Use when the user wants a new workflow canvas/automation, not when editing an
@@ -2912,13 +2936,16 @@ def create_workflow(name: str, graph: dict[str, Any] | None = None, description:
     changes or update_workflow only for rename/full replacement. graph =
     {"nodes": [{id,type,name,position,config}], "edges": [{id,source,target}]};
     omit graph for a bare start-node workflow. Check list_workflow_node_types first.
+    template_id (from list_workflow_templates) builds it from an official template instead — the same graph the
+    template library adds, with models picked from the user's settings; then set start params with run_workflow.
     """
     confirmation = _open_card(
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "create_workflow",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"name": name, "description": description, "graph": graph},
+            "payload": {"name": name, "description": description, "graph": graph,
+                        **({"template_id": template_id} if template_id else {})},
         },
     )
     return _confirmation_reply(confirmation)
@@ -3226,23 +3253,88 @@ def run_board_item(board_id: str, item_id: str, producer: str = "", workspace_id
 
 
 @tool(effect="confirms")
-def run_workflow(workflow_id: str, params: dict[str, Any] | None = None, workspace_id: str = "") -> dict[str, Any]:
+def run_workflow(
+    workflow_id: str, params: dict[str, Any] | None = None, workspace_id: str = "",
+    runs: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Confirmation required: execute an EXISTING visual workflow.
 
     Use after get_workflow when the user wants to run the workflow automation.
     params supplies start/input variables. This may spend AI/render budget, so it
     requires the user's approval; the run starts only if they approve. Do NOT use to edit the workflow graph (edit_workflow/update_workflow) or
     export a video timeline (render_sequence).
+    runs (instead of params): several start-param sets, one run each, all started in parallel on one approval
+    (e.g. one run per scene of an episode); returns job_ids. Follow each with get_workflow_run.
     """
     confirmation = _open_card(
         {
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "run_workflow",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"workflow_id": workflow_id, "params": params or {}},
+            "payload": {"workflow_id": workflow_id, "params": params or {}, **({"runs": runs} if runs else {})},
         },
     )
     return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms", kit="canvas")
+def continue_workflow_run(job_id: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Confirmation required: continue a failed, interrupted or cancelled workflow run from where it stopped.
+
+    Steps that already finished are not redone (and not paid again). params overrides start params for the
+    steps still to run. Check get_workflow_run first: can_continue says whether it applies.
+    """
+    from app.domain.job_center import use_cases
+
+    #: 卡开在这次运行所在的工作区(读得到它才开:读不到的在这里就拒,不开一张注定失败的卡)。
+    workspace_id = _use_case(lambda db, user: use_cases.readable(db, user, job_id).workspace_id)
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id,
+            "tool": "continue_workflow_run",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"job_id": job_id, "params": params or {}},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="reads", kit="canvas")
+def get_workflow_run(job_id: str) -> dict[str, Any]:
+    """Read-only: how far one workflow run has got — status, progress, finished and remaining top-level steps,
+    sub-task counts by kind:status (image / video / speech generations…), recent failure reasons, money spent,
+    and can_continue. Use to watch long runs (call again later; do not poll in a tight loop)."""
+    from app.domain.job_center import use_cases
+    from app.domain.workflows.run_progress import run_progress
+
+    def progress(db, user) -> dict[str, Any]:
+        job = use_cases.readable(db, user, job_id)
+        if job.kind != "workflow":
+            raise ValueError(f"{job_id} is a {job.kind} job, not a workflow run — use get_job")
+        return run_progress(db, job)
+
+    return _use_case(progress)
+
+
+@tool(effect="reads", kit="canvas")
+def list_workflow_templates() -> list[dict[str, Any]]:
+    """Read-only: the official workflow templates — id (pass to create_workflow template_id), name, what it does,
+    its stages and what it needs (models, engines). E.g. series_setup builds a series' episodes, characters with
+    voices and locations into the asset library; full_video_generation shoots one episode or scene from a topic."""
+    from app.core.i18n import get_current_locale
+    from app.domain.workflows.templates import TEMPLATE_CATALOG
+    from mosael_formats.i18n import pick_text
+
+    locale = get_current_locale()
+    return [
+        {
+            "id": str(template["id"]),
+            "name": pick_text(template["name"], locale),
+            "summary": pick_text(template["summary"], locale),
+            "needs": [pick_text(one["text"], locale) + (" (optional)" if one["optional"] else "") for one in template["requires"]],
+        }
+        for template in TEMPLATE_CATALOG
+    ]
 
 
 @tool(effect="reads")

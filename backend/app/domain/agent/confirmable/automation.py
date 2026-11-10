@@ -9,13 +9,13 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import fragment, tr, is_message_key
+from app.core.i18n import fragment, get_current_locale, tr, is_message_key
 from app.domain.effects import needs_card, permission_for, warning_key
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.confirmable.graphs import external_warning, graph_under_review
 from app.domain.workflows.graph_rules import external_nodes_in_graph, code_field_findings, validate_graph
-from app.db.models import Board, User, Workflow
+from app.db.models import Board, Job, User, Workflow
 from app.domain.boards import producers
 from app.domain.boards.errors import BoardDomainError, item_not_found
 from app.domain.boards.ops import BOARD_OP_KINDS, apply_board_ops
@@ -31,7 +31,8 @@ from app.domain.workflows import create_workflow, edit_workflow_graph, engine as
 from app.domain.workflows.engine import check_runnable
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_ops import GRAPH_OP_KINDS, apply_graph_ops
-from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision
+from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision, attest_revision
+from app.domain.workflows.templates import built_in_template_graph, current_template_versions
 
 
 
@@ -97,6 +98,20 @@ def _escalate_graph(db: Session, tool: str, payload: dict[str, Any]) -> str | No
 def _validate_create_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     if not str(payload.get("name", "")).strip():
         raise ConfirmationError("create_workflow requires a name")
+    template_id = str(payload.get("template_id") or "").strip()
+    if template_id:
+        #: 从官方模板建(和模板库里点「添加」同一张图,见 templates.built_in_template_graph):模板和手写的图只能二选一,
+        #: 图在**开卡这一刻**造好钉进卡里 —— 卡上审的、批准后落库的是同一张(模型按这个人此刻的设置挑)。
+        if payload.get("graph") is not None:
+            raise ConfirmationError("routeErr_workflowTemplateAndGraph")
+        if template_id not in current_template_versions():
+            raise ConfirmationError("confirmErr_unknownTemplate", template=template_id, known=", ".join(current_template_versions()))
+        try:
+            payload["graph"] = built_in_template_graph(
+                db, template_id, user_id=actor or "", workspace_id=workspace_id, locale=get_current_locale(),
+            )
+        except WorkflowDomainError as exc:
+            raise ConfirmationError.relay(exc) from exc
     if payload.get("graph") is not None:
         _check_graph(db, payload["graph"])
 
@@ -113,6 +128,7 @@ def _summarize_create_workflow(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
 
+    template_id = str(payload.get("template_id") or "").strip()
     workflow = create_workflow(
         db,
         workspace_id=confirmation.workspace_id,
@@ -121,8 +137,9 @@ def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) 
         graph=payload.get("graph"),
         source="agent",
         created_by=actor,
+        revision_note=f"template:{template_id}" if template_id else "",
     )
-    return {"workflow_id": workflow.id}
+    return {"workflow_id": workflow.id, **({"template_id": template_id} if template_id else {})}
 
 
 def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
@@ -233,17 +250,38 @@ def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, An
     #: 批准时跑的必须还是这一版 —— 中间被改过(加了一个发布节点)的话,用户批的就不是要跑的那张图。
     payload["workflow_revision"] = int(workflow.revision or 0)
     #: 运行前检查查的是工作流的当前版 —— 也就是上面刚钉住的那一版。
-    params = payload.get("params")
     try:
-        check_runnable(db, workflow, dict(params) if isinstance(params, dict) else {}, actor)
+        for params in _run_params(payload):
+            check_runnable(db, workflow, params, actor)
     except WorkflowDomainError as exc:
         raise ConfirmationError.relay(exc) from exc
 
 
+#: 一张卡最多起几次运行:每次都是一整条可能付费的流程,一次批太多,批的人看不清自己批了什么。
+MAX_RUNS_PER_CARD = 8
+
+
+def _run_params(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """这张卡要起的每一次运行各自的开始参数:`runs`(几组,同时跑)或 `params`(一组)。**两样只能给一样。**"""
+    runs = payload.get("runs")
+    if runs:
+        if payload.get("params"):
+            raise ConfirmationError("confirmErr_runsAndParams")
+        if not isinstance(runs, list) or not all(isinstance(one, dict) for one in runs):
+            raise ConfirmationError("confirmErr_runsShape")
+        if len(runs) > MAX_RUNS_PER_CARD:
+            raise ConfirmationError("confirmErr_tooManyRuns", count=len(runs), limit=MAX_RUNS_PER_CARD)
+        return [dict(one) for one in runs]
+    params = payload.get("params")
+    return [dict(params) if isinstance(params, dict) else {}]
+
+
 def _summarize_run_workflow(db: Session, payload: dict[str, Any]) -> Summary:
     name = str(payload.get("name") or "")
+    runs = len(payload.get("runs") or []) or 1
     return "confirm_runWorkflow", {
         "named": fragment("confirm_workflowNamed", name=name) if name else "",
+        "times": fragment("confirm_runTimes", count=runs) if runs > 1 else "",
         "warning": external_warning(external_nodes_in_graph(graph_under_review(db, "run_workflow", payload))),
     }
 
@@ -269,8 +307,49 @@ def _execute_run_workflow(db: Session, confirmation: Any, actor: str | None) -> 
             attest_current_revision(db, workflow, attested_by=actor)
         except WorkflowRevisionError as exc:
             raise ConfirmationError.relay(exc) from exc
-    job = workflows_engine.start_workflow_job(db, workflow, created_by=actor, params=dict(payload.get("params") or {}))
-    return {"job_id": job.id, "workflow_revision": int(workflow.revision or 0)}
+    jobs = [workflows_engine.start_workflow_job(db, workflow, created_by=actor, params=params)
+            for params in _run_params(payload)]
+    if len(jobs) == 1:
+        return {"job_id": jobs[0].id, "workflow_revision": int(workflow.revision or 0)}
+    #: 几次运行同时跑(各是一条运行记录):用 get_workflow_run 逐条看进度。
+    return {"job_ids": [job.id for job in jobs], "workflow_revision": int(workflow.revision or 0)}
+
+
+def _validate_continue_workflow_run(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    """接着跑的是这个工作区里、这张工作流的一次**中断 / 失败 / 取消**了的运行;卡上点名是哪张工作流。"""
+    job = db.get(Job, str(payload.get("job_id", "")))
+    if job is None or job.workspace_id != workspace_id or job.kind != "workflow":
+        raise ConfirmationError("confirmErr_runNotFound")
+    if job.status not in ("failed", "cancelled"):
+        raise ConfirmationError("confirmErr_runNotContinuable", status=job.status)
+    workflow = _workflow_in(db, workspace_id, {"workflow_id": (job.payload or {}).get("workflow_id")})
+    payload["workflow_id"] = workflow.id
+    payload["name"] = workflow.name
+
+
+def _summarize_continue_workflow_run(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_continueWorkflowRun", {"name": str(payload.get("name") or "")}
+
+
+def _execute_continue_workflow_run(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """和运行历史里点「从中断处继续」同一条路(见 api/routes/workflows.continue_workflow_run):已经落定的节点不再执行,
+    这次运行钉住的那一版由点头的人认可。"""
+    payload = confirmation.payload
+    job = db.get(Job, str(payload["job_id"]))
+    workflow = db.get(Workflow, str(payload["workflow_id"]))
+    if job is None or workflow is None:
+        raise ConfirmationError("confirmErr_workflowGone")
+    try:
+        revision = int((job.payload or {}).get("workflow_revision") or 0)
+        if revision and confirmation.decision_mode == "manual" and actor:
+            attest_revision(db, workflow, revision, attested_by=actor)
+        params = payload.get("params")
+        continued = workflows_engine.continue_run(db, workflow, job, params=dict(params) if isinstance(params, dict) else None)
+    except WorkflowRevisionError as exc:
+        raise ConfirmationError.relay(exc) from exc
+    except WorkflowDomainError as exc:
+        raise ConfirmationError.relay(exc) from exc
+    return {"job_id": continued.id, "status": continued.status}
 
 
 def _board_in(db: Session, workspace_id: str, payload: dict[str, Any]):
@@ -524,6 +603,17 @@ confirmable_tool(ConfirmableTool(
     execute=_execute_run_workflow,
     validate=_validate_run_workflow,
     escalate=_escalate_graph,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="continue_workflow_run",
+    permission="ai-cost",
+    cost="ai",
+    writes=("workflows",),
+    summarize=_summarize_continue_workflow_run,
+    execute=_execute_continue_workflow_run,
+    validate=_validate_continue_workflow_run,
 ))
 
 

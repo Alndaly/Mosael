@@ -68,6 +68,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "开卡之后工作流「{name}」被改过(开卡时是第 {opened} 版,现在是第 {now} 版),这张卡批准的不是现在这张图,没有运行 —— 请重新发起",
         "en": "Workflow “{name}” was changed after this card was opened (it was revision {opened}, now {now}), so the card does not cover the current graph and nothing was run. Please ask again.",
     },
+    "confirmErr_unknownTemplate": {
+        "zh": "没有叫「{template}」的官方模板。现有的:{known}",
+        "en": "There is no official template \u300c{template}\u300d. Available: {known}",
+    },
+    "confirmErr_runsAndParams": {
+        "zh": "params 和 runs 只能给一个:跑一次给 params,同时跑几次给 runs(每次一组参数)",
+        "en": "Give either params or runs: params for one run, runs (one parameter set each) for several in parallel",
+    },
+    "confirmErr_runsShape": {"zh": "runs 要是一组对象,每个对象是一次运行的开始参数", "en": "runs must be a list of objects, one set of start parameters per run"},
+    "confirmErr_tooManyRuns": {
+        "zh": "一次最多同时起 {limit} 次运行,这次要了 {count} 次;分几张卡批",
+        "en": "At most {limit} runs per approval ({count} asked); split them over several",
+    },
+    "confirmErr_runNotFound": {"zh": "这个工作区里没有这次工作流运行", "en": "No such workflow run in this workspace"},
+    "confirmErr_runNotContinuable": {
+        "zh": "这次运行是「{status}」:只有失败、中断或取消的运行能从中断处接着跑",
+        "en": "This run is \u300c{status}\u300d: only failed, interrupted or cancelled runs can continue",
+    },
     "confirmErr_workflowGone": {
         "zh": "这张卡要运行的工作流已经被删除了",
         "en": "The workflow this card would run has been deleted.",

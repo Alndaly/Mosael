@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **146** 个工具,其中 **52** 个走确认卡、**1** 个停下来等用户作答。
+共 **150** 个工具,其中 **53** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -66,6 +66,7 @@
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
 | `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |
 | `computer_type` | 确认卡 | Confirmation required: type text into Mosael's app window (into the focused field). |
+| `continue_workflow_run` | 确认卡 | Confirmation required: continue a failed, interrupted or cancelled workflow run from where it stopped. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location, prop, pose or costume in the asset library (a workspace edit, no confirmation). |
@@ -101,6 +102,7 @@
 | `get_scene` | 直接执行 | Read the current editable 3D scene, objects, materials, camera shots and revision. |
 | `get_transcript` | 直接执行 | Read-only: read the transcript/subtitles of an asset — timed segments with speakers. |
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
+| `get_workflow_run` | 直接执行 | Read-only: how far one workflow run has got — status, progress, finished and remaining top-level steps, |
 | `grab_video_frame` | 确认卡 | Confirmation required: save one frame of an EXISTING video asset as a NEW image asset. |
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
 | `import_from_url` | 确认卡 | Confirmation required: download a video (kind=audio: its audio) from a web link into the media library. |
@@ -124,6 +126,7 @@
 | `list_skills` | 直接执行 | Read-only: every skill in this workspace, disabled ones too — name, title, description, source, enabled, editable. |
 | `list_speech_engines` | 直接执行 | Read-only: the speech engines generate_audio / dub_subtitles can speak with, and their voices. |
 | `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, or inspect one type in full. |
+| `list_workflow_templates` | 直接执行 | Read-only: the official workflow templates — id (pass to create_workflow template_id), name, what it does, |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
 | `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |
 | `notify_agent_session` | 直接执行 | Runs directly: send a message to ANOTHER agent session (@-mention style). |
@@ -146,6 +149,7 @@
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `search_references` | 直接执行 | Read-only: search the user's external REFERENCE LIBRARIES (read-only atlases from plugins, such as |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |
+| `set_entity_voice` | 直接执行 | Give a CHARACTER in the asset library its voice (a workspace edit, no confirmation). engine and voice come from |
 | `set_skill_enabled` | 确认卡 | Confirmation required, every time: turn a skill on or off in this workspace (on shows its full text). |
 | `show_widget` | 直接执行 | Show a sandboxed HTML view (map, chart, a small page) IN YOUR ANSWER, right where you called it. |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |

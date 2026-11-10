@@ -351,6 +351,10 @@ const TOOL_LABELS: Record<string, string> = {
   edit_workflow: "编辑工作流",
   update_workflow: "更新工作流",
   run_workflow: "运行工作流",
+  continue_workflow_run: "从中断处继续运行",
+  get_workflow_run: "查看运行进度",
+  list_workflow_templates: "列出官方模板",
+  set_entity_voice: "给人物配嗓子",
   list_agent_sessions: "查看智能体会话",
   notify_agent_session: "通知另一个智能体",
   // 技能(ADR 0040):两个都只读,子智能体也拿得到(判据仍是 manifest 的 read_only,不是这张表)。

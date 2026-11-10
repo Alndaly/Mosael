@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import re
+
 import json
 import os
 from pathlib import Path
@@ -24,7 +26,7 @@ from app.domain.plugins.manifest import PATH_KEY
 from mosael_formats.agent_skill import SkillDoc
 from tests.util import add_provider, fresh_client
 
-BUILTINS = ("3d-scene", "creative-board", "workflow-canvas")
+BUILTINS = ("3d-scene", "creative-board", "episodic-series", "workflow-canvas")
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -69,10 +71,11 @@ def test_内置技能都合规范_默认开着_按名字排() -> None:
     client = fresh_client()
     ws = _workspace(client)
     listed = client.get(f"/api/workspaces/{ws}/skills").json()
-    assert [one["ref"] for one in listed[:3]] == list(BUILTINS)
-    assert all(one["enabled"] and not one["problem"] for one in listed[:3])
-    assert {one["title"] for one in listed[:3]} == {"3D 场景与建模", "创意画板", "搭工作流"}
-    assert {one["source_label"] for one in listed[:3]} == {"Mosael 内置"}
+    builtins = listed[:len(BUILTINS)]
+    assert [one["ref"] for one in builtins] == list(BUILTINS)
+    assert all(one["enabled"] and not one["problem"] for one in builtins)
+    assert {one["title"] for one in builtins} == {"3D 场景与建模", "创意画板", "做连续剧", "搭工作流"}
+    assert {one["source_label"] for one in builtins} == {"Mosael 内置"}
     builtin = [one for one in _skills(ws).values() if one.source == catalog.BUILTIN]
     assert all(not one.editable and one.doc and one.doc.name == one.name for one in builtin), "文件夹名就是 name"
 
@@ -109,7 +112,12 @@ def test_目录封顶_每条说明截断_放不下的只列名字() -> None:
     text = _system_prompt(ws)
     assert len(text) <= runtime.MAX_LISTING_CHARS
     assert "长" * runtime.MAX_LISTED_DESCRIPTION_CHARS not in text, "单条说明截断"
-    assert "另有" in text and "skill-29" in text
+    #: 放不下的那几个:名字放得下就列名字,放不下就只说个数 —— 哪一种都得把**没列全的个数**说对。
+    entries = [line for line in text.splitlines() if line.startswith("- ")]
+    found = re.search(r"另有 (\d+) 个技能", entries[-1])
+    with SessionLocal() as db:
+        total = len(catalog.active_skills(db, ws))
+    assert found and len(entries) - 1 + int(found.group(1)) == total
 
 
 def test_系统提示瘦身_搬走的做法在内置技能里() -> None:
