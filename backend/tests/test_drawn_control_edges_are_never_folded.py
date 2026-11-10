@@ -45,6 +45,7 @@ _TEMPLATE_MODULES = (
     "templates_cleanup",
     "templates_dub",
     "templates_shots",
+    "templates_series",
 )
 
 

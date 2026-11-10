@@ -14,7 +14,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.ai.providers.adapters.microsoft.edge_speech import EDGE_BUILTIN_VOICES
+from app.ai.providers import VoiceCatalogContext, engine_voices, speech_engines
 from app.domain.voices.speech import EDGE_ENGINE
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
@@ -29,8 +29,11 @@ MAX_EPISODES = 60
 MAX_CHARACTERS = 8
 MAX_LOCATIONS = 6
 
-#: 角色的嗓子从这几把里挑:免费、不用登录、每台机器都念得了(Edge)。想换克隆音色或别的引擎,建好之后在资产库里改。
-SERIES_VOICES = tuple(voice for voice in EDGE_BUILTIN_VOICES if voice.id.startswith("zh-CN-"))
+#: 角色的嗓子从这几把里挑:免费、不用登录、每台机器都念得了的那个引擎(Edge,不要钥匙的那一个,同 voices.speech 的
+#: EDGE_ENGINE)。经公共接口问它的内置音色目录,只取简体中文的。想换克隆音色或别的引擎,建好之后在资产库里改。
+_FREE_ENGINE = next(engine for engine in speech_engines() if not engine.needs_key)
+SERIES_VOICES = tuple(voice for voice in engine_voices(_FREE_ENGINE.engine_id, VoiceCatalogContext())
+                      if voice.id.startswith("zh-CN-"))
 
 DEFAULT_STYLE = (
     "Chinese guofeng anime style, 2D cel-shaded illustration with soft ink-wash textures, cinematic lighting, "
