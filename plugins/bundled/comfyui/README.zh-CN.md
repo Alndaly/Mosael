@@ -282,6 +282,8 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
+krea2_keyframe_character.json
+krea2_keyframe_scene_character.json
 ```
 
 每张都带名字和一句说明;先只读检查哪张已经存在、每张缺哪些节点和模型。卡片按 grid 排列,每张自己有一颗「安装」,
@@ -389,6 +391,20 @@ HTTP 404。
 - **`app` 的回答**里每张表单带着它的模型 id 和工具名(`model`、`tool`;工作台带着 `path` 来问画布上那张也说得出):宿主据此数
   「Mosael 里有几处在用它」,删表单之前说给作者听。
 - 没起标题的表单(上一版改写过来、当初没起的那张)主名叫「未命名表单」;编辑器要求每张表单都起标题。
+
+## Krea2 关键帧范例(1.25.0)
+
+官方范例多两张出图工作流(「从主题到完整视频」免费画首帧用,不必再走付费的多参考图模型):
+
+- `krea2_keyframe_character.json`「Krea2 关键帧 · 人物三视图 + 文字」:一张人物三视图 + 一段画面描述 → 同一个人在新场景、
+  新机位里的一帧。三视图先缩到 1536×864、只截左边正面那一格再交给 Krea2 编辑(整张三视图交进去,模型会把同一个人画两三遍,
+  实测);场景和机位全由文字定,所以每镜的景别、角度跟得上分镜。
+- `krea2_keyframe_scene_character.json`「Krea2 · 把人物放进场景图」:场景图 + 人物三视图(同样只取正面)→ 人放进这张场景;
+  Krea2 编辑会保留场景图的构图,适合定场、同一机位。
+
+两张都用 `krea2_turbo_int8_convrot`、`krea2_identity_edit_v1_2`(LoRA)、`qwen3vl_4b_bf16`、`qwen_image_vae`;
+文件放在子目录里的,工作流详情会提示改成那一个。只截正面那一步假定人物图是「正面 · 侧面 · 背面」并排的 16:9 三视图
+(Mosael 画的三视图就是这样);给普通人像时它只会用到左边三分之一。
 
 ## 修补(1.21.1)
 

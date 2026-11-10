@@ -961,6 +961,37 @@ def capabilities_of_choice(
     return known_capabilities_for(provider, model, kind)
 
 
+def keep_sources_that_fit(
+    sources: list[dict[str, str]], capabilities: dict[str, Any] | None, kind: str
+) -> list[dict[str, str]]:
+    """**按先后取,收得下的才留**:同一份素材同一个角色只留第一次;每个角色超过模型上限(`source_limits`)的、
+    模型根本不收的角色,丢掉。认不出这个模型时原样交回(由生成漏斗照常判)。
+
+    给「参考图有先后」的调用方用(工作流节点的 `source_overflow = keep_first`):整片的首帧按「主角三视图 → 地点
+    设定图 → 白模 → 其余」排,收两张的模型(krea2 编辑)拿前两张、收十六张的拿全部 —— 一张图一个模型地写死张数,
+    换个模型就错。默认仍是超了就拒(`_check_source_counts`):不说清先后的调用方,丢哪张都是替用户做主。
+    """
+    if capabilities is None:
+        return sources
+    limits = capabilities.get("source_limits") or {}
+    allowed = allowed_parameter_keys(capabilities, kind) if capabilities.get("parameter_keys") else set()
+    kept: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    used: Counter[str] = Counter()
+    for source in sources:
+        role = source.get("role") or ""
+        key = (source.get("asset_id") or "", role)
+        if key in seen or (allowed and role not in allowed):
+            continue
+        cap = limits.get(role)
+        if cap is not None and used[role] >= int(cap):
+            continue
+        seen.add(key)
+        used[role] += 1
+        kept.append(source)
+    return kept
+
+
 def takes_source_role(
     db: Session, *, provider: str, model: str, kind: str, provider_profile_id: str | None, role: str
 ) -> bool:

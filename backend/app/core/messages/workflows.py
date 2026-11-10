@@ -506,6 +506,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_op_replace": {"zh": "替换", "en": "Replace"},
     "wfOpt_op_regex_extract": {"zh": "正则提取", "en": "Extract with regex"},
     "wfOpt_op_length": {"zh": "取长度", "en": "Length"},
+    "wfOpt_source_overflow_error": {"zh": "超了就报错", "en": "Fail when there are too many"},
+    "wfOpt_source_overflow_keep_first": {"zh": "按先后保留收得下的", "en": "Keep the first ones that fit"},
     "wfOpt_source_group_all": {"zh": "全部", "en": "All"},
     "wfOpt_source_group_keyframes": {"zh": "首尾帧", "en": "First/last frames"},
     "wfOpt_source_group_references": {"zh": "参考素材", "en": "References"},

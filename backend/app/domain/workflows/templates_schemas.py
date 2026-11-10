@@ -144,6 +144,12 @@ def _shot_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -
             "description": "说这句 narration 的角色：视觉圣经里这个角色的 name，一字不差；旁白或没有人说话写空字符串",
         },
         "location_id": {"type": "string", "description": "视觉圣经里的场景 id"},
+        #: 首帧的参考图按名字到资产库里认(见 templates_full_video 的逐镜循环):地点和主角各一个名字。
+        "location_name": {"type": "string", "description": "这一镜的场景在视觉圣经里的 name,一字不差"},
+        "first_frame_subject": {
+            "type": "string",
+            "description": "首帧里最主要的那个角色在视觉圣经里的 name,一字不差;画面里没有角色写空字符串",
+        },
         "characters": {"type": "array", "items": {"type": "string"}, "description": "这一镜出镜的角色 id"},
         "blocking": {"type": "string", "description": "人物站位与走位:谁在哪、朝向哪、从哪走到哪(米为单位的相对位置)"},
         "shot_size": {"type": "string", "enum": SHOT_SIZES},

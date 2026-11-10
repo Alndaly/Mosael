@@ -329,7 +329,7 @@ appearance / description 照它的提示词描述写（它的参考图会直接�
 只输出符合 JSON Schema 的对象。"""
 
     storyboard_system = f"""你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的
-{clip} 秒镜头。每镜给出精确起止时间、口播、场景(location_id)、出镜角色、人物站位与走位、景别、
+{clip} 秒镜头。每镜给出精确起止时间、口播、场景(location_id,以及它的 name 写进 location_name)、出镜角色(首帧里最主要的那个的 name 写进 first_frame_subject)、人物站位与走位、景别、
 机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须
 首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来
 不得超过 {clip} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进
@@ -349,12 +349,15 @@ JSON Schema 的对象。"""
 
 {blockout_rules(clip, source="视觉圣经")}只输出符合 JSON Schema 的对象。"""
 
+    #: 关键帧的参考图**按先后排**:主角三视图 → (尾帧时)首帧 → 地点设定图 → 白模 → 其余角色与地点;出图节点按所选模型
+    #: 收得下的张数取前几张(`source_overflow = keep_first`)。收两张的 krea2 拿到主角和地点(或首帧),收十六张的全拿到。
+    #: 此前白模排第一、全部角色和场景一股脑挂上:模型只收几张时整步报错,收得下时主角也淹没在一排三视图里。
     frame_prompt_tail = (
-        " Reference images: the first one is a grey 3D blockout of this exact shot — match its camera angle, lens, "
-        "framing, horizon line and the placement of the coloured mannequins exactly ({{input.legend}}); the "
-        "mannequins are stand-ins, render them as the real characters. The character turnaround sheets fix each "
-        "character's face, hair, outfit and proportions; the location concept art fixes the set. Only the characters "
-        "described above appear. {{input.style}}"
+        " Reference images, most important first: the main character's turnaround sheet (front, side and back of ONE "
+        "person — draw them once), then the location's concept art, then a grey 3D blockout of this exact shot — match "
+        "its camera angle, lens, framing and the placement of the coloured mannequins ({{input.legend}}); the mannequins "
+        "are stand-ins, render them as the real characters. Any further images are other characters and locations. "
+        "Some of these may be missing. Only the characters described above appear. {{input.style}}"
     )
 
     #: 这一镜交给下游的是哪个节点的素材:接得下去的模型是接好的那一条。
@@ -396,10 +399,13 @@ JSON Schema 的对象。"""
                     #: 关键帧按成片画幅出:后面它当视频的首帧 / 尾帧,画幅不对会被压扁或裁掉(ADR 0094)。
                     "frame_aspect": "{{input.aspect_ratio}}",
                     "source_assets": [
+                        "{{find_subject.asset_id}}:reference_image",
+                        "{{find_location.asset_id}}:reference_image",
                         "{{render_blockout.first_frame_asset_id}}:reference_image",
                         "{{input.sheets}}",
                         "{{input.locations}}",
                     ],
+                    "source_overflow": "keep_first",
                 },
             },
             {
@@ -433,14 +439,17 @@ JSON Schema 的对象。"""
                     "model": image.model,
                     "kind": "image",
                     "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame "
-                              "is the second reference image — keep characters, wardrobe, lighting and set continuous."
-                              + frame_prompt_tail,
+                              "is the reference image right after the main character's sheet — keep characters, wardrobe, "
+                              "lighting and set continuous." + frame_prompt_tail,
                     "parameters": image_parameters,
                     #: 关键帧按成片画幅出:后面它当视频的首帧 / 尾帧,画幅不对会被压扁或裁掉(ADR 0094)。
                     "frame_aspect": "{{input.aspect_ratio}}",
+                    "source_overflow": "keep_first",
                     "source_assets": [
-                        "{{render_blockout.last_frame_asset_id}}:reference_image",
+                        "{{find_subject.asset_id}}:reference_image",
                         "{{paint_first_frame.asset_id}}:reference_image",
+                        "{{find_location.asset_id}}:reference_image",
+                        "{{render_blockout.last_frame_asset_id}}:reference_image",
                         "{{input.sheets}}",
                         "{{input.locations}}",
                     ],
@@ -485,6 +494,34 @@ JSON Schema 的对象。"""
                     "name": "镜头 {{loop.item.shot_number}}",
                     "project_id": "{{input.project_id}}",
                 },
+            },
+            {
+                "id": "has_subject",
+                "type": "condition",
+                "name": {"zh": "首帧里有主角吗", "en": "Is there a main character in the first frame?"},
+                "position": {"x": 80, "y": -260},
+                "config": {"left": "{{loop.item.first_frame_subject}}", "op": "not_empty"},
+            },
+            {
+                "id": "find_subject",
+                "type": "entity_get",
+                "name": {"zh": "在资产库里找首帧主角", "en": "Look the first frame's main character up in the library"},
+                "position": {"x": 390, "y": -260},
+                "config": {"kind": "character", "name": "{{loop.item.first_frame_subject}}", "limit": 1},
+            },
+            {
+                "id": "has_location",
+                "type": "condition",
+                "name": {"zh": "写了这一镜在哪吗", "en": "Does the shot name its location?"},
+                "position": {"x": 80, "y": -420},
+                "config": {"left": "{{loop.item.location_name}}", "op": "not_empty"},
+            },
+            {
+                "id": "find_location",
+                "type": "entity_get",
+                "name": {"zh": "在资产库里找这一镜的地点", "en": "Look the shot's location up in the library"},
+                "position": {"x": 390, "y": -420},
+                "config": {"kind": "location", "name": "{{loop.item.location_name}}", "limit": 1},
             },
             {
                 "id": "has_narration",
@@ -542,6 +579,9 @@ JSON Schema 的对象。"""
         ],
         "edges": [
             {"id": "shot_blockout_mode", "source": "render_blockout", "target": "is_keyframes"},
+            #: 首帧引用这两步(引用即依赖):旁白镜、没写地点的镜被跳过时读到空串,参考图那一行自然消失。
+            {"id": "shot_subject_find", "source": "has_subject", "target": "find_subject", "source_handle": "true"},
+            {"id": "shot_location_find", "source": "has_location", "target": "find_location", "source_handle": "true"},
             {"id": "shot_mode_first", "source": "is_keyframes", "target": "paint_first_frame", "source_handle": "true"},
             {"id": "shot_first_needs_last", "source": "paint_first_frame", "target": "needs_last_frame"},
             {"id": "shot_first_file", "source": "paint_first_frame", "target": "file_keyframes"},
@@ -1140,11 +1180,12 @@ JSON Schema 的对象。"""
     ]
     add_background_music(nodes, edges, music, FULL_VIDEO_MUSIC_SLOT, db)
     graph = {
+        #: v18:关键帧的参考图按先后排(主角 → 地点 → 白模 → 其余),按模型收得下的张数取(source_overflow)。
         #: v17:每镜写明谁在说(speaker),角色带着音色就用它的嗓子念;有音乐模型时铺一首配乐(templates_music)。
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 17, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 18, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

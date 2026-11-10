@@ -491,7 +491,7 @@ def test_图上写了要哪一版_装的时候交给_Manager_git_commit_或没�
     assert any("latest" in (one.get("message") or "") for one in events), "不能选版本时明说会装 latest"
 
 
-def test_随插件的官方工作流范例_列出四张和缺项(plugin, comfy) -> None:
+def test_随插件的官方工作流范例_列出全部和缺项(plugin, comfy) -> None:
     _module, Comfy, _convert = plugin
     import bundled
 
@@ -499,10 +499,14 @@ def test_随插件的官方工作流范例_列出四张和缺项(plugin, comfy) 
 
     assert status["id"] == "official_comfyui_examples"
     assert status["folder"] == "mosael/examples"
-    assert len(status["workflows"]) == 4
+    #: H3 长片 / 数字人四张,Krea2 关键帧两张(1.25.0)。
+    assert [one["file"] for one in status["workflows"]] == [
+        "minimax_h3_open.json", "minimax_h3_continue.json", "minimax_h3_talk_open.json", "minimax_h3_talk_continue.json",
+        "krea2_keyframe_character.json", "krea2_keyframe_scene_character.json",
+    ]
     assert all(one["path"].startswith("mosael/examples/") and not one["installed"] for one in status["workflows"])
     assert all(one["file"] and one["description"] for one in status["workflows"])
-    #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG 节点,所以每张都应报缺——这正是运行前要说的东西。
+    #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG/Krea2 节点,所以每张都应报缺——这正是运行前要说的东西。
     assert all(one["missing_nodes"] for one in status["workflows"])
     assert all("problem" in one for one in status["workflows"])
 

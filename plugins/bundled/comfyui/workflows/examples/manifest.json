@@ -61,6 +61,32 @@
         "zh": "读取上一段数字人潜空间继续说话，保存当前段潜空间；和第一段配套使用。",
         "en": "Continue the digital human from the previous latent and save the current one; use it with the opening workflow."
       }
+    },
+    {
+      "file": "krea2_keyframe_character.json",
+      "role": "keyframe_from_character",
+      "category": "image",
+      "name": {
+        "zh": "Krea2 关键帧 · 人物三视图 + 文字",
+        "en": "Krea2 keyframe · character turnaround + text"
+      },
+      "description": {
+        "zh": "给一张人物三视图(自动只取正面那一格)和一段画面描述,画出同一个人在新场景、新机位里的一帧 —— 「从主题到完整视频」逐镜画首帧用它。",
+        "en": "Give a character turnaround (only its front view is used) and a description: draws the same person in a new scene and camera angle — what “Topic to finished video” uses for each shot's first frame."
+      }
+    },
+    {
+      "file": "krea2_keyframe_scene_character.json",
+      "role": "place_character_in_scene",
+      "category": "image",
+      "name": {
+        "zh": "Krea2 · 把人物放进场景图",
+        "en": "Krea2 · place a character into a scene"
+      },
+      "description": {
+        "zh": "一张场景图加一张人物三视图(只取正面),把这个人放进这张场景里;构图跟着场景图走,适合定场、换装后的同一机位。",
+        "en": "A scene image plus a character turnaround (front view only): puts the person into that scene; the framing follows the scene image — for establishing shots or the same camera set-up."
+      }
     }
   ]
 }

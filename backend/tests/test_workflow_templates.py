@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 17,
+        "template_version": 18,
         "source": "official",
     }
 
@@ -145,11 +145,25 @@ class Test每一镜都有实物参考:
         assert {"first_frame", "last_frame", "reference_image", "reference_video"} <= roles
         assert "{{input.sheets}}" in clip["source_assets"], "全部角色的三视图整组接进来"
 
-    def test_首帧按白模机位画_带着三视图和设定图(self) -> None:
-        first = self._body()["paint_first_frame"]["config"]
+    def test_首帧的参考图按先后排_主角_地点_白模_其余_按模型收得下的取(self) -> None:
+        """只收两张的模型(krea2 编辑)拿到主角和地点;收得多的照样拿到白模与全部三视图、设定图。
+        此前白模排第一、全部角色和场景一股脑挂上:收得少的模型整步报错。"""
+        body = self._body()
+        first = body["paint_first_frame"]["config"]
         assert first["kind"] == "image" and first["model"] == SEEDREAM.model
-        assert first["source_assets"][0] == "{{render_blockout.first_frame_asset_id}}:reference_image"
+        assert first["source_assets"][:3] == [
+            "{{find_subject.asset_id}}:reference_image",
+            "{{find_location.asset_id}}:reference_image",
+            "{{render_blockout.first_frame_asset_id}}:reference_image",
+        ]
         assert {"{{input.sheets}}", "{{input.locations}}"} <= set(first["source_assets"])
+        assert first["source_overflow"] == "keep_first"
+        assert body["find_subject"]["config"] == {"kind": "character", "name": "{{loop.item.first_frame_subject}}", "limit": 1}
+        assert body["find_location"]["config"] == {"kind": "location", "name": "{{loop.item.location_name}}", "limit": 1}
+        last = body["paint_last_frame"]["config"]
+        assert last["source_assets"][:2] == ["{{find_subject.asset_id}}:reference_image",
+                                             "{{paint_first_frame.asset_id}}:reference_image"]
+        assert last["source_overflow"] == "keep_first"
 
     def test_尾帧接着首帧画(self) -> None:
         last = self._body()["paint_last_frame"]["config"]

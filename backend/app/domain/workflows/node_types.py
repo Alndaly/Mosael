@@ -373,6 +373,7 @@ _FIELD_LABELS = {
     "quality": "wfField_quality",
     "ai_label": "wfField_ai_label",
     "source_group": "wfField_source_group",
+    "source_overflow": "wfField_source_overflow",
     "entity_ids": "wfField_entity_ids",
     "shot_angle": "wfField_shot_angle",
     "frame_aspect": "wfField_frame_aspect",
@@ -1141,6 +1142,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "source_group": {
                 "advanced": True, "type": "string", "default": "all", "options": list(SOURCE_GROUPS),
                 "allow_custom": True, "description": "wfNode_ai_generate_source_group",
+            },
+            #: 输入素材超过模型能收的张数时:缺省报错(丢哪张都是替人做主);`keep_first` = 素材是按先后排的,去掉重复、
+            #: 只留前面收得下的那几张 —— 整片的首帧按「主角 → 地点 → 白模 → 其余」排,换个收两张 / 十六张的模型都对。
+            "source_overflow": {
+                "advanced": True, "type": "string", "default": "error", "options": ["error", "keep_first"],
+                "description": "wfNode_ai_generate_source_overflow",
             },
             #: 点名资产库里的资产(ADR 0027 的 `@资产`):提示词描述拼进提示词,参考图按模型收得下的
             #: 张数挂上 —— 和 AI 工作台、画板、智能体同一条路(domain/entities/mentions)。挑几个就是一串 id;

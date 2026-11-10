@@ -376,7 +376,7 @@ def test_官方工作流范例可以检查并按选择安装(connected) -> None:
     assert status.status_code == 200, status.text
     body = status.json()
     assert body["id"] == "official_comfyui_examples" and body["folder"] == "mosael/examples"
-    assert len(body["workflows"]) == 4
+    assert len(body["workflows"]) == 6
     assert all(not one["installed"] for one in body["workflows"])
     assert all(one["description"] for one in body["workflows"]), "列表里每张都说清它是什么"
 

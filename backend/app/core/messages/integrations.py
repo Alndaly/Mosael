@@ -1214,6 +1214,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_resolution": {"zh": "分辨率", "en": "Resolution"},
     "wfField_quality": {"zh": "画质", "en": "Quality"},
     "wfField_ai_label": {"zh": "「AI 生成」标识", "en": "“AI generated” label"},
+    "wfField_source_overflow": {"zh": "素材超出上限时", "en": "When inputs exceed the limit"},
     "wfField_source_group": {"zh": "用哪一组素材", "en": "Which sources to use"},
     "wfField_entity_ids": {"zh": "资产", "en": "Assets"},
     "wfField_shot_angle": {"zh": "这一镜的机位", "en": "Shot angle"},

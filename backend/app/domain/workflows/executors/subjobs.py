@@ -55,9 +55,11 @@ from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 from app.domain.generation import operations as generation_operations, runner as generation_runner
 from app.domain.generation.operations import (
     GenerationDomainError,
+    capabilities_of_choice,
     check_parameters,
     is_digital_human_request,
     keep_source_group,
+    keep_sources_that_fit,
     parse_source_assets,
 )
 from app.domain.generation.origins import of_run_scope
@@ -289,6 +291,22 @@ def _pose_of(config: dict[str, Any]) -> PoseUse:
         raise WorkflowDomainError("wfErr_shotAngleInvalid", params={"value": str(config.get("shot_angle") or "")}) from exc
 
 
+def _sources_to_send(db: Session, config: dict[str, Any], kind: str) -> list[dict[str, str]]:
+    """节点上的「输入素材」→ 交给生成的那几份:先按组筛(首尾帧组 / 参考组),`source_overflow = keep_first` 时再按先后
+    只留模型收得下的(见 generation.operations.keep_sources_that_fit);默认原样交,超了由生成漏斗拒。"""
+    sources = keep_source_group(
+        parse_source_assets(config.get("source_assets"), kind=kind),
+        str(config.get("source_group") or "all").strip(),
+    )
+    if str(config.get("source_overflow") or "").strip() != "keep_first":
+        return sources
+    capabilities = capabilities_of_choice(
+        db, provider=str(config.get("provider", "")), model=str(config.get("model", "")), kind=kind,
+        provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
+    )
+    return keep_sources_that_fit(sources, capabilities, kind)
+
+
 @register("ai_generate")
 def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
 
@@ -313,10 +331,7 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 prompt=str(config.get("prompt", "")),
                 negative_prompt=str(config.get("negative_prompt", "")),
                 parameters=provided(dict(config.get("parameters") or {})),
-                source_assets=keep_source_group(
-                    parse_source_assets(config.get("source_assets"), kind=kind),
-                    str(config.get("source_group") or "all").strip(),
-                ),
+                source_assets=_sources_to_send(db, config, kind),
                 #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
                 entity_ids=parse_entity_ids(config.get("entity_ids")),
                 pose=_pose_of(config),

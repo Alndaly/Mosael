@@ -370,6 +370,8 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
+krea2_keyframe_character.json
+krea2_keyframe_scene_character.json
 ```
 
 Each entry has a name and a one-line description. It first checks, without writing, which files already exist and which
@@ -507,6 +509,22 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
 - A form without a title (the one rewritten from the previous format, if it never had one) is named "Untitled form"; the editor requires
   every form to have a title.
 
+
+## Krea2 keyframe examples (1.25.0)
+
+Two image workflows join the official examples (free first frames for "Topic to finished video", no paid multi-reference
+model needed):
+
+- `krea2_keyframe_character.json` "Krea2 keyframe · character turnaround + text": a character turnaround plus a description →
+  the same person in a new scene and camera angle. The turnaround is scaled to 1536×864 and only its left (front) third is
+  handed to Krea2 edit — given the whole sheet, the model draws the same person two or three times (measured). Scene and
+  camera come from the text, so each shot's size and angle follow the storyboard.
+- `krea2_keyframe_scene_character.json` "Krea2 · place a character into a scene": a scene image plus a turnaround (front only)
+  → the person in that scene. Krea2 edit keeps the scene image's framing — for establishing shots or one fixed set-up.
+
+Both use `krea2_turbo_int8_convrot`, `krea2_identity_edit_v1_2` (LoRA), `qwen3vl_4b_bf16` and `qwen_image_vae`; when a file
+sits in a subfolder, the workflow details offer to point at it. The front-view crop assumes a 16:9 "front · side · back"
+turnaround (what Mosael draws); an ordinary portrait only has its left third used.
 
 ## Fixes (1.21.4)
 

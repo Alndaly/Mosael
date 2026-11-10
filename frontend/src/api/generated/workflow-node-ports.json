@@ -95,6 +95,13 @@
           "en": "Which sources to use"
         }
       },
+      "source_overflow": {
+        "type": "string",
+        "label": {
+          "zh": "素材超出上限时",
+          "en": "When inputs exceed the limit"
+        }
+      },
       "entity_ids": {
         "type": "template",
         "editor": "id_list",
