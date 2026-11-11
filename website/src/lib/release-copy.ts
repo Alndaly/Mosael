@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.5.0": {
+    zh: [
+      "**H3 Image 有了正式的质量路径。** 新范例先用 Qwen3.5-9B 扩写提示词，再按 16MP（4096×4096）出图；可关掉扩写或改画幅，官方范例更新也会标出「有更新」。",
+      "**数字人按配音实际长度生成。** 「让它说话」会认 H3 数字人工作流，按配音剪短、清掉驱动音频里的长静音；默认模型直接预选，不再显示占位项。",
+      "**没有旁白的镜头保留环境声。** 雨声、水滴不再被整段静音；环境声也不会触发配乐闪避，配乐垫底不会被错误压低。",
+      "**整片、连续剧和飞书继续补完。** 角色按自己的嗓子配音、系列设定模板、白模关键帧、2K/4K 超分，以及飞书卡片 JSON 2.0 与素材图片发送都已落地。",
+    ],
+    en: [
+      "**H3 Image gains a real quality path.** The new example expands the short prompt with Qwen3.5-9B, then renders at 16 MP (4096×4096); the enhancer and canvas are both switchable, and updated official examples are marked “Update available”.",
+      "**Digital humans follow the actual voice length.** “Make it speak” recognizes the H3 digital-human workflow, trims the video to the voice and removes long silences from the driving audio; the default model is preselected instead of a placeholder.",
+      "**Shots without narration keep their ambience.** Rain and water drops are no longer muted with the whole clip, and ambience no longer ducks the music bed.",
+      "**Full videos, series and Feishu keep filling in.** Character voices, the series-setup template, blockout keyframes, 2K/4K upscaling, Feishu card JSON 2.0 and asset-image sending all land here.",
+    ],
+  },
   "v2.4.4": {
     zh: [
       "**ComfyUI 工作台新增「工作流」页签和官方范例安装。** 当前连接的工作流可直接打开/新建，官方范例吸底收起、点击展开，每张单独安装；切换工作流直接走现有画布桥，不再整页重开。",

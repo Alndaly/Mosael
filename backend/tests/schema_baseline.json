@@ -92,12 +92,7 @@
   ],
   "agent_voice_prefs": [
     "owner_user_id",
-    "engine",
-    "engine_voice",
-    "engine_voice_resource",
-    "engine_model",
-    "provider_profile_id",
-    "voice_id",
+    "voice",
     "speed",
     "enabled",
     "asr_engine",
@@ -299,6 +294,7 @@
     "id",
     "open_registration",
     "plugin_registry_url",
+    "update_feed_url",
     "shared_host_folders",
     "outbound_allowlist",
     "web_url",
@@ -1012,7 +1008,6 @@
   ],
   "voice_default_config": [
     "id",
-    "engine",
     "voice",
     "updated_at"
   ],
