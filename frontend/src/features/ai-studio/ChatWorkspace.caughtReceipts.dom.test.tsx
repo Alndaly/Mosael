@@ -168,13 +168,10 @@ it("成功的回执即使还没交给智能体,也不在对话里画卡 —— �
   expect(container.querySelectorAll("[data-job-receipt]")).toHaveLength(0);
 });
 
-it("没接住的失败回执仍然显式是一张卡,带动作", async () => {
+it("没接住的失败回执也不在对话里画卡 —— 右侧后台任务承担", async () => {
   h.messages = [firstAsk, undelivered];
   const { container } = mount();
 
-  await screen.findByText("配音 2");
-  const notices = container.querySelectorAll<HTMLElement>("[data-job-receipt]");
-  expect(notices).toHaveLength(1);
-  expect(notices[0].textContent).toContain("chatReceiptWaiting");
-  expect(notices[0].querySelector("[data-receipt-open-task]")).toBeTruthy();
+  await screen.findByText("把旁白都配上音");
+  expect(container.querySelectorAll("[data-job-receipt]")).toHaveLength(0);
 });

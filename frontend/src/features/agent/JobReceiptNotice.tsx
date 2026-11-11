@@ -54,11 +54,6 @@ export function isWaitingReceipt(message: { role: string; payload?: unknown }): 
   return message.role === JOB_RECEIPT_ROLE && Boolean((message.payload as ReceiptPayload)?.undelivered);
 }
 
-/** 成功回执:右侧「后台任务」已经列着它,对话里不再画那张兜底卡。 */
-export function isSuccessfulReceipt(message: { role: string; payload?: unknown }): boolean {
-  return message.role === JOB_RECEIPT_ROLE && (message.payload as ReceiptPayload)?.status === "succeeded";
-}
-
 /**
  * 后台任务跑完送回来的回执。
  *
