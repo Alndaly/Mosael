@@ -43,12 +43,31 @@ def _text(content: str) -> dict[str, Any]:
     return {"tag": "div", "text": {"tag": "lark_md", "content": content}}
 
 
+def _flatten_payload(value: Any, prefix: str = "") -> list[tuple[str, str]]:
+    if isinstance(value, dict):
+        rows: list[tuple[str, str]] = []
+        for key, item in value.items():
+            name = f"{prefix}.{key}" if prefix else str(key)
+            rows.extend(_flatten_payload(item, name))
+        return rows
+    if isinstance(value, list):
+        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    elif value is None:
+        text = "—"
+    elif isinstance(value, bool):
+        text = "是" if value else "否"
+    else:
+        text = str(value)
+    return [(prefix or "值", text)]
+
+
 def _payload_elements(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """和 Mosael 内部确认卡一样展示完整 payload;空对象不占一块。"""
-    if not payload:
+    """和 Mosael 内部确认卡一样展示完整参数;展平成可读字段,避开旧版卡片的代码围栏限制。"""
+    rows = _flatten_payload(payload)
+    if not rows:
         return []
-    raw = json.dumps(payload, ensure_ascii=False, indent=2)
-    return [_text(f"**参数**\n```json\n{raw}\n```")]
+    lines = ["**参数**", *(f"`{key}`:{value}" for key, value in rows)]
+    return [_text("\n".join(lines))]
 
 
 def _button_row(buttons: list[dict[str, Any]]) -> dict[str, Any]:

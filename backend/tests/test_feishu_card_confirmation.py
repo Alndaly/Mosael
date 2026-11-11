@@ -266,8 +266,9 @@ def test_待确认和已结算卡都保留完整生成参数() -> None:
         text = "\n".join(element.get("text", {}).get("content", "") for element in card["elements"])
         assert "doubao-seedream-4-5" in text
         assert "1920x1080" in text
-        assert '"num_images": 2' in text
-        assert '"provider": "volcengine"' in text
+        assert "`parameters.num_images`:2" in text
+        assert "`provider`:volcengine" in text
+        assert "```" not in text
 
 
 def test_飞书卡片消息_id_会落库(ctx, monkeypatch) -> None:
