@@ -2416,6 +2416,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                           "description": "wfNode_entity_get_entity_id"},
             "kind": {"type": "string", "options": list(ENTITY_KINDS), "description": "wfNode_entity_get_kind"},
             "name": {"type": "template", "one_of": "target", "description": "wfNode_entity_get_name"},
+            #: 只要这种角度的图(场景的「设计稿」这类):给了就只从这种图里挑,封面也不算 —— 老资产封面是全景时,
+            #: 整片要的设计稿不会被封面顶掉;一张都没有时 asset_ids 为空,正好走「去画」那一支。
+            "role": {"advanced": True, "type": "string", "options_from": "entity_roles", "depends_on": "kind",
+                     "description": "wfNode_entity_get_role"},
             "limit": {"advanced": True, "type": "number", "description": "wfNode_entity_get_limit"},
         },
         "outputs": ["entity_id", "found", "name", "description", "prompt", "asset_ids", "asset_id", "voice_engine", "voice_id"],

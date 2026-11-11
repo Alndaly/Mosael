@@ -26,6 +26,7 @@ ROLES: tuple[str, ...] = (
     "side",
     "back",
     "turnaround",
+    "design_sheet",
     "closeup",
     "full_body",
     "expression",
@@ -43,7 +44,7 @@ ROLES: tuple[str, ...] = (
 #: 道具没有;场景没有「正面 / 侧面 / 背面」,它的角度是机位 —— 全景、反打、俯视。
 ROLES_BY_KIND: dict[str, tuple[str, ...]] = {
     "character": ("front", "side", "back", "turnaround", "closeup", "full_body", "expression", "concept", "detail"),
-    "location": ("wide", "reverse", "overhead", "concept", "detail"),
+    "location": ("design_sheet", "wide", "reverse", "overhead", "concept", "detail"),
     "prop": ("front", "side", "back", "turnaround", "closeup", "concept", "detail"),
     #: 姿势的角度是**机位**:同一个体态从正面、斜侧、侧面、背面、俯拍、仰拍看(ADR 0091 §2,词表见 shot_angles)。
     "pose": (*SHOT_ANGLES, "detail"),
@@ -51,10 +52,12 @@ ROLES_BY_KIND: dict[str, tuple[str, ...]] = {
 }
 
 #: 生成时从参考图里挑的先后(ADR 0027 §3),按种类:人物三视图 > 正面 > 全身,道具三视图 > 正面,
-#: 场景全景 > 设定图;其余按资产里排的顺序。
+#: 场景设计稿 > 全景 > 设定图;其余按资产里排的顺序。场景的「设计稿」是人物三视图的对应物:一张图分几格画同一个地方
+#: (俯瞰布局、反打、立面细节、地面细节),交给出图模型时它学得到建筑、陈设和光线,却没有一个现成的构图可以照搬
+#: —— 一张全景设定图交进去,FLUX.3 / Qwen-Image / MOSS / krea2 都照着它的构图画,白模的机位压不过它(ADR 0097 修订四)。
 ATTACH_PRIORITY: dict[str, tuple[str, ...]] = {
     "character": ("turnaround", "front", "full_body"),
-    "location": ("wide", "concept"),
+    "location": ("design_sheet", "wide", "concept"),
     "prop": ("turnaround", "front"),
     "costume": ("front", "back"),
 }

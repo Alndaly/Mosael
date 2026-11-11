@@ -18,7 +18,7 @@ from app.ai.providers import VoiceCatalogContext, engine_voices, speech_engines
 from app.domain.voices.speech import EDGE_ENGINE
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_full_video import LOCATION_ART_PROMPT, TURNAROUND_PROMPT
+from app.domain.workflows.templates_full_video import LOCATION_DESIGN_SHEET_PROMPT, LOCATION_SHEET_ROLE, TURNAROUND_PROMPT
 from app.domain.workflows.templates_models import ModelChoice, image_plan_for
 from app.domain.workflows.templates_schemas import object_schema
 
@@ -97,9 +97,12 @@ def series_setup_graph(*, chat: ModelChoice, image: ModelChoice, db: Session | N
 - style_prompt 用户写了画风就照它写成一句英文；没写就按题材定。
 只输出符合 JSON Schema 的对象。"""
 
-    def reuse_or_draw(kind: str, drawer: dict[str, Any], save: dict[str, Any]) -> dict[str, Any]:
+    def reuse_or_draw(kind: str, drawer: dict[str, Any], save: dict[str, Any], role: str = "") -> dict[str, Any]:
         """库里按名字认:有图就不画。**存成资产每一项都跑**(不只新画的):库里已有的人物也要配上嗓子;它引用画图那一步,
         画图被跳过时照样等它落定、读到空串,只补嗓子不加图。"""
+        find_config = {"kind": kind, "name": "{{loop.item.name}}", "limit": 1}
+        if role:
+            find_config["role"] = role
         return {
             "nodes": [
                 {
@@ -107,7 +110,7 @@ def series_setup_graph(*, chat: ModelChoice, image: ModelChoice, db: Session | N
                     "type": "entity_get",
                     "name": {"zh": "在资产库里找", "en": "Look it up in the asset library"},
                     "position": {"x": 80, "y": 140},
-                    "config": {"kind": kind, "name": "{{loop.item.name}}", "limit": 1},
+                    "config": find_config,
                 },
                 {
                     "id": "has_art",
@@ -153,16 +156,17 @@ def series_setup_graph(*, chat: ModelChoice, image: ModelChoice, db: Session | N
     )
     location_body = reuse_or_draw(
         "location",
-        drawer("art", "画这个场景的设定图", "Paint this location's concept art", LOCATION_ART_PROMPT),
+        drawer("art", "画这个场景的设计稿", "Paint this location's design sheet", LOCATION_DESIGN_SHEET_PROMPT),
         {
             "id": "save",
             "type": "entity_save",
             "name": {"zh": "存成场景资产", "en": "Save as a location asset"},
             "config": {
                 "kind": "location", "name": "{{loop.item.name}}", "prompt": "{{loop.item.description}}",
-                "asset_ids": "{{art.asset_id}}", "tags": "{{input.title}}",
+                "asset_ids": "{{art.asset_id}}", "role": LOCATION_SHEET_ROLE, "tags": "{{input.title}}",
             },
         },
+        role=LOCATION_SHEET_ROLE,
     )
     loop_inputs = {"style": "{{series_bible.json.style_prompt}}", "title": "{{series_bible.json.title}}"}
 
@@ -291,7 +295,7 @@ def series_setup_graph(*, chat: ModelChoice, image: ModelChoice, db: Session | N
         {"id": "note_output", "source": "bible_note", "target": "output"},
     ]
     return normalize_graph(
-        {"meta": {"template_id": SERIES_SETUP, "template_version": 1, "source": "official"}, "nodes": nodes, "edges": edges},
+        {"meta": {"template_id": SERIES_SETUP, "template_version": 2, "source": "official"}, "nodes": nodes, "edges": edges},
         node_types=NODE_TYPES,
     )
 

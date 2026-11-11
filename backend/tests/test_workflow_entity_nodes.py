@@ -51,6 +51,27 @@ def test_取资产_点名一个_交出提示词描述和按挑图先后排的参
     assert out["asset_ids"] == ["winter"]
 
 
+def test_取资产_按角色筛选_指定时不让封面顶替_变体沿用母体() -> None:
+    client, ws = _setup()
+    made = client.post("/api/entities", json={
+        "workspace_id": ws, "kind": "location", "name": "山间小屋", "prompt": "山雾中的木屋",
+    }).json()
+    client.post(f"/api/entities/{made['id']}/references", json={"asset_id": "front", "role": "wide", "cover": True})
+    client.post(f"/api/entities/{made['id']}/references", json={"asset_id": "sheet", "role": "design_sheet"})
+
+    with SessionLocal() as db:
+        design = entity_get(db, _scope(ws), {"entity_id": made["id"], "role": "design_sheet"})
+        every = entity_get(db, _scope(ws), {"entity_id": made["id"]})
+    assert design["asset_ids"] == ["sheet"] and design["asset_id"] == "sheet"
+    assert every["asset_ids"] == ["sheet", "front"], "设计稿优先,全景在后"
+    assert every["asset_id"] == "front", "没指定角色时仍尊重人手设的封面"
+
+    variant = client.post(f"/api/entities/{made['id']}/variants", json={"name": "雨夜"}).json()
+    with SessionLocal() as db:
+        inherited = entity_get(db, _scope(ws), {"entity_id": variant["id"], "role": "design_sheet"})
+    assert inherited["asset_ids"] == ["sheet"], "变体没有自己的设计稿时沿用母体的"
+
+
 def test_取资产_按名字找_找不到给_0_不报错_点名的找不到才报错() -> None:
     client, ws = _setup()
     made = _character(client, ws)
@@ -157,8 +178,12 @@ def test_资产下拉可以按种类筛() -> None:
         every = [one["label"] for one in field_options(db, "entities", ctx)]
         props = [one["label"] for one in field_options(db, "entities.prop", ctx)]
         roles = {one["value"]: one["label"] for one in field_options(db, "entity_roles", ctx)}
+        place_ctx = OptionContext(workspace_id=ws, user_id=None, parent="location", locale="zh")
+        place_roles = {one["value"] for one in field_options(db, "entity_roles", place_ctx)}
     assert len(every) == 2 and props == ["道具 · 红伞"]
     assert roles["front"] == "正面" and roles["turnaround"] == "三视图"
+    assert roles["design_sheet"] == "设计稿"
+    assert "design_sheet" in place_roles and "turnaround" not in place_roles
 
 
 def test_整片模板的角色循环_库里有的直接用_没有的画完存成资产(monkeypatch) -> None:

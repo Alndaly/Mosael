@@ -52,6 +52,17 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _tagged_asset_ids(db: Session, entity: Any, role: str) -> set[str]:
+    """这个角色标成该用途的图片 id;变体也认母体的参考图。"""
+    owners = [entity.id] + ([entity.parent_id] if entity.parent_id else [])
+    return {
+        ref.asset_id
+        for owner in owners
+        for ref, _asset in references_of(db, owner)
+        if ref.role == role
+    }
+
+
 @register("entity_get")
 def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """点名一个资产,或按「种类 + 名字」找一个。点名的找不到是错;按名字找不到不是错,`found` 给 0 ——
@@ -79,6 +90,10 @@ def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
         limit = int(config.get("limit") or DEFAULT_REFERENCE_LIMIT)
     except (TypeError, ValueError):
         limit = DEFAULT_REFERENCE_LIMIT
+    role = _text(config.get("role"))
+    if role:
+        tagged = _tagged_asset_ids(db, entity, role)
+        images = [one for one in images if one in tagged]
     picked = images[: max(1, limit)]
     voice = VoiceRef.stored((entity.attributes or {}).get("voice"))
     return {
@@ -89,7 +104,7 @@ def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
         "prompt": descriptor,
         "asset_ids": picked,
         #: 封面:设过的那张,没设就是挑图顺序里的第一张。
-        "asset_id": entity.cover_asset_id or (picked[0] if picked else ""),
+        "asset_id": (picked[0] if picked else "") if role else entity.cover_asset_id or (picked[0] if picked else ""),
         #: 节点的出口还是「引擎 + 一格音色」两格,接给念稿节点的那两格(ADR 0087 第 3 步改成一个音色选择)。
         "voice_engine": voice.engine if voice is not None else "",
         "voice_id": voice.spoken if voice is not None else "",

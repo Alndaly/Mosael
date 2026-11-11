@@ -522,6 +522,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_entity_get_kind": {"zh": "按名字找时:哪一种", "en": "For a name lookup: which kind"},
     "wfNode_entity_get_name": {"zh": "按名字找(不分大小写);常接上游的角色名", "en": "Look up by name (case-insensitive); usually a character name from upstream"},
     "wfNode_entity_get_limit": {"zh": "最多交出几张参考图,默认 8", "en": "At most this many references, 8 by default"},
+    "wfNode_entity_get_role": {"zh": "只要这种角度的图(如场景的设计稿);留空按挑图先后取全部,封面排第一", "en": "Only images of this angle (such as a location's design sheet); empty takes all in attach order, cover first"},
     "wfNode_scene_from_text": {"zh": "按文字搭 3D 场景", "en": "Build a 3D scene from text"},
     "wfNode_scene_from_text_desc": {
         "zh": "照一段剧本、分镜或描述搭一个 3D 白模场景:拆成几个镜头,每镜一个布景台,摆好人偶、道具和相机,写好运镜。和「从主题到完整视频」里搭白模的规矩是同一份。搭好的场景在「3D 场景」里,可以渲首尾帧或运镜视频。",

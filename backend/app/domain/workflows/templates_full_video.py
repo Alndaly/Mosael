@@ -145,10 +145,18 @@ TURNAROUND_PROMPT = (
     "identical outfit and proportions, relaxed A-pose, plain white background, soft even studio "
     "light, no text, no labels, no borders. {{input.style}}"
 )
-LOCATION_ART_PROMPT = (
-    "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. "
-    "Wide view of the empty set, no people, no text. {{input.style}}"
+#: 场景存进库的是一张**设计稿**(和人物三视图对应,ADR 0097 修订四):一张图四格画同一个地方,出图模型拿它学建筑、陈设、
+#: 光线,却没有一个现成的构图可以照搬。此前是一张全景设定图(「Establishing concept art……Wide view」):交给画关键帧
+#: 的模型,FLUX.3 / Qwen-Image / MOSS / krea2 都照着它的构图画,白模的机位压不过它。
+LOCATION_DESIGN_SHEET_PROMPT = (
+    "Location design sheet of {{loop.item.name}}: {{loop.item.description}} "
+    "A 2x2 grid of four separate panels with thin white gutters on a plain light background: top-left a high bird's-eye "
+    "view showing the whole layout of the place; top-right an eye-level view looking the opposite way; bottom-left a "
+    "close-up of the walls, doors, windows and fixtures; bottom-right a close-up of the floor or ground and small props. "
+    "The same place, materials, lighting and weather in every panel. No people, no text. {{input.style}}"
 )
+#: 场景的设计稿在资产里标成这个角度;「取资产」按它认(只认设计稿:老资产只有全景时补画一张,加进同一个资产里)。
+LOCATION_SHEET_ROLE = "design_sheet"
 
 
 #: **用户给了逐镜剧本时照它来。** 主题可以是一句话,也可以是一份分场剧本(一行一镜:画面、谁说、台词原文)。分镜那次对话
@@ -378,9 +386,12 @@ JSON Schema 的对象。"""
         " Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, "
         "lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render "
         "them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main "
-        "character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's concept "
-        "art; either may be missing. Output one single finished picture, never a collage of the references. Only the "
-        "characters described above appear; if none are described, the place is empty of people. {{input.style}}"
+        "character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design "
+        "sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the "
+        "framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture "
+        "or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a "
+        "collage of the references. Only the characters described above appear; if none are described, the place is empty "
+        "of people. {{input.style}}"
     )
 
     #: 这一镜交给下游的是哪个节点的素材:接得下去的模型是接好的那一条。
@@ -540,7 +551,8 @@ JSON Schema 的对象。"""
                 "type": "entity_get",
                 "name": {"zh": "在资产库里找这一镜的地点", "en": "Look the shot's location up in the library"},
                 "position": {"x": 390, "y": -420},
-                "config": {"kind": "location", "name": "{{loop.item.location_name}}", "limit": 1},
+                "config": {"kind": "location", "name": "{{loop.item.location_name}}", "limit": 1,
+                               "role": LOCATION_SHEET_ROLE},
             },
             {
                 "id": "has_narration",
@@ -706,10 +718,17 @@ JSON Schema 的对象。"""
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
     }
-    def reuse_or_draw(kind: str, what: dict[str, str], drawer: dict[str, Any], save: dict[str, Any]) -> dict[str, Any]:
+    def reuse_or_draw(kind: str, what: dict[str, str], drawer: dict[str, Any], save: dict[str, Any],
+                      role: str = "") -> dict[str, Any]:
         """每个角色 / 场景:先到资产库里按名字认(ADR 0027 阶段 4),**有图就用它的,不再重画**;没有才画,画完
         存成资产 —— 下一部片子里的同一个角色是同一张脸。循环交出的是「认出来的那张」或「新画的那张」:
-        没跑的那一支引用出来是空串,两段拼在一起正好是跑了的那一支(见 workflows.interpolate)。"""
+        没跑的那一支引用出来是空串,两段拼在一起正好是跑了的那一支(见 workflows.interpolate)。
+
+        场景要 `role`:库里只有全景设定图的老场景不算「有图」,补画一张设计稿再加进同一个资产。
+        """
+        find_config = {"kind": kind, "name": "{{loop.item.name}}", "limit": 1}
+        if role:
+            find_config["role"] = role
         return {
             "nodes": [
                 {
@@ -717,7 +736,7 @@ JSON Schema 的对象。"""
                     "type": "entity_get",
                     "name": {"zh": f"在资产库里找这个{what['zh']}", "en": f"Look this {what['en']} up in the asset library"},
                     "position": {"x": 80, "y": 140},
-                    "config": {"kind": kind, "name": "{{loop.item.name}}", "limit": 1},
+                    "config": find_config,
                 },
                 {
                     "id": "has_art",
@@ -781,13 +800,13 @@ JSON Schema 的对象。"""
         {
             "id": "art",
             "type": "ai_generate",
-            "name": {"zh": "画这个场景的设定图", "en": "Paint this location's concept art"},
+            "name": {"zh": "画这个场景的设计稿", "en": "Paint this location's design sheet"},
             "config": {
                 "provider": image.provider,
                 "provider_profile_id": image.profile_id,
                 "model": image.model,
                 "kind": "image",
-                "prompt": LOCATION_ART_PROMPT,
+                "prompt": LOCATION_DESIGN_SHEET_PROMPT,
                 "parameters": sheet_parameters,
             },
         },
@@ -800,9 +819,10 @@ JSON Schema 的对象。"""
                 "name": "{{loop.item.name}}",
                 "prompt": "{{loop.item.description}}",
                 "asset_ids": "{{art.asset_id}}",
-                "role": "wide",
+                "role": LOCATION_SHEET_ROLE,
             },
         },
+        role=LOCATION_SHEET_ROLE,
     )
 
     #: **摆位:没有一条线从别的卡片底下穿过。** 卡片压在线上面,穿过去的线看着就像是那张卡片接出来的:此前
@@ -1233,7 +1253,7 @@ JSON Schema 的对象。"""
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 22, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 23, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

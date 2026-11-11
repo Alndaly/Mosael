@@ -58,6 +58,17 @@ def test_库里已有的人物不重画_但每一项都存一次_补上嗓子() 
     assert ("sheet", "asset_id", "save", "asset_ids") in data
 
 
+def test_场景循环只取设计稿_存成资产也标设计稿() -> None:
+    graph = series_setup_graph(chat=CHAT, image=IMAGE)
+    body = _node(graph, "location_assets")["config"]["body"]
+    nodes = {one["id"]: one for one in body["nodes"]}
+    assert nodes["find"]["config"] == {
+        "kind": "location", "name": "{{loop.item.name}}", "limit": 1, "role": "design_sheet",
+    }
+    assert nodes["save"]["config"]["role"] == "design_sheet"
+    assert "2x2 grid of four separate panels" in nodes["art"]["config"]["prompt"]
+
+
 def test_真跑角色循环_有图的只配嗓子_新角色画三视图并存图存嗓子(monkeypatch) -> None:
     from app.domain.workflows.engine import execute_graph
 

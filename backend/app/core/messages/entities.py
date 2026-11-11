@@ -17,6 +17,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "entityRole_side": {"zh": "侧面", "en": "Side"},
     "entityRole_back": {"zh": "背面", "en": "Back"},
     "entityRole_turnaround": {"zh": "三视图", "en": "Turnaround"},
+    "entityRole_design_sheet": {"zh": "设计稿", "en": "Design sheet"},
     "entityRole_closeup": {"zh": "特写", "en": "Close-up"},
     "entityRole_full_body": {"zh": "全身", "en": "Full body"},
     "entityRole_expression": {"zh": "表情", "en": "Expression"},

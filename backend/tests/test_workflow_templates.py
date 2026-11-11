@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 22,
+        "template_version": 23,
         "source": "official",
     }
 
@@ -162,8 +162,12 @@ class Test每一镜都有实物参考:
         assert "image 1 is always a grey 3D blockout" in first["prompt"]
         assert "empty of people" in first["prompt"]
         assert "never a collage" in first["prompt"]
+        assert "location's design sheet" in first["prompt"]
+        assert "never the framing of any panel" in first["prompt"]
         assert body["find_subject"]["config"] == {"kind": "character", "name": "{{loop.item.first_frame_subject}}", "limit": 1}
-        assert body["find_location"]["config"] == {"kind": "location", "name": "{{loop.item.location_name}}", "limit": 1}
+        assert body["find_location"]["config"] == {
+            "kind": "location", "name": "{{loop.item.location_name}}", "limit": 1, "role": "design_sheet",
+        }
         last = body["paint_last_frame"]["config"]
         assert last["source_assets"][:3] == ["{{render_blockout.last_frame_asset_id}}:reference_image",
                                              "{{paint_first_frame.asset_id}}:reference_image",
@@ -186,11 +190,14 @@ class Test每一镜都有实物参考:
         """ADR 0027 阶段 4:第二部片子里的同一个角色是同一张脸。"""
         graph = _full_video()
         for loop, drawer, kind, role in (("character_sheets", "sheet", "character", "turnaround"),
-                                         ("location_art", "art", "location", "wide")):
+                                         ("location_art", "art", "location", "design_sheet")):
             body = _node(graph, loop)["config"]["body"]
             nodes = {one["id"]: one for one in body["nodes"]}
             assert nodes["find"]["type"] == "entity_get"
-            assert nodes["find"]["config"] == {"kind": kind, "name": "{{loop.item.name}}", "limit": 1}
+            expected = {"kind": kind, "name": "{{loop.item.name}}", "limit": 1}
+            if role == "design_sheet":
+                expected["role"] = role
+            assert nodes["find"]["config"] == expected
             assert nodes["has_art"]["config"] == {"left": "{{find.asset_ids.0}}", "op": "not_empty"}
             edges = {(one["source"], one["target"], one.get("source_handle")) for one in body["edges"]}
             assert edges == {("find", "has_art", None), ("has_art", drawer, "false"), (drawer, "save", None),
@@ -205,6 +212,8 @@ class Test每一镜都有实物参考:
             ), "作者画的控制边不许被规范化折掉"
             save = nodes["save"]["config"]
             assert (save["kind"], save["name"], save["role"]) == (kind, "{{loop.item.name}}", role)
+            if kind == "location":
+                assert "2x2 grid of four separate panels" in nodes["art"]["config"]["prompt"]
 
     def test_定角色之前先看资产库里有谁(self) -> None:
         graph = _full_video()
