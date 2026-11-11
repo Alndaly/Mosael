@@ -22,7 +22,6 @@ import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { toast } from "sonner";
 import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
-import type { MessageKey } from "@/app/messages";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
 import { VideoCompareView } from "@/features/media/VideoCompareView";
 import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
@@ -62,16 +61,6 @@ type KindFilter = (typeof KIND_FILTERS)[number];
 
 const SORT_KEYS = ["created", "updated", "name", "duration"] as const satisfies readonly AssetSort[];
 type SortKey = (typeof SORT_KEYS)[number];
-
-/**
- * 中间产物(某道工序逐条做出来的零件,见后端 domain/assets/intermediates)在界面上叫什么、是什么。
- * 素材库默认不列它们;筛选条上一枚「配音片段 985」按下去才看。后端多了一种而这里没写的,不摆入口。
- */
-const INTERMEDIATE_COPY: Record<string, { label: MessageKey; notice: MessageKey }> = {
-  dub_line: { label: "mediaIntermediate_dub_line", notice: "mediaIntermediateHint_dub_line" },
-  lipsync_chunk: { label: "mediaIntermediate_lipsync_chunk", notice: "mediaIntermediateHint_lipsync_chunk" },
-  fitted_frame: { label: "mediaIntermediate_fitted_frame", notice: "mediaIntermediateHint_fitted_frame" },
-};
 
 /** 网格:一张卡片至少这么宽,一行能放几张就放几张(此前的 `repeat(auto-fill, minmax(220px, 1fr))`)。 */
 const CARD_MIN_PX = 220;
@@ -128,18 +117,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [filtersStuck, setFiltersStuck] = React.useState(false);
   const [actionMenuId, setActionMenuId] = React.useState<string | null>(null);
 
-  //: 看素材库(空串),还是某一种中间产物(逐句配音的一句……)。它是「这一刻在看什么」,不记住:下次进来照旧是素材库 ——
-  //: 停在配音片段上的话,人会以为素材库里只剩这些。
-  const [shelf, setShelf] = React.useState("");
-  //: 页签上的数字、标签筛选的候选:整个工作区的(素材库,或眼下看的那一种中间产物),不跟着搜索和这一页走
-  //: (见后端 domain/assets/listing)。另带着每种中间产物各几份 —— 切过去的入口上写着它。标题旁的数说的
-  //: 一直是素材库(看配音片段时写着「素材 985」会让人以为素材库里就是这些),所以素材库的那份总要有;看素材库时
-  //: 两个是同一个查询。
-  const libraryFacets = useAssetFacets(workspace.id);
-  const facets = useAssetFacets(workspace.id, { intermediate: shelf });
-  const intermediates = Object.entries(facets.data?.intermediates ?? {}).filter(
-    ([kind, count]) => count > 0 && kind in INTERMEDIATE_COPY,
-  );
+  //: 页签上的数字、标签筛选的候选来自整个工作区,不跟着搜索和当前分页走(见后端 domain/assets/listing)。
+  const facets = useAssetFacets(workspace.id);
   const tagCount = React.useMemo(() => sortedTagCounts(facets.data?.tags ?? {}), [facets.data]);
   const allTags = React.useMemo(() => [...tagCount.keys()], [tagCount]);
 
@@ -155,7 +134,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     q: settledSearch || undefined,
     tag: tagFilter.length > 0 ? tagFilter : undefined,
     tag_match: tagMatch,
-    intermediate: shelf || undefined,
     sort: sortKey,
   };
   const assets = useAssetPages(query);
@@ -331,12 +309,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     setPreviewingId(null);
     setKindFilter("all");
     setTagFilter([]);
-    setShelf("");
   });
-  //: 一份都没有(不是「筛完没有」):整个工作区的计数说了算。素材库是空的、却有配音片段时,筛选条照旧在 ——
-  //: 切过去的入口在上面。
-  const libraryEmpty = libraryFacets.data?.total === 0;
-  const nothingAtAll = libraryEmpty && intermediates.length === 0;
+  //: 一份都没有(不是「筛完没有」):整个工作区的计数说了算。
+  const nothingAtAll = facets.data?.total === 0;
   const kindCount = (kind: KindFilter): number | undefined =>
     facets.data === undefined ? undefined : kind === "all" ? facets.data.total : (facets.data.kinds[kind] ?? 0);
 
@@ -490,7 +465,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
         }}
       >
-      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={libraryFacets.data?.total} className="mb-4 pt-7 xl:pt-8" actions={<>
+      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={facets.data?.total} className="mb-4 pt-7 xl:pt-8" actions={<>
               <input
                 ref={importInputRef}
                 type="file"
@@ -541,27 +516,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
               **窄了就换行,不横向滚。** 这一行里全是要读的标签和要打字的输入框,滚动条会把
               其中一半藏起来 —— 而它们没有主次之分,藏哪一半都是错的。 */}
-          {/* 两行:第一行是「看哪些」(类型 + 中间产物),第二行是搜索 / 排序 / 标签和视图动作。
+          {/* 两行:第一行是素材类型,第二行是搜索 / 排序 / 标签和视图动作。
               原来挤成一行,1440 宽时搜索框和标签筛选被压得很紧;拆开后和别处的列表页同一套节奏。 */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-media-filter-row>
             <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: kindCount(kind) }))} />
-            {/* 中间产物的入口:素材库默认不列它们,在这里按下去看(再按一下回到素材库)。数字是那一种一共几份。
-                紧跟在类型标签后面 —— 它和类型一样是「看哪些」,也和页签一样带着数。 */}
-            {intermediates.map(([kind, count]) => (
-              <Button
-                key={kind}
-                variant="outline"
-                size="default"
-                aria-pressed={shelf === kind}
-                aria-label={`${t(INTERMEDIATE_COPY[kind].label)} ${count}`}
-                className="shrink-0"
-                onClick={() => setShelf((current) => (current === kind ? "" : kind))}
-              >
-                <Layers size={13} />
-                {t(INTERMEDIATE_COPY[kind].label)}
-                <span className="text-ui-xs tabular-nums text-muted-foreground">{count}</span>
-              </Button>
-            ))}
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-media-filter-actions>
             <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -639,16 +597,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   </Button>
 
           </div>}
-          {/* 正在看中间产物:说清它们是什么、时间线上照常在用 —— 免得人以为素材库只剩这些,或者以为它们丢过。 */}
-          {shelf && INTERMEDIATE_COPY[shelf] && (
-            <div role="note" className="flex flex-wrap items-center gap-2 border-t border-divider pt-3 text-ui-sm text-muted-foreground">
-              <Layers size={14} className="shrink-0" />
-              <span className="min-w-0 flex-1">{t(INTERMEDIATE_COPY[shelf].notice)}</span>
-              <Button variant="outline" size="default" onClick={() => setShelf("")}>
-                <X size={13} /> {t("mediaBackToLibrary")}
-              </Button>
-            </div>
-          )}
         </div>
       )}
       <UrlImportDialog
@@ -660,7 +608,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onQueued={() => void qc.invalidateQueries({ queryKey: assetKeys.everywhere() })}
       />
 
-      {assets.isPending ? <MediaLibrarySkeleton list={display === "list"} /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : libraryEmpty ? (
+      {assets.isPending ? <MediaLibrarySkeleton list={display === "list"} /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : nothingAtAll ? (
         <EmptyState
           icon={<FolderOpen size={22} />}
           title={t("mediaEmptyTitle")}
