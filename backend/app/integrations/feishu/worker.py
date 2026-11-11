@@ -230,6 +230,9 @@ def main(bot_id: str) -> None:
         lark.EventDispatcherHandler.builder("", "")
         .register_p2_im_message_receive_v1(_on_message)
         .register_p2_im_message_message_read_v1(lambda data: None)  # read receipts: harmless, silence them
+        # 给消息贴 / 摘 Typing 后飞书还会回送反应事件;它们只是回执,不处理,但不能让 SDK 报 processor not found。
+        .register_p2_im_message_reaction_created_v1(lambda data: None)
+        .register_p2_im_message_reaction_deleted_v1(lambda data: None)
         .register_p2_card_action_trigger(_on_card_action)
         .build()
     )

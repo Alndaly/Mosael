@@ -91,15 +91,29 @@ def _wait_until(predicate: Callable[[], bool], timeout: float = 10.0) -> bool:
 
 
 class _FakeBuilder:
-    """`EventDispatcherHandler.builder("", "")` 那串注册:注册了什么不重要,链式调用要能走通。"""
+    """`EventDispatcherHandler.builder("", "")` 那串注册:记下事件名,并可调用处理器。"""
 
-    def register_p2_im_message_receive_v1(self, _fn):
+    def __init__(self) -> None:
+        self.handlers: dict[str, Callable] = {}
+
+    def register_p2_im_message_receive_v1(self, fn):
+        self.handlers["p2.im.message.receive_v1"] = fn
         return self
 
-    def register_p2_im_message_message_read_v1(self, _fn):
+    def register_p2_im_message_message_read_v1(self, fn):
+        self.handlers["p2.im.message.message_read_v1"] = fn
         return self
 
-    def register_p2_card_action_trigger(self, _fn):
+    def register_p2_im_message_reaction_created_v1(self, fn):
+        self.handlers["p2.im.message.reaction.created_v1"] = fn
+        return self
+
+    def register_p2_im_message_reaction_deleted_v1(self, fn):
+        self.handlers["p2.im.message.reaction.deleted_v1"] = fn
+        return self
+
+    def register_p2_card_action_trigger(self, fn):
+        self.handlers["p2.card.action.trigger"] = fn
         return self
 
     def build(self):
@@ -124,12 +138,14 @@ class _FakeClient:
         self.script(self)
 
 
-def _install_fake_sdk(monkeypatch, client: _FakeClient) -> None:
+def _install_fake_sdk(monkeypatch, client: _FakeClient) -> _FakeBuilder:
     module = types.ModuleType("lark_oapi")
+    builder = _FakeBuilder()
     module.LogLevel = types.SimpleNamespace(INFO=1)  # type: ignore[attr-defined]
-    module.EventDispatcherHandler = types.SimpleNamespace(builder=lambda *_a, **_k: _FakeBuilder())  # type: ignore[attr-defined]
+    module.EventDispatcherHandler = types.SimpleNamespace(builder=lambda *_a, **_k: builder)  # type: ignore[attr-defined]
     module.ws = types.SimpleNamespace(Client=lambda *_a, **_k: client)  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "lark_oapi", module)
+    return builder
 
 
 def _run_worker(
@@ -155,6 +171,21 @@ def _run_worker(
     monkeypatch.setattr(worker, "CONNECT_CHECK_SECONDS", 0.01, raising=False)
     threading.Thread(target=worker.main, args=("bot-status",), daemon=True).start()
     return client, emitted
+
+
+def test_反应新增和删除事件都有处理器_不再报_processor_not_found(monkeypatch) -> None:
+    """给消息贴 / 摘 Typing 都会让飞书再回送一个反应事件;它们是回执,不需要业务处理。"""
+    client = _FakeClient(lambda _client: None)
+    builder = _install_fake_sdk(monkeypatch, client)
+    monkeypatch.setattr(worker, "follow_parent", lambda *_a, **_k: None)
+    monkeypatch.setattr(worker.sys, "stdin", io.StringIO(json.dumps({"app_id": "cli_s", "app_secret": "s"}) + "\n"))
+
+    worker.main("bot-reactions")
+
+    for event_type in ("p2.im.message.reaction.created_v1", "p2.im.message.reaction.deleted_v1"):
+        handler = builder.handlers.get(event_type)
+        assert handler is not None, f"{event_type} 没有处理器,SDK 会报 processor not found"
+        assert handler(object()) is None
 
 
 # ---------------- ① 在线只能由「真的连上了」驱动 ----------------
