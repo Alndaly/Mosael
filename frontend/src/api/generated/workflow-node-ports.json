@@ -1848,6 +1848,13 @@
           "en": "Name"
         }
       },
+      "role": {
+        "type": "string",
+        "label": {
+          "zh": "角度",
+          "en": "Angle"
+        }
+      },
       "limit": {
         "type": "number",
         "label": {
