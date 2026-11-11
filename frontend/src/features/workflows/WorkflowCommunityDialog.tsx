@@ -361,7 +361,7 @@ function RequirementList({ template, statuses }: { template: WorkflowTemplate; s
           <li key={requirement.text} data-requirement-state={state} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2.5">
             <Icon size={15} aria-hidden className={cn("mt-0.5", look.tone, state === "unknown" && "motion-safe:animate-spin")} />
             <span className="grid min-w-0 gap-0.5">
-              <span className="text-ui-sm leading-snug text-foreground">{requirement.text}</span>
+              <span className="min-w-0 break-words text-ui-sm leading-snug text-foreground">{requirement.text}</span>
               <span className={cn("text-ui-xs", state === "missing" ? "text-warning" : "text-muted-foreground")}>{t(look.label)}</span>
             </span>
           </li>
