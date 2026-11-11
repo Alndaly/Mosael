@@ -549,21 +549,58 @@ def test_H3_Image_文生图范例只走图像模型_单帧采样_模型和参数
     assert set(nodes) == {
         "UNETLoader", "CLIPLoader", "VAELoader", "MiniMaxH3ImageConditioning",
         "ConditioningZeroOut", "KSampler", "VAEDecode", "SaveImage", "MarkdownNote",
+        "TextGenerateV2", "PrimitiveBoolean", "PrimitiveStringMultiline", "ComfySwitchNode", "ResolutionSelector",
     }
     assert nodes["UNETLoader"]["widgets_values"][0] == "minimax_h3_image_pruned_int8_convrot.safetensors"
-    assert nodes["CLIPLoader"]["widgets_values"][:2] == ["qwen3vl_32b_minimax_h3_int8_convrot.safetensors", "minimax"]
+    clip_loaders = [node for node in graph["nodes"] if node["type"] == "CLIPLoader"]
+    assert {node["widgets_values"][0] for node in clip_loaders} == {
+        "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "qwen3.5_9b_int8_convrot.safetensors",
+    }
+    assert all(node["widgets_values"][1] == "minimax" for node in clip_loaders)
     assert nodes["VAELoader"]["widgets_values"] == ["minimax_h3_image_vae_fp16.safetensors"]
     conditioning = nodes["MiniMaxH3ImageConditioning"]
-    assert [item["name"] for item in conditioning["inputs"]] == ["clip", "vae"], "文生图不带参考图口"
-    assert conditioning["widgets_values"][1:] == [2048, 2048]
+    assert [item["name"] for item in conditioning["inputs"]] == ["clip", "vae", "prompt", "width", "height"], \
+        "文生图不带参考图口"
+    assert all(not item["name"].startswith("images.") for item in conditioning["inputs"])
+    assert conditioning["widgets_values"][1:] == [4096, 4096]
     assert nodes["KSampler"]["widgets_values"] == [42, "fixed", 6, 1, "euler", "simple", 1]
-    assert "TextGenerateV2" not in nodes, "可选的 Qwen 扩写分支不混进模型测试"
+    assert nodes["ResolutionSelector"]["widgets_values"] == ["1:1 (Square)", 16, 32]
+    assert nodes["TextGenerateV2"]["widgets_values"][1] == 768, "提示词扩写上限"
+    assert nodes["PrimitiveBoolean"]["widgets_values"] == [True], "默认开启提示词扩写"
 
     node_ids = {node["id"] for node in graph["nodes"]}
     for link_id, source, source_slot, target, target_slot, kind in graph["links"]:
         assert source in node_ids and target in node_ids, "连线两端都得是图里的节点"
         assert source_slot >= 0 and target_slot >= 0 and kind
         assert link_id
+
+
+def test_已装范例和插件版本不同会标出_确认覆盖后写回新版(plugin, comfy) -> None:
+    """插件升级了范例,已装的那份不能一直静默停在旧版。状态按内容摘要判「有更新」,覆盖只写选中的那张。"""
+    _module, Comfy, _convert = plugin
+    import bundled
+
+    client = Comfy(comfy.url)
+    path = "mosael/examples/minimax_h3_image_t2i.json"
+    first = bundled.install({"files": ["minimax_h3_image_t2i.json"]}, client, "zh")
+    assert first["installed"] == [path]
+    assert next(one for one in first["workflows"] if one["path"] == path)["outdated"] is False
+
+    comfy.state.userdata_put(f"workflows/{path}", {"nodes": [], "links": []})
+    status = bundled.status(client, "zh")
+    row = next(one for one in status["workflows"] if one["path"] == path)
+    assert row["installed"] is True and row["outdated"] is True
+
+    skipped = bundled.install({"files": ["minimax_h3_image_t2i.json"]}, client, "zh")
+    assert skipped["installed"] == [] and skipped["updated"] == [] and skipped["skipped"] == [path], \
+        "默认仍不覆盖"
+
+    updated = bundled.install({"files": ["minimax_h3_image_t2i.json"], "overwrite": True}, client, "zh")
+    assert updated["updated"] == [path] and updated["installed"] == []
+    assert comfy.state.userdata_get(f"workflows/{path}")["nodes"], "写回的是插件里的图,不是空壳"
+    row = next(one for one in updated["workflows"] if one["path"] == path)
+    assert row["outdated"] is False
 
 
 def test_白模关键帧范例_白模必填且排第一_其余两位可选_都接进参考节点() -> None:

@@ -382,6 +382,10 @@ one card writes only that file under `workflows/mosael/examples/`, never overwri
 installed from each workflow's details — the cards list them, but this action does not install nodes or download models
 automatically.
 
+After a plugin upgrade, an installed example whose content differs from the bundled version is marked “Update available”
+in the card and the workbench panel. Updating asks for confirmation and then overwrites that one file (local changes to
+the same workflow are lost); other installed examples are untouched.
+
 The connection's "Workflow library" on the Plugins page: every workflow saved on this ComfyUI (ADR 0035), in the same
 layout as the model library — subfolders on the left, search, kind filter, sorting and three view densities on top. Each
 workflow gets a card: a thumbnail of its node graph (drawn from the nodes' positions and links in the workflow, not a

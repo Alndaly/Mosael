@@ -48,7 +48,7 @@ export const assetLibrary = {
   entitySpeakText: "要说的话",
   entitySpeakPlaceholder: "大家好,我是……",
   entitySpeakModel: "视频模型",
-  entitySpeakDefaultModel: "用默认或第一个会「说话照片」的视频模型",
+  entitySpeakDefaultBadge: "默认",
   entitySpeakNoModel: "还没有会「说话照片」的视频模型(如百炼 wan2.2-s2v,或 ComfyUI 上一张人像 + 一段音频的数字人工作流)。",
   entitySpeakStart: "开始",
   entitySpeakStarted: "开始了:先配音,再做说话的视频;做完任务中心会说一声",

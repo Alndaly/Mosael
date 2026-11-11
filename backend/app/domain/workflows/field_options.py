@@ -356,7 +356,8 @@ def generation_option_names(option: dict[str, Any]) -> dict[str, Any]:
     原样带上,界面摆成第二行(frontend lib/entryNames 的 entryNamedOptions)—— 不在这里拼成一句。入口那一格叫 `entry_group`:
     下拉选项上的 `group` 是分组标题,不能撞名。"""
     return {"value": option["id"], "label": option["model_label"], "model": option["model"],
-            "profile_name": option["profile_name"], "entry_group": option.get("group")}
+            "profile_name": option["profile_name"], "entry_group": option.get("group"),
+            "is_default": bool(option.get("is_default"))}
 
 
 def _talking_models(mode: str) -> Source:
@@ -578,6 +579,12 @@ def distinct_labels(options: list[Option]) -> list[Option]:
     out: list[Option] = []
     for option, tail in zip(options, tails):
         if counts[option["label"]] == 1:
+            out.append(option)
+            continue
+        #: 生成选项的两层名字已经带了连接 / 入口(界面用 `entryNamedOptions` 摆副名),不要再把 id 拼进主名:
+        #: ComfyUI 的 id 都以 `.json` 结尾,末四位一样,旧写法只能退回整串 id,于是下拉里出现
+        #: 「工作流路径 · 连接id:video:工作流路径.json」这种谁也读不出来的名字。
+        if option.get("profile_name") or option.get("entry_group"):
             out.append(option)
             continue
         value = option["value"]

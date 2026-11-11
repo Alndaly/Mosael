@@ -47,14 +47,14 @@ describe("工作流面板", () => {
     getBundledWorkflows.mockResolvedValue({
       id: "official", title: "官方工作流范例", folder: "mosael/examples", description: "",
       workflows: [{ path: "mosael/examples/h3.json", file: "h3.json", name: "H3", description: "长片", category: "video",
-        installed: false, missing_nodes: [], missing_models: [], problem: "" }],
+        installed: false, outdated: false, missing_nodes: [], missing_models: [], problem: "" }],
     });
-    installBundledWorkflows.mockResolvedValue({ folder: "mosael/examples", installed: ["mosael/examples/h3.json"], skipped: [], workflows: [] });
+    installBundledWorkflows.mockResolvedValue({ folder: "mosael/examples", installed: ["mosael/examples/h3.json"], updated: [], skipped: [], workflows: [] });
     renderPanel();
     expect(screen.queryByRole("button", { name: "workflowBundleInstallOne" })).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: /官方工作流范例|workflowBundleInstall/ }));
     fireEvent.click(await screen.findByRole("button", { name: "workflowBundleInstallOne" }));
-    await waitFor(() => expect(installBundledWorkflows).toHaveBeenCalledWith("i1", ["h3.json"], "mosael/examples"));
+    await waitFor(() => expect(installBundledWorkflows).toHaveBeenCalledWith("i1", ["h3.json"], "mosael/examples", false));
   });
 
   it("列出当前连接的工作流,点开一张时用同一个工作台打开;新建走 fresh", async () => {

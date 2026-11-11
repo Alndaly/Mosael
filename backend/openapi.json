@@ -22945,7 +22945,7 @@
           "plugins"
         ],
         "summary": "Install Bundled Workflows",
-        "description": "把选中的工作流范例写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。",
+        "description": "把选中的工作流范例写进当前 ComfyUI 的 workflows/;默认只新建，`overwrite` 时覆盖选中的旧版本。",
         "operationId": "install_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_install_post",
         "parameters": [
           {
@@ -53648,6 +53648,11 @@
             "maxLength": 400,
             "title": "Folder",
             "default": ""
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "default": false
           }
         },
         "type": "object",
@@ -53957,6 +53962,11 @@
                 "type": "null"
               }
             ]
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
           }
         },
         "type": "object",

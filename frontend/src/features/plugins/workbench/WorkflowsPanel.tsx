@@ -13,6 +13,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/app/modals";
 import { workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 
 function WorkflowRow({ children, action }: { children: React.ReactNode; action: React.ReactNode }) {
@@ -45,13 +46,18 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
   });
   const qc = useQueryClient();
   const [installing, setInstalling] = React.useState("");
-  const install = async (flow: BundledWorkflow) => {
+  const [updating, setUpdating] = React.useState<BundledWorkflow | null>(null);
+  const install = async (flow: BundledWorkflow, overwrite = false) => {
     setInstalling(flow.file);
     try {
-      const result = await installBundledWorkflows(target.instanceId, [flow.file], bundled.data?.folder);
+      const result = await installBundledWorkflows(target.instanceId, [flow.file], bundled.data?.folder, overwrite);
       await bundled.refetch();
       await qc.invalidateQueries({ queryKey: ["workflow-library", target.instanceId, target.workspaceId] });
-      toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
+      const installed = result.installed.length;
+      const updated = result.updated.length;
+      toast.success(updated
+        ? t("workflowBundleChanged").replace("{installed}", String(installed)).replace("{updated}", String(updated))
+        : t("workflowBundleInstallDone").replace("{n}", String(installed)));
     } catch (error) {
       toast.error(errorText(error));
     } finally {
@@ -113,17 +119,20 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
                   action={(
                     <Button
                       size="default"
-                      variant={flow.installed ? "outline" : "default"}
-                      disabled={flow.installed || installing !== ""}
+                      variant={flow.installed && !flow.outdated ? "outline" : "default"}
+                      disabled={(flow.installed && !flow.outdated) || installing !== ""}
                       loading={installing === flow.file}
-                      onClick={() => void install(flow)}
+                      onClick={() => flow.outdated ? setUpdating(flow) : void install(flow)}
                     >
-                      {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
+                      {flow.outdated ? t("workflowBundleUpdateOne") : flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
                     </Button>
                   )}
                 >
                   <span className="grid min-w-0 flex-1 gap-0.5">
-                    <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</Truncate>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Truncate className="min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</Truncate>
+                      {flow.outdated && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-ui-2xs font-medium text-accent-foreground">{t("workflowBundleOutdated")}</span>}
+                    </span>
                     {flow.description && (
                       <span className="min-w-0 text-ui-xs text-muted-foreground">
                         <InlineMarkdown text={flow.description} links={false} />
@@ -136,6 +145,20 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
           )}
         </section>
       )}
+      <ConfirmDialog
+        open={updating !== null}
+        title={t("workflowBundleUpdateTitle").replace("{name}", updating?.name ?? "")}
+        body={t("workflowBundleUpdateBody")}
+        confirmLabel={t("workflowBundleUpdateConfirm")}
+        pending={installing !== ""}
+        onCancel={() => setUpdating(null)}
+        onConfirm={() => {
+          if (!updating) return;
+          const flow = updating;
+          setUpdating(null);
+          void install(flow, true);
+        }}
+      />
       {library.isPending ? (
         <LoadingState label={t("workflowLibraryLoading")} className="flex-1" />
       ) : library.isError ? (

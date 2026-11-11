@@ -185,7 +185,7 @@ beforeEach(() => {
     if (source === "speech_engines") return [{ value: "builtin:clone", label: "本地克隆" }, { value: "builtin:edge", label: "Edge" }];
     void parent;
     if (source === "reference_image_models") return [{ value: "p1:image:edit", label: "连接 · 能改图 · 默认" }];
-    if (source === "speech_video_models") return [{ value: "p1:video:wan2.2-s2v", label: "百炼 · 说话照片" }];
+    if (source === "speech_video_models") return [{ value: "p1:video:wan2.2-s2v", label: "百炼 · 说话照片", model: "wan2.2-s2v", profile_name: "百炼", is_default: true }];
     return [];
   });
   api.listVoices.mockResolvedValue([{ id: "v1", name: "我的声音" }]);
@@ -461,9 +461,10 @@ describe("参考图墙", () => {
     fireEvent.click(screen.getByRole("button", { name: "entitySpeak" }));
     const dialog = await waitFor(() => document.querySelector("[data-speak-dialog]") as HTMLElement);
     fireEvent.change(within(dialog).getByRole("textbox", { name: "entitySpeakText" }), { target: { value: "大家好" } });
+    expect(within(dialog).getByRole("combobox", { name: "entitySpeakModel" }).textContent).toContain("百炼 · 说话照片");
     fireEvent.click(screen.getByRole("button", { name: "entitySpeakStart" }));
     await waitFor(() =>
-      expect(api.drawEntity).toHaveBeenCalledWith("e1", { ability: "speak", text: "大家好", model: "", scope: "missing", expressions: "" }),
+      expect(api.drawEntity).toHaveBeenCalledWith("e1", { ability: "speak", text: "大家好", model: "p1:video:wan2.2-s2v", scope: "missing", expressions: "" }),
     );
     expect((await screen.findByRole("alert")).textContent).toContain("还没有声明");
     cleanup();

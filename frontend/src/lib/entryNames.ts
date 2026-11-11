@@ -108,7 +108,9 @@ export function twoLayerTitle(name: TwoLayerName): string {
  * 工作流的几个入口同属一小组(只管搜索,不画小标题、不缩进,见 generationPickerEntry)。后端只给结构化的几格
  * (workflows.field_options.generation_option_names),不拼成一句。别的选项原样。
  */
-export function entryNamedOptions<T extends FieldOption>(options: readonly T[], t: Translate) {
+export function entryNamedOptions<T extends FieldOption>(
+  options: readonly T[], t: Translate,
+): Array<T & { description?: string; keywords?: string[]; section?: OptionSection }> {
   const formed = formedGroups(options.map((one) => ({ group: one.entry_group })));
   return options.map((one) => {
     if (one.profile_name === undefined) return one;

@@ -237,11 +237,11 @@ function bundledExamples() {
     folder: "mosael/examples",
     workflows: [
       { path: "mosael/examples/minimax_h3_open.json", file: "minimax_h3_open.json",
-        name: "H3 长片 · 第一段", description: "第一段", category: "long_video", installed: false,
+        name: "H3 长片 · 第一段", description: "第一段", category: "long_video", installed: false, outdated: false,
         missing_nodes: [{ type: "VRGDG_MiniMaxH3SaveLatent", count: 1, core: false, packs: [] }],
         missing_models: [{ folder: "diffusion_models", name: "minimax_h3_hybrid.safetensors" }], problem: "" },
       { path: "mosael/examples/minimax_h3_continue.json", file: "minimax_h3_continue.json",
-        name: "H3 长片 · 续写", description: "续写", category: "long_video", installed: false,
+        name: "H3 长片 · 续写", description: "续写", category: "long_video", installed: false, outdated: false,
         missing_nodes: [], missing_models: [], problem: "" },
     ],
   };
@@ -251,7 +251,7 @@ describe("工作流库", () => {
   it("官方工作流范例:每张卡片自己安装,只写这一张", async () => {
     api.getBundledWorkflows.mockResolvedValue(bundledExamples());
     api.installBundledWorkflows.mockResolvedValue({
-      folder: "mosael/examples", installed: ["mosael/examples/minimax_h3_open.json"], skipped: [],
+      folder: "mosael/examples", installed: ["mosael/examples/minimax_h3_open.json"], updated: [], skipped: [],
       workflows: [],
     });
     await openLibrary();
@@ -266,7 +266,7 @@ describe("工作流库", () => {
     //: 点第一张自己的安装键:只写这一张,不把整组都写进去。
     fireEvent.click(within(dialog).getByRole("button", { name: "安装「H3 长片 · 第一段」" }));
     await waitFor(() => expect(api.installBundledWorkflows).toHaveBeenCalledWith(
-      "i1", ["minimax_h3_open.json"], "mosael/examples",
+      "i1", ["minimax_h3_open.json"], "mosael/examples", false,
     ));
   });
 
@@ -282,7 +282,7 @@ describe("工作流库", () => {
     fireEvent.click(first);
 
     await waitFor(() => expect(api.installBundledWorkflows).toHaveBeenCalledWith(
-      "i1", ["minimax_h3_open.json"], "mosael/examples",
+      "i1", ["minimax_h3_open.json"], "mosael/examples", false,
     ));
     expect(first).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "安装「H3 长片 · 续写」" })).toBeEnabled();
@@ -299,6 +299,26 @@ describe("工作流库", () => {
     const installed = within(dialog).getByRole("button", { name: "「H3 长片 · 第一段」workflowBundleInstalled" });
     expect(installed).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "安装「H3 长片 · 续写」" })).toBeEnabled();
+  });
+
+  it("已装的范例有新版:标出有更新,确认后带 overwrite 覆盖", async () => {
+    const data = bundledExamples();
+    data.workflows[0].installed = true;
+    data.workflows[0].outdated = true;
+    api.getBundledWorkflows.mockResolvedValue(data);
+    api.installBundledWorkflows.mockResolvedValue({
+      folder: "mosael/examples", installed: [], updated: ["mosael/examples/minimax_h3_open.json"], skipped: [], workflows: data.workflows,
+    });
+    await openLibrary();
+
+    fireEvent.click(screen.getByRole("button", { name: "workflowBundleInstall" }));
+    const dialog = await screen.findByRole("dialog", { name: "workflowBundleInstall" });
+    expect(dialog).toHaveTextContent("workflowBundleOutdated");
+    fireEvent.click(within(dialog).getByRole("button", { name: "workflowBundleUpdateOneNamed" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "workflowBundleUpdateConfirm" }));
+    await waitFor(() => expect(api.installBundledWorkflows).toHaveBeenCalledWith(
+      "i1", ["minimax_h3_open.json"], "mosael/examples", true,
+    ));
   });
 
   it("官方工作流范例:点按钮就开宽弹窗,清单没到时先摆对应数量的卡片骨架", async () => {

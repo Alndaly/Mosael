@@ -170,6 +170,8 @@ class WorkflowFieldOptionOut(ApiModel):
     model: str = ""
     profile_name: str = ""
     entry_group: EntryGroupOut | None = None
+    #: 这个人给这种生成设的默认项。选择器据此**预选真实的那一个**,不再放一个「用默认」的占位项。
+    is_default: bool = False
 
 
 class WorkflowUnusableNodeOut(ApiModel):

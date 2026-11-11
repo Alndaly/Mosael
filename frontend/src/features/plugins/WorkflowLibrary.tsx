@@ -264,14 +264,25 @@ function BundledWorkflowCard({
   onInstalled: (result: BundledWorkflowInstallResult) => void;
 }) {
   const t = useI18n();
+  const [confirming, setConfirming] = React.useState(false);
   const install = useMutation({
-    mutationFn: () => installBundledWorkflows(instanceId, [flow.file], folder),
-    onSuccess: onInstalled,
-    onError: (error: Error) => toast.error(errorText(error)),
+    mutationFn: () => installBundledWorkflows(instanceId, [flow.file], folder, flow.outdated),
+    onSuccess: (result) => {
+      setConfirming(false);
+      onInstalled(result);
+    },
+    onError: (error: Error) => {
+      setConfirming(false);
+      toast.error(errorText(error));
+    },
   });
+  const update = flow.outdated;
   return (
     <article className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-panel-subtle p-3.5">
-      <h3 className="m-0 min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</h3>
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <h3 className="m-0 min-w-0 text-ui-sm font-medium text-foreground">{flow.name}</h3>
+        {update && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-ui-2xs font-medium text-accent-foreground">{t("workflowBundleOutdated")}</span>}
+      </div>
       {flow.description && (
         <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
           <InlineMarkdown text={flow.description} links={false} />
@@ -291,20 +302,27 @@ function BundledWorkflowCard({
         </div>
       )}
       {flow.problem && <div className="text-ui-xs text-muted-foreground">{flow.problem}</div>}
+      {update && confirming && (
+        <p className="m-0 text-ui-xs leading-normal text-warning">{t("workflowBundleUpdateBody")}</p>
+      )}
       <div className="mt-auto flex justify-end pt-1">
         <Button
           size="sm"
-          variant={flow.installed ? "outline" : "default"}
-          disabled={flow.installed}
+          variant={flow.installed && !update ? "outline" : "default"}
+          disabled={flow.installed && !update}
           loading={install.isPending}
           aria-label={
-            flow.installed
-              ? `「${flow.name}」${t("workflowBundleInstalled")}`
-              : t("workflowBundleInstallOneNamed").replace("{name}", flow.name)
+            update
+              ? confirming
+                ? t("workflowBundleUpdateConfirm")
+                : t("workflowBundleUpdateOneNamed").replace("{name}", flow.name)
+              : flow.installed
+                ? `「${flow.name}」${t("workflowBundleInstalled")}`
+                : t("workflowBundleInstallOneNamed").replace("{name}", flow.name)
           }
-          onClick={() => install.mutate()}
+          onClick={() => update && !confirming ? setConfirming(true) : install.mutate()}
         >
-          {flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
+          {confirming ? t("workflowBundleUpdateConfirm") : update ? t("workflowBundleUpdateOne") : flow.installed ? t("workflowBundleInstalled") : t("workflowBundleInstallOne")}
         </Button>
       </div>
     </article>
@@ -426,7 +444,11 @@ export function WorkflowLibraryDialog({
   const bundleInstalled = (result: BundledWorkflowInstallResult) => {
     setBundled((now) => now && { ...now, workflows: result.workflows });
     void qc.invalidateQueries({ queryKey: libraryKey });
-    toast.success(t("workflowBundleInstallDone").replace("{n}", String(result.installed.length)));
+    const installed = result.installed.length;
+    const updated = result.updated.length;
+    toast.success(updated
+      ? t("workflowBundleChanged").replace("{installed}", String(installed)).replace("{updated}", String(updated))
+      : t("workflowBundleInstallDone").replace("{n}", String(installed)));
   };
   //: 改完一张:工作流库那份列表重新问一遍(跟着连接走的那一份,含表单、能填什么);生成选项、工具清单里的那张也跟着变
   //: (宿主已经让这个连接的目录重拉过)。这里改了工作流(存了精简表单、导入、改名、复制、恢复):模型下拉里它叫什么、
@@ -1082,7 +1104,7 @@ export function WorkflowLibraryDialog({
                       />
                     ))}
                   </div>
-                  {bundled.workflows.every((one) => one.installed) && (
+                  {bundled.workflows.every((one) => one.installed && !one.outdated) && (
                     <p className="m-0 text-ui-xs text-success">{t("workflowBundleAllInstalled")}</p>
                   )}
                 </div>

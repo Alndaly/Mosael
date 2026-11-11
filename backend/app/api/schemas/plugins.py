@@ -1308,6 +1308,8 @@ class WorkflowBundleInstallRequest(ApiModel):
     files: list[str] = Field(min_length=1)
     #: 写进 workflows/ 下的哪个文件夹;空 = 清单里的默认目录。
     folder: str = Field(default="", max_length=400)
+    #: 用插件里的新版覆盖选中的已有文件。界面上必须先确认：会盖掉用户在那台 ComfyUI 里改过的内容。
+    overwrite: bool = False
 
 
 class WorkflowLibrarySaveRequest(ApiModel):

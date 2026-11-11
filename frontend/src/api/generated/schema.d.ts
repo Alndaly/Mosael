@@ -7845,7 +7845,7 @@ export interface paths {
         put?: never;
         /**
          * Install Bundled Workflows
-         * @description 把选中的工作流范例写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。
+         * @description 把选中的工作流范例写进当前 ComfyUI 的 workflows/;默认只新建，`overwrite` 时覆盖选中的旧版本。
          */
         post: operations["install_bundled_workflows_api_plugins_instances__instance_id__workflow_library_bundled_install_post"];
         delete?: never;
@@ -21529,6 +21529,11 @@ export interface components {
              * @default
              */
             folder: string;
+            /**
+             * Overwrite
+             * @default false
+             */
+            overwrite: boolean;
         };
         /**
          * WorkflowCanvasMarksOut
@@ -21687,6 +21692,11 @@ export interface components {
              */
             profile_name: string;
             entry_group?: components["schemas"]["EntryGroupOut"] | null;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
         };
         /**
          * WorkflowFileOut

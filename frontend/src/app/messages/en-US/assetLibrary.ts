@@ -48,7 +48,7 @@ export const assetLibrary = {
   entitySpeakText: "What to say",
   entitySpeakPlaceholder: "Hi everyone, I'm…",
   entitySpeakModel: "Video model",
-  entitySpeakDefaultModel: "Default, or the first video model that does talking photos",
+  entitySpeakDefaultBadge: "default",
   entitySpeakNoModel: "No video model does talking photos yet (e.g. Bailian wan2.2-s2v, or a ComfyUI digital-human workflow that takes one portrait and one audio clip).",
   entitySpeakStart: "Start",
   entitySpeakStarted: "Started: voicing first, then the talking video; the task center will tell you when it's done",

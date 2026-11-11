@@ -563,15 +563,17 @@ def bundled(db: Session, instance: PluginInstance) -> dict[str, Any]:
     )
 
 
-def install_bundled(db: Session, instance: PluginInstance, files: list[str], folder: str = "") -> dict[str, Any]:
-    """把选中的工作流范例写进当前 ComfyUI 的 workflows/。只新建、不覆盖;写完重拉生成目录。"""
+def install_bundled(db: Session, instance: PluginInstance, files: list[str], folder: str = "",
+                    overwrite: bool = False) -> dict[str, Any]:
+    """把选中的工作流范例写进当前 ComfyUI 的 workflows/。默认只新建，`overwrite` 时覆盖;写完重拉生成目录。"""
     _require(db, instance)
     output = tools.invoke_host(
         db, instance.id, WORKFLOW_LIBRARY,
-        {"op": "install_bundled_workflows", "files": files, **({"folder": folder} if folder else {})},
+        {"op": "install_bundled_workflows", "files": files,
+         **({"folder": folder} if folder else {}), **({"overwrite": True} if overwrite else {})},
         timeout=QUICK_TIMEOUT_SECONDS, record=True,
     )
-    if output.get("installed"):
+    if output.get("installed") or output.get("updated"):
         #: 新工作流会变成新的生成模型/工具;不等那一分钟的指纹。
         host_capabilities.notify(db, instance, refresh=True)
     return output

@@ -121,6 +121,8 @@ export type FieldOption = {
   profile_name?: string;
   /** 是哪张工作流的哪个入口(不叫 `group`:下拉选项的 `group` 是分组标题)。 */
   entry_group?: components["schemas"]["EntryGroupOut"] | null;
+  /** 这个人给这种生成设的默认项;选择器据此预选真实的那一项。 */
+  is_default?: boolean;
   /**
    * 这一项属于**哪台机器人** —— 只有飞书「收件人」那一格带它(`feishu_targets`)。那一格的值是
    * 某台应用眼里的 open_id / chat_id(open_id 按飞书应用隔离),所以选中它时要把节点上 `bot` 那一格

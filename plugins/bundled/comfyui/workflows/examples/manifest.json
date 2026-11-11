@@ -71,8 +71,8 @@
         "en": "MiniMax H3 Image · text to image"
       },
       "description": {
-        "zh": "用新的 MiniMax H3 Image 权重直接出静图:4–20MP 有效,约 16MP 最好;6 步、CFG 1、euler + simple。这张图只测模型本体,不带可选的 Qwen 提示词扩写。需要 ComfyUI 0.45.0 或更新版本。",
-        "en": "Draws stills with the new MiniMax H3 Image weights: 4–20 MP, best around 16 MP; 6 steps, CFG 1, euler + simple. This graph tests the model itself, without the optional Qwen prompt enhancer. Needs ComfyUI 0.45.0 or newer."
+        "zh": "用 MiniMax H3 Image 出静图:默认 16MP、6 步、CFG 1,并先用 Qwen3.5-9B 把短提示词扩成完整画面描述;可下拉关掉扩写或改画幅。",
+        "en": "Draws stills with MiniMax H3 Image: 16 MP by default, 6 steps, CFG 1, and a Qwen3.5-9B prompt enhancer that expands the short prompt first; turn it off or change the canvas from the dropdowns."
       }
     },
     {

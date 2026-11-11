@@ -267,6 +267,8 @@ export type BundledWorkflow = {
   description: string;
   category: string;
   installed: boolean;
+  /** 已装的这份和当前插件里的版本内容不同:可以确认后用新版覆盖。 */
+  outdated: boolean;
   missing_nodes: Array<{ type: string; count: number; core: boolean; packs: unknown[] }>;
   missing_models: Array<{ folder: string; name: string }>;
   problem: string;
@@ -281,6 +283,7 @@ export type BundledWorkflows = {
 export type BundledWorkflowInstallResult = {
   folder: string;
   installed: string[];
+  updated: string[];
   skipped: string[];
   workflows: BundledWorkflow[];
 };
@@ -289,11 +292,11 @@ export type BundledWorkflowInstallResult = {
 export const getBundledWorkflows = (instanceId: string) =>
   api<BundledWorkflows>(`/api/plugins/instances/${instanceId}/workflow-library/bundled`);
 
-/** 把选中的工作流范例写进那台 ComfyUI 的 workflows/(只新建、不覆盖)。 */
-export const installBundledWorkflows = (instanceId: string, files: string[], folder = "") =>
+/** 把选中的工作流范例写进那台 ComfyUI 的 workflows/;默认只新建,`overwrite` 时换成插件里的新版。 */
+export const installBundledWorkflows = (instanceId: string, files: string[], folder = "", overwrite = false) =>
   api<BundledWorkflowInstallResult>(
     `/api/plugins/instances/${instanceId}/workflow-library/bundled/install`,
-    { method: "POST", body: JSON.stringify({ files, ...(folder ? { folder } : {}) }) },
+    { method: "POST", body: JSON.stringify({ files, ...(folder ? { folder } : {}), ...(overwrite ? { overwrite } : {}) }) },
   );
 
 /** 这个连接背后的服务现在通不通(按连接的关键地址发一次 3 秒的短请求;有人应答就算通)。「在 ComfyUI 工作台里打开」据此决定能不能点。 */

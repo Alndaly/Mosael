@@ -87,6 +87,7 @@ def test_入口的两层名字穿过接口那一层(monkeypatch) -> None:
         "group": group,
         "adapter_available": True,
         "capabilities": {"modes": ["speech-to-video"]},
+        "is_default": True,
     }])
 
     got = client.get("/api/workflows/field-options",
@@ -98,6 +99,21 @@ def test_入口的两层名字穿过接口那一层(monkeypatch) -> None:
     assert options[0]["model"] == "krea2-text-2-image.json", got.text
     assert options[0]["profile_name"] == "ComfyUI 本机", got.text
     assert options[0]["entry_group"] == group, got.text
+    assert options[0]["is_default"] is True, got.text
+
+
+def test_生成选项重名时不再把整串连接id拼进主名() -> None:
+    """ComfyUI 的模型 id 都以 `.json` 结尾,尾四位会撞;两层名字的副名已经说了是哪条连接、哪个入口。"""
+    from app.domain.workflows.field_options import distinct_labels
+
+    options = distinct_labels([
+        {"value": "a:video:mosael/examples/minimax_h3_talk_open.json", "label": "minimax_h3_talk_open",
+         "profile_name": "ComfyUI · A", "entry_group": {"id": "x", "label": "minimax_h3_talk_open", "entry": "full", "order": 0}},
+        {"value": "b:video:mosael/examples/minimax_h3_talk_open.json", "label": "minimax_h3_talk_open",
+         "profile_name": "ComfyUI · B", "entry_group": {"id": "x", "label": "minimax_h3_talk_open", "entry": "full", "order": 0}},
+    ])
+    assert [one["label"] for one in options] == ["minimax_h3_talk_open", "minimax_h3_talk_open"]
+    assert [one["profile_name"] for one in options] == ["ComfyUI · A", "ComfyUI · B"]
 
 
 def test_别的来源不填的那几格是空的而不是缺的() -> None:
@@ -118,3 +134,4 @@ def test_别的来源不填的那几格是空的而不是缺的() -> None:
         assert one["bot_id"] == ""
         assert one["model"] == "" and one["profile_name"] == ""
         assert one["entry_group"] is None
+        assert one["is_default"] is False

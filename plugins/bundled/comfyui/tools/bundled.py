@@ -6,8 +6,9 @@ ComfyUI 也未必有它们,所以这里把文件随插件发布,并在**写入�
 
 宿主按 `op` 问(见 main._generation):
 
-    {"op": "bundled_workflows"} → 包里有哪些范例、当前 ComfyUI 有没有、各自缺什么
-    {"op": "install_bundled_workflows", "folder"?, "files": [...]} → 只写选中的、缺的(不覆盖),回 install/skip 和目标目录
+    {"op": "bundled_workflows"} → 包里有哪些范例、当前 ComfyUI 有没有、装的还是不是插件里这一版、各自缺什么
+    {"op": "install_bundled_workflows", "folder"?, "files": [...], "overwrite"?: bool}
+        → 只写选中的;默认只新建、不覆盖,`overwrite` 为 true 时把选中的已存在文件换成插件里的版本(界面上确认过)
 
 **只写当前连接的 ComfyUI**:`comfy` 由宿主按实例地址构造。写之前界面上会确认目标服务器;这里再查路径、只新建、
 不覆盖。缺的节点 / 模型不替用户自动装 —— 节点包和模型是另外两步,同一个工作流库详情里补。
@@ -15,6 +16,7 @@ ComfyUI 也未必有它们,所以这里把文件随插件发布,并在**写入�
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -63,6 +65,12 @@ def _source(spec: dict[str, Any], locale: str) -> dict[str, Any]:
     return source
 
 
+def _digest(source: dict[str, Any]) -> str:
+    """同一张图排版不同不算变:按稳定 JSON 算摘要,比较的是内容不是字节。"""
+    text = json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def status(comfy: Comfy, locale: str) -> dict[str, Any]:
     """包里每张工作流在当前 ComfyUI 上的状态。**不改那台机器**,只读 files 和 object_info。"""
     manifest = _manifest(locale)
@@ -85,10 +93,13 @@ def status(comfy: Comfy, locale: str) -> dict[str, Any]:
             "installed": path in installed,
         }
         try:
+            bundled = _source(spec, locale)
             #: 已装的那张可能被用户改过:缺项要照**那台机器上的文件**判,不照插件里的原始副本。
-            source = comfy.fetch_workflow(path) if row["installed"] else _source(spec, locale)
+            source = comfy.fetch_workflow(path) if row["installed"] else bundled
+            row["outdated"] = bool(row["installed"] and _digest(source) != _digest(bundled))
         except Exception as exc:  # noqa: BLE001 — 一张读不出来只影响这一行
-            row.update({"missing_nodes": [], "missing_models": [], "problem": str(exc) or type(exc).__name__})
+            row.update({"outdated": False, "missing_nodes": [], "missing_models": [],
+                        "problem": str(exc) or type(exc).__name__})
             rows.append(row)
             continue
         try:
@@ -114,7 +125,7 @@ def status(comfy: Comfy, locale: str) -> dict[str, Any]:
 
 
 def install(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """把用户选中的工作流写到当前 ComfyUI。**只新建、不覆盖**;已有同名文件跳过。"""
+    """把用户选中的工作流写到当前 ComfyUI。默认**只新建、不覆盖**;`overwrite` 时才换掉选中的旧文件。"""
     manifest = _manifest(locale)
     folder = check_folder(str(payload.get("folder") or manifest.get("folder") or "mosael/examples"), locale)
     requested = [str(one) for one in payload.get("files") or [] if str(one).strip()]
@@ -127,15 +138,25 @@ def install(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
                              f"The plugin manifest has no such workflows: {', '.join(unknown)}"))
     saved, _others = comfy.saved_files()
     installed = set(saved)
+    overwrite = bool(payload.get("overwrite"))
     written: list[str] = []
+    updated: list[str] = []
     skipped: list[str] = []
     for name in requested:
         spec = specs[name]
         path = _target(manifest, spec, folder, locale)
-        if path in installed or path in written:
+        if path in written or path in updated:
             skipped.append(path)
             continue
         source = _source(spec, locale)
+        if path in installed:
+            if not overwrite:
+                skipped.append(path)
+                continue
+            text = json.dumps(source, ensure_ascii=False, indent=2)
+            comfy.overwrite_userdata(f"workflows/{path}", text)
+            updated.append(path)
+            continue
         if not comfy.write_userdata(f"workflows/{path}", source):
             skipped.append(path)
             continue
@@ -143,6 +164,7 @@ def install(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
     return {
         "folder": folder,
         "installed": written,
+        "updated": updated,
         "skipped": skipped,
         "workflows": status(comfy, locale)["workflows"],
     }

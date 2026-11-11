@@ -8,12 +8,12 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { entryNamedOptions } from "@/lib/entryNames";
 import { Textarea } from "@/components/ui/textarea";
 import { gotoSettings } from "@/lib/deepLink";
 import { useWatchedJob } from "@/lib/useWatchedJob";
-
-const DEFAULT_MODEL = "__default__";
 
 /**
  * 人物资产「让它说话」(ADR 0028 §4):用它自己的音色给一段话配音,再用它的正面图做一段说话的视频。
@@ -61,14 +61,25 @@ function SpeakDialog({
 }) {
   const t = useI18n();
   const [text, setText] = React.useState("");
-  const [model, setModel] = React.useState(DEFAULT_MODEL);
+  const [model, setModel] = React.useState("");
   const models = useQuery({
     queryKey: ["field-options", "speech_video_models", workspaceId],
     queryFn: () => fetchWorkflowFieldOptions("speech_video_models", workspaceId),
   });
+  const options = React.useMemo(() => entryNamedOptions(models.data ?? [], t), [models.data, t]);
+  const effectiveDefault = options.find((one) => one.is_default) ?? options[0];
+  React.useEffect(() => {
+    if (!model && effectiveDefault) setModel(effectiveDefault.value);
+  }, [effectiveDefault, model]);
+  const pickerOptions = React.useMemo(() => options.map((one) => (
+    one.value === effectiveDefault?.value
+      ? { ...one, label: `${one.label} · ${t("entitySpeakDefaultBadge")}` }
+      : one
+  )), [effectiveDefault, options, t]);
+  const selectedOption = options.find((one) => one.value === model);
   const start = useMutation({
     mutationFn: () =>
-      drawEntity(entity.id, { ability: "speak", text: text.trim(), model: model === DEFAULT_MODEL ? "" : model, scope: "missing", expressions: "" }),
+      drawEntity(entity.id, { ability: "speak", text: text.trim(), model, scope: "missing", expressions: "" }),
     onSuccess: (job) => onStarted(job.id),
   });
   const noModels = models.isSuccess && models.data.length === 0;
@@ -83,7 +94,7 @@ function SpeakDialog({
           <Button variant="outline" disabled={start.isPending} onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button disabled={noModels || !text.trim()} loading={start.isPending} onClick={() => start.mutate()}>
+          <Button disabled={noModels || !model || !text.trim()} loading={start.isPending} onClick={() => start.mutate()}>
             {t("entitySpeakStart")}
           </Button>
         </>
@@ -112,12 +123,19 @@ function SpeakDialog({
               </button>
             </span>
           ) : (
-            <OptionPicker
-              ariaLabel={t("entitySpeakModel")}
-              value={model}
-              onChange={setModel}
-              options={[{ value: DEFAULT_MODEL, label: t("entitySpeakDefaultModel") }, ...(models.data ?? [])]}
-            />
+            <>
+              <OptionPicker
+                ariaLabel={t("entitySpeakModel")}
+                value={model}
+                onChange={setModel}
+                options={pickerOptions}
+              />
+              {selectedOption?.description && (
+                <span className="text-ui-xs text-muted-foreground">
+                  <InlineMarkdown text={selectedOption.description} links={false} />
+                </span>
+              )}
+            </>
           )}
         </label>
         {start.isError && (

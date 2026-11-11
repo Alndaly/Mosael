@@ -1,6 +1,6 @@
 {
-  "last_node_id": 9,
-  "last_link_id": 10,
+  "last_node_id": 16,
+  "last_link_id": 19,
   "nodes": [
     {
       "id": 1,
@@ -39,7 +39,7 @@
       "outputs": [
         {"name": "CLIP", "type": "CLIP", "links": [2], "slot_index": 0}
       ],
-      "title": "Text encoder",
+      "title": "Image text encoder",
       "properties": {
         "Node name for S&R": "CLIPLoader",
         "models": [
@@ -81,24 +81,38 @@
       "id": 4,
       "type": "MiniMaxH3ImageConditioning",
       "pos": [520, 40],
-      "size": [500, 280],
+      "size": [500, 330],
       "flags": {},
       "order": 3,
       "mode": 0,
       "inputs": [
         {"name": "clip", "type": "CLIP", "link": 2},
-        {"name": "vae", "type": "VAE", "link": 3}
+        {"name": "vae", "type": "VAE", "link": 3},
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {"name": "prompt"},
+          "link": 17
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {"name": "width"},
+          "link": 18
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {"name": "height"},
+          "link": 19
+        }
       ],
       "outputs": [
         {"name": "positive", "type": "CONDITIONING", "links": [5, 6], "slot_index": 0},
         {"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 1}
       ],
       "properties": {"Node name for S&R": "MiniMaxH3ImageConditioning"},
-      "widgets_values": [
-        "A cinematic still of a rain-soaked neon alley in 1990s Hong Kong, a lone figure with an umbrella, reflections on wet asphalt, volumetric light, 35mm film grain.",
-        2048,
-        2048
-      ]
+      "widgets_values": ["", 4096, 4096]
     },
     {
       "id": 5,
@@ -174,18 +188,167 @@
     {
       "id": 9,
       "type": "MarkdownNote",
-      "pos": [520, 400],
-      "size": [500, 300],
+      "pos": [40, 470],
+      "size": [900, 360],
       "flags": {},
       "order": 8,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "MiniMax H3 Image test",
+      "title": "MiniMax H3 Image · quality path",
       "properties": {},
       "widgets_values": [
-        "## MiniMax H3 Image · text to image\n\n- `MiniMaxH3ImageConditioning` needs ComfyUI with the 2026-11-10 MiniMax-H3-Image support (v0.45.0 or newer).\n- The model works from about 4 MP to 20 MP; around 16 MP is the sweet spot. This test uses 2048×2048 (4 MP).\n- 6 steps, CFG 1, `euler` + `simple` is the reference setup. Raise steps to 20–50 for more detail.\n- The optional Qwen prompt-enhancer branch is intentionally left out: this graph tests the image model itself."
+        "## MiniMax H3 Image · quality path\n\n- **16 MP (4096×4096) is the default.** The model is tuned for roughly 16 MP and is noticeably sharper there than at 4 MP. Lower `megapixels` to 4 if the GPU runs out of memory.\n- **Prompt enhancer is ON by default.** A Qwen3.5-9B text model expands the short prompt into a production-ready caption; switch `Enable prompt enhancer` off to send the raw prompt unchanged.\n- The prompt enhancer is a text model. It is separate from the image model and from the Qwen3-VL image text encoder.\n- 6 steps, CFG 1, `euler` + `simple` is the reference recipe. Raise steps to 20–50 for more detail.\n- Use `ResolutionSelector` to change aspect ratio or megapixels. Keep dimensions on the 32-pixel grid.\n- The optional Qwen prompt-enhancer branch is the official quality path; the model itself is still the new MiniMax-H3-Image weights."
       ]
+    },
+    {
+      "id": 10,
+      "type": "CLIPLoader",
+      "pos": [520, 470],
+      "size": [420, 120],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "CLIP", "type": "CLIP", "links": [11], "slot_index": 0}
+      ],
+      "title": "Prompt enhancer (Qwen3.5-9B)",
+      "properties": {
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "qwen3.5_9b_int8_convrot.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Qwen3.5/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors",
+            "directory": "text_encoders"
+          }
+        ]
+      },
+      "widgets_values": ["qwen3.5_9b_int8_convrot.safetensors", "minimax", "default"]
+    },
+    {
+      "id": 11,
+      "type": "PrimitiveStringMultiline",
+      "pos": [520, 630],
+      "size": [420, 180],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "STRING", "type": "STRING", "links": [12, 13], "slot_index": 0}
+      ],
+      "title": "Prompt (edit here)",
+      "properties": {"Node name for S&R": "PrimitiveStringMultiline"},
+      "widgets_values": [
+        "A lone figure with an umbrella in a rain-soaked neon alley in 1990s Hong Kong."
+      ]
+    },
+    {
+      "id": 12,
+      "type": "PrimitiveStringMultiline",
+      "pos": [520, 850],
+      "size": [420, 260],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "STRING", "type": "STRING", "links": [14], "slot_index": 0}
+      ],
+      "title": "Prompt enhancer system",
+      "properties": {"Node name for S&R": "PrimitiveStringMultiline"},
+      "widgets_values": [
+        "You are a senior cinematic image prompt writer. Rewrite the user's idea as one continuous English text-to-image prompt of 120 to 180 words. Describe the subject and action, composition and camera angle, lens and depth of field, lighting, color palette, materials and textures, atmosphere, and rendering style. Preserve every named fact. Do not add text, logos, watermarks, borders, or captions. Output plain text only: no markdown, no bold, no asterisks, no bullet points, no labels, no quotation marks, no commentary."
+      ]
+    },
+    {
+      "id": 13,
+      "type": "TextGenerateV2",
+      "pos": [980, 470],
+      "size": [440, 360],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 11},
+        {
+          "name": "system_prompt",
+          "type": "STRING",
+          "shape": 7,
+          "link": 14
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {"name": "prompt"},
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {"name": "generated_text", "type": "STRING", "links": [15], "slot_index": 0},
+        {"name": "thinking", "type": "STRING", "links": [], "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "TextGenerateV2"},
+      "widgets_values": ["", 768, "on", 0.7, 64, 0.95, 0.05, 1.05, 0, 43, false, true, "auto"]
+    },
+    {
+      "id": 14,
+      "type": "PrimitiveBoolean",
+      "pos": [980, 870],
+      "size": [300, 80],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "BOOLEAN", "type": "BOOLEAN", "links": [16], "slot_index": 0}
+      ],
+      "title": "Enable prompt enhancer",
+      "properties": {"Node name for S&R": "PrimitiveBoolean"},
+      "widgets_values": [true]
+    },
+    {
+      "id": 15,
+      "type": "ComfySwitchNode",
+      "pos": [1470, 470],
+      "size": [320, 160],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {"name": "on_false", "type": "STRING", "shape": 7, "link": 13},
+        {"name": "on_true", "type": "STRING", "shape": 7, "link": 15},
+        {
+          "name": "switch",
+          "type": "BOOLEAN",
+          "widget": {"name": "switch"},
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {"name": "output", "type": "*", "links": [17], "slot_index": 0}
+      ],
+      "title": "Prompt: enhanced or raw",
+      "properties": {"Node name for S&R": "ComfySwitchNode"},
+      "widgets_values": [true]
+    },
+    {
+      "id": 16,
+      "type": "ResolutionSelector",
+      "pos": [40, 160],
+      "size": [420, 150],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "width", "type": "INT", "links": [18], "slot_index": 0},
+        {"name": "height", "type": "INT", "links": [19], "slot_index": 1}
+      ],
+      "title": "16 MP canvas",
+      "properties": {"Node name for S&R": "ResolutionSelector"},
+      "widgets_values": ["1:1 (Square)", 16, 32]
     }
   ],
   "links": [
@@ -198,7 +361,16 @@
     [7, 4, 1, 6, 3, "LATENT"],
     [8, 5, 0, 6, 2, "CONDITIONING"],
     [9, 6, 0, 7, 0, "LATENT"],
-    [10, 7, 0, 8, 0, "IMAGE"]
+    [10, 7, 0, 8, 0, "IMAGE"],
+    [11, 10, 0, 13, 0, "CLIP"],
+    [12, 11, 0, 13, 1, "STRING"],
+    [13, 11, 0, 15, 0, "STRING"],
+    [14, 12, 0, 13, 2, "STRING"],
+    [15, 13, 0, 15, 1, "STRING"],
+    [16, 14, 0, 15, 2, "BOOLEAN"],
+    [17, 15, 0, 4, 2, "STRING"],
+    [18, 16, 0, 4, 3, "INT"],
+    [19, 16, 1, 4, 4, "INT"]
   ],
   "groups": [],
   "config": {},

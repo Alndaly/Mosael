@@ -594,10 +594,11 @@ def get_bundled_workflows(instance_id: str, db: DbSession, user: CurrentUser) ->
 
 @router.post("/plugins/instances/{instance_id}/workflow-library/bundled/install")
 def install_bundled_workflows(instance_id: str, body: WorkflowBundleInstallRequest, db: Tx, user: CurrentUser) -> dict:
-    """把选中的工作流范例写进当前 ComfyUI 的 workflows/(只新建、不覆盖)。"""
+    """把选中的工作流范例写进当前 ComfyUI 的 workflows/;默认只新建，`overwrite` 时覆盖选中的旧版本。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return server_workflows.install_bundled(db, instance, folder=body.folder, files=body.files)
+        return server_workflows.install_bundled(db, instance, folder=body.folder, files=body.files,
+                                                overwrite=body.overwrite)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
