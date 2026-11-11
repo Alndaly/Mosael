@@ -43,7 +43,7 @@ describe("模型自己声明的参数", () => {
     // 没动过就是空的 —— 不替用户填 20
     expect(input.value).toBe("");
     fireEvent.change(input, { target: { value: "30" } });
-    expect(onChange).toHaveBeenCalledWith("30", true);
+    expect(onChange).toHaveBeenCalledWith("30");
   });
 
   it("多行文本给多行框", () => {

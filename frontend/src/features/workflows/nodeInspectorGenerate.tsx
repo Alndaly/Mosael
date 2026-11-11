@@ -2,7 +2,7 @@ import React from "react";
 
 import type { GenerationOption, WorkflowGraph } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { DeclaredParameterControl } from "@/components/generation/parameterPanel";
+import { ReferenceParameterControl } from "@/features/nodeForms/ReferenceParameterControl";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { Input } from "@/components/ui/input";
@@ -433,7 +433,7 @@ export function generateNodeSection({
                   onUseTriggers={(words) => setConfig("prompt", withTriggerWords(String(config.prompt ?? ""), words))}
                 />
               ) : declared ? (
-                <DeclaredParameterControl
+                <ReferenceParameterControl
                   parameter={declared}
                   variables={variables}
                   value={genParams[key] === undefined ? "" : String(genParams[key])}
