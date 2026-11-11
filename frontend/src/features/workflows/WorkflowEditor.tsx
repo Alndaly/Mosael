@@ -35,6 +35,7 @@ import { usePageTrail } from "@/components/layout/pageTrail";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
@@ -576,7 +577,7 @@ export function WorkflowEditor({
           )}>
             {t(STEP_STATUS_LABELS[subflowStatus])}
           </span>
-          {scopeRunStep && <span className="truncate text-muted-foreground">{scopeRunStep.name}</span>}
+          {scopeRunStep && <Truncate className="min-w-0 flex-1 text-muted-foreground">{scopeRunStep.name}</Truncate>}
           {subflowSeconds != null && (
             <span className="shrink-0 tabular-nums text-muted-foreground">{subflowSeconds.toFixed(1)}s</span>
           )}
