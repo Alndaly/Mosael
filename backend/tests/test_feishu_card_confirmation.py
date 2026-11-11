@@ -237,9 +237,11 @@ def _card_buttons(node):
 
 def test_pending_card_has_both_buttons() -> None:
     card = cards.confirmation_card(confirmation_id="c1", tool="create_workflow", summary="建一条流", requested_by="pi", payload={})
+    assert card["schema"] == "2.0"
     actions = list(_card_buttons(card))
-    assert {a["value"]["action"] for a in actions} == {cards.ACTION_APPROVE, cards.ACTION_REJECT}
-    assert all(a["value"]["confirmation_id"] == "c1" for a in actions)
+    values = [a["behaviors"][0]["value"] for a in actions]
+    assert {value["action"] for value in values} == {cards.ACTION_APPROVE, cards.ACTION_REJECT}
+    assert all(value["confirmation_id"] == "c1" for value in values)
     assert all(a["width"] == "fill" for a in actions)
 
 
@@ -263,12 +265,15 @@ def test_待确认和已结算卡都保留完整生成参数() -> None:
     ]
 
     for card in rendered:
-        text = "\n".join(element.get("text", {}).get("content", "") for element in card["elements"])
+        assert card["schema"] == "2.0"
+        text = "\n".join(element.get("content", "") for element in card["body"]["elements"])
         assert "doubao-seedream-4-5" in text
         assert "1920x1080" in text
-        assert "`parameters.num_images`:2" in text
-        assert "`provider`:volcengine" in text
-        assert "```" not in text
+        assert '"num_images": 2' in text
+        assert '"provider": "volcengine"' in text
+        assert "\n```json\n{" in text
+        assert "工具:generate_image" in text
+        assert "`generate_image`" not in text
 
 
 def test_飞书卡片消息_id_会落库(ctx, monkeypatch) -> None:

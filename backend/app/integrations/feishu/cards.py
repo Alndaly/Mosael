@@ -43,31 +43,51 @@ def _text(content: str) -> dict[str, Any]:
     return {"tag": "div", "text": {"tag": "lark_md", "content": content}}
 
 
-def _flatten_payload(value: Any, prefix: str = "") -> list[tuple[str, str]]:
-    if isinstance(value, dict):
-        rows: list[tuple[str, str]] = []
-        for key, item in value.items():
-            name = f"{prefix}.{key}" if prefix else str(key)
-            rows.extend(_flatten_payload(item, name))
-        return rows
-    if isinstance(value, list):
-        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    elif value is None:
-        text = "—"
-    elif isinstance(value, bool):
-        text = "是" if value else "否"
-    else:
-        text = str(value)
-    return [(prefix or "值", text)]
+def _markdown(content: str) -> dict[str, Any]:
+    """卡片 JSON 2.0 的原生 Markdown 组件,支持带语言的代码块。"""
+    return {"tag": "markdown", "content": content}
+
+
+def _tool_card(*, template: str, title: str, elements: list[dict[str, Any]]) -> dict[str, Any]:
+    """工具确认卡统一使用卡片 JSON 2.0。"""
+    return {
+        "schema": "2.0",
+        "header": {"template": template, "title": {"tag": "plain_text", "content": title}},
+        "body": {"elements": elements},
+    }
 
 
 def _payload_elements(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """和 Mosael 内部确认卡一样展示完整参数;展平成可读字段,避开旧版卡片的代码围栏限制。"""
-    rows = _flatten_payload(payload)
-    if not rows:
+    """和 Mosael 内部确认卡一样展示完整参数;2.0 Markdown 原生渲染 JSON 代码块。"""
+    if not payload:
         return []
-    lines = ["**参数**", *(f"`{key}`:{value}" for key, value in rows)]
-    return [_text("\n".join(lines))]
+    raw = json.dumps(payload, ensure_ascii=False, indent=2)
+    return [_markdown(f"**参数**\n```json\n{raw}\n```")]
+
+
+def _callback_row(buttons: list[dict[str, Any]]) -> dict[str, Any]:
+    """2.0 的按钮行;按钮回传值走官方 `behaviors.callback.value`。"""
+    return {
+        "tag": "column_set",
+        "flex_mode": "bisect" if len(buttons) > 1 else "none",
+        "horizontal_spacing": "default",
+        "columns": [
+            {
+                "tag": "column",
+                "width": "weighted",
+                "weight": 1,
+                "vertical_align": "top",
+                "elements": [{
+                    "tag": "button",
+                    "text": button["text"],
+                    "type": button["type"],
+                    "width": "fill",
+                    "behaviors": [{"type": "callback", "value": button["value"]}],
+                }],
+            }
+            for button in buttons
+        ],
+    }
 
 
 def _button_row(buttons: list[dict[str, Any]]) -> dict[str, Any]:
@@ -97,29 +117,27 @@ def confirmation_card(
     *, confirmation_id: str, tool: str, summary: str, requested_by: str, payload: dict[str, Any],
 ) -> dict[str, Any]:
     """待确认卡:说清「谁要动什么」,给同意/拒绝两个按钮。"""
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {"template": "orange", "title": {"tag": "plain_text", "content": "需要你确认"}},
-        "elements": [
-            _text(f"**{summary or tool}**"),
-            _text(f"工具:`{tool}`\n发起:{requested_by or '智能体'}"),
+    return _tool_card(
+        template="orange",
+        title="需要你确认",
+        elements=[
+            _markdown(f"**{summary or tool}**"),
+            _markdown(f"工具:{tool}\n发起:{requested_by or '智能体'}"),
             *_payload_elements(payload),
-            _button_row([
+            _callback_row([
                 {
-                    "tag": "button",
                     "text": {"tag": "plain_text", "content": "同意"},
                     "type": "primary",
                     "value": {"action": ACTION_APPROVE, "confirmation_id": confirmation_id},
                 },
                 {
-                    "tag": "button",
                     "text": {"tag": "plain_text", "content": "拒绝"},
                     "type": "danger",
                     "value": {"action": ACTION_REJECT, "confirmation_id": confirmation_id},
                 },
             ]),
         ],
-    }
+    )
 
 
 def settled_card(
@@ -127,44 +145,41 @@ def settled_card(
 ) -> dict[str, Any]:
     """已决卡:替换掉原卡,**不再带按钮** —— 否则同一张卡会被反复点。"""
     approved = decision == "approved"
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "template": "green" if approved else "grey",
-            "title": {"tag": "plain_text", "content": "已同意" if approved else "已拒绝"},
-        },
-        "elements": [
-            _text(f"**{summary or tool}**"),
-            _text(f"工具:`{tool}`\n{'同意' if approved else '拒绝'}人:{by}"),
+    return _tool_card(
+        template="green" if approved else "grey",
+        title="已同意" if approved else "已拒绝",
+        elements=[
+            _markdown(f"**{summary or tool}**"),
+            _markdown(f"工具:{tool}\n{'同意' if approved else '拒绝'}人:{by}"),
             *_payload_elements(payload),
         ],
-    }
+    )
 
 
 def failed_card(*, summary: str, tool: str, error: str, payload: dict[str, Any]) -> dict[str, Any]:
     """批准了但执行失败:原卡必须退出待操作态,并把结果说成失败而不是已同意。"""
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {"template": "red", "title": {"tag": "plain_text", "content": "执行失败"}},
-        "elements": [
-            _text(f"**{summary or tool}**"),
-            _text(f"工具:`{tool}`\n{error or '工具执行失败'}"),
+    return _tool_card(
+        template="red",
+        title="执行失败",
+        elements=[
+            _markdown(f"**{summary or tool}**"),
+            _markdown(f"工具:{tool}\n{error or '工具执行失败'}"),
             *_payload_elements(payload),
         ],
-    }
+    )
 
 
 def expired_card(*, summary: str, tool: str, payload: dict[str, Any]) -> dict[str, Any]:
     """这张卡已经因为对话结束 / 等待超时 / 重启而作废,不能再点。"""
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {"template": "grey", "title": {"tag": "plain_text", "content": "已失效"}},
-        "elements": [
-            _text(f"**{summary or tool}**"),
+    return _tool_card(
+        template="grey",
+        title="已失效",
+        elements=[
+            _markdown(f"**{summary or tool}**"),
             *_payload_elements(payload),
-            _text("这一轮已经结束,这张卡不能再操作。"),
+            _markdown("这一轮已经结束,这张卡不能再操作。"),
         ],
-    }
+    )
 
 
 def interrupted_card(*, summary: str, tool: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -173,15 +188,15 @@ def interrupted_card(*, summary: str, tool: str, payload: dict[str, Any]) -> dic
     不能写「已同意」:那读起来像已经做完了。也不能写「已失效」:那读起来像没做。所以单独一副说法,
     并且明说**先去确认,别直接重做** —— 它可能已经生效了一半(见 domain/agent/card_expiry 的 UNKNOWN)。
     """
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {"template": "orange", "title": {"tag": "plain_text", "content": "结果未知"}},
-        "elements": [
-            _text(f"**{summary or tool}**"),
+    return _tool_card(
+        template="orange",
+        title="结果未知",
+        elements=[
+            _markdown(f"**{summary or tool}**"),
             *_payload_elements(payload),
-            _text("这张卡已经批准,但后端在它执行时重启了 —— 动作可能已经生效,也可能没有。先确认现状,不要直接重做。"),
+            _markdown("这张卡已经批准,但后端在它执行时重启了 —— 动作可能已经生效,也可能没有。先确认现状,不要直接重做。"),
         ],
-    }
+    )
 
 
 # ---------------- 工作流「等人确认」 ----------------

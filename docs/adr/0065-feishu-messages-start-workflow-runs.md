@@ -262,9 +262,9 @@ keywords 为空,或文本里出现任意一个(大小写不敏感)
 - **客户端与业务分层**。`client.send_image` 只负责 `POST /im/v1/images` 上传和 `image` 消息;
   `outbound` 负责素材授权与顺序。multipart 上传遇令牌刷新重试时先重置文件游标,避免第二次发出空文件。
 - **确认卡展示完整 payload**。待确认、已同意/拒绝、执行失败、失效与结果未知卡都显式接收同一份
-  `confirmation.payload`,与 Mosael 内部确认卡的信息来源一致。飞书旧版卡片无法可靠渲染带语言标记的
-  代码围栏,因此参数按键路径展平为可读字段(`parameters.num_images`:2),不显示原始 JSON 源码。
-  执行失败是独立的 `failed` 终态,
+  `confirmation.payload`,统一使用卡片 JSON 2.0;参数由 2.0 原生 Markdown 渲染成带语言标记的 JSON
+  代码块。工具卡按钮走官方 `behaviors.callback.value`。已发出的 1.0 工具卡不再兼容更新,
+  以新卡为准。执行失败是独立的 `failed` 终态,
   不能写成「已同意」,也不能让原卡继续保留按钮。
 - **反应事件是回执**。`im.message.reaction.created_v1 / deleted_v1` 由 worker 显式空处理;
   添加或移除 Typing 产生的回执不该在日志里冒充业务错误。
