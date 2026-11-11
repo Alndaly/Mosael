@@ -526,9 +526,11 @@ def test_随插件的官方工作流范例_列出全部和缺项(plugin, comfy) 
 
     assert status["id"] == "official_comfyui_examples"
     assert status["folder"] == "mosael/examples"
-    #: H3 长片 / 数字人四张;关键帧三张:白模机位 + 人物 + 场景(1.26.1),人物三视图 + 场景图两张(1.26.0)。
+    #: H3 长片 / 数字人四张、H3 Image 文生图一张;关键帧三张:白模机位 + 人物 + 场景(1.26.1),
+    #: 人物三视图 + 场景图两张(1.26.0)。
     assert [one["file"] for one in status["workflows"]] == [
         "minimax_h3_open.json", "minimax_h3_continue.json", "minimax_h3_talk_open.json", "minimax_h3_talk_continue.json",
+        "minimax_h3_image_t2i.json",
         "flux3_keyframe_blockout.json", "flux3_keyframe_scene_character.json", "moss_keyframe_scene_character.json",
     ]
     assert all(one["path"].startswith("mosael/examples/") and not one["installed"] for one in status["workflows"])
@@ -536,6 +538,32 @@ def test_随插件的官方工作流范例_列出全部和缺项(plugin, comfy) 
     #: 假 ComfyUI 的 object_info 里没有 H3/VRGDG/FLUX.3/MOSS 节点,所以每张都应报缺——这正是运行前要说的东西。
     assert all(one["missing_nodes"] for one in status["workflows"])
     assert all("problem" in one for one in status["workflows"])
+
+
+def test_H3_Image_文生图范例只走图像模型_单帧采样_模型和参数都钉住() -> None:
+    """新的 MiniMax H3 Image 权重不是 H3 视频模型:加载器、VAE、条件节点和 6 步采样都照官方 graph。"""
+    path = Path(__file__).resolve().parents[2] / "plugins/bundled/comfyui/workflows/examples/minimax_h3_image_t2i.json"
+    graph = json.loads(path.read_text(encoding="utf-8"))
+    nodes = {node["type"]: node for node in graph["nodes"]}
+
+    assert set(nodes) == {
+        "UNETLoader", "CLIPLoader", "VAELoader", "MiniMaxH3ImageConditioning",
+        "ConditioningZeroOut", "KSampler", "VAEDecode", "SaveImage", "MarkdownNote",
+    }
+    assert nodes["UNETLoader"]["widgets_values"][0] == "minimax_h3_image_pruned_int8_convrot.safetensors"
+    assert nodes["CLIPLoader"]["widgets_values"][:2] == ["qwen3vl_32b_minimax_h3_int8_convrot.safetensors", "minimax"]
+    assert nodes["VAELoader"]["widgets_values"] == ["minimax_h3_image_vae_fp16.safetensors"]
+    conditioning = nodes["MiniMaxH3ImageConditioning"]
+    assert [item["name"] for item in conditioning["inputs"]] == ["clip", "vae"], "文生图不带参考图口"
+    assert conditioning["widgets_values"][1:] == [2048, 2048]
+    assert nodes["KSampler"]["widgets_values"] == [42, "fixed", 6, 1, "euler", "simple", 1]
+    assert "TextGenerateV2" not in nodes, "可选的 Qwen 扩写分支不混进模型测试"
+
+    node_ids = {node["id"] for node in graph["nodes"]}
+    for link_id, source, source_slot, target, target_slot, kind in graph["links"]:
+        assert source in node_ids and target in node_ids, "连线两端都得是图里的节点"
+        assert source_slot >= 0 and target_slot >= 0 and kind
+        assert link_id
 
 
 def test_白模关键帧范例_白模必填且排第一_其余两位可选_都接进参考节点() -> None:

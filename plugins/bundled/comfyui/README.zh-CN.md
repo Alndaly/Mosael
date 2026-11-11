@@ -282,6 +282,7 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
+minimax_h3_image_t2i.json
 flux3_keyframe_blockout.json
 flux3_keyframe_scene_character.json
 moss_keyframe_scene_character.json

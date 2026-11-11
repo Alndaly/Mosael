@@ -1,0 +1,207 @@
+{
+  "last_node_id": 9,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [40, 40],
+      "size": [420, 90],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}
+      ],
+      "title": "MiniMax H3 Image",
+      "properties": {
+        "Node name for S&R": "UNETLoader",
+        "models": [
+          {
+            "name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+            "directory": "diffusion_models"
+          }
+        ]
+      },
+      "widgets_values": ["minimax_h3_image_pruned_int8_convrot.safetensors", "default"]
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [40, 180],
+      "size": [420, 120],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "CLIP", "type": "CLIP", "links": [2], "slot_index": 0}
+      ],
+      "title": "Text encoder",
+      "properties": {
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "directory": "text_encoders"
+          }
+        ]
+      },
+      "widgets_values": ["qwen3vl_32b_minimax_h3_int8_convrot.safetensors", "minimax", "default"]
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [40, 350],
+      "size": [420, 70],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "VAE", "type": "VAE", "links": [3, 4], "slot_index": 0}
+      ],
+      "title": "Image VAE",
+      "properties": {
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "minimax_h3_image_vae_fp16.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/vae/minimax_h3_image_vae_fp16.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": ["minimax_h3_image_vae_fp16.safetensors"]
+    },
+    {
+      "id": 4,
+      "type": "MiniMaxH3ImageConditioning",
+      "pos": [520, 40],
+      "size": [500, 280],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 2},
+        {"name": "vae", "type": "VAE", "link": 3}
+      ],
+      "outputs": [
+        {"name": "positive", "type": "CONDITIONING", "links": [5, 6], "slot_index": 0},
+        {"name": "LATENT", "type": "LATENT", "links": [7], "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "MiniMaxH3ImageConditioning"},
+      "widgets_values": [
+        "A cinematic still of a rain-soaked neon alley in 1990s Hong Kong, a lone figure with an umbrella, reflections on wet asphalt, volumetric light, 35mm film grain.",
+        2048,
+        2048
+      ]
+    },
+    {
+      "id": 5,
+      "type": "ConditioningZeroOut",
+      "pos": [1080, 40],
+      "size": [300, 80],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {"name": "conditioning", "type": "CONDITIONING", "link": 5}
+      ],
+      "outputs": [
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [8], "slot_index": 0}
+      ],
+      "title": "Negative conditioning",
+      "properties": {"Node name for S&R": "ConditioningZeroOut"},
+      "widgets_values": []
+    },
+    {
+      "id": 6,
+      "type": "KSampler",
+      "pos": [1080, 180],
+      "size": [340, 300],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 1},
+        {"name": "positive", "type": "CONDITIONING", "link": 6},
+        {"name": "negative", "type": "CONDITIONING", "link": 8},
+        {"name": "latent_image", "type": "LATENT", "link": 7}
+      ],
+      "outputs": [
+        {"name": "LATENT", "type": "LATENT", "links": [9], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "KSampler"},
+      "widgets_values": [42, "fixed", 6, 1, "euler", "simple", 1]
+    },
+    {
+      "id": 7,
+      "type": "VAEDecode",
+      "pos": [1480, 180],
+      "size": [300, 80],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 9},
+        {"name": "vae", "type": "VAE", "link": 4}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [10], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "VAEDecode"},
+      "widgets_values": []
+    },
+    {
+      "id": 8,
+      "type": "SaveImage",
+      "pos": [1840, 180],
+      "size": [420, 540],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 10}
+      ],
+      "outputs": [],
+      "properties": {"Node name for S&R": "SaveImage"},
+      "widgets_values": ["minimax_h3_image_t2i"]
+    },
+    {
+      "id": 9,
+      "type": "MarkdownNote",
+      "pos": [520, 400],
+      "size": [500, 300],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "MiniMax H3 Image test",
+      "properties": {},
+      "widgets_values": [
+        "## MiniMax H3 Image · text to image\n\n- `MiniMaxH3ImageConditioning` needs ComfyUI with the 2026-11-10 MiniMax-H3-Image support (v0.45.0 or newer).\n- The model works from about 4 MP to 20 MP; around 16 MP is the sweet spot. This test uses 2048×2048 (4 MP).\n- 6 steps, CFG 1, `euler` + `simple` is the reference setup. Raise steps to 20–50 for more detail.\n- The optional Qwen prompt-enhancer branch is intentionally left out: this graph tests the image model itself."
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 6, 0, "MODEL"],
+    [2, 2, 0, 4, 0, "CLIP"],
+    [3, 3, 0, 4, 1, "VAE"],
+    [4, 3, 0, 7, 1, "VAE"],
+    [5, 4, 0, 5, 0, "CONDITIONING"],
+    [6, 4, 0, 6, 1, "CONDITIONING"],
+    [7, 4, 1, 6, 3, "LATENT"],
+    [8, 5, 0, 6, 2, "CONDITIONING"],
+    [9, 6, 0, 7, 0, "LATENT"],
+    [10, 7, 0, 8, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
