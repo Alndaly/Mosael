@@ -695,7 +695,7 @@ def _settle_question(db: Session, question) -> None:
 
 def _settle_confirmation(db: Session, confirmation) -> None:
 
-    if confirmation.status not in {"approved", "executed", "rejected", "expired", "unknown"} or not confirmation.feishu_message_id:
+    if confirmation.status not in {"approved", "executed", "failed", "rejected", "expired", "unknown"} or not confirmation.feishu_message_id:
         return
     origin = None
     if confirmation.session_id:
@@ -704,7 +704,9 @@ def _settle_confirmation(db: Session, confirmation) -> None:
             origin = _route(db, session)
     if origin is None:
         return
-    if confirmation.status == "unknown":
+    if confirmation.status == "failed":
+        settled = cards.failed_card(summary=full_summary(confirmation), tool=confirmation.tool, error=confirmation.error or "")
+    elif confirmation.status == "unknown":
         # 批过、执行到一半后端没了:不能写「已同意」(读起来像做完了),也不能写「已失效」(读起来像没做)。
         settled = cards.interrupted_card(summary=full_summary(confirmation), tool=confirmation.tool)
     elif confirmation.status == "expired":

@@ -107,6 +107,18 @@ def settled_card(*, summary: str, tool: str, decision: str, by: str) -> dict[str
     }
 
 
+def failed_card(*, summary: str, tool: str, error: str) -> dict[str, Any]:
+    """批准了但执行失败:原卡必须退出待操作态,并把结果说成失败而不是已同意。"""
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {"template": "red", "title": {"tag": "plain_text", "content": "执行失败"}},
+        "elements": [
+            _text(f"**{summary or tool}**"),
+            _text(f"工具:`{tool}`\n{error or '工具执行失败'}"),
+        ],
+    }
+
+
 def expired_card(*, summary: str, tool: str) -> dict[str, Any]:
     """这张卡已经因为对话结束 / 等待超时 / 重启而作废,不能再点。"""
     return {

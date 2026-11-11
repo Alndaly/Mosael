@@ -481,7 +481,7 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             # 校验与执行都在 authorize_and_*(和 HTTP 路由共用同一份)。这一层只负责:
             # 把 open_id 认成人、把领域异常翻成 toast。
             if action == cards.ACTION_APPROVE:
-                confirmations.authorize_and_approve(db, user, confirmation)
+                confirmation = confirmations.authorize_and_approve(db, user, confirmation)
                 decision = "approved"
             else:
                 authorize_and_reject(db, user, confirmation)
@@ -493,7 +493,10 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             logger.exception("feishu card decision failed confirmation=%s", confirmation_id)
             return _toast("处理失败,请到 Mosael 里查看")
 
-        settled = cards.settled_card(
-            summary=summary, tool=tool, decision=decision, by=user.username
-        )
+        if confirmation.status == "failed":
+            settled = cards.failed_card(summary=summary, tool=tool, error=confirmation.error or "")
+        else:
+            settled = cards.settled_card(
+                summary=summary, tool=tool, decision=decision, by=user.username
+            )
         return CardDecision({"card": {"type": "raw", "data": settled}})

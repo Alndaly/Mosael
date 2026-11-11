@@ -159,6 +159,25 @@ def test_bound_member_can_approve(ctx) -> None:
     assert _status(cid) == "executed"
 
 
+def test_飞书内批准但执行失败时回失败卡(ctx, monkeypatch) -> None:
+    from app.domain.agent import confirmations
+
+    client, ws, user_id, _ = ctx
+    _bind(ws, OTHER_OPEN_ID, user_id)
+    cid = _make_confirmation(client, ws)
+    monkeypatch.setattr(
+        confirmations, "_execute",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("工具执行失败")),
+    )
+
+    out = _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
+
+    assert "card" in out
+    assert out["card"]["data"]["header"]["title"]["content"] == "执行失败"
+    assert not list(_card_buttons(out["card"]["data"]))
+    assert _status(cid) == "failed"
+
+
 def test_bound_member_can_reject(ctx) -> None:
     client, ws, user_id, _ = ctx
     _bind(ws, OTHER_OPEN_ID, user_id)
@@ -264,6 +283,36 @@ def test_确认卡过期时收回飞书原卡(ctx, monkeypatch) -> None:
 
     assert updated and updated[0][0] == "om_expire"
     assert updated[0][1]["header"]["title"]["content"] == "已失效"
+
+
+def test_应用内批准但执行失败时收回飞书原卡(ctx, monkeypatch) -> None:
+    from app.domain.agent import confirmations
+    from app.integrations.feishu import client as feishu_client
+
+    client, ws, _, _ = ctx
+    with SessionLocal() as db:
+        bot = FeishuBot(workspace_id=ws, app_id="cli_card_failed", app_secret="s")
+        db.add(bot)
+        db.commit()
+        bot_id = bot.id
+    monkeypatch.setattr(feishu_client, "send_card", lambda *args, **kwargs: "om_failed")
+    cid = _make_feishu_confirmation(client, ws, bot_id)
+
+    updated: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        feishu_client, "update_card",
+        lambda bot, message_id, card: updated.append((message_id, card)),
+    )
+    monkeypatch.setattr(
+        confirmations, "_execute",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("工具执行失败")),
+    )
+    response = client.post(f"/api/confirmations/{cid}/approve")
+
+    assert response.status_code == 200 and response.json()["status"] == "failed"
+    assert updated and updated[0][0] == "om_failed"
+    assert updated[0][1]["header"]["title"]["content"] == "执行失败"
+    assert not list(_card_buttons(updated[0][1]))
 
 
 def test_missing_card_capability_degrades_to_text_and_records_why(ctx, monkeypatch) -> None:
