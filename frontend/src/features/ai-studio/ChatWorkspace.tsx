@@ -45,7 +45,7 @@ import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { ChatBubble, caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
 import { ChatTranscriptSkeleton } from "@/features/agent/chatSkeleton";
-import { isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
+import { isSuccessfulReceipt, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { attachmentToken, chatMediaGallery } from "@/features/agent/userMessage";
 import { type AgentUsageEvent } from "@/features/agent/messageUsage";
@@ -370,7 +370,8 @@ export function ChatWorkspace({
     () => visibleMessages.filter((message) => !isWaitingReceipt(message)),
     [visibleMessages],
   );
-  const waitingReceipts = visibleMessages.filter(isWaitingReceipt);
+  //: 成功的回执由右侧「后台任务」承担;这里只留失败 / 被停下的兜底卡。
+  const waitingReceipts = visibleMessages.filter((message) => isWaitingReceipt(message) && !isSuccessfulReceipt(message));
   //: 被智能体**接住**的回执归给接住它的那一轮回答(见 ChatBubble.caughtReceiptsByMessage)。
   //: 归属只能在这里算 —— 只有消息列表容器手里有全部消息,单条气泡看不到后面还有没有回答。
   //: 没接住的不在这张表里:它们要在对话里显式出现(带动作的那张卡)。

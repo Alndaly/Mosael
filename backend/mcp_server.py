@@ -4130,14 +4130,25 @@ def get_transcript(
 
     Narrow with start_seconds/end_seconds (both in seconds; end 0 means "to the end") rather
     than pulling a long video whole. Per-word tokens are dropped — segment timing is what
-    cutting needs. Returns 404 if the asset has no transcript yet: run transcribe_asset first.
+    cutting needs. If the asset has no transcript yet, returns ``status: "missing"`` and an
+    empty segment list instead of failing: run transcribe_asset first, then read it again.
     """
     from app.api.schemas import TranscriptOut
     from app.domain.assets import use_cases
 
     data = _use_case(use_cases.transcript_of, asset_id, out=TranscriptOut)
     if data is None:
-        raise ValueError("Transcript not found")
+        #: 素材存在、只是还没转写。这不是工具坏了:回一个说得清的状态,模型才知道下一步该转写,
+        #: 界面上也不会把一次正常的「还没做」画成红色失败。
+        return {
+            "asset_id": asset_id,
+            "status": "missing",
+            "message": "No transcript yet. Run transcribe_asset first.",
+            "total_segments": 0,
+            "truncated": False,
+            "segments": [],
+            "text": "",
+        }
     segments = data.get("segments") or []
     if start_seconds or end_seconds:
         end = float(end_seconds) if end_seconds else float("inf")

@@ -36,6 +36,9 @@ const firstAsk = message("u1", "user", "把旁白都配上音");
 const undelivered = message("r2", "job_receipt", "「配音 2」失败了。", {
   job_id: "j2", kind: "tts", status: "failed", subject: "配音 2", undelivered: true, error_summary: "合成时断了",
 });
+const undeliveredOk = message("r3", "job_receipt", "「配音 3」成功了。", {
+  job_id: "j3", kind: "tts", status: "succeeded", subject: "配音 3", undelivered: true,
+});
 
 const CATALOG = {
   kinds: [{ kind: "tts", label: "配音", announce: "always", affects: ["assets"], view: "ai", record_field: "session_id" }],
@@ -157,7 +160,15 @@ it("被接住的回执不单独渲染:收进那一轮的步骤里,默认收起�
   expect(step?.textContent).toContain("runStatus_failed");
 });
 
-it("没接住的回执仍然显式是一张卡,带动作", async () => {
+it("成功的回执即使还没交给智能体,也不在对话里画卡 —— 右侧后台任务已经列着它", async () => {
+  h.messages = [firstAsk, undeliveredOk];
+  const { container } = mount();
+
+  await screen.findByText("把旁白都配上音");
+  expect(container.querySelectorAll("[data-job-receipt]")).toHaveLength(0);
+});
+
+it("没接住的失败回执仍然显式是一张卡,带动作", async () => {
   h.messages = [firstAsk, undelivered];
   const { container } = mount();
 

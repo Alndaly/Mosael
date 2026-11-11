@@ -92,6 +92,15 @@ def test_transcript_narrows_by_time_and_owns_up_to_truncating(monkeypatch) -> No
     assert window["total_segments"] == len(window["segments"])
 
 
+def test_missing_transcript_is_a_state_not_a_tool_failure(monkeypatch) -> None:
+    """素材在、还没转写:回 missing 和下一步,不把「还没做」画成红色失败。"""
+    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: None)
+    out = mcp_server.get_transcript("a1")
+    assert out["status"] == "missing"
+    assert out["segments"] == [] and out["total_segments"] == 0
+    assert "transcribe_asset" in out["message"]
+
+
 def test_transcript_keeps_the_speaker_only_when_there_is_one(monkeypatch) -> None:
     monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: {
         "language": "zh", "status": "done",
