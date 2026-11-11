@@ -78,8 +78,6 @@ class AssetFacets:
     total: int
     kinds: dict[str, int] = field(default_factory=dict)
     tags: dict[str, int] = field(default_factory=dict)
-    #: 每种中间产物各几份(整个范围的,不管眼下看的是哪一种)—— 素材页切过去的入口上写着它。
-    intermediates: dict[str, int] = field(default_factory=dict)
 
 
 def page(
@@ -121,10 +119,7 @@ def facets(db: Session, workspace_id: str, *, project_id: str | None = None, int
     tags: Counter[str] = Counter()
     for tagged in db.scalars(select(Asset.tags).where(*conditions)):
         tags.update(tag for tag in tagged or [] if isinstance(tag, str) and tag)
-    whole = _range(AssetScope(workspace_id=workspace_id, project_id=project_id))
-    intermediates = {kind: count for kind, count in db.execute(
-        select(Asset.intermediate, func.count()).where(*whole, Asset.intermediate != "").group_by(Asset.intermediate))}
-    return AssetFacets(total=sum(kinds.values()), kinds=kinds, tags=dict(tags), intermediates=intermediates)
+    return AssetFacets(total=sum(kinds.values()), kinds=kinds, tags=dict(tags))
 
 
 def _check(scope: AssetScope) -> None:

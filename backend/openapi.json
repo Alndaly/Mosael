@@ -33483,21 +33483,13 @@
             },
             "type": "object",
             "title": "Tags"
-          },
-          "intermediates": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Intermediates"
           }
         },
         "type": "object",
         "required": [
           "total",
           "kinds",
-          "tags",
-          "intermediates"
+          "tags"
         ],
         "title": "AssetFacetsOut",
         "description": "页签上的数字和标签筛选的候选:整个范围里每种各几份、每个标签挂在几份上。"

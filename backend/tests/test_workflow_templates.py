@@ -542,7 +542,8 @@ class Test分镜写了口播就要真的配上:
         placed = {n["id"]: n for n in assemble["body"]["nodes"]}
         assert placed["has_audio"]["config"] == {"left": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}", "op": "not_empty"}
         gated = [e for e in assemble["body"]["edges"] if e["source"] == "has_audio"]
-        assert gated and all(e.get("source_handle") == "true" for e in gated)
+        assert ("has_audio", "mute_clip", "true") in {(e["source"], e["target"], e.get("source_handle")) for e in gated}
+        assert ("has_audio", "mark_ambience", "false") in {(e["source"], e["target"], e.get("source_handle")) for e in gated}
 
     def test_这一镜没口播也跳过(self) -> None:
         """分镜 schema 明说"无则写空字符串" —— 纯画面镜头是正常的,而空文本交给合成会失败,

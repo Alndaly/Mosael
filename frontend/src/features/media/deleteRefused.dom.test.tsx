@@ -51,7 +51,7 @@ const CARDS = [card("a", "成片A"), card("b", "成片B")];
 
 function serveAssets() {
   vi.mocked(listAssetPage).mockImplementation(async (_query: AssetQuery) => ({ items: CARDS, next_cursor: null, total: CARDS.length }));
-  vi.mocked(getAssetFacets).mockResolvedValue({ total: CARDS.length, kinds: { video: 2 }, tags: {}, intermediates: {} });
+  vi.mocked(getAssetFacets).mockResolvedValue({ total: CARDS.length, kinds: { video: 2 }, tags: {} });
   //: 「成片A」还在发布:后端回 409,detail 是那一句;「成片B」照常删掉。
   vi.mocked(deleteAsset).mockImplementation(async (id: string) => {
     if (id === "a") throw new ApiError(REFUSED, 409, JSON.stringify({ detail: REFUSED }));

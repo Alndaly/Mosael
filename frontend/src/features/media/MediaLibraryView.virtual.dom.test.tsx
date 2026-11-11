@@ -39,7 +39,7 @@ beforeEach(() => {
   localStorage.clear();
   window.location.hash = "#/media";
   vi.mocked(listAssetPage).mockReset();
-  vi.mocked(getAssetFacets).mockResolvedValue({ total: 400, kinds: { image: 400 }, tags: {}, intermediates: {} });
+  vi.mocked(getAssetFacets).mockResolvedValue({ total: 400, kinds: { image: 400 }, tags: {} });
 });
 afterEach(cleanup);
 

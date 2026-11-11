@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "从主题到完整视频",
   "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。台词按分镜写的说话人配音：角色在资产库里带着音色就用它的嗓子，旁白和没带音色的角色用开始节点的那一把；有能出音乐的模型时再生成一首配乐，垫在对白底下。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话、逐镜配音和一首配乐——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
-  "graph_hash": "751b1966f34e4fbbab05aa3bf5fe8514a03ca6e5d88498d86872cc852acb5623",
+  "graph_hash": "c109bbb1e2c6a9592162c9f3ba3d51b21765981311b256e3a65e70aae23ce43a",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 22,
+      "template_version": 25,
       "source": "official"
     },
     "nodes": [
@@ -579,7 +579,8 @@
                 "config": {
                   "kind": "location",
                   "name": "{{loop.item.name}}",
-                  "limit": 1
+                  "limit": 1,
+                  "role": "design_sheet"
                 }
               },
               {
@@ -598,13 +599,13 @@
               {
                 "id": "art",
                 "type": "ai_generate",
-                "name": "画这个场景的设定图",
+                "name": "画这个场景的设计稿",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
+                  "prompt": "Location design sheet of {{loop.item.name}}: {{loop.item.description}} A 2x2 grid of four separate panels with thin white gutters on a plain light background: top-left a high bird's-eye view showing the whole layout of the place; top-right an eye-level view looking the opposite way; bottom-left a close-up of the walls, doors, windows and fixtures; bottom-right a close-up of the floor or ground and small props. The same place, materials, lighting and weather in every panel. No people, no text. {{input.style}}",
                   "parameters": {}
                 },
                 "position": {
@@ -621,7 +622,7 @@
                   "name": "{{loop.item.name}}",
                   "prompt": "{{loop.item.description}}",
                   "asset_ids": "",
-                  "role": "wide"
+                  "role": "design_sheet"
                 },
                 "position": {
                   "x": 980,
@@ -1330,7 +1331,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's concept art; either may be missing. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
@@ -1383,7 +1384,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's concept art; either may be missing. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
@@ -1496,7 +1497,8 @@
                 "config": {
                   "kind": "location",
                   "name": "{{loop.item.location_name}}",
-                  "limit": 1
+                  "limit": 1,
+                  "role": "design_sheet"
                 }
               },
               {
@@ -1761,19 +1763,6 @@
                 }
               },
               {
-                "id": "mute_clip",
-                "type": "edit_timeline",
-                "name": "这一镜的视频不出声",
-                "position": {
-                  "x": 80,
-                  "y": 320
-                },
-                "config": {
-                  "sequence_id": "{{input.sequence_id}}",
-                  "operations": "[{\"kind\": \"set_clip_gain\", \"clip_id\": \"{{append_clip.clip_id}}\", \"muted\": true}]"
-                }
-              },
-              {
                 "id": "has_audio",
                 "type": "condition",
                 "name": "这一镜合成了口播吗",
@@ -1787,11 +1776,37 @@
                 }
               },
               {
+                "id": "mute_clip",
+                "type": "edit_timeline",
+                "name": "有旁白的镜头静音原声",
+                "position": {
+                  "x": 700,
+                  "y": 320
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "operations": "[{\"kind\": \"set_clip_gain\", \"clip_id\": \"{{append_clip.clip_id}}\", \"muted\": true}]"
+                }
+              },
+              {
+                "id": "mark_ambience",
+                "type": "edit_timeline",
+                "name": "把无旁白镜头的原声标成环境声",
+                "position": {
+                  "x": 700,
+                  "y": 500
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "operations": "[{\"kind\": \"set_clip_effects\", \"clip_id\": \"{{append_clip.clip_id}}\", \"effects\": {\"ambience\": true}}]"
+                }
+              },
+              {
                 "id": "append_narration",
                 "type": "timeline_append",
                 "name": "把口播对齐到这一镜",
                 "position": {
-                  "x": 700,
+                  "x": 1010,
                   "y": 140
                 },
                 "config": {
@@ -1811,7 +1826,7 @@
                 "type": "template",
                 "name": "这一镜的字幕文本",
                 "position": {
-                  "x": 1010,
+                  "x": 1320,
                   "y": 140
                 },
                 "config": {
@@ -1821,20 +1836,26 @@
             ],
             "edges": [
               {
-                "id": "assemble_clip_mute",
-                "source": "append_clip",
-                "target": "mute_clip"
-              },
-              {
                 "id": "assemble_clip_gate",
-                "source": "mute_clip",
+                "source": "append_clip",
                 "target": "has_audio"
               },
               {
-                "id": "assemble_gate_narration",
+                "id": "assemble_gate_mute",
                 "source": "has_audio",
-                "target": "append_narration",
+                "target": "mute_clip",
                 "source_handle": "true"
+              },
+              {
+                "id": "assemble_gate_ambience",
+                "source": "has_audio",
+                "target": "mark_ambience",
+                "source_handle": "false"
+              },
+              {
+                "id": "assemble_mute_narration",
+                "source": "mute_clip",
+                "target": "append_narration"
               },
               {
                 "id": "assemble_narration_caption",

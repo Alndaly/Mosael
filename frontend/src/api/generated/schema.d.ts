@@ -11926,10 +11926,6 @@ export interface components {
             tags: {
                 [key: string]: number;
             };
-            /** Intermediates */
-            intermediates: {
-                [key: string]: number;
-            };
         };
         /**
          * AssetFrameRequest

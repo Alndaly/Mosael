@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Series bible for an episodic show",
   "description": "The first step of an episodic show: give the title, premise and number of episodes, and list your own characters and locations one per line if you want to (name, role, looks, the voice you want) — anything left out is filled in from the premise. It writes the episode outline and the look, draws a turnaround and picks a voice for each character, paints concept art for each location, saves them all to the asset library and saves the bible as a note. Then shoot each episode with \"Topic to finished video\": characters and locations are recognised by name, with the same face and the same voice. Cost: one chat call, plus one turnaround per new character and one concept image per new location (none for those already in the library).",
-  "graph_hash": "a1a0e29a33490e2519efa6ba05f05be9485ffd24cc8d98ba2989a9c0ac38ada6",
+  "graph_hash": "426aec564115b6ec0125b6170c2d562cdaf714332f5ec07092b3aa0e7c88a2c0",
   "graph": {
     "meta": {
       "template_id": "series_setup",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -361,7 +361,8 @@
                 "config": {
                   "kind": "location",
                   "name": "{{loop.item.name}}",
-                  "limit": 1
+                  "limit": 1,
+                  "role": "design_sheet"
                 }
               },
               {
@@ -380,13 +381,13 @@
               {
                 "id": "art",
                 "type": "ai_generate",
-                "name": "Paint this location's concept art",
+                "name": "Paint this location's design sheet",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
+                  "prompt": "Location design sheet of {{loop.item.name}}: {{loop.item.description}} A 2x2 grid of four separate panels with thin white gutters on a plain light background: top-left a high bird's-eye view showing the whole layout of the place; top-right an eye-level view looking the opposite way; bottom-left a close-up of the walls, doors, windows and fixtures; bottom-right a close-up of the floor or ground and small props. The same place, materials, lighting and weather in every panel. No people, no text. {{input.style}}",
                   "parameters": {}
                 },
                 "position": {
@@ -403,6 +404,7 @@
                   "name": "{{loop.item.name}}",
                   "prompt": "{{loop.item.description}}",
                   "asset_ids": "",
+                  "role": "design_sheet",
                   "tags": "{{input.title}}"
                 },
                 "position": {

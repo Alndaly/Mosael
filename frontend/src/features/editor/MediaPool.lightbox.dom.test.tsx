@@ -38,7 +38,7 @@ const ASSETS = [asset("beach", "video"), asset("pier", "video")];
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   listAssetPage: vi.fn(async () => ({ items: ASSETS, next_cursor: null, total: ASSETS.length })),
-  getAssetFacets: vi.fn(async () => ({ total: ASSETS.length, kinds: { video: 2 }, tags: {}, intermediates: {} })),
+  getAssetFacets: vi.fn(async () => ({ total: ASSETS.length, kinds: { video: 2 }, tags: {} })),
 }));
 
 const portal = () => document.querySelector<HTMLElement>(".PhotoView-Portal");

@@ -28,7 +28,7 @@ const ASSETS = [asset("beach", "video"), asset("plain", "audio"), asset("pier", 
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   listAssetPage: vi.fn(async () => ({ items: ASSETS, next_cursor: null, total: ASSETS.length })),
-  getAssetFacets: vi.fn(async () => ({ total: ASSETS.length, kinds: { video: 1, image: 1, audio: 1 }, tags: {}, intermediates: {} })),
+  getAssetFacets: vi.fn(async () => ({ total: ASSETS.length, kinds: { video: 1, image: 1, audio: 1 }, tags: {} })),
 }));
 
 afterEach(() => {

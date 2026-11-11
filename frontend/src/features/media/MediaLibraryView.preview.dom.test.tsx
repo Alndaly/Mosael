@@ -51,7 +51,7 @@ const cards = [card("poster", "image"), card("voice", "audio"), card("clip", "vi
 function mount() {
   localStorage.clear();
   vi.mocked(listAssetPage).mockImplementation(async () => ({ items: cards, next_cursor: null, total: cards.length }));
-  vi.mocked(getAssetFacets).mockResolvedValue({ total: cards.length, kinds: { image: 2, audio: 1, video: 1 }, tags: {}, intermediates: {} });
+  vi.mocked(getAssetFacets).mockResolvedValue({ total: cards.length, kinds: { image: 2, audio: 1, video: 1 }, tags: {} });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);
 }

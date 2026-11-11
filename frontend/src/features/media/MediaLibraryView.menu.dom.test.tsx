@@ -15,7 +15,7 @@ vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   separateAssetAudio: vi.fn(async () => ({ id: "job-1" })),
   listAssetPage: vi.fn(),
-  getAssetFacets: vi.fn(async () => ({ total: 0, kinds: {}, tags: {}, intermediates: {} })),
+  getAssetFacets: vi.fn(async () => ({ total: 0, kinds: {}, tags: {} })),
 }));
 
 const asset = (id: string, kind: string, tags: string[] = []): AssetCard => ({
@@ -38,7 +38,6 @@ function serve(cards: AssetCard[]) {
     total: cards.length,
     kinds: count(cards.map((one) => one.kind)),
     tags: count(cards.flatMap((one) => one.tags ?? [])),
-    intermediates: {},
   });
 }
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en" }) }));

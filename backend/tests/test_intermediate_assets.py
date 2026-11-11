@@ -43,7 +43,6 @@ def test_素材库默认不列中间产物_切到那一种才看得见() -> None
     facets = client.get("/api/assets/facets", params={"workspace_id": ws}).json()
     assert facets["total"] == 2 and facets["kinds"] == {"audio": 1, "image": 1}
     assert facets["tags"] == {"口播": 1}, "页签和标签只数素材库里的"
-    assert facets["intermediates"] == {DUB_LINE: 3}, "切过去的入口上写着有几份"
     shelf = client.get("/api/assets/facets", params={"workspace_id": ws, "intermediate": DUB_LINE}).json()
     assert shelf["total"] == 3 and shelf["kinds"] == {"audio": 3} and shelf["tags"] == {"配音": 3}
 

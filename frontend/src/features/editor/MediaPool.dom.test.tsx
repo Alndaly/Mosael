@@ -57,7 +57,6 @@ vi.mock("@/api/client", async (original) => ({
     total: ASSETS.length,
     kinds: { video: 2, image: 1, audio: 1 },
     tags: { sea: 2, dusk: 1, "b-roll": 1, interview: 1 },
-    intermediates: {},
   })),
 }));
 

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "连续剧 · 系列设定",
   "description": "做漫剧、连续剧的第一步：填剧名、梗概和集数，角色和场景想自己定就一行一个写上（名字、身份、长相、想要什么嗓子都行），不写就由 AI 按梗概补。生成分集大纲和画风，给每个角色画三视图、配一把嗓子，给每个场景画设定图，全部存进资产库，设定文档存成笔记。之后每一集用「从主题到完整视频」拍：角色和场景按名字从库里认出来，同一张脸、同一把嗓子。花费量级：1 次对话，外加每个新角色一张三视图、每个新场景一张设定图（库里已有的不再画）。",
-  "graph_hash": "003631b1d726fae7a40bc6de986e737d93bd42a3e485cc77f5a9d8ed48afe2d6",
+  "graph_hash": "a3dcc64a05f053a2fc93aeb9a93d82c34901a006617b8b17bd7b9d29d9d7c5d7",
   "graph": {
     "meta": {
       "template_id": "series_setup",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -361,7 +361,8 @@
                 "config": {
                   "kind": "location",
                   "name": "{{loop.item.name}}",
-                  "limit": 1
+                  "limit": 1,
+                  "role": "design_sheet"
                 }
               },
               {
@@ -380,13 +381,13 @@
               {
                 "id": "art",
                 "type": "ai_generate",
-                "name": "画这个场景的设定图",
+                "name": "画这个场景的设计稿",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
+                  "prompt": "Location design sheet of {{loop.item.name}}: {{loop.item.description}} A 2x2 grid of four separate panels with thin white gutters on a plain light background: top-left a high bird's-eye view showing the whole layout of the place; top-right an eye-level view looking the opposite way; bottom-left a close-up of the walls, doors, windows and fixtures; bottom-right a close-up of the floor or ground and small props. The same place, materials, lighting and weather in every panel. No people, no text. {{input.style}}",
                   "parameters": {}
                 },
                 "position": {
@@ -403,6 +404,7 @@
                   "name": "{{loop.item.name}}",
                   "prompt": "{{loop.item.description}}",
                   "asset_ids": "",
+                  "role": "design_sheet",
                   "tags": "{{input.title}}"
                 },
                 "position": {

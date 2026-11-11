@@ -201,8 +201,6 @@ class AssetFacetsOut(ApiModel):
     total: int
     kinds: dict[str, int]
     tags: dict[str, int]
-    #: 每种中间产物各几份(整个范围的,不管眼下看的是哪一种):素材页切过去的入口上写着它。
-    intermediates: dict[str, int]
 
 
 class AssetLineageNode(ApiModel):

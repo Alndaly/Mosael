@@ -49,7 +49,7 @@ beforeEach(() => {
   window.location.hash = "#/media";
   vi.mocked(listAssetPage).mockReset();
   vi.mocked(getAssetFacets).mockReset();
-  vi.mocked(getAssetFacets).mockResolvedValue({ total: 130, kinds: { video: 30, image: 100 }, tags: { 海边: 4 }, intermediates: {} });
+  vi.mocked(getAssetFacets).mockResolvedValue({ total: 130, kinds: { video: 30, image: 100 }, tags: { 海边: 4 } });
 });
 afterEach(cleanup);
 

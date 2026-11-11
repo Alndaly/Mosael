@@ -176,8 +176,8 @@ def test_模型下拉只列收参考图的_默认那个标出来(setup) -> None:
     with unit_of_work() as db:
         options = field_options(db, "reference_image_models", ctx)
     assert options == [
-        {"value": "p1:image:edit", "label": "能改图 · 默认", "model": "edit", "profile_name": "连接", "entry_group": None},
-        {"value": "p2:image:edit", "label": "能改图", "model": "edit", "profile_name": "另一家", "entry_group": None},
+        {"value": "p1:image:edit", "label": "能改图 · 默认", "model": "edit", "profile_name": "连接", "entry_group": None, "is_default": True},
+        {"value": "p2:image:edit", "label": "能改图", "model": "edit", "profile_name": "另一家", "entry_group": None, "is_default": False},
     ], "主名和「默认」;连接名、是哪张工作流的哪个入口原样带上,界面摆成第二行(ADR 0045),不拼成一句"
 
 

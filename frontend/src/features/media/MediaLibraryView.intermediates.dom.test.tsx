@@ -36,7 +36,6 @@ beforeEach(() => {
     total: 3,
     kinds: { audio: 3 },
     tags: {},
-    intermediates: { dub_line: 985, fitted_frame: 8 },
   });
 });
 afterEach(cleanup);

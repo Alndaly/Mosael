@@ -43,7 +43,7 @@ import { MediaLibraryView } from "./MediaLibraryView";
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   listAssetPage: vi.fn(),
-  getAssetFacets: vi.fn(async () => ({ total: 0, kinds: {}, tags: {}, intermediates: {} })),
+  getAssetFacets: vi.fn(async () => ({ total: 0, kinds: {}, tags: {} })),
 }));
 
 const card = (id: string, kind: string): AssetCard => ({
@@ -97,7 +97,6 @@ function mount(cards: AssetCard[]) {
     total: cards.length,
     kinds: { image: cards.filter((one) => one.kind === "image").length },
     tags: {},
-    intermediates: {},
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);

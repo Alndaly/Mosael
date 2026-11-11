@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Each line is voiced by the speaker the storyboard names: a character that carries a voice in the asset library speaks in it, the narrator and characters without one use the start node's voice; with a music model, a background score is generated and laid under the dialogue. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls, per-shot voicing and one music track — the most expensive template here; max_shots on the start node caps the shot count, and shot_seconds sets each shot's length (preset to the length the chosen video model can make that is closest to its default).",
-  "graph_hash": "80e73d98483281b44b4b8758cb44b20ba18ee50ec56d330993a3e5f153f04dfe",
+  "graph_hash": "9a7644da0c0e6b68d05241d3047d6a56db1ca3debbe7cf5d9e0b6b31094ade34",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 22,
+      "template_version": 25,
       "source": "official"
     },
     "nodes": [
@@ -579,7 +579,8 @@
                 "config": {
                   "kind": "location",
                   "name": "{{loop.item.name}}",
-                  "limit": 1
+                  "limit": 1,
+                  "role": "design_sheet"
                 }
               },
               {
@@ -598,13 +599,13 @@
               {
                 "id": "art",
                 "type": "ai_generate",
-                "name": "Paint this location's concept art",
+                "name": "Paint this location's design sheet",
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "Establishing concept art of {{loop.item.name}}: {{loop.item.description}}. Wide view of the empty set, no people, no text. {{input.style}}",
+                  "prompt": "Location design sheet of {{loop.item.name}}: {{loop.item.description}} A 2x2 grid of four separate panels with thin white gutters on a plain light background: top-left a high bird's-eye view showing the whole layout of the place; top-right an eye-level view looking the opposite way; bottom-left a close-up of the walls, doors, windows and fixtures; bottom-right a close-up of the floor or ground and small props. The same place, materials, lighting and weather in every panel. No people, no text. {{input.style}}",
                   "parameters": {}
                 },
                 "position": {
@@ -621,7 +622,7 @@
                   "name": "{{loop.item.name}}",
                   "prompt": "{{loop.item.description}}",
                   "asset_ids": "",
-                  "role": "wide"
+                  "role": "design_sheet"
                 },
                 "position": {
                   "x": 980,
@@ -1330,7 +1331,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's concept art; either may be missing. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
@@ -1383,7 +1384,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's concept art; either may be missing. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
@@ -1496,7 +1497,8 @@
                 "config": {
                   "kind": "location",
                   "name": "{{loop.item.location_name}}",
-                  "limit": 1
+                  "limit": 1,
+                  "role": "design_sheet"
                 }
               },
               {
@@ -1761,19 +1763,6 @@
                 }
               },
               {
-                "id": "mute_clip",
-                "type": "edit_timeline",
-                "name": "Mute this shot's clip",
-                "position": {
-                  "x": 80,
-                  "y": 320
-                },
-                "config": {
-                  "sequence_id": "{{input.sequence_id}}",
-                  "operations": "[{\"kind\": \"set_clip_gain\", \"clip_id\": \"{{append_clip.clip_id}}\", \"muted\": true}]"
-                }
-              },
-              {
                 "id": "has_audio",
                 "type": "condition",
                 "name": "Did this shot get narration?",
@@ -1787,11 +1776,37 @@
                 }
               },
               {
+                "id": "mute_clip",
+                "type": "edit_timeline",
+                "name": "Mute the source audio when narration is present",
+                "position": {
+                  "x": 700,
+                  "y": 320
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "operations": "[{\"kind\": \"set_clip_gain\", \"clip_id\": \"{{append_clip.clip_id}}\", \"muted\": true}]"
+                }
+              },
+              {
+                "id": "mark_ambience",
+                "type": "edit_timeline",
+                "name": "Mark this shot's sound as ambience",
+                "position": {
+                  "x": 700,
+                  "y": 500
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "operations": "[{\"kind\": \"set_clip_effects\", \"clip_id\": \"{{append_clip.clip_id}}\", \"effects\": {\"ambience\": true}}]"
+                }
+              },
+              {
                 "id": "append_narration",
                 "type": "timeline_append",
                 "name": "Align the narration to this shot",
                 "position": {
-                  "x": 700,
+                  "x": 1010,
                   "y": 140
                 },
                 "config": {
@@ -1811,7 +1826,7 @@
                 "type": "template",
                 "name": "This shot's subtitle text",
                 "position": {
-                  "x": 1010,
+                  "x": 1320,
                   "y": 140
                 },
                 "config": {
@@ -1821,20 +1836,26 @@
             ],
             "edges": [
               {
-                "id": "assemble_clip_mute",
-                "source": "append_clip",
-                "target": "mute_clip"
-              },
-              {
                 "id": "assemble_clip_gate",
-                "source": "mute_clip",
+                "source": "append_clip",
                 "target": "has_audio"
               },
               {
-                "id": "assemble_gate_narration",
+                "id": "assemble_gate_mute",
                 "source": "has_audio",
-                "target": "append_narration",
+                "target": "mute_clip",
                 "source_handle": "true"
+              },
+              {
+                "id": "assemble_gate_ambience",
+                "source": "has_audio",
+                "target": "mark_ambience",
+                "source_handle": "false"
+              },
+              {
+                "id": "assemble_mute_narration",
+                "source": "mute_clip",
+                "target": "append_narration"
               },
               {
                 "id": "assemble_narration_caption",
