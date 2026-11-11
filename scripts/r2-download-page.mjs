@@ -18,7 +18,7 @@ export function renderDownloadPage(files, tag) {
       detail: "Apple Silicon · DMG",
     },
     {
-      file: files.find((name) => /^Mosael Setup .*\.exe$/i.test(name)),
+      file: files.find((name) => /^Mosael[ .]Setup[ .].*\.exe$/i.test(name)),
       title: "Windows",
       detail: "x64 · EXE",
     },
