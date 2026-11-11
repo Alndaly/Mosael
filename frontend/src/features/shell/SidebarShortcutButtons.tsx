@@ -1,7 +1,7 @@
-import React from "react";
 import { toast } from "sonner";
 
 import type { StudioView } from "@/components/layout/navLabels";
+import { RailDivider } from "@/components/layout/RailDivider";
 import {
   shortcutIcon,
   shortcutLabel,
@@ -43,9 +43,10 @@ export function SidebarShortcutButtons({
     if (shortcut.url) window.open(shortcut.url, "_blank", "noopener,noreferrer");
   };
   return (
+    <>
     <div
       data-sidebar-shortcuts=""
-      className={`mb-3 grid shrink-0 gap-1 border-b border-divider pb-3 ${compact ? "grid-cols-1" : ""}`}
+      className={`grid shrink-0 gap-1 ${compact ? "grid-cols-1" : ""}`}
       style={compact ? undefined : { gridTemplateColumns: `repeat(${Math.min(shortcuts.length, 4)}, minmax(0, 1fr))` }}
     >
       {shortcuts.map((shortcut) => {
@@ -64,5 +65,8 @@ export function SidebarShortcutButtons({
         );
       })}
     </div>
+    {/* 和导航里的分隔线同一条(此前这里是贯穿整宽的 border-b) */}
+    <RailDivider />
+    </>
   );
 }

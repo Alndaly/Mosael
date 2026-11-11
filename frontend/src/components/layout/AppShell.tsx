@@ -44,6 +44,7 @@ import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { useCreateWorkspace, useDeleteWorkspace, useRenameWorkspace } from "@/lib/workspaces";
 import { PageTrailProvider, type PageTrail } from "@/components/layout/pageTrail";
+import { RailDivider } from "@/components/layout/RailDivider";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
 export type { StudioView } from "@/components/layout/navLabels";
@@ -313,21 +314,23 @@ export function AppShell({
         </div>
       </header>
       <aside data-glass-surface className="col-start-1 row-start-2 flex min-h-0 flex-col border-r border-divider bg-panel px-3 py-3">
-        <div className="mb-4 shrink-0">
+        {/* 段间 12px(间距只用 12 / 8 / 4 三档;此前这里是 mb-4 = 16px) */}
+        <div className="mb-3 shrink-0">
           <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
         </div>
         {shortcutBar?.(compact)}
         <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 [@media(max-height:850px)]:gap-0.5 overflow-y-auto overflow-x-hidden">
           {PRIMARY_NAV.map((item) => (
             <React.Fragment key={item.view}>
-              {item.dividerBefore && <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-divider" />}
+              {item.dividerBefore && <RailDivider inNav />}
               {railItem(item)}
             </React.Fragment>
           ))}
-          <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-divider" />
+          <RailDivider inNav />
           {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map(railItem)}
         </nav>
-        <div className="mt-3 grid shrink-0 gap-1 border-t border-divider pt-3">
+        <RailDivider />
+        <div className="grid shrink-0 gap-1">
           {FOOTER_NAV.map(railItem)}
           <RailUserMenu compact={compact} />
         </div>
