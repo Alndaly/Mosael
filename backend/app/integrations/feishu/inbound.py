@@ -51,7 +51,7 @@ from app.domain.permissions import holds_workspace_perm
 from app.domain.triggers.matching import IncomingMessage
 from app.domain.triggers.dispatch import Outcome
 from app.domain.triggers import dispatch as trigger_dispatch
-from app.integrations.feishu import client, cards, question_cards
+from app.integrations.feishu import client, cards, question_cards, outbound
 from app.domain.assets import importer
 from app.integrations.feishu.approvals import full_summary, announce_confirmation
 
@@ -661,7 +661,7 @@ def deliver_turn(session_id: str, message_id: str | None = None) -> None:
         try:
             #: **长正文发卡片**:智能体的回复是 markdown,`text` 类型会在飞书里显示成源码。
             #: 卡片失败时 `send_markdown` 自己降级成 text 重发并记日志 —— 回复不会凭空消失。
-            client.send_markdown(bot, chat_id, text)
+            outbound.send_with_assets(db, bot, chat_id, text, workspace_id=session.workspace_id)
         except client.FeishuError:
             logger.exception("feishu reply failed bot=%s chat=%s", bot.id, chat_id)
 
@@ -705,12 +705,15 @@ def _settle_confirmation(db: Session, confirmation) -> None:
     if origin is None:
         return
     if confirmation.status == "failed":
-        settled = cards.failed_card(summary=full_summary(confirmation), tool=confirmation.tool, error=confirmation.error or "")
+        settled = cards.failed_card(
+            summary=full_summary(confirmation), tool=confirmation.tool, error=confirmation.error or "",
+            payload=confirmation.payload,
+        )
     elif confirmation.status == "unknown":
         # 批过、执行到一半后端没了:不能写「已同意」(读起来像做完了),也不能写「已失效」(读起来像没做)。
-        settled = cards.interrupted_card(summary=full_summary(confirmation), tool=confirmation.tool)
+        settled = cards.interrupted_card(summary=full_summary(confirmation), tool=confirmation.tool, payload=confirmation.payload)
     elif confirmation.status == "expired":
-        settled = cards.expired_card(summary=full_summary(confirmation), tool=confirmation.tool)
+        settled = cards.expired_card(summary=full_summary(confirmation), tool=confirmation.tool, payload=confirmation.payload)
     else:
         decision = "approved" if confirmation.status in {"approved", "executed"} else "rejected"
         decided_by = db.get(User, confirmation.decided_by) if confirmation.decided_by else None
@@ -719,6 +722,7 @@ def _settle_confirmation(db: Session, confirmation) -> None:
             tool=confirmation.tool,
             decision=decision,
             by=decided_by.username if decided_by is not None else "",
+            payload=confirmation.payload,
         )
     client.update_card(origin[0], confirmation.feishu_message_id, settled)
 
@@ -780,7 +784,7 @@ def deliver_trigger_run(db: Session, job: Job) -> None:
         return
     try:
         #: 运行结果也是**长正文**(头部一句 + 产出全文),和智能体回复一样发卡片。
-        client.send_markdown(bot, chat_id, text)
+        outbound.send_with_assets(db, bot, chat_id, text, workspace_id=job.workspace_id)
     except client.FeishuError:
         logger.exception("feishu trigger result failed trigger=%s chat=%s", trigger.id, chat_id)
 

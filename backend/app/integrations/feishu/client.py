@@ -27,6 +27,7 @@ import mimetypes
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, NoReturn
 from urllib.parse import quote
 
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 API_BASE = "https://open.feishu.cn/open-apis"
 TOKEN_URL = f"{API_BASE}/auth/v3/tenant_access_token/internal"
 SEND_URL = f"{API_BASE}/im/v1/messages"
+IMAGES_URL = f"{API_BASE}/im/v1/images"
 #: 单个飞书资源下载上限。消息里的视频/文件先整段读进内存再交给素材库;没有上限时一个超大附件
 #: 就能把后端内存打满。200 MB 足够覆盖常见视频,超过的在 API 这一层直接说清。
 RESOURCE_MAX_BYTES = 200 * 1024 * 1024
@@ -221,11 +223,31 @@ def invalidate_token(bot_id: str) -> None:
         _token_cache.pop(bot_id, None)
 
 
-def call_api(bot: FeishuBot, method: str, url: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+def call_api(
+    bot: FeishuBot,
+    method: str,
+    url: str,
+    body: dict[str, Any] | None = None,
+    *,
+    files: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     def _call(token: str) -> dict[str, Any]:
+        # 同一个 multipart 请求可能因令牌失效再发一次;文件对象第一次读完必须归零。
+        for value in (files or {}).values():
+            stream = value[1] if isinstance(value, tuple) else value
+            seek = getattr(stream, "seek", None)
+            if callable(seek):
+                seek(0)
         with RetryingClient(timeout=15.0, max_retries=_resend_budget(method, url)) as client:
             try:
-                response = client.request(method, url, headers={"Authorization": f"Bearer {token}"}, json=body)
+                response = client.request(
+                    method,
+                    url,
+                    headers={"Authorization": f"Bearer {token}"},
+                    json=body if files is None else None,
+                    data=body if files is not None else None,
+                    files=files,
+                )
             except httpx.RequestError as exc:
                 _network_failure(exc)
             return _payload(response)
@@ -254,6 +276,33 @@ def send_text(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: str =
     )
     if data.get("code") != 0:
         _fail("feishuErr_sendText", data)
+    return _message_id(data)
+
+
+def send_image(bot: FeishuBot, chat_id: str, path: Path, *, receive_id_type: str = "chat_id") -> str:
+    """把本机图片交给飞书:先传图拿 image_key,再发 image 消息。"""
+    content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    with path.open("rb") as stream:
+        uploaded = call_api(
+            bot,
+            "POST",
+            IMAGES_URL,
+            {"image_type": "message"},
+            files={"image": (path.name, stream, content_type)},
+        )
+    if uploaded.get("code") != 0:
+        _fail("feishuErr_sendImage", uploaded)
+    image_key = str((uploaded.get("data") or {}).get("image_key") or "")
+    if not image_key:
+        raise FeishuError("feishuErr_sendImage", detail="image_key is missing")
+    body = {
+        "receive_id": chat_id,
+        "msg_type": "image",
+        "content": json.dumps({"image_key": image_key}, ensure_ascii=False),
+    }
+    data = call_api(bot, "POST", f"{SEND_URL}?receive_id_type={receive_id_type}", body)
+    if data.get("code") != 0:
+        _fail("feishuErr_sendImage", data)
     return _message_id(data)
 
 

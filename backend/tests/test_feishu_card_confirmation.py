@@ -120,6 +120,7 @@ def test_card_renders_the_full_prompt_not_the_stored_truncated_snapshot(monkeypa
         summary_key="confirm_generateImage",
         summary_params={"asked": long_prompt},
         requested_by="pi",
+        payload={},
     )
 
     approvals.announce_confirmation(SimpleNamespace(), confirmation)
@@ -235,11 +236,38 @@ def _card_buttons(node):
 
 
 def test_pending_card_has_both_buttons() -> None:
-    card = cards.confirmation_card(confirmation_id="c1", tool="create_workflow", summary="建一条流", requested_by="pi")
+    card = cards.confirmation_card(confirmation_id="c1", tool="create_workflow", summary="建一条流", requested_by="pi", payload={})
     actions = list(_card_buttons(card))
     assert {a["value"]["action"] for a in actions} == {cards.ACTION_APPROVE, cards.ACTION_REJECT}
     assert all(a["value"]["confirmation_id"] == "c1" for a in actions)
     assert all(a["width"] == "fill" for a in actions)
+
+
+def test_待确认和已结算卡都保留完整生成参数() -> None:
+    payload = {
+        "prompt": "山间清晨的田园小屋",
+        "provider": "volcengine",
+        "model": "doubao-seedream-4-5",
+        "parameters": {"size": "1920x1080", "num_images": 2},
+    }
+    rendered = [
+        cards.confirmation_card(
+            confirmation_id="c1", tool="generate_image", summary="生成图片", requested_by="pi", payload=payload,
+        ),
+        cards.settled_card(
+            summary="生成图片", tool="generate_image", decision="approved", by="kinda", payload=payload,
+        ),
+        cards.failed_card(
+            summary="生成图片", tool="generate_image", error="供应商拒收", payload=payload,
+        ),
+    ]
+
+    for card in rendered:
+        text = "\n".join(element.get("text", {}).get("content", "") for element in card["elements"])
+        assert "doubao-seedream-4-5" in text
+        assert "1920x1080" in text
+        assert '"num_images": 2' in text
+        assert '"provider": "volcengine"' in text
 
 
 def test_飞书卡片消息_id_会落库(ctx, monkeypatch) -> None:

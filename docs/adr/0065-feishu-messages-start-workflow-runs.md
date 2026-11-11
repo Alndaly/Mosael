@@ -192,11 +192,9 @@ keywords 为空,或文本里出现任意一个(大小写不敏感)
   消息 id / 发件人 / 类型 / 文本 / 素材 id),不认飞书;`WorkflowTrigger.bot_id` / `chat_id`
   为空串就是"任意来源",加一种来源 = 写一个适配器把它的消息包成 `Message`,再在它自己的入口
   调一次(定时与 webhook 那一边已经有 `ScheduledTask`,`trigger_type` 就是现成的挂点)。
-- **产出里的图片 / 音频传回飞书**:`integrations/feishu/client.py` 没有"上传图片拿 img_key"
-  的口子(`send_card` 只能发文字卡),结果回群里目前是**文本 + 状态**。要传图得先给 client
-  加一个上传函数(那一层属于另一笔在途的改动,不在这次的范围里)。
+- **产出里的音频传回飞书**:暂不实现。图片已于 2026-11-11 由 `outbound.send_with_assets` 支持，见文末补记。
 - **把运行结果落进智能体会话**:触发器认领之后那次运行与 `AgentSession` 没有任何关系。
-- **回群里做富文本卡片**:目前是纯文本回执(`client.send_text`),卡片留给以后。
+- **起跑回执的富文本卡片**:回执仍是纯文本(`client.send_text`)；运行结果已使用 Markdown 卡片，素材图片走真实图片消息。
 - **对"人"的粒度做去重**:同一个人连发五条不同的消息就是五次运行(在限流之内)。按人合并
   需要引入"等一会儿再跑"的窗口,会和"群里丢一条就跑"直接冲突。
 
@@ -255,3 +253,19 @@ keywords 为空,或文本里出现任意一个(大小写不敏感)
    在面板上显示成"开着",直到下一条消息才 `refused` + 自停。
 8. **三处机械 bug**(`ad6775dcb`,同一族代码):`limit=0` / 非法 `channel` / `raw` 前缀写法
    (见 [ADR 0066](0066-feishu-is-a-first-class-citizen-of-the-workflow.md) 的补记)。
+
+## 补记(2026-11-11):出站素材图片与确认卡的信息完整性
+
+- **素材图片是消息,不是 Markdown 源码**。`integrations/feishu/outbound.py` 识别智能体回复和触发器结果中的
+  `![说明](mosael-asset:<id>)`,按「前文 → 图片 → 后文」的顺序发送。只有当前工作区里真实存在、
+  文件仍在磁盘上的 `image` 素材会上传;其他引用保持原文,绝不跨工作区读文件。
+- **客户端与业务分层**。`client.send_image` 只负责 `POST /im/v1/images` 上传和 `image` 消息;
+  `outbound` 负责素材授权与顺序。multipart 上传遇令牌刷新重试时先重置文件游标,避免第二次发出空文件。
+- **确认卡展示完整 payload**。待确认、已同意/拒绝、执行失败、失效与结果未知卡都显式接收同一份
+  `confirmation.payload`,与 Mosael 内部确认卡的信息来源一致。执行失败是独立的 `failed` 终态,
+  不能写成「已同意」,也不能让原卡继续保留按钮。
+- **反应事件是回执**。`im.message.reaction.created_v1 / deleted_v1` 由 worker 显式空处理;
+  添加或移除 Typing 产生的回执不该在日志里冒充业务错误。
+- 验收:`test_feishu_markdown_cards.py` 覆盖实际上传、正文顺序与跨工作区拒绝;
+  `test_feishu_card_confirmation.py` 覆盖完整参数、内部审批和飞书回调的失败收卡;
+  `test_feishu_connection_status_tells_the_truth.py` 覆盖反应回执处理器。

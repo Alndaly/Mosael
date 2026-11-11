@@ -33,10 +33,11 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.db import SessionLocal
+from app.core.config import settings
 from app.db.models import AgentMessage, AgentSession, FeishuBot
 from app.integrations.feishu import client, inbound
 from app.core import http_retry
-from tests.util import fresh_client
+from tests.util import fresh_client, insert_asset
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,8 @@ class _Wire:
             wire.seen.append(request)
             if request.url.path.endswith("/tenant_access_token/internal"):
                 return httpx.Response(200, json={"code": 0, "tenant_access_token": "t-1", "expire": 7200})
+            if request.url.path.endswith("/im/v1/images"):
+                return httpx.Response(200, json={"code": 0, "data": {"image_key": "img_test"}})
             if wire.card_error is not None and json.loads(request.content).get("msg_type") == "interactive":
                 return httpx.Response(200, json=wire.card_error)
             return httpx.Response(200, json={"code": 0, "data": {"message_id": f"om_{len(wire.seen)}"}})
@@ -148,6 +151,47 @@ def test_智能体回复发成交互卡片_正文一字不改(monkeypatch) -> No
     assert len(messages) == 1, messages
     card = _card_of(messages[0])
     assert card == {"schema": "2.0", "body": {"elements": [{"tag": "markdown", "content": reply}]}}
+
+
+def test_回复里的素材图片上传后按正文顺序发出(monkeypatch) -> None:
+    client_http = fresh_client()
+    bot = _seeded_bot(client_http)
+    key = "media/feishu-reply/cabin.png"
+    target = settings.data_dir / key
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"real-image-bytes")
+    asset_id = insert_asset(bot["workspace_id"], kind="image", name="山间小屋", file_key=key)
+    wire = _Wire(monkeypatch)
+    reply = f"先看这一张。\n![山间小屋](mosael-asset:{asset_id})\n图后是补充说明。"
+
+    inbound.deliver_turn(_seed_assistant_reply(bot["id"], "oc_image", reply))
+
+    messages = wire.messages()
+    assert [one["msg_type"] for one in messages] == ["interactive", "image", "interactive"]
+    assert _markdown_of(_card_of(messages[0])) == "先看这一张。\n"
+    assert json.loads(messages[1]["content"]) == {"image_key": "img_test"}
+    assert _markdown_of(_card_of(messages[2])) == "\n图后是补充说明。"
+    upload = next(request for request in wire.seen if request.url.path.endswith("/im/v1/images"))
+    assert b"real-image-bytes" in upload.content
+    assert b'name="image_type"' in upload.content and b"message" in upload.content
+
+
+def test_其他工作区的素材引用保持原文_不上传(monkeypatch) -> None:
+    client_http = fresh_client()
+    bot = _seeded_bot(client_http)
+    other = client_http.post("/api/workspaces", json={"name": "Other"}).json()
+    key = "media/feishu-reply/other.png"
+    target = settings.data_dir / key
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"not-for-this-workspace")
+    asset_id = insert_asset(other["id"], kind="image", name="别处图片", file_key=key)
+    wire = _Wire(monkeypatch)
+    reply = f"![别处图片](mosael-asset:{asset_id})"
+
+    inbound.deliver_turn(_seed_assistant_reply(bot["id"], "oc_other", reply))
+
+    assert [_markdown_of(_card_of(one)) for one in wire.messages()] == [reply]
+    assert not any(request.url.path.endswith("/im/v1/images") for request in wire.seen)
 
 
 def test_send_markdown_单张卡的形状(monkeypatch) -> None:

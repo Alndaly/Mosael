@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 # 按钮 value 里带的动作名。飞书把它原样回传,所以这就是回调的路由键。
@@ -40,6 +41,14 @@ NOTE_FIELD = "note"
 
 def _text(content: str) -> dict[str, Any]:
     return {"tag": "div", "text": {"tag": "lark_md", "content": content}}
+
+
+def _payload_elements(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """和 Mosael 内部确认卡一样展示完整 payload;空对象不占一块。"""
+    if not payload:
+        return []
+    raw = json.dumps(payload, ensure_ascii=False, indent=2)
+    return [_text(f"**参数**\n```json\n{raw}\n```")]
 
 
 def _button_row(buttons: list[dict[str, Any]]) -> dict[str, Any]:
@@ -65,7 +74,9 @@ def _button_row(buttons: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def confirmation_card(*, confirmation_id: str, tool: str, summary: str, requested_by: str) -> dict[str, Any]:
+def confirmation_card(
+    *, confirmation_id: str, tool: str, summary: str, requested_by: str, payload: dict[str, Any],
+) -> dict[str, Any]:
     """待确认卡:说清「谁要动什么」,给同意/拒绝两个按钮。"""
     return {
         "config": {"wide_screen_mode": True},
@@ -73,6 +84,7 @@ def confirmation_card(*, confirmation_id: str, tool: str, summary: str, requeste
         "elements": [
             _text(f"**{summary or tool}**"),
             _text(f"工具:`{tool}`\n发起:{requested_by or '智能体'}"),
+            *_payload_elements(payload),
             _button_row([
                 {
                     "tag": "button",
@@ -91,7 +103,9 @@ def confirmation_card(*, confirmation_id: str, tool: str, summary: str, requeste
     }
 
 
-def settled_card(*, summary: str, tool: str, decision: str, by: str) -> dict[str, Any]:
+def settled_card(
+    *, summary: str, tool: str, decision: str, by: str, payload: dict[str, Any],
+) -> dict[str, Any]:
     """已决卡:替换掉原卡,**不再带按钮** —— 否则同一张卡会被反复点。"""
     approved = decision == "approved"
     return {
@@ -103,11 +117,12 @@ def settled_card(*, summary: str, tool: str, decision: str, by: str) -> dict[str
         "elements": [
             _text(f"**{summary or tool}**"),
             _text(f"工具:`{tool}`\n{'同意' if approved else '拒绝'}人:{by}"),
+            *_payload_elements(payload),
         ],
     }
 
 
-def failed_card(*, summary: str, tool: str, error: str) -> dict[str, Any]:
+def failed_card(*, summary: str, tool: str, error: str, payload: dict[str, Any]) -> dict[str, Any]:
     """批准了但执行失败:原卡必须退出待操作态,并把结果说成失败而不是已同意。"""
     return {
         "config": {"wide_screen_mode": True},
@@ -115,23 +130,25 @@ def failed_card(*, summary: str, tool: str, error: str) -> dict[str, Any]:
         "elements": [
             _text(f"**{summary or tool}**"),
             _text(f"工具:`{tool}`\n{error or '工具执行失败'}"),
+            *_payload_elements(payload),
         ],
     }
 
 
-def expired_card(*, summary: str, tool: str) -> dict[str, Any]:
+def expired_card(*, summary: str, tool: str, payload: dict[str, Any]) -> dict[str, Any]:
     """这张卡已经因为对话结束 / 等待超时 / 重启而作废,不能再点。"""
     return {
         "config": {"wide_screen_mode": True},
         "header": {"template": "grey", "title": {"tag": "plain_text", "content": "已失效"}},
         "elements": [
             _text(f"**{summary or tool}**"),
+            *_payload_elements(payload),
             _text("这一轮已经结束,这张卡不能再操作。"),
         ],
     }
 
 
-def interrupted_card(*, summary: str, tool: str) -> dict[str, Any]:
+def interrupted_card(*, summary: str, tool: str, payload: dict[str, Any]) -> dict[str, Any]:
     """这张卡**批过、也已经开始执行**,但后端在它落结果之前重启了 —— 结果是「不知道」。
 
     不能写「已同意」:那读起来像已经做完了。也不能写「已失效」:那读起来像没做。所以单独一副说法,
@@ -142,6 +159,7 @@ def interrupted_card(*, summary: str, tool: str) -> dict[str, Any]:
         "header": {"template": "orange", "title": {"tag": "plain_text", "content": "结果未知"}},
         "elements": [
             _text(f"**{summary or tool}**"),
+            *_payload_elements(payload),
             _text("这张卡已经批准,但后端在它执行时重启了 —— 动作可能已经生效,也可能没有。先确认现状,不要直接重做。"),
         ],
     }

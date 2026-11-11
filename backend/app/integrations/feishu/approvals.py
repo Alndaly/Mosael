@@ -104,6 +104,7 @@ def announce_confirmation(db: Session, confirmation: Any) -> str | None:
                     tool=confirmation.tool,
                     summary=full_summary(confirmation),
                     requested_by=confirmation.requested_by,
+                    payload=confirmation.payload,
                 ),
             )
             return message_id
@@ -494,9 +495,9 @@ def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") ->
             return _toast("处理失败,请到 Mosael 里查看")
 
         if confirmation.status == "failed":
-            settled = cards.failed_card(summary=summary, tool=tool, error=confirmation.error or "")
+            settled = cards.failed_card(summary=summary, tool=tool, error=confirmation.error or "", payload=confirmation.payload)
         else:
             settled = cards.settled_card(
-                summary=summary, tool=tool, decision=decision, by=user.username
+                summary=summary, tool=tool, decision=decision, by=user.username, payload=confirmation.payload,
             )
         return CardDecision({"card": {"type": "raw", "data": settled}})
