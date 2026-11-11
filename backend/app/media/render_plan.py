@@ -495,7 +495,9 @@ def build_render_plan(
                 appearance=_scale_appearance(_read_appearance(effects), pixel_scale),
             )
         )
-        if clip.get("has_audio") and not clip.get("muted"):
+        #: 基底轨的环境声(雨声、水滴)仍然混进成片,但不当作闪避的触发源:它不是说话的人,
+        #: 让它把配乐压下去只会让整段更轻。见 clip_properties.clean_effects 的 ambience。
+        if clip.get("has_audio") and not clip.get("muted") and not effects.get("ambience"):
             base_sound_spans.append((start, start + duration))
         cursor = start + duration
 

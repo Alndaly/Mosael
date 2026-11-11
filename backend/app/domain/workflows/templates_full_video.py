@@ -686,6 +686,18 @@ JSON Schema 的对象。"""
                 },
             },
             {
+                #: 没旁白的镜头原声是环境声。它照常混进成片,但不能触发配乐闪避:雨声、水滴不是说话的人,
+                #: 让它们把音乐压低约 10.5 dB,整段反而比原来更轻(第一版保留原声后真跑量出来的)。
+                "id": "mark_ambience",
+                "type": "edit_timeline",
+                "name": {"zh": "把无旁白镜头的原声标成环境声", "en": "Mark this shot's sound as ambience"},
+                "position": {"x": 700, "y": 500},
+                "config": {
+                    "sequence_id": "{{input.sequence_id}}",
+                    "operations": '[{"kind": "set_clip_effects", "clip_id": "{{append_clip.clip_id}}", "effects": {"ambience": true}}]',
+                },
+            },
+            {
                 "id": "append_narration",
                 "type": "timeline_append",
                 "name": {"zh": "把口播对齐到这一镜", "en": "Align the narration to this shot"},
@@ -712,9 +724,10 @@ JSON Schema 的对象。"""
             },
         ],
         "edges": [
-            #: 先判有没有旁白:有才静音视频原声、再叠口播;没有就保留雨声/水滴等环境声。
+            #: 先判有没有旁白:有才静音视频原声、再叠口播;没有就保留雨声/水滴等环境声,并标成环境声。
             {"id": "assemble_clip_gate", "source": "append_clip", "target": "has_audio"},
             {"id": "assemble_gate_mute", "source": "has_audio", "target": "mute_clip", "source_handle": "true"},
+            {"id": "assemble_gate_ambience", "source": "has_audio", "target": "mark_ambience", "source_handle": "false"},
             {"id": "assemble_mute_narration", "source": "mute_clip", "target": "append_narration"},
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
@@ -1254,7 +1267,8 @@ JSON Schema 的对象。"""
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 24, "source": "official"},
+        #: v25:无旁白镜头的原声标成环境声,照常出声但不触发配乐闪避。
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 25, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

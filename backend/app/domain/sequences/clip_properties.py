@@ -253,6 +253,12 @@ def _clean_fade(key: str, value: Any) -> float:
     return _effect_number(key, value, 0.0, 3600.0)
 
 
+def _clean_flag(key: str, value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+    return value
+
+
 def _clean_filter(key: str, value: Any) -> str:
     if not isinstance(value, str) or (value and value not in FILTER_PRESETS):
         raise SequenceDomainError("seqErr_effectBadValue", effect=key)
@@ -320,6 +326,9 @@ _EFFECT_CLEANERS: dict[str, Any] = {
     "video_fade_in": _clean_fade,
     "video_fade_out": _clean_fade,
     "gain_keyframes": _clean_gain_keyframes,
+    #: 环境声:这段声音让音乐垫在下面,但**不触发音乐闪避** —— 雨声、水滴不是说话的人,
+    #: 把它们当成闪避的触发源会把配乐压掉约 10.5 dB,整段反而比原来更轻。
+    "ambience": _clean_flag,
     "text_style": _clean_nested_style,
     "appearance": _clean_nested_style,
 }

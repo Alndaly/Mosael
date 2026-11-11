@@ -65,6 +65,24 @@ def _check(levels: np.ndarray) -> None:
         assert DUCK_GAIN + 0.1 < middle < 0.95, f"第 {n} 句的压低没有斜坡:{middle:.2f}"
 
 
+def test_环境声照常出声但不触发音乐闪避() -> None:
+    """雨声、水滴不是说话的人:混进成片,但不能把配乐压掉 10.5 dB。"""
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=64, height=36, fps=10,
+        clips=[{"id": "base", "asset_id": "base", "timeline_start": 0, "src_in": 0, "src_out": 4,
+                "has_audio": True, "effects": {"ambience": True}}],
+        assets={"base": {"file_key": "base.mp4"}, "music": {"file_key": "music.wav"},
+                "voice": {"file_key": "voice.wav"}},
+        audio_clips=[
+            {"id": "m", "asset_id": "music", "timeline_start": 0, "src_in": 0, "src_out": 4,
+             "gain": 1.0, "duck": True},
+            {"id": "v", "asset_id": "voice", "timeline_start": 1, "src_in": 0, "src_out": 1, "gain": 1.0},
+        ],
+    )
+    #: 环境声不在 key_spans 里;真正说话的那一条照样让音乐让路。
+    assert plan.audio_overlays[0].duck_windows == ((1.0, 2.0),)
+
+
 def test_基底轨标了闪避_150_段配音照样导得出来(tmp_path) -> None:
     _tone(tmp_path / "base.mp4", SECONDS, video=True)
     _tone(tmp_path / "line.wav", LONG, video=False)

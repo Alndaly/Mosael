@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 24,
+        "template_version": 25,
         "source": "official",
     }
 
@@ -328,14 +328,19 @@ def test_full_video_narration_lands_on_its_own_shot() -> None:
     #: 有旁白才静音视频原声;没旁白的镜头保留雨声/水滴等环境声。
     gate = next(node for node in body["nodes"] if node["id"] == "has_audio")
     mute = next(node for node in body["nodes"] if node["id"] == "mute_clip")
+    ambience = next(node for node in body["nodes"] if node["id"] == "mark_ambience")
     wires = {(edge["source"], edge["target"], edge.get("source_handle")) for edge in body["edges"]}
     assert gate["config"]["left"] == "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}"
     assert ("append_clip", "has_audio", None) in wires
     assert ("has_audio", "mute_clip", "true") in wires
+    assert ("has_audio", "mark_ambience", "false") in wires
     assert ("mute_clip", "append_narration", None) in wires
     assert ("append_clip", "mute_clip", None) not in wires, "无旁白时不能先静音"
     assert json.loads(mute["config"]["operations"].replace("{{append_clip.clip_id}}", "c")) == [
         {"kind": "set_clip_gain", "clip_id": "c", "muted": True},
+    ]
+    assert json.loads(ambience["config"]["operations"].replace("{{append_clip.clip_id}}", "c")) == [
+        {"kind": "set_clip_effects", "clip_id": "c", "effects": {"ambience": True}},
     ]
     storyboard = next(node for node in graph["nodes"] if node["id"] == "storyboard")
     assert "每秒约 4 字" in storyboard["config"]["system"]

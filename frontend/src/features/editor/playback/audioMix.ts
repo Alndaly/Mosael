@@ -19,6 +19,8 @@ export interface AudioSourceSpec {
   trackMuted: boolean;
   soloMuted?: boolean;
   duck?: boolean;
+  /** 环境声:照常出声,但不触发别的轨闪避(见后端的 effects.ambience)。 */
+  ambience?: boolean;
   fadeIn?: number;
   fadeOut?: number;
 }
@@ -41,14 +43,15 @@ export function buildAudioSources(tracks: Track[], assets: Map<string, Asset>): 
   const soloActive = tracks.some(t => t.solo);
   return tracks.filter(t => t.kind === "video" || t.kind === "audio").flatMap(track =>
     (track.clips ?? []).filter(c => c.asset_id && (track.kind === "audio" || assets.get(c.asset_id)?.kind === "video")).map(c => {
-      const effects = c.effects as { gain_keyframes?: GainKeyframe[]; fade_in?: number; fade_out?: number } | undefined;
+      const effects = c.effects as { gain_keyframes?: GainKeyframe[]; fade_in?: number; fade_out?: number;
+        ambience?: boolean } | undefined;
       return {
         key: c.id, assetId: c.asset_id!, audioProxy: audioProxyKey(assets.get(c.asset_id!)),
         srcIn: c.src_in, srcOut: c.src_out,
         timelineStart: c.timeline_start, speed: c.speed || 1, gain: c.gain ?? 1,
         gainKeyframes: effects?.gain_keyframes, fadeIn: effects?.fade_in, fadeOut: effects?.fade_out,
         muted: Boolean(c.muted), trackMuted: Boolean(track.muted), soloMuted: soloActive && !track.solo,
-        duck: Boolean(track.duck),
+        duck: Boolean(track.duck), ambience: Boolean(effects?.ambience),
       };
     }),
   );
@@ -60,6 +63,7 @@ export function buildAudioSources(tracks: Track[], assets: Map<string, Asset>): 
  * 闪避:标了闪避的轨,在**任何**一条没标闪避、此刻有声的轨同时发声时压到 0.3。基底视频轨两头都算 ——
  * 它的声音会让音乐轨让路(人声在原片里、音乐在音频轨上,最常见的就是这个形状),它自己标了闪避
  * 也会给配音让路(译配)。此前这里把基底轨两头都排除了,而导出那边已经会压基底轨:预览和成片不一样。
+ * 标了 `ambience` 的段是环境声(雨、水滴),照常出声,但不算「有人在说话」,不触发闪避。
  */
 export function audioGainAt(s: AudioSourceSpec, sources: AudioSourceSpec[], time: number, volume = 1, masterMuted = false): number {
   const dur = duration(s), local = time - s.timelineStart;
@@ -73,7 +77,7 @@ export function audioGainAt(s: AudioSourceSpec, sources: AudioSourceSpec[], time
   fi = Math.round(fi * 1e6) / 1e6; fo = Math.round(fo * 1e6) / 1e6;
   gain = clamp(gain, 4) * (fi > 0 ? Math.min(1, local / fi) : 1) * (fo > 0 ? Math.min(1, (dur - local) / fo) : 1);
   if (s.duck && sources.some(other => {
-    if (other.key === s.key || other.duck || silent(other)) return false;
+    if (other.key === s.key || other.duck || other.ambience || silent(other)) return false;
     const start = Math.max(s.timelineStart, other.timelineStart);
     const end = Math.min(s.timelineStart + dur, other.timelineStart + duration(other));
     return end - start > 0.01 && time >= start && time <= end;
