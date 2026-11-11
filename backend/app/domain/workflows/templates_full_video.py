@@ -666,18 +666,6 @@ JSON Schema 的对象。"""
                 },
             },
             {
-                #: 视频模型自带的声音(H3 这类边出画面边出声的)不混进成片:台词和旁白是配音念的,模型自己出的是听不清的
-                #: 人声和杂音,压在配音底下就「听不懂」(漫剧第一集真跑)。和带货口播每一拍静音同一个做法。
-                "id": "mute_clip",
-                "type": "edit_timeline",
-                "name": {"zh": "这一镜的视频不出声", "en": "Mute this shot's clip"},
-                "position": {"x": 80, "y": 320},
-                "config": {
-                    "sequence_id": "{{input.sequence_id}}",
-                    "operations": '[{"kind": "set_clip_gain", "clip_id": "{{append_clip.clip_id}}", "muted": true}]',
-                },
-            },
-            {
                 "id": "has_audio",
                 "type": "condition",
                 "name": {"zh": "这一镜合成了口播吗", "en": "Did this shot get narration?"},
@@ -685,10 +673,23 @@ JSON Schema 的对象。"""
                 "config": {"left": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}", "op": "not_empty"},
             },
             {
+                #: **有旁白才静音视频自带的声音。** H3 自己出的台词/人声压在配音下会「听不懂」，
+                #: 但无旁白镜头的声音就是雨声、落伞、水滴这些环境声 —— 一律静音会把它们也删掉
+                #: （第一场第 10 镜的水滴声真跑时就是这么没的）。没旁白时保留原声。
+                "id": "mute_clip",
+                "type": "edit_timeline",
+                "name": {"zh": "有旁白的镜头静音原声", "en": "Mute the source audio when narration is present"},
+                "position": {"x": 700, "y": 320},
+                "config": {
+                    "sequence_id": "{{input.sequence_id}}",
+                    "operations": '[{"kind": "set_clip_gain", "clip_id": "{{append_clip.clip_id}}", "muted": true}]',
+                },
+            },
+            {
                 "id": "append_narration",
                 "type": "timeline_append",
                 "name": {"zh": "把口播对齐到这一镜", "en": "Align the narration to this shot"},
-                "position": {"x": 700, "y": 140},
+                "position": {"x": 1010, "y": 140},
                 "config": {
                     "sequence_id": "{{input.sequence_id}}",
                     #: 两支(角色的嗓子 / 旁白的嗓子)只跑了一支,拼在一起正好是跑了的那一支。
@@ -706,15 +707,15 @@ JSON Schema 的对象。"""
                 "id": "caption",
                 "type": "template",
                 "name": {"zh": "这一镜的字幕文本", "en": "This shot's subtitle text"},
-                "position": {"x": 1010, "y": 140},
+                "position": {"x": 1320, "y": 140},
                 "config": {"template": "{{loop.item.loop.item.narration}}"},
             },
         ],
         "edges": [
-            #: 静音和接口播改的是同一条时间线:一步接一步,同时提交的话后到的那个撞上版本号。
-            {"id": "assemble_clip_mute", "source": "append_clip", "target": "mute_clip"},
-            {"id": "assemble_clip_gate", "source": "mute_clip", "target": "has_audio"},
-            {"id": "assemble_gate_narration", "source": "has_audio", "target": "append_narration", "source_handle": "true"},
+            #: 先判有没有旁白:有才静音视频原声、再叠口播;没有就保留雨声/水滴等环境声。
+            {"id": "assemble_clip_gate", "source": "append_clip", "target": "has_audio"},
+            {"id": "assemble_gate_mute", "source": "has_audio", "target": "mute_clip", "source_handle": "true"},
+            {"id": "assemble_mute_narration", "source": "mute_clip", "target": "append_narration"},
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
     }
@@ -1253,7 +1254,7 @@ JSON Schema 的对象。"""
         #: v14:每镜秒数超过模型一次能出的,这一镜接着往下拍(_shot_chain)。
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 23, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 24, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
