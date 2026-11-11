@@ -264,6 +264,24 @@ async function drillInto(id: string) {
   await screen.findByText(/wfLoopBody/);
 }
 
+it("钻进循环体仍看得见这一层的运行状态", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    { id: "job-0", kind: "workflow", status: "running", message: "", created_at: "2026-09-20T02:00:00", updated_at: "2026-09-20T02:00:01", payload: {} },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([
+    { id: "e1", job_id: "job-0", type: "workflow.node.started", payload: { node_id: "loop-1", name: "循环" }, created_at: "2026-09-20T02:00:00" },
+  ]);
+  await renderEditor(LOOPED);
+  await drillInto("loop-1");
+  const status = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>("[data-subflow-run-status]");
+    expect(found).not.toBeNull();
+    return found!;
+  });
+  expect(status.textContent).toContain("wfStepRunning");
+  expect(status.textContent).toContain("循环");
+});
+
 it("循环体里按 Delete 删的是循环体里选中的节点,不会把外面那个循环节点一起删掉", async () => {
   await renderEditor(LOOPED);
   await drillInto("loop-1");

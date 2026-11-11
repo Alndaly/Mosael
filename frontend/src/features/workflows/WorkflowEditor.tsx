@@ -44,6 +44,7 @@ import { useNodePicker } from "@/features/nodeForms/nodePicker";
 import { NodeInspector } from "@/features/workflows/NodeInspector";
 import { WORKFLOW_CANVAS_EDGE_TYPES } from "@/features/workflows/ReferenceHintEdge";
 import { RunParamsDialog } from "@/features/workflows/RunParamsDialog";
+import { STEP_STATUS_LABELS, type Step } from "@/features/workflows/runSteps";
 import { useReferenceHintEdges } from "@/features/workflows/referenceHints";
 import { highlightAtLayer, nodeSearchEntryId, nodeSearchTargets } from "@/features/workflows/nodeSearch";
 import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
@@ -408,6 +409,20 @@ export function WorkflowEditor({
     setAskingParams,
     runWithParams,
   } = useWorkflowRun({ workflow, qc, t, rootGraph, registry, scopePath, save, pendingSaveRef });
+  /** 钻进循环体/子图后,体里的节点不发运行事件;但**包着这一层的容器**知道它还在跑。
+   *  从最内层往回找第一个有事件的外层容器,给子画布顶上一枚状态条。 */
+  const scopeRunStep = React.useMemo<Step | null>(() => {
+    if (atRoot) return null;
+    for (const id of [...scopePath].reverse()) {
+      const step = runByNode[id];
+      if (step) return step;
+    }
+    return null;
+  }, [atRoot, scopePath, runByNode]);
+  const subflowStatus = !atRoot && (scopeRunStep || running) ? (scopeRunStep?.status ?? "running") : null;
+  const subflowSeconds = scopeRunStep?.status === "running" && scopeRunStep.startAt
+    ? Math.max(0, (Date.now() - scopeRunStep.startAt) / 1000)
+    : scopeRunStep?.ms != null ? scopeRunStep.ms / 1000 : null;
   /** 失败卡上点了「去这个节点」:检查器翻到出问题的那一格所在的那一档(见 NodeInspector 的 revealField)。 */
   const [revealField, setRevealField] = React.useState<{ nodeId: string; field: string } | null>(null);
   /** 已经去过那个节点的那一次拦截:卡收成一行(详情浮层里原因、怎么修都还在)—— 聚焦把节点和检查器摆在画布正中,
@@ -542,6 +557,31 @@ export function WorkflowEditor({
     // 两条并排的竖条,用户得先分辨"哪条是应用的、哪条是这一页的"。所以横向成组、浮在顶部,
     // 保持"这一页的操作"和"整个应用的导航"在方向上就分得开。
     <div ref={editorRef} className="relative grid min-h-0">
+      {subflowStatus && (
+        <div
+          role="status"
+          aria-live="polite"
+          data-subflow-run-status=""
+          className={cn(
+            CANVAS_GLASS_SURFACE_CLASS,
+            "pointer-events-none absolute left-2 top-2 z-20 flex h-[42px] max-w-[min(420px,60%)] items-center gap-2 rounded-lg px-3 text-ui-xs",
+          )}
+        >
+          {subflowStatus === "running" ? (
+            <Loader2 size={14} className="shrink-0 animate-mosael-spin text-[var(--canvas-edge-run)]" />
+          ) : null}
+          <span className={cn(
+            "shrink-0 font-medium",
+            subflowStatus === "failed" ? "text-destructive" : subflowStatus === "done" ? "text-success" : "text-foreground",
+          )}>
+            {t(STEP_STATUS_LABELS[subflowStatus])}
+          </span>
+          {scopeRunStep && <span className="truncate text-muted-foreground">{scopeRunStep.name}</span>}
+          {subflowSeconds != null && (
+            <span className="shrink-0 tabular-nums text-muted-foreground">{subflowSeconds.toFixed(1)}s</span>
+          )}
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-end gap-2 [&>*]:pointer-events-auto">
         {/* 「这是哪一个工作流、钻到了第几层」写在顶栏的路径里(工作流 / 批量配音 / 循环体,见
             components/layout/pageTrail),画布上只浮着操作这一组。保存状态没有单独的指示:失败弹 toast,运行键的 title 说「保存中」/「上次保存失败」。 */}
