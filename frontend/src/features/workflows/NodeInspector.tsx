@@ -746,6 +746,7 @@ export function NodeInspector({
             workspaceId,
             config,
             generationModels,
+            variables,
             onChange,
             setConfig,
             setTextConfig,

@@ -204,6 +204,8 @@ describe("模型自己声明的参数", () => {
     // 声明成文本的,长得像数字也是文本 —— 否则提交时被校验器按类型拦下
     expect(declaredParameterValue({ ...sampler, options: [] }, "123")).toBe("123");
     expect(declaredParameterValue({ ...sampler, type: "boolean" }, "false")).toBe(false);
+    expect(declaredParameterValue(steps, "{{start.seed}}")).toBe("{{start.seed}}");
+    expect(declaredParameterValue({ ...sampler, type: "boolean", options: [] }, "{{start.flag}}")).toBe("{{start.flag}}");
   });
 });
 

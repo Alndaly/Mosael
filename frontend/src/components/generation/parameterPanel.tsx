@@ -6,6 +6,8 @@ import { InspectorCard } from "@/components/layout/InspectorCard";
 import { Input } from "@/components/ui/input";
 import { OptionPicker, type PickerOption } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
+import { RefCombobox } from "@/features/nodeForms/RefCombobox";
+import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { DeclaredParameter } from "@/lib/generationCapabilities";
@@ -184,21 +186,47 @@ export function DeclaredParameterControl({
   parameter,
   value,
   onChange,
+  variables,
 }: {
   parameter: DeclaredParameter;
   value: string;
-  onChange: (next: string) => void;
+  onChange: (next: string, typing?: boolean) => void;
+  /** 工作流里有上游输出时给这份清单:控件改成引用感知的下拉/编辑器。 */
+  variables?: readonly string[];
 }) {
   const t = useI18n();
   const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
   if (parameter.type === "boolean" || parameter.options.length > 0) {
     const choices = declaredChoices(parameter, t);
+    if (variables) {
+      return (
+        <RefCombobox
+          value={choices.shown(value)}
+          options={choices.options}
+          variables={variables}
+          literal={false}
+          className={PARAMETER_CONTROL_CLASS}
+          onValueChange={(next) => onChange(choices.stored(next), false)}
+        />
+      );
+    }
     return (
       <OptionPicker
         value={choices.shown(value)}
-        onChange={(next) => onChange(choices.stored(next))}
+        onChange={(next) => onChange(choices.stored(next), false)}
         options={choices.options}
         className={PARAMETER_CONTROL_CLASS}
+      />
+    );
+  }
+  if (variables) {
+    return (
+      <RefEditor
+        rows={parameter.multiline ? 4 : 1}
+        value={value}
+        variables={variables}
+        label={parameter.label}
+        onChange={(next) => onChange(next, true)}
       />
     );
   }
@@ -208,7 +236,7 @@ export function DeclaredParameterControl({
         className="min-h-20 text-foreground"
         value={value}
         placeholder={fallback}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value, true)}
       />
     );
   }
@@ -222,7 +250,7 @@ export function DeclaredParameterControl({
       step={parameter.step ?? (numeric ? "any" : undefined)}
       value={value}
       placeholder={fallback || t("genDeclaredDefaultNone")}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={(event) => onChange(event.target.value, true)}
     />
   );
 }

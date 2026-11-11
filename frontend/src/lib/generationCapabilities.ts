@@ -387,6 +387,8 @@ export function declaredParameterValue(
   text: string,
 ): string | number | boolean | undefined {
   if (text === "") return undefined;
+  //: 数值 / 布尔参数也能接上游(`{{start.seed}}`):不能先 Number() 再当非法值丢掉。
+  if (text.includes("{{")) return text;
   if (parameter.type === "boolean") return text === "true";
   if (parameter.type === "integer" || parameter.type === "number") {
     const value = Number(text);

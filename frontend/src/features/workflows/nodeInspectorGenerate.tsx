@@ -2,7 +2,7 @@ import React from "react";
 
 import type { GenerationOption, WorkflowGraph } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { declaredChoices } from "@/components/generation/parameterPanel";
+import { DeclaredParameterControl } from "@/components/generation/parameterPanel";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { Input } from "@/components/ui/input";
@@ -69,7 +69,7 @@ interface GenField {
   /** 控件下面那句说明(跑几遍那一格:一遍出几张、一共几张)。 */
   hint?: string;
   toggle?: boolean;
-  /** 模型自己声明的参数(`parameter_schema`)。控件和取值都按它的声明来,见 DeclaredGenControl。 */
+  /** 模型自己声明的参数(`parameter_schema`)。控件和取值按声明,共用 DeclaredParameterControl。 */
   declared?: DeclaredParameter;
 }
 
@@ -86,50 +86,6 @@ interface GenField {
 export const GENERATE_SPECIAL_CONFIG_KEYS = new Set([
   "provider_profile_id", "provider", "model", "kind", "parameters",
 ]);
-
-/**
- * 模型自己声明的一个参数(插件生成供应商,见 lib/generationCapabilities.declaredParameters)。
- *
- * 可选值 / 开关给下拉,其余给输入框。第一项永远是「默认」= 不发,让模型用它自己的默认值 ——
- * 插件给的那个默认只拿来当提示,不替用户选(ADR 0015)。`typing` 告诉调用方这一下是不是打字
- * (撤销时要合并成一步,见 typingRun)。
- */
-function DeclaredGenControl({
-  parameter,
-  value,
-  onChange,
-}: {
-  parameter: DeclaredParameter;
-  value: string;
-  onChange: (text: string, typing: boolean) => void;
-}) {
-  const t = useI18n();
-  const fallback = parameter.defaultValue === undefined ? "" : String(parameter.defaultValue);
-  if (parameter.type === "boolean" || parameter.options.length > 0) {
-    const choices = declaredChoices(parameter, t);
-    return (
-      <OptionPicker
-        value={choices.shown(value)}
-        onChange={(next) => onChange(choices.stored(next), false)}
-        options={choices.options}
-      />
-    );
-  }
-  const numeric = parameter.type === "integer" || parameter.type === "number";
-  return parameter.multiline ? (
-    <textarea rows={4} value={value} placeholder={fallback} onChange={(event) => onChange(event.target.value, true)} />
-  ) : (
-    <Input
-      type={numeric ? "number" : "text"}
-      min={parameter.minimum}
-      max={parameter.maximum}
-      step={parameter.step ?? (numeric ? "any" : undefined)}
-      value={value}
-      placeholder={fallback || t("genDeclaredDefaultNone")}
-      onChange={(event) => onChange(event.target.value, true)}
-    />
-  );
-}
 
 type NodeConfig = Record<string, unknown>;
 
@@ -329,6 +285,7 @@ export function generateNodeSection({
   workspaceId,
   config,
   generationModels,
+  variables,
   onChange,
   setConfig,
   setTextConfig,
@@ -340,6 +297,7 @@ export function generateNodeSection({
   workspaceId: string;
   config: NodeConfig;
   generationModels: { options: GenerationOption[] };
+  variables: readonly string[];
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>, options?: SetGraphOptions) => void;
   setConfig: (key: string, value: unknown, options?: SetGraphOptions) => void;
   setTextConfig: (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -475,8 +433,9 @@ export function generateNodeSection({
                   onUseTriggers={(words) => setConfig("prompt", withTriggerWords(String(config.prompt ?? ""), words))}
                 />
               ) : declared ? (
-                <DeclaredGenControl
+                <DeclaredParameterControl
                   parameter={declared}
+                  variables={variables}
                   value={genParams[key] === undefined ? "" : String(genParams[key])}
                   onChange={(text, typing) => {
                     const next = { ...genParams };

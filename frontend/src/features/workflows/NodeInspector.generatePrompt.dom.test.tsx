@@ -105,7 +105,15 @@ function renderInspector(
     profiles = [COMFY_PROFILE],
     config,
     modelsListed = true,
-  }: { profiles?: unknown[]; config?: Record<string, unknown>; modelsListed?: boolean } = {},
+    extraNodes = [],
+    extraRegistry = [],
+  }: {
+    profiles?: unknown[];
+    config?: Record<string, unknown>;
+    modelsListed?: boolean;
+    extraNodes?: unknown[];
+    extraRegistry?: Array<[string, WorkflowNodeType]>;
+  } = {},
 ) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://x");
@@ -139,8 +147,8 @@ function renderInspector(
           <NodeInspector
             node={node as never}
             meta={META}
-            graph={{ nodes: [node], edges: [] } as never}
-            registry={new Map([["ai_generate", META]])}
+            graph={{ nodes: [node, ...extraNodes], edges: extraNodes.length ? [{ id: "e", source: "start", target: "gen" }] : [] } as never}
+            registry={new Map([["ai_generate", META], ...extraRegistry])}
             workspaceId="w1"
             onChange={vi.fn()}
             onApplyGraph={vi.fn()}
@@ -152,6 +160,42 @@ function renderInspector(
 }
 
 const promptField = () => document.querySelector<HTMLElement>('[data-field-key="prompt"]');
+
+const START_META = {
+  type: "start",
+  label: "开始",
+  description: "",
+  category: "",
+  config: { params: { type: "object" } },
+  outputs: ["*params"],
+  output_types: {},
+  output_labels: {},
+} as unknown as WorkflowNodeType;
+
+describe("AI 生成节点声明的文本参数", () => {
+  it("显示为引用编辑器,不把 {{开始.主题}} 原样摆在 textarea 里", async () => {
+    renderInspector(
+      {
+        parameter_keys: ["43.caption"],
+        parameter_schema: {
+          "43.caption": { type: "string", title: "Caption", "x-multiline": true },
+        },
+      },
+      {
+        config: {
+          provider_profile_id: "p1", provider: "plugin:dev.mosael.comfyui", model: "upscale.json", kind: "image",
+          prompt: "", parameters: { "43.caption": "标题:{{start.topic}}" },
+        },
+        extraNodes: [{ id: "start", type: "start", position: { x: 0, y: 0 }, config: { params: { topic: "长明灯" } } }],
+        extraRegistry: [["start", START_META]],
+      },
+    );
+
+    const caption = await screen.findByRole("textbox", { name: "Caption" });
+    expect(caption.tagName).not.toBe("TEXTAREA");
+    expect(caption.textContent).not.toContain("{{start.topic}}");
+  });
+});
 
 describe("AI 生成节点的提示词一格", () => {
   it("选中的模型不收提示词:整格藏起来", async () => {
