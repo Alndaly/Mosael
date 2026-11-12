@@ -423,6 +423,7 @@ def _provider_view(provider: CloudUpstreamProvider) -> dict[str, object]:
         "id": provider.id,
         "name": provider.name,
         "adapter": provider.adapter,
+        "config": provider.config,
         "base_url": provider.base_url,
         "enabled": provider.enabled,
         "note": provider.note,
@@ -440,26 +441,30 @@ def list_providers(db: Session) -> list[dict[str, object]]:
 
 
 def create_provider(
-    db: Session, config: CloudConfig, *, name: str, base_url: str, api_key: str, note: str, adapter: str = "openai"
+    db: Session, config: CloudConfig, *, name: str, base_url: str, api_key: str, note: str,
+    adapter: str = "openai", adapter_config: dict[str, object] | None = None
 ) -> dict[str, object]:
     if not base_url.startswith(("https://", "http://")):
         raise CloudError(400, "channel_url_invalid")
     if not config.channel_key:
         raise CloudError(503, "gateway_not_configured")
     provider = catalog.add_provider(
-        db, config, name=name, base_url=base_url, api_key=api_key, note=note, adapter=adapter
+        db, config, name=name, base_url=base_url, api_key=api_key, note=note, adapter=adapter,
+        adapter_config=adapter_config,
     )
     return _provider_view(provider)
 
 
 def update_provider(
-    db: Session, config: CloudConfig, provider_id: str, *, name: str, adapter: str, note: str, enabled: bool, api_key: str
+    db: Session, config: CloudConfig, provider_id: str, *, name: str, adapter: str, note: str,
+    enabled: bool, api_key: str, adapter_config: dict[str, object] | None = None
 ) -> dict[str, object]:
     provider = db.get(CloudUpstreamProvider, provider_id)
     if provider is None:
         raise CloudError(404, "provider_not_found")
     provider.name = name
     provider.adapter = adapter
+    provider.config = dict(adapter_config or {})
     provider.note = note
     provider.enabled = enabled
     if api_key:

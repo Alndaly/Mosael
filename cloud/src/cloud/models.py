@@ -661,6 +661,8 @@ class CloudUpstreamProvider(Base):
     protocol: Mapped[str] = mapped_column(String(16), nullable=False, default="openai")
     #: adapter 注册表 key;`protocol` 只保留到 contract 迁移。
     adapter: Mapped[str] = mapped_column(String(32), nullable=False, default="openai", server_default="openai")
+    #: 适配器需要的非密钥配置(region、project、secret_key 等);密钥仍走 encrypted 列。
+    config: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
     #: 端点前缀,如 `https://api.deepseek.com/v1`;网关请求打到 `<base_url>/chat/completions`。
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     api_key_encrypted: Mapped[str] = mapped_column(String(1000), nullable=False)

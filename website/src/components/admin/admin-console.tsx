@@ -816,6 +816,7 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
 }) {
   const [name, setName] = useState(provider?.name ?? "");
   const [adapter, setAdapter] = useState(provider?.adapter ?? "openai");
+  const [adapterConfig, setAdapterConfig] = useState(JSON.stringify(provider?.config ?? {}, null, 2));
   const [base, setBase] = useState(provider?.base_url ?? "");
   const [key, setKey] = useState("");
   const [note, setNote] = useState(provider?.note ?? "");
@@ -824,8 +825,11 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   const submit = async () => {
     setSaving(true);
     try {
-      if (provider) await cloudAdmin.updateProvider(provider.id, { name, adapter, note, enabled, api_key: key });
-      else await cloudAdmin.createProvider({ name, adapter, base_url: base, api_key: key, note });
+      let config: Record<string, unknown>;
+      try { config = JSON.parse(adapterConfig || "{}") as Record<string, unknown>; }
+      catch { throw new Error(copy.adapterConfig); }
+      if (provider) await cloudAdmin.updateProvider(provider.id, { name, adapter, config, note, enabled, api_key: key });
+      else await cloudAdmin.createProvider({ name, adapter, config, base_url: base, api_key: key, note });
       onSaved();
     } catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
@@ -856,7 +860,7 @@ function ProviderEnabledSwitch({ copy, provider, onChanged, onFailure }: {
   const toggle = async (enabled: boolean) => {
     setBusy(true);
     try {
-      await cloudAdmin.updateProvider(provider.id, { name: provider.name, adapter: provider.adapter, note: provider.note, enabled, api_key: "" });
+      await cloudAdmin.updateProvider(provider.id, { name: provider.name, adapter: provider.adapter, config: provider.config, note: provider.note, enabled, api_key: "" });
       onChanged();
     } catch (failure) {
       onFailure(failure);

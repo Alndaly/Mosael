@@ -253,7 +253,7 @@ def admin_providers(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
 def admin_create_provider(body: ProviderIn, actor: CurrentAdmin, config: CurrentConfig, db: DbSession) -> dict[str, object]:
     provider = service.create_provider(
         db, config, name=body.name, base_url=body.base_url, api_key=body.api_key, note=body.note,
-        adapter=body.adapter,
+        adapter=body.adapter, adapter_config=body.config,
     )
     audit.record(db, actor=actor, action="provider.create", target_type="provider", target_id=provider["id"],
                  detail={"name": body.name, "base_url": body.base_url, "api_key_set": True})
@@ -267,7 +267,7 @@ def admin_update_provider(
 ) -> dict[str, object]:
     provider = service.update_provider(
         db, config, provider_id, name=body.name, adapter=body.adapter, note=body.note,
-        enabled=body.enabled, api_key=body.api_key
+        enabled=body.enabled, api_key=body.api_key, adapter_config=body.config
     )
     audit.record(db, actor=actor, action="provider.update", target_type="provider", target_id=provider_id,
                  detail={"enabled": body.enabled, "api_key_replaced": bool(body.api_key)})

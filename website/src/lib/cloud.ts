@@ -549,6 +549,7 @@ export type AdminProvider = {
   id: string;
   name: string;
   adapter: string;
+  config: Record<string, unknown>;
   base_url: string;
   enabled: boolean;
   note: string;
@@ -704,9 +705,9 @@ export const cloudAdmin = {
       },
     ),
   providers: () => request<{ providers: AdminProvider[] }>("/admin/providers"),
-  createProvider: (body: { name: string; adapter: string; base_url: string; api_key: string; note: string }) =>
+  createProvider: (body: { name: string; adapter: string; config: Record<string, unknown>; base_url: string; api_key: string; note: string }) =>
     request<{ provider: AdminProvider }>("/admin/providers", { method: "POST", body: JSON.stringify(body) }),
-  updateProvider: (id: string, body: { name: string; adapter: string; note: string; enabled: boolean; api_key: string }) =>
+  updateProvider: (id: string, body: { name: string; adapter: string; config: Record<string, unknown>; note: string; enabled: boolean; api_key: string }) =>
     request<{ provider: AdminProvider }>(`/admin/providers/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(body),

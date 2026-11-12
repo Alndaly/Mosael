@@ -131,10 +131,12 @@ def add_provider(
     api_key: str,
     note: str = "",
     adapter: str = "openai",
+    adapter_config: dict[str, object] | None = None,
 ) -> CloudUpstreamProvider:
     provider = CloudUpstreamProvider(
         name=name,
         adapter=adapter,
+        config=dict(adapter_config or {}),
         base_url=base_url.rstrip("/"),
         api_key_encrypted=seal(config, api_key),
         note=note,

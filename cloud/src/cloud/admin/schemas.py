@@ -68,6 +68,7 @@ class PriceIn(BaseModel):
 class ProviderIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     adapter: str = Field(default="openai", min_length=1, max_length=32)
+    config: dict[str, object] = Field(default_factory=dict)
     base_url: str = Field(min_length=1, max_length=500)
     api_key: str = Field(min_length=1, max_length=1000)
     note: str = Field(default="", max_length=200)
@@ -76,6 +77,7 @@ class ProviderIn(BaseModel):
 class ProviderPatch(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     adapter: str = Field(default="openai", min_length=1, max_length=32)
+    config: dict[str, object] = Field(default_factory=dict)
     note: str = Field(default="", max_length=200)
     enabled: bool = True
     api_key: str = Field(default="", max_length=1000)

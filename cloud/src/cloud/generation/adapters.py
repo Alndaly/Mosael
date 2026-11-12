@@ -34,6 +34,7 @@ class JobContext:
     base_url: str
     upstream_model: str
     api_key: str
+    config: dict[str, object]
 
 
 class JobAdapter(Protocol):

@@ -129,10 +129,37 @@ def test_openai_images_adapter_builds_artifacts_and_usage():
     adapter = OpenAIImagesAdapter(transport=httpx2.MockTransport(handler))
     result = adapter.submit(JobContext(
         job_id="j1", model_id="m1", input={"prompt": "cat", "n": 1},
-        capability={}, base_url="https://api.example/v1", upstream_model="gpt-image-2", api_key="sk-test",
+        capability={}, base_url="https://api.example/v1", upstream_model="gpt-image-2", api_key="sk-test", config={},
     ))
     assert result.status == "succeeded"
     assert result.usage == {"image": 1}
     assert result.artifacts[0].data == b"png"
     assert seen["url"] == "https://api.example/v1/images/generations"
     assert '"model":"gpt-image-2"' in seen["body"]
+
+
+def test_kling_adapter_submits_polls_and_downloads(monkeypatch):
+    import httpx2
+    from cloud.generation.kling import KlingVideoAdapter
+
+    calls = []
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        calls.append((request.method, str(request.url)))
+        if request.method == "POST":
+            return httpx2.Response(200, json={"code": 0, "data": {"task_id": "t1"}})
+        if request.url.path.endswith("/t1"):
+            return httpx2.Response(200, json={"code": 0, "data": {"task_status": "succeed", "task_result": {"videos": [{"url": "https://cdn.example/v.mp4"}]}}})
+        return httpx2.Response(200, content=b"mp4", headers={"content-type": "video/mp4"})
+
+    adapter = KlingVideoAdapter(transport=httpx2.MockTransport(handler))
+    ctx = JobContext(
+        job_id="j", model_id="m", input={"prompt": "run", "duration_seconds": 5}, capability={},
+        base_url="https://api.klingai.com", upstream_model="kling-v3", api_key="ak", config={"secret_key": "sk"},
+    )
+    submitted = adapter.submit(ctx)
+    assert submitted.status == "pending" and submitted.provider_job_id == "text2video:t1"
+    finished = adapter.poll(ctx, submitted.provider_job_id or "")
+    assert finished.status == "succeeded"
+    assert finished.usage == {"second": 5}
+    assert finished.artifacts[0].data == b"mp4"
+    assert calls[0][1].endswith("/v1/videos/text2video")

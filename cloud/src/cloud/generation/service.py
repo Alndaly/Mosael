@@ -148,6 +148,7 @@ def _context(
             base_url=one.provider.base_url,
             upstream_model=one.channel.upstream_model,
             api_key=unseal(config, one.provider.api_key_encrypted),
+            config=one.provider.config,
         ),
         one.provider,
         one.channel,

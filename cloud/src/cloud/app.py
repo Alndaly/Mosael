@@ -40,6 +40,7 @@ from cloud.payments.base import PaymentChannel
 from cloud.payments.registry import channels_from_config
 from cloud.generation.storage import LocalArtifactStorage
 from cloud.generation.openai_images import ADAPTER as OPENAI_IMAGES
+from cloud.generation.kling import ADAPTER as KLING_VIDEO
 from cloud.generation import adapters as generation_adapters
 from cloud.generation.service import run_one
 
@@ -131,6 +132,7 @@ def create_app(
     )
     app.state.artifact_storage = LocalArtifactStorage(resolved.data_dir / "media")
     generation_adapters.register(OPENAI_IMAGES)
+    generation_adapters.register(KLING_VIDEO)
 
     @app.middleware("http")
     async def same_origin_and_headers(request: Request, call_next):
