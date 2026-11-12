@@ -471,7 +471,6 @@ export const otherUi = {
   sizeApprox: "~{size}",
   ttsThisDownloading: "This engine is already downloading.",
   chatJumpToLatest: "Jump to latest",
-  chatSubagents: "{n} subagents",
   chatSubagentsTitle: "Subagents",
   chatFromAgentSession: "From another agent",
   chatJobsTitle: "Background jobs",

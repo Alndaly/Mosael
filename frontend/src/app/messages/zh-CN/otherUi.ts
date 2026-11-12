@@ -469,7 +469,6 @@ export const otherUi = {
   sizeApprox: "约 {size}",
   ttsThisDownloading: "这个引擎正在下载中。",
   chatJumpToLatest: "回到最新",
-  chatSubagents: "{n} 个子代理",
   chatSubagentsTitle: "子代理",
   chatFromAgentSession: "来自其他智能体",
   chatJobsTitle: "后台任务",
