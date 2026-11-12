@@ -476,7 +476,8 @@ export function ProviderProfilesSection({
           {visibleProfiles.map((profile) => (
             <SettingsListItem
                 className={cn(
-                  "grid items-center gap-2",
+                  //: 连接表用紧凑密度(py-2):这里是在扫一排连接,不是读一段表单。
+                  "grid items-center gap-2 py-2",
                   /* 右端只有**一列**。此前「已停用」徽标自己占一列,而它只在停用时渲染 ——
                      启用的行少一个子元素,末列空着,gap 却照算,于是那些行的图标比停用的行
                      往左错开一格。条件出现的东西不能自己占一条网格轨道。 */
@@ -661,7 +662,7 @@ export function ProviderProfilesSection({
           {pluginProfiles.map((profile) => (
             <SettingsListItem
               key={profile.id}
-              className={cn("grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2", !profile.enabled && "opacity-55")}
+              className={cn("grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 py-2", !profile.enabled && "opacity-55")}
             >
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <Plug size={13} />

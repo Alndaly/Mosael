@@ -86,7 +86,7 @@ function SignedInRow({
 
   return (
     <SettingsListBlock>
-      <SettingsListItem data-mosael-cloud="" className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2">
+      <SettingsListItem data-mosael-cloud="" className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 py-2">
         <CloudBadge />
         <div className="min-w-0">
           <Truncate as="strong" className="text-ui-md font-semibold">{t("providerMosaelCloud")}</Truncate>
@@ -139,7 +139,7 @@ function SignedOutRow() {
   const t = useI18n();
   return (
     <SettingsListBlock>
-      <SettingsListItem data-mosael-cloud="" className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2">
+      <SettingsListItem data-mosael-cloud="" className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 py-2">
         <CloudBadge />
         <div className="min-w-0">
           <Truncate as="strong" className="text-ui-md font-semibold">{t("providerMosaelCloud")}</Truncate>

@@ -140,6 +140,10 @@ describe("供应商连接列表", () => {
 
     await waitFor(() => expect(container.textContent).toContain("ComfyUI"));
     expect(container.querySelectorAll('[data-slot="settings-block"]')).toHaveLength(0);
+    //: 两行都走紧凑密度;默认的 py-5 会在两张连接之间留出一大段空气。
+    const rows = [...container.querySelectorAll("[data-slot='settings-list-item']")];
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.classList.contains("py-2"))).toBe(true);
   });
 
   it("在对话分区加 Google:说明 Gemini 的对话在哪能用;视频分区不说这句", async () => {
