@@ -212,7 +212,7 @@ class FakeDirectStorage:
     direct_upload = True
     def save(self, **_kwargs):
         raise AssertionError("not used")
-    def presign_put(self, *, storage_key: str, mime: str, expires_in: int = 900) -> str:
+    def presign_put(self, *, storage_key: str, mime: str, size: int, expires_in: int = 900) -> str:
         return f"https://r2.example/{storage_key}?signature=put"
     def presign_get(self, *, storage_key: str, expires_in: int = 3600) -> str:
         return f"https://r2.example/{storage_key}?signature=get"
@@ -262,6 +262,6 @@ def test_r2_storage_writes_objects_and_signs_direct_puts():
     assert stored.storage_key.startswith("artifacts/u/j/")
     assert calls[0][1]["Bucket"] == "mosael-cloud"
     assert calls[0][1]["ContentType"] == "image/png"
-    upload = storage.presign_put(storage_key="uploads/u/x-frame.png", mime="image/png")
+    upload = storage.presign_put(storage_key="uploads/u/x-frame.png", mime="image/png", size=3)
     assert upload == "https://r2.example/uploads/u/x-frame.png"
     assert storage.public_url("uploads/u/x frame.png") == "https://media.mosael.com/uploads/u/x%20frame.png"

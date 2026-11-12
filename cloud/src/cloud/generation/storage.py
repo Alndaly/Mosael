@@ -30,7 +30,7 @@ class ArtifactStorage(Protocol):
 
     def save(self, *, user_id: str, job_id: str, artifact: AdapterArtifact) -> StoredArtifact: ...
 
-    def presign_put(self, *, storage_key: str, mime: str, expires_in: int = 900) -> str: ...
+    def presign_put(self, *, storage_key: str, mime: str, size: int, expires_in: int = 900) -> str: ...
 
     def presign_get(self, *, storage_key: str, expires_in: int = 3600) -> str: ...
 
@@ -61,7 +61,7 @@ class LocalArtifactStorage:
             raise ValueError("artifact path escapes storage root")
         return candidate
 
-    def presign_put(self, *, storage_key: str, mime: str, expires_in: int = 900) -> str:
+    def presign_put(self, *, storage_key: str, mime: str, size: int, expires_in: int = 900) -> str:
         raise NotImplementedError("local storage has no direct upload")
 
     def presign_get(self, *, storage_key: str, expires_in: int = 3600) -> str:
@@ -109,10 +109,10 @@ class R2ArtifactStorage:
         self.client.put_object(Bucket=self.bucket, Key=key, Body=artifact.data, ContentType=artifact.mime)
         return StoredArtifact(storage_key=key, size=len(artifact.data), sha256=digest)
 
-    def presign_put(self, *, storage_key: str, mime: str, expires_in: int = 900) -> str:
+    def presign_put(self, *, storage_key: str, mime: str, size: int, expires_in: int = 900) -> str:
         return self.client.generate_presigned_url(
             "put_object",
-            Params={"Bucket": self.bucket, "Key": storage_key, "ContentType": mime},
+            Params={"Bucket": self.bucket, "Key": storage_key, "ContentType": mime, "ContentLength": size},
             ExpiresIn=expires_in,
         )
 

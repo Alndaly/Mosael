@@ -123,7 +123,7 @@ def presign_upload(body: UploadTicketIn, request: Request, device: CurrentDevice
     return {
         "id": row.id,
         "method": "PUT",
-        "upload_url": storage.presign_put(storage_key=storage_key, mime=body.mime),
+        "upload_url": storage.presign_put(storage_key=storage_key, mime=body.mime, size=body.size),
         "url": public,
         "headers": {"Content-Type": body.mime},
         "expires_at": row.expires_at.isoformat(),
