@@ -138,6 +138,13 @@ class CloudConfig:
     wechatpay_apiv3_key: str = ""
     wechatpay_public_key: str = ""
     wechatpay_public_key_id: str = ""
+    #: 对象存储(Cloudflare R2)。五项齐了才启用直传;否则退回本地磁盘。
+    #: **密钥只从环境变量读**,不写进仓库;桶私有,公开访问走自定义域名。
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket: str = "mosael-cloud"
+    r2_public_base_url: str = ""
     #: 从 `public_url` 推出来的同源校验名单(允许的 Origin)。
     #: 允许的 Origin。**默认就是 `public_url` 的那一个**;本地开发时官网(3100)和桌面后端(8000)
     #: 都要来调接口,而它们不是同一个 Origin —— 用 `CLOUD_ALLOWED_ORIGINS` 显式列出来。
@@ -178,6 +185,16 @@ class CloudConfig:
     @property
     def resolved_database_url(self) -> str:
         return self.database_url or f"sqlite:///{self.data_dir / 'cloud.db'}"
+
+    @property
+    def r2_configured(self) -> bool:
+        return bool(
+            self.r2_account_id.strip()
+            and self.r2_access_key_id.strip()
+            and self.r2_secret_access_key.strip()
+            and self.r2_bucket.strip()
+            and self.r2_public_base_url.strip()
+        )
 
     @property
     def smtp_configured(self) -> bool:
@@ -243,6 +260,11 @@ class CloudConfig:
                 if part.strip()
             ),
             database_url=os.environ.get("CLOUD_DATABASE_URL", "").strip(),
+            r2_account_id=os.environ.get("CLOUD_R2_ACCOUNT_ID", "").strip(),
+            r2_access_key_id=os.environ.get("CLOUD_R2_ACCESS_KEY_ID", "").strip(),
+            r2_secret_access_key=os.environ.get("CLOUD_R2_SECRET_ACCESS_KEY", "").strip(),
+            r2_bucket=os.environ.get("CLOUD_R2_BUCKET", "mosael-cloud").strip() or "mosael-cloud",
+            r2_public_base_url=os.environ.get("CLOUD_R2_PUBLIC_BASE_URL", "").strip().rstrip("/"),
             cookie_secure=_flag("CLOUD_COOKIE_SECURE", True),
             cookie_name=os.environ.get("CLOUD_COOKIE_NAME", "mosael_cloud_session").strip() or "mosael_cloud_session",
             cookie_path=os.environ.get("CLOUD_COOKIE_PATH", "/").strip() or "/",

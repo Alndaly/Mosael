@@ -12,7 +12,7 @@ from cloud.domain import catalog, credits
 from cloud.domain.channel_keys import unseal
 from cloud.errors import CloudError
 from cloud.generation.adapters import AdapterResult, JobAdapter, JobContext
-from cloud.generation.storage import LocalArtifactStorage
+from cloud.generation.storage import ArtifactStorage
 from cloud.models import (
     CloudGatewayCall,
     CloudGatewayModel,
@@ -159,7 +159,7 @@ def _succeed(
     db: Session,
     job: CloudGenerationJob,
     result: AdapterResult,
-    storage: LocalArtifactStorage,
+    storage: ArtifactStorage,
     at: datetime,
 ) -> None:
     artifact_ids: list[str] = []
@@ -204,7 +204,7 @@ def _fail(db: Session, job: CloudGenerationJob, code: str, detail: str, at: date
         credits.settle(db, call, charged=0, at=at)
 
 
-def run_one(db: Session, *, config: CloudConfig, adapters: dict[str, JobAdapter], storage: LocalArtifactStorage) -> bool:
+def run_one(db: Session, *, config: CloudConfig, adapters: dict[str, JobAdapter], storage: ArtifactStorage) -> bool:
     """处理一个到期任务。返回是否处理了任务;worker 自己循环调用它。"""
     at = now()
     job = _claimed(db, at)

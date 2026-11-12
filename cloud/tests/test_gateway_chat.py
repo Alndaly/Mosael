@@ -145,7 +145,9 @@ def test_models_are_an_openai_list_priced_in_credits(gateway):
     #: 没有通道的模型不列。
     assert body["data"] == [{
         "id": "deepseek-chat", "object": "model", "owned_by": "mosael", "name": "DeepSeek V3", "max_output_tokens": 4000,
-        "pricing": {"prompt": "0.002", "completion": "0.004", "currency": "CREDITS"},
+        "interaction": "stream", "capability": {"max_output_tokens": 4000},
+        "pricing": {"prompt": "0.002", "completion": "0.004", "currency": "CREDITS",
+                    "components": {"token_input": 2, "token_output": 4}},
     }]
 
 

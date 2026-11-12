@@ -33,6 +33,7 @@ TIMEOUT_SECONDS = 3600.0
 class MosaelCloudJobAdapter(GenerationAdapter):
     vendor_id = "mosael-cloud"
     supports_resume = False
+    surface_depends_on_model = False
 
     def __init__(self, media_kind: str, *, transport: httpx.BaseTransport | None = None) -> None:
         self.media_kind = media_kind
@@ -54,16 +55,27 @@ class MosaelCloudJobAdapter(GenerationAdapter):
             headers={"Authorization": f"Bearer {context.api_key}"},
             timeout=60.0,
             transport=self._transport,
+            follow_redirects=True,
         )
 
     def _upload(self, client: httpx.Client, path: Path) -> str:
         mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        response = client.post(
-            "/uploads", content=path.read_bytes(),
-            headers={"Content-Type": mime, "X-Filename": path.name},
-        )
-        response.raise_for_status()
-        return str(response.json()["url"])
+        body = path.read_bytes()
+        ticket = client.post("/uploads/presign", json={"filename": path.name, "mime": mime, "size": len(body)})
+        if ticket.status_code == 201:
+            data = ticket.json()
+            uploaded = httpx.put(data["upload_url"], content=body, headers=data["headers"], timeout=120.0)
+            uploaded.raise_for_status()
+            return str(data["url"])
+        if ticket.status_code == 503:
+            response = client.post(
+                "/uploads", content=body,
+                headers={"Content-Type": mime, "X-Filename": path.name},
+            )
+            response.raise_for_status()
+            return str(response.json()["url"])
+        ticket.raise_for_status()
+        raise GenerationAdapterError("providerErr_uploadRejected", vendor=self.vendor_id, detail=ticket.text[:300])
 
     def _input(self, request: GenerationRequest, client: httpx.Client) -> dict[str, Any]:
         data: dict[str, Any] = {"prompt": request.prompt}

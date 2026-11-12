@@ -45,6 +45,13 @@ services:
       CLOUD_COOKIE_SECURE: "true"
       CLOUD_DATABASE_URL: postgresql+psycopg://mosael:${POSTGRES_PASSWORD:?在 .env 里设置 POSTGRES_PASSWORD}@postgres:5432/mosael
       CLOUD_DATA_DIR: /data
+      # 对象存储:五项齐了才启用直传;缺任一项退回本地磁盘(只适合开发/小部署)。
+      # 凭据只放在部署机 .env,不进仓库。
+      CLOUD_R2_ACCOUNT_ID: ${CLOUD_R2_ACCOUNT_ID:-}
+      CLOUD_R2_ACCESS_KEY_ID: ${CLOUD_R2_ACCESS_KEY_ID:-}
+      CLOUD_R2_SECRET_ACCESS_KEY: ${CLOUD_R2_SECRET_ACCESS_KEY:-}
+      CLOUD_R2_BUCKET: ${CLOUD_R2_BUCKET:-mosael-cloud}
+      CLOUD_R2_PUBLIC_BASE_URL: ${CLOUD_R2_PUBLIC_BASE_URL:-https://media.mosael.com}
       CLOUD_SESSION_TTL_DAYS: ${CLOUD_SESSION_TTL_DAYS:-30}
       CLOUD_PASSWORD_MIN_LENGTH: ${CLOUD_PASSWORD_MIN_LENGTH:-8}
       CLOUD_OAUTH_STATE_TTL_SECONDS: ${CLOUD_OAUTH_STATE_TTL_SECONDS:-600}

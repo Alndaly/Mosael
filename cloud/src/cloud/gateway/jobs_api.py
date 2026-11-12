@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Request, Response
 from sqlalchemy import select
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from cloud.api.deps import CurrentConfig, DbSession
@@ -22,6 +23,13 @@ router = APIRouter(prefix="/gateway/v1", tags=["gateway"])
 
 #: 输入素材上限;视频首帧/参考视频可到几十 MB,留足余量。
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+
+
+class UploadTicketIn(BaseModel):
+    filename: str = Field(min_length=1, max_length=200)
+    mime: str = Field(min_length=1, max_length=120)
+    size: int = Field(gt=0, le=MAX_UPLOAD_BYTES)
+    sha256: str = Field(default="", max_length=64)
 
 
 class JobIn(BaseModel):
@@ -75,14 +83,57 @@ def get_artifact(job_id: str, artifact_id: str, request: Request, device: Curren
     artifact = db.get(CloudMediaArtifact, artifact_id)
     if artifact is None or artifact.job_id != job_id or artifact.user_id != device.user.id:
         raise CloudError(404, "artifact_not_found")
-    path = request.app.state.artifact_storage.path(artifact.storage_key)
+    storage = request.app.state.artifact_storage
+    if storage.direct_upload:
+        public = storage.public_url(artifact.storage_key)
+        if public is None:
+            raise CloudError(503, "storage_not_configured")
+        return RedirectResponse(public, status_code=302)
+    path = storage.path(artifact.storage_key)
     if not path.is_file():
         raise CloudError(404, "artifact_not_found")
     return FileResponse(path, media_type=artifact.mime, filename=artifact.filename)
 
 
+@router.post("/uploads/presign", status_code=201)
+def presign_upload(body: UploadTicketIn, request: Request, device: CurrentDevice, config: CurrentConfig, db: DbSession) -> dict[str, object]:
+    storage = request.app.state.artifact_storage
+    if not storage.direct_upload:
+        raise CloudError(503, "direct_upload_not_configured")
+    filename = Path(body.filename).name[:200] or "upload.bin"
+    token = new_token(24)
+    storage_key = f"uploads/{device.user.id}/{token}-{filename}"
+    at = now()
+    row = CloudMediaUpload(
+        user_id=device.user.id,
+        filename=filename,
+        mime=body.mime,
+        size=body.size,
+        sha256=body.sha256,
+        storage_key=storage_key,
+        public_token=token,
+        created_at=at,
+        expires_at=at + timedelta(days=1),
+    )
+    db.add(row)
+    db.commit()
+    public = storage.public_url(storage_key)
+    if public is None:
+        raise CloudError(503, "storage_not_configured")
+    return {
+        "id": row.id,
+        "method": "PUT",
+        "upload_url": storage.presign_put(storage_key=storage_key, mime=body.mime),
+        "url": public,
+        "headers": {"Content-Type": body.mime},
+        "expires_at": row.expires_at.isoformat(),
+    }
+
+
 @router.post("/uploads", status_code=201)
 async def upload_media(request: Request, device: CurrentDevice, config: CurrentConfig, db: DbSession) -> dict[str, object]:
+    if request.app.state.artifact_storage.direct_upload:
+        raise CloudError(410, "upload_via_presign")
     body = await request.body()
     if not body or len(body) > MAX_UPLOAD_BYTES:
         raise CloudError(413, "upload_too_large")
@@ -116,7 +167,13 @@ def public_upload(token: str, request: Request, db: DbSession) -> FileResponse:
     row = db.scalar(select(CloudMediaUpload).where(CloudMediaUpload.public_token == token))
     if row is None or row.expires_at <= now():
         raise CloudError(404, "upload_not_found")
-    path = request.app.state.artifact_storage.path(row.storage_key)
+    storage = request.app.state.artifact_storage
+    if storage.direct_upload:
+        public = storage.public_url(row.storage_key)
+        if public is None:
+            raise CloudError(503, "storage_not_configured")
+        return RedirectResponse(public, status_code=302)
+    path = storage.path(row.storage_key)
     if not path.is_file():
         raise CloudError(404, "upload_not_found")
     return FileResponse(path, media_type=row.mime, filename=row.filename)

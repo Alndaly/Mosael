@@ -38,7 +38,7 @@ from cloud.sms import PhoneCodeSender, TencentSmsSender
 from cloud.oauth import OAuthProvider, default_providers
 from cloud.payments.base import PaymentChannel
 from cloud.payments.registry import channels_from_config
-from cloud.generation.storage import LocalArtifactStorage
+from cloud.generation.storage import ArtifactStorage, LocalArtifactStorage, R2ArtifactStorage
 from cloud.generation.openai_images import ADAPTER as OPENAI_IMAGES
 from cloud.generation.kling import ADAPTER as KLING_VIDEO
 from cloud.generation.seedance import ADAPTER as SEEDANCE_VIDEO
@@ -131,7 +131,17 @@ def create_app(
     app.state.oauth_providers = (
         dict(oauth_providers) if oauth_providers is not None else default_providers()
     )
-    app.state.artifact_storage = LocalArtifactStorage(resolved.data_dir / "media")
+    app.state.artifact_storage: ArtifactStorage = (
+        R2ArtifactStorage(
+            account_id=resolved.r2_account_id,
+            access_key_id=resolved.r2_access_key_id,
+            secret_access_key=resolved.r2_secret_access_key,
+            bucket=resolved.r2_bucket,
+            public_base_url=resolved.r2_public_base_url,
+        )
+        if resolved.r2_configured
+        else LocalArtifactStorage(resolved.data_dir / "media")
+    )
     generation_adapters.register(OPENAI_IMAGES)
     generation_adapters.register(KLING_VIDEO)
     generation_adapters.register(SEEDANCE_VIDEO)

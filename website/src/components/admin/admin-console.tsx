@@ -815,8 +815,8 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   copy: Messages["admin"]; provider: AdminProvider | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [name, setName] = useState(provider?.name ?? "");
-  const [adapter, setAdapter] = useState(provider?.adapter ?? "openai");
-  const [adapterConfig, setAdapterConfig] = useState(JSON.stringify(provider?.config ?? {}, null, 2));
+  const adapter = provider?.adapter ?? "openai";
+  const adapterConfig = JSON.stringify(provider?.config ?? {}, null, 2);
   const [base, setBase] = useState(provider?.base_url ?? "");
   const [key, setKey] = useState("");
   const [note, setNote] = useState(provider?.note ?? "");
