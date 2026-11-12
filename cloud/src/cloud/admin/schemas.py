@@ -10,6 +10,21 @@ from pydantic import BaseModel, Field
 RoleName = Literal["member", "admin"]
 
 
+class IpBanIn(BaseModel):
+    ip: str = Field(min_length=1, max_length=64)
+    reason: str = Field(default="", max_length=200)
+
+
+class AdjustIn(BaseModel):
+    delta: int = Field(ge=-10_000_000, le=10_000_000)
+    days: int = Field(default=30, ge=1, le=3650)
+    note: str = Field(default="", max_length=200)
+
+
+class BanIn(BaseModel):
+    reason: str = Field(default="", max_length=200)
+
+
 class UserPatch(BaseModel):
     """管理台修改公开身份;邮箱 / 手机号会换登录方式,不在这里改。"""
 

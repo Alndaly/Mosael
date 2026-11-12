@@ -348,7 +348,7 @@ uv run python -m cloud.cli admin-list
 uv run python -m cloud.cli admin-revoke --email someone@example.com
 ```
 
-不能撤销最后一名管理员。注册、`PUT /me` 和 OAuth 都不会写 `role`。管理端网页在 `/<locale>/admin`，按概览、账号、模型、上游供应商、通道、套餐、运营、审计分区；未登录或非管理员直接 404。
+不能撤销最后一名管理员。注册、`PUT /me` 和 OAuth 都不会写 `role`。管理端网页在 `/<locale>/admin`，按概览、账号、模型、上游供应商、通道、套餐、封禁 IP、运营、审计分区；未登录或非管理员直接 404。
 
 
 #### 管理端接口
@@ -363,9 +363,13 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | GET | `/admin/orders` | 最近 100 笔订单(含账号、套餐、金额、状态、渠道) |
 | GET | `/admin/usage?days=7` | 近 N 天调用数 / 积分 / token,按日与模型汇总 |
 | GET | `/admin/users?q=` | 搜索账号；返回订阅、积分、角色、official、MFA 状态 |
-| GET | `/admin/users/{id}` | 账号详情：积分批次、订阅、最近订单 |
+| GET | `/admin/users/{id}` | 账号详情：积分批次、订阅、最近订单、封禁状态 |
+| PATCH | `/admin/users/{id}` | 修改公开昵称 / 短名 |
+| DELETE | `/admin/users/{id}` | 删除账号；禁止删除自己、官方账号和最后一名管理员 |
 | POST | `/admin/users/{id}/role` | `member` / `admin`；不能撤销最后一名管理员 |
 | POST | `/admin/users/{id}/credits` | 赠送积分 |
+| POST | `/admin/users/{id}/credits/adjust` | 增减积分；正数带有效期，负数从可用批次扣减，不能扣成负余额 |
+| POST | `/admin/users/{id}/ban` / `unban` | 封禁 / 解封账号；封禁时撤销全部会话和设备令牌 |
 | POST | `/admin/users/{id}/subscriptions` | 开通套餐 |
 | POST | `/admin/users/{id}/reset-password` | 生成一次性临时密码，撤销该账号全部会话和设备令牌；不能重置自己 |
 | GET/POST | `/admin/models` | 模型目录；新建时 id 由系统生成 UUID，请求不接收 id |
@@ -376,14 +380,17 @@ uv run python -m cloud.cli admin-revoke --email someone@example.com
 | GET/POST | `/admin/channels` | 模型到供应商的路由；只接收 model_id / provider_id / upstream_model |
 | PATCH | `/admin/channels/{id}` | 上游模型 / 优先级 / 启停 / 备注；不可换供应商或改端点 |
 | POST | `/admin/channels/{id}/test` | 用供应商已存 Key 发一次最小对话，返回状态 / 延迟 / 用量 / 上游 detail；不回 Key |
-| GET/POST | `/admin/plans` | 套餐列表 / 新建 |
+| GET/POST | `/admin/plans` | 套餐列表 / 新建；已删除的套餐不返回 |
 | PATCH | `/admin/plans/{slug}` | 修改套餐；slug 不可改 |
+| DELETE | `/admin/plans/{slug}` | 软删除：不再列出、不能新购；已有订阅继续有效 |
+| GET/POST | `/admin/ip-bans` | 封禁来源 IP 列表 / 新增 |
+| DELETE | `/admin/ip-bans/{ip}` | 解除 IP 封禁 |
 
 响应全部显式组装：不返回密码哈希、设备令牌或上游 API Key。管理端网页在 `/<locale>/admin`，未登录或非管理员直接 404；真实权限仍由 Cloud 路由的 `CurrentAdmin` 校验。
 
 管理端写操作会写入 `cloud_admin_audit`：操作者邮箱快照、动作、对象、白名单 detail、时间；和业务写入在同一事务里提交。审计详情不记录密码、设备令牌或上游 Key 原文。
 
-管理端目前仍使用普通 Cloud 登录；管理员 MFA 强制、更严格的高危操作二次验证还没有接入。
+账号封禁对登录和已有会话立即生效；IP 封禁作用于非管理 API（管理端保留入口，避免把自己锁在外面）。管理端目前仍使用普通 Cloud 登录；管理员 MFA 强制、更严格的高危操作二次验证还没有接入。
 
 ### 可选双因素(TOTP)
 

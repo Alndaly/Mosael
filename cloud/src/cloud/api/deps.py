@@ -60,6 +60,8 @@ def browser_user(request: Request, db: DbSession, config: CurrentConfig) -> Clou
     user = db.get(CloudUser, session.user_id)
     if user is None:
         raise CloudError(401, "not_authenticated")
+    if user.banned_at is not None:
+        raise CloudError(403, "account_banned")
     return user
 
 
@@ -77,6 +79,8 @@ def current_user(request: Request, db: DbSession, config: CurrentConfig) -> Clou
         user = _device_user(db, raw_bearer)
         if user is None:
             raise CloudError(401, "device_token_invalid")
+        if user.banned_at is not None:
+            raise CloudError(403, "account_banned")
         return user
     return browser_user(request, db, config)
 
@@ -111,7 +115,8 @@ def optional_user(request: Request, db: DbSession, config: CurrentConfig) -> Clo
     session = db.get(CloudSession, token_digest(raw))
     if session is None or session.expires_at <= now():
         return None
-    return db.get(CloudUser, session.user_id)
+    user = db.get(CloudUser, session.user_id)
+    return None if user is None or user.banned_at is not None else user
 
 
 MaybeUser = Annotated[CloudUser | None, Depends(optional_user)]

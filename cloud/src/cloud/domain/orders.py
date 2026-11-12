@@ -34,7 +34,7 @@ def purchasable_plans(db: Session) -> list[CloudPlan]:
     return list(
         db.scalars(
             select(CloudPlan)
-            .where(CloudPlan.on_sale.is_(True), CloudPlan.price_cents.is_not(None))
+            .where(CloudPlan.deleted_at.is_(None), CloudPlan.on_sale.is_(True), CloudPlan.price_cents.is_not(None))
             .order_by(CloudPlan.price_cents, CloudPlan.slug)
         )
     )
@@ -49,7 +49,7 @@ def create_order(
     at: datetime,
 ) -> CloudOrder:
     """下一笔单并向渠道要二维码。渠道没开(`channel` 为空)或渠道一时不可用都说清楚;下单失败不留半截订单(调用方回滚)。"""
-    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == plan_slug))
+    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == plan_slug, CloudPlan.deleted_at.is_(None)))
     if plan is None or not plan.on_sale or plan.price_cents is None:
         raise CloudError(404, "plan_not_for_sale")
     if channel is None:

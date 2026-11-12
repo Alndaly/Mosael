@@ -504,6 +504,8 @@ export type AdminUser = {
   display_name: string | null;
   role: "member" | "admin";
   official: boolean;
+  banned: boolean;
+  ban_reason: string;
   has_password: boolean;
   mfa_enabled: boolean;
   created_at: string;
@@ -565,6 +567,12 @@ export type AdminChannel = {
   cooldown_until: string | null;
   note: string;
   has_api_key: boolean;
+};
+
+export type AdminIpBan = {
+  ip: string;
+  reason: string;
+  created_at: string;
 };
 
 export type AdminPlan = {
@@ -639,6 +647,13 @@ export const cloudAdmin = {
     }),
   deleteUser: (id: string) =>
     request<void>(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  banUser: (id: string, reason: string) =>
+    request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/ban`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  unbanUser: (id: string) =>
+    request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/unban`, { method: "POST" }),
   resetPassword: (id: string) =>
     request<{ temporary_password: string }>(`/admin/users/${encodeURIComponent(id)}/reset-password`, {
       method: "POST",
@@ -652,6 +667,11 @@ export const cloudAdmin = {
     request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/credits`, {
       method: "POST",
       body: JSON.stringify({ credits, days, note }),
+    }),
+  adjustCredits: (id: string, delta: number, days: number, note: string) =>
+    request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/credits/adjust`, {
+      method: "POST",
+      body: JSON.stringify({ delta, days, note }),
     }),
   subscribe: (id: string, plan: string) =>
     request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}/subscriptions`, {
@@ -714,4 +734,9 @@ export const cloudAdmin = {
     }),
   deletePlan: (slug: string) =>
     request<void>(`/admin/plans/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  ipBans: () => request<{ bans: AdminIpBan[] }>("/admin/ip-bans"),
+  banIp: (ip: string, reason: string) =>
+    request<{ ban: AdminIpBan }>("/admin/ip-bans", { method: "POST", body: JSON.stringify({ ip, reason }) }),
+  unbanIp: (ip: string) =>
+    request<void>(`/admin/ip-bans/${encodeURIComponent(ip)}`, { method: "DELETE" }),
 };

@@ -65,6 +65,7 @@ def _grant(
     expires_at: datetime,
     subscription_id: str | None = None,
     note: str = "",
+    entry_kind: str = "grant",
 ) -> CloudCreditBatch:
     batch = CloudCreditBatch(
         user_id=user_id,
@@ -77,7 +78,7 @@ def _grant(
     )
     db.add(batch)
     db.flush()
-    db.add(CloudUsageEntry(user_id=user_id, batch_id=batch.id, kind="grant", delta=amount, created_at=granted_at))
+    db.add(CloudUsageEntry(user_id=user_id, batch_id=batch.id, kind=entry_kind, delta=amount, created_at=granted_at))
     return batch
 
 
@@ -140,6 +141,43 @@ def gift(db: Session, user: CloudUser, *, amount: int, days: int, note: str, at:
     if amount <= 0 or days <= 0:
         raise ValueError("amount and days must be positive")
     return _grant(db, user.id, source="gift", amount=amount, granted_at=at, expires_at=at + timedelta(days=days), note=note)
+
+
+def adjust(db: Session, user: CloudUser, *, delta: int, days: int, note: str, at: datetime) -> None:
+    """管理台人工调整:正数发一批(gift 来源),负数从可用批次里按先到期顺序扣。
+
+    负数不能扣到负余额;也不改写批次本身的金额,只追加 `adjust` 流水。"""
+    if delta == 0:
+        raise CloudError(400, "invalid_adjustment")
+    _lock_user(db, user.id)
+    catch_up(db, user.id, at=at)
+    if delta > 0:
+        if days <= 0:
+            raise CloudError(400, "invalid_adjustment")
+        _grant(
+            db, user.id, source="gift", amount=delta, granted_at=at,
+            expires_at=at + timedelta(days=days), note=note, entry_kind="adjust",
+        )
+        db.flush()
+        return
+    usable = _remaining(db, user.id, expired=False, at=at)
+    available = sum(left for _, left in usable)
+    if -delta > available:
+        raise CloudError(
+            400,
+            "insufficient_credits",
+            needed=-delta,
+            available=available,
+            details={"needed": -delta, "available": available},
+        )
+    owed = -delta
+    for batch, left in usable:
+        if owed == 0:
+            break
+        take = min(left, owed)
+        db.add(CloudUsageEntry(user_id=user.id, batch_id=batch.id, kind="adjust", delta=-take, created_at=at))
+        owed -= take
+    db.flush()
 
 
 # ---------------------------------------------------------------- 把账补到此刻

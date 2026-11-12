@@ -26,6 +26,7 @@ from cloud.models import (
     CloudDeviceToken,
     CloudGatewayCall,
     CloudGatewayModel,
+    CloudIpBan,
     CloudModelPrice,
     CloudOrder,
     CloudSession,
@@ -72,6 +73,8 @@ def _user_view(db: Session, user: CloudUser, at: datetime) -> dict[str, object]:
         "display_name": user.display_name,
         "role": user.role,
         "official": user.official,
+        "banned": user.banned_at is not None,
+        "ban_reason": user.ban_reason,
         "has_password": bool(user.password_hash),
         "mfa_enabled": bool(user.mfa_enabled_at and user.mfa_totp_secret_encrypted),
         "created_at": user.created_at.isoformat(),
@@ -162,6 +165,38 @@ def update_user(
     return _user_view(db, user, now())
 
 
+def set_ban(
+    db: Session, user_id: str, *, banned: bool, reason: str, acting_user_id: str
+) -> dict[str, object]:
+    user = db.get(CloudUser, user_id)
+    if user is None:
+        raise CloudError(404, "user_not_found")
+    if banned:
+        if user.id == acting_user_id:
+            raise CloudError(400, "cannot_ban_self")
+        if user.official:
+            raise CloudError(409, "cannot_ban_official")
+        if user.role == role_admin.ROLE_ADMIN:
+            admins = int(db.scalar(
+                select(func.count()).select_from(CloudUser).where(
+                    CloudUser.role == role_admin.ROLE_ADMIN,
+                    CloudUser.banned_at.is_(None),
+                )
+            ) or 0)
+            if admins <= 1:
+                raise CloudError(409, "last_admin")
+        user.banned_at = now()
+        user.ban_reason = reason.strip()[:200]
+        # 封禁立即生效:已有浏览器会话和桌面设备令牌都撤掉。
+        db.execute(delete(CloudSession).where(CloudSession.user_id == user.id))
+        db.execute(delete(CloudDeviceToken).where(CloudDeviceToken.user_id == user.id))
+    else:
+        user.banned_at = None
+        user.ban_reason = ""
+    db.flush()
+    return _user_view(db, user, now())
+
+
 def delete_user(db: Session, user_id: str, *, acting_user_id: str) -> None:
     user = db.get(CloudUser, user_id)
     if user is None:
@@ -188,9 +223,19 @@ def gift(db: Session, user_id: str, *, amount: int, days: int, note: str) -> dic
     return _user_view(db, user, now())
 
 
+def adjust_credits(
+    db: Session, user_id: str, *, delta: int, days: int, note: str
+) -> dict[str, object]:
+    user = db.get(CloudUser, user_id)
+    if user is None:
+        raise CloudError(404, "user_not_found")
+    credits.adjust(db, user, delta=delta, days=days, note=note, at=now())
+    return _user_view(db, user, now())
+
+
 def subscribe(db: Session, user_id: str, *, plan_slug: str) -> dict[str, object]:
     user = db.get(CloudUser, user_id)
-    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == plan_slug))
+    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == plan_slug, CloudPlan.deleted_at.is_(None)))
     if user is None:
         raise CloudError(404, "user_not_found")
     if plan is None:
@@ -390,18 +435,44 @@ def update_provider(
     return _provider_view(provider)
 
 
+def list_ip_bans(db: Session) -> list[dict[str, object]]:
+    return [
+        {"ip": one.ip, "reason": one.reason, "created_at": one.created_at.isoformat()}
+        for one in db.scalars(select(CloudIpBan).order_by(CloudIpBan.created_at.desc())).all()
+    ]
+
+
+def ban_ip(db: Session, *, ip: str, reason: str) -> dict[str, object]:
+    import ipaddress
+
+    try:
+        canonical = str(ipaddress.ip_address(ip.strip()))
+    except ValueError as exc:
+        raise CloudError(400, "invalid_ip") from exc
+    row = db.get(CloudIpBan, canonical)
+    if row is None:
+        row = CloudIpBan(ip=canonical, reason=reason.strip()[:200], created_at=now())
+        db.add(row)
+    else:
+        row.reason = reason.strip()[:200]
+    db.flush()
+    return {"ip": row.ip, "reason": row.reason, "created_at": row.created_at.isoformat()}
+
+
+def unban_ip(db: Session, ip: str) -> None:
+    row = db.get(CloudIpBan, ip)
+    if row is not None:
+        db.delete(row)
+        db.flush()
+
+
 def delete_plan(db: Session, slug: str) -> None:
-    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == slug))
+    """软删除:历史订阅 / 订单还引用这一行。已订阅的人照常用完已发积分,但不再能新买或新开通。"""
+    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == slug, CloudPlan.deleted_at.is_(None)))
     if plan is None:
         raise CloudError(404, "plan_not_found")
-    in_use = db.scalar(
-        select(func.count()).select_from(CloudSubscription).where(CloudSubscription.plan_id == plan.id)
-    ) or db.scalar(
-        select(func.count()).select_from(CloudOrder).where(CloudOrder.plan_id == plan.id)
-    )
-    if in_use:
-        raise CloudError(409, "plan_in_use")
-    db.delete(plan)
+    plan.deleted_at = now()
+    plan.on_sale = False
     db.flush()
 
 
@@ -484,7 +555,10 @@ def _plan_view(plan: CloudPlan) -> dict[str, object]:
 
 
 def list_plans(db: Session) -> list[dict[str, object]]:
-    return [_plan_view(one) for one in db.scalars(select(CloudPlan).order_by(CloudPlan.slug)).all()]
+    return [
+        _plan_view(one)
+        for one in db.scalars(select(CloudPlan).where(CloudPlan.deleted_at.is_(None)).order_by(CloudPlan.slug)).all()
+    ]
 
 
 def create_plan(db: Session, *, slug: str, name: str, period: str, monthly_credits: int, credit_ttl_days: int, on_sale: bool, price_cents: int | None) -> dict[str, object]:
@@ -505,7 +579,7 @@ def create_plan(db: Session, *, slug: str, name: str, period: str, monthly_credi
 
 
 def update_plan(db: Session, slug: str, *, name: str, period: str, monthly_credits: int, credit_ttl_days: int, on_sale: bool, price_cents: int | None) -> dict[str, object]:
-    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == slug))
+    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == slug, CloudPlan.deleted_at.is_(None)))
     if plan is None:
         raise CloudError(404, "plan_not_found")
     plan.name = name

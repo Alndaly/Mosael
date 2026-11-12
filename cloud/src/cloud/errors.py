@@ -288,13 +288,33 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "You cannot delete your own account from the admin console.",
         "zh": "不能在这里删除自己的账号。",
     },
+    "ip_banned": {
+        "en": "This network is blocked from using MosaelCloud.",
+        "zh": "这个网络已被禁止使用 MosaelCloud。",
+    },
+    "invalid_ip": {
+        "en": "Enter a valid IPv4 or IPv6 address.",
+        "zh": "请输入合法的 IPv4 或 IPv6 地址。",
+    },
+    "account_banned": {
+        "en": "This account has been suspended. Contact the deployment administrator.",
+        "zh": "这个账号已被封禁，请联系部署管理员。",
+    },
+    "cannot_ban_self": {
+        "en": "You cannot suspend your own account.",
+        "zh": "不能封禁自己的账号。",
+    },
+    "cannot_ban_official": {
+        "en": "The official account cannot be suspended.",
+        "zh": "官方账号不能封禁。",
+    },
     "official_account": {
         "en": "The official account cannot be deleted.",
         "zh": "官方账号不能删除。",
     },
-    "plan_in_use": {
-        "en": "This plan has subscriptions or orders and cannot be deleted. Turn off online sale instead.",
-        "zh": "这个套餐还有订阅或订单，不能删除；可以先关闭在线销售。",
+    "invalid_adjustment": {
+        "en": "Enter a non-zero credit adjustment; positive additions need a positive validity period.",
+        "zh": "积分调整不能为 0；增加积分时有效天数必须大于 0。",
     },
     "user_not_found": {
         "en": "No MosaelCloud account uses that handle.",

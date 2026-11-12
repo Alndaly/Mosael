@@ -10,7 +10,10 @@ from fastapi import APIRouter, Query, Request, Response
 
 from cloud.admin import service
 from cloud.admin.schemas import (
+    AdjustIn,
+    BanIn,
     ChannelIn,
+    IpBanIn,
     ChannelPatch,
     GiftIn,
     ModelIn,
@@ -67,6 +70,23 @@ def admin_update_user(
     return {"user": user}
 
 
+@router.post("/admin/users/{user_id}/ban")
+def admin_ban_user(user_id: str, body: BanIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    user = service.set_ban(db, user_id, banned=True, reason=body.reason, acting_user_id=actor.id)
+    audit.record(db, actor=actor, action="user.ban", target_type="user", target_id=user_id,
+                 detail={"reason": body.reason})
+    db.commit()
+    return {"user": user}
+
+
+@router.post("/admin/users/{user_id}/unban")
+def admin_unban_user(user_id: str, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    user = service.set_ban(db, user_id, banned=False, reason="", acting_user_id=actor.id)
+    audit.record(db, actor=actor, action="user.unban", target_type="user", target_id=user_id)
+    db.commit()
+    return {"user": user}
+
+
 @router.delete("/admin/users/{user_id}", status_code=204)
 def admin_delete_user(user_id: str, actor: CurrentAdmin, db: DbSession) -> Response:
     service.delete_user(db, user_id, acting_user_id=actor.id)
@@ -92,6 +112,17 @@ def admin_user_credits(user_id: str, body: GiftIn, actor: CurrentAdmin, db: DbSe
     return {"user": user}
 
 
+@router.post("/admin/users/{user_id}/credits/adjust")
+def admin_adjust_user_credits(
+    user_id: str, body: AdjustIn, actor: CurrentAdmin, db: DbSession
+) -> dict[str, object]:
+    user = service.adjust_credits(db, user_id, delta=body.delta, days=body.days, note=body.note)
+    audit.record(db, actor=actor, action="user.credits_adjust", target_type="user", target_id=user_id,
+                 detail={"delta": body.delta, "days": body.days, "note": body.note})
+    db.commit()
+    return {"user": user}
+
+
 @router.post("/admin/users/{user_id}/reset-password")
 def admin_reset_user_password(user_id: str, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     temporary = service.reset_password(db, user_id, acting_user_id=actor.id)
@@ -107,6 +138,28 @@ def admin_user_subscription(user_id: str, body: SubscribeIn, actor: CurrentAdmin
                  detail={"plan": body.plan})
     db.commit()
     return {"user": user}
+
+
+@router.get("/admin/ip-bans")
+def admin_ip_bans(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    return {"bans": service.list_ip_bans(db)}
+
+
+@router.post("/admin/ip-bans", status_code=201)
+def admin_ban_ip(body: IpBanIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
+    ban = service.ban_ip(db, ip=body.ip, reason=body.reason)
+    audit.record(db, actor=actor, action="ip.ban", target_type="ip", target_id=ban["ip"],
+                 detail={"reason": body.reason})
+    db.commit()
+    return {"ban": ban}
+
+
+@router.delete("/admin/ip-bans/{ip}", status_code=204)
+def admin_unban_ip(ip: str, actor: CurrentAdmin, db: DbSession) -> Response:
+    service.unban_ip(db, ip)
+    audit.record(db, actor=actor, action="ip.unban", target_type="ip", target_id=ip)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/admin/orders")

@@ -112,6 +112,8 @@ def open_session(db, config: CloudConfig, user: CloudUser, response: Response) -
     认证本身(密码 / 邮箱验证码),不取决于 `official` 这个公开标记 —— 这里没有特判,
     所以也就不存在"拿到密码 / 拿到码却换不到会话"的第三道闸。
     """
+    if user.banned_at is not None:
+        raise CloudError(403, "account_banned")
     raw = new_token()
     expires_at = now() + timedelta(days=config.session_ttl_days)
     db.add(CloudSession(token_hash=token_digest(raw), user_id=user.id, expires_at=expires_at))
@@ -123,6 +125,8 @@ def open_session(db, config: CloudConfig, user: CloudUser, response: Response) -
 
 def login_result(db, config: CloudConfig, user: CloudUser, response: Response) -> dict[str, object]:
     """一次主认证成功之后:开了 MFA 就发一次性票据,否则直接发会话。"""
+    if user.banned_at is not None:
+        raise CloudError(403, "account_banned")
     response.headers["Cache-Control"] = "no-store"
     if mfa_domain.enabled(user):
         ticket = mfa_domain.create_ticket(db, user, config)

@@ -37,6 +37,7 @@ export const adminInvalidation = {
   ],
   channel: [queryKeys.adminChannels(), queryKeys.adminModels(), queryKeys.adminOverview(), queryKeys.adminAudit()],
   plan: [queryKeys.adminPlans(), queryKeys.adminOverview(), queryKeys.adminAudit()],
+  ip: [queryKeys.adminIpBans(), queryKeys.adminAudit()],
 } as const satisfies Record<string, readonly (readonly unknown[])[]>;
 
 export function useAdminOverview() {
@@ -74,6 +75,10 @@ export function useAdminChannels() {
 
 export function useAdminPlans() {
   return useQuery({ queryKey: queryKeys.adminPlans(), queryFn: async () => (await cloudAdmin.plans()).plans });
+}
+
+export function useAdminIpBans() {
+  return useQuery({ queryKey: queryKeys.adminIpBans(), queryFn: async () => (await cloudAdmin.ipBans()).bans });
 }
 
 export function useAdminOrders() {

@@ -19,13 +19,14 @@ import { toast } from "sonner";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, LogOut, Menu, ScrollText, Server, Users } from "lucide-react";
+import { Activity, Ban, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, LogOut, Menu, ScrollText, Server, Users } from "lucide-react";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import {
   adminInvalidation,
   useAdminAudit,
   useAdminChannels,
+  useAdminIpBans,
   useAdminModels,
   useAdminOrders,
   useAdminOverview,
@@ -44,6 +45,7 @@ import {
   cloudAdmin,
   type AdminAudit,
   type AdminChannel,
+  type AdminIpBan,
   type AdminModel,
   type AdminOrder,
   type AdminPlan,
@@ -117,6 +119,9 @@ function auditActionLabel(action: string, copy: Messages["admin"]): string {
     "user.delete": copy.auditUserDelete,
     "user.reset_password": copy.auditUserResetPassword,
     "user.credits": copy.auditUserCredits,
+    "user.credits_adjust": copy.auditUserCreditsAdjust,
+    "user.ban": copy.auditUserBan,
+    "user.unban": copy.auditUserUnban,
     "user.subscribe": copy.auditUserSubscribe,
     "model.create": copy.auditModelCreate,
     "model.update": copy.auditModelUpdate,
@@ -128,6 +133,8 @@ function auditActionLabel(action: string, copy: Messages["admin"]): string {
     "plan.create": copy.auditPlanCreate,
     "plan.update": copy.auditPlanUpdate,
     "plan.delete": copy.auditPlanDelete,
+    "ip.ban": copy.auditIpBan,
+    "ip.unban": copy.auditIpUnban,
   };
   return labels[action] ?? action;
 }
@@ -170,7 +177,7 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-const ADMIN_TABS = ["overview", "users", "providers", "models", "channels", "plans", "operations", "audit"] as const;
+const ADMIN_TABS = ["overview", "users", "providers", "models", "channels", "plans", "ip-bans", "operations", "audit"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 function readTab(value: string | null): AdminTab {
@@ -189,6 +196,7 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
   const providersQuery = useAdminProviders();
   const channelsQuery = useAdminChannels();
   const plansQuery = useAdminPlans();
+  const ipBansQuery = useAdminIpBans();
   const ordersQuery = useAdminOrders();
   const usageQuery = useAdminUsage();
   const auditQuery = useAdminAudit();
@@ -199,6 +207,7 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
     providersQuery,
     channelsQuery,
     plansQuery,
+    ipBansQuery,
     ordersQuery,
     usageQuery,
     auditQuery,
@@ -227,6 +236,7 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
   const providers = providersQuery.data ?? [];
   const channels = channelsQuery.data ?? [];
   const plans = plansQuery.data ?? [];
+  const ipBans = ipBansQuery.data ?? [];
   const orders = ordersQuery.data ?? [];
   const usage = usageQuery.data ?? null;
   const audit = auditQuery.data ?? [];
@@ -276,6 +286,7 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
             {tab === "providers" && <ProvidersPanel copy={copy} providers={providers} onChanged={() => invalidate(...adminInvalidation.provider)} onFailure={notifyFailure} />}
             {tab === "channels" && <ChannelsPanel copy={copy} models={models} providers={providers} channels={channels} onChanged={() => invalidate(...adminInvalidation.channel)} onFailure={notifyFailure} />}
             {tab === "plans" && <PlansPanel copy={copy} plans={plans} onChanged={() => invalidate(...adminInvalidation.plan)} onFailure={notifyFailure} />}
+            {tab === "ip-bans" && <IpBansPanel copy={copy} bans={ipBans} onChanged={() => invalidate(...adminInvalidation.ip)} onFailure={notifyFailure} />}
             {tab === "operations" && <OperationsPanel copy={copy} locale={locale} orders={orders} usage={usage} />}
             {tab === "audit" && <AuditPanel copy={copy} locale={locale} audit={audit} />}
           </div>
@@ -311,6 +322,7 @@ function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; on
     { id: "models", label: copy.tabModels, icon: Boxes },
     { id: "channels", label: copy.tabChannels, icon: Cable },
     { id: "plans", label: copy.tabPlans, icon: CreditCard },
+    { id: "ip-bans", label: copy.tabIpBans, icon: Ban },
     { id: "operations", label: copy.tabOperations, icon: Activity },
     { id: "audit", label: copy.tabAudit, icon: ScrollText },
   ];
@@ -411,7 +423,7 @@ function UsersPanel({ copy, locale, users, plans, onChanged, onFailure }: {
               {visible.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell><strong className="block font-medium">{user.display_name || user.handle || user.email || user.phone}</strong><span className="text-xs text-muted-foreground">{user.email || user.phone}</span></TableCell>
-                  <TableCell><Badge variant={user.role === "admin" ? "default" : "secondary"}>{roleLabel(user.role, copy)}</Badge>{user.official && <Badge variant="outline" className="ml-1">{copy.official}</Badge>}</TableCell>
+                  <TableCell><Badge variant={user.role === "admin" ? "default" : "secondary"}>{roleLabel(user.role, copy)}</Badge>{user.official && <Badge variant="outline" className="ml-1">{copy.official}</Badge>}{user.banned && <Badge variant="destructive" className="ml-1">{copy.banned}</Badge>}</TableCell>
                   <TableCell>{user.credits}</TableCell>
                   <TableCell>{user.subscription?.name || "—"}</TableCell>
                   <TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setSelected(user)}>{copy.edit}</AButton></TableCell>
@@ -455,8 +467,11 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
   const [credits, setCredits] = useState("100");
   const [days, setDays] = useState("30");
   const [note, setNote] = useState("");
+  const [adjustDelta, setAdjustDelta] = useState("");
   const [plan, setPlan] = useState(plans[0]?.slug ?? "");
   const [temporary, setTemporary] = useState("");
+  const [banReason, setBanReason] = useState(current.ban_reason ?? "");
+  const [confirmingBan, setConfirmingBan] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState("");
   const update = (next: AdminUser) => { setCurrent(next); onUser(next); };
@@ -468,6 +483,19 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
       if (handleValue.trim()) payload.handle = handleValue.trim();
       update((await cloudAdmin.updateUser(current.id, payload)).user);
       toast.success(copy.saved);
+    } catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const suspend = async () => {
+    setBusy("ban");
+    try {
+      update((await cloudAdmin.banUser(current.id, banReason)).user);
+      setConfirmingBan(false);
+    } catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const unsuspend = async () => {
+    setBusy("unban");
+    try {
+      update((await cloudAdmin.unbanUser(current.id)).user);
     } catch (failure) { onFailure(failure); } finally { setBusy(""); }
   };
   const removeUser = async () => {
@@ -491,6 +519,14 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
     setBusy("gift");
     try { update((await cloudAdmin.gift(current.id, Number(credits), Number(days), note)).user); }
     catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const adjustCredits = async () => {
+    setBusy("adjust");
+    try {
+      update((await cloudAdmin.adjustCredits(current.id, Number(adjustDelta), Number(days), note)).user);
+      setAdjustDelta("");
+      toast.success(copy.saved);
+    } catch (failure) { onFailure(failure); } finally { setBusy(""); }
   };
   const subscribe = async () => {
     if (!plan) return;
@@ -542,10 +578,38 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
             </div>
             <AButton className="w-full" variant="outline" onClick={() => void gift()} loading={busy === "gift"} disabled={Boolean(busy)}>{copy.grant}</AButton>
           </div>
+          <div className="grid gap-3 border-t border-border pt-4">
+            <strong className="text-sm">{copy.adjustCredits}</strong>
+            <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.adjustHint}</p>
+            <Field label={copy.adjustDelta}><AInput value={adjustDelta} onChange={(event) => setAdjustDelta(event.target.value)} placeholder="-100" /></Field>
+            <AButton variant="outline" onClick={() => void adjustCredits()} loading={busy === "adjust"} disabled={!adjustDelta.trim() || Boolean(busy)}>{copy.adjust}</AButton>
+          </div>
           {current.credit_batches?.length ? <div className="grid gap-1 border-t border-border pt-4 text-xs text-muted-foreground">{current.credit_batches.map((batch, index) => <p key={`${batch.expires_at}-${index}`} className="m-0">{batch.remaining} · {batch.source} · {date(batch.expires_at, locale)}</p>)}</div> : null}
           <div className="grid gap-1 border-t border-border pt-4">
             <strong className="text-sm">{copy.orders}</strong>
             {current.orders?.length ? current.orders.map((order) => <p key={order.id} className="m-0 py-1 text-xs text-muted-foreground">{order.plan?.name || "—"} · {orderStatusLabel(order.status, copy)} · {money(order.amount_cents)} · {date(order.created_at, locale)}</p>) : <p className="m-0 py-2 text-xs text-muted-foreground">{copy.noOrders}</p>}
+          </div>
+          <div className="grid gap-2 border-t border-destructive/30 pt-4">
+            <strong className="text-sm">{copy.suspend}</strong>
+            {current.banned ? (
+              <>
+                <p className="m-0 text-xs leading-5 text-muted-foreground">{current.ban_reason || copy.banReason}</p>
+                <AButton variant="outline" onClick={() => void unsuspend()} loading={busy === "unban"} disabled={Boolean(busy)}>{copy.unsuspend}</AButton>
+              </>
+            ) : confirmingBan ? (
+              <>
+                <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.banConfirm}</p>
+                <div className="flex flex-wrap gap-2">
+                  <AButton variant="destructive" onClick={() => void suspend()} loading={busy === "ban"} disabled={Boolean(busy)}>{copy.suspend}</AButton>
+                  <AButton variant="ghost" onClick={() => setConfirmingBan(false)} disabled={Boolean(busy)}>{copy.cancel}</AButton>
+                </div>
+              </>
+            ) : (
+              <>
+                <Field label={copy.banReason}><AInput value={banReason} onChange={(event) => setBanReason(event.target.value)} /></Field>
+                <AButton variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmingBan(true)} disabled={Boolean(busy)}>{copy.suspend}</AButton>
+              </>
+            )}
           </div>
           <div className="grid gap-2 border-t border-destructive/30 pt-4">
             {confirmingDelete ? (
@@ -979,6 +1043,48 @@ function PlanOnSaleSwitch({ copy, plan, onChanged, onFailure }: {
     }
   };
   return <Switch checked={plan.on_sale} disabled={busy} onCheckedChange={(onSale) => void toggle(onSale)} aria-label={`${copy.onSale}: ${plan.name}`} />;
+}
+
+function IpBansPanel({ copy, bans, onChanged, onFailure }: {
+  copy: Messages["admin"];
+  bans: AdminIpBan[];
+  onChanged: () => void;
+  onFailure: (failure: unknown) => void;
+}) {
+  const [ip, setIp] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState("");
+  const add = async () => {
+    if (!ip.trim()) return;
+    setBusy("add");
+    try {
+      await cloudAdmin.banIp(ip.trim(), reason.trim());
+      setIp("");
+      setReason("");
+      onChanged();
+    } catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const remove = async (value: string) => {
+    setBusy(value);
+    try { await cloudAdmin.unbanIp(value); onChanged(); }
+    catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  return (
+    <Card className="bg-card/60 ring-border">
+      <CardHeader><CardTitle>{copy.tabIpBans}</CardTitle><CardDescription>{copy.ipBanHint}</CardDescription></CardHeader>
+      <CardContent className="grid gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Field label={copy.ipAddress}><AInput value={ip} onChange={(event) => setIp(event.target.value)} placeholder="203.0.113.7" /></Field>
+          <Field label={copy.ipReason}><AInput value={reason} onChange={(event) => setReason(event.target.value)} /></Field>
+          <AButton className="sm:self-end" onClick={() => void add()} loading={busy === "add"} disabled={!ip.trim() || Boolean(busy)}>{copy.addIpBan}</AButton>
+        </div>
+        <Table><TableHeader><TableRow><TableHead>{copy.ipAddress}</TableHead><TableHead>{copy.ipReason}</TableHead><TableHead><span className="sr-only">{copy.delete}</span></TableHead></TableRow></TableHeader>
+          <TableBody>{bans.map((ban) => <TableRow key={ban.ip}><TableCell className="font-mono">{ban.ip}</TableCell><TableCell>{ban.reason || "—"}</TableCell><TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => void remove(ban.ip)} loading={busy === ban.ip} disabled={Boolean(busy)}>{copy.unsuspend}</AButton></TableCell></TableRow>)}</TableBody>
+        </Table>
+        {bans.length === 0 && <Empty>{copy.noIpBans}</Empty>}
+      </CardContent>
+    </Card>
+  );
 }
 
 function OperationsPanel({ copy, locale, orders, usage }: { copy: Messages["admin"]; locale: Locale; orders: AdminOrder[]; usage: AdminUsage | null }) {

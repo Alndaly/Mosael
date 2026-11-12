@@ -29,6 +29,7 @@ from cloud.gateway.api import router as gateway_router
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.db import Database
 from cloud.errors import CloudError, message
+from cloud.models import CloudIpBan
 from cloud.mailer import CodeSender, SmtpCodeSender
 from cloud.sms import PhoneCodeSender, TencentSmsSender
 from cloud.oauth import OAuthProvider, default_providers
@@ -55,6 +56,14 @@ def _error(status: int, code: str) -> JSONResponse:
         status_code=status,
         headers={"Cache-Control": "no-store"},
     )
+
+
+def client_ip(request: Request) -> str:
+    """真实客户端 IP:经过 nginx 时取 X-Forwarded-For 的最后一跳(nginx 追加的那一项)。"""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else ""
 
 
 def _cross_site(request: Request, config: CloudConfig) -> bool:
@@ -117,6 +126,14 @@ def create_app(
     @app.middleware("http")
     async def same_origin_and_headers(request: Request, call_next):
         path = request.url.path.rstrip("/")
+        if (
+            path.startswith(API_PREFIX)
+            and not path.startswith(f"{API_PREFIX}/admin")
+            and path != f"{API_PREFIX}/health"
+        ):
+            with database.session() as db:
+                if db.get(CloudIpBan, client_ip(request)) is not None:
+                    return _error(403, "ip_banned")
         if (
             request.method in UNSAFE_METHODS
             and path.startswith(API_PREFIX)

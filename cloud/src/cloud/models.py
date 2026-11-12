@@ -65,6 +65,10 @@ class CloudUser(Base):
     mfa_enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     #: 最后一次被接受的 TOTP 时间步;同一个 30 秒窗口的码不能重放。
     mfa_last_used_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: 被封禁的时间;非空时所有登录和已有会话都应被拒绝。空 = 正常账号。
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    #: 封禁原因,只给管理台看,不进公开响应。
+    ban_reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     #: 注册时要先验邮箱验证码,验过即写这个时间;更早的账号可能是空,不做回填。
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
@@ -472,6 +476,8 @@ class CloudPlan(Base):
     #: 在线买一个周期多少钱,**分**。空 = 不在线卖(只由管理员开通,如内测套餐)。国内版只收人民币(第 3 步)。
     price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY", server_default="CNY")
+    #: 软删除时间。历史订阅 / 订单仍引用这一行,所以不能物理删除;删掉的套餐不再列出、不能再购买。
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
 
     __table_args__ = (
@@ -708,3 +714,13 @@ class CloudOrder(Base):
     )
     #: 不该发生却发生了的事(回调金额对不上等),给运营看,不进对外响应。
     note: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+
+
+class CloudIpBan(Base):
+    """管理台封禁的来源 IP。表很小;中间件在每个 API 请求上按主键查一次。"""
+
+    __tablename__ = "cloud_ip_bans"
+
+    ip: Mapped[str] = mapped_column(String(45), primary_key=True)
+    reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)

@@ -51,6 +51,7 @@ export const queryKeys = {
   adminProviders: () => ["admin", "providers"] as const,
   adminChannels: () => ["admin", "channels"] as const,
   adminPlans: () => ["admin", "plans"] as const,
+  adminIpBans: () => ["admin", "ip-bans"] as const,
   adminOrders: () => ["admin", "orders"] as const,
   adminUsage: (days = 7) => ["admin", "usage", days] as const,
   adminAudit: () => ["admin", "audit"] as const,
