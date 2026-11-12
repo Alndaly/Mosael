@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
 from cloud.domain.channel_keys import seal
-from cloud.models import CloudGatewayModel, CloudModelPrice, CloudUpstreamChannel, CloudUpstreamProvider
+from cloud.models import CloudGatewayModel, CloudModelPrice, CloudModelPriceComponent, CloudUpstreamChannel, CloudUpstreamProvider
 
 #: 一条通道回了 429 / 5xx / 超时之后歇多久。
 CHANNEL_COOLDOWN = timedelta(seconds=60)
@@ -80,7 +80,17 @@ def set_price(
     )
     db.add(price)
     db.flush()
+    db.add_all([
+        CloudModelPriceComponent(price_id=price.id, unit="token_input", credits_per_unit=input_per_1k),
+        CloudModelPriceComponent(price_id=price.id, unit="token_output", credits_per_unit=output_per_1k),
+    ])
+    db.flush()
     return price
+
+
+def price_components(db: Session, price_id: str) -> dict[str, int]:
+    rows = db.scalars(select(CloudModelPriceComponent).where(CloudModelPriceComponent.price_id == price_id)).all()
+    return {row.unit: row.credits_per_unit for row in rows}
 
 
 def current_price(db: Session, model_id: str, *, at: datetime) -> CloudModelPrice | None:

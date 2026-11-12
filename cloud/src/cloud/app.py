@@ -26,6 +26,7 @@ from cloud.api.oauth import router as oauth_router
 from cloud.api.profile import router as profile_router
 from cloud.api.shares import router as shares_router
 from cloud.gateway.api import router as gateway_router
+from cloud.gateway.jobs_api import router as jobs_router
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.db import Database
 from cloud.errors import CloudError, message
@@ -35,6 +36,7 @@ from cloud.sms import PhoneCodeSender, TencentSmsSender
 from cloud.oauth import OAuthProvider, default_providers
 from cloud.payments.base import PaymentChannel
 from cloud.payments.registry import channels_from_config
+from cloud.generation.storage import LocalArtifactStorage
 
 #: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸。
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -122,6 +124,7 @@ def create_app(
     app.state.oauth_providers = (
         dict(oauth_providers) if oauth_providers is not None else default_providers()
     )
+    app.state.artifact_storage = LocalArtifactStorage(resolved.data_dir / "media")
 
     @app.middleware("http")
     async def same_origin_and_headers(request: Request, call_next):
@@ -176,5 +179,6 @@ def create_app(
     app.include_router(device_tokens_router, prefix=API_PREFIX)
     app.include_router(mfa_router, prefix=API_PREFIX)
     app.include_router(gateway_router, prefix=API_PREFIX)
+    app.include_router(jobs_router, prefix=API_PREFIX)
     app.include_router(orders_router, prefix=API_PREFIX)
     return app

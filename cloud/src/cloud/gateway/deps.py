@@ -30,6 +30,8 @@ def current_device(request: Request, db: DbSession) -> Device:
     user = db.get(CloudUser, token.user_id)
     if user is None:
         raise CloudError(401, "device_token_invalid")
+    if user.banned_at is not None:
+        raise CloudError(403, "account_banned")
     return Device(token=token, user=user)
 
 

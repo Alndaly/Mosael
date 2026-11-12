@@ -50,11 +50,9 @@ def estimate_tokens(chars: int) -> int:
 
 @dataclass(frozen=True)
 class Rate:
-    """预占那一刻生效的单价 —— 结算按它算(ADR 0088 §2「已经预占的调用按预占那一刻的单价结算」)。取成普通值带着走,
-    不带 ORM 行:结算时请求的会话早已关了。"""
+    """预占那一刻生效的计量单价;结算按它算,不带 ORM 行。"""
 
-    input_per_1k: int
-    output_per_1k: int
+    units: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -86,12 +84,8 @@ def begin(
     if max_tokens is not None and max_tokens > ceiling:
         raise CloudError(400, "gateway_max_tokens_too_large", max=ceiling)
     granted = max_tokens or ceiling
-    reserved = credits.chat_cost(
-        input_per_1k=listed.price.input_per_1k,
-        output_per_1k=listed.price.output_per_1k,
-        input_tokens=input_chars,
-        output_tokens=granted,
-    )
+    units = catalog.price_components(db, listed.price.id)
+    reserved = credits.cost_for_units(units, {"token_input": input_chars, "token_output": granted})
     call = CloudGatewayCall(
         user_id=user_id, device_token_id=device_token_id, model_id=model_id, reserved=max(reserved, 1), created_at=at
     )
@@ -99,7 +93,7 @@ def begin(
     db.flush()
     credits.reserve(db, call, at=at)
     db.commit()
-    rate = Rate(input_per_1k=listed.price.input_per_1k, output_per_1k=listed.price.output_per_1k)
+    rate = Rate(units=units)
     return Begun(call=call, model_id=model_id, rate=rate, max_tokens=granted, input_chars=input_chars)
 
 
@@ -172,11 +166,8 @@ def finish(
         reported = usage is not None
         input_tokens = usage.input_tokens if usage else estimate_tokens(input_chars)
         output_tokens = usage.output_tokens if usage else estimate_tokens(output_chars)
-        charged = credits.chat_cost(
-            input_per_1k=rate.input_per_1k,
-            output_per_1k=rate.output_per_1k,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
+        charged = credits.cost_for_units(
+            rate.units, {"token_input": input_tokens, "token_output": output_tokens}
         )
         call.input_tokens = input_tokens
         call.output_tokens = output_tokens

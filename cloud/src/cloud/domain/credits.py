@@ -47,8 +47,22 @@ def add_months(moment: datetime, months: int) -> datetime:
     return moment.replace(year=year, month=month, day=day)
 
 
+#: 价格分量的计量分母。token 按千;image / second / request 按个。
+UNIT_SCALE = {"token_input": 1000, "token_output": 1000}
+
+
+def cost_for_units(units: dict[str, int], usage: dict[str, int]) -> int:
+    """用量事实 × 单价分量;没有用量的分量不计,总和向上取整。"""
+    total = sum(
+        usage.get(unit, 0) * rate / UNIT_SCALE.get(unit, 1)
+        for unit, rate in units.items()
+        if rate
+    )
+    return math.ceil(total) if total else 0
+
+
 def chat_cost(*, input_per_1k: int, output_per_1k: int, input_tokens: int, output_tokens: int) -> int:
-    """一次对话值多少积分:输入、输出各按千 token 单价算,相加后**向上取整**(积分是最小单位,不欠零头)。"""
+    """兼容旧调用点的 token 计费;新代码走 `cost_for_units`。"""
     return math.ceil((input_tokens * input_per_1k + output_tokens * output_per_1k) / 1000)
 
 

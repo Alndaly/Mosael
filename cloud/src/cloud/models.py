@@ -743,3 +743,62 @@ class CloudIpBan(Base):
     ip: Mapped[str] = mapped_column(String(45), primary_key=True)
     reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudGenerationJob(Base):
+    """一次异步生成任务。对话不走这里;图片/视频/语音都走同一张表。"""
+
+    __tablename__ = "cloud_generation_jobs"
+    __table_args__ = (
+        Index("uq_cloud_generation_jobs_user_idempotency", "user_id", "idempotency_key", unique=True),
+        Index("idx_cloud_generation_jobs_status_poll", "status", "next_poll_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    device_token_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_device_tokens.id", ondelete="SET NULL"), nullable=True
+    )
+    model_id: Mapped[str] = mapped_column(ForeignKey("cloud_gateway_models.id", ondelete="CASCADE"), nullable=False)
+    call_id: Mapped[str] = mapped_column(ForeignKey("cloud_gateway_calls.id", ondelete="CASCADE"), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    input: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
+    capability: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
+    price_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
+    provider_job_id: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONType, nullable=True, default=None)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True, default=None)
+    error_detail: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    next_poll_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class CloudJobUsage(Base):
+    """任务完成后的用量事实;价格换算不在适配器里。"""
+
+    __tablename__ = "cloud_job_usage"
+
+    job_id: Mapped[str] = mapped_column(ForeignKey("cloud_generation_jobs.id", ondelete="CASCADE"), primary_key=True)
+    unit: Mapped[str] = mapped_column(String(32), primary_key=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    reported: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class CloudMediaArtifact(Base):
+    """任务结果文件;数据库只存对象存储 key,不存二进制。"""
+
+    __tablename__ = "cloud_media_artifacts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    job_id: Mapped[str] = mapped_column(ForeignKey("cloud_generation_jobs.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(200), nullable=False)
+    mime: Mapped[str] = mapped_column(String(120), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
