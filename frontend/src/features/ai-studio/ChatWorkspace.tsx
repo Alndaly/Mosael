@@ -75,7 +75,7 @@ import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
 import { buildTurns } from "@/features/agent/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
-import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, collectSubagentRuns, type SubagentRun } from "@/features/agent/SubagentPanel";
+import { InspectorSubagentList, SubagentBreadcrumb, SubagentSessionView, collectSubagentRuns, type SubagentRun } from "@/features/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -613,7 +613,6 @@ export function ChatWorkspace({
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
             <span className="shrink-0 empty:hidden">
-              <SubagentButton timeline={subagentSourceTimeline} onOpen={openSubagent} />
             </span>
           )}
         </div>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, ChevronDown, ChevronRight, CircleAlert, Loader2, X } from "lucide-react";
+import { Bot, ChevronRight, CircleAlert, X } from "lucide-react";
 
 import type { AgentTimelineItem, ToolCall } from "@/features/agent/ToolCalls";
 import { ChatBubble, type AgentMessage as ChatMessage } from "@/features/agent/ChatBubble";
@@ -9,8 +9,6 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { InspectorCard } from "@/components/layout/InspectorCard";
 import { IconButton } from "@/components/ui/icon-button";
-import { MenuContent, MenuItem } from "@/components/ui/menu";
-import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Truncate } from "@/components/ui/truncate";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -24,8 +22,8 @@ import { cn } from "@/lib/utils";
  * 轨迹=它的阶段性文字与每一步工具调用。看得到全貌,但不可继续 —— 这一点如实呈现
  * (DSH 的可继续建立在子代理是持久会话之上,我们的不是)。
  *
- * 三个入口指向同一个视图:头部「N 个子代理」下拉、右侧「智能体环境」的子代理区块、
- * (对话流里的 run_subagent 卡只是普通卡,不再内嵌子步 —— 过程在子会话里看)。
+ * 右侧「智能体环境」的子代理区块是入口;对话流里的 run_subagent 卡只是普通卡,
+ * 不再内嵌子步 —— 过程在子会话里看。
  */
 
 type SubagentArchive = {
@@ -139,49 +137,6 @@ function RunMeta({ run }: { run: SubagentRun }) {
           : t("chatSubagentNoTrace")}
       {run.archive?.error ? ` · ${run.archive.error.slice(0, 60)}` : ""}
     </>
-  );
-}
-
-/** 头部「N 个子代理」下拉。点一项进入它的会话视图(onOpen 由 ChatWorkspace 落实)。 */
-export function SubagentButton({
-  timeline,
-  onOpen,
-}: {
-  timeline: AgentTimelineItem[] | undefined;
-  onOpen: (run: SubagentRun) => void;
-}) {
-  const t = useI18n();
-  const runs = React.useMemo(() => collectSubagentRuns(timeline), [timeline]);
-  const [open, setOpen] = React.useState(false);
-  if (runs.length === 0) return null;
-  const running = runs.some((run) => run.running);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="xs" variant="ghost" className="gap-1 text-muted-foreground">
-          {running ? <Loader2 size={12} className="animate-mosael-spin" /> : <Bot size={12} />}
-          {t("chatSubagents").replace("{n}", String(runs.length))}
-          <ChevronDown size={11} />
-        </Button>
-      </PopoverTrigger>
-      <MenuContent align="end" label={t("chatSubagentsTitle")} className="max-h-[300px] overflow-y-auto">
-        {runs.map((run, index) => (
-          <MenuItem
-            key={`${run.call.id}-${index}`}
-            icon={<StatusDot run={run} />}
-            // 名字最多两行,超出省略、悬停看全文 —— 单行省略对"以一串 UUID 开头"的任务名太狠,
-            // 两行正好露出人写的那半句。
-            label={<Truncate lines={2}>{subagentRunLabel(run)}</Truncate>}
-            description={<RunMeta run={run} />}
-            hint={typeof run.call.usage?.duration_seconds === "number" ? formatElapsedSeconds(run.call.usage.duration_seconds) : undefined}
-            onClick={() => {
-              setOpen(false);
-              onOpen(run);
-            }}
-          />
-        ))}
-      </MenuContent>
-    </Popover>
   );
 }
 

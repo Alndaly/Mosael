@@ -78,14 +78,13 @@ vi.mock("@/features/agent/SubagentPanel", () => {
   const run = { call: { id: "call-1" }, running: true };
   return {
     collectSubagentRuns: () => [run],
-    SubagentButton: ({ onOpen }: { onOpen: (value: typeof run) => void }) => (
+    SubagentBreadcrumb: () => <span>breadcrumb</span>,
+    SubagentSessionView: () => <div>subagent-view</div>,
+    InspectorSubagentList: ({ onOpen }: { onOpen: (value: typeof run) => void }) => (
       <button type="button" onClick={() => onOpen(run)}>
         open-subagent
       </button>
     ),
-    SubagentBreadcrumb: () => <span>breadcrumb</span>,
-    SubagentSessionView: () => <div>subagent-view</div>,
-    InspectorSubagentList: () => null,
   };
 });
 
