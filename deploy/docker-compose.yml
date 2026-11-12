@@ -88,6 +88,8 @@ services:
       CLOUD_ALIPAY_APP_ID: ${CLOUD_ALIPAY_APP_ID:-}
       CLOUD_ALIPAY_PRIVATE_KEY: ${CLOUD_ALIPAY_PRIVATE_KEY:-}
       CLOUD_ALIPAY_PUBLIC_KEY: ${CLOUD_ALIPAY_PUBLIC_KEY:-}
+      # 生产用默认值；沙箱联调时显式指向沙箱网关。
+      CLOUD_ALIPAY_GATEWAY: ${CLOUD_ALIPAY_GATEWAY:-https://openapi.alipay.com/gateway.do}
       CLOUD_WECHATPAY_MCHID: ${CLOUD_WECHATPAY_MCHID:-}
       CLOUD_WECHATPAY_APPID: ${CLOUD_WECHATPAY_APPID:-}
       CLOUD_WECHATPAY_SERIAL_NO: ${CLOUD_WECHATPAY_SERIAL_NO:-}
@@ -95,6 +97,9 @@ services:
       CLOUD_WECHATPAY_APIV3_KEY: ${CLOUD_WECHATPAY_APIV3_KEY:-}
       CLOUD_WECHATPAY_PUBLIC_KEY: ${CLOUD_WECHATPAY_PUBLIC_KEY:-}
       CLOUD_WECHATPAY_PUBLIC_KEY_ID: ${CLOUD_WECHATPAY_PUBLIC_KEY_ID:-}
+    # 支付 PEM / 其他密钥可以只挂载、不写进 .env；目录里放 *.pem，env 填 /run/secrets/<name>。
+    volumes:
+      - ./secrets:/run/secrets:ro
     # 只绑回环:宿主机 nginx 的 /api/cloud/ 指向 127.0.0.1:${CLOUD_PORT}。
     ports:
       - "127.0.0.1:${CLOUD_PORT:-8901}:8000"
