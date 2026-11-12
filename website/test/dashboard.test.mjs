@@ -205,6 +205,11 @@ test("④ 个人信息:PUT /me,409 两种 handle 冲突都显示后端原话", (
   // 预览和顶栏 / 社区卡片共用 components/community/tile.tsx 的 --tile-* 色相。
   assert.match(read("src/components/community/tile.tsx"), /--tile-/, "色块组件用的不是 --tile-* 那组 token");
   assert.match(panel, /signOut|signingOut/, "个人信息里没有退出登录");
+  // 控制台不继承公开站头，侧栏也必须给退出入口，而不是只能先切到个人信息。
+  const sidebar = read(DASHBOARD_SIDEBAR);
+  assert.match(sidebar, /cloudAccount\.logout\(/, "控制台侧栏没有退出登录");
+  assert.match(sidebar, /copy\.signOut/, "控制台侧栏没有退出文案");
+  assert.match(sidebar, /invalidateAfterSignOut\(queryClient\)/, "控制台侧栏退出后没有清缓存");
 
   // 硬要求:email 只许出现在「个人信息」那一块(注释里提到不算)。
   const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");

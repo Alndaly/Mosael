@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Bell, LayoutDashboard, PackageOpen, ShieldCheck, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, BadgeCheck, Bell, LayoutDashboard, LogOut, PackageOpen, ShieldCheck, UserRound } from "lucide-react";
+import { useState } from "react";
 
 import { InitialTile } from "@/components/community/tile";
 import { LocaleSwitch } from "@/components/locale-switch";
@@ -22,6 +25,8 @@ import {
 import type { Locale } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import { useUnreadCount } from "@/lib/queries";
+import { cloudAccount } from "@/lib/cloud";
+import { invalidateAfterSignOut } from "@/lib/query-invalidation";
 
 import { DASHBOARD_TABS, dashboardTabHref, showsOfficialBadge, type DashboardIdentity, type DashboardTab } from "./dashboard-utils";
 
@@ -65,6 +70,9 @@ export function DashboardSidebar({
   onSelect: (tab: DashboardTab) => void;
 }) {
   const { setOpen } = useSidebar();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [signingOut, setSigningOut] = useState(false);
   const unread = useUnreadCount().data ?? 0;
   const name = identity.display_name?.trim() || identity.handle?.trim() || copy.title;
   const handle = identity.handle?.trim() ?? "";
@@ -73,6 +81,20 @@ export function DashboardSidebar({
   const backToCommunity = getMessages(locale).community.backToCommunity;
   const showOfficial = showsOfficialBadge(identity) && !name.includes(officialLabel);
   const otherLocale = locale === "zh" ? "en" : "zh";
+
+  // 控制台不继承公开站点导航，退出只能在这里给；与个人信息里的退出走同一套缓存清理。
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await cloudAccount.logout();
+    } catch {
+      // 本地没有状态要清，cookie 由服务端撤销；离开这一页也不显示旧账号。
+    }
+    await invalidateAfterSignOut(queryClient);
+    router.push(`/${locale}/login`);
+    router.refresh();
+  };
 
   return (
     <Sidebar>
@@ -145,6 +167,16 @@ export function DashboardSidebar({
               <span className="truncate">{backToCommunity}</span>
               <ArrowLeft className="size-4" aria-hidden />
             </Link>
+          </SidebarMenuButton>
+          <SidebarMenuButton
+            type="button"
+            className="w-full justify-between text-muted-foreground hover:text-foreground"
+            disabled={signingOut}
+            aria-busy={signingOut}
+            onClick={() => void signOut()}
+          >
+            <span className="truncate">{signingOut ? copy.signingOut : copy.signOut}</span>
+            <LogOut className="size-4" aria-hidden />
           </SidebarMenuButton>
           <div className="flex items-center justify-between px-1">
             <LocaleSwitch locale={locale} label={copy.language} href={dashboardTabHref(otherLocale, active)} />
