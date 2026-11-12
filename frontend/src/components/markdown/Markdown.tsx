@@ -128,7 +128,7 @@ function MarkdownImage(props: React.ComponentProps<"img"> & { node?: unknown }) 
       </a>
     );
   }
-  return <FallbackImage {...image} data-streamdown="image" referrerPolicy="no-referrer" loading="lazy" />;
+  return <FallbackImage {...image} src={String(image.src ?? "")} data-streamdown="image" referrerPolicy="no-referrer" loading="lazy" />;
 }
 
 /** 定值：组件表每次换新对象都会让 Streamdown 重建一遍内部的 components。 */
