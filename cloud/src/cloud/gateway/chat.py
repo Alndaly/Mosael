@@ -80,9 +80,9 @@ def begin(
     if not config.channel_key:
         raise CloudError(503, "gateway_not_configured")
     listed = catalog.usable_model(db, model_id, at=at)
-    if listed is None or listed.model.kind != "chat":
+    if listed is None or listed.model.interaction != "stream":
         raise CloudError(404, "gateway_model_unknown")
-    ceiling = listed.model.max_output_tokens
+    ceiling = catalog.max_output_tokens(listed.model)
     if max_tokens is not None and max_tokens > ceiling:
         raise CloudError(400, "gateway_max_tokens_too_large", max=ceiling)
     granted = max_tokens or ceiling

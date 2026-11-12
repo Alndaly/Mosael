@@ -43,19 +43,33 @@ def display_labels(models: Iterable[CloudGatewayModel]) -> dict[str, str]:
 
 
 def upsert_model(
-    db: Session, *, model_id: str, label: str, kind: str, max_output_tokens: int, enabled: bool = True, sort_order: int = 0
+    db: Session,
+    *,
+    model_id: str,
+    label: str,
+    interaction: str,
+    capability: dict[str, object],
+    enabled: bool = True,
+    sort_order: int = 0,
 ) -> CloudGatewayModel:
     model = db.get(CloudGatewayModel, model_id)
     if model is None:
         model = CloudGatewayModel(id=model_id)
         db.add(model)
     model.label = label
-    model.kind = kind
-    model.max_output_tokens = max_output_tokens
+    model.interaction = interaction
+    model.capability = capability
+    #: contract 迁移前旧列仍是 NOT NULL;新代码不读它们。
+    model.kind = "chat"
+    model.max_output_tokens = int(capability.get("max_output_tokens") or 1)
     model.enabled = enabled
     model.sort_order = sort_order
     db.flush()
     return model
+
+
+def max_output_tokens(model: CloudGatewayModel) -> int:
+    return int(model.capability.get("max_output_tokens") or 1)
 
 
 def set_price(
@@ -88,7 +102,7 @@ def add_provider(
 ) -> CloudUpstreamProvider:
     provider = CloudUpstreamProvider(
         name=name,
-        protocol="openai",
+        adapter="openai",
         base_url=base_url.rstrip("/"),
         api_key_encrypted=seal(config, api_key),
         note=note,

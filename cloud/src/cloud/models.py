@@ -607,6 +607,10 @@ class CloudGatewayModel(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     label: Mapped[str] = mapped_column(String(80), nullable=False)
+    #: 能力驱动的交互形态;`kind` 只保留到 contract 迁移。
+    interaction: Mapped[str] = mapped_column(String(16), nullable=False, default="stream", server_default="stream")
+    #: 受控能力声明;对话至少含 max_output_tokens,图片/视频含各自输入限制。
+    capability: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
     #: 第 2 步只有对话;生成类在第 4 步加进这道 CHECK。
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     #: 一次调用最多让上游生成多少 token。预占按它算上限,请求里的 `max_tokens` 不许超过它。
@@ -633,8 +637,21 @@ class CloudModelPrice(Base):
     effective_from: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
 
 
+class CloudModelPriceComponent(Base):
+    """价格的一个计量分量:token_input / token_output / image / second / request。"""
+
+    __tablename__ = "cloud_model_price_components"
+    __table_args__ = (CheckConstraint("credits_per_unit >= 0", name="ck_cloud_model_price_components_nonnegative"),)
+
+    price_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_model_prices.id", ondelete="CASCADE"), primary_key=True
+    )
+    unit: Mapped[str] = mapped_column(String(32), primary_key=True)
+    credits_per_unit: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class CloudUpstreamProvider(Base):
-    """一个上游供应商账号:协议、端点、加密 Key。多个模型可以共用同一份凭据。"""
+    """一个上游供应商账号:适配器、端点、加密 Key。多个模型可以共用同一份凭据。"""
 
     __tablename__ = "cloud_upstream_providers"
     __table_args__ = (CheckConstraint("protocol IN ('openai')", name="ck_cloud_upstream_providers_protocol"),)
@@ -642,6 +659,8 @@ class CloudUpstreamProvider(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     protocol: Mapped[str] = mapped_column(String(16), nullable=False, default="openai")
+    #: adapter 注册表 key;`protocol` 只保留到 contract 迁移。
+    adapter: Mapped[str] = mapped_column(String(32), nullable=False, default="openai", server_default="openai")
     #: 端点前缀,如 `https://api.deepseek.com/v1`;网关请求打到 `<base_url>/chat/completions`。
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     api_key_encrypted: Mapped[str] = mapped_column(String(1000), nullable=False)

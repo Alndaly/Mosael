@@ -303,8 +303,9 @@ def _model_view(db: Session, model: CloudGatewayModel, at: datetime, display_lab
         "id": model.id,
         "label": model.label,
         "display_label": display_label,
-        "kind": model.kind,
-        "max_output_tokens": model.max_output_tokens,
+        "interaction": model.interaction,
+        "capability": model.capability,
+        "max_output_tokens": catalog.max_output_tokens(model),
         "enabled": model.enabled,
         "sort_order": model.sort_order,
         "current_price": (
@@ -341,8 +342,8 @@ def create_model(db: Session, *, label: str, max_output_tokens: int, sort_order:
         db,
         model_id=new_id(),
         label=label,
-        kind="chat",
-        max_output_tokens=max_output_tokens,
+        interaction="stream",
+        capability={"max_output_tokens": max_output_tokens},
         enabled=enabled,
         sort_order=sort_order,
     )
@@ -358,8 +359,8 @@ def update_model(db: Session, model_id: str, *, label: str, max_output_tokens: i
         db,
         model_id=model_id,
         label=label,
-        kind=model.kind,
-        max_output_tokens=max_output_tokens,
+        interaction=model.interaction,
+        capability={**model.capability, "max_output_tokens": max_output_tokens},
         enabled=enabled,
         sort_order=sort_order,
     )
@@ -409,7 +410,7 @@ def _provider_view(provider: CloudUpstreamProvider) -> dict[str, object]:
     return {
         "id": provider.id,
         "name": provider.name,
-        "protocol": provider.protocol,
+        "adapter": provider.adapter,
         "base_url": provider.base_url,
         "enabled": provider.enabled,
         "note": provider.note,

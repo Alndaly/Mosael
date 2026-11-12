@@ -78,7 +78,7 @@ def gateway(tmp_path, upstream):
                          channel_key=new_channel_key())
     app = create_app(config, code_sender=RecordingSender(), upstream_transport=httpx2.MockTransport(upstream.handler))
     with app.state.db.session() as db:
-        catalog.upsert_model(db, model_id="deepseek-chat", label="DeepSeek V3", kind="chat", max_output_tokens=4000)
+        catalog.upsert_model(db, model_id="deepseek-chat", label="DeepSeek V3", interaction="stream", capability={"max_output_tokens": 4000})
         catalog.set_price(db, model_id="deepseek-chat", input_per_1k=2, output_per_1k=4,
                           effective_from=now() - timedelta(days=1))
         primary = catalog.add_provider(
@@ -136,7 +136,7 @@ def only_call(app) -> CloudGatewayCall:
 
 def test_models_are_an_openai_list_priced_in_credits(gateway):
     with gateway.state.db.session() as db:
-        catalog.upsert_model(db, model_id="no-channel", label="x", kind="chat", max_output_tokens=10)
+        catalog.upsert_model(db, model_id="no-channel", label="x", interaction="stream", capability={"max_output_tokens": 10})
         catalog.set_price(db, model_id="no-channel", input_per_1k=1, output_per_1k=1, effective_from=now())
         db.commit()
     client = desktop(gateway, credits_amount=500)

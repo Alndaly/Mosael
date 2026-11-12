@@ -533,7 +533,8 @@ export type AdminModel = {
   id: string;
   label: string;
   display_label: string;
-  kind: string;
+  interaction: string;
+  capability: Record<string, unknown>;
   max_output_tokens: number;
   enabled: boolean;
   sort_order: number;
@@ -547,7 +548,7 @@ export type AdminModel = {
 export type AdminProvider = {
   id: string;
   name: string;
-  protocol: "openai";
+  adapter: string;
   base_url: string;
   enabled: boolean;
   note: string;

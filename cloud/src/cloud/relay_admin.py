@@ -187,14 +187,14 @@ def _model_set(args, _config: CloudConfig, db: Session) -> str:
         db,
         model_id=model_id,
         label=args.label,
-        kind="chat",
-        max_output_tokens=args.max_output_tokens,
+        interaction="stream",
+        capability={"max_output_tokens": args.max_output_tokens},
         enabled=not args.disable,
         sort_order=args.sort,
     )
     labels = catalog.display_labels(db.scalars(select(CloudGatewayModel)).all())
     return (
-        f"模型 {model.id}({labels.get(model.id, model.label)}),一次最多 {model.max_output_tokens} token,"
+        f"模型 {model.id}({labels.get(model.id, model.label)}),一次最多 {catalog.max_output_tokens(model)} token,"
         f"{'停用' if args.disable else '启用'}"
     )
 

@@ -97,8 +97,8 @@ function orderChannelLabel(channel: string, copy: Messages["admin"]): string {
   return channel;
 }
 
-function protocolLabel(protocol: string, copy: Messages["admin"]): string {
-  return protocol === "openai" ? copy.protocolOpenai : protocol;
+function protocolLabel(adapter: string, copy: Messages["admin"]): string {
+  return adapter === "openai" ? copy.protocolOpenai : adapter;
 }
 
 function auditTargetLabel(target: string, copy: Messages["admin"]): string {
@@ -776,7 +776,7 @@ function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
           <Table><TableHeader><TableRow><TableHead>{copy.providerName}</TableHead><TableHead>{copy.baseUrl}</TableHead><TableHead>{copy.apiKey}</TableHead><TableHead>{copy.enabled}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{providers.map((provider) => (
               <TableRow key={provider.id}>
-                <TableCell><strong className="block">{provider.name}</strong><span className="text-xs text-muted-foreground">{protocolLabel(provider.protocol, copy)}</span></TableCell>
+                <TableCell><strong className="block">{provider.name}</strong><span className="text-xs text-muted-foreground">{protocolLabel(provider.adapter, copy)}</span></TableCell>
                 <TableCell className="max-w-72 truncate">{provider.base_url}</TableCell>
                 <TableCell>{provider.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ProviderEnabledSwitch copy={copy} provider={provider} onChanged={onChanged} onFailure={onFailure} /></TableCell>

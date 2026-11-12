@@ -74,7 +74,7 @@ def list_models(device: CurrentDevice, db: DbSession) -> dict[str, object]:
                 "object": "model",
                 "owned_by": "mosael",
                 "name": labels.get(one.model.id, one.model.label),
-                "max_output_tokens": one.model.max_output_tokens,
+                "max_output_tokens": catalog.max_output_tokens(one.model),
                 "pricing": {
                     "prompt": _per_token(one.price.input_per_1k),
                     "completion": _per_token(one.price.output_per_1k),

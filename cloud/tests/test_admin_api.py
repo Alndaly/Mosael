@@ -132,7 +132,7 @@ def test_admin_can_build_a_model_catalog_and_price(client):
 def test_admin_channel_api_never_returns_the_upstream_key(client):
     make_admin(client)
     with client.app.state.db.session() as db:
-        db.add(CloudGatewayModel(id="m1", label="M1", kind="chat", max_output_tokens=100))
+        db.add(CloudGatewayModel(id="m1", label="M1", kind="chat", max_output_tokens=100, interaction="stream", capability={"max_output_tokens": 100}))
         db.commit()
     config = replace(client.app.state.config, channel_key=Fernet.generate_key().decode("ascii"))
     with client.app.state.db.session() as db:
@@ -155,7 +155,7 @@ def test_admin_channel_api_never_returns_the_upstream_key(client):
 def test_channel_connectivity_test_uses_the_stored_key_without_returning_it(client):
     make_admin(client)
     with client.app.state.db.session() as db:
-        db.add(CloudGatewayModel(id="m2", label="M2", kind="chat", max_output_tokens=100))
+        db.add(CloudGatewayModel(id="m2", label="M2", kind="chat", max_output_tokens=100, interaction="stream", capability={"max_output_tokens": 100}))
         db.commit()
     config = replace(client.app.state.config, channel_key=Fernet.generate_key().decode("ascii"))
     seen = {}
@@ -215,7 +215,7 @@ def test_admin_provider_routes_share_credentials_across_channels_and_never_retur
         client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
     )
     with client.app.state.db.session() as db:
-        db.add(CloudGatewayModel(id="m3", label="M3", kind="chat", max_output_tokens=100))
+        db.add(CloudGatewayModel(id="m3", label="M3", kind="chat", max_output_tokens=100, interaction="stream", capability={"max_output_tokens": 100}))
         db.commit()
 
     created = client.post(
