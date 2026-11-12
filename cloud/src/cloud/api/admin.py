@@ -21,6 +21,7 @@ from cloud.admin.schemas import (
     PlanIn,
     PlanPatch,
     PriceIn,
+    OrderRefundIn,
     ProviderIn,
     UserPatch,
     ProviderPatch,
@@ -29,6 +30,7 @@ from cloud.admin.schemas import (
 )
 from cloud.api.deps import CurrentAdmin, CurrentConfig, DbSession
 from cloud.domain import audit
+from cloud.models import now
 
 router = APIRouter(tags=["admin"])
 
@@ -195,6 +197,18 @@ def admin_usage(_user: CurrentAdmin, db: DbSession, days: int = Query(default=7,
 @router.get("/admin/audit")
 def admin_audit(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
     return {"events": service.list_audit(db)}
+
+
+@router.post("/admin/orders/{order_id}/refund")
+def admin_refund_order(
+    order_id: str, body: OrderRefundIn, actor: CurrentAdmin, db: DbSession
+) -> dict[str, object]:
+    order = service.mark_order_refunded(db, order_id, amount_cents=body.amount_cents, note=body.note, at=now())
+    audit.record(db, actor=actor, action="order.refund", target_type="order", target_id=order_id,
+                 detail={"amount_cents": order.refund_cents, "note": order.refund_note})
+    db.commit()
+    return {"order": {"id": order.id, "refunded_at": order.refunded_at.isoformat(),
+                      "refund_cents": order.refund_cents, "note": order.refund_note}}
 
 
 @router.get("/admin/models")

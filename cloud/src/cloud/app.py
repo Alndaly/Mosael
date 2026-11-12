@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from threading import Event, Thread
-from time import sleep
+from time import monotonic, sleep
 from urllib.parse import urlsplit
 
 import httpx2
@@ -32,7 +32,7 @@ from cloud.gateway.jobs_api import router as jobs_router
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.db import Database
 from cloud.errors import CloudError, message
-from cloud.models import CloudIpBan
+from cloud.models import CloudIpBan, now
 from cloud.mailer import CodeSender, SmtpCodeSender
 from cloud.sms import PhoneCodeSender, TencentSmsSender
 from cloud.oauth import OAuthProvider, default_providers
@@ -44,6 +44,7 @@ from cloud.generation.kling import ADAPTER as KLING_VIDEO
 from cloud.generation.seedance import ADAPTER as SEEDANCE_VIDEO
 from cloud.generation import adapters as generation_adapters
 from cloud.generation.service import run_one
+from cloud.domain import orders as order_domain
 
 #: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸。
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -206,7 +207,18 @@ def create_app(
         stop = Event()
 
         def work() -> None:
+            last_reconcile = 0.0
             while not stop.is_set():
+                if monotonic() - last_reconcile >= 60:
+                    last_reconcile = monotonic()
+                    with app.state.db.session() as reconcile_db:
+                        try:
+                            order_domain.reconcile_pending(
+                                reconcile_db, app.state.payment_channels, at=now()
+                            )
+                            reconcile_db.commit()
+                        except Exception:  # noqa: BLE001 —— 对账失败不能拖垮生成 worker
+                            reconcile_db.rollback()
                 with app.state.db.session() as db:
                     try:
                         handled = run_one(

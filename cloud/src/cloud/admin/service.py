@@ -750,3 +750,23 @@ def usage_summary(db: Session, *, days: int = 7) -> dict[str, object]:
             for key, value in sorted(by_model.items(), key=lambda item: -item[1]["charged"])
         ],
     }
+
+
+def mark_order_refunded(
+    db: Session, order_id: str, *, amount_cents: int | None, note: str, at: datetime
+) -> CloudOrder:
+    order = db.get(CloudOrder, order_id)
+    if order is None:
+        raise CloudError(404, "order_not_found")
+    if order.status != "paid":
+        raise CloudError(409, "order_not_refundable")
+    amount = order.amount_cents if amount_cents is None else amount_cents
+    if amount <= 0 or amount > order.amount_cents:
+        raise CloudError(400, "invalid_request")
+    if order.refunded_at is not None:
+        return order
+    order.refunded_at = at
+    order.refund_cents = amount
+    order.refund_note = note[:300]
+    db.flush()
+    return order

@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from cloud.api.deps import CurrentUser, DbSession
 from cloud.domain import orders
+from cloud import payment_limits
 from cloud.errors import CloudError
 from cloud.models import CloudOrder, now
 from cloud.payments.base import NotifyRejected
@@ -49,6 +50,7 @@ class OrderIn(BaseModel):
 
 @router.post("/orders", status_code=201)
 def create_order(body: OrderIn, request: Request, user: CurrentUser, db: DbSession) -> dict[str, object]:
+    payment_limits.order(user.id, request.client.host if request.client else "")
     order = orders.create_order(
         db, user=user, plan_slug=body.plan, channel=request.app.state.payment_channels.get(body.channel), at=now()
     )
@@ -80,6 +82,7 @@ async def payment_notify(channel: str, request: Request) -> Response:
     payment = request.app.state.payment_channels.get(channel)
     if payment is None:
         raise CloudError(404, "not_found")
+    payment_limits.notify(request.client.host if request.client else "")
     body = await request.body()
     with request.app.state.db.session() as db:
         try:

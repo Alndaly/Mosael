@@ -735,6 +735,10 @@ class CloudOrder(Base):
     )
     #: 不该发生却发生了的事(回调金额对不上等),给运营看,不进对外响应。
     note: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    #: 渠道侧已退款的事实（运营在商户后台退款后登记）。有它时重复回调不能再发放。
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    refund_cents: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    refund_note: Mapped[str] = mapped_column(String(300), nullable=False, default="")
 
 
 class CloudIpBan(Base):

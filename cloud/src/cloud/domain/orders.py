@@ -54,6 +54,8 @@ def create_order(
         raise CloudError(404, "plan_not_for_sale")
     if channel is None:
         raise CloudError(400, "payment_channel_unavailable")
+    if channel.name in {"alipay", "wechat"} and plan.currency != "CNY":
+        raise CloudError(400, "invalid_request")
     order = CloudOrder(
         user_id=user.id,
         plan_id=plan.id,
@@ -83,7 +85,7 @@ def settle_paid(db: Session, notice: PaidNotice, *, channel: str, at: datetime) 
     if order is None or order.channel != channel:
         logger.warning("渠道 %s 报了一笔不认识的订单 %s", channel, notice.order_id)
         return None
-    if order.status == "paid":
+    if order.status == "paid" or order.refunded_at is not None:
         return order
     if notice.amount_cents != order.amount_cents:
         order.note = f"amount mismatch: channel says {notice.amount_cents}, order is {order.amount_cents}"[:300]
@@ -106,7 +108,7 @@ def settle_paid(db: Session, notice: PaidNotice, *, channel: str, at: datetime) 
 
 def refresh(db: Session, order: CloudOrder, channels: Mapping[str, PaymentChannel], *, at: datetime) -> CloudOrder:
     """桌面端轮询订单时:还没到账就主动问一次渠道(兜住丢了的回调);过了有效期还没付就关单。"""
-    if order.status == "paid":
+    if order.status == "paid" or order.refunded_at is not None:
         return order
     channel = channels.get(order.channel)
     if channel is not None and at - order.created_at <= LATE_QUERY_WINDOW:
@@ -140,6 +142,27 @@ def order_view(db: Session, order: CloudOrder) -> dict[str, object]:
         "created_at": order.created_at.isoformat(),
         "expires_at": order.expires_at.isoformat(),
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+        "refunded_at": order.refunded_at.isoformat() if order.refunded_at else None,
         #: 到账后发放的那个订阅现在到哪天 —— 续费是顺延,不会当场多一批积分,界面要说的是「有效期到哪天」。
         "subscription_ends_at": subscription.ends_at.isoformat() if subscription else None,
     }
+
+
+def reconcile_pending(
+    db: Session, channels: Mapping[str, PaymentChannel], *, at: datetime, limit: int = 100
+) -> int:
+    """回调丢失 / 渠道延迟时的兜底：主动查最近一天仍 pending 的订单。"""
+    since = at - LATE_QUERY_WINDOW
+    rows = list(db.scalars(
+        select(CloudOrder)
+        .where(CloudOrder.status == "pending", CloudOrder.created_at >= since, CloudOrder.refunded_at.is_(None))
+        .order_by(CloudOrder.created_at)
+        .limit(limit)
+    ))
+    for order in rows:
+        try:
+            with db.begin_nested():
+                refresh(db, order, channels, at=at)
+        except Exception:  # noqa: BLE001 —— 单条渠道异常不能中断整轮对账
+            continue
+    return len(rows)

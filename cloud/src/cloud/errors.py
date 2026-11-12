@@ -388,6 +388,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "That order does not exist.",
         "zh": "没有这笔订单。",
     },
+    "order_not_refundable": {
+        "en": "Only a paid order can be marked as refunded.",
+        "zh": "只有已到账的订单才能登记退款。",
+    },
     "not_found": {
         "en": "No such endpoint.",
         "zh": "没有这个接口。",

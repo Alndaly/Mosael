@@ -98,6 +98,11 @@ class ChannelPatch(BaseModel):
     enabled: bool = True
 
 
+class OrderRefundIn(BaseModel):
+    amount_cents: int | None = Field(default=None, gt=0)
+    note: str = Field(default="", max_length=300)
+
+
 class PlanPatch(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     period: Literal["month", "quarter", "year"]
