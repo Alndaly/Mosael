@@ -46,7 +46,7 @@ def sync(db: Session, user_id: str) -> Synced:
         raise cloud_binding.CloudBindingError(401, "not_authenticated", tr("routeErr_cloudSignInRequired"))
     if reply.status != 200 or not isinstance(reply.body, dict):
         raise cloud_binding.CloudUnavailable(f"gateway catalog answered {reply.status}")
-    catalog = parse_openai_catalog(reply.body.get("data"))
+    catalog = [one for one in parse_openai_catalog(reply.body.get("data")) if one.interaction == "stream"]
     profile = selection.adopt_mosael_cloud_connection(db, owner_user_id=user_id)
     provider_models.replace_declared_catalog(
         db,

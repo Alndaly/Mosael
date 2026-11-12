@@ -75,14 +75,16 @@ def list_models(device: CurrentDevice, db: DbSession) -> dict[str, object]:
                 "owned_by": "mosael",
                 "name": labels.get(one.model.id, one.model.label),
                 "max_output_tokens": catalog.max_output_tokens(one.model),
+                "interaction": one.model.interaction,
+                "capability": one.model.capability,
                 "pricing": {
                     "prompt": _per_token(one.price.input_per_1k),
                     "completion": _per_token(one.price.output_per_1k),
                     "currency": CREDITS,
+                    "components": catalog.price_components(db, one.price.id),
                 },
             }
             for one in catalog.listed_models(db, at=now())
-            if one.model.interaction == "stream"
         ],
     }
 

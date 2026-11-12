@@ -190,3 +190,19 @@ def test_seedance_adapter_submits_polls_and_downloads():
     assert finished.usage == {"second": 5}
     assert finished.artifacts[0].data == b"mp4"
     assert seen[0][1].endswith("/contents/generations/tasks")
+
+
+def test_media_upload_is_public_for_provider_fetch(tmp_path):
+    app = _setup(tmp_path)
+    client = _desktop(app)
+    uploaded = client.post(
+        api("/gateway/v1/uploads"), content=b"image-bytes",
+        headers={"Content-Type": "image/png", "X-Filename": "frame.png"},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    body = uploaded.json()
+    assert body["mime"] == "image/png"
+    token = body["url"].rsplit("/", 1)[-1]
+    fetched = client.get(api(f"/gateway/v1/uploads/public/{token}"))
+    assert fetched.status_code == 200
+    assert fetched.content == b"image-bytes"

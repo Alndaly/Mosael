@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.ai.gemini_models import is_chat_model as is_gemini_chat_model
 from app.core.http_retry import RetryingClient, auth_headers
@@ -51,6 +51,11 @@ class CatalogModel:
     currency: str = "USD"
     #: 端点给的显示名(OpenRouter、MosaelCloud 的 `name`);没给是空串,界面用 id。
     name: str = ""
+    #: MosaelCloud 的任务形态;普通端点缺省是 stream。job 模型不进聊天目录。
+    interaction: str = "stream"
+    #: MosaelCloud 的能力声明与计量分量,供 job 客户端使用;普通端点为空。
+    capability: dict = field(default_factory=dict)
+    price_components: dict[str, int] = field(default_factory=dict)
 
 
 #: 缓存键:(端点, 钥匙, 说哪种话)。同一个地址按两种说法问出来的是两份目录,不能互相顶替。
@@ -119,6 +124,13 @@ def parse_openai_catalog(rows: object) -> list[CatalogModel]:
             cache_write_cost=_per_million(pricing.get("input_cache_write")),
             currency=str(pricing.get("currency") or "USD").strip().upper()[:8] or "USD",
             name=str(row.get("name") or "").strip()[:160],
+            interaction=str(row.get("interaction") or "stream"),
+            capability=row.get("capability") if isinstance(row.get("capability"), dict) else {},
+            price_components={
+                str(key): int(value)
+                for key, value in (pricing.get("components") or {}).items()
+                if isinstance(value, int) and not isinstance(value, bool)
+            } if isinstance(pricing.get("components"), dict) else {},
         )
     return [models[key] for key in sorted(models)]
 

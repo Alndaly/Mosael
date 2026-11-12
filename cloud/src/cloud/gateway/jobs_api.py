@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from fastapi import APIRouter, Request, Response
+from sqlalchemy import select
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from cloud.api.deps import DbSession
+from cloud.api.deps import CurrentConfig, DbSession
+from cloud.config import API_PREFIX
 from cloud.errors import CloudError
 from cloud.gateway.deps import CurrentDevice
 from cloud.generation import service
-from cloud.models import CloudGenerationJob, CloudMediaArtifact, now
+from cloud.generation.adapters import AdapterArtifact
+from cloud.models import CloudGenerationJob, CloudMediaArtifact, CloudMediaUpload, now
+from cloud.security import new_token
 
 router = APIRouter(prefix="/gateway/v1", tags=["gateway"])
+
+#: 输入素材上限;视频首帧/参考视频可到几十 MB,留足余量。
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 
 
 class JobIn(BaseModel):
@@ -70,3 +79,44 @@ def get_artifact(job_id: str, artifact_id: str, request: Request, device: Curren
     if not path.is_file():
         raise CloudError(404, "artifact_not_found")
     return FileResponse(path, media_type=artifact.mime, filename=artifact.filename)
+
+
+@router.post("/uploads", status_code=201)
+async def upload_media(request: Request, device: CurrentDevice, config: CurrentConfig, db: DbSession) -> dict[str, object]:
+    body = await request.body()
+    if not body or len(body) > MAX_UPLOAD_BYTES:
+        raise CloudError(413, "upload_too_large")
+    filename = request.headers.get("x-filename", "upload.bin")[:200]
+    mime = request.headers.get("content-type", "application/octet-stream").split(";")[0][:120]
+    stored = request.app.state.artifact_storage.save(
+        user_id=device.user.id, job_id="uploads",
+        artifact=AdapterArtifact(filename=filename, mime=mime, data=body),
+    )
+    token = new_token(24)
+    at = now()
+    row = CloudMediaUpload(
+        user_id=device.user.id,
+        filename=filename,
+        mime=mime,
+        size=stored.size,
+        sha256=stored.sha256,
+        storage_key=stored.storage_key,
+        public_token=token,
+        created_at=at,
+        expires_at=at + timedelta(days=1),
+    )
+    db.add(row)
+    db.commit()
+    public_url = f"{config.public_url}{API_PREFIX}/gateway/v1/uploads/public/{token}"
+    return {"id": row.id, "url": public_url, "mime": mime, "size": stored.size, "sha256": stored.sha256}
+
+
+@router.get("/uploads/public/{token}")
+def public_upload(token: str, request: Request, db: DbSession) -> FileResponse:
+    row = db.scalar(select(CloudMediaUpload).where(CloudMediaUpload.public_token == token))
+    if row is None or row.expires_at <= now():
+        raise CloudError(404, "upload_not_found")
+    path = request.app.state.artifact_storage.path(row.storage_key)
+    if not path.is_file():
+        raise CloudError(404, "upload_not_found")
+    return FileResponse(path, media_type=row.mime, filename=row.filename)

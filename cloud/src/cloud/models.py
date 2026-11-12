@@ -804,3 +804,20 @@ class CloudMediaArtifact(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudMediaUpload(Base):
+    """任务输入素材的临时上传;public_token 让上游供应商能在有效期内匿名取图/视频。"""
+
+    __tablename__ = "cloud_media_uploads"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(200), nullable=False)
+    mime: Mapped[str] = mapped_column(String(120), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    public_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
