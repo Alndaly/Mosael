@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.5.1": {
+    zh: [
+      "**子画布里的节点会实时亮起。** 内嵌子图和循环体的事件带上容器路径与循环轮次，节点角标、边着色和检查器共用同一份状态；多轮运行时只要有一轮在跑就仍然显示运行中。",
+      "**失败的那一轮保留已经说出的正文。** 正文照常按 Markdown 读，失败原因单独放在错误卡里；后端重启接管时也一样，不再把整段回答塞进红色错误卡。",
+      "**中间栏头部不再重复「N 个子代理」。** 右侧「智能体环境」保留完整的子代理区块，头部只留对话 / 轨迹与布局切换。",
+      "**官网可以退出登录了。** 点开头像即可去控制台或退出；退出会清掉站头与未读缓存，并回到登录页。",
+    ],
+    en: [
+      "**Nodes inside subgraphs light up live.** Inline subgraph and loop events carry the container path and loop round; node badges, edge colouring and the inspector share one state, and a node still shows running while any round is active.",
+      "**A failed turn keeps what was already said.** The answer renders as normal Markdown while the failure reason stays in its own error card; a backend restart no longer stuffs the whole reply into the red card.",
+      "**The middle header no longer repeats “N subagents”.** The Agent environment panel keeps the complete subagent section; the header is left to the conversation / trace and layout switches.",
+      "**The website can sign out.** Open the avatar to reach the dashboard or sign out; signing out clears the header and unread caches and returns to the login page.",
+    ],
+  },
   "v2.5.0": {
     zh: [
       "**H3 Image 有了正式的质量路径。** 新范例先用 Qwen3.5-9B 扩写提示词，再按 16MP（4096×4096）出图；可关掉扩写或改画幅，官方范例更新也会标出「有更新」。",

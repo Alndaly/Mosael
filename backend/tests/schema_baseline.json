@@ -263,9 +263,8 @@
   "cloud_login": [
     "user_id",
     "email",
-    "cookie_name",
-    "cookie_value",
-    "expires_at",
+    "device_token_id",
+    "device_token",
     "created_at"
   ],
   "comment_mentions": [
