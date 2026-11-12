@@ -59,3 +59,7 @@ def get(name: str) -> JobAdapter | None:
 
 def names() -> list[str]:
     return sorted(_ADAPTERS)
+
+
+def all() -> dict[str, JobAdapter]:
+    return dict(_ADAPTERS)

@@ -120,6 +120,8 @@ class CloudConfig:
     #: 官方号的密码。**空 = 不改密码**:新账号因此没有密码(密码登录 401),不是启动错误。
     #: 非空时短于 `password_min_length` 直接让配置构造失败 —— 不静默接受一个弱密码。
     official_password: str = ""
+    #: 是否在 Cloud 进程内启动异步任务 worker(单实例/小部署足够;多实例靠数据库租约)。
+    worker_enabled: bool = False
     #: 上游通道 API Key 的落库加密钥(Fernet,`python -m cloud.cli channel-key` 生成)。**空 = 网关没配置**:
     #: 对话接口明确回 503 `gateway_not_configured`,加通道的命令拒绝执行 —— 不把 Key 明文落库。
     channel_key: str = ""
@@ -269,6 +271,7 @@ class CloudConfig:
             # 密码**不 strip**:前后空格就是密码的一部分,原样交给 hash_password。
             official_handle=os.environ.get("CLOUD_OFFICIAL_HANDLE", "").strip() or "mosael",
             official_email=os.environ.get("CLOUD_OFFICIAL_EMAIL", "").strip() or "official@mosael.example",
+            worker_enabled=os.environ.get("CLOUD_WORKER_ENABLED", "").strip().lower() in {"1", "true", "yes"},
             channel_key=os.environ.get("CLOUD_CHANNEL_KEY", "").strip(),
             alipay_app_id=os.environ.get("CLOUD_ALIPAY_APP_ID", "").strip(),
             alipay_private_key=os.environ.get("CLOUD_ALIPAY_PRIVATE_KEY", "").strip(),

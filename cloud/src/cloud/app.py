@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from threading import Event, Thread
+from time import sleep
 from urllib.parse import urlsplit
 
 import httpx2
@@ -37,6 +39,9 @@ from cloud.oauth import OAuthProvider, default_providers
 from cloud.payments.base import PaymentChannel
 from cloud.payments.registry import channels_from_config
 from cloud.generation.storage import LocalArtifactStorage
+from cloud.generation.openai_images import ADAPTER as OPENAI_IMAGES
+from cloud.generation import adapters as generation_adapters
+from cloud.generation.service import run_one
 
 #: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸。
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -125,6 +130,7 @@ def create_app(
         dict(oauth_providers) if oauth_providers is not None else default_providers()
     )
     app.state.artifact_storage = LocalArtifactStorage(resolved.data_dir / "media")
+    generation_adapters.register(OPENAI_IMAGES)
 
     @app.middleware("http")
     async def same_origin_and_headers(request: Request, call_next):
@@ -181,4 +187,28 @@ def create_app(
     app.include_router(gateway_router, prefix=API_PREFIX)
     app.include_router(jobs_router, prefix=API_PREFIX)
     app.include_router(orders_router, prefix=API_PREFIX)
+
+    if resolved.worker_enabled:
+        stop = Event()
+
+        def work() -> None:
+            while not stop.is_set():
+                with app.state.db.session() as db:
+                    try:
+                        handled = run_one(
+                            db,
+                            config=resolved,
+                            adapters=generation_adapters.all(),
+                            storage=app.state.artifact_storage,
+                        )
+                    except Exception:  # noqa: BLE001 —— worker 不能因为一条坏任务退出
+                        db.rollback()
+                        handled = False
+                if not handled:
+                    sleep(2)
+
+        app.state.worker_stop = stop
+        app.state.worker_thread = Thread(target=work, name="generation-worker", daemon=True)
+        app.state.worker_thread.start()
+
     return app

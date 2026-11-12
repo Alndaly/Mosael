@@ -113,3 +113,26 @@ def test_job_is_reserved_submitted_polled_and_downloaded(tmp_path):
     assert downloaded.status_code == 200
     assert downloaded.content == b"png-bytes"
     assert Path(tmp_path / "media").exists()
+
+
+def test_openai_images_adapter_builds_artifacts_and_usage():
+    import base64
+    import httpx2
+    from cloud.generation.openai_images import OpenAIImagesAdapter
+
+    seen = {}
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen["url"] = str(request.url)
+        seen["body"] = request.read().decode()
+        return httpx2.Response(200, json={"data": [{"b64_json": base64.b64encode(b"png").decode()}]})
+
+    adapter = OpenAIImagesAdapter(transport=httpx2.MockTransport(handler))
+    result = adapter.submit(JobContext(
+        job_id="j1", model_id="m1", input={"prompt": "cat", "n": 1},
+        capability={}, base_url="https://api.example/v1", upstream_model="gpt-image-2", api_key="sk-test",
+    ))
+    assert result.status == "succeeded"
+    assert result.usage == {"image": 1}
+    assert result.artifacts[0].data == b"png"
+    assert seen["url"] == "https://api.example/v1/images/generations"
+    assert '"model":"gpt-image-2"' in seen["body"]
