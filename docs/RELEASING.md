@@ -145,7 +145,7 @@ node scripts/publish-r2.mjs --dist dist/VERSION --tag vVERSION --dry-run
 scripts/publish-r2-rclone.sh VERSION
 ```
 
-脚本使用 4 路 `--transfers` / `--s3-upload-concurrency`、`--s3-upload-cutoff 16M` / `--s3-chunk-size 16M`，并为 `latest/` 加 `--ignore-times`：`latest-mac.yml` / `latest.yml` 改版时大小可能不变，size-only 会把旧元数据留在 `latest/`。上传后仍要逐项回读公网对象，不能只凭 PutObject 成功就宣称镜像已发布。
+脚本使用 4 路 `--transfers` / `--s3-upload-concurrency`、`--s3-upload-cutoff 16M` / `--s3-chunk-size 16M`，并为 `latest/` 加 `--ignore-times` 和 `--checksum`：`latest-mac.yml` / `latest.yml` 改版时大小可能不变，仅比大小会把旧元数据留在 `latest/`。上传后仍要逐项回读公网对象，不能只凭 PutObject 成功就宣称镜像已发布。
 
 **R2 上传未完成 = 这一版没发完。** `site.ts` 的 `r2.url` 非空时，官网默认下载就是 R2 的 `latest/`；镜像没跟上时用户拿到的还是上一版。
 
