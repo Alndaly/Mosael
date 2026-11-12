@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import httpx
+from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
     FIRST_FRAME,
@@ -35,36 +35,35 @@ class MosaelCloudJobAdapter(GenerationAdapter):
     supports_resume = False
     surface_depends_on_model = False
 
-    def __init__(self, media_kind: str, *, transport: httpx.BaseTransport | None = None) -> None:
+    def __init__(self, media_kind: str) -> None:
         self.media_kind = media_kind
-        self._transport = transport
         self.parameter_surface = (
             ("num_images", "size", "aspect_ratio")
             if media_kind == "image"
             else ("duration_seconds", "resolution", "aspect_ratio", "generate_audio")
         )
 
-    def _client(self, context: GenerationAdapterContext) -> httpx.Client:
+    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
         if not context.api_key:
             raise GenerationAdapterError("providerErr_apiKeyMissing", vendor=self.vendor_id)
         base = (context.base_url or "").rstrip("/")
         if not base.endswith("/gateway/v1"):
             raise GenerationAdapterError("providerErr_cloudEndpoint", vendor=self.vendor_id)
-        return httpx.Client(
+        return RetryingClient(
             base_url=base,
             headers={"Authorization": f"Bearer {context.api_key}"},
             timeout=60.0,
-            transport=self._transport,
             follow_redirects=True,
         )
 
-    def _upload(self, client: httpx.Client, path: Path) -> str:
+    def _upload(self, client: RetryingClient, path: Path) -> str:
         mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         body = path.read_bytes()
         ticket = client.post("/uploads/presign", json={"filename": path.name, "mime": mime, "size": len(body)})
         if ticket.status_code == 201:
             data = ticket.json()
-            uploaded = httpx.put(data["upload_url"], content=body, headers=data["headers"], timeout=120.0)
+            with RetryingClient(timeout=120.0, follow_redirects=True) as uploader:
+                uploaded = uploader.put(data["upload_url"], content=body, headers=data["headers"])
             uploaded.raise_for_status()
             return str(data["url"])
         if ticket.status_code == 503:
@@ -77,7 +76,7 @@ class MosaelCloudJobAdapter(GenerationAdapter):
         ticket.raise_for_status()
         raise GenerationAdapterError("providerErr_uploadRejected", vendor=self.vendor_id, detail=ticket.text[:300])
 
-    def _input(self, request: GenerationRequest, client: httpx.Client) -> dict[str, Any]:
+    def _input(self, request: GenerationRequest, client: RetryingClient) -> dict[str, Any]:
         data: dict[str, Any] = {"prompt": request.prompt}
         if request.negative_prompt:
             data["negative_prompt"] = request.negative_prompt

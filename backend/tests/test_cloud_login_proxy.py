@@ -769,10 +769,18 @@ def test_gateway_job_models_become_generation_capabilities_with_component_prices
     ]
 
 
-def test_mosael_cloud_job_adapter_submits_polls_and_downloads(tmp_path) -> None:
+def test_mosael_cloud_job_adapter_submits_polls_and_downloads(tmp_path, monkeypatch) -> None:
     import httpx
+    from app.ai.providers.adapters.mosael_cloud import jobs as jobs_module
     from app.ai.providers.adapters.mosael_cloud.jobs import MosaelCloudJobAdapter
     from app.ai.providers.contracts.generation import GenerationAdapterContext, GenerationRequest
+    from app.core import http_retry
+
+    transport = None
+    real = http_retry.RetryingClient
+    def patched(*args, **kwargs):
+        kwargs["transport"] = transport
+        return real(*args, **kwargs)
 
     calls = []
     def handler(request: httpx.Request) -> httpx.Response:
@@ -782,11 +790,14 @@ def test_mosael_cloud_job_adapter_submits_polls_and_downloads(tmp_path) -> None:
         if request.url.path.endswith("/jobs/j1"):
             return httpx.Response(200, json={"job": {"id": "j1", "status": "succeeded",
                                                      "result": {"artifact_ids": ["a1"]}}})
-        if request.url.path.endswith("/artifacts/a1"):
+        if request.url.path.endswith("/artifacts/a1") or request.url.host == "r2.example":
             return httpx.Response(200, content=b"png")
         raise AssertionError(str(request.url))
 
-    adapter = MosaelCloudJobAdapter("image", transport=httpx.MockTransport(handler))
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(http_retry, "RetryingClient", patched)
+    monkeypatch.setattr(jobs_module, "RetryingClient", patched)
+    adapter = MosaelCloudJobAdapter("image")
     context = GenerationAdapterContext(
         connection_id="c", vendor_id="mosael-cloud", api_key="mct_token",
         base_url="https://cloud.test/api/cloud/v1/gateway/v1",
