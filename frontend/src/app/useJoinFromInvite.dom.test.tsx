@@ -21,6 +21,7 @@ vi.mock("@/app/preferences", () => ({
     ({
       inviteJoined: "已加入「{name}」",
       inviteAlreadyMember: "你已经在「{name}」里了",
+      inviteConfirmJoin: "要加入这个工作区吗？",
       inviteJoinedDetail: "主人:{owner} · 你的角色:{role}",
       role_editor: "编辑者",
     })[key] ?? key,
@@ -50,6 +51,7 @@ function mount(current: string | null = "old-ws") {
 
 beforeEach(() => {
   sessionStorage.clear();
+  window.confirm = () => true;
   selected.length = 0;
   for (const fn of Object.values(h)) fn.mockReset();
 });

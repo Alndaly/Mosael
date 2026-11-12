@@ -24,24 +24,30 @@ afterEach(() => {
 
 it("点第二张图:请求带着这一段的两张,从第二张开始", async () => {
   document.addEventListener(IMAGE_PREVIEW_EVENT, onRequest);
-  const view = render(<AgentMarkdown>{"一张图:\n\n![流程图](https://x.test/a.png)\n\n又一张:\n\n![](https://x.test/b.png)"}</AgentMarkdown>);
+  const view = render(<AgentMarkdown>{"一张图:\n\n![流程图](http://127.0.0.1:8800/api/assets/a.png)\n\n又一张:\n\n![](http://127.0.0.1:8800/api/assets/b.png)"}</AgentMarkdown>);
   await waitFor(() => expect(view.container.querySelectorAll('img[data-streamdown="image"]')).toHaveLength(2));
   fireEvent.click(view.container.querySelectorAll('img[data-streamdown="image"]')[1]);
   expect(requests).toEqual([
     {
-      src: "https://x.test/b.png",
+      src: "http://127.0.0.1:8800/api/assets/b.png",
       title: undefined,
       gallery: [
-        { src: "https://x.test/a.png", title: "流程图" },
-        { src: "https://x.test/b.png", title: undefined },
+        { src: "http://127.0.0.1:8800/api/assets/a.png", title: "流程图" },
+        { src: "http://127.0.0.1:8800/api/assets/b.png", title: undefined },
       ],
     },
   ]);
 });
 
+it("外部图片不自动加载,渲染成显式链接", async () => {
+  const view = render(<AgentMarkdown>{"![流程图](https://x.test/a.png)"}</AgentMarkdown>);
+  await waitFor(() => expect(view.container.querySelector("a")?.getAttribute("href")).toBe("https://x.test/a.png"));
+  expect(view.container.querySelector("img")).toBeNull();
+});
+
 it("点在图以外的地方不开", async () => {
   document.addEventListener(IMAGE_PREVIEW_EVENT, onRequest);
-  const view = render(<AgentMarkdown>{"一段字\n\n![图](https://x.test/a.png)"}</AgentMarkdown>);
+  const view = render(<AgentMarkdown>{"一段字\n\n![图](http://127.0.0.1:8800/api/assets/a.png)"}</AgentMarkdown>);
   await waitFor(() => expect(view.container.querySelector("p")).not.toBeNull());
   fireEvent.click(view.container.querySelector("p")!);
   expect(requests).toEqual([]);

@@ -553,6 +553,8 @@ export const aiStudio = {
   inviteJoinedDetail: "主人:{owner} · 你的角色:{role}",
   inviteJoinUndo: "撤销",
   inviteJoinUndone: "已退出「{name}」",
+  markdownExternalImage: "在浏览器打开外部图片",
+  inviteConfirmJoin: "要加入这个工作区吗？加入后你的上传和新建内容会归属到该工作区。",
   inviteJoinFailed: "没能凭这张邀请链接加入",
   notifInviteTitle: "邀请你加入「{ws}」",
   notifInviteBody: "{name} 邀请你以「{role}」身份加入。",

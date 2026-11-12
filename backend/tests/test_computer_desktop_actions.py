@@ -26,7 +26,7 @@ def test_desktop_actions_are_confirmation_tools_with_both_targets() -> None:
         assert specs[name]["read_only"] is False, name
         assert name in mcp_server.CONFIRMATION_TOOLS
         assert name not in mcp_server.READ_ONLY_TOOLS
-        assert tool_spec(name).permission == "edit"
+        assert tool_spec(name).permission == "external"
     assert set(specs["computer_desktop_click"]["parameters"]["properties"]) == {
         "token", "capture_id", "x", "y", "button", "click_count", "scale",
     }
@@ -59,6 +59,8 @@ def test_the_card_rejects_ambiguous_targets_and_bad_actions() -> None:
 
 
 def test_capture_coordinates_are_scaled_back_before_the_bridge(monkeypatch) -> None:
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
     calls: list[tuple[str, dict]] = []
     png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
@@ -100,6 +102,8 @@ def test_capture_coordinates_are_scaled_back_before_the_bridge(monkeypatch) -> N
 
 
 def test_token_type_and_scroll_use_the_element_token(monkeypatch) -> None:
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
     calls: list[tuple[str, dict]] = []
 
     def fake_host_call(channel: str, payload: dict) -> dict:

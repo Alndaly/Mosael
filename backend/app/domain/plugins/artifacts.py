@@ -31,6 +31,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.http_retry import RetryingClient
+from app.core.outbound_guard import Origin
 from app.core.i18n import LocalizedError
 from app.domain.plugins import media_bridge
 from app.domain.plugins.egress import Egress
@@ -111,7 +112,8 @@ def _download(spec: dict[str, Any], scratch: Path, *, egress: Egress) -> Path:
         # 地址是插件拿到的,这一趟由后端替那个连接去下:走它的出站决定(见 egress)。百度网盘的 dlink 这种
         # 带地域限制的地址,插件换到它走的是哪条路,下它就得走同一条。
         with RetryingClient(
-            timeout=DOWNLOAD_TIMEOUT_SECONDS, headers=headers, follow_redirects=True, **egress.httpx_options(url)
+            timeout=DOWNLOAD_TIMEOUT_SECONDS, headers=headers, follow_redirects=True,
+            origin=Origin.GIVEN, **egress.httpx_options(url)
         ) as client:
             with client.stream("GET", url) as response:
                 response.raise_for_status()

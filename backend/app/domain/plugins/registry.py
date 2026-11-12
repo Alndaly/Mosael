@@ -40,6 +40,7 @@ from mosael_formats import plugin_archive
 
 from app.media.scratch import PLUGIN_INSTALL, scratch_dir
 from app.core.http_retry import RetryingClient
+from app.core.outbound_guard import Origin
 from app.domain import deployment
 from mosael_formats.effects import plugin_tool_effects
 from app.domain.plugins.errors import PluginDomainError
@@ -92,6 +93,7 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
             timeout=REGISTRY_TIMEOUT_SECONDS,
             follow_redirects=True,
             max_retries=0,
+            origin=Origin.GIVEN,
         ) as client:
             response = client.get(url)
             response.raise_for_status()
@@ -191,7 +193,7 @@ def _download(url: str) -> bytes:
         raise PluginDomainError("pluginErr_downloadBadScheme")
     written = bytearray()
     try:
-        with RetryingClient(timeout=DOWNLOAD_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        with RetryingClient(timeout=DOWNLOAD_TIMEOUT_SECONDS, follow_redirects=True, origin=Origin.GIVEN) as client:
             with client.stream("GET", url) as response:
                 response.raise_for_status()
                 for chunk in response.iter_bytes():

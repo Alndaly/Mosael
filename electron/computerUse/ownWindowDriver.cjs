@@ -179,6 +179,24 @@ async function captureMosaelWindow(mainWindow) {
 
 
 
+
+/**
+ * 合成输入不能落在确认卡 / 急停条上。模型读网页后按坐标点“批准”，等于让它自己把另一张
+ * 确认卡的闸门按掉；这里按 DOM 命中结果拒绝，坐标校验留在后端卡上。
+ */
+async function assertComputerTargetAllowed(contents, action) {
+  if (!contents || typeof contents.executeJavaScript !== "function") return;
+  const blocked = await contents.executeJavaScript(`(() => {
+    const hit = ${action.kind === "type"
+      ? 'document.activeElement'
+      : 'document.elementFromPoint(' + Number(action.x || 0) + ',' + Number(action.y || 0) + ')'};
+    return Boolean(hit && hit.closest && hit.closest("[data-confirmation-card],[data-computer-use-banner]"));
+  })()`);
+  if (blocked) {
+    throw new Error("That target is the Mosael confirmation or emergency-stop surface. Nothing was sent.");
+  }
+}
+
 /** ADR 0081 的 DesktopDriver 端口:L1 的实现。 */
 class OwnWindowDriver {
   /** `getWindow` 每次调用时取主窗口 —— mac 关窗再激活会重建它,所以不缓存引用。 */
@@ -199,6 +217,9 @@ class OwnWindowDriver {
   /** 动作:点 / 输入 / 滚动。`action.kind` 只认这三种;别的直接拒。 */
   async act(action) {
     const window = this.getWindow();
+    if (window && (action.kind === "click" || action.kind === "type")) {
+      await assertComputerTargetAllowed(window.webContents, action);
+    }
     switch (action.kind) {
       case "click":
         return clickMosaelWindow(action, window, action.cursor ?? null);

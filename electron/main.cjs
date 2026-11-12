@@ -1159,6 +1159,11 @@ function createWindow() {
   const { createDisplayMediaGrant } = require("./display-media.cjs");
   win.webContents.session.setDisplayMediaRequestHandler(
     (request, callback) => {
+      // 只把屏幕捕获交给应用自己的主框架；浮层/子框架/未来注入的页面不能无提示拿首块屏幕。
+      if (!isAppUrl(request.frame?.url ?? "")) {
+        callback({});
+        return;
+      }
       desktopCapturer
         .getSources({ types: ["screen", "window"] })
         .then((sources) =>

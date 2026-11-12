@@ -551,6 +551,8 @@ export const aiStudio = {
   inviteJoinedDetail: "Owner: {owner} · your role: {role}",
   inviteJoinUndo: "Undo",
   inviteJoinUndone: "Left “{name}”",
+  markdownExternalImage: "Open external image in browser",
+  inviteConfirmJoin: "Join this workspace? Your uploads and new work will belong to it.",
   inviteJoinFailed: "Couldn't join with this invite link",
   notifInviteTitle: "Invitation to join \u201c{ws}\u201d",
   notifInviteBody: "{name} invites you to join as {role}.",

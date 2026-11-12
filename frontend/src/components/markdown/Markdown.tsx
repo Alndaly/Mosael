@@ -4,6 +4,8 @@ import { CodeBlock, CodeBlockCopyButton, Streamdown, type Components } from "str
 import { WrapText } from "lucide-react";
 
 import { requestImagePreview } from "@/components/app/image-preview-request";
+import { FallbackImage } from "@/components/ui/fallback-image";
+import { useI18n } from "@/app/preferences";
 import { assetPreviewUrl } from "@/api/domains/assets";
 import { codeHighlighter } from "@/components/markdown/codeHighlighter";
 import { IconButton } from "@/components/ui/icon-button";
@@ -11,8 +13,6 @@ import { cn } from "@/lib/utils";
 import { CitationLink } from "./CitationLink";
 import { rewriteAssetRefs } from "./assetRefs";
 import { MARKDOWN_REF, MarkdownRefsContext } from "./markdownRefs";
-
-import { useI18n } from "@/app/preferences";
 
 /** 围栏代码块里的原始文本:markdown 把 ```…``` 渲染成 <pre><code>纯文本</code></pre>。 */
 function codeText(node: React.ReactNode): string {
@@ -115,8 +115,24 @@ function MarkdownLink(props: React.ComponentProps<"a"> & { node?: unknown }) {
   return <CitationLink {...props} />;
 }
 
-/** 定值:组件表每次换新对象都会让 Streamdown 重建一遍内部的 components。 */
-const COMPONENTS: Components = { pre: CodeCard, a: MarkdownLink };
+/** 外部图片不自动加载：模型/网页内容可以写任意 URL，自动请求会把上下文塞进第三方查询串。
+ *  外链改成一条明确的链接（桌面壳会交给系统浏览器），只内联 data:/blob:/本机后端来源的图片。 */
+function MarkdownImage(props: React.ComponentProps<"img"> & { node?: unknown }) {
+  const t = useI18n();
+  const image = props;
+  const src = String(image.src ?? "");
+  if (/^https?:/i.test(src) && !/^https?:\/\/(127\.0\.0\.1|localhost):8800\//i.test(src)) {
+    return (
+      <a href={src} target="_blank" rel="noreferrer noopener" className="text-primary underline underline-offset-2">
+        {image.alt || t("markdownExternalImage")}
+      </a>
+    );
+  }
+  return <FallbackImage {...image} data-streamdown="image" referrerPolicy="no-referrer" loading="lazy" />;
+}
+
+/** 定值：组件表每次换新对象都会让 Streamdown 重建一遍内部的 components。 */
+const COMPONENTS: Components = { pre: CodeCard, a: MarkdownLink, img: MarkdownImage as Components["img"] };
 
 /**
  * `fullTables`:表格按全高排、跟着外面一起滚。Streamdown 缺省把表格限在 300px、里面再套一层滚动框 ——

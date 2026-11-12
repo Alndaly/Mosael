@@ -87,7 +87,17 @@ def _summarize_click(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_computerDesktopClickPixel", _point_params(payload)
 
 
+def _whole_machine_guard(db: Session, actor: str | None) -> None:
+    from app.domain import host_files
+
+    try:
+        host_files.ensure_whole_machine(db, actor=actor)
+    except host_files.HostFileNotAllowed as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
+
+
 def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    _whole_machine_guard(db, actor)
     payload = confirmation.payload
     try:
         return _with_replay(confirmation, use_click(
@@ -103,9 +113,11 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
         raise ConfirmationError(str(error)) from None
 
 
+#: 跨应用输入不是“改这一屏的视图”，它和 run_host_code 一样是这台电脑上的副作用；auto 档
+#: 不能替用户点头。放在 external 档，规则/判断者/人都要过，执行体再要求部署管理员。
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_click",
-    permission="edit",
+    permission="external",
     cost="none",
     writes=(),
     validate=_validate_click,
@@ -132,6 +144,7 @@ def _summarize_type(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    _whole_machine_guard(db, actor)
     payload = confirmation.payload
     try:
         return _with_replay(confirmation, use_type(
@@ -148,7 +161,7 @@ def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str
 
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_type",
-    permission="edit",
+    permission="external",
     cost="none",
     writes=(),
     validate=_validate_type,
@@ -179,6 +192,7 @@ def _summarize_scroll(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    _whole_machine_guard(db, actor)
     payload = confirmation.payload
     try:
         return _with_replay(confirmation, use_scroll(
@@ -195,7 +209,7 @@ def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[s
 
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_scroll",
-    permission="edit",
+    permission="external",
     cost="none",
     writes=(),
     validate=_validate_scroll,

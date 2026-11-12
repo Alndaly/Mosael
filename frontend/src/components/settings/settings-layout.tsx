@@ -475,8 +475,8 @@ export function SettingsListBlock({
   );
 }
 
-export function SettingsListItem({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="settings-list-item" className={cn("px-0.5 py-5", className)} {...props} />;
+export function SettingsListItem({ className, compact = false, ...props }: React.ComponentProps<"div"> & { compact?: boolean }) {
+  return <div data-slot="settings-list-item" className={cn("px-0.5", compact ? "py-2" : "py-5", className)} {...props} />;
 }
 
 /**

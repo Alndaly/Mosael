@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from app.ai.media_transfer import download_to_path
+from app.core.outbound_guard import Origin
 from app.ai.providers.contracts.generation import (
     DRIVING_AUDIO,
     FIRST_FRAME,
@@ -92,7 +93,7 @@ def local_copy(request: GenerationRequest, role: str, work: Path) -> Path:
     if urls:
         suffix = Path(urlsplit(str(urls[0])).path).suffix.lower()
         target = work / f"{role}{suffix}"
-        download_to_path(str(urls[0]), target)
+        download_to_path(str(urls[0]), target, origin=Origin.GIVEN)
         return target
     path = request.source_for(role)
     if path is None or not path.is_file():

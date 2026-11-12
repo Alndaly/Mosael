@@ -62,8 +62,14 @@ export function useJoinFromInvite(selectWorkspace: (id: string) => void, current
   current.current = currentWorkspaceId;
   React.useEffect(() => {
     if (!code) return;
+    //: 深链/邀请链接是外部输入。**先问一句**：任意网页都能触发 mosael://open?join=，
+    //: 自动兑换会把用户后续上传的东西落进攻击者的工作区。
+    if (typeof window.confirm === "function" && !window.confirm(t("inviteConfirmJoin"))) {
+      clearPendingInvite();
+      return;
+    }
     previous.current = current.current;
     mutate(code);
-  }, [code, mutate]);
+  }, [code, mutate, t]);
   return Boolean(code) || isPending;
 }

@@ -26,8 +26,8 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 
 from app.core.http_retry import RetryingClient, backoff_seconds
-from app.core.i18n import LocalizedError
 from app.core.outbound_guard import Origin
+from app.core.i18n import LocalizedError
 
 _MAX_REDIRECTS = 5
 
@@ -95,6 +95,7 @@ def download_to_path(
     trusted_base_url: str = "",
     trusted_headers: dict[str, str] | None = None,
     max_bytes: int = MAX_DOWNLOAD_BYTES,
+    origin: Origin = Origin.CONFIGURED,
 ) -> str:
     """Stream a remote asset to disk without carrying credentials across origins.
 
@@ -111,7 +112,7 @@ def download_to_path(
                 try:
                     content_type, total = _receive(
                         str(url), handle, timeout=timeout, trusted_base_url=trusted_base_url,
-                        trusted_headers=trusted_headers, max_bytes=max_bytes,
+                        trusted_headers=trusted_headers, max_bytes=max_bytes, origin=origin,
                     )
                 except httpx.TransportError as exc:
                     # 连上了又断了(或者这一次压根没连上):攒下的留着,下一次从这里接着要。
@@ -145,6 +146,7 @@ def _receive(
     trusted_base_url: str,
     trusted_headers: dict[str, str] | None,
     max_bytes: int,
+    origin: Origin,
 ) -> tuple[str, int | None]:
     """连一次、收一段:跟重定向,文件里已经有 `handle.tell()` 字节时带 `Range` 从那里接着要。返回 (content-type, 总长或 None)。
     收到超过 `max_bytes` 就停(对面说的长度可能是假的,也可能不说)。"""
@@ -154,7 +156,7 @@ def _receive(
         headers = trusted_headers_for_url(current, trusted_base_url, trusted_headers)
         if offset:
             headers = {**headers, "Range": f"bytes={offset}-"}
-        with RetryingClient(timeout=timeout, headers=headers, follow_redirects=False) as client:
+        with RetryingClient(timeout=timeout, headers=headers, follow_redirects=False, origin=origin) as client:
             with client.stream("GET", current) as response:
                 redirected = _redirect_target(current, response)
                 if redirected is not None:
