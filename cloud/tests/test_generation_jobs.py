@@ -154,7 +154,7 @@ def test_kling_adapter_submits_polls_and_downloads(monkeypatch):
     adapter = KlingVideoAdapter(transport=httpx2.MockTransport(handler))
     ctx = JobContext(
         job_id="j", model_id="m", input={"prompt": "run", "duration_seconds": 5}, capability={},
-        base_url="https://api.klingai.com", upstream_model="kling-v3", api_key="ak", config={"secret_key": "sk"},
+        base_url="https://api.klingai.com", upstream_model="kling-v3", api_key="ak:sk", config={},
     )
     submitted = adapter.submit(ctx)
     assert submitted.status == "pending" and submitted.provider_job_id == "text2video:t1"

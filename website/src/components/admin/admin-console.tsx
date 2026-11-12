@@ -841,6 +841,7 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
           {!provider && <Field label={copy.baseUrl}><AInput value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
           <Field label={copy.apiKey}><AInput type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
           <p className="m-0 text-xs text-muted-foreground">{copy.apiKeyHint}</p>
+          {adapter === "kling" && <p className="m-0 text-xs text-muted-foreground">{copy.klingKeyHint}</p>}
           <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
           <div className="flex items-center justify-between gap-4 py-1">
             <span className="text-sm font-medium">{copy.enabled}</span>

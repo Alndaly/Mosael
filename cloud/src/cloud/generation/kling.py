@@ -34,8 +34,9 @@ class KlingVideoAdapter:
         self._transport = transport
 
     def _headers(self, job: JobContext) -> dict[str, str]:
-        secret = str(job.config.get("secret_key") or "")
-        token = _jwt(job.api_key, secret) if secret else job.api_key
+        # AccessKey:SecretKey 一起放在加密的 api_key 列;没有冒号时按裸 Bearer Key 处理。
+        access, separator, secret = job.api_key.partition(":")
+        token = _jwt(access, secret) if separator and secret else job.api_key
         return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     def submit(self, job: JobContext) -> AdapterResult:
