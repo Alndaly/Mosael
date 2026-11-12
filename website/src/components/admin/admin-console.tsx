@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, Menu, ScrollText, Server, Users } from "lucide-react";
+import { Activity, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, LogOut, Menu, ScrollText, Server, Users } from "lucide-react";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import {
@@ -36,9 +36,11 @@ import {
   useAdminUsers,
 } from "@/lib/admin-queries";
 import { queryKeys } from "@/lib/queryKeys";
+import { invalidateAfterSignOut } from "@/lib/query-invalidation";
 import { cn } from "@/lib/utils";
 import {
   CloudApiError,
+  cloudAccount,
   cloudAdmin,
   type AdminAudit,
   type AdminChannel,
@@ -281,8 +283,24 @@ export function AdminConsole({ locale, copy, viewer }: { locale: Locale; copy: M
 }
 
 function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; onSelect: (tab: string) => void; copy: Messages["admin"]; locale: Locale; viewer: CloudUser }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [signingOut, setSigningOut] = useState(false);
   const name = viewer.display_name?.trim() || viewer.handle?.trim() || viewer.email?.trim() || viewer.phone || copy.adminFallback;
   const initial = Array.from(name)[0]?.toUpperCase() ?? "A";
+  // 管理台不继承公开站头；退出放在侧栏账号块下面，和 dashboard 保持同一个动作。
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await cloudAccount.logout();
+    } catch {
+      // 本地没有状态要清，cookie 由服务端撤销。
+    }
+    await invalidateAfterSignOut(queryClient);
+    router.push(`/${locale}/login`);
+    router.refresh();
+  };
   const items = [
     { id: "overview", label: copy.tabOverview, icon: LayoutDashboard },
     { id: "users", label: copy.tabUsers, icon: Users },
@@ -331,6 +349,16 @@ function AdminSidebar({ tab, onSelect, copy, locale, viewer }: { tab: string; on
           <Badge variant="secondary">{roleLabel(viewer.role || "admin", copy)}</Badge>
         </div>
         <Separator className="mb-3" />
+        <SidebarMenuButton
+          type="button"
+          className="mb-2 w-full justify-between text-muted-foreground hover:text-foreground"
+          disabled={signingOut}
+          aria-busy={signingOut}
+          onClick={() => void signOut()}
+        >
+          <span className="truncate">{signingOut ? copy.signingOut : copy.signOut}</span>
+          <LogOut className="size-4" aria-hidden />
+        </SidebarMenuButton>
         <div className="flex items-center justify-between gap-2">
           <LocaleSwitch locale={locale} label={copy.language} />
           <ThemeToggle label={copy.theme} />
