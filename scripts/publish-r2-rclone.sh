@@ -54,13 +54,13 @@ rclone copy "$DIST" "$IMMUTABLE" \
   --transfers 4 --s3-upload-concurrency 4 \
   --s3-upload-cutoff 16M --s3-chunk-size 16M \
   --stats-one-line --stats 30s
-rclone check "$DIST" "$IMMUTABLE" --size-only --one-way
+rclone check "$DIST" "$IMMUTABLE" --checksum --one-way
 
 # Then server-side copy to latest. --ignore-times is required: metadata files
 # change without changing size, and size-only would silently keep the old release.
 rclone copy "$IMMUTABLE" "$LATEST" \
-  --ignore-times --size-only --server-side-across-configs
-rclone check "$IMMUTABLE" "$LATEST" --size-only --one-way
+  --ignore-times --checksum --server-side-across-configs
+rclone check "$IMMUTABLE" "$LATEST" --checksum --one-way
 
 curl -fsSL "${PUBLIC_BASE}/${PREFIX}/latest/latest-mac.yml" | grep -qx "version: ${VERSION}"
 curl -fsSL "${PUBLIC_BASE}/${PREFIX}/latest/latest.yml" | grep -qx "version: ${VERSION}"

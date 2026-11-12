@@ -22,6 +22,7 @@ export function DashboardSecurity({
 }) {
   const [status, setStatus] = useState<CloudMfaStatus | null>(null);
   const [setup, setSetup] = useState<{ secret: string; otpauth_uri: string } | null>(null);
+  const [password, setPassword] = useState("");
   const [qr, setQr] = useState("");
   const [code, setCode] = useState("");
   const [codes, setCodes] = useState<string[]>([]);
@@ -53,7 +54,7 @@ export function DashboardSecurity({
     setBusy("setup");
     setError("");
     try {
-      const started = await cloudAccount.setupMfa();
+      const started = await cloudAccount.setupMfa(password);
       setSetup(started);
       setQr(await QRCode.toDataURL(started.otpauth_uri, { width: 190, margin: 1 }));
     } catch (failure) {
@@ -203,6 +204,15 @@ export function DashboardSecurity({
                       <code className="mt-1 block font-mono text-[13px] [overflow-wrap:anywhere]">{setup.secret}</code>
                     </div>
                     <AccountField
+                      id="dashboard-mfa-password"
+                      label={copy.passwordCurrent}
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="h-9 rounded-md text-sm"
+                    />
+                    <AccountField
                       id="dashboard-mfa-setup-code"
                       label={copy.mfaCode}
                       inputMode="numeric"
@@ -223,6 +233,7 @@ export function DashboardSecurity({
                           setSetup(null);
                           setQr("");
                           setCode("");
+                          setPassword("");
                           setError("");
                         }}
                       >

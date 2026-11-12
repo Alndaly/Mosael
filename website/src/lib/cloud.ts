@@ -347,8 +347,12 @@ function createClient(context: RequestContext = {}) {
       mfaStatus(): Promise<CloudMfaStatus> {
         return request("/mfa", {}, context);
       },
-      setupMfa(): Promise<CloudMfaSetup> {
-        return request("/mfa/setup", { method: "POST" }, context);
+      setupMfa(currentPassword: string): Promise<CloudMfaSetup> {
+        return request(
+          "/mfa/setup",
+          { method: "POST", body: JSON.stringify({ current_password: currentPassword }) },
+          context,
+        );
       },
       enableMfa(code: string): Promise<{ enabled: true; recovery_codes: string[] }> {
         return request("/mfa/enable", { method: "POST", body: JSON.stringify({ code }) }, context);

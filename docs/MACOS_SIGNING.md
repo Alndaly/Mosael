@@ -49,12 +49,15 @@ App 专用密码撤销后，重新生成密码并再次运行同名 `store-crede
 | 名称 | 内容 |
 | --- | --- |
 | `CSC_LINK` | 仅包含上述发布身份的加密 PKCS#12 文件，Base64 编码 |
+| `WIN_CSC_LINK` | Windows Authenticode 证书（`.pfx`，Base64）；tag 构建必需 |
+| `WIN_CSC_KEY_PASSWORD` | 上述 Windows 证书密码；tag 构建必需 |
+| `WIN_PUBLISHER_NAME` | Windows 证书主体（写入 `app-update.yml` 的 `publisherName`）；tag 构建必需 |
 | `CSC_KEY_PASSWORD` | 该 PKCS#12 文件的独立强密码 |
 | `MACOS_PROVISION_PROFILE` | 对应 Developer ID 描述文件，Base64 编码 |
 | `APPLE_ID` | 有权为团队提交公证的 Apple ID |
 | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
-签名与公证凭据仅传给 macOS 打包步骤。Windows 构建不会获得这些凭据。私钥通过加密的 Actions secret 进入临时构建环境；不要将整个登录钥匙串导出到 CI。维护者撤销或更新证书、密码时，同步更新 secrets 和描述文件。
+macOS 凭据仅传给 macOS 打包步骤；Windows 凭据仅传给 Windows 打包步骤。Windows tag 构建缺少 `WIN_*` 三项会失败；`workflow_dispatch` 试打包允许未签名产物，但不会发布。私钥通过加密的 Actions secret 进入临时构建环境；不要将整个登录钥匙串导出到 CI。维护者撤销或更新证书、密码时，同步更新 secrets 和描述文件。
 
 `app-builder-lib` 26.15.x 导入证书时会误将 PKCS#12 密码用于临时钥匙串的访问控制设置，导致 `SecKeychainUnlock` 失败；26.16.1 起修复（改为传入创建钥匙串时生成的独立密码），仓库当时删除了补丁。当前使用 `electron-builder ^26.18.0`，补丁不存在。`electron/mac-signing.test.ts` 直接运行已安装的 `app-builder-lib` 源码，覆盖两份独立加密证书的导入；以后升级打包工具时，这条测试失败就说明回归又出现了。
 

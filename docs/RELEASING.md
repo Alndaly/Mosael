@@ -154,14 +154,14 @@ scripts/publish-r2-rclone.sh VERSION
 - Cloudflare 单次 `PutObject` 上限 300 MB；`publish-r2-rclone.sh` 用 `--s3-upload-cutoff 16M` 让大件直接从 16MB 起走分段上传，不要改回单次 PutObject。
 - Cloudflare 的 **IPv6** 在部分线路上会"接受连接但不回数据"。rclone 走系统解析；遇到大件卡死先确认解析/路由，不要用关闭 TLS 校验之类的方式绕过。
 
-发布脚本分两阶段：先把全部文件写入不可变 `v<tag>/`，`rclone check --size-only` 核对；这一阶段全部成功后，才 server-side copy 到 `latest/` 并同样核对。任何不可变文件失败都会立即停止，不会碰 `latest/`。R2 没有目录列表，所以脚本在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引不能只加 `--download-base`：那样会忽略镜像参数并覆盖 `website/public/plugins/registry.json`。R2 的索引要同时给 `--release` / `--packages`，并把 base 指到带 `mosael` 前缀的根地址：
+发布脚本分两阶段：先把全部文件写入不可变 `v<tag>/`，`rclone check --checksum` 核对；这一阶段全部成功后，才 server-side copy 到 `latest/` 并同样核对。任何不可变文件失败都会立即停止，不会碰 `latest/`。R2 没有目录列表，所以脚本在两处生成 `index.html`，只链接本次目录里真实存在的 DMG、Windows 安装包和浏览器扩展；官网人工下载入口指向 `latest/index.html`。插件索引不能只加 `--download-base`：那样会忽略镜像参数并覆盖 `website/public/plugins/registry.json`。R2 的索引要同时给 `--release` / `--packages`，并把 base 指到带 `mosael` 前缀的根地址：
 
 ```bash
 mkdir -p dist/r2-VERSION && cp dist/plugins-VERSION/*.zip dist/r2-VERSION/
 python3 scripts/sync-plugin-registry.py --release vVERSION --repo Alndaly/Mosael \
   --packages dist/r2-VERSION --download-base https://dl.mosael.com/mosael
 ```
-- 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
+- 同一构建的 Windows x64 `.exe`：tag 发布必须带 Authenticode 签名，`WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` / `WIN_PUBLISHER_NAME` 三项缺一不可；`SHA256SUMS` 由 `scripts/write-release-checksums.mjs` 生成并与安装包一起上传。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。
 - `backend/app/domain/media_tool_builds.json`：**「让 Mosael 装一个完整版 FFmpeg」装的那个构建**（每个平台一条，钉死地址和 sha256）。发版前刷新一次，让用户装到的是当版上游：

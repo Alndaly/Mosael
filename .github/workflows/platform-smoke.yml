@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: ./.github/actions/toolchain
 
       - name: Install dependencies
@@ -37,14 +37,16 @@ jobs:
 
       # Electron 在无头 Linux 上要 xvfb;--no-sandbox 由脚本自己加(容器里 root 跑不了沙箱)。
       - name: Run the site-contract smoke
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -o pipefail
-          xvfb-run -a ./node_modules/.bin/electron --no-sandbox scripts/platform-smoke.cjs ${{ inputs.platforms }} | tee platform-smoke-report.jsonl
+          xvfb-run -a ./node_modules/.bin/electron --no-sandbox scripts/platform-smoke.cjs "$PLATFORMS" | tee platform-smoke-report.jsonl
 
       # 结果落成 artifact:红了直接看是哪一家、页面当时是什么样。
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: platform-smoke-report
           path: |

@@ -26,7 +26,7 @@ on:
         default: cloud
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -97,13 +97,17 @@ jobs:
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,
   # 全部成功后才转正——避免用户在「检查更新」里看到缺产物的半成品版本。
   draft:
+    permissions:
+      contents: write
     needs: [test]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f53f5227a9e83886ab598c617f3c170fab62f0d3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
           cache: pnpm
@@ -147,7 +151,7 @@ jobs:
       - name: Upload plugins to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/plugins/*.zip dist/plugins/registry.json
+        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" dist/plugins/*.zip dist/plugins/registry.json
 
       - name: Package Chrome extension
         run: |
@@ -159,9 +163,11 @@ jobs:
       - name: Upload Chrome extension to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/browser-extension/mosael-browser-extension.zip
+        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" dist/browser-extension/mosael-browser-extension.zip
 
   build:
+    permissions:
+      contents: write
     needs: [test, draft]
     # workflow_dispatch 时 draft 被跳过,也要能继续跑。
     # **test 必须显式要求 success**:`!cancelled()` 会让 build 在依赖失败时照样起来 ——
@@ -180,9 +186,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f53f5227a9e83886ab598c617f3c170fab62f0d3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
           cache: pnpm
@@ -240,6 +248,9 @@ jobs:
           APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: "27W3D2ZUT9"
+          WIN_CSC_LINK: ${{ runner.os == 'Windows' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+          WIN_PUBLISHER_NAME: ${{ runner.os == 'Windows' && secrets.WIN_PUBLISHER_NAME || '' }}
           LOCAL_NOTARIZATION: ${{ github.event_name == 'workflow_dispatch' && inputs.notarization == 'local' }}
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
@@ -257,7 +268,20 @@ jobs:
               node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app
             fi
           else
-            pnpm exec electron-builder --win nsis --publish never
+            if [ "$GITHUB_EVENT_NAME" = "push" ] && [ -z "$WIN_CSC_LINK" ]; then
+              echo "::error::Windows tag builds require WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD / WIN_PUBLISHER_NAME."
+              exit 1
+            fi
+            if [ -n "$WIN_CSC_LINK" ]; then
+              node scripts/configure-windows-publisher.mjs
+              export CSC_LINK="$WIN_CSC_LINK"
+              export CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD"
+            fi
+            if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+              pnpm exec electron-builder --win nsis --publish never -c.win.forceCodeSigning=true
+            else
+              pnpm exec electron-builder --win nsis --publish never -c.win.forceCodeSigning=false
+            fi
           fi
       - name: Generate updater metadata
         run: |
@@ -273,6 +297,7 @@ jobs:
             node scripts/write-update-metadata.mjs --version "$version" --windows "release/Mosael Setup $version.exe" --out release
             test -f "release/Mosael Setup $version.exe.blockmap"
           fi
+          node scripts/write-release-checksums.mjs --release release
 
       - name: Smoke packaged Electron and database upgrade
         run: node test/bundle.smoke.mjs
@@ -286,11 +311,12 @@ jobs:
           if compgen -G "release/latest*.yml" > /dev/null; then files+=(release/latest*.yml); fi
           if compgen -G "release/*-mac-signed.zip" > /dev/null; then files+=(release/*-mac-signed.zip); fi
           if compgen -G "release/*.blockmap" > /dev/null; then files+=(release/*.blockmap); fi
-          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+          files+=(release/SHA256SUMS)
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" "${files[@]}"
 
       - name: Upload artifact (dry run)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: mosael-${{ runner.os }}
           path: |
@@ -300,11 +326,15 @@ jobs:
           if-no-files-found: error
 
   publish:
+    permissions:
+      contents: write
     needs: [build]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

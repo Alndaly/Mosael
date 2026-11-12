@@ -35,7 +35,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: ./.github/actions/toolchain
 
       - name: Install dependencies
@@ -124,7 +124,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: ./.github/actions/toolchain
 
       - name: Install dependencies
@@ -155,14 +155,14 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: ./.github/actions/toolchain
 
       # 没有 ffmpeg 的话,9 个测试文件会整体 skip —— 导出与渲染主流程都在里面。
       # Ubuntu 24.04 自带的是 6.1,其 framesync 在 EOF 处有已知时序缺陷;产品与开发环境已经以
       # 现代 FFmpeg 为基线,CI 也必须测同一条契约,不能继续为发行多年前的运行时堆兼容滤镜。
       # 下载地址与 sha256 都钉在一次不可变的上游构建,避免 latest 静默换包。
-      - uses: actions/cache@v5
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         id: ffmpeg-cache
         with:
           path: .ci/ffmpeg
@@ -206,7 +206,7 @@ jobs:
 
       # 烧字的浏览器那条路用 Playwright 自带的 Chromium。取舍:装它多花一两分钟(浏览器本体按 uv.lock 缓存,
       # 系统依赖每次 apt 装),换来字幕 / 花字 / AI 标识的默认导出路径在 CI 上真渲一遍 —— 此前没有任何自动门禁渲过它。
-      - uses: actions/cache@v5
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
@@ -234,7 +234,7 @@ jobs:
 
       - name: Upload backend test report
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: junit-backend-${{ github.run_attempt }}
           path: .ci/junit-backend.xml
@@ -253,7 +253,7 @@ jobs:
         shell: bash
         working-directory: cloud
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
@@ -275,7 +275,7 @@ jobs:
         shell: bash
         working-directory: packages/mosael-formats
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
