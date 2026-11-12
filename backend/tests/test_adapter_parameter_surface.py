@@ -43,6 +43,9 @@ DECLARED_INDEPENDENT = {
     # 两项都是「设了才拼进提示词」。
     ("evolink", "audio"),
     ("google", "audio"),
+    #: MosaelCloud job 的请求体只按「给了什么」拼;图片恒发 n(默认 1),其余没设就不发。
+    ("mosael-cloud", "image"),
+    ("mosael-cloud", "video"),
 }
 
 
