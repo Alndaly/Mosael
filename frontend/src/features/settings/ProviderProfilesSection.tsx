@@ -619,8 +619,18 @@ export function ProviderProfilesSection({
             </SettingsListItem>
           ))}
         </SettingsListBlock>
-      ) : /* 「Mosael Cloud」在顶上那一行提供了这项能力:不算「没有」,也就不画空状态那一块。 */
-      profiles.isSuccess && cloudOffersCapability ? null : (
+      ) : null}
+
+      {/* 「没有」和「没问出来」是两回事:失败/在问/真的空,才占一块说明。
+          **插件连接不算「没有」** —— 视频页只有 ComfyUI 时,这里曾经仍画一个空的
+          SettingsBlock,它自己的 py-5 在两条连接之间留出一大块空白,看起来像上面那行
+          展开了却没内容。插件存在或 Cloud 已提供该能力时,不画这一块。 */}
+      {(profiles.isError ||
+        profiles.isPending ||
+        (profiles.isSuccess &&
+          visibleProfiles.length === 0 &&
+          pluginProfiles.length === 0 &&
+          !cloudOffersCapability)) && (
         <SettingsBlock>
           {/* **「没有」和「没问出来」是两回事。** 空状态此前挂在 `profiles.data && …` 后面:
               请求失败(401、后端没起、网络断)时 data 是 undefined,那一行被短路掉,而外层容器

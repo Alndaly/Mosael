@@ -126,6 +126,22 @@ describe("供应商连接列表", () => {
     expect(screen.queryByText("初始模型(可选)")).not.toBeInTheDocument();
   });
 
+  it("只有插件连接时不画空设置块 —— 否则两行之间多出一块空白,像上面那行展开了", async () => {
+    /* 视频页:Cloud 不提供视频模型,可编辑连接为空,只有 ComfyUI。此前的空状态块虽然
+       没有文字,但 SettingsBlock 自带 py-5;它在 Cloud 与 ComfyUI 之间撑出一段空白,
+       读起来像 Cloud 行展开了却没有内容。 */
+    vendorsResult = [];
+    providersResult = [{
+      id: "comfy", name: "ComfyUI", vendor: "comfyui", enabled: true, auth_type: "api_key",
+      oauth_linked: false, capability_ids: ["image", "video"], config: {}, base_url: "http://127.0.0.1:8188",
+      plugin_instance_id: "instance-1", quota_supported: false,
+    }];
+    const { container } = renderSection("video");
+
+    await waitFor(() => expect(container.textContent).toContain("ComfyUI"));
+    expect(container.querySelectorAll('[data-slot="settings-block"]')).toHaveLength(0);
+  });
+
   it("在对话分区加 Google:说明 Gemini 的对话在哪能用;视频分区不说这句", async () => {
     /* Gemini(以及订阅授权那几家)的对话走 pi 的原生协议,字幕翻译这类直连调用不走它 —— 不说的话,配好之后在翻译里
        找不到它,人会以为配错了。在视频分区加 Google 的人是来配 Veo 的,这句话对他是噪音。 */
