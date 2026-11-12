@@ -163,3 +163,30 @@ def test_kling_adapter_submits_polls_and_downloads(monkeypatch):
     assert finished.usage == {"second": 5}
     assert finished.artifacts[0].data == b"mp4"
     assert calls[0][1].endswith("/v1/videos/text2video")
+
+
+def test_seedance_adapter_submits_polls_and_downloads():
+    import httpx2
+    from cloud.generation.seedance import SeedanceAdapter
+
+    seen = []
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append((request.method, str(request.url)))
+        if request.method == "POST":
+            return httpx2.Response(200, json={"id": "task-1"})
+        if request.url.path.endswith("/task-1"):
+            return httpx2.Response(200, json={"status": "succeeded", "content": {"video_url": "https://cdn.example/v.mp4"}})
+        return httpx2.Response(200, content=b"mp4", headers={"content-type": "video/mp4"})
+
+    adapter = SeedanceAdapter(transport=httpx2.MockTransport(handler))
+    ctx = JobContext(
+        job_id="j", model_id="m", input={"prompt": "waves", "duration_seconds": 5}, capability={},
+        base_url="https://ark.example/api/v3", upstream_model="doubao-seedance-2-0", api_key="sk", config={},
+    )
+    submitted = adapter.submit(ctx)
+    assert submitted.status == "pending" and submitted.provider_job_id == "task-1"
+    finished = adapter.poll(ctx, "task-1")
+    assert finished.status == "succeeded"
+    assert finished.usage == {"second": 5}
+    assert finished.artifacts[0].data == b"mp4"
+    assert seen[0][1].endswith("/contents/generations/tasks")
