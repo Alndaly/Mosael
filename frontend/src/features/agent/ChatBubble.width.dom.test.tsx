@@ -64,3 +64,43 @@ it("成功的后台任务回执不常驻在对话里:交给右侧「后台任务
   expect(screen.queryByTestId("footer")).toBeNull();
   expect(container.querySelectorAll("button")).toHaveLength(0);
 });
+
+it("失败回合:正文照常渲染,错误卡只承担失败原因", () => {
+  //: 用户截图:一整段已经写好的回答被塞进红色错误卡,看起来像「所有回答都没了」。
+  //: 后端现在把正文与 failure_text 分开存,气泡必须把正文按普通 Markdown 画出来。
+  const message = {
+    id: "m3",
+    role: "assistant",
+    content: "我先看了八个房间的白模。",
+    payload: { failure_text: "智能体执行失败,请稍后重试。", timeline: [] },
+    error: "Connection error.",
+    created_at: "2026-11-03T08:00:00Z",
+  } as unknown as Parameters<typeof ChatBubble>[0]["message"];
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ChatBubble message={message} usageEvents={[]} workspaceId="w1" />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByText("我先看了八个房间的白模。")).toBeTruthy();
+  expect(screen.getByText("智能体执行失败,请稍后重试。")).toBeTruthy();
+});
+
+it("失败回合:时间线已经画过正文时不再重复画 content", () => {
+  const message = {
+    id: "m4",
+    role: "assistant",
+    content: "我先看了八个房间的白模。",
+    payload: {
+      failure_text: "智能体执行失败,请稍后重试。",
+      timeline: [{ type: "text", text: "我先看了八个房间的白模。" }],
+    },
+    error: "Connection error.",
+    created_at: "2026-11-03T08:00:00Z",
+  } as unknown as Parameters<typeof ChatBubble>[0]["message"];
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ChatBubble message={message} usageEvents={[]} workspaceId="w1" />
+    </QueryClientProvider>,
+  );
+  expect(screen.getAllByText("我先看了八个房间的白模。")).toHaveLength(1);
+});

@@ -51,10 +51,11 @@ def test_a_failed_turn_keeps_what_the_model_already_said(monkeypatch) -> None:
     messages = _wait(client, session["id"])
     assistant = messages[-1]
     assert assistant["role"] == "assistant"
-    # 说过的话还在,失败原因接在后面(而不是只剩一句"执行失败")。
+    # 正文只放说过的话;失败原因单独进 payload,界面把它挂在错误卡上,不再混进正文。
     assert "我先看看节点类型。" in assistant["content"]
     assert "搭好了 4 路并发抓取。" in assistant["content"]
-    assert "智能体执行失败" in assistant["content"]
+    assert "智能体执行失败" not in assistant["content"]
+    assert "智能体执行失败" in (assistant.get("payload") or {}).get("failure_text", "")
     # 草稿只应该有一条:收尾是**更新**它,不是另起一条。
     assert [m["role"] for m in messages] == ["user", "assistant"]
     assert not (assistant.get("payload") or {}).get("streaming"), "收尾后不该还挂着 streaming"
@@ -90,7 +91,8 @@ def test_a_restart_keeps_the_draft_text_and_appends_the_notice() -> None:
         kept = db.get(AgentMessage, draft_id)
         assert kept is not None, "不该另起一条:草稿就是这一轮的那条消息"
         assert "我已经读完 15 个节点。" in kept.content, "已经说过的话不能丢"
-        assert INTERRUPTED_NOTICE in kept.content, "中断说明要接在后面"
+        assert INTERRUPTED_NOTICE not in kept.content, "中断说明不再混进正文"
+        assert (kept.payload or {}).get("failure_text") == INTERRUPTED_NOTICE, "中断说明单独进 payload"
         assert kept.error == "backend restarted mid-turn"
         assert not (kept.payload or {}).get("streaming"), "接管之后不再是流式中"
 

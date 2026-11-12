@@ -9,6 +9,8 @@ import { useI18n } from "@/app/preferences";
 import { CompactionNotice, type CompactionInfo } from "@/features/agent/ContextMeter";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type FoldedReceipt } from "@/features/agent/ToolCalls";
 import type { AnsweredChoice } from "@/features/agent/AnsweredChoice";
+import { AgentMarkdown } from "@/components/markdown/Markdown";
+import { AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
 import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { CHAT_ASSISTANT_ROW_CLASS, CHAT_USER_PILL_CLASS, CHAT_USER_ROW_CLASS } from "@/features/agent/agentRow";
 import type { JSONContent } from "@tiptap/react";
@@ -225,9 +227,18 @@ export const ChatBubble = React.memo(function ChatBubble({
             durationSeconds={payload?.usage?.duration_seconds}
             foldedReceipts={foldedReceipts}
           />
+          {(payload as { failure_text?: string } | null)?.failure_text
+          && message.content.trim()
+          && !payload?.timeline?.some((item) => item.type === "text") ? (
+            <div className={AGENT_TEXT_BLOCK_CLASS}><AgentMarkdown>{message.content}</AgentMarkdown></div>
+          ) : null}
           {message.error && (
             <div className={payload?.timeline?.length ? "mt-2" : undefined}>
-              <AgentErrorCard content={message.content} error={message.error} code={(message.payload as { error_code?: string } | null)?.error_code} />
+              <AgentErrorCard
+                content={(payload as { failure_text?: string } | null)?.failure_text ?? message.content}
+                error={message.error}
+                code={(message.payload as { error_code?: string } | null)?.error_code}
+              />
             </div>
           )}
         </>

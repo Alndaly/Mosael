@@ -1050,11 +1050,12 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 db,
                 draft_holder["id"],
                 session.id,
-                # 说得出原因就说原因 —— 「请稍后重试」对一次超时是错的建议;正文在前,原因在后。
-                content="{}\n\n{}".format(streamed, failure_text) if streamed else failure_text,
+                # 正文和失败原因分开存:正文按正常助手回答渲染,错误卡只承担原因。
+                content=streamed or failure_text,
                 error=str(exc)[:800],
                 payload={
                     "usage": usage,
+                    **({"failure_text": failure_text} if streamed else {}),
                     # 这一轮的记忆回存了:那条用户消息、做过的工具调用都在模型记忆里。`unseen_since_last_success` 据此
                     # 不再把它当成「你没见过的」整段重述一遍(重述会让模型以为没做过,再做一遍)。
                     **({"memory_saved": True} if memory_saved else {}),
@@ -1096,9 +1097,13 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 db,
                 draft_holder["id"],
                 session.id,
-                content="{}\n\n{}".format(streamed, crashed) if streamed else crashed,
+                content=streamed or crashed,
                 error=str(exc)[:800],
-                payload={"usage": usage, **_failed_turn_timeline(session_id)},
+                payload={
+                    "usage": usage,
+                    **({"failure_text": crashed} if streamed else {}),
+                    **_failed_turn_timeline(session_id),
+                },
             )
             if provider_vendor or provider_model:
                 # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
@@ -1289,11 +1294,11 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
         interrupted = _interrupted_turn_payload(db, session.id)
         draft = _streaming_draft(db, session.id)
         if draft is not None:
-            # **草稿还在:已经说过的话留着**,只把中断说明接在后面。
+            # **草稿还在:已经说过的话留着**,中断说明单独进 payload,不混进正文。
             kept = (draft.content or "").strip()
-            draft.content = "{}\n\n{}".format(kept, INTERRUPTED_NOTICE) if kept else INTERRUPTED_NOTICE
+            draft.content = kept or INTERRUPTED_NOTICE
             draft.error = "backend restarted mid-turn"
-            draft.payload = interrupted
+            draft.payload = {**interrupted, **({"failure_text": INTERRUPTED_NOTICE} if kept else {})}
         else:
             db.add(
                 AgentMessage(
