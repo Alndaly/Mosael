@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  Boxes,
+  Building2,
   ChevronsUpDown,
   FolderPlus,
   Languages,
@@ -474,7 +474,7 @@ function WorkspaceSwitcher({
         <Hint label={compact ? workspaceName : undefined} hint={compact ? t("workspaceSwitch") : undefined} side="right">
           <PopoverTrigger asChild>
             <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center rounded-lg text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact ? "aspect-square justify-center bg-accent p-0 text-primary hover:bg-primary/20 data-[state=open]:ring-2 data-[state=open]:ring-ring" : "h-14 gap-2.5 px-2 hover:bg-secondary data-[state=open]:bg-secondary")} aria-label={t("workspaceSwitch")}>
-              <span className={cn("grid shrink-0 place-items-center text-primary", compact ? "size-5" : "size-8 rounded-md bg-accent")}><Boxes size={compact ? 20 : 18} /></span>
+              <span className={cn("grid shrink-0 place-items-center text-primary", compact ? "size-5" : "size-8 rounded-md bg-accent")}><Building2 size={compact ? 20 : 18} /></span>
               {!compact && <><span className="min-w-0 flex-1"><Truncate className="text-ui-sm font-semibold">{workspaceName}</Truncate><span className="block text-ui-xs text-muted-foreground">{t("workspaceSwitch")}</span></span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
             </button>
           </PopoverTrigger>
