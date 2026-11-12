@@ -724,6 +724,8 @@ export const aiStudio = {
   providerMosaelCloudSignedIn: "Official relay · {email}",
   providerMosaelCloudSignedOut: "Official relay · sign in to use models Mosael has set up for you",
   providerMosaelCloudSignIn: "Sign in",
+  providerMosaelCloudEmptyTitle: "Mosael Cloud has no models for this capability yet",
+  providerMosaelCloudEmptyBody: "Refresh after the gateway opens it; your other connections are unaffected.",
   providerMosaelCloudSoon: "Coming soon for this kind",
   providerMosaelCloudCredits: "{credits} credits",
   providerMosaelCloudRefresh: "Refresh models and credit prices",

@@ -16,6 +16,9 @@ vi.mock("@/app/preferences", () => ({
       providerMosaelCloudSignedOut: "登录后可用",
       providerMosaelCloudSignIn: "去登录",
       providerMosaelCloudSoon: "这类模型即将开放",
+      providerMosaelCloudEmptyTitle: "Mosael Cloud 还没有这类模型",
+      providerMosaelCloudEmptyBody: "刷新后重新对齐。",
+      modelListEmptyTitle: "这个连接还没有模型",
       providerMosaelCloudCredits: "{credits} 积分",
       providerMosaelCloudRefresh: "刷新",
       providerMosaelCloudSynced: "取到 {n} 个模型",
@@ -74,11 +77,13 @@ describe("供应商列表里的 Mosael Cloud", () => {
     expect(screen.queryByText("这类模型即将开放")).toBeNull();
   });
 
-  it("这一页的能力网关还没有:说即将开放,不给展开", async () => {
+  it("这一页的能力网关还没有:说即将开放,展开后给空状态", async () => {
     session = async () => ({ email: "alice@example.com" });
     renderRow({ profile: PROFILE, offersCapability: false });
     expect(await screen.findByText("这类模型即将开放")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "模型" })).toBeNull();
+    await userEvent.click(await screen.findByRole("button", { name: "模型" }));
+    expect(screen.getByText("Mosael Cloud 还没有这类模型")).toBeTruthy();
+    expect(screen.queryByTestId("models")).toBeNull();
   });
 
   it("「刷新」重新对齐网关目录", async () => {

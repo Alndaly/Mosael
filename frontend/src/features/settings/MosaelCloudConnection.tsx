@@ -14,6 +14,7 @@ import { errorText } from "@/api/errorMessage";
 import { cloudKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
@@ -81,7 +82,7 @@ function SignedInRow({
     onError: (error) => toast.error(errorText(error)),
   });
   const credits = account.data ? t("providerMosaelCloudCredits").replace("{credits}", account.data.credits.toLocaleString()) : "";
-  const showModels = offersCapability && profile !== null;
+  const canExpand = profile !== null;
 
   return (
     <SettingsListBlock>
@@ -97,7 +98,7 @@ function SignedInRow({
         <div className="flex items-center gap-1">
           {offersCapability || profile === null ? null : <Badge variant="outline">{t("providerMosaelCloudSoon")}</Badge>}
           <Button variant="outline" size="sm" onClick={() => setBuying(true)}>{t("cloudBuy")}</Button>
-          {showModels && (
+          {canExpand && (
             <IconButton
               size="icon-sm"
               label={t("modelListTitle")}
@@ -111,9 +112,21 @@ function SignedInRow({
             <RotateCw size={13} />
           </IconButton>
         </div>
-        {showModels && expanded && (
+        {canExpand && expanded && (
           <div className="col-span-full border-t border-border pt-2">
-            <ProviderModelList profileId={profile.id} vendor={profile.vendor} />
+            {offersCapability ? (
+              <ProviderModelList profileId={profile.id} vendor={profile.vendor} />
+            ) : (
+              <div className="grid place-items-center rounded-lg border border-dashed border-border px-4 py-5">
+                <EmptyState
+                  size="compact"
+                  icon={<Cloud size={16} />}
+                  title={t("providerMosaelCloudEmptyTitle")}
+                  body={t("providerMosaelCloudEmptyBody")}
+                  action={<Button size="sm" variant="outline" loading={sync.isPending} onClick={() => sync.mutate()}>{t("providerMosaelCloudRefresh")}</Button>}
+                />
+              </div>
+            )}
           </div>
         )}
       </SettingsListItem>

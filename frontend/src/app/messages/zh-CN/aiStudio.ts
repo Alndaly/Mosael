@@ -726,6 +726,8 @@ export const aiStudio = {
   providerMosaelCloudSignedIn: "官方中转 · {email}",
   providerMosaelCloudSignedOut: "官方中转 · 登录后在 Mosael 里直接用官方配好的模型",
   providerMosaelCloudSignIn: "去登录",
+  providerMosaelCloudEmptyTitle: "Mosael Cloud 还没有这类模型",
+  providerMosaelCloudEmptyBody: "网关开放后点「刷新」重新对齐；已经配好的其它连接不受影响。",
   providerMosaelCloudSoon: "这类模型即将开放",
   providerMosaelCloudCredits: "{credits} 积分",
   providerMosaelCloudRefresh: "刷新模型与积分单价",
