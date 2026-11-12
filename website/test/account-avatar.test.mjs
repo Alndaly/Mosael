@@ -55,12 +55,15 @@ function avatarClass() {
   return found[1];
 }
 
-test("① 已登录渲染成圆形头像:链接 + 圆形 + 36px,不再是「账号」两个字", () => {
+test("① 已登录渲染成圆形头像:按钮 + 菜单 + 圆形 + 36px,不再是「账号」两个字", () => {
   const cls = avatarClass();
   assert.match(cls, /rounded-full/, "头像不是圆形");
-  assert.match(accountNav, /<Link\b/, "头像不是链接(键盘到不了)");
+  assert.match(accountNav, /aria-haspopup="menu"/, "头像不是能打开账号菜单的按钮");
+  assert.match(accountNav, /href=\{`\/\$\{locale\}\/dashboard`\}/, "账号菜单里没有去控制台的入口");
+  assert.match(accountNav, /cloudAccount\.logout\(/, "账号菜单里没有退出登录");
+  assert.match(accountNav, /invalidateAfterSignOut\(queryClient\)/, "退出后没有清站头 / 未读缓存");
   assert.match(accountNav, /\{initialOf\(/, "头像里没有放账号名的首字");
-  assert.doesNotMatch(accountNav, /\{accountLabel\}\s*<\/Link>/, "已登录入口还在渲染「账号」文字");
+  assert.doesNotMatch(accountNav, /className="[^"]*size-9[^"]*"[^>]*>\s*\{accountLabel\}/, "已登录入口还在渲染「账号」文字");
 });
 
 test("① 头像直径与旁边那排图标按钮同一档(量过:GitHub / 主题 / 语言 / 搜索都是 36px)", () => {

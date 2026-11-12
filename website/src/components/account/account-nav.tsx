@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
-import { formatUnreadBadge, type CloudUser } from "@/lib/cloud";
+import { cloudAccount, formatUnreadBadge, type CloudUser } from "@/lib/cloud";
+import { invalidateAfterSignOut } from "@/lib/query-invalidation";
 import { useUnreadCount, useViewer } from "@/lib/queries";
 
 /**
@@ -73,15 +77,52 @@ export function AccountNav({
   locale,
   loginLabel,
   accountLabel,
+  signOutLabel,
 }: {
   locale: Locale;
   loginLabel: string;
   accountLabel: string;
+  signOutLabel: string;
 }) {
   // undefined = 还在问 /me;null = 问过了,没登录。两份数据都走查询缓存:
   // 登录 / 退出 / 改资料之后由 invalidateQueries 通知,而不是只有挂载时问一次。
   const viewer = useViewer();
   const unreadQuery = useUnreadCount();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === "Escape") setOpen(false);
+        return;
+      }
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const signOut = async () => {
+    setSigningOut(true);
+    try {
+      await cloudAccount.logout();
+    } catch {
+      // 服务端撤销失败也要离开这一页:留着本地缓存比留着 cookie 更糟。
+    }
+    await invalidateAfterSignOut(queryClient);
+    setOpen(false);
+    router.push(`/${locale}/login`);
+    router.refresh();
+  };
   // 注意不能用 `viewer.data ?? ...` —— 401 时 data 是 **null**(「问过了,没登录」),
   // 空值合并会把它当成「还没问过」,登录按钮就永远不出现。undefined 才是加载中。
   const user = viewer.data !== undefined ? viewer.data : viewer.isError ? null : undefined;
@@ -95,23 +136,54 @@ export function AccountNav({
     const badge = formatUnreadBadge(unread);
     const label = badge ? `${avatarLabel(accountLabel, name)} · ${badge}` : avatarLabel(accountLabel, name);
     return (
-      <Link
-        href={`/${locale}/dashboard`}
-        aria-label={label}
-        title={label}
-        className="relative inline-flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-ink transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
-        style={avatarStyle(name || user.id)}
-      >
-        {initialOf(name)}
-        {badge && (
-          <span
-            aria-hidden
-            className="absolute -top-0.5 -right-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-background tabular-nums ring-2 ring-background"
+      <div ref={menuRef} className="relative shrink-0">
+        <button
+          type="button"
+          aria-label={label}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          title={label}
+          onClick={() => setOpen((value) => !value)}
+          className="relative inline-flex size-9 items-center justify-center rounded-full text-sm font-semibold text-ink transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+          style={avatarStyle(name || user.id)}
+        >
+          {initialOf(name)}
+          {badge && (
+            <span
+              aria-hidden
+              className="absolute -top-0.5 -right-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-background tabular-nums ring-2 ring-background"
+            >
+              {badge}
+            </span>
+          )}
+        </button>
+        {open && (
+          <div
+            role="menu"
+            aria-label={accountLabel}
+            className="absolute right-0 top-full z-50 mt-2 w-44 overflow-hidden rounded-lg border border-border bg-background p-1 shadow-lg"
           >
-            {badge}
-          </span>
+            <Link
+              role="menuitem"
+              href={`/${locale}/dashboard`}
+              onClick={() => setOpen(false)}
+              className="flex items-center rounded-md px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary"
+            >
+              {accountLabel}
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={signingOut}
+              onClick={() => void signOut()}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+            >
+              <LogOut size={14} aria-hidden />
+              {signingOut ? "…" : signOutLabel}
+            </button>
+          </div>
         )}
-      </Link>
+      </div>
     );
   }
   return (

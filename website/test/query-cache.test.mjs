@@ -181,7 +181,9 @@ test("③ 站头 / 个人页 / 通知改成了 hook;账号页只剩跳转", asyn
   const nav = read(NAV);
   assert.match(nav, /import \{[^}]*useViewer[^}]*\} from "@\/lib\/queries"/, "站头没有用 useViewer");
   assert.match(nav, /import \{[^}]*useUnreadCount[^}]*\} from "@\/lib\/queries"/, "站头没有用 useUnreadCount");
-  assert.doesNotMatch(stripComments(nav), /useEffect/, "站头还在用 useEffect 取数(改了昵称/头像后不会刷新)");
+  //: 站头现在有一个 useEffect,只负责账号菜单的点击外部 / Esc 关闭,不取数;
+  //: 取数仍然只走 useViewer / useUnreadCount。
+  assert.doesNotMatch(stripComments(nav), /useEffect\([\s\S]{0,400}cloudAccount\.me\(/, "站头还在用 useEffect 问 /me");
   assert.doesNotMatch(stripComments(nav), /cloudAccount\.me\(/, "站头还在自己问 /me");
   assert.doesNotMatch(stripComments(nav), /cloudNotifications\.unreadCount\(/, "站头还在自己问 unread-count");
 

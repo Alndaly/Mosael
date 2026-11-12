@@ -68,7 +68,7 @@ test("登录是次级按钮(复用 Button + outline),不是纯文字链接", () 
   assert.doesNotMatch(loginButton, /<div\b|<span\b/, "登录被改成了没有链接语义的元素");
 
   // 显示文字已经说清是「登录」,不再叠一个重复的 aria-label。
-  assert.doesNotMatch(accountNav, /aria-label=\{?(loginLabel|accountLabel)/, "aria-label 与可见文字重复");
+  assert.doesNotMatch(loginButton, /aria-label=/, "登录按钮的 aria-label 与可见文字重复");
 });
 
 test("登录与「下载」不同视觉重量:一个描边、一个实心主色", () => {
