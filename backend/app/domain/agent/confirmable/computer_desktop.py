@@ -21,6 +21,7 @@ from app.domain.agent.computer_use import desktop_type as use_type
 from app.domain.agent import replay as replay_store
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
+from app.domain import host_files
 
 
 def _with_replay(confirmation: Any, result: dict[str, Any]) -> dict[str, Any]:
@@ -88,8 +89,6 @@ def _summarize_click(db: Session, payload: dict[str, Any]) -> Summary:
 
 
 def _whole_machine_guard(db: Session, actor: str | None) -> None:
-    from app.domain import host_files
-
     try:
         host_files.ensure_whole_machine(db, actor=actor)
     except host_files.HostFileNotAllowed as exc:
