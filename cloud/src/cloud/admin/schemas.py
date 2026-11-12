@@ -10,6 +10,13 @@ from pydantic import BaseModel, Field
 RoleName = Literal["member", "admin"]
 
 
+class UserPatch(BaseModel):
+    """管理台修改公开身份;邮箱 / 手机号会换登录方式,不在这里改。"""
+
+    display_name: str | None = None
+    handle: str | None = None
+
+
 class RoleIn(BaseModel):
     role: RoleName
 

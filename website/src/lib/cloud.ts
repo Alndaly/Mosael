@@ -632,6 +632,13 @@ export const cloudAdmin = {
   usage: (days = 7) => request<AdminUsage>(`/admin/usage?days=${days}`),
   users: (q = "") => request<{ users: AdminUser[] }>(`/admin/users?${new URLSearchParams({ q })}`),
   user: (id: string) => request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}`),
+  updateUser: (id: string, body: { display_name?: string; handle?: string }) =>
+    request<{ user: AdminUser }>(`/admin/users/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteUser: (id: string) =>
+    request<void>(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" }),
   resetPassword: (id: string) =>
     request<{ temporary_password: string }>(`/admin/users/${encodeURIComponent(id)}/reset-password`, {
       method: "POST",
@@ -705,4 +712,6 @@ export const cloudAdmin = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  deletePlan: (slug: string) =>
+    request<void>(`/admin/plans/${encodeURIComponent(slug)}`, { method: "DELETE" }),
 };

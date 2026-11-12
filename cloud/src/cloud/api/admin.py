@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Response
 
 from cloud.admin import service
 from cloud.admin.schemas import (
@@ -19,6 +19,7 @@ from cloud.admin.schemas import (
     PlanPatch,
     PriceIn,
     ProviderIn,
+    UserPatch,
     ProviderPatch,
     RoleIn,
     SubscribeIn,
@@ -53,6 +54,25 @@ def admin_users(
 @router.get("/admin/users/{user_id}")
 def admin_user(user_id: str, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
     return {"user": service.user_detail(db, user_id)}
+
+
+@router.patch("/admin/users/{user_id}")
+def admin_update_user(
+    user_id: str, body: UserPatch, actor: CurrentAdmin, db: DbSession
+) -> dict[str, object]:
+    user = service.update_user(db, user_id, display_name=body.display_name, handle=body.handle)
+    audit.record(db, actor=actor, action="user.update", target_type="user", target_id=user_id,
+                 detail={"display_name": body.display_name, "handle": body.handle})
+    db.commit()
+    return {"user": user}
+
+
+@router.delete("/admin/users/{user_id}", status_code=204)
+def admin_delete_user(user_id: str, actor: CurrentAdmin, db: DbSession) -> Response:
+    service.delete_user(db, user_id, acting_user_id=actor.id)
+    audit.record(db, actor=actor, action="user.delete", target_type="user", target_id=user_id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/admin/users/{user_id}/role")
@@ -271,6 +291,14 @@ def admin_create_plan(body: PlanIn, actor: CurrentAdmin, db: DbSession) -> dict[
                  detail={"name": body.name, "monthly_credits": body.monthly_credits})
     db.commit()
     return {"plan": plan}
+
+
+@router.delete("/admin/plans/{slug}", status_code=204)
+def admin_delete_plan(slug: str, actor: CurrentAdmin, db: DbSession) -> Response:
+    service.delete_plan(db, slug)
+    audit.record(db, actor=actor, action="plan.delete", target_type="plan", target_id=slug)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/admin/plans/{slug}")

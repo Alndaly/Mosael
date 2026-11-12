@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
 from cloud.domain import catalog, credits
+from cloud.domain.identity import set_identity
 from cloud.domain import admin as role_admin
 from cloud.domain import orders as order_domain
 from cloud.domain.channel_keys import unseal
@@ -149,6 +150,34 @@ def set_role(db: Session, user_id: str, role: str) -> dict[str, object]:
         except role_admin.RoleError as exc:
             raise CloudError(409, "last_admin") from exc
     return _user_view(db, user, now())
+
+
+def update_user(
+    db: Session, user_id: str, *, display_name: str | None, handle: str | None
+) -> dict[str, object]:
+    user = db.get(CloudUser, user_id)
+    if user is None:
+        raise CloudError(404, "user_not_found")
+    user = set_identity(db, user, display_name=display_name, handle=handle)
+    return _user_view(db, user, now())
+
+
+def delete_user(db: Session, user_id: str, *, acting_user_id: str) -> None:
+    user = db.get(CloudUser, user_id)
+    if user is None:
+        raise CloudError(404, "user_not_found")
+    if user.id == acting_user_id:
+        raise CloudError(400, "cannot_delete_self")
+    if user.official:
+        raise CloudError(409, "official_account")
+    if user.role == role_admin.ROLE_ADMIN:
+        admins = int(db.scalar(
+            select(func.count()).select_from(CloudUser).where(CloudUser.role == role_admin.ROLE_ADMIN)
+        ) or 0)
+        if admins <= 1:
+            raise CloudError(409, "last_admin")
+    db.delete(user)
+    db.flush()
 
 
 def gift(db: Session, user_id: str, *, amount: int, days: int, note: str) -> dict[str, object]:
@@ -359,6 +388,21 @@ def update_provider(
         catalog.replace_provider_key(db, config, provider, api_key)
     db.flush()
     return _provider_view(provider)
+
+
+def delete_plan(db: Session, slug: str) -> None:
+    plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == slug))
+    if plan is None:
+        raise CloudError(404, "plan_not_found")
+    in_use = db.scalar(
+        select(func.count()).select_from(CloudSubscription).where(CloudSubscription.plan_id == plan.id)
+    ) or db.scalar(
+        select(func.count()).select_from(CloudOrder).where(CloudOrder.plan_id == plan.id)
+    )
+    if in_use:
+        raise CloudError(409, "plan_in_use")
+    db.delete(plan)
+    db.flush()
 
 
 def _channel_view(

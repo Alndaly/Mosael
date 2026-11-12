@@ -284,6 +284,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Change your own password under Settings → Account instead.",
         "zh": "自己的密码请在「设置 → 账户」里修改。",
     },
+    "cannot_delete_self": {
+        "en": "You cannot delete your own account from the admin console.",
+        "zh": "不能在这里删除自己的账号。",
+    },
+    "official_account": {
+        "en": "The official account cannot be deleted.",
+        "zh": "官方账号不能删除。",
+    },
+    "plan_in_use": {
+        "en": "This plan has subscriptions or orders and cannot be deleted. Turn off online sale instead.",
+        "zh": "这个套餐还有订阅或订单，不能删除；可以先关闭在线销售。",
+    },
     "user_not_found": {
         "en": "No MosaelCloud account uses that handle.",
         "zh": "没有这个短名对应的账号。",

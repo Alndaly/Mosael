@@ -113,6 +113,8 @@ function auditTargetLabel(target: string, copy: Messages["admin"]): string {
 function auditActionLabel(action: string, copy: Messages["admin"]): string {
   const labels: Record<string, string> = {
     "user.role": copy.auditUserRole,
+    "user.update": copy.auditUserUpdate,
+    "user.delete": copy.auditUserDelete,
     "user.reset_password": copy.auditUserResetPassword,
     "user.credits": copy.auditUserCredits,
     "user.subscribe": copy.auditUserSubscribe,
@@ -125,6 +127,7 @@ function auditActionLabel(action: string, copy: Messages["admin"]): string {
     "channel.update": copy.auditChannelUpdate,
     "plan.create": copy.auditPlanCreate,
     "plan.update": copy.auditPlanUpdate,
+    "plan.delete": copy.auditPlanDelete,
   };
   return labels[action] ?? action;
 }
@@ -428,6 +431,7 @@ function UsersPanel({ copy, locale, users, plans, onChanged, onFailure }: {
           plans={plans}
           onClose={() => setSelected(null)}
           onUser={(next) => { setSelected(next); onChanged(); }}
+          onDeleted={() => { setSelected(null); onChanged(); }}
           onFailure={onFailure}
         />
       )}
@@ -435,23 +439,44 @@ function UsersPanel({ copy, locale, users, plans, onChanged, onFailure }: {
   );
 }
 
-function UserDialog({ copy, locale, user, plans, onClose, onUser, onFailure }: {
+function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onFailure }: {
   copy: Messages["admin"];
   locale: Locale;
   user: AdminUser;
   plans: AdminPlan[];
   onClose: () => void;
   onUser: (user: AdminUser) => void;
+  onDeleted: () => void;
   onFailure: (failure: unknown) => void;
 }) {
   const [current, setCurrent] = useState(user);
+  const [displayName, setDisplayName] = useState(user.display_name ?? "");
+  const [handleValue, setHandleValue] = useState(user.handle ?? "");
   const [credits, setCredits] = useState("100");
   const [days, setDays] = useState("30");
   const [note, setNote] = useState("");
   const [plan, setPlan] = useState(plans[0]?.slug ?? "");
   const [temporary, setTemporary] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState("");
   const update = (next: AdminUser) => { setCurrent(next); onUser(next); };
+  const saveProfile = async () => {
+    setBusy("profile");
+    try {
+      const payload: { display_name?: string; handle?: string } = {};
+      if (displayName.trim()) payload.display_name = displayName.trim();
+      if (handleValue.trim()) payload.handle = handleValue.trim();
+      update((await cloudAdmin.updateUser(current.id, payload)).user);
+      toast.success(copy.saved);
+    } catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const removeUser = async () => {
+    setBusy("delete");
+    try {
+      await cloudAdmin.deleteUser(current.id);
+      onDeleted();
+    } catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
   const role = async () => {
     setBusy("role");
     try { update((await cloudAdmin.setRole(current.id, current.role === "admin" ? "member" : "admin")).user); }
@@ -481,6 +506,13 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onFailure }: {
           <DialogDescription>{current.email || current.phone || current.id} · {roleLabel(current.role, copy)} · {copy.credits} {current.credits}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-5">
+          <div className="grid gap-3 border-t border-border pt-4">
+            <strong className="text-sm">{copy.profileInfo}</strong>
+            <Field label={copy.displayName}><AInput value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
+            <Field label={copy.handle}><AInput value={handleValue} onChange={(event) => setHandleValue(event.target.value)} /></Field>
+            <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.handleHint}</p>
+            <AButton className="w-full" variant="outline" onClick={() => void saveProfile()} loading={busy === "profile"} disabled={Boolean(busy)}>{copy.save}</AButton>
+          </div>
           <div className="flex flex-wrap gap-2">
             <AButton variant="outline" onClick={() => void role()} loading={busy === "role"} disabled={Boolean(busy)}>{current.role === "admin" ? copy.removeAdmin : copy.makeAdmin}</AButton>
             <AButton variant="outline" onClick={() => void reset()} loading={busy === "reset"} disabled={Boolean(busy)}>{copy.resetPassword}</AButton>
@@ -514,6 +546,19 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onFailure }: {
           <div className="grid gap-1 border-t border-border pt-4">
             <strong className="text-sm">{copy.orders}</strong>
             {current.orders?.length ? current.orders.map((order) => <p key={order.id} className="m-0 py-1 text-xs text-muted-foreground">{order.plan?.name || "—"} · {orderStatusLabel(order.status, copy)} · {money(order.amount_cents)} · {date(order.created_at, locale)}</p>) : <p className="m-0 py-2 text-xs text-muted-foreground">{copy.noOrders}</p>}
+          </div>
+          <div className="grid gap-2 border-t border-destructive/30 pt-4">
+            {confirmingDelete ? (
+              <>
+                <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.deleteUserConfirm}</p>
+                <div className="flex flex-wrap gap-2">
+                  <AButton variant="destructive" onClick={() => void removeUser()} loading={busy === "delete"} disabled={Boolean(busy)}>{copy.confirmDelete}</AButton>
+                  <AButton variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={Boolean(busy)}>{copy.cancel}</AButton>
+                </div>
+              </>
+            ) : (
+              <AButton variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmingDelete(true)} disabled={Boolean(busy)}>{copy.deleteUser}</AButton>
+            )}
           </div>
         </div>
       </DialogContent>
@@ -854,7 +899,9 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
   const [ttl, setTtl] = useState(String(plan?.credit_ttl_days ?? 60));
   const [price, setPrice] = useState(plan?.price_cents ? String(plan.price_cents) : "");
   const [onSale, setOnSale] = useState(plan?.on_sale ?? false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const submit = async () => {
     setSaving(true);
     try {
@@ -863,6 +910,14 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
       else await cloudAdmin.createPlan({ ...payload, slug });
       onSaved();
     } catch (failure) { onFailure(failure); } finally { setSaving(false); }
+  };
+  const removePlan = async () => {
+    if (!plan) return;
+    setDeleting(true);
+    try {
+      await cloudAdmin.deletePlan(plan.slug);
+      onSaved();
+    } catch (failure) { onFailure(failure); } finally { setDeleting(false); }
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -880,6 +935,21 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
             <Switch checked={onSale} onCheckedChange={setOnSale} aria-label={copy.onSale} />
           </div>
         </div>
+        {plan && (
+          <div className="grid gap-2 border-t border-destructive/30 pt-4">
+            {confirmingDelete ? (
+              <>
+                <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.deletePlanConfirm}</p>
+                <div className="flex flex-wrap gap-2">
+                  <AButton variant="destructive" onClick={() => void removePlan()} loading={deleting} disabled={saving || deleting}>{copy.confirmDelete}</AButton>
+                  <AButton variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={saving || deleting}>{copy.cancel}</AButton>
+                </div>
+              </>
+            ) : (
+              <AButton variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmingDelete(true)} disabled={saving}>{copy.deletePlan}</AButton>
+            )}
+          </div>
+        )}
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.save}</AButton></DialogFooter>
       </DialogContent>
     </Dialog>
