@@ -805,7 +805,7 @@ function PlansPanel({ copy, plans, onChanged, onFailure }: {
       <Card className="bg-card/60 ring-border">
         <CardHeader className="flex flex-row items-center justify-between"><CardTitle>{copy.tabPlans}</CardTitle><AButton onClick={() => setDialog({ plan: null })}>{copy.addPlan}</AButton></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow><TableHead>{copy.planCode}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.priceCents}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
+          <Table><TableHeader><TableRow><TableHead>{copy.planCode}</TableHead><TableHead>{copy.monthlyCredits}</TableHead><TableHead>{copy.price}</TableHead><TableHead>{copy.onSale}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{plans.map((plan) => <TableRow key={plan.slug}><TableCell><strong className="block">{plan.slug}</strong><span className="text-xs text-muted-foreground">{plan.name}</span></TableCell><TableCell>{plan.monthly_credits} · {periodLabel(plan.period, copy)}</TableCell><TableCell>{money(plan.price_cents)}</TableCell><TableCell><PlanOnSaleSwitch copy={copy} plan={plan} onChanged={onChanged} onFailure={onFailure} /></TableCell><TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ plan })}>{copy.edit}</AButton></TableCell></TableRow>)}</TableBody>
           </Table>
           {plans.length === 0 && <Empty>{copy.noPlans}</Empty>}
