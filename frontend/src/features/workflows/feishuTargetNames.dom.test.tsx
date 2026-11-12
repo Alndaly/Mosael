@@ -72,7 +72,6 @@ function cardLine(g: WorkflowGraph, catalog: unknown[]) {
         markersVisible: true,
         annotationMode: false,
         searchHit: null,
-        atRoot: true,
         refName: plainRefName,
         portNamer: workflowPortNamer({ registry: REGISTRY, t: T }),
       }),

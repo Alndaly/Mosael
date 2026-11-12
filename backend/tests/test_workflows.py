@@ -517,6 +517,39 @@ def test_loop_foreach_iterates_body_and_feeds_downstream() -> None:
     assert context["loop"]["count"] == 3
     # The join node proves the actual per-iteration outputs were collected in order and consumable.
     assert context["join"]["output"] == "第0项:甲 | 第1项:乙 | 第2项:丙"
+    events = client.get(f"/api/jobs/{job_id}/events").json()
+    scoped = [(e["type"], (e.get("payload") or {}).get("node_id"), (e.get("payload") or {}).get("scope"))
+              for e in events if (e.get("payload") or {}).get("node_id") == "fmt"]
+    assert ("workflow.node.started", "fmt", "loop/#0") in scoped
+    assert ("workflow.node.finished", "fmt", "loop/#2") in scoped
+
+
+def test_内嵌子图的节点事件带作用域_子画布据此显示节点运行态() -> None:
+    """循环体里的节点不发事件时，子画布只能看到整段状态条；带 scope 的 started/finished 才能点亮节点。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    body = {"nodes": [{"id": "inner", "type": "template", "config": {"template": "{{loop.item}}"}}], "edges": []}
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {"xs": ["甲", "乙"]}}},
+            {"id": "loop", "type": "loop_foreach", "config": {"items": "{{start.xs}}", "body": body, "output": "{{inner.text}}"}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "loop"}],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "体内事件", "graph": graph}).json()
+    job_id = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}}).json()["id"]
+    deadline = time.monotonic() + CODE_RUN_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "succeeded", job
+    events = client.get(f"/api/jobs/{job_id}/events").json()
+    scoped = {(e["type"], (e.get("payload") or {}).get("node_id"), (e.get("payload") or {}).get("scope"))
+              for e in events if (e.get("payload") or {}).get("node_id") == "inner"}
+    assert ("workflow.node.started", "inner", "loop/#0") in scoped
+    assert ("workflow.node.finished", "inner", "loop/#1") in scoped
 
 
 def test_loop_while_repeats_until_condition_false() -> None:

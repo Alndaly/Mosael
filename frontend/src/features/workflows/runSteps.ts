@@ -32,6 +32,8 @@ export type Step = {
   /** 跑挂了给人看的那几样(那一句、原文、原因和怎么修):后端在节点失败的事件上按读的人的语言出(TaskEventOut)。 */
   failure?: ReturnType<typeof failureFields>;
   details?: Record<string, unknown>;
+  /** 这一层图在哪(内嵌子图事件带):容器节点 id 加循环轮次,如 `loop-1/#0`。 */
+  scope?: string;
   /** 跑着的时候节点自己报的进度(插件跑一张 ComfyUI 工作流:「采样 12/20」)。跑完就不再显示。 */
   progress?: number;
   message?: string;
@@ -86,20 +88,23 @@ export function toSteps(events: TaskEvent[]): Step[] {
       error_detail?: string | null;
       error_hint?: FailureFix | null;
       details?: Record<string, unknown>;
+      scope?: string;
       progress?: number;
       message?: string;
     };
     const nid = p.node_id ?? "";
     if (!nid) continue;
+    const scope = p.scope ?? "";
+    const key = scope ? `${scope}/${nid}` : nid;
     if (e.type === "workflow.node.started") {
-      if (!byNode.has(nid)) order.push(nid);
-      byNode.set(nid, { nid, name: p.name ?? nid, nodeType: p.node_type, status: "running", startAt: e.created_at ? parseServerTime(e.created_at).getTime() : undefined });
+      if (!byNode.has(key)) order.push(key);
+      byNode.set(key, { nid, scope: scope || undefined, name: p.name ?? nid, nodeType: p.node_type, status: "running", startAt: e.created_at ? parseServerTime(e.created_at).getTime() : undefined });
     } else if (e.type === "workflow.node.finished") {
-      let s = byNode.get(nid);
+      let s = byNode.get(key);
       if (!s) {
-        order.push(nid);
-        s = { nid, name: p.name ?? nid, status: "done" };
-        byNode.set(nid, s);
+        order.push(key);
+        s = { nid, scope: scope || undefined, name: p.name ?? nid, status: "done" };
+        byNode.set(key, s);
       }
       s.status = "done";
       s.outputs = p.outputs;
@@ -107,11 +112,11 @@ export function toSteps(events: TaskEvent[]): Step[] {
       s.jobId = e.job_id;
       if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseServerTime(e.created_at).getTime() - s.startAt);
     } else if (e.type === "workflow.node.failed") {
-      let s = byNode.get(nid);
+      let s = byNode.get(key);
       if (!s) {
-        order.push(nid);
-        s = { nid, name: p.name ?? nid, status: "failed" };
-        byNode.set(nid, s);
+        order.push(key);
+        s = { nid, scope: scope || undefined, name: p.name ?? nid, status: "failed" };
+        byNode.set(key, s);
       }
       s.status = "failed";
       s.error = p.error;
@@ -119,14 +124,14 @@ export function toSteps(events: TaskEvent[]): Step[] {
       s.details = p.details;
       if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseServerTime(e.created_at).getTime() - s.startAt);
     } else if (e.type === "workflow.node.progress") {
-      const s = byNode.get(nid);
+      const s = byNode.get(key);
       if (s && s.status === "running") {
         s.progress = typeof p.progress === "number" ? p.progress : s.progress;
         s.message = p.message || s.message;
       }
     } else if (e.type === "workflow.node.skipped") {
-      if (!byNode.has(nid)) order.push(nid);
-      byNode.set(nid, { nid, name: p.name ?? nid, status: "skipped" });
+      if (!byNode.has(key)) order.push(key);
+      byNode.set(key, { nid, scope: scope || undefined, name: p.name ?? nid, status: "skipped" });
     }
   }
   if (terminal) {
@@ -138,12 +143,51 @@ export function toSteps(events: TaskEvent[]): Step[] {
       }
     }
   }
-  return order.map((nid) => byNode.get(nid)!).filter(Boolean);
+  return order.map((key) => byNode.get(key)!).filter(Boolean);
 }
 
 /** 节点 id → 这一步的状态。画布按它给节点/边上色。 */
 export function stepsByNode(events: TaskEvent[]): Record<string, Step> {
-  return Object.fromEntries(toSteps(events).map((step) => [step.nid, step]));
+  return Object.fromEntries(toSteps(events).map((step) => [step.scope ? `${step.scope}/${step.nid}` : step.nid, step]));
+}
+
+/** 同一层子图里，同一个体节点在多个循环轮次里出现时，画布该显哪一种状态。 */
+const SCOPE_STATUS_RANK: Record<Step["status"], number> = {
+  failed: 5, cancelled: 4, running: 3, skipped: 2, done: 1,
+};
+
+/**
+ * 当前这一层子画布上每个节点的状态。
+ *
+ * 内嵌子图事件带 `scope`（容器路径 + 循环轮次，如 `loop-1/#0`），而画布只看当前路径
+ * (`["loop-1"]`)，不认识轮次。这里把路径里的容器 id 对齐、跳过 `#N` 轮次；同一节点在多轮里
+ * 出现时按「失败 > 被停 > 运行中 > 跳过 > 完成」取一个，至少有一轮在跑就仍会转圈。
+ */
+export function stepsAtScope(
+  steps: Record<string, Step>, path: readonly string[],
+): Record<string, Step> {
+  if (path.length === 0) return steps;
+  const out: Record<string, Step> = {};
+  for (const step of Object.values(steps)) {
+    if (!step.scope) continue;
+    const parts = [...step.scope.split("/").filter(Boolean), step.nid];
+    let index = 0;
+    let matched = true;
+    for (const container of path) {
+      while (parts[index]?.startsWith("#")) index += 1;
+      if (parts[index] !== container) { matched = false; break; }
+      index += 1;
+    }
+    if (!matched) continue;
+    while (parts[index]?.startsWith("#")) index += 1;
+    if (index !== parts.length - 1) continue;
+    const nid = parts[index];
+    const previous = out[nid];
+    if (!previous || SCOPE_STATUS_RANK[step.status] > SCOPE_STATUS_RANK[previous.status]) {
+      out[nid] = step;
+    }
+  }
+  return out;
 }
 
 /**

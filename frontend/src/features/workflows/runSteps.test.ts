@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TaskEvent } from "@/api/client";
-import { toSteps } from "@/features/workflows/runSteps";
+import { stepsAtScope, stepsByNode, toSteps } from "@/features/workflows/runSteps";
 
 describe("节点自己报的进度", () => {
   const event = (id: string, type: string, at: string, payload: Record<string, unknown>) =>
@@ -34,6 +34,24 @@ describe("节点自己报的进度", () => {
     ]);
     expect(step.truncated).toEqual({ text: 3200 });
     expect(step.jobId).toBe("j1");
+  });
+});
+
+describe("子图节点的作用域", () => {
+  const event = (id: string, type: string, at: string, payload: Record<string, unknown>) =>
+    ({ id, job_id: "j1", type, created_at: at, payload }) as TaskEvent;
+
+  it("同一层子图里的节点按 raw id 归并;多轮里有一轮在跑就还亮", () => {
+    const map = stepsByNode([
+      event("1", "workflow.node.started", "2026-09-25T08:00:00Z", { node_id: "inner", name: "体内", scope: "loop-1/#0" }),
+      event("2", "workflow.node.finished", "2026-09-25T08:00:01Z", { node_id: "inner", name: "体内", scope: "loop-1/#0", outputs: {} }),
+      event("3", "workflow.node.started", "2026-09-25T08:00:02Z", { node_id: "inner", name: "体内", scope: "loop-1/#1" }),
+      event("4", "workflow.node.finished", "2026-09-25T08:00:03Z", { node_id: "other", name: "另一层", scope: "loop-1/inner-2/#0", outputs: {} }),
+    ]);
+    const scoped = stepsAtScope(map, ["loop-1"]);
+    expect(Object.keys(scoped)).toEqual(["inner"]);
+    expect(scoped.inner.status).toBe("running");
+    expect(stepsAtScope(map, ["loop-1", "inner-2"]).other.status).toBe("done");
   });
 });
 

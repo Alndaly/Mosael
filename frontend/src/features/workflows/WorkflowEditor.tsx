@@ -49,6 +49,7 @@ import { STEP_STATUS_LABELS, type Step } from "@/features/workflows/runSteps";
 import { useReferenceHintEdges } from "@/features/workflows/referenceHints";
 import { highlightAtLayer, nodeSearchEntryId, nodeSearchTargets } from "@/features/workflows/nodeSearch";
 import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
+import { stepsAtScope } from "@/features/workflows/runSteps";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { useWorkflowCanvasEdits } from "@/features/workflows/useWorkflowCanvasEdits";
 import { useWorkflowDisplayEdges, useWorkflowDisplayNodes, canvasEdgeHeightRank, canvasEdgesForFlow } from "@/features/workflows/useWorkflowDisplayElements";
@@ -424,6 +425,11 @@ export function WorkflowEditor({
   const subflowSeconds = scopeRunStep?.status === "running" && scopeRunStep.startAt
     ? Math.max(0, (Date.now() - scopeRunStep.startAt) / 1000)
     : scopeRunStep?.ms != null ? scopeRunStep.ms / 1000 : null;
+  /** 当前画布这一层的节点状态:顶层直接用,体里从带 scope 的事件里按路径归并。 */
+  const canvasRunByNode = React.useMemo(
+    () => (atRoot ? runByNode : stepsAtScope(runByNode, scopePath)),
+    [atRoot, runByNode, scopePath],
+  );
   /** 失败卡上点了「去这个节点」:检查器翻到出问题的那一格所在的那一档(见 NodeInspector 的 revealField)。 */
   const [revealField, setRevealField] = React.useState<{ nodeId: string; field: string } | null>(null);
   /** 已经去过那个节点的那一次拦截:卡收成一行(详情浮层里原因、怎么修都还在)—— 聚焦把节点和检查器摆在画布正中,
@@ -502,7 +508,7 @@ export function WorkflowEditor({
   // 助手与执行历史上下分。上界给得宽 —— 只想看助手时把它拉满是合理的用法。
   const agentRow = useResizableRow("workflow-agent", { min: 160, max: 900, fallback: 420 });
 
-  const displayEdges = useWorkflowDisplayEdges(edges, runByNode, edgeShape);
+  const displayEdges = useWorkflowDisplayEdges(edges, canvasRunByNode, edgeShape);
   //: `{{…}}` 引用画成淡点线(只管先后,不让被引用的节点跑);被引用的不会跑时是错误色。不在图里,只叠在显示上。
   const referenceHintEdges = useReferenceHintEdges(graph, registry, { entryIsRoot: !atRoot, shape: edgeShape, t });
   //: 两串一起过一遍「同一对节点之间的第几条」:折边拿掉之后,一对节点上会同时挂着控制线、数据线和
@@ -536,7 +542,7 @@ export function WorkflowEditor({
     portNamer,
     t,
     layerIssues,
-    runByNode,
+    runByNode: canvasRunByNode,
     nodeZ,
     markers,
     patchMarker,
@@ -545,7 +551,6 @@ export function WorkflowEditor({
     markersVisible,
     annotationMode,
     searchHit: layerSearchHit,
-    atRoot,
   });
 
   return (
@@ -887,8 +892,8 @@ export function WorkflowEditor({
         {selectedNode && !annotationMode && (
           <NodeInspector
             inert={canvas.panning}
-            step={atRoot ? (runByNode[selectedNode.id] ?? null) : null}
-            runSteps={atRoot ? runByNode : undefined}
+            step={canvasRunByNode[selectedNode.id] ?? null}
+            runSteps={canvasRunByNode}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}

@@ -656,6 +656,10 @@ def run_graph(
     total = max(len(order_ids), 1)
     wf_job_id = job.id if job is not None else current_parent_job_id()
     has_job = job is not None and db is not None
+    #: 内嵌子图(循环体 / subgraph)自己不带 job,但体里的节点也该让子画布看见运行态:
+    #: 事件记到外层 job 上,`scope` 说明是哪一层(见 step_scope)。
+    event_scope = step_scope()
+    inner_events = not has_job and bool(wf_job_id and event_scope)
 
     context: dict[str, Any] = dict(initial_context or {})
     executed: set[str] = set()
@@ -722,10 +726,22 @@ def run_graph(
             emit_job_event(db, job.id, kind, payload)
             db.commit()
 
+    def inner_label(nid: str) -> tuple[str, str]:
+        """体内节点没有目录可查:用节点自己的名字;没起名字就用类型。前端有完整目录。"""
+        node = nodes_by_id[nid]
+        return str(node.get("name") or node_types[nid]), ""
+
     def node_event(kind: str, nid: str, **fields: Any) -> None:
-        """节点事件。名字只在真要发的时候才取 —— 内嵌子图(循环体 / subgraph)不发事件。"""
+        """节点事件。顶层记在外层 job 上;体内节点带 scope 记到外层 job,子画布据此点亮节点。"""
         if has_job:
             event(kind, {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid), **fields})
+        elif inner_events:
+            name, name_key = inner_label(nid)
+            with unit_of_work() as inner_db:
+                emit_job_event(inner_db, wf_job_id, kind, {
+                    "node_id": nid, "name": name, "name_key": name_key,
+                    "scope": event_scope, **fields,
+                })
 
     def node_finished(nid: str, outputs: dict[str, Any]) -> None:
         """节点跑完:事件里是有界的快照。被截断的文字(顶层的、嵌在列表 / 对象里的)另存全文(见

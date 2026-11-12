@@ -128,7 +128,6 @@ export function useWorkflowDisplayNodes({
   markersVisible,
   annotationMode,
   searchHit,
-  atRoot,
   refName,
   portNamer,
 }: {
@@ -148,7 +147,6 @@ export function useWorkflowDisplayNodes({
   markersVisible: boolean;
   annotationMode: boolean;
   searchHit: CanvasSearchHighlight | null;
-  atRoot: boolean;
   /** 角标说明里提到的引用怎么说:「节点标题 · 输出」(见 workflowRefNamer)。 */
   refName: (ref: string, path: ScopePath) => string;
   /** 卡片上的接点叫什么(见 portNames)。 */
@@ -177,13 +175,13 @@ export function useWorkflowDisplayNodes({
           return { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected, style: { ...node.style, pointerEvents: markerMode ? "auto" as const : "none" as const }, data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } };
         }
         // 角标按**这一层**折好了(layerIssues):这一层自己的节点挂自己的问题,更深处的挂在通往它的容器上。
-        // 运行状态仍只认主流程:体里的节点不发事件(子图不带 job),体里的 id 又是另一套命名空间
-        // (体里也可以有一个 llm-1),拿去查只会张冠李戴。
+        // 运行状态按**当前这一层**折好了(见 stepsAtScope):体里的节点 id 是另一套命名空间,
+        // 不能直接拿主流程的 key 查;调用方传进来的是这一层自己的表。
         const nodeIssues = layerIssues.get(node.id);
         const badge = nodeIssues
           ? { severity: worstSeverity(nodeIssues), count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry, unusableReasons, refName)).join("\n") }
           : null;
-        const step = atRoot ? runByNode[node.id] : undefined;
+        const step = runByNode[node.id];
         return {
           ...node,
           className: cn(node.className, searchHighlightClass(searchHit, node.id)) || undefined,
@@ -206,6 +204,6 @@ export function useWorkflowDisplayNodes({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded, feishuNames],
+    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, refName, portNamer, generationModels.options, generationModels.loaded, feishuNames],
   );
 }
