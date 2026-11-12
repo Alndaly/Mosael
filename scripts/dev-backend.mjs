@@ -25,6 +25,17 @@ const env = {
   MOSAEL_LOCAL_DESKTOP: process.env.MOSAEL_LOCAL_DESKTOP || "1",
 };
 
+//: 父 shell 里的 MOSAEL_CLOUD_URL 会覆盖 backend/.env。它必须带 `/api/cloud/v1` 后缀；
+//: 本地常见的 `http://127.0.0.1:3100` 会得到 cloud_misconfigured。发现这种明显漏后缀的值时
+//: 丢掉它，让 backend/.env 里的完整地址生效，并明确告诉开发者。
+if (env.MOSAEL_CLOUD_URL && !env.MOSAEL_CLOUD_URL.trim().replace(/\/+$/, "").endsWith("/api/cloud/v1")) {
+  console.warn(
+    `[dev:backend] 忽略缺少 /api/cloud/v1 后缀的 MOSAEL_CLOUD_URL=${env.MOSAEL_CLOUD_URL}；` +
+      "改用 backend/.env 里的地址。",
+  );
+  delete env.MOSAEL_CLOUD_URL;
+}
+
 if (!env.MOSAEL_SECRET_KEY && !existsSync(join(dataDir, "secret.key")) && existsSync(join(dataDir, "secret.key.sealed"))) {
   const electron = createRequire(import.meta.url)("electron");
   const key = await new Promise((resolve) => {
