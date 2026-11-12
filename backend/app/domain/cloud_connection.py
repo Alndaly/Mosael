@@ -46,14 +46,21 @@ def sync(db: Session, user_id: str) -> Synced:
         raise cloud_binding.CloudBindingError(401, "not_authenticated", tr("routeErr_cloudSignInRequired"))
     if reply.status != 200 or not isinstance(reply.body, dict):
         raise cloud_binding.CloudUnavailable(f"gateway catalog answered {reply.status}")
-    catalog = [one for one in parse_openai_catalog(reply.body.get("data")) if one.interaction == "stream"]
+    catalog = parse_openai_catalog(reply.body.get("data"))
     profile = selection.adopt_mosael_cloud_connection(db, owner_user_id=user_id)
-    provider_models.replace_declared_catalog(
-        db,
-        profile,
-        [provider_models.DeclaredModel(model_id=one.id, display_name=one.name, capability_ids=["chat"]) for one in catalog],
-        source=cloud_vendor.VENDOR,
-    )
+    entries: list[provider_models.DeclaredModel] = []
+    for one in catalog:
+        if one.interaction == "stream":
+            entries.append(provider_models.DeclaredModel(
+                model_id=one.id, display_name=one.name, capability_ids=["chat"],
+            ))
+            continue
+        kind = _job_kind(one)
+        if kind is not None:
+            entries.append(provider_models.DeclaredModel(
+                model_id=one.id, display_name=one.name, capability_ids=[kind],
+            ))
+    provider_models.replace_declared_catalog(db, profile, entries, source=cloud_vendor.VENDOR)
     align_listed_pricing(
         db,
         provider_profile_id=profile.id,
@@ -62,11 +69,40 @@ def sync(db: Session, user_id: str) -> Synced:
         listed={one.id: _quotes(one) for one in catalog},
         at=now(),
     )
-    return Synced(profile=profile, models=len(catalog))
+    return Synced(profile=profile, models=len(entries))
+
+
+def _job_kind(one: CatalogModel) -> str | None:
+    declared = str(one.capability.get("kind") or "")
+    if declared in {"image", "video", "audio"}:
+        return declared
+    reservation = one.capability.get("reservation")
+    if isinstance(reservation, dict):
+        if "image" in reservation:
+            return "image"
+        if "second" in reservation:
+            return "video"
+    return None
 
 
 def _quotes(model: CatalogModel) -> list[PriceQuote]:
-    """目录里的价(每百万 token,币种照目录说的)→ 规则。0 也写:积分单价为 0 就是不扣积分,不是「没标价」。"""
+    """目录里的价 → 本地计价规则。chat 是每百万 token;job 是每个计量分量。"""
+    if model.interaction != "stream":
+        kind = _job_kind(model) or ""
+        if not kind:
+            return []
+        return [
+            PriceQuote(
+                capability=kind,
+                billing_unit=_job_billing_unit(unit),
+                unit_amount_micros=rate * 1_000_000,
+                currency=model.currency,
+                source=cloud_vendor.VENDOR,
+                notes=tr("pricingNote_mosaelCloud"),
+            )
+            for unit, rate in model.price_components.items()
+            if rate >= 0
+        ]
     rates = {"input": model.input_cost, "output": model.output_cost,
              "cache_read": model.cache_read_cost, "cache_write": model.cache_write_cost}
     return [
@@ -81,3 +117,13 @@ def _quotes(model: CatalogModel) -> list[PriceQuote]:
         for key, unit in CATALOG_PRICE_UNITS.items()
         if (amount := rates[key]) is not None
     ]
+
+
+def _job_billing_unit(unit: str) -> str:
+    return {
+        "image": "image",
+        "second": "video_second",
+        "request": "request",
+        "token_input": "million_input_token",
+        "token_output": "million_output_token",
+    }.get(unit, unit)

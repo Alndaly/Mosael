@@ -38,6 +38,7 @@ from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
 from app.ai.providers.adapters.local.rnnoise_denoise import RnnoiseDenoiseAdapter
 from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
 from app.ai.providers.adapters.minimax.video import MiniMaxVideoAdapter
+from app.ai.providers.adapters.mosael_cloud.jobs import MosaelCloudJobAdapter
 from app.ai.providers.adapters.openai.image import OpenAIImageAdapter
 from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
 from app.ai.providers.contracts.denoise import DenoiseAdapter
@@ -60,6 +61,8 @@ def _generation_adapters() -> tuple[GenerationAdapter, ...]:
         SeedanceAdapter(),
         SeedreamAdapter(),
         MiniMaxVideoAdapter(),
+        MosaelCloudJobAdapter("image"),
+        MosaelCloudJobAdapter("video"),
         VeoAdapter(),
         KlingVideoAdapter(),
         OpenAIImageAdapter("openai"),

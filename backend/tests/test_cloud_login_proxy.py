@@ -738,3 +738,63 @@ def test_ordering_without_signing_in_is_401_without_touching_cloud(cloud: FakeCl
     assert client.post("/api/cloud/v1/orders", json={"plan": "pro", "channel": "alipay"}).status_code == 401
     assert client.post("/api/cloud/v1/orders", json={"plan": "pro", "channel": "paypal"}).status_code == 422
     assert cloud.requests == []
+
+
+def test_gateway_job_models_become_generation_capabilities_with_component_prices(cloud: FakeCloud) -> None:
+    client = fresh_client()
+    models = {"object": "list", "data": [
+        {"id": "image-1", "object": "model", "name": "Image", "interaction": "job",
+         "capability": {"reservation": {"image": 1}},
+         "pricing": {"currency": "CREDITS", "components": {"image": 2}}},
+        {"id": "video-1", "object": "model", "name": "Video", "interaction": "job",
+         "capability": {"reservation": {"second": 5}},
+         "pricing": {"currency": "CREDITS", "components": {"second": 10}}},
+    ]}
+    queue_successful_login(cloud, models=models)
+    assert client.post("/api/cloud/v1/login", json={"email": EMAIL, "password": PASSWORD}).status_code == 200
+
+    with engine.begin() as connection:
+        capabilities = list(connection.execute(text(
+            "SELECT model_id, capability_ids FROM provider_models WHERE provider_profile_id IN "
+            "(SELECT id FROM provider_profiles WHERE vendor = 'mosael-cloud') ORDER BY model_id"
+        )))
+        rules = list(connection.execute(text(
+            "SELECT model, capability, billing_unit, unit_amount_micros FROM provider_pricing_rules "
+            "WHERE source = 'mosael-cloud' ORDER BY model, billing_unit"
+        )))
+    assert capabilities == [("image-1", '["image"]'), ("video-1", '["video"]')]
+    assert rules == [
+        ("image-1", "image", "image", 2_000_000),
+        ("video-1", "video", "video_second", 10_000_000),
+    ]
+
+
+def test_mosael_cloud_job_adapter_submits_polls_and_downloads(tmp_path) -> None:
+    import httpx
+    from app.ai.providers.adapters.mosael_cloud.jobs import MosaelCloudJobAdapter
+    from app.ai.providers.contracts.generation import GenerationAdapterContext, GenerationRequest
+
+    calls = []
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, request.url.path))
+        if request.url.path.endswith("/jobs"):
+            return httpx.Response(201, json={"job": {"id": "j1", "status": "queued"}})
+        if request.url.path.endswith("/jobs/j1"):
+            return httpx.Response(200, json={"job": {"id": "j1", "status": "succeeded",
+                                                     "result": {"artifact_ids": ["a1"]}}})
+        if request.url.path.endswith("/artifacts/a1"):
+            return httpx.Response(200, content=b"png")
+        raise AssertionError(str(request.url))
+
+    adapter = MosaelCloudJobAdapter("image", transport=httpx.MockTransport(handler))
+    context = GenerationAdapterContext(
+        connection_id="c", vendor_id="mosael-cloud", api_key="mct_token",
+        base_url="https://cloud.test/api/cloud/v1/gateway/v1",
+    )
+    result = adapter.generate(
+        GenerationRequest(kind="image", model="image-1", prompt="cat", parameters={"num_images": 1}),
+        context, tmp_path,
+    )
+    assert result.output_paths[0].read_bytes() == b"png"
+    assert calls[0] == ("POST", "/api/cloud/v1/gateway/v1/jobs")
+    assert ("GET", "/api/cloud/v1/gateway/v1/jobs/j1/artifacts/a1") in calls
