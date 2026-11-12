@@ -85,8 +85,8 @@ class OpenAIImagesAdapter:
     def poll(self, job: JobContext, provider_job_id: str) -> AdapterResult:
         return AdapterResult(status="failed", error_code="image_not_pollable", error_detail="image adapter is synchronous")
 
-    def cancel(self, job: JobContext, provider_job_id: str) -> None:
-        return None
+    def cancel(self, job: JobContext, provider_job_id: str) -> bool:
+        return False
 
 
 ADAPTER = OpenAIImagesAdapter()

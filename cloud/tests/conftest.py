@@ -296,3 +296,13 @@ def execute(db_path: Path, sql: str, params: tuple = ()) -> None:
     with sqlite3.connect(db_path) as connection:
         connection.execute(sql, params)
         connection.commit()
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_limits():
+    """登录限速是进程级内存；每个测试都从空桶开始，避免测试顺序影响结果。"""
+    from cloud import login_limits
+
+    login_limits.reset()
+    yield
+    login_limits.reset()

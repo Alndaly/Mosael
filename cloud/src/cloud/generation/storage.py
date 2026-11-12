@@ -34,6 +34,8 @@ class ArtifactStorage(Protocol):
 
     def presign_get(self, *, storage_key: str, expires_in: int = 3600) -> str: ...
 
+    def delete(self, storage_key: str) -> None: ...
+
     def public_url(self, storage_key: str) -> str | None: ...
 
 
@@ -46,8 +48,14 @@ class LocalArtifactStorage:
 
     def save(self, *, user_id: str, job_id: str, artifact: AdapterArtifact) -> StoredArtifact:
         digest = hashlib.sha256(artifact.data).hexdigest()
-        relative = Path(user_id) / job_id / f"{digest[:16]}-{artifact.filename}"
-        target = self.root / relative
+        name = Path(str(artifact.filename or "artifact.bin")).name
+        if name in {"", ".", ".."}:
+            name = "artifact.bin"
+        relative = Path(user_id) / job_id / f"{digest[:16]}-{name}"
+        target = (self.root / relative).resolve()
+        root = self.root.resolve()
+        if not target.is_relative_to(root):
+            raise ValueError("artifact path escapes storage root")
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_suffix(target.suffix + ".part")
         temporary.write_bytes(artifact.data)
@@ -66,6 +74,9 @@ class LocalArtifactStorage:
 
     def presign_get(self, *, storage_key: str, expires_in: int = 3600) -> str:
         raise NotImplementedError("local storage has no presigned reads")
+
+    def delete(self, storage_key: str) -> None:
+        self.path(storage_key).unlink(missing_ok=True)
 
     def public_url(self, storage_key: str) -> str | None:
         return None
@@ -105,8 +116,12 @@ class R2ArtifactStorage:
 
     def save(self, *, user_id: str, job_id: str, artifact: AdapterArtifact) -> StoredArtifact:
         digest = hashlib.sha256(artifact.data).hexdigest()
-        key = f"artifacts/{user_id}/{job_id}/{digest[:16]}-{artifact.filename}"
-        self.client.put_object(Bucket=self.bucket, Key=key, Body=artifact.data, ContentType=artifact.mime)
+        name = Path(str(artifact.filename or "artifact.bin")).name or "artifact.bin"
+        key = f"artifacts/{user_id}/{job_id}/{digest[:16]}-{name}"
+        mime = artifact.mime if artifact.mime.startswith(("image/", "video/", "audio/")) else "application/octet-stream"
+        if mime == "image/svg+xml":
+            mime = "application/octet-stream"
+        self.client.put_object(Bucket=self.bucket, Key=key, Body=artifact.data, ContentType=mime)
         return StoredArtifact(storage_key=key, size=len(artifact.data), sha256=digest)
 
     def presign_put(self, *, storage_key: str, mime: str, size: int, expires_in: int = 900) -> str:
@@ -122,6 +137,9 @@ class R2ArtifactStorage:
             Params={"Bucket": self.bucket, "Key": storage_key},
             ExpiresIn=expires_in,
         )
+
+    def delete(self, storage_key: str) -> None:
+        self.client.delete_object(Bucket=self.bucket, Key=storage_key)
 
     def public_url(self, storage_key: str) -> str | None:
         if not self.public_base_url:

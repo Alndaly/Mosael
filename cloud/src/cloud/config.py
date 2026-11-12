@@ -153,6 +153,13 @@ class CloudConfig:
 
     def __post_init__(self) -> None:
         public = self.public_url.rstrip("/")
+        # `__Host-` 让浏览器强制 host-only + Path=/ + Secure：同站子域（media.…）不能再写一条
+        # 同名 `Domain=…` 影子 cookie 来覆盖会话。本地 http 开发没有 Secure，保持原名。
+        if self.cookie_secure:
+            for name in ("cookie_name", "oauth_cookie_name"):
+                value = getattr(self, name)
+                if not value.startswith("__Host-"):
+                    object.__setattr__(self, name, f"__Host-{value}")
         object.__setattr__(self, "public_url", public)
         origins = set(self.allowed_origins)
         if not origins:

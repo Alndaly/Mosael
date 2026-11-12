@@ -6,9 +6,9 @@ from datetime import timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Request, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from cloud.api.deps import CurrentConfig, DbSession
 from cloud.config import API_PREFIX
@@ -25,11 +25,25 @@ router = APIRouter(prefix="/gateway/v1", tags=["gateway"])
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 
 
+#: 用户上传只接受媒体。**不能收 text/html / image/svg+xml**：对象经公开的 media 子域读取，
+#: 内联 HTML 会在同站子域里执行脚本；SVG 也能带脚本。
+UPLOAD_MIME_PREFIXES = ("image/", "video/", "audio/")
+UPLOAD_MIME_DENY = frozenset({"image/svg+xml"})
+
+
 class UploadTicketIn(BaseModel):
     filename: str = Field(min_length=1, max_length=200)
     mime: str = Field(min_length=1, max_length=120)
     size: int = Field(gt=0, le=MAX_UPLOAD_BYTES)
     sha256: str = Field(default="", max_length=64)
+
+    @field_validator("mime")
+    @classmethod
+    def _media_only(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in UPLOAD_MIME_DENY or not normalized.startswith(UPLOAD_MIME_PREFIXES):
+            raise ValueError("only image, video, or audio uploads are accepted")
+        return normalized
 
 
 class JobIn(BaseModel):
@@ -95,11 +109,26 @@ def get_artifact(job_id: str, artifact_id: str, request: Request, device: Curren
     return FileResponse(path, media_type=artifact.mime, filename=artifact.filename)
 
 
+#: 每个用户每天的直传票上限；对象本身再受 200MB/条限制。没有这道闸，一个账号就能把对象存储
+#: 当成无限量免费图床/文件柜。
+MAX_TICKETS_PER_DAY = 50
+MAX_TICKETS_BYTES_PER_DAY = 2 * 1024 * 1024 * 1024
+
+
 @router.post("/uploads/presign", status_code=201)
 def presign_upload(body: UploadTicketIn, request: Request, device: CurrentDevice, config: CurrentConfig, db: DbSession) -> dict[str, object]:
     storage = request.app.state.artifact_storage
     if not storage.direct_upload:
         raise CloudError(503, "direct_upload_not_configured")
+    since = now() - timedelta(days=1)
+    used = db.execute(
+        select(func.count(), func.coalesce(func.sum(CloudMediaUpload.size), 0)).where(
+            CloudMediaUpload.user_id == device.user.id,
+            CloudMediaUpload.created_at >= since,
+        )
+    ).one()
+    if used[0] >= MAX_TICKETS_PER_DAY or int(used[1]) + body.size > MAX_TICKETS_BYTES_PER_DAY:
+        raise CloudError(429, "too_many_requests")
     filename = Path(body.filename).name[:200] or "upload.bin"
     token = new_token(24)
     storage_key = f"uploads/{device.user.id}/{token}-{filename}"
@@ -137,7 +166,7 @@ async def upload_media(request: Request, device: CurrentDevice, config: CurrentC
     body = await request.body()
     if not body or len(body) > MAX_UPLOAD_BYTES:
         raise CloudError(413, "upload_too_large")
-    filename = request.headers.get("x-filename", "upload.bin")[:200]
+    filename = Path(request.headers.get("x-filename", "upload.bin")).name[:200] or "upload.bin"
     mime = request.headers.get("content-type", "application/octet-stream").split(";")[0][:120]
     stored = request.app.state.artifact_storage.save(
         user_id=device.user.id, job_id="uploads",

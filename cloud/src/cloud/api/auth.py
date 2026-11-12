@@ -21,7 +21,8 @@ from cloud.email_codes import consume_code, issue_code
 from cloud.phone import normalize_phone
 from cloud.phone_codes import consume_phone_code, issue_phone_code
 from cloud.errors import CloudError
-from cloud.models import CloudSession, CloudUser, now
+from cloud import login_limits
+from cloud.models import CloudDeviceToken, CloudSession, CloudUser, now
 from cloud.security import hash_password, new_token, token_digest, verify_password
 
 router = APIRouter(tags=["accounts"])
@@ -74,7 +75,11 @@ def _phone(body: PhoneIn) -> str:
 
 
 def request_ip(request: Request) -> str:
-    """限流用的来源 IP。反代后面要开 uvicorn 的 proxy headers,否则这里看到的是代理地址。"""
+    """限流用的来源 IP。
+
+    nginx 用 `$remote_addr` **覆盖** X-Forwarded-For，uvicorn 的 proxy headers 再把它作为
+    `request.client.host`；这里不再自己取 XFF，避免与 `app.client_ip()` 各取一端。
+    """
     return request.client.host if request.client is not None else ""
 
 
@@ -138,15 +143,23 @@ def login_result(db, config: CloudConfig, user: CloudUser, response: Response) -
 
 @router.post("/signup/code")
 def signup_code(body: EmailIn, db: DbSession, request: Request) -> dict[str, object]:
-    """注册第一步:把 6 位码发到这个邮箱。已注册的邮箱直接 409(注册页本来就会说)。"""
+    """注册第一步：发码。已注册邮箱仍回 409（产品选择），但先过失败计数，避免无限枚举。"""
     email = str(body.email).strip().lower()
-    issue_code(
-        db,
-        email=email,
-        purpose="signup",
-        request_ip=request_ip(request),
-        sender=request.app.state.code_sender,
-    )
+    ip = request_ip(request)
+    login_limits.check(email, ip)
+    try:
+        issue_code(
+            db,
+            email=email,
+            purpose="signup",
+            request_ip=ip,
+            sender=request.app.state.code_sender,
+        )
+    except CloudError as exc:
+        if exc.code == "email_taken":
+            login_limits.failed(email, ip)
+        raise
+    login_limits.succeeded(email, ip)
     return {"sent": True}
 
 
@@ -187,8 +200,10 @@ def signup(body: SignupIn, db: DbSession, config: CurrentConfig, response: Respo
 
 
 @router.post("/login")
-def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Response) -> dict[str, object]:
+def login(body: LoginIn, request: Request, db: DbSession, config: CurrentConfig, response: Response) -> dict[str, object]:
     email = str(body.email).strip().lower()
+    ip = request_ip(request)
+    login_limits.check(email, ip)
     user = db.scalar(select(CloudUser).where(CloudUser.email == email))
     # 不区分"邮箱没注册"和"密码错" —— 否则这个接口就成了账号探测器。
     # 第三方登录建出来的账号 `password_hash` 为空:它没有密码可验,只能走验证码那条路。
@@ -198,15 +213,19 @@ def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Respons
         or not user.password_hash
         or not verify_password(body.password, user.password_hash)
     ):
+        login_limits.failed(email, ip)
         raise CloudError(401, "invalid_credentials")
 
+    login_limits.succeeded(email, ip)
     return login_result(db, config, user, response)
 
 
 @router.post("/login/phone")
-def login_with_phone(body: PhoneLoginIn, db: DbSession, config: CurrentConfig, response: Response) -> dict[str, object]:
+def login_with_phone(body: PhoneLoginIn, request: Request, db: DbSession, config: CurrentConfig, response: Response) -> dict[str, object]:
     """手机号 + 密码登录。和邮箱密码登录共用会话与同一句 `invalid_credentials`。"""
     phone = _phone(body)
+    ip = request_ip(request)
+    login_limits.check(phone, ip)
     user = db.scalar(select(CloudUser).where(CloudUser.phone == phone))
     if (
         user is None
@@ -214,7 +233,9 @@ def login_with_phone(body: PhoneLoginIn, db: DbSession, config: CurrentConfig, r
         or not user.password_hash
         or not verify_password(body.password, user.password_hash)
     ):
+        login_limits.failed(phone, ip)
         raise CloudError(401, "invalid_credentials")
+    login_limits.succeeded(phone, ip)
     return login_result(db, config, user, response)
 
 
@@ -298,7 +319,7 @@ def login_with_sms(
 
 @router.post("/me/password")
 def change_password(
-    body: PasswordChangeIn, user: CurrentUser, db: DbSession, config: CurrentConfig
+    body: PasswordChangeIn, request: Request, user: CurrentUser, db: DbSession, config: CurrentConfig
 ) -> dict[str, object]:
     """设置或修改 MosaelCloud 密码。
 
@@ -310,11 +331,24 @@ def change_password(
         raise CloudError(400, "password_too_short", min=config.password_min_length)
     if len(body.new_password) > config.password_max_length:
         raise CloudError(400, "password_too_long", max=config.password_max_length)
+    ip = request_ip(request)
+    key = user.email or user.phone or user.id
+    login_limits.check(key, ip)
     if user.password_hash and (
         not body.current_password or not verify_password(body.current_password, user.password_hash)
     ):
+        login_limits.failed(key, ip)
         raise CloudError(401, "current_password_invalid")
+    login_limits.succeeded(key, ip)
     user.password_hash = hash_password(body.new_password)
+    #: 改密必须让其他会话重新认证；设备令牌是长期凭据，一并吊销（当前浏览器会话保留）。
+    raw = request.cookies.get(config.cookie_name, "")
+    current_hash = token_digest(raw) if raw else ""
+    db.query(CloudSession).filter(
+        CloudSession.user_id == user.id,
+        CloudSession.token_hash != current_hash,
+    ).delete(synchronize_session=False)
+    db.query(CloudDeviceToken).filter(CloudDeviceToken.user_id == user.id).delete(synchronize_session=False)
     db.commit()
     return {"user": account_user(user)}
 
@@ -340,9 +374,21 @@ def me(user: CurrentUser) -> dict[str, object]:
 
 
 @router.delete("/me", status_code=204)
-def delete_me(user: CurrentUser, db: DbSession, config: CurrentConfig):
+def delete_me(user: CurrentUser, request: Request, db: DbSession, config: CurrentConfig):
+    from sqlalchemy import select
+
+    from cloud.models import CloudMediaArtifact, CloudMediaUpload
+
+    keys = list(db.scalars(select(CloudMediaArtifact.storage_key).where(CloudMediaArtifact.user_id == user.id))) + list(
+        db.scalars(select(CloudMediaUpload.storage_key).where(CloudMediaUpload.user_id == user.id))
+    )
     db.delete(user)
     db.commit()
+    for key in keys:
+        try:
+            request.app.state.artifact_storage.delete(key)
+        except Exception:  # noqa: BLE001
+            pass
     response = Response(status_code=204)
     clear_session_cookie(response, config)
     return response

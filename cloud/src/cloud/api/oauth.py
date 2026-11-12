@@ -115,7 +115,8 @@ def _session_user(request: Request, db: DbSession, config: CloudConfig) -> Cloud
     session = db.get(CloudSession, token_digest(raw))
     if session is None or session.expires_at <= now():
         return None
-    return db.get(CloudUser, session.user_id)
+    user = db.get(CloudUser, session.user_id)
+    return None if user is None or user.banned_at is not None else user
 
 
 @router.get("/oauth/providers")

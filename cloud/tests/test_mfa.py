@@ -9,7 +9,7 @@ from cloud.mfa import normalize_recovery_code, totp_code
 
 
 def enable_mfa(client) -> tuple[str, list[str]]:
-    setup = client.post(api("/mfa/setup"))
+    setup = client.post(api("/mfa/setup"), json={"current_password": PASSWORD})
     assert setup.status_code == 200, setup.text
     secret = setup.json()["secret"]
     enabled = client.post(api("/mfa/enable"), json={"code": totp_code(secret, step=int(time.time() // 30))})

@@ -12,6 +12,7 @@ from cloud.domain import catalog, credits
 from cloud.domain.channel_keys import unseal
 from cloud.errors import CloudError
 from cloud.generation.adapters import AdapterResult, JobAdapter, JobContext
+from cloud.generation.validation import estimated_units, normalize_job_input
 from cloud.generation.storage import ArtifactStorage
 from cloud.models import (
     CloudGatewayCall,
@@ -24,7 +25,7 @@ from cloud.models import (
     now,
 )
 
-ACTIVE = frozenset({"queued", "submitted", "running"})
+ACTIVE = frozenset({"queued", "submitted", "running", "cancel_requested"})
 TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
 
 
@@ -46,6 +47,7 @@ def create_job(
     )
     if existing is not None:
         return existing
+    input = normalize_job_input(input)
     model = db.get(CloudGatewayModel, model_id)
     if model is None or not model.enabled or model.interaction != "job":
         raise CloudError(404, "gateway_model_unknown")
@@ -59,7 +61,11 @@ def create_job(
     missing = [unit for unit in reservation if unit not in units]
     if missing:
         raise CloudError(404, "gateway_model_unknown")
-    reserved = max(1, credits.cost_for_units(units, {str(k): int(v) for k, v in reservation.items()}))
+    estimate = estimated_units(reservation, input)
+    missing_estimate = [unit for unit in estimate if unit not in units]
+    if missing_estimate:
+        raise CloudError(404, "gateway_model_unknown")
+    reserved = max(1, credits.cost_for_units(units, estimate))
     call = CloudGatewayCall(
         user_id=user_id,
         device_token_id=device_token_id,
@@ -95,9 +101,15 @@ def cancel_job(db: Session, *, user_id: str, job_id: str, at: datetime) -> Cloud
         raise CloudError(404, "job_not_found")
     if job.status in TERMINAL:
         raise CloudError(409, "job_already_finished")
+    if job.status == "cancel_requested":
+        return job
     if job.provider_job_id:
-        # 真正调用上游取消由 worker 处理;这里先把取消意图落库。
-        pass
+        # 已提交上游:**先不要退款**。worker 会领取这个状态、尝试真正取消;只有适配器
+        # 确认取消成功才释放预占。否则“提交后立刻取消”就是免费烧上游额度的入口。
+        job.status = "cancel_requested"
+        job.updated_at = at
+        db.commit()
+        return job
     job.status = "cancelled"
     job.finished_at = at
     job.updated_at = at
@@ -113,7 +125,7 @@ def _claimed(db: Session, at: datetime) -> CloudGenerationJob | None:
         select(CloudGenerationJob)
         .where(
             or_(
-                CloudGenerationJob.status == "queued",
+                CloudGenerationJob.status.in_(("queued", "cancel_requested")),
                 and_(
                     CloudGenerationJob.status.in_(("submitted", "running")),
                     CloudGenerationJob.next_poll_at.is_not(None),
@@ -215,6 +227,22 @@ def run_one(db: Session, *, config: CloudConfig, adapters: dict[str, JobAdapter]
         adapter = adapters.get(provider.adapter)
         if adapter is None:
             _fail(db, job, "adapter_unavailable", f"no adapter registered for {provider.adapter}", at)
+            db.commit()
+            return True
+        if job.status == "cancel_requested":
+            cancelled = False
+            try:
+                cancelled = bool(adapter.cancel(context, job.provider_job_id or ""))
+            except Exception:  # noqa: BLE001 —— 取消失败不能留下“免费取消”的口子
+                cancelled = False
+            job.status = "cancelled"
+            job.finished_at = at
+            job.updated_at = at
+            job.next_poll_at = None
+            call = db.get(CloudGatewayCall, job.call_id)
+            if call is not None and call.status == "reserved":
+                #: 上游确认取消 → 全额释放；没确认 → 按预占收，避免反复提交/取消烧供应商额度。
+                credits.settle(db, call, charged=0 if cancelled else call.reserved, at=at)
             db.commit()
             return True
         if job.status == "queued" or not job.provider_job_id:

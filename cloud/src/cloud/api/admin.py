@@ -88,10 +88,22 @@ def admin_unban_user(user_id: str, actor: CurrentAdmin, db: DbSession) -> dict[s
 
 
 @router.delete("/admin/users/{user_id}", status_code=204)
-def admin_delete_user(user_id: str, actor: CurrentAdmin, db: DbSession) -> Response:
+def admin_delete_user(user_id: str, request: Request, actor: CurrentAdmin, db: DbSession) -> Response:
+    from sqlalchemy import select
+
+    from cloud.models import CloudMediaArtifact, CloudMediaUpload
+
+    keys = list(db.scalars(select(CloudMediaArtifact.storage_key).where(CloudMediaArtifact.user_id == user_id))) + list(
+        db.scalars(select(CloudMediaUpload.storage_key).where(CloudMediaUpload.user_id == user_id))
+    )
     service.delete_user(db, user_id, acting_user_id=actor.id)
     audit.record(db, actor=actor, action="user.delete", target_type="user", target_id=user_id)
     db.commit()
+    for key in keys:
+        try:
+            request.app.state.artifact_storage.delete(key)
+        except Exception:  # noqa: BLE001 —— DB 已删；对象清理失败由生命周期兜底
+            pass
     return Response(status_code=204)
 
 

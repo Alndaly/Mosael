@@ -37,8 +37,8 @@ class FakeJobAdapter:
             usage={"image": 1},
         )
 
-    def cancel(self, job: JobContext, provider_job_id: str) -> None:
-        pass
+    def cancel(self, job: JobContext, provider_job_id: str) -> bool:
+        return True
 
 
 def _setup(tmp_path):
@@ -265,3 +265,44 @@ def test_r2_storage_writes_objects_and_signs_direct_puts():
     upload = storage.presign_put(storage_key="uploads/u/x-frame.png", mime="image/png", size=3)
     assert upload == "https://r2.example/uploads/u/x-frame.png"
     assert storage.public_url("uploads/u/x frame.png") == "https://media.mosael.com/uploads/u/x%20frame.png"
+
+
+def test_cancel_after_submission_waits_and_only_refunds_when_provider_confirms(tmp_path):
+    from cloud.domain import credits
+    from cloud.models import CloudGatewayCall, CloudUser, now
+    from sqlalchemy import select
+
+    class PendingAdapter(FakeJobAdapter):
+        def poll(self, job, provider_job_id):
+            return AdapterResult(status="running", provider_job_id=provider_job_id)
+
+    app = _setup(tmp_path)
+    client = _desktop(app)
+    adapter = PendingAdapter()
+    created = client.post(api("/gateway/v1/jobs"), json={
+        "model": "image-model", "input": {"prompt": "cat", "n": 1}, "idempotency_key": "cancel-1",
+    })
+    assert created.status_code == 201, created.text
+    job_id = created.json()["job"]["id"]
+    with app.state.db.session() as db:
+        assert run_one(db, config=app.state.config, adapters={"fake": adapter}, storage=app.state.artifact_storage)
+        job = db.get(CloudGenerationJob, job_id)
+        job.next_poll_at = now() - timedelta(seconds=1)
+        db.commit()
+    with app.state.db.session() as db:
+        assert run_one(db, config=app.state.config, adapters={"fake": adapter}, storage=app.state.artifact_storage)
+        job = db.get(CloudGenerationJob, job_id)
+        assert job.provider_job_id == "provider-1"
+        call = db.get(CloudGatewayCall, job.call_id)
+        assert call.status == "reserved"
+
+    assert client.delete(api(f"/gateway/v1/jobs/{job_id}")).status_code == 204
+    with app.state.db.session() as db:
+        job = db.get(CloudGenerationJob, job_id)
+        assert job.status == "cancel_requested"
+        assert db.get(CloudGatewayCall, job.call_id).status == "reserved"
+    with app.state.db.session() as db:
+        assert run_one(db, config=app.state.config, adapters={"fake": adapter}, storage=app.state.artifact_storage)
+        job = db.get(CloudGenerationJob, job_id)
+        assert job.status == "cancelled"
+        assert db.get(CloudGatewayCall, job.call_id).status == "released"

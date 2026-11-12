@@ -108,7 +108,8 @@ def optional_user(request: Request, db: DbSession, config: CurrentConfig) -> Clo
     """
     raw_bearer = bearer_token(request)
     if raw_bearer:
-        return _device_user(db, raw_bearer)
+        user = _device_user(db, raw_bearer)
+        return None if user is None or user.banned_at is not None else user
     raw = request.cookies.get(config.cookie_name, "")
     if not raw:
         return None

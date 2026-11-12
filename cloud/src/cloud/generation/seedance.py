@@ -101,8 +101,8 @@ class SeedanceAdapter:
         except (httpx2.HTTPError, ValueError, KeyError) as exc:
             return AdapterResult(status="failed", error_code="upstream_error", error_detail=str(exc)[:300])
 
-    def cancel(self, job: JobContext, provider_job_id: str) -> None:
-        return None
+    def cancel(self, job: JobContext, provider_job_id: str) -> bool:
+        return False
 
 
 ADAPTER = SeedanceAdapter()

@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from sqlalchemy import update
 from pydantic import BaseModel, Field
 
 from cloud.api.auth import open_session
 from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
+from cloud.config import CloudConfig
 from cloud.domain import mfa as mfa_domain
 from cloud.domain.identity import account_user
 from cloud.errors import CloudError
+from cloud.security import verify_password
 from cloud.mfa import (
     new_totp_secret,
     open_secret,
@@ -20,7 +22,8 @@ from cloud.mfa import (
     seal_secret,
     verify_totp,
 )
-from cloud.models import CloudMfaTicket, CloudUser, now
+from cloud.models import CloudDeviceToken, CloudMfaTicket, CloudSession, CloudUser, now
+from cloud.security import token_digest
 
 router = APIRouter(tags=["mfa"])
 SETUP_TTL = timedelta(minutes=10)
@@ -30,12 +33,27 @@ class MfaCodeIn(BaseModel):
     code: str = Field(min_length=1, max_length=64)
 
 
+class MfaSetupIn(BaseModel):
+    #: 有密码的账号必须再验一次当前密码；只靠一枚被盗会话就能绑定攻击者的 TOTP 会把所有者锁在门外。
+    current_password: str = Field(default="", max_length=512)
+
+
 class MfaVerifyIn(MfaCodeIn):
     ticket: str = Field(min_length=1, max_length=512)
 
 
 def _label(user: CloudUser) -> str:
     return user.email or user.phone or user.id
+
+
+def _revoke_other_credentials(db, user: CloudUser, request: Request, config: CloudConfig) -> None:
+    raw = request.cookies.get(config.cookie_name, "")
+    current = token_digest(raw) if raw else ""
+    db.query(CloudSession).filter(
+        CloudSession.user_id == user.id,
+        CloudSession.token_hash != current,
+    ).delete(synchronize_session=False)
+    db.query(CloudDeviceToken).filter(CloudDeviceToken.user_id == user.id).delete(synchronize_session=False)
 
 
 @router.get("/mfa")
@@ -48,7 +66,12 @@ def mfa_status(user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[
 
 
 @router.post("/mfa/setup")
-def mfa_setup(user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[str, object]:
+def mfa_setup(user: CurrentUser, db: DbSession, config: CurrentConfig, body: MfaSetupIn | None = None) -> dict[str, object]:
+    password = body.current_password if body is not None else ""
+    if user.password_hash and (
+        not password or not verify_password(password, user.password_hash)
+    ):
+        raise CloudError(401, "current_password_invalid")
     if not config.mfa_key:
         raise CloudError(503, "mfa_not_configured")
     if mfa_domain.enabled(user):
@@ -61,7 +84,7 @@ def mfa_setup(user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[s
 
 
 @router.post("/mfa/enable")
-def mfa_enable(body: MfaCodeIn, user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[str, object]:
+def mfa_enable(body: MfaCodeIn, request: Request, user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[str, object]:
     if mfa_domain.enabled(user):
         raise CloudError(409, "mfa_already_enabled")
     if not user.mfa_pending_secret_encrypted or not user.mfa_pending_expires_at or user.mfa_pending_expires_at <= now():
@@ -76,18 +99,20 @@ def mfa_enable(body: MfaCodeIn, user: CurrentUser, db: DbSession, config: Curren
     user.mfa_pending_secret_encrypted = None
     user.mfa_pending_expires_at = None
     codes = mfa_domain.replace_recovery_codes(db, user)
+    _revoke_other_credentials(db, user, request, config)
     db.commit()
     return {"enabled": True, "recovery_codes": codes}
 
 
 @router.post("/mfa/disable")
-def mfa_disable(body: MfaCodeIn, user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[str, object]:
+def mfa_disable(body: MfaCodeIn, request: Request, user: CurrentUser, db: DbSession, config: CurrentConfig) -> dict[str, object]:
     if not mfa_domain.enabled(user):
         raise CloudError(400, "mfa_not_enabled")
     if mfa_domain.verify_code(db, user, config, body.code) is None:
         db.rollback()
         raise CloudError(401, "mfa_code_invalid")
     mfa_domain.clear(db, user)
+    _revoke_other_credentials(db, user, request, config)
     db.commit()
     return {"enabled": False}
 
