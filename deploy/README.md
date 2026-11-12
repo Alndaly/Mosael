@@ -4,7 +4,7 @@
 (Postgres + MosaelCloud + 官网 + cleanup),80/443 交给宿主 nginx;官网和 Cloud 只绑在
 `127.0.0.1` 的回环端口上,由 `deploy/nginx/mosael.conf` 反代。
 
-**只有一个域名**:`https://<DOMAIN>/` 是官网,`https://<DOMAIN>/api/cloud/v1/*` 是云账号。
+**主域名只有一个**:`https://<DOMAIN>/` 是官网,`https://<DOMAIN>/api/cloud/v1/*` 是云账号。
 两者同源 —— 云账号的会话 cookie 才是第一方 cookie,不需要 CORS,也不需要第二个子域。
 
 ```
@@ -75,10 +75,15 @@ curl -fsS https://mosael.example.com/api/cloud/v1/health   # {"status":"ok"}
      的随机串。首次初始化之后改它不会改数据库里的密码(见故障对照)。
    - `WEBSITE_PORT` / `CLOUD_PORT`:默认 3000 / 8901,只绑 `127.0.0.1`;只有被别的进程
      占用时才改,改完 nginx 配置里两处 `proxy_pass` 也要一起改。
-4. **SMTP(可选,但邮箱验证码注册/登录需要)**:填 `CLOUD_SMTP_HOST`、端口、加密方式、
+4. **R2 对象存储(生产推荐)**:桶 `mosael-cloud` 绑定自定义域名 `media.mosael.com`;
+   在 `.env` 填 `CLOUD_R2_ACCOUNT_ID` / `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` / `BUCKET` /
+   `PUBLIC_BASE_URL`。这五项齐了,上传和生成结果都走 R2 直传/重定向,不占服务器带宽。
+   R2 凭据必须只授权这个桶,不能复用 `mosael-releases` 的发布凭据。自定义域名由
+   Cloudflare 管理,DNS 与 SSL 不经过这台 nginx。
+5. **SMTP(可选,但邮箱验证码注册/登录需要)**:填 `CLOUD_SMTP_HOST`、端口、加密方式、
    用户名/密码、`CLOUD_SMTP_FROM`。不填的话发码接口明确回 `503 mail_not_configured`,
    官网会把原因显示给用户 —— 不会假装发出。
-5. **第三方登录(可选)**:在两个平台各建一个 OAuth 应用,回调地址必须**逐字**是:
+6. **第三方登录(可选)**:在两个平台各建一个 OAuth 应用,回调地址必须**逐字**是:
 
    ```
    https://<DOMAIN>/api/cloud/v1/oauth/github/callback
@@ -87,10 +92,10 @@ curl -fsS https://mosael.example.com/api/cloud/v1/health   # {"status":"ok"}
 
    然后把 client id / secret 填进 `.env`。留空 = 未启用:官网不显示对应按钮,入口返回
    `oauth_not_configured`,不会出现"点了没反应"。
-6. **官网的可选构建期变量**:`NEXT_PUBLIC_GOOGLE_ANALYTICS_ID`、`SITE_VERIFICATION_*`。
+7. **官网的可选构建期变量**:`NEXT_PUBLIC_GOOGLE_ANALYTICS_ID`、`SITE_VERIFICATION_*`。
    它们写进前端产物,改完必须 `docker compose build website`(或 `up -d --build`)。
    留空 = 不注入 GA、不出对应验证 meta。
-7. **启动并自检**:
+8. **启动并自检**:
 
    ```bash
    cd deploy
@@ -104,7 +109,7 @@ curl -fsS https://mosael.example.com/api/cloud/v1/health   # {"status":"ok"}
    `cloud` 等 `postgres` healthy 才启动,`cleanup` 等两者 healthy(`depends_on: condition:
    service_healthy`);云服务 unhealthy 时先看 `docker compose logs cloud`。容器 healthy
    之后再到宿主 nginx 这一层验证:改完配置必须 `sudo nginx -t` 通过再 `systemctl reload nginx`。
-8. **nginx 安装 / 证书**:
+9. **nginx 安装 / 证书**:
 
    ```bash
    cd ..   # 回到仓库根(第 7 步在 deploy/ 里)
@@ -122,7 +127,7 @@ curl -fsS https://mosael.example.com/api/cloud/v1/health   # {"status":"ok"}
    `-d mosael.example.com -d www.mosael.example.com`。证书续期由 certbot 的 systemd
    timer 负责,`systemctl list-timers 'certbot*'` 可查。
    出事要回滚:`sudo rm -rf /etc/nginx && sudo cp -a /root/nginx.bak /etc/nginx`。
-9. **备份**:数据库在 compose 的 `postgres_data` 命名卷(用 `pg_dump` 备份);
+10. **备份**:数据库在 compose 的 `postgres_data` 命名卷(用 `pg_dump` 备份);
    nginx 配置在 `/etc/nginx`,证书在 `/etc/letsencrypt`(certbot 管理),它们都不在 compose 里。
    `docker compose down` 保留数据库数据;**`docker compose down -v` 只删 compose 自己的
    命名卷(数据库)**,不会动 `/etc/nginx` 和 `/etc/letsencrypt`。

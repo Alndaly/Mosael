@@ -42,6 +42,23 @@ http://localhost:3000/api/cloud/v1/oauth/google/callback
 健康检查 `GET /api/cloud/v1/health`。官网开发时 `next.config.ts` 会把 `/api/cloud/v1/*`
 同源反代到这里(见 `website/.env.example` 的 `CLOUD_API_URL`)。
 
+## 对象存储(Cloudflare R2)
+
+生产把输入素材和生成结果放 R2,用户上传拿**预签名 URL 直传**,Cloud 只签发/重定向,
+不中转文件。配置五项:
+
+```bash
+CLOUD_R2_ACCOUNT_ID=...
+CLOUD_R2_ACCESS_KEY_ID=...
+CLOUD_R2_SECRET_ACCESS_KEY=...
+CLOUD_R2_BUCKET=mosael-cloud
+CLOUD_R2_PUBLIC_BASE_URL=https://media.mosael.com
+```
+
+存储键:`uploads/<user>/<token>-<filename>`、`artifacts/<user>/<job>/<digest>-<filename>`。
+`CLOUD_R2_PUBLIC_BASE_URL` 是绑定到桶的自定义域名;桶不暴露 `r2.dev`。缺任一变量时退回
+`CLOUD_DATA_DIR/media` 本地磁盘(只适合开发)。**R2 凭据按桶授权**,不要复用发布桶的密钥。
+
 ## 社区分享接口(P1)
 
 **前缀 `/api/cloud/v1`。读接口公开;写接口要 session,发布 / 评论还要求已设置 `display_name`
