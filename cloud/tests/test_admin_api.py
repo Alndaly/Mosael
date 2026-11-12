@@ -120,10 +120,10 @@ def test_admin_can_build_a_model_catalog_and_price(client):
     assert model["listed"] is False
     assert model["not_listed_reasons"] == ["missing_price", "missing_channel"]
 
-    priced = client.post(api(f"/admin/models/{model['id']}/prices"), json={"input_per_1k": 2, "output_per_1k": 8})
+    priced = client.post(api(f"/admin/models/{model['id']}/prices"), json={"components": {"token_input": 2, "token_output": 8}})
     assert priced.status_code == 201, priced.text
     models = client.get(api("/admin/models")).json()["models"]
-    assert models[0]["current_price"]["input_per_1k"] == 2
+    assert models[0]["current_price"]["components"]["token_input"] == 2
     assert models[0]["not_listed_reasons"] == ["missing_channel"]
     prices = client.get(api(f"/admin/models/{model['id']}/prices")).json()["prices"]
     assert len(prices) == 1

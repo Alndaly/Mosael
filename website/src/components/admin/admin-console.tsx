@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -667,8 +668,8 @@ function ModelsPanel({ copy, locale, models, onChanged, onFailure }: {
           <Table><TableHeader><TableRow><TableHead>{copy.label}</TableHead><TableHead>{copy.currentPrice}</TableHead><TableHead>{copy.channelsCount}</TableHead><TableHead>{copy.listed}</TableHead><TableHead /></TableRow></TableHeader>
             <TableBody>{models.map((model) => (
               <TableRow key={model.id}>
-                <TableCell><strong className="block">{model.display_label}</strong><span className="text-xs text-muted-foreground">{model.max_output_tokens} token</span></TableCell>
-                <TableCell>{model.current_price ? `${model.current_price.input_per_1k} / ${model.current_price.output_per_1k}` : copy.noPrice}</TableCell>
+                <TableCell><strong className="block">{model.display_label}</strong><span className="text-xs text-muted-foreground">{model.interaction === "job" ? copy.interactionJob : `${model.max_output_tokens} token`}</span></TableCell>
+                <TableCell>{model.current_price ? JSON.stringify(model.current_price.components) : copy.noPrice}</TableCell>
                 <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
                 <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.map((reason) => modelReasonLabel(reason, copy)).join(", ")}</Badge></TableCell>
                 <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="outline" onClick={() => setPriceFor(model)}>{model.current_price ? copy.priceHistory : copy.addPrice}</AButton></div></TableCell>
@@ -688,15 +689,25 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   copy: Messages["admin"]; model: AdminModel | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [label, setLabel] = useState(model?.label ?? "");
+  const [interaction, setInteraction] = useState<"stream" | "job">(model?.interaction === "job" ? "job" : "stream");
   const [max, setMax] = useState(String(model?.max_output_tokens ?? 8000));
+  const [capability, setCapability] = useState(JSON.stringify(model?.capability ?? {}, null, 2));
   const [sort, setSort] = useState(String(model?.sort_order ?? 0));
   const [enabled, setEnabled] = useState(model?.enabled ?? true);
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     setSaving(true);
     try {
-      if (model) await cloudAdmin.updateModel(model.id, { label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
-      else await cloudAdmin.createModel({ label, max_output_tokens: Number(max), sort_order: Number(sort), enabled });
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(capability || "{}") as Record<string, unknown>; }
+      catch { throw new Error(copy.capability); }
+      const payload = {
+        label, interaction, capability: parsed,
+        max_output_tokens: interaction === "stream" ? Number(max) : undefined,
+        sort_order: Number(sort), enabled,
+      };
+      if (model) await cloudAdmin.updateModel(model.id, payload);
+      else await cloudAdmin.createModel(payload);
       onSaved();
     } catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
@@ -705,7 +716,15 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
       <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model ? copy.modelEditDesc : copy.modelCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           <Field label={copy.label}><AInput value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
-          <Field label={copy.maxOutput}><AInput value={max} onChange={(event) => setMax(event.target.value)} /></Field>
+          <Field label={copy.interaction}><Select value={interaction} onValueChange={(value) => setInteraction(value as "stream" | "job")}><ASelectTrigger><SelectValue /></ASelectTrigger><SelectContent><SelectItem value="stream">{copy.interactionStream}</SelectItem><SelectItem value="job">{copy.interactionJob}</SelectItem></SelectContent></Select></Field>
+          {interaction === "stream" ? (
+            <Field label={copy.maxOutput}><AInput value={max} onChange={(event) => setMax(event.target.value)} /></Field>
+          ) : (
+            <>
+              <Field label={copy.capability}><Textarea value={capability} onChange={(event) => setCapability(event.target.value)} className="min-h-28 font-mono text-xs" /></Field>
+              <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.capabilityHint}</p>
+            </>
+          )}
           <Field label={copy.sort}><AInput value={sort} onChange={(event) => setSort(event.target.value)} /></Field>
           <div className="flex items-center justify-between gap-4 py-1">
             <span className="text-sm font-medium">{copy.enabled}</span>
@@ -723,14 +742,14 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
 }) {
   const queryClient = useQueryClient();
   const prices = useAdminPrices(model.id);
-  const [input, setInput] = useState("0");
-  const [output, setOutput] = useState("0");
+  const [components, setComponents] = useState(JSON.stringify(model.current_price?.components ?? { token_input: 2, token_output: 8 }, null, 2));
   const [from, setFrom] = useState("");
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     setSaving(true);
     try {
-      await cloudAdmin.addPrice(model.id, Number(input), Number(output), from || undefined);
+      const parsed = JSON.parse(components) as Record<string, number>;
+      await cloudAdmin.addPrice(model.id, parsed, from || undefined);
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminPrices(model.id) });
       onSaved();
     }
@@ -744,8 +763,8 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
             {prices.isPending ? (
               <output className="m-0 block text-sm text-muted-foreground">{copy.loading}</output>
             ) : prices.data?.length ? (
-              <Table><TableHeader><TableRow><TableHead>{copy.effectiveAt}</TableHead><TableHead>{copy.inputPer1k}</TableHead><TableHead>{copy.outputPer1k}</TableHead></TableRow></TableHeader>
-                <TableBody>{prices.data.map((price) => <TableRow key={price.effective_from}><TableCell>{new Date(price.effective_from).toLocaleString(locale === "zh" ? "zh-CN" : "en")}</TableCell><TableCell>{price.input_per_1k}</TableCell><TableCell>{price.output_per_1k}</TableCell></TableRow>)}</TableBody>
+              <Table><TableHeader><TableRow><TableHead>{copy.effectiveAt}</TableHead><TableHead>{copy.components}</TableHead></TableRow></TableHeader>
+                <TableBody>{prices.data.map((price) => <TableRow key={price.effective_from}><TableCell>{new Date(price.effective_from).toLocaleString(locale === "zh" ? "zh-CN" : "en")}</TableCell><TableCell><code className="font-mono text-xs">{JSON.stringify(price.components)}</code></TableCell></TableRow>)}</TableBody>
               </Table>
             ) : (
               <p className="m-0 text-sm text-muted-foreground">{copy.noPriceHistory}</p>
@@ -753,8 +772,8 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
           </div>
           <div className="grid gap-3 border-t border-border pt-4">
             <strong className="text-sm">{copy.addPrice}</strong>
-            <Field label={copy.inputPer1k}><AInput value={input} onChange={(event) => setInput(event.target.value)} /></Field>
-            <Field label={copy.outputPer1k}><AInput value={output} onChange={(event) => setOutput(event.target.value)} /></Field>
+            <Field label={copy.components}><Textarea value={components} onChange={(event) => setComponents(event.target.value)} className="min-h-24 font-mono text-xs" /></Field>
+            <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.componentsHint}</p>
             <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
           </div>
         </div>
@@ -796,6 +815,7 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   copy: Messages["admin"]; provider: AdminProvider | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [name, setName] = useState(provider?.name ?? "");
+  const [adapter, setAdapter] = useState(provider?.adapter ?? "openai");
   const [base, setBase] = useState(provider?.base_url ?? "");
   const [key, setKey] = useState("");
   const [note, setNote] = useState(provider?.note ?? "");
@@ -804,8 +824,8 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   const submit = async () => {
     setSaving(true);
     try {
-      if (provider) await cloudAdmin.updateProvider(provider.id, { name, note, enabled, api_key: key });
-      else await cloudAdmin.createProvider({ name, base_url: base, api_key: key, note });
+      if (provider) await cloudAdmin.updateProvider(provider.id, { name, adapter, note, enabled, api_key: key });
+      else await cloudAdmin.createProvider({ name, adapter, base_url: base, api_key: key, note });
       onSaved();
     } catch (failure) { onFailure(failure); } finally { setSaving(false); }
   };
@@ -836,7 +856,7 @@ function ProviderEnabledSwitch({ copy, provider, onChanged, onFailure }: {
   const toggle = async (enabled: boolean) => {
     setBusy(true);
     try {
-      await cloudAdmin.updateProvider(provider.id, { name: provider.name, note: provider.note, enabled, api_key: "" });
+      await cloudAdmin.updateProvider(provider.id, { name: provider.name, adapter: provider.adapter, note: provider.note, enabled, api_key: "" });
       onChanged();
     } catch (failure) {
       onFailure(failure);

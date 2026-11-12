@@ -310,8 +310,7 @@ def _model_view(db: Session, model: CloudGatewayModel, at: datetime, display_lab
         "sort_order": model.sort_order,
         "current_price": (
             {
-                "input_per_1k": price.input_per_1k,
-                "output_per_1k": price.output_per_1k,
+                "components": catalog.price_components(db, price.id),
                 "effective_from": price.effective_from.isoformat(),
             }
             if price
@@ -337,13 +336,26 @@ def list_models(db: Session) -> list[dict[str, object]]:
     ]
 
 
-def create_model(db: Session, *, label: str, max_output_tokens: int, sort_order: int, enabled: bool) -> dict[str, object]:
+def _model_capability(interaction: str, capability: dict[str, object], max_output_tokens: int | None) -> dict[str, object]:
+    if interaction == "stream":
+        if not max_output_tokens:
+            raise CloudError(422, "gateway_capability_invalid")
+        return {**capability, "max_output_tokens": max_output_tokens}
+    if interaction == "job":
+        if not isinstance(capability.get("reservation"), dict) or not capability["reservation"]:
+            raise CloudError(422, "gateway_capability_invalid")
+        return dict(capability)
+    raise CloudError(422, "gateway_capability_invalid")
+
+
+def create_model(db: Session, *, label: str, interaction: str, capability: dict[str, object], max_output_tokens: int | None, sort_order: int, enabled: bool) -> dict[str, object]:
+    resolved = _model_capability(interaction, capability, max_output_tokens)
     model = catalog.upsert_model(
         db,
         model_id=new_id(),
         label=label,
-        interaction="stream",
-        capability={"max_output_tokens": max_output_tokens},
+        interaction=interaction,
+        capability=resolved,
         enabled=enabled,
         sort_order=sort_order,
     )
@@ -351,16 +363,17 @@ def create_model(db: Session, *, label: str, max_output_tokens: int, sort_order:
     return _model_view(db, model, now(), labels[model.id])
 
 
-def update_model(db: Session, model_id: str, *, label: str, max_output_tokens: int, sort_order: int, enabled: bool) -> dict[str, object]:
+def update_model(db: Session, model_id: str, *, label: str, interaction: str, capability: dict[str, object], max_output_tokens: int | None, sort_order: int, enabled: bool) -> dict[str, object]:
     model = db.get(CloudGatewayModel, model_id)
     if model is None:
         raise CloudError(404, "model_not_found")
+    resolved = _model_capability(interaction, capability, max_output_tokens)
     catalog.upsert_model(
         db,
         model_id=model_id,
         label=label,
-        interaction=model.interaction,
-        capability={**model.capability, "max_output_tokens": max_output_tokens},
+        interaction=interaction,
+        capability=resolved,
         enabled=enabled,
         sort_order=sort_order,
     )
@@ -372,19 +385,19 @@ def _utc_naive(value: datetime) -> datetime:
     return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
 
 
-def add_price(db: Session, model_id: str, *, input_per_1k: int, output_per_1k: int, effective_from: datetime | None) -> dict[str, object]:
+def add_price(db: Session, model_id: str, *, components: dict[str, int], effective_from: datetime | None) -> dict[str, object]:
     if db.get(CloudGatewayModel, model_id) is None:
         raise CloudError(404, "model_not_found")
-    price = catalog.set_price(
+    if not components or any(value < 0 for value in components.values()):
+        raise CloudError(422, "gateway_capability_invalid")
+    price = catalog.add_price_components(
         db,
         model_id=model_id,
-        input_per_1k=input_per_1k,
-        output_per_1k=output_per_1k,
+        components={unit: int(value) for unit, value in components.items()},
         effective_from=_utc_naive(effective_from) if effective_from else now(),
     )
     return {
-        "input_per_1k": price.input_per_1k,
-        "output_per_1k": price.output_per_1k,
+        "components": catalog.price_components(db, price.id),
         "effective_from": price.effective_from.isoformat(),
     }
 
@@ -394,8 +407,7 @@ def list_prices(db: Session, model_id: str) -> list[dict[str, object]]:
         raise CloudError(404, "model_not_found")
     return [
         {
-            "input_per_1k": one.input_per_1k,
-            "output_per_1k": one.output_per_1k,
+            "components": catalog.price_components(db, one.id),
             "effective_from": one.effective_from.isoformat(),
         }
         for one in db.scalars(
@@ -428,25 +440,26 @@ def list_providers(db: Session) -> list[dict[str, object]]:
 
 
 def create_provider(
-    db: Session, config: CloudConfig, *, name: str, base_url: str, api_key: str, note: str
+    db: Session, config: CloudConfig, *, name: str, base_url: str, api_key: str, note: str, adapter: str = "openai"
 ) -> dict[str, object]:
     if not base_url.startswith(("https://", "http://")):
         raise CloudError(400, "channel_url_invalid")
     if not config.channel_key:
         raise CloudError(503, "gateway_not_configured")
     provider = catalog.add_provider(
-        db, config, name=name, base_url=base_url, api_key=api_key, note=note
+        db, config, name=name, base_url=base_url, api_key=api_key, note=note, adapter=adapter
     )
     return _provider_view(provider)
 
 
 def update_provider(
-    db: Session, config: CloudConfig, provider_id: str, *, name: str, note: str, enabled: bool, api_key: str
+    db: Session, config: CloudConfig, provider_id: str, *, name: str, adapter: str, note: str, enabled: bool, api_key: str
 ) -> dict[str, object]:
     provider = db.get(CloudUpstreamProvider, provider_id)
     if provider is None:
         raise CloudError(404, "provider_not_found")
     provider.name = name
+    provider.adapter = adapter
     provider.note = note
     provider.enabled = enabled
     if api_key:

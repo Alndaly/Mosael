@@ -538,7 +538,7 @@ export type AdminModel = {
   max_output_tokens: number;
   enabled: boolean;
   sort_order: number;
-  current_price: { input_per_1k: number; output_per_1k: number; effective_from: string } | null;
+  current_price: { components: Record<string, number>; effective_from: string } | null;
   channel_count: number;
   active_channel_count: number;
   listed: boolean;
@@ -629,7 +629,9 @@ export type AdminChannelTest = {
 
 export type AdminModelInput = {
   label: string;
-  max_output_tokens: number;
+  interaction: "stream" | "job";
+  capability: Record<string, unknown>;
+  max_output_tokens?: number;
   sort_order: number;
   enabled: boolean;
 };
@@ -690,21 +692,21 @@ export const cloudAdmin = {
       body: JSON.stringify(body),
     }),
   prices: (id: string) =>
-    request<{ prices: { input_per_1k: number; output_per_1k: number; effective_from: string }[] }>(
+    request<{ prices: { components: Record<string, number>; effective_from: string }[] }>(
       `/admin/models/${encodeURIComponent(id)}/prices`,
     ),
-  addPrice: (id: string, input_per_1k: number, output_per_1k: number, effective_from?: string) =>
-    request<{ price: { input_per_1k: number; output_per_1k: number; effective_from: string } }>(
+  addPrice: (id: string, components: Record<string, number>, effective_from?: string) =>
+    request<{ price: { components: Record<string, number>; effective_from: string } }>(
       `/admin/models/${encodeURIComponent(id)}/prices`,
       {
         method: "POST",
-        body: JSON.stringify({ input_per_1k, output_per_1k, effective_from: effective_from || null }),
+        body: JSON.stringify({ components, effective_from: effective_from || null }),
       },
     ),
   providers: () => request<{ providers: AdminProvider[] }>("/admin/providers"),
-  createProvider: (body: { name: string; base_url: string; api_key: string; note: string }) =>
+  createProvider: (body: { name: string; adapter: string; base_url: string; api_key: string; note: string }) =>
     request<{ provider: AdminProvider }>("/admin/providers", { method: "POST", body: JSON.stringify(body) }),
-  updateProvider: (id: string, body: { name: string; note: string; enabled: boolean; api_key: string }) =>
+  updateProvider: (id: string, body: { name: string; adapter: string; note: string; enabled: boolean; api_key: string }) =>
     request<{ provider: AdminProvider }>(`/admin/providers/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(body),

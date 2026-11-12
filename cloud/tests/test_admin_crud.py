@@ -124,6 +124,20 @@ def test_admin_can_cancel_a_users_subscription_without_clawing_back_issued_credi
     assert client.delete(api(f"/admin/users/{user_id}/subscriptions")).status_code == 409
 
 
+def test_admin_can_create_a_job_model_and_price_it_by_component(client):
+    _make_admin(client)
+    created = client.post(api("/admin/models"), json={
+        "label": "Image Job", "interaction": "job",
+        "capability": {"reservation": {"image": 1}},
+    })
+    assert created.status_code == 201, created.text
+    model = created.json()["model"]
+    assert model["interaction"] == "job"
+    priced = client.post(api(f"/admin/models/{model['id']}/prices"), json={"components": {"image": 2}})
+    assert priced.status_code == 201, priced.text
+    assert priced.json()["price"]["components"] == {"image": 2}
+
+
 def test_a_plan_without_references_can_be_deleted_but_an_in_use_one_cannot(client):
     _make_admin(client)
     created = client.post(api("/admin/plans"), json={

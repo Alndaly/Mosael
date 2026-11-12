@@ -48,26 +48,26 @@ class SubscribeIn(BaseModel):
 
 class ModelIn(BaseModel):
     label: str = Field(min_length=1, max_length=80)
-    max_output_tokens: int = Field(gt=0, le=1_000_000)
+    interaction: Literal["stream", "job"] = "stream"
+    capability: dict[str, object] = Field(default_factory=dict)
+    max_output_tokens: int | None = Field(default=None, gt=0, le=1_000_000)
     sort_order: int = 0
     enabled: bool = True
 
 
-class ModelPatch(BaseModel):
-    label: str = Field(min_length=1, max_length=80)
-    max_output_tokens: int = Field(gt=0, le=1_000_000)
-    sort_order: int = 0
-    enabled: bool = True
+class ModelPatch(ModelIn):
+    pass
 
 
 class PriceIn(BaseModel):
-    input_per_1k: int = Field(ge=0, le=1_000_000)
-    output_per_1k: int = Field(ge=0, le=1_000_000)
+    #: 计量分量,如 {"token_input": 2, "token_output": 8} 或 {"image": 2}。
+    components: dict[str, int]
     effective_from: datetime | None = None
 
 
 class ProviderIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    adapter: str = Field(default="openai", min_length=1, max_length=32)
     base_url: str = Field(min_length=1, max_length=500)
     api_key: str = Field(min_length=1, max_length=1000)
     note: str = Field(default="", max_length=200)
@@ -75,6 +75,7 @@ class ProviderIn(BaseModel):
 
 class ProviderPatch(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    adapter: str = Field(default="openai", min_length=1, max_length=32)
     note: str = Field(default="", max_length=200)
     enabled: bool = True
     api_key: str = Field(default="", max_length=1000)

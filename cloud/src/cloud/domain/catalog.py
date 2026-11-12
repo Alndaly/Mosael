@@ -88,6 +88,27 @@ def set_price(
     return price
 
 
+def add_price_components(
+    db: Session, *, model_id: str, components: dict[str, int], effective_from: datetime
+) -> CloudModelPrice:
+    if any(value < 0 for value in components.values()):
+        raise ValueError("credits_per_unit must be non-negative")
+    price = CloudModelPrice(
+        model_id=model_id,
+        input_per_1k=int(components.get("token_input", 0)),
+        output_per_1k=int(components.get("token_output", 0)),
+        effective_from=effective_from,
+    )
+    db.add(price)
+    db.flush()
+    db.add_all([
+        CloudModelPriceComponent(price_id=price.id, unit=unit, credits_per_unit=value)
+        for unit, value in components.items()
+    ])
+    db.flush()
+    return price
+
+
 def price_components(db: Session, price_id: str) -> dict[str, int]:
     rows = db.scalars(select(CloudModelPriceComponent).where(CloudModelPriceComponent.price_id == price_id)).all()
     return {row.unit: row.credits_per_unit for row in rows}
@@ -109,10 +130,11 @@ def add_provider(
     base_url: str,
     api_key: str,
     note: str = "",
+    adapter: str = "openai",
 ) -> CloudUpstreamProvider:
     provider = CloudUpstreamProvider(
         name=name,
-        adapter="openai",
+        adapter=adapter,
         base_url=base_url.rstrip("/"),
         api_key_encrypted=seal(config, api_key),
         note=note,

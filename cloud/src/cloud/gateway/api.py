@@ -82,6 +82,7 @@ def list_models(device: CurrentDevice, db: DbSession) -> dict[str, object]:
                 },
             }
             for one in catalog.listed_models(db, at=now())
+            if one.model.interaction == "stream"
         ],
     }
 

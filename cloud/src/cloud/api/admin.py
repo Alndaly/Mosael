@@ -195,12 +195,14 @@ def admin_create_model(body: ModelIn, actor: CurrentAdmin, db: DbSession) -> dic
     model = service.create_model(
         db,
         label=body.label,
+        interaction=body.interaction,
+        capability=body.capability,
         max_output_tokens=body.max_output_tokens,
         sort_order=body.sort_order,
         enabled=body.enabled,
     )
     audit.record(db, actor=actor, action="model.create", target_type="model", target_id=model["id"],
-                 detail={"label": body.label, "max_output_tokens": body.max_output_tokens})
+                 detail={"label": body.label, "interaction": body.interaction})
     db.commit()
     return {"model": model}
 
@@ -211,6 +213,8 @@ def admin_update_model(model_id: str, body: ModelPatch, actor: CurrentAdmin, db:
         db,
         model_id,
         label=body.label,
+        interaction=body.interaction,
+        capability=body.capability,
         max_output_tokens=body.max_output_tokens,
         sort_order=body.sort_order,
         enabled=body.enabled,
@@ -231,12 +235,11 @@ def admin_add_price(model_id: str, body: PriceIn, actor: CurrentAdmin, db: DbSes
     price = service.add_price(
         db,
         model_id,
-        input_per_1k=body.input_per_1k,
-        output_per_1k=body.output_per_1k,
+        components=body.components,
         effective_from=body.effective_from,
     )
     audit.record(db, actor=actor, action="model.price", target_type="model", target_id=model_id,
-                 detail={"input_per_1k": body.input_per_1k, "output_per_1k": body.output_per_1k})
+                 detail={"components": body.components})
     db.commit()
     return {"price": price}
 
@@ -249,7 +252,8 @@ def admin_providers(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
 @router.post("/admin/providers", status_code=201)
 def admin_create_provider(body: ProviderIn, actor: CurrentAdmin, config: CurrentConfig, db: DbSession) -> dict[str, object]:
     provider = service.create_provider(
-        db, config, name=body.name, base_url=body.base_url, api_key=body.api_key, note=body.note
+        db, config, name=body.name, base_url=body.base_url, api_key=body.api_key, note=body.note,
+        adapter=body.adapter,
     )
     audit.record(db, actor=actor, action="provider.create", target_type="provider", target_id=provider["id"],
                  detail={"name": body.name, "base_url": body.base_url, "api_key_set": True})
@@ -262,7 +266,8 @@ def admin_update_provider(
     provider_id: str, body: ProviderPatch, actor: CurrentAdmin, config: CurrentConfig, db: DbSession
 ) -> dict[str, object]:
     provider = service.update_provider(
-        db, config, provider_id, name=body.name, note=body.note, enabled=body.enabled, api_key=body.api_key
+        db, config, provider_id, name=body.name, adapter=body.adapter, note=body.note,
+        enabled=body.enabled, api_key=body.api_key
     )
     audit.record(db, actor=actor, action="provider.update", target_type="provider", target_id=provider_id,
                  detail={"enabled": body.enabled, "api_key_replaced": bool(body.api_key)})
