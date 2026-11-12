@@ -6,11 +6,9 @@ import { ChatBubble, type AgentMessage as ChatMessage } from "@/features/agent/C
 import { chatMediaGallery } from "@/features/agent/userMessage";
 import { TraceView } from "@/features/agent/trace/TraceView";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
 import { InspectorCard } from "@/components/layout/InspectorCard";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
-import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -123,20 +121,6 @@ function StatusDot({ run }: { run: SubagentRun }) {
       )}
       aria-hidden
     />
-  );
-}
-
-function RunMeta({ run }: { run: SubagentRun }) {
-  const t = useI18n();
-  return (
-    <>
-      {run.archive
-        ? t("chatSubagentSteps").replace("{n}", String(run.archive.steps))
-        : run.running
-          ? t("chatSubagentRunning")
-          : t("chatSubagentNoTrace")}
-      {run.archive?.error ? ` · ${run.archive.error.slice(0, 60)}` : ""}
-    </>
   );
 }
 
