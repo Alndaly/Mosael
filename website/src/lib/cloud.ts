@@ -678,6 +678,8 @@ export const cloudAdmin = {
       method: "POST",
       body: JSON.stringify({ plan }),
     }),
+  cancelSubscription: (id: string) =>
+    request<void>(`/admin/users/${encodeURIComponent(id)}/subscriptions`, { method: "DELETE" }),
   models: () => request<{ models: AdminModel[] }>("/admin/models"),
   createModel: (body: AdminModelInput) =>
     request<{ model: AdminModel }>("/admin/models", { method: "POST", body: JSON.stringify(body) }),

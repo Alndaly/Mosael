@@ -25,4 +25,6 @@ test("管理台有用户资料编辑、用户删除与套餐删除", () => {
   assert.match(cloud, /ipBans: \(\)/, "客户端没有 IP 封禁列表");
   assert.match(consoleSource, /cloudAdmin\.banIp\(/, "管理台没有封禁 IP");
   assert.match(consoleSource, /cloudAdmin\.unbanIp\(/, "管理台没有解除 IP 封禁");
+  assert.match(cloud, /cancelSubscription: \(id: string\)/, "客户端没有取消用户套餐");
+  assert.match(consoleSource, /cloudAdmin\.cancelSubscription\(/, "管理台没有取消用户套餐");
 });

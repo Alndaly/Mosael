@@ -292,6 +292,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This network is blocked from using MosaelCloud.",
         "zh": "这个网络已被禁止使用 MosaelCloud。",
     },
+    "no_subscription": {
+        "en": "This account has no active subscription.",
+        "zh": "这个账号没有有效套餐。",
+    },
     "invalid_ip": {
         "en": "Enter a valid IPv4 or IPv6 address.",
         "zh": "请输入合法的 IPv4 或 IPv6 地址。",

@@ -103,6 +103,27 @@ def test_admin_cannot_delete_self_or_official_account(client):
     assert response.json()["error"] == "official_account"
 
 
+def test_admin_can_cancel_a_users_subscription_without_clawing_back_issued_credits(client):
+    _make_admin(client)
+    created = client.post(api("/admin/plans"), json={
+        "slug": "cancel-me", "name": "Cancel me", "period": "month",
+        "monthly_credits": 100, "credit_ttl_days": 30, "on_sale": False, "price_cents": None,
+    })
+    assert created.status_code == 201, created.text
+    signup(client, email="cancel@example.com", password=PASSWORD)
+    user_id = _user_id(client, "cancel@example.com")
+    login(client, email="admin@example.com", password=PASSWORD)
+    opened = client.post(api(f"/admin/users/{user_id}/subscriptions"), json={"plan": "cancel-me"})
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["user"]["credits"] == 100
+
+    assert client.delete(api(f"/admin/users/{user_id}/subscriptions")).status_code == 204
+    detail = client.get(api(f"/admin/users/{user_id}")).json()["user"]
+    assert detail["subscription"] is None
+    assert detail["credits"] == 100  # 已发积分不追回
+    assert client.delete(api(f"/admin/users/{user_id}/subscriptions")).status_code == 409
+
+
 def test_a_plan_without_references_can_be_deleted_but_an_in_use_one_cannot(client):
     _make_admin(client)
     created = client.post(api("/admin/plans"), json={

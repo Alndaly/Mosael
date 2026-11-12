@@ -123,6 +123,7 @@ function auditActionLabel(action: string, copy: Messages["admin"]): string {
     "user.ban": copy.auditUserBan,
     "user.unban": copy.auditUserUnban,
     "user.subscribe": copy.auditUserSubscribe,
+    "user.cancel_subscription": copy.auditUserCancelSubscription,
     "model.create": copy.auditModelCreate,
     "model.update": copy.auditModelUpdate,
     "model.price": copy.auditModelPrice,
@@ -472,6 +473,7 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
   const [temporary, setTemporary] = useState("");
   const [banReason, setBanReason] = useState(current.ban_reason ?? "");
   const [confirmingBan, setConfirmingBan] = useState(false);
+  const [confirmingCancelPlan, setConfirmingCancelPlan] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState("");
   const update = (next: AdminUser) => { setCurrent(next); onUser(next); };
@@ -519,6 +521,15 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
     setBusy("gift");
     try { update((await cloudAdmin.gift(current.id, Number(credits), Number(days), note)).user); }
     catch (failure) { onFailure(failure); } finally { setBusy(""); }
+  };
+  const cancelSubscription = async () => {
+    setBusy("cancel-plan");
+    try {
+      await cloudAdmin.cancelSubscription(current.id);
+      const next = await cloudAdmin.user(current.id);
+      update(next.user);
+      setConfirmingCancelPlan(false);
+    } catch (failure) { onFailure(failure); } finally { setBusy(""); }
   };
   const adjustCredits = async () => {
     setBusy("adjust");
@@ -568,6 +579,19 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
               <Select value={plan} onValueChange={setPlan} disabled={plans.length === 0}><ASelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={plans.length === 0 ? copy.noPlansYet : copy.choosePlan} /></ASelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
               <AButton variant="outline" onClick={() => void subscribe()} loading={busy === "subscribe"} disabled={!plan || Boolean(busy)}>{copy.subscribe}</AButton>
             </div>
+            {current.subscription && (
+              confirmingCancelPlan ? (
+                <div className="grid gap-2 rounded-lg bg-destructive/5 p-3">
+                  <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.cancelPlanConfirm}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <AButton variant="destructive" onClick={() => void cancelSubscription()} loading={busy === "cancel-plan"} disabled={Boolean(busy)}>{copy.confirmDelete}</AButton>
+                    <AButton variant="ghost" onClick={() => setConfirmingCancelPlan(false)} disabled={Boolean(busy)}>{copy.cancel}</AButton>
+                  </div>
+                </div>
+              ) : (
+                <AButton variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmingCancelPlan(true)} disabled={Boolean(busy)}>{copy.cancelPlan}</AButton>
+              )
+            )}
           </div>
           <div className="grid gap-3 border-t border-border pt-4">
             <strong className="text-sm">{copy.giftCredits}</strong>

@@ -131,6 +131,14 @@ def admin_reset_user_password(user_id: str, actor: CurrentAdmin, db: DbSession) 
     return {"temporary_password": temporary}
 
 
+@router.delete("/admin/users/{user_id}/subscriptions", status_code=204)
+def admin_cancel_user_subscription(user_id: str, actor: CurrentAdmin, db: DbSession) -> Response:
+    service.cancel_subscription(db, user_id)
+    audit.record(db, actor=actor, action="user.cancel_subscription", target_type="user", target_id=user_id)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.post("/admin/users/{user_id}/subscriptions")
 def admin_user_subscription(user_id: str, body: SubscribeIn, actor: CurrentAdmin, db: DbSession) -> dict[str, object]:
     user = service.subscribe(db, user_id, plan_slug=body.plan)

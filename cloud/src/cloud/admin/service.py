@@ -233,6 +233,27 @@ def adjust_credits(
     return _user_view(db, user, now())
 
 
+def cancel_subscription(db: Session, user_id: str) -> dict[str, object]:
+    """结束用户的当前套餐订阅。已发的积分不追回,只是不再发下一批。"""
+    user = db.get(CloudUser, user_id)
+    if user is None:
+        raise CloudError(404, "user_not_found")
+    at = now()
+    active = db.scalars(
+        select(CloudSubscription).where(
+            CloudSubscription.user_id == user.id,
+            CloudSubscription.status == "active",
+        )
+    ).all()
+    if not active:
+        raise CloudError(409, "no_subscription")
+    for subscription in active:
+        subscription.status = "ended"
+        subscription.ends_at = min(subscription.ends_at, at)
+    db.flush()
+    return _user_view(db, user, at)
+
+
 def subscribe(db: Session, user_id: str, *, plan_slug: str) -> dict[str, object]:
     user = db.get(CloudUser, user_id)
     plan = db.scalar(select(CloudPlan).where(CloudPlan.slug == plan_slug, CloudPlan.deleted_at.is_(None)))
