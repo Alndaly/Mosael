@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select
 
 from cloud.config import CloudConfig
+from cloud.errors import CloudError
 from cloud.gateway.jobs_api import UploadTicketIn
 from cloud.generation.adapters import AdapterArtifact
 from cloud.generation.storage import LocalArtifactStorage
@@ -45,9 +43,9 @@ def test_local_storage_never_writes_outside_its_root(tmp_path):
 
 
 def test_job_input_is_allowlisted_and_bounded():
-    with pytest.raises(Exception):
+    with pytest.raises(CloudError):
         normalize_job_input({"prompt": "x", "n": 999})
-    with pytest.raises(Exception):
+    with pytest.raises(CloudError):
         normalize_job_input({"prompt": "x", "unknown": 1})
     assert normalize_job_input({"prompt": "x", "n": 4}) == {"prompt": "x", "n": 4}
     assert estimated_units({"image": 1}, {"n": 4}) == {"image": 4}
@@ -58,7 +56,7 @@ def test_login_limiter_locks_after_repeated_failures():
     login_limits.reset()
     for _ in range(login_limits.MAX_FAILURES):
         login_limits.failed("a@example.com", "1.2.3.4")
-    with pytest.raises(Exception):
+    with pytest.raises(CloudError):
         login_limits.check("a@example.com", "1.2.3.4")
     login_limits.succeeded("a@example.com", "1.2.3.4")
     login_limits.check("a@example.com", "1.2.3.4")

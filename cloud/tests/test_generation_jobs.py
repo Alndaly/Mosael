@@ -268,9 +268,7 @@ def test_r2_storage_writes_objects_and_signs_direct_puts():
 
 
 def test_cancel_after_submission_waits_and_only_refunds_when_provider_confirms(tmp_path):
-    from cloud.domain import credits
-    from cloud.models import CloudGatewayCall, CloudUser, now
-    from sqlalchemy import select
+    from cloud.models import CloudGatewayCall, now
 
     class PendingAdapter(FakeJobAdapter):
         def poll(self, job, provider_job_id):
