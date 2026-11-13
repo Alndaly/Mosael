@@ -354,6 +354,7 @@ root 的 `pnpm lint` 里也带着同一份 ruff。CI 不启动这个服务,也�
 | `CLOUD_CHANNEL_KEY` | 空(网关未配置) | 上游 API Key 的落库加密钥(Fernet,`cli channel-key` 生成);空则网关对话 503、加通道的命令拒绝 |
 | `CLOUD_ALIPAY_APP_ID` / `_PRIVATE_KEY` / `_PUBLIC_KEY` | 空(不开) | 支付宝当面付:应用 id、**应用私钥**、**支付宝公钥**(RSA2;PEM 内容或 PEM 文件路径)。三项配齐才开 |
 | `CLOUD_ALIPAY_GATEWAY` | `https://openapi.alipay.com/gateway.do` | 沙箱联调时换成沙箱网关 |
+| `CLOUD_ALIPAY_MODE` | `precreate` | `precreate` 当面付扫码；`page` 电脑网站支付（返回自动提交 HTML，放同源 iframe） |
 | `CLOUD_WECHATPAY_MCHID` / `_APPID` / `_SERIAL_NO` / `_PRIVATE_KEY` / `_APIV3_KEY` / `_PUBLIC_KEY` / `_PUBLIC_KEY_ID` | 空(不开) | 微信支付 Native(APIv3):商户号、AppID、商户证书序列号、商户私钥、APIv3 密钥(32 字节)、**微信支付公钥**与公钥 ID。七项配齐才开 |
 
 ### 第三方 OAuth 应用的填法

@@ -56,6 +56,7 @@ def create_order(
         raise CloudError(400, "payment_channel_unavailable")
     if channel.name in {"alipay", "wechat"} and plan.currency != "CNY":
         raise CloudError(400, "invalid_request")
+    page_mode = channel.name == "alipay" and getattr(channel, "mode", "precreate") == "page"
     order = CloudOrder(
         user_id=user.id,
         plan_id=plan.id,
@@ -69,12 +70,17 @@ def create_order(
     db.add(order)
     db.flush()
     try:
-        qr = channel.create_qr(order_id=order.id, amount_cents=order.amount_cents,
-                               subject=f"Mosael {plan.name}", expires_at=order.expires_at)
+        if page_mode:
+            page = channel.create_page(order_id=order.id, amount_cents=order.amount_cents,
+                                       subject=f"Mosael {plan.name}", expires_at=order.expires_at)
+            order.payment_html = page.html
+        else:
+            qr = channel.create_qr(order_id=order.id, amount_cents=order.amount_cents,
+                                   subject=f"Mosael {plan.name}", expires_at=order.expires_at)
+            order.code_url = qr.code_url
     except ChannelUnavailable as exc:
-        logger.warning("下单要二维码失败(%s):%s", channel.name, exc)
+        logger.warning("下单要支付凭据失败(%s):%s", channel.name, exc)
         raise CloudError(503, "payment_channel_unavailable") from exc
-    order.code_url = qr.code_url
     db.flush()
     return order
 
@@ -139,6 +145,7 @@ def order_view(db: Session, order: CloudOrder) -> dict[str, object]:
         "channel": order.channel,
         #: 只在等付款时给二维码:付了、关了再给就是一张扫了也没用的码。
         "code_url": order.code_url if order.status == "pending" else None,
+        "payment_html": order.payment_html if order.status == "pending" else None,
         "created_at": order.created_at.isoformat(),
         "expires_at": order.expires_at.isoformat(),
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,

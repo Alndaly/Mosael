@@ -186,7 +186,18 @@ function PayStep({ order: placed, onAgain, onDone }: { order: CloudOrder; onAgai
   return (
     <div className="grid justify-items-center gap-3" data-cloud-order="pending">
       <p className="m-0 text-ui-md font-medium">{t("cloudBuyScan").replace("{channel}", channel).replace("{amount}", amount)}</p>
-      {qr ? <FallbackImage src={qr} alt="" className="size-[200px] rounded-md" /> : <div className="size-[200px]" />}
+      {order.payment_html ? (
+        <iframe
+          title={t("cloudBuyAlipay")}
+          srcDoc={order.payment_html}
+          sandbox="allow-forms allow-scripts allow-top-navigation allow-popups"
+          className="h-[280px] w-full max-w-[420px] rounded-md border border-border bg-white"
+        />
+      ) : qr ? (
+        <FallbackImage src={qr} alt="" className="size-[200px] rounded-md" />
+      ) : (
+        <div className="size-[200px]" />
+      )}
       <p className="m-0 text-ui-xs text-muted-foreground">
         {t("cloudBuyExpires").replace(
           "{time}",

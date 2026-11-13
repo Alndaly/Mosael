@@ -130,6 +130,8 @@ class CloudConfig:
     alipay_private_key: str = ""
     alipay_public_key: str = ""
     alipay_gateway: str = "https://openapi.alipay.com/gateway.do"
+    #: `precreate` = 当面付扫码；`page` = 电脑网站支付（iframe 自动提交表单）。
+    alipay_mode: str = "precreate"
     #: 微信支付 Native(APIv3)。七项配齐才开;公钥用「微信支付公钥」(带公钥 id),不用平台证书。
     wechatpay_mchid: str = ""
     wechatpay_appid: str = ""
@@ -176,6 +178,8 @@ class CloudConfig:
             raise ValueError("mfa_ticket_ttl_seconds must be positive")
         if self.mfa_max_attempts <= 0:
             raise ValueError("mfa_max_attempts must be positive")
+        if self.alipay_mode not in {"precreate", "page"}:
+            raise ValueError("alipay_mode must be precreate or page")
         if self.smtp_tls not in SMTP_TLS_MODES:
             raise ValueError(f"smtp_tls must be one of {sorted(SMTP_TLS_MODES)}")
         if not 0 < self.smtp_port < 65536:
@@ -306,6 +310,7 @@ class CloudConfig:
             alipay_private_key=os.environ.get("CLOUD_ALIPAY_PRIVATE_KEY", "").strip(),
             alipay_public_key=os.environ.get("CLOUD_ALIPAY_PUBLIC_KEY", "").strip(),
             alipay_gateway=os.environ.get("CLOUD_ALIPAY_GATEWAY", "").strip() or "https://openapi.alipay.com/gateway.do",
+            alipay_mode=os.environ.get("CLOUD_ALIPAY_MODE", "precreate").strip().lower(),
             wechatpay_mchid=os.environ.get("CLOUD_WECHATPAY_MCHID", "").strip(),
             wechatpay_appid=os.environ.get("CLOUD_WECHATPAY_APPID", "").strip(),
             wechatpay_serial_no=os.environ.get("CLOUD_WECHATPAY_SERIAL_NO", "").strip(),

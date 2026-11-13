@@ -212,6 +212,8 @@ export type CloudOrder = {
   channel: PaymentChannelName;
   /** 只在等付款时有:渠道给的二维码内容,界面把它画成码。 */
   code_url: string | null;
+  /** 支付宝电脑网站支付的自动提交表单；与 code_url 二选一。 */
+  payment_html?: string | null;
   created_at: string;
   expires_at: string;
   paid_at: string | null;

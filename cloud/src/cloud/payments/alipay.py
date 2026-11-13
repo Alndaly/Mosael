@@ -30,6 +30,7 @@ from cloud.payments.base import (
     NotifyAck,
     NotifyRejected,
     PaidNotice,
+    PagePayment,
     QrPayment,
     cents_from_yuan,
     yuan,
@@ -65,6 +66,8 @@ class AlipayChannel:
         app_private_key: bytes,
         alipay_public_key: bytes,
         notify_url: str,
+        return_url: str = "",
+        mode: str = "precreate",
         gateway: str = PROD_GATEWAY,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
@@ -76,6 +79,8 @@ class AlipayChannel:
         self._private = private
         self._public = public
         self.notify_url = notify_url
+        self.return_url = return_url
+        self.mode = mode
         self.gateway = gateway
         self._transport = transport
 
@@ -141,6 +146,37 @@ class AlipayChannel:
         if not isinstance(code, str) or not code:
             raise ChannelUnavailable("alipay precreate: no qr_code")
         return QrPayment(code_url=code)
+
+    def create_page(self, *, order_id: str, amount_cents: int, subject: str, expires_at: datetime) -> PagePayment:
+        """电脑网站支付（alipay.trade.page.pay）：返回可放进 iframe 的自动提交表单。"""
+        params = {
+            "app_id": self.app_id,
+            "method": "alipay.trade.page.pay",
+            "format": "JSON",
+            "charset": "utf-8",
+            "sign_type": "RSA2",
+            "timestamp": _beijing(datetime.now(timezone.utc).replace(tzinfo=None)),
+            "version": "1.0",
+            "notify_url": self.notify_url,
+            "return_url": self.return_url,
+            "biz_content": json.dumps({
+                "out_trade_no": order_id,
+                "total_amount": yuan(amount_cents),
+                "subject": subject,
+                "product_code": "FAST_INSTANT_TRADE_PAY",
+                "timeout_express": "30m",
+            }, ensure_ascii=False, separators=(",", ":")),
+        }
+        params["sign"] = self._sign(sign_content(params))
+        try:
+            with httpx2.Client(transport=self._transport, timeout=TIMEOUT_SECONDS) as client:
+                response = client.post(self.gateway, data=params)
+        except httpx2.HTTPError as exc:
+            raise ChannelUnavailable(f"alipay page.pay: {type(exc).__name__}") from exc
+        html = response.text
+        if response.status_code >= 400 or "<form" not in html.lower():
+            raise ChannelUnavailable(f"alipay page.pay: no payment form ({response.status_code})")
+        return PagePayment(html=html)
 
     def query(self, order_id: str) -> PaidNotice | None:
         try:

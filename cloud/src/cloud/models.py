@@ -19,6 +19,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     false,
     true,
@@ -739,6 +740,8 @@ class CloudOrder(Base):
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     refund_cents: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     refund_note: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    #: 电脑网站支付返回的自动提交表单；只有 pending 时对外返回。
+    payment_html: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
 
 class CloudIpBan(Base):

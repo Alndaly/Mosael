@@ -21,6 +21,13 @@ class QrPayment:
 
 
 @dataclass(frozen=True)
+class PagePayment:
+    """电脑网站支付返回的自动提交 HTML 表单（放进同源 iframe 的 srcdoc）。"""
+
+    html: str
+
+
+@dataclass(frozen=True)
 class PaidNotice:
     """渠道说「这一笔付了」(回调或查单),**已经验过签**。金额是渠道说的数,和订单对不对得上由订单那一层判。"""
 
