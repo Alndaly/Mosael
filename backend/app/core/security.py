@@ -89,6 +89,8 @@ def revoke_other_logins(db, user_id: str, keep_raw: str | None) -> int:
 
 #: 剩余不足这么多就续期。不是每次请求都写库 —— 那是一次登录换来每个请求一次 UPDATE。
 LOGIN_RENEW_THRESHOLD = LOGIN_SESSION_TTL / 2
+#: 回合令牌同理:剩余不足半个周期、又正被用着,就往后推一个周期。
+TURN_RENEW_THRESHOLD = SERVICE_SESSION_TTL / 2
 
 
 def prune_expired_sessions(db) -> int:
@@ -187,17 +189,27 @@ def _mint(
 
 
 def renew_if_stale(db, session) -> None:
-    """登录会话被用到就往后续 —— 用着用着被登出是回归,不是安全。
+    """被用到的凭据往后续 —— 用着用着被踢出去是回归,不是安全。
 
-    只续 `login`:服务令牌的周期由那次操作决定,不由它被用了多少次决定,续期会把一份本该
-    半小时后消失的凭据变成长期的。
+    服务令牌的周期由**那次操作**决定,不由它被用了多少次决定,所以续不续看它属于哪种操作:
+
+    - `login`:「这个人还在用这台机器」,活跃就续一个登录周期;
+    - **回合令牌**(带 `agent_session_id` 的服务令牌):那次操作就是这一轮对话。一轮要等出图、出视频,
+      跑上一个小时是常态 —— 此前它和设备码登录一样定死半小时,长回合跑到一半所有工具一齐 401
+      (「Invalid or expired session」),导出那一步永远到不了。现在它跟着回合活:被用着就再续半小时,
+      回合结束由 host 撤销;没人再用,半小时后自己过期 —— 泄漏的代价仍然被这一轮的长度封住;
+    - 其余服务令牌(设备码登录、OAuth 刷新、上下文压缩):一次性的短操作,不续。
     """
     from app.db.models import now
 
-    if session.kind != "login":
+    if session.kind == "login":
+        threshold, ttl = LOGIN_RENEW_THRESHOLD, LOGIN_SESSION_TTL
+    elif session.kind == "service" and session.agent_session_id:
+        threshold, ttl = TURN_RENEW_THRESHOLD, SERVICE_SESSION_TTL
+    else:
         return
     moment = now()
-    if session.expires_at - moment > LOGIN_RENEW_THRESHOLD:
+    if session.expires_at - moment > threshold:
         return
-    session.expires_at = moment + LOGIN_SESSION_TTL
+    session.expires_at = moment + ttl
     db.commit()

@@ -121,6 +121,37 @@ def test_service_tokens_do_not_slide() -> None:
     assert _row(token).expires_at == before, "服务令牌被续期了"
 
 
+def test_a_turn_token_lives_as_long_as_the_turn_uses_it() -> None:
+    """回合令牌的「那次操作」就是这一轮:等出视频跑过半小时是常态,用着就不能半路 401。"""
+    client = fresh_client()
+    with SessionLocal() as db:
+        token = mint_service_session(db, _user_id("tester"), agent_session_id="turn-session")
+    # 这一轮已经跑了二十多分钟:剩下不到半个周期。
+    with SessionLocal() as db:
+        row = find_session(db, token)
+        row.expires_at = now() + timedelta(minutes=2)
+        db.commit()
+
+    client.headers["Authorization"] = f"Bearer {token}"
+    assert client.get("/api/agent/tools").status_code == 200
+
+    renewed = _row(token)
+    assert renewed is not None
+    assert renewed.expires_at > now() + SERVICE_SESSION_TTL / 2, "正被使用的回合令牌没有续上"
+    assert renewed.expires_at <= now() + SERVICE_SESSION_TTL, "回合令牌一次续得比一个服务周期还长"
+
+
+def test_an_idle_turn_token_still_expires() -> None:
+    """续期只给正在用的回合:半小时没人碰(回合崩了、令牌被带走),它照样过期。"""
+    client = fresh_client()
+    with SessionLocal() as db:
+        token = mint_service_session(db, _user_id("tester"), agent_session_id="turn-session")
+    _expire(token)
+
+    client.headers["Authorization"] = f"Bearer {token}"
+    assert client.get("/api/agent/tools").status_code == 401
+
+
 def test_pruning_leaves_live_sessions_alone() -> None:
     client = fresh_client()
     live = client.headers["Authorization"].removeprefix("Bearer ")
