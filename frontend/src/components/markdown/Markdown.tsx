@@ -4,9 +4,10 @@ import { CodeBlock, CodeBlockCopyButton, Streamdown, type Components } from "str
 import { WrapText } from "lucide-react";
 
 import { requestImagePreview } from "@/components/app/image-preview-request";
+import { MediaPreview } from "@/components/app/asset-media";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { useI18n } from "@/app/preferences";
-import { assetPreviewUrl } from "@/api/domains/assets";
+import { assetFileUrl, assetPreviewUrl } from "@/api/domains/assets";
 import { codeHighlighter } from "@/components/markdown/codeHighlighter";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
@@ -117,10 +118,18 @@ function MarkdownLink(props: React.ComponentProps<"a"> & { node?: unknown }) {
 
 /** 外部图片不自动加载：模型/网页内容可以写任意 URL，自动请求会把上下文塞进第三方查询串。
  *  外链改成一条明确的链接（桌面壳会交给系统浏览器），只内联 data:/blob:/本机后端来源的图片。 */
+/**
+ * 正文里引用的本机素材(`mosael-asset:<id>` 换成的预览地址,见 assetRefs):按素材的种类画 —— 视频出播放器、音频出音频条、
+ * 图照旧。此前一律当 `<img>`,引用一段视频就是一枚破图标(维护者截图:Remotion 渲好的片子在回复里看不了)。
+ */
+const LOCAL_ASSET_PREVIEW = /\/api\/assets\/([A-Za-z0-9_-]+)\/preview(?:\?|$)/;
+
 function MarkdownImage(props: React.ComponentProps<"img"> & { node?: unknown }) {
   const t = useI18n();
   const image = props;
   const src = String(image.src ?? "");
+  const local = LOCAL_ASSET_PREVIEW.exec(src);
+  if (local) return <MediaPreview assetId={local[1]} />;
   if (/^https?:/i.test(src) && !/^https?:\/\/(127\.0\.0\.1|localhost):8800\//i.test(src)) {
     return (
       <a href={src} target="_blank" rel="noreferrer noopener" className="text-primary underline underline-offset-2">
@@ -144,7 +153,7 @@ export function AgentMarkdown({ children, fullTables = false }: { children: stri
   const refs = React.useContext(MarkdownRefsContext);
   //: 正文里 `![说明](mosael-asset:<id>)` → 带 token 的素材地址(媒体元素加不了请求头,见 assetRefs)。
   const markdown = React.useMemo(
-    () => rewriteAssetRefs(refs ? refs.rewrite(children) : children, assetPreviewUrl),
+    () => rewriteAssetRefs(refs ? refs.rewrite(children) : children, assetPreviewUrl, assetFileUrl),
     [refs, children],
   );
   return (

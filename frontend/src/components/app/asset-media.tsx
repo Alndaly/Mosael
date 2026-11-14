@@ -15,11 +15,13 @@ import { cn } from "@/lib/utils";
 /**
  * 媒体预览卡:按素材 kind 渲染图/视频/音频,让智能体「返回」的素材在聊天里可见可播。
  *
- * 两处用它:工具行的明细(这一步碰过的素材)和一轮回答的结果区(这一轮做出来的,见 turnOutputs)。
+ * 三处用它:工具行的明细(这一步碰过的素材)、一轮回答的结果区(这一轮做出来的,见 turnOutputs),以及回复正文里
+ * `![说明](mosael-asset:<id>)` 引用的素材(见 components/markdown 的 MarkdownImage)—— 此前正文里的引用一律按图画,
+ * 引用一段视频就是一枚破图标(维护者截图)。所以它住在 components/app,不在 features/agent。
  * 结果区的卡多一颗「在素材库中打开」(`reveal`)—— 那是这一轮交出来的东西,下一步多半是去素材库接着用它;
  * 工具行明细里那张多半是用户自己的原图,不必再指一遍路。
  */
-function MediaPreview({ assetId, gallery, reveal }: { assetId: string; gallery?: ImagePreviewItem[]; reveal: boolean }) {
+export function MediaPreview({ assetId, gallery, reveal = false }: { assetId: string; gallery?: ImagePreviewItem[]; reveal?: boolean }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const asset = useQuery({

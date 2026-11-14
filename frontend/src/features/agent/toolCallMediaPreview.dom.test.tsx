@@ -23,7 +23,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
-import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
+import { MediaPreviewGrid } from "@/components/app/asset-media";
 
 afterEach(() => {
   cleanup();

@@ -29,7 +29,7 @@ import { collectCitations } from "@/features/agent/citations";
 import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { DecisionsContext, useToolCallConfirmation } from "@/features/agent/decisionsContext";
-import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
+import { MediaPreviewGrid } from "@/components/app/asset-media";
 import { widgetOfTool, type AgentWidget } from "@/features/agent/turnOutputs";
 import { AgentWidgetFrame } from "@/features/agent/AgentWidgetFrame";
 import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";

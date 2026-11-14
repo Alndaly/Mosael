@@ -11,7 +11,7 @@ import type { ImagePreviewItem } from "@/components/app/imagePreviewContext";
  *
  * 1. 预览这一层只吃素材行的地址。`ImagePreviewItem` 的 `src` 在库里每一个调用点都是后端那条
  *    `/api/assets/{id}/…`(`assetPreviewUrl` / `assetFileUrl`)或者 `blob:` / `data:` 拼出来的
- *    (见 components/app/asset-preview、features/agent/MediaPreview、features/media/*);
+ *    (见 components/app/asset-preview、components/app/asset-media、features/media/*);
  *    `assetId` 这个字段本身就是"这是库里哪一份"的意思 —— 灯箱顶上「保存到本地」按它取原始字节。
  * 2. 没有把绝对路径变成可加载地址的桥。preload 暴露的 `MosaelDesktopBridge` 里没有任何
  *    路径 → URL 的东西(见 electron/preload-api.d.ts),渲染层拿到的只是一串本机绝对路径。

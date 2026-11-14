@@ -9,11 +9,19 @@
  * 贴一张网上的图)。
  */
 const MARKDOWN_ASSET_REF = /(]\()mosael-asset:([A-Za-z0-9_-]+)(\s*\))/g;
-const HTML_ASSET_REF = /(\bsrc\s*=\s*["'])mosael-asset:([A-Za-z0-9_-]+)(["'])/g;
+//: 内嵌 HTML 的 src:按标签取 —— `<img>` 要预览图(HEIC 转成浏览器认得的),`<video>` / `<audio>` / `<source>` 要原文件
+//: (预览图那一路给不出视频的字节;此前一律换成预览地址,`<video src="mosael-asset:…">` 放不出来)。
+const HTML_ASSET_REF = /(<(img|video|audio|source)\b[^>]*?\bsrc\s*=\s*["'])mosael-asset:([A-Za-z0-9_-]+)(["'])/gi;
 
-export function rewriteAssetRefs(markdown: string, urlFor: (assetId: string) => string): string {
+/**
+ * `previewUrl`:Markdown 图片语法和 `<img>` 用的地址(MarkdownImage 认出它是本机素材后按种类画);
+ * `fileUrl`:`<video>` / `<audio>` / `<source>` 用的原文件地址。
+ */
+export function rewriteAssetRefs(markdown: string, previewUrl: (assetId: string) => string,
+                                 fileUrl: (assetId: string) => string): string {
   if (!markdown.includes("mosael-asset:")) return markdown;
   return markdown
-    .replace(MARKDOWN_ASSET_REF, (_match, head: string, id: string, tail: string) => `${head}${urlFor(id)}${tail}`)
-    .replace(HTML_ASSET_REF, (_match, head: string, id: string, tail: string) => `${head}${urlFor(id)}${tail}`);
+    .replace(MARKDOWN_ASSET_REF, (_match, head: string, id: string, tail: string) => `${head}${previewUrl(id)}${tail}`)
+    .replace(HTML_ASSET_REF, (_match, head: string, tag: string, id: string, tail: string) =>
+      `${head}${tag.toLowerCase() === "img" ? previewUrl(id) : fileUrl(id)}${tail}`);
 }

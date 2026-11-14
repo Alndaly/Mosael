@@ -33,7 +33,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
-import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
+import { MediaPreviewGrid } from "@/components/app/asset-media";
 
 function renderRows(ok: string[], missing: string[]) {
   gone.clear();
