@@ -360,7 +360,7 @@ from pathlib import Path
 
 args = sys.argv[1:]
 if args[:1] == ["-c"]:
-    print(json.dumps({{"python": "3.13.0", "manim": "0.21.0"}}))
+    print(json.dumps({{"python": "3.13.0", "manim": "0.22.1"}}))
     sys.exit(0)
 scene_file, scene = Path(args[2]), args[3]
 media = Path(args[args.index("--media_dir") + 1])
@@ -402,7 +402,7 @@ if scene == "MosaelExplainer":
         say(kind="segment_end", index=index, time=now)
     say(kind="done", time=now)
 if fmt == "png":
-    target = media / "images" / scene_file.stem / f"{{scene}}_ManimCE_v0.21.0.png"
+    target = media / "images" / scene_file.stem / f"{{scene}}_ManimCE_v0.22.1.png"
 else:
     target = media / "videos" / scene_file.stem / "720p30" / f"{{scene}}.{{fmt}}"
     partial = media / "videos" / scene_file.stem / "720p30" / "partial_movie_files" / scene / f"{{scene}}.{{fmt}}"
@@ -502,7 +502,7 @@ class Test入口:
     def test_准备环境_用配置的Python(self, fake_env: dict[str, str]) -> None:
         final, progress = _call("manim_setup", {}, fake_env, locale="en")
         assert final["ok"] is True, final
-        assert final["output"]["manim"] == "0.21.0" and final["output"]["source"] == "configured"
+        assert final["output"]["manim"] == "0.22.1" and final["output"]["source"] == "configured"
         assert "PyAV" in final["output"]["ffmpeg"] and progress
 
     def test_没准备好时说去跑准备环境(self, fake_env: dict[str, str]) -> None:

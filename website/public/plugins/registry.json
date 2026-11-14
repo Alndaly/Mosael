@@ -87,14 +87,14 @@
         "zh": "Blender MCP",
         "en": "Blender MCP"
       },
-      "version": "0.3.3",
+      "version": "0.4.0",
       "summary": {
         "zh": "让智能体操作本机 Blender:看场景、改模型和材质,和 3D 工作台互传。",
         "en": "Let your agent work in Blender on this computer: inspect scenes, edit models and materials, and trade scenes with the 3D studio."
       },
       "description": {
-        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 2.0.3 Add-on。",
-        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.0.3 add-on."
+        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 2.2.9 Add-on。",
+        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.2.9 add-on."
       },
       "author": "Mosael",
       "author_url": "https://mosael.com",
@@ -118,7 +118,7 @@
     {
       "id": "dev.mosael.comfyui",
       "name": "ComfyUI",
-      "version": "1.26.1",
+      "version": "1.27.0",
       "summary": {
         "zh": "接一台 ComfyUI:存着的工作流变成生成模型和工具,还能在 Mosael 里管它的模型和工作流。",
         "en": "Connect a ComfyUI server: its saved workflows become generation models and tools, and you manage its models and workflows from Mosael."
@@ -259,7 +259,7 @@
         "zh": "Manim 教学动画",
         "en": "Manim Teaching Animation"
       },
-      "version": "0.3.3",
+      "version": "0.4.0",
       "summary": {
         "zh": "用 Manim 在本机做教学动画:公式推导、几何、函数图像、算法步骤,不花生成费用。",
         "en": "Make teaching animations with Manim on this computer: derivations, geometry, plots and algorithm steps, at no generation cost."
@@ -509,7 +509,7 @@
         "zh": "Remotion 动画",
         "en": "Remotion Animation"
       },
-      "version": "0.3.3",
+      "version": "0.4.0",
       "summary": {
         "zh": "用代码做动画视频:知识讲解、公式、代码演示和数据图表,本机渲染,不花生成费用。",
         "en": "Make animated videos with code: explainers, formulas, code demos and charts, rendered locally at no generation cost."

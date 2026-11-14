@@ -1,6 +1,6 @@
 # Blender MCP
 
-让你选择的 Mosael 智能体连接本机 Blender，并通过 **3D 场景 → Blender** 菜单交换模型和镜头。本插件使用社区的 [MCP for Blender](https://github.com/ahujasid/mcp-for-blender) 服务器（发布名为 `mcp-for-blender`，2.0 之前叫 `blender-mcp`），固定在 **2.0.3**。不需要 Astra，也不需要单独的建模模型 API Key。
+让你选择的 Mosael 智能体连接本机 Blender，并通过 **3D 场景 → Blender** 菜单交换模型和镜头。本插件使用社区的 [MCP for Blender](https://github.com/ahujasid/mcp-for-blender) 服务器（发布名为 `mcp-for-blender`，2.0 之前叫 `blender-mcp`），固定在 **2.2.9**。不需要 Astra，也不需要单独的建模模型 API Key。
 
 ## 安装
 
@@ -17,7 +17,7 @@
    删掉同版本的 legacy 副本，两份并存会抢同一个 9876 端口。
 
    默认装到所有 4.2 及以上的 Blender；`--blender 5.2` 只装一个，`--list` 先看会装到哪里。
-   仍要用旧体系(Blender 4.2 以下)时才跑 `uvx --python 3.14 mcp-for-blender==2.0.3 install-addon`。
+   仍要用旧体系(Blender 4.2 以下)时才跑 `uvx --python 3.14 mcp-for-blender==2.2.9 install-addon`。
 
    装好后在 Blender 的 Preferences → Add-ons 中搜 MCP，勾选 **MCP for Blender**。这是社区插件，
    不是 Blender 官方插件。

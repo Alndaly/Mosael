@@ -92,4 +92,4 @@ Manim 需要 Python 3.11+(插件用随 Mosael 发的那个 Python,不用你装),
 
 ## 版本与许可
 
-Manim 0.21.0(锁定精确版本;插件升级换了版本时,渲染工具会提醒再运行一次「准备 Manim 环境」,它按新版本重装)。Manim 社区版是 [MIT 许可](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md);插件不分发 Manim 的代码,而是在你的电脑上从 PyPI 安装。
+Manim 0.22.1(锁定精确版本;插件升级换了版本时,渲染工具会提醒再运行一次「准备 Manim 环境」,它按新版本重装)。Manim 社区版是 [MIT 许可](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md);插件不分发 Manim 的代码,而是在你的电脑上从 PyPI 安装。

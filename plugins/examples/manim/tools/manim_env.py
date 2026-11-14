@@ -33,7 +33,7 @@ from typing import Any
 from plugin_kit import Emit, PluginError, TimedOut, blame_line, data_dir, exclusive, follow, line, progress
 
 #: 锁定的 Manim 版本。插件的模板、报错整理、进度解析都是对着它测的。
-MANIM_VERSION = "0.21.0"
+MANIM_VERSION = "0.22.1"
 MIN_PYTHON = (3, 11)
 #: 装依赖的上限。清单里给 manim_setup 声明了 1200 秒,这里留出收尾的余量。
 SETUP_TIMEOUT = 1100

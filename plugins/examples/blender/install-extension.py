@@ -23,7 +23,7 @@ Blender 4.2 起分成两套:Extensions(`blender_manifest.toml`)和 legacy add-on
 
     uv run plugins/examples/blender/install-extension.py
 
-    --version 2.0.3          # 装哪个上游版本(默认与 README 钉的一致)
+    --version 2.2.9          # 装哪个上游版本(默认与 README 钉的一致)
     --blender 5.2            # 只装到某个 Blender 版本(默认:所有 >= 4.2 的)
     --list                   # 只看会装到哪里,不动手
 
@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 #: 与 README 钉的一致。改这里要连 README 一起改 —— Add-on 与 MCP server 的协议版本是配套的。
-DEFAULT_UPSTREAM = "2.0.3"
+DEFAULT_UPSTREAM = "2.2.9"
 
 #: Extensions 体系从 4.2 开始。更早的 Blender 只能用 legacy,那时该跑上游的 install-addon。
 MIN_EXTENSION_BLENDER = (4, 2)

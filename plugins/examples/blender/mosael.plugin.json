@@ -10,7 +10,7 @@
     "en": "Let your agent work in Blender on this computer: inspect scenes, edit models and materials, and trade scenes with the 3D studio."
   },
   "default_locale": "zh",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
   "author": {
     "name": "Mosael",
@@ -27,7 +27,7 @@
     "args": [
       "--python",
       "3.14",
-      "mcp-for-blender==2.0.3"
+      "mcp-for-blender==2.2.9"
     ]
   },
   "permissions": [
@@ -40,8 +40,8 @@
     {
       "id": "blender",
       "description": {
-        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 2.0.3 Add-on。",
-        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.0.3 add-on."
+        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 2.2.9 Add-on。",
+        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 2.2.9 add-on."
       }
     }
   ],
@@ -49,7 +49,7 @@
     "expose": "selected",
     "recommended": [
       "get_scene_info",
-      "get_object_info"
+      "look"
     ],
     "overrides": {
       "get_scene_info": {
@@ -59,83 +59,67 @@
         },
         "read_only": true,
         "description": {
-          "zh": "读取当前 Blender 场景:有哪些物体、各自的类型和位置。只读,不改动任何东西。",
-          "en": "Read the current Blender scene: what objects it holds, their types and positions. Read-only."
+          "zh": "读取当前 Blender 场景:有哪些物体、在哪、多大,网格和骨架是否健康;可按名字筛、看某个物体的子树。只读,不改动任何东西。",
+          "en": "Read the current Blender scene: which objects, where, how big, and whether meshes and rigs are healthy; filter by name or list one object's children. Read-only."
         }
       },
-      "get_object_info": {
+      "look": {
         "label": {
-          "zh": "查看 Blender 物体",
-          "en": "Inspect Blender object"
+          "zh": "看一眼 Blender 场景",
+          "en": "Look at the Blender scene"
         },
         "read_only": true,
         "description": {
-          "zh": "读取某个物体的细节:网格、材质、修改器、变换。只读,不改动任何东西。",
-          "en": "Read one object in detail: mesh, materials, modifiers and transform. Read-only."
+          "zh": "把场景渲成一张图:视口所见、透过场景相机、或从几个角度看某个物体。只读,不改动任何东西。",
+          "en": "Render the scene as one image: what the viewport shows, through the scene camera, or a target from several angles. Read-only."
         }
-      },
-      "get_viewport_screenshot": {
-        "label": {
-          "zh": "截取 Blender 视口",
-          "en": "Capture Blender viewport"
-        },
-        "read_only": true
       },
       "get_addon_status": {
         "label": {
           "zh": "查看 Add-on 状态",
           "en": "Check add-on status"
         },
-        "read_only": true
+        "read_only": true,
+        "description": {
+          "zh": "连上的 Blender 版本、Add-on 和服务是否配套、开了哪些素材库和 3D 生成服务。只读。",
+          "en": "The connected Blender's version, whether the add-on matches the server, and which asset libraries and 3D generators are on. Read-only."
+        }
       },
-      "describe_node_type": {
+      "search_assets": {
         "label": {
-          "zh": "查询节点类型",
-          "en": "Describe a node type"
+          "zh": "搜索素材库",
+          "en": "Search asset libraries"
         },
-        "read_only": true
+        "read_only": true,
+        "description": {
+          "zh": "在 Poly Haven / Sketchfab / Poly Pizza 里搜现成的模型、贴图、HDRI。只查不下载,不改动场景。",
+          "en": "Search Poly Haven / Sketchfab / Poly Pizza for existing models, textures and HDRIs. Searches only; nothing is downloaded or changed."
+        }
       },
-      "bpy_api_lookup": {
+      "import_asset": {
         "label": {
-          "zh": "查询 Blender API",
-          "en": "Look up the Blender API"
+          "zh": "导入素材",
+          "en": "Import an asset"
         },
-        "read_only": true
+        "read_only": false
       },
-      "get_polyhaven_status": {
+      "generate_3d": {
         "label": {
-          "zh": "Poly Haven 状态",
-          "en": "Poly Haven status"
+          "zh": "生成 3D 模型",
+          "en": "Generate a 3D model"
         },
-        "read_only": true
+        "read_only": false,
+        "description": {
+          "zh": "交给 Add-on 里开着的 3D 生成服务(可能按次收费)生成一个模型放进场景。",
+          "en": "Have a 3D generator switched on in the add-on (may charge per run) make a model and place it in the scene."
+        }
       },
-      "get_hyper3d_status": {
+      "generate_gaussian_world": {
         "label": {
-          "zh": "Hyper3D 状态",
-          "en": "Hyper3D status"
+          "zh": "生成高斯场景",
+          "en": "Generate a Gaussian world"
         },
-        "read_only": true
-      },
-      "get_sketchfab_status": {
-        "label": {
-          "zh": "Sketchfab 状态",
-          "en": "Sketchfab status"
-        },
-        "read_only": true
-      },
-      "get_polypizza_status": {
-        "label": {
-          "zh": "Poly Pizza 状态",
-          "en": "Poly Pizza status"
-        },
-        "read_only": true
-      },
-      "get_hunyuan3d_status": {
-        "label": {
-          "zh": "混元 3D 状态",
-          "en": "Hunyuan3D status"
-        },
-        "read_only": true
+        "read_only": false
       },
       "execute_blender_code": {
         "label": {

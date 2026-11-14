@@ -68,4 +68,4 @@ Only `react`, `remotion`, `katex` (including `katex/dist/katex.min.css`) can be 
 
 ## Versions
 
-Remotion 4.0.529, React 19.3.0, KaTeX 0.18.9, all pinned to exact versions (`tools/project/package.json`). When a plugin upgrade changes the versions, the rendering tools remind you to run "Prepare the renderer" again, which reinstalls the new versions.
+Remotion 4.0.543, React 19.3.1, KaTeX 0.19.1, all pinned to exact versions (`tools/project/package.json`). When a plugin upgrade changes the versions, the rendering tools remind you to run "Prepare the renderer" again, which reinstalls the new versions.

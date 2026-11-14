@@ -92,4 +92,4 @@ Manim needs Python 3.11+ (the plugin uses the Python that ships with Mosael, so 
 
 ## Version and license
 
-Manim 0.21.0 (pinned to the exact version; when a plugin upgrade changes the version, the rendering tools remind you to run "Prepare Manim" again, which reinstalls the new version). Manim Community is [MIT licensed](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md); the plugin does not distribute Manim's code but installs it from PyPI on your computer.
+Manim 0.22.1 (pinned to the exact version; when a plugin upgrade changes the version, the rendering tools remind you to run "Prepare Manim" again, which reinstalls the new version). Manim Community is [MIT licensed](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md); the plugin does not distribute Manim's code but installs it from PyPI on your computer.

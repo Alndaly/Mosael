@@ -67,13 +67,10 @@ def test_manifest_passes_local_connection_config():
     assert [o['value'] for o in fields['BLENDER_HOST'].options] == ['127.0.0.1', 'localhost']
 
 
-#: mcp-for-blender 2.0.3 里只读的工具:读场景、看视口、查节点 / API 的写法、问 Add-on 的集成开没开。
-#: `describe_node_type` 在一棵临时节点树里建一个节点读完就删,不碰用户看得见的东西(上游文档原话)。
-UPSTREAM_READ_ONLY = {
-    "get_scene_info", "get_object_info", "get_viewport_screenshot", "get_addon_status", "describe_node_type",
-    "bpy_api_lookup", "get_polyhaven_status", "get_hyper3d_status", "get_sketchfab_status", "get_polypizza_status",
-    "get_hunyuan3d_status",
-}
+#: mcp-for-blender 2.2.9 里只读的工具:读场景、看一眼场景的图、问 Add-on 配不配套 / 开了哪些服务、搜素材库(只查不下载)。
+#: 2.2 把 2.0 的 32 个工具收成 10 个:`get_object_info` 并进 `get_scene_info`(按名字筛)、视口截图成了 `look`,
+#: 各素材库 / 生成服务各自的「状态」并进 `get_addon_status`,查 API / 节点类型的两个去掉了。
+UPSTREAM_READ_ONLY = {"get_scene_info", "look", "get_addon_status", "search_assets"}
 
 
 def test_upstream_read_only_tools_skip_the_card_and_writers_do_not():
@@ -90,8 +87,7 @@ def test_upstream_read_only_tools_skip_the_card_and_writers_do_not():
                                    default=raw['tools'].get('default_effects'))
 
     assert {name for name in overrides if effects(name) == NONE} == UPSTREAM_READ_ONLY
-    for writer in ('set_texture', 'download_polyhaven_asset', 'export_scene', 'generate_hyper3d_model_via_text',
-                   'import_generated_asset'):
+    for writer in ('import_asset', 'generate_3d', 'generate_gaussian_world', 'disable_telemetry'):
         assert effects(writer) == 'external', writer
     assert overrides['execute_blender_code']['internal'] is True
 
