@@ -9,6 +9,11 @@
 
 发版时把这一版改过、而截图没跟上的界面加在最上面(见 [RELEASING.md](../RELEASING.md))。
 
+## 2.6.1
+
+- **MosaelCloud 管理台 → 上游供应商**:万相 Wan 选项与提示；ComfyUI / 价格 JSON 的代码编辑器。
+- **设置 → Mosael Cloud → 订阅 / 续费**:支付宝方形扫码框与真实表单加载后的弹窗尺寸。
+
 ## 2.6.0
 
 - **MosaelCloud 管理台 → 上游供应商**:适配器选择、ComfyUI 地址 / 可选 Key / 工作流映射配置。

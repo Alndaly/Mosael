@@ -8,7 +8,7 @@ moves.
 
 from __future__ import annotations
 
-OLDEST_SUPPORTED_RELEASE = "v2.3.1"
+OLDEST_SUPPORTED_RELEASE = "v2.4.0"
 MAX_RELEASES_BEHIND = 8
 
 __all__ = ["MAX_RELEASES_BEHIND", "OLDEST_SUPPORTED_RELEASE"]

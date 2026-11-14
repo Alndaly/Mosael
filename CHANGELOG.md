@@ -3,6 +3,14 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.6.1] - 2026-11-14
+
+### MosaelCloud
+
+- **新增万相 Wan 上游。** 管理台可选择阿里云百炼或千问 AI；Wanx 图片、Wan3 / 2.7 视频与旧版视频共用任务查询、产物下载和取消，支持首尾帧、参考图和分辨率 / 时长参数。
+- **管理台 JSON 使用代码编辑器。** ComfyUI 工作流与价格分量改用与应用内一致的 CodeMirror 6，提供语法高亮、行号、括号匹配和折叠。
+- **修复支付宝网页支付白屏。** 改为本地生成官方 `pageExecute` 自动提交表单，启用扫码模式与正方形二维码区域；CSP 仅放行支付宝生产与沙箱收银台，移除会阻断支付宝脚本的 iframe sandbox。
+
 ## [2.6.0] - 2026-11-14
 
 ### MosaelCloud 生成与存储

@@ -1,7 +1,7 @@
-"""Build and verify the oldest supported (v2.3.1) database for the packaged upgrade smoke.
+"""Build and verify the oldest supported (v2.4.0) database for the packaged upgrade smoke.
 
 The fixture owns only facts required by the remaining rolling-window migrations. Table shapes
-come from the real v2.3.1 schema baseline; explicit rows exercise the migrations that still
+come from the real v2.4.0 schema baseline; explicit rows exercise the migrations that still
 transform old data, rather than succeeding only on an empty install.
 """
 

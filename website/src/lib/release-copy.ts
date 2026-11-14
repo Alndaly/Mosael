@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.1": {
+    zh: [
+      "**管理台可以接入万相 Wan。** 阿里云百炼与千问 AI 使用同一套任务链路，支持 Wanx 图片、Wan3 / 2.7 视频、旧版参数映射、首尾帧与参考图。",
+      "**复杂配置改用代码编辑器。** ComfyUI 工作流和价格分量获得与应用内一致的语法高亮、行号、括号匹配与折叠。",
+      "**支付宝网页支付不再白屏。** 支付表单在本地生成并直接显示方形扫码区，CSP 只允许支付宝生产与沙箱收银台。",
+    ],
+    en: [
+      "**The admin console can add Wan as an upstream.** Model Studio and Qianwen AI share one job pipeline, covering Wanx images, Wan3 / 2.7 video, legacy parameter mapping, first/last frames and references.",
+      "**Complex configuration uses a code editor.** ComfyUI workflows and price components now have the same syntax highlighting, line numbers, bracket matching and folding as the desktop app.",
+      "**Alipay web payment no longer shows a blank frame.** The form is generated locally and shows a square scan area, with CSP limited to Alipay production and sandbox cashiers.",
+    ],
+  },
   "v2.6.0": {
     zh: [
       "**MosaelCloud 支持异步图片和视频生成。** OpenAI 图片、可灵、火山 Seedance 与已部署的 ComfyUI 都接入统一任务管线，包含预占结算、取消、产物回传和桌面端调用。",
