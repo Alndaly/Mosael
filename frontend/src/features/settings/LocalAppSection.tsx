@@ -8,6 +8,12 @@ import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Truncate } from "@/components/ui/truncate";
 import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";
+import {
+  announceUpdate,
+  startUpdateDownload,
+  startUpdateInstall,
+  supportsInAppUpdate,
+} from "@/lib/updateNotice";
 
 export function StartupRow() {
   const t = useI18n();
@@ -81,26 +87,13 @@ export function ExternalOpenRow() {
 
 /** 检查更新:打包版支持下载并静默安装,开发模式仍提供发布页入口。
  *  macOS 使用已签名/公证的 ZIP;Windows 使用 NSIS。安装前由主进程完成后端收尾。 */
-type UpdateInfo = {
-  current?: string;
-  latest?: string;
-  hasUpdate?: boolean;
-  supportsAutoInstall?: boolean;
-  phase?: string;
-  percent?: number;
-  url?: string;
-  error?: string;
-  manualUrl?: string;
-  source?: string;
-};
+type UpdateInfo = MosaelUpdateInfo;
 
 export function UpdateCheckButton() {
   const t = useI18n();
   const [busy, setBusy] = React.useState<"check" | "download" | "install" | null>(null);
   const [info, setInfo] = React.useState<UpdateInfo | null>(null);
   const check = window.mosaelDesktop?.checkUpdates;
-  const download = window.mosaelDesktop?.downloadUpdate;
-  const install = window.mosaelDesktop?.installUpdate;
   const reportError = (next: UpdateInfo, message: string) => {
     toast.error(message, {
       description: String(next.error),
@@ -121,7 +114,7 @@ export function UpdateCheckButton() {
 
   if (!check) return null;
 
-  const canInstall = Boolean(download && install && info?.supportsAutoInstall);
+  const canInstall = supportsInAppUpdate(info);
   const phase = info?.phase;
   const label =
     phase === "downloading"
@@ -131,7 +124,7 @@ export function UpdateCheckButton() {
         : info?.hasUpdate
           ? canInstall
             ? t("updateDownload")
-            : t("updateView")
+            : t("updateOpenRelease")
           : t("updateCheck");
 
   return (
@@ -143,10 +136,8 @@ export function UpdateCheckButton() {
         if (phase === "downloaded" || phase === "deferred") {
           setBusy("install");
           try {
-            const next = await install!();
-            setInfo(next);
-            if (next.error === "update_jobsRunning") toast.error(t("updateJobsRunning"));
-            else if (next.error) reportError(next, next.error);
+            const next = await startUpdateInstall(t);
+            if (next) setInfo(next);
           } finally {
             setBusy(null);
           }
@@ -155,9 +146,8 @@ export function UpdateCheckButton() {
         if (info?.hasUpdate && canInstall) {
           setBusy("download");
           try {
-            const next = await download!();
-            setInfo(next);
-            if (next.error) reportError(next, t("updateDownloadFailed"));
+            const next = await startUpdateDownload(t);
+            if (next) setInfo(next);
           } finally {
             setBusy(null);
           }
@@ -173,16 +163,8 @@ export function UpdateCheckButton() {
           setInfo(next);
           if (next.error) reportError(next, t("updateCheckFailed"));
           else if (next.hasUpdate) {
-            toast(t("updateAvailable").replace("{version}", next.latest ?? ""), {
-              duration: 12000,
-              action: {
-                label: canInstall ? t("updateDownload") : t("updateView"),
-                onClick: () => {
-                  if (canInstall) void download!();
-                  else window.open(next.url, "_blank");
-                },
-              },
-            });
+            // 用刚查到的 next 判断能不能应用内安装;拿点击前的 info 判断会把安装版也送去网页。
+            announceUpdate(t, next);
           } else {
             toast.success(`${t("updateUpToDate")} · v${next.latest ?? next.current ?? ""}`);
           }

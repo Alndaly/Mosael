@@ -39,6 +39,7 @@ import { DeleteWorkspaceDialog } from "@/components/layout/DeleteWorkspaceDialog
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
+import { announceUpdate, showUpdateProgress } from "@/lib/updateNotice";
 import { gotoSettings } from "@/lib/deepLink";
 import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -140,37 +141,10 @@ export function AppShell({
     try { localStorage.setItem("mosael.sidebar.collapsed", String(!compact)); } catch { /* memory only */ }
   };
 
-  // 桌面端更新:发现新版本给「下载并安装」;下载完成后给「重启并安装」。
+  // 桌面端更新:发现新版本、下载进度、下载完成共用一条提示(见 lib/updateNotice)。
   React.useEffect(() => {
-    const offAvailable = window.mosaelDesktop?.onUpdateAvailable?.((info) => {
-      if (!info?.hasUpdate) return;
-      const canInstall = info.supportsAutoInstall && window.mosaelDesktop?.downloadUpdate;
-      toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
-        duration: 12000,
-        action: {
-          label: canInstall ? t("updateDownload") : t("updateView"),
-          onClick: () => {
-            if (canInstall) void window.mosaelDesktop?.downloadUpdate?.();
-            else window.open(info.url, "_blank");
-          },
-        },
-      });
-    });
-    const offProgress = window.mosaelDesktop?.onUpdateProgress?.((info) => {
-      if (info.phase === "downloaded") {
-        toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
-          duration: 12000,
-          action: {
-            label: t("updateInstallNow"),
-            onClick: () => void window.mosaelDesktop?.installUpdate?.(),
-          },
-        });
-      } else if (info.phase === "deferred") {
-        toast(t("updateJobsRunning"));
-      } else if (info.phase === "error") {
-        toast.error(t("updateDownloadFailed"), { description: info.error });
-      }
-    });
+    const offAvailable = window.mosaelDesktop?.onUpdateAvailable?.((info) => announceUpdate(t, info));
+    const offProgress = window.mosaelDesktop?.onUpdateProgress?.((info) => showUpdateProgress(t, info));
     return () => {
       offAvailable?.();
       offProgress?.();
