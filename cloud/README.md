@@ -236,9 +236,20 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 
 ### 异步生成与 ComfyUI 上游
 
-管理台「上游供应商」可选择 OpenAI 图片、可灵、火山 Seedance 或 **ComfyUI**。ComfyUI 的地址必须能从
+管理台「上游供应商」可选择 OpenAI 图片、可灵、火山 Seedance、**万相 Wan** 或 **ComfyUI**。ComfyUI 的地址必须能从
 **Cloud 服务器**访问；桌面端本机的 `127.0.0.1:8188` 不等于 Cloud 本机。无鉴权部署可以留空 API Key，
 填写后请求带 `Authorization: Bearer …`。
+
+万相 Wan 同时支持阿里云百炼和千问 AI：两者任务协议一致，但 API Key 与 Endpoint 不通用。图片模型名以
+`wanx` 开头，走 `text2image/image-synthesis`；视频模型走 `video-generation/video-synthesis`。Wan3 / 2.7
+使用 `input.media` 传首尾帧与参考图，旧版按 resolution + aspect ratio 映射官方 `size`；查询统一走
+`/api/v1/tasks/{task_id}`，成功后由 Cloud 下载图片或视频并写入 R2。上游地址分别填写：
+
+```text
+https://dashscope.aliyuncs.com
+https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com
+https://maas.qianwenaiapi.com
+```
 
 一台 ComfyUI 可保存多张 API 格式工作流。`workflows` 的键就是新建通道时填写的「上游模型名」，
 `prompt` 是 ComfyUI「导出 API 格式」得到的节点图，`bindings` 把通用任务输入写到节点路径。

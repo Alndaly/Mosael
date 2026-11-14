@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { CodeEditor } from "@/components/ui/code-editor";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -106,6 +106,7 @@ function protocolLabel(adapter: string, copy: Messages["admin"]): string {
     kling: copy.adapterKling,
     seedance: copy.adapterSeedance,
     comfyui: copy.adapterComfyui,
+    wan: copy.adapterWan,
   };
   return labels[adapter] ?? adapter;
 }
@@ -161,10 +162,6 @@ function AButton({ className, loading = false, disabled, children, ...props }: R
 
 function AInput({ className, ...props }: React.ComponentProps<typeof Input>) {
   return <Input {...props} className={cn("h-9 rounded-md border-input bg-transparent px-3 py-1 text-sm shadow-sm", className)} />;
-}
-
-function ATextarea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
-  return <Textarea {...props} className={cn("rounded-md border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:ring-4 focus-visible:ring-primary/15", className)} />;
 }
 
 function ASelectTrigger({ className, ...props }: React.ComponentProps<typeof SelectTrigger>) {
@@ -853,7 +850,7 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
           </div>
           <div className="grid gap-3 border-t border-border pt-4">
             <strong className="text-sm">{copy.addPrice}</strong>
-            <Field label={copy.components}><ATextarea value={components} onChange={(event) => setComponents(event.target.value)} className="min-h-24 font-mono text-xs" /></Field>
+            <Field label={copy.components}><CodeEditor value={components} onChange={setComponents} minHeight={144} /></Field>
             <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.componentsHint}</p>
             <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
           </div>
@@ -943,6 +940,7 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
                 <SelectItem value="kling">{copy.adapterKling}</SelectItem>
                 <SelectItem value="seedance">{copy.adapterSeedance}</SelectItem>
                 <SelectItem value="comfyui">{copy.adapterComfyui}</SelectItem>
+                <SelectItem value="wan">{copy.adapterWan}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -950,10 +948,11 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
           <Field label={copy.apiKey}><AInput type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
           <p className="m-0 text-xs text-muted-foreground">{adapter === "comfyui" ? copy.comfyuiApiKeyHint : copy.apiKeyHint}</p>
           {adapter === "kling" && <p className="m-0 text-xs text-muted-foreground">{copy.klingKeyHint}</p>}
+          {adapter === "wan" && <p className="m-0 text-xs text-muted-foreground">{copy.wanHint}</p>}
           {adapter === "comfyui" && (
             <>
               <Field label={copy.adapterConfig}>
-                <ATextarea value={adapterConfig} onChange={(event) => setAdapterConfig(event.target.value)} className="min-h-56 font-mono text-xs" />
+                <CodeEditor value={adapterConfig} onChange={setAdapterConfig} minHeight={224} />
               </Field>
               <p className="m-0 -mt-2 text-xs leading-5 text-muted-foreground">{copy.comfyuiConfigHint}</p>
             </>

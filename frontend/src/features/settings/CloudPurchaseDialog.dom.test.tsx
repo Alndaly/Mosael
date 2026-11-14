@@ -76,6 +76,28 @@ describe("订阅 / 续费", () => {
     expect(await screen.findByRole("button", { name: "去付款" })).toBeTruthy();
   }, 10_000);
 
+  it("支付宝网页支付用小尺寸 iframe 渲染签名表单，不再显示大块空白收银台", async () => {
+    cloud.createCloudOrder.mockResolvedValue({
+      order: {
+        ...order("pending"),
+        channel: "alipay",
+        code_url: null,
+        payment_html: '<form action="https://openapi.alipay.com/gateway.do"></form>',
+      },
+    });
+    renderDialog();
+    await userEvent.click(await screen.findByRole("button", { name: "去付款" }));
+    const iframe = await waitFor(() => {
+      const element = document.querySelector("iframe");
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    expect(iframe.getAttribute("srcdoc")).toContain("openapi.alipay.com");
+    expect(iframe.getAttribute("src")).toBeNull();
+    expect(iframe.getAttribute("sandbox")).toBeNull();
+    expect(iframe.className).toContain("size-[280px]");
+  });
+
   it("这个部署没开任何支付渠道:说清楚,不给付款", async () => {
     cloud.listCloudPlans.mockResolvedValue({ ...PLANS, channels: [] });
     renderDialog();

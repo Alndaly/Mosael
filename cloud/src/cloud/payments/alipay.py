@@ -19,7 +19,7 @@ import json
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from html import escape
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, urlencode
 
 import httpx2
 from cryptography.exceptions import InvalidSignature
@@ -55,20 +55,6 @@ def _beijing(moment: datetime) -> str:
 
 def _utc(text: str) -> datetime:
     return datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=BEIJING).astimezone(timezone.utc).replace(tzinfo=None)
-
-
-def _cashier_redirect_html(response: httpx2.Response) -> str | None:
-    if response.status_code not in {301, 302, 303, 307, 308}:
-        return None
-    location = response.headers.get("location", "")
-    target = urlsplit(location)
-    if target.scheme != "https" or not target.hostname or not (
-        target.hostname == "alipay.com" or target.hostname.endswith(".alipay.com")
-    ):
-        raise ChannelUnavailable("alipay page.pay: unexpected cashier redirect")
-    # CloudOrder 只存 payment_html、购买弹窗用 iframe.srcDoc；把网关的合法 302 包成等价 HTML，
-    # 不为同一种支付结果再增加一套 URL 字段和前端分支。
-    return f'<!doctype html><meta http-equiv="refresh" content="0;url={escape(location, quote=True)}">'
 
 
 class AlipayChannel:
@@ -163,7 +149,7 @@ class AlipayChannel:
         return QrPayment(code_url=code)
 
     def create_page(self, *, order_id: str, amount_cents: int, subject: str, expires_at: datetime) -> PagePayment:
-        """电脑网站支付：网关返回自动提交表单，或直接重定向到支付宝收银台。"""
+        """与官方 SDK pageExecute(POST) 相同：签名参数放 action URL，biz_content 放表单体。"""
         params = {
             "app_id": self.app_id,
             "method": "alipay.trade.page.pay",
@@ -179,22 +165,21 @@ class AlipayChannel:
                 "total_amount": yuan(amount_cents),
                 "subject": subject,
                 "product_code": "FAST_INSTANT_TRADE_PAY",
-                "timeout_express": "30m",
+                "time_expire": _beijing(expires_at),
+                "qr_pay_mode": "1",
+                "qrcode_width": 200,
             }, ensure_ascii=False, separators=(",", ":")),
         }
         params["sign"] = self._sign(sign_content(params))
-        try:
-            with httpx2.Client(transport=self._transport, timeout=TIMEOUT_SECONDS) as client:
-                response = client.post(self.gateway, data=params)
-        except httpx2.HTTPError as exc:
-            raise ChannelUnavailable(f"alipay page.pay: {type(exc).__name__}") from exc
-        redirect_html = _cashier_redirect_html(response)
-        if redirect_html is not None:
-            return PagePayment(html=redirect_html)
-        html = response.text
-        if response.status_code >= 400 or "<form" not in html.lower():
-            raise ChannelUnavailable(f"alipay page.pay: no payment form ({response.status_code})")
-        return PagePayment(html=html)
+        biz_content = params.pop("biz_content")
+        action = f"{self.gateway}?{urlencode(params)}"
+        form = (
+            '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+            f'<form action="{escape(action, quote=True)}" method="post">'
+            f'<input type="hidden" name="biz_content" value="{escape(biz_content, quote=True)}">'
+            '</form><script>document.forms[0].submit()</script></body></html>'
+        )
+        return PagePayment(html=form)
 
     def query(self, order_id: str) -> PaidNotice | None:
         try:

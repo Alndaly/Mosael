@@ -190,8 +190,7 @@ function PayStep({ order: placed, onAgain, onDone }: { order: CloudOrder; onAgai
         <iframe
           title={t("cloudBuyAlipay")}
           srcDoc={order.payment_html}
-          sandbox="allow-forms allow-scripts allow-top-navigation allow-popups"
-          className="h-[280px] w-full max-w-[420px] rounded-md border border-border bg-white"
+          className="size-[280px] rounded-md border border-border bg-white"
         />
       ) : qr ? (
         <FallbackImage src={qr} alt="" className="size-[200px] rounded-md" />

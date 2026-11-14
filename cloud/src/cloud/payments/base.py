@@ -22,7 +22,7 @@ class QrPayment:
 
 @dataclass(frozen=True)
 class PagePayment:
-    """电脑网站支付返回的自动提交 HTML 表单（放进同源 iframe 的 srcdoc）。"""
+    """电脑网站支付的自动提交表单（扫码模式放进小尺寸 iframe）。"""
 
     html: str
 

@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import base64
+import html as html_lib
 import json
+import re
 import secrets
 import time
 from datetime import timedelta
@@ -448,18 +450,12 @@ def test_an_alipay_response_in_gbk_still_verifies():
     assert channel.query("o1") is None
 
 
-def test_alipay_page_pay_accepts_a_cashier_redirect():
-    """生产网关可能直接 302 到收银台，而不是返回自动提交表单；iframe 仍需拿到可渲染的 HTML。"""
+def test_alipay_page_pay_builds_a_self_submitting_qr_form():
+    """与官方 pageExecute(POST) 一致：公共签名参数在 action URL，业务参数在隐藏表单字段。"""
     fake = FakeAlipay()
-    cashier_url = "https://unitradeprod.alipay.com/appAssign.htm?trade_no=2026111400001&mode=pc"
 
     def handler(request: httpx2.Request) -> httpx2.Response:
-        params = dict(parse_qsl(request.content.decode()))
-        signature = params.pop("sign")
-        rsa_verify(fake.app_public, sign_content(params).encode(), signature)
-        assert params["method"] == "alipay.trade.page.pay"
-        assert json.loads(params["biz_content"])["product_code"] == "FAST_INSTANT_TRADE_PAY"
-        return httpx2.Response(302, headers={"location": cashier_url})
+        raise AssertionError("page.pay 表单应在本地生成，下单时不应额外请求网关")
 
     channel = AlipayChannel(
         app_id=APP_ID,
@@ -470,10 +466,20 @@ def test_alipay_page_pay_accepts_a_cashier_redirect():
         transport=httpx2.MockTransport(handler),
     )
     payment = channel.create_page(
-        order_id="mosael_page_redirect",
+        order_id="mosael_page_qr",
         amount_cents=1,
         subject="Mosael payment test",
         expires_at=now() + timedelta(minutes=30),
     )
-    assert 'http-equiv="refresh"' in payment.html
-    assert "appAssign.htm?trade_no=2026111400001&amp;mode=pc" in payment.html
+    action = html_lib.unescape(re.search(r'action="([^"]+)"', payment.html).group(1))
+    params = dict(parse_qsl(urlsplit(action).query))
+    biz_text = html_lib.unescape(re.search(r'name="biz_content" value="([^"]+)"', payment.html).group(1))
+    params["biz_content"] = biz_text
+    signature = params.pop("sign")
+    rsa_verify(fake.app_public, sign_content(params).encode(), signature)
+    assert params["method"] == "alipay.trade.page.pay"
+    biz = json.loads(biz_text)
+    assert biz["product_code"] == "FAST_INSTANT_TRADE_PAY"
+    assert biz["qr_pay_mode"] == "1"
+    assert biz["qrcode_width"] == 200
+    assert "document.forms[0].submit()" in payment.html
