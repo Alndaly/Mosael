@@ -2561,6 +2561,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "resolution": {"advanced": True, "type": "string", "depends_on": "model", "options_from": "speech_video_resolutions",
                            "description": "wfNode_talking_resolution"},
             "consent": {"type": "string", "required": True, "options": ["yes"], "description": "wfNode_talking_consent"},
+            #: 这一句怎么说(表情、动作、情绪),拼进说话照片的提示词;只交给收提示词的模型(ComfyUI 上的 H3 数字人这类)。
+            "prompt": {"advanced": True, "type": "template", "description": "wfNode_image_speak_prompt"},
         },
         "outputs": ["asset_id", "asset_ids", "audio_asset_id"],
     },

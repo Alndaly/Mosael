@@ -2782,6 +2782,13 @@
           "zh": "授权确认",
           "en": "Consent"
         }
+      },
+      "prompt": {
+        "type": "template",
+        "label": {
+          "zh": "提示词",
+          "en": "Prompt"
+        }
       }
     },
     "outputs": [

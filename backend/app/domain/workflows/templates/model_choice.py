@@ -225,6 +225,16 @@ def _talking_video_model(db: Session, user_id: str, *, continuing: bool) -> Mode
     return _pick(db, user_id, "video", usable)
 
 
+def _speech_photo_model(db: Session, user_id: str) -> ModelChoice:
+    """「说话照片」用哪个模型(漫剧的对白镜头):描述符的 modes 里有 speech-to-video 的视频模型 —— 云端的 s2v、
+    ComfyUI 上一张人像 + 一段驱动音频的数字人工作流(见插件 graph.speaks_a_photo)。和「让它说话」挑的是同一种。"""
+
+    def usable(db_: Session | None, choice: ModelChoice) -> bool:
+        return "speech-to-video" in ((model_capabilities(db_, choice, "video") or {}).get("modes") or ())
+
+    return _pick(db, user_id, "video", usable)
+
+
 #: 明说自己出音乐的模式(内置的音乐服务)。
 _MUSIC_MODES = frozenset({"text-to-music", "text-to-bgm"})
 

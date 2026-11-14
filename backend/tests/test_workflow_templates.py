@@ -939,7 +939,7 @@ def test_模板卡片和图一一对应() -> None:
         PRODUCT_PITCH_SHORT,
         TALKING_SCRIPT_VIDEO,
     )
-    from app.domain.workflows.templates.full_video import FULL_VIDEO_GENERATION
+    from app.domain.workflows.templates.full_video import DRAMA_EPISODE, FULL_VIDEO_GENERATION
     from app.domain.workflows.templates.cleanup import TRANSCRIPT_VIDEO_CLEANUP
     from app.domain.workflows.templates.dub import TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC
     from app.domain.workflows.templates.analysis import ACCOUNT_ANALYSIS, COMMENT_INSIGHTS, VIRAL_VIDEO_BREAKDOWN
@@ -952,7 +952,7 @@ def test_模板卡片和图一一对应() -> None:
         FULL_VIDEO_GENERATION, LONG_TAKE_VIDEO, LONG_TALK_VIDEO, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
         HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK, FOOTAGE_MONTAGE,
         TALKING_SCRIPT_VIDEO, TRANSLATED_DUB_LIPSYNC, PRODUCT_PITCH_PRESENTER,
-        ACCOUNT_ANALYSIS, VIRAL_VIDEO_BREAKDOWN, COMMENT_INSIGHTS, REFERENCE_VIDEO_SHOTS, SERIES_SETUP,
+        ACCOUNT_ANALYSIS, VIRAL_VIDEO_BREAKDOWN, COMMENT_INSIGHTS, REFERENCE_VIDEO_SHOTS, SERIES_SETUP, DRAMA_EPISODE,
     }
     assert {card["id"] for card in TEMPLATE_CATALOG} == known
     for card in BUSINESS_TEMPLATE_CATALOG:

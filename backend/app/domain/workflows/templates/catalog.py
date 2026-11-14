@@ -77,6 +77,7 @@ from app.domain.workflows.templates.model_choice import (
     music_may_sing,
     _opening_video_model,
     _shot_video_model,
+    _speech_photo_model,
     _talking_video_model,
     _reference_image_model,
 )
@@ -86,7 +87,7 @@ from app.domain.workflows.templates.dub import (
     TRANSLATED_DUB_LIPSYNC,
     translated_dub_graph,
 )
-from app.domain.workflows.templates.full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
+from app.domain.workflows.templates.full_video import DRAMA_EPISODE, FULL_VIDEO_GENERATION, full_video_generation_graph
 from app.domain.workflows.templates.music import BackgroundMusic
 from app.domain.workflows.templates.series import SERIES_SETUP, series_setup_graph
 from app.domain.workflows.templates.long_take import LONG_TAKE_VIDEO, long_take_video_graph
@@ -161,6 +162,36 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                 "Export"
             ]
         }
+    },
+    {
+        "id": "drama_episode",
+        "name": {"zh": "漫剧单集", "en": "Drama episode"},
+        "summary": {
+            "zh": "拍漫剧(短剧)的一集:和「从主题到完整视频」同一条流水线 —— 认资产库里的角色和场景、分镜、3D 白模机位、逐镜关键帧 ——"
+                  "但剧本和分镜按**对白推动**来写(旁白只交代时间地点),对白镜头对着说话的人;**有角色台词的镜头用说话照片模型让关键帧开口**,"
+                  "嘴型跟着这句台词的配音(角色在资产库里带着嗓子就用它的),没台词的镜头照旧图生视频。主题里可以直接贴一份逐镜剧本(画面、谁说、台词)。"
+                  "先用「连续剧 · 系列设定」把角色(连同嗓子)和场景建进库,再一集一集拍。花费量级:同「从主题到完整视频」,对白镜头的视频换成一次说话照片生成。",
+            "en": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, "
+                  "storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the "
+                  "scene) and dialogue shots face the speaker; **every shot with a character's line makes the keyframe speak** through a speaking-photo model, "
+                  "lips following that line's voice (the character's own voice from the library when it has one), while shots without lines are generated "
+                  "from the keyframe as usual. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters (with voices) and locations "
+                  "with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\", with one speaking-photo generation in place "
+                  "of the video for each dialogue shot."
+        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(MULTI_REFERENCE_IMAGE_MODEL, zh="能同时带多张参考图出图的图像模型", en="Image model that takes several reference images at once"),
+            requirement(MULTI_REFERENCE_VIDEO_MODEL, zh="支持首帧或参考素材的视频模型", en="Video model that takes a first frame or references"),
+            requirement(SPEECH_VIDEO_MODEL, zh="会「说话照片」的视频模型(让对白镜头开口)", en="Speaking-photo video model (makes dialogue shots speak)"),
+        ],
+        "stages": {
+            "zh": ["输入主题或逐镜剧本", "对白驱动的脚本、角色与视觉圣经", "认已有资产,新的画三视图 / 设计稿", "分镜与机位(对白镜头对着说话的人)",
+                   "搭建 3D 白模", "逐镜:白模 → 关键帧 → 对白镜头开口 / 其余镜头出片", "按顺序组装并配字幕", "导出成片"],
+            "en": ["Choose a topic or paste a shot script", "Dialogue-driven script, characters and visual bible", "Reuse library assets; draw the new ones",
+                   "Storyboard and cameras (dialogue shots face the speaker)", "Build the 3D blockout",
+                   "Per shot: blockout → keyframe → speaking shot or generated shot", "Assemble in order with captions", "Export"],
+        },
     },
     {
         "id": "series_setup",
@@ -357,6 +388,18 @@ def built_in_template_graph(
             music=_background_music(db, user_id, workspace_id),
             db=db,
         ))
+    if template_id == DRAMA_EPISODE:
+        #: 和整片同一个挑法,多挑一个说话照片模型(对白镜头让关键帧开口)。
+        return localised_names(locale, full_video_generation_graph(
+            chat=chat,
+            image=_reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED),
+            video=_shot_video_model(db, user_id),
+            voice_id=_prefilled_voice_id(db, workspace_id),
+            music=_background_music(db, user_id, workspace_id),
+            talk=_speech_photo_model(db, user_id),
+            drama=True,
+            db=db,
+        ))
     if template_id == SERIES_SETUP:
         #: 三视图和整片画的是同一种图,用同一个挑法(整片里库里认出来的就是这一张)。
         return localised_names(locale, series_setup_graph(
@@ -449,6 +492,7 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         #: 照样接到开始参数(templates/model_choice._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
         #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
         FULL_VIDEO_GENERATION: full_video_generation_graph(chat=blank, image=blank, video=blank),
+        DRAMA_EPISODE: full_video_generation_graph(chat=blank, image=blank, video=blank, talk=blank, drama=True),
         SERIES_SETUP: series_setup_graph(chat=blank, image=blank),
         LONG_TAKE_VIDEO: long_take_video_graph(chat=blank, opening=blank, video=blank),
         LONG_TALK_VIDEO: long_talk_video_graph(opening=blank, video=blank),

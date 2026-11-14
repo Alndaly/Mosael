@@ -21,6 +21,7 @@ import {
   Shirt,
   Smartphone,
   UserRound,
+  Drama,
 } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -56,6 +57,7 @@ import { cn } from "@/lib/utils";
     此前这些文案在前端一份、官网同步脚本里一份、后端图里一份,三处各写各的。 */
 const TEMPLATE_ICONS: Record<string, typeof Film> = {
   full_video_generation: Film,
+  drama_episode: Drama,
   transcript_video_cleanup: Scissors,
   translated_dub: Languages,
   translated_dub_lipsync: Languages,

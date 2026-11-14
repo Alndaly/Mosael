@@ -49,10 +49,10 @@ from tests.util import fresh_client
 
 TEMPLATE_IDS = [card["id"] for card in TEMPLATE_CATALOG]
 #: 折边撤掉之后才有的模板:当年的旧数据里没有它们,不进那份审计。
-BORN_AFTER_THE_FOLD = {"long_take_video", "long_talk_video", "series_setup"}
+BORN_AFTER_THE_FOLD = {"long_take_video", "long_talk_video", "series_setup", "drama_episode"}
 #: 当年存在、库里可能留着被折过的旧图的模板 —— 迁移要证的只有它们。之后才有的那几张没有旧数据,「迁移之前缺边」
 #: 这句前提对它们不成立(series_setup 一条可折的边都没有,硬测就是让一张新图去证一份它从没有过的旧数据)。
-FOLDED_ERA_IDS = [template_id for template_id in TEMPLATE_IDS if template_id not in {"series_setup"}]
+FOLDED_ERA_IDS = [template_id for template_id in TEMPLATE_IDS if template_id not in {"series_setup", "drama_episode"}]
 
 #: 模板建图函数最后一步都过 normalize_graph;把它换成原样交回,拿到的就是作者画的那一张
 #: (和 tests/test_drawn_control_edges_are_never_folded.py 取原图同一条路)。

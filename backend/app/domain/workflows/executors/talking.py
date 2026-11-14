@@ -109,8 +109,8 @@ _SPEAKING_PROMPT = (
 
 
 def speaking_prompt(model: dict[str, Any], look: str = "") -> str:
-    """说话照片交给模型的提示词:描述符说不收(`prompt: none`,百炼 s2v 这类)就空着;收的,交这一句,人物资产带着它的
-    长相描述(`look`)。"""
+    """说话照片交给模型的提示词:描述符说不收(`prompt: none`,百炼 s2v 这类)就空着;收的,交这一句 —— 前面接上
+    `look`:人物资产的长相描述(「让它说话」),或这一句的表演(漫剧对白镜头的表情、动作,见 image_speak 的 prompt)。"""
     if ((model.get("capabilities") or {}).get("prompt") or "none") == "none":
         return ""
     return f"{look.strip()} {_SPEAKING_PROMPT}".strip()
@@ -393,9 +393,10 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     if given:
         given = executors_inputs._asset_in(db, scope, given).id
     audio = given or _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
+    #: 表演提示(可选):这一句怎么说 —— 表情、动作、情绪(漫剧的对白镜头交分镜里写的表演)。只给收提示词的模型。
     videos = _generate(db, scope, model, [{"asset_id": face, "role": face_role(model)},
                                           {"asset_id": audio, "role": DRIVING_AUDIO}], parameters,
-                       prompt=speaking_prompt(model))
+                       prompt=speaking_prompt(model, _text(config.get("prompt"))))
     videos = [_fit_to_audio(db, one, audio) for one in videos]
     #: 用的是上游现成的音频时不交回它(和对口型同一条)。
     return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": "" if given else audio}

@@ -55638,6 +55638,7 @@
             "type": "string",
             "enum": [
               "full_video_generation",
+              "drama_episode",
               "series_setup",
               "long_take_video",
               "long_talk_video",
