@@ -784,5 +784,10 @@ def mark_order_refunded(
     order.refunded_at = at
     order.refund_cents = amount
     order.refund_note = note[:300]
+    #: 退款收回这一笔买下的那个周期(钱是运营在渠道后台退的;权益在这里收回)。账号已删、没发放过的单没有可收回的。
+    subscription = db.get(CloudSubscription, order.subscription_id) if order.subscription_id else None
+    plan = db.get(CloudPlan, order.plan_id)
+    if subscription is not None and plan is not None:
+        credits.revoke_purchase(db, subscription, plan, at=at)
     db.flush()
     return order

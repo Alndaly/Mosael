@@ -152,7 +152,11 @@ class WechatPayChannel:
             return None
         if status != 200:
             raise ChannelUnavailable(f"wechat query: {status} {data.get('code')}")
-        return self._paid(data, order_id)
+        try:
+            return self._paid(data, order_id)
+        except ValueError as exc:
+            #: 查单回包缺字段:当作「没问到」(上层照常等回调 / 下一次查单),不能让读订单的请求 500。
+            raise ChannelUnavailable(f"wechat query: {exc}") from exc
 
     # ------------------------------------------------------------ 支付通知
 
@@ -179,7 +183,10 @@ class WechatPayChannel:
             raise NotifyRejected(f"wechat notify: cannot decrypt ({type(exc).__name__})") from exc
         if transaction.get("mchid") != self.mchid or transaction.get("appid") != self.appid:
             raise NotifyRejected("wechat notify: not our merchant")
-        return self._paid(transaction, None)
+        try:
+            return self._paid(transaction, None)
+        except ValueError as exc:
+            raise NotifyRejected(f"wechat notify: {exc}") from exc
 
     def _paid(self, transaction: Mapping[str, object], order_id: str | None) -> PaidNotice | None:
         if transaction.get("trade_state") != "SUCCESS":
@@ -187,7 +194,8 @@ class WechatPayChannel:
         amount = transaction.get("amount")
         total = amount.get("total") if isinstance(amount, dict) else None
         if not isinstance(total, int):
-            raise NotifyRejected("wechat: transaction without amount.total")
+            #: 回调与查单两条路各自换成自己的错误(NotifyRejected / ChannelUnavailable)。
+            raise ValueError("transaction without amount.total")
         success = transaction.get("success_time")
         return PaidNotice(
             order_id=str(transaction.get("out_trade_no") or order_id or ""),

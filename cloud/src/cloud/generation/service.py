@@ -96,7 +96,10 @@ def create_job(
 
 
 def cancel_job(db: Session, *, user_id: str, job_id: str, at: datetime) -> CloudGenerationJob:
-    job = db.get(CloudGenerationJob, job_id)
+    #: **锁住任务行再判断。** worker 领到排队的任务后,在持锁状态下调上游 submit(要几秒);此前这里不加锁读,读到「还没提交」
+    #: 就全额退预占,它的 UPDATE 等 worker 提交后再执行,把「已提交上游」覆盖成「已取消」—— 上游照跑、平台付钱、用户 0 扣。
+    #: 现在等 worker 提交完再读:提交了的走下面「先请 worker 去取消」那条路。
+    job = db.scalars(select(CloudGenerationJob).where(CloudGenerationJob.id == job_id).with_for_update()).first()
     if job is None or job.user_id != user_id:
         raise CloudError(404, "job_not_found")
     if job.status in TERMINAL:

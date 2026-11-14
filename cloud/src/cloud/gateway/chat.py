@@ -139,6 +139,14 @@ def _release(db: Session, call: CloudGatewayCall, *, at: datetime) -> None:
     db.commit()
 
 
+def release(database: Database, *, call_id: str, at: datetime) -> None:
+    """这一次没成(读回包时连接断了):全额释放预占。自己开会话 —— 请求那个会话可能已经还了。"""
+    with database.session() as db:
+        call = db.get(CloudGatewayCall, call_id)
+        if call is not None:
+            _release(db, call, at=at)
+
+
 @dataclass(frozen=True)
 class Settled:
     call_id: str

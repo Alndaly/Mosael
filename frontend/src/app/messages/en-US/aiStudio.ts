@@ -751,6 +751,7 @@ export const aiStudio = {
   cloudBuyWaiting: "This updates by itself once you have paid. Keep it open.",
   cloudBuyPaid: "Subscribed: {plan} now runs until {date}; credits arrive monthly.",
   cloudBuyClosed: "The QR code expired. Nothing was charged.",
+  cloudBuyUnderReview: "The amount paid does not match the order, so nothing was activated; it is with our team for review and you will not be charged again.",
   cloudBuyAgain: "Order again",
   cloudBuyNoChannels: "Online purchase is not set up on this deployment yet.",
   cloudBuyNoPlans: "No plans are on sale right now.",

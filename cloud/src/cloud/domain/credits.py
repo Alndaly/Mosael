@@ -29,6 +29,7 @@ from cloud.errors import CloudError
 from cloud.models import (
     CloudCreditBatch,
     CloudGatewayCall,
+    CloudGenerationJob,
     CloudPlan,
     CloudSubscription,
     CloudUsageEntry,
@@ -150,6 +151,37 @@ def purchase(db: Session, user: CloudUser, plan: CloudPlan, *, at: datetime) -> 
     return current
 
 
+def revoke_purchase(db: Session, subscription: CloudSubscription, plan: CloudPlan, *, at: datetime) -> None:
+    """退款收回这一笔买下的**一个周期**(ADR 0088 后续修正 2026-11-14)。
+
+    - 订阅的到期日往前退一个周期;退完已经不在未来 → 订阅此刻结束;
+    - 落在被收回那段时间里发的批次,没用完的作废(追加 `adjust` 流水,不改批次);之前那段时间发的照用 —— 那是付过钱的部分。
+
+    新开的订阅整段被收回(立刻结束、余下积分作废);续费顺延收回的是还没到的那段,眼下的权益不受影响,只是到期日提前。
+    此前「标记退款」只记一笔:订阅照样有效、积分照发,退了款的人继续用。
+    """
+    _lock_user(db, subscription.user_id)
+    catch_up(db, subscription.user_id, at=at)
+    cut = add_months(subscription.ends_at, -PERIOD_MONTHS[plan.period])
+    if cut <= at:
+        subscription.status = "ended"
+        subscription.ends_at = at
+    else:
+        subscription.ends_at = cut
+    left = func.coalesce(func.sum(CloudUsageEntry.delta), 0)
+    revoked = db.execute(
+        select(CloudCreditBatch, left)
+        .join(CloudUsageEntry, CloudUsageEntry.batch_id == CloudCreditBatch.id)
+        .where(CloudCreditBatch.subscription_id == subscription.id, CloudCreditBatch.granted_at >= cut)
+        .group_by(CloudCreditBatch.id)
+        .having(left > 0)
+    ).all()
+    for batch, remaining in revoked:
+        db.add(CloudUsageEntry(user_id=subscription.user_id, batch_id=batch.id, kind="adjust", delta=-int(remaining),
+                               created_at=at))
+    db.flush()
+
+
 def gift(db: Session, user: CloudUser, *, amount: int, days: int, note: str, at: datetime) -> CloudCreditBatch:
     """赠送一批积分(运营、补偿)。有效期由调用方给 —— 赠送的通常比月度短。"""
     if amount <= 0 or days <= 0:
@@ -198,7 +230,12 @@ def adjust(db: Session, user: CloudUser, *, delta: int, days: int, note: str, at
 
 
 def catch_up(db: Session, user_id: str, *, at: datetime) -> None:
-    """补发到期该发的月度批次,把过了期还有剩的批次清零。幂等:同一时刻再跑一次什么都不写。"""
+    """补发到期该发的月度批次,把过了期还有剩的批次清零。幂等:同一时刻再跑一次什么都不写。
+
+    **先锁住用户行。** 读余额(桌面端查余额、聊天结算、管理台)、预占、购买都会调到这里;此前只有预占和人工调整先锁,发放那一刻
+    并发进来的两个请求都看到「该发了」,各发一批(过期清零也各写一遍)。批次表上的唯一约束是最后一道兜底(迁移 0027)。
+    """
+    _lock_user(db, user_id)
     subscriptions = db.scalars(
         select(CloudSubscription).where(CloudSubscription.user_id == user_id, CloudSubscription.status == "active")
     ).all()
@@ -324,13 +361,19 @@ def reserve(db: Session, call: CloudGatewayCall, *, at: datetime) -> None:
     db.flush()
 
 
-def settle(db: Session, call: CloudGatewayCall, *, charged: int, at: datetime) -> None:
-    """按实际该扣的数结算:多预占的退回原来那几批(晚到期的先退)。`charged=0` 就是全额释放。
+def settle(db: Session, call: CloudGatewayCall, *, charged: int, at: datetime) -> bool:
+    """按实际该扣的数结算:多预占的退回原来那几批(晚到期的先退)。`charged=0` 就是全额释放。交回这一次是否真的结了。
 
     该扣的超过预占的(上游报的输入比估的多)按预占封顶 —— 预占就是这次调用答应过的上限,不事后追扣。
+
+    **先锁住这一笔再判断,已经结过的什么都不做。** 结算有好几条路(worker 跑完 / 失败、用户取消、流断开的 finally、陈旧预占回收),
+    此前只在内存里看 `status == "reserved"`:两条路同时到,两边都看到「还没结」,各写一遍退回流水 —— 凭空多出积分。
     """
+    #: 先把调用方刚记上的用量(token 数等)写进去,再加锁重读 —— 直接重读会把还没写库的改动丢掉。
+    db.flush()
+    db.refresh(call, with_for_update=True)
     if call.status != "reserved":
-        raise ValueError(f"call {call.id} is already {call.status}")
+        return False
     charged = max(0, min(charged, call.reserved))
     refund = call.reserved - charged
     #: 预占是先到期的先扣,退就倒过来:晚到期的先退(同一时刻写下的几行流水没有先后,按批次的到期时间定顺序)。
@@ -351,3 +394,27 @@ def settle(db: Session, call: CloudGatewayCall, *, charged: int, at: datetime) -
     call.status = "settled" if charged > 0 else "released"
     call.finished_at = at
     db.flush()
+    return True
+
+
+#: 预占多久还没结算就算卡住了。聊天一次最长也就几分钟;生成任务由它自己的状态管(见下),不按这个时限。
+STALE_RESERVATION = timedelta(minutes=30)
+
+
+def release_stale(db: Session, *, at: datetime, older_than: timedelta = STALE_RESERVATION) -> int:
+    """回收卡住的预占:超过时限还是 `reserved`、又不属于一个还在跑的生成任务的调用,全额释放。交回释放了几笔。
+
+    怎么会卡:非流式聊天读回包时连接断了、流式响应中途进程退出、worker 在结算前崩了 —— 结算那一步没走到,这部分积分就一直
+    被占着,余额看着少了一截。全额释放是对用户有利的那一边:上游有没有真的算钱我们此刻不知道,不替用户猜。
+    """
+    running = select(CloudGenerationJob.id).where(
+        CloudGenerationJob.call_id == CloudGatewayCall.id, CloudGenerationJob.status.not_in(("succeeded", "failed", "cancelled"))
+    )
+    stuck = db.scalars(
+        select(CloudGatewayCall)
+        .where(CloudGatewayCall.status == "reserved", CloudGatewayCall.created_at < at - older_than, ~running.exists())
+        .order_by(CloudGatewayCall.created_at)
+        .limit(200)
+    ).all()
+    return sum(1 for call in stuck if settle(db, call, charged=0, at=at))
+

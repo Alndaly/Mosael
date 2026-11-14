@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from threading import Event, Thread
-from time import monotonic, sleep
+from time import sleep
 from urllib.parse import urlsplit
 
 import httpx2
@@ -46,10 +46,13 @@ from cloud.generation.comfyui import ADAPTER as COMFYUI
 from cloud.generation.wan import ADAPTER as WAN
 from cloud.generation import adapters as generation_adapters
 from cloud.generation.service import run_one
-from cloud.domain import orders as order_domain
+from cloud.domain import credits, orders as order_domain
 
 #: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸。
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+#: 维护线程(对账、预占回收)多久跑一轮。
+UPKEEP_SECONDS = 60.0
 
 
 def _origin_of(value: str) -> str:
@@ -211,18 +214,8 @@ def create_app(
         stop = Event()
 
         def work() -> None:
-            last_reconcile = 0.0
+            """生成 worker:只领任务、交上游、轮询。对账和预占回收在另一条线程(`upkeep`),渠道慢不拖住生成队列。"""
             while not stop.is_set():
-                if monotonic() - last_reconcile >= 60:
-                    last_reconcile = monotonic()
-                    with app.state.db.session() as reconcile_db:
-                        try:
-                            order_domain.reconcile_pending(
-                                reconcile_db, app.state.payment_channels, at=now()
-                            )
-                            reconcile_db.commit()
-                        except Exception:  # noqa: BLE001 —— 对账失败不能拖垮生成 worker
-                            reconcile_db.rollback()
                 with app.state.db.session() as db:
                     try:
                         handled = run_one(
@@ -237,8 +230,29 @@ def create_app(
                 if not handled:
                     sleep(2)
 
+        def upkeep() -> None:
+            """每分钟一轮:主动查最近仍待付款的订单(兜住丢了的回调)、回收陈旧的预占。
+
+            此前对账在生成 worker 里同步跑:每轮最多查 100 笔、每笔超时 15 秒,渠道一慢,生成队列最坏停二十多分钟。两件事各自
+            一个会话、各自吞掉异常 —— 一件失败不影响另一件,也不让这条线程退出。"""
+            while not stop.wait(UPKEEP_SECONDS):
+                with app.state.db.session() as db:
+                    try:
+                        order_domain.reconcile_pending(db, app.state.payment_channels, at=now())
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+                with app.state.db.session() as db:
+                    try:
+                        credits.release_stale(db, at=now())
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+
         app.state.worker_stop = stop
         app.state.worker_thread = Thread(target=work, name="generation-worker", daemon=True)
         app.state.worker_thread.start()
+        app.state.upkeep_thread = Thread(target=upkeep, name="billing-upkeep", daemon=True)
+        app.state.upkeep_thread.start()
 
     return app

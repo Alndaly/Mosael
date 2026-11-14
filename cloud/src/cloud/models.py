@@ -19,7 +19,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     UniqueConstraint,
     false,
     true,
@@ -515,6 +514,8 @@ class CloudCreditBatch(Base):
     __tablename__ = "cloud_credit_batches"
     __table_args__ = (
         Index("idx_cloud_credit_batches_user_expiry", "user_id", "expires_at"),
+        #: 一份订阅同一发放时刻只有一批(补发并发时的兜底,见 credits.catch_up 与迁移 0027);赠送批次没有订阅,不受限。
+        UniqueConstraint("subscription_id", "granted_at", name="uq_cloud_credit_batches_subscription_grant"),
         CheckConstraint("source IN ('plan', 'gift')", name="ck_cloud_credit_batches_source"),
         CheckConstraint("amount > 0", name="ck_cloud_credit_batches_amount"),
     )
@@ -707,7 +708,7 @@ class CloudOrder(Base):
     __tablename__ = "cloud_orders"
     __table_args__ = (
         Index("idx_cloud_orders_user_created", "user_id", "created_at"),
-        CheckConstraint("status IN ('pending', 'paid', 'closed')", name="ck_cloud_orders_status"),
+        CheckConstraint("status IN ('pending', 'paid', 'closed', 'under_review')", name="ck_cloud_orders_status"),
         CheckConstraint("channel IN ('alipay', 'wechat')", name="ck_cloud_orders_channel"),
         CheckConstraint("amount_cents > 0", name="ck_cloud_orders_amount"),
     )
@@ -740,8 +741,8 @@ class CloudOrder(Base):
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     refund_cents: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     refund_note: Mapped[str] = mapped_column(String(300), nullable=False, default="")
-    #: 电脑网站支付返回的自动提交表单；只有 pending 时对外返回。
-    payment_html: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    #: 电脑网站支付要 POST 的表单 `{action, fields}`(见 payments.base.PaymentForm);扫码(当面付 / 微信)的单为空。
+    payment_form: Mapped[dict[str, Any] | None] = mapped_column(JSONType, nullable=True, default=None)
 
 
 class CloudIpBan(Base):

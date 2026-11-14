@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from cloud.domain import credits
 from cloud.errors import CloudError
@@ -131,10 +131,70 @@ def test_not_enough_credits_is_a_402_that_says_how_much(db, user):
     assert raised.value.details["next_grant_at"] == credits.add_months(T0, 1).isoformat()
 
 
-def test_a_reserved_call_cannot_be_settled_twice(db, user):
+def test_a_reserved_call_is_settled_once_and_a_second_settle_changes_nothing(db, user):
+    """结算有好几条路(跑完、失败、取消、流断开、陈旧预占回收);第二条到时这一笔已经结过,什么都不写 —— 此前两条路同时结
+    会各写一遍退回流水,凭空多出积分。"""
     credits.gift(db, user, amount=10, days=1, note="", at=T0)
     once = call(db, user, reserved=5)
     credits.reserve(db, once, at=T0)
-    credits.settle(db, once, charged=5, at=T0)
-    with pytest.raises(ValueError):
-        credits.settle(db, once, charged=0, at=T0)
+    assert credits.settle(db, once, charged=5, at=T0) is True
+    entries = db.scalar(select(func.count()).select_from(CloudUsageEntry))
+    assert credits.settle(db, once, charged=0, at=T0) is False
+    assert db.scalar(select(func.count()).select_from(CloudUsageEntry)) == entries
+    assert once.status == "settled" and once.charged == 5
+    assert credits.balance(db, user.id, at=T0).total == 5
+
+
+def test_refunding_a_new_subscription_ends_it_and_voids_what_is_left(db, user):
+    """退款收回买下的那个周期:新开的订阅整段被收回 —— 立刻结束,余下的积分作废,之后也不再发。"""
+    pro = plan(db, period="month", monthly=1000)
+    bought = credits.purchase(db, user, pro, at=T0)
+    used = call(db, user, reserved=200)
+    credits.reserve(db, used, at=T0)
+    credits.settle(db, used, charged=200, at=T0)
+    assert credits.balance(db, user.id, at=T0).total == 800
+
+    later = T0 + timedelta(days=3)
+    credits.revoke_purchase(db, bought, pro, at=later)
+    assert bought.status == "ended" and bought.ends_at == later
+    assert credits.balance(db, user.id, at=later).total == 0
+    #: 结束了的订阅不再发下一批
+    assert credits.balance(db, user.id, at=T0 + timedelta(days=60)).total == 0
+
+
+def test_refunding_a_renewal_only_pulls_the_end_date_back(db, user):
+    """续费顺延收回的是还没到的那一段:眼下的积分照用、订阅照样有效,只是到期日退回一个周期。"""
+    pro = plan(db, period="month", monthly=1000)
+    first = credits.purchase(db, user, pro, at=T0)
+    renewed = credits.purchase(db, user, pro, at=T0 + timedelta(days=1))
+    assert renewed.id == first.id
+    extended_to = renewed.ends_at
+
+    credits.revoke_purchase(db, renewed, pro, at=T0 + timedelta(days=2))
+    assert renewed.status == "active"
+    assert renewed.ends_at == credits.add_months(extended_to, -1)
+    assert credits.balance(db, user.id, at=T0 + timedelta(days=2)).total == 1000
+
+
+def test_a_stuck_reservation_is_released_but_a_running_job_keeps_its_own(db, user):
+    """结算那一步没走到(读回包时断线、进程退出)的预占,过了时限全额释放;还在跑的生成任务的预占不动 —— 它由任务自己结。"""
+    from cloud.models import CloudGatewayModel, CloudGenerationJob
+
+    db.add(CloudGatewayModel(id="m", label="M", kind="chat", max_output_tokens=1))
+    db.flush()
+    credits.gift(db, user, amount=100, days=30, note="", at=T0)
+    stuck = call(db, user, reserved=40)
+    stuck.created_at = T0
+    credits.reserve(db, stuck, at=T0)
+    busy = call(db, user, reserved=50)
+    busy.created_at = T0
+    credits.reserve(db, busy, at=T0)
+    db.add(CloudGenerationJob(user_id=user.id, call_id=busy.id, model_id="m", idempotency_key="k1", status="running",
+                              created_at=T0, updated_at=T0))
+    db.flush()
+    assert credits.balance(db, user.id, at=T0).total == 10
+
+    assert credits.release_stale(db, at=T0 + timedelta(minutes=10)) == 0, "还没到时限"
+    assert credits.release_stale(db, at=T0 + timedelta(hours=1)) == 1
+    assert stuck.status == "released" and busy.status == "reserved"
+    assert credits.balance(db, user.id, at=T0 + timedelta(hours=1)).total == 50

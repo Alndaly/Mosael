@@ -29,7 +29,7 @@ const PLANS = {
 
 const order = (status: string) => ({
   id: "o1", status, plan: { slug: "max", name: "Max", period: "year" }, amount_cents: 99900, currency: "CNY",
-  channel: "wechat", code_url: status === "pending" ? "weixin://wxpay/bizpayurl?pr=abc" : null,
+  channel: "wechat", code_url: status === "pending" ? "weixin://wxpay/bizpayurl?pr=abc" : null, payment_form: null,
   created_at: "2026-10-29T10:00:00", expires_at: "2026-10-29T10:30:00", paid_at: null,
   subscription_ends_at: status === "paid" ? "2027-10-29T10:01:00" : null,
 });
@@ -85,27 +85,50 @@ describe("订阅 / 续费", () => {
     expect(await screen.findByRole("button", { name: "去付款" })).toBeTruthy();
   }, 10_000);
 
-  it("支付宝网页支付只渲染 200 方形二维码，不再嵌入整页", async () => {
+  it("支付宝网页支付:自己的表单 POST 进 200 方形 iframe,不执行服务端给的 HTML", async () => {
+    const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => undefined);
     cloud.createCloudOrder.mockResolvedValue({
       order: {
         ...order("pending"),
         channel: "alipay",
         code_url: null,
-        payment_html: '<form action="https://openapi.alipay.com/gateway.do"></form>',
+        payment_form: { action: "https://openapi.alipay.com/gateway.do?app_id=1&sign=s", fields: { biz_content: '{"qr_pay_mode":"4"}' } },
       },
     });
+    cloud.getCloudOrder.mockResolvedValue({ order: { ...order("pending"), channel: "alipay", code_url: null,
+      payment_form: { action: "https://openapi.alipay.com/gateway.do?app_id=1&sign=s", fields: { biz_content: '{"qr_pay_mode":"4"}' } } } });
     renderDialog();
     await userEvent.click(await screen.findByRole("button", { name: "去付款" }));
     const iframe = await waitFor(() => {
-      const element = document.querySelector("iframe");
+      const element = document.querySelector<HTMLIFrameElement>("iframe[data-payment-frame]");
       expect(element).not.toBeNull();
       return element!;
     });
-    expect(iframe.getAttribute("srcdoc")).toContain("openapi.alipay.com");
-    expect(iframe.getAttribute("src")).toBeNull();
-    expect(iframe.getAttribute("sandbox")).toBeNull();
+    //: 不再有 srcdoc:页面里不执行任何服务端下发的标记
+    expect(iframe.getAttribute("srcdoc")).toBeNull();
     expect(iframe.className).toContain("size-[200px]");
-  });
+    const form = document.querySelector("form[target]") as HTMLFormElement;
+    expect(form.getAttribute("target")).toBe(iframe.name);
+    expect(form.getAttribute("action")).toBe("https://openapi.alipay.com/gateway.do?app_id=1&sign=s");
+    expect(form.method).toBe("post");
+    expect((form.querySelector('input[name="biz_content"]') as HTMLInputElement).value).toBe('{"qr_pay_mode":"4"}');
+    //: 轮询再拿到同一张表单也只提交一次
+    await waitFor(() => expect(cloud.getCloudOrder.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 5000 });
+    expect(submit).toHaveBeenCalledTimes(1);
+    submit.mockRestore();
+  }, 10_000);
+
+  it("金额对不上:说没自动开通、已转人工,不给二维码", async () => {
+    cloud.getCloudOrder.mockResolvedValue({ order: { ...order("under_review"), code_url: null } });
+    const { onOpenChange } = renderDialog();
+    await userEvent.click(await screen.findByRole("button", { name: "去付款" }));
+    expect(await screen.findByText(/金额和订单对不上/, {}, { timeout: 6000 })).toBeTruthy();
+    expect(document.querySelector("img")).toBeNull();
+    //: 只有弹窗自己的那个关闭键
+    expect(screen.getAllByRole("button", { name: "关闭" })).toHaveLength(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  }, 10_000);
 
   it("这个部署没开任何支付渠道:说清楚,不给付款", async () => {
     cloud.listCloudPlans.mockResolvedValue({ ...PLANS, channels: [] });

@@ -21,10 +21,15 @@ class QrPayment:
 
 
 @dataclass(frozen=True)
-class PagePayment:
-    """电脑网站支付的自动提交表单（扫码模式放进小尺寸 iframe）。"""
+class PaymentForm:
+    """电脑网站支付要 POST 的表单:提交到哪(`action`,签好名的公共参数在查询串里)、带哪些字段。
 
-    html: str
+    **交数据、不交 HTML。** 桌面端用自己的表单把它提交进购买框里的 iframe,iframe 直接加载渠道的页面;此前这里交一整段
+    自动提交的 HTML,桌面端塞进 `<iframe srcDoc>` 执行 —— srcdoc 和应用同源,服务端下发的脚本就带着应用的权限在跑。
+    """
+
+    action: str
+    fields: dict[str, str]
 
 
 @dataclass(frozen=True)

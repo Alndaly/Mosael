@@ -323,6 +323,23 @@ def test_a_non_streamed_chat_carries_the_settlement_in_the_reply(gateway, upstre
     assert "stream_options" not in upstream.body()
 
 
+class _BrokenBody(httpx2.SyncByteStream):
+    """回包头到了、读回包体时连接断了。"""
+
+    def __iter__(self):
+        raise httpx2.ReadError("connection reset")
+
+
+def test_a_non_streamed_reply_that_breaks_mid_read_releases_the_reservation(gateway, upstream):
+    """此前读回包时一断线,结算走不到,这一次的预占就一直占着用户的积分。"""
+    client = desktop(gateway)
+    upstream.replies[PRIMARY_KEY].append(httpx2.Response(200, stream=_BrokenBody(), headers={"content-type": "application/json"}))
+    response = ask(client, stream=False)
+    assert response.status_code == 502
+    assert only_call(gateway).status == "released"
+    assert credits_left(gateway) == 100_000
+
+
 def test_without_reported_usage_the_charge_is_estimated_from_the_text(gateway, upstream):
     client = desktop(gateway)
     upstream.replies[PRIMARY_KEY].append(sse(chunk("x" * 3000), done=False))

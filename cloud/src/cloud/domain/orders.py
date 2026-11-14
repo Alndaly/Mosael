@@ -24,6 +24,8 @@ from cloud.payments.base import ChannelUnavailable, PaidNotice, PaymentChannel
 
 logger = logging.getLogger(__name__)
 
+#: 渠道报的金额和订单对不上:钱收了、不发放,等运营核对(退款或手工补发)。
+UNDER_REVIEW = "under_review"
 #: 二维码多久有效。过了就关单(之后才到的付款照样发放)。
 ORDER_TTL = timedelta(minutes=30)
 #: 关了的单还主动查多久:有人扫码后拖到最后一刻才付、回调又丢了,这段时间里查单还能兜住。
@@ -99,7 +101,7 @@ def create_order(
         if page_mode:
             page = channel.create_page(order_id=order.id, amount_cents=order.amount_cents,
                                        subject=f"Mosael {plan.name}", expires_at=order.expires_at)
-            order.payment_html = page.html
+            order.payment_form = {"action": page.action, "fields": page.fields}
         else:
             qr = channel.create_qr(order_id=order.id, amount_cents=order.amount_cents,
                                    subject=f"Mosael {plan.name}", expires_at=order.expires_at)
@@ -119,7 +121,11 @@ def settle_paid(db: Session, notice: PaidNotice, *, channel: str, at: datetime) 
         return None
     if order.status == "paid" or order.refunded_at is not None:
         return order
+    if order.status == UNDER_REVIEW:
+        return order
     if notice.amount_cents != order.amount_cents:
+        #: 钱收了、数对不上:不发放,转人工。此前订单一直停在「待付款」、还在给二维码,对账每分钟再报一次错。
+        order.status = UNDER_REVIEW
         order.note = f"amount mismatch: channel says {notice.amount_cents}, order is {order.amount_cents}"[:300]
         logger.error("订单 %s 金额对不上:%s", order.id, order.note)
         db.flush()
@@ -140,7 +146,7 @@ def settle_paid(db: Session, notice: PaidNotice, *, channel: str, at: datetime) 
 
 def refresh(db: Session, order: CloudOrder, channels: Mapping[str, PaymentChannel], *, at: datetime) -> CloudOrder:
     """桌面端轮询订单时:还没到账就主动问一次渠道(兜住丢了的回调,同一笔最多 `QUERY_EVERY` 问一次);过了有效期还没付就关单。"""
-    if order.status == "paid" or order.refunded_at is not None:
+    if order.status in ("paid", UNDER_REVIEW) or order.refunded_at is not None:
         return order
     channel = channels.get(order.channel)
     if channel is not None and at - order.created_at <= LATE_QUERY_WINDOW and _query_due(order.id, at):
@@ -171,7 +177,7 @@ def order_view(db: Session, order: CloudOrder) -> dict[str, object]:
         "channel": order.channel,
         #: 只在等付款时给二维码:付了、关了再给就是一张扫了也没用的码。
         "code_url": order.code_url if order.status == "pending" else None,
-        "payment_html": order.payment_html if order.status == "pending" else None,
+        "payment_form": order.payment_form if order.status == "pending" else None,
         "created_at": order.created_at.isoformat(),
         "expires_at": order.expires_at.isoformat(),
         "paid_at": order.paid_at.isoformat() if order.paid_at else None,

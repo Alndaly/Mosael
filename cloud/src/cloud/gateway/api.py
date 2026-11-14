@@ -28,6 +28,7 @@ from cloud.api.deps import CurrentConfig, DbSession
 from cloud.domain import catalog, credits
 from cloud.domain.device_tokens import device_token_view
 from cloud.domain.identity import account_user
+from cloud.errors import CloudError
 from cloud.gateway import chat
 from cloud.gateway.deps import CurrentDevice
 from cloud.gateway.upstream import generated_chars, new_client, usage_of
@@ -145,6 +146,10 @@ def chat_completions(body: ChatIn, request: Request, device: CurrentDevice, db: 
     if not body.stream:
         try:
             raw = response.read()
+        except httpx2.HTTPError as exc:
+            #: 此前这里一抛,结算那一步走不到,预占就一直占着用户的积分(陈旧预占回收是最后的兜底)。
+            chat.release(database, call_id=call_id, at=now())
+            raise CloudError(502, "upstream_unavailable") from exc
         finally:
             response.close()
             client.close()

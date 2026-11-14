@@ -7,9 +7,7 @@
 from __future__ import annotations
 
 import base64
-import html as html_lib
 import json
-import re
 import secrets
 import time
 from datetime import timedelta
@@ -281,13 +279,33 @@ def test_a_forged_or_tampered_alipay_notify_grants_nothing(shop, alipay):
     assert credits_of(shop) == 0
 
 
-def test_a_wrong_amount_is_acknowledged_but_not_granted(shop, alipay):
+def test_a_wrong_amount_is_acknowledged_not_granted_and_handed_to_a_human(shop, alipay):
+    """钱收了、数对不上:不发放,订单转「待人工核对」—— 不再停在待付款、不再给二维码,也不再去查单。"""
     client = buyer(shop)
     order = order_of(client)
     assert notify_alipay(TestClient(shop), alipay.notify_body(order["id"], "0.01")).text == "success"
     found = stored(shop, order["id"])
-    assert found.status == "pending" and "amount mismatch" in found.note
+    assert found.status == "under_review" and "amount mismatch" in found.note
     assert credits_of(shop) == 0
+    asked = len(alipay.requests)
+    view = client.get(api(f"/orders/{order['id']}")).json()["order"]
+    assert view["status"] == "under_review" and view["code_url"] is None
+    assert len(alipay.requests) == asked, "待人工核对的单不再查渠道"
+    #: 同一笔再来一次正确金额的通知也不自动发放 —— 交给人
+    notify_alipay(TestClient(shop), alipay.notify_body(order["id"], "29.00"))
+    assert stored(shop, order["id"]).status == "under_review" and credits_of(shop) == 0
+
+
+def test_a_wechat_query_without_an_amount_is_treated_as_not_known_yet(shop, wechat, monkeypatch):
+    """查单回包缺 `amount.total`:此前抛的是回调用的错,读订单直接 500;现在当作「没问到」,订单照旧待付款。"""
+    monkeypatch.setattr("cloud.domain.orders.QUERY_EVERY", timedelta(0))
+    client = buyer(shop)
+    order = order_of(client, channel="wechat")
+    broken = wechat.transaction(order["id"], 2900)
+    broken.pop("amount")
+    wechat.transactions[order["id"]] = broken
+    response = client.get(api(f"/orders/{order['id']}"))
+    assert response.status_code == 200 and response.json()["order"]["status"] == "pending"
 
 
 def test_a_lost_callback_is_caught_by_polling_the_order(shop, alipay, monkeypatch):
@@ -319,7 +337,7 @@ def test_the_embedded_alipay_page_has_no_return_url(shop, alipay):
     """购买框里那张码付完不能把 iframe 跳到任何页面(此前跳官网账户页,框里闪过支付宝成功页和官网)。"""
     channel = alipay.channel("https://cloud.example/notify")
     page = channel.create_page(order_id="o" * 32, amount_cents=2900, subject="Mosael Pro", expires_at=now() + timedelta(minutes=30))
-    assert "return_url" not in page.html
+    assert "return_url" not in page.action and "return_url" not in page.fields["biz_content"]
 
 
 def test_an_unpaid_order_closes_after_it_expires_and_a_late_payment_still_counts(shop, alipay):
@@ -494,9 +512,10 @@ def test_alipay_page_pay_builds_a_self_submitting_qr_form():
         subject="Mosael payment test",
         expires_at=now() + timedelta(minutes=30),
     )
-    action = html_lib.unescape(re.search(r'action="([^"]+)"', payment.html).group(1))
-    params = dict(parse_qsl(urlsplit(action).query))
-    biz_text = html_lib.unescape(re.search(r'name="biz_content" value="([^"]+)"', payment.html).group(1))
+    #: 交的是数据(提交地址 + 字段),不是一段要执行的 HTML
+    assert set(payment.fields) == {"biz_content"}
+    params = dict(parse_qsl(urlsplit(payment.action).query))
+    biz_text = payment.fields["biz_content"]
     params["biz_content"] = biz_text
     signature = params.pop("sign")
     rsa_verify(fake.app_public, sign_content(params).encode(), signature)
@@ -505,4 +524,20 @@ def test_alipay_page_pay_builds_a_self_submitting_qr_form():
     assert biz["product_code"] == "FAST_INSTANT_TRADE_PAY"
     assert biz["qr_pay_mode"] == "4"
     assert biz["qrcode_width"] == 200
-    assert "document.forms[0].submit()" in payment.html
+
+
+def test_marking_an_order_refunded_takes_back_what_it_bought(shop, alipay):
+    """管理台「标记退款」此前只记一笔:订阅照样有效、积分照发。现在收回这一笔买下的那个周期。"""
+    from cloud.admin import service
+
+    client = buyer(shop)
+    order = order_of(client)
+    notify_alipay(TestClient(shop), alipay.notify_body(order["id"], "29.00"))
+    assert credits_of(shop) == 1000
+    with shop.state.db.session() as db:
+        service.mark_order_refunded(db, order["id"], amount_cents=None, note="用户申请", at=now())
+        db.commit()
+    assert credits_of(shop) == 0
+    with shop.state.db.session() as db:
+        assert db.scalar(select(CloudSubscription)).status == "ended"
+        assert db.get(CloudOrder, order["id"]).refund_cents == 2900

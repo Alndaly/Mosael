@@ -10,6 +10,9 @@ from pathlib import Path
 
 import pytest
 
+#: 迁移链的最新一条。加了迁移只改这一处。
+HEAD = "0029"
+
 
 def _url(path: Path) -> str:
     return f"sqlite:///{path}"
@@ -56,7 +59,7 @@ def test_migrations_build_the_full_schema(tmp_path):
         assert {"display_name", "handle", "avatar_seed", "phone", "phone_verified_at", "mfa_enabled_at", "role"} <= columns
 
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert version == ("0026",)
+        assert version == (HEAD,)
 
         unique_handle = [
             row[1]
@@ -96,7 +99,7 @@ def test_upgrading_a_0001_database_keeps_rows_and_leaves_identity_empty(tmp_path
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"cloud_shares", "cloud_share_likes", "cloud_share_favorites", "cloud_share_comments"} <= tables
         assert {"cloud_share_notifications"} <= tables
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0026",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (HEAD,)
 
 
 def test_0004_drops_the_device_binding_tables(tmp_path):
@@ -127,7 +130,7 @@ def test_0004_drops_the_device_binding_tables(tmp_path):
         assert not ({"cloud_device_codes", "cloud_devices"} & tables)
         # 账号本身不受影响。
         assert connection.execute("SELECT email FROM cloud_users WHERE id = 'u1'").fetchone() == ("old@example.com",)
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0026",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (HEAD,)
 
 
 def test_0016_moves_channel_credentials_into_shared_providers(tmp_path):
@@ -174,7 +177,7 @@ def test_0016_moves_channel_credentials_into_shared_providers(tmp_path):
         model_id = connection.execute("SELECT id FROM cloud_gateway_models").fetchone()[0]
         assert len(model_id) == 32 and int(model_id, 16) >= 0
         assert connection.execute("SELECT DISTINCT model_id FROM cloud_upstream_channels").fetchall() == [(model_id,)]
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0026",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (HEAD,)
 
 
 def test_notification_table_shape_and_indexes(tmp_path):
@@ -270,7 +273,7 @@ def test_0005_allows_plugin_kind_and_0006_adds_official_and_seed_slug(tmp_path):
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0026",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (HEAD,)
 
         # ① plugin 现在能建;非法值仍然被数据库兜住。
         connection.execute(_share_insert("plugin"), ("s1", "plugin"))
@@ -381,7 +384,7 @@ def test_0007_backfills_existing_rows_with_zh_cn_and_checks_two_locales(tmp_path
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0026",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (HEAD,)
         columns = {row[1]: row for row in connection.execute("PRAGMA table_info(cloud_shares)")}
         assert columns["locale"][3] == 1  # NOT NULL
         # 既有行没有语言信息可推断 —— 迁移只能把它们都当中文,并在迁移里写明。
@@ -459,8 +462,86 @@ def test_0007_downgrade_round_trip_restores_the_0006_shape(tmp_path):
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0026",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (HEAD,)
         assert connection.execute("SELECT id, locale FROM cloud_shares").fetchall() == [("s1", "zh-CN")]
+
+
+def test_0027_merges_duplicate_monthly_batches_and_then_forbids_them(tmp_path):
+    """补发并发时同一订阅同一时刻发过两批:重复那批的用量流水转到保留的一批上,它的发放流水和批次删掉;之后再插就被约束拦住。"""
+    from cloud.schema import upgrade_database
+
+    path = tmp_path / "dup.db"
+    url = _url(path)
+    upgrade_database(url, "0026")
+    t0 = "2026-11-01 00:00:00.000000"
+    with sqlite3.connect(path) as connection:
+        connection.execute("INSERT INTO cloud_users (id, created_at) VALUES ('u1', ?)", (t0,))
+        connection.execute("INSERT INTO cloud_plans (id, slug, name, period, monthly_credits, credit_ttl_days, created_at) "
+                           "VALUES ('p1', 'pro', 'Pro', 'month', 1000, 60, ?)", (t0,))
+        connection.execute("INSERT INTO cloud_subscriptions (id, user_id, plan_id, status, started_at, ends_at, next_grant_at, "
+                           "created_at) VALUES ('s1', 'u1', 'p1', 'active', ?, '2026-12-01 00:00:00.000000', "
+                           "'2026-12-01 00:00:00.000000', ?)", (t0, t0))
+        for batch in ("b1", "b2"):
+            connection.execute("INSERT INTO cloud_credit_batches (id, user_id, source, subscription_id, amount, granted_at, "
+                               "expires_at, note) VALUES (?, 'u1', 'plan', 's1', 1000, ?, '2027-01-01 00:00:00.000000', '')",
+                               (batch, t0))
+            connection.execute("INSERT INTO cloud_usage_entries (id, user_id, batch_id, kind, delta, created_at) "
+                               "VALUES (?, 'u1', ?, 'grant', 1000, ?)", (f"g-{batch}", batch, t0))
+        connection.execute("INSERT INTO cloud_usage_entries (id, user_id, batch_id, kind, delta, created_at) "
+                           "VALUES ('r1', 'u1', 'b2', 'reserve', -30, ?)", (t0,))
+        connection.commit()
+
+    upgrade_database(url, "head")
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT id FROM cloud_credit_batches").fetchall() == [("b1",)]
+        assert sorted(connection.execute("SELECT id, batch_id, kind, delta FROM cloud_usage_entries").fetchall()) == [
+            ("g-b1", "b1", "grant", 1000),
+            ("r1", "b1", "reserve", -30),
+        ]
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("INSERT INTO cloud_credit_batches (id, user_id, source, subscription_id, amount, granted_at, "
+                               "expires_at, note) VALUES ('b3', 'u1', 'plan', 's1', 1000, ?, '2027-01-01 00:00:00.000000', '')",
+                               (t0,))
+        #: 赠送批次没有订阅:同一时刻发几批都行
+        for batch in ("g1", "g2"):
+            connection.execute("INSERT INTO cloud_credit_batches (id, user_id, source, subscription_id, amount, granted_at, "
+                               "expires_at, note) VALUES (?, 'u1', 'gift', NULL, 10, ?, '2027-01-01 00:00:00.000000', '')",
+                               (batch, t0))
+
+
+def test_0029_turns_the_stored_payment_page_into_form_data(tmp_path):
+    """电脑网站支付的单此前存一整段自动提交的 HTML;升级后存 `{action, fields}`,旧 HTML 列删掉。"""
+    import json
+
+    from cloud.schema import upgrade_database
+
+    path = tmp_path / "form.db"
+    url = _url(path)
+    upgrade_database(url, "0028")
+    t0 = "2026-11-14 00:00:00.000000"
+    page = ('<!doctype html><html><head><meta charset="utf-8"></head><body>'
+            '<form action="https://openapi.alipay.com/gateway.do?app_id=1&amp;sign=a%2Bb" method="post">'
+            '<input type="hidden" name="biz_content" value="{&quot;qr_pay_mode&quot;:&quot;4&quot;}">'
+            '</form><script>document.forms[0].submit()</script></body></html>')
+    with sqlite3.connect(path) as connection:
+        connection.execute("INSERT INTO cloud_plans (id, slug, name, period, monthly_credits, credit_ttl_days, created_at) "
+                           "VALUES ('p1', 'pro', 'Pro', 'month', 1000, 60, ?)", (t0,))
+        connection.execute("INSERT INTO cloud_orders (id, plan_id, amount_cents, currency, channel, status, code_url, "
+                           "created_at, expires_at, note, payment_html) VALUES ('o1', 'p1', 2900, 'CNY', 'alipay', 'pending', "
+                           "'', ?, ?, '', ?)", (t0, t0, page))
+        connection.commit()
+
+    upgrade_database(url, "head")
+
+    with sqlite3.connect(path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_orders)")}
+        assert "payment_html" not in columns
+        (form,) = connection.execute("SELECT payment_form FROM cloud_orders WHERE id = 'o1'").fetchone()
+        assert json.loads(form) == {
+            "action": "https://openapi.alipay.com/gateway.do?app_id=1&sign=a%2Bb",
+            "fields": {"biz_content": '{"qr_pay_mode":"4"}'},
+        }
 
 
 def test_models_and_migrations_do_not_drift(tmp_path):

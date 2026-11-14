@@ -753,6 +753,7 @@ export const aiStudio = {
   cloudBuyWaiting: "付款后这里会自动刷新,不用关掉。",
   cloudBuyPaid: "订阅成功:{plan} 有效期到 {date},积分每月发放。",
   cloudBuyClosed: "二维码过期了,没有扣款。",
+  cloudBuyUnderReview: "这笔付款的金额和订单对不上,没有自动开通;已转人工核对,不会再扣款。",
   cloudBuyAgain: "重新下单",
   cloudBuyNoChannels: "这个部署还没开通在线购买。",
   cloudBuyNoPlans: "现在没有在线出售的套餐。",

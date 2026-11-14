@@ -18,7 +18,6 @@ import base64
 import json
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
-from html import escape
 from urllib.parse import parse_qsl, urlencode
 
 import httpx2
@@ -31,7 +30,7 @@ from cloud.payments.base import (
     NotifyAck,
     NotifyRejected,
     PaidNotice,
-    PagePayment,
+    PaymentForm,
     QrPayment,
     cents_from_yuan,
     yuan,
@@ -146,8 +145,8 @@ class AlipayChannel:
             raise ChannelUnavailable("alipay precreate: no qr_code")
         return QrPayment(code_url=code)
 
-    def create_page(self, *, order_id: str, amount_cents: int, subject: str, expires_at: datetime) -> PagePayment:
-        """与官方 SDK pageExecute(POST) 相同：签名参数放 action URL，biz_content 放表单体。
+    def create_page(self, *, order_id: str, amount_cents: int, subject: str, expires_at: datetime) -> PaymentForm:
+        """与官方 SDK pageExecute(POST) 相同：签名参数放 action URL，biz_content 放表单体(交成数据,见 PaymentForm)。
 
         **不给 `return_url`**:这张页嵌在桌面端购买框的 iframe 里(`qr_pay_mode=4` 只出一张码)。给了的话,手机上付完
         支付宝会把 iframe 跳到那个地址 —— 此前是官网的账户页,200×200 的框里先闪一下支付宝的成功页、再闪一下官网,等下一次
@@ -173,14 +172,7 @@ class AlipayChannel:
         }
         params["sign"] = self._sign(sign_content(params))
         biz_content = params.pop("biz_content")
-        action = f"{self.gateway}?{urlencode(params)}"
-        form = (
-            '<!doctype html><html><head><meta charset="utf-8"></head><body>'
-            f'<form action="{escape(action, quote=True)}" method="post">'
-            f'<input type="hidden" name="biz_content" value="{escape(biz_content, quote=True)}">'
-            '</form><script>document.forms[0].submit()</script></body></html>'
-        )
-        return PagePayment(html=form)
+        return PaymentForm(action=f"{self.gateway}?{urlencode(params)}", fields={"biz_content": biz_content})
 
     def query(self, order_id: str) -> PaidNotice | None:
         try:

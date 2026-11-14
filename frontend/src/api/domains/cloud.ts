@@ -207,15 +207,19 @@ export type PaymentChannelName = "alipay" | "wechat";
 
 export type CloudOrder = {
   id: string;
-  status: "pending" | "paid" | "closed";
+  /** `under_review`:渠道报的金额和订单对不上 —— 钱收了、没发放,等人工核对。 */
+  status: "pending" | "paid" | "closed" | "under_review";
   plan: { slug: string; name: string; period: CloudPlan["period"] } | null;
   amount_cents: number;
   currency: string;
   channel: PaymentChannelName;
   /** 只在等付款时有:渠道给的二维码内容,界面把它画成码。 */
   code_url: string | null;
-  /** 支付宝电脑网站支付的自动提交表单；与 code_url 二选一。 */
-  payment_html?: string | null;
+  /**
+   * 支付宝电脑网站支付要 POST 的表单(提交地址 + 字段);与 code_url 二选一。是数据、不是 HTML:购买框用自己的表单把它
+   * 提交进 iframe,iframe 直接加载支付宝的页面(此前 Cloud 交一段自动提交的 HTML 塞进 srcDoc,和应用同源地执行)。
+   */
+  payment_form: { action: string; fields: Record<string, string> } | null;
   created_at: string;
   expires_at: string;
   paid_at: string | null;

@@ -178,6 +178,14 @@ function PayStep({ order: placed, onAgain, onDone }: { order: CloudOrder; onAgai
   const channel = t(order.channel === "alipay" ? "cloudBuyAlipay" : "cloudBuyWechat");
 
   if (paid) return null;
+  if (order.status === "under_review") {
+    return (
+      //: 只说清楚发生了什么;关掉用弹窗自己的关闭键(同一屏不放第二个同样的动作)。
+      <div className="grid gap-3" data-cloud-order="under_review">
+        <p className="m-0 text-ui-md">{t("cloudBuyUnderReview")}</p>
+      </div>
+    );
+  }
   if (order.status === "closed") {
     return (
       <div className="grid gap-3" data-cloud-order="closed">
@@ -191,12 +199,8 @@ function PayStep({ order: placed, onAgain, onDone }: { order: CloudOrder; onAgai
   return (
     <div className="grid justify-items-center gap-3" data-cloud-order="pending">
       <p className="m-0 text-ui-md font-medium">{t("cloudBuyScan").replace("{channel}", channel).replace("{amount}", amount)}</p>
-      {order.payment_html ? (
-        <iframe
-          title={t("cloudBuyAlipay")}
-          srcDoc={order.payment_html}
-          className="size-[200px] rounded-md border border-border bg-white"
-        />
+      {placed.payment_form ? (
+        <PaymentFrame form={placed.payment_form} title={t("cloudBuyAlipay")} />
       ) : qr ? (
         <FallbackImage src={qr} alt="" className="size-[200px] rounded-md" />
       ) : (
@@ -211,5 +215,34 @@ function PayStep({ order: placed, onAgain, onDone }: { order: CloudOrder; onAgai
         {t("cloudBuyWaiting")}
       </p>
     </div>
+  );
+}
+
+
+/**
+ * 支付宝电脑网站支付那张码:一个带名字的 iframe,加上**我们自己**的一张隐藏表单,挂上就 POST 进 iframe。iframe 直接加载
+ * 支付宝的页面(Electron 只放行 https 的 alipay.com / alipaydev.com 子框架导航,见 electron/app-origin)。
+ *
+ * 此前 Cloud 交一整段自动提交的 HTML,这里塞进 `<iframe srcDoc>`:srcdoc 文档和应用同源,服务端下发的脚本带着应用的权限
+ * 在跑。现在 Cloud 只交数据(提交地址 + 字段),页面里不执行任何服务端给的标记。表单只提交一次:订单轮询时数据再来,不重提。
+ */
+function PaymentFrame({ form, title }: { form: { action: string; fields: Record<string, string> }; title: string }) {
+  const name = React.useId();
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const submitted = React.useRef(false);
+  React.useEffect(() => {
+    if (submitted.current || !formRef.current) return;
+    submitted.current = true;
+    formRef.current.submit();
+  }, []);
+  return (
+    <>
+      <iframe name={name} title={title} className="size-[200px] rounded-md border border-border bg-white" data-payment-frame="" />
+      <form ref={formRef} action={form.action} method="post" target={name} className="hidden" aria-hidden>
+        {Object.entries(form.fields).map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+      </form>
+    </>
   );
 }
