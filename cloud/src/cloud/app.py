@@ -42,6 +42,7 @@ from cloud.generation.storage import ArtifactStorage, LocalArtifactStorage, R2Ar
 from cloud.generation.openai_images import ADAPTER as OPENAI_IMAGES
 from cloud.generation.kling import ADAPTER as KLING_VIDEO
 from cloud.generation.seedance import ADAPTER as SEEDANCE_VIDEO
+from cloud.generation.comfyui import ADAPTER as COMFYUI
 from cloud.generation import adapters as generation_adapters
 from cloud.generation.service import run_one
 from cloud.domain import orders as order_domain
@@ -146,6 +147,7 @@ def create_app(
     generation_adapters.register(OPENAI_IMAGES)
     generation_adapters.register(KLING_VIDEO)
     generation_adapters.register(SEEDANCE_VIDEO)
+    generation_adapters.register(COMFYUI)
 
     @app.middleware("http")
     async def same_origin_and_headers(request: Request, call_next):

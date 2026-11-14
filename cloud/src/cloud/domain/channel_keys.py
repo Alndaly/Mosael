@@ -28,6 +28,8 @@ def seal(config: CloudConfig, api_key: str) -> str:
 
 def unseal(config: CloudConfig, sealed: str) -> str:
     """解不开(钥匙换过、库被改过)当作网关没配好:说「没配置」,不把一个坏 Key 发给上游。"""
+    if not sealed:
+        return ""
     try:
         return _fernet(config).decrypt(sealed.encode("ascii")).decode("utf-8")
     except InvalidToken as exc:

@@ -20,7 +20,8 @@ import { toast } from "sonner";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Ban, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, LogOut, Menu, ScrollText, Server, Users } from "lucide-react";
+import { Activity, Ban, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, LogOut, Menu, Plus, ScrollText, Server, Trash2, Users } from "lucide-react";
+import { reservationFromRows, rowsFromCapability, type ReservationRow } from "@/components/admin/model-reservation";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import {
@@ -99,7 +100,14 @@ function orderChannelLabel(channel: string, copy: Messages["admin"]): string {
 }
 
 function protocolLabel(adapter: string, copy: Messages["admin"]): string {
-  return adapter === "openai" ? copy.protocolOpenai : adapter;
+  const labels: Record<string, string> = {
+    openai: copy.protocolOpenai,
+    openai_images: copy.adapterOpenaiImages,
+    kling: copy.adapterKling,
+    seedance: copy.adapterSeedance,
+    comfyui: copy.adapterComfyui,
+  };
+  return labels[adapter] ?? adapter;
 }
 
 function auditTargetLabel(target: string, copy: Messages["admin"]): string {
@@ -155,8 +163,12 @@ function AInput({ className, ...props }: React.ComponentProps<typeof Input>) {
   return <Input {...props} className={cn("h-9 rounded-md border-input bg-transparent px-3 py-1 text-sm shadow-sm", className)} />;
 }
 
+function ATextarea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
+  return <Textarea {...props} className={cn("rounded-md border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:ring-4 focus-visible:ring-primary/15", className)} />;
+}
+
 function ASelectTrigger({ className, ...props }: React.ComponentProps<typeof SelectTrigger>) {
-  return <SelectTrigger size="sm" {...props} className={cn("w-full rounded-md text-sm", className)} />;
+  return <SelectTrigger size="sm" {...props} className={cn("w-full rounded-md border-input bg-transparent py-1 pl-3 text-sm shadow-sm focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15", className)} />;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -685,24 +697,96 @@ function ModelsPanel({ copy, locale, models, onChanged, onFailure }: {
   );
 }
 
+function ReservationFields({ copy, rows, onChange }: {
+  copy: Messages["admin"];
+  rows: ReservationRow[];
+  onChange: (rows: ReservationRow[]) => void;
+}) {
+  const update = (index: number, patch: Partial<ReservationRow>) => {
+    onChange(rows.map((row, at) => at === index ? { ...row, ...patch } : row));
+  };
+  const add = () => {
+    const used = new Set(rows.map((row) => row.unit));
+    const unit = !used.has("image") ? "image" : !used.has("second") ? "second" : "";
+    onChange([...rows, { unit, amount: unit === "second" ? "5" : "1" }]);
+  };
+  return (
+    <div className="grid gap-2">
+      <span className="text-xs font-medium text-muted-foreground">{copy.reservation}</span>
+      {rows.map((row, index) => {
+        const commonUnit = row.unit === "image" || row.unit === "second";
+        return (
+          <div className="grid gap-2" key={index}>
+            <div className="grid grid-cols-[minmax(0,1fr)_6rem_2.25rem] gap-2">
+              <Select
+                value={commonUnit ? row.unit : "custom"}
+                onValueChange={(unit) => update(index, { unit: unit === "custom" ? "" : unit, amount: unit === "second" && row.unit !== "second" ? "5" : row.amount })}
+              >
+                <ASelectTrigger aria-label={copy.reservationUnit}><SelectValue /></ASelectTrigger>
+                <SelectContent>
+                  <SelectItem value="image">{copy.reservationImage}</SelectItem>
+                  <SelectItem value="second">{copy.reservationSecond}</SelectItem>
+                  <SelectItem value="custom">{copy.reservationCustom}</SelectItem>
+                </SelectContent>
+              </Select>
+              <AInput
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                aria-label={copy.reservationAmount}
+                value={row.amount}
+                onChange={(event) => update(index, { amount: event.target.value })}
+              />
+              <AButton
+                type="button"
+                variant="ghost"
+                className="w-9 px-0 text-muted-foreground"
+                aria-label={copy.reservationRemove}
+                disabled={rows.length === 1}
+                onClick={() => onChange(rows.filter((_, at) => at !== index))}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </AButton>
+            </div>
+            {!commonUnit && (
+              <AInput
+                aria-label={copy.reservationCustomUnit}
+                placeholder={copy.reservationCustomUnit}
+                value={row.unit}
+                onChange={(event) => update(index, { unit: event.target.value })}
+              />
+            )}
+          </div>
+        );
+      })}
+      <AButton type="button" variant="ghost" className="w-fit px-0 text-muted-foreground" onClick={add}>
+        <Plus className="size-4" aria-hidden />
+        {copy.reservationAdd}
+      </AButton>
+      <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.reservationHint}</p>
+    </div>
+  );
+}
+
 function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   copy: Messages["admin"]; model: AdminModel | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [label, setLabel] = useState(model?.label ?? "");
   const [interaction, setInteraction] = useState<"stream" | "job">(model?.interaction === "job" ? "job" : "stream");
   const [max, setMax] = useState(String(model?.max_output_tokens ?? 8000));
-  const [capability, setCapability] = useState(JSON.stringify(model?.capability ?? {}, null, 2));
+  const [reservation, setReservation] = useState<ReservationRow[]>(() => rowsFromCapability(model?.capability ?? {}));
   const [sort, setSort] = useState(String(model?.sort_order ?? 0));
   const [enabled, setEnabled] = useState(model?.enabled ?? true);
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     setSaving(true);
     try {
-      let parsed: Record<string, unknown>;
-      try { parsed = JSON.parse(capability || "{}") as Record<string, unknown>; }
-      catch { throw new Error(copy.capability); }
+      const capability = interaction === "job"
+        ? { ...model?.capability, reservation: reservationFromRows(reservation) }
+        : {};
       const payload = {
-        label, interaction, capability: parsed,
+        label, interaction, capability,
         max_output_tokens: interaction === "stream" ? Number(max) : undefined,
         sort_order: Number(sort), enabled,
       };
@@ -720,10 +804,7 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
           {interaction === "stream" ? (
             <Field label={copy.maxOutput}><AInput value={max} onChange={(event) => setMax(event.target.value)} /></Field>
           ) : (
-            <>
-              <Field label={copy.capability}><Textarea value={capability} onChange={(event) => setCapability(event.target.value)} className="min-h-28 font-mono text-xs" /></Field>
-              <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.capabilityHint}</p>
-            </>
+            <ReservationFields copy={copy} rows={reservation} onChange={setReservation} />
           )}
           <Field label={copy.sort}><AInput value={sort} onChange={(event) => setSort(event.target.value)} /></Field>
           <div className="flex items-center justify-between gap-4 py-1">
@@ -772,7 +853,7 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
           </div>
           <div className="grid gap-3 border-t border-border pt-4">
             <strong className="text-sm">{copy.addPrice}</strong>
-            <Field label={copy.components}><Textarea value={components} onChange={(event) => setComponents(event.target.value)} className="min-h-24 font-mono text-xs" /></Field>
+            <Field label={copy.components}><ATextarea value={components} onChange={(event) => setComponents(event.target.value)} className="min-h-24 font-mono text-xs" /></Field>
             <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.componentsHint}</p>
             <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
           </div>
@@ -811,17 +892,32 @@ function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
   );
 }
 
+const COMFYUI_PROVIDER_CONFIG = JSON.stringify({
+  workflows: {
+    "my-workflow": {
+      prompt: {},
+      bindings: { prompt: "6.inputs.text" },
+    },
+  },
+}, null, 2);
+
 function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   copy: Messages["admin"]; provider: AdminProvider | null; onClose: () => void; onSaved: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [name, setName] = useState(provider?.name ?? "");
-  const adapter = provider?.adapter ?? "openai";
-  const adapterConfig = JSON.stringify(provider?.config ?? {}, null, 2);
+  const [adapter, setAdapter] = useState(provider?.adapter ?? "openai");
+  const [adapterConfig, setAdapterConfig] = useState(JSON.stringify(provider?.config ?? {}, null, 2));
   const [base, setBase] = useState(provider?.base_url ?? "");
   const [key, setKey] = useState("");
   const [note, setNote] = useState(provider?.note ?? "");
   const [enabled, setEnabled] = useState(provider?.enabled ?? true);
   const [saving, setSaving] = useState(false);
+  const changeAdapter = (value: string) => {
+    setAdapter(value);
+    if (value === "comfyui" && adapterConfig.trim() === "{}") {
+      setAdapterConfig(COMFYUI_PROVIDER_CONFIG);
+    }
+  };
   const submit = async () => {
     setSaving(true);
     try {
@@ -838,10 +934,30 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
       <DialogContent><DialogHeader><DialogTitle>{provider ? copy.providerEdit : copy.addProvider}</DialogTitle><DialogDescription>{provider?.base_url ?? copy.providerCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           <Field label={copy.providerName}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
+          <Field label={copy.adapter}>
+            <Select value={adapter} onValueChange={changeAdapter}>
+              <ASelectTrigger><SelectValue /></ASelectTrigger>
+              <SelectContent>
+                <SelectItem value="openai">{copy.adapterOpenai}</SelectItem>
+                <SelectItem value="openai_images">{copy.adapterOpenaiImages}</SelectItem>
+                <SelectItem value="kling">{copy.adapterKling}</SelectItem>
+                <SelectItem value="seedance">{copy.adapterSeedance}</SelectItem>
+                <SelectItem value="comfyui">{copy.adapterComfyui}</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           {!provider && <Field label={copy.baseUrl}><AInput value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
           <Field label={copy.apiKey}><AInput type="password" value={key} onChange={(event) => setKey(event.target.value)} /></Field>
-          <p className="m-0 text-xs text-muted-foreground">{copy.apiKeyHint}</p>
+          <p className="m-0 text-xs text-muted-foreground">{adapter === "comfyui" ? copy.comfyuiApiKeyHint : copy.apiKeyHint}</p>
           {adapter === "kling" && <p className="m-0 text-xs text-muted-foreground">{copy.klingKeyHint}</p>}
+          {adapter === "comfyui" && (
+            <>
+              <Field label={copy.adapterConfig}>
+                <ATextarea value={adapterConfig} onChange={(event) => setAdapterConfig(event.target.value)} className="min-h-56 font-mono text-xs" />
+              </Field>
+              <p className="m-0 -mt-2 text-xs leading-5 text-muted-foreground">{copy.comfyuiConfigHint}</p>
+            </>
+          )}
           <Field label={copy.note}><AInput value={note} onChange={(event) => setNote(event.target.value)} /></Field>
           <div className="flex items-center justify-between gap-4 py-1">
             <span className="text-sm font-medium">{copy.enabled}</span>

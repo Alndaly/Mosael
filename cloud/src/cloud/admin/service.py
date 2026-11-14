@@ -440,10 +440,25 @@ def list_providers(db: Session) -> list[dict[str, object]]:
     ]
 
 
+def _validate_adapter_config(adapter: str, adapter_config: dict[str, object] | None) -> None:
+    if adapter != "comfyui":
+        return
+    workflows = (adapter_config or {}).get("workflows")
+    if not isinstance(workflows, dict) or not workflows:
+        raise CloudError(422, "provider_config_invalid")
+    for name, workflow in workflows.items():
+        if not isinstance(name, str) or not name or not isinstance(workflow, dict):
+            raise CloudError(422, "provider_config_invalid")
+        bindings = workflow.get("bindings")
+        if not isinstance(workflow.get("prompt"), dict) or not isinstance(bindings, dict) or "prompt" not in bindings:
+            raise CloudError(422, "provider_config_invalid")
+
+
 def create_provider(
     db: Session, config: CloudConfig, *, name: str, base_url: str, api_key: str, note: str,
     adapter: str = "openai", adapter_config: dict[str, object] | None = None
 ) -> dict[str, object]:
+    _validate_adapter_config(adapter, adapter_config)
     if not base_url.startswith(("https://", "http://")):
         raise CloudError(400, "channel_url_invalid")
     if not config.channel_key:
@@ -462,6 +477,7 @@ def update_provider(
     provider = db.get(CloudUpstreamProvider, provider_id)
     if provider is None:
         raise CloudError(404, "provider_not_found")
+    _validate_adapter_config(adapter, adapter_config)
     provider.name = name
     provider.adapter = adapter
     provider.config = dict(adapter_config or {})

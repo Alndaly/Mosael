@@ -234,6 +234,38 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 连不上 / 超时 / 429 / 5xx 把那条冷却 60 秒、换下一条 —— **只在上游开始生成之前换**,所以不会两条各收一次;其余 4xx 不换,
 全额释放后原话(抹掉 Key)回给调用方。全都不行回 503 `upstream_unavailable`,不扣积分。
 
+### 异步生成与 ComfyUI 上游
+
+管理台「上游供应商」可选择 OpenAI 图片、可灵、火山 Seedance 或 **ComfyUI**。ComfyUI 的地址必须能从
+**Cloud 服务器**访问；桌面端本机的 `127.0.0.1:8188` 不等于 Cloud 本机。无鉴权部署可以留空 API Key，
+填写后请求带 `Authorization: Bearer …`。
+
+一台 ComfyUI 可保存多张 API 格式工作流。`workflows` 的键就是新建通道时填写的「上游模型名」，
+`prompt` 是 ComfyUI「导出 API 格式」得到的节点图，`bindings` 把通用任务输入写到节点路径。
+下面是**结构示意**，实际使用时把 `prompt` 换成完整节点图：
+
+```json
+{
+  "workflows": {
+    "text-to-image": {
+      "prompt": {"6": {"inputs": {"text": "原提示词"}}},
+      "bindings": {
+        "prompt": "6.inputs.text",
+        "negative_prompt": "7.inputs.text",
+        "n": "5.inputs.batch_size",
+        "first_frame": "10.inputs.image",
+        "reference_images": ["11.inputs.image", "12.inputs.image"]
+      }
+    }
+  }
+}
+```
+
+标量输入直接写入路径；图片 URL / data URI 先经 `/upload/image` 进入 ComfyUI 输入目录，再绑定返回的文件名。
+参考图多于绑定路径时任务直接失败，不会静默丢图。提交走 `/prompt`，轮询 `/history/{prompt_id}`，产物从
+`/view` 回读到 R2；排队取消只删除目标任务，运行中取消仅在队列明确显示目标任务时调用 `/interrupt`，
+不会误停同一台服务器上的其他任务。
+
 **账本**:`cloud_credit_batches` 只记一批发了多少、何时到期;每一笔进出是 `cloud_usage_entries` 里带符号的一行,余额是流水的和。
 月度批次(一律从开通那一刻往后数第 N 个月,日子不漂)和到期清零在读余额 / 预占时按需补记,不需要定时任务。
 每次调用一行 `cloud_gateway_calls`(预占、实扣、token、走的通道)。

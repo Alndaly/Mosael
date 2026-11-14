@@ -253,6 +253,31 @@ def test_admin_provider_routes_share_credentials_across_channels_and_never_retur
     assert "sk-provider-secret" not in client.get(api("/admin/providers")).text
 
 
+def test_admin_can_add_comfyui_without_a_key_and_must_declare_workflows(client):
+    make_admin(client)
+    client.app.state.config = replace(
+        client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
+    )
+    base = {
+        "name": "Deployed ComfyUI",
+        "adapter": "comfyui",
+        "base_url": "https://comfy.example",
+        "api_key": "",
+        "note": "",
+    }
+    invalid = client.post(api("/admin/providers"), json={**base, "config": {}})
+    assert invalid.status_code == 422
+
+    created = client.post(api("/admin/providers"), json={
+        **base,
+        "config": {"workflows": {"txt2img": {"prompt": {"6": {"class_type": "CLIPTextEncode"}},
+                                               "bindings": {"prompt": "6.inputs.text"}}}},
+    })
+    assert created.status_code == 201, created.text
+    assert created.json()["provider"]["adapter"] == "comfyui"
+    assert created.json()["provider"]["has_api_key"] is False
+
+
 def test_duplicate_model_names_get_stable_display_suffixes_and_channels_use_them(client):
     make_admin(client)
     client.app.state.config = replace(

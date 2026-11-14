@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 RoleName = Literal["member", "admin"]
 
@@ -70,8 +70,14 @@ class ProviderIn(BaseModel):
     adapter: str = Field(default="openai", min_length=1, max_length=32)
     config: dict[str, object] = Field(default_factory=dict)
     base_url: str = Field(min_length=1, max_length=500)
-    api_key: str = Field(min_length=1, max_length=1000)
+    api_key: str = Field(default="", max_length=1000)
     note: str = Field(default="", max_length=200)
+
+    @model_validator(mode="after")
+    def check_api_key(self) -> "ProviderIn":
+        if self.adapter != "comfyui" and not self.api_key:
+            raise ValueError("api_key is required for this adapter")
+        return self
 
 
 class ProviderPatch(BaseModel):

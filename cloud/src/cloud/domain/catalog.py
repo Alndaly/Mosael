@@ -138,7 +138,7 @@ def add_provider(
         adapter=adapter,
         config=dict(adapter_config or {}),
         base_url=base_url.rstrip("/"),
-        api_key_encrypted=seal(config, api_key),
+        api_key_encrypted=seal(config, api_key) if api_key else "",
         note=note,
     )
     db.add(provider)
