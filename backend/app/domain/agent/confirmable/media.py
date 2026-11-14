@@ -169,7 +169,7 @@ def _summarize_render_sequence(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_render_sequence(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
 
-    job = render.start_export(db, str(payload["sequence_id"]))
+    job = render.start_export(db, str(payload["sequence_id"]), created_by=actor)
     return {"job_id": job.id}
 
 

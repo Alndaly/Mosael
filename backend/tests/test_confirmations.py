@@ -78,6 +78,43 @@ def test_edit_timeline_requires_approval_then_executes() -> None:
     assert state["can_undo"] is True
 
 
+def test_render_sequence_confirmation_queues_an_export_owned_by_the_approver(monkeypatch) -> None:
+    """智能体导出成片:批卡之后真的建出渲染任务,任务记在批卡的人名下。
+
+    此前执行体调 `render.start_export` 时没传 `created_by`(它是必填的关键字参数),批了就报
+    「missing 1 required keyword-only argument」—— 智能体能拼好整条时间线,最后一步永远导不出来。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+    from app.domain import render
+
+    monkeypatch.setattr(render, "dispatch_job", lambda db, job, work: None)  # 只验建任务,不真跑 FFmpeg
+    client = fresh_client()
+    ws, _, asset, sequence = setup_sequence(client)
+    track = next(t for t in sequence["tracks"] if t["kind"] == "video")
+    edit = client.post("/api/confirmations", json={
+        "workspace_id": ws["id"], "tool": "edit_timeline", "requested_by": "pi",
+        "payload": {"sequence_id": sequence["id"], "operations": [
+            {"kind": "insert_clip", "track_id": track["id"], "asset_id": asset["id"],
+             "timeline_start": 0, "src_in": 0, "src_out": 5},
+        ]},
+    }).json()
+    assert client.post(f"/api/confirmations/{edit['id']}/approve").json()["status"] == "executed"
+
+    confirmation = client.post("/api/confirmations", json={
+        "workspace_id": ws["id"], "tool": "render_sequence", "requested_by": "pi",
+        "payload": {"sequence_id": sequence["id"]},
+    }).json()
+    approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+
+    me = client.get("/api/auth/me").json()
+    with SessionLocal() as db:
+        job = db.get(Job, approved["result"]["job_id"])
+        assert job is not None and job.kind == "render"
+        assert job.created_by == me["id"], "导出任务没有记在批卡的人名下"
+
+
 def test_edit_workflow_applies_granular_ops() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
