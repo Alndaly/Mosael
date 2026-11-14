@@ -1,5 +1,13 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.2": {
+    zh: [
+      "**修复 Windows 上支付宝二维码白屏。** 旧尺寸不满足支付宝前置模式的最小要求；现在使用官方 600×300 简约前置模式，完整显示正方形二维码与扫码说明。",
+    ],
+    en: [
+      "**Fixes the blank Alipay QR on Windows.** The old frame was below Alipay's minimum for front mode; payment now uses the official 600×300 simple front layout with a complete square QR code and instructions.",
+    ],
+  },
   "v2.6.1": {
     zh: [
       "**管理台可以接入万相 Wan。** 阿里云百炼与千问 AI 使用同一套任务链路，支持 Wanx 图片、Wan3 / 2.7 视频、旧版参数映射、首尾帧与参考图。",

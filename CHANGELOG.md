@@ -3,6 +3,12 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.6.2] - 2026-11-14
+
+### 支付
+
+- **修复 Windows 上支付宝二维码白屏。** `qr_pay_mode=1` 官方要求 iframe 至少 300×600，旧界面只有 280×280；改用简约前置模式 `qr_pay_mode=0`，按最小 600×300 展示完整正方形二维码与扫码说明。
+
 ## [2.6.1] - 2026-11-14
 
 ### MosaelCloud
