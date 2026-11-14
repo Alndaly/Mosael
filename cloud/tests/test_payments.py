@@ -480,6 +480,5 @@ def test_alipay_page_pay_builds_a_self_submitting_qr_form():
     assert params["method"] == "alipay.trade.page.pay"
     biz = json.loads(biz_text)
     assert biz["product_code"] == "FAST_INSTANT_TRADE_PAY"
-    assert biz["qr_pay_mode"] == "1"
-    assert biz["qrcode_width"] == 200
+    assert biz["qr_pay_mode"] == "0"
     assert "document.forms[0].submit()" in payment.html

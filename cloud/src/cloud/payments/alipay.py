@@ -166,8 +166,7 @@ class AlipayChannel:
                 "subject": subject,
                 "product_code": "FAST_INSTANT_TRADE_PAY",
                 "time_expire": _beijing(expires_at),
-                "qr_pay_mode": "1",
-                "qrcode_width": 200,
+                "qr_pay_mode": "0",
             }, ensure_ascii=False, separators=(",", ":")),
         }
         params["sign"] = self._sign(sign_content(params))
