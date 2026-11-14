@@ -21,7 +21,6 @@ def channels_from_config(config: CloudConfig) -> dict[str, PaymentChannel]:
             app_private_key=pem(config.alipay_private_key, kind="private"),
             alipay_public_key=pem(config.alipay_public_key, kind="public"),
             notify_url=notify_url(config, "alipay"),
-            return_url=f"{config.public_url}/zh/account",
             mode=config.alipay_mode,
             gateway=config.alipay_gateway,
         )

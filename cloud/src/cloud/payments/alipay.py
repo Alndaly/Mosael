@@ -67,7 +67,6 @@ class AlipayChannel:
         app_private_key: bytes,
         alipay_public_key: bytes,
         notify_url: str,
-        return_url: str = "",
         mode: str = "precreate",
         gateway: str = PROD_GATEWAY,
         transport: httpx2.BaseTransport | None = None,
@@ -80,7 +79,6 @@ class AlipayChannel:
         self._private = private
         self._public = public
         self.notify_url = notify_url
-        self.return_url = return_url
         self.mode = mode
         self.gateway = gateway
         self._transport = transport
@@ -149,7 +147,11 @@ class AlipayChannel:
         return QrPayment(code_url=code)
 
     def create_page(self, *, order_id: str, amount_cents: int, subject: str, expires_at: datetime) -> PagePayment:
-        """与官方 SDK pageExecute(POST) 相同：签名参数放 action URL，biz_content 放表单体。"""
+        """与官方 SDK pageExecute(POST) 相同：签名参数放 action URL，biz_content 放表单体。
+
+        **不给 `return_url`**:这张页嵌在桌面端购买框的 iframe 里(`qr_pay_mode=4` 只出一张码)。给了的话,手机上付完
+        支付宝会把 iframe 跳到那个地址 —— 此前是官网的账户页,200×200 的框里先闪一下支付宝的成功页、再闪一下官网,等下一次
+        轮询才换成「已到账」(维护者截图)。到账只认异步通知和查单,购买框按轮询结果收起这张码。"""
         params = {
             "app_id": self.app_id,
             "method": "alipay.trade.page.pay",
@@ -159,7 +161,6 @@ class AlipayChannel:
             "timestamp": _beijing(datetime.now(timezone.utc).replace(tzinfo=None)),
             "version": "1.0",
             "notify_url": self.notify_url,
-            "return_url": self.return_url,
             "biz_content": json.dumps({
                 "out_trade_no": order_id,
                 "total_amount": yuan(amount_cents),

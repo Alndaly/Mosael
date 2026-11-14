@@ -9,6 +9,7 @@ import type { ProviderProfile } from "@/api/domains/providers";
 import { ApiError } from "@/api/transport";
 
 vi.mock("@/app/preferences", () => ({
+  usePreferences: () => ({ locale: "zh-CN" }),
   useI18n: () => (key: string) =>
     ({
       providerMosaelCloud: "Mosael Cloud",
@@ -20,6 +21,9 @@ vi.mock("@/app/preferences", () => ({
       providerMosaelCloudEmptyBody: "刷新后重新对齐。",
       modelListEmptyTitle: "这个连接还没有模型",
       providerMosaelCloudCredits: "{credits} 积分",
+      providerMosaelCloudPlan: "{plan} 有效期到 {date}",
+      cloudBuySubscribe: "订阅",
+      cloudBuyRenew: "续费",
       providerMosaelCloudRefresh: "刷新",
       providerMosaelCloudSynced: "取到 {n} 个模型",
       modelListTitle: "模型",
@@ -58,15 +62,27 @@ function renderRow(props: { profile?: ProviderProfile | null; offersCapability?:
 describe("供应商列表里的 Mosael Cloud", () => {
   beforeEach(() => {
     gotoSettings.mockReset();
-    cloud.getCloudAccount.mockReset().mockResolvedValue({ credits: 998, batches: [], next_grant_at: null, plan: "Pro" });
+    cloud.getCloudAccount.mockReset().mockResolvedValue({
+      credits: 998, batches: [], next_grant_at: null, plan: "Pro", plan_ends_at: "2027-10-29T10:01:00",
+    });
     cloud.syncCloudConnection.mockReset().mockResolvedValue({ profile_id: "cloud-1", models: 3 });
   });
 
-  it("登录了:写出账号和积分,不给登录按钮", async () => {
+  it("登录了:写出账号、套餐到哪天和积分,按钮是续费,不给登录按钮", async () => {
     session = async () => ({ email: "alice@example.com" });
     renderRow({ profile: PROFILE, offersCapability: true });
-    expect(await screen.findByText(/官方中转 · alice@example.com · 998 积分/)).toBeTruthy();
+    //: 续费只顺延有效期、积分当场不变 —— 买完之后用户看得到的就是「有效期到哪天」变了
+    expect(await screen.findByText(/官方中转 · alice@example.com · Pro 有效期到 2027\/10\/29 · 998 积分/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "续费" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "去登录" })).toBeNull();
+  });
+
+  it("还没订阅:不写套餐,按钮是订阅", async () => {
+    cloud.getCloudAccount.mockResolvedValue({ credits: 0, batches: [], next_grant_at: null, plan: null, plan_ends_at: null });
+    session = async () => ({ email: "alice@example.com" });
+    renderRow({ profile: PROFILE, offersCapability: true });
+    expect(await screen.findByText(/官方中转 · alice@example.com · 0 积分/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "订阅" })).toBeTruthy();
   });
 
   it("这一页的能力网关有:能展开看模型(就是那条连接的模型行)", async () => {

@@ -170,12 +170,14 @@ export function logoutCloud(): Promise<void> {
 /** 「Mosael Cloud」连接用的 vendor(ADR 0088)。这条连接由云端登录建出来,不在「添加供应商」里,供应商列表单独画它。 */
 export const MOSAEL_CLOUD_VENDOR = "mosael-cloud";
 
-/** 官方中转上的积分:总数、按批次(先到期在前)、下一批何时发、套餐。照 Cloud 的原样。 */
+/** 官方中转上的积分:总数、按批次(先到期在前)、下一批何时发、套餐和它到哪天。照 Cloud 的原样。 */
 export type CloudAccount = {
   credits: number;
   batches: { remaining: number; expires_at: string; source: string }[];
   next_grant_at: string | null;
   plan: string | null;
+  /** 套餐到哪天:续费顺延的是它(积分不会当场多),买完之后设置里那一行靠它让人看出生效了。 */
+  plan_ends_at: string | null;
 };
 
 export function getCloudAccount(): Promise<CloudAccount> {

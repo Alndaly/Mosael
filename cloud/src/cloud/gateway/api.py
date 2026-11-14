@@ -55,6 +55,7 @@ def get_account(device: CurrentDevice, db: DbSession) -> dict[str, object]:
         ],
         "next_grant_at": current.next_grant_at.isoformat() if current.next_grant_at else None,
         "plan": current.plan_name,
+        "plan_ends_at": current.plan_ends_at.isoformat() if current.plan_ends_at else None,
     }
 
 

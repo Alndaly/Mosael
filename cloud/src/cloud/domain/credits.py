@@ -262,6 +262,8 @@ class Balance:
     #: 有效订阅的下一批何时发;没有订阅是 None。
     next_grant_at: datetime | None
     plan_name: str | None
+    #: 这个套餐到哪天:续费是把它往后顺延、积分不会当场多 —— 买完之后界面靠它说「有效期到哪天」。
+    plan_ends_at: datetime | None
 
 
 def balance(db: Session, user_id: str, *, at: datetime) -> Balance:
@@ -280,6 +282,7 @@ def balance(db: Session, user_id: str, *, at: datetime) -> Balance:
         batches=[BatchBalance(remaining=left, expires_at=batch.expires_at, source=batch.source) for batch, left in usable],
         next_grant_at=next_grant,
         plan_name=plan.name if plan else None,
+        plan_ends_at=subscription.ends_at if subscription else None,
     )
 
 

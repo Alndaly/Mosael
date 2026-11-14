@@ -12,7 +12,7 @@ import {
 import type { ProviderProfile } from "@/api/domains/providers";
 import { errorText } from "@/api/errorMessage";
 import { cloudKeys } from "@/api/queryKeys";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { CloudPurchaseDialog } from "@/features/settings/CloudPurchaseDialog";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { gotoSettings } from "@/lib/deepLink";
+import { parseServerTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,7 +82,14 @@ function SignedInRow({
     },
     onError: (error) => toast.error(errorText(error)),
   });
-  const credits = account.data ? t("providerMosaelCloudCredits").replace("{credits}", account.data.credits.toLocaleString()) : "";
+  const { locale } = usePreferences();
+  const credits = account.data ? t("providerMosaelCloudCredits").replace("{credits}", account.data.credits.toLocaleString(locale)) : "";
+  //: 套餐和它到哪天:订阅 / 续费之后,这一行是用户看得到的那个变化(续费只顺延有效期,积分数当场不变)。
+  const plan = account.data?.plan && account.data.plan_ends_at
+    ? t("providerMosaelCloudPlan")
+      .replace("{plan}", account.data.plan)
+      .replace("{date}", parseServerTime(account.data.plan_ends_at).toLocaleDateString(locale))
+    : "";
   const canExpand = profile !== null;
 
   return (
@@ -92,12 +100,15 @@ function SignedInRow({
           <Truncate as="strong" className="text-ui-md font-semibold">{t("providerMosaelCloud")}</Truncate>
           <Truncate as="small" className="text-ui-xs text-muted-foreground">
             {t("providerMosaelCloudSignedIn").replace("{email}", email)}
+            {plan && ` · ${plan}`}
             {credits && ` · ${credits}`}
           </Truncate>
         </div>
         <div className="flex items-center gap-1">
           {offersCapability || profile === null ? null : <Badge variant="outline">{t("providerMosaelCloudSoon")}</Badge>}
-          <Button variant="outline" size="sm" onClick={() => setBuying(true)}>{t("cloudBuy")}</Button>
+          <Button variant="outline" size="sm" onClick={() => setBuying(true)}>
+            {t(account.data?.plan ? "cloudBuyRenew" : "cloudBuySubscribe")}
+          </Button>
           {canExpand && (
             <IconButton
               size="icon-sm"

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 
@@ -27,6 +28,31 @@ logger = logging.getLogger(__name__)
 ORDER_TTL = timedelta(minutes=30)
 #: 关了的单还主动查多久:有人扫码后拖到最后一刻才付、回调又丢了,这段时间里查单还能兜住。
 LATE_QUERY_WINDOW = timedelta(days=1)
+#: 同一笔单最多隔多久问一次渠道。购买框每秒读一次订单(到账后要立刻收起二维码);到账主要靠异步通知,查单只是兜底 ——
+#: 每次读都同步问渠道的话,一个开着的购买框半小时要问一千多次,还占着请求线程等它回包。按进程记(Cloud 单实例部署)。
+QUERY_EVERY = timedelta(seconds=5)
+_last_query_lock = threading.Lock()
+_last_query: dict[str, datetime] = {}
+
+
+def reset_query_clock() -> None:
+    """清掉「每笔上次何时问过渠道」(测试之间从空表开始)。"""
+    with _last_query_lock:
+        _last_query.clear()
+
+
+def _query_due(order_id: str, at: datetime) -> bool:
+    """这一笔现在该不该问渠道;该问就记下这一刻。顺手丢掉早已过时的记录,表不会越长越大。"""
+    with _last_query_lock:
+        last = _last_query.get(order_id)
+        if last is not None and at - last < QUERY_EVERY:
+            return False
+        _last_query[order_id] = at
+        if len(_last_query) > 10_000:
+            for key, when in list(_last_query.items()):
+                if at - when > LATE_QUERY_WINDOW:
+                    _last_query.pop(key, None)
+        return True
 
 
 def purchasable_plans(db: Session) -> list[CloudPlan]:
@@ -113,11 +139,11 @@ def settle_paid(db: Session, notice: PaidNotice, *, channel: str, at: datetime) 
 
 
 def refresh(db: Session, order: CloudOrder, channels: Mapping[str, PaymentChannel], *, at: datetime) -> CloudOrder:
-    """桌面端轮询订单时:还没到账就主动问一次渠道(兜住丢了的回调);过了有效期还没付就关单。"""
+    """桌面端轮询订单时:还没到账就主动问一次渠道(兜住丢了的回调,同一笔最多 `QUERY_EVERY` 问一次);过了有效期还没付就关单。"""
     if order.status == "paid" or order.refunded_at is not None:
         return order
     channel = channels.get(order.channel)
-    if channel is not None and at - order.created_at <= LATE_QUERY_WINDOW:
+    if channel is not None and at - order.created_at <= LATE_QUERY_WINDOW and _query_due(order.id, at):
         try:
             notice = channel.query(order.id)
         except ChannelUnavailable as exc:

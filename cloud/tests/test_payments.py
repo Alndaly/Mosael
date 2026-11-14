@@ -290,7 +290,8 @@ def test_a_wrong_amount_is_acknowledged_but_not_granted(shop, alipay):
     assert credits_of(shop) == 0
 
 
-def test_a_lost_callback_is_caught_by_polling_the_order(shop, alipay):
+def test_a_lost_callback_is_caught_by_polling_the_order(shop, alipay, monkeypatch):
+    monkeypatch.setattr("cloud.domain.orders.QUERY_EVERY", timedelta(0))
     client = buyer(shop)
     order = order_of(client)
     assert client.get(api(f"/orders/{order['id']}")).json()["order"]["status"] == "pending"
@@ -298,6 +299,27 @@ def test_a_lost_callback_is_caught_by_polling_the_order(shop, alipay):
                                   "send_pay_date": "2026-10-29 18:00:00"}
     assert client.get(api(f"/orders/{order['id']}")).json()["order"]["status"] == "paid"
     assert credits_of(shop) == 1000
+
+
+def test_polling_an_order_every_second_asks_the_channel_at_most_once_per_window(shop, alipay):
+    """购买框每秒读一次订单;同一笔单 `QUERY_EVERY` 之内只问一次渠道,其余只读库(到账主要靠异步通知)。"""
+    client = buyer(shop)
+    order = order_of(client)
+    asked = lambda: sum(1 for one in alipay.requests if one["method"] == "alipay.trade.query")  # noqa: E731
+    for _ in range(5):
+        assert client.get(api(f"/orders/{order['id']}")).json()["order"]["status"] == "pending"
+    assert asked() == 1
+    #: 异步通知一到,下一次读就是已到账 —— 不用等查单
+    notify_alipay(TestClient(shop), alipay.notify_body(order["id"], "29.00"))
+    assert client.get(api(f"/orders/{order['id']}")).json()["order"]["status"] == "paid"
+    assert asked() == 1
+
+
+def test_the_embedded_alipay_page_has_no_return_url(shop, alipay):
+    """购买框里那张码付完不能把 iframe 跳到任何页面(此前跳官网账户页,框里闪过支付宝成功页和官网)。"""
+    channel = alipay.channel("https://cloud.example/notify")
+    page = channel.create_page(order_id="o" * 32, amount_cents=2900, subject="Mosael Pro", expires_at=now() + timedelta(minutes=30))
+    assert "return_url" not in page.html
 
 
 def test_an_unpaid_order_closes_after_it_expires_and_a_late_payment_still_counts(shop, alipay):
@@ -394,7 +416,8 @@ def test_wechat_notifies_that_do_not_verify_are_refused(shop, wechat):
     assert credits_of(shop) == 0
 
 
-def test_a_lost_wechat_callback_is_caught_by_a_signed_query(shop, wechat):
+def test_a_lost_wechat_callback_is_caught_by_a_signed_query(shop, wechat, monkeypatch):
+    monkeypatch.setattr("cloud.domain.orders.QUERY_EVERY", timedelta(0))
     client = buyer(shop)
     order = order_of(client, channel="wechat")
     assert client.get(api(f"/orders/{order['id']}")).json()["order"]["status"] == "pending"

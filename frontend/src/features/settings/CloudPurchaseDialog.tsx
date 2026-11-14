@@ -1,6 +1,7 @@
 import React from "react";
 import QRCode from "qrcode";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   createCloudOrder,
@@ -22,15 +23,20 @@ import { FallbackImage } from "@/components/ui/fallback-image";
 import { formatMoney } from "@/lib/money";
 import { parseServerTime } from "@/lib/time";
 
-/** 扫码之后多久问一次订单。Cloud 那边还没到账时会顺手问一次支付渠道,所以回调丢了也等得到。 */
-const POLL_MS = 2_000;
+/**
+ * 扫码之后多久读一次订单。到账主要靠渠道的异步通知(Cloud 收到就入账),读订单只是看它到了没有;Cloud 那边同一笔单
+ * 最多每 5 秒顺手问一次渠道,回调丢了也等得到。一秒一次:付完到收起二维码不超过一秒左右。
+ */
+const POLL_MS = 1_000;
 
 /**
  * 「订阅 / 续费」(ADR 0088 第 3 步,国内二维码预付):选套餐和支付方式 → 下单拿二维码 → 扫码 → 轮询订单直到到账。
  *
- * 到账之后由 Cloud 发放:新开的套餐当场发第一批积分,续费是把有效期往后顺延(积分照旧每月发)—— 所以到账那句说的是
- * 「有效期到哪天」,不是「积分到了」。这里把余额那一份缓存作废,供应商列表那一行就会显示新余额。二维码过期(没付)就说没扣款、
- * 给「重新下单」。续费规则(同一套餐顺延、换套餐重新开始)在 Cloud 那边定,这里只说一句让人心里有数。
+ * **到账就收起购买框,不留中间页**(照 Revornix 的做法,维护者要求):弹一条「{套餐} 有效期到哪天」,把账户那一份缓存
+ * 作废 —— 设置里 Mosael Cloud 那一行随即显示新的套餐、到期日和余额。此前到账后框里还停着一句话和「完成」,而支付宝那张
+ * 嵌入页付完会被跳到 `return_url`(官网账户页),小框里先闪支付宝成功页、再闪官网;现在 Cloud 不再给 `return_url`。
+ * 续费是把有效期往后顺延(积分照旧每月发),所以提示说的是「有效期到哪天」,不是「积分到了」。二维码过期(没付)就说没扣款、
+ * 给「重新下单」。
  */
 export function CloudPurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useI18n();
@@ -150,29 +156,28 @@ function PayStep({ order: placed, onAgain, onDone }: { order: CloudOrder; onAgai
   React.useEffect(() => {
     if (placed.code_url) void QRCode.toDataURL(placed.code_url, { width: 200, margin: 1 }).then(setQr);
   }, [placed.code_url]);
+  //: 到账:提示一句、账户缓存作废、收起购买框(二维码 / 支付宝嵌入页随之卸载,不再闪任何页面)。
+  const paid = order.status === "paid";
+  //: 只在变成「已到账」那一下做一次(之后订单数据再变也不重复提示)。
+  const announced = React.useRef(false);
   React.useEffect(() => {
-    if (order.status === "paid") void qc.invalidateQueries({ queryKey: cloudKeys.account() });
-  }, [order.status, qc]);
+    if (!paid || announced.current) return;
+    announced.current = true;
+    toast.success(
+      t("cloudBuyPaid")
+        .replace("{plan}", order.plan?.name ?? "")
+        .replace("{date}", order.subscription_ends_at
+          ? parseServerTime(order.subscription_ends_at).toLocaleDateString(locale)
+          : "—"),
+    );
+    void qc.invalidateQueries({ queryKey: cloudKeys.account() });
+    onDone();
+  }, [paid, order, t, locale, qc, onDone]);
 
   const amount = formatMoney(order.amount_cents * 10_000, order.currency, locale);
   const channel = t(order.channel === "alipay" ? "cloudBuyAlipay" : "cloudBuyWechat");
 
-  if (order.status === "paid") {
-    return (
-      <div className="grid gap-3" data-cloud-order="paid">
-        <p className="m-0 text-ui-md">
-          {t("cloudBuyPaid")
-            .replace("{plan}", order.plan?.name ?? "")
-            .replace("{date}", order.subscription_ends_at
-              ? parseServerTime(order.subscription_ends_at).toLocaleDateString(locale)
-              : "—")}
-        </p>
-        <div className="flex justify-end">
-          <Button size="sm" onClick={onDone}>{t("cloudBuyDone")}</Button>
-        </div>
-      </div>
-    );
-  }
+  if (paid) return null;
   if (order.status === "closed") {
     return (
       <div className="grid gap-3" data-cloud-order="closed">

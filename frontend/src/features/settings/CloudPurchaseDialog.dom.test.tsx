@@ -14,6 +14,8 @@ vi.mock("@/api/domains/cloud", async (importOriginal) => ({
   ...cloud,
 }));
 vi.mock("qrcode", () => ({ default: { toDataURL: vi.fn(async () => "data:image/png;base64,QR") } }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock("sonner", () => ({ toast }));
 
 import { CloudPurchaseDialog } from "@/features/settings/CloudPurchaseDialog";
 
@@ -35,14 +37,15 @@ const order = (status: string) => ({
 function renderDialog() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, "invalidateQueries");
+  const onOpenChange = vi.fn();
   render(
     <QueryClientProvider client={client}>
       <PreferencesProvider>
-        <CloudPurchaseDialog open onOpenChange={() => undefined} />
+        <CloudPurchaseDialog open onOpenChange={onOpenChange} />
       </PreferencesProvider>
     </QueryClientProvider>,
   );
-  return { invalidate };
+  return { invalidate, onOpenChange };
 }
 
 describe("订阅 / 续费", () => {
@@ -51,11 +54,12 @@ describe("订阅 / 续费", () => {
     cloud.listCloudPlans.mockReset().mockResolvedValue(PLANS);
     cloud.createCloudOrder.mockReset().mockResolvedValue({ order: order("pending") });
     cloud.getCloudOrder.mockReset();
+    toast.success.mockReset();
   });
 
-  it("选套餐和支付方式下单,画出二维码;轮询到到账就说有效期到哪天、刷新余额", async () => {
+  it("选套餐和支付方式下单,画出二维码;到账就收起购买框,提示有效期到哪天、刷新余额(不留中间页)", async () => {
     cloud.getCloudOrder.mockResolvedValueOnce({ order: order("pending") }).mockResolvedValue({ order: order("paid") });
-    const { invalidate } = renderDialog();
+    const { invalidate, onOpenChange } = renderDialog();
     await userEvent.click(await screen.findByRole("radio", { name: /Max/ }));
     await userEvent.click(screen.getByRole("radio", { name: "微信支付" }));
     await userEvent.click(screen.getByRole("button", { name: "去付款" }));
@@ -63,8 +67,13 @@ describe("订阅 / 续费", () => {
     expect(cloud.createCloudOrder).toHaveBeenCalledWith("max", "wechat");
     expect(await screen.findByText(/用微信支付扫码支付/)).toBeTruthy();
     await waitFor(() => expect(document.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,QR"));
-    expect(await screen.findByText(/已到账。Max 的有效期到 2027\/10\/29/, {}, { timeout: 6000 })).toBeTruthy();
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false), { timeout: 6000 });
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.success.mock.calls[0][0]).toMatch(/订阅成功:Max 有效期到 2027\/10\/29/);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["cloud-account"] });
+    //: 到账那一刻二维码就卸掉了,框里不留「已到账」那一页
+    expect(document.querySelector("img")).toBeNull();
+    expect(document.querySelector("[data-cloud-order]")).toBeNull();
   }, 10_000);
 
   it("二维码过期没付:说没扣款,给重新下单", async () => {
