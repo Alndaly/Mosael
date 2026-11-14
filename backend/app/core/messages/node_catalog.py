@@ -560,10 +560,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_video_lipsync_audio": {"zh": "新的那段话;画板上连一个音频格进来,留空就用下面的稿子配", "en": "The new speech; on a board connect an audio item, or leave empty to voice the script below"},
     "wfNode_video_lipsync_text": {"zh": "稿子(没接音频时用它配音)", "en": "Script (voiced when no audio is connected)"},
     "wfNode_image_speak_audio": {
-    "wfNode_image_speak_prompt": {"zh": "这一句怎么说:表情、动作、情绪(可选;只交给收提示词的说话照片模型)", "en": "How the line is delivered: expression, gesture, mood (optional; only for speaking-photo models that take a prompt)"},
         "zh": "要说的那段话;接上游的音频(长稿分段配好的一段、画板上连进来的音频格),留空就用下面的稿子配",
         "en": "The speech to say; connect an upstream audio (a segment from long-script voicing, or an audio item on a board), or leave empty to voice the script below",
     },
+    "wfNode_image_speak_prompt": {"zh": "这一句怎么说:表情、动作、情绪(可选;只交给收提示词的说话照片模型)", "en": "How the line is delivered: expression, gesture, mood (optional; only for speaking-photo models that take a prompt)"},
     "wfNode_image_speak_text": {"zh": "稿子(没接音频时用它配音)", "en": "Script (voiced when no audio is connected)"},
     "wfNode_dub_lipsync": {"zh": "译配对口型", "en": "Lip-sync a dubbed timeline"},
     "wfNode_dub_lipsync_desc": {
