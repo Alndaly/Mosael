@@ -1,5 +1,13 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.3": {
+    zh: [
+      "**检查更新不再把人送去网页。** 设置页查到新版本后直接给「下载并安装」，下载进度和「重启并安装」在同一条右下角提示里更新；开发版或未打包安装会明确说明不能应用内更新，并给「打开发布页」。",
+    ],
+    en: [
+      "**Checking for updates no longer sends you to a webpage.** When a new version is found, Settings offers Download and install in place, then Restart and install, all in the same bottom-right notice; development or unpackaged builds explain why they cannot self-install and offer Open release page instead.",
+    ],
+  },
   "v2.6.2": {
     zh: [
       "**修复 Windows 上支付宝二维码白屏。** 与 Revornix 对齐为纯二维码模式：`qr_pay_mode=4`、`qrcode_width=200`，界面只显示 200×200 正方形二维码，不再嵌入整页。",

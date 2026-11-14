@@ -3,6 +3,12 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.6.3] - 2026-11-14
+
+### 应用内更新
+
+- **检查更新不再把人送去网页。** 设置页查到新版本后直接给「下载并安装」，下载进度和「重启并安装」在同一条右下角提示里更新；开发版或未打包安装会明确说明不能应用内更新，并给「打开发布页」。修复检查后沿用点击前空状态、误显示「查看」的问题。
+
 ## [2.6.2] - 2026-11-14
 
 ### 支付
