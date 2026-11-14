@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
-from cloud.mfa import (
+from cloud.domain.totp import (
     new_recovery_codes,
     open_secret,
     recovery_digest,

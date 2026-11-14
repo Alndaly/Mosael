@@ -14,7 +14,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from cloud.email_codes import (
+from cloud.domain.email_codes import (
     CODE_MAX_ATTEMPTS,
     CODE_TTL_SECONDS,
     IP_HOURLY_LIMIT,

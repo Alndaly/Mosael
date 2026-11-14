@@ -15,7 +15,7 @@ from cloud.domain import mfa as mfa_domain
 from cloud.domain.identity import account_user
 from cloud.errors import CloudError
 from cloud.security import verify_password
-from cloud.mfa import (
+from cloud.domain.totp import (
     new_totp_secret,
     open_secret,
     otpauth_uri,

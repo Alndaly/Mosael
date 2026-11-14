@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from cloud.config import CloudConfig
 from cloud.domain import device_tokens
 from cloud.errors import CloudError
-from cloud.domain import admin as admin_domain
+from cloud.domain import roles as admin_domain
 from cloud.models import CloudSession, CloudUser, now
 from cloud.security import token_digest
 

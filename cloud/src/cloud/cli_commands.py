@@ -1,4 +1,6 @@
-"""官方中转的运维命令(ADR 0088 第 2 步:还没接支付,套餐、模型目录、上游通道都由维护者手动开通)。
+"""`python -m cloud.cli` 的运维命令:套餐、模型目录、上游通道、赠送积分、账号角色、密钥(ADR 0088)。
+
+在线购买已上线(ADR 0088 第 3 步);这里是维护者手动开通 / 纠错的那一侧。此前叫 `relay_admin.py`、住在包根目录(2026-11-14 审计 C1)。
 
     uv run python -m cloud.cli channel-key                                  生成一把 CLOUD_CHANNEL_KEY
     uv run python -m cloud.cli plan-set --slug pro --name Pro --period month --monthly-credits 20000 --credit-ttl-days 60 \\
@@ -26,9 +28,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
-from cloud.domain import admin, catalog, credits
+from cloud.domain import roles, catalog, credits
 from cloud.domain.channel_keys import new_channel_key
-from cloud.mfa import new_fernet_key
+from cloud.domain.totp import new_fernet_key
 from cloud.payments.base import cents_from_yuan, yuan
 from cloud.models import (
     CloudGatewayModel,
@@ -286,15 +288,15 @@ def _channel_list(_args, _config: CloudConfig, db: Session) -> str:
 
 def _admin_grant(args, _config: CloudConfig, db: Session) -> str:
     user = _user(db, args.email)
-    changed = admin.grant(db, user)
+    changed = roles.grant(db, user)
     return f"{user.email} {'已成为' if changed else '已经是'} MosaelCloud 管理员"
 
 
 def _admin_revoke(args, _config: CloudConfig, db: Session) -> str:
     user = _user(db, args.email)
     try:
-        changed = admin.revoke(db, user)
-    except admin.RoleError as exc:
+        changed = roles.revoke(db, user)
+    except roles.RoleError as exc:
         if exc.code == "last_admin":
             raise AdminError("不能撤销最后一名管理员;先授予另一个账号") from exc
         raise
@@ -302,7 +304,7 @@ def _admin_revoke(args, _config: CloudConfig, db: Session) -> str:
 
 
 def _admin_list(_args, _config: CloudConfig, db: Session) -> str:
-    users = admin.admins(db)
+    users = roles.admins(db)
     if not users:
         return "还没有 MosaelCloud 管理员"
     return "\n".join(f"{user.email or user.phone or user.id}  @{user.handle or '-'}" for user in users)

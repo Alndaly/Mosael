@@ -301,7 +301,7 @@ def execute(db_path: Path, sql: str, params: tuple = ()) -> None:
 @pytest.fixture(autouse=True)
 def _reset_login_limits():
     """登录限速是进程级内存；每个测试都从空桶开始，避免测试顺序影响结果。"""
-    from cloud import login_limits, payment_limits
+    from cloud.limits import login as login_limits, payment as payment_limits
     from cloud.domain import orders
 
     login_limits.reset()

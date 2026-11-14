@@ -11,7 +11,7 @@ from cloud.gateway.jobs_api import UploadTicketIn
 from cloud.generation.adapters import AdapterArtifact
 from cloud.generation.storage import LocalArtifactStorage
 from cloud.generation.validation import estimated_units, normalize_job_input
-from cloud import login_limits
+from cloud.limits import login as login_limits
 
 
 def test_secure_cloud_cookie_gets_host_prefix_but_local_http_does_not(tmp_path):

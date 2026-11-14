@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from cloud.config import CloudConfig
 from cloud.domain import catalog, credits
 from cloud.domain.identity import set_identity
-from cloud.domain import admin as role_admin
+from cloud.domain import roles as role_admin
 from cloud.domain import orders as order_domain
 from cloud.domain.channel_keys import unseal
 from cloud.gateway import upstream

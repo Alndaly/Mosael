@@ -8,8 +8,8 @@ import httpx2
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 
-from cloud.admin import service
-from cloud.domain import admin as role_admin
+from cloud.domain import admin_console
+from cloud.domain import roles as role_admin
 from cloud.models import CloudGatewayCall, CloudGatewayModel, CloudUser
 from conftest import PASSWORD, api, login, signup
 
@@ -136,10 +136,10 @@ def test_admin_channel_api_never_returns_the_upstream_key(client):
         db.commit()
     config = replace(client.app.state.config, channel_key=Fernet.generate_key().decode("ascii"))
     with client.app.state.db.session() as db:
-        provider = service.create_provider(
+        provider = admin_console.create_provider(
             db, config, name="upstream", base_url="https://upstream.example/v1", api_key="sk-never-return-this", note=""
         )
-        channel = service.create_channel(
+        channel = admin_console.create_channel(
             db,
             model_id="m1",
             provider_id=provider["id"],
@@ -163,15 +163,15 @@ def test_channel_connectivity_test_uses_the_stored_key_without_returning_it(clie
         seen["auth"] = request.headers.get("authorization")
         return httpx2.Response(200, json={"choices": [], "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
     with client.app.state.db.session() as db:
-        provider = service.create_provider(
+        provider = admin_console.create_provider(
             db, config, name="upstream", base_url="https://upstream.example/v1", api_key="sk-test", note=""
         )
-        channel = service.create_channel(
+        channel = admin_console.create_channel(
             db, model_id="m2", provider_id=provider["id"],
             upstream_model="m2", priority=0, note="",
         )
         db.commit()
-        result = service.test_channel(db, config, channel["id"], transport=httpx2.MockTransport(handler))
+        result = admin_console.test_channel(db, config, channel["id"], transport=httpx2.MockTransport(handler))
     assert result["ok"] is True
     assert result["status"] == 200
     assert seen["auth"] == "Bearer sk-test"

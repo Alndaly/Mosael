@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from cloud.cli import main
 from cloud.db import Database
-from cloud.domain import admin, device_tokens
+from cloud.domain import roles, device_tokens
 from cloud.models import CloudUser
 from cloud.schema import upgrade_database
 from conftest import api, signup
@@ -69,7 +69,7 @@ def test_member_and_admin_are_told_apart_by_the_admin_endpoint(client):
 
     with client.app.state.db.session() as db:
         user = db.scalar(select(CloudUser).where(CloudUser.email == "member@example.com"))
-        admin.grant(db, user)
+        roles.grant(db, user)
         db.commit()
 
     allowed = client.get(api("/admin/me"))
@@ -81,7 +81,7 @@ def test_admin_endpoint_rejects_device_tokens(client):
     signup(client, email="device@example.com")
     with client.app.state.db.session() as db:
         user = db.scalar(select(CloudUser).where(CloudUser.email == "device@example.com"))
-        admin.grant(db, user)
+        roles.grant(db, user)
         db.commit()
         token, secret = device_tokens.issue(db, user, "host")
         db.commit()

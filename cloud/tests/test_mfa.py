@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from conftest import PASSWORD, api, rows, signup
-from cloud.mfa import normalize_recovery_code, totp_code
+from cloud.domain.totp import normalize_recovery_code, totp_code
 
 
 def enable_mfa(client) -> tuple[str, list[str]]:

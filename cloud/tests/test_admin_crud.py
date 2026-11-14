@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from cloud.domain import admin as role_admin
+from cloud.domain import roles as role_admin
 from cloud.models import CloudUser
 from conftest import PASSWORD, api, login, signup
 

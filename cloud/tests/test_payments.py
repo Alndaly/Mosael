@@ -528,14 +528,14 @@ def test_alipay_page_pay_builds_a_self_submitting_qr_form():
 
 def test_marking_an_order_refunded_takes_back_what_it_bought(shop, alipay):
     """管理台「标记退款」此前只记一笔:订阅照样有效、积分照发。现在收回这一笔买下的那个周期。"""
-    from cloud.admin import service
+    from cloud.domain import admin_console
 
     client = buyer(shop)
     order = order_of(client)
     notify_alipay(TestClient(shop), alipay.notify_body(order["id"], "29.00"))
     assert credits_of(shop) == 1000
     with shop.state.db.session() as db:
-        service.mark_order_refunded(db, order["id"], amount_cents=None, note="用户申请", at=now())
+        admin_console.mark_order_refunded(db, order["id"], amount_cents=None, note="用户申请", at=now())
         db.commit()
     assert credits_of(shop) == 0
     with shop.state.db.session() as db:

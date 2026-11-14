@@ -17,11 +17,11 @@ from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.domain import mfa as mfa_domain
 from cloud.domain.identity import account_user, give_default_identity
-from cloud.email_codes import consume_code, issue_code
+from cloud.domain.email_codes import consume_code, issue_code
 from cloud.phone import normalize_phone
-from cloud.phone_codes import consume_phone_code, issue_phone_code
+from cloud.domain.phone_codes import consume_phone_code, issue_phone_code
 from cloud.errors import CloudError
-from cloud import login_limits
+from cloud.limits import login as login_limits
 from cloud.models import CloudDeviceToken, CloudSession, CloudUser, now
 from cloud.security import hash_password, new_token, token_digest, verify_password
 

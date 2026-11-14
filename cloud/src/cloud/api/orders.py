@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from cloud.api.deps import CurrentUser, DbSession
 from cloud.domain import orders
-from cloud import payment_limits
+from cloud.limits import payment as payment_limits
 from cloud.errors import CloudError
 from cloud.models import CloudOrder, now
 from cloud.payments.base import NotifyRejected

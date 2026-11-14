@@ -14,7 +14,7 @@ import pytest
 
 import time
 
-from cloud.mfa import totp_code
+from cloud.domain.totp import totp_code
 from cloud.oauth import code_challenge
 from conftest import api, execute, rows, scalar, signup, signed_in
 
