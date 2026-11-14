@@ -103,7 +103,7 @@ def unusable_node_types(db: DbSession, user: CurrentUser, types: Annotated[list[
 def workflow_templates() -> list[dict]:
     """官方模板:叫什么、干什么、分几步、跑之前要备好什么。**按请求方的语言发下去。**
 
-    说明只有一份(domain/workflows/templates.TEMPLATE_CATALOG),应用的模板卡片和官网的模板页
+    说明只有一份(domain/workflows/templates/catalog.TEMPLATE_CATALOG),应用的模板卡片和官网的模板页
     读的是同一份 —— 此前是三套各写各的。图标留在前端(和节点图标、任务种类同一条规矩)。
     """
 

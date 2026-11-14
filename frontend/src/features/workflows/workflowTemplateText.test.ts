@@ -14,7 +14,7 @@ export const RATCHET = true;
 
 const DIALOG = readFileSync(join(import.meta.dirname, "WorkflowCommunityDialog.tsx"), "utf8");
 const CATALOG = readFileSync(
-  join(import.meta.dirname, "../../../../backend/app/domain/workflows/templates.py"),
+  join(import.meta.dirname, "../../../../backend/app/domain/workflows/templates/catalog.py"),
   "utf8",
 );
 

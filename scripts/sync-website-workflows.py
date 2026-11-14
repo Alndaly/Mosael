@@ -43,7 +43,7 @@ def catalog_files() -> dict[str, str]:
             name = f'{template["id"]}.{locale}.mosael-workflow.json'
             entry["download"][locale] = f"/workflows/{name}"
             #: **节点名按这一份的语言定下来。** 图里的名字是语言对象(翻译贴着节点写,见
-            #: domain/workflows/templates),而下载下来的这份是要被导入的 —— 导入方拿到的必须是
+            #: domain/workflows/templates/catalog),而下载下来的这份是要被导入的 —— 导入方拿到的必须是
             #: 一个名字,不是一个待挑的对象。
             localised = localised_names(locale, copy.deepcopy(graphs[locale][template["id"]]))
             payload = {"format": "mosael-workflow", "version": 1, "workflow_revision": 1,

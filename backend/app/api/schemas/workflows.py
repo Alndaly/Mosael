@@ -242,7 +242,7 @@ class WorkflowTemplateCheckOut(ApiModel):
 
 
 class WorkflowTemplateOut(ApiModel):
-    """官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);
+    """官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates/catalog.TEMPLATE_CATALOG);
     图标由界面按 id 给,和节点图标、任务种类同一条规矩。"""
 
     id: WorkflowTemplateId

@@ -52,7 +52,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /** 每个官方模板的图标。**只有图标在前端** —— 名字、介绍、步骤、前置条件都由后端随模板目录
-    发下来(`GET /api/workflows/templates`,见 domain/workflows/templates.TEMPLATE_CATALOG)。
+    发下来(`GET /api/workflows/templates`,见 domain/workflows/templates/catalog.TEMPLATE_CATALOG)。
     此前这些文案在前端一份、官网同步脚本里一份、后端图里一份,三处各写各的。 */
 const TEMPLATE_ICONS: Record<string, typeof Film> = {
   full_video_generation: Film,
