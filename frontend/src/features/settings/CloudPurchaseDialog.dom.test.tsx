@@ -76,7 +76,7 @@ describe("订阅 / 续费", () => {
     expect(await screen.findByRole("button", { name: "去付款" })).toBeTruthy();
   }, 10_000);
 
-  it("支付宝网页支付使用官方最小前置尺寸显示签名表单，不再白屏", async () => {
+  it("支付宝网页支付只渲染 200 方形二维码，不再嵌入整页", async () => {
     cloud.createCloudOrder.mockResolvedValue({
       order: {
         ...order("pending"),
@@ -95,8 +95,7 @@ describe("订阅 / 续费", () => {
     expect(iframe.getAttribute("srcdoc")).toContain("openapi.alipay.com");
     expect(iframe.getAttribute("src")).toBeNull();
     expect(iframe.getAttribute("sandbox")).toBeNull();
-    expect(iframe.className).toContain("h-[300px]");
-    expect(iframe.className).toContain("w-[600px]");
+    expect(iframe.className).toContain("size-[200px]");
   });
 
   it("这个部署没开任何支付渠道:说清楚,不给付款", async () => {

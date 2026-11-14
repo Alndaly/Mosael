@@ -2,10 +2,10 @@
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
   "v2.6.2": {
     zh: [
-      "**修复 Windows 上支付宝二维码白屏。** 旧尺寸不满足支付宝前置模式的最小要求；现在使用官方 600×300 简约前置模式，完整显示正方形二维码与扫码说明。",
+      "**修复 Windows 上支付宝二维码白屏。** 与 Revornix 对齐为纯二维码模式：`qr_pay_mode=4`、`qrcode_width=200`，界面只显示 200×200 正方形二维码，不再嵌入整页。",
     ],
     en: [
-      "**Fixes the blank Alipay QR on Windows.** The old frame was below Alipay's minimum for front mode; payment now uses the official 600×300 simple front layout with a complete square QR code and instructions.",
+      "**Fixes the blank Alipay QR on Windows.** Payment now matches Revornix's QR-only mode: qr_pay_mode=4 with qrcode_width=200, rendered in a 200×200 square without embedding the full page.",
     ],
   },
   "v2.6.1": {

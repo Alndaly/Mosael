@@ -44,7 +44,6 @@ export function CloudPurchaseDialog({ open, onOpenChange }: { open: boolean; onO
       open={open}
       onOpenChange={(next) => (next ? onOpenChange(true) : close())}
       title={t("cloudBuyTitle")}
-      className={order?.payment_html ? "w-[648px] max-w-[calc(100vw-2rem)]" : undefined}
     >
       {order ? (
         <PayStep order={order} onAgain={() => setOrder(null)} onDone={close} />
@@ -191,7 +190,7 @@ function PayStep({ order: placed, onAgain, onDone }: { order: CloudOrder; onAgai
         <iframe
           title={t("cloudBuyAlipay")}
           srcDoc={order.payment_html}
-          className="h-[300px] w-[600px] max-w-full rounded-md border border-border bg-white"
+          className="size-[200px] rounded-md border border-border bg-white"
         />
       ) : qr ? (
         <FallbackImage src={qr} alt="" className="size-[200px] rounded-md" />
