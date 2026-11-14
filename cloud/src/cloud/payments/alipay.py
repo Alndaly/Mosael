@@ -1,4 +1,4 @@
-"""支付宝当面付(扫码支付):`alipay.trade.precreate` 拿二维码、`alipay.trade.query` 查单、异步通知验签。
+"""支付宝支付:当面付扫码、电脑网站支付、查单与异步通知验签。
 
 签名照支付宝开放平台的 RSA2 规则(https://opendocs.alipay.com/common/02kf5q):
 
@@ -18,7 +18,8 @@ import base64
 import json
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qsl
+from html import escape
+from urllib.parse import parse_qsl, urlsplit
 
 import httpx2
 from cryptography.exceptions import InvalidSignature
@@ -54,6 +55,20 @@ def _beijing(moment: datetime) -> str:
 
 def _utc(text: str) -> datetime:
     return datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=BEIJING).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _cashier_redirect_html(response: httpx2.Response) -> str | None:
+    if response.status_code not in {301, 302, 303, 307, 308}:
+        return None
+    location = response.headers.get("location", "")
+    target = urlsplit(location)
+    if target.scheme != "https" or not target.hostname or not (
+        target.hostname == "alipay.com" or target.hostname.endswith(".alipay.com")
+    ):
+        raise ChannelUnavailable("alipay page.pay: unexpected cashier redirect")
+    # CloudOrder 只存 payment_html、购买弹窗用 iframe.srcDoc；把网关的合法 302 包成等价 HTML，
+    # 不为同一种支付结果再增加一套 URL 字段和前端分支。
+    return f'<!doctype html><meta http-equiv="refresh" content="0;url={escape(location, quote=True)}">'
 
 
 class AlipayChannel:
@@ -148,7 +163,7 @@ class AlipayChannel:
         return QrPayment(code_url=code)
 
     def create_page(self, *, order_id: str, amount_cents: int, subject: str, expires_at: datetime) -> PagePayment:
-        """电脑网站支付（alipay.trade.page.pay）：返回可放进 iframe 的自动提交表单。"""
+        """电脑网站支付：网关返回自动提交表单，或直接重定向到支付宝收银台。"""
         params = {
             "app_id": self.app_id,
             "method": "alipay.trade.page.pay",
@@ -173,6 +188,9 @@ class AlipayChannel:
                 response = client.post(self.gateway, data=params)
         except httpx2.HTTPError as exc:
             raise ChannelUnavailable(f"alipay page.pay: {type(exc).__name__}") from exc
+        redirect_html = _cashier_redirect_html(response)
+        if redirect_html is not None:
+            return PagePayment(html=redirect_html)
         html = response.text
         if response.status_code >= 400 or "<form" not in html.lower():
             raise ChannelUnavailable(f"alipay page.pay: no payment form ({response.status_code})")
