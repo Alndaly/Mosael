@@ -7,10 +7,11 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 // CommonJS is intentional: Electron main loads this exact module.
-const { createAppUrlCheck, createSenderCheck, guardNavigation } = createRequire(import.meta.url)("./app-origin.cjs") as {
+const { createAppUrlCheck, createSenderCheck, guardNavigation, isAlipayFrameUrl } = createRequire(import.meta.url)("./app-origin.cjs") as {
   createAppUrlCheck: (options: { isPackaged: boolean; frontendUrl: string; distDir: string }) => (raw: unknown) => boolean;
   createSenderCheck: (options: { isAppUrl: (url: string) => boolean; windowOf: (contents: unknown) => { webContents: unknown } | null }) => (event: unknown) => boolean;
   guardNavigation: (contents: EventEmitter, options: { isAppUrl: (url: string) => boolean; openExternal: (url: string) => void; log?: (line: string) => void }) => void;
+  isAlipayFrameUrl: (raw: unknown) => boolean;
 };
 
 const DIST = path.join(path.sep, "Applications", "Mosael.app", "Contents", "Resources", "app.asar", "frontend", "dist");
@@ -125,10 +126,39 @@ describe("子框架(智能体给的小界面)只许停在 srcdoc 和应用地址
     expect(log).toHaveBeenCalledWith("blocked subframe navigation to https://evil.example");
   });
 
+  it("支付 iframe 可以跳到支付宝生产与沙箱收银台", () => {
+    const contents = new EventEmitter();
+    guardNavigation(contents, { isAppUrl, openExternal: vi.fn() });
+    expect(navigateFrame(contents, "https://openapi.alipay.com/gateway.do?x=1")).toBe(false);
+    expect(navigateFrame(contents, "https://excashier.alipay.com/standard/auth.htm")).toBe(false);
+    expect(navigateFrame(contents, "https://openapi-sandbox.dl.alipaydev.com/gateway.do")).toBe(false);
+    expect(navigateFrame(contents, "https://excashier-sandbox.dl.alipaydev.com/standard/auth.htm")).toBe(false);
+  });
+
+  it("相似域名、非 HTTPS 和其他来源仍被拦截", () => {
+    const contents = new EventEmitter();
+    guardNavigation(contents, { isAppUrl, openExternal: vi.fn() });
+    expect(navigateFrame(contents, "https://alipay.com.evil.example/")).toBe(true);
+    expect(navigateFrame(contents, "https://evil-alipay.com/")).toBe(true);
+    expect(navigateFrame(contents, "http://openapi.alipay.com/gateway.do")).toBe(true);
+    expect(isAlipayFrameUrl("https://openapi.alipay.com/gateway.do")).toBe(true);
+    expect(isAlipayFrameUrl("https://openapi.alipay.com.evil.example/")).toBe(false);
+  });
+
   it("主框架不归这一道管(will-navigate 那一道管,而且会把 http(s) 交给系统浏览器)", () => {
     const contents = new EventEmitter();
     guardNavigation(contents, { isAppUrl, openExternal: vi.fn() });
     expect(navigateFrame(contents, "https://evil.example/", true)).toBe(false);
+  });
+
+  it("will-navigate 把子框架留给 will-frame-navigate,不会先拦掉支付宝表单", () => {
+    const contents = new EventEmitter();
+    const openExternal = vi.fn();
+    guardNavigation(contents, { isAppUrl, openExternal });
+    const event = { url: "https://openapi.alipay.com/gateway.do", isMainFrame: false, preventDefault: vi.fn() };
+    contents.emit("will-navigate", event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
   });
 });
 

