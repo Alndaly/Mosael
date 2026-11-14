@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.0": {
+    zh: [
+      "**MosaelCloud 支持异步图片和视频生成。** OpenAI 图片、可灵、火山 Seedance 与已部署的 ComfyUI 都接入统一任务管线，包含预占结算、取消、产物回传和桌面端调用。",
+      "**ComfyUI 可以成为 Cloud 上游。** 一台部署保存多张 API 工作流，通道按名称选择；输入映射、图片上传、队列轮询和结果下载都有明确配置。",
+      "**管理台补完运营与表单。** 账号、积分、封禁、套餐和 IP 管理集中处理；异步任务的计量预留改为可增删的单位与数量，不再要求手写 JSON。",
+      "**R2 直传与支付宝网页支付上线。** 素材和生成结果走 Cloudflare R2；桌面订阅支持电脑网站支付，并兼容支付宝生产环境的收银台重定向。",
+    ],
+    en: [
+      "**MosaelCloud now runs async image and video jobs.** OpenAI Images, Kling, Volcengine Seedance and deployed ComfyUI servers share one pipeline for reservation, settlement, cancellation, artifact delivery and desktop access.",
+      "**ComfyUI can be a Cloud provider.** One deployment holds multiple API workflows, selected by channel name; input bindings, image uploads, queue polling and result downloads are explicit.",
+      "**The admin console completes operations and forms.** Accounts, credits, bans, plans and IP rules are managed in one place; async reservations use editable unit-and-quantity rows instead of hand-written JSON.",
+      "**R2 direct transfer and Alipay web payment land.** Inputs and generated artifacts use Cloudflare R2, while desktop subscriptions support computer website payment and Alipay's production cashier redirect.",
+    ],
+  },
   "v2.5.1": {
     zh: [
       "**子画布里的节点会实时亮起。** 内嵌子图和循环体的事件带上容器路径与循环轮次，节点角标、边着色和检查器共用同一份状态；多轮运行时只要有一轮在跑就仍然显示运行中。",

@@ -9,6 +9,13 @@
 
 发版时把这一版改过、而截图没跟上的界面加在最上面(见 [RELEASING.md](../RELEASING.md))。
 
+## 2.6.0
+
+- **MosaelCloud 管理台 → 上游供应商**:适配器选择、ComfyUI 地址 / 可选 Key / 工作流映射配置。
+- **MosaelCloud 管理台 → 模型**:异步任务的「计量单位 + 最少预留数量」行，不再显示能力声明 JSON。
+- **MosaelCloud 管理台 → 账号 / 套餐 / 封禁 IP**:账号编辑与删除、积分调整、套餐取消、封禁与解封操作。
+- **设置 → Mosael Cloud**:Cloud 图片 / 视频任务入口、R2 素材上传与结果记录；支付宝网页支付弹窗。
+
 ## 2.5.1
 
 - **AI Studio 对话中间栏 header**:去掉了「N 个子代理」下拉,`ai-studio` / `agent` 相关截图需重拍。
