@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import (
+from app.domain.workflows.templates.model_choice import (
     CONTINUATION_TAIL_SECONDS,
     FRAME_ASPECTS,
     LATENT_CONTEXT_SECONDS,
@@ -32,8 +32,8 @@ from app.domain.workflows.templates_models import (
     image_plan_for,
     video_plan_for,
 )
-from app.domain.workflows.templates_schemas import object_schema
-from app.domain.workflows.templates_upscale import DEFAULT_OUTPUT_RESOLUTION, frame_plan_node, resolution_options, upscale_node
+from app.domain.workflows.templates.schemas import object_schema
+from app.domain.workflows.templates.upscale import DEFAULT_OUTPUT_RESOLUTION, frame_plan_node, resolution_options, upscale_node
 
 LONG_TAKE_VIDEO = "long_take_video"
 
@@ -92,7 +92,7 @@ def _anchor_nodes(image: ModelChoice, plan: VideoPlan, db: Session | None) -> tu
 def long_take_video_graph(*, chat: ModelChoice, opening: ModelChoice, video: ModelChoice,
                           image: ModelChoice | None = None, upscale: ModelChoice | None = None,
                           db: Session | None = None) -> dict[str, Any]:
-    """`upscale`:配好的超分工作流(见 templates_upscale)。有它,每段上时间线前超分到开始参数选的清晰度。"""
+    """`upscale`:配好的超分工作流(见 templates/upscale)。有它,每段上时间线前超分到开始参数选的清晰度。"""
     plan = video_plan_for(db, video, references=0)
     upscaling = upscale is not None and bool(upscale.model)
     #: 模型不收尾帧、或者这台机器上没有收参考图的图片模型:没有这一格,图里也没有这几个节点。

@@ -17,7 +17,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, _parameter_keys, _pick
+from app.domain.workflows.templates.model_choice import FRAME_ASPECTS, ModelChoice, _parameter_keys, _pick
 
 #: 超分工作流定尺寸的那两项。
 UPSCALE_WIDTH = "6.width"

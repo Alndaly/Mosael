@@ -189,7 +189,7 @@ def test_批量节点收一段文本_不再静默交出空结果(monkeypatch) ->
 def test_模板不再逐句发请求() -> None:
     """真机上那条失败是「第 1/31 次迭代」—— 循环把一轨字幕拆成 31 次串行调用,
     每次一个新连接,而免费端点按 IP 限流。判据是模板里那一步**不是循环**。"""
-    from app.domain.workflows.templates_dub import translated_dub_graph
+    from app.domain.workflows.templates.dub import translated_dub_graph
 
     graph = translated_dub_graph(voice_id="")
     step = next(node for node in graph["nodes"] if node["id"] == "translate_lines")
@@ -222,7 +222,7 @@ def test_目标语言和音色留在能选它们的那个控件上() -> None:
     要让「运行时问我一次」成立,缺的是**起始参数能声明类型**,那是引擎级的口子。
     """
     from app.domain.workflows.node_types import NODE_TYPES
-    from app.domain.workflows.templates_dub import translated_dub_graph
+    from app.domain.workflows.templates.dub import translated_dub_graph
 
     graph = translated_dub_graph(voice_id="voice-1")
     nodes = {node["id"]: node for node in graph["nodes"]}
@@ -236,7 +236,7 @@ def test_目标语言和音色留在能选它们的那个控件上() -> None:
 
 def test_译配模板里一个循环节点都没有() -> None:
     """「逐句」说的是切分,不是逐个发请求 —— 整轨一次交给批量节点。"""
-    from app.domain.workflows.templates_dub import translated_dub_graph
+    from app.domain.workflows.templates.dub import translated_dub_graph
 
     types = {node["type"] for node in translated_dub_graph(voice_id="")["nodes"]}
     assert not {one for one in types if one.startswith("loop_")}, types
@@ -250,7 +250,7 @@ def test_原声三档各做各的事() -> None:
     在说话,只是一个小声点。真机上报回来的正是这句:「视频原本的文案对应的音频还在」。
     """
     from app.domain.workflows.node_types import NODE_TYPES
-    from app.domain.workflows.templates_dub import translated_dub_graph
+    from app.domain.workflows.templates.dub import translated_dub_graph
 
     spec = NODE_TYPES["dub_subtitles"]["config"]["original_audio"]
     assert spec["options"] == ["duck", "mute", "keep", "separate"], spec

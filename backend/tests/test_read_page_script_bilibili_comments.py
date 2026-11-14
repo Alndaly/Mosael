@@ -19,7 +19,7 @@ import subprocess
 
 import pytest
 
-from app.domain.workflows.templates_analysis import _READ_PAGE_SCRIPT
+from app.domain.workflows.templates.analysis import _READ_PAGE_SCRIPT
 
 NOTES = {
     "login": "没登录:B 站只给前 3 条一级评论",

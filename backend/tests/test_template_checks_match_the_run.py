@@ -12,7 +12,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import User, Voice
-from app.domain.workflows.templates import built_in_template_graph, requirement_statuses
+from app.domain.workflows.templates.catalog import built_in_template_graph, requirement_statuses
 from tests.test_audio_plugins import _setup
 from tests.util import fresh_client, make_voice
 
@@ -93,7 +93,7 @@ def test_克隆音色要克隆引擎跑得起来_数字人用的还要声明过�
 
 def test_译配模板的嗓子那一条有检查键() -> None:
     """配音节点的引擎写死 builtin:clone,前置条件却是一句查不了的话 —— 界面说「运行时选择」,跑到配音才失败。"""
-    from app.domain.workflows.templates import TEMPLATE_CATALOG
+    from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG
 
     cards = {card["id"]: card for card in TEMPLATE_CATALOG}
     assert "cloned_voice" in {one["check"] for one in cards["translated_dub"]["requires"]}
@@ -103,8 +103,8 @@ def test_译配模板的嗓子那一条有检查键() -> None:
 def test_口播模板_逐段说话用分段时挑定的模型_嗓子要声明过是谁的() -> None:
     """分段按说话照片模型的音频上限切;下游「让它说话」留空模型会再挑一次,可能挑到上限更短的另一个。
     嗓子要交给数字人,前置条件查的是声明过的克隆音色,不只是「有一把克隆音色」。"""
-    from app.domain.workflows.templates import TEMPLATE_CATALOG
-    from app.domain.workflows.templates_business import talking_script_video_graph
+    from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG
+    from app.domain.workflows.templates.business import talking_script_video_graph
 
     graph = talking_script_video_graph(voice_id="")
     loop = next(one for one in graph["nodes"] if one["id"] == "speak_segments")

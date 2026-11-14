@@ -1649,7 +1649,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["text", "length"],
     },
-    #: 自媒体分析(见 domain/social_media、templates_analysis):认链接、把作品 / 评论整理成同一个形状并算指标。
+    #: 自媒体分析(见 domain/social_media、templates/analysis):认链接、把作品 / 评论整理成同一个形状并算指标。
     #: 不取数 —— 取数是 TikHub 插件节点、浏览器节点的事;这两个节点让两条取数路交出同一份东西。
     #: 认链接要跟短链的跳转(v.douyin.com、xhslink.com、b23.tv),所以算外部节点。
     "social_link": {

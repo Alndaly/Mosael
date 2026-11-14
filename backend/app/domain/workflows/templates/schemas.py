@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.entities.shot_angles import SHOT_ANGLES
-from app.domain.workflows.templates_models import VideoPlan
+from app.domain.workflows.templates.model_choice import VideoPlan
 
 
 def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -138,13 +138,13 @@ def _shot_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -
             "type": "string",
             "description": f"该时间段的口播或对白，只写一个人说的话，念出来不超过 {clip} 秒；无则写空字符串",
         },
-        #: 谁说这句:按名字到资产库里找这个角色,它带着音色就用它的嗓子念(见 templates_full_video 的逐镜循环)。
+        #: 谁说这句:按名字到资产库里找这个角色,它带着音色就用它的嗓子念(见 templates/full_video 的逐镜循环)。
         "speaker": {
             "type": "string",
             "description": "说这句 narration 的角色：视觉圣经里这个角色的 name，一字不差；旁白或没有人说话写空字符串",
         },
         "location_id": {"type": "string", "description": "视觉圣经里的场景 id"},
-        #: 首帧的参考图按名字到资产库里认(见 templates_full_video 的逐镜循环):地点和主角各一个名字。
+        #: 首帧的参考图按名字到资产库里认(见 templates/full_video 的逐镜循环):地点和主角各一个名字。
         "location_name": {"type": "string", "description": "这一镜的场景在视觉圣经里的 name,一字不差"},
         "first_frame_subject": {
             "type": "string",
@@ -218,7 +218,7 @@ SET_KINDS = ["group", "room", "box", "cylinder", "sphere", "plane", "stairs", "t
              "model", "camera"]
 
 
-def _set_design_schema() -> dict[str, Any]:
+def set_design_schema() -> dict[str, Any]:
     """布景的形状 = 3D 场景的数据格式(SceneContent),只收这条流程用得到的那部分。
 
     所有字段都列成必填(结构化输出的严格模式要求如此);用不上的给中性值 —— 非相机的 target/fov

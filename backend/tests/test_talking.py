@@ -88,7 +88,7 @@ def test_人物说话_用它自己的嗓子配音_正面图加这段配音做说
 
 def test_人物说话_交出这段话的字幕_时间在这段视频里_整段一条(setup) -> None:
     """付费实测:出镜版带货口播里,主播对着镜头说的开场和收尾一个字都没上屏。字幕由说话这一步自己交出来,
-    铺上时间线时由「生成字幕」按片段映射(见 templates_business._with_presenter)。"""
+    铺上时间线时由「生成字幕」按片段映射(见 templates/business._with_presenter)。"""
     from app.db.models import Asset
 
     client, ws, fakes = setup

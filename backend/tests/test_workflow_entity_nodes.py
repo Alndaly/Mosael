@@ -189,7 +189,7 @@ def test_资产下拉可以按种类筛() -> None:
 def test_整片模板的角色循环_库里有的直接用_没有的画完存成资产(monkeypatch) -> None:
     """「从主题到完整视频」的角色循环体原样拿来跑:林小满库里有图,阿澄没有 —— 只画阿澄,画完存成人物资产。"""
     from app.domain.workflows.executors import registry
-    from app.domain.workflows.templates_full_video import full_video_generation_graph
+    from app.domain.workflows.templates.full_video import full_video_generation_graph
     from tests.test_workflow_templates import CHAT, SEEDANCE, SEEDREAM
 
     client, ws = _setup()

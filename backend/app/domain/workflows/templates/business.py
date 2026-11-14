@@ -23,8 +23,8 @@ from sqlalchemy.orm import Session
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import ModelChoice, model_capabilities, image_plan_for, video_plan_for
-from app.domain.workflows.templates_music import BackgroundMusic, MusicSlot, add_background_music
+from app.domain.workflows.templates.model_choice import ModelChoice, model_capabilities, image_plan_for, video_plan_for
+from app.domain.workflows.templates.music import BackgroundMusic, MusicSlot, add_background_music
 from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
@@ -74,7 +74,7 @@ def _vertical_clip(
     以及上身图以什么角色交给它。
 
     都从视频模型的能力表里取:写死 5 秒的话 Veo(只收 4 / 6 / 8)必败;画幅优先竖屏,模型不收竖屏就用它自己的
-    默认(或它唯一收的那一档)。时长和参数键和整片生成同一个出处(templates_models._video_plan)。
+    默认(或它唯一收的那一档)。时长和参数键和整片生成同一个出处(templates/model_choice._video_plan)。
 
     `silent`:这段视频铺上时间线就静音(带货口播的每一拍,声音是画外音)。模型有「生成音频」开关的就关掉 ——
     方舟 / Evolink 的 Seedance 默认出有声视频(描述符的 default_generate_audio,提交时补上),有声的比无声的贵,
@@ -1357,7 +1357,7 @@ def product_pitch_short_graph(
                 #: v7:动起来那一步关掉视频自己的声音(铺上去本来就静音,有声的贵,见 _vertical_clip 的 silent);
                 #:     拍数按目标时长卡住(fit_beats 的 max_total_seconds,模型多写的从中间去掉)。
                 #: v8:画面和动起来那一步写上「目标画幅 9:16」(ADR 0094)。
-                #: v9:有能从文字出音乐的模型时生成一首配乐,铺在旁白底下(见 templates_music)。
+                #: v9:有能从文字出音乐的模型时生成一首配乐,铺在旁白底下(见 templates/music)。
                 #: v10:字幕铺念出来的画外音(按它的落点),不再铺脚本另写的屏幕短句。
                 "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 10, "source": "official"},
                 "nodes": nodes,

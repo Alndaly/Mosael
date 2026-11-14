@@ -10,7 +10,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.domain.workflows import template_requirements as req
-from app.domain.workflows.templates import TEMPLATE_CATALOG
+from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG
 from tests.util import add_provider, fresh_client, second_client
 
 

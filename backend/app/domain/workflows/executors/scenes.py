@@ -28,8 +28,8 @@ from app.domain.scenes.render.model_mesh import UnsupportedModel, read_model
 from app.domain.scenes.types import SceneContent
 from app.domain.workflows.executors import ai
 from app.domain.workflows.field_options import split_chat_model
-from app.domain.workflows.templates_full_video import single_set_rules
-from app.domain.workflows.templates_schemas import _set_design_schema
+from app.domain.workflows.templates.blockout import single_set_rules
+from app.domain.workflows.templates.schemas import set_design_schema
 
 
 def _layout(value: Any) -> dict[str, Any]:
@@ -48,7 +48,7 @@ def _layout(value: Any) -> dict[str, Any]:
     return parsed
 
 
-#: 布景的结构化输出(严格模式)要求每一格都在,用不上的引用写空字符串(见 templates._set_design_schema);
+#: 布景的结构化输出(严格模式)要求每一格都在,用不上的引用写空字符串(见 templates.set_design_schema);
 #: 场景格式里它们是「没有就不写」。空字符串在这里就是「没有」—— 不是替它猜一个值。
 _OPTIONAL_REFERENCES = ("parent_id", "model_id", "entity_id")
 
@@ -221,7 +221,7 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
                   + f"\n\n画幅:{aspect}。",
         "response_format": "json_schema",
         "json_schema_name": "blockout_scene",
-        "json_schema": _set_design_schema(),
+        "json_schema": set_design_schema(),
         "json_schema_strict": "true",
         "temperature": 0.2,
         "max_tokens": 16000,

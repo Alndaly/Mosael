@@ -9,8 +9,8 @@ import pytest
 from app.domain.jobs import wait_for_idle_jobs
 from app.domain.workflows.executors import registry
 from app.domain.workflows.graph_rules import validate_graph
-from app.domain.workflows.templates_long_take import long_take_video_graph
-from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates.long_take import long_take_video_graph
+from app.domain.workflows.templates.model_choice import ModelChoice
 from tests.util import fresh_client
 
 CHAT = ModelChoice("c", "anthropic", "claude")
@@ -110,10 +110,10 @@ def test_真跑一遍_每段接着上一段的尾巴(fake_run) -> None:
 
 
 def test_潜空间续写_不截尾巴_按段号存取_按上文长度接(monkeypatch) -> None:
-    from app.domain.workflows import templates_long_take
-    from app.domain.workflows.templates_models import VideoPlan
+    from app.domain.workflows.templates import long_take
+    from app.domain.workflows.templates.model_choice import VideoPlan
 
-    monkeypatch.setattr(templates_long_take, "video_plan_for", lambda db, choice, references=0: VideoPlan(latent_chain=True, parameters={}))
+    monkeypatch.setattr(long_take, "video_plan_for", lambda db, choice, references=0: VideoPlan(latent_chain=True, parameters={}))
     graph = long_take_video_graph(chat=CHAT, opening=WAN_T2V, video=WAN_I2V)
     body = _node(graph, "segments")["config"]["body"]
     assert [node["id"] for node in body["nodes"]] == ["extend"]

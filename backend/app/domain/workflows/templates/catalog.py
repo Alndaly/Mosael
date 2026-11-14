@@ -34,7 +34,7 @@ from app.domain.workflows.template_requirements import (
     TRANSCRIPTION_ENGINE,
     requirement,
 )
-from app.domain.workflows.templates_business import (
+from app.domain.workflows.templates.business import (
     BUSINESS_TEMPLATE_CATALOG,
     FABRIC_LOOKBOOK,
     FOOTAGE_MONTAGE,
@@ -51,7 +51,7 @@ from app.domain.workflows.templates_business import (
     talking_script_video_graph,
 )
 from app.domain.workflows.normalization import localised_names
-from app.domain.workflows.templates_analysis import (
+from app.domain.workflows.templates.analysis import (
     ACCOUNT_ANALYSIS,
     ANALYSIS_TEMPLATE_CATALOG,
     COMMENT_INSIGHTS,
@@ -65,8 +65,8 @@ from app.domain.workflows.templates_analysis import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-#: 模型挑选、Schema 与几张大图住在旁边的 templates_* 模块里,调用方直接从那里取;这里只 import 自己要用的。
-from app.domain.workflows.templates_models import (
+#: 模型挑选、Schema 与几张大图住在同一个包里的其它模块里,调用方直接从那里取;这里只 import 自己要用的。
+from app.domain.workflows.templates.model_choice import (
     ModelChoice,
     REFERENCE_IMAGES_NEEDED,
     SINGLE_REFERENCE,
@@ -80,19 +80,19 @@ from app.domain.workflows.templates_models import (
     _talking_video_model,
     _reference_image_model,
 )
-from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP, transcript_video_cleanup_graph
-from app.domain.workflows.templates_dub import (
+from app.domain.workflows.templates.cleanup import TRANSCRIPT_VIDEO_CLEANUP, transcript_video_cleanup_graph
+from app.domain.workflows.templates.dub import (
     TRANSLATED_DUB,
     TRANSLATED_DUB_LIPSYNC,
     translated_dub_graph,
 )
-from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
-from app.domain.workflows.templates_music import BackgroundMusic
-from app.domain.workflows.templates_series import SERIES_SETUP, series_setup_graph
-from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO, long_take_video_graph
-from app.domain.workflows.templates_upscale import upscale_model
-from app.domain.workflows.templates_long_talk import LONG_TALK_VIDEO, long_talk_video_graph
-from app.domain.workflows.templates_shots import (
+from app.domain.workflows.templates.full_video import FULL_VIDEO_GENERATION, full_video_generation_graph
+from app.domain.workflows.templates.music import BackgroundMusic
+from app.domain.workflows.templates.series import SERIES_SETUP, series_setup_graph
+from app.domain.workflows.templates.long_take import LONG_TAKE_VIDEO, long_take_video_graph
+from app.domain.workflows.templates.upscale import upscale_model
+from app.domain.workflows.templates.long_talk import LONG_TALK_VIDEO, long_talk_video_graph
+from app.domain.workflows.templates.shots import (
     REFERENCE_VIDEO_SHOTS,
     SHOTS_TEMPLATE_CATALOG,
     reference_video_shots_graph,
@@ -111,8 +111,8 @@ from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYN
 #: 此前这份说明有**三套**:应用里的模板卡片(前端 messages.ts 里一串 key)、官网模板页
 #: (同步脚本里另写一份)、以及这里的图。三套各写各的,改一处不会让另外两处报错,只会让同一个
 #: 模板在三个地方讲三种话。现在应用和官网都读这一份。
-#: 模板库里的卡片。前三条是"无中生有"和"一进一出";后四条(templates_business)是**起点为用户
-#: 手里已有的东西** —— 一条长视频、一张商品图;最后是分析类(templates_analysis),产出的是一份分析笔记。
+#: 模板库里的卡片。前三条是"无中生有"和"一进一出";后四条(templates/business)是**起点为用户
+#: 手里已有的东西** —— 一条长视频、一张商品图;最后是分析类(templates/analysis),产出的是一份分析笔记。
 #: 拼在一起是因为模板库只有一份清单。
 TEMPLATE_CATALOG: list[dict[str, Any]] = [
     {
@@ -422,7 +422,7 @@ def built_in_template_graph(
             chat=chat,
             image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
         ))
-    #: 分析类:只要对话模型;取数走 TikHub 插件或内嵌浏览器,由开始节点的 data_source 选(见 templates_analysis)。
+    #: 分析类:只要对话模型;取数走 TikHub 插件或内嵌浏览器,由开始节点的 data_source 选(见 templates/analysis)。
     if template_id == ACCOUNT_ANALYSIS:
         return localised_names(locale, account_analysis_graph(chat=chat, locale=locale))
     if template_id == VIRAL_VIDEO_BREAKDOWN:
@@ -446,7 +446,7 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
     return {
         #: 视频模型留空 = 按"还没挑模型"出片计划:每镜秒数默认 5、只走首帧那条路。**首帧是每一个能用的视频模型都收的
         #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道。出图 / 视频的画幅、尺寸、分辨率
-        #: 照样接到开始参数(templates_models._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
+        #: 照样接到开始参数(templates/model_choice._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
         #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
         FULL_VIDEO_GENERATION: full_video_generation_graph(chat=blank, image=blank, video=blank),
         SERIES_SETUP: series_setup_graph(chat=blank, image=blank),
@@ -538,10 +538,10 @@ def _carry_picks(fresh: dict[str, Any], old: dict[str, Any]) -> None:
 
 
 def _background_music(db: Session, user_id: str, workspace_id: str) -> BackgroundMusic | None:
-    """成片配乐用哪个模型、要不要先拆掉人声(见 templates_music);没有能用的音乐模型就是 None,模板不加配乐那几步
+    """成片配乐用哪个模型、要不要先拆掉人声(见 templates/music);没有能用的音乐模型就是 None,模板不加配乐那几步
     (和「动起来」同一个挑法,不让整条模板用不了)。
 
-    会唱的模型要先拆掉人声(见 templates_models.music_may_sing):分离引擎**明说缺了**才连配乐一起不加(和
+    会唱的模型要先拆掉人声(见 templates/model_choice.music_may_sing):分离引擎**明说缺了**才连配乐一起不加(和
     requirement_problem 同一条线:还没探测过的照常加,真缺时那一步说清)—— 铺一首带人声的歌在旁白、对白底下,比不铺更糟。
     """
     music = _music_model(db, user_id)
@@ -649,7 +649,7 @@ def requirement_status(db: Session, *, user_id: str, workspace_id: str, check: s
 def requirement_problem(db: Session, *, user_id: str, workspace_id: str, check: str) -> str | None:
     """这一项前置条件此刻**缺什么**,一句给人看的话;齐了(或者还没测出来)回 None。
 
-    TikHub 那几项说得出具体缺哪一步(没装、没接、连接卡在哪、工具没勾,见 templates_analysis.tikhub_problem);
+    TikHub 那几项说得出具体缺哪一步(没装、没接、连接卡在哪、工具没勾,见 templates/analysis.tikhub_problem);
     别的检查只有齐 / 不齐,就说那一项没备好。
     """
     if check in (TIKHUB_ACCOUNT, TIKHUB_VIDEO, TIKHUB_COMMENTS):

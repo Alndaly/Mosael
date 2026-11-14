@@ -37,12 +37,12 @@
 
 ### 2. 带货口播(和数字人带货)在有音乐模型时铺一首
 
-- 建图时挑音乐模型(`templates_models._music_model`):明说出音乐的(`text-to-music` / `text-to-bgm`)优先;
+- 建图时挑音乐模型(`templates/model_choice._music_model`):明说出音乐的(`text-to-music` / `text-to-bgm`)优先;
   退一步挑「从文字出音频」且写得进曲子描述的(ComfyUI 的音乐工作流都报成插件缺省的 `text-to-audio`)。
   一个都没有就**不加这两步** —— 和「每一拍动起来」同一个挑法,不让整条模板用不了;官网导出的那份不带(模型空着,
   导入的人得先删掉它们才跑得起来)。
 - 「生成一首配乐」在脚本写好之后就开始(和逐拍出图同时跑),「配乐只留伴奏」紧跟着它,「铺上配乐」在字幕之后、导出之前。
-- 曲子怎么写(`templates_models.music_request`),按节点输入的名字认(同 ADR 0094 的 `aspect_ratio`):
+- 曲子怎么写(`templates/model_choice.music_request`),按节点输入的名字认(同 ADR 0094 的 `aspect_ratio`):
   - 有 `caption` 输入的音乐工作流(MiniMax Music / ACE-Step):描述写进 `caption`、**提示词留空** —— 真跑时 MiniMax Music
     表单版的「提示词」接的是 **Lyrics**,描述写进提示词会被唱出来,caption 还是默认的「女声抒情歌」;
     `lyrics` 写 `[Instrumental]`(完整工作流的歌词默认是一段示例说唱),`max_duration` 写 60 秒(默认 240);
@@ -50,7 +50,7 @@
 - **会唱的模型后面接一步「配乐只留伴奏」**(`separate_audio`,本机 Demucs),铺上去的是伴奏那一轨。
   实测 MiniMax Music3:歌词写 `""` / `[Inst]` / `[inst]` / `[Intro][Inst][Outro]` / `[Instrumental]`,描述里也写明
   「no vocals」,五次出来都有整段人声(Demucs 拆出的人声轨占了大头)—— 这类模型「纯器乐」说了不算,只能事后拆。
-  判断「会唱」按输入的名字认(`templates_models.music_may_sing`:有 `caption`、没有纯器乐开关);内置音乐服务有
+  判断「会唱」按输入的名字认(`templates/model_choice.music_may_sing`:有 `caption`、没有纯器乐开关);内置音乐服务有
   纯器乐开关,不加这一步。
   分离引擎**明说缺了**才连配乐一起不加(和 `requirement_problem` 同一条线:还没探测过的照常加,真缺时那一步说清)——
   铺一首带人声的歌在旁白底下,比不铺更糟。

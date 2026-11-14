@@ -211,7 +211,7 @@ class Test字幕配音:
 class Test官方工作流:
     def test_译配模板连得起来且默认压回原长度(self) -> None:
         from app.domain.workflows.graph_rules import validate_graph
-        from app.domain.workflows.templates_dub import translated_dub_graph
+        from app.domain.workflows.templates.dub import translated_dub_graph
 
         graph = translated_dub_graph(voice_id="v1")
         # 只差用户自己选那份视频 —— 其余每一处配置都该是完整的。

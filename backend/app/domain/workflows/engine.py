@@ -76,7 +76,7 @@ from app.domain.workflows.run_scope import continuing_run, halt_scope, halted, i
 from app.domain.generation.operations import GenerationDomainError, check_text_inputs
 from app.domain.plugins import nodes as plugins_nodes
 from app.domain.plugins.nodes import why_unusable
-from app.domain.workflows.templates import requirement_problem
+from app.domain.workflows.templates.catalog import requirement_problem
 
 logger = logging.getLogger(__name__)
 

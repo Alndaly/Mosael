@@ -46,8 +46,8 @@
 | 音色库：上传克隆、从说话人克隆；本机 F5-TTS / Fish Speech，云端 TTS | `domain/voices/`、`db/model_slices/voices.py`、`ai/runtime/` | 「一把嗓子」已经有 |
 | 转写、翻译、分离人声、降噪 | 工作流节点；画板上正在改成内容格能力（[ADR 0025](../adr/0025-board-recipes-versions-and-ports.md) 修订） | 视频翻译链路的前几步 |
 | 可灵主体库：建档 + 引用，名字按内容哈希算，不存映射表 | `ai/providers/adapters/kuaishou/kling/elements.py` | 厂商侧的形象 id 照这个做法处理 |
-| 模板「商品 → 带货口播短视频」 | `domain/workflows/templates_business.py` | 现在是逐拍出静帧再配口播，可以直接升级成真人口播 |
-| 剪辑时间线、字幕、配音逐句合成 | `domain/sequences/`、`domain/workflows/templates.py` | 长稿分段后在这里拼接 |
+| 模板「商品 → 带货口播短视频」 | `domain/workflows/templates/business.py` | 现在是逐拍出静帧再配口播，可以直接升级成真人口播 |
+| 剪辑时间线、字幕、配音逐句合成 | `domain/sequences/`、`domain/workflows/templates/catalog.py` | 长稿分段后在这里拼接 |
 
 **缺的东西：**
 

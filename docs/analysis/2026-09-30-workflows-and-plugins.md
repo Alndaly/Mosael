@@ -101,12 +101,12 @@
 
 | # | 级别 | 证据 | 问题 |
 |---|---|---|---|
-| H1 | 高 · 已确认 ✔ | `templates_business.py:1567-1568` 只写 `start` 与 `max_duration`;`subjobs.py:480` 缺 `end` 时取整段;`_fit_speed` 只加速且 ≤1.5× | **素材混剪每段时长错。** 60s 素材计划用 5s,实际铺进约 37s 快放画面,旁白字幕全错位。 |
-| H2 | 高 · 已确认 | `templates_business.py:769` | **带货短片的口播是坏的**:只念开场钩子 + 收尾号召、放在第 0 秒,中间每拍的 narration 没人念;两版都没有字幕节点,卡片却写「配上口播与屏幕短句」。 |
+| H1 | 高 · 已确认 ✔ | `templates/business.py:1567-1568` 只写 `start` 与 `max_duration`;`subjobs.py:480` 缺 `end` 时取整段;`_fit_speed` 只加速且 ≤1.5× | **素材混剪每段时长错。** 60s 素材计划用 5s,实际铺进约 37s 快放画面,旁白字幕全错位。 |
+| H2 | 高 · 已确认 | `templates/business.py:769` | **带货短片的口播是坏的**:只念开场钩子 + 收尾号召、放在第 0 秒,中间每拍的 narration 没人念;两版都没有字幕节点,卡片却写「配上口播与屏幕短句」。 |
 | H3 | 高 · 已确认 | `sequences/append.py:18` `STILL_SECONDS=5`;`:752` | **每拍画面时长和脚本对不上**:图片上时间线固定 5s,`max_duration` 只能压到 3.33–5s;主播版画外音因此串到下一拍。 |
-| H4 | 高 · 已确认 | `templates_business.py:427, 430-431`;`descriptors/video.py:266, 379`;`operations.py:1023` | **商品上身的视频一步在 Seedance 2.0 / MiniMax 上必然失败**:同时传首帧与参考图、没写 `source_group`,两组互斥 → `genErr_exclusiveSources`,且在每组图**已付费之后**才报;卡片里举的例子恰好是 Seedance 2.0。时长写死 5s,没用 `_video_plan`。 |
-| M1 | 中 · 已确认 | `templates_full_video.py:68` vs `:77` | 白模提示词自相矛盾:「不要用固定的 40 米」与「position 为 [n*40,0,0]」同段;测试只禁了 `x = n*40`。 |
-| M2 | 中 · 已确认 | `templates_models.py:95-104`;`translate.py:120` | **前置检查与运行时不一致**:只要 1 张参考图的三个模板套用了整片的「≥9 张」判据,能收 1–8 张的模型被判缺;译配的翻译节点运行时用第一条可用连接,不是检查时挑的对话模型(推断)。 |
+| H4 | 高 · 已确认 | `templates/business.py:427, 430-431`;`descriptors/video.py:266, 379`;`operations.py:1023` | **商品上身的视频一步在 Seedance 2.0 / MiniMax 上必然失败**:同时传首帧与参考图、没写 `source_group`,两组互斥 → `genErr_exclusiveSources`,且在每组图**已付费之后**才报;卡片里举的例子恰好是 Seedance 2.0。时长写死 5s,没用 `_video_plan`。 |
+| M1 | 中 · 已确认 | `templates/full_video.py:68` vs `:77` | 白模提示词自相矛盾:「不要用固定的 40 米」与「position 为 [n*40,0,0]」同段;测试只禁了 `x = n*40`。 |
+| M2 | 中 · 已确认 | `templates/model_choice.py:95-104`;`translate.py:120` | **前置检查与运行时不一致**:只要 1 张参考图的三个模板套用了整片的「≥9 张」判据,能收 1–8 张的模型被判缺;译配的翻译节点运行时用第一条可用连接,不是检查时挑的对话模型(推断)。 |
 | M3 | 中 · 已确认 | `:771`、`:1273` | 缺配置到运行时才发现:带货版缺音色、主播版没选主播,都要等并行的 LLM / 出图已经开始后才失败。 |
 | M4 | 中 · 已确认 | `:499`、`:1637` | 默认值让第一次运行出错:整片的主题、混剪的素材标签是占位句;商品名默认空不拦。 |
 | M5 | 中 · 已确认 ✔ | `MAX_VARIANTS=12` 全仓只有定义;`:334`、`:863` 无 `maxItems` | **没有费用上限**:scenes / applications 只在提示词里说数量。 |

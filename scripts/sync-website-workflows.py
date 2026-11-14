@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.domain.workflows.revisions import graph_digest
-from app.domain.workflows.templates import TEMPLATE_CATALOG, blank_template_graphs, localised_names
+from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG, blank_template_graphs, localised_names
 
 
 def catalog_files() -> dict[str, str]:

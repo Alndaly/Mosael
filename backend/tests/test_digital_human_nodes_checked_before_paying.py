@@ -18,7 +18,7 @@ from app.domain.workflows import create_workflow
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.executors import talking
-from app.domain.workflows.templates_dub import translated_dub_graph
+from app.domain.workflows.templates.dub import translated_dub_graph
 from tests.util import fresh_client, make_voice, user_id
 
 LIPSYNC = {"id": "p:video:videoretalk", "is_default": True, "capabilities": {"modes": ["video-lipsync"]}}

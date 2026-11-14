@@ -21,7 +21,7 @@ from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job
 from app.domain.workflows.engine import execute_graph
 from app.domain.workflows.executors import dub_lipsync as module
-from app.domain.workflows.templates_dub import translated_dub_graph
+from app.domain.workflows.templates.dub import translated_dub_graph
 from tests.util import fresh_client
 
 #: 30 秒原片,每 6 秒一句;模型一次收 2–10 秒 —— 切成好几块,每块一两句。

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.db.models import ScheduledTask, Workflow
-from app.domain.workflows.templates_analysis import ACCOUNT_ANALYSIS, COMMENT_INSIGHTS, VIRAL_VIDEO_BREAKDOWN
+from app.domain.workflows.templates.analysis import ACCOUNT_ANALYSIS, COMMENT_INSIGHTS, VIRAL_VIDEO_BREAKDOWN
 from tests.util import fresh_client, second_client
 
 VIDEO = "https://www.bilibili.com/video/BV1xx411c7mD"

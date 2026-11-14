@@ -15,8 +15,8 @@ from app.core.db import SessionLocal
 from app.db.models import Entity, Workflow
 from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.graph_rules import validate_graph, with_run_params
-from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_series import SERIES_VOICES, series_setup_graph
+from app.domain.workflows.templates.model_choice import ModelChoice
+from app.domain.workflows.templates.series import SERIES_VOICES, series_setup_graph
 from tests.util import fresh_client
 
 CHAT = ModelChoice(profile_id="c", provider="o", model="m")

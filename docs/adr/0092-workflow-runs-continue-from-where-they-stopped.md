@@ -227,7 +227,7 @@ argument 'attention'`),所以那个补丁去掉。Spark-H3 的稀疏注意力声
 - **插件认分批**:VHS 每批跑完用同一个 client_id 换任务号重新排队,没收尾的那几批历史里只有 `unfinished_batch`。
   插件此前只等提交的那一个任务号,第一批就当完成;现在顺着 client_id 跟到最后一批(`run.next_batch`);
 - **模板**:配了超分工作流(收源视频、有 `6.width` / `6.height`)时,开始参数多一格「成片清晰度」(1080p / 2K / 4K),
-  时间线画布和每段超分按画幅和它查同一张表(`templates_upscale`),每段先超分再上时间线;没配就和以前一样;
+  时间线画布和每段超分按画幅和它查同一张表(`templates/upscale`),每段先超分再上时间线;没配就和以前一样;
 - **工作流**由插件仓库的[生成脚本](https://github.com/Alndaly/ComfyUI-Mosael-Plugins/blob/main/scripts/build_minimax_h3_examples.py)生成,上面每一项取舍都写在里面。
 
 实测(长片,走 Mosael,3 段 27 秒,2560×1440,约 24 Mbps):每段生成约 3 分钟、超分约 9 分钟,整条 39 分钟。第一条接缝

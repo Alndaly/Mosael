@@ -1,6 +1,6 @@
 """内置模板「拆解参考视频」的图:选视频 → 拆镜头 →(可选)转写口播 → 逐镜看画面 → 报告 → 总结 → 笔记。
 
-和 templates_analysis 里那三条的分界:那三条取数靠 TikHub / 内嵌浏览器(链接进),这一条**起点是素材库里
+和 templates/analysis 里那三条的分界:那三条取数靠 TikHub / 内嵌浏览器(链接进),这一条**起点是素材库里
 已有的视频**(ADR 0061 §4)。镜头表、联系表、逐镜判断全走 domain/shots 的三个新节点 —— 刀口 / 时长 / 动静是
 代码量出来的,只有「看画面」和「写总结」花钱。
 
@@ -15,8 +15,8 @@ from mosael_formats.i18n import pick_text
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.template_requirements import CHAT_MODEL, TRANSCRIPTION_ENGINE, requirement
-from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_schemas import object_schema
+from app.domain.workflows.templates.model_choice import ModelChoice
+from app.domain.workflows.templates.schemas import object_schema
 
 REFERENCE_VIDEO_SHOTS = "reference_video_shots"
 

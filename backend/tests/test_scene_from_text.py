@@ -43,7 +43,7 @@ def _scope():
 def test_照文字搭一个场景_不是每镜一个布景台_相机规矩和整片模板同一份(written) -> None:
     """用户截图:「一个女孩在雪山脚下的草原上跑步」搭成了三套一样的草原和山、女孩不动 —— 那是整片模板分镜的搭法
     (每镜一个布景台)。这里是一个地方里的一段事:一个布景,动作是人物的关键帧,几台相机拍同一段。"""
-    from app.domain.workflows.templates_full_video import _camera_rules, blockout_rules, single_set_rules
+    from app.domain.workflows.templates.blockout import _camera_rules, blockout_rules, single_set_rules
 
     scope = _scope()
     with SessionLocal() as db:
@@ -173,9 +173,9 @@ def test_搭场景的模型给每镜标机位_空串当没标(written) -> None:
     """按文字搭的场景此前从不带机位(布景的 schema 里没有这一格),姿势参考在这条链上永远发不出去(ADR 0091)。
     机位的取值就是 entities.shot_angles 那一份;严格模式下的空字符串 = 不标。"""
     from app.domain.entities.shot_angles import SHOT_ANGLES
-    from app.domain.workflows.templates_schemas import _set_design_schema
+    from app.domain.workflows.templates.schemas import set_design_schema
 
-    shot_schema = _set_design_schema()["properties"]["shots"]["items"]
+    shot_schema = set_design_schema()["properties"]["shots"]["items"]
     assert "shot_angle" in shot_schema["required"]
     assert shot_schema["properties"]["shot_angle"]["enum"] == [*SHOT_ANGLES, ""]
 

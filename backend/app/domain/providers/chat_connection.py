@@ -36,7 +36,7 @@ def reachable_on(profile: ProviderProfile, surface: ChatSurface) -> bool:
 
 def default_chat_connection(db: Session, *, owner_user_id: str | None, surface: ChatSurface) -> ProviderProfile | None:
     """没点名连接时拿哪一条去**对话**:他设的默认对话模型所在的那条;没设(或它已停用)就是他最早接上的、
-    挂着启用对话模型的那一条 —— 和模板预填对话模型同一个先后(workflows.templates_models._pick)。
+    挂着启用对话模型的那一条 —— 和模板预填对话模型同一个先后(workflows.templates.model_choice._pick)。
 
     此前是「最早建的那条启用连接」,不管它会不会对话:先接了一条生图连接的人,翻译、LLM 节点都拿它去发对话请求。
     没设默认时仍然给一条会对话的,而不是像智能体那样直接拒:建连接不会顺手设默认,这些节点一直在「没设默认也能跑」

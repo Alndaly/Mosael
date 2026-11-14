@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Clip, Project, Sequence, Track, Workspace
 from app.domain.workflows.executors.subjobs import _compact_timed_text, timeline_cut_ranges
-from app.domain.workflows.templates_cleanup import _cleanup_schema
+from app.domain.workflows.templates.cleanup import _cleanup_schema
 from tests.util import fresh_client, insert_asset
 
 

@@ -31,7 +31,7 @@ import pytest
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates import TEMPLATE_CATALOG, blank_template_graphs
+from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG, blank_template_graphs
 from tests.util import fresh_client
 
 TEMPLATE_IDS = [card["id"] for card in TEMPLATE_CATALOG]
@@ -39,13 +39,13 @@ TEMPLATE_IDS = [card["id"] for card in TEMPLATE_CATALOG]
 #: 模板建图函数最后一步都过 normalize_graph;把它换成原样交回,拿到的就是作者画的那一张(和
 #: test_official_templates_hold_together 取原图同一条路 —— 规范化之前 vs 之后,用的是同一个函数)。
 _TEMPLATE_MODULES = (
-    "templates_full_video",
-    "templates_business",
-    "templates_analysis",
-    "templates_cleanup",
-    "templates_dub",
-    "templates_shots",
-    "templates_series",
+    "templates.full_video",
+    "templates.business",
+    "templates.analysis",
+    "templates.cleanup",
+    "templates.dub",
+    "templates.shots",
+    "templates.series",
 )
 
 

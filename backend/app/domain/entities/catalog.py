@@ -62,6 +62,10 @@ ATTACH_PRIORITY: dict[str, tuple[str, ...]] = {
     "costume": ("front", "back"),
 }
 
+#: 场景的设计稿标成这个角度(和人物的三视图对应):整片 / 系列设定模板画的就是它,「取资产」按它认 ——
+#: 老场景只有全景图时取出来为空,模板补画一张加进同一个资产里(ADR 0097 修订四)。
+LOCATION_SHEET_ROLE = "design_sheet"
+
 #: 新挂一张参考图、没说角度时按种类给的缺省:人物和道具先当正面,场景先当设定图。
 DEFAULT_ROLE: dict[str, str] = {
     "character": "front", "location": "concept", "prop": "front", "pose": "front", "costume": "front",

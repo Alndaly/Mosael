@@ -10,7 +10,7 @@ from typing import Any
 from mosael_formats.i18n import pick_text
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates.model_choice import ModelChoice
 
 
 TRANSLATED_DUB = "translated_dub"

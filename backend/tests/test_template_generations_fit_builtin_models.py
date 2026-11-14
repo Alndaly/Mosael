@@ -21,15 +21,15 @@ from app.domain.generation_catalog.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
 from app.domain.workflows.executors.basic import json_extract
 from app.domain.workflows.graph_rules import interpolate
-from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates.model_choice import ModelChoice
 from app.domain.workflows.executors.subjobs import chain_plan
-from app.domain.workflows.templates_full_video import full_video_generation_graph
-from app.domain.workflows.templates_business import (
+from app.domain.workflows.templates.full_video import full_video_generation_graph
+from app.domain.workflows.templates.business import (
     fabric_lookbook_graph,
     product_on_model_graph,
     product_pitch_short_graph,
 )
-from app.domain.workflows.templates_models import (
+from app.domain.workflows.templates.model_choice import (
     FRAME_ASPECTS,
     REFERENCE_IMAGES_NEEDED,
     SINGLE_REFERENCE,
@@ -51,7 +51,7 @@ def _choices(kind: str, usable) -> list[ModelChoice]:
     ]
 
 
-#: 挑模型的判据(templates_models)排掉了拍不了一镜的模型(说话照片、改口型、改视频、续写视频)、参考图收不下一整组的
+#: 挑模型的判据(templates/model_choice)排掉了拍不了一镜的模型(说话照片、改口型、改视频、续写视频)、参考图收不下一整组的
 #: (kling-v3-omni 只收 4 张)、首帧那条路注定被 requires_source 拒的(wan2.7-r2v),`_image_plan` 也认得「1:1」这种
 #: 尺寸写法了 —— 此前这几处在这里挂着 strict xfail,现在每个会被挑中的模型都该真的通过。
 def _video_params() -> list[Any]:

@@ -50,7 +50,7 @@ from app.domain.workflows.graph_rules import (
 from app.domain.workflows.field_activation import config_field_active
 from app.domain.workflows.graph_rules import blank
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates import TEMPLATE_CATALOG, blank_template_graphs
+from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG, blank_template_graphs
 from tests.util import fresh_client
 
 TEMPLATE_IDS = [card["id"] for card in TEMPLATE_CATALOG]
@@ -242,8 +242,8 @@ def test_就绪检查只等用的人填那几格_没有别的阻断和警告(tem
 
 def _raw_template_graphs(monkeypatch: pytest.MonkeyPatch) -> dict[str, dict[str, Any]]:
     """建图函数最后都过一遍 normalize_graph;换成原样交回,拿到的就是作者画的那张(规范化之前)。"""
-    for name in ("templates_full_video", "templates_business", "templates_analysis", "templates_cleanup", "templates_dub",
-                 "templates_shots"):
+    for name in ("templates.full_video", "templates.business", "templates.analysis", "templates.cleanup", "templates.dub",
+                 "templates.shots"):
         module = importlib.import_module(f"app.domain.workflows.{name}")
         monkeypatch.setattr(module, "normalize_graph", lambda graph, *, node_types: graph)
     return blank_template_graphs("zh")

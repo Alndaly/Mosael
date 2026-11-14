@@ -61,7 +61,7 @@ FROZEN = {
     "domain/workflows/executors/basic.py": 1,
     "domain/workflows/executors/subjobs.py": 1,
     "domain/workflows/field_options.py": 4,
-    "domain/workflows/templates.py": 2,
+    "domain/workflows/templates/catalog.py": 2,
     "domain/workflows/use_cases.py": 1,
     "integrations/feishu/approvals.py": 2,
     "main.py": 70,

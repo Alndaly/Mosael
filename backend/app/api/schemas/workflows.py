@@ -7,7 +7,7 @@ from pydantic import Field
 
 from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.plugins import EntryGroupOut
-from app.domain.workflows.templates import TEMPLATE_CATALOG
+from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG
 
 #: 官方模板的 id:由模板目录说了算,生成的前端类型因此是一个确切的联合。此前前端手抄了一份(3 个,实际 11 个),
 #: 拿 `as` 断言盖住了对不上。

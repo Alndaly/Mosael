@@ -10,7 +10,7 @@ from app.core.db import SessionLocal
 from app.db.models import User, Workspace
 from app.domain.providers.chat_connection import require_connection
 from app.domain.translate import resolve_ai_chat_target
-from app.domain.workflows.templates import built_in_template_graph
+from app.domain.workflows.templates.catalog import built_in_template_graph
 from tests.util import add_provider, fresh_client
 
 
@@ -54,7 +54,7 @@ def test_两条译配模板把对话连接和模型写在翻译节点上() -> No
 
 def test_没设默认对话模型时_建图和前置检查说的是同一个() -> None:
     """此前建图用「默认模型」(没设就空着),检查用「没默认也挑一个配好的」:检查说齐了,节点上却是空的。"""
-    from app.domain.workflows.templates import requirement_statuses
+    from app.domain.workflows.templates.catalog import requirement_statuses
 
     me, _image, chat = _deployment(chat_default=False)
     with SessionLocal() as db:

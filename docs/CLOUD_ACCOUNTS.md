@@ -188,7 +188,7 @@ cloud_email_codes(
 重发限流,见下表的常量与理由。`request_ip` 目前没有清理任务,和码一样属于短期运维数据;
 要长期保留时应单独做清理策略。
 
-### 阈值(常量在 `cloud/src/cloud/email_codes.py`,理由随行注释)
+### 阈值(常量在 `cloud/src/cloud/domain/email_codes.py`,理由随行注释)
 
 | 常量 | 值 | 为什么 |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 """自媒体数据:认链接、把各平台取回来的作品 / 评论整理成同一个形状、算运营指标。
 
-分析类官方模板(templates_analysis)的两条取数路 —— TikHub 插件和内嵌浏览器 —— 交回来的东西长得完全不一样:
+分析类官方模板(templates/analysis)的两条取数路 —— TikHub 插件和内嵌浏览器 —— 交回来的东西长得完全不一样:
 
 - TikHub 走 MCP,回的是它**自己裁过的投影**,字段名跟着平台走(抖音 `statistics.digg_count`、
   B 站 `play` / `created`、小红书 `liked_count`),投影的形状还会随服务端升级变;

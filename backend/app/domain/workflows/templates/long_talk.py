@@ -18,12 +18,12 @@ from typing import Any
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import (
+from app.domain.workflows.templates.model_choice import (
     FRAME_ASPECTS, LATENT_CONTEXT_SECONDS, LATENT_FPS, LATENT_LENGTH, LATENT_SEGMENT_SECONDS, LATENT_SHORTEST_SECONDS,
     ModelChoice,
 )
 from app.media.pauses import DEFAULT_MAX_PAUSE
-from app.domain.workflows.templates_upscale import DEFAULT_OUTPUT_RESOLUTION, frame_plan_node, resolution_options, upscale_node
+from app.domain.workflows.templates.upscale import DEFAULT_OUTPUT_RESOLUTION, frame_plan_node, resolution_options, upscale_node
 
 LONG_TALK_VIDEO = "long_talk_video"
 
@@ -38,7 +38,7 @@ def _speaking_prompt(scene: str) -> str:
 
 def long_talk_video_graph(*, opening: ModelChoice, video: ModelChoice, voice_id: str = "",
                           upscale: ModelChoice | None = None) -> dict[str, Any]:
-    """`upscale`:配好的超分工作流(见 templates_upscale)。有它,每段上时间线前超分到开始参数选的清晰度。"""
+    """`upscale`:配好的超分工作流(见 templates/upscale)。有它,每段上时间线前超分到开始参数选的清晰度。"""
     width, height = FRAME_ASPECTS["16:9"]
     upscaling = upscale is not None and bool(upscale.model)
     segment_body = {

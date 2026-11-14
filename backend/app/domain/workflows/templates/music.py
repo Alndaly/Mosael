@@ -14,14 +14,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.workflows.templates_models import ModelChoice, model_capabilities, music_request
+from app.domain.workflows.templates.model_choice import ModelChoice, model_capabilities, music_request
 
 
 @dataclass(frozen=True)
 class BackgroundMusic:
     """配乐用哪个模型、要不要先拆掉人声。
 
-    `strip_vocals`:这个模型交回来的可能带人声(见 templates_models.music_may_sing)—— 写法管不住它会不会唱,
+    `strip_vocals`:这个模型交回来的可能带人声(见 templates/model_choice.music_may_sing)—— 写法管不住它会不会唱,
     生成之后先拆一遍人声、只铺伴奏。挑模型在 templates._background_music(要查这台机器的分离引擎)。
     """
 

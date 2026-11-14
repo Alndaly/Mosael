@@ -256,8 +256,8 @@ def _middle_of_full_video(fake_node, *, shots, voice_id, project) -> tuple[dict[
     所以模板里被规范成数据边的那些引用,走的是和真跑一样的路。
     """
     from app.domain.workflows.engine import execute_graph
-    from app.domain.workflows.templates_models import ModelChoice
-    from app.domain.workflows.templates_full_video import full_video_generation_graph
+    from app.domain.workflows.templates.model_choice import ModelChoice
+    from app.domain.workflows.templates.full_video import full_video_generation_graph
 
     graph = full_video_generation_graph(
         chat=ModelChoice(profile_id="c", provider="o", model="m"),
@@ -291,8 +291,8 @@ def _middle_of_full_video(fake_node, *, shots, voice_id, project) -> tuple[dict[
 
 def _assemble_seconds() -> float:
     """每镜多长由模板按视频模型定;从模板里读,不在测试里另写一个数。"""
-    from app.domain.workflows.templates_models import ModelChoice
-    from app.domain.workflows.templates_full_video import full_video_generation_graph
+    from app.domain.workflows.templates.model_choice import ModelChoice
+    from app.domain.workflows.templates.full_video import full_video_generation_graph
 
     graph = full_video_generation_graph(
         chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(profile_id="v", provider="f", model="vm")

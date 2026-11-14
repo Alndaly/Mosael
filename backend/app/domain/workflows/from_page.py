@@ -1,6 +1,6 @@
 """「用当前页开工」:内嵌浏览器里正开着一条视频 / 一个账号主页,一键用分析模板把它跑起来。
 
-三张分析模板(见 templates_analysis):视频爆款拆解、评论区洞察要视频链接,账号运营诊断要账号主页链接。
+三张分析模板(见 templates/analysis):视频爆款拆解、评论区洞察要视频链接,账号运营诊断要账号主页链接。
 做的事只有一件 —— **把一张模板图准备好**:没建过就按模板建,建过就打开最近改过的那张;开始节点填上当前页的链接,
 数据来源选「内嵌浏览器」;有浏览器档案时,读页面那一步(打开浏览器)换成浏览器池里的这个档案、下载视频那一步也借它的
 登录态 —— 用户正在这个档案里看着这一页,同一个登录态去读,读到的才是他看到的东西。不替他点运行:跑之前他可能还想
@@ -23,14 +23,14 @@ from mosael_formats.i18n import pick_text
 from app.db.models import RecordReference, Workflow
 from app.domain.workflows import create_workflow, edit_workflow_graph, list_workflows
 from app.domain.workflows.errors import WorkflowDomainError
-from app.domain.workflows.templates_analysis import (
+from app.domain.workflows.templates.analysis import (
     ACCOUNT_ANALYSIS,
     ANALYSIS_TEMPLATE_CATALOG,
     BROWSER,
     COMMENT_INSIGHTS,
     VIRAL_VIDEO_BREAKDOWN,
 )
-from app.domain.workflows.templates import built_in_template_graph
+from app.domain.workflows.templates.catalog import built_in_template_graph
 
 #: 能「用当前页开工」的模板 → 链接填进开始节点的哪一格。
 PAGE_TEMPLATES: dict[str, str] = {

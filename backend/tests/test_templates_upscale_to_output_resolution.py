@@ -14,10 +14,10 @@ H3 两遍采样直出 1728×960,模板的时间线写死 1920×1080、导出只�
 
 from __future__ import annotations
 
-from app.domain.workflows.templates_long_take import long_take_video_graph
-from app.domain.workflows.templates_long_talk import long_talk_video_graph
-from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_upscale import UPSCALE_HEIGHT, UPSCALE_WIDTH, frame_table
+from app.domain.workflows.templates.long_take import long_take_video_graph
+from app.domain.workflows.templates.long_talk import long_talk_video_graph
+from app.domain.workflows.templates.model_choice import ModelChoice
+from app.domain.workflows.templates.upscale import UPSCALE_HEIGHT, UPSCALE_WIDTH, frame_table
 
 UPSCALE = ModelChoice("profile", "plugin:dev.mosael.comfyui", "seedvr2_upscale_batched.json")
 CHAT = ModelChoice("chat", "openai", "gpt")

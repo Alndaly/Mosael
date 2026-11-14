@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from app.domain.workflows.templates_full_video import blockout_rules, single_set_rules
+from app.domain.workflows.templates.blockout import blockout_rules, single_set_rules
 
 
 def test_两种搭法都要中性灰_浅背景_只取光的方向() -> None:

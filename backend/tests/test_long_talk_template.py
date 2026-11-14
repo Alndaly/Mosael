@@ -9,8 +9,8 @@ import pytest
 from app.domain.jobs import wait_for_idle_jobs
 from app.domain.workflows.executors import registry
 from app.domain.workflows.graph_rules import validate_graph
-from app.domain.workflows.templates_long_talk import long_talk_video_graph
-from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates.long_talk import long_talk_video_graph
+from app.domain.workflows.templates.model_choice import ModelChoice
 from tests.util import fresh_client
 
 OPEN = ModelChoice("p", "plugin:dev.mosael.comfyui", "minimax_h3_talk_open.json")

@@ -3,7 +3,7 @@
 **封闭**是这张表有用的前提:每人一套说法的表汇总不出任何东西(「中近景」「胸部以上」「MCU」是同一个景别)。
 模型写了表外的词,对账时清空并记一条提示,不猜它想说哪个。
 
-**不和故事板那套共用**(workflows/templates_schemas 的 SHOT_SIZES / CAMERA_MOVES):那是「要怎么拍」交给生成模型的词,
+**不和故事板那套共用**(workflows/templates/schemas 的 SHOT_SIZES / CAMERA_MOVES):那是「要怎么拍」交给生成模型的词,
 这是「拍成了什么」拿来统计的词;两边各自演进,耦在一起改一边坏一边。
 """
 

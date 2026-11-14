@@ -22,11 +22,11 @@ from typing import Any, Literal
 CHAT_MODEL = "chat_model"
 #: 能带一张参考图出图的图像模型(商品图、面料图:每次只带那一张)。
 REFERENCE_IMAGE_MODEL = "reference_image_model"
-#: 能同时带一组参考图出图的图像模型(整片生成的关键帧:白模帧 + 三视图 + 设定图,见 templates_models)。
+#: 能同时带一组参考图出图的图像模型(整片生成的关键帧:白模帧 + 三视图 + 设定图,见 templates/model_choice)。
 MULTI_REFERENCE_IMAGE_MODEL = "multi_reference_image_model"
 #: 能从首帧或**一张**参考图出片的视频模型(上身图动起来、带货口播每一拍动起来:每次只交那一张图)。
 REFERENCE_VIDEO_MODEL = "reference_video_model"
-#: 能从首帧或**一整组**参考图出片的视频模型(整片生成一镜交白模帧 + 三视图 + 设定图,见 templates_models)。
+#: 能从首帧或**一整组**参考图出片的视频模型(整片生成一镜交白模帧 + 三视图 + 设定图,见 templates/model_choice)。
 #: 和上面分开,是因为卡片说「齐了」和建图时挑不挑得中视频模型必须是同一个门槛 —— 此前只有这一个键、门槛是整组,
 #: 只配了万相 wan2.7-r2v(只收 5 张)的人,带货口播的卡片说缺,建出来的图却带着动起来那一步。
 MULTI_REFERENCE_VIDEO_MODEL = "multi_reference_video_model"
@@ -44,7 +44,7 @@ SEPARATION_ENGINE = "separation_engine"
 SPEECH_VIDEO_MODEL = "speech_video_model"
 #: 会「改口型」的视频模型(modes 里有 video-lipsync)。
 LIPSYNC_VIDEO_MODEL = "lipsync_video_model"
-#: 分析类模板的 TikHub 那一路:至少一个平台,要用的几个工具都落在一条可用连接上(见 templates_analysis.tikhub_status)。
+#: 分析类模板的 TikHub 那一路:至少一个平台,要用的几个工具都落在一条可用连接上(见 templates/analysis.tikhub_status)。
 #: 三个模板用的工具不同,所以是三个键。
 TIKHUB_ACCOUNT = "tikhub_account"
 TIKHUB_VIDEO = "tikhub_video"

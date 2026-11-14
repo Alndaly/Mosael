@@ -32,7 +32,7 @@ from app.domain.workflows.engine import check_runnable
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_ops import GRAPH_OP_KINDS, apply_graph_ops
 from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision, attest_revision
-from app.domain.workflows.templates import built_in_template_graph, current_template_versions
+from app.domain.workflows.templates.catalog import built_in_template_graph, current_template_versions
 
 
 

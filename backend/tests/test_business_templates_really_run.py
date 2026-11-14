@@ -31,9 +31,9 @@ from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import validate_graph, with_run_params
 from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_full_video import full_video_generation_graph
-from app.domain.workflows.templates_business import (
+from app.domain.workflows.templates.model_choice import ModelChoice
+from app.domain.workflows.templates.full_video import full_video_generation_graph
+from app.domain.workflows.templates.business import (
     DUCKED_SOURCE_GAIN,
     fabric_lookbook_graph,
     footage_montage_graph,
@@ -1234,7 +1234,7 @@ class Test克隆引擎没装:
     @pytest.mark.parametrize("template_id", ["full_video_generation", "footage_montage", "translated_dub"])
     def test_前置检查说缺_建出来的图里也不填音色(self, monkeypatch, template_id: str) -> None:
         from app.core.db import SessionLocal
-        from app.domain.workflows.templates import requirement_statuses
+        from app.domain.workflows.templates.catalog import requirement_statuses
         from tests.util import make_voice, user_id
 
         client, ws = _template_client()
@@ -1267,7 +1267,7 @@ class Test克隆引擎没装:
         assert voice["config"]["engine"] == "builtin:edge"
 
     def test_带货口播的卡片说清楚_有克隆音色优先用_没有就用免费的_Edge_音色(self) -> None:
-        from app.domain.workflows.templates import TEMPLATE_CATALOG
+        from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG
 
         card = next(one for one in TEMPLATE_CATALOG if one["id"] == "product_pitch_short")
         voice = next(one for one in card["requires"] if one["check"] == "cloned_voice")
@@ -1316,7 +1316,7 @@ class Test带货口播动起来_建图与运行前:
     @pytest.mark.parametrize("template_id", ["product_pitch_short", "product_pitch_presenter"])
     def test_有能从首帧出片的视频模型就动起来_没有就是静图_卡片的可选项同一个判据(self, template_id: str) -> None:
         from app.core.db import SessionLocal
-        from app.domain.workflows.templates import requirement_status
+        from app.domain.workflows.templates.catalog import requirement_status
         from tests.util import add_provider, user_id
 
         client, ws = _template_client()
@@ -1341,7 +1341,7 @@ class Test带货口播动起来_建图与运行前:
         """万相 wan2.7-r2v 只收 5 张参考:带货口播每拍只交一张画面,它挑得中;整片一镜要一整组,它挑不中。
         卡片说「齐了」和建图时挑不挑得中必须是同一个门槛 —— 此前卡片按整组判,说缺,建出来的图却带着动起来那一步。"""
         from app.core.db import SessionLocal
-        from app.domain.workflows.templates import requirement_status
+        from app.domain.workflows.templates.catalog import requirement_status
         from tests.util import add_provider, user_id
 
         client, ws = _template_client()

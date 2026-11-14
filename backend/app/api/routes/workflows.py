@@ -59,7 +59,7 @@ from app.domain.workflows.revisions import (
     restore_workflow_revision,
     with_vouchers,
 )
-from app.domain.workflows.templates import (
+from app.domain.workflows.templates.catalog import (
     built_in_template_graph,
     TEMPLATE_CATALOG,
     current_template_versions,

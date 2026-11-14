@@ -44,7 +44,7 @@ from app.domain.workflows.graph_rules import BRANCHING_NODE_TYPES
 from app.domain.workflows.graph_upgrade import drawn_control_edges_come_back
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.revisions import commit_graph_revision, graph_digest
-from app.domain.workflows.templates import TEMPLATE_CATALOG, blank_template_graphs
+from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG, blank_template_graphs
 from tests.util import fresh_client
 
 TEMPLATE_IDS = [card["id"] for card in TEMPLATE_CATALOG]
@@ -57,12 +57,12 @@ FOLDED_ERA_IDS = [template_id for template_id in TEMPLATE_IDS if template_id not
 #: 模板建图函数最后一步都过 normalize_graph;把它换成原样交回,拿到的就是作者画的那一张
 #: (和 tests/test_drawn_control_edges_are_never_folded.py 取原图同一条路)。
 _TEMPLATE_MODULES = (
-    "templates_full_video",
-    "templates_business",
-    "templates_analysis",
-    "templates_cleanup",
-    "templates_dub",
-    "templates_shots",
+    "templates.full_video",
+    "templates.business",
+    "templates.analysis",
+    "templates.cleanup",
+    "templates.dub",
+    "templates.shots",
 )
 
 

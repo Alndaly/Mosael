@@ -3322,7 +3322,7 @@ def list_workflow_templates() -> list[dict[str, Any]]:
     its stages and what it needs (models, engines). E.g. series_setup builds a series' episodes, characters with
     voices and locations into the asset library; full_video_generation shoots one episode or scene from a topic."""
     from app.core.i18n import get_current_locale
-    from app.domain.workflows.templates import TEMPLATE_CATALOG
+    from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG
     from mosael_formats.i18n import pick_text
 
     locale = get_current_locale()

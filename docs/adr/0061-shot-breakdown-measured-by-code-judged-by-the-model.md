@@ -91,7 +91,7 @@ Proposed — 2026-10-14。方向由维护者提(「优化当前 AI Studio 视频
 - `frames.py`:每镜 15% / 85% 两帧;联系表用 PIL 拼(每格左上角压 `S03 0:12.4`),一张最多 25 镜。
   **不用 ffmpeg 的 drawtext**:那要 libfreetype,精简版 ffmpeg 没有(见 media_tools 的 ffmpeg-full)。
 - `vocab.py`:五张封闭词表,和 reelbench 同名同义;运镜带「实测档」(strong / subtle / still)。
-  **不复用**故事板那套(`templates_schemas.SHOT_SIZES`):那是「要怎么拍」给生成模型的词,这是「拍成了什么」
+  **不复用**故事板那套(`templates/schemas.SHOT_SIZES`):那是「要怎么拍」给生成模型的词,这是「拍成了什么」
   拿来统计的词,两边各自演进,耦在一起改一边坏一边。
 - `describe.py`:一批 ≤ 25 镜一次视觉调用(A、B 两张联系表 + 每镜的时间、实测动静、分到的台词)。
   回来之后**代码对账**:表外的词清空并记一条提示;strong 运镜而实测 < 1.5(且镜长 ≥ 1 秒)→ 去掉那个运镜、

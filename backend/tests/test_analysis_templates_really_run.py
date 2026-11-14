@@ -35,9 +35,9 @@ from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import validate_graph, with_run_params
 from app.domain.workflows.executors import registry as executors_registry
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates import requirement_statuses
-from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_analysis import (
+from app.domain.workflows.templates.catalog import requirement_statuses
+from app.domain.workflows.templates.model_choice import ModelChoice
+from app.domain.workflows.templates.analysis import (
     TIKHUB_CALLS,
     TIKHUB_PLUGIN,
     account_analysis_graph,
@@ -466,7 +466,7 @@ class Test爆款拆解真跑:
 
     def test_读页面脚本的B站接口那一支_带回视频数据(self) -> None:
         """脚本在浏览器里跑、这里跑不了它 —— 至少钉住接口那一支交回的值里有 view 接口的视频数据。"""
-        from app.domain.workflows.templates_analysis import _READ_PAGE_SCRIPT
+        from app.domain.workflows.templates.analysis import _READ_PAGE_SCRIPT
 
         api_return = _READ_PAGE_SCRIPT[_READ_PAGE_SCRIPT.index('mode: "api"') - 200:_READ_PAGE_SCRIPT.index('mode: "api"') + 300]
         assert "video" in api_return, api_return
@@ -648,7 +648,7 @@ class Test前置检查:
 
     def test_取评论的两张_内嵌浏览器那一条说的是实情_B站不登录只给前3条(self) -> None:
         """此前写着「B站不用登录」。实测(2026-10):未登录时 B 站的评论接口(连网页自己用的那个)只给 3 条一级评论。"""
-        from app.domain.workflows.templates_analysis import ANALYSIS_TEMPLATE_CATALOG
+        from app.domain.workflows.templates.analysis import ANALYSIS_TEMPLATE_CATALOG
 
         for card in ANALYSIS_TEMPLATE_CATALOG:
             if card["id"] == "account_analysis":

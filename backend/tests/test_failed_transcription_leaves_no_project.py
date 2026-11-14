@@ -15,9 +15,9 @@ from app.db.models import Asset, Project, Workflow
 from app.domain.jobs import create_job
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates_cleanup import transcript_video_cleanup_graph
-from app.domain.workflows.templates_dub import translated_dub_graph
-from app.domain.workflows.templates_models import ModelChoice
+from app.domain.workflows.templates.cleanup import transcript_video_cleanup_graph
+from app.domain.workflows.templates.dub import translated_dub_graph
+from app.domain.workflows.templates.model_choice import ModelChoice
 from tests.util import fresh_client
 
 

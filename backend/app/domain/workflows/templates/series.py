@@ -18,9 +18,10 @@ from app.ai.providers import VoiceCatalogContext, engine_voices, speech_engines
 from app.domain.voices.speech import EDGE_ENGINE
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_full_video import LOCATION_DESIGN_SHEET_PROMPT, LOCATION_SHEET_ROLE, TURNAROUND_PROMPT
-from app.domain.workflows.templates_models import ModelChoice, image_plan_for
-from app.domain.workflows.templates_schemas import object_schema
+from app.domain.entities.catalog import LOCATION_SHEET_ROLE
+from app.domain.workflows.templates.asset_prompts import LOCATION_DESIGN_SHEET_PROMPT, TURNAROUND_PROMPT
+from app.domain.workflows.templates.model_choice import ModelChoice, image_plan_for
+from app.domain.workflows.templates.schemas import object_schema
 
 SERIES_SETUP = "series_setup"
 

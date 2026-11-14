@@ -19,8 +19,8 @@ from app.domain.workflows.engine import execute_graph
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors import registry, subjobs
 from app.domain.workflows.graph_rules import validate_graph
-from app.domain.workflows.templates_full_video import full_video_generation_graph
-from app.domain.workflows.templates_models import ModelChoice, video_plan_for
+from app.domain.workflows.templates.full_video import full_video_generation_graph
+from app.domain.workflows.templates.model_choice import ModelChoice, video_plan_for
 from app.media.paths import resolve_key
 from app.media.probe import probe_media
 from tests.util import fresh_client

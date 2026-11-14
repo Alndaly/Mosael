@@ -9,11 +9,11 @@ import pytest
 
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.graph_rules import validate_graph, with_run_params
-from app.domain.workflows.templates import built_in_template_graph
-from app.domain.workflows.templates_models import ModelChoice
-from app.domain.workflows.templates_full_video import full_video_generation_graph
-from app.domain.workflows.templates_dub import translated_dub_graph
-from app.domain.workflows.templates_cleanup import transcript_video_cleanup_graph
+from app.domain.workflows.templates.catalog import built_in_template_graph
+from app.domain.workflows.templates.model_choice import ModelChoice
+from app.domain.workflows.templates.full_video import full_video_generation_graph
+from app.domain.workflows.templates.dub import translated_dub_graph
+from app.domain.workflows.templates.cleanup import transcript_video_cleanup_graph
 from app.domain.workflows.normalization import canonicalize_data_bindings
 
 REF_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
@@ -253,9 +253,9 @@ class Test分镜能选的路跟着视频模型走:
 def test_布景的形状就是_3D_场景的数据格式() -> None:
     """布景 LLM 的输出直接交给 scene_create 按 SceneContent 校验 —— 两边的字段必须对得上。"""
     from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
-    from app.domain.workflows.templates_schemas import _set_design_schema
+    from app.domain.workflows.templates.schemas import set_design_schema
 
-    schema = _set_design_schema()
+    schema = set_design_schema()
     assert set(schema["properties"]) <= set(SceneContent.model_fields)
     obj = schema["properties"]["objects"]["items"]["properties"]
     assert set(obj) <= set(SceneObject.model_fields)
@@ -408,7 +408,7 @@ class Test示范工作流要挑得动的模型:
         return row
 
     def test_判断规则(self) -> None:
-        from app.domain.workflows.templates_models import (
+        from app.domain.workflows.templates.model_choice import (
             REFERENCE_IMAGES_NEEDED,
             _can_shoot_from_references,
             _can_take_references,
@@ -423,7 +423,7 @@ class Test示范工作流要挑得动的模型:
     def test_默认图像模型只会文生图时换一个能带参考的(self) -> None:
         from app.core.db import SessionLocal
         from app.domain.providers.defaults import set_default
-        from app.domain.workflows.templates_models import _reference_image_model
+        from app.domain.workflows.templates.model_choice import _reference_image_model
         from tests.util import fresh_client
 
         fresh_client()
@@ -436,7 +436,7 @@ class Test示范工作流要挑得动的模型:
 
     def test_一个合用的都没有就留空(self) -> None:
         from app.core.db import SessionLocal
-        from app.domain.workflows.templates_models import _reference_image_model
+        from app.domain.workflows.templates.model_choice import _reference_image_model
         from tests.util import fresh_client
 
         fresh_client()
@@ -451,7 +451,7 @@ class Test示范工作流要挑得动的模型:
         明明够用却被判缺。"""
         from app.core.db import SessionLocal
         from app.domain.providers.defaults import set_default
-        from app.domain.workflows.templates import requirement_statuses
+        from app.domain.workflows.templates.catalog import requirement_statuses
         from tests.util import fresh_client
 
         fresh_client()
@@ -470,7 +470,7 @@ class Test示范工作流要挑得动的模型:
         """此前只看参数键:说话照片、改口型、改视频也收首帧 / 参考素材,被当成镜头模型;参考那条路一镜交 8 张,
         可灵 kling-v3-omni 只收 4 张照样算能走;万相 wan2.7-r2v 要求参考图或参考视频至少一种,首帧那条路注定被拒,
         照样算能走首帧。"""
-        from app.domain.workflows.templates_models import _can_shoot_from_references, video_plan_for
+        from app.domain.workflows.templates.model_choice import _can_shoot_from_references, video_plan_for
 
         for vendor, model in (("alibaba", "wan2.2-s2v"), ("alibaba", "videoretalk"), ("alibaba", "wan2.7-videoedit")):
             assert not _can_shoot_from_references(None, ModelChoice(provider=vendor, model=model)), model
@@ -482,7 +482,7 @@ class Test示范工作流要挑得动的模型:
         """Evolink 的 gpt-image-1.5 尺寸表是 "1:1"、"16:9" 这种画幅比,此前按 x 拆开转整数,建图 500。"""
         from app.core.db import SessionLocal
         from app.domain.providers.defaults import set_default
-        from app.domain.workflows.templates_models import image_plan_for
+        from app.domain.workflows.templates.model_choice import image_plan_for
         from tests.util import fresh_client
 
         assert image_plan_for(None, ModelChoice(provider="evolink", model="gpt-image-1.5")).frame_sizes.keys() <= {"16:9", "9:16", "1:1"}
@@ -568,8 +568,8 @@ class Test分镜写了口播就要真的配上:
     def test_谁说话就用谁的嗓子_旁白和没带音色的角色用开始节点那一把(self) -> None:
         """漫剧几个角色对话,此前所有台词都是同一个旁白在念。分镜每镜写明 speaker,按名字到资产库里找这个人物,
         它带着音色就用它的;旁白(speaker 空)、没带音色的角色走开始节点那一把。"""
-        from app.domain.workflows.templates_schemas import _storyboard_schema
-        from app.domain.workflows.templates_models import VideoPlan
+        from app.domain.workflows.templates.schemas import _storyboard_schema
+        from app.domain.workflows.templates.model_choice import VideoPlan
 
         generate, _ = self._loops()
         nodes = {n["id"]: n for n in generate["body"]["nodes"]}
@@ -600,10 +600,10 @@ def test_模板里的节点名跟着界面语言走() -> None:
     此前这些名字是写死的中文:英文用户从模板建一条流程,画布上一排中文节点。
     """
     from app.core.db import SessionLocal
-    from app.domain.workflows.templates import built_in_template_graph
-    from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION
-    from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP
-    from app.domain.workflows.templates_dub import TRANSLATED_DUB
+    from app.domain.workflows.templates.catalog import built_in_template_graph
+    from app.domain.workflows.templates.full_video import FULL_VIDEO_GENERATION
+    from app.domain.workflows.templates.cleanup import TRANSCRIPT_VIDEO_CLEANUP
+    from app.domain.workflows.templates.dub import TRANSLATED_DUB
     from tests.util import fresh_client
 
     fresh_client()
@@ -636,11 +636,11 @@ def test_每个模板节点都写了中英两份名字() -> None:
     import ast
     import pathlib
 
-    workflows = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "workflows"
-    #: **每一份模板文件都要扫。** 只扫 templates.py 的话,新加的那个文件天生免检 ——
-    #: 而"漏一种语言"恰恰是新写模板时最容易犯的。所以按 templates*.py 找,而不是列名字。
-    sources = sorted(workflows.glob("templates*.py"))
-    assert workflows / "templates_full_video.py" in sources and workflows / "templates_business.py" in sources
+    templates = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "workflows" / "templates"
+    #: **每一份模板文件都要扫。** 只扫目录(catalog)的话,新加的那个文件天生免检 ——
+    #: 而"漏一种语言"恰恰是新写模板时最容易犯的。所以把 templates/ 包里的文件全扫一遍,而不是列名字。
+    sources = sorted(templates.glob("*.py"))
+    assert templates / "full_video.py" in sources and templates / "business.py" in sources
     missing = []
     for node in ast.walk(ast.parse("\n".join(one.read_text(encoding="utf-8") for one in sources))):
         if not isinstance(node, ast.Dict):
@@ -664,9 +664,9 @@ def test_每个模板节点都写了中英两份名字() -> None:
 # 起点是「用户手里已有的东西」的那四个模板
 # --------------------------------------------------------------------------------------
 
-from app.domain.workflows.templates import TEMPLATE_CATALOG  # noqa: E402
-from app.domain.workflows.templates_schemas import MAX_SHOTS_CEILING
-from app.domain.workflows.templates_business import (  # noqa: E402
+from app.domain.workflows.templates.catalog import TEMPLATE_CATALOG  # noqa: E402
+from app.domain.workflows.templates.schemas import MAX_SHOTS_CEILING
+from app.domain.workflows.templates.business import (  # noqa: E402
     BUSINESS_TEMPLATE_CATALOG,
     fabric_lookbook_graph,
     footage_montage_graph,
@@ -887,7 +887,7 @@ def test_带货口播_没有视频模型时和此前一样每拍一张静图(pre
 
 
 def test_带货口播_动起来_第七版关掉视频自己的声音_两条卡片都说清要什么_花多少() -> None:
-    from app.domain.workflows.templates import current_template_versions
+    from app.domain.workflows.templates.catalog import current_template_versions
 
     versions = current_template_versions()
     assert versions["product_pitch_short"] == versions["product_pitch_presenter"] == 10
@@ -902,7 +902,7 @@ def test_带货口播_动起来_第七版关掉视频自己的声音_两条卡�
 
 @pytest.mark.parametrize("template_id", ["product_pitch_short", "product_pitch_presenter"])
 def test_带货口播的官网副本带着动起来那一步_模型留空由导入的人挑(template_id: str) -> None:
-    from app.domain.workflows.templates import blank_template_graphs
+    from app.domain.workflows.templates.catalog import blank_template_graphs
 
     graph = blank_template_graphs("zh")[template_id]
     assert validate_graph(graph, require_config=False) == []
@@ -930,7 +930,7 @@ def test_面料规格页不许编数字() -> None:
 def test_模板卡片和图一一对应() -> None:
     """卡片是用户**照着判断自己能不能跑**的那份东西。有卡片没图 = 点了报错;
     有图没卡片 = 这个模板根本没人找得到。"""
-    from app.domain.workflows.templates_business import (
+    from app.domain.workflows.templates.business import (
         FABRIC_LOOKBOOK,
         HIGHLIGHT_SHORTS,
         PRODUCT_ON_MODEL,
@@ -939,14 +939,14 @@ def test_模板卡片和图一一对应() -> None:
         PRODUCT_PITCH_SHORT,
         TALKING_SCRIPT_VIDEO,
     )
-    from app.domain.workflows.templates_full_video import FULL_VIDEO_GENERATION
-    from app.domain.workflows.templates_cleanup import TRANSCRIPT_VIDEO_CLEANUP
-    from app.domain.workflows.templates_dub import TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC
-    from app.domain.workflows.templates_analysis import ACCOUNT_ANALYSIS, COMMENT_INSIGHTS, VIRAL_VIDEO_BREAKDOWN
-    from app.domain.workflows.templates_long_take import LONG_TAKE_VIDEO
-    from app.domain.workflows.templates_long_talk import LONG_TALK_VIDEO
-    from app.domain.workflows.templates_shots import REFERENCE_VIDEO_SHOTS
-    from app.domain.workflows.templates_series import SERIES_SETUP
+    from app.domain.workflows.templates.full_video import FULL_VIDEO_GENERATION
+    from app.domain.workflows.templates.cleanup import TRANSCRIPT_VIDEO_CLEANUP
+    from app.domain.workflows.templates.dub import TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC
+    from app.domain.workflows.templates.analysis import ACCOUNT_ANALYSIS, COMMENT_INSIGHTS, VIRAL_VIDEO_BREAKDOWN
+    from app.domain.workflows.templates.long_take import LONG_TAKE_VIDEO
+    from app.domain.workflows.templates.long_talk import LONG_TALK_VIDEO
+    from app.domain.workflows.templates.shots import REFERENCE_VIDEO_SHOTS
+    from app.domain.workflows.templates.series import SERIES_SETUP
 
     known = {
         FULL_VIDEO_GENERATION, LONG_TAKE_VIDEO, LONG_TALK_VIDEO, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
@@ -1090,7 +1090,7 @@ def test_稿子到数字人口播_分段配音逐段说话_授权留给跑的人
     """ADR 0028 阶段 3:长稿按说话照片接得住的长度分段;每段一次「让它说话」接上一段的音频,按段的顺序首尾相接;
     字幕用配音的实测时长;授权确认不替用户选。"""
     from app.domain.workflows.graph_rules import validate_graph
-    from app.domain.workflows.templates_business import talking_script_video_graph
+    from app.domain.workflows.templates.business import talking_script_video_graph
 
     graph = talking_script_video_graph(voice_id="v1")
     assert validate_graph(graph, require_config=False) == []
@@ -1111,7 +1111,7 @@ def test_稿子到数字人口播_分段配音逐段说话_授权留给跑的人
 def test_视频翻译改口型_同一张译配图在导出之前多一步对口型_原来那条模板不变() -> None:
     """ADR 0028 阶段 3:改口型接在配音之后、导出之前;前面几步和「视频译配」是同一张图(不另抄一份)。"""
     from app.domain.workflows.graph_rules import validate_graph
-    from app.domain.workflows.templates_dub import translated_dub_graph
+    from app.domain.workflows.templates.dub import translated_dub_graph
 
     plain = translated_dub_graph(voice_id="v1")
     synced = translated_dub_graph(voice_id="v1", lipsync=True)
@@ -1129,7 +1129,7 @@ def test_视频翻译改口型_同一张译配图在导出之前多一步对口�
 def test_数字人出镜带货_开场收尾由资产人物说_每拍用它的嗓子配画外音_顺序是开场各拍收尾() -> None:
     """ADR 0028 阶段 3「带货口播升级」:同一张带货图换掉口播那一段;不出镜的那条不变。"""
     from app.domain.workflows.graph_rules import validate_graph
-    from app.domain.workflows.templates_business import product_pitch_short_graph
+    from app.domain.workflows.templates.business import product_pitch_short_graph
 
     graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)
     assert validate_graph(graph, require_config=False) == []
@@ -1235,9 +1235,9 @@ class Test旧版模板建的图:
 def test_带货口播_有音乐模型时铺一首配乐_没有就不加(presenter: bool) -> None:
     """成片只剩旁白(每一拍的视频静音),维护者说「背景音乐也没了」:有音乐模型时脚本写好就生成一首,
     内容和字幕都铺好之后、导出之前铺上去;没有音乐模型这两步一步都不加。"""
-    from app.domain.workflows.templates_business import product_pitch_short_graph
-    from app.domain.workflows.templates_models import ModelChoice
-    from app.domain.workflows.templates_music import BackgroundMusic
+    from app.domain.workflows.templates.business import product_pitch_short_graph
+    from app.domain.workflows.templates.model_choice import ModelChoice
+    from app.domain.workflows.templates.music import BackgroundMusic
 
     blank = ModelChoice()
     music = BackgroundMusic(ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax-music.json#e2gn2t"))
@@ -1263,7 +1263,7 @@ def test_带货口播_有音乐模型时铺一首配乐_没有就不加(presente
 def test_音乐工作流的曲子描述写进_caption_歌词写纯器乐_时长按要的写() -> None:
     """真跑时 MiniMax Music 表单版的「提示词」接的是 Lyrics:配乐描述写进提示词会被唱出来,caption 还是默认的
     「女声抒情歌」;完整工作流的歌词默认是一段示例说唱、时长 240 秒。按名字认(和 aspect_ratio 同一个约定)。"""
-    from app.domain.workflows.templates_models import INSTRUMENTAL_LYRICS, music_request
+    from app.domain.workflows.templates.model_choice import INSTRUMENTAL_LYRICS, music_request
 
     full = {"parameter_keys": ["seed", "44.caption", "44.lyrics", "44.max_duration"],
             "parameter_schema": {"44.caption": {}, "44.lyrics": {}, "44.max_duration": {}}}
@@ -1279,13 +1279,13 @@ def test_音乐工作流的曲子描述写进_caption_歌词写纯器乐_时长�
 def test_会唱的音乐模型_先拆掉人声再铺伴奏() -> None:
     """真跑时 MiniMax Music 3 的歌词写成空 / [Inst] / [Instrumental] / 段落标记,拆出来人声那一轨都不小:写法管不住,
     生成之后先拆一遍人声,铺的是伴奏那一轨。"""
-    from app.domain.workflows.templates_business import product_pitch_short_graph
-    from app.domain.workflows.templates_models import ModelChoice, music_may_sing
+    from app.domain.workflows.templates.business import product_pitch_short_graph
+    from app.domain.workflows.templates.model_choice import ModelChoice, music_may_sing
 
     assert music_may_sing({"parameter_keys": ["44.caption", "44.lyrics"]})
     assert not music_may_sing({"parameter_keys": ["instrumental", "lyrics"], "modes": ["text-to-music"]})
 
-    from app.domain.workflows.templates_music import BackgroundMusic
+    from app.domain.workflows.templates.music import BackgroundMusic
 
     blank = ModelChoice()
     music = BackgroundMusic(ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax+music3.json"),
@@ -1301,7 +1301,7 @@ def test_会唱的音乐模型_先拆掉人声再铺伴奏() -> None:
 
 def test_整片_叙事脚本和分镜都看得到主题原文_给了逐镜剧本就照它() -> None:
     """漫剧第一集第 1 场:主题是一份逐镜剧本,写分镜那次对话只看得到创意简报和叙事脚本的转述,10 句旁白只有第 1 句是原文。"""
-    from app.domain.workflows.templates_full_video import SCRIPT_GIVEN_RULE
+    from app.domain.workflows.templates.full_video import SCRIPT_GIVEN_RULE
 
     graph = _full_video()
     for node_id in ("narrative_script", "storyboard"):
@@ -1312,11 +1312,11 @@ def test_整片_叙事脚本和分镜都看得到主题原文_给了逐镜剧本
 
 
 def test_整片_有音乐模型时铺一首配乐_字幕之后导出之前() -> None:
-    """漫剧一场戏只有对白和旁白,两句之间是空白。和带货口播同一组节点(templates_music):创意简报定下就生成,
+    """漫剧一场戏只有对白和旁白,两句之间是空白。和带货口播同一组节点(templates/music):创意简报定下就生成,
     字幕铺好之后、导出之前铺;没有音乐模型就不加。"""
-    from app.domain.workflows.templates_full_video import full_video_generation_graph
-    from app.domain.workflows.templates_models import ModelChoice
-    from app.domain.workflows.templates_music import BackgroundMusic
+    from app.domain.workflows.templates.full_video import full_video_generation_graph
+    from app.domain.workflows.templates.model_choice import ModelChoice
+    from app.domain.workflows.templates.music import BackgroundMusic
 
     blank = ModelChoice()
     music = BackgroundMusic(ModelChoice(profile_id="p", provider="plugin:dev.mosael.comfyui", model="minimax+music3.json"),
