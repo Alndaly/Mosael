@@ -32,7 +32,7 @@ from app.domain.workflows.templates.schemas import (
 FULL_VIDEO_GENERATION = "full_video_generation"
 #: 同一张图的「漫剧」形态(`drama=True`):对白推动,角色台词的镜头用说话照片模型让关键帧开口(见 full_video_generation_graph)。
 DRAMA_EPISODE = "drama_episode"
-DRAMA_EPISODE_VERSION = 5
+DRAMA_EPISODE_VERSION = 6
 
 #: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
 RUNTIME_PROMPT_HEADROOM = 600
@@ -424,16 +424,19 @@ JSON Schema 的对象。"""
     #: 往前挪,第一张的意思也不变 —— 白模排第三时那样一挪,模型把地点和白模拼成一张上下两截的图。
     #: **不再在后面挂全部角色和场景**:没有主角的镜头空出一位,被全部三视图里的第一张补上,剧本写着「空无一人」的长街
     #: 画出四个灰袍人(ADR 0097 修订三)。主角、地点在库里按名字认得出来,用不着那一串兜底。
+    #: **图例只在这一镜有主角时才拼进来**(`blockout_cast`,挂在「首帧里有主角吗」的真出口上;空镜时它被跳过,引用出来是
+    #: 空串)。此前每一镜都写「照彩色人偶站的位置画、人偶是替身」再列全片的颜色图例:Qwen-Image 这类照字面画的模型在
+    #: 空镜里把图例里的几个人偶真的画了出来(灯铺顶棚那一镜冒出红绿蓝三个人),去掉 mannequin 这个词、只留图例也还会补上人。
+    #: 图例本身也不再用 mannequin 这个词(见视觉圣经的 `blockout_legend`)。
     frame_prompt_tail = (
         " Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, "
-        "lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render "
-        "them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main "
-        "character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design "
-        "sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the "
-        "framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture "
-        "or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a "
-        "collage of the references. Only the characters described above appear; if none are described, the place is empty "
-        "of people. {{input.style}}"
+        "lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come the "
+        "main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's "
+        "design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, "
+        "never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real "
+        "architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, "
+        "never a collage of the references. Only the characters described above appear; if none are described, the place "
+        "is empty of people. {{input.style}}"
     )
 
     #: 这一镜交给下游的是哪个节点的素材:接得下去的模型是接好的那一条。
@@ -575,6 +578,16 @@ JSON Schema 的对象。"""
                 "config": {"left": "{{loop.item.first_frame_subject}}", "op": "not_empty"},
             },
             {
+                "id": "blockout_cast",
+                "type": "template",
+                "name": {"zh": "白模里的人偶是谁", "en": "Who the blockout's figures are"},
+                "position": {"x": 390, "y": -340},
+                "config": {"template": (
+                    "A coloured humanoid shape in image 1 marks where a character stands ({{input.legend}}) — draw that "
+                    "real person there, never the coloured shape."
+                )},
+            },
+            {
                 "id": "find_subject",
                 "type": "entity_get",
                 "name": {"zh": "在资产库里找首帧主角", "en": "Look the first frame's main character up in the library"},
@@ -654,6 +667,7 @@ JSON Schema 的对象。"""
             {"id": "shot_blockout_mode", "source": "render_blockout", "target": "is_keyframes"},
             #: 首帧引用这两步(引用即依赖):旁白镜、没写地点的镜被跳过时读到空串,参考图那一行自然消失。
             {"id": "shot_subject_find", "source": "has_subject", "target": "find_subject", "source_handle": "true"},
+            {"id": "shot_subject_cast", "source": "has_subject", "target": "blockout_cast", "source_handle": "true"},
             {"id": "shot_location_find", "source": "has_location", "target": "find_location", "source_handle": "true"},
             {"id": "shot_mode_first", "source": "is_keyframes", "target": "paint_first_frame", "source_handle": "true"},
             {"id": "shot_first_needs_last", "source": "paint_first_frame", "target": "needs_last_frame"},
@@ -1336,7 +1350,7 @@ JSON Schema 的对象。"""
         #: 漫剧 v3:对白由视频模型出片时一起念(不再另配 TTS + 说话照片),字幕按画面片段上屏。
         #: v26(漫剧 v2):布景台要和分镜一样多(json_match_items);接时间线之前先清空(重做一轮不再把镜头接两遍)。
         "meta": {"template_id": DRAMA_EPISODE if drama else FULL_VIDEO_GENERATION,
-                 "template_version": DRAMA_EPISODE_VERSION if drama else 27, "source": "official"},
+                 "template_version": DRAMA_EPISODE_VERSION if drama else 28, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

@@ -89,6 +89,19 @@
       }
     },
     {
+      "file": "krea2_keyframe_two_stage.json",
+      "role": "keyframe_two_stage",
+      "category": "image",
+      "name": {
+        "zh": "Krea2 两段式关键帧 · 白模定构图 + 人物精绘",
+        "en": "Krea2 two-stage keyframe · blockout layout + character finish"
+      },
+      "description": {
+        "zh": "第一段 Qwen-Image 2.1 照白模出构图草图(机位、站位、陈设),第二段 Krea2 identity edit 以草图为底、照人物三视图精绘长相;空镜(只有白模和场景两张)直接用草图。全景镜头不会把设计稿和三视图拼成四宫格。「从主题到完整视频」「漫剧单集」逐镜画首尾帧推荐用它。",
+        "en": "Stage one, Qwen-Image 2.1, drafts the layout from the blockout (camera, staging, set); stage two, Krea2 identity edit, repaints the draft with the character's face and outfit from the turnaround. Shots without a character (only blockout and location) keep the draft. Wide shots no longer come out as a four-panel collage of the design sheet and turnaround. Recommended keyframe model for “Topic to finished video” and “Drama episode”."
+      }
+    },
+    {
       "file": "flux3_keyframe_blockout.json",
       "role": "keyframe_blockout",
       "category": "image",
@@ -97,8 +110,8 @@
         "en": "FLUX.3 keyframe · blockout camera + character + scene"
       },
       "description": {
-        "zh": "第一张必须是这一镜的灰色白模:机位、构图、人站在哪照它来,画出来是成片质感、不留灰色人偶;后面两张可选,是人物三视图和场景设定图,管长相服装和陈设。「从主题到完整视频」逐镜画首尾帧推荐用它。",
-        "en": "The first image must be the shot's grey blockout: camera, framing and staging follow it while the picture comes out finished, with no grey mannequins left. The next two are optional, a character turnaround and a location concept image for looks, outfit and set. The recommended keyframe model for “Topic to finished video”."
+        "zh": "第一张必须是这一镜的灰色白模:机位、构图、人站在哪照它来,画出来是成片质感、不留灰色人偶;后面两张可选,是人物三视图和场景设定图,管长相服装和陈设。只装得下 FLUX.3 时用它;全景镜头偶尔会把参考图拼成四宫格,推荐换上面的 Krea2 两段式。",
+        "en": "The first image must be the shot's grey blockout: camera, framing and staging follow it while the picture comes out finished, with no grey mannequins left. The next two are optional, a character turnaround and a location concept image for looks, outfit and set. Use it when only FLUX.3 fits; wide shots sometimes collage the references, so the Krea2 two-stage one above is recommended."
       }
     },
     {

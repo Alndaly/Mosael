@@ -372,6 +372,7 @@ minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
 minimax_h3_dialogue_voice.json
 minimax_h3_image_t2i.json
+krea2_keyframe_two_stage.json
 flux3_keyframe_blockout.json
 flux3_keyframe_scene_character.json
 moss_keyframe_scene_character.json
@@ -382,6 +383,12 @@ anchored at frame 0 by `MiniMaxH3AddGuide` (the composition holds), and the char
 `ref_audios`; the prompt asks the character to speak "in the voice of `<Audio 1>`, with the emotion of this shot". The
 reference fixes the voice and H3 performs the delivery from the picture — the same character sounds the same across
 shots without a flat dub (ADR 0101, revision 2).
+
+The two "H3 digital human" examples (`minimax_h3_talk_open.json` / `minimax_h3_talk_continue.json`, 1.29.0) drop the
+second latent-upscale pass too and render one 12-step pass straight at 1344×768: the second pass's
+`MiniMaxH3LatentUpscaleCombined` left a regular grid on smooth areas such as skin and walls. The continuation moves the previous
+segment's latent guide (`ApplyLatentGuide`, 39 frames of context) from the second pass into this one, keeps the first pass's
+decode-and-scale `AddGuide`, and saves this pass's latent (ADR 0092 revision).
 
 Each entry has a name and a one-line description. It first checks, without writing, which files already exist and which
 node types and model files each one needs. Cards are laid out in a grid and each has its own Install button; installing
@@ -560,6 +567,28 @@ disagreed (spotted by the maintainer on scene 1).
   picture receding into depth; the medium back shot with blockout + grey-robed passer-by + stone-bridge art follows the
   blockout's back view, bridge on the left and staging, with no grey mannequins left.
 - Same models as the FLUX.3 example above.
+
+## Keyframe example: Krea2 two-stage (1.29.0, recommended for "Topic to finished video" and "Drama episode")
+
+The FLUX.3 one takes blockout, turnaround and design sheet in one go, and on **wide shots** it sometimes hands the turnaround
+and the 2×2 design sheet back as a four-panel collage (measured on shot 16 of a drama's second scene).
+`krea2_keyframe_two_stage.json` "Krea2 two-stage keyframe" splits it into two stages, one job each:
+
+- **Stage one · layout**: Qwen-Image 2.1 edit (`TextEncodeQwenImage21`, three reference images, 25 steps, cfg 1) drafts the
+  shot from the blockout — camera, staging and set from the blockout, materials and light from the design sheet. The host's
+  prompt goes into this box ("Prompt · layout draft").
+- **Stage two · character finish**: Krea2 identity edit (`Krea2EditModelPatch`, the draft `aligned` to hold the layout, the
+  turnaround beside it as the character reference, 8 steps) repaints the draft with the face, hair and outfit from the
+  turnaround. Its instruction is fixed and comes in through `StringConcatenate`, so the plugin doesn't take it for a prompt box.
+- **No finish without a character**: the host passes blockout → main character → location and drops missing ones, so only
+  when **all three** loaders have an image is the second one a person; with two (no character, or no location) a lazy
+  `ComfySwitchNode` returns the draft. Krea2 adds people to empty shots.
+- Measured (5090, the same blockout / turnaround / design sheet, same seed): shot 16 comes out as one picture with the boy on
+  the back stair; the close-up matches the turnaround; about 19 s for an empty shot, 38 s with a character.
+- Models (official file names with download links): `qwen_image_2.1_bf16`, `qwen3vl_8b_int8_convrot`,
+  `qwen_image_2.1_vae_bf16` (Comfy-Org/Qwen-Image-2.1); `krea2_turbo_int8_convrot`, `qwen3vl_4b_bf16`, `qwen_image_vae`
+  (Comfy-Org/Krea-2); LoRA `krea2_identity_edit_v1_2` (conradlocke/krea2-identity-edit). If your files sit in a subfolder,
+  pick them again in the workflow.
 
 ## Dynamic combos expand by the chosen option (1.26.0)
 

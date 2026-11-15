@@ -736,6 +736,7 @@
     1,
     0,
     24.0,
+    false,
     -1
    ],
    "title": "存下这一段的潜空间 / Keep this latent"

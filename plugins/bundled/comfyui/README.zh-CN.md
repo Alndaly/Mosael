@@ -284,6 +284,7 @@ minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
 minimax_h3_dialogue_voice.json
 minimax_h3_image_t2i.json
+krea2_keyframe_two_stage.json
 flux3_keyframe_blockout.json
 flux3_keyframe_scene_character.json
 moss_keyframe_scene_character.json
@@ -292,6 +293,8 @@ moss_keyframe_scene_character.json
 `minimax_h3_dialogue_voice.json`(1.28.0)是漫剧的对白镜头:这一镜的关键帧既当参考图、又被 `MiniMaxH3AddGuide` 钉在
 第 0 帧(构图不跑),角色的参考嗓音接在 `ref_audios` 上;提示词让角色「用 `<Audio 1>` 的音色、按这一镜的情绪」念台词。
 嗓音由参考定、语气由 H3 照画面演 —— 同一个角色几镜之间嗓音一致,又不是平的配音(ADR 0101 修订二)。
+
+「H3 数字人」两张(`minimax_h3_talk_open.json` / `minimax_h3_talk_continue.json`,1.29.0)也去掉了第二遍潜空间放大,单遍 12 步、1344×768 直出:第二遍的 `MiniMaxH3LatentUpscaleCombined` 在皮肤、墙面这类平滑区域留下规则的格纹。续写把上一段的潜空间引导(`ApplyLatentGuide`,39 帧上文)从第二遍挪进这一遍,第一遍原有的解码缩小 + `AddGuide` 照旧,存下的就是这一遍的潜空间(ADR 0092 修订)。
 
 每张都带名字和一句说明;先只读检查哪张已经存在、每张缺哪些节点和模型。卡片按 grid 排列,每张自己有一颗「安装」,
 点哪张就只写哪一张到 `workflows/mosael/examples/`,只新建、不覆盖。节点包和模型仍要在工作流详情里补 —— 卡片会把缺项
@@ -431,6 +434,23 @@ HTTP 404。
 - 实测(5090,第 1 场第 1、3 镜,同一 seed):远景长街只交白模 + 雨夜长街设定图,出一整张、街道朝纵深延伸;背影中景交
   白模 + 灰袍路人三视图 + 石桥设定图,背影、石桥在左、人站的位置都照白模,画面里没有灰色人偶。
 - 模型和上面 FLUX.3 那张相同。
+
+## 关键帧范例:Krea2 两段式(1.29.0,「从主题到完整视频」「漫剧单集」推荐)
+
+FLUX.3 那张一次吃下白模、三视图、设计稿三张图,**全景镜头**偶尔把三视图和 2×2 设计稿原样拼成四宫格交回来
+(实测漫剧第 2 场第 16 镜:上半是设计稿两格、下半是三视图和设计稿一格)。`krea2_keyframe_two_stage.json`「Krea2 两段式关键帧」改成两段,各管一件事:
+
+- **第一段 · 定构图**:Qwen-Image 2.1 编辑(`TextEncodeQwenImage21`,三张参考图,25 步、cfg 1)照白模出一张构图草图 ——
+  机位、站位、陈设照白模,材质和光线照设计稿。宿主的提示词写进这一格(「画面描述 · 构图草图」)。
+- **第二段 · 精绘人物**:Krea2 identity edit(`Krea2EditModelPatch` 草图 `aligned` 钉住构图、三视图放在右边当人物参考,
+  8 步)以草图为底重画,长相、发型、服装照三视图。精绘那一句是固定的,经 `StringConcatenate` 接进来,插件不把它认成提示词格。
+- **空镜不精绘**:宿主按「白模 → 主角 → 地点」交图、缺的不占位,三个读图位**都有图**才说明第二张是人;只有两张时
+  (空镜,或有人没场景)`ComfySwitchNode`(惰性)直接交草图。空镜交给 Krea2 会被添上人。
+- 实测(5090,第 2 场同一组白模 / 三视图 / 设计稿,同一种子):第 16 镜出成一整张、小满在后楼梯上;近景小满和三视图
+  一致;空镜一张约 19 秒、有人约 38 秒。
+- 模型(都写官方文件名、带下载地址):`qwen_image_2.1_bf16`、`qwen3vl_8b_int8_convrot`、`qwen_image_2.1_vae_bf16`
+  (Comfy-Org/Qwen-Image-2.1);`krea2_turbo_int8_convrot`、`qwen3vl_4b_bf16`、`qwen_image_vae`(Comfy-Org/Krea-2);
+  LoRA `krea2_identity_edit_v1_2`(conradlocke/krea2-identity-edit)。本机文件放在子文件夹里的,在工作流里重新选一下。
 
 ## 动态下拉的子输入按选中项展开(1.26.0)
 

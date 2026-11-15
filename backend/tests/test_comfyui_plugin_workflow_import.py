@@ -526,12 +526,12 @@ def test_随插件的官方工作流范例_列出全部和缺项(plugin, comfy) 
 
     assert status["id"] == "official_comfyui_examples"
     assert status["folder"] == "mosael/examples"
-    #: H3 长片 / 数字人四张、H3 对白(角色参考嗓音,漫剧)一张、H3 Image 文生图一张;关键帧三张:白模机位 + 人物 + 场景
-    #: (1.26.1),人物三视图 + 场景图两张(1.26.0)。
+    #: H3 长片 / 数字人四张、H3 对白(角色参考嗓音,漫剧)一张、H3 Image 文生图一张;关键帧四张:Krea2 两段式(1.29.0,
+    #: 推荐)、白模机位 + 人物 + 场景(1.26.1),人物三视图 + 场景图两张(1.26.0)。
     assert [one["file"] for one in status["workflows"]] == [
         "minimax_h3_open.json", "minimax_h3_continue.json", "minimax_h3_talk_open.json", "minimax_h3_talk_continue.json",
         "minimax_h3_dialogue_voice.json", "minimax_h3_image_t2i.json",
-        "flux3_keyframe_blockout.json", "flux3_keyframe_scene_character.json", "moss_keyframe_scene_character.json",
+        "krea2_keyframe_two_stage.json", "flux3_keyframe_blockout.json", "flux3_keyframe_scene_character.json", "moss_keyframe_scene_character.json",
     ]
     assert all(one["path"].startswith("mosael/examples/") and not one["installed"] for one in status["workflows"])
     assert all(one["file"] and one["description"] for one in status["workflows"])
@@ -615,6 +615,45 @@ def test_白模关键帧范例_白模必填且排第一_其余两位可选_都�
     reference = next(n for n in graph["nodes"] if n["type"] == "ReferenceMultiLatent")
     wired = {link[1] for link in graph["links"] if link[3] == reference["id"] and link[5] == "IMAGE"}
     assert wired == {n["id"] for n in loaders}
+
+
+def test_Krea2_两段式关键帧范例_白模排第一_三位都有图才精绘_宿主提示词只写进构图那一格() -> None:
+    """FLUX.3 一次吃三张图,全景镜头偶尔拼成四宫格;两段式先由 Qwen-Image 2.1 照白模出草图,再由 Krea2 照三视图精绘。
+    宿主按「白模 → 主角 → 地点」交图、缺的不占位:第三位有图才说明第二张是人,否则直接交草图(空镜交给 Krea2 会被添上人)。
+    精绘那一句固定,经 StringConcatenate 接进去 —— 插件只把构图那一格认成提示词。"""
+    path = Path(__file__).resolve().parents[2] / "plugins/bundled/comfyui/workflows/examples/krea2_keyframe_two_stage.json"
+    ui = json.loads(path.read_text(encoding="utf-8"))
+    nodes = {node["id"]: node for node in ui["nodes"]}
+    #: link = [id, 上游节点, 上游槽, 下游节点, 下游槽, 类型]
+    into = {(link[3], link[4]): (link[1], link[2]) for link in ui["links"]}
+
+    def upstream(node: dict, name: str) -> tuple[dict, int]:
+        slot = next(i for i, one in enumerate(node["inputs"]) if one["name"] == name)
+        source, out = into[(node["id"], slot)]
+        return nodes[source], out
+
+    loaders = sorted((n for n in ui["nodes"] if n["type"] in ("LoadImage", "Optional Load Image")), key=lambda n: n["id"])
+    assert [n["type"] for n in loaders] == ["LoadImage", "Optional Load Image", "Optional Load Image"]
+    assert loaders[0]["title"].startswith("白模机位")
+
+    switch = next(n for n in ui["nodes"] if n["type"] == "ComfySwitchNode")
+    assert upstream(switch, "switch") == (loaders[2], 2), "第三位有没有图(has_image)决定精不精绘"
+    finished, _ = upstream(switch, "on_true")
+    draft, _ = upstream(switch, "on_false")
+    assert finished["type"] == draft["type"] == "VAEDecode" and finished is not draft
+    save = next(n for n in ui["nodes"] if n["type"] == "SaveImage")
+    assert upstream(save, "images")[0] is switch
+
+    #: 宿主的提示词只写进构图那一格(字面量);精绘那一句从 StringConcatenate 接进去,插件追不到它
+    qwen = next(n for n in ui["nodes"] if n["type"] == "TextEncodeQwenImage21")
+    assert not any(one["name"] == "prompt" and one.get("link") is not None for one in qwen["inputs"])
+    finish = next(n for n in ui["nodes"] if n["type"] == "Krea2EditGroundedEncode" and n.get("title"))
+    assert upstream(finish, "prompt")[0]["type"] == "StringConcatenate"
+    #: 每个加载器都带官方文件名的下载地址(ComfyUI 缺模型时按它提示下载)
+    for node in ui["nodes"]:
+        if node["type"] in ("UNETLoader", "CLIPLoader", "VAELoader", "LoraLoaderModelOnly"):
+            [model] = node["properties"]["models"]
+            assert model["name"] == node["widgets_values"][0] and model["url"].startswith("https://huggingface.co/")
 
 
 def test_按选择安装只写选中的_再装不会覆盖(plugin, comfy) -> None:

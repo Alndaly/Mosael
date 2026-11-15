@@ -100,7 +100,7 @@ def _visual_bible_schema() -> dict[str, Any]:
         "style_prompt": {"type": "string", "description": "英文一句话的全片画风,每张图、每段视频都会带上"},
         "blockout_legend": {
             "type": "string",
-            "description": "英文,说明白模里各颜色人偶分别是谁,如 'red mannequin = Lin (class president), blue mannequin = Kai'",
+            "description": "英文,白模里各颜色分别是谁,只写「颜色 = 名字(一句身份)」,如 'red = Lin (class president), blue = Kai';不要写 mannequin / figure 这类词(照字面画的模型会把它们画出来)",
         },
     }
     return object_schema(fields, list(fields))

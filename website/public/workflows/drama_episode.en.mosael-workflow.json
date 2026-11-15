@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Drama episode",
   "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **the video model speaks each character's line while it generates the shot**, so the delivery follows the moment (needs a video model with native voice, such as MiniMax H3); narration is voiced separately. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\". This copy includes “Act this line in the character's voice” (a dialogue model taking a first frame and reference audio, e.g. the ComfyUI example “H3 dialogue · character voice”): pick the model there after importing so a character sounds the same across shots. Without such a model, delete “Does the speaking character carry a voice?”, “Record a reference line in this character's voice” and “Act this line in the character's voice”; lines are then spoken from the text alone. In the app this branch is added only when such a model is set up.",
-  "graph_hash": "a31a03fe540504098f1f99c8d3b721fd4f68e8233f2c4d774bb0ec61caa46b6a",
+  "graph_hash": "94f273862ec9fe07a0a543191cd96957642fb634df273640ae0a4d449ea69f19",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
-      "template_version": 5,
+      "template_version": 6,
       "source": "official"
     },
     "nodes": [
@@ -373,7 +373,7 @@
               },
               "blockout_legend": {
                 "type": "string",
-                "description": "英文,说明白模里各颜色人偶分别是谁,如 'red mannequin = Lin (class president), blue mannequin = Kai'"
+                "description": "英文,白模里各颜色分别是谁,只写「颜色 = 名字(一句身份)」,如 'red = Lin (class president), blue = Kai';不要写 mannequin / figure 这类词(照字面画的模型会把它们画出来)"
               }
             },
             "required": [
@@ -1333,7 +1333,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
@@ -1386,7 +1386,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens, framing and where the coloured mannequins stand ({{input.legend}}); the mannequins are stand-ins, render them as the real characters and the grey boxes as the real set, never as grey shapes. After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
@@ -1456,6 +1456,18 @@
                 "config": {
                   "left": "{{loop.item.first_frame_subject}}",
                   "op": "not_empty"
+                }
+              },
+              {
+                "id": "blockout_cast",
+                "type": "template",
+                "name": "Who the blockout's figures are",
+                "position": {
+                  "x": 390,
+                  "y": -340
+                },
+                "config": {
+                  "template": "A coloured humanoid shape in image 1 marks where a character stands ({{input.legend}}) — draw that real person there, never the coloured shape."
                 }
               },
               {
@@ -1646,6 +1658,12 @@
                 "id": "shot_subject_find",
                 "source": "has_subject",
                 "target": "find_subject",
+                "source_handle": "true"
+              },
+              {
+                "id": "shot_subject_cast",
+                "source": "has_subject",
+                "target": "blockout_cast",
                 "source_handle": "true"
               },
               {

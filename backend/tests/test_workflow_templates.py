@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 27,
+        "template_version": 28,
         "source": "official",
     }
 
@@ -178,6 +178,21 @@ class Test每一镜都有实物参考:
         assert len(last["source_assets"]) == 4
         assert "right after the blockout" in last["prompt"]
         assert last["source_overflow"] == "keep_first"
+
+    def test_白模图例只在有主角的镜头拼进首尾帧提示词(self) -> None:
+        """空镜也列全片的「颜色 = 人偶」图例时,Qwen-Image 这类照字面画的模型把图例里的人画了出来(灯铺顶棚那一镜冒出
+        红绿蓝三个人)。图例挂在「首帧里有主角吗」的真出口上,空镜时被跳过、引用出来是空串;提示词里也不再出现 mannequin。"""
+        full = _full_video()
+        body = self._body()
+        edges = _node(full, "generate_shots")["config"]["body"]["edges"]
+        assert body["blockout_cast"]["type"] == "template"
+        assert "{{input.legend}}" in body["blockout_cast"]["config"]["template"]
+        assert {"source": "has_subject", "target": "blockout_cast", "source_handle": "true"}.items() <= next(
+            edge for edge in edges if edge["target"] == "blockout_cast").items()
+        for frame in ("paint_first_frame", "paint_last_frame"):
+            prompt = body[frame]["config"]["prompt"]
+            assert "{{blockout_cast.text}}" in prompt and "{{input.legend}}" not in prompt
+            assert "mannequin" not in prompt.lower()
 
     def test_尾帧接着首帧画(self) -> None:
         last = self._body()["paint_last_frame"]["config"]

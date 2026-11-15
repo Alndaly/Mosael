@@ -23,10 +23,7 @@
      "type": "MODEL",
      "links": [
       9,
-      10,
-      17,
-      19,
-      23
+      10
      ],
      "slot_index": 0
     }
@@ -261,8 +258,7 @@
      "name": "positive",
      "type": "CONDITIONING",
      "links": [
-      11,
-      22
+      11
      ],
      "slot_index": 0
     },
@@ -280,8 +276,8 @@
    },
    "widgets_values": [
     "<Picture 1> speaks to the camera. Highest priority: whenever she is on screen her mouth keeps speaking, the lips, jaw and cheeks follow <Audio 1> syllable by syllable, opening and closing naturally every half second, teeth and the inside of the mouth visible when she opens it. Photorealistic documentary footage, real skin with pores and fine hair, natural micro-expressions, eye blinks, subtle breathing. Natural available light, realistic film grain, no beauty filter, no plastic skin, no CGI look. One continuous shot, the camera stays still, no cut.",
-    864,
-    480,
+    1344,
+    768,
     243,
     "match"
    ]
@@ -393,8 +389,7 @@
      "name": "SAMPLER",
      "type": "SAMPLER",
      "links": [
-      14,
-      27
+      14
      ],
      "slot_index": 0
     }
@@ -442,7 +437,7 @@
    },
    "widgets_values": [
     "beta",
-    8,
+    12,
     1
    ]
   },
@@ -533,292 +528,6 @@
      "name": "output",
      "type": "LATENT",
      "links": [
-      18
-     ],
-     "slot_index": 0
-    },
-    {
-     "name": "denoised_output",
-     "type": "LATENT",
-     "links": [],
-     "slot_index": 1
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "SamplerCustomAdvanced"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 70,
-   "type": "MiniMaxH3Pass2StaggeredScheduler",
-   "pos": [
-    360,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 13,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "model",
-     "type": "MODEL",
-     "link": 17
-    }
-   ],
-   "outputs": [
-    {
-     "name": "SIGMAS",
-     "type": "SIGMAS",
-     "links": [
-      21,
-      28
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "MiniMaxH3Pass2StaggeredScheduler"
-   },
-   "widgets_values": [
-    4,
-    0.45,
-    7.0,
-    "karras",
-    8,
-    "simple"
-   ]
-  },
-  {
-   "id": 71,
-   "type": "RandomNoise",
-   "pos": [
-    680,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 14,
-   "mode": 0,
-   "inputs": [],
-   "outputs": [
-    {
-     "name": "NOISE",
-     "type": "NOISE",
-     "links": [
-      20
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "RandomNoise"
-   },
-   "widgets_values": [
-    2,
-    "randomize"
-   ]
-  },
-  {
-   "id": 72,
-   "type": "MiniMaxH3LatentUpscaleCombined",
-   "pos": [
-    1000,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 15,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "samples",
-     "type": "LATENT",
-     "link": 18
-    },
-    {
-     "name": "model",
-     "type": "MODEL",
-     "link": 19
-    },
-    {
-     "name": "noise",
-     "type": "NOISE",
-     "link": 20
-    },
-    {
-     "name": "sigmas",
-     "type": "SIGMAS",
-     "link": 21
-    },
-    {
-     "name": "positive",
-     "type": "CONDITIONING",
-     "link": 22
-    }
-   ],
-   "outputs": [
-    {
-     "name": "latent",
-     "type": "LATENT",
-     "links": [
-      29
-     ],
-     "slot_index": 0
-    },
-    {
-     "name": "positive",
-     "type": "CONDITIONING",
-     "links": [
-      24
-     ],
-     "slot_index": 1
-    },
-    {
-     "name": "negative",
-     "type": "CONDITIONING",
-     "links": [],
-     "slot_index": 2
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "MiniMaxH3LatentUpscaleCombined"
-   },
-   "widgets_values": [
-    "learned model",
-    "h3_clean_latent_upscaler_film_epoch200.safetensors",
-    0.0,
-    "independent",
-    0.0
-   ]
-  },
-  {
-   "id": 73,
-   "type": "BasicGuider",
-   "pos": [
-    1320,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 16,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "model",
-     "type": "MODEL",
-     "link": 23
-    },
-    {
-     "name": "conditioning",
-     "type": "CONDITIONING",
-     "link": 24
-    }
-   ],
-   "outputs": [
-    {
-     "name": "GUIDER",
-     "type": "GUIDER",
-     "links": [
-      26
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "BasicGuider"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 75,
-   "type": "DisableNoise",
-   "pos": [
-    1640,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 17,
-   "mode": 0,
-   "inputs": [],
-   "outputs": [
-    {
-     "name": "NOISE",
-     "type": "NOISE",
-     "links": [
-      25
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "DisableNoise"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 74,
-   "type": "SamplerCustomAdvanced",
-   "pos": [
-    40,
-    940
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 18,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "noise",
-     "type": "NOISE",
-     "link": 25
-    },
-    {
-     "name": "guider",
-     "type": "GUIDER",
-     "link": 26
-    },
-    {
-     "name": "sampler",
-     "type": "SAMPLER",
-     "link": 27
-    },
-    {
-     "name": "sigmas",
-     "type": "SIGMAS",
-     "link": 28
-    },
-    {
-     "name": "latent_image",
-     "type": "LATENT",
-     "link": 29
-    }
-   ],
-   "outputs": [
-    {
-     "name": "output",
-     "type": "LATENT",
-     "links": [
       30
      ],
      "slot_index": 0
@@ -880,6 +589,7 @@
     1,
     0,
     24.0,
+    false,
     -1
    ],
    "title": "存下这一段的潜空间 / Keep this latent"
@@ -1181,118 +891,6 @@
    "LATENT"
   ],
   [
-   17,
-   3,
-   0,
-   70,
-   0,
-   "MODEL"
-  ],
-  [
-   18,
-   13,
-   0,
-   72,
-   0,
-   "LATENT"
-  ],
-  [
-   19,
-   3,
-   0,
-   72,
-   1,
-   "MODEL"
-  ],
-  [
-   20,
-   71,
-   0,
-   72,
-   2,
-   "NOISE"
-  ],
-  [
-   21,
-   70,
-   0,
-   72,
-   3,
-   "SIGMAS"
-  ],
-  [
-   22,
-   7,
-   0,
-   72,
-   4,
-   "CONDITIONING"
-  ],
-  [
-   23,
-   3,
-   0,
-   73,
-   0,
-   "MODEL"
-  ],
-  [
-   24,
-   72,
-   1,
-   73,
-   1,
-   "CONDITIONING"
-  ],
-  [
-   25,
-   75,
-   0,
-   74,
-   0,
-   "NOISE"
-  ],
-  [
-   26,
-   73,
-   0,
-   74,
-   1,
-   "GUIDER"
-  ],
-  [
-   27,
-   11,
-   0,
-   74,
-   2,
-   "SAMPLER"
-  ],
-  [
-   28,
-   70,
-   0,
-   74,
-   3,
-   "SIGMAS"
-  ],
-  [
-   29,
-   72,
-   0,
-   74,
-   4,
-   "LATENT"
-  ],
-  [
-   30,
-   74,
-   0,
-   52,
-   0,
-   "LATENT"
-  ],
-  [
    31,
    52,
    0,
@@ -1331,6 +929,14 @@
    17,
    0,
    "VIDEO"
+  ],
+  [
+   30,
+   13,
+   0,
+   52,
+   0,
+   "LATENT"
   ]
  ],
  "groups": [],
