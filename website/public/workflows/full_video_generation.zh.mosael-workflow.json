@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "从主题到完整视频",
   "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。台词按分镜写的说话人配音：角色在资产库里带着音色就用它的嗓子，旁白和没带音色的角色用开始节点的那一把；有能出音乐的模型时再生成一首配乐，垫在对白底下。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话、逐镜配音和一首配乐——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限，shot_seconds 是每镜几秒（建图时按所选视频模型取它能出的、最接近默认的那一档）。",
-  "graph_hash": "16564c8b6031e9aaa9d44ba3eb37020fc3a6ad1cb7be69e7a6d3e4e4a1ea65b0",
+  "graph_hash": "9c46c7f6a743aaaf3cc5547dbee19091bd1f65bbb6ba53ffd760a64fb98972d5",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 29,
+      "template_version": 30,
       "source": "official"
     },
     "nodes": [
@@ -492,6 +492,19 @@
                 ]
               },
               {
+                "id": "views",
+                "type": "entity_sheet_views",
+                "name": "拆成单张视图",
+                "position": {
+                  "x": 1280,
+                  "y": 140
+                },
+                "config": {
+                  "kind": "character",
+                  "name": "{{loop.item.name}}"
+                }
+              },
+              {
                 "id": "file_art",
                 "type": "asset_update",
                 "name": "归档进成片项目",
@@ -531,6 +544,17 @@
                 "target": "file_art"
               },
               {
+                "id": "found_views",
+                "source": "has_art",
+                "target": "views",
+                "source_handle": "true"
+              },
+              {
+                "id": "saved_views",
+                "source": "save",
+                "target": "views"
+              },
+              {
                 "id": "d-sheet-asset_id-save-asset_ids",
                 "source": "sheet",
                 "target": "save",
@@ -548,7 +572,7 @@
               }
             ]
           },
-          "output": "{{find.asset_ids.0}}{{sheet.asset_id}}:reference_image",
+          "output": "{{views.asset_ids.0}}:reference_image\n{{views.asset_ids.1}}:reference_image\n{{views.asset_ids.2}}:reference_image\n{{views.asset_ids.3}}:reference_image",
           "concurrency": 3
         }
       },
@@ -633,6 +657,19 @@
                 ]
               },
               {
+                "id": "views",
+                "type": "entity_sheet_views",
+                "name": "拆成单张视图",
+                "position": {
+                  "x": 1280,
+                  "y": 140
+                },
+                "config": {
+                  "kind": "location",
+                  "name": "{{loop.item.name}}"
+                }
+              },
+              {
                 "id": "file_art",
                 "type": "asset_update",
                 "name": "归档进成片项目",
@@ -672,6 +709,17 @@
                 "target": "file_art"
               },
               {
+                "id": "found_views",
+                "source": "has_art",
+                "target": "views",
+                "source_handle": "true"
+              },
+              {
+                "id": "saved_views",
+                "source": "save",
+                "target": "views"
+              },
+              {
                 "id": "d-art-asset_id-save-asset_ids",
                 "source": "art",
                 "target": "save",
@@ -689,7 +737,7 @@
               }
             ]
           },
-          "output": "{{find.asset_ids.0}}{{art.asset_id}}:reference_image",
+          "output": "{{views.asset_ids.0}}:reference_image\n{{views.asset_ids.1}}:reference_image\n{{views.asset_ids.2}}:reference_image\n{{views.asset_ids.3}}:reference_image",
           "concurrency": 3
         }
       },
@@ -1342,15 +1390,20 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.first_frame_prompt}} Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come separate single views of the main character — front, side and back of the SAME one person, draw them once — then separate views of the location (a high overview, a reverse eye-level view, close-ups of its walls and floor): copy its architecture, materials, props, lighting and weather, not the framing of any view. Any of them may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture of this location — never leave a plain wall. Output one single finished picture, never a collage, grid or split screen. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
                   "frame_aspect": "{{input.aspect_ratio}}",
                   "source_assets": [
                     "{{render_blockout.first_frame_asset_id}}:reference_image",
-                    "{{find_subject.asset_id}}:reference_image",
-                    "{{find_location.asset_id}}:reference_image"
+                    "{{find_subject.asset_ids.0}}:reference_image",
+                    "{{find_subject.asset_ids.1}}:reference_image",
+                    "{{find_subject.asset_ids.2}}:reference_image",
+                    "{{find_location.asset_ids.0}}:reference_image",
+                    "{{find_location.asset_ids.1}}:reference_image",
+                    "{{find_location.asset_ids.2}}:reference_image",
+                    "{{find_location.asset_ids.3}}:reference_image"
                   ],
                   "source_overflow": "keep_first"
                 }
@@ -1395,7 +1448,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come the main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, never a collage of the references. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
+                  "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the reference image right after the blockout — keep characters, wardrobe, lighting and set continuous. Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come separate single views of the main character — front, side and back of the SAME one person, draw them once — then separate views of the location (a high overview, a reverse eye-level view, close-ups of its walls and floor): copy its architecture, materials, props, lighting and weather, not the framing of any view. Any of them may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture of this location — never leave a plain wall. Output one single finished picture, never a collage, grid or split screen. Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}",
                   "parameters": {
                     "size": "{{input.frame_size}}"
                   },
@@ -1404,8 +1457,13 @@
                   "source_assets": [
                     "{{render_blockout.last_frame_asset_id}}:reference_image",
                     "{{paint_first_frame.asset_id}}:reference_image",
-                    "{{find_subject.asset_id}}:reference_image",
-                    "{{find_location.asset_id}}:reference_image"
+                    "{{find_subject.asset_ids.0}}:reference_image",
+                    "{{find_subject.asset_ids.1}}:reference_image",
+                    "{{find_subject.asset_ids.2}}:reference_image",
+                    "{{find_location.asset_ids.0}}:reference_image",
+                    "{{find_location.asset_ids.1}}:reference_image",
+                    "{{find_location.asset_ids.2}}:reference_image",
+                    "{{find_location.asset_ids.3}}:reference_image"
                   ]
                 }
               },
@@ -1493,7 +1551,8 @@
                 "config": {
                   "kind": "character",
                   "name": "{{loop.item.first_frame_subject}}",
-                  "limit": 1
+                  "views": "yes",
+                  "limit": 3
                 }
               },
               {
@@ -1520,8 +1579,8 @@
                 "config": {
                   "kind": "location",
                   "name": "{{loop.item.location_name}}",
-                  "limit": 1,
-                  "role": "design_sheet"
+                  "views": "yes",
+                  "limit": 4
                 }
               },
               {

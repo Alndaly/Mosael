@@ -1855,6 +1855,13 @@
           "en": "Angle"
         }
       },
+      "views": {
+        "type": "string",
+        "label": {
+          "zh": "只要单张视图",
+          "en": "Single views only"
+        }
+      },
       "limit": {
         "type": "number",
         "label": {
@@ -2066,6 +2073,51 @@
       "name": {
         "zh": "名称",
         "en": "Name"
+      }
+    }
+  },
+  {
+    "type": "entity_sheet_views",
+    "config": {
+      "entity_id": {
+        "type": "template",
+        "label": {
+          "zh": "资产",
+          "en": "Asset"
+        }
+      },
+      "kind": {
+        "type": "string",
+        "label": {
+          "zh": "类型",
+          "en": "Kind"
+        }
+      },
+      "name": {
+        "type": "template",
+        "label": {
+          "zh": "名称",
+          "en": "Name"
+        }
+      }
+    },
+    "outputs": [
+      "entity_id",
+      "asset_ids",
+      "count"
+    ],
+    "output_labels": {
+      "entity_id": {
+        "zh": "资产",
+        "en": "Asset"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
       }
     }
   },

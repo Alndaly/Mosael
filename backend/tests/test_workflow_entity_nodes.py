@@ -39,8 +39,8 @@ def test_取资产_点名一个_交出提示词描述和按挑图先后排的参
     with SessionLocal() as db:
         out = entity_get(db, _scope(ws), {"entity_id": made["id"]})
     assert out["found"] == 1 and out["name"] == "林小满" and out["prompt"] == "短发,校服"
-    assert out["asset_ids"] == ["sheet", "front", "side"], "三视图 > 正面 > 其余;视频不交"
-    assert out["asset_id"] == "sheet", "没设封面时是挑图顺序的第一张"
+    assert out["asset_ids"] == ["front", "side", "sheet"], "单张视图在前、三视图在后(拼版图会被画成几宫格);视频不交"
+    assert out["asset_id"] == "front", "没设封面时是挑图顺序的第一张"
     assert (out["voice_engine"], out["voice_id"]) == ("builtin:edge", "zh-CN-XiaoxiaoNeural")
 
     variant = client.post(f"/api/entities/{made['id']}/variants", json={"name": "冬装", "prompt": "羽绒服"}).json()
@@ -198,8 +198,25 @@ def test_整片模板的角色循环_库里有的直接用_没有的画完存成
     drawn: list[str] = []
 
     def fake_generate(db, scope, config):
+        """画一张真的「三视图」:三格不同颜色的并排图(拆单张视图要真的切它)。"""
+        import tempfile
+        from pathlib import Path
+
+        from PIL import Image
+
+        from app.domain.assets.importer import register_file_asset
+
         drawn.append(config["prompt"])
-        return {"asset_id": "sheet", "asset_ids": ["sheet"], "generation_id": "g"}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "turnaround.png"
+            sheet = Image.new("RGB", (300, 120), "white")
+            for index, color in enumerate(("red", "green", "blue")):
+                sheet.paste(color, (index * 100 + 10, 10, index * 100 + 90, 110))
+            sheet.save(path)
+            asset = register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=path,
+                                        name="turnaround.png", source="generated")
+        db.flush()
+        return {"asset_id": asset.id, "asset_ids": [asset.id], "generation_id": "g"}
 
     monkeypatch.setitem(registry._REGISTRY, "ai_generate", fake_generate)
     template = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
@@ -226,12 +243,19 @@ def test_整片模板的角色循环_库里有的直接用_没有的画完存成
         time.sleep(0.2)
     assert job["status"] == "succeeded", job
     assert len(drawn) == 1 and "阿澄" in drawn[0], "库里有图的林小满不再重画"
-    assert job["result"]["context"]["character_sheets"]["results"] == ["front:reference_image", "sheet:reference_image"]
     saved = [one for one in client.get("/api/entities", params={"workspace_id": ws, "kind": "character"}).json()
              if one["name"] == "阿澄"]
     assert len(saved) == 1
     entity = client.get(f"/api/entities/{saved[0]['id']}").json()
-    assert entity["prompt"] == "tall boy" and [(r["asset_id"], r["role"]) for r in entity["references"]] == [("sheet", "turnaround")]
+    #: 三视图存成资产,并拆成正 / 侧 / 背三张单张视图挂回去(ADR 0097 修订六)
+    assert entity["prompt"] == "tall boy"
+    assert [r["role"] for r in entity["references"]] == ["turnaround", "front", "side", "back"]
+    views = [r["asset_id"] for r in entity["references"][1:]]
+    #: 循环每项交出它的单张视图,不交三视图本身:只有一张正面照的林小满交出那张正面照
+    #: (缺的那几格是空 id 的行,解析素材时跳过 —— generation.parse_source_assets)
+    results = [[line for line in item.split("\n") if not line.startswith(":")]
+               for item in job["result"]["context"]["character_sheets"]["results"]]
+    assert results == [["front:reference_image"], [f"{one}:reference_image" for one in views]]
 
 
 def test_列资产_按种类列_交出给模型读的清单() -> None:

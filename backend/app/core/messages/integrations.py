@@ -1007,6 +1007,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_created": {"zh": "新建的(1)/合并的(0)", "en": "Newly created (1) / merged (0)"},
     "wfField_added": {"zh": "新挂上几张参考图", "en": "References added"},
     "wfField_role": {"zh": "角度", "en": "Angle"},
+    "wfField_views": {"zh": "只要单张视图", "en": "Single views only"},
     "wfField_if_exists": {"zh": "同名时", "en": "When it exists"},
     #: 一串素材和一份素材**不同名**:生成节点同时交出这两样(封面一份、这次出的全部),都叫「素材」时画布上两个口一模一样。
     "wfField_asset_ids": {"zh": "素材列表", "en": "Media list"},

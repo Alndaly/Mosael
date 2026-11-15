@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 29,
+        "template_version": 30,
         "source": "official",
     }
 
@@ -148,34 +148,30 @@ class Test每一镜都有实物参考:
         assert {"first_frame", "last_frame", "reference_image", "reference_video"} <= roles
         assert "{{input.sheets}}" in clip["source_assets"], "全部角色的三视图整组接进来"
 
-    def test_首帧的参考图按先后排_白模_主角_地点_只这三张(self) -> None:
-        """白模永远第一张:它定机位和构图,每一镜都有。排在主角、地点后面时,收两张的模型永远拿不到它(ADR 0097 修订二);
-        没有主角的镜头其余几张往前挪,第一张的意思不变。收得多的模型照样拿到全部三视图、设定图。"""
+    def test_首帧的参考图按先后排_白模_主角的单张视图_地点的单张视图(self) -> None:
+        """白模永远第一张:它定机位和构图,每一镜都有(ADR 0097 修订二)。其后是主角的单张视图(正 → 侧 → 背)、地点的
+        单张视图(俯视 → 反打 → 细节)—— **不交三视图、设计稿这类拼版图**:模型会把版式一起照搬,画出几宫格(修订六)。
+        收得少的模型按先后留前几张(keep_first)。"""
         body = self._body()
         first = body["paint_first_frame"]["config"]
         assert first["kind"] == "image" and first["model"] == SEEDREAM.model
-        assert first["source_assets"][:3] == [
-            "{{render_blockout.first_frame_asset_id}}:reference_image",
-            "{{find_subject.asset_id}}:reference_image",
-            "{{find_location.asset_id}}:reference_image",
-        ]
-        #: 只这三张:没有主角的镜头空出的那一位不再被全部三视图里的第一张补上(ADR 0097 修订三)
-        assert len(first["source_assets"]) == 3
+        views = [f"{{{{find_subject.asset_ids.{i}}}}}:reference_image" for i in range(3)] + \
+                [f"{{{{find_location.asset_ids.{i}}}}}:reference_image" for i in range(4)]
+        assert first["source_assets"] == ["{{render_blockout.first_frame_asset_id}}:reference_image", *views]
         assert first["source_overflow"] == "keep_first"
         assert "image 1 is always a grey 3D blockout" in first["prompt"]
+        assert "single views of the main character" in first["prompt"] and "turnaround" not in first["prompt"]
+        assert "never a collage, grid or split screen" in first["prompt"]
         assert "empty of people" in first["prompt"]
-        assert "never a collage" in first["prompt"]
-        assert "location's design sheet" in first["prompt"]
-        assert "never the framing of any panel" in first["prompt"]
-        assert body["find_subject"]["config"] == {"kind": "character", "name": "{{loop.item.first_frame_subject}}", "limit": 1}
+        assert body["find_subject"]["config"] == {
+            "kind": "character", "name": "{{loop.item.first_frame_subject}}", "views": "yes", "limit": 3,
+        }
         assert body["find_location"]["config"] == {
-            "kind": "location", "name": "{{loop.item.location_name}}", "limit": 1, "role": "design_sheet",
+            "kind": "location", "name": "{{loop.item.location_name}}", "views": "yes", "limit": 4,
         }
         last = body["paint_last_frame"]["config"]
-        assert last["source_assets"][:3] == ["{{render_blockout.last_frame_asset_id}}:reference_image",
-                                             "{{paint_first_frame.asset_id}}:reference_image",
-                                             "{{find_subject.asset_id}}:reference_image"]
-        assert len(last["source_assets"]) == 4
+        assert last["source_assets"] == ["{{render_blockout.last_frame_asset_id}}:reference_image",
+                                         "{{paint_first_frame.asset_id}}:reference_image", *views]
         assert "right after the blockout" in last["prompt"]
         assert last["source_overflow"] == "keep_first"
 
@@ -201,8 +197,8 @@ class Test每一镜都有实物参考:
     def test_角色三视图按角色逐个画_交出整组参考行(self) -> None:
         sheets = _node(_full_video(), "character_sheets")["config"]
         assert sheets["items"] == "{{visual_bible.json.characters}}"
-        #: 认出来的那张,或新画的那张 —— 另一支没跑,引用出来是空串。
-        assert sheets["output"] == "{{find.asset_ids.0}}{{sheet.asset_id}}:reference_image"
+        #: 交出这个角色的单张视图(正 / 侧 / 背),不交三视图本身:拼版图会被画成几宫格(ADR 0097 修订六)。
+        assert sheets["output"].split("\n") == [f"{{{{views.asset_ids.{index}}}}}:reference_image" for index in range(4)]
 
     def test_角色和场景先到资产库里认_有图就用_没有才画_画完存成资产(self) -> None:
         """ADR 0027 阶段 4:第二部片子里的同一个角色是同一张脸。"""
@@ -219,7 +215,10 @@ class Test每一镜都有实物参考:
             assert nodes["has_art"]["config"] == {"left": "{{find.asset_ids.0}}", "op": "not_empty"}
             edges = {(one["source"], one["target"], one.get("source_handle")) for one in body["edges"]}
             assert edges == {("find", "has_art", None), ("has_art", drawer, "false"), (drawer, "save", None),
-                             (drawer, "file_art", None)}, "只有库里没有它的图时才画;画完就存,并归进成片项目"
+                             (drawer, "file_art", None), ("has_art", "views", "true"), ("save", "views", None)}, \
+                "只有库里没有它的图时才画;画完就存,并归进成片项目;两支都汇到「拆成单张视图」"
+            assert (nodes["views"]["type"], nodes["views"]["config"]) == (
+                "entity_sheet_views", {"kind": kind, "name": "{{loop.item.name}}"})
             #: 存的就是刚画的那张(模板规范化把整串引用改成了一根数据线);同格上作者画的那条先后控制边照样在
             #: (折边已废,见 ADR 0063)—— 两条边同一个 (source, target),上面那个集合分不出来,这里分开看。
             wire = next(one for one in body["edges"] if one["target"] == "save" and one.get("kind") == "data")

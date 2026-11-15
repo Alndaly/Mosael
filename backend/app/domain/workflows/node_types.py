@@ -395,6 +395,7 @@ _FIELD_LABELS = {
     "created": "wfField_created",
     "added": "wfField_added",
     "role": "wfField_role",
+    "views": "wfField_views",
     "if_exists": "wfField_if_exists",
     "cues": "wfField_cues",
     "chunk_count": "wfField_chunk_count",
@@ -2423,10 +2424,31 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             #: 整片要的设计稿不会被封面顶掉;一张都没有时 asset_ids 为空,正好走「去画」那一支。
             "role": {"advanced": True, "type": "string", "options_from": "entity_roles", "depends_on": "kind",
                      "description": "wfNode_entity_get_role"},
+            #: 只要单张视图(人物正 / 侧 / 背,场景俯视 / 反打 / 细节),不要三视图、设计稿这类拼版图:拼版图交给出图模型,
+            #: 它会把版式一起照搬,画出几宫格(见 entities.sheet_views)。
+            "views": {"advanced": True, "type": "string", "default": "no", "options": ["no", "yes"],
+                      "description": "wfNode_entity_get_views"},
             "limit": {"advanced": True, "type": "number", "description": "wfNode_entity_get_limit"},
         },
         "outputs": ["entity_id", "found", "name", "description", "prompt", "asset_ids", "asset_id", "voice_engine", "voice_id"],
         "output_types": {"found": "number", "name": "text", "description": "text", "prompt": "text"},
+    },
+    #: 拼版参考图拆成单张视图挂回资产(entities.sheet_views):三视图 → 正 / 侧 / 背,设计稿 → 俯视 / 反打 / 细节。
+    #: 拆过的不再拆。整片 / 漫剧在认出或画完每个角色、场景之后跑它,逐镜画关键帧时只交单张视图。
+    "entity_sheet_views": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_entity_sheet_views",
+        "description": "wfNode_entity_sheet_views_desc",
+        "config": {
+            "entity_id": {"type": "template", "one_of": "target", "options_from": "entities",
+                          "description": "wfNode_entity_get_entity_id"},
+            "kind": {"type": "string", "options": list(ENTITY_KINDS), "description": "wfNode_entity_get_kind"},
+            "name": {"type": "template", "one_of": "target", "description": "wfNode_entity_get_name"},
+        },
+        "outputs": ["entity_id", "asset_ids", "count"],
+        "output_types": {"count": "number"},
     },
     "entity_list": {
         "external": False,

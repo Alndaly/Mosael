@@ -51,14 +51,16 @@ ROLES_BY_KIND: dict[str, tuple[str, ...]] = {
     "costume": ("front", "back", "side", "detail", "concept"),
 }
 
-#: 生成时从参考图里挑的先后(ADR 0027 §3),按种类:人物三视图 > 正面 > 全身,道具三视图 > 正面,
-#: 场景设计稿 > 全景 > 设定图;其余按资产里排的顺序。场景的「设计稿」是人物三视图的对应物:一张图分几格画同一个地方
-#: (俯瞰布局、反打、立面细节、地面细节),交给出图模型时它学得到建筑、陈设和光线,却没有一个现成的构图可以照搬
-#: —— 一张全景设定图交进去,FLUX.3 / Qwen-Image / MOSS / krea2 都照着它的构图画,白模的机位压不过它(ADR 0097 修订四)。
+#: 生成时从参考图里挑的先后(ADR 0027 §3),按种类;其余按资产里排的顺序。
+#:
+#: **单张视图在前,拼版图在后**(ADR 0097 修订六):人物正面 > 侧面 > 背面 > 全身 > 三视图,道具同理,场景俯视 > 反打
+#: > 细节 > 设计稿 > 全景 > 设定图。三视图、设计稿是一张图里排着几格,交给出图模型时它会把版式一起照搬,画出几宫格;
+#: 同一张拼版图拆成的单张视图(entities.sheet_views)信息一样多,却没有版式可以照搬。全景设定图排在设计稿后面:
+#: 单张全景会让模型照搬它的构图,白模的机位压不过它(修订四)。
 ATTACH_PRIORITY: dict[str, tuple[str, ...]] = {
-    "character": ("turnaround", "front", "full_body"),
-    "location": ("design_sheet", "wide", "concept"),
-    "prop": ("turnaround", "front"),
+    "character": ("front", "side", "back", "full_body", "turnaround"),
+    "location": ("overhead", "reverse", "detail", "design_sheet", "wide", "concept"),
+    "prop": ("front", "side", "back", "turnaround"),
     "costume": ("front", "back"),
 }
 

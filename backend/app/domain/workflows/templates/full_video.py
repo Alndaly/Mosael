@@ -32,7 +32,7 @@ from app.domain.workflows.templates.schemas import (
 FULL_VIDEO_GENERATION = "full_video_generation"
 #: 同一张图的「漫剧」形态(`drama=True`):对白推动,角色台词的镜头用说话照片模型让关键帧开口(见 full_video_generation_graph)。
 DRAMA_EPISODE = "drama_episode"
-DRAMA_EPISODE_VERSION = 7
+DRAMA_EPISODE_VERSION = 8
 
 #: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
 RUNTIME_PROMPT_HEADROOM = 600
@@ -418,7 +418,9 @@ JSON Schema 的对象。"""
 
 {blockout_rules(clip, source="视觉圣经")}只输出符合 JSON Schema 的对象。"""
 
-    #: 关键帧的参考图**按先后排**:本镜白模 → (尾帧时)首帧 → 主角三视图 → 地点设定图,**只这几张**;出图节点按所选
+    #: 关键帧的参考图**按先后排**:本镜白模 → (尾帧时)首帧 → 主角的单张视图(正 → 侧 → 背)→ 地点的单张视图(俯视 →
+    #: 反打 → 细节),**只这几张**。**不交三视图、设计稿这类拼版图**(ADR 0097 修订六):一张图里排着几格,模型会把版式
+    #: 一起照搬,画出几宫格 —— 同一镜、同一模型、三个种子,交拼版图三张全是拼图,拆成单图三张全是一整张。出图节点按所选
     #: 模型收得下的张数取前几张(`source_overflow = keep_first`)。**白模永远第一张**:每一镜都渲了它,它定机位、构图和站位;
     #: 排在主角、地点后面时,收两张的模型永远拿不到它,关键帧照着设定图的构图画(ADR 0097 修订二);没有主角的镜头其余几张
     #: 往前挪,第一张的意思也不变 —— 白模排第三时那样一挪,模型把地点和白模拼成一张上下两截的图。
@@ -430,13 +432,13 @@ JSON Schema 的对象。"""
     #: 图例本身也不再用 mannequin 这个词(见视觉圣经的 `blockout_legend`)。
     frame_prompt_tail = (
         " Reference images, in order: image 1 is always a grey 3D blockout of this exact shot — copy its camera angle, "
-        "lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come the "
-        "main character's turnaround sheet (front, side and back of ONE person — draw them once), then the location's "
-        "design sheet (several panels of the same place: copy its architecture, materials, props, lighting and weather, "
-        "never the framing of any panel); either may be missing. Every grey box in image 1 is only a placeholder for real "
-        "architecture or furniture from the design sheet — never leave a plain wall. Output one single finished picture, "
-        "never a collage of the references. Only the characters described above appear; if none are described, the place "
-        "is empty of people. {{input.style}}"
+        "lens and framing; its grey boxes are the real set, never grey shapes. {{blockout_cast.text}} After it come "
+        "separate single views of the main character — front, side and back of the SAME one person, draw them once — "
+        "then separate views of the location (a high overview, a reverse eye-level view, close-ups of its walls and "
+        "floor): copy its architecture, materials, props, lighting and weather, not the framing of any view. Any of them "
+        "may be missing. Every grey box in image 1 is only a placeholder for real architecture or furniture of this "
+        "location — never leave a plain wall. Output one single finished picture, never a collage, grid or split screen. "
+        "Only the characters described above appear; if none are described, the place is empty of people. {{input.style}}"
     )
 
     #: 这一镜交给下游的是哪个节点的素材:接得下去的模型是接好的那一条。
@@ -479,8 +481,13 @@ JSON Schema 的对象。"""
                     "frame_aspect": "{{input.aspect_ratio}}",
                     "source_assets": [
                         "{{render_blockout.first_frame_asset_id}}:reference_image",
-                        "{{find_subject.asset_id}}:reference_image",
-                        "{{find_location.asset_id}}:reference_image",
+                        "{{find_subject.asset_ids.0}}:reference_image",
+                        "{{find_subject.asset_ids.1}}:reference_image",
+                        "{{find_subject.asset_ids.2}}:reference_image",
+                        "{{find_location.asset_ids.0}}:reference_image",
+                        "{{find_location.asset_ids.1}}:reference_image",
+                        "{{find_location.asset_ids.2}}:reference_image",
+                        "{{find_location.asset_ids.3}}:reference_image",
                     ],
                     "source_overflow": "keep_first",
                 },
@@ -525,8 +532,13 @@ JSON Schema 的对象。"""
                     "source_assets": [
                         "{{render_blockout.last_frame_asset_id}}:reference_image",
                         "{{paint_first_frame.asset_id}}:reference_image",
-                        "{{find_subject.asset_id}}:reference_image",
-                        "{{find_location.asset_id}}:reference_image",
+                        "{{find_subject.asset_ids.0}}:reference_image",
+                        "{{find_subject.asset_ids.1}}:reference_image",
+                        "{{find_subject.asset_ids.2}}:reference_image",
+                        "{{find_location.asset_ids.0}}:reference_image",
+                        "{{find_location.asset_ids.1}}:reference_image",
+                        "{{find_location.asset_ids.2}}:reference_image",
+                        "{{find_location.asset_ids.3}}:reference_image",
                     ],
                 },
             },
@@ -592,7 +604,8 @@ JSON Schema 的对象。"""
                 "type": "entity_get",
                 "name": {"zh": "在资产库里找首帧主角", "en": "Look the first frame's main character up in the library"},
                 "position": {"x": 390, "y": -260},
-                "config": {"kind": "character", "name": "{{loop.item.first_frame_subject}}", "limit": 1},
+                #: 主角的单张视图(正 → 侧 → 背),不要三视图:拼版图会被画成几宫格(见 entities.sheet_views)。
+                "config": {"kind": "character", "name": "{{loop.item.first_frame_subject}}", "views": "yes", "limit": 3},
             },
             {
                 "id": "has_location",
@@ -606,8 +619,8 @@ JSON Schema 的对象。"""
                 "type": "entity_get",
                 "name": {"zh": "在资产库里找这一镜的地点", "en": "Look the shot's location up in the library"},
                 "position": {"x": 390, "y": -420},
-                "config": {"kind": "location", "name": "{{loop.item.location_name}}", "limit": 1,
-                               "role": LOCATION_SHEET_ROLE},
+                #: 地点的单张视图(俯视 → 反打 → 细节),不要 2×2 设计稿本身。
+                "config": {"kind": "location", "name": "{{loop.item.location_name}}", "views": "yes", "limit": 4},
             },
             {
                 "id": "has_narration",
@@ -791,6 +804,9 @@ JSON Schema 的对象。"""
     }
     if drama:
         _speak_in_the_clip(generate_body, assemble_body, dialogue)
+    #: 角色 / 场景循环每项交出的那几行:它的单张视图(人物正 / 侧 / 背,场景俯视 / 反打 / 两张细节),缺的那行自然消失。
+    view_lines = "\n".join(f"{{{{views.asset_ids.{index}}}}}:reference_image" for index in range(4))
+
     def reuse_or_draw(kind: str, what: dict[str, str], drawer: dict[str, Any], save: dict[str, Any],
                       role: str = "") -> dict[str, Any]:
         """每个角色 / 场景:先到资产库里按名字认(ADR 0027 阶段 4),**有图就用它的,不再重画**;没有才画,画完
@@ -821,6 +837,15 @@ JSON Schema 的对象。"""
                 {**drawer, "position": {"x": 680, "y": 240}},
                 {**save, "position": {"x": 980, "y": 240}},
                 {
+                    #: 认出来的、新画的都拆成单张视图挂回资产(entities.sheet_views):逐镜画关键帧只交单张视图 ——
+                    #: 拼版图(三视图横排三人、设计稿 2×2)交给出图模型,它会把版式一起照搬,画出几宫格。拆过的不再拆。
+                    "id": "views",
+                    "type": "entity_sheet_views",
+                    "name": {"zh": "拆成单张视图", "en": "Split into single views"},
+                    "position": {"x": 1280, "y": 140},
+                    "config": {"kind": kind, "name": "{{loop.item.name}}"},
+                },
+                {
                     #: 新画的这张也归进成片项目(此前只存成人物 / 场景资产,不在项目里)。库里认出来的那张不动。
                     "id": "file_art",
                     "type": "asset_update",
@@ -834,6 +859,9 @@ JSON Schema 的对象。"""
                 {"id": "missing_draw", "source": "has_art", "target": drawer["id"], "source_handle": "false"},
                 {"id": "draw_save", "source": drawer["id"], "target": save["id"]},
                 {"id": "draw_file", "source": drawer["id"], "target": "file_art"},
+                #: 两支汇到同一步:库里有图(真出口)直接拆,没图的画完存好再拆。
+                {"id": "found_views", "source": "has_art", "target": "views", "source_handle": "true"},
+                {"id": "saved_views", "source": save["id"], "target": "views"},
             ],
         }
 
@@ -1062,9 +1090,9 @@ JSON Schema 的对象。"""
                 "items": "{{visual_bible.json.characters}}",
                 "inputs": {"style": "{{visual_bible.json.style_prompt}}", "project_id": "{{video_project.project_id}}"},
                 "body": sheet_body,
-                #: 每项交出一行 `素材:reference_image` —— 下游把整组一次接进参考图。
-                #: 认出来的那张,或新画的那张(另一支没跑,引用出来是空串)。
-                "output": "{{find.asset_ids.0}}{{sheet.asset_id}}:reference_image",
+                #: 每项交出这个角色的单张视图,一张一行 `素材:reference_image` —— 下游把整组一次接进参考图。
+                #: 不交三视图:拼版图会被画成几宫格(见 entities.sheet_views)。
+                "output": view_lines,
                 "concurrency": 3,
             },
         },
@@ -1077,7 +1105,7 @@ JSON Schema 的对象。"""
                 "items": "{{visual_bible.json.locations}}",
                 "inputs": {"style": "{{visual_bible.json.style_prompt}}", "project_id": "{{video_project.project_id}}"},
                 "body": location_body,
-                "output": "{{find.asset_ids.0}}{{art.asset_id}}:reference_image",
+                "output": view_lines,
                 "concurrency": 3,
             },
         },
@@ -1350,7 +1378,7 @@ JSON Schema 的对象。"""
         #: 漫剧 v3:对白由视频模型出片时一起念(不再另配 TTS + 说话照片),字幕按画面片段上屏。
         #: v26(漫剧 v2):布景台要和分镜一样多(json_match_items);接时间线之前先清空(重做一轮不再把镜头接两遍)。
         "meta": {"template_id": DRAMA_EPISODE if drama else FULL_VIDEO_GENERATION,
-                 "template_version": DRAMA_EPISODE_VERSION if drama else 29, "source": "official"},
+                 "template_version": DRAMA_EPISODE_VERSION if drama else 30, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

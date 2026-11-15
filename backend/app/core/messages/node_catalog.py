@@ -523,6 +523,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_entity_get_name": {"zh": "按名字找(不分大小写);常接上游的角色名", "en": "Look up by name (case-insensitive); usually a character name from upstream"},
     "wfNode_entity_get_limit": {"zh": "最多交出几张参考图,默认 8", "en": "At most this many references, 8 by default"},
     "wfNode_entity_get_role": {"zh": "只要这种角度的图(如场景的设计稿);留空按挑图先后取全部,封面排第一", "en": "Only images of this angle (such as a location's design sheet); empty takes all in attach order, cover first"},
+    "wfNode_entity_get_views": {"zh": "只要单张视图(人物正面 / 侧面 / 背面,场景俯视 / 反打 / 细节),不要三视图、设计稿这类拼版图 —— 拼版图交给出图模型会被画成几宫格", "en": "Only single views (a character's front / side / back, a location's overview / reverse / details), not combined sheets such as turnarounds or design sheets — image models copy a combined sheet's panel layout"},
+    "wfNode_entity_sheet_views": {"zh": "拆成单张视图", "en": "Split into single views"},
+    "wfNode_entity_sheet_views_desc": {
+        "zh": "把资产的拼版参考图拆成单张视图挂回去:人物三视图拆成正面 / 侧面 / 背面,场景设计稿拆成俯视 / 反打 / 两张细节。拆过的不再拆。拼版图交给出图模型时,模型会把版式一起照搬,画出几宫格;单张视图没有这个问题。",
+        "en": "Split an asset's combined reference sheets into single views and attach them back: a character turnaround becomes front / side / back, a location design sheet becomes overview / reverse / two details. Sheets already split are skipped. Image models copy a combined sheet's panel layout into a grid; single views don't have that problem.",
+    },
     "wfNode_scene_from_text": {"zh": "按文字搭 3D 场景", "en": "Build a 3D scene from text"},
     "wfNode_scene_from_text_desc": {
         "zh": "照一段剧本、分镜或描述搭一个 3D 白模场景:拆成几个镜头,每镜一个布景台,摆好人偶、道具和相机,写好运镜。和「从主题到完整视频」里搭白模的规矩是同一份。搭好的场景在「3D 场景」里,可以渲首尾帧或运镜视频。",
