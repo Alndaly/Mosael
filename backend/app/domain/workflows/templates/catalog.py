@@ -180,11 +180,11 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
         },
         "download_note": {
             "zh": "这一份带着「用角色的嗓子演这一句」(对白模型,收首帧和参考音频,例:ComfyUI 范例「H3 对白 · 角色嗓音」):"
-                  "导入后在那一格挑好模型,同一个角色几镜之间嗓音一致。没有这种模型的话,删掉「这一镜是角色在说话吗」"
+                  "导入后在那一格挑好模型,同一个角色几镜之间嗓音一致。没有这种模型的话,删掉「说话的角色带着嗓子吗」"
                   "「用这个角色的嗓子念一句参考」「用角色的嗓子演这一句」三个节点,对白照旧按文字描述念。应用里有这种模型才带这一支。",
             "en": " This copy includes “Act this line in the character's voice” (a dialogue model taking a first frame and reference audio, "
                   "e.g. the ComfyUI example “H3 dialogue · character voice”): pick the model there after importing so a character sounds the "
-                  "same across shots. Without such a model, delete “Is a character speaking in this shot?”, “Record a reference line in this "
+                  "same across shots. Without such a model, delete “Does the speaking character carry a voice?”, “Record a reference line in this "
                   "character's voice” and “Act this line in the character's voice”; lines are then spoken from the text alone. In the app "
                   "this branch is added only when such a model is set up.",
         },

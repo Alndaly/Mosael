@@ -163,8 +163,8 @@ def test_给了对白模型_对白镜头用关键帧加角色参考嗓音出片(
     assert speak["source_assets"] == ["{{paint_first_frame.asset_id}}:first_frame", "{{voice_sample.asset_id}}:reference_audio"]
     for part in ("<Picture 1>", "<Audio 1>", "{{loop.item.narration}}", "{{loop.item.generation_prompt}}"):
         assert part in speak["prompt"], part
-    assert "dialogue_cue" not in {node["id"] for node in body["nodes"]}, "台词已经写在对白模型的提示词里"
-    assert "{{dialogue_cue.text}}" not in _node(body, "generate_clip")["config"]["prompt"]
+    #: 说话人没配嗓子的镜头照旧图生视频,台词由「这一句怎么说」拼进它的提示词
+    assert "{{dialogue_cue.text}}" in _node(body, "generate_clip")["config"]["prompt"]
 
 
 def test_给了对白模型_两支只跑一支_图生视频只由不是对白那个出口激活() -> None:
@@ -172,9 +172,9 @@ def test_给了对白模型_两支只跑一支_图生视频只由不是对白那
     两个素材 id(初版就这样失败过)。"""
     body = _shots(_voiced())
     into = {(source, handle) for source, target, handle in _control(body) if target == "generate_clip"}
-    assert into == {("is_dialogue", "false")}
-    assert {("is_dialogue", "speak_line", "true"), ("render_blockout", "is_dialogue", None),
-            ("find_speaker", "voice_sample", None)} <= _control(body)
+    assert into == {("has_character_voice", "false")}
+    assert {("has_character_voice", "speak_line", "true"), ("has_character_voice", "voice_sample", "true"),
+            ("render_blockout", "has_character_voice", None)} <= _control(body)
     organize = _node(body, "organize_clip")
     assert organize["config"]["asset_ids"] == "{{generate_clip.asset_id}}{{speak_line.asset_id}}"
     assert not {edge["source"] for edge in body["edges"]
@@ -195,3 +195,16 @@ def test_分镜和布景的输出上限够写满20镜() -> None:
     for graph in (_drama(), _full()):
         for node_id in ("storyboard", "set_design"):
             assert _node(graph, node_id)["config"]["max_tokens"] >= 64000, node_id
+
+
+def test_说话人没配嗓子就退回按文字念_不让整个循环失败() -> None:
+    """分镜把门外那句台词标给了库里没配嗓子的「灰袍路人」:判的若是「有没有说话的人」,念参考那一步报「没有选音色」,
+    整个逐镜循环跟着失败(《长明灯》第 2 场第 20 镜)。判「说话的角色带着嗓子吗」,没有就图生视频、台词照旧拼进提示词。"""
+    body = _shots(_voiced())
+    assert _node(body, "has_character_voice")["config"]["op"] == "not_empty"
+    #: 判的是说话角色身上的嗓子(一整格引用,规范化成数据边)
+    assert ("find_speaker", "voice_id", "left") in {
+        (edge["source"], edge.get("source_output"), edge.get("target_input"))
+        for edge in body["edges"] if edge.get("kind") == "data" and edge["target"] == "has_character_voice"
+    }
+    assert "is_dialogue" not in {node["id"] for node in body["nodes"]}

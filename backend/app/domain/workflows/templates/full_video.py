@@ -32,7 +32,7 @@ from app.domain.workflows.templates.schemas import (
 FULL_VIDEO_GENERATION = "full_video_generation"
 #: 同一张图的「漫剧」形态(`drama=True`):对白推动,角色台词的镜头用说话照片模型让关键帧开口(见 full_video_generation_graph)。
 DRAMA_EPISODE = "drama_episode"
-DRAMA_EPISODE_VERSION = 4
+DRAMA_EPISODE_VERSION = 5
 
 #: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
 RUNTIME_PROMPT_HEADROOM = 600
@@ -228,31 +228,29 @@ def _speak_in_the_character_voice(generate: dict[str, Any], assemble: dict[str, 
     0.14–0.42;给 H3 一段角色的参考嗓音(`ref_audios`)之后同一个孩子两镜 0.84,台词逐字不差,构图由钉在第 0 帧的关键帧
     定住(维护者:「同一角色声音务必一样」)。
 
-    - `voice_sample`:用资产库里这个角色的嗓子念一句固定的话(VOICE_SAMPLE_TEXT)——没给角色配嗓子的,这一步照实报错,
-      先在「连续剧 · 系列设定」里配好;
+    - `voice_sample`:用资产库里这个角色的嗓子念一句固定的话(VOICE_SAMPLE_TEXT);
     - `speak_line`:首帧 + 参考嗓音 + 提示词(动作、运镜、谁用 <Audio 1> 的音色按此刻的情绪念哪一句);
-    - `is_dialogue`:是角色在说的镜头走 `speak_line`,其余图生视频。**图生视频只由它的假出口激活**:原来挂着的普通控制边
-      (白模之后、接力取尾帧之后)改接到判断上 —— 有路由边时没有同向数据线陪着的普通边照样激活(engine.incoming_active),
-      不改接的话对白镜头两支都跑,下游把两个素材 id 拼成一串;
+    - `has_character_voice`:**说话的角色带着嗓子**的镜头走 `speak_line`,其余(没台词的、旁白的、说话人没配嗓子的)图生视频,
+      台词照旧由「这一句怎么说」拼进它的提示词。此前判的是「有没有说话的人」:分镜把门外那句台词标给了库里没配嗓子的
+      「灰袍路人」,念参考那一步报「没有选音色」,整个逐镜循环跟着失败(《长明灯》第 2 场第 20 镜)。
+      **图生视频只由它的假出口激活**:原来挂着的普通控制边(白模之后、接力取尾帧之后)改接到判断上 —— 有路由边时没有同向
+      数据线陪着的普通边照样激活(engine.incoming_active),不改接的话对白镜头两支都跑,下游把两个素材 id 拼成一串;
     - 归档、上时间线取两支拼起来的那一个(没跑的那支引用出来是空串)。
     """
-    generate["nodes"] = [node for node in generate["nodes"] if node["id"] != "dialogue_cue"]
-    generate["edges"] = [edge for edge in generate["edges"] if edge["id"] != "shot_speaker_cue"]
-    clip = next(node for node in generate["nodes"] if node["id"] == "generate_clip")["config"]
-    clip["prompt"] = clip["prompt"].replace(" {{dialogue_cue.text}}", "")
     generate["nodes"] += [
         {
-            "id": "is_dialogue",
+            "id": "has_character_voice",
             "type": "condition",
-            "name": {"zh": "这一镜是角色在说话吗", "en": "Is a character speaking in this shot?"},
+            "name": {"zh": "说话的角色带着嗓子吗", "en": "Does the speaking character carry a voice?"},
             "position": {"x": 1010, "y": 260},
-            "config": {"left": "{{loop.item.speaker}}", "op": "not_empty"},
+            #: 没台词、旁白的镜头「找说话的角色」被跳过,引用出来是空串 —— 同样走图生视频。
+            "config": {"left": "{{find_speaker.voice_id}}", "op": "not_empty"},
         },
         {
             "id": "voice_sample",
             "type": "synthesize_speech",
             "name": {"zh": "用这个角色的嗓子念一句参考", "en": "Record a reference line in this character's voice"},
-            "position": {"x": 1010, "y": 420},
+            "position": {"x": 1010, "y": 580},
             "config": {"text": VOICE_SAMPLE_TEXT, "engine": "{{find_speaker.voice_engine}}", "voice": "{{find_speaker.voice_id}}"},
         },
         {
@@ -283,11 +281,11 @@ def _speak_in_the_character_voice(generate: dict[str, Any], assemble: dict[str, 
     ]
     for edge in generate["edges"]:
         if edge["target"] == "generate_clip" and not edge.get("source_handle"):
-            edge["target"] = "is_dialogue"
+            edge["target"] = "has_character_voice"
     generate["edges"] += [
-        {"id": "shot_speaker_voice", "source": "find_speaker", "target": "voice_sample"},
-        {"id": "shot_dialogue_speak", "source": "is_dialogue", "target": "speak_line", "source_handle": "true"},
-        {"id": "shot_silent_generate", "source": "is_dialogue", "target": "generate_clip", "source_handle": "false"},
+        {"id": "shot_voice_sample", "source": "has_character_voice", "target": "voice_sample", "source_handle": "true"},
+        {"id": "shot_voice_speak", "source": "has_character_voice", "target": "speak_line", "source_handle": "true"},
+        {"id": "shot_unvoiced_generate", "source": "has_character_voice", "target": "generate_clip", "source_handle": "false"},
     ]
     #: 两条入边是「都跑了才跑」,归档不能汇到它们:按引用等两支落定。
     organize = next(node for node in generate["nodes"] if node["id"] == "organize_clip")["config"]
@@ -1333,6 +1331,7 @@ JSON Schema 的对象。"""
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
         #: v25:无旁白镜头的原声标成环境声,照常出声但不触发配乐闪避。
+        #: 漫剧 v5:对白分支按「说话的角色带着嗓子吗」判断(没配嗓子的退回按文字念,不再让整个循环失败)。
         #: v27(漫剧 v4):分镜、布景两次对话的输出上限提到 64000(布景 20 镜在 32000 被截断);漫剧对白可交对白模型(角色参考嗓音)。
         #: 漫剧 v3:对白由视频模型出片时一起念(不再另配 TTS + 说话照片),字幕按画面片段上屏。
         #: v26(漫剧 v2):布景台要和分镜一样多(json_match_items);接时间线之前先清空(重做一轮不再把镜头接两遍)。
