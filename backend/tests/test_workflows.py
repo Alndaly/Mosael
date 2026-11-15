@@ -910,6 +910,9 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
                 "strict": True,
             },
         },
+        #: 直连一律流式下发,长输出才撑得过供应商网关的 100 秒(见 test_chat_streams_long_outputs)。
+        "stream": True,
+        "stream_options": {"include_usage": True},
     }
 
 

@@ -292,6 +292,12 @@ def chat(
             allow_response_format_fallback=allow_response_format_fallback,
             on_downgrade=on_downgrade,
         )
+    #: **流式下发,整段读完再用。** 长输出(20 镜的分镜、整集剧本)一次要生成好几分钟,非流式时连接上一个字节都没有,
+    #: 供应商前面的网关等满 100 秒就掐断(Cloudflare 524「Upstream … temporarily unavailable」)—— 漫剧第 2 场的分镜
+    #: 连挂两次,每次都在 126 秒上。流式时字节一边生成一边回来,网关不再判它超时;我们照样把整段读完再拼回同一个回复体,
+    #: 下游(计量、空内容降级、报错)一行不用动。用量要显式要(`include_usage`),否则流式下没有 usage,账就记不上。
+    payload["stream"] = True
+    payload["stream_options"] = {"include_usage": True}
     url = f"{target.base_url.rstrip('/')}/chat/completions"
     headers = http_retry.auth_headers(target.api_key)
     if call is not None:
@@ -316,7 +322,7 @@ def chat(
                 _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_rejected"))
                 payload = fallback
                 continue
-            body = response.json()
+            body = _completion_body(response)
             # 空 content 也可能已经消耗了推理 token；每个 200 尝试都累计到同一条账，而不是
             # 只记最终可见答案。BillableCall.meter 明确定义为可多次累加。
             if call is not None:
@@ -625,6 +631,37 @@ def _sanitize(message: str, credential: str | None) -> str:
     text = re.sub(r"(Bearer\s+)[A-Za-z0-9._-]+", r"\1***", text)
     text = re.sub(r"(api[_-]?key[\"'=:\s]+)[A-Za-z0-9._-]+", r"\1***", text, flags=re.IGNORECASE)
     return text[:500]
+
+
+def _completion_body(response: httpx.Response) -> dict[str, Any]:
+    """把一次补全的响应读成非流式的回复体形状:`{"choices": [{"message": {"content": …}}], "usage": …}`。
+
+    请求总是带 `stream: true`(见 chat),但回什么由供应商定:按 OpenAI 的约定回 SSE(`text/event-stream`,一行
+    `data: {…}` 一个分片,`data: [DONE]` 收尾);不理会 `stream` 的照旧回一整个 JSON。两种都是合法的回答,按
+    Content-Type 分开读,读出来是同一个形状。流的中途报错(`data: {"error": …}`)当场抛出 —— 拼出半截内容当成功,
+    比报错更糟。
+    """
+    if not response.headers.get("content-type", "").startswith("text/event-stream"):
+        return response.json()
+    parts: list[str] = []
+    usage: dict[str, Any] | None = None
+    for line in response.text.splitlines():
+        if not line.startswith("data:"):
+            continue  # 空行、`event:`、`: keep-alive` 注释
+        data = line.removeprefix("data:").strip()
+        if not data or data == "[DONE]":
+            continue
+        chunk = json.loads(data)
+        if chunk.get("error"):
+            error = chunk["error"]
+            raise ValueError(str(error.get("message") if isinstance(error, dict) else error))
+        if chunk.get("usage"):
+            usage = chunk["usage"]
+        for choice in chunk.get("choices") or ():
+            delta = choice.get("delta") or {}
+            if delta.get("content"):
+                parts.append(str(delta["content"]))
+    return {"choices": [{"message": {"content": "".join(parts)}}], "usage": usage}
 
 
 def _provider_detail(response: httpx.Response) -> tuple[int, str]:

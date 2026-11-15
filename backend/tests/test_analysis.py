@@ -203,6 +203,9 @@ def test_analyze_rejects_audio_assets() -> None:
 
 
 class _FakeResp:
+    #: 一整个 JSON 的回答(供应商不理会 `stream` 时的形状);流式那种见 test_chat_streams_long_outputs。
+    headers = {"content-type": "application/json"}
+
     def __init__(self, payload: dict) -> None:
         self._payload = payload
 
