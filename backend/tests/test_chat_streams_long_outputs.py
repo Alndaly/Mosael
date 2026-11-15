@@ -82,3 +82,53 @@ def test_流的中途报错就是失败_不拿半截内容当结果(monkeypatch)
         chat(TARGET, [{"role": "user", "content": "写分镜"}])
 
     assert "upstream overloaded" in str(caught.value)
+
+
+def test_到了长度上限就接着写_几段原样拼起来(monkeypatch) -> None:
+    """CommandCode 上的 DeepSeek V4 Flash 每次三万来个 token 就停(请求里写 64000 也一样):20 镜的 3D 布景在第 7 万字处
+    断在一个字符串中间,重答一遍还是在同一处断。到了长度上限就把写出来的那段交回去,让它接着写。"""
+    answers = [
+        _sse({"choices": [{"delta": {"content": '{"shots": [{"id": "shot-1"}, {"id": "sh'}}]},
+             {"choices": [{"delta": {}, "finish_reason": "length"}]}, "[DONE]"),
+        _sse({"choices": [{"delta": {"content": 'ot-2"}]}'}}]}, {"choices": [{"delta": {}, "finish_reason": "stop"}]}, "[DONE]"),
+    ]
+    seen: list[dict] = []
+    _install(monkeypatch, lambda r: httpx.Response(200, request=r, text=answers[len(seen) - 1],
+                                                   headers={"content-type": "text/event-stream"}), seen)
+
+    text = chat(TARGET, [{"role": "user", "content": "搭布景"}], json_object=True, continue_cut_off=3)
+
+    assert json.loads(text) == {"shots": [{"id": "shot-1"}, {"id": "shot-2"}]}
+    assert len(seen) == 2
+    follow = seen[1]
+    assert follow["messages"][-2] == {"role": "assistant", "content": '{"shots": [{"id": "shot-1"}, {"id": "sh'}
+    assert follow["messages"][-1]["role"] == "user" and "接着往下写" in follow["messages"][-1]["content"]
+    assert "response_format" not in follow, "半截内容本身不是合法 JSON,续写时还强制 JSON 模式只会让模型另起一个对象"
+
+
+def test_没开续写的照旧交回截断的那段(monkeypatch) -> None:
+    body = _sse({"choices": [{"delta": {"content": "写到一半"}, "finish_reason": "length"}]}, "[DONE]")
+    seen: list[dict] = []
+    _install(monkeypatch, lambda r: httpx.Response(200, request=r, text=body, headers={"content-type": "text/event-stream"}), seen)
+
+    assert chat(TARGET, [{"role": "user", "content": "hi"}]) == "写到一半"
+    assert len(seen) == 1
+
+
+def test_整个JSON的回答也认得长度截断(monkeypatch) -> None:
+    answers = [
+        {"choices": [{"message": {"content": "前半"}, "finish_reason": "length"}]},
+        {"choices": [{"message": {"content": "后半"}, "finish_reason": "stop"}]},
+    ]
+    seen: list[dict] = []
+    _install(monkeypatch, lambda r: httpx.Response(200, request=r, json=answers[len(seen) - 1]), seen)
+
+    assert chat(TARGET, [{"role": "user", "content": "hi"}], continue_cut_off=1) == "前半后半"
+
+
+def test_正文里的行分隔符不会把一条分片切成两半(monkeypatch) -> None:
+    """SSE 只按 \\n 分行;此前用 splitlines(),正文里出现 U+2028 / \\x85 就把那一条 data 切断、整轮报格式错误。"""
+    body = "data: " + json.dumps({"choices": [{"delta": {"content": "甲 乙\x85丙"}}]}, ensure_ascii=False) + "\n\ndata: [DONE]\n\n"
+    _install(monkeypatch, lambda r: httpx.Response(200, request=r, text=body, headers={"content-type": "text/event-stream"}), [])
+
+    assert chat(TARGET, [{"role": "user", "content": "hi"}]) == "甲 乙\x85丙"

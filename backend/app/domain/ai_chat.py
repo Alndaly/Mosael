@@ -237,8 +237,12 @@ def chat(
     label: str = "aiChat_labelDefault",
     allow_response_format_fallback: bool = False,
     on_downgrade: DowngradeReporter | None = None,
+    continue_cut_off: int = 0,
 ) -> str:
     """跑一次对话补全,返回助手消息的文本。
+
+    continue_cut_off:回答因为到了长度上限被截断(`finish_reason == "length"`)时,最多接着续写几次、拼成一整段
+    (见 _continuation_payload)。缺省 0 —— 截断就交回截断的那段,和此前一样。
 
     client 给了就复用它(整批字幕共用连接,省掉每条一次 TLS 握手);此时重试由该 client 决定。
     call 给了就把 token 计量报进那次记账(见 domain/billing/usage.billable)。
@@ -303,6 +307,8 @@ def chat(
     if call is not None:
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
 
+    #: 被长度上限截断后续写出来的那几段(见 continue_cut_off);最后一段在 content 里,交回时拼在一起。
+    written: list[str] = []
     try:
         while True:
             if client is not None:
@@ -329,12 +335,17 @@ def chat(
                 call.meter_openai_tokens(body.get("usage"))
             raw_content = body["choices"][0]["message"]["content"]
             content = "" if raw_content is None else str(raw_content)
-            if allow_response_format_fallback and not content.strip():
+            if allow_response_format_fallback and not content.strip() and not written:
                 fallback = _downgrade_response_format_payload(payload)
                 if fallback is not None:
                     _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_empty"))
                     payload = fallback
                     continue
+            if body["choices"][0].get("finish_reason") == "length" and len(written) < continue_cut_off:
+                written.append(content)
+                payload = _continuation_payload(payload, "".join(written))
+                continue
+            content = "".join(written) + content
             break
     except httpx.HTTPStatusError as exc:
         status, detail = _provider_detail(exc.response)
@@ -645,7 +656,9 @@ def _completion_body(response: httpx.Response) -> dict[str, Any]:
         return response.json()
     parts: list[str] = []
     usage: dict[str, Any] | None = None
-    for line in response.text.splitlines():
+    finish_reason: str | None = None
+    #: 只按 \n 切(SSE 的规矩):splitlines() 连 U+2028、\x85 这些也当换行,正文里出现一个就把一条 data 切成两半。
+    for line in response.text.split("\n"):
         if not line.startswith("data:"):
             continue  # 空行、`event:`、`: keep-alive` 注释
         data = line.removeprefix("data:").strip()
@@ -661,7 +674,32 @@ def _completion_body(response: httpx.Response) -> dict[str, Any]:
             delta = choice.get("delta") or {}
             if delta.get("content"):
                 parts.append(str(delta["content"]))
-    return {"choices": [{"message": {"content": "".join(parts)}}], "usage": usage}
+            if choice.get("finish_reason"):
+                finish_reason = str(choice["finish_reason"])
+    return {"choices": [{"message": {"content": "".join(parts)}, "finish_reason": finish_reason}], "usage": usage}
+
+
+#: 续写时追加的那句话。只要接着写、不要复述 —— 下游把几段原样拼起来,多一个字少一个字都会让 JSON 断掉。
+CONTINUE_PROMPT = (
+    "你上一条回答到了长度上限、在中间被截断了。从断开的地方原样接着往下写:不要重复已经写过的任何字符,不要加开头语、"
+    "解释或 Markdown 围栏,第一个字符紧接着上一条的最后一个字符。"
+)
+
+
+def _continuation_payload(payload: dict[str, Any], written: str) -> dict[str, Any]:
+    """长度截断之后的那一次请求:原来的对话 + 已经写出来的那段(助手) + 「接着写」(用户)。
+
+    几个供应商把单次输出限得比模型本身小得多(CommandCode 上的 DeepSeek V4 Flash 每次三万来个 token 就停,请求里写
+    64000 也一样)—— 20 镜的 3D 布景一次写不完,在第 7 万字处断在一个字符串中间。续写的那几次**不要** response_format:
+    半截内容本身不是合法 JSON,强制 JSON 模式只会让模型另起一个对象。
+    """
+    following = {key: value for key, value in payload.items() if key != "response_format"}
+    following["messages"] = [
+        *payload.get("messages", []),
+        {"role": "assistant", "content": written},
+        {"role": "user", "content": CONTINUE_PROMPT},
+    ]
+    return following
 
 
 def _provider_detail(response: httpx.Response) -> tuple[int, str]:

@@ -293,6 +293,9 @@ def _enforced_locally(config: dict[str, Any], used_tier: str) -> bool:
 #: 要么是提示词和 schema 本身打架(比如"每镜 2~3 秒"配上"总长 20 秒、约 9 镜"),再试十次一样。
 #: 而每一次都是一次付费调用,所以不能为了"总有一次能过"无限试。
 JSON_REPAIR_ATTEMPTS = 1
+#: 一次回答到了长度上限、被截断时最多接着续写几次。供应商的单次输出上限可能比模型本身小得多(CommandCode 上的
+#: DeepSeek V4 Flash 每次三万来个 token 就停),20 镜的 3D 布景要两到三段才写得完。
+LLM_CONTINUE_CUT_OFF = 3
 
 
 class _BadJson(Exception):
@@ -522,6 +525,8 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
                     label="调用 LLM" if attempt == 0 else "重新生成 JSON",
                     allow_response_format_fallback=allow_response_format_fallback,
                     on_downgrade=_note_downgrade,
+                    #: 半截 JSON 解析不了、重答一遍还是在同一处断:到了长度上限就接着写(见 ai_chat.chat)。
+                    continue_cut_off=LLM_CONTINUE_CUT_OFF if wants_json else 0,
                 )
                 text = raw_text.strip()
                 if not wants_json:
