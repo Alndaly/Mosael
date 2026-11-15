@@ -37,6 +37,7 @@ from app.domain.agent.stream import (
     _stream_tool_event,
     _stream_turn_id,
     _timeline_for_payload,
+    settled_tool,
 )
 from app.domain.agent import card_expiry, computer_use, origins, titles
 from app.domain.agent.places import STUDIO_PLACE, Place
@@ -1255,7 +1256,10 @@ def _interrupted_turn_payload(db: Session, session_id: str) -> dict:
     取不到不能让重启收尾崩掉 —— 它在启动路径上,崩了后端就起不来。
     """
     try:
-        timeline = timeline_for_session(db, session_id)
+        timeline = [
+            {**item, "tool": settled_tool(item["tool"])} if isinstance(item.get("tool"), dict) else item
+            for item in timeline_for_session(db, session_id)
+        ]
         turn_id = latest_turn_id(db, session_id)
     except Exception:  # noqa: BLE001 —— 启动路径:有过程更好,没有也不能连累后端起来
         logger.exception("failed to capture the persisted steps of interrupted session %s", session_id)

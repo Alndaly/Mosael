@@ -11557,6 +11557,8 @@ export interface components {
             timeline?: {
                 [key: string]: unknown;
             }[];
+            /** Started At */
+            started_at?: string | null;
         };
         /**
          * AgentToolsetOut

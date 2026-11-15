@@ -15,6 +15,7 @@ import threading
 import time
 
 from app.db.agent_turn_events import record_turn_event
+from app.core.i18n import tr
 from app.db.models import new_id, now
 from app.domain.agent.textclean import decode_byte_fallback
 
@@ -62,6 +63,8 @@ def _stream_reset(session_id: str) -> None:
             #: 这一轮在库里叫什么(见 `app.db.agent_turn_events`)。事件按 (turn_id, seq) 落库,
             #: 重启收尾时靠它把「做到哪一步」找回来。
             "turn_id": new_id(),
+            #: 这一轮开始的时刻(UTC,和库里其它时间同一种形状),界面的「已用 …」从它算。
+            "started_at": now(),
         }
 
 
@@ -317,6 +320,28 @@ def _stream_finish(session_id: str, final_text: str) -> None:
         state["seq"] += 1
 
 
+def settled_tool(tool: dict) -> dict:
+    """落库那一刻还在 `running` 的工具卡 → 一张收了尾的卡(`error`,说明这一步没等到结果)。
+
+    **落库的时间线里不能有还在跑的工具。** 落库就是这一轮(或这一段)结束了:之后不会再有 `tool_end`
+    来改这张卡 —— 线程死了(后端重启)、用户停了、模型调用失败了,或者一段被插话截断、流已经换了一段。
+    留着 `running`,界面上那一行就**永远转圈**,而对话其实早往下走了(维护者截图:ask_user 等人回答时
+    后端重启,答完之后新的一轮都跑了十几分钟,上面那行还在转)。和思考块「落库一律标 done」同一条规矩。
+
+    不改成 `done`:没拿到结果就说做完了,是在替工具编一个结局。已经挂上去的东西(后台子智能体回填的
+    存档)留着,只补一句为什么没有结果。
+    """
+    card = dict(tool)
+    if card.get("status") != "running":
+        return card
+    card["status"] = "error"
+    result = card.get("result")
+    result = dict(result) if isinstance(result, dict) else {}
+    result.setdefault("content", [{"type": "text", "text": tr("agentTurn_toolNeverFinished")}])
+    card["result"] = result
+    return card
+
+
 def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
     """Return the persisted, display-ready event order for one assistant turn.
 
@@ -331,11 +356,11 @@ def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
             if text:
                 timeline.append({"type": "text", "text": text})
         elif item.get("type") == "tool" and isinstance(item.get("tool"), dict):
-            timeline.append({"type": "tool", "tool": dict(item["tool"])})
+            timeline.append({"type": "tool", "tool": settled_tool(item["tool"])})
         elif item.get("type") == "subtool" and isinstance(item.get("tool"), dict):
             # 子智能体的步骤要活过刷新 —— 这里此前只认三种类型,subtool 落库时被静默丢掉,
             # 于是流式期间嵌套卡都在,一刷新全没了。
-            timeline.append({"type": "subtool", "parent_id": item.get("parent_id"), "tool": dict(item["tool"])})
+            timeline.append({"type": "subtool", "parent_id": item.get("parent_id"), "tool": settled_tool(item["tool"])})
         elif item.get("type") == "thinking":
             text = decode_byte_fallback(str(item.get("text", "")))
             if text:

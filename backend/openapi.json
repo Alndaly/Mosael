@@ -32775,6 +32775,18 @@
             },
             "type": "array",
             "title": "Timeline"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
           }
         },
         "type": "object",

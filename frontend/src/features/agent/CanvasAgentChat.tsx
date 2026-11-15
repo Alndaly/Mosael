@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
+import { useTurnElapsedSeconds } from "@/features/agent/useTurnElapsedSeconds";
 import {
   MAX_CONTEXT_CHARS,
   MAX_MESSAGE_CHARS,
@@ -174,10 +175,6 @@ export function CanvasAgentChat({
   const readOnly = current.readOnly;
   //: 空串 = 还没有会话(各查询都以它为 enabled 条件)。
   const sessionId = activeSession?.id ?? "";
-  // 连流 → 攒状态 → 收尾失效:**只有一份**,和 AI 工作台共用(见 useAgentTurnStream)。
-  // 此前这里各写了一遍,而收尾那一步停在没修之前的写法 —— 每答完一句都会闪一下,
-  // 而那个 bug 在隔壁文件里早就被诊断、注释、修好过。
-  const { streamText, streamTimeline, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspaceId);
   //: 换地方:上一处挂着的附件暂存起来,这一处先前的取回来;打的字换成这一处的。见上面 `draft` 那段。
@@ -228,6 +225,10 @@ export function CanvasAgentChat({
     refetchOnWindowFocus: true,
   });
   const running = live.data?.status === "running";
+  // 连流 → 攒状态 → 收尾失效:**只有一份**,和 AI 工作台共用(见 useAgentTurnStream)。
+  // 此前这里各写了一遍,而收尾那一步停在没修之前的写法 —— 每答完一句都会闪一下,
+  // 而那个 bug 在隔壁文件里早就被诊断、注释、修好过。
+  const { streamText, streamTimeline, turnStartedAt, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null, running);
   //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)。
   const messages = useQuery({
     queryKey: ["agent-messages", sessionId],
@@ -357,24 +358,7 @@ export function CanvasAgentChat({
     mutationFn: () => stopAgentSession(sessionId),
     meta: { silentError: true },
   });
-  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
-  React.useEffect(() => {
-    if (!running) {
-      setElapsedSeconds(0);
-      return;
-    }
-    const startedAt = Date.now();
-    setElapsedSeconds(0);
-    const timer = window.setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [running, sessionId]);
-
-
-  React.useEffect(() => {
-    if (running && sessionId) void attachStream(sessionId);
-  }, [running, sessionId, attachStream]);
+  const elapsedSeconds = useTurnElapsedSeconds(running, turnStartedAt);
 
   const send = useMutation({
     mutationFn: async ({

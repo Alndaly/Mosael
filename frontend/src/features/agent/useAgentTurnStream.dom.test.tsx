@@ -16,10 +16,12 @@ import { beforeEach, expect, it, vi } from "vitest";
  */
 
 const chunks: string[] = [];
+//: 一次接流取走一份;空了就用 `chunks`。验「一条流结束了还在跑就再接」要两条不一样的流。
+const streams: string[][] = [];
 let closeStream: (() => void) | null = null;
 vi.mock("@/lib/sse", () => ({
   readSseData: async function* () {
-    for (const one of chunks) yield one;
+    for (const one of streams.shift() ?? chunks) yield one;
     // 流不主动结束 —— 只有读到 done 的那一方才会跳出循环。这正是要验的那件事。
     await new Promise<void>((resolve) => {
       closeStream = resolve;
@@ -30,7 +32,7 @@ vi.mock("@/lib/sse", () => ({
 const { useAgentTurnStream } = await import("./useAgentTurnStream");
 
 function Probe({ viewed = "s1" }: { viewed?: string }) {
-  const { streamText, attach } = useAgentTurnStream(viewed);
+  const { streamText, attach } = useAgentTurnStream(viewed, false);
   React.useEffect(() => {
     void attach("s1");
   }, [attach]);
@@ -47,6 +49,7 @@ function show(client: QueryClient) {
 
 beforeEach(() => {
   chunks.length = 0;
+  streams.length = 0;
   closeStream = null;
   vi.stubGlobal("fetch", vi.fn(async () => new Response("ok", { status: 200 })));
 });
@@ -138,4 +141,37 @@ it("看的会话换成了别的:掐掉手上那条流,流态清空", async () =>
   );
   expect(screen.getByLabelText("text").textContent).toBe("");
   expect(signals[0]?.aborted).toBe(true);
+});
+
+/** 面板只告诉它「这个会话在跑」,接流由它自己来 —— 和两个面板的用法一样。 */
+function Follower() {
+  const { streamText, turnStartedAt } = useAgentTurnStream("s1", true);
+  return (
+    <>
+      <output aria-label="text">{streamText}</output>
+      <output aria-label="started">{turnStartedAt?.toISOString() ?? ""}</output>
+    </>
+  );
+}
+
+// 维护者截图:ask_user 等人回答时后端重启,答完之后新的一轮跑了十几分钟,界面还停在那一行、
+// 「已用」一路累加。一轮紧接一轮时会话一直是 running,看 running 的跳变来接流就接不上后面那一轮。
+// 变异验证过:去掉跟随 effect 里的 `endedStreams` 依赖,它红在等「下一轮」的 waitFor 上。
+it("一条流结束了而会话还在跑:自己再接上下一轮,开始时间跟着换成下一轮的", { timeout: 4000 }, async () => {
+  streams.push([JSON.stringify({ text: "上一轮", done: true, timeline: [], started_at: "2026-11-15T07:00:00" })]);
+  streams.push([JSON.stringify({ text: "下一轮", done: false, timeline: [], started_at: "2026-11-15T07:27:13" })]);
+  const fetched = vi.fn(async () => new Response("ok", { status: 200 }));
+  vi.stubGlobal("fetch", fetched);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.invalidateQueries = (async () => undefined) as typeof client.invalidateQueries;
+  render(
+    <QueryClientProvider client={client}>
+      <Follower />
+    </QueryClientProvider>,
+  );
+
+  await waitFor(() => expect(screen.getByLabelText("text").textContent).toBe("下一轮"), { timeout: 2000 });
+  expect(fetched).toHaveBeenCalledTimes(2);
+  // 后端时间不带时区标记,是 UTC —— 经 parseServerTime 解析,不能被当成本地时间。
+  expect(screen.getByLabelText("started").textContent).toBe("2026-11-15T07:27:13.000Z");
 });

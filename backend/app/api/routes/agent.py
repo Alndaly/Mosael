@@ -358,8 +358,15 @@ def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> Stre
 
     async def generator():
         last_seq = -1
+        turn_id: str | None = None
         while True:
             state = agent_stream.get_stream_state(session_id)
+            #: **一条流只属于一轮。** 下一轮可能在上一轮收尾后几毫秒内就起来(回执、答完问题都会接着起一轮),
+            #: 比这里 0.1 秒一次的轮询快 —— 上一轮的 done 没被看到,流状态已经换成了新的一轮。这时关掉流,
+            #: 由客户端重新接上新的这一轮(见前端 useAgentTurnStream),而不是把两轮接成一条。
+            turn_id = turn_id or state.get("turn_id")
+            if state.get("turn_id") and state.get("turn_id") != turn_id:
+                break
             if state["seq"] != last_seq:
                 last_seq = state["seq"]
                 yield (
@@ -369,6 +376,7 @@ def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> Stre
                         segment=int(state.get("segment") or 0),
                         done=state["done"],
                         timeline=state.get("timeline", []),
+                        started_at=state.get("started_at"),
                     ).model_dump_json()
                     + "\n\n"
                 )

@@ -69,6 +69,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这段对话正在回答,等它答完再整理上下文。",
         "en": "This conversation is answering right now; compact its context once it finishes.",
     },
+    "agentTurn_toolNeverFinished": {"zh": "这一步没有等到结果:这一轮先结束了(被停止、出错或后端重启)。", "en": "This step never got a result: the turn ended first (stopped, failed or the backend restarted)."},
     "agentTurn_stoppedBeforeReply": {"zh": "(还没开始回答就停下了。)", "en": "(Stopped before it started answering.)"},
     "agentErr_turnCrashed": {"zh": "智能体执行异常。", "en": "The agent run hit an unexpected error."},
     "agentErr_messageAlreadyRunning": {

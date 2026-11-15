@@ -448,3 +448,6 @@ class AgentStreamEvent(ApiModel):
     done: bool = False
     #: 执行轨迹(工具调用、子智能体、确认卡),同样是全量快照。
     timeline: list[dict[str, Any]] = Field(default_factory=list)
+    #: 这一轮从什么时候开始跑(UTC)。界面上「已用 …」从它算 —— 不从「看到 running 的那一刻」算:
+    #: 刷新页面、或者一轮紧接一轮(回执、答完问题)会话一直是 running,那样算出来的是几轮加起来的时长。
+    started_at: datetime | None = None

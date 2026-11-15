@@ -165,3 +165,39 @@ def test_同一个事件写两次是覆盖_顺序按seq() -> None:
         rows = turn_events(db, "s-idem")
     assert [(row["seq"], row["kind"]) for row in rows] == [(1, "tool_end"), (2, "tool_start")]
     assert rows[0]["payload"]["tool"]["status"] == "done"
+
+
+def test_落库的时间线里没有还在跑的工具_重启时正在等人回答的那一步也收尾() -> None:
+    """ask_user 正等人回答时后端重启:那张卡此前带着 running 落库,人答完、新的一轮跑了十几分钟,
+    上面那一行还在转。落库就是这一轮结束了,之后没有 tool_end 会来改它。"""
+    client = fresh_client()
+    session_id = _session(client)["id"]
+    agent_stream._stream_reset(session_id)
+    agent_stream._stream_tool_event(
+        session_id, {"type": "tool_start", "toolCallId": "q1", "name": "ask_user", "args": {"questions": []}}
+    )
+    _restart()
+    with SessionLocal() as db:
+        db.get(AgentSession, session_id).status = "running"
+        db.commit()
+        host.reconcile_orphaned_agent_sessions(db)
+        db.commit()
+
+    timeline = client.get(f"/api/agent/sessions/{session_id}/messages").json()[-1]["payload"]["timeline"]
+    card = timeline[-1]["tool"]
+    assert card["name"] == "ask_user" and card["status"] == "error", "不能说成做完了,也不能一直转"
+    assert card["result"]["content"][0]["text"]
+
+
+def test_正常收尾时还开着的工具卡同样收尾_做完的原样() -> None:
+    session_id = "s-settle"
+    agent_stream._stream_reset(session_id)
+    agent_stream._stream_tool_event(session_id, {"type": "tool_start", "toolCallId": "a", "name": "x", "args": {}})
+    agent_stream._stream_tool_event(
+        session_id, {"type": "tool_end", "toolCallId": "a", "result": {"ok": 1}, "isError": False})
+    agent_stream._stream_tool_event(session_id, {"type": "tool_start", "toolCallId": "b", "name": "y", "args": {}})
+    timeline = agent_stream._timeline_for_payload(agent_stream.get_stream_state(session_id), "")
+    assert [item["tool"]["status"] for item in timeline] == ["done", "error"]
+    assert timeline[0]["tool"]["result"] == {"ok": 1}
+    assert agent_stream.get_stream_state(session_id)["timeline"][1]["tool"]["status"] == "running", "内存里的那一份不动"
+    agent_stream._streams.pop(session_id)  # type: ignore[attr-defined]

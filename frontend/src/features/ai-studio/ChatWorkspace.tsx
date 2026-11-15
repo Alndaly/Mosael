@@ -26,6 +26,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
+import { useTurnElapsedSeconds } from "@/features/agent/useTurnElapsedSeconds";
 import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerAttachMenu } from "@/features/agent/ComposerAttachMenu";
@@ -190,9 +191,6 @@ export function ChatWorkspace({
     queryFn: () => listAgentTools<AgentTool>(),
     staleTime: 60_000,
   });
-  // 连流 → 攒状态 → 收尾失效:**只有一份**,和画布助手共用(见 useAgentTurnStream)。
-  // 此前两个面板各写一遍,而收尾那一步已经分岔 —— 隔壁每答完一句都会闪一下。
-  const { streamText, streamTimeline, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null);
   //「对话」读答案,「轨迹」读执行。记住选择:排查问题的人往往连着看好几个会话的轨迹。
   const [view, setView] = usePersistentTab<"chat" | "trace">("agent-view", "chat", ["chat", "trace"]);
 
@@ -207,6 +205,9 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
+  // 连流 → 攒状态 → 收尾失效:**只有一份**,和画布助手共用(见 useAgentTurnStream)。
+  // 此前两个面板各写一遍,而收尾那一步已经分岔 —— 隔壁每答完一句都会闪一下。
+  const { streamText, streamTimeline, turnStartedAt, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null, running);
   //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)—— 此前每 1.2 秒
   //: 无条件整段重拉,一段带着工具结果的长对话就是每秒几 MB。
   const messages = useQuery({
@@ -284,20 +285,7 @@ export function ChatWorkspace({
     meta: { silentError: true },
   });
 
-  // 运行中的实时耗时:running 置真时记起点,每秒走字。
-  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
-  React.useEffect(() => {
-    if (!running) {
-      setElapsedSeconds(0);
-      return;
-    }
-    const startedAt = Date.now();
-    setElapsedSeconds(0);
-    const timer = window.setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [running, activeSession?.id]);
+  const elapsedSeconds = useTurnElapsedSeconds(running, turnStartedAt);
 
   // 发送时没有会话就先建一个(生成页同款「输入框直达」交互)。
   const sendMessage = useMutation({
@@ -324,11 +312,6 @@ export function ChatWorkspace({
     },
   });
 
-
-  // Reconnect to an in-flight turn (e.g. after switching sessions or reload).
-  React.useEffect(() => {
-    if (running && activeSession) void attachStream(activeSession.id);
-  }, [running, activeSession, attachStream]);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
