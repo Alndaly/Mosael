@@ -311,6 +311,21 @@ it("拒绝 / 作废:一行「已拒绝」「这一轮已停止,卡已作废」,�
   expect(container.textContent).not.toContain("turn_stopped");
 });
 
+it("卡作废了而工具一直没等到结束事件:行首不再转圈,和右边那句「卡已作废」一致", async () => {
+  //: 这一轮结束 / 后端重启时卡被结成 expired,工具那边永远停在 running。
+  mocks.streamTimeline = [tool("a1", "edit_timeline", "running"), tool("a2", "edit_timeline", "running")];
+  mocks.cards = [
+    { id: "card-a1", tool_call_id: "a1", status: "expired", error: "turn_failed" },
+    { id: "card-a2", tool_call_id: "a2", status: "approved" },
+  ];
+  const { container } = await mount();
+
+  await waitFor(() => expect(row(container, "a1")!.querySelector("[data-decision]")).toBeTruthy());
+  expect(row(container, "a1")!.querySelector(".animate-mosael-spin"), "作废的卡不转圈").toBeNull();
+  expect(row(container, "a1")!.querySelector("svg.lucide-x")).toBeTruthy();
+  expect(row(container, "a2")!.querySelector(".animate-mosael-spin"), "批了、还在跑的照旧转圈").toBeTruthy();
+});
+
 it("自动放行的那几张写「自动放行」,不冒充用户点过", async () => {
   mocks.streamTimeline = [tool("a1", "generate_speech")];
   mocks.cards = [{ id: "card-a1", tool_call_id: "a1", status: "executed", decision_mode: "session-allow" }];

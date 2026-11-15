@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, CircleAlert, Loader2, Settings2, Sparkles, X } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, CircleHelp, Loader2, Settings2, Sparkles, X, type LucideIcon } from "lucide-react";
 
 import { getJob, type Confirmation, type JobSummary } from "@/api/client";
 import { agentReplayImageUrl, clearAgentReplay } from "@/api/domains/sessions";
@@ -275,6 +275,28 @@ function DesktopReplay({ replay }: { replay: ReplayEvidence }) {
   );
 }
 
+/**
+ * 行首那个图标。有确认卡、而卡已经有了结论时**以卡为准**:卡作废(这一轮结束 / 后端重启)时工具那边
+ * 永远等不到结束事件,`tool.status` 会一直停在 running —— 按它画就是一个永远转着的圈,
+ * 右边却写着「这一轮已经结束,卡已作废」。还没结论(没卡 / 等决定 / 批了在跑)才看工具自己的状态。
+ */
+function toolMarker(tool: ToolCall, decision: Confirmation | null | undefined): { icon: LucideIcon; className?: string } {
+  switch (decision?.status) {
+    case "rejected":
+    case EXPIRED:
+      return { icon: X };
+    case "failed":
+      return { icon: CircleAlert, className: "text-destructive" };
+    case "unknown":
+      return { icon: CircleHelp, className: "text-warning" };
+    case "executed":
+      return { icon: Check, className: "text-success" };
+  }
+  if (tool.status === "running") return { icon: Loader2 };
+  if (tool.status === "error") return { icon: CircleAlert, className: "text-destructive" };
+  return { icon: Check, className: "text-success" };
+}
+
 function ToolCallCard({ tool }: { tool: ToolCall }) {
   const t = useI18n();
   //: 这次调用开的确认卡(没有就是 null)。等决定时卡就摆在这一行下面;有了结论只剩行里那一句状态。
@@ -283,6 +305,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   //: 是他做的决定。不标红、不自动摊开那句错误。
   const declined = decision?.status === "rejected" || decision?.status === EXPIRED;
   const failed = tool.status === "error" && !declined;
+  const marker = toolMarker(tool, decision);
   //: 默认折叠:失败的原因不在明细里,在这一行下面那张失败展示里(不跟着折叠)。
   const [open, setOpen] = React.useState(false);
   const preview = summarize(tool.args);
@@ -367,22 +390,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           aria-expanded={hasBody ? open : undefined}
           disabled={!hasBody}
         >
-          <MarkerIcon
-            className={cn(
-              "inline-flex items-center justify-center",
-              tool.status === "done" && "text-success",
-              failed && "text-destructive",
-            )}
-          >
-            {tool.status === "running" ? (
-              <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />
-            ) : declined ? (
-              <X className={AGENT_ROW_ICON_CLASS} />
-            ) : tool.status === "error" ? (
-              <CircleAlert className={AGENT_ROW_ICON_CLASS} />
-            ) : (
-              <Check className={AGENT_ROW_ICON_CLASS} />
-            )}
+          <MarkerIcon className={cn("inline-flex items-center justify-center", marker.className)}>
+            <marker.icon className={cn(AGENT_ROW_ICON_CLASS, marker.icon === Loader2 && "animate-mosael-spin")} />
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <Truncate className="min-w-0 shrink font-mono text-foreground">{tool.name}</Truncate>
