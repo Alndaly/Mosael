@@ -53,7 +53,9 @@ MiniMax H3 的参考模式(`MiniMaxH3ReferenceToVideo`)收参考音频(`ref_audi
 所以:
 
 - **新的 ComfyUI 范例 `minimax_h3_dialogue_voice.json`**(「H3 对白 · 角色嗓音」,插件 1.28.0):关键帧既当参考图、又被
-  `AddGuide` 钉在第 0 帧,角色嗓音接 `ref_audios`;第二遍潜空间放大沿用数字人那份。插件把「钉在第 0 帧的图」认成首帧
+  `AddGuide` 钉在第 0 帧,角色嗓音接 `ref_audios`;单遍采样 12 步、1344×768 直出。**不做第二遍潜空间放大**:
+  初版沿用了数字人那份的 `MiniMaxH3LatentUpscaleCombined`,对白镜头在皮肤、墙面这类平滑区域出现规则的格纹和竖纹
+  (维护者:「有几帧有着明显的方块格子的感觉」),图生视频的镜头不走它、画面干净;成片时间线本来就会统一缩放。插件把「钉在第 0 帧的图」认成首帧
   (`graph._frame_role`,和视频锚帧同一个口径),这张图就被声明成「首帧必给 + 参考音频」的图生视频模型。
 - **模板多一个可选的对白模型**(`full_video_generation_graph(dialogue=…)`,挑法 `_dialogue_video_model`:同时收首帧和参考音频
   的视频模型)。给了它,对白镜头:`voice_sample`(用这个角色的嗓子念**同一句**中性的话 `VOICE_SAMPLE_TEXT`,同一个角色的参考

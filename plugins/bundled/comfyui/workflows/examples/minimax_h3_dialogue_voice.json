@@ -1,6 +1,6 @@
 {
  "last_node_id": 81,
- "last_link_id": 46,
+ "last_link_id": 48,
  "nodes": [
   {
    "id": 3,
@@ -23,10 +23,7 @@
      "type": "MODEL",
      "links": [
       9,
-      10,
-      17,
-      19,
-      23
+      10
      ],
      "slot_index": 0
     }
@@ -207,9 +204,9 @@
    },
    "widgets_values": [
     "<Picture 1> is the exact first frame of this shot; keep its composition, characters and set. The character speaks in exactly the voice of <Audio 1> (same timbre, pitch, age and gender), with the tone and emotion of this moment, lips in sync. Photorealistic, natural micro-expressions and breathing. One continuous shot, no cut.",
-    864,
-    480,
-    243,
+    1344,
+    768,
+    124,
     "match"
    ]
   },
@@ -307,8 +304,7 @@
      "name": "SAMPLER",
      "type": "SAMPLER",
      "links": [
-      14,
-      27
+      14
      ],
      "slot_index": 0
     }
@@ -356,7 +352,7 @@
    },
    "widgets_values": [
     "beta",
-    8,
+    12,
     1
    ]
   },
@@ -406,7 +402,8 @@
      "name": "output",
      "type": "LATENT",
      "links": [
-      18
+      47,
+      48
      ],
      "slot_index": 0
     },
@@ -440,7 +437,7 @@
     {
      "name": "samples",
      "type": "LATENT",
-     "link": 43
+     "link": 47
     },
     {
      "name": "vae",
@@ -663,293 +660,6 @@
    "title": "角色参考嗓音 / Character voice"
   },
   {
-   "id": 70,
-   "type": "MiniMaxH3Pass2StaggeredScheduler",
-   "pos": [
-    360,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 13,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "model",
-     "type": "MODEL",
-     "link": 17
-    }
-   ],
-   "outputs": [
-    {
-     "name": "SIGMAS",
-     "type": "SIGMAS",
-     "links": [
-      21,
-      28
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "MiniMaxH3Pass2StaggeredScheduler"
-   },
-   "widgets_values": [
-    4,
-    0.45,
-    7.0,
-    "karras",
-    8,
-    "simple"
-   ]
-  },
-  {
-   "id": 71,
-   "type": "RandomNoise",
-   "pos": [
-    680,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 14,
-   "mode": 0,
-   "inputs": [],
-   "outputs": [
-    {
-     "name": "NOISE",
-     "type": "NOISE",
-     "links": [
-      20
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "RandomNoise"
-   },
-   "widgets_values": [
-    2,
-    "randomize"
-   ]
-  },
-  {
-   "id": 72,
-   "type": "MiniMaxH3LatentUpscaleCombined",
-   "pos": [
-    1000,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 15,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "samples",
-     "type": "LATENT",
-     "link": 18
-    },
-    {
-     "name": "model",
-     "type": "MODEL",
-     "link": 19
-    },
-    {
-     "name": "noise",
-     "type": "NOISE",
-     "link": 20
-    },
-    {
-     "name": "sigmas",
-     "type": "SIGMAS",
-     "link": 21
-    },
-    {
-     "name": "positive",
-     "type": "CONDITIONING",
-     "link": 41
-    }
-   ],
-   "outputs": [
-    {
-     "name": "latent",
-     "type": "LATENT",
-     "links": [
-      29
-     ],
-     "slot_index": 0
-    },
-    {
-     "name": "positive",
-     "type": "CONDITIONING",
-     "links": [
-      24
-     ],
-     "slot_index": 1
-    },
-    {
-     "name": "negative",
-     "type": "CONDITIONING",
-     "links": [],
-     "slot_index": 2
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "MiniMaxH3LatentUpscaleCombined"
-   },
-   "widgets_values": [
-    "learned model",
-    "h3_clean_latent_upscaler_film_epoch200.safetensors",
-    0.0,
-    "independent",
-    0.0
-   ]
-  },
-  {
-   "id": 73,
-   "type": "BasicGuider",
-   "pos": [
-    1320,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 16,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "model",
-     "type": "MODEL",
-     "link": 23
-    },
-    {
-     "name": "conditioning",
-     "type": "CONDITIONING",
-     "link": 24
-    }
-   ],
-   "outputs": [
-    {
-     "name": "GUIDER",
-     "type": "GUIDER",
-     "links": [
-      26
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "BasicGuider"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 74,
-   "type": "SamplerCustomAdvanced",
-   "pos": [
-    40,
-    940
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 18,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "noise",
-     "type": "NOISE",
-     "link": 25
-    },
-    {
-     "name": "guider",
-     "type": "GUIDER",
-     "link": 26
-    },
-    {
-     "name": "sampler",
-     "type": "SAMPLER",
-     "link": 27
-    },
-    {
-     "name": "sigmas",
-     "type": "SIGMAS",
-     "link": 28
-    },
-    {
-     "name": "latent_image",
-     "type": "LATENT",
-     "link": 29
-    }
-   ],
-   "outputs": [
-    {
-     "name": "output",
-     "type": "LATENT",
-     "links": [
-      43,
-      44
-     ],
-     "slot_index": 0
-    },
-    {
-     "name": "denoised_output",
-     "type": "LATENT",
-     "links": [],
-     "slot_index": 1
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "SamplerCustomAdvanced"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 75,
-   "type": "DisableNoise",
-   "pos": [
-    1640,
-    640
-   ],
-   "size": [
-    300,
-    120
-   ],
-   "flags": {},
-   "order": 17,
-   "mode": 0,
-   "inputs": [],
-   "outputs": [
-    {
-     "name": "NOISE",
-     "type": "NOISE",
-     "links": [
-      25
-     ],
-     "slot_index": 0
-    }
-   ],
-   "properties": {
-    "Node name for S&R": "DisableNoise"
-   },
-   "widgets_values": []
-  },
-  {
    "id": 80,
    "type": "MiniMaxH3AddGuide",
    "pos": [
@@ -1008,8 +718,7 @@
      "name": "positive",
      "type": "CONDITIONING",
      "links": [
-      40,
-      41
+      40
      ],
      "slot_index": 0
     }
@@ -1040,7 +749,7 @@
     {
      "name": "samples",
      "type": "LATENT",
-     "link": 44
+     "link": 48
     },
     {
      "name": "vae",
@@ -1155,102 +864,6 @@
    "SIGMAS"
   ],
   [
-   17,
-   3,
-   0,
-   70,
-   0,
-   "MODEL"
-  ],
-  [
-   18,
-   13,
-   0,
-   72,
-   0,
-   "LATENT"
-  ],
-  [
-   19,
-   3,
-   0,
-   72,
-   1,
-   "MODEL"
-  ],
-  [
-   20,
-   71,
-   0,
-   72,
-   2,
-   "NOISE"
-  ],
-  [
-   21,
-   70,
-   0,
-   72,
-   3,
-   "SIGMAS"
-  ],
-  [
-   23,
-   3,
-   0,
-   73,
-   0,
-   "MODEL"
-  ],
-  [
-   24,
-   72,
-   1,
-   73,
-   1,
-   "CONDITIONING"
-  ],
-  [
-   25,
-   75,
-   0,
-   74,
-   0,
-   "NOISE"
-  ],
-  [
-   26,
-   73,
-   0,
-   74,
-   1,
-   "GUIDER"
-  ],
-  [
-   27,
-   11,
-   0,
-   74,
-   2,
-   "SAMPLER"
-  ],
-  [
-   28,
-   70,
-   0,
-   74,
-   3,
-   "SIGMAS"
-  ],
-  [
-   29,
-   72,
-   0,
-   74,
-   4,
-   "LATENT"
-  ],
-  [
    32,
    5,
    0,
@@ -1315,35 +928,11 @@
    "CONDITIONING"
   ],
   [
-   41,
-   80,
-   0,
-   72,
-   4,
-   "CONDITIONING"
-  ],
-  [
    42,
    7,
    1,
    13,
    4,
-   "LATENT"
-  ],
-  [
-   43,
-   74,
-   0,
-   14,
-   0,
-   "LATENT"
-  ],
-  [
-   44,
-   74,
-   0,
-   81,
-   0,
    "LATENT"
   ],
   [
@@ -1361,6 +950,22 @@
    16,
    1,
    "AUDIO"
+  ],
+  [
+   47,
+   13,
+   0,
+   14,
+   0,
+   "LATENT"
+  ],
+  [
+   48,
+   13,
+   0,
+   81,
+   0,
+   "LATENT"
   ]
  ],
  "groups": [],
