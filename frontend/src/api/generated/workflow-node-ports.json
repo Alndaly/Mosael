@@ -3123,7 +3123,7 @@
         }
       },
       "json_match_field": {
-        "type": "string",
+        "type": "template",
         "label": {
           "zh": "对齐条数的字段",
           "en": "Field to match"

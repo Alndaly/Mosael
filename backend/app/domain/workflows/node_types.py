@@ -758,7 +758,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["true", "false"],
             },
             #: 交回的 JSON 里这个数组要和上游那个数组一样多(布景台对齐分镜的镜数),少了让模型补齐(见 executors/ai)。
-            "json_match_field": {"advanced": True, "type": "string", "label": "wfField_json_match_field", "description": "wfNode_llm_json_match_field"},
+            "json_match_field": {"advanced": True, "type": "template", "label": "wfField_json_match_field", "description": "wfNode_llm_json_match_field"},
             "json_match_items": {"advanced": True, "type": "template", "label": "wfField_json_match_items", "description": "wfNode_llm_json_match_items"},
         },
         #: `response_format_used`:这一轮**实际**跑在哪一档(json_schema / json_object / text)。
