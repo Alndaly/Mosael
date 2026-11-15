@@ -64,3 +64,11 @@ test("普通回答原样转发,结尾压着的「<」和空白在块结束时补
   assert.equal(shown, text);
   assert.equal(result.mosaelLeakedToolCalls, undefined);
 });
+
+test("没写全的开头(实测:两行 `<｜｜DSML｜｜ calls`,没有 `>`)也认得出来,标记之前那句话留下", async () => {
+  const broken = `我先并行做两件事:重出第 3 镜,同时读取时间线现状。\n\n<${B}DSML${B} calls\n\n<${B}DSML${B} calls`;
+  assert.deepEqual(leakedToolCalls(broken), { before: "我先并行做两件事:重出第 3 镜,同时读取时间线现状。", tools: [] });
+  const { shown, result } = await run(broken, 3);
+  assert.equal(shown, "我先并行做两件事:重出第 3 镜,同时读取时间线现状。");
+  assert.deepEqual(result.mosaelLeakedToolCalls, []);
+});

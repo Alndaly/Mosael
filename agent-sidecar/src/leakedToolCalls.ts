@@ -27,7 +27,9 @@ import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi
 //: 标记里的竖线是全角的「｜」,有时成对;两侧空白可有可无。
 const BAR = "[|｜]+";
 const TAG = `${BAR}\\s*DSML\\s*${BAR}\\s*`;
-const START = new RegExp(`<\\s*${TAG}(?:function_)?calls\\s*>`);
+//: 开头只认「<｜DSML」这几个字:正常文字里不会出现它,而模型写坏的时候连 `calls>` 都不写全
+//: (实测一条只有两行 `<｜｜DSML｜｜ calls`,没有 `>`,按完整开头认就漏过去了)。
+const START = new RegExp(`<\\s*${TAG}`);
 const INVOKE = new RegExp(`<\\s*${TAG}invoke\\s+name="([^"]+)"`, "g");
 //: 流式时还没写完的开头:「<」后面只跟着竖线、空白、DSML 的前缀 —— 先压着,等下一段再判断。
 const PENDING = /<\s*(?:[|｜]+\s*(?:D(?:S(?:M(?:L)?)?)?)?)?$/;
