@@ -158,6 +158,21 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
     ]
 
 
+def _gate_generation_on_silence(body: dict[str, Any]) -> None:
+    """对白镜头只开口、不再图生视频:「生成视频」只由「是不是角色在说话」的**假**出口激活。
+
+    它原本挂着几条只排先后的普通控制边(白模之后、接力取尾帧之后)。引擎的规矩是有路由边时,没有同向数据线陪着的
+    普通控制边**照样激活**(见 engine.incoming_active)—— 这几条都是,因为生成视频对白模、尾帧的引用嵌在提示词和
+    参考图列表里,规范化不把它们升成数据线。于是对白镜头两支都跑:多花一次图生视频,下游把两个素材 id 拼成一串
+    (「素材不在这个工作区里」,漫剧第 2 场第 3 镜真跑出来的)。
+
+    把这几条改接到判断上:先后不变(判断在白模 / 接力之后才判),生成视频只剩那一个出口。
+    """
+    for edge in body["edges"]:
+        if edge["target"] == "generate_clip" and edge["source"] != "is_dialogue" and not edge.get("source_handle"):
+            edge["target"] = "is_dialogue"
+
+
 #: 漫剧的叙事规则(拼在叙事脚本的系统提示后面)。`{clip}` 运行时换成每镜秒数的引用。
 DRAMA_NARRATIVE_RULE = """
 **这是一部漫剧(短剧),不是解说片。** 故事靠角色的对白和表演推进:每一拍尽量由某个角色说出来或演出来,台词口语化、
@@ -576,6 +591,8 @@ JSON Schema 的对象。"""
         next(node for node in generate_body["nodes"] if node["id"] == "organize_clip")["config"]["asset_ids"] = shot_ref
     if video_plan.chains:
         _shot_chain(generate_body, video, video_plan, video_parameters)
+    if talking:
+        _gate_generation_on_silence(generate_body)
     #: 分镜里模型写的那几段提示词各自最多多少字:所选模型的提示词上限,减去模板固定拼上的那几句(白模说明、
     #: 「保持角色一致」……),再给运行时才插进来的画风、白模图例、运镜各留一段余量。此前不限:首帧那条固定的
     #: 白模说明就有近 500 字,Evolink 的图像模型只收 2000 字,模型写长一点整条提示词就超了。模型没声明上限的不限。

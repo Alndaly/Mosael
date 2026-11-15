@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "漫剧单集",
   "description": "拍漫剧(短剧)的一集:和「从主题到完整视频」同一条流水线 —— 认资产库里的角色和场景、分镜、3D 白模机位、逐镜关键帧 ——但剧本和分镜按**对白推动**来写(旁白只交代时间地点),对白镜头对着说话的人;**有角色台词的镜头用说话照片模型让关键帧开口**,嘴型跟着这句台词的配音(角色在资产库里带着嗓子就用它的),没台词的镜头照旧图生视频。主题里可以直接贴一份逐镜剧本(画面、谁说、台词)。先用「连续剧 · 系列设定」把角色(连同嗓子)和场景建进库,再一集一集拍。花费量级:同「从主题到完整视频」,对白镜头的视频换成一次说话照片生成。",
-  "graph_hash": "88babeb6df67656bdbe90efce5a439125bf05a744adce7fc1dc515042876794d",
+  "graph_hash": "2cae5ba3dd2324ffb5667220f5a8c3acbc2e3049ce2b35a07591f0a72c249151",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
@@ -1678,7 +1678,7 @@
               {
                 "id": "shot_blockout_generate",
                 "source": "render_blockout",
-                "target": "generate_clip"
+                "target": "is_dialogue"
               },
               {
                 "id": "shot_narration_speaker",

@@ -99,3 +99,36 @@ def test_说话照片的表演提示拼进提示词() -> None:
 
     said = speaking_prompt({"capabilities": {"prompt": "optional"}}, "She frowns, eyes red, voice trembling.")
     assert said.startswith("She frowns, eyes red, voice trembling.") and "follow the audio" in said
+
+
+def _control_into(body: dict[str, Any], target: str) -> set[tuple[str, str | None]]:
+    return {(edge["source"], edge.get("source_handle")) for edge in body["edges"]
+            if edge["target"] == target and edge.get("kind", "control") != "data"}
+
+
+def test_对白镜头不再图生视频_生成视频只由不是对白那个出口激活() -> None:
+    """引擎的判法(engine.incoming_active):有路由边时,没有同向数据线陪着的普通控制边照样激活。生成视频对白模的引用
+    嵌在提示词和参考图列表里,规范化不升成数据线 —— 所以「白模之后」那条普通边一直在激活它,对白镜头两支都跑:
+    多花一次图生视频,下游把两个素材 id 拼成一串(漫剧第 2 场第 3 镜:「素材不在这个工作区里」)。"""
+    body = _shots(_drama())
+    assert _control_into(body, "generate_clip") == {("is_dialogue", "false")}, "还有别的控制边在激活生成视频"
+    assert ("render_blockout", None) in _control_into(body, "is_dialogue"), "先后不变:白模之后才判、才生成"
+
+
+def test_接力出片的取尾帧那条边也改接到判断上() -> None:
+    """视频模型一次出不满一镜时(video_plan.chains)还有一条「取尾帧之后再生成」的普通边,同样会绕过判断。"""
+    from app.domain.workflows.templates.full_video import _gate_generation_on_silence
+
+    body = {"nodes": [], "edges": [
+        {"id": "shot_blockout_generate", "source": "render_blockout", "target": "generate_clip"},
+        {"id": "chain_generate", "source": "shot_chain", "target": "generate_clip"},
+        {"id": "shot_silent_generate", "source": "is_dialogue", "target": "generate_clip", "source_handle": "false"},
+    ]}
+    _gate_generation_on_silence(body)
+    assert _control_into(body, "generate_clip") == {("is_dialogue", "false")}
+    assert _control_into(body, "is_dialogue") == {("render_blockout", None), ("shot_chain", None)}
+
+
+def test_整片生成不受影响_生成视频照旧挂在白模之后() -> None:
+    body = _shots(full_video_generation_graph(chat=CHAT, image=IMAGE, video=VIDEO))
+    assert _control_into(body, "generate_clip") == {("render_blockout", None)}
