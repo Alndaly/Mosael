@@ -4216,6 +4216,73 @@
         }
       }
     },
+    "/api/assets/{asset_id}/spectrogram": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Spectrogram",
+        "description": "一段音频 / 视频音轨的频谱图(ADR 0103)。对话里「听」的那张卡片画它,和交给模型的是同一份缓存。",
+        "operationId": "get_asset_spectrogram_api_assets__asset_id__spectrogram_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0.0,
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/thumbnail": {
       "get": {
         "tags": [

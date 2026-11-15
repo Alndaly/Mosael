@@ -16,6 +16,7 @@ from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
 from app.domain import host_files
+from app.domain.analysis import listening
 from app.domain.analysis import use_cases as analysis_use_cases
 from app.domain.assets import use_cases
 from app.domain.assets.listing import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, AssetFacets, AssetListingError, AssetScope
@@ -28,6 +29,7 @@ from app.media.waveform import waveform_path
 from app.ai.providers.contracts.denoise import DenoiseError
 from app.ai.providers.contracts.separation import SeparationError
 from app.domain.analysis.service import AnalysisError
+from app.media.listening import ListeningError
 from app.domain.assets.frames import AssetFrameError
 from app.domain.assets.from_url import UrlImportError, import_image_url, probe_url as probe
 from app.domain.assets.masks import MaskAssetError
@@ -534,6 +536,22 @@ def get_asset_preview(asset_id: str, db: DbSession, user: CurrentUser) -> FileRe
         raise HTTPException(status_code=422, detail="Image preview could not be generated")
     preview, media_type = compatible
     return file_response(db, preview, media_type=media_type)
+
+
+@router.get("/assets/{asset_id}/spectrogram", response_class=Response, responses={200: {"content": {"image/png": {}}}})
+def get_asset_spectrogram(
+    asset_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    start: Annotated[float, Query(ge=0)] = 0.0,
+    end: Annotated[float | None, Query(gt=0)] = None,
+) -> Response:
+    """一段音频 / 视频音轨的频谱图(ADR 0103)。对话里「听」的那张卡片画它,和交给模型的是同一份缓存。"""
+    try:
+        png = listening.spectrogram_for(db, user, asset_id, start=start, end=end)
+    except ListeningError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.get("/assets/{asset_id}/thumbnail")

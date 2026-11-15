@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { AnsweredChoiceStatus } from "@/features/agent/AnsweredChoice";
+import { ListeningResult, isListening, type ListeningValue } from "@/features/agent/ListeningResult";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 
@@ -561,6 +562,7 @@ function SummaryCard({ value }: { value: Record<string, unknown> }) {
  */
 export type ResultShape =
   | "answer"
+  | "listening"
   | "assets"
   | "search"
   | "projects"
@@ -635,6 +637,7 @@ export function detectShape(value: unknown): ResultShape {
     if (isRecord(value.answers) || value.skipped === true || value.status === "dismissed") {
       if ("status" in value || "skipped" in value) return "answer";
     }
+    if (isListening(value)) return "listening";
     if (Array.isArray(value.assets) && "count" in value) return "assetBundle";
     if (Array.isArray(value.updated) && "count" in value) return "updated";
     if ("status" in value && "output" in value && "error" in value) return "pluginOutput";
@@ -674,6 +677,8 @@ export function ToolResultCard({ value }: { value: unknown }): React.ReactElemen
   switch (detectShape(value)) {
     case "answer":
       return <AskUserAnswer value={value as Record<string, unknown>} />;
+    case "listening":
+      return <ListeningResult value={value as ListeningValue} />;
     case "assets":
       return <AssetList rows={value as Record<string, unknown>[]} />;
     case "search":

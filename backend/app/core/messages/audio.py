@@ -6,6 +6,26 @@ key → {语言: 文案}。规矩见 core/i18n 与 tests/test_backend_i18n.py。
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    # 听音频(app/media/listening、domain/analysis/listening,ADR 0103)
+    "listenErr_window": {"zh": "要听的那一段不对:start 不能小于 0,end 要大于 start。", "en": "The window to listen to is invalid: start must be ≥ 0 and end must be after start."},
+    "listenErr_decode": {"zh": "这个文件解不出声音(文件损坏,或者不是音频 / 视频)。", "en": "Couldn't decode any sound from this file (it is damaged, or not audio/video)."},
+    "listenErr_noAudio": {"zh": "这一段里没有声音:文件没有音轨,或者窗口超出了它的长度。", "en": "There is no sound in this window: the file has no audio track, or the window is past its end."},
+    "listenErr_notAudible": {"zh": "「{name}」不是音频或视频,没有声音可听。", "en": "“{name}” is not audio or video — there is nothing to listen to."},
+    "listenErr_tooMany": {"zh": "一次最多听 {max} 段。", "en": "At most {max} clips per call."},
+    "listenFinding_silent": {"zh": "整段几乎没有声音。", "en": "The whole clip is essentially silent."},
+    "listenFinding_clipping": {"zh": "削波 {count} 处:波形被削平,听起来是破音、沙沙的失真。", "en": "Clipping at {count} spots: the waveform is flattened — audible as crackly distortion."},
+    "listenFinding_truePeakHot": {"zh": "真峰值 {value} dBTP,高于 −1:平台转码后容易破音,压低 1–2 dB 再用。", "en": "True peak is {value} dBTP, above −1: it will likely distort after platform transcoding. Lower it by 1–2 dB."},
+    "listenFinding_tooQuiet": {"zh": "整体响度 {value} LUFS,偏轻(短视频惯例约 −14):手机上要开很大声才听得清。", "en": "Integrated loudness is {value} LUFS — quiet (short-video norm is about −14): phones will need high volume."},
+    "listenFinding_tooLoud": {"zh": "整体响度 {value} LUFS,偏响:多半压限过狠,听感发扁、累耳朵。", "en": "Integrated loudness is {value} LUFS — loud: probably over-compressed, flat and fatiguing."},
+    "listenFinding_clicks": {"zh": "孤立的爆音 {count} 处:贯穿高低频的一下「啪」。", "en": "{count} isolated clicks: a sharp broadband pop."},
+    "listenFinding_dropouts": {"zh": "中途断了 {count} 次,最长 {longest} 秒:声音整个没了又回来。", "en": "Drops out {count} times (longest {longest} s): the sound vanishes and comes back."},
+    "listenFinding_choppy": {"zh": "一卡一卡:短暂的断 {count} 次,音乐不连贯,像在跳帧。", "en": "Choppy: {count} brief cut-outs — the music stutters instead of flowing."},
+    "listenFinding_choppyAny": {"zh": "短暂的断 {count} 次。若这是音乐,就是一卡一卡、不连贯;若是人声,多半只是换气和停顿。", "en": "{count} brief cut-outs. In music that is stuttering; in speech it is probably just breaths and pauses."},
+    "listenFinding_hardCut": {"zh": "结尾是硬切:最后一刻还在原音量,会「啪」地断掉。加 1–2 秒淡出,或者在乐句结束处裁。", "en": "Ends with a hard cut — still at full level at the last moment. Add a 1–2 s fade or cut at a phrase end."},
+    "listenFinding_headSilence": {"zh": "开头空了 {value} 秒才出声。", "en": "{value} s of silence before the sound starts."},
+    "listenFinding_dcOffset": {"zh": "直流偏移 {value}:波形整体偏向一边,会吃掉动态余量、剪辑处可能有咔声。", "en": "DC offset of {value}: the waveform sits off-centre, wasting headroom and risking clicks at edits."},
+    "listenFinding_phaseInverted": {"zh": "左右声道相关性 {value}:有反相,手机外放(单声道)时会互相抵消、变薄。", "en": "Channel correlation is {value}: partly phase-inverted — it thins out or cancels on mono phone speakers."},
+    "listenFinding_noiseLike": {"zh": "谱平坦度 {value}:听起来更像噪声而不是乐音(生成坏了、或者是大量嘶声 / 风声)。", "en": "Spectral flatness {value}: it sounds more like noise than tone (a broken generation, or heavy hiss/wind)."},
     # -- B3·配音、转写、降噪、分离、分析 --
     # 配音 / 声音克隆(domain/voices/voices.py、engine_catalog.py、agent_voice.py)
     "voiceErr_ffmpegNoReason": {"zh": "ffmpeg 没有说明原因", "en": "ffmpeg gave no reason"},

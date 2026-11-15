@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **150** 个工具,其中 **53** 个走确认卡、**1** 个停下来等用户作答。
+共 **151** 个工具,其中 **53** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -129,6 +129,7 @@
 | `list_workflow_templates` | 直接执行 | Read-only: the official workflow templates — id (pass to create_workflow template_id), name, what it does, |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
 | `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |
+| `listen_to_audio` | 直接执行 | Read-only: LISTEN to 1–4 audio or video assets (a video's soundtrack) — free, local, a few seconds. |
 | `notify_agent_session` | 直接执行 | Runs directly: send a message to ANOTHER agent session (@-mention style). |
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
 | `plugin_tools` | 直接执行 | Read-only: plugin tools not in your list this turn. No `tool`: find them by `query` words. With `tool` (its |

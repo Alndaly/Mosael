@@ -1464,10 +1464,11 @@ def generate_podcast(
 def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict[str, Any]:
     """Analyze an EXISTING image/video media asset with a multimodal model.
 
-    Use after list_assets when you need to understand visual/audio content,
+    Use after list_assets when you need to understand visual content,
     scenes, on-screen text, mood, or best moments for cutting. Do NOT use for
     documents, web pages, workflow graphs, or to generate new media — use
-    fetch_url/get_workflow/generate_*.
+    fetch_url/get_workflow/generate_*. To check how something SOUNDS (music, voice-over,
+    narration, sound effects — or a video's soundtrack), use listen_to_audio.
 
     When called from an AI Studio turn, the backend derives the provider/model from the
     authenticated agent session. Do not try to choose or describe another provider in the
@@ -1504,6 +1505,40 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
         return analysis_use_cases.analyze(db, user, asset_id, question, session_target=target, mode=mode)
 
     return _use_case(analyze, asset_id)
+
+
+@tool(effect="reads")
+def listen_to_audio(
+    asset_ids: list[str], start: float = 0.0, end: float = 0.0, expect: str = "any"
+) -> list[TextContent | ImageContent]:
+    """Read-only: LISTEN to 1–4 audio or video assets (a video's soundtrack) — free, local, a few seconds.
+
+    You cannot hear audio yourself; this measures it so you can judge it. Use it after you
+    generate or pick music / voice-over / sound effects, before you tell the user it is done,
+    and whenever the user says something "sounds wrong". Returns, per clip:
+      - loudness: integrated LUFS (short-video norm ≈ −14), loudness range, true peak (dBTP);
+      - findings: concrete problems with timestamps, worst first — clipping, true peak above −1,
+        dropouts, choppy stutter, clicks, hard-cut ending, too quiet / too loud, phase, noise.
+        Each has a ready-made message; quote the times when you report them;
+      - rhythm: bpm (None = no steady beat) and steadiness 0–1 — check it against the edit's pace;
+      - timbre: brightness_hz (higher = brighter), noisiness 0–1, energy share in low/mid/high,
+        pitch_hz with its 10–90% range (a single voice or solo instrument; ignore when
+        voiced_ratio < 0.3) — e.g. male voices ≈ 85–180 Hz, female ≈ 165–300 Hz;
+      - sections: level and brightness every ~2 s (intro, build, drop, outro);
+      - a spectrogram image (if your model can see images): dark vertical bands = dropouts,
+        bright full-height lines = clicks, even vertical stripes = beats, horizontal lines = notes.
+    With 2+ clips, `comparison` gives per pair: brightness ratio, pitch difference in semitones,
+    band-share shift, loudness difference and a timbre distance (0 = same) — use it to explain
+    how two voices or two music takes differ. start/end (seconds, end=0 = to the end) listen to
+    one window only. expect: "music", "speech" or "any" — say what the clip is: pauses are normal
+    in speech but a defect in music. It measures; it does not judge taste — whether the music
+    fits the video is still your call, and the user's.
+    """
+    from app.domain.analysis.listening import listen_to_assets
+
+    mode = expect if expect in ("music", "speech", "any") else "any"
+    data = _use_case(listen_to_assets, asset_ids, start=max(0.0, start), end=end if end > 0 else None, expect=mode)
+    return _with_images(data)
 
 
 def _queue_shot_breakdown(db, user, asset_id: str):

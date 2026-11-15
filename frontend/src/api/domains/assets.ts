@@ -29,7 +29,7 @@ export interface WaveformData {
   peaks: number[];
 }
 
-function assetUrl(assetId: string, representation: "file" | "preview" | "thumbnail" | "filmstrip" | "proxy" | "audio-proxy") {
+function assetUrl(assetId: string, representation: "file" | "preview" | "thumbnail" | "filmstrip" | "proxy" | "audio-proxy" | "spectrogram") {
   const token = getAuthToken();
   const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/assets/${assetId}/${representation}${suffix}`;
@@ -95,6 +95,16 @@ export function assetPreviewUrl(assetId: string): string {
 
 export function assetThumbnailUrl(assetId: string): string {
   return assetUrl(assetId, "thumbnail");
+}
+
+/** 一段声音的频谱图(智能体「听」的结果卡用,ADR 0103)。`end` 为 null = 到结尾。 */
+export function assetSpectrogramUrl(assetId: string, start = 0, end: number | null = null): string {
+  const base = assetUrl(assetId, "spectrogram");
+  const window = new URLSearchParams();
+  if (start > 0) window.set("start", String(start));
+  if (end != null) window.set("end", String(end));
+  const query = window.toString();
+  return query ? `${base}${base.includes("?") ? "&" : "?"}${query}` : base;
 }
 
 /** Uniformly sampled frames used by the editor filmstrip. */

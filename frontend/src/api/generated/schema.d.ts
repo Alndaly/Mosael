@@ -1596,6 +1596,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/spectrogram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Spectrogram
+         * @description 一段音频 / 视频音轨的频谱图(ADR 0103)。对话里「听」的那张卡片画它,和交给模型的是同一份缓存。
+         */
+        get: operations["get_asset_spectrogram_api_assets__asset_id__spectrogram_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/thumbnail": {
         parameters: {
             query?: never;
@@ -26134,6 +26154,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_asset_spectrogram_api_assets__asset_id__spectrogram_get: {
+        parameters: {
+            query?: {
+                start?: number;
+                end?: number | null;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
                 };
             };
             /** @description Validation Error */
