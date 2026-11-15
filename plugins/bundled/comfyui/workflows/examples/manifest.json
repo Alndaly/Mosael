@@ -63,6 +63,19 @@
       }
     },
     {
+      "file": "minimax_h3_dialogue_voice.json",
+      "role": "drama_dialogue",
+      "category": "digital_human",
+      "name": {
+        "zh": "H3 对白 · 角色嗓音",
+        "en": "H3 dialogue · character voice"
+      },
+      "description": {
+        "zh": "漫剧的对白镜头：关键帧钉在第 0 帧，角色的参考嗓音交给 H3，台词由 H3 照这一镜的情绪念出来，同一个角色几镜之间嗓音一致。",
+        "en": "Dialogue shots for a drama: the keyframe is anchored at frame 0 and the character's reference voice goes to H3, which speaks the line with the emotion of the shot, so a character sounds the same across shots."
+      }
+    },
+    {
       "file": "minimax_h3_image_t2i.json",
       "role": "minimax_h3_image_t2i",
       "category": "image",

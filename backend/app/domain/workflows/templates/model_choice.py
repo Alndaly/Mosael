@@ -14,7 +14,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.providers import DRIVING_AUDIO, FIRST_CLIP, FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
+from app.ai.providers import (
+    DRIVING_AUDIO,
+    FIRST_CLIP,
+    FIRST_FRAME,
+    LAST_FRAME,
+    REFERENCE_AUDIO,
+    REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
+)
 from app.db.models import ProviderModel
 from app.domain.generation_catalog import known_capabilities_for
 from app.domain.generation.aspect import size_for_aspect
@@ -292,6 +300,17 @@ def _music_model(db: Session, user_id: str) -> ModelChoice:
 
     music = _pick(db, user_id, "audio", says_music)
     return music if music.model else _pick(db, user_id, "audio", takes_a_prompt)
+
+
+def _dialogue_video_model(db: Session, user_id: str) -> ModelChoice:
+    """漫剧对白镜头用哪个模型:同时收**首帧**和**参考音频**的视频模型(首帧定构图,参考音频定这个角色的嗓子,台词由它照
+    画面的情绪念)。例:ComfyUI 范例「H3 对白 · 角色嗓音」。一个都没有时留空,对白镜头照旧让图生视频按文字描述念。"""
+
+    def usable(db_: Session | None, choice: ModelChoice) -> bool:
+        keys = _parameter_keys(db_, choice)
+        return FIRST_FRAME in keys and REFERENCE_AUDIO in keys
+
+    return _pick(db, user_id, "video", usable)
 
 
 def _parameter_keys(db: Session | None, choice: ModelChoice) -> list[str]:

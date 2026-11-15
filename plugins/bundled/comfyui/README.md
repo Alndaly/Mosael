@@ -53,7 +53,7 @@ background (at startup, or when the workflow list changed).
 | An image workflow with a seed (with or without a canvas) | "Runs" (the parameter key is still `num_images`; up to 4, 1 when not set, 1.12.3): the plugin **submits it N times**, one after another, each run as the workflow is saved with a new seed (counting up from the given seed, or random when none is given); every output carries its run's seed (the generation record / the tool's `seeds`). What comes back is runs × images per run. Cancelling stops the run in progress and submits no more; when one run fails, what came out is still returned with a note saying how many of N runs came out and why the others didn't; after a Mosael restart it waits for the run in progress and then runs the rest. The form labels this field "Runs" and says below it how many images one run makes and how many this makes in total. A graph without a seed (upscaling) makes the same image every run, so it has no such field; neither do video graphs |
 | The save nodes of that kind (the preview nodes when nothing is saved) | How many images one run returns (`outputs_per_run` = the batch each default output node receives, summed, counting 1 where the batch can't be told; the host multiplies it by the runs and lays out that many placeholders up front); with more than one, the parameters get a "Results from" choice (node titles): pick one to get only its output, and the other save nodes don't run (1.6.0); each choice's images per run are in `x-outputs-per-run`. "All" by default; "Final result" when some previews are an intermediate step or a control image (1.12.2, see below) |
 | Any other tunable literal input | An entry in the parameter form: known inputs get plain names (`labels.py`: sampler, steps, LoRA…), and only on a name clash do they carry the node name or "2nd KSampler"; unknown ones are called "node name · ComfyUI's name for the input"; entries that still clash (several nodes with the same title) each end with the node number, e.g. "#730", matching the number on the canvas; the common ones come first and the rest (plus anything ComfyUI marks `advanced`) go under "Advanced", and inputs ComfyUI marks `hidden` are not listed; the raw "node · input name" is in the description |
-| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame (also when the image is resized or cropped first; an image-to-video graph's first frame is required, 1.6.1); when a role has several loader nodes (or a node is named), each slot is named in order (the node's title, or a node name plus number such as "Load Image #10" when unnamed) and the AI workbench, boards and workflow nodes show it (1.13.0) |
+| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame (also when the image is resized or cropped first; an image-to-video graph's first frame is required, 1.6.1; an image wired to the `image` of `MiniMaxH3AddGuide` with `frame_idx` 0 is the first frame too, a negative index the last frame, anything in between stays a reference image, 1.28.0); when a role has several loader nodes (or a node is named), each slot is named in order (the node's title, or a node name plus number such as "Load Image #10" when unnamed) and the AI workbench, boards and workflow nodes show it (1.13.0) |
 | LoadImageMask, or a LoadImage whose mask output is the only one used | Mask (`mask`) |
 | LoadVideo / VHS_LoadVideo | The video to edit (`source_video`, mode `video-edit`); one anchored at frame 0 of `MiniMaxH3AddGuide` is the clip to extend (`first_clip`, mode `video-extend`, see the `minimax_h3_continue` example in ComfyUI-Mosael-Plugins); one wired to a **reference** input such as `ref_videos.*` is a reference video |
 | LoadAudio / VHS_LoadAudioUpload | Driving audio (video graphs) / reference audio; one wired to a reference input is reference audio. A video graph taking **exactly one portrait (first frame or reference image) + one driving audio**, nothing else, and not loading a saved latent from a previous segment also declares the `speech-to-video` mode (talking photo), so an asset's "Make it speak" and the digital-human nodes can pick it (1.26.1) |
@@ -370,11 +370,18 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
+minimax_h3_dialogue_voice.json
 minimax_h3_image_t2i.json
 flux3_keyframe_blockout.json
 flux3_keyframe_scene_character.json
 moss_keyframe_scene_character.json
 ```
+
+`minimax_h3_dialogue_voice.json` (1.28.0) is for drama dialogue shots: the shot's keyframe is both a reference image and
+anchored at frame 0 by `MiniMaxH3AddGuide` (the composition holds), and the character's reference voice goes into
+`ref_audios`; the prompt asks the character to speak "in the voice of `<Audio 1>`, with the emotion of this shot". The
+reference fixes the voice and H3 performs the delivery from the picture — the same character sounds the same across
+shots without a flat dub (ADR 0101, revision 2).
 
 Each entry has a name and a one-line description. It first checks, without writing, which files already exist and which
 node types and model files each one needs. Cards are laid out in a grid and each has its own Install button; installing

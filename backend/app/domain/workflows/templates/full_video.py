@@ -158,7 +158,7 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
     ]
 
 
-def _speak_in_the_clip(generate: dict[str, Any], assemble: dict[str, Any]) -> None:
+def _speak_in_the_clip(generate: dict[str, Any], assemble: dict[str, Any], dialogue: ModelChoice | None) -> None:
     """漫剧的对白让视频模型在出片时一起念出来,不另配。
 
     MiniMax H3 这类模型在同一次生成里出画面和原生声音(人声、音效、音乐一起建模):把「谁、用什么样的嗓子和情绪、说哪一句」
@@ -170,6 +170,8 @@ def _speak_in_the_clip(generate: dict[str, Any], assemble: dict[str, Any]) -> No
       同一个角色几镜之间的嗓音尽量靠拢。
     - **接时间线**:对白镜头的原声是人在说话 —— 不静音、也不标成环境声(环境声不触发配乐闪避,说话要)。字幕挂在画面片段
       之后,时间取这一镜画面的起止(见 narration_subtitles)。
+    - **给了对白模型**(`dialogue`,收首帧 + 参考音频的那种,例:ComfyUI 范例「H3 对白 · 角色嗓音」)时对白镜头走它,
+      见 _speak_in_the_character_voice —— 只靠文字描述,同一个角色几镜之间嗓音对不上(实测同一个孩子三镜声纹相似度 0.14–0.42)。
     """
     generate["nodes"] = [node for node in generate["nodes"] if node["id"] not in {"speaker_has_voice", "speak_as_character"}]
     generate["edges"] = [edge for edge in generate["edges"]
@@ -192,6 +194,8 @@ def _speak_in_the_clip(generate: dict[str, Any], assemble: dict[str, Any]) -> No
     ]
     clip = next(node for node in generate["nodes"] if node["id"] == "generate_clip")["config"]
     clip["prompt"] = clip["prompt"].replace(" {{input.style}}", " {{dialogue_cue.text}} {{input.style}}")
+    if dialogue is not None:
+        _speak_in_the_character_voice(generate, assemble, dialogue)
 
     nodes = {node["id"]: node for node in assemble["nodes"]}
     nodes["has_audio"]["config"]["left"] = "{{loop.item.narrate.asset_id}}"
@@ -212,6 +216,87 @@ def _speak_in_the_clip(generate: dict[str, Any], assemble: dict[str, Any]) -> No
     ]
 
 
+#: 角色参考嗓音念的那一句:**每次都一样**,同一个角色交给对白模型的参考才一模一样(Edge 这类引擎同一句话合成出来逐字节一致)。
+#: 内容是中性的叙述,不带这一镜的情绪 —— 情绪由对白模型照画面演,参考只定音色。
+VOICE_SAMPLE_TEXT = "我是{{loop.item.speaker}}。今晚的雨下得很大,铺子里的灯还亮着,我就在这里。"
+
+
+def _speak_in_the_character_voice(generate: dict[str, Any], assemble: dict[str, Any], dialogue: ModelChoice) -> None:
+    """对白镜头走对白模型:首帧是这一镜的关键帧,参考音频是这个角色的嗓子,台词由模型按此刻的情绪念。
+
+    只把台词写进提示词时,每一镜都是一次独立生成,嗓音每次都不一样 —— 《长明灯》第 2 场实测同一个孩子三镜声纹相似度
+    0.14–0.42;给 H3 一段角色的参考嗓音(`ref_audios`)之后同一个孩子两镜 0.84,台词逐字不差,构图由钉在第 0 帧的关键帧
+    定住(维护者:「同一角色声音务必一样」)。
+
+    - `voice_sample`:用资产库里这个角色的嗓子念一句固定的话(VOICE_SAMPLE_TEXT)——没给角色配嗓子的,这一步照实报错,
+      先在「连续剧 · 系列设定」里配好;
+    - `speak_line`:首帧 + 参考嗓音 + 提示词(动作、运镜、谁用 <Audio 1> 的音色按此刻的情绪念哪一句);
+    - `is_dialogue`:是角色在说的镜头走 `speak_line`,其余图生视频。**图生视频只由它的假出口激活**:原来挂着的普通控制边
+      (白模之后、接力取尾帧之后)改接到判断上 —— 有路由边时没有同向数据线陪着的普通边照样激活(engine.incoming_active),
+      不改接的话对白镜头两支都跑,下游把两个素材 id 拼成一串;
+    - 归档、上时间线取两支拼起来的那一个(没跑的那支引用出来是空串)。
+    """
+    generate["nodes"] = [node for node in generate["nodes"] if node["id"] != "dialogue_cue"]
+    generate["edges"] = [edge for edge in generate["edges"] if edge["id"] != "shot_speaker_cue"]
+    clip = next(node for node in generate["nodes"] if node["id"] == "generate_clip")["config"]
+    clip["prompt"] = clip["prompt"].replace(" {{dialogue_cue.text}}", "")
+    generate["nodes"] += [
+        {
+            "id": "is_dialogue",
+            "type": "condition",
+            "name": {"zh": "这一镜是角色在说话吗", "en": "Is a character speaking in this shot?"},
+            "position": {"x": 1010, "y": 260},
+            "config": {"left": "{{loop.item.speaker}}", "op": "not_empty"},
+        },
+        {
+            "id": "voice_sample",
+            "type": "synthesize_speech",
+            "name": {"zh": "用这个角色的嗓子念一句参考", "en": "Record a reference line in this character's voice"},
+            "position": {"x": 1010, "y": 420},
+            "config": {"text": VOICE_SAMPLE_TEXT, "engine": "{{find_speaker.voice_engine}}", "voice": "{{find_speaker.voice_id}}"},
+        },
+        {
+            "id": "speak_line",
+            "type": "ai_generate",
+            "name": {"zh": "用角色的嗓子演这一句", "en": "Act this line in the character's voice"},
+            "position": {"x": 1320, "y": 100},
+            "config": {
+                "provider": dialogue.provider,
+                "provider_profile_id": dialogue.profile_id,
+                "model": dialogue.model,
+                "kind": "video",
+                "prompt": (
+                    "<Picture 1> is the exact first frame of this shot; keep its composition, characters and set. "
+                    "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. "
+                    "Spoken dialogue in Mandarin Chinese, lips in sync: {{loop.item.speaker}} ({{find_speaker.description}}) "
+                    "speaks in exactly the voice of <Audio 1> (same timbre, pitch, age and gender), with the tone and emotion "
+                    "of this moment, and says only: 「{{loop.item.narration}}」. No narrator, no other voices. {{input.style}}"
+                ),
+                "negative_prompt": "{{loop.item.negative_prompt}}",
+                "frame_aspect": "{{input.aspect_ratio}}",
+                "source_assets": [
+                    "{{paint_first_frame.asset_id}}:first_frame",
+                    "{{voice_sample.asset_id}}:reference_audio",
+                ],
+            },
+        },
+    ]
+    for edge in generate["edges"]:
+        if edge["target"] == "generate_clip" and not edge.get("source_handle"):
+            edge["target"] = "is_dialogue"
+    generate["edges"] += [
+        {"id": "shot_speaker_voice", "source": "find_speaker", "target": "voice_sample"},
+        {"id": "shot_dialogue_speak", "source": "is_dialogue", "target": "speak_line", "source_handle": "true"},
+        {"id": "shot_silent_generate", "source": "is_dialogue", "target": "generate_clip", "source_handle": "false"},
+    ]
+    #: 两条入边是「都跑了才跑」,归档不能汇到它们:按引用等两支落定。
+    organize = next(node for node in generate["nodes"] if node["id"] == "organize_clip")["config"]
+    generate["edges"] = [edge for edge in generate["edges"] if edge["target"] != "organize_clip" or edge.get("kind") == "data"]
+    organize["asset_ids"] = organize["asset_ids"] + "{{speak_line.asset_id}}"
+    append = next(node for node in assemble["nodes"] if node["id"] == "append_clip")["config"]
+    append["asset_id"] = append["asset_id"] + "{{loop.item.speak_line.asset_id}}"
+
+
 #: 漫剧的叙事规则(拼在叙事脚本的系统提示后面)。`{clip}` 运行时换成每镜秒数的引用。
 DRAMA_NARRATIVE_RULE = """
 **这是一部漫剧(短剧),不是解说片。** 故事靠角色的对白和表演推进:每一拍尽量由某个角色说出来或演出来,台词口语化、
@@ -229,7 +314,7 @@ DRAMA_STORYBOARD_RULE = """
 
 def full_video_generation_graph(
     *, chat: ModelChoice, image: ModelChoice, video: ModelChoice, voice_id: str = "", music: BackgroundMusic | None = None,
-    drama: bool = False, db: Session | None = None,
+    drama: bool = False, dialogue: ModelChoice | None = None, db: Session | None = None,
 ) -> dict[str, Any]:
     """主题 → 主旨 → 脚本 / 视觉圣经 → 角色三视图 + 场景设定图 → 分镜 → 3D 白模布景 → 逐镜:
     白模参考 → 首帧(需要时加尾帧)→ 视频 → 按序上时间线 → 口播字幕 → 导出。
@@ -693,7 +778,7 @@ JSON Schema 的对象。"""
         ],
     }
     if drama:
-        _speak_in_the_clip(generate_body, assemble_body)
+        _speak_in_the_clip(generate_body, assemble_body, dialogue)
     def reuse_or_draw(kind: str, what: dict[str, str], drawer: dict[str, Any], save: dict[str, Any],
                       role: str = "") -> dict[str, Any]:
         """每个角色 / 场景:先到资产库里按名字认(ADR 0027 阶段 4),**有图就用它的,不再重画**;没有才画,画完

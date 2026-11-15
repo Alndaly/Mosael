@@ -3,8 +3,8 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "漫剧单集",
-  "description": "拍漫剧(短剧)的一集:和「从主题到完整视频」同一条流水线 —— 认资产库里的角色和场景、分镜、3D 白模机位、逐镜关键帧 ——但剧本和分镜按**对白推动**来写(旁白只交代时间地点),对白镜头对着说话的人;**角色的台词由视频模型出片时一起念出来**,语气跟着这一镜的表情和情绪走(需要 MiniMax H3 这类会出原生人声的视频模型),旁白另配。主题里可以直接贴一份逐镜剧本(画面、谁说、台词)。先用「连续剧 · 系列设定」把角色和场景建进库,再一集一集拍。花费量级:同「从主题到完整视频」。",
-  "graph_hash": "0d6589e12124764c1ff82b9bc03644e9c9d70d8132aad737cba3611ef9aaffc7",
+  "description": "拍漫剧(短剧)的一集:和「从主题到完整视频」同一条流水线 —— 认资产库里的角色和场景、分镜、3D 白模机位、逐镜关键帧 ——但剧本和分镜按**对白推动**来写(旁白只交代时间地点),对白镜头对着说话的人;**角色的台词由视频模型出片时一起念出来**,语气跟着这一镜的表情和情绪走(需要 MiniMax H3 这类会出原生人声的视频模型),旁白另配。主题里可以直接贴一份逐镜剧本(画面、谁说、台词)。先用「连续剧 · 系列设定」把角色和场景建进库,再一集一集拍。花费量级:同「从主题到完整视频」。这一份带着「用角色的嗓子演这一句」(对白模型,收首帧和参考音频,例:ComfyUI 范例「H3 对白 · 角色嗓音」):导入后在那一格挑好模型,同一个角色几镜之间嗓音一致。没有这种模型的话,删掉「这一镜是角色在说话吗」「用这个角色的嗓子念一句参考」「用角色的嗓子演这一句」三个节点,对白照旧按文字描述念。应用里有这种模型才带这一支。",
+  "graph_hash": "b7e7c1ff0acece795c7cc1ad0f7051179359096eb27a55231b851e4c54b5e7e0",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
@@ -1413,7 +1413,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
-                  "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{dialogue_cue.text}} {{input.style}}",
+                  "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{input.style}}",
                   "negative_prompt": "{{loop.item.negative_prompt}}",
                   "parameters": {
                     "duration_seconds": "{{input.shot_seconds}}",
@@ -1440,13 +1440,10 @@
                   "y": 260
                 },
                 "config": {
-                  "asset_ids": "",
+                  "asset_ids": "{{generate_clip.asset_id}}{{speak_line.asset_id}}",
                   "name": "镜头 {{loop.item.shot_number}}",
                   "project_id": "{{input.project_id}}"
-                },
-                "inputs": [
-                  "asset_ids"
-                ]
+                }
               },
               {
                 "id": "has_subject",
@@ -1571,15 +1568,56 @@
                 }
               },
               {
-                "id": "dialogue_cue",
-                "type": "template",
-                "name": "这一句怎么说",
+                "id": "is_dialogue",
+                "type": "condition",
+                "name": "这一镜是角色在说话吗",
+                "position": {
+                  "x": 1010,
+                  "y": 260
+                },
+                "config": {
+                  "left": "{{loop.item.speaker}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "voice_sample",
+                "type": "synthesize_speech",
+                "name": "用这个角色的嗓子念一句参考",
                 "position": {
                   "x": 1010,
                   "y": 420
                 },
                 "config": {
-                  "template": "Spoken dialogue (Mandarin Chinese, generated with the video, in sync with the lips): {{loop.item.speaker}} ({{find_speaker.description}}) says, with the tone and emotion of this moment: 「{{loop.item.narration}}」. Only this one line; no narrator, no other voices."
+                  "text": "我是{{loop.item.speaker}}。今晚的雨下得很大,铺子里的灯还亮着,我就在这里。",
+                  "engine": "",
+                  "voice": ""
+                },
+                "inputs": [
+                  "engine",
+                  "voice"
+                ]
+              },
+              {
+                "id": "speak_line",
+                "type": "ai_generate",
+                "name": "用角色的嗓子演这一句",
+                "position": {
+                  "x": 1320,
+                  "y": 100
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "video",
+                  "prompt": "<Picture 1> is the exact first frame of this shot; keep its composition, characters and set. {{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Spoken dialogue in Mandarin Chinese, lips in sync: {{loop.item.speaker}} ({{find_speaker.description}}) speaks in exactly the voice of <Audio 1> (same timbre, pitch, age and gender), with the tone and emotion of this moment, and says only: 「{{loop.item.narration}}」. No narrator, no other voices. {{input.style}}",
+                  "negative_prompt": "{{loop.item.negative_prompt}}",
+                  "frame_aspect": "{{input.aspect_ratio}}",
+                  "source_assets": [
+                    "{{paint_first_frame.asset_id}}:first_frame",
+                    "{{voice_sample.asset_id}}:reference_audio"
+                  ]
                 }
               }
             ],
@@ -1626,12 +1664,7 @@
               {
                 "id": "shot_blockout_generate",
                 "source": "render_blockout",
-                "target": "generate_clip"
-              },
-              {
-                "id": "shot_generate_organize",
-                "source": "generate_clip",
-                "target": "organize_clip"
+                "target": "is_dialogue"
               },
               {
                 "id": "shot_narration_speaker",
@@ -1652,23 +1685,43 @@
                 "source_handle": "true"
               },
               {
-                "id": "shot_speaker_cue",
-                "source": "find_speaker",
-                "target": "dialogue_cue"
-              },
-              {
                 "id": "shot_narrator_voice",
                 "source": "has_speaker",
                 "target": "has_voice",
                 "source_handle": "false"
               },
               {
-                "id": "d-generate_clip-asset_id-organize_clip-asset_ids",
-                "source": "generate_clip",
-                "target": "organize_clip",
+                "id": "shot_speaker_voice",
+                "source": "find_speaker",
+                "target": "voice_sample"
+              },
+              {
+                "id": "shot_dialogue_speak",
+                "source": "is_dialogue",
+                "target": "speak_line",
+                "source_handle": "true"
+              },
+              {
+                "id": "shot_silent_generate",
+                "source": "is_dialogue",
+                "target": "generate_clip",
+                "source_handle": "false"
+              },
+              {
+                "id": "d-find_speaker-voice_engine-voice_sample-engine",
+                "source": "find_speaker",
+                "target": "voice_sample",
                 "kind": "data",
-                "source_output": "asset_id",
-                "target_input": "asset_ids"
+                "source_output": "voice_engine",
+                "target_input": "engine"
+              },
+              {
+                "id": "d-find_speaker-voice_id-voice_sample-voice",
+                "source": "find_speaker",
+                "target": "voice_sample",
+                "kind": "data",
+                "source_output": "voice_id",
+                "target_input": "voice"
               }
             ]
           },
@@ -1720,7 +1773,7 @@
                 },
                 "config": {
                   "sequence_id": "{{input.sequence_id}}",
-                  "asset_id": "{{loop.item.generate_clip.asset_id}}",
+                  "asset_id": "{{loop.item.generate_clip.asset_id}}{{loop.item.speak_line.asset_id}}",
                   "track_id": "{{input.video_track_id}}",
                   "start": 0,
                   "end": "{{input.shot_seconds}}"

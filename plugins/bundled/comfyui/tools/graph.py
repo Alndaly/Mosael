@@ -390,6 +390,12 @@ def _continues_this_clip(api: dict[str, Any], node_id: str) -> bool:
     return False
 
 
+def _anchor_frame(api: dict[str, Any], node_id: str) -> int | None:
+    """钉帧节点钉在哪一帧(字面量才算;接线进来的认不出)。"""
+    value = (api.get(node_id, {}).get("inputs") or {}).get("frame_idx")
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def _frame_role(api: dict[str, Any], node_id: str) -> str:
     """视频图里一张读进来的图是首帧、尾帧还是参考图:看它(或它缩放、裁切之后的那张)接进了哪一格。"""
     downstream: dict[str, list[tuple[str, str, str, int]]] = {}
@@ -409,6 +415,14 @@ def _frame_role(api: dict[str, Any], node_id: str) -> str:
                     return "first_frame"
                 if name in _LAST_FRAME_INPUTS:
                     return "last_frame"
+                if class_name in _CLIP_GUIDES and name == "image":
+                    #: 钉帧节点上:钉在第 0 帧是首帧,钉在倒数(负数)是尾帧,钉在中间的照旧是参考图。和视频锚帧同一个口径
+                    #: (见 _continues_this_clip)。H3 对白工作流靠它:关键帧同时当参考图、又被钉在第 0 帧。
+                    anchored = _anchor_frame(api, consumer)
+                    if anchored == 0:
+                        return "first_frame"
+                    if isinstance(anchored, int) and anchored < 0:
+                        return "last_frame"
                 if name in _IMAGE_PASSES and consumer not in seen:
                     seen.add(consumer)
                     following.append(consumer)

@@ -3,8 +3,8 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Drama episode",
-  "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **the video model speaks each character's line while it generates the shot**, so the delivery follows the moment (needs a video model with native voice, such as MiniMax H3); narration is voiced separately. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\".",
-  "graph_hash": "78a697ca1931b01db5441d492d93d2476ad479cfa6d39d95ea2a7e7ee5bcd38f",
+  "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **the video model speaks each character's line while it generates the shot**, so the delivery follows the moment (needs a video model with native voice, such as MiniMax H3); narration is voiced separately. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\". This copy includes “Act this line in the character's voice” (a dialogue model taking a first frame and reference audio, e.g. the ComfyUI example “H3 dialogue · character voice”): pick the model there after importing so a character sounds the same across shots. Without such a model, delete “Is a character speaking in this shot?”, “Record a reference line in this character's voice” and “Act this line in the character's voice”; lines are then spoken from the text alone. In the app this branch is added only when such a model is set up.",
+  "graph_hash": "50f016f0c8b2390bbe257c9985b8f359823cd87afa4742d3874d240373dd1f88",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
@@ -1413,7 +1413,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
-                  "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{dialogue_cue.text}} {{input.style}}",
+                  "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{input.style}}",
                   "negative_prompt": "{{loop.item.negative_prompt}}",
                   "parameters": {
                     "duration_seconds": "{{input.shot_seconds}}",
@@ -1440,13 +1440,10 @@
                   "y": 260
                 },
                 "config": {
-                  "asset_ids": "",
+                  "asset_ids": "{{generate_clip.asset_id}}{{speak_line.asset_id}}",
                   "name": "镜头 {{loop.item.shot_number}}",
                   "project_id": "{{input.project_id}}"
-                },
-                "inputs": [
-                  "asset_ids"
-                ]
+                }
               },
               {
                 "id": "has_subject",
@@ -1571,15 +1568,56 @@
                 }
               },
               {
-                "id": "dialogue_cue",
-                "type": "template",
-                "name": "How this line is spoken",
+                "id": "is_dialogue",
+                "type": "condition",
+                "name": "Is a character speaking in this shot?",
+                "position": {
+                  "x": 1010,
+                  "y": 260
+                },
+                "config": {
+                  "left": "{{loop.item.speaker}}",
+                  "op": "not_empty"
+                }
+              },
+              {
+                "id": "voice_sample",
+                "type": "synthesize_speech",
+                "name": "Record a reference line in this character's voice",
                 "position": {
                   "x": 1010,
                   "y": 420
                 },
                 "config": {
-                  "template": "Spoken dialogue (Mandarin Chinese, generated with the video, in sync with the lips): {{loop.item.speaker}} ({{find_speaker.description}}) says, with the tone and emotion of this moment: 「{{loop.item.narration}}」. Only this one line; no narrator, no other voices."
+                  "text": "我是{{loop.item.speaker}}。今晚的雨下得很大,铺子里的灯还亮着,我就在这里。",
+                  "engine": "",
+                  "voice": ""
+                },
+                "inputs": [
+                  "engine",
+                  "voice"
+                ]
+              },
+              {
+                "id": "speak_line",
+                "type": "ai_generate",
+                "name": "Act this line in the character's voice",
+                "position": {
+                  "x": 1320,
+                  "y": 100
+                },
+                "config": {
+                  "provider": "",
+                  "provider_profile_id": "",
+                  "model": "",
+                  "kind": "video",
+                  "prompt": "<Picture 1> is the exact first frame of this shot; keep its composition, characters and set. {{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Spoken dialogue in Mandarin Chinese, lips in sync: {{loop.item.speaker}} ({{find_speaker.description}}) speaks in exactly the voice of <Audio 1> (same timbre, pitch, age and gender), with the tone and emotion of this moment, and says only: 「{{loop.item.narration}}」. No narrator, no other voices. {{input.style}}",
+                  "negative_prompt": "{{loop.item.negative_prompt}}",
+                  "frame_aspect": "{{input.aspect_ratio}}",
+                  "source_assets": [
+                    "{{paint_first_frame.asset_id}}:first_frame",
+                    "{{voice_sample.asset_id}}:reference_audio"
+                  ]
                 }
               }
             ],
@@ -1626,12 +1664,7 @@
               {
                 "id": "shot_blockout_generate",
                 "source": "render_blockout",
-                "target": "generate_clip"
-              },
-              {
-                "id": "shot_generate_organize",
-                "source": "generate_clip",
-                "target": "organize_clip"
+                "target": "is_dialogue"
               },
               {
                 "id": "shot_narration_speaker",
@@ -1652,23 +1685,43 @@
                 "source_handle": "true"
               },
               {
-                "id": "shot_speaker_cue",
-                "source": "find_speaker",
-                "target": "dialogue_cue"
-              },
-              {
                 "id": "shot_narrator_voice",
                 "source": "has_speaker",
                 "target": "has_voice",
                 "source_handle": "false"
               },
               {
-                "id": "d-generate_clip-asset_id-organize_clip-asset_ids",
-                "source": "generate_clip",
-                "target": "organize_clip",
+                "id": "shot_speaker_voice",
+                "source": "find_speaker",
+                "target": "voice_sample"
+              },
+              {
+                "id": "shot_dialogue_speak",
+                "source": "is_dialogue",
+                "target": "speak_line",
+                "source_handle": "true"
+              },
+              {
+                "id": "shot_silent_generate",
+                "source": "is_dialogue",
+                "target": "generate_clip",
+                "source_handle": "false"
+              },
+              {
+                "id": "d-find_speaker-voice_engine-voice_sample-engine",
+                "source": "find_speaker",
+                "target": "voice_sample",
                 "kind": "data",
-                "source_output": "asset_id",
-                "target_input": "asset_ids"
+                "source_output": "voice_engine",
+                "target_input": "engine"
+              },
+              {
+                "id": "d-find_speaker-voice_id-voice_sample-voice",
+                "source": "find_speaker",
+                "target": "voice_sample",
+                "kind": "data",
+                "source_output": "voice_id",
+                "target_input": "voice"
               }
             ]
           },
@@ -1720,7 +1773,7 @@
                 },
                 "config": {
                   "sequence_id": "{{input.sequence_id}}",
-                  "asset_id": "{{loop.item.generate_clip.asset_id}}",
+                  "asset_id": "{{loop.item.generate_clip.asset_id}}{{loop.item.speak_line.asset_id}}",
                   "track_id": "{{input.video_track_id}}",
                   "start": 0,
                   "end": "{{input.shot_seconds}}"

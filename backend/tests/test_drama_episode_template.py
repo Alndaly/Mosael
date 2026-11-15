@@ -136,3 +136,54 @@ def test_接时间线之前先清空_重做一轮不会把镜头接两遍() -> N
         edges = {(edge["source"], edge["target"]) for edge in graph["edges"] if edge.get("kind", "control") != "data"}
         assert ("generate_shots", "clear_timeline") in edges and ("clear_timeline", "assemble_timeline") in edges
         assert ("generate_shots", "assemble_timeline") not in edges, "绕过清空直接接,重做时还是接两遍"
+
+
+DIALOGUE = ModelChoice(profile_id="d", provider="plugin:dev.mosael.comfyui", model="mosael/examples/minimax_h3_dialogue_voice.json")
+
+
+def _voiced() -> dict[str, Any]:
+    return full_video_generation_graph(chat=CHAT, image=IMAGE, video=VIDEO, dialogue=DIALOGUE, drama=True)
+
+
+def test_给了对白模型_对白镜头用关键帧加角色参考嗓音出片() -> None:
+    """只把台词写进提示词时,同一个角色几镜之间嗓音对不上(实测同一个孩子三镜声纹相似度 0.14–0.42);给 H3 一段角色的
+    参考嗓音之后同一个孩子两镜 0.84(维护者:「同一角色声音务必一样」)。"""
+    from app.domain.workflows.templates.full_video import VOICE_SAMPLE_TEXT
+
+    body = _shots(_voiced())
+    assert _node(body, "voice_sample")["config"]["text"] == VOICE_SAMPLE_TEXT
+    #: 嗓子取资产库里这个角色的(一整格引用,规范化成数据边)
+    assert {("find_speaker", "voice_engine", "engine"), ("find_speaker", "voice_id", "voice")} <= {
+        (edge["source"], edge.get("source_output"), edge.get("target_input"))
+        for edge in body["edges"] if edge.get("kind") == "data" and edge["target"] == "voice_sample"
+    }
+    assert "{{loop.item.narration}}" not in VOICE_SAMPLE_TEXT, "参考嗓音每次念同一句,同一个角色的参考才一模一样"
+    speak = _node(body, "speak_line")["config"]
+    assert speak["model"] == DIALOGUE.model and speak["kind"] == "video"
+    assert speak["source_assets"] == ["{{paint_first_frame.asset_id}}:first_frame", "{{voice_sample.asset_id}}:reference_audio"]
+    for part in ("<Picture 1>", "<Audio 1>", "{{loop.item.narration}}", "{{loop.item.generation_prompt}}"):
+        assert part in speak["prompt"], part
+    assert "dialogue_cue" not in {node["id"] for node in body["nodes"]}, "台词已经写在对白模型的提示词里"
+    assert "{{dialogue_cue.text}}" not in _node(body, "generate_clip")["config"]["prompt"]
+
+
+def test_给了对白模型_两支只跑一支_图生视频只由不是对白那个出口激活() -> None:
+    """引擎的判法:有路由边时,没有同向数据线陪着的普通控制边照样激活 —— 白模那条不改接,对白镜头两支都跑、下游拼出一串
+    两个素材 id(初版就这样失败过)。"""
+    body = _shots(_voiced())
+    into = {(source, handle) for source, target, handle in _control(body) if target == "generate_clip"}
+    assert into == {("is_dialogue", "false")}
+    assert {("is_dialogue", "speak_line", "true"), ("render_blockout", "is_dialogue", None),
+            ("find_speaker", "voice_sample", None)} <= _control(body)
+    organize = _node(body, "organize_clip")
+    assert organize["config"]["asset_ids"] == "{{generate_clip.asset_id}}{{speak_line.asset_id}}"
+    assert not {edge["source"] for edge in body["edges"]
+                if edge["target"] == "organize_clip" and edge.get("kind", "control") != "data"}, "两条入边是都跑了才跑"
+    append = _node(_assemble(_voiced()), "append_clip")["config"]
+    assert append["asset_id"] == "{{loop.item.generate_clip.asset_id}}{{loop.item.speak_line.asset_id}}"
+
+
+def test_官网空白副本带对白那一支_模型格空着() -> None:
+    blank = ModelChoice()
+    body = _shots(full_video_generation_graph(chat=blank, image=blank, video=blank, dialogue=blank, drama=True))
+    assert _node(body, "speak_line")["config"]["model"] == ""

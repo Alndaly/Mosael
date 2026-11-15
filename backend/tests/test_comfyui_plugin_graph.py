@@ -1211,6 +1211,37 @@ def test_锚在别的帧上的视频_还是要改的那一段(graph) -> None:
     assert [slot["role"] for slot in graph.slots(api, "video")] == ["source_video"]
 
 
+#: H3 对白(角色参考嗓音,漫剧):关键帧同时当参考图、又被 AddGuide 钉在第 0 帧;角色的嗓子当参考音频。
+H3_DIALOGUE = {
+    "40": {"class_type": "LoadImage", "inputs": {"image": "first_frame.png"}},
+    "41": {"class_type": "LoadAudio", "inputs": {"audio": "voice.wav"}},
+    "7": {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {
+        "prompt": "<Picture 1> speaks in the voice of <Audio 1>", "width": 1344, "height": 768, "length": 124,
+        "ref_images.ref_image_0": ["40", 0], "ref_audios.ref_audio_0": ["41", 0],
+    }},
+    "80": {"class_type": "MiniMaxH3AddGuide", "inputs": {"positive": ["7", 0], "latent": ["7", 1], "image": ["40", 0], "frame_idx": 0}},
+    "9": {"class_type": "SaveVideo", "inputs": {"video": ["80", 0]}},
+}
+
+
+def test_钉在第0帧的图是首帧_角色的嗓子是参考音频(graph) -> None:
+    """漫剧对白要同一个角色嗓音一致:关键帧钉在第 0 帧(构图不跑)、角色的嗓子当 <Audio 1>。此前钉帧的图被认成参考图,
+    宿主交的首帧接不上,工作流照着存着的那张图出片。"""
+    assert [(slot["node"], slot["role"]) for slot in graph.slots(H3_DIALOGUE, "video")] == [
+        ("40", "first_frame"), ("41", "reference_audio")]
+    model = graph.describe("dialogue.json", "dialogue", H3_DIALOGUE, OBJECT_INFO)
+    assert model["modes"] == ["image-to-video"]
+    assert {"role": "first_frame", "max": 1, "required": True} in roles(model)
+    assert {"role": "reference_audio", "max": 1} in roles(model), "参考嗓音不是驱动口型的音频(那要数字人授权)"
+
+
+def test_钉在最后一帧的图是尾帧_钉在中间的照旧是参考图(graph) -> None:
+    last = {**H3_DIALOGUE, "80": {**H3_DIALOGUE["80"], "inputs": {**H3_DIALOGUE["80"]["inputs"], "frame_idx": -1}}}
+    assert graph.slots(last, "video")[0]["role"] == "last_frame"
+    middle = {**H3_DIALOGUE, "80": {**H3_DIALOGUE["80"], "inputs": {**H3_DIALOGUE["80"]["inputs"], "frame_idx": 40}}}
+    assert graph.slots(middle, "video")[0]["role"] == "reference_image"
+
+
 def test_核心的_Advanced_保存节点也是成品_文生音乐是音频模型(graph) -> None:
     """维护者真实的「minimax+music3+文生音乐」:唯一的输出是 ComfyUI 0.39 核心的 SaveAudioAdvanced(选格式的保存节点)。
     此前它不在音频输出里,整张图被兜成图像模型、输出是 any。SaveImageAdvanced 同理。"""

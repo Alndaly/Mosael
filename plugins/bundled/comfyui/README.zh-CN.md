@@ -41,7 +41,7 @@
 | 有种子的出图工作流(有没有画布都一样) | 「跑几遍」(参数键仍是 `num_images`,最多 4,没选就是 1,1.12.3):**循环提交 N 次**,一遍跑完再提交下一遍,每遍按工作流原样、换一个种子 —— 给了种子就从它开始依次 +1,没给就每次随机;每份产出带着它那一遍的种子(进生成记录 / 工具结果的 `seeds`)。一共交回「跑几遍 × 一遍几张」。取消时剩下的不再提交、在跑的那遍中断;某一遍失败,出来的照样交回,并说明「跑了 N 遍、出来几遍、第几遍为什么没出来」;Mosael 重启时接着等在跑的那一遍、再把剩下的跑完。表单上这一格叫「跑几遍」,下面写着一遍出几张、这次一共几张。没有种子的(放大)跑几遍都是同一张,没有这一格;视频图也没有 |
 | 这一种的保存节点(一个都没存就是预览节点) | 跑一遍交回几张(`outputs_per_run` = 缺省交回的那几个节点各自收到的批量加起来,判不出批量的按 1;宿主乘上跑几遍一次摆好占位);不止一个时「参数」里有一项「结果取自」(节点标题),选了一个就只交回它的,别的保存节点不跑(1.6.0),每一项跑一遍交回几张写在 `x-outputs-per-run` 上。缺省「全部」;预览节点里有中间一步、控制图时缺省「最终结果」(1.12.2,见下) |
 | 其余可调的字面量输入 | 参数表里的一项:认得的输入用人话起名(`labels.py`:采样器、步数、LoRA…),撞名才带上节点名或「第 2 个 K 采样器」;不认得的叫「节点名 · ComfyUI 给这一格的名字」;这样还撞的(几个节点标题一样)各带上节点号,如「#730」,和画布上的号对得上;常用的在前,其余(和 ComfyUI 标了 `advanced` 的)收进「高级」,ComfyUI 标了 `hidden` 的不列;原始的「节点 · 输入名」在说明里 |
-| LoadImage 节点 | 参考图;视频图里接到 `start_image` / `first_frame` / `start_frame` / `first_frame_image`…的是首帧,`end_image` / `last_frame` / `end_frame`…的是尾帧(先过一道缩放、裁切再接进去的也算;图生视频的首帧必须给,1.6.1);一个角色几个读图节点时(或者给节点起过名),每个槽位按顺序带名字(节点标题,没起名的是「加载图像 #10」这种节点名加节点号),AI 工作台、画板、工作流节点上标着(1.13.0) |
+| LoadImage 节点 | 参考图;视频图里接到 `start_image` / `first_frame` / `start_frame` / `first_frame_image`…的是首帧,`end_image` / `last_frame` / `end_frame`…的是尾帧(先过一道缩放、裁切再接进去的也算;图生视频的首帧必须给,1.6.1;接在 `MiniMaxH3AddGuide` 的 `image` 上、`frame_idx` 为 0 的也是首帧,为负数的是尾帧,钉在中间的照旧是参考图,1.28.0);一个角色几个读图节点时(或者给节点起过名),每个槽位按顺序带名字(节点标题,没起名的是「加载图像 #10」这种节点名加节点号),AI 工作台、画板、工作流节点上标着(1.13.0) |
 | LoadImageMask,或只用了 LoadImage 蒙版那一路的 | 蒙版(`mask`) |
 | LoadVideo / VHS_LoadVideo | 待编辑的视频(`source_video`,模式 `video-edit`);锚在 `MiniMaxH3AddGuide` 第 0 帧上的是待续写的片段(`first_clip`,模式 `video-extend`,见 ComfyUI-Mosael-Plugins 的 `minimax_h3_continue` 示例);接在 `ref_videos.*` 这类**参考**口上的是参考视频 |
 | LoadAudio / VHS_LoadAudioUpload | 驱动音频(视频图)/ 参考音频;接在参考口上的是参考音频。视频图里**恰好一张人像(首帧或参考图)+ 一段驱动音频**、别的素材都不收、也不读上一段存下的潜空间的,再声明模式 `speech-to-video`(说话照片):资产页「让它说话」、数字人节点挑得到它(1.26.1) |
@@ -282,11 +282,16 @@ minimax_h3_open.json
 minimax_h3_continue.json
 minimax_h3_talk_open.json
 minimax_h3_talk_continue.json
+minimax_h3_dialogue_voice.json
 minimax_h3_image_t2i.json
 flux3_keyframe_blockout.json
 flux3_keyframe_scene_character.json
 moss_keyframe_scene_character.json
 ```
+
+`minimax_h3_dialogue_voice.json`(1.28.0)是漫剧的对白镜头:这一镜的关键帧既当参考图、又被 `MiniMaxH3AddGuide` 钉在
+第 0 帧(构图不跑),角色的参考嗓音接在 `ref_audios` 上;提示词让角色「用 `<Audio 1>` 的音色、按这一镜的情绪」念台词。
+嗓音由参考定、语气由 H3 照画面演 —— 同一个角色几镜之间嗓音一致,又不是平的配音(ADR 0101 修订二)。
 
 每张都带名字和一句说明;先只读检查哪张已经存在、每张缺哪些节点和模型。卡片按 grid 排列,每张自己有一颗「安装」,
 点哪张就只写哪一张到 `workflows/mosael/examples/`,只新建、不覆盖。节点包和模型仍要在工作流详情里补 —— 卡片会把缺项

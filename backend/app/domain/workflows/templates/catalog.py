@@ -71,6 +71,7 @@ from app.domain.workflows.templates.model_choice import (
     REFERENCE_IMAGES_NEEDED,
     SINGLE_REFERENCE,
     _chat_model,
+    _dialogue_video_model,
     _continuation_video_model,
     _music_model,
     model_capabilities,
@@ -176,6 +177,16 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                   "follows the moment (needs a video model with native voice, such as MiniMax H3); narration is voiced separately. The topic can be a "
                   "shot-by-shot script (picture, speaker, line). Build the characters and locations with \"Series bible\" first, then shoot episode by "
                   "episode. Cost: as \"Topic to finished video\"."
+        },
+        "download_note": {
+            "zh": "这一份带着「用角色的嗓子演这一句」(对白模型,收首帧和参考音频,例:ComfyUI 范例「H3 对白 · 角色嗓音」):"
+                  "导入后在那一格挑好模型,同一个角色几镜之间嗓音一致。没有这种模型的话,删掉「这一镜是角色在说话吗」"
+                  "「用这个角色的嗓子念一句参考」「用角色的嗓子演这一句」三个节点,对白照旧按文字描述念。应用里有这种模型才带这一支。",
+            "en": " This copy includes “Act this line in the character's voice” (a dialogue model taking a first frame and reference audio, "
+                  "e.g. the ComfyUI example “H3 dialogue · character voice”): pick the model there after importing so a character sounds the "
+                  "same across shots. Without such a model, delete “Is a character speaking in this shot?”, “Record a reference line in this "
+                  "character's voice” and “Act this line in the character's voice”; lines are then spoken from the text alone. In the app "
+                  "this branch is added only when such a model is set up.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -386,7 +397,9 @@ def built_in_template_graph(
             db=db,
         ))
     if template_id == DRAMA_EPISODE:
-        #: 和整片同一个挑法,多挑一个说话照片模型(对白镜头让关键帧开口)。
+        #: 和整片同一个挑法,多挑一个对白模型(首帧 + 角色参考嗓音,同一个角色几镜之间嗓音一致)。挑不到就不带这一支
+        #: (对白照旧按文字念),不留一个空模型格让就绪检查一直红着。
+        dialogue = _dialogue_video_model(db, user_id)
         return localised_names(locale, full_video_generation_graph(
             chat=chat,
             image=_reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED),
@@ -394,6 +407,7 @@ def built_in_template_graph(
             voice_id=_prefilled_voice_id(db, workspace_id),
             music=_background_music(db, user_id, workspace_id),
             drama=True,
+            dialogue=dialogue if dialogue.model else None,
             db=db,
         ))
     if template_id == SERIES_SETUP:
@@ -488,7 +502,7 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         #: 照样接到开始参数(templates/model_choice._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
         #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
         FULL_VIDEO_GENERATION: full_video_generation_graph(chat=blank, image=blank, video=blank),
-        DRAMA_EPISODE: full_video_generation_graph(chat=blank, image=blank, video=blank, drama=True),
+        DRAMA_EPISODE: full_video_generation_graph(chat=blank, image=blank, video=blank, dialogue=blank, drama=True),
         SERIES_SETUP: series_setup_graph(chat=blank, image=blank),
         LONG_TAKE_VIDEO: long_take_video_graph(chat=blank, opening=blank, video=blank),
         LONG_TALK_VIDEO: long_talk_video_graph(opening=blank, video=blank),

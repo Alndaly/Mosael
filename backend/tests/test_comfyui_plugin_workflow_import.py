@@ -526,11 +526,11 @@ def test_随插件的官方工作流范例_列出全部和缺项(plugin, comfy) 
 
     assert status["id"] == "official_comfyui_examples"
     assert status["folder"] == "mosael/examples"
-    #: H3 长片 / 数字人四张、H3 Image 文生图一张;关键帧三张:白模机位 + 人物 + 场景(1.26.1),
-    #: 人物三视图 + 场景图两张(1.26.0)。
+    #: H3 长片 / 数字人四张、H3 对白(角色参考嗓音,漫剧)一张、H3 Image 文生图一张;关键帧三张:白模机位 + 人物 + 场景
+    #: (1.26.1),人物三视图 + 场景图两张(1.26.0)。
     assert [one["file"] for one in status["workflows"]] == [
         "minimax_h3_open.json", "minimax_h3_continue.json", "minimax_h3_talk_open.json", "minimax_h3_talk_continue.json",
-        "minimax_h3_image_t2i.json",
+        "minimax_h3_dialogue_voice.json", "minimax_h3_image_t2i.json",
         "flux3_keyframe_blockout.json", "flux3_keyframe_scene_character.json", "moss_keyframe_scene_character.json",
     ]
     assert all(one["path"].startswith("mosael/examples/") and not one["installed"] for one in status["workflows"])
