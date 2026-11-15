@@ -32,7 +32,7 @@ from app.domain.workflows.templates.schemas import (
 FULL_VIDEO_GENERATION = "full_video_generation"
 #: 同一张图的「漫剧」形态(`drama=True`):对白推动,角色台词的镜头用说话照片模型让关键帧开口(见 full_video_generation_graph)。
 DRAMA_EPISODE = "drama_episode"
-DRAMA_EPISODE_VERSION = 2
+DRAMA_EPISODE_VERSION = 3
 
 #: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
 RUNTIME_PROMPT_HEADROOM = 600
@@ -158,19 +158,58 @@ def _shot_chain(body: dict[str, Any], video: ModelChoice, plan: VideoPlan, param
     ]
 
 
-def _gate_generation_on_silence(body: dict[str, Any]) -> None:
-    """对白镜头只开口、不再图生视频:「生成视频」只由「是不是角色在说话」的**假**出口激活。
+def _speak_in_the_clip(generate: dict[str, Any], assemble: dict[str, Any]) -> None:
+    """漫剧的对白让视频模型在出片时一起念出来,不另配。
 
-    它原本挂着几条只排先后的普通控制边(白模之后、接力取尾帧之后)。引擎的规矩是有路由边时,没有同向数据线陪着的
-    普通控制边**照样激活**(见 engine.incoming_active)—— 这几条都是,因为生成视频对白模、尾帧的引用嵌在提示词和
-    参考图列表里,规范化不把它们升成数据线。于是对白镜头两支都跑:多花一次图生视频,下游把两个素材 id 拼成一串
-    (「素材不在这个工作区里」,漫剧第 2 场第 3 镜真跑出来的)。
+    MiniMax H3 这类模型在同一次生成里出画面和原生声音(人声、音效、音乐一起建模):把「谁、用什么样的嗓子和情绪、说哪一句」
+    写进这一镜的提示词,台词的语气就跟着表演走。此前对白先用 TTS 配好、再交给说话照片对口型 —— 维护者:「后期配音没什么
+    语气语调,跟情境不符」。
 
-    把这几条改接到判断上:先后不变(判断在白模 / 接力之后才判),生成视频只剩那一个出口。
+    - **逐镜**:角色台词不再合成配音(去掉「角色带着嗓子就用它的」那一支),旁白照旧用旁白那把;多一步「这一句怎么说」,
+      拼进「生成这一镜」的提示词(没台词的镜头它被跳过,引用出来是空串)。人物的设定(年龄、身份、性子)一并写进去,
+      同一个角色几镜之间的嗓音尽量靠拢。
+    - **接时间线**:对白镜头的原声是人在说话 —— 不静音、也不标成环境声(环境声不触发配乐闪避,说话要)。字幕挂在画面片段
+      之后,时间取这一镜画面的起止(见 narration_subtitles)。
     """
-    for edge in body["edges"]:
-        if edge["target"] == "generate_clip" and edge["source"] != "is_dialogue" and not edge.get("source_handle"):
-            edge["target"] = "is_dialogue"
+    generate["nodes"] = [node for node in generate["nodes"] if node["id"] not in {"speaker_has_voice", "speak_as_character"}]
+    generate["edges"] = [edge for edge in generate["edges"]
+                         if edge["id"] not in {"shot_narration_voice_gate", "shot_character_speak", "shot_fallback_voice"}]
+    generate["nodes"].append({
+        "id": "dialogue_cue",
+        "type": "template",
+        "name": {"zh": "这一句怎么说", "en": "How this line is spoken"},
+        "position": {"x": 1010, "y": 420},
+        "config": {"template": (
+            "Spoken dialogue (Mandarin Chinese, generated with the video, in sync with the lips): "
+            "{{loop.item.speaker}} ({{find_speaker.description}}) says, with the tone and emotion of this moment: "
+            "「{{loop.item.narration}}」. Only this one line; no narrator, no other voices."
+        )},
+    })
+    generate["edges"] += [
+        {"id": "shot_speaker_cue", "source": "find_speaker", "target": "dialogue_cue"},
+        #: 旁白(没写说话的角色)才合成配音。
+        {"id": "shot_narrator_voice", "source": "has_speaker", "target": "has_voice", "source_handle": "false"},
+    ]
+    clip = next(node for node in generate["nodes"] if node["id"] == "generate_clip")["config"]
+    clip["prompt"] = clip["prompt"].replace(" {{input.style}}", " {{dialogue_cue.text}} {{input.style}}")
+
+    nodes = {node["id"]: node for node in assemble["nodes"]}
+    nodes["has_audio"]["config"]["left"] = "{{loop.item.narrate.asset_id}}"
+    nodes["append_narration"]["config"]["asset_id"] = "{{loop.item.narrate.asset_id}}"
+    assemble["nodes"].append({
+        "id": "is_spoken",
+        "type": "condition",
+        "name": {"zh": "这一镜是角色在说话吗", "en": "Is a character speaking in this shot?"},
+        "position": {"x": 700, "y": 680},
+        "config": {"left": "{{loop.item.loop.item.speaker}}", "op": "not_empty"},
+    })
+    assemble["edges"] = [edge for edge in assemble["edges"]
+                         if edge["id"] not in {"assemble_gate_ambience", "assemble_narration_caption"}]
+    assemble["edges"] += [
+        {"id": "assemble_gate_spoken", "source": "has_audio", "target": "is_spoken", "source_handle": "false"},
+        {"id": "assemble_silent_ambience", "source": "is_spoken", "target": "mark_ambience", "source_handle": "false"},
+        {"id": "assemble_clip_caption", "source": "append_clip", "target": "caption"},
+    ]
 
 
 #: 漫剧的叙事规则(拼在叙事脚本的系统提示后面)。`{clip}` 运行时换成每镜秒数的引用。
@@ -183,13 +222,14 @@ DRAMA_STORYBOARD_RULE = """
 
 **漫剧镜头规则**:有角色台词的镜头,镜头对着说话的人 —— 中近景或近景,正面或 3/4 侧面,脸和嘴看得清;reference_mode
 一律 keyframes,first_frame_subject 写说话的那个角色;generation_prompt 用英文写清这一句的表情、眼神、手势和情绪变化
-(之后用这一镜的配音驱动首帧开口,嘴型跟着念)。两人对话用正反打交替;旁白镜头不超过三成,用来交代环境或转场;
-动作镜头写清动作节拍。"""
+(视频模型出片时照这一句的情绪把台词念出来,嘴型跟着念;台词本身不用抄进 generation_prompt,模板会拼上)。
+没有角色台词的镜头,generation_prompt 末尾写 "No one speaks."(旁白另配,画里的人不出声)。两人对话用正反打交替;
+旁白镜头不超过三成,用来交代环境或转场;动作镜头写清动作节拍。"""
 
 
 def full_video_generation_graph(
     *, chat: ModelChoice, image: ModelChoice, video: ModelChoice, voice_id: str = "", music: BackgroundMusic | None = None,
-    talk: ModelChoice | None = None, drama: bool = False, db: Session | None = None,
+    drama: bool = False, db: Session | None = None,
 ) -> dict[str, Any]:
     """主题 → 主旨 → 脚本 / 视觉圣经 → 角色三视图 + 场景设定图 → 分镜 → 3D 白模布景 → 逐镜:
     白模参考 → 首帧(需要时加尾帧)→ 视频 → 按序上时间线 → 口播字幕 → 导出。
@@ -207,9 +247,9 @@ def full_video_generation_graph(
       由视频模型的能力决定(见 VideoPlan.modes)。
 
     **漫剧形态**(`drama=True`,模板「漫剧单集」):剧本和分镜按对白推动来写(旁白只交代时间地点),对白镜头对着说话的人;
-    给了说话照片模型(`talk`)时,**有角色台词的镜头不走图生视频**,而是用这句台词的配音驱动这一镜的关键帧开口(`image_speak`,
-    嘴型跟着念)—— 此前台词只是叠在图生视频上的配音,画里的人不说话也不演,看起来是一张会动的插画配着声音(维护者:
-    「更像是动态漫画,不是漫剧」)。没台词的镜头照旧图生视频。
+    **对白镜头的人声由视频模型在出片时一起生成**(MiniMax H3 这类出原生音频的模型):台词、谁在说、这个人的嗓音和此刻的情绪
+    写进这一镜的生成提示词,时间线保留片段自带的声音 —— 此前是另配 TTS、再用说话照片对口型,维护者:「后期配音没什么语气语调,
+    跟情境不符」。旁白镜头画里没人开口,照旧用旁白的嗓子配、原声静音。
 
     **谁说话就用谁的嗓子**:分镜每镜写明说话的角色(`speaker`),配音按名字到资产库里找这个人物,它带着音色就用它的,
     旁白和没带音色的角色用开始节点那一把 —— 漫剧这种几个角色对话的片子,此前所有台词都是同一个旁白在念。
@@ -550,49 +590,9 @@ JSON Schema 的对象。"""
             {"id": "shot_narrator_speak", "source": "has_voice", "target": "narrate", "source_handle": "true"},
         ],
     }
-    #: **对白镜头让关键帧开口**(漫剧形态 + 有说话照片模型时):角色台词的镜头不走图生视频,用这一镜的配音驱动首帧说话。
-    #: 这一镜的产物取「图生视频」和「说话照片」两支拼起来的那一个(没跑的那支引用出来是空串,同三视图「认出来的 / 新画的」)。
-    #: 官网下载的空白副本也带这一支(模型格空着,导入后由用户挑)。
-    talking = drama and talk is not None
     shot_ref = "{{%s.asset_id}}" % shot_asset
-    if talking:
-        generate_body["nodes"] += [
-            {
-                "id": "is_dialogue",
-                "type": "condition",
-                "name": {"zh": "这一镜是角色在说话吗", "en": "Is a character speaking in this shot?"},
-                "position": {"x": 1010, "y": 220},
-                "config": {"left": "{{loop.item.speaker}}", "op": "not_empty"},
-            },
-            {
-                "id": "talk_clip",
-                "type": "image_speak",
-                "name": {"zh": "让这一镜的人开口", "en": "Make the character speak this line"},
-                "position": {"x": 1320, "y": 120},
-                "config": {
-                    "asset_id": "{{paint_first_frame.asset_id}}",
-                    #: 角色带着嗓子就是它念的那段,否则是旁白那把(两支只跑一支)。视频剪到这段配音那么长(talking._fit_to_audio)。
-                    "audio_asset_id": "{{speak_as_character.asset_id}}{{narrate.asset_id}}",
-                    "model": f"{talk.profile_id}:video:{talk.model}" if talk and talk.model else "",
-                    "consent": "{{input.talk_consent}}",
-                    #: 这一句怎么说:分镜里写的表情、眼神、手势(漫剧镜头规则要求写在 generation_prompt 里)和画风。
-                    "prompt": "{{loop.item.generation_prompt}} {{input.style}}",
-                },
-            },
-        ]
-        generate_body["edges"] += [
-            {"id": "shot_dialogue_talk", "source": "is_dialogue", "target": "talk_clip", "source_handle": "true"},
-            #: 没台词的镜头才图生视频(生成那一步另有「白模之后」那条入边)。
-            {"id": "shot_silent_generate", "source": "is_dialogue", "target": "generate_clip", "source_handle": "false"},
-        ]
-        shot_ref = "{{%s.asset_id}}{{talk_clip.asset_id}}" % shot_asset
-        #: 归档按引用等两支落定(两条入边是「都跑了才跑」,不能汇到它)。
-        generate_body["edges"] = [edge for edge in generate_body["edges"] if edge["id"] != "shot_generate_organize"]
-        next(node for node in generate_body["nodes"] if node["id"] == "organize_clip")["config"]["asset_ids"] = shot_ref
     if video_plan.chains:
         _shot_chain(generate_body, video, video_plan, video_parameters)
-    if talking:
-        _gate_generation_on_silence(generate_body)
     #: 分镜里模型写的那几段提示词各自最多多少字:所选模型的提示词上限,减去模板固定拼上的那几句(白模说明、
     #: 「保持角色一致」……),再给运行时才插进来的画风、白模图例、运镜各留一段余量。此前不限:首帧那条固定的
     #: 白模说明就有近 500 字,Evolink 的图像模型只收 2000 字,模型写长一点整条提示词就超了。模型没声明上限的不限。
@@ -692,6 +692,8 @@ JSON Schema 的对象。"""
             {"id": "assemble_narration_caption", "source": "append_narration", "target": "caption"},
         ],
     }
+    if drama:
+        _speak_in_the_clip(generate_body, assemble_body)
     def reuse_or_draw(kind: str, what: dict[str, str], drawer: dict[str, Any], save: dict[str, Any],
                       role: str = "") -> dict[str, Any]:
         """每个角色 / 场景:先到资产库里按名字认(ADR 0027 阶段 4),**有图就用它的,不再重画**;没有才画,画完
@@ -834,10 +836,8 @@ JSON Schema 的对象。"""
                     "fps": 24,
                     # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败。
                     "voice_id": voice_id,
-                    #: 对白镜头用说话照片让关键帧开口:人脸是这次运行画的虚构角色,但「可以用于数字人」仍由跑的人确认(选 yes)。
-                    **({"talk_consent": ""} if talking else {}),
                 },
-                "required_params": ["topic", *(["talk_consent"] if talking else [])],
+                "required_params": ["topic"],
             },
         },
         {
@@ -1095,7 +1095,6 @@ JSON Schema 的对象。"""
                     "aspect_ratio": "{{start.aspect_ratio}}",
                     "resolution": "{{start.resolution}}",
                     "shot_seconds": "{{start.shot_seconds}}",
-                    **({"talk_consent": "{{start.talk_consent}}"} if talking else {}),
                 },
                 "body": generate_body,
                 # 不写 output:每一项交出那一镜的全部产物(画面、口播)连同分镜本身,
@@ -1144,8 +1143,9 @@ JSON Schema 的对象。"""
             "config": {
                 "sequence_id": "{{video_project.sequence_id}}",
                 "segments": "{{assemble_timeline.results}}",
-                "start_field": "append_narration.timeline_start",
-                "end_field": "append_narration.timeline_end",
+                #: 漫剧的对白是片段自带的声音(没有另配的那一段),字幕按这一镜画面的起止上屏。
+                "start_field": "append_clip.timeline_start" if drama else "append_narration.timeline_start",
+                "end_field": "append_clip.timeline_end" if drama else "append_narration.timeline_end",
                 "text_field": "caption.text",
                 #: 一镜可以有几十秒,口播一条上屏就出了画面。
                 "break_long_lines": "yes",
@@ -1246,6 +1246,7 @@ JSON Schema 的对象。"""
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
         #: v25:无旁白镜头的原声标成环境声,照常出声但不触发配乐闪避。
+        #: 漫剧 v3:对白由视频模型出片时一起念(不再另配 TTS + 说话照片),字幕按画面片段上屏。
         #: v26(漫剧 v2):布景台要和分镜一样多(json_match_items);接时间线之前先清空(重做一轮不再把镜头接两遍)。
         "meta": {"template_id": DRAMA_EPISODE if drama else FULL_VIDEO_GENERATION,
                  "template_version": DRAMA_EPISODE_VERSION if drama else 26, "source": "official"},

@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Drama episode",
-  "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **every shot with a character's line makes the keyframe speak** through a speaking-photo model, lips following that line's voice (the character's own voice from the library when it has one), while shots without lines are generated from the keyframe as usual. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters (with voices) and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\", with one speaking-photo generation in place of the video for each dialogue shot.",
-  "graph_hash": "5d6c2db99f4f4543d68b0c44d28f104e8ba0830c0c82de8c7ff032dbbf3ab348",
+  "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **the video model speaks each character's line while it generates the shot**, so the delivery follows the moment (needs a video model with native voice, such as MiniMax H3); narration is voiced separately. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\".",
+  "graph_hash": "78a697ca1931b01db5441d492d93d2476ad479cfa6d39d95ea2a7e7ee5bcd38f",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [
@@ -32,12 +32,10 @@
             "aspect_ratio": "16:9",
             "resolution": "720p",
             "fps": 24,
-            "voice_id": "",
-            "talk_consent": ""
+            "voice_id": ""
           },
           "required_params": [
-            "topic",
-            "talk_consent"
+            "topic"
           ]
         }
       },
@@ -707,7 +705,7 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n{{start.shot_seconds}} 秒镜头。每镜给出精确起止时间、口播、场景(location_id,以及它的 name 写进 location_name)、出镜角色(首帧里最主要的那个的 name 写进 first_frame_subject)、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 {{start.shot_seconds}} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。narration 可以是旁白，也可以是某个角色的台词：**一镜只写一个人说的话**，speaker 写说话的\n角色在视觉圣经里的 name(一字不差，配音按它找这个角色的嗓子)，旁白写空字符串；两人对话就拆成几镜，一镜一句(正反打)。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 {{start.shot_seconds}} 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。\n\n**漫剧镜头规则**:有角色台词的镜头,镜头对着说话的人 —— 中近景或近景,正面或 3/4 侧面,脸和嘴看得清;reference_mode\n一律 keyframes,first_frame_subject 写说话的那个角色;generation_prompt 用英文写清这一句的表情、眼神、手势和情绪变化\n(之后用这一镜的配音驱动首帧开口,嘴型跟着念)。两人对话用正反打交替;旁白镜头不超过三成,用来交代环境或转场;\n动作镜头写清动作节拍。",
+          "system": "你是导演、摄影指导、分镜师和生成提示词工程师。把创意简报拆成连续的\n{{start.shot_seconds}} 秒镜头。每镜给出精确起止时间、口播、场景(location_id,以及它的 name 写进 location_name)、出镜角色(首帧里最主要的那个的 name 写进 first_frame_subject)、人物站位与走位、景别、\n机位角度、焦段(lens_mm)、运镜方式与路径、主体动作、光线、声音设计和连续性。所有镜头时间必须\n首尾相接，不重叠、不留空；首镜建立钩子，中段逐步升级信息，末镜完成主旨回收。每镜 narration 念出来\n不得超过 {{start.shot_seconds}} 秒：中文按每秒约 4 字、英文按每秒约 2.5 个词估算，宁短勿长；超出的部分会被加速压进\n这一镜，听起来会很赶。narration 可以是旁白，也可以是某个角色的台词：**一镜只写一个人说的话**，speaker 写说话的\n角色在视觉圣经里的 name(一字不差，配音按它找这个角色的嗓子)，旁白写空字符串；两人对话就拆成几镜，一镜一句(正反打)。\n\n每镜选一条出片路径(reference_mode,可选:keyframes):keyframes 先按白模机位画首帧再生成,\n构图最稳,适合绝大多数镜头;references 把角色三视图、场景设定图和白模运镜视频直接交给视频模型,\n适合环绕、长距离跟拍这类首尾两帧说不清的复杂运镜。first_frame_prompt 用英文完整描述第一帧画面。\ngeneration_prompt 用英文写动作节拍、表演、环境变化与光影，主体动作必须能在 {{start.shot_seconds}} 秒内完成；\n**不要写机位参数**(机位会从白模自动算出来补上),画面中不要生成字幕、UI、Logo 或水印。\ntransition_in/out 是交付给后期查看的剪辑意图；本工作流自动合成阶段按时间顺序硬切。只输出符合\nJSON Schema 的对象。\n\n**漫剧镜头规则**:有角色台词的镜头,镜头对着说话的人 —— 中近景或近景,正面或 3/4 侧面,脸和嘴看得清;reference_mode\n一律 keyframes,first_frame_subject 写说话的那个角色;generation_prompt 用英文写清这一句的表情、眼神、手势和情绪变化\n(视频模型出片时照这一句的情绪把台词念出来,嘴型跟着念;台词本身不用抄进 generation_prompt,模板会拼上)。\n没有角色台词的镜头,generation_prompt 末尾写 \"No one speaks.\"(旁白另配,画里的人不出声)。两人对话用正反打交替;\n旁白镜头不超过三成,用来交代环境或转场;动作镜头写清动作节拍。",
           "prompt": "请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。\n\n用户给的原始主题(原文)：\n{{start.topic}}\n\n如果用户的原始主题里已经写好了逐镜的分场剧本(一条一镜:画面、谁说话、台词),就**严格照它**:镜数、顺序、每一镜的台词逐字照抄、说话人照写,不增、不减、不改写、不合并;其余要你补的(机位、表演、光线、提示词)按它的画面去补。没给剧本时按创意简报自己写。\n\n创意简报：\n{{creative_brief.text}}\n\n叙事脚本与节拍：\n{{narrative_script.text}}\n\n视觉圣经(含角色与场景 id)：\n{{visual_bible.text}}\n\n成片目标时长：{{start.target_duration_seconds}} 秒；画幅：{{start.aspect_ratio}}；\n语言：{{start.language}}。每个镜头固定 {{start.shot_seconds}} 秒。镜头数 = 目标时长 ÷ {{start.shot_seconds}} 向上取整，\n但**最多 {{start.max_shots}} 镜**；两者冲突时以上限为准，把成片做短一点，\n**不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 {{start.shot_seconds}} 秒。时间码从 0 开始连续编号。",
           "response_format": "json_schema",
           "json_schema_name": "professional_timed_storyboard",
@@ -1289,8 +1287,7 @@
             "video_size": "{{frame_plan.value.video_size}}",
             "aspect_ratio": "{{start.aspect_ratio}}",
             "resolution": "{{start.resolution}}",
-            "shot_seconds": "{{start.shot_seconds}}",
-            "talk_consent": "{{start.talk_consent}}"
+            "shot_seconds": "{{start.shot_seconds}}"
           },
           "body": {
             "nodes": [
@@ -1416,7 +1413,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "video",
-                  "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{input.style}}",
+                  "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{dialogue_cue.text}} {{input.style}}",
                   "negative_prompt": "{{loop.item.negative_prompt}}",
                   "parameters": {
                     "duration_seconds": "{{input.shot_seconds}}",
@@ -1443,10 +1440,13 @@
                   "y": 260
                 },
                 "config": {
-                  "asset_ids": "{{generate_clip.asset_id}}{{talk_clip.asset_id}}",
+                  "asset_ids": "",
                   "name": "镜头 {{loop.item.shot_number}}",
                   "project_id": "{{input.project_id}}"
-                }
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               },
               {
                 "id": "has_subject",
@@ -1544,40 +1544,6 @@
                 }
               },
               {
-                "id": "speaker_has_voice",
-                "type": "condition",
-                "name": "Does this character carry a voice?",
-                "position": {
-                  "x": 1010,
-                  "y": 420
-                },
-                "config": {
-                  "left": "",
-                  "op": "not_empty"
-                },
-                "inputs": [
-                  "left"
-                ]
-              },
-              {
-                "id": "speak_as_character",
-                "type": "synthesize_speech",
-                "name": "Speak the line in this character's voice",
-                "position": {
-                  "x": 1320,
-                  "y": 420
-                },
-                "config": {
-                  "text": "{{loop.item.narration}}",
-                  "engine": "",
-                  "voice": ""
-                },
-                "inputs": [
-                  "engine",
-                  "voice"
-                ]
-              },
-              {
                 "id": "has_voice",
                 "type": "condition",
                 "name": "Was a voice picked?",
@@ -1605,36 +1571,16 @@
                 }
               },
               {
-                "id": "is_dialogue",
-                "type": "condition",
-                "name": "Is a character speaking in this shot?",
+                "id": "dialogue_cue",
+                "type": "template",
+                "name": "How this line is spoken",
                 "position": {
                   "x": 1010,
-                  "y": 220
+                  "y": 420
                 },
                 "config": {
-                  "left": "{{loop.item.speaker}}",
-                  "op": "not_empty"
+                  "template": "Spoken dialogue (Mandarin Chinese, generated with the video, in sync with the lips): {{loop.item.speaker}} ({{find_speaker.description}}) says, with the tone and emotion of this moment: 「{{loop.item.narration}}」. Only this one line; no narrator, no other voices."
                 }
-              },
-              {
-                "id": "talk_clip",
-                "type": "image_speak",
-                "name": "Make the character speak this line",
-                "position": {
-                  "x": 1320,
-                  "y": 120
-                },
-                "config": {
-                  "asset_id": "",
-                  "audio_asset_id": "{{speak_as_character.asset_id}}{{narrate.asset_id}}",
-                  "model": "",
-                  "consent": "{{input.talk_consent}}",
-                  "prompt": "{{loop.item.generation_prompt}} {{input.style}}"
-                },
-                "inputs": [
-                  "asset_id"
-                ]
               }
             ],
             "edges": [
@@ -1680,7 +1626,12 @@
               {
                 "id": "shot_blockout_generate",
                 "source": "render_blockout",
-                "target": "is_dialogue"
+                "target": "generate_clip"
+              },
+              {
+                "id": "shot_generate_organize",
+                "source": "generate_clip",
+                "target": "organize_clip"
               },
               {
                 "id": "shot_narration_speaker",
@@ -1695,72 +1646,29 @@
                 "source_handle": "true"
               },
               {
-                "id": "shot_narration_voice_gate",
-                "source": "has_narration",
-                "target": "speaker_has_voice",
-                "source_handle": "true"
-              },
-              {
-                "id": "shot_character_speak",
-                "source": "speaker_has_voice",
-                "target": "speak_as_character",
-                "source_handle": "true"
-              },
-              {
-                "id": "shot_fallback_voice",
-                "source": "speaker_has_voice",
-                "target": "has_voice",
-                "source_handle": "false"
-              },
-              {
                 "id": "shot_narrator_speak",
                 "source": "has_voice",
                 "target": "narrate",
                 "source_handle": "true"
               },
               {
-                "id": "shot_dialogue_talk",
-                "source": "is_dialogue",
-                "target": "talk_clip",
-                "source_handle": "true"
+                "id": "shot_speaker_cue",
+                "source": "find_speaker",
+                "target": "dialogue_cue"
               },
               {
-                "id": "shot_silent_generate",
-                "source": "is_dialogue",
-                "target": "generate_clip",
+                "id": "shot_narrator_voice",
+                "source": "has_speaker",
+                "target": "has_voice",
                 "source_handle": "false"
               },
               {
-                "id": "d-find_speaker-voice_id-speaker_has_voice-left",
-                "source": "find_speaker",
-                "target": "speaker_has_voice",
-                "kind": "data",
-                "source_output": "voice_id",
-                "target_input": "left"
-              },
-              {
-                "id": "d-find_speaker-voice_engine-speak_as_character-engine",
-                "source": "find_speaker",
-                "target": "speak_as_character",
-                "kind": "data",
-                "source_output": "voice_engine",
-                "target_input": "engine"
-              },
-              {
-                "id": "d-find_speaker-voice_id-speak_as_character-voice",
-                "source": "find_speaker",
-                "target": "speak_as_character",
-                "kind": "data",
-                "source_output": "voice_id",
-                "target_input": "voice"
-              },
-              {
-                "id": "d-paint_first_frame-asset_id-talk_clip-asset_id",
-                "source": "paint_first_frame",
-                "target": "talk_clip",
+                "id": "d-generate_clip-asset_id-organize_clip-asset_ids",
+                "source": "generate_clip",
+                "target": "organize_clip",
                 "kind": "data",
                 "source_output": "asset_id",
-                "target_input": "asset_id"
+                "target_input": "asset_ids"
               }
             ]
           },
@@ -1812,7 +1720,7 @@
                 },
                 "config": {
                   "sequence_id": "{{input.sequence_id}}",
-                  "asset_id": "{{loop.item.generate_clip.asset_id}}{{loop.item.talk_clip.asset_id}}",
+                  "asset_id": "{{loop.item.generate_clip.asset_id}}",
                   "track_id": "{{input.video_track_id}}",
                   "start": 0,
                   "end": "{{input.shot_seconds}}"
@@ -1827,7 +1735,7 @@
                   "y": 140
                 },
                 "config": {
-                  "left": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}",
+                  "left": "{{loop.item.narrate.asset_id}}",
                   "op": "not_empty"
                 }
               },
@@ -1867,7 +1775,7 @@
                 },
                 "config": {
                   "sequence_id": "{{input.sequence_id}}",
-                  "asset_id": "{{loop.item.narrate.asset_id}}{{loop.item.speak_as_character.asset_id}}",
+                  "asset_id": "{{loop.item.narrate.asset_id}}",
                   "track_id": "{{input.audio_track_id}}",
                   "at": "",
                   "max_duration": ""
@@ -1888,6 +1796,19 @@
                 "config": {
                   "template": "{{loop.item.loop.item.narration}}"
                 }
+              },
+              {
+                "id": "is_spoken",
+                "type": "condition",
+                "name": "Is a character speaking in this shot?",
+                "position": {
+                  "x": 700,
+                  "y": 680
+                },
+                "config": {
+                  "left": "{{loop.item.loop.item.speaker}}",
+                  "op": "not_empty"
+                }
               }
             ],
             "edges": [
@@ -1903,19 +1824,25 @@
                 "source_handle": "true"
               },
               {
-                "id": "assemble_gate_ambience",
-                "source": "has_audio",
-                "target": "mark_ambience",
-                "source_handle": "false"
-              },
-              {
                 "id": "assemble_mute_narration",
                 "source": "mute_clip",
                 "target": "append_narration"
               },
               {
-                "id": "assemble_narration_caption",
-                "source": "append_narration",
+                "id": "assemble_gate_spoken",
+                "source": "has_audio",
+                "target": "is_spoken",
+                "source_handle": "false"
+              },
+              {
+                "id": "assemble_silent_ambience",
+                "source": "is_spoken",
+                "target": "mark_ambience",
+                "source_handle": "false"
+              },
+              {
+                "id": "assemble_clip_caption",
+                "source": "append_clip",
                 "target": "caption"
               },
               {
@@ -1954,8 +1881,8 @@
         "config": {
           "sequence_id": "",
           "segments": "",
-          "start_field": "append_narration.timeline_start",
-          "end_field": "append_narration.timeline_end",
+          "start_field": "append_clip.timeline_start",
+          "end_field": "append_clip.timeline_end",
           "text_field": "caption.text",
           "break_long_lines": "yes",
           "allow_empty": "yes"
