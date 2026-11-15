@@ -32,7 +32,7 @@ import {
   type FigurePose,
   type Vec3,
 } from "@/api/domains/scenes";
-import { cameraOfShot, sampleCamera, sampleObject } from "./sceneGraph";
+import { cameraOfShot, hiddenObjectIds, inShot, sampleCamera, sampleObject } from "./sceneGraph";
 import {
   poseFromMannequin,
   readPose,
@@ -107,16 +107,18 @@ function disposeTree(root: THREE.Object3D) {
     }
   });
 }
-function applyTransform(target: THREE.Object3D, o: SceneObject) {
+function applyTransform(target: THREE.Object3D, o: SceneObject, shotId: string) {
   target.position.fromArray(o.position);
   target.rotation.set(...(o.rotation.map(THREE.MathUtils.degToRad) as Vec3));
   target.scale.fromArray(o.scale);
-  target.visible = !o.hidden;
+  // 不属于当前镜头的(每镜各一份的人偶,ADR 0102)和藏起来的一样:看不见、选不中、不出操纵器。
+  const hidden = o.hidden || !inShot(o, shotId);
+  target.visible = !hidden;
   target.name = o.name;
   target.userData.sceneObjectId = o.id;
   // 可见性记一份在数据上:相机道具的 `visible` 每帧按视图重设(见渲染循环),读它分不出
   // "藏了"和"这一刻不画",而选中框、操纵器要的是前者。
-  target.userData.hidden = o.hidden;
+  target.userData.hidden = hidden;
 }
 /** 它自己和所有上级都没藏。**藏一个组 = 组里的东西都看不见**,孩子们自己的标记不动。 */
 function shownInTree(node: THREE.Object3D, root: THREE.Object3D) {
@@ -411,7 +413,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         // 自定义背景。按视图决定,见下面渲染那一段。
         ambient.intensity = p.content.ambient;
         if (p.content.lighting) applyLighting(p.content.lighting);
-        const signature = JSON.stringify(p.content.objects);
+        //: 镜头也在签名里:换镜头时哪些物体在画面里会变(ADR 0102)。
+        const signature = `${p.shot.id}\n${JSON.stringify(p.content.objects)}`;
         if (signature === lastSignature) {
           select();
           return;
@@ -425,7 +428,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         objects.clear();
         for (const o of p.content.objects) {
           const node = geometryObject(o);
-          applyTransform(node, o);
+          applyTransform(node, o, p.shot.id);
           // 相机的朝向由 target 决定,不由欧拉角 —— 摆完变换再瞄一次。
           if (o.kind === "camera") aimLikeCamera(node, o.target);
           objects.set(o.id, node);
@@ -771,6 +774,21 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           }
         }
       }
+      /**
+       * 交出去的那份场景。视口按**当前镜头**藏了别的镜头的物体(ADR 0102),而导出的可能是另一个镜头、或整份场景
+       * (GLB,不传镜头)—— 留哪些按要导出的那一镜重新算,留下的一律设成可见(克隆带着视口里的 `visible`)。
+       */
+      function exportCopy(shotId?: string) {
+        const gone = hiddenObjectIds(latest.current.content.objects, shotId);
+        const copy = cloneSceneForExport(root, (node) => {
+          const id = node.userData.sceneObjectId;
+          return typeof id === "string" ? !gone.has(id) : node.visible;
+        });
+        copy.traverse((node) => {
+          if (typeof node.userData.sceneObjectId === "string") node.visible = true;
+        });
+        return copy;
+      }
       function output(shot: SceneShot) {
         if (modelsPending) throw new Error(translate.current("sceneModelsLoadingExport"));
         if (
@@ -796,7 +814,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         );
         const exportScene = new THREE.Scene();
         exportScene.background = new THREE.Color(latest.current.content.background);
-        const copy = cloneSceneForExport(root);
+        const copy = exportCopy(shot.id);
         const exportSun = sun.clone();
         // 平行光的朝向由 target 决定,而 clone 出来的 target 不在任何场景里 —— 不加进去,
         // 它的世界矩阵就不参与更新,光会照着默认方向(原点)打。
@@ -927,7 +945,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             )
           )
             throw new Error(translate.current("sceneModelsFailedExport"));
-          const data = await new GLTFExporter().parseAsync(cloneSceneForExport(root), {
+          const data = await new GLTFExporter().parseAsync(exportCopy(), {
             binary: true,
           });
           if (!(data instanceof ArrayBuffer)) throw new Error(translate.current("sceneExportGlbFailed"));
@@ -1089,9 +1107,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         runtime.current = null;
       };
     }, [props.workspace, props.sceneId]);
+    //: 换镜头也要重新同步:哪些物体在画面里跟着镜头变(`shot_ids`,ADR 0102)。
     React.useEffect(() => {
       runtime.current?.sync();
-    }, [props.content]);
+    }, [props.content, props.shot.id]);
     React.useEffect(() => {
       runtime.current?.selected();
     }, [

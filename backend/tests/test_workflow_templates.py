@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 28,
+        "template_version": 29,
         "source": "official",
     }
 
@@ -1072,23 +1072,23 @@ def test_白模的台距由布景尺寸算出来_而不是写死() -> None:
     system = _node(_full_video(), "set_design")["config"]["system"]
     #: 任何一处 n*40 都不许有 —— 此前台距那一段改成了 D,布景台里 room 的 position 却还写着 [n*40,0,0]。
     assert "n*40" not in system
-    assert "[n*D,0,0]" in system
-    assert "不要用固定的 40 米" in system
+    assert "[k*D,0,0]" in system
     #: 台距要从视觉圣经里的场景尺寸推出来。
     assert "width_m" in system and "台距" in system
 
 
-def test_每个布景台收进一个组() -> None:
-    """八个台摊平就是七十多条重名的列表(「出租屋卧室」出现八次),谁也分不出哪个是哪个。
-
-    组**放在原点**,所以它只负责收纳、不改变任何坐标 —— 相机与渲染那套算法一点不用动。
-    """
+def test_每个地点一份布景_每镜只加自己的相机和人偶() -> None:
+    """此前每镜一个布景台:同一场 20 镜都在灯铺,3D 场景里就有 20 份一模一样的灯铺(维护者截图,254 个物体)。
+    场景数据现在能说「这个物体只在第几镜出现」(`shot_ids`,ADR 0102):布景按地点搭一份、收进 `set-<k>` 组,
+    shot_ids 留空;人偶和相机按镜头挂,shot_ids 写 ["shot-<n>"]。组放在原点,不改变任何坐标。"""
     graph = _full_video()
     props = _node(graph, "set_design")["config"]["json_schema"]["properties"]["objects"]["items"]["properties"]
     assert "parent_id" in props, "schema 里没有 parent_id 的话,模型根本分不了组"
     assert "group" in props["kind"]["enum"]
+    assert props["shot_ids"]["type"] == "array", "schema 里没有 shot_ids 的话,人偶只能整台复制"
     system = _node(graph, "set_design")["config"]["system"]
-    assert 'id="bay-<n>"' in system
+    assert 'id="set-<k>"' in system and "bay-<n>" not in system
+    assert '["shot-<n>"]' in system and "只搭一次" in system
     assert "不改变任何坐标" in system
 
 

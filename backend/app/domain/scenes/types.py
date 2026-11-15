@@ -93,6 +93,10 @@ class SceneObject(SceneValue):
     metalness: float = Field(0, ge=0, le=1)
     intensity: float = Field(30, ge=0, le=10000)
     hidden: bool = False
+    #: 只在这几个镜头里出现(ADR 0102)。**空 = 每个镜头里都有。** 和 `hidden` 一样沿父链继承:组只属于第 3 镜,
+    #: 组里的东西也只在第 3 镜。白模布景靠它做到「一个地点一份布景,每镜只放自己的相机和人偶」——
+    #: 此前没有这个说法,同一场 20 镜只好把灯铺复制 20 份,否则每一镜都会拍进别的镜头的人偶。
+    shot_ids: list[Identifier] = Field(default_factory=list, max_length=32)
     model_id: Identifier | None = None
     #: 人偶演的是资产库里的哪个人物(ADR 0029 §3)。渲这个镜头当生成参考时,镜头里看得见的人偶带上它的参考图、
     #: 提示词里写明「这个颜色的人偶是谁」—— 构图由 3D 定,长相由资产定。只有 figure 用得上。
@@ -234,4 +238,9 @@ class SceneContent(SceneValue):
             camera = objects.get(shot.camera_id)
             if camera is None or camera.kind != "camera":
                 raise PydanticCustomError("scene_invalid", "Every shot needs an existing camera object")
+        #: 物体只属于的镜头必须真的在:写错的 id 等于这个物体哪一镜都不出现,而那时没人说得出它为什么没了。
+        shots = {shot.id for shot in self.shots}
+        for obj in self.objects:
+            if any(one not in shots for one in obj.shot_ids):
+                raise PydanticCustomError("scene_invalid", "Objects can only belong to existing shots")
         return self

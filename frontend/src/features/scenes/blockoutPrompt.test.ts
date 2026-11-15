@@ -22,7 +22,7 @@ const OBJECTS = [
 
 describe("白模 → 生成的提示词", () => {
   it("画面里有什么、打光要说出来:白模里的形状各是什么", () => {
-    const prompt = sceneBriefPrompt({ objects: OBJECTS, lighting: "正午日光", t: zh });
+    const prompt = sceneBriefPrompt({ objects: OBJECTS, shotId: "shot-1", lighting: "正午日光", t: zh });
     expect(prompt).toContain("画面里有：列柱 ×2、神像");
     expect(prompt).toContain("打光：正午日光。");
     //: 白模说明由服务端随现渲的参考附上(ADR 0029),不在提示词框里重复一遍。
@@ -30,8 +30,8 @@ describe("白模 → 生成的提示词", () => {
   });
 
   it("清单不列相机、灯、藏起来的和默认名", () => {
-    expect(sceneInventory(OBJECTS, zh)).toBe("列柱 ×2、神像");
-    expect(sceneInventory([{ id: "o", parent_id: null, name: "Object", kind: "box", hidden: false }], zh)).toBe("");
+    expect(sceneInventory(OBJECTS, "shot-1", zh)).toBe("列柱 ×2、神像");
+    expect(sceneInventory([{ id: "o", parent_id: null, name: "Object", kind: "box", hidden: false }], "shot-1", zh)).toBe("");
   });
 
   it("藏起来的组里的东西也不列 —— 它们自己那一位没藏,但画面里同样没有", () => {
@@ -40,6 +40,16 @@ describe("白模 → 生成的提示词", () => {
       { id: "p", parent_id: "g", name: "石像", kind: "box", hidden: false },
       { id: "q", parent_id: null, name: "祭台", kind: "box", hidden: false },
     ] as const;
-    expect(sceneInventory(objects, zh)).toBe("祭台");
+    expect(sceneInventory(objects, "shot-1", zh)).toBe("祭台");
+  });
+
+  it("只列这一镜里的:每镜各一份的人偶只属于自己那一镜(ADR 0102)", () => {
+    const objects = [
+      { id: "set", parent_id: null, name: "灯铺", kind: "box", hidden: false, shot_ids: [] },
+      { id: "a-1", parent_id: null, name: "沈青禾", kind: "figure", hidden: false, shot_ids: ["shot-1"] },
+      { id: "b-2", parent_id: null, name: "小满", kind: "figure", hidden: false, shot_ids: ["shot-2"] },
+    ] as const;
+    expect(sceneInventory(objects, "shot-1", zh)).toBe("灯铺、沈青禾");
+    expect(sceneInventory(objects, "shot-2", zh)).toBe("灯铺、小满");
   });
 });

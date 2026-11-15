@@ -245,6 +245,8 @@ def set_design_schema() -> dict[str, Any]:
         #: 只有 kind="model" 用得上:上游道具清单里的那个 id。其余物体写空字符串
         #: (严格模式要求每一格都在)。
         "model_id": {"type": "string"},
+        #: 只在这几个镜头里出现(ADR 0102):每镜的人偶、相机写 ["shot-<n>"];布景写空数组 = 每一镜都有。
+        "shot_ids": {"type": "array", "maxItems": 32, "items": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"}},
         #: 只有 figure 用得上:它演的是资产库里哪个人物(ADR 0029 §3)。没有就写空字符串。
         "entity_id": {"type": "string"},
         "parameters": object_schema(parameters, list(parameters)),

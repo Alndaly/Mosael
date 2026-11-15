@@ -81,6 +81,42 @@ export function SceneInspector({
                 </Select>
               </label>
             )}
+            {/* 这个物体只在哪个镜头里出现(ADR 0102):每镜各一份的人偶挂在自己那一镜,布景留「所有镜头」。
+                单选覆盖绝大多数情况;属于好几镜的(布景模型偶尔这么写)原样列出来,改选就换成一镜或全部。 */}
+            {content.shots.length > 1 && object.kind !== "camera" && (
+              <label className="scene-number">
+                <span>{t("sceneObjectShots")}</span>
+                <Select
+                  value={object.shot_ids?.length === 1 ? object.shot_ids[0] : object.shot_ids?.length ? SEVERAL_SHOTS : EVERY_SHOT}
+                  onValueChange={(value) => {
+                    if (value === SEVERAL_SHOTS) return;
+                    objectPatch(object.id, { shot_ids: value === EVERY_SHOT ? [] : [value] });
+                  }}
+                >
+                  <SelectTrigger aria-label={t("sceneObjectShots")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={EVERY_SHOT}>{t("sceneObjectShotsAll")}</SelectItem>
+                    {(object.shot_ids?.length ?? 0) > 1 && (
+                      <SelectItem value={SEVERAL_SHOTS} truncate>
+                        {t("sceneObjectShotsSeveral").replace(
+                          "{shots}",
+                          (object.shot_ids ?? [])
+                            .map((id) => content.shots.find((one) => one.id === id)?.name ?? id)
+                            .join(t("sceneListSeparator")),
+                        )}
+                      </SelectItem>
+                    )}
+                    {content.shots.map((one) => (
+                      <SelectItem key={one.id} value={one.id} truncate>
+                        {one.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            )}
             {object.kind === "figure" && (
               <FigureCast
                 workspaceId={workspaceId}
@@ -317,6 +353,9 @@ export function SceneInspector({
  *  没用 —— 调的人想的是身高和肩宽,名字贴着它实际是什么,省掉一次心里的换算。 */
 /** 「不在组里」在 Select 里要有一个值 —— 空串会被 Radix 当成"没选" 。 */
 const TOP_LEVEL = "__top__";
+//: 「出现在」那一格的两个特殊值:每个镜头都有 / 属于好几镜(只展示,选它不改)。
+const EVERY_SHOT = "__every_shot__";
+const SEVERAL_SHOTS = "__several_shots__";
 const NO_CAST = "__none__";
 
 /**

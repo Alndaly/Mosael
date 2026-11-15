@@ -226,3 +226,61 @@ def test_看图工具返回的是图片块_通道上拆成文字和图片() -> N
     assert _as_payload(blocks) == {"result": {"revision": 2, "image_views": ["top"]},
                                    "images": [{"mime_type": "image/jpeg", "data": "QQ=="}]}
     assert _as_payload({"plain": 1}) == {"result": {"plain": 1}}
+
+
+class Test物体只属于某几个镜头:
+    """ADR 0102:同一个地点只搭一份布景,每镜只放自己的相机和人偶。一镜的白模里不能拍进别的镜头的人偶。"""
+
+    def _two_shots(self, *extra: dict) -> SceneContent:
+        blue_wall = {"id": "wall", "kind": "box", "position": [0, 0, -2], "parameters": {"width": 4, "height": 4, "depth": 1},
+                     "color": "#0000ff"}
+        return SceneContent.model_validate({
+            "objects": [blue_wall, *extra,
+                        {"id": "cam", "kind": "camera", "position": [0, 1, 5], "target": [0, 1, 0], "fov": 40}],
+            "shots": [{"id": "s1", "camera_id": "cam"}, {"id": "s2", "camera_id": "cam"}],
+            "background": "#000000",
+        })
+
+    def test_只属于第二镜的物体第一镜看不到_共用的布景两镜都在(self) -> None:
+        red = {"id": "red", "kind": "box", "position": [0, 1, 1], "parameters": {"width": 1, "height": 1, "depth": 1},
+               "color": "#ff0000", "shot_ids": ["s2"]}
+        content = self._two_shots(red)
+        r1, _, b1 = _pixel(render_frame(content, "s1", 0, supersample=1).image, 0.5, 0.5)
+        r2, _, b2 = _pixel(render_frame(content, "s2", 0, supersample=1).image, 0.5, 0.5)
+        assert b1 > r1, "第一镜只看得到共用的蓝墙"
+        assert r2 > b2, "第二镜里红盒子挡在墙前"
+
+    def test_组的镜头归属传给组里的东西(self) -> None:
+        group = {"id": "g", "kind": "group", "shot_ids": ["s2"]}
+        red = {"id": "red", "kind": "box", "parent_id": "g", "position": [0, 1, 1],
+               "parameters": {"width": 1, "height": 1, "depth": 1}, "color": "#ff0000"}
+        content = self._two_shots(group, red)
+        r1, _, b1 = _pixel(render_frame(content, "s1", 0, supersample=1).image, 0.5, 0.5)
+        assert b1 > r1, "组只属于第二镜,组里的红盒子第一镜也看不到"
+
+    def test_挑参考人物只算这一镜的人偶(self) -> None:
+        from app.domain.scenes.render import figures_in_shot
+
+        figure = {"id": "a-2", "kind": "figure", "position": [0, 0, 0], "shot_ids": ["s2"]}
+        content = self._two_shots(figure)
+        assert [one.id for one in figures_in_shot(content, content.shots[0])] == []
+        assert [one.id for one in figures_in_shot(content, content.shots[1])] == ["a-2"]
+
+    def test_写了不存在的镜头当场说清(self) -> None:
+        with pytest.raises(Exception, match="existing shots"):
+            self._two_shots({"id": "red", "kind": "box", "shot_ids": ["s9"]})
+
+
+def test_删掉镜头时_只属于它的物体连同后代一起删_属于几镜的只摘掉它() -> None:
+    from app.domain.scenes.operations import _without_dropped_shots
+
+    objects = [
+        {"id": "set", "kind": "group"},
+        {"id": "a-2", "kind": "figure", "parent_id": "set", "shot_ids": ["s2"]},
+        {"id": "g2", "kind": "group", "shot_ids": ["s2"]},
+        {"id": "inside", "kind": "box", "parent_id": "g2"},
+        {"id": "both", "kind": "box", "shot_ids": ["s1", "s2"]},
+    ]
+    kept = _without_dropped_shots(objects, {"s1"})
+    assert [one["id"] for one in kept] == ["set", "both"]
+    assert kept[1]["shot_ids"] == ["s1"]

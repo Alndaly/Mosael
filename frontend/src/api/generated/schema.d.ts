@@ -19465,6 +19465,8 @@ export interface components {
              * @default false
              */
             hidden: boolean;
+            /** Shot Ids */
+            shot_ids?: string[];
             /** Model Id */
             model_id?: string | null;
             /** Entity Id */

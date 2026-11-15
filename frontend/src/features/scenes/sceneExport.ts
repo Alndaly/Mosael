@@ -12,11 +12,11 @@ import { Box3, type BufferGeometry, type Object3D } from "three";
  * 藏没藏都一样 —— 相机不拍自己;而"藏起来的相机"仍能当镜头的机位用(镜头看的是数据,不是
  * 这个道具,见 SceneViewport 里 `frameAt`)。
  */
-export function cloneSceneForExport(root: Object3D): Object3D {
+export function cloneSceneForExport(root: Object3D, shown: (node: Object3D) => boolean = (node) => node.visible): Object3D {
   const copy = root.clone(true);
   const dropped: Object3D[] = [];
   copy.traverse((node) => {
-    if (node !== copy && (node.userData.editorOnly || !node.visible)) dropped.push(node);
+    if (node !== copy && (node.userData.editorOnly || !shown(node))) dropped.push(node);
   });
   for (const node of dropped) node.removeFromParent();
   return copy;

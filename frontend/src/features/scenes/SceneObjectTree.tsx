@@ -71,6 +71,7 @@ function pointerY(event: DragMoveEvent | DragEndEvent): number | null {
  */
 export function SceneObjectTree({
   content,
+  shotId,
   selected,
   collapsed,
   busy,
@@ -83,6 +84,8 @@ export function SceneObjectTree({
   onMove,
 }: {
   content: SceneContent;
+  /** 当前镜头:不在这一镜里的物体(每镜各一份的人偶,ADR 0102)和藏起来的一样淡下去。 */
+  shotId: string;
   selected: string | null;
   collapsed: ReadonlySet<string>;
   busy: boolean;
@@ -100,6 +103,9 @@ export function SceneObjectTree({
   const rows = React.useMemo(() => objectTree(content, collapsed), [content, collapsed]);
   // 藏在一个藏起来的组里的行也淡下去,但斜体只有自己藏了才有(见下面那行 data-hidden)。
   const inheritedHidden = React.useMemo(() => hiddenObjectIds(content.objects), [content.objects]);
+  //: 此刻不在画面里、又不是藏起来的:只属于别的镜头(自己或上级的 `shot_ids`)。
+  const offShot = React.useMemo(() => hiddenObjectIds(content.objects, shotId), [content.objects, shotId]);
+  const shotNames = React.useMemo(() => new Map(content.shots.map((one) => [one.id, one.name])), [content.shots]);
   const byId = React.useMemo(
     () => new Map(content.objects.map((one) => [one.id, one])),
     [content],
@@ -185,6 +191,8 @@ export function SceneObjectTree({
             selected={selected === o.id}
             collapsed={collapsed.has(o.id)}
             inherited={inheritedHidden.has(o.id)}
+            offShot={!inheritedHidden.has(o.id) && offShot.has(o.id)}
+            onlyIn={o.shot_ids?.length ? o.shot_ids.map((one) => shotNames.get(one) ?? one).join(t("sceneListSeparator")) : null}
             busy={busy}
             dragging={dragId === o.id}
             drop={drop?.id === o.id ? drop.zone : undefined}
@@ -233,6 +241,8 @@ function SceneObjectRow({
   selected,
   collapsed,
   inherited,
+  offShot,
+  onlyIn,
   busy,
   dragging,
   drop,
@@ -250,6 +260,10 @@ function SceneObjectRow({
   collapsed: boolean;
   /** 它在一个藏起来的组里(不是自己藏的)。 */
   inherited: boolean;
+  /** 它没藏,但只属于别的镜头,当前镜头里看不到(ADR 0102)。 */
+  offShot: boolean;
+  /** 它只属于哪几个镜头(镜头名,已拼好);每个镜头都有时是 null。 */
+  onlyIn: string | null;
   busy: boolean;
   dragging: boolean;
   drop: DropZone | undefined;
@@ -281,7 +295,7 @@ function SceneObjectRow({
       // 淡显的是"实际看不见"的行,不只是自己藏了的:藏一个组,组里那些行也要
       // 看得出它们此刻不在画面里。`self` 与 `inherited` 分开,前者另加斜体 ——
       // 眼睛图标只说自己那一位,斜体说的是"是我自己藏的"。
-      data-hidden={o.hidden ? "self" : inherited ? "inherited" : undefined}
+      data-hidden={o.hidden ? "self" : inherited ? "inherited" : offShot ? "off-shot" : undefined}
       data-dragging={dragging || undefined}
       data-drop={drop}
       data-object-id={o.id}
@@ -319,6 +333,7 @@ function SceneObjectRow({
         <ObjectKindIcon kind={o.kind} />
         <Truncate>{o.name}</Truncate>
         {childCount > 0 && collapsed && <small>{t("sceneChildCount").replace("{n}", String(childCount))}</small>}
+        {onlyIn && <small data-only-in="">{t("sceneObjectOnlyIn").replace("{shots}", onlyIn)}</small>}
       </button>
       {/* 显示/隐藏和删除并排,同尺寸、同一种安静的样子 —— 此前藏一个物体要先选中它,
           再到下面的「调整对象」里找那颗眼睛;列表里只有一个「隐藏」字样的标记。 */}

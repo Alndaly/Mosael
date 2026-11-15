@@ -91,12 +91,13 @@ def test_每个图元跟自己的材质颜色_不被物体那一个刷成一色(
 def test_场景里的模型真的进了三角形_没给库时如实记一笔跳过(tmp_path: Path) -> None:
     path = _glb(tmp_path, [{"id": "b", "kind": "box", "parameters": {"width": 2, "height": 2, "depth": 2}}])
     content = _scene([{"id": "prop", "kind": "model", "model_id": "m1", "position": [0, 0, 0]}])
-    world = _world_matrices(content, find_shot(content, "s"), 0)
+    shot = find_shot(content, "s")
+    world = _world_matrices(content, shot, 0)
 
-    bare, skipped = _triangles(content, world)
+    bare, skipped = _triangles(content, shot, world)
     assert len(bare.corners) == 0 and skipped == 1, "没有模型库时,少画的那件要报出来"
 
-    drawn, skipped = _triangles(content, world, library_for({"m1": path}))
+    drawn, skipped = _triangles(content, shot, world, library_for({"m1": path}))
     assert len(drawn.corners) == 12 and skipped == 0, "给了库就该画上,而且不再算跳过"
 
 
@@ -104,8 +105,8 @@ def test_模型的姿态跟着场景走_不是钉在原点(tmp_path: Path) -> No
     path = _glb(tmp_path, [{"id": "b", "kind": "box", "parameters": {"width": 1, "height": 1, "depth": 1}}])
     content = _scene([{"id": "prop", "kind": "model", "model_id": "m1", "position": [7, 0, 0],
                        "scale": [2, 2, 2]}])
-    tris, _ = _triangles(content, _world_matrices(content, find_shot(content, "s"), 0),
-                         library_for({"m1": path}))
+    shot = find_shot(content, "s")
+    tris, _ = _triangles(content, shot, _world_matrices(content, shot, 0), library_for({"m1": path}))
     points = tris.corners.reshape(-1, 3)
     assert np.allclose(points.min(axis=0), [6, 0, -1], atol=1e-4), "位移和缩放都要作用上去"
     assert np.allclose(points.max(axis=0), [8, 2, 1], atol=1e-4)
@@ -175,5 +176,6 @@ def test_内嵌_gltf_也读得了(tmp_path: Path) -> None:
 
 def test_空库就是空库_不会把没模型的场景弄坏() -> None:
     content = _scene([{"id": "b", "kind": "box"}])
-    tris, skipped = _triangles(content, _world_matrices(content, find_shot(content, "s"), 0), ModelLibrary())
+    shot = find_shot(content, "s")
+    tris, skipped = _triangles(content, shot, _world_matrices(content, shot, 0), ModelLibrary())
     assert len(tris.corners) == 12 and skipped == 0

@@ -87,12 +87,17 @@ def scene_preview(content: dict) -> dict:
     raws = content.get("objects", [])
     by_id = {raw.get("id"): raw for raw in raws}
 
+    shots = content.get("shots") or []
+    #: 缩略图画第一个镜头的样子:只属于别的镜头的物体(每镜各一份的人偶,ADR 0102)不画,否则同一个地点里
+    #: 二十个人偶叠在一起。
+    first_shot = shots[0].get("id") if shots and isinstance(shots[0], dict) else None
+
     def hidden(raw: dict | None) -> bool:
-        """自己或任一上级藏了 —— 和出片(scene_render `_visible`)同一条规则。只看自己的话,
+        """自己或任一上级藏了、或不属于第一个镜头 —— 和出片(scene_render `_visible`)同一条规则。只看自己的话,
         藏起来的分组里的东西照样画在缩略图上。父链上的环、缺失的父级都按"没藏"走到头。"""
         seen: set = set()
         while raw is not None and raw.get("id") not in seen:
-            if raw.get("hidden"):
+            if raw.get("hidden") or (raw.get("shot_ids") and first_shot not in raw["shot_ids"]):
                 return True
             seen.add(raw.get("id"))
             raw = by_id.get(raw.get("parent_id")) if raw.get("parent_id") else None
@@ -417,6 +422,22 @@ def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
     after_commit(db, lambda: path.unlink(missing_ok=True))
 
 
+def _without_dropped_shots(objects: list[dict], kept: set) -> list[dict]:
+    """镜头被删掉之后:从每个物体的 `shot_ids` 里摘掉它;**摘空了的物体连同后代一起删** —— 它原本只属于那几镜
+    (ADR 0102),留着就成了「每一镜都有」,一个删掉的镜头的人偶会出现在所有镜头里。前端同一条规则见 `removeShot`。"""
+    dropped: set = set()
+    kept_objects: list[dict] = []
+    for obj in objects:
+        own = obj.get('shot_ids') or []
+        remaining = [one for one in own if one in kept]
+        if own and not remaining:
+            dropped.add(obj.get('id'))
+        kept_objects.append({**obj, 'shot_ids': remaining} if own else obj)
+    for _ in range(16):
+        dropped.update(o.get('id') for o in kept_objects if o.get('parent_id') in dropped)
+    return [o for o in kept_objects if o.get('id') not in dropped]
+
+
 def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, objects: list[dict], remove_ids: list[str], shots: list[dict] | None, name: str | None) -> Scene3D:
     """Merge object fields atomically; deletion includes descendants. No executable code."""
     from copy import deepcopy
@@ -436,6 +457,7 @@ def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, obje
     content['objects'] = list(by_id.values())
     if shots is not None:
         content['shots'] = shots
+        content['objects'] = _without_dropped_shots(content['objects'], {shot.get('id') for shot in shots if isinstance(shot, dict)})
     try:
         validated = SceneContent.model_validate(content)
     except ValidationError as exc:

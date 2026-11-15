@@ -65,6 +65,8 @@ export function makeObject(
     metalness: 0,
     intensity: 40,
     hidden: false,
+    //: 只在这几个镜头里出现(ADR 0102);空 = 每个镜头里都有。
+    shot_ids: [],
     model_id: null,
     //: 人偶演的是资产库里哪个人物(ADR 0029 §3);没指就是 null。
     entity_id: null,
@@ -292,14 +294,45 @@ export function removeShot(content: SceneContent, shotId: string): SceneContent 
   if (!shot || content.shots.length <= 1) return content;
   const shots = content.shots.filter((s) => s !== shot);
   const shared = shots.some((s) => s.camera_id === shot.camera_id);
+  //: 只属于这一镜的物体(每镜各一份的人偶,ADR 0102)跟着删,连同后代;属于几镜的只摘掉这一镜。
+  //: 留着的话 `shot_ids` 摘空就成了「每一镜都有」。后端同一条规则见 operations._without_dropped_shots。
+  const doomed = new Set<string>(
+    content.objects
+      .filter((o) => o.shot_ids?.length === 1 && o.shot_ids[0] === shotId)
+      .map((o) => o.id),
+  );
+  if (!shared) doomed.add(shot.camera_id);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const o of content.objects)
+      if (o.parent_id && doomed.has(o.parent_id) && !doomed.has(o.id)) {
+        doomed.add(o.id);
+        grew = true;
+      }
+  }
+  //: 一样都没动时原样交回同一个数组:视口、撤销栈按引用认「物体变没变」。
+  const touched = doomed.size > 0 || content.objects.some((o) => o.shot_ids?.includes(shotId));
   return {
     ...content,
     shots,
-    objects: shared ? content.objects : content.objects.filter((o) => o.id !== shot.camera_id),
+    objects: touched
+      ? content.objects
+          .filter((o) => !doomed.has(o.id))
+          .map((o) => (o.shot_ids?.includes(shotId) ? { ...o, shot_ids: o.shot_ids.filter((one) => one !== shotId) } : o))
+      : content.objects,
   };
 }
 /**
- * 实际看不见的那些物体:**自己藏了,或者任一上级藏了**。
+ * 这个物体自己属不属于这个镜头(不看上级):没写 `shot_ids` 就是每个镜头都有(ADR 0102)。
+ * 沿父链的那一半见 {@link hiddenObjectIds};视口里 three 的子节点本来就随父节点隐藏,只要这一半。
+ */
+export function inShot(object: { shot_ids?: readonly string[] }, shotId: string): boolean {
+  return !object.shot_ids?.length || object.shot_ids.includes(shotId);
+}
+
+/**
+ * 实际看不见的那些物体:**自己藏了,或者任一上级藏了**;给了镜头时,还有父链上任一级不属于这个镜头的
+ * (`shot_ids`,ADR 0102 —— 每镜各一份的人偶)。
  *
  * `hidden` 只记物体自己那一位 —— 藏一个组不去改孩子们的标记,再显示这个组时,孩子们原先
  * 各自藏没藏都还在(和 Blender 一样)。所以"看不看得见"要沿着父链算,不能只看自己。
@@ -309,7 +342,8 @@ export function removeShot(content: SceneContent, shotId: string): SceneContent 
  * 父级不存在的孤儿按顶层算,父链上的环走到重复就停 —— 和 {@link objectTree} 同一个宽容度。
  */
 export function hiddenObjectIds(
-  objects: readonly Pick<SceneObject, "id" | "parent_id" | "hidden">[],
+  objects: readonly (Pick<SceneObject, "id" | "parent_id" | "hidden"> & { shot_ids?: readonly string[] })[],
+  shotId?: string,
 ): Set<string> {
   const byId = new Map(objects.map((o) => [o.id, o]));
   const hidden = new Set<string>();
@@ -321,7 +355,7 @@ export function hiddenObjectIds(
       current = current.parent_id ? byId.get(current.parent_id) : undefined
     ) {
       seen.add(current.id);
-      if (current.hidden) {
+      if (current.hidden || (shotId !== undefined && !inShot(current, shotId))) {
         hidden.add(object.id);
         break;
       }

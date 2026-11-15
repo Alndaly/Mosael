@@ -32,7 +32,7 @@ from app.domain.workflows.templates.schemas import (
 FULL_VIDEO_GENERATION = "full_video_generation"
 #: 同一张图的「漫剧」形态(`drama=True`):对白推动,角色台词的镜头用说话照片模型让关键帧开口(见 full_video_generation_graph)。
 DRAMA_EPISODE = "drama_episode"
-DRAMA_EPISODE_VERSION = 6
+DRAMA_EPISODE_VERSION = 7
 
 #: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
 RUNTIME_PROMPT_HEADROOM = 600
@@ -1149,7 +1149,7 @@ JSON Schema 的对象。"""
 可用的 3D 道具(kind="model" 时 model_id 只能从这里选;尺寸是实测值)：
 {{props.catalog}}
 
-画幅：{{start.aspect_ratio}}。请给每个镜头搭一个布景台并放好相机。""",
+画幅：{{start.aspect_ratio}}。每个地点只搭一份布景，每个镜头放好这一镜的相机和出镜人偶。""",
                 "response_format": "json_schema",
                 "json_schema_name": "blockout_scene",
                 "json_schema": set_design_schema(),
@@ -1159,8 +1159,8 @@ JSON Schema 的对象。"""
                 "json_match_field": "shots",
                 "json_match_items": "{{storyboard.json.shots}}",
                 "temperature": 0.2,
-                #: 每镜一个布景台(房间、陈设、人偶、相机与轨迹),20 镜比分镜还长:32000 时《长明灯》第 2 场写到第 7.5 万字
-                #: 被截断(「Unterminated string」),补一轮还是在同一处断。和分镜同一个上限。
+                #: 每个地点一份布景、每镜只加相机和人偶(ADR 0102);此前每镜一个布景台,20 镜比分镜还长,32000 时写到
+                #: 第 7.5 万字被截断。上限仍和分镜一样,给多个地点、复杂运镜留余量。
                 "max_tokens": 64000,
             },
         },
@@ -1350,7 +1350,7 @@ JSON Schema 的对象。"""
         #: 漫剧 v3:对白由视频模型出片时一起念(不再另配 TTS + 说话照片),字幕按画面片段上屏。
         #: v26(漫剧 v2):布景台要和分镜一样多(json_match_items);接时间线之前先清空(重做一轮不再把镜头接两遍)。
         "meta": {"template_id": DRAMA_EPISODE if drama else FULL_VIDEO_GENERATION,
-                 "template_version": DRAMA_EPISODE_VERSION if drama else 28, "source": "official"},
+                 "template_version": DRAMA_EPISODE_VERSION if drama else 29, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

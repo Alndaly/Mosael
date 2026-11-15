@@ -52,6 +52,38 @@ describe("editable scene graph", () => {
     const kept = removeShot({ ...content, shots: [...content.shots, sharing] }, sharing.id);
     expect(kept.objects).toBe(content.objects);
   });
+  it("删镜头时只属于它的物体连同后代一起删,属于几镜的只摘掉它(ADR 0102)", () => {
+    const content = initialScene(zh);
+    const two = makeShot("镜头 2");
+    const base = { ...content, shots: [...content.shots, two.shot], objects: [...content.objects, two.camera] };
+    const shot2 = two.shot.id;
+    const scene = {
+      ...base,
+      objects: [
+        ...base.objects,
+        makeObject("figure", { id: "a-2", shot_ids: [shot2] }),
+        makeObject("group", { id: "g2", shot_ids: [shot2] }),
+        makeObject("box", { id: "inside", parent_id: "g2" }),
+        makeObject("box", { id: "both", shot_ids: [base.shots[0].id, shot2] }),
+      ],
+    };
+    const after = removeShot(scene, shot2);
+    const ids = after.objects.map((o) => o.id);
+    expect(ids).not.toContain("a-2");
+    expect(ids).not.toContain("g2");
+    expect(ids).not.toContain("inside");
+    expect(after.objects.find((o) => o.id === "both")?.shot_ids).toEqual([base.shots[0].id]);
+  });
+  it("此刻看不见的:藏起来的,和只属于别的镜头的(连同组里的东西)", () => {
+    const objects = [
+      makeObject("group", { id: "g", shot_ids: ["s2"] }),
+      makeObject("box", { id: "in", parent_id: "g" }),
+      makeObject("box", { id: "shared" }),
+    ];
+    expect([...hiddenObjectIds(objects, "s1")].sort()).toEqual(["g", "in"]);
+    expect([...hiddenObjectIds(objects, "s2")]).toEqual([]);
+    expect([...hiddenObjectIds(objects)]).toEqual([]);
+  });
   it("samples every camera key exactly and holds at the bounds", () => {
     const content = initialScene(zh, true);
     const shot = content.shots[0];

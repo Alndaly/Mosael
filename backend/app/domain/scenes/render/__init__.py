@@ -102,11 +102,12 @@ def _world_matrices(content: SceneContent, shot: SceneShot, time: float) -> dict
     return world
 
 
-def _visible(obj: SceneObject, objects: dict[str, SceneObject]) -> bool:
-    """自己和所有上级都没被隐藏。"""
+def _visible(obj: SceneObject, objects: dict[str, SceneObject], shot: SceneShot | None = None) -> bool:
+    """此刻在不在画面里:自己和所有上级都没被隐藏,而且(给了镜头时)父链上每一级写了的 `shot_ids` 都含这个镜头
+    (ADR 0102)。不给镜头 = 整份场景(导出 GLB)。前端同一条规则见 `sceneGraph.hiddenObjectIds`。"""
     current: SceneObject | None = obj
     while current is not None:
-        if current.hidden:
+        if current.hidden or (shot is not None and current.shot_ids and shot.id not in current.shot_ids):
             return False
         current = objects.get(current.parent_id) if current.parent_id else None
     return True
@@ -121,13 +122,13 @@ def _camera(content: SceneContent, shot: SceneShot, time: float) -> CameraPose:
     return sample_camera(camera, shot, time)
 
 
-def _triangles(content: SceneContent, world: dict[str, np.ndarray],
+def _triangles(content: SceneContent, shot: SceneShot, world: dict[str, np.ndarray],
                models: ModelLibrary | None = None) -> tuple[Triangles, int]:
     objects = {obj.id: obj for obj in content.objects}
     corners, albedo, metal = [], [], []
     skipped = 0
     for obj in content.objects:
-        if not _visible(obj, objects):
+        if not _visible(obj, objects, shot):
             continue
         parts = meshes_for(obj)
         if obj.kind in FROM_FILE:
@@ -152,13 +153,13 @@ def _triangles(content: SceneContent, world: dict[str, np.ndarray],
     return Triangles(np.concatenate(corners), np.concatenate(albedo), np.concatenate(metal)), skipped
 
 
-def _lighting(content: SceneContent, world: dict[str, np.ndarray]) -> Lighting:
+def _lighting(content: SceneContent, shot: SceneShot, world: dict[str, np.ndarray]) -> Lighting:
     objects = {obj.id: obj for obj in content.objects}
     light = content.lighting
     lamps = [
         PointLight(position=world[obj.id][:3, 3], color=hex_to_linear(obj.color), intensity=obj.intensity)
         for obj in content.objects
-        if obj.kind == "light" and _visible(obj, objects)
+        if obj.kind == "light" and _visible(obj, objects, shot)
     ]
     return Lighting(
         ambient=content.ambient,
@@ -192,7 +193,7 @@ def figures_in_shot(content: SceneContent, shot: SceneShot) -> list[SceneObject]
         half_h = math.tan(math.radians(camera.fov) / 2)
         half_w = half_h * width / height
         for obj in content.objects:
-            if obj.kind != "figure" or obj.id in seen or not _visible(obj, objects):
+            if obj.kind != "figure" or obj.id in seen or not _visible(obj, objects, shot):
                 continue
             chest = world[obj.id] @ np.array([0.0, obj.parameters.height * 0.7, 0.0, 1.0])
             offset = chest[:3] - eye
@@ -233,7 +234,7 @@ def free_view_camera(content: SceneContent, view: str, shot: SceneShot, time: fl
     不算它的话,自由视角会把它切掉一半。"""
     if view not in FREE_VIEWS:
         raise SceneRenderError("sceneRenderErr_unknownView", view=view, options=", ".join(FREE_VIEWS))
-    tris, _ = _triangles(content, _world_matrices(content, shot, time), models)
+    tris, _ = _triangles(content, shot, _world_matrices(content, shot, time), models)
     if len(tris.corners):
         points = tris.corners.reshape(-1, 3)
         low, high = points.min(axis=0), points.max(axis=0)
@@ -261,11 +262,11 @@ def render_view(content: SceneContent, view: str, *, time: float = 0.0, shot_id:
 def _render(content: SceneContent, shot: SceneShot, time: float, camera: CameraPose,
             size: tuple[int, int], supersample: int, models: ModelLibrary | None = None) -> RenderedFrame:
     world = _world_matrices(content, shot, time)
-    tris, skipped = _triangles(content, world, models)
+    tris, skipped = _triangles(content, shot, world, models)
     width, height = size
     background = np.array([int(content.background[i:i + 2], 16) / 255 for i in (1, 3, 5)])
     pixels = render(
-        tris, _lighting(content, world),
+        tris, _lighting(content, shot, world),
         camera_position=np.asarray(camera.position, dtype=np.float64),
         camera_target=np.asarray(camera.target, dtype=np.float64),
         fov=camera.fov, width=width * supersample, height=height * supersample, background=background,

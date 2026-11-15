@@ -49567,6 +49567,17 @@
             "title": "Hidden",
             "default": false
           },
+          "shot_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[\\w-]+$"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Shot Ids"
+          },
           "model_id": {
             "anyOf": [
               {

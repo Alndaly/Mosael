@@ -90,6 +90,7 @@ def scene_document(content: SceneContent, shot: SceneShot, time: float = 0.0) ->
 
 
     # 隐藏的不导出,**连同它的后代** —— 只看自己那一位的话,藏起来的分组里的东西会掉出来变成根节点。
+    # 只属于某几个镜头的物体照样导出(不传镜头):交给 Blender 的是整份场景,不是某一镜(ADR 0102)。
     catalogue = {obj.id: obj for obj in content.objects}
     drawable = [obj for obj in content.objects if obj.kind != "camera" and _visible(obj, catalogue)]
     for obj in drawable:

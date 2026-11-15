@@ -38,7 +38,7 @@ vi.mock("@/api/domains/scenes", async (importOriginal) => ({
 }));
 
 import { SceneStudio } from "./SceneStudio";
-import { initialScene, makeObject } from "./sceneGraph";
+import { initialScene, makeObject, makeShot } from "./sceneGraph";
 
 /** 物体列表里的那一行。同名的字还出现在时间轴的行上,所以只在列表(role=tree)里找。 */
 const tree = () => within(screen.getByRole("tree"));
@@ -110,4 +110,28 @@ it("H 切换选中物体,⌥H 全部显示", async () => {
   });
   expect(row("石像")).not.toHaveAttribute("data-hidden");
   expect(row("后排")).not.toHaveAttribute("data-hidden");
+});
+
+it("只属于别的镜头的人偶:当前镜头里淡下去,行尾写只在哪一镜(ADR 0102)", async () => {
+  const two = makeShot("镜头 2");
+  scene.content.objects.push(two.camera, makeObject("figure", { name: "小满", shot_ids: [two.shot.id] }));
+  scene.content.shots.push(two.shot);
+  await open();
+  //: 打开时停在第一个镜头:小满只属于镜头 2,淡下去,但不是「藏起来」(眼睛仍睁着)
+  expect(row("小满")).toHaveAttribute("data-hidden", "off-shot");
+  expect(screen.getByRole("button", { name: "隐藏 小满" })).toBeInTheDocument();
+  expect(row("小满").querySelector("[data-only-in]")?.textContent).toBe("只在镜头 2");
+  //: 共用的布景每个镜头都在,不标
+  expect(row("石像")).not.toHaveAttribute("data-hidden");
+  expect(row("石像").querySelector("[data-only-in]")).toBeNull();
+});
+
+it("在列表里选中只属于别的镜头的人偶:切到它那一镜", async () => {
+  const two = makeShot("镜头 2");
+  scene.content.objects.push(two.camera, makeObject("figure", { name: "小满", shot_ids: [two.shot.id] }));
+  scene.content.shots.push(two.shot);
+  await open();
+  fireEvent.click(tree().getByText("小满"));
+  expect(row("小满")).not.toHaveAttribute("data-hidden");
+  expect(row("石像")).not.toHaveAttribute("data-hidden");
 });

@@ -23,7 +23,9 @@ import type { SceneObject } from "@/api/domains/scenes";
 import { hiddenObjectIds } from "./sceneGraph";
 
 /** 清单要看的那几个字段。带上 id/parent_id 是为了算"上级藏没藏"(见下)。 */
-type InventoryObject = Pick<SceneObject, "id" | "parent_id" | "name" | "kind" | "hidden">;
+type InventoryObject = Pick<SceneObject, "id" | "parent_id" | "name" | "kind" | "hidden"> & {
+  shot_ids?: readonly string[];
+};
 
 /** 不出现在画面里的物体:相机、灯、分组本身。 */
 const OFFSCREEN = new Set(["camera", "light", "group"]);
@@ -34,13 +36,15 @@ const MAX_LISTED = 12;
 /** 画面里有什么:「列柱 ×12、神像、石阶」。同名的合并计数,按出现次数多的在前。
  *
  *  **藏起来的不列,连同藏起来的组里的东西** —— 参考帧和视频里画不出它们,清单再说"画面里有",
- *  模型就会凭空补一个出来。此前只看物体自己那一位,藏一个组时组里的东西照样上了清单。 */
+ *  模型就会凭空补一个出来。此前只看物体自己那一位,藏一个组时组里的东西照样上了清单。
+ *  **只列这个镜头里的** —— 每镜各一份的人偶(ADR 0102)只属于自己那一镜。 */
 export function sceneInventory(
   objects: readonly InventoryObject[],
+  shotId: string,
   t: (key: MessageKey) => string,
 ): string {
   const counts = new Map<string, number>();
-  const hidden = hiddenObjectIds(objects);
+  const hidden = hiddenObjectIds(objects, shotId);
   for (const object of objects) {
     const name = object.name.trim();
     if (hidden.has(object.id) || OFFSCREEN.has(object.kind) || !name || DEFAULT_NAME.test(name)) continue;
@@ -61,15 +65,18 @@ export function sceneInventory(
  */
 export function sceneBriefPrompt({
   objects,
+  shotId,
   lighting,
   t,
 }: {
   objects: readonly InventoryObject[];
+  /** 从哪个镜头生成:清单只列这一镜看得到的物体。 */
+  shotId: string;
   /** 打光预设那段话(lightingPrompt 的结果),不带句号。 */
   lighting: string;
   t: (key: MessageKey) => string;
 }): string {
-  const inventory = sceneInventory(objects, t);
+  const inventory = sceneInventory(objects, shotId, t);
   const lines = [inventory ? t("sceneBlockoutInventory").replace("{items}", inventory) : "", t("sceneBlockoutLighting").replace("{lighting}", lighting)];
   return lines.filter(Boolean).join(t("sceneSentenceGap"));
 }

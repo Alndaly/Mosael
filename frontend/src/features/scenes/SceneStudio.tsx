@@ -884,7 +884,7 @@ function SceneEditor({
           x: 0,
           y: 0,
           form: {
-            prompt: sceneBriefPrompt({ objects: draft.content.objects, lighting: lightingPrompt(draft.content.lighting, t), t }),
+            prompt: sceneBriefPrompt({ objects: draft.content.objects, shotId: shot.id, lighting: lightingPrompt(draft.content.lighting, t), t }),
             scene_reference: { shot_id: shot.id, use },
             parameters: { aspect_ratio: shot.aspect, ...(kind === "video" ? { duration_seconds: shot.duration } : {}) },
           },
@@ -1620,12 +1620,20 @@ function SceneEditor({
                       落在下面那几条老路上(select / collapsed / objectPatch / update),不另开一份。 */}
                   <SceneObjectTree
                     content={draft.content}
+                    shotId={shot.id}
                     selected={selected}
                     collapsed={collapsed}
                     busy={!!busy}
                     onSelect={(id) => {
                       setSelected(id);
                       setPreview(false);
+                      //: 选中只属于别的镜头的物体(每镜各一份的人偶,ADR 0102)时切到它那一镜 —— 否则选中了却看不见它。
+                      const picked = draft.content.objects.find((o) => o.id === id);
+                      if (picked?.shot_ids?.length && !picked.shot_ids.includes(shot.id)) {
+                        setShotId(picked.shot_ids[0]);
+                        setTime(0);
+                        setPlaying(false);
+                      }
                       requestAnimationFrame(() => view.current?.focus());
                     }}
                     onFocusView={() => view.current?.focus()}
