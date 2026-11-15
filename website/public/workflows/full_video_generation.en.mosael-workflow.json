@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Each line is voiced by the speaker the storyboard names: a character that carries a voice in the asset library speaks in it, the narrator and characters without one use the start node's voice; with a music model, a background score is generated and laid under the dialogue. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls, per-shot voicing and one music track — the most expensive template here; max_shots on the start node caps the shot count, and shot_seconds sets each shot's length (preset to the length the chosen video model can make that is closest to its default).",
-  "graph_hash": "cb27404f76a6bfcdabab76ca616a08b1357a4d1caf81ab7c56299716b2ee7174",
+  "graph_hash": "4f78cfc9867824e0f5a1dbb597ba74aac9139884c6211649a9e07987a8d1bdd1",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 25,
+      "template_version": 26,
       "source": "official"
     },
     "nodes": [
@@ -1731,6 +1731,21 @@
         }
       },
       {
+        "id": "clear_timeline",
+        "type": "timeline_clear",
+        "name": "Clear the timeline",
+        "position": {
+          "x": 2400,
+          "y": 660
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
         "id": "assemble_timeline",
         "type": "loop_foreach",
         "name": "Append the shots to the timeline in order",
@@ -2084,8 +2099,13 @@
         "target": "generate_shots"
       },
       {
-        "id": "generate_assemble",
+        "id": "generate_clear",
         "source": "generate_shots",
+        "target": "clear_timeline"
+      },
+      {
+        "id": "clear_assemble",
+        "source": "clear_timeline",
         "target": "assemble_timeline"
       },
       {
@@ -2115,6 +2135,14 @@
         "kind": "data",
         "source_output": "json",
         "target_input": "layout"
+      },
+      {
+        "id": "d-video_project-sequence_id-clear_timeline-sequence_id",
+        "source": "video_project",
+        "target": "clear_timeline",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
       },
       {
         "id": "d-generate_shots-results-assemble_timeline-items",

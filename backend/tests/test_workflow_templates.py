@@ -86,7 +86,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 25,
+        "template_version": 26,
         "source": "official",
     }
 
@@ -115,7 +115,10 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     #: 生成可以同时跑(视频生成是整条流程最慢的一步);上时间线必须一镜接一镜。
     assert generate["config"]["concurrency"] == 3
     assert assemble["config"]["concurrency"] == 1
-    assert successors["generate_shots"] == {"assemble_timeline"}
+    #: 先清空再接(重做一轮不会把镜头接两遍),见 test_drama_episode_template。
+    #: 接时间线还从逐镜取每一镜的产物(数据边),所以两个都在。
+    assert successors["generate_shots"] == {"clear_timeline", "assemble_timeline"}
+    assert successors["clear_timeline"] == {"assemble_timeline"}
     assert successors["assemble_timeline"] == {"narration_subtitles"}
     assert successors["narration_subtitles"] == {"export_final"}
     organize = next(node for node in generate["config"]["body"]["nodes"] if node["id"] == "organize_clip")

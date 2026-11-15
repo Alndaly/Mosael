@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "漫剧单集",
   "description": "拍漫剧(短剧)的一集:和「从主题到完整视频」同一条流水线 —— 认资产库里的角色和场景、分镜、3D 白模机位、逐镜关键帧 ——但剧本和分镜按**对白推动**来写(旁白只交代时间地点),对白镜头对着说话的人;**有角色台词的镜头用说话照片模型让关键帧开口**,嘴型跟着这句台词的配音(角色在资产库里带着嗓子就用它的),没台词的镜头照旧图生视频。主题里可以直接贴一份逐镜剧本(画面、谁说、台词)。先用「连续剧 · 系列设定」把角色(连同嗓子)和场景建进库,再一集一集拍。花费量级:同「从主题到完整视频」,对白镜头的视频换成一次说话照片生成。",
-  "graph_hash": "4f337c5e9132cba9c3c02962a2b222d6b5ae9d1f13c55169f46372a6d9b2c687",
+  "graph_hash": "f709e7987d64caa8dbca39997a04d05f9610be878a59a9a21177accbf8ef66de",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -1770,6 +1770,21 @@
         }
       },
       {
+        "id": "clear_timeline",
+        "type": "timeline_clear",
+        "name": "清空时间线",
+        "position": {
+          "x": 2400,
+          "y": 660
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
         "id": "assemble_timeline",
         "type": "loop_foreach",
         "name": "按镜头顺序接上时间线",
@@ -2123,8 +2138,13 @@
         "target": "generate_shots"
       },
       {
-        "id": "generate_assemble",
+        "id": "generate_clear",
         "source": "generate_shots",
+        "target": "clear_timeline"
+      },
+      {
+        "id": "clear_assemble",
+        "source": "clear_timeline",
         "target": "assemble_timeline"
       },
       {
@@ -2154,6 +2174,14 @@
         "kind": "data",
         "source_output": "json",
         "target_input": "layout"
+      },
+      {
+        "id": "d-video_project-sequence_id-clear_timeline-sequence_id",
+        "source": "video_project",
+        "target": "clear_timeline",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
       },
       {
         "id": "d-generate_shots-results-assemble_timeline-items",

@@ -32,7 +32,7 @@ from app.domain.workflows.templates.schemas import (
 FULL_VIDEO_GENERATION = "full_video_generation"
 #: 同一张图的「漫剧」形态(`drama=True`):对白推动,角色台词的镜头用说话照片模型让关键帧开口(见 full_video_generation_graph)。
 DRAMA_EPISODE = "drama_episode"
-DRAMA_EPISODE_VERSION = 1
+DRAMA_EPISODE_VERSION = 2
 
 #: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
 RUNTIME_PROMPT_HEADROOM = 600
@@ -1108,6 +1108,16 @@ JSON Schema 的对象。"""
             },
         },
         {
+            #: **接之前先清空。**「接到末尾」是追加:从第几轮重做(ADR 0092)时这一段整个重跑,20 镜又接在原来那 20 镜后面,
+            #: 成片长一倍(漫剧第 2 场从第 16 镜重做:80 秒变 161 秒)。轨道留着,下游还要往这几条上铺;连续长镜头、
+            #: 长口播两份模板早就这样接。
+            "id": "clear_timeline",
+            "type": "timeline_clear",
+            "name": {"zh": "清空时间线", "en": "Clear the timeline"},
+            "position": {"x": 2400, "y": 660},
+            "config": {"sequence_id": "{{video_project.sequence_id}}"},
+        },
+        {
             "id": "assemble_timeline",
             "type": "loop_foreach",
             "name": {"zh": "按镜头顺序接上时间线", "en": "Append the shots to the timeline in order"},
@@ -1219,7 +1229,8 @@ JSON Schema 的对象。"""
         {"id": "build_generate", "source": "build_set", "target": "generate_shots"},
         {"id": "sheets_generate", "source": "character_sheets", "target": "generate_shots"},
         {"id": "locations_generate", "source": "location_art", "target": "generate_shots"},
-        {"id": "generate_assemble", "source": "generate_shots", "target": "assemble_timeline"},
+        {"id": "generate_clear", "source": "generate_shots", "target": "clear_timeline"},
+        {"id": "clear_assemble", "source": "clear_timeline", "target": "assemble_timeline"},
         {"id": "assemble_subtitles", "source": "assemble_timeline", "target": "narration_subtitles"},
         {"id": "subtitles_export", "source": "narration_subtitles", "target": "export_final"},
         {"id": "export_notice", "source": "export_final", "target": "done_notice"},
@@ -1235,8 +1246,9 @@ JSON Schema 的对象。"""
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
         #: v25:无旁白镜头的原声标成环境声,照常出声但不触发配乐闪避。
+        #: v26(漫剧 v2):布景台要和分镜一样多(json_match_items);接时间线之前先清空(重做一轮不再把镜头接两遍)。
         "meta": {"template_id": DRAMA_EPISODE if drama else FULL_VIDEO_GENERATION,
-                 "template_version": DRAMA_EPISODE_VERSION if drama else 25, "source": "official"},
+                 "template_version": DRAMA_EPISODE_VERSION if drama else 26, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

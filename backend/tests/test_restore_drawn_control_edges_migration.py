@@ -245,8 +245,11 @@ def test_当年的折边折掉了作者画的控制边_这份旧数据符合当�
         start, output = _start_and_output(stored)
         if output not in _reachable_over_control(stored, start):
             broken.append(template_id)
-    assert folded_edges == 68, f"当年折掉的条数对不上:现在是 {folded_edges}"
-    assert len(broken) == 10, f"当年断链的模板数对不上:现在是 {len(broken)} 张 {sorted(broken)}"
+    #: 审计时是 68 条。夹具从**现行模板**生成:整片 v26 起「逐镜 → 接时间线」中间多了一步清空,原来那条带同向数据线、
+    #: 当年会被折掉的 generate_shots → assemble_timeline 不在了,所以从现行模板数出来少这一条。
+    assert folded_edges == 67, f"当年折掉的条数对不上:现在是 {folded_edges}"
+    #: 审计时是 10 张;整片 v26 的「逐镜 → 清空」那条没有同向数据线、不会被折,现行模板套旧规范化器不再断链,所以 9 张。
+    assert len(broken) == 9, f"当年断链的模板数对不上:现在是 {len(broken)} 张 {sorted(broken)}"
 
 
 @pytest.mark.parametrize("template_id", FOLDED_ERA_IDS)

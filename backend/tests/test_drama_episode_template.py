@@ -140,3 +140,19 @@ def test_布景台要和分镜一样多_少了当场补齐() -> None:
         config = _node(graph, "set_design")["config"]
         assert config["json_match_field"] == "shots"
         assert config["json_match_items"] == "{{storyboard.json.shots}}"
+
+
+def test_接时间线之前先清空_重做一轮不会把镜头接两遍() -> None:
+    """「接到末尾」是追加:从第几轮重做(ADR 0092)时整段接时间线重跑,20 镜又接在原来那 20 镜后面
+    (漫剧第 2 场从第 16 镜重做:成片 80 秒变 161 秒)。连续长镜头、长口播两份模板早就先清空。"""
+    for graph in (_drama(), full_video_generation_graph(chat=CHAT, image=IMAGE, video=VIDEO)):
+        clear = _node(graph, "clear_timeline")
+        assert clear["type"] == "timeline_clear"
+        #: 精确引用被规范化升成数据边(配置那一格随之清空)。
+        assert {("video_project", "sequence_id", "sequence_id")} <= {
+            (edge["source"], edge.get("source_output"), edge.get("target_input"))
+            for edge in graph["edges"] if edge.get("kind") == "data" and edge["target"] == "clear_timeline"
+        }
+        edges = {(edge["source"], edge["target"]) for edge in graph["edges"] if edge.get("kind", "control") != "data"}
+        assert ("generate_shots", "clear_timeline") in edges and ("clear_timeline", "assemble_timeline") in edges
+        assert ("generate_shots", "assemble_timeline") not in edges, "绕过清空直接接,重做时还是接两遍"

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Drama episode",
   "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **every shot with a character's line makes the keyframe speak** through a speaking-photo model, lips following that line's voice (the character's own voice from the library when it has one), while shots without lines are generated from the keyframe as usual. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters (with voices) and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\", with one speaking-photo generation in place of the video for each dialogue shot.",
-  "graph_hash": "7117a13790f4422bc3a67f3cbfbcbcf4a0d04c429496a79d0a4585139497e39f",
+  "graph_hash": "5d6c2db99f4f4543d68b0c44d28f104e8ba0830c0c82de8c7ff032dbbf3ab348",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -1770,6 +1770,21 @@
         }
       },
       {
+        "id": "clear_timeline",
+        "type": "timeline_clear",
+        "name": "Clear the timeline",
+        "position": {
+          "x": 2400,
+          "y": 660
+        },
+        "config": {
+          "sequence_id": ""
+        },
+        "inputs": [
+          "sequence_id"
+        ]
+      },
+      {
         "id": "assemble_timeline",
         "type": "loop_foreach",
         "name": "Append the shots to the timeline in order",
@@ -2123,8 +2138,13 @@
         "target": "generate_shots"
       },
       {
-        "id": "generate_assemble",
+        "id": "generate_clear",
         "source": "generate_shots",
+        "target": "clear_timeline"
+      },
+      {
+        "id": "clear_assemble",
+        "source": "clear_timeline",
         "target": "assemble_timeline"
       },
       {
@@ -2154,6 +2174,14 @@
         "kind": "data",
         "source_output": "json",
         "target_input": "layout"
+      },
+      {
+        "id": "d-video_project-sequence_id-clear_timeline-sequence_id",
+        "source": "video_project",
+        "target": "clear_timeline",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
       },
       {
         "id": "d-generate_shots-results-assemble_timeline-items",
