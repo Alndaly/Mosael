@@ -84,13 +84,14 @@ def test_流的中途报错就是失败_不拿半截内容当结果(monkeypatch)
     assert "upstream overloaded" in str(caught.value)
 
 
-def test_到了长度上限就接着写_几段原样拼起来(monkeypatch) -> None:
-    """CommandCode 上的 DeepSeek V4 Flash 每次三万来个 token 就停(请求里写 64000 也一样):20 镜的 3D 布景在第 7 万字处
-    断在一个字符串中间,重答一遍还是在同一处断。到了长度上限就把写出来的那段交回去,让它接着写。"""
+def test_JSON到了长度上限_截回最后一个完整元素再从下一个写起(monkeypatch) -> None:
+    """CommandCode 上的 DeepSeek V4 Flash 每次三万来个 token 就停(请求里写 64000 也一样),20 镜的 3D 布景写不完。
+    让它「从断开的那个字符接着写」不可靠 —— 实测它从下一个完整对象写起,接缝处那半个对象成了乱码。截到最后一个完整元素
+    之后、请它从下一个元素写起。"""
     answers = [
         _sse({"choices": [{"delta": {"content": '{"shots": [{"id": "shot-1"}, {"id": "sh'}}]},
              {"choices": [{"delta": {}, "finish_reason": "length"}]}, "[DONE]"),
-        _sse({"choices": [{"delta": {"content": 'ot-2"}]}'}}]}, {"choices": [{"delta": {}, "finish_reason": "stop"}]}, "[DONE]"),
+        _sse({"choices": [{"delta": {"content": '{"id": "shot-2"}]}'}}]}, {"choices": [{"delta": {}, "finish_reason": "stop"}]}, "[DONE]"),
     ]
     seen: list[dict] = []
     _install(monkeypatch, lambda r: httpx.Response(200, request=r, text=answers[len(seen) - 1],
@@ -99,11 +100,24 @@ def test_到了长度上限就接着写_几段原样拼起来(monkeypatch) -> No
     text = chat(TARGET, [{"role": "user", "content": "搭布景"}], json_object=True, continue_cut_off=3)
 
     assert json.loads(text) == {"shots": [{"id": "shot-1"}, {"id": "shot-2"}]}
-    assert len(seen) == 2
     follow = seen[1]
-    assert follow["messages"][-2] == {"role": "assistant", "content": '{"shots": [{"id": "shot-1"}, {"id": "sh'}
-    assert follow["messages"][-1]["role"] == "user" and "接着往下写" in follow["messages"][-1]["content"]
+    assert follow["messages"][-2] == {"role": "assistant", "content": '{"shots": [{"id": "shot-1"},'}, "截掉了半个元素"
+    assert "从下一个元素接着写" in follow["messages"][-1]["content"]
     assert "response_format" not in follow, "半截内容本身不是合法 JSON,续写时还强制 JSON 模式只会让模型另起一个对象"
+
+
+def test_续写几次都从截断前那份请求出发_对话不越叠越长(monkeypatch) -> None:
+    answers = [
+        {"choices": [{"message": {"content": "第一段"}, "finish_reason": "length"}]},
+        {"choices": [{"message": {"content": "第二段"}, "finish_reason": "length"}]},
+        {"choices": [{"message": {"content": "第三段"}, "finish_reason": "stop"}]},
+    ]
+    seen: list[dict] = []
+    _install(monkeypatch, lambda r: httpx.Response(200, request=r, json=answers[len(seen) - 1]), seen)
+
+    assert chat(TARGET, [{"role": "user", "content": "写长文"}], continue_cut_off=3) == "第一段第二段第三段"
+    assert [len(one["messages"]) for one in seen] == [1, 3, 3]
+    assert seen[2]["messages"][1] == {"role": "assistant", "content": "第一段第二段"}, "文字从断开的那个字接,不截"
 
 
 def test_没开续写的照旧交回截断的那段(monkeypatch) -> None:

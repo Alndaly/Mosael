@@ -307,8 +307,11 @@ def chat(
     if call is not None:
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
 
-    #: 被长度上限截断后续写出来的那几段(见 continue_cut_off);最后一段在 content 里,交回时拼在一起。
-    written: list[str] = []
+    #: 被长度上限截断之后,到目前为止写好的全部(见 continue_cut_off);最后一段在 content 里,交回时接在它后面。
+    so_far = ""
+    continued = 0
+    #: 截断前的那份请求:每次续写都从它出发,只带「到目前为止写好的全部」—— 不在上一轮续写的对话上再叠一层。
+    before_cut: dict[str, Any] | None = None
     try:
         while True:
             if client is not None:
@@ -335,17 +338,23 @@ def chat(
                 call.meter_openai_tokens(body.get("usage"))
             raw_content = body["choices"][0]["message"]["content"]
             content = "" if raw_content is None else str(raw_content)
-            if allow_response_format_fallback and not content.strip() and not written:
+            if allow_response_format_fallback and not content.strip() and not continued:
                 fallback = _downgrade_response_format_payload(payload)
                 if fallback is not None:
                     _report_downgrade(on_downgrade, payload, fallback, tr("aiChatDowngrade_empty"))
                     payload = fallback
                     continue
-            if body["choices"][0].get("finish_reason") == "length" and len(written) < continue_cut_off:
-                written.append(content)
-                payload = _continuation_payload(payload, "".join(written))
+            if body["choices"][0].get("finish_reason") == "length" and continued < continue_cut_off:
+                continued += 1
+                before_cut = before_cut or payload
+                answers_json = isinstance(before_cut.get("response_format"), dict)
+                so_far += content
+                #: JSON 截回最后一个完整元素之后再接(见 _json_resume_point);文字就从断开的那个字接。
+                if answers_json:
+                    so_far = _json_resume_point(so_far)
+                payload = _continuation_payload(before_cut, so_far, answers_json)
                 continue
-            content = "".join(written) + content
+            content = so_far + content
             break
     except httpx.HTTPStatusError as exc:
         status, detail = _provider_detail(exc.response)
@@ -684,9 +693,25 @@ CONTINUE_PROMPT = (
     "你上一条回答到了长度上限、在中间被截断了。从断开的地方原样接着往下写:不要重复已经写过的任何字符,不要加开头语、"
     "解释或 Markdown 围栏,第一个字符紧接着上一条的最后一个字符。"
 )
+#: JSON 的那一句:上一条已经截到最后一个完整元素之后(以逗号结尾),从下一个元素写起。
+CONTINUE_JSON_PROMPT = (
+    "你上一条 JSON 到了长度上限、在中间被截断了;它已经截到最后一个完整的元素之后、以逗号结尾。从下一个元素接着写,"
+    "一直写到整个 JSON 结束(补齐所有没闭合的括号):不要重复已经写过的元素,不要加开头语、解释或 Markdown 围栏。"
+)
 
 
-def _continuation_payload(payload: dict[str, Any], written: str) -> dict[str, Any]:
+def _json_resume_point(text: str) -> str:
+    """半截 JSON 截回最后一个完整元素之后(`},` / `],` 那个逗号为止)。
+
+    让模型「从断开的那个字符接着写」不可靠:《长明灯》第 2 场布景断在一个对象中间(`"rotation":[0,0,0],"`),
+    续写从下一个完整对象 `{"id":…` 写起,接缝处那半个对象成了乱码。截到一个干净的边界、请它从下一个元素写起,
+    正好是它自然会做的那件事;被截掉的半个元素它会整个重写。找不到边界(还没写完第一个元素)就原样交回。
+    """
+    cut = max(text.rfind("},"), text.rfind("],"))
+    return text[: cut + 2] if cut >= 0 else text
+
+
+def _continuation_payload(payload: dict[str, Any], written: str, answers_json: bool = False) -> dict[str, Any]:
     """长度截断之后的那一次请求:原来的对话 + 已经写出来的那段(助手) + 「接着写」(用户)。
 
     几个供应商把单次输出限得比模型本身小得多(CommandCode 上的 DeepSeek V4 Flash 每次三万来个 token 就停,请求里写
@@ -697,7 +722,7 @@ def _continuation_payload(payload: dict[str, Any], written: str) -> dict[str, An
     following["messages"] = [
         *payload.get("messages", []),
         {"role": "assistant", "content": written},
-        {"role": "user", "content": CONTINUE_PROMPT},
+        {"role": "user", "content": CONTINUE_JSON_PROMPT if answers_json else CONTINUE_PROMPT},
     ]
     return following
 
