@@ -187,3 +187,11 @@ def test_官网空白副本带对白那一支_模型格空着() -> None:
     blank = ModelChoice()
     body = _shots(full_video_generation_graph(chat=blank, image=blank, video=blank, dialogue=blank, drama=True))
     assert _node(body, "speak_line")["config"]["model"] == ""
+
+
+def test_分镜和布景的输出上限够写满20镜() -> None:
+    """布景 20 镜比分镜还长:32000 时《长明灯》第 2 场写到第 7.5 万字被截断(「Unterminated string」),补一轮还在同一处断。
+    发出去的是它和模型自身上限里小的那个(ai_chat.chat),给得宽不会被供应商拒。"""
+    for graph in (_drama(), _full()):
+        for node_id in ("storyboard", "set_design"):
+            assert _node(graph, node_id)["config"]["max_tokens"] >= 64000, node_id

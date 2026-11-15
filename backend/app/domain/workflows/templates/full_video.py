@@ -32,7 +32,7 @@ from app.domain.workflows.templates.schemas import (
 FULL_VIDEO_GENERATION = "full_video_generation"
 #: 同一张图的「漫剧」形态(`drama=True`):对白推动,角色台词的镜头用说话照片模型让关键帧开口(见 full_video_generation_graph)。
 DRAMA_EPISODE = "drama_episode"
-DRAMA_EPISODE_VERSION = 3
+DRAMA_EPISODE_VERSION = 4
 
 #: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
 RUNTIME_PROMPT_HEADROOM = 600
@@ -1105,7 +1105,8 @@ JSON Schema 的对象。"""
                 "json_schema_strict": "true",
                 "temperature": 0.65,
                 #: 每镜十几格的英文提示词与中文说明,20 镜实测写到 3.7 万字:12000 在中途截断、整步交回半截 JSON。
-                "max_tokens": 32000,
+                #: 发出去的是它和这个模型输出上限里小的那个(ai_chat.chat),给得宽不会被供应商拒。
+                "max_tokens": 64000,
             },
         },
         {
@@ -1146,8 +1147,9 @@ JSON Schema 的对象。"""
                 "json_match_field": "shots",
                 "json_match_items": "{{storyboard.json.shots}}",
                 "temperature": 0.2,
-                #: 每镜一个布景台(房间、陈设、人偶、相机与轨迹),20 镜同样写得很长;和分镜同一个上限。
-                "max_tokens": 32000,
+                #: 每镜一个布景台(房间、陈设、人偶、相机与轨迹),20 镜比分镜还长:32000 时《长明灯》第 2 场写到第 7.5 万字
+                #: 被截断(「Unterminated string」),补一轮还是在同一处断。和分镜同一个上限。
+                "max_tokens": 64000,
             },
         },
         {
@@ -1331,10 +1333,11 @@ JSON Schema 的对象。"""
         #: v15:分段后每段只演自己那一截,尾帧落在最后一段;长口播切成几条字幕。
         #: v13:每镜秒数成了开始参数,视频时长、时间线、分镜和布景的提示词都引用它(此前建图时写死成一个数)。
         #: v25:无旁白镜头的原声标成环境声,照常出声但不触发配乐闪避。
+        #: v27(漫剧 v4):分镜、布景两次对话的输出上限提到 64000(布景 20 镜在 32000 被截断);漫剧对白可交对白模型(角色参考嗓音)。
         #: 漫剧 v3:对白由视频模型出片时一起念(不再另配 TTS + 说话照片),字幕按画面片段上屏。
         #: v26(漫剧 v2):布景台要和分镜一样多(json_match_items);接时间线之前先清空(重做一轮不再把镜头接两遍)。
         "meta": {"template_id": DRAMA_EPISODE if drama else FULL_VIDEO_GENERATION,
-                 "template_version": DRAMA_EPISODE_VERSION if drama else 26, "source": "official"},
+                 "template_version": DRAMA_EPISODE_VERSION if drama else 27, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

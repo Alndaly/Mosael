@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Drama episode",
   "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **the video model speaks each character's line while it generates the shot**, so the delivery follows the moment (needs a video model with native voice, such as MiniMax H3); narration is voiced separately. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\". This copy includes “Act this line in the character's voice” (a dialogue model taking a first frame and reference audio, e.g. the ComfyUI example “H3 dialogue · character voice”): pick the model there after importing so a character sounds the same across shots. Without such a model, delete “Is a character speaking in this shot?”, “Record a reference line in this character's voice” and “Act this line in the character's voice”; lines are then spoken from the text alone. In the app this branch is added only when such a model is set up.",
-  "graph_hash": "50f016f0c8b2390bbe257c9985b8f359823cd87afa4742d3874d240373dd1f88",
+  "graph_hash": "319710f6d0746a21bd5fdd1865fe15763b728f7713b7d69d3dfbfeb0ae4ba0dd",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -910,7 +910,7 @@
           },
           "json_schema_strict": "true",
           "temperature": 0.65,
-          "max_tokens": 32000
+          "max_tokens": 64000
         }
       },
       {
@@ -1246,7 +1246,7 @@
           "json_match_field": "shots",
           "json_match_items": "{{storyboard.json.shots}}",
           "temperature": 0.2,
-          "max_tokens": 32000
+          "max_tokens": 64000
         }
       },
       {

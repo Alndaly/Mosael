@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "漫剧单集",
   "description": "拍漫剧(短剧)的一集:和「从主题到完整视频」同一条流水线 —— 认资产库里的角色和场景、分镜、3D 白模机位、逐镜关键帧 ——但剧本和分镜按**对白推动**来写(旁白只交代时间地点),对白镜头对着说话的人;**角色的台词由视频模型出片时一起念出来**,语气跟着这一镜的表情和情绪走(需要 MiniMax H3 这类会出原生人声的视频模型),旁白另配。主题里可以直接贴一份逐镜剧本(画面、谁说、台词)。先用「连续剧 · 系列设定」把角色和场景建进库,再一集一集拍。花费量级:同「从主题到完整视频」。这一份带着「用角色的嗓子演这一句」(对白模型,收首帧和参考音频,例:ComfyUI 范例「H3 对白 · 角色嗓音」):导入后在那一格挑好模型,同一个角色几镜之间嗓音一致。没有这种模型的话,删掉「这一镜是角色在说话吗」「用这个角色的嗓子念一句参考」「用角色的嗓子演这一句」三个节点,对白照旧按文字描述念。应用里有这种模型才带这一支。",
-  "graph_hash": "b7e7c1ff0acece795c7cc1ad0f7051179359096eb27a55231b851e4c54b5e7e0",
+  "graph_hash": "c7715b11f08b0068bc88eb86a5c862a8353a0afb6a028d7e20d5799c278d9b84",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -910,7 +910,7 @@
           },
           "json_schema_strict": "true",
           "temperature": 0.65,
-          "max_tokens": 32000
+          "max_tokens": 64000
         }
       },
       {
@@ -1246,7 +1246,7 @@
           "json_match_field": "shots",
           "json_match_items": "{{storyboard.json.shots}}",
           "temperature": 0.2,
-          "max_tokens": 32000
+          "max_tokens": 64000
         }
       },
       {
