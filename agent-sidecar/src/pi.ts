@@ -22,6 +22,7 @@ import { BackendCredentialStore } from "./credentials.js";
 import type { RunTurnRequest } from "./protocol.js";
 import { keepWhatWasSaid } from "./stopped.js";
 import { dropToolImages, keepRecentToolImages } from "./toolImages.js";
+import { forgetLeakedToolCalls, hidingLeakedToolCalls } from "./leakedToolCalls";
 // 规范入口(不是 `/compat` —— 那是上游标注为「临时、将随 ModelManager 迁移删除」的兼容层)。
 // 这个入口能用的前提是构建带 --ignore-annotations,原因见 package.json 里的说明。
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
@@ -306,6 +307,7 @@ type Stall = { code: Exclude<StallCode, "context_full"> | "dangling"; nudge: str
  *    把截断的调用报成失败结果、让模型重发,循环接着跑);
  *  · stopReason=toolUse(finish_reason=tool_calls)却一个工具调用都没有:模型说要调工具,调用在路上丢了;
  *  · Anthropic 协议的 pause_turn:供应商要我们重发接着来,pi 把它映射成了普通的 stop;
+ *  · 工具调用被写成了正文里的标记(DeepSeek 的 DSML,见 leakedToolCalls.ts),标记已去掉;
  *  · 正常 stop,但最后一句停在冒号上(`dangling`,见下)。
  *
  * 不是这几种(说完了的 stop、出错、被中止)就是 null。
@@ -319,6 +321,16 @@ export function stallOf(message: unknown): Stall | null {
       code: "output_limit",
       nudge:
         "【系统】你上一条回复在输出额度处被截断了,还没说完。请从断处直接接着说下去,不要重复已经说过的内容;如果接下来要调用工具,请完整地发起调用。",
+    };
+  }
+  //: 工具调用写成了正文里的标记(见 leakedToolCalls.ts):标记已经去掉,这里提醒它用标准的工具调用重发。
+  //: 和「调用在路上丢了」同一种结果 —— 模型要调工具,我们没收到可执行的调用。
+  const leaked = (m as { mosaelLeakedToolCalls?: string[] }).mosaelLeakedToolCalls;
+  if (leaked && !hasToolCall) {
+    const names = leaked.length ? `(${[...new Set(leaked)].join("、")})` : "";
+    return {
+      code: "tool_call_lost",
+      nudge: `【系统】你上一条回复把工具调用${names}写成了正文里的标记,系统收不到、也没有执行。请用标准的工具调用(function calling)重新发起,不要把调用写进正文。`,
     };
   }
   if (m.stopReason === "toolUse" && !hasToolCall) {
@@ -645,13 +657,16 @@ export function leaveThinkingToModel(model: Model<Api>, options: StreamOptions):
  * 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
  * 收到的永远是"别思考",思考档位调什么都没用。pi 的 StreamFn 契约原文就写着
  * "Models.streamSimple satisfies this shape",我照着 stream 写才踩进去。
+ *
+ * 外面再包一层 `hidingLeakedToolCalls`:DeepSeek 偶尔把工具调用用它自己的 DSML 标记写进正文 —— 标记不显示、
+ * 不进历史,由 `stallOf` 提醒它用标准的工具调用重发(见 leakedToolCalls.ts)。
  */
 function streamFnFor(models: Models) {
   return (
     m: Parameters<typeof models.streamSimple>[0],
     context: Parameters<typeof models.streamSimple>[1],
     options: Parameters<typeof models.streamSimple>[2],
-  ) => models.streamSimple(m, context, leaveThinkingToModel(m as Model<Api>, options));
+  ) => hidingLeakedToolCalls(models.streamSimple(m, context, leaveThinkingToModel(m as Model<Api>, options)));
 }
 
 /**
@@ -690,7 +705,8 @@ export async function runCompaction(input: {
   token: string;
 }): Promise<{ sessionState: unknown; context: { tokens: number; window: number }; compaction: CompactionResult["info"]; usage: Record<string, unknown> }> {
   const { models, model } = await resolveModels(input.provider, input.model, input.apiBase, input.token);
-  const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
+  //: 历史里写成正文标记的工具调用去掉(见 leakedToolCalls.ts):留着模型会照着接着写。
+  const prior = Array.isArray(input.sessionState) ? forgetLeakedToolCalls(input.sessionState as AgentMessage[]) : [];
   const { messages, info, usage } = await prepareContext(prior, model as Model<Api>, streamFnFor(models), true);
   return {
     sessionState: messages,
@@ -831,7 +847,8 @@ export async function runGatewayCompletion(
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */
 export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): Promise<PiTurnResult> {
   const { models, model } = await resolveModels(input.provider, input.model, input.apiBase, input.token);
-  const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
+  //: 历史里写成正文标记的工具调用去掉(见 leakedToolCalls.ts):留着模型会照着接着写。
+  const prior = Array.isArray(input.sessionState) ? forgetLeakedToolCalls(input.sessionState as AgentMessage[]) : [];
   const images = model?.input?.includes("image") ? (input.images ?? []) : [];
   let contextFull = false;
   const streamFn = streamFnFor(models);

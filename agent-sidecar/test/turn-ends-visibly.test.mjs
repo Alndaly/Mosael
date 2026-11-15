@@ -58,7 +58,7 @@ function sse({ text = "", toolCalls = [], finish = "stop", promptTokens = 100 })
 }
 
 /** 跑一轮;`script` 是供应商依次给出的回应。返回结果和每次请求的 body。 */
-async function turn(script, { tools = [], provider = {} } = {}) {
+async function turn(script, { tools = [], provider = {}, sessionState } = {}) {
   const original = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (_url, init) => {
@@ -78,6 +78,7 @@ async function turn(script, { tools = [], provider = {} } = {}) {
         apiBase: "http://127.0.0.1:1",
         token: "t",
         thinkingLevel: "off",
+        sessionState,
       },
       {
         onDelta: (delta) => deltas.push(delta),
@@ -189,4 +190,57 @@ test("续完还停在冒号上:就当它说完了,不报错 —— 那是模型�
   ]);
   assert.equal(requests.length, 2, "只续一次");
   assert.equal(result.errorMessage, undefined);
+});
+
+//: DeepSeek 经网关时偶尔把工具调用写成正文里的 DSML 标记(2026-11-15 实测,见 src/leakedToolCalls.ts)。
+const B = "｜｜";
+const LEAKED = `先摸清时间线的操作清单。\n\n<${B}DSML${B} calls>\n<${B}DSML${B} invoke name="list_assets">\n`
+  + `<${B}DSML${B} parameter name="query" string="true">时间线</${B}DSML${B} parameter>\n</${B}DSML${B} invoke>\n</${B}DSML${B} calls>`;
+
+test("工具调用写成了正文里的标记:界面上不显示、不替它执行,提醒它用标准的工具调用重发;重发成了照常跑完", async () => {
+  let ran = 0;
+  const tool = {
+    name: "list_assets",
+    label: "列出素材",
+    description: "列",
+    parameters: { type: "object", properties: {} },
+    execute: async () => { ran += 1; return { content: [{ type: "text", text: "[]" }], details: {} }; },
+  };
+  const { result, requests, text } = await turn(
+    [
+      { text: LEAKED, finish: "stop" },
+      { toolCalls: [{ id: "call-1", name: "list_assets", arguments: "{}" }], finish: "tool_calls" },
+      { text: "素材都在。", finish: "stop" },
+    ],
+    { tools: [tool] },
+  );
+  assert.equal(requests.length, 3);
+  assert.ok(!text.includes("DSML"), "标记推到了界面上");
+  assert.match(lastUserText(requests[1]), /list_assets/, "要告诉模型它想调的工具没被执行");
+  assert.ok(!JSON.stringify(requests[1].messages).includes("DSML"), "标记进了下一次请求的历史");
+  assert.equal(ran, 1, "只执行重发的那一次标准调用,不执行正文里的标记");
+  assert.equal(result.errorMessage, undefined);
+});
+
+test("重发之后还是写成标记:报 tool_call_lost,标记一直不显示", async () => {
+  const { result, requests, text } = await turn([
+    { text: LEAKED, finish: "stop" },
+    { text: LEAKED, finish: "stop" },
+  ]);
+  assert.equal(requests.length, 2);
+  assert.equal(result.errorCode, "tool_call_lost");
+  assert.ok(!text.includes("DSML"));
+});
+
+test("历史里早先存下的标记(修复之前)发给模型前去掉:免得它照着接着写", async () => {
+  const sessionState = [
+    { role: "user", content: [{ type: "text", text: "改时间线" }], timestamp: 1 },
+    { role: "assistant", content: [{ type: "text", text: LEAKED }], api: "openai-completions", provider: "openai",
+      model: "m", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: 2 },
+  ];
+  const { requests } = await turn([{ text: "好的。", finish: "stop" }], { sessionState });
+  const sent = JSON.stringify(requests[0].messages);
+  assert.ok(!sent.includes("DSML"), "历史里的标记发给了模型");
+  assert.ok(sent.includes("先摸清时间线的操作清单"), "标记之前那句话要留着");
 });
