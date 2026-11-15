@@ -261,6 +261,19 @@ describe("和「任务计划」同一套行语法", () => {
     expect(order).toEqual(["run", "wait", "done"]);
   });
 
+  it("⑥ 结束了的按时间排(新的在上),不把失败的排在成功的前面", async () => {
+    //: 维护者截图:两条早先连不上 ComfyUI 的失败压在刚做完的几条上面 ——「应该按照顺序排列,而不是错误在前正确在后」
+    h.jobs = [
+      job({ id: "old-fail", status: "failed", error: "连不上这台 ComfyUI", created_at: stamp(600), payload: { subject: "早先失败的", receipt: { session_id: "s1" } } }),
+      job({ id: "new-done", status: "succeeded", progress: 1, created_at: stamp(5), payload: { subject: "刚做完的", receipt: { session_id: "s1" } } }),
+      job({ id: "mid-done", status: "succeeded", progress: 1, created_at: stamp(300), payload: { subject: "前一会儿做完的", receipt: { session_id: "s1" } } }),
+    ];
+    const { container } = mount();
+    await screen.findByText("刚做完的");
+    const order = [...container.querySelectorAll("[data-session-job]")].map((row) => row.getAttribute("data-session-job"));
+    expect(order).toEqual(["new-done", "mid-done", "old-fail"]);
+  });
+
   it("④ 进度/用时在主行下方的说明行里,和文字同一左缘", async () => {
     h.jobs = [
       job({ id: "run", status: "running", progress: 0.4, payload: { subject: "在跑的", receipt: { session_id: "s1" } } }),

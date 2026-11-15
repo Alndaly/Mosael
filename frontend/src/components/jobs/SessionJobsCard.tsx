@@ -104,8 +104,10 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
   const mine = React.useMemo(() => {
     // 先看在跑的,再看排队的,最后是已经结束的;同一档里新的在上。侧栏只扫一眼,
     // 「现在有什么在跑」必须第一眼看见,而不是被上一条做完的任务顶下去。
-    const rank = (status: string) =>
-      status === "running" ? 0 : status === "queued" ? 1 : status === "failed" ? 2 : 3;
+    // **结束了的不再分成功 / 失败**,统一按时间排:此前失败排在成功前面,两条早先连不上 ComfyUI 的失败压在
+    // 刚做完的几条上面,列表读起来像是「最近一直在失败」(维护者:「应该按照顺序排列,而不是错误在前正确在后」)。
+    // 失败本身靠那颗红圈和说明行看得出来,用不着靠位置。
+    const rank = (status: string) => (status === "running" ? 0 : status === "queued" ? 1 : 2);
     return (jobs.data ?? [])
       .filter((job) => receiptSessionId(job) === sessionId)
       .sort((a, b) => rank(a.status) - rank(b.status) || parseServerTime(b.created_at).getTime() - parseServerTime(a.created_at).getTime());
