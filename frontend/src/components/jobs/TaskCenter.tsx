@@ -11,7 +11,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
 import { jobSubjectOf } from "@/components/jobs/SessionJobsCard";
 import { gotoJobPage, JobKindIcon, jobPage, queryKeysAffectedBy, shouldAnnounce, useJobKinds } from "@/components/jobs/jobKinds";
-import { relativeTime } from "@/lib/time";
+import { relativeTime, parseServerTime } from "@/lib/time";
 import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LIST_HAIRLINE } from "@/components/ui/floating";
@@ -323,7 +323,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
           </span>
           <span className="inline-flex shrink-0 items-center gap-1 text-ui-2xs tabular-nums text-muted-foreground">
             {!running && (
-              <Hint label={new Date(job.updated_at).toLocaleString(locale)}>
+              <Hint label={parseServerTime(job.updated_at).toLocaleString(locale)}>
                 <span>{relativeTime(job.updated_at, locale)}</span>
               </Hint>
             )}
@@ -339,7 +339,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
               // 一次没报过进度就**别报数**。视频生成这类活儿,供应商只在做完时回一次结果,
               // 中间没有百分比可言 —— 而一个挂了五分钟的「0%」读起来就是"卡死了"
               // (真机反馈原话:一直挂在这个状态上没动)。这时有用的是**已经跑了多久**。
-              <Hint label={new Date(job.created_at).toLocaleString(locale)}>
+              <Hint label={parseServerTime(job.created_at).toLocaleString(locale)}>
                 <span>{t("jobRunningFor").replace("{t}", relativeTime(job.created_at, locale))}</span>
               </Hint>
             )}

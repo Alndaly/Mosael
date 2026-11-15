@@ -11,6 +11,7 @@
  * 只给部署管理员(后端也拦);别人看不到这一行。
  */
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleArrowUp, CircleCheck, FileText, TriangleAlert, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -187,7 +188,7 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
       </span>
       <span>
         {up?.checked_at
-          ? t("localServiceVersionFactChecked").replace("{time}", new Date(up.checked_at).toLocaleString(locale))
+          ? t("localServiceVersionFactChecked").replace("{time}", parseServerTime(up.checked_at).toLocaleString(locale))
           : t("localServiceVersionNotChecked")}
       </span>
       <span>

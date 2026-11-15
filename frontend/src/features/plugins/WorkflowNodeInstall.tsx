@@ -1,4 +1,5 @@
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
@@ -29,7 +30,7 @@ export const installActive = (job: Job) => ACTIVE.has(job.status);
 /** 装好了、还没重启过的(`restartedAt`:这次打开之后最近一次重启成功的时刻,毫秒;没重启过是 0)。 */
 export const awaitingRestart = (job: Job, restartedAt: number) => {
   if (job.status !== "succeeded") return false;
-  const finished = Date.parse(job.updated_at ?? "");
+  const finished = job.updated_at ? parseServerTime(job.updated_at).getTime() : Number.NaN;
   return Number.isNaN(finished) || finished > restartedAt;
 };
 

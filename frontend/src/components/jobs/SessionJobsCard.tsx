@@ -12,7 +12,7 @@ import { gotoJobPage, jobPage, useJobKinds } from "@/components/jobs/jobKinds";
 import { Button } from "@/components/ui/button";
 import { Truncate } from "@/components/ui/truncate";
 import { leaveNativeView } from "@/lib/nativeView";
-import { formatElapsedSeconds } from "@/lib/time";
+import { formatElapsedSeconds, parseServerTime } from "@/lib/time";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -108,7 +108,7 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
       status === "running" ? 0 : status === "queued" ? 1 : status === "failed" ? 2 : 3;
     return (jobs.data ?? [])
       .filter((job) => receiptSessionId(job) === sessionId)
-      .sort((a, b) => rank(a.status) - rank(b.status) || Date.parse(b.created_at) - Date.parse(a.created_at));
+      .sort((a, b) => rank(a.status) - rank(b.status) || parseServerTime(b.created_at).getTime() - parseServerTime(a.created_at).getTime());
   }, [jobs.data, sessionId]);
 
   const cancel = useMutation({
@@ -133,7 +133,7 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
           const failed = job.status === "failed";
           const page = jobPage(job, kind);
           const progress = typeof job.progress === "number" ? job.progress : 0;
-          const elapsed = Math.max(0, (Date.now() - Date.parse(job.created_at)) / 1000);
+          const elapsed = Math.max(0, (Date.now() - parseServerTime(job.created_at).getTime()) / 1000);
           const meta = active
             ? progress > 0
               ? `${Math.round(progress * 100)}%`

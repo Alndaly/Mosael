@@ -11,6 +11,7 @@
  * 的」—— 一个看起来精确的假数字,比一个空着的位置糟得多。渲染层据此决定「不显示这一项」。
  */
 import type { AgentTimelineItem, ToolCall } from "@/features/agent/ToolCalls";
+import { parseServerTime } from "@/lib/time";
 import type { AgentUsageEvent } from "@/features/agent/messageUsage";
 import { summarizeMessageUsage } from "@/features/agent/messageUsage";
 import { JOB_RECEIPT_ROLE } from "@/features/agent/JobReceiptNotice";
@@ -102,7 +103,7 @@ export function oneLine(value: unknown): string {
 
 function parseTime(value: unknown): number | null {
   if (typeof value !== "string" || !value.trim()) return null;
-  const parsed = Date.parse(value);
+  const parsed = parseServerTime(value).getTime();
   return Number.isFinite(parsed) ? parsed : null;
 }
 

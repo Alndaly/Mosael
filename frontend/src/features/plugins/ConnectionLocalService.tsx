@@ -1,4 +1,5 @@
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { Check, CircleAlert, CircleCheck, FileText, Info, Library, Play, RotateCw, Square, TriangleAlert } from "lucide-react";
@@ -932,7 +933,7 @@ function ServiceRows({
   const meta = [
     t("localServicePort").replace("{port}", String(service.port)),
     service.pid ? t("localServicePid").replace("{pid}", String(service.pid)) : "",
-    service.started_at ? t("localServiceStartedAt").replace("{time}", new Date(service.started_at).toLocaleTimeString()) : "",
+    service.started_at ? t("localServiceStartedAt").replace("{time}", parseServerTime(service.started_at).toLocaleTimeString()) : "",
     service.state === "running" && service.ready_seconds != null && !service.adopted
       ? t("localServiceReadyIn").replace("{s}", String(service.ready_seconds))
       : "",

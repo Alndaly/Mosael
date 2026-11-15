@@ -1,4 +1,5 @@
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { noteSnippet } from "@/features/notes/noteSnippet";
 import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import {
@@ -209,7 +210,7 @@ export function NoteList({
                   </strong>
                   <p>{noteSnippet(n.markdown, 100)}</p>
                   <time>
-                    {new Date(n.updated_at).toLocaleDateString()}
+                    {parseServerTime(n.updated_at).toLocaleDateString()}
                     {n.topics.length ? ` · ${n.topics.join(", ")}` : ""}
                   </time>
                 </button>

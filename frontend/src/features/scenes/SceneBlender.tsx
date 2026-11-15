@@ -1,4 +1,5 @@
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -289,7 +290,7 @@ export function SceneBlender({
                 value={latest!.id}
                 options={readyTransfers.map((one) => [
                   one.id,
-                  `${new Date(one.created_at).toLocaleString()} · ${t("sceneHistoryRevision").replace("{n}", String(one.source_revision))}`,
+                  `${parseServerTime(one.created_at).toLocaleString()} · ${t("sceneHistoryRevision").replace("{n}", String(one.source_revision))}`,
                 ])}
                 onChange={setSelectedTransfer}
               />
@@ -298,7 +299,7 @@ export function SceneBlender({
               <div className="scene-blender-result">
                 <span>
                   {t("sceneBlenderSentAt")
-                    .replace("{time}", new Date(latest.created_at).toLocaleString())
+                    .replace("{time}", parseServerTime(latest.created_at).toLocaleString())
                     .replace("{n}", String(latest.source_revision))}
                 </span>
                 <small>{t("sceneBlenderReceiveNote")}</small>

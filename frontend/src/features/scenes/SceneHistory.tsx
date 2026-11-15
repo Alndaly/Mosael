@@ -1,4 +1,5 @@
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/transport";
 import type { Scene, SceneContent } from "@/api/domains/scenes";
@@ -53,7 +54,7 @@ export function SceneHistory({
             <div key={r.revision}>
               <span>
                 {t("sceneHistoryRevision").replace("{n}", String(r.revision))} · {r.name}
-                <small>{new Date(r.created_at).toLocaleString()}</small>
+                <small>{parseServerTime(r.created_at).toLocaleString()}</small>
               </span>
               <Button
                 variant="ghost"

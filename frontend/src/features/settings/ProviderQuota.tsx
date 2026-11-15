@@ -1,4 +1,5 @@
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { useQuery } from "@tanstack/react-query";
 import { Gauge, Loader2 } from "lucide-react";
 
@@ -74,7 +75,7 @@ function MetricRow({ metric }: { metric: Metric }) {
         </div>
         {metric.resets_at && (
           <span className="text-ui-2xs text-muted-foreground">
-            {t("quotaResetsAt").replace("{t}", new Date(metric.resets_at).toLocaleString())}
+            {t("quotaResetsAt").replace("{t}", parseServerTime(metric.resets_at).toLocaleString())}
           </span>
         )}
       </div>

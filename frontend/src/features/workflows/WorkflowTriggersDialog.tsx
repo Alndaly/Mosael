@@ -11,6 +11,7 @@
  */
 
 import React from "react";
+import { parseServerTime } from "@/lib/time";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, Play, Plus, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -271,7 +272,7 @@ function TriggerRow({
       <p className="text-xs text-muted-foreground">{summary}</p>
       <p className="text-xs text-muted-foreground">
         {trigger.last_fired_at
-          ? t("workflowTriggersLastFired").replace("{time}", new Date(trigger.last_fired_at).toLocaleString())
+          ? t("workflowTriggersLastFired").replace("{time}", parseServerTime(trigger.last_fired_at).toLocaleString())
           : t("workflowTriggersNeverFired")}
       </p>
       <div>
@@ -325,7 +326,7 @@ function TriggerEvents({ triggerId }: { triggerId: string }) {
                 {t("workflowTriggersAssetsCount").replace("{n}", String(one.asset_ids.length))}
               </span>
             )}
-            <span className="shrink-0 text-muted-foreground">{new Date(one.created_at).toLocaleString()}</span>
+            <span className="shrink-0 text-muted-foreground">{parseServerTime(one.created_at).toLocaleString()}</span>
             {one.job_id && (
               <Button size="sm" variant="ghost" onClick={() => gotoJob(one.job_id as string)}>
                 <Play size={13} /> {t("workflowTriggersOpenRun")}

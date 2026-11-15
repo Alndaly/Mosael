@@ -613,7 +613,7 @@ function PublishCard({
             {/*: 作品**真正发出去的时刻**(published_at,服务端记的),和右上角那颗记录创建时间不是同一个。 */}
             {task.post?.published_at && (
               <span data-publish-row-published="" className="shrink-0">
-                {t("publishPostAt")} {new Date(task.post.published_at).toLocaleString(locale)}
+                {t("publishPostAt")} {parseServerTime(task.post.published_at).toLocaleString(locale)}
               </span>
             )}
             {task.post?.url && (

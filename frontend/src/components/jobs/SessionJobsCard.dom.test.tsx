@@ -30,7 +30,7 @@ const CATALOG = {
 };
 
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  useI18n: () => (key: string) => (key === "chatJobsElapsed" ? "chatJobsElapsed {t}" : key),
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 vi.mock("@/api/client", () => ({
@@ -59,7 +59,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PlanCard } from "@/features/agent/PlanCard";
 import { SessionJobsCard } from "./SessionJobsCard";
 
-const stamp = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1000).toISOString();
+//: 和后端交回的一样:UTC、**不带时区标记**(`2026-11-15 11:39:52.518043`)。此前夹具用 `toISOString()`(带 Z),
+//: 计时那一处直接 `Date.parse` 在测试里是对的,真机上东八区多出 8 小时(「已跑 480m」)。
+const stamp = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1000).toISOString().replace("T", " ").replace("Z", "");
 
 const job = (extra: Record<string, any>) => ({
   id: "job-1",
@@ -175,7 +177,8 @@ it("还没报进度的在跑任务说「已跑 N 秒」,不是停在 0%", async 
   ];
   const { container } = mount();
   await screen.findByText("慢活");
-  expect(screen.getByText("chatJobsElapsed")).toBeTruthy();
+  //: 7 秒前建的,写 7 秒 —— 不是把 UTC 当本地时间多算的 8 小时。
+  expect(screen.getByText(/^chatJobsElapsed /).textContent).toMatch(/^chatJobsElapsed [78](\.\d)?s$/);
   //: 用时是次要信息:在主行下方那一行,不挤在主行右侧(和「任务计划」同一个位置约定)。
   expect(container.querySelector("[data-session-job] [data-inspector-note]")?.textContent).toContain("chatJobsElapsed");
 });
