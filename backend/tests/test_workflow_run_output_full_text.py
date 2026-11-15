@@ -113,3 +113,26 @@ def test_嵌在循环结果里的长文字也标截断_按路径取得到全文(
     full = client.get(f"/api/workflows/runs/{job['id']}/outputs/each/results.1.t.text")
     assert full.status_code == 200, full.text
     assert full.json() == {"value": item + "b"}
+
+
+def test_同一次运行里节点重跑_全文以后跑的为准() -> None:
+    """「从第几轮重做」(ADR 0092)把循环之后的节点在同一个任务里再跑一遍。此前全文只管插入,重做一跑到导出就撞
+    唯一约束,整次运行以「UNIQUE constraint failed: workflow_run_outputs…」失败(漫剧第 2 场从第 16 镜重做)。"""
+    from sqlalchemy import select
+
+    from app.db.models import WorkflowRunOutput
+    from app.domain.workflows.run_outputs import full_text, keep_full_texts
+
+    client = fresh_client()
+    job = _run(client, {"nodes": [{"id": "start", "type": "start", "config": {"params": {}}}], "edges": []})
+    with SessionLocal() as db:
+        keep_full_texts(db, job["id"], "export", {"text": "第一次", "results.0.text": "只在第一次被截断"})
+        db.commit()
+    with SessionLocal() as db:
+        keep_full_texts(db, job["id"], "export", {"text": "重做之后", "results.1.text": "这次才被截断"})
+        db.commit()
+        assert full_text(db, job["id"], "export", "text") == "重做之后"
+        assert full_text(db, job["id"], "export", "results.1.text") == "这次才被截断"
+        assert full_text(db, job["id"], "export", "results.0.text") is None, "这次没截断的旧全文留着,只会取到上一次的"
+        keys = db.scalars(select(WorkflowRunOutput.output_key).where(WorkflowRunOutput.job_id == job["id"])).all()
+        assert sorted(keys) == ["results.1.text", "text"]

@@ -74,9 +74,29 @@ def _trim(value: Any, path: str, depth: int, cut: dict[str, str]) -> Any:
 
 
 def keep_full_texts(db: Session, job_id: str, node_id: str, texts: dict[str, str]) -> None:
-    """记下这些输出的全文(键是 snapshot 给的路径)。同一次运行里同一个节点只跑完一次,不会重复写。"""
+    """记下这些输出的全文(键是 snapshot 给的路径)。**后跑的那次为准**。
+
+    同一次运行里同一个节点可以跑不止一次:「从第几轮重做」(ADR 0092)把循环之后的节点在**同一个任务**里再跑一遍。
+    此前这里只管插入(注释写着「只跑完一次」),重做一跑到导出那一步就撞唯一约束,整次运行以
+    「UNIQUE constraint failed: workflow_run_outputs…」失败(漫剧第 2 场从第 16 镜重做时真跑出来的)。
+
+    已有的键就地改值,这次没被截断的旧键删掉(界面按这一次的快照取全文,留着只会取到上一次的),新键插入。
+    不先删后插:同一次 flush 里 SQLAlchemy 先插后删,照样撞约束。
+    """
+    rows = {
+        row.output_key: row
+        for row in db.scalars(select(WorkflowRunOutput).where(
+            WorkflowRunOutput.job_id == job_id, WorkflowRunOutput.node_id == node_id,
+        ))
+    }
+    for key, row in rows.items():
+        if key in texts:
+            row.value = texts[key]
+        else:
+            db.delete(row)
     for key, value in texts.items():
-        db.add(WorkflowRunOutput(job_id=job_id, node_id=node_id, output_key=key, value=value))
+        if key not in rows:
+            db.add(WorkflowRunOutput(job_id=job_id, node_id=node_id, output_key=key, value=value))
 
 
 def full_text(db: Session, job_id: str, node_id: str, key: str) -> str | None:
