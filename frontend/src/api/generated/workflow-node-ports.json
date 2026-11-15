@@ -3121,6 +3121,20 @@
           "zh": "严格模式",
           "en": "Strict mode"
         }
+      },
+      "json_match_field": {
+        "type": "string",
+        "label": {
+          "zh": "对齐条数的字段",
+          "en": "Field to match"
+        }
+      },
+      "json_match_items": {
+        "type": "template",
+        "label": {
+          "zh": "对齐的那一组",
+          "en": "List to match"
+        }
       }
     },
     "outputs": [

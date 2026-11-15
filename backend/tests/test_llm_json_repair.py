@@ -201,3 +201,32 @@ def test_响应格式里的_Schema_三种不对分开说() -> None:
     payload = _response_format({"response_format": "json_schema", "json_schema": array_schema})
     assert payload["type"] == "json_schema"
     assert payload["json_schema"]["schema"] == array_schema
+
+
+#: 布景台对齐分镜的镜数:输出数组要和上游一样多(json_match_field / json_match_items)。
+SHOTS_CONFIG = {"response_format": "json_object", "json_match_field": "shots",
+                "json_match_items": [{"shot_number": n} for n in range(1, 21)]}
+
+
+def test_长输出提前收尾_条数不够就打回去补齐() -> None:
+    """漫剧第 2 场的布景:分镜 20 镜,模型交回一个合法的 JSON,却只搭了 6 个镜头(上一轮同一个节点给满了 20 个),
+    到第 7 镜才炸「场景里没有镜头 shot-7」—— 前面的出图已经花出去了。条数取决于运行时的上游,写不进静态 Schema。"""
+    six = json.dumps({"shots": [{"id": f"shot-{n}"} for n in range(1, 7)]})
+    with pytest.raises(_BadJson) as caught:
+        _json_result(six, six, SHOTS_CONFIG, "flash")
+    bad = caught.value
+    assert bad.key == "wfErr_llmItemsShort"
+    assert bad.params == {"field": "shots", "have": 6, "expected": 20}
+    #: 发回去的话要说清缺哪几项、已有的别动 —— 只说"不够"它可能整份重写、又少别的。
+    assert "第 7–20 项" in bad.feedback and "原样保留" in bad.feedback
+
+
+def test_条数够了就过_多了也不拦() -> None:
+    twenty = json.dumps({"shots": [{"id": f"shot-{n}"} for n in range(1, 21)]})
+    assert len(_json_result(twenty, twenty, SHOTS_CONFIG, "flash")["shots"]) == 20
+    more = json.dumps({"shots": [{"id": n} for n in range(25)]})
+    assert len(_json_result(more, more, SHOTS_CONFIG, "flash")["shots"]) == 25
+
+
+def test_没配对齐的照旧不管条数() -> None:
+    assert _json_result('{"shots": []}', '{"shots": []}', {"response_format": "json_object"}, "flash") == {"shots": []}

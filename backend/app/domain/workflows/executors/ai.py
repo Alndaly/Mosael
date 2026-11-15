@@ -371,7 +371,34 @@ def _json_result(
                  "response_format_used": used_tier, "schema_enforced": enforced},
                 {"reason": reason} if enforced else {"reason": reason, "tier": used_tier},
             ) from exc
+    _require_matching_items(value, config, base)
     return value
+
+
+def _require_matching_items(value: Any, config: dict[str, Any], base: dict[str, Any]) -> None:
+    """输出里的某个数组要和上游某个数组**一样多**(`json_match_field` / `json_match_items`),少了就打回去补齐。
+
+    长输出时模型会自己提前收尾、交回一个合法却不完整的 JSON:漫剧第 2 场的布景,分镜 20 镜,它只搭了 6 个镜头的
+    布景台(上一轮同一个节点给满了 20 个)—— 到第 7 镜才炸「场景里没有镜头 shot-7」,前面的出图已经花出去了。
+    条数取决于运行时的上游,写不进静态的 Schema,所以单独一格。
+    """
+    field = str(config.get("json_match_field") or "").strip()
+    expected = config.get("json_match_items")
+    if not field or not isinstance(expected, list) or not isinstance(value, dict):
+        return
+    got = value.get(field)
+    have = len(got) if isinstance(got, list) else 0
+    if have >= len(expected):
+        return
+    reason = f"$.{field}: {have} / {len(expected)}"
+    raise _BadJson(
+        "wfErr_llmItemsShort",
+        reason,
+        f"你上一次的回答里 `{field}` 只有 {have} 项,而上游有 {len(expected)} 项,每一项都要有对应的一条。"
+        f"缺的是第 {have + 1}–{len(expected)} 项:请补齐它们,已有的原样保留,重新输出完整对象。",
+        {**base, "items_field": field, "items_have": have, "items_expected": len(expected)},
+        {"field": field, "have": have, "expected": len(expected)},
+    )
 
 
 #: 一次最多给模型看几张图。多了既贵又容易超上下文;多数视觉模型也有自己的张数上限。

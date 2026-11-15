@@ -132,3 +132,11 @@ def test_接力出片的取尾帧那条边也改接到判断上() -> None:
 def test_整片生成不受影响_生成视频照旧挂在白模之后() -> None:
     body = _shots(full_video_generation_graph(chat=CHAT, image=IMAGE, video=VIDEO))
     assert _control_into(body, "generate_clip") == {("render_blockout", None)}
+
+
+def test_布景台要和分镜一样多_少了当场补齐() -> None:
+    """模型长输出时会提前收尾:实测分镜 20 镜,布景只搭了 6 镜,到第 7 镜才炸。整片和漫剧同一个布景节点。"""
+    for graph in (_drama(), full_video_generation_graph(chat=CHAT, image=IMAGE, video=VIDEO)):
+        config = _node(graph, "set_design")["config"]
+        assert config["json_match_field"] == "shots"
+        assert config["json_match_items"] == "{{storyboard.json.shots}}"

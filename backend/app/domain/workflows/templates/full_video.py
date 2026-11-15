@@ -1056,6 +1056,10 @@ JSON Schema 的对象。"""
                 "json_schema_name": "blockout_scene",
                 "json_schema": set_design_schema(),
                 "json_schema_strict": "true",
+                #: 每一镜都要有它的布景台:模型长输出时会提前收尾,交回合法却只搭了几镜的 JSON(实测 20 镜只给 6 镜),
+                #: 到逐镜那一步才炸「场景里没有镜头 shot-7」。少了当场打回去补齐。
+                "json_match_field": "shots",
+                "json_match_items": "{{storyboard.json.shots}}",
                 "temperature": 0.2,
                 #: 每镜一个布景台(房间、陈设、人偶、相机与轨迹),20 镜同样写得很长;和分镜同一个上限。
                 "max_tokens": 32000,

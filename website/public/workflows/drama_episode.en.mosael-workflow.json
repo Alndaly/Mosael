@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Drama episode",
   "description": "Shoot one episode of a short drama: the same pipeline as \"Topic to finished video\" — reuse library characters and locations, storyboard, 3D blockout cameras, per-shot keyframes — but the script and storyboard are **driven by dialogue** (narration only sets the scene) and dialogue shots face the speaker; **every shot with a character's line makes the keyframe speak** through a speaking-photo model, lips following that line's voice (the character's own voice from the library when it has one), while shots without lines are generated from the keyframe as usual. The topic can be a shot-by-shot script (picture, speaker, line). Build the characters (with voices) and locations with \"Series bible\" first, then shoot episode by episode. Cost: as \"Topic to finished video\", with one speaking-photo generation in place of the video for each dialogue shot.",
-  "graph_hash": "f37c98f46f26cc983d836ef5f33d25e80366bad64a42ce283b7dfd923d6bfa42",
+  "graph_hash": "7117a13790f4422bc3a67f3cbfbcbcf4a0d04c429496a79d0a4585139497e39f",
   "graph": {
     "meta": {
       "template_id": "drama_episode",
@@ -1245,6 +1245,8 @@
             "additionalProperties": false
           },
           "json_schema_strict": "true",
+          "json_match_field": "shots",
+          "json_match_items": "{{storyboard.json.shots}}",
           "temperature": 0.2,
           "max_tokens": 32000
         }
