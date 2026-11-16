@@ -1,5 +1,15 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.5": {
+    zh: [
+      "**屏幕 + 摄像头在 Windows 上不再丢摄像头声音。** 抓屏开始后重新采集麦克风，摄像头画面继续使用已预热的流；新麦克风打不开时退回纯画面，不取消整次双路录制。",
+      "**屏幕 + 麦克风显示实时电平和设备选择。** 打开麦克风开关后，录制前就能看到电平、选择设备并在需要时申请授权；录制中继续显示同一条麦克风。",
+    ],
+    en: [
+      "**Screen + camera no longer loses camera audio on Windows.** The microphone is re-opened after screen capture starts while the camera picture keeps its warmed-up stream; if the new microphone cannot open, the camera file falls back to video-only instead of cancelling both captures.",
+      "**Screen + microphone now shows a live level and device picker.** With the microphone switch on, you can check the level, choose a device and request permission before recording; the same microphone stays visible while recording.",
+    ],
+  },
   "v2.6.4": {
     zh: [
       "**Windows 安装包改名为 Mosael-Setup-<版本>.exe。** 文件名不再带空格，GitHub、R2 下载源与更新元数据一致，修复配置了 R2 更新源时 Windows 应用内更新下载 404。",

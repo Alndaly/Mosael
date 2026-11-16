@@ -3,6 +3,13 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.6.5] - 2026-11-16
+
+### 录制
+
+- **屏幕 + 摄像头在 Windows 上不再丢摄像头声音。** 抓屏开始后重新采集麦克风，摄像头画面继续复用已预热的流；新麦克风打不开时退回纯画面，不取消整次双路录制。
+- **屏幕 + 麦克风显示实时电平和设备选择。** 打开麦克风开关后，录制前就能看到电平、选择设备并在需要时申请授权；录制中继续显示同一条麦克风。
+
 ## [2.6.4] - 2026-11-16
 
 ### 应用内更新

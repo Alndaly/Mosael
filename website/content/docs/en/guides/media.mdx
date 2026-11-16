@@ -5,7 +5,7 @@ seo_title: Media library: import, record and download video
 keywords: media library, video downloader, screen recording, asset tags
 order: 7
 updated: 2026-11-01
-version: 2.6.4
+version: 2.6.5
 ---
 
 The media library is where every file enters Mosael: local uploads, screen/camera recordings,
@@ -38,13 +38,16 @@ editable on the timeline. If either capture is empty, neither file is imported, 
 
 Enable **Mirror camera** for a selfie-style composition. Both the camera preview and saved camera asset
 are flipped horizontally, while the screen asset stays unchanged. The choice is remembered for later recordings.
+When screen + camera starts capturing the screen, it re-opens the microphone while the camera picture keeps
+the warmed-up video stream; if the new microphone cannot open, the camera asset falls back to video-only
+instead of cancelling both captures.
 
 Mosael does not access the camera or microphone merely because the recorder was opened. After selecting a mode
 that needs those devices, choose **Allow access** to trigger the operating-system prompts. Once access is granted,
 selecting a mode with the camera opens it right away with a live preview (mirroring applies to the preview too), and
 recording takes over that same stream — so the dark first moments while a freshly opened camera settles its exposure
 are not recorded. Switching to a mode without the camera, or closing the recorder, releases it. Modes that record the microphone
-(camera, screen + camera, microphone) likewise open it once access is granted and show a live input level, so you can
+(camera, screen + camera, screen + microphone, microphone) likewise open it once access is granted and show a live input level, so you can
 confirm there is sound before recording; the level stays in the floating controller while recording. A denied permission
 stays visible as an actionable state with links to the relevant system settings and a retry action. Screen and
 system-audio consent is requested by the operating system's sharing picker, as required by macOS.
