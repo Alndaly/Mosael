@@ -149,6 +149,7 @@
       ]
     },
     "nsis": {
+      "artifactName": "Mosael-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "include": "build/installer.nsh",

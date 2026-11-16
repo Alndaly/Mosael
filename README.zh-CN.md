@@ -33,7 +33,7 @@ Mosael 是一款把视频从构思做到发布的桌面软件：**AI 生成、�
 | 平台 | 安装包 | 说明 |
 | --- | --- | --- |
 | macOS | `Mosael-<版本>-arm64.dmg` | Apple 芯片(M 系列)，已签名并通过 Apple 公证 |
-| Windows | `Mosael Setup <版本>.exe` | Windows 10 / 11，x64 |
+| Windows | `Mosael-Setup-<版本>.exe` | Windows 10 / 11，x64 |
 
 国内用户走 **[百度网盘](https://mosael.com/zh/docs/start/download)**，其他地区从
 **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)** 下载，两边是同一份安装包。

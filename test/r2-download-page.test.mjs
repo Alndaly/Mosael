@@ -6,12 +6,12 @@ import { renderDownloadPage } from "../scripts/r2-download-page.mjs";
 test("R2 下载页只链接这次真实存在的安装产物", () => {
   const html = renderDownloadPage([
     "Mosael-2.2.3-arm64.dmg",
-    "Mosael Setup 2.2.3.exe",
+    "Mosael-Setup-2.2.3.exe",
     "Mosael-2.2.3-mac-signed.zip",
     "SHA256SUMS",
   ], "v2.2.3");
   assert.match(html, /href="Mosael-2\.2\.3-arm64\.dmg"/);
-  assert.match(html, /href="Mosael%20Setup%202\.2\.3\.exe"/);
+  assert.match(html, /href="Mosael-Setup-2\.2\.3\.exe"/);
   assert.match(html, /href="SHA256SUMS"/);
   assert.doesNotMatch(html, /mac-signed\.zip"/);
   assert.doesNotMatch(html, /browser-extension\.zip"/);

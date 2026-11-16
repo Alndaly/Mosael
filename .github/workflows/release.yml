@@ -294,8 +294,8 @@ jobs:
             node scripts/write-update-metadata.mjs --version "$version" --mac "release/Mosael-$version-mac-signed.zip" --out release
             test -f "release/Mosael-$version-mac-signed.zip.blockmap"
           else
-            node scripts/write-update-metadata.mjs --version "$version" --windows "release/Mosael Setup $version.exe" --out release
-            test -f "release/Mosael Setup $version.exe.blockmap"
+            node scripts/write-update-metadata.mjs --version "$version" --windows "release/Mosael-Setup-$version.exe" --out release
+            test -f "release/Mosael-Setup-$version.exe.blockmap"
           fi
           node scripts/write-release-checksums.mjs --release release
 

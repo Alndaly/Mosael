@@ -34,7 +34,7 @@ already pay for — Mosael doesn't resell credits — and keeps your projects an
 | Platform | Installer | Notes |
 | --- | --- | --- |
 | macOS | `Mosael-<version>-arm64.dmg` | Apple silicon (M-series); signed and notarized |
-| Windows | `Mosael Setup <version>.exe` | Windows 10 / 11, x64 |
+| Windows | `Mosael-Setup-<version>.exe` | Windows 10 / 11, x64 |
 
 Get the latest stable build from **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)** (users in
 mainland China can use the [Baidu Netdisk mirror](https://mosael.com/zh/docs/start/download)). Free for personal,

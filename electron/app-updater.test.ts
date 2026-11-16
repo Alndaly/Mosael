@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { gunzipSync } from "node:zlib";
 import { join } from "node:path";
@@ -161,7 +161,7 @@ describe("更新元数据", () => {
   it("从最终 ZIP / NSIS 生成带 sha512 的 latest-mac.yml / latest.yml", () => {
     const dir = mkdtempSync(join(tmpdir(), "mosael-update-metadata-"));
     const mac = join(dir, "Mosael-2.2.2-mac-signed.zip");
-    const windows = join(dir, "Mosael Setup 2.2.2.exe");
+    const windows = join(dir, "Mosael-Setup-2.2.2.exe");
     writeFileSync(mac, "zip");
     writeFileSync(windows, "exe");
     const root = fileURLToPath(new URL("..", import.meta.url));
@@ -186,9 +186,26 @@ describe("更新元数据", () => {
       expect(blockMap.files[0].sizes.length).toBeGreaterThan(0);
     }
     expect(macYml).toContain("size: 3");
-    expect(winYml).toContain("path: Mosael.Setup.2.2.2.exe");
+    expect(winYml).toContain("path: Mosael-Setup-2.2.2.exe");
     expect(winYml).toContain(`sha512: ${winSha}`);
     expect(winYml).toContain("size: 3");
+  });
+  // 带空格的名字在 GitHub 上被改成点、在 R2 上原样保留,元数据只能对上一处 —— 2.6.2 / 2.6.3 配了 R2 更新源的
+  // Windows 应用内更新因此 404。脚本不替它改名,直接拒绝;命名由 package.json 的 nsis.artifactName 定。
+  it("安装包名里有空白就拒绝生成元数据,不替它改名", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mosael-update-metadata-space-"));
+    const windows = join(dir, "Mosael Setup 2.2.2.exe");
+    writeFileSync(windows, "exe");
+    const root = fileURLToPath(new URL("..", import.meta.url));
+    expect(() => execFileSync(process.execPath, [
+      join(root, "scripts", "write-update-metadata.mjs"), "--version", "2.2.2", "--windows", windows, "--out", dir,
+    ], { cwd: root, stdio: "pipe" })).toThrow(/must not contain whitespace/);
+    expect(existsSync(join(dir, "latest.yml"))).toBe(false);
+  });
+  it("打包配置给 Windows 安装包定的名字不带空白", () => {
+    const root = fileURLToPath(new URL("..", import.meta.url));
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    expect(pkg.build.nsis.artifactName).toBe("Mosael-Setup-${version}.${ext}");
   });
   it("macOS 更新 ZIP 以 Copy 存储 app.asar,让未变块可以复用", () => {
     const dir = mkdtempSync(join(tmpdir(), "mosael-mac-update-package-"));

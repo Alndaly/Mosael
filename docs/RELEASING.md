@@ -118,7 +118,7 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 - 公证完成的 macOS arm64 `.dmg`。
 - 应用内更新产物:macOS `Mosael-VERSION-mac-signed.zip`(同一份已签名/公证的 `.app` ZIP,不是 DMG)和 Windows NSIS 安装包。`latest-mac.yml` / `latest.yml` 由 `scripts/write-update-metadata.mjs` 从**最终二进制**生成并上传;缺了它们,`electron-updater` 找不到更新。
   每个 `.app` / NSIS 包还必须内嵌 `resources/app-update.yml`（由 `build/app-update.yml` 经 `extraResources` 拷入），声明 GitHub owner/repo 和 updater 缓存目录；`test/bundle.smoke.mjs` 会在启动前检查它。只上传元数据而漏掉包内配置，会在下载开始时报 `ENOENT: …/app-update.yml`。
-  差分更新还要发布 macOS `Mosael-VERSION-mac-signed.zip.blockmap` 和 Windows `Mosael Setup VERSION.exe.blockmap`。它们由 `write-update-metadata.mjs` 与元数据同时从最终二进制生成;工作流会检查文件存在并上传。旧版本首次升级时会同时取新旧两份 blockmap,之后更新器按 Range 下载变化块,失败才回退完整包。
+  差分更新还要发布 macOS `Mosael-VERSION-mac-signed.zip.blockmap` 和 Windows `Mosael-Setup-VERSION.exe.blockmap`。它们由 `write-update-metadata.mjs` 与元数据同时从最终二进制生成;工作流会检查文件存在并上传。旧版本首次升级时会同时取新旧两份 blockmap,之后更新器按 Range 下载变化块,失败才回退完整包。
   本机交接注意:artifact 里的 `latest-mac.yml` / `*.blockmap` 是**公证前** ZIP 生成的;`stapler staple` 会改变 `.app` 字节,拿到最终 ZIP 后要重跑 `scripts/write-update-metadata.mjs`,不要直接上传 artifact 里那两份。
   手动交接时:macOS ZIP 用与公证相同的 `Mosael.app` 经 `scripts/pack-mac-update.mjs` 生成,其中 `Contents/Resources/app.asar` 以 `Copy` 存储,其他成员正常压缩并保留符号链接;不要用普通 `ditto` ZIP 替代,否则压缩流变化会让差分退化成整包下载。Windows 用同一次构建的 NSIS 安装包。`write-update-metadata.mjs` 会把 sha512 写进元数据;不要手抄或从旧版复制。
   `SHA256SUMS` 也要覆盖这些 `.blockmap`,不能只核对安装包本体。

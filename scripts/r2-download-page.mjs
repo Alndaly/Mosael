@@ -18,7 +18,8 @@ export function renderDownloadPage(files, tag) {
       detail: "Apple Silicon · DMG",
     },
     {
-      file: files.find((name) => /^Mosael[ .]Setup[ .].*\.exe$/i.test(name)),
+      //: 名字由打包配置定(package.json 的 nsis.artifactName),不带空白 —— 这里只认这一种写法。
+      file: files.find((name) => /^Mosael-Setup-.*\.exe$/.test(name)),
       title: "Windows",
       detail: "x64 · EXE",
     },

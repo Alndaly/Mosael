@@ -28,10 +28,15 @@ function args() {
   return out;
 }
 
-async function yamlFor(version, file, platform) {
-  const name = basename(file);
-  // GitHub 会把 Windows 安装包名里的空格规范化成点;元数据必须指向规范化后的下载地址。
-  const url = platform === "windows" ? name.replace(/\s+/g, ".") : name;
+async function yamlFor(version, file) {
+  const url = basename(file);
+  // **文件名里不许有空白。** 元数据写的名字必须和 GitHub / R2 上的对象一字不差:GitHub 上传时把空格改成点,R2 原样保留,
+  // 带空格的名字于是在两处叫法不同,元数据只能对上其中一处(2.6.2、2.6.3 配了 R2 更新源的 Windows 应用内更新 404)。
+  // 不在这里替它改名 —— 改了就又是一处「元数据里的名字不是文件的名字」。命名在打包配置里定(package.json 的 nsis.artifactName)。
+  if (/\s/.test(url)) {
+    console.error(`update artifact name must not contain whitespace: ${JSON.stringify(url)} (set build.nsis.artifactName)`);
+    exit(1);
+  }
   // 输出文件存在时 buildBlockMap 不改原安装包,返回的仍是它的 size / sha512。
   const { size, sha512 } = await buildBlockMap(file, "gzip", `${file}.blockmap`);
   return [
@@ -64,7 +69,7 @@ for (const [platform, filename] of jobs) {
     console.error(`missing ${platform} artifact: ${file}`);
     exit(1);
   }
-  writeFileSync(resolve(outDir, filename), await yamlFor(options.version, file, platform));
+  writeFileSync(resolve(outDir, filename), await yamlFor(options.version, file));
   console.log(`wrote ${filename} for ${platform}: ${basename(file)} + .blockmap`);
   written += 1;
 }
