@@ -943,6 +943,30 @@ def live(api: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
     return {node_id: node for node_id, node in api.items() if node_id in keep}
 
 
+def executed(api: dict[str, Any], object_info: dict[str, Any], targets: list[str] | None = None) -> dict[str, Any]:
+    """ComfyUI 收到这张图**会校验、会执行**的那部分:输出节点(给了 `targets` 就只是它们)连同全部上游(返回新图)。
+
+    ComfyUI 的 `validate_prompt` 只从输出节点往上游核输入、只执行这一部分 —— 走不到任何输出的节点它根本不碰。
+    这种节点在社区工作流里很常见:KJNodes 的 Set / Get 把一路信号挂成名字,存图的人留下一个没接完的 CLIPTextEncode、
+    读它的 GetNode 后面什么都没接;在 ComfyUI 里照跑。提交前的检查此前对**整张图**逐个节点核,于是被这种半截节点
+    没接的 `clip` 拦下,整张图在 Mosael 里跑不起来(维护者:「有些 comfyui 工作流本身就是会有没有连接的节点」)。
+
+    和 `live` 不是一回事:`live` 还会剪掉**出不来**的输出(上游缺了必填插口),给目录和表单用;这里只剪
+    **走不到输出**的节点,出不来的那一支留着 —— 提交前要把它缺了什么说出来,而不是藏起来。
+
+    认不出的节点(`object_info` 里没有它)连同上游留着:不知道它是不是输出节点。一个输出都认不出时整张图原样交回,
+    由 ComfyUI 自己说「没有输出」。
+    """
+    if not object_info:
+        return api
+    roots = {one for one in targets if one in api} if targets else {node["node"] for node in output_nodes(api, object_info)}
+    if not roots:
+        return api
+    unknown = {node_id for node_id, node in api.items() if str(node.get("class_type", "")) not in object_info}
+    keep = _upstream_closure(api, roots | unknown)
+    return {node_id: node for node_id, node in api.items() if node_id in keep}
+
+
 def media_outputs(api: dict[str, Any], object_info: dict[str, Any] | None = None,
                   titles: dict[str, str] | None = None) -> list[dict[str, str]]:
     """会交出**文件**的输出节点:图、视频、音频,以及认不出种类的自定义输出节点(多半是某种保存节点)。

@@ -411,6 +411,14 @@ A node type counts as missing when it is not in this ComfyUI's object_info **and
 Reroute, PrimitiveNode, KJNodes' Set / Get, rgthree's Fast Groups Bypasser / Label / Bookmark and the like never exist on
 the backend); subgraph instances don't count either.
 
+**Pre-submit checks only cover the part ComfyUI will execute (1.29.1)**: the output nodes (or the one picked with "run
+this node" on the canvas) and everything upstream of them (`graph.executed`). Community workflows often carry half-wired
+nodes that reach no output — an encoder left unconnected next to Set / Get nodes, a Get whose output goes nowhere —
+which ComfyUI neither validates nor runs; Mosael used to check required inputs on every node and refused the whole
+workflow because of them. Required inputs, model files and stale dropdown values are now checked on the executed part
+only; **missing node types are still checked across the whole graph**, because ComfyUI rejects a prompt containing any
+node type it doesn't know.
+
 Mosael can change the workflow files on that machine directly, always through ComfyUI's own userdata API and **never
 overwriting**:
 

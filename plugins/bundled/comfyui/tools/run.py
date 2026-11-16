@@ -143,10 +143,14 @@ def _same_file(name: str) -> str:
     return name.replace("\\", "/")
 
 
-def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[str], list[str], list[str]]:
+def missing(prompt: dict[str, Any], object_info: dict[str, Any],
+            targets: list[str] | None = None) -> tuple[list[str], list[str], list[str]]:
     """这张图要、而这台 ComfyUI 上没有 / 已经对不上的东西:
 
     (没装的节点类型, 「模型文件(#节点 类型 · 输入名)」, 「下拉里没有的值(#节点 类型 · 输入名)」)。
+
+    **两类口径不同,和 ComfyUI 一致**:没装的节点按**整张图**查 —— 图里任何一个它不认识的节点类型,ComfyUI 都整单拒;
+    模型文件和下拉里的值只按**会执行的那部分**查(`graph.executed`)—— 走不到输出的节点 ComfyUI 不核它的输入。
 
     第三类是**存的图和当前的节点对不上**:节点包更新过之后,下拉的选项会变(占位符改个词、选项多一个少一个),
     而工作流里存的是当初那个字符串 —— ComfyUI 到提交时才回一句「Value not in list: prefix: 'X' not in [...]」,
@@ -158,11 +162,14 @@ def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[s
     #: 读素材的节点的槽位不看「值在不在下拉里」:那几格是插件自己写上上传回来的文件名的,下拉是服务器目录里的文件。
     loaders = graph.loader_inputs(prompt, object_info)
     for node_id in sorted(prompt, key=graph._node_order):  # noqa: SLF001 — 同一个插件里的模块
-        node = prompt[node_id]
+        class_type = str(prompt[node_id].get("class_type", ""))
+        if class_type not in object_info and class_type not in nodes:
+            nodes.append(class_type)
+    executed = graph.executed(prompt, object_info, targets)
+    for node_id in sorted(executed, key=graph._node_order):  # noqa: SLF001
+        node = executed[node_id]
         class_type = str(node.get("class_type", ""))
         if class_type not in object_info:
-            if class_type not in nodes:
-                nodes.append(class_type)
             continue
         defs = graph._input_defs(object_info, class_type)  # noqa: SLF001
         for name, value in (node.get("inputs") or {}).items():
@@ -190,7 +197,8 @@ def _named(names: list[str], sep: str) -> str:
     return shown if len(names) <= _MAX_NAMED else f"{shown}{sep}… ({len(names)})"
 
 
-def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) -> None:
+def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str,
+              targets: list[str] | None = None) -> None:
     """提交之前看一眼:这张图要的节点、模型文件这台 ComfyUI 上有没有。缺的**一次说全**,什么都不排上。
 
     ComfyUI 自己每次只说第一个没装的节点(「Node 'X' not found. The custom node may not be installed.」),装好一个才知道
@@ -201,7 +209,7 @@ def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) 
     现在判会把「等一下就有值」的格子误报成缺 —— 那一关在接线之后、POST 出去之前(见 required_inputs)。"""
     if not object_info:
         return
-    nodes, files, stale = missing(prompt, object_info)
+    nodes, files, stale = missing(prompt, object_info, targets)
     zh: list[str] = []
     en: list[str] = []
     if nodes:
@@ -227,7 +235,8 @@ def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) 
         raise ComfyError(say(locale, "".join(zh), " ".join(en)))
 
 
-def required_inputs(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) -> None:
+def required_inputs(prompt: dict[str, Any], object_info: dict[str, Any], locale: str,
+                    targets: list[str] | None = None) -> None:
     """这张图该带的必填输入带齐了吗;缺的现在就说,别交给 ComfyUI 去拒(见 `graph.missing_required`)。
 
     ComfyUI 只在 `/prompt` 回一句英文的「Required input is missing: compare_view」—— 看不出是哪个节点上的哪一格,
@@ -236,7 +245,8 @@ def required_inputs(prompt: dict[str, Any], object_info: dict[str, Any], locale:
     一格(见 convert._complete),不补就会少。"""
     if not object_info:
         return
-    missing_required = graph.missing_required(prompt, object_info)
+    #: 只核 ComfyUI 会执行的那部分(`graph.executed`):走不到输出的半截节点它不核,这里也不该拦。
+    missing_required = graph.missing_required(graph.executed(prompt, object_info, targets), object_info)
     if not missing_required:
         return
     listed = _named(missing_required, "、")
@@ -968,8 +978,8 @@ def _generate_canvas(canvas: dict[str, Any], comfy: Comfy, locale: str, emit: Em
                 "先选一个会产出图片 / 视频 / 音频的输出节点,或者不指定节点跑整张。",
                 f"ComfyUI partial execution can only target output nodes; #{', #'.join(not_output)} is not an output node. "
                 "Pick an output node that produces media, or omit the node to run the whole canvas."))
-    preflight(prompt, info, locale)
-    required_inputs(prompt, info, locale)
+    preflight(prompt, info, locale, targets)
+    required_inputs(prompt, info, locale, targets)
     extra = ({"extra_pnginfo": {"workflow": workflow}}
              if isinstance(workflow, dict) and isinstance(workflow.get("nodes"), list) else None)
     prompt_id = submit(comfy, prompt, client_id, locale, extra, targets)

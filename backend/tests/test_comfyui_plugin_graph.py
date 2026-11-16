@@ -2018,6 +2018,64 @@ def test_必填输入补不出缺省值_跑之前就说清是哪个节点哪一�
     assert run.required_inputs(api, {}, "zh") is None, "不知道节点定义(object_info 拿不到)就不判,交给 ComfyUI 说"
 
 
+#: 一条完整的链(读 CLIP → 编码 → 出图 → 保存)外加几个走不到输出的半截节点 —— 社区工作流里很常见:KJNodes 的
+#: Set / Get 把一路信号挂成名字,存图的人留下一个没接完的编码节点、读它的 GetNode 后面什么都没接。
+_DANGLING_INFO = {
+    "Loader": {"input": {"required": {"name": [["a.safetensors"], {}]}}, "output": ["CLIP"]},
+    "Encode": {"input": {"required": {"clip": ["CLIP", {}], "text": ["STRING", {}]}}, "output": ["COND"]},
+    "Render": {"input": {"required": {"cond": ["COND", {}]}}, "output": ["IMAGE"]},
+    "Save": {"input": {"required": {"images": ["IMAGE", {}]}}, "output": [], "output_node": True},
+}
+
+
+def _dangling_api() -> dict:
+    return {
+        "1": {"class_type": "Loader", "inputs": {"name": "a.safetensors"}},
+        "2": {"class_type": "Encode", "inputs": {"clip": ["1", 0], "text": "a cat"}},
+        "3": {"class_type": "Render", "inputs": {"cond": ["2", 0]}},
+        "4": {"class_type": "Save", "inputs": {"images": ["3", 0]}},
+        #: 半截:没接 clip、后面也什么都没接(真机 zimage_krea2_qwen2.1_compare_test 的 #215)。
+        "9": {"class_type": "Encode", "inputs": {"text": "unused"}},
+        #: 半截:读一个这台机器上没有的模型文件,同样走不到输出。
+        "10": {"class_type": "Loader", "inputs": {"name": "gone.safetensors"}},
+        #: 半截:一个没装的节点包。
+        "11": {"class_type": "SomePackNode", "inputs": {}},
+    }
+
+
+def test_走不到输出的半截节点不拦提交_和ComfyUI只核会执行的部分一致(graph) -> None:
+    """ComfyUI 只从输出节点往上游核、只执行这一部分;Mosael 提交前此前对**整张图**逐个核,被半截节点没接的 `clip`
+    拦下,整张图跑不起来(维护者:「有些 comfyui 工作流本身就是会有没有连接的节点 …… 在 mosael 内会导致无法运行」)。"""
+    import run
+
+    api, info = _dangling_api(), _DANGLING_INFO
+    assert graph.missing_required(api, info) == ["#9 Encode · clip"], "对整张图问,它照样指得出半截节点缺了什么"
+    assert set(graph.executed(api, info)) == {"1", "2", "3", "4", "11"}, "认不出的节点留着:不知道它是不是输出"
+    run.required_inputs(api, info, "zh")  # 不抛:#9 不会执行
+    nodes, files, stale = run.missing(api, info)
+    assert nodes == ["SomePackNode"], "没装的节点在哪儿都算 —— ComfyUI 对图里任何一个不认识的类型都整单拒"
+    assert files == [] and stale == [], "走不到输出的 #10 读的文件不在,ComfyUI 不核它,这里也不报"
+
+
+def test_会执行的那部分真缺了照样拦_只跑某个输出时按它算(graph) -> None:
+    from lines import ComfyError
+    import run
+
+    api, info = _dangling_api(), _DANGLING_INFO
+    del api["3"]["inputs"]["cond"]
+    with pytest.raises(ComfyError) as caught:
+        run.required_inputs(api, info, "zh")
+    assert "#3 Render · cond" in str(caught.value) and "#9" not in str(caught.value)
+
+    #: 第二个输出那一支是好的;画布上「只跑这个节点」指定它时,坏掉的第一支不该拦它。
+    api = {**_dangling_api(), "5": {"class_type": "Render", "inputs": {"cond": ["2", 0]}},
+           "6": {"class_type": "Save", "inputs": {"images": ["5", 0]}}}
+    del api["3"]["inputs"]["cond"]
+    run.required_inputs(api, info, "zh", targets=["6"])
+    with pytest.raises(ComfyError):
+        run.required_inputs(api, info, "zh")
+
+
 def test_补必填不吃掉既有那几种输入(convert, graph) -> None:
     """补的是**缺**的那一格:存下来的 widget 值(按位置对得上)、连上的线、可选的没给、前端专用的
     `upload` / `audioUI`、以及 `hidden` 那几格 —— 一个都不动,一个都不多。"""
