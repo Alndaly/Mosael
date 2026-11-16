@@ -110,6 +110,14 @@ function levelMeter() {
   return screen.queryByRole("meter", { name: "recordLevel" });
 }
 
+function currentAudioGraph() {
+  return FakeAudioContext.instances[FakeAudioContext.instances.length - 1];
+}
+
+function openAudioGraphs() {
+  return FakeAudioContext.instances.filter((context) => !context.closed);
+}
+
 function fakeDevice(kind: MediaDeviceKind, deviceId: string, label: string): MediaDeviceInfo {
   return { kind, deviceId, label, groupId: "group", toJSON: () => ({}) };
 }
@@ -148,6 +156,29 @@ describe("Recorder", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     Reflect.deleteProperty(window, "mosaelDesktop");
+  });
+
+  it("shows the microphone level before and during a screen recording with narration", async () => {
+    grantInputs();
+    localStorage.setItem("mosael.recorder.screenMic", "1");
+    const microphone = fakeMicrophone();
+    const screenCapture = fakeStream({ audio: true });
+    getUserMedia.mockResolvedValueOnce(microphone.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    //: 打开「屏幕 → 麦克风」后,录制前就该看到设备电平;录起来时同一条流继续显示。
+    await waitFor(() => expect(levelMeter()).toBeInTheDocument());
+    expect(currentAudioGraph().stream).toBe(microphone.stream);
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+    await screen.findByRole("button", { name: /recordStop/ });
+    expect(levelMeter()).toBeInTheDocument();
+    expect(currentAudioGraph().stream).toBe(microphone.stream);
+
+    await user.click(screen.getByRole("button", { name: /recordStop/ }));
+    await waitFor(() => expect(openAudioGraphs()).toHaveLength(0));
   });
 
   it("does not request camera or microphone access merely by opening the recorder", async () => {
@@ -736,14 +767,6 @@ describe("Recorder", () => {
   });
 
   describe("microphone level", () => {
-    function currentAudioGraph() {
-      return FakeAudioContext.instances[FakeAudioContext.instances.length - 1];
-    }
-
-    function openAudioGraphs() {
-      return FakeAudioContext.instances.filter((context) => !context.closed);
-    }
-
     it("shows the level of the previewed camera's microphone before and while recording", async () => {
       grantInputs();
       const camera = fakeStream({ audio: true });

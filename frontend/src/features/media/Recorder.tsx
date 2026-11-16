@@ -108,7 +108,6 @@ export function Recorder({
   const [source, setSource] = React.useState<RecordingSource>("screen");
   const capturesScreen = source === "screen" || source === "screenCamera";
   const capturesCamera = source === "camera" || source === "screenCamera";
-  const capturesMicrophone = source !== "screen";
   const [recording, setRecording] = React.useState(false);
   const [minimized, setMinimized] = React.useState(false);
   const [starting, setStarting] = React.useState(false);
@@ -137,6 +136,9 @@ export function Recorder({
     const stored = localStorage.getItem(SCREEN_MIC_STORAGE_KEY);
     return stored === "1";
   });
+  //: 「屏幕 + 麦克风」也是要麦克风的:它同样需要设备选择、授权与录制前的实时电平。
+  //: 摄像头 / 屏幕+摄像头 / 麦克风来源本来就带麦克风;纯屏幕则看这个开关。
+  const capturesMicrophone = source !== "screen" || captureScreenMic;
   const [captureSystemAudio, setCaptureSystemAudio] = React.useState(
     () => localStorage.getItem(SYSTEM_AUDIO_STORAGE_KEY) !== "false",
   );
