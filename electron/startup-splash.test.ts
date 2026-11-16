@@ -46,6 +46,13 @@ describe("后端日志的最后一句", () => {
     expect(lastLogLine(path.join(os.tmpdir(), "no-such-mosael-log.log"))).toBe("");
     expect(lastLogLine(logFile("just noise\n"))).toBe("");
   });
+
+  it("按字符截短:emoji 不会被从中间切开、在末尾留下「�」", () => {
+    const line = lastLogLine(logFile(`2026-10-08 11:08:51 INFO    app.x: ${"装插件🎬".repeat(20)}\n`), 10);
+    expect(Array.from(line)).toHaveLength(10);
+    expect(line).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    expect(line.endsWith("…")).toBe(true);
+  });
 });
 
 describe("小窗的页面", () => {

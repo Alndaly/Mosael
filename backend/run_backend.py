@@ -31,6 +31,10 @@ def config(port: int) -> uvicorn.Config:
 
 
 def main() -> None:
+    #: 第一件事:输出按 UTF-8 写。之后无论是管理命令还是服务本身,写进 backend.log 的中文都不会随系统编码变成乱码。
+    from app.core.logging import write_stdio_as_utf8
+
+    write_stdio_as_utf8()
     from app import cli
 
     if len(sys.argv) > 1 and sys.argv[1] in cli.COMMANDS:

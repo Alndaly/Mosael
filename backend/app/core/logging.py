@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import re
 import sys
@@ -73,6 +74,23 @@ class AccessLogFilter(logging.Filter):
 
 # 每请求一行 INFO 的库,压到 WARNING 免得淹没业务日志。
 _NOISY_LIBRARIES = ("httpx", "httpcore", "urllib3", "openai", "PIL")
+
+
+def write_stdio_as_utf8() -> None:
+    """标准输出、标准错误一律按 UTF-8 写出去,不跟系统的区域编码走。
+
+    桌面壳把后端的输出直接接进 `userData/logs/backend.log`(electron/main.cjs),启动小窗读它的最后一句显示进度,
+    诊断包也把它原样带走。输出是文件而不是终端时,Python 按**区域编码**写:中文 Windows 上是 GBK,而读的一方一律按
+    UTF-8 —— 小窗里那句状态就成了乱码(维护者截图:应用打开后的 loading 窗口状态乱码)。macOS / Linux 的区域编码
+    本来就是 UTF-8,所以只在 Windows 上露出来。
+
+    不用 `PYTHONUTF8` / `PYTHONIOENCODING` 环境变量:打包版是 PyInstaller 冻结的,它不读 `PYTHON*` 环境变量。
+    写不出的字符(孤立的代理项)转成 `\\x..` 转义,不让一行日志因为一个字符把进程打断。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        #: 没有控制台时(Windows 的 GUI 子系统)这两个可能是 None;被测试替换成别的对象时也不是 TextIOWrapper。
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
 
 
 def configure_logging() -> None:

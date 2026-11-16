@@ -39,7 +39,10 @@ function lastLogLine(file, maxChars = 140) {
   const lines = text.split(/\r?\n/);
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const match = LOG_LINE.exec(lines[index].trim());
-    if (match && match[1]) return match[1].length > maxChars ? `${match[1].slice(0, maxChars - 1)}…` : match[1];
+    if (!match || !match[1]) continue;
+    //: 按字符截,不按 UTF-16 单元截:emoji 这类字符占两个单元,从中间切开会在末尾留下一个「�」。
+    const characters = Array.from(match[1]);
+    return characters.length > maxChars ? `${characters.slice(0, maxChars - 1).join("")}…` : match[1];
   }
   return "";
 }
