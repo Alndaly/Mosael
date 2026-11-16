@@ -48,6 +48,7 @@ class FakeMediaRecorder {
 function fakeStream({ audio = false }: { audio?: boolean } = {}) {
   let onEnded: EventListener | null = null;
   const track = {
+    kind: "video",
     stop: vi.fn(),
     getSettings: () => ({ width: 1280, height: 720, frameRate: 30 }),
     addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
@@ -60,14 +61,23 @@ function fakeStream({ audio = false }: { audio?: boolean } = {}) {
     }),
   };
   const audioTrack = {
+    kind: "audio",
     stop: vi.fn(),
     readyState: "live" as MediaStreamTrackState,
   };
+  const tracks: Array<typeof track | typeof audioTrack> = audio ? [track, audioTrack] : [track];
   return {
     stream: {
-      getTracks: () => (audio ? [track, audioTrack] : [track]),
-      getVideoTracks: () => [track],
-      getAudioTracks: () => (audio ? [audioTrack] : []),
+      getTracks: () => [...tracks],
+      getVideoTracks: () => tracks.filter((one) => one.kind === "video"),
+      getAudioTracks: () => tracks.filter((one) => one.kind === "audio"),
+      addTrack: (next: typeof track | typeof audioTrack) => {
+        if (!tracks.includes(next)) tracks.push(next);
+      },
+      removeTrack: (next: typeof track | typeof audioTrack) => {
+        const index = tracks.indexOf(next);
+        if (index >= 0) tracks.splice(index, 1);
+      },
     } as unknown as MediaStream,
     track,
     audioTrack,
@@ -77,7 +87,7 @@ function fakeStream({ audio = false }: { audio?: boolean } = {}) {
 
 /** A microphone-only stream, as the mic source opens it. */
 function fakeMicrophone() {
-  const audioTrack = { stop: vi.fn(), readyState: "live" as MediaStreamTrackState };
+  const audioTrack = { kind: "audio", stop: vi.fn(), readyState: "live" as MediaStreamTrackState };
   return {
     stream: {
       getTracks: () => [audioTrack],
@@ -547,8 +557,9 @@ describe("Recorder", () => {
     it("keeps the previewed camera for the screen and camera session until the screen is picked", async () => {
       grantInputs();
       const camera = fakeStream({ audio: true });
+      const freshMicrophone = fakeMicrophone();
       const screenCapture = fakeStream({ audio: true });
-      getUserMedia.mockResolvedValueOnce(camera.stream);
+      getUserMedia.mockResolvedValueOnce(camera.stream).mockResolvedValueOnce(freshMicrophone.stream);
       getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
       const user = userEvent.setup();
 
@@ -559,7 +570,10 @@ describe("Recorder", () => {
       await user.click(screen.getByRole("button", { name: /recordStart/ }));
       await screen.findByRole("button", { name: /recordStop/ });
 
-      expect(getUserMedia).toHaveBeenCalledOnce();
+      // The camera picture is reused; the microphone is re-opened after the screen picker.
+      expect(getUserMedia).toHaveBeenCalledTimes(2);
+      expect(getUserMedia).toHaveBeenLastCalledWith({ audio: true });
+      expect(camera.stream.getAudioTracks()).toEqual([freshMicrophone.audioTrack]);
       expect(FakeMediaRecorder.streams).toEqual([screenCapture.stream, camera.stream]);
     });
 
@@ -644,10 +658,14 @@ describe("Recorder", () => {
     it("keeps the preview when the screen picker fails, and never leaks a camera the recording took", async () => {
       grantInputs();
       const camera = fakeStream({ audio: true });
+      const freshMicrophone = fakeMicrophone();
       const reopened = fakeStream({ audio: true });
       const mute = fakeStream();
       const screenCapture = fakeStream({ audio: true });
-      getUserMedia.mockResolvedValueOnce(camera.stream).mockResolvedValueOnce(reopened.stream);
+      getUserMedia
+        .mockResolvedValueOnce(camera.stream)
+        .mockResolvedValueOnce(freshMicrophone.stream)
+        .mockResolvedValueOnce(reopened.stream);
       getDisplayMedia.mockResolvedValueOnce(mute.stream).mockResolvedValueOnce(screenCapture.stream);
       const user = userEvent.setup();
 
@@ -676,7 +694,7 @@ describe("Recorder", () => {
       expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
       expect(screenCapture.track.stop).toHaveBeenCalledOnce();
       await waitFor(() => expect(previewVideo().srcObject).toBe(reopened.stream));
-      expect(getUserMedia).toHaveBeenCalledTimes(2);
+      expect(getUserMedia).toHaveBeenCalledTimes(3);
       expect(screen.getByRole("button", { name: /recordStart/ })).toBeEnabled();
     });
 
@@ -756,8 +774,9 @@ describe("Recorder", () => {
     it("shows the level for the screen and camera session from the camera's microphone", async () => {
       grantInputs();
       const camera = fakeStream({ audio: true });
+      const freshMicrophone = fakeMicrophone();
       const screenCapture = fakeStream({ audio: true });
-      getUserMedia.mockResolvedValueOnce(camera.stream);
+      getUserMedia.mockResolvedValueOnce(camera.stream).mockResolvedValueOnce(freshMicrophone.stream);
       getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
       const user = userEvent.setup();
 

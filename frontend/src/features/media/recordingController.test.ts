@@ -10,17 +10,26 @@ import type { RecordingInput, RecordingSession } from "./recordingSession";
 function fakeStream({ audio = false }: { audio?: boolean } = {}) {
   const listeners = new Map<string, EventListener>();
   const videoTrack = {
+    kind: "video",
     stop: vi.fn(),
     addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
     removeEventListener: vi.fn((type: string, listener: EventListener) => {
       if (listeners.get(type) === listener) listeners.delete(type);
     }),
   };
-  const audioTrack = { stop: vi.fn(), readyState: "live" as MediaStreamTrackState };
+  const audioTrack = { kind: "audio", stop: vi.fn(), readyState: "live" as MediaStreamTrackState };
+  const tracks: unknown[] = audio ? [videoTrack, audioTrack] : [videoTrack];
   const stream = {
-    getTracks: () => (audio ? [videoTrack, audioTrack] : [videoTrack]),
-    getVideoTracks: () => [videoTrack],
-    getAudioTracks: () => (audio ? [audioTrack] : []),
+    getTracks: () => [...tracks],
+    getVideoTracks: () => tracks.filter((track) => (track as { kind?: string }).kind === "video"),
+    getAudioTracks: () => tracks.filter((track) => (track as { kind?: string }).kind === "audio"),
+    addTrack: (track: unknown) => {
+      if (!tracks.includes(track)) tracks.push(track);
+    },
+    removeTrack: (track: unknown) => {
+      const index = tracks.indexOf(track);
+      if (index >= 0) tracks.splice(index, 1);
+    },
   } as unknown as MediaStream;
   return {
     stream,
@@ -53,8 +62,11 @@ function dependencies(overrides: Partial<RecordingControllerDependencies> = {}) 
 
 const filenames = { screen: "screen", camera: "camera", mic: "mic" };
 
-function inputSource(stream: MediaStream | Promise<MediaStream>) {
-  return { take: vi.fn(() => Promise.resolve(stream)) };
+function inputSource(stream: MediaStream | Promise<MediaStream>, microphone?: MediaStream | Promise<MediaStream>) {
+  return {
+    take: vi.fn(() => Promise.resolve(stream)),
+    ...(microphone ? { takeMicrophone: vi.fn(() => Promise.resolve(microphone)) } : {}),
+  };
 }
 
 const noInputs = { take: vi.fn(() => Promise.reject(new Error("no camera expected"))) };
@@ -102,6 +114,62 @@ describe("recording controller", () => {
 
     screen.end();
     expect(requestStop).toHaveBeenCalledOnce();
+  });
+
+  it("re-takes the camera microphone after the screen is acquired", async () => {
+    const screen = fakeStream({ audio: true });
+    const camera = fakeStream({ audio: true });
+    const freshMicrophone = fakeStream({ audio: true });
+    const deps = dependencies();
+    deps.getDisplayMedia.mockResolvedValue(screen.stream);
+    const camera$ = inputSource(camera.stream, freshMicrophone.stream);
+    const controller = createRecordingController(deps.value);
+
+    const active = await controller.start({
+      source: "screenCamera",
+      captureSystemAudio: true,
+      inputs: camera$,
+      mirrorCamera: false,
+      filenames,
+      requestStop: vi.fn(),
+    });
+
+    //: 屏幕选择器之前打开的麦克风轨可能已经在 Windows 上失效;录制必须用它之后新开的那一条。
+    expect(camera$.takeMicrophone).toHaveBeenCalledOnce();
+    expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
+    expect(camera.stream.getAudioTracks()).toEqual(freshMicrophone.stream.getAudioTracks());
+    expect(deps.createSession).toHaveBeenCalledWith(
+      [
+        { kind: "screen", stream: screen.stream, filenamePrefix: "screen" },
+        { kind: "camera", stream: camera.stream, filenamePrefix: "camera" },
+      ],
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+    expect(active.previewStreams.microphone).toBe(camera.stream);
+  });
+
+  it("falls back to a video-only camera capture when re-taking the microphone fails", async () => {
+    const screen = fakeStream({ audio: true });
+    const camera = fakeStream({ audio: true });
+    const deps = dependencies();
+    deps.getDisplayMedia.mockResolvedValue(screen.stream);
+    const camera$ = {
+      take: vi.fn(() => Promise.resolve(camera.stream)),
+      takeMicrophone: vi.fn(() => Promise.reject(new DOMException("busy", "NotReadableError"))),
+    };
+    const controller = createRecordingController(deps.value);
+
+    await controller.start({
+      source: "screenCamera",
+      captureSystemAudio: true,
+      inputs: camera$,
+      mirrorCamera: false,
+      filenames,
+      requestStop: vi.fn(),
+    });
+
+    expect(camera.stream.getAudioTracks()).toEqual([]);
+    expect(camera.audioTrack.stop).toHaveBeenCalledOnce();
   });
 
   it("mirrors the camera from its stream alone, while the preview shows the raw camera", async () => {

@@ -26,7 +26,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { createInputPreview } from "./inputPreview";
 import { AudioLevelMeter, MicrophoneLevelMeter } from "./MicrophoneLevelMeter";
-import { selectableRecordingDevices } from "./recordingDevices";
+import { exactRecordingDevice, selectableRecordingDevices } from "./recordingDevices";
 import {
   createRecordingController,
   RecordingCancelledError,
@@ -349,7 +349,12 @@ export function Recorder({
         //: 只有「纯屏幕」这一档才需要它:摄像头 / 屏幕+摄像头 / 麦克风来源本来就带麦克风
         //: (屏幕+摄像头那条的摄像头流里就有麦克风),再取一次会抢走本该给摄像头的那一份。
         captureMicrophone: source === "screen" && captureScreenMic,
-        inputs: { take: () => inputPreview.take({ cameraId: previewCameraId, micId }) },
+        inputs: {
+          take: () => inputPreview.take({ cameraId: previewCameraId, micId }),
+          //: 屏幕 + 摄像头时,摄像头那份的麦克风要在屏幕取流之后再开一次:预览里的音轨是
+          //: 系统屏幕选择器之前打开的,Windows 上抓屏开始后可能已经收不到声音(见控制器)。
+          takeMicrophone: () => navigator.mediaDevices.getUserMedia({ audio: exactRecordingDevice(micId) }),
+        },
         mirrorCamera,
         filenames: {
           screen: t("record_screen_file"),

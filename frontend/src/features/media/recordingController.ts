@@ -12,12 +12,18 @@ export type RecordingSource = "screen" | "camera" | "screenCamera" | "mic";
 export type RecordingPermissionIssue = "screen" | "systemAudio" | "cameraMicrophone" | "microphone";
 
 /**
- * Supplies the stream of the recording's own input devices: camera + microphone for camera
+ * Supplies the streams of the recording's own input devices: camera + microphone for camera
  * sources, the microphone alone for the mic source. Ownership transfers on take(): the recording
  * stops the stream when it ends or fails to start.
+ *
+ * `takeMicrophone` is used by screen + camera: the preview opens camera + microphone before the
+ * screen picker, and Windows can leave that microphone track silent once display capture starts.
+ * Re-taking the microphone after the screen is acquired keeps the camera picture warm while
+ * giving the recording a fresh audio track.
  */
 export interface RecordingInputSource {
   take(): Promise<MediaStream>;
+  takeMicrophone?(): Promise<MediaStream>;
 }
 
 export interface RecordingStartOptions {
@@ -219,6 +225,39 @@ export function createRecordingController(
           cameraStream = await options.inputs.take();
           acquiredStreams.add(cameraStream);
           assertStarting();
+
+          //: **屏幕 + 摄像头**:摄像头+麦克风的预览流在系统屏幕选择器之前就打开了。Windows 上
+          //: 开始抓屏后,这条预览流里的麦克风轨可能变成静音;纯「屏幕 + 麦克风」之所以没坏,是
+          //: 因为它的麦克风是在屏幕取流**之后**才要的。这里按同一条顺序补一次:画面继续用已经
+          //: 预热好的摄像头,只把音轨换成屏幕取流之后新打开的麦克风。
+          if (capturesScreen && options.inputs.takeMicrophone && cameraStream.getAudioTracks().length > 0) {
+            let refreshedMicrophone: MediaStream | null = null;
+            //: 先放掉预览在屏幕选择器之前打开的那条麦克风轨。设备独占时,不先放掉就开不出
+            //: 第二条;而这条旧轨正是可能已经被抓屏弄哑的那一条。
+            const oldTracks = cameraStream.getAudioTracks();
+            for (const track of oldTracks) {
+              cameraStream.removeTrack(track);
+              track.stop();
+            }
+            try {
+              refreshedMicrophone = await options.inputs.takeMicrophone();
+              acquiredStreams.add(refreshedMicrophone);
+              assertStarting();
+              const freshTracks = refreshedMicrophone.getAudioTracks();
+              if (freshTracks.length === 0) throw new Error("The refreshed microphone has no audio track.");
+              for (const track of freshTracks) cameraStream.addTrack(track);
+            } catch (error) {
+              if (error instanceof RecordingCancelledError) throw error;
+              //: 补音失败(设备被独占 / 权限刚被收走)时让摄像头那份退回纯画面 ——
+              //: 不能让整次双路录制因为补音失败而取消。
+              if (refreshedMicrophone) {
+                acquiredStreams.delete(refreshedMicrophone);
+                stopStream(refreshedMicrophone);
+              }
+              refreshedMicrophone = null;
+            }
+            if (refreshedMicrophone) transferToInput(refreshedMicrophone);
+          }
 
           if (options.mirrorCamera) {
             const capture = dependencies.createMirroredCapture(cameraStream);
