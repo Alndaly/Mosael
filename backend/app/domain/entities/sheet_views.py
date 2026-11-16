@@ -36,11 +36,7 @@ VIEW_ROLES: dict[str, tuple[str, ...]] = {
 
 
 def attach_sheet_views(db: Session, entity: Entity) -> list[str]:
-    """把这个资产上还没拆过的拼版图拆成单张视图挂回来,交回它**全部**的单张视图(按 VIEW_ROLES 的先后,同一种按挂的先后)。
-
-    交回的不只是这次切出来的:库里本来就挂着的正面照、全景之外的反打图也算 —— 只挂了一张正面照的人物照样交得出它。
-    一张拼版图都没有、也没有单张视图的(老的全景场景)交回空列表。
-    """
+    """把这个资产上还没拆过的拼版图拆成单张视图挂回来,交回它该交给出图模型的参考图(见 `model_references`)。"""
     refs = references_of(db, entity.id)
     attached = {asset.id for _ref, asset in refs}
     for ref, sheet in refs:
@@ -53,7 +49,19 @@ def attach_sheet_views(db: Session, entity: Entity) -> list[str]:
             continue
         for piece, role in zip(split_image_grid(db, sheet, grid=grid, gutter=True), roles, strict=True):
             entity = add_reference(db, entity, piece.id, role)
+    return model_references(db, entity)
+
+
+def model_references(db: Session, entity: Entity) -> list[str]:
+    """交给出图模型的参考图:**只有单张图**,拼版图(三视图、设计稿)一张都不交 —— 交了就会被照搬成几宫格。
+
+    排序:先单张视图,按 VIEW_ROLES 的先后(人物正 → 侧 → 背,场景俯视 → 反打 → 细节),同一种按挂的先后;再是
+    其它单张图(全身照、全景、概念图……),按挂的先后。一张单张图都没有时交回空列表,由调用方决定这算不算错
+    (拆视图节点报错,见 workflows.executors.entities.entity_sheet_views)—— 这里不拿拼版图顶上。
+    """
+    images = [(position, ref.role, asset.id) for position, (ref, asset) in enumerate(references_of(db, entity.id))
+              if asset.kind == "image" and ref.role not in SHEET_VIEWS]
     rank = {role: index for index, role in enumerate(VIEW_ROLES.get(entity.kind, ()))}
-    views = [(rank[ref.role], position, asset.id) for position, (ref, asset) in enumerate(references_of(db, entity.id))
-             if ref.role in rank and asset.kind == "image"]
-    return [asset_id for _rank, _position, asset_id in sorted(views)]
+    others = len(rank)
+    return [asset_id for _rank, _position, asset_id in
+            sorted((rank.get(role, others), position, asset_id) for position, role, asset_id in images)]

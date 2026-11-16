@@ -76,9 +76,9 @@ def test_AI_工作台_点名资产_请求里记下拼好的提示词和挂上的
     assert request["prompt_notes"] == ["张三: 黑色短发,红围巾"]
     assert prompt_for_provider(request) == "张三走过老街\n\n张三: 黑色短发,红围巾"
     assert request["source_assets"] == [
-        {"asset_id": "sheet", "role": "reference_image"}, {"asset_id": "front", "role": "reference_image"},
+        {"asset_id": "front", "role": "reference_image"}, {"asset_id": "sheet", "role": "reference_image"},
     ]
-    assert request["entities"][0]["attached"] == ["sheet", "front"]
+    assert request["entities"][0]["attached"] == ["front", "sheet"]
     assert request["entities"][0]["dropped"] == []
 
     # 已经挂了首帧:和参考图互斥,一张不挂,回执里说为什么。
@@ -89,7 +89,7 @@ def test_AI_工作台_点名资产_请求里记下拼好的提示词和挂上的
     }).json()["generation"]["request"]
     assert blocked["source_assets"] == [{"asset_id": "first", "role": "first_frame"}]
     assert blocked["entities"][0]["notes"] == ["exclusive"]
-    assert blocked["entities"][0]["dropped"] == ["sheet", "front"]
+    assert blocked["entities"][0]["dropped"] == ["front", "sheet"]
 
 
 def test_点名别的工作区的资产_提交当场拒() -> None:

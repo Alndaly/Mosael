@@ -3,8 +3,8 @@
 纯测量,不碰数据库:输入一个文件路径(音频,或者视频 —— 取音轨)和可选的 [start, end)。
 同一个文件、同一个窗口、同一个 `MEASURE_VERSION` 永远得出同一份报告,调用方据此缓存。
 
-    report = listen(path, start=0, end=None, expect="music")
-    png = spectrogram_png(path)
+    report = listen(path, start=0, end=None, expect="music")      # 本模块
+    png = spectrogram.spectrogram_png(path)                       # 各子模块的名字从子模块取
 
 各模块各管一样(见各自的说明):`decode` 解码,`levels` 电平,`gaps` 连贯性,`spectrum` 共用的 STFT,
 `rhythm` 节奏,`timbre` 音色,`sections` 起落,`findings` 问题清单,`spectrogram` 频谱图,`compare` 比较。
@@ -16,14 +16,12 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from app.media.listening.compare import compare
-from app.media.listening.decode import MAX_SECONDS, ListeningError, decode
+from app.media.listening.decode import decode
 from app.media.listening.findings import Expect, findings
 from app.media.listening.gaps import gaps
 from app.media.listening.levels import levels
 from app.media.listening.rhythm import rhythm
 from app.media.listening.sections import sections
-from app.media.listening.spectrogram import spectrogram_png
 from app.media.listening.spectrum import spectrum
 from app.media.listening.timbre import timbre
 from app.media.loudness import measure_loudness
@@ -52,4 +50,4 @@ def listen(path: Path, *, start: float = 0.0, end: float | None = None, expect: 
     }
 
 
-__all__ = ["MAX_SECONDS", "MEASURE_VERSION", "Expect", "ListeningError", "compare", "listen", "spectrogram_png"]
+__all__ = ["MEASURE_VERSION", "listen"]

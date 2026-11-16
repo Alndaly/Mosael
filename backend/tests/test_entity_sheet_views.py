@@ -10,13 +10,15 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
 from app.core.db import SessionLocal
 from app.db.models import Entity
 from app.domain.assets.importer import register_file_asset
 from app.domain.entities.library import add_reference, references_of
-from app.domain.entities.sheet_views import attach_sheet_views
+from app.domain.entities.sheet_views import attach_sheet_views, model_references
+from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.entities import entity_get, entity_sheet_views
 from tests.util import fresh_client, seed_assets
 
@@ -99,7 +101,7 @@ def test_拆过的不再拆_只有正面照的人物照样交出那张正面照(
         db.commit()
 
 
-def test_节点按名字认资产拆开_取资产只要单张视图时不交拼版图() -> None:
+def test_节点按名字认资产拆开_取资产只要单张视图时不交拼版图_找不到资产报错() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     entity_id = _entity(client, ws, "character", "小满")
@@ -111,6 +113,26 @@ def test_节点按名字认资产拆开_取资产只要单张视图时不交拼�
         assert out["entity_id"] == entity_id and out["count"] == 3
         got = entity_get(db, scope, {"kind": "character", "name": "小满", "views": "yes", "limit": 3})
         assert got["asset_ids"] == out["asset_ids"] and sheet.id not in got["asset_ids"]
-        missing = entity_sheet_views(db, scope, {"kind": "character", "name": "没有这个人"})
-        assert missing == {"entity_id": "", "asset_ids": [], "count": 0}, "这一轮没画成的角色不是错"
+        with pytest.raises(WorkflowDomainError):
+            entity_sheet_views(db, scope, {"kind": "character", "name": "没有这个人"})
         db.commit()
+
+
+def test_只交单张图_拼版图一张不交_拿不到单张图就报错() -> None:
+    """交给出图模型的只有单张图(entities.sheet_views.model_references):全身照这类不叫「正面」的单图照样交;
+    拼版图永远不交。只剩一张切不开的拼版图时,拆视图节点**报错**,不拿拼版图顶上、也不交空的往下走。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    seed_assets(ws, {"body": "image", "board": "image"})
+    body_only = _entity(client, ws, "character", "老周")
+    sheet_only = _entity(client, ws, "character", "小林")
+    scope = SimpleNamespace(workspace_id=ws, id="wf", name="测试流程")
+    with SessionLocal() as db:
+        add_reference(db, db.get(Entity, body_only), "body", "full_body")
+        assert model_references(db, db.get(Entity, body_only)) == ["body"]
+        #: 种子素材没有文件,切不开。
+        add_reference(db, db.get(Entity, sheet_only), "board", "turnaround")
+        assert model_references(db, db.get(Entity, sheet_only)) == []
+        with pytest.raises(WorkflowDomainError):
+            entity_sheet_views(db, scope, {"kind": "character", "name": "小林"})
+        db.rollback()

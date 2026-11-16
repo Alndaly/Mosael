@@ -20,7 +20,7 @@ from app.domain.workflows.executors.common import wait_for_job
 from app.domain.workflows.id_values import id_list
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
-from app.domain.entities.sheet_views import VIEW_ROLES, attach_sheet_views
+from app.domain.entities.sheet_views import attach_sheet_views, model_references
 from app.domain.assets.image_grid import ImageGridError
 from app.domain.entities.library import (
     EntityDomainError,
@@ -97,9 +97,8 @@ def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
         tagged = _tagged_asset_ids(db, entity, role)
         images = [one for one in images if one in tagged]
     if _text(config.get("views")) == "yes":
-        #: 单张视图按种类的先后(人物正 → 侧 → 背,场景俯视 → 反打 → 细节),同一种里按挂的先后。
-        order = {asset_id: rank for rank, view in enumerate(VIEW_ROLES.get(entity.kind, ()))
-                 for asset_id in _tagged_asset_ids(db, entity, view)}
+        #: 交给出图模型的那几张,分档取(单张视图 → 其它单图 → 拼版图,见 entities.sheet_views.model_references)。
+        order = {asset_id: rank for rank, asset_id in enumerate(model_references(db, entity))}
         images = sorted((one for one in images if one in order), key=lambda one: order[one])
     picked = images[: max(1, limit)]
     voice = VoiceRef.stored((entity.attributes or {}).get("voice"))
@@ -120,8 +119,13 @@ def entity_get(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
 
 @register("entity_sheet_views")
 def entity_sheet_views(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """点名或按「种类 + 名字」找一个资产,把它的拼版参考图拆成单张视图挂回去(见 entities.sheet_views)。
-    找不到不是错:这个角色 / 场景这一轮没画成,交回空的就是。"""
+    """点名或按「种类 + 名字」找一个资产,把它的拼版参考图拆成单张视图挂回去,交回该给出图模型的单张图
+    (见 entities.sheet_views.model_references)。
+
+    **三种情况都报错,不交空的往下走**:找不到这个资产、拼版图切不开、切完一张单张图都没有。模板里这一步排在
+    「认出或画完这个角色 / 场景」之后,走到这里还拿不到图就是真出了问题;交空的话,后面每一镜的关键帧都在
+    没有长相参考的情况下照画,画出来的人对不上,却没有任何一处说明为什么。
+    """
 
     entity_id = _text(config.get("entity_id"))
     name = _text(config.get("name"))
@@ -134,8 +138,10 @@ def entity_sheet_views(db: Session, scope: RunScope, config: dict[str, Any]) -> 
         else:
             raise WorkflowDomainError("wfErr_entityGetNeedsTarget")
         if entity is None:
-            return {"entity_id": "", "asset_ids": [], "count": 0}
+            raise WorkflowDomainError("wfErr_entityNotFoundByName", params={"name": name or entity_id})
         views = attach_sheet_views(db, entity)
+        if not views:
+            raise WorkflowDomainError("wfErr_entityNoSingleViews", params={"name": entity.name})
     except EntityDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     except ImageGridError as exc:

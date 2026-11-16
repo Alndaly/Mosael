@@ -136,6 +136,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{name}」不是人物 —— 只有人物能生成表情",
         "en": "“{name}” isn't a character — only characters have expressions.",
     },
+    "wfErr_entityNotFoundByName": {"zh": "资产库里没有「{name}」", "en": "There is no “{name}” in the asset library."},
+    "wfErr_entityNoSingleViews": {
+        "zh": "「{name}」没有能交给出图模型的单张参考图 —— 只有三视图、设计稿这类拼版图会被模型照搬成几宫格,先补一张正面图",
+        "en": "“{name}” has no single-view reference image to give an image model — composite sheets (turnarounds, design sheets) get copied as a grid. Add a front view first.",
+    },
     "wfErr_entityNothingDrawn": {"zh": "一张都没画出来", "en": "No image was drawn."},
     "wfErr_entitySaveNeedsName": {"zh": "「存成资产」要一个名字", "en": "Save to asset library needs a name."},
     "wfErr_entitySaveIfExists": {"zh": "同名时怎么办只能是:{options}", "en": "When one exists, choose one of: {options}"},

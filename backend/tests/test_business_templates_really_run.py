@@ -1137,6 +1137,11 @@ class Test整片真跑:
             saved.append(config)
             return {"entity_id": "e", "created": 1, "added": 1, "name": ""}
 
+        #: 资产本身是假的(不进库),拆视图那一步照着 entity_get 交:老周交他那张图,新画的交空。
+        def entity_sheet_views(db, scope, config):
+            known = config.get("name") == "老周"
+            return {"entity_id": "e-zhou" if known else "", "asset_ids": [library] if known else [], "count": int(known)}
+
         def scene_render(db, scope, config):
             shot_id = config["shot_id"]
             return {"first_frame_asset_id": f"blockout-first-{shot_id}", "last_frame_asset_id": f"blockout-last-{shot_id}",
@@ -1146,6 +1151,7 @@ class Test整片真跑:
             "entity_get": entity_get,
             "entity_list": lambda db, scope, config: {"entities": [], "count": 0, "text": ""},
             "entity_save": entity_save,
+            "entity_sheet_views": entity_sheet_views,
             "scene_create": lambda db, scope, config: {"scene_id": "scene-1", "shot_ids": [], "shot_count": 3},
             "scene_render": scene_render,
         }
@@ -1162,7 +1168,9 @@ class Test整片真跑:
         sheets = [one for one in studio.calls["ai_generate"] if one["prompt"].startswith("Character turnaround")]
         assert len(sheets) == 1 and "小林" in sheets[0]["prompt"]
         assert sorted(one["kind"] for one in saved) == ["character", "location"]
-        assert context["character_sheets"]["results"][0] == f"{library}:reference_image"
+        #: 角色这一格交的是「单张视图」那几行(整片模板 30);没有图的那几行是空 id,出图节点解析时跳过。
+        assert parse_source_assets(context["character_sheets"]["results"][0], kind="image") == [
+            {"asset_id": library, "role": "reference_image"}]
 
         clips = sorted((one for one in studio.calls["ai_generate"] if one["kind"] == "video"), key=lambda one: one["prompt"])
         roles = [sorted({source["role"] for source in one["sources"]}) for one in clips]

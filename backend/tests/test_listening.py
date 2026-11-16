@@ -17,7 +17,8 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, User
 from app.domain.analysis.listening import listen_to_assets
 from app.domain.assets.importer import register_file_asset
-from app.media.listening import compare, listen
+from app.media.listening import listen
+from app.media.listening.compare import compare
 from app.media.listening.decode import ListeningError
 from app.media.paths import resolve_key
 from tests.util import fresh_client

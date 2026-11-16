@@ -90,13 +90,14 @@ def test_变体继承母体的提示词描述_名字带上母体(ws) -> None:
     assert expansion.receipt[0]["name"] == "张三 · 冬装"
 
 
-def test_挑图的先后_三视图_正面_全身_其余_只挂图片(ws) -> None:
+def test_挑图的先后_正面_侧面_全身_三视图_其余_只挂图片(ws) -> None:
+    """单张视图排在拼版图前面:三视图交给编辑模型会被照搬成几宫格(ADR 0097 修订六,catalog.ATTACH_PRIORITY)。"""
     zhang = _entity(ws, "张三", "", [
         ("a-side", "side"), ("a-clip", "concept"), ("a-body", "full_body"), ("a-front", "front"),
         ("a-face", "closeup"), ("a-sheet", "turnaround"),
     ])
     expansion = _expand(ws, [zhang], OPENAI_IMAGE_CAPABILITIES)
-    assert _attached(expansion) == ["a-sheet", "a-front", "a-body", "a-side", "a-face"]
+    assert _attached(expansion) == ["a-front", "a-side", "a-body", "a-sheet", "a-face"]
     assert expansion.receipt[0]["dropped"] == [] and expansion.receipt[0]["notes"] == []
 
 
@@ -107,10 +108,10 @@ def test_按描述符的上限挂_挂不下的照实记下(ws) -> None:
         ("a-side", "side"), ("a-body", "full_body"), ("a-front", "front"), ("a-face", "closeup"), ("a-sheet", "turnaround"),
     ])
     expansion = _expand(ws, [zhang], QWEN_EDIT_IMAGE_CAPABILITIES)
-    assert _attached(expansion) == ["a-sheet", "a-front", "a-body"]
+    assert _attached(expansion) == ["a-front", "a-side", "a-body"]
     row = expansion.receipt[0]
-    assert row["attached"] == ["a-sheet", "a-front", "a-body"]
-    assert row["dropped"] == ["a-side", "a-face"]
+    assert row["attached"] == ["a-front", "a-side", "a-body"]
+    assert row["dropped"] == ["a-sheet", "a-face"]
     assert row["notes"] == ["limit"]
 
 
@@ -118,8 +119,8 @@ def test_手挂的参考图先占名额(ws) -> None:
     zhang = _entity(ws, "张三", "", [("a-sheet", "turnaround"), ("a-front", "front"), ("a-body", "full_body")])
     manual = [{"asset_id": "c-front", "role": "reference_image"}]
     expansion = _expand(ws, [zhang], QWEN_EDIT_IMAGE_CAPABILITIES, sources=manual)
-    assert _attached(expansion) == ["c-front", "a-sheet", "a-front"]
-    assert expansion.receipt[0]["dropped"] == ["a-body"]
+    assert _attached(expansion) == ["c-front", "a-front", "a-body"]
+    assert expansion.receipt[0]["dropped"] == ["a-sheet"]
 
 
 def test_两个人轮流挑_不让第一个把名额吃光(ws) -> None:
@@ -127,8 +128,8 @@ def test_两个人轮流挑_不让第一个把名额吃光(ws) -> None:
     li = _entity(ws, "李四", "", [("b-front", "front"), ("b-back", "back"), ("b-sheet", "turnaround")])
     expansion = _expand(ws, [zhang, li], QWEN_EDIT_IMAGE_CAPABILITIES)
     # 名额按轮次分(甲、乙、甲),发出去的清单按资产成组。
-    assert _attached(expansion) == ["a-sheet", "a-front", "b-sheet"]
-    assert [row["attached"] for row in expansion.receipt] == [["a-sheet", "a-front"], ["b-sheet"]]
+    assert _attached(expansion) == ["a-front", "a-body", "b-front"]
+    assert [row["attached"] for row in expansion.receipt] == [["a-front", "a-body"], ["b-front"]]
 
 
 def test_模型不收参考图_一张不挂_提示词照拼(ws) -> None:
@@ -187,7 +188,7 @@ class Test可灵按资产建主体:
         groups: dict[str, list[str]] = {}
         for entry in expansion.source_assets:
             groups.setdefault(entry["subject"], []).append(entry["asset_id"])
-        assert groups == {zhang: ["a-front", "a-sheet"], li: ["b-front", "b-sheet"]}
+        assert groups == {zhang: ["a-front", "a-body"], li: ["b-front", "b-sheet"]}
         validate_against_capabilities("kuaishou", "kling-v3-omni", "video", {}, expansion.source_assets,
                                       capabilities=caps)
 
@@ -298,7 +299,7 @@ def test_姿势和参考图各用各的名额(ws) -> None:
     sitting = _entity(ws, "坐姿", "", [("b-front", "front"), ("b-sheet", "front"), ("c-front", "side")], kind="pose")
     expansion = _expand(ws, [zhang, sitting], POSE_CAPS, shot_angle="front")
     attached = [entry for entry in expansion.source_assets if entry["role"] in ("reference_image", "pose_reference")]
-    assert [one["asset_id"] for one in attached if one["role"] == "reference_image"] == ["a-sheet", "a-front", "a-body"]
+    assert [one["asset_id"] for one in attached if one["role"] == "reference_image"] == ["a-front", "a-body", "a-sheet"]
     assert [one["asset_id"] for one in attached if one["role"] == "pose_reference"] == ["b-front", "b-sheet"]
     assert expansion.receipt[1]["dropped"] == ["c-front"]
 

@@ -19,7 +19,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, User
-from app.media.listening import MEASURE_VERSION, Expect, ListeningError, compare, listen, spectrogram_png
+from app.media.listening import MEASURE_VERSION, listen
+from app.media.listening.compare import compare
+from app.media.listening.decode import ListeningError
+from app.media.listening.findings import Expect
+from app.media.listening.spectrogram import spectrogram_png
 from app.media.paths import resolve_key
 from app.domain.permissions import require_asset
 
@@ -63,7 +67,7 @@ def spectrogram_for(db: Session, user: User, asset_id: str, *, start: float = 0.
 def report_of(asset: Asset, *, start: float, end: float | None, expect: Expect) -> dict[str, Any]:
     cached = _cache_path(asset, "json", start, end, expect)
     if cached.is_file():
-        return json.loads(cached.read_text())
+        return json.loads(cached.read_text(encoding="utf-8"))
     report = listen(_source(asset), start=start, end=end, expect=expect)
     _write(cached, json.dumps(report, ensure_ascii=False).encode())
     return report

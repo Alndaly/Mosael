@@ -148,6 +148,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   entity_list: ListIcon,
   entity_get: UsersRound,
   entity_save: UserRoundPlus,
+  entity_sheet_views: Grid3x3,
   //: 资产格的两项能力:转一圈看别的角度、换几种表情。
   entity_angles: Rotate3d,
   entity_expressions: Smile,

@@ -29,7 +29,7 @@ from app.media.waveform import waveform_path
 from app.ai.providers.contracts.denoise import DenoiseError
 from app.ai.providers.contracts.separation import SeparationError
 from app.domain.analysis.service import AnalysisError
-from app.media.listening import ListeningError
+from app.media.listening.decode import ListeningError
 from app.domain.assets.frames import AssetFrameError
 from app.domain.assets.from_url import UrlImportError, import_image_url, probe_url as probe
 from app.domain.assets.masks import MaskAssetError
