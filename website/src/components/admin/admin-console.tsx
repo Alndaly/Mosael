@@ -136,11 +136,14 @@ function auditActionLabel(action: string, copy: Messages["admin"]): string {
     "user.cancel_subscription": copy.auditUserCancelSubscription,
     "model.create": copy.auditModelCreate,
     "model.update": copy.auditModelUpdate,
+    "model.delete": copy.auditModelDelete,
     "model.price": copy.auditModelPrice,
     "provider.create": copy.auditProviderCreate,
     "provider.update": copy.auditProviderUpdate,
+    "provider.delete": copy.auditProviderDelete,
     "channel.create": copy.auditChannelCreate,
     "channel.update": copy.auditChannelUpdate,
+    "channel.delete": copy.auditChannelDelete,
     "plan.create": copy.auditPlanCreate,
     "plan.update": copy.auditPlanUpdate,
     "plan.delete": copy.auditPlanDelete,
@@ -185,6 +188,30 @@ function Empty({ children }: { children: React.ReactNode }) {
         <p className="m-0 text-sm text-muted-foreground">{children}</p>
       </div>
     </div>
+  );
+}
+
+function DeleteResourceDialog({ copy, title, description, busy, onClose, onConfirm }: {
+  copy: Messages["admin"];
+  title: string;
+  description: string;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild><AButton variant="ghost" disabled={busy}>{copy.cancel}</AButton></DialogClose>
+          <AButton variant="destructive" loading={busy} onClick={onConfirm}>{copy.confirmDelete}</AButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -669,6 +696,21 @@ function ModelsPanel({ copy, locale, models, onChanged, onFailure }: {
 }) {
   const [dialog, setDialog] = useState<{ model: AdminModel | null } | null>(null);
   const [priceFor, setPriceFor] = useState<AdminModel | null>(null);
+  const [deleting, setDeleting] = useState<AdminModel | null>(null);
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await cloudAdmin.deleteModel(deleting.id);
+      setDeleting(null);
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <>
       <Card className="bg-card/60 ring-border">
@@ -681,7 +723,7 @@ function ModelsPanel({ copy, locale, models, onChanged, onFailure }: {
                 <TableCell>{model.current_price ? JSON.stringify(model.current_price.components) : copy.noPrice}</TableCell>
                 <TableCell>{model.active_channel_count}/{model.channel_count}</TableCell>
                 <TableCell><Badge variant={model.listed ? "default" : "secondary"}>{model.listed ? copy.listed : model.not_listed_reasons.map((reason) => modelReasonLabel(reason, copy)).join(", ")}</Badge></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="outline" onClick={() => setPriceFor(model)}>{model.current_price ? copy.priceHistory : copy.addPrice}</AButton></div></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => setDialog({ model })}>{copy.edit}</AButton><AButton size="sm" variant="outline" onClick={() => setPriceFor(model)}>{model.current_price ? copy.priceHistory : copy.addPrice}</AButton><AButton size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleting(model)}>{copy.delete}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -690,6 +732,7 @@ function ModelsPanel({ copy, locale, models, onChanged, onFailure }: {
       </Card>
       {dialog && <ModelDialog copy={copy} model={dialog.model} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
       {priceFor && <PriceDialog copy={copy} locale={locale} model={priceFor} onClose={() => setPriceFor(null)} onSaved={() => { setPriceFor(null); onChanged(); }} onFailure={onFailure} />}
+      {deleting && <DeleteResourceDialog copy={copy} title={copy.deleteModel} description={copy.deleteModelConfirm} busy={busy} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
     </>
   );
 }
@@ -865,6 +908,21 @@ function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
   copy: Messages["admin"]; providers: AdminProvider[]; onChanged: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [dialog, setDialog] = useState<{ provider: AdminProvider | null } | null>(null);
+  const [deleting, setDeleting] = useState<AdminProvider | null>(null);
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await cloudAdmin.deleteProvider(deleting.id);
+      setDeleting(null);
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <>
       <Card className="bg-card/60 ring-border">
@@ -877,7 +935,7 @@ function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
                 <TableCell className="max-w-72 truncate">{provider.base_url}</TableCell>
                 <TableCell>{provider.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ProviderEnabledSwitch copy={copy} provider={provider} onChanged={onChanged} onFailure={onFailure} /></TableCell>
-                <TableCell className="text-right"><AButton size="sm" variant="outline" onClick={() => setDialog({ provider })}>{copy.edit}</AButton></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => setDialog({ provider })}>{copy.edit}</AButton><AButton size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleting(provider)}>{copy.delete}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -885,6 +943,7 @@ function ProvidersPanel({ copy, providers, onChanged, onFailure }: {
         </CardContent>
       </Card>
       {dialog && <ProviderDialog copy={copy} provider={dialog.provider} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
+      {deleting && <DeleteResourceDialog copy={copy} title={copy.deleteProvider} description={copy.deleteProviderConfirm} busy={busy} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
     </>
   );
 }
@@ -991,6 +1050,8 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
   copy: Messages["admin"]; models: AdminModel[]; providers: AdminProvider[]; channels: AdminChannel[]; onChanged: () => void; onFailure: (failure: unknown) => void;
 }) {
   const [dialog, setDialog] = useState<{ channel: AdminChannel | null } | null>(null);
+  const [deleting, setDeleting] = useState<AdminChannel | null>(null);
+  const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState("");
   const test = async (channel: AdminChannel) => {
     setTesting(channel.id);
@@ -1009,6 +1070,19 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
       setTesting("");
     }
   };
+  const remove = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await cloudAdmin.deleteChannel(deleting.id);
+      setDeleting(null);
+      onChanged();
+    } catch (failure) {
+      onFailure(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <>
       <Card className="bg-card/60 ring-border">
@@ -1022,7 +1096,7 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
                 <TableCell>{channel.priority}</TableCell>
                 <TableCell>{channel.has_api_key ? copy.hasKey : "—"}</TableCell>
                 <TableCell><ChannelEnabledSwitch copy={copy} channel={channel} onChanged={onChanged} onFailure={onFailure} /></TableCell>
-                <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton></div></TableCell>
+                <TableCell className="text-right"><div className="flex justify-end gap-2"><AButton size="sm" variant="outline" onClick={() => void test(channel)} loading={testing === channel.id} disabled={Boolean(testing)}>{testing === channel.id ? copy.testing : copy.testChannel}</AButton><AButton size="sm" variant="outline" onClick={() => setDialog({ channel })}>{copy.edit}</AButton><AButton size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleting(channel)}>{copy.delete}</AButton></div></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>
@@ -1030,6 +1104,7 @@ function ChannelsPanel({ copy, models, providers, channels, onChanged, onFailure
         </CardContent>
       </Card>
       {dialog && <ChannelDialog copy={copy} models={models} providers={providers} channel={dialog.channel} onClose={() => setDialog(null)} onSaved={() => { setDialog(null); onChanged(); }} onFailure={onFailure} />}
+      {deleting && <DeleteResourceDialog copy={copy} title={copy.deleteChannel} description={copy.deleteChannelConfirm} busy={busy} onClose={() => setDeleting(null)} onConfirm={() => void remove()} />}
     </>
   );
 }
@@ -1047,7 +1122,7 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
   const submit = async () => {
     setSaving(true);
     try {
-      if (channel) await cloudAdmin.updateChannel(channel.id, { upstream_model: upstream, priority: Number(priority), note, enabled });
+      if (channel) await cloudAdmin.updateChannel(channel.id, { model_id: model, provider_id: provider, upstream_model: upstream, priority: Number(priority), note, enabled });
       else await cloudAdmin.createChannel({ model_id: model, provider_id: provider, upstream_model: upstream, priority: Number(priority), note });
       onSaved();
     } catch (failure) { onFailure(failure); } finally { setSaving(false); }
@@ -1056,8 +1131,8 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{copy.channelProviderHint}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          {!channel && <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.display_label}</SelectItem>)}</SelectContent></Select></Field>}
-          {!channel && <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><SelectContent>{providers.map((one) => <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>)}</SelectContent></Select></Field>}
+          <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.display_label}</SelectItem>)}</SelectContent></Select></Field>
+          <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><SelectContent>{providers.map((one) => <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>)}</SelectContent></Select></Field>
           {!channel && models.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noModelForChannel}</p>}
           {!channel && providers.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noProviderForChannel}</p>}
           <Field label={copy.upstreamModel}><AInput value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
@@ -1082,6 +1157,8 @@ function ChannelEnabledSwitch({ copy, channel, onChanged, onFailure }: {
     setBusy(true);
     try {
       await cloudAdmin.updateChannel(channel.id, {
+        model_id: channel.model_id,
+        provider_id: channel.provider_id,
         upstream_model: channel.upstream_model,
         priority: channel.priority,
         note: channel.note,

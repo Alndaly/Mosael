@@ -251,6 +251,14 @@ def admin_update_model(model_id: str, body: ModelPatch, actor: CurrentAdmin, db:
     return {"model": model}
 
 
+@router.delete("/admin/models/{model_id}", status_code=204)
+def admin_delete_model(model_id: str, actor: CurrentAdmin, db: DbSession) -> Response:
+    admin_console.delete_model(db, model_id)
+    audit.record(db, actor=actor, action="model.delete", target_type="model", target_id=model_id)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/admin/models/{model_id}/prices")
 def admin_prices(model_id: str, _user: CurrentAdmin, db: DbSession) -> dict[str, object]:
     return {"prices": admin_console.list_prices(db, model_id)}
@@ -301,6 +309,14 @@ def admin_update_provider(
     return {"provider": provider}
 
 
+@router.delete("/admin/providers/{provider_id}", status_code=204)
+def admin_delete_provider(provider_id: str, actor: CurrentAdmin, db: DbSession) -> Response:
+    admin_console.delete_provider(db, provider_id)
+    audit.record(db, actor=actor, action="provider.delete", target_type="provider", target_id=provider_id)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/admin/channels")
 def admin_channels(_user: CurrentAdmin, db: DbSession) -> dict[str, object]:
     return {"channels": admin_console.list_channels(db)}
@@ -332,15 +348,25 @@ def admin_update_channel(
     channel = admin_console.update_channel(
         db,
         channel_id,
+        model_id=body.model_id,
+        provider_id=body.provider_id,
         upstream_model=body.upstream_model,
         priority=body.priority,
         note=body.note,
         enabled=body.enabled,
     )
     audit.record(db, actor=actor, action="channel.update", target_type="channel", target_id=channel_id,
-                 detail={"enabled": body.enabled})
+                 detail={"model_id": body.model_id, "provider_id": body.provider_id, "enabled": body.enabled})
     db.commit()
     return {"channel": channel}
+
+
+@router.delete("/admin/channels/{channel_id}", status_code=204)
+def admin_delete_channel(channel_id: str, actor: CurrentAdmin, db: DbSession) -> Response:
+    admin_console.delete_channel(db, channel_id)
+    audit.record(db, actor=actor, action="channel.delete", target_type="channel", target_id=channel_id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/admin/channels/{channel_id}/test")

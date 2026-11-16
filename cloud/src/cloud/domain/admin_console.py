@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx2
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
@@ -34,6 +34,8 @@ from cloud.models import (
     CloudSubscription,
     CloudUpstreamChannel,
     CloudUpstreamProvider,
+    CloudModelPriceComponent,
+    CloudGenerationJob,
     CloudUser,
     new_id,
     now,
@@ -381,6 +383,42 @@ def update_model(db: Session, model_id: str, *, label: str, interaction: str, ca
     return _model_view(db, model, now(), labels[model.id])
 
 
+def delete_model(db: Session, model_id: str) -> None:
+    """删除一个还没被使用过的模型;通道和生成记录会阻止删除。
+
+    生成任务保留用户实际跑过的结果与计费链路,模型配置行不能连带把它们删掉。
+    有通道时先删通道,有历史任务时只能停用 —— 删除入口不替用户做这个决定。
+    """
+    model = db.get(CloudGatewayModel, model_id)
+    if model is None:
+        raise CloudError(404, "model_not_found")
+    channels = int(
+        db.scalar(
+            select(func.count()).select_from(CloudUpstreamChannel).where(CloudUpstreamChannel.model_id == model_id)
+        )
+        or 0
+    )
+    jobs = int(
+        db.scalar(
+            select(func.count()).select_from(CloudGenerationJob).where(CloudGenerationJob.model_id == model_id)
+        )
+        or 0
+    )
+    if channels or jobs:
+        raise CloudError(
+            409,
+            "model_in_use",
+            details={"channels": channels, "jobs": jobs},
+            channels=channels,
+            jobs=jobs,
+        )
+    price_ids = select(CloudModelPrice.id).where(CloudModelPrice.model_id == model_id)
+    db.execute(delete(CloudModelPriceComponent).where(CloudModelPriceComponent.price_id.in_(price_ids)))
+    db.execute(delete(CloudModelPrice).where(CloudModelPrice.model_id == model_id))
+    db.delete(model)
+    db.flush()
+
+
 def _utc_naive(value: datetime) -> datetime:
     return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
 
@@ -491,6 +529,25 @@ def update_provider(
     return _provider_view(provider)
 
 
+def delete_provider(db: Session, provider_id: str) -> None:
+    """删除供应商前先确认没有通道还挂着它;通道删除是独立的显式动作。"""
+    provider = db.get(CloudUpstreamProvider, provider_id)
+    if provider is None:
+        raise CloudError(404, "provider_not_found")
+    channels = int(
+        db.scalar(
+            select(func.count())
+            .select_from(CloudUpstreamChannel)
+            .where(CloudUpstreamChannel.provider_id == provider_id)
+        )
+        or 0
+    )
+    if channels:
+        raise CloudError(409, "provider_in_use", details={"channels": channels}, channels=channels)
+    db.delete(provider)
+    db.flush()
+
+
 def list_ip_bans(db: Session) -> list[dict[str, object]]:
     return [
         {"ip": one.ip, "reason": one.reason, "created_at": one.created_at.isoformat()}
@@ -581,13 +638,27 @@ def create_channel(db: Session, *, model_id: str, provider_id: str, upstream_mod
     return _channel_view(channel, provider, labels[model_id])
 
 
-def update_channel(db: Session, channel_id: str, *, upstream_model: str, priority: int, note: str, enabled: bool) -> dict[str, object]:
+def update_channel(
+    db: Session,
+    channel_id: str,
+    *,
+    model_id: str,
+    provider_id: str,
+    upstream_model: str,
+    priority: int,
+    note: str,
+    enabled: bool,
+) -> dict[str, object]:
     channel = db.get(CloudUpstreamChannel, channel_id)
     if channel is None:
         raise CloudError(404, "channel_not_found")
-    provider = db.get(CloudUpstreamProvider, channel.provider_id)
+    if db.get(CloudGatewayModel, model_id) is None:
+        raise CloudError(404, "model_not_found")
+    provider = db.get(CloudUpstreamProvider, provider_id)
     if provider is None:
         raise CloudError(404, "provider_not_found")
+    channel.model_id = model_id
+    channel.provider_id = provider_id
     channel.upstream_model = upstream_model
     channel.priority = priority
     channel.note = note
@@ -595,6 +666,16 @@ def update_channel(db: Session, channel_id: str, *, upstream_model: str, priorit
     db.flush()
     labels = _model_labels(db)
     return _channel_view(channel, provider, labels.get(channel.model_id, channel.model_id))
+
+
+def delete_channel(db: Session, channel_id: str) -> None:
+    """删除一条路由;历史调用记录保留,只把 channel_id 置空。"""
+    channel = db.get(CloudUpstreamChannel, channel_id)
+    if channel is None:
+        raise CloudError(404, "channel_not_found")
+    db.execute(update(CloudGatewayCall).where(CloudGatewayCall.channel_id == channel_id).values(channel_id=None))
+    db.delete(channel)
+    db.flush()
 
 
 def _plan_view(plan: CloudPlan) -> dict[str, object]:
@@ -680,6 +761,9 @@ def test_channel(
     if provider is None:
         raise CloudError(404, "provider_not_found")
     started = time.monotonic()
+    api_key = unseal(config, provider.api_key_encrypted)
+    if provider.adapter == "comfyui":
+        return _test_comfyui(provider, channel, api_key, transport, started)
     body = {
         "messages": [{"role": "user", "content": "ping"}],
         "max_tokens": 1,
@@ -691,7 +775,7 @@ def test_channel(
                 client,
                 provider,
                 upstream_model=channel.upstream_model,
-                api_key=unseal(config, provider.api_key_encrypted),
+                api_key=api_key,
                 body=body,
             )
             try:
@@ -719,6 +803,49 @@ def test_channel(
         "upstream_model": channel.upstream_model,
         "input_tokens": usage.input_tokens if usage else None,
         "output_tokens": usage.output_tokens if usage else None,
+    }
+
+
+def _test_comfyui(
+    provider: CloudUpstreamProvider,
+    channel: CloudUpstreamChannel,
+    api_key: str,
+    transport: httpx2.BaseTransport | None,
+    started: float,
+) -> dict[str, object]:
+    """ComfyUI 没有 `/chat/completions`;测活走 `/system_stats`,并确认工作流名确实配置过。"""
+    workflows = provider.config.get("workflows")
+    if not isinstance(workflows, dict) or channel.upstream_model not in workflows:
+        return {
+            "ok": False,
+            "status": 422,
+            "detail": f"workflow not found in provider config: {channel.upstream_model}",
+            "retryable": False,
+            "latency_ms": int((time.monotonic() - started) * 1000),
+        }
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        with httpx2.Client(transport=transport, timeout=10.0) as client:
+            response = client.get(f"{provider.base_url.rstrip('/')}/system_stats", headers=headers)
+            status = response.status_code
+            detail = "" if status == 200 else " ".join(response.text.split())[:300]
+    except httpx2.TransportError as exc:
+        return {
+            "ok": False,
+            "status": 502,
+            "detail": type(exc).__name__,
+            "retryable": True,
+            "latency_ms": int((time.monotonic() - started) * 1000),
+        }
+    return {
+        "ok": status == 200,
+        "status": status,
+        "detail": detail,
+        "retryable": status == 429 or status >= 500,
+        "latency_ms": int((time.monotonic() - started) * 1000),
+        "upstream_model": channel.upstream_model,
+        "input_tokens": None,
+        "output_tokens": None,
     }
 
 

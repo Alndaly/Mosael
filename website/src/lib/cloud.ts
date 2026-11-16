@@ -696,6 +696,8 @@ export const cloudAdmin = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  deleteModel: (id: string) =>
+    request<void>(`/admin/models/${encodeURIComponent(id)}`, { method: "DELETE" }),
   prices: (id: string) =>
     request<{ prices: { components: Record<string, number>; effective_from: string }[] }>(
       `/admin/models/${encodeURIComponent(id)}/prices`,
@@ -716,6 +718,8 @@ export const cloudAdmin = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  deleteProvider: (id: string) =>
+    request<void>(`/admin/providers/${encodeURIComponent(id)}`, { method: "DELETE" }),
   channels: () => request<{ channels: AdminChannel[] }>("/admin/channels"),
   createChannel: (body: {
     model_id: string;
@@ -726,12 +730,14 @@ export const cloudAdmin = {
   }) => request<{ channel: AdminChannel }>("/admin/channels", { method: "POST", body: JSON.stringify(body) }),
   updateChannel: (
     id: string,
-    body: { upstream_model: string; priority: number; note: string; enabled: boolean },
+    body: { model_id: string; provider_id: string; upstream_model: string; priority: number; note: string; enabled: boolean },
   ) =>
     request<{ channel: AdminChannel }>(`/admin/channels/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  deleteChannel: (id: string) =>
+    request<void>(`/admin/channels/${encodeURIComponent(id)}`, { method: "DELETE" }),
   testChannel: (id: string) =>
     request<{ result: AdminChannelTest }>(`/admin/channels/${encodeURIComponent(id)}/test`, { method: "POST" }),
   plans: () => request<{ plans: AdminPlan[] }>("/admin/plans"),

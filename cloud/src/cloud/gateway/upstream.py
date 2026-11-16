@@ -47,11 +47,14 @@ def open_chat(
     client: httpx2.Client, provider: CloudUpstreamProvider, *, upstream_model: str, api_key: str, body: dict[str, object]
 ) -> httpx2.Response:
     """发出一次 `/chat/completions`,成功(200)就把还没读的响应交回去(流式或整包都由调用方读)。"""
+    headers = {"Accept": "text/event-stream, application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     request = client.build_request(
         "POST",
         f"{provider.base_url}/chat/completions",
         json={**body, "model": upstream_model},
-        headers={"Authorization": f"Bearer {api_key}", "Accept": "text/event-stream, application/json"},
+        headers=headers,
     )
     try:
         response = client.send(request, stream=True)

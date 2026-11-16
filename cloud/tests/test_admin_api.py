@@ -246,11 +246,130 @@ def test_admin_provider_routes_share_credentials_across_channels_and_never_retur
 
     patched = client.patch(
         api(f"/admin/channels/{channel.json()['channel']['id']}"),
-        json={"upstream_model": "m3-new", "priority": 1, "note": "backup", "enabled": True},
+        json={
+            "model_id": "m3",
+            "provider_id": provider["id"],
+            "upstream_model": "m3-new",
+            "priority": 1,
+            "note": "backup",
+            "enabled": True,
+        },
     )
     assert patched.status_code == 200, patched.text
     assert patched.json()["channel"]["upstream_model"] == "m3-new"
     assert "sk-provider-secret" not in client.get(api("/admin/providers")).text
+
+
+def test_admin_can_move_a_channel_to_another_model_and_provider(client):
+    make_admin(client)
+    client.app.state.config = replace(
+        client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
+    )
+    first = client.post(api("/admin/models"), json={"label": "First", "max_output_tokens": 100}).json()["model"]
+    second = client.post(api("/admin/models"), json={"label": "Second", "max_output_tokens": 100}).json()["model"]
+    provider_one = client.post(
+        api("/admin/providers"),
+        json={"name": "P one", "base_url": "https://p1.example/v1", "api_key": "sk-p1", "note": ""},
+    ).json()["provider"]
+    provider_two = client.post(
+        api("/admin/providers"),
+        json={"name": "P two", "base_url": "https://p2.example/v1", "api_key": "sk-p2", "note": ""},
+    ).json()["provider"]
+    channel = client.post(
+        api("/admin/channels"),
+        json={"model_id": first["id"], "provider_id": provider_one["id"], "upstream_model": "old-model"},
+    ).json()["channel"]
+
+    moved = client.patch(
+        api(f"/admin/channels/{channel['id']}"),
+        json={
+            "model_id": second["id"],
+            "provider_id": provider_two["id"],
+            "upstream_model": "new-model",
+            "priority": 2,
+            "note": "moved",
+            "enabled": True,
+        },
+    )
+    assert moved.status_code == 200, moved.text
+    body = moved.json()["channel"]
+    assert body["model_id"] == second["id"]
+    assert body["model_label"] == "Second"
+    assert body["provider_id"] == provider_two["id"]
+    assert body["provider_name"] == "P two"
+    assert body["upstream_model"] == "new-model"
+
+
+def test_admin_deletes_a_channel_then_provider_and_model_but_blocks_in_use_rows(client):
+    make_admin(client)
+    client.app.state.config = replace(
+        client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
+    )
+    model = client.post(api("/admin/models"), json={"label": "M4", "max_output_tokens": 100}).json()["model"]
+    provider = client.post(
+        api("/admin/providers"),
+        json={"name": "P4", "base_url": "https://p4.example/v1", "api_key": "sk-p4", "note": ""},
+    ).json()["provider"]
+    channel = client.post(
+        api("/admin/channels"),
+        json={"model_id": model["id"], "provider_id": provider["id"], "upstream_model": "m4"},
+    ).json()["channel"]
+
+    blocked_provider = client.delete(api(f"/admin/providers/{provider['id']}"))
+    assert blocked_provider.status_code == 409
+    assert blocked_provider.json()["error"] == "provider_in_use"
+    blocked_model = client.delete(api(f"/admin/models/{model['id']}"))
+    assert blocked_model.status_code == 409
+    assert blocked_model.json()["error"] == "model_in_use"
+
+    assert client.delete(api(f"/admin/channels/{channel['id']}")).status_code == 204
+    assert client.delete(api(f"/admin/providers/{provider['id']}")).status_code == 204
+    assert client.delete(api(f"/admin/models/{model['id']}")).status_code == 204
+    assert client.get(api("/admin/channels")).json()["channels"] == []
+    assert client.get(api("/admin/providers")).json()["providers"] == []
+    assert all(one["id"] != model["id"] for one in client.get(api("/admin/models")).json()["models"])
+
+
+def test_comfyui_channel_test_uses_system_stats_and_never_sends_an_empty_bearer(client):
+    make_admin(client)
+    client.app.state.config = replace(
+        client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
+    )
+    with client.app.state.db.session() as db:
+        db.add(CloudGatewayModel(id="m-comfy", label="Comfy", kind="chat", max_output_tokens=100, interaction="stream", capability={"max_output_tokens": 100}))
+        db.commit()
+        provider = admin_console.create_provider(
+            db,
+            client.app.state.config,
+            name="Comfy",
+            base_url="https://comfy.example",
+            api_key="",
+            note="",
+            adapter="comfyui",
+            adapter_config={"workflows": {"wf": {"prompt": {}, "bindings": {"prompt": "6.inputs.text"}}}},
+        )
+        channel = admin_console.create_channel(
+            db, model_id="m-comfy", provider_id=provider["id"], upstream_model="wf", priority=0, note=""
+        )
+        missing = admin_console.create_channel(
+            db, model_id="m-comfy", provider_id=provider["id"], upstream_model="missing", priority=1, note=""
+        )
+        db.commit()
+        seen = {}
+        def handler(request):
+            seen["path"] = request.url.path
+            seen["auth"] = request.headers.get("authorization")
+            return httpx2.Response(200, json={"system": {}})
+
+        result = admin_console.test_channel(
+            db, client.app.state.config, channel["id"], transport=httpx2.MockTransport(handler)
+        )
+        absent = admin_console.test_channel(db, client.app.state.config, missing["id"], transport=httpx2.MockTransport(handler))
+    assert result["ok"] is True
+    assert result["status"] == 200
+    assert seen == {"path": "/system_stats", "auth": None}
+    assert absent["ok"] is False
+    assert absent["status"] == 422
 
 
 def test_admin_can_add_comfyui_without_a_key_and_must_declare_workflows(client):

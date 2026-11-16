@@ -268,6 +268,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The upstream URL must start with http:// or https://.",
         "zh": "上游地址必须以 http:// 或 https:// 开头。",
     },
+    "model_in_use": {
+        "en": "This model still has {channels} channel(s) and {jobs} generation job(s). Delete its channels or disable the model instead.",
+        "zh": "这个模型还有 {channels} 条通道和 {jobs} 条生成记录；请先删除通道，或者直接停用模型。",
+    },
+    "provider_in_use": {
+        "en": "This provider still has {channels} upstream channel(s). Delete those channels first.",
+        "zh": "这个供应商还有 {channels} 条上游通道，请先删除通道。",
+    },
     "plan_not_found": {
         "en": "No such plan.",
         "zh": "没有这个套餐。",
