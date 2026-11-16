@@ -21,8 +21,8 @@ export function PageHero({ eyebrow, title, lede }: { eyebrow?: string; title: st
           </p>
         )}
         {/* 渐变字的背景只铺在行框里:行高低于 1 时,g / p / y 的降部落到框外,会被裁平。
-            这里保持 1.02,不要按大标题的观感再压到 0.9。 */}
-        <h1 className="mt-0 mb-0 max-w-[12ch] bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text font-display text-[clamp(3.25rem,8vw,7rem)] leading-[1.02] font-[720] tracking-[-0.055em] text-transparent">
+            这里保持 1.15,不要按大标题的观感再压到 0.9。 */}
+        <h1 className="mt-0 mb-0 max-w-[12ch] bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text font-display text-[clamp(3.25rem,8vw,7rem)] leading-[1.15] font-[720] tracking-[-0.055em] text-transparent">
           {title}
         </h1>
         <p className="mt-8 mb-0 max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">{lede}</p>
