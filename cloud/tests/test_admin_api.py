@@ -246,58 +246,11 @@ def test_admin_provider_routes_share_credentials_across_channels_and_never_retur
 
     patched = client.patch(
         api(f"/admin/channels/{channel.json()['channel']['id']}"),
-        json={
-            "model_id": "m3",
-            "provider_id": provider["id"],
-            "upstream_model": "m3-new",
-            "priority": 1,
-            "note": "backup",
-            "enabled": True,
-        },
+        json={"upstream_model": "m3-new", "priority": 1, "note": "backup", "enabled": True},
     )
     assert patched.status_code == 200, patched.text
     assert patched.json()["channel"]["upstream_model"] == "m3-new"
     assert "sk-provider-secret" not in client.get(api("/admin/providers")).text
-
-
-def test_admin_can_move_a_channel_to_another_model_and_provider(client):
-    make_admin(client)
-    client.app.state.config = replace(
-        client.app.state.config, channel_key=Fernet.generate_key().decode("ascii")
-    )
-    first = client.post(api("/admin/models"), json={"label": "First", "max_output_tokens": 100}).json()["model"]
-    second = client.post(api("/admin/models"), json={"label": "Second", "max_output_tokens": 100}).json()["model"]
-    provider_one = client.post(
-        api("/admin/providers"),
-        json={"name": "P one", "base_url": "https://p1.example/v1", "api_key": "sk-p1", "note": ""},
-    ).json()["provider"]
-    provider_two = client.post(
-        api("/admin/providers"),
-        json={"name": "P two", "base_url": "https://p2.example/v1", "api_key": "sk-p2", "note": ""},
-    ).json()["provider"]
-    channel = client.post(
-        api("/admin/channels"),
-        json={"model_id": first["id"], "provider_id": provider_one["id"], "upstream_model": "old-model"},
-    ).json()["channel"]
-
-    moved = client.patch(
-        api(f"/admin/channels/{channel['id']}"),
-        json={
-            "model_id": second["id"],
-            "provider_id": provider_two["id"],
-            "upstream_model": "new-model",
-            "priority": 2,
-            "note": "moved",
-            "enabled": True,
-        },
-    )
-    assert moved.status_code == 200, moved.text
-    body = moved.json()["channel"]
-    assert body["model_id"] == second["id"]
-    assert body["model_label"] == "Second"
-    assert body["provider_id"] == provider_two["id"]
-    assert body["provider_name"] == "P two"
-    assert body["upstream_model"] == "new-model"
 
 
 def test_admin_deletes_a_channel_then_provider_and_model_but_blocks_in_use_rows(client):

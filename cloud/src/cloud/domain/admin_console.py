@@ -638,27 +638,13 @@ def create_channel(db: Session, *, model_id: str, provider_id: str, upstream_mod
     return _channel_view(channel, provider, labels[model_id])
 
 
-def update_channel(
-    db: Session,
-    channel_id: str,
-    *,
-    model_id: str,
-    provider_id: str,
-    upstream_model: str,
-    priority: int,
-    note: str,
-    enabled: bool,
-) -> dict[str, object]:
+def update_channel(db: Session, channel_id: str, *, upstream_model: str, priority: int, note: str, enabled: bool) -> dict[str, object]:
     channel = db.get(CloudUpstreamChannel, channel_id)
     if channel is None:
         raise CloudError(404, "channel_not_found")
-    if db.get(CloudGatewayModel, model_id) is None:
-        raise CloudError(404, "model_not_found")
-    provider = db.get(CloudUpstreamProvider, provider_id)
+    provider = db.get(CloudUpstreamProvider, channel.provider_id)
     if provider is None:
         raise CloudError(404, "provider_not_found")
-    channel.model_id = model_id
-    channel.provider_id = provider_id
     channel.upstream_model = upstream_model
     channel.priority = priority
     channel.note = note
@@ -816,10 +802,14 @@ def _test_comfyui(
     """ComfyUI 没有 `/chat/completions`;测活走 `/system_stats`,并确认工作流名确实配置过。"""
     workflows = provider.config.get("workflows")
     if not isinstance(workflows, dict) or channel.upstream_model not in workflows:
+        configured = ", ".join(sorted(workflows)[:8]) if isinstance(workflows, dict) else ""
         return {
             "ok": False,
             "status": 422,
-            "detail": f"workflow not found in provider config: {channel.upstream_model}",
+            "detail": (
+                f"workflow not found in provider config: {channel.upstream_model}"
+                f"{f' (configured: {configured})' if configured else ''}"
+            ),
             "retryable": False,
             "latency_ms": int((time.monotonic() - started) * 1000),
         }

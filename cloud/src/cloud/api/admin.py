@@ -348,15 +348,13 @@ def admin_update_channel(
     channel = admin_console.update_channel(
         db,
         channel_id,
-        model_id=body.model_id,
-        provider_id=body.provider_id,
         upstream_model=body.upstream_model,
         priority=body.priority,
         note=body.note,
         enabled=body.enabled,
     )
     audit.record(db, actor=actor, action="channel.update", target_type="channel", target_id=channel_id,
-                 detail={"model_id": body.model_id, "provider_id": body.provider_id, "enabled": body.enabled})
+                 detail={"enabled": body.enabled})
     db.commit()
     return {"channel": channel}
 

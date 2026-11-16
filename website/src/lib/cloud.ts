@@ -730,7 +730,7 @@ export const cloudAdmin = {
   }) => request<{ channel: AdminChannel }>("/admin/channels", { method: "POST", body: JSON.stringify(body) }),
   updateChannel: (
     id: string,
-    body: { model_id: string; provider_id: string; upstream_model: string; priority: number; note: string; enabled: boolean },
+    body: { upstream_model: string; priority: number; note: string; enabled: boolean },
   ) =>
     request<{ channel: AdminChannel }>(`/admin/channels/${encodeURIComponent(id)}`, {
       method: "PATCH",

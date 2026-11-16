@@ -1122,7 +1122,7 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
   const submit = async () => {
     setSaving(true);
     try {
-      if (channel) await cloudAdmin.updateChannel(channel.id, { model_id: model, provider_id: provider, upstream_model: upstream, priority: Number(priority), note, enabled });
+      if (channel) await cloudAdmin.updateChannel(channel.id, { upstream_model: upstream, priority: Number(priority), note, enabled });
       else await cloudAdmin.createChannel({ model_id: model, provider_id: provider, upstream_model: upstream, priority: Number(priority), note });
       onSaved();
     } catch (failure) { onFailure(failure); } finally { setSaving(false); }
@@ -1131,8 +1131,8 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{copy.channelProviderHint}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.display_label}</SelectItem>)}</SelectContent></Select></Field>
-          <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><SelectContent>{providers.map((one) => <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>)}</SelectContent></Select></Field>
+          <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={Boolean(channel) || models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.display_label}</SelectItem>)}</SelectContent></Select></Field>
+          <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={Boolean(channel) || providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><SelectContent>{providers.map((one) => <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>)}</SelectContent></Select></Field>
           {!channel && models.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noModelForChannel}</p>}
           {!channel && providers.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noProviderForChannel}</p>}
           <Field label={copy.upstreamModel}><AInput value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
@@ -1157,8 +1157,6 @@ function ChannelEnabledSwitch({ copy, channel, onChanged, onFailure }: {
     setBusy(true);
     try {
       await cloudAdmin.updateChannel(channel.id, {
-        model_id: channel.model_id,
-        provider_id: channel.provider_id,
         upstream_model: channel.upstream_model,
         priority: channel.priority,
         note: channel.note,
