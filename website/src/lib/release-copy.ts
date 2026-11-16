@@ -1,5 +1,13 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.4": {
+    zh: [
+      "**Windows 安装包改名为 Mosael-Setup-<版本>.exe。** 文件名不再带空格，GitHub、R2 下载源与更新元数据一致，修复配置了 R2 更新源时 Windows 应用内更新下载 404。",
+    ],
+    en: [
+      "**The Windows installer is now named Mosael-Setup-<version>.exe.** With no spaces in the name, GitHub, the R2 mirror and the update metadata agree — fixing 404s for Windows in-app updates when the R2 update source is configured.",
+    ],
+  },
   "v2.6.3": {
     zh: [
       "**新模板「漫剧单集」。** 对白镜头由视频模型出片时一起念出台词，同一个角色全集用同一把嗓子。",

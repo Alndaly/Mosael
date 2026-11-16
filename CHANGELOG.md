@@ -3,6 +3,12 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.6.4] - 2026-11-16
+
+### 应用内更新
+
+- **Windows 安装包改名为 `Mosael-Setup-<版本>.exe`。** 文件名不再带空格，GitHub、R2 下载源和更新元数据里是同一个名字 —— 修复配置了 R2 更新源的 Windows 部署检查到新版后下载 404。默认走 GitHub 的安装不受影响。
+
 ## [2.6.3] - 2026-11-16
 
 ### 漫剧与整片
