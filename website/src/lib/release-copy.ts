@@ -2,10 +2,18 @@
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
   "v2.6.3": {
     zh: [
-      "**检查更新不再把人送去网页。** 设置页查到新版本后直接给「下载并安装」，下载进度和「重启并安装」在同一条右下角提示里更新；开发版或未打包安装会明确说明不能应用内更新，并给「打开发布页」。",
+      "**新模板「漫剧单集」。** 对白镜头由视频模型出片时一起念出台词，同一个角色全集用同一把嗓子。",
+      "**关键帧不再画成几宫格。** 三视图、设计稿先拆成单张视图再交给出图模型；拿不到单张图时直接报错说明。",
+      "**3D 白模同一个地点只搭一份布景。** 物体可以只属于某几个镜头，每镜只放自己的相机和人偶。",
+      "**智能体能「听」音频。** 量出削波、断档、卡顿、硬切、响度、速度与音色，附频谱图，还能比较两个声音差在哪。",
+      "**检查更新直接下载并安装。** 下载进度和「重启并安装」在同一条提示里更新，不再把人送去网页。",
     ],
     en: [
-      "**Checking for updates no longer sends you to a webpage.** When a new version is found, Settings offers Download and install in place, then Restart and install, all in the same bottom-right notice; development or unpackaged builds explain why they cannot self-install and offer Open release page instead.",
+      "**New template: Drama episode.** Dialogue shots speak their lines as the video model renders them, and each character keeps one voice for the whole episode.",
+      "**Keyframes no longer come out as grids.** Turnarounds and design sheets are split into single views before they reach the image model; if no single view is available, the run stops with a clear error.",
+      "**One set per location in 3D blockouts.** Objects can belong to specific shots, so each shot adds only its own camera and figures.",
+      "**The agent can listen to audio.** It measures clipping, dropouts, stutter, hard cuts, loudness, tempo and timbre with a spectrogram, and compares how two clips differ.",
+      "**Check for updates installs in place.** Download progress and Restart and install appear in the same notice instead of opening a webpage.",
     ],
   },
   "v2.6.2": {
