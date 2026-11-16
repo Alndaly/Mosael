@@ -16,7 +16,6 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 
 import { build } from "esbuild";
-import { Type } from "@earendil-works/pi-ai";
 
 const outdir = path.join(import.meta.dirname, "..", "dist");
 mkdirSync(outdir, { recursive: true });
@@ -85,7 +84,7 @@ const tools = [
     name: "lookup_asset",
     label: "查素材",
     description: "Look up one asset by id.",
-    parameters: Type.Object({ asset_id: Type.String() }),
+    parameters: { type: "object", properties: { asset_id: { type: "string" } }, required: ["asset_id"] },
     execute: async (toolCallId, params) => {
       toolCalls.push(["lookup_asset", toolCallId, params]);
       return { content: [{ type: "text", text: `asset ${params.asset_id}: 12s beach clip` }], details: {} };
@@ -95,7 +94,7 @@ const tools = [
     name: "list_assets",
     label: "列素材",
     description: "List assets.",
-    parameters: Type.Object({}),
+    parameters: { type: "object", properties: {} },
     execute: async (toolCallId) => {
       toolCalls.push(["list_assets", toolCallId, {}]);
       return { content: [{ type: "text", text: "asset-42, asset-7" }], details: {} };
