@@ -53,5 +53,9 @@ export type HintRegionValue = {
    * 抬到外壳之上即可;交给浮层视图反而会绕一层,浮层没显示时这里就像"没有说明"。
    */
   layer?: "lightbox" | "dom"
+  /** 说明不能越过的 DOM 边界(选择器)。内嵌原生网页旁边的外壳用它把浮层收在可见的 DOM 区域里。 */
+  collisionBoundary?: string
+  /** 这个区域里的说明最大宽度;长说明在窄列里折行,而不是伸到原生网页上。 */
+  maxWidth?: string
 }
 export const HintRegion = React.createContext<HintRegionValue | null>(null)

@@ -42,10 +42,14 @@ const TOOLTIP_MOTION =
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => {
+>(({ className, sideOffset = 4, style, ...props }, ref) => {
   //: 浮层内容只在打开时才挂上(Radix 的 Presence),所以用 state 记住它 —— 挂上那一刻才开始交给浮层视图。
   const [node, setNode] = React.useState<HTMLDivElement | null>(null)
-  useFloatMirror(node, mirrorsToFloat(React.useContext(HintRegion)))
+  const region = React.useContext(HintRegion)
+  useFloatMirror(node, mirrorsToFloat(region))
+  const boundary = region?.collisionBoundary && typeof document !== "undefined"
+    ? document.querySelector(region.collisionBoundary) as HTMLElement | null
+    : null
   const setRef = React.useCallback(
     (element: HTMLDivElement | null) => {
       setNode(element)
@@ -61,6 +65,8 @@ const TooltipContent = React.forwardRef<
         data-tooltip=""
         sideOffset={sideOffset}
         collisionPadding={FLOATING_COLLISION_PADDING}
+        collisionBoundary={boundary ?? undefined}
+        style={region?.maxWidth ? { maxWidth: region.maxWidth, ...style } : style}
         className={cn(TOOLTIP_SURFACE, TOOLTIP_MOTION, className)}
         {...props}
       />

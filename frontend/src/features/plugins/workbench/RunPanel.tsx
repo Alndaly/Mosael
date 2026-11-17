@@ -350,7 +350,7 @@ function RunCard({
                           </IconButton>
                         </>
                       ) : (
-                        <IconButton size="icon-2xs" label={t(copy.label).replace("{node}", name)} hint={t(copy.hint).replace("{node}", name)}
+                        <IconButton size="icon-2xs" tooltipAlign="start" label={t(copy.label).replace("{node}", name)} hint={t(copy.hint).replace("{node}", name)}
                                     loading={marks.pending === group.node} onClick={() => marks.mark(group.node!)}>
                           <Pin size={11} />
                         </IconButton>

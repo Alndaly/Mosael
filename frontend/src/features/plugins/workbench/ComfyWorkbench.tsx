@@ -45,8 +45,14 @@ type Tab = (typeof TABS)[number];
 const BAR_REGION = { side: "bottom" as const };
 //: 等桥多久才说「连不上」:第一次打开要下整套前端,慢的机器上要好几十秒
 const BRIDGE_PATIENCE_MS = 45_000;
-//: 右列是完整的 DOM、没有原生网页盖在上面;说明留在 DOM 里,压在外壳之上即可。
-const COLUMN_REGION = { side: "top" as const, layer: "dom" as const };
+//: 右列是完整 DOM；浮层视图在这一层不可靠，说明留在 DOM 里。靠左的说明用 align 收进列内，
+//: 不伸到画布上被原生视图盖住。
+const COLUMN_REGION = {
+  side: "top" as const,
+  layer: "dom" as const,
+  collisionBoundary: "[data-comfy-workbench-column]",
+  maxWidth: "min(17rem, calc(100vw - 1rem))",
+};
 const SAVE_KEY = "Mod+S";
 
 /** 这一下按键落在工作台自己的顶栏或右边那一列里(助手的输入框也在这一列)。 */
