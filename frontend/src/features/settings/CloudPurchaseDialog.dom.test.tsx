@@ -106,7 +106,9 @@ describe("订阅 / 续费", () => {
     });
     //: 不再有 srcdoc:页面里不执行任何服务端下发的标记
     expect(iframe.getAttribute("srcdoc")).toBeNull();
+    expect(iframe.getAttribute("scrolling")).toBe("no");
     expect(iframe.className).toContain("size-[200px]");
+    expect(iframe.className).toContain("overflow-hidden");
     const form = document.querySelector("form[target]") as HTMLFormElement;
     expect(form.getAttribute("target")).toBe(iframe.name);
     expect(form.getAttribute("action")).toBe("https://openapi.alipay.com/gateway.do?app_id=1&sign=s");
@@ -129,6 +131,23 @@ describe("订阅 / 续费", () => {
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
   }, 10_000);
+
+  it("套餐还在加载:显示骨架,不提前画空状态", async () => {
+    cloud.listCloudPlans.mockReturnValue(new Promise(() => undefined));
+    renderDialog();
+    expect(await screen.findByText("订阅 Mosael Cloud")).toBeTruthy();
+    expect(document.querySelectorAll("[data-slot=skeleton]").length).toBeGreaterThan(0);
+    expect(screen.queryByText("现在没有在线出售的套餐。")).toBeNull();
+  });
+
+  it("没有在线套餐:显示空状态,不给付款", async () => {
+    cloud.listCloudPlans.mockResolvedValue({ plans: [], channels: ["wechat"] });
+    renderDialog();
+    expect(await screen.findByText("现在没有在线出售的套餐。")).toBeTruthy();
+    expect(screen.getByText("管理员上架套餐后,这里会显示价格和积分。")).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: "微信支付" })).toBeNull();
+    expect(screen.getByRole("button", { name: "去付款" }).hasAttribute("disabled")).toBe(true);
+  });
 
   it("这个部署没开任何支付渠道:说清楚,不给付款", async () => {
     cloud.listCloudPlans.mockResolvedValue({ ...PLANS, channels: [] });

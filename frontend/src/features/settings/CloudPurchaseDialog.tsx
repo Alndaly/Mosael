@@ -1,6 +1,7 @@
 import React from "react";
 import QRCode from "qrcode";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -19,7 +20,9 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup } from "@/components/ui/radio-group";
 import { Segmented } from "@/components/ui/segmented";
 import { FailureCard } from "@/components/failure/FailureCard";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { FallbackImage } from "@/components/ui/fallback-image";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatMoney } from "@/lib/money";
 import { parseServerTime } from "@/lib/time";
 
@@ -94,9 +97,22 @@ function PickStep({
       {catalog.isError && (
         <FailureCard size="inline" status="failed" title={t("cloudBuyTitle")} summary={errorText(catalog.error)} />
       )}
-      {catalog.isSuccess && plans.length === 0 && <p className="m-0 text-ui-sm text-muted-foreground">{t("cloudBuyNoPlans")}</p>}
+      {catalog.isPending && <CatalogSkeleton />}
+      {catalog.isSuccess && plans.length === 0 && (
+        <EmptyState
+          size="compact"
+          icon={<CreditCard size={15} />}
+          title={t("cloudBuyNoPlans")}
+          body={t("cloudBuyNoPlansBody")}
+        />
+      )}
       {catalog.isSuccess && plans.length > 0 && channels.length === 0 && (
-        <p className="m-0 text-ui-sm text-muted-foreground">{t("cloudBuyNoChannels")}</p>
+        <EmptyState
+          size="compact"
+          icon={<CreditCard size={15} />}
+          title={t("cloudBuyNoChannels")}
+          body={t("cloudBuyNoChannelsBody")}
+        />
       )}
       {plans.length > 0 && (
         <RadioGroup
@@ -112,7 +128,7 @@ function PickStep({
           }))}
         />
       )}
-      {channels.length > 0 && (
+      {plans.length > 0 && channels.length > 0 && (
         <Segmented
           fill
           aria-label={t("cloudBuyChannel")}
@@ -136,6 +152,18 @@ function PickStep({
           {t("cloudBuyPay")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function CatalogSkeleton() {
+  return (
+    <div className="grid gap-3" aria-busy="true">
+      <div className="grid gap-2.5">
+        <Skeleton className="h-11 w-full rounded-lg" />
+        <Skeleton className="h-11 w-full rounded-lg" />
+      </div>
+      <Skeleton className="h-8 w-44 rounded-lg" />
     </div>
   );
 }
@@ -237,7 +265,7 @@ function PaymentFrame({ form, title }: { form: { action: string; fields: Record<
   }, []);
   return (
     <>
-      <iframe name={name} title={title} className="size-[200px] rounded-md border border-border bg-white" data-payment-frame="" />
+      <iframe name={name} title={title} scrolling="no" className="size-[200px] overflow-hidden rounded-md border border-border bg-white" data-payment-frame="" />
       <form ref={formRef} action={form.action} method="post" target={name} className="hidden" aria-hidden>
         {Object.entries(form.fields).map(([key, value]) => (
           <input key={key} type="hidden" name={key} value={value} />
