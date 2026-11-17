@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **151** 个工具,其中 **53** 个走确认卡、**1** 个停下来等用户作答。
+共 **152** 个工具,其中 **54** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -59,13 +59,13 @@
 | `computer_click` | 确认卡 | Confirmation required: click a point in Mosael's app window. |
 | `computer_desktop_accessibility` | 直接执行 | Read-only: read another app's macOS accessibility tree by `pid`. |
 | `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
+| `computer_desktop_input` | 确认卡 | Confirmation required: type text or press a key in another desktop app. |
 | `computer_desktop_screenshot` | 直接执行 | Read-only: capture another app's visible desktop window by `window_id`. |
 | `computer_desktop_scroll` | 确认卡 | Confirmation required: scroll over a token or captured point in another desktop app. |
-| `computer_desktop_input` | 确认卡 | Confirmation required: type text or press a key in a token or captured point in another desktop app. |
 | `computer_desktop_windows` | 直接执行 | Read-only: list visible desktop windows, including other apps. |
+| `computer_input` | 确认卡 | Confirmation required: type text or press a key in Mosael's app window. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
 | `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |
-| `computer_input` | 确认卡 | Confirmation required: type text or press a key/shortcut in Mosael's app window. |
 | `continue_workflow_run` | 确认卡 | Confirmation required: continue a failed, interrupted or cancelled workflow run from where it stopped. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
@@ -86,7 +86,7 @@
 | `edit_scene` | 直接执行 | Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first. |
 | `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE (ids from inspect_sequence). |
 | `edit_workflow` | 确认卡 | Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops. |
-| `extract_audio` | 确认卡 | Confirmation required: extract the audio track from an existing video into a new .m4a asset. |
+| `extract_audio` | 确认卡 | Confirmation required: extract the audio track from an EXISTING video into a NEW .m4a asset. |
 | `fetch_url` | 直接执行 | Read-only: fetch one public web page as readable text. |
 | `forget` | 直接执行 | Runs directly: delete one memory entry. |
 | `generate_audio` | 确认卡 | Confirmation required: generate a NEW spoken-audio asset from text. |
