@@ -64,6 +64,8 @@ DESKTOP_KEY_CHANNEL = "computer:desktop-key"
 DESKTOP_DRAG_CHANNEL = "computer:desktop-drag"
 WAIT_CHANNEL = "computer:wait"
 DESKTOP_WAIT_CHANNEL = "computer:desktop-wait"
+VERIFY_CHANNEL = "computer:verify"
+DESKTOP_VERIFY_CHANNEL = "computer:desktop-verify"
 #: 这一轮结束了 —— 让主进程把「被控制中」熄灭(不是急停:下一轮还能动)。
 END_CHANNEL = "computer:end"
 #: 一次滚动最多几格滚轮。再多就不是「往下看看」,而是整段跳走。
@@ -135,6 +137,27 @@ def wait(text: object, timeout_ms: object = DEFAULT_WAIT_MS) -> dict[str, Any]:
     if not isinstance(answer, dict) or not isinstance(answer.get("found"), bool):
         raise ComputerUseError("The Mosael window bridge answered without a wait result.")
     return {**answer, "text": label, "timeoutMs": timeout}
+
+
+def verify(text: object, absent: object = False) -> dict[str, Any]:
+    """立即检查 Mosael 窗口里有没有一段可见文字;不等待,只给一个可判定的结果。"""
+    label = _wait_text(text)
+    missing = _bool_flag(absent, "absent")
+    answer = _host_call(VERIFY_CHANNEL, {"text": label, "absent": missing})
+    if not isinstance(answer, dict) or not isinstance(answer.get("ok"), bool):
+        raise ComputerUseError("The Mosael window bridge answered without a verification result.")
+    return {**answer, "text": label, "absent": missing}
+
+
+def desktop_verify(pid: object, text: object, absent: object = False) -> dict[str, Any]:
+    """立即检查一个桌面应用的 AX 树里有没有一段文字;只读。"""
+    target = _desktop_id(pid, "pid")
+    label = _wait_text(text)
+    missing = _bool_flag(absent, "absent")
+    answer = _host_call(DESKTOP_VERIFY_CHANNEL, {"pid": target, "text": label, "absent": missing})
+    if not isinstance(answer, dict) or not isinstance(answer.get("ok"), bool):
+        raise ComputerUseError("The desktop bridge answered without a verification result.")
+    return {**answer, "pid": target, "text": label, "absent": missing}
 
 
 def desktop_wait(pid: object, text: object, timeout_ms: object = DEFAULT_WAIT_MS) -> dict[str, Any]:
@@ -771,11 +794,13 @@ __all__ = [
     "DEFAULT_SCALE",
     "DEFAULT_WAIT_MS",
     "DESKTOP_WAIT_CHANNEL",
+    "DESKTOP_VERIFY_CHANNEL",
     "DRAG_CHANNEL",
     "END_CHANNEL",
     "MAX_WAIT_MS",
     "MIN_WAIT_MS",
     "WAIT_CHANNEL",
+    "VERIFY_CHANNEL",
     "MAX_DRAG_MS",
     "MAX_SCALE",
     "MIN_DRAG_MS",
@@ -799,10 +824,12 @@ __all__ = [
     "desktop_screenshot",
     "desktop_scroll",
     "desktop_type",
+    "desktop_verify",
     "desktop_wait",
     "desktop_windows",
     "screenshot",
     "scroll",
     "type_text",
+    "verify",
     "wait",
 ]

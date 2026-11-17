@@ -285,6 +285,21 @@ async function waitForMosaelText(text, timeoutMs, mainWindow) {
   }
 }
 
+/** 立即检查窗口里有没有一段可见文字;不等待。 */
+async function verifyMosaelText(text, absent, mainWindow) {
+  const win = computerUseWindow(mainWindow);
+  if (!win || !win.webContents || typeof win.webContents.executeJavaScript !== "function") {
+    throw new Error("There is no Mosael window open to verify. Nothing was checked.");
+  }
+  const expression = `(() => Boolean(document.body && document.body.innerText.includes(${JSON.stringify(String(text))})))()`;
+  const found = Boolean(await win.webContents.executeJavaScript(expression));
+  return {
+    ok: absent ? !found : found,
+    reason: found ? "found" : (absent ? "absent" : "not_found"),
+    evidence: { text: String(text), found },
+  };
+}
+
 /**
  * 拍下 Mosael 主窗口,回 `{width, height, image, elements}`(图片是原图,缩放由后端做;
  * elements 坐标随后端 scale 一起缩)。参数不对 / 没窗口 / 最小化 / 空图,都抛一句人话。
@@ -368,6 +383,10 @@ class OwnWindowDriver {
 
   async waitForText(text, timeoutMs) {
     return waitForMosaelText(text, timeoutMs, this.getWindow());
+  }
+
+  async verifyText(text, absent = false) {
+    return verifyMosaelText(text, absent, this.getWindow());
   }
 
   /** 动作:点 / 输入 / 按键 / 滚动。`action.kind` 只认这四种;别的直接拒。 */

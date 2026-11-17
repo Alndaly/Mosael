@@ -489,6 +489,36 @@ def computer_wait(
 
 
 @tool(effect="reads")
+def computer_verify(
+    text: Annotated[str, Field(description="Visible text to check in Mosael's window.")],
+    absent: Annotated[bool, Field(description="Set true to require the text is NOT visible.")] = False,
+) -> dict[str, Any]:
+    """Read-only: check right now whether visible text exists in Mosael's app window.
+
+    Returns {ok, reason, evidence}; use after an action to assert a postcondition, then re-read
+    the screenshot if ok=false. Unlike computer_wait this does not wait.
+    """
+    from app.domain.agent.computer_use import verify
+
+    return verify(text=text, absent=absent)
+
+
+@tool(effect="reads")
+def computer_desktop_verify(
+    pid: Annotated[int, Field(description="The `pid` returned by computer_desktop_windows.")],
+    text: Annotated[str, Field(description="Text to check in that app's accessibility tree.")],
+    absent: Annotated[bool, Field(description="Set true to require the text is NOT present.")] = False,
+) -> dict[str, Any]:
+    """Read-only: check right now whether an app's accessibility tree contains the text.
+
+    Returns {ok, reason, evidence}; use after a desktop action to assert a postcondition.
+    """
+    from app.domain.agent.computer_use import desktop_verify
+
+    return desktop_verify(pid=pid, text=text, absent=absent)
+
+
+@tool(effect="reads")
 def computer_desktop_wait(
     pid: Annotated[int, Field(description="The `pid` returned by computer_desktop_windows.")],
     text: Annotated[str, Field(description="Visible text to wait for in that app's accessibility tree.")],

@@ -59,9 +59,11 @@ const {
   parseComputerDesktopAccessibility,
   parseComputerDrag,
   parseComputerWait,
+  parseComputerVerify,
   parseComputerDesktopClick,
   parseComputerDesktopDrag,
   parseComputerDesktopWait,
+  parseComputerDesktopVerify,
   parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,
@@ -393,6 +395,11 @@ async function desktopWait(target = {}) {
   return desktopUseDriver.waitForText(target.pid, target.text, target.timeoutMs);
 }
 
+async function desktopVerify(target = {}) {
+  if (!desktopUseDriver) throw new Error("Desktop observation currently supports macOS only.");
+  return desktopUseDriver.verifyText(target.pid, target.text, target.absent);
+}
+
 async function desktopWindows(target = {}) {
   return { windows: await desktopObserve(target) };
 }
@@ -496,6 +503,7 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerDesktopDrag]: () =>
       withDesktopAction((driver) => driver.act({ kind: "drag", replay: true, ...parseComputerDesktopDrag(request.payload) })),
     [IPC.invoke.computerDesktopWait]: () => desktopWait(parseComputerDesktopWait(request.payload)),
+    [IPC.invoke.computerDesktopVerify]: () => desktopVerify(parseComputerDesktopVerify(request.payload)),
     [IPC.invoke.computerDesktopType]: () =>
       withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...parseComputerDesktopType(request.payload) })),
     [IPC.invoke.computerDesktopKey]: () =>
@@ -509,6 +517,10 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerWait]: () => {
       const wait = parseComputerWait(request.payload);
       return computerUseDriver.waitForText(wait.text, wait.timeoutMs);
+    },
+    [IPC.invoke.computerVerify]: () => {
+      const check = parseComputerVerify(request.payload);
+      return computerUseDriver.verifyText(check.text, check.absent);
     },
     [IPC.invoke.computerType]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "type", ...parseComputerType(request.payload), cursor: computerUseCursor })),

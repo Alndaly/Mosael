@@ -89,6 +89,18 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     expect(calls).toBe(2);
   });
 
+  it("verifyText 立即判断文字存在 / 不存在", async () => {
+    const win = fakeWindow();
+    win.webContents.executeJavaScript = vi.fn(async () => true);
+    const driver = new OwnWindowDriver(() => win);
+
+    expect(await driver.verifyText("保存")).toMatchObject({ ok: true, reason: "found" });
+    expect(await driver.verifyText("保存", true)).toMatchObject({ ok: false, reason: "found" });
+
+    win.webContents.executeJavaScript = vi.fn(async () => false);
+    expect(await driver.verifyText("保存", true)).toMatchObject({ ok: true, reason: "absent" });
+  });
+
   it("act 把三种动作交给原来的实现:click / type / scroll", async () => {
     const win = fakeWindow();
     const driver = new OwnWindowDriver(() => win);

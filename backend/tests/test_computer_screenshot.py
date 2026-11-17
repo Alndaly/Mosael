@@ -136,6 +136,22 @@ def test_wait_reports_whether_the_text_appeared(monkeypatch) -> None:
     assert calls == [("computer:wait", {"text": "保存", "timeoutMs": 1000})]
 
 
+def test_verify_reports_ok_for_present_and_absent_text(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"ok": True, "reason": "found", "evidence": {"text": "保存", "found": True}}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    result = computer_use.verify("保存")
+    assert result["ok"] is True
+    assert calls == [("computer:verify", {"text": "保存", "absent": False})]
+
+    computer_use.verify("保存", absent=True)
+    assert calls[-1] == ("computer:verify", {"text": "保存", "absent": True})
+
+
 def test_wait_rejects_an_empty_text_or_bad_timeout(monkeypatch) -> None:
     monkeypatch.setattr(
         computer_use, "_host_call", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("不该走桥"))

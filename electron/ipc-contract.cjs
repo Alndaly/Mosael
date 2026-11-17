@@ -89,9 +89,11 @@ const IPC = Object.freeze({
     computerDesktopScroll: "computer:desktop-scroll",
     computerDesktopDrag: "computer:desktop-drag",
     computerDesktopWait: "computer:desktop-wait",
+    computerDesktopVerify: "computer:desktop-verify",
     computerClick: "computer:click",
     computerDrag: "computer:drag",
     computerWait: "computer:wait",
+    computerVerify: "computer:verify",
     computerType: "computer:type",
     computerKey: "computer:key",
     computerScroll: "computer:scroll",
@@ -775,6 +777,29 @@ function parseComputerDesktopWait(value) {
   return { pid: desktopId(payload.pid, "pid", channel), ...parseWaitText(payload, channel) };
 }
 
+function parseVerifyText(payload, channel) {
+  const text = typeof payload.text === "string" ? payload.text.trim() : "";
+  if (!text) throw new TypeError(`${channel}: text must be a non-empty string`);
+  if (text.length > 200) throw new TypeError(`${channel}: text must be at most 200 characters`);
+  const absent = payload.absent === undefined ? false : payload.absent;
+  if (typeof absent !== "boolean") throw new TypeError(`${channel}: absent must be a boolean`);
+  return { text, absent };
+}
+
+function parseComputerVerify(value) {
+  const channel = IPC.invoke.computerVerify;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["text", "absent"], channel);
+  return parseVerifyText(payload, channel);
+}
+
+function parseComputerDesktopVerify(value) {
+  const channel = IPC.invoke.computerDesktopVerify;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["pid", "text", "absent"], channel);
+  return { pid: desktopId(payload.pid, "pid", channel), ...parseVerifyText(payload, channel) };
+}
+
 function parseDragPoint(payload, key, channel) {
   const n = payload[key];
   if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
@@ -1233,11 +1258,13 @@ module.exports = {
   parseComputerClick,
   parseComputerDrag,
   parseComputerWait,
+  parseComputerVerify,
   parseComputerDesktopAccessibility,
   parseComputerDesktopClick,
   parseComputerDesktopDrag,
   parseComputerDesktopScroll,
   parseComputerDesktopWait,
+  parseComputerDesktopVerify,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,
   parseComputerDesktopKey,

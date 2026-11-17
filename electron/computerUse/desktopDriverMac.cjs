@@ -434,6 +434,18 @@ class DesktopDriverMac {
     };
   }
 
+  async verifyText(pid, text, absent = false) {
+    const snapshot = await this.observe({ pid });
+    const needle = String(text || "");
+    const found = (snapshot.elements || []).some((element) => [element.title, element.value, element.role]
+      .some((part) => typeof part === "string" && part.includes(needle)));
+    return {
+      ok: absent ? !found : found,
+      reason: found ? "found" : (absent ? "absent" : "not_found"),
+      evidence: { text: needle, found, snapshot_id: snapshot.meta?.snapshot_id ?? "" },
+    };
+  }
+
   async waitForText(pid, text, timeoutMs) {
     const started = Date.now();
     const needle = String(text || "");
