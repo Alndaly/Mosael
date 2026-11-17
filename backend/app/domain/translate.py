@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_EXCEPTION, Future, ThreadPoolExecutor, wait
 import time
 from typing import Literal
 
@@ -343,11 +343,9 @@ def translate_many(
                 if not submit_next():
                     break
             stopped = False
-            failed = False
             while pending:
                 done, pending = wait(pending, timeout=_STOP_POLL_SECONDS, return_when=FIRST_EXCEPTION)
                 if any(not one.cancelled() and one.exception() is not None for one in done):
-                    failed = True
                     break
                 if stop is not None and stop():
                     stopped = True
