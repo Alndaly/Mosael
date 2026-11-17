@@ -3682,24 +3682,55 @@ def list_workflow_templates() -> list[dict[str, Any]]:
 
 
 @tool(effect="reads")
-def get_confirmation(confirmation_id: str) -> dict[str, Any]:
+def get_confirmation(confirmation_id: str) -> dict[str, Any] | list[TextContent | ImageContent]:
     """Read-only: poll one confirmation card by confirmation_id.
 
     Use only after a confirmation-required tool returns {confirmation_id,
     status:"pending"}. Status becomes executed/rejected/failed after the user
-    decides in Mosael; result/error explain the outcome. Do NOT call this to find
-    projects, assets, workflows, jobs, or arbitrary IDs.
+    decides in Mosael; result/error explain the outcome. If the result points at
+    a screenshot asset (batch actions), the picture is returned as an image block
+    so you see the post-action state without another round trip. Do NOT call this
+    to find projects, assets, workflows, jobs, or arbitrary IDs.
     """
     from app.api.routes.confirmations import get_confirmation as read
     from app.api.schemas import ConfirmationOut
 
     confirmation = _route(read, confirmation_id=confirmation_id, out=ConfirmationOut)
-    return {
+    result = confirmation["result"]
+    data = {
         "confirmation_id": confirmation["id"],
         "status": confirmation["status"],
-        "result": confirmation["result"],
+        "result": result,
         "error": confirmation["error"],
     }
+    asset_id = result.get("screenshot_asset_id") if isinstance(result, dict) else None
+    image = _screenshot_asset_image(asset_id)
+    if image is None:
+        return data
+    return _with_images({
+        **data,
+        "images": [{"view": "batch", "mime_type": "image/png", "data": image}],
+    })
+
+
+def _screenshot_asset_image(asset_id: object) -> str | None:
+    """一张已入库截图 → base64;卡片结果里只存 id,不把大图塞进数据库。"""
+    if not isinstance(asset_id, str) or not asset_id:
+        return None
+    import base64
+
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+    from app.media.paths import resolve_key
+
+    try:
+        with SessionLocal() as db:
+            asset = db.get(Asset, asset_id)
+            if asset is None or not asset.file_key or asset.kind != "image":
+                return None
+            return base64.b64encode(resolve_key(asset.file_key).read_bytes()).decode("ascii")
+    except OSError:
+        return None
 
 
 # --- 工作流有、智能体也该有的能力 ---------------------------------------

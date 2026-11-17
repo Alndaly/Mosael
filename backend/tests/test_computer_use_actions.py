@@ -632,3 +632,23 @@ def test_special_click_has_a_truthful_card() -> None:
             "confirm_computerSpecialClick",
             {"x": 5, "y": 6, "button": "middle", "keys": "shift+triple-click"},
         )
+
+
+def test_get_confirmation_attaches_a_batch_screenshot(monkeypatch) -> None:
+    import json
+
+    from mcp.types import ImageContent, TextContent
+
+    import mcp_server
+
+    png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    monkeypatch.setattr(mcp_server, "_route", lambda *a, **k: {
+        "id": "card-1", "status": "executed", "result": {"screenshot_asset_id": "asset-1"}, "error": None,
+    })
+    monkeypatch.setattr(mcp_server, "_screenshot_asset_image", lambda asset_id: png)
+    blocks = mcp_server.get_confirmation("card-1")
+    assert isinstance(blocks, list) and len(blocks) == 2
+    assert isinstance(blocks[0], TextContent)
+    assert json.loads(blocks[0].text)["confirmation_id"] == "card-1"
+    assert isinstance(blocks[1], ImageContent)
+    assert blocks[1].mime_type == "image/png"
