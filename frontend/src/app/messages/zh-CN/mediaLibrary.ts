@@ -74,6 +74,7 @@ export const mediaLibrary = {
   assetLineageOpTighten: "压缩停顿",
   assetLineageOpFit: "按画幅裁",
   assetLineageOpPlugin: "插件加工",
+  assetLineageOpAudio: "抽取音轨",
   // 清除元数据(ADR 0062):素材详情(视频)的一个动作 —— 点开是一张小确认面板,确认后排一条后台任务。
   // provenance 那一段的后果与后端 domain/assets/scrub/policy.PROVENANCE 同一句(必须写在开关旁边)。
   scrubAction: "清除元数据…",

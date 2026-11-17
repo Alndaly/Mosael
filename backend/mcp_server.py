@@ -913,6 +913,28 @@ def import_from_url(
 
 
 @tool(effect="confirms")
+def extract_audio(
+    asset_id: Annotated[str, Field(description="A video asset in the workspace.")],
+    workspace_id: Annotated[str, Field(description="Workspace id; omit for the conversation's workspace.")] = "",
+) -> dict[str, Any]:
+    """Confirmation required: extract the audio track from an EXISTING video into a NEW .m4a asset.
+
+    The source video is never changed. Use this after importing a video when the user wants only
+    the sound; do not tell them to run ffmpeg. It copies an AAC track without re-encoding and
+    falls back to AAC transcoding when the container cannot hold it directly.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "extract_audio",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def split_image_grid(
     asset_id: str,
     grid: str = "3x3",

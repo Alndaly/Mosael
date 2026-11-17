@@ -86,6 +86,7 @@
 | `edit_scene` | 直接执行 | Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first. |
 | `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE (ids from inspect_sequence). |
 | `edit_workflow` | 确认卡 | Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops. |
+| `extract_audio` | 确认卡 | Confirmation required: extract the audio track from an existing video into a new .m4a asset. |
 | `fetch_url` | 直接执行 | Read-only: fetch one public web page as readable text. |
 | `forget` | 直接执行 | Runs directly: delete one memory entry. |
 | `generate_audio` | 确认卡 | Confirmation required: generate a NEW spoken-audio asset from text. |

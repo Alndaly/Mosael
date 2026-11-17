@@ -21,6 +21,7 @@ from app.domain.assets.denoise import DENOISABLE_KINDS
 from app.domain.assets.frames import AssetFrameError, last_frame_time, save_frame_as_asset
 from app.domain.assets.from_url import UrlImportError, start_url_import
 from app.domain.assets.image_grid import GRIDS, ImageGridError, parse_grid, split_image_grid
+from app.domain.assets.audio_extract import AudioExtractError, extract_audio_asset
 from app.domain.assets.masks import MaskAssetError, make_mask_asset
 from app.domain.assets.scrub.engine import ScrubError
 from app.domain.assets.scrub.task import require_video, start_scrub_job
@@ -789,6 +790,41 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_clip_media,
     execute=_execute_clip_media,
     validate=_validate_clip_media,
+))
+
+
+def _validate_extract_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotInWorkspace")
+    if asset.kind != "video":
+        raise ConfirmationError("audioErr_extractNeedsVideo")
+
+
+def _summarize_extract_audio(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_extractAudio", {}
+
+
+def _execute_extract_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    asset = db.get(Asset, str(payload["asset_id"]))
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    try:
+        made = extract_audio_asset(db, asset)
+    except AudioExtractError as exc:
+        raise ConfirmationError(str(exc)) from exc
+    return {"asset_id": made.id, "source_asset_id": asset.id}
+
+
+confirmable_tool(ConfirmableTool(
+    name="extract_audio",
+    permission="render-cost",
+    cost="render",
+    writes=("assets",),
+    summarize=_summarize_extract_audio,
+    execute=_execute_extract_audio,
+    validate=_validate_extract_audio,
 ))
 
 

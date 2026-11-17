@@ -27,6 +27,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 from app.core import outbound_proxy
+from app.core.child_process import run_logged
+from app.core.config import settings
 from app.core.i18n import t
 from app.core.outbound_guard import Origin
 from app.media import extractors
@@ -159,6 +161,29 @@ def _sniff_media(data: bytes) -> str | None:
     if data.startswith(b"ID3") or (len(data) >= 2 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0):
         return "audio"
     return None
+
+
+def _audio_only(path: Path, target_dir: Path) -> Path:
+    """yt-dlp 在某些站点只能给回带画面的 mp4；音频请求再抽一次，保证落地的是纯音频。"""
+    with path.open("rb") as handle:
+        found = _sniff_media(handle.read(64))
+    if found != "video":
+        return path
+    target = target_dir / f"{path.stem}.m4a"
+    try:
+        result = run_logged(
+            [settings.ffmpeg, "-y", "-v", "error", "-i", str(path), "-vn", "-c:a", "aac", "-b:a", "192k",
+             "-f", "mp4", str(target)],
+            capture_output=True, text=True, timeout=900, what="抽取音轨",
+        )
+    except Exception as exc:
+        target.unlink(missing_ok=True)
+        raise YtdlpError("urlImportErr_audioOnly") from exc
+    if result.returncode != 0 or not target.is_file() or target.stat().st_size == 0:
+        target.unlink(missing_ok=True)
+        raise YtdlpError("urlImportErr_audioOnly")
+    path.unlink(missing_ok=True)
+    return target
 
 
 def _checked_media(path: Path, kind: str) -> Path:
@@ -457,9 +482,9 @@ def download(
 ) -> Path:
     """把一条下到 `target_dir`,返回落地的文件路径。
 
-    `kind`:`"video"` 取画面 + 声音并合流,`"audio"` 只取声轨。**不做二次转码** —— 直接要
-    对应的流,省掉一次全片重编码(那既慢又掉画质)。容器交给 yt-dlp 按流选,ffmpeg 只在需要
-    合并音视频轨时介入。
+    `kind`:`"video"` 取画面 + 声音并合流,`"audio"` 只取声轨。正常路径不做二次转码 —— 直接要
+    对应的流,省掉一次全片重编码。少数站点只能给回带画面的 mp4 时,audio 请求会在落地后抽一次
+    AAC 音轨,保证素材库里是纯音频。容器交给 yt-dlp 按流选,ffmpeg 只在需要合并 / 抽取时介入。
 
     `max_height`:画质上限(0 = 不限)。**上限而不是精确值** —— 同一个播放列表里每条能给的
     画质并不一样,要求"正好 1080p"会让没有这一档的那些直接失败;要"不超过 1080p"则每条都
@@ -569,6 +594,8 @@ def download(
         # 下载 / 合流刚好在 deadline 之后才回来:这一条不再收下。
         landed.unlink(missing_ok=True)
         raise _abort_error("timeout")
+    if kind == "audio":
+        landed = _audio_only(landed, target_dir)
     return _checked_media(landed, kind)
 
 

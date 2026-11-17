@@ -115,6 +115,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "没能把处理后的声音放回视频:{detail}",
         "en": "Couldn't put the processed audio back into the video: {detail}",
     },
+    "audioErr_extractNeedsVideo": {"zh": "只有视频能抽音轨。", "en": "Only videos can have their audio track extracted."},
+    "audioErr_noLocalFile": {"zh": "这份视频没有本地文件。", "en": "This video has no local file."},
+    "audioErr_fileMissing": {"zh": "这份视频的文件找不到了。", "en": "This video's file can't be found."},
+    "audioErr_empty": {"zh": "抽出来的音轨是空的。", "en": "The extracted audio track came out empty."},
+    "confirm_extractAudio": {"zh": "从这段视频抽出一条新的音轨(原视频不变)", "en": "Extract a new audio track from this video (the video stays unchanged)"},
     "mediaErr_vendorFormat": {
         "zh": "{what}没成功:{detail}",
         "en": "Couldn't convert the file for the provider ({what}): {detail}",
@@ -440,6 +445,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "下载超过 {minutes} 分钟还没完成(总时限),已经取消这一条。换一条更短的,或稍后再试。",
         "en": "This download didn't finish within {minutes} minutes (total deadline), so it was cancelled. Try a shorter item or come back later.",
     },
+    "urlImportErr_audioOnly": {"zh": "这条链接只给回了带画面的文件,抽音轨失败。", "en": "This link only returned a video file, and extracting its audio failed."},
     "urlImportErr_notMedia": {
         "zh": "下载回来的文件不是视频或音频(按文件头判定,不信后缀),没有收下。",
         "en": "What came back isn't video or audio (judged by the file header, not the extension), so it wasn't imported.",
