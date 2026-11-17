@@ -83,6 +83,32 @@ function dragMosaelWindow(request, mainWindow, cursor = null) {
   return { fromX, fromY, toX, toY, button, durationMs };
 }
 
+function pointerMosaelWindow(request, mainWindow, cursor = null) {
+  const win = computerUseWindow(mainWindow);
+  if (!win) throw new Error("There is no Mosael window open for the pointer. Nothing was sent.");
+  if (typeof win.isMinimized === "function" && win.isMinimized()) {
+    throw new Error("The Mosael window is minimized; restore it and try again. Nothing was sent.");
+  }
+  const contents = win.webContents;
+  const size = typeof contents.getSize === "function" ? contents.getSize() : null;
+  if (size && (request.x >= size[0] || request.y >= size[1])) {
+    throw new Error(
+      `That point is outside the Mosael window: it reports ${size[0]}×${size[1]} CSS pixels, and (${request.x}, ${request.y}) is not inside it. Nothing was sent.`,
+    );
+  }
+  if (typeof win.focus === "function") win.focus();
+  if (typeof contents.focus === "function") contents.focus();
+  const x = Math.round(request.x);
+  const y = Math.round(request.y);
+  const button = request.button || "left";
+  const modifiers = electronModifiers(request.modifiers);
+  contents.sendInputEvent({ type: "mouseMove", x, y, modifiers });
+  if (request.action === "down") contents.sendInputEvent({ type: "mouseDown", x, y, button, clickCount: 1, modifiers });
+  if (request.action === "up") contents.sendInputEvent({ type: "mouseUp", x, y, button, clickCount: 1, modifiers });
+  showComputerUseCursor(win, x, y, request.action === "hover" ? "hover" : request.action, cursor);
+  return { action: request.action, x, y, button, modifiers };
+}
+
 function clickMosaelWindow(request, mainWindow, cursor = null) {
   const win = computerUseWindow(mainWindow);
   if (!win) {
@@ -104,13 +130,14 @@ function clickMosaelWindow(request, mainWindow, cursor = null) {
   const y = Math.round(request.y);
   const button = request.button || "left";
   const clickCount = request.clickCount || 1;
-  contents.sendInputEvent({ type: "mouseMove", x, y });
-  contents.sendInputEvent({ type: "mouseDown", x, y, button, clickCount });
-  contents.sendInputEvent({ type: "mouseUp", x, y, button, clickCount });
+  const modifiers = electronModifiers(request.modifiers);
+  contents.sendInputEvent({ type: "mouseMove", x, y, modifiers });
+  contents.sendInputEvent({ type: "mouseDown", x, y, button, clickCount, modifiers });
+  contents.sendInputEvent({ type: "mouseUp", x, y, button, clickCount, modifiers });
   //: 在窗口里那个点上亮一枚指针(区别于真光标:它只亮一下,拍图也拍不到)——
   //: 连续自动放行时,人至少看得见「它刚才点了哪儿」。
   showComputerUseCursor(win, x, y, "click", cursor);
-  return { x, y, button, clickCount };
+  return { x, y, button, clickCount, modifiers };
 }
 
 /**
@@ -156,15 +183,19 @@ function scrollMosaelWindow(request, mainWindow, cursor = null) {
   //: 的滚动过程」)。人滚滚轮是一格一格来的:这里按 100 像素一格切成 4–8 格,格间 16–40ms 抖动,
   //: 总时长跟着距离走(最多约 400ms)。页面自己也靠这一串事件做惯性滚动与懒加载 —— 一次到底时
   //: 那些都来不及发生,看起来就是"跳"过去的。
-  const steps = Math.min(8, Math.max(4, Math.abs(request.dy)));
-  const perStep = (-request.dy * 100) / steps;
+  const dy = request.dy || 0;
+  const dx = request.dx || 0;
+  const steps = Math.min(8, Math.max(4, Math.max(Math.abs(dy), Math.abs(dx))));
+  const perStepY = (-dy * 100) / steps;
+  const perStepX = (dx * 100) / steps;
   for (let index = 0; index < steps; index += 1) {
-    contents.sendInputEvent({ type: "mouseWheel", x, y, deltaY: perStep, canScroll: true });
+    contents.sendInputEvent({ type: "mouseWheel", x, y, deltaX: perStepX, deltaY: perStepY, canScroll: true });
     //: 最后一格之后不等:调用方马上要读页面,多等这一下只是白慢。
     if (index < steps - 1) spinWait(16 + Math.round(Math.random() * 24));
   }
-  showComputerUseCursor(win, x, y, request.dy > 0 ? "scroll-down" : "scroll-up", cursor);
-  return { dy: request.dy, x, y };
+  const kind = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "scroll-right" : "scroll-left") : (dy > 0 ? "scroll-down" : "scroll-up");
+  showComputerUseCursor(win, x, y, kind, cursor);
+  return { dy, dx, x, y };
 }
 
 /**
@@ -191,7 +222,7 @@ function electronModifiers(modifiers) {
 }
 
 /** 在 Mosael 主窗口里按一个键或组合键;焦点在窗口自己的 DOM 里(输入框 / 画布)。 */
-function pressMosaelWindow(request, mainWindow, cursor = null) {
+async function pressMosaelWindow(request, mainWindow, cursor = null) {
   const win = computerUseWindow(mainWindow);
   if (!win) throw new Error("There is no Mosael window open to press a key in. Nothing was pressed.");
   if (typeof win.isMinimized === "function" && win.isMinimized()) {
@@ -203,9 +234,13 @@ function pressMosaelWindow(request, mainWindow, cursor = null) {
   const keyCode = electronKeyCode(request.key);
   const modifiers = electronModifiers(request.modifiers);
   contents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+  if (request.holdMs > 0) {
+    //: 不要用 spinWait:按住键可以长达几分钟,阻塞主进程会让整个应用卡死。
+    await new Promise((resolve) => setTimeout(resolve, request.holdMs));
+  }
   contents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
   if (cursor && lastComputerUsePoint) cursor.showAt(lastComputerUsePoint.x, lastComputerUsePoint.y, "type");
-  return { key: request.key, modifiers: request.modifiers || [], keyCode };
+  return { key: request.key, modifiers: request.modifiers || [], keyCode, holdMs: request.holdMs || 0 };
 }
 
 function typeIntoMosaelWindow(request, mainWindow, cursor = null) {
@@ -456,10 +491,14 @@ class OwnWindowDriver {
       const target = await this.resolveElement(run.token);
       run = { ...run, x: target.x, y: target.y, token: undefined };
     }
-    if (window && (run.kind === "click" || run.kind === "type" || run.kind === "key" || run.kind === "drag")) {
+    if (window && (run.kind === "click" || run.kind === "type" || run.kind === "key" || run.kind === "drag" || run.kind === "hover")) {
       await assertComputerTargetAllowed(window.webContents, run);
     }
     switch (run.kind) {
+      case "hover":
+      case "down":
+      case "up":
+        return pointerMosaelWindow({ ...run, action: run.kind }, window, run.cursor ?? null);
       case "click":
         return clickMosaelWindow(run, window, run.cursor ?? null);
       case "drag":

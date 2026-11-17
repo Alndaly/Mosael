@@ -48,14 +48,14 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
 
     click_properties = tools["computer_click"]["parameters"]["properties"]
     #: 只有一个窗口可操作 —— 没有 window 这一维(publish 分支随窗口一起删了)。
-    assert set(click_properties) == {"x", "y", "button", "click_count", "scale", "token", "name"}
+    assert set(click_properties) == {"x", "y", "button", "click_count", "scale", "token", "name", "modifiers"}
     assert click_properties["button"]["default"] == "left"
     assert click_properties["click_count"]["default"] == 1
-    assert set(tools["computer_input"]["parameters"]["properties"]) == {"action", "text", "key", "modifiers"}
+    assert set(tools["computer_input"]["parameters"]["properties"]) == {"action", "text", "key", "modifiers", "hold_ms"}
     assert set(tools["computer_drag"]["parameters"]["properties"]) == {
         "from_x", "from_y", "to_x", "to_y", "button", "duration_ms", "scale",
     }
-    assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "x", "y", "scale"}
+    assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "dx", "x", "y", "scale"}
 
 
 def test_the_actions_are_ordinary_edit_tier_tools() -> None:
@@ -173,8 +173,12 @@ def test_click_converts_screenshot_pixels_by_scale(monkeypatch) -> None:
     result = computer_use.click(x=200, y=100, scale=0.5)
 
     # 图片是按 0.5 缩小的:图上的 (200, 100) 在窗口里是 (400, 200) 的 CSS 像素。
-    assert calls == [("computer:click", {"x": 400, "y": 200, "button": "left", "clickCount": 1})]
-    assert result == {"x": 400, "y": 200, "scale": 0.5, "button": "left", "clickCount": 1}
+    assert calls == [("computer:click", {
+        "x": 400, "y": 200, "button": "left", "clickCount": 1, "modifiers": [],
+    })]
+    assert result == {
+        "x": 400, "y": 200, "scale": 0.5, "button": "left", "clickCount": 1, "modifiers": [],
+    }
 
 
 def test_click_rejects_bad_coordinates_buttons_and_counts_without_calling_the_bridge(monkeypatch) -> None:
@@ -188,9 +192,9 @@ def test_click_rejects_bad_coordinates_buttons_and_counts_without_calling_the_br
     with pytest.raises(computer_use.ComputerUseError, match="x must be"):
         computer_use.click(x=True)  # bool 不是 1
     with pytest.raises(computer_use.ComputerUseError, match="button"):
-        computer_use.click(button="middle")
+        computer_use.click(button="back")
     with pytest.raises(computer_use.ComputerUseError, match="click_count"):
-        computer_use.click(click_count=3)
+        computer_use.click(click_count=4)
     #: 没有 window 这一维了:传一个不存在的窗口参数就是 TypeError(函数不接受该关键字)。
     with pytest.raises(TypeError):
         computer_use.click(window="desktop")
@@ -204,8 +208,10 @@ def test_press_goes_through_the_bridge_and_rejects_unknown_keys(monkeypatch) -> 
         return {"key": payload["key"], "modifiers": payload["modifiers"]}
 
     monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
-    assert computer_use.press("z", ["cmd", "shift"]) == {"key": "z", "modifiers": ["cmd", "shift"]}
-    assert calls == [("computer:key", {"key": "z", "modifiers": ["cmd", "shift"]})]
+    assert computer_use.press("z", ["cmd", "shift"]) == {
+        "key": "z", "modifiers": ["cmd", "shift"], "holdMs": 0,
+    }
+    assert calls == [("computer:key", {"key": "z", "modifiers": ["cmd", "shift"], "holdMs": 0})]
 
     with pytest.raises(computer_use.ComputerUseError, match="key must be"):
         computer_use.press("a very long key")
@@ -239,19 +245,19 @@ def test_scroll_goes_through_the_bridge_with_the_pointer_position(monkeypatch) -
 
     def fake_host_call(channel: str, payload: dict) -> dict:
         calls.append((channel, payload))
-        return {"dy": payload.get("dy")}
+        return {"dy": payload.get("dy"), "dx": payload.get("dx")}
 
     monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
 
     result = computer_use.scroll(dy=3, x=100, y=40, scale=0.5)
 
     # 图上的 (100, 40) 在窗口里是 (200, 80) 的 CSS 像素;dy 不给位置就不带 x/y。
-    assert calls == [("computer:scroll", {"dy": 3, "x": 200, "y": 80})]
-    assert result == {"dy": 3, "scale": 0.5, "x": 200, "y": 80}
+    assert calls == [("computer:scroll", {"dy": 3, "dx": 0, "x": 200, "y": 80})]
+    assert result == {"dy": 3, "dx": 0, "scale": 0.5, "x": 200, "y": 80}
 
     calls.clear()
     computer_use.scroll(dy=-2)
-    assert calls == [("computer:scroll", {"dy": -2})]
+    assert calls == [("computer:scroll", {"dy": -2, "dx": 0})]
 
 
 def test_scroll_rejects_zero_and_runaway_notches(monkeypatch) -> None:
@@ -298,8 +304,8 @@ def test_the_card_checks_shape_before_opening() -> None:
             {"x": -5},
             {"y": "10"},
             {"scale": 2},
-            {"button": "middle"},
-            {"click_count": 3},
+            {"button": "back"},
+            {"click_count": 4},
         ):
             with pytest.raises(ConfirmationError):
                 spec.validate(db, "w1", _click_payload(**bad), None)
@@ -327,7 +333,7 @@ def test_the_card_checks_shape_before_opening() -> None:
             {"from_x": -1},
             {"to_y": "40"},
             {"duration_ms": 50},
-            {"button": "middle"},
+            {"button": "back"},
         ):
             with pytest.raises(ConfirmationError):
                 drag_spec.validate(db, "w1", {
@@ -428,7 +434,9 @@ def test_approved_element_token_click_uses_the_token(monkeypatch) -> None:
         )
         result = tool_spec("computer_click").execute(db, card, "user-1")
     assert result["token"] == "snap-1:0"
-    assert calls == [("computer:click", {"token": "snap-1:0", "button": "left", "clickCount": 1})]
+    assert calls == [("computer:click", {
+        "token": "snap-1:0", "button": "left", "clickCount": 1, "modifiers": [],
+    })]
 
 
 # ── 工具端点:真的开一张卡 ─────────────────────────────────
@@ -552,3 +560,75 @@ def test_batch_saves_a_final_screenshot(monkeypatch) -> None:
         asset = db.get(Asset, result["screenshot_asset_id"])
         assert asset is not None
         assert asset.kind == "image"
+
+
+def test_pointer_action_validates_and_executes(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {**payload}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        spec = tool_spec("computer_pointer")
+        spec.validate(db, "w1", {"action": "hover", "x": 10, "y": 20}, None)
+        assert spec.summarize(db, {"action": "down", "x": 10, "y": 20, "button": "middle"}) == (
+            "confirm_computerPointer",
+            {"action": "down", "x": 10, "y": 20, "button": "middle"},
+        )
+        card = types.SimpleNamespace(
+            payload={"action": "up", "x": 10, "y": 20, "button": "left", "modifiers": ["shift"], "scale": 1},
+            workspace_id="w1",
+        )
+        result = spec.execute(db, card, "user-1")
+    assert result["action"] == "up"
+    assert result["modifiers"] == ["shift"]
+    assert calls == [("computer:pointer", {
+        "action": "up", "x": 10, "y": 20, "button": "left", "modifiers": ["shift"],
+    })]
+
+
+def test_hold_and_horizontal_scroll_are_explicit_on_the_card(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {**payload}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        hold = tool_spec("computer_input")
+        assert hold.summarize(db, {"action": "press", "key": "Space", "hold_ms": 800}) == (
+            "confirm_computerKeyHold",
+            {"keys": "space", "ms": 800},
+        )
+        card = types.SimpleNamespace(
+            payload={"action": "press", "key": "Space", "hold_ms": 800, "modifiers": []},
+            workspace_id="w1",
+        )
+        hold.execute(db, card, "user-1")
+        scroll = tool_spec("computer_scroll")
+        assert scroll.summarize(db, {"dx": 4, "dy": 0}) == (
+            "confirm_computerScrollRight", {"steps": 4},
+        )
+    assert calls == [
+        ("computer:key", {"key": "space", "modifiers": [], "holdMs": 800}),
+    ]
+
+
+def test_special_click_has_a_truthful_card() -> None:
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        click = tool_spec("computer_click")
+        assert click.summarize(db, {
+            "x": 5, "y": 6, "button": "middle", "click_count": 3, "modifiers": ["shift"],
+        }) == (
+            "confirm_computerSpecialClick",
+            {"x": 5, "y": 6, "button": "middle", "keys": "shift+triple-click"},
+        )

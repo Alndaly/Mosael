@@ -84,9 +84,9 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
 
     const result = await driver.act({ kind: "click", token, button: "left", clickCount: 1 });
 
-    expect(result).toEqual({ x: 140, y: 220, button: "left", clickCount: 1 });
+    expect(result).toEqual({ x: 140, y: 220, button: "left", clickCount: 1, modifiers: [] });
     expect(win.webContents.sendInputEvent).toHaveBeenLastCalledWith({
-      type: "mouseUp", x: 140, y: 220, button: "left", clickCount: 1,
+      type: "mouseUp", x: 140, y: 220, button: "left", clickCount: 1, modifiers: [],
     });
     await expect(driver.act({ kind: "click", token })).rejects.toThrow(/snapshot expired/);
   });
@@ -123,14 +123,25 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     const win = fakeWindow();
     const driver = new OwnWindowDriver(() => win);
     const click = await driver.act({ kind: "click", x: 10, y: 20, button: "left", clickCount: 1 });
-    expect(click).toEqual({ x: 10, y: 20, button: "left", clickCount: 1 });
+    expect(click).toEqual({ x: 10, y: 20, button: "left", clickCount: 1, modifiers: [] });
     const typed = await driver.act({ kind: "type", text: "hi" });
     expect(typed).toEqual({ typed: 2 });
-    const scrolled = await driver.act({ kind: "scroll", dy: 2, x: null, y: null });
+    const scrolled = await driver.act({ kind: "scroll", dy: 2, dx: 0, x: null, y: null });
     expect(scrolled.dy).toBe(2);
+    expect(scrolled.dx).toBe(0);
+
+    const horizontal = await driver.act({ kind: "scroll", dy: 0, dx: 2, x: 10, y: 20 });
+    expect(horizontal.dx).toBe(2);
+    const wheel = win.webContents.sendInputEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === "mouseWheel")
+      .reduce((sum: number, event: { deltaX?: number }) => sum + Number(event.deltaX || 0), 0);
+    expect(wheel).toBe(200);
     const pressed = await driver.act({ kind: "key", key: "Enter", modifiers: ["cmd"] });
-    expect(pressed).toEqual({ key: "Enter", modifiers: ["cmd"], keyCode: "Enter" });
+    expect(pressed).toMatchObject({ key: "Enter", modifiers: ["cmd"], keyCode: "Enter", holdMs: 0 });
     expect(win.webContents.sendInputEvent).toHaveBeenLastCalledWith({ type: "keyUp", keyCode: "Enter", modifiers: ["command"] });
+    const held = await driver.act({ kind: "key", key: "Space", modifiers: [], holdMs: 20 });
+    expect(held.holdMs).toBe(20);
     expect(win.webContents.sendInputEvent).toHaveBeenCalled();
     expect(win.webContents.insertText).toHaveBeenCalledWith("hi");
 

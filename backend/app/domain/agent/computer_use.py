@@ -57,6 +57,7 @@ DESKTOP_SCROLL_CHANNEL = "computer:desktop-scroll"
 #: 动手:L1 的点击与输入(ADR 0075 的 P1)。坐标是**看着的那张图**上的(缩放过的)像素,
 #: 这里除以 scale 换成窗口的 CSS 像素再交给主进程 —— 模型不需要知道缩放这回事。
 CLICK_CHANNEL = "computer:click"
+POINTER_CHANNEL = "computer:pointer"
 DRAG_CHANNEL = "computer:drag"
 TYPE_CHANNEL = "computer:type"
 KEY_CHANNEL = "computer:key"
@@ -80,8 +81,11 @@ MIN_WAIT_MS = 100
 MAX_WAIT_MS = 15_000
 DEFAULT_WAIT_MS = 5_000
 
-#: 能点的键。
+#: 能点的键。L3 仍然只开放左右键;L1 额外支持中键,但它与 L3 的驱动能力不是一回事。
 CLICK_BUTTONS = ("left", "right")
+L1_BUTTONS = ("left", "right", "middle")
+L1_POINTER_ACTIONS = ("hover", "down", "up")
+MAX_HOLD_MS = 300_000
 #: 一次最多输入这么多字符。再多就不是「在输入框里写一句话」,而是整段粘贴了。
 MAX_TYPE_CHARS = 2000
 
@@ -318,7 +322,7 @@ def desktop_click(
     kind = str(button or "left").strip().lower()
     if kind not in CLICK_BUTTONS:
         raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
-    count = _click_count(click_count)
+    count = _desktop_click_count(click_count)
     _mark_touched()
     answer = _host_call(DESKTOP_CLICK_CHANNEL, {**target, "button": kind, "clickCount": count})
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
@@ -443,14 +447,15 @@ def key_payload(key: object, modifiers: object) -> tuple[str, list[str]]:
     return normalized, list(dict.fromkeys(mods))
 
 
-def press(key: object, modifiers: object = None) -> dict[str, Any]:
-    """在 Mosael 主窗口里按一个键或组合键(不插入文字)。"""
+def press(key: object, modifiers: object = None, hold_ms: object = 0) -> dict[str, Any]:
+    """在 Mosael 主窗口里按一个键或组合键;`hold_ms` > 0 时按住这么久再松开。"""
     normalized, mods = key_payload(key, modifiers)
+    hold = _hold_ms(hold_ms)
     _mark_touched()
-    answer = _host_call(KEY_CHANNEL, {"key": normalized, "modifiers": mods})
+    answer = _host_call(KEY_CHANNEL, {"key": normalized, "modifiers": mods, "holdMs": hold})
     if not isinstance(answer, dict):
         raise ComputerUseError("The Mosael window bridge answered without confirming the key press.")
-    return {**answer, "key": normalized, "modifiers": mods}
+    return {**answer, "key": normalized, "modifiers": mods, "holdMs": hold}
 
 
 def desktop_press(
@@ -488,6 +493,7 @@ def click(
     click_count: object = 1,
     scale: float = DEFAULT_SCALE,
     token: object = "",
+    modifiers: object = None,
 ) -> dict[str, Any]:
     """点一下 Mosael 主窗口。`x`/`y` 是图片像素;`token` 是截图元素清单里的一次性令牌。
 
@@ -495,12 +501,15 @@ def click(
     """
     element = _element_token(token)
     kind = str(button or "left").strip().lower()
-    if kind not in CLICK_BUTTONS:
-        raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
+    if kind not in L1_BUTTONS:
+        raise ComputerUseError(f'button must be "left", "right" or "middle" (got {button!r}).')
     count = _click_count(click_count)
+    mods = _modifiers(modifiers)
     if element:
         _mark_touched()
-        answer = _host_call(CLICK_CHANNEL, {"token": element, "button": kind, "clickCount": count})
+        answer = _host_call(CLICK_CHANNEL, {
+            "token": element, "button": kind, "clickCount": count, "modifiers": mods,
+        })
         if not isinstance(answer, dict) or answer.get("x") is None:
             raise ComputerUseError("The Mosael window bridge answered without confirming the click.")
         return {**answer, "button": kind, "clickCount": count, "token": element}
@@ -508,10 +517,14 @@ def click(
     css_x = _screenshot_coordinate(x, "x", factor)
     css_y = _screenshot_coordinate(y, "y", factor)
     _mark_touched()
-    answer = _host_call(CLICK_CHANNEL, {"x": css_x, "y": css_y, "button": kind, "clickCount": count})
+    answer = _host_call(CLICK_CHANNEL, {
+        "x": css_x, "y": css_y, "button": kind, "clickCount": count, "modifiers": mods,
+    })
     if not isinstance(answer, dict) or answer.get("x") is None:
         raise ComputerUseError("The Mosael window bridge answered without confirming the click.")
-    return {"x": css_x, "y": css_y, "scale": factor, "button": kind, "clickCount": count}
+    return {
+        "x": css_x, "y": css_y, "scale": factor, "button": kind, "clickCount": count, "modifiers": mods,
+    }
 
 
 def drag(
@@ -555,6 +568,37 @@ def drag(
     }
 
 
+def pointer(
+    action: object,
+    x: object,
+    y: object,
+    button: object = "left",
+    modifiers: object = None,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在 Mosael 主窗口里移动指针或单独按下/抬起鼠标键。`action`: hover / down / up。"""
+    kind = str(action or "").strip().lower()
+    if kind not in L1_POINTER_ACTIONS:
+        raise ComputerUseError('action must be "hover", "down" or "up".')
+    mouse = str(button or "left").strip().lower()
+    if mouse not in L1_BUTTONS:
+        raise ComputerUseError(f'button must be "left", "right" or "middle" (got {button!r}).')
+    factor = _scale(scale)
+    css_x = _screenshot_coordinate(x, "x", factor)
+    css_y = _screenshot_coordinate(y, "y", factor)
+    mods = _modifiers(modifiers)
+    _mark_touched()
+    answer = _host_call(POINTER_CHANNEL, {
+        "action": kind, "x": css_x, "y": css_y, "button": mouse, "modifiers": mods,
+    })
+    if not isinstance(answer, dict) or answer.get("action") != kind:
+        raise ComputerUseError("The Mosael window bridge answered without confirming the pointer action.")
+    return {
+        **answer, "action": kind, "x": css_x, "y": css_y, "scale": factor,
+        "button": mouse, "modifiers": mods,
+    }
+
+
 def type_text(text: object = "") -> dict[str, Any]:
     """往 Mosael 主窗口里输入一段文字(输入到当前焦点)。"""
 
@@ -574,24 +618,26 @@ def scroll(
     x: object = None,
     y: object = None,
     scale: float = DEFAULT_SCALE,
+    dx: object = 0,
 ) -> dict[str, Any]:
-    """在 Mosael 主窗口里滚动。`dy` 是滚轮格数(正 = 往下);`x`/`y` 是在图片上的指针位置(可省)。"""
+    """在 Mosael 主窗口里滚动;`dy` 正 = 下,`dx` 正 = 右,至少一个非零。"""
     factor = _scale(scale)
-    if isinstance(dy, bool) or not isinstance(dy, (int, float)):
-        raise ComputerUseError(f"dy must be a number of wheel notches (got {dy!r}).")
-    notches = int(dy)
-    if notches == 0 or abs(notches) > MAX_SCROLL_NOTCHES:
-        raise ComputerUseError(f"dy must be a non-zero integer between -{MAX_SCROLL_NOTCHES} and {MAX_SCROLL_NOTCHES}.")
-    payload: dict[str, Any] = {"dy": notches}
+    vertical = _scroll_notches(dy, "dy")
+    horizontal = _scroll_notches(dx, "dx")
+    if vertical == 0 and horizontal == 0:
+        raise ComputerUseError("dx or dy must be a non-zero integer.")
+    payload: dict[str, Any] = {"dy": vertical, "dx": horizontal}
     if x is not None:
         payload["x"] = _screenshot_coordinate(x, "x", factor)
     if y is not None:
         payload["y"] = _screenshot_coordinate(y, "y", factor)
     _mark_touched()
     answer = _host_call(SCROLL_CHANNEL, payload)
-    if not isinstance(answer, dict) or answer.get("dy") != notches:
+    if not isinstance(answer, dict) or answer.get("dy") != vertical or answer.get("dx") != horizontal:
         raise ComputerUseError("The Mosael window bridge answered without confirming the scroll.")
-    return {"dy": notches, "scale": factor, "x": payload.get("x"), "y": payload.get("y")}
+    return {
+        "dy": vertical, "dx": horizontal, "scale": factor, "x": payload.get("x"), "y": payload.get("y"),
+    }
 
 
 def _screenshot_coordinate(value: object, axis: str, factor: float) -> int:
@@ -605,9 +651,45 @@ def _screenshot_coordinate(value: object, axis: str, factor: float) -> int:
 
 
 def _click_count(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2, 3):
+        raise ComputerUseError(f"click_count must be 1 (single), 2 (double) or 3 (triple), not {value!r}.")
+    return int(value)
+
+
+def _desktop_click_count(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2):
         raise ComputerUseError(f"click_count must be 1 (single) or 2 (double), not {value!r}.")
     return int(value)
+
+
+def _scroll_notches(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ComputerUseError(f"{name} must be a number of wheel notches (got {value!r}).")
+    notches = int(value)
+    if abs(notches) > MAX_SCROLL_NOTCHES:
+        raise ComputerUseError(f"{name} must be between -{MAX_SCROLL_NOTCHES} and {MAX_SCROLL_NOTCHES}.")
+    return notches
+
+
+def _modifiers(value: object) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ComputerUseError("modifiers must be a list such as [\"shift\", \"ctrl\"].")
+    mods = [str(one).strip().lower() for one in value if str(one).strip()]
+    unsupported = [one for one in mods if one not in KEY_MODIFIERS]
+    if unsupported:
+        raise ComputerUseError(f"unsupported modifier(s): {', '.join(unsupported)}")
+    return list(dict.fromkeys(mods))
+
+
+def _hold_ms(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ComputerUseError("hold_ms must be a number of milliseconds.")
+    hold = int(value)
+    if hold < 0 or hold > MAX_HOLD_MS:
+        raise ComputerUseError(f"hold_ms must be between 0 and {MAX_HOLD_MS}.")
+    return hold
 
 
 def _element_token(value: object) -> str:
@@ -865,6 +947,10 @@ __all__ = [
     "CLICK_BUTTONS",
     "CLICK_CHANNEL",
     "ComputerUseError",
+    "L1_BUTTONS",
+    "L1_POINTER_ACTIONS",
+    "MAX_HOLD_MS",
+    "POINTER_CHANNEL",
     "DEFAULT_DRAG_MS",
     "DEFAULT_SCALE",
     "DEFAULT_WAIT_MS",
@@ -892,6 +978,7 @@ __all__ = [
     "TYPE_CHANNEL",
     "click",
     "drag",
+    "pointer",
     "end_turn",
     "desktop_accessibility",
     "desktop_click",

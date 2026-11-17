@@ -91,6 +91,7 @@ const IPC = Object.freeze({
     computerDesktopWait: "computer:desktop-wait",
     computerDesktopVerify: "computer:desktop-verify",
     computerClick: "computer:click",
+    computerPointer: "computer:pointer",
     computerDrag: "computer:drag",
     computerWait: "computer:wait",
     computerVerify: "computer:verify",
@@ -855,25 +856,51 @@ function parseComputerDrag(value) {
  * 点一下 Mosael 自己的窗口:坐标是**页面 CSS 像素**(左上角为原点),和 `capturePage` 拍出来的
  * 图同一个坐标系(缩放在后端做,见 domain/agent/computer_use)。按钮只认左/右,连点只认 1/2。
  */
+function parseModifiers(value, channel) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 5 || value.some((one) => typeof one !== "string"
+      || !["cmd", "ctrl", "alt", "shift", "meta"].includes(one))) {
+    throw new TypeError(`${channel}: modifiers must be an array of cmd, ctrl, alt, shift or meta`);
+  }
+  return [...new Set(value)];
+}
+
+function parseComputerPointer(value) {
+  const channel = IPC.invoke.computerPointer;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["action", "x", "y", "button", "modifiers"], channel);
+  const action = payload.action;
+  if (!["hover", "down", "up"].includes(action)) throw new TypeError(`${channel}: action must be hover, down or up`);
+  const coordinate = (key) => {
+    const n = payload[key];
+    if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
+    return n;
+  };
+  const button = payload.button === undefined ? "left" : payload.button;
+  if (!["left", "right", "middle"].includes(button)) throw new TypeError(`${channel}: button must be "left", "right" or "middle"`);
+  return { action, x: coordinate("x"), y: coordinate("y"), button, modifiers: parseModifiers(payload.modifiers, channel) };
+}
+
 function parseComputerClick(value) {
   const channel = IPC.invoke.computerClick;
   const payload = record(value, channel);
-  onlyKeys(payload, ["x", "y", "button", "clickCount", "token"], channel);
+  onlyKeys(payload, ["x", "y", "button", "clickCount", "token", "modifiers"], channel);
   const button = payload.button === undefined ? "left" : payload.button;
-  if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
+  if (!["left", "right", "middle"].includes(button)) throw new TypeError(`${channel}: button must be "left", "right" or "middle"`);
   const clickCount = payload.clickCount === undefined ? 1 : payload.clickCount;
-  if (clickCount !== 1 && clickCount !== 2) throw new TypeError(`${channel}: clickCount must be 1 or 2`);
+  if (![1, 2, 3].includes(clickCount)) throw new TypeError(`${channel}: clickCount must be 1, 2 or 3`);
+  const modifiers = parseModifiers(payload.modifiers, channel);
   const token = typeof payload.token === "string" ? payload.token.trim() : "";
   if (token) {
     if (!/^[A-Za-z0-9-]{1,64}:\d{1,8}$/.test(token)) throw new TypeError(`${channel}: token is invalid`);
-    return { token, button, clickCount };
+    return { token, button, clickCount, modifiers };
   }
   const coordinate = (key) => {
     const n = payload[key];
     if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
     return n;
   };
-  return { x: coordinate("x"), y: coordinate("y"), button, clickCount };
+  return { x: coordinate("x"), y: coordinate("y"), button, clickCount, modifiers };
 }
 
 /**
@@ -883,24 +910,34 @@ function parseComputerClick(value) {
 function parseComputerScroll(value) {
   const channel = IPC.invoke.computerScroll;
   const payload = record(value, channel);
-  onlyKeys(payload, ["dy", "x", "y"], channel);
-  const dy = payload.dy;
-  if (!Number.isInteger(dy) || dy === 0 || Math.abs(dy) > 30) {
-    throw new TypeError(`${channel}: dy must be a non-zero integer between -30 and 30 (wheel notches)`);
+  onlyKeys(payload, ["dy", "dx", "x", "y"], channel);
+  const dy = payload.dy === undefined ? 0 : payload.dy;
+  const dx = payload.dx === undefined ? 0 : payload.dx;
+  for (const [key, value] of [["dy", dy], ["dx", dx]]) {
+    if (!Number.isInteger(value) || Math.abs(value) > 30) {
+      throw new TypeError(`${channel}: ${key} must be an integer between -30 and 30 (wheel notches)`);
+    }
   }
+  if (dy === 0 && dx === 0) throw new TypeError(`${channel}: dx or dy must be non-zero`);
   const point = (key) => {
     if (payload[key] === undefined) return null;
     const n = payload[key];
     if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
     return n;
   };
-  return { dy, x: point("x"), y: point("y") };
+  return { dy, dx, x: point("x"), y: point("y") };
 }
 
 /** 在 Mosael 自己的窗口里按一个键或组合键。 */
 function parseComputerKey(value) {
   const channel = IPC.invoke.computerKey;
-  return parseKeyInput(record(value, channel), channel, []);
+  const payload = record(value, channel);
+  const parsed = parseKeyInput(payload, channel, ["holdMs"]);
+  const holdMs = payload.holdMs === undefined ? 0 : payload.holdMs;
+  if (!Number.isInteger(holdMs) || holdMs < 0 || holdMs > 300000) {
+    throw new TypeError(`${channel}: holdMs must be an integer between 0 and 300000`);
+  }
+  return { ...parsed, holdMs };
 }
 
 /** 往 Mosael 自己的窗口里输入一段文字(输入到当前焦点,走 `webContents.insertText`)。 */
@@ -1261,6 +1298,7 @@ module.exports = {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseComputerPointer,
   parseComputerDrag,
   parseComputerWait,
   parseComputerVerify,

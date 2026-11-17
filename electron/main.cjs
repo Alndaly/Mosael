@@ -56,6 +56,7 @@ const {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseComputerPointer,
   parseComputerDesktopAccessibility,
   parseComputerDrag,
   parseComputerWait,
@@ -512,6 +513,12 @@ async function answerHostBridgeRequest(line, socket) {
       withDesktopAction((driver) => driver.act({ kind: "scroll", replay: true, ...parseComputerDesktopScroll(request.payload) })),
     [IPC.invoke.computerClick]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
+    [IPC.invoke.computerPointer]: () => {
+      const pointer = parseComputerPointer(request.payload);
+      return withComputerUse(() => computerUseDriver.act({
+        ...pointer, kind: pointer.action, cursor: computerUseCursor,
+      }));
+    },
     [IPC.invoke.computerDrag]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "drag", ...parseComputerDrag(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerWait]: () => {

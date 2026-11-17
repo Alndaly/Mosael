@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **161** 个工具,其中 **57** 个走确认卡、**1** 个停下来等用户作答。
+共 **162** 个工具,其中 **58** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -70,8 +70,9 @@
 | `computer_desktop_windows` | 直接执行 | Read-only: list visible desktop windows, including other apps. |
 | `computer_drag` | 确认卡 | Confirmation required: drag from one point to another in Mosael's app window. |
 | `computer_input` | 确认卡 | Confirmation required: type text or press a key in Mosael's app window. |
+| `computer_pointer` | 确认卡 | Confirmation required: hover or press/release a mouse button in Mosael's window. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
-| `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |
+| `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, dx > 0 = right). |
 | `computer_verify` | 直接执行 | Read-only: check right now whether visible text exists in Mosael's app window. |
 | `computer_wait` | 直接执行 | Read-only: wait until visible text appears in Mosael's app window. |
 | `computer_zoom` | 直接执行 | Read-only: crop one region of Mosael's window at higher resolution. |

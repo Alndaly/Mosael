@@ -28,6 +28,7 @@ const contract = require("./ipc-contract.cjs") as {
   };
   parseComputerWait: (value: unknown) => { text: string; timeoutMs: number };
   parseComputerVerify: (value: unknown) => { text: string; absent: boolean };
+  parseComputerPointer: (value: unknown) => { action: string; x: number; y: number; button: string; modifiers: string[] };
   parseComputerScroll: (value: unknown) => { dy: number; x: number | null; y: number | null };
 };
 
@@ -77,7 +78,7 @@ function loadActions() {
     computerUseWindow: undefined as unknown as (mainWindow?: FakeWindow) => FakeWindow | null,
   };
   vm.runInNewContext(
-    `${sourceOf("spinWait")}\n${sourceOf("computerUseWindow")}\n${sourceOf("dragMosaelWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
+    `${sourceOf("spinWait")}\n${sourceOf("computerUseWindow")}\n${sourceOf("electronModifiers")}\n${sourceOf("pointerMosaelWindow")}\n${sourceOf("dragMosaelWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
       "this.computerUseWindow = computerUseWindow;\n" +
       "this.dragMosaelWindow = dragMosaelWindow;\n" +
       "this.clickMosaelWindow = clickMosaelWindow;\n" +
@@ -91,6 +92,7 @@ function loadActions() {
     dragMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     typeIntoMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     scrollMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+    pointerMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
   };
 }
 
@@ -99,24 +101,29 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
     expect(contract.IPC.invoke.computerClick).toBe("computer:click");
     expect(contract.IPC.invoke.computerType).toBe("computer:type");
     expect(contract.IPC.invoke.computerKey).toBe("computer:key");
-    expect(contract.parseComputerKey({ key: "Enter" })).toEqual({ key: "Enter", modifiers: [] });
-    expect(contract.parseComputerKey({ key: "a", modifiers: ["cmd", "shift"] })).toEqual({ key: "a", modifiers: ["cmd", "shift"] });
+    expect(contract.parseComputerKey({ key: "Enter" })).toEqual({ key: "Enter", modifiers: [], holdMs: 0 });
+    expect(contract.parseComputerKey({ key: "a", modifiers: ["cmd", "shift"] })).toEqual({
+      key: "a", modifiers: ["cmd", "shift"], holdMs: 0,
+    });
     expect(() => contract.parseComputerKey({ key: "" })).toThrow(/key must be/);
     expect(() => contract.parseComputerKey({ key: "Enter", modifiers: ["hyper"] })).toThrow(/modifiers/);
     expect(contract.IPC.invoke.computerDesktopKey).toBe("computer:desktop-key");
 
     expect(contract.parseComputerClick({ x: 10, y: 20 })).toEqual({
-      x: 10, y: 20, button: "left", clickCount: 1,
+      x: 10, y: 20, button: "left", clickCount: 1, modifiers: [],
     });
     expect(contract.parseComputerClick({ token: "snap-1:0" })).toEqual({
-      token: "snap-1:0", button: "left", clickCount: 1,
+      token: "snap-1:0", button: "left", clickCount: 1, modifiers: [],
     });
     expect(() => contract.parseComputerClick({ token: "bad" })).toThrow(/token/);
     //: 没有 window 这一维了 —— 传它就是多了一个字段,直接拒。
     expect(() => contract.parseComputerClick({ x: 1, y: 2, window: "publish" })).toThrow(/unexpected/);
     expect(() => contract.parseComputerClick({ x: -1, y: 0 })).toThrow(/x must be/);
-    expect(() => contract.parseComputerClick({ x: 1, y: 0, button: "middle" })).toThrow(/button/);
-    expect(() => contract.parseComputerClick({ x: 1, y: 0, clickCount: 3 })).toThrow(/clickCount/);
+    expect(contract.parseComputerClick({ x: 1, y: 0, button: "middle", clickCount: 3 })).toMatchObject({
+      button: "middle", clickCount: 3,
+    });
+    expect(() => contract.parseComputerClick({ x: 1, y: 0, button: "back" })).toThrow(/button/);
+    expect(() => contract.parseComputerClick({ x: 1, y: 0, clickCount: 4 })).toThrow(/clickCount/);
 
 
     expect(contract.parseComputerType({ text: "hi" })).toEqual({ text: "hi" });
@@ -127,6 +134,10 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
     expect(contract.parseComputerWait({ text: " 保存 " })).toEqual({ text: "保存", timeoutMs: 5000 });
     expect(() => contract.parseComputerWait({ text: "" })).toThrow(/text/);
     expect(() => contract.parseComputerWait({ text: "x", timeoutMs: 20 })).toThrow(/timeoutMs/);
+    expect(contract.IPC.invoke.computerPointer).toBe("computer:pointer");
+    expect(contract.parseComputerPointer({ action: "hover", x: 1, y: 2 })).toEqual({
+      action: "hover", x: 1, y: 2, button: "left", modifiers: [],
+    });
     expect(contract.IPC.invoke.computerVerify).toBe("computer:verify");
     expect(contract.parseComputerVerify({ text: "保存" })).toEqual({ text: "保存", absent: false });
     expect(contract.parseComputerVerify({ text: "保存", absent: true })).toEqual({ text: "保存", absent: true });
@@ -142,8 +153,8 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
     expect(() => contract.parseComputerDrag({ fromX: 1, fromY: 2, toX: 3, toY: 4, durationMs: 50 })).toThrow(/durationMs/);
 
     expect(contract.IPC.invoke.computerScroll).toBe("computer:scroll");
-    expect(contract.parseComputerScroll({ dy: 3 })).toEqual({ dy: 3, x: null, y: null });
-    expect(contract.parseComputerScroll({ dy: -2, x: 10, y: 20 })).toEqual({ dy: -2, x: 10, y: 20 });
+    expect(contract.parseComputerScroll({ dy: 3 })).toEqual({ dy: 3, dx: 0, x: null, y: null });
+    expect(contract.parseComputerScroll({ dy: -2, x: 10, y: 20 })).toEqual({ dy: -2, dx: 0, x: 10, y: 20 });
     expect(() => contract.parseComputerScroll({ dy: 0 })).toThrow(/non-zero/);
     expect(() => contract.parseComputerScroll({ dy: 31 })).toThrow(/30/);
     expect(() => contract.parseComputerScroll({ dy: 1, x: -1 })).toThrow(/non-negative/);
@@ -190,11 +201,11 @@ describe("点的是 Mosael 自己的窗口", () => {
 
     const sent = main.webContents.sendInputEvent.mock.calls.map(([event]) => event);
     expect(sent).toEqual([
-      { type: "mouseMove", x: 120, y: 80 },
-      { type: "mouseDown", x: 120, y: 80, button: "right", clickCount: 2 },
-      { type: "mouseUp", x: 120, y: 80, button: "right", clickCount: 2 },
+      { type: "mouseMove", x: 120, y: 80, modifiers: [] },
+      { type: "mouseDown", x: 120, y: 80, button: "right", clickCount: 2, modifiers: [] },
+      { type: "mouseUp", x: 120, y: 80, button: "right", clickCount: 2, modifiers: [] },
     ]);
-    expect(result).toEqual({ x: 120, y: 80, button: "right", clickCount: 2 });
+    expect(result).toEqual({ x: 120, y: 80, button: "right", clickCount: 2, modifiers: [] });
     //: 点之前先聚焦窗口与页面 —— sendInputEvent 作用的对象是窗口里那个页面。
     expect(main.focus).toHaveBeenCalledTimes(1);
     expect(main.webContents.focus).toHaveBeenCalledTimes(1);
@@ -238,6 +249,7 @@ describe("输入到 Mosael 自己的窗口", () => {
       clickMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     dragMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
       scrollMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+    pointerMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
       typeIntoMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     };
     const cursor = { showAt: vi.fn() };
@@ -267,7 +279,7 @@ describe("输入到 Mosael 自己的窗口", () => {
     expect(wheels.length).toBeGreaterThan(1);
     expect(wheels.every((event) => event.x === 500 && event.y === 400)).toBe(true);
     expect(wheels.reduce((sum, event) => sum + event.deltaY, 0)).toBe(-300);
-    expect(result).toEqual({ dy: 3, x: 500, y: 400 });
+    expect(result).toEqual({ dy: 3, dx: 0, x: 500, y: 400 });
 
     // 指到坐标上就照给的来;往上的 dy 是正的 deltaY。
     main.webContents.sendInputEvent.mockClear();
@@ -302,5 +314,23 @@ describe("输入到 Mosael 自己的窗口", () => {
     );
     expect(minimized.webContents.insertText).not.toHaveBeenCalled();
     expect(() => typeIntoMosaelWindow({ text: "x" }, undefined as unknown as FakeWindow)).toThrow(/no Mosael window/);
+  });
+});
+
+
+describe("指针原语", () => {
+  it("hover / down / up 只发送对应事件", () => {
+    const main = fakeWindow({ size: [1000, 800] });
+    const { pointerMosaelWindow } = loadActions();
+    const hover = pointerMosaelWindow({ action: "hover", x: 10, y: 20 }, main);
+    expect(hover).toMatchObject({ action: "hover", x: 10, y: 20 });
+    expect(main.webContents.sendInputEvent).toHaveBeenLastCalledWith({ type: "mouseMove", x: 10, y: 20, modifiers: [] });
+
+    main.webContents.sendInputEvent.mockClear();
+    pointerMosaelWindow({ action: "down", x: 10, y: 20, button: "middle" }, main);
+    expect(main.webContents.sendInputEvent.mock.calls.map(([e]) => e.type)).toEqual(["mouseMove", "mouseDown"]);
+    expect(main.webContents.sendInputEvent).toHaveBeenLastCalledWith({
+      type: "mouseDown", x: 10, y: 20, button: "middle", clickCount: 1, modifiers: [],
+    });
   });
 });

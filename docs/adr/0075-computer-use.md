@@ -106,7 +106,7 @@ L1 的五个动作 —— 截图、点击、拖拽、滚动、输入 —— 都�
 | 项 | 状态 |
 | --- | --- |
 | L1 截图（应用主窗口，可缩放） | ✅ 已交付，工具 `computer_screenshot` |
-| L1 点击 / 拖拽 / 滚动 / 键盘输入 | ✅ 已交付（`computer_click` / `computer_drag` / `computer_scroll` / `computer_input`，含文字与按键/组合键），edit 档确认卡；带命令修饰键的快捷键动态升 external |
+| L1 点击 / 拖拽 / 滚动 / 键盘输入 | ✅ 已交付（`computer_click` / `computer_drag` / `computer_scroll` / `computer_input` / `computer_pointer`，含中键、三击、修饰键、hover、按下/抬起、按住键、水平滚动），edit 档确认卡；带命令修饰键的快捷键动态升 external |
 | L1 感知与等待 | ✅ 截图附带带一次性 token 的可见元素清单；`computer_click(token=…)` 重读 DOM 核对后才点；`computer_zoom` 放大区域；`computer_wait` 等文字，`computer_verify` 断言存在 / 不存在（只读） |
 | L1 批量动作 | ✅ `computer_batch`：一张 always-ask 卡列出最多 8 步，顺序执行、失败即停、默认保存收尾截图 |
 | 「被控制中」可见性 + 空闲退出 + 急停 + 光标 | ✅ 已交付（`computerUseGuard` / `Overlay` / `Cursor`） |

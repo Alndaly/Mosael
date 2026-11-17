@@ -309,6 +309,7 @@ def computer_click(
     scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
     token: Annotated[str, Field(description="Element token from computer_screenshot's elements list; use instead of x/y.")] = "",
     name: Annotated[str, Field(description="Human-readable element name from that list, for the confirmation card.")] = "",
+    modifiers: Annotated[list[str] | None, Field(description="Modifier keys held during the click: shift, ctrl, alt, cmd, meta.")] = None,
 ) -> dict[str, Any]:
     """Confirmation required: click a point or an element in Mosael's app window.
 
@@ -330,6 +331,35 @@ def computer_click(
                 "scale": scale,
                 "token": token,
                 "name": name,
+                "modifiers": modifiers or [],
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
+def computer_pointer(
+    action: Annotated[Literal["hover", "down", "up"], Field(description="Move the pointer, press a mouse button, or release it.")],
+    x: Annotated[int, Field(description="X pixel in the picture computer_screenshot returned.")],
+    y: Annotated[int, Field(description="Y pixel in the picture computer_screenshot returned.")],
+    button: Annotated[str, Field(description='"left", "right" or "middle".')] = "left",
+    modifiers: Annotated[list[str] | None, Field(description="Modifiers held during the pointer action: shift, ctrl, alt, cmd, meta.")] = None,
+    scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: hover or press/release a mouse button in Mosael's window.
+
+    Use hover to open tooltips/menus; use down then up for drags or selections that need steps
+    between them. Coordinates are screenshot pixels. Only acts inside Mosael's own UI.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_pointer",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "action": action, "x": x, "y": y, "button": button,
+                "modifiers": modifiers or [], "scale": scale,
             },
         },
     )
@@ -344,10 +374,10 @@ def computer_batch(
     """Confirmation required: run up to 8 UI actions in Mosael's window, in order.
 
     Each action is one of:
-      {"kind":"click","x":…,"y":…,"button":"left","click_count":1,"scale":1}
+      {"kind":"click","x":…,"y":…,"button":"left","click_count":1,"scale":1,"modifiers":["shift"]}
       {"kind":"drag","from_x":…,"from_y":…,"to_x":…,"to_y":…,"button":"left","duration_ms":300,"scale":1}
-      {"kind":"scroll","dy":3,"x":…,"y":…,"scale":1}
-      {"kind":"input","action":"type","text":"…"} or {"kind":"input","action":"press","key":"Enter","modifiers":[]}
+      {"kind":"scroll","dy":3,"dx":0,"x":…,"y":…,"scale":1}
+      {"kind":"input","action":"type","text":"…"} or {"kind":"input","action":"press","key":"Enter","modifiers":[],"hold_ms":0}
       {"kind":"wait","text":"Saved","timeout_ms":5000}
     Coordinates are pixels in the last computer_screenshot. The card lists every step; execution
     stops at the first failure. A final screenshot is saved as an asset by default. Element tokens
@@ -401,18 +431,19 @@ def computer_drag(
 
 @tool(effect="confirms")
 def computer_scroll(
-    dy: Annotated[int, Field(description="Wheel notches: positive scrolls down, negative up (max 30).")],
+    dy: Annotated[int, Field(description="Vertical wheel notches: positive down, negative up (max 30).")] = 0,
     x: Annotated[int | None, Field(description="Pointer x in the screenshot pixels (omit for the middle).")] = None,
     y: Annotated[int | None, Field(description="Pointer y in the screenshot pixels (omit for the middle).")] = None,
     scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
+    dx: Annotated[int, Field(description="Horizontal wheel notches: positive right, negative left (max 30).")] = 0,
 ) -> dict[str, Any]:
-    """Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines)."""
+    """Confirmation required: scroll in Mosael's app window (dy > 0 = down, dx > 0 = right)."""
     confirmation = _open_card(
         {
             "workspace_id": _default_workspace_id(),
             "tool": "computer_scroll",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"dy": dy, "x": x, "y": y, "scale": scale},
+            "payload": {"dy": dy, "dx": dx, "x": x, "y": y, "scale": scale},
         },
     )
     return _confirmation_reply(confirmation)
@@ -424,6 +455,7 @@ def computer_input(
     text: Annotated[str, Field(description="Text for action=\"type\" (at most 2000 characters).")] = "",
     key: Annotated[str, Field(description="A key for action=\"press\": a letter/digit, or Enter, Tab, Escape, ArrowUp, F5, ….")] = "",
     modifiers: Annotated[list[str] | None, Field(description='Modifiers for action="press": cmd, ctrl, alt, shift, meta.')] = None,
+    hold_ms: Annotated[int, Field(description="For action=press: hold the key down this many milliseconds before releasing (0–300000).")] = 0,
 ) -> dict[str, Any]:
     """Confirmation required: type text or press a key in Mosael's app window.
 
@@ -437,7 +469,7 @@ def computer_input(
             "workspace_id": _default_workspace_id(),
             "tool": "computer_input",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"action": action, "text": text, "key": key, "modifiers": modifiers or []},
+            "payload": {"action": action, "text": text, "key": key, "modifiers": modifiers or [], "hold_ms": hold_ms},
         },
     )
     return _confirmation_reply(confirmation)
