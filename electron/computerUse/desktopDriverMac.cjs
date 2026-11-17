@@ -364,7 +364,7 @@ class DesktopDriverMac {
   }
 
   async act(action = {}) {
-    if (!["click", "type", "key", "scroll", "drag"].includes(action.kind)) {
+    if (!["click", "hover", "down", "up", "type", "key", "scroll", "drag"].includes(action.kind)) {
       throw new TypeError(`Unsupported desktop action: ${String(action.kind)}`);
     }
     await this.requirePermission("accessibility");
@@ -388,15 +388,17 @@ class DesktopDriverMac {
       button: action.button ?? "left",
       clickCount: action.clickCount ?? 1,
       text: action.text ?? "",
+      modifiers: action.modifiers ?? [],
       ...(action.kind === "type" || action.kind === "key"
         ? { clickTarget: action.clickTarget !== false }
         : {}),
-      ...(action.kind === "key" ? { key: action.key ?? "", modifiers: action.modifiers ?? [] } : {}),
+      ...(action.kind === "key" ? { key: action.key ?? "", holdMs: action.holdMs ?? 0 } : {}),
       ...(action.kind === "drag" ? {
         toPoint: target.toPoint,
         durationMs: action.durationMs ?? 300,
       } : {}),
       dy: action.dy ?? 0,
+      dx: action.dx ?? 0,
     };
     const binary = await this.binary();
     const { stdout } = await this.runner(binary, ["perform"], 20000, JSON.stringify(request));
@@ -404,10 +406,11 @@ class DesktopDriverMac {
     const after = await capture();
     return {
       kind: action.kind,
+      action: action.kind,
       windowNumber: target.windowNumber,
       pid: target.pid,
       point: result.point ?? target.point,
-      ...(action.kind === "key" ? { key: action.key, modifiers: action.modifiers ?? [] } : {}),
+      ...(action.kind === "key" ? { key: action.key, modifiers: action.modifiers ?? [], holdMs: action.holdMs ?? 0 } : {}),
       ...(action.kind === "drag" ? {
         toPoint: result.toPoint ?? target.toPoint,
         durationMs: action.durationMs ?? 300,
@@ -423,7 +426,7 @@ class DesktopDriverMac {
             ...(action.kind === "type" || action.kind === "key"
               ? { clickTarget: action.clickTarget !== false }
               : {}),
-            ...(action.kind === "key" ? { key: action.key ?? "", modifiers: action.modifiers ?? [] } : {}),
+            ...(action.kind === "key" ? { key: action.key ?? "", holdMs: action.holdMs ?? 0 } : {}),
             ...(action.kind === "drag" ? { durationMs: action.durationMs ?? 300 } : {}),
             dy: action.dy ?? 0,
           },

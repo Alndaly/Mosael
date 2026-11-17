@@ -62,6 +62,7 @@ const {
   parseComputerWait,
   parseComputerVerify,
   parseComputerDesktopClick,
+  parseComputerDesktopPointer,
   parseComputerDesktopDrag,
   parseComputerDesktopWait,
   parseComputerDesktopVerify,
@@ -501,6 +502,12 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerDesktopAccessibility]: () => desktopObserve(parseComputerDesktopAccessibility(request.payload)),
     [IPC.invoke.computerDesktopClick]: () =>
       withDesktopAction((driver) => driver.act({ kind: "click", replay: true, ...parseComputerDesktopClick(request.payload) })),
+    [IPC.invoke.computerDesktopPointer]: () => {
+      const pointer = parseComputerDesktopPointer(request.payload);
+      return withDesktopAction((driver) => driver.act({
+        kind: pointer.action, ...pointer, replay: false,
+      }));
+    },
     [IPC.invoke.computerDesktopDrag]: () =>
       withDesktopAction((driver) => driver.act({ kind: "drag", replay: true, ...parseComputerDesktopDrag(request.payload) })),
     [IPC.invoke.computerDesktopWait]: () => desktopWait(parseComputerDesktopWait(request.payload)),

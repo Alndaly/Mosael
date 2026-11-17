@@ -128,25 +128,71 @@ func requestPermission(_ kind: String) -> Bool {
     }
 }
 
-func postClick(_ point: CGPoint, button: CGMouseButton, count: Int) {
-    let downType: CGEventType = button == .right ? .rightMouseDown : .leftMouseDown
-    let upType: CGEventType = button == .right ? .rightMouseUp : .leftMouseUp
+func mouseEventTypes(_ button: CGMouseButton) -> (down: CGEventType, up: CGEventType) {
+    switch button {
+    case .right: return (.rightMouseDown, .rightMouseUp)
+    case .center: return (.otherMouseDown, .otherMouseUp)
+    default: return (.leftMouseDown, .leftMouseUp)
+    }
+}
+
+func mouseButton(_ name: String) -> CGMouseButton {
+    switch name.lowercased() {
+    case "right": return .right
+    case "middle": return .center
+    default: return .left
+    }
+}
+
+func modifierFlags(_ modifiers: [String]) throws -> CGEventFlags {
+    var flags: CGEventFlags = []
+    for modifier in modifiers {
+        switch modifier.lowercased() {
+        case "cmd", "meta": flags.insert(.maskCommand)
+        case "ctrl": flags.insert(.maskControl)
+        case "alt": flags.insert(.maskAlternate)
+        case "shift": flags.insert(.maskShift)
+        default:
+            throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "unsupported modifier: \(modifier)"])
+        }
+    }
+    return flags
+}
+
+func postClick(_ point: CGPoint, button: CGMouseButton, count: Int, modifiers: [String] = []) {
+    let types = mouseEventTypes(button)
+    let flags = (try? modifierFlags(modifiers)) ?? []
     for click in 1...max(1, count) {
-        if let down = CGEvent(mouseEventSource: nil, mouseType: downType, mouseCursorPosition: point, mouseButton: button) {
+        if let down = CGEvent(mouseEventSource: nil, mouseType: types.down, mouseCursorPosition: point, mouseButton: button) {
+            down.flags = flags
             down.setIntegerValueField(.mouseEventClickState, value: Int64(click))
             down.post(tap: .cghidEventTap)
         }
-        if let up = CGEvent(mouseEventSource: nil, mouseType: upType, mouseCursorPosition: point, mouseButton: button) {
+        if let up = CGEvent(mouseEventSource: nil, mouseType: types.up, mouseCursorPosition: point, mouseButton: button) {
+            up.flags = flags
             up.setIntegerValueField(.mouseEventClickState, value: Int64(click))
             up.post(tap: .cghidEventTap)
         }
     }
 }
 
-func postDrag(from: CGPoint, to: CGPoint, button: CGMouseButton, durationMs: Int) {
-    let downType: CGEventType = button == .right ? .rightMouseDown : .leftMouseDown
+func postMouseButton(_ point: CGPoint, button: CGMouseButton, down: Bool, modifiers: [String] = []) {
+    let types = mouseEventTypes(button)
+    let type = down ? types.down : types.up
+    let flags = (try? modifierFlags(modifiers)) ?? []
+    if let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button) {
+        event.flags = flags
+        event.setIntegerValueField(.mouseEventClickState, value: 1)
+        event.post(tap: .cghidEventTap)
+    }
+}
+
+func postDrag(from: CGPoint, to: CGPoint, button: CGMouseButton, durationMs: Int, modifiers: [String] = []) {
+    let types = mouseEventTypes(button)
+    let downType = types.down
     let dragType: CGEventType = button == .right ? .rightMouseDragged : .leftMouseDragged
-    let upType: CGEventType = button == .right ? .rightMouseUp : .leftMouseUp
+    let upType = types.up
+    let flags = (try? modifierFlags(modifiers)) ?? []
     if let down = CGEvent(mouseEventSource: nil, mouseType: downType, mouseCursorPosition: from, mouseButton: button) {
         down.setIntegerValueField(.mouseEventClickState, value: 1)
         down.post(tap: .cghidEventTap)
@@ -160,12 +206,14 @@ func postDrag(from: CGPoint, to: CGPoint, button: CGMouseButton, durationMs: Int
             y: from.y + (to.y - from.y) * progress
         )
         if let drag = CGEvent(mouseEventSource: nil, mouseType: dragType, mouseCursorPosition: point, mouseButton: button) {
+            drag.flags = flags
             drag.setIntegerValueField(.mouseEventClickState, value: 1)
             drag.post(tap: .cghidEventTap)
         }
         Thread.sleep(forTimeInterval: delay)
     }
     if let up = CGEvent(mouseEventSource: nil, mouseType: upType, mouseCursorPosition: to, mouseButton: button) {
+        up.flags = flags
         up.setIntegerValueField(.mouseEventClickState, value: 1)
         up.post(tap: .cghidEventTap)
     }
@@ -197,24 +245,17 @@ let keyCodes: [String: CGKeyCode] = [
     "f9": 101, "f10": 109, "f11": 103, "f12": 111
 ]
 
-func postKey(_ key: String, modifiers: [String]) throws {
+func postKey(_ key: String, modifiers: [String], holdMs: Int = 0) throws {
     guard let code = keyCodes[key.lowercased()] else {
         throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "unsupported key: \(key)"])
     }
-    var flags: CGEventFlags = []
-    for modifier in modifiers {
-        switch modifier.lowercased() {
-        case "cmd", "meta": flags.insert(.maskCommand)
-        case "ctrl": flags.insert(.maskControl)
-        case "alt": flags.insert(.maskAlternate)
-        case "shift": flags.insert(.maskShift)
-        default:
-            throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "unsupported modifier: \(modifier)"])
-        }
-    }
+    let flags = try modifierFlags(modifiers)
     if let down = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true) {
         down.flags = flags
         down.post(tap: .cghidEventTap)
+    }
+    if holdMs > 0 {
+        Thread.sleep(forTimeInterval: Double(holdMs) / 1000.0)
     }
     if let up = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: false) {
         up.flags = flags
@@ -295,9 +336,19 @@ func performAction(_ request: [String: Any]) throws -> [String: Any] {
     switch action {
     case "click":
         let buttonName = request["button"] as? String ?? "left"
-        let button: CGMouseButton = buttonName == "right" ? .right : .left
-        let count = max(1, min(2, (request["clickCount"] as? NSNumber)?.intValue ?? 1))
-        postClick(point, button: button, count: count)
+        let modifiers = request["modifiers"] as? [String] ?? []
+        let count = max(1, min(3, (request["clickCount"] as? NSNumber)?.intValue ?? 1))
+        postClick(point, button: mouseButton(buttonName), count: count, modifiers: modifiers)
+    case "hover":
+        let modifiers = request["modifiers"] as? [String] ?? []
+        if let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+            move.flags = (try? modifierFlags(modifiers)) ?? []
+            move.post(tap: .cghidEventTap)
+        }
+    case "down", "up":
+        let buttonName = request["button"] as? String ?? "left"
+        let modifiers = request["modifiers"] as? [String] ?? []
+        postMouseButton(point, button: mouseButton(buttonName), down: action == "down", modifiers: modifiers)
     case "type":
         guard let text = request["text"] as? String, !text.isEmpty else {
             throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "text is required"])
@@ -312,11 +363,12 @@ func performAction(_ request: [String: Any]) throws -> [String: Any] {
             throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "key is required"])
         }
         let modifiers = request["modifiers"] as? [String] ?? []
+        let hold = max(0, min(300000, (request["holdMs"] as? NSNumber)?.intValue ?? 0))
         if clickTarget {
             postClick(point, button: .left, count: 1)
             Thread.sleep(forTimeInterval: 0.08)
         }
-        try postKey(key, modifiers: modifiers)
+        try postKey(key, modifiers: modifiers, holdMs: hold)
     case "drag":
         guard let toPointObject = request["toPoint"] as? [String: Any],
               let toX = (toPointObject["x"] as? NSNumber)?.doubleValue,
@@ -328,18 +380,20 @@ func performAction(_ request: [String: Any]) throws -> [String: Any] {
             throw NSError(domain: "MosaelWindowTools", code: 409, userInfo: [NSLocalizedDescriptionKey: "the drag end is not over the target app; nothing was sent"])
         }
         let buttonName = request["button"] as? String ?? "left"
-        let button: CGMouseButton = buttonName == "right" ? .right : .left
+        let modifiers = request["modifiers"] as? [String] ?? []
         let duration = max(100, min(2000, (request["durationMs"] as? NSNumber)?.intValue ?? 300))
-        postDrag(from: point, to: toPoint, button: button, durationMs: duration)
+        postDrag(from: point, to: toPoint, button: mouseButton(buttonName), durationMs: duration, modifiers: modifiers)
         dragEnd = toPoint
     case "scroll":
-        guard let dy = (request["dy"] as? NSNumber)?.int32Value, dy != 0 else {
-            throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "dy is required"])
+        let dy = (request["dy"] as? NSNumber)?.int32Value ?? 0
+        let dx = (request["dx"] as? NSNumber)?.int32Value ?? 0
+        if dy == 0 && dx == 0 {
+            throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "dx or dy is required"])
         }
         if let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
             move.post(tap: .cghidEventTap)
         }
-        if let scroll = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: dy * 20, wheel2: 0, wheel3: 0) {
+        if let scroll = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: dy * 20, wheel2: dx * 20, wheel3: 0) {
             scroll.location = point
             scroll.post(tap: .cghidEventTap)
         }

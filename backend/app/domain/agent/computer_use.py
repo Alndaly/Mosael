@@ -52,6 +52,7 @@ DESKTOP_WINDOWS_CHANNEL = "computer:desktop-windows"
 DESKTOP_SCREENSHOT_CHANNEL = "computer:desktop-screenshot"
 DESKTOP_ACCESSIBILITY_CHANNEL = "computer:desktop-accessibility"
 DESKTOP_CLICK_CHANNEL = "computer:desktop-click"
+DESKTOP_POINTER_CHANNEL = "computer:desktop-pointer"
 DESKTOP_TYPE_CHANNEL = "computer:desktop-type"
 DESKTOP_SCROLL_CHANNEL = "computer:desktop-scroll"
 #: 动手:L1 的点击与输入(ADR 0075 的 P1)。坐标是**看着的那张图**上的(缩放过的)像素,
@@ -82,7 +83,7 @@ MAX_WAIT_MS = 15_000
 DEFAULT_WAIT_MS = 5_000
 
 #: 能点的键。L3 仍然只开放左右键;L1 额外支持中键,但它与 L3 的驱动能力不是一回事。
-CLICK_BUTTONS = ("left", "right")
+CLICK_BUTTONS = ("left", "right", "middle")
 L1_BUTTONS = ("left", "right", "middle")
 L1_POINTER_ACTIONS = ("hover", "down", "up")
 MAX_HOLD_MS = 300_000
@@ -316,18 +317,51 @@ def desktop_click(
     button: object = "left",
     click_count: object = 1,
     scale: float = DEFAULT_SCALE,
+    modifiers: object = None,
 ) -> dict[str, Any]:
     """点一下已验证的桌面目标;令牌或截图绑定由 Electron 驱动复核。"""
     target = _desktop_target(token, capture_id, x, y, scale)
     kind = str(button or "left").strip().lower()
     if kind not in CLICK_BUTTONS:
-        raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
+        raise ComputerUseError(f'button must be "left", "right" or "middle" (got {button!r}).')
     count = _desktop_click_count(click_count)
+    mods = _modifiers(modifiers)
     _mark_touched()
-    answer = _host_call(DESKTOP_CLICK_CHANNEL, {**target, "button": kind, "clickCount": count})
+    answer = _host_call(
+        DESKTOP_CLICK_CHANNEL,
+        {**target, "button": kind, "clickCount": count, "modifiers": mods},
+    )
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
         raise ComputerUseError("The desktop bridge answered without confirming the click.")
-    return {**answer, "button": kind, "clickCount": count}
+    return {**answer, "button": kind, "clickCount": count, "modifiers": mods}
+
+
+def desktop_pointer(
+    action: object,
+    token: object = "",
+    capture_id: object = "",
+    x: object = None,
+    y: object = None,
+    button: object = "left",
+    modifiers: object = None,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在已验证的桌面目标上 hover / 按下 / 抬起鼠标键;目标绑定仍是一次性的。"""
+    kind = str(action or "").strip().lower()
+    if kind not in L1_POINTER_ACTIONS:
+        raise ComputerUseError('action must be "hover", "down" or "up".')
+    target = _desktop_target(token, capture_id, x, y, scale)
+    mouse = str(button or "left").strip().lower()
+    if mouse not in CLICK_BUTTONS:
+        raise ComputerUseError(f'button must be "left", "right" or "middle" (got {button!r}).')
+    mods = _modifiers(modifiers)
+    _mark_touched()
+    answer = _host_call(DESKTOP_POINTER_CHANNEL, {
+        **target, "action": kind, "button": mouse, "modifiers": mods,
+    })
+    if not isinstance(answer, dict) or answer.get("action") != kind:
+        raise ComputerUseError("The desktop bridge answered without confirming the pointer action.")
+    return {**answer, "action": kind, "button": mouse, "modifiers": mods}
 
 
 def desktop_type(
@@ -362,19 +396,19 @@ def desktop_scroll(
     x: object = None,
     y: object = None,
     scale: float = DEFAULT_SCALE,
+    dx: object = 0,
 ) -> dict[str, Any]:
-    """在已验证的桌面目标上滚动;dy > 0 向下,最多 30 格。"""
-    if isinstance(dy, bool) or not isinstance(dy, (int, float)):
-        raise ComputerUseError(f"dy must be a number of wheel notches (got {dy!r}).")
-    notches = int(dy)
-    if notches == 0 or abs(notches) > MAX_SCROLL_NOTCHES:
-        raise ComputerUseError(f"dy must be a non-zero integer between -{MAX_SCROLL_NOTCHES} and {MAX_SCROLL_NOTCHES}.")
+    """在已验证的桌面目标上滚动;dy > 0 向下、dx > 0 向右,最多各 30 格。"""
+    vertical = _scroll_notches(dy, "dy")
+    horizontal = _scroll_notches(dx, "dx")
+    if vertical == 0 and horizontal == 0:
+        raise ComputerUseError("dx or dy must be a non-zero integer.")
     target = _desktop_target(token, capture_id, x, y, scale)
     _mark_touched()
-    answer = _host_call(DESKTOP_SCROLL_CHANNEL, {**target, "dy": notches})
+    answer = _host_call(DESKTOP_SCROLL_CHANNEL, {**target, "dy": vertical, "dx": horizontal})
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
         raise ComputerUseError("The desktop bridge answered without confirming the scroll.")
-    return {**answer, "dy": notches}
+    return {**answer, "dy": vertical, "dx": horizontal}
 
 
 def desktop_drag(
@@ -467,18 +501,23 @@ def desktop_press(
     y: object = None,
     scale: float = DEFAULT_SCALE,
     click_target: object = True,
+    hold_ms: object = 0,
 ) -> dict[str, Any]:
     """在已验证的桌面目标上按一个键或组合键;`click_target=False` 时只聚焦应用,不点击元素。"""
     normalized, mods = key_payload(key, modifiers)
+    hold = _hold_ms(hold_ms)
     target = _desktop_target(token, capture_id, x, y, scale)
     _mark_touched()
     answer = _host_call(
         DESKTOP_KEY_CHANNEL,
-        {**target, "key": normalized, "modifiers": mods, "clickTarget": _bool_flag(click_target, "click_target")},
+        {
+            **target, "key": normalized, "modifiers": mods,
+            "clickTarget": _bool_flag(click_target, "click_target"), "holdMs": hold,
+        },
     )
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
         raise ComputerUseError("The desktop bridge answered without confirming the key press.")
-    return {**answer, "key": normalized, "modifiers": mods}
+    return {**answer, "key": normalized, "modifiers": mods, "holdMs": hold}
 
 
 def _mark_touched() -> None:
@@ -657,8 +696,8 @@ def _click_count(value: object) -> int:
 
 
 def _desktop_click_count(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2):
-        raise ComputerUseError(f"click_count must be 1 (single) or 2 (double), not {value!r}.")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2, 3):
+        raise ComputerUseError(f"click_count must be 1 (single), 2 (double) or 3 (triple), not {value!r}.")
     return int(value)
 
 
@@ -969,6 +1008,7 @@ __all__ = [
     "SCREENSHOT_CHANNEL",
     "DESKTOP_ACCESSIBILITY_CHANNEL",
     "DESKTOP_CLICK_CHANNEL",
+    "DESKTOP_POINTER_CHANNEL",
     "DESKTOP_DRAG_CHANNEL",
     "DESKTOP_SCREENSHOT_CHANNEL",
     "DESKTOP_SCROLL_CHANNEL",
@@ -983,6 +1023,7 @@ __all__ = [
     "desktop_accessibility",
     "desktop_click",
     "desktop_drag",
+    "desktop_pointer",
     "desktop_screenshot",
     "desktop_scroll",
     "desktop_type",

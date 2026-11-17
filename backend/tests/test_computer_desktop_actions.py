@@ -28,7 +28,7 @@ def test_desktop_actions_are_confirmation_tools_with_both_targets() -> None:
         assert name not in mcp_server.READ_ONLY_TOOLS
         assert tool_spec(name).permission == "external"
     assert set(specs["computer_desktop_click"]["parameters"]["properties"]) == {
-        "token", "capture_id", "x", "y", "button", "click_count", "scale",
+        "token", "capture_id", "x", "y", "button", "click_count", "scale", "modifiers",
     }
     assert set(specs["computer_desktop_drag"]["parameters"]["properties"]) == {
         "capture_id", "from_x", "from_y", "to_x", "to_y", "button", "duration_ms", "scale",
@@ -48,8 +48,8 @@ def test_the_card_rejects_ambiguous_targets_and_bad_actions() -> None:
             {},
             {"token": "snap-1:0", "capture_id": CAPTURE, "x": 1, "y": 2},
             {"capture_id": CAPTURE, "x": -1, "y": 2},
-            {"token": "snap-1:0", "button": "middle"},
-            {"token": "snap-1:0", "click_count": 3},
+            {"token": "snap-1:0", "button": "back"},
+            {"token": "snap-1:0", "click_count": 4},
         ):
             with pytest.raises(ConfirmationError):
                 click.validate(db, "w1", bad, None)
@@ -102,6 +102,7 @@ def test_capture_coordinates_are_scaled_back_before_the_bridge(monkeypatch) -> N
         "y": 200,
         "button": "left",
         "clickCount": 1,
+        "modifiers": [],
     })]
 
 
@@ -122,7 +123,9 @@ def test_desktop_key_uses_the_same_target_and_replay(monkeypatch) -> None:
             db, types.SimpleNamespace(payload={"action": "press", "token": "snap-1:0", "key": "Enter", "modifiers": []}, workspace_id="w1"), "user-1",
         )
     assert result["key"] == "enter"
-    assert calls == [("computer:desktop-key", {"token": "snap-1:0", "key": "enter", "modifiers": [], "clickTarget": True})]
+    assert calls == [("computer:desktop-key", {
+        "token": "snap-1:0", "key": "enter", "modifiers": [], "clickTarget": True, "holdMs": 0,
+    })]
 
 
 def test_token_type_and_scroll_use_the_element_token(monkeypatch) -> None:
@@ -152,7 +155,7 @@ def test_token_type_and_scroll_use_the_element_token(monkeypatch) -> None:
     assert scrolled["dy"] == 3
     assert calls == [
         ("computer:desktop-type", {"token": "snap-1:0", "text": "hello", "clickTarget": True}),
-        ("computer:desktop-scroll", {"token": "snap-1:0", "dy": 3}),
+        ("computer:desktop-scroll", {"token": "snap-1:0", "dy": 3, "dx": 0}),
     ]
 
 
@@ -183,7 +186,7 @@ def test_press_can_use_the_current_focus_without_clicking(monkeypatch) -> None:
     assert summary == ("confirm_computerDesktopKeyTokenFocused", {"token": "snap-1:0", "keys": "enter"})
     assert result["key"] == "enter"
     assert calls == [("computer:desktop-key", {
-        "token": "snap-1:0", "key": "enter", "modifiers": [], "clickTarget": False,
+        "token": "snap-1:0", "key": "enter", "modifiers": [], "clickTarget": False, "holdMs": 0,
     })]
 
 
@@ -240,3 +243,56 @@ def test_the_tool_endpoint_opens_a_card_instead_of_acting_now() -> None:
     assert response.status_code == 200, response.text
     assert response.json()["result"]["status"] == "pending"
     assert response.json()["result"]["confirmation_id"]
+
+
+def test_desktop_pointer_and_hold_and_horizontal_scroll(monkeypatch) -> None:
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        if channel == "computer:desktop-pointer":
+            return {"action": payload["action"], "point": {"x": 10, "y": 20}}
+        return {"point": {"x": 10, "y": 20}}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        pointer = tool_spec("computer_desktop_pointer")
+        assert pointer.summarize(
+            db, {"action": "hover", "token": "snap-1:0", "button": "left"},
+        ) == ("confirm_computerDesktopPointerToken", {
+            "action": "hover", "button": "left", "token": "snap-1:0",
+        })
+        pointer.execute(db, types.SimpleNamespace(
+            payload={"action": "hover", "token": "snap-1:0", "button": "left", "modifiers": [], "scale": 1},
+            workspace_id="w1",
+        ), "user-1")
+
+        hold = tool_spec("computer_desktop_input")
+        assert hold.summarize(
+            db, {"action": "press", "token": "snap-1:0", "key": "Space", "hold_ms": 700},
+        ) == ("confirm_computerDesktopKeyHoldToken", {
+            "token": "snap-1:0", "keys": "space", "ms": 700,
+        })
+        hold.execute(db, types.SimpleNamespace(
+            payload={"action": "press", "token": "snap-1:0", "key": "Space", "hold_ms": 700, "modifiers": []},
+            workspace_id="w1",
+        ), "user-1")
+
+        scroll = tool_spec("computer_desktop_scroll")
+        assert scroll.summarize(db, {"dx": -3, "dy": 0}) == (
+            "confirm_computerScrollLeft", {"steps": 3},
+        )
+
+    assert calls == [
+        ("computer:desktop-pointer", {
+            "action": "hover", "token": "snap-1:0", "button": "left", "modifiers": [],
+        }),
+        ("computer:desktop-key", {
+            "token": "snap-1:0", "key": "space", "modifiers": [],
+            "clickTarget": True, "holdMs": 700,
+        }),
+    ]

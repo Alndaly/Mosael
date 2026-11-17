@@ -13,7 +13,10 @@ from sqlalchemy.orm import Session
 from app.domain.agent.computer_use import (
     CLICK_BUTTONS,
     DEFAULT_DRAG_MS,
+    KEY_MODIFIERS,
+    L1_POINTER_ACTIONS,
     MAX_DRAG_MS,
+    MAX_HOLD_MS,
     MAX_TYPE_CHARS,
     MIN_DRAG_MS,
     ComputerUseError,
@@ -21,6 +24,7 @@ from app.domain.agent.computer_use import (
 )
 from app.domain.agent.computer_use import desktop_click as use_click
 from app.domain.agent.computer_use import desktop_drag as use_drag
+from app.domain.agent.computer_use import desktop_pointer as use_pointer
 from app.domain.agent.computer_use import desktop_press as use_press
 from app.domain.agent.computer_use import desktop_scroll as use_scroll
 from app.domain.agent.computer_use import desktop_type as use_type
@@ -83,12 +87,25 @@ def _validate_click(db: Session, workspace_id: str, payload: dict[str, Any], act
     button = str(payload.get("button") or "left").strip().lower()
     if button not in CLICK_BUTTONS:
         raise ConfirmationError("confirmErr_computerClickButton")
+    modifiers = payload.get("modifiers") or []
+    if not isinstance(modifiers, (list, tuple)) or any(str(one) not in KEY_MODIFIERS for one in modifiers):
+        raise ConfirmationError("confirmErr_computerPointerModifiers")
     count = payload.get("click_count", 1)
-    if isinstance(count, bool) or not isinstance(count, (int, float)) or int(count) not in (1, 2):
+    if isinstance(count, bool) or not isinstance(count, (int, float)) or int(count) not in (1, 2, 3):
         raise ConfirmationError("confirmErr_computerClickCount")
 
 
 def _summarize_click(db: Session, payload: dict[str, Any]) -> Summary:
+    button = str(payload.get("button") or "left").strip().lower()
+    count = int(payload.get("click_count", 1))
+    mods = [str(one) for one in (payload.get("modifiers") or [])]
+    if mods or button == "middle" or count == 3:
+        keys = "+".join([*mods, {1: "click", 2: "double-click", 3: "triple-click"}[count]])
+        if payload.get("token"):
+            return "confirm_computerDesktopSpecialClickToken", {
+                "token": str(payload.get("token"))[:120], "keys": keys[:120], "button": button,
+            }
+        return "confirm_computerDesktopSpecialClickPixel", {**_point_params(payload), "keys": keys[:120], "button": button}
     if payload.get("token"):
         return "confirm_computerDesktopClickToken", {"token": str(payload.get("token"))[:120]}
     return "confirm_computerDesktopClickPixel", _point_params(payload)
@@ -113,6 +130,7 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
             button=str(payload.get("button") or "left"),
             click_count=payload.get("click_count", 1),
             scale=_scale(payload),
+            modifiers=payload.get("modifiers"),
         ))
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None
@@ -156,6 +174,9 @@ def _validate_input(db: Session, workspace_id: str, payload: dict[str, Any], act
     click_target = payload.get("click_target", True)
     if not isinstance(click_target, bool):
         raise ConfirmationError("confirmErr_computerInputClickTarget")
+    hold = payload.get("hold_ms", 0)
+    if isinstance(hold, bool) or not isinstance(hold, (int, float)) or not 0 <= int(hold) <= MAX_HOLD_MS:
+        raise ConfirmationError("confirmErr_computerHoldMs", max=MAX_HOLD_MS)
     try:
         _input_action(payload)
     except ComputerUseError as error:
@@ -179,6 +200,13 @@ def _summarize_input(db: Session, payload: dict[str, Any]) -> Summary:
         return "confirm_computerDesktopTypePixel", {**_point_params(payload), "text": text}
     key, modifiers = key_payload(payload.get("key"), payload.get("modifiers"))
     pressed = "+".join([*modifiers, key])
+    hold = int(payload.get("hold_ms") or 0)
+    if hold:
+        if payload.get("token"):
+            return "confirm_computerDesktopKeyHoldToken", {
+                "token": str(payload.get("token"))[:120], "keys": pressed, "ms": hold,
+            }
+        return "confirm_computerDesktopKeyHoldPixel", {**_point_params(payload), "keys": pressed, "ms": hold}
     if payload.get("token"):
         if focused:
             return "confirm_computerDesktopKeyTokenFocused", {
@@ -215,6 +243,7 @@ def _execute_input(db: Session, confirmation: Any, actor: str | None) -> dict[st
             y=payload.get("y"),
             scale=_scale(payload),
             click_target=payload.get("click_target", True),
+            hold_ms=payload.get("hold_ms", 0),
         ))
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None
@@ -234,20 +263,31 @@ confirmable_tool(ConfirmableTool(
 def _validate_scroll(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     _target(payload)
     _scale(payload)
-    dy = payload.get("dy")
-    if isinstance(dy, bool) or not isinstance(dy, (int, float)) or int(dy) == 0 or abs(int(dy)) > 30:
+    dy = payload.get("dy", 0)
+    dx = payload.get("dx", 0)
+    for value, key in ((dy, "confirmErr_computerScrollDy"), (dx, "confirmErr_computerScrollDx")):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or abs(int(value)) > 30:
+            raise ConfirmationError(key)
+    if int(dy) == 0 and int(dx) == 0:
         raise ConfirmationError("confirmErr_computerScrollDy")
 
 
 def _summarize_scroll(db: Session, payload: dict[str, Any]) -> Summary:
-    notches = int(payload.get("dy") or 0)
-    steps = abs(notches)
+    dy = int(payload.get("dy") or 0)
+    dx = int(payload.get("dx") or 0)
+    if dy and dx:
+        return "confirm_computerScrollBoth", {"dx": dx, "dy": dy}
+    if dx > 0:
+        return "confirm_computerScrollRight", {"steps": dx}
+    if dx < 0:
+        return "confirm_computerScrollLeft", {"steps": -dx}
+    steps = abs(dy)
     if payload.get("token"):
         token = str(payload.get("token"))[:120]
-        if notches > 0:
+        if dy > 0:
             return "confirm_computerDesktopScrollDownToken", {"token": token, "steps": steps}
         return "confirm_computerDesktopScrollUpToken", {"token": token, "steps": steps}
-    if notches > 0:
+    if dy > 0:
         return "confirm_computerDesktopScrollDownPixel", {**_point_params(payload), "steps": steps}
     return "confirm_computerDesktopScrollUpPixel", {**_point_params(payload), "steps": steps}
 
@@ -258,6 +298,7 @@ def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[s
     try:
         return _with_replay(confirmation, use_scroll(
             dy=payload.get("dy", 0),
+            dx=payload.get("dx", 0),
             token=payload.get("token", ""),
             capture_id=payload.get("capture_id", ""),
             x=payload.get("x"),
@@ -332,4 +373,57 @@ confirmable_tool(ConfirmableTool(
     validate=_validate_drag,
     summarize=_summarize_drag,
     execute=_execute_drag,
+))
+
+
+def _validate_pointer(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    _target(payload)
+    _scale(payload)
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in L1_POINTER_ACTIONS:
+        raise ConfirmationError("confirmErr_computerPointerAction")
+    button = str(payload.get("button") or "left").strip().lower()
+    if button not in CLICK_BUTTONS:
+        raise ConfirmationError("confirmErr_computerClickButton")
+    modifiers = payload.get("modifiers") or []
+    if not isinstance(modifiers, (list, tuple)) or any(str(one) not in KEY_MODIFIERS for one in modifiers):
+        raise ConfirmationError("confirmErr_computerPointerModifiers")
+
+
+def _summarize_pointer(db: Session, payload: dict[str, Any]) -> Summary:
+    params = {
+        "action": str(payload.get("action") or "").strip().lower(),
+        "button": str(payload.get("button") or "left"),
+    }
+    if payload.get("token"):
+        return "confirm_computerDesktopPointerToken", {**params, "token": str(payload.get("token"))[:120]}
+    return "confirm_computerDesktopPointerPixel", {**_point_params(payload), **params}
+
+
+def _execute_pointer(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    _whole_machine_guard(db, actor)
+    payload = confirmation.payload
+    try:
+        return _with_replay(confirmation, use_pointer(
+            action=payload.get("action"),
+            token=payload.get("token", ""),
+            capture_id=payload.get("capture_id", ""),
+            x=payload.get("x"),
+            y=payload.get("y"),
+            button=payload.get("button", "left"),
+            modifiers=payload.get("modifiers"),
+            scale=_scale(payload),
+        ))
+    except ComputerUseError as error:
+        raise ConfirmationError(str(error)) from None
+
+
+confirmable_tool(ConfirmableTool(
+    name="computer_desktop_pointer",
+    permission="external",
+    cost="none",
+    writes=(),
+    validate=_validate_pointer,
+    summarize=_summarize_pointer,
+    execute=_execute_pointer,
 ))

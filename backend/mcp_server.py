@@ -675,8 +675,9 @@ def computer_desktop_click(
     x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
     y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
     button: Annotated[str, Field(description='"left" or "right".')] = "left",
-    click_count: Annotated[int, Field(description="1 (single) or 2 (double).")] = 1,
+    click_count: Annotated[int, Field(description="1 (single), 2 (double) or 3 (triple).")] = 1,
     scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+    modifiers: Annotated[list[str] | None, Field(description="Modifier keys held during the click: shift, ctrl, alt, cmd, meta.")] = None,
 ) -> dict[str, Any]:
     """Confirmation required: click a token or captured point in another desktop app.
 
@@ -698,6 +699,37 @@ def computer_desktop_click(
                 "button": button,
                 "click_count": click_count,
                 "scale": scale,
+                "modifiers": modifiers or [],
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
+def computer_desktop_pointer(
+    action: Annotated[Literal["hover", "down", "up"], Field(description="Move the pointer, press a mouse button, or release it.")],
+    token: Annotated[str, Field(description="Element token from computer_desktop_accessibility. Use token OR capture_id+x/y.")] = "",
+    capture_id: Annotated[str, Field(description="capture_id from computer_desktop_screenshot. Use with x and y.")] = "",
+    x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
+    y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
+    button: Annotated[str, Field(description='"left", "right" or "middle".')] = "left",
+    modifiers: Annotated[list[str] | None, Field(description="Modifier keys held during the pointer action: shift, ctrl, alt, cmd, meta.")] = None,
+    scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: hover or press/release a mouse button in another desktop app.
+
+    Use the same one-time target rules as desktop click. The driver refuses stale targets, moved
+    windows and protected apps; every pointer action waits for approval.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_desktop_pointer",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "action": action, "token": token, "capture_id": capture_id,
+                "x": x, "y": y, "button": button, "modifiers": modifiers or [], "scale": scale,
             },
         },
     )
@@ -716,6 +748,7 @@ def computer_desktop_input(
     y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
     scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
     click_target: Annotated[bool, Field(description="Click the target before typing/pressing. Set false to use the app's current focus.")] = True,
+    hold_ms: Annotated[int, Field(description="For action=press: hold the key down this many milliseconds before releasing (0–300000).")] = 0,
 ) -> dict[str, Any]:
     """Confirmation required: type text or press a key in another desktop app.
 
@@ -740,6 +773,7 @@ def computer_desktop_input(
                 "y": y,
                 "scale": scale,
                 "click_target": click_target,
+                "hold_ms": hold_ms,
             },
         },
     )
@@ -785,12 +819,13 @@ def computer_desktop_drag(
 
 @tool(effect="confirms")
 def computer_desktop_scroll(
-    dy: Annotated[int, Field(description="Wheel notches: positive scrolls down, negative up (max 30).")],
+    dy: Annotated[int, Field(description="Vertical wheel notches: positive down, negative up (max 30).")] = 0,
     token: Annotated[str, Field(description="Element token from computer_desktop_accessibility. Use token OR capture_id+x/y.")] = "",
     capture_id: Annotated[str, Field(description="capture_id from computer_desktop_screenshot. Use with x and y.")] = "",
     x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
     y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
     scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+    dx: Annotated[int, Field(description="Horizontal wheel notches: positive right, negative left (max 30).")] = 0,
 ) -> dict[str, Any]:
     """Confirmation required: scroll over a token or captured point in another desktop app.
 
@@ -804,6 +839,7 @@ def computer_desktop_scroll(
             "requested_by": _REQUESTED_BY.get(),
             "payload": {
                 "dy": dy,
+                "dx": dx,
                 "token": token,
                 "capture_id": capture_id,
                 "x": x,

@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **162** 个工具,其中 **58** 个走确认卡、**1** 个停下来等用户作答。
+共 **163** 个工具,其中 **59** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -63,6 +63,7 @@
 | `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
 | `computer_desktop_drag` | 确认卡 | Confirmation required: drag between two points in another desktop app. |
 | `computer_desktop_input` | 确认卡 | Confirmation required: type text or press a key in another desktop app. |
+| `computer_desktop_pointer` | 确认卡 | Confirmation required: hover or press/release a mouse button in another desktop app. |
 | `computer_desktop_screenshot` | 直接执行 | Read-only: capture another app's visible desktop window by `window_id`. |
 | `computer_desktop_scroll` | 确认卡 | Confirmation required: scroll over a token or captured point in another desktop app. |
 | `computer_desktop_verify` | 直接执行 | Read-only: check right now whether an app's accessibility tree contains the text. |

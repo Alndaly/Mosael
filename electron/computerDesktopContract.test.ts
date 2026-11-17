@@ -32,6 +32,10 @@ describe("desktop observation IPC contract(ADR 0081)", () => {
       token: "snap-1:0",
       button: "left",
       clickCount: 1,
+      modifiers: [],
+    });
+    expect(contract.parseComputerDesktopClick({ token: "snap-1:0", button: "middle", clickCount: 3 })).toMatchObject({
+      token: "snap-1:0", button: "middle", clickCount: 3,
     });
     expect(contract.parseComputerDesktopClick({ captureId: capture, x: 10, y: 20 })).toMatchObject({
       captureId: capture,
@@ -57,9 +61,13 @@ describe("desktop observation IPC contract(ADR 0081)", () => {
       clickTarget: false,
     });
     expect(() => contract.parseComputerDesktopType({ token: "snap-1:0", text: "" })).toThrow("non-empty");
+    expect(contract.parseComputerDesktopPointer({ action: "hover", token: "snap-1:0" })).toEqual({
+      action: "hover", token: "snap-1:0", button: "left", modifiers: [],
+    });
     expect(contract.parseComputerDesktopScroll({ token: "snap-1:0", dy: -3 })).toEqual({
       token: "snap-1:0",
       dy: -3,
+      dx: 0,
     });
     expect(() => contract.parseComputerDesktopScroll({ token: "snap-1:0", dy: 0 })).toThrow("non-zero");
   });

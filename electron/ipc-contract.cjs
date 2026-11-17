@@ -84,6 +84,7 @@ const IPC = Object.freeze({
     computerDesktopScreenshot: "computer:desktop-screenshot",
     computerDesktopAccessibility: "computer:desktop-accessibility",
     computerDesktopClick: "computer:desktop-click",
+    computerDesktopPointer: "computer:desktop-pointer",
     computerDesktopType: "computer:desktop-type",
     computerDesktopKey: "computer:desktop-key",
     computerDesktopScroll: "computer:desktop-scroll",
@@ -699,12 +700,24 @@ function desktopTarget(payload, channel, extraKeys) {
 function parseComputerDesktopClick(value) {
   const channel = IPC.invoke.computerDesktopClick;
   const payload = record(value, channel);
-  const target = desktopTarget(payload, channel, ["button", "clickCount"]);
+  const target = desktopTarget(payload, channel, ["button", "clickCount", "modifiers"]);
   const button = payload.button === undefined ? "left" : payload.button;
-  if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
+  if (!["left", "right", "middle"].includes(button)) throw new TypeError(`${channel}: button must be "left", "right" or "middle"`);
   const clickCount = payload.clickCount === undefined ? 1 : payload.clickCount;
-  if (clickCount !== 1 && clickCount !== 2) throw new TypeError(`${channel}: clickCount must be 1 or 2`);
-  return { ...target, button, clickCount };
+  if (![1, 2, 3].includes(clickCount)) throw new TypeError(`${channel}: clickCount must be 1, 2 or 3`);
+  return { ...target, button, clickCount, modifiers: parseModifiers(payload.modifiers, channel) };
+}
+
+function parseComputerDesktopPointer(value) {
+  const channel = IPC.invoke.computerDesktopPointer;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["action", "token", "captureId", "x", "y", "button", "modifiers"], channel);
+  const action = payload.action;
+  if (!["hover", "down", "up"].includes(action)) throw new TypeError(`${channel}: action must be hover, down or up`);
+  const target = desktopTarget(payload, channel, ["action", "button", "modifiers"]);
+  const button = payload.button === undefined ? "left" : payload.button;
+  if (!["left", "right", "middle"].includes(button)) throw new TypeError(`${channel}: button must be "left", "right" or "middle"`);
+  return { ...target, action, button, modifiers: parseModifiers(payload.modifiers, channel) };
 }
 
 function parseComputerDesktopType(value) {
@@ -736,21 +749,34 @@ function parseKeyInput(payload, channel, extraKeys) {
 function parseComputerDesktopKey(value) {
   const channel = IPC.invoke.computerDesktopKey;
   const payload = record(value, channel);
-  const target = desktopTarget(payload, channel, ["key", "modifiers", "clickTarget"]);
+  const target = desktopTarget(payload, channel, ["key", "modifiers", "clickTarget", "holdMs"]);
   const clickTarget = payload.clickTarget === undefined ? true : payload.clickTarget;
   if (typeof clickTarget !== "boolean") throw new TypeError(`${channel}: clickTarget must be a boolean`);
-  return { ...target, ...parseKeyInput(payload, channel, ["token", "captureId", "x", "y", "clickTarget"]), clickTarget };
+  const holdMs = payload.holdMs === undefined ? 0 : payload.holdMs;
+  if (!Number.isInteger(holdMs) || holdMs < 0 || holdMs > 300000) {
+    throw new TypeError(`${channel}: holdMs must be an integer between 0 and 300000`);
+  }
+  return {
+    ...target,
+    ...parseKeyInput(payload, channel, ["token", "captureId", "x", "y", "clickTarget", "holdMs"]),
+    clickTarget,
+    holdMs,
+  };
 }
 
 function parseComputerDesktopScroll(value) {
   const channel = IPC.invoke.computerDesktopScroll;
   const payload = record(value, channel);
-  const target = desktopTarget(payload, channel, ["dy"]);
-  const dy = payload.dy;
-  if (!Number.isInteger(dy) || dy === 0 || Math.abs(dy) > 30) {
-    throw new TypeError(`${channel}: dy must be a non-zero integer between -30 and 30`);
+  const target = desktopTarget(payload, channel, ["dy", "dx"]);
+  const dy = payload.dy === undefined ? 0 : payload.dy;
+  const dx = payload.dx === undefined ? 0 : payload.dx;
+  for (const [key, value] of [["dy", dy], ["dx", dx]]) {
+    if (!Number.isInteger(value) || Math.abs(value) > 30) {
+      throw new TypeError(`${channel}: ${key} must be an integer between -30 and 30`);
+    }
   }
-  return { ...target, dy };
+  if (dy === 0 && dx === 0) throw new TypeError(`${channel}: dx or dy must be non-zero`);
+  return { ...target, dy, dx };
 }
 
 function parseWaitText(payload, channel) {
@@ -1304,6 +1330,7 @@ module.exports = {
   parseComputerVerify,
   parseComputerDesktopAccessibility,
   parseComputerDesktopClick,
+  parseComputerDesktopPointer,
   parseComputerDesktopDrag,
   parseComputerDesktopScroll,
   parseComputerDesktopWait,

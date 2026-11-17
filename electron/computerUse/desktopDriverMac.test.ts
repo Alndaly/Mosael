@@ -127,6 +127,16 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     expect(await driver.verifyText(42, "Save", true)).toMatchObject({ ok: false, reason: "found" });
   });
 
+  it("指针动作把 hover / down / up 交给 Swift 工具", async () => {
+    const { runner, performInputs } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await driver.observe({ pid: 42 });
+    await driver.act({ kind: "hover", token: "snap-1:0", modifiers: ["shift"] });
+    expect(performInputs.at(-1)).toMatchObject({
+      action: "hover", modifiers: ["shift"], point: { x: 60, y: 40 },
+    });
+  });
+
   it("waitForText 在 AX 树里找到文字就返回", async () => {
     const { runner } = harness();
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
@@ -154,7 +164,9 @@ describe("DesktopDriverMac(ADR 0081)", () => {
       button: "left",
       clickCount: 2,
       text: "",
+      modifiers: [],
       dy: 0,
+      dx: 0,
     }]);
   });
 
