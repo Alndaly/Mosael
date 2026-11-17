@@ -147,6 +147,7 @@
     "tags",
     "derived_from",
     "ai_generated",
+    "voices",
     "intermediate",
     "created_at",
     "updated_at"

@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.6": {
+    zh: [
+      "**修复 MosaelCloud 任务模型定价缺单位导致的生图拒绝。** 图片 / 视频 / 音频能力显式记录，价格必须覆盖每个预留计量单位；管理台改为按单位填写价格，缺价格时给出可诊断的原因。",
+      "**订阅 MosaelCloud 的弹窗更完整。** 套餐加载时显示骨架；没有在线套餐或支付渠道时显示空状态和下一步；Windows 上支付宝扫码区不再出现内嵌页滚动条。",
+      "**管理台表单统一。** 输入框、下拉、按钮和弹窗统一到 shadcn 标准密度，不再混用官网营销页的大字段样式。",
+    ],
+    en: [
+      "**Fixes MosaelCloud job pricing gaps that rejected every image.** Image, video and audio capabilities are now explicit, and a price must cover every reserved unit; the admin console edits prices by unit and reports the missing unit instead of only providerErr+cloudRejected.",
+      "**The MosaelCloud subscription dialog is complete.** Plan loading uses skeletons, unavailable plans or payment channels show a real empty state with the next step, and the Alipay QR area no longer renders inner scrollbars on Windows.",
+      "**Admin forms share one density.** Inputs, selects, buttons and dialogs now use the shadcn control scale instead of inheriting the marketing site's oversized fields.",
+    ],
+  },
   "v2.6.5": {
     zh: [
       "**屏幕 + 摄像头在 Windows 上不再丢摄像头声音。** 抓屏开始后重新采集麦克风，摄像头画面继续使用已预热的流；新麦克风打不开时退回纯画面，不取消整次双路录制。",

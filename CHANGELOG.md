@@ -3,6 +3,17 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.6.6] - 2026-11-17
+
+### MosaelCloud
+
+- **修复任务模型定价缺单位导致生图全部被拒。** 图片 / 视频 / 音频能力显式记录；价格必须覆盖模型预留的每个计量单位，缺一个就给出可诊断的 `gateway_model_price_incomplete`，不再只剩 `providerErr+cloudRejected`。管理台价格弹窗改为按预留单位填写。
+- **订阅弹窗补上加载骨架和空状态。** 套餐目录请求期间显示骨架；没有在线套餐或支付渠道时说明原因和下一步；Windows 上支付宝 200×200 扫码区不再出现内嵌页滚动条。
+
+### 管理台
+
+- **表单控件统一到 shadcn 标准密度。** 输入框、下拉、按钮、弹窗使用同一套 36px 高度、圆角、字号与阴影；管理台不再继承官网营销页的 48px 大字段形态。
+
 ## [2.6.5] - 2026-11-16
 
 ### 录制
