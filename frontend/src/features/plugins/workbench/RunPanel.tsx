@@ -21,7 +21,6 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { Button } from "@/components/ui/button";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
-import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import {
   FormsLockedError,
