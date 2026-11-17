@@ -115,6 +115,25 @@ def test_job_is_reserved_submitted_polled_and_downloaded(tmp_path):
     assert Path(tmp_path / "media").exists()
 
 
+def test_a_job_with_a_price_missing_its_reserved_unit_is_rejected(tmp_path):
+    app = _setup(tmp_path)
+    client = _desktop(app)
+    with app.state.db.session() as db:
+        model = catalog.upsert_model(
+            db, model_id="unpriced-image", label="Unpriced image", interaction="job",
+            capability={"reservation": {"image": 1}, "kind": "image"},
+        )
+        catalog.set_price(db, model_id=model.id, input_per_1k=2, output_per_1k=8,
+                          effective_from=now() - timedelta(days=1))
+        db.commit()
+
+    rejected = client.post(api("/gateway/v1/jobs"), json={
+        "model": "unpriced-image", "input": {"prompt": "a cat"}, "idempotency_key": "job-missing-price",
+    })
+    assert rejected.status_code == 422
+    assert rejected.json()["error"] == "gateway_model_price_incomplete"
+
+
 def test_openai_images_adapter_builds_artifacts_and_usage():
     import base64
     import httpx2

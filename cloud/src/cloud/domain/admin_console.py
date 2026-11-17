@@ -344,9 +344,19 @@ def _model_capability(interaction: str, capability: dict[str, object], max_outpu
             raise CloudError(422, "gateway_capability_invalid")
         return {**capability, "max_output_tokens": max_output_tokens}
     if interaction == "job":
-        if not isinstance(capability.get("reservation"), dict) or not capability["reservation"]:
+        reservation = capability.get("reservation")
+        if not isinstance(reservation, dict) or not reservation:
             raise CloudError(422, "gateway_capability_invalid")
-        return dict(capability)
+        kind = capability.get("kind")
+        if kind not in {"image", "video", "audio"}:
+            # 老模型可能没有显式 kind；从计量项能认出来的补上，认不出的必须由管理台选择。
+            if "image" in reservation:
+                kind = "image"
+            elif "second" in reservation:
+                kind = "video"
+            else:
+                raise CloudError(422, "gateway_capability_invalid")
+        return {**capability, "kind": kind}
     raise CloudError(422, "gateway_capability_invalid")
 
 
@@ -424,10 +434,18 @@ def _utc_naive(value: datetime) -> datetime:
 
 
 def add_price(db: Session, model_id: str, *, components: dict[str, int], effective_from: datetime | None) -> dict[str, object]:
-    if db.get(CloudGatewayModel, model_id) is None:
+    model = db.get(CloudGatewayModel, model_id)
+    if model is None:
         raise CloudError(404, "model_not_found")
     if not components or any(value < 0 for value in components.values()):
         raise CloudError(422, "gateway_capability_invalid")
+    if model.interaction == "job":
+        reservation = model.capability.get("reservation")
+        if not isinstance(reservation, dict) or not reservation:
+            raise CloudError(422, "gateway_capability_invalid")
+        missing = [unit for unit in reservation if unit not in components]
+        if missing:
+            raise CloudError(422, "gateway_model_price_incomplete", units=", ".join(missing))
     price = catalog.add_price_components(
         db,
         model_id=model_id,

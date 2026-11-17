@@ -60,11 +60,11 @@ def create_job(
         raise CloudError(400, "gateway_capability_invalid")
     missing = [unit for unit in reservation if unit not in units]
     if missing:
-        raise CloudError(404, "gateway_model_unknown")
+        raise CloudError(422, "gateway_model_price_incomplete", units=", ".join(missing))
     estimate = estimated_units(reservation, input)
     missing_estimate = [unit for unit in estimate if unit not in units]
     if missing_estimate:
-        raise CloudError(404, "gateway_model_unknown")
+        raise CloudError(422, "gateway_model_price_incomplete", units=", ".join(missing_estimate))
     reserved = max(1, credits.cost_for_units(units, estimate))
     call = CloudGatewayCall(
         user_id=user_id,

@@ -27,6 +27,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{vendor} could not fetch the first-frame image: {detail}",
     },
     "providerErr_generationFailed": {"zh": "{vendor} 生成失败:{detail}", "en": "{vendor} generation failed: {detail}"},
+    "providerErr_cloudRejected": {"zh": "MosaelCloud 拒绝了这次任务:{detail}", "en": "MosaelCloud rejected this job: {detail}"},
+    "providerErr_cloudEndpoint": {"zh": "MosaelCloud 的连接地址不正确,请在设置里重新登录 MosaelCloud。", "en": "The MosaelCloud endpoint is incorrect. Sign in to MosaelCloud again in Settings."},
+
     "providerErr_upstreamAuth": {
         "zh": "{vendor} 不认这把密钥,请到设置里检查连接的凭据:{detail}",
         "en": "{vendor} rejected the credentials; check the connection in Settings: {detail}",

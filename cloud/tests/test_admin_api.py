@@ -253,6 +253,45 @@ def test_admin_provider_routes_share_credentials_across_channels_and_never_retur
     assert "sk-provider-secret" not in client.get(api("/admin/providers")).text
 
 
+def test_job_models_record_an_explicit_capability_kind(client):
+    make_admin(client)
+    created = client.post(
+        api("/admin/models"),
+        json={"label": "Image job", "interaction": "job", "capability": {"reservation": {"image": 1}, "kind": "image"}},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["model"]["capability"]["kind"] == "image"
+
+    old = client.post(
+        api("/admin/models"),
+        json={"label": "Old image job", "interaction": "job", "capability": {"reservation": {"image": 1}}},
+    )
+    assert old.status_code == 201, old.text
+    assert old.json()["model"]["capability"]["kind"] == "image"
+
+    ambiguous = client.post(
+        api("/admin/models"),
+        json={"label": "Ambiguous job", "interaction": "job", "capability": {"reservation": {"request": 1}}},
+    )
+    assert ambiguous.status_code == 422
+    assert ambiguous.json()["error"] == "gateway_capability_invalid"
+
+
+def test_a_job_price_must_cover_every_reserved_unit(client):
+    make_admin(client)
+    model = client.post(
+        api("/admin/models"),
+        json={"label": "Priced image job", "interaction": "job", "capability": {"reservation": {"image": 1}, "kind": "image"}},
+    ).json()["model"]
+    incomplete = client.post(api(f"/admin/models/{model['id']}/prices"), json={"components": {"token_input": 2}})
+    assert incomplete.status_code == 422
+    assert incomplete.json()["error"] == "gateway_model_price_incomplete"
+
+    complete = client.post(api(f"/admin/models/{model['id']}/prices"), json={"components": {"image": 5}})
+    assert complete.status_code == 201, complete.text
+    assert complete.json()["price"]["components"] == {"image": 5}
+
+
 def test_admin_deletes_a_channel_then_provider_and_model_but_blocks_in_use_rows(client):
     make_admin(client)
     client.app.state.config = replace(

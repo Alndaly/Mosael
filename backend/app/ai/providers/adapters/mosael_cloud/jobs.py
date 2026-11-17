@@ -30,6 +30,21 @@ POLL_SECONDS = 2.0
 TIMEOUT_SECONDS = 3600.0
 
 
+def _rejection_detail(response: object) -> str:
+    """Cloud 的拒绝原因:优先取它给中英双语 `message` 的中文,取不到再退回原始响应。"""
+    try:
+        body = response.json()  # type: ignore[attr-defined]
+    except ValueError:
+        return response.text[:300]  # type: ignore[attr-defined]
+    message = body.get("message") if isinstance(body, dict) else None
+    if isinstance(message, dict):
+        return str(message.get("zh") or message.get("en") or "")
+    if isinstance(message, str):
+        return message
+    error = body.get("error") if isinstance(body, dict) else None
+    return str(error or response.text[:300])  # type: ignore[attr-defined]
+
+
 class MosaelCloudJobAdapter(GenerationAdapter):
     vendor_id = "mosael-cloud"
     supports_resume = False
@@ -108,7 +123,10 @@ class MosaelCloudJobAdapter(GenerationAdapter):
             }
             created = client.post("/jobs", json=payload)
             if created.status_code >= 400:
-                raise GenerationAdapterError("providerErr_cloudRejected", vendor=self.vendor_id, detail=created.text[:300])
+                raise GenerationAdapterError(
+                    "providerErr_cloudRejected", vendor=self.vendor_id,
+                    detail=_rejection_detail(created),
+                )
             job = created.json()["job"]
             job_id = job["id"]
             deadline = time.monotonic() + TIMEOUT_SECONDS

@@ -8,19 +8,19 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent as RadixDialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { CodeEditor } from "@/components/ui/code-editor";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem as RadixSelectItem, SelectValue } from "@/components/ui/select";
+import { Select as SelectPrimitive } from "radix-ui";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Ban, Boxes, Cable, CreditCard, LayoutDashboard, Loader2, LogOut, Menu, Plus, ScrollText, Server, Trash2, Users } from "lucide-react";
+import { Activity, Ban, Boxes, Cable, ChevronDown, CreditCard, LayoutDashboard, Loader2, LogOut, Menu, Plus, ScrollText, Server, Trash2, Users } from "lucide-react";
 import { reservationFromRows, rowsFromCapability, type ReservationRow } from "@/components/admin/model-reservation";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
@@ -163,20 +163,48 @@ function AButton({ className, loading = false, disabled, children, ...props }: R
   );
 }
 
-function AInput({ className, ...props }: React.ComponentProps<typeof Input>) {
-  return <Input {...props} className={cn("h-9 rounded-md border-input bg-transparent px-3 py-1 text-sm shadow-sm", className)} />;
+/** 管理台的输入控件沿用 shadcn 的 36px 标准密度，不继承官网营销页的 48px 大字段。 */
+/** 管理台的表单控件从 shadcn 标准形态直接起一份,不继承官网营销页的 h-12 / rounded-xl。 */
+const adminControlClass =
+  "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40";
+
+function AInput({ className, ...props }: React.ComponentProps<"input">) {
+  return <input data-slot="admin-input" {...props} className={cn(adminControlClass, className)} />;
 }
 
-function ASelectTrigger({ className, ...props }: React.ComponentProps<typeof SelectTrigger>) {
-  return <SelectTrigger size="sm" {...props} className={cn("w-full rounded-md border-input bg-transparent py-1 pl-3 text-sm shadow-sm focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15", className)} />;
+function ASelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
+  return (
+    <SelectPrimitive.Trigger
+      data-slot="admin-select-trigger"
+      {...props}
+      className={cn(adminControlClass, "flex items-center justify-between gap-2 py-2 whitespace-nowrap [&>span]:line-clamp-1", className)}
+    >
+      {children}
+      <SelectPrimitive.Icon asChild>
+        <ChevronDown className="pointer-events-none size-4 text-muted-foreground" aria-hidden />
+      </SelectPrimitive.Icon>
+    </SelectPrimitive.Trigger>
+  );
+}
+
+function ASelectContent({ className, ...props }: React.ComponentProps<typeof SelectContent>) {
+  return <SelectContent {...props} className={cn("rounded-md border-border bg-popover shadow-md", className)} />;
+}
+
+function ASelectItem({ className, ...props }: React.ComponentProps<typeof RadixSelectItem>) {
+  return <RadixSelectItem {...props} className={cn("rounded-sm py-1.5 pr-8 pl-2 text-sm focus:bg-accent focus:text-accent-foreground", className)} />;
+}
+
+function ADialogContent({ className, ...props }: React.ComponentProps<typeof RadixDialogContent>) {
+  return <RadixDialogContent {...props} className={cn("gap-4 rounded-lg shadow-lg", className)} />;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
-      {label}
+    <div className="grid gap-2">
+      <Label className="text-sm font-medium text-foreground">{label}</Label>
       {children}
-    </Label>
+    </div>
   );
 }
 
@@ -201,7 +229,7 @@ function DeleteResourceDialog({ copy, title, description, busy, onClose, onConfi
 }) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
-      <DialogContent>
+      <ADialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -210,7 +238,7 @@ function DeleteResourceDialog({ copy, title, description, busy, onClose, onConfi
           <DialogClose asChild><AButton variant="ghost" disabled={busy}>{copy.cancel}</AButton></DialogClose>
           <AButton variant="destructive" loading={busy} onClick={onConfirm}>{copy.confirmDelete}</AButton>
         </DialogFooter>
-      </DialogContent>
+      </ADialogContent>
     </Dialog>
   );
 }
@@ -584,7 +612,7 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="w-[min(40rem,calc(100vw-2rem))]">
+      <ADialogContent className="w-[min(40rem,calc(100vw-2rem))]">
         <DialogHeader>
           <DialogTitle>{current.display_name || current.handle || current.email || current.phone}</DialogTitle>
           <DialogDescription>{current.email || current.phone || current.id} · {roleLabel(current.role, copy)} · {copy.credits} {current.credits}</DialogDescription>
@@ -613,7 +641,7 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
               <span className="text-xs text-muted-foreground">{current.subscription ? `${current.subscription.name} · ${date(current.subscription.ends_at, locale)}` : copy.noPlan}</span>
             </div>
             <div className="flex gap-2">
-              <Select value={plan} onValueChange={setPlan} disabled={plans.length === 0}><ASelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={plans.length === 0 ? copy.noPlansYet : copy.choosePlan} /></ASelectTrigger><SelectContent>{plans.map((one) => <SelectItem key={one.slug} value={one.slug}>{one.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={plan} onValueChange={setPlan} disabled={plans.length === 0}><ASelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={plans.length === 0 ? copy.noPlansYet : copy.choosePlan} /></ASelectTrigger><ASelectContent>{plans.map((one) => <ASelectItem key={one.slug} value={one.slug}>{one.name}</ASelectItem>)}</ASelectContent></Select>
               <AButton variant="outline" onClick={() => void subscribe()} loading={busy === "subscribe"} disabled={!plan || Boolean(busy)}>{copy.subscribe}</AButton>
             </div>
             {current.subscription && (
@@ -686,7 +714,7 @@ function UserDialog({ copy, locale, user, plans, onClose, onUser, onDeleted, onF
             )}
           </div>
         </div>
-      </DialogContent>
+      </ADialogContent>
     </Dialog>
   );
 }
@@ -752,7 +780,7 @@ function ReservationFields({ copy, rows, onChange }: {
   };
   return (
     <div className="grid gap-2">
-      <span className="text-xs font-medium text-muted-foreground">{copy.reservation}</span>
+      <span className="text-sm font-medium text-foreground">{copy.reservation}</span>
       {rows.map((row, index) => {
         const commonUnit = row.unit === "image" || row.unit === "second";
         return (
@@ -763,11 +791,11 @@ function ReservationFields({ copy, rows, onChange }: {
                 onValueChange={(unit) => update(index, { unit: unit === "custom" ? "" : unit, amount: unit === "second" && row.unit !== "second" ? "5" : row.amount })}
               >
                 <ASelectTrigger aria-label={copy.reservationUnit}><SelectValue /></ASelectTrigger>
-                <SelectContent>
-                  <SelectItem value="image">{copy.reservationImage}</SelectItem>
-                  <SelectItem value="second">{copy.reservationSecond}</SelectItem>
-                  <SelectItem value="custom">{copy.reservationCustom}</SelectItem>
-                </SelectContent>
+                <ASelectContent>
+                  <ASelectItem value="image">{copy.reservationImage}</ASelectItem>
+                  <ASelectItem value="second">{copy.reservationSecond}</ASelectItem>
+                  <ASelectItem value="custom">{copy.reservationCustom}</ASelectItem>
+                </ASelectContent>
               </Select>
               <AInput
                 type="number"
@@ -814,6 +842,15 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
 }) {
   const [label, setLabel] = useState(model?.label ?? "");
   const [interaction, setInteraction] = useState<"stream" | "job">(model?.interaction === "job" ? "job" : "stream");
+  const declaredKind = model?.capability?.kind;
+  const inferredKind = declaredKind === "video" || declaredKind === "audio"
+    ? declaredKind
+    : declaredKind === "image"
+      ? "image"
+      : model?.capability?.reservation && typeof model.capability.reservation === "object" && "second" in model.capability.reservation
+        ? "video"
+        : "image";
+  const [kind, setKind] = useState<"image" | "video" | "audio">(inferredKind);
   const [max, setMax] = useState(String(model?.max_output_tokens ?? 8000));
   const [reservation, setReservation] = useState<ReservationRow[]>(() => rowsFromCapability(model?.capability ?? {}));
   const [sort, setSort] = useState(String(model?.sort_order ?? 0));
@@ -823,7 +860,7 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
     setSaving(true);
     try {
       const capability = interaction === "job"
-        ? { ...model?.capability, reservation: reservationFromRows(reservation) }
+        ? { ...model?.capability, kind, reservation: reservationFromRows(reservation) }
         : {};
       const payload = {
         label, interaction, capability,
@@ -837,10 +874,22 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model ? copy.modelEditDesc : copy.modelCreateDesc}</DialogDescription></DialogHeader>
+      <ADialogContent><DialogHeader><DialogTitle>{model ? copy.modelEdit : copy.addModel}</DialogTitle><DialogDescription>{model ? copy.modelEditDesc : copy.modelCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           <Field label={copy.label}><AInput value={label} onChange={(event) => setLabel(event.target.value)} /></Field>
-          <Field label={copy.interaction}><Select value={interaction} onValueChange={(value) => setInteraction(value as "stream" | "job")}><ASelectTrigger><SelectValue /></ASelectTrigger><SelectContent><SelectItem value="stream">{copy.interactionStream}</SelectItem><SelectItem value="job">{copy.interactionJob}</SelectItem></SelectContent></Select></Field>
+          <Field label={copy.interaction}><Select value={interaction} onValueChange={(value) => setInteraction(value as "stream" | "job")}><ASelectTrigger><SelectValue /></ASelectTrigger><ASelectContent><ASelectItem value="stream">{copy.interactionStream}</ASelectItem><ASelectItem value="job">{copy.interactionJob}</ASelectItem></ASelectContent></Select></Field>
+          {interaction === "job" && (
+            <Field label={copy.kind}>
+              <Select value={kind} onValueChange={(value) => setKind(value as "image" | "video" | "audio")}>
+                <ASelectTrigger><SelectValue /></ASelectTrigger>
+                <ASelectContent>
+                  <ASelectItem value="image">{copy.kindImage}</ASelectItem>
+                  <ASelectItem value="video">{copy.kindVideo}</ASelectItem>
+                  <ASelectItem value="audio">{copy.kindAudio}</ASelectItem>
+                </ASelectContent>
+              </Select>
+            </Field>
+          )}
           {interaction === "stream" ? (
             <Field label={copy.maxOutput}><AInput value={max} onChange={(event) => setMax(event.target.value)} /></Field>
           ) : (
@@ -853,9 +902,31 @@ function ModelDialog({ copy, model, onClose, onSaved, onFailure }: {
           </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.save}</AButton></DialogFooter>
-      </DialogContent>
+      </ADialogContent>
     </Dialog>
   );
+}
+
+type PriceRow = { unit: string; amount: string };
+
+function priceUnitsOf(model: AdminModel): string[] {
+  if (model.interaction !== "job") return ["token_input", "token_output"];
+  const reservation = model.capability.reservation;
+  if (reservation && typeof reservation === "object") {
+    const units = Object.keys(reservation);
+    if (units.length) return units;
+  }
+  const kind = typeof model.capability.kind === "string" ? model.capability.kind : "";
+  return kind ? [kind] : [];
+}
+
+function priceUnitLabel(unit: string, copy: Messages["admin"]): string {
+  if (unit === "image") return copy.reservationImage;
+  if (unit === "second") return copy.reservationSecond;
+  if (unit === "token_input") return copy.tokenInputUnit;
+  if (unit === "token_output") return copy.tokenOutputUnit;
+  if (unit === "request") return copy.requestUnit;
+  return unit;
 }
 
 function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
@@ -863,13 +934,17 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
 }) {
   const queryClient = useQueryClient();
   const prices = useAdminPrices(model.id);
-  const [components, setComponents] = useState(JSON.stringify(model.current_price?.components ?? { token_input: 2, token_output: 8 }, null, 2));
+  const units = priceUnitsOf(model);
+  const [rows, setRows] = useState<PriceRow[]>(() => units.map((unit) => ({
+    unit,
+    amount: String(model.current_price?.components[unit] ?? (unit === "token_input" ? 2 : unit === "token_output" ? 8 : 1)),
+  })));
   const [from, setFrom] = useState("");
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     setSaving(true);
     try {
-      const parsed = JSON.parse(components) as Record<string, number>;
+      const parsed = Object.fromEntries(rows.map((row) => [row.unit, Number(row.amount)]));
       await cloudAdmin.addPrice(model.id, parsed, from || undefined);
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminPrices(model.id) });
       onSaved();
@@ -878,7 +953,7 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="w-[min(40rem,calc(100vw-2rem))]"><DialogHeader><DialogTitle>{copy.priceHistory}</DialogTitle><DialogDescription>{model.display_label}</DialogDescription></DialogHeader>
+      <ADialogContent className="w-[min(40rem,calc(100vw-2rem))]"><DialogHeader><DialogTitle>{copy.priceHistory}</DialogTitle><DialogDescription>{model.display_label}</DialogDescription></DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
             {prices.isPending ? (
@@ -893,13 +968,32 @@ function PriceDialog({ copy, locale, model, onClose, onSaved, onFailure }: {
           </div>
           <div className="grid gap-3 border-t border-border pt-4">
             <strong className="text-sm">{copy.addPrice}</strong>
-            <Field label={copy.components}><CodeEditor value={components} onChange={setComponents} minHeight={144} /></Field>
-            <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.componentsHint}</p>
+            {rows.length === 0 ? (
+              <p className="m-0 text-sm text-muted-foreground">{copy.priceNoUnits}</p>
+            ) : (
+              <div className="grid gap-2">
+                {rows.map((row, index) => (
+                  <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-3" key={row.unit}>
+                    <span className="text-sm">{priceUnitLabel(row.unit, copy)}</span>
+                    <AInput
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      aria-label={`${priceUnitLabel(row.unit, copy)} · ${copy.priceUnit}`}
+                      value={row.amount}
+                      onChange={(event) => setRows(rows.map((one, at) => at === index ? { ...one, amount: event.target.value } : one))}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="m-0 text-xs leading-5 text-muted-foreground">{copy.priceUnitsHint}</p>
             <Field label={copy.effectiveFrom}><AInput value={from} onChange={(event) => setFrom(event.target.value)} /></Field>
           </div>
         </div>
-        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.addPrice}</AButton></DialogFooter>
-      </DialogContent>
+        <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving} disabled={rows.length === 0}>{copy.addPrice}</AButton></DialogFooter>
+      </ADialogContent>
     </Dialog>
   );
 }
@@ -987,20 +1081,20 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{provider ? copy.providerEdit : copy.addProvider}</DialogTitle><DialogDescription>{provider?.base_url ?? copy.providerCreateDesc}</DialogDescription></DialogHeader>
+      <ADialogContent><DialogHeader><DialogTitle>{provider ? copy.providerEdit : copy.addProvider}</DialogTitle><DialogDescription>{provider?.base_url ?? copy.providerCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           <Field label={copy.providerName}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
           <Field label={copy.adapter}>
             <Select value={adapter} onValueChange={changeAdapter}>
               <ASelectTrigger><SelectValue /></ASelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai">{copy.adapterOpenai}</SelectItem>
-                <SelectItem value="openai_images">{copy.adapterOpenaiImages}</SelectItem>
-                <SelectItem value="kling">{copy.adapterKling}</SelectItem>
-                <SelectItem value="seedance">{copy.adapterSeedance}</SelectItem>
-                <SelectItem value="comfyui">{copy.adapterComfyui}</SelectItem>
-                <SelectItem value="wan">{copy.adapterWan}</SelectItem>
-              </SelectContent>
+              <ASelectContent>
+                <ASelectItem value="openai">{copy.adapterOpenai}</ASelectItem>
+                <ASelectItem value="openai_images">{copy.adapterOpenaiImages}</ASelectItem>
+                <ASelectItem value="kling">{copy.adapterKling}</ASelectItem>
+                <ASelectItem value="seedance">{copy.adapterSeedance}</ASelectItem>
+                <ASelectItem value="comfyui">{copy.adapterComfyui}</ASelectItem>
+                <ASelectItem value="wan">{copy.adapterWan}</ASelectItem>
+              </ASelectContent>
             </Select>
           </Field>
           {!provider && <Field label={copy.baseUrl}><AInput value={base} onChange={(event) => setBase(event.target.value)} /></Field>}
@@ -1023,7 +1117,7 @@ function ProviderDialog({ copy, provider, onClose, onSaved, onFailure }: {
           </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.save}</AButton></DialogFooter>
-      </DialogContent>
+      </ADialogContent>
     </Dialog>
   );
 }
@@ -1129,10 +1223,10 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{copy.channelProviderHint}</DialogDescription></DialogHeader>
+      <ADialogContent><DialogHeader><DialogTitle>{channel ? copy.channelEdit : copy.addChannel}</DialogTitle><DialogDescription>{copy.channelProviderHint}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
-          <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={Boolean(channel) || models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><SelectContent>{models.map((one) => <SelectItem key={one.id} value={one.id}>{one.display_label}</SelectItem>)}</SelectContent></Select></Field>
-          <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={Boolean(channel) || providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><SelectContent>{providers.map((one) => <SelectItem key={one.id} value={one.id}>{one.name}</SelectItem>)}</SelectContent></Select></Field>
+          <Field label={copy.models}><Select value={model} onValueChange={setModel} disabled={Boolean(channel) || models.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={models.length === 0 ? copy.noModelsYet : copy.chooseModel} /></ASelectTrigger><ASelectContent>{models.map((one) => <ASelectItem key={one.id} value={one.id}>{one.display_label}</ASelectItem>)}</ASelectContent></Select></Field>
+          <Field label={copy.provider}><Select value={provider} onValueChange={setProvider} disabled={Boolean(channel) || providers.length === 0}><ASelectTrigger className="w-full"><SelectValue placeholder={providers.length === 0 ? copy.noProvidersYet : copy.chooseProvider} /></ASelectTrigger><ASelectContent>{providers.map((one) => <ASelectItem key={one.id} value={one.id}>{one.name}</ASelectItem>)}</ASelectContent></Select></Field>
           {!channel && models.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noModelForChannel}</p>}
           {!channel && providers.length === 0 && <p className="m-0 text-xs text-destructive">{copy.noProviderForChannel}</p>}
           <Field label={copy.upstreamModel}><AInput value={upstream} onChange={(event) => setUpstream(event.target.value)} /></Field>
@@ -1144,7 +1238,7 @@ function ChannelDialog({ copy, models, providers, channel, onClose, onSaved, onF
           </div>
         </div>
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving} disabled={!channel && (providers.length === 0 || models.length === 0)}>{copy.save}</AButton></DialogFooter>
-      </DialogContent>
+      </ADialogContent>
     </Dialog>
   );
 }
@@ -1224,12 +1318,12 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
   };
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan ? plan.slug : copy.planCreateDesc}</DialogDescription></DialogHeader>
+      <ADialogContent><DialogHeader><DialogTitle>{plan ? copy.planEdit : copy.addPlan}</DialogTitle><DialogDescription>{plan ? plan.slug : copy.planCreateDesc}</DialogDescription></DialogHeader>
         <div className="grid gap-3">
           {!plan && <Field label={copy.planCode}><AInput value={slug} placeholder="pro" onChange={(event) => setSlug(event.target.value)} /></Field>}
           {!plan && <p className="m-0 -mt-2 text-xs text-muted-foreground">{copy.planCodeHint}</p>}
           <Field label={copy.label}><AInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
-          <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><ASelectTrigger className="w-full"><SelectValue /></ASelectTrigger><SelectContent><SelectItem value="month">{copy.month}</SelectItem><SelectItem value="quarter">{copy.quarter}</SelectItem><SelectItem value="year">{copy.year}</SelectItem></SelectContent></Select></Field>
+          <Field label={copy.period}><Select value={period} onValueChange={(value) => setPeriod(value as AdminPlan["period"])}><ASelectTrigger className="w-full"><SelectValue /></ASelectTrigger><ASelectContent><ASelectItem value="month">{copy.month}</ASelectItem><ASelectItem value="quarter">{copy.quarter}</ASelectItem><ASelectItem value="year">{copy.year}</ASelectItem></ASelectContent></Select></Field>
           <Field label={copy.monthlyCredits}><AInput value={credits} onChange={(event) => setCredits(event.target.value)} /></Field>
           <Field label={copy.ttlDays}><AInput value={ttl} onChange={(event) => setTtl(event.target.value)} /></Field>
           <Field label={copy.priceCents}><AInput value={price} onChange={(event) => setPrice(event.target.value)} /></Field>
@@ -1254,7 +1348,7 @@ function PlanDialog({ copy, plan, onClose, onSaved, onFailure }: {
           </div>
         )}
         <DialogFooter><DialogClose asChild><AButton variant="ghost">{copy.cancel}</AButton></DialogClose><AButton onClick={() => void submit()} loading={saving}>{copy.save}</AButton></DialogFooter>
-      </DialogContent>
+      </ADialogContent>
     </Dialog>
   );
 }

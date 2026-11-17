@@ -372,6 +372,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "MosaelCloud does not offer that model, or it is not available right now.",
         "zh": "MosaelCloud 没有这个模型,或者它暂时不可用。",
     },
+    "gateway_model_price_incomplete": {
+        "en": "This job model's price does not cover every reserved unit: {units}. Add a price for those units before using it.",
+        "zh": "这个任务模型的定价没有覆盖全部计量单位:{units}。先在管理台补齐这些单位的积分单价。",
+    },
     "gateway_max_tokens_too_large": {
         "en": "This model generates at most {max} tokens per call.",
         "zh": "这个模型一次最多生成 {max} 个 token。",
