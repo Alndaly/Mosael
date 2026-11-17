@@ -130,6 +130,46 @@ def screenshot(scale: float = DEFAULT_SCALE) -> dict[str, Any]:
     }
 
 
+def zoom(region: object, scale: float = DEFAULT_SCALE) -> dict[str, Any]:
+    """按全屏像素裁出 Mosael 窗口的一块区域,再按 `scale` 缩小;用于读小字和密集 UI。"""
+    box = _region(region)
+    factor = _scale(scale)
+    answer = _host_call(SCREENSHOT_CHANNEL, {})
+    if not isinstance(answer, dict):
+        raise ComputerUseError("computer_zoom got no answer from the Mosael window bridge.")
+    raw = _image_bytes(answer)
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            if image.format != "PNG":
+                raise ComputerUseError("The Mosael window returned something that isn't a PNG.")
+            source_width, source_height = image.size
+            x0, y0, x1, y1 = box
+            if x1 > source_width or y1 > source_height:
+                raise ComputerUseError(
+                    f"region is outside the screenshot: it is {source_width}×{source_height}, "
+                    f"but region ends at ({x1}, {y1})."
+                )
+            cropped = image.crop(box)
+            buffer = io.BytesIO()
+            cropped.save(buffer, format="PNG")
+    except ComputerUseError:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise ComputerUseError("The Mosael window returned something that isn't a readable PNG.") from None
+    width, height, pixels = _size_and_pixels(buffer.getvalue(), factor)
+    return {
+        "width": width,
+        "height": height,
+        "scale": factor,
+        "source_width": source_width,
+        "source_height": source_height,
+        "region": list(box),
+        "image": base64.b64encode(pixels).decode("ascii"),
+    }
+
+
 def wait(text: object, timeout_ms: object = DEFAULT_WAIT_MS) -> dict[str, Any]:
     """等 Mosael 窗口里出现一段可见文字;找到返回 found=True,等满返回 False。只读。"""
     label = _wait_text(text)
@@ -644,6 +684,20 @@ def end_turn() -> None:
         pass
 
 
+def _region(value: object) -> tuple[int, int, int, int]:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        raise ComputerUseError("region must be [x0, y0, x1, y1] in full-screenshot pixels.")
+    coords: list[int] = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, (int, float)) or not math.isfinite(float(item)):
+            raise ComputerUseError("region must be [x0, y0, x1, y1] in full-screenshot pixels.")
+        coords.append(max(0, round(float(item))))
+    x0, y0, x1, y1 = coords
+    if x1 <= x0 or y1 <= y0:
+        raise ComputerUseError("region needs x1 > x0 and y1 > y0.")
+    return x0, y0, x1, y1
+
+
 def _scale(value: object) -> float:
     # bool 是 int 的子类:True 不是 1 倍,是「模型把话听拧了」。
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -853,4 +907,5 @@ __all__ = [
     "type_text",
     "verify",
     "wait",
+    "zoom",
 ]

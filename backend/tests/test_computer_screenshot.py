@@ -105,6 +105,23 @@ def test_it_goes_through_the_host_bridge_and_returns_an_image_block(monkeypatch)
     assert base64.b64decode(images[0]["data"]) == _png(640, 480)
 
 
+def test_zoom_crops_the_full_screenshot_and_reports_the_source(monkeypatch) -> None:
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(100, 80))
+
+    shot = computer_use.zoom([10, 20, 60, 50])
+
+    assert (shot["width"], shot["height"]) == (50, 30)
+    assert (shot["source_width"], shot["source_height"]) == (100, 80)
+    assert shot["region"] == [10, 20, 60, 50]
+    assert base64.b64decode(shot["image"])
+
+
+def test_zoom_rejects_a_region_outside_the_screenshot(monkeypatch) -> None:
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(100, 80))
+    with pytest.raises(computer_use.ComputerUseError, match="outside"):
+        computer_use.zoom([10, 20, 200, 50])
+
+
 def test_the_element_list_uses_the_same_scale_as_the_picture(monkeypatch) -> None:
     client = fresh_client()
     shot = _shot(1600, 1200)

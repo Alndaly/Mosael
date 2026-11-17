@@ -479,6 +479,28 @@ def computer_screenshot(
 
 
 @tool(effect="reads")
+def computer_zoom(
+    region: Annotated[list[float], Field(description="[x0, y0, x1, y1] in full-screenshot pixels.")],
+    scale: Annotated[float, Field(description="0.25–1; usually leave 1 for a full-resolution crop.")] = 1,
+) -> list[TextContent | ImageContent]:
+    """Read-only: crop one region of Mosael's window at higher resolution.
+
+    Use after computer_screenshot when small text or dense controls are unreadable. Coordinates
+    are in the full screenshot's pixels, not the crop's; the result reports source_width and
+    source_height so you can map back. It never clicks, types or scrolls.
+    """
+    from app.domain.agent.computer_use import zoom
+
+    shot = zoom(region=region, scale=scale)
+    extra = {
+        key: shot[key]
+        for key in ("source_width", "source_height", "region")
+        if key in shot
+    }
+    return _computer_image_response(shot, asset_name="窗口放大", extra=extra)
+
+
+@tool(effect="reads")
 def computer_wait(
     text: Annotated[str, Field(description="Visible text to wait for in Mosael's window.")],
     timeout_ms: Annotated[int, Field(description="Maximum wait in milliseconds (100–15000).")] = 5000,

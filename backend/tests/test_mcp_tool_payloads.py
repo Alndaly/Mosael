@@ -124,6 +124,7 @@ ARGS: dict[str, dict[str, Any]] = {
     # 桌面壳的宿主桥不在这个测试进程里:调用会回一句人话(ComputerUseError),不是载荷形状被拒。
     "computer_screenshot": {},
     "computer_wait": {"text": "保存", "timeout_ms": 100},
+    "computer_zoom": {"region": [0, 0, 10, 10]},
     "computer_verify": {"text": "保存"},
     "computer_desktop_wait": {"pid": 42, "text": "保存", "timeout_ms": 100},
     "computer_desktop_verify": {"pid": 42, "text": "保存"},

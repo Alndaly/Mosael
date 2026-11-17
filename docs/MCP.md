@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **159** 个工具,其中 **56** 个走确认卡、**1** 个停下来等用户作答。
+共 **160** 个工具,其中 **56** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -73,6 +73,7 @@
 | `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |
 | `computer_verify` | 直接执行 | Read-only: check right now whether visible text exists in Mosael's app window. |
 | `computer_wait` | 直接执行 | Read-only: wait until visible text appears in Mosael's app window. |
+| `computer_zoom` | 直接执行 | Read-only: crop one region of Mosael's window at higher resolution. |
 | `continue_workflow_run` | 确认卡 | Confirmation required: continue a failed, interrupted or cancelled workflow run from where it stopped. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
