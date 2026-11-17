@@ -113,7 +113,7 @@ export function FormsBar({
             description: full ? t("workflowFormsMax").replace("{n}", String(MAX_FORMS)) : undefined,
           }))}
           trigger={
-            <Button variant="outline" size="sm" aria-haspopup="menu" data-forms-new="">
+            <Button variant="outline" size="sm" shape="round" aria-haspopup="menu" data-forms-new="">
               <Plus size={14} />
               {t("workflowFormNew")}
             </Button>
