@@ -320,17 +320,41 @@ def translate_many(
         撤掉;已经在跑的(至多 `workers` 句)跑完为止。
         """
         # run_in_scope:contextvars 不会自动跨进工作线程,而记账归属就在里面。
+        #
+        # **只把当前窗口内的句子放进线程池**,不再一次 submit 全部:此前一次提交几百句,
+        # 第一句失败时排队中的句子仍会被空闲下来的 worker 领走,测试里出现「失败之后又翻了 17 句」。
+        # 窗口始终不超过 workers;失败或说停之后不再补下一句。
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(run_in_scope(translate_one), item) for item in indexed]
-            pending = set(futures)
+            iterator = iter(indexed)
+            futures: list[Future] = []
+            pending: set[Future] = set()
+
+            def submit_next() -> bool:
+                try:
+                    item = next(iterator)
+                except StopIteration:
+                    return False
+                one = pool.submit(run_in_scope(translate_one), item)
+                futures.append(one)
+                pending.add(one)
+                return True
+
+            for _ in range(workers):
+                if not submit_next():
+                    break
             stopped = False
+            failed = False
             while pending:
                 done, pending = wait(pending, timeout=_STOP_POLL_SECONDS, return_when=FIRST_EXCEPTION)
                 if any(not one.cancelled() and one.exception() is not None for one in done):
+                    failed = True
                     break
                 if stop is not None and stop():
                     stopped = True
                     break
+                for _ in done:
+                    if not submit_next():
+                        break
             for one in pending:
                 one.cancel()
         #: 按句子的顺序报第一条真的失败;撤掉的那些不算。
