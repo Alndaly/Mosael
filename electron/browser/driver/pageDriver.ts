@@ -787,6 +787,36 @@ export class PageDriver {
     return false;
   }
 
+  /**
+   * 按页面 CSS 坐标点一下(可信输入)。给 canvas / WebGL / 跨域 iframe 用:
+   * 这些没有可读 DOM 或无法从外层用选择器进入,但页面上的位置仍然存在。
+   */
+  async clickAt(x: number, y: number): Promise<void> {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
+      throw new Error("clickAt needs non-negative page coordinates");
+    }
+    const viewport = await this.evaluate<{ vw: number; vh: number }>(
+      "({ vw: innerWidth, vh: innerHeight })",
+    );
+    this.ensurePointerUsable(viewport, "clickAt");
+    if (x >= viewport.vw || y >= viewport.vh) {
+      throw new Error(`clickAt: (${x}, ${y}) is outside the ${viewport.vw}×${viewport.vh} viewport`);
+    }
+    const zoom = (() => {
+      try { return safeZoom(this.wc.getZoomFactor()); } catch { return 1; }
+    })();
+    const tx = Math.round(pageToView(x, zoom));
+    const ty = Math.round(pageToView(y, zoom));
+    for (let i = 1; i <= 4; i++) {
+      this.wc.sendInputEvent({ type: "mouseMove", x: Math.round(tx - 30 + i * 8), y: Math.round(ty - 20 + i * 5) });
+      await this.wait(10 + Math.round(Math.random() * 15));
+    }
+    this.wc.sendInputEvent({ type: "mouseDown", x: tx, y: ty, button: "left", clickCount: 1 });
+    await this.wait(40 + Math.round(Math.random() * 50));
+    this.wc.sendInputEvent({ type: "mouseUp", x: tx, y: ty, button: "left", clickCount: 1 });
+    await this.wait(80);
+  }
+
   async pointerClickCss(selector: string): Promise<void> {
     // scrollIntoView 之后必须**等滚动停下来**再读 rect:页面若是平滑滚动,同步读到的是滚动前的
     // 位置,而 humanClickAt 还要花 100–200ms 移动鼠标,真正点下去时按钮早已不在那儿 —— 命中测试

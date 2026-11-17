@@ -207,6 +207,19 @@ export async function executeBrowserAction(
       }
       return { lastUrl: driver.url() };
     }
+    case "click_at": {
+      const x = Number(args.x);
+      const y = Number(args.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(t("browserErr_clickNeedsTarget"));
+      await driver.clickAt(x, y);
+      return { lastUrl: driver.url() };
+    }
+    case "type_focused": {
+      const value = s(args.value);
+      if (!value) throw new Error(t("browserErr_typeNeedsValue"));
+      await driver.type(value);
+      return { lastUrl: driver.url() };
+    }
     case "input": {
       const selector = s(args.selector);
       const { target, left } = await withinFrame(driver, args, waitMsOf(args));

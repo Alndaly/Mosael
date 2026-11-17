@@ -68,7 +68,7 @@ WORKER_LEASE_SECONDS = 60
 
 # 文档用途;worker 是动作合法性的最终裁判。
 KNOWN_ACTIONS = (
-    "navigate", "click", "input", "extract", "wait", "scroll",
+    "navigate", "click", "click_at", "input", "type_focused", "extract", "wait", "scroll",
     "screenshot", "evaluate", "upload", "press_key", "close",
     #: 截这一页并存进素材库(「截图」节点 / 智能体的 browser_screenshot)。和 screenshot 不同:那个是失败现场的
     #: 小图,只回 base64、不入库。

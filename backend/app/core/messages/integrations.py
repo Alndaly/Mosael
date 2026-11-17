@@ -929,6 +929,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirm_computerBatch": {"zh": "按顺序执行 {count} 个界面动作:{steps}", "en": "Run {count} UI actions in order: {steps}"},
     "confirm_computerBatchWait": {"zh": "等待文字「{text}」出现", "en": "Wait for the text “{text}”"},
     "confirm_computerElementClick": {"zh": "点击 Mosael 窗口里的界面元素「{name}」", "en": "Click the UI element “{name}” in the Mosael window"},
+    "confirm_computerElementType": {"zh": "先在 Mosael 窗口点击界面元素「{name}」,然后输入:{text}", "en": "Click the UI element “{name}” in the Mosael window, then type: {text}"},
+    "confirm_computerElementDrag": {"zh": "在 Mosael 窗口里从界面元素「{from_name}」拖到「{to_name}」", "en": "Drag from UI element “{from_name}” to “{to_name}” in the Mosael window"},
     "confirm_computerSpecialClick": {"zh": "在 Mosael 窗口 ({x}, {y}) 执行 {keys}", "en": "Perform {keys} at ({x}, {y}) in the Mosael window"},
     "confirm_computerPointer": {"zh": "在 Mosael 窗口 ({x}, {y}) 执行指针动作:{action}({button} 键)", "en": "Perform pointer {action} at ({x}, {y}) in the Mosael window ({button} button)"},
     "confirm_computerKeyHold": {"zh": "在 Mosael 窗口按住 {keys} {ms} 毫秒", "en": "Hold {keys} in the Mosael window for {ms} ms"},

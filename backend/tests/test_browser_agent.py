@@ -10,7 +10,7 @@ from app.domain import browser
 from tests.util import fresh_client
 
 BROWSER_TOOLS = [
-    "browser_open", "browser_navigate", "browser_click", "browser_type", "browser_press",
+    "browser_open", "browser_navigate", "browser_click", "browser_click_at", "browser_type", "browser_type_focused", "browser_press",
     "browser_read", "browser_wait", "browser_close",
 ]
 

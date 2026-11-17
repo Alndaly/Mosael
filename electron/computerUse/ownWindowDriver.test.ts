@@ -91,6 +91,48 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     await expect(driver.act({ kind: "click", token })).rejects.toThrow(/snapshot expired/);
   });
 
+  it("type token 先点元素再输入", async () => {
+    const win = fakeWindow();
+    const rows = [{ role: "input", name: "搜索", x: 10, y: 20, width: 100, height: 30, disabled: false }];
+    win.webContents.executeJavaScript = vi.fn(async (script: string) => (
+      script.includes("querySelectorAll") ? rows : false
+    ));
+    const driver = new OwnWindowDriver(() => win);
+    const token = (await driver.observe()).elements[0].token;
+
+    const result = await driver.act({ kind: "type", token, text: "hi" });
+
+    expect(result.typed).toBe(2);
+    expect(win.webContents.insertText).toHaveBeenCalledWith("hi");
+    expect(win.webContents.sendInputEvent).toHaveBeenCalledWith({
+      type: "mouseUp", x: 60, y: 35, button: "left", clickCount: 1, modifiers: [],
+    });
+  });
+
+  it("drag 接受两个元素 token", async () => {
+    const win = fakeWindow();
+    const rows = [
+      { role: "button", name: "文件", x: 10, y: 20, width: 40, height: 20, disabled: false },
+      { role: "button", name: "文件夹", x: 100, y: 200, width: 40, height: 20, disabled: false },
+    ];
+    win.webContents.executeJavaScript = vi.fn(async (script: string) => (
+      script.includes("querySelectorAll") ? rows : false
+    ));
+    const driver = new OwnWindowDriver(() => win);
+    const shot = await driver.observe();
+
+    const result = await driver.act({
+      kind: "drag", fromToken: shot.elements[0].token, toToken: shot.elements[1].token,
+      button: "left", durationMs: 100,
+    });
+
+    expect(result.toX).toBe(120);
+    expect(result.toY).toBe(210);
+    expect(win.webContents.sendInputEvent).toHaveBeenLastCalledWith({
+      type: "mouseUp", x: 120, y: 210, button: "left", clickCount: 1,
+    });
+  });
+
   it("waitForText 重读 DOM 直到文字出现或超时", async () => {
     const win = fakeWindow();
     let calls = 0;

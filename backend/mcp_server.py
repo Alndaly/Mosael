@@ -403,8 +403,12 @@ def computer_drag(
     button: Annotated[str, Field(description='"left" or "right".')] = "left",
     duration_ms: Annotated[int, Field(description="Drag duration in milliseconds (100–2000).")] = 300,
     scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
+    from_token: Annotated[str, Field(description="Start element token from computer_screenshot; use with to_token.")] = "",
+    to_token: Annotated[str, Field(description="End element token from computer_screenshot; use with from_token.")] = "",
+    from_name: Annotated[str, Field(description="Start element name for the confirmation card.")] = "",
+    to_name: Annotated[str, Field(description="End element name for the confirmation card.")] = "",
 ) -> dict[str, Any]:
-    """Confirmation required: drag from one point to another in Mosael's app window.
+    """Confirmation required: drag from one point or element to another in Mosael's app window.
 
     Use this for sliders, text selection, drag-and-drop inside the app, or moving a canvas object.
     Both coordinates are pixels in the picture computer_screenshot returned; pass that call's scale.
@@ -423,6 +427,10 @@ def computer_drag(
                 "button": button,
                 "duration_ms": duration_ms,
                 "scale": scale,
+                "from_token": from_token,
+                "to_token": to_token,
+                "from_name": from_name,
+                "to_name": to_name,
             },
         },
     )
@@ -456,6 +464,8 @@ def computer_input(
     key: Annotated[str, Field(description="A key for action=\"press\": a letter/digit, or Enter, Tab, Escape, ArrowUp, F5, ….")] = "",
     modifiers: Annotated[list[str] | None, Field(description='Modifiers for action="press": cmd, ctrl, alt, shift, meta.')] = None,
     hold_ms: Annotated[int, Field(description="For action=press: hold the key down this many milliseconds before releasing (0–300000).")] = 0,
+    token: Annotated[str, Field(description="For action=type: element token from computer_screenshot; clicks it before typing.")] = "",
+    name: Annotated[str, Field(description="Human-readable element name for the confirmation card.")] = "",
 ) -> dict[str, Any]:
     """Confirmation required: type text or press a key in Mosael's app window.
 
@@ -469,7 +479,10 @@ def computer_input(
             "workspace_id": _default_workspace_id(),
             "tool": "computer_input",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"action": action, "text": text, "key": key, "modifiers": modifiers or [], "hold_ms": hold_ms},
+            "payload": {
+                "action": action, "text": text, "key": key, "modifiers": modifiers or [],
+                "hold_ms": hold_ms, "token": token, "name": name,
+            },
         },
     )
     return _confirmation_reply(confirmation)
@@ -700,6 +713,39 @@ def computer_desktop_click(
                 "click_count": click_count,
                 "scale": scale,
                 "modifiers": modifiers or [],
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
+def computer_desktop_batch(
+    actions: list[dict[str, Any]],
+    window_id: Annotated[int | None, Field(description="Window to screenshot after the batch (from computer_desktop_windows).")] = None,
+    finish_screenshot: bool = True,
+) -> dict[str, Any]:
+    """Confirmation required: run up to 8 desktop actions in order.
+
+    Each action is one of:
+      {"kind":"click","token":…} / {"kind":"click","capture_id":…,"x":…,"y":…,"button":"left","click_count":1}
+      {"kind":"pointer","action":"hover","token":…} / capture_id+x+y
+      {"kind":"input","action":"type","token":…,"text":"…"} or {"kind":"input","action":"press","token":…,"key":"Enter","hold_ms":0}
+      {"kind":"scroll","token":…,"dy":3,"dx":0} or capture_id+x+y
+      {"kind":"drag","capture_id":…,"from_x":…,"from_y":…,"to_x":…,"to_y":…}
+      {"kind":"wait","pid":…,"text":"Saved","timeout_ms":5000}
+    One always-ask card lists every step; execution stops at the first failure. The final/error
+    screenshot is saved as an asset and returned as an image block by get_confirmation.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_desktop_batch",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "actions": actions,
+                "window_id": window_id,
+                "finish_screenshot": finish_screenshot,
             },
         },
     )
@@ -2350,6 +2396,22 @@ def browser_click(
 
 
 @tool(effect="writes")
+def browser_click_at(
+    session_id: str,
+    x: Annotated[int, Field(description="X in page CSS pixels (the visible page, not the browser window).")],
+    y: Annotated[int, Field(description="Y in page CSS pixels.")],
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Click a page point by CSS coordinates in the open session.
+
+    Use for canvas / WebGL surfaces, or for content inside a cross-origin iframe where selectors
+    cannot reach. Coordinates come from the page screenshot. Prefer browser_click with a selector
+    or text when the element is reachable: a selector survives layout changes, a point does not.
+    """
+    return _browser_act(session_id, "click_at", {"x": x, "y": y}, workspace_id)
+
+
+@tool(effect="writes")
 def browser_type(session_id: str, selector: str, value: str, frame: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials.
     frame: the iframe holding it, as in browser_click."""
@@ -2368,6 +2430,20 @@ def browser_press(
     with Escape. The browser driver sends a trusted key event; no selector is involved.
     """
     return _browser_act(session_id, "press_key", {"key": key}, workspace_id)
+
+
+@tool(effect="writes")
+def browser_type_focused(
+    session_id: str,
+    value: str,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Type into whatever currently has focus in the open page.
+
+    Use after browser_click_at when the target is a canvas, WebGL surface or a cross-origin
+    iframe field where selectors are not reachable. Follows the same credentials ban as browser_type.
+    """
+    return _browser_act(session_id, "type_focused", {"value": value}, workspace_id)
 
 
 @tool(effect="reads")

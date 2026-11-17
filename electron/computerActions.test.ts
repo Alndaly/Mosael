@@ -127,6 +127,9 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
 
 
     expect(contract.parseComputerType({ text: "hi" })).toEqual({ text: "hi" });
+    expect(contract.parseComputerType({ text: "hi", token: "snap-1:0" })).toEqual({
+      text: "hi", token: "snap-1:0",
+    });
     expect(() => contract.parseComputerType({ text: "" })).toThrow(/non-empty/);
     expect(() => contract.parseComputerType({ text: "x".repeat(2001) })).toThrow(/2000/);
 
@@ -151,6 +154,9 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
     })).toMatchObject({ button: "right", durationMs: 500 });
     expect(() => contract.parseComputerDrag({ fromX: -1, fromY: 2, toX: 3, toY: 4 })).toThrow(/fromX/);
     expect(() => contract.parseComputerDrag({ fromX: 1, fromY: 2, toX: 3, toY: 4, durationMs: 50 })).toThrow(/durationMs/);
+    expect(contract.parseComputerDrag({ fromToken: "snap-1:0", toToken: "snap-1:1" })).toEqual({
+      fromToken: "snap-1:0", toToken: "snap-1:1", button: "left", durationMs: 300,
+    });
 
     expect(contract.IPC.invoke.computerScroll).toBe("computer:scroll");
     expect(contract.parseComputerScroll({ dy: 3 })).toEqual({ dy: 3, dx: 0, x: null, y: null });

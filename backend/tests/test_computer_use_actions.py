@@ -51,9 +51,10 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
     assert set(click_properties) == {"x", "y", "button", "click_count", "scale", "token", "name", "modifiers"}
     assert click_properties["button"]["default"] == "left"
     assert click_properties["click_count"]["default"] == 1
-    assert set(tools["computer_input"]["parameters"]["properties"]) == {"action", "text", "key", "modifiers", "hold_ms"}
+    assert set(tools["computer_input"]["parameters"]["properties"]) == {"action", "text", "key", "modifiers", "hold_ms", "token", "name"}
     assert set(tools["computer_drag"]["parameters"]["properties"]) == {
         "from_x", "from_y", "to_x", "to_y", "button", "duration_ms", "scale",
+        "from_token", "to_token", "from_name", "to_name",
     }
     assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "dx", "x", "y", "scale"}
 
@@ -652,3 +653,45 @@ def test_get_confirmation_attaches_a_batch_screenshot(monkeypatch) -> None:
     assert json.loads(blocks[0].text)["confirmation_id"] == "card-1"
     assert isinstance(blocks[1], ImageContent)
     assert blocks[1].mime_type == "image/png"
+
+
+def test_input_and_drag_accept_element_tokens(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"typed": len(payload.get("text", "")), "toX": payload.get("toX", 0)}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        input_spec = tool_spec("computer_input")
+        input_spec.validate(db, "w1", {"action": "type", "text": "hi", "token": "snap-1:0"}, None)
+        assert input_spec.summarize(
+            db, {"action": "type", "text": "hi", "token": "snap-1:0", "name": "搜索"},
+        ) == ("confirm_computerElementType", {"name": "搜索", "text": "hi"})
+        input_spec.execute(db, types.SimpleNamespace(
+            payload={"action": "type", "text": "hi", "token": "snap-1:0"},
+            workspace_id="w1",
+        ), "user-1")
+
+        drag_spec = tool_spec("computer_drag")
+        drag_spec.validate(db, "w1", {
+            "from_token": "snap-1:0", "to_token": "snap-1:1", "button": "left", "duration_ms": 300,
+        }, None)
+        assert drag_spec.summarize(db, {
+            "from_token": "snap-1:0", "to_token": "snap-1:1", "from_name": "文件", "to_name": "文件夹",
+        }) == ("confirm_computerElementDrag", {"from_name": "文件", "to_name": "文件夹"})
+        drag_spec.execute(db, types.SimpleNamespace(
+            payload={
+                "from_token": "snap-1:0", "to_token": "snap-1:1",
+                "button": "left", "duration_ms": 300,
+            },
+            workspace_id="w1",
+        ), "user-1")
+
+    assert calls == [
+        ("computer:type", {"text": "hi", "token": "snap-1:0"}),
+        ("computer:drag", {"fromToken": "snap-1:0", "toToken": "snap-1:1", "button": "left", "durationMs": 300}),
+    ]

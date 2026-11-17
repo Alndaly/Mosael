@@ -444,7 +444,7 @@ class OwnWindowDriver {
   }
 
   /** 令牌 → 当前 DOM 里的同一个元素;重读并比对指纹,过期 / 变了就拒绝。 */
-  async resolveElement(token) {
+  async resolveElement(token, consume = true) {
     const match = /^([A-Za-z0-9-]{1,64}):(\d{1,8})$/.exec(String(token || ""));
     if (!match) throw new Error("The element token is invalid; take a new screenshot.");
     const snapshot = this.domSnapshots.get(match[1]);
@@ -463,12 +463,13 @@ class OwnWindowDriver {
       this.domSnapshots.delete(match[1]);
       throw new Error("That element changed or disappeared; take a new screenshot before acting.");
     }
-    this.domSnapshots.delete(match[1]);
+    if (consume) this.domSnapshots.delete(match[1]);
     return {
       x: Math.round(after.x + after.width / 2),
       y: Math.round(after.y + after.height / 2),
       role: after.role,
       name: after.name,
+      snapshotId: match[1],
     };
   }
 
@@ -484,15 +485,27 @@ class OwnWindowDriver {
   async act(action) {
     const window = this.getWindow();
     let run = action;
+    let tokenType = false;
+    if (run.fromToken || run.toToken) {
+      if (!run.fromToken || !run.toToken) {
+        throw new Error("fromToken and toToken must be provided together.");
+      }
+      const from = await this.resolveElement(run.fromToken, false);
+      const to = await this.resolveElement(run.toToken, false);
+      this.domSnapshots.delete(from.snapshotId);
+      this.domSnapshots.delete(to.snapshotId);
+      run = { ...run, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, fromToken: undefined, toToken: undefined };
+    }
     if (run.token) {
-      if (run.kind !== "click") {
-        throw new Error("Element tokens currently target clicks only; use coordinates for this action.");
+      if (run.kind !== "click" && run.kind !== "type") {
+        throw new Error("Element tokens currently target clicks and text input; use coordinates for this action.");
       }
       const target = await this.resolveElement(run.token);
+      tokenType = run.kind === "type";
       run = { ...run, x: target.x, y: target.y, token: undefined };
     }
     if (window && (run.kind === "click" || run.kind === "type" || run.kind === "key" || run.kind === "drag" || run.kind === "hover")) {
-      await assertComputerTargetAllowed(window.webContents, run);
+      await assertComputerTargetAllowed(window.webContents, tokenType ? { ...run, kind: "click" } : run);
     }
     switch (run.kind) {
       case "hover":
@@ -504,6 +517,7 @@ class OwnWindowDriver {
       case "drag":
         return dragMosaelWindow(run, window, run.cursor ?? null);
       case "type":
+        if (tokenType) clickMosaelWindow(run, window, run.cursor ?? null);
         return typeIntoMosaelWindow(run, window, run.cursor ?? null);
       case "key":
         return pressMosaelWindow(run, window, run.cursor ?? null);

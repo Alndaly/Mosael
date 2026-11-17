@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **163** 个工具,其中 **59** 个走确认卡、**1** 个停下来等用户作答。
+共 **166** 个工具,其中 **60** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -26,6 +26,7 @@
 | `blender_look` | 直接执行 | Read-only: LOOK at the open Blender scene — returns rendered images you can see. |
 | `blender_send_scene` | 直接执行 | Send a Mosael 3D scene into Blender, so you can refine it there with real modeling. |
 | `browser_click` | 直接执行 | Click an element by CSS selector or visible text in the open session (one of selector/text). |
+| `browser_click_at` | 直接执行 | Click a page point by CSS coordinates in the open session. |
 | `browser_close` | 直接执行 | Close a browser session (frees the view; a throwaway session's cookies/storage are wiped). |
 | `browser_evaluate` | 直接执行 | Advanced: evaluate a JS expression in the open session's page and return its value. |
 | `browser_navigate` | 直接执行 | Navigate an already-open browser session to a URL. Needs a session_id from browser_open. |
@@ -38,6 +39,7 @@
 | `browser_screenshot` | 直接执行 | Screenshot the open session's page into the asset library; returns { value: { asset_id } }. |
 | `browser_scroll` | 直接执行 | Scroll the open session to an element (selector) or by dy pixels. frame: as in browser_click. |
 | `browser_type` | 直接执行 | Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials. |
+| `browser_type_focused` | 直接执行 | Type into whatever currently has focus in the open page. |
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
 | `clip_media` | 确认卡 | Confirmation required: cut a stretch of an EXISTING video or audio asset into a NEW asset. |
@@ -60,6 +62,7 @@
 | `computer_batch` | 确认卡 | Confirmation required: run up to 8 UI actions in Mosael's window, in order. |
 | `computer_click` | 确认卡 | Confirmation required: click a point or an element in Mosael's app window. |
 | `computer_desktop_accessibility` | 直接执行 | Read-only: read another app's macOS accessibility tree by `pid`. |
+| `computer_desktop_batch` | 确认卡 | Confirmation required: run up to 8 desktop actions in order. |
 | `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
 | `computer_desktop_drag` | 确认卡 | Confirmation required: drag between two points in another desktop app. |
 | `computer_desktop_input` | 确认卡 | Confirmation required: type text or press a key in another desktop app. |
@@ -69,7 +72,7 @@
 | `computer_desktop_verify` | 直接执行 | Read-only: check right now whether an app's accessibility tree contains the text. |
 | `computer_desktop_wait` | 直接执行 | Read-only: wait until an app's accessibility tree contains the given text. |
 | `computer_desktop_windows` | 直接执行 | Read-only: list visible desktop windows, including other apps. |
-| `computer_drag` | 确认卡 | Confirmation required: drag from one point to another in Mosael's app window. |
+| `computer_drag` | 确认卡 | Confirmation required: drag from one point or element to another in Mosael's app window. |
 | `computer_input` | 确认卡 | Confirmation required: type text or press a key in Mosael's app window. |
 | `computer_pointer` | 确认卡 | Confirmation required: hover or press/release a mouse button in Mosael's window. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |

@@ -145,10 +145,22 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+def _drag_token(payload: dict[str, Any], key: str) -> str:
+    token = str(payload.get(key) or "").strip()
+    if token and not re.fullmatch(r"[A-Za-z0-9-]{1,64}:\d{1,8}", token):
+        raise ConfirmationError("confirmErr_computerElementToken")
+    return token
+
+
 def _validate_drag(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    for key in ("from_x", "from_y", "to_x", "to_y"):
-        _coordinate(payload, key)
-    _scale(payload)
+    first = _drag_token(payload, "from_token")
+    last = _drag_token(payload, "to_token")
+    if bool(first) != bool(last):
+        raise ConfirmationError("confirmErr_computerBatchBadAction", index=0)
+    if not first:
+        for key in ("from_x", "from_y", "to_x", "to_y"):
+            _coordinate(payload, key)
+        _scale(payload)
     button = str(payload.get("button") or "left").strip().lower()
     if button not in L1_BUTTONS:
         raise ConfirmationError("confirmErr_computerClickButton")
@@ -158,6 +170,13 @@ def _validate_drag(db: Session, workspace_id: str, payload: dict[str, Any], acto
 
 
 def _summarize_drag(db: Session, payload: dict[str, Any]) -> Summary:
+    first = str(payload.get("from_token") or "").strip()
+    last = str(payload.get("to_token") or "").strip()
+    if first and last:
+        return "confirm_computerElementDrag", {
+            "from_name": str(payload.get("from_name") or first)[:120],
+            "to_name": str(payload.get("to_name") or last)[:120],
+        }
     return "confirm_computerDrag", {
         "from_x": _coordinate(payload, "from_x"),
         "from_y": _coordinate(payload, "from_y"),
@@ -178,6 +197,8 @@ def _execute_drag(db: Session, confirmation: Any, actor: str | None) -> dict[str
             button=str(payload.get("button") or "left"),
             duration_ms=payload.get("duration_ms", DEFAULT_DRAG_MS),
             scale=float(payload.get("scale", 1)),
+            from_token=payload.get("from_token", ""),
+            to_token=payload.get("to_token", ""),
         )
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None
@@ -263,6 +284,9 @@ def _input_kind(payload: dict[str, Any]) -> str:
 
 
 def _validate_input(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    token = _element(payload)
+    if token and str(payload.get("action") or "").strip().lower() != "type":
+        raise ConfirmationError("confirmErr_computerInputMixed")
     try:
         _input_kind(payload)
         hold = payload.get("hold_ms", 0)
@@ -274,7 +298,13 @@ def _validate_input(db: Session, workspace_id: str, payload: dict[str, Any], act
 
 def _summarize_input(db: Session, payload: dict[str, Any]) -> Summary:
     if str(payload.get("action") or "").strip().lower() == "type":
-        return "confirm_computerType", {"text": str(payload.get("text") or "")[:400]}
+        text = str(payload.get("text") or "")[:400]
+        if payload.get("token"):
+            return "confirm_computerElementType", {
+                "name": str(payload.get("name") or payload.get("token"))[:120],
+                "text": text,
+            }
+        return "confirm_computerType", {"text": text}
     key, modifiers = key_payload(payload.get("key"), payload.get("modifiers"))
     pressed = "+".join([*modifiers, key])
     hold = int(payload.get("hold_ms") or 0)
@@ -287,7 +317,7 @@ def _execute_input(db: Session, confirmation: Any, actor: str | None) -> dict[st
     payload = confirmation.payload
     try:
         if str(payload.get("action") or "").strip().lower() == "type":
-            return use_type(text=payload.get("text", ""))
+            return use_type(text=payload.get("text", ""), token=payload.get("token", ""))
         return use_press(
             key=payload.get("key"), modifiers=payload.get("modifiers"),
             hold_ms=payload.get("hold_ms", 0),

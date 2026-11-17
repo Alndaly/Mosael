@@ -574,15 +574,32 @@ def drag(
     button: object = "left",
     duration_ms: object = DEFAULT_DRAG_MS,
     scale: float = DEFAULT_SCALE,
+    from_token: object = "",
+    to_token: object = "",
 ) -> dict[str, Any]:
-    """在 Mosael 主窗口里从起点拖到终点。坐标是**图片上**的像素,和点击同一套换算。"""
+    """在 Mosael 主窗口里从起点拖到终点;也可给起点/终点元素 token。"""
+    first = _element_token(from_token)
+    last = _element_token(to_token)
+    if bool(first) != bool(last):
+        raise ComputerUseError("from_token and to_token must be provided together.")
+    kind = _drag_button(button)
+    duration = _drag_duration(duration_ms)
+    if first and last:
+        _mark_touched()
+        answer = _host_call(DRAG_CHANNEL, {
+            "fromToken": first, "toToken": last, "button": kind, "durationMs": duration,
+        })
+        if not isinstance(answer, dict) or answer.get("toX") is None:
+            raise ComputerUseError("The Mosael window bridge answered without confirming the drag.")
+        return {
+            **answer, "fromToken": first, "toToken": last,
+            "button": kind, "durationMs": duration,
+        }
     factor = _scale(scale)
     start_x = _screenshot_coordinate(from_x, "from_x", factor)
     start_y = _screenshot_coordinate(from_y, "from_y", factor)
     end_x = _screenshot_coordinate(to_x, "to_x", factor)
     end_y = _screenshot_coordinate(to_y, "to_y", factor)
-    kind = _drag_button(button)
-    duration = _drag_duration(duration_ms)
     _mark_touched()
     answer = _host_call(
         DRAG_CHANNEL,
@@ -638,18 +655,20 @@ def pointer(
     }
 
 
-def type_text(text: object = "") -> dict[str, Any]:
-    """往 Mosael 主窗口里输入一段文字(输入到当前焦点)。"""
+def type_text(text: object = "", token: object = "") -> dict[str, Any]:
+    """往 Mosael 主窗口里输入一段文字;给 token 时先点该元素再输入。"""
 
     if not isinstance(text, str) or not text:
         raise ComputerUseError("text must be a non-empty string; nothing was typed.")
     if len(text) > MAX_TYPE_CHARS:
         raise ComputerUseError(f"text must be at most {MAX_TYPE_CHARS} characters (got {len(text)}); nothing was typed.")
+    element = _element_token(token)
     _mark_touched()
-    answer = _host_call(TYPE_CHANNEL, {"text": text})
+    payload = {"text": text, **({"token": element} if element else {})}
+    answer = _host_call(TYPE_CHANNEL, payload)
     if not isinstance(answer, dict) or answer.get("typed") != len(text):
         raise ComputerUseError("The Mosael window bridge answered without confirming the typing.")
-    return {"typed": len(text)}
+    return {**({"token": element} if element else {}), "typed": len(text)}
 
 
 def scroll(

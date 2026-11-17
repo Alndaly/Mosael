@@ -867,14 +867,27 @@ function parseComputerDesktopDrag(value) {
 function parseComputerDrag(value) {
   const channel = IPC.invoke.computerDrag;
   const payload = record(value, channel);
-  onlyKeys(payload, ["fromX", "fromY", "toX", "toY", "button", "durationMs"], channel);
+  onlyKeys(payload, ["fromX", "fromY", "toX", "toY", "fromToken", "toToken", "button", "durationMs"], channel);
+  const button = parseDragButton(payload, channel);
+  const durationMs = parseDragDuration(payload, channel);
+  const fromToken = typeof payload.fromToken === "string" ? payload.fromToken.trim() : "";
+  const toToken = typeof payload.toToken === "string" ? payload.toToken.trim() : "";
+  if (Boolean(fromToken) !== Boolean(toToken)) {
+    throw new TypeError(`${channel}: fromToken and toToken must be provided together`);
+  }
+  if (fromToken && toToken) {
+    for (const [key, token] of [["fromToken", fromToken], ["toToken", toToken]]) {
+      if (!/^[A-Za-z0-9-]{1,64}:\d{1,8}$/.test(token)) throw new TypeError(`${channel}: ${key} is invalid`);
+    }
+    return { fromToken, toToken, button, durationMs };
+  }
   return {
     fromX: parseDragPoint(payload, "fromX", channel),
     fromY: parseDragPoint(payload, "fromY", channel),
     toX: parseDragPoint(payload, "toX", channel),
     toY: parseDragPoint(payload, "toY", channel),
-    button: parseDragButton(payload, channel),
-    durationMs: parseDragDuration(payload, channel),
+    button,
+    durationMs,
   };
 }
 
@@ -970,11 +983,13 @@ function parseComputerKey(value) {
 function parseComputerType(value) {
   const channel = IPC.invoke.computerType;
   const payload = record(value, channel);
-  onlyKeys(payload, ["text"], channel);
+  onlyKeys(payload, ["text", "token"], channel);
   const text = payload.text;
   if (typeof text !== "string" || !text) throw new TypeError(`${channel}: text must be a non-empty string`);
   if (text.length > 2000) throw new TypeError(`${channel}: text must be at most 2000 characters`);
-  return { text };
+  const token = typeof payload.token === "string" ? payload.token.trim() : "";
+  if (token && !/^[A-Za-z0-9-]{1,64}:\d{1,8}$/.test(token)) throw new TypeError(`${channel}: token is invalid`);
+  return token ? { text, token } : { text };
 }
 
 /**

@@ -493,3 +493,17 @@ describe("evaluate 的脚本预算", () => {
     expect(seen).toEqual([120000, undefined]);
   });
 });
+
+
+describe("canvas / 跨域 iframe 的坐标点击", () => {
+  it("click_at 把页面 CSS 坐标交给可信坐标点击", async () => {
+    const calls: Array<[number, number]> = [];
+    const driver = fakeDriver("https://example.com/canvas", {
+      clickAt: async (x: number, y: number) => { calls.push([x, y]); },
+    } as Partial<PageDriver>);
+    await expect(executeBrowserAction(driver, "click_at", { x: 120, y: 80 })).resolves.toEqual({
+      lastUrl: "https://example.com/canvas",
+    });
+    expect(calls).toEqual([[120, 80]]);
+  });
+});

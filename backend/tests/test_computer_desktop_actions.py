@@ -296,3 +296,53 @@ def test_desktop_pointer_and_hold_and_horizontal_scroll(monkeypatch) -> None:
             "clickTarget": True, "holdMs": 700,
         }),
     ]
+
+
+def test_desktop_batch_is_one_always_ask_card(monkeypatch) -> None:
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        if channel == "computer:desktop-click":
+            return {"point": {"x": 10, "y": 20}}
+        if channel == "computer:desktop-pointer":
+            return {"action": payload.get("action"), "point": {"x": 10, "y": 20}}
+        if channel == "computer:desktop-scroll":
+            return {"point": {"x": 10, "y": 20}}
+        return {"point": {"x": 10, "y": 20}}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        spec = tool_spec("computer_desktop_batch")
+        assert spec.always_asks is True
+        assert spec.permission == "external"
+        for bad in (
+            {"actions": []},
+            {"actions": [{"kind": "unknown"}]},
+            {"actions": [{"kind": "click", "token": "snap-1:0"}], "window_id": 0},
+        ):
+            with pytest.raises(ConfirmationError):
+                spec.validate(db, "w1", bad, None)
+        summary = spec.summarize(db, {"actions": [
+            {"kind": "click", "token": "snap-1:0"},
+            {"kind": "pointer", "action": "hover", "token": "snap-1:0"},
+        ]})
+        assert summary[0] == "confirm_computerBatch"
+        assert summary[1]["count"] == 2
+        card = types.SimpleNamespace(
+            payload={"actions": [
+                {"kind": "click", "token": "snap-1:0"},
+                {"kind": "pointer", "action": "hover", "token": "snap-1:0"},
+            ], "finish_screenshot": False},
+            workspace_id="w1",
+        )
+        result = spec.execute(db, card, "user-1")
+    assert result["ok"] is True
+    assert [one["kind"] for one in result["results"]] == ["click", "pointer"]
+    assert [channel for channel, _ in calls] == [
+        "computer:desktop-click", "computer:desktop-pointer",
+    ]

@@ -24,7 +24,9 @@ from tests.util import fresh_client
 MUTATING = {
     # 浏览器里的每一个动作都作用在真实页面上;开池会话时那还是用户的登录身份。
     "browser_type",
+    "browser_type_focused",
     "browser_click",
+    "browser_click_at",
     "browser_press",
     "browser_upload",
     "browser_evaluate",
