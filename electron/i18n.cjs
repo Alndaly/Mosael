@@ -388,6 +388,7 @@ const MESSAGES = {
 
   // ---- 浏览器自动化动作的报错(回给后端,出现在工作流 / 智能体的执行结果里) ----
   browserErr_clickNeedsTarget: { zh: "click 需要 selector 或 text", en: "click needs a selector or text" },
+  browserErr_typeNeedsValue: { zh: "要输入的文字是空的", en: "There is no text to type" },
   browserErr_uploadNeedsPath: { zh: "upload 需要文件路径", en: "upload needs a file path" },
   browserErr_fileInputMissing: {
     zh: "upload:文件输入框没有出现:{selector}",
