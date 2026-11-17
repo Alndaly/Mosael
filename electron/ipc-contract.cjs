@@ -91,6 +91,11 @@ const IPC = Object.freeze({
     computerDesktopDrag: "computer:desktop-drag",
     computerDesktopWait: "computer:desktop-wait",
     computerDesktopVerify: "computer:desktop-verify",
+    computerDesktopFullScreenshot: "computer:desktop-full-screenshot",
+    computerOcr: "computer:ocr",
+    computerDesktopOcr: "computer:desktop-ocr",
+    computerClipboardRead: "computer:clipboard-read",
+    computerClipboardWrite: "computer:clipboard-write",
     computerClick: "computer:click",
     computerPointer: "computer:pointer",
     computerDrag: "computer:drag",
@@ -797,6 +802,45 @@ function parseComputerWait(value) {
   return parseWaitText(payload, channel);
 }
 
+function parseComputerOcr(value) {
+  const channel = IPC.invoke.computerOcr;
+  const payload = value === undefined || value === null ? {} : record(value, channel);
+  onlyKeys(payload, [], channel);
+  return {};
+}
+
+function parseComputerDesktopOcr(value) {
+  const channel = IPC.invoke.computerDesktopOcr;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["windowNumber"], channel);
+  return { windowNumber: desktopId(payload.windowNumber, "windowNumber", channel) };
+}
+
+function parseComputerClipboardRead(value) {
+  const channel = IPC.invoke.computerClipboardRead;
+  const payload = value === undefined || value === null ? {} : record(value, channel);
+  onlyKeys(payload, [], channel);
+  return {};
+}
+
+function parseComputerClipboardWrite(value) {
+  const channel = IPC.invoke.computerClipboardWrite;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["text"], channel);
+  const text = payload.text;
+  if (typeof text !== "string" || text.length > 100_000) {
+    throw new TypeError(`${channel}: text must be a string of at most 100000 characters`);
+  }
+  return { text };
+}
+
+function parseComputerDesktopFullScreenshot(value) {
+  const channel = IPC.invoke.computerDesktopFullScreenshot;
+  const payload = value === undefined || value === null ? {} : record(value, channel);
+  onlyKeys(payload, [], channel);
+  return {};
+}
+
 function parseComputerDesktopWait(value) {
   const channel = IPC.invoke.computerDesktopWait;
   const payload = record(value, channel);
@@ -1339,12 +1383,17 @@ module.exports = {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseComputerClipboardRead,
+  parseComputerClipboardWrite,
+  parseComputerOcr,
+  parseComputerDesktopOcr,
   parseComputerPointer,
   parseComputerDrag,
   parseComputerWait,
   parseComputerVerify,
   parseComputerDesktopAccessibility,
   parseComputerDesktopClick,
+  parseComputerDesktopFullScreenshot,
   parseComputerDesktopPointer,
   parseComputerDesktopDrag,
   parseComputerDesktopScroll,

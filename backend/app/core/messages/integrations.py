@@ -927,6 +927,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirm_computerScrollDown": {"zh": "在 Mosael 窗口里向下滚动 {steps} 格", "en": "Scroll down {steps} steps in the Mosael window"},
     "confirm_computerDrag": {"zh": "在 Mosael 窗口里从 ({from_x}, {from_y}) 拖到 ({to_x}, {to_y})", "en": "Drag from ({from_x}, {from_y}) to ({to_x}, {to_y}) in the Mosael window"},
     "confirm_computerBatch": {"zh": "按顺序执行 {count} 个界面动作:{steps}", "en": "Run {count} UI actions in order: {steps}"},
+    "confirm_computerClipboardRead": {"zh": "读取系统剪贴板内容(可能含敏感信息)", "en": "Read the system clipboard (may contain sensitive data)"},
+    "confirm_computerClipboardWrite": {"zh": "覆盖系统剪贴板,写入 {chars} 个字符", "en": "Replace the system clipboard with {chars} characters"},
+
     "confirm_computerBatchWait": {"zh": "等待文字「{text}」出现", "en": "Wait for the text “{text}”"},
     "confirm_computerElementClick": {"zh": "点击 Mosael 窗口里的界面元素「{name}」", "en": "Click the UI element “{name}” in the Mosael window"},
     "confirm_computerElementType": {"zh": "先在 Mosael 窗口点击界面元素「{name}」,然后输入:{text}", "en": "Click the UI element “{name}” in the Mosael window, then type: {text}"},
@@ -986,6 +989,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirmErr_computerBatchTooMany": {"zh": "一次最多 {limit} 个界面动作。", "en": "At most {limit} UI actions per batch."},
     "confirmErr_computerBatchBadAction": {"zh": "第 {index} 个动作不认识。", "en": "Action {index} is not supported."},
     "confirmErr_computerBatchToken": {"zh": "批量动作暂不支持元素令牌,请用坐标。", "en": "Element tokens are not supported in a batch yet; use coordinates."},
+    "confirmErr_computerClipboardText": {"zh": "剪贴板文本必须是字符串,最多 100000 个字符。", "en": "Clipboard text must be a string of at most 100000 characters."},
+
     "confirm_httpRequest": {"zh": "⚠️ 向外部发起 {method} 请求: {url}", "en": "⚠️ Make an outbound {method} request to {url}"},
     "confirm_runCode": {
         "zh": "在隔离沙箱里运行一段 Python({chars} 字符,无网络、看不到你的文件){head}",

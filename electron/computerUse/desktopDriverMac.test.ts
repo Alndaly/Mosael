@@ -146,6 +146,51 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     expect(result.found).toBe(true);
   });
 
+  it("ocrImage 把本地 Vision 结果交回", async () => {
+    const runner = vi.fn(async (_file: string, args: string[]) => {
+      if (args[0] === "ocr") {
+        return { stdout: JSON.stringify({ text: "保存\n完成", lines: ["保存", "完成"] }), stderr: "" };
+      }
+      return { stdout: "", stderr: "" };
+    });
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    const result = await driver.ocrImage("png");
+    expect(result).toEqual({ text: "保存\n完成", lines: ["保存", "完成"] });
+  });
+
+  it("fullScreenshot 拍整屏,受保护应用在屏时拒绝", async () => {
+    const calls: string[] = [];
+    const runner = vi.fn(async (file: string, args: string[]) => {
+      if (file === "/fake/tool" && args[0] === "windows") {
+        return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "Finder", title: "Desktop", x: 0, y: 0, width: 800, height: 600, onscreen: true }]), stderr: "" };
+      }
+      if (file === "screencapture") {
+        calls.push("screencapture");
+        fs.writeFileSync(args[1], Buffer.from("full-png"));
+        return { stdout: "", stderr: "" };
+      }
+      if (file === "sips") {
+        return { stdout: "pixelWidth: 1600\npixelHeight: 1000\n", stderr: "" };
+      }
+      return { stdout: JSON.stringify({ accessibility: true, screen: true }), stderr: "" };
+    });
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    const shot = await driver.fullScreenshot();
+    expect(calls).toEqual(["screencapture"]);
+    expect(shot).toMatchObject({ width: 1600, height: 1000 });
+    expect(shot.image).toBe(Buffer.from("full-png").toString("base64"));
+
+    const protectedRunner = vi.fn(async (file: string, args: string[]) => {
+      if (file === "/fake/tool" && args[0] === "windows") {
+        return { stdout: JSON.stringify([{ id: 7, pid: 42, owner: "1Password", title: "Vault", onscreen: true }]), stderr: "" };
+      }
+      return { stdout: "", stderr: "" };
+    });
+    const blocked = new DesktopDriverMac({ binaryPath: "/fake/tool", runner: protectedRunner });
+    await expect(blocked.fullScreenshot()).rejects.toMatchObject({ code: "desktop_protected_app" });
+    expect(protectedRunner).not.toHaveBeenCalledWith("screencapture", expect.anything());
+  });
+
   it("verify 仍不支持,不冒充已验证", () => {
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool" });
     expect(driver.verify()).toEqual({ ok: false, reason: "verify_not_supported", evidence: null });

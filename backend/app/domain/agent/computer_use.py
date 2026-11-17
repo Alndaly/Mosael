@@ -50,6 +50,7 @@ BRIDGE_FILE = "host-bridge.json"
 SCREENSHOT_CHANNEL = "computer:screenshot"
 DESKTOP_WINDOWS_CHANNEL = "computer:desktop-windows"
 DESKTOP_SCREENSHOT_CHANNEL = "computer:desktop-screenshot"
+DESKTOP_FULL_SCREENSHOT_CHANNEL = "computer:desktop-full-screenshot"
 DESKTOP_ACCESSIBILITY_CHANNEL = "computer:desktop-accessibility"
 DESKTOP_CLICK_CHANNEL = "computer:desktop-click"
 DESKTOP_POINTER_CHANNEL = "computer:desktop-pointer"
@@ -69,6 +70,10 @@ WAIT_CHANNEL = "computer:wait"
 DESKTOP_WAIT_CHANNEL = "computer:desktop-wait"
 VERIFY_CHANNEL = "computer:verify"
 DESKTOP_VERIFY_CHANNEL = "computer:desktop-verify"
+OCR_CHANNEL = "computer:ocr"
+DESKTOP_OCR_CHANNEL = "computer:desktop-ocr"
+CLIPBOARD_READ_CHANNEL = "computer:clipboard-read"
+CLIPBOARD_WRITE_CHANNEL = "computer:clipboard-write"
 #: 这一轮结束了 —— 让主进程把「被控制中」熄灭(不是急停:下一轮还能动)。
 END_CHANNEL = "computer:end"
 #: 一次滚动最多几格滚轮。再多就不是「往下看看」,而是整段跳走。
@@ -110,6 +115,26 @@ PROTECTED_OWNERS = frozenset({
 
 class ComputerUseError(ValueError):
     """给模型看的一句话。不是 traceback,也不是 HTTP 500 —— 模型据此改参数或告诉用户。"""
+
+
+def clipboard_read() -> dict[str, Any]:
+    """读取系统剪贴板文本。敏感操作;确认与管理员门在确认工具层。"""
+    answer = _host_call(CLIPBOARD_READ_CHANNEL, {})
+    if not isinstance(answer, dict) or not isinstance(answer.get("text"), str):
+        raise ComputerUseError("The clipboard bridge answered without text.")
+    return {"text": answer["text"], "length": len(answer["text"])}
+
+
+def clipboard_write(text: object) -> dict[str, Any]:
+    """写入系统剪贴板文本。敏感操作;确认与管理员门在确认工具层。"""
+    if not isinstance(text, str):
+        raise ComputerUseError("text must be a string.")
+    if len(text) > 100_000:
+        raise ComputerUseError("text must be at most 100000 characters.")
+    answer = _host_call(CLIPBOARD_WRITE_CHANNEL, {"text": text})
+    if not isinstance(answer, dict) or answer.get("written") != len(text):
+        raise ComputerUseError("The clipboard bridge answered without confirming the write.")
+    return {"written": len(text)}
 
 
 def screenshot(scale: float = DEFAULT_SCALE) -> dict[str, Any]:
@@ -215,6 +240,37 @@ def desktop_wait(pid: object, text: object, timeout_ms: object = DEFAULT_WAIT_MS
     if not isinstance(answer, dict) or not isinstance(answer.get("found"), bool):
         raise ComputerUseError("The desktop bridge answered without a wait result.")
     return {**answer, "pid": target, "text": label, "timeoutMs": timeout}
+
+
+def ocr() -> dict[str, Any]:
+    """对 Mosael 主窗口做本地 OCR(macOS Vision);只读。"""
+    answer = _host_call(OCR_CHANNEL, {})
+    if not isinstance(answer, dict) or not isinstance(answer.get("text"), str):
+        raise ComputerUseError("The OCR bridge answered without text.")
+    return {"text": answer["text"], "lines": answer.get("lines") or []}
+
+
+def desktop_ocr(window_id: object) -> dict[str, Any]:
+    """对一个桌面窗口做本地 OCR;窗口受保护时驱动会拒绝。只读。"""
+    target = _desktop_id(window_id, "window_id")
+    answer = _host_call(DESKTOP_OCR_CHANNEL, {"windowNumber": target})
+    if not isinstance(answer, dict) or not isinstance(answer.get("text"), str):
+        raise ComputerUseError("The desktop OCR bridge answered without text.")
+    return {"window_id": target, "text": answer["text"], "lines": answer.get("lines") or []}
+
+
+def desktop_full_screenshot(scale: float = DEFAULT_SCALE) -> dict[str, Any]:
+    """拍整个桌面;受保护应用在屏时 Electron 驱动会拒绝。只读。"""
+    factor = _scale(scale)
+    answer = _host_call(DESKTOP_FULL_SCREENSHOT_CHANNEL, {})
+    raw = _image_bytes(answer)
+    width, height, raw = _size_and_pixels(raw, factor)
+    return {
+        "width": width,
+        "height": height,
+        "scale": factor,
+        "image": base64.b64encode(raw).decode("ascii"),
+    }
 
 
 def desktop_windows() -> dict[str, Any]:
@@ -1004,6 +1060,9 @@ def _host_call(channel: str, payload: dict[str, Any]) -> dict[str, Any]:
 __all__ = [
     "CLICK_BUTTONS",
     "CLICK_CHANNEL",
+    "CLIPBOARD_READ_CHANNEL",
+    "OCR_CHANNEL",
+    "CLIPBOARD_WRITE_CHANNEL",
     "ComputerUseError",
     "L1_BUTTONS",
     "L1_POINTER_ACTIONS",
@@ -1029,6 +1088,8 @@ __all__ = [
     "DESKTOP_CLICK_CHANNEL",
     "DESKTOP_POINTER_CHANNEL",
     "DESKTOP_DRAG_CHANNEL",
+    "DESKTOP_FULL_SCREENSHOT_CHANNEL",
+    "DESKTOP_OCR_CHANNEL",
     "DESKTOP_SCREENSHOT_CHANNEL",
     "DESKTOP_SCROLL_CHANNEL",
     "DESKTOP_TYPE_CHANNEL",
@@ -1036,12 +1097,16 @@ __all__ = [
     "SCROLL_CHANNEL",
     "TYPE_CHANNEL",
     "click",
+    "clipboard_read",
+    "clipboard_write",
     "drag",
     "pointer",
     "end_turn",
     "desktop_accessibility",
     "desktop_click",
     "desktop_drag",
+    "desktop_full_screenshot",
+    "desktop_ocr",
     "desktop_pointer",
     "desktop_screenshot",
     "desktop_scroll",

@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **166** 个工具,其中 **60** 个走确认卡、**1** 个停下来等用户作答。
+共 **171** 个工具,其中 **62** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -61,11 +61,15 @@
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
 | `computer_batch` | 确认卡 | Confirmation required: run up to 8 UI actions in Mosael's window, in order. |
 | `computer_click` | 确认卡 | Confirmation required: click a point or an element in Mosael's app window. |
+| `computer_clipboard_read` | 确认卡 | Confirmation required: read the system clipboard text. |
+| `computer_clipboard_write` | 确认卡 | Confirmation required: replace the system clipboard text. |
 | `computer_desktop_accessibility` | 直接执行 | Read-only: read another app's macOS accessibility tree by `pid`. |
 | `computer_desktop_batch` | 确认卡 | Confirmation required: run up to 8 desktop actions in order. |
 | `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
 | `computer_desktop_drag` | 确认卡 | Confirmation required: drag between two points in another desktop app. |
+| `computer_desktop_full_screenshot` | 直接执行 | Read-only: capture the whole desktop, including all visible apps. |
 | `computer_desktop_input` | 确认卡 | Confirmation required: type text or press a key in another desktop app. |
+| `computer_desktop_ocr` | 直接执行 | Read-only: OCR one desktop window with local macOS Vision. |
 | `computer_desktop_pointer` | 确认卡 | Confirmation required: hover or press/release a mouse button in another desktop app. |
 | `computer_desktop_screenshot` | 直接执行 | Read-only: capture another app's visible desktop window by `window_id`. |
 | `computer_desktop_scroll` | 确认卡 | Confirmation required: scroll over a token or captured point in another desktop app. |
@@ -74,6 +78,7 @@
 | `computer_desktop_windows` | 直接执行 | Read-only: list visible desktop windows, including other apps. |
 | `computer_drag` | 确认卡 | Confirmation required: drag from one point or element to another in Mosael's app window. |
 | `computer_input` | 确认卡 | Confirmation required: type text or press a key in Mosael's app window. |
+| `computer_ocr` | 直接执行 | Read-only: OCR Mosael's app window with local macOS Vision. |
 | `computer_pointer` | 确认卡 | Confirmation required: hover or press/release a mouse button in Mosael's window. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
 | `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, dx > 0 = right). |

@@ -2,6 +2,8 @@ import Foundation
 import CoreGraphics
 import ApplicationServices
 import AppKit
+import ImageIO
+import Vision
 
 // ADR 0081: macOS 只读观察(P1)与受控桌面动作(P2)。
 // 动作必须经 AX 权限;受保护应用与令牌校验在驱动层完成,这里只执行已验证的坐标与动作。
@@ -105,6 +107,31 @@ func accessibilityTree(_ pid: Int32) -> [String: Any] {
     }
     walk(application, path: [0], depth: 0)
     return ["snapshot_id": snapshot, "elements": elements]
+}
+
+func ocrImage(_ encoded: String) -> [String: Any] {
+    guard let data = Data(base64Encoded: encoded),
+          let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        return ["error": ["message": "OCR input is not a readable image"]]
+    }
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = true
+    let handler = VNImageRequestHandler(cgImage: image, options: [:])
+    do {
+        try handler.perform([request])
+        let observations = (request.results ?? []).sorted { a, b in
+            if abs(a.boundingBox.midY - b.boundingBox.midY) > 0.01 {
+                return a.boundingBox.midY > b.boundingBox.midY
+            }
+            return a.boundingBox.minX < b.boundingBox.minX
+        }
+        let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+        return ["text": lines.joined(separator: "\n"), "lines": lines]
+    } catch {
+        return ["error": ["message": "OCR failed: \(error)"]]
+    }
 }
 
 func permissionStatus() -> [String: Bool] {
@@ -433,6 +460,14 @@ case "windows":
     WindowJSON.write(listWindows())
 case "permissions":
     WindowJSON.write(permissionStatus())
+case "ocr":
+    let data = FileHandle.standardInput.readDataToEndOfFile()
+    if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let image = object["image"] as? String {
+        WindowJSON.write(ocrImage(image))
+    } else {
+        WindowJSON.write(["error": ["message": "ocr needs {image: base64}"]])
+    }
 case "request-permission":
     guard arguments.count >= 3 else {
         FileHandle.standardError.write(Data("request-permission needs accessibility or screen\n".utf8))

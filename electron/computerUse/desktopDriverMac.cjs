@@ -176,6 +176,45 @@ class DesktopDriverMac {
     }
   }
 
+  /** 整个桌面的截图。受保护窗口只要在屏就拒绝,避免把密码管理器等整屏拍下来。 */
+  async ocrImage(image) {
+    const binary = await this.binary();
+    const { stdout } = await this.runner(binary, ["ocr"], 30000, JSON.stringify({ image }));
+    const result = parse(stdout);
+    return { text: String(result.text || ""), lines: Array.isArray(result.lines) ? result.lines.map(String) : [] };
+  }
+
+  async ocrWindow(windowNumber) {
+    const shot = await this.observe({ windowNumber });
+    const result = await this.ocrImage(shot.image);
+    return { ...result, window_id: windowNumber, meta: shot.meta };
+  }
+
+  async fullScreenshot() {
+    const visible = await this.windows();
+    const protectedWindow = visible.find((one) => one.onscreen && PROTECTED_OWNERS.has(one.owner));
+    if (protectedWindow) {
+      throw bindingError("desktop_protected_app", `Full-screen capture is blocked while ${protectedWindow.owner} is visible.`);
+    }
+    await this.requirePermission("screen");
+    const output = path.join(os.tmpdir(), `mosael-fullscreen-${crypto.randomUUID()}.png`);
+    try {
+      await this.runner("screencapture", ["-x", output]);
+      const { stdout: dimensions } = await this.runner("sips", ["-g", "pixelWidth", "-g", "pixelHeight", output]);
+      const size = Object.fromEntries(dimensions.trim().split("\n").filter((line) => line.includes(":")).map((line) => {
+        const [key, value] = line.split(":");
+        return [key.trim(), Number(value.trim())];
+      }));
+      return {
+        image: fs.readFileSync(output).toString("base64"),
+        width: size.pixelWidth,
+        height: size.pixelHeight,
+      };
+    } finally {
+      fs.rmSync(output, { force: true });
+    }
+  }
+
   /** 只查询,不触发系统授权弹窗。 */
   async permissions() {
     const binary = await this.binary();

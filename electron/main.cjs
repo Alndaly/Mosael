@@ -3,6 +3,7 @@ const {
   BrowserWindow,
   Menu,
   Notification,
+  clipboard,
   dialog,
   ipcMain,
   nativeImage,
@@ -56,12 +57,17 @@ const {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseComputerClipboardRead,
+  parseComputerClipboardWrite,
+  parseComputerOcr,
+  parseComputerDesktopOcr,
   parseComputerPointer,
   parseComputerDesktopAccessibility,
   parseComputerDrag,
   parseComputerWait,
   parseComputerVerify,
   parseComputerDesktopClick,
+  parseComputerDesktopFullScreenshot,
   parseComputerDesktopPointer,
   parseComputerDesktopDrag,
   parseComputerDesktopWait,
@@ -397,6 +403,22 @@ async function desktopWait(target = {}) {
   return desktopUseDriver.waitForText(target.pid, target.text, target.timeoutMs);
 }
 
+async function mainWindowOcr() {
+  if (!desktopUseDriver) throw new Error("OCR currently supports macOS only.");
+  const shot = await computerUseDriver.observe();
+  return desktopUseDriver.ocrImage(shot.image);
+}
+
+async function desktopOcr(target = {}) {
+  if (!desktopUseDriver) throw new Error("Desktop OCR currently supports macOS only.");
+  return desktopUseDriver.ocrWindow(target.windowNumber);
+}
+
+async function desktopFullScreenshot() {
+  if (!desktopUseDriver) throw new Error("Desktop observation currently supports macOS only.");
+  return desktopUseDriver.fullScreenshot();
+}
+
 async function desktopVerify(target = {}) {
   if (!desktopUseDriver) throw new Error("Desktop observation currently supports macOS only.");
   return desktopUseDriver.verifyText(target.pid, target.text, target.absent);
@@ -512,6 +534,24 @@ async function answerHostBridgeRequest(line, socket) {
       withDesktopAction((driver) => driver.act({ kind: "drag", replay: true, ...parseComputerDesktopDrag(request.payload) })),
     [IPC.invoke.computerDesktopWait]: () => desktopWait(parseComputerDesktopWait(request.payload)),
     [IPC.invoke.computerDesktopVerify]: () => desktopVerify(parseComputerDesktopVerify(request.payload)),
+    [IPC.invoke.computerDesktopFullScreenshot]: () => {
+      parseComputerDesktopFullScreenshot(request.payload);
+      return desktopFullScreenshot();
+    },
+    [IPC.invoke.computerOcr]: () => {
+      parseComputerOcr(request.payload);
+      return mainWindowOcr();
+    },
+    [IPC.invoke.computerDesktopOcr]: () => desktopOcr(parseComputerDesktopOcr(request.payload)),
+    [IPC.invoke.computerClipboardRead]: () => {
+      parseComputerClipboardRead(request.payload);
+      return { text: clipboard.readText() };
+    },
+    [IPC.invoke.computerClipboardWrite]: () => {
+      const write = parseComputerClipboardWrite(request.payload);
+      clipboard.writeText(write.text);
+      return { written: write.text.length };
+    },
     [IPC.invoke.computerDesktopType]: () =>
       withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...parseComputerDesktopType(request.payload) })),
     [IPC.invoke.computerDesktopKey]: () =>

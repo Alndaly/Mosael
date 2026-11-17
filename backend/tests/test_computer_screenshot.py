@@ -178,6 +178,18 @@ def test_wait_rejects_an_empty_text_or_bad_timeout(monkeypatch) -> None:
             computer_use.wait(text, timeout_ms=timeout)
 
 
+def test_ocr_reads_text_through_the_host_bridge(monkeypatch) -> None:
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"text": "保存", "lines": ["保存"]})
+    assert computer_use.ocr() == {"text": "保存", "lines": ["保存"]}
+
+
+def test_full_desktop_screenshot_is_scaled(monkeypatch) -> None:
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(1600, 1000))
+    shot = computer_use.desktop_full_screenshot(scale=0.5)
+    assert (shot["width"], shot["height"]) == (800, 500)
+    assert shot["scale"] == 0.5
+
+
 def test_a_large_capture_is_shrunk_by_scale(monkeypatch) -> None:
     """scale 是给「窗口很大、我只想看布局」用的:图真的变小,回来的是缩小后的尺寸。"""
     client = fresh_client()

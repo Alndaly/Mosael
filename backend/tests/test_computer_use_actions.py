@@ -695,3 +695,34 @@ def test_input_and_drag_accept_element_tokens(monkeypatch) -> None:
         ("computer:type", {"text": "hi", "token": "snap-1:0"}),
         ("computer:drag", {"fromToken": "snap-1:0", "toToken": "snap-1:1", "button": "left", "durationMs": 300}),
     ]
+
+
+def test_clipboard_is_always_asked_and_goes_through_the_bridge(monkeypatch) -> None:
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        if channel == "computer:clipboard-read":
+            return {"text": "hello", "length": 5}
+        return {"written": len(payload["text"])}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        read_spec = tool_spec("computer_clipboard_read")
+        write_spec = tool_spec("computer_clipboard_write")
+        assert read_spec.always_asks is True
+        assert write_spec.always_asks is True
+        read_spec.validate(db, "w1", {}, None)
+        write_spec.validate(db, "w1", {"text": "hi"}, None)
+        read = read_spec.execute(db, types.SimpleNamespace(payload={}), "user-1")
+        write = write_spec.execute(db, types.SimpleNamespace(payload={"text": "hi"}), "user-1")
+    assert read["text"] == "hello"
+    assert write["written"] == 2
+    assert calls == [
+        ("computer:clipboard-read", {}),
+        ("computer:clipboard-write", {"text": "hi"}),
+    ]
