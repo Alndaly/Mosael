@@ -332,6 +332,41 @@ def computer_click(
 
 
 @tool(effect="confirms")
+def computer_drag(
+    from_x: Annotated[int, Field(description="Start X pixel in the picture computer_screenshot returned.")],
+    from_y: Annotated[int, Field(description="Start Y pixel in the picture computer_screenshot returned.")],
+    to_x: Annotated[int, Field(description="End X pixel in the picture computer_screenshot returned.")],
+    to_y: Annotated[int, Field(description="End Y pixel in the picture computer_screenshot returned.")],
+    button: Annotated[str, Field(description='"left" or "right".')] = "left",
+    duration_ms: Annotated[int, Field(description="Drag duration in milliseconds (100–2000).")] = 300,
+    scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: drag from one point to another in Mosael's app window.
+
+    Use this for sliders, text selection, drag-and-drop inside the app, or moving a canvas object.
+    Both coordinates are pixels in the picture computer_screenshot returned; pass that call's scale.
+    It only acts inside Mosael's own UI and waits for approval unless edit-tier cards are allowed.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_drag",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "from_x": from_x,
+                "from_y": from_y,
+                "to_x": to_x,
+                "to_y": to_y,
+                "button": button,
+                "duration_ms": duration_ms,
+                "scale": scale,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def computer_scroll(
     dy: Annotated[int, Field(description="Wheel notches: positive scrolls down, negative up (max 30).")],
     x: Annotated[int | None, Field(description="Pointer x in the screenshot pixels (omit for the middle).")] = None,
@@ -529,12 +564,14 @@ def computer_desktop_input(
     x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
     y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
     scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+    click_target: Annotated[bool, Field(description="Click the target before typing/pressing. Set false to use the app's current focus.")] = True,
 ) -> dict[str, Any]:
     """Confirmation required: type text or press a key in another desktop app.
 
     Use action="type" for literal text and action="press" for Enter/Escape/arrows or shortcuts.
-    The driver focuses and resolves the target first; it refuses stale targets, moved windows
-    and protected apps. Every input waits for approval.
+    With click_target=false the target identifies the app/window but is not clicked first, so
+    keyboard shortcuts act on that app's current focus. The driver still refuses stale targets,
+    moved windows and protected apps. Every input waits for approval.
     """
     confirmation = _open_card(
         {
@@ -550,6 +587,44 @@ def computer_desktop_input(
                 "capture_id": capture_id,
                 "x": x,
                 "y": y,
+                "scale": scale,
+                "click_target": click_target,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
+def computer_desktop_drag(
+    capture_id: Annotated[str, Field(description="capture_id from computer_desktop_screenshot; both points must come from it.")],
+    from_x: Annotated[int, Field(description="Start X pixel in that desktop screenshot.")],
+    from_y: Annotated[int, Field(description="Start Y pixel in that desktop screenshot.")],
+    to_x: Annotated[int, Field(description="End X pixel in that desktop screenshot.")],
+    to_y: Annotated[int, Field(description="End Y pixel in that desktop screenshot.")],
+    button: Annotated[str, Field(description='"left" or "right".')] = "left",
+    duration_ms: Annotated[int, Field(description="Drag duration in milliseconds (100–2000).")] = 300,
+    scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: drag between two points in another desktop app.
+
+    Both points bind to one desktop screenshot; the driver refuses a stale capture, moved window,
+    protected app, or an end point outside that window. Use for sliders, selecting text or moving
+    files within the same app. Every drag waits for approval.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_desktop_drag",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "capture_id": capture_id,
+                "from_x": from_x,
+                "from_y": from_y,
+                "to_x": to_x,
+                "to_y": to_y,
+                "button": button,
+                "duration_ms": duration_ms,
                 "scale": scale,
             },
         },
@@ -2092,6 +2167,20 @@ def browser_type(session_id: str, selector: str, value: str, frame: str = "", wo
     """Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials.
     frame: the iframe holding it, as in browser_click."""
     return _browser_act(session_id, "input", {"selector": selector, "value": value, **_in_frame(frame)}, workspace_id)
+
+
+@tool(effect="writes")
+def browser_press(
+    session_id: str,
+    key: Literal["Enter", "Escape", "Space", "Tab"],
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Press Enter, Escape, Space or Tab in the open page's current focus.
+
+    Use this after browser_type when a search box or form submits on Enter, or to dismiss a menu
+    with Escape. The browser driver sends a trusted key event; no selector is involved.
+    """
+    return _browser_act(session_id, "press_key", {"key": key}, workspace_id)
 
 
 @tool(effect="reads")

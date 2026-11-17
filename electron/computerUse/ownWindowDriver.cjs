@@ -38,6 +38,49 @@ function showComputerUseCursor(win, x, y, kind, cursor) {
   }
 }
 
+function dragMosaelWindow(request, mainWindow, cursor = null) {
+  const win = computerUseWindow(mainWindow);
+  if (!win) {
+    throw new Error("There is no Mosael window open to drag in. Nothing was dragged.");
+  }
+  if (typeof win.isMinimized === "function" && win.isMinimized()) {
+    throw new Error("The Mosael window is minimized; restore it and try again. Nothing was dragged.");
+  }
+  const contents = win.webContents;
+  const size = typeof contents.getSize === "function" ? contents.getSize() : null;
+  for (const [x, y] of [[request.fromX, request.fromY], [request.toX, request.toY]]) {
+    if (size && (x >= size[0] || y >= size[1])) {
+      throw new Error(
+        `That point is outside the Mosael window: it reports ${size[0]}×${size[1]} CSS pixels, and (${x}, ${y}) is not inside it. Nothing was dragged.`,
+      );
+    }
+  }
+  if (typeof win.focus === "function") win.focus();
+  if (typeof contents.focus === "function") contents.focus();
+  const fromX = Math.round(request.fromX);
+  const fromY = Math.round(request.fromY);
+  const toX = Math.round(request.toX);
+  const toY = Math.round(request.toY);
+  const button = request.button || "left";
+  const durationMs = request.durationMs || 300;
+  const steps = Math.max(8, Math.min(30, Math.round(durationMs / 20)));
+  const waitMs = Math.max(1, Math.round(durationMs / (steps + 1)));
+  contents.sendInputEvent({ type: "mouseMove", x: fromX, y: fromY });
+  contents.sendInputEvent({ type: "mouseDown", x: fromX, y: fromY, button, clickCount: 1 });
+  for (let index = 1; index <= steps; index += 1) {
+    const progress = index / (steps + 1);
+    contents.sendInputEvent({
+      type: "mouseMove",
+      x: Math.round(fromX + (toX - fromX) * progress),
+      y: Math.round(fromY + (toY - fromY) * progress),
+    });
+    spinWait(waitMs);
+  }
+  contents.sendInputEvent({ type: "mouseUp", x: toX, y: toY, button, clickCount: 1 });
+  showComputerUseCursor(win, toX, toY, "drag", cursor);
+  return { fromX, fromY, toX, toY, button, durationMs };
+}
+
 function clickMosaelWindow(request, mainWindow, cursor = null) {
   const win = computerUseWindow(mainWindow);
   if (!win) {
@@ -222,11 +265,18 @@ async function captureMosaelWindow(mainWindow) {
  */
 async function assertComputerTargetAllowed(contents, action) {
   if (!contents || typeof contents.executeJavaScript !== "function") return;
+  const points = action.kind === "drag"
+    ? `[[${Number(action.fromX || 0)}, ${Number(action.fromY || 0)}], [${Number(action.toX || 0)}, ${Number(action.toY || 0)}]]`
+    : `[[${Number(action.x || 0)}, ${Number(action.y || 0)}]]`;
   const blocked = await contents.executeJavaScript(`(() => {
-    const hit = ${(action.kind === "type" || action.kind === "key")
-      ? 'document.activeElement'
-      : 'document.elementFromPoint(' + Number(action.x || 0) + ',' + Number(action.y || 0) + ')'};
-    return Boolean(hit && hit.closest && hit.closest("[data-confirmation-card],[data-computer-use-banner]"));
+    const points = ${points};
+    const blocked = points.some(([x, y]) => {
+      const hit = ${(action.kind === "type" || action.kind === "key")
+        ? 'document.activeElement'
+        : 'document.elementFromPoint(x, y)'};
+      return Boolean(hit && hit.closest && hit.closest("[data-confirmation-card],[data-computer-use-banner]"));
+    });
+    return blocked;
   })()`);
   if (blocked) {
     throw new Error("That target is the Mosael confirmation or emergency-stop surface. Nothing was sent.");
@@ -253,12 +303,14 @@ class OwnWindowDriver {
   /** 动作:点 / 输入 / 按键 / 滚动。`action.kind` 只认这四种;别的直接拒。 */
   async act(action) {
     const window = this.getWindow();
-    if (window && (action.kind === "click" || action.kind === "type" || action.kind === "key")) {
+    if (window && (action.kind === "click" || action.kind === "type" || action.kind === "key" || action.kind === "drag")) {
       await assertComputerTargetAllowed(window.webContents, action);
     }
     switch (action.kind) {
       case "click":
         return clickMosaelWindow(action, window, action.cursor ?? null);
+      case "drag":
+        return dragMosaelWindow(action, window, action.cursor ?? null);
       case "type":
         return typeIntoMosaelWindow(action, window, action.cursor ?? null);
       case "key":

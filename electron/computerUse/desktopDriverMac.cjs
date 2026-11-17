@@ -304,7 +304,7 @@ class DesktopDriverMac {
     };
   }
 
-  async resolveCapture(captureId, x, y) {
+  async captureFor(captureId) {
     const capture = this.captures.get(String(captureId || ""));
     if (!capture || Date.now() - capture.at > CAPTURE_TTL_MS) {
       throw bindingError("desktop_stale_capture", "The desktop screenshot expired; take a new screenshot.");
@@ -319,18 +319,38 @@ class DesktopDriverMac {
       throw bindingError("desktop_stale_capture", "The window moved or resized; take a new screenshot.");
     }
     allowedOwner(capture.owner);
+    return capture;
+  }
+
+  capturePoint(capture, x, y, message = "The click point is outside the desktop screenshot.") {
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0
         || x >= capture.imageWidth || y >= capture.imageHeight) {
-      throw bindingError("desktop_coordinate_invalid", "The click point is outside the desktop screenshot.");
+      throw bindingError("desktop_coordinate_invalid", message);
     }
+    return {
+      x: capture.x + x / capture.scale,
+      y: capture.y + y / capture.scale,
+    };
+  }
+
+  async resolveCapture(captureId, x, y) {
+    const capture = await this.captureFor(captureId);
     return {
       pid: capture.pid,
       windowNumber: capture.windowNumber,
       binding: { kind: "capture", key: String(captureId) },
-      point: {
-        x: capture.x + x / capture.scale,
-        y: capture.y + y / capture.scale,
-      },
+      point: this.capturePoint(capture, x, y),
+    };
+  }
+
+  async resolveDrag(action) {
+    const capture = await this.captureFor(action.captureId);
+    return {
+      pid: capture.pid,
+      windowNumber: capture.windowNumber,
+      binding: { kind: "capture", key: String(action.captureId) },
+      point: this.capturePoint(capture, action.fromX, action.fromY, "The drag start is outside the desktop screenshot."),
+      toPoint: this.capturePoint(capture, action.toX, action.toY, "The drag end is outside the desktop screenshot."),
     };
   }
 
@@ -344,12 +364,12 @@ class DesktopDriverMac {
   }
 
   async act(action = {}) {
-    if (!["click", "type", "key", "scroll"].includes(action.kind)) {
+    if (!["click", "type", "key", "scroll", "drag"].includes(action.kind)) {
       throw new TypeError(`Unsupported desktop action: ${String(action.kind)}`);
     }
     await this.requirePermission("accessibility");
     if (action.replay) await this.requirePermission("screen");
-    const target = await this.resolveTarget(action);
+    const target = action.kind === "drag" ? await this.resolveDrag(action) : await this.resolveTarget(action);
     //: 一次性绑定:动作一旦开始就作废 —— 即使 CGEvent 半途失败,也不许拿旧快照再点一次。
     (target.binding.kind === "snapshot" ? this.snapshots : this.captures).delete(target.binding.key);
     const capture = async () => {
@@ -368,7 +388,14 @@ class DesktopDriverMac {
       button: action.button ?? "left",
       clickCount: action.clickCount ?? 1,
       text: action.text ?? "",
+      ...(action.kind === "type" || action.kind === "key"
+        ? { clickTarget: action.clickTarget !== false }
+        : {}),
       ...(action.kind === "key" ? { key: action.key ?? "", modifiers: action.modifiers ?? [] } : {}),
+      ...(action.kind === "drag" ? {
+        toPoint: target.toPoint,
+        durationMs: action.durationMs ?? 300,
+      } : {}),
       dy: action.dy ?? 0,
     };
     const binary = await this.binary();
@@ -381,6 +408,10 @@ class DesktopDriverMac {
       pid: target.pid,
       point: result.point ?? target.point,
       ...(action.kind === "key" ? { key: action.key, modifiers: action.modifiers ?? [] } : {}),
+      ...(action.kind === "drag" ? {
+        toPoint: result.toPoint ?? target.toPoint,
+        durationMs: action.durationMs ?? 300,
+      } : {}),
       ...(action.replay ? {
         replay: {
           at: new Date().toISOString(),
@@ -389,7 +420,11 @@ class DesktopDriverMac {
             button: action.button ?? "left",
             clickCount: action.clickCount ?? 1,
             text: action.text ?? "",
+            ...(action.kind === "type" || action.kind === "key"
+              ? { clickTarget: action.clickTarget !== false }
+              : {}),
             ...(action.kind === "key" ? { key: action.key ?? "", modifiers: action.modifiers ?? [] } : {}),
+            ...(action.kind === "drag" ? { durationMs: action.durationMs ?? 300 } : {}),
             dy: action.dy ?? 0,
           },
           before,

@@ -71,6 +71,14 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     expect(win.webContents.sendInputEvent).toHaveBeenLastCalledWith({ type: "keyUp", keyCode: "Enter", modifiers: ["command"] });
     expect(win.webContents.sendInputEvent).toHaveBeenCalled();
     expect(win.webContents.insertText).toHaveBeenCalledWith("hi");
+
+    const dragged = await driver.act({
+      kind: "drag", fromX: 10, fromY: 20, toX: 100, toY: 200, button: "left", durationMs: 200,
+    });
+    expect(dragged).toEqual({ fromX: 10, fromY: 20, toX: 100, toY: 200, button: "left", durationMs: 200 });
+    expect(win.webContents.sendInputEvent).toHaveBeenLastCalledWith({
+      type: "mouseUp", x: 100, y: 200, button: "left", clickCount: 1,
+    });
   });
 
   it("verify 明确不支持,不冒充已验证", () => {

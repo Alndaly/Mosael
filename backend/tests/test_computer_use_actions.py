@@ -36,7 +36,7 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
     client = fresh_client()
     tools = {tool["name"]: tool for tool in client.get("/api/agent/tools").json()}
 
-    for name in ("computer_click", "computer_input"):
+    for name in ("computer_click", "computer_input", "computer_drag"):
         spec = tools[name]
         # 会改界面:进确认类,不进只读那一份(子智能体拿不到)。
         assert spec["confirmation"] is True, name
@@ -50,6 +50,9 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
     assert click_properties["button"]["default"] == "left"
     assert click_properties["click_count"]["default"] == 1
     assert set(tools["computer_input"]["parameters"]["properties"]) == {"action", "text", "key", "modifiers"}
+    assert set(tools["computer_drag"]["parameters"]["properties"]) == {
+        "from_x", "from_y", "to_x", "to_y", "button", "duration_ms", "scale",
+    }
     assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "x", "y", "scale"}
 
 
@@ -59,7 +62,7 @@ def test_the_actions_are_ordinary_edit_tier_tools() -> None:
     它们不声明「每次都问」—— 那只留给会长期改变智能体做法的操作(改技能,ADR 0043);
     点一下 / 输入一段的后果在这一屏里,和改时间线同级。
     """
-    for name in ("computer_click", "computer_input", "computer_scroll"):
+    for name in ("computer_click", "computer_input", "computer_scroll", "computer_drag"):
         spec = tool_spec(name)
         assert spec is not None, name
         assert spec.permission == "edit", name
@@ -309,6 +312,21 @@ def test_the_card_checks_shape_before_opening() -> None:
         with pytest.raises(ConfirmationError):
             scroll_spec.validate(db, "w1", {"dy": 0}, None)
 
+        drag_spec = tool_spec("computer_drag")
+        drag_spec.validate(db, "w1", {
+            "from_x": 10, "from_y": 20, "to_x": 30, "to_y": 40, "button": "left", "duration_ms": 300, "scale": 1,
+        }, None)
+        for bad in (
+            {"from_x": -1},
+            {"to_y": "40"},
+            {"duration_ms": 50},
+            {"button": "middle"},
+        ):
+            with pytest.raises(ConfirmationError):
+                drag_spec.validate(db, "w1", {
+                    "from_x": 10, "from_y": 20, "to_x": 30, "to_y": 40, **bad,
+                }, None)
+
 
 def test_the_card_says_what_will_happen() -> None:
     from app.core.db import SessionLocal
@@ -332,6 +350,12 @@ def test_the_card_says_what_will_happen() -> None:
             "confirm_computerScrollUp",
             {"steps": 2},
         )
+        assert tool_spec("computer_drag").summarize(db, {
+            "from_x": 10, "from_y": 20, "to_x": 30, "to_y": 40, "button": "left",
+        }) == (
+            "confirm_computerDrag",
+            {"from_x": 10, "from_y": 20, "to_x": 30, "to_y": 40, "button": "left"},
+        )
 
 
 def test_approved_card_executes_through_the_bridge(monkeypatch) -> None:
@@ -349,6 +373,32 @@ def test_approved_card_executes_through_the_bridge(monkeypatch) -> None:
         result = tool_spec("computer_click").execute(db, card, "user-1")
         assert result["x"] == 10 and result["y"] == 20
         assert calls[0][0] == "computer:click"
+
+
+def test_approved_drag_executes_through_the_bridge(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {**payload, "toX": payload["toX"]}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        card = types.SimpleNamespace(
+            payload={
+                "from_x": 20, "from_y": 40, "to_x": 60, "to_y": 80,
+                "button": "left", "duration_ms": 400, "scale": 0.5,
+            },
+            workspace_id="w1",
+        )
+        result = tool_spec("computer_drag").execute(db, card, "user-1")
+    assert result["from"] == {"x": 40, "y": 80}
+    assert result["to"] == {"x": 120, "y": 160}
+    assert calls == [("computer:drag", {
+        "fromX": 40, "fromY": 80, "toX": 120, "toY": 160, "button": "left", "durationMs": 400,
+    })]
 
 
 # ── 工具端点:真的开一张卡 ─────────────────────────────────

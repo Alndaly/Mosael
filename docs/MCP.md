@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **152** 个工具,其中 **54** 个走确认卡、**1** 个停下来等用户作答。
+共 **155** 个工具,其中 **56** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -33,6 +33,7 @@
 | `browser_page` | 直接执行 | Pages of the open session (links that open a new window join it and become current). |
 | `browser_pool_list` | 直接执行 | List the browser POOL profiles you may request access to — the user's reusable persistent logins |
 | `browser_pool_open` | 确认卡 | Confirmation required: open a browser session that REUSES one of the user's LOGGED-IN pool |
+| `browser_press` | 直接执行 | Press Enter, Escape, Space or Tab in the open page's current focus. |
 | `browser_read` | 直接执行 | Read-only: extract visible text from the open page (whole body if no selector). The returned text |
 | `browser_screenshot` | 直接执行 | Screenshot the open session's page into the asset library; returns { value: { asset_id } }. |
 | `browser_scroll` | 直接执行 | Scroll the open session to an element (selector) or by dy pixels. frame: as in browser_click. |
@@ -59,10 +60,12 @@
 | `computer_click` | 确认卡 | Confirmation required: click a point in Mosael's app window. |
 | `computer_desktop_accessibility` | 直接执行 | Read-only: read another app's macOS accessibility tree by `pid`. |
 | `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
+| `computer_desktop_drag` | 确认卡 | Confirmation required: drag between two points in another desktop app. |
 | `computer_desktop_input` | 确认卡 | Confirmation required: type text or press a key in another desktop app. |
 | `computer_desktop_screenshot` | 直接执行 | Read-only: capture another app's visible desktop window by `window_id`. |
 | `computer_desktop_scroll` | 确认卡 | Confirmation required: scroll over a token or captured point in another desktop app. |
 | `computer_desktop_windows` | 直接执行 | Read-only: list visible desktop windows, including other apps. |
+| `computer_drag` | 确认卡 | Confirmation required: drag from one point to another in Mosael's app window. |
 | `computer_input` | 确认卡 | Confirmation required: type text or press a key in Mosael's app window. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
 | `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |

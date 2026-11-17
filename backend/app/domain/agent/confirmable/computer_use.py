@@ -15,8 +15,17 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.agent.computer_use import CLICK_BUTTONS, MAX_TYPE_CHARS, ComputerUseError, key_payload
+from app.domain.agent.computer_use import (
+    CLICK_BUTTONS,
+    DEFAULT_DRAG_MS,
+    MAX_DRAG_MS,
+    MAX_TYPE_CHARS,
+    MIN_DRAG_MS,
+    ComputerUseError,
+    key_payload,
+)
 from app.domain.agent.computer_use import click as use_click
+from app.domain.agent.computer_use import drag as use_drag
 from app.domain.agent.computer_use import press as use_press
 from app.domain.agent.computer_use import scroll as use_scroll
 from app.domain.agent.computer_use import type_text as use_type
@@ -85,6 +94,55 @@ confirmable_tool(ConfirmableTool(
     validate=_validate_click,
     summarize=_summarize_click,
     execute=_execute_click,
+))
+
+
+def _validate_drag(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    for key in ("from_x", "from_y", "to_x", "to_y"):
+        _coordinate(payload, key)
+    _scale(payload)
+    button = str(payload.get("button") or "left").strip().lower()
+    if button not in CLICK_BUTTONS:
+        raise ConfirmationError("confirmErr_computerClickButton")
+    duration = payload.get("duration_ms", DEFAULT_DRAG_MS)
+    if isinstance(duration, bool) or not isinstance(duration, (int, float)) or not MIN_DRAG_MS <= int(duration) <= MAX_DRAG_MS:
+        raise ConfirmationError("confirmErr_computerDragDuration", min=MIN_DRAG_MS, max=MAX_DRAG_MS)
+
+
+def _summarize_drag(db: Session, payload: dict[str, Any]) -> Summary:
+    return "confirm_computerDrag", {
+        "from_x": _coordinate(payload, "from_x"),
+        "from_y": _coordinate(payload, "from_y"),
+        "to_x": _coordinate(payload, "to_x"),
+        "to_y": _coordinate(payload, "to_y"),
+        "button": str(payload.get("button") or "left"),
+    }
+
+
+def _execute_drag(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    try:
+        return use_drag(
+            from_x=payload.get("from_x", 0),
+            from_y=payload.get("from_y", 0),
+            to_x=payload.get("to_x", 0),
+            to_y=payload.get("to_y", 0),
+            button=str(payload.get("button") or "left"),
+            duration_ms=payload.get("duration_ms", DEFAULT_DRAG_MS),
+            scale=float(payload.get("scale", 1)),
+        )
+    except ComputerUseError as error:
+        raise ConfirmationError(str(error)) from None
+
+
+confirmable_tool(ConfirmableTool(
+    name="computer_drag",
+    permission="edit",
+    cost="none",
+    writes=(),
+    validate=_validate_drag,
+    summarize=_summarize_drag,
+    execute=_execute_drag,
 ))
 
 

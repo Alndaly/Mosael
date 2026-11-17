@@ -21,7 +21,7 @@ def _specs(client) -> dict[str, dict]:
 
 def test_desktop_actions_are_confirmation_tools_with_both_targets() -> None:
     specs = _specs(fresh_client())
-    for name in ("computer_desktop_click", "computer_desktop_input", "computer_desktop_scroll"):
+    for name in ("computer_desktop_click", "computer_desktop_input", "computer_desktop_scroll", "computer_desktop_drag"):
         assert specs[name]["confirmation"] is True, name
         assert specs[name]["read_only"] is False, name
         assert name in mcp_server.CONFIRMATION_TOOLS
@@ -30,6 +30,10 @@ def test_desktop_actions_are_confirmation_tools_with_both_targets() -> None:
     assert set(specs["computer_desktop_click"]["parameters"]["properties"]) == {
         "token", "capture_id", "x", "y", "button", "click_count", "scale",
     }
+    assert set(specs["computer_desktop_drag"]["parameters"]["properties"]) == {
+        "capture_id", "from_x", "from_y", "to_x", "to_y", "button", "duration_ms", "scale",
+    }
+    assert "click_target" in specs["computer_desktop_input"]["parameters"]["properties"]
     assert "protected apps" in specs["computer_desktop_click"]["description"].lower()
 
 
@@ -118,7 +122,7 @@ def test_desktop_key_uses_the_same_target_and_replay(monkeypatch) -> None:
             db, types.SimpleNamespace(payload={"action": "press", "token": "snap-1:0", "key": "Enter", "modifiers": []}, workspace_id="w1"), "user-1",
         )
     assert result["key"] == "enter"
-    assert calls == [("computer:desktop-key", {"token": "snap-1:0", "key": "enter", "modifiers": []})]
+    assert calls == [("computer:desktop-key", {"token": "snap-1:0", "key": "enter", "modifiers": [], "clickTarget": True})]
 
 
 def test_token_type_and_scroll_use_the_element_token(monkeypatch) -> None:
@@ -147,9 +151,83 @@ def test_token_type_and_scroll_use_the_element_token(monkeypatch) -> None:
     assert typed["typed"] == 5
     assert scrolled["dy"] == 3
     assert calls == [
-        ("computer:desktop-type", {"token": "snap-1:0", "text": "hello"}),
+        ("computer:desktop-type", {"token": "snap-1:0", "text": "hello", "clickTarget": True}),
         ("computer:desktop-scroll", {"token": "snap-1:0", "dy": 3}),
     ]
+
+
+def test_press_can_use_the_current_focus_without_clicking(monkeypatch) -> None:
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"point": {"x": 10, "y": 20}, "windowNumber": 7, "pid": 42}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        summary = tool_spec("computer_desktop_input").summarize(
+            db, {"action": "press", "token": "snap-1:0", "key": "Enter", "click_target": False},
+        )
+        result = tool_spec("computer_desktop_input").execute(
+            db,
+            types.SimpleNamespace(
+                payload={"action": "press", "token": "snap-1:0", "key": "Enter", "click_target": False},
+                workspace_id="w1",
+            ),
+            "user-1",
+        )
+    assert summary == ("confirm_computerDesktopKeyTokenFocused", {"token": "snap-1:0", "keys": "enter"})
+    assert result["key"] == "enter"
+    assert calls == [("computer:desktop-key", {
+        "token": "snap-1:0", "key": "enter", "modifiers": [], "clickTarget": False,
+    })]
+
+
+def test_drag_maps_both_points_from_one_capture(monkeypatch) -> None:
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {
+            "point": {"x": 100, "y": 200},
+            "toPoint": {"x": 300, "y": 400},
+            "windowNumber": 7,
+            "pid": 42,
+        }
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        result = tool_spec("computer_desktop_drag").execute(
+            db,
+            types.SimpleNamespace(
+                payload={
+                    "capture_id": CAPTURE,
+                    "from_x": 20, "from_y": 40, "to_x": 60, "to_y": 80,
+                    "button": "left", "duration_ms": 400, "scale": 0.5,
+                },
+                workspace_id="w1",
+            ),
+            "user-1",
+        )
+    assert result["from"] == {"x": 40, "y": 80}
+    assert result["to"] == {"x": 120, "y": 160}
+    assert calls == [("computer:desktop-drag", {
+        "captureId": CAPTURE,
+        "fromX": 40,
+        "fromY": 80,
+        "toX": 120,
+        "toY": 160,
+        "button": "left",
+        "durationMs": 400,
+    })]
 
 
 def test_the_tool_endpoint_opens_a_card_instead_of_acting_now() -> None:

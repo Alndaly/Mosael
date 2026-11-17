@@ -138,6 +138,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "browser_navigate": {"session_id": "no-such-session", "url": "https://example.test"},
     "browser_click": {"session_id": "no-such-session", "selector": "#x"},
     "browser_type": {"session_id": "no-such-session", "selector": "#x", "value": "hi"},
+    "browser_press": {"session_id": "no-such-session", "key": "Enter"},
     "browser_read": {"session_id": "no-such-session"},
     "browser_wait": {"session_id": "no-such-session", "text": "x", "timeout_ms": 1},
     "browser_scroll": {"session_id": "no-such-session", "dy": 100},

@@ -87,7 +87,9 @@ const IPC = Object.freeze({
     computerDesktopType: "computer:desktop-type",
     computerDesktopKey: "computer:desktop-key",
     computerDesktopScroll: "computer:desktop-scroll",
+    computerDesktopDrag: "computer:desktop-drag",
     computerClick: "computer:click",
+    computerDrag: "computer:drag",
     computerType: "computer:type",
     computerKey: "computer:key",
     computerScroll: "computer:scroll",
@@ -703,11 +705,13 @@ function parseComputerDesktopClick(value) {
 function parseComputerDesktopType(value) {
   const channel = IPC.invoke.computerDesktopType;
   const payload = record(value, channel);
-  const target = desktopTarget(payload, channel, ["text"]);
+  const target = desktopTarget(payload, channel, ["text", "clickTarget"]);
   const text = payload.text;
   if (typeof text !== "string" || !text) throw new TypeError(`${channel}: text must be a non-empty string`);
   if (text.length > 2000) throw new TypeError(`${channel}: text must be at most 2000 characters`);
-  return { ...target, text };
+  const clickTarget = payload.clickTarget === undefined ? true : payload.clickTarget;
+  if (typeof clickTarget !== "boolean") throw new TypeError(`${channel}: clickTarget must be a boolean`);
+  return { ...target, text, clickTarget };
 }
 
 function parseKeyInput(payload, channel, extraKeys) {
@@ -727,8 +731,10 @@ function parseKeyInput(payload, channel, extraKeys) {
 function parseComputerDesktopKey(value) {
   const channel = IPC.invoke.computerDesktopKey;
   const payload = record(value, channel);
-  const target = desktopTarget(payload, channel, ["key", "modifiers"]);
-  return { ...target, ...parseKeyInput(payload, channel, ["token", "captureId", "x", "y"]) };
+  const target = desktopTarget(payload, channel, ["key", "modifiers", "clickTarget"]);
+  const clickTarget = payload.clickTarget === undefined ? true : payload.clickTarget;
+  if (typeof clickTarget !== "boolean") throw new TypeError(`${channel}: clickTarget must be a boolean`);
+  return { ...target, ...parseKeyInput(payload, channel, ["token", "captureId", "x", "y", "clickTarget"]), clickTarget };
 }
 
 function parseComputerDesktopScroll(value) {
@@ -740,6 +746,57 @@ function parseComputerDesktopScroll(value) {
     throw new TypeError(`${channel}: dy must be a non-zero integer between -30 and 30`);
   }
   return { ...target, dy };
+}
+
+function parseDragPoint(payload, key, channel) {
+  const n = payload[key];
+  if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
+  return n;
+}
+
+function parseDragDuration(payload, channel) {
+  const duration = payload.durationMs === undefined ? 300 : payload.durationMs;
+  if (!Number.isInteger(duration) || duration < 100 || duration > 2000) {
+    throw new TypeError(`${channel}: durationMs must be an integer between 100 and 2000`);
+  }
+  return duration;
+}
+
+function parseDragButton(payload, channel) {
+  const button = payload.button === undefined ? "left" : payload.button;
+  if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
+  return button;
+}
+
+function parseComputerDesktopDrag(value) {
+  const channel = IPC.invoke.computerDesktopDrag;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["captureId", "fromX", "fromY", "toX", "toY", "button", "durationMs"], channel);
+  const captureId = typeof payload.captureId === "string" ? payload.captureId.trim() : "";
+  if (!/^[a-f0-9-]{36}$/.test(captureId)) throw new TypeError(`${channel}: captureId is invalid`);
+  return {
+    captureId,
+    fromX: parseDragPoint(payload, "fromX", channel),
+    fromY: parseDragPoint(payload, "fromY", channel),
+    toX: parseDragPoint(payload, "toX", channel),
+    toY: parseDragPoint(payload, "toY", channel),
+    button: parseDragButton(payload, channel),
+    durationMs: parseDragDuration(payload, channel),
+  };
+}
+
+function parseComputerDrag(value) {
+  const channel = IPC.invoke.computerDrag;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["fromX", "fromY", "toX", "toY", "button", "durationMs"], channel);
+  return {
+    fromX: parseDragPoint(payload, "fromX", channel),
+    fromY: parseDragPoint(payload, "fromY", channel),
+    toX: parseDragPoint(payload, "toX", channel),
+    toY: parseDragPoint(payload, "toY", channel),
+    button: parseDragButton(payload, channel),
+    durationMs: parseDragDuration(payload, channel),
+  };
 }
 
 /**
@@ -1147,8 +1204,10 @@ module.exports = {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseComputerDrag,
   parseComputerDesktopAccessibility,
   parseComputerDesktopClick,
+  parseComputerDesktopDrag,
   parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,

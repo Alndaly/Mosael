@@ -10,7 +10,7 @@ from app.domain import browser
 from tests.util import fresh_client
 
 BROWSER_TOOLS = [
-    "browser_open", "browser_navigate", "browser_click", "browser_type",
+    "browser_open", "browser_navigate", "browser_click", "browser_type", "browser_press",
     "browser_read", "browser_wait", "browser_close",
 ]
 
@@ -27,6 +27,21 @@ def test_browser_tools_in_manifest_and_gating() -> None:
     assert by_name["browser_open"]["confirmation"] is True  # 入口走确认卡
     assert by_name["browser_navigate"]["confirmation"] is False  # 同会话动作内联
     assert by_name["browser_read"]["confirmation"] is False
+
+
+def test_browser_press_sends_the_key_to_the_executor(monkeypatch) -> None:
+    import mcp_server
+
+    calls: list[tuple[str, str, dict, str]] = []
+    monkeypatch.setattr(
+        mcp_server,
+        "_browser_act",
+        lambda session_id, action, args, workspace_id: (
+            calls.append((session_id, action, args, workspace_id)) or {"value": "ok"}
+        ),
+    )
+    assert mcp_server.browser_press("session-1", key="Enter", workspace_id="ws-1") == {"value": "ok"}
+    assert calls == [("session-1", "press_key", {"key": "Enter"}, "ws-1")]
 
 
 def test_browser_open_confirmation_opens_agent_session() -> None:

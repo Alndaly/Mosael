@@ -143,6 +143,34 @@ func postClick(_ point: CGPoint, button: CGMouseButton, count: Int) {
     }
 }
 
+func postDrag(from: CGPoint, to: CGPoint, button: CGMouseButton, durationMs: Int) {
+    let downType: CGEventType = button == .right ? .rightMouseDown : .leftMouseDown
+    let dragType: CGEventType = button == .right ? .rightMouseDragged : .leftMouseDragged
+    let upType: CGEventType = button == .right ? .rightMouseUp : .leftMouseUp
+    if let down = CGEvent(mouseEventSource: nil, mouseType: downType, mouseCursorPosition: from, mouseButton: button) {
+        down.setIntegerValueField(.mouseEventClickState, value: 1)
+        down.post(tap: .cghidEventTap)
+    }
+    let steps = max(8, min(30, durationMs / 20))
+    let delay = Double(max(1, durationMs)) / 1000.0 / Double(steps + 1)
+    for index in 1...steps {
+        let progress = CGFloat(index) / CGFloat(steps + 1)
+        let point = CGPoint(
+            x: from.x + (to.x - from.x) * progress,
+            y: from.y + (to.y - from.y) * progress
+        )
+        if let drag = CGEvent(mouseEventSource: nil, mouseType: dragType, mouseCursorPosition: point, mouseButton: button) {
+            drag.setIntegerValueField(.mouseEventClickState, value: 1)
+            drag.post(tap: .cghidEventTap)
+        }
+        Thread.sleep(forTimeInterval: delay)
+    }
+    if let up = CGEvent(mouseEventSource: nil, mouseType: upType, mouseCursorPosition: to, mouseButton: button) {
+        up.setIntegerValueField(.mouseEventClickState, value: 1)
+        up.post(tap: .cghidEventTap)
+    }
+}
+
 func postUnicode(_ characters: [UniChar]) {
     guard !characters.isEmpty else { return }
     var buffer = characters
@@ -258,10 +286,12 @@ func performAction(_ request: [String: Any]) throws -> [String: Any] {
         throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "point is required"])
     }
     let point = CGPoint(x: x, y: y)
+    let clickTarget = (request["clickTarget"] as? NSNumber)?.boolValue ?? true
     try activate(pid)
     guard targetIsFrontmost(pid, point) else {
         throw NSError(domain: "MosaelWindowTools", code: 409, userInfo: [NSLocalizedDescriptionKey: "the target window is not frontmost; nothing was sent"])
     }
+    var dragEnd: CGPoint? = nil
     switch action {
     case "click":
         let buttonName = request["button"] as? String ?? "left"
@@ -272,17 +302,36 @@ func performAction(_ request: [String: Any]) throws -> [String: Any] {
         guard let text = request["text"] as? String, !text.isEmpty else {
             throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "text is required"])
         }
-        postClick(point, button: .left, count: 1)
-        Thread.sleep(forTimeInterval: 0.08)
+        if clickTarget {
+            postClick(point, button: .left, count: 1)
+            Thread.sleep(forTimeInterval: 0.08)
+        }
         postText(text)
     case "key":
         guard let key = request["key"] as? String, !key.isEmpty else {
             throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "key is required"])
         }
         let modifiers = request["modifiers"] as? [String] ?? []
-        postClick(point, button: .left, count: 1)
-        Thread.sleep(forTimeInterval: 0.08)
+        if clickTarget {
+            postClick(point, button: .left, count: 1)
+            Thread.sleep(forTimeInterval: 0.08)
+        }
         try postKey(key, modifiers: modifiers)
+    case "drag":
+        guard let toPointObject = request["toPoint"] as? [String: Any],
+              let toX = (toPointObject["x"] as? NSNumber)?.doubleValue,
+              let toY = (toPointObject["y"] as? NSNumber)?.doubleValue else {
+            throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "toPoint is required"])
+        }
+        let toPoint = CGPoint(x: toX, y: toY)
+        guard targetIsFrontmost(pid, toPoint) else {
+            throw NSError(domain: "MosaelWindowTools", code: 409, userInfo: [NSLocalizedDescriptionKey: "the drag end is not over the target app; nothing was sent"])
+        }
+        let buttonName = request["button"] as? String ?? "left"
+        let button: CGMouseButton = buttonName == "right" ? .right : .left
+        let duration = max(100, min(2000, (request["durationMs"] as? NSNumber)?.intValue ?? 300))
+        postDrag(from: point, to: toPoint, button: button, durationMs: duration)
+        dragEnd = toPoint
     case "scroll":
         guard let dy = (request["dy"] as? NSNumber)?.int32Value, dy != 0 else {
             throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "dy is required"])
@@ -296,6 +345,12 @@ func performAction(_ request: [String: Any]) throws -> [String: Any] {
         }
     default:
         throw NSError(domain: "MosaelWindowTools", code: 400, userInfo: [NSLocalizedDescriptionKey: "unknown action: \(action)"])
+    }
+    if let dragEnd {
+        return ["ok": true, "action": action, "point": ["x": x, "y": y], "toPoint": [
+            "x": dragEnd.x,
+            "y": dragEnd.y,
+        ]]
     }
     return ["ok": true, "action": action, "point": ["x": x, "y": y]]
 }

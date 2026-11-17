@@ -1,6 +1,6 @@
 # ADR 0075 · Computer Use：三层的边界与安全模型
 
-- 状态：**Accepted** — 2026-10-21 提出；**L1（自己的窗口）已交付**（截图、点击、滚动、输入、
+- 状态：**Accepted** — 2026-10-21 提出；**L1（自己的窗口）已交付**（截图、点击、拖拽、滚动、输入、
   「被控制中」与急停），**L3 的 macOS 只读与动作已交付**。L2 / 回放见 [ADR 0081](0081-desktop-driver-and-model-driven-web.md)
 - 相关：ADR 0021 / 0044（确认卡与效果）、ADR 0032（宿主能力）、ADR 0038（工作台）
 - 代码位置：`backend/app/domain/agent/computer_use.py`、`backend/app/domain/agent/confirmable/computer_use.py`、
@@ -48,7 +48,7 @@
 
 ## 决定 2 · L1 的能力边界：只碰自己的 UI，不碰别人的站点
 
-L1 的四个动作 —— 截图、点击、滚动、输入 —— 都只作用在**应用自己的渲染**里：
+L1 的五个动作 —— 截图、点击、拖拽、滚动、输入 —— 都只作用在**应用自己的渲染**里：
 
 - 截图不需要 macOS 的屏幕录制权限（`capturePage()` 拍的是自己的渲染输出）；
 - 点击/输入用 `webContents.sendInputEvent`，事件是**可信**的（`isTrusted === true`），不是 `.click()`；
@@ -106,12 +106,12 @@ L1 的四个动作 —— 截图、点击、滚动、输入 —— 都只作用�
 | 项 | 状态 |
 | --- | --- |
 | L1 截图（应用主窗口，可缩放） | ✅ 已交付，工具 `computer_screenshot` |
-| L1 点击 / 滚动 / 键盘输入 | ✅ 已交付（`computer_click` / `computer_scroll` / `computer_input`，含文字与按键/组合键），edit 档确认卡；带命令修饰键的快捷键动态升 external |
+| L1 点击 / 拖拽 / 滚动 / 键盘输入 | ✅ 已交付（`computer_click` / `computer_drag` / `computer_scroll` / `computer_input`，含文字与按键/组合键），edit 档确认卡；带命令修饰键的快捷键动态升 external |
 | 「被控制中」可见性 + 空闲退出 + 急停 + 光标 | ✅ 已交付（`computerUseGuard` / `Overlay` / `Cursor`） |
 | 回环桥（端口/令牌/0600/独立部署说人话） | ✅ 已交付 |
 | 回放时间线（决定 5） | 🟡 桌面动作前后证据、本机存储、时间线卡片与清空已实现；真机 UI 待复核 |
 | L2 模型驱动网页（决定 4 的第 2 点半） | ⬜ 未实现；确定性那一半已在发布域 |
-| L3 桌面级驱动 | ✅ macOS 只读观察、权限引导与点击 / 输入 / 滚动已交付；回放已实现待真机复核，见 [ADR 0081](0081-desktop-driver-and-model-driven-web.md) |
+| L3 桌面级驱动 | ✅ macOS 只读观察、权限引导与点击 / 拖拽 / 输入 / 滚动已交付（输入可要求不先点击目标）；回放已实现待真机复核，见 [ADR 0081](0081-desktop-driver-and-model-driven-web.md) |
 
 ## 后果
 

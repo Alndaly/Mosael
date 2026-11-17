@@ -23,6 +23,9 @@ const contract = require("./ipc-contract.cjs") as {
   parseComputerClick: (value: unknown) => { x: number; y: number; button: string; clickCount: number };
   parseComputerType: (value: unknown) => { text: string };
   parseComputerKey: (value: unknown) => { key: string; modifiers: string[] };
+  parseComputerDrag: (value: unknown) => {
+    fromX: number; fromY: number; toX: number; toY: number; button: string; durationMs: number;
+  };
   parseComputerScroll: (value: unknown) => { dy: number; x: number | null; y: number | null };
 };
 
@@ -72,8 +75,9 @@ function loadActions() {
     computerUseWindow: undefined as unknown as (mainWindow?: FakeWindow) => FakeWindow | null,
   };
   vm.runInNewContext(
-    `${sourceOf("spinWait")}\n${sourceOf("computerUseWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
+    `${sourceOf("spinWait")}\n${sourceOf("computerUseWindow")}\n${sourceOf("dragMosaelWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
       "this.computerUseWindow = computerUseWindow;\n" +
+      "this.dragMosaelWindow = dragMosaelWindow;\n" +
       "this.clickMosaelWindow = clickMosaelWindow;\n" +
       "this.typeIntoMosaelWindow = typeIntoMosaelWindow;\n" +
       "this.scrollMosaelWindow = scrollMosaelWindow;\n" +
@@ -82,6 +86,7 @@ function loadActions() {
   );
   return context as unknown as {
     clickMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+    dragMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     typeIntoMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     scrollMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
   };
@@ -112,12 +117,53 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
     expect(() => contract.parseComputerType({ text: "" })).toThrow(/non-empty/);
     expect(() => contract.parseComputerType({ text: "x".repeat(2001) })).toThrow(/2000/);
 
+    expect(contract.IPC.invoke.computerDrag).toBe("computer:drag");
+    expect(contract.parseComputerDrag({
+      fromX: 1, fromY: 2, toX: 3, toY: 4,
+    })).toEqual({ fromX: 1, fromY: 2, toX: 3, toY: 4, button: "left", durationMs: 300 });
+    expect(contract.parseComputerDrag({
+      fromX: 1, fromY: 2, toX: 3, toY: 4, button: "right", durationMs: 500,
+    })).toMatchObject({ button: "right", durationMs: 500 });
+    expect(() => contract.parseComputerDrag({ fromX: -1, fromY: 2, toX: 3, toY: 4 })).toThrow(/fromX/);
+    expect(() => contract.parseComputerDrag({ fromX: 1, fromY: 2, toX: 3, toY: 4, durationMs: 50 })).toThrow(/durationMs/);
+
     expect(contract.IPC.invoke.computerScroll).toBe("computer:scroll");
     expect(contract.parseComputerScroll({ dy: 3 })).toEqual({ dy: 3, x: null, y: null });
     expect(contract.parseComputerScroll({ dy: -2, x: 10, y: 20 })).toEqual({ dy: -2, x: 10, y: 20 });
     expect(() => contract.parseComputerScroll({ dy: 0 })).toThrow(/non-zero/);
     expect(() => contract.parseComputerScroll({ dy: 31 })).toThrow(/30/);
     expect(() => contract.parseComputerScroll({ dy: 1, x: -1 })).toThrow(/non-negative/);
+  });
+});
+
+describe("拖的是 Mosael 自己的窗口", () => {
+  it("从起点按下、沿路径移动、在终点抬起", () => {
+    const main = fakeWindow({ size: [1000, 800] });
+    const cursor = { showAt: vi.fn() };
+    const { dragMosaelWindow } = loadActions();
+
+    const result = dragMosaelWindow({
+      fromX: 100, fromY: 120, toX: 400, toY: 300, button: "left", durationMs: 200,
+    }, main, cursor);
+
+    const sent = main.webContents.sendInputEvent.mock.calls.map(([event]) => event);
+    expect(sent[0]).toEqual({ type: "mouseMove", x: 100, y: 120 });
+    expect(sent[1]).toEqual({ type: "mouseDown", x: 100, y: 120, button: "left", clickCount: 1 });
+    expect(sent.at(-1)).toEqual({ type: "mouseUp", x: 400, y: 300, button: "left", clickCount: 1 });
+    expect(sent.filter((event) => event.type === "mouseMove").length).toBeGreaterThan(2);
+    expect(sent.some((event) => event.type === "mouseMove" && event.x > 100 && event.x < 400)).toBe(true);
+    expect(result).toEqual({ fromX: 100, fromY: 120, toX: 400, toY: 300, button: "left", durationMs: 200 });
+    expect(cursor.showAt).toHaveBeenCalledWith(1400, 500, "drag");
+  });
+
+  it("终点在窗口外:一下都不发", () => {
+    const main = fakeWindow({ size: [1000, 800] });
+    const { dragMosaelWindow } = loadActions();
+
+    expect(() => dragMosaelWindow({
+      fromX: 10, fromY: 20, toX: 1000, toY: 20, button: "left", durationMs: 200,
+    }, main)).toThrow(/outside the Mosael window/);
+    expect(main.webContents.sendInputEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -176,6 +222,7 @@ describe("输入到 Mosael 自己的窗口", () => {
     const main = fakeWindow({ size: [1000, 800] });
     const { clickMosaelWindow, scrollMosaelWindow, typeIntoMosaelWindow } = loadActions() as unknown as {
       clickMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
+    dragMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
       scrollMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
       typeIntoMosaelWindow: (request: Record<string, unknown>, mainWindow: FakeWindow, cursor?: { showAt: (x: number, y: number, kind?: string) => void }) => Record<string, unknown>;
     };

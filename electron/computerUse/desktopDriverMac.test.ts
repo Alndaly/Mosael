@@ -112,9 +112,11 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     const { runner, performInputs } = harness();
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
     await driver.observe({ pid: 42 });
-    const result = await driver.act({ kind: "key", token: "snap-1:0", key: "Enter", modifiers: ["cmd"] });
+    const result = await driver.act({ kind: "key", token: "snap-1:0", key: "Enter", modifiers: ["cmd"], clickTarget: false });
     expect(result.key).toBe("Enter");
-    expect(performInputs.at(-1)).toMatchObject({ action: "key", key: "Enter", modifiers: ["cmd"] });
+    expect(performInputs.at(-1)).toMatchObject({
+      action: "key", key: "Enter", modifiers: ["cmd"], clickTarget: false,
+    });
   });
 
   it("verify 仍不支持,不冒充已验证", () => {
@@ -145,6 +147,31 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     const shot = await driver.observe({ windowNumber: 7 });
     await driver.act({ kind: "click", captureId: shot.meta.capture_id, x: 400, y: 300 });
     expect(performInputs[0]).toMatchObject({ action: "click", pid: 42, point: { x: 401, y: 302 } });
+  });
+
+  it("拖拽把同一张截图的两个点交给 Swift 工具", async () => {
+    const { runner, performInputs } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    const shot = await driver.observe({ windowNumber: 7 });
+    const result = await driver.act({
+      kind: "drag",
+      captureId: shot.meta.capture_id,
+      fromX: 10, fromY: 20, toX: 100, toY: 200,
+      button: "left", durationMs: 400,
+    });
+    expect(result).toMatchObject({
+      kind: "drag",
+      point: { x: 11, y: 22 },
+      toPoint: { x: 101, y: 202 },
+      durationMs: 400,
+    });
+    expect(performInputs[0]).toMatchObject({
+      action: "drag",
+      point: { x: 11, y: 22 },
+      toPoint: { x: 101, y: 202 },
+      button: "left",
+      durationMs: 400,
+    });
   });
 
   it("令牌对应的界面变了就拒绝,不点旧坐标", async () => {

@@ -57,7 +57,9 @@ const {
   parseCaptureMode,
   parseComputerClick,
   parseComputerDesktopAccessibility,
+  parseComputerDrag,
   parseComputerDesktopClick,
+  parseComputerDesktopDrag,
   parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,
@@ -484,6 +486,8 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerDesktopAccessibility]: () => desktopObserve(parseComputerDesktopAccessibility(request.payload)),
     [IPC.invoke.computerDesktopClick]: () =>
       withDesktopAction((driver) => driver.act({ kind: "click", replay: true, ...parseComputerDesktopClick(request.payload) })),
+    [IPC.invoke.computerDesktopDrag]: () =>
+      withDesktopAction((driver) => driver.act({ kind: "drag", replay: true, ...parseComputerDesktopDrag(request.payload) })),
     [IPC.invoke.computerDesktopType]: () =>
       withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...parseComputerDesktopType(request.payload) })),
     [IPC.invoke.computerDesktopKey]: () =>
@@ -492,6 +496,8 @@ async function answerHostBridgeRequest(line, socket) {
       withDesktopAction((driver) => driver.act({ kind: "scroll", replay: true, ...parseComputerDesktopScroll(request.payload) })),
     [IPC.invoke.computerClick]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
+    [IPC.invoke.computerDrag]: () =>
+      withComputerUse(() => computerUseDriver.act({ kind: "drag", ...parseComputerDrag(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerType]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "type", ...parseComputerType(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerKey]: () =>

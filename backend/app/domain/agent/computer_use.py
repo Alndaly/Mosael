@@ -56,14 +56,20 @@ DESKTOP_SCROLL_CHANNEL = "computer:desktop-scroll"
 #: 动手:L1 的点击与输入(ADR 0075 的 P1)。坐标是**看着的那张图**上的(缩放过的)像素,
 #: 这里除以 scale 换成窗口的 CSS 像素再交给主进程 —— 模型不需要知道缩放这回事。
 CLICK_CHANNEL = "computer:click"
+DRAG_CHANNEL = "computer:drag"
 TYPE_CHANNEL = "computer:type"
 KEY_CHANNEL = "computer:key"
 SCROLL_CHANNEL = "computer:scroll"
 DESKTOP_KEY_CHANNEL = "computer:desktop-key"
+DESKTOP_DRAG_CHANNEL = "computer:desktop-drag"
 #: 这一轮结束了 —— 让主进程把「被控制中」熄灭(不是急停:下一轮还能动)。
 END_CHANNEL = "computer:end"
 #: 一次滚动最多几格滚轮。再多就不是「往下看看」,而是整段跳走。
 MAX_SCROLL_NOTCHES = 30
+#: 拖拽按真实时间走:太快页面收不到中间移动,太慢像卡住。100ms–2s 足够覆盖框选与拖文件。
+MIN_DRAG_MS = 100
+MAX_DRAG_MS = 2000
+DEFAULT_DRAG_MS = 300
 
 #: 能点的键。
 CLICK_BUTTONS = ("left", "right")
@@ -234,15 +240,19 @@ def desktop_type(
     x: object = None,
     y: object = None,
     scale: float = DEFAULT_SCALE,
+    click_target: object = True,
 ) -> dict[str, Any]:
-    """在已验证的桌面目标里输入文字;只输入这一串,不按额外快捷键。"""
+    """在已验证的桌面目标里输入文字;默认先点一下目标,`click_target=False` 时输入到当前焦点。"""
     if not isinstance(text, str) or not text:
         raise ComputerUseError("text must be a non-empty string; nothing was typed.")
     if len(text) > MAX_TYPE_CHARS:
         raise ComputerUseError(f"text must be at most {MAX_TYPE_CHARS} characters (got {len(text)}); nothing was typed.")
     target = _desktop_target(token, capture_id, x, y, scale)
     _mark_touched()
-    answer = _host_call(DESKTOP_TYPE_CHANNEL, {**target, "text": text})
+    answer = _host_call(
+        DESKTOP_TYPE_CHANNEL,
+        {**target, "text": text, "clickTarget": _bool_flag(click_target, "click_target")},
+    )
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
         raise ComputerUseError("The desktop bridge answered without confirming the typing.")
     return {**answer, "typed": len(text)}
@@ -268,6 +278,51 @@ def desktop_scroll(
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
         raise ComputerUseError("The desktop bridge answered without confirming the scroll.")
     return {**answer, "dy": notches}
+
+
+def desktop_drag(
+    capture_id: object,
+    from_x: object,
+    from_y: object,
+    to_x: object,
+    to_y: object,
+    button: object = "left",
+    duration_ms: object = DEFAULT_DRAG_MS,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在一张桌面截图的绑定内从起点拖到终点;两个坐标都必须来自同一张截图。"""
+    capture = str(capture_id or "").strip()
+    if not capture:
+        raise ComputerUseError("capture_id is required: drag both points in one computer_desktop_screenshot.")
+    factor = _scale(scale)
+    start_x = _screenshot_coordinate(from_x, "from_x", factor)
+    start_y = _screenshot_coordinate(from_y, "from_y", factor)
+    end_x = _screenshot_coordinate(to_x, "to_x", factor)
+    end_y = _screenshot_coordinate(to_y, "to_y", factor)
+    kind = _drag_button(button)
+    duration = _drag_duration(duration_ms)
+    _mark_touched()
+    answer = _host_call(
+        DESKTOP_DRAG_CHANNEL,
+        {
+            "captureId": capture,
+            "fromX": start_x,
+            "fromY": start_y,
+            "toX": end_x,
+            "toY": end_y,
+            "button": kind,
+            "durationMs": duration,
+        },
+    )
+    if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
+        raise ComputerUseError("The desktop bridge answered without confirming the drag.")
+    return {
+        **answer,
+        "from": {"x": start_x, "y": start_y},
+        "to": {"x": end_x, "y": end_y},
+        "button": kind,
+        "durationMs": duration,
+    }
 
 
 def key_payload(key: object, modifiers: object) -> tuple[str, list[str]]:
@@ -313,12 +368,16 @@ def desktop_press(
     x: object = None,
     y: object = None,
     scale: float = DEFAULT_SCALE,
+    click_target: object = True,
 ) -> dict[str, Any]:
-    """在已验证的桌面目标上按一个键或组合键;目标规则和桌面点击一致。"""
+    """在已验证的桌面目标上按一个键或组合键;`click_target=False` 时只聚焦应用,不点击元素。"""
     normalized, mods = key_payload(key, modifiers)
     target = _desktop_target(token, capture_id, x, y, scale)
     _mark_touched()
-    answer = _host_call(DESKTOP_KEY_CHANNEL, {**target, "key": normalized, "modifiers": mods})
+    answer = _host_call(
+        DESKTOP_KEY_CHANNEL,
+        {**target, "key": normalized, "modifiers": mods, "clickTarget": _bool_flag(click_target, "click_target")},
+    )
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
         raise ComputerUseError("The desktop bridge answered without confirming the key press.")
     return {**answer, "key": normalized, "modifiers": mods}
@@ -352,6 +411,47 @@ def click(
     if not isinstance(answer, dict) or answer.get("x") is None:
         raise ComputerUseError("The Mosael window bridge answered without confirming the click.")
     return {"x": css_x, "y": css_y, "scale": factor, "button": kind, "clickCount": count}
+
+
+def drag(
+    from_x: object = 0,
+    from_y: object = 0,
+    to_x: object = 0,
+    to_y: object = 0,
+    button: object = "left",
+    duration_ms: object = DEFAULT_DRAG_MS,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在 Mosael 主窗口里从起点拖到终点。坐标是**图片上**的像素,和点击同一套换算。"""
+    factor = _scale(scale)
+    start_x = _screenshot_coordinate(from_x, "from_x", factor)
+    start_y = _screenshot_coordinate(from_y, "from_y", factor)
+    end_x = _screenshot_coordinate(to_x, "to_x", factor)
+    end_y = _screenshot_coordinate(to_y, "to_y", factor)
+    kind = _drag_button(button)
+    duration = _drag_duration(duration_ms)
+    _mark_touched()
+    answer = _host_call(
+        DRAG_CHANNEL,
+        {
+            "fromX": start_x,
+            "fromY": start_y,
+            "toX": end_x,
+            "toY": end_y,
+            "button": kind,
+            "durationMs": duration,
+        },
+    )
+    if not isinstance(answer, dict) or answer.get("toX") is None:
+        raise ComputerUseError("The Mosael window bridge answered without confirming the drag.")
+    return {
+        **answer,
+        "from": {"x": start_x, "y": start_y},
+        "to": {"x": end_x, "y": end_y},
+        "scale": factor,
+        "button": kind,
+        "durationMs": duration,
+    }
 
 
 def type_text(text: object = "") -> dict[str, Any]:
@@ -407,6 +507,30 @@ def _click_count(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2):
         raise ComputerUseError(f"click_count must be 1 (single) or 2 (double), not {value!r}.")
     return int(value)
+
+
+def _drag_button(value: object) -> str:
+    kind = str(value or "left").strip().lower()
+    if kind not in CLICK_BUTTONS:
+        raise ComputerUseError(f'button must be "left" or "right" (got {value!r}).')
+    return kind
+
+
+def _drag_duration(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ComputerUseError(f"duration_ms must be a number between {MIN_DRAG_MS} and {MAX_DRAG_MS}.")
+    duration = int(value)
+    if duration < MIN_DRAG_MS or duration > MAX_DRAG_MS:
+        raise ComputerUseError(
+            f"duration_ms must be between {MIN_DRAG_MS} and {MAX_DRAG_MS} (got {value!r})."
+        )
+    return duration
+
+
+def _bool_flag(value: object, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ComputerUseError(f"{name} must be true or false.")
+    return value
 
 
 #: 这一轮里动过手没有(点/输入/滚动成功过一次就记上)。回合结束时据此决定要不要提醒桌面壳 ——
@@ -570,13 +694,18 @@ __all__ = [
     "CLICK_BUTTONS",
     "CLICK_CHANNEL",
     "ComputerUseError",
+    "DEFAULT_DRAG_MS",
     "DEFAULT_SCALE",
+    "DRAG_CHANNEL",
     "END_CHANNEL",
+    "MAX_DRAG_MS",
     "MAX_SCALE",
+    "MIN_DRAG_MS",
     "MIN_SCALE",
     "SCREENSHOT_CHANNEL",
     "DESKTOP_ACCESSIBILITY_CHANNEL",
     "DESKTOP_CLICK_CHANNEL",
+    "DESKTOP_DRAG_CHANNEL",
     "DESKTOP_SCREENSHOT_CHANNEL",
     "DESKTOP_SCROLL_CHANNEL",
     "DESKTOP_TYPE_CHANNEL",
@@ -584,9 +713,11 @@ __all__ = [
     "SCROLL_CHANNEL",
     "TYPE_CHANNEL",
     "click",
+    "drag",
     "end_turn",
     "desktop_accessibility",
     "desktop_click",
+    "desktop_drag",
     "desktop_screenshot",
     "desktop_scroll",
     "desktop_type",
