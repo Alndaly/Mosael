@@ -170,18 +170,23 @@ def _audio_only(path: Path, target_dir: Path) -> Path:
     if found != "video":
         return path
     target = target_dir / f"{path.stem}.m4a"
-    try:
-        result = run_logged(
-            [settings.ffmpeg, "-y", "-v", "error", "-i", str(path), "-vn", "-c:a", "aac", "-b:a", "192k",
-             "-f", "mp4", str(target)],
-            capture_output=True, text=True, timeout=900, what="抽取音轨",
-        )
-    except Exception as exc:
-        target.unlink(missing_ok=True)
-        raise YtdlpError("urlImportErr_audioOnly") from exc
-    if result.returncode != 0 or not target.is_file() or target.stat().st_size == 0:
-        target.unlink(missing_ok=True)
-        raise YtdlpError("urlImportErr_audioOnly")
+
+    def extract(codec: list[str]) -> bool:
+        try:
+            result = run_logged(
+                [settings.ffmpeg, "-y", "-v", "error", "-i", str(path), "-vn", *codec,
+                 "-f", "mp4", str(target)],
+                capture_output=True, text=True, timeout=900, what="抽取音轨",
+            )
+        except Exception as exc:
+            raise YtdlpError("urlImportErr_audioOnly") from exc
+        return result.returncode == 0 and target.is_file() and target.stat().st_size > 0
+
+    #: 音轨本来就是 AAC 时只换容器，不重编码；容器不支持时再转一次。
+    if not extract(["-c:a", "copy"]):
+        if not extract(["-c:a", "aac", "-b:a", "192k"]):
+            target.unlink(missing_ok=True)
+            raise YtdlpError("urlImportErr_audioOnly")
     path.unlink(missing_ok=True)
     return target
 
