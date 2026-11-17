@@ -813,7 +813,7 @@ def _execute_extract_audio(db: Session, confirmation: Any, actor: str | None) ->
     try:
         made = extract_audio_asset(db, asset)
     except AudioExtractError as exc:
-        raise ConfirmationError(str(exc)) from exc
+        raise ConfirmationError(exc.key, **exc.params) from exc
     return {"asset_id": made.id, "source_asset_id": asset.id}
 
 
