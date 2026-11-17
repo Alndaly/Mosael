@@ -49,6 +49,12 @@ describe("desktop observation IPC contract(ADR 0081)", () => {
     expect(contract.parseComputerDesktopType({ token: "snap-1:0", text: "hello" })).toEqual({
       token: "snap-1:0",
       text: "hello",
+      clickTarget: true,
+    });
+    expect(contract.parseComputerDesktopType({ token: "snap-1:0", text: "hello", clickTarget: false })).toEqual({
+      token: "snap-1:0",
+      text: "hello",
+      clickTarget: false,
     });
     expect(() => contract.parseComputerDesktopType({ token: "snap-1:0", text: "" })).toThrow("non-empty");
     expect(contract.parseComputerDesktopScroll({ token: "snap-1:0", dy: -3 })).toEqual({

@@ -167,17 +167,29 @@ def _summarize_input(db: Session, payload: dict[str, Any]) -> Summary:
     if _input_action(payload) == "type":
         text = str(payload.get("text") or "")[:400]
         if payload.get("token"):
-            key = "confirm_computerDesktopTypeTokenFocused" if focused else "confirm_computerDesktopTypeToken"
-            return key, {"token": str(payload.get("token"))[:120], "text": text}
-        key = "confirm_computerDesktopTypePixelFocused" if focused else "confirm_computerDesktopTypePixel"
-        return key, {**_point_params(payload), "text": text}
+            if focused:
+                return "confirm_computerDesktopTypeTokenFocused", {
+                    "token": str(payload.get("token"))[:120], "text": text,
+                }
+            return "confirm_computerDesktopTypeToken", {
+                "token": str(payload.get("token"))[:120], "text": text,
+            }
+        if focused:
+            return "confirm_computerDesktopTypePixelFocused", {**_point_params(payload), "text": text}
+        return "confirm_computerDesktopTypePixel", {**_point_params(payload), "text": text}
     key, modifiers = key_payload(payload.get("key"), payload.get("modifiers"))
     pressed = "+".join([*modifiers, key])
     if payload.get("token"):
-        summary = "confirm_computerDesktopKeyTokenFocused" if focused else "confirm_computerDesktopKeyToken"
-        return summary, {"token": str(payload.get("token"))[:120], "keys": pressed}
-    summary = "confirm_computerDesktopKeyPixelFocused" if focused else "confirm_computerDesktopKeyPixel"
-    return summary, {**_point_params(payload), "keys": pressed}
+        if focused:
+            return "confirm_computerDesktopKeyTokenFocused", {
+                "token": str(payload.get("token"))[:120], "keys": pressed,
+            }
+        return "confirm_computerDesktopKeyToken", {
+            "token": str(payload.get("token"))[:120], "keys": pressed,
+        }
+    if focused:
+        return "confirm_computerDesktopKeyPixelFocused", {**_point_params(payload), "keys": pressed}
+    return "confirm_computerDesktopKeyPixel", {**_point_params(payload), "keys": pressed}
 
 
 def _execute_input(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
