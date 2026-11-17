@@ -72,6 +72,7 @@ def test_同一张卡英文用户也读得懂() -> None:
         ("grab_video_frame", {}),
         ("grab_video_frame", {"at": 2}),
         ("extract_audio", {}),
+        ("computer_click", {"token": "snap-1:0", "name": "Save"}),
         ("computer_drag", {"from_x": 1, "from_y": 2, "to_x": 3, "to_y": 4}),
         ("computer_desktop_drag", {"from_x": 1, "from_y": 2, "to_x": 3, "to_y": 4}),
         ("clip_media", {"start": 1, "end": 3}),

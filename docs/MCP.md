@@ -57,7 +57,7 @@
 | `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |
 | `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
-| `computer_click` | 确认卡 | Confirmation required: click a point in Mosael's app window. |
+| `computer_click` | 确认卡 | Confirmation required: click a point or an element in Mosael's app window. |
 | `computer_desktop_accessibility` | 直接执行 | Read-only: read another app's macOS accessibility tree by `pid`. |
 | `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
 | `computer_desktop_drag` | 确认卡 | Confirmation required: drag between two points in another desktop app. |

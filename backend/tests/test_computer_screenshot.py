@@ -109,7 +109,7 @@ def test_the_element_list_uses_the_same_scale_as_the_picture(monkeypatch) -> Non
     client = fresh_client()
     shot = _shot(1600, 1200)
     shot["elements"] = [
-        {"role": "button", "name": "保存", "x": 100, "y": 200, "width": 80, "height": 40, "disabled": False},
+        {"role": "button", "name": "保存", "x": 100, "y": 200, "width": 80, "height": 40, "disabled": False, "token": "snap-1:0"},
     ]
     monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: shot)
 
@@ -119,7 +119,7 @@ def test_the_element_list_uses_the_same_scale_as_the_picture(monkeypatch) -> Non
     )
     assert response.status_code == 200, response.text
     assert response.json()["result"]["elements"] == [
-        {"role": "button", "name": "保存", "x": 25, "y": 50, "width": 20, "height": 10, "disabled": False},
+        {"role": "button", "name": "保存", "x": 25, "y": 50, "width": 20, "height": 10, "disabled": False, "token": "snap-1:0"},
     ]
 
 

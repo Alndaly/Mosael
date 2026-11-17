@@ -302,17 +302,20 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
 
 @tool(effect="confirms")
 def computer_click(
-    x: Annotated[int, Field(description="X pixel in the picture computer_screenshot returned.")],
-    y: Annotated[int, Field(description="Y pixel in the picture computer_screenshot returned.")],
+    x: Annotated[int, Field(description="X pixel in the picture computer_screenshot returned.")] = 0,
+    y: Annotated[int, Field(description="Y pixel in the picture computer_screenshot returned.")] = 0,
     button: Annotated[str, Field(description='"left" or "right".')] = "left",
     click_count: Annotated[int, Field(description="1 (single) or 2 (double).")] = 1,
     scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
+    token: Annotated[str, Field(description="Element token from computer_screenshot's elements list; use instead of x/y.")] = "",
+    name: Annotated[str, Field(description="Human-readable element name from that list, for the confirmation card.")] = "",
 ) -> dict[str, Any]:
-    """Confirmation required: click a point in Mosael's app window.
+    """Confirmation required: click a point or an element in Mosael's app window.
 
-    Coordinates are pixels in the picture computer_screenshot returned — pass that call's scale.
-    It only acts inside Mosael's own UI (never the desktop or other apps), and every click waits
-    for the user's approval — unless the session already allowed edit-tier cards.
+    Prefer `token` from the `elements` list returned with computer_screenshot: the driver re-reads
+    the DOM and refuses if that element changed or disappeared. Coordinates are pixels in the
+    screenshot — pass that call's scale. It only acts inside Mosael's own UI and every click waits
+    for approval unless edit-tier cards are allowed.
     """
     confirmation = _open_card(
         {
@@ -325,6 +328,8 @@ def computer_click(
                 "button": button,
                 "click_count": click_count,
                 "scale": scale,
+                "token": token,
+                "name": name,
             },
         },
     )

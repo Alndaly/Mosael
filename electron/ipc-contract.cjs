@@ -858,16 +858,21 @@ function parseComputerDrag(value) {
 function parseComputerClick(value) {
   const channel = IPC.invoke.computerClick;
   const payload = record(value, channel);
-  onlyKeys(payload, ["x", "y", "button", "clickCount"], channel);
+  onlyKeys(payload, ["x", "y", "button", "clickCount", "token"], channel);
+  const button = payload.button === undefined ? "left" : payload.button;
+  if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
+  const clickCount = payload.clickCount === undefined ? 1 : payload.clickCount;
+  if (clickCount !== 1 && clickCount !== 2) throw new TypeError(`${channel}: clickCount must be 1 or 2`);
+  const token = typeof payload.token === "string" ? payload.token.trim() : "";
+  if (token) {
+    if (!/^[A-Za-z0-9-]{1,64}:\d{1,8}$/.test(token)) throw new TypeError(`${channel}: token is invalid`);
+    return { token, button, clickCount };
+  }
   const coordinate = (key) => {
     const n = payload[key];
     if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
     return n;
   };
-  const button = payload.button === undefined ? "left" : payload.button;
-  if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
-  const clickCount = payload.clickCount === undefined ? 1 : payload.clickCount;
-  if (clickCount !== 1 && clickCount !== 2) throw new TypeError(`${channel}: clickCount must be 1 or 2`);
   return { x: coordinate("x"), y: coordinate("y"), button, clickCount };
 }
 

@@ -73,6 +73,24 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     expect(win.webContents.executeJavaScript).toHaveBeenCalledOnce();
   });
 
+  it("元素 token 重读 DOM 后点击元素中心,且只能用一次", async () => {
+    const win = fakeWindow();
+    const rows = [{ role: "button", name: "保存", x: 100, y: 200, width: 80, height: 40, disabled: false }];
+    win.webContents.executeJavaScript = vi.fn(async (script: string) => (
+      script.includes("querySelectorAll") ? rows : false
+    ));
+    const driver = new OwnWindowDriver(() => win);
+    const token = (await driver.observe()).elements[0].token;
+
+    const result = await driver.act({ kind: "click", token, button: "left", clickCount: 1 });
+
+    expect(result).toEqual({ x: 140, y: 220, button: "left", clickCount: 1 });
+    expect(win.webContents.sendInputEvent).toHaveBeenLastCalledWith({
+      type: "mouseUp", x: 140, y: 220, button: "left", clickCount: 1,
+    });
+    await expect(driver.act({ kind: "click", token })).rejects.toThrow(/snapshot expired/);
+  });
+
   it("waitForText 重读 DOM 直到文字出现或超时", async () => {
     const win = fakeWindow();
     let calls = 0;

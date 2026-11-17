@@ -11,6 +11,7 @@ auto 档的 edit 直放、bypass 都该对它们生效。所以别的地方(Bypa
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -50,10 +51,21 @@ def _scale(payload: dict[str, Any]) -> float:
     return float(value)
 
 
+def _element(payload: dict[str, Any]) -> str:
+    token = str(payload.get("token") or "").strip()
+    if not token:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,64}:\d{1,8}", token):
+        raise ConfirmationError("confirmErr_computerElementToken")
+    return token
+
+
 def _validate_click(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    _coordinate(payload, "x")
-    _coordinate(payload, "y")
-    _scale(payload)
+    token = _element(payload)
+    if not token:
+        _coordinate(payload, "x")
+        _coordinate(payload, "y")
+        _scale(payload)
     button = str(payload.get("button") or "left").strip().lower()
     if button not in CLICK_BUTTONS:
         raise ConfirmationError("confirmErr_computerClickButton")
@@ -63,6 +75,10 @@ def _validate_click(db: Session, workspace_id: str, payload: dict[str, Any], act
 
 
 def _summarize_click(db: Session, payload: dict[str, Any]) -> Summary:
+    token = _element(payload)
+    if token:
+        name = str(payload.get("name") or token).strip()[:120]
+        return "confirm_computerElementClick", {"name": name}
     return "confirm_computerClick", {
         "x": _coordinate(payload, "x"),
         "y": _coordinate(payload, "y"),
@@ -80,6 +96,7 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
             button=str(payload.get("button") or "left"),
             click_count=payload.get("click_count", 1),
             scale=float(payload.get("scale", 1)),
+            token=payload.get("token", ""),
         )
     except ComputerUseError as error:
         raise ConfirmationError(str(error)) from None

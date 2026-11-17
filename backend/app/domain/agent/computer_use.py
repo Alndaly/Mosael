@@ -22,6 +22,7 @@ import io
 import json
 import math
 import os
+import re
 import socket
 from typing import Any
 from app.core.config import settings
@@ -446,18 +447,26 @@ def click(
     button: str = "left",
     click_count: object = 1,
     scale: float = DEFAULT_SCALE,
+    token: object = "",
 ) -> dict[str, Any]:
-    """点一下 Mosael 主窗口。`x`/`y` 是**图片上**的像素(=窗口 CSS 像素 × scale)。
+    """点一下 Mosael 主窗口。`x`/`y` 是图片像素;`token` 是截图元素清单里的一次性令牌。
 
-    返回实际点到的 CSS 坐标与缩放,模型据此核对「我刚才看的那张图」和这次动作是同一个坐标系。
+    有 `token` 时不再用坐标:主进程会重读 DOM、核对元素仍在原处,然后点元素中心。
     """
-    factor = _scale(scale)
-    css_x = _screenshot_coordinate(x, "x", factor)
-    css_y = _screenshot_coordinate(y, "y", factor)
+    element = _element_token(token)
     kind = str(button or "left").strip().lower()
     if kind not in CLICK_BUTTONS:
         raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
     count = _click_count(click_count)
+    if element:
+        _mark_touched()
+        answer = _host_call(CLICK_CHANNEL, {"token": element, "button": kind, "clickCount": count})
+        if not isinstance(answer, dict) or answer.get("x") is None:
+            raise ComputerUseError("The Mosael window bridge answered without confirming the click.")
+        return {**answer, "button": kind, "clickCount": count, "token": element}
+    factor = _scale(scale)
+    css_x = _screenshot_coordinate(x, "x", factor)
+    css_y = _screenshot_coordinate(y, "y", factor)
     _mark_touched()
     answer = _host_call(CLICK_CHANNEL, {"x": css_x, "y": css_y, "button": kind, "clickCount": count})
     if not isinstance(answer, dict) or answer.get("x") is None:
@@ -559,6 +568,15 @@ def _click_count(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2):
         raise ComputerUseError(f"click_count must be 1 (single) or 2 (double), not {value!r}.")
     return int(value)
+
+
+def _element_token(value: object) -> str:
+    token = str(value or "").strip()
+    if not token:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,64}:\d{1,8}", token):
+        raise ComputerUseError("The element token is invalid; take a new screenshot.")
+    return token
 
 
 def _drag_button(value: object) -> str:
@@ -698,6 +716,9 @@ def _scaled_elements(value: object, factor: float) -> list[dict[str, Any]]:
             "name": str(row.get("name") or "")[:120],
             "disabled": bool(row.get("disabled")),
         }
+        token = str(row.get("token") or "")[:120]
+        if token:
+            clean["token"] = token
         for key in ("x", "y", "width", "height"):
             number = row.get(key)
             if isinstance(number, bool) or not isinstance(number, (int, float)):

@@ -5,6 +5,8 @@
  * 这一份只认 Mosael 主窗口:`capturePage` + `sendInputEvent`。
  * 从 `main.cjs` 搬出时逐字未改,行为零变化;守卫 / overlay / cursor 仍由 main.cjs 持有。
  */
+const crypto = require("node:crypto");
+
 const { captureToCss } = require("../browser/driver/coords.cjs");
 
 /**
@@ -225,6 +227,15 @@ function typeIntoMosaelWindow(request, mainWindow, cursor = null) {
   return { typed: String(request.text).length };
 }
 
+const DOM_TOKEN_TTL_MS = 60_000;
+const MAX_DOM_SNAPSHOTS = 8;
+
+function domFingerprint(row) {
+  return JSON.stringify([
+    row.role || "", row.name || "", row.x, row.y, row.width, row.height, Boolean(row.disabled),
+  ]);
+}
+
 /**
  * 把窗口里可操作的元素读成一张轻量清单。坐标是**窗口 CSS 像素**,和后端拿到截图后再按 scale
  * 缩放后的图片坐标同一套;输入框的当前值**不读**(可能是密码 / 私密内容)。
@@ -369,16 +380,61 @@ class OwnWindowDriver {
   /** `getWindow` 每次调用时取主窗口 —— mac 关窗再激活会重建它,所以不缓存引用。 */
   constructor(getWindow) {
     this.getWindow = getWindow;
+    this.domSnapshots = new Map();
   }
 
   capabilities() {
     return { tree: false, screenshots: true, input: true, platforms: ["mosael-window"] };
   }
 
-  /** 观察:主窗口的一张图。L1 没有可访问性树,elements 明确为空,不假装有。 */
+  /** 观察:主窗口的一张图 + 可见元素清单;元素带一次性 token。 */
   async observe() {
     const captured = await captureMosaelWindow(this.getWindow());
-    return { ...captured, elements: captured.elements ?? [], meta: { window: "main" } };
+    const snapshotId = crypto.randomUUID();
+    const elements = (captured.elements ?? []).map((row, index) => ({
+      ...row,
+      token: `${snapshotId}:${index}`,
+    }));
+    if (elements.length) {
+      this.domSnapshots.set(snapshotId, { elements, at: Date.now() });
+      while (this.domSnapshots.size > MAX_DOM_SNAPSHOTS) {
+        this.domSnapshots.delete(this.domSnapshots.keys().next().value);
+      }
+    }
+    return {
+      ...captured,
+      elements,
+      meta: { window: "main", ...(elements.length ? { snapshot_id: snapshotId } : {}) },
+    };
+  }
+
+  /** 令牌 → 当前 DOM 里的同一个元素;重读并比对指纹,过期 / 变了就拒绝。 */
+  async resolveElement(token) {
+    const match = /^([A-Za-z0-9-]{1,64}):(\d{1,8})$/.exec(String(token || ""));
+    if (!match) throw new Error("The element token is invalid; take a new screenshot.");
+    const snapshot = this.domSnapshots.get(match[1]);
+    const index = Number(match[2]);
+    if (!snapshot || Date.now() - snapshot.at > DOM_TOKEN_TTL_MS) {
+      this.domSnapshots.delete(match[1]);
+      throw new Error("The element snapshot expired; take a new screenshot.");
+    }
+    const before = snapshot.elements[index];
+    if (!before) throw new Error("The element token is not in that snapshot; take a new screenshot.");
+    const window = computerUseWindow(this.getWindow());
+    if (!window) throw new Error("There is no Mosael window open to resolve that element.");
+    const current = await domElements(window);
+    const after = current.find((row) => domFingerprint(row) === domFingerprint(before));
+    if (!after) {
+      this.domSnapshots.delete(match[1]);
+      throw new Error("That element changed or disappeared; take a new screenshot before acting.");
+    }
+    this.domSnapshots.delete(match[1]);
+    return {
+      x: Math.round(after.x + after.width / 2),
+      y: Math.round(after.y + after.height / 2),
+      role: after.role,
+      name: after.name,
+    };
   }
 
   async waitForText(text, timeoutMs) {
@@ -392,22 +448,30 @@ class OwnWindowDriver {
   /** 动作:点 / 输入 / 按键 / 滚动。`action.kind` 只认这四种;别的直接拒。 */
   async act(action) {
     const window = this.getWindow();
-    if (window && (action.kind === "click" || action.kind === "type" || action.kind === "key" || action.kind === "drag")) {
-      await assertComputerTargetAllowed(window.webContents, action);
+    let run = action;
+    if (run.token) {
+      if (run.kind !== "click") {
+        throw new Error("Element tokens currently target clicks only; use coordinates for this action.");
+      }
+      const target = await this.resolveElement(run.token);
+      run = { ...run, x: target.x, y: target.y, token: undefined };
     }
-    switch (action.kind) {
+    if (window && (run.kind === "click" || run.kind === "type" || run.kind === "key" || run.kind === "drag")) {
+      await assertComputerTargetAllowed(window.webContents, run);
+    }
+    switch (run.kind) {
       case "click":
-        return clickMosaelWindow(action, window, action.cursor ?? null);
+        return clickMosaelWindow(run, window, run.cursor ?? null);
       case "drag":
-        return dragMosaelWindow(action, window, action.cursor ?? null);
+        return dragMosaelWindow(run, window, run.cursor ?? null);
       case "type":
-        return typeIntoMosaelWindow(action, window, action.cursor ?? null);
+        return typeIntoMosaelWindow(run, window, run.cursor ?? null);
       case "key":
-        return pressMosaelWindow(action, window, action.cursor ?? null);
+        return pressMosaelWindow(run, window, run.cursor ?? null);
       case "scroll":
-        return scrollMosaelWindow(action, window, action.cursor ?? null);
+        return scrollMosaelWindow(run, window, run.cursor ?? null);
       default:
-        throw new Error(`Unknown computer-use action: ${action.kind}`);
+        throw new Error(`Unknown computer-use action: ${run.kind}`);
     }
   }
 

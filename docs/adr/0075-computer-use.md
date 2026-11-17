@@ -107,7 +107,7 @@ L1 的五个动作 —— 截图、点击、拖拽、滚动、输入 —— 都�
 | --- | --- |
 | L1 截图（应用主窗口，可缩放） | ✅ 已交付，工具 `computer_screenshot` |
 | L1 点击 / 拖拽 / 滚动 / 键盘输入 | ✅ 已交付（`computer_click` / `computer_drag` / `computer_scroll` / `computer_input`，含文字与按键/组合键），edit 档确认卡；带命令修饰键的快捷键动态升 external |
-| L1 感知与等待 | ✅ 截图附带可见元素清单；`computer_wait` 等文字出现，`computer_verify` 断言存在 / 不存在（只读） |
+| L1 感知与等待 | ✅ 截图附带带一次性 token 的可见元素清单；`computer_click(token=…)` 重读 DOM 核对后才点；`computer_wait` 等文字，`computer_verify` 断言存在 / 不存在（只读） |
 | 「被控制中」可见性 + 空闲退出 + 急停 + 光标 | ✅ 已交付（`computerUseGuard` / `Overlay` / `Cursor`） |
 | 回环桥（端口/令牌/0600/独立部署说人话） | ✅ 已交付 |
 | 回放时间线（决定 5） | 🟡 桌面动作前后证据、本机存储、时间线卡片与清空已实现；真机 UI 待复核 |

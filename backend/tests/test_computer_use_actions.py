@@ -46,7 +46,7 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
 
     click_properties = tools["computer_click"]["parameters"]["properties"]
     #: 只有一个窗口可操作 —— 没有 window 这一维(publish 分支随窗口一起删了)。
-    assert set(click_properties) == {"x", "y", "button", "click_count", "scale"}
+    assert set(click_properties) == {"x", "y", "button", "click_count", "scale", "token", "name"}
     assert click_properties["button"]["default"] == "left"
     assert click_properties["click_count"]["default"] == 1
     assert set(tools["computer_input"]["parameters"]["properties"]) == {"action", "text", "key", "modifiers"}
@@ -302,6 +302,11 @@ def test_the_card_checks_shape_before_opening() -> None:
             with pytest.raises(ConfirmationError):
                 spec.validate(db, "w1", _click_payload(**bad), None)
 
+        click_spec = tool_spec("computer_click")
+        click_spec.validate(db, "w1", {"token": "snap-1:0", "button": "left", "click_count": 1}, None)
+        with pytest.raises(ConfirmationError):
+            click_spec.validate(db, "w1", {"token": "not-a-token", "button": "left"}, None)
+
         input_spec = tool_spec("computer_input")
         input_spec.validate(db, "w1", {"action": "type", "text": "hi"}, None)
         with pytest.raises(ConfirmationError):
@@ -336,6 +341,9 @@ def test_the_card_says_what_will_happen() -> None:
             "confirm_computerClick",
             {"x": 120, "y": 80, "button": "left", "count": 1},
         )
+        assert tool_spec("computer_click").summarize(
+            db, {"token": "snap-1:0", "name": "保存"},
+        ) == ("confirm_computerElementClick", {"name": "保存"})
         key, params = tool_spec("computer_input").summarize(db, {"action": "type", "text": "你好"})
         assert key == "confirm_computerType"
         assert params["text"] == "你好"
@@ -399,6 +407,26 @@ def test_approved_drag_executes_through_the_bridge(monkeypatch) -> None:
     assert calls == [("computer:drag", {
         "fromX": 40, "fromY": 80, "toX": 120, "toY": 160, "button": "left", "durationMs": 400,
     })]
+
+
+def test_approved_element_token_click_uses_the_token(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"x": 140, "y": 220, "button": "left", "clickCount": 1}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        card = types.SimpleNamespace(
+            payload={"token": "snap-1:0", "name": "保存", "button": "left", "click_count": 1},
+            workspace_id="w1",
+        )
+        result = tool_spec("computer_click").execute(db, card, "user-1")
+    assert result["token"] == "snap-1:0"
+    assert calls == [("computer:click", {"token": "snap-1:0", "button": "left", "clickCount": 1})]
 
 
 # ── 工具端点:真的开一张卡 ─────────────────────────────────

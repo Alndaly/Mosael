@@ -108,6 +108,10 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
     expect(contract.parseComputerClick({ x: 10, y: 20 })).toEqual({
       x: 10, y: 20, button: "left", clickCount: 1,
     });
+    expect(contract.parseComputerClick({ token: "snap-1:0" })).toEqual({
+      token: "snap-1:0", button: "left", clickCount: 1,
+    });
+    expect(() => contract.parseComputerClick({ token: "bad" })).toThrow(/token/);
     //: 没有 window 这一维了 —— 传它就是多了一个字段,直接拒。
     expect(() => contract.parseComputerClick({ x: 1, y: 2, window: "publish" })).toThrow(/unexpected/);
     expect(() => contract.parseComputerClick({ x: -1, y: 0 })).toThrow(/x must be/);
