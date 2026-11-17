@@ -127,6 +127,42 @@ function scrollMosaelWindow(request, mainWindow, cursor = null) {
  * `insertText` 是 Chromium 自己的「插入文本」,和用户打字走同一条路(受控输入框的 onInput 会触发),
  * 比逐字符发 keyDown/char 稳,也不会被输入法状态影响。
  */
+/** 键名归一化到 Electron `sendInputEvent` 的 keyCode;只接受单字符或明确的命名键。 */
+function electronKeyCode(key) {
+  const lower = String(key || "").toLowerCase();
+  const named = {
+    enter: "Enter", tab: "Tab", escape: "Escape", backspace: "Backspace", delete: "Delete", space: "Space",
+    home: "Home", end: "End", pageup: "PageUp", pagedown: "PageDown", left: "Left", right: "Right", up: "Up", down: "Down",
+    ...Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`f${index + 1}`, `F${index + 1}`])),
+  };
+  if (named[lower]) return named[lower];
+  if (lower.length === 1) return lower.toUpperCase();
+  throw new Error(`Unsupported key: ${key}`);
+}
+
+function electronModifiers(modifiers) {
+  const map = { cmd: "command", ctrl: "control", alt: "alt", shift: "shift", meta: "command" };
+  return [...new Set((Array.isArray(modifiers) ? modifiers : []).map((one) => map[String(one).toLowerCase()]).filter(Boolean))];
+}
+
+/** 在 Mosael 主窗口里按一个键或组合键;焦点在窗口自己的 DOM 里(输入框 / 画布)。 */
+function pressMosaelWindow(request, mainWindow, cursor = null) {
+  const win = computerUseWindow(mainWindow);
+  if (!win) throw new Error("There is no Mosael window open to press a key in. Nothing was pressed.");
+  if (typeof win.isMinimized === "function" && win.isMinimized()) {
+    throw new Error("The Mosael window is minimized; restore it and try again. Nothing was pressed.");
+  }
+  const contents = win.webContents;
+  if (typeof win.focus === "function") win.focus();
+  if (typeof contents.focus === "function") contents.focus();
+  const keyCode = electronKeyCode(request.key);
+  const modifiers = electronModifiers(request.modifiers);
+  contents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+  contents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
+  if (cursor && lastComputerUsePoint) cursor.showAt(lastComputerUsePoint.x, lastComputerUsePoint.y, "type");
+  return { key: request.key, modifiers: request.modifiers || [], keyCode };
+}
+
 function typeIntoMosaelWindow(request, mainWindow, cursor = null) {
   const win = computerUseWindow(mainWindow);
   if (!win) {
@@ -187,7 +223,7 @@ async function captureMosaelWindow(mainWindow) {
 async function assertComputerTargetAllowed(contents, action) {
   if (!contents || typeof contents.executeJavaScript !== "function") return;
   const blocked = await contents.executeJavaScript(`(() => {
-    const hit = ${action.kind === "type"
+    const hit = ${(action.kind === "type" || action.kind === "key")
       ? 'document.activeElement'
       : 'document.elementFromPoint(' + Number(action.x || 0) + ',' + Number(action.y || 0) + ')'};
     return Boolean(hit && hit.closest && hit.closest("[data-confirmation-card],[data-computer-use-banner]"));
@@ -214,10 +250,10 @@ class OwnWindowDriver {
     return { ...captured, elements: [], meta: { window: "main" } };
   }
 
-  /** 动作:点 / 输入 / 滚动。`action.kind` 只认这三种;别的直接拒。 */
+  /** 动作:点 / 输入 / 按键 / 滚动。`action.kind` 只认这四种;别的直接拒。 */
   async act(action) {
     const window = this.getWindow();
-    if (window && (action.kind === "click" || action.kind === "type")) {
+    if (window && (action.kind === "click" || action.kind === "type" || action.kind === "key")) {
       await assertComputerTargetAllowed(window.webContents, action);
     }
     switch (action.kind) {
@@ -225,6 +261,8 @@ class OwnWindowDriver {
         return clickMosaelWindow(action, window, action.cursor ?? null);
       case "type":
         return typeIntoMosaelWindow(action, window, action.cursor ?? null);
+      case "key":
+        return pressMosaelWindow(action, window, action.cursor ?? null);
       case "scroll":
         return scrollMosaelWindow(action, window, action.cursor ?? null);
       default:

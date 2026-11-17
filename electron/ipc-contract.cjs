@@ -85,9 +85,11 @@ const IPC = Object.freeze({
     computerDesktopAccessibility: "computer:desktop-accessibility",
     computerDesktopClick: "computer:desktop-click",
     computerDesktopType: "computer:desktop-type",
+    computerDesktopKey: "computer:desktop-key",
     computerDesktopScroll: "computer:desktop-scroll",
     computerClick: "computer:click",
     computerType: "computer:type",
+    computerKey: "computer:key",
     computerScroll: "computer:scroll",
     // 这一轮智能体结束了(后端在回合收尾时发):「被控制中」熄灭,但**不**等于急停 —— 下一轮还能动。
     computerEnd: "computer:end",
@@ -708,6 +710,27 @@ function parseComputerDesktopType(value) {
   return { ...target, text };
 }
 
+function parseKeyInput(payload, channel, extraKeys) {
+  onlyKeys(payload, ["key", "modifiers", ...extraKeys], channel);
+  const key = payload.key;
+  if (typeof key !== "string" || !key.trim() || key.length > 32) {
+    throw new TypeError(`${channel}: key must be a non-empty string of at most 32 characters`);
+  }
+  const modifiers = payload.modifiers === undefined ? [] : payload.modifiers;
+  if (!Array.isArray(modifiers) || modifiers.length > 5 || modifiers.some((one) => typeof one !== "string"
+      || !["cmd", "ctrl", "alt", "shift", "meta"].includes(one))) {
+    throw new TypeError(`${channel}: modifiers must be an array of cmd, ctrl, alt, shift or meta`);
+  }
+  return { key, modifiers };
+}
+
+function parseComputerDesktopKey(value) {
+  const channel = IPC.invoke.computerDesktopKey;
+  const payload = record(value, channel);
+  const target = desktopTarget(payload, channel, ["key", "modifiers"]);
+  return { ...target, ...parseKeyInput(payload, channel, ["token", "captureId", "x", "y"]) };
+}
+
 function parseComputerDesktopScroll(value) {
   const channel = IPC.invoke.computerDesktopScroll;
   const payload = record(value, channel);
@@ -758,6 +781,12 @@ function parseComputerScroll(value) {
     return n;
   };
   return { dy, x: point("x"), y: point("y") };
+}
+
+/** 在 Mosael 自己的窗口里按一个键或组合键。 */
+function parseComputerKey(value) {
+  const channel = IPC.invoke.computerKey;
+  return parseKeyInput(record(value, channel), channel, []);
 }
 
 /** 往 Mosael 自己的窗口里输入一段文字(输入到当前焦点,走 `webContents.insertText`)。 */
@@ -1123,11 +1152,13 @@ module.exports = {
   parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,
+  parseComputerDesktopKey,
   parseComputerDesktopWindows,
   parseHostLayer,
   parseComputerScreenshot,
   parseComputerScroll,
   parseComputerType,
+  parseComputerKey,
   parseComfyNavigation,
   parseComfyWorkbenchCall,
   parseComfyWorkbenchOpen,

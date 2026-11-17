@@ -66,6 +66,9 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     expect(typed).toEqual({ typed: 2 });
     const scrolled = await driver.act({ kind: "scroll", dy: 2, x: null, y: null });
     expect(scrolled.dy).toBe(2);
+    const pressed = await driver.act({ kind: "key", key: "Enter", modifiers: ["cmd"] });
+    expect(pressed).toEqual({ key: "Enter", modifiers: ["cmd"], keyCode: "Enter" });
+    expect(win.webContents.sendInputEvent).toHaveBeenLastCalledWith({ type: "keyUp", keyCode: "Enter", modifiers: ["command"] });
     expect(win.webContents.sendInputEvent).toHaveBeenCalled();
     expect(win.webContents.insertText).toHaveBeenCalledWith("hi");
   });

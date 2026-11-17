@@ -36,7 +36,7 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
     client = fresh_client()
     tools = {tool["name"]: tool for tool in client.get("/api/agent/tools").json()}
 
-    for name in ("computer_click", "computer_type"):
+    for name in ("computer_click", "computer_input"):
         spec = tools[name]
         # 会改界面:进确认类,不进只读那一份(子智能体拿不到)。
         assert spec["confirmation"] is True, name
@@ -49,7 +49,7 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
     assert set(click_properties) == {"x", "y", "button", "click_count", "scale"}
     assert click_properties["button"]["default"] == "left"
     assert click_properties["click_count"]["default"] == 1
-    assert set(tools["computer_type"]["parameters"]["properties"]) == {"text"}
+    assert set(tools["computer_input"]["parameters"]["properties"]) == {"action", "text", "key", "modifiers"}
     assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "x", "y", "scale"}
 
 
@@ -59,7 +59,7 @@ def test_the_actions_are_ordinary_edit_tier_tools() -> None:
     它们不声明「每次都问」—— 那只留给会长期改变智能体做法的操作(改技能,ADR 0043);
     点一下 / 输入一段的后果在这一屏里,和改时间线同级。
     """
-    for name in ("computer_click", "computer_type", "computer_scroll"):
+    for name in ("computer_click", "computer_input", "computer_scroll"):
         spec = tool_spec(name)
         assert spec is not None, name
         assert spec.permission == "edit", name
@@ -129,7 +129,7 @@ def test_auto_mode_approves_edit_tier_actions(monkeypatch) -> None:
     client = fresh_client()
     workspace, session = _session_client(client, mode="auto")
 
-    response = client.post("/api/agent/tools/computer_type", json={"arguments": {"text": "你好"}})
+    response = client.post("/api/agent/tools/computer_input", json={"arguments": {"action": "type", "text": "你好"}})
     assert response.status_code == 200, response.text
     card = _card_after(client, workspace, session, response.json()["result"]["confirmation_id"])
 
@@ -189,6 +189,23 @@ def test_click_rejects_bad_coordinates_buttons_and_counts_without_calling_the_br
     #: 没有 window 这一维了:传一个不存在的窗口参数就是 TypeError(函数不接受该关键字)。
     with pytest.raises(TypeError):
         computer_use.click(window="desktop")
+
+
+def test_press_goes_through_the_bridge_and_rejects_unknown_keys(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"key": payload["key"], "modifiers": payload["modifiers"]}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    assert computer_use.press("z", ["cmd", "shift"]) == {"key": "z", "modifiers": ["cmd", "shift"]}
+    assert calls == [("computer:key", {"key": "z", "modifiers": ["cmd", "shift"]})]
+
+    with pytest.raises(computer_use.ComputerUseError, match="key must be"):
+        computer_use.press("a very long key")
+    with pytest.raises(computer_use.ComputerUseError, match="unsupported modifier"):
+        computer_use.press("Enter", ["hyper"])
 
 
 def test_type_text_goes_through_the_bridge_and_caps_length(monkeypatch) -> None:
@@ -282,10 +299,10 @@ def test_the_card_checks_shape_before_opening() -> None:
             with pytest.raises(ConfirmationError):
                 spec.validate(db, "w1", _click_payload(**bad), None)
 
-        type_spec = tool_spec("computer_type")
-        type_spec.validate(db, "w1", {"text": "hi"}, None)
+        input_spec = tool_spec("computer_input")
+        input_spec.validate(db, "w1", {"action": "type", "text": "hi"}, None)
         with pytest.raises(ConfirmationError):
-            type_spec.validate(db, "w1", {"text": ""}, None)
+            input_spec.validate(db, "w1", {"action": "type", "text": ""}, None)
 
         scroll_spec = tool_spec("computer_scroll")
         scroll_spec.validate(db, "w1", {"dy": 3}, None)
@@ -301,9 +318,12 @@ def test_the_card_says_what_will_happen() -> None:
             "confirm_computerClick",
             {"x": 120, "y": 80, "button": "left", "count": 1},
         )
-        key, params = tool_spec("computer_type").summarize(db, {"text": "你好"})
+        key, params = tool_spec("computer_input").summarize(db, {"action": "type", "text": "你好"})
         assert key == "confirm_computerType"
         assert params["text"] == "你好"
+        key, params = tool_spec("computer_input").summarize(db, {"action": "press", "key": "z", "modifiers": ["cmd"]})
+        assert key == "confirm_computerKey"
+        assert params["keys"] == "cmd+z"
         assert tool_spec("computer_scroll").summarize(db, {"dy": 3}) == (
             "confirm_computerScrollDown",
             {"steps": 3},
@@ -343,10 +363,23 @@ def test_the_tool_endpoint_opens_a_card_and_does_not_act_immediately() -> None:
     assert body["result"]["status"] == "pending"
     assert body["result"]["confirmation_id"]
 
-    response = client.post("/api/agent/tools/computer_type", json={"arguments": {"text": "你好"}})
+    response = client.post("/api/agent/tools/computer_input", json={"arguments": {"action": "type", "text": "你好"}})
     assert response.status_code == 200, response.text
     assert response.json()["result"]["status"] == "pending"
 
     response = client.post("/api/agent/tools/computer_scroll", json={"arguments": {"dy": -3}})
     assert response.status_code == 200, response.text
     assert response.json()["result"]["status"] == "pending"
+
+
+def test_the_input_tool_opens_a_key_card_and_escalates_shortcuts() -> None:
+    from app.core.db import SessionLocal
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    response = client.post("/api/agent/tools/computer_input", json={"arguments": {"action": "press", "key": "z", "modifiers": ["cmd"]}})
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["status"] == "pending"
+    with SessionLocal() as db:
+        assert tool_spec("computer_input").escalate(db, "w1", {"action": "press", "key": "z", "modifiers": ["cmd"]}) == "external"
+        assert tool_spec("computer_input").escalate(db, "w1", {"action": "press", "key": "Enter", "modifiers": []}) is None

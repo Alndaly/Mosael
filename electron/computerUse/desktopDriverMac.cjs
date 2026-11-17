@@ -344,7 +344,7 @@ class DesktopDriverMac {
   }
 
   async act(action = {}) {
-    if (!["click", "type", "scroll"].includes(action.kind)) {
+    if (!["click", "type", "key", "scroll"].includes(action.kind)) {
       throw new TypeError(`Unsupported desktop action: ${String(action.kind)}`);
     }
     await this.requirePermission("accessibility");
@@ -368,6 +368,7 @@ class DesktopDriverMac {
       button: action.button ?? "left",
       clickCount: action.clickCount ?? 1,
       text: action.text ?? "",
+      ...(action.kind === "key" ? { key: action.key ?? "", modifiers: action.modifiers ?? [] } : {}),
       dy: action.dy ?? 0,
     };
     const binary = await this.binary();
@@ -379,6 +380,7 @@ class DesktopDriverMac {
       windowNumber: target.windowNumber,
       pid: target.pid,
       point: result.point ?? target.point,
+      ...(action.kind === "key" ? { key: action.key, modifiers: action.modifiers ?? [] } : {}),
       ...(action.replay ? {
         replay: {
           at: new Date().toISOString(),
@@ -387,6 +389,7 @@ class DesktopDriverMac {
             button: action.button ?? "left",
             clickCount: action.clickCount ?? 1,
             text: action.text ?? "",
+            ...(action.kind === "key" ? { key: action.key ?? "", modifiers: action.modifiers ?? [] } : {}),
             dy: action.dy ?? 0,
           },
           before,

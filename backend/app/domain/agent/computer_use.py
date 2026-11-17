@@ -1,7 +1,7 @@
-"""Computer Use 的宿主桥:L1 操作 Mosael 自己,L3 只读观察桌面(ADR 0075 / 0081)。
+"""Computer Use 的宿主桥:L1 操作 Mosael 自己,L3 观察/操作其他桌面应用(ADR 0075 / 0081)。
 
 L1 图由 Electron 用 `webContents.capturePage()` 拍 Mosael 自己的渲染,不需要屏幕录制权限;
-L3 由 DesktopDriverMac 枚举其他应用窗口、截图和读取 AX 树,桌面输入尚未开放。
+L3 由 DesktopDriverMac 枚举其他应用窗口、截图、读取 AX 树,并在一次性令牌/截图绑定后执行点击、输入和按键。
 
 线程模型和进程边界:
 
@@ -57,7 +57,9 @@ DESKTOP_SCROLL_CHANNEL = "computer:desktop-scroll"
 #: 这里除以 scale 换成窗口的 CSS 像素再交给主进程 —— 模型不需要知道缩放这回事。
 CLICK_CHANNEL = "computer:click"
 TYPE_CHANNEL = "computer:type"
+KEY_CHANNEL = "computer:key"
 SCROLL_CHANNEL = "computer:scroll"
+DESKTOP_KEY_CHANNEL = "computer:desktop-key"
 #: 这一轮结束了 —— 让主进程把「被控制中」熄灭(不是急停:下一轮还能动)。
 END_CHANNEL = "computer:end"
 #: 一次滚动最多几格滚轮。再多就不是「往下看看」,而是整段跳走。
@@ -67,6 +69,15 @@ MAX_SCROLL_NOTCHES = 30
 CLICK_BUTTONS = ("left", "right")
 #: 一次最多输入这么多字符。再多就不是「在输入框里写一句话」,而是整段粘贴了。
 MAX_TYPE_CHARS = 2000
+
+#: 按键与修饰键:和真正的键盘事件同一套名字。文本输入不走这里(见 `type_text`)。
+KEY_MODIFIERS = frozenset({"cmd", "ctrl", "alt", "shift", "meta"})
+SPECIAL_KEYS = frozenset({
+    "enter", "tab", "escape", "backspace", "delete", "space",
+    "home", "end", "pageup", "pagedown", "left", "right", "up", "down",
+    "arrowleft", "arrowright", "arrowup", "arrowdown", "return", "esc",
+    "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+})
 
 #: 这些应用即使只读截图也不把像素交出去(与 Electron 驱动的动作黑名单对齐)。
 PROTECTED_OWNERS = frozenset({
@@ -257,6 +268,60 @@ def desktop_scroll(
     if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
         raise ComputerUseError("The desktop bridge answered without confirming the scroll.")
     return {**answer, "dy": notches}
+
+
+def key_payload(key: object, modifiers: object) -> tuple[str, list[str]]:
+    """归一化一个按键和一个组合键;拒绝任意字符串,避免把标记、路径之类塞进键盘事件。"""
+    text = str(key or "").strip()
+    lowered = text.lower()
+    if len(lowered) == 1 and (lowered.isalnum() or lowered in "`-=[]\\;',./"):
+        normalized = lowered
+    elif lowered in SPECIAL_KEYS:
+        normalized = {"return": "enter", "esc": "escape", "arrowleft": "left", "arrowright": "right",
+                      "arrowup": "up", "arrowdown": "down"}.get(lowered, lowered)
+    else:
+        raise ComputerUseError(
+            "key must be one letter/digit/punctuation key or a named key such as Enter, Tab, Escape, ArrowUp or F5."
+        )
+    if modifiers is None:
+        mods: list[str] = []
+    elif isinstance(modifiers, (list, tuple)):
+        mods = [str(one).strip().lower() for one in modifiers if str(one).strip()]
+    else:
+        raise ComputerUseError("modifiers must be a list such as [\"cmd\", \"shift\"].")
+    unsupported = [one for one in mods if one not in KEY_MODIFIERS]
+    if unsupported:
+        raise ComputerUseError(f"unsupported modifier(s): {', '.join(unsupported)}")
+    return normalized, list(dict.fromkeys(mods))
+
+
+def press(key: object, modifiers: object = None) -> dict[str, Any]:
+    """在 Mosael 主窗口里按一个键或组合键(不插入文字)。"""
+    normalized, mods = key_payload(key, modifiers)
+    _mark_touched()
+    answer = _host_call(KEY_CHANNEL, {"key": normalized, "modifiers": mods})
+    if not isinstance(answer, dict):
+        raise ComputerUseError("The Mosael window bridge answered without confirming the key press.")
+    return {**answer, "key": normalized, "modifiers": mods}
+
+
+def desktop_press(
+    key: object,
+    modifiers: object = None,
+    token: object = "",
+    capture_id: object = "",
+    x: object = None,
+    y: object = None,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在已验证的桌面目标上按一个键或组合键;目标规则和桌面点击一致。"""
+    normalized, mods = key_payload(key, modifiers)
+    target = _desktop_target(token, capture_id, x, y, scale)
+    _mark_touched()
+    answer = _host_call(DESKTOP_KEY_CHANNEL, {**target, "key": normalized, "modifiers": mods})
+    if not isinstance(answer, dict) or not isinstance(answer.get("point"), dict):
+        raise ComputerUseError("The desktop bridge answered without confirming the key press.")
+    return {**answer, "key": normalized, "modifiers": mods}
 
 
 def _mark_touched() -> None:

@@ -17,7 +17,7 @@ import contextlib
 import contextvars
 import json
 import logging
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.types import ImageContent, TextContent
 from pydantic import Field
@@ -351,20 +351,25 @@ def computer_scroll(
 
 
 @tool(effect="confirms")
-def computer_type(
-    text: Annotated[str, Field(description="What to type (at most 2000 characters).")],
+def computer_input(
+    action: Annotated[Literal["type", "press"], Field(description='"type" inserts text; "press" presses one key or a chord.')],
+    text: Annotated[str, Field(description="Text for action=\"type\" (at most 2000 characters).")] = "",
+    key: Annotated[str, Field(description="A key for action=\"press\": a letter/digit, or Enter, Tab, Escape, ArrowUp, F5, ….")] = "",
+    modifiers: Annotated[list[str] | None, Field(description='Modifiers for action="press": cmd, ctrl, alt, shift, meta.')] = None,
 ) -> dict[str, Any]:
-    """Confirmation required: type text into Mosael's app window (into the focused field).
+    """Confirmation required: type text or press a key in Mosael's app window.
 
-    It only types inside Mosael's own UI (never the desktop or other apps), and every input waits
-    for the user's approval — unless the session already allowed edit-tier cards.
+    Use action="type" for literal text (IME-safe), and action="press" for Enter/Tab/Escape,
+    arrows, function keys or shortcuts such as cmd+shift+z. Text and key are mutually exclusive.
+    It only acts inside Mosael's own UI, and every input waits for approval unless the session
+    already allowed edit-tier cards. Shortcuts with command/control/alt are escalated to external.
     """
     confirmation = _open_card(
         {
             "workspace_id": _default_workspace_id(),
-            "tool": "computer_type",
+            "tool": "computer_input",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"text": text},
+            "payload": {"action": action, "text": text, "key": key, "modifiers": modifiers or []},
         },
     )
     return _confirmation_reply(confirmation)
@@ -469,7 +474,7 @@ def computer_desktop_accessibility(
 
     Use computer_desktop_windows first. Returns a one-time snapshot_id and element tokens.
     macOS asks for Accessibility through the native permission guide when needed. Pass a token
-    to computer_desktop_click, computer_desktop_type or computer_desktop_scroll; the driver
+    to computer_desktop_click, computer_desktop_input or computer_desktop_scroll; the driver
     re-reads the app and refuses the action if that element changed.
     """
     from app.domain.agent.computer_use import desktop_accessibility
@@ -514,27 +519,33 @@ def computer_desktop_click(
 
 
 @tool(effect="confirms")
-def computer_desktop_type(
-    text: Annotated[str, Field(description="What to type (at most 2000 characters).")],
+def computer_desktop_input(
+    action: Annotated[Literal["type", "press"], Field(description='"type" inserts text; "press" presses one key or a chord.')],
+    text: Annotated[str, Field(description="Text for action=\"type\" (at most 2000 characters).")] = "",
+    key: Annotated[str, Field(description="A key for action=\"press\": a letter/digit, or Enter, Tab, Escape, ArrowUp, F5, ….")] = "",
+    modifiers: Annotated[list[str] | None, Field(description='Modifiers for action="press": cmd, ctrl, alt, shift, meta.')] = None,
     token: Annotated[str, Field(description="Element token from computer_desktop_accessibility. Use token OR capture_id+x/y.")] = "",
     capture_id: Annotated[str, Field(description="capture_id from computer_desktop_screenshot. Use with x and y.")] = "",
     x: Annotated[int | None, Field(description="X pixel in that desktop screenshot.")] = None,
     y: Annotated[int | None, Field(description="Y pixel in that desktop screenshot.")] = None,
     scale: Annotated[float, Field(description="The scale passed to computer_desktop_screenshot.")] = 1,
 ) -> dict[str, Any]:
-    """Confirmation required: type into a token or captured point in another desktop app.
+    """Confirmation required: type text or press a key in another desktop app.
 
-    The driver focuses the target app and clicks the target before typing. It refuses stale
-    targets, moved windows and protected apps. Every input waits for the user's approval
-    unless the session already allowed edit-tier cards.
+    Use action="type" for literal text and action="press" for Enter/Escape/arrows or shortcuts.
+    The driver focuses and resolves the target first; it refuses stale targets, moved windows
+    and protected apps. Every input waits for approval.
     """
     confirmation = _open_card(
         {
             "workspace_id": _default_workspace_id(),
-            "tool": "computer_desktop_type",
+            "tool": "computer_desktop_input",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {
+                "action": action,
                 "text": text,
+                "key": key,
+                "modifiers": modifiers or [],
                 "token": token,
                 "capture_id": capture_id,
                 "x": x,

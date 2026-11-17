@@ -14,8 +14,10 @@ from app.domain.agent.computer_use import (
     CLICK_BUTTONS,
     MAX_TYPE_CHARS,
     ComputerUseError,
+    key_payload,
 )
 from app.domain.agent.computer_use import desktop_click as use_click
+from app.domain.agent.computer_use import desktop_press as use_press
 from app.domain.agent.computer_use import desktop_scroll as use_scroll
 from app.domain.agent.computer_use import desktop_type as use_type
 from app.domain.agent import replay as replay_store
@@ -125,29 +127,63 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
-def _validate_type(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+def _input_action(payload: dict[str, Any]) -> str:
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in {"type", "press"}:
+        raise ConfirmationError("confirmErr_computerInputAction")
+    if action == "type":
+        text = payload.get("text")
+        if not isinstance(text, str) or not text:
+            raise ConfirmationError("confirmErr_computerTypeEmpty")
+        if len(text) > MAX_TYPE_CHARS:
+            raise ConfirmationError("confirmErr_computerTypeTooLong", chars=MAX_TYPE_CHARS)
+        if payload.get("key") or payload.get("modifiers"):
+            raise ConfirmationError("confirmErr_computerInputMixed")
+    else:
+        key_payload(payload.get("key"), payload.get("modifiers"))
+        if payload.get("text"):
+            raise ConfirmationError("confirmErr_computerInputMixed")
+    return action
+
+
+def _validate_input(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     _target(payload)
     _scale(payload)
-    text = payload.get("text")
-    if not isinstance(text, str) or not text:
-        raise ConfirmationError("confirmErr_computerTypeEmpty")
-    if len(text) > MAX_TYPE_CHARS:
-        raise ConfirmationError("confirmErr_computerTypeTooLong", chars=MAX_TYPE_CHARS)
+    try:
+        _input_action(payload)
+    except ComputerUseError as error:
+        raise ConfirmationError(str(error)) from None
 
 
-def _summarize_type(db: Session, payload: dict[str, Any]) -> Summary:
-    text = str(payload.get("text") or "")[:400]
+def _summarize_input(db: Session, payload: dict[str, Any]) -> Summary:
+    if _input_action(payload) == "type":
+        text = str(payload.get("text") or "")[:400]
+        if payload.get("token"):
+            return "confirm_computerDesktopTypeToken", {"token": str(payload.get("token"))[:120], "text": text}
+        return "confirm_computerDesktopTypePixel", {**_point_params(payload), "text": text}
+    key, modifiers = key_payload(payload.get("key"), payload.get("modifiers"))
+    pressed = "+".join([*modifiers, key])
     if payload.get("token"):
-        return "confirm_computerDesktopTypeToken", {"token": str(payload.get("token"))[:120], "text": text}
-    return "confirm_computerDesktopTypePixel", {**_point_params(payload), "text": text}
+        return "confirm_computerDesktopKeyToken", {"token": str(payload.get("token"))[:120], "keys": pressed}
+    return "confirm_computerDesktopKeyPixel", {**_point_params(payload), "keys": pressed}
 
 
-def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+def _execute_input(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     _whole_machine_guard(db, actor)
     payload = confirmation.payload
     try:
-        return _with_replay(confirmation, use_type(
-            text=payload.get("text", ""),
+        if _input_action(payload) == "type":
+            return _with_replay(confirmation, use_type(
+                text=payload.get("text", ""),
+                token=payload.get("token", ""),
+                capture_id=payload.get("capture_id", ""),
+                x=payload.get("x"),
+                y=payload.get("y"),
+                scale=_scale(payload),
+            ))
+        return _with_replay(confirmation, use_press(
+            key=payload.get("key"),
+            modifiers=payload.get("modifiers"),
             token=payload.get("token", ""),
             capture_id=payload.get("capture_id", ""),
             x=payload.get("x"),
@@ -159,13 +195,13 @@ def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str
 
 
 confirmable_tool(ConfirmableTool(
-    name="computer_desktop_type",
+    name="computer_desktop_input",
     permission="external",
     cost="none",
     writes=(),
-    validate=_validate_type,
-    summarize=_summarize_type,
-    execute=_execute_type,
+    validate=_validate_input,
+    summarize=_summarize_input,
+    execute=_execute_input,
 ))
 
 

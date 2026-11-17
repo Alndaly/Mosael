@@ -22,6 +22,7 @@ const contract = require("./ipc-contract.cjs") as {
   IPC: { invoke: Record<string, string> };
   parseComputerClick: (value: unknown) => { x: number; y: number; button: string; clickCount: number };
   parseComputerType: (value: unknown) => { text: string };
+  parseComputerKey: (value: unknown) => { key: string; modifiers: string[] };
   parseComputerScroll: (value: unknown) => { dy: number; x: number | null; y: number | null };
 };
 
@@ -86,10 +87,16 @@ function loadActions() {
   };
 }
 
-describe("computer_click / computer_type 的 IPC 契约", () => {
+describe("computer_click / computer_input 的 IPC 契约", () => {
   it("两条通道与参数形状:点只认坐标 + 左右键 + 单击/双击;输入只认文本", () => {
     expect(contract.IPC.invoke.computerClick).toBe("computer:click");
     expect(contract.IPC.invoke.computerType).toBe("computer:type");
+    expect(contract.IPC.invoke.computerKey).toBe("computer:key");
+    expect(contract.parseComputerKey({ key: "Enter" })).toEqual({ key: "Enter", modifiers: [] });
+    expect(contract.parseComputerKey({ key: "a", modifiers: ["cmd", "shift"] })).toEqual({ key: "a", modifiers: ["cmd", "shift"] });
+    expect(() => contract.parseComputerKey({ key: "" })).toThrow(/key must be/);
+    expect(() => contract.parseComputerKey({ key: "Enter", modifiers: ["hyper"] })).toThrow(/modifiers/);
+    expect(contract.IPC.invoke.computerDesktopKey).toBe("computer:desktop-key");
 
     expect(contract.parseComputerClick({ x: 10, y: 20 })).toEqual({
       x: 10, y: 20, button: "left", clickCount: 1,

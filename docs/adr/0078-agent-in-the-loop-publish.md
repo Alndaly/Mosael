@@ -35,7 +35,7 @@
 确认卡上多一条:**「让智能体看这一步」**。点了之后:
 
 1. 取第 1 条的现场(截图 + 事实),交给一个**受限**的智能体回合:它只有 Computer Use 的
-   `computer_screenshot` / `computer_click` / `computer_type` / `computer_scroll`(ADR 0075),
+   `computer_screenshot` / `computer_click` / `computer_input` / `computer_scroll`(ADR 0075),
    没有发帖权、没有登录权、不能改任务参数;
 2. 它要么**说明为什么卡住**(人话,进任务行),要么**给出下一步动作**:点哪个坐标、在哪个框里输入什么;
 3. 动作执行后**回到执行器重跑这一步**(不是重跑整条任务),成功就继续,失败就把这次尝试也记进现场;

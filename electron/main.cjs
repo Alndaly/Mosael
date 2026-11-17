@@ -61,11 +61,13 @@ const {
   parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,
+  parseComputerDesktopKey,
   parseComputerDesktopWindows,
   parseHostLayer,
   parseComputerScreenshot,
   parseComputerScroll,
   parseComputerType,
+  parseComputerKey,
   parseImageUrls,
   parseLocale,
   parseNewPage,
@@ -484,12 +486,16 @@ async function answerHostBridgeRequest(line, socket) {
       withDesktopAction((driver) => driver.act({ kind: "click", replay: true, ...parseComputerDesktopClick(request.payload) })),
     [IPC.invoke.computerDesktopType]: () =>
       withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...parseComputerDesktopType(request.payload) })),
+    [IPC.invoke.computerDesktopKey]: () =>
+      withDesktopAction((driver) => driver.act({ kind: "key", replay: true, ...parseComputerDesktopKey(request.payload) })),
     [IPC.invoke.computerDesktopScroll]: () =>
       withDesktopAction((driver) => driver.act({ kind: "scroll", replay: true, ...parseComputerDesktopScroll(request.payload) })),
     [IPC.invoke.computerClick]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerType]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "type", ...parseComputerType(request.payload), cursor: computerUseCursor })),
+    [IPC.invoke.computerKey]: () =>
+      withComputerUse(() => computerUseDriver.act({ kind: "key", ...parseComputerKey(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerEnd]: () => {
       //: 回合结束:熄灭「被控制中」。不是急停 —— 不设 stopped,下一轮还能动。
       computerUseGuard.end();
@@ -503,7 +509,7 @@ async function answerHostBridgeRequest(line, socket) {
     return replyHostBridge(socket, {
       ok: false,
       status: 405,
-      error: "The host bridge only serves computer:screenshot, computer:click, computer:type and registered desktop observation/action channels.",
+      error: "The host bridge only serves computer:screenshot, computer:click, computer:type, computer:key and registered desktop observation/action channels.",
     });
   }
   try {

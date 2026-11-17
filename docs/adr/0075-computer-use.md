@@ -106,7 +106,7 @@ L1 的四个动作 —— 截图、点击、滚动、输入 —— 都只作用�
 | 项 | 状态 |
 | --- | --- |
 | L1 截图（应用主窗口，可缩放） | ✅ 已交付，工具 `computer_screenshot` |
-| L1 点击 / 滚动 / 输入 | ✅ 已交付（`computer_click` / `computer_scroll` / `computer_type`），edit 档确认卡 |
+| L1 点击 / 滚动 / 键盘输入 | ✅ 已交付（`computer_click` / `computer_scroll` / `computer_input`，含文字与按键/组合键），edit 档确认卡；带命令修饰键的快捷键动态升 external |
 | 「被控制中」可见性 + 空闲退出 + 急停 + 光标 | ✅ 已交付（`computerUseGuard` / `Overlay` / `Cursor`） |
 | 回环桥（端口/令牌/0600/独立部署说人话） | ✅ 已交付 |
 | 回放时间线（决定 5） | 🟡 桌面动作前后证据、本机存储、时间线卡片与清空已实现；真机 UI 待复核 |

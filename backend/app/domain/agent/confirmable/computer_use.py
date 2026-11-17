@@ -15,8 +15,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.agent.computer_use import CLICK_BUTTONS, MAX_TYPE_CHARS, ComputerUseError
+from app.domain.agent.computer_use import CLICK_BUTTONS, MAX_TYPE_CHARS, ComputerUseError, key_payload
 from app.domain.agent.computer_use import click as use_click
+from app.domain.agent.computer_use import press as use_press
 from app.domain.agent.computer_use import scroll as use_scroll
 from app.domain.agent.computer_use import type_text as use_type
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
@@ -75,29 +76,6 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
         raise ConfirmationError(str(error)) from None
 
 
-def _validate_type(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    text = payload.get("text")
-    if not isinstance(text, str) or not text:
-        raise ConfirmationError("confirmErr_computerTypeEmpty")
-    if len(text) > MAX_TYPE_CHARS:
-        raise ConfirmationError("confirmErr_computerTypeTooLong", chars=MAX_TYPE_CHARS)
-
-
-def _summarize_type(db: Session, payload: dict[str, Any]) -> Summary:
-    #: 卡上要把**要输入的字**原样给出来 —— 授权界面上看不到内容,等于没让人看清要干什么。
-    return "confirm_computerType", {
-        "text": str(payload.get("text") or "")[:400],
-    }
-
-
-def _execute_type(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    payload = confirmation.payload
-    try:
-        return use_type(text=payload.get("text", ""))
-    except ComputerUseError as error:
-        raise ConfirmationError(str(error)) from None
-
-
 confirmable_tool(ConfirmableTool(
     name="computer_click",
     permission="edit",
@@ -118,7 +96,6 @@ def _validate_scroll(db: Session, workspace_id: str, payload: dict[str, Any], ac
 
 def _summarize_scroll(db: Session, payload: dict[str, Any]) -> Summary:
     notches = int(payload.get("dy") or 0)
-    #: 方向是两个句子,不是一个布尔参数 —— 卡上的话要能直接读,别让 {down} 渲染成 True / False。
     if notches > 0:
         return "confirm_computerScrollDown", {"steps": notches}
     return "confirm_computerScrollUp", {"steps": -notches}
@@ -141,7 +118,6 @@ confirmable_tool(ConfirmableTool(
     name="computer_scroll",
     permission="edit",
     cost="none",
-    #: 滚动只改这一屏的视图位置,不写任何数据 —— 最容易撤回的一类动作
     writes=(),
     validate=_validate_scroll,
     summarize=_summarize_scroll,
@@ -149,12 +125,68 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+def _input_kind(payload: dict[str, Any]) -> str:
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in {"type", "press"}:
+        raise ConfirmationError("confirmErr_computerInputAction")
+    if action == "type":
+        text = payload.get("text")
+        if not isinstance(text, str) or not text:
+            raise ConfirmationError("confirmErr_computerTypeEmpty")
+        if len(text) > MAX_TYPE_CHARS:
+            raise ConfirmationError("confirmErr_computerTypeTooLong", chars=MAX_TYPE_CHARS)
+        if payload.get("key") or payload.get("modifiers"):
+            raise ConfirmationError("confirmErr_computerInputMixed")
+    else:
+        key_payload(payload.get("key"), payload.get("modifiers"))
+        if payload.get("text"):
+            raise ConfirmationError("confirmErr_computerInputMixed")
+    return action
+
+
+def _validate_input(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    try:
+        _input_kind(payload)
+    except ComputerUseError as error:
+        raise ConfirmationError(str(error)) from None
+
+
+def _summarize_input(db: Session, payload: dict[str, Any]) -> Summary:
+    if str(payload.get("action") or "").strip().lower() == "type":
+        return "confirm_computerType", {"text": str(payload.get("text") or "")[:400]}
+    key, modifiers = key_payload(payload.get("key"), payload.get("modifiers"))
+    pressed = "+".join([*modifiers, key])
+    return "confirm_computerKey", {"keys": pressed[:120]}
+
+
+def _execute_input(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    try:
+        if str(payload.get("action") or "").strip().lower() == "type":
+            return use_type(text=payload.get("text", ""))
+        return use_press(key=payload.get("key"), modifiers=payload.get("modifiers"))
+    except ComputerUseError as error:
+        raise ConfirmationError(str(error)) from None
+
+
+def _escalate_input(db: Session, workspace_id: str, payload: dict[str, Any]) -> str | None:
+    """带命令修饰键的组合键能退出/提交/删东西,不跟普通输入同档。"""
+    if str(payload.get("action") or "").strip().lower() != "press":
+        return None
+    try:
+        _key, modifiers = key_payload(payload.get("key"), payload.get("modifiers"))
+    except ComputerUseError:
+        return None
+    return "external" if any(one in {"cmd", "ctrl", "alt", "meta"} for one in modifiers) else None
+
+
 confirmable_tool(ConfirmableTool(
-    name="computer_type",
+    name="computer_input",
     permission="edit",
     cost="none",
     writes=(),
-    validate=_validate_type,
-    summarize=_summarize_type,
-    execute=_execute_type,
+    validate=_validate_input,
+    summarize=_summarize_input,
+    execute=_execute_input,
+    escalate=_escalate_input,
 ))

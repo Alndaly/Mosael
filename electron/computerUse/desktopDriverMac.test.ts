@@ -108,6 +108,15 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     expect(calls).not.toContain("ax");
   });
 
+  it("key 动作把按键和修饰键交给 Swift 工具", async () => {
+    const { runner, performInputs } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+    await driver.observe({ pid: 42 });
+    const result = await driver.act({ kind: "key", token: "snap-1:0", key: "Enter", modifiers: ["cmd"] });
+    expect(result.key).toBe("Enter");
+    expect(performInputs.at(-1)).toMatchObject({ action: "key", key: "Enter", modifiers: ["cmd"] });
+  });
+
   it("verify 仍不支持,不冒充已验证", () => {
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool" });
     expect(driver.verify()).toEqual({ ok: false, reason: "verify_not_supported", evidence: null });
