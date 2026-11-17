@@ -10,6 +10,7 @@ type FakeWindow = {
     insertText: ReturnType<typeof vi.fn>;
     focus: ReturnType<typeof vi.fn>;
     getSize: () => [number, number];
+    executeJavaScript?: ReturnType<typeof vi.fn>;
   };
   focus: ReturnType<typeof vi.fn>;
   isDestroyed: () => boolean;
@@ -55,6 +56,21 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     expect(shot.width).toBe(800);
     expect(shot.height).toBe(600);
     expect(shot.image).toBe(Buffer.from("png").toString("base64"));
+  });
+
+  it("observe 同时给出可操作元素的 CSS 坐标清单", async () => {
+    const win = fakeWindow();
+    win.webContents.executeJavaScript = vi.fn(async () => [
+      { role: "button", name: "保存", x: 10, y: 20, width: 80, height: 30, disabled: false },
+      { role: "input", name: "搜索", x: 100, y: 20, width: 200, height: 30, disabled: false },
+    ]);
+    const driver = new OwnWindowDriver(() => win);
+
+    const shot = await driver.observe();
+
+    expect(shot.elements).toHaveLength(2);
+    expect(shot.elements[0]).toMatchObject({ role: "button", name: "保存", x: 10, y: 20 });
+    expect(win.webContents.executeJavaScript).toHaveBeenCalledOnce();
   });
 
   it("act 把三种动作交给原来的实现:click / type / scroll", async () => {

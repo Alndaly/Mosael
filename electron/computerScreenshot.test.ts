@@ -93,7 +93,7 @@ function loadCapture() {
     ) => Promise<{ width: number; height: number; image: string }>,
   };
   vm.runInNewContext(
-    `${sourceOf("computerUseWindow")}\n${sourceOf("captureMosaelWindow")}\n` +
+    `${sourceOf("computerUseWindow")}\n${sourceOf("domElements")}\n${sourceOf("captureMosaelWindow")}\n` +
       "this.computerUseWindow = computerUseWindow;\n" +
       "this.captureMosaelWindow = captureMosaelWindow;",
     context,
@@ -290,6 +290,7 @@ function bridgeSources(): string {
     "const computerUseDriver = new OwnWindowDriver(() => mainWindow);\n",
     sourceOf("hostBridgeFile"),
     sourceOf("computerUseWindow"),
+    sourceOf("domElements"),
     sourceOf("captureMosaelWindow"),
     sourceOf("hostBridgeTokenMatches"),
     sourceOf("replyHostBridge"),

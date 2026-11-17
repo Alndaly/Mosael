@@ -445,6 +445,7 @@ def _computer_image_response(
         "width": shot["width"],
         "height": shot["height"],
         "scale": shot["scale"],
+        **({"elements": shot["elements"]} if shot.get("elements") else {}),
         **({"screenshot_asset_id": asset_id} if asset_id else {}),
         "images": [{"view": "computer", "mime_type": "image/png", "data": shot["image"]}],
     })
@@ -462,7 +463,9 @@ def computer_screenshot(
     It does NOT capture other apps or the menu bar and needs no screen-recording permission.
     For other apps, call computer_desktop_windows first, then computer_desktop_screenshot or
     computer_desktop_accessibility. scale 0.25–1 shrinks a large window; an embedded web page
-    is browser_screenshot. It never clicks, types or scrolls.
+    is browser_screenshot. It never clicks, types or scrolls. When available, the JSON result also
+    includes `elements`: visible buttons, links and fields with role, name and a rect in the same
+    scaled pixels as the picture, so you can aim at an element's center instead of guessing.
     """
     from app.domain.agent.computer_use import screenshot
 

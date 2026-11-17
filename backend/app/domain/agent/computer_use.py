@@ -111,10 +111,12 @@ def screenshot(scale: float = DEFAULT_SCALE) -> dict[str, Any]:
 
     raw = _image_bytes(answer)
     width, height, raw = _size_and_pixels(raw, factor)
+    elements = _scaled_elements(answer.get("elements"), factor)
     return {
         "width": width,
         "height": height,
         "scale": factor,
+        **({"elements": elements} if elements else {}),
         "image": base64.b64encode(raw).decode("ascii"),
     }
 
@@ -611,6 +613,30 @@ def _size_and_pixels(raw: bytes, factor: float) -> tuple[int, int, bytes]:
         raise
     except (UnidentifiedImageError, OSError, ValueError):
         raise ComputerUseError("The Mosael window returned something that isn't a readable PNG.") from None
+
+
+def _scaled_elements(value: object, factor: float) -> list[dict[str, Any]]:
+    """把 Electron 交回的 CSS 坐标元素清单缩到模型看到的那张图上;形状不对的条目丢掉。"""
+    if not isinstance(value, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for row in value[:200]:
+        if not isinstance(row, dict):
+            continue
+        clean: dict[str, Any] = {
+            "role": str(row.get("role") or "")[:40],
+            "name": str(row.get("name") or "")[:120],
+            "disabled": bool(row.get("disabled")),
+        }
+        for key in ("x", "y", "width", "height"):
+            number = row.get(key)
+            if isinstance(number, bool) or not isinstance(number, (int, float)):
+                clean = {}
+                break
+            clean[key] = max(0, round(float(number) * factor))
+        if clean:
+            out.append(clean)
+    return out
 
 
 def _bridge_endpoint() -> tuple[int, str]:

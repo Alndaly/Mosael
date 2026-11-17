@@ -226,8 +226,51 @@ function typeIntoMosaelWindow(request, mainWindow, cursor = null) {
 }
 
 /**
- * 拍下 Mosael 主窗口,回 `{width, height, image}`(`image` 是 PNG 的
- * base64;缩放由后端做,主进程只给原图)。参数不对 / 没窗口 / 最小化 / 空图,都抛一句人话。
+ * 把窗口里可操作的元素读成一张轻量清单。坐标是**窗口 CSS 像素**,和后端拿到截图后再按 scale
+ * 缩放后的图片坐标同一套;输入框的当前值**不读**(可能是密码 / 私密内容)。
+ */
+async function domElements(win) {
+  const contents = win && win.webContents;
+  if (!contents || typeof contents.executeJavaScript !== "function") return [];
+  try {
+    const rows = await contents.executeJavaScript(`(() => {
+      const nodes = Array.from(document.querySelectorAll(
+        'button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]'
+      ));
+      const text = (el) => {
+        const raw = el.getAttribute('aria-label') || el.getAttribute('placeholder')
+          || el.getAttribute('title') || el.innerText || el.textContent || '';
+        return String(raw).replace(/\\s+/g, ' ').trim().slice(0, 120);
+      };
+      const visible = (el) => {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0
+          && style.visibility !== 'hidden' && style.display !== 'none';
+      };
+      return nodes.filter(visible).slice(0, 200).map((el) => {
+        const rect = el.getBoundingClientRect();
+        return {
+          role: el.getAttribute('role') || el.tagName.toLowerCase(),
+          name: text(el),
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          disabled: Boolean(el.disabled || el.getAttribute('aria-disabled') === 'true'),
+        };
+      });
+    })()`);
+    return Array.isArray(rows) ? rows.filter((one) => one && typeof one === "object") : [];
+  } catch {
+    //: 元素清单是截图的补充,不是截图本身;读不到就只交图片,不让一次观察整个失败。
+    return [];
+  }
+}
+
+/**
+ * 拍下 Mosael 主窗口,回 `{width, height, image, elements}`(图片是原图,缩放由后端做;
+ * elements 坐标随后端 scale 一起缩)。参数不对 / 没窗口 / 最小化 / 空图,都抛一句人话。
  */
 async function captureMosaelWindow(mainWindow) {
   const win = computerUseWindow(mainWindow);
@@ -253,7 +296,13 @@ async function captureMosaelWindow(mainWindow) {
   const target = captureToCss(image.getSize(), content || null);
   if (target) shot = image.resize({ width: target.width, height: target.height, quality: "best" });
   const { width, height } = shot.getSize();
-  return { width, height, image: shot.toPNG().toString("base64") };
+  const elements = await domElements(win);
+  return {
+    width,
+    height,
+    image: shot.toPNG().toString("base64"),
+    ...(elements.length ? { elements } : {}),
+  };
 }
 
 
@@ -297,7 +346,7 @@ class OwnWindowDriver {
   /** 观察:主窗口的一张图。L1 没有可访问性树,elements 明确为空,不假装有。 */
   async observe() {
     const captured = await captureMosaelWindow(this.getWindow());
-    return { ...captured, elements: [], meta: { window: "main" } };
+    return { ...captured, elements: captured.elements ?? [], meta: { window: "main" } };
   }
 
   /** 动作:点 / 输入 / 按键 / 滚动。`action.kind` 只认这四种;别的直接拒。 */

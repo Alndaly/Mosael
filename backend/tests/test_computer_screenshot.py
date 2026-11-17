@@ -105,6 +105,24 @@ def test_it_goes_through_the_host_bridge_and_returns_an_image_block(monkeypatch)
     assert base64.b64decode(images[0]["data"]) == _png(640, 480)
 
 
+def test_the_element_list_uses_the_same_scale_as_the_picture(monkeypatch) -> None:
+    client = fresh_client()
+    shot = _shot(1600, 1200)
+    shot["elements"] = [
+        {"role": "button", "name": "保存", "x": 100, "y": 200, "width": 80, "height": 40, "disabled": False},
+    ]
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: shot)
+
+    response = client.post(
+        "/api/agent/tools/computer_screenshot",
+        json={"arguments": {"scale": 0.25}},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["elements"] == [
+        {"role": "button", "name": "保存", "x": 25, "y": 50, "width": 20, "height": 10, "disabled": False},
+    ]
+
+
 def test_a_large_capture_is_shrunk_by_scale(monkeypatch) -> None:
     """scale 是给「窗口很大、我只想看布局」用的:图真的变小,回来的是缩小后的尺寸。"""
     client = fresh_client()
