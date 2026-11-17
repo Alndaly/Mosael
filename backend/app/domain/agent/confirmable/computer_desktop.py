@@ -25,6 +25,7 @@ from app.domain.agent.computer_use import (
 )
 from app.domain.agent.computer_use import desktop_click as use_click
 from app.domain.agent.computer_use import desktop_drag as use_drag
+from app.domain.agent.computer_use import desktop_full_screenshot as use_full_screenshot
 from app.domain.agent.computer_use import desktop_pointer as use_pointer
 from app.domain.agent.computer_use import desktop_press as use_press
 from app.domain.agent.computer_use import desktop_screenshot as use_screenshot
@@ -515,11 +516,24 @@ def _summarize_batch(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_computerBatch", {"count": len(steps), "steps": steps}
 
 
+def _batch_window_from_results(results: list[dict[str, Any]]) -> int | None:
+    """最后一步真正落在哪个窗口;动作结果里有 windowNumber 就用它。"""
+    for item in reversed(results):
+        result = item.get("result")
+        if isinstance(result, dict):
+            window = result.get("windowNumber")
+            if isinstance(window, int) and not isinstance(window, bool) and window > 0:
+                return window
+    return None
+
+
 def _batch_screenshot(db: Session, workspace_id: str, window_id: object) -> str:
-    if window_id in (None, ""):
-        return ""
+    """优先拍最后动作的窗口;没有窗口信息时用全桌面截图兜底。受保护应用在屏则静默跳过。"""
     try:
-        shot = use_screenshot(window_id=window_id, scale=0.75)
+        if window_id not in (None, ""):
+            shot = use_screenshot(window_id=window_id, scale=0.75)
+        else:
+            shot = use_full_screenshot(scale=0.75)
         asset = import_binary_asset(
             db,
             workspace_id=workspace_id,
@@ -589,13 +603,19 @@ def _execute_batch(db: Session, confirmation: Any, actor: str | None) -> dict[st
                 pid, text, timeout = _wait_check(item, index)
                 result = use_wait(pid=pid, text=text, timeout_ms=timeout)
         except ComputerUseError as error:
-            shot_id = _batch_screenshot(db, confirmation.workspace_id, payload.get("window_id"))
+            shot_id = _batch_screenshot(
+                db, confirmation.workspace_id,
+                payload.get("window_id") or _batch_window_from_results(results),
+            )
             return {
                 "ok": False, "failed_index": index, "error": str(error), "results": results,
                 **({"screenshot_asset_id": shot_id} if shot_id else {}),
             }
         results.append({"index": index, "kind": kind, "result": result})
-    shot_id = _batch_screenshot(db, confirmation.workspace_id, payload.get("window_id")) if payload.get("finish_screenshot", True) else ""
+    shot_id = _batch_screenshot(
+        db, confirmation.workspace_id,
+        payload.get("window_id") or _batch_window_from_results(results),
+    ) if payload.get("finish_screenshot", True) else ""
     return {
         "ok": True, "results": results,
         **({"screenshot_asset_id": shot_id} if shot_id else {}),

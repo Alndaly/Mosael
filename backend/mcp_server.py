@@ -803,7 +803,8 @@ def computer_desktop_batch(
       {"kind":"drag","capture_id":…,"from_x":…,"from_y":…,"to_x":…,"to_y":…}
       {"kind":"wait","pid":…,"text":"Saved","timeout_ms":5000}
     One always-ask card lists every step; execution stops at the first failure. The final/error
-    screenshot is saved as an asset and returned as an image block by get_confirmation.
+    screenshot is saved as an asset and returned as an image block by get_confirmation. With no
+    window_id, it uses the last action's window and falls back to a full-desktop capture.
     """
     confirmation = _open_card(
         {

@@ -346,3 +346,44 @@ def test_desktop_batch_is_one_always_ask_card(monkeypatch) -> None:
     assert [channel for channel, _ in calls] == [
         "computer:desktop-click", "computer:desktop-pointer",
     ]
+
+
+def test_desktop_batch_infers_the_window_for_its_final_screenshot(monkeypatch) -> None:
+    import base64
+    import io
+
+    from PIL import Image
+
+    from tests.util import fresh_client
+
+    png = io.BytesIO()
+    Image.new("RGB", (8, 8), (10, 20, 30)).save(png, format="PNG")
+    encoded = base64.b64encode(png.getvalue()).decode("ascii")
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        if channel == "computer:desktop-click":
+            return {"point": {"x": 10, "y": 20}, "windowNumber": 7, "pid": 42}
+        if channel == "computer:desktop-screenshot":
+            return {
+                "width": 8, "height": 8, "image": encoded,
+                "meta": {"owner": "Finder", "capture_id": CAPTURE},
+            }
+        return {"point": {"x": 10, "y": 20}}
+
+    from app.domain import host_files
+    monkeypatch.setattr(host_files, "ensure_whole_machine", lambda *_a, **_k: None)
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        card = types.SimpleNamespace(
+            payload={"actions": [{"kind": "click", "token": "snap-1:0"}], "finish_screenshot": True},
+            workspace_id=workspace["id"],
+        )
+        result = tool_spec("computer_desktop_batch").execute(db, card, "user-1")
+        assert result["ok"] is True
+        asset = db.get(Asset, result["screenshot_asset_id"])
+        assert asset is not None and asset.kind == "image"
