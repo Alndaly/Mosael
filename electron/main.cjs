@@ -58,8 +58,10 @@ const {
   parseComputerClick,
   parseComputerDesktopAccessibility,
   parseComputerDrag,
+  parseComputerWait,
   parseComputerDesktopClick,
   parseComputerDesktopDrag,
+  parseComputerDesktopWait,
   parseComputerDesktopScroll,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,
@@ -386,6 +388,11 @@ function desktopObserve(target = {}) {
   return desktopUseDriver.observe(target);
 }
 
+async function desktopWait(target = {}) {
+  if (!desktopUseDriver) throw new Error("Desktop observation currently supports macOS only.");
+  return desktopUseDriver.waitForText(target.pid, target.text, target.timeoutMs);
+}
+
 async function desktopWindows(target = {}) {
   return { windows: await desktopObserve(target) };
 }
@@ -488,6 +495,7 @@ async function answerHostBridgeRequest(line, socket) {
       withDesktopAction((driver) => driver.act({ kind: "click", replay: true, ...parseComputerDesktopClick(request.payload) })),
     [IPC.invoke.computerDesktopDrag]: () =>
       withDesktopAction((driver) => driver.act({ kind: "drag", replay: true, ...parseComputerDesktopDrag(request.payload) })),
+    [IPC.invoke.computerDesktopWait]: () => desktopWait(parseComputerDesktopWait(request.payload)),
     [IPC.invoke.computerDesktopType]: () =>
       withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...parseComputerDesktopType(request.payload) })),
     [IPC.invoke.computerDesktopKey]: () =>
@@ -498,6 +506,10 @@ async function answerHostBridgeRequest(line, socket) {
       withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerDrag]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "drag", ...parseComputerDrag(request.payload), cursor: computerUseCursor })),
+    [IPC.invoke.computerWait]: () => {
+      const wait = parseComputerWait(request.payload);
+      return computerUseDriver.waitForText(wait.text, wait.timeoutMs);
+    },
     [IPC.invoke.computerType]: () =>
       withComputerUse(() => computerUseDriver.act({ kind: "type", ...parseComputerType(request.payload), cursor: computerUseCursor })),
     [IPC.invoke.computerKey]: () =>

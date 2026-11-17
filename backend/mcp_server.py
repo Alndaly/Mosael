@@ -474,6 +474,37 @@ def computer_screenshot(
 
 
 @tool(effect="reads")
+def computer_wait(
+    text: Annotated[str, Field(description="Visible text to wait for in Mosael's window.")],
+    timeout_ms: Annotated[int, Field(description="Maximum wait in milliseconds (100–15000).")] = 5000,
+) -> dict[str, Any]:
+    """Read-only: wait until visible text appears in Mosael's app window.
+
+    Use after an action when the result is asynchronous (a save finished, a panel opened).
+    Returns {found, waitedMs}; found=false means the timeout passed, not that the action failed.
+    """
+    from app.domain.agent.computer_use import wait
+
+    return wait(text=text, timeout_ms=timeout_ms)
+
+
+@tool(effect="reads")
+def computer_desktop_wait(
+    pid: Annotated[int, Field(description="The `pid` returned by computer_desktop_windows.")],
+    text: Annotated[str, Field(description="Visible text to wait for in that app's accessibility tree.")],
+    timeout_ms: Annotated[int, Field(description="Maximum wait in milliseconds (100–15000).")] = 5000,
+) -> dict[str, Any]:
+    """Read-only: wait until an app's accessibility tree contains the given text.
+
+    Use after a desktop action when the app updates asynchronously. Returns {found, waitedMs};
+    found=false means the timeout passed, not that the action failed.
+    """
+    from app.domain.agent.computer_use import desktop_wait
+
+    return desktop_wait(pid=pid, text=text, timeout_ms=timeout_ms)
+
+
+@tool(effect="reads")
 def computer_desktop_windows() -> dict[str, Any]:
     """Read-only: list visible desktop windows, including other apps.
 

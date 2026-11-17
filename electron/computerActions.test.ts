@@ -26,6 +26,7 @@ const contract = require("./ipc-contract.cjs") as {
   parseComputerDrag: (value: unknown) => {
     fromX: number; fromY: number; toX: number; toY: number; button: string; durationMs: number;
   };
+  parseComputerWait: (value: unknown) => { text: string; timeoutMs: number };
   parseComputerScroll: (value: unknown) => { dy: number; x: number | null; y: number | null };
 };
 
@@ -116,6 +117,11 @@ describe("computer_click / computer_input 的 IPC 契约", () => {
     expect(contract.parseComputerType({ text: "hi" })).toEqual({ text: "hi" });
     expect(() => contract.parseComputerType({ text: "" })).toThrow(/non-empty/);
     expect(() => contract.parseComputerType({ text: "x".repeat(2001) })).toThrow(/2000/);
+
+    expect(contract.IPC.invoke.computerWait).toBe("computer:wait");
+    expect(contract.parseComputerWait({ text: " 保存 " })).toEqual({ text: "保存", timeoutMs: 5000 });
+    expect(() => contract.parseComputerWait({ text: "" })).toThrow(/text/);
+    expect(() => contract.parseComputerWait({ text: "x", timeoutMs: 20 })).toThrow(/timeoutMs/);
 
     expect(contract.IPC.invoke.computerDrag).toBe("computer:drag");
     expect(contract.parseComputerDrag({

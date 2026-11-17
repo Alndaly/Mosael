@@ -73,6 +73,22 @@ describe("OwnWindowDriver(ADR 0081 P0)", () => {
     expect(win.webContents.executeJavaScript).toHaveBeenCalledOnce();
   });
 
+  it("waitForText 重读 DOM 直到文字出现或超时", async () => {
+    const win = fakeWindow();
+    let calls = 0;
+    win.webContents.executeJavaScript = vi.fn(async () => {
+      calls += 1;
+      return calls >= 2;
+    });
+    const driver = new OwnWindowDriver(() => win);
+
+    const result = await driver.waitForText("保存", 500);
+
+    expect(result.found).toBe(true);
+    expect(result.waitedMs).toBeGreaterThanOrEqual(0);
+    expect(calls).toBe(2);
+  });
+
   it("act 把三种动作交给原来的实现:click / type / scroll", async () => {
     const win = fakeWindow();
     const driver = new OwnWindowDriver(() => win);

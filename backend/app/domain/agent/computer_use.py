@@ -62,6 +62,8 @@ KEY_CHANNEL = "computer:key"
 SCROLL_CHANNEL = "computer:scroll"
 DESKTOP_KEY_CHANNEL = "computer:desktop-key"
 DESKTOP_DRAG_CHANNEL = "computer:desktop-drag"
+WAIT_CHANNEL = "computer:wait"
+DESKTOP_WAIT_CHANNEL = "computer:desktop-wait"
 #: 这一轮结束了 —— 让主进程把「被控制中」熄灭(不是急停:下一轮还能动)。
 END_CHANNEL = "computer:end"
 #: 一次滚动最多几格滚轮。再多就不是「往下看看」,而是整段跳走。
@@ -70,6 +72,10 @@ MAX_SCROLL_NOTCHES = 30
 MIN_DRAG_MS = 100
 MAX_DRAG_MS = 2000
 DEFAULT_DRAG_MS = 300
+#: 等一段界面文字出现。太短来不及重渲染,太长会把一次失败拖成半分钟。
+MIN_WAIT_MS = 100
+MAX_WAIT_MS = 15_000
+DEFAULT_WAIT_MS = 5_000
 
 #: 能点的键。
 CLICK_BUTTONS = ("left", "right")
@@ -119,6 +125,27 @@ def screenshot(scale: float = DEFAULT_SCALE) -> dict[str, Any]:
         **({"elements": elements} if elements else {}),
         "image": base64.b64encode(raw).decode("ascii"),
     }
+
+
+def wait(text: object, timeout_ms: object = DEFAULT_WAIT_MS) -> dict[str, Any]:
+    """等 Mosael 窗口里出现一段可见文字;找到返回 found=True,等满返回 False。只读。"""
+    label = _wait_text(text)
+    timeout = _wait_timeout(timeout_ms)
+    answer = _host_call(WAIT_CHANNEL, {"text": label, "timeoutMs": timeout})
+    if not isinstance(answer, dict) or not isinstance(answer.get("found"), bool):
+        raise ComputerUseError("The Mosael window bridge answered without a wait result.")
+    return {**answer, "text": label, "timeoutMs": timeout}
+
+
+def desktop_wait(pid: object, text: object, timeout_ms: object = DEFAULT_WAIT_MS) -> dict[str, Any]:
+    """等一个桌面应用的 AX 树里出现一段文字;只读,不注入输入。"""
+    target = _desktop_id(pid, "pid")
+    label = _wait_text(text)
+    timeout = _wait_timeout(timeout_ms)
+    answer = _host_call(DESKTOP_WAIT_CHANNEL, {"pid": target, "text": label, "timeoutMs": timeout})
+    if not isinstance(answer, dict) or not isinstance(answer.get("found"), bool):
+        raise ComputerUseError("The desktop bridge answered without a wait result.")
+    return {**answer, "pid": target, "text": label, "timeoutMs": timeout}
 
 
 def desktop_windows() -> dict[str, Any]:
@@ -535,6 +562,26 @@ def _bool_flag(value: object, name: str) -> bool:
     return value
 
 
+def _wait_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ComputerUseError("text must be a non-empty string to wait for.")
+    if len(text) > 200:
+        raise ComputerUseError("text to wait for must be at most 200 characters.")
+    return text
+
+
+def _wait_timeout(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ComputerUseError(f"timeout_ms must be a number between {MIN_WAIT_MS} and {MAX_WAIT_MS}.")
+    timeout = int(value)
+    if timeout < MIN_WAIT_MS or timeout > MAX_WAIT_MS:
+        raise ComputerUseError(
+            f"timeout_ms must be between {MIN_WAIT_MS} and {MAX_WAIT_MS} (got {value!r})."
+        )
+    return timeout
+
+
 #: 这一轮里动过手没有(点/输入/滚动成功过一次就记上)。回合结束时据此决定要不要提醒桌面壳 ——
 #: 每一轮都发一条桥消息也没坏处,但「没动过」的回合根本不需要问对面。
 _touched_this_turn = False
@@ -722,8 +769,13 @@ __all__ = [
     "ComputerUseError",
     "DEFAULT_DRAG_MS",
     "DEFAULT_SCALE",
+    "DEFAULT_WAIT_MS",
+    "DESKTOP_WAIT_CHANNEL",
     "DRAG_CHANNEL",
     "END_CHANNEL",
+    "MAX_WAIT_MS",
+    "MIN_WAIT_MS",
+    "WAIT_CHANNEL",
     "MAX_DRAG_MS",
     "MAX_SCALE",
     "MIN_DRAG_MS",
@@ -747,8 +799,10 @@ __all__ = [
     "desktop_screenshot",
     "desktop_scroll",
     "desktop_type",
+    "desktop_wait",
     "desktop_windows",
     "screenshot",
     "scroll",
     "type_text",
+    "wait",
 ]

@@ -119,6 +119,15 @@ describe("DesktopDriverMac(ADR 0081)", () => {
     });
   });
 
+  it("waitForText 在 AX 树里找到文字就返回", async () => {
+    const { runner } = harness();
+    const driver = new DesktopDriverMac({ binaryPath: "/fake/tool", runner });
+
+    const result = await driver.waitForText(42, "Save", 500);
+
+    expect(result.found).toBe(true);
+  });
+
   it("verify 仍不支持,不冒充已验证", () => {
     const driver = new DesktopDriverMac({ binaryPath: "/fake/tool" });
     expect(driver.verify()).toEqual({ ok: false, reason: "verify_not_supported", evidence: null });

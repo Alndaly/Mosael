@@ -268,6 +268,23 @@ async function domElements(win) {
   }
 }
 
+/** 等窗口里出现一段可见文字。只读;每次重读 DOM,不依赖上一次的截图。 */
+async function waitForMosaelText(text, timeoutMs, mainWindow) {
+  const win = computerUseWindow(mainWindow);
+  if (!win || !win.webContents || typeof win.webContents.executeJavaScript !== "function") {
+    throw new Error("There is no Mosael window open to wait in. Nothing was waited for.");
+  }
+  const started = Date.now();
+  const expression = `(() => Boolean(document.body && document.body.innerText.includes(${JSON.stringify(String(text))})))()`;
+  for (;;) {
+    const found = await win.webContents.executeJavaScript(expression);
+    const waitedMs = Date.now() - started;
+    if (found) return { found: true, waitedMs };
+    if (waitedMs >= timeoutMs) return { found: false, waitedMs };
+    await new Promise((resolve) => setTimeout(resolve, Math.min(150, Math.max(1, timeoutMs - waitedMs))));
+  }
+}
+
 /**
  * 拍下 Mosael 主窗口,回 `{width, height, image, elements}`(图片是原图,缩放由后端做;
  * elements 坐标随后端 scale 一起缩)。参数不对 / 没窗口 / 最小化 / 空图,都抛一句人话。
@@ -347,6 +364,10 @@ class OwnWindowDriver {
   async observe() {
     const captured = await captureMosaelWindow(this.getWindow());
     return { ...captured, elements: captured.elements ?? [], meta: { window: "main" } };
+  }
+
+  async waitForText(text, timeoutMs) {
+    return waitForMosaelText(text, timeoutMs, this.getWindow());
   }
 
   /** 动作:点 / 输入 / 按键 / 滚动。`action.kind` 只认这四种;别的直接拒。 */

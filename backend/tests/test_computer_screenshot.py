@@ -123,6 +123,28 @@ def test_the_element_list_uses_the_same_scale_as_the_picture(monkeypatch) -> Non
     ]
 
 
+def test_wait_reports_whether_the_text_appeared(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"found": True, "waitedMs": 42}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    result = computer_use.wait("保存", timeout_ms=1000)
+    assert result == {"found": True, "waitedMs": 42, "text": "保存", "timeoutMs": 1000}
+    assert calls == [("computer:wait", {"text": "保存", "timeoutMs": 1000})]
+
+
+def test_wait_rejects_an_empty_text_or_bad_timeout(monkeypatch) -> None:
+    monkeypatch.setattr(
+        computer_use, "_host_call", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("不该走桥"))
+    )
+    for text, timeout in ((" ", 1000), ("保存", 50), ("保存", 20_000)):
+        with pytest.raises(computer_use.ComputerUseError):
+            computer_use.wait(text, timeout_ms=timeout)
+
+
 def test_a_large_capture_is_shrunk_by_scale(monkeypatch) -> None:
     """scale 是给「窗口很大、我只想看布局」用的:图真的变小,回来的是缩小后的尺寸。"""
     client = fresh_client()

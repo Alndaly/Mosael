@@ -434,6 +434,20 @@ class DesktopDriverMac {
     };
   }
 
+  async waitForText(pid, text, timeoutMs) {
+    const started = Date.now();
+    const needle = String(text || "");
+    for (;;) {
+      const snapshot = await this.observe({ pid });
+      const found = (snapshot.elements || []).some((element) => [element.title, element.value, element.role]
+        .some((part) => typeof part === "string" && part.includes(needle)));
+      const waitedMs = Date.now() - started;
+      if (found) return { found: true, waitedMs };
+      if (waitedMs >= timeoutMs) return { found: false, waitedMs };
+      await new Promise((resolve) => setTimeout(resolve, Math.min(200, Math.max(1, timeoutMs - waitedMs))));
+    }
+  }
+
   verify() {
     return { ok: false, reason: "verify_not_supported", evidence: null };
   }

@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **155** 个工具,其中 **56** 个走确认卡、**1** 个停下来等用户作答。
+共 **157** 个工具,其中 **56** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -64,11 +64,13 @@
 | `computer_desktop_input` | 确认卡 | Confirmation required: type text or press a key in another desktop app. |
 | `computer_desktop_screenshot` | 直接执行 | Read-only: capture another app's visible desktop window by `window_id`. |
 | `computer_desktop_scroll` | 确认卡 | Confirmation required: scroll over a token or captured point in another desktop app. |
+| `computer_desktop_wait` | 直接执行 | Read-only: wait until an app's accessibility tree contains the given text. |
 | `computer_desktop_windows` | 直接执行 | Read-only: list visible desktop windows, including other apps. |
 | `computer_drag` | 确认卡 | Confirmation required: drag from one point to another in Mosael's app window. |
 | `computer_input` | 确认卡 | Confirmation required: type text or press a key in Mosael's app window. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's app window — returns a PNG you can see. |
 | `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's app window (dy > 0 = down, one notch ≈ 3 lines). |
+| `computer_wait` | 直接执行 | Read-only: wait until visible text appears in Mosael's app window. |
 | `continue_workflow_run` | 确认卡 | Confirmation required: continue a failed, interrupted or cancelled workflow run from where it stopped. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |

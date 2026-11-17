@@ -88,8 +88,10 @@ const IPC = Object.freeze({
     computerDesktopKey: "computer:desktop-key",
     computerDesktopScroll: "computer:desktop-scroll",
     computerDesktopDrag: "computer:desktop-drag",
+    computerDesktopWait: "computer:desktop-wait",
     computerClick: "computer:click",
     computerDrag: "computer:drag",
+    computerWait: "computer:wait",
     computerType: "computer:type",
     computerKey: "computer:key",
     computerScroll: "computer:scroll",
@@ -748,6 +750,31 @@ function parseComputerDesktopScroll(value) {
   return { ...target, dy };
 }
 
+function parseWaitText(payload, channel) {
+  const text = typeof payload.text === "string" ? payload.text.trim() : "";
+  if (!text) throw new TypeError(`${channel}: text must be a non-empty string`);
+  if (text.length > 200) throw new TypeError(`${channel}: text must be at most 200 characters`);
+  const timeoutMs = payload.timeoutMs === undefined ? 5000 : payload.timeoutMs;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 15000) {
+    throw new TypeError(`${channel}: timeoutMs must be an integer between 100 and 15000`);
+  }
+  return { text, timeoutMs };
+}
+
+function parseComputerWait(value) {
+  const channel = IPC.invoke.computerWait;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["text", "timeoutMs"], channel);
+  return parseWaitText(payload, channel);
+}
+
+function parseComputerDesktopWait(value) {
+  const channel = IPC.invoke.computerDesktopWait;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["pid", "text", "timeoutMs"], channel);
+  return { pid: desktopId(payload.pid, "pid", channel), ...parseWaitText(payload, channel) };
+}
+
 function parseDragPoint(payload, key, channel) {
   const n = payload[key];
   if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
@@ -1205,10 +1232,12 @@ module.exports = {
   parseCaptureMode,
   parseComputerClick,
   parseComputerDrag,
+  parseComputerWait,
   parseComputerDesktopAccessibility,
   parseComputerDesktopClick,
   parseComputerDesktopDrag,
   parseComputerDesktopScroll,
+  parseComputerDesktopWait,
   parseComputerDesktopScreenshot,
   parseComputerDesktopType,
   parseComputerDesktopKey,
