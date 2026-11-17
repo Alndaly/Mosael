@@ -178,6 +178,11 @@ const calls = (bridge: { comfyWorkbench: ReturnType<typeof vi.fn> }) =>
 const tab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }));
 const column = () => screen.getByRole("complementary", { name: "workbenchColumn" });
 const shownPanel = () => column().querySelector<HTMLElement>("[role=tabpanel]:not([hidden])")!;
+const need = <T extends Element>(selector: string) => waitFor(() => {
+  const found = document.querySelector<T>(selector);
+  expect(found, selector).not.toBeNull();
+  return found!;
+});
 
 const appData = (overrides: Partial<WorkflowApp> = {}): WorkflowApp => ({
   path: "", modified: null, kind: "image", editable: true,
@@ -712,7 +717,7 @@ describe("ComfyUI 工作台", () => {
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "1", upgradable: true, forms: [],
                                                         results: [], invalid: 0, stray: 0 } }));
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
-    const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
+    const preview = await need<HTMLElement>('[data-output-node="17"]');
     expect(await screen.findByText("workbenchRunFormsOld")).toBeTruthy();
     expect(within(preview).queryByRole("button", { name: "workbenchRunOnlyThisImageLabel" })).toBeNull();
     //: 面板读完之前就点了(按钮还在的那一下):改标记那一步自己再看一眼,照样不写
@@ -732,9 +737,9 @@ describe("ComfyUI 工作台", () => {
     await waitFor(() => expect(api.runCanvas).toHaveBeenCalledWith("i1", {
       workspace_id: "w1", path: "人像/古风.json", prompt: EXPORTED.prompt, workflow: EXPORTED.workflow, client_id: EXPORTED.clientId,
     }));
-    const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
-    expect(within(preview).getAllByRole("img")[0].getAttribute("src")).toBe("thumb://a1");
-    expect(screen.getByRole("region", { name: "高清 #9" })).toBeTruthy();
+    const preview = await need<HTMLElement>('[data-result-node="17"]');
+    expect(document.querySelector<HTMLImageElement>('[data-output-node="17"] img')!.getAttribute("src")).toBe("thumb://a1");
+    expect(await need<HTMLElement>('[data-result-node="9"]')).toBeTruthy();
     fireEvent.click(await within(preview).findByRole("button", { name: "workbenchRunOnlyThisImageLabel" }));
     await waitFor(() => expect(api.getCanvasMarks).toHaveBeenCalled());
     expect(api.getCanvasMarks.mock.calls[0][1].results, "只标这一个,清掉别的").toEqual(["17"]);
@@ -1092,8 +1097,8 @@ describe("运行与结果:节点名和应用表单、「结果取自」同一种
       app: { status: "ok", version: "1", upgradable: false, forms: [], results: ["17"], invalid: 0, stray: 0 },
     }));
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
-    expect(await screen.findByRole("region", { name: "预览图像 #17" })).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "PreviewImage #17" })).toBeNull();
+    expect(await need<HTMLElement>('[data-result-node="17"]')).toBeTruthy();
+    expect(screen.queryByText("PreviewImage #17")).toBeNull();
     await waitFor(() => expect(document.querySelector("[data-results-from]")?.textContent).toContain("预览图像 #17"));
   });
 });
@@ -1105,8 +1110,8 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     api.getJob.mockResolvedValue(SUCCEEDED);
     api.getCanvasApp.mockResolvedValue(appData());
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
-    const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
-    const buttons = within(preview).getAllByRole("button", { name: /workbenchPreviewOpen/ });
+    const preview = await need<HTMLElement>('[data-output-node="17"]');
+    const buttons = within(preview.parentElement!).getAllByRole("button", { name: /workbenchPreviewOpen/ });
     fireEvent.click(buttons[1]);
     const viewer = await waitFor(() => {
       const element = document.querySelector<HTMLElement>(".PhotoView-Portal");
@@ -1126,9 +1131,9 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     api.getAsset.mockImplementation(async (id: string) => ({ id, kind: id === "a1" ? "video" : "image" }));
     api.getCanvasApp.mockResolvedValue(appData());
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
-    const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
-    const play = await within(preview).findByRole("button", { name: /workbenchPreviewVideo/ });
-    expect(within(preview).getAllByRole("button", { name: /workbenchPreviewOpen/ })).toHaveLength(1);
+    const preview = await need<HTMLElement>('[data-output-node="17"]');
+    const play = await within(preview.parentElement!).findByRole("button", { name: /workbenchPreviewVideo/ });
+    expect(within(preview.parentElement!).getAllByRole("button", { name: /workbenchPreviewOpen/ })).toHaveLength(2);
     fireEvent.click(play);
     const frame = await waitFor(() => {
       const element = document.querySelector<HTMLElement>("[data-video-frame]");
@@ -1147,10 +1152,10 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     api.getCanvasApp.mockResolvedValue(marked(["9", "5"]));
     api.getCanvasMarks.mockResolvedValue({ nodes: {}, extra: { version: 1 } });
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
-    const saved = await screen.findByRole("region", { name: "高清 #9" });
+    const saved = await need<HTMLElement>('[data-result-node="9"]');
     expect(await within(saved).findByText("workbenchRunIsResult")).toBeTruthy();
     expect(within(saved).queryByRole("button", { name: "workbenchRunOnlyThisImageLabel" }), "已经标着的不再给这个按钮").toBeNull();
-    const preview = screen.getByRole("region", { name: "PreviewImage #17" });
+    const preview = await need<HTMLElement>('[data-result-node="17"]');
     expect(within(preview).getByRole("button", { name: "workbenchRunOnlyThisImageLabel" })).toBeTruthy();
     expect(within(preview).queryByText("workbenchRunIsResult")).toBeNull();
     expect(document.querySelector("[data-results-from]")!.textContent, "两个都标着:都说出来").toContain("workbenchRunResultsFrom");
@@ -1182,7 +1187,7 @@ describe("画布上换了一张工作流:右边那一列跟着换", () => {
     tab("workbenchTabApp");
     await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
-    await screen.findByRole("region", { name: "PreviewImage #17" });
+    await waitFor(() => expect(document.querySelector('[data-output-node="17"]')).not.toBeNull());
 
     const appReads = api.getCanvasApp.mock.calls.length;
     bridge.emit(state({ workflow: { ...OTHER } }));
@@ -1191,7 +1196,7 @@ describe("画布上换了一张工作流:右边那一列跟着换", () => {
     expect(within(column()).getByRole("tabpanel").textContent, "运行与结果:这一张还没跑过").toContain("workbenchRunEmptyHere");
     const others = within(column()).getByRole("button", { name: /workbenchRunOthersToggle/ });
     fireEvent.click(others);
-    expect(within(column()).getByRole("region", { name: "古风" }), "之前那张跑的还看得到").toBeTruthy();
+    expect(within(column()).getByText("古风"), "之前那张跑的还看得到").toBeTruthy();
     tab("workbenchTabMissing");
     await waitFor(() => expect(api.inspectWorkflowImport, "缺失项自己重新检查这一张").toHaveBeenCalledTimes(2));
     tab("workbenchTabApp");

@@ -41,6 +41,7 @@ import {
   type WorkbenchRun,
   type WorkbenchTarget,
 } from "@/features/plugins/workbench/workbenchSession";
+import { formatElapsedSeconds, parseServerTime, useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -254,6 +255,11 @@ function RunCard({
   const kindByAsset = new Map(assetIds.map((asset, index) => [asset, assets[index]?.data?.kind ?? run.kind]));
   const cancel = useMutation({ mutationFn: () => cancelJob(run.jobId) });
   const running = !jobDone(job);
+  //: 运行中每秒走一次；结束后停在任务实际的更新时间，不继续涨。
+  const now = useNow(running ? 1_000 : 60_000);
+  const startedAt = job?.created_at ? parseServerTime(job.created_at) : new Date(run.startedAt);
+  const finishedAt = running ? now : job?.updated_at ? parseServerTime(job.updated_at) : now;
+  const elapsedSeconds = Math.max(0, (finishedAt.getTime() - startedAt.getTime()) / 1_000);
   const nodeName = (node: string) => `${labels.get(node) || t("workbenchNode")} #${node}`;
   const resultCopy = (media: string): { button: MessageKey; label: MessageKey; hint: MessageKey; undo: MessageKey } => {
     if (media === "video") return { button: "workbenchRunOnlyThisVideo", label: "workbenchRunOnlyThisVideoLabel", hint: "workbenchRunOnlyThisVideoHint", undo: "workbenchRunUndoVideoLabel" };
@@ -279,6 +285,9 @@ function RunCard({
         {running && <Loader2 size={13} aria-hidden className="shrink-0 animate-mosael-spin text-muted-foreground" />}
         <Truncate className="min-w-0 flex-1 font-medium text-foreground">{run.path}</Truncate>
         <span className="shrink-0 tabular-nums text-muted-foreground">{new Date(run.startedAt).toLocaleTimeString(locale)}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground" data-run-elapsed="">
+          {t("workbenchRunElapsed").replace("{time}", formatElapsedSeconds(elapsedSeconds))}
+        </span>
         {running && (
           <Button variant="ghost" size="xs" className="shrink-0" loading={cancel.isPending} onClick={() => cancel.mutate()}>
             <Square size={11} />
@@ -300,69 +309,60 @@ function RunCard({
                      summaryClassName="text-ui-sm font-normal" data-workbench-run-failed={run.jobId} />
       )}
       {job?.status === "cancelled" && <PanelNote>{t("workbenchRunCancelled")}</PanelNote>}
-      {groups.map((group) => {
-        const name = group.node ? nodeName(group.node) : t("workbenchRunUnknownNode");
-        const isResult = Boolean(group.node && marks?.results?.includes(group.node));
-        const copy = resultCopy(kindByAsset.get(group.assets[0] ?? "") ?? run.kind);
-        return (
-          <section key={group.node || "unknown"} aria-label={name} className="grid gap-1.5">
-            <div className="flex min-h-7 min-w-0 items-center gap-2 text-ui-xs">
-              <Truncate className="min-w-0 flex-1 text-muted-foreground">
-                {group.node ? t("workbenchRunFrom").replace("{node}", name) : name}
-              </Truncate>
-              {group.node && marks && (isResult ? (
-                <>
-                  <span data-result-mark="" className="inline-flex shrink-0 items-center gap-1 font-medium text-primary">
-                    <Pin size={11} aria-hidden />
-                    {t("workbenchRunIsResult")}
-                  </span>
-                  <Button variant="ghost" size="xs" className="shrink-0" loading={marks.pending === group.node}
-                          aria-label={t(copy.undo).replace("{node}", name)}
-                          onClick={() => marks.unmark(group.node)}>
-                    <Undo2 size={11} />
-                    {t("workbenchRunUndoMark")}
-                  </Button>
-                </>
-              ) : (
-                <Hint label={t(copy.hint).replace("{node}", name)}>
-                  <Button variant="outline" size="xs" className="shrink-0" loading={marks.pending === group.node}
-                          aria-label={t(copy.label).replace("{node}", name)}
-                          onClick={() => marks.mark(group.node)}>
-                    <Pin size={11} />
-                    {t(copy.button)}
-                  </Button>
-                </Hint>
-              ))}
-            </div>
-            <ul className="m-0 grid list-none grid-cols-3 gap-1.5 p-0">
-              {group.assets.map((asset) => {
+      {groups.length > 0 && (
+        <div className="grid gap-2" data-run-gallery="">
+          <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-2 p-0">
+            {groups.flatMap((group) => {
+              const name = group.node ? nodeName(group.node) : t("workbenchRunUnknownNode");
+              const isResult = Boolean(group.node && marks?.results?.includes(group.node));
+              const copy = resultCopy(kindByAsset.get(group.assets[0] ?? "") ?? run.kind);
+              return group.assets.map((asset, assetIndex) => {
                 const item = gallery.find((one) => one.asset === asset);
                 const title = item?.title ?? name;
                 const isVideo = item?.video === true;
+                const first = assetIndex === 0;
                 return (
-                  <li key={asset}>
+                  <li key={asset} data-output-node={group.node || "unknown"} data-result-node={group.node || "unknown"}
+                      className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel">
                     <IconButton
                       unstyled
                       label={t(isVideo ? "workbenchPreviewVideo" : "workbenchPreviewOpen").replace("{title}", title)}
-                      className={cn("relative block w-full rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                      className={cn("group relative block aspect-square w-full bg-panel-inset p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                                     isVideo ? "cursor-pointer" : "cursor-zoom-in")}
                       onClick={() => open(asset)}
                     >
                       <FallbackImage src={assetThumbnailUrl(asset)} alt={t(isVideo ? "workbenchRunVideoOutputAlt" : "workbenchRunOutputAlt").replace("{node}", name)}
-                           loading="lazy" className="block aspect-square w-full rounded-md bg-secondary object-cover" />
+                           loading="lazy" className="block size-full object-cover" />
                       {isVideo && (
-                        <span aria-hidden className="absolute inset-0 grid place-items-center rounded-md bg-black/15">
+                        <span aria-hidden className="absolute inset-0 grid place-items-center bg-black/15">
                           <span className="grid size-7 place-items-center rounded-full bg-background/85 text-foreground"><Play size={13} fill="currentColor" /></span>
                         </span>
                       )}
                     </IconButton>
+                    <div className="flex min-h-7 items-center gap-1 border-t border-border px-1.5 py-1">
+                      <Truncate className="min-w-0 flex-1 text-ui-2xs text-muted-foreground">{name}</Truncate>
+                      {group.node && marks && first && (isResult ? (
+                        <>
+                          <span className="sr-only">{t("workbenchRunIsResult")}</span>
+                          <IconButton size="icon-2xs" label={t(copy.undo).replace("{node}", name)}
+                                      onClick={() => marks.unmark(group.node!)}>
+                            <Undo2 size={11} />
+                          </IconButton>
+                        </>
+                      ) : (
+                        <IconButton size="icon-2xs" label={t(copy.label).replace("{node}", name)} hint={t(copy.hint).replace("{node}", name)}
+                                    loading={marks.pending === group.node} onClick={() => marks.mark(group.node!)}>
+                          <Pin size={11} />
+                        </IconButton>
+                      ))}
+                    </div>
                   </li>
                 );
-              })}
-            </ul>
-          </section>
-        );
-      })}
+              });
+            })}
+          </ul>
+        </div>
+      )}
     </li>
   );
 }
