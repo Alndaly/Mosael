@@ -34,6 +34,9 @@ function needsCodeSignature(file) {
 function isTransientSigningFailure(error) {
   const text = String(error);
   return text.includes("timestamp service is not available")
+    // Apple 的时间戳服务没回包时,codesign 不一定说「服务不可用」,也可能只说
+    // 「A timestamp was expected but was not found」。2.6.7 的发布构建就停在这句上。
+    || text.toLowerCase().includes("a timestamp was expected but was not found")
     || text.includes("internal error in Code Signing subsystem")
     || text.includes("Operation not permitted");
 }
