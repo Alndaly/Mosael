@@ -337,6 +337,34 @@ def computer_click(
 
 
 @tool(effect="confirms")
+def computer_batch(
+    actions: list[dict[str, Any]],
+    finish_screenshot: bool = True,
+) -> dict[str, Any]:
+    """Confirmation required: run up to 8 UI actions in Mosael's window, in order.
+
+    Each action is one of:
+      {"kind":"click","x":…,"y":…,"button":"left","click_count":1,"scale":1}
+      {"kind":"drag","from_x":…,"from_y":…,"to_x":…,"to_y":…,"button":"left","duration_ms":300,"scale":1}
+      {"kind":"scroll","dy":3,"x":…,"y":…,"scale":1}
+      {"kind":"input","action":"type","text":"…"} or {"kind":"input","action":"press","key":"Enter","modifiers":[]}
+      {"kind":"wait","text":"Saved","timeout_ms":5000}
+    Coordinates are pixels in the last computer_screenshot. The card lists every step; execution
+    stops at the first failure. A final screenshot is saved as an asset by default. Element tokens
+    are not supported inside a batch yet — click by coordinate.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_batch",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"actions": actions, "finish_screenshot": finish_screenshot},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def computer_drag(
     from_x: Annotated[int, Field(description="Start X pixel in the picture computer_screenshot returned.")],
     from_y: Annotated[int, Field(description="Start Y pixel in the picture computer_screenshot returned.")],

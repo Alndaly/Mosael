@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import base64
+import io
 import types
 
 import pytest
@@ -461,3 +463,92 @@ def test_the_input_tool_opens_a_key_card_and_escalates_shortcuts() -> None:
     with SessionLocal() as db:
         assert tool_spec("computer_input").escalate(db, "w1", {"action": "press", "key": "z", "modifiers": ["cmd"]}) == "external"
         assert tool_spec("computer_input").escalate(db, "w1", {"action": "press", "key": "Enter", "modifiers": []}) is None
+
+
+def test_batch_is_a_one_card_always_ask_tool() -> None:
+    client = fresh_client()
+    tools = {tool["name"]: tool for tool in client.get("/api/agent/tools").json()}
+    assert tools["computer_batch"]["confirmation"] is True
+    assert tools["computer_batch"]["read_only"] is False
+    assert tool_spec("computer_batch").always_asks is True
+
+
+def test_batch_checks_each_action_before_opening() -> None:
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        batch = tool_spec("computer_batch")
+        batch.validate(db, "w1", {"actions": [
+            {"kind": "click", "x": 10, "y": 20},
+            {"kind": "input", "action": "type", "text": "hello"},
+            {"kind": "wait", "text": "Saved", "timeout_ms": 1000},
+        ]}, None)
+        for bad in (
+            {"actions": []},
+            {"actions": [{"kind": "evaluate"}]},
+            {"actions": [{"kind": "click", "token": "snap-1:0"}]},
+            {"actions": [{"kind": "wait", "text": ""}]},
+            {"actions": [{"kind": "click", "x": -1, "y": 0}]},
+        ):
+            with pytest.raises(ConfirmationError):
+                batch.validate(db, "w1", bad, None)
+
+
+def test_batch_card_lists_steps_and_executes_in_order(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"x": payload.get("x", 0), "y": payload.get("y", 0), "typed": len(payload.get("text", "")), "dy": payload.get("dy", 0), "toX": payload.get("toX", 0)}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        summary = tool_spec("computer_batch").summarize(db, {"actions": [
+            {"kind": "click", "x": 1, "y": 2},
+            {"kind": "input", "action": "type", "text": "hi"},
+        ]})
+        assert summary[0] == "confirm_computerBatch"
+        assert summary[1]["count"] == 2
+        card = types.SimpleNamespace(
+            payload={"actions": [
+                {"kind": "click", "x": 1, "y": 2},
+                {"kind": "input", "action": "type", "text": "hi"},
+            ], "finish_screenshot": False},
+            workspace_id="w1",
+        )
+        result = tool_spec("computer_batch").execute(db, card, "user-1")
+    assert result["ok"] is True
+    assert [one["kind"] for one in result["results"]] == ["click", "input"]
+    assert [channel for channel, _ in calls] == ["computer:click", "computer:type"]
+
+
+def test_batch_saves_a_final_screenshot(monkeypatch) -> None:
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (10, 10), (20, 30, 40)).save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        if channel == "computer:screenshot":
+            return {"width": 10, "height": 10, "image": encoded}
+        return {"x": payload.get("x", 0), "y": payload.get("y", 0)}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    with SessionLocal() as db:
+        card = types.SimpleNamespace(
+            payload={"actions": [{"kind": "click", "x": 1, "y": 2}], "finish_screenshot": True},
+            workspace_id=workspace["id"],
+        )
+        result = tool_spec("computer_batch").execute(db, card, "user-1")
+        assert result["ok"] is True
+        asset = db.get(Asset, result["screenshot_asset_id"])
+        assert asset is not None
+        assert asset.kind == "image"

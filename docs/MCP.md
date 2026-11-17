@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **160** 个工具,其中 **56** 个走确认卡、**1** 个停下来等用户作答。
+共 **161** 个工具,其中 **57** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -57,6 +57,7 @@
 | `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |
 | `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
+| `computer_batch` | 确认卡 | Confirmation required: run up to 8 UI actions in Mosael's window, in order. |
 | `computer_click` | 确认卡 | Confirmation required: click a point or an element in Mosael's app window. |
 | `computer_desktop_accessibility` | 直接执行 | Read-only: read another app's macOS accessibility tree by `pid`. |
 | `computer_desktop_click` | 确认卡 | Confirmation required: click a token or captured point in another desktop app. |
