@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.6.7] - 2026-11-18
+
+### Computer Use
+
+- **Computer Use 大幅补齐。** L1 新增元素 token 点击、文本 token 输入、token 拖拽、区域放大、hover、按下/抬起、中键/三击、修饰键点击、按住键、水平滚动、批量动作、等待与文字断言；L3 同步补齐指针原语、批量动作、OCR、全桌面截图和收尾截图自动内联。
+- **批量操作更安全也更省往返。** L1/L3 批量动作使用一张 always-ask 卡列出全部步骤，顺序执行、失败即停；结果截图通过确认结果直接作为图片块返回。
+- **桌面敏感能力有明确边界。** 剪贴板要求部署管理员且每次确认；OCR 使用 macOS Vision；全屏截图在受保护应用可见时拒绝。
+
+### 素材
+
+- **从视频抽音轨。** 新增 `extract_audio`：从已有视频生成新的 `.m4a`，原视频不变；链接导入只要求音频时，遇到带画面的回源文件会自动抽轨。
+
+### 工作台
+
+- **ComfyUI 表单与结果密度统一。** 新表单按钮、页签和运行结果卡片统一到胶囊形与标准间距。
+
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 

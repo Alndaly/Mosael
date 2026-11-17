@@ -147,7 +147,6 @@
     "tags",
     "derived_from",
     "ai_generated",
-    "voices",
     "intermediate",
     "created_at",
     "updated_at"
@@ -1099,15 +1098,6 @@
     "node_id",
     "output_key",
     "value",
-    "created_at"
-  ],
-  "workflow_run_steps": [
-    "id",
-    "job_id",
-    "scope",
-    "node_id",
-    "outputs",
-    "held",
     "created_at"
   ],
   "workflow_trigger_events": [

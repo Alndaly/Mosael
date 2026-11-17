@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.7": {
+    zh: [
+      "**Computer Use 补齐到可用的本地操作层。** L1/L3 都支持元素 token、拖拽、指针按下/抬起、中键/三击、修饰键、按住键、水平滚动、批量动作、等待与断言；截图、批量和 OCR 现在能直接回到模型上下文。",
+      "**桌面敏感能力有硬边界。** 剪贴板读写要求部署管理员且每次确认；OCR 使用本地 macOS Vision；全屏截图遇到受保护应用直接拒绝。",
+      "**从视频抽音轨。** 新增 `extract_audio`，链接只要求音频时也会自动处理带画面的回源文件。",
+    ],
+    en: [
+      "**Computer Use now covers the local operation layer.** L1 and L3 support element tokens, dragging, pointer down/up, middle/triple click, modifiers, held keys, horizontal scrolling, batches, waits and assertions; screenshots, batch results and OCR come back into the model context.",
+      "**Sensitive desktop capabilities have hard edges.** Clipboard access requires a deployment admin and explicit approval each time; OCR uses local macOS Vision; full-screen capture refuses protected apps.",
+      "**Extract audio from video.** The new `extract_audio` tool creates a separate .m4a and keeps the original video; link imports that request only audio also handle video-only responses.",
+    ],
+  },
   "v2.6.6": {
     zh: [
       "**修复 MosaelCloud 任务模型定价缺单位导致的生图拒绝。** 图片 / 视频 / 音频能力显式记录，价格必须覆盖每个预留计量单位；管理台改为按单位填写价格，缺价格时给出可诊断的原因。",
