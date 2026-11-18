@@ -480,6 +480,8 @@ export const otherUi = {
   chatTabTrace: "Trace",
   chatSessionsCollapse: "Collapse session list",
   chatSessionsExpand: "Expand session list",
+  surfacePanel: "Side panel",
+  surfaceOpenProjects: "Open project panel",
   sizeApprox: "~{size}",
   ttsThisDownloading: "This engine is already downloading.",
   chatJumpToLatest: "Jump to latest",

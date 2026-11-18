@@ -82,7 +82,7 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
         creatingProject={ctx.creatingProject}
       />
     ),
-  ai: (ctx) => <AiStudio workspace={ctx.workspace} />,
+  ai: (ctx) => <AiStudio workspace={ctx.workspace} surfaceContext={ctx} />,
   publish: (ctx) => <PublishView workspace={ctx.workspace} />,
   workflows: (ctx) => <WorkflowsView workspace={ctx.workspace} />,
   "browser-pool": (ctx) => <BrowserPoolView workspace={ctx.workspace} />,
