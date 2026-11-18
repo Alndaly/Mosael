@@ -30,6 +30,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
+import { useCurrentAgentSession, useSessionSettings } from "@/features/agent/currentAgentSession";
 import { clipEnd, snapToFrame } from "@/domain/timeline/geometry";
 import { clipContains } from "@/domain/timeline/editTargets";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
@@ -72,6 +73,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const writeBlocked = useWriteBlocked(workspace.role);
   //: 剪辑这一处是这个项目(ADR 0044):助手面板接这个项目的对话,面板收起来时浮标和跳转也认得出你在这里。
   const agentPlace = useAgentPlace({ kind: "project", id: project.id });
+  const agentSession = useCurrentAgentSession(workspace.id, agentPlace).session;
+  const { update: updateWorkingSet } = useSessionSettings(workspace.id, agentPlace, agentSession);
+  const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   const qc = useQueryClient();
   const { openRecorder } = useRecorder();
   const selectedClipId = useEditorStore(selectedClipIdOf);
@@ -119,6 +123,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const sequence = sequences.data?.find((one) => one.id === namedSequence) ?? sequences.data?.[0] ?? null;
   //: 时间线、监视器、检查器读的素材:**这条时间线用到的那些**,完整字段(见 useSequenceAssets)。
   //: 素材池是另一回事 —— 它一页页列素材库(MediaPool 自己取),配音片段这类中间产物不在那里,却照样在时间线上。
+  React.useEffect(() => {
+    if (!sequence?.id || agentSession?.is_mine === false) return;
+    const clipKey = selectedClipIds.join(",");
+    updateWorkingSet.mutate({
+      working_set: {
+        project_id: project.id,
+        surface: "editor",
+        selection: clipKey ? { sequence_id: sequence.id, clip_ids: selectedClipIds.slice(0, 20) } : {},
+      },
+    });
+    // 这里只同步指代上下文;编辑器的选中片段不是会话归属。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, sequence?.id, selectedClipIds.join(",")]);
+
   const sequenceAssetsQuery = useSequenceAssets(workspace.id, sequence);
   const sequenceAssets = React.useMemo(() => sequenceAssetsQuery.data ?? [], [sequenceAssetsQuery.data]);
   const {

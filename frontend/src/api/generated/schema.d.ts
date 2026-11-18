@@ -11668,6 +11668,10 @@ export interface components {
              * @enum {string}
              */
             surface: "ai" | "projects" | "editor" | "media" | "entities" | "notes" | "scenes" | "boards" | "workflows" | "publish" | "scheduler" | "plugins";
+            /** Selection */
+            selection?: {
+                [key: string]: unknown;
+            };
         };
         /** AiRuntimeConfigOut */
         AiRuntimeConfigOut: {

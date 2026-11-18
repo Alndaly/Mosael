@@ -357,15 +357,23 @@ def _working_set_prompt(session: AgentSession) -> str:
     data = session.working_set if isinstance(session.working_set, dict) else {}
     project_id = str(data.get("project_id") or "")
     surface = str(data.get("surface") or "ai")
-    if not project_id and surface == "ai":
+    selection = data.get("selection") if isinstance(data.get("selection"), dict) else {}
+    if not project_id and surface == "ai" and not selection:
         return ""
     where = f"项目 ID={project_id}" if project_id else "没有指定关注项目"
-    return (
+    text = (
         f"\n\n【当前关注上下文】{where};当前面板={surface}。"
         "它只用于理解“这个项目/这段/这里”等指代,不是权限或归属限制。"
         "用户要求别的项目时,直接用 list_projects / 工具查看并操作对应的 project_id,"
         "不需要先让用户切换关注项目;没有明确指代时先查清或询问,不要自行假设。"
     )
+    if selection:
+        sequence_id = str(selection.get("sequence_id") or "")
+        clip_ids = selection.get("clip_ids") if isinstance(selection.get("clip_ids"), list) else []
+        clip_text = ",".join(str(one) for one in clip_ids[:20])
+        if sequence_id or clip_text:
+            text += f" 当前选区:sequence_id={sequence_id or '未指定'},clip_ids={clip_text or '无'}。"
+    return text
 
 
 def build_system_prompt(db: Session, session: AgentSession) -> str:

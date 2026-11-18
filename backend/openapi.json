@@ -33022,6 +33022,11 @@
             ],
             "title": "Surface",
             "default": "ai"
+          },
+          "selection": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Selection"
           }
         },
         "type": "object",

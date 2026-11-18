@@ -134,6 +134,8 @@ class AgentWorkingSet(ApiModel):
 
     project_id: str = Field(default="", max_length=64)
     surface: WorkingSurface = "ai"
+    #: 当前选中的上下文(时间线片段、素材等)。没有就是空对象;Agent 仍应自己查现状。
+    selection: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentSessionCreate(ApiModel):
