@@ -2,7 +2,7 @@ import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleDot, Database, Eye, FolderKanban, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Route, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleDot, Database, Eye, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Route, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -153,11 +153,9 @@ const NO_MESSAGES: AgentMessage[] = [];
 export function ChatWorkspace({
   workspace,
   switcher,
-  onOpenProjects,
 }: {
   workspace: Workspace;
   switcher?: React.ReactNode;
-  onOpenProjects?: () => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -582,16 +580,6 @@ export function ChatWorkspace({
           >
             {sessionListOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
           </IconButton>
-          {onOpenProjects && (
-            <IconButton
-              variant="ghost"
-              size="icon-sm"
-              label={t("surfaceOpenProjects")}
-              onClick={onOpenProjects}
-            >
-              <FolderKanban />
-            </IconButton>
-          )}
           {viewingSubagent ? (
             <SubagentBreadcrumb
               sessionTitle={activeSession?.title || t("chatSessionsTitle")}

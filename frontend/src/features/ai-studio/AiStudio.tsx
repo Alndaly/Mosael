@@ -1,8 +1,6 @@
 import React from "react";
 
 import type { Workspace } from "@/api/client";
-import type { PageContext } from "@/app/pages";
-import { SurfaceDock } from "@/features/surfaces/SurfaceDock";
 import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import { MessageSquare, Sparkles } from "lucide-react";
@@ -23,9 +21,8 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 //: 两个分区(ADR 0055):对话;创作是图像、视频、语音、播客、音乐一个工作台 —— 会话列表上面一排筛选,种类由挑的模型定。
 const STUDIO_TAB_LABELS = { chat: "aiTabChat", create: "aiTabCreate" } as const;
 
-export function AiStudio({ workspace, surfaceContext }: { workspace: Workspace; surfaceContext?: PageContext }) {
+export function AiStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
-  const [surfaceOpen, setSurfaceOpen] = React.useState(false);
   const [tab, setTab] = usePersistentTab<StudioTab>(STUDIO_TAB_KEY, "chat", STUDIO_TABS);
   useStudioLink(setTab);
 
@@ -53,14 +50,11 @@ export function AiStudio({ workspace, surfaceContext }: { workspace: Workspace; 
 
   return (
     // 聊天/创作只在线程内部滚动,页面本身不滚(overflow-hidden)。
-    <div className="relative flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-workspace-panel">
-      {surfaceOpen && surfaceContext && (
-        <SurfaceDock view="projects" context={surfaceContext} onClose={() => setSurfaceOpen(false)} />
-      )}
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-workspace-panel">
       {tab === "chat" ? (
-        <ChatWorkspace workspace={workspace} switcher={switcher} onOpenProjects={surfaceContext ? () => setSurfaceOpen(true) : undefined} />
+        <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (
-        <GenerateWorkspace workspace={workspace} switcher={switcher} onOpenProjects={surfaceContext ? () => setSurfaceOpen(true) : undefined} />
+        <GenerateWorkspace workspace={workspace} switcher={switcher} />
       )}
     </div>
   );

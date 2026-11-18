@@ -478,8 +478,6 @@ export const otherUi = {
   chatTabTrace: "轨迹",
   chatSessionsCollapse: "收起对话列表",
   chatSessionsExpand: "展开对话列表",
-  surfacePanel: "侧栏面板",
-  surfaceOpenProjects: "打开项目面板",
   sizeApprox: "约 {size}",
   ttsThisDownloading: "这个引擎正在下载中。",
   chatJumpToLatest: "回到最新",

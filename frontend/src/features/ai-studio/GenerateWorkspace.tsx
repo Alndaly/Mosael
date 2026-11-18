@@ -9,7 +9,6 @@ import {
   Cpu,
   Eye,
   Film,
-  FolderKanban,
   Image as ImageIcon,
   Images,
   Music,
@@ -389,11 +388,9 @@ const GENERATION_KINDS = ["image", "video", "audio"] as const;
 export function GenerateWorkspace({
   workspace,
   switcher,
-  onOpenProjects,
 }: {
   workspace: Workspace;
   switcher?: React.ReactNode;
-  onOpenProjects?: () => void;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -1471,11 +1468,6 @@ export function GenerateWorkspace({
           >
             {sessionListOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
           </IconButton>
-          {onOpenProjects && (
-            <IconButton variant="ghost" size="icon-sm" label={t("surfaceOpenProjects")} onClick={onOpenProjects}>
-              <FolderKanban />
-            </IconButton>
-          )}
           <Truncate className="flex-1 text-ui-sm font-medium">{activeSession ? sessionTitle(t, activeSession) : t("generationNewSession")}</Truncate>
           {!readOnly && (
             <Button variant="ghost" size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
