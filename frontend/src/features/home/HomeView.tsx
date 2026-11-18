@@ -46,11 +46,10 @@ import { toast } from "sonner";
 export type ProjectsLoad = { pending: boolean; error: unknown; retrying: boolean; retry: () => void };
 
 /**
- * **剪辑页没有选中项目时的项目浏览器。**
+ * **独立的项目浏览 surface**(`#/projects`)。
  *
- * 这里曾经是独立的「工作台」tab。它和剪辑页共享同一个 `projectId`,却各有一套新建/切换行为:
- * 在首页新建留在原地,在顶栏新建直接进剪辑 —— 同一个动作两种结果。现在只留一个页面:
- * 没选项目时就是这里,选中之后就是编辑器(见 app/pages.tsx)。
+ * 剪辑只由 `#/editor?p=<id>` 打开;没有项目时不再把编辑器当首页,而是落到这里。
+ * 选中项目后由 `openProject` 切到编辑器(见 app/pages.tsx)。
  */
 export function HomeView({
   workspace,

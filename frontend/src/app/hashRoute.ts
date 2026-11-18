@@ -12,9 +12,12 @@ export function readHash(): { view: StudioView; projectId: string | null } {
   // Hash routing survives file:// packaging — the fragment never hits HTTP.
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [path, query] = raw.split("?");
-  //: 不认识的页面(包括已经不存在的 `home`)落到剪辑页:没有项目时它就是项目浏览器。
-  const view = VALID_VIEWS.includes(path) ? (path as StudioView) : "editor";
   const projectId = new URLSearchParams(query ?? "").get("p");
+  //: 不认识的页面(包括已经不存在的 `home`)落到 AI Studio;它是产品的默认入口。
+  const parsed = VALID_VIEWS.includes(path) ? (path as StudioView) : "ai";
+  //: `#/editor` 不带 `p` 是“还没有选中项目”的旧入口,交给独立项目浏览页;
+  //: 真正的编辑器只由 `#/editor?p=<id>` 打开。
+  const view = parsed === "editor" && !projectId ? "projects" : parsed;
   return { view, projectId };
 }
 
@@ -25,7 +28,7 @@ const PAGE_QUERY_VIEWS: readonly StudioView[] = ["notes", "scenes", "boards", "e
  * 换页之后项目 id 怎么取。
  *
  * - 新地址明确带了 `p` → 用它;
- * - 目标是剪辑且没带 `p` → 这是“回到项目列表”,清掉;
+ * - 目标是剪辑或项目浏览页且没带 `p` → 项目列表语境,清掉;
  * - 其它页(笔记/画板/场景/实体/AI)没带 `p` → **沿用当前项目**。侧栏只是换页,
  *   不该把正在剪的项目丢掉;以前这里一律 `setProjectId(next.projectId)`,点一下
  *   “3D 场景”再回剪辑就只剩项目列表了。
@@ -35,7 +38,7 @@ export function projectAfterHashChange(
   next: { view: StudioView; projectId: string | null },
 ): string | null {
   if (next.projectId) return next.projectId;
-  return next.view === "editor" ? null : currentProjectId;
+  return next.view === "editor" || next.view === "projects" ? null : currentProjectId;
 }
 
 /** 写一个规范 hash;`params` 是这一页自己的参数,`p` 由这里统一补。 */

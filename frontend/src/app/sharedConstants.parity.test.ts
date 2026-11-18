@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
 
 import contract from "../../../contracts/shared-constants.json";
 import studioViews from "../../../contracts/studio-views.json";
-import { NAV_ITEMS } from "@/components/layout/navLabels";
+import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { WINDOW_CHROME_HEIGHT } from "@/lib/windowChrome";
 import { PUBLISH_BAR_HEIGHT } from "@/app/App";
 import { BOARD_ITEM_TITLE_MAX } from "@/features/boards/BoardNodeLabel";
@@ -62,8 +62,8 @@ describe("shared-constants 的前端一侧", () => {
 });
 
 describe("contracts/studio-views.json 的前端一侧", () => {
-  it("导航里的页面就是契约里那一组 —— mosael:// 深链按它把关", () => {
-    // NAV_ITEMS 是 StudioView 的全部取值(每个页面一条);新加一页而契约没跟上,深链就跳不过去。
-    expect(NAV_ITEMS.map((item) => item.view).sort()).toEqual([...studioViews.views].sort());
+  it("可路由页面就是契约里那一组 —— mosael:// 深链按它把关", () => {
+    // STUDIO_VIEWS 是 StudioView 的全部可路由取值;新加一页而契约没跟上,深链就跳不过去。
+    expect([...STUDIO_VIEWS].sort()).toEqual([...studioViews.views].sort());
   });
 });

@@ -105,8 +105,6 @@ const hideNativeView = () => void window.mosaelPublish?.hideView().catch(() => u
 //: 缓存窗口、获焦不重拉、4xx 不重试都在 app/queryClient 里说明。
 const queryClient = createAppQueryClient((message) => toast.error(message), translateNow);
 
-const EDITOR_VIEW: StudioView = "editor";
-
 export function App() {
   // **整页点不动**的兜底:Radix 偶发把 body 的 pointer-events:none 留在那儿(浮层还开着就被
   // 卸载、或两个浮层的清理互相打架),此后整个应用只能刷新。挂在最外层 —— 留下锁的那个浮层
@@ -563,9 +561,9 @@ function Studio({
     sceneNavigation.visit(workspace.id, window.location.hash);
     // Set the destination before mounting SceneStudio: its initial state reads the URL.
     if (next === "scenes") window.location.hash = sceneNavigation.restore(workspace.id);
-    //: 侧栏只是换页:不清掉当前项目。项目 id 在 hash 的 `p` 里,回到剪辑仍然是那条时间线;
-    //: 要回项目列表,用顶栏面包屑里的「剪辑」(见 AppShell),不是侧栏。
-    setView(next);
+    //: 剪辑是项目 surface:没有当前项目时先落到项目浏览页,而不是空编辑器。
+    //: 侧栏只是换页,不清掉当前项目;要回项目列表走 `showProjects`。
+    setView(next === "editor" && !projectIdRef.current ? "projects" : next);
   };
 
   // Switching workspaces: the open project belongs to the previous workspace, so
@@ -576,7 +574,8 @@ function Studio({
       lastWorkspaceRef.current = workspace.id;
       routeWorkspace.current = workspace.id;
       setProjectId(null);
-      setView("editor");
+      //: 新工作区从 Agent 入口开始;项目属于旧工作区,不能继承。
+      setView("ai");
     }
   }, [workspace.id]);
 
@@ -606,8 +605,8 @@ function Studio({
     queryFn: () =>
       api<ProjectWithStats[]>(`/api/projects?workspace_id=${workspace.id}`),
     staleTime: 0,
-    //: 项目列表是这一页的空态;选中项目之后不再轮询(剪辑页有自己的查询)。
-    refetchInterval: view === EDITOR_VIEW && projectId === null ? 5_000 : false,
+    //: 项目列表页需要保持新鲜;选中项目之后不再轮询(剪辑页有自己的查询)。
+    refetchInterval: view === "projects" ? 5_000 : false,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
@@ -621,8 +620,9 @@ function Studio({
     if (!projectId || !projects.data) return;
     if (projects.data.some((item) => item.id === projectId)) return;
     setProjectId(null);
+    if (view === "editor") setView("projects");
     toast(t("projectMissing"));
-  }, [projectId, projects.data, t]);
+  }, [projectId, projects.data, t, view]);
 
   const openProject = (id: string) => {
     setProjectId(id);
@@ -630,7 +630,7 @@ function Studio({
   };
   const showProjects = () => {
     setProjectId(null);
-    setView("editor");
+    setView("projects");
   };
 
   // 新建项目的入口不止剪辑页一处(顶栏切换器、命令面板也有),所以在这里建一次往下传,

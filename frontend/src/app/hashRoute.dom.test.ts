@@ -24,11 +24,12 @@ it("别的页照旧写成规范的样子:项目参数是 ?p=,不认识的参数�
   expect(window.location.hash).toBe("#/media");
 });
 
-it("侧栏换页不丢当前项目;只有回到剪辑且不带 p 才清空", () => {
+it("侧栏换页不丢当前项目;回到剪辑或项目列表且不带 p 才清空", () => {
   const next = (view: StudioView, projectId: string | null = null) => ({ view, projectId });
   expect(projectAfterHashChange("p1", next("scenes"))).toBe("p1");
   expect(projectAfterHashChange("p1", next("notes"))).toBe("p1");
   expect(projectAfterHashChange("p1", next("editor"))).toBeNull();
+  expect(projectAfterHashChange("p1", next("projects"))).toBeNull();
   expect(projectAfterHashChange("p1", next("editor", "p2"))).toBe("p2");
 });
 
@@ -46,14 +47,20 @@ it("写回地址时项目参数和页面自己的参数一起保留,刷新不丢
   expect(editor.get("s")).toBe("seq-2");
 });
 
-it("不认识的页面落到剪辑的项目浏览器(不留旧页面兼容分支)", () => {
+it("不认识的页面落到 AI Studio;剪辑和项目浏览页各自有明确的地址", () => {
   window.history.replaceState(null, "", "#/home");
-  expect(readHash()).toEqual({ view: "editor", projectId: null });
-  writeHash("editor", null);
-  expect(window.location.hash).toBe("#/editor");
+  expect(readHash()).toEqual({ view: "ai", projectId: null });
+  writeHash("ai", null);
+  expect(window.location.hash).toBe("#/ai");
 
   window.history.replaceState(null, "", "#/");
-  expect(readHash()).toEqual({ view: "editor", projectId: null });
+  expect(readHash()).toEqual({ view: "ai", projectId: null });
+
+  window.history.replaceState(null, "", "#/editor");
+  expect(readHash()).toEqual({ view: "projects", projectId: null });
+
+  window.history.replaceState(null, "", "#/projects");
+  expect(readHash()).toEqual({ view: "projects", projectId: null });
 
   window.history.replaceState(null, "", "#/editor?p=p1");
   expect(readHash()).toEqual({ view: "editor", projectId: "p1" });

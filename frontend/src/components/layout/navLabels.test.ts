@@ -17,10 +17,9 @@ import { join } from "node:path";
 import { NAV_ITEMS, STUDIO_VIEWS, navItemsAt, navLabelKey } from "@/components/layout/navLabels";
 
 describe("导航标签", () => {
-  it("每个视图都查得到自己的标签", () => {
+  it("每个可路由视图都查得到自己的标签", () => {
     for (const view of STUDIO_VIEWS) {
-      const found = NAV_ITEMS.find((item) => item.view === view);
-      expect(found, `${view} 没有导航标签 —— 面包屑会退回「首页」,页面顶上写着别的页面的名字`).toBeTruthy();
+      expect(navLabelKey(view), `${view} 没有页面标签 —— 面包屑会退回「首页」,页面顶上写着别的页面的名字`).toBeTruthy();
     }
   });
 

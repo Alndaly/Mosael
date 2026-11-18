@@ -36,6 +36,7 @@ export type StudioView =
   | "notes"
   | "scenes"
   | "editor"
+  | "projects"
   | "ai"
   | "publish"
   | "settings"
@@ -72,8 +73,7 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  //: 首页/工作台不是一个独立 tab —— 没有项目时,`editor` 就是项目浏览器(见 app/pages.tsx)。
-  //: 「剪辑」是唯一的项目入口:选项目、建项目、进时间线都在这一页。
+  //: AI Studio 是默认入口;「剪辑」是项目 surface 的入口,没有项目时先落到项目浏览页。
   { view: "ai", labelKey: "navAi", placement: "primary", icon: Bot, keywords: ["ai", "chat", "agent"] },
   { view: "editor", labelKey: "navEditor", placement: "primary", icon: Scissors, keywords: ["editor", "cut", "jianji", "project", "xiangmu"], dividerBefore: true },
   { view: "media", labelKey: "navMedia", placement: "primary", icon: FolderOpen, keywords: ["media", "assets", "sucai"] },
@@ -108,9 +108,15 @@ export function navItemsAt(placement: NavPlacement): readonly NavItem[] {
   return NAV_ITEMS.filter((item) => item.placement === placement);
 }
 
-export const STUDIO_VIEWS: readonly StudioView[] = NAV_ITEMS.map((item) => item.view);
+/** 可以出现在地址里的页面。项目浏览页是剪辑的空态 surface,不占侧栏一格。 */
+export const STUDIO_VIEWS: readonly StudioView[] = [...NAV_ITEMS.map((item) => item.view), "projects"];
+
+/** 不在侧栏、但面包屑需要名字的页面。 */
+const NON_NAV_LABEL_KEYS: Partial<Record<StudioView, MessageKey>> = {
+  projects: "homeProjectsTitle",
+};
 
 /** 查不到就是 null。**别兜成首页** —— 那正是 admin 顶着「首页」这个名字的原因。 */
 export function navLabelKey(view: StudioView): MessageKey | null {
-  return NAV_ITEMS.find((item) => item.view === view)?.labelKey ?? null;
+  return NAV_ITEMS.find((item) => item.view === view)?.labelKey ?? NON_NAV_LABEL_KEYS[view] ?? null;
 }

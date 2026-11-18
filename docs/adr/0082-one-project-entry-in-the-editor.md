@@ -2,6 +2,7 @@
 
 - 状态：**Accepted** — 2026-10-25
 - 相关：ADR 0060（智能体不再带用户跳页）、`contracts/studio-views.json`、`frontend/src/app/pages.tsx`
+- 后续：ADR 0104（阶段 1）把项目浏览页独立成 `#/projects`，AI Studio 成为默认入口；剪辑仍只由项目打开。
 
 ## 要解决什么
 

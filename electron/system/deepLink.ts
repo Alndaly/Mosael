@@ -41,6 +41,7 @@ export const ALLOWED_VIEWS: ReadonlySet<string> = new Set([
   "scenes",
   "boards",
   "editor",
+  "projects",
   "ai",
   "publish",
   "workflows",

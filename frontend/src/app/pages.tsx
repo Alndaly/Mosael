@@ -9,8 +9,8 @@ import { HomeView, type ProjectsLoad } from "@/features/home/HomeView";
  * **页面按需加载。** 打开一次素材库,不该先解析工作流的图编辑器、笔记的富文本内核和 3D 的
  * three.js —— 它们此前全在同一个 4.2 MB 的主包里,每次启动都要解析一遍。
  *
- * 首屏是「剪辑」没有项目时的项目浏览器:它一定会被渲染,所以直接 import(给它加一层
- * Suspense 只会多一次闪烁)。编辑器本身仍然懒加载 —— 选中项目之后才需要它。
+ * 首屏是 AI Studio;项目浏览页保持静态装配,剪辑只在选中项目后懒加载 ——
+ * 启动不会被 mp4box / 时间线拖重。
  */
 const AdminView = React.lazy(() => import("@/features/admin/AdminView").then((m) => ({ default: m.AdminView })));
 const AiStudio = React.lazy(() => import("@/features/ai-studio/AiStudio").then((m) => ({ default: m.AiStudio })));
@@ -56,7 +56,18 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
   notes: (ctx) => <NotesWithAgent key={ctx.workspace.id} workspace={ctx.workspace} />,
   scenes: (ctx) => <SceneStudio key={ctx.workspace.id} workspace={ctx.workspace} />,
   boards: (ctx) => <BoardsView workspace={ctx.workspace} />,
-  //: **一个 tab,两个状态。** 没有选中项目时是项目浏览器;选中之后才挂编辑器。
+  //: 项目浏览页是独立 surface;剪辑只由 `#/editor?p=<id>` 打开。
+  projects: (ctx) => (
+    <HomeView
+      workspace={ctx.workspace}
+      projects={ctx.projects}
+      load={ctx.projectsLoad}
+      onOpenProject={ctx.openProject}
+      onCreateProject={ctx.createProject}
+      creatingProject={ctx.creatingProject}
+    />
+  ),
+  //: 兜底:项目在打开后被删掉的那一瞬间仍显示项目列表,不把空编辑器留给用户。
   //: 编辑器保持懒加载,项目浏览器在首屏静态闭包里 —— 启动不会被 mp4box / 时间线拖重。
   editor: (ctx) =>
     ctx.project ? (
