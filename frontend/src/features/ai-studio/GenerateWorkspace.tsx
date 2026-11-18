@@ -16,6 +16,8 @@ import {
   SlidersHorizontal,
   CircleAlert,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Send,
   Sparkles,
   Square,
@@ -148,6 +150,7 @@ import {
   lyricsLimit,
 } from "@/features/ai-studio/audioGeneration";
 import { SessionList } from "@/features/ai-studio/SessionList";
+import { useSessionListOpen } from "@/features/ai-studio/useSessionListOpen";
 import { GenerationModelGate } from "@/features/ai-studio/GenerationModelGate";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
 import { takeGenerationHandoff } from "@/lib/generationHandoff";
@@ -395,6 +398,7 @@ export function GenerateWorkspace({
   const writeBlocked = useWriteBlocked(workspace.role);
 
   const panels = useSidePanels("generation", AI_PANEL_BOUNDS);
+  const [sessionListOpen, setSessionListOpen] = useSessionListOpen();
   const narrowLayout = useMediaMatch("(max-width: 1180px)");
   const singleColumn = useMediaMatch("(max-width: 820px)");
   const [parametersOpen, setParametersOpen] = React.useState(() => !narrowLayout);
@@ -467,11 +471,16 @@ export function GenerateWorkspace({
   const showRightPanel = panelOpen && !narrowLayout;
   // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判 ——
   // 单列也显式指定,避免 CSS 与 matchMedia 在断点处有不同的边界语义。
+  const showLeft = sessionListOpen && !singleColumn;
   const columns = singleColumn
     ? "minmax(0,1fr)"
-    : showRightPanel
+    : showLeft && showRightPanel
       ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
-      : `${panels.left}px minmax(0,1fr)`;
+      : showLeft
+        ? `${panels.left}px minmax(0,1fr)`
+        : showRightPanel
+          ? `minmax(0,1fr) ${panels.right}px`
+          : "minmax(0,1fr)";
   //: 贴底跟随(见 features/agent/stickToBottom)。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
   //: 一条会话先取最近的一页(ADR 0052:一块画板一条会话,跑了几百次就是几百轮),往上翻点「显示更早的」再多要一页。
@@ -1380,7 +1389,7 @@ export function GenerateWorkspace({
     >
       {/* 和对话页同一套(lib/useResizableSidebar):同一个形状不该有两份实现,
           而这边此前一条拖柄都没有 —— 右栏那些参数挤在 300px 里,长模型名一个都看不全。 */}
-      {!singleColumn && (
+      {showLeft && (
         <div
           className={SIDEBAR_HANDLE_CLASS}
           style={{ left: handleOffset(panels.left) }}
@@ -1396,7 +1405,7 @@ export function GenerateWorkspace({
       )}
       {/* 和对话栏同一个组件:分组、拖进分组、搜索、批量删,两边一份实现。
           布局也照它 —— flex 列而不是定行数的 grid:搜索框是条件渲染的,行数会变。 */}
-      <StudioIndex label={t("generationSessionsTitle")}>
+      {sessionListOpen && <StudioIndex label={t("generationSessionsTitle")}>
         <SessionList
           kind="generation"
           workspaceId={workspace.id}
@@ -1446,10 +1455,19 @@ export function GenerateWorkspace({
             void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
           }}
         />
-      </StudioIndex>
+      </StudioIndex>}
 
       <section className="min-h-0 overflow-hidden bg-workspace-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
         <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            label={sessionListOpen ? t("chatSessionsCollapse") : t("chatSessionsExpand")}
+            aria-pressed={sessionListOpen}
+            onClick={() => setSessionListOpen((open) => !open)}
+          >
+            {sessionListOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+          </IconButton>
           <Truncate className="flex-1 text-ui-sm font-medium">{activeSession ? sessionTitle(t, activeSession) : t("generationNewSession")}</Truncate>
           {!readOnly && (
             <Button variant="ghost" size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>

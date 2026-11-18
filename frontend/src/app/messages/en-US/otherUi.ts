@@ -478,6 +478,8 @@ export const otherUi = {
   subtitleDubFailed: "Could not queue the dubbing",
   chatTabConversation: "Conversation",
   chatTabTrace: "Trace",
+  chatSessionsCollapse: "Collapse session list",
+  chatSessionsExpand: "Expand session list",
   sizeApprox: "~{size}",
   ttsThisDownloading: "This engine is already downloading.",
   chatJumpToLatest: "Jump to latest",

@@ -2,7 +2,7 @@ import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleDot, Database, Eye, MessageSquare, PanelRight, Route, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleDot, Database, Eye, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Route, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -75,6 +75,7 @@ import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
 import { buildTurns } from "@/features/agent/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
+import { useSessionListOpen } from "@/features/ai-studio/useSessionListOpen";
 import { InspectorSubagentList, SubagentBreadcrumb, SubagentSessionView, collectSubagentRuns, type SubagentRun } from "@/features/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -413,6 +414,7 @@ export function ChatWorkspace({
   // —— 可拉伸分栏(照剪辑页的模式:pointer 拖拽 + localStorage 持久化 + 边界钳制)——
   // clamp 在**读取**时也做:localStorage 里可能躺着旧版本写的越界值。
   const panels = useSidePanels("ai", AI_PANEL_BOUNDS);
+  const [sessionListOpen, setSessionListOpen] = useSessionListOpen();
 
   const usageByMessage = React.useMemo(() => {
     const byMessage = new Map<string, AgentUsageEvent[]>();
@@ -479,11 +481,16 @@ export function ChatWorkspace({
   const showRight = environmentOpen && !narrow;
   // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判:
   // 单列也显式指定,避免 matchMedia 的 ≤ 与 CSS max-width 的 < 在断点处不一致。
+  const showLeft = sessionListOpen && !single;
   const columns = single
     ? "minmax(0,1fr)"
-    : showRight
+    : showLeft && showRight
       ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
-      : `${panels.left}px minmax(0,1fr)`;
+      : showLeft
+        ? `${panels.left}px minmax(0,1fr)`
+        : showRight
+          ? `minmax(0,1fr) ${panels.right}px`
+          : "minmax(0,1fr)";
 
 
   return (
@@ -499,7 +506,7 @@ export function ChatWorkspace({
       style={{ gridTemplateColumns: columns }}
     >
       {/* 拖柄压在栏与栏之间那条分割线上 —— 和剪辑页同款。 */}
-      {!single && (
+      {showLeft && (
         <div
           className={SIDEBAR_HANDLE_CLASS}
           style={{ left: handleOffset(panels.left) }}
@@ -516,7 +523,7 @@ export function ChatWorkspace({
       {/* flex 列而不是定行数的 grid:搜索框是**条件渲染**的(空列表/选择模式下不出现),
           而 `grid-rows-[auto_minmax(0,1fr)]` 一旦子元素从两个变三个,能滚的那一行就落到
           搜索框头上,列表反而掉进隐式行撑破容器。 */}
-      <StudioIndex label={t("chatSessionsTitle")}>
+      {sessionListOpen && <StudioIndex label={t("chatSessionsTitle")}>
         <SessionList
           kind="agent"
           workspaceId={workspace.id}
@@ -550,7 +557,7 @@ export function ChatWorkspace({
                 }
           }
         />
-      </StudioIndex>
+      </StudioIndex>}
 
       {/* 文件拖到整块对话区上都算数(输入框只有两行高,瞄准它松手太难)。只读、看子代理时没有输入框,
           也就没有附件可加 —— 那时不接拖放,不亮一个松手后什么都不会发生的提示。 */}
@@ -564,6 +571,15 @@ export function ChatWorkspace({
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
         <div ref={measureToolbar} className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            label={sessionListOpen ? t("chatSessionsCollapse") : t("chatSessionsExpand")}
+            aria-pressed={sessionListOpen}
+            onClick={() => setSessionListOpen((open) => !open)}
+          >
+            {sessionListOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+          </IconButton>
           {viewingSubagent ? (
             <SubagentBreadcrumb
               sessionTitle={activeSession?.title || t("chatSessionsTitle")}
@@ -596,7 +612,7 @@ export function ChatWorkspace({
           </div>
           </>
           )}
-          <IconButton variant="ghost" size="icon-sm" label={t("agentInspectorTitle")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></IconButton>
+          <IconButton variant="ghost" size="icon-sm" label={t("agentInspectorTitle")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}>{environmentOpen ? <PanelRightClose /> : <PanelRightOpen />}</IconButton>
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
             <span className="shrink-0 empty:hidden">

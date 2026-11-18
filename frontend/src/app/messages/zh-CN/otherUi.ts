@@ -476,6 +476,8 @@ export const otherUi = {
   subtitleDubFailed: "配音排队失败",
   chatTabConversation: "对话",
   chatTabTrace: "轨迹",
+  chatSessionsCollapse: "收起对话列表",
+  chatSessionsExpand: "展开对话列表",
   sizeApprox: "约 {size}",
   ttsThisDownloading: "这个引擎正在下载中。",
   chatJumpToLatest: "回到最新",
