@@ -39,7 +39,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
-import { useCurrentAgentSession, useSessionSettings } from "@/features/agent/currentAgentSession";
+import { useAgentWorkingSet } from "@/app/useAgentWorkingSet";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { useNodePicker } from "@/features/nodeForms/nodePicker";
@@ -464,25 +464,15 @@ export function WorkflowEditor({
       [analysis.issues],
     ),
   );
-  const agentSession = useCurrentAgentSession(workflow.workspace_id, agentPlace).session;
-  const { settings: agentSettings, update: updateWorkingSet } = useSessionSettings(workflow.workspace_id, agentPlace, agentSession);
-  React.useEffect(() => {
-    if (agentSession?.is_mine === false) return;
-    const selection = selectedNode
-      ? { node_id: selectedNode.id, node_type: selectedNode.type }
-      : {};
-    updateWorkingSet.mutate({
-      working_set: {
-        project_id: agentSettings.working_set?.project_id ?? "",
-        surface: "workflows",
-        selection,
-      },
-    });
-    // 工作流节点只是“这个节点”的指代,不是工作流归属或运行授权。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflow.id, selectedNodeId, agentSession?.id]);
 
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  useAgentWorkingSet(
+    workflow.workspace_id,
+    agentPlace,
+    selectedNode ? { node_id: selectedNode.id, node_type: selectedNode.type } : {},
+    `${workflow.id}:${selectedNodeId ?? ""}`,
+  );
+
 
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
   const agentPanel = (

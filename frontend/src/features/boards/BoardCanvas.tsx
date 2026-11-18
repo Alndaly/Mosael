@@ -86,7 +86,7 @@ import { BOARD_SELECTION_SKIN, BoardSelectionOutlet, LINK_TARGET_CLASS } from "@
 import { boundsOf, type PlacedCell, type XY } from "@/features/boards/selectionLink";
 import { useBoardViewport } from "@/features/boards/useBoardViewport";
 import { useFrameDrag } from "@/features/boards/useFrameDrag";
-import { useCurrentAgentSession, useSessionSettings } from "@/features/agent/currentAgentSession";
+import { useAgentWorkingSet } from "@/app/useAgentWorkingSet";
 
 //: 纯函数拆到了 boardCanvasModel.ts;别处(和测试)仍从这里取。
 export {
@@ -599,24 +599,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   );
   /** 选区框:选中两格以上时整组外面那一圈;统一出口连出去的是其中连得出线的几格(从左到右)。评论、标记模式下没有。 */
   const selectedCells = placedCells.filter((cell) => cell.selected);
-  const agentSession = useCurrentAgentSession(workspaceId, { kind: "board", id: boardId }).session;
-  const { settings: agentSettings, update: updateWorkingSet } = useSessionSettings(workspaceId, { kind: "board", id: boardId }, agentSession);
   const cellSelectionKey = selectedCells.map((cell) => cell.id).sort().join(",");
-  React.useEffect(() => {
-    if (agentSession?.is_mine === false) return;
-    const selection = selectedCells.length > 0
-      ? { cell_ids: selectedCells.map((cell) => cell.id).slice(0, 30) }
-      : {};
-    updateWorkingSet.mutate({
-      working_set: {
-        project_id: agentSettings.working_set?.project_id ?? "",
-        surface: "boards",
-        selection,
-      },
-    });
-    // 画布格子只是“这几格”的指代,不是把画板绑给会话。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, boardId, cellSelectionKey, agentSession?.id]);
+  useAgentWorkingSet(
+    workspaceId,
+    { kind: "board", id: boardId },
+    selectedCells.length > 0 ? { cell_ids: selectedCells.map((cell) => cell.id).slice(0, 30) } : {},
+    cellSelectionKey,
+  );
 
   const selectionFrame = !commentMode && !markerMode && selectedCells.length > 1 ? boundsOf(selectedCells) : null;
   const outletSources = React.useMemo(() => selectionSources(placedCells), [placedCells]);
