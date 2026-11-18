@@ -101,6 +101,13 @@ describe("有分组时,空态在分组下面、撑满剩下的高度", () => {
     expect(precedes(toggle, empty()!)).toBe(true);
   });
 
+  it("分组只表达归属,组内会话不再额外缩进", async () => {
+    renderList({ sessions: [{ ...row("s2", "海报"), group_id: "g1" }], groups: [GROUP] });
+    await waitFor(() => expect(document.querySelector("[data-group-toggle]")).toBeTruthy());
+    const groupedRow = screen.getByText("海报").closest("button");
+    expect(groupedRow?.parentElement).not.toHaveClass("pl-2");
+  });
+
   it("这里开过的有(哪怕都收在分组里):不说「一条都没有」", async () => {
     renderList({ sessions: [{ ...row("s2", "海报"), group_id: "g1" }], groups: [GROUP] });
     await waitFor(() => expect(document.querySelector("[data-group-toggle]")).toBeTruthy());

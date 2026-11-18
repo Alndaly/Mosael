@@ -18,6 +18,8 @@ import {
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Send,
   Sparkles,
   Square,
@@ -1470,7 +1472,17 @@ export function GenerateWorkspace({
           </IconButton>
           <Truncate className="flex-1 text-ui-sm font-medium">{activeSession ? sessionTitle(t, activeSession) : t("generationNewSession")}</Truncate>
           {!readOnly && (
-            <Button variant="ghost" size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
+            <IconButton
+              variant="ghost"
+              size="icon-sm"
+              label={t("generationEngineSettings")}
+              aria-pressed={parametersOpen}
+              aria-expanded={parametersOpen}
+              aria-controls={parametersOpen ? enginePanelId : undefined}
+              onClick={() => setParametersOpen(!parametersOpen)}
+            >
+              {parametersOpen ? <PanelRightClose /> : <PanelRightOpen />}
+            </IconButton>
           )}
         </div>
         <div className="relative grid min-h-0 min-w-0">

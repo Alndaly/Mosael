@@ -157,6 +157,16 @@ describe("共享来的会话只能看", () => {
     expect(await screen.findByRole("textbox", { name: "genPromptLabel" })).toBeInTheDocument();
     expect(screen.queryByRole("note")).toBeNull();
     expect(screen.getByRole("complementary", { name: "generationEngineSettings" })).not.toHaveClass("hidden");
+    const engineToggle = screen.getByRole("button", { name: "generationEngineSettings" });
+    expect(engineToggle).toHaveAttribute("aria-pressed", "true");
+    expect(engineToggle).toHaveAttribute("aria-expanded", "true");
+    expect(engineToggle).not.toHaveTextContent("generationEngineSettings");
+    expect(engineToggle.querySelector(".lucide-panel-right-close")).not.toBeNull();
+    fireEvent.click(engineToggle);
+    expect(engineToggle).toHaveAttribute("aria-pressed", "false");
+    expect(engineToggle).toHaveAttribute("aria-expanded", "false");
+    expect(engineToggle.querySelector(".lucide-panel-right-open")).not.toBeNull();
+    expect(screen.getByRole("complementary", { name: "generationEngineSettings", hidden: true })).toHaveClass("hidden");
     const row = await screen.findByRole("button", { name: /同事的海报/ });
     fireEvent.contextMenu(row);
     expect(await screen.findByRole("menuitem", { name: /rename/ })).toBeInTheDocument();

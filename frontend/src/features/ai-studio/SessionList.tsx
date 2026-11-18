@@ -621,7 +621,7 @@ export function SessionList<S extends ListedSession>({
                   </ContextMenuContent>
                 </ContextMenu>
                 {!isCollapsed && (
-                  <div className="grid gap-1 pl-2">{members.map(renderSession)}</div>
+                  <div className="grid gap-1">{members.map(renderSession)}</div>
                 )}
               </GroupSection>
             );
