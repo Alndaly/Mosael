@@ -338,6 +338,19 @@ def test_画板格子选区进入系统提示() -> None:
         assert "当前选中画板格子 IDs=cell-a,cell-b" in prompt
 
 
+def test_工作流节点选区进入系统提示() -> None:
+    client = fresh_client()
+    workspace = _workspace(client)
+    created = _session(
+        client, workspace, STUDIO,
+        working_set={"project_id": "", "surface": "workflows",
+                     "selection": {"node_id": "node-7", "node_type": "generate_image"}},
+    )
+    with SessionLocal() as db:
+        prompt = build_system_prompt(db, db.get(AgentSession, created["id"]))
+        assert "当前选中工作流节点 ID=node-7,类型=generate_image" in prompt
+
+
 def test_工作上下文跟着会话走并进入系统提示() -> None:
     client = fresh_client()
     workspace = _workspace(client)
