@@ -715,6 +715,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Files on this computer belong to the deployment admin, and only admins can read them directly. Use an asset from the library instead, or ask an admin to add the folder to “Folders shared with members”.",
     },
     # 往网页上传框塞的文件(见 host_files.upload_source):素材和本机路径只能给一个。
+    "hostErr_notTrusted": {
+        "zh": "这个路径不在信任目录里。请让管理员把文件夹加到共享目录,或改用信任目录里的文件",
+        "en": "That path isn't in a trusted folder. Ask an admin to share the folder, or use a file inside a trusted folder.",
+    },
+    "hostErr_notADirectory": {
+        "zh": "这个路径不是一个存在的文件夹",
+        "en": "That path isn't an existing folder.",
+    },
     "hostErr_uploadBothSources": {
         "zh": "素材和本机路径只能填一个:请清空其中一个",
         "en": "Fill in either an asset or a path on this computer, not both. Clear one of them.",

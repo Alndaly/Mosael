@@ -30,6 +30,7 @@ from tests.util import pinned, fresh_client, make_video_asset, second_client
 #: 读本机的那一刻。每一个都必须有一个**必填**的关键字参数 `actor`。
 SEAMS = {
     "ensure_readable": host_files.ensure_readable,
+    "ensure_trusted_path": host_files.ensure_trusted_path,
     "ensure_whole_machine": host_files.ensure_whole_machine,
     "upload_source": host_files.upload_source,
 }
@@ -42,6 +43,10 @@ ENTRY_POINTS = {
     ("app/api/routes/assets.py", "import_local_asset"),
     ("app/domain/agent/confirmable/external.py", "_execute_run_host_code"),
     ("app/domain/agent/confirmable/blender.py", "_execute_blender_execute"),
+    ("mcp_server.py", "host_trusted_dirs"),
+    ("mcp_server.py", "host_list_dir"),
+    ("mcp_server.py", "host_read_file"),
+    ("mcp_server.py", "host_write_file"),
 }
 
 
@@ -102,7 +107,7 @@ def test_every_entry_point_goes_through_the_seam(path: str, function: str) -> No
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
         and isinstance(node.func.value, ast.Name) and node.func.value.id == "host_files"
     }
-    assert used & {"ensure_readable", "upload_source", "ensure_whole_machine"}, f"{path}:{function} 没过 host_files"
+    assert used & {"ensure_readable", "ensure_trusted_path", "trusted_folders", "upload_source", "ensure_whole_machine"}, f"{path}:{function} 没过 host_files"
 
 
 def test_the_browser_only_uploads_a_host_file() -> None:
@@ -207,6 +212,26 @@ def test_admin_reads_anything_members_only_the_shared_folders(tmp_path) -> None:
             host_files.ensure_readable(db, str(tmp_path / "nothing-here"), actor=mate)
         with pytest.raises(host_files.HostFileNotAllowed):
             host_files.ensure_readable(db, str(inside), actor=None)
+
+
+def test_trusted_paths_are_inside_shared_folders_or_default_roots(tmp_path) -> None:
+    _owner, _workspace, mate = _team()
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    inside = shared / "notes.txt"
+    inside.write_text("ok")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("no")
+    _owner.put("/api/admin/shared-host-folders", json={"folders": [str(shared)]})
+    with SessionLocal() as db:
+        actor = _uid("mate")
+        assert host_files.ensure_trusted_path(db, str(inside), actor=actor, must_exist=True).path == pathlib.Path(
+            os.path.realpath(inside)
+        )
+        for path in (outside, shared / ".." / "outside.txt"):
+            with pytest.raises(host_files.HostFileNotAllowed) as refused:
+                host_files.ensure_trusted_path(db, str(path), actor=actor, must_exist=True)
+            assert refused.value.key == "hostErr_notTrusted"
 
 
 def test_code_on_this_machine_needs_an_admin() -> None:

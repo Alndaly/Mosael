@@ -44,6 +44,10 @@ class HostFileNotAllowed(PermissionDenied):
     """这个人不能读这台电脑上的这个位置。是 `PermissionDenied`,api 回 403。"""
 
 
+#: 单机/桌面安装的默认信任目录。只放 Mosael 自己的两个工作入口,不把整个家目录交出去。
+DEFAULT_TRUSTED_SUBDIRS = ("Documents/Mosael", "Downloads/Mosael")
+
+
 class HostFileNotVouched(HostFileNotAllowed):
     """跑的人读得了,但被执行的那一版工作流是别人改的,改它的人读不了 —— 要管理员认可这一版。
 
@@ -58,6 +62,16 @@ class HostFileNotVouched(HostFileNotAllowed):
 @dataclass(frozen=True)
 class HostFile:
     """一份**已经放行**的本机文件(真实路径)。只有本模块构造它 —— 见模块说明。"""
+
+    path: Path
+
+    def __str__(self) -> str:
+        return str(self.path)
+
+
+@dataclass(frozen=True)
+class HostPath:
+    """已经过信任目录判断的路径(文件或目录)。文件工具只收这个。"""
 
     path: Path
 
@@ -99,6 +113,57 @@ def may_read(db: Session, path: str | os.PathLike[str], *, actor: str | None) ->
     if _is_admin(db, actor):
         return True
     return _in_shared_folder(db, _real(path))
+
+
+def trusted_folders(db: Session, *, actor: str | None) -> list[str]:
+    """文件工具可自动操作的目录。
+
+    - 部署管理员:两个默认工作目录 + 管理员共享给成员的目录;
+    - 其他成员:只共享目录,不继承服务器的家目录。
+
+    **不是**整台机器:任意代码仍走 `ensure_whole_machine` 和确认卡。这样文件工具能免卡,
+    但 `run_host_code` 不会因为当前目录在信任目录里就被放宽。
+    """
+    user = db.get(User, actor) if actor else None
+    if user is None:
+        return []
+    folders = shared_folders(db)
+    if user.is_deployment_admin:
+        folders = [*folders, *(str(Path.home() / part) for part in DEFAULT_TRUSTED_SUBDIRS)]
+    out: list[str] = []
+    for folder in folders:
+        real = str(_real(folder))
+        if real not in out:
+            out.append(real)
+    return out
+
+
+def ensure_trusted_path(
+    db: Session,
+    path: str | os.PathLike[str],
+    *,
+    actor: Actor,
+    must_exist: bool = False,
+    directory: bool = False,
+) -> HostPath:
+    """文件读写工具的统一入口:只放行信任目录内的路径。
+
+    写新文件时目标还不存在,按现有父目录展开真实路径;这样软链接和 `..` 不能把目标带到
+    信任目录外面。删除/覆盖仍由工具层单独决定是否确认。
+    """
+    raw = os.fspath(path).strip() if isinstance(path, str) else os.fspath(path)
+    if not raw or not Path(os.path.expanduser(raw)).is_absolute():
+        raise HostFileError("hostErr_notAbsolute")
+    real = _real(raw)
+    trusted = [Path(folder) for folder in trusted_folders(db, actor=actor)]
+    if not any(real == root or real.is_relative_to(root) for root in trusted):
+        raise HostFileNotAllowed("hostErr_notTrusted")
+    if must_exist:
+        if directory and not real.is_dir():
+            raise HostFileError("hostErr_notADirectory")
+        if not directory and not real.is_file():
+            raise HostFileError("hostErr_notAFile")
+    return HostPath(real)
 
 
 def ensure_readable(db: Session, path: str | os.PathLike[str], *, actor: Actor) -> HostFile:

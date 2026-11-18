@@ -2157,6 +2157,103 @@ def read_skill_file(name: str, path: str, offset: int = 0, workspace_id: str = "
     return _use_case(use_cases.read_skill_file, ws, name, path, offset)
 
 
+# ---------- 本机文件:只在信任目录内自动操作 ----------
+#
+# 文件工具按**路径**判信任,而不是把 run_host_code 的整机器风险按目录放行。信任目录见
+# domain/host_files:桌面管理员是两个 Mosael 工作目录,成员只有管理员共享的目录。
+
+
+@tool(effect="reads")
+def host_trusted_dirs() -> dict[str, Any]:
+    """Read-only: list the local folders where file tools may operate without a confirmation card.
+
+    These are the deployment admin's Mosael folders (Documents/Mosael, Downloads/Mosael) plus
+    folders shared with members. Paths outside them are refused; arbitrary code still needs its
+    own confirmation card.
+    """
+    from app.domain import host_files
+
+    return _use_case(lambda db, user: {"folders": host_files.trusted_folders(db, actor=user.id)})
+
+
+@tool(effect="reads")
+def host_list_dir(path: str) -> dict[str, Any]:
+    """Read-only: list one local folder inside a trusted folder.
+
+    `path` must be absolute and inside a folder returned by host_trusted_dirs. Entries are
+    bounded; symlinks are shown but file tools still resolve their real path before reading.
+    """
+    from app.domain import host_files
+
+    def run(db, user) -> dict[str, Any]:
+        root = host_files.ensure_trusted_path(db, path, actor=user.id, must_exist=True, directory=True)
+        entries: list[dict[str, Any]] = []
+        truncated = False
+        for child in sorted(root.path.iterdir(), key=lambda one: (not one.is_dir(), one.name.lower())):
+            if len(entries) >= 500:
+                truncated = True
+                break
+            try:
+                stat = child.stat()
+                kind = "dir" if child.is_dir() else "file"
+                size = None if kind == "dir" else stat.st_size
+            except OSError:
+                kind, size = "other", None
+            entries.append({"name": child.name, "path": str(child), "kind": kind, "size": size})
+        return {"path": str(root.path), "entries": entries, "truncated": truncated}
+
+    return _use_case(run)
+
+
+@tool(effect="reads")
+def host_read_file(path: str, offset: int = 0, length: int = 20000) -> dict[str, Any]:
+    """Read-only: read a text file inside a trusted folder.
+
+    At most 20000 characters per call; use the returned `next_offset` to continue. Binary files
+    return metadata only. The path is resolved with realpath before the trust check.
+    """
+    from app.domain import host_files
+
+    def run(db, user) -> dict[str, Any]:
+        target = host_files.ensure_trusted_path(db, path, actor=user.id, must_exist=True)
+        size = target.path.stat().st_size
+        if size > 8 * 1024 * 1024:
+            raise ValueError("file is larger than 8 MiB; use a narrower file")
+        data = target.path.read_bytes()
+        if b"\0" in data[:4096]:
+            return {"path": str(target.path), "binary": True, "size": size}
+        text = data.decode("utf-8", errors="replace")
+        start = max(0, offset)
+        chunk = text[start:start + max(1, min(length, 20000))]
+        end = start + len(chunk)
+        return {"path": str(target.path), "text": chunk, "next_offset": None if end >= len(text) else end, "size": size}
+
+    return _use_case(run)
+
+
+@tool(effect="writes")
+def host_write_file(path: str, content: str, overwrite: bool = False) -> dict[str, Any]:
+    """Write a UTF-8 file inside a trusted folder, creating parent folders as needed.
+
+    Existing files are not replaced unless `overwrite=true`. This tool never leaves a trusted
+    folder; arbitrary code is a different tool and still requires confirmation.
+    """
+    from app.domain import host_files
+
+    if len(content.encode("utf-8")) > 1024 * 1024:
+        raise ValueError("content is larger than 1 MiB")
+
+    def run(db, user) -> dict[str, Any]:
+        target = host_files.ensure_trusted_path(db, path, actor=user.id)
+        if target.path.exists() and not overwrite:
+            raise ValueError("file exists; pass overwrite=true to replace it")
+        target.path.parent.mkdir(parents=True, exist_ok=True)
+        target.path.write_text(content, encoding="utf-8")
+        return {"path": str(target.path), "bytes": target.path.stat().st_size}
+
+    return _use_case(run)
+
+
 # ---------- 智能体自己管技能(ADR 0043):列出 / 看一份,和六件写的事 ----------
 #
 # 写的都开确认卡,而且每一张都要人点头(confirmable/skills 声明了 always_asks):不进「本会话始终允许」,放行准则、
