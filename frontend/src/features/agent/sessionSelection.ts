@@ -20,7 +20,7 @@ type AgentSessionCreate = components["schemas"]["AgentSessionCreate"];
 
 /** 草稿上能先选好的会话设置 —— 建会话时一起带上(见 `ensureAgentSession`)。 */
 export type AgentDraftSettings = Partial<
-  Pick<AgentSessionCreate, "provider_profile_id" | "model" | "thinking_level" | "permission_mode" | "analysis_video_mode">
+  Pick<AgentSessionCreate, "provider_profile_id" | "model" | "thinking_level" | "permission_mode" | "analysis_video_mode" | "working_set">
 >;
 
 const SESSION_PREFIX = "mosael.agent.session.";

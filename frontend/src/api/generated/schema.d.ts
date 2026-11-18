@@ -11158,6 +11158,7 @@ export interface components {
             permission_mode?: string | null;
             /** Analysis Video Mode */
             analysis_video_mode?: string | null;
+            working_set?: components["schemas"]["AgentWorkingSet"] | null;
         };
         /** AgentSessionOut */
         AgentSessionOut: {
@@ -11220,6 +11221,7 @@ export interface components {
              * @default auto
              */
             analysis_video_mode: string;
+            working_set?: components["schemas"]["AgentWorkingSet"];
             /**
              * Thinking Level
              * @default off
@@ -11257,6 +11259,7 @@ export interface components {
             thinking_level?: string | null;
             /** Permission Mode */
             permission_mode?: string | null;
+            working_set?: components["schemas"]["AgentWorkingSet"] | null;
             /** Auto Allow Tools */
             auto_allow_tools?: components["schemas"]["SessionAllowance"][] | null;
             /** Group Id */
@@ -11648,6 +11651,23 @@ export interface components {
              * @default true
              */
             speak_early: boolean;
+        };
+        /**
+         * AgentWorkingSet
+         * @description 这段对话现在对着什么工作:项目 + 面板。**不是授权** —— 具体操作仍由工具与权限闸校验。
+         */
+        AgentWorkingSet: {
+            /**
+             * Project Id
+             * @default
+             */
+            project_id: string;
+            /**
+             * Surface
+             * @default ai
+             * @enum {string}
+             */
+            surface: "ai" | "projects" | "editor" | "media" | "entities" | "notes" | "scenes" | "boards" | "workflows" | "publish" | "scheduler" | "plugins";
         };
         /** AiRuntimeConfigOut */
         AiRuntimeConfigOut: {

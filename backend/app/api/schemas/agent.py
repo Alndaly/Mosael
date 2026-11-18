@@ -112,6 +112,30 @@ class PlaceIn(ApiModel):
     id: str = Field(default="", max_length=700)
 
 
+#: 会话工作上下文里的面板。只列会影响操作语境的页面;设置/管理这类系统页不是工作对象。
+WorkingSurface = Literal[
+    "ai",
+    "projects",
+    "editor",
+    "media",
+    "entities",
+    "notes",
+    "scenes",
+    "boards",
+    "workflows",
+    "publish",
+    "scheduler",
+    "plugins",
+]
+
+
+class AgentWorkingSet(ApiModel):
+    """这段对话现在对着什么工作:项目 + 面板。**不是授权** —— 具体操作仍由工具与权限闸校验。"""
+
+    project_id: str = Field(default="", max_length=64)
+    surface: WorkingSurface = "ai"
+
+
 class AgentSessionCreate(ApiModel):
     workspace_id: str
     #: 在哪开的(ADR 0044)。**必填**:没有「缺省当 AI Studio」这条路 —— 界面上每一处都说得出自己在哪。
@@ -126,6 +150,7 @@ class AgentSessionCreate(ApiModel):
     thinking_level: str | None = None
     permission_mode: str | None = None
     analysis_video_mode: str | None = None
+    working_set: AgentWorkingSet | None = None
 
 
 class SessionGroupCreate(ApiModel):
@@ -167,6 +192,8 @@ class AgentSessionUpdate(ApiModel):
     thinking_level: str | None = None
     #: 权限模式:manual / auto / bypass。切到 bypass 另需 admin(见路由)。
     permission_mode: str | None = None
+    #: 这次对话现在对着的项目与面板。整份替换。
+    working_set: AgentWorkingSet | None = None
     #: 「本会话始终允许」的清单,每条是 (工具, 档位)。整份替换 —— 它就是用户在卡上点出来的那份清单。
     auto_allow_tools: list[SessionAllowance] | None = Field(default=None, max_length=40)
     #: 收进哪个分组。**空串 = 移出分组**(与 provider_profile_id 同一套约定):这套 schema 用
@@ -197,6 +224,7 @@ class AgentSessionOut(OrmModel):
     provider_profile_id: str | None = None
     model: str | None = None
     analysis_video_mode: str = "auto"
+    working_set: AgentWorkingSet = Field(default_factory=AgentWorkingSet)
     thinking_level: str = "off"
     status: str
     #: 当前上下文水位。**每次请求现算**,而不是等某一轮回报 —— 打开旧会话、刚换过模型、

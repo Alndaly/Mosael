@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { Workspace } from "@/api/client";
+import type { ProjectWithStats, Workspace } from "@/api/client";
 import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
@@ -20,7 +20,7 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 //: 两个分区(ADR 0055):对话;创作是图像、视频、语音、播客、音乐一个工作台 —— 会话列表上面一排筛选,种类由挑的模型定。
 const STUDIO_TAB_LABELS = { chat: "aiTabChat", create: "aiTabCreate" } as const;
 
-export function AiStudio({ workspace }: { workspace: Workspace }) {
+export function AiStudio({ workspace, projects = [] }: { workspace: Workspace; projects?: ProjectWithStats[] }) {
   const t = useI18n();
   const [tab, setTab] = usePersistentTab<StudioTab>(STUDIO_TAB_KEY, "chat", STUDIO_TABS);
   useStudioLink(setTab);
@@ -46,7 +46,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
     // 聊天/创作只在线程内部滚动,页面本身不滚(overflow-hidden)。
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-workspace-panel">
       {tab === "chat" ? (
-        <ChatWorkspace workspace={workspace} switcher={switcher} />
+        <ChatWorkspace workspace={workspace} projects={projects} switcher={switcher} />
       ) : (
         <GenerateWorkspace workspace={workspace} switcher={switcher} />
       )}

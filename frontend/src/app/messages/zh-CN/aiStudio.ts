@@ -2,6 +2,9 @@ export const aiStudio = {
   // AI Studio
   aiTabChat: "对话",
   aiTabCreate: "创作",
+  agentWorkingProject: "当前项目",
+  agentWorkingNone: "未指定项目",
+  agentWorkingDeletedProject: "已删除的项目",
   audioCloneNeedsVoice: "本地克隆要先有音色 —— 在设置的「我的音色」里上传或录一段参考音频。",
   audioManageVoices: "管理音色",
   audioPodcastUnavailable: "还没有可用的播客服务。",

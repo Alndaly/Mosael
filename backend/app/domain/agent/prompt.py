@@ -348,6 +348,21 @@ def _prompt_snapshot(db: Session, session_id: str, system_prompt: str) -> dict |
     return {"system": system_prompt, "hash": fingerprint}
 
 
+def _working_set_prompt(session: AgentSession) -> str:
+    """把会话显式选中的项目/面板说给模型听。空项目 + AI Studio 不占提示词。"""
+    data = session.working_set if isinstance(session.working_set, dict) else {}
+    project_id = str(data.get("project_id") or "")
+    surface = str(data.get("surface") or "ai")
+    if not project_id and surface == "ai":
+        return ""
+    where = f"项目 ID={project_id}" if project_id else "没有指定项目"
+    return (
+        f"\n\n【当前工作上下文】{where};当前面板={surface}。"
+        "用户没有明确换项目时,默认在这个项目里操作;要换项目先确认。"
+        "这只是上下文,不替代工具里的工作区/项目参数与权限校验。"
+    )
+
+
 def build_system_prompt(db: Session, session: AgentSession) -> str:
     """这一轮实际发出去的系统提示。
 
@@ -359,6 +374,8 @@ def build_system_prompt(db: Session, session: AgentSession) -> str:
     # 注入量有上限,见 domain/agent/memory.MAX_PROMPT_CHARS —— 它是每轮都要付的固定成本。
     # 项目级的那一份跟着家走:剪辑里开的对话带上那个项目的(ADR 0044 §1)。
     prompt += agent_memory.memory_prompt(db, session.workspace_id, places.memory_project(session))
+    # 会话自己的工作上下文:项目/面板由用户在 AI Studio 里选,不跟壳层的全局 projectId 走。
+    prompt += _working_set_prompt(session)
     # 技能目录(ADR 0040):启用的技能只列名字和一句说明,用到时 use_skill 读全文。和记忆一样封顶、顺序固定。
     prompt += skills_runtime.skills_prompt(db, session.workspace_id)
     # 当前计划随提示带上:模型下一轮才知道自己上一轮写到哪了(计划不在消息里)。

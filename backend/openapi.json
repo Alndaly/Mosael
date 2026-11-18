@@ -31976,6 +31976,16 @@
               }
             ],
             "title": "Analysis Video Mode"
+          },
+          "working_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentWorkingSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -32120,6 +32130,9 @@
             "title": "Analysis Video Mode",
             "default": "auto"
           },
+          "working_set": {
+            "$ref": "#/components/schemas/AgentWorkingSet"
+          },
           "thinking_level": {
             "type": "string",
             "title": "Thinking Level",
@@ -32252,6 +32265,16 @@
               }
             ],
             "title": "Permission Mode"
+          },
+          "working_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentWorkingSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "auto_allow_tools": {
             "anyOf": [
@@ -32972,6 +32995,38 @@
         },
         "type": "object",
         "title": "AgentVoiceUpdate"
+      },
+      "AgentWorkingSet": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Project Id",
+            "default": ""
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "projects",
+              "editor",
+              "media",
+              "entities",
+              "notes",
+              "scenes",
+              "boards",
+              "workflows",
+              "publish",
+              "scheduler",
+              "plugins"
+            ],
+            "title": "Surface",
+            "default": "ai"
+          }
+        },
+        "type": "object",
+        "title": "AgentWorkingSet",
+        "description": "这段对话现在对着什么工作:项目 + 面板。**不是授权** —— 具体操作仍由工具与权限闸校验。"
       },
       "AiRuntimeConfigOut": {
         "properties": {

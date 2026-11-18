@@ -50,6 +50,7 @@ import {
 export { adoptAgentSession, startAgentDraft } from "@/features/agent/sessionSelection";
 
 type AgentSessionUpdate = components["schemas"]["AgentSessionUpdate"];
+type AgentWorkingSet = components["schemas"]["AgentWorkingSet"];
 
 const EMPTY: AgentSession[] = [];
 
@@ -275,6 +276,7 @@ export interface AgentSettingsView {
   thinking_level?: string | null;
   permission_mode?: string | null;
   analysis_video_mode?: string | null;
+  working_set?: AgentWorkingSet | null;
   /** 档位是谁开的(只有会话上有)。 */
   mode_set_by?: string | null;
 }

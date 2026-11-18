@@ -84,6 +84,21 @@ def _migrate_agent_questions_feishu_message_id() -> None:
         conn.execute(text("ALTER TABLE agent_questions ADD COLUMN feishu_message_id VARCHAR(128)"))
 
 
+def _migrate_agent_sessions_working_set() -> None:
+    """agent_sessions 新增 working_set:这次对话当前操作的项目与面板。
+
+    空对象 = 还没有指定工作上下文;AI Studio 首次切换项目时写入。新列必须在 SCHEMA 之前加,
+    否则已有库上的 `create_all` 不会补这一列。
+    """
+    inspector = inspect(engine)
+    if "agent_sessions" not in set(inspector.get_table_names()):
+        return
+    if "working_set" in {column["name"] for column in inspector.get_columns("agent_sessions")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN working_set JSON NOT NULL DEFAULT '{}'"))
+
+
 def _migrate_update_feed_url() -> None:
     """deployment_config 新增 update_feed_url(应用更新包下载根地址)。空串 = 只用 GitHub Releases。
 
@@ -952,6 +967,7 @@ def migration_plan() -> MigrationPlan:
     return MigrationPlan((
         *_steps(
             MigrationPhase.BEFORE_SCHEMA,
+            _migrate_agent_sessions_working_set,
             _migrate_update_feed_url,
             _migrate_publish_tasks_get_content_shape,
             _migrate_workflow_publish_nodes_get_content_kind,

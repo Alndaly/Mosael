@@ -46,6 +46,7 @@ from app.api.schemas import (
     AgentSessionOut,
     AgentSessionUpdate,
     AgentToolsetOut,
+    AgentWorkingSet,
     AgentStreamEvent,
     ProviderUsageEventOut,
     SessionAllowance,
@@ -75,8 +76,9 @@ def _apply_settings(
     analysis_video_mode: str | None,
     thinking_level: str | None,
     permission_mode: str | None,
+    working_set: AgentWorkingSet | None,
 ) -> None:
-    """建会话(草稿上选好的)和改会话设置同一套校验:分析方式、思考档位、权限模式。给 None 的不动。"""
+    """建会话(草稿上选好的)和改会话设置同一套校验:分析方式、思考档位、权限模式、工作上下文。给 None 的不动。"""
     if analysis_video_mode is not None:
         if analysis_video_mode not in ("auto", "native", "frames"):
             raise HTTPException(status_code=422, detail=tr("routeErr_badAnalysisVideoMode"))
@@ -90,6 +92,8 @@ def _apply_settings(
             autopilot.set_permission_mode(db, user, session, permission_mode)
         except autopilot.PermissionModeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if working_set is not None:
+        session.working_set = working_set.model_dump()
 
 
 @router.post("/agent/sessions", response_model=AgentSessionOut)
@@ -114,6 +118,7 @@ def create_agent_session(body: AgentSessionCreate, db: Tx, user: CurrentUser) ->
         analysis_video_mode=body.analysis_video_mode,
         thinking_level=body.thinking_level,
         permission_mode=body.permission_mode,
+        working_set=body.working_set,
     )
     return session
 
@@ -275,6 +280,7 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         analysis_video_mode=body.analysis_video_mode,
         thinking_level=body.thinking_level,
         permission_mode=body.permission_mode,
+        working_set=body.working_set,
     )
     if body.group_id is not None:
         session_groups.move_into(db, session, body.group_id, kind="agent")

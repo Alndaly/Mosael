@@ -286,6 +286,34 @@ def test_list_agent_sessions_工具说得出每段是在哪开的() -> None:
 # ---------- 草稿上选好的设置(维护者 2026-10-07:第一句话发出去才建会话) ----------
 
 
+def test_工作上下文跟着会话走并进入系统提示() -> None:
+    client = fresh_client()
+    workspace = _workspace(client)
+    project = client.post("/api/projects", json={"workspace_id": workspace, "name": "宣传片"}).json()["id"]
+
+    created = _session(
+        client, workspace, STUDIO,
+        working_set={"project_id": project, "surface": "editor"},
+    )
+    assert created["working_set"] == {"project_id": project, "surface": "editor"}
+
+    with SessionLocal() as db:
+        prompt = build_system_prompt(db, db.get(AgentSession, created["id"]))
+        assert project in prompt and "当前面板=editor" in prompt
+
+    patched = client.patch(
+        f"/api/agent/sessions/{created['id']}",
+        json={"working_set": {"project_id": "", "surface": "media"}},
+    ).json()
+    assert patched["working_set"] == {"project_id": "", "surface": "media"}
+
+    bad = client.patch(
+        f"/api/agent/sessions/{created['id']}",
+        json={"working_set": {"project_id": "", "surface": "settings"}},
+    )
+    assert bad.status_code == 422
+
+
 def test_草稿上选好的设置建会话时一起带上_哪一项不合规整个不建() -> None:
     client = fresh_client()
     workspace = _workspace(client)
