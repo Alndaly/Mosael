@@ -130,7 +130,7 @@ WorkingSurface = Literal[
 
 
 class AgentWorkingSet(ApiModel):
-    """这段对话现在对着什么工作:项目 + 面板。**不是授权** —— 具体操作仍由工具与权限闸校验。"""
+    """这段对话当前关注的项目 + 面板。**不是授权,也不是项目绑定** —— Agent 仍可跨项目操作。"""
 
     project_id: str = Field(default="", max_length=64)
     surface: WorkingSurface = "ai"

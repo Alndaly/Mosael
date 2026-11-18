@@ -349,17 +349,22 @@ def _prompt_snapshot(db: Session, session_id: str, system_prompt: str) -> dict |
 
 
 def _working_set_prompt(session: AgentSession) -> str:
-    """把会话显式选中的项目/面板说给模型听。空项目 + AI Studio 不占提示词。"""
+    """把会话当前关注的项目/面板说给模型听。
+
+    这不是绑定,也不是权限边界:只用于理解“这个项目/这段/这里”等指代。Agent 仍然可以
+    用 list_projects 查看全部项目,并按用户请求直接操作别的项目。
+    """
     data = session.working_set if isinstance(session.working_set, dict) else {}
     project_id = str(data.get("project_id") or "")
     surface = str(data.get("surface") or "ai")
     if not project_id and surface == "ai":
         return ""
-    where = f"项目 ID={project_id}" if project_id else "没有指定项目"
+    where = f"项目 ID={project_id}" if project_id else "没有指定关注项目"
     return (
-        f"\n\n【当前工作上下文】{where};当前面板={surface}。"
-        "用户没有明确换项目时,默认在这个项目里操作;要换项目先确认。"
-        "这只是上下文,不替代工具里的工作区/项目参数与权限校验。"
+        f"\n\n【当前关注上下文】{where};当前面板={surface}。"
+        "它只用于理解“这个项目/这段/这里”等指代,不是权限或归属限制。"
+        "用户要求别的项目时,直接用 list_projects / 工具查看并操作对应的 project_id,"
+        "不需要先让用户切换关注项目;没有明确指代时先查清或询问,不要自行假设。"
     )
 
 

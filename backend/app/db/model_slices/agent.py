@@ -76,8 +76,8 @@ class AgentSession(Base):
     # 视频分析方式偏好:auto(默认,原生优先否则抽帧)/ native(强制原生)/ frames(强制抽帧+转写)。
     # 会话级,聊天里可切,注入系统提示让 analyze_asset 照此传 mode。
     analysis_video_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")
-    #: 会话当前工作上下文:`{"project_id": "...", "surface": "ai"}`。项目/面板是**这次对话**
-    #: 的操作对象,不跟壳层的全局 projectId 走;AI Studio 可切换,系统提示按它告诉模型现在在哪。
+    #: 会话当前关注上下文:`{"project_id": "...", "surface": "ai"}`。它只帮助理解“这个项目/这段”
+    #: 等指代,不是项目绑定或权限边界;Agent 可以自己列项目、选项目、跨项目操作。
     working_set: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     #: 权限模式:manual(默认)/ auto / bypass。挂在**会话**上 —— 「这次对话里哪一类动作不用问我」
     #: 是每次对话的选择,和思考档位同类。
