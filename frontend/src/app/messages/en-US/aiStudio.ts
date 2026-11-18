@@ -2,9 +2,6 @@ export const aiStudio = {
   // AI Studio
   aiTabChat: "Chat",
   aiTabCreate: "Create",
-  agentWorkingProject: "Focus project",
-  agentWorkingNone: "Auto",
-  agentWorkingDeletedProject: "Deleted project",
   audioCloneNeedsVoice: "Local cloning needs a voice first — upload or record a reference clip under Settings → My voices.",
   audioManageVoices: "Manage voices",
   audioPodcastUnavailable: "No podcast service is available yet.",

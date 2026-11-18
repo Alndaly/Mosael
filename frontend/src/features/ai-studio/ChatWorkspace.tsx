@@ -19,7 +19,6 @@ import {
   sendAgentMessage,
   steerQueuedMessage,
   stopAgentSession,
-  type ProjectWithStats,
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -62,7 +61,6 @@ import { goHome } from "@/features/ai-studio/goToPlace";
 import { workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
 import { useOpenRequest } from "@/lib/deepLink";
 import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
-import { WorkingSetBar } from "@/features/ai-studio/WorkingSetBar";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
 import { SessionJobsCard } from "@/components/jobs/SessionJobsCard";
@@ -154,11 +152,9 @@ const NO_MESSAGES: AgentMessage[] = [];
 
 export function ChatWorkspace({
   workspace,
-  projects = [],
   switcher,
 }: {
   workspace: Workspace;
-  projects?: ProjectWithStats[];
   switcher?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -580,7 +576,6 @@ export function ChatWorkspace({
           {/* 当前会话名常驻头部:和子代理视图的面包屑首段(父会话名)是同一个东西 ——
               进了子代理它变成面包屑的第一段,回来它就是标题本身。空会话仍保留弹性间距,分开模式与视图切换。 */}
           <Truncate className="flex-1 text-ui-sm font-medium text-foreground">{activeSession?.title}</Truncate>
-          <WorkingSetBar workspaceId={workspace.id} session={session.data ?? activeSession} projects={projects} />
           <div className={segmentedListClass()} role="tablist" aria-label={t("chatSessionsTitle")}>
             {(["chat", "trace"] as const).map((item) => (
               <button
