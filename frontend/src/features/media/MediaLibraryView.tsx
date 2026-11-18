@@ -48,6 +48,8 @@ import { assetGallery, assetPreviewItem } from "@/components/app/asset-preview";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { useMultiSelect } from "@/lib/useMultiSelect";
+import { useCurrentAgentSession, useSessionSettings } from "@/features/agent/currentAgentSession";
+import { STUDIO_PLACE } from "@/features/agent/places";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useElementWidth } from "@/lib/useElementWidth";
@@ -185,6 +187,26 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     () => visible.filter((asset) => selectedIds.has(asset.id)),
     [visible, selectedIds],
   );
+  const agentSession = useCurrentAgentSession(workspace.id, STUDIO_PLACE).session;
+  const { settings: agentSettings, update: updateWorkingSet } = useSessionSettings(workspace.id, STUDIO_PLACE, agentSession);
+  const selectedKey = [...selectedIds].sort().join(",");
+  React.useEffect(() => {
+    if (agentSession?.is_mine === false) return;
+    const selection: Record<string, unknown> = {};
+    const assetIds = [...selectedIds].slice(0, 20);
+    if (assetIds.length > 0) selection.asset_ids = assetIds;
+    if (previewingId) selection.preview_asset_id = previewingId;
+    updateWorkingSet.mutate({
+      working_set: {
+        project_id: agentSettings.working_set?.project_id ?? "",
+        surface: "media",
+        selection,
+      },
+    });
+    // 选中的素材和预览的素材只是指代上下文,不改变素材归属。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.id, selectedKey, previewingId, agentSession?.id]);
+
   const compareKind: "image" | "video" | null = React.useMemo(() => {
     const kinds = new Set(selectedAssets.map((asset) => asset.kind));
     if (kinds.size !== 1) return null;

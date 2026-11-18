@@ -299,6 +299,20 @@ def test_选区进入系统提示但不构成项目绑定() -> None:
         assert "当前选区:sequence_id=seq1,clip_ids=c1,c2" in prompt
 
 
+def test_素材选区和预览进入系统提示() -> None:
+    client = fresh_client()
+    workspace = _workspace(client)
+    created = _session(
+        client, workspace, STUDIO,
+        working_set={"project_id": "", "surface": "media",
+                     "selection": {"asset_ids": ["a1", "a2"], "preview_asset_id": "a2"}},
+    )
+    with SessionLocal() as db:
+        prompt = build_system_prompt(db, db.get(AgentSession, created["id"]))
+        assert "当前选中素材 IDs=a1,a2" in prompt
+        assert "当前预览素材 ID=a2" in prompt
+
+
 def test_工作上下文跟着会话走并进入系统提示() -> None:
     client = fresh_client()
     workspace = _workspace(client)

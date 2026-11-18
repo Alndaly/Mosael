@@ -373,6 +373,13 @@ def _working_set_prompt(session: AgentSession) -> str:
         clip_text = ",".join(str(one) for one in clip_ids[:20])
         if sequence_id or clip_text:
             text += f" 当前选区:sequence_id={sequence_id or '未指定'},clip_ids={clip_text or '无'}。"
+    asset_ids = selection.get("asset_ids") if isinstance(selection.get("asset_ids"), list) else []
+    asset_text = ",".join(str(one) for one in asset_ids[:20])
+    if asset_text:
+        text += f" 当前选中素材 IDs={asset_text}。"
+    preview_asset_id = str(selection.get("preview_asset_id") or "")
+    if preview_asset_id:
+        text += f" 当前预览素材 ID={preview_asset_id}。"
     return text
 
 
