@@ -64,7 +64,6 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/agent/ToolCalls.tsx": 3,
   "features/agent/toolResultShapes.tsx": 2,
   "features/agent/trace/TraceView.tsx": 4,
-  "features/ai-studio/AiStudio.tsx": 1,
   //: 4 → 3:「最近工具」那一行改成 InspectorStatusRow 之后,手写 button 少了一颗。
   "features/ai-studio/ChatWorkspace.tsx": 3,
   "features/ai-studio/FrameSlotField.tsx": 2,

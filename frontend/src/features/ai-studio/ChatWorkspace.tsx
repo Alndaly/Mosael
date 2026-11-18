@@ -531,6 +531,7 @@ export function ChatWorkspace({
           creating={false}
           writeBlocked={writeBlocked}
           onDeleted={current.forget}
+          switcher={switcher}
           //: 家在 AI Studio 的不写(每行都说「在 AI Studio 里开的」只是噪音);回得去的给一颗「回到那里」。
           extras={(item) =>
             item.home_kind === "studio"
@@ -564,7 +565,6 @@ export function ChatWorkspace({
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
         <div ref={measureToolbar} className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
-          {switcher}
           {viewingSubagent ? (
             <SubagentBreadcrumb
               sessionTitle={activeSession?.title || t("chatSessionsTitle")}

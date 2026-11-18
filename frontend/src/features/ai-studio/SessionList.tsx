@@ -236,6 +236,7 @@ export function SessionList<S extends ListedSession>({
   onDeleted,
   extras,
   toolbar,
+  switcher,
   emptyTitle,
   aside,
   writeBlocked = null,
@@ -263,6 +264,8 @@ export function SessionList<S extends ListedSession>({
   extras?: (session: S) => SessionRowExtras | null;
   /** 标题行下面、搜索框上面的那一排(创作页的种类筛选)。 */
   toolbar?: React.ReactNode;
+  /** 对话 / 创作的切换:放在列表头部右侧图标组里,不再占对话页的标题栏。 */
+  switcher?: React.ReactNode;
   /** 一条都没有时说什么。没给就是这一类会话的那句(SESSION_KINDS);创作页按筛选的种类说。 */
   emptyTitle?: string;
   /**
@@ -503,8 +506,14 @@ export function SessionList<S extends ListedSession>({
           </>
         ) : (
           <>
-            <h2>{t(spec.title)}</h2>
+            <h2 className="shrink-0 whitespace-nowrap">{t(spec.title)}</h2>
             <span className="flex items-center gap-0.5">
+              {switcher && (
+                <>
+                  {switcher}
+                  <span className="mx-0.5 h-4 w-px bg-divider" aria-hidden />
+                </>
+              )}
               <IconButton
                 variant="ghost"
                 size="icon-xs"

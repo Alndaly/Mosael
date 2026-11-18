@@ -1412,6 +1412,7 @@ export function GenerateWorkspace({
           onCreate={startNewSession}
           creating={false}
           writeBlocked={writeBlocked}
+          switcher={switcher}
           toolbar={<CreateFilterRow value={filter} onChange={setFilter} />}
           emptyTitle={t(emptySessionsKey(filter))}
           extras={(listed) => {
@@ -1449,7 +1450,6 @@ export function GenerateWorkspace({
 
       <section className="min-h-0 overflow-hidden bg-workspace-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
         <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
-          {switcher}
           <Truncate className="flex-1 text-ui-sm font-medium">{activeSession ? sessionTitle(t, activeSession) : t("generationNewSession")}</Truncate>
           {!readOnly && (
             <Button variant="ghost" size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>

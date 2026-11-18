@@ -3,7 +3,8 @@ import React from "react";
 import type { Workspace } from "@/api/client";
 import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
-import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
+import { MessageSquare, Sparkles } from "lucide-react";
+import { IconButton } from "@/components/ui/icon-button";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { GenerateWorkspace } from "@/features/ai-studio/GenerateWorkspace";
 import {
@@ -26,19 +27,24 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   useStudioLink(setTab);
 
   const switcher = (
-    <div className={segmentedListClass()} role="tablist" aria-label="AI Studio">
-      {STUDIO_TABS.map((item) => (
-        <button
-          key={item}
-          type="button"
-          role="tab"
-          aria-selected={tab === item}
-          className={segmentedItemClass(tab === item)}
-          onClick={() => setTab(item)}
-        >
-          {t(STUDIO_TAB_LABELS[item])}
-        </button>
-      ))}
+    <div className="flex items-center gap-0.5" role="tablist" aria-label="AI Studio">
+      {STUDIO_TABS.map((item) => {
+        const Icon = item === "chat" ? MessageSquare : Sparkles;
+        const active = tab === item;
+        return (
+          <IconButton
+            key={item}
+            size="icon-xs"
+            label={t(STUDIO_TAB_LABELS[item])}
+            role="tab"
+            aria-selected={active}
+            className={active ? "bg-secondary text-foreground" : "text-muted-foreground"}
+            onClick={() => setTab(item)}
+          >
+            <Icon size={14} />
+          </IconButton>
+        );
+      })}
     </div>
   );
 

@@ -146,10 +146,10 @@ function renderStudio({
 }
 
 describe("两个分区和深链", () => {
-  it("顶上是「对话 | 创作」两个分区", async () => {
+  it("左边会话列表头部的图标组是「对话 | 创作」两个分区", async () => {
     renderStudio();
     const tabs = within(screen.getByRole("tablist", { name: "AI Studio" })).getAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["aiTabChat", "aiTabCreate"]);
+    expect(tabs.map((tab) => tab.getAttribute("aria-label"))).toEqual(["aiTabChat", "aiTabCreate"]);
     expect(tabs[1]).toHaveAttribute("aria-selected", "true");
   });
 
