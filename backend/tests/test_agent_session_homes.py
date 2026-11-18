@@ -313,6 +313,31 @@ def test_素材选区和预览进入系统提示() -> None:
         assert "当前预览素材 ID=a2" in prompt
 
 
+def test_笔记选区进入系统提示() -> None:
+    client = fresh_client()
+    workspace = _workspace(client)
+    created = _session(
+        client, workspace, STUDIO,
+        working_set={"project_id": "", "surface": "notes",
+                     "selection": {"note_id": "n1", "start": 4, "end": 10, "text": "这段正文"}},
+    )
+    with SessionLocal() as db:
+        prompt = build_system_prompt(db, db.get(AgentSession, created["id"]))
+        assert "当前笔记 ID=n1" in prompt and "这段正文" in prompt
+
+
+def test_画板格子选区进入系统提示() -> None:
+    client = fresh_client()
+    workspace = _workspace(client)
+    created = _session(
+        client, workspace, STUDIO,
+        working_set={"project_id": "", "surface": "boards", "selection": {"cell_ids": ["cell-a", "cell-b"]}},
+    )
+    with SessionLocal() as db:
+        prompt = build_system_prompt(db, db.get(AgentSession, created["id"]))
+        assert "当前选中画板格子 IDs=cell-a,cell-b" in prompt
+
+
 def test_工作上下文跟着会话走并进入系统提示() -> None:
     client = fresh_client()
     workspace = _workspace(client)

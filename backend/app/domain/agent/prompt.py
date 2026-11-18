@@ -380,6 +380,14 @@ def _working_set_prompt(session: AgentSession) -> str:
     preview_asset_id = str(selection.get("preview_asset_id") or "")
     if preview_asset_id:
         text += f" 当前预览素材 ID={preview_asset_id}。"
+    cell_ids = selection.get("cell_ids") if isinstance(selection.get("cell_ids"), list) else []
+    cell_text = ",".join(str(one) for one in cell_ids[:30])
+    if cell_text:
+        text += f" 当前选中画板格子 IDs={cell_text}。"
+    note_id = str(selection.get("note_id") or "")
+    if note_id:
+        excerpt = str(selection.get("text") or "")[:500]
+        text += f" 当前笔记 ID={note_id};选区={selection.get('start')}–{selection.get('end')},文字={excerpt!r}。"
     return text
 
 

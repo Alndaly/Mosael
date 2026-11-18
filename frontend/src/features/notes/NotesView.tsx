@@ -32,6 +32,8 @@ import { saveBlobToDisk } from "@/lib/download";
 import { useFileDrop } from "@/lib/useFileDrop";
 import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
+import { useCurrentAgentSession, useSessionSettings } from "@/features/agent/currentAgentSession";
+import { STUDIO_PLACE } from "@/features/agent/places";
 import { readHash, replaceHash } from "@/app/hashRoute";
 import { useI18n } from "@/app/preferences";
 import type { ComposerChip } from "@/lib/composerChip";
@@ -173,6 +175,31 @@ export function NotesView({ workspace, AgentPanel, onNoteChange }: {
   React.useEffect(() => { setSelection(null); setDismissed(""); setPinned(null); setOutbox(null); }, [id]);
   //: 发送那一刻才拼:正文取编辑器里最新的草稿(controller),不是上次存盘的那份。
   const agentContext = React.useCallback(() => noteAgentContext(t, controller.current?.read() ?? null, quotedRef.current), [t]);
+  const agentPlace = id ? { kind: "note" as const, id } : STUDIO_PLACE;
+  const agentSession = useCurrentAgentSession(workspace.id, agentPlace).session;
+  const { settings: agentSettings, update: updateWorkingSet } = useSessionSettings(workspace.id, agentPlace, agentSession);
+  const quotedKey = quoted ? selectionKey(quoted) : "";
+  React.useEffect(() => {
+    if (agentSession?.is_mine === false) return;
+    const selection = quoted
+      ? {
+          note_id: id ?? "",
+          start: quoted.start,
+          end: quoted.end,
+          text: quoted.text.slice(0, 500),
+        }
+      : {};
+    updateWorkingSet.mutate({
+      working_set: {
+        project_id: agentSettings.working_set?.project_id ?? "",
+        surface: "notes",
+        selection,
+      },
+    });
+    // 笔记选区只是“这段文字”的指代,不是笔记归属或编辑授权。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.id, id, quotedKey, agentSession?.id]);
+
   const selectionChips: ComposerChip[] = quoted?.text ? [{
     id: "note-selection", label: plainExcerpt(quoted.text), icon: <TextQuote size={11} />,
     text: { title: t("noteAgentSelectionChip"), body: quoted.text },
