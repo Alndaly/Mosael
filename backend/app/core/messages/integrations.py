@@ -901,6 +901,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "画布上找不到节点 #{node},这次没有运行。先重新读一遍画布,再选输出节点。",
         "en": "Node #{node} is not on the canvas, so nothing was run. Read the canvas again and pick an output node.",
     },
+    "confirm_runHostCommand": {
+        "zh": "在本机运行命令「{command}」(工作目录:{cwd})",
+        "en": "Run the local command “{command}” (working directory: {cwd})",
+    },
+    "hostCmdErr_noCwd": {
+        "zh": "没有可用的信任工作目录,请先在设置里共享一个本机文件夹",
+        "en": "There is no trusted working directory. Share a local folder in settings first.",
+    },
     "confirm_deleteHostFile": {
         "zh": "永久删除本机文件「{path}」",
         "en": "Permanently delete the local file “{path}”",

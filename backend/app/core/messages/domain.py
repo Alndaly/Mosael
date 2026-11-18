@@ -715,6 +715,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Files on this computer belong to the deployment admin, and only admins can read them directly. Use an asset from the library instead, or ask an admin to add the folder to “Folders shared with members”.",
     },
     # 往网页上传框塞的文件(见 host_files.upload_source):素材和本机路径只能给一个。
+    "hostCmdErr_notAllowed": {
+        "zh": "本机命令 {command} 不在允许列表里",
+        "en": "The local command {command} is not allowed.",
+    },
+    "hostCmdErr_argsTooLarge": {
+        "zh": "本机命令参数太多(最多 {limit} 个)",
+        "en": "Too many local command arguments (max {limit}).",
+    },
+    "hostCmdErr_timeoutRange": {
+        "zh": "本机命令超时必须在 1–{max} 秒之间",
+        "en": "The local command timeout must be between 1 and {max} seconds.",
+    },
+    "hostCmdErr_missing": {
+        "zh": "这台电脑上找不到命令 {command}",
+        "en": "The command {command} isn't available on this computer.",
+    },
     "hostErr_notTrusted": {
         "zh": "这个路径不在信任目录里。请让管理员把文件夹加到共享目录,或改用信任目录里的文件",
         "en": "That path isn't in a trusted folder. Ask an admin to share the folder, or use a file inside a trusted folder.",

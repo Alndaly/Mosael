@@ -2367,6 +2367,37 @@ def host_import_asset(path: str, workspace_id: str = "", project_id: str = "") -
     return _use_case(run, out=AssetOut)
 
 
+@tool(effect="confirms")
+def host_run_command(
+    command: str,
+    args: list[str] | None = None,
+    cwd: str = "",
+    timeout_seconds: int = 60,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: run one allowlisted local developer command with structured argv.
+
+    No shell is involved: pass the executable name in `command` and every argument in `args`.
+    The working directory must be inside a trusted folder; omitted uses the first trusted folder.
+    Only git, Python/Node/pnpm/npm, ffmpeg/ffprobe, rg, ls/pwd/cat/head/tail/wc and mkdir are
+    allowed. Still requires a deployment admin and a confirmation card.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "host_run_command",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "command": command,
+                "args": args or [],
+                "cwd": cwd,
+                "timeout_seconds": timeout_seconds,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
 # ---------- 智能体自己管技能(ADR 0043):列出 / 看一份,和六件写的事 ----------
 #
 # 写的都开确认卡,而且每一张都要人点头(confirmable/skills 声明了 always_asks):不进「本会话始终允许」,放行准则、

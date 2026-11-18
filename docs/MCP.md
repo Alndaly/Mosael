@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **179** 个工具,其中 **63** 个走确认卡、**1** 个停下来等用户作答。
+共 **180** 个工具,其中 **64** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -129,6 +129,7 @@
 | `host_list_dir` | 直接执行 | Read-only: list one local folder inside a trusted folder. |
 | `host_move_file` | 直接执行 | Move or rename one file/directory between trusted folders. |
 | `host_read_file` | 直接执行 | Read-only: read a text file inside a trusted folder. |
+| `host_run_command` | 确认卡 | Confirmation required: run one allowlisted local developer command with structured argv. |
 | `host_search_files` | 直接执行 | Read-only: find files under one trusted folder by a case-insensitive name substring. |
 | `host_trusted_dirs` | 直接执行 | Read-only: list the local folders where file tools may operate without a confirmation card. |
 | `host_write_file` | 直接执行 | Write a UTF-8 file inside a trusted folder, creating parent folders as needed. |
