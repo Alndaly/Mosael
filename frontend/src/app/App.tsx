@@ -39,8 +39,10 @@ import {
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
+import { PageBoundary } from "@/app/PageBoundary";
+import { PAGE_RENDERERS } from "@/app/pages";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { SidebarShortcutButtons } from "@/features/shell/SidebarShortcutButtons";
-import { SurfaceHost } from "@/features/surfaces/SurfaceHost";
 import { projectAfterHashChange, readHash, writeHash } from "@/app/hashRoute";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
@@ -684,20 +686,20 @@ function Studio({
         {/* 按需加载多了一种此前不存在的失败:那一块 JS 没取到。React.lazy 会把它**往上抛**,
             而 Suspense 不接错误 —— 没有这层边界的话整棵树卸掉,用户拿到一个永久白屏,
             连回上一页都做不到。见 app/PageBoundary。 */}
-        <SurfaceHost
-          view={view}
-          loadingLabel={t("pageLoading")}
-          context={{
-            workspace,
-            project,
-            projects: projects.data ?? [],
-            projectsLoad: { pending: projects.isPending, error: projects.isError ? projects.error : null, retrying: projects.isFetching, retry: () => void projects.refetch() },
-            openProject,
-            createProject: (name) => createProject.mutate(name),
-            creatingProject: createProject.isPending,
-            t,
-          }}
-        />
+        <PageBoundary resetKey={view}>
+        <React.Suspense fallback={<LoadingState label={t("pageLoading")} />}>
+        {PAGE_RENDERERS[view]({
+          workspace,
+          project,
+          projects: projects.data ?? [],
+          projectsLoad: { pending: projects.isPending, error: projects.isError ? projects.error : null, retrying: projects.isFetching, retry: () => void projects.refetch() },
+          openProject,
+          createProject: (name) => createProject.mutate(name),
+          creatingProject: createProject.isPending,
+          t,
+        })}
+        </React.Suspense>
+        </PageBoundary>
         {/* 浮在页面上的这几块各自兜底,换一页就重新挂上(见 SectionBoundary 的 quiet)。 */}
         {/* 命令面板和下面那一问:内嵌浏览器、工作台在前台时也在它们前面打开(ADR 0051,见 OverNativeView) */}
         <SectionBoundary mode="quiet" resetKey={view}>

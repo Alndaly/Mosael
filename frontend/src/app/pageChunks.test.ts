@@ -46,8 +46,8 @@ describe("页面分块", () => {
 
   it("兜底的 Suspense 在渲染出口上", () => {
     // 每页各写一次的话,漏写的那一页首次打开会直接抛,而不是转一下菊花。
-    const host = readFileSync(join(import.meta.dirname, "..", "features", "surfaces", "SurfaceHost.tsx"), "utf8");
-    expect(host).toMatch(/<React\.Suspense[\s\S]{0,200}?\{PAGE_RENDERERS\[view\]\(/);
+    const app = readFileSync(join(import.meta.dirname, "App.tsx"), "utf8");
+    expect(app).toMatch(/<React\.Suspense[\s\S]{0,200}?\{PAGE_RENDERERS\[view\]\(/);
   });
 
   /**
