@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **171** 个工具,其中 **62** 个走确认卡、**1** 个停下来等用户作答。
+共 **175** 个工具,其中 **62** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -124,6 +124,10 @@
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
 | `get_workflow_run` | 直接执行 | Read-only: how far one workflow run has got — status, progress, finished and remaining top-level steps, |
 | `grab_video_frame` | 确认卡 | Confirmation required: save one frame of an EXISTING video asset as a NEW image asset. |
+| `host_list_dir` | 直接执行 | Read-only: list one local folder inside a trusted folder. |
+| `host_read_file` | 直接执行 | Read-only: read a text file inside a trusted folder. |
+| `host_trusted_dirs` | 直接执行 | Read-only: list the local folders where file tools may operate without a confirmation card. |
+| `host_write_file` | 直接执行 | Write a UTF-8 file inside a trusted folder, creating parent folders as needed. |
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
 | `import_from_url` | 确认卡 | Confirmation required: download a video (kind=audio: its audio) from a web link into the media library. |
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
