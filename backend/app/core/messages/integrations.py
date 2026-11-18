@@ -901,6 +901,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "画布上找不到节点 #{node},这次没有运行。先重新读一遍画布,再选输出节点。",
         "en": "Node #{node} is not on the canvas, so nothing was run. Read the canvas again and pick an output node.",
     },
+    "confirm_deleteHostFile": {
+        "zh": "永久删除本机文件「{path}」",
+        "en": "Permanently delete the local file “{path}”",
+    },
+    "confirmErr_hostDirectoryDelete": {
+        "zh": "这个路径是文件夹;文件工具不会递归删除文件夹",
+        "en": "That path is a folder; file tools don't remove folders recursively.",
+    },
     "confirm_deleteAssets": {
         "zh": "永久删除 {count} 个素材({names}){tail} —— 文件会从磁盘上清掉,撤不回来",
         "en": "Permanently delete {count} assets ({names}){tail} — the files are removed from disk and cannot be recovered",

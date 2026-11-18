@@ -2254,6 +2254,119 @@ def host_write_file(path: str, content: str, overwrite: bool = False) -> dict[st
     return _use_case(run)
 
 
+@tool(effect="reads")
+def host_search_files(path: str, pattern: str = "", max_results: int = 100) -> dict[str, Any]:
+    """Read-only: find files under one trusted folder by a case-insensitive name substring.
+
+    Walks recursively, skips symlinks, and returns at most 500 entries. Use it before moving or
+    importing files when the exact name is not known.
+    """
+    from app.domain import host_files
+
+    def run(db, user) -> dict[str, Any]:
+        root = host_files.ensure_trusted_path(db, path, actor=user.id, must_exist=True, directory=True)
+        limit = max(1, min(max_results, 500))
+        needle = pattern.strip().lower()
+        entries: list[dict[str, Any]] = []
+        truncated = False
+        for child in root.path.rglob("*"):
+            if child.is_symlink():
+                continue
+            if needle and needle not in child.name.lower():
+                continue
+            if len(entries) >= limit:
+                truncated = True
+                break
+            try:
+                stat = child.stat()
+                entries.append({
+                    "name": child.name,
+                    "path": str(child),
+                    "relative_path": str(child.relative_to(root.path)),
+                    "kind": "dir" if child.is_dir() else "file",
+                    "size": None if child.is_dir() else stat.st_size,
+                })
+            except OSError:
+                continue
+        return {"path": str(root.path), "entries": entries, "truncated": truncated}
+
+    return _use_case(run)
+
+
+@tool(effect="writes")
+def host_move_file(source: str, destination: str, overwrite: bool = False) -> dict[str, Any]:
+    """Move or rename one file/directory between trusted folders.
+
+    Both paths are trusted-path checked. Existing destinations are not replaced unless
+    `overwrite=true`. Cross-filesystem moves fall back to copy+remove; the source is removed only
+    after the destination is complete.
+    """
+    from app.domain import host_files
+    import shutil
+
+    def run(db, user) -> dict[str, Any]:
+        src = host_files.ensure_trusted_path(db, source, actor=user.id, must_exist=True)
+        dst = host_files.ensure_trusted_path(db, destination, actor=user.id)
+        if dst.path.exists() and not overwrite:
+            raise ValueError("destination exists; pass overwrite=true to replace it")
+        dst.path.parent.mkdir(parents=True, exist_ok=True)
+        if dst.path.exists() and overwrite:
+            if dst.path.is_dir():
+                raise ValueError("destination is a directory")
+            dst.path.unlink()
+        shutil.move(str(src.path), str(dst.path))
+        return {"source": str(src.path), "destination": str(dst.path)}
+
+    return _use_case(run)
+
+
+@tool(effect="confirms")
+def host_delete_file(path: str, workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: permanently delete one file inside a trusted folder.
+
+    Directories are refused; this tool never deletes recursively. Get the exact path from
+    host_search_files / host_list_dir first.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "host_delete_file",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"path": path},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="writes")
+def host_import_asset(path: str, workspace_id: str = "", project_id: str = "") -> dict[str, Any]:
+    """Import one local media file from a trusted folder into the Mosael asset library.
+
+    The file is registered (not copied twice); supported media suffixes are the same as the
+    desktop import action. Requires the desktop backend.
+    """
+    from app.api.schemas import AssetOut
+    from app.core.config import settings
+    from app.domain import host_files
+    from app.domain.assets import use_cases
+
+    if not settings.local_desktop:
+        raise ValueError("local asset import is only available on the desktop backend")
+    suffixes = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mp3", ".wav", ".m4a", ".aac", ".flac",
+                ".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+    def run(db, user) -> Any:
+        target = host_files.ensure_trusted_path(db, path, actor=user.id, must_exist=True)
+        if target.path.suffix.lower() not in suffixes:
+            raise ValueError(f"unsupported media suffix: {target.path.suffix}")
+        ws = workspace_id or _default_workspace_id()
+        return use_cases.import_local(
+            db, user, ws, project_id=(project_id or None), path=target.path,
+        )
+
+    return _use_case(run, out=AssetOut)
+
+
 # ---------- 智能体自己管技能(ADR 0043):列出 / 看一份,和六件写的事 ----------
 #
 # 写的都开确认卡,而且每一张都要人点头(confirmable/skills 声明了 always_asks):不进「本会话始终允许」,放行准则、

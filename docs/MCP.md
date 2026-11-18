@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **175** 个工具,其中 **62** 个走确认卡、**1** 个停下来等用户作答。
+共 **179** 个工具,其中 **63** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -124,8 +124,12 @@
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
 | `get_workflow_run` | 直接执行 | Read-only: how far one workflow run has got — status, progress, finished and remaining top-level steps, |
 | `grab_video_frame` | 确认卡 | Confirmation required: save one frame of an EXISTING video asset as a NEW image asset. |
+| `host_delete_file` | 确认卡 | Confirmation required: permanently delete one file inside a trusted folder. |
+| `host_import_asset` | 直接执行 | Import one local media file from a trusted folder into the Mosael asset library. |
 | `host_list_dir` | 直接执行 | Read-only: list one local folder inside a trusted folder. |
+| `host_move_file` | 直接执行 | Move or rename one file/directory between trusted folders. |
 | `host_read_file` | 直接执行 | Read-only: read a text file inside a trusted folder. |
+| `host_search_files` | 直接执行 | Read-only: find files under one trusted folder by a case-insensitive name substring. |
 | `host_trusted_dirs` | 直接执行 | Read-only: list the local folders where file tools may operate without a confirmation card. |
 | `host_write_file` | 直接执行 | Write a UTF-8 file inside a trusted folder, creating parent folders as needed. |
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
