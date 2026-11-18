@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.8": {
+    zh: [
+      "**AI Studio 成为默认首页。** 剪辑项目有独立的项目浏览页；对话 / 创作 / 轨迹、左右侧栏与引擎参数统一为图标交互，分组会话不再额外缩进。",
+      "**智能体知道你在操作什么。** 时间线片段、素材、笔记选区、画板格子和工作流节点都会进入当前会话上下文；这些选区只用于理解指代，不改变权限或项目归属。",
+      "**智能体可以整理受信任的本地工作目录。** 支持列目录、读写、搜索、移动、删除和导入素材；本机命令使用结构化参数、工具白名单、信任目录与确认卡。",
+    ],
+    en: [
+      "**AI Studio is now the default home.** Video projects have a dedicated browser; conversation/create/trace, both sidebars and engine settings share icon controls, and grouped sessions no longer add indentation.",
+      "**The agent knows what you are working on.** Timeline clips, media, note selections, board cells and workflow nodes now enter the session context as references only — never as permissions or project ownership.",
+      "**The agent can organize trusted local work folders.** It can list, read, write, search, move, delete and import media; local commands use structured arguments, an allowlist, trusted directories and confirmation cards.",
+    ],
+  },
   "v2.6.7": {
     zh: [
       "**Computer Use 补齐到可用的本地操作层。** L1/L3 都支持元素 token、拖拽、指针按下/抬起、中键/三击、修饰键、按住键、水平滚动、批量动作、等待与断言；截图、批量和 OCR 现在能直接回到模型上下文。",
