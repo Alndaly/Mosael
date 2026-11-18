@@ -1,9 +1,8 @@
-import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleDot, Database, Eye, PanelRight, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleDot, Database, Eye, MessageSquare, PanelRight, Route, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -576,19 +575,24 @@ export function ChatWorkspace({
           {/* 当前会话名常驻头部:和子代理视图的面包屑首段(父会话名)是同一个东西 ——
               进了子代理它变成面包屑的第一段,回来它就是标题本身。空会话仍保留弹性间距,分开模式与视图切换。 */}
           <Truncate className="flex-1 text-ui-sm font-medium text-foreground">{activeSession?.title}</Truncate>
-          <div className={segmentedListClass()} role="tablist" aria-label={t("chatSessionsTitle")}>
-            {(["chat", "trace"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                role="tab"
-                aria-selected={view === item}
-                onClick={() => setView(item)}
-                className={segmentedItemClass(view === item)}
-              >
-                {t(item === "chat" ? "chatTabConversation" : "chatTabTrace")}
-              </button>
-            ))}
+          <div className="flex items-center gap-0.5" role="tablist" aria-label={t("chatSessionsTitle")}>
+            {(["chat", "trace"] as const).map((item) => {
+              const Icon = item === "chat" ? MessageSquare : Route;
+              const active = view === item;
+              return (
+                <IconButton
+                  key={item}
+                  size="icon-sm"
+                  role="tab"
+                  aria-selected={active}
+                  label={t(item === "chat" ? "chatTabConversation" : "chatTabTrace")}
+                  className={active ? "bg-secondary text-foreground" : "text-muted-foreground"}
+                  onClick={() => setView(item)}
+                >
+                  <Icon size={15} />
+                </IconButton>
+              );
+            })}
           </div>
           </>
           )}
