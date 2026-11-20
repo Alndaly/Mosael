@@ -88,3 +88,4 @@ def test_最近任务查询只计算一次隐藏任务集合_两条任务查询�
     assert len(hidden_queries) == 1, selects
     assert len(job_queries) == 2, selects
     assert all("generation_jobs" not in sql and "generation_sessions" not in sql for sql in job_queries), job_queries
+    assert all("jobs.status NOT IN" not in sql for sql in job_queries), job_queries

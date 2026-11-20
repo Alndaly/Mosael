@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, defer
 
 from app.db.models import GenerationJob, Job, JobCenterMark, TaskEvent, User, now
 from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, hidden_job_ids, jobs_filter
-from app.domain.jobs import TERMINAL_STATUSES, cancel_job
+from app.domain.jobs import IN_FLIGHT_STATUSES, TERMINAL_STATUSES, cancel_job
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_member, ensure_workspace_perm
 
 
@@ -49,7 +49,9 @@ def list_jobs(
     newest_first = (Job.created_at.desc(), Job.id.desc())
     recent = list(db.scalars(stmt.order_by(*newest_first).limit(limit)))
     seen = {job.id for job in recent}
-    running = [job for job in db.scalars(stmt.where(Job.status.not_in(TERMINAL_STATUSES)).order_by(*newest_first))
+    # 不在 SQL 里按 created_at 排序:正向状态集合走 `(workspace_id, status, updated_at)` 索引,
+    # 避免为了找几条活动任务沿创建时间索引扫完整个历史;合并后由下面的 sorted 统一排序。
+    running = [job for job in db.scalars(stmt.where(Job.status.in_(IN_FLIGHT_STATUSES)))
                if job.id not in seen]
     return sorted([*recent, *running], key=lambda job: (job.created_at, job.id), reverse=True)
 
@@ -126,7 +128,7 @@ def panel(
         stmt = stmt.where(or_(~finished, Job.updated_at > cleared_at))
     recent = list(db.scalars(stmt.order_by(*newest_first).limit(limit)))
     seen = {job.id for job in recent}
-    running = [job for job in db.scalars(stmt.where(~finished).order_by(*newest_first)) if job.id not in seen]
+    running = [job for job in db.scalars(stmt.where(Job.status.in_(IN_FLIGHT_STATUSES))) if job.id not in seen]
     return sorted([*recent, *running], key=lambda job: (job.created_at, job.id), reverse=True), cleared_at
 
 
