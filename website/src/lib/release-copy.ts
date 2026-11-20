@@ -1,5 +1,15 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.10": {
+    zh: [
+      "**Kimi Code 额度恢复正常显示。** 适配新的 5 小时 / 7 天聚合额度结构，月度窗口也有独立标签；额度怎么查、怎么显示不再受上游回包结构变化影响。",
+      "**供应商错误保留真正原因。** 订阅刷新失败、上游 500、本机端点未启动等长错误不再只显示调用栈尾部，用户能直接看到「Refresh token expired」或「服务不可达」这类根因。",
+    ],
+    en: [
+      "**Kimi Code quotas show up again.** The new 5-hour / 7-day aggregate usage shape is supported, with separate labels for monthly windows, so the quota card no longer depends on which response shape the upstream returns.",
+      "**Provider errors keep the real cause.** Long subscription-refresh, upstream 500 and local-endpoint errors no longer show only the tail of a stack trace; the actionable cause such as “Refresh token expired” stays visible.",
+    ],
+  },
   "v2.6.9": {
     zh: [
       "**后台轮询更快，也更省内存。** 任务中心不再为了找几条运行中的任务扫描整段历史；用量统计和会话列表只读取需要的字段，真实工作区的任务列表中位耗时从约 24ms 降到约 3ms。",
