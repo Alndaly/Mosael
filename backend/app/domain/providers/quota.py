@@ -199,21 +199,20 @@ def parse_openrouter(payload: dict[str, Any]) -> dict[str, Any]:
 def parse_kimi(payload: dict[str, Any]) -> dict[str, Any]:
     """`GET https://api.kimi.com/coding/v1/usages`。
 
-    两层:`usage` 是本周用量,`limits[]` 是每个滚动窗口的频率限制(现在只有一个 5 小时窗口)。两处都给
-    `limit` 和 `remaining`,**分母恒为 100 —— 是百分点,不是次数**:Kimi Code 后台对同一份数据写的是
-    「Weekly usage 83%」「Rate limit 0%」。此前这里归一成「已用 83 / 上限 100」、单位记成 call,界面读作
-    「用了 83 次、共 100 次」,和后台对不上。所以两条都按百分比报(已用 / 上限),分母哪天不是 100 也照样是比例。
-
-    窗口长度得由 duration + timeUnit 两个字段一起算 —— 只看 duration 会把「300 分钟」当成「300 秒」。
-    重置时间各在各的 `resetTime` 里(窗口的在 `detail` 里)。
+    当前接口先给 `usages.{limit_5h,limit_7d,limit_month_total,limit_month_code}.used_ratio`
+    (0–1 比例);旧版曾给 `usage`(本周用量)与 `limits[]`(5 小时频率限制)。两套结构同时存在时,
+    同一窗口只报一次。所有指标继续按百分比归一,和 Kimi Code 后台显示一致。
     """
     metrics: list[dict[str, Any]] = []
+    has_weekly = False
+    has_rate_limit = False
     usage = payload.get("usage")
     if isinstance(usage, dict):
         used_percent = _kimi_used_percent(usage)
         if used_percent is not None:
             reset = usage.get("resetTime")
             metrics.append(_percent_metric("weekly", used_percent, window_seconds=None, resets_at=str(reset) if reset else None))
+            has_weekly = True
     for index, entry in enumerate(payload.get("limits") or []):
         if not isinstance(entry, dict):
             continue
@@ -231,6 +230,40 @@ def parse_kimi(payload: dict[str, Any]) -> dict[str, Any]:
                 resets_at=str(reset) if reset else None,
             )
         )
+        has_rate_limit = True
+
+    # Kimi Code 新版按窗口名给聚合比例(0–1);旧版 response 仍可能把这些窗口
+    # 同时放进 `usage` / `limits[]`,所以已有的同名窗口不再重复成第二条。
+    usages = payload.get("usages")
+    if isinstance(usages, dict):
+        windows = {
+            "limit_5h": ("five_hour", 5 * 3600),
+            "limit_7d": ("seven_day", 7 * 86400),
+            "limit_month_total": ("month_total", None),
+            "limit_month_code": ("month_code", None),
+        }
+        ordered = [*windows, *(key for key in usages if key not in windows)]
+        for name in ordered:
+            entry = usages.get(name)
+            if not isinstance(entry, dict):
+                continue
+            if name == "limit_5h" and has_rate_limit:
+                continue
+            if name == "limit_7d" and has_weekly:
+                continue
+            ratio = _number(entry.get("used_ratio"))
+            if ratio is None:
+                continue
+            key, window_seconds = windows.get(name, (name, None))
+            reset = entry.get("reset_time") or entry.get("resetTime")
+            metrics.append(
+                _percent_metric(
+                    key,
+                    round(min(max(ratio, 0.0), 1.0) * 100, 2),
+                    window_seconds=window_seconds,
+                    resets_at=str(reset) if reset else None,
+                )
+            )
     if not metrics:
         raise QuotaUnavailable("quotaErr_noQuota")
     user = payload.get("user")

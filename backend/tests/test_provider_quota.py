@@ -136,6 +136,40 @@ def test_kimi_未知时间单位不瞎猜():
     assert snapshot["metrics"][0]["window_seconds"] is None
 
 
+def test_kimi_新版聚合窗口按比例报():
+    """2026-11-20 的实际回包:`usages.limit_5h/limit_7d.used_ratio` 是 0–1 比例。"""
+    snapshot = parse_kimi(
+        {
+            "usages": {
+                "limit_5h": {"used_ratio": 0.25, "reset_time": "2026-11-20T18:00:00Z"},
+                "limit_7d": {"used_ratio": 0.5},
+                "limit_month_total": {"used_ratio": 1.2},
+            }
+        }
+    )
+    assert [m["key"] for m in snapshot["metrics"]] == ["five_hour", "seven_day", "month_total"]
+    assert [m["used_percent"] for m in snapshot["metrics"]] == [25.0, 50.0, 100.0]
+    assert snapshot["metrics"][0]["window_seconds"] == 5 * 3600
+    assert snapshot["metrics"][1]["window_seconds"] == 7 * 86400
+    assert snapshot["metrics"][0]["resets_at"] == "2026-11-20T18:00:00Z"
+
+
+def test_kimi_新旧结构同时存在时同一窗口只报一次():
+    snapshot = parse_kimi(
+        {
+            "usage": {"limit": 100, "remaining": 40, "resetTime": "2026-11-21T00:00:00Z"},
+            "limits": [{"window": {"duration": 5, "timeUnit": "TIME_UNIT_HOUR"}, "detail": {"limit": 100, "remaining": 70}}],
+            "usages": {
+                "limit_5h": {"used_ratio": 0.3},
+                "limit_7d": {"used_ratio": 0.6},
+                "limit_month_total": {"used_ratio": 0.1},
+            },
+        }
+    )
+    assert [m["key"] for m in snapshot["metrics"]] == ["weekly", "rate_limit", "month_total"]
+    assert [m["used_percent"] for m in snapshot["metrics"]] == [60.0, 30.0, 10.0]
+
+
 def test_xai_按需上限单独成条():
     """按需上限不能加进月度上限:那会让「月度还剩很多」看起来成立,实际早已进入按需计费。"""
     snapshot = parse_xai({"config": {"used": 80, "monthlyLimit": 100, "onDemandCap": 500}, "subscription_tier_display": "SuperGrok"})
