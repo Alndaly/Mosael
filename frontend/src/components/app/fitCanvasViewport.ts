@@ -86,7 +86,8 @@ export function fitCanvasViewport<NodeType extends Node = Node, EdgeType extends
     visible.height,
     options.minZoom ?? 0.1,
     options.maxZoom ?? 1,
-    options.padding ?? 0.3,
+    // v13 的 padding 是像素;换算回 v12 的比例边距,保持既有 fitView 留白不变。
+    (50 * (options.padding ?? 0.3)) / (1 + (options.padding ?? 0.3)),
   );
   return instance.setViewport(
     finiteViewport({ ...viewport, x: viewport.x + visible.left, y: viewport.y + visible.top }),

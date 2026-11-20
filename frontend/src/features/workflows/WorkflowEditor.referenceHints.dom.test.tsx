@@ -9,6 +9,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
+import { EdgeChangeset } from "@xyflow/react";
 import type { Edge, ReactFlowProps } from "@xyflow/react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 
@@ -200,7 +201,7 @@ it("连进流程之后:线变回淡色,角标消失;接控制线不藏提示线,
 it("提示线不在图里:画布报来的删除落不到图上,也不触发保存", async () => {
   await renderEditor(GRAPH);
   await waitFor(() => expect(hints().size).toBe(3));
-  act(() => flow.props?.onEdgesChange?.([{ type: "remove", id: "ref-hint:props>out:text>set" }]));
+  act(() => flow.props?.onEdgesChange?.(new EdgeChangeset([{ type: "remove", id: "ref-hint:props>out:text>set" }])));
   await new Promise((resolve) => setTimeout(resolve, 1200));
   expect(apiMocks.updateWorkflow).not.toHaveBeenCalled();
   expect(hints().has("ref-hint:props>out:text>set>in:template")).toBe(true);

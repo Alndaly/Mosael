@@ -9,7 +9,7 @@ vi.mock("@xyflow/react", () => ({
   Handle: () => null,
   NodeResizer: () => null,
   Position: { Left: "left", Right: "right" },
-  useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
+  useViewportStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
     selector({ transform: [0, 0, 1] }),
 }));
 vi.mock("@/app/preferences", () => ({

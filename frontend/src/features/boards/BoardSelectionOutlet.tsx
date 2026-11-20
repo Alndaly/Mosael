@@ -1,5 +1,5 @@
 import React from "react";
-import { Position, getBezierPath, getSmoothStepPath, useReactFlow, useStore } from "@xyflow/react";
+import { Position, getBezierPath, getSmoothStepPath, useReactFlow, useViewportStore } from "@xyflow/react";
 import { Plus } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
@@ -139,7 +139,7 @@ export function BoardSelectionOutlet({
   onRelease: (target: string | null, at: XY) => void;
 }) {
   const t = useI18n();
-  const [tx, ty, zoom] = useStore((state) => state.transform);
+  const [tx, ty, zoom] = useViewportStore((state) => state.transform);
   const { screenToFlowPosition } = useReactFlow();
   const model = React.useRef({ sources, cells, edges });
   model.current = { sources, cells, edges };

@@ -1,5 +1,5 @@
 import React from "react";
-import { useStore } from "@xyflow/react";
+import { useViewportStore } from "@xyflow/react";
 import type { LucideIcon } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
@@ -56,7 +56,7 @@ export function BoardNodeLabel({
   //: **反着视口缩放** —— 标签跟着画布缩的话,它在屏幕上的高度一直在变,而上方那块操作条
   //: 的间距是按屏幕像素算的(NodeToolbar 的 offset)。两者对不上的结果:拉远时标签越缩越小,
   //: 操作条和节点之间的空当越拉越大,而下方的面板纹丝不动。
-  const zoom = useStore((state) => state.transform[2]) || 1;
+  const zoom = useViewportStore((state) => state.transform[2]) || 1;
   const name = title?.trim() ?? "";
   const editable = !readOnly && Boolean(onRenaming && onRename);
   const editing = editable && renaming;

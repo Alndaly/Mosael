@@ -7,7 +7,7 @@ import {
   Handle,
   Position,
   useReactFlow,
-  useStore,
+  useViewportStore,
   type Edge,
   type FinalConnectionState,
   type Node,
@@ -139,7 +139,7 @@ type GhostData = { icon: LucideIcon; label: string };
  */
 export function PendingLinkGhost({ data }: NodeProps) {
   const { icon: Icon, label } = data as unknown as GhostData;
-  const zoom = useStore((state) => state.transform[2]) || 1;
+  const zoom = useViewportStore((state) => state.transform[2]) || 1;
   //: 接点贴在边上、不居中骑线 —— 锚点取的是接点那一侧的外边缘(见画板 Ports 的说明)。
   const flush = { transform: "translateY(-50%)" };
   const anchor = "!h-2 !w-2 !min-h-0 !min-w-0 !rounded-none !border-0 !bg-transparent !p-0 !opacity-0";

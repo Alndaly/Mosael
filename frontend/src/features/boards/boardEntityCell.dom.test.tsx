@@ -40,7 +40,7 @@ vi.mock("@xyflow/react", () => ({
   NodeResizer: () => null,
   NodeToolbar: ({ children }: { children: React.ReactNode }) => children,
   Position: { Left: "left", Right: "right", Bottom: "bottom" },
-  useStore: (selector: (state: { transform: [number, number, number] }) => unknown) => selector({ transform: [0, 0, 1] }),
+  useViewportStore: (selector: (state: { transform: [number, number, number] }) => unknown) => selector({ transform: [0, 0, 1] }),
 }));
 vi.mock("@/components/app/asset-preview", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/components/app/asset-preview")>()), AssetInlinePreview: () => <div /> }));

@@ -12,7 +12,7 @@ vi.mock("@xyflow/react", () => ({
   Handle: ({ children, isConnectable, className }: { children?: React.ReactNode; isConnectable?: boolean; className?: string }) => <div data-testid="connection-handle" data-connectable={isConnectable} className={className}>{children}</div>,
   NodeResizer: () => null,
   Position: { Left: "left", Right: "right" },
-  useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
+  useViewportStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
     selector({ transform: [0, 0, 1] }),
 }));
 vi.mock("@/app/preferences", () => ({

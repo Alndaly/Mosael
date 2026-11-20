@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { applyEdgeChanges, applyNodeChanges, type Connection, type Edge, type EdgeChange, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
+import { type Connection, type Edge, type EdgeChangeset, type Node, type NodeChangeset, type ReactFlowInstance } from "@xyflow/react";
 import { toast } from "sonner";
 
 import { importAsset, type WorkflowGraph, type WorkflowNodeType } from "@/api/client";
@@ -230,11 +230,11 @@ export function useWorkflowCanvasEdits({
   }, [copySelection, cutSelection, pasteClipboard, selectedFlowIds, handleCollapse]);
 
   const onNodesChange = React.useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((current) => applyNodeChanges(changes, current));
+    (changes: NodeChangeset<Node>) => {
+      setNodes((current) => changes.applyTo(current));
       // 拖拽会连发几十次 position;声明 coalesce,让这一串在历史里塌成一条(存的是拖之前的
       // 图)。删除是离散操作,不合并 —— 连删两个节点该能分别撤销。
-      const dragging = changes.some((change) => change.type === "position");
+      const dragging = changes.getByType("position").length > 0;
       // 位置/删除同步回 graph
       setGraph((current) => {
         let next = current;
@@ -279,8 +279,8 @@ export function useWorkflowCanvasEdits({
     [],
   );
 
-  const onEdgesChange = React.useCallback((changes: EdgeChange[]) => {
-    setEdges((current) => applyEdgeChanges(changes, current));
+  const onEdgesChange = React.useCallback((changes: EdgeChangeset) => {
+    setEdges((current) => changes.applyTo(current));
     setGraph((current) => {
       let next = current;
       for (const change of changes) {

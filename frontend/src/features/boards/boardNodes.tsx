@@ -1,7 +1,7 @@
 import React from "react";
 import type { NoteReference } from "@/api/domains/notes";
 import { locateNotePassage, noteHref } from "@/lib/deepLink";
-import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, useViewportStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
@@ -110,7 +110,7 @@ function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: bo
   //: 圆圈**反着视口缩放**,于是它在屏幕上永远这么大 —— 跟着画布缩的话,拉远时它小成一个
   //: 点(点不中),拉近时又胀成一个盘子。同一份 transform 里连位移一起抵消,离节点的那段
   //: 距离也就不会跟着变(transform 从右往左作用,先位移再缩放)。
-  const zoom = useStore((state) => state.transform[2]) || 1;
+  const zoom = useViewportStore((state) => state.transform[2]) || 1;
   // Keep handles mounted so undo can remeasure edges in annotation modes.
   //: **锚点是 handle 在那一侧的外边缘,不是中心** —— 源码里 Position.Right 返回 x+width、
   //: Position.Left 返回 x。而默认样式把 handle 居中骑在边线上(translate ±50%),于是线头

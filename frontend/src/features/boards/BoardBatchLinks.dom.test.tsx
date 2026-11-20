@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { NodeChangeset } from "@xyflow/react";
 import type { Connection, FinalConnectionState, ReactFlowInstance, ReactFlowProps } from "@xyflow/react";
 
 /**
@@ -101,7 +102,7 @@ async function steadyViewport() {
 /** 选中这几格(React Flow 框选之后交给画布的就是这一串 select 变化)。 */
 function pick(...ids: string[]) {
   act(() => {
-    flow.props!.onNodesChange!(ids.map((id) => ({ id, type: "select", selected: true })));
+    flow.props!.onNodesChange!(new NodeChangeset(ids.map((id) => ({ id, type: "select", selected: true }))));
   });
 }
 function connect(source: string, target: string) {
@@ -262,7 +263,7 @@ describe("选区框的统一出口", () => {
 const ports = (id: string) => [...document.querySelectorAll<HTMLElement>(`.react-flow__node[data-id="${id}"] .react-flow__handle`)];
 function unpick(...ids: string[]) {
   act(() => {
-    flow.props!.onNodesChange!(ids.map((id) => ({ id, type: "select", selected: false })));
+    flow.props!.onNodesChange!(new NodeChangeset(ids.map((id) => ({ id, type: "select", selected: false }))));
   });
 }
 

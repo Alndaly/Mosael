@@ -35,7 +35,7 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePr
 vi.mock("@xyflow/react", () => ({
   NodeToolbar: ({ children }: { children: React.ReactNode }) => children,
   Position: { Left: "left", Right: "right", Bottom: "bottom" },
-  useStore: (selector: (state: { transform: [number, number, number] }) => unknown) => selector({ transform: [0, 0, 1] }),
+  useViewportStore: (selector: (state: { transform: [number, number, number] }) => unknown) => selector({ transform: [0, 0, 1] }),
 }));
 const openImagePreview = vi.hoisted(() => vi.fn());
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: false }) }));

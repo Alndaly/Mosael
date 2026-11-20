@@ -18,7 +18,7 @@ vi.mock("@xyflow/react", () => ({
   Position: { Bottom: "bottom" },
   NodeResizer: () => null,
   Handle: () => null,
-  useStore: () => 1,
+  useViewportStore: () => 1,
 }));
 
 import type { BoardItem, BoardProducerInfo, BoardRunRequest } from "@/api/client";
