@@ -882,8 +882,14 @@ def _run_pi(
 TURN_CUT_SHORT = frozenset({"output_limit", "tool_call_lost", "paused", "context_full"})
 
 
-def _tail(text: str, limit: int = 500) -> str:
-    return text.strip()[-limit:]
+def _tail(text: str, limit: int = 1000) -> str:
+    """长错误保留**开头和结尾**:开头才是根因(sidecar 的 describeError 把根因放在最前、stack 在后),
+    只留尾部会让用户看到一截调用栈、看不到到底为什么失败。根因分到三分之二。"""
+    stripped = text.strip()
+    if len(stripped) <= limit:
+        return stripped
+    head = max(1, limit * 2 // 3)
+    return f"{stripped[:head]}\n…\n{stripped[-(limit - head):]}"
 
 
 def _reported(event: dict, fallback_key: str) -> SidecarError:

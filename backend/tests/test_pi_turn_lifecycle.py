@@ -267,6 +267,15 @@ for _ in sys.stdin:
 """
 
 
+def test_长错误保留根因而不是只剩调用栈() -> None:
+    from app.ai.sidecar.pi_client import _tail
+
+    shown = _tail("根因: refresh token was rejected\n" + "x" * 800 + "\n    at refresh (sidecar.cjs:1:2)", limit=120)
+    assert shown.startswith("根因: refresh token was rejected")
+    assert shown.endswith("at refresh (sidecar.cjs:1:2)")
+    assert len(shown) <= 140
+
+
 @pytest.mark.parametrize("code", ["output_limit", "tool_call_lost", "paused", "context_full"])
 def test_a_turn_that_stopped_short_reports_what_happened_not_check_your_provider(tmp_path: Path, monkeypatch, code) -> None:
     """**没说完就停下**(截断 / 工具调用丢了 / 供应商暂停)是跑起来之后的事,不是供应商配置错了。
