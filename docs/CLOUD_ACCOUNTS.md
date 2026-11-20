@@ -2,9 +2,9 @@
 
 **MosaelCloud 有自己的一套账号**:邮箱验证码注册、密码 / 验证码两种登录,以及
 **GitHub / Google 登录**(见「GitHub / Google 登录」一节)。社区分享的第①笔(身份、分享、
-点赞 / 收藏 / 评论)见「社区分享第①笔」。**桌面端不绑定云端账号** —— 没有设备码、没有设备
-列表,也没有 `/api/cloud/binding*` 这一层;桌面端只经本地后端**只读反代**社区分享。
-同步、钱包、模型网关不在这里,也不预先加字段。
+点赞 / 收藏 / 评论)见「社区分享第①笔」。**桌面端可以绑定自己的 Cloud 账号**:本地用户登录 Cloud 后
+立即把会话换成设备令牌(`POST /device-tokens`,加密存进 `cloud_login`),此后账号、套餐 / 积分和官方
+中转网关只认这枚令牌;社区分享仍由本地后端反代。桌面端关系是**用令牌绑定**,不是设备码配对。
 
 设计方向来自 [ADR 0039](adr/0039-mosael-cloud.md)(Cloud 是独立产品边界),但它当时设想的是
 "重新接社区服务的设备授权";这一期按维护者的新方向改成**一套独立的 Cloud 账号**,不复用
@@ -17,10 +17,10 @@
 | 谁在用 | 这台机器 / 这个部署 | 官网 |
 | 身份表 | `backend` 的 `users`(用户名 + 密码) | `cloud/` 的 `cloud_users`(邮箱 / 手机号 + 密码) |
 | 登录 | 本地后端签的会话(`auth_sessions`) | Cloud 的 HttpOnly cookie(`cloud_sessions`) |
-| 桌面端关系 | 本地账号照旧登录、照旧用 | 不绑定;社区分享的读请求经本地后端反代 |
+| 桌面端关系 | 本地账号照旧登录、照旧用 | 用设备令牌绑定(`cloud_login` 只存加密令牌);社区分享经本地后端反代 |
 
-**互不污染**:Cloud 不知道本地 `users` / `workspaces` / `auth_sessions`,本地库里也没有任何
-指向 Cloud 账号的表。Cloud 的测试用两个真实 SQLite 文件钉住这条边界(见
+**边界是单向的**:Cloud 不知道本地 `users` / `workspaces` / `auth_sessions`;本地 `cloud_login` 只记
+设备令牌和对应 Cloud 账号标识,不把 Cloud 密码或浏览器 Cookie 带进本地账号表。Cloud 的测试用两个真实 SQLite 文件钉住这条边界(见
 `cloud/tests/test_identity_isolation.py`)。
 
 ## 目录与部署形态
@@ -30,7 +30,7 @@ cloud/                      新的后端模块(FastAPI + SQLAlchemy),不属于 b
   src/cloud/                账号、会话、OAuth、社区分享
   tests/                    SQLite 临时库,不连外网
 website/                    官网:注册 / 登录 / 账号三页 + 同源反代
-backend/                    本地后端:社区分享只读反代 /api/cloud/v1/shares/*
+backend/                    本地后端:Cloud 账号 / 设备令牌 / 网关 / 社区分享的转发(`/api/cloud/v1/*`)
 ```
 
 **为什么放 `cloud/` 而不是 `backend/`**:`backend/` 是跑在用户自己电脑上的本地服务端,它的

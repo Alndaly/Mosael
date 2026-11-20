@@ -270,12 +270,9 @@ on the one line a user reads before clicking approve.
 
 The browser tools reuse the confirmation gate. `browser_pool_open` is the security-critical one: the agent can use **no** logged-in profile without the user approving a card that names the identity ("显式授权每会话"). Agents are instructed that page content is DATA, not instructions; never enter passwords/payment; and warn the user before any post/submit/purchase.
 
-### 三档权限模式(已设计,未实现)
+### 三档权限模式（manual / auto / bypass，已落地）
 
-现在的门控是二元的:走卡或不走卡。三档模式(手动 / auto / bypass)的设计见
-[ADR 0007](adr/0007-agent-permission-modes.md) —— 包括为什么「AI 自行判断是否放行」必须由一个
-**看不到工具返回内容**的隔离判断者来做。落地方案与对 ADR 的三处修正见
-[AGENT_PERMISSION_MODES.md](AGENT_PERMISSION_MODES.md)。
+模式挂在会话上（`AgentSession.permission_mode`），判定在 `domain/agent/autopilot.decide`：`manual` 每个需确认的工具都出卡，`auto` 只放行规则明确允许的那些，`bypass` 由部署管理员显式开启；共享会话（飞书）不能开 bypass。设计原因和判断者边界见 [ADR 0007](adr/0007-agent-permission-modes.md)。
 
 **权限档已经改成按 payload 派生**(第 1 期,已落地):`TOOL_DEFS` 里的值只是下限,`run_workflow`
 与工作流的建/改会扫**这次会落库或执行的那张图**,含 `code` / `publish` / `http_request` /
@@ -285,10 +282,9 @@ The browser tools reuse the confirmation gate. `browser_pool_open` is the securi
 
 ## Confirmation flow
 
-Mutating tools never execute directly. They create a pending confirmation;
-a card appears showing the requesting agent, permission level, and operation
-details. Only user approval executes the action — timeline edits run through
-SequenceOperations and stay undoable (⌘Z). Agents poll `get_confirmation` until
+Tools whose manifest entry sets `confirmation: true` never execute directly. They create a pending confirmation;
+a card appears showing the requesting agent, permission level, and operation details. Only user approval executes the action — timeline edits run through
+SequenceOperations and stay undoable (⌘Z). The rest execute immediately under their declared effect tier; irreversible or external effects still take a card. Agents poll `get_confirmation` until
 the status is terminal; `result` then carries the new revision or job id.
 
 ### Where the card appears — and who may approve it

@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.9": {
+    zh: [
+      "**后台轮询更快，也更省内存。** 任务中心不再为了找几条运行中的任务扫描整段历史；用量统计和会话列表只读取需要的字段，真实工作区的任务列表中位耗时从约 24ms 降到约 3ms。",
+      "**存储清理补上中断转码残片。** 管理页会列出素材目录里遗留的 `.part` 文件，可全选、确认并删除；正在写入的文件、素材原件、正式代理和缩略图都会保留。自动升级快照只保留最近三份，数据目录不再无限增长。",
+      "**画板和工作流升级到新版画布引擎。** 节点选择、拖拽、删除、连线、提示线和工作流检查器的行为保持不变。",
+    ],
+    en: [
+      "**Background polling is faster and lighter.** The task center no longer scans the whole history to find a few running jobs, while usage summaries and session lists read only the fields they need; the real-workspace task list went from about 24 ms to about 3 ms.",
+      "**Storage cleanup now finds interrupted transcodes.** The admin page lists leftover .part files in asset directories and supports select-all, confirmation and rechecking; active writes, originals, published proxies and thumbnails stay. Automatic upgrade snapshots keep only the latest three, so the data directory no longer grows without bound.",
+      "**Boards and workflows move to the new canvas engine.** Node selection, dragging, deletion, connections, reference hints and the workflow inspector keep their behaviour.",
+    ],
+  },
   "v2.6.8": {
     zh: [
       "**AI Studio 成为默认首页。** 剪辑项目有独立的项目浏览页；对话 / 创作 / 轨迹、左右侧栏与引擎参数统一为图标交互，分组会话不再额外缩进。",

@@ -4,8 +4,8 @@ description: Connect media, models and tools, check inputs and run repeatable cr
 seo_title: AI video workflows and templates
 keywords: AI video workflow, AI video automation, product promo video template, translated dubbing, long video to shorts
 order: 6
-updated: 2026-10-17
-version: 2.6.8
+updated: 2026-11-20
+version: 2.6.9
 ---
 
 A workflow is **done once, run endlessly**: it turns something you did once into a process that runs again on new input, runs unattended, and runs at scale. Start-node inputs and templates make it reusable; it can carry media through the timeline, subtitles, export and publishing to a finished piece; loops, concurrency and branches handle batches and say which item failed; schedules, webhooks, the agent or other workflows can start it; and every run keeps each node's inputs, results and errors. The process itself is the product. While you are still looking, revising and picking between versions, use a [creative board](/docs/guides/boards).
@@ -20,22 +20,23 @@ The [website workflow catalog](/workflows) describes every official template, wh
 2. Choose your workspace in the app, open Workflows, then use Import workflow to select the file.
 3. Open the imported graph, choose your own providers and models, fill in the start node's required parameters and pass the readiness check before running.
 
-Downloads contain no account secrets or private assets, and do not automatically select local default models. Importing needs 2.6.8 or newer. Node names follow the language of the file you downloaded.
+Downloads contain no account secrets or private assets, and do not automatically select local default models. Importing needs 2.6.9 or newer. Node names follow the language of the file you downloaded.
 
 | For | Templates |
 | --- | --- |
-| Finished videos | **Topic to finished video** (brief → script and visual bible → characters looked up in the asset library first, with turnarounds / location art drawn and saved only for new ones → storyboard → an automatic 3D blockout → per-shot video from the blockout → narration captions → export; the most expensive one, up to 8 shots by default; the start node's **Seconds per shot** is set at build time to the duration nearest the default that the chosen video model can make, video length, timeline and storyboard all follow it, and a model that can't make that length is stopped before the run), **Long video into vertical clips** (picks up to 12 segments, each on its own vertical timeline with short captions) |
+| Finished videos | **Topic to finished video** (brief → script and visual bible → characters looked up in the asset library first, with turnarounds / location art drawn and saved only for new ones → storyboard → an automatic 3D blockout → per-shot video from the blockout → narration captions → export; the most expensive one, up to 8 shots by default; the start node's **Seconds per shot** is set at build time to the duration nearest the default that the chosen video model can make, video length, timeline and storyboard all follow it, and a model that can't make that length is stopped before the run), **Long video into vertical clips** (picks up to 12 segments, each on its own vertical timeline with short captions), **Drama episode** (dialogue shots speak their lines as the video model renders them, with one voice per character), **Continuous video of any length** (long takes continue in segments and join back into one) |
+| Series | **Series bible for an episodic show** (set the episodes, characters, locations and voices once; the next episode keeps the same faces and voices) |
 | Clean-up and montage | **Transcript-based video cleanup** (denoise first, then cut pauses, fillers and repetition by the transcript; for material up to about 30 minutes), **Montage from your own footage** (orders a tagged batch of your clips and adds narration and captions) |
 | Translated dubbing | **Translated dubbing with subtitles** (transcribe, translate and subtitle line by line on the original timecodes, dub each line into its slot, strip the original voice but keep the music), **Translated dubbing with lip-sync** (the same, then the speaker's lips follow the dub) |
-| Products and business | **Product photo into on-model shots** (the outputs list each group's on-model shot and video), **Product into a narrated short** (the script goes through **Fit narration to its length** first; uses a cloned voice when you have one, otherwise the free Edge voice, with nothing to set up, and the finish notice says which voice it used; with a video model that takes a first frame, **every beat moves**: the beat's frame becomes the first frame of a clip, the clip goes on the timeline with its own sound muted, and every beat is the same length — the start node's beat_seconds, set at build time to a length that model can make, with a length it can't make stopped before the run; that is one more paid video per beat, about 6 clips for the default 30 seconds at 5 seconds a beat; without a video model it lays one still per beat as before), **Fabric into applications and a spec sheet** |
-| Digital humans | **Script into a talking-head video**, **Product into a presenter-led short** (see [Digital humans](/docs/guides/digital-humans)) |
-| Analytics | **Social account health check**, **Why a video went viral**, **Comment insights and audience** (see "Analytics templates" below) |
+| Products and business | **Product photo into on-model shots** (the outputs list each group's on-model shot and video), **Product into a narrated short** (the script goes through **Fit narration to its length** first; uses a cloned voice when you have one, otherwise the free Edge voice, with nothing to set up, and the finish notice says which voice it used; with a video model that takes a first frame, **every beat moves**: the beat's frame becomes the first frame of a clip, the clip goes on the timeline with its own sound muted, and every beat is the same length — the start node's beat_seconds, set at build time to a length that model can make, with a length it can't make stopped before the run; that is one more paid video per beat, about 6 clips fo… |
+| Digital humans | **Script into a talking-head video**, **Product into a presenter-led short**, **Digital human of any length** (generated in segments beyond the single-run limit and joined; see [Digital humans](/docs/guides/digital-humans)) |
+| Analytics | **Social account health check**, **Why a video went viral**, **Comment insights and audience**, **Break down a reference video: shot list + contact sheet + report** (see "Analytics templates" below) |
 
 What each one needs (a chat model, an image model that takes references, a video model, a cloned voice, a transcription or separation engine…) is on its card, and the template gallery checks each item off.
 The reduce-noise node uses the built-in engine by default. For speech-led material with messy noise (keyboards, dishes, chatter)
 switch it to DeepFilterNet (a deployment admin downloads it first under Admin → Engines); it removes music as well.
 
-![Workflow Community: the fourteen official templates; each card shows what is missing and how many steps, and added ones say Added](/media/screens/en/workflow-templates.png)
+![Workflow Community: the eighteen official templates; each card shows what is missing and how many steps, and added ones say Added](/media/screens/en/workflow-templates.png)
 
 ![Template details (social account health check): summary and steps, with the run requirements and “another way works” on the right](/media/screens/en/workflow-template-check.png)
 
@@ -60,10 +61,10 @@ adds that step when you have a video model.
 
   | Group | Nodes |
   | --- | --- |
-  | Flow | Start, Condition, Delay, Loop · for each, Loop · while, Call workflow, Output, Subgraph |
+  | Flow | Start, Condition, Delay, Loop · for each, Loop · while, Call workflow, Output, Subgraph, Wait for approval, Estimate video cost, Plan the segments |
   | AI | LLM, AI generate, Translate, Translate lines, Fill in angles, Generate expressions, Make it talk (character / image), Lip sync, Lip-sync a dubbed timeline, Voice a long script in segments, Fit narration to its length |
-  | Audio | Transcribe asset, Text to speech, Separate voice and background, Reduce noise, Dub subtitles |
-  | Assets | Export timeline, Asset, Download from a link, Inspect timeline, Append to timeline, Add a track, Clear timeline, Clean up time ranges, Timeline advanced operations, Clip media, Video to GIF, Split grid, Generate subtitles, Find assets, Get from asset library, List library assets, Save to asset library, Tag assets, Organize assets, Create project, Create video project |
+  | Audio | Transcribe asset, Text to speech, Separate voice and background, Reduce noise, Dub subtitles, Tighten pauses |
+  | Assets | Export timeline, Asset, Download from a link, Inspect timeline, Append to timeline, Add a track, Clear timeline, Clean up time ranges, Timeline advanced operations, Clip media, Video to GIF, Split grid, Generate subtitles, Find assets, Get from asset library, List library assets, Save to asset library, Tag assets, Organize assets, Create project, Create video project, Grab a frame, Join into one video, Find the seam, Detect shots, Judge shots, Shot report, Strip metadata |
   | 3D | Available 3D props, Build a 3D blockout scene, Build a 3D scene from text, Render blockout references |
   | Knowledge | Search notes, Read note, Save as note, Document to Markdown |
   | Data | HTTP request, Code, Text template, JSON extract, Split into batches, Text transform, Read a social media link, Tidy post and comment data, Check quotes |

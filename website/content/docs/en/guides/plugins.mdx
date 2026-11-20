@@ -4,8 +4,8 @@ description: Connect local tools or MCP services and configure permissions for a
 seo_title: Plugins: ComfyUI, Blender, Manim and MCP servers
 keywords: Mosael plugins, ComfyUI plugin, Blender MCP, Manim, MCP server
 order: 10
-updated: 2026-11-01
-version: 2.6.8
+updated: 2026-11-20
+version: 2.6.9
 ---
 
 A plugin brings capability from outside Mosael in — a local script, or an existing MCP
@@ -166,7 +166,7 @@ The manifest syntax is in `docs/PLUGIN_MANIFEST.md`, under `instance.oauth`.
 ## In the agent
 
 Tools from an enabled, authorized, fully-credentialed plugin **appear directly in the agent's tool
-list** (named `plugin__<plugin>__<tool>`), indistinguishable from built-in ones. The model sees the
+list** (named `plugin__<connection id>__<tool>` — two connections of one package are separate tool sets; over 64 characters the connection id keeps its first 8 characters and the name ends with an 8-character digest), indistinguishable from built-in ones. The model sees the
 name and the input schema straight away — it does not have to first *think of* asking whether a
 plugin might help, then spend a turn listing them.
 

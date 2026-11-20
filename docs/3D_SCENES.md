@@ -1,6 +1,6 @@
 # 3D 场景:数据形状与几何契约
 
-**用户怎么用这一页,看[使用指南](https://mosael.app/docs/guides/scenes)**(仓库里的源文件是
+**用户怎么用这一页,看[使用指南](https://mosael.com/zh/docs/guides/scenes)**(仓库里的源文件是
 `website/content/docs/{zh,en}/guides/scenes.mdx`)。那边讲操作:观察方式、加物体、插关键帧、
 生成素材、Blender 往返。这里只讲**代码这一侧的契约** —— 同一段操作说明此前在两个地方各写了
 一份,写着写着就不是同一件事了(官网有缩略图那段、仓库有建模助手那段,谁也不知道另一边缺什么)。

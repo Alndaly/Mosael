@@ -8,10 +8,11 @@
 真平台:`douyin` / `xiaohongshu` / `weixin-channels` / `bilibili` / `tiktok` / `x` / `youtube`,
 一律由**桌面端内嵌浏览器**驱动真实平台页面。
 
-### 每个平台能发什么
+### 我们目前能发什么(界面只列 `IMPLEMENTED_KINDS`)
 
 「平台能发」(注册表的 `kinds`)与「我们已经会发」(`IMPLEMENTED_KINDS`)是两件事,由棘轮
-`test_publish_adapter_supports_match_registry` 对齐;界面的「内容类型」只列后者。
+`test_publish_adapter_supports_match_registry` 对齐;界面的「内容类型」只列后者。注册表还声明了
+B站 / YouTube 的图文形态,但没有对应适配器,所以不出现。
 
 | 平台 | 视频 | 图文 | 文章(专栏) |
 | --- | --- | --- | --- |
@@ -60,7 +61,7 @@
 | `POST /worker/claim-check` | 认领一个待复检登录态的账号 |
 | `POST /worker/mark-due` | 开机全量巡检:把所有账号标记待复检 |
 | `PATCH /worker/account` | 回写 `binding_status` / `last_error` / `profile_name`(平台侧昵称) |
-| `POST /worker/heartbeat` | 30s 心跳,前端据此显示执行器在线 |
+| `POST /worker/heartbeat` | 每拍心跳(空闲约 4s、忙时 0.5s);后端 30s 内有心跳即判在线(`worker_online`) |
 
 任务富状态会同步映射到任务总线的 `job`,并产生站内通知(成功/失败/需重登/被拦截…)。
 **已取消的任务不给后到的回报复活**(`report_task` 里的规则)。

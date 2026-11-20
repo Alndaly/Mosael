@@ -355,7 +355,7 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 `_migrate_*` 有明确的退休判据:**它保护的最早版本一旦不再需要支持,就可以删**。判据是引入时间
 对比最早仍支持的 GitHub Release —— 早于它的只服务从未公开的 dev 库,可以删掉;晚于它的仍在为
 真实用户的升级路径服务。支持窗口是**最新公开版往前 8 个版本序号**(含最新共 9 个 Release):
-当前最新 v2.4.4,门槛 **v2.2.2**;调整时同步 ADR-0006、CONTEXT、Release Notes
+当前最新 v2.6.9,门槛 **v2.6.1**(单一事实源 `backend/app/db/support_window.py` 的 `OLDEST_SUPPORTED_RELEASE`);调整时同步 ADR-0006、CONTEXT、Release Notes
 和打包升级夹具(`test/upgrade_db_fixture.py` + `backend/tests/schema_baseline.json`)。
 仓库里一度还留着 30 个 Alembic 迁移文件,但它们从不被执行、且自
 2026-07-23 起就与 `models.py` 漂移(此后模型改了 6 次、迁移 0 次),已随这条规约一并移除。
@@ -813,7 +813,7 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 ## 智能体与 MCP
 
 智能体通过 MCP 工具读写系统(查素材、改时间线、跑工作流、生成内容)。
-**所有写操作先出确认卡**(`tool_confirmations` 表 + 前端卡片),用户批准后才执行——见 [MCP.md](MCP.md)。
+**不可撤销或对外的操作先出确认卡**(`tool_confirmations` 表 + 前端卡片),用户批准后才执行;库内可撤销的变更由工具清单的 `confirmation` 标记决定,多数直接执行 —— 见 [MCP.md](MCP.md)。
 
 卡上那句话**落库存 key、出口才翻**(`summary_key` + `summary_params`,`ConfirmationOut` 按请求方的语言
 渲染),和 `Job.message` 同一条规矩:卡活得比一次请求久,写入时就翻会把语言冻死在那一刻。
@@ -969,7 +969,7 @@ Adapter 声明 `surface_depends_on_model = False` 要同时满足两条:不按�
 智能体工具 `render_scene_references` 共用;还会从机位轨迹**算出**一句镜头语言(焦段、机位高度、
 推拉/环绕/跟拍/摇/俯仰)供提示词使用。拍摄相机按世界坐标摆,不随分组变换(和工作台的 `pose()` 一致)。
 
-**「从主题到完整视频」(模板 v8)按这套流程出片**:视觉圣经定下角色与场景 → 每个角色一张三视图、
+**「从主题到完整视频」(模板 v30)按这套流程出片**:视觉圣经定下角色与场景 → 每个角色一张三视图、
 每个场景一张设定图 → 分镜给出景别/焦段/运镜和每镜的出片路径 → LLM 按分镜搭白模(每镜一个布景台、
 一台相机,台距由布景尺寸算出来,因为场景时间是所有镜头共用的,同一套人偶没法在不同镜头里站在不同位置)
 → 逐镜渲白模,再走首尾帧(按白模画首帧、必要时加尾帧)或参考素材(三视图 + 设定图 + 白模运镜视频)。

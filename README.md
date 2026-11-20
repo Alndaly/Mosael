@@ -149,7 +149,7 @@ angle. The Assets page's reference library brings in external atlases, with the 
 ### Publish to Douyin, TikTok, Bilibili, Xiaohongshu and YouTube
 
 Browser Pool keeps persistent sign-ins and proxies for several accounts. Each platform takes the content it supports —
-video on every one of them, **image-text** on Douyin, Xiaohongshu, WeChat Channels, Bilibili, TikTok, X and YouTube, and
+video on every one of them, **image-text** on Douyin, Xiaohongshu, WeChat Channels, TikTok and X, and
 **articles (columns)** on Douyin, Xiaohongshu, X and Bilibili. Publishing forms follow each destination's options;
 review the media, account and copy before submitting, then track the result.
 [Publishing](https://mosael.com/en/docs/guides/publishing) · [Browser profiles](https://mosael.com/en/docs/guides/browser-pool)
@@ -396,6 +396,8 @@ On macOS, `<userData>` is `~/Library/Application Support/Mosael`; on Windows it 
 
 ```text
 backend/          FastAPI, SQLAlchemy, domain services, and pytest
+cloud/            MosaelCloud account service (its own uv project)
+packages/         mosael-formats shared manifest and version formats
 frontend/         React 19, Vite, TypeScript, Tailwind v4, and Radix/shadcn
 electron/         Main process, preload, publishing, and system-integration bundles
 agent-sidecar/    Agent runtime

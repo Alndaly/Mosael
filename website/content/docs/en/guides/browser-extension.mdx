@@ -4,8 +4,8 @@ description: Read transcripts, seek through a video and import media or the curr
 seo_title: Chrome video companion: transcripts and import
 keywords: Chrome extension, video transcript, video translation, video import
 order: 9
-updated: 2026-09-24
-version: 2.6.8
+updated: 2026-11-20
+version: 2.6.9
 ---
 
 The Chrome extension opens Mosael's video companion in the native **Side Panel** and follows the active video tab. It accepts video URLs recognized by the installed yt-dlp build. YouTube and Bilibili use native captions when available; other supported sites can use Mosael transcription. Playback control and frame capture require an accessible HTML5 video player.
@@ -52,8 +52,8 @@ choose a workspace and optional project.
   upload endpoint.
 
 The password is used only to mint a session and is never stored. The extension does not request
-cookie access or export Chrome login state. Download members-only, private, or region-locked content
-from Mosael with the matching [Browser Pool](/docs/guides/browser-pool) profile.
+cookie access or export Chrome login state; the side-panel settings let you pick a [Browser Pool](/docs/guides/browser-pool)
+profile (and an optional project), and imports use that profile's signed-in session and proxy.
 
 ## Why the permissions are needed
 
@@ -62,7 +62,6 @@ from Mosael with the matching [Browser Pool](/docs/guides/browser-pool) profile.
 | Side Panel | Open Chrome's native right-hand panel |
 | Tabs / Active Tab | Follow video pages, seek, and capture the visible player |
 | Storage | Keep the Mosael session and destination workspace |
-| `<all_urls>` | Discover HTML5 players on video pages and capture the video region when direct frame access is restricted |
-| localhost / 127.0.0.1 | Call the local Mosael API |
+| `<all_urls>` | Discover HTML5 players on video pages, capture the video region when direct frame access is restricted, and reach the local Mosael API at `127.0.0.1:8800` (no separate localhost host permission) |
 
 Chrome 116+ is required. At least part of the player must be visible for frame capture.
