@@ -301,6 +301,10 @@ export class AccountViewManager {
     if (!this.idleTimer) this.idleTimer = setInterval(() => this.sweepIdlePanels(), IDLE_SWEEP_MS);
   }
 
+  has(accountId: string): boolean {
+    return this.views.has(accountId);
+  }
+
   getDriver(accountId: string): PageDriver {
     return this.ensure(accountId).driver;
   }

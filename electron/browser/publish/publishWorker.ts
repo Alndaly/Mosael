@@ -233,6 +233,7 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
       .catch(() => undefined);
     return;
   }
+  const temporaryView = !views.has(acc.account_id);
   const platform = resolvePlatform(acc.platform).id;
   const stub: PublishTask = {
     id: `check-${acc.account_id}`,
@@ -287,6 +288,17 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
         last_error: null,
       })
       .catch(() => undefined);
+  } finally {
+    // 登录态在 persist 分区里,销毁视图不会登出。只收回本次巡检新建的页面;用户已有、接管或正在使用的保留。
+    if (
+      temporaryView &&
+      !loginAccounts.has(acc.account_id) &&
+      !running.has(acc.account_id) &&
+      views.visibleAccountId !== acc.account_id &&
+      !views.isPanelled(acc.account_id)
+    ) {
+      views.destroy(acc.account_id);
+    }
   }
 }
 
