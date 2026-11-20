@@ -55,6 +55,23 @@ describe("浮在画面上的圆钮", () => {
     expect(rightOffset(save) - rightOffset(close)).toBe(FLOATING_SIZE + FLOATING_GAP);
   });
 
+  it("Windows 非系统全屏:两颗钮一起让开原生最小化/最大化/关闭,间距不变", () => {
+    render(
+      <>
+        <FloatingIconButton slot={0} label="关闭"><Icon /></FloatingIconButton>
+        <FloatingIconButton slot={1} label="保存到本地"><Icon /></FloatingIconButton>
+      </>,
+    );
+    const close = screen.getByRole("button", { name: "关闭" });
+    const save = screen.getByRole("button", { name: "保存到本地" });
+    expect(close).toHaveClass("[.is-desktop.is-win:not(.is-fullscreen)_&]:right-[156px]");
+    expect(save).toHaveClass("[.is-desktop.is-win:not(.is-fullscreen)_&]:right-[200px]");
+    expect(200 - 156).toBe(FLOATING_SIZE + FLOATING_GAP);
+    // 基础位置仍保留:macOS 与系统全屏没有右上角原生按钮,不该出现一块空白。
+    expect(close).toHaveClass("right-2");
+    expect(save).toHaveClass("right-[52px]");
+  });
+
   it("不给 slot 就不摆位置:位置由调用方自己给(窗格里浮着的那种)", () => {
     render(<FloatingIconButton label="保存到本地" className="absolute left-2 top-8"><Icon /></FloatingIconButton>);
     const button = screen.getByRole("button", { name: "保存到本地" });

@@ -37,10 +37,14 @@ export const FLOATING_GAP = 8
  *
  * 8 + 36 + 8 = 52,所以第二颗是 `right-[52px]` —— Tailwind 的刻度里没有 13 这一档,这里写实值。
  * `z-[221]`:压在大图那一层(`z-[220]`)上面,两颗同在那一层。再加一颗钮就往这张表末尾加一条。
+ *
+ * Windows 非系统全屏时,`titleBarOverlay` 的最小化/最大化/关闭也压在右上角。两颗钮整体左移
+ * `windowChrome.ts` 同一份 148px 保留区:156 = 148 + 8,200 = 148 + 52。系统全屏没有那排原生按钮,
+ * 不加偏移;macOS 的红绿灯在左边,也不加。
  */
 export const FLOATING_TOP_RIGHT = [
-  "fixed right-2 top-1.5 z-[221]",
-  "fixed right-[52px] top-1.5 z-[221]",
+  "fixed right-2 top-1.5 z-[221] [.is-desktop.is-win:not(.is-fullscreen)_&]:right-[156px]",
+  "fixed right-[52px] top-1.5 z-[221] [.is-desktop.is-win:not(.is-fullscreen)_&]:right-[200px]",
 ] as const
 
 //: `slot` 要从 IconButton(即 React 的按钮属性)里去掉:HTML 自己有个 `slot`(字符串,分配落点),
