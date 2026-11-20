@@ -12,7 +12,7 @@ import time
 from typing import Any
 
 from sqlalchemy import event as orm_event, func, or_, select, update
-from sqlalchemy.orm import Session, SessionTransaction, defer
+from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.usage_scope import current_workspace
 from app.db.models import Job, ProviderPricingRule, ProviderUsageEvent, now
@@ -815,9 +815,17 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     start_date = (now() - timedelta(days=days - 1)).date()
     start_dt = datetime.combine(start_date, datetime.min.time())
     window = (ProviderUsageEvent.workspace_id == workspace_id, ProviderUsageEvent.created_at >= start_dt)
-    # 聚合只用 units / cost / 分类字段;raw_usage 供审计与回填使用,不要每五秒把整份服务商回包读进 Python。
-    rows = list(db.scalars(
-        select(ProviderUsageEvent).options(defer(ProviderUsageEvent.raw_usage))
+    # 只取聚合实际读的列:既不是 ORM 实体,也不加载 raw_usage / 审计字段。
+    rows = list(db.execute(
+        select(
+            ProviderUsageEvent.created_at,
+            ProviderUsageEvent.units,
+            ProviderUsageEvent.cost_micros,
+            ProviderUsageEvent.provider,
+            ProviderUsageEvent.model,
+            ProviderUsageEvent.capability,
+            ProviderUsageEvent.unpriced_reason,
+        )
         .where(*window).order_by(ProviderUsageEvent.created_at.asc())
     ))
     daily_index = {
@@ -961,30 +969,32 @@ def _best_price_rules(
     return list(by_unit.values())
 
 
+#: 单位别名是固定目录,不是每次读一条用量都重建的局部对象。计价与统计共用这一份。
+UNIT_ALIASES = {
+    "request": ("request", "requests", "request_count"),
+    "image": ("image", "images", "image_count", "num_images"),
+    "video": ("video", "videos", "video_count"),
+    "video_second": ("video_second", "video_seconds", "duration_seconds"),
+    "audio": ("audio", "audios", "audio_count"),
+    "audio_second": ("audio_second", "audio_seconds", "duration_seconds"),
+    "character": ("character", "characters", "input_characters"),
+    "token": ("token", "tokens", "total_token", "total_tokens"),
+    # prompt_tokens 只作为 input_token 的兜底别名:适配器直接给 input_tokens 时用它(已扣除缓存)。
+    "input_token": ("input_token", "input_tokens", "prompt_tokens"),
+    "output_token": ("output_token", "output_tokens", "completion_tokens"),
+    "cache_read_token": ("cache_read_token", "cache_read_tokens", "cached_tokens"),
+    "cache_write_token": ("cache_write_token", "cache_write_tokens"),
+    "image_input_token": ("image_input_token", "image_input_tokens"),
+}
+
+
 def _quantity_for_unit(units: dict[str, Any], billing_unit: str) -> float | None:
     if billing_unit.startswith("million_"):
         base = billing_unit.removeprefix("million_")
         quantity = _quantity_for_unit(units, base)
         return quantity / 1_000_000 if quantity is not None else None
 
-    aliases = {
-        "request": ("request", "requests", "request_count"),
-        "image": ("image", "images", "image_count", "num_images"),
-        "video": ("video", "videos", "video_count"),
-        "video_second": ("video_second", "video_seconds", "duration_seconds"),
-        "audio": ("audio", "audios", "audio_count"),
-        "audio_second": ("audio_second", "audio_seconds", "duration_seconds"),
-        "character": ("character", "characters", "input_characters"),
-        "token": ("token", "tokens", "total_token", "total_tokens"),
-        # 注意 prompt_tokens 只作为 input_token 的**兜底**别名:适配器直接给 input_tokens 时
-        # 用它(已扣除缓存);只有那些自己不拆分的来源才会落到 prompt_tokens 上。
-        "input_token": ("input_token", "input_tokens", "prompt_tokens"),
-        "output_token": ("output_token", "output_tokens", "completion_tokens"),
-        "cache_read_token": ("cache_read_token", "cache_read_tokens", "cached_tokens"),
-        "cache_write_token": ("cache_write_token", "cache_write_tokens"),
-        "image_input_token": ("image_input_token", "image_input_tokens"),
-    }
-    for key in (billing_unit, *aliases.get(billing_unit, ())):
+    for key in UNIT_ALIASES.get(billing_unit, (billing_unit,)):
         value = units.get(key)
         if isinstance(value, bool):
             continue
