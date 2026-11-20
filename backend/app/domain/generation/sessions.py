@@ -68,15 +68,20 @@ def ensure_writable(db: Session, session: GenerationSession, actor_id: str | Non
 # 工作流……)是工作区的,不受这里管。
 
 
-def jobs_filter(job_id_column: Any, user: User, workspace_id: str) -> Any:
-    """`jobs` 表上他看得见的那些(SQL 条件)。`job_id_column` 是任务 id 那一列。"""
+def hidden_job_ids(db: Session, user: User, workspace_id: str) -> set[str]:
+    """这个人在这个工作区看不见的生成任务 id。一次列表请求算一次,最近/运行中两条查询共同复用。"""
     visible_sessions = select(GenerationSession.id).where(sharing.visible_filter(SHARE_KIND, user, workspace_id))
     hidden = select(GenerationJob.job_id).where(
         GenerationJob.job_id.is_not(None),
         GenerationJob.session_id.is_not(None),
         GenerationJob.session_id.not_in(visible_sessions),
     )
-    return job_id_column.not_in(hidden)
+    return {str(job_id) for job_id in db.scalars(hidden) if job_id}
+
+
+def jobs_filter(job_id_column: Any, hidden: set[str]) -> Any:
+    """`jobs` 表上可见任务的 SQL 条件。`hidden` 必须来自本次请求的 hidden_job_ids。"""
+    return job_id_column.not_in(sorted(hidden))
 
 
 def ensure_job_readable(db: Session, user: User, job_id: str) -> None:

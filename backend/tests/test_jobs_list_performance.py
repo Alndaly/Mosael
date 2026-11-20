@@ -65,3 +65,26 @@ def test_任务列表和面板都不读取只在详情里使用的_result() -> N
     queries = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT") and "FROM jobs" in sql]
     assert queries
     assert all("jobs.result" not in sql for sql in queries), queries
+
+
+def test_最近任务查询只计算一次隐藏任务集合_两条任务查询复用() -> None:
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, sql: str, _parameters, _context, _executemany) -> None:
+        statements.append(sql)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        response = client.get(f"/api/jobs?workspace_id={workspace}")
+        assert response.status_code == 200, response.text
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    selects = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT")]
+    hidden_queries = [sql for sql in selects if "FROM generation_jobs" in sql]
+    job_queries = [sql for sql in selects if "FROM jobs" in sql]
+    assert len(hidden_queries) == 1, selects
+    assert len(job_queries) == 2, selects
+    assert all("generation_jobs" not in sql and "generation_sessions" not in sql for sql in job_queries), job_queries

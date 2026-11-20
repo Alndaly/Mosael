@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
@@ -128,7 +128,8 @@ def start_session(
 def list_sessions(db: Session, user: User, workspace_id: str, home: places.Place | None = None) -> list[AgentSession]:
     """最近活跃在前,最多 SESSION_LIST_LIMIT 条。给了 `home` 就只列家在那里的(各处面板的「这里的对话」)。"""
     ensure_workspace_access(db, user, workspace_id)
-    stmt = select(AgentSession).where(
+    # 列表出参不含 adapter_state;单个会话的 pi 消息快照可达数百 KB,只在执行和详情路径读取。
+    stmt = select(AgentSession).options(defer(AgentSession.adapter_state)).where(
         AgentSession.workspace_id == workspace_id,
         AgentSession.origin == "ui",
         sharing.visible_filter(SHARE_KIND, user, workspace_id),

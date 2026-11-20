@@ -12,7 +12,7 @@ import time
 from typing import Any
 
 from sqlalchemy import event as orm_event, func, or_, select, update
-from sqlalchemy.orm import Session, SessionTransaction
+from sqlalchemy.orm import Session, SessionTransaction, defer
 
 from app.core.usage_scope import current_workspace
 from app.db.models import Job, ProviderPricingRule, ProviderUsageEvent, now
@@ -815,7 +815,11 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     start_date = (now() - timedelta(days=days - 1)).date()
     start_dt = datetime.combine(start_date, datetime.min.time())
     window = (ProviderUsageEvent.workspace_id == workspace_id, ProviderUsageEvent.created_at >= start_dt)
-    rows = list(db.scalars(select(ProviderUsageEvent).where(*window).order_by(ProviderUsageEvent.created_at.asc())))
+    # 聚合只用 units / cost / 分类字段;raw_usage 供审计与回填使用,不要每五秒把整份服务商回包读进 Python。
+    rows = list(db.scalars(
+        select(ProviderUsageEvent).options(defer(ProviderUsageEvent.raw_usage))
+        .where(*window).order_by(ProviderUsageEvent.created_at.asc())
+    ))
     daily_index = {
         str(start_date + timedelta(days=offset)): {
             "date": str(start_date + timedelta(days=offset)),

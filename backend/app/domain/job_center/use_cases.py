@@ -12,7 +12,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, defer
 
 from app.db.models import GenerationJob, Job, JobCenterMark, TaskEvent, User, now
-from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter
+from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, hidden_job_ids, jobs_filter
 from app.domain.jobs import TERMINAL_STATUSES, cancel_job
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_member, ensure_workspace_perm
 
@@ -33,8 +33,9 @@ def list_jobs(
     限制 —— 一个跑了一整夜的批量任务排在两百条之后,也得看得见它的进度、停得下它。
     """
     ensure_workspace_access(db, user, workspace_id)
+    hidden = hidden_job_ids(db, user, workspace_id)
     # 列表出参没有 result;工作流结果一条可达几百 KB,数据库也不该把它读出来再丢掉。
-    stmt = select(Job).options(defer(Job.result)).where(Job.workspace_id == workspace_id, jobs_filter(Job.id, user, workspace_id))
+    stmt = select(Job).options(defer(Job.result)).where(Job.workspace_id == workspace_id, jobs_filter(Job.id, hidden))
     if kind:
         stmt = stmt.where(Job.kind == kind)
     if recorded:
@@ -78,10 +79,11 @@ def events(db: Session, user: User, job_id: str, *, limit: int) -> list[TaskEven
 def children(db: Session, user: User, job_id: str) -> list[Job]:
     """一个工作流 job 派生的子任务。"""
     parent = readable(db, user, job_id)
+    hidden = hidden_job_ids(db, user, parent.workspace_id)
     return list(
         db.scalars(
             select(Job)
-            .where(Job.parent_job_id == job_id, jobs_filter(Job.id, user, parent.workspace_id))
+            .where(Job.parent_job_id == job_id, jobs_filter(Job.id, hidden))
             .order_by(Job.created_at.asc())
         )
     )
@@ -110,8 +112,9 @@ def panel(
     ensure_workspace_access(db, user, workspace_id)
     mark = _mark(db, user, workspace_id)
     cleared_at = mark.cleared_at if mark is not None else None
+    hidden = hidden_job_ids(db, user, workspace_id)
     stmt = select(Job).options(defer(Job.result)).where(
-        Job.workspace_id == workspace_id, Job.parent_job_id.is_(None), jobs_filter(Job.id, user, workspace_id)
+        Job.workspace_id == workspace_id, Job.parent_job_id.is_(None), jobs_filter(Job.id, hidden)
     )
     finished = Job.status.in_(TERMINAL_STATUSES)
     newest_first = (Job.created_at.desc(), Job.id.desc())
