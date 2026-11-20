@@ -64,7 +64,7 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { useAgentSessions, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { homeOf, placeKey, placePayload, type AgentPlace } from "@/features/agent/places";
 import { readComposerDraft, stashComposerExtras, takeComposerExtras, writeComposerDraft } from "@/features/agent/sessionSelection";
-import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
+import { sessionPolling, transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
@@ -221,7 +221,7 @@ export function CanvasAgentChat({
     queryKey: ["agent-session", sessionId],
     enabled: Boolean(sessionId),
     queryFn: () => getAgentSession(sessionId),
-    refetchInterval: 1500,
+    refetchInterval: (query) => sessionPolling(query.state.data?.status === "running"),
     refetchOnWindowFocus: true,
   });
   const running = live.data?.status === "running";
@@ -634,7 +634,7 @@ export function CanvasAgentChat({
             <AgentStatusRow className="mt-1.5" meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}
-        {running && !streamText && (
+        {(running || compact.isPending) && !streamText && (
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} running />
             <AgentStatusRow label={t(compact.isPending ? "agentCompactRunning" : "chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />

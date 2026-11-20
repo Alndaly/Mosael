@@ -47,6 +47,7 @@ let stopped = false;
 let generation = 0;
 // 登录轮询的可取消定时器句柄:stopPublishWorker 要能停掉它(视图销毁后别再空转最多 10 分钟)。
 let loginPollTimer: ReturnType<typeof setTimeout> | null = null;
+let startupRecheckTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 一条任务跑到终态/受阻时回调主进程(发系统通知 + 更新 dock 角标)。
 export type SettleInfo = { status: string; title: string; accountName: string };
@@ -170,6 +171,8 @@ function settle(t: PublishTask, status: string): void {
 
 const POLL_IDLE_MS = 4000;
 const POLL_BUSY_MS = 500;
+/** 首屏先稳定;发布任务循环立即启动,全量账号登录态巡检稍后再做。 */
+export const STARTUP_RECHECK_DELAY_MS = 15_000;
 
 /** 请求前台可见槽:仅当前台空闲(无视图可见)才把该账号亮出并返回 true;被占则不抢(让当前占用者先
  *  处理完),返回 false——视图仍在(表单/现场都在),用户可稍后从任务行「查看页面」再亮出来。 */
@@ -350,13 +353,22 @@ export function startPublishWorker(opts: {
   onSettled = opts.onTaskSettled ?? null;
   onFrame = opts.onFrame ?? null;
   plog("worker started, generation", generation);
-  // 开机先来一轮全量巡检:把所有账号标记为待复检,loop 会快速逐个后台核对登录态。
-  void backend.markDue().catch(() => undefined);
-  loop(generation);
+  // 待发布任务的认领与心跳立即开始;创作者平台页面较重,全量登录态巡检不跟首屏抢资源。
+  const gen = generation;
+  startupRecheckTimer = setTimeout(() => {
+    startupRecheckTimer = null;
+    if (stopped || gen !== generation) return;
+    void backend.markDue().catch(() => undefined);
+  }, STARTUP_RECHECK_DELAY_MS);
+  loop(gen);
 }
 
 export function stopPublishWorker(): void {
   stopped = true;
+  if (startupRecheckTimer) {
+    clearTimeout(startupRecheckTimer);
+    startupRecheckTimer = null;
+  }
   for (const controller of taskControllers.values()) controller.abort();
   taskControllers.clear();
   // 停掉登录轮询定时器:视图即将销毁,别再让它空转触发(最多 10 分钟)。在途的 checkLogin/loop

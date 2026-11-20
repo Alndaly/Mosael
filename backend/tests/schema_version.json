@@ -1,5 +1,5 @@
 {
-  "version": 48,
+  "version": 49,
   "steps": [
     "migrate-agent-questions-feishu-message-id",
     "migrate-agent-sessions-working-set",
@@ -10,6 +10,7 @@
     "migrate-character-voices-become-voice-refs",
     "migrate-cloud-login-keeps-a-device-token",
     "migrate-dub-lines-use-the-voice-ref-identity",
+    "migrate-jobs-list-recent-index",
     "migrate-publish-tasks-get-content-shape",
     "migrate-shot-angle-replaces-camera-angle",
     "migrate-speech-records-store-a-voice-ref",

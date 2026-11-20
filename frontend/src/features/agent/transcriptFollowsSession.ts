@@ -17,6 +17,14 @@ export function transcriptPolling(running: boolean): number | false {
   return running ? TRANSCRIPT_POLL_MS : false;
 }
 
+export const SESSION_ACTIVE_POLL_MS = 1200;
+export const SESSION_IDLE_POLL_MS = 10_000;
+
+/** 会话详情只负责发现状态变化:运行时高频,空闲保留低频对账;消息正文由 updated_at 跟随重取。 */
+export function sessionPolling(running: boolean): number {
+  return running ? SESSION_ACTIVE_POLL_MS : SESSION_IDLE_POLL_MS;
+}
+
 export function useTranscriptFollowsSession(
   sessionId: string,
   session: { status?: string | null; updated_at?: string | null } | null | undefined,

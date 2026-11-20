@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { WORKBENCH_VERSION, workbenchCallScript, workbenchInstallScript, workbenchPollScript } from "./comfyWorkbench";
-import { PAUSED_POLL_MS, POLL_MS, WorkbenchSessions } from "./comfyWorkbenchSessions";
+import { IDLE_AFTER_POLLS, IDLE_POLL_MS, PAUSED_POLL_MS, POLL_MS, WorkbenchSessions } from "./comfyWorkbenchSessions";
 
 const ORIGIN = "http://192.168.3.15:8188";
 const PARTITION = "persist:pool-comfyui-c1";
@@ -137,6 +137,36 @@ describe("工作台会话(主进程这一侧)", () => {
     await h.sessions.call(PARTITION, { ...call, openedBy: undefined });
     await h.tick();
     expect(h.emit, "不是智能体开的:没什么要报").toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe("工作台可见但连续空闲", () => {
+  it("无变化后从 300ms 降到 1000ms,画布一有变化立即恢复", async () => {
+    let state = answer();
+    const queued: { callback: () => void; ms: number }[] = [];
+    const driver = { evaluate: vi.fn(async (script: string) => (script === workbenchPollScript(ORIGIN) ? state : true)) };
+    const sessions = new WorkbenchSessions({
+      driver: () => driver,
+      visible: () => true,
+      emit: vi.fn(),
+      schedule: (callback, ms) => {
+        queued.push({ callback, ms });
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      },
+    });
+    const step = async () => {
+      queued.shift()!.callback();
+      await vi.waitFor(() => expect(queued).toHaveLength(1));
+    };
+    sessions.start(PARTITION, ORIGIN);
+    await vi.waitFor(() => expect(queued).toHaveLength(1));
+    for (let index = 0; index < IDLE_AFTER_POLLS; index++) await step();
+    expect(queued[0].ms).toBe(IDLE_POLL_MS);
+
+    state = answer({ workflow: { path: "workflows/a.json", name: "a", temporary: false, modified: true } });
+    await step();
+    expect(queued[0].ms).toBe(POLL_MS);
   });
 });
 

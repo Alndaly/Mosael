@@ -8,6 +8,7 @@
   "migrate-character-voices-become-voice-refs": "15b741a4ce388b0c",
   "migrate-cloud-login-keeps-a-device-token": "794dc05880e56d7d",
   "migrate-dub-lines-use-the-voice-ref-identity": "08bdd2edc76417a8",
+  "migrate-jobs-list-recent-index": "857c1ba2ffe62129",
   "migrate-publish-tasks-get-content-shape": "5fdb6a738dab692f",
   "migrate-shot-angle-replaces-camera-angle": "0b619d45093e6972",
   "migrate-speech-records-store-a-voice-ref": "e85b10b9990883f0",

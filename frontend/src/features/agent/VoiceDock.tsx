@@ -37,7 +37,7 @@ import { useNativeViewInFront } from "@/lib/nativeView";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
+import { sessionPolling, transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 
 const DOCK_SIZE = 52;
 
@@ -54,7 +54,7 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
     queryKey: ["agent-session", sessionId],
     queryFn: () => getAgentSession(sessionId),
     enabled: Boolean(sessionId),
-    refetchInterval: 1500,
+    refetchInterval: (query) => sessionPolling(query.state.data?.status === "running"),
   });
   //: 和面板同一条:消息只在跑着的时候轮询,空闲时跟着会话变化重取(见 transcriptFollowsSession)。
   const messages = useQuery({

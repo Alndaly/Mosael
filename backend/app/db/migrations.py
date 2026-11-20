@@ -99,6 +99,19 @@ def _migrate_agent_sessions_working_set() -> None:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN working_set JSON NOT NULL DEFAULT '{}'"))
 
 
+def _migrate_jobs_list_recent_index() -> None:
+    """任务列表按工作区 + 创建时间倒序取最近 N 条,不能随着历史任务增长每次全表临时排序。"""
+    inspector = inspect(engine)
+    if "jobs" not in set(inspector.get_table_names()):
+        return
+    if "idx_jobs_workspace_created_id" in {index["name"] for index in inspector.get_indexes("jobs")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE INDEX idx_jobs_workspace_created_id ON jobs (workspace_id, created_at, id)"
+        ))
+
+
 def _migrate_update_feed_url() -> None:
     """deployment_config 新增 update_feed_url(应用更新包下载根地址)。空串 = 只用 GitHub Releases。
 
@@ -1001,6 +1014,7 @@ def migration_plan() -> MigrationPlan:
         ),
         *_steps(
             MigrationPhase.AFTER_SCHEMA,
+            _migrate_jobs_list_recent_index,
             _migrate_bound_profiles_use_the_account_partition,
             # ADR 0091:「这一镜的机位」统一叫 shot_angle(3D 场景的镜头、生成记录)。
             _migrate_shot_angle_replaces_camera_angle,

@@ -13,7 +13,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
-import { useTranscriptFollowsSession } from "./transcriptFollowsSession";
+import { sessionPolling, useTranscriptFollowsSession } from "./transcriptFollowsSession";
+
+it("会话详情只在运行时高频轮询,空闲降频但不停止", () => {
+  expect(sessionPolling(true)).toBe(1200);
+  expect(sessionPolling(false)).toBe(10_000);
+});
 
 function Follower({ session }: { session: { status: string; updated_at: string } }) {
   useTranscriptFollowsSession("s1", session);

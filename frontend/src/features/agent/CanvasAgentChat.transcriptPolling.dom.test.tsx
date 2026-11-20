@@ -85,8 +85,9 @@ it("空闲时不拉消息;一轮收尾(updated_at 变了)重取一次;跑着的�
   const fetched = vi.mocked(listAgentMessages);
   backend.messages = [{ id: "m1", session_id: "s1", role: "user", content: "第一句", payload: {}, error: null, created_at: "2026-10-08T00:00:00" }];
   adoptAgentSession("w1", NOTE_A, "s1");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <CanvasAgentChat contextLine="" emptyHint="hint" placeholder="p" rectKey="r" workspaceId="w1" place={NOTE_A} mode="docked" />
     </QueryClientProvider>,
   );
@@ -98,9 +99,12 @@ it("空闲时不拉消息;一轮收尾(updated_at 变了)重取一次;跑着的�
   // 别处起了一轮又收了尾(比如任务回执):状态没赶上被看见,updated_at 变了 —— 重取一次,新消息出现。
   backend.messages.push({ id: "m2", session_id: "s1", role: "user", content: "回执处理完了", payload: {}, error: null, created_at: "2026-10-08T00:01:00" });
   backend.session = { ...backend.session, updated_at: "2026-10-08T00:01:00" };
+  // 空闲会话详情改为 10 秒对账;这里显式模拟一次外部刷新,不真睡 10 秒。
+  await client.invalidateQueries({ queryKey: ["agent-session", "s1"] });
   await screen.findByText("回执处理完了", undefined, { timeout: 4000 });
 
   backend.session = { ...backend.session, status: "running", updated_at: "2026-10-08T00:02:00" };
+  await client.invalidateQueries({ queryKey: ["agent-session", "s1"] });
   await waitFor(() => expect(fetched.mock.calls.length).toBeGreaterThan(atRest + 1), { timeout: 4000 });
   const whileRunning = fetched.mock.calls.length;
   await sleep(3400);

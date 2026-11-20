@@ -28,6 +28,9 @@ import {
 
 /** 轮询的节奏(ADR 0038 §3:大约 300ms)。 */
 export const POLL_MS = 300;
+/** 连续这么多拍完全没变后,可见但静置的画布降到每秒一次;有变化立即回到 POLL_MS。 */
+export const IDLE_AFTER_POLLS = 20;
+export const IDLE_POLL_MS = 1_000;
 /** 窗口收进托盘、最小化时:画布谁也看不见,只隔一会儿看一眼窗口回来没有,不去问画布。 */
 export const PAUSED_POLL_MS = 1_000;
 const POLL_BUDGET_MS = 2_000;
@@ -57,6 +60,7 @@ interface Session {
   origin: string;
   timer: ReturnType<typeof setTimeout> | null;
   last: string;
+  idlePolls: number;
   stopped: boolean;
   /** 智能体刚开的那一张,等下一次轮询报出去 */
   openedBy: WorkbenchOpenedBy | null;
@@ -86,7 +90,7 @@ export class WorkbenchSessions {
   /** 开一个(已经开着就换成新的来源、接着轮询)。先注入桥,再开始轮询。 */
   start(partition: string, origin: string): void {
     this.stop(partition, false);
-    const session: Session = { origin, timer: null, last: "", stopped: false, openedBy: null };
+    const session: Session = { origin, timer: null, last: "", idlePolls: 0, stopped: false, openedBy: null };
     this.sessions.set(partition, session);
     void this.tick(partition, session);
   }
@@ -120,6 +124,7 @@ export class WorkbenchSessions {
     const session = this.sessions.get(partition);
     const driver = this.deps.driver(partition);
     if (!session || !driver) return { ok: false, error: "closed" };
+    session.idlePolls = 0;
     const { call: pageCall, openedBy } = withoutOpener(call);
     try {
       const raw = await driver.evaluate<unknown>(workbenchCallScript(session.origin, pageCall), CALL_BUDGET_MS[call.op]);
@@ -145,6 +150,7 @@ export class WorkbenchSessions {
       session.timer = this.deps.schedule ? this.deps.schedule(next, ms) : setTimeout(next, ms);
     };
     if (this.deps.paused?.()) {
+      session.idlePolls = 0;
       later(PAUSED_POLL_MS);
       return;
     }
@@ -159,7 +165,9 @@ export class WorkbenchSessions {
         const { events, renames, ...rest } = state;
         const key = JSON.stringify(rest);
         const openedBy = session.openedBy;
-        if (key !== session.last || events.length > 0 || renames.length > 0 || openedBy) {
+        const changed = key !== session.last || events.length > 0 || renames.length > 0 || Boolean(openedBy);
+        session.idlePolls = changed ? 0 : session.idlePolls + 1;
+        if (changed) {
           session.last = key;
           session.openedBy = null;
           this.deps.emit(partition, { ...state, openedBy });
@@ -167,6 +175,6 @@ export class WorkbenchSessions {
       }
     }
     if (session.stopped) return;
-    later(POLL_MS);
+    later(session.idlePolls >= IDLE_AFTER_POLLS ? IDLE_POLL_MS : POLL_MS);
   }
 }

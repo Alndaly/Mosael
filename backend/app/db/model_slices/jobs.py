@@ -20,6 +20,7 @@ class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
         Index("idx_jobs_workspace_status_updated", "workspace_id", "status", "updated_at"),
+        Index("idx_jobs_workspace_created_id", "workspace_id", "created_at", "id"),
         Index("idx_jobs_status_lease_expires", "status", "lease_expires_at"),
     )
 

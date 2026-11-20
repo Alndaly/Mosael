@@ -58,7 +58,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const jobs = useQuery({
     ...jobsQuery,
     refetchInterval: (query) =>
-      (query.state.data?.jobs ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
+      (query.state.data?.jobs ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 15_000,
     refetchOnWindowFocus: true,
   });
   //: 「清空已结束」只是把我的水位线挪到现在(D27):不删任何东西、别人的面板不变,所以不要确认框;要找回来就打开底下的

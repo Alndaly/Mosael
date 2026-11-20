@@ -26,7 +26,7 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
 import { useTurnElapsedSeconds } from "@/features/agent/useTurnElapsedSeconds";
-import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
+import { sessionPolling, transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerAttachMenu } from "@/features/agent/ComposerAttachMenu";
 import { ComposerChips } from "@/features/agent/ComposerChips";
@@ -201,7 +201,7 @@ export function ChatWorkspace({
     queryKey: ["agent-session", activeSession?.id],
     enabled: Boolean(activeSession),
     queryFn: () => getAgentSession(activeSession!.id),
-    refetchInterval: 1200,
+    refetchInterval: (query) => sessionPolling(query.state.data?.status === "running"),
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";

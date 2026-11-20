@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.db.models import GenerationJob, Job, JobCenterMark, TaskEvent, User, now
 from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter
@@ -33,7 +33,8 @@ def list_jobs(
     限制 —— 一个跑了一整夜的批量任务排在两百条之后,也得看得见它的进度、停得下它。
     """
     ensure_workspace_access(db, user, workspace_id)
-    stmt = select(Job).where(Job.workspace_id == workspace_id, jobs_filter(Job.id, user, workspace_id))
+    # 列表出参没有 result;工作流结果一条可达几百 KB,数据库也不该把它读出来再丢掉。
+    stmt = select(Job).options(defer(Job.result)).where(Job.workspace_id == workspace_id, jobs_filter(Job.id, user, workspace_id))
     if kind:
         stmt = stmt.where(Job.kind == kind)
     if recorded:
@@ -109,7 +110,7 @@ def panel(
     ensure_workspace_access(db, user, workspace_id)
     mark = _mark(db, user, workspace_id)
     cleared_at = mark.cleared_at if mark is not None else None
-    stmt = select(Job).where(
+    stmt = select(Job).options(defer(Job.result)).where(
         Job.workspace_id == workspace_id, Job.parent_job_id.is_(None), jobs_filter(Job.id, user, workspace_id)
     )
     finished = Job.status.in_(TERMINAL_STATUSES)
