@@ -38,6 +38,10 @@ function isTransientSigningFailure(error) {
     // 「A timestamp was expected but was not found」。2.6.7 的发布构建就停在这句上。
     || text.toLowerCase().includes("a timestamp was expected but was not found")
     || text.includes("internal error in Code Signing subsystem")
+    // macOS 27 上打包刚铺完文件时,`--force` 替换已有签名还会偶发
+    // `<file>: replacing existing signature` 后接 `Input/output error`;
+    // 同一条命令手工重跑就成功,和上面两条是同一类「还没落定」。
+    || text.includes("Input/output error")
     || text.includes("Operation not permitted");
 }
 

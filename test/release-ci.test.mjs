@@ -32,5 +32,6 @@ test("发版草稿创建前检查滚动支持窗口", () => {
 test("macOS 签名把 Apple 时间戳未回包当作瞬时失败重试", () => {
   assert.equal(isTransientSigningFailure("A timestamp was expected but was not found."), true);
   assert.equal(isTransientSigningFailure("timestamp service is not available"), true);
+  assert.equal(isTransientSigningFailure("...: replacing existing signature\n...: Input/output error"), true);
   assert.equal(isTransientSigningFailure("resource fork, Finder information, or similar detritus not allowed"), false);
 });
