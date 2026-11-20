@@ -14,9 +14,12 @@ from __future__ import annotations
 import os
 import sqlite3
 import uuid
+import logging
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # 这个数现在**只做一件事:拦住降级** —— 库被更新的版本迁移过之后,老版本不许再动它。
 # 它不再决定"要不要拍快照":那个决定改由「有没有待跑的一次性迁移」回答(见 MigrationPlan.pending)。
@@ -27,6 +30,11 @@ from pathlib import Path
 # 靠人记得改的数守不住,所以有测试看着:`tests/test_schema_version_follows_the_migrations.py` 对着
 # `tests/schema_version.json`(这个数当时认得的那几步),多出一步而这个数没动就红。
 DATABASE_SCHEMA_VERSION = 49
+
+#: 自动升级快照保留最近几份。一次升级只需要最近的前态来回退;更早的自动快照没有恢复价值,
+#: 却每份都接近整个数据库大小。只匹配本模块生成的文件名,目录里的人工备份不参与清理。
+UPGRADE_SNAPSHOT_KEEP = 3
+_SNAPSHOT_GLOB = "mosael-v*-to-v*.sqlite"
 
 
 class DatabaseVersionTooNew(RuntimeError):
@@ -69,10 +77,38 @@ def create_upgrade_snapshot(path: Path, *, from_version: int, to_version: int) -
                 raise sqlite3.DatabaseError("upgrade snapshot failed its integrity check")
         temporary.chmod(0o600)
         os.replace(temporary, destination)
+        prune_upgrade_snapshots(directory)
         return destination
     except Exception:
         temporary.unlink(missing_ok=True)
         raise
+
+
+def prune_upgrade_snapshots(directory: Path, *, keep: int = UPGRADE_SNAPSHOT_KEEP) -> list[Path]:
+    """只保留最近 `keep` 份自动升级快照,返回删掉的。人工放在同目录的文件名不匹配,不会动。
+
+    删除失败不回滚升级:新快照已经通过完整性校验并落盘,旧快照清不掉只是多占盘。
+    """
+    if keep < 1:
+        raise ValueError("keep must be at least 1")
+    found: list[tuple[int, str, Path]] = []
+    for snapshot in directory.glob(_SNAPSHOT_GLOB):
+        if not snapshot.is_file() or snapshot.is_symlink():
+            continue
+        try:
+            found.append((snapshot.stat().st_mtime_ns, snapshot.name, snapshot))
+        except OSError:
+            continue
+    found.sort(reverse=True)
+    removed: list[Path] = []
+    for _, _, snapshot in found[keep:]:
+        try:
+            snapshot.unlink()
+        except OSError as exc:
+            logger.warning("旧升级快照 %s 没删掉: %s", snapshot, exc)
+        else:
+            removed.append(snapshot)
+    return removed
 
 
 def snapshot_before_upgrade(path: Path, *, target_version: int, pending: int = 0) -> Path | None:
@@ -104,8 +140,10 @@ def mark_database_version(path: Path, version: int) -> None:
 __all__ = [
     "DATABASE_SCHEMA_VERSION",
     "DatabaseVersionTooNew",
+    "UPGRADE_SNAPSHOT_KEEP",
     "create_upgrade_snapshot",
     "database_version",
     "mark_database_version",
+    "prune_upgrade_snapshots",
     "snapshot_before_upgrade",
 ]

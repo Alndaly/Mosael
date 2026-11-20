@@ -8,6 +8,28 @@ from app.db.safety import DATABASE_SCHEMA_VERSION
 from tests.test_auth import fresh_client
 
 
+def test_自动升级快照只保留最近几份_手动文件不动(tmp_path) -> None:
+    from app.db.safety import UPGRADE_SNAPSHOT_KEEP, create_upgrade_snapshot
+
+    database = tmp_path / "mosael.db"
+    with sqlite3.connect(database) as connection:
+        connection.execute("create table things (id text primary key)")
+        connection.execute("insert into things values ('keep me')")
+        connection.commit()
+    created = [
+        create_upgrade_snapshot(database, from_version=version, to_version=version + 1)
+        for version in range(UPGRADE_SNAPSHOT_KEEP + 3)
+    ]
+    directory = database.parent / ".maintenance" / "database-snapshots"
+    assert sorted(directory.glob("mosael-v*-to-v*.sqlite")) == sorted(created[-UPGRADE_SNAPSHOT_KEEP:])
+
+    manual = directory / "manual-keep.sqlite"
+    manual.write_bytes(b"not an automatic snapshot")
+    create_upgrade_snapshot(database, from_version=99, to_version=100)
+    assert manual.exists()
+    assert len(list(directory.glob("mosael-v*-to-v*.sqlite"))) == UPGRADE_SNAPSHOT_KEEP
+
+
 def test_existing_database_is_snapshotted_once_before_schema_upgrade() -> None:
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "Before upgrade"}).json()
