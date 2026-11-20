@@ -17,11 +17,12 @@ const deletes: string[][] = [];
 const ORPHANS = [
   { key: "media/assets/gone-ws", reason: "workspace_gone", bytes: 2048, modified_at: "2026-10-01T00:00:00Z" },
   { key: "avatars/nobody.png", reason: "avatar_unused", bytes: 512, modified_at: "2026-10-01T00:00:00Z" },
+  { key: "media/assets/w1/a1/proxy.old.part.mp4", reason: "transcode_leftover", bytes: 1024, modified_at: "2026-10-01T00:00:00Z" },
 ];
 vi.mock("@/api/client", () => ({
   storageOrphansQuery: () => ({
     queryKey: ["admin", "storage-orphans"],
-    queryFn: () => Promise.resolve({ items: ORPHANS, total_bytes: 2560 }),
+    queryFn: () => Promise.resolve({ items: ORPHANS, total_bytes: 3584 }),
   }),
   deleteStorageOrphans: (keys: string[]) => {
     deletes.push(keys);
@@ -70,4 +71,14 @@ it("确认框里点取消:什么都不删", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "cancel" }));
   await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   expect(deletes).toEqual([]);
+});
+
+it("大量残片可以全选,确认时只交当前清单", async () => {
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "storageOrphansSelectAll" }));
+  expect(screen.getByText(/storageOrphanTranscodeLeftover/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /storageOrphansDelete/ }));
+  const dialog = await screen.findByRole("alertdialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "storageOrphansConfirmAction" }));
+  await waitFor(() => expect(deletes).toEqual([ORPHANS.map((one) => one.key)]));
 });

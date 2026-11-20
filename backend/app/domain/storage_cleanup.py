@@ -40,7 +40,7 @@ class Orphan:
 
     key: str
     #: 为什么说它没人认领:workspace_gone(工作区已经删了)/ row_gone(那一条素材、音色、LUT、字体已经删了)/
-    #: avatar_unused(没有账号用这张头像)
+    #: avatar_unused(没有账号用这张头像)/ transcode_leftover(进程中断留下的临时转码文件)
     reason: str
     bytes: int
     modified_at: datetime
@@ -88,6 +88,12 @@ def find_orphans(db: Session, *, now: float | None = None) -> list[Orphan]:
             for item_dir in sorted(_children(workspace_dir)):
                 if item_dir.name not in ids:
                     found.extend(_orphan(item_dir, "row_gone", moment))
+                    continue
+                # 有效素材目录里也可能有进程中断留下的 `*.part.mp4/.m4a`。只列单文件,
+                # 不碰同目录的原件/正式代理;一小时内仍在写的残片由 _orphan 的宽限期排除。
+                for part in sorted(item_dir.iterdir()):
+                    if part.is_file() and not part.is_symlink() and ".part." in part.name:
+                        found.extend(_orphan(part, "transcode_leftover", moment))
     avatars = settings.data_dir / "avatars"
     if avatars.is_dir():
         used = {str(key) for key in db.scalars(select(User.avatar_key)) if key}

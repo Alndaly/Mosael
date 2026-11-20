@@ -239,8 +239,8 @@ class StorageOrphanDeleteOut(BaseModel):
 
 @router.get("/admin/storage/orphans", response_model=StorageOrphansOut)
 def list_storage_orphans(db: DbSession, user: CurrentUser) -> StorageOrphansOut:
-    """数据目录里没人认领的文件:工作区 / 素材 / 音色 / LUT / 字体已经删了、文件还在的,没有账号在用的头像。
-    **只列,不删**(见 domain/storage_cleanup:判据是此刻库里没有对应的行,而那可能是恢复到一半的库)。"""
+    """数据目录里没人认领的文件:已删工作区/素材等留下的目录、没人用的头像,以及有效素材目录里的陈旧转码残片。
+    **只列,不删**(见 domain/storage_cleanup:目录可能属于恢复到一半的备份;残片也有一小时写入宽限期)。"""
     ensure_deployment_admin(db, user)
 
     items = [StorageOrphanOut(**vars(one)) for one in find_orphans(db)]

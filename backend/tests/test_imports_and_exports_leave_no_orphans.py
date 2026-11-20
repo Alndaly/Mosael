@@ -139,6 +139,41 @@ def test_老版本的导出中转目录_列进存储清理_管理员确认后才
     assert not legacy.exists()
 
 
+def test_有效素材目录里的陈旧转码残片可清理_正在写和原件不动(tmp_path: Path) -> None:
+    import os
+    import time
+
+    from app.domain.storage_cleanup import ORPHAN_GRACE_SECONDS, delete_orphans, find_orphans
+
+    workspace = _workspace()
+    source = tmp_path / "source.png"
+    source.write_bytes(PNG)
+    with SessionLocal() as db:
+        asset = register_file_asset(db, workspace_id=workspace, project_id=None, source_path=source, name="pic")
+        asset_id = asset.id
+        original = settings.data_dir / asset.file_key
+        db.commit()
+    directory = settings.media_dir / "assets" / workspace / asset_id
+    stale = directory / "proxy.old.part.mp4"
+    active = directory / "proxy.active.part.mp4"
+    stale.write_bytes(b"stale")
+    active.write_bytes(b"active")
+    moment = time.time()
+    old = moment - ORPHAN_GRACE_SECONDS - 10
+    os.utime(stale, (old, old))
+
+    stale_key = stale.relative_to(settings.data_dir).as_posix()
+    active_key = active.relative_to(settings.data_dir).as_posix()
+    original_key = original.relative_to(settings.data_dir).as_posix()
+    with SessionLocal() as db:
+        listed = {orphan.key: orphan for orphan in find_orphans(db, now=moment)}
+        assert stale_key in listed and listed[stale_key].reason == "transcode_leftover"
+        assert active_key not in listed and original_key not in listed
+        assert stale.exists(), "扫描只列残片,不能自动删"
+        assert delete_orphans(db, [stale_key, active_key, original_key]) == ([stale_key], [active_key, original_key])
+    assert not stale.exists() and active.exists() and original.exists()
+
+
 # --------------------------------------------------------------------- 生成
 
 

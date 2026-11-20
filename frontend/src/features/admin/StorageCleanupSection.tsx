@@ -29,6 +29,7 @@ const REASON_LABEL: Record<string, MessageKey> = {
   row_gone: "storageOrphanRowGone",
   avatar_unused: "storageOrphanAvatarUnused",
   export_leftover: "storageOrphanExportLeftover",
+  transcode_leftover: "storageOrphanTranscodeLeftover",
 };
 
 /**
@@ -83,6 +84,17 @@ export function StorageCleanupSection() {
               <RefreshCw size={13} />
               {t("storageOrphansRescan")}
             </Button>
+            {items.length > 1 ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setPicked(
+                  chosen.length === items.length ? new Set() : new Set(items.map((one) => one.key)),
+                )}
+              >
+                {t(chosen.length === items.length ? "storageOrphansSelectNone" : "storageOrphansSelectAll")}
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="outline"
