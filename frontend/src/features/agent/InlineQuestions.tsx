@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, HelpCircle } from "lucide-react";
 
 import { answerAgentQuestion, dismissAgentQuestion, listAgentQuestions, type AgentQuestion } from "@/api/client";
+import { markAgentTurnStarted } from "@/features/agent/agentTurnStarts";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,11 @@ export function InlineQuestions({ sessionId, readOnly = false }: { sessionId: st
           key={row.id}
           row={row}
           readOnly={readOnly}
-          onDone={() => void qc.invalidateQueries({ queryKey: ["agent-questions", sessionId] })}
+          onDone={() => {
+            // 作答会把 idle 的会话直接开成一轮;只刷问题列表会让进度等 10 秒的空闲轮询。
+            markAgentTurnStarted(qc, sessionId);
+            void qc.invalidateQueries({ queryKey: ["agent-questions", sessionId] });
+          }}
         />
       ))}
     </div>

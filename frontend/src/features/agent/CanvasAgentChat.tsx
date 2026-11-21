@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
+import { markAgentTurnStarted } from "@/features/agent/agentTurnStarts";
 import { useTurnElapsedSeconds } from "@/features/agent/useTurnElapsedSeconds";
 import {
   MAX_CONTEXT_CHARS,
@@ -410,8 +411,7 @@ export function CanvasAgentChat({
         attach.clear();
       }
       onSent?.();
-      void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
-      void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
+      markAgentTurnStarted(qc, targetId);
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
       void attachStream(targetId);
     },

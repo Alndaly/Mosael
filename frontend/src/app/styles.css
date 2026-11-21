@@ -26,6 +26,13 @@
 [data-radix-popper-content-wrapper]:has(> [data-over-lightbox]) {
   z-index: 230 !important;
 }
+/* Windows 非系统全屏时,原生最小化 / 最大化 / 关闭压在右上角 148px 里。灯箱的两颗浮钮
+   已经在 FLOATING_TOP_RIGHT 里让开了,但 react-photo-view 自己的 BannerRight(「打开原图」和
+   它旁边的工具)此前只给浮钮让了 88px,整条工具条仍会落在系统按钮下面 —— 所以这里把
+   148px 也加上。系统全屏时原生按钮消失,`:not(.is-fullscreen)` 让这条规则不生效。 */
+.is-desktop.is-win:not(.is-fullscreen) .PhotoView-Slider__BannerRight {
+  padding-right: calc(88px + 148px);
+}
 /* Custom-background menus and canvas panels. Modal surfaces own their independent glass. */
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   :root[data-appearance="glass"] [data-radix-popper-content-wrapper] > *:not([data-tooltip]),

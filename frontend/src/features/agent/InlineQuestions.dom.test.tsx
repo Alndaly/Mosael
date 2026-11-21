@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { expect, it, vi } from "vitest";
 
@@ -64,4 +64,22 @@ it("同事共享来的对话:问题和选项照样看得见,作答的控件不�
   expect(screen.queryByRole("button", { name: "askSubmit" })).toBeNull();
   expect(screen.queryByRole("button", { name: "askSkip" })).toBeNull();
   expect(screen.queryByPlaceholderText("askOtherPlaceholder")).toBeNull();
+});
+
+it("作答成功后立即把会话标成 running,进度不再等 10 秒的空闲轮询", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  //: 这正是界面在作答前的缓存:轮次停着,会话详情下一次轮询要等 10 秒。
+  client.setQueryData(["agent-session", "s1"], { id: "s1", status: "idle", title: "会话" });
+  client.setQueryData(["agent-messages", "s1"], []);
+  render(
+    <QueryClientProvider client={client}>
+      <InlineQuestions sessionId="s1" />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: /竖屏/ }));
+  fireEvent.click(screen.getByRole("button", { name: "askSubmit" }));
+  await waitFor(() =>
+    expect(client.getQueryData<{ status: string }>(["agent-session", "s1"])?.status).toBe("running"),
+  );
+  expect(client.getQueryState(["agent-messages", "s1"])?.isInvalidated).toBe(true);
 });

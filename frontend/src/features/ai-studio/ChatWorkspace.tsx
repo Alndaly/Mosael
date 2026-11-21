@@ -25,6 +25,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
+import { markAgentTurnStarted } from "@/features/agent/agentTurnStarts";
 import { useTurnElapsedSeconds } from "@/features/agent/useTurnElapsedSeconds";
 import { sessionPolling, transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
@@ -305,8 +306,7 @@ export function ChatWorkspace({
       draft.set(emptyDocument);
       // 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了(画布助手一直是这样)。
       attach.clear();
-      void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
-      void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
+      markAgentTurnStarted(qc, targetId);
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
       void attachStream(targetId);
     },

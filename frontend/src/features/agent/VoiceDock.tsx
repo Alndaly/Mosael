@@ -28,6 +28,7 @@ import { useI18n } from "@/app/preferences";
 import { useVoiceLoop } from "@/features/agent/useVoiceLoop";
 import { useActivePlace } from "@/features/agent/activePlace";
 import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
+import { markAgentTurnStarted } from "@/features/agent/agentTurnStarts";
 import { placePayload } from "@/features/agent/places";
 import { VoiceAssistantStatus } from "@/features/agent/VoiceAssistantStatus";
 import { voiceAssistantView } from "@/features/agent/voiceAssistant";
@@ -90,11 +91,9 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
       }
       const target = (await current.ensure()).id;
       await sendAgentMessage(target, { content: text, place: placePayload(place) });
-      void qc.invalidateQueries({ queryKey: ["agent-messages", target] });
-      //: 会话的 `status`(浮标的 `busy`)也是这一句之后才变成 running 的。不立刻重取的话,
-      //: 「消息已发出」到下一次 1.5 秒轮询之间,浮标只能靠状态机里的看门狗推断这一轮在跑。
-      //: 重取一次不改变语义,只是让"在想"更早接上真事。
-      void qc.invalidateQueries({ queryKey: ["agent-session"] });
+      // 会话的 `status`(浮标的 `busy`)也是这一句之后才变成 running 的。立刻重取一次,
+      // 「消息已发出」到下一次空闲轮询之间不再只能靠看门狗推断。
+      markAgentTurnStarted(qc, target);
     },
   });
 

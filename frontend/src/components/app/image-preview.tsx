@@ -256,6 +256,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
           visible && "[.is-desktop_&]:[-webkit-app-region:no-drag]",
           //: 库自带的 ✕ 藏起来(换成上面那颗一直在的关闭键),右边让出顶上那**两颗**浮钮的位子
           //: (关闭 8..44、保存在它左边 52..88;加上胶囊自己的 `mr-2` 就是 8px 的间距)。
+          //: Windows 非系统全屏时,styles.css 还要在这 88px 之外加上原生窗口按钮的 148px。
           String.raw`[&_.PhotoView-Slider\_\_BannerRight>.PhotoView-Slider\_\_toolbarIcon]:hidden [&_.PhotoView-Slider\_\_BannerRight]:pr-[88px]`,
           String.raw`z-[220] [&_.PhotoView-Slider\_\_BannerWrap]:h-12 [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)] [&_.PhotoView-Slider\_\_Counter]:font-mono [&_.PhotoView-Slider\_\_Counter]:text-ui-xs [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)] [&_.PhotoView-Slider\_\_toolbarIcon]:h-9 [&_.PhotoView-Slider\_\_toolbarIcon]:w-9 [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)] [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]`,
         )}
