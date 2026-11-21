@@ -140,8 +140,12 @@ def _captured_analyze(client, monkeypatch, asset_id: str, question: str = "这�
     return captured
 
 
+def _user_message(messages: list) -> dict:
+    return next(message for message in messages if message["role"] == "user")
+
+
 def _image_count(messages: list) -> int:
-    return len([part for part in messages[0]["content"] if part["type"] == "image_url"])
+    return len([part for part in _user_message(messages)["content"] if part["type"] == "image_url"])
 
 
 def _hints(asset_id: str) -> list[dict]:
@@ -153,7 +157,7 @@ def _hints(asset_id: str) -> list[dict]:
 
 def _content_text(messages: list) -> tuple[str, list[str]]:
     """第一段是提示词正文;后面每隔一张图前面那段 `【…】` 是这张图的标注(中点帧或联系表)。"""
-    parts = messages[0]["content"]
+    parts = _user_message(messages)["content"]
     labels = [part["text"] for part in parts[1:] if part["type"] == "text"]
     return parts[0]["text"], labels
 
@@ -167,7 +171,7 @@ def test_frames_path_samples_per_shot_with_labels(client, video_asset, monkeypat
     assert "【S01 · 0:00.0–0:01.0】" in labels
     assert "【S04 · 0:03.0–0:04.0】" in labels
     assert len(labels) == 4  # 4 镜 ≤ MAX_VISUAL_FRAMES,每镜一帧(不是按时长算出来的 4)
-    parts = captured["messages"][0]["content"]
+    parts = _user_message(captured["messages"])["content"]
     images = [p for p in parts if p["type"] == "image_url"]
     assert len(images) == 4
     assert captured["result"]["frames"] == 4
@@ -242,7 +246,7 @@ def test_more_shots_than_budget_hands_over_contact_sheets(client, monkeypatch) -
         "【联系表 3 · S51–S53 · 15% 处】", "【联系表 3 · S51–S53 · 85% 处】",
     ]
     #: 交的是盘上那份表本身(不是又现场拼一遍)。
-    parts = captured["messages"][0]["content"]
+    parts = _user_message(captured["messages"])["content"]
     first_image = next(part for part in parts if part["type"] == "image_url")
     sheet_file = breakdowns.shots_dir(asset) / "sheets" / made[0]["a"]
     assert first_image["image_url"]["url"].endswith(base64.b64encode(sheet_file.read_bytes()).decode())
@@ -347,7 +351,7 @@ def test_native_path_also_carries_shot_table(client, video_asset, monkeypatch) -
         result = service.analyze_asset(db, db.get(Asset, video_asset.id), "什么景别?",
                                        mode="native", user_id=me)
     assert result["mode"] == "native"
-    prompt = captured["messages"][0]["content"][0]["text"]
+    prompt = _user_message(captured["messages"])["content"][0]["text"]
     assert "【镜头表" in prompt and "特写" in prompt
 
 
