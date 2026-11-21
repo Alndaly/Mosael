@@ -179,6 +179,28 @@ async function mount() {
 
 const row = (container: HTMLElement, id: string) => container.querySelector(`[data-tool-call="${id}"]`);
 
+it("失败卡用 failure_text 当摘要,不把半截回答印成失败原因", async () => {
+  mocks.running = false;
+  mocks.messages = [
+    { id: "u1", session_id: "s1", role: "user", content: "分析一下当前工作流是否有问题", payload: {}, error: null, created_at: "2026-11-21T16:01:30" },
+    {
+      id: "a1", session_id: "s1", role: "assistant",
+      content: "我先读一下技能，再读画布和做诊断。",
+      error: "Connection error.: Client network socket disconnected before secure TLS connection was established (ECONNRESET)",
+      payload: {
+        failure_text: "与模型服务的连接中断了。请检查网络或代理后重试。",
+        timeline: [{ type: "text", text: "我先读一下技能，再读画布和做诊断。" }],
+      },
+      created_at: "2026-11-21T16:01:31",
+    },
+  ];
+  await mount();
+  const summary = await screen.findByText("与模型服务的连接中断了。请检查网络或代理后重试。");
+  const failed = summary.closest<HTMLElement>("[data-agent-turn-failed]");
+  expect(failed).not.toBeNull();
+  expect(within(failed!).queryByText("我先读一下技能，再读画布和做诊断。")).toBeNull();
+});
+
 describe("一轮里连着五条「生成音频」,全批了、全执行完(用户截图那一幕)", () => {
   it("不留任何一张卡,也没有 × —— 每次调用的行里一行「已批准 · 已执行」", async () => {
     const audio = ["a1", "a2", "a3", "a4", "a5"];

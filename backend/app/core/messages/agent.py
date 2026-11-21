@@ -65,6 +65,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Only conversations opened in ComfyUI follow their workflow when it moves; Mosael's own things are found by id and never move.",
     },
     "agentErr_turnFailed": {"zh": "智能体执行失败，请稍后重试。", "en": "The agent run failed. Try again later."},
+    "aiErr_connectionLost": {
+        "zh": "与模型服务的连接中断了。请检查网络或代理后重试。",
+        "en": "Lost the connection to the model service. Check the network or proxy and try again.",
+    },
     "agentErr_compactWhileRunning": {
         "zh": "这段对话正在回答,等它答完再整理上下文。",
         "en": "This conversation is answering right now; compact its context once it finishes.",

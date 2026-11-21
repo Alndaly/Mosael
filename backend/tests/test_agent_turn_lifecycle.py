@@ -319,6 +319,22 @@ def test_供应商配置问题_气泡上说原因而不是请稍后重试(monkey
     assert "base_url" in caught.value.human
 
 
+def test_工具之后连接中断_摘要说连接中断而不是请稍后重试(monkeypatch) -> None:
+    _fake_sidecar(
+        monkeypatch,
+        {"type": "tool_start", "turnId": "turn", "toolCallId": "t1", "name": "comfy_check", "args": {}},
+        {"type": "error", "turnId": "turn",
+         "message": "Connection error.: Client network socket disconnected before secure TLS connection was established (ECONNRESET)"},
+    )
+    with pytest.raises(SidecarError) as caught:
+        pi_client.run_turn(
+            "pi", prompt="你好", system_prompt="", api_base="http://127.0.0.1:1", token="t",
+            provider={"base_url": "http://x/v1", "api_key": "k"}, model="m",
+        )
+    assert "连接中断" in caught.value.human
+    assert "ECONNRESET" in str(caught.value)
+
+
 def test_没有供应商时_sidecar_那一层也说清原因并给出去设置的线索() -> None:
     with pytest.raises(SidecarError) as caught:
         pi_client.run_turn("pi", prompt="你好", system_prompt="", api_base="", token="t", provider=None, model=None)

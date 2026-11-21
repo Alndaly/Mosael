@@ -55,6 +55,7 @@ import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/fe
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, toolCallIds, type AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { agentFailureSummary } from "@/features/agent/agentFailureSummary";
 import type { AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
@@ -608,7 +609,7 @@ export function CanvasAgentChat({
                   />
                   {message.error && (
                     <div className={payload?.timeline?.length ? "mt-2" : undefined}>
-                      <AgentErrorCard content={message.content} error={message.error} code={(message.payload as { error_code?: string } | null)?.error_code} />
+                      <AgentErrorCard content={agentFailureSummary(message)} error={message.error} code={(message.payload as { error_code?: string } | null)?.error_code} />
                     </div>
                   )}
                 </>

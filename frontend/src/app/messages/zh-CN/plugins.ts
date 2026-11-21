@@ -541,7 +541,7 @@ export const plugins = {
   workbenchAssistantEmpty: "问我这张工作流的事:哪里有问题、缺什么节点和模型、某个节点包能不能装;或者让我改它(改动先摆成清单,你点「应用」才改到画布上),或者新建一个工作流(我先找官方模板,在新标签页里打开)。我从不替你存盘。",
   workbenchAssistantPlaceholder: "例如:这个工作流为什么跑不起来?",
   workbenchAssistantContext:
-    "你在 Mosael 的 ComfyUI 工作台里协助用户:左边是 ComfyUI「{name}」(instance_id={id},{version})自己的画布,你在右边那一列的「助手」页签里。画布上开着:{workflow}。选中的节点:{selection}。{run}照技能 comfyui-workflows 的做法做。读画布用 comfy_canvas_read,诊断用 comfy_check,指给用户看用 comfy_locate;改当前这张用 comfy_canvas_edit(一批改动,用户在确认卡上看过清单点「应用」才改,一次 Ctrl+Z 就退回去);新建用 comfy_canvas_new(在新标签页打开,不动开着的);找模板、查节点和节点包用 comfy_templates、comfy_template、comfy_node_types、comfy_node_packs、comfy_node_pack_search、comfy_node_pack_info —— 都带上 instance_id={id}。都不存盘,存不存是用户的事。整张图不在这段上下文里,要看就调 comfy_canvas_read。回答里提到节点写 #编号(子图里的写 #12:5),界面会把它变成能点的定位。",
+    "你在 Mosael 的 ComfyUI 工作台里协助用户:左边是 ComfyUI「{name}」(instance_id={id},{version})自己的画布,你在右边那一列的「助手」页签里。画布上开着:{workflow}。选中的节点:{selection}。{run}照技能 dev.mosael.comfyui:comfyui-workflows 的做法做。读画布用 comfy_canvas_read,诊断用 comfy_check,指给用户看用 comfy_locate;改当前这张用 comfy_canvas_edit(一批改动,用户在确认卡上看过清单点「应用」才改,一次 Ctrl+Z 就退回去);新建用 comfy_canvas_new(在新标签页打开,不动开着的);找模板、查节点和节点包用 comfy_templates、comfy_template、comfy_node_types、comfy_node_packs、comfy_node_pack_search、comfy_node_pack_info —— 都带上 instance_id={id}。都不存盘,存不存是用户的事。整张图不在这段上下文里,要看就调 comfy_canvas_read。回答里提到节点写 #编号(子图里的写 #12:5),界面会把它变成能点的定位。",
   workbenchAssistantVersion: "ComfyUI {version}",
   workbenchAssistantFrontend: ",前端 {version}",
   workbenchAssistantVersionUnknown: "版本还没读到",

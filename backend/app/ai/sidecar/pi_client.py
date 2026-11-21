@@ -813,6 +813,8 @@ def _run_pi(
                     # 放手时记成要重新授权(见 providers.auth.note_refresh_failure),设置页那一行同时变成「授权过期」。
                     error_kwargs["code"] = "oauth_expired"
                     raise SidecarError(detail, failed_state, human=tr("aiErr_oauthExpired"), **error_kwargs)
+                if _connection_lost(detail):
+                    raise SidecarError(detail, failed_state, human=tr("aiErr_connectionLost"), **error_kwargs)
                 if not saw_tool:
                     raise SidecarError(
                         "aiErr_turnFailedCheckProvider", failed_state, detail=detail,
@@ -884,12 +886,25 @@ TURN_CUT_SHORT = frozenset({"output_limit", "tool_call_lost", "paused", "context
 
 def _tail(text: str, limit: int = 1000) -> str:
     """长错误保留**开头和结尾**:开头才是根因(sidecar 的 describeError 把根因放在最前、stack 在后),
-    只留尾部会让用户看到一截调用栈、看不到到底为什么失败。根因分到三分之二。"""
+    只留尾部会让用户看到一截调用?、看不到到底为什么失败。根因分到三分之二。"""
     stripped = text.strip()
     if len(stripped) <= limit:
         return stripped
     head = max(1, limit * 2 // 3)
-    return f"{stripped[:head]}\n…\n{stripped[-(limit - head):]}"
+    return f"{stripped[:head]}\n...\n{stripped[-(limit - head):]}"
+
+
+#: 网络/代理层失败的外形。这类错误不是供应商配置写错,也不该在已调过工具之后只剩一句
+#: 「请稍后重试」—— 用户需要知道重试的是连接,而不是去翻 base_url / 模型名。
+_CONNECTION_LOST = re.compile(
+    r"ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|"
+    r"network socket disconnected|TLS connection|socket disconnected|fetch failed|Connection error",
+    re.IGNORECASE,
+)
+
+
+def _connection_lost(detail: str) -> bool:
+    return bool(_CONNECTION_LOST.search(detail))
 
 
 def _reported(event: dict, fallback_key: str) -> SidecarError:

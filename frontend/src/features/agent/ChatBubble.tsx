@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 
 import { CompactionNotice, type CompactionInfo } from "@/features/agent/ContextMeter";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type FoldedReceipt } from "@/features/agent/ToolCalls";
+import { agentFailureSummary } from "@/features/agent/agentFailureSummary";
 import type { AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
@@ -235,7 +236,7 @@ export const ChatBubble = React.memo(function ChatBubble({
           {message.error && (
             <div className={payload?.timeline?.length ? "mt-2" : undefined}>
               <AgentErrorCard
-                content={(payload as { failure_text?: string } | null)?.failure_text ?? message.content}
+                content={agentFailureSummary(message)}
                 error={message.error}
                 code={(message.payload as { error_code?: string } | null)?.error_code}
               />
