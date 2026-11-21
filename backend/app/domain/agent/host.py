@@ -958,7 +958,12 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             # Never persist a blank assistant turn: an empty reply with no tool calls means the
             # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
             # provider misconfiguration look like "nothing happened".
-            if result.aborted and not segment_text.strip() and not timeline:
+            #
+            # **思考块不算“有内容”。** 停在第一次出字之前、只留下 thinking 时，旧条件
+            # `not timeline` 为假，于是 content="" 的助手消息照样落库——用户看到一个空气泡。
+            # 只有在真的留下了工具/子智能体结果时，才不需要补这句停止说明。
+            has_work = any(item.get("type") in {"tool", "subtool"} for item in timeline)
+            if result.aborted and not segment_text.strip() and not has_work:
                 # 还没出字就被停下:那不是「模型什么都没回」,是用户按了停止 —— 照停止记,不报检查供应商配置。
                 segment_text = tr("agentTurn_stoppedBeforeReply")
             tail_empty = not segment_text.strip() and not timeline

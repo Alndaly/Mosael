@@ -27,7 +27,7 @@ from app.core.child_process import ChildProcess, popen_text
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage, AgentSession, ToolConfirmation
-from app.domain.agent import host
+from app.domain.agent import host, stream as agent_stream
 from tests.test_agent_queue import _session, _wait_idle
 from tests.util import fresh_client, user_id
 
@@ -242,6 +242,27 @@ def test_还没出字就被停下_记成停止不是模型什么都没回(monkey
     last = _last_assistant(sid)
     assert last.error is None, "按了停止被记成失败(此前是「模型没有返回任何内容,请检查供应商配置」)"
     assert last.content == "(还没开始回答就停下了。)"
+
+
+def test_只思考就被停下_落成停止而不是空气泡(monkeypatch) -> None:
+    """**思考块不是正文。** 停在第一次出字之前时，timeline 里只有一块 thinking；
+    此前它让「还没出字」的判断失效，助手消息以 content="" 落库，界面上是一个空回复。"""
+    def turn(*_args, **kwargs):
+        sid = kwargs["session_key"]
+        agent_stream._stream_reset(sid)
+        agent_stream._stream_thinking(sid, {"type": "thinking_delta", "delta": "先想一下"})
+        return TurnResult(text="", aborted=True)
+
+    monkeypatch.setattr(host, "run_turn", turn)
+    client = fresh_client()
+    sid = _session(client)
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "写一篇长文"})
+    _wait_idle(sid)
+    last = _last_assistant(sid)
+    assert last.error is None
+    assert last.content == "(还没开始回答就停下了。)"
+    thinking = [item for item in (last.payload or {}).get("timeline", []) if item.get("type") == "thinking"]
+    assert thinking and thinking[0]["text"] == "先想一下"
 
 
 def test_失败带回了记忆_落库记下记忆已回存(monkeypatch) -> None:
