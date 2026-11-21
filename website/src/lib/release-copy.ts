@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.12": {
+    zh: [
+      "**思考中停止不再留下空气泡。** 停在第一句回答之前会明确写「还没开始回答就停下了」，已经产生的思考内容照常保留。",
+      "**失败卡显示真正原因。** 连接中断、授权过期和供应商错误不再被半截回答盖住；ComfyUI 工作台与普通对话使用同一份失败摘要。",
+      "**ComfyUI 工作台复制不再变成 `Text`。** 复制右侧智能体回复时直接写入宿主选区，不再受底层画布文本节点影响。",
+      "**Prompt 契约收紧。** 插件技能必须写明 `插件 id:技能名`；素材分析区分观察与推断；发布文案按平台、标题上限与事实边界生成。",
+    ],
+    en: [
+      "**Stopping during thinking no longer leaves an empty bubble.** Stopping before the first sentence now says it stopped before answering, while keeping whatever thinking was already shown.",
+      "**Failure cards show the real cause.** Connection loss, expired authorization and provider errors are no longer hidden behind a partial answer; the ComfyUI workbench and regular chat share the same failure summary.",
+      "**Copying from the ComfyUI workbench no longer turns into `Text`.** Copying an agent reply writes the host selection directly, independent of the underlying canvas text node.",
+      "**Tighter prompt contracts.** Plugin skills must be named `plugin id:skill name`; asset analysis separates observation from inference; publish copy follows the target platform, title limit and fact boundaries.",
+    ],
+  },
   "v2.6.11": {
     zh: [
       "**作答或首次发送后，进度立刻出现。** 选择卡点完、消息发出、语音说完，会话马上进入运行中并刷新对话与队列，不再等空闲轮询的那 10 秒。",
