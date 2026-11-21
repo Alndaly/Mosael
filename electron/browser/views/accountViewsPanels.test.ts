@@ -133,6 +133,7 @@ const fake = vi.hoisted(() => {
       focus() { this.focused = true; },
       isDestroyed: () => false,
       on: () => undefined,
+      executeJavaScript: async (_code?: string): Promise<unknown> => "",
       /** 「视图 → 放大 / 缩小」的页面缩放(见 accountViews 的 hostZoom)。 */
       zoom: 1,
       getZoomFactor() { return this.zoom; },
@@ -169,7 +170,7 @@ const fake = vi.hoisted(() => {
       return false;
     }
   }
-  return { WebContentsView, WebContents, Window, userData: "" };
+  return { WebContentsView, WebContents, Window, userData: "", clipboard: { text: "", writeText(text: string) { this.text = text; } } };
 });
 
 vi.mock("electron", () => ({
@@ -177,6 +178,7 @@ vi.mock("electron", () => ({
   screen: { getCursorScreenPoint: () => ({ x: -1, y: -1 }) },
   session: { fromPartition: () => ({}) },
   WebContentsView: fake.WebContentsView,
+  clipboard: fake.clipboard,
 }));
 
 const { AccountViewManager } = await import("./accountViews");
@@ -234,6 +236,7 @@ function attach(...ids: string[]) {
 
 beforeEach(() => {
   fake.userData = fs.mkdtempSync(path.join(os.tmpdir(), "mosael-panels-"));
+  fake.clipboard.text = "";
   window = new fake.Window();
   cards = [];
   manager = new AccountViewManager(() => undefined, (next) => {
@@ -420,6 +423,19 @@ describe("window resizing", () => {
 
 describe("keyboard focus between Mosael and the embedded page", () => {
   const escape = (view: FakeView) => view.webContents.emit("before-input-event", {}, { type: "keyDown", key: "Escape" });
+
+  it("Copies Mosael's selected text even while the native page still owns keyboard focus.", async () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    window.webContents.executeJavaScript = vi.fn(async () => "复制这一段回答");
+    expect(viewOf("pool-a").webContents.focused).toBe(true);
+
+    await expect(manager.copyHostSelectionIfAny()).resolves.toBe(true);
+
+    //: Windows 上 host.copy() 在宿主没焦点时会静默失效,剪贴板留着画布里的 Text 节点。
+    //: 这里必须直接写读到的选区,不能依赖焦点。
+    expect(fake.clipboard.text).toBe("复制这一段回答");
+  });
 
   it("entering the embedded browser puts the keyboard in the page; going back puts it in Mosael", () => {
     manager.registerSession("pool-a", "persist:pool-a");

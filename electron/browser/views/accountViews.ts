@@ -1,4 +1,4 @@
-import { app, screen, session, shell, WebContentsView, type BaseWindow } from "electron";
+import { app, clipboard, screen, session, shell, WebContentsView, type BaseWindow } from "electron";
 // 登录要唤起本机客户端的那几种协议(微信快捷登录等):交给系统,否则 Chromium 静默丢掉 ——
 // 用户看到的是「点了没反应 / 又回登录页」,而不是任何错误。
 import { forwardExternalLogin, isExternalLoginUrl } from "../../external-login-schemes.cjs";
@@ -881,7 +881,10 @@ export class AccountViewManager {
     if (!host) return false;
     const text = await host.executeJavaScript("window.getSelection()?.toString() ?? ''").catch(() => "");
     if (!text || !String(text).trim()) return false;
-    host.copy();
+    //: **直接写文字,不调 host.copy()。** 原生视图占着键盘时宿主没有焦点,`copy()`
+    //: 在 Windows 上可能静默不写;剪贴板于是保留上一次的「Text」(ComfyUI 文本节点)。
+    //: 这里已经拿到了确切选区,写它就是用户眼前这段文字,和焦点在哪无关。
+    clipboard.writeText(String(text));
     return true;
   }
 
