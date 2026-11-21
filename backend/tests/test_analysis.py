@@ -84,7 +84,9 @@ def test_build_messages_shape() -> None:
         media_info = {"duration": 8.0}
 
     messages = service.build_messages(FakeAsset(), "画面里有什么？", [b"a", b"b"])
-    content = messages[0]["content"]
+    assert messages[0]["role"] == "system"
+    assert "推断" in messages[0]["content"] and "不要编造" in messages[0]["content"]
+    content = messages[1]["content"]
     assert content[0]["type"] == "text"
     assert "海边素材" in content[0]["text"] and "2 帧" in content[0]["text"]
     assert [part["type"] for part in content[1:]] == ["image_url", "image_url"]
@@ -98,7 +100,7 @@ def test_build_messages_includes_transcript() -> None:
         media_info = {"duration": 30.0}
 
     messages = service.build_messages(FakeAsset(), "讲了什么？", [b"a"], transcript="你好，今天聊剪辑。")
-    text = messages[0]["content"][0]["text"]
+    text = messages[1]["content"][0]["text"]
     assert "语音转写" in text
     assert "你好，今天聊剪辑。" in text
 
@@ -157,7 +159,7 @@ def test_analyze_endpoint_end_to_end(monkeypatch, tmp_path: Path) -> None:
 
     def fake_call(db, profile, messages, call=None):
         captured["model_profile"] = profile.vendor
-        captured["parts"] = len(messages[0]["content"])
+        captured["parts"] = len(next(message for message in messages if message["role"] == "user")["content"])
         return "画面是一张纯红色图片。"
 
     monkeypatch.setattr(service, "call_vision_model", fake_call)
@@ -182,7 +184,7 @@ def test_analyze_heic_sends_real_jpeg_bytes_and_mime(monkeypatch) -> None:
     captured: dict[str, str] = {}
 
     def fake_call(db, profile, messages, call=None):
-        captured["url"] = messages[0]["content"][1]["image_url"]["url"]
+        captured["url"] = next(message for message in messages if message["role"] == "user")["content"][1]["image_url"]["url"]
         return "红色图片"
 
     monkeypatch.setattr(service, "call_vision_model", fake_call)
@@ -268,7 +270,7 @@ def test_analyze_video_native_qwen_video_url(monkeypatch) -> None:
         result = service.analyze_asset(db, asset, "讲了什么", mode="native", user_id=_me())
     assert result["mode"] == "native" and result["provider"] == "alibaba"
     assert result["answer"] == "海边散步的女孩"
-    content = captured["json"]["messages"][0]["content"]
+    content = next(message for message in captured["json"]["messages"] if message["role"] == "user")["content"]
     assert any(part.get("type") == "video_url" for part in content)
     assert content[-1]["video_url"]["url"].startswith("data:video/mp4;base64,")
 

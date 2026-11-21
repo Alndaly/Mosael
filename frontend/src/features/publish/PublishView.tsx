@@ -785,7 +785,11 @@ function CreatePublishDialog({
   }, [kind]);
 
   const aiCopy = useMutation({
-    mutationFn: () => generatePublishCopy({ workspace_id: workspace.id, asset_id: assetId }),
+    mutationFn: () => generatePublishCopy({
+      workspace_id: workspace.id,
+      asset_id: assetId,
+      brief: platformMeta ? `${t("publishPlatform")}:${platformMeta.label};标题最多${platformMeta.title_max}字` : undefined,
+    }),
     onSuccess: (copy) => {
       setTitle(copy.title);
       setDescription(copy.description);

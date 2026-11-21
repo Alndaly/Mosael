@@ -28,8 +28,17 @@ class CopyParseError(LocalizedError, ValueError):
 
 TRANSCRIPT_EXCERPT_CHARS = 1500
 
-_SYSTEM = """你是短视频发布运营。根据素材信息写发布文案,只输出一个 JSON 对象,不要解释、不要代码围栏:
-{"title": "吸引人的标题,<=30字", "description": "简介,2-4句,自然口语", "tags": ["3-8个话题标签,不带#"]}"""
+_SYSTEM = """你是短视频/图文发布运营,为 Mosael 创作者写可直接使用的发布文案。
+只输出一个 JSON 对象,不要解释、不要代码围栏:
+{"title": "标题", "description": "简介", "tags": ["话题标签"]}
+
+写作要求:
+1. 只使用「素材信息」和「创作要求与平台约束」里的事实。不编造人物、地点、功效、数据、承诺或素材里没有发生的事。
+2. 标题要具体、有信息量,优先 12–24 字,并严格遵守输入里给出的平台标题上限;不用夸张营销词和标题党。
+3. 简介 2–4 句自然口语:第一句给钩子,随后说清内容/价值,最后可给一个轻 CTA;不要重复标题,不要写成标签堆。
+4. 标签 3–8 个,不带 #,必须与内容直接相关;不要塞无关热词。
+5. 语言与素材和创作者要求一致;创作者明确要求优先于默认风格。
+6. 输入里有「平台:…」时按该平台习惯写(标题长度、语气、标签数量);没有就按通用短视频处理。"""
 
 
 def generate_copy(
@@ -44,7 +53,7 @@ def generate_copy(
     profile = require_connection(db, profile_id, user_id=user_id, error=PublishDomainError, surface="direct")
     parts: list[str] = []
     if brief.strip():
-        parts.append(f"创作者要求:{brief.strip()}")
+        parts.append(f"创作要求与平台约束:{brief.strip()}")
     if asset_id:
         asset = db.get(Asset, asset_id)
         if asset is None or asset.workspace_id != workspace_id:
