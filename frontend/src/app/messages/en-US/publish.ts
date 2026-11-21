@@ -422,6 +422,7 @@ export const publish = {
   publishTags: "Tags",
   publishTagsPlaceholder: "Comma separated, e.g. beach, travel, vlog",
   publishAiCopy: "AI copy",
+  publishCopyPlatformHint: "Platform: {platform}; title up to {max} characters",
   publishCopyDone: "Copy drafted — tweak as needed",
   publishCopyFailed: "Copy generation failed",
   publishStart: "Publish",

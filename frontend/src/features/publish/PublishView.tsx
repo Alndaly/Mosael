@@ -788,7 +788,9 @@ function CreatePublishDialog({
     mutationFn: () => generatePublishCopy({
       workspace_id: workspace.id,
       asset_id: assetId,
-      brief: platformMeta ? `${t("publishPlatform")}:${platformMeta.label};标题最多${platformMeta.title_max}字` : undefined,
+      brief: platformMeta
+        ? t("publishCopyPlatformHint").replace("{platform}", platformMeta.label).replace("{max}", String(platformMeta.title_max))
+        : undefined,
     }),
     onSuccess: (copy) => {
       setTitle(copy.title);

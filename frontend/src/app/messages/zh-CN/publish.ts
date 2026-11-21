@@ -423,6 +423,7 @@ export const publish = {
   publishTags: "标签",
   publishTagsPlaceholder: "逗号分隔,如:海边, 旅行, vlog",
   publishAiCopy: "AI 文案",
+  publishCopyPlatformHint: "平台:{platform};标题最多 {max} 字",
   publishCopyDone: "文案已生成,可继续修改",
   publishCopyFailed: "文案生成失败",
   publishStart: "发布",
