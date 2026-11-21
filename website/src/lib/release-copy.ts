@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.11": {
+    zh: [
+      "**作答或首次发送后，进度立刻出现。** 选择卡点完、消息发出、语音说完，会话马上进入运行中并刷新对话与队列，不再等空闲轮询的那 10 秒。",
+      "**Windows 全屏预览右上角不再被系统按钮压住。**「打开原图」、保存和关闭一起让开最小化/最大化/关闭，图片与视频的全屏查看不会再点不到。",
+      "**自带 FFmpeg 安装源更新到 9.1。** 需要让 Mosael 安装完整版 FFmpeg 时，拿到的是当前发行构建。",
+    ],
+    en: [
+      "**Progress appears as soon as you answer or send the first message.** A question choice, a sent message or a voice utterance immediately puts the session into running and refreshes the transcript and queue, instead of waiting up to 10 seconds for the idle poll.",
+      "**Windows full-screen preview no longer sits under the system buttons.** Open original, save and close all move left of minimize/maximize/close, so image and video previews stay clickable.",
+      "**The bundled FFmpeg installer source moves to 9.1.** Installing a full FFmpeg build now fetches the current release build.",
+    ],
+  },
   "v2.6.10": {
     zh: [
       "**Kimi Code 额度恢复正常显示。** 适配新的 5 小时 / 7 天聚合额度结构，月度窗口也有独立标签；额度怎么查、怎么显示不再受上游回包结构变化影响。",
