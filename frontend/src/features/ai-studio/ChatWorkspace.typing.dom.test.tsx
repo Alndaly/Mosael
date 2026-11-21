@@ -21,6 +21,7 @@ import { emitOpenEvent } from "@/lib/deepLink";
 
 const renders = vi.hoisted(() => ({ user: 0, assistant: 0 }));
 const sent = vi.hoisted(() => [] as { content: string }[]);
+const turn = vi.hoisted(() => ({ status: "idle" }));
 
 vi.mock("@/api/client", () => ({
   isNotFound: () => false,
@@ -32,7 +33,7 @@ vi.mock("@/api/client", () => ({
   listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "长对话", is_mine: true }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
-  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "长对话", status: "idle", is_mine: true })),
+  getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "长对话", status: turn.status, is_mine: true })),
   listAgentMessages: vi.fn(async () => [
     { id: "m1", session_id: "s1", role: "user", content: "第一句", payload: {}, error: null, created_at: "2026-10-08T00:00:00" },
     { id: "m2", session_id: "s1", role: "assistant", content: "第一句的回答", payload: { timeline: [{ type: "text", text: "第一句的回答" }] }, error: null, created_at: "2026-10-08T00:00:01" },
@@ -42,6 +43,7 @@ vi.mock("@/api/client", () => ({
   listAgentUsageEvents: vi.fn(async () => []),
   sendAgentMessage: vi.fn(async (id: string, body: { content: string }) => {
     sent.push(body);
+    turn.status = "running";
     return { id: "m4", session_id: id, role: "user", content: body.content, payload: {}, error: null, created_at: "2026-10-08T00:00:03" };
   }),
   fetchJobKinds: vi.fn(async () => ({
@@ -131,6 +133,7 @@ beforeEach(() => {
   renders.user = 0;
   renders.assistant = 0;
   sent.length = 0;
+  turn.status = "idle";
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
@@ -164,6 +167,14 @@ it("打字不重画已有的气泡;发送键跟着框里空不空走,发出去�
   await waitFor(() => expect(sent).toHaveLength(1));
   expect(sent[0].content).toBe("帮我看看第三个镜头");
   await waitFor(() => expect(box().value).toBe(""));
+});
+
+it("首次发出消息后立刻显示思考进度,不等 10 秒空闲轮询", async () => {
+  await mount();
+  fireEvent.change(box(), { target: { value: "先看一下" } });
+  fireEvent.click(screen.getByRole("button", { name: "chatSend" }));
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(await screen.findByText("chatThinking")).toBeTruthy();
 });
 
 it("对话页为别的事重渲(右侧智能体环境默认开着)也不重画气泡", async () => {
