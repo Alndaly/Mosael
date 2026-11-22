@@ -231,7 +231,8 @@ def test_scheduled_task_run_creates_job(tmp_path: Path) -> None:
 def test_clearing_finished_jobs_keeps_generation_history() -> None:
     """生成记录是创作历史:任务行没了(老版本的「清空已结束」真删过;保留清理不删生成记录指着的,ADR 0050),记录必须还在
     (job_id 置空),会话列表接口也仍要返回它。曾因 CASCADE 全部丢失。"""
-    from app.domain.jobs import create_job, delete_jobs
+    from app.domain.jobs import create_job
+    from app.domain.jobs.retention import delete_jobs
     from app.db.models import GenerationSession, User
 
     client = fresh_client()

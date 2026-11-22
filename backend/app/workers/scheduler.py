@@ -12,12 +12,12 @@ from app.core.db import SessionLocal
 from app.db.models import ScheduledTask, now
 from app.core.unit_of_work import unit_of_work
 from app.domain import deployment
-from app.domain.jobs import (
+from app.domain.jobs import expire_worker_leases
+from app.domain.jobs.retention import (
     DELETE_JOBS_BATCH,
     PRUNE_BATCH,
     delete_jobs,
     delete_task_events,
-    expire_worker_leases,
     expired_job_trees,
     prunable_task_events,
 )

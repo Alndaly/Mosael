@@ -13,9 +13,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.db.models import Job
+from app.db.models import Job, TaskEvent
 from app.domain import jobs as jobs_domain
 from tests.util import fresh_client
 
@@ -173,6 +174,42 @@ class Test回执在终态送出:
                 assert job.status == "succeeded"
         finally:
             jobs_domain._RECEIPT_DELIVERERS.pop("boom", None)
+
+    def test_一步失败只回滚这一步(self) -> None:
+        """一封回执写了一半就炸:它写的东西不能搭下一封的提交进库,下一封自己照常提交。"""
+        client = fresh_client()
+        ws = _workspace(client)
+        leaked: list[str] = []
+
+        def write_then_boom(db, job, receipt):
+            db.add(TaskEvent(job_id=job.id, type="half_delivered", payload={}))
+            db.flush()
+            raise RuntimeError("送到一半摔了")
+
+        def commit_its_own(db, job, receipt):
+            db.add(TaskEvent(job_id=job.id, type="delivered", payload={}))
+            db.commit()  # 和智能体回执目前的行为一致:回执自己提交。
+            leaked.append(job.id)
+
+        jobs_domain.register_receipt_deliverer("half", write_then_boom)
+        jobs_domain.register_receipt_deliverer("whole", commit_its_own)
+        try:
+            with SessionLocal() as db:
+                first = _job(db, ws, receipt={"kind": "half"})
+                second = _job(db, ws, receipt={"kind": "whole"})
+                db.commit()
+                first_id, second_id = first.id, second.id
+                first.status = "failed"
+                second.status = "succeeded"
+                db.commit()
+        finally:
+            jobs_domain._RECEIPT_DELIVERERS.pop("half", None)
+            jobs_domain._RECEIPT_DELIVERERS.pop("whole", None)
+
+        assert leaked == [second_id]
+        with SessionLocal() as db:
+            assert db.scalar(select(TaskEvent).where(TaskEvent.job_id == first_id, TaskEvent.type == "half_delivered")) is None
+            assert db.scalar(select(TaskEvent).where(TaskEvent.job_id == second_id, TaskEvent.type == "delivered")) is not None
 
     def test_不认识的回执种类静静跳过(self, spy) -> None:
         """老任务、或者某个模块没装配上 —— 都不该炸。"""

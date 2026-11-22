@@ -16,7 +16,7 @@ from sqlalchemy import event
 
 from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent, now
-from app.domain import jobs as jobs_bus
+from app.domain.jobs import retention as jobs_retention
 from app.workers import scheduler
 from app.core import unit_of_work
 from tests.util import fresh_client
@@ -93,7 +93,7 @@ def test_prune_runs_with_the_shared_selection(monkeypatch) -> None:
     ws = _workspace()
     recent = _job(ws, status="succeeded", events=8)
     with SessionLocal() as db:
-        assert len(jobs_bus.prunable_task_events(db)) == 3
-        assert jobs_bus.prune_task_events(db) == 3
+        assert len(jobs_retention.prunable_task_events(db)) == 3
+        assert jobs_retention.prune_task_events(db) == 3
         db.commit()
     assert _events(recent) == 5

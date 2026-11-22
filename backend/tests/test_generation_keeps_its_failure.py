@@ -12,7 +12,8 @@ from __future__ import annotations
 from app.core.db import SessionLocal
 from app.db.models import GenerationJob, Job
 from app.domain.generation.runner import GenerationRunError, _fail
-from app.domain.jobs import create_job, delete_jobs, reconcile_orphaned_jobs
+from app.domain.jobs import create_job, reconcile_orphaned_jobs
+from app.domain.jobs.retention import delete_jobs
 from tests.util import fresh_client
 
 

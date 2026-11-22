@@ -13,37 +13,27 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, event, func, inspect, select, union_all, update
+from sqlalchemy import event, inspect, select, update
 from sqlalchemy.orm import Session
 
 from app.core import abort
-from app.core.db import SessionLocal, Base
+from app.core.db import SessionLocal
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import LocalizedError, fragment, t, is_message_key, render_message, stored_param
 from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Job, TaskEvent, now as models_now
 from app.domain.jobs import catalog as job_catalog
+from app.domain.jobs.constants import (
+    CANCELLED,
+    was_cancelled,
+    CANCELLED_ERROR_KEY,
+    IN_FLIGHT_STATUSES,
+    RESTART_ERROR_KEY,
+    TERMINAL_STATUSES,
+)
 from app.domain.collaboration import record_activity
 
 logger = logging.getLogger(__name__)
-
-#: 被停下的任务落的状态(ADR 0049):人点了停止 / 取消,或者 Mosael 替人做的决定 —— 父任务被取消了、等它的那一轮停了。
-#: 它是终态,而且**进去就出不来**(见 _terminal_is_terminal)。租约过期、重启打断、父任务失败照旧是 failed:那不是谁的决定。
-CANCELLED = "cancelled"
-TERMINAL_STATUSES = ("succeeded", "failed", CANCELLED)
-#: 任务系统只有这两种非终态。轮询必须用正向集合命中 `(workspace_id, status, …)` 索引;
-#: `NOT IN TERMINAL_STATUSES` 会为了找零条活动任务扫描整个工作区的历史。
-IN_FLIGHT_STATUSES = ("queued", "running")
-#: 「被停下了」的那句话(「已取消」)。任务本身不再用它记取消(见 CANCELLED);还用它的:执行体发现自己没人要了时抛的
-#: JobCancelled、工作流节点事件里那一步「被停下」、生成记录上抄下的「已停止」(generation.runner.record_failure)。
-CANCELLED_ERROR_KEY = "jobErr_cancelled"
-#: 「后端重启时它还在跑、接不回来」的记法:failed + 这个 key(见 reconcile_orphaned_jobs)。
-RESTART_ERROR_KEY = "jobErr_backendRestart"
-
-
-def was_cancelled(job: Any) -> bool:
-    """这个任务是不是被停下的(状态是 `cancelled`,ADR 0049)。"""
-    return getattr(job, "status", None) == CANCELLED
 
 # 「当前正在执行的父任务」:之后 create_job 建出来的任务,都挂在它下面(ADR-0018)。
 #
@@ -593,26 +583,31 @@ def _after_jobs_settled(job_ids: list[str]) -> None:
             if job is None:
                 continue
             for name, listener in list(_SETTLE_LISTENERS.items()):
-                try:
-                    listener(fresh, job)
-                    # 这里是收拾动作的入口:每一个收拾动作单独提交,前一个不被后一个的失败带走。
-                    fresh.commit()
-                except Exception:
-                    # 收拾不成**不能**反过来改写任务的终态 —— 那一笔已经提交了。记下来。
-                    fresh.rollback()
-                    logger.warning("job %s [%s] 落终态后的收拾没做成 (%s)", job.id, job.kind, name, exc_info=True)
+                _run_settled_step(fresh, job, f"收拾 ({name})", functools.partial(listener, fresh, job))
             receipt = (job.payload or {}).get("receipt")
             if not isinstance(receipt, dict):
                 continue
-            deliver = _RECEIPT_DELIVERERS.get(str(receipt.get("kind") or ""))
+            kind = str(receipt.get("kind") or "")
+            deliver = _RECEIPT_DELIVERERS.get(kind)
             if deliver is None:
                 continue
-            try:
-                deliver(fresh, job, receipt)
-            except Exception:
-                # 回执送不到**不能**把任务弄失败 —— 活儿已经干完了,产物已经在库里。
-                # 吞掉但记下来:没有日志的话,「智能体不知道任务结束了」会查成一个玄学问题。
-                logger.warning("job %s [%s] 回执没送到 (%s)", job.id, job.kind, receipt.get("kind"), exc_info=True)
+            _run_settled_step(fresh, job, f"回执 ({kind})", functools.partial(deliver, fresh, job, receipt))
+
+
+def _run_settled_step(session: Session, job: Job, label: str, action: Callable[[], None]) -> None:
+    """终态之后的一步(收拾 / 回执):**自成事务**,成功就提交,失败就整步回滚。
+
+    两类回调走同一条契约,因为它们都可能写库:收拾会关浏览器会话、回执会往对话里落一条消息。
+    此前收拾提交、回执不提交,靠每个回执自己记得提交 —— 少提交一次就悄悄丢了;而一步失败后不回滚,
+    它写了一半的东西会搭下一封回执的提交进库。现在失败只回滚这一步,不影响任务终态,也不污染下一步。
+    """
+    try:
+        action()
+        session.commit()
+    except Exception:
+        # 终态那一笔已经提交了。这一步没做成不能反过来改写任务,也不能把半成品带进下一步。
+        session.rollback()
+        logger.warning("job %s [%s] 落终态后的%s没做成", job.id, job.kind, label, exc_info=True)
 
 
 def _elapsed(job: Job) -> str:
@@ -627,12 +622,6 @@ def _elapsed(job: Job) -> str:
     if seconds < 90:
         return f"{seconds:.1f}s"
     return f"{int(seconds) // 60}m{int(seconds) % 60:02d}s"
-# Retention (plan §12.3): active jobs keep every event; terminal jobs keep the
-# most recent few; terminal jobs older than the window lose all detail events.
-TERMINAL_KEEP_EVENTS = 5
-EVENT_RETENTION_DAYS = 30
-
-
 # ---------- 执行模式接缝 ----------
 #
 # 每种 job kind 声明由谁执行,两个适配器:
@@ -1288,138 +1277,3 @@ def report_job(
     db.commit()
     db.refresh(job)
     return job
-
-
-#: 一批最多删这么多条任务事件。删的时候攥着写锁:一批要短,别的写入(请求、任务进度)才等得过 busy_timeout。
-PRUNE_BATCH = 2000
-
-
-def prunable_task_events(db: Session, *, now: datetime | None = None) -> list[str]:
-    """按保留规则该删的任务事件 id。**只读** —— 不占写锁;删由 `delete_task_events` 分批做(见 workers/scheduler.prune_events)。
-
-    规则:进行中的任务全留;已结束的留最近 TERMINAL_KEEP_EVENTS 条(工作流在窗口内全留);结束超过 EVENT_RETENTION_DAYS
-    天的事件全删,任务那一行留着。
-
-    **判据是一条集合式查询,不把任务读成 ORM 对象。** 此前逐个任务查、逐个删,而 ORM 的 DELETE 每一次都把身份映射里
-    的全部对象过一遍(默认的 synchronize_session):一年的量(三万多个任务)清一次 67 秒,全程攥着写锁 ——
-    期间别的写入 5 秒后报 database is locked。
-    """
-    reference = now or models_now()  # utcnow() is deprecated; models_now is the same naive UTC
-    cutoff = reference - timedelta(days=EVENT_RETENTION_DAYS)
-    finished = Job.status.in_(TERMINAL_STATUSES)
-    expired = (
-        select(TaskEvent.id.label("id"))
-        .join(Job, Job.id == TaskEvent.job_id)
-        .where(finished, Job.updated_at < cutoff)
-    )
-    # 工作流历史靠 started/finished/failed 事件配对还原每一个节点。通用的“只留最后 5 条”
-    # 会稳定地裁掉前半程，让失败运行看起来只执行了最后一个报错节点。30 天窗口已经给存储
-    # 设了明确上限；窗口内保留完整工作流事件，才能让“执行历史”名副其实。
-    ranked = (
-        select(
-            TaskEvent.id.label("id"),
-            func.row_number()
-            .over(partition_by=TaskEvent.job_id, order_by=(TaskEvent.created_at.desc(), TaskEvent.id.desc()))
-            .label("newest_first"),
-        )
-        .join(Job, Job.id == TaskEvent.job_id)
-        .where(finished, Job.updated_at >= cutoff, Job.kind != "workflow")
-        .subquery()
-    )
-    trimmed = select(ranked.c.id).where(ranked.c.newest_first > TERMINAL_KEEP_EVENTS)
-    return list(db.scalars(union_all(expired, trimmed)))
-
-
-def delete_task_events(db: Session, ids: list[str]) -> int:
-    """按 id 删一批任务事件(不提交)。返回删了几条。"""
-    if not ids:
-        return 0
-    db.execute(delete(TaskEvent).where(TaskEvent.id.in_(ids)).execution_options(synchronize_session=False))
-    return len(ids)
-
-
-def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
-    """一次删完(一个事务)。给测试和小库用;调度线程走分批的 `workers/scheduler.prune_events`。"""
-    ids = prunable_task_events(db, now=now)
-    return sum(delete_task_events(db, ids[start:start + PRUNE_BATCH]) for start in range(0, len(ids), PRUNE_BATCH))
-
-
-@dataclass(frozen=True)
-class _JobRow:
-    """建保留清理那份计划时读的几列 —— 不把任务读成 ORM 对象(见 `expired_job_trees`)。"""
-
-    id: str
-    parent_job_id: str | None
-    status: str
-    updated_at: datetime
-
-
-def _referenced_job_ids(db: Session) -> set[str]:
-    """保留清理不删的任务:别处的记录还指着它(ADR 0050 D29)。
-
-    「别处的记录」按外键认,不在这里点名是哪几张表(任务域不认识发布单、生成记录这些):指着 `jobs.id`、任务删了只是**置空**的
-    那几列 —— 定时任务的运行记录、AI Studio 的生成记录、发布记录、用量事件。它们各自是一份「这一次是怎么跑的 / 花了多少」,
-    任务删了就只剩一个空的 job_id。级联删除的那几张(任务事件、运行产出全文)本来就是任务的一部分,跟着任务走,不算。
-    """
-
-    kept: set[str] = set()
-    for table in Base.metadata.tables.values():
-        for fk in table.foreign_keys:
-            if fk.column.table.name == Job.__tablename__ and fk.ondelete == "SET NULL":
-                column = fk.parent
-                kept |= set(db.scalars(select(column).where(column.is_not(None)).distinct()))
-    return kept
-
-
-def expired_job_trees(db: Session, *, cutoff: datetime) -> list[str]:
-    """保留清理要删的任务 id:结束在 `cutoff` 之前的**整棵树**(顶层任务连同它收纳的子任务)。只读 —— 删由 `delete_jobs`
-    分批做(见 workers/scheduler.prune_jobs)。这是任务行唯一被物理删除的地方(ADR 0050):任务中心的「清空已结束」只挪水位线。
-
-    一棵树整棵删或整棵留:
-    - 树里有一行还没结束(顶层结束了、它派生的代理转码还在跑),整棵留着 —— 删了父任务,还在跑的那个就成了孤儿;
-    - 树里有一行结束得不够久,整棵留着 —— 父任务的详情要能读到每一步;
-    - 树里有一行被别处的记录指着(`_referenced_job_ids`),整棵留着。
-
-    父任务早就不在了的行当作顶层(旧版本的「清空已结束」留下的孤儿)。全部署一起算:保留多久是这台部署的事(部署设置)。
-    """
-    rows = [
-        _JobRow(row.id, row.parent_job_id, row.status, row.updated_at)
-        for row in db.execute(select(Job.id, Job.parent_job_id, Job.status, Job.updated_at)).all()
-    ]
-    kept_ids = _referenced_job_ids(db)
-    present = {row.id for row in rows}
-    children: dict[str, list[_JobRow]] = {}
-    for row in rows:
-        if row.parent_job_id:
-            children.setdefault(row.parent_job_id, []).append(row)
-
-    def tree(root: _JobRow) -> list[_JobRow]:
-        nodes, frontier = [root], [root]
-        while frontier:
-            kids = children.get(frontier.pop().id, [])
-            nodes.extend(kids)
-            frontier.extend(kids)
-        return nodes
-
-    doomed: list[str] = []
-    for root in rows:
-        if root.parent_job_id in present:
-            continue
-        nodes = tree(root)
-        if any(node.status not in TERMINAL_STATUSES or node.updated_at >= cutoff or node.id in kept_ids for node in nodes):
-            continue
-        doomed.extend(node.id for node in nodes)
-    return doomed
-
-
-#: 保留清理一批删多少个任务。删的时候攥着写锁(连带它们的事件、运行产出、外键上的置空),一批要短。
-DELETE_JOBS_BATCH = 500
-
-
-def delete_jobs(db: Session, ids: list[str]) -> int:
-    """按 id 删一批任务连同它们的事件(不提交);运行产出由外键级联跟着走。返回删了几个。批的大小由调用方定(见 DELETE_JOBS_BATCH)。"""
-    if not ids:
-        return 0
-    db.execute(delete(TaskEvent).where(TaskEvent.job_id.in_(ids)).execution_options(synchronize_session=False))
-    db.execute(delete(Job).where(Job.id.in_(ids)).execution_options(synchronize_session=False))
-    return len(ids)
