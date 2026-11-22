@@ -20,7 +20,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage
 from app.domain.agent.plugin_schema import DESCRIPTION_CAP
-from app.domain.agent.tool_manifest import _CONFIRMATION_PROTOCOL, ON_DEMAND_TOOLS, agent_tool_name
+from app.domain.agent.tools.manifest import _CONFIRMATION_PROTOCOL, ON_DEMAND_TOOLS, agent_tool_name
 from tests import general_plugins
 from tests.util import fresh_client, second_client, settled_card, user_id
 

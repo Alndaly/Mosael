@@ -35,7 +35,7 @@ from app.api.deps import CurrentUser, DbSession, PresentedToken, Tx
 from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
-from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
+from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
 from app.domain.agent.autopilot import session_for_token
 from app.domain.agent.confirmable.plugin_tools import exposed_tool
 from app.domain.agent.errors import ConfirmationError

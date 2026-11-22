@@ -21,7 +21,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import PluginInvocation, ToolConfirmation, User
 from app.domain.agent.autopilot import wait_for_idle_autopilot
-from app.domain.agent.tool_manifest import agent_tool_name
+from app.domain.agent.tools.manifest import agent_tool_name
 from tests.test_plugins import install, packages
 
 ENTRY = """

@@ -1,6 +1,6 @@
 """智能体调插件工具:**有后果的**先开一张卡(见 domain/effects)。
 
-插件工具在智能体眼里是一个个一等公民(`plugin__<连接>__<工具>`,见 agent.tool_manifest)。此前它们
+插件工具在智能体眼里是一个个一等公民(`plugin__<连接>__<工具>`,见 agent.tools.manifest)。此前它们
 一律直接跑 —— 只读的该这样,可 Manim 的「自定义动画」是在本机执行一段模型写的 Python,对象存储的
 「上传」是把用户的文件传到别人的服务器上,这些和内置的 run_host_code / publish_asset 是同一类事,
 却不经任何人点头。现在每个插件工具在清单里声明后果(`effects`),智能体直接调用时:
@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import fragment
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_family, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
-from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
+from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.effects import needs_card, permission_for, warning_key
 from app.domain.agent.plugin_lookup import PluginLookupError, unknown_inputs
 from app.domain.plugins import tools as plugins_tools
@@ -45,7 +45,7 @@ def exposed_tool(db: Session, name: str, user_id: str | None) -> dict[str, Any] 
     """这个人**自己接的**可用连接里,展开名叫 `name` 的那个工具。
 
     按展开后的名字反查,不把名字劈开拼回 id —— 名字里的非法字符被折成了下划线,拼回去才会错
-    (见 agent.tool_manifest.agent_tool_name)。只在他自己的连接里找:否则一个名字对得上的调用
+    (见 agent.tools.manifest.agent_tool_name)。只在他自己的连接里找:否则一个名字对得上的调用
     就会拿着别人的第三方密钥跑起来。
     """
 

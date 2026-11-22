@@ -166,7 +166,7 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                 # 画板上只留生成那一个入口(boards.transforms 的 mirrored_by_generation)。
                 "mirrors": tool.get("mirrors") if tool["name"] in reported else None,
                 # 这个工具跑的是连接上的哪张工作流(运行时报出的工具才说得出,见 dynamic_tools.clean_workflow)——
-                # 智能体那一轮只发用得上的那几张(agent.tool_manifest)。
+                # 智能体那一轮只发用得上的那几张(agent.tools.manifest)。
                 "workflow": tool.get("workflow") if tool["name"] in reported else None,
                 # 哪样东西的哪个入口(ADR 0045;运行时报出的工具才说得出,见 plugins.groups),名字按此刻的语言挑好
                 "group": readable_group(tool.get("group")) if tool["name"] in reported else None,

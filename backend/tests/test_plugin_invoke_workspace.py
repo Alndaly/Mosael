@@ -114,7 +114,7 @@ def test_智能体那条路直接跑的工具也要工作区的写权限(panel):
     """插件页「试一下」要写权限(工具会读素材、产出文件入库)。智能体那条路上不开卡的工具(effects: none,
     比如把网盘文件收进素材库)此前只查「是不是成员」—— 一个只读成员用 MCP 直连带上工作区 id,就能往
     他只读的那个工作区里写素材。"""
-    from app.domain.agent.tool_manifest import agent_tool_name
+    from app.domain.agent.tools.manifest import agent_tool_name
 
     client, _, instance_id, _, user = panel
     with SessionLocal() as db:

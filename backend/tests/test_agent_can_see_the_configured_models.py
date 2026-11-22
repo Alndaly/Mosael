@@ -168,7 +168,7 @@ def test_它作为只读工具送达各运行时() -> None:
     `read_only` 为假则子智能体拿不到它 —— 而"替我查一下现在用的什么模型"正是该派子智能体的活。
     """
     from app.db.models import User
-    from app.domain.agent import tool_manifest
+    from app.domain.agent.tools import manifest as tool_manifest
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})

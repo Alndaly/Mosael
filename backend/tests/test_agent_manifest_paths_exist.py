@@ -47,7 +47,7 @@ def _exists(real: dict[str, set[str]], path: str, method: str) -> bool:
 
 
 def test_核心工具集声明的路径都存在() -> None:
-    from app.domain.agent.toolsets import CORE_TOOLSETS
+    from app.domain.agent.tools.toolsets import CORE_TOOLSETS
 
     real = _real_paths()
     missing = [

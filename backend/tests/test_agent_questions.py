@@ -155,7 +155,7 @@ class Test等作答这件事要写在清单上:
     """
 
     def test_清单上标着它要等用户作答(self) -> None:
-        from app.domain.agent import tool_manifest
+        from app.domain.agent.tools import manifest as tool_manifest
 
         spec = next(one for one in _specs() if one.name == "ask_user")
         assert spec.awaits_answer is True
@@ -167,7 +167,7 @@ class Test等作答这件事要写在清单上:
 
     def test_确认卡那份协议没被串到这里(self) -> None:
         """两段协议的结局不同(超时 = 没发生 / 超时 = 还没答),串了就会说反。"""
-        from app.domain.agent import tool_manifest
+        from app.domain.agent.tools import manifest as tool_manifest
 
         spec = next(one for one in _specs() if one.name == "ask_user")
         assert tool_manifest._CONFIRMATION_PROTOCOL not in spec.description
@@ -179,7 +179,7 @@ class Test等作答这件事要写在清单上:
 
 def _specs():
     from app.core.db import SessionLocal
-    from app.domain.agent.tool_manifest import agent_tool_specs
+    from app.domain.agent.tools.manifest import agent_tool_specs
 
     with SessionLocal() as db:
         return agent_tool_specs(db)

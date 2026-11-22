@@ -65,7 +65,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage
-from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
+from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.providers.model_limits import LOCAL_FALLBACK_CONTEXT_WINDOW
 from tests import comfyui_big_catalog, general_plugins
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants

@@ -126,7 +126,7 @@ def clean_workflow(raw: Any) -> dict[str, Any] | None:
 
         {"path": "<工作流库里的路径>", "name": "<到处同一个名字,可以按语言分>"}
 
-    宿主据此只把用得上的那几张发给智能体(画布上开着的、对话里用过或点过名的,见 agent.tool_manifest)。路径不对的整条不认 ——
+    宿主据此只把用得上的那几张发给智能体(画布上开着的、对话里用过或点过名的,见 agent.tools.manifest)。路径不对的整条不认 ——
     认错了的结果是一张工作流的工具在它开着的时候不发;名字不像样的只丢名字(点名认不出,画布和用过照旧认)。
     """
     if not isinstance(raw, dict):

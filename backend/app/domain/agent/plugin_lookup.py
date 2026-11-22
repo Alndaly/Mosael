@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.db.models import User
 from app.domain.agent.plugin_schema import compact_property
-from app.domain.agent.tool_manifest import agent_plugin_tools, agent_tool_name, session_kits
+from app.domain.agent.tools.manifest import agent_plugin_tools, agent_tool_name, session_kits
 from app.domain.effects import needs_card
 
 #: 按字找一次最多回多少个。

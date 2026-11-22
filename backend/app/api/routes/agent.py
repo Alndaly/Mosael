@@ -53,7 +53,7 @@ from app.api.schemas import (
 )
 from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
-from app.domain.agent.toolsets import list_agent_toolsets
+from app.domain.agent.tools.toolsets import list_agent_toolsets
 from app.domain.agent.sessions import readable_session, writable_session
 from app.domain.voices import agent_voice
 

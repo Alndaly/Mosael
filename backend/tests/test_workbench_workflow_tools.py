@@ -26,7 +26,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage
 from app.domain.agent.plugin_schema import ENUM_INLINE, SPEC_CAP, agent_parameters, compact_property
-from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
+from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.plugins.dynamic_tools import clean_workflow
 from tests import comfyui_big_catalog
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
@@ -295,7 +295,7 @@ def test_本会话始终允许按工作流记_同一张不再问_换一张照问
 def test_点名要点得像点名_两三个字的名字不被日常说话带进来(bench) -> None:
     """ADR 0044 修订之四:此前两个字就算点过名 —— 名叫「放大」「测试」「人像」的工作流,用户随口一句话就把它整份定义带进每一轮。
     现在四个字以上才按出现认;更短的要括起来(「图」《图》);纯英文数字的名字要整词。"""
-    from app.domain.agent.tool_manifest import _named
+    from app.domain.agent.tools.manifest import _named
 
     assert not _named("放大", "帮我把这张放大一点"), "两个字的名字被日常说话带进来了"
     assert _named("放大", "用「放大」那张跑一下")

@@ -12,7 +12,7 @@ get_confirmation 轮询」那套(那是**直连 MCP** 才成立的协议),模型
 from __future__ import annotations
 
 import mcp_server
-from app.domain.agent.tool_manifest import agent_tool_specs
+from app.domain.agent.tools.manifest import agent_tool_specs
 from tests.util import fresh_client
 
 

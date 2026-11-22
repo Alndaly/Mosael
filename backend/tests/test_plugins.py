@@ -493,7 +493,7 @@ def test_智能体函数名不超过_64_个字符_长名字的工具照样调得
     「函数名太长」拒掉(OpenAI 兼容接口、Gemini 都限 64),智能体连一句话都回不了。"""
     import re
 
-    from app.domain.agent.tool_manifest import MAX_AGENT_TOOL_NAME, agent_tool_name
+    from app.domain.agent.tools.manifest import MAX_AGENT_TOOL_NAME, agent_tool_name
 
     long_tool = "fetch_one_video_by_share_url_with_extras"
     manifest = {**SIMPLE, "tools": {"expose": "all", "declare": [

@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from app.core.db import SessionLocal
-from app.domain.agent.tool_manifest import agent_tool_specs
+from app.domain.agent.tools.manifest import agent_tool_specs
 from tests.fake_comfyui import PORTRAIT_ID, FakeComfyUI, comfyui_grants
 from tests.util import fresh_client, user_id
 
@@ -124,7 +124,7 @@ def test_工作台按路径找工作流工具_有表单的找到的是表单入�
 def test_智能体调表单入口的工具_确认卡上说出来自哪张工作流(connected) -> None:
     """确认卡是给人读的一句话:表单入口的工具,卡上写「来自 portrait」—— 名字分两层,这句话里两层都说(ADR 0045)。"""
     from app.core.security import mint_service_session
-    from app.domain.agent.tool_manifest import agent_tool_name
+    from app.domain.agent.tools.manifest import agent_tool_name
 
     client, _, instance_id = connected
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]

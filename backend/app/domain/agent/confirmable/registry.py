@@ -105,7 +105,7 @@ _TOOLS: dict[str, ConfirmableTool] = {}
 #: **一族**名字共用一份声明:前缀 → 给定具体名字造出那一条的函数。
 #:
 #: 为插件工具而设。插件工具在智能体眼里是一个个一等公民(`plugin__<连接>__<工具>`,见
-#: agent.tool_manifest),名字在运行时才知道,不能逐个登记;而卡又必须**按这个具体名字**开 ——
+#: agent.tools.manifest),名字在运行时才知道,不能逐个登记;而卡又必须**按这个具体名字**开 ——
 #: 「本会话始终允许」按工具名记(见 autopilot.decide),批准一次 Manim 渲染不该顺带放开往云盘传文件。
 #: 所以登记的是一族,查的时候按具体名字造出那一条(名字就是卡上的 `tool`,validate 由它认出是哪个工具)。
 _FAMILIES: dict[str, Callable[[str], ConfirmableTool]] = {}
