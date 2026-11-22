@@ -22,7 +22,7 @@ const api = vi.hoisted(() => {
     downloads,
     getModelLibrary: vi.fn(),
     modelDownloadsQuery: (workspaceId: string) => ({
-      queryKey: ["jobs", workspaceId, "model-downloads"],
+      queryKey: jobKeys.of(workspaceId, "model-downloads"),
       queryFn: async () => downloads,
     }),
     resolveModelLink: vi.fn(),
@@ -44,6 +44,7 @@ vi.mock("@/app/preferences", async () => {
 
 import { HintRegion, TooltipProvider } from "@/components/ui/tooltip";
 import { ModelDownload } from "./ModelDownload";
+import { jobKeys } from "@/api/queryKeys";
 
 const TARGET = { instanceId: "i1", instanceName: "ComfyUI · 本机", workspaceId: "w1", url: "http://127.0.0.1:8188" };
 const FOLDER = "checkpoints";

@@ -74,6 +74,7 @@ import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from
 import { cn } from "@/lib/utils";
 import type { ComposerChip } from "@/lib/composerChip";
 import type { AgentMessageQuote } from "@/api/domains/sessions";
+import { agentKeys } from "@/api/queryKeys";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 export type CanvasAgentMode = "docked" | "floating";
@@ -214,13 +215,13 @@ export function CanvasAgentChat({
     onSuccess: (_data, deletedId) => {
       setDeletingSession(null);
       current.forget([deletedId]);
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
+      void qc.invalidateQueries({ queryKey: agentKeys.sessions(workspaceId) });
     },
   });
 
   /** 会话详情:运行状态、水位(列表接口不带 —— 那要为每个会话各算一次,而界面只看当前这个)。 */
   const live = useQuery({
-    queryKey: ["agent-session", sessionId],
+    queryKey: agentKeys.session(sessionId),
     enabled: Boolean(sessionId),
     queryFn: () => getAgentSession(sessionId),
     refetchInterval: (query) => sessionPolling(query.state.data?.status === "running"),
@@ -233,7 +234,7 @@ export function CanvasAgentChat({
   const { streamText, streamTimeline, turnStartedAt, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null, running);
   //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)。
   const messages = useQuery({
-    queryKey: ["agent-messages", sessionId],
+    queryKey: agentKeys.messages(sessionId),
     enabled: Boolean(sessionId),
     queryFn: () => listAgentMessages(sessionId),
     refetchInterval: transcriptPolling(running),
@@ -268,14 +269,14 @@ export function CanvasAgentChat({
   // Same source of truth as the studio chat: the server knows what is still waiting.
   //: 空闲时也读:按了停止,扣下的那几条等人点「继续发送」(D63)。跑着时轮询,空闲时跟着会话状态重取(transcriptFollowsSession)。
   const queue = useQuery({
-    queryKey: ["agent-queue", sessionId],
+    queryKey: agentKeys.queue(sessionId),
     enabled: Boolean(sessionId),
     queryFn: () => listAgentQueue(sessionId),
     refetchInterval: running ? 1500 : false,
   });
   // 计费/用量:与对话页同源,按 agent_message_id 归到各条回复(见 MessageUsageFooter)。
   const usageEvents = useQuery({
-    queryKey: ["agent-usage-events", sessionId],
+    queryKey: agentKeys.usage(sessionId),
     enabled: Boolean(sessionId),
     queryFn: () => listAgentUsageEvents<AgentUsageEvent>(sessionId),
     refetchInterval: running ? 1200 : false,
@@ -332,8 +333,8 @@ export function CanvasAgentChat({
     onError: (error) => toast.error(`${t("agentCompactFailed")}:${(error as Error).message}`),
   });
   const refreshQueue = () => {
-    void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
-    void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
+    void qc.invalidateQueries({ queryKey: agentKeys.queue(sessionId) });
+    void qc.invalidateQueries({ queryKey: agentKeys.messages(sessionId) });
   };
   const cancelQueued = useMutation({
     mutationFn: (messageId: string) =>
@@ -413,7 +414,7 @@ export function CanvasAgentChat({
       }
       onSent?.();
       markAgentTurnStarted(qc, targetId);
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
+      void qc.invalidateQueries({ queryKey: agentKeys.sessions(workspaceId) });
       void attachStream(targetId);
     },
   });

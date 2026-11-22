@@ -20,7 +20,7 @@ import {
 //: 而这一块是素材详情里的一个附加动作,不该让那些用例整棵树挂掉。
 import { scrubOutcomeOf } from "@/api/domains/assets";
 import { errorText } from "@/api/errorMessage";
-import { scrubKeys } from "@/api/queryKeys";
+import { scrubKeys, jobKeys } from "@/api/queryKeys";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
@@ -162,7 +162,7 @@ export function useScrubRun(asset: Asset | null): ScrubRun {
         setStarted(job.id);
         setPending(false);
         void qc?.invalidateQueries({ queryKey: scrubKeys.pending(workspaceId) });
-        void qc?.invalidateQueries({ queryKey: ["jobs", workspaceId] });
+        void qc?.invalidateQueries({ queryKey: jobKeys.of(workspaceId) });
         onQueued?.(job);
       },
       (error: unknown) => {

@@ -20,7 +20,7 @@ vi.mock("@/api/client", () => ({
   getJob: vi.fn(),
   clearTaskCenter: vi.fn(),
   taskCenterQuery: (workspaceId: string) => ({
-    queryKey: ["jobs", workspaceId, "task-center", "shown"],
+    queryKey: jobKeys.of(workspaceId, "task-center", "shown"),
     queryFn: async () => ({ jobs: [], cleared_at: null }),
   }),
 }));
@@ -30,6 +30,7 @@ import { resetNativeViewAside, settleNativeViewAside } from "@/components/ui/nat
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resetNativeViewForTests } from "@/lib/nativeView";
 import { TaskCenter } from "./TaskCenter";
+import { jobKeys } from "@/api/queryKeys";
 
 function desktop(visible: boolean) {
   const setHostLayer = vi.fn(async (_claim: { id: string; kind: string; active: boolean }) => undefined);

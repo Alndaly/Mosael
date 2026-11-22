@@ -14,6 +14,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { jobKeys } from "@/api/queryKeys";
 
 const EXPORT_PARAMS_KEY = "mosael.export.params";
 type RememberedExportParams = Omit<ExportParams, "ai_label">;
@@ -89,7 +90,7 @@ export function ExportControl({ sequence, writeBlocked = null }: { sequence: Seq
       setJobId(job.id);
       setConfigOpen(false);
       // 让任务中心马上看见这条任务,而不是等它下一轮轮询。
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },
   });
   const job = useQuery({

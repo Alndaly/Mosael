@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getJob } from "@/api/client";
 import { jobSettled as isSettled } from "@/components/jobs/runStatus";
+import { jobKeys } from "@/api/queryKeys";
 
 /**
  * 盯着一个刚排上的任务,在它跑完之前让发起的按钮保持忙碌。
@@ -26,7 +27,7 @@ export function useWatchedJob() {
   const watch = React.useCallback(
     (id: string) => {
       setJobId(id);
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },
     [qc],
   );

@@ -15,6 +15,7 @@ import { useI18n } from "@/app/preferences";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { jobKeys } from "@/api/queryKeys";
 
 /** 面板的根:竖排、占满页签剩下的高(空态、在读的才能摆在正中)。 */
 export const PANEL_ROOT = "flex min-w-0 flex-1 flex-col";
@@ -124,7 +125,7 @@ export const jobDone = (job: Pick<Job, "status"> | undefined | null) => Boolean(
 /** 盯着一个后台任务(装节点包、下模型、跑一次):没完就每秒问一次,完了不再问。 */
 export function useJobWatch(jobId: string | null, initial?: Job) {
   return useQuery({
-    queryKey: ["jobs", "workbench", jobId],
+    queryKey: jobKeys.of("workbench", jobId),
     queryFn: () => getJob(jobId!),
     enabled: Boolean(jobId),
     initialData: initial,

@@ -50,7 +50,7 @@ vi.mock("@/api/client", () => ({
     kinds: [], fallback: { kind: "", label: "任务", announce: "always", affects: [], view: null, record_field: null },
   })),
   topLevelJobsQuery: (workspaceId: string) => ({
-    queryKey: ["jobs", workspaceId, "top-level"],
+    queryKey: jobKeys.of(workspaceId, "top-level"),
     queryFn: async () => [],
   }),
   getJob: vi.fn(),
@@ -125,6 +125,7 @@ vi.mock("@/features/agent/trace/TraceView", () => ({ TraceView: () => null, Trac
 vi.mock("@/features/agent/trace/traceModel", () => ({ buildTurns: () => [] }));
 
 import { ChatWorkspace } from "./ChatWorkspace";
+import { jobKeys } from "@/api/queryKeys";
 
 beforeEach(() => {
   window.localStorage.clear();

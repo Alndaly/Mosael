@@ -1,4 +1,4 @@
-import { assetKeys } from "@/api/queryKeys";
+import { assetKeys, jobKeys } from "@/api/queryKeys";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
@@ -451,7 +451,7 @@ export function GenerateWorkspace({
   const voicedOptions = useVoicedOptions();
   //: 挂着创作记录的任务(生成、语音、播客):按种类列 `tts` 会把字幕配音的几百句零件一起拉回来。
   const jobs = useQuery({
-    queryKey: ["jobs", workspace.id, "creation"],
+    queryKey: jobKeys.of(workspace.id, "creation"),
     queryFn: () => listJobs(workspace.id, { recorded: true }),
     refetchInterval: (query) =>
       query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1000 : false,
@@ -964,7 +964,7 @@ export function GenerateWorkspace({
       }
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId ?? undefined] });
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
     },
     onError: (error) => {
       if (!isConsentDeclined(error)) toast.error(errorText(error));
@@ -1028,7 +1028,7 @@ export function GenerateWorkspace({
   const stopGeneration = useMutation({
     mutationFn: (jobId: string) => cancelJob(jobId),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
     },
     onError: (error) => toast.error(t("genStopFailed"), { description: errorText(error) }),
@@ -1039,7 +1039,7 @@ export function GenerateWorkspace({
   const retrieveAgain = useMutation({
     mutationFn: (generationId: string) => retrieveGeneration(generationId),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
     },
     onError: (error) => toast.error(t("genRetrieveFailed"), { description: errorText(error) }),
@@ -1051,7 +1051,7 @@ export function GenerateWorkspace({
     mutationFn: (generationId: string) => repeatGeneration(generationId),
     onSuccess: () => {
       stick.scrollToBottom();
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id] });
+      void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id) });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     },
@@ -1454,7 +1454,7 @@ export function GenerateWorkspace({
             // 会话没了,它那些生成记录也不该继续挂在任务列表里。SessionList 只管会话这一层,
             // 连带要刷的东西由调用方说 —— 它不认识生成任务。
             void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id] });
-            void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
+            void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
           }}
         />
       </StudioIndex>}

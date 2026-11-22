@@ -85,12 +85,13 @@ vi.mock("@/api/client", async (importOriginal) => ({
   setResourceShared: vi.fn(),
   attestWorkflowRevision: h.attest,
   fetchJobKinds: async () => ({ kinds: [], fallback: { kind: "", label: "任务", announce: "never", affects: [], view: null, record_field: null } }),
-  topLevelJobsQuery: (workspaceId: string) => ({ queryKey: ["jobs", workspaceId, "top-level"], queryFn: async () => [] }),
+  topLevelJobsQuery: (workspaceId: string) => ({ queryKey: jobKeys.of(workspaceId, "top-level"), queryFn: async () => [] }),
 }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SchedulerView } from "./SchedulerView";
 import { readHint } from "@/test/hint";
+import { jobKeys } from "@/api/queryKeys";
 
 function mount(role = "owner") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

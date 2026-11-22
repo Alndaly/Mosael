@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { AgentSession } from "@/api/domains/sessions";
+import { agentKeys } from "@/api/queryKeys";
 
 /**
  * 用户刚让一轮跑起来(发送 / 回答选择卡 / 继续发送)之后的缓存更新。
@@ -13,10 +14,10 @@ import type { AgentSession } from "@/api/domains/sessions";
  * 用户消息、排队项)立即校正。发送、作答和语音输入都走这一份,别各写一遍。
  */
 export function markAgentTurnStarted(qc: QueryClient, sessionId: string): void {
-  qc.setQueryData<AgentSession>(["agent-session", sessionId], (current) =>
+  qc.setQueryData<AgentSession>(agentKeys.session(sessionId), (current) =>
     current ? { ...current, status: "running" } : current,
   );
-  void qc.invalidateQueries({ queryKey: ["agent-session", sessionId] });
-  void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
-  void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
+  void qc.invalidateQueries({ queryKey: agentKeys.session(sessionId) });
+  void qc.invalidateQueries({ queryKey: agentKeys.messages(sessionId) });
+  void qc.invalidateQueries({ queryKey: agentKeys.queue(sessionId) });
 }

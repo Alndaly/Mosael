@@ -40,13 +40,14 @@ vi.mock("@/api/client", () => ({
   getJob: vi.fn(),
   clearTaskCenter: vi.fn(),
   taskCenterQuery: (workspaceId: string) => ({
-    queryKey: ["jobs", workspaceId, "task-center", "shown"],
+    queryKey: jobKeys.of(workspaceId, "task-center", "shown"),
     queryFn: async () => ({ jobs: await h.apiMock(`/api/jobs/center?workspace_id=${workspaceId}`), cleared_at: null }),
   }),
 }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TaskCenter } from "./TaskCenter";
+import { jobKeys } from "@/api/queryKeys";
 
 function mount(initial: any[]) {
   // **一开始就得有活跃任务**:任务列表的轮询间隔是"有在跑的 1.5 秒、没有的 8 秒",
@@ -182,7 +183,7 @@ describe("每个任务最多说一次,历史任务不说", () => {
     const top = job("wf", "subtitle_dub", "running");
     const { client } = mount([top]);
     await spinning();
-    client.setQueryData(["jobs", "w1", "top-level"], [
+    client.setQueryData(jobKeys.of("w1", "top-level"), [
       top,
       job("child-1", "subtitle_dub", "succeeded", { parent_job_id: "wf" }),
       job("child-2", "url_import", "succeeded", { parent_job_id: "wf" }),
@@ -196,7 +197,7 @@ describe("每个任务最多说一次,历史任务不说", () => {
     await finish("subtitle_dub", "succeeded");
     await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
 
-    const key = ["jobs", "w1", "top-level"];
+    const key = jobKeys.of("w1", "top-level");
     client.setQueryData(key, []);
     await settle();
     client.setQueryData(key, [job("j1", "subtitle_dub", "succeeded")]);
@@ -211,7 +212,7 @@ describe("每个任务最多说一次,历史任务不说", () => {
   it("两次轮询之间建出来又做完的新任务,照样说", async () => {
     const { client } = mount([job("j1", "subtitle_dub", "running")]);
     await spinning();
-    client.setQueryData(["jobs", "w1", "task-center", "shown"], {
+    client.setQueryData(jobKeys.of("w1", "task-center", "shown"), {
       jobs: [job("fast", "url_import", "succeeded"), job("j1", "subtitle_dub", "running")],
       cleared_at: null,
     });

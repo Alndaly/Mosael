@@ -33,6 +33,7 @@ import { MediaPreviewGrid } from "@/components/app/asset-media";
 import { widgetOfTool, type AgentWidget } from "@/features/agent/turnOutputs";
 import { AgentWidgetFrame } from "@/features/agent/AgentWidgetFrame";
 import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
+import { agentKeys } from "@/api/queryKeys";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
 export type ToolCall = {
@@ -212,7 +213,7 @@ function DesktopReplay({ replay }: { replay: ReplayEvidence }) {
   const [broken, setBroken] = React.useState<Record<string, boolean>>({});
   const clear = useMutation({
     mutationFn: () => clearAgentReplay(String(replay.session_id)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-messages", replay.session_id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: agentKeys.messages(replay.session_id) }),
   });
   const image = (which: "before" | "after") => {
     const evidence = replay[which];

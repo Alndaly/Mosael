@@ -72,6 +72,7 @@ vi.mock("@/features/agent/QueuedMessages", () => ({ QueuedMessages: () => null }
 import { listAgentMessages } from "@/api/client";
 import { CanvasAgentChat } from "./CanvasAgentChat";
 import { adoptAgentSession } from "./sessionSelection";
+import { agentKeys } from "@/api/queryKeys";
 
 const NOTE_A = { kind: "note", id: "a" } as const;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -100,11 +101,11 @@ it("空闲时不拉消息;一轮收尾(updated_at 变了)重取一次;跑着的�
   backend.messages.push({ id: "m2", session_id: "s1", role: "user", content: "回执处理完了", payload: {}, error: null, created_at: "2026-10-08T00:01:00" });
   backend.session = { ...backend.session, updated_at: "2026-10-08T00:01:00" };
   // 空闲会话详情改为 10 秒对账;这里显式模拟一次外部刷新,不真睡 10 秒。
-  await client.invalidateQueries({ queryKey: ["agent-session", "s1"] });
+  await client.invalidateQueries({ queryKey: agentKeys.session("s1") });
   await screen.findByText("回执处理完了", undefined, { timeout: 4000 });
 
   backend.session = { ...backend.session, status: "running", updated_at: "2026-10-08T00:02:00" };
-  await client.invalidateQueries({ queryKey: ["agent-session", "s1"] });
+  await client.invalidateQueries({ queryKey: agentKeys.session("s1") });
   await waitFor(() => expect(fetched.mock.calls.length).toBeGreaterThan(atRest + 1), { timeout: 4000 });
   const whileRunning = fetched.mock.calls.length;
   await sleep(3400);

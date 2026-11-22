@@ -279,3 +279,36 @@ export const referenceKeys = {
     ["reference-library", "search", instanceId, collection, q, filters] as const,
   item: (instanceId: string, itemId: string) => ["reference-library", "item", instanceId, itemId] as const,
 };
+
+/**
+ * 智能体会话缓存:会话、消息、队列、会话列表、待答问题。
+ *
+ * 这些族此前散在 agent 与 ai-studio 十几个文件里手拼;同一个失效命令要在每处重复。
+ * 受 `queryKeys.test.ts` 的「工厂里的族不许再内联手写」棘轮约束。
+ */
+export const agentKeys = {
+  /** 会话列表:按工作区;带地方的是「这里接着哪一段」的那份。 */
+  sessions: (workspaceId: string, place?: string) =>
+    place === undefined
+      ? (["agent-sessions", workspaceId] as const)
+      : (["agent-sessions", workspaceId, place] as const),
+  session: (sessionId: string | undefined) => ["agent-session", sessionId] as const,
+  messages: (sessionId: string | undefined) => ["agent-messages", sessionId] as const,
+  queue: (sessionId: string | undefined) => ["agent-queue", sessionId] as const,
+  questions: (sessionId: string) => ["agent-questions", sessionId] as const,
+  usage: (sessionId: string | undefined) => ["agent-usage-events", sessionId] as const,
+  manifest: () => ["agent-manifest"] as const,
+  tools: () => ["agent-tools"] as const,
+  voice: () => ["agent-voice"] as const,
+};
+
+/**
+ * 任务中心 / 任务列表:根是 `jobs`。
+ *
+ * `of(...)` 保留调用方已有的分段(顶层、创作、模型下载、工作台……),但根只有一个出处。
+ * 失效一律用 `all()` 或 `of(workspaceId)` 这样的短前缀。
+ */
+export const jobKeys = {
+  all: () => ["jobs"] as const,
+  of: (...parts: Array<string | number | boolean | null | undefined>) => ["jobs", ...parts],
+};

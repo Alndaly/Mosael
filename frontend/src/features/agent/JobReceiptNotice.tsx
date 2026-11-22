@@ -15,6 +15,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { leaveNativeView } from "@/lib/nativeView";
 import { cn } from "@/lib/utils";
+import { jobKeys } from "@/api/queryKeys";
 
 /** 后台任务回执那条消息的形状(后端 host.JOB_RECEIPT_ROLE)。 */
 export const JOB_RECEIPT_ROLE = "job_receipt";
@@ -221,7 +222,7 @@ function ReceiptCard({
     mutationFn: () => retrieveGeneration(receipt.generation_id!),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["generation"] });
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },
   });
 

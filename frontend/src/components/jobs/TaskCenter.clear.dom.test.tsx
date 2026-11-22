@@ -32,13 +32,14 @@ vi.mock("@/api/client", () => ({
   getJob: vi.fn(),
   clearTaskCenter: h.clear,
   taskCenterQuery: (workspaceId: string, { cleared = false }: { cleared?: boolean } = {}) => ({
-    queryKey: ["jobs", workspaceId, "task-center", cleared ? "cleared" : "shown"],
+    queryKey: jobKeys.of(workspaceId, "task-center", cleared ? "cleared" : "shown"),
     queryFn: async () => (cleared ? h.cleared : h.panel),
   }),
 }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TaskCenter } from "./TaskCenter";
+import { jobKeys } from "@/api/queryKeys";
 
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

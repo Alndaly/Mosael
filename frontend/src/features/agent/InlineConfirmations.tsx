@@ -1,5 +1,5 @@
 import React from "react";
-import { confirmationKeys } from "@/api/queryKeys";
+import { confirmationKeys, agentKeys } from "@/api/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCheck, X } from "lucide-react";
 
@@ -191,7 +191,7 @@ export function ConfirmationsProvider({
         // 「工具」是卡说的 `allow_tool`:替别的插件工具开卡的 run_plugin_tool 记在它替调的那个名下(只放行同一个)。
         // **加一条,由后端合并**:此前在这里读出整份、加一条、写回去,两张卡几乎同时点,后写的盖掉先写的。
         await addSessionAllowance(sessionId, { tool, permission });
-        void qc.invalidateQueries({ queryKey: ["agent-session", sessionId] });
+        void qc.invalidateQueries({ queryKey: agentKeys.session(sessionId) });
       }
       return choice === "reject" ? rejectConfirmation(id) : approveConfirmation(id, choices);
     },

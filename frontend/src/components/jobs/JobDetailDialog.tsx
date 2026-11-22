@@ -19,6 +19,7 @@ import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
+import { jobKeys } from "@/api/queryKeys";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -83,7 +84,7 @@ export function JobDetailDialog({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["job", current?.id] });
       void qc.invalidateQueries({ queryKey: ["job-events", current?.id] });
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },
     onError: (error: Error) => toast.error(errorText(error)),
   });
@@ -92,7 +93,7 @@ export function JobDetailDialog({
     mutationFn: () => retryable?.(current!) ?? Promise.resolve(null),
     onSuccess: () => {
       toast.success(t("jobRetryQueued"));
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },
     onError: (error: Error) => toast.error(errorText(error)),
   });

@@ -1,5 +1,6 @@
 import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
+import { jobKeys } from "@/api/queryKeys";
 
 export type Job = components["schemas"]["JobOut"];
 /** 列表里的一行:除了 `result` 什么都有。做出了什么只在详情里给(`getJob`)—— 工作流的结果一条几百 KB,列表一处都不读它。 */
@@ -9,14 +10,14 @@ export type TaskEvent = components["schemas"]["TaskEventOut"];
 /**
  * 工作区的**顶层**任务(工作流派生的子任务收在父任务下,不平铺)—— 任务中心和定时任务页读的那一份。
  *
- * **键和取法写在一起,同一个键只有一种取法。** 此前任务中心拿 `["jobs", ws, "all"]` 拉顶层,
+ * **键和取法写在一起,同一个键只有一种取法。** 此前任务中心拿 `jobKeys.of(ws, "all")` 拉顶层,
  * 定时任务页拿同一个键拉**全部**(含子任务):两边轮流覆盖同一份缓存,谁最后拉,缓存里就是谁的
  * 那份。任务中心每换回一次含子任务的那份,就看见一批「新出现、已经完成」的转写、导出 —— 按
  * 「快任务两次轮询之间就做完了」那条规则,把它们当成刚做完的,挨个弹一遍「已完成」。
  */
 export function topLevelJobsQuery(workspaceId: string) {
   return {
-    queryKey: ["jobs", workspaceId, "top-level"] as const,
+    queryKey: jobKeys.of(workspaceId, "top-level"),
     queryFn: () => listJobs(workspaceId, { topLevel: true }),
   };
 }
@@ -32,7 +33,7 @@ export function topLevelJobsQuery(workspaceId: string) {
  */
 export function modelDownloadsQuery(workspaceId: string) {
   return {
-    queryKey: ["jobs", workspaceId, "model-downloads"] as const,
+    queryKey: jobKeys.of(workspaceId, "model-downloads"),
     queryFn: () => listJobs(workspaceId, { kind: "model_download" }),
   };
 }
@@ -80,7 +81,7 @@ export type JobCenter = components["schemas"]["JobCenterOut"];
  */
 export function taskCenterQuery(workspaceId: string, { cleared = false }: { cleared?: boolean } = {}) {
   return {
-    queryKey: ["jobs", workspaceId, "task-center", cleared ? "cleared" : "shown"] as const,
+    queryKey: jobKeys.of(workspaceId, "task-center", cleared ? "cleared" : "shown"),
     queryFn: () =>
       api<JobCenter>(`/api/jobs/center?workspace_id=${encodeURIComponent(workspaceId)}${cleared ? "&cleared=true" : ""}`),
   };

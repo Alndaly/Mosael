@@ -27,7 +27,7 @@ import {
   setAgentVoice,
 } from "@/api/client";
 import { isClonedVoice, spokenId, voiceRefOf } from "@/api/domains/speech";
-import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
+import { capabilityKeys, voiceKeys, agentKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -46,7 +46,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const { voiceDock, setVoiceDock } = usePreferences();
   const qc = useQueryClient();
-  const pref = useQuery({ queryKey: ["agent-voice"], queryFn: getAgentVoice });
+  const pref = useQuery({ queryKey: agentKeys.voice(), queryFn: getAgentVoice });
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
   //: 说话输入的候选就是「转写」那项能力的候选 —— 和「设置 → 能力提供方」同源,不是另一份目录。
   const capabilities = useQuery({ queryKey: capabilityKeys.choices(), queryFn: listCapabilityChoices, staleTime: 30_000 });
@@ -116,7 +116,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
       ),
     // 回包就是存下的那份:直接放进缓存,试听键不必等一次重新拉取才知道「屏幕上的已经存好了」。
     onSuccess: (saved) => {
-      qc.setQueryData(["agent-voice"], saved);
+      qc.setQueryData(agentKeys.voice(), saved);
       rememberSpeechMode(speechModeOf(saved));
     },
     onError: (error: Error) => {
@@ -138,7 +138,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
         speak_early: pref.data?.speak_early ?? true,
       }),
     onSuccess: (saved) => {
-      qc.setQueryData(["agent-voice"], saved);
+      qc.setQueryData(agentKeys.voice(), saved);
       rememberSpeechMode(speechModeOf(saved));
     },
     onError: (error: Error) => toast.error(error.message),
@@ -172,7 +172,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
         }),
       ),
     onSuccess: (saved) => {
-      qc.setQueryData(["agent-voice"], saved);
+      qc.setQueryData(agentKeys.voice(), saved);
       rememberSpeechMode(speechModeOf(saved));
     },
     onError: (error: Error) => toast.error(error.message),

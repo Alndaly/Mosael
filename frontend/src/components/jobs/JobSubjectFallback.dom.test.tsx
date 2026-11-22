@@ -54,11 +54,11 @@ vi.mock("@/api/client", () => ({
     },
   }),
   topLevelJobsQuery: (workspaceId: string) => ({
-    queryKey: ["jobs", workspaceId, "top-level"],
+    queryKey: jobKeys.of(workspaceId, "top-level"),
     queryFn: async () => h.jobs,
   }),
   taskCenterQuery: (workspaceId: string) => ({
-    queryKey: ["jobs", workspaceId, "task-center"],
+    queryKey: jobKeys.of(workspaceId, "task-center"),
     queryFn: async () => ({ jobs: h.jobs, cleared_at: null }),
   }),
   listJobEvents: vi.fn(async () => []),
@@ -82,6 +82,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { JobReceiptNotice } from "@/features/agent/JobReceiptNotice";
 import { SessionJobsCard } from "./SessionJobsCard";
 import { TaskCenter } from "./TaskCenter";
+import { jobKeys } from "@/api/queryKeys";
 
 const t = (key: string) => (messages as Record<string, Record<string, string>>)[h.locale][key];
 

@@ -23,6 +23,7 @@ import type { AgentMessageQuote } from "@/api/domains/sessions";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
+import { agentKeys } from "@/api/queryKeys";
 
 export type AgentMessage = components["schemas"]["AgentMessageOut"];
 
@@ -111,7 +112,7 @@ export function caughtReceiptsByMessage(
 function AgentOrigin({ sessionId }: { sessionId: string }) {
   const t = useI18n();
   const source = useQuery({
-    queryKey: ["agent-session", sessionId],
+    queryKey: agentKeys.session(sessionId),
     queryFn: () => api<{ title?: string }>(`/api/agent/sessions/${sessionId}`),
     staleTime: 60_000,
     retry: false,

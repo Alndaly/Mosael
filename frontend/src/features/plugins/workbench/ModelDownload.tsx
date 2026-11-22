@@ -32,6 +32,7 @@ import type { WorkbenchTarget } from "@/features/plugins/workbench/workbenchSess
 import { formatBytes, formatSpeed } from "@/lib/bytes";
 import { parseServerTime, relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { jobKeys } from "@/api/queryKeys";
 
 /** `job.result` 里的字节数(后端从插件的结构化 step 事件记下的):认不出就是 null,不当 0。 */
 function byteField(value: unknown): number | null {
@@ -158,7 +159,7 @@ export function ModelDownload({
   }, [mine]);
   //: 列表里不带 `result`(字节 / 速度只在详情里):盯着的那条还在跑时再问一次详情。
   const detail = useQuery({
-    queryKey: ["jobs", "workbench", latest?.id],
+    queryKey: jobKeys.of("workbench", latest?.id),
     queryFn: () => getJob(latest!.id),
     enabled: Boolean(latest && !jobDone(latest)),
     refetchInterval: 1500,
@@ -273,7 +274,7 @@ export function ModelDownload({
       seenActive.current = job.id;
       //: **把 POST 回来的任务写进列表缓存,不存 id** —— 后面的状态、取消、续传都从这份缓存派生。
       writeJob(job);
-      qc.setQueryData(["jobs", "workbench", job.id], job);
+      qc.setQueryData(jobKeys.of("workbench", job.id), job);
     },
   });
   //: 取消没成功时那一句该说什么。**任务在请求到达前刚好结束不是取消失败** —— 那一下本来也没有可取消的东西,
@@ -285,7 +286,7 @@ export function ModelDownload({
       setCancelNote("");
       //: 取消接口回的就是取消后的那一条:直接写进这份缓存(列表 + 详情),不必等下一轮轮询。
       writeJob(stopped);
-      qc.setQueryData(["jobs", "workbench", stopped.id], stopped);
+      qc.setQueryData(jobKeys.of("workbench", stopped.id), stopped);
       //: 取消**不删**半截(断点续传):这一行下面马上要问它还剩多少,好让人「继续下载」。
       void qc.invalidateQueries({ queryKey: ["model-partial", target.instanceId] });
     },
@@ -293,7 +294,7 @@ export function ModelDownload({
       try {
         const fresh = await getJob(jobId);
         writeJob(fresh);
-        qc.setQueryData(["jobs", "workbench", jobId], fresh);
+        qc.setQueryData(jobKeys.of("workbench", jobId), fresh);
         setCancelNote(jobDone(fresh) ? "ended" : "failed");
       } catch {
         //: 连它现在是什么都读不回来:只能照实说这次取消没成。

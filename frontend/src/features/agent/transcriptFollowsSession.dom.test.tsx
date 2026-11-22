@@ -14,6 +14,7 @@ import { render } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
 import { sessionPolling, useTranscriptFollowsSession } from "./transcriptFollowsSession";
+import { agentKeys } from "@/api/queryKeys";
 
 it("会话详情只在运行时高频轮询,空闲降频但不停止", () => {
   expect(sessionPolling(true)).toBe(1200);
@@ -41,6 +42,6 @@ it("一轮收尾(running → idle):消息和排队的那几条一起重取;刚�
     </QueryClientProvider>,
   );
   const keys = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
-  expect(keys).toContain(JSON.stringify(["agent-messages", "s1"]));
-  expect(keys).toContain(JSON.stringify(["agent-queue", "s1"]));
+  expect(keys).toContain(JSON.stringify(agentKeys.messages("s1")));
+  expect(keys).toContain(JSON.stringify(agentKeys.queue("s1")));
 });

@@ -4,7 +4,7 @@ import { useCreateWorkspace, useWorkspaces } from "@/lib/workspaces";
 import { FirstWorkspace } from "@/app/FirstWorkspace";
 import { useJoinFromInvite } from "@/app/useJoinFromInvite";
 import { JOBS_CREATED_EVENT } from "@/api/client";
-import { assetKeys, projectKeys } from "@/api/queryKeys";
+import { assetKeys, projectKeys, jobKeys } from "@/api/queryKeys";
 import React from "react";
 import {
   QueryClientProvider,
@@ -117,7 +117,7 @@ export function App() {
   // 哪个请求建了任务,所有任务列表(任务中心、AI 工作台、转写面板……)都立刻刷新 ——
   // 它们的键都以 "jobs" 开头。见 api/transport 的 JOBS_CREATED_EVENT。
   React.useEffect(() => {
-    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: jobKeys.all() });
     window.addEventListener(JOBS_CREATED_EVENT, refresh);
     return () => window.removeEventListener(JOBS_CREATED_EVENT, refresh);
   }, []);

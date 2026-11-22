@@ -80,6 +80,7 @@ import { useSessionListOpen } from "@/features/ai-studio/useSessionListOpen";
 import { InspectorSubagentList, SubagentBreadcrumb, SubagentSessionView, collectSubagentRuns, type SubagentRun } from "@/features/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+import { agentKeys } from "@/api/queryKeys";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -183,12 +184,12 @@ export function ChatWorkspace({
   // 附件三种入口(选文件 / 拖放 / 粘贴)与工作流助手共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspace.id);
   const manifest = useQuery({
-    queryKey: ["agent-manifest"],
+    queryKey: agentKeys.manifest(),
     queryFn: () => agentManifest<AgentManifest>(),
     staleTime: 60_000,
   });
   const tools = useQuery({
-    queryKey: ["agent-tools"],
+    queryKey: agentKeys.tools(),
     queryFn: () => listAgentTools<AgentTool>(),
     staleTime: 60_000,
   });
@@ -199,7 +200,7 @@ export function ChatWorkspace({
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
 
   const session = useQuery({
-    queryKey: ["agent-session", activeSession?.id],
+    queryKey: agentKeys.session(activeSession?.id),
     enabled: Boolean(activeSession),
     queryFn: () => getAgentSession(activeSession!.id),
     refetchInterval: (query) => sessionPolling(query.state.data?.status === "running"),
@@ -212,7 +213,7 @@ export function ChatWorkspace({
   //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)—— 此前每 1.2 秒
   //: 无条件整段重拉,一段带着工具结果的长对话就是每秒几 MB。
   const messages = useQuery({
-    queryKey: ["agent-messages", activeSession?.id],
+    queryKey: agentKeys.messages(activeSession?.id),
     enabled: Boolean(activeSession),
     queryFn: () => listAgentMessages(activeSession!.id),
     refetchInterval: transcriptPolling(running),
@@ -235,7 +236,7 @@ export function ChatWorkspace({
   
   
   const usageEvents = useQuery({
-    queryKey: ["agent-usage-events", activeSession?.id],
+    queryKey: agentKeys.usage(activeSession?.id),
     enabled: Boolean(activeSession),
     queryFn: () => listAgentUsageEvents<AgentUsageEvent>(activeSession!.id),
     refetchInterval: running ? 1200 : false,
@@ -246,15 +247,15 @@ export function ChatWorkspace({
   //: **空闲时也要读**:按了停止,排着的那几条被扣下(D63),停在排队条里等人点「继续发送」—— 那时没有一轮在跑。
   //: 跑着的时候轮询;空闲时跟着会话的状态 / updated_at 重取(见 transcriptFollowsSession),和消息同一个节拍。
   const queue = useQuery({
-    queryKey: ["agent-queue", activeSession?.id],
+    queryKey: agentKeys.queue(activeSession?.id),
     enabled: Boolean(activeSession),
     queryFn: () => listAgentQueue(activeSession!.id),
     refetchInterval: running ? 1500 : false,
   });
   const queuedIds = React.useMemo(() => new Set((queue.data ?? []).map((message) => message.id)), [queue.data]);
   const refreshQueue = () => {
-    void qc.invalidateQueries({ queryKey: ["agent-queue", activeSession?.id] });
-    void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
+    void qc.invalidateQueries({ queryKey: agentKeys.queue(activeSession?.id) });
+    void qc.invalidateQueries({ queryKey: agentKeys.messages(activeSession?.id) });
   };
   const cancelQueued = useMutation({
     mutationFn: (messageId: string) =>
@@ -266,7 +267,7 @@ export function ChatWorkspace({
     mutationFn: (messageId: string) => resumeQueuedMessage(String(activeSession?.id), messageId),
     onSuccess: () => {
       refreshQueue();
-      void qc.invalidateQueries({ queryKey: ["agent-session", activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: agentKeys.session(activeSession?.id) });
     },
   });
   const steerQueued = useMutation({
@@ -307,7 +308,7 @@ export function ChatWorkspace({
       // 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了(画布助手一直是这样)。
       attach.clear();
       markAgentTurnStarted(qc, targetId);
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
+      void qc.invalidateQueries({ queryKey: agentKeys.sessions(workspace.id) });
       void attachStream(targetId);
     },
   });
@@ -406,7 +407,7 @@ export function ChatWorkspace({
     // 此前两种情况都只是 loading 闪一下就没了,用户无从判断是没生效、还是不需要。
     onSuccess: (result) => {
       void messages.refetch();
-      void qc.invalidateQueries({ queryKey: ["agent-session", activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: agentKeys.session(activeSession?.id) });
       if (!result?.compaction) toast.message(t("agentCompactNothing"));
     },
     onError: (error) => toast.error(`${t("agentCompactFailed")}:${(error as Error).message}`),

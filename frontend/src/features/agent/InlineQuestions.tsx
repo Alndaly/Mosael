@@ -9,6 +9,7 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { agentKeys } from "@/api/queryKeys";
 
 type Question = AgentQuestion;
 
@@ -26,7 +27,7 @@ type Question = AgentQuestion;
 export function InlineQuestions({ sessionId, readOnly = false }: { sessionId: string; readOnly?: boolean }) {
   const qc = useQueryClient();
   const pending = useQuery({
-    queryKey: ["agent-questions", sessionId],
+    queryKey: agentKeys.questions(sessionId),
     queryFn: () => listAgentQuestions(sessionId),
     // 模型问完之后卡片要尽快出现 —— 它此刻正阻塞着等答案。
     refetchInterval: 2000,
@@ -44,7 +45,7 @@ export function InlineQuestions({ sessionId, readOnly = false }: { sessionId: st
           onDone={() => {
             // 作答会把 idle 的会话直接开成一轮;只刷问题列表会让进度等 10 秒的空闲轮询。
             markAgentTurnStarted(qc, sessionId);
-            void qc.invalidateQueries({ queryKey: ["agent-questions", sessionId] });
+            void qc.invalidateQueries({ queryKey: agentKeys.questions(sessionId) });
           }}
         />
       ))}

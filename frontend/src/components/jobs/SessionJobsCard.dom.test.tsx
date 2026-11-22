@@ -36,7 +36,7 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("@/api/client", () => ({
   api: vi.fn(),
   topLevelJobsQuery: (workspaceId: string) => ({
-    queryKey: ["jobs", workspaceId, "top-level"],
+    queryKey: jobKeys.of(workspaceId, "top-level"),
     queryFn: async () => h.jobs,
   }),
   cancelJob: h.cancelJob,
@@ -58,6 +58,7 @@ vi.mock("@/components/jobs/JobDetailDialog", () => ({
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PlanCard } from "@/features/agent/PlanCard";
 import { SessionJobsCard } from "./SessionJobsCard";
+import { jobKeys } from "@/api/queryKeys";
 
 //: 和后端交回的一样:UTC、**不带时区标记**(`2026-11-15 11:39:52.518043`)。此前夹具用 `toISOString()`(带 Z),
 //: 计时那一处直接 `Date.parse` 在测试里是对的,真机上东八区多出 8 小时(「已跑 480m」)。

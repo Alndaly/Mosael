@@ -24,6 +24,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { jobSettled } from "@/components/jobs/runStatus";
+import { jobKeys } from "@/api/queryKeys";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -67,7 +68,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     mutationFn: () => clearTaskCenter(workspaceId),
     onSuccess: () => {
       toast.success(t("clearEndedDone"));
-      void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "task-center"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.of(workspaceId, "task-center") });
     },
     onError: (error: Error) => toast.error(error.message),
   });

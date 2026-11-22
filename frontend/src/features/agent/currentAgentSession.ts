@@ -11,7 +11,7 @@
  * (`ensureAgentSession`)才建,家就是这一处;草稿上先选好的模型、思考档位……一起带上。所以打开智能体、点「新对话」、对浮标
  * 说话之前,都不会留下空对话(维护者 2026-10-07 的修订:每次初次打开智能体是一段未创建的新对话)。
  *
- * 选过的那段家在别处也照样是它(在这里接着聊,拍板 4):读它自己的 `["agent-session", id]`(面板本来就在轮询它),不依赖
+ * 选过的那段家在别处也照样是它(在这里接着聊,拍板 4):读它自己的 `agentKeys.session(id)`(面板本来就在轮询它),不依赖
  * 「家在这里的」那份清单。它被删了(404)就放下选择,回到草稿。
  *
  * **同事共享来的对话只能看**(后端 domain/agent/sessions 的写闸,`is_mine` 是它给的答案)。「能不能往里写」只在这里判一次
@@ -34,6 +34,7 @@ import {
 import type { components } from "@/api/generated/schema";
 import { STUDIO_PLACE, placeKey, placePayload, samePlace, type AgentPlace } from "@/features/agent/places";
 import { gotoAiChat } from "@/lib/aiStudioLink";
+import { agentKeys } from "@/api/queryKeys";
 import {
   type AgentDraftSettings,
   adoptAgentSession,
@@ -56,12 +57,12 @@ const EMPTY: AgentSession[] = [];
 
 /** 整个工作区的对话(AI Studio 的列表、面板下拉里的「其他对话」)。各处的清单都以它为前缀 —— 失效它就一起失效。 */
 export function agentSessionsQueryKey(workspaceId: string) {
-  return ["agent-sessions", workspaceId] as const;
+  return agentKeys.sessions(workspaceId);
 }
 
 /** 家在这一处的对话(面板下拉里的「这里的对话」)。 */
 export function agentSessionsHereKey(workspaceId: string, place: AgentPlace) {
-  return ["agent-sessions", workspaceId, placeKey(place)] as const;
+  return agentKeys.sessions(workspaceId, placeKey(place));
 }
 
 /** 同事共享来、只能看的对话。只认后端明说「不是你的」—— 没说的(刚建、还没回来)当作自己的。 */
@@ -105,7 +106,7 @@ async function createHere(qc: QueryClient, workspaceId: string, place: AgentPlac
   });
   clearDraftSettings(workspaceId, place);
   // 先把它放进清单和详情的缓存再选中:等重拉的那一下里新 id 找不到,这一处会闪回草稿 —— 看起来就像那句话没发出去。
-  qc.setQueryData(["agent-session", created.id], created);
+  qc.setQueryData(agentKeys.session(created.id), created);
   qc.setQueryData<AgentSession[]>(agentSessionsHereKey(workspaceId, place), (old) => [
     created,
     ...(old ?? []).filter((item) => item.id !== created.id),
@@ -130,11 +131,11 @@ export function ensureAgentSession(qc: QueryClient, workspaceId: string, place: 
   const job = (async () => {
     const choice = readChoice(workspaceId, place);
     if (choice) {
-      let session = qc.getQueryData<AgentSession>(["agent-session", choice]) ?? null;
+      let session = qc.getQueryData<AgentSession>(agentKeys.session(choice)) ?? null;
       if (!session) {
         try {
           session = await qc.fetchQuery({
-            queryKey: ["agent-session", choice],
+            queryKey: agentKeys.session(choice),
             queryFn: () => getAgentSession(choice),
             staleTime: 0,
           });
@@ -183,7 +184,7 @@ function forgetSessions(qc: QueryClient, workspaceId: string, ids: readonly stri
   );
   forgetChoices(workspaceId, ids);
   for (const id of ids) {
-    for (const family of ["agent-messages", "agent-session", "agent-queue"]) {
+    for (const family of ["agent-session", "agent-messages", "agent-queue"]) {
       qc.removeQueries({ queryKey: [family, id] });
     }
   }
@@ -237,7 +238,7 @@ export function useCurrentAgentSession(
   });
   //: 选着的那段读它自己的详情 —— 家在别处的(在这里接着聊的)不在「这里的对话」里。和面板的 `live` 同一个键,不多打请求。
   const chosen = useQuery({
-    queryKey: ["agent-session", choice],
+    queryKey: agentKeys.session(choice),
     queryFn: () => getAgentSession(choice),
     enabled: Boolean(choice),
     retry: (count, error) => !isNotFound(error) && count < 2,
@@ -313,7 +314,7 @@ export function useUpdateAgentSession(workspaceId: string, place: AgentPlace, se
     },
     onSuccess: (sessionId) => {
       if (!sessionId) return;
-      void qc.invalidateQueries({ queryKey: ["agent-session", sessionId] });
+      void qc.invalidateQueries({ queryKey: agentKeys.session(sessionId) });
       void qc.invalidateQueries({ queryKey: agentSessionsQueryKey(workspaceId) });
     },
   });

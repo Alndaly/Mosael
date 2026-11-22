@@ -23,6 +23,7 @@ import { type RunRefusal, runRefusalOf } from "@/features/workflows/runRefusal";
 import { runEventIsTerminal, stepsByNode } from "@/features/workflows/runSteps";
 import type { ScopePath } from "@/features/workflows/scope";
 import type { WorkflowSaveState } from "@/features/workflows/useWorkflowSave";
+import { jobKeys } from "@/api/queryKeys";
 
 /**
  * 编辑器里「运行」的那一半:画布绑着哪一次运行、正在看哪一次、它的每一步、运行 / 停止,
@@ -110,7 +111,7 @@ export function useWorkflowRun({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
       void qc.invalidateQueries({ queryKey: ["job-events", runJobId] });
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
+      void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },
     onError: (error: Error) => toast.error(errorText(error)),
   });

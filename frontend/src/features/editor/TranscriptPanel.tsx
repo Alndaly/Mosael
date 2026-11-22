@@ -7,7 +7,7 @@ import { AudioLines, BookPlus, Captions, ListChecks, Loader2, MessageSquareText,
 
 import { getAssetTranscript, getJob, listAsrModels, listJobs, transcribeAsset, type Clip, type Sequence } from "@/api/client";
 import { jobSettled } from "@/components/jobs/runStatus";
-import { transcriptKeys } from "@/api/queryKeys";
+import { transcriptKeys, jobKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -489,7 +489,7 @@ export function TranscriptPanel({
   //
   // 状态的真相在服务端(它有这些任务),所以挂载时去认领:这个工作区里还在跑的转写任务。
   const runningTranscribes = useQuery({
-    queryKey: ["jobs", sequence.workspace_id, "transcribe"],
+    queryKey: jobKeys.of(sequence.workspace_id, "transcribe"),
     queryFn: () => listJobs(sequence.workspace_id, { kind: "transcribe" }),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((job) => job.status === "running" || job.status === "queued") ? 1500 : false,
@@ -511,7 +511,7 @@ export function TranscriptPanel({
    * "是不是没点上"的话。任务的真相在后端。
    */
   const transcribeJobs = useQuery({
-    queryKey: ["jobs", sequence.workspace_id, "transcribe"],
+    queryKey: jobKeys.of(sequence.workspace_id, "transcribe"),
     queryFn: () => listJobs(sequence.workspace_id, { kind: "transcribe" }),
     // **一直轮询,不是"有在跑才轮询"。** 后者是个死结:挂载那一刻没有在跑的任务,它就再也不查了,
     // 而"转写是在面板挂载之后才开始的"恰恰是最常见的情形 —— 从素材页发起,或者切一下标签页

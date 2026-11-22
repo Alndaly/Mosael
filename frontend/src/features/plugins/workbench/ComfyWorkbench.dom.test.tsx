@@ -43,7 +43,7 @@ const api = vi.hoisted(() => ({
   getJob: vi.fn(),
   getAsset: vi.fn(),
   cancelJob: vi.fn(),
-  modelDownloadsQuery: (workspaceId: string) => ({ queryKey: ["jobs", workspaceId, "model-downloads"], queryFn: async () => [] }),
+  modelDownloadsQuery: (workspaceId: string) => ({ queryKey: jobKeys.of(workspaceId, "model-downloads"), queryFn: async () => [] }),
   assetThumbnailUrl: (id: string) => `thumb://${id}`,
   assetPreviewUrl: (id: string) => `preview://${id}`,
   assetFileUrl: (id: string) => `file://${id}`,
@@ -92,6 +92,7 @@ import { FormsLockedError, markOnlyResult } from "./canvasMarks";
 import { ComfyWorkbench } from "./ComfyWorkbench";
 import { RECHECK_DELAY_MS } from "./MissingPanel";
 import { openWorkbench, resetWorkbench } from "./workbenchSession";
+import { jobKeys } from "@/api/queryKeys";
 
 const TARGET = { instanceId: "i1", instanceName: "ComfyUI · 192.168.3.15", workspaceId: "w1", url: "http://192.168.3.15:8188" };
 const CAPS = { selection: true, setWidget: true, refreshCombos: true, export: true, dirty: true, save: true, events: true, marks: true,

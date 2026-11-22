@@ -1,7 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { FLOATING_SURFACE } from "@/components/ui/floating";
-import { confirmationKeys } from "@/api/queryKeys";
+import { confirmationKeys, agentKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronUp, CornerUpLeft, ShieldAlert, X } from "lucide-react";
@@ -194,7 +194,7 @@ export function ConfirmationCenter({
 function CardHome({ sessionId, goHome }: { sessionId: string; goHome?: (session: AgentSession) => void | Promise<void> }) {
   const t = useI18n();
   //: 和面板同一个键:那段对话开着时这份早就在缓存里。
-  const session = useQuery({ queryKey: ["agent-session", sessionId], queryFn: () => getAgentSession(sessionId) });
+  const session = useQuery({ queryKey: agentKeys.session(sessionId), queryFn: () => getAgentSession(sessionId) });
   if (!session.data) return null;
   const home = session.data;
   return (

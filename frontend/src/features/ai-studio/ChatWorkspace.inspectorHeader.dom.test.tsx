@@ -61,7 +61,7 @@ vi.mock("@/api/client", () => ({
   fetchJobKinds: vi.fn(async () => ({
     kinds: [], fallback: { kind: "", label: "任务", announce: "always", affects: [], view: null, record_field: null },
   })),
-  topLevelJobsQuery: () => ({ queryKey: ["jobs", "w1", "top-level"], queryFn: async () => [] }),
+  topLevelJobsQuery: () => ({ queryKey: jobKeys.of("w1", "top-level"), queryFn: async () => [] }),
   getJob: vi.fn(),
   cancelJob: vi.fn(),
   listJobEvents: vi.fn(async () => []),
@@ -99,6 +99,7 @@ vi.mock("@/features/agent/trace/TraceView", () => ({ TraceView: () => null, Trac
 vi.mock("@/features/agent/trace/traceModel", () => ({ buildTurns: () => [] }));
 
 import { ChatWorkspace } from "./ChatWorkspace";
+import { jobKeys } from "@/api/queryKeys";
 
 /** 工具栏量出来的高度。`0` 只该出现在"它已经离开文档"的时候 —— 浏览器就是这么报的。 */
 const metrics = { toolbar: 56 };

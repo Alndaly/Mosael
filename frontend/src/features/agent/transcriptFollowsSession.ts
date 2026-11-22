@@ -1,5 +1,6 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { agentKeys } from "@/api/queryKeys";
 
 /**
  * 对话的消息**只在一轮跑着的时候轮询**;空闲时跟着会话本身动(智能体那一路 AGENT-11 第一步)。
@@ -38,8 +39,8 @@ export function useTranscriptFollowsSession(
     seen.current = { id: sessionId, mark };
     //: 刚换到这一段(或刚挂上):消息查询自己会取,不必再来一次。
     if (last.id !== sessionId || last.mark === mark) return;
-    void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
+    void qc.invalidateQueries({ queryKey: agentKeys.messages(sessionId) });
     //: 排着的那几条也只会因为一轮而变(轮到了、被停止扣下),和消息同一个节拍重取(D63)。
-    void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
+    void qc.invalidateQueries({ queryKey: agentKeys.queue(sessionId) });
   }, [qc, sessionId, mark]);
 }

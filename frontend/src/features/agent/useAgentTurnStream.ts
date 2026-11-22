@@ -6,6 +6,7 @@ import type { components } from "@/api/generated/schema";
 import { readSseData } from "@/lib/sse";
 import { parseServerTime } from "@/lib/time";
 import type { AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { agentKeys } from "@/api/queryKeys";
 
 /**
  * 「连流 → 攒状态 → 收尾失效」这一段状态机 —— **只有这一份**。
@@ -113,8 +114,8 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
           if (segment !== segmentRef.current) {
             segmentRef.current = segment;
             // steer 被模型消费：上一段和插话已经落库，立即取回，避免实时气泡清空的空窗。
-            void qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] });
-            void qc.invalidateQueries({ queryKey: ["agent-queue", targetSessionId] });
+            void qc.invalidateQueries({ queryKey: agentKeys.messages(targetSessionId) });
+            void qc.invalidateQueries({ queryKey: agentKeys.queue(targetSessionId) });
           }
           setStreamText(payload.text);
           setStreamTimeline((payload.timeline ?? []) as AgentTimelineItem[]);
@@ -138,8 +139,8 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
           //
           // 这段此前只在工作台那一份里有,画布助手每答完一句都会闪一下。
           await Promise.all([
-            qc.invalidateQueries({ queryKey: ["agent-messages", targetSessionId] }),
-            qc.invalidateQueries({ queryKey: ["agent-session", targetSessionId] }),
+            qc.invalidateQueries({ queryKey: agentKeys.messages(targetSessionId) }),
+            qc.invalidateQueries({ queryKey: agentKeys.session(targetSessionId) }),
           ]);
           setStreamText("");
           setStreamTimeline([]);
@@ -147,7 +148,7 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
           setEndedStreams((count) => count + 1);
           // 回合结束后计费事件才落库,而 usage-events 只在 running 时轮询 —— 不主动失效,
           // 这条回复的 token / 费用就一直缺。
-          void qc.invalidateQueries({ queryKey: ["agent-usage-events", targetSessionId] });
+          void qc.invalidateQueries({ queryKey: agentKeys.usage(targetSessionId) });
         }
       }
     },
