@@ -126,10 +126,14 @@ app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
 // 不再出帧,scroll 事件和 IntersectionObserver 都停,滚动加载的列表 / 评论区就不往下加载了 —— 而工作流正是让人
 // 切走去干别的时候在跑(实测:B 站评论区读页面那一路从 33 条一级评论掉到 3 条)。只关这一条,最小化照旧按隐藏。
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
-// Windows / Linux 的滚动条默认是占布局宽度的「经典」条;Chromium 的 OverlayScrollbars 让它们在
-// 这些平台上也悬浮在内容上(macOS 的默认行为)。开着它,界面的悬停显形滚动条在非 Mac 上
-// 才不会把内容挤窄再弹回(0 → 6px 的宽度跳变)。
-if (process.platform !== "darwin") app.commandLine.appendSwitch("enable-features", "OverlayScrollbars");
+// Windows / Linux 的滚动条默认是占布局宽度的「经典」条:一出现就把内容挤窄、消失再弹回(维护者:「滚动条出现的时候
+// 会占据额外位置导致页面 UI 宽度变动」)。Chromium 的 `OverlayScrollbar` 让它们像 macOS 一样浮在内容上、不占宽度,
+// 平时隐藏,滚动或指过去时才显形。
+//
+// **特性名是单数**:此前写成 `OverlayScrollbars`,Chromium 里没有这个特性,开关一直没生效(Electron 二进制里只有
+// `OverlayScrollbar`,复数只出现在 `ShowNonMacOverlayScrollbars` 这类别的名字里)。另一半在样式:Chromium 只把
+// **没自定义样式**的滚动条画成悬浮的,所以这些平台上 tokens.css 不再给滚动条设样式(见那里的说明)。
+if (process.platform !== "darwin") app.commandLine.appendSwitch("enable-features", "OverlayScrollbar");
 
 const BACKEND_PORT = Number(process.env.MOSAEL_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;

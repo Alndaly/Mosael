@@ -751,35 +751,24 @@ body {
  * 会话列表和生成页里(各一长串 class),现在提成全局默认 —— 新加的滚动区不必再抄一遍,
  * 也不会因为忘了抄而各长各的样。
  *
- * 需要给滚动条**预留位置**、避免出现时内容跳动的地方,自己加 `scrollbar-gutter: stable`。 */
+ * 需要给滚动条**预留位置**、避免出现时内容跳动的地方,自己加 `scrollbar-gutter: stable`。
+ *
+ * **Windows / Linux 桌面版不用这套**(`.is-desktop.is-win`,见 lib/windowChrome):那里的滚动条由桌面壳打开 Chromium 的
+ * `OverlayScrollbar` 变成悬浮的(见 electron/main.cjs)—— 原生的悬浮滚动条本来就平时隐藏、滚动或指过去时才显形,
+ * 而且**不占宽度**。可 Chromium 只把**没自定义样式**的滚动条画成悬浮的:这里一设 `scrollbar-width` / `scrollbar-color`,
+ * 它就退回占宽度的经典条,悬停时 none → thin 一变,内容被挤窄再弹回(维护者在 Windows 上报的就是这个)。
+ * macOS 的滚动条由系统决定悬不悬浮,网页版照浏览器 —— 这两处照旧用这套。
+ *
+ * 只写标准属性:`scrollbar-width` 一旦不是 auto,Chromium 就忽略 `::-webkit-scrollbar`,那几条伪元素规则写了也不生效。 */
 @layer base {
-  * {
+  :root:not(.is-desktop.is-win) * {
     scrollbar-width: none;
   }
-  *:hover,
-  *:focus-within {
+  :root:not(.is-desktop.is-win) *:hover,
+  :root:not(.is-desktop.is-win) *:focus-within {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
   }
-  *::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
-  *:hover::-webkit-scrollbar,
-  *:focus-within::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  *::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  *::-webkit-scrollbar-thumb {
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
-  }
-
-  /* Windows / Linux 的滚动条也由桌面壳开 OverlayScrollbars 变成悬浮的(见 main.cjs),
-     不占布局宽度 —— 悬停显形那套在那边同样成立,不用平台分支。网页版(无壳)照浏览器默认。 */
 }
 
 ::selection {
@@ -793,27 +782,6 @@ body {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
-}
-
-/* Quiet, consistent scrollbars for a desktop tool. */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
-  border-radius: 8px;
-  background-color: var(--border-strong);
-  background-clip: padding-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--muted-foreground);
-}
-
-::-webkit-scrollbar-corner {
-  background: transparent;
 }
 
 /* 要求减少动态:过渡和动画都压到一瞬,**循环的只走一遍就停在原样**。此前只压了时长,循环的照旧循环 —— 0.01ms 一圈,
