@@ -141,6 +141,18 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 加了前两段。Anthropic 协议(Kimi Code 订阅走的就是它)开着缓存时,新进来的对话正记在 `cacheWrite` 上 ——
 水位停在「工具定义 + 系统提示」那么高,压缩迟迟不触发;而 pi 夹 `max_tokens` 时是把它算进去的。
 
+### `host-bridge.json` —— Electron 宿主桥契约
+
+「Computer Use 经哪条本机回环桥、认哪些通道、文件名和请求上限是什么。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| Electron 主进程 | `electron/ipc-contract.cjs` 的 `IPC.invoke` + `electron/main.cjs` 的桥 | `electron/computerScreenshot.test.ts` |
+| Python 后端 | `backend/app/domain/agent/computer_use.py` | `backend/tests/test_computer_screenshot.py` |
+
+桥是一个特权本机 RPC 面:通道名、`host-bridge.json`、令牌校验和每条通道的 handler 表必须在两侧同名。
+此前两侧各写一份常量,测试只盯自己那一侧;改名两边都绿、运行时才 405/400。现在这份 JSON 是唯一清单,
+两侧测试都从它读。
 ### `token-estimate-cases.json` —— 计费回退的 token 估算契约
 
 「上游没报 usage 时,一段文字按几个 token 收费。」

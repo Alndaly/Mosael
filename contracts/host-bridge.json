@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "file": "host-bridge.json",
+  "max_request_bytes": 65536,
+  "channels": {
+    "screenshot": {
+      "wire": "computer:screenshot",
+      "ipc": "computerScreenshot"
+    },
+    "desktopWindows": {
+      "wire": "computer:desktop-windows",
+      "ipc": "computerDesktopWindows"
+    },
+    "desktopScreenshot": {
+      "wire": "computer:desktop-screenshot",
+      "ipc": "computerDesktopScreenshot"
+    },
+    "desktopFullScreenshot": {
+      "wire": "computer:desktop-full-screenshot",
+      "ipc": "computerDesktopFullScreenshot"
+    },
+    "desktopAccessibility": {
+      "wire": "computer:desktop-accessibility",
+      "ipc": "computerDesktopAccessibility"
+    },
+    "desktopClick": {
+      "wire": "computer:desktop-click",
+      "ipc": "computerDesktopClick"
+    },
+    "desktopPointer": {
+      "wire": "computer:desktop-pointer",
+      "ipc": "computerDesktopPointer"
+    },
+    "desktopType": {
+      "wire": "computer:desktop-type",
+      "ipc": "computerDesktopType"
+    },
+    "desktopScroll": {
+      "wire": "computer:desktop-scroll",
+      "ipc": "computerDesktopScroll"
+    },
+    "desktopKey": {
+      "wire": "computer:desktop-key",
+      "ipc": "computerDesktopKey"
+    },
+    "desktopDrag": {
+      "wire": "computer:desktop-drag",
+      "ipc": "computerDesktopDrag"
+    },
+    "desktopWait": {
+      "wire": "computer:desktop-wait",
+      "ipc": "computerDesktopWait"
+    },
+    "desktopVerify": {
+      "wire": "computer:desktop-verify",
+      "ipc": "computerDesktopVerify"
+    },
+    "desktopOcr": {
+      "wire": "computer:desktop-ocr",
+      "ipc": "computerDesktopOcr"
+    },
+    "click": {
+      "wire": "computer:click",
+      "ipc": "computerClick"
+    },
+    "pointer": {
+      "wire": "computer:pointer",
+      "ipc": "computerPointer"
+    },
+    "drag": {
+      "wire": "computer:drag",
+      "ipc": "computerDrag"
+    },
+    "type": {
+      "wire": "computer:type",
+      "ipc": "computerType"
+    },
+    "key": {
+      "wire": "computer:key",
+      "ipc": "computerKey"
+    },
+    "scroll": {
+      "wire": "computer:scroll",
+      "ipc": "computerScroll"
+    },
+    "wait": {
+      "wire": "computer:wait",
+      "ipc": "computerWait"
+    },
+    "verify": {
+      "wire": "computer:verify",
+      "ipc": "computerVerify"
+    },
+    "ocr": {
+      "wire": "computer:ocr",
+      "ipc": "computerOcr"
+    },
+    "clipboardRead": {
+      "wire": "computer:clipboard-read",
+      "ipc": "computerClipboardRead"
+    },
+    "clipboardWrite": {
+      "wire": "computer:clipboard-write",
+      "ipc": "computerClipboardWrite"
+    },
+    "end": {
+      "wire": "computer:end",
+      "ipc": "computerEnd"
+    }
+  }
+}

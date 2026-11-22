@@ -564,3 +564,13 @@ describe("宿主桥的安全边界", () => {
 
 
 });
+
+
+  it("host bridge channels and file name match the shared contract", () => {
+    const contract = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "contracts", "host-bridge.json"), "utf8"));
+    const invoke = require("./ipc-contract.cjs").IPC.invoke;
+    for (const [name, entry] of Object.entries(contract.channels) as Array<[string, { wire: string; ipc: string }]>) {
+      expect(invoke[entry.ipc], `${name}: IPC.${entry.ipc}`).toBe(entry.wire);
+    }
+    expect(contract.file).toBe("host-bridge.json");
+  });

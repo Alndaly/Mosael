@@ -18,6 +18,7 @@ import io
 import json
 import socket
 import threading
+from pathlib import Path
 
 import pytest
 from mcp.types import ImageContent, TextContent
@@ -370,3 +371,39 @@ def test_a_bridge_refusal_is_a_sentence(monkeypatch) -> None:
     finally:
         thread.join(5)
         server.close()
+
+
+def test_host_bridge_channels_match_the_shared_contract() -> None:
+    """Electron 与 Python 各有一份常量;契约是唯一清单,改名必须两侧一起红。"""
+    contract = json.loads((Path(__file__).resolve().parents[2] / "contracts" / "host-bridge.json").read_text(encoding="utf-8"))
+    channels = contract["channels"]
+    expected = {
+        "screenshot": computer_use.SCREENSHOT_CHANNEL,
+        "desktopWindows": computer_use.DESKTOP_WINDOWS_CHANNEL,
+        "desktopScreenshot": computer_use.DESKTOP_SCREENSHOT_CHANNEL,
+        "desktopFullScreenshot": computer_use.DESKTOP_FULL_SCREENSHOT_CHANNEL,
+        "desktopAccessibility": computer_use.DESKTOP_ACCESSIBILITY_CHANNEL,
+        "desktopClick": computer_use.DESKTOP_CLICK_CHANNEL,
+        "desktopPointer": computer_use.DESKTOP_POINTER_CHANNEL,
+        "desktopType": computer_use.DESKTOP_TYPE_CHANNEL,
+        "desktopScroll": computer_use.DESKTOP_SCROLL_CHANNEL,
+        "desktopKey": computer_use.DESKTOP_KEY_CHANNEL,
+        "desktopDrag": computer_use.DESKTOP_DRAG_CHANNEL,
+        "desktopWait": computer_use.DESKTOP_WAIT_CHANNEL,
+        "desktopVerify": computer_use.DESKTOP_VERIFY_CHANNEL,
+        "desktopOcr": computer_use.DESKTOP_OCR_CHANNEL,
+        "click": computer_use.CLICK_CHANNEL,
+        "pointer": computer_use.POINTER_CHANNEL,
+        "drag": computer_use.DRAG_CHANNEL,
+        "type": computer_use.TYPE_CHANNEL,
+        "key": computer_use.KEY_CHANNEL,
+        "scroll": computer_use.SCROLL_CHANNEL,
+        "wait": computer_use.WAIT_CHANNEL,
+        "verify": computer_use.VERIFY_CHANNEL,
+        "ocr": computer_use.OCR_CHANNEL,
+        "clipboardRead": computer_use.CLIPBOARD_READ_CHANNEL,
+        "clipboardWrite": computer_use.CLIPBOARD_WRITE_CHANNEL,
+        "end": computer_use.END_CHANNEL,
+    }
+    assert {name: entry["wire"] for name, entry in channels.items()} == expected
+    assert computer_use.BRIDGE_FILE == contract["file"]
