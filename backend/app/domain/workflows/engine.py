@@ -572,7 +572,8 @@ def _run_workflow_thread(
                 db,
                 workflow.workspace_id,
                 type="workflow",
-                title=f"工作流失败: {workflow.name}",
+                #: 通知落库时存的是**这一轮的语言**;标题至少不能写死中文。
+                title=tr("jobMsg_workflowFailed", name=workflow.name),
                 body=str(exc),
                 link="#/workflows",
                 payload={"workflow_id": workflow.id, "job_id": job.id},

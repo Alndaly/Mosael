@@ -1051,7 +1051,7 @@ export function GenerateWorkspace({
     mutationFn: (generationId: string) => repeatGeneration(generationId),
     onSuccess: () => {
       stick.scrollToBottom();
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     },

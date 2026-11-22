@@ -24,11 +24,28 @@ logger = logging.getLogger(__name__)
 _streams_lock = threading.Lock()
 
 
+#: 收尾后的流状态还给前端留多久。前端每 1.5 秒轮询一次,一轮结束后最多再读几次;留 60 秒足够
+#: 慢页面看到 done,又不会让长驻应用的 `_streams` 按「用过的会话数」无限增长。
+STREAM_RETENTION_SECONDS = 60.0
+
+
 _streams: dict[str, dict] = {}
+
+
+def _prune_locked(now: float) -> None:
+    """在持锁状态下清掉收尾太久的流。**只清 finished,不清正在跑的。**"""
+    stale = [
+        session_id
+        for session_id, state in _streams.items()
+        if state.get("done") and now - float(state.get("finished_at") or now) >= STREAM_RETENTION_SECONDS
+    ]
+    for session_id in stale:
+        _streams.pop(session_id, None)
 
 
 def get_stream_state(session_id: str) -> dict:
     with _streams_lock:
+        _prune_locked(time.monotonic())
         state = _streams.get(session_id)
         if not state:
             return {"text": "", "done": True, "seq": 0, "timeline": []}
@@ -55,6 +72,7 @@ def _stream_reset(session_id: str) -> None:
         _streams[session_id] = {
             "text": "",
             "done": False,
+            "finished_at": None,
             "seq": 0,
             "segment": 0,
             "timeline": [],
@@ -317,6 +335,7 @@ def _stream_finish(session_id: str, final_text: str) -> None:
             else:
                 timeline.append({"type": "text", "text": tail})
         state["done"] = True
+        state["finished_at"] = time.monotonic()
         state["seq"] += 1
 
 

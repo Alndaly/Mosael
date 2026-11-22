@@ -60,3 +60,18 @@ def test_换了一轮就关流_每一帧带着这一轮的开始时间() -> None
         thread.join(timeout=15)
         with agent_stream._streams_lock:
             agent_stream._streams.pop(session, None)
+
+
+def test_finished_streams_are_evicted_after_the_retention_window(monkeypatch) -> None:
+    """收尾后的流只留一小段给前端读 done;不回收就是每个用过的会话永久占一份正文和 timeline。"""
+    session = "stream-eviction"
+    agent_stream._stream_reset(session)
+    agent_stream._stream_finish(session, "答完了")
+    with agent_stream._streams_lock:
+        assert session in agent_stream._streams
+
+    monkeypatch.setattr(agent_stream, "STREAM_RETENTION_SECONDS", 0.0)
+    state = agent_stream.get_stream_state(session)
+    assert state["done"] is True
+    with agent_stream._streams_lock:
+        assert session not in agent_stream._streams, "收尾后的流状态没有被回收"

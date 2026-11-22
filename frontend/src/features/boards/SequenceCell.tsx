@@ -26,6 +26,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { noteSequenceEdit, readSequenceCursor, SequenceAddContext, updateSequenceCursor, useSequenceCursor } from "@/features/boards/sequenceCursor";
+import { sequenceEditScope } from "@/features/editor/sequenceEditScope";
 import { useDndAccessibility } from "@/components/app/dndAccessibility";
 
 /** 贴着格子外壳内沿上半的圆角(和 boardNodes 的 CELL_INNER_TOP_RADIUS 同一个值:外壳 rounded-xl 减 1px 边框)。 */
@@ -203,6 +204,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   );
   const actions = useSequenceActions(sequenceId);
   const reorder = useMutation({
+    scope: sequenceEditScope(sequenceId),
     mutationFn: (order: Clip[]) => {
       //: 按新的先后首尾相接重新排(和剪辑页的波纹一样,中间不留空当)。一次提交,一步撤销。
       let cursor = 0;
@@ -484,6 +486,7 @@ export function useSequenceActions(sequenceId: string) {
   const settle = (next: Sequence) => qc.setQueryData(boardSequenceKey(sequenceId), next);
   const fail = (error: unknown) => toast.error(errorText(error));
   const cut = useMutation({
+    scope: sequenceEditScope(sequenceId),
     mutationFn: (clip: Clip) => splitClip(sequence.data!, clip.id, clip.src_in + (time - clip.timeline_start) * (clip.speed || 1)),
     onSuccess: (next) => {
       settle(next);
@@ -492,6 +495,7 @@ export function useSequenceActions(sequenceId: string) {
     onError: fail,
   });
   const removal = useMutation({
+    scope: sequenceEditScope(sequenceId),
     mutationFn: (clipId: string) => rippleDeleteClipsBatch(sequence.data!, [clipId]),
     onSuccess: (next) => {
       settle(next);
