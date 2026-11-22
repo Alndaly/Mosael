@@ -22,11 +22,10 @@ from __future__ import annotations
 RATCHET = True
 
 import ast
-import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
-PROTOCOL = REPO / "agent-sidecar" / "src" / "protocol.ts"
+CONTRACT = REPO / "contracts" / "sidecar-protocol.json"
 #: 接事件的那几处。新增一处读 sidecar 事件的地方,要加进来。
 CONSUMERS = (
     REPO / "backend" / "app" / "ai" / "sidecar" / "pi_client.py",
@@ -41,11 +40,10 @@ NOT_CONSUMED: dict[str, str] = {
 
 
 def _event_types() -> set[str]:
-    """`export type Event =` 那个联合里的每一个 `type: "…"` 字面量。"""
-    text = PROTOCOL.read_text(encoding="utf-8")
-    start = text.index("export type Event =")
-    end = text.index("\nexport ", start + 1)
-    return set(re.findall(r'type:\s*"([a-z_]+)"', text[start:end]))
+    """共享契约里的每一种事件。**契约是唯一清单**,TS 侧由 protocol-contract 测试比对。"""
+    import json
+
+    return set(json.loads(CONTRACT.read_text(encoding="utf-8"))["events"])
 
 
 def _consumed_types(sources: dict[Path, str] | None = None) -> set[str]:

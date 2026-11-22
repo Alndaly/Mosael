@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "transport": "newline-delimited JSON over stdio; stdout carries protocol only",
+  "requests": [
+    "run_turn",
+    "gateway_complete",
+    "steer",
+    "queue",
+    "abort",
+    "compact",
+    "refresh_credential",
+    "auth_login",
+    "auth_answer",
+    "auth_cancel"
+  ],
+  "events": [
+    "ready",
+    "text_delta",
+    "thinking_delta",
+    "thinking_end",
+    "tool_start",
+    "tool_end",
+    "subtool",
+    "subagent_result",
+    "turn_done",
+    "queued",
+    "steer_applied",
+    "aborted",
+    "awaiting_user",
+    "aborted_ack",
+    "credential_refreshed",
+    "gateway_done",
+    "compacted",
+    "error",
+    "auth_event",
+    "auth_prompt",
+    "auth_done"
+  ],
+  "notes": [
+    "backend/app/ai/sidecar/pi_client.py 必须为每个 event 留分支;ready 是启动握手,不进回合事件循环。",
+    "请求字段由 test_sidecar_requests_have_readers 继续钉住;payload 形状变化必须同时改两侧测试。"
+  ]
+}

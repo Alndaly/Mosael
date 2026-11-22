@@ -141,6 +141,17 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 加了前两段。Anthropic 协议(Kimi Code 订阅走的就是它)开着缓存时,新进来的对话正记在 `cacheWrite` 上 ——
 水位停在「工具定义 + 系统提示」那么高,压缩迟迟不触发;而 pi 夹 `max_tokens` 时是把它算进去的。
 
+### `sidecar-protocol.json` —— 后端 ↔ sidecar JSONL 契约
+
+「后端能发哪几种请求、sidecar 能回哪几种事件。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| sidecar | `agent-sidecar/src/protocol.ts` | `agent-sidecar/test/protocol-contract.test.mjs` |
+| 后端 | `backend/app/ai/sidecar/pi_client.py` | `backend/tests/test_sidecar_events_have_consumers.py` / `test_sidecar_requests_have_readers.py` |
+
+两侧是两种语言,没有共享类型系统。契约冻结请求/事件名称;后端必须为每种事件留分支,sidecar 必须真的读每个请求字段。
+payload 形状继续由两侧各写一份测试,但改名/增删协议帧必须同时改契约。
 ### `host-bridge.json` —— Electron 宿主桥契约
 
 「Computer Use 经哪条本机回环桥、认哪些通道、文件名和请求上限是什么。」
