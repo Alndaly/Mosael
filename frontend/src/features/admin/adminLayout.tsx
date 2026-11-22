@@ -46,7 +46,8 @@ export function AdminSection({
       {/* 动作和标题同一行、靠右;说明另起一行铺满。此前三者在一个 flex-wrap 里:说明一长(它不设宽度上限),
           动作就被挤到说明下面单独一行,32px 的节头按钮正好压在 40px 的筛选栏上方,两排按钮高低不一
           (维护者:「这一行按钮的高度和正常的不一样」)。节头按钮本来就是轻一档的 sm,它该挨着标题,不该挨着工具栏。 */}
-      <header className="grid min-w-0 gap-1">
+      {/* 标题行 → 说明 8px(块间):标题行里有 32px 的按钮,只隔 4px 时按钮底边几乎贴着说明文字(维护者:「太紧了」)。 */}
+      <header className="grid min-w-0 gap-2">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-6 gap-y-2">
           <div className="flex min-w-0 items-center gap-2">
             <h2 id={headingId} className="m-0 text-ui-md font-semibold leading-snug">
