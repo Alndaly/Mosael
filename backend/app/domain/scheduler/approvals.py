@@ -2,7 +2,7 @@
 
 定时任务到点替主人跑、花主人的 AI 连接和插件连接;而它绑着的工作流是工作区内容,同事能改。所以「这一版要不要
 主人担保」和私有账号那条一样(见 domain/authority):被执行的每一版,花谁的钱就要谁担保 —— 判据在
-workflows.engine.unvouched_spend,开跑前问它,执行时的闸兜底。这里是定时任务这一侧要做的几件事:
+workflows.readiness.unvouched_spend,开跑前问它,执行时的闸兜底。这里是定时任务这一侧要做的几件事:
 
 - **点「立即运行」即认可**(D6):主人就在现场,记他为绑着的那张图当前版的担保人;
 - **任务上挂「待你确认」**(D10):下一次到点会不会停在「这一版要主人认可」,停的话是哪一版;
@@ -24,7 +24,7 @@ from app.domain.authority import Voucher
 from app.domain.referrers import referrers
 from app.domain.scheduler.executors import bound_workflow
 from app.domain.notifications import notify
-from app.domain.workflows.engine import unvouched_spend
+from app.domain.workflows.readiness import unvouched_spend
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision
 

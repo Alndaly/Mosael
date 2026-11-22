@@ -74,6 +74,7 @@ _Avoid_: 把宿主模块再叫回 `workflow_library`(和 `workflows/` 只差一�
 
 **引擎(engine.py)**:
 纯 DAG 调度器:拓扑、并行、条件路由、取消边界、事件与进度。对具体领域零 import。
+建任务前的图校验、插件可运行性、花费担保在 `workflows/readiness.py`;运行收尾的计费与失败通知在 `workflows/settlement.py`。
 
 **工作流修订(WorkflowRevision)**:
 工作流图的不可变持久快照。`Workflow.graph/revision/graph_hash` 只是最新修订的当前投影；创建、

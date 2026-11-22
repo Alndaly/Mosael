@@ -31,7 +31,7 @@ from app.domain.generation.operations import parse_source_assets
 from app.domain.generation.origins import Origin, SCHEDULE
 from app.domain.notifications import notify
 from app.domain.workflows import engine as workflows_engine
-from app.domain.workflows.engine import check_runnable
+from app.domain.workflows.readiness import check_runnable
 from app.domain.workflows.errors import WorkflowDomainError
 from mosael_formats.i18n import DEFAULT_LOCALE
 
@@ -132,7 +132,7 @@ Readiness = Callable[[Session, str, dict[str, Any], "str | None"], LocalizedErro
 
 
 def _workflow_ready(db: Session, workspace_id: str, payload: dict[str, Any], owner: str | None) -> LocalizedError | None:
-    """绑的工作流在,而且**带着任务的参数、替任务的主人**跑得起来 —— 和点运行同一套检查(workflows.engine.check_runnable)。"""
+    """绑的工作流在,而且**带着任务的参数、替任务的主人**跑得起来 —— 和点运行同一套检查(workflows.readiness.check_runnable)。"""
 
     workflow = bound_workflow(db, workspace_id=workspace_id, payload=payload)
     if workflow is None:

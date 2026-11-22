@@ -28,7 +28,7 @@ from app.domain.permissions import ensure_workspace_perm
 from app.domain.plugins import nodes as plugins_nodes
 from app.domain.plugins.nodes import why_unusable
 from app.domain.workflows import create_workflow, edit_workflow_graph, engine as workflows_engine, update_workflow
-from app.domain.workflows.engine import check_runnable
+from app.domain.workflows.readiness import check_runnable
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_ops import GRAPH_OP_KINDS, apply_graph_ops
 from app.domain.workflows.revisions import WorkflowRevisionError, attest_current_revision, attest_revision
@@ -236,7 +236,7 @@ def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) ->
 
 def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     """开卡之前先钉住要跑的那一版,再按**那一版**问「现在跑得起来吗」—— 和点运行、定时任务同一套检查
-    (workflows.engine.check_runnable)。
+    (workflows.readiness.check_runnable)。
 
     此前只看工作流在不在:缺一个必填的开始参数、插件节点这个人用不了,都要等用户批准之后、建任务时才报 ——
     用户点了同意,看到的是一句失败。跑不起来就不开卡,原因原样交给智能体,它能照着补参数或换做法。

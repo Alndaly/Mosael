@@ -209,7 +209,7 @@ def _fire_one(db: Session, trigger_id: str, message: IncomingMessage) -> Outcome
     #: (和定时任务 `ensure_runnable` 同一个道理)。这一次的入参是**按这条消息算出来的**,
     #: 所以只有到这一刻才判得了。
     try:
-        from app.domain.workflows.engine import check_runnable
+        from app.domain.workflows.readiness import check_runnable
 
         check_runnable(db, workflow, params, actor)
     except Exception as exc:  # noqa: BLE001 —— 认得出原因的当拒绝,认不出的也是拒绝
