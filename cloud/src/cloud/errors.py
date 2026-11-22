@@ -372,6 +372,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "MosaelCloud does not offer that model, or it is not available right now.",
         "zh": "MosaelCloud 没有这个模型,或者它暂时不可用。",
     },
+    "generation_worker_unavailable": {
+        "en": "This MosaelCloud deployment has no generation worker. No credits were used; try again after the administrator enables it.",
+        "zh": "这个 MosaelCloud 部署没有开启生成 worker。这次没有扣积分,请联系管理员开启后再试。",
+    },
     "gateway_model_price_incomplete": {
         "en": "This job model's price does not cover every reserved unit: {units}. Add a price for those units before using it.",
         "zh": "这个任务模型的定价没有覆盖全部计量单位:{units}。先在管理台补齐这些单位的积分单价。",

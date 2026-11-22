@@ -552,6 +552,9 @@ def _request_for(generation: GenerationJob, job: Job, *, sources: tuple[SourceAs
         sources=sources,
         #: 工作台跑画布上那张图(ADR 0038 §6):图在任务载荷里,不在生成参数里
         graph=_workbench_graph(job),
+        #: 同一份生成记录的重试必须用同一个键。进程在提交与落回执之间死掉时,Cloud 靠它去重,
+        #: 不会把同一份付费任务再提交一次(ADR 0019)。
+        idempotency_key=generation.id,
     )
 
 

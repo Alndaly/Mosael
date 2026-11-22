@@ -45,6 +45,7 @@ from cloud.generation.seedance import ADAPTER as SEEDANCE_VIDEO
 from cloud.generation.comfyui import ADAPTER as COMFYUI
 from cloud.generation.wan import ADAPTER as WAN
 from cloud.generation import adapters as generation_adapters
+from cloud.generation import service
 from cloud.generation.service import run_one
 from cloud.domain import credits, orders as order_domain
 
@@ -195,8 +196,9 @@ def create_app(
         return _error(failure.status_code, code)
 
     @app.get(f"{API_PREFIX}/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
+    def health() -> dict[str, object]:
+        #: 能力事实也要能探到:没有 worker 的部署仍能登录/社区,但不能接生成任务。
+        return {"status": "ok", "generation_worker": resolved.worker_enabled}
 
     app.include_router(accounts_router, prefix=API_PREFIX)
     app.include_router(admin_router, prefix=API_PREFIX)
@@ -215,6 +217,13 @@ def create_app(
 
         def work() -> None:
             """生成 worker:只领任务、交上游、轮询。对账和预占回收在另一条线程(`upkeep`),渠道慢不拖住生成队列。"""
+            #: 上一次进程死在 submit 与 provider_job_id 之间留下的 `submitting`:先收尾,绝不自动重提。
+            with app.state.db.session() as db:
+                try:
+                    if service.reconcile_uncertain_submits(db, at=now()):
+                        db.commit()
+                except Exception:  # noqa: BLE001 —— 收尾失败不能挡住新任务
+                    db.rollback()
             while not stop.is_set():
                 with app.state.db.session() as db:
                     try:
@@ -244,6 +253,7 @@ def create_app(
                         db.rollback()
                 with app.state.db.session() as db:
                     try:
+                        service.expire_queued_jobs(db, at=now())
                         credits.release_stale(db, at=now())
                         db.commit()
                     except Exception:  # noqa: BLE001

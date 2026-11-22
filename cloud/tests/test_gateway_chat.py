@@ -346,8 +346,8 @@ def test_without_reported_usage_the_charge_is_estimated_from_the_text(gateway, u
     response = ask(client)
     settled = final_chunk(response.text)["mosael"]
     assert settled["usage_reported"] is False
-    #: 输入 2 字 → 1 token;输出 3000 字 → 1500 token:ceil((1×2 + 1500×4)/1000) = 7
-    assert (settled["input_tokens"], settled["output_tokens"], settled["charged"]) == (1, 1500, 7)
+    #: 输入「你好」→ 2 token;输出 3000 个拉丁字符 → 750 token:ceil((2×2 + 750×4)/1000) = 4
+    assert (settled["input_tokens"], settled["output_tokens"], settled["charged"]) == (2, 750, 4)
     #: 上游没发 [DONE],网关也不替它补。
     assert "[DONE]" not in response.text
 
@@ -360,7 +360,7 @@ def test_a_stream_cut_off_midway_is_settled_for_what_was_generated(gateway, upst
         user = db.scalar(select(CloudUser))
         token = db.scalar(select(CloudDeviceToken))
         begun = chat.begin(db, gateway.state.config, user_id=user.id, device_token_id=token.id, model_id="deepseek-chat",
-                           max_tokens=None, input_chars=2, at=now())
+                           max_tokens=None, input_text="你好", at=now())
         upstream_client = httpx2.Client(transport=httpx2.MockTransport(upstream.handler))
         _channel, response = chat.connect(db, gateway.state.config, upstream_client, begun,
                                           body={"messages": [], "max_tokens": 4000, "stream": True}, at=now())
@@ -371,9 +371,9 @@ def test_a_stream_cut_off_midway_is_settled_for_what_was_generated(gateway, upst
 
     with gateway.state.db.session() as db:
         call = db.get(CloudGatewayCall, call_id)
-        #: 读到的 1000 字 → 500 token:ceil((1×2 + 500×4)/1000) = 3;其余预占退回。
-        assert (call.status, call.charged, call.usage_reported) == ("settled", 3, False)
-    assert credits_left(gateway) == 100_000 - 3
+        #: 读到的 1000 个拉丁字符 → 250 token:ceil((2×2 + 250×4)/1000) = 2;其余预占退回。
+        assert (call.status, call.charged, call.usage_reported) == ("settled", 2, False)
+    assert credits_left(gateway) == 100_000 - 2
 
 
 def test_thinking_text_counts_toward_the_estimate_under_either_name():

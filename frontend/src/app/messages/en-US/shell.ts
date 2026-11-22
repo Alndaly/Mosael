@@ -153,6 +153,7 @@ export const shell = {
   settingsCloudMfaLoading: "Loading two-factor status…",
   settingsCloudMfaOn: "On",
   settingsCloudMfaOff: "Off",
+  settingsCloudMfaCurrentPassword: "Current password (required for email/password accounts)",
   settingsCloudMfaEnable: "Enable two-factor",
   modelRemoved: "Removed.",
   modelRemoveTitle: "Remove this model?",

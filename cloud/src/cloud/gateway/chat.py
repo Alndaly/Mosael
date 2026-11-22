@@ -3,7 +3,7 @@
 1. `begin`:认模型、定 `max_tokens`、按上限估预占(输入按**字数**算 token —— 宁多勿少,多的结算时退),建调用记录、预占,提交。
 2. `connect`:按通道顺序试;可重试的失败(连不上 / 超时 / 429 / 5xx)把那条冷却、换下一条;上游明确拒绝的不换,全额释放后
    原话告诉调用方;全都不行也全额释放。**换通道只发生在上游开始生成之前**,所以一次调用不会被两条通道各收一次钱。
-3. `finish`:流读完(或被掐断)后按上游报的用量结算;上游没报就按字数估(`estimate_tokens`),写进调用记录、多退。
+3. `finish`:流读完(或被掐断)后按上游报的用量结算;上游没报就按文字估(`estimate_text_tokens`),写进调用记录、多退。
 
 结算在流结束那一刻发生,那时请求的数据库会话早已还回去了 —— `finish` 自己开一个。
 """
@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -24,28 +23,28 @@ from cloud.domain import catalog, credits
 from cloud.domain.channel_keys import unseal
 from cloud.errors import CloudError
 from cloud.gateway.upstream import UpstreamFailure, UpstreamUsage, open_chat
+from cloud.gateway.token_estimate import estimate_text_tokens
 from cloud.models import CloudGatewayCall, CloudUpstreamChannel
 
 
-def prompt_chars(messages: list[dict[str, object]], tools: list[object] | None) -> int:
-    """请求里会被上游算成输入的字数:每条消息的内容(多段内容的文字部分)+ 工具声明。"""
-    total = 0
+def prompt_text(messages: list[dict[str, object]], tools: list[object] | None) -> str:
+    """请求里会被上游算成输入的文字:每条消息的内容(多段内容的文字部分)+ 工具声明。
+
+    保留原文而不是只留字数:中文一字约一 token、英文约四字符一 token,只有字数无法区分。
+    估算规则见 `gateway/token_estimate.py`(和桌面端同一份)。
+    """
+    parts: list[str] = []
     for message in messages:
         content = message.get("content")
         if isinstance(content, str):
-            total += len(content)
+            parts.append(content)
         elif content is not None:
-            total += len(json.dumps(content, ensure_ascii=False))
+            parts.append(json.dumps(content, ensure_ascii=False))
         if message.get("tool_calls") is not None:
-            total += len(json.dumps(message["tool_calls"], ensure_ascii=False))
+            parts.append(json.dumps(message["tool_calls"], ensure_ascii=False))
     if tools:
-        total += len(json.dumps(tools, ensure_ascii=False))
-    return total
-
-
-def estimate_tokens(chars: int) -> int:
-    """上游没报用量时按字数估 token:两个字算一个(中文约一字一 token、英文约四字符一 token,取中间)。"""
-    return math.ceil(chars / 2)
+        parts.append(json.dumps(tools, ensure_ascii=False))
+    return "\n".join(parts)
 
 
 @dataclass(frozen=True)
@@ -61,7 +60,7 @@ class Begun:
     model_id: str
     rate: Rate
     max_tokens: int
-    input_chars: int
+    input_text: str
 
 
 def begin(
@@ -72,7 +71,7 @@ def begin(
     device_token_id: str,
     model_id: str,
     max_tokens: int | None,
-    input_chars: int,
+    input_text: str,
     at: datetime,
 ) -> Begun:
     if not config.channel_key:
@@ -85,7 +84,8 @@ def begin(
         raise CloudError(400, "gateway_max_tokens_too_large", max=ceiling)
     granted = max_tokens or ceiling
     units = catalog.price_components(db, listed.price.id)
-    reserved = credits.cost_for_units(units, {"token_input": input_chars, "token_output": granted})
+    input_tokens = estimate_text_tokens(input_text)
+    reserved = credits.cost_for_units(units, {"token_input": input_tokens, "token_output": granted})
     call = CloudGatewayCall(
         user_id=user_id, device_token_id=device_token_id, model_id=model_id, reserved=max(reserved, 1), created_at=at
     )
@@ -94,7 +94,7 @@ def begin(
     credits.reserve(db, call, at=at)
     db.commit()
     rate = Rate(units=units)
-    return Begun(call=call, model_id=model_id, rate=rate, max_tokens=granted, input_chars=input_chars)
+    return Begun(call=call, model_id=model_id, rate=rate, max_tokens=granted, input_text=input_text)
 
 
 def connect(
@@ -163,8 +163,8 @@ def finish(
     call_id: str,
     rate: Rate,
     usage: UpstreamUsage | None,
-    input_chars: int,
-    output_chars: int,
+    input_text: str,
+    output_text: str,
     at: datetime,
 ) -> Settled:
     """按用量结算这一次(上游没报就按字数估),多预占的退回。自己开会话:流结束时请求的会话已经还了。"""
@@ -172,8 +172,8 @@ def finish(
         call = db.get(CloudGatewayCall, call_id)
         assert call is not None
         reported = usage is not None
-        input_tokens = usage.input_tokens if usage else estimate_tokens(input_chars)
-        output_tokens = usage.output_tokens if usage else estimate_tokens(output_chars)
+        input_tokens = usage.input_tokens if usage else estimate_text_tokens(input_text)
+        output_tokens = usage.output_tokens if usage else estimate_text_tokens(output_text)
         charged = credits.cost_for_units(
             rate.units, {"token_input": input_tokens, "token_output": output_tokens}
         )

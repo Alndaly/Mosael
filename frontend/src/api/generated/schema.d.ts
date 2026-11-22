@@ -10301,7 +10301,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cloud Mfa Setup */
+        /**
+         * Cloud Mfa Setup
+         * @description 开启 TOTP 需要当前密码(Cloud 对邮箱/密码账号强制校验;OAuth 账号没有密码,空串可过)。
+         */
         post: operations["cloud_mfa_setup_api_cloud_v1_mfa_setup_post"];
         delete?: never;
         options?: never;
@@ -13210,6 +13213,17 @@ export interface components {
             ticket: string;
             /** Methods */
             methods: string[];
+        };
+        /**
+         * CloudMfaSetupIn
+         * @description 开启 TOTP 之前确认当前密码。OAuth 账号没有密码时 Cloud 接受空串。
+         */
+        CloudMfaSetupIn: {
+            /**
+             * Current Password
+             * @default
+             */
+            current_password: string;
         };
         /** CloudMfaVerifyIn */
         CloudMfaVerifyIn: {
@@ -43233,7 +43247,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudMfaSetupIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

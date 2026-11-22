@@ -21,7 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudMfaCodeIn, CloudMfaRequiredOut, CloudMfaVerifyIn, CloudPasswordIn, CloudPhoneCodeIn, CloudPhoneIn, CloudPhoneLoginIn, CloudSessionOut
+from app.api.schemas import CloudCodeIn, CloudConnectionSyncOut, CloudOrderIn, CloudEmailIn, CloudLoginIn, CloudMfaCodeIn, CloudMfaRequiredOut, CloudMfaSetupIn, CloudMfaVerifyIn, CloudPasswordIn, CloudPhoneCodeIn, CloudPhoneIn, CloudPhoneLoginIn, CloudSessionOut
 from app.core.i18n import get_current_locale, tr
 from mosael_formats.i18n import pick_text
 from app.db.models import CloudLogin, User
@@ -354,8 +354,9 @@ def cloud_mfa_status(user: CurrentUser, db: DbSession) -> Response:
 
 
 @router.post("/cloud/v1/mfa/setup")
-def cloud_mfa_setup(user: CurrentUser, db: DbSession) -> Response:
-    reply, _row = _send("POST", "/mfa/setup", None, user=user, db=db)
+def cloud_mfa_setup(body: CloudMfaSetupIn, user: CurrentUser, db: DbSession) -> Response:
+    """开启 TOTP 需要当前密码(Cloud 对邮箱/密码账号强制校验;OAuth 账号没有密码,空串可过)。"""
+    reply, _row = _send("POST", "/mfa/setup", {"current_password": body.current_password}, user=user, db=db)
     return _success(reply)
 
 

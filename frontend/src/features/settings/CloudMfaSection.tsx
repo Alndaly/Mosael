@@ -26,6 +26,7 @@ export function CloudMfaSection() {
   const t = useI18n();
   const [status, setStatus] = React.useState<CloudMfaStatus | null>(null);
   const [setup, setSetup] = React.useState<CloudMfaSetup | null>(null);
+  const [password, setPassword] = React.useState("");
   const [qr, setQr] = React.useState("");
   const [code, setCode] = React.useState("");
   const [codes, setCodes] = React.useState<string[]>([]);
@@ -56,7 +57,7 @@ export function CloudMfaSection() {
     setFailure("");
     setBusy("setup");
     try {
-      const started = await setupCloudMfa();
+      const started = await setupCloudMfa(password);
       setSetup(started);
       setQr(await QRCode.toDataURL(started.otpauth_uri, { width: 170, margin: 1 }));
     } catch (error) {
@@ -138,9 +139,20 @@ export function CloudMfaSection() {
                 {status?.enabled ? t("settingsCloudMfaOn") : t("settingsCloudMfaOff")}
               </span>
               {!status?.enabled && !setup && status?.available === true && (
-                <Button variant="outline" onClick={() => void startSetup()} loading={busy === "setup"}>
-                  {t("settingsCloudMfaEnable")}
-                </Button>
+                <>
+                  <Input
+                    type="password"
+                    aria-label={t("settingsCloudMfaCurrentPassword")}
+                    autoComplete="current-password"
+                    placeholder={t("settingsCloudMfaCurrentPassword")}
+                    className={`${SETTINGS_FIELD_WIDTH} shrink-0`}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                  <Button variant="outline" onClick={() => void startSetup()} loading={busy === "setup"}>
+                    {t("settingsCloudMfaEnable")}
+                  </Button>
+                </>
               )}
               {status && status.available !== true && (
                 <small className="text-ui-sm text-muted-foreground">{t("settingsCloudMfaUnavailable")}</small>
@@ -215,6 +227,7 @@ export function CloudMfaSection() {
                   setSetup(null);
                   setQr("");
                   setCode("");
+                  setPassword("");
                   setFailure("");
                 }}
               >

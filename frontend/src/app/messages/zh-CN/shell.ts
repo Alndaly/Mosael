@@ -155,6 +155,7 @@ export const shell = {
   settingsCloudMfaLoading: "正在读取双因素状态…",
   settingsCloudMfaOn: "已开启",
   settingsCloudMfaOff: "未开启",
+  settingsCloudMfaCurrentPassword: "当前密码（邮箱/密码账号必填）",
   settingsCloudMfaEnable: "开启双因素认证",
   modelRemoved: "已删除。",
   modelRemoveTitle: "确认删除?",

@@ -160,6 +160,10 @@ class GenerationRequest:
     #: 调用方交来的一整张图,跑它而不是模型存着的那张(ComfyUI 工作台的「运行」,ADR 0038 §6):`prompt`(API 格式)、
     #: `workflow`(界面格式)、`client_id`。只有插件的生成适配器转交它;别的供应商没有「图」,不看这一格。
     graph: dict[str, Any] | None = None
+    #: 这次逻辑提交的稳定身份。**必须在重试之间保持不变** —— 用它给幂等键(今天只有 Cloud 用):
+    #: 进程在"请求已发出、回执还没落库"之间死掉时,下一次 `generate` 拿同一个键去提交,远端不会
+    #: 再扣一次费。为空时适配器只能退回随机值(如直接调 Adapter 的测试),不保证跨重启幂等。
+    idempotency_key: str = ""
 
     def source_for(self, role: str) -> Path | None:
         """取这个角色的素材;没有就是 None。同一角色给了多份时取第一份。"""

@@ -66,6 +66,12 @@ class CloudMfaRequiredOut(ApiModel):
     methods: list[str]
 
 
+class CloudMfaSetupIn(ApiModel):
+    """开启 TOTP 之前确认当前密码。OAuth 账号没有密码时 Cloud 接受空串。"""
+
+    current_password: str = Field(default="", max_length=512)
+
+
 class CloudMfaCodeIn(ApiModel):
     code: str = Field(min_length=1, max_length=64)
 

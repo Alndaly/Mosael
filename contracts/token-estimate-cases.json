@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "description": "上游没报 usage 时的 token 回退估算。中文按一字一 token,其余去掉空白后每四字符一 token,四舍五入并至少为 1。桌面端 app/core/token_estimate.py 与 MosaelCloud cloud/gateway/token_estimate.py 跑同一份语料;这不是分词器,上游报了 usage 就一律以上游为准。",
+  "cases": [
+    {"text": "", "tokens": 0, "why": "空输入不占 token"},
+    {"text": "a", "tokens": 1, "why": "非空至少算 1"},
+    {"text": "hello", "tokens": 1, "why": "英文按四字符一 token"},
+    {"text": "hello world", "tokens": 2, "why": "空白不计"},
+    {"text": "你好", "tokens": 2, "why": "中文一字一 token"},
+    {"text": "你好世界", "tokens": 4, "why": "连续中文逐字计"},
+    {"text": "你好 world", "tokens": 3, "why": "中文与英文混排"},
+    {"text": "中文abc", "tokens": 3, "why": "两个中文 + 三个英文字符"},
+    {"text": "const x = 1;", "tokens": 2, "why": "代码去掉空白后按四字符一 token"},
+    {"text": "你好，世界！", "tokens": 4, "why": "中文标点非 CJK,按四字符一 token 并入"},
+    {"text": "模型 says hello 世界", "tokens": 6, "why": "中英混排逐段相加"}
+  ]
+}

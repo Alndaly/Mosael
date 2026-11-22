@@ -107,11 +107,11 @@ def usage_of(payload: object) -> UpstreamUsage | None:
     return UpstreamUsage(input_tokens=max(0, prompt), output_tokens=max(0, completion))
 
 
-def generated_chars(payload: object) -> int:
-    """一段回包里生成了多少字(正文 + 思考 + 工具调用参数)—— 上游没报用量时拿它估输出 token。"""
+def generated_text(payload: object) -> str:
+    """一段回包里生成了什么文字(正文 + 思考 + 工具调用参数)—— 上游没报用量时拿它估输出 token。"""
     if not isinstance(payload, dict):
-        return 0
-    total = 0
+        return ""
+    parts: list[str] = []
     for choice in payload.get("choices") or []:
         if not isinstance(choice, dict):
             continue
@@ -121,9 +121,14 @@ def generated_chars(payload: object) -> int:
         #: 思考过程各家叫法不同:DeepSeek 是 `reasoning_content`,Ollama / OpenRouter 是 `reasoning`。都是生成出来、要算钱的。
         for key in ("content", "reasoning_content", "reasoning"):
             if isinstance(part.get(key), str):
-                total += len(part[key])
+                parts.append(part[key])
         for call in part.get("tool_calls") or []:
             function = call.get("function") if isinstance(call, dict) else None
             if isinstance(function, dict) and isinstance(function.get("arguments"), str):
-                total += len(function["arguments"])
-    return total
+                parts.append(function["arguments"])
+    return "".join(parts)
+
+
+def generated_chars(payload: object) -> int:
+    """一段回包里生成了多少字。保留给只关心长度的调用方/测试;计费估算用 `generated_text`。"""
+    return len(generated_text(payload))

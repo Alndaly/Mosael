@@ -29903,7 +29903,18 @@
           "cloud"
         ],
         "summary": "Cloud Mfa Setup",
+        "description": "开启 TOTP 需要当前密码(Cloud 对邮箱/密码账号强制校验;OAuth 账号没有密码,空串可过)。",
         "operationId": "cloud_mfa_setup_api_cloud_v1_mfa_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudMfaSetupIn"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -36518,6 +36529,19 @@
         ],
         "title": "CloudMfaRequiredOut",
         "description": "主认证成功但账号开了双因素:客户端拿票据去换真正的会话。"
+      },
+      "CloudMfaSetupIn": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Current Password",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "CloudMfaSetupIn",
+        "description": "开启 TOTP 之前确认当前密码。OAuth 账号没有密码时 Cloud 接受空串。"
       },
       "CloudMfaVerifyIn": {
         "properties": {

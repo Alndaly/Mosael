@@ -16,7 +16,14 @@ from cloud.errors import CloudError
 from cloud.gateway.deps import CurrentDevice
 from cloud.generation import service
 from cloud.generation.adapters import AdapterArtifact
-from cloud.models import CloudGenerationJob, CloudMediaArtifact, CloudMediaUpload, now
+from cloud.models import (
+    CloudGatewayCall,
+    CloudGenerationJob,
+    CloudJobUsage,
+    CloudMediaArtifact,
+    CloudMediaUpload,
+    now,
+)
 from cloud.security import new_token
 
 router = APIRouter(prefix="/gateway/v1", tags=["gateway"])
@@ -52,20 +59,36 @@ class JobIn(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=120)
 
 
-def _view(job: CloudGenerationJob) -> dict[str, object]:
+def _view(db: DbSession, job: CloudGenerationJob) -> dict[str, object]:
+    """任务的对外形状。`usage` / `charged_credits` 是**结算事实**:桌面端账本按它们入账,
+    不再拿请求侧估算当成 Cloud 实际扣费(ADR 0019 / 0088)。"""
+    usage = {
+        row.unit: row.quantity
+        for row in db.scalars(select(CloudJobUsage).where(CloudJobUsage.job_id == job.id))
+    }
+    call = db.get(CloudGatewayCall, job.call_id)
     return {
         "id": job.id,
         "model": job.model_id,
         "status": job.status,
         "result": job.result,
         "error": {"code": job.error_code, "detail": job.error_detail} if job.error_code else None,
+        "usage": usage,
+        "charged_credits": call.charged if call is not None else 0,
         "created_at": job.created_at.isoformat(),
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
     }
 
 
 @router.post("/jobs", status_code=201)
-def create_job(body: JobIn, device: CurrentDevice, db: DbSession) -> dict[str, object]:
+def create_job(body: JobIn, device: CurrentDevice, db: DbSession, config: CurrentConfig) -> dict[str, object]:
+    #: 重放旧请求先拿旧任务:worker 能力 gate 不能把已经存在的任务变成 503。
+    existing = service.find_by_idempotency(db, user_id=device.user.id, idempotency_key=body.idempotency_key)
+    if existing is not None:
+        return {"job": _view(db, existing)}
+    #: 没有 worker 的部署**不能接单**:否则任务只预占积分、永远不跑,桌面端等到超时才失败。
+    if not config.worker_enabled:
+        raise CloudError(503, "generation_worker_unavailable")
     job = service.create_job(
         db,
         user_id=device.user.id,
@@ -75,7 +98,7 @@ def create_job(body: JobIn, device: CurrentDevice, db: DbSession) -> dict[str, o
         input=body.input,
         at=now(),
     )
-    return {"job": _view(job)}
+    return {"job": _view(db, job)}
 
 
 @router.get("/jobs/{job_id}")
@@ -83,7 +106,7 @@ def get_job(job_id: str, device: CurrentDevice, db: DbSession) -> dict[str, obje
     job = db.get(CloudGenerationJob, job_id)
     if job is None or job.user_id != device.user.id:
         raise CloudError(404, "job_not_found")
-    return {"job": _view(job)}
+    return {"job": _view(db, job)}
 
 
 @router.delete("/jobs/{job_id}", status_code=204)

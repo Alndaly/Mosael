@@ -784,6 +784,10 @@ class CloudGenerationJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
     next_poll_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     lease_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    #: **提交上游之前**就落库的时刻。它和 `provider_job_id` 一起回答「这次提交是不是已经发出去了」:
+    #: 进程在 submit 与写回 provider_job_id 之间死掉时,状态停在 `submitting` —— 重启后不能盲目再提交
+    #: (上游可能已经收下并扣费),只能按「结局不明」收预占、让用户重试。见 service.reconcile_uncertain_submits。
+    submit_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 

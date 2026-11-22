@@ -129,8 +129,11 @@ export function getCloudMfaStatus(): Promise<CloudMfaStatus> {
   return apiAllowingUnauthorized<CloudMfaStatus>("/api/cloud/v1/mfa");
 }
 
-export function setupCloudMfa(): Promise<CloudMfaSetup> {
-  return apiAllowingUnauthorized<CloudMfaSetup>("/api/cloud/v1/mfa/setup", { method: "POST" });
+export function setupCloudMfa(currentPassword: string): Promise<CloudMfaSetup> {
+  return apiAllowingUnauthorized<CloudMfaSetup>("/api/cloud/v1/mfa/setup", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword }),
+  });
 }
 
 export function enableCloudMfa(code: string): Promise<{ enabled: true; recovery_codes: string[] }> {

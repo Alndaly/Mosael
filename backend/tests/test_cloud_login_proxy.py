@@ -797,6 +797,13 @@ def test_mosael_cloud_job_adapter_submits_polls_and_downloads(tmp_path, monkeypa
     transport = httpx.MockTransport(handler)
     monkeypatch.setattr(http_retry, "RetryingClient", patched)
     monkeypatch.setattr(jobs_module, "RetryingClient", patched)
+
+    def fake_download(url: str, target, **_kwargs) -> str:
+        calls.append(("GET", urlsplit(url).path))
+        target.write_bytes(b"png")
+        return "image/png"
+
+    monkeypatch.setattr(jobs_module, "download_to_path", fake_download)
     adapter = MosaelCloudJobAdapter("image")
     context = GenerationAdapterContext(
         connection_id="c", vendor_id="mosael-cloud", api_key="mct_token",
@@ -809,3 +816,18 @@ def test_mosael_cloud_job_adapter_submits_polls_and_downloads(tmp_path, monkeypa
     assert result.output_paths[0].read_bytes() == b"png"
     assert calls[0] == ("POST", "/api/cloud/v1/gateway/v1/jobs")
     assert ("GET", "/api/cloud/v1/gateway/v1/jobs/j1/artifacts/a1") in calls
+
+
+def test_mfa_setup_relays_the_current_password(cloud: FakeCloud) -> None:
+    """Cloud 对邮箱/密码账号要求当前密码;中继曾经发 None,桌面端开启 TOTP 永远 401。"""
+    client = fresh_client()
+    login(client, cloud)
+    cloud.reply(200, {
+        "secret": "JBSWY3DPEHPK3PXP",
+        "otpauth_uri": "otpauth://totp/Mosael:alice@example.com?secret=JBSWY3DPEHPK3PXP",
+    })
+    response = client.post("/api/cloud/v1/mfa/setup", json={"current_password": PASSWORD})
+    assert response.status_code == 200, response.text
+    sent = cloud.requests[-1]
+    assert (sent.method, sent.url.path) == ("POST", "/mfa/setup")
+    assert json.loads(sent.content) == {"current_password": PASSWORD}

@@ -141,6 +141,20 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 加了前两段。Anthropic 协议(Kimi Code 订阅走的就是它)开着缓存时,新进来的对话正记在 `cacheWrite` 上 ——
 水位停在「工具定义 + 系统提示」那么高,压缩迟迟不触发;而 pi 夹 `max_tokens` 时是把它算进去的。
 
+### `token-estimate-cases.json` —— 计费回退的 token 估算契约
+
+「上游没报 usage 时,一段文字按几个 token 收费。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 桌面端本地账本 / 请求侧计量 | `backend/app/core/token_estimate.py` | `backend/tests/test_token_estimate_parity.py` |
+| MosaelCloud 网关预占与结算 | `cloud/src/cloud/gateway/token_estimate.py` | `cloud/tests/test_token_estimate_parity.py` |
+
+**为什么不共用一份实现**:云端网关和桌面端是两个部署物、两个 Python 环境,不互相 import;而两边都要在
+上游省略 usage 时给出同一个数。此前 Cloud 按 `chars / 2`、桌面端按「中文一字一 token + 英文四字符一 token」,
+同一段对话在应用里显示一个数、Cloud 扣另一个数,用户无法复核。现在两侧跑同一份语料;上游报了 usage 仍以
+上游为准(`usage_reported=True`),语料只约束回退。
+
 ### `transform-cases.json` —— 片段变换契约
 
 「一份 `clip.transform` 读出来是什么(默认、钳制、垃圾值怎么退),关键帧在某进度处采样成什么。」

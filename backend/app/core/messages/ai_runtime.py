@@ -28,6 +28,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "providerErr_generationFailed": {"zh": "{vendor} 生成失败:{detail}", "en": "{vendor} generation failed: {detail}"},
     "providerErr_cloudRejected": {"zh": "MosaelCloud 拒绝了这次任务:{detail}", "en": "MosaelCloud rejected this job: {detail}"},
+    "providerErr_cloudFailed": {"zh": "MosaelCloud 任务失败:{detail}", "en": "MosaelCloud job failed: {detail}"},
+    "providerErr_cloudNoResult": {"zh": "MosaelCloud 任务完成了,但没有交回任何文件。", "en": "The MosaelCloud job finished without returning any files."},
     "providerErr_cloudEndpoint": {"zh": "MosaelCloud 的连接地址不正确,请在设置里重新登录 MosaelCloud。", "en": "The MosaelCloud endpoint is incorrect. Sign in to MosaelCloud again in Settings."},
 
     "providerErr_upstreamAuth": {

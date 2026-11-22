@@ -13,7 +13,14 @@ from cloud.domain import catalog, credits
 from cloud.domain.channel_keys import new_channel_key
 from cloud.generation.adapters import AdapterArtifact, AdapterResult, JobContext
 from cloud.generation.service import run_one
-from cloud.models import CloudGenerationJob, CloudMediaUpload, CloudModelPriceComponent, CloudUser, now
+from cloud.models import (
+    CloudGatewayCall,
+    CloudGenerationJob,
+    CloudMediaUpload,
+    CloudModelPriceComponent,
+    CloudUser,
+    now,
+)
 from conftest import RecordingSender, api, signed_in
 
 
@@ -41,12 +48,12 @@ class FakeJobAdapter:
         return True
 
 
-def _setup(tmp_path):
+def _setup(tmp_path, *, worker_enabled: bool = True):
     from cloud.app import create_app
 
     app = create_app(
         CloudConfig(data_dir=tmp_path, public_url="https://mosael.test", cookie_secure=False,
-                    channel_key=new_channel_key()),
+                    channel_key=new_channel_key(), worker_enabled=worker_enabled),
         code_sender=RecordingSender(),
     )
     with app.state.db.session() as db:
@@ -108,6 +115,8 @@ def test_job_is_reserved_submitted_polled_and_downloaded(tmp_path):
     assert finished.status_code == 200
     body = finished.json()["job"]
     assert body["status"] == "succeeded"
+    assert body["usage"] == {"image": 1}
+    assert body["charged_credits"] == 2
     artifact_id = body["result"]["artifact_ids"][0]
     downloaded = client.get(api(f"/gateway/v1/jobs/{job_id}/artifacts/{artifact_id}"))
     assert downloaded.status_code == 200
@@ -323,3 +332,129 @@ def test_cancel_after_submission_waits_and_only_refunds_when_provider_confirms(t
         job = db.get(CloudGenerationJob, job_id)
         assert job.status == "cancelled"
         assert db.get(CloudGatewayCall, job.call_id).status == "released"
+
+
+def test_no_worker_rejects_new_jobs_without_reserving_credits(tmp_path):
+    app = _setup(tmp_path, worker_enabled=False)
+    client = _desktop(app)
+    rejected = client.post(api("/gateway/v1/jobs"), json={
+        "model": "image-model", "input": {"prompt": "a cat"}, "idempotency_key": "no-worker",
+    })
+    assert rejected.status_code == 503
+    assert rejected.json()["error"] == "generation_worker_unavailable"
+    with app.state.db.session() as db:
+        assert db.scalar(select(CloudGenerationJob)) is None
+        assert db.scalar(select(CloudGatewayCall)) is None, "被拒绝的请求不能留下预占"
+
+
+def test_an_existing_job_is_replayable_even_when_the_worker_is_off(tmp_path):
+    """重放同一个幂等键要拿回旧任务;不能因为 worker 后来关了就把一次已存在的请求变成 503。"""
+    from cloud.app import create_app
+
+    app = _setup(tmp_path, worker_enabled=True)
+    client = _desktop(app)
+    secret = client.headers["Authorization"].removeprefix("Bearer ")
+    created = client.post(api("/gateway/v1/jobs"), json={
+        "model": "image-model", "input": {"prompt": "a cat"}, "idempotency_key": "replay-me",
+    })
+    assert created.status_code == 201
+    job_id = created.json()["job"]["id"]
+
+    offline = create_app(
+        CloudConfig(data_dir=tmp_path, public_url="https://mosael.test", cookie_secure=False,
+                    channel_key=app.state.config.channel_key, worker_enabled=False),
+        code_sender=RecordingSender(),
+    )
+    replay = TestClient(offline)
+    replay.headers["Authorization"] = f"Bearer {secret}"
+    again = replay.post(api("/gateway/v1/jobs"), json={
+        "model": "image-model", "input": {"prompt": "a cat"}, "idempotency_key": "replay-me",
+    })
+    assert again.status_code == 201, again.text
+    assert again.json()["job"]["id"] == job_id
+
+
+def test_uncertain_submit_is_reconciled_without_resubmitting(tmp_path):
+    from cloud.generation import service as generation_service
+
+    app = _setup(tmp_path, worker_enabled=False)
+    _desktop(app)
+    with app.state.db.session() as db:
+        user = db.scalar(select(CloudUser))
+        call = CloudGatewayCall(user_id=user.id, model_id="image-model", reserved=9, created_at=now())
+        db.add(call)
+        db.flush()
+        credits.reserve(db, call, at=now())
+        job = CloudGenerationJob(
+            user_id=user.id, model_id="image-model", call_id=call.id, idempotency_key="uncertain",
+            status="submitting", input={}, capability={}, price_snapshot={},
+            submit_started_at=now(), created_at=now(), updated_at=now(),
+        )
+        db.add(job)
+        db.commit()
+        job_id, call_id = job.id, call.id
+
+    with app.state.db.session() as db:
+        assert generation_service.reconcile_uncertain_submits(db, at=now()) == 1
+        db.commit()
+
+    with app.state.db.session() as db:
+        job = db.get(CloudGenerationJob, job_id)
+        call = db.get(CloudGatewayCall, call_id)
+        assert job.status == "failed"
+        assert job.error_code == "submit_outcome_unknown"
+        assert call.status == "settled" and call.charged == call.reserved, "结局不明不能白送一次上游生成"
+
+
+def test_queued_job_expires_and_releases_its_reservation(tmp_path):
+    from cloud.generation import service as generation_service
+
+    app = _setup(tmp_path, worker_enabled=False)
+    _desktop(app)
+    with app.state.db.session() as db:
+        user = db.scalar(select(CloudUser))
+        call = CloudGatewayCall(user_id=user.id, model_id="image-model", reserved=5, created_at=now())
+        db.add(call)
+        db.flush()
+        credits.reserve(db, call, at=now())
+        old = now() - timedelta(hours=2)
+        job = CloudGenerationJob(
+            user_id=user.id, model_id="image-model", call_id=call.id, idempotency_key="queued-old",
+            status="queued", input={}, capability={}, price_snapshot={},
+            created_at=old, updated_at=old,
+        )
+        db.add(job)
+        db.commit()
+        job_id, call_id = job.id, call.id
+
+    with app.state.db.session() as db:
+        assert generation_service.expire_queued_jobs(db, at=now()) == 1
+        db.commit()
+
+    with app.state.db.session() as db:
+        job = db.get(CloudGenerationJob, job_id)
+        call = db.get(CloudGatewayCall, call_id)
+        assert job.status == "failed" and job.error_code == "worker_unavailable"
+        assert call.status == "released" and call.charged == 0
+
+
+def test_future_lease_is_not_claimed_by_another_worker(tmp_path):
+    from cloud.generation import service as generation_service
+
+    app = _setup(tmp_path, worker_enabled=False)
+    _desktop(app)
+    with app.state.db.session() as db:
+        user = db.scalar(select(CloudUser))
+        call = CloudGatewayCall(user_id=user.id, model_id="image-model", reserved=1, created_at=now())
+        db.add(call)
+        db.flush()
+        job = CloudGenerationJob(
+            user_id=user.id, model_id="image-model", call_id=call.id, idempotency_key="leased",
+            status="queued", input={}, capability={}, price_snapshot={},
+            lease_until=now() + timedelta(minutes=5), created_at=now(), updated_at=now(),
+        )
+        db.add(job)
+        db.commit()
+
+    with app.state.db.session() as db:
+        assert generation_service._claimed(db, now()) is None

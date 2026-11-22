@@ -31,7 +31,7 @@ from cloud.domain.identity import account_user
 from cloud.errors import CloudError
 from cloud.gateway import chat
 from cloud.gateway.deps import CurrentDevice
-from cloud.gateway.upstream import generated_chars, new_client, usage_of
+from cloud.gateway.upstream import generated_text, new_client, usage_of
 from cloud.models import CloudGatewayModel, now
 
 router = APIRouter(prefix="/gateway", tags=["gateway"])
@@ -128,7 +128,7 @@ def chat_completions(body: ChatIn, request: Request, device: CurrentDevice, db: 
         device_token_id=device.token.id,
         model_id=body.model,
         max_tokens=body.max_tokens,
-        input_chars=chat.prompt_chars(messages, body.tools),
+        input_text=chat.prompt_text(messages, body.tools),
         at=at,
     )
     payload = body.model_dump(exclude_none=True, exclude={"model", "messages", "max_tokens"})
@@ -162,8 +162,8 @@ def chat_completions(body: ChatIn, request: Request, device: CurrentDevice, db: 
             call_id=call_id,
             rate=begun.rate,
             usage=usage_of(reply),
-            input_chars=begun.input_chars,
-            output_chars=generated_chars(reply),
+            input_text=begun.input_text,
+            output_text=generated_text(reply),
             at=now(),
         )
         out = reply if isinstance(reply, dict) else {}
@@ -182,7 +182,7 @@ def _relay(
 ) -> Iterator[str]:
     """把上游的 SSE 一块块转回,边转边记用量;最后那块 usage 由网关结算后给出。结束(或被掐断)时结算。"""
     usage = None
-    output_chars = 0
+    output_parts: list[str] = []
     upstream_done = False
     #: 上游最后那块 usage 的样子(id、created …):网关照它给出自己的那块;上游没给就照最后一块内容的样子拼一块。
     last_chunk: dict[str, Any] = {}
@@ -194,7 +194,7 @@ def _relay(
         settling_started = True
         return chat.finish(
             database, call_id=call_id, rate=begun.rate, usage=usage,
-            input_chars=begun.input_chars, output_chars=output_chars, at=now(),
+            input_text=begun.input_text, output_text="".join(output_parts), at=now(),
         )
 
     try:
@@ -215,7 +215,7 @@ def _relay(
                 yield f"{line}\n"
                 continue
             usage = usage_of(parsed) or usage
-            output_chars += generated_chars(parsed)
+            output_parts.append(generated_text(parsed))
             last_chunk = {key: parsed[key] for key in ("id", "object", "created", "system_fingerprint") if key in parsed}
             #: 用量由网关结算后在最后一块里给;上游这一块里的 usage 拿掉,只剩用量的那块整个不转。
             parsed.pop("usage", None)

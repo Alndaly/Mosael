@@ -25,8 +25,12 @@ from cloud.models import (
     now,
 )
 
-ACTIVE = frozenset({"queued", "submitted", "running", "cancel_requested"})
+ACTIVE = frozenset({"queued", "submitting", "submitted", "running", "cancel_requested"})
 TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
+#: 一次 claim 的租约。它挡住「上一个 worker 还活着、只是慢」时的第二个 claim;到期由下一个 worker 接管。
+LEASE_SECONDS = 120
+#: 排队超过这么久还没有 worker 处理:不再无限占积分,直接失败并释放预占。桌面端自己等 Cloud 的上限是 1 小时。
+QUEUED_TTL = timedelta(hours=1)
 
 
 def create_job(
@@ -95,6 +99,66 @@ def create_job(
     return job
 
 
+def find_by_idempotency(db: Session, *, user_id: str, idempotency_key: str) -> CloudGenerationJob | None:
+    """同一个用户、同一个幂等键已有的任务。API 在 worker 能力 gate 之前先查它:重放旧请求要拿到旧任务,不能被 503。"""
+    return db.scalar(
+        select(CloudGenerationJob).where(
+            CloudGenerationJob.user_id == user_id,
+            CloudGenerationJob.idempotency_key == idempotency_key,
+        )
+    )
+
+
+def reconcile_uncertain_submits(db: Session, *, at: datetime) -> int:
+    """收尾「提交已经发出、结果没写回」的任务。**绝不自动重提** —— 上游可能已经收下并扣费。
+
+    有 `provider_job_id` 的接回轮询;没有的记 `submit_outcome_unknown` 并按预占收费(与「取消时撤销
+    没确认」同一条风控:宁可让用户找客服退,也不白送一次上游生成)。返回处理了几条。
+    """
+    rows = list(db.scalars(
+        select(CloudGenerationJob)
+        .where(CloudGenerationJob.status == "submitting")
+        .with_for_update(skip_locked=True)
+    ))
+    for job in rows:
+        if job.provider_job_id:
+            job.status = "submitted"
+            job.next_poll_at = at
+        else:
+            job.status = "failed"
+            job.error_code = "submit_outcome_unknown"
+            job.error_detail = "worker stopped between submit and provider job id; not resubmitted"
+            job.finished_at = at
+            job.updated_at = at
+            job.next_poll_at = None
+            call = db.get(CloudGatewayCall, job.call_id)
+            if call is not None and call.status == "reserved":
+                credits.settle(db, call, charged=call.reserved, at=at)
+        job.lease_until = None
+        job.updated_at = at
+    return len(rows)
+
+
+def expire_queued_jobs(db: Session, *, at: datetime, older_than: timedelta = QUEUED_TTL) -> int:
+    """没有 worker 的部署不能无限接单:排队超过 TTL 的任务失败并全额释放预占。"""
+    rows = list(db.scalars(
+        select(CloudGenerationJob)
+        .where(CloudGenerationJob.status == "queued", CloudGenerationJob.created_at <= at - older_than)
+        .with_for_update(skip_locked=True)
+    ))
+    for job in rows:
+        job.status = "failed"
+        job.error_code = "worker_unavailable"
+        job.error_detail = "no generation worker processed this job before its queue deadline"
+        job.finished_at = at
+        job.updated_at = at
+        job.next_poll_at = None
+        call = db.get(CloudGatewayCall, job.call_id)
+        if call is not None and call.status == "reserved":
+            credits.settle(db, call, charged=0, at=at)
+    return len(rows)
+
+
 def cancel_job(db: Session, *, user_id: str, job_id: str, at: datetime) -> CloudGenerationJob:
     #: **锁住任务行再判断。** worker 领到排队的任务后,在持锁状态下调上游 submit(要几秒);此前这里不加锁读,读到「还没提交」
     #: 就全额退预占,它的 UPDATE 等 worker 提交后再执行,把「已提交上游」覆盖成「已取消」—— 上游照跑、平台付钱、用户 0 扣。
@@ -106,9 +170,9 @@ def cancel_job(db: Session, *, user_id: str, job_id: str, at: datetime) -> Cloud
         raise CloudError(409, "job_already_finished")
     if job.status == "cancel_requested":
         return job
-    if job.provider_job_id:
-        # 已提交上游:**先不要退款**。worker 会领取这个状态、尝试真正取消;只有适配器
-        # 确认取消成功才释放预占。否则“提交后立刻取消”就是免费烧上游额度的入口。
+    if job.provider_job_id or job.status == "submitting":
+        # 已提交上游、或者提交请求正在路上:**先不要退款**。worker 会领取这个状态、尝试真正取消;
+        # 只有适配器确认取消成功才释放预占。否则“提交后立刻取消”就是免费烧上游额度的入口。
         job.status = "cancel_requested"
         job.updated_at = at
         db.commit()
@@ -124,9 +188,11 @@ def cancel_job(db: Session, *, user_id: str, job_id: str, at: datetime) -> Cloud
 
 
 def _claimed(db: Session, at: datetime) -> CloudGenerationJob | None:
+    lease_ready = or_(CloudGenerationJob.lease_until.is_(None), CloudGenerationJob.lease_until <= at)
     statement = (
         select(CloudGenerationJob)
         .where(
+            lease_ready,
             or_(
                 CloudGenerationJob.status.in_(("queued", "cancel_requested")),
                 and_(
@@ -134,7 +200,7 @@ def _claimed(db: Session, at: datetime) -> CloudGenerationJob | None:
                     CloudGenerationJob.next_poll_at.is_not(None),
                     CloudGenerationJob.next_poll_at <= at,
                 ),
-            )
+            ),
         )
         .order_by(CloudGenerationJob.created_at)
         .with_for_update(skip_locked=True)
@@ -142,7 +208,7 @@ def _claimed(db: Session, at: datetime) -> CloudGenerationJob | None:
     job = db.scalars(statement).first()
     if job is None:
         return None
-    job.lease_until = at + timedelta(seconds=120)
+    job.lease_until = at + timedelta(seconds=LEASE_SECONDS)
     db.flush()
     return job
 
@@ -249,11 +315,43 @@ def run_one(db: Session, *, config: CloudConfig, adapters: dict[str, JobAdapter]
             db.commit()
             return True
         if job.status == "queued" or not job.provider_job_id:
-            result = adapter.submit(context)
+            #: **先把「提交已经发出」落库,再发网络请求。** 中间崩溃时下一次启动看到 `submitting`
+            #: 会按结局不明收尾,而不是再提交一次(上游可能已经扣过费)。
+            job.status = "submitting"
+            job.submit_started_at = at
+            job.updated_at = at
+            db.commit()
+            try:
+                result = adapter.submit(context)
+            except Exception as exc:  # noqa: BLE001 —— 提交阶段异常可能是「对方收到了但没回」
+                job.status = "failed"
+                job.error_code = "submit_outcome_unknown"
+                job.error_detail = str(exc)[:500]
+                job.finished_at = at
+                job.updated_at = at
+                job.next_poll_at = None
+                job.lease_until = None
+                call = db.get(CloudGatewayCall, job.call_id)
+                if call is not None and call.status == "reserved":
+                    credits.settle(db, call, charged=call.reserved, at=at)
+                db.commit()
+                return True
         else:
             result = adapter.poll(context, job.provider_job_id)
+        #: 提交期间用户可能点了取消。刷新后先尊重那一行,不把 result 覆盖上去。
+        db.refresh(job)
+        if job.status == "cancel_requested":
+            if result.provider_job_id:
+                job.provider_job_id = result.provider_job_id
+            job.next_poll_at = at
+            job.lease_until = None
+            job.submit_started_at = None
+            job.updated_at = at
+            db.commit()
+            return True
         job.updated_at = at
         job.lease_until = None
+        job.submit_started_at = None
         if result.provider_job_id:
             job.provider_job_id = result.provider_job_id
         if result.status == "succeeded":

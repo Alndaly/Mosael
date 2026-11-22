@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 #: 迁移链的最新一条。加了迁移只改这一处。
-HEAD = "0029"
+HEAD = "0030"
 
 
 def _url(path: Path) -> str:
