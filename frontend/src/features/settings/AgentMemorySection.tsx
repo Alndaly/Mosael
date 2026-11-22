@@ -123,7 +123,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
       contentClassName={memories.data && rows.length === 0 ? "min-h-0" : undefined}
       actions={
         <div className="flex items-center gap-1.5">
-          <BulkSelectTrigger active={bulk.selectMode} onEnter={bulk.enter} disabled={rows.length === 0} />
+          <BulkSelectTrigger size="sm" active={bulk.selectMode} onEnter={bulk.enter} disabled={rows.length === 0} />
           <Button variant="outline" size="sm" onClick={openAdd}>
             <Plus size={13} /> {t("agentMemoryAdd")}
           </Button>

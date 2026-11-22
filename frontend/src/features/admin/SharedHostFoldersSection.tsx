@@ -46,7 +46,7 @@ export function SharedHostFoldersSection() {
       title={t("deploySharedFoldersTitle")}
       description={t("deploySharedFoldersDesc")}
       actions={
-        <Button size="sm" variant="outline" disabled={!folders.isSuccess} onClick={() => setAdding(true)}>
+        <Button variant="outline" disabled={!folders.isSuccess} onClick={() => setAdding(true)}>
           <Plus size={13} /> {t("deploySharedFoldersNew")}
         </Button>
       }

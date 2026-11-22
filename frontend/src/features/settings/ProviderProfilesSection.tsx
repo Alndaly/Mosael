@@ -314,7 +314,7 @@ export function ProviderProfilesSection({
       description={description ?? t("providerAccountsDesc")}
       actions={
         <div className="flex items-center gap-1.5">
-          <BulkSelectTrigger active={bulk.selectMode} onEnter={bulk.enter} disabled={visibleProfiles.length === 0} />
+          <BulkSelectTrigger size="sm" active={bulk.selectMode} onEnter={bulk.enter} disabled={visibleProfiles.length === 0} />
           <Button variant="outline" size="sm" onClick={openCreate}>
             <Plus size={13} /> {t("providerAdd")}
           </Button>

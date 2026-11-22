@@ -98,12 +98,21 @@ export function BulkActionBar({
 }
 
 
-/** 标题行右侧的「选择」入口。选择模式打开后它让位给操作条,所以进了模式就不再渲染。 */
-export function BulkSelectTrigger({ active, onEnter, disabled }: { active: boolean; onEnter: () => void; disabled?: boolean }) {
+/**
+ * 标题行右侧的「选择」入口。选择模式打开后它让位给操作条,所以进了模式就不再渲染。
+ *
+ * `size` 跟着它旁边的按钮走:设置页的节头是 sm,管理页的节头和页面工具栏同高(default)。
+ */
+export function BulkSelectTrigger({ active, onEnter, disabled, size }: {
+  active: boolean;
+  onEnter: () => void;
+  disabled?: boolean;
+  size: "sm" | "default";
+}) {
   const t = useI18n();
   if (active) return null;
   return (
-    <Button variant="outline" size="sm" disabled={disabled} onClick={onEnter}>
+    <Button variant="outline" size={size} disabled={disabled} onClick={onEnter}>
       <ListChecks size={13} /> {t("bulkSelect")}
     </Button>
   );

@@ -43,7 +43,7 @@ export function OutboundAllowlistSection() {
       title={t("deployOutboundTitle")}
       description={t("deployOutboundDesc")}
       actions={
-        <Button size="sm" variant="outline" disabled={!allowlist.isSuccess} onClick={() => setAdding(true)}>
+        <Button variant="outline" disabled={!allowlist.isSuccess} onClick={() => setAdding(true)}>
           <Plus size={13} /> {t("deployOutboundNew")}
         </Button>
       }

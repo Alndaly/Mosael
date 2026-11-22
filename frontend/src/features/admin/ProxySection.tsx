@@ -56,7 +56,7 @@ export function ProxySection() {
       title={t("proxyTitle")}
       description={t("proxyDesc")}
       actions={
-        <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
+        <Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
           {t("save")}
         </Button>
       }

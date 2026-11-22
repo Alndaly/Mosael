@@ -415,11 +415,10 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       }
       actions={
         <div className="flex items-center gap-1.5">
-          <BulkSelectTrigger active={bulk.selectMode} onEnter={bulk.enter} disabled={ruleList.length === 0} />
+          <BulkSelectTrigger size="default" active={bulk.selectMode} onEnter={bulk.enter} disabled={ruleList.length === 0} />
           <Hint label={t("pricingPrefillHint")}>
             <Button
               variant="outline"
-              size="sm"
               onClick={() => {
                 setPrefillResults([]);
                 setPrefillOpen(true);
@@ -428,7 +427,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               <Sparkles size={13} /> {t("pricingPrefill")}
             </Button>
           </Hint>
-          <Button variant="outline" size="sm" onClick={openCreate}>
+          <Button variant="outline" onClick={openCreate}>
             <Plus size={13} /> {t("pricingRuleAdd")}
           </Button>
         </div>

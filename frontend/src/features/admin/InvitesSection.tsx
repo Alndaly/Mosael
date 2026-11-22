@@ -68,7 +68,7 @@ export function InvitesSection({ onOpenDeployment }: { onOpenDeployment: () => v
       description={inviteOnly ? t("deployInvitesDesc") : undefined}
       actions={
         inviteOnly && (
-          <Button size="sm" onClick={() => setCreating(true)}>
+          <Button onClick={() => setCreating(true)}>
             <Plus size={13} /> {t("deployInviteNew")}
           </Button>
         )

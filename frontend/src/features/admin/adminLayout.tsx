@@ -57,6 +57,7 @@ export function AdminSection({
               <span className="rounded-md bg-secondary px-1.5 py-0.5 text-ui-xs tabular-nums text-muted-foreground">{count}</span>
             )}
           </div>
+          {/* 动作按钮用 default(40px),和节下面的搜索框、筛选、列表同高(棘轮:design/adminSectionActions.test.ts)。 */}
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </div>
         {/* 说明跟着这一列铺开,不设宽度上限:管理面板是整页宽、下面紧跟满宽卡片,
