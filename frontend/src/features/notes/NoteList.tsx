@@ -307,8 +307,7 @@ export function NoteList({
               <span>{s.selectedCount(chosen.length)}</span>
             </label>
             <IconButton
-              unstyled
-              className="note-icon"
+              size="icon-xs"
               label={s.cancelSelection}
               disabled={busy}
               onClick={clear}

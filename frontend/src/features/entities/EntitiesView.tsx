@@ -150,10 +150,12 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
   //: 这一类一个都没有(不是筛没了)时,「新建」只在正中的空状态里摆一颗,页头不再摆第二颗同一件事的实心按钮。
   const emptyKind = !filtering && listing.isSuccess && visible.length === 0;
   const sortLabel: Record<SortKey, string> = { updated: t("sortUpdated"), name: t("sortName"), references: t("entitiesSortReferences") };
+  //: 「资产库 / 参考库」换的是**整页**(两边各有自己的筛选条),所以放在页头、和页头按钮同高(md,40px)。
+  //: 此前它是 sm(32px),挂在页签那一行右端,正下方右对齐着 40px 的「选择」,一高一矮;
+  //: 参考库那边还得把它接过去在自己的筛选条里再摆一次。
   const modeSwitch = (
     <Segmented
       aria-label={t("navEntities")}
-      size="sm"
       value={mode}
       onValueChange={setMode}
       options={[
@@ -178,14 +180,17 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         count={activeMode === "assets" ? all.data?.length : undefined}
         className="mb-4 pt-7 xl:pt-8"
         actions={
-          activeMode === "assets" && !emptyKind ? (
-            <Hint disabledReason={writeBlocked?.reason}>
-              <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
-                <Plus />
-                {t("entitiesNew").replace("{kind}", labels.kind(kind))}
-              </Button>
-            </Hint>
-          ) : undefined
+          <>
+            {modeSwitch}
+            {activeMode === "assets" && !emptyKind && (
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                  <Plus />
+                  {t("entitiesNew").replace("{kind}", labels.kind(kind))}
+                </Button>
+              </Hint>
+            )}
+          </>
         }
       />
 
@@ -212,7 +217,6 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
               count: (all.data ?? []).filter((entity) => entity.kind === one).length,
             }))}
           />
-          <div className="ml-auto">{modeSwitch}</div>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -249,7 +253,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
       )}
 
       {activeMode === "references" ? (
-        <ReferenceLibraryView workspace={workspace} modeSwitch={modeSwitch} />
+        <ReferenceLibraryView workspace={workspace} />
       ) : (
       <>
       {/* 空态要落在**剩下的那块空间**中间,和工作台同一个做法:根容器是列方向的 flex,

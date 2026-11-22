@@ -71,17 +71,15 @@ describe("参考库", () => {
   });
   afterEach(cleanup);
 
-  it("没有接参考库:切回资产库的开关位置和资产库一致,空态在剩下的高度里居中", async () => {
+  it("没有接参考库:空态在剩下的高度里居中(「资产库 / 参考库」开关在页头,不归这里摆)", async () => {
     api.listReferenceConnections.mockResolvedValue([]);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <ReferenceLibraryView workspace={WORKSPACE} modeSwitch={<span>切回资产库</span>} />
+        <ReferenceLibraryView workspace={WORKSPACE} />
       </QueryClientProvider>,
     );
 
-    const trigger = await screen.findByText("切回资产库");
-    expect(trigger.parentElement?.className, "开关那一行和资产库的筛选首行同高").toContain("min-h-10");
     const empty = (await screen.findByText("referenceLibraryNoConnection")).closest(".empty-state");
     expect(empty?.parentElement?.className, "空态吃满剩下的高度并居中").toContain("flex-1");
     expect(empty?.parentElement?.className).toContain("items-center");

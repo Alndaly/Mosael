@@ -184,7 +184,7 @@ function LibraryFailure({ error }: { error: unknown }) {
 }
 
 /** 参考库:只读外部图集;浏览只拉缩略图,点「用作素材 / 存为资产」才把单条原图取进工作区。 */
-export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Workspace; modeSwitch?: React.ReactNode }) {
+export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const [connectionId, setConnectionId] = React.useState("");
@@ -249,7 +249,6 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
   if (connections.data.length === 0) {
     return (
       <div className="flex min-w-0 flex-1 flex-col" data-reference-library="">
-        {modeSwitch && <div className="flex min-h-10 items-center justify-end">{modeSwitch}</div>}
         <div className="flex flex-1 items-center justify-center">
           <EmptyState
             icon={<Sparkles />}
@@ -281,7 +280,6 @@ export function ReferenceLibraryView({ workspace, modeSwitch }: { workspace: Wor
             label={t("referenceLibraryCollection")}
             items={(collections.data ?? []).map((one) => ({ value: one.id, label: localized(one.name, locale), count: one.count }))}
           />
-          {modeSwitch && <div className="ml-auto">{modeSwitch}</div>}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
           {connections.data.length > 1 && (

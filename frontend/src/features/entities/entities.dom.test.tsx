@@ -212,6 +212,20 @@ describe("资产页", () => {
     expect(screen.getByRole("link", { name: "referenceLibraryGoPlugins" }).getAttribute("href")).toBe("#/plugins");
   });
 
+  //: UI 走查:开关曾是 32px,挂在页签行右端,正下方右对齐着 40px 的「选择」。它换的是整页,放页头、和页头按钮同高。
+  it("「资产库 / 参考库」开关在页头、不在筛选条里;切到参考库它还在原位", async () => {
+    api.listEntities.mockResolvedValue([summary()]);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    await screen.findByText("张三");
+    const inHeader = () => screen.getByRole("radio", { name: "referenceLibraryTab" }).closest("[data-slot=page-heading]");
+    expect(inHeader(), "开关在页头里").not.toBeNull();
+    expect(screen.getByRole("radio", { name: "referenceLibraryTab" }).closest(".workspace-sticky")).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "referenceLibraryTab" }));
+    expect(await screen.findByText("referenceLibraryNoConnection")).toBeTruthy();
+    expect(screen.getAllByRole("radio", { name: "referenceLibraryTab" })).toHaveLength(1);
+    expect(inHeader()).not.toBeNull();
+  });
+
   it("接着参考库时切换器照常可用", async () => {
     api.listEntities.mockResolvedValue([summary()]);
     api.listReferenceConnections.mockResolvedValue([{ id: "c1", name: "PoseAtlas" }]);
