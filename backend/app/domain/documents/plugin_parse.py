@@ -31,7 +31,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, AssetExtraction, Job
 from mosael_formats.plugin_manifest import DOCUMENT_PARSE
 from app.domain.documents.local import DocumentParseError, Parsed, Section, html_to_markdown, _split_by_headings
-from app.domain.jobs import was_cancelled
+from app.domain.jobs.constants import was_cancelled
 from app.domain.plugins import tools as plugins_tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks

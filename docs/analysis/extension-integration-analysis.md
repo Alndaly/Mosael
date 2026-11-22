@@ -271,7 +271,7 @@ flowchart TD
 
 ### 2.6 智能体与工作流里的表达
 
-- **智能体工具**:`plugin__<实例id>__<工具名>`(`tool_manifest.py:54-62`,非法字符折成
+- **智能体工具**:`plugin__<实例id>__<工具名>`(`tools/manifest.py:54-62`,非法字符折成
   下划线,调用时反查清单而不是把名字拼回 id)。按实例而非按包:同包的两次接入是两套工具,
   模型要能分辨"从 B 站取"和"从抖音取"。描述前缀 `[插件·实例名]` 标明出处。
 - **工作流节点**:`plugin.<包id>.<工具名>`(`nodes.py:60-76`,按**最后一个点**切,因为插件
@@ -458,11 +458,11 @@ domain rules and permissions apply uniformly"(文件头注释)。错误处理 `_
 在别人站点上的真实登录身份,一张入口卡之后子智能体可以全程零卡地填表提交。改成显式声明,
 漏声明测试红。
 
-`domain/agent/tool_manifest.py` 从注册表派生 manifest(`GET /api/agent/tools`),并把
+`domain/agent/tools/manifest.py` 从注册表派生 manifest(`GET /api/agent/tools`),并把
 **插件工具展开成一等公民**(`plugin__…`,见 §2.6);两个元工具(`list_plugin_tools`/
-`invoke_plugin_tool`)留在 mcp_server 里只给直连 MCP 客户端用(`tool_manifest.py:45-48`)。
+`invoke_plugin_tool`)留在 mcp_server 里只给直连 MCP 客户端用(`tools/manifest.py:45-48`)。
 确认卡/选择卡的**等待协议由 manifest 标记驱动、各 runtime 自己生成**(`_CONFIRMATION_PROTOCOL`/
-`_ANSWER_PROTOCOL`,tool_manifest.py:93-112)——写死在工具描述里就必然对另一条运行时说谎;
+`_ANSWER_PROTOCOL`,tools/manifest.py:93-112)——写死在工具描述里就必然对另一条运行时说谎;
 两种卡的超时结局相反(确认卡超时=动作没发生,抛错;选择卡超时=用户没顾上,答案仍会由回执
 送回,如实说"还没答")。
 

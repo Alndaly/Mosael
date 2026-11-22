@@ -38,7 +38,8 @@ from app.domain.jobs import cancel_job, reconcile_orphaned_jobs
 from app.domain.workflows import create_workflow
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows import approvals as run_approvals
-from app.domain.workflows.engine import check_runnable, start_workflow_job
+from app.domain.workflows.engine import start_workflow_job
+from app.domain.workflows.readiness import check_runnable
 from app.integrations.feishu import cards
 from app.integrations.feishu.approvals import handle_card_action
 from tests.util import fresh_client, user_id

@@ -27,7 +27,8 @@ from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.assets.intermediates import DUB_LINE
 from app.domain.assets.media_info import patch_media_info
-from app.domain.jobs import CANCELLED, CANCELLED_ERROR_KEY, JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.jobs import JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.jobs.constants import CANCELLED, CANCELLED_ERROR_KEY
 from app.domain.sequences.tracks import AddTrack, add_track
 from app.domain.sequences.placement import InsertClip, insert_clip, DeleteClip, delete_clip
 from app.domain.voices.original_audio import (

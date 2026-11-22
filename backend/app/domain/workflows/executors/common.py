@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from app.core.db import SessionLocal
 from app.db.models import Job
-from app.domain.jobs import CANCELLED, cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
+from app.domain.jobs import cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
+from app.domain.jobs.constants import CANCELLED
 from app.domain.workflows import graph_runner, node_budget
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.errors import WorkflowDomainError

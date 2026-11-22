@@ -1370,7 +1370,8 @@ class Test带货口播动起来_建图与运行前:
         from app.db.models import Job
         from app.domain.generation.operations import GenerationDomainError
         from app.domain.workflows import create_workflow
-        from app.domain.workflows.engine import check_runnable, start_workflow_job
+        from app.domain.workflows.engine import start_workflow_job
+        from app.domain.workflows.readiness import check_runnable
         from tests.util import add_provider, user_id
 
         ws = _workspace()

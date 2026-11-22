@@ -685,7 +685,7 @@ def _start(graph: dict[str, Any]) -> dict[str, Any]:
 
 
 def _check(ws: str, user: str, graph: dict[str, Any], **params: Any) -> None:
-    from app.domain.workflows.engine import check_runnable
+    from app.domain.workflows.readiness import check_runnable
 
     with SessionLocal() as db:
         check_runnable(db, graph, params, user, workspace_id=ws)

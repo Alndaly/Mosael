@@ -26,7 +26,8 @@ from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import AgentMessage, AgentSession, GenerationJob, Job, User
 from app.domain.agent import host
 from app.domain.jobs.catalog import FALLBACK_LABEL_KEY, job_kind
-from app.domain.jobs import CANCELLED, TERMINAL_STATUSES, register_receipt_deliverer
+from app.domain.jobs import register_receipt_deliverer
+from app.domain.jobs.constants import CANCELLED, TERMINAL_STATUSES
 
 logger = logging.getLogger(__name__)
 

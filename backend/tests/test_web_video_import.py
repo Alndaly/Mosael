@@ -18,7 +18,8 @@ from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain.assets import from_url
 from app.domain.assets.from_url import start_url_import
-from app.domain.jobs import cancel_job, was_cancelled
+from app.domain.jobs import cancel_job
+from app.domain.jobs.constants import was_cancelled
 from app.media import ytdlp
 from tests.util import fresh_client
 

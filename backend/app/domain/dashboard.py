@@ -29,7 +29,7 @@ from app.db.models import (
     Workspace,
     now,
 )
-from app.domain.jobs import CANCELLED, TERMINAL_STATUSES
+from app.domain.jobs.constants import CANCELLED, TERMINAL_STATUSES
 from app.domain.publish import summary_bucket
 from app.domain.billing.usage import CostAmount, costs_by_currency, summarize_usage
 

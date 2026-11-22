@@ -29,7 +29,8 @@ from app.domain.workflows.graph_rules import (
     with_run_params,
 )
 from app.domain.workflows.node_types import node_title
-from app.domain.workflows.revisions import WorkflowRevision, WorkflowRevisionError, current_workflow_revision
+from app.db.models import WorkflowRevision
+from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.templates.catalog import requirement_problem
 
 #: 子工作流最多往下查几层 —— 和执行时 call_workflow 的嵌套上限同一个数(见 executors.subworkflow)。

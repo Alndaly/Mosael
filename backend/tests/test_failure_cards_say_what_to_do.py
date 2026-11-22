@@ -175,7 +175,7 @@ def test_工作台画布上跑的_数字人生成_不能照原样再来(connecte
 def test_停下了_可能已扣费才写那一句(stopped: bool, confidence: str | None, expected: bool) -> None:
     """D58:维持 ADR 0019(停下就是不要这一份),但服务商那边可能已经扣过费的,「已停止」卡上写「可能已扣费,成片未保留」。"""
     from app.api.schemas.generation import GenerationJobOut
-    from app.domain.jobs import CANCELLED_ERROR_KEY
+    from app.domain.jobs.constants import CANCELLED_ERROR_KEY
 
     record = GenerationJobOut.model_construct(error_key=CANCELLED_ERROR_KEY if stopped else "providerErr_pluginFailed",
                                               cost_confidence=confidence, request={})

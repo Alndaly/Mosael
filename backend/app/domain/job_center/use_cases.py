@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session, defer
 
 from app.db.models import GenerationJob, Job, JobCenterMark, TaskEvent, User, now
 from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, hidden_job_ids, jobs_filter
-from app.domain.jobs import IN_FLIGHT_STATUSES, TERMINAL_STATUSES, cancel_job
+from app.domain.jobs import cancel_job
+from app.domain.jobs.constants import IN_FLIGHT_STATUSES, TERMINAL_STATUSES
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_member, ensure_workspace_perm
 
 

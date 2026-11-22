@@ -4248,7 +4248,7 @@ def get_job(job_id: str) -> dict[str, Any]:
     from app.api.schemas import JobOut
     from app.domain.agent import receipts
     from app.domain.job_center import use_cases
-    from app.domain.jobs import TERMINAL_STATUSES
+    from app.domain.jobs.constants import TERMINAL_STATUSES
 
     job = _use_case(use_cases.readable, job_id, out=JobOut)
     # 看到终态了:这个任务发回这次对话的回执就不必再送(见 receipts.acknowledge_seen)。

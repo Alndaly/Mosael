@@ -14,14 +14,8 @@ import sys
 from app.core.child_process import ChildProcess
 from app.core.db import SessionLocal
 from app.db.models import Job
-from app.domain.jobs import (
-    TERMINAL_STATUSES,
-    cancel_job,
-    finish_job,
-    kill_job_child,
-    register_job_child,
-    unregister_job_child,
-)
+from app.domain.jobs import cancel_job, finish_job, kill_job_child, register_job_child, unregister_job_child
+from app.domain.jobs.constants import TERMINAL_STATUSES
 from tests.util import fresh_client
 
 

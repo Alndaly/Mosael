@@ -31,14 +31,8 @@ from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job, PublishAccount, PublishTask, Transcript
 from app.domain import jobs as jobs_bus
-from app.domain.jobs import (
-    CANCELLED_ERROR_KEY,
-    JobStateError,
-    cancel_job,
-    create_job,
-    start_job,
-    wait_for_idle_jobs,
-)
+from app.domain.jobs import JobStateError, cancel_job, create_job, start_job, wait_for_idle_jobs
+from app.domain.jobs.constants import CANCELLED_ERROR_KEY
 from app.domain.voices.voice_ref import VoiceRef
 from tests.util import fresh_client, insert_asset
 

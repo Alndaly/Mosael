@@ -348,11 +348,11 @@ sequenceDiagram
 
 ## 12. MCP 工具注册表(`backend/mcp_server.py`,2183 行)
 
-- **唯一工具定义处**:77 个 `@mcp.tool`(实测),`/api/agent/tools` manifest 派生它,sidecar/MCP 客户端/飞书全从 manifest 生成工具——"不再手写第二份"。历史事故:sidecar 曾手写第二份清单,漂移一次"静默少了十九个工具"(`tool_manifest.py:4-7`)。
+- **唯一工具定义处**:77 个 `@mcp.tool`(实测),`/api/agent/tools` manifest 派生它,sidecar/MCP 客户端/飞书全从 manifest 生成工具——"不再手写第二份"。历史事故:sidecar 曾手写第二份清单,漂移一次"静默少了十九个工具"(`tools/manifest.py:4-7`)。
 - 三个集合(`CONFIRMATION_TOOLS` 20 / `READ_ONLY_TOOLS` 35 / `MUTATING_TOOLS` 22)合起来必须覆盖全部内置工具,测试钉住。
-- 插件工具展开为一等公民:`plugin__<instance>__<tool>` 命名("按实例而不是按包——同一包的两次接入是两套工具"),`list_plugin_tools`/`invoke_plugin_tool` 元工具只留给不做展开的直连 MCP 客户端(`tool_manifest.py:45-48`)。
+- 插件工具展开为一等公民:`plugin__<instance>__<tool>` 命名("按实例而不是按包——同一包的两次接入是两套工具"),`list_plugin_tools`/`invoke_plugin_tool` 元工具只留给不做展开的直连 MCP 客户端(`tools/manifest.py:45-48`)。
 - ContextVar 传 API base 与 token——"这个模块有两个调用者:stdio 时环境就够;in-process 时一个进程处理多个用户的回合,全局变量会把一个人的 token 泄进另一个人的请求"(mcp_server.py:42-49)。
-- 工具描述里**不写怎么等**:确认/选择卡的等待协议由 manifest 标记驱动,各 runtime 自己生成——"写死一种必然对另一种说谎"(`tool_manifest.py:82-97`);给 sidecar 这条路的描述追加 `_CONFIRMATION_PROTOCOL`/"BLOCKS" 段落,因为直连 MCP 的协议(自己轮询 `get_confirmation`)对它不成立。
+- 工具描述里**不写怎么等**:确认/选择卡的等待协议由 manifest 标记驱动,各 runtime 自己生成——"写死一种必然对另一种说谎"(`tools/manifest.py:82-97`);给 sidecar 这条路的描述追加 `_CONFIRMATION_PROTOCOL`/"BLOCKS" 段落,因为直连 MCP 的协议(自己轮询 `get_confirmation`)对它不成立。
 
 ## 13. agent-sidecar:回合级 Node 进程
 

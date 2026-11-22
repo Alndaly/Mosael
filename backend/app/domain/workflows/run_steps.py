@@ -24,7 +24,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import GenerationJob, Job, WorkflowRunStep
-from app.domain.jobs import CANCELLED, current_parent_job_id
+from app.domain.jobs import current_parent_job_id
+from app.domain.jobs.constants import CANCELLED
 from app.domain.workflows.run_scope import current_node, is_continuing, step_scope
 
 logger = logging.getLogger(__name__)

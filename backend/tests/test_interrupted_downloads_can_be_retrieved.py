@@ -256,7 +256,7 @@ def test_下载接不上_说人话_点重新取回_不重新提交_账只记一�
 
 def test_停下的和别人的都取不回(monkeypatch) -> None:
     from tests.util import fresh_client, second_client
-    from app.domain.jobs import CANCELLED_ERROR_KEY
+    from app.domain.jobs.constants import CANCELLED_ERROR_KEY
 
     client = fresh_client()
     workspace, job_id, generation_id = _video_generation(client)

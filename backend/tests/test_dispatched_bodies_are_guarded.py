@@ -11,7 +11,8 @@ from app.core.db import SessionLocal
 from app.core.i18n import render_message
 from app.core.unit_of_work import unit_of_work
 from app.db.models import GenerationJob, Job
-from app.domain.jobs import CANCELLED_ERROR_KEY, JobCancelled, create_job, dispatch_job, wait_for_idle_jobs
+from app.domain.jobs import JobCancelled, create_job, dispatch_job, wait_for_idle_jobs
+from app.domain.jobs.constants import CANCELLED_ERROR_KEY
 from tests.util import fresh_client
 
 

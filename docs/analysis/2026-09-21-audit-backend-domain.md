@@ -561,7 +561,7 @@ mine = task.claimed_by == worker if worker else True
 - **插件清单的"老文件名"**(`backend/app/domain/plugins/packages.py:25-27,109-121`)—— 看着像兼容分支,
   实际不是:老名字只用于**发现目录**,发现后立刻 `migrate_directory` 就地改写
   (`packages.py:38-39`),之后的代码只认一种形状。符合"兼容负担在升级那一刻付一次"。
-- **确认卡的协议措辞**(`tool_manifest.py:82-112` 与 `mcp_server.py:338-345`)——
+- **确认卡的协议措辞**(`tools/manifest.py:82-112` 与 `mcp_server.py:338-345`)——
   看着像"两处说了相反的话",逐条对过之后是对的:阻塞那条路由 sidecar 代等,模型看不到
   `confirmation_id`;直连 MCP 那条才会读到 `_confirmation_reply` 里的轮询说明。
   两份文案各自对应一条真实运行时,正是 `_CONFIRMATION_PROTOCOL` 注释所解释的那个设计。
@@ -621,7 +621,7 @@ mine = task.claimed_by == worker if worker else True
 - `backend/app/domain/agent/confirmable/graphs.py`
 - `backend/app/domain/agent/confirmable/media.py`
 - `backend/app/domain/agent/questions.py`
-- `backend/app/domain/agent/tool_manifest.py`
+- `backend/app/domain/agent/tools/manifest.py`
 - `backend/app/db/model_slices/agent.py`
 - `backend/mcp_server.py`
 

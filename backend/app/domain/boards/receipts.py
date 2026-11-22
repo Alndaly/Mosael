@@ -17,7 +17,8 @@ from app.domain.boards.producer_ids import derives_outputs
 from app.domain.boards.run_state import live_job
 from app.core.unit_of_work import unit_of_work
 from app.domain.boards.timelines import append_filled_media
-from app.domain.jobs import TERMINAL_STATUSES, register_receipt_deliverer, was_cancelled
+from app.domain.jobs import register_receipt_deliverer
+from app.domain.jobs.constants import TERMINAL_STATUSES, was_cancelled
 
 
 logger = logging.getLogger(__name__)

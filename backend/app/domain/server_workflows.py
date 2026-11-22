@@ -75,7 +75,8 @@ from app.db.references import generation_model_key
 from app.domain import capabilities, local_services
 from app.domain.agent import places
 from app.domain.boards.producer_ids import node_producer_id
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say, was_cancelled
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.jobs.constants import was_cancelled
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import (
     generation as plugin_generation,

@@ -14,7 +14,7 @@ from app.api.schemas.plugins import EntryGroupOut
 from app.api.schemas.voices import VoiceRefBody
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 from app.domain.entities.mentions import PoseUse
-from app.domain.jobs import CANCELLED_ERROR_KEY
+from app.domain.jobs.constants import CANCELLED_ERROR_KEY
 
 
 """生成:输入素材的引用、模型与参数选项、发起生成、会话与提示词优化。"""

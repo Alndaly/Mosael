@@ -12,7 +12,7 @@ import time
 import mcp_server
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow, WorkflowRunStep
-from app.domain.jobs import TERMINAL_STATUSES
+from app.domain.jobs.constants import TERMINAL_STATUSES
 from tests.util import fresh_client, user_id
 
 

@@ -33,7 +33,7 @@ from app.domain.plugins import instances as inst, runtime, tools
 from mosael_formats.plugin_manifest import WORKFLOW_LIBRARY
 from app.core.db import SessionLocal
 from app.domain.job_center import use_cases as job_center
-from app.domain.jobs import TERMINAL_STATUSES
+from app.domain.jobs.constants import TERMINAL_STATUSES
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
 from app.domain.server_workflows import WorkflowLibraryError

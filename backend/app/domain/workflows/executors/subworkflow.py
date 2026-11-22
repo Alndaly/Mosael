@@ -11,7 +11,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Job, Workflow
-from app.domain.jobs import CANCELLED, current_parent_job_id
+from app.domain.jobs import current_parent_job_id
+from app.domain.jobs.constants import CANCELLED
 from app.domain.workflows import graph_runner, run_steps
 from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.graph_rules import interpolate

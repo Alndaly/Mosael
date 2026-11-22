@@ -21,7 +21,8 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderUsageEvent
-from app.domain.jobs import CANCELLED_ERROR_KEY, create_job, wait_for_idle_jobs
+from app.domain.jobs import create_job, wait_for_idle_jobs
+from app.domain.jobs.constants import CANCELLED_ERROR_KEY
 from tests.util import fresh_client, until
 
 

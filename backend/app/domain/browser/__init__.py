@@ -44,7 +44,8 @@ from app.db.models import (
     User,
     now,
 )
-from app.domain.jobs import TERMINAL_STATUSES, register_settle_listener
+from app.domain.jobs import register_settle_listener
+from app.domain.jobs.constants import TERMINAL_STATUSES
 
 _UNSET = object()  # update_profile 里区分「不改」与「置空」
 

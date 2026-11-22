@@ -1579,7 +1579,8 @@ def test_一个节点失败_兄弟节点等着的子任务跟着取消(monkeypat
     """一个节点失败,整条工作流就失败了。此前引擎要等所有还在跑的兄弟节点**自己**跑完才报失败 ——
     而兄弟节点等的是它派生的子任务(生成、导出……),那些子任务照样在跑、照样花钱,
     做完了也没人要。失败要让这一轮停下:兄弟节点等着的子任务取消,失败立刻报出来。"""
-    from app.domain.jobs import create_job, was_cancelled
+    from app.domain.jobs import create_job
+    from app.domain.jobs.constants import was_cancelled
     from app.domain.workflows.executors.registry import _REGISTRY
     from app.domain.workflows.executors import common
 

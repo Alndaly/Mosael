@@ -24,7 +24,8 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, t
 from app.core.unit_of_work import after_commit
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, Workflow, now
-from app.domain.jobs import TERMINAL_STATUSES, blame, failure_payload, finish_job, reset_parent_job, say, set_parent_job
+from app.domain.jobs import blame, failure_payload, finish_job, reset_parent_job, say, set_parent_job
+from app.domain.jobs.constants import TERMINAL_STATUSES
 from app.domain import render
 from app.domain.generation import operations as generation_operations, runner as generation_runner
 from app.domain.generation.operations import parse_source_assets

@@ -51,21 +51,8 @@ from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now, ProviderUsageEvent
 from app.domain.providers import models as provider_models, selection as providers_selection
 from app.domain.generation.operations import prompt_for_provider, WORKBENCH_GRAPH
-from app.domain.jobs import (
-    CANCELLED,
-    CANCELLED_ERROR_KEY,
-    RESTART_ERROR_KEY,
-    blame,
-    dispatch_job,
-    emit_job_event,
-    finish_job,
-    lock_active_job,
-    register_resumer,
-    register_settle_listener,
-    say,
-    waiting_on_other_jobs,
-    was_cancelled,
-)
+from app.domain.jobs import blame, dispatch_job, emit_job_event, finish_job, lock_active_job, register_resumer, register_settle_listener, say, waiting_on_other_jobs
+from app.domain.jobs.constants import CANCELLED, CANCELLED_ERROR_KEY, RESTART_ERROR_KEY, was_cancelled
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.media.scratch import GENERATION as GENERATION_SCRATCH, scratch_dir

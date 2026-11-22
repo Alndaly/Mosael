@@ -246,7 +246,7 @@ def test_解析中停下_记成已停止_任务不被改成失败(monkeypatch) -
             break
         time.sleep(0.1)
     assert listed[0]["status"] == "cancelled" and listed[0]["error"] == "", listed[0]["error"]
-    from app.domain.jobs import was_cancelled
+    from app.domain.jobs.constants import was_cancelled
 
     with SessionLocal() as db:
         assert was_cancelled(db.get(Job, listed[0]["job_id"])), "任务仍是「被取消」,没被解析那一侧改成一条失败"
