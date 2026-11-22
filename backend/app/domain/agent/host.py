@@ -39,7 +39,7 @@ from app.domain.agent.stream import (
     _timeline_for_payload,
     settled_tool,
 )
-from app.domain.agent import card_expiry, computer_use, origins, titles
+from app.domain.agent import card_expiry, computer_use, origins, titles, turn_scheduler
 from app.domain.agent.places import STUDIO_PLACE, Place
 from app.domain.agent.textclean import decode_byte_fallback
 from app.domain.providers import (
@@ -96,10 +96,13 @@ def wait_for_idle_turns(timeout: float = 5.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         alive = [t for t in threading.enumerate() if t.name == TURN_THREAD_NAME and t.is_alive()]
-        if not alive:
+        if not alive and turn_scheduler.idle():
             return True
-        alive[0].join(timeout=max(0.0, deadline - time.monotonic()))
-    return not any(t.name == TURN_THREAD_NAME and t.is_alive() for t in threading.enumerate())
+        if alive:
+            alive[0].join(timeout=min(0.2, max(0.0, deadline - time.monotonic())))
+        else:
+            time.sleep(0.01)
+    return turn_scheduler.idle() and not any(t.name == TURN_THREAD_NAME and t.is_alive() for t in threading.enumerate())
 
 
 #: 这一轮因为「没有可用的对话模型」没跑起来(SidecarError.code)。界面据此在失败气泡上给一个去设置的按钮。
@@ -678,7 +681,7 @@ def _start_turn(session_id: str, prompt: str, token: str, *, actor_id: str | Non
         set_current_locale(locale)
         _run_turn_thread(session_id, prompt, token, actor_id=actor_id)
 
-    threading.Thread(target=run, daemon=True, name=TURN_THREAD_NAME).start()
+    turn_scheduler.submit(session_id, run)
 
 
 #: 流式正文落库的节流:每 1 秒或每 4000 字写一次。**不开长事务** —— 每次一个短会话,
@@ -1567,7 +1570,15 @@ def stop_turn(db: Session, session: AgentSession) -> bool:
     """
     if session.status != "running":
         return False
-    return abort_turn(session.id)
+    stopped = abort_turn(session.id)
+    if not stopped and turn_scheduler.cancel(session.id):
+        #: 还在准入队列里,根本没起 sidecar。把流收掉、会话放回 idle;用户那句消息仍在,
+        #: 只是这一轮没有开始 —— 再发一句就是新的一轮。
+        _stream_finish(session.id, "")
+        session.status = "idle"
+        session.updated_at = now()
+        return True
+    return stopped
 
 
 def compact_session_context(db: Session, session: AgentSession, user: User) -> dict:

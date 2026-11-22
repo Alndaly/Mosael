@@ -59,6 +59,7 @@
 | `app/ai/runtime/tts_daemon.py:_POOL` | 常驻 TTS 工作进程池 | 重启后第一次合成要重新加载模型(十几秒到几分钟)。第二个后端进程会**再养一份**,显存翻倍。 |
 | `app/ai/runtime/asr_daemon.py:_POOL` | 常驻 ASR 工作进程池 | 同上。语音对话的首句延迟就取决于这个池热没热。 |
 | `app/domain/agent/stream.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的);那一轮落库的时间线里还在 `running` 的工具卡收成 `error`(`stream.settled_tool`,正常收尾同一条规矩),否则那一行永远转圈。**一条 SSE 流只属于一轮**:换轮就关流,客户端看会话还在跑就重新接(`useAgentTurnStream`),每帧带 `started_at` 给「已用」计时。 |
+| `app/domain/agent/turn_scheduler.py:_scheduler` | 智能体回合的准入队列:最多 8 轮同时真在跑,超出排队;排队项只在内存 | 重启丢了排队项,但对应会话的消息仍在、状态可能还是 running —— `reconcile_orphaned_agent_sessions()` 会把它们拨回 idle。第二个进程各有一份 8 个名额,同时跑的上限翻倍;sidecar 数量随之翻倍。 |
 | `app/domain/jobs/__init__.py:_KILLED` | 取消已经掐过、执行体还在跑的任务 | 取消在提交之前就掐子进程;执行体恰好在那一刻起的新子进程去库里查还是 running,没人掐它。登记时先看这里。执行体结束就忘掉,重启后没有执行体可言。 |
 | `app/domain/jobs/__init__.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
 | `app/domain/jobs/__init__.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额(其中后台道最多 4 个,见 register_background_kind)。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |

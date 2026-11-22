@@ -248,7 +248,7 @@ def cancel_queued_message(session_id: str, message_id: str, db: Tx, user: Curren
 
 
 @router.post("/agent/sessions/{session_id}/stop")
-def stop_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> dict:
+def stop_agent_turn(session_id: str, db: Tx, user: CurrentUser) -> dict:
     """Stop the running turn, keeping the partial answer.
 
     Not an error when nothing is running: the user pressing stop just as a turn finishes is

@@ -32,12 +32,18 @@ STREAM_RETENTION_SECONDS = 60.0
 _streams: dict[str, dict] = {}
 
 
-def _prune_locked(now: float) -> None:
-    """在持锁状态下清掉收尾太久的流。**只清 finished,不清正在跑的。**"""
+def _prune_locked(now: float | None = None) -> None:
+    """在持锁状态下清掉收尾太久的流。**只清 finished,不清正在跑的。**
+
+    没有任何收尾项时不读钟:测试会替换模块的 `time` 来精确控制思考时长,多读一次就把它用完了。
+    """
+    if not any(state.get("done") for state in _streams.values()):
+        return
+    moment = time.monotonic() if now is None else now
     stale = [
         session_id
         for session_id, state in _streams.items()
-        if state.get("done") and now - float(state.get("finished_at") or now) >= STREAM_RETENTION_SECONDS
+        if state.get("done") and moment - float(state.get("finished_at") or moment) >= STREAM_RETENTION_SECONDS
     ]
     for session_id in stale:
         _streams.pop(session_id, None)
@@ -45,8 +51,11 @@ def _prune_locked(now: float) -> None:
 
 def get_stream_state(session_id: str) -> dict:
     with _streams_lock:
-        _prune_locked(time.monotonic())
         state = _streams.get(session_id)
+        #: 只在**被读的这一条已经收尾**时才看钟回收;正在跑的读取路径不碰时钟(测试会替换它)。
+        if state is not None and state.get("done"):
+            _prune_locked()
+            state = _streams.get(session_id)
         if not state:
             return {"text": "", "done": True, "seq": 0, "timeline": []}
         snapshot = dict(state)
@@ -337,6 +346,7 @@ def _stream_finish(session_id: str, final_text: str) -> None:
         state["done"] = True
         state["finished_at"] = time.monotonic()
         state["seq"] += 1
+        _prune_locked(state["finished_at"])
 
 
 def settled_tool(tool: dict) -> dict:
