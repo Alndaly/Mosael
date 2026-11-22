@@ -43,9 +43,12 @@ export function AdminSection({
   const headingId = `admin-section-${id}`;
   return (
     <section data-admin-section={id} aria-labelledby={headingId} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
-      <header className="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <div className="grid min-w-0 gap-1">
-          <div className="flex items-center gap-2">
+      {/* 动作和标题同一行、靠右;说明另起一行铺满。此前三者在一个 flex-wrap 里:说明一长(它不设宽度上限),
+          动作就被挤到说明下面单独一行,32px 的节头按钮正好压在 40px 的筛选栏上方,两排按钮高低不一
+          (维护者:「这一行按钮的高度和正常的不一样」)。节头按钮本来就是轻一档的 sm,它该挨着标题,不该挨着工具栏。 */}
+      <header className="grid min-w-0 gap-1">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <div className="flex min-w-0 items-center gap-2">
             <h2 id={headingId} className="m-0 text-ui-md font-semibold leading-snug">
               {title}
             </h2>
@@ -53,11 +56,11 @@ export function AdminSection({
               <span className="rounded-md bg-secondary px-1.5 py-0.5 text-ui-xs tabular-nums text-muted-foreground">{count}</span>
             )}
           </div>
-          {/* 说明跟着这一列铺开,不设宽度上限:管理面板是整页宽、下面紧跟满宽卡片,
-              说明却被 42rem 的上限截住时,右边会空出一大块(维护者指出)。这是全页共用的节头,一处改、各处一致。 */}
-          {description && <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{description}</p>}
+          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {/* 说明跟着这一列铺开,不设宽度上限:管理面板是整页宽、下面紧跟满宽卡片,
+            说明却被 42rem 的上限截住时,右边会空出一大块(维护者指出)。这是全页共用的节头,一处改、各处一致。 */}
+        {description && <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{description}</p>}
       </header>
       {children}
     </section>

@@ -203,11 +203,14 @@ function PriceLines({ group, labels, onEdit, onDelete, dense }: {
   return (
     <ul className={cn("m-0 grid list-none p-0", dense ? "gap-0.5" : "gap-1")}>
       {group.rules.map((rule) => (
-        <li key={rule.id} className="group/price grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 rounded-md px-1.5 py-1 hover:bg-secondary/60">
+        <li key={rule.id} className="group/price grid grid-cols-[minmax(0,1fr)_auto_auto] items-center rounded-md px-1.5 py-1 hover:bg-secondary/60">
           <Truncate className="text-ui-xs text-muted-foreground">{labels.priceLabel(rule)}</Truncate>
-          <span className="whitespace-nowrap text-ui-sm font-medium tabular-nums">{labels.amount(rule)}</span>
-          {/* 动作悬停 / 键盘聚焦时才出现,触屏上常驻 —— 一张卡四条价格各顶两个图标就成了一片按钮。 */}
-          <span className="flex items-center opacity-0 transition-opacity group-hover/price:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+          <span className="whitespace-nowrap pl-2 text-ui-sm font-medium tabular-nums">{labels.amount(rule)}</span>
+          {/* 动作悬停 / 键盘聚焦时才出现,触屏上常驻 —— 一张卡四条价格各顶两个图标就成了一片按钮。
+              **没出现时不占宽度**(max-w-0):此前只是透明,两颗按钮的位置照样空着,价格离右边一大截,
+              一列价格像被往左推了(维护者:「没有 hover 的时候会感觉有怪异的间距」)。
+              宽度为 0 照样能被 Tab 聚焦到,聚焦时整行 focus-within 把它撑开。 */}
+          <span className="flex max-w-0 items-center overflow-hidden opacity-0 transition-opacity group-hover/price:max-w-16 group-hover/price:pl-1 group-hover/price:opacity-100 group-focus-within/price:max-w-16 group-focus-within/price:pl-1 group-focus-within/price:opacity-100 [@media(hover:none)]:max-w-16 [@media(hover:none)]:pl-1 [@media(hover:none)]:opacity-100">
             <IconButton size="icon-xs" label={`${t("pricingRuleEdit")}: ${labels.priceLabel(rule)}`} onClick={() => onEdit(rule)}>
               <Pencil />
             </IconButton>
