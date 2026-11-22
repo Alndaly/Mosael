@@ -172,7 +172,7 @@ function SpendByPerson({
   const unattributed = spend.some((row) => !row.user_id);
   return (
     <div className="grid gap-4">
-      <ul className="m-0 grid list-none gap-3.5 p-0">
+      <ul className="m-0 grid list-none gap-3 p-0">
         {spend.map((row) => (
           <li
             key={row.user_id || "unknown"}

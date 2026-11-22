@@ -795,7 +795,7 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
  * 上下边框约 `text` 高)—— 一行真画出来之后按量到的算,这只是还没画时的估计。
  */
 const GRID = {
-  small: { min: 136, gap: 10, text: 63, className: "gap-x-2.5 pb-2.5" },
+  small: { min: 136, gap: 10, text: 63, className: "gap-x-2 pb-2.5" },
   large: { min: 200, gap: 12, text: 96, className: "gap-x-3 pb-3" },
 } as const;
 /** 列表一行多高(36 的缩略图上下各 6,加一条分隔线);同上,只是还没画时的估计。 */

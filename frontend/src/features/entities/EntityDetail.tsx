@@ -548,7 +548,7 @@ function ChoiceField({
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
   const t = useI18n();
   return (
-    <FieldBox as="label" className="cursor-pointer gap-2.5" data-color-field="">
+    <FieldBox as="label" className="cursor-pointer gap-2" data-color-field="">
       <input
         type="color"
         aria-label={label}

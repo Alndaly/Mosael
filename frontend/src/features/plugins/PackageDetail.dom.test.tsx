@@ -131,10 +131,12 @@ describe("页头", () => {
     expect(within(hero()).queryByRole("button", { name: "pluginMarketBack" })).toBeNull();
   });
 
-  it("能做的事都是按钮:还没有连接时「新建连接」是主按钮;文档是链接;内置的没有 ⋯(卸不掉)", () => {
+  it("能做的事都是按钮:还没有连接时「新建连接」只在空状态里一颗、是主按钮(页头不摆第二颗);文档是链接;内置的没有 ⋯(卸不掉)", () => {
     mocks.market.mockResolvedValue({ plugins: [], index_error: "" });
     wrap(<PackageDetail pkg={comfy} workspaceId="w1" />);
-    const add = within(hero()).getByRole("button", { name: "pluginNewConnection" });
+    expect(within(hero()).queryByRole("button", { name: "pluginNewConnection" })).toBeNull();
+    const add = screen.getByRole("button", { name: "pluginNewConnection" });
+    expect(add.closest(".empty-state")).not.toBeNull();
     expect(add.className).toContain("bg-action");
     expect(within(hero()).getByRole("link", { name: "pluginDocs" }).getAttribute("href")).toBe(comfy.docs);
     expect(within(hero()).queryByRole("button", { name: "pluginMore" })).toBeNull();
@@ -164,8 +166,8 @@ describe("页头", () => {
     wrap(<PackageDetail pkg={pan} workspaceId="w1" onUpdate={onUpdate} />);
     await waitFor(() => expect(within(hero()).getByText("pluginMarketHasUpdate")).toBeTruthy());
     expect(within(hero()).getByText("pluginLatestVersion")).toBeTruthy();
-    //: 有新版时「更新」是主按钮,「新建连接」退成描边的。
-    expect(within(hero()).getByRole("button", { name: "pluginNewConnection" }).className).not.toContain("bg-action");
+    //: 有新版时「更新」是主按钮,空状态里的「新建连接」退成描边的。
+    expect(screen.getByRole("button", { name: "pluginNewConnection" }).className).not.toContain("bg-action");
     await user.click(within(hero()).getByRole("button", { name: "pluginUpdate" }));
     expect(onUpdate).toHaveBeenCalled();
   });

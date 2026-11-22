@@ -354,13 +354,13 @@ function RequirementList({ template, statuses }: { template: WorkflowTemplate; s
   const t = useI18n();
   const states = statesOf(template, statuses);
   return (
-    <ul className="m-0 grid list-none gap-2.5 p-0">
+    <ul className="m-0 grid list-none gap-2 p-0">
       {(template.requirements ?? []).map((requirement, index) => {
         const state = states[index];
         const look = REQUIREMENT_LOOK[state];
         const Icon = look.icon;
         return (
-          <li key={requirement.text} data-requirement-state={state} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2.5">
+          <li key={requirement.text} data-requirement-state={state} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2">
             <Icon size={15} aria-hidden className={cn("mt-0.5", look.tone, state === "unknown" && "motion-safe:animate-spin")} />
             <span className="grid min-w-0 gap-0.5">
               <span className="min-w-0 break-words text-ui-sm leading-snug text-foreground">{requirement.text}</span>

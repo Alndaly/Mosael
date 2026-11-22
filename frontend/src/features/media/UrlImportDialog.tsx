@@ -153,7 +153,7 @@ export function UrlImportDialog({
     >
       <div className="grid min-w-0 gap-5">
         <form
-          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2.5 gap-y-2"
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2 gap-y-2"
           onSubmit={(event) => {
             event.preventDefault();
             if (url.trim()) {
@@ -193,7 +193,7 @@ export function UrlImportDialog({
         )}
 
         <form
-          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2.5 gap-y-2 border-t border-divider pt-4"
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2 gap-y-2 border-t border-divider pt-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (imageUrl.trim()) importImage.mutate();

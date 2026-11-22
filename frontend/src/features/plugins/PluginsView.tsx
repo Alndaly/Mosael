@@ -204,7 +204,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             {packages.isLoading &&
               list.length === 0 &&
               [0, 1, 2].map((i) => (
-                <div key={`sk${i}`} className="flex items-center gap-[9px] px-2 py-1.5" aria-hidden>
+                <div key={`sk${i}`} className="flex items-center gap-2 px-2 py-1.5" aria-hidden>
                   <div className="grid min-w-0 flex-1 gap-1.5">
                     <Skeleton className="h-3.5 w-3/4 rounded" />
                     <Skeleton className="h-2.5 w-1/3 rounded" />
@@ -430,9 +430,10 @@ export function PackageDetail({
                 {t("pluginUpdate")}
               </Button>
             )}
-            {/* 「新建连接」排在最前:它是这一页最常做的事;一个连接都没有时它就是主按钮。 */}
-            {canAdd && (
-              <Button variant={instances.length === 0 && status !== "update" ? "default" : "outline"} onClick={() => setAddOpen(true)}>
+            {/* 「新建连接」排在最前:它是这一页最常做的事。一个连接都没有时它只在下面的空状态里摆一颗实心的,
+                页头不再摆第二颗(空页只留一个入口,见 docs/CONVENTIONS.md)。 */}
+            {canAdd && instances.length > 0 && (
+              <Button variant="outline" onClick={() => setAddOpen(true)}>
                 <Plus />
                 {t("pluginNewConnection")}
               </Button>
@@ -500,8 +501,9 @@ export function PackageDetail({
               body={t("pluginNoConnectionsBody")}
               action={
                 canAdd ? (
-                  <Button size="sm" onClick={() => setAddOpen(true)}>
-                    <Plus size={13} /> {t("pluginAddConnection")}
+                  //: 有新版时页头的「更新」是这一屏的主按钮,这一颗退成描边。
+                  <Button size="sm" variant={status === "update" && onUpdate ? "outline" : "default"} onClick={() => setAddOpen(true)}>
+                    <Plus size={13} /> {t("pluginNewConnection")}
                   </Button>
                 ) : undefined
               }

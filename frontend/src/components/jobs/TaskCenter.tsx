@@ -308,7 +308,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
       {/* 又一处单列 grid:`min-w-0` 管的是这个 div 自身的最小宽度,管不住**轨道** ——
           隐式列仍是 max-content,于是里面的 truncate 没有定数可截,内容直接顶出去。
           真机量到:容器已锁到 284px,而每一行的 scrollWidth 还有 992px。 */}
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[3px]">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1">
         <div className="flex items-center justify-between gap-1.5 [&_strong]:text-ui-sm [&_strong]:font-semibold">
           <span className="flex min-w-0 items-baseline gap-1.5">
             <strong className="shrink-0">{meta.label}</strong>

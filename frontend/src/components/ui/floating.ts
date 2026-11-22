@@ -31,7 +31,7 @@ export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:
 export const OVER_POPOVER_MODAL_LAYER = "z-[130]";
 export const MODAL_TITLE = "m-0 text-ui-lg font-semibold leading-snug tracking-tight break-words";
 export const MODAL_DESCRIPTION = "text-ui-sm leading-relaxed text-muted-foreground break-words";
-const MENU_ITEM_SHAPE = "relative flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-ui-sm leading-5 outline-none transition-colors";
+const MENU_ITEM_SHAPE = "relative flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-ui-sm leading-5 outline-none transition-colors";
 const MENU_ITEM_STATES = "data-[highlighted]:bg-secondary disabled:pointer-events-none disabled:opacity-40 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:size-4 [&_svg]:shrink-0";
 export const MENU_ITEM = `${MENU_ITEM_SHAPE} hover:bg-secondary focus:bg-secondary ${MENU_ITEM_STATES}`;
 /**

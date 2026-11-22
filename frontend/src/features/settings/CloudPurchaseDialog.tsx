@@ -159,7 +159,7 @@ function PickStep({
 function CatalogSkeleton() {
   return (
     <div className="grid gap-3" aria-busy="true">
-      <div className="grid gap-2.5">
+      <div className="grid gap-2">
         <Skeleton className="h-11 w-full rounded-lg" />
         <Skeleton className="h-11 w-full rounded-lg" />
       </div>

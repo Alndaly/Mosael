@@ -222,7 +222,7 @@ export function PluginHero({
       <CatalogBackSlot />
       <PluginMark name={profile.name} size={compact ? "md" : "lg"} />
       <div className="grid min-w-0 flex-1 basis-[240px] content-start gap-1.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Heading
             className={cn(
               "m-0 min-w-0 break-words font-semibold leading-snug tracking-tight text-foreground",

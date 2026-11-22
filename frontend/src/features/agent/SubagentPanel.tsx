@@ -283,7 +283,7 @@ export function SubagentSessionView({ run, workspaceId }: { run: SubagentRun; wo
         /* 主对话同一套容器与同一个 ChatBubble:子智能体本质就是一个新的聊天智能体,
            它的对话就该长得和主对话一模一样 —— 任务是右侧的用户气泡,产出是带工具卡
            和悬停脚注的助手消息,失败走同一张错误卡(所以 tabs 行不再单独挂红字)。 */
-        <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-7">
+        <div className="flex min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-7">
           {(messages as ChatMessage[]).map((message) => (
             <ChatBubble key={message.id} message={message} usageEvents={[]} mediaGallery={mediaGallery} workspaceId={workspaceId} />
           ))}

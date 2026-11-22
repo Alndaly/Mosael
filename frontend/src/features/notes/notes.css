@@ -55,7 +55,7 @@
 .note-prose td p,.note-prose th p { margin:0; }
 .note-prose .selectedCell::after { content:""; position:absolute; inset:0; background:color-mix(in srgb,var(--primary) 12%,transparent); pointer-events:none; }
 .note-prose ul[data-type=taskList] { list-style:none; padding-left:0; }
-.note-prose ul[data-type=taskList] li { display:flex; align-items:baseline; gap:10px; }
+.note-prose ul[data-type=taskList] li { display:flex; align-items:baseline; gap:8px; }
 .note-prose ul[data-type=taskList] li > label { flex-shrink:0; user-select:none; }
 .note-prose ul[data-type=taskList] li > div { flex:1; min-width:0; }
 .note-prose input[type=checkbox] { accent-color:var(--primary); }
@@ -149,7 +149,7 @@
 /* 编辑器失焦时仍画出选区:助手会带上的就是这一段(见 inactiveSelection)。 */
 .note-prose .note-inactive-selection { background:color-mix(in srgb,var(--primary) 16%,transparent); border-radius:2px; }
 @media(max-width:1250px) { .note-document-header { padding-inline:12px; } }
-.note-heading-option { display:inline-flex; align-items:center; gap:10px; }
+.note-heading-option { display:inline-flex; align-items:center; gap:8px; }
 .note-heading-option > span { font:500 var(--text-ui-xs) var(--font-mono); color:var(--muted-foreground); }
 .note-format button[aria-pressed=true],.notes-filter button[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
 .note-list-row { padding:12px; }
@@ -177,7 +177,7 @@
 .note-image-edit input { min-width:0; width:100%; flex:1; padding:6px 8px; border:0; border-radius:5px; background:transparent; color:var(--foreground); outline:none; }
 .note-image-edit input:focus { background:var(--background); box-shadow:0 0 0 1px color-mix(in srgb,var(--primary) 35%,transparent); }
 .note-image-link-row input { font-family:var(--font-mono); }
-.note-image-alt { display:flex; align-items:center; gap:10px; margin:5px 0 0 24px; color:var(--muted-foreground); white-space:nowrap; }
+.note-image-alt { display:flex; align-items:center; gap:8px; margin:5px 0 0 24px; color:var(--muted-foreground); white-space:nowrap; }
 .note-image-unavailable { padding:32px 16px; background:var(--workspace-subtle); border-radius:8px; color:var(--muted-foreground); text-align:center; cursor:pointer; }
 /* 一块代码只有**一条左边线**:语言、代码、以及右边那颗复制按钮都对着它排。
    此前头部的左内边距是 14px、代码是 20px,而语言控件自己还有 8px —— 于是「Shell」落在 22px、
@@ -208,7 +208,7 @@
 .note-list-entry:hover { background:color-mix(in srgb,var(--foreground) 3%,transparent); }
 .note-list-entry:has(.note-list-row[aria-current=true]) { background:var(--accent); }
 .note-list-entry .note-list-row { flex:1; min-width:0; margin:0; }
-.note-list-entry .note-list-row strong { display:flex; align-items:center; gap:5px; }
+.note-list-entry .note-list-row strong { display:flex; align-items:center; gap:6px; }
 .note-list-entry .note-list-row strong span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .note-list-entry .note-list-row strong svg { flex-shrink:0; color:var(--primary); }
 .note-list-entry[data-selected=true] { background:var(--accent); color:var(--accent-foreground); }
@@ -224,7 +224,7 @@
    里面那一行和正文同宽同轴。回收站那条此前是缩进的圆角卡片、横跨整个编辑区,和另两条不像一家。 */
 .note-reference-notice,.note-trash-notice { flex-shrink:0; padding:8px clamp(20px,5vw,72px); color:var(--muted-foreground); font-size:var(--text-ui-xs); background:var(--workspace-subtle); }
 .note-notice-actions { display:flex; align-items:center; gap:4px; margin-left:auto; }
-.note-trash-notice button { display:inline-flex; align-items:center; gap:5px; color:var(--primary); padding:3px 6px; border-radius:4px; }
+.note-trash-notice button { display:inline-flex; align-items:center; gap:6px; color:var(--primary); padding:3px 6px; border-radius:4px; }
 .note-trash-notice button:hover { background:var(--accent); }
 .note-trash-notice .note-notice-danger { color:var(--destructive); }
 .note-trash-notice .note-notice-danger:hover { background:color-mix(in srgb,var(--destructive) 10%,transparent); }
@@ -280,7 +280,7 @@
 .note-history-meta { display:flex; align-items:baseline; gap:8px; min-width:0; }
 .note-history-how { font-size:var(--text-ui-xs); color:var(--muted-foreground); }
 .note-history-change { display:flex; flex-shrink:0; gap:6px; margin-left:auto; font-size:var(--text-ui-2xs); color:var(--muted-foreground); font-variant-numeric:tabular-nums; white-space:nowrap; }
-.note-history-change > span { display:inline-flex; gap:3px; }
+.note-history-change > span { display:inline-flex; gap:4px; }
 .note-history-added { color:var(--success); }
 .note-history-removed { color:var(--destructive); }
 .note-history-item[aria-current=true] .note-history-how { color:inherit; opacity:.8; }
@@ -288,7 +288,7 @@
 .note-history-only { margin:12px 10px 0; font-size:var(--text-ui-xs); line-height:1.7; color:var(--muted-foreground); }
 .note-history-main { display:grid; grid-template-rows:auto auto minmax(0,1fr); min-width:0; min-height:0; }
 .note-history-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 20px; border-bottom:1px solid var(--divider); }
-.note-history-what { display:flex; align-items:center; gap:10px; min-width:0; font-size:var(--text-ui-sm); white-space:nowrap; }
+.note-history-what { display:flex; align-items:center; gap:8px; min-width:0; font-size:var(--text-ui-sm); white-space:nowrap; }
 .note-history-what > span:not(.note-history-badge) { flex-shrink:0; font-size:var(--text-ui-xs); color:var(--muted-foreground); }
 .note-history-what > :last-child:not(.note-history-badge) { min-width:0; }
 .note-history-actions { display:flex; flex-shrink:0; align-items:center; gap:6px; }

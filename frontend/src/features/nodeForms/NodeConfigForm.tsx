@@ -524,7 +524,7 @@ export function NodeConfigForm({
                     type="button"
                     data-input-mode=""
                     className={cn(
-                      "ml-auto inline-flex cursor-pointer items-center gap-[3px] rounded-full border border-border bg-transparent px-1.5 py-px text-ui-2xs font-medium text-muted-foreground transition-[border-color,color,background] duration-100 hover:border-border-strong hover:text-foreground",
+                      "ml-auto inline-flex cursor-pointer items-center gap-1 rounded-full border border-border bg-transparent px-1.5 py-px text-ui-2xs font-medium text-muted-foreground transition-[border-color,color,background] duration-100 hover:border-border-strong hover:text-foreground",
                       connected && "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
                     )}
                     aria-pressed={connected}

@@ -163,7 +163,7 @@ function AudioTrack({ assetId, title, track }: { assetId: string; title: string;
           <FolderOpen size={13} />
         </IconButton>
       </div>
-      <div className="flex min-w-0 items-center gap-2.5 pr-1">
+      <div className="flex min-w-0 items-center gap-2 pr-1">
         <WaveformScrubber media={ref} peaks={peaks} at={at} total={total} className="h-8 min-w-0 flex-1" />
         <span className="timecode shrink-0 text-ui-2xs tabular-nums text-muted-foreground">
           {error ? t("mediaPlaybackError") : `${mediaClock(at)} / ${mediaClock(total)}`}
@@ -186,7 +186,7 @@ export function PendingAudioList({ count, running }: { count: number; running: b
           <div className="flex h-7 items-center">
             {running ? <Skeleton className="h-3 w-2/5 rounded-full" /> : <span className="h-3 w-2/5 rounded-full bg-muted" />}
           </div>
-          <div className="flex h-8 items-center gap-[3px] pr-1">
+          <div className="flex h-8 items-center gap-1 pr-1">
             {PENDING_WAVE.map((height, bar) =>
               running ? (
                 <Skeleton key={bar} className="w-[3px] flex-1 rounded-full" style={{ height: `${height}%` }} />

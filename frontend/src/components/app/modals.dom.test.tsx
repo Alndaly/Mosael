@@ -67,7 +67,7 @@ describe("ModalShell sticky layout", () => {
 
     expect(dialog.className).toContain("rounded-2xl");
     expect(dialog.className).not.toContain("sm:rounded-2xl");
-    expect(header?.className).toContain("gap-2.5");
+    expect(header?.className).toMatch(/(^| )gap-2( |$)/);
     expect(header?.className).not.toMatch(/space-y-/);
     expect(footer?.className).toContain("gap-2");
     expect(footer?.className).not.toMatch(/space-x-/);

@@ -36,7 +36,7 @@ export function ConnectionPermissionNotice({ instance }: { instance: PluginInsta
   return (
     <SettingsBlock>
       <div role="alert" className="grid min-w-0 gap-3 rounded-lg border border-warning/40 bg-warning/5 p-4">
-        <div className="flex min-w-0 items-start gap-2.5">
+        <div className="flex min-w-0 items-start gap-2">
           <ShieldAlert size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden />
           <div className="grid min-w-0 gap-1">
             <h4 className="m-0 text-ui-sm font-semibold text-foreground">

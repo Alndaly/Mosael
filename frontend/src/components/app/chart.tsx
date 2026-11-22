@@ -135,7 +135,7 @@ function ChartLegendContent({
         const key = String(item.dataKey ?? item.value ?? "");
         const entry = config[key];
         return (
-          <span className="inline-flex items-center gap-[5px]" key={key}>
+          <span className="inline-flex items-center gap-1.5" key={key}>
             <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: entry?.color ?? item.color }} /> {entry?.label ?? key}
           </span>
         );

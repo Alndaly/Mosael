@@ -37,7 +37,7 @@ const USE_KIND_LABEL: Record<string, MessageKey> = {
 export function CapabilityUseList({ uses, label }: { uses: CapabilityUse[]; label?: string }) {
   return (
     //: 标签钉在左边一列,标签组在右边自己换行 —— 条目一多,「用在哪」不会被挤到单独一行。
-    <div className="flex min-w-0 items-start gap-2.5">
+    <div className="flex min-w-0 items-start gap-2">
       {label && <span className="shrink-0 text-ui-xs leading-6 text-muted-foreground">{label}</span>}
       <ul data-capability-uses="" className="m-0 flex min-w-0 flex-1 list-none flex-wrap gap-1.5 p-0">
         {uses.map((use) => {

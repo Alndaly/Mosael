@@ -90,7 +90,7 @@ export function SessionSettingsMenu({
           )}
         </IconButton>
       </PopoverTrigger>
-      <PopoverContent align="start" className="grid w-[260px] gap-2.5 p-2.5">
+      <PopoverContent align="start" className="grid w-[260px] gap-2 p-2.5">
         {/* 权限模式排在最前:它决定智能体能不问就做什么,是这里分量最重的一项。 */}
         <div className="grid gap-1.5">
           <span className="flex items-center gap-1.5 text-ui-xs font-medium text-muted-foreground">

@@ -145,7 +145,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
     <SettingsGroup title={t("teamTitle")} description={t("teamDesc")}>
       <SettingsBlock>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-2">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[15px] font-bold text-primary" aria-hidden>
               {workspace.name.slice(0, 1).toUpperCase()}
             </span>
@@ -234,7 +234,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             }}
           />
           {/* 对方还没有账号、或者不知道他的用户名:发一张链接,打开就进来(ADR 0054)。 */}
-          <div className="mt-3 flex flex-wrap items-center gap-2.5 border-t border-divider pt-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-divider pt-3">
             <Button data-invite-link-new="" variant="outline" size="sm" onClick={() => setLinkOpen(true)}>
               <Link2 size={13} /> {t("inviteLinkNew")}
             </Button>
@@ -439,11 +439,11 @@ function InviteMemberForm({ onInvite }: { onInvite: (body: { username: string; r
 
   return (
     <Form {...form}>
-      <form className="grid gap-2.5" onSubmit={submit} noValidate>
+      <form className="grid gap-2" onSubmit={submit} noValidate>
         <div className="flex items-center gap-1.5 text-xs font-[550] text-foreground">
           <UserPlus size={14} /> {t("teamInvite")}
         </div>
-        <div className="grid grid-cols-[1.6fr_0.8fr] gap-2.5 max-[720px]:grid-cols-1">
+        <div className="grid grid-cols-[1.6fr_0.8fr] gap-2 max-[720px]:grid-cols-1">
           <FormField
             control={form.control}
             name="username"
@@ -480,7 +480,7 @@ function InviteMemberForm({ onInvite }: { onInvite: (body: { username: string; r
             )}
           />
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <Button type="submit" size="sm" loading={form.formState.isSubmitting}>
             <UserPlus size={13} /> {t("teamInvite")}
           </Button>

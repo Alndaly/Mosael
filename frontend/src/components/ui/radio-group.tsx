@@ -54,7 +54,7 @@ export function RadioGroup<T extends string>({
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-orientation={orientation}
-      className={cn(orientation === "vertical" ? "grid gap-2.5" : "flex flex-wrap items-start gap-x-5 gap-y-2.5", className)}
+      className={cn(orientation === "vertical" ? "grid gap-2" : "flex flex-wrap items-start gap-x-5 gap-y-2", className)}
     >
       {options.map((option) => {
         const off = disabled || option.disabled
@@ -63,7 +63,7 @@ export function RadioGroup<T extends string>({
             key={option.value}
             data-radio-option={option.value}
             className={cn(
-              indicator === "corner" ? "relative block min-w-0" : "flex min-w-0 items-start gap-2.5",
+              indicator === "corner" ? "relative block min-w-0" : "flex min-w-0 items-start gap-2",
               off ? "cursor-not-allowed opacity-50" : "cursor-pointer",
             )}
           >

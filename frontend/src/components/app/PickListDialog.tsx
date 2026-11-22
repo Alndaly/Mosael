@@ -147,7 +147,7 @@ export function PickListDialog<T>({
                 data-pick-row=""
                 onMouseMove={() => index !== active && setActive(index)}
                 onClick={() => onPick(item)}
-                className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left transition-colors aria-selected:bg-secondary"
+                className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors aria-selected:bg-secondary"
               >
                 <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] text-muted-foreground">
                   {one.lead}

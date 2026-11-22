@@ -66,7 +66,7 @@ export function TagsDialog({
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
               <span
-                className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-[9px] py-px text-ui-xs text-muted-foreground transition-colors"
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-panel px-[9px] py-px text-ui-xs text-muted-foreground transition-colors"
                 key={tag}
               >
                 {tag}

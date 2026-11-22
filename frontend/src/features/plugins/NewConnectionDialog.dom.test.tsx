@@ -336,7 +336,7 @@ describe("不是部署管理员", () => {
 describe("建好之后", () => {
   async function createFromPage(mode: "localServiceModeDirectory" | "localServiceModeManaged") {
     const view = mount(<PackageDetail pkg={COMFY} workspaceId="w1" />);
-    fireEvent.click(within(document.querySelector<HTMLElement>("[data-plugin-hero]")!).getByRole("button", { name: "pluginNewConnection" }));
+    fireEvent.click(screen.getByRole("button", { name: "pluginNewConnection" }));
     fireEvent.click(await screen.findByRole("radio", { name: mode }));
     if (mode === "localServiceModeDirectory") {
       fireEvent.change(screen.getByLabelText("localServiceDirectory"), { target: { value: "/Users/me/ComfyUI" } });

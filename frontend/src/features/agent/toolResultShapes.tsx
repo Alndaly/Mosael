@@ -543,7 +543,7 @@ function SummaryCard({ value }: { value: Record<string, unknown> }) {
     .slice(0, 8);
   if (entries.length === 0) return <EmptyResult />;
   return (
-    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
+    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
       {entries.map(([key, item]) => (
         <React.Fragment key={key}>
           <dt>{keyLabel(key, t)}</dt>

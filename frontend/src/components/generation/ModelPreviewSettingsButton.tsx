@@ -59,7 +59,7 @@ export function ModelPreviewSettingsButton({
           {covered ? <EyeOff size={13} /> : <Eye size={13} />}
         </IconButton>
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label={t("modelPreviewSettings")} className="grid gap-3.5">
+      <PopoverContent align="end" aria-label={t("modelPreviewSettings")} className="grid gap-3">
         <Choice
           label={t("modelPreviewLevel")}
           value={settings.level}

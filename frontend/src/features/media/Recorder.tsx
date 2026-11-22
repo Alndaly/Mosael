@@ -471,7 +471,7 @@ export function Recorder({
         </div>
       }
     >
-      <div className="grid w-full gap-2.5">
+      <div className="grid w-full gap-2">
         {!recording && (
           <div
             key="source-picker"

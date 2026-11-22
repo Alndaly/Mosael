@@ -86,7 +86,7 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
         <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" maxBarSize={14} />
         <Bar dataKey="cancelled" stackId="jobs" fill="var(--color-cancelled)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {max}</span></Hint>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-1.5 tabular-nums text-muted-foreground">{t("homeChartPeak")} {max}</span></Hint>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -246,7 +246,7 @@ export function UsageCostChart({
           content={<ChartTooltipContent valueFormatter={(value) => money(Number(value))} />}
         />
         <Bar dataKey="cost" fill="var(--color-cost)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {maxLabel}</span></Hint>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-1.5 tabular-nums text-muted-foreground">{t("homeChartPeak")} {maxLabel}</span></Hint>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -299,7 +299,7 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
         <Bar dataKey="output" stackId="tokens" fill="var(--color-output)" maxBarSize={14} />
         <Bar dataKey="other" stackId="tokens" fill="var(--color-other)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend
-          content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {formatCount(maxTokens)}</span></Hint>} />}
+          content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-1.5 tabular-nums text-muted-foreground">{t("homeChartPeak")} {formatCount(maxTokens)}</span></Hint>} />}
         />
       </BarChart>
     </ChartContainer>
@@ -412,7 +412,7 @@ export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publi
         <Bar dataKey="active" stackId="publish" fill="var(--color-active)" maxBarSize={14} />
         <Bar dataKey="blocked" stackId="publish" fill="var(--color-blocked)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="publish" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">{t("homeChartPeak")} {max}</span></Hint>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<Hint label={t("homeChartPeakHint")}><span className="ml-auto inline-flex items-center gap-1.5 tabular-nums text-muted-foreground">{t("homeChartPeak")} {max}</span></Hint>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -447,7 +447,7 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
   );
 
   return (
-    <div className="grid grid-cols-[auto_1fr] items-center gap-3.5">
+    <div className="grid grid-cols-[auto_1fr] items-center gap-3">
       <ChartContainer config={config} className="h-[120px] w-[120px]">
         <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
           <ChartTooltip content={<ChartTooltipContent hideLabel />} />
@@ -474,7 +474,7 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
         </div>
         <div className="flex flex-col flex-wrap items-start gap-1 text-ui-xs text-muted-foreground">
           {segments.map((segment) => (
-            <span className="inline-flex items-center gap-[5px]" key={segment.platform}>
+            <span className="inline-flex items-center gap-1.5" key={segment.platform}>
               <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} /> {segment.name}{" "}
               <em className="not-italic tabular-nums text-foreground">{segment.count}</em>
             </span>

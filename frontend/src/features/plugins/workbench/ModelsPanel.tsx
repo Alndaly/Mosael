@@ -274,7 +274,7 @@ function SlotPicker({
   };
 
   return (
-    <section aria-label={`${slot.widget} · ${slot.folder}`} className="flex h-full min-h-0 flex-col gap-2.5">
+    <section aria-label={`${slot.widget} · ${slot.folder}`} className="flex h-full min-h-0 flex-col gap-2">
       <header className="grid gap-1">
         <h3 className="m-0 flex min-w-0 items-center gap-1.5 text-ui-sm font-semibold text-foreground">
           <Truncate>{node.title || node.type}</Truncate>

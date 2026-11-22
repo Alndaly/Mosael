@@ -165,7 +165,7 @@ export function SceneComposer({
           : null
       }
     >
-      <div data-scene-composer-scene="" className="flex min-w-0 items-center gap-2.5 px-1 py-1">
+      <div data-scene-composer-scene="" className="flex min-w-0 items-center gap-2 px-1 py-1">
         <div className="grid h-10 w-16 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-secondary/40 text-muted-foreground">
           {item.scene_id ? (
             <SceneOverview key={item.scene_id} workspaceId={workspaceId} sceneId={item.scene_id} fallback={<Box size={16} strokeWidth={1.4} />} />

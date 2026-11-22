@@ -434,15 +434,15 @@ export function WorkflowRunHistory({
                             )}
                           </span>
                           {s.status === "skipped" || s.status === "cancelled" ? (
-                            <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                            <span className="timecode inline-flex items-center gap-1 text-ui-2xs text-muted-foreground">
                               {t(STEP_STATUS_LABELS[s.status])}
                             </span>
                           ) : s.status === "running" && s.startAt != null ? (
-                            <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                            <span className="timecode inline-flex items-center gap-1 text-ui-2xs text-muted-foreground">
                               <Clock size={10} /> {Math.max(0, (now - s.startAt) / 1000).toFixed(0)}s
                             </span>
                           ) : s.ms != null ? (
-                            <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                            <span className="timecode inline-flex items-center gap-1 text-ui-2xs text-muted-foreground">
                               <Clock size={10} /> {(s.ms / 1000).toFixed(2)}s
                             </span>
                           ) : null}

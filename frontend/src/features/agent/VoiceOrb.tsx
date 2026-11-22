@@ -111,7 +111,7 @@ export function VoiceOrb({
       {state === "speaking" && (
         <span className="animate-voice-ripple absolute inset-0 rounded-full border border-foreground/40" />
       )}
-      <span className="flex h-[18px] items-center gap-[3px]">
+      <span className="flex h-[18px] items-center gap-1">
         {WEIGHTS.map((_, index) => (
           <span
             key={index}

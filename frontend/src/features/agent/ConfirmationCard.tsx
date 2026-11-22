@@ -61,7 +61,7 @@ export function ConfirmationCard({
       data-confirmation-card=""
       data-status={item.status}
       className={cn(
-        "grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2.5 rounded-lg border border-border bg-panel p-3 text-ui-sm text-foreground",
+        "grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border bg-panel p-3 text-ui-sm text-foreground",
         className,
       )}
     >

@@ -17,7 +17,7 @@ function Mention({ userId, label }: { userId: string; label: string }) {
       </button>
     </PopoverTrigger>
     <PopoverContent data-board-comment-overlay="" align="start" className="w-56 p-3" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-ui-xs font-semibold text-primary">{(member?.display_name || label).slice(0, 1).toUpperCase()}</span>
         <div className="min-w-0 text-ui-xs"><Truncate as="p" className="font-medium">{member?.display_name || label}</Truncate>{member && <Truncate as="p" className="text-muted-foreground">@{member.username}</Truncate>}</div>
       </div>

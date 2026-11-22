@@ -128,7 +128,7 @@ function FullFailure(props: FailureCardProps) {
     <div
       role="group"
       aria-labelledby={titleId}
-      className={cn("@container/failure grid w-full min-w-0 gap-2.5 rounded-lg border border-border bg-secondary/40 px-3.5 py-3", className)}
+      className={cn("@container/failure grid w-full min-w-0 gap-2 rounded-lg border border-border bg-secondary/40 px-3.5 py-3", className)}
       data-failure=""
       data-failure-status={status}
       {...dataAttributes(props)}
@@ -192,7 +192,7 @@ function FailureBody({
       ) : null}
       {cause || steps.length ? (
         <dl
-          className="m-0 grid min-w-0 gap-2.5 rounded-md border border-border bg-background/70 px-3 py-2.5 text-ui-sm leading-[1.55]"
+          className="m-0 grid min-w-0 gap-2 rounded-md border border-border bg-background/70 px-3 py-2.5 text-ui-sm leading-[1.55]"
           data-failure-fix=""
         >
           {cause ? (
@@ -273,7 +273,7 @@ function MoreDetails(props: FailureCardProps & { centered?: boolean }) {
       </PopoverTrigger>
       <PopoverContent
         align={centered ? "center" : "start"}
-        className="@container/failure grid w-[min(440px,calc(100vw-1rem))] gap-2.5 p-3 text-left"
+        className="@container/failure grid w-[min(440px,calc(100vw-1rem))] gap-2 p-3 text-left"
         data-failure-popover=""
       >
         <span className="flex items-center gap-1.5">

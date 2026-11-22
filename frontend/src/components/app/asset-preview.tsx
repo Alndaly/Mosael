@@ -205,7 +205,7 @@ export function AssetInlinePreview({
     //: 不是拖动,进度条的 nodrag 写在 Scrubber 自己内部。
     return <AudioPlayerBar src={src} className={cn("h-10 rounded-lg border border-border bg-panel", className ?? "w-[260px] max-w-full")} />;
   }
-  const chip = "inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-ui-xs text-muted-foreground";
+  const chip = "inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-panel px-2 py-1 text-ui-xs text-muted-foreground";
   const label = (
     <>
       <Paperclip size={12} className="shrink-0" />

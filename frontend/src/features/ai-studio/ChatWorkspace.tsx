@@ -76,6 +76,7 @@ import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
 import { buildTurns } from "@/features/agent/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
+import { useRightPanelOpen } from "@/features/ai-studio/useRightPanelOpen";
 import { useSessionListOpen } from "@/features/ai-studio/useSessionListOpen";
 import { InspectorSubagentList, SubagentBreadcrumb, SubagentSessionView, collectSubagentRuns, type SubagentRun } from "@/features/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -447,9 +448,9 @@ export function ChatWorkspace({
 
   const narrow = useMediaMatch("(max-width: 1180px)");
   const single = useMediaMatch("(max-width: 820px)");
-  //: 默认展开(维护者要求「智能体 tab 一进来就能看到环境」)。窄屏走浮层(drawer),
-  //: 同样默认开着;要腾地方时点工具栏那颗开关收起。
-  const [environmentOpen, setEnvironmentOpen] = React.useState(true);
+  //: 宽屏默认展开(维护者要求「智能体 tab 一进来就能看到环境」);窄屏是浮层,默认收起,
+  //: 免得一进来就盖住输入框(见 useRightPanelOpen)。
+  const [environmentOpen, setEnvironmentOpen] = useRightPanelOpen(narrow);
   const environmentId = React.useId();
   //: 工具栏的高度:右侧「智能体环境」的头部拿它对齐成同一条分隔线(见 ChatInspector 的 headerHeight)。
   //
@@ -666,7 +667,7 @@ export function ChatWorkspace({
             /* 横向和纵向一起锁:flex 子项默认 min-width:auto,一段长代码块或长 URL 会把这一列
                  撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */
             <div className="relative grid min-h-0 min-w-0" ref={threadArea}>
-            <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
+            <div className="flex min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
               {transcriptMessages.map((message) =>
                 foldedIds.has(message.id) || message.role === JOB_RECEIPT_ROLE ? null : (
                   <ChatBubble
@@ -686,7 +687,7 @@ export function ChatWorkspace({
                 </div>
               )}
               {running && !streamText && (
-                <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
+                <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-2 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} running />
                   {/* 整理上下文的那几十秒这段对话也是占着的(和一轮同一个认领,见 host.compact_session_context):说它在整理,不说在思考。 */}
                   <AgentStatusRow label={t(compactContext.isPending ? "agentCompactRunning" : "chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
@@ -847,7 +848,7 @@ export function ChatWorkspace({
       </section>
 
       {environmentOpen && <div id={environmentId}
-        className={cn("min-h-0 min-w-0 overflow-hidden border-l border-divider bg-workspace-subtle", narrow && "workspace-overlay absolute bottom-0 right-0 z-30 w-[min(360px,100%)]")}
+        className={cn("min-h-0 min-w-0 overflow-hidden border-l border-divider bg-workspace-subtle", narrow && "workspace-overlay absolute bottom-0 right-0 z-30 w-[min(360px,100%)] shadow-xl")}
         style={narrow ? { top: toolbarHeight } : undefined}
       ><ChatInspector
         headerHeight={narrow ? 56 : toolbarHeight}
@@ -1175,7 +1176,7 @@ function ToolBrowser({
         {/* **响应式卡片网格**,不是一行一个。工具说明动辄一整段,横着排不下时卡片自己换行;
             minmax(min(100%,15rem),1fr) 让窄窗口退成一列,宽窗口吃满 2–4 列。
             横向仍要锁死:grid 子项默认 min-width:auto,长英文单词会把弹窗撑宽。 */}
-        <div className="grid max-h-[62vh] min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] content-start gap-2.5 overflow-y-auto overflow-x-hidden">
+        <div className="grid max-h-[62vh] min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] content-start gap-2 overflow-y-auto overflow-x-hidden">
           {matched.map((tool) => (
             <ToolBrowserRow key={tool.name} tool={tool} />
           ))}

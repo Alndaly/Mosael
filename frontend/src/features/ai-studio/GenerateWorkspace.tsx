@@ -152,6 +152,7 @@ import {
   lyricsLimit,
 } from "@/features/ai-studio/audioGeneration";
 import { SessionList } from "@/features/ai-studio/SessionList";
+import { useRightPanelOpen } from "@/features/ai-studio/useRightPanelOpen";
 import { useSessionListOpen } from "@/features/ai-studio/useSessionListOpen";
 import { GenerationModelGate } from "@/features/ai-studio/GenerationModelGate";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
@@ -403,7 +404,7 @@ export function GenerateWorkspace({
   const [sessionListOpen, setSessionListOpen] = useSessionListOpen();
   const narrowLayout = useMediaMatch("(max-width: 1180px)");
   const singleColumn = useMediaMatch("(max-width: 820px)");
-  const [parametersOpen, setParametersOpen] = React.useState(() => !narrowLayout);
+  const [parametersOpen, setParametersOpen] = useRightPanelOpen(narrowLayout);
   //: 右栏「引擎参数」(焦点要落进去)。底下那枚模型按钮点了:开着的就把模型那一块亮一下(engineFlash 是这一次的时刻)。
   const enginePanel = React.useRef<HTMLElement>(null);
   const enginePanelId = React.useId();
@@ -1486,7 +1487,7 @@ export function GenerateWorkspace({
           )}
         </div>
         <div className="relative grid min-h-0 min-w-0">
-        <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
+        <div className="flex min-w-0 flex-col gap-3 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
           {/* 第一次打开一条会话、记录还没到:按这条会话的种类摆骨架(不闪「还没有生成任务」)。外壳和真的那一轮是同一套
               (TURN_* 那几个类、结果卡的框),记录到了原地换上,版面不跳。 */}
           {/* 只摆一轮:两轮的高度常常超出这一栏,贴底跟随会先把它滚到底下,记录到了又回到顶上 —— 那正是这次要消掉的那一下跳 */}
@@ -1735,7 +1736,7 @@ export function GenerateWorkspace({
               message={t("generationNoModels")}
               actionLabel={t("wfGoConfigure")}
               section={settingsSection}
-              className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
+              className="items-center gap-2 rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
               textClassName="line-clamp-3"
               actionClassName="self-center"
             />
@@ -2093,11 +2094,11 @@ function GeneratedVideo({ assetId, onExpand }: { assetId: string; onExpand: (src
  * 不各写一份 —— 此前骨架是一条 16px 高的细胶囊加一块 320 的方块,和真的气泡、结果卡对不上,记录一到整屏往下跳
  * (维护者:「实际位置似乎和真实的不一样」)。改外壳就改这里,两边一起变。
  */
-const TURN_CLASS = "group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center";
+const TURN_CLASS = "group/gen grid w-full max-w-[780px] shrink-0 gap-2 self-center";
 const TURN_PROMPT_ROW_CLASS = "grid justify-items-end gap-1";
 const TURN_PROMPT_BUBBLE_CLASS =
   "w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground";
-const TURN_RESULT_ROW_CLASS = "grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5";
+const TURN_RESULT_ROW_CLASS = "grid min-h-7 justify-items-start gap-2 pb-2 pt-0.5";
 /**
  * 产出下面那一行元信息(模型 · 用时 · 费用)的外框,和 TurnMeta 摆出来的 `<div className="justify-self-start"><small …>` 同一串。
  * TurnMeta 归失败卡那一路(卡头里也用它,正在抽成共用组件),这里不去改它的写法;两边一字不差由 Skeletons.dom.test 钉着。

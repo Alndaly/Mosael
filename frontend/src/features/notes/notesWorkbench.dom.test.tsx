@@ -150,3 +150,14 @@ it("只读成员:导入、新建是灰的,拖 .md 进来不建;打开的那篇�
   fireEvent.drop(layout, { dataTransfer });
   expect(api.createNote).not.toHaveBeenCalled();
 });
+
+//: UI 走查:一篇笔记都没有时,一屏摆过三颗「新建笔记」(列表头的 +、列表空态、右侧空态)。
+//: 现在列表空态只写文字:列表头常驻那颗 + 加右侧正中一颗主按钮(空页只留一个入口,见 docs/CONVENTIONS.md)。
+it("一篇都没有:列表空态不再摆「新建笔记」,一屏只剩列表头和右侧正中两处", async () => {
+  api.listNotes.mockResolvedValue([]);
+  api.listNoteTopics.mockResolvedValue([]);
+  mountView();
+  const emptyList = (await screen.findByText("还没有笔记")).closest(".note-empty-state") as HTMLElement;
+  expect(within(emptyList).queryByRole("button", { name: /新建笔记/ })).toBeNull();
+  expect(screen.getAllByRole("button", { name: "新建笔记" })).toHaveLength(2);
+});

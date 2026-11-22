@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * 耗时都对不上。中间那段可伸缩的空白由 flex-1 占着,和 ToolCallCard 里那个占位是同一招。
  *
  * 四个调用点(画布助手 / 对话页 × 出没出正文)此前各写了一份,写出了四种:有的没有内缩、
- * 有的字号从外层继承成 text-ui-md、有的 mt-1.5 有的 gap-[7px]。
+ * 有的字号从外层继承成 text-ui-md、有的 mt-1.5 有的 gap-2。
  */
 export function AgentStatusRow({
   label,

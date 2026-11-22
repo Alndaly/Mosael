@@ -183,7 +183,7 @@ export function AccountSection() {
             </div>
             <span
               className={cn(
-                "inline-flex items-center gap-[5px] whitespace-nowrap text-xs text-muted-foreground",
+                "inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground",
                 saveState === "saved" && "text-success",
                 saveState === "error" && "text-destructive",
               )}

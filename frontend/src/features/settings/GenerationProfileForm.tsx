@@ -448,7 +448,7 @@ export function CapabilityProfileForm({
       {/* 可选值:跟着勾出来的参数出现。「参数可选值」只在选了真有枚举的参数时才有意义 —
           没选的时候摆一个空行编辑器,看着像坏掉的。 */}
       {parameters.some((parameter) => choicesKey[parameter]) || enumCapableSelected.length > 0 ? (
-        <div className="grid gap-2.5 border-t border-border pt-3">
+        <div className="grid gap-2 border-t border-border pt-3">
           <GroupHeader title={t("genGroup_choices")} hint={t("genGroupHint_choices")} />
           {parameters.map((parameter) => {
             const listKey = choicesKey[parameter];
@@ -489,7 +489,7 @@ export function CapabilityProfileForm({
           现在每一格从 schema 的 defaults 组里来,「这一格是谁的默认值」也由 schema 说
           (defaults_for)。有档位可选的给下拉(选不回来的值不存在),其余按形状给控件。 */}
       {defaultRows.length > 0 && (
-        <div className="grid gap-2.5 border-t border-border pt-3">
+        <div className="grid gap-2 border-t border-border pt-3">
           <GroupHeader title={t("genGroup_defaults")} hint={t("genGroupHint_defaults")} />
           {/* 每一项一整行:名字在左,控件靠右。
               此前是两列格子,而这一组里控件宽窄差得极远(一个下拉、一个开关)—— 开关独占半格,
@@ -522,7 +522,7 @@ export function CapabilityProfileForm({
         const { active, idle } = groupFields(group);
         if (active.length === 0 && idle.length === 0) return null;
         return (
-          <div className="grid gap-2.5 border-t border-border pt-3" key={group}>
+          <div className="grid gap-2 border-t border-border pt-3" key={group}>
             {/* 「再加一个」挂在组头上,不排在列表最末 —— 排在末尾的话,字段加得越多,下一次
                 添加就要往下走得越远;而且它长得和一格空表单一模一样,像是有一项没填完。 */}
             <GroupHeader

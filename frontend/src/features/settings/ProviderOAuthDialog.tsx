@@ -256,7 +256,7 @@ export function ProviderOAuthDialog({
         </Button>
       }
     >
-      <div className="grid gap-2.5">
+      <div className="grid gap-2">
         <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("providerOauthHint")}</p>
 
         {(state.data?.events ?? []).map((event, index) => (

@@ -45,7 +45,7 @@ export function TableSizePicker({ onPick, autoFocus }: {
       <div
         role="grid"
         aria-label={s.insertTable}
-        className="flex flex-col gap-[3px]"
+        className="flex flex-col gap-1"
         onKeyDown={(event) => {
           if (isImeKeystroke(event)) return;
           if (event.key === "Enter") {
@@ -66,7 +66,7 @@ export function TableSizePicker({ onPick, autoFocus }: {
         }}
       >
         {Array.from({ length: grid.rows }, (_, r) => (
-          <div key={r} role="row" className="flex gap-[3px]">
+          <div key={r} role="row" className="flex gap-1">
             {Array.from({ length: grid.cols }, (_, c) => {
               const size = { rows: r + 1, cols: c + 1 };
               const lit = size.rows <= at.rows && size.cols <= at.cols;

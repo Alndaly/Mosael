@@ -51,7 +51,7 @@ export function ServerPicker() {
 
   if (!open) {
     return (
-      <button type="button" className="inline-flex cursor-pointer items-center gap-[5px] border-0 bg-transparent p-0 text-xs text-muted-foreground transition-colors duration-100 hover:text-foreground [&_strong]:font-semibold [&_strong]:text-foreground" onClick={() => setOpen(true)}>
+      <button type="button" className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-xs text-muted-foreground transition-colors duration-100 hover:text-foreground [&_strong]:font-semibold [&_strong]:text-foreground" onClick={() => setOpen(true)}>
         <Server size={13} />
         {t("serverLabel")}
         <strong>{currentLabel}</strong>
@@ -62,7 +62,7 @@ export function ServerPicker() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-2.5 text-left [&_input]:w-full">
+    <div className="flex w-full flex-col gap-2 text-left [&_input]:w-full">
       <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border h-[30px] w-full [&>button]:flex-1 [&>button]:justify-center">
         <button
           type="button"

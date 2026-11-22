@@ -66,7 +66,7 @@ function NewSkillPreview({ payload }: { payload: Record<string, unknown> }) {
     text: row.path === "SKILL.md" ? text(payload._skill_md) : text(written[row.path]),
   }));
   return (
-    <div className="grid min-w-0 gap-2.5" data-slot="skill-card-new">
+    <div className="grid min-w-0 gap-2" data-slot="skill-card-new">
       <SkillContent head={{ description: text(payload.description) }} files={files} />
       <EnableChoice label="agentSkillCardEnable" />
     </div>
@@ -90,7 +90,7 @@ function CopiedSkillPreview({ payload, workspaceId }: { payload: Record<string, 
           : (originalText.get(row.path) ?? null),
   }));
   return (
-    <div className="grid min-w-0 gap-2.5" data-slot="skill-card-copy">
+    <div className="grid min-w-0 gap-2" data-slot="skill-card-copy">
       <p className="m-0 text-ui-xs text-muted-foreground">
         {t("agentSkillCardCopiedFrom").replace("{source}", text(payload._source_title) || source).replace("{label}", text(payload._source_label))}
       </p>
@@ -176,7 +176,7 @@ function EnableSkillPreview({ payload, workspaceId }: { payload: Record<string, 
   if (detail.isError) return <p className="m-0 text-ui-xs text-destructive">{errorText(detail.error)}</p>;
   if (!detail.data) return <p className="m-0 text-ui-xs text-muted-foreground">{t("agentSkillCardLoading")}</p>;
   return (
-    <div className="grid min-w-0 gap-2.5" data-slot="skill-card-enable-review">
+    <div className="grid min-w-0 gap-2" data-slot="skill-card-enable-review">
       <p className="m-0 text-ui-xs text-muted-foreground">{t("agentSkillsReviewHint").replace("{source}", detail.data.source_label)}</p>
       <SkillContent head={detail.data} files={detail.data.files ?? []} />
     </div>

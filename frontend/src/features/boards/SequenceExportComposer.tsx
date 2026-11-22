@@ -126,7 +126,7 @@ export function SequenceExportComposer({
           : null
       }
     >
-      <div data-sequence-export-summary="" className="flex min-w-0 items-center gap-2.5 px-1 py-1">
+      <div data-sequence-export-summary="" className="flex min-w-0 items-center gap-2 px-1 py-1">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-border bg-secondary/40 text-muted-foreground">
           <Clapperboard size={16} strokeWidth={1.4} />
         </div>

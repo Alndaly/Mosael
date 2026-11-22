@@ -42,7 +42,7 @@
 .scene-actions {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
 }
 .scene-empty {
@@ -77,7 +77,7 @@
   min-height: 52px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   /* 和它下面那一行之间要有线。此前两行直接贴着:工作区那边刻意不画上边线(注释在
      .scene-workspace 上,理由是"上面已经有一条"),而页头这边也没画 —— 于是一条都没有,
      标题行和视角切换行糊成一块。舞台工具条和属性栏各自的下边线都在,单单这一根是漏的。 */
@@ -110,7 +110,7 @@
   color: var(--muted-foreground);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   margin-right: auto;
 }
 /* 图标按钮。**尺寸跟着 --scene-control-height 走**,和这一页其余控件同高。
@@ -288,7 +288,7 @@
 .scene-vector {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
+  gap: 6px;
 }
 .scene-number {
   display: flex;
@@ -342,7 +342,7 @@
 .scene-shape {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: 8px;
 }
 .scene-color {
   display: flex;
@@ -743,7 +743,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-align: center;
   padding: 25px 18px;
 }
@@ -778,7 +778,7 @@
 .scene-subsection-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 2px 0 8px;
   font-size: var(--text-ui-xs);
   color: var(--muted-foreground);
@@ -813,7 +813,7 @@
 .scene-preset-list > button {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   /* 和物体列表同一个值:两处都是"一整行可点",底色该一样宽。 */
   padding: 8px var(--scene-row-bleed);
   margin-inline: calc(var(--scene-row-bleed) * -1);
@@ -875,7 +875,7 @@
 .scene-output-summary {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   padding: 2px;
 }
 .scene-output-summary small {
@@ -1159,7 +1159,7 @@
 }
 
 /* Blender exchange uses the same quiet surfaces as the scene controls. */
-.scene-blender { width: 370px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - 100px); overflow-y: auto; }
+.scene-blender { width: 370px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100dvh - 100px); overflow-y: auto; }
 .scene-blender-heading, .scene-blender-connection, .scene-blender-result > div { display: flex; align-items: center; gap: 8px; }
 /* 这一行是下拉配一个 sm 按钮,两者都是 32px —— 高度写在下拉的 className 上(h-8)。此前写在
    这里的 `.scene-blender-connection [role="combobox"] { height }` 在 @layer components 里,压不过
@@ -1171,7 +1171,7 @@
 .scene-blender-action { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; text-align: left; background: color-mix(in srgb, var(--muted) 55%, transparent); transition: background-color var(--motion-base) var(--motion-ease-enter), color var(--motion-base) var(--motion-ease-enter), opacity var(--motion-base) var(--motion-ease-enter); }
 .scene-blender-action:hover:not(:disabled) { background: var(--accent); }
 .scene-blender-action:disabled { opacity: .45; cursor: default; }
-.scene-blender-action > span { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.scene-blender-action > span { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 /* 图标不许被文字挤小:说明一长(接收时要念出整个场景名),flex 就按比例压 svg,同样 19px 的
    两枚图标并排时一大一小。 */
 .scene-blender-action > svg { flex-shrink: 0; }
@@ -1187,13 +1187,13 @@
 /* 「生成素材」从侧栏搬进了顶栏的弹层。宽度给足(里面是三条带说明的选项),高度封顶 ——
    弹层不该长到把屏幕顶穿。 */
 .scene-generate { width: 340px; max-height: min(70vh, 560px); overflow: auto; }
-.scene-generate .scene-output-panel { padding: 0; gap: 10px; }
+.scene-generate .scene-output-panel { padding: 0; gap: 8px; }
 .scene-generate h2 { font-size: var(--text-ui-sm); font-weight: 600; }
 /* 「同时送一张灰模」那个勾选。和 .scene-choice 同一套内距,好让它读起来是同一列里的一项。 */
-.scene-toggle { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+.scene-toggle { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
 .scene-toggle:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
 .scene-toggle > input { margin-top: 3px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
-.scene-toggle > span { display: grid; gap: 3px; min-width: 0; }
+.scene-toggle > span { display: grid; gap: 4px; min-width: 0; }
 .scene-toggle strong { font-size: 13px; font-weight: 500; }
 .scene-toggle small { color: var(--muted-foreground); font-size: var(--text-ui-xs); }
 .scene-blender-setup { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
@@ -1213,7 +1213,7 @@
 .scene-card-open:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
 .scene-card-menu { position: absolute; top: 10px; right: 10px; }
 .scene-selection-bar { position: sticky; top: -32px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); }
-.scene-selection-bar label, .scene-selection-bar > div { display: flex; align-items: center; gap: 10px; }
+.scene-selection-bar label, .scene-selection-bar > div { display: flex; align-items: center; gap: 8px; }
 .scene-selection-bar input { accent-color: var(--primary); }
 
 .scene-card-menu > button { background: var(--control); border-color: var(--border); }

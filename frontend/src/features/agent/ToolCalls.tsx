@@ -437,7 +437,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           ) : null}
           {hasPageCard ? pageCard : card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
           {argText && !argsAreJustPreview && (
-            <div className="flex flex-col gap-[3px]">
+            <div className="flex flex-col gap-1">
               <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
               <HighlightedCode
                 code={argText}
@@ -446,7 +446,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
             </div>
           )}
           {resultText && (
-            <div className="flex flex-col gap-[3px]">
+            <div className="flex flex-col gap-1">
               <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolResult")}</span>
               <HighlightedCode
                 code={resultText}
@@ -585,7 +585,7 @@ type TurnBlock =
 /**
  * 把一轮的时间线切成**渲染块**,并且把**连着的工具调用并成一块**。
  *
- * 之前每个工具各自成块,于是三步连着调用时,它们之间用的是外层那个「块与块」的 gap-2.5
+ * 之前每个工具各自成块,于是三步连着调用时,它们之间用的是外层那个「块与块」的 gap-2
  * —— 和"一段正文之后跟一张卡"同一个间距。结果是三个本该读成一串步骤的东西,被摊成三条
  * 互不相干的行:ToolCalls 里那句"竖排成任务步骤"的设计从来没生效过,它内部的 gap-1 也
  * 一直是死代码(每次只传一个工具进去)。

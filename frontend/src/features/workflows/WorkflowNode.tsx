@@ -294,7 +294,7 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
         // 端口行读作独立的接线区,而不是悬在卡片下半的零散小字(空的一侧也不再是大片留白)。
         // 圆角同上:卡片圆角 − 1px 边框。差 1px 就会在底部两角露出一线卡片底色。
         <div className="flex justify-between gap-4 rounded-b-[calc(var(--wf-node-radius)-1px)] border-t border-border bg-panel-subtle px-3 py-[6px]">
-          <div className="flex min-w-0 flex-col gap-[3px]">
+          <div className="flex min-w-0 flex-col gap-1">
             {inputs.map((key) => (
               <div className="relative flex min-h-4 items-center" key={key}>
                 <Handle
@@ -313,7 +313,7 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
               </div>
             ))}
           </div>
-          <div className="flex min-w-0 flex-col gap-[3px]">
+          <div className="flex min-w-0 flex-col gap-1">
             {outputs.map((output) => (
               <div className="relative flex min-h-4 items-center justify-end" key={output}>
                 <Hint label={output}>

@@ -183,7 +183,7 @@ const SelectItem = React.forwardRef<
       ref={ref}
       className={cn(
         "relative flex min-h-9 w-full min-w-0 cursor-default select-none rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
-        media ? "items-center gap-2.5" : description ? "flex-col items-start gap-px" : "items-center",
+        media ? "items-center gap-2" : description ? "flex-col items-start gap-px" : "items-center",
         className
       )}
       {...props}

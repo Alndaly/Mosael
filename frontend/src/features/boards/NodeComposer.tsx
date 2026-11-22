@@ -1214,7 +1214,7 @@ export function NodeComposer({
   /** 精简表单里的提示词和素材角色,读写的就是底部编辑器的同一份 state。表单只决定顺序和名字,
    * 不另建一份 prompt / sources —— 两处显示不同正是这次问题的根。 */
   const appFormContext = selectedForm && formHasVisibleItem ? (
-    <section className="grid gap-2.5 border-b border-border pb-3" data-board-app-form="">
+    <section className="grid gap-2 border-b border-border pb-3" data-board-app-form="">
       {selectedForm.description.trim() ? (
         <span className="text-ui-xs leading-relaxed text-muted-foreground">
           <InlineMarkdown text={selectedForm.description} />

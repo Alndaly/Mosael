@@ -234,7 +234,7 @@ export function Inspector({
           onSetEffects={onSetEffects}
         />
       ) : (
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
+        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-2 [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
           <dl>
             <dt>{t("asset")}</dt>
             <Truncate as="dd">
@@ -570,7 +570,7 @@ function ColorGradePanel({
         <div className="inline-flex items-center gap-1">
           {hasGrade && (
             <Hint label={t("gradeResetAllHint")}>
-              <button type="button" className="inline-flex cursor-pointer items-center gap-[3px] whitespace-nowrap border-0 bg-transparent p-0 text-ui-xs text-muted-foreground hover:text-destructive" onClick={resetAll}>
+              <button type="button" className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap border-0 bg-transparent p-0 text-ui-xs text-muted-foreground hover:text-destructive" onClick={resetAll}>
                 <RotateCcw size={11} /> {t("gradeReset")}
               </button>
             </Hint>

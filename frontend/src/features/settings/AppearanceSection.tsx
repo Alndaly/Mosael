@@ -263,7 +263,7 @@ function SliderRow({
 }) {
   return (
     <SettingsRow label={label}>
-      <div className="flex min-w-[220px] items-center gap-2.5">
+      <div className="flex min-w-[220px] items-center gap-2">
         <Slider value={[value]} min={min} max={max} step={step} onValueChange={([v]) => onChange(v)} />
         <span className="w-[42px] text-right text-xs tabular-nums text-muted-foreground">{format(value)}</span>
       </div>

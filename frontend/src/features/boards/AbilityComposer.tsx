@@ -353,7 +353,7 @@ function AbilityHost({ item, tool }: { item: BoardItem; tool: BoardProducerInfo 
   const KindIcon = kindIcon(item.kind);
   const what = firstSentence(tool.board_description ?? "") || tool.label;
   return (
-    <div data-ability-host={item.id} className="flex min-w-0 items-center gap-2.5 px-1 py-1">
+    <div data-ability-host={item.id} className="flex min-w-0 items-center gap-2 px-1 py-1">
       <div className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-secondary/40 text-muted-foreground">
         {item.kind === "image" && item.asset_id ? (
           <AssetInlinePreview

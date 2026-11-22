@@ -143,7 +143,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
       <PopoverContent className="w-[min(440px,calc(100vw-24px))] overflow-hidden p-0" aria-label={t("notifTitle")}>
         <div className="flex items-center justify-between border-b border-divider px-5 py-5 [&_strong]:text-lg">
           <strong>{t("notifTitle")}</strong>
-          <span className="flex items-center gap-2.5">
+          <span className="flex items-center gap-2">
             {unreadNotifications > 0 && (
               <button
                 type="button"

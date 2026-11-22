@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
  * 此前三处各写各的:快捷键条下面那条贯穿整宽、上下 12px;导航里的两条缩 8px、`my-3` 再叠上导航项之间 4px 的 gap,
  * 实际上下各 16px;底部那条又是整宽。维护者截图:「这里间距似乎有点不太一致」。
  *
- * `inNav`:画在导航列表里(它的子项之间有 4px gap,矮屏 2px),margin 扣掉 gap,看上去照样是 12px(矮屏 8px)。
+ * `inNav`:画在导航列表里(它的子项之间有 4px gap),margin 扣掉 gap,看上去照样是 12px。
+ * 窗口矮时腾地方的是导航项本身(40px 压到 32px),分隔线不跟着变。
  */
 export function RailDivider({ inNav = false }: { inNav?: boolean }) {
   return (
@@ -14,7 +15,7 @@ export function RailDivider({ inNav = false }: { inNav?: boolean }) {
       data-rail-divider=""
       className={cn(
         "mx-2 shrink-0 border-t border-divider",
-        inNav ? "my-2 [@media(max-height:850px)]:my-1.5" : "my-3 [@media(max-height:850px)]:my-2",
+        inNav ? "my-2" : "my-3",
       )}
     />
   );

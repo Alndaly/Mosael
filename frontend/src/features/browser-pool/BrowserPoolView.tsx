@@ -370,7 +370,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       {p.proxy && (
                         // 徽标上写「代理已开」,悬停给走的是哪个代理。
                         <Hint label={p.proxy}>
-                          <em className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary">
+                          <em className="inline-flex max-w-[130px] items-center gap-1 overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary">
                             <Globe size={10} /> {t("publishProxyOn")}
                           </em>
                         </Hint>
@@ -577,7 +577,7 @@ function OpenSiteDialog({
         </>
       }
     >
-      <div className="grid gap-2.5">
+      <div className="grid gap-2">
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -617,7 +617,7 @@ function CreateProfileDialog({
         </>
       }
     >
-      <div className="grid gap-2.5">
+      <div className="grid gap-2">
         <label className={DIALOG_FIELD}>
           <span>{t("poolNameLabel")}</span>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("poolNamePlaceholder")} autoFocus />
@@ -659,7 +659,7 @@ function ProxyDialog({
         </>
       }
     >
-      <div className="grid gap-2.5">
+      <div className="grid gap-2">
         <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" autoFocus />
         <small className="text-ui-xs text-muted-foreground">{t("poolProxyHint")}</small>
       </div>

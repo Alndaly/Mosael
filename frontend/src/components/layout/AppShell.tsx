@@ -293,7 +293,9 @@ export function AppShell({
           <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
         </div>
         {shortcutBar?.(compact)}
-        <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 [@media(max-height:850px)]:gap-0.5 overflow-y-auto overflow-x-hidden">
+        {/* 窗口矮时导航项自己从 40px 压到 32px(见 RailButton 的 min-h-8),压到底才滚动 ——
+            此前靠 `max-height:850px` 一刀切,900 高的窗口落在刀外,最后一项「管理」被切掉一半、又没有滚动条可看。 */}
+        <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden">
           {PRIMARY_NAV.map((item) => (
             <React.Fragment key={item.view}>
               {item.dividerBefore && <RailDivider inNav />}
@@ -367,7 +369,7 @@ function ProjectSwitcher({
               key={p.id}
               role="menuitemradio"
               checked={p.id === currentProjectId}
-              // 项目行没有图标,就不占图标槽:此前 `inset` 给每一行垫了 size-4 + gap-2.5,
+              // 项目行没有图标,就不占图标槽:此前 `inset` 给每一行垫了 size-4 + gap-2,
               // 于是文字比下面有文件夹图标的「新建项目」多缩进一截。勾在行尾,左边不需要留位。
               label={p.name}
               truncate
@@ -447,7 +449,7 @@ function WorkspaceSwitcher({
         {/* 收起的侧栏里只剩一枚图标:名字和「切换工作区」放进悬停说明。展开时名字就写在按钮上,不再说一遍。 */}
         <Hint label={compact ? workspaceName : undefined} hint={compact ? t("workspaceSwitch") : undefined} side="right">
           <PopoverTrigger asChild>
-            <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center rounded-lg text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact ? "aspect-square justify-center bg-accent p-0 text-primary hover:bg-primary/20 data-[state=open]:ring-2 data-[state=open]:ring-ring" : "h-14 gap-2.5 px-2 hover:bg-secondary data-[state=open]:bg-secondary")} aria-label={t("workspaceSwitch")}>
+            <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center rounded-lg text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact ? "aspect-square justify-center bg-accent p-0 text-primary hover:bg-primary/20 data-[state=open]:ring-2 data-[state=open]:ring-ring" : "h-14 gap-2 px-2 hover:bg-secondary data-[state=open]:bg-secondary")} aria-label={t("workspaceSwitch")}>
               <span className={cn("grid shrink-0 place-items-center text-primary", compact ? "size-5" : "size-8 rounded-md bg-accent")}><Building2 size={compact ? 20 : 18} /></span>
               {!compact && <><span className="min-w-0 flex-1"><Truncate className="text-ui-sm font-semibold">{workspaceName}</Truncate><span className="block text-ui-xs text-muted-foreground">{t("workspaceSwitch")}</span></span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
             </button>
@@ -569,7 +571,7 @@ function RailUserMenu({ compact }: { compact: boolean }) {
       {/* 收起的侧栏里只剩头像:名字放进悬停说明。 */}
       <Hint label={compact ? displayName : undefined} side="right">
         <PopoverTrigger asChild>
-          <button type="button" className={cn("flex h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 text-left hover:bg-secondary", compact && "justify-center px-0")} aria-label={displayName}>
+          <button type="button" className={cn("flex h-11 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left hover:bg-secondary", compact && "justify-center px-0")} aria-label={displayName}>
             <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold">
               {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" onError={onAvatarError} /> : initial}
             </span>
@@ -634,7 +636,7 @@ function RailButton({
       <button
         type="button"
         className={cn(
-        "relative flex h-10 [@media(max-height:850px)]:h-9 w-full shrink-0 cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-ui-sm font-medium text-muted-foreground transition-colors duration-160 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&>svg]:shrink-0",
+        "relative flex h-10 min-h-8 w-full shrink cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-ui-sm font-medium text-muted-foreground transition-colors duration-160 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&>svg]:shrink-0",
         compact && "justify-center px-0",
         active &&
           "bg-accent font-semibold text-accent-foreground hover:bg-accent hover:text-accent-foreground",

@@ -132,7 +132,7 @@ export function LoginView() {
 
       <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">
         <div className="grid w-[min(400px,100%)] content-center gap-8 py-12">
-          <div className="grid gap-2.5 [&_h1]:m-0 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-ui-md [&_p]:leading-normal [&_p]:text-muted-foreground">
+          <div className="grid gap-2 [&_h1]:m-0 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-ui-md [&_p]:leading-normal [&_p]:text-muted-foreground">
             <span className="mb-8 text-3xl font-semibold tracking-tighter">Mosael</span>
             {/* 空库 = 这个部署还没有管理员。直说他正在创建什么,而不是一句泛泛的"创建账户"。 */}
             <h1>{mode === "login" ? t("loginWelcomeBack") : hasUsers ? t("loginCreateTitle") : t("bootstrapTitle")}</h1>
@@ -428,8 +428,8 @@ function OAuthButtons() {
   if (list.length === 0) return null;
 
   return (
-    <div className="grid gap-2.5">
-      <div className="flex items-center gap-2.5 text-ui-xs text-muted-foreground before:h-px before:flex-1 before:bg-border before:content-[''] after:h-px after:flex-1 after:bg-border after:content-['']">
+    <div className="grid gap-2">
+      <div className="flex items-center gap-2 text-ui-xs text-muted-foreground before:h-px before:flex-1 before:bg-border before:content-[''] after:h-px after:flex-1 after:bg-border after:content-['']">
         {t("authOr")}
       </div>
       {list.includes("google") && (

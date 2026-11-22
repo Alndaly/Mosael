@@ -48,7 +48,7 @@ import { Input } from "@/components/ui/input";
  * 没有聚焦环,带放大镜的搜索框让出的左边距也被它的 `px-3` 盖回去。
  */
 export const DIALOG_FIELD =
-  "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground";
+  "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground";
 
 /**
  * 全站弹窗的外壳:**三段** —— 钉住的头、能滚的身体、钉住的尾。
@@ -194,7 +194,7 @@ export function ModalShell({
             // 像是被搜索框压住。正文只留 pt-1 / pb-1,给首尾那个输入框的聚焦光圈(ring-2)不被裁掉。
             "sticky top-0 z-10 shrink-0",
             headerClassName ?? "px-6 pb-5 pt-6",
-            header && "gap-2.5",
+            header && "gap-2",
           )}
         >
           {titleAction ? (

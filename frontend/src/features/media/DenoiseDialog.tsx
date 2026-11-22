@@ -76,7 +76,7 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
       }
     >
       <div className="grid gap-6">
-        <div className="grid gap-2.5">
+        <div className="grid gap-2">
           <span className={SECTION_LABEL}>{t("denoiseMethod")}</span>
           <div className="grid gap-2" role="radiogroup" aria-label={t("denoiseMethod")}>
             {list.map((one) => {
@@ -163,7 +163,7 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
         </div>
         {/* 没有档位的引擎不摆这个旋钮 —— 拨了也没用。 */}
         {strengths.length > 0 && (
-          <div className="grid gap-2.5">
+          <div className="grid gap-2">
             <span className={SECTION_LABEL}>{t("denoiseStrength")}</span>
             {/* 三档等分整行 —— 挤在左边、右边空一大截时,看着像没排完。 */}
             <div className={segmentedListClass("md", { fill: true })} role="radiogroup" aria-label={t("denoiseStrength")}>

@@ -707,7 +707,7 @@ export function NodeInspector({
         )}
         {staleRefs.length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_6%,transparent)] px-2.5 py-2">
-            <span className="flex items-center gap-[5px] text-ui-xs font-semibold text-destructive">
+            <span className="flex items-center gap-1.5 text-ui-xs font-semibold text-destructive">
               <AlertTriangle size={12} /> {t("wfStaleRefsTitle")}
             </span>
             {staleRefs.map(({ key, ref }) => (
@@ -766,7 +766,7 @@ export function NodeInspector({
         {area === "config" && renderFields(basicSpecs)}
         {area === "advanced" && renderFields(advancedSpecs)}
         {area === "outputs" && (
-          <div className="grid gap-[5px] pt-0.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
+          <div className="grid gap-1.5 pt-0.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>
             <div className="flex flex-wrap gap-1" data-output-refs="">
               {outputNames.map((output) => {

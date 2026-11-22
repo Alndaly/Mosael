@@ -220,7 +220,7 @@ export function CanvasNodeSearch({
                   data-search-entry={entry.id}
                   aria-current={index === current ? "true" : undefined}
                   className={cn(
-                    "flex cursor-pointer items-baseline justify-between gap-2.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
+                    "flex cursor-pointer items-baseline justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
                     (index === current || (current === null && entry.id === selectedId)) && "bg-accent hover:bg-accent",
                   )}
                   onClick={() => {

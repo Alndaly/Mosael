@@ -1302,7 +1302,7 @@ export function Timeline({
               <MarkedRangeBand pxPerSecond={pxPerSecond} duration={sequenceDuration(allClips)} />
             </div>
             {newLayerDrag && (
-              <div className="pointer-events-none absolute inset-x-0 z-[4] flex h-[22px] items-center justify-center gap-[5px] border-y-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_16%,transparent)] text-ui-xs font-semibold text-primary" style={{ top: RULER_HEIGHT }}>
+              <div className="pointer-events-none absolute inset-x-0 z-[4] flex h-[22px] items-center justify-center gap-1.5 border-y-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_16%,transparent)] text-ui-xs font-semibold text-primary" style={{ top: RULER_HEIGHT }}>
                 <Plus size={12} /> {t("dropNewLayer")}
               </div>
             )}

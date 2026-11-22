@@ -129,9 +129,9 @@ export function CollaborationSheet({
               {items.map((comment, index) => (
                 <li
                   key={comment.id}
-                  className="grid gap-2.5 rounded-lg border border-divider bg-secondary/25 px-3.5 py-3 transition-colors hover:border-border-strong"
+                  className="grid gap-2 rounded-lg border border-divider bg-secondary/25 px-3.5 py-3 transition-colors hover:border-border-strong"
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/12 text-ui-2xs font-semibold text-primary">
                       {actorName(comment.author, t("teamSystemActor")).slice(0, 1).toUpperCase()}
                     </span>

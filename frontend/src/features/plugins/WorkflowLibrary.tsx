@@ -960,7 +960,7 @@ export function WorkflowLibraryDialog({
           "m-0 grid list-none gap-3 p-0",
           density === "large"
             ? "grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))]"
-            : "grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] gap-2.5",
+            : "grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] gap-2",
         )}
       >
         {shown.map((flow) => (

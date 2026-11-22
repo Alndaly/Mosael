@@ -242,7 +242,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       {hasBots ? (
         <SettingsListBlock>
           {(bots.data ?? []).map((bot) => (
-            <SettingsListItem className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5" key={bot.id}>
+            <SettingsListItem className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2" key={bot.id}>
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
                   <MessageSquare size={15} />
                 </span>
@@ -316,7 +316,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         {/* 二维码在上、说明在下,整列水平居中 —— 扫码是**一件事**,不是「左一块右一块」。
             此前是横排(左 188px 的码、右两行说明),默认 512px 宽的弹窗把说明挤在右边一窄条里,
             两块各贴一边。三种状态(生成中占位 / 出码 / 出码失败)共用这一个竖直容器,只换第一块。 */}
-        <div className="flex min-w-0 flex-col items-center gap-3.5 text-center [&_img]:rounded [&_img]:bg-white [&_img]:p-1 [&_p]:mb-1 [&_p]:mt-0 [&_p]:text-xs [&_p]:break-words">
+        <div className="flex min-w-0 flex-col items-center gap-3 text-center [&_img]:rounded [&_img]:bg-white [&_img]:p-1 [&_p]:mb-1 [&_p]:mt-0 [&_p]:text-xs [&_p]:break-words">
           {qrDataUrl ? (
             <img src={qrDataUrl} alt="Feishu QR" />
           ) : (

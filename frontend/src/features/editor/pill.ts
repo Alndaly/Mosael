@@ -27,7 +27,7 @@ export const ACTION_ICON = "relative shrink-0 text-muted-foreground";
  * 要打的控件,滚起来就藏掉一半,而它们没有主次(见 MediaLibraryView 的筛选行);这一排则是
  * 同一类的图标动作,右侧那条信息才是要一直看得见的那一个 —— 让它留在原地,动作从左往右翻。
  */
-export const ACTION_BAR = "flex min-w-0 items-center gap-2.5";
+export const ACTION_BAR = "flex min-w-0 items-center gap-2";
 
 /**
  * 左栏:可收缩的动作区。`flex-1 min-w-0` 先让它成为能被压缩的那一栏 —— 不写 `min-w-0`,

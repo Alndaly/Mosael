@@ -140,7 +140,7 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={levelPercent}
-            className="flex h-3 w-4 shrink-0 items-end gap-[2px]"
+            className="flex h-3 w-4 shrink-0 items-end gap-0.5"
           >
             {/*: 从左到右**越来越高**:这是一条电平,不是装饰性的三道杠 —— 高度顺序反过来
                  会读成"中间最响",和真实的音量没关系。 */}
