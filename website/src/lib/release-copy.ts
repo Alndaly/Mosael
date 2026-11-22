@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.13": {
+    zh: [
+      "**Cloud 生成不再重复扣费。** 提交使用稳定幂等键；后端重启后接着查同一个远端任务，取消会尝试取消上游，重复点击或重试不会再次提交。",
+      "**提交中的任务有确定结局。** 提交前先落库，崩溃后收尾而不是自动重提；排队超过 1 小时会失败并释放预占积分，没有生成 worker 时直接拒绝新任务。",
+      "**邮箱密码账号能在应用内开启 TOTP。** MFA 设置会带上当前密码，不再因为中继丢掉校验字段而失败。",
+      "**智能体同时运行的回合有上限。** 最多 8 轮真正执行，其余排队；停止按钮可以撤回还没开始的一轮。",
+    ],
+    en: [
+      "**Cloud generation no longer charges twice.** Submissions use a stable idempotency key; after a restart the backend resumes polling the same remote job, cancellation tries to cancel upstream, and repeated clicks or retries do not submit again.",
+      "**Tasks in flight have a definite outcome.** Submission is persisted first, crashes are reconciled instead of resubmitted, jobs queued for more than an hour fail and release their reserved credits, and new jobs are rejected when no generation worker is available.",
+      "**Email/password accounts can enable TOTP in the app.** MFA setup now forwards the current password instead of failing when the relay drops the verification field.",
+      "**Running agent turns are bounded.** At most eight turns execute at once and the rest queue; Stop can withdraw a turn that has not started.",
+    ],
+  },
   "v2.6.12": {
     zh: [
       "**思考中停止不再留下空气泡。** 停在第一句回答之前会明确写「还没开始回答就停下了」，已经产生的思考内容照常保留。",
