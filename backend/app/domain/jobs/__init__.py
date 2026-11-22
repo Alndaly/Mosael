@@ -799,7 +799,7 @@ def wait_for_idle_jobs(timeout: float = 5.0) -> bool:
             alive[0].join(timeout=max(0.0, min(0.5, deadline - time.monotonic())))
         else:
             time.sleep(0.01)  # 排着队、线程还没起来的那一小段
-    return _runner.idle() and not any(t.name == JOB_THREAD_NAME and t.is_alive() for t in threading.enumerate())
+    return _runner.idle() and not any(thread.name == JOB_THREAD_NAME and thread.is_alive() for thread in threading.enumerate())
 
 
 def find_job(db: Session, job_id: str) -> Job | None:
