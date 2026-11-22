@@ -94,7 +94,7 @@
 }
 
 .notes-list-empty { display:flex; align-items:center; justify-content:center; }
-.note-empty-state { display:flex; width:100%; max-width:230px; flex-direction:column; align-items:center; gap:12px; text-align:center; padding:28px 16px; margin:auto; }
+.note-empty-state { display:flex; width:100%; max-width:230px; flex-direction:column; align-items:center; gap:12px; text-align:center; text-wrap:balance; padding:28px 16px; margin:auto; }
 .note-empty-icon { display:grid; place-items:center; width:52px; height:52px; border-radius:16px; background:color-mix(in srgb,var(--foreground) 4%,transparent); color:var(--muted-foreground); margin-bottom:3px; }
 .note-empty-state strong { font-size:var(--text-ui-sm); font-weight:550; }.note-empty-state p { font-size:var(--text-ui-xs); line-height:1.75; color:var(--muted-foreground); }
 

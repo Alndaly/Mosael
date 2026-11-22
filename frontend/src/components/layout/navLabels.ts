@@ -111,12 +111,22 @@ export function navItemsAt(placement: NavPlacement): readonly NavItem[] {
 /** 可以出现在地址里的页面。项目浏览页是剪辑的空态 surface,不占侧栏一格。 */
 export const STUDIO_VIEWS: readonly StudioView[] = [...NAV_ITEMS.map((item) => item.view), "projects"];
 
-/** 不在侧栏、但面包屑需要名字的页面。 */
-const NON_NAV_LABEL_KEYS: Partial<Record<StudioView, MessageKey>> = {
-  projects: "homeProjectsTitle",
+/**
+ * 不占侧栏一格、但归在某一格下面的页面。
+ *
+ * 项目浏览页是「剪辑」的空态 surface:从编辑器点面包屑里的「剪辑」回到这里,侧栏点「剪辑」没打开项目时也落到这里。
+ * 所以侧栏亮「剪辑」、顶栏也叫「剪辑」。此前两处都没对上:侧栏一格都不亮,顶栏叫「项目」。
+ */
+const NAV_PARENT: Partial<Record<StudioView, StudioView>> = {
+  projects: "editor",
 };
+
+/** 这个页面在侧栏里算哪一格(侧栏高亮、面包屑名字都看它)。 */
+export function navViewOf(view: StudioView): StudioView {
+  return NAV_PARENT[view] ?? view;
+}
 
 /** 查不到就是 null。**别兜成首页** —— 那正是 admin 顶着「首页」这个名字的原因。 */
 export function navLabelKey(view: StudioView): MessageKey | null {
-  return NAV_ITEMS.find((item) => item.view === view)?.labelKey ?? NON_NAV_LABEL_KEYS[view] ?? null;
+  return NAV_ITEMS.find((item) => item.view === navViewOf(view))?.labelKey ?? null;
 }

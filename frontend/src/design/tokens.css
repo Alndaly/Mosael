@@ -239,7 +239,9 @@
   --secondary-foreground: #34415a;
   --muted: #f0f3f8;
   --muted-foreground: #626e83;
-  --accent: #edf2fa;
+  /* 选中态。必须和 --secondary(悬停)看得出是两档:此前是 #edf2fa,和悬停的 #edf1f7 差一个色阶,
+     侧栏「当前页」和「鼠标停着的那项」一样亮,只剩蓝字区分。深色、磨砂两套本来就拉开了。 */
+  --accent: #e2ebf9;
   --accent-foreground: #34558e;
   --destructive: #bd383e;
   /* 状态色按正文尺寸校验对比度；不要在组件里回退到 Tailwind 原色。 */

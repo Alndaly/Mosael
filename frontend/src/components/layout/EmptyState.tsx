@@ -47,7 +47,9 @@ export function EmptyState({
         // `max-w` 是**上限不是宽度**,但它挡不住比它更窄的容器 —— 260px 的空态放进 258px 的
         // 侧栏就溢出 10px,而那 10px 会让整页能左右滑。`w-full` 让它先服从容器,
         // `break-words` 让里面的长 URL(报错文案里全是)断得开而不是硬撑。
-        "empty-state m-auto grid w-full justify-items-center break-words text-center [overflow-wrap:anywhere]",
+        // `text-balance`:居中的两三行短文让各行等长,不出现「最后一行只剩一两个字」、在短语中间折断的样子。
+        // 中文没有词边界,浏览器做不到真正按词折行(`word-break: auto-phrase` 目前只认日文),等长是能做到的那一步。
+        "empty-state m-auto grid w-full justify-items-center break-words text-center text-balance [overflow-wrap:anywhere]",
         compact &&
           "max-w-[260px] gap-1 px-3 py-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-[620] [&_p]:m-0 [&_p]:text-ui-xs [&_p]:leading-[1.5] [&_p]:text-muted-foreground",
         section &&

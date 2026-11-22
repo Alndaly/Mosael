@@ -38,7 +38,7 @@ import { OverNativeView } from "@/components/app/overNativeView";
 import { DeleteWorkspaceDialog } from "@/components/layout/DeleteWorkspaceDialog";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
+import { navItemsAt, navLabelKey, navViewOf, type NavItem, type StudioView } from "@/components/layout/navLabels";
 import { announceUpdate, showUpdateProgress } from "@/lib/updateNotice";
 import { gotoSettings } from "@/lib/deepLink";
 import { formatCombo } from "@/lib/shortcuts";
@@ -154,7 +154,7 @@ export function AppShell({
   const railItem = (item: NavItem) => {
     const Icon = item.icon;
     return (
-      <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={view === item.view} onClick={() => onViewChange(item.view)}>
+      <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={navViewOf(view) === item.view} onClick={() => onViewChange(item.view)}>
         <Icon size={17} />
       </RailButton>
     );

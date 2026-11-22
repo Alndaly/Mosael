@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { NAV_ITEMS, STUDIO_VIEWS, navItemsAt, navLabelKey } from "@/components/layout/navLabels";
+import { NAV_ITEMS, STUDIO_VIEWS, navItemsAt, navLabelKey, navViewOf } from "@/components/layout/navLabels";
 
 describe("导航标签", () => {
   it("每个可路由视图都查得到自己的标签", () => {
@@ -25,6 +25,12 @@ describe("导航标签", () => {
 
   it("admin 有自己的名字,不是「首页」", () => {
     expect(navLabelKey("admin")).toBe("navAdmin");
+  });
+
+  it("项目浏览页归在「剪辑」下面:侧栏亮「剪辑」,顶栏也叫「剪辑」(此前侧栏一格不亮、顶栏叫「项目」)", () => {
+    expect(navViewOf("projects")).toBe("editor");
+    expect(navLabelKey("projects")).toBe("navEditor");
+    expect(navViewOf("media")).toBe("media");
   });
 
   it("查不到的视图不会假装成首页", () => {
