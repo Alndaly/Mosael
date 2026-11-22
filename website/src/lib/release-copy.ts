@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.14": {
+    zh: [
+      "**Windows 滚动条不再挤占页面。** 改成悬浮滚动条，滚动条出现时页面不再变窄、跳动。",
+      "**窄窗口里 AI Studio 不再被右栏盖住。** 右栏在窄窗口默认收起、点开才浮在上面，标题和输入框完整可见。",
+      "**导航与选中态更清楚。** 900 高的窗口里导航放得下；亮色主题选中和悬停分得开；项目列表页侧栏亮「剪辑」。",
+      "**控件高度和间距统一。** 管理页节头按钮与工具栏同高，笔记图标按钮回到统一刻度，成本规则价格贴住右边。",
+    ],
+    en: [
+      "**Windows scrollbars no longer take up space.** Overlay scrollbars keep pages from narrowing and jumping when a scrollbar appears.",
+      "**AI Studio's side panel no longer covers content in narrow windows.** It starts collapsed below 1180px and floats on top only when opened, so the title and composer stay visible.",
+      "**Clearer navigation and selection.** The sidebar fits in a 900px-tall window, selected and hovered items are distinct in light mode, and the project list highlights Editor.",
+      "**Consistent control heights and spacing.** Admin section buttons match the toolbar below, note icon buttons return to the shared scale, and cost-rule prices align to the right edge.",
+    ],
+  },
   "v2.6.13": {
     zh: [
       "**Cloud 生成不再重复扣费。** 提交使用稳定幂等键；后端重启后接着查同一个远端任务，取消会尝试取消上游，重复点击或重试不会再次提交。",
