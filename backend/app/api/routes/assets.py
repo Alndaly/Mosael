@@ -393,7 +393,7 @@ def analyze_asset_route(
     and never requires a caller-supplied service address.
     """
 
-    # 智能体看素材走 analyze_asset 这个工具(用这次对话的连接、模型和视频分析方式,见 mcp_server);
+    # 智能体看素材走 analyze_asset 这个工具(用这次对话的连接、模型和视频分析方式,见 app/agent_tools/media);
     # 这条路由是人点的,用他单独选的分析配置。
     try:
         result = analysis_use_cases.analyze(db, user, asset_id, body.question, profile_id=body.profile_id, mode=body.mode)

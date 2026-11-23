@@ -30,17 +30,17 @@ def test_browser_tools_in_manifest_and_gating() -> None:
 
 
 def test_browser_press_sends_the_key_to_the_executor(monkeypatch) -> None:
-    import mcp_server
+    from app.agent_tools import browser
 
     calls: list[tuple[str, str, dict, str]] = []
     monkeypatch.setattr(
-        mcp_server,
+        browser,
         "_browser_act",
         lambda session_id, action, args, workspace_id: (
             calls.append((session_id, action, args, workspace_id)) or {"value": "ok"}
         ),
     )
-    assert mcp_server.browser_press("session-1", key="Enter", workspace_id="ws-1") == {"value": "ok"}
+    assert browser.browser_press("session-1", key="Enter", workspace_id="ws-1") == {"value": "ok"}
     assert calls == [("session-1", "press_key", {"key": "Enter"}, "ws-1")]
 
 

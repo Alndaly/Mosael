@@ -32,7 +32,7 @@ def test_MCP那侧不再自己拼信封() -> None:
     """信封只有一个产地。两处都拼的话,用户会看到它两次;都不拼则模型一次都收不到。"""
     from pathlib import Path
 
-    source = (Path(__file__).resolve().parents[1] / "mcp_server.py").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[1] / "app" / "agent_tools" / "conversation.py").read_text(encoding="utf-8")
     body = source[source.index("def notify_agent_session"):]
     body = body[: body.index("\ndef ")]
     assert "【来自另一个智能体会话的通知】" not in body, "notify_agent_session 又开始自己拼信封了"

@@ -271,39 +271,39 @@ class Test按描述符校验:
 
 class Test智能体拿得到描述符:
     def test_每个模型都报得出它认哪些参数(self) -> None:
-        import mcp_server
+        from app.agent_tools import generation
 
         for item in BUILTIN_MODELS:
             capabilities = item["capabilities"]
-            help_ = mcp_server._parameter_help(capabilities)
+            help_ = generation._parameter_help(capabilities)
             assert set(help_) == set(capabilities.get("parameter_keys") or []), (
                 f"{item['id']} 的参数说明和描述符对不上"
             )
 
     def test_有清单的参数要把清单带出去(self) -> None:
         """只说「支持 duration_seconds」不够 —— 智能体得知道能填哪几个,否则还是在猜。"""
-        import mcp_server
+        from app.agent_tools import generation
 
-        help_ = mcp_server._parameter_help(capabilities_for("minimax", "MiniMax-H3", "video"))
+        help_ = generation._parameter_help(capabilities_for("minimax", "MiniMax-H3", "video"))
         assert help_["duration_seconds"]["choices"] == list(range(4, 16))
         assert help_["duration_seconds"]["default"] == 6
 
     def test_布尔参数明确给出真假选项(self) -> None:
-        import mcp_server
+        from app.agent_tools import generation
 
-        help_ = mcp_server._parameter_help(capabilities_for("alibaba", "qwen-image", "image"))
+        help_ = generation._parameter_help(capabilities_for("alibaba", "qwen-image", "image"))
         assert help_["prompt_extend"] == {"choices": [True, False], "default": True}
 
     def test_供应商枚举参数也带选项(self) -> None:
-        import mcp_server
+        from app.agent_tools import generation
 
-        help_ = mcp_server._parameter_help(capabilities_for("openai", "gpt-image-2", "image"))
+        help_ = generation._parameter_help(capabilities_for("openai", "gpt-image-2", "image"))
         assert help_["quality"] == {"choices": ["auto", "low", "medium", "high"], "default": "auto"}
 
     def test_素材类参数说清楚要给什么(self) -> None:
-        import mcp_server
+        from app.agent_tools import generation
 
-        help_ = mcp_server._parameter_help(capabilities_for("minimax", "MiniMax-H3", "video"))
+        help_ = generation._parameter_help(capabilities_for("minimax", "MiniMax-H3", "video"))
         assert "asset_id" in help_["first_frame"]
         assert "asset_id" in help_["last_frame"]
 
@@ -312,11 +312,11 @@ class Test智能体拿得到描述符:
 
         判据:目录里出现过的每个参数键,_parameter_help 都得处理得了 —— 不能返回空。
         """
-        import mcp_server
+        from app.agent_tools import generation
 
         every_key = {key for item in BUILTIN_MODELS for key in item["capabilities"].get("parameter_keys") or []}
         fake = {"parameter_keys": sorted(every_key)}
-        help_ = mcp_server._parameter_help(fake)
+        help_ = generation._parameter_help(fake)
         assert set(help_) == every_key
         assert all(value for value in help_.values()), "有参数键翻不出任何说明"
 
@@ -350,9 +350,9 @@ class Test智能体拿得到素材的规矩:
     而这些规矩本来就可以先说。"""
 
     def _rules(self, provider: str, model: str, kind: str) -> list[str]:
-        import mcp_server
+        from app.agent_tools import generation
 
-        return mcp_server._source_rules(capabilities_for(provider, model, kind))
+        return generation._source_rules(capabilities_for(provider, model, kind))
 
     def test_互斥说出来(self) -> None:
         rules = self._rules("bytedance", "doubao-seedance-2-0-260128", "video")
@@ -366,9 +366,9 @@ class Test智能体拿得到素材的规矩:
         assert any("参考音频要搭配" in one for one in rules)
 
     def test_张数进了参数说明(self) -> None:
-        import mcp_server
+        from app.agent_tools import generation
 
-        help_ = mcp_server._parameter_help(capabilities_for("bytedance", "doubao-seedance-2-0-260128", "video"))
+        help_ = generation._parameter_help(capabilities_for("bytedance", "doubao-seedance-2-0-260128", "video"))
         assert "最多 9 份" in help_["reference_image"]
 
     def test_没规矩的模型不要硬编出一条(self) -> None:

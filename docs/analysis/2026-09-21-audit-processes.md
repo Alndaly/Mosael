@@ -2,7 +2,7 @@
 
 > 日期:2026-09-21 · 基准:`e58190f2` 之后的干净工作区 · 版本 1.4.2
 > 范围:`electron/`(主进程 / preload / system / 发布执行器 / 浏览器执行器)、`agent-sidecar/`、
-> `browser-extension/`、`plugins/` 与 `domain/plugins`、`domain/blender`、`backend/mcp_server.py`、
+> `browser-extension/`、`plugins/` 与 `domain/plugins`、`domain/blender`、`backend/app/agent_tools/`、
 > `website/`(只看它与主仓库的耦合点)。**不含**后端领域内部逻辑、AI 供应商层、前端页面内部。
 > 方法同 [链条审计](2026-09-21-chain-audit.md):沿链条走,每条给 `文件:行号`。
 > 本文**只读**,没有改动任何代码。
@@ -687,7 +687,7 @@ video.currentTime = Math.max(0, Math.min(..., message.seconds));
 - `browser-extension/src/shared/protocol.ts`
 - `browser-extension/src/content.ts`
 - `browser-extension/scripts/build.mjs`
-- `backend/mcp_server.py`
+- `backend/app/agent_tools/`
 - `backend/app/api/deps/auth.py`
 
 **契约与官网**

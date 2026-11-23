@@ -15,7 +15,7 @@ import contextvars
 
 import pytest
 
-import mcp_server
+from app.agent_tools import media, registry
 from app.core.db import SessionLocal
 from app.core.security import find_session
 from app.db.models import Project
@@ -28,20 +28,20 @@ def agent(monkeypatch):
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
         me = find_session(db, client.headers["Authorization"].removeprefix("Bearer ")).user_id
-    monkeypatch.setattr(mcp_server, "_CALLER_ID", contextvars.ContextVar("test_caller", default=me))
+    monkeypatch.setattr(registry, "CALLER_ID", contextvars.ContextVar("test_caller", default=me))
     return client, ws
 
 
 def _timeline(sequence_id: str) -> dict:
-    return mcp_server.inspect_sequence(sequence_id=sequence_id)
+    return media.inspect_sequence(sequence_id=sequence_id)
 
 
 def test_给已有项目建一条空时间线_能直接拿去剪(agent) -> None:
     client, ws = agent
-    project = mcp_server.create_project(name="宣传片")
+    project = media.create_project(name="宣传片")
     assert project.get("sequence_id") is None, "不要 timeline 时只建项目,和此前一样"
 
-    created = mcp_server.create_project(name="竖屏版", project_id=project["id"], width=1080, height=1920)
+    created = media.create_project(name="竖屏版", project_id=project["id"], width=1080, height=1920)
 
     assert created["id"] == project["id"], "给了 project_id 就不该再建一个项目"
     timeline = _timeline(created["sequence_id"])
@@ -53,9 +53,9 @@ def test_给已有项目建一条空时间线_能直接拿去剪(agent) -> None:
 
 def test_不给画幅就跟项目当前那条时间线(agent) -> None:
     _client, _ws = agent
-    project = mcp_server.create_project(name="宣传片")
-    first = mcp_server.create_project(name="主序列", project_id=project["id"], width=1080, height=1920, fps=25)
-    second = mcp_server.create_project(name="备选剪法", project_id=project["id"])
+    project = media.create_project(name="宣传片")
+    first = media.create_project(name="主序列", project_id=project["id"], width=1080, height=1920, fps=25)
+    second = media.create_project(name="备选剪法", project_id=project["id"])
 
     timeline = _timeline(second["sequence_id"])
     assert (timeline["width"], timeline["height"], timeline["fps"]) == (1080, 1920, 25)
@@ -65,7 +65,7 @@ def test_不给画幅就跟项目当前那条时间线(agent) -> None:
 
 def test_新项目可以顺手带一条时间线_缺省画幅和剪辑页新建的一样(agent) -> None:
     _client, _ws = agent
-    created = mcp_server.create_project(name="新片", timeline=True)
+    created = media.create_project(name="新片", timeline=True)
     timeline = _timeline(created["sequence_id"])
     assert (timeline["name"], timeline["width"], timeline["height"], timeline["fps"]) == ("新片", 1920, 1080, 30)
 
@@ -75,13 +75,13 @@ def test_别的工作区的项目建不进去(agent) -> None:
     other = client.post("/api/workspaces", json={"name": "别处"}).json()["id"]
     elsewhere = client.post("/api/projects", json={"workspace_id": other, "name": "别处的项目"}).json()["id"]
     with pytest.raises(Exception) as caught:
-        mcp_server.create_project(name="x", project_id=elsewhere, workspace_id=_ws)
+        media.create_project(name="x", project_id=elsewhere, workspace_id=_ws)
     assert "not found" in str(caught.value).lower() or "不" in str(caught.value)
 
 
 def test_项目里还没有时间线时_inspect_sequence_指路去建(agent) -> None:
     _client, _ws = agent
-    project = mcp_server.create_project(name="空项目")
+    project = media.create_project(name="空项目")
     with pytest.raises(ValueError) as caught:
-        mcp_server.inspect_sequence(project_id=project["id"])
+        media.inspect_sequence(project_id=project["id"])
     assert "create_project" in str(caught.value), "只说「没有时间线」,模型不知道怎么建"

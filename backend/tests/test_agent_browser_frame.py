@@ -6,10 +6,11 @@
 """
 from __future__ import annotations
 
-import asyncio
+from app.domain.agent.tools import catalog
+
 import contextvars
 
-import mcp_server
+from app.agent_tools import browser, registry
 from app.core.db import SessionLocal
 from app.core.security import find_session
 from app.domain import browser as bdom
@@ -34,7 +35,7 @@ def _setup(monkeypatch) -> tuple[str, str]:
         caller = find_session(db, client.headers["Authorization"].removeprefix("Bearer ")).user_id
         sid = bdom.open_session(db, workspace_id=ws, actor=caller).id
         db.commit()
-    monkeypatch.setattr(mcp_server, "_CALLER_ID", contextvars.ContextVar("test_caller", default=caller))
+    monkeypatch.setattr(registry, "CALLER_ID", contextvars.ContextVar("test_caller", default=caller))
     return ws, sid
 
 
@@ -44,7 +45,7 @@ def test_按选择器操作的工具都把框架交给执行器(monkeypatch) -> 
     monkeypatch.setattr(bdom, "run_action", lambda s, action, args, **k: (calls.append((action, args)) or {"value": ""}))
     for name, (args, action) in TOOLS.items():
         calls.clear()
-        getattr(mcp_server, name)(session_id=sid, workspace_id=ws, frame=f"  {FRAME} ", **args)
+        catalog.get(name).function(session_id=sid, workspace_id=ws, frame=f"  {FRAME} ", **args)
         assert calls and calls[0][0] == action, name
         assert calls[0][1]["frame"] == FRAME, f"{name} 没把框架交给执行器:{calls[0][1]}"
 
@@ -55,7 +56,7 @@ def test_没填框架就不交_和以前一样作用在整个页面(monkeypatch)
     monkeypatch.setattr(bdom, "run_action", lambda s, action, args, **k: (calls.append(args) or {"value": ""}))
     for name, (args, _action) in TOOLS.items():
         calls.clear()
-        getattr(mcp_server, name)(session_id=sid, workspace_id=ws, **args)
+        catalog.get(name).function(session_id=sid, workspace_id=ws, **args)
         assert "frame" not in calls[0], name
 
 
@@ -67,16 +68,16 @@ def test_上传也认框架(monkeypatch) -> None:
 
     monkeypatch.setattr(host_files, "upload_source", lambda db, **kwargs: object())
     monkeypatch.setattr(bdom, "upload_file", lambda session_id, file, **kwargs: (seen.update(kwargs) or {}))
-    mcp_server.browser_upload(session_id=sid, selector="input[type=file]", asset_id="a1", workspace_id=ws, frame=FRAME)
+    browser.browser_upload(session_id=sid, selector="input[type=file]", asset_id="a1", workspace_id=ws, frame=FRAME)
     assert seen["frame"] == FRAME
     seen.clear()
-    mcp_server.browser_upload(session_id=sid, selector="input[type=file]", asset_id="a1", workspace_id=ws)
+    browser.browser_upload(session_id=sid, selector="input[type=file]", asset_id="a1", workspace_id=ws)
     assert seen["frame"] == ""
 
 
 def test_工具说明里写清楚什么时候用框架() -> None:
-    tools = {tool.name: tool for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    tools = {tool.name: tool for tool in catalog.definitions()}
     for name in [*TOOLS, "browser_upload"]:
-        schema = tools[name].input_schema["properties"]
+        schema = tools[name].parameters["properties"]
         assert "frame" in schema, f"{name} 没有 frame 参数"
     assert "iframe" in tools["browser_click"].description

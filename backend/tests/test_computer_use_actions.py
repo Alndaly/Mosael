@@ -18,7 +18,8 @@ import types
 
 import pytest
 
-import mcp_server
+from app import agent_tools
+from app.agent_tools import conversation
 from app.domain.agent import computer_use
 from app.domain.agent.confirmable.registry import tool_spec
 from app.domain.agent.errors import ConfirmationError
@@ -43,8 +44,8 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
         # 会改界面:进确认类,不进只读那一份(子智能体拿不到)。
         assert spec["confirmation"] is True, name
         assert spec["read_only"] is False, name
-        assert name in mcp_server.CONFIRMATION_TOOLS
-        assert name not in mcp_server.READ_ONLY_TOOLS
+        assert name in agent_tools.CONFIRMATION_TOOLS
+        assert name not in agent_tools.READ_ONLY_TOOLS
 
     click_properties = tools["computer_click"]["parameters"]["properties"]
     #: 只有一个窗口可操作 —— 没有 window 这一维(publish 分支随窗口一起删了)。
@@ -638,16 +639,15 @@ def test_special_click_has_a_truthful_card() -> None:
 def test_get_confirmation_attaches_a_batch_screenshot(monkeypatch) -> None:
     import json
 
-    from mcp.types import ImageContent, TextContent
+    from app.agent_tools.registry import ImageContent, TextContent
 
-    import mcp_server
 
     png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: {
+    monkeypatch.setattr(conversation, "use_case", lambda *a, **k: {
         "id": "card-1", "status": "executed", "result": {"screenshot_asset_id": "asset-1"}, "error": None,
     })
-    monkeypatch.setattr(mcp_server, "_screenshot_asset_image", lambda asset_id: png)
-    blocks = mcp_server.get_confirmation("card-1")
+    monkeypatch.setattr(conversation, "_screenshot_asset_image", lambda asset_id: png)
+    blocks = conversation.get_confirmation("card-1")
     assert isinstance(blocks, list) and len(blocks) == 2
     assert isinstance(blocks[0], TextContent)
     assert json.loads(blocks[0].text)["confirmation_id"] == "card-1"

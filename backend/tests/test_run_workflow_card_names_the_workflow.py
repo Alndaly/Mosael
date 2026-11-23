@@ -1,12 +1,12 @@
 """「运行工作流」卡上点名的是**真要跑的那一张**,名字由开卡时查出来,不由调用方转述。
 
-MCP 的 run_workflow 只带 workflow_id(mcp_server.run_workflow),而摘要读 `payload["name"]`、读不到就退回 id ——
+MCP 的 run_workflow 只带 workflow_id(workflows.run_workflow),而摘要读 `payload["name"]`、读不到就退回 id ——
 卡标题于是是一串 uuid:用户在授权界面上认不出自己要批的是哪一张。反过来,调用方自带的 name 也不能信。
 """
 
 from __future__ import annotations
 
-import mcp_server
+from app.agent_tools import registry, workflows
 from tests.util import fresh_client, user_id
 
 
@@ -22,8 +22,8 @@ def test_MCP_开的运行卡_标题是工作流的名字不是_id() -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     wf = _workflow(client, ws, "日更短视频")
 
-    with mcp_server.calling_as(user_id=user_id(), requested_by="mcp"):
-        card = mcp_server.run_workflow(workflow_id=wf, workspace_id=ws)
+    with registry.calling_as(user_id=user_id(), requested_by="mcp"):
+        card = workflows.run_workflow(workflow_id=wf, workspace_id=ws)
 
     shown = client.get(f"/api/confirmations/{card['confirmation_id']}").json()
     assert "「日更短视频」" in shown["headline"], shown["headline"]

@@ -80,7 +80,7 @@ def revision(db: Session, user: User, workspace_id: str, note_id: str, number: i
 
 def create(db: Session, user: User, workspace_id: str, content: NoteContent, *,
            origin: NoteRevisionOrigin = "create") -> Note:
-    """`origin`:页面上新建是 create;智能体经工具建的(mcp_server.create_note)传 agent。"""
+    """`origin`:页面上新建是 create;智能体经工具建的(app/agent_tools/knowledge.create_note)传 agent。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
     return notes.create_note(db, workspace_id, content, actor=user.id, origin=origin)
 
@@ -95,7 +95,7 @@ def append(
     db: Session, user: User, workspace_id: str, note_id: str, markdown: str, sources: list[dict[str, Any]], *,
     origin: NoteRevisionOrigin = "append",
 ) -> Note:
-    """`origin`:页面上「存到笔记」是 append;智能体经工具追加的(mcp_server.append_note)传 agent。"""
+    """`origin`:页面上「存到笔记」是 append;智能体经工具追加的(app/agent_tools/knowledge.append_note)传 agent。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
     return notes.append_note(db, workspace_id, note_id, markdown, sources, actor=user.id, origin=origin)
 

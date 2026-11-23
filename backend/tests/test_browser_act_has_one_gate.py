@@ -13,7 +13,7 @@ import pathlib
 
 import pytest
 
-import mcp_server
+from app.agent_tools import browser as browser_tools, registry
 from app.api.domain_errors import STATUS_BY_ERROR
 from app.core.db import SessionLocal
 from app.db.models import User
@@ -77,8 +77,8 @@ def test_three_entrances_refuse_the_same_way(uploads, monkeypatch) -> None:
     )
     assert over_http.status_code == 404, over_http.text
 
-    with mcp_server.calling_as(user_id=_uid("tester")), pytest.raises(NotVisible) as from_tool:
-        mcp_server.browser_upload(session_id, "input", elsewhere["id"], workspace_id=a["id"])
+    with registry.calling_as(user_id=_uid("tester")), pytest.raises(NotVisible) as from_tool:
+        browser_tools.browser_upload(session_id, "input", elsewhere["id"], workspace_id=a["id"])
     assert str(from_tool.value) == over_http.json()["detail"]
 
     with SessionLocal() as db:
@@ -99,13 +99,14 @@ def test_three_entrances_refuse_the_same_way(uploads, monkeypatch) -> None:
 
 
 def test_the_agent_tools_no_longer_borrow_route_functions() -> None:
-    """工具层只剩 `_use_case` 一种调用:不 import 路由模块,也没有 `_route` 这条借道。"""
-    tree = ast.parse(pathlib.Path("mcp_server.py").read_text(encoding="utf-8"))
-    borrowed = sorted(
-        {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.api.routes")}
-    )
-    assert borrowed == [], f"工具层又借道调路由了:{borrowed}"
-    assert not any(isinstance(node, ast.FunctionDef) and node.name == "_route" for node in ast.walk(tree))
+    """工具层只剩 `use_case` 一种调用:不 import 路由模块,也没有 `_route` 这条借道。"""
+    for path in sorted(pathlib.Path("app/agent_tools").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        borrowed = sorted(
+            {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.api.routes")}
+        )
+        assert borrowed == [], f"{path} 又借道调路由了:{borrowed}"
+        assert not any(isinstance(node, ast.FunctionDef) and node.name == "_route" for node in ast.walk(tree)), path
 
 
 def test_every_mapped_error_reaches_http_with_its_code() -> None:

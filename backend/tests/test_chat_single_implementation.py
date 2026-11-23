@@ -17,6 +17,7 @@ test_agent_workflow_parity.py 是同一套棘轮。
 
 from __future__ import annotations
 
+
 import ast
 import subprocess
 from pathlib import Path
@@ -43,7 +44,7 @@ def _files_containing(needle: str) -> list[str]:
     而豁免清单一长,它就不再是约束了。
     """
     tracked = subprocess.run(
-        ["git", "ls-files", "app", "mcp_server.py"], cwd=BACKEND, capture_output=True, text=True
+        ["git", "ls-files", "app"], cwd=BACKEND, capture_output=True, text=True
     ).stdout.split()
     hits = []
     for rel in tracked:

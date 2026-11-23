@@ -85,12 +85,12 @@ def test_智能体的卡上机位不对_开卡就拒() -> None:
 
 
 def test_智能体工具当场说出合法的机位() -> None:
-    import mcp_server
+    from app.agent_tools import generation
 
-    assert mcp_server._pose_payload("side", True) == {"pose": {"shot_angle": "side", "as_reference": True}}
-    assert mcp_server._pose_payload("", False) == {}
+    assert generation._pose_payload("side", True) == {"pose": {"shot_angle": "side", "as_reference": True}}
+    assert generation._pose_payload("", False) == {}
     with pytest.raises(ValueError, match="three_quarter"):
-        mcp_server._pose_payload("from_above", False)
+        generation._pose_payload("from_above", False)
 
 
 def test_工作流节点把机位和降级开关交进漏斗() -> None:

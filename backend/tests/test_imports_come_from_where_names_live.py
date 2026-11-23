@@ -118,7 +118,7 @@ def _absolute(path: pathlib.Path, node: ast.ImportFrom) -> str:
 
 def _sources() -> list[pathlib.Path]:
     files = [*(BACKEND / "app").rglob("*.py"), *(BACKEND / "tests").rglob("*.py"), *(BACKEND / "scripts").rglob("*.py")]
-    return sorted([*files, BACKEND / "mcp_server.py"])
+    return sorted(files)
 
 
 def test_名字从定义它的模块导入() -> None:

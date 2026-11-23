@@ -16,13 +16,15 @@ test_agent_workflow_parity 钉的是「工作流有的能力智能体也有」�
 
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
 
-import asyncio
 from typing import Any
 
-import mcp_server
+from app import agent_tools
+from app.agent_tools import registry, workflows
 from tests.util import fresh_client
 
 #: 工具名 → 一份最小的合法参数。空 dict 表示无参调用。
@@ -189,7 +191,7 @@ def _route_through(monkeypatch, client) -> None:
 
     with SessionLocal() as db:
         caller = find_session(db, client.headers["Authorization"].removeprefix("Bearer ")).user_id
-    monkeypatch.setattr(mcp_server, "_CALLER_ID", contextvars.ContextVar("test_caller", default=caller))
+    monkeypatch.setattr(registry, "CALLER_ID", contextvars.ContextVar("test_caller", default=caller))
 
 
 def _is_shape_rejection(exc: BaseException) -> bool:
@@ -209,13 +211,13 @@ def test_每个工具发出去的载荷后端都接得住(monkeypatch) -> None:
     client.post("/api/workspaces", json={"name": "W"})  # 工具默认取第一个工作区
     _route_through(monkeypatch, client)
 
-    tools = {tool.name: tool for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    tools = {tool.name: tool for tool in catalog.definitions()}
     broken: list[str] = []
     for name, args in ARGS.items():
         if name not in tools:
             continue
         try:
-            getattr(mcp_server, name)(**args)
+            catalog.get(name).function(**args)
         except Exception as exc:  # noqa: BLE001 — 领域错误是预期的(传的都是不存在的 id)
             if _is_shape_rejection(exc):
                 broken.append(f"{name}: {type(exc).__name__}: {str(exc)[:200]}")
@@ -224,14 +226,14 @@ def test_每个工具发出去的载荷后端都接得住(monkeypatch) -> None:
 
 def test_每个直接执行的工具要么冒烟要么写明为什么不冒烟() -> None:
     """只减不增。新加一个工具却不给它一份参数,这条就红 —— 而那正是 translate_text 溜过去的路。"""
-    tools = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
-    direct = tools - set(mcp_server.CONFIRMATION_TOOLS)
+    tools = {tool.name for tool in catalog.definitions()}
+    direct = tools - set(agent_tools.CONFIRMATION_TOOLS)
     uncovered = sorted(direct - set(ARGS) - set(SKIP))
     assert uncovered == [], "这些工具没有冒烟参数,也没写明为什么不需要:\n  " + "\n  ".join(uncovered)
 
 
 def test_冒烟清单里没有已经删掉的工具() -> None:
-    tools = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    tools = {tool.name for tool in catalog.definitions()}
     stale = sorted((set(ARGS) | set(SKIP)) - tools)
     assert stale == [], f"登记了不存在的工具: {stale}"
 
@@ -251,10 +253,10 @@ def test_节点类型先返回轻量目录_指定类型才返回完整配置(mon
             "tool_name": "",
         }
     ]
-    monkeypatch.setattr(mcp_server, "_use_case", lambda *_a, **_k: rows)
+    monkeypatch.setattr(workflows, "use_case", lambda *_a, **_k: rows)
 
-    catalog = mcp_server.list_workflow_node_types()
-    assert catalog == [
+    node_types = workflows.list_workflow_node_types()
+    assert node_types == [
         {
             "type": "llm",
             "label": "LLM",
@@ -265,4 +267,4 @@ def test_节点类型先返回轻量目录_指定类型才返回完整配置(mon
             "tool_name": "",
         }
     ]
-    assert mcp_server.list_workflow_node_types("llm") == rows[0]
+    assert workflows.list_workflow_node_types("llm") == rows[0]

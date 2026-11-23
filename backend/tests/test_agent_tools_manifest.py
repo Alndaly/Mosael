@@ -12,7 +12,10 @@ Two hand-maintained lists drift, and silently. These tests pin that there is now
 
 from __future__ import annotations
 
-import mcp_server
+from app.domain.agent.tools import catalog
+
+from app import agent_tools
+from app.agent_tools import media, registry
 from tests.util import fresh_client
 
 
@@ -35,12 +38,10 @@ def test_the_manifest_is_the_mcp_registry_exactly() -> None:
     Plugin tools are expanded into the manifest as first-class entries, so there is no
     meta-tool left to subtract (the old list_plugin_tools / invoke_plugin_tool were only
     there for stand-alone MCP clients, which are gone)."""
-    import asyncio
-
     client = fresh_client()
     served = {tool["name"] for tool in _builtin(client)}
     #: 声明了 `needs` 的只发给接了那种插件的人(这个新用户什么都没接;另一半见 test_workbench_agent)
-    registered = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools()) if not mcp_server.TOOL_NEEDS.get(tool.name)}
+    registered = {tool.name for tool in catalog.definitions() if not tool.needs}
     assert served == registered
     assert len(served) > 20, "the registry looks truncated"
 
@@ -121,7 +122,7 @@ def test_workflow_graph_ops_sent_to_edit_timeline_get_recoverable_feedback(monke
     def should_not_open(*_args, **_kwargs) -> dict:
         raise AssertionError("workflow graph ops should be rejected before creating a timeline confirmation")
 
-    monkeypatch.setattr(mcp_server, "_open_card", should_not_open)
+    monkeypatch.setattr(media, "open_card", should_not_open)
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
     res = client.post(
@@ -147,18 +148,18 @@ def test_the_caller_is_context_bound_not_global() -> None:
     call with another person's identity."""
     import contextvars
 
-    assert isinstance(mcp_server._CALLER_ID, contextvars.ContextVar)
+    assert isinstance(registry.CALLER_ID, contextvars.ContextVar)
 
     def read_in_context(user_id: str) -> str:
-        with mcp_server.calling_as(user_id=user_id):
-            return mcp_server._CALLER_ID.get()
+        with registry.calling_as(user_id=user_id):
+            return registry.CALLER_ID.get()
 
     ctx_a = contextvars.copy_context()
     ctx_b = contextvars.copy_context()
     assert ctx_a.run(read_in_context, "user-a") == "user-a"
     assert ctx_b.run(read_in_context, "user-b") == "user-b"
     # Neither leaked into the ambient context.
-    assert mcp_server._CALLER_ID.get() == ""
+    assert registry.CALLER_ID.get() == ""
 
 
 def test_the_manifest_is_enough_to_build_a_tool_from() -> None:
@@ -197,7 +198,7 @@ def test_the_declared_schema_matches_what_the_function_accepts() -> None:
 
     client = fresh_client()
     for tool in _builtin(client):
-        fn = getattr(mcp_server, tool["name"])
+        fn = catalog.get(tool["name"]).function
         accepted = set(inspect.signature(fn).parameters)
         declared = set(tool["parameters"].get("properties", {}))
         assert declared <= accepted, (
@@ -234,7 +235,7 @@ def test_confirmation_gated_tools_are_marked_in_the_manifest() -> None:
     client = fresh_client()
     marked = {tool["name"] for tool in _builtin(client) if tool.get("confirmation")}
     #: 声明了 `needs` 的(comfy_canvas_edit)只发给接了那种插件的人;这个新用户什么都没接(那一半见 test_workbench_agent)
-    assert marked == {name for name in mcp_server.CONFIRMATION_TOOLS if not mcp_server.TOOL_NEEDS.get(name)}
+    assert marked == {name for name in agent_tools.CONFIRMATION_TOOLS if not catalog.get(name).needs}
     # 会真实创建确认卡的核心变更工具必须在列
     for name in ("edit_timeline", "render_sequence", "generate_image", "generate_video", "generate_audio", "generate_podcast"):
         assert name in marked

@@ -1,7 +1,7 @@
 /**
  * 技能的两个工具(ADR 0040):use_skill / read_skill_file 从后端的工具清单来,**只读** —— 主智能体有,子智能体也有。
  *
- * sidecar 不认识「技能」这件事:它照 manifest 生成工具,只读与否看 `read_only`(名单在后端,见 mcp_server 的
+ * sidecar 不认识「技能」这件事:它照 manifest 生成工具,只读与否看 `read_only`(名单在后端,见 backend/app/agent_tools 的
  * `@tool(effect="reads")`)。这里钉住三件事:两个工具注册上了、带中文标签;子智能体的只读筛选拿得到它们、拿不到会改东西的;
  * 调用时补上这一轮的工作区,结果原样交给模型。
  *

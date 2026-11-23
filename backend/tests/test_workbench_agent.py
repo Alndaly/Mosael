@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 import copy
 import json
 import threading
@@ -548,17 +550,17 @@ class _Job:
 def test_补全和试跑的五个工具_都在工作台那一份_只读和确认卡分得清() -> None:
     """发现成本那一条(ADR 0042 §7):五个工具都跟着 ComfyUI 工作台那一份发,都要工作流库;三个会改那台机器的开确认卡,
     两个只读的不开 —— 而且三个确认卡都在登记表里(不然点「批准」那一刻才报 Unknown mutating tool)。"""
-    import mcp_server
+    from app import agent_tools
     from app.domain.agent.confirmable.registry import tool_specs
 
-    assert STEP_THREE <= set(mcp_server.REGISTERED_TOOLS)
+    assert STEP_THREE <= set(agent_tools.REGISTERED_TOOLS)
     for name in STEP_THREE:
-        assert mcp_server.TOOL_KITS.get(name) == "comfyui", name
-        assert mcp_server.TOOL_NEEDS.get(name) == "workflow_library", name
-    assert {name for name in STEP_THREE if name in mcp_server.READ_ONLY_TOOLS} == \
+        assert catalog.get(name).kit == "comfyui", name
+        assert catalog.get(name).needs == "workflow_library", name
+    assert {name for name in STEP_THREE if name in agent_tools.READ_ONLY_TOOLS} == \
         {"comfy_model_search", "comfy_model_resolve"}
     confirming = {"comfy_model_download", "comfy_node_pack_install", "comfy_canvas_run"}
-    assert STEP_THREE & mcp_server.CONFIRMATION_TOOLS == confirming
+    assert STEP_THREE & agent_tools.CONFIRMATION_TOOLS == confirming
     assert confirming <= set(tool_specs()), "确认卡工具必须登记:否则批准时报 Unknown mutating tool"
 
 

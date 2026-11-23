@@ -623,7 +623,7 @@ mine = task.claimed_by == worker if worker else True
 - `backend/app/domain/agent/questions.py`
 - `backend/app/domain/agent/tools/manifest.py`
 - `backend/app/db/model_slices/agent.py`
-- `backend/mcp_server.py`
+- `backend/app/agent_tools/`
 
 **时间线 / 发布 / 归属**
 - `backend/app/domain/sequences/operations.py`

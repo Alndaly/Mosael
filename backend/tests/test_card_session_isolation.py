@@ -79,10 +79,10 @@ def test_没有自动回答那条路() -> None:
     确认卡有「本会话始终允许」(按会话记的白名单,后端在开卡那一刻判定)。选择卡不该有任何
     对应物 —— 自动回答等于让模型自己编一个答案,而它问就是因为不知道。
     """
-    import mcp_server
+    from app import agent_tools
     from app.domain.agent import autopilot
 
     # ask_user 不在确认卡那套里 —— 进去就会被 auto_allow / bypass 覆盖到。
-    assert "ask_user" not in mcp_server.CONFIRMATION_TOOLS
+    assert "ask_user" not in agent_tools.CONFIRMATION_TOOLS
     # 自动放行的判定只认工具名,而问题不是工具调用 —— 它连进那个判定的资格都没有。
     assert not hasattr(autopilot, "auto_answer"), "autopilot 里长出了自动回答"

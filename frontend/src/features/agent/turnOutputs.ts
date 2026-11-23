@@ -13,7 +13,7 @@
  */
 import type { ToolCall } from "@/features/agent/ToolCalls";
 
-/** 智能体给的一块小界面(`show_widget` 工具,见后端 mcp_server.show_widget)。 */
+/** 智能体给的一块小界面(`show_widget` 工具,见后端 app/agent_tools/conversation.show_widget)。 */
 export type AgentWidget = { id: string; title: string; html: string };
 
 export const SHOW_WIDGET_TOOL = "show_widget";

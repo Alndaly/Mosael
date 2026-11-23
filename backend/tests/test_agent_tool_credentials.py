@@ -2,19 +2,19 @@
 
 `AuthSession` 没有过期列。工具通道此前每次调用都铸一个令牌给工具体回连本 API 用(先是永不撤销,
 后来改成调用结束就撤)。工具改成进程内直接调领域用例之后,回连没有了,这一份令牌也就不存在了 ——
-身份经上下文变量交给工具体(mcp_server.calling_as),落不到库里。
+身份经上下文变量交给工具体(registry.calling_as),落不到库里。
 
 这些用例钉住:调用之后行数不增,工具体认出的正是调用方这个人,调用方自己的会话照样在。
 """
 
 from __future__ import annotations
 
-import mcp_server
+from app.agent_tools import registry
 
 from app.core.db import SessionLocal
 from app.core.security import find_session
 from app.db.models import AuthSession
-from tests.util import fresh_client
+from tests.util import fresh_client, register_temporary_tool
 
 
 def _auth_rows() -> int:
@@ -27,12 +27,11 @@ def _probe(monkeypatch) -> list[str]:
     seen: list[str] = []
 
     def probe_caller(workspace_id: str = "") -> dict:
-        seen.append(mcp_server._CALLER_ID.get())
+        seen.append(registry.CALLER_ID.get())
         return {}
 
-    monkeypatch.setattr(mcp_server, "probe_caller", probe_caller, raising=False)
     #: 通道只认登记过的工具(SEC-13):临时工具也登记进去,和 `@tool` 登记的同一个待遇。
-    monkeypatch.setattr(mcp_server, "REGISTERED_TOOLS", mcp_server.REGISTERED_TOOLS | {"probe_caller"})
+    register_temporary_tool(monkeypatch, probe_caller)
     return seen
 
 
@@ -61,7 +60,7 @@ def test_the_tool_body_runs_as_the_caller(monkeypatch) -> None:
     caller_token = client.headers["Authorization"].removeprefix("Bearer ")
     with SessionLocal() as db:
         assert seen == [find_session(db, caller_token).user_id], "工具体认出的不是调用方这个人"
-    assert mcp_server._CALLER_ID.get() == "", "调用结束之后身份不该留在上下文里"
+    assert registry.CALLER_ID.get() == "", "调用结束之后身份不该留在上下文里"
 
 
 def test_the_callers_own_session_survives_the_call(monkeypatch) -> None:

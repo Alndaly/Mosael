@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-import mcp_server
+from app.agent_tools import knowledge
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import User
@@ -116,14 +116,14 @@ def test_智能体在自己的对话里把消息存成笔记_操作人是这一�
         return _route_through(monkeypatch, client)
 
     agent_of("tester", mine)
-    saved = mcp_server.create_note(title="摘录", markdown="把这段存下来", workspace_id=workspace, sources=[_cite(said)])
+    saved = knowledge.create_note(title="摘录", markdown="把这段存下来", workspace_id=workspace, sources=[_cite(said)])
     assert saved["sources"][0]["id"] == said
 
     agent_of("mate", mates_own)
     told: list[str] = []
     for message_id in (said, "no-such-message"):
         with pytest.raises(ValueError) as caught:
-            mcp_server.create_note(title="摘录", markdown="偷看", workspace_id=workspace, sources=[_cite(message_id)])
+            knowledge.create_note(title="摘录", markdown="偷看", workspace_id=workspace, sources=[_cite(message_id)])
         told.append(str(caught.value))
     hidden, missing = told
     # 看不见和不存在同一个说法(工具直接调领域,读到的是领域的那句话,不再带 HTTP 状态码前缀)。

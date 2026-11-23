@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-import mcp_server
+from app.agent_tools import conversation
 
 from app.core.db import SessionLocal
 from app.core.i18n import speaking
@@ -168,13 +168,13 @@ def test_列任务给模型的简报_没提示词也说清是哪来的() -> None
     }
 
     with speaking("zh-CN"):
-        assert mcp_server._job_brief(job)["subject"] == "从 2 个素材 AI 生成"
+        assert conversation._job_brief(job)["subject"] == "从 2 个素材 AI 生成"
     with speaking("en-US"):
-        assert mcp_server._job_brief(job)["subject"] == "AI generation from 2 assets"
+        assert conversation._job_brief(job)["subject"] == "AI generation from 2 assets"
 
 
 def test_列任务简报_没有素材数时只说种类而不是空() -> None:
-    brief = mcp_server._job_brief(
+    brief = conversation._job_brief(
         {"id": "j", "kind": "render", "status": "succeeded", "progress": 1, "payload": {}, "result": {}}
     )
 

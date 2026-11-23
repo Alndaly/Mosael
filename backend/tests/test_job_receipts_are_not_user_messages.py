@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from sqlalchemy import event
 
-import mcp_server
+from app.agent_tools import conversation, registry
 from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, Job, User
@@ -190,8 +190,8 @@ def test_智能体自己get_job看到了终态_回执不再送_也不为它起�
     _finish(job_id, "asset-1")
     assert [one["role"] for one in _messages(client, sid)].count("job_receipt") == 1
 
-    with mcp_server.calling_as(user_id=_me(), session_id=sid):
-        assert mcp_server.get_job(job_id)["status"] == "succeeded"
+    with registry.calling_as(user_id=_me(), session_id=sid):
+        assert conversation.get_job(job_id)["status"] == "succeeded"
     assert [one["role"] for one in _messages(client, sid)].count("job_receipt") == 0, "看到终态之后,回执还挂着等送"
 
     _settle(turns)

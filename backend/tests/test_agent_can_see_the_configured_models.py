@@ -19,7 +19,9 @@
 
 from __future__ import annotations
 
-import mcp_server
+from app.domain.agent.tools import catalog
+
+from app.agent_tools import generation
 import pytest
 from app.core.db import SessionLocal
 from tests.util import add_provider, fresh_client
@@ -78,7 +80,7 @@ def test_一次调用同时给出连接id和模型名(monkeypatch) -> None:
     _setup(client)
     _route_through(monkeypatch, client)
 
-    reply = mcp_server.list_provider_models(capability="chat")
+    reply = generation.list_provider_models(capability="chat")
     chat = {item["model"]: item for item in reply["models"]}
     assert "qwen-max" in chat, reply
 
@@ -95,7 +97,7 @@ def test_认得出用户自己设过的默认(monkeypatch) -> None:
     _setup(client)
     _route_through(monkeypatch, client)
 
-    models = mcp_server.list_provider_models(capability="chat")["models"]
+    models = generation.list_provider_models(capability="chat")["models"]
     assert [item["model"] for item in models if item["is_default"]] == ["qwen-max"]
     # 没设过默认的能力就是没设过 —— 不替他从候选里挑一个充数。要有一个候选,这句才测得到东西:此前 _setup 只配了 chat,
     # 别的能力一个候选都没有,`all(... for item in [])` 永远成立,「替他挑一个充数」的回归防不住。
@@ -103,7 +105,7 @@ def test_认得出用户自己设过的默认(monkeypatch) -> None:
         add_provider(db, name="播客", vendor="volcano", base_url="", api_key="sk-test", model="volc-podcast",
                      capability_ids=["podcast"], make_default=False)
         db.commit()
-    podcast = mcp_server.list_provider_models(capability="podcast")["models"]
+    podcast = generation.list_provider_models(capability="podcast")["models"]
     assert [item["model"] for item in podcast] == ["volc-podcast"], podcast
     assert not any(item["is_default"] for item in podcast), podcast
 
@@ -113,7 +115,7 @@ def test_念字不在按能力的默认模型里(monkeypatch) -> None:
     client = fresh_client()
     _route_through(monkeypatch, client)
     with pytest.raises(ValueError, match="unknown capability 'tts'"):
-        mcp_server.list_provider_models(capability="tts")
+        generation.list_provider_models(capability="tts")
 
 
 def test_执行面会转发下去(monkeypatch) -> None:
@@ -123,7 +125,7 @@ def test_执行面会转发下去(monkeypatch) -> None:
     _route_through(monkeypatch, client)
 
     def names(surface: str) -> set[str]:
-        return {item["model"] for item in mcp_server.list_provider_models(capability="chat", surface=surface)["models"]}
+        return {item["model"] for item in generation.list_provider_models(capability="chat", surface=surface)["models"]}
 
     # automation = direct + gateway,运行时按鉴权方式分派 —— API Key 和 OAuth 都在里面。
     assert names("automation") == {"qwen-max", "claude-sonnet"}
@@ -143,7 +145,7 @@ def test_填错的取值当场说清楚而不是换回一个422(monkeypatch) -> 
     # 模型看到 422 不会说「我填错了参数」,它会换个词再试一次。所以合法取值要写在错误里。
     for bad, kwargs in (("surface", {"surface": "gateway-ish"}), ("capability", {"capability": "chat-ish"})):
         try:
-            mcp_server.list_provider_models(**kwargs)
+            generation.list_provider_models(**kwargs)
         except ValueError as error:
             assert bad in str(error) or "valid" in str(error) or "has" in str(error), error
         else:  # pragma: no cover - 只在契约破了时走到
@@ -157,8 +159,8 @@ def test_回包里带着这次问的执行面(monkeypatch) -> None:
     _setup(client)
     _route_through(monkeypatch, client)
 
-    assert mcp_server.list_provider_models()["surface"] == "all"
-    assert mcp_server.list_provider_models(surface="automation")["surface"] == "automation"
+    assert generation.list_provider_models()["surface"] == "all"
+    assert generation.list_provider_models(surface="automation")["surface"] == "automation"
 
 
 def test_它作为只读工具送达各运行时() -> None:
@@ -189,11 +191,10 @@ def test_描述里名出全部合法能力() -> None:
     `surface` 当时把四个取值都写进了描述,`capability` 没有 —— 这条测试钉的就是这个不对称,
     并且防止后端加一种能力之后描述开始说谎(那正是被它自己的枚举挡下来的那类错误)。
     """
-    import asyncio
 
     from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES
 
-    tools = {tool.name: tool for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    tools = {tool.name: tool for tool in catalog.definitions()}
     description = tools["list_provider_models"].description or ""
     missing = [one for one in DEFAULTABLE_CAPABILITIES if one not in description]
     assert not missing, f"这些能力没有写进工具描述,模型只能靠猜:{missing}"

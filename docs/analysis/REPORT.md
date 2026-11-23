@@ -364,7 +364,7 @@ Mosael 是教科书级的"**模块化单体 + 卫星进程**":它用 ADR-0001 �
 | 渲染双实现 | `backend/app/media/scene.py` ↔ `frontend/src/features/editor/playback/sceneModel.ts` |
 | 契约语料 | `contracts/*.json`(9 份) |
 | 组装根 | `backend/app/main.py` |
-| 智能体 | `backend/app/domain/agent/host.py`、`backend/mcp_server.py`、`agent-sidecar/src/` |
+| 智能体 | `backend/app/domain/agent/host.py`、`backend/app/agent_tools/`、`agent-sidecar/src/` |
 | 供应商/生成 | `backend/app/ai/providers/`、`backend/app/domain/generation/` |
 | 插件 | `backend/app/domain/plugins/`、`plugins/examples/` |
 | 桌面壳 | `electron/main.cjs`、`electron/system/`、`electron/browser/` |

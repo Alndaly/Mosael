@@ -47,10 +47,10 @@ def test_the_routes_are_gone() -> None:
 
 def test_the_agent_tools_are_gone() -> None:
     """智能体的工具表里不该再有它 —— 留着的话模型会去调一个 404。"""
-    import mcp_server
+    from app.domain.agent.tools import catalog
 
     for name in ("search_kb", "read_kb_document", "create_kb_note"):
-        assert not hasattr(mcp_server, name), f"{name} 还在"
+        assert catalog.get(name) is None, f"{name} 还在"
 
 
 def test_the_workflow_node_is_gone() -> None:

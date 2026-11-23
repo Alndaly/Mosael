@@ -20,7 +20,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 def test_每个记账的调用点都说替谁花的钱_不写字面量None() -> None:
     """`user_id` 没有默认值,漏了在调用那一刻就报错;这里再静态看一遍,连「先传个 None 凑数」也拦下。"""
     offenders: list[str] = []
-    sources = [*(BACKEND / "app").rglob("*.py"), BACKEND / "mcp_server.py"]
+    sources = list((BACKEND / "app").rglob("*.py"))
     for path in sources:
         tree = ast.parse(path.read_text())
         for call in ast.walk(tree):

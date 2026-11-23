@@ -43,10 +43,10 @@ ENTRY_POINTS = {
     ("app/api/routes/assets.py", "import_local_asset"),
     ("app/domain/agent/confirmable/external.py", "_execute_run_host_code"),
     ("app/domain/agent/confirmable/blender.py", "_execute_blender_execute"),
-    ("mcp_server.py", "host_trusted_dirs"),
-    ("mcp_server.py", "host_list_dir"),
-    ("mcp_server.py", "host_read_file"),
-    ("mcp_server.py", "host_write_file"),
+    ("app/agent_tools/host.py", "host_trusted_dirs"),
+    ("app/agent_tools/host.py", "host_list_dir"),
+    ("app/agent_tools/host.py", "host_read_file"),
+    ("app/agent_tools/host.py", "host_write_file"),
 }
 
 
@@ -62,7 +62,7 @@ def test_the_seam_requires_an_actor(name: str) -> None:
 
 
 def _trees() -> list[tuple[pathlib.Path, ast.AST]]:
-    paths = [*sorted(pathlib.Path("app").rglob("*.py")), pathlib.Path("mcp_server.py")]
+    paths = sorted(pathlib.Path("app").rglob("*.py"))
     return [(path, ast.parse(path.read_text(encoding="utf-8"))) for path in paths]
 
 

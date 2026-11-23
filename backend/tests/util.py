@@ -521,3 +521,16 @@ def settled_card(card_id: str, timeout: float = 30.0):
         if row.status != "approved" or time.monotonic() > deadline:
             return row
         time.sleep(0.02)
+
+
+def register_temporary_tool(monkeypatch, fn, *, effect: str = "writes") -> None:
+    """测试里临时登记一个智能体工具(和 `@tool` 登记的同一个待遇:HTTP 通道认得它)。测试结束自动撤掉。"""
+    from app.agent_tools.registry import parameters_schema
+    from app.domain.agent.tools import catalog
+    from app.domain.agent.tools.catalog import ToolDefinition
+
+    definition = ToolDefinition(
+        name=fn.__name__, description=fn.__doc__ or "", parameters=parameters_schema(fn), effect=effect,
+        awaits_answer=False, needs="", kit=None, function=fn,
+    )
+    monkeypatch.setitem(catalog._DEFINITIONS, fn.__name__, definition)

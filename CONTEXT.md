@@ -220,7 +220,7 @@ _Avoid_: 把费用写进 `task_events`、把供应商账单逻辑散落在各 ad
 ### 智能体
 
 **工具注册表**:
-`mcp_server.py` 是唯一工具定义处;`/api/agent/tools` manifest 派生它,所有 runtime(pi sidecar / 飞书)从 manifest 生成工具,不再手写第二份。
+`backend/app/agent_tools/`(按族分模块,登记进 `domain/agent/tools/catalog`)是唯一工具定义处;`/api/agent/tools` manifest 派生它,所有 runtime(pi sidecar / 飞书)从 manifest 生成工具,不再手写第二份。
 
 **确认门控**:
 变更工具的属性(manifest 的 `confirmation: true`):调用只创建待确认卡,用户批准后才执行;sidecar 对此类工具统一阻塞轮询。

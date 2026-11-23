@@ -144,7 +144,7 @@ def allowance_name(tool: str, payload: dict[str, Any] | None) -> str:
 
 
 def tool_specs() -> dict[str, ConfirmableTool]:
-    """**逐个登记**的那些(和 mcp_server.CONFIRMATION_TOOLS 一一对应)。一族的见 tool_families。"""
+    """**逐个登记**的那些(和工具登记里 effect="confirms" 的那些一一对应,见 domain/agent/tools/catalog)。一族的见 tool_families。"""
     return dict(_TOOLS)
 
 

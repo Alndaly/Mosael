@@ -62,8 +62,8 @@ def test_沙箱与不隔离是两档独立的放行() -> None:
 
 
 def test_两个工具都是确认卡_外部档() -> None:
-    import mcp_server
+    from app import agent_tools
     from app.domain.agent.confirmable.registry import tool_spec
 
-    assert {"run_code", "run_host_code"} <= set(mcp_server.CONFIRMATION_TOOLS)
+    assert {"run_code", "run_host_code"} <= set(agent_tools.CONFIRMATION_TOOLS)
     assert tool_spec("run_host_code").permission == "external"

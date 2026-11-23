@@ -2,7 +2,7 @@
  * Mosael tools as pi AgentTools — generated entirely from the backend registry.
  *
  * pi has no MCP, so tools come from GET /api/agent/tools (the manifest derived from
- * mcp_server.py, the single tool registry) and execute via POST /api/agent/tools/{name}.
+ * backend/app/agent_tools, the single tool registry) and execute via POST /api/agent/tools/{name}.
  * There is no hand-written second list any more: the seven tools that used to live here in
  * source (read-only trio + confirmation-gated quartet) drifted from the registry once and
  * silently cost the agent nineteen tools — see backend/app/api/routes/agent_tools.py.
@@ -32,7 +32,7 @@ import { log } from "./protocol.js";
  * 真机上模型读到这句话得出的结论是「可能是临时网络问题,我重试一次」—— 然后第二次撞进同一
  * 堵墙。后端就在回环地址上,这里几乎不可能是网络;把这一点说清楚,重试才不会被当成办法。
  *
- * 180s 的来历:最长的**合法**单次调用是 sleep(封顶 60s,见 mcp_server.SLEEP_CAP_SECONDS),
+ * 180s 的来历:最长的**合法**单次调用是 sleep(封顶 60s,见 backend/app/agent_tools/conversation.SLEEP_CAP_SECONDS),
  * 浏览器等待默认 15s。留足余量,同时**必须低于** undici 的 300s —— 要由我们先超时,否则抛
  * 出来的还是那句没有信息的 fetch failed。
  */

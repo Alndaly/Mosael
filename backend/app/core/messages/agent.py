@@ -511,4 +511,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The model uses a sparse accessor, which the graybox renderer can't read.",
     },
     "modelMeshErr_unreadable": {"zh": "模型文件读不了:{detail}", "en": "Couldn't read the model file: {detail}"},
+    # 智能体工具层(app/agent_tools)回给模型的报错。
+    "agentToolErr_sessionGone": {"zh": "这次对话已经不存在了", "en": "This conversation no longer exists."},
+    "agentToolErr_noCaller": {
+        "zh": "这次工具调用没有调用方 —— 只能经 /api/agent/tools 调用",
+        "en": "This tool call has no caller; tools can only be called through /api/agent/tools.",
+    },
+    "agentToolErr_callerGone": {"zh": "调用方已经不存在", "en": "The caller no longer exists."},
+    "agentToolErr_widgetEmpty": {"zh": "html 是空的:没有可显示的内容", "en": "html is empty: there is nothing to show."},
+    "agentToolErr_widgetTitleTooLong": {"zh": "title 最多 {limit} 个字符", "en": "title can be at most {limit} characters."},
+    "agentToolErr_urlNothingToDownload": {
+        "zh": "这个链接探不到可下载的内容:{what}",
+        "en": "Found nothing downloadable at this link: {what}",
+    },
 }

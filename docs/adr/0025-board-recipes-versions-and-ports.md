@@ -49,7 +49,7 @@ ADR 0021 的修订把画板定位成「想法摊开,边看边做」:**内容是�
 | 产出是文字的格子 | `kind == "note"`(`canvas.py:758`) | `item.kind === "note"`(`boardItemState.ts:151`) |
 | 截取不吃上游 | — | `producer !== "trim"`(`frontend/src/features/boards/BoardCanvas.tsx:562`) |
 | 新格子挂哪个产出者 | `producer_for_new_slot`(`backend/app/domain/boards/producers.py:539`) | `NEW_SLOT_PRODUCER`(`boardItemState.ts:47`) |
-| 智能体看得到哪些产出者 | `list_board_producers` 只留工具格(`backend/mcp_server.py:1952`) | — |
+| 智能体看得到哪些产出者 | `list_board_producers` 只留工具格(`backend/app/agent_tools/:1952`) | — |
 
 连线本身不校验:`onConnect` 什么都收(`BoardCanvas.tsx:1237`);拉线菜单(`:1033`)列全部种类和工具;
 操作条上「接着做」的按钮是一张手写表(`:1797-1822`)。

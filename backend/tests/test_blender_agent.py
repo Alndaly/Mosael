@@ -124,11 +124,11 @@ def test_导入前先比修订_过期了不让_Blender_白导一趟(fake_blender
 
 def test_跑代码只有确认卡一条路_插件的原始入口不暴露() -> None:
     """Blender MCP 自带的 execute_blender_code 不经确认;它和 blender_execute 并存就是后门。"""
-    import mcp_server
+    from app import agent_tools
     from app.domain.agent import rules
     from mosael_formats.plugin_manifest import parse
 
-    assert "blender_execute" in mcp_server.CONFIRMATION_TOOLS
+    assert "blender_execute" in agent_tools.CONFIRMATION_TOOLS
     assert rules.evaluate("blender_execute", {}, rules.default_rules()).denied
     loose_host = {**rules.default_rules(), "run_host_code": "always"}
     assert rules.evaluate("blender_execute", {}, loose_host).denied, "放开不隔离执行不连带放开 Blender"

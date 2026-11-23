@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import re
 import sys
 from pathlib import Path
@@ -38,13 +37,14 @@ def _first_sentence(text: str) -> str:
 
 def render() -> str:
     sys.path.insert(0, str(ROOT / "backend"))
-    import mcp_server
+    import app.agent_tools as agent_tools  # 导入即登记
+    from app.domain.agent.tools import catalog
 
-    tools = sorted(asyncio.run(mcp_server.mcp.list_tools()), key=lambda t: t.name)
-    gated = set(mcp_server.CONFIRMATION_TOOLS)
+    tools = sorted(catalog.definitions(), key=lambda t: t.name)
+    gated = set(agent_tools.CONFIRMATION_TOOLS)
     #: 「等作答」不是「直接执行」的一种。这一列此前只有两个取值,于是 ask_user 被标成
     #: 「直接执行」—— 而它会停在那儿等用户挑,读者据此得出的结论正好相反。
-    waiting = set(mcp_server.ANSWER_TOOLS)
+    waiting = set(agent_tools.ANSWER_TOOLS)
 
     def gate(name: str) -> str:
         if name in gated:

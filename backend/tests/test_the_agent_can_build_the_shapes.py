@@ -117,13 +117,13 @@ def _agent_facing_text() -> str:
 
     节点清单(list_workflow_node_types)不算:那要它先想到去列一遍,而"想不到"正是要修的东西。
     """
-    import mcp_server
+    from app.agent_tools import workflows
     from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE
     from app.domain.agent.skills.catalog import BUILTIN_ROOT
 
     assert 'use_skill("workflow-canvas")' in SYSTEM_PROMPT_TEMPLATE, "系统提示没指向搭工作流的技能"
     skill = (BUILTIN_ROOT / "workflow-canvas" / "SKILL.md").read_text(encoding="utf-8")
-    return skill + (mcp_server.edit_workflow.__doc__ or "")
+    return skill + (workflows.edit_workflow.__doc__ or "")
 
 
 def test_it_is_told_that_branches_run_side_by_side() -> None:

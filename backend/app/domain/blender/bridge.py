@@ -169,7 +169,7 @@ BLENDER_SYNC_TIMEOUT_SECONDS = 300
 #: 智能体的 inspect / look / execute 允许跑多久。
 #:
 #: **比上面那个短,因为上面还站着一个等得更急的人**:这几个工具由 MCP 客户端调用,
-#: 而 `mcp_server.py` 给的客户端预算是 180 秒。后端等得比调用方久没有任何意义 ——
+#: 而 sidecar 给每次工具调用的预算是 180 秒。后端等得比调用方久没有任何意义 ——
 #: 对方早就放弃了,而我们还占着那把独占锁,用户的下一次操作被挡在外面。
 #: 两者的先后由 contracts/shared-constants.json 的 budgets 钉着。
 BLENDER_AGENT_TIMEOUT_SECONDS = 150

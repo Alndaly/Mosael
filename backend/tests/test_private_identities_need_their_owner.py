@@ -55,7 +55,7 @@ def test_the_seam_requires_an_actor(name: str) -> None:
 
 def _seam_calls() -> list[tuple[str, int, str, ast.Call]]:
     found: list[tuple[str, int, str, ast.Call]] = []
-    paths = [*sorted(pathlib.Path("app").rglob("*.py")), pathlib.Path("mcp_server.py")]
+    paths = sorted(pathlib.Path("app").rglob("*.py"))
     for path in paths:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

@@ -176,7 +176,7 @@ def _run(db: Session, name: str, payload: dict[str, Any], workspace_id: str, act
 
 
 def _on_behalf_validate(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    """`run_plugin_tool` 的卡:`tool` 是它替调的那个插件工具的展开名(mcp_server 开卡前已在这一处够得着的里认出)。入参名都得是
+    """`run_plugin_tool` 的卡:`tool` 是它替调的那个插件工具的展开名(工具层开卡前已在这一处够得着的里认出)。入参名都得是
     它认得的,再走**那个工具自己的**开卡校验;卡上记着它的展开名。"""
 
     name = str(payload.get("tool") or "")

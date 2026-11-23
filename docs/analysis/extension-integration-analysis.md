@@ -13,7 +13,7 @@ Mosael 的对外集成面可以按「谁主动」分成两类——**进来**的
 ```
 ┌─ 进来(外部 → Mosael 后端)─────────────────────────────┐
 │ Chrome 扩展 (browser-extension/)   Bearer 会话 + CORS 白名单 │
-│ MCP 客户端 (backend/mcp_server.py) MOSAEL_API + MOSAEL_TOKEN │
+│ MCP 客户端 (backend/app/agent_tools/) MOSAEL_API + MOSAEL_TOKEN │
 │ 飞书 bot (app/integrations/feishu/) 长连接 + open_id 绑定     │
 │ Webhook (app/api/routes/hooks.py)  任务级密钥,不挂登录态      │
 │ 发布 worker (routes/publish_worker.py) 启动时下发的共享密钥   │
@@ -417,7 +417,7 @@ sequenceDiagram
 
 ---
 
-## 4. MCP 集成(backend/mcp_server.py,2183 行)
+## 4. MCP 集成(backend/app/agent_tools/,2183 行)
 
 ### 4.1 定位:唯一工具注册表
 

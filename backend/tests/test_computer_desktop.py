@@ -7,7 +7,7 @@ import io
 
 import pytest
 
-import mcp_server
+from app import agent_tools
 from app.domain.agent import computer_use
 from tests.util import fresh_client
 
@@ -41,8 +41,8 @@ def test_desktop_observation_is_exposed_as_read_only_and_routes_the_old_tool() -
     for name in names:
         assert specs[name]["read_only"] is True
         assert specs[name]["confirmation"] is False
-        assert name in mcp_server.READ_ONLY_TOOLS
-        assert name not in mcp_server.CONFIRMATION_TOOLS
+        assert name in agent_tools.READ_ONLY_TOOLS
+        assert name not in agent_tools.CONFIRMATION_TOOLS
     assert "separate confirmation tools" in specs["computer_desktop_windows"]["description"].lower()
     assert "computer_desktop_click" in specs["computer_desktop_accessibility"]["description"]
     assert "computer_desktop_windows" in specs["computer_screenshot"]["description"]

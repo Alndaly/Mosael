@@ -44,7 +44,7 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
 | 内嵌浏览器「交给智能体」 | `features/browser-pool/session-tools/useStartTools.ts` 的 `startNewAgentSession` | 新建并选中、跳到 AI Studio、填草稿 |
 | 确认卡 | `features/agent/ConfirmationCenter.tsx` + `confirmSurface.ts` | 不读当前会话:内联面登记「哪些会话有人在管」,没人管的卡(那段对话没开着、外部智能体)落到右上角的全局中心。卡上看不出是哪段对话的 |
 | 飞书 | `integrations/feishu/inbound.py` | 每个飞书会话一条(`origin="feishu"`、`external_key`),不进界面清单(`use_cases.list_sessions` 只列 `origin == "ui"`),没有「当前」 |
-| MCP | `backend/mcp_server.py` | 直连的客户端没有会话(`open_view` 回「跳不了」);`list_agent_sessions` / `notify_agent_session` 让一段对话找、通知另一段 —— 列出来的只有标题和状态 |
+| MCP | `backend/app/agent_tools/` | 直连的客户端没有会话(`open_view` 回「跳不了」);`list_agent_sessions` / `notify_agent_session` 让一段对话找、通知另一段 —— 列出来的只有标题和状态 |
 | 共享 | `domain/agent/sessions.py`、`domain/sharing` | 对话默认私有,主人可以共享给工作区看;`is_mine` 由后端标 |
 
 ### 会话行上已有的(`db/model_slices/agent.py` 的 `AgentSession`)

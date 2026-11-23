@@ -40,11 +40,11 @@ def test_不写改了什么就造不出一个需要确认的工具() -> None:
 
 
 def test_每个需要确认的工具都声明了_而且用的是词表里的词() -> None:
-    import mcp_server
+    from app import agent_tools
 
     specs = tool_specs()
     #: 智能体开卡的每个工具都在登记表里(插件工具是一族,按名字造)。
-    for name in mcp_server.CONFIRMATION_TOOLS:
+    for name in agent_tools.CONFIRMATION_TOOLS:
         spec = tool_spec(name) if not name.startswith(PLUGIN_TOOL_PREFIX) else tool_spec(f"{name}x")
         assert spec is not None, f"{name}:开卡的工具不在 confirmable 登记表里"
     bound = [tool_spec(f"{prefix}conn__tool") for prefix in tool_families()]

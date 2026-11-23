@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 import types
 
 from app.core.db import SessionLocal
@@ -78,8 +80,4 @@ def test_切换页面节点登记齐全_切页时要说找哪一页() -> None:
 
 
 def test_智能体也能切页() -> None:
-    import asyncio
-
-    import mcp_server
-
-    assert "browser_page" in {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    assert "browser_page" in {tool.name for tool in catalog.definitions()}

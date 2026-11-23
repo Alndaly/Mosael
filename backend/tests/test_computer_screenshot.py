@@ -21,9 +21,10 @@ import threading
 from pathlib import Path
 
 import pytest
-from mcp.types import ImageContent, TextContent
+from app.agent_tools.registry import ImageContent, TextContent
 
-import mcp_server
+from app import agent_tools
+from app.agent_tools import computer
 from app.domain.agent import computer_use
 from tests.util import fresh_client
 
@@ -58,8 +59,8 @@ def test_it_is_a_read_only_tool_with_scale_only() -> None:
     # 只读:子智能体拿得到,而且调用不会立确认卡(截图不改任何东西)。
     assert spec["read_only"] is True
     assert spec["confirmation"] is False
-    assert "computer_screenshot" in mcp_server.READ_ONLY_TOOLS
-    assert "computer_screenshot" not in mcp_server.CONFIRMATION_TOOLS
+    assert "computer_screenshot" in agent_tools.READ_ONLY_TOOLS
+    assert "computer_screenshot" not in agent_tools.CONFIRMATION_TOOLS
 
     parameters = spec["parameters"]
     assert parameters["type"] == "object"
@@ -243,7 +244,7 @@ def test_the_tool_function_returns_text_and_image_blocks() -> None:
     """进程内 MCP 客户端(Claude CLI 那一路)拿到的是标准内容块:文字里是尺寸,图单独一块。"""
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(320, 200))
-        blocks = mcp_server.computer_screenshot(scale=1)
+        blocks = computer.computer_screenshot(scale=1)
 
     assert isinstance(blocks, list) and len(blocks) == 2
     assert isinstance(blocks[0], TextContent)
@@ -267,7 +268,7 @@ def test_the_same_png_is_saved_as_an_asset_but_not_into_the_answer_area(monkeypa
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(320, 200))
-    monkeypatch.setattr(mcp_server, "_default_workspace_id", lambda: ws["id"])
+    monkeypatch.setattr(computer, "default_workspace_id", lambda: ws["id"])
 
     response = client.post("/api/agent/tools/computer_screenshot", json={"arguments": {}})
     assert response.status_code == 200, response.text
@@ -292,14 +293,12 @@ def test_the_same_png_is_saved_as_an_asset_but_not_into_the_answer_area(monkeypa
 def test_a_failing_asset_import_does_not_fail_the_screenshot(monkeypatch) -> None:
     """入库只是「让用户也看得见」的副本:它失败了,截图本身(模型看 images)照常返回,
      只是结果里没有截图 id。"""
-    import app.domain.assets.importer as importer
-
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(320, 200))
-    monkeypatch.setattr(mcp_server, "_default_workspace_id", lambda: ws["id"])
+    monkeypatch.setattr(computer, "default_workspace_id", lambda: ws["id"])
     monkeypatch.setattr(
-        importer,
+        computer,
         "import_binary_asset",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("素材库拒收")),
     )

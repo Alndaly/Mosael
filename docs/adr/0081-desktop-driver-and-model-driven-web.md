@@ -4,7 +4,7 @@
   P0、macOS P1 与 P2，并实现 P3 的回放证据、清理与时间线卡片；2026-11-17 补齐拖拽与“只聚焦不点击”的按键。维护者拍板：**L2 要做**（「任何网站上的任何事都能做」）、**回放要做且记全量**、**L3 倾向自研**
 - 相关：[ADR 0075](0075-computer-use.md)（三层的边界与安全模型）、ADR 0044（确认卡）、
   ADR 0080（发布域的契约与判定原语 —— L2 确定性那一半）
-- 代码位置：`electron/computerUse/ownWindowDriver.cjs`（L1）、`electron/computerUse/desktopDriverMac.cjs`（macOS L3）、`backend/app/domain/agent/computer_use.py` 与 `backend/mcp_server.py`（宿主桥客户端与工具层）、`backend/app/domain/agent/confirmable/computer_desktop.py`（桌面动作确认卡）
+- 代码位置：`electron/computerUse/ownWindowDriver.cjs`（L1）、`electron/computerUse/desktopDriverMac.cjs`（macOS L3）、`backend/app/domain/agent/computer_use.py` 与 `backend/app/agent_tools/`（宿主桥客户端与工具层）、`backend/app/domain/agent/confirmable/computer_desktop.py`（桌面动作确认卡）
 
 ## 要解决什么
 

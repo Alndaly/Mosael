@@ -19,7 +19,7 @@ from app.domain.agent import host
 from app.domain.assets import from_url
 from app.domain.voices import voices
 from app.domain.voices.voice_ref import VoiceRef
-from tests.util import fresh_client, insert_asset
+from tests.util import fresh_client, insert_asset, register_temporary_tool
 
 
 def _chat() -> tuple:
@@ -97,7 +97,7 @@ def test_一次调用建出的每个job都归属到这次会话(monkeypatch) -> 
     """回执挂在调用上,不挂在「返回的那一个」上:调用期间建几个 job,几个都带同一份回执。"""
     from app.core.unit_of_work import unit_of_work
 
-    import mcp_server
+    from app.agent_tools import registry
 
     client, workspace_id, session_id, token = _chat()
     created: list[str] = []
@@ -107,13 +107,13 @@ def test_一次调用建出的每个job都归属到这次会话(monkeypatch) -> 
             for _ in range(2):
                 job = jobs_domain.create_job(
                     db, workspace_id=workspace_id, kind="export", payload={"subject": "x"},
-                    created_by=mcp_server._CALLER_ID.get(),
+                    created_by=registry.CALLER_ID.get(),
                 )
                 created.append(job.id)
         return {"queued": len(created)}
 
-    monkeypatch.setattr(mcp_server, "REGISTERED_TOOLS", mcp_server.REGISTERED_TOOLS | {"test_two_jobs"})
-    monkeypatch.setattr(mcp_server, "test_two_jobs", two_jobs, raising=False)
+    two_jobs.__name__ = "test_two_jobs"
+    register_temporary_tool(monkeypatch, two_jobs)
     response = client.post(
         "/api/agent/tools/test_two_jobs",
         json={"arguments": {}},
@@ -131,17 +131,17 @@ def _long_prompt() -> str:
 
 def test_列任务的模型简报截subject时带省略号() -> None:
     """给模型看的列表有长度上限,但截了要说 —— 完整原文在 get_job 的 payload 里。"""
-    import mcp_server
+    from app.agent_tools import conversation
 
     subject = _long_prompt()
-    brief = mcp_server._job_brief({
+    brief = conversation._job_brief({
         "id": "j", "kind": "workflow", "status": "succeeded", "progress": 0,
         "payload": {"subject": subject}, "result": {},
     })
     assert brief["subject"].endswith("…"), "静默切一半,模型以为那就是全部"
     assert brief["subject"][:-1] == subject[:119].rstrip()
 
-    short = mcp_server._job_brief({
+    short = conversation._job_brief({
         "id": "j", "kind": "workflow", "status": "succeeded", "progress": 0,
         "payload": {"subject": "出海流程"}, "result": {},
     })

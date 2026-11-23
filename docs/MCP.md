@@ -4,8 +4,10 @@
 
 **只在后端进程内运行**:sidecar 经 `GET /api/agent/tools` 发现工具、经 `POST /api/agent/tools/{name}` 调用。
 不再作为独立的 MCP(stdio)服务对外提供 —— 那要求工具体经 HTTP 回连后端,而进程内这条路本不需要。
-注册表在 `backend/mcp_server.py`(名字是历史遗留):每个工具的 `@tool(effect=...)` 声明它做了什么,
-工具体正在逐个改成直接调领域用例。
+工具在 `backend/app/agent_tools/`,按族分模块(computer、browser、media、generation……):每个工具的
+`@tool(effect=...)` 声明它做了什么,导入时登记进 `app/domain/agent/tools/catalog`(清单、确认门控、子智能体挑工具都只认那里)。
+工具体直接调领域用例(`registry.use_case`);参数 schema 按函数签名用 pydantic 生成(`registry.parameters_schema`)。
+加一个工具:在对应族的模块里写函数、加 `@tool`;新开一族就在 `app/agent_tools/__init__.py` 里 import 一行。
 
 ## Tools
 

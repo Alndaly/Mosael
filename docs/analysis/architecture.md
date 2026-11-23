@@ -407,7 +407,7 @@ SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显�
 
 ### 8.2 工具注册表:一份定义,多处派生
 
-`backend/mcp_server.py` 是唯一工具定义处(77 个工具);`/api/agent/tools` manifest 派生它,所有 runtime(pi sidecar / MCP 客户端 / 飞书)从 manifest 生成工具。ADR-0016 记录了教训:一份手写第二份的工具表漂移后让智能体悄悄少了 19 个工具。
+`backend/app/agent_tools/` 是唯一工具定义处(77 个工具);`/api/agent/tools` manifest 派生它,所有 runtime(pi sidecar / MCP 客户端 / 飞书)从 manifest 生成工具。ADR-0016 记录了教训:一份手写第二份的工具表漂移后让智能体悄悄少了 19 个工具。
 
 ### 8.3 确认门控与权限三档(ADR-0007)
 
@@ -622,7 +622,7 @@ flowchart TD
 | 契约语料 | `contracts/*.json` + `backend/tests/test_*_parity.py` + `frontend/src/**/*.parity.test.ts` |
 | 组装根 | `backend/app/main.py`(`_wire_seams`、`lifespan`、CORS、异常翻译) |
 | Electron 壳 | `electron/main.cjs`、`electron/system/*.ts`、`electron/browser/` |
-| 智能体 | `backend/app/domain/agent/host.py`、`agent-sidecar/src/{pi,compaction,subagent,tools}.ts`、`backend/mcp_server.py` |
+| 智能体 | `backend/app/domain/agent/host.py`、`agent-sidecar/src/{pi,compaction,subagent,tools}.ts`、`backend/app/agent_tools/` |
 | 供应商 | `backend/app/ai/providers/{contracts,adapters,registry.py,media_transfer.py}`、`backend/app/domain/provider_*.py` |
 | 生成契约 | `backend/app/domain/generation/{catalog,resolution,custom_profiles,operations,runner}.py` |
 | 数据演进 | `backend/app/db/migrations.py`、`backend/app/domain/ownership.py`、`test/bundle.smoke.mjs` |

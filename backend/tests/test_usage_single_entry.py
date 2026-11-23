@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
 
@@ -29,7 +30,7 @@ EXEMPT: dict[str, str] = {}
 
 def _callers_of(name: str) -> list[str]:
     tracked = subprocess.run(
-        ["git", "ls-files", "app", "mcp_server.py"], cwd=BACKEND, capture_output=True, text=True
+        ["git", "ls-files", "app"], cwd=BACKEND, capture_output=True, text=True
     ).stdout.split()
     hits = []
     for rel in tracked:

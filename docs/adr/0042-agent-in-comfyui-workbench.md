@@ -20,7 +20,7 @@ Qwen-Image 2.1 编辑图片的工作流;或者提问工作流存在的问题。�
   **能改的只有控件的值和标记,不能加删节点、不能连线。** 用到的前端接口:`app.graphToPrompt`、`app.loadGraphData`(只在打开一张
   存着的工作流时)、`extensionManager.workflow.activeWorkflow.changeTracker`(`checkState` 记一步撤销)、`extensionManager.command.execute`
   (`Comfy.SaveWorkflow`、`Comfy.NewBlankWorkflow`)、`canvas.selectItems` / `centerOnNode`。
-- **智能体**:pi 跑在 sidecar 里,工具全在 `backend/mcp_server.py` 一张表上(105 个,`reads` / `writes` / `confirms` 三种),要人点头的走
+- **智能体**:pi 跑在 sidecar 里,工具全在 `backend/app/agent_tools/` 一张表上(105 个,`reads` / `writes` / `confirms` 三种),要人点头的走
   确认卡。**没有一个工具碰得到工作台**;也没有「在界面里执行、把结果交回智能体」的工具。最接近的是浏览器那一组(`browser_*`):后端
   排一条动作,Electron 主进程的 worker(`electron/browser/pool/browserWorker.ts`)领走、在内嵌页面里执行、把结果报回去 —— 后端 → 主进程 →
   页面的来回已经有现成的样子。
@@ -327,7 +327,7 @@ ComfyUI 的保存或工作台顶栏的「保存」。
 
 **下载、安装、试跑**落地。底层实现基本都在,这一步把智能体接上去,并且把「谁都不能替他做」的那几道门补在宿主这一侧。
 
-- **工具**(§4):三个新能力五个工具,都注册在 `backend/mcp_server.py` 里和其他 `comfy_*` 一起,`needs="workflow_library"`、
+- **工具**(§4):三个新能力五个工具,都注册在 `backend/app/agent_tools/` 里和其他 `comfy_*` 一起,`needs="workflow_library"`、
   `kit="comfyui"`;`instance_id` 只有一条正常连接时可以省略(`workbench_agent.connection`)。插件清单里不新增公开工具 ——
   `comfyui_generation` 那类是宿主内部能力,`exposed()` 会把 `internal` 滤掉。
   - `comfy_model_search(filename, folder?, hash?, hash_type?, instance_id?)`:只读,按文件名(可带哈希)查 Civitai / HuggingFace /

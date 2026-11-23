@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-import mcp_server
+from app.agent_tools import entities, generation
 from tests.test_mcp_tool_payloads import _route_through
 from tests.util import fresh_client, seed_assets
 
@@ -17,22 +17,22 @@ def test_建人物_挂参考图_读回来_列出来(monkeypatch) -> None:
     seed_assets(ws, {"face": "image", "sheet": "image"})
     _route_through(monkeypatch, client)
 
-    made = mcp_server.create_entity(kind="character", name="张三", prompt="黑色短发,红围巾", tags=["主角"], workspace_id=ws)
+    made = entities.create_entity(kind="character", name="张三", prompt="黑色短发,红围巾", tags=["主角"], workspace_id=ws)
     assert made["name"] == "张三" and made["prompt"] == "黑色短发,红围巾"
-    variant = mcp_server.create_entity(kind="character", name="冬装", prompt="羽绒服", parent_id=made["id"], workspace_id=ws)
+    variant = entities.create_entity(kind="character", name="冬装", prompt="羽绒服", parent_id=made["id"], workspace_id=ws)
     assert variant["parent_name"] == "张三"
 
-    mcp_server.attach_entity_reference(made["id"], "face", role="front", cover=True)
-    got = mcp_server.attach_entity_reference(made["id"], "sheet", role="turnaround")
+    entities.attach_entity_reference(made["id"], "face", role="front", cover=True)
+    got = entities.attach_entity_reference(made["id"], "sheet", role="turnaround")
     assert [(r["asset_id"], r["role"]) for r in got["references"]] == [("face", "front"), ("sheet", "turnaround")]
     assert got["cover_asset_id"] == "face"
 
-    detail = mcp_server.get_entity(made["id"])
+    detail = entities.get_entity(made["id"])
     assert [v["name"] for v in detail["variants"]] == ["冬装"]
-    listed = mcp_server.list_entities(kind="character", workspace_id=ws)
+    listed = entities.list_entities(kind="character", workspace_id=ws)
     assert [(row["name"], row["reference_count"], row["variant_count"]) for row in listed] == [("张三", 2, 1)]
-    assert mcp_server.list_entities(query="红围巾", workspace_id=ws)[0]["id"] == made["id"]
-    assert mcp_server.list_entities(kind="prop", workspace_id=ws) == []
+    assert entities.list_entities(query="红围巾", workspace_id=ws)[0]["id"] == made["id"]
+    assert entities.list_entities(kind="prop", workspace_id=ws) == []
 
 
 def test_生成带上_entity_ids_批准之后结果里有回执(monkeypatch) -> None:
@@ -48,7 +48,7 @@ def test_生成带上_entity_ids_批准之后结果里有回执(monkeypatch) -> 
                 json={"model_id": "qwen-image", "enabled": True, "capability_ids": ["image"]})
     _route_through(monkeypatch, client)
 
-    reply = mcp_server.generate_image(prompt="张三在雨里", provider="alibaba", model="qwen-image",
+    reply = generation.generate_image(prompt="张三在雨里", provider="alibaba", model="qwen-image",
                                       entity_ids=[entity["id"]], workspace_id=ws)
     confirmation_id = reply["confirmation_id"]
     card = client.get(f"/api/confirmations/{confirmation_id}").json()

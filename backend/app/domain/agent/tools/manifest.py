@@ -1,6 +1,6 @@
 """智能体能用的那份工具清单 —— **一份**,不是每个入口各写一份。
 
-由 mcp_server 的注册表派生:HTTP 那条路(GET /api/agent/tools,给 sidecar 发现工具)和上下文
+由工具登记处(domain/agent/tools/catalog)派生:HTTP 那条路(GET /api/agent/tools,给 sidecar 发现工具)和上下文
 水位那条路(算"工具定义每轮重发占了多少")读的是同一个函数。此前它长在 api/routes 里,于是
 水位那边要么反向依赖 api 层,要么自己再列一遍 —— 而再列一遍正是这份清单存在的原因:两份手写
 清单必然漂移,且漂移是静默的(sidecar 曾因此静默少了十九个工具)。
@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import re
 from dataclasses import dataclass
@@ -18,18 +17,11 @@ from pydantic import BaseModel
 from app.db.models import AgentMessage, AgentSession, PluginInstance
 from app.domain.agent.places import COMFYUI, home_of, turn_place
 from app.domain.agent.plugin_schema import agent_description, agent_parameters, omitted_note
+from app.domain.agent.tools import catalog
 from app.domain.effects import needs_card
 from app.domain.place_names import comfy_parts
 from app.domain.plugins import instances as inst, tools as plugins_tools
 from app.domain.plugins.errors import PluginDomainError
-
-
-def tool_registry():
-    # Imported lazily: mcp_server sits at the repo root rather than inside the app package, and
-    # importing it at module load would make the API's startup depend on the MCP library.
-    import mcp_server
-
-    return mcp_server
 
 
 class ToolSpec(BaseModel):
@@ -315,7 +307,7 @@ def _describe(description: str, gated: bool, awaits_answer: bool = False) -> str
 
 
 def kits_for(place: Any) -> frozenset[str]:
-    """这一轮在哪说的,就发哪几份工具(ADR 0044 §8,工具的 `kit` 见 mcp_server.tool)。通用的(不声明 kit)哪儿都发。
+    """这一轮在哪说的,就发哪几份工具(ADR 0044 §8,工具的 `kit` 见 app/agent_tools/registry.tool)。通用的(不声明 kit)哪儿都发。
 
     ComfyUI 工作台是另一个世界:那里要的是 ComfyUI 的图(`comfyui`),不是 Mosael 的画板和时间线(`canvas`)、也不是 Blender、
     Manim 这些通用插件工具(`GENERAL_PLUGIN_KIT`);反过来,AI Studio 和 Mosael 各页面之间串门是常事(在画板里让它建一条时间线),
@@ -353,30 +345,24 @@ def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -
     挑只在用得上时才发的插件工具(`Turn`)。这一轮有没发的,`ON_DEMAND_TOOLS` 跟着发,`plugin_tools` 的说明里点出是哪几个连接的;
     一个没发的都没有就不发那两个。没有对话的调用方(MCP 直连、界面拉工具清单)给 None —— 全给。
     """
-    registry = tool_registry()
-    tools = asyncio.run(registry.mcp.list_tools())
+    tools = catalog.definitions()
     provided = _provided_capabilities(db, user_id)
     turn = turn_of(db, session) if session is not None else None
     kits = session_kits(db, session.id) if session is not None else None
     specs = [
         ToolSpec(
             name=tool.name,
-            description=_describe(
-                tool.description or "",
-                tool.name in registry.CONFIRMATION_TOOLS,
-                tool.name in registry.ANSWER_TOOLS,
-            ),
-            # mcp 2.0 起字段名统一为 snake_case(原 inputSchema)。
-            parameters=tool.input_schema or {"type": "object", "properties": {}},
-            confirmation=tool.name in registry.CONFIRMATION_TOOLS,
-            awaits_answer=tool.name in registry.ANSWER_TOOLS,
+            description=_describe(tool.description, tool.effect == "confirms", tool.awaits_answer),
+            parameters=tool.parameters,
+            confirmation=tool.effect == "confirms",
+            awaits_answer=tool.awaits_answer,
             # 显式声明,不再由「有没有确认卡」推出来 —— 那个推论对浏览器动作是错的,
-            # 而这个标记决定的是子智能体拿得到什么(见 mcp_server.READ_ONLY_TOOLS)。
-            read_only=tool.name in registry.READ_ONLY_TOOLS,
+            # 而这个标记决定的是子智能体拿得到什么。
+            read_only=tool.effect == "reads",
         )
         for tool in tools
-        if (provided is None or registry.TOOL_NEEDS.get(tool.name, "") in provided)
-        and (kits is None or registry.TOOL_KITS.get(tool.name) in (None, *kits))
+        if (provided is None or tool.needs in provided)
+        and (kits is None or tool.kit in (None, *kits))
     ]
     plugin = _plugin_tools(db, user_id, kits, turn)
     if turn is not None and not plugin.unlisted:
@@ -390,7 +376,7 @@ def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -
 
 def _provided_capabilities(db: Any, user_id: str | None) -> set[str] | None:
     """这个人接的插件连接提供的能力(插件清单的 `provides`),加上空串(不要什么的工具)。不知道是谁(MCP 直连)回 None:
-    不裁。工具的 `needs` 见 mcp_server.tool —— 只对接了 ComfyUI 的人有用的 comfy_* 工具,没接的人每轮不发。"""
+    不裁。工具的 `needs` 见 app/agent_tools/registry.tool —— 只对接了 ComfyUI 的人有用的 comfy_* 工具,没接的人每轮不发。"""
     if db is None or not user_id:
         return None
     from sqlalchemy import select

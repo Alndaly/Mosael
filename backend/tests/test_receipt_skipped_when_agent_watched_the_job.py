@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-import mcp_server
+from app.agent_tools import conversation, registry
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, Job, User
 from app.domain import jobs as jobs_domain
@@ -64,8 +64,8 @@ def test_回执已经落库待送_智能体get_job看到终态就拿掉(monkeypa
     _queued_receipt("s-mine", job_id)
     assert _queued("s-mine") == [job_id]
 
-    with mcp_server.calling_as(user_id=me, session_id="s-mine"):
-        seen = mcp_server.get_job(job_id)
+    with registry.calling_as(user_id=me, session_id="s-mine"):
+        seen = conversation.get_job(job_id)
     assert seen["status"] == "succeeded"
     assert _queued("s-mine") == [], "看到终态之后,待送的回执还会再跑一轮"
     with SessionLocal() as db:
@@ -91,8 +91,8 @@ def test_没看到的照样送_还在跑时查一眼不算(monkeypatch) -> None:
     posted: list[str] = []
     monkeypatch.setattr(receipts.host, "post_job_receipt", lambda db, session, content, *a, **k: posted.append(content))
     job_id = _job(ws, me, "s-mine")
-    with mcp_server.calling_as(user_id=me, session_id="s-mine"):
-        assert mcp_server.get_job(job_id)["status"] != "succeeded"
+    with registry.calling_as(user_id=me, session_id="s-mine"):
+        assert conversation.get_job(job_id)["status"] != "succeeded"
     _finish(job_id)
     assert posted == ["「签章文件.pdf」已完成。"]
 
@@ -103,6 +103,6 @@ def test_别的会话看一眼_不替这次对话确认(monkeypatch) -> None:
     job_id = _job(ws, me, "s-mine")
     _finish(job_id)
     _queued_receipt("s-mine", job_id)
-    with mcp_server.calling_as(user_id=me, session_id="s-other"):
-        mcp_server.get_job(job_id)
+    with registry.calling_as(user_id=me, session_id="s-other"):
+        conversation.get_job(job_id)
     assert _queued("s-mine") == [job_id]

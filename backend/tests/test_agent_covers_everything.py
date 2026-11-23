@@ -15,11 +15,9 @@
 
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 RATCHET = True
-
-import asyncio
-
-import mcp_server
 
 #: 三块能力,各自的核心动作 → 该由哪个工具承担。
 #: 只增不减:某个工具改名了就在这里改,而不是把这一行删掉。
@@ -43,7 +41,7 @@ REQUIRED: dict[str, dict[str, str]] = {
 
 
 def _tool_names() -> set[str]:
-    return {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    return {tool.name for tool in catalog.definitions()}
 
 
 def test_三块能力智能体都够得着() -> None:
@@ -62,7 +60,7 @@ def test_时间线的每种操作智能体都发得出() -> None:
     的清单说了算。工具的说明里要把它们都列出来,否则模型不知道自己能做什么。"""
     from app.domain.sequences.operations import EDIT_OP_KINDS
 
-    doc = next(t for t in asyncio.run(mcp_server.mcp.list_tools()) if t.name == "edit_timeline").description or ""
+    doc = next(t for t in catalog.definitions() if t.name == "edit_timeline").description or ""
     missing = [kind for kind in EDIT_OP_KINDS if kind not in doc]
     assert not missing, f"edit_timeline 的说明里没提这些操作,模型不会用:{missing}"
 

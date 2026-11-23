@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-import mcp_server
+from app import agent_tools
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import PluginPackage
@@ -149,7 +149,7 @@ def test_每轮的系统提示带上目录() -> None:
 
 
 def test_两个工具都是只读_子智能体拿得到() -> None:
-    assert {"use_skill", "read_skill_file"} <= mcp_server.READ_ONLY_TOOLS
+    assert {"use_skill", "read_skill_file"} <= agent_tools.READ_ONLY_TOOLS
     client = fresh_client()
     manifest = {one["name"]: one for one in client.get("/api/agent/tools").json()}
     assert manifest["use_skill"]["read_only"] and not manifest["use_skill"]["confirmation"]

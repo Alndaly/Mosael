@@ -11,7 +11,7 @@ get_confirmation 轮询」那套(那是**直连 MCP** 才成立的协议),模型
 
 from __future__ import annotations
 
-import mcp_server
+from app import agent_tools
 from app.domain.agent.tools.manifest import agent_tool_specs
 from tests.util import fresh_client
 
@@ -23,7 +23,7 @@ def test_确认门控工具的描述讲明了它是阻塞的_并且不叫模型�
     with SessionLocal() as db:
         specs = {spec.name: spec for spec in agent_tool_specs(db)}
 
-    gated = [name for name in mcp_server.CONFIRMATION_TOOLS if name in specs]
+    gated = [name for name in agent_tools.CONFIRMATION_TOOLS if name in specs]
     assert gated, "一个确认门控工具都没进清单?"
 
     for name in gated:

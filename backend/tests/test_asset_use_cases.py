@@ -128,14 +128,10 @@ def test_update_tidies_tags_and_leaves_the_commit_to_the_caller() -> None:
 
 def test_asset_tools_call_the_domain_directly_not_the_api(monkeypatch) -> None:
     """智能体的素材工具直接调这些用例:不再经 HTTP 回连,闸是同一道。"""
-    import mcp_server
     from fastapi.testclient import TestClient
 
     from app.core.security import mint_service_session
     from app.main import app
-
-    # 回连的出口整个不存在了:工具只能直接调领域。
-    assert not any(hasattr(mcp_server, name) for name in ("_get", "_post", "_patch", "_put", "_delete"))
 
     workspace_id, viewer = _workspace_with("viewer")
     asset_id = insert_asset(workspace_id, kind="image", name="a")

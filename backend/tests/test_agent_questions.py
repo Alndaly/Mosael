@@ -140,10 +140,10 @@ class Test不会被自动回答:
         开了自动批准的会话里,「你要哪一个」会被自动答掉 —— 而模型收到的是一个它自己编的
         答案,现象是「它没问我就动手了」。
         """
-        import mcp_server
+        from app import agent_tools
 
-        assert "ask_user" not in mcp_server.CONFIRMATION_TOOLS
-        assert "ask_user" in mcp_server.READ_ONLY_TOOLS, "问一句话不改任何东西,该是只读"
+        assert "ask_user" not in agent_tools.CONFIRMATION_TOOLS
+        assert "ask_user" in agent_tools.READ_ONLY_TOOLS, "问一句话不改任何东西,该是只读"
 
 
 class Test等作答这件事要写在清单上:

@@ -41,7 +41,7 @@ const SUBAGENT_PROMPT = `你是一个子智能体,被主智能体派来独立完
  *  只认 manifest 里的声明,但内置工具仍然按"非确认门"**算**——而那句"会改东西的都走确认卡"
  *  是错的:browser_type / click / upload / evaluate 都不走卡(入口那张卡走过一次),于是子智能体
  *  拿得到它们,而池会话用的是用户在别人站点上的真实登录身份。现在内置工具也是**显式声明**
- *  (后端 mcp_server.READ_ONLY_TOOLS),漏声明的一律算会改东西。 */
+ *  (后端工具登记的 effect="reads",见 backend/app/agent_tools),漏声明的一律算会改东西。 */
 export function readOnlyTools(tools: AgentTool[]): AgentTool[] {
   return tools.filter((tool) => {
     const flags = tool as { readOnly?: boolean; awaitsAnswer?: boolean };

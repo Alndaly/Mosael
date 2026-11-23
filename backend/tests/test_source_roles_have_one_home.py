@@ -143,6 +143,11 @@ def test_没有第二处把角色名铺开写() -> None:
         "providers/contracts/generation.py",
         "generation_catalog/__init__.py",
         "providers/adapters/alibaba/dashscope/video.py",
+        #: 智能体工具的说明里讲**配方**(首帧 + 驱动音频 = 对口型、出图后当参考图用),点名几个角色是在教用法,
+        #: 不是抄那张表。「有哪些角色」不在这里写:generate_video 曾手抄六个(表里早已十个),现在指向
+        #: list_generation_models —— 那份由描述符生成。
+        "agent_tools/generation.py",
+        "agent_tools/scenes.py",
     )
     allowed_dirs = ("domain/generation_catalog/descriptors",)
 

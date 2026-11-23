@@ -7,14 +7,16 @@
 
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 import pytest
 
-import mcp_server
+from app.agent_tools import conversation
 from tests.util import fresh_client
 
 
 def test_成功时只回一句已显示_不把html再回给模型() -> None:
-    reply = mcp_server.show_widget(title=" 路线图 ", html="<div id=map></div>")
+    reply = conversation.show_widget(title=" 路线图 ", html="<div id=map></div>")
     assert reply == {"shown": True, "title": "路线图"}
 
 
@@ -22,13 +24,13 @@ def test_成功时只回一句已显示_不把html再回给模型() -> None:
     ("title", "html", "says"),
     [
         ("空的", "   ", "空"),
-        ("太大", "x" * (mcp_server.WIDGET_HTML_LIMIT + 1), "超过上限"),
-        ("标" * (mcp_server.WIDGET_TITLE_LIMIT + 1), "<p>ok</p>", "title"),
+        ("太大", "x" * (conversation.WIDGET_HTML_LIMIT + 1), "超过上限"),
+        ("标" * (conversation.WIDGET_TITLE_LIMIT + 1), "<p>ok</p>", "title"),
     ],
 )
 def test_空的超长的是失败的调用(title: str, html: str, says: str) -> None:
     with pytest.raises(ValueError, match=says):
-        mcp_server.show_widget(title=title, html=html)
+        conversation.show_widget(title=title, html=html)
 
 
 def test_经工具通道调用_失败成为一句错误而不是500() -> None:
@@ -41,4 +43,4 @@ def test_经工具通道调用_失败成为一句错误而不是500() -> None:
 
 def test_不改任何东西_所以标成只读() -> None:
     """只读决定它不走确认卡;子智能体那一路另把它排除在外(agent-sidecar/src/subagent.ts readOnlyTools)。"""
-    assert mcp_server._TOOL_EFFECTS["show_widget"] == "reads"
+    assert catalog.get("show_widget").effect == "reads"

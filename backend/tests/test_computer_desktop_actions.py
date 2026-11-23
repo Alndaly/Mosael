@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-import mcp_server
+from app import agent_tools
 from app.domain.agent import computer_use
 from app.domain.agent.confirmable.registry import tool_spec
 from app.domain.agent.errors import ConfirmationError
@@ -24,8 +24,8 @@ def test_desktop_actions_are_confirmation_tools_with_both_targets() -> None:
     for name in ("computer_desktop_click", "computer_desktop_input", "computer_desktop_scroll", "computer_desktop_drag"):
         assert specs[name]["confirmation"] is True, name
         assert specs[name]["read_only"] is False, name
-        assert name in mcp_server.CONFIRMATION_TOOLS
-        assert name not in mcp_server.READ_ONLY_TOOLS
+        assert name in agent_tools.CONFIRMATION_TOOLS
+        assert name not in agent_tools.READ_ONLY_TOOLS
         assert tool_spec(name).permission == "external"
     assert set(specs["computer_desktop_click"]["parameters"]["properties"]) == {
         "token", "capture_id", "x", "y", "button", "click_count", "scale", "modifiers",

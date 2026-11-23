@@ -11,7 +11,8 @@
 
 from __future__ import annotations
 
-import asyncio
+from app.domain.agent.tools import catalog
+
 import math
 
 import pytest
@@ -145,11 +146,9 @@ def test_请求体里的actor_id_冒充不了() -> None:
 
 
 def test_说明从模型生成_参数名和校验是同一份() -> None:
-    import mcp_server
-
     from app.domain.sequences.operations import EDIT_OP_KINDS
 
-    doc = next(t for t in asyncio.run(mcp_server.mcp.list_tools()) if t.name == "edit_timeline").description
+    doc = next(t for t in catalog.definitions() if t.name == "edit_timeline").description
     assert "split_clip*(clip_id, src_time)" in doc, "作用于链接组的标 *,linked 开关在开头说一次"
     assert "linked:false" in doc
     assert "fill_mode?:cover|contain|blur" in doc

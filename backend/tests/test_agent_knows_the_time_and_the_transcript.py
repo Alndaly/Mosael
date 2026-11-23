@@ -11,9 +11,10 @@
 """
 from __future__ import annotations
 
-import asyncio
+from app.domain.agent.tools import catalog
 
-import mcp_server
+
+from app.agent_tools import conversation, media
 from tests.util import fresh_client
 
 #: 这次补的工具,以及它各自补上的那个缺口(写在这里,是为了下次有人想删时先读到理由)。
@@ -28,7 +29,7 @@ ADDED = {
 
 def test_the_added_tools_reach_the_agent() -> None:
     """光有函数不算数 —— 要出现在智能体拿到的那份清单里。"""
-    names = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    names = {tool.name for tool in catalog.definitions()}
     missing = sorted(name for name in ADDED if name not in names)
     assert missing == [], f"这些工具没进清单:{missing}"
 
@@ -44,26 +45,26 @@ def test_they_are_in_the_manifest_the_runtime_reads() -> None:
 
 def test_every_added_tool_says_when_to_use_it() -> None:
     """描述得说清「什么时候用」。模型选错工具的代价是它去凑一个 —— 而它不会说自己没有。"""
-    by_name = {tool.name: tool for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    by_name = {tool.name: tool for tool in catalog.definitions()}
     for name in ADDED:
         text = by_name[name].description or ""
         assert "Use " in text or "use " in text, f"{name} 的描述没说什么时候该用它"
 
 
 def test_current_time_is_real_and_admits_an_unknown_zone() -> None:
-    now = mcp_server.get_current_time()
+    now = conversation.get_current_time()
     assert now["date"] == now["local"][:10]
     assert now["utc"].endswith("+00:00")
     assert now["unix"] > 1_700_000_000
     assert "warning" not in now
 
-    tokyo = mcp_server.get_current_time("Asia/Tokyo")
+    tokyo = conversation.get_current_time("Asia/Tokyo")
     assert tokyo["timezone"] == "Asia/Tokyo"
     assert tokyo["utc_offset"] == "+09:00"
     assert tokyo["unix"] == now["unix"] or abs(tokyo["unix"] - now["unix"]) <= 2
 
     # 认不出的时区**不能悄悄按本机算**:那会让「按东京时间」静静地算错,而结果看着完全正常。
-    bad = mcp_server.get_current_time("Mars/Olympus")
+    bad = conversation.get_current_time("Mars/Olympus")
     assert "warning" in bad and "Mars/Olympus" in bad["warning"]
 
 
@@ -74,11 +75,11 @@ def test_transcript_narrows_by_time_and_owns_up_to_truncating(monkeypatch) -> No
         for i in range(500)
     ]
     # 工具直接调领域用例(`_use_case`);这里替掉的就是那一次调用,只看工具怎么裁剪结果。
-    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: {
+    monkeypatch.setattr(media, "use_case", lambda *a, **k: {
         "language": "zh", "status": "done", "segments": segments,
     })
 
-    whole = mcp_server.get_transcript("a1")
+    whole = media.get_transcript("a1")
     assert whole["total_segments"] == 500
     assert whole["truncated"] is True
     assert len(whole["segments"]) == 200
@@ -86,7 +87,7 @@ def test_transcript_narrows_by_time_and_owns_up_to_truncating(monkeypatch) -> No
     assert "tokens" not in whole["segments"][0]
     assert whole["text"].startswith("第0句 第1句")
 
-    window = mcp_server.get_transcript("a1", start_seconds=10, end_seconds=20)
+    window = media.get_transcript("a1", start_seconds=10, end_seconds=20)
     assert window["truncated"] is False
     assert all(seg["end_time"] > 10 and seg["start_time"] < 20 for seg in window["segments"])
     assert window["total_segments"] == len(window["segments"])
@@ -94,22 +95,22 @@ def test_transcript_narrows_by_time_and_owns_up_to_truncating(monkeypatch) -> No
 
 def test_missing_transcript_is_a_state_not_a_tool_failure(monkeypatch) -> None:
     """素材在、还没转写:回 missing 和下一步,不把「还没做」画成红色失败。"""
-    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: None)
-    out = mcp_server.get_transcript("a1")
+    monkeypatch.setattr(media, "use_case", lambda *a, **k: None)
+    out = media.get_transcript("a1")
     assert out["status"] == "missing"
     assert out["segments"] == [] and out["total_segments"] == 0
     assert "transcribe_asset" in out["message"]
 
 
 def test_transcript_keeps_the_speaker_only_when_there_is_one(monkeypatch) -> None:
-    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: {
+    monkeypatch.setattr(media, "use_case", lambda *a, **k: {
         "language": "zh", "status": "done",
         "segments": [
             {"start_time": 0, "end_time": 1, "text": "有说话人", "speaker": "B"},
             {"start_time": 1, "end_time": 2, "text": "没有", "speaker": None},
         ],
     })
-    segs = mcp_server.get_transcript("a1")["segments"]
+    segs = media.get_transcript("a1")["segments"]
     assert segs[0]["speaker"] == "B"
     assert "speaker" not in segs[1], "没有说话人时不该塞一个空的 —— 那会读成「有个叫 None 的人」"
 
@@ -118,18 +119,18 @@ def test_url_import_refuses_a_link_it_could_not_probe(monkeypatch) -> None:
     """探不到条目就别硬下:那多半是链接不对,而「下了个空」比报错更难查。"""
     import pytest
 
-    monkeypatch.setattr(mcp_server, "_default_workspace_id", lambda: "w1")
+    monkeypatch.setattr(media, "default_workspace_id", lambda: "w1")
     from types import SimpleNamespace
 
     monkeypatch.setattr(
-        mcp_server, "_use_case", lambda *a, **k: SimpleNamespace(title="", entries=[], is_playlist=False, truncated=False)
+        media, "use_case", lambda *a, **k: SimpleNamespace(title="", entries=[], is_playlist=False, truncated=False)
     )
     with pytest.raises(ValueError, match="探不到"):
-        mcp_server.import_media_from_url("https://example.com/nope")
+        media.import_media_from_url("https://example.com/nope")
 
 
 def test_url_import_only_takes_video_or_audio(monkeypatch) -> None:
     import pytest
 
     with pytest.raises(ValueError, match="video"):
-        mcp_server.import_media_from_url("https://example.com/x", kind="subtitles")
+        media.import_media_from_url("https://example.com/x", kind="subtitles")

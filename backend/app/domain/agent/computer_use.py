@@ -5,7 +5,7 @@ L3 由 DesktopDriverMac 枚举其他应用窗口、截图、读取 AX 树,并在
 
 线程模型和进程边界:
 
-    工具(mcp_server) ── 这里 ──127.0.0.1 回环桥──→ Electron 主进程 ── DesktopDriver
+    工具(app/agent_tools/computer) ── 这里 ──127.0.0.1 回环桥──→ Electron 主进程 ── DesktopDriver
 
 Electron 的 `ipcMain` 只服务渲染层,后端(Python,另一个进程)够不着它。主进程在启动时开一条
 只绑回环、带每进程随机令牌、通道写死的一问一答桥。壳拉起的后端拿

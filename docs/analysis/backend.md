@@ -346,7 +346,7 @@ sequenceDiagram
 
 `domain/context_meter.py` 与 `agent-sidecar/src/compaction.ts` 是**同一份规则的两份实现**,由 `contracts/context-meter-cases.json` 钉死,两侧测试跑同一语料:以最近一条带 usage 的 assistant 消息为锚(input+output+**cacheRead**——"cacheRead 也占窗口……漏掉它水位系统性偏乐观,而偏乐观的水位是最坏的那种"),锚后按 `CHARS_PER_TOKEN=3.5` 估算;回退窗口云端 128K / 本机-LAN 32K,两侧常量逐字一致(host.py:1359-1363)。`context_breakdown` 把窗口拆成 消息/工具/系统/空闲 四项("这个应用里真正的大头往往不是对话——每次请求约 12k token 里几乎全是工具定义"),并对"减出来的数不可信"做降级重分配(host.py:104-145 注释:实测 39 个会话 27 个的「消息」分项因此恒为 0)。
 
-## 12. MCP 工具注册表(`backend/mcp_server.py`,2183 行)
+## 12. MCP 工具注册表(`backend/app/agent_tools/`,2183 行)
 
 - **唯一工具定义处**:77 个 `@mcp.tool`(实测),`/api/agent/tools` manifest 派生它,sidecar/MCP 客户端/飞书全从 manifest 生成工具——"不再手写第二份"。历史事故:sidecar 曾手写第二份清单,漂移一次"静默少了十九个工具"(`tools/manifest.py:4-7`)。
 - 三个集合(`CONFIRMATION_TOOLS` 20 / `READ_ONLY_TOOLS` 35 / `MUTATING_TOOLS` 22)合起来必须覆盖全部内置工具,测试钉住。

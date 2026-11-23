@@ -12,14 +12,15 @@
 
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
 
-import asyncio
 import contextvars
 from typing import Any, Callable
 
-import mcp_server
+from app.agent_tools import entities, knowledge, media, registry, scenes, workflows
 from app.core.db import SessionLocal
 from app.core.security import find_session
 from app.db.models import BrowserProfile, PublishAccount, PublishTask, Scene3DModel
@@ -56,20 +57,20 @@ def _seed(client, monkeypatch) -> dict[str, str]:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
         me = find_session(db, client.headers["Authorization"].removeprefix("Bearer ")).user_id
-    monkeypatch.setattr(mcp_server, "_CALLER_ID", contextvars.ContextVar("test_caller", default=me))
+    monkeypatch.setattr(registry, "CALLER_ID", contextvars.ContextVar("test_caller", default=me))
 
     ids: dict[str, str] = {"workspace": ws}
-    ids["project"] = mcp_server.create_project(name="宣传片")["id"]
+    ids["project"] = media.create_project(name="宣传片")["id"]
     ids["asset"] = insert_asset(ws, kind="video", name="素材.mp4", media_info={"duration": 3.0})
     ids["workflow"] = client.post("/api/workflows", json={"workspace_id": ws, "name": "流", "graph": {
         "nodes": [{"id": "start", "type": "start", "config": {"params": {}}}], "edges": []}}).json()["id"]
     ids["board"] = client.post("/api/boards", json={"workspace_id": ws, "name": "灵感板", "canvas": {
         "items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "width": 200, "height": 120, "text": "开场要快"}],
         "edges": []}}).json()["id"]
-    mcp_server.remember(content="视频统一竖屏")
-    ids["note"] = mcp_server.create_note(title="脚本", markdown="第一场:清晨")["id"]
-    ids["scene"] = mcp_server.create_scene(name="客厅")["id"]
-    ids["entity"] = mcp_server.create_entity(kind="character", name="小林", prompt="黑色短发")["id"]
+    knowledge.remember(content="视频统一竖屏")
+    ids["note"] = knowledge.create_note(title="脚本", markdown="第一场:清晨")["id"]
+    ids["scene"] = scenes.create_scene(name="客厅")["id"]
+    ids["entity"] = entities.create_entity(kind="character", name="小林", prompt="黑色短发")["id"]
     _seed_reference_library(monkeypatch)
     ids["session"] = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()["id"]
     with SessionLocal() as db:
@@ -138,7 +139,7 @@ def test_有数据的工作区上_每个读工具都跑得通(monkeypatch) -> No
     broken: list[str] = []
     for name, (args, at_least) in READS.items():
         try:
-            result = getattr(mcp_server, name)(**args(ids))
+            result = catalog.get(name).function(**args(ids))
         except Exception as exc:  # noqa: BLE001 — 这里传的全是真 id,任何异常都是 bug
             broken.append(f"{name}: {type(exc).__name__}: {str(exc)[:200]}")
             continue
@@ -151,15 +152,15 @@ def test_list_boards_报出每张板的格子数(monkeypatch) -> None:
     """格子数来自摘要的 item_count —— 此前从 canvas 里数,而摘要里没有 canvas。"""
     client = fresh_client()
     ids = _seed(client, monkeypatch)
-    assert mcp_server.list_boards() == [{"id": ids["board"], "name": "灵感板", "items": 1}]
+    assert workflows.list_boards() == [{"id": ids["board"], "name": "灵感板", "items": 1}]
 
 
 def test_每个列表类只读工具都在有数据的工作区上跑过() -> None:
     """只减不增:新加的 list_* / search_* / *_list 只读工具,要么在 READS 里,要么在 UNSEEDED 里写明为什么不跑。"""
-    tools = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    tools = {tool.name for tool in catalog.definitions()}
     listing = {
         name for name in tools
-        if mcp_server._TOOL_EFFECTS.get(name) == "reads"
+        if catalog.get(name).effect == "reads"
         and (name.startswith(("list_", "search_")) or name.endswith("_list"))
     }
     missing = sorted(listing - set(READS) - set(UNSEEDED))
@@ -171,6 +172,6 @@ def test_每个列表类只读工具都在有数据的工作区上跑过() -> No
 def test_search_references_不把成人内容交给智能体(monkeypatch) -> None:
     client = fresh_client()
     _seed(client, monkeypatch)
-    result = mcp_server.search_references(query="坐")
+    result = entities.search_references(query="坐")
     assert [one["id"] for one in result["items"]] == ["p1"]
     assert result["items"][0]["provenance"]["author"] == "作者" and result["items"][0]["angles"] == ["front"]

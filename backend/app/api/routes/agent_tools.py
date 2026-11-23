@@ -1,17 +1,9 @@
-"""One tool registry, served to whichever agent runtime is in use.
+"""一份工具清单,交给正在用的那个智能体运行时(pi sidecar 等)。
 
-There were two. mcp_server.py defines 26 tools for the Claude CLI (which speaks MCP), and
-agent-sidecar/src/tools.ts hand-wrote 7 of them again for pi (which does not). The sidecar's
-list was a staged build-out — its own header says "S3: read-only set", with the rest promised
-for a later slice — and it stopped there. So once pi became the default agent, it silently lost
-nineteen tools, including web_search, fetch_url and edit_workflow, all of which were built,
-tested and confirmed present in the MCP server while being invisible to the agent that needed
-them. Nothing failed loudly; the model just called a tool that "was not found".
-
-Two lists maintained by hand will drift, and the drift is silent, so the fix is to stop having
-two. The MCP registry stays the definition. These endpoints expose it — the manifest so an agent
-can discover the tools, and the invoke endpoint so it can run one without reimplementing it. A
-tool added to mcp_server.py is available to every runtime with no second edit.
+此前有两份:仓库根的 mcp_server.py 给说 MCP 的客户端,agent-sidecar 里又给 pi 手写了一份;后者停在七个,pi 成了默认之后
+静默少了十九个工具(web_search、fetch_url、edit_workflow……),模型调用时只得到「not found」。两份手抄的清单一定会漂,
+而漂是无声的,所以只留一份:工具登记在 `domain/agent/tools/catalog`(本体在 `app/agent_tools/`),这里只把它暴露出去 ——
+清单接口让运行时发现工具,调用接口让它不必重写就能跑一个。新加的工具对所有运行时立即可用。
 
 **插件工具也在这份清单里**,展开成一等公民(`plugin__<插件>__<工具>`),而不是留在
 list_plugin_tools/invoke_plugin_tool 那两个元工具后面。理由是发现成本:元工具意味着模型要先
@@ -35,7 +27,9 @@ from app.api.deps import CurrentUser, DbSession, PresentedToken, Tx
 from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
-from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
+from app.agent_tools.registry import ImageContent, TextContent, calling_as, confirmation_reply
+from app.domain.agent.tools import catalog
+from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs
 from app.domain.agent.autopilot import session_for_token
 from app.domain.agent.confirmable.plugin_tools import exposed_tool
 from app.domain.agent.errors import ConfirmationError
@@ -154,7 +148,7 @@ def _invoke_plugin_tool(
         except ConfirmationError as exc:
             # 参数不对(缺必填、类型错)开卡时就拒:模型据这句话改了重发,而不是等人批准了才炸。
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return {"result": tool_registry()._confirmation_reply({
+        return {"result": confirmation_reply({
             "id": confirmation.id,
             "status": confirmation.status,
             "permission": confirmation.permission,
@@ -191,11 +185,11 @@ def invoke_agent_tool(
         ensure_workspace_member(db, user, workspace_id)
     if name.startswith(PLUGIN_TOOL_PREFIX):
         return _invoke_plugin_tool(db, name, body, user, token, workspace_id)
-    registry = tool_registry()
-    #: 只认登记过的工具(mcp_server.REGISTERED_TOOLS),不认模块里随便哪个公开的可调用对象。
-    if name not in registry.REGISTERED_TOOLS:
+    #: 只认登记过的工具(domain/agent/tools/catalog),不认哪个模块里随便一个公开的可调用对象。
+    definition = catalog.get(name)
+    if definition is None:
         raise HTTPException(status_code=404, detail=f"Tool {name} not found")
-    fn = getattr(registry, name)
+    fn = definition.function
 
     # 这次调用属于哪次对话:从**令牌**取,不从参数取。turn 令牌铸造时就带着它
     # (core/security.mint_service_session),而参数是调用方自己填的 —— 填上别人的会话 id 就能把
@@ -205,10 +199,10 @@ def invoke_agent_tool(
     if dropped:
         # 丢了什么要留痕:静默容错在排查时会变成"参数明明传了却没生效"。
         logger.info("tool %s: dropped unsupported arguments %s", name, dropped)
-    # 工具体在本进程里直接调领域用例,以**这个人**的身份(见 mcp_server._use_case):不再经 HTTP 回连,
+    # 工具体在本进程里直接调领域用例,以**这个人**的身份(见 app/agent_tools/registry.use_case):不再经 HTTP 回连,
     # 也就不再需要为每次调用铸一份短期令牌。
     agent_session_id = (auth.agent_session_id if auth is not None else None) or None
-    with registry.calling_as(
+    with calling_as(
         user_id=user.id, requested_by=body.requested_by, session_id=agent_session_id or "", tool_call_id=body.tool_call_id
     ):
         # **直接工具也会建后台任务**(transcribe_asset、import_media_from_url……),它们不经过确认卡。
@@ -239,11 +233,9 @@ def _as_payload(result: Any) -> dict[str, Any]:
     """工具的返回值 → 这条 HTTP 通道的形状。
 
     多数工具返回普通数据,原样放进 `result`。**会给模型看图的工具**返回 MCP 标准内容块
-    (文字 + 图片,见 mcp_server._with_images):文字解析回数据进 `result`,图片单独放进
+    (文字 + 图片,见 app/agent_tools/registry.with_images):文字解析回数据进 `result`,图片单独放进
     `images`,由 sidecar 交给模型当视觉输入。只有这一种形状,不按工具名特判。
     """
-    from mcp.types import ImageContent, TextContent
-
     if not (isinstance(result, list) and result and all(isinstance(b, (TextContent, ImageContent)) for b in result)):
         return {"result": result}
     text = "\n".join(block.text for block in result if isinstance(block, TextContent))

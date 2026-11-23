@@ -181,6 +181,8 @@
 
 模块导入时填一次,之后只读。每个进程都一样,不构成任何约束。
 
+- `app/domain/agent/tools/catalog.py:_DEFINITIONS` — 智能体工具的登记处。`app/agent_tools/` 的各族模块在 import 时
+  登记进来(`app.main` 导入一次),之后只读;领域里读工具清单的人只认它,不反过来 import 工具层。
 - `app/domain/agent/confirmable/registry.py:_TOOLS` — 确认卡工具的登记表。
 - `app/domain/agent/confirmable/registry.py:_FAMILIES` — 按名字前缀认领的一族确认卡(插件工具 `plugin__…`),同样在 import 时登记。
 - `app/domain/jobs/__init__.py:_EXECUTION_MODES`(每个 kind 在进程内跑还是交给外部执行器)、

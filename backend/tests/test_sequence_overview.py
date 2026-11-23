@@ -43,11 +43,11 @@ def _setup():
 
 
 def _agent_view(client, sid: str) -> dict:
-    import mcp_server
+    from app.agent_tools import media, registry
 
     me = client.get("/api/auth/me").json()["id"]
-    with mcp_server.calling_as(user_id=me):
-        return mcp_server.inspect_sequence(sequence_id=sid)
+    with registry.calling_as(user_id=me):
+        return media.inspect_sequence(sequence_id=sid)
 
 
 def _workflow_view(ws: str, sid: str) -> dict:

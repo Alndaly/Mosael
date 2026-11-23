@@ -17,7 +17,7 @@ JS,全程零张卡,而用户看不到子智能体的中间过程。
 
 from __future__ import annotations
 
-import mcp_server
+from app import agent_tools
 from tests.util import fresh_client
 
 #: 会改动东西的内置工具 —— 它们**都不该**被算成只读。走不走确认卡是另一个问题。
@@ -80,11 +80,11 @@ def test_every_builtin_tool_declares_it() -> None:
     """新增工具时必须表态。**默认落在"会改东西"那边** —— 漏掉的那个恰恰是没人想过后果的那个。"""
     client = fresh_client()
     builtin = {name for name in _specs(client) if not name.startswith("plugin__")}
-    declared = mcp_server.READ_ONLY_TOOLS | set(mcp_server.CONFIRMATION_TOOLS) | mcp_server.MUTATING_TOOLS
+    declared = agent_tools.READ_ONLY_TOOLS | set(agent_tools.CONFIRMATION_TOOLS) | agent_tools.MUTATING_TOOLS
     missing = builtin - declared
     assert missing == set(), f"这些工具没有声明会不会改东西:{sorted(missing)}"
 
 
 def test_confirmation_tools_are_never_read_only() -> None:
     """走确认卡就说明它会改东西 —— 两套声明不能互相打架。"""
-    assert not (mcp_server.READ_ONLY_TOOLS & set(mcp_server.CONFIRMATION_TOOLS))
+    assert not (agent_tools.READ_ONLY_TOOLS & set(agent_tools.CONFIRMATION_TOOLS))

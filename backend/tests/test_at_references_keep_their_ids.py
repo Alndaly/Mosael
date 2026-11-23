@@ -66,12 +66,12 @@ def test_清单里点名的工具真的存在() -> None:
 
     (这四个名字当初是我按命名习惯猜的,恰好全中。这条用例把"恰好"换成"一定"。)
     """
-    import mcp_server
+    from app.domain.agent.tools import catalog
 
     for _label, tool in agent_prompt._REFERENCE_HOW.values():
         if not tool:
             continue
-        assert callable(getattr(mcp_server, tool, None)), f"{tool} 不是 mcp_server 里的工具"
+        assert catalog.get(tool) is not None, f"{tool} 不是登记过的智能体工具"
 
 
 def test_删掉的对象明说已不存在(tmp_path) -> None:

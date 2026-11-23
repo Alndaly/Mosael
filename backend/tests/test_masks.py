@@ -374,11 +374,11 @@ def test_不是图片的素材报错而不是产出一张废图() -> None:
 
 
 def test_智能体按同一形状接上了_开卡说明白要算什么_批准后交回新素材() -> None:
-    import mcp_server
+    from app import agent_tools
     from app.domain.agent.confirmable.registry import tool_spec
     from tests.util import fresh_client
 
-    assert "create_mask" in mcp_server.CONFIRMATION_TOOLS, "它是一条确认卡工具"
+    assert "create_mask" in agent_tools.CONFIRMATION_TOOLS, "它是一条确认卡工具"
     spec = tool_spec("create_mask")
     assert spec is not None and spec.writes == ("assets",) and spec.permission == "edit"
 

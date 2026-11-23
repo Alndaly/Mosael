@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 import io
 import types
 
@@ -116,9 +118,9 @@ def test_截图节点能指定截会话里的哪一页_没指定就是当前页(
 def test_智能体截图也能指定哪一页(monkeypatch) -> None:
     import inspect
 
-    import mcp_server
+    from app.agent_tools import browser
 
-    params = inspect.signature(mcp_server.browser_screenshot).parameters
+    params = inspect.signature(browser.browser_screenshot).parameters
     assert "page_by" in params and "page_value" in params
 
 
@@ -192,9 +194,7 @@ def test_截图入口只收图片_出处种类有数() -> None:
 
 
 def test_智能体也能截图() -> None:
-    import asyncio
 
-    import mcp_server
 
-    tools = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    tools = {tool.name for tool in catalog.definitions()}
     assert "browser_screenshot" in tools

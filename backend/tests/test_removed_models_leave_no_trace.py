@@ -24,7 +24,7 @@ REMOVED = {
 }
 
 #: 扫这些地方的源码。文档不扫:ADR 与能力矩阵要记下「接过、为什么撤」。
-SCANNED = ("backend/app", "backend/mcp_server.py", "frontend/src", "agent-sidecar/src", "plugins", "contracts")
+SCANNED = ("backend/app", "frontend/src", "agent-sidecar/src", "plugins", "contracts")
 SUFFIXES = {".py", ".ts", ".tsx", ".json", ".mjs", ".cjs"}
 #: 清存量数据的迁移要点名它清的是什么;生成的接口类型跟着 openapi 走。
 ALLOWED = {"backend/app/db/migrations.py"}

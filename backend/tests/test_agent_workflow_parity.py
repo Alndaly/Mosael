@@ -11,12 +11,14 @@
 
 from __future__ import annotations
 
+from app.domain.agent.tools import catalog
+
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
 
-import asyncio
 
-import mcp_server
+from app import agent_tools
+from app.agent_tools import conversation
 from app.domain.workflows.node_types import NODE_TYPES
 
 #: 节点类型 → 对应的智能体工具名。
@@ -166,7 +168,7 @@ NOT_A_TOOL: dict[str, str] = {
 
 
 def _agent_tools() -> set[str]:
-    return {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    return {tool.name for tool in catalog.definitions()}
 
 
 def test_每个工作流节点要么有对应工具_要么写明为什么不需要() -> None:
@@ -203,7 +205,7 @@ def test_两份确认清单必须一致() -> None:
     """
     from app.domain.agent.confirmable.registry import tool_specs
 
-    assert set(mcp_server.CONFIRMATION_TOOLS) == set(tool_specs())
+    assert set(agent_tools.CONFIRMATION_TOOLS) == set(tool_specs())
 
 
 def test_确认卡的权限档次前端都有文案() -> None:
@@ -236,7 +238,7 @@ def test_确认卡的权限档次前端都有文案() -> None:
 def test_改动外面世界的工具都走确认卡() -> None:
     """公开发布、在本机跑代码、向外部发写请求 —— 这三件的后果都不在这个应用里,
     撤不回来。它们必须等用户点头,而不是"跑完了再说"。"""
-    assert {"publish_asset", "run_code", "http_request"} <= set(mcp_server.CONFIRMATION_TOOLS)
+    assert {"publish_asset", "run_code", "http_request"} <= set(agent_tools.CONFIRMATION_TOOLS)
 
 
 def test_sleep_有上限() -> None:
@@ -244,6 +246,6 @@ def test_sleep_有上限() -> None:
 
     (这里不真睡满上限:断言的是那个数字本身,以及超限会被夹到上限。)
     """
-    assert mcp_server.SLEEP_CAP_SECONDS == 60.0
-    assert mcp_server.sleep(0)["slept_seconds"] == 0.0
-    assert mcp_server.sleep(-5)["slept_seconds"] == 0.0
+    assert conversation.SLEEP_CAP_SECONDS == 60.0
+    assert conversation.sleep(0)["slept_seconds"] == 0.0
+    assert conversation.sleep(-5)["slept_seconds"] == 0.0

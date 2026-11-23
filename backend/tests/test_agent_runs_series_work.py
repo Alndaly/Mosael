@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 
-import mcp_server
+from app.agent_tools import entities, registry, workflows
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow, WorkflowRunStep
 from app.domain.jobs.constants import TERMINAL_STATUSES
@@ -49,11 +49,11 @@ def _wait(job_id: str) -> Job:
 def test_从官方模板新建工作流_卡上审的就是落库的那张() -> None:
     client = fresh_client()
     ws = _workspace(client)
-    templates = {one["id"] for one in mcp_server.list_workflow_templates()}
+    templates = {one["id"] for one in workflows.list_workflow_templates()}
     assert {"series_setup", "full_video_generation"} <= templates
 
-    with mcp_server.calling_as(user_id=user_id(), requested_by="mcp"):
-        card = mcp_server.create_workflow(name="长明灯 · 系列设定", template_id="series_setup", workspace_id=ws)
+    with registry.calling_as(user_id=user_id(), requested_by="mcp"):
+        card = workflows.create_workflow(name="长明灯 · 系列设定", template_id="series_setup", workspace_id=ws)
     created = _approve(client, card)
     assert created["template_id"] == "series_setup"
     with SessionLocal() as db:
@@ -79,8 +79,8 @@ def test_一张卡并行起几次运行_各带一组参数_逐条看得到进度
     client = fresh_client()
     ws = _workspace(client)
     wf = _simple_workflow(client, ws)
-    with mcp_server.calling_as(user_id=user_id(), requested_by="mcp"):
-        card = mcp_server.run_workflow(workflow_id=wf, workspace_id=ws,
+    with registry.calling_as(user_id=user_id(), requested_by="mcp"):
+        card = workflows.run_workflow(workflow_id=wf, workspace_id=ws,
                                        runs=[{"topic": "第一场"}, {"topic": "第二场"}, {"topic": "第三场"}])
     headline = client.get(f"/api/confirmations/{card['confirmation_id']}").json()["headline"]
     assert "3 次" in headline or "3 times" in headline, headline
@@ -91,8 +91,8 @@ def test_一张卡并行起几次运行_各带一组参数_逐条看得到进度
     said = sorted(job.result["context"]["say"]["text"] for job in finished)
     assert said == ["第一场", "第三场", "第二场"]
 
-    with mcp_server.calling_as(user_id=user_id(), requested_by="mcp"):
-        progress = mcp_server.get_workflow_run(started["job_ids"][0])
+    with registry.calling_as(user_id=user_id(), requested_by="mcp"):
+        progress = workflows.get_workflow_run(started["job_ids"][0])
     assert progress["status"] == "succeeded" and progress["steps_done"] == ["start", "写一句"]
     assert progress["steps_remaining"] == [] and progress["can_continue"] is False
 
@@ -121,11 +121,11 @@ def test_中断的运行_智能体看得到停在哪_批准后从中断处接着
         db.query(WorkflowRunStep).filter(WorkflowRunStep.job_id == job.id).delete()
         db.commit()
 
-    with mcp_server.calling_as(user_id=user_id(), requested_by="mcp"):
-        progress = mcp_server.get_workflow_run(run["id"])
+    with registry.calling_as(user_id=user_id(), requested_by="mcp"):
+        progress = workflows.get_workflow_run(run["id"])
         assert progress["steps_done"] == ["start"] and progress["steps_remaining"] == ["写一句"]
         assert progress["can_continue"] is True
-        card = mcp_server.continue_workflow_run(run["id"])
+        card = workflows.continue_workflow_run(run["id"])
     assert "「一场戏」" in client.get(f"/api/confirmations/{card['confirmation_id']}").json()["headline"]
     continued = _approve(client, card)
     assert continued["job_id"] == run["id"], "接着跑的是同一条运行"
@@ -148,14 +148,14 @@ def test_给人物配嗓子_只收人物_空着是清掉() -> None:
     ws = _workspace(client)
     hero = client.post("/api/entities", json={"workspace_id": ws, "kind": "character", "name": "沈青禾"}).json()
     shop = client.post("/api/entities", json={"workspace_id": ws, "kind": "location", "name": "长明灯铺"}).json()
-    with mcp_server.calling_as(user_id=user_id(), requested_by="mcp"):
-        voiced = mcp_server.set_entity_voice(hero["id"], engine="builtin:edge", voice="zh-CN-XiaoyiNeural")
+    with registry.calling_as(user_id=user_id(), requested_by="mcp"):
+        voiced = entities.set_entity_voice(hero["id"], engine="builtin:edge", voice="zh-CN-XiaoyiNeural")
         assert (voiced["attributes"]["voice"]["engine"], voiced["attributes"]["voice"]["voice"]) == (
             "builtin:edge", "zh-CN-XiaoyiNeural")
-        cleared = mcp_server.set_entity_voice(hero["id"], engine="", voice="")
+        cleared = entities.set_entity_voice(hero["id"], engine="", voice="")
         assert not cleared["attributes"].get("voice")
         try:
-            mcp_server.set_entity_voice(shop["id"], engine="builtin:edge", voice="zh-CN-XiaoyiNeural")
+            entities.set_entity_voice(shop["id"], engine="builtin:edge", voice="zh-CN-XiaoyiNeural")
         except Exception as exc:  # noqa: BLE001 — 工具层把它翻成给模型看的一句
             assert "character" in str(exc)
         else:

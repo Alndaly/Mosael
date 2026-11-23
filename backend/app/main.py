@@ -14,6 +14,8 @@ from fastapi.responses import JSONResponse
 
 from fastapi import Depends
 
+#: 导入即把全部智能体工具登记进 domain/agent/tools/catalog(领域里读工具清单的人只认那里)。
+import app.agent_tools  # noqa: F401
 from app.api.routes.agent import router as agent_router
 from app.api.routes.agent_skills import router as agent_skills_router
 from app.api.routes.session_groups import router as session_groups_router

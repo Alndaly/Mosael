@@ -21,7 +21,7 @@ from uuid import uuid4
 
 import pytest
 
-import mcp_server
+from app.agent_tools import media, registry
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import ShotBreakdown, User
@@ -226,8 +226,8 @@ def test_帧图取得到_别的名字取不到(client, video) -> None:
 # --------------------------------------------------------------------------------------
 
 def test_analyze_asset_的_shots_模式排的是同一条任务(client, video) -> None:
-    with mcp_server.calling_as(user_id=user_id(), requested_by="test"):
-        job = mcp_server.analyze_asset(video["id"], mode="shots")
+    with registry.calling_as(user_id=user_id(), requested_by="test"):
+        job = media.analyze_asset(video["id"], mode="shots")
     assert job["kind"] == "shot_breakdown" and job["payload"]["asset_id"] == video["id"]
     assert job["status"] in ("queued", "running")
     assert "answer" not in job, "这个模式不回分析结论,回的是一条任务"
@@ -239,7 +239,7 @@ def test_analyze_asset_的_shots_模式排的是同一条任务(client, video) -
 
 def test_智能体那一路用的是这次对话的连接和模型(client, video) -> None:
     """会话里定下的连接和模型照用(和 analyze 同一个来源);会话里选的**视频看法**管不到它 ——
-    `mode="shots"` 不是「怎么喂视频」,那条路(`mcp_server._queue_shot_breakdown`)根本不读它。"""
+    `mode="shots"` 不是「怎么喂视频」,那条路(`media._queue_shot_breakdown`)根本不读它。"""
     target = SimpleNamespace(connection=SimpleNamespace(id="profile-from-session"), model="vision-from-session",
                              mode="native")
     with SessionLocal() as db:

@@ -38,8 +38,8 @@ def test_内核不点名任何工具() -> None:
 
 
 def test_登记表和_MCP_那份要确认的清单一致() -> None:
-    import mcp_server
+    from app import agent_tools
 
     from app.domain.agent.confirmable.registry import tool_specs
 
-    assert set(mcp_server.CONFIRMATION_TOOLS) == set(tool_specs())
+    assert set(agent_tools.CONFIRMATION_TOOLS) == set(tool_specs())

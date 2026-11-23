@@ -63,7 +63,7 @@ def test_managing_requires_an_actor(name: str) -> None:
 
 
 def test_every_caller_names_a_real_actor() -> None:
-    paths = [*sorted(pathlib.Path("app").rglob("*.py")), pathlib.Path("mcp_server.py")]
+    paths = sorted(pathlib.Path("app").rglob("*.py"))
     bad, seen = [], 0
     for path in paths:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

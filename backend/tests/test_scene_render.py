@@ -215,12 +215,12 @@ class Test自由视角给智能体自己检查:
 def test_看图工具返回的是图片块_通道上拆成文字和图片() -> None:
     """模型要**看见**画面:MCP 客户端收到标准图片块;HTTP 通道拆成 result + images,
     不能把几十万字符的 base64 塞进 JSON 让模型去读。"""
-    from mcp.types import ImageContent, TextContent
+    from app.agent_tools.registry import ImageContent, TextContent
 
-    import mcp_server
+    from app.agent_tools import registry
     from app.api.routes.agent_tools import _as_payload
 
-    blocks = mcp_server._with_images({"revision": 2, "images": [{"view": "top", "mime_type": "image/jpeg", "data": "QQ=="}]})
+    blocks = registry.with_images({"revision": 2, "images": [{"view": "top", "mime_type": "image/jpeg", "data": "QQ=="}]})
     assert isinstance(blocks[0], TextContent) and isinstance(blocks[1], ImageContent)
     assert "QQ==" not in blocks[0].text
     assert _as_payload(blocks) == {"result": {"revision": 2, "image_views": ["top"]},
