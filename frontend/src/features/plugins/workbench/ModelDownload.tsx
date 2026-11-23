@@ -1,4 +1,5 @@
 import React from "react";
+import { useJob } from "@/lib/useJob";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { onlineManager, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, Link2, Loader2, Search, X } from "lucide-react";
@@ -158,13 +159,7 @@ export function ModelDownload({
     return newestFirst.find((job) => !jobDone(job)) ?? newestFirst[0] ?? null;
   }, [mine]);
   //: 列表里不带 `result`(字节 / 速度只在详情里):盯着的那条还在跑时再问一次详情。
-  const detail = useQuery({
-    queryKey: jobKeys.of("workbench", latest?.id),
-    queryFn: () => getJob(latest!.id),
-    enabled: Boolean(latest && !jobDone(latest)),
-    refetchInterval: 1500,
-    retry: false,
-  });
+  const detail = useJob(latest?.id, { enabled: Boolean(latest && !jobDone(latest)), interval: 1500 });
   //: 这一行的状态就是任务里的那个;详情那份到了就用它(它比列表勤,取消 / 失败的最后一份字节也在里面)。
   const current: Job | JobSummary | null =
     latest && detail.data && detail.data.id === latest.id ? detail.data : latest;
@@ -274,7 +269,7 @@ export function ModelDownload({
       seenActive.current = job.id;
       //: **把 POST 回来的任务写进列表缓存,不存 id** —— 后面的状态、取消、续传都从这份缓存派生。
       writeJob(job);
-      qc.setQueryData(jobKeys.of("workbench", job.id), job);
+      qc.setQueryData(jobKeys.detail(job.id), job);
     },
   });
   //: 取消没成功时那一句该说什么。**任务在请求到达前刚好结束不是取消失败** —— 那一下本来也没有可取消的东西,
@@ -286,7 +281,7 @@ export function ModelDownload({
       setCancelNote("");
       //: 取消接口回的就是取消后的那一条:直接写进这份缓存(列表 + 详情),不必等下一轮轮询。
       writeJob(stopped);
-      qc.setQueryData(jobKeys.of("workbench", stopped.id), stopped);
+      qc.setQueryData(jobKeys.detail(stopped.id), stopped);
       //: 取消**不删**半截(断点续传):这一行下面马上要问它还剩多少,好让人「继续下载」。
       void qc.invalidateQueries({ queryKey: ["model-partial", target.instanceId] });
     },
@@ -294,7 +289,7 @@ export function ModelDownload({
       try {
         const fresh = await getJob(jobId);
         writeJob(fresh);
-        qc.setQueryData(jobKeys.of("workbench", jobId), fresh);
+        qc.setQueryData(jobKeys.detail(jobId), fresh);
         setCancelNote(jobDone(fresh) ? "ended" : "failed");
       } catch {
         //: 连它现在是什么都读不回来:只能照实说这次取消没成。

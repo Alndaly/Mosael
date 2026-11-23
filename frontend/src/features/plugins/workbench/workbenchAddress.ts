@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { workflowLibraryKeys } from "@/api/queryKeys";
 import { getWorkflowLibrary, type PluginInstance, type PluginPackage } from "@/api/client";
 
 /**
@@ -24,7 +25,7 @@ export async function workbenchAddress(
   if (own) return own;
   const library = await withPatience(
     queryClient.fetchQuery({
-      queryKey: ["workflow-library", instance.id, workspaceId],
+      queryKey: workflowLibraryKeys.list(instance.id, workspaceId),
       queryFn: () => getWorkflowLibrary(instance.id, workspaceId),
       staleTime: 60_000,
       retry: false,

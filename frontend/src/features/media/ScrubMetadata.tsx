@@ -4,7 +4,6 @@ import { Eraser, FileText, Loader2, ShieldAlert, ShieldCheck } from "lucide-reac
 import { toast } from "sonner";
 
 import {
-  getJob,
   getScrubReport,
   listJobs,
   SCRUB_JOB_KIND,
@@ -18,6 +17,7 @@ import {
 //: 这一条**从它自己的模块**读,不走 `@/api/client` 那个桶:有几个画板用例把整个桶换成一张局部替身,
 //: 读一个它没列出的导出会在**取值那一刻**就抛(vitest 的替身如此),连 `typeof x === "function"` 都来不及判。
 //: 而这一块是素材详情里的一个附加动作,不该让那些用例整棵树挂掉。
+import { useJob } from "@/lib/useJob";
 import { scrubOutcomeOf } from "@/api/domains/assets";
 import { errorText } from "@/api/errorMessage";
 import { scrubKeys, jobKeys } from "@/api/queryKeys";
@@ -109,11 +109,7 @@ export function useScrubRun(asset: Asset | null): ScrubRun {
   const failed = mine.find((row) => row.status === "failed") ?? null;
   //: 结果只在**任务详情**里给(`/api/jobs` 那一列不带 `result`),所以按 id 现取那一条。
   const jobId = done?.id ?? started;
-  const detail = useQuery({
-    queryKey: ["job", jobId],
-    queryFn: () => getJob(jobId as string),
-    enabled: Boolean(jobId),
-  });
+  const detail = useJob(jobId, { interval: false });
   /** 结果那一份。不是这个形状(别的任务、老数据、没结果的替身)时是 `null`,不猜。 */
   const outcome = React.useMemo(() => scrubOutcomeOf(detail.data?.result), [detail.data]);
   const cleanId = outcome?.asset_id ?? "";

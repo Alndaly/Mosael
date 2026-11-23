@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { refreshPluginInstance } from "@/api/client";
 import type { PluginPackage } from "@/api/domains/plugins";
-import { boardKeys, generationKeys, providerKeys } from "@/api/queryKeys";
+import { boardKeys, generationJobKeys, generationKeys, providerKeys } from "@/api/queryKeys";
 import { invalidateResources } from "@/api/resourceKeys";
 
 /**
@@ -34,7 +34,7 @@ export const PLUGIN_DEPENDENT_KEYS = [
   // (修订之二)都会在后端当场改写它们 —— 生成会话、生成记录、画板格子、工作流节点、定时任务。只失效选项的话,
   // 界面拿着改名前的那一份:刚升级完的会话还指着完整工作流、刚改了名的画板格子说「用不了」,要等一分钟的 staleTime。
   ["generation-sessions"],
-  ["generation-jobs"],
+  generationJobKeys.all(),
   boardKeys.everywhere(),
   ["workflows"],
   ["scheduled-tasks"],

@@ -39,3 +39,11 @@ export const TERMINAL_JOB_STATUSES: ReadonlySet<string> = new Set(["succeeded", 
 export function jobSettled(status: string | undefined): boolean {
   return status !== undefined && TERMINAL_JOB_STATUSES.has(status);
 }
+
+/**
+ * 「还在跑」:知道状态、而且还没落终态(排队、等执行器、在跑都算)。此前各处各写一份 ——
+ * 有的只认 `running`、有的认 `queued | running`、有的把 `pending` 也算上,同一个任务在两处显示得不一样。
+ */
+export function jobIsActive(status: string | undefined | null): boolean {
+  return Boolean(status) && !TERMINAL_JOB_STATUSES.has(status as string);
+}

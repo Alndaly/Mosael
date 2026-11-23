@@ -1,17 +1,18 @@
 import React from "react";
+import { useJob } from "@/lib/useJob";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Ban, CheckCircle2, CircleAlert, ExternalLink, Loader2, RotateCcw, Square } from "lucide-react";
 import { toast } from "sonner";
 
-import { cancelJob, getJob, listJobEvents, regenerateAssetProxy, type JobSummary } from "@/api/client";
+import { cancelJob, listJobEvents, regenerateAssetProxy, type JobSummary } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { JobEventList } from "@/components/jobs/JobEvents";
 import { JobResult } from "@/components/jobs/JobResult";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useJobKinds } from "@/components/jobs/jobKinds";
-import { runStatusText } from "@/components/jobs/runStatus";
+import { jobIsActive, runStatusText } from "@/components/jobs/runStatus";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
@@ -20,8 +21,6 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { jobKeys } from "@/api/queryKeys";
-
-const ACTIVE = new Set(["queued", "running"]);
 
 /**
  * 失败了能就地重来的任务种类:怎么重来由那一种自己说(拿载荷里的什么、调哪个接口)。此前失败的任务只有「前往对应页面 / 关闭」,
@@ -54,14 +53,9 @@ export function JobDetailDialog({
   // — and polling every 1.5s — for as long as it stayed open. Track the live row instead.
   //: 列表里那一行不带 `result`(做出了什么),所以不拿它当这个查询的初始数据 —— 那样「做出了什么」要等下一次轮询才出来,
   //: 而已经结束的任务不轮询。没取回来之前,状态那几行先用列表里那一行。
-  const live = useQuery({
-    queryKey: ["job", job?.id],
-    queryFn: () => getJob(job!.id),
-    enabled: !!job,
-    refetchInterval: (query) => (ACTIVE.has(query.state.data?.status ?? "") ? 1500 : false),
-  });
+  const live = useJob(job?.id, { interval: 1500 });
   const current: JobSummary | null = live.data ?? job;
-  const active = current ? ACTIVE.has(current.status) : false;
+  const active = current ? jobIsActive(current.status) : false;
 
   const events = useQuery({
     queryKey: ["job-events", job?.id],
@@ -82,7 +76,7 @@ export function JobDetailDialog({
   const stop = useMutation({
     mutationFn: () => cancelJob(current!.id),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["job", current?.id] });
+      void qc.invalidateQueries({ queryKey: jobKeys.detail(current?.id) });
       void qc.invalidateQueries({ queryKey: ["job-events", current?.id] });
       void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },

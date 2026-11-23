@@ -1,4 +1,5 @@
 import React from "react";
+import { modelLibraryKeys } from "@/api/queryKeys";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -192,7 +193,7 @@ export function ModelLibraryDialog({
   const library = useModelLibrary(instance.id, { enabled: open, staleTime: 30_000 });
   const queryKey = library.queryKey;
   //: 下完一个、找完一批、存回一张之后作废的是这个连接的模型库(不管挑法是哪一种)
-  const libraryPrefix = React.useMemo(() => ["model-library", instance.id], [instance.id]);
+  const libraryPrefix = React.useMemo(() => modelLibraryKeys.connection(instance.id), [instance.id]);
   const [view, setView] = React.useState(ALL_FOLDERS);
   const [families, setFamilies] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState("");

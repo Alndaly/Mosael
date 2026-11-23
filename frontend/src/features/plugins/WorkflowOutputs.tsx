@@ -11,6 +11,7 @@ import {
   type ModelNsfw,
   type WorkflowRecentOutput,
 } from "@/api/client";
+import { workflowLibraryKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
@@ -31,8 +32,7 @@ import { cn } from "@/lib/utils";
 /** 先摆几张;多的点「显示全部」(最多后端交的那么多,更早的在素材库里)。 */
 export const OUTPUTS_SHOWN = 8;
 
-export const workflowOutputsKey = (instanceId: string, workspaceId: string, path: string) =>
-  ["workflow-outputs", instanceId, workspaceId, path] as const;
+export const workflowOutputsKey = workflowLibraryKeys.outputs;
 
 /**
  * 工作流库详情里「最近的产出」:这张工作流在这个工作区里的产出,**一组**,不是一张(维护者:「工作流产出这里应该是个图片集
@@ -74,7 +74,7 @@ export function WorkflowOutputs({ instanceId, workspaceId, path, label }: {
       qc.setQueryData(key, (previous: typeof query.data) =>
         previous && { ...previous, outputs: previous.outputs.map((one) => (one.asset_id === asset ? { ...one, nsfw: verdict } : one)) });
       //: 卡片上那一张(最近的那份)也带着判断:让工作流库重新问
-      void qc.invalidateQueries({ queryKey: ["workflow-library", instanceId] });
+      void qc.invalidateQueries({ queryKey: workflowLibraryKeys.connection(instanceId) });
     },
     onError: (error) => toast.error(errorText(error)),
   });

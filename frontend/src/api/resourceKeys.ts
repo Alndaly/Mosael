@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { components } from "@/api/generated/schema";
+import type { QueryFamily } from "@/api/queryKeys";
 
 /**
  * 后端说「改了哪种数据」,这里说「那是哪些缓存」(ADR 0053)。
@@ -17,7 +18,7 @@ import type { components } from "@/api/generated/schema";
  */
 export type Resource = components["schemas"]["ConfirmationOut"]["writes"][number];
 
-export const RESOURCE_QUERY_KEYS: Record<Resource, readonly string[]> = {
+export const RESOURCE_QUERY_KEYS: Record<Resource, readonly QueryFamily[]> = {
   //: 素材库、单份素材(`["assets", "detail", id]`)、文档阅读器挂在 `asset` 下的那几份、波形;
   //: 还有插件那边**按产出看的两份**:工作流库详情(大卡片上「最近的那一份产出」)和详情里「最近的产出」那一组。
   //: 它们说的是"这张工作流产出过什么",而产出是别处(创作页、工作台、画板、工作流节点、智能体)跑出来的 ——

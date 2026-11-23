@@ -1,3 +1,4 @@
+import { useJob } from "@/lib/useJob";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
@@ -5,8 +6,7 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, BookPlus, Captions, ListChecks, Loader2, MessageSquareText, Mic, Scissors, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
-import { getAssetTranscript, getJob, listAsrModels, listJobs, transcribeAsset, type Clip, type Sequence } from "@/api/client";
-import { jobSettled } from "@/components/jobs/runStatus";
+import { getAssetTranscript, listAsrModels, listJobs, transcribeAsset, type Clip, type Sequence } from "@/api/client";
 import { transcriptKeys, jobKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
@@ -540,16 +540,7 @@ export function TranscriptPanel({
     wasRunning.current = now;
   }, [runningJob, assetIds, qc]);
 
-  const asrJob = useQuery({
-    queryKey: ["job", asrJobId],
-    enabled: Boolean(asrJobId),
-    queryFn: () => getJob(asrJobId!),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return jobSettled(status) ? false : 1500;
-    },
-    refetchOnWindowFocus: true,
-  });
+  const asrJob = useJob(asrJobId, { interval: 1500, refetchOnWindowFocus: true });
   React.useEffect(() => {
     if (asrJob.data?.status === "succeeded") {
       setAsrJobId(null);

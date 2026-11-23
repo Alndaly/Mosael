@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, SquareArrowOutUpRight } from "lucide-react";
 import { toast } from "sonner";
 
+import { workflowLibraryKeys } from "@/api/queryKeys";
 import { getWorkflowLibrary, type PluginInstance, type PluginPackage } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
@@ -44,7 +45,7 @@ export function OpenConnectionWorkbench({
   //: 认领了工作流库的连接才有编辑界面(ADR 0035),才有「进它的界面」这回事
   const hasEditor = hasWorkflowEditor(pkg);
   const library = useQuery({
-    queryKey: ["workflow-library", instance.id, workspaceId],
+    queryKey: workflowLibraryKeys.list(instance.id, workspaceId),
     queryFn: () => getWorkflowLibrary(instance.id, workspaceId),
     //: 只有桌面壳要为这一颗按钮问工作流库(地址取插件报的 `editor.url`)。网页版用连接自己写的地址 ——
     //: 目录大的那台一次要传 1MB 多,不该为了一个按钮去拉。

@@ -68,7 +68,9 @@ describe("素材缓存的键", () => {
 // **族名从 queryKeys.ts 里读**,不再手抄一份清单:此前这里只列了 assets / workspaces / voices 三族,而工厂里有二十多族,
 // 画板、笔记详情就还有人内联手写。收进工厂的那一刻,它就自动受这条约束。
 const INLINE = (family: string) => new RegExp(`(?:queryKey:\\s*|(?:set|get)QueryData(?:<[^>]*>)?\\()\\["${family}"`);
-const FACTORY_FAMILIES = [...new Set([...readFileSync(join(SRC, "api", "queryKeys.ts"), "utf8").matchAll(/\[\s*"([a-z][\w-]*)"/g)].map((one) => one[1]))].sort();
+//: 只读工厂那一段 —— 文件末尾的 QUERY_FAMILIES 名单列的是**全部**键族(含还没收进工厂的),不是工厂。
+const FACTORY_SOURCE = readFileSync(join(SRC, "api", "queryKeys.ts"), "utf8").split("export const QUERY_FAMILIES")[0];
+const FACTORY_FAMILIES = [...new Set([...FACTORY_SOURCE.matchAll(/\[\s*"([a-z][\w-]*)"/g)].map((one) => one[1]))].sort();
 
 describe("缓存键只在 queryKeys.ts 里拼", () => {
   it("扫得到工厂里的族 —— 别变成空转", () => {
@@ -105,8 +107,6 @@ describe("缓存键只在 queryKeys.ts 里拼", () => {
 const SAME_FETCHER_ALLOWED: Record<string, string> = {
   //: 一个按 `options_from` 取候选的通用入口:不同的族取的是不同来源的候选(工作流节点、资产的嗓子、画图参数),不是同一份数据。
   fetchWorkflowFieldOptions: "参数化的通用取数,各族取的不是同一份数据",
-  //: 单个任务各自每秒轮询到结束,不靠失效刷新;工作台那份挂在 jobs 下是为了新任务事件时一起重取。
-  getJob: "各自轮询到结束,不靠失效",
   //: 按条件切任务的**通用入口**:任务中心按 top_level、素材详情按 kind=shot_breakdown 取,各族取的本就不是同一份数据
   //: (和 fetchWorkflowFieldOptions 同一类)。表在素材详情右栏(ADR 0061 §5),在跑时自己轮询。
   listJobs: "参数化的通用取数,各族取的不是同一份数据",

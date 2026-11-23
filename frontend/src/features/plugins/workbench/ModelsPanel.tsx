@@ -2,6 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Info, Loader2, MousePointerClick, RefreshCcw } from "lucide-react";
 
+import { modelLibraryKeys } from "@/api/queryKeys";
 import { getNodeFolders, modelPreviewUrl, type ModelFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
@@ -252,7 +253,7 @@ function SlotPicker({
     mutationFn: () => workbenchCall({ op: "refreshCombos" }),
     onSuccess: (result) => {
       setNote(result.ok ? { tone: "info", text: t("workbenchCombosRefreshed") } : { tone: "error", text: t("workbenchCallFailed").replace("{why}", result.error) });
-      void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });
+      void qc.invalidateQueries({ queryKey: modelLibraryKeys.connection(target.instanceId) });
     },
   });
 
@@ -304,7 +305,7 @@ function SlotPicker({
         <ModelDownload target={target} folder={slot.folder} wanted={slot.value}
                        doneLabel={t(canRefresh ? "workbenchDownloadDone" : "workbenchDownloadDoneManual")}
                        onDone={() => {
-                         void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });
+                         void qc.invalidateQueries({ queryKey: modelLibraryKeys.connection(target.instanceId) });
                          if (canRefresh) refresh.mutate();
                        }} />
       )}

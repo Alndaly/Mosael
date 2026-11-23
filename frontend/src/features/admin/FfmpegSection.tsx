@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Download, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 
+import { useJob } from "@/lib/useJob";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
@@ -161,13 +162,7 @@ function InstallRow({ workspaceId, install, onDone }: {
     onError: (error) => toast.error(errorText(error)),
   });
   //: 装的时候盯那颗任务:成了就重问这一格(路径和后端探出来的结论都会变),没成就把原因摆出来。
-  const job = useQuery({
-    queryKey: ["job", jobId] as const,
-    //: 和这一页别的请求同一个口(`api`),不另引一个客户端的封装 —— 这一页只关心状态和进度。
-    queryFn: () => api<{ status: string; progress: number; error: string | null }>(`/api/jobs/${jobId}`),
-    enabled: Boolean(jobId),
-    refetchInterval: (query) => (query.state.data && ["succeeded", "failed", "cancelled"].includes(query.state.data.status) ? false : 1000),
-  });
+  const job = useJob(jobId);
   const status = job.data?.status;
   React.useEffect(() => {
     if (status === "succeeded") {

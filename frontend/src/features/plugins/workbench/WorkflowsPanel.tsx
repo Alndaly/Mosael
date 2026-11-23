@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, PackagePlus, Plus, RefreshCw, SearchX, Workflow } from "lucide-react";
 import { toast } from "sonner";
 
+import { workflowLibraryKeys } from "@/api/queryKeys";
 import { getBundledWorkflows, getWorkflowLibrary, installBundledWorkflows, type BundledWorkflow, type WorkflowFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
@@ -35,7 +36,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
   const [opening, setOpening] = React.useState<string | null>(null);
   const [examplesOpen, setExamplesOpen] = React.useState(false);
   const library = useQuery({
-    queryKey: ["workflow-library", target.instanceId, target.workspaceId],
+    queryKey: workflowLibraryKeys.list(target.instanceId, target.workspaceId),
     queryFn: () => getWorkflowLibrary(target.instanceId, target.workspaceId),
     retry: false,
   });
@@ -52,7 +53,7 @@ export function WorkflowsPanel({ target }: { target: WorkbenchTarget }) {
     try {
       const result = await installBundledWorkflows(target.instanceId, [flow.file], bundled.data?.folder, overwrite);
       await bundled.refetch();
-      await qc.invalidateQueries({ queryKey: ["workflow-library", target.instanceId, target.workspaceId] });
+      await qc.invalidateQueries({ queryKey: workflowLibraryKeys.list(target.instanceId, target.workspaceId) });
       const installed = result.installed.length;
       const updated = result.updated.length;
       toast.success(updated

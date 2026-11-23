@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
+import { modelLibraryKeys } from "@/api/queryKeys";
 import { getModelLibrary } from "@/api/client";
 import { previewPick, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 
@@ -10,7 +11,7 @@ import { previewPick, useModelPreviewSettings } from "@/components/generation/mo
  * 都要按新的那张重说一遍。键的前两段(`["model-library", 连接]`)不变 —— 下完一个模型、标了 NSFW 之后按前缀作废。
  */
 export function modelLibraryKey(instanceId: string, pick: "safest" | "cover") {
-  return ["model-library", instanceId, pick] as const;
+  return modelLibraryKeys.list(instanceId, pick);
 }
 
 export function useModelLibrary(instanceId: string, options: { enabled?: boolean; staleTime?: number; retry?: boolean } = {}) {

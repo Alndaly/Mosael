@@ -1,4 +1,5 @@
 import React from "react";
+import { modelLibraryKeys, workflowLibraryKeys } from "@/api/queryKeys";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Boxes, CheckCircle2, CircleAlert, Crosshair, ExternalLink, RefreshCcw } from "lucide-react";
@@ -95,7 +96,7 @@ export function MissingPanel({
   }, [canExport, followsEdits, active, revision, run]);
   //: 这台 ComfyUI 有没有 ComfyUI-Manager(没有就认不出节点包、也装不了):工作流库报的,和工作流库同一份缓存
   const library = useQuery({
-    queryKey: ["workflow-library", target.instanceId, target.workspaceId],
+    queryKey: workflowLibraryKeys.list(target.instanceId, target.workspaceId),
     queryFn: () => getWorkflowLibrary(target.instanceId, target.workspaceId),
     staleTime: 60_000,
     retry: false,
@@ -417,7 +418,7 @@ function ModelRow({ target, folder, name, url, hash, hashType, spots, canLocate,
       <ModelDownload target={target} folder={folder} wanted={name} url={url} hash={hash} hashType={hashType}
                      doneLabel={t(canRefresh ? "workbenchDownloadDone" : "workbenchDownloadDoneManual")}
                      onDone={() => {
-                       void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });
+                       void qc.invalidateQueries({ queryKey: modelLibraryKeys.connection(target.instanceId) });
                        void (canRefresh ? workbenchCall({ op: "refreshCombos" }) : Promise.resolve()).finally(onDone);
                      }} />
     </li>

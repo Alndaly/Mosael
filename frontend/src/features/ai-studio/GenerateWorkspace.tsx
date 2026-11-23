@@ -1,4 +1,4 @@
-import { assetKeys, jobKeys } from "@/api/queryKeys";
+import { assetKeys, generationJobKeys, jobKeys } from "@/api/queryKeys";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
@@ -448,7 +448,7 @@ export function GenerateWorkspace({
   const recordLimit = paging && paging.session === activeSession?.id ? paging.limit : RECORD_PAGE;
   const showEarlier = () => activeSession && setPaging({ session: activeSession.id, limit: recordLimit + RECORD_PAGE });
   const sessionJobs = useQuery({
-    queryKey: ["generation-jobs", workspace.id, activeSession?.id, recordLimit],
+    queryKey: generationJobKeys.list(workspace.id, activeSession?.id, recordLimit),
     enabled: Boolean(activeSession),
     //: 同一条会话多要一页时照旧摆着这一页,不闪回占位;换了会话不拿上一条的顶着
     placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === activeSession?.id ? previous : undefined),
@@ -876,7 +876,7 @@ export function GenerateWorkspace({
       setPoseMentionsAsReference(false);
       setPoseAngle(null);
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
+      void qc.invalidateQueries({ queryKey: generationJobKeys.session(workspace.id, targetSessionId) });
     },
   });
   //: 语音、播客(ADR 0055):谁来念、播客的稿子和发音人。音色、语速、发音人接着这条会话最后一条记录用的。
@@ -918,7 +918,7 @@ export function GenerateWorkspace({
         window.localStorage.setItem(sessionKey, targetSessionId);
       }
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId ?? undefined] });
+      void qc.invalidateQueries({ queryKey: generationJobKeys.session(workspace.id, targetSessionId ?? undefined) });
       void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
     },
     onError: (error) => {
@@ -984,7 +984,7 @@ export function GenerateWorkspace({
     mutationFn: (jobId: string) => cancelJob(jobId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: generationJobKeys.session(workspace.id, activeSession?.id) });
     },
     onError: (error) => toast.error(t("genStopFailed"), { description: errorText(error) }),
   });
@@ -995,7 +995,7 @@ export function GenerateWorkspace({
     mutationFn: (generationId: string) => retrieveGeneration(generationId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: generationJobKeys.session(workspace.id, activeSession?.id) });
     },
     onError: (error) => toast.error(t("genRetrieveFailed"), { description: errorText(error) }),
   });
@@ -1007,7 +1007,7 @@ export function GenerateWorkspace({
     onSuccess: () => {
       stick.scrollToBottom();
       void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id) });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: generationJobKeys.session(workspace.id, activeSession?.id) });
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     },
     onError: (error) => toast.error(t("genRepeatFailed"), { description: errorText(error) }),
@@ -1021,7 +1021,7 @@ export function GenerateWorkspace({
   React.useEffect(() => {
     if (settled) {
       void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: generationJobKeys.session(workspace.id, activeSession?.id) });
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     }
   }, [settled, qc, workspace.id, activeSession?.id]);
@@ -1408,7 +1408,7 @@ export function GenerateWorkspace({
             }
             // 会话没了,它那些生成记录也不该继续挂在任务列表里。SessionList 只管会话这一层,
             // 连带要刷的东西由调用方说 —— 它不认识生成任务。
-            void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id] });
+            void qc.invalidateQueries({ queryKey: generationJobKeys.workspace(workspace.id) });
             void qc.invalidateQueries({ queryKey: jobKeys.of(workspace.id, "creation") });
           }}
         />

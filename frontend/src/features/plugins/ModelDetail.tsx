@@ -31,6 +31,7 @@ import {
   type ModelNsfw,
   type ModelPreviewTools,
 } from "@/api/client";
+import { modelLibraryKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
@@ -117,7 +118,7 @@ export function useModelActionsHost({
   const qc = useQueryClient();
   const [settings] = useModelPreviewSettings();
   //: 找完一批、存回一张之后作废的是这个连接的模型库(不管挑法是哪一种)
-  const libraryPrefix = React.useMemo(() => ["model-library", instanceId], [instanceId]);
+  const libraryPrefix = React.useMemo(() => modelLibraryKeys.connection(instanceId), [instanceId]);
   //: 「在 Civitai 上找」「补图」:后台任务,这次打开之后发起的。做完了先把对上的那几条当场改进记着的模型库(原链接、预览图
   //: 从哪来、NSFW —— 不等重列),再在后台重新列一遍
   const lookups = useLookupJobs(
@@ -731,7 +732,7 @@ export function ModelDetail({
   const t = useI18n();
   const { locale } = usePreferences();
   const meta = useQuery({
-    queryKey: ["model-library-detail", instanceId, model.folder, model.name],
+    queryKey: modelLibraryKeys.detail(instanceId, model.folder, model.name),
     queryFn: () => getModelDetail(instanceId, model.folder, model.name),
   });
   const actions = React.useContext(ModelActionsContext);

@@ -62,6 +62,7 @@ import {
   type WorkflowNodePack,
   type WorkflowTrashed,
 } from "@/api/client";
+import { workflowLibraryKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { invalidateResources } from "@/api/resourceKeys";
 import type { MessageKey } from "@/app/messages";
@@ -357,7 +358,7 @@ export function WorkflowLibraryDialog({
 }) {
   const t = useI18n();
   //: 这一份列表的键:重问和「先就地改」都用它(键里有连接和工作区)。
-  const libraryKey = React.useMemo(() => ["workflow-library", instance.id, workspaceId] as const, [instance.id, workspaceId]);
+  const libraryKey = React.useMemo(() => workflowLibraryKeys.list(instance.id, workspaceId), [instance.id, workspaceId]);
   const library = useQuery({
     queryKey: libraryKey,
     queryFn: () => getWorkflowLibrary(instance.id, workspaceId),

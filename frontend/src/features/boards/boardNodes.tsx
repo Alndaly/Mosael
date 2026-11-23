@@ -1,11 +1,12 @@
 import React from "react";
+import { useJob } from "@/lib/useJob";
 import type { NoteReference } from "@/api/domains/notes";
 import { locateNotePassage, noteHref } from "@/lib/deepLink";
 import { Handle, NodeResizer, Position, useViewportStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
-import { entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
+import { entityKeys, getEntity, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
 import { isNotFound } from "@/api/transport";
 import { EntityThumb } from "@/features/entities/EntityMention";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
@@ -338,12 +339,7 @@ function StopButton({ item, onStop }: { item: BoardItem; onStop: (id: string) =>
 
 /** 任务自己报的进度(0 到 1 之间)。任务没报就是 0 —— 不去猜一个数。 */
 function useJobProgress(jobId: string | undefined, running: boolean): number {
-  const job = useQuery({
-    queryKey: ["job", jobId],
-    queryFn: () => getJob(jobId as string),
-    enabled: running && Boolean(jobId),
-    refetchInterval: running ? 2000 : false,
-  });
+  const job = useJob(jobId, { enabled: running, interval: 2000 });
   const progress = running ? (job.data?.progress ?? 0) : 0;
   return progress > 0 && progress < 1 ? progress : 0;
 }

@@ -80,11 +80,12 @@ vi.mock("@/api/client", () => ({
       installs += 1;
       return Promise.resolve({ id: task.id });
     }
-    if (url === "/api/jobs/j1") {
-      if (!task) return Promise.reject(new Error("no task"));
-      return Promise.resolve({ ...task, message_key: "jobMsg_mediaToolDownloading" });
-    }
     return Promise.reject(new Error(`unexpected ${url}`));
+  },
+  //: 盯安装任务走 lib/useJob(和别处盯任务同一个写法),它经 getJob 取详情。
+  getJob: (jobId: string) => {
+    if (jobId !== task.id) return Promise.reject(new Error(`unexpected job ${jobId}`));
+    return Promise.resolve({ ...task, message_key: "jobMsg_mediaToolDownloading" });
   },
 }));
 

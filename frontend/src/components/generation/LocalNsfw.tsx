@@ -2,6 +2,7 @@ import React from "react";
 import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Repeat, ScanEye } from "lucide-react";
 
+import { modelLibraryKeys } from "@/api/queryKeys";
 import { getLocalNsfw, installLocalNsfw, type ModelLocalNsfw } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useIsDeploymentAdmin } from "@/app/auth";
@@ -34,7 +35,7 @@ export function useLocalNsfw() {
     refetchInterval: (query) => (busy(query.state.data) ? POLL_MS : false),
   });
   //: 列完一次模型库(在列的从有到无),问一次 —— 那一次列可能刚排进去一批
-  const listing = useIsFetching({ queryKey: ["model-library"] });
+  const listing = useIsFetching({ queryKey: modelLibraryKeys.all() });
   const wasListing = React.useRef(listing);
   React.useEffect(() => {
     if (wasListing.current > 0 && listing === 0) void qc.invalidateQueries({ queryKey: LOCAL_NSFW_KEY });
@@ -50,7 +51,7 @@ export function useLocalNsfw() {
     const drained = before.pending > 0 && status.data.pending === 0;
     if (installed || drained) {
       handled = status.dataUpdatedAt;
-      void qc.invalidateQueries({ queryKey: ["model-library"] });
+      void qc.invalidateQueries({ queryKey: modelLibraryKeys.all() });
     }
   }, [status.data, status.dataUpdatedAt, qc]);
   return status;

@@ -1,7 +1,7 @@
 import React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { getJob } from "@/api/client";
+import { useJob } from "@/lib/useJob";
 import { jobSettled as isSettled } from "@/components/jobs/runStatus";
 import { jobKeys } from "@/api/queryKeys";
 
@@ -15,12 +15,7 @@ import { jobKeys } from "@/api/queryKeys";
 export function useWatchedJob() {
   const qc = useQueryClient();
   const [jobId, setJobId] = React.useState<string | null>(null);
-  const job = useQuery({
-    queryKey: ["job", jobId],
-    enabled: Boolean(jobId),
-    queryFn: () => getJob(jobId!),
-    refetchInterval: (query) => (isSettled(query.state.data?.status) ? false : 1000),
-  });
+  const job = useJob(jobId);
   React.useEffect(() => {
     if (jobId && job.data?.id === jobId && isSettled(job.data.status)) setJobId(null);
   }, [jobId, job.data]);

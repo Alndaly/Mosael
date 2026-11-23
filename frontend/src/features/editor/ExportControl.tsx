@@ -1,11 +1,10 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileOutput, Info } from "lucide-react";
 
+import { useJob } from "@/lib/useJob";
 import { exportSequence, type ExportParams, type Sequence } from "@/api/domains/editor";
 import type { WriteBlock } from "@/components/layout/useWriteBlocked";
-import { getJob } from "@/api/domains/jobs";
-import { jobSettled } from "@/components/jobs/runStatus";
 import { useI18n } from "@/app/preferences";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Alert } from "@/components/ui/alert";
@@ -93,16 +92,7 @@ export function ExportControl({ sequence, writeBlocked = null }: { sequence: Seq
       void qc.invalidateQueries({ queryKey: jobKeys.all() });
     },
   });
-  const job = useQuery({
-    queryKey: ["job", jobId],
-    enabled: Boolean(jobId),
-    queryFn: () => getJob(jobId!),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return jobSettled(status) ? false : 700;
-    },
-    refetchOnWindowFocus: true,
-  });
+  const job = useJob(jobId, { interval: 700, refetchOnWindowFocus: true });
 
   const status = jobId ? (job.data?.status ?? "queued") : null;
 

@@ -6,16 +6,16 @@
  * `PanelLoading`)。为此每个页签都是一个竖排的 flex(`ComfyWorkbench` 里那一层,自己滚动),面板的根也是竖排的
  * flex、占满剩下的高(`PANEL_ROOT`),空态和在读的那一块再占满剩下的、居中。
  */
+import { jobSettled } from "@/components/jobs/runStatus";
+import { useJob } from "@/lib/useJob";
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { CircleAlert, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 
-import { getJob, type Job } from "@/api/client";
+import { type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { jobKeys } from "@/api/queryKeys";
 
 /** 面板的根:竖排、占满页签剩下的高(空态、在读的才能摆在正中)。 */
 export const PANEL_ROOT = "flex min-w-0 flex-1 flex-col";
@@ -118,19 +118,12 @@ export function InlineConfirm({
   );
 }
 
-const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
 
-export const jobDone = (job: Pick<Job, "status"> | undefined | null) => Boolean(job && TERMINAL.has(job.status));
+export const jobDone = (job: Pick<Job, "status"> | undefined | null) => jobSettled(job?.status);
 
 /** 盯着一个后台任务(装节点包、下模型、跑一次):没完就每秒问一次,完了不再问。 */
 export function useJobWatch(jobId: string | null, initial?: Job) {
-  return useQuery({
-    queryKey: jobKeys.of("workbench", jobId),
-    queryFn: () => getJob(jobId!),
-    enabled: Boolean(jobId),
-    initialData: initial,
-    refetchInterval: (query) => (jobDone(query.state.data) ? false : 1000),
-  });
+  return useJob(jobId, { initialData: initial });
 }
 
 /** 任务完成的那一下(从没完到完)只做一次。 */
