@@ -54,6 +54,8 @@ from comfy_http import Comfy
 from lines import ComfyError, say
 from workflow_library import _choices, live_graph
 
+#: 交给桥的指令名、字段与下面三条上限(MAX_OPS / MAX_VALUE / MAX_COORDINATE)和主进程、工作台桥一致,
+#: 由 contracts/canvas-edit-ops.json 钉住。
 #: 一批最多几条(再多就该拆成几批,或者从模板开始)。
 MAX_OPS = 200
 #: 说不通的最多列几条(多了智能体也看不过来;改了前面的,后面的往往跟着好了)。

@@ -476,6 +476,20 @@ float32。「斑驳」那份小样就是照着这一格挑的:羽化后的值紧
 (白点的三档扩张、`十字 · 扩张 1`、`十字 · 收缩 -1`、`白点 · 扩张 1 再羽化 2.5`)。两侧的测试都断言
 「分得出圆盘与正方形的用例不少于 3 条」—— 一条永远绿的语料比没有更糟。
 
+### `canvas-edit-ops.json` —— 画布编辑指令
+
+「智能体改 ComfyUI 画布的那一批指令有哪几种、每种带哪些字段、一批 / 一格值 / 坐标的上限是多少。」(ADR 0042 第二步)
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 插件模拟并规整出交给桥的那一批 | `plugins/bundled/comfyui/tools/canvas_edit.py`(`_record` 的第一个参数) | `backend/tests/test_canvas_edit_contract.py` |
+| 主进程逐项查形状 | `electron/ipc-contract.cjs`(`EDIT_OPS` / `parseEditOps`) | `electron/canvasEditOps.contract.test.ts` |
+| 工作台桥在页面里照做 | `electron/browser/comfy/comfyWorkbench.ts`(`op.op === …` 分支) | 同上 |
+
+三处语言不同、跑的地方不同(插件进程、主进程、ComfyUI 页面),只能各写一份。此前任一处加一种指令或改一个字段名,
+另外两处不会报错:插件拼的字段被主进程当「多带的键」拒掉,或者桥那边少一个分支、那条改动默默不做 —— 都要等真开一个工作台
+让智能体改图才露出来。语料给每种指令一条示例(主进程原样放行)、一组该拒的形状,和三条上限;插件那侧静态比对每一处 `_record`。
+
 ## 怎么保证"该进契约的都进了"
 
 `backend/tests/test_cross_runtime_claims_name_a_contract.py`:凡是源码里写下
@@ -504,6 +518,7 @@ float32。「斑驳」那份小样就是照着这一格挑的:羽化后的值紧
 3. 再改两侧实现,直到一起绿
 
 反过来做——先改实现、再补语料——就把语料降级成了实现的复读机,它将不再能防住任何东西。
+
 
 ## 什么该进契约,什么不该
 

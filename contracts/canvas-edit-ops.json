@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "about": "智能体改 ComfyUI 画布的那一批指令(ADR 0042 第二步)经过三处:插件 canvas_edit 模拟并规整出它、主进程 ipc-contract 逐项查形状、工作台桥(comfyWorkbench.ts)在页面里照做。三处必须认同一套指令、同一套字段、同几条上限。layer 是子图 id,null 是根图;每条都带。",
+  "limits": {
+    "ops_per_batch": 200,
+    "value_chars": 20000,
+    "coordinate": 1000000
+  },
+  "ops": {
+    "add_node": {
+      "fields": ["op", "layer", "id", "type", "widgets", "title", "near"],
+      "example": { "op": "add_node", "layer": null, "id": "$l", "type": "LoraLoader", "widgets": { "strength_model": 0.6 }, "title": "LoRA", "near": "4" }
+    },
+    "remove_node": {
+      "fields": ["op", "layer", "node"],
+      "example": { "op": "remove_node", "layer": null, "node": "7" }
+    },
+    "connect": {
+      "fields": ["op", "layer", "from", "to"],
+      "example": { "op": "connect", "layer": "8f1c0e2a-9b7d-4c51", "from": { "node": "@in", "name": "seed" }, "to": { "node": "5", "name": "seed" } }
+    },
+    "disconnect": {
+      "fields": ["op", "layer", "to"],
+      "example": { "op": "disconnect", "layer": "8f1c0e2a-9b7d-4c51", "to": { "node": "@out", "name": "IMAGE" } }
+    },
+    "set_widget": {
+      "fields": ["op", "layer", "node", "widget", "value"],
+      "example": { "op": "set_widget", "layer": null, "node": "3", "widget": "steps", "value": 30 }
+    },
+    "set_title": {
+      "fields": ["op", "layer", "node", "title"],
+      "example": { "op": "set_title", "layer": null, "node": "3", "title": "采样" }
+    },
+    "set_position": {
+      "fields": ["op", "layer", "node", "x", "y"],
+      "example": { "op": "set_position", "layer": null, "node": "3", "x": 240.5, "y": -80 }
+    },
+    "add_group": {
+      "fields": ["op", "layer", "title", "x", "y", "width", "height", "color"],
+      "example": { "op": "add_group", "layer": null, "title": "输出", "x": 900, "y": 0, "width": 300, "height": 200, "color": "#3f789e" }
+    },
+    "set_group": {
+      "fields": ["op", "layer", "group", "title", "x", "y", "width", "height", "color"],
+      "example": { "op": "set_group", "layer": null, "group": "g1", "title": "采样", "x": 200, "y": -100, "width": 600, "height": 400, "color": "#2457AA" }
+    },
+    "remove_group": {
+      "fields": ["op", "layer", "group"],
+      "example": { "op": "remove_group", "layer": null, "group": "g2" }
+    },
+    "mode": {
+      "fields": ["op", "layer", "node", "mode"],
+      "example": { "op": "mode", "layer": null, "node": "8", "mode": 4 }
+    },
+    "add_io": {
+      "fields": ["op", "layer", "side", "name", "type"],
+      "example": { "op": "add_io", "layer": "8f1c0e2a-9b7d-4c51", "side": "output", "name": "LATENT", "type": "LATENT" }
+    },
+    "remove_io": {
+      "fields": ["op", "layer", "side", "name"],
+      "example": { "op": "remove_io", "layer": "8f1c0e2a-9b7d-4c51", "side": "input", "name": "negative" }
+    },
+    "promote": {
+      "fields": ["op", "layer", "node", "widget", "name"],
+      "example": { "op": "promote", "layer": "8f1c0e2a-9b7d-4c51", "node": "5", "widget": "cfg", "name": "cfg" }
+    },
+    "unpromote": {
+      "fields": ["op", "layer", "node", "widget"],
+      "example": { "op": "unpromote", "layer": "8f1c0e2a-9b7d-4c51", "node": "5", "widget": "steps" }
+    },
+    "to_subgraph": {
+      "fields": ["op", "layer", "nodes", "name"],
+      "example": { "op": "to_subgraph", "layer": null, "nodes": ["3", "8"], "name": "采样" }
+    },
+    "unpack": {
+      "fields": ["op", "layer", "node"],
+      "example": { "op": "unpack", "layer": null, "node": "12" }
+    }
+  },
+  "rejected": [
+    { "why": "不认识的指令", "op": { "op": "eval", "layer": null } },
+    { "why": "多带的字段", "op": { "op": "remove_node", "layer": null, "node": "7", "script": "alert(1)" } },
+    { "why": "节点既不是编号也不是临时名字", "op": { "op": "remove_node", "layer": null, "node": "3; alert(1)" } },
+    { "why": "控件的值只收标量", "op": { "op": "set_widget", "layer": null, "node": "3", "widget": "steps", "value": { "evil": true } } },
+    { "why": "值超过上限", "op": { "op": "set_widget", "layer": null, "node": "3", "widget": "text", "value": "@value_chars+1" } },
+    { "why": "坐标超过上限", "op": { "op": "set_position", "layer": null, "node": "3", "x": 1000001, "y": 0 } },
+    { "why": "layer 不是子图 id", "op": { "op": "remove_node", "layer": "x\"); alert(1)", "node": "7" } },
+    { "why": "mode 只有 0 / 2 / 4", "op": { "op": "mode", "layer": null, "node": "8", "mode": 3 } },
+    { "why": "分组颜色不是 #RGB / #RRGGBB", "op": { "op": "add_group", "layer": null, "title": "t", "x": 0, "y": 0, "width": 10, "height": 10, "color": "red" } }
+  ]
+}

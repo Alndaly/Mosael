@@ -343,7 +343,8 @@ const CANVAS_GROUP = /^g[1-9]\d*$/;
 const GROUP_COLOR = /^#[0-9A-Fa-f]{3}(?:[0-9A-Fa-f]{3})?$/;
 //: 智能体对话的 id(后端的会话 id 是 32 位十六进制;留宽一点,只挡形状)
 const AGENT_SESSION_ID = /^[A-Za-z0-9_-]{1,64}$/;
-//: 一批改动每一种带哪些字段(插件 canvas_edit 规整过的那一份;字段的形状下面逐项查)
+//: 一批改动每一种带哪些字段(插件 canvas_edit 规整过的那一份;字段的形状下面逐项查)。指令名、字段、上限三处一致,
+//: 由 contracts/canvas-edit-ops.json 钉住(插件、这里、工作台桥各跑一遍)。
 const EDIT_OPS = {
   add_node: ["op", "layer", "id", "type", "widgets", "title", "near"],
   remove_node: ["op", "layer", "node"],
