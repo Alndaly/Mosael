@@ -220,7 +220,7 @@ fix(engines): 同一 ASR 引擎的运行环境安装与删除串行
 - **拒绝抛领域错误,状态码只在 `api/domain_errors.STATUS_BY_ERROR` 翻一次**。路由不再逐个
   `except XxxError: raise HTTPException(...)`;新加一类领域错误,在那张表里登记它的码(或让它带 `status`)。
 - **智能体工具只调用例**(`mcp_server._use_case`),不 import 路由模块。逻辑长在路由里(出参组装、按人筛选)
-  就先把它搬进领域(例如 `domain/entities/projections`、`domain/browser/profile_cards`),再让两边都调它。
+  就先把它搬进领域(例如 `domain/entities/projections`、`domain/browser_profile_cards`),再让两边都调它。
   棘轮:`tests/test_browser_act_has_one_gate.py`。
 
 存量按领域逐个迁移,`tests/test_use_case_boundaries_ratchet.py` 让两类旧写法只减不增。

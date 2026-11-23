@@ -19,7 +19,8 @@ from app.api.schemas import (
 )
 from app.db.models import BrowserSession, User
 from app.domain import browser
-from app.domain.browser import profile_cards, use_cases as profiles
+from app.domain import browser_profile_cards as profile_cards
+from app.domain.browser import use_cases as profiles
 from app.domain.workflows import use_cases as workflow_uc
 
 router = APIRouter(tags=["browser-profiles"])

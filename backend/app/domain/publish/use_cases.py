@@ -13,6 +13,7 @@ from app.core.i18n import LocalizedError
 from app.db.models import Asset, PublishAccount, PublishTask, User
 from app.domain import sharing
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
+from app.domain.publish import list_tasks, task_with_status
 
 
 def list_accounts(db: Session, user: User, workspace_id: str) -> list[PublishAccount]:
@@ -77,8 +78,6 @@ def ensure_can_browse(db: Session, user: User, workspace_id: str) -> None:
 
 def list_tasks_with_status(db: Session, user: User, workspace_id: str) -> list[dict]:
     """这个工作区的发布任务,每条带上它现在的状态(界面的发布列表与智能体的 list_publish_tasks 共用)。"""
-    from app.domain.publish import list_tasks, task_with_status
-
     ensure_can_browse(db, user, workspace_id)
     return [task_with_status(db, task) for task in list_tasks(db, workspace_id)]
 

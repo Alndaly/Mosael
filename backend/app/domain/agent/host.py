@@ -41,6 +41,7 @@ from app.domain.agent.stream import (
 )
 from app.domain.agent import card_expiry, computer_use, origins, titles, turn_scheduler
 from app.domain.agent.places import STUDIO_PLACE, Place
+from app.domain.agent.sessions import writable_session
 from app.domain.agent.textclean import decode_byte_fallback
 from app.domain.providers import (
     models as provider_models,
@@ -540,8 +541,6 @@ def post_from_session(db: Session, user: User, session_id: str, content: str, *,
     闸和人在界面里发消息是同一道:他得能写对方那条对话。来源只走结构化字段(`origin_session_id`),
     给模型看的信封由收信那侧拼提示词时加(见 agent_notice_envelope)。
     """
-    from app.domain.agent.sessions import writable_session
-
     return post_user_message(db, writable_session(db, user, session_id), content, user, origin_session_id=origin_session_id)
 
 

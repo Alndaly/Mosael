@@ -2622,7 +2622,7 @@ def browser_pool_list(workspace_id: str = "") -> dict[str, Any]:
     (null = generic) and whether it's logged in. NO cookies or credentials are exposed. Use this to find
     the right profile, then browser_pool_open(profile_id) to REQUEST the user's approval to use it."""
     from app.api.schemas import BrowserProfileOut
-    from app.domain.browser import profile_cards
+    from app.domain import browser_profile_cards as profile_cards
 
     workspace_id = workspace_id or _default_workspace_id()
     rows = _use_case(profile_cards.list_cards, workspace_id, out=BrowserProfileOut)
@@ -4459,7 +4459,7 @@ def notify_agent_session(session_id: str, message: str) -> dict[str, Any]:
     from app.api.schemas import AgentMessageOut
     from app.domain.agent import host
 
-    result = _use_case(host.post_from_session, session_id, text, origin_session_id=me or None, out=AgentMessageOut)
+    result = _use_case(host.post_from_session, session_id, content=text, origin_session_id=me or None, out=AgentMessageOut)
     queued = bool((result.get("payload") or {}).get("queued")) if isinstance(result, dict) else False
     return {
         "delivered": True,
