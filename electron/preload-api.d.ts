@@ -222,7 +222,7 @@ export interface MosaelBrowserBridge {
     resume?: boolean;
     /** 档案钉的浏览器身份(见 BrowserProfile.identity):有它就不看平台规矩。 */
     identity?: "chrome" | "electron";
-  }): Promise<{ ok: boolean; error?: string }>;
+  }): Promise<{ ok: true } | IpcFailure>;
   /** 清掉一个通用档案里存着的全部登录数据(cookie / 本地存储 / 缓存)。 */
   clearProfile(partition: string): Promise<void>;
   /**
@@ -233,7 +233,7 @@ export interface MosaelBrowserBridge {
   setComfyNavigation(opts: {
     connectionId: string;
     mode: "trackpad" | "mouse";
-  }): Promise<{ ok: boolean; outcome?: "applied" | "unsupported" | "elsewhere" | "notReady"; error?: string }>;
+  }): Promise<{ ok: true; outcome: "applied" | "unsupported" | "elsewhere" | "notReady" } | IpcFailure>;
   /**
    * ComfyUI 工作台(ADR 0038 §3):亮出这个连接的内嵌视图,注入写死的桥、开始轮询;`path` 给了就打开那一张,`fresh` 是新建一张,
    * 都不给就回到画布上开着的那张。工作流库里打开一张、「新建」(桌面版)都走这里。
@@ -245,11 +245,7 @@ export interface MosaelBrowserBridge {
     name?: string;
     path?: string | null;
     fresh?: boolean;
-  }): Promise<{
-    ok: boolean;
-    outcome?: "opened" | "created" | "missing" | "unsupported" | "elsewhere" | "notReady";
-    error?: string;
-  }>;
+  }): Promise<{ ok: true; outcome: "opened" | "created" | "missing" | "unsupported" | "elsewhere" | "notReady" } | IpcFailure>;
   /** 工作台面板要桥做的一件事(逐项校验;会话不在、桥不在都回原因码,不做)。 */
   comfyWorkbench(opts: { connectionId: string; call: ComfyWorkbenchCall }): Promise<ComfyWorkbenchCallResult>;
   /** 桥那边看到的(主进程规整过):选中、脏标记、能力、事件。`state: null` 是会话结束了(视图收起)。 */
@@ -257,7 +253,17 @@ export interface MosaelBrowserBridge {
 }
 
 export type ComfyWorkbenchCall = import("./browser/comfy/comfyWorkbench").WorkbenchCall;
-export type ComfyWorkbenchCallResult = import("./browser/comfy/comfyWorkbench").WorkbenchCallResult | { ok: false; error: "invalid"; message?: string };
+export type ComfyWorkbenchCallResult = import("./browser/comfy/comfyWorkbench").WorkbenchCallResult | IpcFailure;
+
+/**
+ * 回话式 IPC(不抛、把失败写进回话的那几条)失败时只有这一种形状:`error` 是原因码 —— 主进程那侧是 `failed`(做的时候出错)
+ * 或 `invalid`(参数没过契约),桥那侧另有自己的码(`closed`、`inSubgraph`…);`message` 是给人看的那句。
+ */
+export interface IpcFailure {
+  ok: false;
+  error: string;
+  message?: string;
+}
 export type ComfyWorkbenchState = import("./browser/comfy/comfyWorkbench").WorkbenchState;
 export type ComfyWorkbenchEvent = import("./browser/comfy/comfyWorkbench").WorkbenchEvent;
 export type ComfyWorkbenchExport = import("./browser/comfy/comfyWorkbench").WorkbenchExport;

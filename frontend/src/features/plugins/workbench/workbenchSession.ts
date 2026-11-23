@@ -165,9 +165,9 @@ export async function openWorkbench(
   });
   if (!result.ok) {
     if (snapshot.target?.instanceId === target.instanceId) set(EMPTY);
-    return { ok: false, error: result.error ?? "" };
+    return { ok: false, error: result.message ?? result.error };
   }
-  return { ok: true, outcome: result.outcome ?? "opened" };
+  return { ok: true, outcome: result.outcome };
 }
 
 /** 面板要桥做的一件事。没开着工作台、会话已经结束都回原因码。 */

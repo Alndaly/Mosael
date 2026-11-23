@@ -169,7 +169,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
       identity: p.identity === "chrome" || p.identity === "electron" ? p.identity : undefined,
     });
     if (!res?.ok) {
-      toast.error(res?.error ?? t("poolOpenFailed"));
+      toast.error((res && !res.ok && res.message) || t("poolOpenFailed"));
       return false;
     }
     if (!resume) await recordBrowserProfileOpened(p.id, url).catch(() => undefined); // 记不下也不耽误已经打开的页面

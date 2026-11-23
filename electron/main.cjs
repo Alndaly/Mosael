@@ -1553,8 +1553,10 @@ app.whenReady().then(async () => {
   });
   // 通用池档案登录:复用发布账号那套 app **内嵌视图**(不弹外部系统窗,体验与发布登录一致)。
   // 安全:只放行 persist:pool-* 分区(发布账号走 publish:login),只放行 http(s)。
-  //: 这几条把失败(参数不对也算)写进回话 `{ ok: false, … }`,界面 / 智能体据此提示,而不是让调用直接失败。
-  const failedReply = (message) => ({ ok: false, error: message });
+  //: 这几条把失败(参数不对也算)写进回话,界面 / 智能体据此提示,而不是让调用直接失败。回话只有一种形状
+  //: `IpcFailure`(preload-api.d.ts):`error` 是原因码(界面 / 智能体按它分支),`message` 是给人看的那句。
+  const failure = (code) => (message) => ({ ok: false, error: code, message });
+  const failedReply = failure("failed");
   const errorText = (err) => String(err && err.message ? err.message : err);
   handle("browserOpenLogin", async (_e, request) => {
     try {
@@ -1575,7 +1577,7 @@ app.whenReady().then(async () => {
     }
   }, { onInvalid: failedReply });
   //: 编辑指令是智能体写的:不对回 `error: "invalid"` 带原因,让它改了再来。
-  const invalidCall = (message) => ({ ok: false, error: "invalid", message });
+  const invalidCall = failure("invalid");
   handle("comfyuiWorkbenchCall", async (_e, call) => {
     try {
       return await requirePublish().comfyWorkbenchCall(call);
