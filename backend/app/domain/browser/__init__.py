@@ -30,7 +30,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.unit_of_work import immediate_unit_of_work, unit_of_work
 from app.core.i18n import LocalizedError, is_message_key, tr, fragment
-from app.domain import sharing
+from app.domain import leases, sharing
 from app.domain.authority import Actor
 from app.domain.host_files import HostFile
 from app.db.models import (
@@ -65,7 +65,6 @@ STALE_ACTION_SECONDS = 5 * 60
 #:
 #: 这条通道此前**一条都没落**:没有租约、没有 worker 身份、心跳只报在线。今天单执行器下它
 #: 工作正常,问题是没有任何东西能在多执行器或执行器崩溃时保证正确 —— 而隔壁两条通道都有。
-WORKER_LEASE_SECONDS = 60
 
 # 文档用途;worker 是动作合法性的最终裁判。
 KNOWN_ACTIONS = (
@@ -783,14 +782,9 @@ def expire_action_leases(db: Session) -> int:
     中间那一拍里心跳可能刚把租约续上,这条在跑的动作就会被错判失败、执行器被叫停。
     续约(renew_action_leases)用的是同一种写法,两条语句在数据库里互斥。
     """
-    stamp = now()
     return db.execute(
         update(BrowserAction)
-        .where(
-            BrowserAction.status == "running",
-            BrowserAction.lease_expires_at.is_not(None),
-            BrowserAction.lease_expires_at <= stamp,
-        )
+        .where(leases.expired_rows(BrowserAction, now()))
         .values(status="failed", error="browserErr_executorLost")
         .execution_options(synchronize_session="fetch")
     ).rowcount
@@ -804,23 +798,8 @@ def renew_action_leases(db: Session, *, worker: str, claims: list[dict[str, str]
     """
     _note_executor_contact()
     expire_action_leases(db)
-    stamp = now()
-    renewed: list[str] = []
-    for claim in claims:
-        count = db.execute(
-            update(BrowserAction)
-            .where(
-                BrowserAction.id == claim.get("action_id"),
-                BrowserAction.status == "running",
-                BrowserAction.lease_worker == worker,
-                BrowserAction.lease_token == claim.get("lease_token"),
-                BrowserAction.lease_expires_at > stamp,
-            )
-            .values(lease_expires_at=stamp + timedelta(seconds=WORKER_LEASE_SECONDS))
-        ).rowcount
-        if count:
-            renewed.append(str(claim.get("action_id")))
-    return renewed
+    pairs = [(str(claim.get("action_id") or ""), str(claim.get("lease_token") or "")) for claim in claims]
+    return leases.renew(db, BrowserAction, worker=worker, claims=pairs)
 
 
 def abandoned_actions(db: Session, *, worker: str, claims: list[dict[str, str]]) -> list[str]:
@@ -835,8 +814,8 @@ def abandoned_actions(db: Session, *, worker: str, claims: list[dict[str, str]])
         if (
             act is None
             or act.status != "running"
-            or act.lease_worker != worker
-            or act.lease_token != claim.get("lease_token")
+            or act.lease_worker != ((worker or "")[:64] or None)
+            or not leases.holds(act, claim.get("lease_token"))
         ):
             gone.append(str(claim.get("action_id")))
     return gone
@@ -868,15 +847,10 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
         ).first()
         if act is None:
             return None
-        token = uuid.uuid4().hex
-        expires = now() + timedelta(seconds=WORKER_LEASE_SECONDS)
-        changed = db.execute(
-            update(BrowserAction)
-            .where(BrowserAction.id == act.id, BrowserAction.status == "queued")
-            .values(status="running", lease_worker=worker or None, lease_token=token, lease_expires_at=expires)
-        ).rowcount
-        if not changed:
+        token = leases.claim(db, BrowserAction, act.id, worker=worker, from_statuses=("queued",))
+        if token is None:
             continue  # 被别的 worker 抢了,取下一条
+        db.refresh(act, ["lease_expires_at"])
         session = db.get(BrowserSession, act.session_id)
         return {
             "id": act.id,
@@ -886,7 +860,7 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
             "action": act.action,
             "args": dict(act.args or {}),
             "lease_token": token,
-            "lease_expires_at": expires.isoformat() + "Z",
+            "lease_expires_at": act.lease_expires_at.isoformat() + "Z",
         }
 
 
@@ -913,12 +887,12 @@ def report_action(
         raise BrowserReportError("browserErr_actionNotFound")
     if act.status in ("done", "failed"):
         return act
-    if act.lease_token and lease_token != act.lease_token:
+    if act.lease_token and not leases.holds(act, lease_token):
         raise BrowserReportError("browserErr_leaseMismatch")
     act.status = status
     if status == "running":
         # 回报本身也算一次心跳 —— 正在干活的证据比一个单独的心跳帧更硬。
-        act.lease_expires_at = now() + timedelta(seconds=WORKER_LEASE_SECONDS)
+        act.lease_expires_at = leases.expires_at()
     if result is not None:
         act.result = result
     if error is not None:
@@ -953,7 +927,7 @@ def artifact_target(db: Session, action_id: str, *, lease_token: str | None) -> 
         raise BrowserReportError("browserErr_actionNotFound")
     if act.status != "running":
         raise BrowserReportError("browserErr_artifactLate")
-    if act.lease_token and lease_token != act.lease_token:
+    if act.lease_token and not leases.holds(act, lease_token):
         raise BrowserReportError("browserErr_leaseMismatch")
     origin = (act.args or {}).get("origin") or {}
     return ArtifactTarget(

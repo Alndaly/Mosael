@@ -22,6 +22,7 @@ from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import LocalizedError, fragment, t, is_message_key, render_message, stored_param
 from mosael_formats.i18n import DEFAULT_LOCALE
 from app.db.models import Job, TaskEvent, now as models_now
+from app.domain import leases
 from app.domain.jobs import catalog as job_catalog
 from app.domain.jobs.constants import (
     CANCELLED,
@@ -1119,7 +1120,6 @@ def cancel_job(db: Session, job: Job, *, by: str | None) -> Job:
 # /api/publish/worker/*(任务粒度是 PublishTask);其余 external kind 走这里。
 
 CLAIMABLE_STATUSES = ("queued",)
-WORKER_LEASE_SECONDS = 60
 
 
 def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str = "") -> Job | None:
@@ -1144,20 +1144,11 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
         ).first()
         if job is None:
             return None
-        # 这里走的是 UPDATE 语句(不是 ORM 对象),所以不能用 say();两栏一起写,含义与它一致。
-
-        claimed = db.execute(
-            Job.__table__.update()
-            .where(Job.id == job.id, Job.status.in_(CLAIMABLE_STATUSES))
-            .values(
-                status="running",
-                lease_token=secrets.token_hex(24),
-                lease_worker=worker[:64],
-                lease_expires_at=models_now() + timedelta(seconds=WORKER_LEASE_SECONDS),
-                message_key="jobMsg_claimed",
-                message=t("jobMsg_claimed", DEFAULT_LOCALE),
-            )
-        ).rowcount
+        #: 认领是一条 UPDATE(不是 ORM 对象),所以不能用 say();两栏一起写,含义与它一致。
+        claimed = leases.claim(
+            db, Job, job.id, worker=worker, from_statuses=CLAIMABLE_STATUSES,
+            values={"message_key": "jobMsg_claimed", "message": t("jobMsg_claimed", DEFAULT_LOCALE)},
+        )
         if claimed:
             db.add(TaskEvent(job_id=job.id, type="job.claimed", payload={"worker": worker}))
             db.commit()
@@ -1182,16 +1173,14 @@ def _expire_worker_leases(db: Session) -> int:
     #: (`_migrate_job_worker_leases` 现在把它们直接判失败)。迁移停在最后一环之前,
     #: 剩下的半步就会变成读路径上一条永久的税:每加一个判据都要问"那条老分支下它该怎么办",
     #: 而那条分支平时没人走、坏了也没人发现。
-    candidates = db.scalars(
-        select(Job).where(Job.status == "running", Job.lease_expires_at <= now)
-    ).all()
+    candidates = db.scalars(select(Job).where(leases.expired_rows(Job, now))).all()
     expired = 0
     for job in candidates:
         if not lock_active_job(db, job):
             continue
-        db.refresh(job, ["lease_expires_at", "updated_at"])
-        # A heartbeat may have renewed after the candidate query but before our write lock.
-        if job.lease_expires_at is None or job.lease_expires_at > now:
+        db.refresh(job, ["status", "lease_expires_at", "updated_at"])
+        #: 查出候选和拿到写锁之间,心跳可能刚把租约续上 —— 锁住重读后再问一次。
+        if not leases.still_expired(job, now):
             continue
         if finish_job(
             db, job, status="failed",
@@ -1206,16 +1195,7 @@ def _expire_worker_leases(db: Session) -> int:
 
 def renew_worker_leases(db: Session, *, worker: str, claims: list[dict[str, str]]) -> list[str]:
     expire_worker_leases(db)
-    now = models_now()
-    renewed = []
-    for claim in claims:
-        count = db.execute(Job.__table__.update().where(
-            Job.id == claim["job_id"], Job.status == "running", Job.lease_worker == worker,
-            Job.lease_token == claim["lease_token"], Job.lease_expires_at > now,
-        ).values(lease_expires_at=now + timedelta(seconds=WORKER_LEASE_SECONDS))).rowcount
-        if count:
-            renewed.append(claim["job_id"])
-    return renewed
+    return leases.renew(db, Job, worker=worker, claims=[(claim["job_id"], claim["lease_token"]) for claim in claims])
 
 
 def report_job(
@@ -1241,15 +1221,15 @@ def report_job(
         db.commit()
         return job
     db.refresh(job, ["status", "lease_token", "lease_expires_at", "lease_worker"])
-    if not job.lease_token or not secrets.compare_digest(job.lease_token, lease_token or ""):
+    if not leases.holds(job, lease_token):
         db.rollback()
         raise JobError("jobErr_badLease")
-    if job.lease_expires_at is None or job.lease_expires_at <= models_now():
+    if leases.still_expired(job, models_now()):
         db.rollback()
         expire_worker_leases(db)
         db.refresh(job)
         return job
-    job.lease_expires_at = models_now() + timedelta(seconds=WORKER_LEASE_SECONDS)
+    job.lease_expires_at = leases.expires_at()
     if status == "running":
         if progress is not None:
             job.progress = max(0.0, min(1.0, float(progress)))
