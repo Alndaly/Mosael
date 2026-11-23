@@ -279,8 +279,6 @@ def set_voice_default(body: VoiceDefaultUpdate, db: Tx, user: CurrentUser) -> di
     ensure_deployment_admin(db, user)
     try:
         chosen = set_default_voice(db, body.voice.ref() if body.voice is not None else None)
-    except voice_defaults.UnknownVoiceEngine as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (voice_defaults.VoiceEngineNotReady, voice_defaults.VoiceMissing,
             voice_defaults.VoiceNotInEngine, errors.VoiceError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

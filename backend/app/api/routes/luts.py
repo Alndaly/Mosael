@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, Form, Response, UploadFile
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import LutOut, LutUpdate
 from app.db.models import Lut
-from app.domain.luts import LutError
 from app.domain.luts import use_cases as luts
 
 router = APIRouter(tags=["luts"])
@@ -24,10 +23,7 @@ def upload_lut(
     name: str | None = Form(None),
     file: UploadFile = File(...),
 ) -> Lut:
-    try:
-        return luts.upload_lut(db, user, workspace_id, file, name)
-    except LutError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return luts.upload_lut(db, user, workspace_id, file, name)
 
 
 @router.patch("/luts/{lut_id}", response_model=LutOut)

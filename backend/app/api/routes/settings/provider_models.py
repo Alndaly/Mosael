@@ -19,7 +19,6 @@ from app.domain.providers.presets import normalize_capability_ids
 
 from app.domain.permissions import require_own_profile
 from app.domain.generation.resolution import (
-    GenerationResolutionError,
     KINDS,
     declaration_refs_for_model,
     resolve_row,
@@ -227,10 +226,7 @@ def add_provider_model(
     )
     if body.generation_capability_refs is not None:
 
-        try:
-            set_declaration_refs(db, model, body.generation_capability_refs)
-        except GenerationResolutionError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        set_declaration_refs(db, model, body.generation_capability_refs)
     db.commit()
     return _model_out(db, model, catalog, profile.vendor)
 
@@ -261,10 +257,7 @@ def update_provider_model(
         model.capability_ids = normalize_capability_ids(body.capability_ids) or []
     if body.generation_capability_refs is not None:
 
-        try:
-            set_declaration_refs(db, model, body.generation_capability_refs)
-        except GenerationResolutionError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        set_declaration_refs(db, model, body.generation_capability_refs)
     db.commit()
     return _model_out(db, model, _catalog_entries(provider_credentials.resolve_or_keyless(db, profile, user.id)), profile.vendor)
 

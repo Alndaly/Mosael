@@ -118,12 +118,9 @@ def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> Members
 @router.post("/workspaces/{workspace_id}/invitations", response_model=InvitationOut)
 def invite_member(workspace_id: str, body: InviteMemberRequest, db: Tx, user: CurrentUser) -> InvitationOut:
     """邀请制:只对已注册用户名发邀请,对方在通知里接受后才建成员行。"""
-    try:
-        invitee, invitation, workspace_name = workspaces.invite_to_workspace(
-            db, user, workspace_id, body.username, body.role
-        )
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    invitee, invitation, workspace_name = workspaces.invite_to_workspace(
+        db, user, workspace_id, body.username, body.role
+    )
     return InvitationOut(
         id=invitation.id,
         workspace_id=workspace_id,
@@ -158,10 +155,7 @@ def sent_invitations(workspace_id: str, db: DbSession, user: CurrentUser) -> Inv
 
 @router.delete("/workspaces/{workspace_id}/invitations/{invitation_id}", status_code=204)
 def revoke_invitation(workspace_id: str, invitation_id: str, db: Tx, user: CurrentUser) -> Response:
-    try:
-        workspaces.revoke_invitation(db, user, workspace_id, invitation_id)
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    workspaces.revoke_invitation(db, user, workspace_id, invitation_id)
     return Response(status_code=204)
 
 
@@ -191,10 +185,7 @@ def issued_out(db: Session, issued: members_svc.IssuedLink) -> IssuedInviteLinkO
 def create_invite_link(workspace_id: str, body: InviteLinkCreate, db: Tx, user: CurrentUser) -> IssuedInviteLinkOut:
     """发一张进这个工作区的邀请链接(ADR 0054):7 天、一次性、能撤回。还没账号的人能不能凭它注册,
     看部署那道门(部署管理员发的自带;否则开放注册,或者请部署管理员放行)。"""
-    try:
-        return issued_out(db, workspaces.issue_invite_link(db, user, workspace_id, body.role))
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return issued_out(db, workspaces.issue_invite_link(db, user, workspace_id, body.role))
 
 
 @router.get("/workspaces/{workspace_id}/invite-links", response_model=list[InviteLinkOut])
@@ -205,29 +196,20 @@ def list_invite_links(workspace_id: str, db: DbSession, user: CurrentUser) -> li
 
 @router.delete("/workspaces/{workspace_id}/invite-links/{link_id}", status_code=204)
 def revoke_invite_link(workspace_id: str, link_id: str, db: Tx, user: CurrentUser) -> Response:
-    try:
-        workspaces.revoke_invite_link(db, user, workspace_id, link_id)
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    workspaces.revoke_invite_link(db, user, workspace_id, link_id)
     return Response(status_code=204)
 
 
 @router.post("/workspaces/{workspace_id}/invite-links/{link_id}/request-signup", response_model=InviteLinkOut)
 def request_link_signup(workspace_id: str, link_id: str, db: Tx, user: CurrentUser) -> InviteLinkOut:
     """请部署管理员放行:让还没账号的人也能凭这张链接注册(ADR 0054 D48)。"""
-    try:
-        return invite_link_out(db, workspaces.request_link_signup(db, user, workspace_id, link_id))
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return invite_link_out(db, workspaces.request_link_signup(db, user, workspace_id, link_id))
 
 
 @router.post("/invite-links/redeem", response_model=InviteLinkJoinedOut)
 def redeem_invite_link(body: InviteCodeIn, db: Tx, user: CurrentUser) -> InviteLinkJoinedOut:
     """已登录的人打开一张工作区邀请链接:直接加入(ADR 0054 D51),界面切过去、说主人和角色、能撤销(退出)。"""
-    try:
-        joined = members_svc.redeem_invite_link(db, user, body.code)
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    joined = members_svc.redeem_invite_link(db, user, body.code)
     return InviteLinkJoinedOut(
         workspace_id=joined.workspace.id,
         workspace_name=joined.workspace.name,
@@ -267,10 +249,7 @@ def decline_invitation(invitation_id: str, db: DbSession, user: CurrentUser) -> 
 
 
 def _respond(db, invitation_id: str, user, *, accept: bool) -> InvitationOut:
-    try:
-        invitation = members_svc.respond_invitation(db, invitation_id, user, accept)
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    invitation = members_svc.respond_invitation(db, invitation_id, user, accept)
     return InvitationOut(
         id=invitation.id,
         workspace_id=invitation.workspace_id,
@@ -287,10 +266,7 @@ def _respond(db, invitation_id: str, user, *, accept: bool) -> InvitationOut:
 def set_member_role(
     workspace_id: str, user_id: str, body: SetRoleRequest, db: Tx, user: CurrentUser
 ) -> WorkspaceMemberOut:
-    try:
-        member, member_user = workspaces.change_member_role(db, user, workspace_id, user_id, body.role)
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    member, member_user = workspaces.change_member_role(db, user, workspace_id, user_id, body.role)
     return WorkspaceMemberOut(
         user_id=user_id,
         username=member_user.username if member_user else user_id,
@@ -302,13 +278,10 @@ def set_member_role(
 @router.delete("/workspaces/{workspace_id}/members/{user_id}", status_code=204)
 def remove_member(workspace_id: str, user_id: str, db: Tx, user: CurrentUser) -> Response:
     # 自己退出是任何成员都能做的事;请别人出去要 members 权限。两件事,两道闸。
-    try:
-        if user_id == user.id:
-            workspaces.leave_workspace(db, user, workspace_id)
-        else:
-            workspaces.remove_other_member(db, user, workspace_id, user_id)
-    except members_svc.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if user_id == user.id:
+        workspaces.leave_workspace(db, user, workspace_id)
+    else:
+        workspaces.remove_other_member(db, user, workspace_id, user_id)
     return Response(status_code=204)
 
 

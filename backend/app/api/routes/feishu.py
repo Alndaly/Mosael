@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Response
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
@@ -78,10 +78,7 @@ def begin_onboarding(workspace_id: str, db: DbSession, user: CurrentUser) -> dic
     #: 这里写注释而不是 docstring —— docstring 会进 OpenAPI 的接口描述,那就是一次要跟前端一起
     #: 重新生成的漂移(见 export_openapi.py --check)。
     feishu.ensure_can_edit(db, user, workspace_id)
-    try:
-        return onboarding.begin_onboarding(workspace_id, user.id)
-    except client.FeishuError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return onboarding.begin_onboarding(workspace_id, user.id)
 
 
 @router.get("/feishu/onboarding/{workspace_id}", response_model=FeishuOnboardingOut)

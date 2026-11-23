@@ -7,13 +7,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import JobOut, ScrubAssetRequest, ScrubReportOut
 from app.db.models import Job
 from app.domain.assets import use_cases
-from app.domain.assets.scrub.engine import ScrubError
 
 router = APIRouter(tags=["scrub"])
 
@@ -30,10 +29,7 @@ def start_scrub(asset_id: str, body: ScrubAssetRequest, db: Tx, user: CurrentUse
     `domain/media/scrub/policy.PROVENANCE`。做完在任务中心看得到,结果里有对账文本和十道门;
     素材详情读 `GET /assets/{id}/scrub-report`。
     """
-    try:
-        return use_cases.start_scrub(db, user, asset_id, provenance=body.provenance)
-    except ScrubError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return use_cases.start_scrub(db, user, asset_id, provenance=body.provenance)
 
 
 @router.get("/assets/{asset_id}/scrub-report", response_model=ScrubReportOut)

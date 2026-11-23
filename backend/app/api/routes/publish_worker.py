@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import DbSession, Tx
 from app.domain import publish
-from app.domain.publish import PublishDomainError
 from app.domain.publish import worker as publish_worker
 
 """桌面发布器 worker 通道(老版契约 1:1)。
@@ -75,17 +74,14 @@ def task_status(task_id: str, db: DbSession) -> dict[str, Any]:
 
 @router.patch("/publish/worker/report")
 def report(body: ReportRequest, db: Tx) -> dict[str, Any]:
-    try:
-        task = publish_worker.report_task(
-            db,
-            task_id=body.task_id,
-            status=body.status,
-            error_message=body.error_message,
-            screenshot_path=body.screenshot_path,
-            post=body.post,
-        )
-    except PublishDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    task = publish_worker.report_task(
+        db,
+        task_id=body.task_id,
+        status=body.status,
+        error_message=body.error_message,
+        screenshot_path=body.screenshot_path,
+        post=body.post,
+    )
     return {"id": task.id, "status": task.status}
 
 
@@ -101,15 +97,12 @@ def mark_due(db: Tx) -> dict[str, Any]:
 
 @router.patch("/publish/worker/account")
 def patch_account(body: AccountPatchRequest, db: Tx) -> dict[str, Any]:
-    try:
-        account = publish_worker.patch_account(
-            db,
-            account_id=body.account_id,
-            binding_status=body.binding_status,
-            last_error=body.last_error,
-        )
-    except PublishDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    account = publish_worker.patch_account(
+        db,
+        account_id=body.account_id,
+        binding_status=body.binding_status,
+        last_error=body.last_error,
+    )
     return {"id": account.id, "binding_status": account.binding_status}
 
 

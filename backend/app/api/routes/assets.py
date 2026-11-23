@@ -12,7 +12,6 @@ from app.core.i18n import tr, get_current_locale, t
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AssetCardOut, AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, ImageUrlImportRequest, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices import use_cases as voice_use_cases
-from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
 from app.domain import host_files
@@ -26,19 +25,10 @@ from app.media.paths import resolve_key
 from app.media.proxy import audio_proxy_path, proxy_path
 from app.media.thumbnails import THUMBNAIL_MEDIA_TYPE, generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
-from app.ai.providers.contracts.denoise import DenoiseError
-from app.ai.providers.contracts.separation import SeparationError
-from app.domain.analysis.service import AnalysisError
-from app.media.listening.decode import ListeningError
-from app.domain.assets.frames import AssetFrameError
-from app.domain.assets.from_url import UrlImportError, import_image_url, probe_url as probe
-from app.domain.assets.masks import MaskAssetError
-from app.domain.assets.video_gif import VideoGifError
+from app.domain.assets.from_url import import_image_url, probe_url as probe
 from app.domain.assets.web_capture import WebCaptureError
-from app.domain.browser import BrowserDomainError
 from app.media import filmstrip
 from app.media.filmstrip import filmstrip_path
-from app.media.still import StillError
 from app.media.ytdlp import YtdlpError, matching_extractor
 
 router = APIRouter(tags=["assets"])
@@ -91,12 +81,9 @@ def save_painted_mask(
     浏览器只管画。按配方算的那条(`POST /assets/{id}/mask`)交给的是同一个写出口。
     """
 
-    try:
-        return use_cases.save_painted_mask(
-            db, user, workspace_id, source_asset_id=source_asset_id, project_id=project_id, upload=file,
-        )
-    except MaskAssetError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return use_cases.save_painted_mask(
+        db, user, workspace_id, source_asset_id=source_asset_id, project_id=project_id, upload=file,
+    )
 
 
 @router.post("/assets/capture", response_model=AssetOut)
@@ -180,9 +167,6 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     except YtdlpError as exc:
         # 出口才翻:领域抛的是原因 key,这里按请求方的 Accept-Language 渲染。
         raise HTTPException(status_code=422, detail=t(exc.key, get_current_locale(), **exc.params)) from exc
-    except UrlImportError as exc:
-        # 守卫拦下的地址、resolver 自己抓页面时被拦的那一跳 —— 已经是给人看的话。
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "title": listing.title,
         "is_playlist": listing.is_playlist,
@@ -221,8 +205,6 @@ def import_from_url(body: UrlImportRequest, db: Tx, user: CurrentUser) -> Job:
         )
     except sharing.NotUsableError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except (UrlImportError, BrowserDomainError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/assets/import-image-url", response_model=AssetOut)
@@ -241,8 +223,6 @@ def import_image_from_url(body: ImageUrlImportRequest, db: Tx, user: CurrentUser
         )
     except WebCaptureError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
-    except UrlImportError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # 桌面端拖进来的文件能有的后缀。白名单而不是"什么都收":这个接口收的是一个由客户端指定的
@@ -395,10 +375,7 @@ def analyze_asset_route(
 
     # 智能体看素材走 analyze_asset 这个工具(用这次对话的连接、模型和视频分析方式,见 app/agent_tools/media);
     # 这条路由是人点的,用他单独选的分析配置。
-    try:
-        result = analysis_use_cases.analyze(db, user, asset_id, body.question, profile_id=body.profile_id, mode=body.mode)
-    except AnalysisError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result = analysis_use_cases.analyze(db, user, asset_id, body.question, profile_id=body.profile_id, mode=body.mode)
     return AnalyzeAssetResponse(**result)
 
 
@@ -441,28 +418,22 @@ def transcribe_asset(
 
     语言只传给识别模型,不暗中切换引擎。挑法见 `transcription.transcriber`(ADR 0032)。
     """
-    try:
-        return voice_use_cases.start_transcription(db, user, asset_id, language=language, engine=engine)
-    except ASRError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return voice_use_cases.start_transcription(db, user, asset_id, language=language, engine=engine)
 
 
 @router.post("/assets/{asset_id}/convert-gif", response_model=JobOut)
 def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: Tx, user: CurrentUser) -> Job:
     """Create a **new** GIF asset. The source video remains untouched."""
 
-    try:
-        return use_cases.start_gif(
-            db,
-            user,
-            asset_id,
-            fps=body.fps,
-            width=body.width,
-            start=body.start,
-            duration=body.duration,
-        )
-    except VideoGifError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return use_cases.start_gif(
+        db,
+        user,
+        asset_id,
+        fps=body.fps,
+        width=body.width,
+        start=body.start,
+        duration=body.duration,
+    )
 
 
 @router.post("/assets/{asset_id}/separate", response_model=JobOut)
@@ -472,19 +443,13 @@ def separate_asset_audio(asset_id: str, db: Tx, user: CurrentUser, engine: str =
     排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被
     某一层断掉 —— 用户看到"失败了",后台其实还在跑。
     """
-    try:
-        return use_cases.start_separation(db, user, asset_id, engine=engine)
-    except SeparationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return use_cases.start_separation(db, user, asset_id, engine=engine)
 
 
 @router.post("/assets/{asset_id}/denoise", response_model=JobOut)
 def denoise_asset_audio(asset_id: str, body: DenoiseAssetRequest, db: Tx, user: CurrentUser) -> Job:
     """降噪,产出一份**新**素材;原素材不动(ADR-0017)。排成任务,理由同分离。"""
-    try:
-        return use_cases.start_denoise(db, user, asset_id, engine=body.engine, strength=body.strength)
-    except DenoiseError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return use_cases.start_denoise(db, user, asset_id, engine=body.engine, strength=body.strength)
 
 
 @router.get("/assets/{asset_id}/transcript", response_model=TranscriptOut)
@@ -547,10 +512,7 @@ def get_asset_spectrogram(
     end: Annotated[float | None, Query(gt=0)] = None,
 ) -> Response:
     """一段音频 / 视频音轨的频谱图(ADR 0103)。对话里「听」的那张卡片画它,和交给模型的是同一份缓存。"""
-    try:
-        png = listening.spectrogram_for(db, user, asset_id, start=start, end=end)
-    except ListeningError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    png = listening.spectrogram_for(db, user, asset_id, start=start, end=end)
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
@@ -578,10 +540,7 @@ def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: Tx, user: Curre
     **原素材不动**,产出是新的一份 —— 取帧是「我要这个画面」,不是「把这段片子变成一张图」。
     """
 
-    try:
-        return use_cases.grab_frame(db, user, asset_id, body.at, project_id=body.project_id)
-    except (AssetFrameError, StillError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return use_cases.grab_frame(db, user, asset_id, body.at, project_id=body.project_id)
 
 
 @router.post("/assets/{asset_id}/mask", response_model=AssetOut)
@@ -592,13 +551,10 @@ def mask_asset(asset_id: str, body: MaskAssetRequest, db: Tx, user: CurrentUser)
     是**同一种形状**(`L` 模式、和源图一样大,ADR 0057):两条路交给同一个写出口。
     """
 
-    try:
-        return use_cases.make_mask(
-            db, user, asset_id, source=body.source, threshold=body.threshold, invert=body.invert,
-            grow=body.grow, feather=body.feather, project_id=body.project_id,
-        )
-    except MaskAssetError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return use_cases.make_mask(
+        db, user, asset_id, source=body.source, threshold=body.threshold, invert=body.invert,
+        grow=body.grow, feather=body.feather, project_id=body.project_id,
+    )
 
 
 @router.get("/assets/{asset_id}/filmstrip")

@@ -21,9 +21,7 @@ from app.domain.agent import (
     use_cases as agent_use_cases,
     places,
     titles,
-    questions as agent_questions,
 )
-from app.ai.sidecar import pi_client
 from app.domain import session_groups
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
@@ -55,17 +53,8 @@ from app.core.config import app_version
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
 from app.domain.agent.tools.toolsets import list_agent_toolsets
 from app.domain.agent.sessions import readable_session, writable_session
-from app.domain.voices import agent_voice
 
 router = APIRouter(tags=["agent"])
-
-
-def _place(kind: str, place_id: str) -> places.Place:
-    """形状不对的地方是 422 —— 说清哪里不对,不当成「没有这个东西」。"""
-    try:
-        return places.checked(kind, place_id)
-    except places.PlaceError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _apply_settings(
@@ -88,10 +77,7 @@ def _apply_settings(
             raise HTTPException(status_code=422, detail=tr("routeErr_badThinkingLevel"))
         session.thinking_level = thinking_level
     if permission_mode is not None:
-        try:
-            autopilot.set_permission_mode(db, user, session, permission_mode)
-        except autopilot.PermissionModeError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        autopilot.set_permission_mode(db, user, session, permission_mode)
     if working_set is not None:
         session.working_set = working_set.model_dump()
 
@@ -100,19 +86,16 @@ def _apply_settings(
 def create_agent_session(body: AgentSessionCreate, db: Tx, user: CurrentUser) -> AgentSession:
     """建一段对话 —— 界面上是第一句话发出去的那一刻(草稿在那之前不建)。草稿上选好的设置一起带上;哪一项不合规整个
     不建(同一个事务),不留下一段空对话。"""
-    try:
-        session = agent_use_cases.start_session(
-            db,
-            user,
-            body.workspace_id,
-            home=_place(body.home.kind, body.home.id),
-            title=body.title,
-            adapter=body.adapter,
-            provider_profile_id=body.provider_profile_id,
-            model=body.model,
-        )
-    except (agent_use_cases.UnknownConnection, places.PlaceError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session = agent_use_cases.start_session(
+        db,
+        user,
+        body.workspace_id,
+        home=places.checked(body.home.kind, body.home.id),
+        title=body.title,
+        adapter=body.adapter,
+        provider_profile_id=body.provider_profile_id,
+        model=body.model,
+    )
     _apply_settings(
         db, user, session,
         analysis_video_mode=body.analysis_video_mode,
@@ -128,17 +111,14 @@ def list_agent_sessions(
     workspace_id: str, db: DbSession, user: CurrentUser, home_kind: str = "", home_id: str = ""
 ) -> list[AgentSession]:
     """不带 `home_kind` 列全部(AI Studio);带了只列家在那里的(各处面板的「这里的对话」,ADR 0044 §2)。"""
-    home = _place(home_kind, home_id) if home_kind else None
+    home = places.checked(home_kind, home_id) if home_kind else None
     return agent_use_cases.list_sessions(db, user, workspace_id, home)
 
 
 @router.post("/agent/homes/move", response_model=AgentHomesMoved)
 def move_agent_homes(body: AgentHomesMove, db: Tx, user: CurrentUser) -> AgentHomesMoved:
     """ComfyUI 那张工作流存盘、改名、挪文件夹时,家跟着挪(ADR 0044 §9)。只收 `comfyui`,只挪他自己的对话。"""
-    try:
-        moved = agent_use_cases.move_homes(db, user, body.workspace_id, body.kind, body.from_id, body.to_id)
-    except places.PlaceError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    moved = agent_use_cases.move_homes(db, user, body.workspace_id, body.kind, body.from_id, body.to_id)
     return AgentHomesMoved(moved=moved)
 
 
@@ -182,7 +162,7 @@ def post_agent_message(
         origin_session_id=body.origin_session_id,
         quote=body.quote.model_dump() if body.quote else None,
         skills=body.skills,
-        place=_place(body.place.kind, body.place.id) if body.place else None,
+        place=places.checked(body.place.kind, body.place.id) if body.place else None,
     )
 
 
@@ -190,12 +170,7 @@ def post_agent_message(
 def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> AgentCompactOut:
     """手动整理上下文。压缩要调一次模型做摘要,所以是用户主动触发,不做后台自动跑。"""
     session = writable_session(db, user, session_id)
-    try:
-        result = host.compact_session_context(db, session, user)
-    except host.HostError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except pi_client.SidecarError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    result = host.compact_session_context(db, session, user)
     return AgentCompactOut(**result)
 
 
@@ -214,20 +189,14 @@ def steer_queued_message(session_id: str, message_id: str, db: Tx, user: Current
     "change what you are doing now".
     """
     session = writable_session(db, user, session_id)
-    try:
-        return {"steered": host.steer_queued_message(db, session, message_id, user)}
-    except host.HostError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"steered": host.steer_queued_message(db, session, message_id, user)}
 
 
 @router.post("/agent/sessions/{session_id}/queue/{message_id}/resume")
 def resume_queued_message(session_id: str, message_id: str, db: Tx, user: CurrentUser) -> dict:
     """「继续发送」:按停止时扣下的那条放回队列 —— 这段对话空闲就当场开跑,正忙就排在这一轮后面(D63)。"""
     session = writable_session(db, user, session_id)
-    try:
-        host.resume_queued_message(db, session, message_id)
-    except host.HostError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    host.resume_queued_message(db, session, message_id)
     host.drain_queue_after_commit(db, session.id)
     return {"resumed": True}
 
@@ -237,10 +206,7 @@ def cancel_queued_message(session_id: str, message_id: str, db: Tx, user: Curren
     """Withdraw a queued message. Deleting the row alone is not enough — the model already
     holds it, so the turn's queue is resent without it."""
     session = writable_session(db, user, session_id)
-    try:
-        remaining = host.cancel_queued_message(db, session, message_id)
-    except host.HostError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    remaining = host.cancel_queued_message(db, session, message_id)
     return {"remaining": len(remaining)}
 
 
@@ -266,10 +232,7 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         #: 人起的名字:之后不再替它起(见 domain/agent/titles)。
         session.title_source = titles.MANUAL
     if body.provider_profile_id is not None:
-        try:
-            session.provider_profile_id = agent_use_cases.checked_profile_id(db, user, body.provider_profile_id)
-        except agent_use_cases.UnknownConnection as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        session.provider_profile_id = agent_use_cases.checked_profile_id(db, user, body.provider_profile_id)
     if body.model is not None:
         session.model = body.model or None
     _apply_settings(
@@ -283,12 +246,9 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         session_groups.move_into(db, session, body.group_id, kind="agent")
     if body.auto_allow_tools is not None:
         with autopilot.ALLOWANCE_LOCK:
-            try:
-                autopilot.set_session_allowances(
-                    db, user, session, [(entry.tool, entry.permission) for entry in body.auto_allow_tools]
-                )
-            except autopilot.PermissionModeError as exc:
-                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            autopilot.set_session_allowances(
+                db, user, session, [(entry.tool, entry.permission) for entry in body.auto_allow_tools]
+            )
             db.commit()
     db.commit()
     if organising_only:
@@ -305,10 +265,7 @@ def add_agent_session_allowance(
     """「本会话始终允许」加一条(卡上点了它)。在库里那一份上合并 —— 此前界面读出整份、加一条、PATCH 整份,两张卡几乎同时点就丢一条。"""
     session = writable_session(db, user, session_id)
     with autopilot.ALLOWANCE_LOCK:
-        try:
-            autopilot.add_session_allowance(db, user, session, body.tool, body.permission)
-        except autopilot.PermissionModeError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        autopilot.add_session_allowance(db, user, session, body.tool, body.permission)
         db.commit()
     db.refresh(session)
     return _out(db, user, session)
@@ -413,11 +370,7 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: Tx, user: Current
 @router.post("/agent/questions", response_model=AgentQuestionOut, status_code=201)
 def ask_question(body: AgentQuestionCreate, db: Tx, user: CurrentUser) -> AgentQuestion:
     """智能体问用户一个有选项的问题(闸与归属见 agent/use_cases.ask)。"""
-    try:
-        return agent_use_cases.ask(db, user, body.session_id, body.questions)
-    except agent_questions.QuestionError as exc:
-        # 422 而不是 500:这是模型给错了形状,消息里说清怎么改 —— 它下一步就是改了重发。
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return agent_use_cases.ask(db, user, body.session_id, body.questions)
 
 
 @router.get("/agent/questions/{question_id}", response_model=AgentQuestionOut)
@@ -433,10 +386,7 @@ def list_pending_questions(session_id: str, db: DbSession, user: CurrentUser) ->
 @router.post("/agent/questions/{question_id}/answer", response_model=AgentQuestionOut)
 def answer_question(question_id: str, body: AgentQuestionAnswer, db: Tx, user: CurrentUser) -> AgentQuestion:
     # 选完要有下文(deliver_to_session):应用自己那条路上模型正停在工具调用里等着,这一送是兜底。
-    try:
-        return agent_use_cases.answer(db, user, question_id, body.answers)
-    except agent_questions.QuestionError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return agent_use_cases.answer(db, user, question_id, body.answers)
 
 
 @router.post("/agent/questions/{question_id}/dismiss", response_model=AgentQuestionOut)
@@ -542,13 +492,7 @@ def read_aloud(body: AgentSpeechRequest, db: Tx, user: CurrentUser) -> Response:
 def _speech_errors() -> Iterator[None]:
     """两条发声路共用的错误翻译。闸与取配置在 agent/use_cases.speak_line。"""
 
-    try:
-        yield
-    except (agent_use_cases.NothingToSay, agent_use_cases.SpeechFailed) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except agent_voice.AgentVoiceUnavailable as exc:
-        # 409 而不是 500:这是"还没配好 / 关着",一个用户点两下就能解决的状态。
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    yield
 
 
 def _audio(out: Path) -> Response:

@@ -19,7 +19,7 @@ from app.api.deps import DbSession, Tx
 from app.api.schemas import JobOut
 from app.core.i18n import tr
 from app.db.models import ScheduledTask, ScheduledTaskRun
-from app.domain.jobs import JobError, cancel_job
+from app.domain.jobs import cancel_job
 from app.domain.scheduler.operations import (
     SchedulerDomainError,
     WebhookRefused,
@@ -102,9 +102,6 @@ def cancel_hook_run(task_id: str, run_id: str, secret: str, db: Tx) -> HookRunOu
     job = run_job(db, run)
     if job is None:
         raise HTTPException(status_code=409, detail=tr("jobErr_alreadyFinished"))
-    try:
-        cancel_job(db, job, by=None)  # 外部系统凭这条任务的密钥来停的,不是 Mosael 里的哪个人
-    except JobError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    cancel_job(db, job, by=None)  # 外部系统凭这条任务的密钥来停的,不是 Mosael 里的哪个人
     db.refresh(run)
     return _out(db, run)

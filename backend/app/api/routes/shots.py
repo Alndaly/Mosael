@@ -30,10 +30,7 @@ def start_shot_breakdown(asset_id: str, db: Tx, user: CurrentUser) -> Job:
     量刀口取帧不花钱;有视觉模型就接着逐镜判画面(一批一次调用)。做完在任务中心看得到,素材详情页那一块
     读 `GET /assets/{id}/shots`。**重拆覆盖**同一张表(ADR 0061 待拍板 2),没有历史版本。
     """
-    try:
-        return analysis_use_cases.start_shots(db, user, asset_id)
-    except breakdowns.ShotBreakdownError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return analysis_use_cases.start_shots(db, user, asset_id)
 
 
 @router.get("/assets/{asset_id}/shots", response_model=ShotBreakdownResponse)

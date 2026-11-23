@@ -11,7 +11,6 @@ from app.api.schemas import (
     ScheduledTaskUpdate,
 )
 from app.db.models import ScheduledTask, ScheduledTaskRun
-from app.domain import sharing
 from app.domain.scheduler.operations import SchedulerBusy, SchedulerDomainError
 from app.domain.scheduler import use_cases as scheduler
 
@@ -41,18 +40,13 @@ def list_tasks(workspace_id: str, db: DbSession, user: CurrentUser, project_id: 
 def update_task(task_id: str, body: ScheduledTaskUpdate, db: Tx, user: CurrentUser) -> ScheduledTaskOut:
     try:
         return _out(*scheduler.update(db, user, task_id, body.model_dump(exclude_unset=True)))
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except SchedulerDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/scheduled-tasks/{task_id}", status_code=204)
 def delete_task(task_id: str, db: Tx, user: CurrentUser) -> Response:
-    try:
-        scheduler.delete(db, user, task_id)
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    scheduler.delete(db, user, task_id)
     return Response(status_code=204)
 
 
@@ -61,8 +55,6 @@ def reset_webhook_secret(task_id: str, db: Tx, user: CurrentUser) -> ScheduledTa
     """重置触发密钥:旧的触发地址立刻失效(泄漏了就点这个)。新密钥的原文只在这一次响应里。"""
     try:
         return _out(*scheduler.rotate_secret(db, user, task_id))
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except SchedulerDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -76,8 +68,6 @@ def list_task_runs(task_id: str, db: DbSession, user: CurrentUser) -> list[Sched
 def run_task(task_id: str, db: Tx, user: CurrentUser) -> RunScheduledTaskResponse:
     try:
         task, run, job = scheduler.run_now(db, user, task_id)
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except SchedulerBusy as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SchedulerDomainError as exc:

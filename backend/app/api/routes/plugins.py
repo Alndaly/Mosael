@@ -86,7 +86,6 @@ from app.domain.permissions import ensure_deployment_admin
 from app.db.models import Job, PluginInstance, PluginInvocation, User
 from app.api.schemas.generation import GenerationCreateResponse, GenerationJobOut
 from app.ai.runtime import nsfw_models
-from app.ai.runtime.errors import RuntimeSetupError
 from app.domain import local_services
 from app.domain.local_services.errors import LocalServiceError
 from app.domain import model_library
@@ -531,10 +530,7 @@ def get_local_nsfw(user: CurrentUser) -> dict:
 def install_local_nsfw(db: DbSession, user: CurrentUser) -> dict:
     """下载本机识别的权重(22.4 MB,钉死版本、校验 SHA-256)。往后端主机上放东西是部署级动作:只给部署管理员。"""
     ensure_deployment_admin(db, user)
-    try:
-        nsfw_models.start_install()
-    except RuntimeSetupError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    nsfw_models.start_install()
     return _local_nsfw()
 
 
@@ -992,12 +988,8 @@ def plugin_oauth_start(instance_id: str, db: DbSession, user: CurrentUser) -> di
     """
     instance = my_instance(db, instance_id, user)
     manifest = inst.manifest_for(db, instance)
-    try:
-        spec = plugin_oauth.spec_of(manifest)
-        url = plugin_oauth.authorize_url(spec, inst.credential_values(db, instance.id))
-    except plugin_oauth.PluginOAuthError as exc:
-        # 422:是"还差点什么"(没声明 oauth、没填 AppKey),不是服务端故障。
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    spec = plugin_oauth.spec_of(manifest)
+    url = plugin_oauth.authorize_url(spec, inst.credential_values(db, instance.id))
     return {"authorize_url": url, "redirect_uri": spec.redirect_uri}
 
 
@@ -1012,12 +1004,9 @@ def plugin_oauth_complete(
     """
     instance = my_instance(db, instance_id, user)
     manifest = inst.manifest_for(db, instance)
-    try:
-        spec = plugin_oauth.spec_of(manifest)
-        network = plugin_egress.resolve(db, instance, manifest).httpx_options(spec.token_url)
-        values = plugin_oauth.exchange_code(spec, inst.credential_values(db, instance.id), body.code, network=network)
-    except plugin_oauth.PluginOAuthError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    spec = plugin_oauth.spec_of(manifest)
+    network = plugin_egress.resolve(db, instance, manifest).httpx_options(spec.token_url)
+    values = plugin_oauth.exchange_code(spec, inst.credential_values(db, instance.id), body.code, network=network)
     inst.set_credentials(db, instance, values)
     try:
         tools_domain.refresh_tools(db, instance, notify=False)

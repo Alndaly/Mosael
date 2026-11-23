@@ -56,7 +56,7 @@ from app.api.schemas import (
 from app.db.models import Asset, Job, Sequence
 from app.domain.permissions import require_sequence_access
 from app.domain.render import start_export, grab_sequence_frame
-from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
+from app.domain.sequences.errors import SequenceDomainError, SequenceRevisionConflict
 from app.domain.sequences.history import redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
 from app.domain.sequences.tracks import (
@@ -132,17 +132,15 @@ from app.domain.sequences.clip_properties import (
     set_clip_transform as set_clip_transform_operation,
     set_sequence_reframe as set_sequence_reframe_operation,
 )
-from app.ai.providers.contracts.denoise import DenoiseError
 from app.domain.sequences.append import append_asset as append
 from app.domain.sequences.media_swap import ReplaceClipMedia, clips_using, replace_clip_media as replace_media
 from app.domain.sequences.subtitle_io import export_track, import_into_track
 from app.domain.voices import use_cases as voices
-from app.domain.voices.clip_audio import ClipAudioError, start_clip_audio_job
+from app.domain.voices.clip_audio import start_clip_audio_job
 from app.domain.voices.errors import VoiceError
 from app.domain.voices.subtitle_dub import DubError, dub_targets
 from app.domain.workflows.file_export import ascii_file_stem
 from app.media.render_executor import RenderExecutionError
-from app.media.subtitle_files import SubtitleFileError
 
 router = APIRouter(tags=["sequences"])
 
@@ -499,8 +497,6 @@ def import_subtitles(
             footprint=concurrency.POSITIONAL,
             actor_id=user.id,
         )
-    except SubtitleFileError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except SequenceRevisionConflict as exc:
         raise _conflict(db, sequence_id, exc) from exc
     except SequenceDomainError as exc:
@@ -533,10 +529,7 @@ def process_clip_audio(
 
     require_sequence_access(db, user, sequence_id, perm="edit")
     _ensure_seen(db, user, sequence_id, base_revision, [clip_id])
-    try:
-        return start_clip_audio_job(db, sequence_id=sequence_id, clip_id=clip_id, action=body.action, created_by=user.id)
-    except (ClipAudioError, DenoiseError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return start_clip_audio_job(db, sequence_id=sequence_id, clip_id=clip_id, action=body.action, created_by=user.id)
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
@@ -864,15 +857,9 @@ def _sequence_response(sequence: Sequence) -> Response:
 
 def _get_sequence(db, sequence_id: str) -> Sequence:
     """整张时间线(轨道、片段、撤销标记,见 sequences/loading);不在回 404。"""
-    try:
-        return loading.with_timeline(db, sequence_id)
-    except SequenceNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return loading.with_timeline(db, sequence_id)
 
 
 def _sequence_row(db, sequence_id: str) -> Sequence:
     """时间线那一行;不在回 404。"""
-    try:
-        return loading.sequence_row(db, sequence_id)
-    except SequenceNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return loading.sequence_row(db, sequence_id)

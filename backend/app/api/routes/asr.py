@@ -45,12 +45,7 @@ def set_default_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> di
     回的是改完之后的那一行;界面据此**再向后端问一次**整张列表,而不是自己把别的行改掉。
     """
     ensure_deployment_admin(db, user)
-    try:
-        asr_defaults.set_default_model(db, model_id)
-    except asr_defaults.UnknownAsrModel as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except asr_defaults.AsrModelNotInstalled as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    asr_defaults.set_default_model(db, model_id)
     db.commit()
     locale = get_current_locale()
     row = next(one for one in _status_rows(db) if one["id"] == model_id)
@@ -163,6 +158,3 @@ async def dictate(
             return {"text": text}
         except transcription.DictationTooLong as exc:
             raise HTTPException(status_code=413, detail=str(exc)) from exc
-        except transcription.ASRError as exc:
-            # 识别失败是**结果**,不是服务端故障 —— 说清楚原因,让界面能原样显示。
-            raise HTTPException(status_code=422, detail=str(exc)) from exc

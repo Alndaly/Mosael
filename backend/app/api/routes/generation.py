@@ -30,7 +30,6 @@ from app.domain.generation import use_cases as generation
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.origins import STUDIO_ORIGIN
 from app.domain.generation.custom_profiles import capability_ref_choices, profile_form_schema
-from app.domain.generation.prompt_optimizer import PromptOptimizeError
 from app.domain.generation.sessions import delete_session, writable_session
 from app.domain.generation.missing import explain_missing
 from app.domain.generation_catalog import GENERATION_KINDS
@@ -155,10 +154,7 @@ def list_capability_refs(
 def optimize_prompt(body: PromptOptimizeRequest, db: Tx, user: CurrentUser) -> PromptOptimizeResponse:
     """把提示词按目标图像平台(provider/model)的习惯优化。前端「优化」按钮与智能助手技能共用。"""
     fields = body.model_dump()
-    try:
-        result = generation.optimize_prompt(db, user, fields.pop("workspace_id"), **fields)
-    except PromptOptimizeError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result = generation.optimize_prompt(db, user, fields.pop("workspace_id"), **fields)
     return PromptOptimizeResponse(**result)
 
 

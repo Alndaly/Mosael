@@ -46,12 +46,7 @@ def set_default_denoise_engine(body: DenoiseDefaultUpdate, db: DbSession, user: 
     回的是改完之后的那一行;界面据此**再向后端问一次**整张列表,而不是自己把别的行改掉。
     """
     ensure_deployment_admin(db, user)
-    try:
-        engine = denoise_defaults.set_default_engine(db, body.engine)
-    except denoise_defaults.UnknownDenoiseEngine as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except (denoise_defaults.DenoiseEngineNotInstalled, denoise_defaults.DenoiseEngineNotReady) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    engine = denoise_defaults.set_default_engine(db, body.engine)
     db.commit()
     locale = get_current_locale()
     row = next(one for one in _status_rows(db, user) if one["engine"] == engine)

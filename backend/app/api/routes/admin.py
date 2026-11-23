@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from app.core.i18n import tr
-from app.core.outbound_guard import AllowlistError
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.routes.workspaces import invite_link_out, issued_out
 from app.api.schemas import (
@@ -50,20 +49,13 @@ def delete_user(user_id: str, db: DbSession, user: CurrentUser) -> Response:
         accounts.delete_member_account(db, user, user_id)
     except accounts.AccountNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except accounts.AccountError as exc:  # 最后一个部署管理员、还在共享工作区里
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=204)
 
 
 @router.post("/admin/users/{user_id}/password", response_model=AdminPasswordResetOut)
 def reset_user_password(user_id: str, db: Tx, user: CurrentUser) -> AdminPasswordResetOut:
     """替一个成员重置密码:临时密码只在这一次给出,他已经登录着的会话全部作废(见 accounts.reset_member_password)。"""
-    try:
-        return AdminPasswordResetOut(password=accounts.reset_member_password(db, user, user_id))
-    except accounts.AccountNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except accounts.ResetOwnPassword as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return AdminPasswordResetOut(password=accounts.reset_member_password(db, user, user_id))
 
 
 class RegistrationSwitch(BaseModel):
@@ -121,10 +113,7 @@ def invites_awaiting_signup(db: DbSession, user: CurrentUser) -> list[InviteLink
 @router.post("/admin/invite-links/{link_id}/approve-signup", response_model=InviteLinkOut)
 def approve_invite_signup(link_id: str, db: Tx, user: CurrentUser) -> InviteLinkOut:
     ensure_deployment_admin(db, user)
-    try:
-        return invite_link_out(db, members.approve_signup(db, link_id, admin=user))
-    except members.MemberError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return invite_link_out(db, members.approve_signup(db, link_id, admin=user))
 
 
 @router.put("/admin/web-url", response_model=WebUrlUpdate)
@@ -181,10 +170,7 @@ def get_shared_host_folders(db: DbSession, user: CurrentUser) -> SharedHostFolde
 def set_shared_host_folders(body: SharedHostFolders, db: DbSession, user: CurrentUser) -> SharedHostFolders:
     """这台电脑上哪些文件夹共享给成员读(见 domain/host_files)。和开放注册同一类:部署级的决定。"""
     ensure_deployment_admin(db, user)
-    try:
-        folders = host_files.set_shared_folders(db, body.folders)
-    except host_files.HostFileError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    folders = host_files.set_shared_folders(db, body.folders)
     db.commit()
     return SharedHostFolders(folders=folders)
 
@@ -208,10 +194,7 @@ def get_outbound_allowlist(db: DbSession, user: CurrentUser) -> OutboundAllowlis
 def set_outbound_allowlist(body: OutboundAllowlist, db: DbSession, user: CurrentUser) -> OutboundAllowlist:
     """改内网访问的允许名单。和共享文件夹同一类:部署级的决定。"""
     ensure_deployment_admin(db, user)
-    try:
-        entries = outbound_allowlist.save(db, body.entries)
-    except AllowlistError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    entries = outbound_allowlist.save(db, body.entries)
     db.commit()
     return OutboundAllowlist(entries=entries)
 

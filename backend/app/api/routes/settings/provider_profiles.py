@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Response
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -108,18 +108,15 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
     """
     # 只能从**自己的**连接复制密钥 —— 否则这就是一条读到别人钥匙的路。
     source = require_own_profile(db, user, body.copy_credentials_from) if body.copy_credentials_from else None
-    try:
-        profile = provider_connections.create_connection(
-            db,
-            owner_user_id=user.id,
-            name=body.name,
-            vendor=body.vendor,
-            auth_type=body.auth_type,
-            config=dict(body.config or {}),
-            copy_credentials_from=source,
-        )
-    except provider_connections.ConnectionConfigError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    profile = provider_connections.create_connection(
+        db,
+        owner_user_id=user.id,
+        name=body.name,
+        vendor=body.vendor,
+        auth_type=body.auth_type,
+        config=dict(body.config or {}),
+        copy_credentials_from=source,
+    )
     db.commit()
     db.refresh(profile)
     return profile_out(db, profile, user)
@@ -130,18 +127,15 @@ def update_provider_profile(
     profile_id: str, body: ProviderProfileUpdate, db: DbSession, user: CurrentUser
 ) -> ProviderProfileOut:
     profile = require_own_profile(db, user, profile_id, editing=True)
-    try:
-        provider_connections.update_connection(
-            db,
-            profile,
-            user_id=user.id,
-            name=body.name,
-            enabled=body.enabled,
-            auth_type=body.auth_type,
-            config=dict(body.config or {}),
-        )
-    except provider_connections.ConnectionConfigError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    provider_connections.update_connection(
+        db,
+        profile,
+        user_id=user.id,
+        name=body.name,
+        enabled=body.enabled,
+        auth_type=body.auth_type,
+        config=dict(body.config or {}),
+    )
     db.commit()
     db.refresh(profile)
     return profile_out(db, profile, user)

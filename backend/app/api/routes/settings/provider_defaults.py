@@ -12,7 +12,7 @@ from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default
 
 from app.domain.permissions import require_own_profile
 from app.domain.voices import agent_voice, use_cases as voice_uc
-from app.domain.voices.defaults import UnknownVoiceEngine, VoiceNotInEngine
+from app.domain.voices.defaults import VoiceNotInEngine
 from app.domain.voices.errors import VoiceError
 
 router = APIRouter(tags=["settings"])
@@ -117,8 +117,6 @@ def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentV
             asr_engine=body.asr_engine,
             speak_early=body.speak_early,
         )
-    except UnknownVoiceEngine as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (VoiceError, VoiceNotInEngine) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _agent_voice_out(row)

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Response
 
-from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     PublishAccountCreate,
@@ -21,7 +20,6 @@ from app.domain.publish import (
     content_limits,
     implemented_kinds,
     PUBLISH_PLATFORMS,
-    PublishDomainError,
     create_account,
     delete_account,
     option_specs,
@@ -86,46 +84,34 @@ def list_accounts(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
 @router.post("/publish/accounts", response_model=PublishAccountOut)
 def create_account_route(body: PublishAccountCreate, db: Tx, user: CurrentUser) -> PublishAccount:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
-    try:
-        return create_account(
-            db,
-            workspace_id=body.workspace_id,
-            platform=body.platform,
-            name=body.name,
-            config=body.config,
-            owner=user,
-            proxy=body.proxy,
-        )
-    except PublishDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return create_account(
+        db,
+        workspace_id=body.workspace_id,
+        platform=body.platform,
+        name=body.name,
+        config=body.config,
+        owner=user,
+        proxy=body.proxy,
+    )
 
 
 @router.patch("/publish/accounts/{account_id}", response_model=PublishAccountOut)
 def update_account_route(account_id: str, body: PublishAccountUpdate, db: Tx, user: CurrentUser) -> PublishAccount:
     account = publish_uc.manageable_account(db, user, account_id)
-    try:
-        return update_account(db, account, body.model_dump(exclude_unset=True), actor=user.id)
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return update_account(db, account, body.model_dump(exclude_unset=True), actor=user.id)
 
 
 @router.post("/publish/accounts/{account_id}/recheck", response_model=PublishAccountOut)
 def recheck_account_route(account_id: str, db: Tx, user: CurrentUser) -> PublishAccount:
     """把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。"""
     account = publish_uc.manageable_account(db, user, account_id)
-    try:
-        return recheck_account(db, account, actor=user.id)
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return recheck_account(db, account, actor=user.id)
 
 
 @router.delete("/publish/accounts/{account_id}", status_code=204)
 def delete_account_route(account_id: str, db: Tx, user: CurrentUser) -> Response:
     account = publish_uc.manageable_account(db, user, account_id)
-    try:
-        delete_account(db, account, actor=user.id)
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    delete_account(db, account, actor=user.id)
     return Response(status_code=204)
 
 
@@ -138,30 +124,21 @@ def list_publish_tasks(workspace_id: str, db: DbSession, user: CurrentUser) -> l
 def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
     #: 素材只有一种形状:`asset_ids`(按发出去的顺序)。视频也是只有一份的那个列表。
-    try:
-        account, assets = publish_uc.publishing_inputs(db, body.workspace_id, body.account_id, body.asset_ids)
-    except publish_uc.NotInWorkspace as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    try:
-        task = start_publish(
-            db,
-            workspace_id=body.workspace_id,
-            account=account,
-            assets=assets,
-            kind=body.content_kind,
-            body=body.body,
-            title=body.title,
-            description=body.description,
-            tags=body.tags,
-            actor=user.id,
-            short_title=body.short_title,
-            options=body.options,
-        )
-    except sharing.NotUsableError as exc:
-        # 别人的私有账号:不是参数错了,是没有这个权限。
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except PublishDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    account, assets = publish_uc.publishing_inputs(db, body.workspace_id, body.account_id, body.asset_ids)
+    task = start_publish(
+        db,
+        workspace_id=body.workspace_id,
+        account=account,
+        assets=assets,
+        kind=body.content_kind,
+        body=body.body,
+        title=body.title,
+        description=body.description,
+        tags=body.tags,
+        actor=user.id,
+        short_title=body.short_title,
+        options=body.options,
+    )
     return task_with_status(db, task)
 
 
@@ -175,10 +152,7 @@ def delete_publish_task(task_id: str, db: Tx, user: CurrentUser) -> Response:
 def generate_publish_copy(body: PublishCopyRequest, db: DbSession, user: CurrentUser) -> dict:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
 
-    try:
-        return generate_copy(
-            db,
-            user_id=user.id, workspace_id=body.workspace_id, asset_id=body.asset_id, brief=body.brief, profile_id=body.profile_id
-        )
-    except PublishDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return generate_copy(
+        db,
+        user_id=user.id, workspace_id=body.workspace_id, asset_id=body.asset_id, brief=body.brief, profile_id=body.profile_id
+    )

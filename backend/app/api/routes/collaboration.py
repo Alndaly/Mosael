@@ -94,8 +94,5 @@ def update_comment_content(comment_id: str, body: CommentContentUpdate, db: Tx, 
 
 @router.delete("/comments/{comment_id}", status_code=204)
 def remove_comment(comment_id: str, workspace_id: str, db: Tx, user: CurrentUser) -> Response:
-    try:
-        collaboration.delete_comment(db, user, workspace_id, comment_id)
-    except CommentOwnershipError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    collaboration.delete_comment(db, user, workspace_id, comment_id)
     return Response(status_code=204)

@@ -12,13 +12,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Query, Response
 from pydantic import Field
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas.base import ApiModel, OrmModel
 from app.db.models import WorkflowTrigger, WorkflowTriggerEvent
-from app.domain.triggers.use_cases import TriggerDomainError
 from app.domain.triggers import use_cases as triggers
 
 router = APIRouter(tags=["triggers"])
@@ -99,10 +98,7 @@ class WorkflowTriggerEventOut(OrmModel):
 @router.post("/workflow-triggers", response_model=WorkflowTriggerOut)
 def create_trigger(body: WorkflowTriggerCreate, db: Tx, user: CurrentUser) -> WorkflowTrigger:
     fields = body.model_dump()
-    try:
-        return triggers.create(db, user, fields.pop("workspace_id"), **fields)
-    except TriggerDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return triggers.create(db, user, fields.pop("workspace_id"), **fields)
 
 
 @router.get("/workflow-triggers", response_model=list[WorkflowTriggerOut])
@@ -123,10 +119,7 @@ def update_trigger(
 ) -> WorkflowTrigger:
     """改配置、开关也走这里(`{"enabled": false}` 就是关掉它)。"""
     changes = body.model_dump(exclude_unset=True)
-    try:
-        return triggers.update(db, user, trigger_id, changes)
-    except TriggerDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return triggers.update(db, user, trigger_id, changes)
 
 
 @router.delete("/workflow-triggers/{trigger_id}", status_code=204)

@@ -53,18 +53,13 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。
     闸门、首个账号的引导都在 domain/accounts.create_account —— 第三方登录建号走的是同一个。
     """
-    try:
-        user = accounts.create_account(
-            db,
-            username=body.username,
-            display_name=body.display_name,
-            password=body.password,
-            invite_code=body.invite_code,
-        )
-    except accounts.SignupClosed as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except accounts.UsernameTaken as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    user = accounts.create_account(
+        db,
+        username=body.username,
+        display_name=body.display_name,
+        password=body.password,
+        invite_code=body.invite_code,
+    )
     token = _create_session(db, user)
     db.commit()
     return AuthOut(token=token, user=current_user_out(db, user))
@@ -96,10 +91,7 @@ def set_deployment_admin(user_id: str, body: DeploymentAdminUpdate, db: DbSessio
     最后一个部署管理员不能被收回:没有他,实例配置改不了、注册邀请码也发不出来,这个部署就成了
     一块砖头,而且**没有任何应用内的路可以救回来**。
     """
-    try:
-        target = accounts.set_deployment_admin(db, user, user_id, granted=body.granted)
-    except accounts.LastDeploymentAdmin as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    target = accounts.set_deployment_admin(db, user, user_id, granted=body.granted)
     if target is None:
         raise HTTPException(status_code=404, detail="Not found")
     db.commit()
@@ -123,12 +115,9 @@ def me(db: DbSession, user: CurrentUser) -> UserOut:
 
 @router.patch("/auth/me", response_model=UserOut)
 def update_me(body: UserProfileUpdate, db: DbSession, user: CurrentUser) -> UserOut:
-    try:
-        accounts.update_profile(
-            db, user, username=body.username, display_name=body.display_name, signature=body.signature
-        )
-    except accounts.UsernameTaken as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    accounts.update_profile(
+        db, user, username=body.username, display_name=body.display_name, signature=body.signature
+    )
     db.commit()
     db.refresh(user)
     return current_user_out(db, user)
@@ -164,10 +153,7 @@ def get_user_avatar(user_id: str, db: DbSession, user: CurrentUser) -> FileRespo
 @router.post("/auth/me/password")
 def update_password(body: PasswordUpdate, db: DbSession, user: CurrentUser, token: PresentedToken) -> dict:
     """改密码,并把这个人**别处的登录**都踢下线(当前这一份留着,改完不用重新登录)。"""
-    try:
-        signed_out = accounts.change_password(db, user, current=body.current_password, new=body.new_password, keep=token)
-    except accounts.WrongPassword as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    signed_out = accounts.change_password(db, user, current=body.current_password, new=body.new_password, keep=token)
     db.commit()
     return {"ok": True, "signed_out": signed_out}
 

@@ -117,10 +117,7 @@ def set_ffmpeg_settings(body: FfmpegSettingsUpdate, db: DbSession, user: Current
 
     自己提交而不用 Tx:回给界面的要是**生效之后**探出来的样子,而生效挂在提交之后(media_tools.save_path)。"""
     ensure_deployment_admin(db, user)
-    try:
-        media_tools.save_path(db, body.path)
-    except media_tools.FfmpegPathError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    media_tools.save_path(db, body.path)
     db.commit()
     return _ffmpeg_out(db, media_tools.status())
 
@@ -140,10 +137,7 @@ def install_ffmpeg(body: FfmpegInstallRequest, db: Tx, user: CurrentUser) -> Job
     验过了才把路径写进「管理 → 引擎 → FFmpeg」那一格。这个平台没有对得上的构建就在起任务之前说。
     """
     ensure_deployment_admin(db, user)
-    try:
-        return media_tools_install.start(db, workspace_id=body.workspace_id, created_by=user.id)
-    except media_tools_install.MediaToolError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return media_tools_install.start(db, workspace_id=body.workspace_id, created_by=user.id)
 
 
 @router.get("/settings/install-source", response_model=InstallSourceOut)

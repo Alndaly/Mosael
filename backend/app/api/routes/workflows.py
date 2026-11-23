@@ -67,7 +67,7 @@ from app.domain.workflows.templates.catalog import (
     requirement_statuses,
 )
 from app.domain.workflows.ai_edit import ai_edit_graph
-from app.domain.workflows.field_options import FieldOptionsError, OptionContext, field_options
+from app.domain.workflows.field_options import OptionContext, field_options
 from mosael_formats.i18n import DEFAULT_LOCALE, pick_text
 
 router = APIRouter(tags=["workflows"])
@@ -174,10 +174,7 @@ def workflow_field_options(
         node_type=node_type,
         workflow_id=workflow_id,
     )
-    try:
-        return field_options(db, source, context)
-    except FieldOptionsError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return field_options(db, source, context)
 
 
 @router.get("/workflows", response_model=list[WorkflowOut])
@@ -430,10 +427,7 @@ def attest(workflow_id: str, revision: int, db: Tx, user: CurrentUser) -> Workfl
     无妨,门槛和编辑工作流一样;真正的判断在用的那一刻。
     """
     workflow = workflow_uc.editable(db, user, workflow_id)
-    try:
-        attested = attest_revision(db, workflow, revision, attested_by=user.id)
-    except WorkflowRevisionError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    attested = attest_revision(db, workflow, revision, attested_by=user.id)
     return with_vouchers(db, [attested])[0]
 
 
@@ -449,10 +443,7 @@ def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUs
 @router.post("/workflows/{workflow_id}/revisions/{revision}/restore", response_model=WorkflowOut)
 def restore_revision(workflow_id: str, revision: int, db: Tx, user: CurrentUser) -> Workflow:
     workflow = workflow_uc.editable(db, user, workflow_id)
-    try:
-        restore_workflow_revision(db, workflow, revision, created_by=user.id)
-    except WorkflowRevisionError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    restore_workflow_revision(db, workflow, revision, created_by=user.id)
     return workflow
 
 

@@ -7,7 +7,6 @@ from app.api.responses import file_response
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import FontOut
 from app.db.models import Font
-from app.domain.fonts import FontError
 from app.domain.fonts import use_cases as fonts
 from app.media.paths import resolve_key
 
@@ -33,10 +32,7 @@ def upload_font(
     workspace_id: str = Form(...),
     file: UploadFile = File(...),
 ) -> Font:
-    try:
-        return fonts.upload_font(db, user, workspace_id, file)
-    except FontError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return fonts.upload_font(db, user, workspace_id, file)
 
 
 @router.get("/fonts/{font_id}/file")
