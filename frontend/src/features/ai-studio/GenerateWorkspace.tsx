@@ -155,7 +155,7 @@ import { SessionList } from "@/features/ai-studio/SessionList";
 import { useRightPanelOpen } from "@/features/ai-studio/useRightPanelOpen";
 import { useSessionListOpen } from "@/features/ai-studio/useSessionListOpen";
 import { GenerationModelGate } from "@/features/ai-studio/GenerationModelGate";
-import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
+import { AiStudioLayout } from "@/features/ai-studio/AiStudioLayout";
 import { takeGenerationHandoff } from "@/lib/generationHandoff";
 import {
   CREATE_FILTERS,
@@ -199,7 +199,6 @@ import {
 } from "@/features/ai-studio/voicedCreation";
 import type { ScriptTurn } from "@/features/ai-studio/podcastScript";
 import { useMediaMatch } from "@/lib/useMediaMatch";
-import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
 import {
   EMPTY_SLOT,
   emptyFrames,
@@ -356,10 +355,8 @@ export function GenerateWorkspace({
   const qc = useQueryClient();
   const writeBlocked = useWriteBlocked(workspace.role);
 
-  const panels = useSidePanels("generation", AI_PANEL_BOUNDS);
   const [sessionListOpen, setSessionListOpen] = useSessionListOpen();
   const narrowLayout = useMediaMatch("(max-width: 1180px)");
-  const singleColumn = useMediaMatch("(max-width: 820px)");
   const [parametersOpen, setParametersOpen] = useRightPanelOpen(narrowLayout);
   //: 右栏「引擎参数」(焦点要落进去)。底下那枚模型按钮点了:开着的就把模型那一块亮一下(engineFlash 是这一次的时刻)。
   const enginePanel = React.useRef<HTMLElement>(null);
@@ -428,18 +425,6 @@ export function GenerateWorkspace({
   //: 模型与参数栏是「写」的一部分:只读的会话不开它(开着的话,在这里换模型会写进别人的会话)。
   const panelOpen = parametersOpen && !readOnly;
   const showRightPanel = panelOpen && !narrowLayout;
-  // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判 ——
-  // 单列也显式指定,避免 CSS 与 matchMedia 在断点处有不同的边界语义。
-  const showLeft = sessionListOpen && !singleColumn;
-  const columns = singleColumn
-    ? "minmax(0,1fr)"
-    : showLeft && showRightPanel
-      ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
-      : showLeft
-        ? `${panels.left}px minmax(0,1fr)`
-        : showRightPanel
-          ? `minmax(0,1fr) ${panels.right}px`
-          : "minmax(0,1fr)";
   //: 贴底跟随(见 features/agent/stickToBottom)。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
   //: 一条会话先取最近的一页(ADR 0052:一块画板一条会话,跑了几百次就是几百轮),往上翻点「显示更早的」再多要一页。
@@ -1340,26 +1325,7 @@ export function GenerateWorkspace({
   };
 
   return (
-    <div
-      className="relative grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]"
-      style={{ gridTemplateColumns: columns }}
-    >
-      {/* 和对话页同一套(lib/useResizableSidebar):同一个形状不该有两份实现,
-          而这边此前一条拖柄都没有 —— 右栏那些参数挤在 300px 里,长模型名一个都看不全。 */}
-      {showLeft && (
-        <div
-          className={SIDEBAR_HANDLE_CLASS}
-          style={{ left: handleOffset(panels.left) }}
-          onPointerDown={panels.startDrag("left")}
-        />
-      )}
-      {showRightPanel && (
-        <div
-          className={SIDEBAR_HANDLE_CLASS}
-          style={{ right: handleOffset(panels.right) }}
-          onPointerDown={panels.startDrag("right")}
-        />
-      )}
+    <AiStudioLayout panelKey="generation" left={sessionListOpen} right={showRightPanel}>
       {/* 和对话栏同一个组件:分组、拖进分组、搜索、批量删,两边一份实现。
           布局也照它 —— flex 列而不是定行数的 grid:搜索框是条件渲染的,行数会变。 */}
       {sessionListOpen && <StudioIndex label={t("generationSessionsTitle")}>
@@ -2015,7 +1981,7 @@ export function GenerateWorkspace({
         initial={maskEditing?.draft ? { assetId: maskEditing.draft.assetId, name: maskEditing.draft.assetName } : null}
         onDone={takeMaskAsset}
       />
-    </div>
+    </AiStudioLayout>
   );
 }
 

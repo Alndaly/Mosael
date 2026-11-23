@@ -30,6 +30,7 @@ import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { ChatBubble, caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
 import { ChatTranscriptSkeleton } from "@/features/agent/chatSkeleton";
 import { JOB_RECEIPT_ROLE, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
+import { AiStudioLayout } from "@/features/ai-studio/AiStudioLayout";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { attachmentToken, chatMediaGallery } from "@/features/agent/userMessage";
 import { type AgentUsageEvent } from "@/features/agent/messageUsage";
@@ -57,7 +58,6 @@ import { readToolPayload } from "@/features/ai-studio/toolPayload";
 import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
 import { buildTurns } from "@/features/agent/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
-import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
 import { useRightPanelOpen } from "@/features/ai-studio/useRightPanelOpen";
 import { useSessionListOpen } from "@/features/ai-studio/useSessionListOpen";
 import { InspectorSubagentList, SubagentBreadcrumb, SubagentSessionView, collectSubagentRuns, type SubagentRun } from "@/features/agent/SubagentPanel";
@@ -119,12 +119,6 @@ export function tallyTurnFailures(messages: readonly FailureLikeMessage[]): Turn
   }
   return { consecutiveFailures, restartInterruptions };
 }
-
-//: 分栏宽度的边界。上限挡的是"把中间对话挤没了",下限挡的是"栏窄到内容全在换行"。
-export const AI_PANEL_BOUNDS = {
-  left: { min: 180, max: 340, fallback: 240 },
-  right: { min: 240, max: 460, fallback: 300 },
-} as const;
 
 /* 输入框那一列的宽度 —— 队列条和它下面那行脚注共用这一个。
    写死三遍的结果是窗口变窄时只有输入框缩进去,队列条仍顶着两侧边缘,同一件事的几个盒子对不齐。 */
@@ -294,7 +288,6 @@ export function ChatWorkspace({
 
   // —— 可拉伸分栏(照剪辑页的模式:pointer 拖拽 + localStorage 持久化 + 边界钳制)——
   // clamp 在**读取**时也做:localStorage 里可能躺着旧版本写的越界值。
-  const panels = useSidePanels("ai", AI_PANEL_BOUNDS);
   const [sessionListOpen, setSessionListOpen] = useSessionListOpen();
 
   //: 等你拍板的卡(确认 / 选择)不跟着视图走。对话视图里确认卡摆在发起它的那次工具调用里(对不上任何一行的
@@ -315,7 +308,6 @@ export function ChatWorkspace({
   const threadArea = React.useRef<HTMLDivElement | null>(null);
 
   const narrow = useMediaMatch("(max-width: 1180px)");
-  const single = useMediaMatch("(max-width: 820px)");
   //: 宽屏默认展开(维护者要求「智能体 tab 一进来就能看到环境」);窄屏是浮层,默认收起,
   //: 免得一进来就盖住输入框(见 useRightPanelOpen)。
   const [environmentOpen, setEnvironmentOpen] = useRightPanelOpen(narrow);
@@ -349,47 +341,12 @@ export function ChatWorkspace({
     toolbarObserver.current = observer;
   }, []);
   const showRight = environmentOpen && !narrow;
-  // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判:
-  // 单列也显式指定,避免 matchMedia 的 ≤ 与 CSS max-width 的 < 在断点处不一致。
-  const showLeft = sessionListOpen && !single;
-  const columns = single
-    ? "minmax(0,1fr)"
-    : showLeft && showRight
-      ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
-      : showLeft
-        ? `${panels.left}px minmax(0,1fr)`
-        : showRight
-          ? `minmax(0,1fr) ${panels.right}px`
-          : "minmax(0,1fr)";
 
 
   return (
     // 右侧「智能体环境」在对话、轨迹两个视图下都能开:此前轨迹视图替人把它收掉、连开关都藏了,
     // 排查时想对照这个会话用的模型、工具就只能切回对话。宽度紧的话自己点开关收起。
-    <div
-      className={cn(
-        "relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]",
-        !showRight
-          ? "grid-cols-[240px_minmax(0,1fr)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]"
-          : "grid-cols-[240px_minmax(0,1fr)_300px] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]",
-      )}
-      style={{ gridTemplateColumns: columns }}
-    >
-      {/* 拖柄压在栏与栏之间那条分割线上 —— 和剪辑页同款。 */}
-      {showLeft && (
-        <div
-          className={SIDEBAR_HANDLE_CLASS}
-          style={{ left: handleOffset(panels.left) }}
-          onPointerDown={panels.startDrag("left")}
-        />
-      )}
-      {showRight && (
-        <div
-          className={SIDEBAR_HANDLE_CLASS}
-          style={{ right: handleOffset(panels.right) }}
-          onPointerDown={panels.startDrag("right")}
-        />
-      )}
+    <AiStudioLayout panelKey="ai" left={sessionListOpen} right={showRight} className="max-[760px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]">
       {/* flex 列而不是定行数的 grid:搜索框是**条件渲染**的(空列表/选择模式下不出现),
           而 `grid-rows-[auto_minmax(0,1fr)]` 一旦子元素从两个变三个,能滚的那一行就落到
           搜索框头上,列表反而掉进隐式行撑破容器。 */}
@@ -732,7 +689,7 @@ export function ChatWorkspace({
         subagentTimeline={subagentSourceTimeline}
         onOpenSubagent={openSubagent}
       /></div>}
-    </div>
+    </AiStudioLayout>
   );
 }
 
