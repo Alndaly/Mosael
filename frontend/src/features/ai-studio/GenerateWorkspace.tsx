@@ -111,7 +111,6 @@ import {
   capabilityString,
   chooseGenerationOption,
   declaredParameters,
-  declaredParameterValue,
   defaultDuration,
   DURATION_UNSET,
   durationOptions,
@@ -138,6 +137,7 @@ import {
   type AppForm,
   type DeclaredParameter,
 } from "@/lib/generationCapabilities";
+import { DEDICATED_BOOLEANS, requestParameters } from "@/lib/generationRequest";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { MaskEditor } from "@/components/generation/MaskEditor";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
@@ -205,7 +205,6 @@ import {
   emptyFrames,
   filledCount,
   SOURCE_ROLES,
-  frameUrlParameters,
   sourceAssetsFrom,
   type FrameSlot,
   type SourceRole,
@@ -243,9 +242,6 @@ type GenerationConfig = {
   lyrics: string;
   instrumental: boolean;
 };
-
-/** 有专属控件的布尔参数 —— 不再进「调参」那一串通用开关里,免得同一个开关出现两次。 */
-const DEDICATED_BOOLEANS = new Set(["generate_audio", "instrumental"]);
 
 /** 三种「拿现成的东西当输入」各自说清自己是干什么的 —— 光看名字分不出编辑和续写的区别。 */
 const VIDEO_INPUT_HINTS = {
@@ -301,64 +297,24 @@ function defaultGenerationConfig(model: GenerationOption | null): GenerationConf
   };
 }
 
+/** 工作台的表单状态 → 统一的生成表单;拼参数的规则在 lib/generationRequest。 */
 function generationParameters(model: GenerationOption, config: GenerationConfig) {
-  // **图像和视频都要的那几项先放这儿。** 此前它们写在 image 分支里,于是视频那条路上
-  // 控件照常渲染、值却在这一行被丢掉 —— 用户填了种子不生效,
-  // 而界面什么都没说。控件的显示条件本来就不分 kind(见 supportsParameter 那几处)。
-  const shared: Record<string, string | number | boolean> = {};
-  if (supportsParameter(model, "seed") && config.seed.trim()) shared.seed = Number(config.seed);
-  for (const key of booleanParameterKeys(model)) {
-    if (!DEDICATED_BOOLEANS.has(key)) shared[key] = config.booleanParameters[key] ?? capabilityBoolean(model, `default_${key}`);
-  }
-  for (const [key, choices] of parameterChoiceEntries(model)) {
-    const value = config.enumParameters[key] ?? capabilityString(model, `default_${key}`, choices[0] ?? "");
-    if (value) shared[key] = value;
-  }
-  // 模型自己声明的参数:**只发用户动过的**。插件给的默认值只是占位提示 —— 它本来就是那个模型
-  // 自己的默认,原样发回去没有意义,而且会把「我没选过」变成「我选了这个」(ADR 0015)。
-  for (const parameter of declaredParameters(model)) {
-    const value = declaredParameterValue(parameter, config.declared[parameter.key] ?? "");
-    if (value !== undefined) shared[parameter.key] = value;
-  }
-
-  if (model.kind === "image") {
-    const params: Record<string, string | number | boolean> = { ...shared };
-    if (supportsParameter(model, "size") && config.size) params.size = config.size;
-    // 分辨率档(GPT Image 的 1K / 2K / 4K)决定像素预算、也就决定价钱:声明了就发。
-    if (supportsParameter(model, "resolution") && config.resolution) params.resolution = config.resolution;
-    if (supportsParameter(model, "num_images")) params.num_images = Math.max(1, Math.min(maxImages(model), Number(config.numImages) || 1));
-    return params;
-  }
-  if (model.kind === "audio") {
-    const params: Record<string, string | number | boolean | string[]> = { ...shared };
-    // 时长空着 = 让模型自己定;填了才发。
-    if (supportsParameter(model, "duration_seconds") && config.durationSeconds.trim() !== "") {
-      params.duration_seconds = Number(config.durationSeconds);
-    }
-    if (supportsParameter(model, "instrumental")) params.instrumental = config.instrumental;
-    // 纯音乐不带歌词 —— 两个都发,后端会拦下(各家要么报错、要么悄悄丢掉歌词)。
-    if (supportsParameter(model, "lyrics") && !config.instrumental && config.lyrics.trim()) params.lyrics = config.lyrics;
-    Object.assign(params, frameUrlParameters(config.frames, (role) => supportsParameter(model, role)));
-    return params;
-  }
-  const params: Record<string, string | number | boolean> = { ...shared };
-  // 空着或 0 = 未设置,不发,让模型用它自己的默认(与画板一致,见 lib/generationCapabilities.DURATION_UNSET)。
-  if (supportsParameter(model, "duration_seconds") && config.durationSeconds.trim() !== "") {
-    // 不在前端悄悄夹到上下界：-1 这类特殊值会被夹坏，真正非法的值应由统一校验器明确报错。
-    const seconds = Number(config.durationSeconds);
-    if (seconds !== DURATION_UNSET) params.duration_seconds = seconds;
-  }
-  // 尺寸**按模型声明的来**。这一支此前只认 `resolution`(720p 那种档位名)—— 那是按火山 /
-  // 可灵那几家定的形状,而万相收的是 `宽*高` 的像素对。声明了 size 的模型于是一个尺寸都发不出去,
-  // 参数描述符说了话而界面没听。
-  if (supportsParameter(model, "size") && config.size) params.size = config.size;
-  if (supportsParameter(model, "resolution") && config.resolution) params.resolution = config.resolution;
-  if (supportsParameter(model, "aspect_ratio") && config.aspectRatio) params.aspect_ratio = config.aspectRatio;
-  if (supportsParameter(model, "generate_audio")) params.generate_audio = config.generateAudio;
-  // 外链形式的输入素材:first_frame_url / last_frame_url / reference_image_url。
-  // 三种角色一条路 —— 此前只有首帧那一条,而且是手写的。
-  Object.assign(params, frameUrlParameters(config.frames, (role) => supportsParameter(model, role)));
-  return params;
+  return requestParameters(model, {
+    size: config.size,
+    resolution: config.resolution,
+    aspectRatio: config.aspectRatio,
+    //: 时长空着 = 不发,让模型自己定(音频按歌词长短,视频用它自己的默认)。
+    durationSeconds: config.durationSeconds.trim() === "" ? undefined : Number(config.durationSeconds),
+    generateAudio: config.generateAudio,
+    numImages: Number(config.numImages) || 1,
+    seed: config.seed,
+    instrumental: config.instrumental,
+    lyrics: config.lyrics,
+    frames: config.frames,
+    booleanParameters: config.booleanParameters,
+    enumParameters: config.enumParameters,
+    declared: config.declared,
+  });
 }
 
 function generationOptionValue(providerProfileId: string, kind: string, model: string) {
@@ -655,9 +611,7 @@ export function GenerateWorkspace({
       setGenerationConfig((config) => ({ ...config, durationSeconds: String(selectedDurations[0]) }));
     }
   }, [generationConfig.durationSeconds, selectedDurations, durationIsFreeInput]);
-  // 图像和视频分走两套栏目(张数 vs 时长/分辨率/画幅),这个判断在下面出现十来次。
-  const isImageModel = selectedModel?.kind === "image";
-  // 音频多两样:歌词和纯音乐开关;结果是一段声音(见 audioGeneration.tsx)。
+  //: 参数栏目**按模型声明**摆(声明了就有),不按种类分;种类只决定提示词怎么措辞。
   const isAudioModel = selectedModel?.kind === "audio";
   //: 这个模型对提示词的要求(见 promptMode):不收的不摆框,可以不写的在占位里说清楚。
   const selectedPromptMode = promptMode(selectedModel);
@@ -677,8 +631,8 @@ export function GenerateWorkspace({
   const selectedForm = appForm(selectedModel);
   //: 输入框:表单里「提示词」那一项的「去写」把焦点送过来
   const composer = React.useRef<HTMLTextAreaElement>(null);
-  const supportsLyrics = isAudioModel && supportsParameter(selectedModel, "lyrics");
-  const supportsInstrumental = isAudioModel && supportsParameter(selectedModel, "instrumental");
+  const supportsLyrics = supportsParameter(selectedModel, "lyrics");
+  const supportsInstrumental = supportsParameter(selectedModel, "instrumental");
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
   //: 通用那一栏挂哪几格素材:**和提交时发哪几格同一个判据**(描述符声明了这个角色,见 lib/sourceFrames 的
   //: panelSourceRoles)。此前按模型种类手列,描述符声明了、手列里没有的角色(工作流完整入口的蒙版)画不出来。
@@ -1833,7 +1787,7 @@ export function GenerateWorkspace({
                     此前它锁在 image 分支里,于是一个声明了 size 的视频模型连这一栏都不出现 ——
                     参数描述符说了话而界面没听。 */}
                 {sizeField(selectedModel)}
-                {isImageModel && numImagesField(selectedModel)}
+                {numImagesField(selectedModel)}
                 {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
                   <ParameterField label={t("genResolution")}>
                     <Select
@@ -1862,7 +1816,7 @@ export function GenerateWorkspace({
                     </Select>
                   </ParameterField>
                 )}
-                {!isImageModel && supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
+                {supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
                   <ParameterField label={t("genAspectRatio")}>
                     <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
                       <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
@@ -1878,7 +1832,7 @@ export function GenerateWorkspace({
                     </Select>
                   </ParameterField>
                 )}
-                {!isImageModel && supportsParameter(selectedModel, "duration_seconds") && (
+                {supportsParameter(selectedModel, "duration_seconds") && (
                   <ParameterField
                     label={t("genDuration")}
                     hint={audioDurationRange ? `${audioDurationRange.min}–${audioDurationRange.max}s` : undefined}
@@ -1913,12 +1867,12 @@ export function GenerateWorkspace({
                 )}
                 {/* 数字人(ADR 0028):成片长度跟着驱动音频走的模型不收时长,这一栏写明它跟着谁;
                     会截掉音频后半段的模型,所选时长短于音频时提醒。 */}
-                {!isImageModel && durationFollowsRole(selectedModel) && (
+                {durationFollowsRole(selectedModel) && (
                   <ParameterField label={t("genDuration")}>
                     <DurationFollowsNote role={durationFollowsRole(selectedModel)} />
                   </ParameterField>
                 )}
-                {!isImageModel && supportsParameter(selectedModel, "duration_seconds") && (
+                {supportsParameter(selectedModel, "duration_seconds") && (
                   <TruncationHint
                     model={selectedModel}
                     frames={generationConfig.frames}
@@ -1945,7 +1899,7 @@ export function GenerateWorkspace({
                     </Select>
                   </ParameterField>
                 )}
-                {!isImageModel && supportsParameter(selectedModel, "generate_audio") && (
+                {supportsParameter(selectedModel, "generate_audio") && (
                   <ParameterField label={t("genGenerateAudio")}>
                     <Select
                       value={generationConfig.generateAudio ? "true" : "false"}

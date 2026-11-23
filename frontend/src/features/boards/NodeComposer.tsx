@@ -45,7 +45,6 @@ import {
   capabilityBoolean,
   capabilityString,
   declaredParameters,
-  declaredParameterValue,
   defaultDuration,
   durationChoices,
   exclusiveSourceGroups,
@@ -66,6 +65,7 @@ import {
   videoResolutionOptions,
   withTriggerWords,
 } from "@/lib/generationCapabilities";
+import { requestParameters } from "@/lib/generationRequest";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 import { formedGroups, generationPickerEntry, missingModelLabel } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
@@ -780,31 +780,24 @@ export function NodeComposer({
   //: 这个模型有没有张数(`num_images`):有才摆「N×」、才发。没声明的模型(视频、没有 batch_size 的 ComfyUI 工作流)
   //: 发了也会被校验拦下 —— 和 AI 工作台同一个判据。
   const batches = supportsParameter(current, "num_images") && maxImages(current) > 1;
-  const formParameters = React.useMemo(() => {
-    const parameters: Record<string, unknown> = {};
-    if (supportsParameter(current, "aspect_ratio") && ratio) parameters.aspect_ratio = ratio;
-    if (supportsParameter(current, "resolution") && resolution) parameters.resolution = resolution;
-    if (supportsParameter(current, "size") && size) parameters.size = size;
-    //: **0 = 未设置,不发。** 此前这里无条件发,而目录没给时长时界面会编一个 5 出来 ——
-    //: 用户没选过时长,成片却是 5 秒。见 ADR 0015 与 lib/generationCapabilities.DURATION_UNSET。
-    if (supportsParameter(current, "duration_seconds") && duration !== DURATION_UNSET) {
-      parameters.duration_seconds = duration;
-    }
-    // 布尔值必须显式发送两边。只在 true 时发送会让“静音”落回供应商默认；Evolink
-    // Seedance 2.5 的默认恰好是有声，于是 UI 显示静音、成片却带声音。
-    if (supportsParameter(current, "generate_audio")) parameters.generate_audio = audio;
-    for (const key of booleanKeys) parameters[key] = booleanParameters[key] ?? capabilityBoolean(current, `default_${key}`);
-    for (const [key, choices] of enumEntries) {
-      const value = enumParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "");
-      if (value) parameters[key] = value;
-    }
-    for (const parameter of declaredParameters(current)) {
-      const value = declaredParameterValue(parameter, declared[parameter.key] ?? "");
-      if (value !== undefined) parameters[parameter.key] = value;
-    }
-    if (batches && count > 1) parameters.num_images = count;
-    return parameters;
-  }, [current, ratio, resolution, size, duration, audio, booleanKeys, booleanParameters, enumEntries, enumParameters, declared, count, batches]);
+  //: 节点的界面状态 → 统一的生成表单;拼参数的规则(声明了才发、0 秒 = 不发、布尔两边都发)在 lib/generationRequest。
+  const formParameters = React.useMemo(
+    () =>
+      requestParameters(current, {
+        aspectRatio: ratio,
+        resolution,
+        size,
+        durationSeconds: duration,
+        generateAudio: audio,
+        numImages: count,
+        //: 画板没有专门的纯音乐控件:它在通用开关那一串里。
+        instrumental: booleanParameters.instrumental,
+        booleanParameters,
+        enumParameters,
+        declared,
+      }),
+    [current, ratio, resolution, size, duration, audio, count, booleanParameters, enumParameters, declared],
+  );
   //: 张数为 1 时一次交回几份(ComfyUI 一张工作流几个保存节点;「结果取自」选了一个就是 1)。「N×」上显示的是
   //: 这一次会落出几格(= 这个数 × 张数),和画板一次摆好的占位一样多。
   const perRun = outputsPerRun(current, formParameters);

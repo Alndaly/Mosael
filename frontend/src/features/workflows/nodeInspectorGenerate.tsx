@@ -16,7 +16,6 @@ import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 import {
   GENERATION_KINDS,
   type GenerationKind,
-  durationOptions,
   durationRange,
   aspectRatioOptions,
   booleanParameterKeys,
@@ -170,59 +169,48 @@ export function useGenerateNodeSection({
     //: 每一格叫什么只问 generationParameterLabel —— 画布上引用写在这一格里时的输入口读的是同一个函数。
     const label = (key: string) => generationParameterLabel(key, genModel, t) || key;
     const out: GenField[] = [];
+    //: 摆哪几格**只看模型声明了什么**,不按图像 / 视频 / 音频分支 —— 和 AI 工作台、画板同一条
+    //: (发出去的参数见 lib/generationRequest)。万相视频也收 size,图像模型也可能收 aspect_ratio。
     const ratios = aspectRatioOptions(genModel);
     if (ratios.length > 0) out.push({ key: "aspect_ratio", label: label("aspect_ratio"), options: ratios });
-    if (genModel.kind === "image") {
-      const sizes = sizeOptions(genModel);
-      if (sizes.length > 0) {
-        out.push({ key: "size", label: label("size"), options: sizes, custom: customSizeRule(genModel) ?? undefined });
-      }
-      // 分辨率档(GPT Image 的 1K / 2K / 4K)决定像素预算、也就决定价钱:声明了才摆。
-      const imageResolutions = videoResolutionOptions(genModel);
-      if (imageResolutions.length > 0) out.push({ key: "resolution", label: label("resolution"), options: imageResolutions });
-      // 一次出几张。此前工作流里没有这一栏 —— 而它是图像那边最常调的一个,
-      // 生成面板有、节点没有,同一个模型两处能力不一样。
-      const images = maxImages(genModel);
-      if (supportsParameter(genModel, "num_images") && images > 1) {
-        // ComfyUI 的工作流「张数」是跑几遍(countsRuns):名字由 generationParameterLabel 照实给,下面说清一遍出几张。
-        const runs = Number(genParams.num_images) || 1;
-        out.push({
-          key: "num_images",
-          label: label("num_images"),
-          options: [],
-          range: { min: 1, max: images },
-          ...(countsRuns(genModel) ? { hint: runsHint(t, genModel, genParams, runs) } : {}),
-        });
-      }
-    } else if (genModel.kind === "audio") {
-      // 音频:时长是个可选的区间(多数音乐模型按歌词长短自己定曲长),歌词是一段长文字。
-      const range = durationRange(genModel);
-      const durations = durationOptions(genModel);
-      if (supportsParameter(genModel, "duration_seconds")) {
-        out.push(
-          durations.length > 0
-            ? { key: "duration_seconds", label: label("duration_seconds"), options: durations.map(String) }
-            : { key: "duration_seconds", label: label("duration_seconds"), options: [], range: range ?? undefined },
-        );
-      }
-      if (supportsParameter(genModel, "lyrics")) {
-        out.push({
-          key: "lyrics",
-          label: label("lyrics"),
-          options: [],
-          declared: {
-            key: "lyrics", type: "string", label: label("lyrics"), description: t("genLyricsHint"),
-            defaultValue: undefined, options: [], optionLabels: {}, multiline: true, advanced: false,
-          },
-        });
-      }
-    } else {
-      const resolutions = videoResolutionOptions(genModel);
-      if (resolutions.length > 0) out.push({ key: "resolution", label: label("resolution"), options: resolutions });
+    const sizes = sizeOptions(genModel);
+    if (sizes.length > 0) {
+      out.push({ key: "size", label: label("size"), options: sizes, custom: customSizeRule(genModel) ?? undefined });
+    }
+    // 分辨率档:视频的 720p,GPT Image 的 1K / 2K / 4K(决定像素预算、也就决定价钱)。
+    const resolutions = videoResolutionOptions(genModel);
+    if (resolutions.length > 0) out.push({ key: "resolution", label: label("resolution"), options: resolutions });
+    // 一次出几张。ComfyUI 的工作流「张数」是跑几遍(countsRuns):名字由 generationParameterLabel 照实给,下面说清一遍出几张。
+    const images = maxImages(genModel);
+    if (supportsParameter(genModel, "num_images") && images > 1) {
+      const runs = Number(genParams.num_images) || 1;
+      out.push({
+        key: "num_images",
+        label: label("num_images"),
+        options: [],
+        range: { min: 1, max: images },
+        ...(countsRuns(genModel) ? { hint: runsHint(t, genModel, genParams, runs) } : {}),
+      });
+    }
+    // 时长:有档位(可随分辨率变)就给档位,否则给区间 —— 多数音乐模型按歌词长短自己定曲长,区间可以空着。
+    if (supportsParameter(genModel, "duration_seconds")) {
       const durations = durationChoices(genModel, String(genParams.resolution ?? ""));
-      if (durations.length > 0) {
-        out.push({ key: "duration_seconds", label: label("duration_seconds"), options: durations.map(String) });
-      }
+      out.push(
+        durations.length > 0
+          ? { key: "duration_seconds", label: label("duration_seconds"), options: durations.map(String) }
+          : { key: "duration_seconds", label: label("duration_seconds"), options: [], range: durationRange(genModel) ?? undefined },
+      );
+    }
+    if (supportsParameter(genModel, "lyrics")) {
+      out.push({
+        key: "lyrics",
+        label: label("lyrics"),
+        options: [],
+        declared: {
+          key: "lyrics", type: "string", label: label("lyrics"), description: t("genLyricsHint"),
+          defaultValue: undefined, options: [], optionLabels: {}, multiline: true, advanced: false,
+        },
+      });
     }
     // 开关类。**只在模型声明了的时候出现** —— 声明即接口,这里不按 kind 猜。
     for (const key of booleanParameterKeys(genModel)) {
