@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.domain.workflows.node_spec import NodeSpec
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.domain.entities.catalog import KINDS as ENTITY_KINDS
 from app.domain.entities.shot_angles import SHOT_ANGLES
@@ -664,7 +665,7 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 #: 运行前检查据此判「这一版要不要跑的人担保」(engine.start_workflow_job);判的是节点类型,所以是保守的:配音节点
 #: 选了免费的内置引擎也算。执行时那道闸(domain/authority.ensure_vouched_to_spend)只在真解析到连接的那一刻拦,
 #: 是兜底。插件节点(`plugin.` 开头)一律算。私有发布账号、浏览器档案、本机文件不归这一格管(那是 §3.8 的闸)。
-NODE_TYPES: dict[str, dict[str, Any]] = {
+NODE_TYPES: dict[str, NodeSpec] = {
     "start": {
         "external": False,
         "spends": False,
