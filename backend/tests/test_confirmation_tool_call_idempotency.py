@@ -13,6 +13,15 @@ from app.domain.agent.confirmable.registry import ConfirmableTool
 from app.domain.agent.confirmations import authorize_and_approve
 from app.domain.agent.proposals import propose
 from tests.util import fresh_client
+from pydantic import ConfigDict
+
+from app.domain.agent.confirmable.registry import CardRequest
+
+
+class AnyPayload(CardRequest):
+    """这条测试的临时卡收什么都行 —— 测的不是载荷的形状。"""
+
+    model_config = ConfigDict(extra="allow")
 
 
 TOOL = "zz_tool_call_idempotency_probe"
@@ -33,6 +42,7 @@ def probe(monkeypatch):
             summarize=lambda db, payload: ("confirm_noteUntitled", {}),
             execute=lambda db, confirmation, actor: executed.append(dict(confirmation.payload)) or {"ok": True},
             writes=(),
+            request=AnyPayload,
         ),
     )
 

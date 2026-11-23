@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment, tr, t
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.db.models import Project, Sequence, Asset
 from app.domain.sequences import operations as seq_ops
@@ -648,8 +648,16 @@ def _execute_reparse_document(db: Session, confirmation: Any, actor: str | None)
         raise ConfirmationError(exc.key, **exc.params) from exc
     return {"asset_id": asset.id, "extraction_id": extraction.id, "job_id": extraction.job_id, "parser": provider.name}
 
+class EditTimelineRequest(CardRequest):
+    """`edit_timeline` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    sequence_id: str
+    operations: list[dict[str, Any]]
+
+
 confirmable_tool(ConfirmableTool(
     name="edit_timeline",
+    request=EditTimelineRequest,
     permission="edit",
     cost="none",
     writes=("sequences",),
@@ -659,8 +667,15 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class RenderSequenceRequest(CardRequest):
+    """`render_sequence` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    sequence_id: str
+
+
 confirmable_tool(ConfirmableTool(
     name="render_sequence",
+    request=RenderSequenceRequest,
     permission="render-cost",
     cost="render",
     #: 只起导出任务;成片由任务做完时刷新
@@ -671,8 +686,23 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class DubSubtitlesRequest(CardRequest):
+    """`dub_subtitles` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    sequence_id: str
+    clip_ids: Any = None
+    track_id: str | None = None
+    match_duration: Any = None
+    line: str | None = None
+    voice_id: str | None = None
+    engine: str | None = None
+    engine_voice: str | None = None
+    original_audio: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="dub_subtitles",
+    request=DubSubtitlesRequest,
     permission="ai-cost",
     cost="ai",
     #: 只起配音任务;时间线、素材由任务做完时刷新
@@ -684,8 +714,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class SeparateAudioRequest(CardRequest):
+    """`separate_audio` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    engine: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="separate_audio",
+    request=SeparateAudioRequest,
     permission="render-cost",
     cost="render",
     #: 只起任务
@@ -697,8 +735,17 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class DenoiseAudioRequest(CardRequest):
+    """`denoise_audio` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    engine: str | None = None
+    strength: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="denoise_audio",
+    request=DenoiseAudioRequest,
     permission="render-cost",
     cost="render",
     #: 只起任务
@@ -758,8 +805,17 @@ def _execute_import_from_url(db: Session, confirmation: Any, actor: str | None) 
     return {"job_id": job.id}
 
 
+class ImportFromUrlRequest(CardRequest):
+    """`import_from_url` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    url: str
+    kind: str | None = None
+    profile_id: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="import_from_url",
+    request=ImportFromUrlRequest,
     permission="external",
     cost="none",
     #: 只起任务
@@ -770,8 +826,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class GrabVideoFrameRequest(CardRequest):
+    """`grab_video_frame` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    at: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="grab_video_frame",
+    request=GrabVideoFrameRequest,
     permission="render-cost",
     cost="render",
     writes=("assets",),
@@ -781,8 +845,18 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class ClipMediaRequest(CardRequest):
+    """`clip_media` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    last_seconds: float | None = None
+    start: float | None = None
+    end: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="clip_media",
+    request=ClipMediaRequest,
     permission="render-cost",
     cost="render",
     #: 只起任务
@@ -817,8 +891,15 @@ def _execute_extract_audio(db: Session, confirmation: Any, actor: str | None) ->
     return {"asset_id": made.id, "source_asset_id": asset.id}
 
 
+class ExtractAudioRequest(CardRequest):
+    """`extract_audio` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+
+
 confirmable_tool(ConfirmableTool(
     name="extract_audio",
+    request=ExtractAudioRequest,
     permission="render-cost",
     cost="render",
     writes=("assets",),
@@ -828,8 +909,19 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class ConvertVideoToGifRequest(CardRequest):
+    """`convert_video_to_gif` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    fps: int | None = None
+    width: int | None = None
+    start: float | None = None
+    duration: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="convert_video_to_gif",
+    request=ConvertVideoToGifRequest,
     permission="render-cost",
     cost="render",
     #: 只起任务
@@ -840,8 +932,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class ScrubVideoMetadataRequest(CardRequest):
+    """`scrub_video_metadata` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    provenance: Any = None
+
+
 confirmable_tool(ConfirmableTool(
     name="scrub_video_metadata",
+    request=ScrubVideoMetadataRequest,
     #: 不花钱,但会**多出一份**素材(整份写一遍)。撤得回:删掉那份产出就回去了,所以是 edit。
     permission="edit",
     cost="none",
@@ -853,8 +953,17 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class SplitImageGridRequest(CardRequest):
+    """`split_image_grid` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    grid: str | None = None
+    trim_gutter: bool | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="split_image_grid",
+    request=SplitImageGridRequest,
     permission="edit",
     cost="none",
     writes=("assets",),
@@ -864,8 +973,20 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class CreateMaskRequest(CardRequest):
+    """`create_mask` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    source: str | None = None
+    threshold: float | None = None
+    invert: bool | None = None
+    grow: int | None = None
+    feather: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="create_mask",
+    request=CreateMaskRequest,
     permission="edit",
     cost="none",
     #: 产出是**新的一份**素材,原素材一个字节都不动。
@@ -876,8 +997,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class ReparseDocumentRequest(CardRequest):
+    """`reparse_document` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    parser: str
+
+
 confirmable_tool(ConfirmableTool(
     name="reparse_document",
+    request=ReparseDocumentRequest,
     permission="edit",
     cost="none",
     #: 那份文档当场变成「解析中」

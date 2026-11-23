@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import fragment
 from app.db.models import User
 from app.domain import reference_library
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.plugins import instances as inst
 from app.domain.plugins.errors import PluginDomainError
@@ -76,8 +76,19 @@ def _execute_use_reference(db: Session, confirmation: Any, actor: str | None) ->
             "provenance": used["provenance"]}
 
 
+class UseReferenceRequest(CardRequest):
+    """`use_reference` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    connection_id: str
+    item_id: str
+    collection: str | None = None
+    save_as_asset: Any = None
+    angle: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="use_reference",
+    request=UseReferenceRequest,
     permission="edit",
     cost="none",
     writes=("assets", "entities"),

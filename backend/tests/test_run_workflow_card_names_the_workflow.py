@@ -35,9 +35,15 @@ def test_调用方自带的名字不算数() -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     wf = _workflow(client, ws, "群发通知")
 
-    card = client.post("/api/confirmations", json={
+    #: 卡上的名字只由工作流 id 查出来;调用方自带的 `name` 交不进来(开卡时点名拒)。
+    forged = client.post("/api/confirmations", json={
         "workspace_id": ws, "tool": "run_workflow", "requested_by": "pi",
         "payload": {"workflow_id": wf, "name": "无害的小测试", "params": {}},
+    })
+    assert forged.status_code == 422 and "name" in forged.text
+    card = client.post("/api/confirmations", json={
+        "workspace_id": ws, "tool": "run_workflow", "requested_by": "pi",
+        "payload": {"workflow_id": wf, "params": {}},
     }).json()
 
     assert "「群发通知」" in card["headline"] and "无害的小测试" not in card["headline"]

@@ -26,7 +26,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_family, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_family, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX, agent_tool_name
 from app.domain.effects import needs_card, permission_for, warning_key
@@ -72,6 +72,13 @@ def brief_arguments(arguments: dict[str, Any]) -> str:
     return joined.replace("`", "'")
 
 
+class PluginToolRequest(CardRequest):
+    """插件工具的卡(`plugin__<连接>__<工具>`)收的参数:就是那次调用的入参。入参本身长什么样由插件清单声明,
+    开卡时按它查(见下面 validate 里的 check_required_input),这里只管外层的形状。"""
+
+    arguments: dict[str, Any] = {}
+
+
 def _bind(name: str) -> ConfirmableTool:
     """展开名 `name` 的那张卡。validate 认的就是这个名字,不是调用方在 payload 里说的。"""
 
@@ -107,6 +114,7 @@ def _bind(name: str) -> ConfirmableTool:
 
     return ConfirmableTool(
         name=name,
+        request=PluginToolRequest,
         #: 下限。实际那一档按工具的后果升(escalate);none 的根本不问人(needs_card)。
         permission="edit",
         cost="none",
@@ -204,10 +212,18 @@ def _on_behalf_execute(db: Session, confirmation: Any, actor: str | None) -> dic
 
 confirmable_family(PLUGIN_TOOL_PREFIX, _bind)
 
+class RunPluginToolRequest(CardRequest):
+    """`run_plugin_tool` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    tool: str
+    arguments: dict[str, Any] = {}
+
+
 #: 调一个这一轮工具表里没有的插件工具(见模块说明)。卡上的话、档位、要不要问人都按 payload 里那个工具的事实算 —— 和以它
 #: 命名的卡同一套函数;「本会话始终允许」记在它名下。
 confirmable_tool(ConfirmableTool(
     name="run_plugin_tool",
+    request=RunPluginToolRequest,
     permission="edit",
     cost="none",
     #: 插件交出的文件收进这个工作区的素材库

@@ -289,9 +289,11 @@ def test_只读的能力直接跑_卡留痕不等人(tmp_path) -> None:
     _connect(_me(client))
     board_id = _board(client, ws, [{"id": "a1", "kind": "note", "x": 0, "y": 0, "text": "hello"}])
 
-    #: 调用方在 payload 里自称「只读」不算数 —— 由开卡时的干跑写回。
-    card = _card(client, ws, "run_board_item", {"board_id": board_id, "item_id": "a1", "producer": SHOUT,
-                                                "effects": "external"})
+    #: 调用方在 payload 里自称的后果交不进来(卡不收 `effects`,开卡时点名拒);后果由开卡时的干跑写回。
+    forged = _card(client, ws, "run_board_item", {"board_id": board_id, "item_id": "a1", "producer": SHOUT,
+                                                  "effects": "external"})
+    assert forged.status_code == 422 and "effects" in forged.text
+    card = _card(client, ws, "run_board_item", {"board_id": board_id, "item_id": "a1", "producer": SHOUT})
     assert card.status_code == 200, card.text
     assert card.json()["permission"] == "edit"
     assert card.json()["payload"]["ability"] is True
@@ -327,7 +329,8 @@ def test_对外的生成器要等人批准_用批准者自己的连接(tmp_path)
     assert refused.status_code == 422 and "画板工具箱" in refused.json()["detail"]
 
     theirs = _connect(_me(mate), name="mate 的工具箱")
-    card = _card(mate, ws, "run_board_item", {"board_id": board_id, "item_id": "a1", "effects": "none"})
+    assert _card(mate, ws, "run_board_item", {"board_id": board_id, "item_id": "a1", "effects": "none"}).status_code == 422
+    card = _card(mate, ws, "run_board_item", {"board_id": board_id, "item_id": "a1"})
     assert card.status_code == 200, card.text
     assert card.json()["payload"]["ability"] is False
     pending = _settle_card(mate, card.json()["id"])

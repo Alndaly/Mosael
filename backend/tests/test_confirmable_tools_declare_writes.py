@@ -16,6 +16,7 @@ RATCHET = True
 
 import pytest
 
+from app.domain.agent.confirmable.registry import CardRequest
 from app.domain.agent.confirmable import registry
 from app.domain.agent.confirmable.registry import ConfirmableTool, tool_families, tool_spec, tool_specs
 from app.domain.agent.tools.manifest import PLUGIN_TOOL_PREFIX
@@ -33,10 +34,13 @@ def test_不写改了什么就造不出一个需要确认的工具() -> None:
         ConfirmableTool(name="x", permission="edit", cost="none", summarize=lambda db, p: ("", {}), execute=_noop)
     with pytest.raises(ValueError, match="writes"):
         ConfirmableTool(name="x", permission="edit", cost="none", summarize=lambda db, p: ("", {}), execute=_noop,
-                        writes=("asset",))
+                        writes=("asset",), request=CardRequest)
     with pytest.raises(ValueError, match="writes"):
         ConfirmableTool(name="x", permission="edit", cost="none", summarize=lambda db, p: ("", {}), execute=_noop,
-                        writes=["assets"])  # type: ignore[arg-type]
+                        writes=["assets"], request=CardRequest)  # type: ignore[arg-type]
+    #: 收什么也没有缺省值(见 registry.CardRequest)。
+    with pytest.raises(TypeError, match="request"):
+        ConfirmableTool(name="x", permission="edit", cost="none", summarize=lambda db, p: ("", {}), execute=_noop, writes=())
 
 
 def test_每个需要确认的工具都声明了_而且用的是词表里的词() -> None:

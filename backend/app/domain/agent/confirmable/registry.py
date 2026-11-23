@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.orm import Session
 
 from app.domain.resources import RESOURCES, Resource
@@ -24,6 +25,31 @@ from app.domain.capabilities import Use
 Summary = tuple[str, dict[str, Any]]
 
 PERMISSIONS = ("edit", "destroy", "render-cost", "ai-cost", "external")
+
+
+class CardRequest(BaseModel):
+    """一种确认卡**收什么**:开卡的人交来的载荷(智能体工具、`POST /api/confirmations`、插件工具通道,都走同一道)。
+
+    此前载荷是隐式约定:工具那侧在 app/agent_tools 里拼一个 dict,卡这侧在 validate / summarize / execute 里
+    `payload.get(...)` 反解 —— 拼错一个键、改了一个参数名,不会在任何地方报错,只会让卡上那一行、批准后的那一下
+    默默用上缺省值。现在每种卡一个模型:多一个键、少一个必填、类型不对,开卡时就拒,模型据这句话改了重发;
+    工具那侧拼的键与这里一致由 tests/test_card_requests 静态比对。
+
+    只校验,不改写:卡存的仍是交来的那份(validate 可以往里补摘要要用的事实,见 ConfirmableTool.validate)。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def check_request(spec: "ConfirmableTool", payload: dict[str, Any]) -> str | None:
+    """载荷说不通时回一句给模型看的原因(哪个键、为什么);说得通回 None。"""
+    try:
+        spec.request.model_validate(payload)
+    except ValidationError as exc:
+        return "; ".join(
+            f"{'.'.join(str(part) for part in error['loc']) or '(payload)'}: {error['msg']}" for error in exc.errors()[:5]
+        )
+    return None
 COSTS = ("none", "render", "ai")
 
 
@@ -58,6 +84,8 @@ class ConfirmableTool:
     #: 批准执行之后**这一下**改了哪几种数据(词见 domain/resources)。只算 execute 当场写的:起的后台任务做完由任务那一侧
     #: 按 `JobKind.affects` 刷新,这里不重复;后果在应用之外的(发请求、跑代码、改 Blender / ComfyUI 画布、开浏览器)写 `()`。
     writes: tuple[Resource, ...]
+    #: 这种卡**收什么**(见 CardRequest)。没有缺省值:新加一种卡不写它,这个模块一导入就报错。
+    request: type[CardRequest]
     validate: Callable[[Session, str, dict[str, Any], str | None], None] | None = None
     #: 这一次调用**要不要问人**。None = 总要问(绝大多数工具)。返回 False 的调用照样开一张卡
     #: (留痕、同一条等待协议),但不等人点 —— 判定见 autopilot.decide 的第一条。

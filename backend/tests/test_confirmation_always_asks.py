@@ -20,6 +20,15 @@ from app.domain.agent.confirmable import registry
 from app.domain.agent.confirmable.registry import ConfirmableTool
 from app.domain.agent.proposals import propose
 from tests.util import fresh_client
+from pydantic import ConfigDict
+
+from app.domain.agent.confirmable.registry import CardRequest
+
+
+class AnyPayload(CardRequest):
+    """这条测试的临时卡收什么都行 —— 测的不是载荷的形状。"""
+
+    model_config = ConfigDict(extra="allow")
 
 FAKE = "zz_always_asks_probe"
 executed: list[dict[str, Any]] = []
@@ -36,7 +45,7 @@ def probe(monkeypatch):
     executed.clear()
     spec = ConfirmableTool(
         name=FAKE, permission="edit", cost="none", always_asks=True, choices=("enable",),
-        summarize=lambda db, payload: ("confirm_noteUntitled", {}), execute=_execute, writes=(),
+        summarize=lambda db, payload: ("confirm_noteUntitled", {}), execute=_execute, writes=(), request=AnyPayload,
     )
     monkeypatch.setitem(registry._TOOLS, FAKE, spec)
     return spec
@@ -66,7 +75,7 @@ def _card(card_id: str) -> ToolConfirmation:
 
 
 def test_声明和自动放行的口子互斥() -> None:
-    noop = dict(summarize=lambda db, payload: ("", {}), execute=_execute, writes=())
+    noop = dict(summarize=lambda db, payload: ("", {}), execute=_execute, writes=(), request=AnyPayload)
     with pytest.raises(ValueError):
         ConfirmableTool(name="x", permission="edit", cost="none", always_asks=True, gate="g", gate_label="G", **noop)
     with pytest.raises(ValueError):

@@ -19,7 +19,9 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
 from app.db.models import User
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from pydantic import Field
+
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.skills.catalog import SkillDomainError
 from app.domain.permissions import PermissionDenied
@@ -125,9 +127,73 @@ def _summarize_import(db: Session, payload: dict[str, Any]) -> Summary:
     }
 
 
-def _card(name: str, action: str, summarize, *, permission: str = "edit", choices: tuple[str, ...] = ()) -> None:
+class CreateSkillRequest(CardRequest):
+    """`create_skill` 这张卡收的参数。`_skills_in_use` 由工具那侧补上:这一轮在用哪些技能(卡上写明「在用技能『…』时提出的」)。"""
+
+    name: str
+    title: str = ""
+    description: str
+    body: str
+    files: dict[str, str] = {}
+    enable: bool = True
+    skills_in_use: list[Any] = Field(default_factory=list, alias="_skills_in_use")
+
+
+class UpdateSkillRequest(CardRequest):
+    """`update_skill` 这张卡收的参数。`_skills_in_use` 由工具那侧补上:这一轮在用哪些技能(卡上写明「在用技能『…』时提出的」)。"""
+
+    name: str
+    title: str | None = None
+    description: str | None = None
+    body: str | None = None
+    files: dict[str, str | None] | None = None
+    skills_in_use: list[Any] = Field(default_factory=list, alias="_skills_in_use")
+
+
+class CopySkillRequest(CardRequest):
+    """`copy_skill` 这张卡收的参数。`_skills_in_use` 由工具那侧补上:这一轮在用哪些技能(卡上写明「在用技能『…』时提出的」)。"""
+
+    name: str
+    new_name: str
+    enable: bool = True
+    title: str | None = None
+    description: str | None = None
+    body: str | None = None
+    files: dict[str, str | None] | None = None
+    skills_in_use: list[Any] = Field(default_factory=list, alias="_skills_in_use")
+
+
+class SetSkillEnabledRequest(CardRequest):
+    """`set_skill_enabled` 这张卡收的参数。`_skills_in_use` 由工具那侧补上:这一轮在用哪些技能(卡上写明「在用技能『…』时提出的」)。"""
+
+    name: str
+    enabled: bool
+    skills_in_use: list[Any] = Field(default_factory=list, alias="_skills_in_use")
+
+
+class DeleteSkillRequest(CardRequest):
+    """`delete_skill` 这张卡收的参数。`_skills_in_use` 由工具那侧补上:这一轮在用哪些技能(卡上写明「在用技能『…』时提出的」)。"""
+
+    name: str
+    skills_in_use: list[Any] = Field(default_factory=list, alias="_skills_in_use")
+
+
+class ImportSkillRequest(CardRequest):
+    """`import_skill` 这张卡收的参数。`_skills_in_use` 由工具那侧补上:这一轮在用哪些技能(卡上写明「在用技能『…』时提出的」)。"""
+
+    url: str
+    import_id: str
+    skills: list[str] = []
+    replace: bool = False
+    enable: bool = False
+    skills_in_use: list[Any] = Field(default_factory=list, alias="_skills_in_use")
+
+
+def _card(name: str, action: str, summarize, request: type[CardRequest], *, permission: str = "edit",
+          choices: tuple[str, ...] = ()) -> None:
     confirmable_tool(ConfirmableTool(
         name=name,
+        request=request,
         permission=permission,
         cost="none",
         writes=("skills",),
@@ -141,10 +207,10 @@ def _card(name: str, action: str, summarize, *, permission: str = "edit", choice
 
 #: 新建和复制:卡上「建好就启用」默认勾着(拍板 5,人在卡上已经看过全文);导入默认不勾(和设置页导入一样:
 #: 那是别人写的做法,开它是另一个信任决定)。缺省值是工具开卡时放进 payload 的 `enable`。
-_card("create_skill", "create", _summarize_create, choices=("enable",))
-_card("update_skill", "update", _summarize_update)
-_card("copy_skill", "copy", _summarize_copy, choices=("enable",))
-_card("set_skill_enabled", "enable", _summarize_enable)
+_card("create_skill", "create", _summarize_create, CreateSkillRequest, choices=("enable",))
+_card("update_skill", "update", _summarize_update, UpdateSkillRequest)
+_card("copy_skill", "copy", _summarize_copy, CopySkillRequest, choices=("enable",))
+_card("set_skill_enabled", "enable", _summarize_enable, SetSkillEnabledRequest)
 #: 删了就没了 —— 文件夹一起删,没有回收站(撤不回的那一档)。
-_card("delete_skill", "delete", _summarize_delete, permission="destroy")
-_card("import_skill", "import", _summarize_import, choices=("enable",))
+_card("delete_skill", "delete", _summarize_delete, DeleteSkillRequest, permission="destroy")
+_card("import_skill", "import", _summarize_import, ImportSkillRequest, choices=("enable",))

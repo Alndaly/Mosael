@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.domain import host_files
 from app.domain.agent.computer_use import ComputerUseError, clipboard_read, clipboard_write
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 
 
@@ -53,8 +53,15 @@ def _execute_write(db: Session, confirmation: Any, actor: str | None) -> dict[st
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerClipboardReadRequest(CardRequest):
+    """`computer_clipboard_read` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    pass
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_clipboard_read",
+    request=ComputerClipboardReadRequest,
     permission="external",
     cost="none",
     writes=(),
@@ -65,8 +72,15 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class ComputerClipboardWriteRequest(CardRequest):
+    """`computer_clipboard_write` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    text: str
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_clipboard_write",
+    request=ComputerClipboardWriteRequest,
     permission="external",
     cost="none",
     writes=(),

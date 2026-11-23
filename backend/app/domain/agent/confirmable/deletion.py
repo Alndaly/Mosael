@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Project
 from app.core.i18n import fragment
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.assets.deletion import AssetNotDeletable, delete_asset, ensure_deletable
 
@@ -147,8 +147,15 @@ def _execute_delete_projects(db: Session, confirmation: Any, actor: str | None) 
     return {"deleted": deleted}
 
 
+class DeleteAssetsRequest(CardRequest):
+    """`delete_assets` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_ids: list[str]
+
+
 confirmable_tool(ConfirmableTool(
     name="delete_assets",
+    request=DeleteAssetsRequest,
     permission="destroy",
     cost="none",
     #: 时间线上用到它的片段跟着变成离线
@@ -159,8 +166,15 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class DeleteProjectsRequest(CardRequest):
+    """`delete_projects` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    project_ids: list[str]
+
+
 confirmable_tool(ConfirmableTool(
     name="delete_projects",
+    request=DeleteProjectsRequest,
     permission="destroy",
     cost="none",
     #: 项目的时间线一起删;素材不删,回到工作区级

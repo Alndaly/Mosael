@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment, get_current_locale, tr, is_message_key
 from app.domain.effects import needs_card, permission_for, warning_key
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.confirmable.graphs import external_warning, graph_under_review
 from app.domain.workflows.graph_rules import external_nodes_in_graph, code_field_findings, validate_graph
@@ -557,8 +557,18 @@ def _execute_run_board_item(db: Session, confirmation: Any, actor: str | None) -
     }
 
 
+class CreateWorkflowRequest(CardRequest):
+    """`create_workflow` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    name: str
+    description: str | None = None
+    graph: dict[str, Any] | None = None
+    template_id: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="create_workflow",
+    request=CreateWorkflowRequest,
     permission="edit",
     cost="none",
     writes=("workflows",),
@@ -569,8 +579,18 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class UpdateWorkflowRequest(CardRequest):
+    """`update_workflow` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    workflow_id: str
+    graph: dict[str, Any] | None = None
+    name: str | None = None
+    description: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="update_workflow",
+    request=UpdateWorkflowRequest,
     permission="edit",
     cost="none",
     writes=("workflows",),
@@ -581,8 +601,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class EditWorkflowRequest(CardRequest):
+    """`edit_workflow` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    workflow_id: str
+    operations: list[dict[str, Any]]
+
+
 confirmable_tool(ConfirmableTool(
     name="edit_workflow",
+    request=EditWorkflowRequest,
     permission="edit",
     cost="none",
     writes=("workflows",),
@@ -593,8 +621,17 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class RunWorkflowRequest(CardRequest):
+    """`run_workflow` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    workflow_id: str
+    params: Any = None
+    runs: list[dict[str, Any]] | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="run_workflow",
+    request=RunWorkflowRequest,
     permission="ai-cost",
     cost="ai",
     #: 起一次运行:运行记录当场多一行;运行产出的素材、时间线由任务做完时刷新
@@ -606,8 +643,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class ContinueWorkflowRunRequest(CardRequest):
+    """`continue_workflow_run` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    job_id: str
+    params: Any = None
+
+
 confirmable_tool(ConfirmableTool(
     name="continue_workflow_run",
+    request=ContinueWorkflowRunRequest,
     permission="ai-cost",
     cost="ai",
     writes=("workflows",),
@@ -617,8 +662,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class EditBoardRequest(CardRequest):
+    """`edit_board` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    board_id: str
+    operations: list[dict[str, Any]]
+
+
 confirmable_tool(ConfirmableTool(
     name="edit_board",
+    request=EditBoardRequest,
     permission="edit",
     cost="none",
     writes=("boards",),
@@ -628,8 +681,17 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class RunBoardItemRequest(CardRequest):
+    """`run_board_item` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    board_id: str
+    item_id: str
+    producer: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="run_board_item",
+    request=RunBoardItemRequest,
     #: 下限。实际那一档按工具的后果升(escalate);只读的根本不问人(needs_card)。
     permission="edit",
     cost="none",

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import base64
 import re
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
@@ -37,7 +37,7 @@ from app.domain.agent.computer_use import screenshot as use_screenshot
 from app.domain.agent.computer_use import scroll as use_scroll
 from app.domain.agent.computer_use import type_text as use_type
 from app.domain.agent.computer_use import wait as use_wait
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.assets.importer import import_binary_asset
 from app.core.i18n import fragment
@@ -133,8 +133,22 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerClickRequest(CardRequest):
+    """`computer_click` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    x: int | None = None
+    y: int | None = None
+    button: str | None = None
+    click_count: int | None = None
+    scale: float | None = None
+    token: str | None = None
+    name: str | None = None
+    modifiers: Any = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_click",
+    request=ComputerClickRequest,
     permission="edit",
     cost="none",
     #: 只动这一屏的界面状态,不写任何数据
@@ -204,8 +218,25 @@ def _execute_drag(db: Session, confirmation: Any, actor: str | None) -> dict[str
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerDragRequest(CardRequest):
+    """`computer_drag` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    from_x: int
+    from_y: int
+    to_x: int
+    to_y: int
+    button: str | None = None
+    duration_ms: int | None = None
+    scale: float | None = None
+    from_token: str | None = None
+    to_token: str | None = None
+    from_name: str | None = None
+    to_name: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_drag",
+    request=ComputerDragRequest,
     permission="edit",
     cost="none",
     writes=(),
@@ -253,8 +284,19 @@ def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[s
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerScrollRequest(CardRequest):
+    """`computer_scroll` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    dy: int | None = None
+    dx: int | None = None
+    x: int | None = None
+    y: int | None = None
+    scale: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_scroll",
+    request=ComputerScrollRequest,
     permission="edit",
     cost="none",
     writes=(),
@@ -337,8 +379,21 @@ def _escalate_input(db: Session, workspace_id: str, payload: dict[str, Any]) -> 
     return "external" if any(one in {"cmd", "ctrl", "alt", "meta"} for one in modifiers) else None
 
 
+class ComputerInputRequest(CardRequest):
+    """`computer_input` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    action: Literal['type', 'press']
+    text: str | None = None
+    key: str | None = None
+    modifiers: Any = None
+    hold_ms: int | None = None
+    token: str | None = None
+    name: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_input",
+    request=ComputerInputRequest,
     permission="edit",
     cost="none",
     writes=(),
@@ -512,8 +567,16 @@ def _escalate_batch(db: Session, workspace_id: str, payload: dict[str, Any]) -> 
     return None
 
 
+class ComputerBatchRequest(CardRequest):
+    """`computer_batch` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    actions: list[dict[str, Any]]
+    finish_screenshot: bool | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_batch",
+    request=ComputerBatchRequest,
     permission="edit",
     cost="none",
     writes=(),
@@ -564,8 +627,20 @@ def _execute_pointer(db: Session, confirmation: Any, actor: str | None) -> dict[
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerPointerRequest(CardRequest):
+    """`computer_pointer` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    action: Literal['hover', 'down', 'up']
+    x: int
+    y: int
+    button: str | None = None
+    modifiers: Any = None
+    scale: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_pointer",
+    request=ComputerPointerRequest,
     permission="edit",
     cost="none",
     writes=(),

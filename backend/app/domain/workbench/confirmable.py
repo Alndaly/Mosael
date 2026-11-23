@@ -25,7 +25,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.db.models import User
 from app.domain.workbench import agent as workbench_agent
@@ -64,8 +64,16 @@ def _execute(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any
     return workbench_agent.apply_edit(db, _user(db, actor), confirmation.workspace_id, dict(confirmation.payload or {}))
 
 
+class ComfyCanvasEditRequest(CardRequest):
+    """`comfy_canvas_edit` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    ops: list[dict[str, Any]]
+    instance_id: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="comfy_canvas_edit",
+    request=ComfyCanvasEditRequest,
     permission="edit",
     cost="none",
     #: 改的是 ComfyUI 画布上开着的那一张,不在 Mosael 的库里
@@ -104,8 +112,19 @@ def _download_execute(db: Session, confirmation: Any, actor: str | None) -> dict
                                                 dict(confirmation.payload or {}))
 
 
+class ComfyModelDownloadRequest(CardRequest):
+    """`comfy_model_download` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    instance_id: str | None = None
+    url: str
+    folder: str
+    filename: str
+    sha256: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="comfy_model_download",
+    request=ComfyModelDownloadRequest,
     permission="external",
     cost="none",
     #: 只在那台机器上排一个下载任务;下完由任务那一侧刷新目录
@@ -158,8 +177,17 @@ def _install_execute(db: Session, confirmation: Any, actor: str | None) -> dict[
                                              dict(confirmation.payload or {}))
 
 
+class ComfyNodePackInstallRequest(CardRequest):
+    """`comfy_node_pack_install` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    instance_id: str | None = None
+    pack_id: str
+    version: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="comfy_node_pack_install",
+    request=ComfyNodePackInstallRequest,
     permission="external",
     cost="none",
     #: 装的是那台机器上的代码、还要重启它;Mosael 这边只起了一个任务
@@ -192,8 +220,16 @@ def _run_execute(db: Session, confirmation: Any, actor: str | None) -> dict[str,
                                       dict(confirmation.payload or {}))
 
 
+class ComfyCanvasRunRequest(CardRequest):
+    """`comfy_canvas_run` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    instance_id: str | None = None
+    node_id: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="comfy_canvas_run",
+    request=ComfyCanvasRunRequest,
     permission="render-cost",
     cost="render",
     #: 起的是一个普通的生成任务;产出由任务那一侧入库

@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.ai.providers import podcast_engine, split_to_rounds
 from app.core.unit_of_work import after_commit
@@ -254,8 +254,22 @@ def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None)
     )
     return {"job_id": job.id, "generation_id": record.id, "session_id": record.session_id}
 
+class GenerateImageRequest(CardRequest):
+    """`generate_image` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    prompt: str | None = None
+    provider: str | None = None
+    provider_profile_id: str | None = None
+    model: str | None = None
+    parameters: Any = None
+    source_assets: Any = None
+    entity_ids: Any = None
+    pose: dict[str, Any] | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="generate_image",
+    request=GenerateImageRequest,
     permission="ai-cost",
     cost="ai",
     #: 生成记录当场多一条;画成的素材由任务做完时刷新
@@ -266,8 +280,23 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class GenerateVideoRequest(CardRequest):
+    """`generate_video` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    prompt: str | None = None
+    provider: str | None = None
+    provider_profile_id: str | None = None
+    model: str | None = None
+    parameters: Any = None
+    source_assets: Any = None
+    entity_ids: Any = None
+    digital_human_consent: Any = None
+    pose: dict[str, Any] | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="generate_video",
+    request=GenerateVideoRequest,
     permission="ai-cost",
     cost="ai",
     writes=("generations",),
@@ -277,8 +306,20 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class GenerateSoundRequest(CardRequest):
+    """`generate_sound` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    prompt: str | None = None
+    provider: str | None = None
+    provider_profile_id: str | None = None
+    model: str | None = None
+    parameters: Any = None
+    source_assets: Any = None
+
+
 confirmable_tool(ConfirmableTool(
     name="generate_sound",
+    request=GenerateSoundRequest,
     permission="ai-cost",
     cost="ai",
     writes=("generations",),
@@ -288,8 +329,18 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class GenerateAudioRequest(CardRequest):
+    """`generate_audio` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    text: str
+    engine: str | None = None
+    voice: str | None = None
+    model: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="generate_audio",
+    request=GenerateAudioRequest,
     permission="ai-cost",
     cost="ai",
     writes=("generations",),
@@ -299,8 +350,18 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class GeneratePodcastRequest(CardRequest):
+    """`generate_podcast` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    text: str | None = None
+    topic: str | None = None
+    mode: str | None = None
+    speakers: Any = None
+
+
 confirmable_tool(ConfirmableTool(
     name="generate_podcast",
+    request=GeneratePodcastRequest,
     permission="ai-cost",
     cost="ai",
     writes=("generations",),

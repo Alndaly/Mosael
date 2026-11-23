@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 
 from app.domain import host_command, host_files
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 
 
@@ -100,8 +100,18 @@ def _execute_command(db: Session, confirmation: Any, actor: str | None) -> dict[
         raise ConfirmationError(exc.key, **exc.params) from exc
 
 
+class HostRunCommandRequest(CardRequest):
+    """`host_run_command` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    command: str
+    args: Any = None
+    cwd: str | None = None
+    timeout_seconds: int | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="host_run_command",
+    request=HostRunCommandRequest,
     permission="external",
     cost="none",
     writes=(),
@@ -111,8 +121,15 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class HostDeleteFileRequest(CardRequest):
+    """`host_delete_file` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    path: str
+
+
 confirmable_tool(ConfirmableTool(
     name="host_delete_file",
+    request=HostDeleteFileRequest,
     permission="destroy",
     cost="none",
     writes=(),

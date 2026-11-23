@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.core.config import settings
 from app.db.models import User
@@ -59,8 +59,17 @@ def _execute_blender_execute(db: Session, confirmation: Any, actor: str | None) 
     return result
 
 
+class BlenderExecuteRequest(CardRequest):
+    """`blender_execute` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    code: str
+    purpose: str | None = None
+    instance_id: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="blender_execute",
+    request=BlenderExecuteRequest,
     permission="external",
     cost="none",
     #: 改的是 Blender 里的场景,不是 Mosael 的数据

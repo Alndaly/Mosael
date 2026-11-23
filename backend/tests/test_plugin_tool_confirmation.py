@@ -262,14 +262,19 @@ def test_参数缺必填_开卡时就拒() -> None:
 
 
 def test_payload里自称的后果不算数() -> None:
-    """后果决定要不要问人、按哪一档问,只能由开卡这一刻的工具说。"""
+    """后果决定要不要问人、按哪一档问,只能由开卡这一刻的工具说。调用方自带的「后果」「连接」根本交不进来:
+    卡只收 `arguments`(见 PluginToolRequest),多出来的键开卡时就拒,并点名是哪几个。"""
     setup = Setup()
     response = setup.client.post("/api/confirmations", json={
         "workspace_id": setup.workspace_id, "tool": setup.name("render"),
         "payload": {"arguments": {"code": "x"}, "effects": "none", "instance_id": "someone-else"},
     })
-    assert response.status_code == 200, response.text
-    card = _card(response.json()["id"])
+    assert response.status_code == 422, response.text
+    assert "effects" in response.text and "instance_id" in response.text
+    honest = setup.client.post("/api/confirmations", json={
+        "workspace_id": setup.workspace_id, "tool": setup.name("render"), "payload": {"arguments": {"code": "x"}},
+    })
+    card = _card(honest.json()["id"])
     assert card.status == "pending" and card.permission == "external"
     assert card.payload["effects"] == "local-code" and card.payload["instance_id"] == setup.instance_id
 

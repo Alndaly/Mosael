@@ -9,7 +9,7 @@ from app.core.i18n import render_message
 from mosael_formats.i18n import DEFAULT_LOCALE
 from app.core.unit_of_work import after_commit
 from app.db.models import ToolConfirmation, User, now
-from app.domain.agent.confirmable.registry import tool_spec
+from app.domain.agent.confirmable.registry import check_request, tool_spec
 from app.domain.agent.errors import ConfirmationError
 from app.domain.agent.sessions import decides_for_filter, ensure_decides_for
 from app.domain.jobs import reset_receipt, set_receipt
@@ -116,6 +116,9 @@ def prepare_confirmation(
     spec = tool_spec(tool)
     if spec is None:
         raise ConfirmationError(f"Unknown mutating tool: {tool}")
+    problem = check_request(spec, payload)
+    if problem is not None:
+        raise ConfirmationError("confirmErr_badRequest", tool=tool, detail=problem)
     if spec.validate is not None:
         spec.validate(db, workspace_id, payload, actor_id)
     #: **key 和参数才是事实,渲染出来的那一行只是默认语言的快照。**

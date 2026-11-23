@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, get_note, save_note, snapshot
@@ -75,8 +75,16 @@ def _execute_edit_note(db: Session, confirmation: Any, actor: str | None) -> dic
     return {"note_id": saved.id, "revision": saved.revision}
 
 
+class EditNoteRequest(CardRequest):
+    """`edit_note` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    note_id: str
+    operations: list[dict[str, Any]]
+
+
 confirmable_tool(ConfirmableTool(
     name="edit_note",
+    request=EditNoteRequest,
     permission="edit",
     cost="none",
     writes=("notes",),

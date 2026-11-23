@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
@@ -33,7 +33,7 @@ from app.domain.agent.computer_use import desktop_scroll as use_scroll
 from app.domain.agent.computer_use import desktop_type as use_type
 from app.domain.agent.computer_use import desktop_wait as use_wait
 from app.domain.agent import replay as replay_store
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.domain.assets.importer import import_binary_asset
 from app.domain import host_files
@@ -142,10 +142,24 @@ def _execute_click(db: Session, confirmation: Any, actor: str | None) -> dict[st
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerDesktopClickRequest(CardRequest):
+    """`computer_desktop_click` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    token: str | None = None
+    capture_id: str | None = None
+    x: int | None = None
+    y: int | None = None
+    button: str | None = None
+    click_count: int | None = None
+    scale: float | None = None
+    modifiers: Any = None
+
+
 #: 跨应用输入不是“改这一屏的视图”，它和 run_host_code 一样是这台电脑上的副作用；auto 档
 #: 不能替用户点头。放在 external 档，规则/判断者/人都要过，执行体再要求部署管理员。
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_click",
+    request=ComputerDesktopClickRequest,
     permission="external",
     cost="none",
     writes=(),
@@ -255,8 +269,25 @@ def _execute_input(db: Session, confirmation: Any, actor: str | None) -> dict[st
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerDesktopInputRequest(CardRequest):
+    """`computer_desktop_input` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    action: Literal['type', 'press']
+    text: str | None = None
+    key: str | None = None
+    modifiers: Any = None
+    token: str | None = None
+    capture_id: str | None = None
+    x: int | None = None
+    y: int | None = None
+    scale: float | None = None
+    click_target: bool | None = None
+    hold_ms: int | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_input",
+    request=ComputerDesktopInputRequest,
     permission="external",
     cost="none",
     writes=(),
@@ -315,8 +346,21 @@ def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[s
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerDesktopScrollRequest(CardRequest):
+    """`computer_desktop_scroll` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    dy: int | None = None
+    dx: int | None = None
+    token: str | None = None
+    capture_id: str | None = None
+    x: int | None = None
+    y: int | None = None
+    scale: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_scroll",
+    request=ComputerDesktopScrollRequest,
     permission="external",
     cost="none",
     writes=(),
@@ -371,8 +415,22 @@ def _execute_drag(db: Session, confirmation: Any, actor: str | None) -> dict[str
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerDesktopDragRequest(CardRequest):
+    """`computer_desktop_drag` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    capture_id: str
+    from_x: int
+    from_y: int
+    to_x: int
+    to_y: int
+    button: str | None = None
+    duration_ms: int | None = None
+    scale: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_drag",
+    request=ComputerDesktopDragRequest,
     permission="external",
     cost="none",
     writes=(),
@@ -424,8 +482,22 @@ def _execute_pointer(db: Session, confirmation: Any, actor: str | None) -> dict[
         raise ConfirmationError(str(error)) from None
 
 
+class ComputerDesktopPointerRequest(CardRequest):
+    """`computer_desktop_pointer` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    action: Literal['hover', 'down', 'up']
+    token: str | None = None
+    capture_id: str | None = None
+    x: int | None = None
+    y: int | None = None
+    button: str | None = None
+    modifiers: Any = None
+    scale: float | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_pointer",
+    request=ComputerDesktopPointerRequest,
     permission="external",
     cost="none",
     writes=(),
@@ -637,8 +709,17 @@ def _escalate_batch(db: Session, workspace_id: str, payload: dict[str, Any]) -> 
     return None
 
 
+class ComputerDesktopBatchRequest(CardRequest):
+    """`computer_desktop_batch` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    actions: list[dict[str, Any]]
+    window_id: int | None = None
+    finish_screenshot: bool | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="computer_desktop_batch",
+    request=ComputerDesktopBatchRequest,
     permission="external",
     cost="none",
     writes=(),

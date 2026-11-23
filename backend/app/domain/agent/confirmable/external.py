@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import fragment
-from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
+from app.domain.agent.confirmable.registry import CardRequest, ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from sqlalchemy import select
 
@@ -216,8 +216,18 @@ def _execute_browser_pool_open(db: Session, confirmation: Any, actor: str | None
     status = _agent_navigate(browser_domain, session.id, url) if url else None
     return {"session_id": session.id, "url": url, "status": status}
 
+class PublishAssetRequest(CardRequest):
+    """`publish_asset` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    account_id: str
+    asset_id: str
+    title: str | None = None
+    description: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="publish_asset",
+    request=PublishAssetRequest,
     permission="external",
     cost="none",
     writes=("publish_tasks",),
@@ -228,8 +238,18 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class HttpRequestRequest(CardRequest):
+    """`http_request` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    url: str
+    method: str = "POST"
+    headers: dict[str, Any] = {}
+    body: str = ""
+
+
 confirmable_tool(ConfirmableTool(
     name="http_request",
+    request=HttpRequestRequest,
     permission="external",
     cost="none",
     #: 后果在应用之外
@@ -242,8 +262,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class RunCodeRequest(CardRequest):
+    """`run_code` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    code: str
+    inputs: Any = None
+
+
 confirmable_tool(ConfirmableTool(
     name="run_code",
+    request=RunCodeRequest,
     permission="external",
     cost="none",
     #: 跑在隔离环境里,结果交回给智能体
@@ -256,8 +284,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class RunHostCodeRequest(CardRequest):
+    """`run_host_code` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    code: str
+    inputs: Any = None
+
+
 confirmable_tool(ConfirmableTool(
     name="run_host_code",
+    request=RunHostCodeRequest,
     permission="external",
     cost="none",
     #: 后果在应用之外(这台电脑上)
@@ -270,8 +306,17 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class BrowserOpenRequest(CardRequest):
+    """`browser_open` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    url: str | None = None
+    session_mode: Any = None
+    session_name: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="browser_open",
+    request=BrowserOpenRequest,
     permission="edit",
     cost="none",
     #: 浏览器池的网页列表自己跟着会话走,不在缓存里
@@ -282,8 +327,16 @@ confirmable_tool(ConfirmableTool(
 ))
 
 
+class BrowserPoolOpenRequest(CardRequest):
+    """`browser_pool_open` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    profile_id: str
+    url: str | None = None
+
+
 confirmable_tool(ConfirmableTool(
     name="browser_pool_open",
+    request=BrowserPoolOpenRequest,
     permission="external",
     cost="none",
     #: 同上

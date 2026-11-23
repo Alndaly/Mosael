@@ -98,6 +98,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件工具 {name} 不在你的工具表里(连接是别人接的、已停用、未授权、缺凭据,或该工具未开启)",
         "en": "Plugin tool {name} is not among your tools (the connection belongs to someone else, or it is disabled, unauthorized, missing credentials, or the tool is turned off).",
     },
+    "confirmErr_badRequest": {
+        "zh": "{tool} 的参数不对:{detail}",
+        "en": "The arguments for {tool} are wrong: {detail}",
+    },
     "confirmErr_pluginToolBadInput": {
         "zh": "插件工具 {name} 的参数不对:{detail}",
         "en": "The arguments for plugin tool {name} are wrong: {detail}",
