@@ -9,6 +9,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import Notification, User
 from app.domain import notifications as notifications_svc
 from app.domain.permissions import NotVisible, ensure_workspace_access
@@ -17,12 +18,24 @@ from app.domain.permissions import NotVisible, ensure_workspace_access
 LIST_LIMIT = 100
 
 
-def post(db: Session, user: User, workspace_id: str, title: str, body: str = "") -> list[Notification]:
-    """给工作区成员推一条(智能体经 POST /api/notifications 用,工作流的通知节点对应物)。没人可推就是空表。"""
+class NoNotifiableMembers(LocalizedError):
+    """这个工作区里没有能收到通知的人。"""
+
+    def __init__(self) -> None:
+        super().__init__("routeErr_noNotifiableMembers")
+
+
+def post(db: Session, user: User, workspace_id: str, title: str, body: str = "") -> Notification:
+    """给工作区成员推一条(智能体的 notify 工具与 POST /api/notifications,工作流通知节点的对应物)。
+
+    回第一个收件人的那条当回执;一个能收的人都没有就抛 {@link NoNotifiableMembers}。
+    """
     ensure_workspace_access(db, user, workspace_id)
     rows = notifications_svc.notify(db, workspace_id, type="agent", title=title, body=body)
+    if not rows:
+        raise NoNotifiableMembers()
     db.flush()
-    return rows
+    return rows[0]
 
 
 def list_mine(

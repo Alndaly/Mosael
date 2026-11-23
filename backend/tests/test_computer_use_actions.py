@@ -643,7 +643,7 @@ def test_get_confirmation_attaches_a_batch_screenshot(monkeypatch) -> None:
     import mcp_server
 
     png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-    monkeypatch.setattr(mcp_server, "_route", lambda *a, **k: {
+    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: {
         "id": "card-1", "status": "executed", "result": {"screenshot_asset_id": "asset-1"}, "error": None,
     })
     monkeypatch.setattr(mcp_server, "_screenshot_asset_image", lambda asset_id: png)

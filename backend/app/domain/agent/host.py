@@ -534,6 +534,17 @@ def _wait_for_the_running_turn(db: Session, session: AgentSession, message: Agen
     return message
 
 
+def post_from_session(db: Session, user: User, session_id: str, content: str, *, origin_session_id: str | None) -> AgentMessage:
+    """一个对话给**另一个**对话发消息(智能体的 notify_agent_session)。对方空闲就直接开跑,在忙就排在它这一回合后面。
+
+    闸和人在界面里发消息是同一道:他得能写对方那条对话。来源只走结构化字段(`origin_session_id`),
+    给模型看的信封由收信那侧拼提示词时加(见 agent_notice_envelope)。
+    """
+    from app.domain.agent.sessions import writable_session
+
+    return post_user_message(db, writable_session(db, user, session_id), content, user, origin_session_id=origin_session_id)
+
+
 def post_user_message(
     db: Session,
     session: AgentSession,

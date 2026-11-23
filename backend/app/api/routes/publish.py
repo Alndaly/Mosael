@@ -24,7 +24,6 @@ from app.domain.publish import (
     PublishDomainError,
     create_account,
     delete_account,
-    list_tasks,
     option_specs,
     recheck_account,
     start_publish,
@@ -132,8 +131,7 @@ def delete_account_route(account_id: str, db: Tx, user: CurrentUser) -> Response
 
 @router.get("/publish/tasks", response_model=list[PublishTaskOut])
 def list_publish_tasks(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    publish_uc.ensure_can_browse(db, user, workspace_id)
-    return [task_with_status(db, task) for task in list_tasks(db, workspace_id)]
+    return publish_uc.list_tasks_with_status(db, user, workspace_id)
 
 
 @router.post("/publish/tasks", response_model=PublishTaskOut)

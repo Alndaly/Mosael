@@ -111,6 +111,9 @@ GATED_IN_THE_DOMAIN = {
     # 闸在 reference_library.use(ensure_workspace_perm "upload"):路由只做归属与实例校验,
     # 取一条外部参考会在工作区里建素材 / 资产,领域函数自己把关。
     "reference_library.py:use_reference_item",
+    # 闸在 domain/translate.translate_for_member(ensure_workspace_member:翻译不改工作区的数据,查看者也能用);
+    # 智能体的 translate_text 调的是同一个函数。translate 是单个模块,不是带 use_cases.py 的包。
+    "translate.py:translate_texts",
 }
 
 

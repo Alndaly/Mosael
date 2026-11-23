@@ -14,8 +14,7 @@ from app.domain.capabilities import CapabilityUnavailable
 from app.domain.documents import use_cases as documents
 from app.domain.documents.extraction import extraction_dir, read_sections, latest_extraction
 from app.domain.documents.local import DocumentParseError
-from app.domain.analysis.service import AnalysisError
-from app.domain.documents.reading import DocumentReadError, document_text, read
+from app.domain.documents.reading import document_text
 
 router = APIRouter(tags=["documents"])
 
@@ -55,11 +54,7 @@ def read_document(asset_id: str, db: DbSession, user: CurrentUser,
     """给智能体读:目录 + 第 first–last 段的正文,从第 first 段的第 offset 个字起(有字数上限,超了 `next`
     说从哪接着读,可能是一段的中间)。还在解析会等一小会儿。"""
 
-    asset = documents.readable_document(db, user, asset_id)
-    try:
-        return read(db, asset.workspace_id, asset.id, first, last, offset)
-    except DocumentReadError as exc:
-        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    return documents.read_readable(db, user, asset_id, first=first, last=last, offset=offset)
 
 
 @router.get("/assets/{asset_id}/document/text", response_model=DocumentTextOut)
@@ -80,12 +75,7 @@ def document_full_text(asset_id: str, db: Tx, user: CurrentUser) -> dict:
 def analyze_document(asset_id: str, body: DocumentPagesRequest, db: DbSession, user: CurrentUser) -> dict:
     """那几页的页面图 + 文字交给视觉模型(看版式、图表、截图)。"""
 
-    try:
-        return documents.analyze(db, user, asset_id, body.pages, body.question, body.profile_id)
-    except DocumentReadError as exc:
-        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
-    except AnalysisError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return documents.analyze(db, user, asset_id, body.pages, body.question, body.profile_id)
 
 
 @router.post("/assets/{asset_id}/note", response_model=DocumentNoteOut)

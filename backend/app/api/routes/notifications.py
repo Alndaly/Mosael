@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
-from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import NotificationListOut, NotificationOut, NotifyRequest
 from app.db.models import Notification
@@ -18,10 +17,7 @@ def create_notification(body: NotifyRequest, db: Tx, user: CurrentUser) -> Notif
     工作流的「发送通知」节点走的是同一个领域函数;这条端点是为了让智能体也能用 ——
     同一个能力不该因为入口不同而只存在于一边。
     """
-    rows = notifications.post(db, user, body.workspace_id, body.title, body.body)
-    if not rows:
-        raise HTTPException(status_code=422, detail=tr("routeErr_noNotifiableMembers"))
-    return rows[0]
+    return notifications.post(db, user, body.workspace_id, body.title, body.body)
 
 
 @router.get("/notifications", response_model=NotificationListOut)

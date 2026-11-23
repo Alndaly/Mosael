@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, AssetExtraction, Note, User
 from app.domain.documents.extraction import ensure_parsed, start_parse
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
-from app.domain.documents.reading import analyze_pages
+from app.domain.documents.reading import analyze_pages, read
 from app.domain.documents.to_note import save_as_note as _save
 from app.domain.documents.web_page import page_note_content
 
@@ -57,6 +57,15 @@ def list_extractions(db: Session, user: User, asset_id: str) -> list[AssetExtrac
 def parse(db: Session, user: User, asset_id: str, provider_id: str | None) -> AssetExtraction:
     asset = _document_for(db, user, asset_id, "upload")
     return start_parse(db, asset, owner_user_id=user.id, provider_id=provider_id, created_by=user.id)
+
+
+def read_readable(
+    db: Session, user: User, asset_id: str, *, first: int = 1, last: int | None = None, offset: int = 0
+) -> dict[str, Any]:
+    """给智能体读:目录 + 第 first–last 段的正文,从第 first 段的第 offset 个字起(有字数上限,超了 `next`
+    说从哪接着读,可能是一段的中间)。还在解析会等一小会儿。"""
+    asset = readable_document(db, user, asset_id)
+    return read(db, asset.workspace_id, asset.id, max(1, first), last, max(0, offset))
 
 
 def analyze(

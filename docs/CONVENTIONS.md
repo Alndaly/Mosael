@@ -217,6 +217,11 @@ fix(engines): 同一 ASR 引擎的运行环境安装与删除串行
 - **入口层包住一次用例**。写操作的路由用 `Tx`(`api/deps`)代替 `DbSession`,路由里也不写 `db.commit()`;
   后台线程、工具、节点用 `with unit_of_work() as db:`。`Tx` 在响应发出之前提交,提交失败就是这次请求的 500。
 - **授权在领域函数里**。领域函数收行动人(`domain/authority.Actor`)、自己把关,入口层不再各写一份。
+- **拒绝抛领域错误,状态码只在 `api/domain_errors.STATUS_BY_ERROR` 翻一次**。路由不再逐个
+  `except XxxError: raise HTTPException(...)`;新加一类领域错误,在那张表里登记它的码(或让它带 `status`)。
+- **智能体工具只调用例**(`mcp_server._use_case`),不 import 路由模块。逻辑长在路由里(出参组装、按人筛选)
+  就先把它搬进领域(例如 `domain/entities/projections`、`domain/browser/profile_cards`),再让两边都调它。
+  棘轮:`tests/test_browser_act_has_one_gate.py`。
 
 存量按领域逐个迁移,`tests/test_use_case_boundaries_ratchet.py` 让两类旧写法只减不增。
 

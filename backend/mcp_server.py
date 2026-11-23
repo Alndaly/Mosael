@@ -4,8 +4,10 @@
 和后端进程内给 pi sidecar 用的工具集 —— 前者要求工具体经 HTTP 回连后端(独立进程只能这么做),于是
 后者也跟着绕一圈:进程内序列化 → HTTP → 反序列化,还得为这一圈专门铸一份短期令牌。
 
-工具体直接调领域用例(`_use_case`),逻辑长在路由里的只读查询直接调路由函数本体(`_route`),都在同一个
-进程、同一次事务里,不经 HTTP。MCPServer 对象现在只用来按函数签名生成参数 schema。
+工具体一律直接调领域用例(`_use_case`):同一个进程、同一次事务,不经 HTTP;闸在用例里,拒绝就是领域
+错误,invoke 那一层把它变成给模型看的 {"error": ...}。此前还有一条借道 —— 直接调**路由函数本体**
+(`_route`),它把 HTTPException 拼成 `"403: …"`,工具层因此有两套错误契约;那些逻辑已搬进领域,借道已删。
+MCPServer 对象现在只用来按函数签名生成参数 schema。
 """
 
 from __future__ import annotations
@@ -36,31 +38,6 @@ def _workspaces() -> list[dict[str, Any]]:
     return _use_case(
         lambda db, user: [{"id": ws.id, "name": ws.name, "role": role} for ws, role in members.workspaces_of(db, user.id)]
     )
-
-
-def _route(fn, *, out: Any = None, **params: Any) -> Any:
-    """在进程内直接调一个**路由函数本体**(不经 HTTP)—— 给逻辑就长在路由里的只读查询用(按人的设置、
-    展示用的组装)。闸、查询、出口形状都是那一份;`out` 传它的 response_model:经 HTTP 时那一层会把
-    ORM 对象按它过滤(比如发布账号不带登录态),直接调同样要过滤。
-
-    **每个参数都要显式给**:直接调用时,没给的参数拿到的是 `Query(...)` 那个对象本身,而不是它的默认值。
-    路由抛的 HTTPException 变成一句模型读得懂的错误,带着状态码和原因,模型据此自己纠正。
-    """
-    from fastapi import HTTPException
-    from fastapi.encoders import jsonable_encoder
-
-    def call(db, user):
-        try:
-            result = fn(db=db, user=user, **params)
-        except HTTPException as exc:
-            raise ValueError(f"{exc.status_code}: {exc.detail}") from None
-        if out is not None:
-            result = (
-                [out.model_validate(item) for item in result] if isinstance(result, list) else out.model_validate(result)
-            )
-        return jsonable_encoder(result)
-
-    return _use_case(call)
 
 
 def _default_workspace_id() -> str:
@@ -1498,9 +1475,9 @@ def list_provider_models(capability: str = "", surface: str = "") -> dict[str, A
         raise ValueError(f"unknown surface {surface!r}; valid values are {list(_SURFACES)}")
     # 能力清单从 provider-defaults 的回包推导 —— 它每种能力回一行。在这里另抄一份
     # DEFAULTABLE_CAPABILITIES 就成了第二份名单,而后端加一种能力时没有任何东西会提醒它。
-    from app.api.routes.settings.provider_defaults import list_capability_models, list_provider_defaults
+    from app.domain.providers import choices
 
-    defaults = _route(list_provider_defaults)
+    defaults = _use_case(choices.defaults_of)
     known = [row["capability"] for row in defaults]
     if capability and capability not in known:
         raise ValueError(f"unknown capability {capability!r}; this backend has {known}")
@@ -1512,7 +1489,7 @@ def list_provider_models(capability: str = "", surface: str = "") -> dict[str, A
     }
     models: list[dict[str, Any]] = []
     for one in [capability] if capability else known:
-        for item in _route(list_capability_models, capability=one, surface=surface or "all"):
+        for item in _use_case(choices.capability_models, one, surface or "all"):
             models.append(
                 {
                     "capability": one,
@@ -1541,12 +1518,13 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
     Each entry's "prompt" says whether the model needs a prompt: "required", "optional", or
     "none" (it takes none — an upscale workflow; send it no prompt).
     """
-    from app.api.routes.generation import list_generation_options
+    from app.api.schemas import GenerationOptionOut
+    from app.domain.generation.resolution import generation_options
 
     kinds = [kind] if kind in _GENERATION_KINDS else list(_GENERATION_KINDS)
     out: list[dict[str, Any]] = []
     for one in kinds:
-        for item in _route(list_generation_options, kind=one):
+        for item in _use_case(lambda db, user, kind=one: generation_options(db, kind, user_id=user.id), out=GenerationOptionOut):
             capabilities = item.get("capabilities") or {}
             out.append(
                 {
@@ -1985,9 +1963,9 @@ def read_document(asset_id: str, first: int = 1, last: int = 0, offset: int = 0)
     on a page, use analyze_document_pages. Do NOT use for knowledge-base notes (read_note) or
     for image/video/audio assets (analyze_asset).
     """
-    from app.api.routes.documents import read_document as read
+    from app.domain.documents import use_cases as documents
 
-    return _route(read, asset_id=asset_id, first=max(1, first), last=last or None, offset=max(0, offset))
+    return _use_case(documents.read_readable, asset_id, first=first, last=last or None, offset=offset)
 
 
 @tool(effect="confirms")
@@ -2022,10 +2000,9 @@ def analyze_document_pages(asset_id: str, pages: list[int], question: str = "") 
     computer (read_document's `page_images` says how many there are). Use read_document for
     the text itself.
     """
-    from app.api.routes.documents import analyze_document
-    from app.api.schemas import DocumentPagesRequest
+    from app.domain.documents import use_cases as documents
 
-    return _route(analyze_document, asset_id=asset_id, body=DocumentPagesRequest(pages=pages, question=question))
+    return _use_case(documents.analyze, asset_id, pages, question, None)
 
 
 @tool(effect="writes")
@@ -2606,11 +2583,10 @@ def _in_frame(frame: str) -> dict[str, str]:
 
 
 def _browser_act(session_id: str, action: str, args: dict[str, Any], workspace_id: str) -> dict[str, Any]:
-    from app.api.routes.agent_browser import ActRequest, act
+    from app.domain.browser import use_cases as sessions
 
-    request = ActRequest(workspace_id=workspace_id or _default_workspace_id(), session_id=session_id, action=action, args=args)
-    resp = _route(act, body=request)
-    return resp.get("result", {}) if isinstance(resp, dict) else {}
+    workspace_id = workspace_id or _default_workspace_id()
+    return _use_case(sessions.act, workspace_id, session_id, action, args) or {}
 
 
 @tool(effect="confirms")
@@ -2645,10 +2621,11 @@ def browser_pool_list(workspace_id: str = "") -> dict[str, Any]:
     (publish accounts + generic site logins they manage). Returns each profile's id, name, platform
     (null = generic) and whether it's logged in. NO cookies or credentials are exposed. Use this to find
     the right profile, then browser_pool_open(profile_id) to REQUEST the user's approval to use it."""
-    from app.api.routes.browser_profiles import list_profiles
     from app.api.schemas import BrowserProfileOut
+    from app.domain.browser import profile_cards
 
-    rows = _route(list_profiles, workspace_id=workspace_id or _default_workspace_id(), out=BrowserProfileOut)
+    workspace_id = workspace_id or _default_workspace_id()
+    rows = _use_case(profile_cards.list_cards, workspace_id, out=BrowserProfileOut)
     profiles = []
     if isinstance(rows, list):
         for p in rows:
@@ -2788,9 +2765,11 @@ def browser_wait(
 @tool(effect="writes")
 def browser_close(session_id: str, workspace_id: str = "") -> dict[str, Any]:
     """Close a browser session (frees the view; a throwaway session's cookies/storage are wiped)."""
-    from app.api.routes.agent_browser import CloseRequest, close
+    from app.domain.browser import use_cases as sessions
 
-    return _route(close, body=CloseRequest(workspace_id=workspace_id or _default_workspace_id(), session_id=session_id))
+    workspace_id = workspace_id or _default_workspace_id()
+    _use_case(sessions.close_session, workspace_id, session_id)
+    return {"ok": True}
 
 
 @tool(effect="reads")
@@ -2874,14 +2853,16 @@ def list_entities(kind: str = "", query: str = "", tag: str = "", workspace_id: 
     To use one in a generation, pass its id in entity_ids of generate_image / generate_video
     instead of picking reference images yourself.
     """
-    from app.api.routes.entities import summaries_out
-    from app.domain.entities import use_cases
+    from app.api.schemas import EntitySummaryOut
+    from app.domain.entities import projections, use_cases
+
+    workspace_id = workspace_id or _default_workspace_id()
 
     def listing(db, user) -> list[dict[str, Any]]:
-        rows = use_cases.list_entities(db, user, workspace_id or _default_workspace_id(), kind=kind, tag=tag, query=query)
-        return [row.model_dump(mode="json") for row in summaries_out(db, rows)]
+        rows = use_cases.list_entities(db, user, workspace_id, kind=kind, tag=tag, query=query)
+        return projections.summaries(db, rows)
 
-    return _use_case(listing)
+    return _use_case(listing, out=EntitySummaryOut)
 
 
 @tool(effect="reads")
@@ -2891,10 +2872,10 @@ def get_entity(entity_id: str) -> dict[str, Any]:
     three_quarter / high_angle / low_angle / concept / detail), cover, per-kind attributes (a character's
     voice_id, blockout color, whether it is a real person and the consent declared; a location's 3D scene
     and time of day; a prop's 3D model; a pose's posture and number of people) and its variants."""
-    from app.api.routes.entities import entity_out
-    from app.domain.entities import use_cases
+    from app.api.schemas import EntityOut
+    from app.domain.entities import projections, use_cases
 
-    return _use_case(lambda db, user: entity_out(db, use_cases.entity(db, user, entity_id)).model_dump(mode="json"))
+    return _use_case(lambda db, user: projections.detail(db, use_cases.entity(db, user, entity_id)), out=EntityOut)
 
 
 @tool(effect="writes")
@@ -2927,14 +2908,13 @@ def create_entity(
     }
     if parent_id:
         body["parent_id"] = parent_id
-    from app.api.routes.entities import entity_out
-    from app.api.schemas import EntityCreate
-    from app.domain.entities import use_cases
+    from app.api.schemas import EntityCreate, EntityOut
+    from app.domain.entities import projections, use_cases
 
     request = EntityCreate(**body)
     fields = request.model_dump(exclude={"workspace_id"})
     return _use_case(
-        lambda db, user: entity_out(db, use_cases.create(db, user, request.workspace_id, **fields)).model_dump(mode="json")
+        lambda db, user: projections.detail(db, use_cases.create(db, user, request.workspace_id, **fields)), out=EntityOut
     )
 
 
@@ -2943,8 +2923,8 @@ def set_entity_voice(entity_id: str, engine: str, voice: str) -> dict[str, Any]:
     """Give a CHARACTER in the asset library its voice (a workspace edit, no confirmation). engine and voice come from
     list_speech_engines (e.g. "builtin:edge" + "zh-CN-XiaoyiNeural"). Workflows then speak that character's lines in it
     (Topic to finished video voices each line by its speaker). Empty voice clears it."""
-    from app.api.routes.entities import entity_out
-    from app.domain.entities import use_cases
+    from app.api.schemas import EntityOut
+    from app.domain.entities import projections, use_cases
     from app.domain.voices import engine_catalog
 
     def apply(db, user) -> dict[str, Any]:
@@ -2955,9 +2935,9 @@ def set_entity_voice(entity_id: str, engine: str, voice: str) -> dict[str, Any]:
         if voice.strip():
             choice = engine_catalog.voice_choice(db, engine=engine, voice=voice, user_id=user.id)
             attributes["voice"] = choice.to_json()
-        return entity_out(db, use_cases.update(db, user, entity_id, attributes=attributes)).model_dump(mode="json")
+        return projections.detail(db, use_cases.update(db, user, entity_id, attributes=attributes))
 
-    return _use_case(apply)
+    return _use_case(apply, out=EntityOut)
 
 
 @tool(effect="writes")
@@ -2970,15 +2950,15 @@ def attach_entity_reference(entity_id: str, asset_id: str, role: str = "", cover
     detail) and costumes front, back, side, detail or concept (empty = front, concept for locations). Attaching
     the same asset again changes its role. cover=true also makes it the cover image.
     """
-    from app.api.routes.entities import entity_out
-    from app.api.schemas import EntityReferenceAdd
-    from app.domain.entities import use_cases
+    from app.api.schemas import EntityOut, EntityReferenceAdd
+    from app.domain.entities import projections, use_cases
 
     request = EntityReferenceAdd(asset_id=asset_id, role=role, cover=cover)
     return _use_case(
-        lambda db, user: entity_out(
+        lambda db, user: projections.detail(
             db, use_cases.add_reference(db, user, entity_id, request.asset_id, request.role, cover=request.cover)
-        ).model_dump(mode="json")
+        ),
+        out=EntityOut,
     )
 
 
@@ -4078,10 +4058,10 @@ def get_confirmation(confirmation_id: str) -> dict[str, Any] | list[TextContent 
     so you see the post-action state without another round trip. Do NOT call this
     to find projects, assets, workflows, jobs, or arbitrary IDs.
     """
-    from app.api.routes.confirmations import get_confirmation as read
     from app.api.schemas import ConfirmationOut
+    from app.domain.agent import use_cases as agent_use_cases
 
-    confirmation = _route(read, confirmation_id=confirmation_id, out=ConfirmationOut)
+    confirmation = _use_case(agent_use_cases.confirmation, confirmation_id, out=ConfirmationOut)
     result = confirmation["result"]
     data = {
         "confirmation_id": confirmation["id"],
@@ -4158,19 +4138,12 @@ def translate_text(text: str, target: str, engine: str = "", workspace_id: str =
     what is available rather than silently becoming Google.
     Do NOT use for transcribing audio — that is transcribe_asset.
     """
-    from app.api.routes.translate import translate_texts
-    from app.api.schemas.translate import TranslateRequest, TranslateResponse
+    from app.domain.translate import translate_for_member
 
-    body = _route(
-        translate_texts,
-        # engine 原样交出去:旧 id 由能力表一处归一(capabilities.canonical_id),认不出的由它报错。
-        body=TranslateRequest(
-            workspace_id=workspace_id or _default_workspace_id(), texts=[text], target_lang=target,
-            engine=engine,
-        ),
-        out=TranslateResponse,
-    )
-    return {"text": (body.get("translations") or [""])[0]}
+    workspace_id = workspace_id or _default_workspace_id()
+    # engine 原样交出去:旧 id 由能力表一处归一(capabilities.canonical_id),认不出的由它报错。
+    translations = _use_case(translate_for_member, workspace_id, [text], target, engine=engine)
+    return {"text": (translations or [""])[0]}
 
 
 @tool(effect="writes")
@@ -4369,11 +4342,11 @@ def notify_workspace(title: str, body: str = "", workspace_id: str = "") -> dict
     Use to report the end of something long the user asked you to do while they were away.
     Do NOT use to talk to the user in this conversation — just say it in your reply.
     """
-    from app.api.routes.notifications import create_notification
-    from app.api.schemas import NotificationOut, NotifyRequest
+    from app.api.schemas import NotificationOut
+    from app.domain.notifications import use_cases as notifications
 
-    request = NotifyRequest(workspace_id=workspace_id or _default_workspace_id(), title=title, body=body)
-    return _route(create_notification, body=request, out=NotificationOut)
+    workspace_id = workspace_id or _default_workspace_id()
+    return _use_case(notifications.post, workspace_id, title, body, out=NotificationOut)
 
 
 @tool(effect="reads")
@@ -4483,11 +4456,10 @@ def notify_agent_session(session_id: str, message: str) -> dict[str, Any]:
     # 来源只走结构化字段。信封(给模型看的那句「这条来自另一个会话」)由收信那侧在**拼提示词
     # 时**加上,见 host.agent_notice_envelope —— 拼进 content 的话,用户在对话里看到的就是一行
     # 方括号标签加一串 32 位 id,而那两样都是写给模型的。
-    from app.api.routes.agent import post_agent_message
-    from app.api.schemas import AgentMessageCreate, AgentMessageOut
+    from app.api.schemas import AgentMessageOut
+    from app.domain.agent import host
 
-    request = AgentMessageCreate(content=text, origin_session_id=me or None)
-    result = _route(post_agent_message, session_id=session_id, body=request, out=AgentMessageOut)
+    result = _use_case(host.post_from_session, session_id, text, origin_session_id=me or None, out=AgentMessageOut)
     queued = bool((result.get("payload") or {}).get("queued")) if isinstance(result, dict) else False
     return {
         "delivered": True,
@@ -4583,10 +4555,11 @@ def publish_asset(
 @tool(effect="reads")
 def list_publish_accounts(workspace_id: str = "") -> list[dict[str, Any]]:
     """Read-only: the platform accounts already logged in, for publish_asset."""
-    from app.api.routes.publish import list_accounts
     from app.api.schemas import PublishAccountOut
+    from app.domain.publish import use_cases as publish_uc
 
-    return _route(list_accounts, workspace_id=workspace_id or _default_workspace_id(), out=PublishAccountOut)
+    workspace_id = workspace_id or _default_workspace_id()
+    return _use_case(publish_uc.list_accounts, workspace_id, out=PublishAccountOut)
 
 
 @tool(effect="reads")
@@ -4599,10 +4572,11 @@ def list_publish_tasks(status: str = "", limit: int = 20, workspace_id: str = ""
     post_id means the platform's reply was not read at publish time — do not guess one from
     the title. `status` filters (success / failed / running / pending …).
     """
-    from app.api.routes.publish import list_publish_tasks
     from app.api.schemas import PublishTaskOut
+    from app.domain.publish import use_cases as publish_uc
 
-    tasks = _route(list_publish_tasks, workspace_id=workspace_id or _default_workspace_id(), out=PublishTaskOut)
+    workspace_id = workspace_id or _default_workspace_id()
+    tasks = _use_case(publish_uc.list_tasks_with_status, workspace_id, out=PublishTaskOut)
     if status:
         tasks = [task for task in tasks if task.get("status") == status]
     keep = ("id", "platform", "account_name", "asset_id", "asset_name", "title", "status", "error", "post", "created_at")

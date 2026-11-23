@@ -409,3 +409,24 @@ def _plugin_translate(db, provider: Provider, texts: list[str], target: str) -> 
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise TranslateError("translateErr_pluginFailed", plugin=provider.name, detail=str(exc)[:500]) from exc
     return translated
+
+
+def translate_for_member(
+    db,
+    user,
+    workspace_id: str,
+    texts: list[str],
+    target: str,
+    *,
+    engine: str = "",
+    profile_id: str | None = None,
+) -> list[str]:
+    """在某个工作区里翻一批文字(POST /api/translate 与智能体的 translate_text 共用)。
+
+    闸是「是这个工作区的人」而不是「能访问」:翻译不改工作区的任何数据,查看者也该能用。过闸的同时
+    把工作区绑进上下文,AI 翻译的用量据此归属。用量记账跟着调用方的事务走,调用方负责提交。
+    """
+    from app.domain.permissions import ensure_workspace_member
+
+    ensure_workspace_member(db, user, workspace_id)
+    return translate_many(db, list(texts), target, user_id=user.id, engine=engine, profile_id=profile_id)

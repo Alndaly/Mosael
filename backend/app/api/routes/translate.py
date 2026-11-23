@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.i18n import get_current_locale, t
 from app.api.schemas import TranslateRequest, TranslateResponse
-from app.domain.permissions import ensure_workspace_member
-from app.domain.translate import TranslateError, translate_many
+from app.domain.translate import translate_for_member
 
 router = APIRouter(tags=["translate"])
 
@@ -14,21 +12,9 @@ router = APIRouter(tags=["translate"])
 @router.post("/translate", response_model=TranslateResponse)
 def translate_texts(body: TranslateRequest, db: DbSession, user: CurrentUser) -> dict:
     """翻一批文字,用哪一家见 domain/translate(能力表)。空串原样回。"""
-    # ensure_workspace_member 而不是 ensure_workspace_access:翻译不改这个工作区的任何数据,
-    # 查看者也该能用。过闸门的同时把工作区绑进上下文,AI 翻译的用量据此归属。
-    ensure_workspace_member(db, user, body.workspace_id)
-    try:
-        out = translate_many(
-            db,
-            list(body.texts),
-            body.target_lang,
-            user_id=user.id,
-            engine=body.engine,
-            profile_id=body.profile_id,
-        )
-    except TranslateError as exc:
-        # 出口才翻:领域抛的是 key,这里按请求方的 Accept-Language 渲染。
-        raise HTTPException(status_code=502, detail=t(exc.key, get_current_locale(), **exc.params)) from exc
+    out = translate_for_member(
+        db, user, body.workspace_id, list(body.texts), body.target_lang, engine=body.engine, profile_id=body.profile_id
+    )
     # 翻译本身不改这个工作区的数据,但 AI 引擎记了一笔账 —— 记账跟着调用方的事务走
     # (见 domain/billing/usage.billable 里为什么必须这样),所以只读接口也得落一次盘。
     db.commit()

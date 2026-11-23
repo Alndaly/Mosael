@@ -75,6 +75,14 @@ def ensure_can_browse(db: Session, user: User, workspace_id: str) -> None:
     ensure_workspace_access(db, user, workspace_id)
 
 
+def list_tasks_with_status(db: Session, user: User, workspace_id: str) -> list[dict]:
+    """这个工作区的发布任务,每条带上它现在的状态(界面的发布列表与智能体的 list_publish_tasks 共用)。"""
+    from app.domain.publish import list_tasks, task_with_status
+
+    ensure_can_browse(db, user, workspace_id)
+    return [task_with_status(db, task) for task in list_tasks(db, workspace_id)]
+
+
 def ensure_can_publish(db: Session, user: User, workspace_id: str) -> None:
     """在这个工作区里接账号、发东西、生成发布文案。"""
     ensure_workspace_perm(db, user, workspace_id, "publish")

@@ -37,9 +37,9 @@ SEAMS = {
 
 #: 收用户给出的本机路径(或在本机跑代码)的入口 —— 每一个的函数体里都必须过 host_files。
 #: 新加一个这样的入口,加进这里;它会先在这里红,而不是先在别人的电脑上漏。
+#: 浏览器上传的三个入口(接口、智能体工具、工作流节点)都经 `browser.use_cases.upload_into`,所以登记的是它。
 ENTRY_POINTS = {
-    ("app/domain/workflows/executors/browser.py", "browser_upload"),
-    ("app/api/routes/agent_browser.py", "act"),
+    ("app/domain/browser/use_cases.py", "upload_into"),
     ("app/api/routes/assets.py", "import_local_asset"),
     ("app/domain/agent/confirmable/external.py", "_execute_run_host_code"),
     ("app/domain/agent/confirmable/blender.py", "_execute_blender_execute"),

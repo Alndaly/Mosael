@@ -1,7 +1,7 @@
 """资产库(ADR 0027)的接口:人物 / 场景 / 道具、参考图、变体、封面,以及反查。
 
 领域在 domain/entities;闸在 domain/entities/use_cases(每个资产先查它在哪个工作区,再按那个工作区过闸)。
-这里只认人、把行翻成出口的形状(entity_out / summaries_out,智能体工具也用它们)。
+这里只认人;出口的形状在 domain/entities/projections(智能体工具也用它)。
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
@@ -29,8 +28,8 @@ from app.api.schemas import (
     JobOut,
 )
 from app.core.i18n import get_current_locale, t, render_message
-from app.db.models import Entity, Job
-from app.domain.entities import library as entities_library, catalog, use_cases
+from app.db.models import Job
+from app.domain.entities import projections, use_cases
 from app.domain.consent import CONSENT_KINDS
 from app.domain.entities.shot_angles import SHOT_ANGLES
 from app.domain.entities.catalog import (
@@ -46,61 +45,6 @@ from app.domain.workflows import use_cases as workflow_use_cases
 from app.domain.workflows.errors import WorkflowDomainError
 
 router = APIRouter(tags=["entities"])
-
-
-def summaries_out(db: Session, rows: list[Entity]) -> list[EntitySummaryOut]:
-    refs, variants, first = entities_library.counts_for(db, [row.id for row in rows])
-    parents = entities_library.parent_names(db, rows)
-    return [
-        EntitySummaryOut(
-            id=row.id,
-            kind=row.kind,
-            parent_id=row.parent_id,
-            parent_name=parents.get(row.parent_id or "", ""),
-            name=row.name,
-            cover_asset_id=entities_library.cover_of(row, first.get(row.id)),
-            tags=list(row.tags or []),
-            reference_count=refs.get(row.id, 0),
-            variant_count=variants.get(row.id, 0),
-            updated_at=row.updated_at,
-        )
-        for row in rows
-    ]
-
-
-def entity_out(db: Session, entity: Entity) -> EntityOut:
-    references = entities_library.references_of(db, entity.id)
-    first_image = next((asset.id for _, asset in references if asset.kind == "image"), None)
-    parent_name = entities_library.parent_names(db, [entity]).get(entity.parent_id or "", "")
-    return EntityOut(
-        id=entity.id,
-        workspace_id=entity.workspace_id,
-        kind=entity.kind,
-        parent_id=entity.parent_id,
-        parent_name=parent_name,
-        name=entity.name,
-        description=entity.description,
-        prompt=entity.prompt,
-        cover_asset_id=entity.cover_asset_id,
-        display_cover_asset_id=entities_library.cover_of(entity, first_image),
-        attributes=dict(entity.attributes or {}),
-        tags=list(entity.tags or []),
-        lost_references=list(entity.lost_references or []),
-        references=[
-            {
-                "asset_id": ref.asset_id,
-                "role": ref.role,
-                "position": ref.position,
-                "asset_kind": asset.kind,
-                "asset_name": asset.name,
-            }
-            for ref, asset in references
-        ],
-        variants=summaries_out(db, entities_library.variants_of(db, entity.id)),
-        usable_for_digital_human=catalog.usable_for_digital_human(dict(entity.attributes or {})),
-        created_at=entity.created_at,
-        updated_at=entity.updated_at,
-    )
 
 
 @router.get("/entities/catalog", response_model=EntityCatalogOut)
@@ -139,15 +83,15 @@ def list_entities(
     q: str = Query(default="", max_length=200),
     parent_id: str = "",
     include_variants: bool = False,
-) -> list[EntitySummaryOut]:
+) -> list[dict]:
     rows = use_cases.list_entities(
         db, user, workspace_id, kind=kind, tag=tag, query=q, parent_id=parent_id, include_variants=include_variants
     )
-    return summaries_out(db, rows)
+    return projections.summaries(db, rows)
 
 
 @router.post("/entities", response_model=EntityOut)
-def create_entity(body: EntityCreate, db: Tx, user: CurrentUser) -> EntityOut:
+def create_entity(body: EntityCreate, db: Tx, user: CurrentUser) -> dict:
     entity = use_cases.create(
         db,
         user,
@@ -160,18 +104,18 @@ def create_entity(body: EntityCreate, db: Tx, user: CurrentUser) -> EntityOut:
         tags=body.tags,
         parent_id=body.parent_id,
     )
-    return entity_out(db, entity)
+    return projections.detail(db, entity)
 
 
 @router.get("/entities/{entity_id}", response_model=EntityOut)
-def read_entity(entity_id: str, db: DbSession, user: CurrentUser) -> EntityOut:
-    return entity_out(db, use_cases.entity(db, user, entity_id))
+def read_entity(entity_id: str, db: DbSession, user: CurrentUser) -> dict:
+    return projections.detail(db, use_cases.entity(db, user, entity_id))
 
 
 @router.patch("/entities/{entity_id}", response_model=EntityOut)
-def update_entity(entity_id: str, body: EntityUpdate, db: Tx, user: CurrentUser) -> EntityOut:
+def update_entity(entity_id: str, body: EntityUpdate, db: Tx, user: CurrentUser) -> dict:
     changes = {name: getattr(body, name) for name in body.model_fields_set}
-    return entity_out(db, use_cases.update(db, user, entity_id, **changes))
+    return projections.detail(db, use_cases.update(db, user, entity_id, **changes))
 
 
 @router.delete("/entities/{entity_id}", status_code=204)
@@ -182,7 +126,7 @@ def delete_entity(entity_id: str, db: Tx, user: CurrentUser, with_variants: bool
 
 
 @router.post("/entities/{entity_id}/variants", response_model=EntityOut)
-def create_variant(entity_id: str, body: EntityVariantCreate, db: Tx, user: CurrentUser) -> EntityOut:
+def create_variant(entity_id: str, body: EntityVariantCreate, db: Tx, user: CurrentUser) -> dict:
     variant = use_cases.create_variant(
         db,
         user,
@@ -192,36 +136,36 @@ def create_variant(entity_id: str, body: EntityVariantCreate, db: Tx, user: Curr
         prompt=body.prompt,
         attributes=body.attributes,
     )
-    return entity_out(db, variant)
+    return projections.detail(db, variant)
 
 
 @router.delete("/entities/{entity_id}/lost-references", response_model=EntityOut)
-def dismiss_lost_references(entity_id: str, db: Tx, user: CurrentUser) -> EntityOut:
+def dismiss_lost_references(entity_id: str, db: Tx, user: CurrentUser) -> dict:
     """「少了哪几张参考图」那句提示看过了。"""
-    return entity_out(db, use_cases.dismiss_lost_references(db, user, entity_id))
+    return projections.detail(db, use_cases.dismiss_lost_references(db, user, entity_id))
 
 
 @router.post("/entities/{entity_id}/references", response_model=EntityOut)
-def add_reference(entity_id: str, body: EntityReferenceAdd, db: Tx, user: CurrentUser) -> EntityOut:
-    return entity_out(db, use_cases.add_reference(db, user, entity_id, body.asset_id, body.role, cover=body.cover))
+def add_reference(entity_id: str, body: EntityReferenceAdd, db: Tx, user: CurrentUser) -> dict:
+    return projections.detail(db, use_cases.add_reference(db, user, entity_id, body.asset_id, body.role, cover=body.cover))
 
 
 @router.put("/entities/{entity_id}/references/order", response_model=EntityOut)
-def reorder_references(entity_id: str, body: EntityReferenceOrder, db: Tx, user: CurrentUser) -> EntityOut:
-    return entity_out(db, use_cases.reorder_references(db, user, entity_id, body.asset_ids))
+def reorder_references(entity_id: str, body: EntityReferenceOrder, db: Tx, user: CurrentUser) -> dict:
+    return projections.detail(db, use_cases.reorder_references(db, user, entity_id, body.asset_ids))
 
 
 @router.patch("/entities/{entity_id}/references/{asset_id}", response_model=EntityOut)
 def update_reference(
     entity_id: str, asset_id: str, body: EntityReferenceUpdate, db: Tx, user: CurrentUser
-) -> EntityOut:
-    return entity_out(db, use_cases.set_reference_role(db, user, entity_id, asset_id, body.role))
+) -> dict:
+    return projections.detail(db, use_cases.set_reference_role(db, user, entity_id, asset_id, body.role))
 
 
 @router.delete("/entities/{entity_id}/references/{asset_id}", response_model=EntityOut)
-def remove_reference(entity_id: str, asset_id: str, db: Tx, user: CurrentUser) -> EntityOut:
+def remove_reference(entity_id: str, asset_id: str, db: Tx, user: CurrentUser) -> dict:
     """摘掉一张参考图。素材还在素材库里。"""
-    return entity_out(db, use_cases.remove_reference(db, user, entity_id, asset_id))
+    return projections.detail(db, use_cases.remove_reference(db, user, entity_id, asset_id))
 
 
 @router.post("/entities/{entity_id}/draw", response_model=JobOut)

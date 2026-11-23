@@ -76,7 +76,10 @@ def test_其余_fastapi_耦合只减不增(path: Path) -> None:
 
 def test_边界确实在翻领域异常() -> None:
     """反向守卫:上面那条只说领域层不抛 HTTP,不说有人接。**没人接 = 500。**"""
-    main = (DOMAIN.parent / "main.py").read_text(encoding="utf-8")
+    #: 翻译只在 api/domain_errors 的一张表里;表里每一类都装到应用上见 test_browser_act_has_one_gate。
+    from app.api.domain_errors import STATUS_BY_ERROR
+
+    registered = {error.__name__ for error in STATUS_BY_ERROR}
     for name in ("NotVisible", "PermissionDenied", "NoteDomainError",
                  "SceneDomainError", "BlenderDomainError"):
-        assert f"@app.exception_handler({name})" in main, f"{name} 没有装处理器,漏出去就是 500"
+        assert name in registered, f"{name} 没有装处理器,漏出去就是 500"

@@ -6,9 +6,8 @@ id(pool 页据此区分「发布账号」与通用档案)。删除受租约/绑�
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Response
 
-from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     BrowserProfileCreate,
@@ -18,79 +17,48 @@ from app.api.schemas import (
     BrowserSessionOut,
     BrowserSessionRunOut,
 )
-from app.db.models import BrowserProfile, BrowserSession, User
+from app.db.models import BrowserSession, User
 from app.domain import browser
-from app.domain.browser import use_cases as profiles
-from app.domain import publish
+from app.domain.browser import profile_cards, use_cases as profiles
 from app.domain.workflows import use_cases as workflow_uc
 
 router = APIRouter(tags=["browser-profiles"])
 
 
-def _serialize(db, prof: BrowserProfile, user: User, shared: set[str]) -> BrowserProfileOut:
-    """回档案 + 若被发布账号绑定则带上平台/账号 id(pool 页标注用)。"""
-    account = publish.account_on_profile(db, prof.id)
-    return BrowserProfileOut(
-        id=prof.id,
-        workspace_id=prof.workspace_id,
-        name=prof.name,
-        partition=prof.partition,
-        proxy=prof.proxy,
-        enabled=prof.enabled,
-        last_used_at=prof.last_used_at,
-        start_url=prof.start_url,
-        identity=prof.identity,
-        created_at=prof.created_at,
-        platform=account.platform if account else None,
-        bound_account_id=account.id if account else None,
-        binding_status=account.binding_status if account else None,
-        last_checked_at=account.last_checked_at if account else None,
-        last_error=account.last_error if account else None,
-        is_mine=prof.owner_user_id == user.id,
-        shared=prof.id in shared,
-    )
-
-
 @router.get("/browser/profiles", response_model=list[BrowserProfileOut])
-def list_profiles(workspace_id: str, db: DbSession, user: CurrentUser) -> list[BrowserProfileOut]:
+def list_profiles(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
     # 档案存的是**某人已登录的浏览器** —— 默认只有主人看得见(见 domain/sharing)。
-    shared = sharing.shared_ids(db, "browser_profile", workspace_id)
-    return [_serialize(db, prof, user, shared) for prof in profiles.list_profiles(db, user, workspace_id)]
+    return profile_cards.list_cards(db, user, workspace_id)
 
 
 @router.post("/browser/profiles", response_model=BrowserProfileOut)
-def create_profile(body: BrowserProfileCreate, db: Tx, user: CurrentUser) -> BrowserProfileOut:
+def create_profile(body: BrowserProfileCreate, db: Tx, user: CurrentUser) -> dict:
     prof = profiles.create_profile(db, user, body.workspace_id, name=body.name, proxy=body.proxy)
-    return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", body.workspace_id))
+    return profile_cards.card_of(db, prof, user)
 
 
 @router.patch("/browser/profiles/{profile_id}", response_model=BrowserProfileOut)
 def update_profile(
     profile_id: str, body: BrowserProfileUpdate, db: Tx, user: CurrentUser
-) -> BrowserProfileOut:
+) -> dict:
     prof = profiles.manageable_profile(db, user, profile_id)
     fields = body.model_fields_set
-    try:
-        prof = browser.update_profile(
-            db,
-            prof.workspace_id,
-            profile_id,
-            name=body.name if "name" in fields else None,
-            proxy=body.proxy if "proxy" in fields else browser._UNSET,
-            enabled=body.enabled if "enabled" in fields else None,
-            actor=user.id,
-        )
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except browser.BrowserDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", prof.workspace_id))
+    prof = browser.update_profile(
+        db,
+        prof.workspace_id,
+        profile_id,
+        name=body.name if "name" in fields else None,
+        proxy=body.proxy if "proxy" in fields else browser._UNSET,
+        enabled=body.enabled if "enabled" in fields else None,
+        actor=user.id,
+    )
+    return profile_cards.card_of(db, prof, user)
 
 
 @router.post("/browser/profiles/{profile_id}/opened", response_model=BrowserProfileOut)
 def record_opened(
     profile_id: str, body: BrowserProfileOpened, db: Tx, user: CurrentUser
-) -> BrowserProfileOut:
+) -> dict:
     """人在应用里用过这个档案:记下它停在哪一页(下次从这里开)和时间。
 
     打开一个新网址时、以及收起内嵌浏览器时各记一次 —— 后者才是「上次关掉时的那一页」。
@@ -99,18 +67,13 @@ def record_opened(
     last_used_at,于是一个刚登过、天天在用的档案卡片上一直写着「尚未使用」。
     """
     prof = profiles.record_opened(db, user, profile_id, body.url)
-    return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", prof.workspace_id))
+    return profile_cards.card_of(db, prof, user)
 
 
 @router.delete("/browser/profiles/{profile_id}", status_code=204)
 def delete_profile(profile_id: str, db: Tx, user: CurrentUser) -> Response:
     prof = profiles.manageable_profile(db, user, profile_id)
-    try:
-        browser.delete_profile(db, prof.workspace_id, profile_id, actor=user.id)
-    except sharing.NotManageableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except browser.BrowserDomainError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    browser.delete_profile(db, prof.workspace_id, profile_id, actor=user.id)
     return Response(status_code=204)
 
 

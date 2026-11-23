@@ -7,11 +7,10 @@ from fastapi import APIRouter, HTTPException
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate, VoiceRefBody
-from app.domain.providers import thinking, models as provider_models
-from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default, get_row
+from app.domain.providers import choices, models as provider_models
+from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default
 
 from app.domain.permissions import require_own_profile
-from app.domain.plugins.groups import readable_group
 from app.domain.voices import agent_voice, use_cases as voice_uc
 from app.domain.voices.defaults import UnknownVoiceEngine, VoiceNotInEngine
 from app.domain.voices.errors import VoiceError
@@ -19,25 +18,9 @@ from app.domain.voices.errors import VoiceError
 router = APIRouter(tags=["settings"])
 
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
-def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
-    """**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。"""
-
-    out: list[ProviderDefaultOut] = []
-    for capability in DEFAULTABLE_CAPABILITIES:
-        row = get_row(db, capability, user.id)
-        # 默认只存一处(指向模型行),连接与模型名从那一行推导出来给界面。
-        model = provider_models.model_row(db, row.provider_model_id if row else None)
-        out.append(
-            ProviderDefaultOut(
-                capability=capability,
-                provider_profile_id=model.provider_profile_id if model else None,
-                model=model.model_id if model else "",
-                # 恒真:能拿到行就说明是我自己设的(get_row 只查我这一条)。字段留着是因为
-                # 前端还在读它,而且它现在表达的是"这一格有没有被我设过"。
-                is_mine=row is not None,
-            )
-        )
-    return out
+def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[dict]:
+    """**我**在每种能力下的默认供应商 + 模型(见 domain/providers/choices)。"""
+    return choices.defaults_of(db, user)
 
 
 @router.get("/settings/capability-models/{capability}", response_model=list[CapabilityModelOut])
@@ -46,34 +29,10 @@ def list_capability_models(
     db: DbSession,
     user: CurrentUser,
     surface: Literal["all", "agent", "direct", "gateway", "automation"] = "all",
-) -> list[CapabilityModelOut]:
-    """某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛
-    选自己的默认模型(见 tests/test_who_owns_each_setting.py)。
-
-    界面直接列它,而不是"先选供应商再选模型" —— 后者是模型还不是实体时的形状,逼着用户
-    先知道"这个模型在哪条连接下",而那恰恰是他不关心的事。
-    """
-    if capability not in DEFAULTABLE_CAPABILITIES:
-        raise HTTPException(status_code=404, detail=tr("routeErr_unknownCapability"))
-    return [
-        CapabilityModelOut(
-            provider_profile_id=model.provider_profile_id,
-            provider_name=model.profile.name if model.profile is not None else "",
-            model=model.model_id,
-            display_name=model.display_name or "",
-            group=readable_group(model.declared_group),
-            # 思考能力跟着模型走:有的完全不思考,有的只能开/关,有的才分档。
-            # 界面据此决定给几个选项 —— 给一个点了没用的开关,比没有这个开关更坏。
-            reasoning=model.reasoning,
-            reasoning_effort=model.reasoning_effort,
-            # 「会不会思考」和「我们能不能把档位传过去」是两回事:Kimi k3 会思考、也分档,
-            # 但它关不掉,而且没有「中」。界面照这份清单渲染,不再自己推。
-            thinking_levels=thinking.profile_for(
-                model.profile.vendor if model.profile is not None else "", model.model_id
-            ).levels(),
-        )
-        for model in provider_models.models_for_capability(db, capability, user.id, surface=surface)
-    ]
+) -> list[dict]:
+    """某能力下所有可用模型,跨连接。界面直接列它,而不是「先选供应商再选模型」—— 后者是模型还不是
+    实体时的形状,逼着用户先知道「这个模型在哪条连接下」,而那恰恰是他不关心的事。"""
+    return choices.capability_models(db, user, capability, surface)
 
 
 @router.put("/settings/provider-defaults/{capability}", response_model=ProviderDefaultOut)

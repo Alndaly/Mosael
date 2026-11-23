@@ -8,10 +8,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 from sqlalchemy.orm import Session
 
 from app.db.models import BrowserProfile, BrowserSession, User, now
-from app.domain import browser, sharing
+from app.domain import browser, host_files, sharing
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 
 SHARE_KIND = "browser_profile"
@@ -90,3 +93,61 @@ def operable_session(db: Session, user: User, workspace_id: str, session_id: str
 def close_session(db: Session, user: User, workspace_id: str, session_id: str) -> None:
     operable_session(db, user, workspace_id, session_id)
     browser.close_session(db, session_id)
+
+
+#: 上传等多久(毫秒),调用方没给或给得不像数时用它。
+UPLOAD_TIMEOUT_MS = 15_000
+
+
+def act(db: Session, user: User, workspace_id: str, session_id: str, action: str, args: dict[str, Any]) -> Any:
+    """在一个开着的会话上跑一个动作(智能体的 browser_* 工具,经 POST /api/agent-browser/act 或工具层直调)。
+
+    闸只在这里:会话他能动手(`operable_session`)→ 上传的话来源要放行(`upload_into`)→ 交给执行器。
+    此前这三步写在路由里,工作流执行器手抄了第二步、拦的错误还不一样多。只抛领域错误。
+    """
+    operable_session(db, user, workspace_id, session_id)
+    if action != "upload":
+        return browser.run_action(session_id, action, args)
+    return upload_into(
+        db,
+        session_id,
+        workspace_id=workspace_id,
+        actor_id=user.id,
+        asset_id=str(args.get("asset_id") or ""),
+        path=str(args.get("path") or ""),
+        selector=str(args.get("selector") or ""),
+        frame=str(args.get("frame") or ""),
+        timeout_ms=_timeout_ms(args.get("timeout_ms")),
+    )
+
+
+def upload_into(
+    db: Session,
+    session_id: str,
+    *,
+    workspace_id: str,
+    actor_id: str | None,
+    asset_id: str = "",
+    path: str = "",
+    selector: str = "",
+    frame: str = "",
+    timeout_ms: int = UPLOAD_TIMEOUT_MS,
+    should_stop: Callable[[], bool] | None = None,
+) -> Any:
+    """往会话里的 <input type=file> 塞一个文件。素材和本机路径只能给一个,都经 domain/host_files 放行。
+
+    不放行就把来源原样交给执行器的话,`{"path": "~/.ssh/id_rsa"}` 就能把这台电脑上的私钥塞进任意网页。
+    拒绝抛 `HostFileError` / `HostFileNotAllowed` / `NotVisible`,执行失败抛 `BrowserDomainError` —— 调用方按类型分。
+    会话能不能动手由调用方先过(智能体走 `act`,工作流的会话是这次运行自己开的)。
+    """
+    file = host_files.upload_source(db, workspace_id=workspace_id, asset_id=asset_id, path=path, actor=actor_id)
+    return browser.upload_file(
+        session_id, file, selector=selector, frame=frame, timeout_ms=timeout_ms, should_stop=should_stop
+    )
+
+
+def _timeout_ms(value: Any) -> int:
+    try:
+        return int(float(value or UPLOAD_TIMEOUT_MS))
+    except (TypeError, ValueError):
+        return UPLOAD_TIMEOUT_MS

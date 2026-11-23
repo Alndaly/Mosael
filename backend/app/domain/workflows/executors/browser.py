@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job
 from app.domain import browser, host_files, sharing
+from app.domain.browser import use_cases as sessions
 from app.domain.jobs import current_parent_job_id
 from app.domain.permissions import NotVisible
 from app.domain.workflows.errors import WorkflowDomainError
@@ -249,20 +250,22 @@ def browser_upload(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     否则同事在工作流里填一个 `~/.ssh/id_rsa`,就能把主人的私钥塞进任意网页。
     """
     sid = _session_in(db, scope, config)
+    selector = str(config.get("selector") or "").strip()
     try:
-        file = host_files.upload_source(
+        sessions.upload_into(
             db,
+            sid,
             workspace_id=scope.workspace_id,
+            actor_id=current_authority(db),
             asset_id=str(config.get("asset_id") or ""),
             path=str(config.get("file_path") or ""),
-            actor=current_authority(db),
+            selector=selector,
+            frame=_frame(config),
+            timeout_ms=_int(config.get("timeout_ms"), sessions.UPLOAD_TIMEOUT_MS),
+            should_stop=halted,
         )
     except (host_files.HostFileError, host_files.HostFileNotAllowed, NotVisible) as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    timeout_ms = _int(config.get("timeout_ms"), 15_000)
-    selector = str(config.get("selector") or "").strip()
-    try:
-        browser.upload_file(sid, file, selector=selector, frame=_frame(config), timeout_ms=timeout_ms, should_stop=halted)
     except browser.BrowserDomainError as exc:
         _raise_failure(exc, sid, "upload", {"selector": selector})
     return {"session": sid}

@@ -171,22 +171,19 @@ def post_agent_message(
     session_id: str, body: AgentMessageCreate, db: DbSession, user: CurrentUser
 ) -> AgentMessage:
     session = writable_session(db, user, session_id)
-    try:
-        return host.post_user_message(
-            db,
-            session,
-            body.content,
-            user,
-            context=body.context,
-            references=[reference.model_dump() for reference in body.references],
-            body_document=body.body_document,
-            origin_session_id=body.origin_session_id,
-            quote=body.quote.model_dump() if body.quote else None,
-            skills=body.skills,
-            place=_place(body.place.kind, body.place.id) if body.place else None,
-        )
-    except host.HostError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return host.post_user_message(
+        db,
+        session,
+        body.content,
+        user,
+        context=body.context,
+        references=[reference.model_dump() for reference in body.references],
+        body_document=body.body_document,
+        origin_session_id=body.origin_session_id,
+        quote=body.quote.model_dump() if body.quote else None,
+        skills=body.skills,
+        place=_place(body.place.kind, body.place.id) if body.place else None,
+    )
 
 
 @router.post("/agent/sessions/{session_id}/compact", response_model=AgentCompactOut)

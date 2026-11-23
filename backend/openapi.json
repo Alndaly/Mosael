@@ -18929,7 +18929,7 @@
           "settings"
         ],
         "summary": "List Provider Defaults",
-        "description": "**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。",
+        "description": "**我**在每种能力下的默认供应商 + 模型(见 domain/providers/choices)。",
         "operationId": "list_provider_defaults_api_settings_provider_defaults_get",
         "responses": {
           "200": {
@@ -18965,7 +18965,7 @@
           "settings"
         ],
         "summary": "List Capability Models",
-        "description": "某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛\n选自己的默认模型(见 tests/test_who_owns_each_setting.py)。\n\n界面直接列它,而不是\"先选供应商再选模型\" —— 后者是模型还不是实体时的形状,逼着用户\n先知道\"这个模型在哪条连接下\",而那恰恰是他不关心的事。",
+        "description": "某能力下所有可用模型,跨连接。界面直接列它,而不是「先选供应商再选模型」—— 后者是模型还不是\n实体时的形状,逼着用户先知道「这个模型在哪条连接下」,而那恰恰是他不关心的事。",
         "operationId": "list_capability_models_api_settings_capability_models__capability__get",
         "parameters": [
           {

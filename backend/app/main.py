@@ -77,15 +77,7 @@ from app.db.migrations import init_db
 
 logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
-from app.domain.permissions import NotVisible, PermissionDenied
-from app.domain.assets.project_scope import AssetProjectError
-from app.domain.assets.deletion import AssetNotDeletable
-from app.domain.assets.importer import AssetFileTypeError
-from app.domain.notes import NoteDomainError
-from app.domain.scenes.operations import SceneDomainError
-from app.domain.agent.skills.catalog import SkillDomainError
-from app.domain.entities.library import EntityDomainError
-from app.domain.blender.bridge import BlenderDomainError
+from app.api.domain_errors import install_domain_error_handlers
 from app.domain.voices.remote import RemoteConsentRequired
 from app.domain.jobs import register_external_kind
 from app.domain.restart import settle_previous_run
@@ -241,68 +233,13 @@ def _prepare_network() -> None:
         media_tools.apply_to_process(db)
 
 
-def _install_permission_handlers(app: FastAPI) -> None:
-    """把授权层的领域异常翻成 HTTP 状态码。
+def _install_error_handlers(app: FastAPI) -> None:
+    """把领域异常翻成 HTTP 状态码。
 
-    授权规则住在 `domain/permissions`(它必须能被飞书回调这类非 HTTP 入口调用,所以不能抛
-    HTTPException)。翻译收在这一处,**29 个调用点一行都不用改** —— 它们照旧只写
-    `ensure_workspace_perm(...)`。
-
-    两个状态码都是**故意**的:不是成员给 404 而不是 403,因为 403 等于告诉他"这个 id 存在"。
+    能用一张表说清的(错误类型 → 码)都在 `api/domain_errors`;这里只留两个要自己渲染响应体的:
+    带结构的 409(音色同意)与请求校验失败的 422。
     """
-
-    @app.exception_handler(NotVisible)
-    async def _not_visible(_request: Request, exc: NotVisible) -> JSONResponse:
-        return JSONResponse(status_code=404, content={"detail": str(exc) or "Not found"})
-
-    @app.exception_handler(PermissionDenied)
-    async def _denied(_request: Request, exc: PermissionDenied) -> JSONResponse:
-        return JSONResponse(status_code=403, content={"detail": str(exc)})
-
-    @app.exception_handler(NoteDomainError)
-    async def _note_error(_request: Request, exc: NoteDomainError) -> JSONResponse:
-        """笔记领域的异常按它自己声明的状态码翻。
-
-        和上面两个装在一处、理由也一样:笔记不只从 `routes/notes` 进来 —— 画板保存要校验
-        引用的文档、工作流知识节点要读它。收在边界,那些调用方就不必反过来 catch
-        HTTPException 再翻回自己的领域错误。
-        """
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(AssetProjectError)
-    async def _asset_project_error(_request: Request, exc: AssetProjectError) -> JSONResponse:
-        """素材要挂的项目不在这个工作区。入库有十几个入口(上传、按路径、从链接、插件交回的
-        文件……),判断收在 assets/project_scope 一处,翻成 422 也收在这一处。"""
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(AssetFileTypeError)
-    async def _asset_file_type_error(_request: Request, exc: AssetFileTypeError) -> JSONResponse:
-        """素材库不收这种文件(ADR 0031)。和上面同一个理由:入库的入口很多,判断在 assets/importer 一处,翻成 415 也在这一处。"""
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(AssetNotDeletable)
-    async def _asset_not_deletable(_request: Request, exc: AssetNotDeletable) -> JSONResponse:
-        """素材现在还不能删(409,例如还在发布)。删素材有接口和智能体确认卡两个入口,拦截登记在 assets/deletion 一处,翻也在这一处。"""
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(SkillDomainError)
-    async def _skill_error(_request: Request, exc: SkillDomainError) -> JSONResponse:
-        """技能(ADR 0040):路由、导入、工具都可能抛,按它自己声明的状态码翻(404 / 409 / 422 / 502)。"""
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(SceneDomainError)
-    async def _scene_error(_request: Request, exc: SceneDomainError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(EntityDomainError)
-    async def _entity_error(_request: Request, exc: EntityDomainError) -> JSONResponse:
-        """资产库的异常按它自己声明的状态码翻(404 / 409 / 422)。"""
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(BlenderDomainError)
-    async def _blender_error(_request: Request, exc: BlenderDomainError) -> JSONResponse:
-        """Blender 互通:502 说的是**上游**没响应,不是调用方请求有错。"""
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+    install_domain_error_handlers(app)
 
     @app.exception_handler(RemoteConsentRequired)
     async def _remote_voice_consent(_request: Request, exc: RemoteConsentRequired) -> JSONResponse:
@@ -538,7 +475,7 @@ TELEMETRY_OFF = {"auto_configure": False, "tracing": False, "metrics": False, "l
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Mosael API", version="0.1.0", lifespan=lifespan, telemetry=TELEMETRY_OFF)
-    _install_permission_handlers(app)
+    _install_error_handlers(app)
     install_rate_limiting(app, settings)
     # 这几层都是纯 ASGI(见 api/middleware 的说明:包在大文件响应外面的 BaseHTTPMiddleware
     # 会让拖视频进度条慢好几倍)。

@@ -87,17 +87,18 @@ def test_智能体传老id_google_也不再502(monkeypatch) -> None:
 # ── ①' 参数**原样**交出去:归一只有能力表那一处(canonical_id)──────────────────────
 
 
-def _spy_engine(monkeypatch) -> list[str]:
-    """截住工具发给路由的那份请求体,只看 `engine` —— 不落库、不出网。"""
-    import mcp_server
+def _spy_engine(monkeypatch, client) -> list[str]:
+    """截住工具交给领域用例的那份请求,只看 `engine` —— 不出网。身份是这个客户端的人(工具直调用例,要认得出调用方)。"""
+    from app.domain import translate
 
+    _as_this_client(monkeypatch, client)
     sent: list[str] = []
 
-    def fake_route(_fn, *, out=None, **params):
-        sent.append(params["body"].engine)
-        return {"translations": [f"[{params['body'].target_lang}]"]}
+    def fake_translate(_db, _user, _workspace_id, _texts, target, *, engine="", profile_id=None):
+        sent.append(engine)
+        return [f"[{target}]"]
 
-    monkeypatch.setattr(mcp_server, "_route", fake_route)
+    monkeypatch.setattr(translate, "translate_for_member", fake_translate)
     return sent
 
 
@@ -110,7 +111,7 @@ def test_智能体不传engine_传下去的是空串而不是硬编码google(mon
 
     client = fresh_client()
     _workspace(client)
-    sent = _spy_engine(monkeypatch)
+    sent = _spy_engine(monkeypatch, client)
 
     assert inspect.signature(mcp_server.translate_text).parameters["engine"].default == ""
     assert mcp_server.translate_text("你好", "en", workspace_id="w") == {"text": "[en]"}
@@ -123,7 +124,7 @@ def test_智能体点名builtin_chat_不被改写成google(monkeypatch) -> None:
 
     client = fresh_client()
     _workspace(client)
-    sent = _spy_engine(monkeypatch)
+    sent = _spy_engine(monkeypatch, client)
 
     mcp_server.translate_text("你好", "en", engine="builtin:chat", workspace_id="w")
 
@@ -136,7 +137,7 @@ def test_智能体点名翻译插件id_不被改写成google(monkeypatch) -> Non
 
     client = fresh_client()
     _workspace(client)
-    sent = _spy_engine(monkeypatch)
+    sent = _spy_engine(monkeypatch, client)
 
     mcp_server.translate_text("你好", "en", engine="Plugin-AbC123", workspace_id="w")
 
@@ -153,11 +154,12 @@ def test_智能体点名不存在的引擎_报错而不是悄悄换成google(mon
     _as_this_client(monkeypatch, client)
     _stub_google(monkeypatch)
 
-    with pytest.raises(ValueError) as caught:
+    with pytest.raises(tr.TranslateError) as caught:
         mcp_server.translate_text("hi", "en", engine="nope", workspace_id=ws)
 
+    #: 领域错误原样到工具层(invoke 那一层再变成给模型看的 {"error": ...}),不再拼成「502: …」那种第二套契约。
     message = str(caught.value)
-    assert "502" in message and "nope" in message, message
+    assert "nope" in message, message
     #: 不是「换成 Google 翻出来了」。
     assert "Google" in message
 
