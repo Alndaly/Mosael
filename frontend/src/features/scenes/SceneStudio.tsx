@@ -68,6 +68,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ApiError } from "@/api/client";
 import type { Workspace } from "@/api/client";
 import { boardKeys, sceneKeys } from "@/api/queryKeys";
 import { importAsset } from "@/api/domains/assets";
@@ -490,7 +491,26 @@ function SceneEditor({
       recordAbort.current?.abort();
     };
   }, [cacheKey]);
+  /**
+   * 换成服务端的这一份:轮询看到别处(智能体、另一个窗口)存了新版本而本地没有欠着的改动时,
+   * 或者保存撞了 409。场景改动粒度粗、很少有人同时编辑,所以不做逐项重放,整份采用(和工作流一致)。
+   *
+   * 撤销历史一并清掉 —— 它记的是被换掉的那份,按一下撤销就会把旧内容写回去、带着新底子存上,
+   * 等于绕过冲突检查把别人的改动静默盖掉。
+   */
+  const adoptServerScene = React.useCallback((result: Scene) => {
+    revision.current = result.revision;
+    const next = { name: result.name, content: result.content };
+    saved.current = JSON.stringify(next);
+    current.current = next;
+    setDraft(next);
+    setHistory([]);
+    setFuture([]);
+  }, []);
   const autosave = useAutosave(draft, async (next) => {
+    //: 和服务端确认过的那份一样就不发 —— 撞了 409、换成服务端那份之后,自动保存会把换上来的这份
+    //: 当成一次编辑送回来。
+    if (JSON.stringify(next) === saved.current) return;
     try {
       const result = await saveScene({
         ...initial,
@@ -503,6 +523,18 @@ function SceneEditor({
         localStorage.removeItem(cacheKey);
       if (mounted.current) setError("");
     } catch (e) {
+      //: 底子旧了(别处先存了一版):此前只记一句错误,之后每次自动保存都带着同一个旧修订号再撞一次,
+      //: 永远存不上。现在换成服务端那份并告诉用户,后面的编辑基于新底子照常保存。
+      if (e instanceof ApiError && e.status === 409) {
+        const latest = await getScene(initial.workspace_id, initial.id).catch(() => null);
+        if (latest && mounted.current) {
+          adoptServerScene(latest);
+          localStorage.removeItem(cacheKey);
+          setError("");
+          toast.error(t("sceneSaveConflict"), { description: t("sceneSaveConflictDetail") });
+          throw e;
+        }
+      }
       if (mounted.current) setError(errorText(e));
       throw e;
     }
@@ -615,13 +647,7 @@ function SceneEditor({
           result.revision === revision.current
         )
           return;
-        revision.current = result.revision;
-        const next = { name: result.name, content: result.content };
-        saved.current = JSON.stringify(next);
-        current.current = next;
-        setDraft(next);
-        setHistory([]);
-        setFuture([]);
+        adoptServerScene(result);
       } catch {
         /* Leave the local draft intact while offline. */
       }
@@ -630,7 +656,7 @@ function SceneEditor({
       active = false;
       clearInterval(timer);
     };
-  }, [initial.id, initial.workspace_id]);
+  }, [initial.id, initial.workspace_id, adoptServerScene]);
   //: 换一个时刻、换一个物体,那段"还没记下来的样子"就作废 —— 回到轨上。
   React.useEffect(() => setPosing(null), [time, selected, shotId]);
   const shot =

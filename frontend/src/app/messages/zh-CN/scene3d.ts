@@ -272,6 +272,8 @@ export const scene3d = {
   sceneDeletedCount: "已删除 {n} 个场景",
   sceneDeletePartialFailed: "部分场景未能删除：{reason}",
   sceneDraftStorageFull: "本地草稿空间不足，请及时保存或导出场景。",
+  sceneSaveConflict: "3D 场景已在别处更新",
+  sceneSaveConflictDetail: "已载入服务器上的最新内容，刚才没存上的改动请重新做一遍。",
   sceneCantDeleteLastShotCamera: "这是场景里最后一个镜头的机位。场景至少要有一个镜头，所以它删不掉。",
   sceneShotsRemovedWithCamera: "已一并删除使用这台机位的镜头：{names}",
   sceneObjectLimit: "单个场景最多 {n} 个对象",

@@ -272,6 +272,8 @@ export const scene3d = {
   sceneDeletedCount: "Deleted {n} scenes",
   sceneDeletePartialFailed: "Some scenes couldn't be deleted: {reason}",
   sceneDraftStorageFull: "Local draft storage is full. Save or export the scene soon.",
+  sceneSaveConflict: "This scene was updated elsewhere",
+  sceneSaveConflictDetail: "Loaded the latest version from the server. Please redo the changes that weren't saved.",
   sceneCantDeleteLastShotCamera: "This is the camera of the scene's last shot. A scene needs at least one shot, so it can't be deleted.",
   sceneShotsRemovedWithCamera: "Also removed the shots using this camera: {names}",
   sceneObjectLimit: "A scene can have at most {n} objects",
