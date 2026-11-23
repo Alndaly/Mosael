@@ -105,7 +105,7 @@ import {
 } from "@/features/agent/CanvasAgentChat";
 import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
-import { useAutosave } from "@/lib/useAutosave";
+import { useVersionedDocument } from "@/lib/versionedDocument/useVersionedDocument";
 import {
   MAX_KEYS,
   frameForObject,
@@ -171,6 +171,9 @@ const MODEL_PREFIX = "model:";
 
 const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
+
+/** 编辑器里这份场景:名字和内容(修订号由 useVersionedDocument 管)。 */
+type SceneDraft = { name: string; content: SceneContent };
 export function SceneStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const writeBlocked = useWriteBlocked(workspace.role);
@@ -395,13 +398,36 @@ function SceneEditor({
   );
   const studioRoot = React.useRef<HTMLDivElement>(null);
   const fullscreen = useSceneFullscreen(studioRoot);
-  const qc = useQueryClient(),
-    [draft, setDraft] = React.useState(() => ({
-      name: initial.name,
-      content: initial.content,
-    })),
-    current = React.useRef(draft);
-  current.current = draft;
+  const qc = useQueryClient();
+  const cacheKey = `mosael.scene-draft:${initial.workspace_id}:${initial.id}`;
+  const [error, setError] = React.useState("");
+  //: 文档本身(内容、底子、自动保存、撞 409、跟进别处存的新版本、撤销)都在 useVersionedDocument 里;
+  //: 这里只说怎么读、怎么存,以及没存上的那份记进本地草稿(下次打开能恢复)。
+  const doc = useVersionedDocument<SceneDraft>({
+    initial: { value: { name: initial.name, content: initial.content }, revision: initial.revision },
+    load: async () => {
+      const latest = await getScene(initial.workspace_id, initial.id);
+      return { value: { name: latest.name, content: latest.content }, revision: latest.revision };
+    },
+    save: async (next, revision) => (await saveScene({ ...initial, ...next, revision })).revision,
+    isConflict: (e) => e instanceof ApiError && e.status === 409,
+    onConflict: () => {
+      setError("");
+      toast.error(t("sceneSaveConflict"), { description: t("sceneSaveConflictDetail") });
+    },
+    onSaveError: (e) => setError(errorText(e)),
+    onSaved: () => setError(""),
+    onUnsaved: (value) => {
+      try {
+        if (value) localStorage.setItem(cacheKey, JSON.stringify(value));
+        else localStorage.removeItem(cacheKey);
+      } catch {
+        toast.error(t("sceneDraftStorageFull"));
+      }
+    },
+    followEveryMs: 3000,
+  });
+  const draft = doc.value;
   const modelsInDraft = React.useMemo(
     () => new Set(draft.content.objects.flatMap((o) => (o.model_id ? [o.model_id] : []))),
     [draft.content.objects],
@@ -414,11 +440,6 @@ function SceneEditor({
     [draft.content],
   );
   const allCollapsed = groupIds.length > 0 && groupIds.every((id) => collapsed.has(id));
-  const revision = React.useRef(initial.revision),
-    saved = React.useRef(JSON.stringify(draft)),
-    [error, setError] = React.useState(""),
-    [history, setHistory] = React.useState<(typeof draft)[]>([]),
-    [future, setFuture] = React.useState<(typeof draft)[]>([]);
   const [selected, setSelected] = React.useState<string | null>(null),
     [mode, setMode] = React.useState<"translate" | "rotate" | "scale">(
       "translate",
@@ -469,7 +490,6 @@ function SceneEditor({
     file = React.useRef<HTMLInputElement>(null),
     recordAbort = React.useRef<AbortController | null>(null),
     mounted = React.useRef(true);
-  const cacheKey = `mosael.scene-draft:${initial.workspace_id}:${initial.id}`;
   React.useEffect(() => {
     mounted.current = true;
     try {
@@ -479,7 +499,7 @@ function SceneEditor({
         if (
           cached.name &&
           cached.content?.version === 1 &&
-          JSON.stringify(cached) !== saved.current
+          JSON.stringify(cached) !== JSON.stringify(doc.current())
         )
           setRecovery(cached);
       }
@@ -491,85 +511,29 @@ function SceneEditor({
       recordAbort.current?.abort();
     };
   }, [cacheKey]);
-  /**
-   * 换成服务端的这一份:轮询看到别处(智能体、另一个窗口)存了新版本而本地没有欠着的改动时,
-   * 或者保存撞了 409。场景改动粒度粗、很少有人同时编辑,所以不做逐项重放,整份采用(和工作流一致)。
-   *
-   * 撤销历史一并清掉 —— 它记的是被换掉的那份,按一下撤销就会把旧内容写回去、带着新底子存上,
-   * 等于绕过冲突检查把别人的改动静默盖掉。
-   */
-  const adoptServerScene = React.useCallback((result: Scene) => {
-    revision.current = result.revision;
-    const next = { name: result.name, content: result.content };
-    saved.current = JSON.stringify(next);
-    current.current = next;
-    setDraft(next);
-    setHistory([]);
-    setFuture([]);
-  }, []);
-  const autosave = useAutosave(draft, async (next) => {
-    //: 和服务端确认过的那份一样就不发 —— 撞了 409、换成服务端那份之后,自动保存会把换上来的这份
-    //: 当成一次编辑送回来。
-    if (JSON.stringify(next) === saved.current) return;
-    try {
-      const result = await saveScene({
-        ...initial,
-        ...next,
-        revision: revision.current,
-      });
-      revision.current = result.revision;
-      saved.current = JSON.stringify(next);
-      if (JSON.stringify(current.current) === saved.current)
-        localStorage.removeItem(cacheKey);
-      if (mounted.current) setError("");
-    } catch (e) {
-      //: 底子旧了(别处先存了一版):此前只记一句错误,之后每次自动保存都带着同一个旧修订号再撞一次,
-      //: 永远存不上。现在换成服务端那份并告诉用户,后面的编辑基于新底子照常保存。
-      if (e instanceof ApiError && e.status === 409) {
-        const latest = await getScene(initial.workspace_id, initial.id).catch(() => null);
-        if (latest && mounted.current) {
-          adoptServerScene(latest);
-          localStorage.removeItem(cacheKey);
-          setError("");
-          toast.error(t("sceneSaveConflict"), { description: t("sceneSaveConflictDetail") });
-          throw e;
-        }
-      }
-      if (mounted.current) setError(errorText(e));
-      throw e;
-    }
-  });
   //: ⌘S:欠着的这一份马上存(见 lib/saveShortcut)。
-  useSaveShortcut(() => void autosave.flush());
-  function change(next: typeof draft) {
-    const previous = current.current;
-    setHistory((h) => [...h.slice(-49), previous]);
-    setFuture([]);
-    current.current = next;
-    setDraft(next);
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(next));
-    } catch {
-      toast.error(t("sceneDraftStorageFull"));
-    }
+  useSaveShortcut(() => void doc.flush());
+  /** 一次编辑。`gesture`:属于哪个连续动作(拖滑块、连着敲数字),同一个手势在撤销栈里只算一步。 */
+  function change(next: SceneDraft, gesture?: string) {
+    doc.change(next, { gesture });
   }
-  function update(content: SceneContent) {
-    change({ ...current.current, content });
+  function update(content: SceneContent, gesture?: string) {
+    change({ ...doc.current(), content }, gesture);
   }
-  function objectPatch(id: string, patch: Partial<SceneObject>) {
+  function objectPatch(id: string, patch: Partial<SceneObject>, gesture?: string) {
     update({
-      ...current.current.content,
-      objects: current.current.content.objects.map((o) =>
+      ...doc.current().content,
+      objects: doc.current().content.objects.map((o) =>
         o.id === id ? { ...o, ...patch } : o,
       ),
-    });
+    }, gesture);
   }
   /**
    * 拖拽的落点。**一步 `update`**:撤销栈、自动保存、本地草稿全走那条老路 —— 不另存一份。
    * `moveObject` 说"没变化"时返回 null,那时连一条空的撤销记录都不该留下。
    */
   function moveInTree(activeId: string, overId: string, zone: DropZone) {
-    const next = moveObject(current.current.content, activeId, overId, zone);
+    const next = moveObject(doc.current().content, activeId, overId, zone);
     if (next) update(next);
   }
   /**
@@ -581,7 +545,7 @@ function SceneEditor({
    */
   function moveSelectedSibling(step: -1 | 1) {
     if (!selected) return;
-    const content = current.current.content;
+    const content = doc.current().content;
     const siblings = siblingsOf(content, selected);
     const at = siblings.findIndex((one) => one.id === selected);
     const neighbour = siblings[at + step];
@@ -590,7 +554,7 @@ function SceneEditor({
     if (next) update(next);
   }
   function removeSceneObjects(ids: string[]) {
-    const before = current.current.content;
+    const before = doc.current().content;
     const content = removeObjects(before, ids);
     if (content === before) {
       toast.error(t("sceneCantDeleteLastShotCamera"));
@@ -606,57 +570,17 @@ function SceneEditor({
    *  再显示这个组,原先就藏着的孩子仍然藏着(和 Blender 一样)。走 objectPatch → update,
    *  所以能撤销,也跟着自动保存进场景。 */
   function toggleHidden(id: string) {
-    const target = current.current.content.objects.find((o) => o.id === id);
+    const target = doc.current().content.objects.find((o) => o.id === id);
     if (target) objectPatch(id, { hidden: !target.hidden });
   }
   /** ⌥H:全部显示。一步 update,撤销时一次全回来。 */
   function revealAll() {
-    const content = current.current.content;
+    const content = doc.current().content;
     if (!content.objects.some((o) => o.hidden)) return;
     update({ ...content, objects: content.objects.map((o) => (o.hidden ? { ...o, hidden: false } : o)) });
   }
-  function undo() {
-    if (!history.length) return;
-    const next = history[history.length - 1];
-    const previous = current.current;
-    setFuture((f) => [previous, ...f]);
-    setHistory((h) => h.slice(0, -1));
-    current.current = next;
-    setDraft(next);
-    localStorage.setItem(cacheKey, JSON.stringify(next));
-  }
-  function redo() {
-    if (!future.length) return;
-    const next = future[0];
-    const previous = current.current;
-    setHistory((h) => [...h, previous]);
-    setFuture((f) => f.slice(1));
-    current.current = next;
-    setDraft(next);
-    localStorage.setItem(cacheKey, JSON.stringify(next));
-  }
-  React.useEffect(() => {
-    let active = true;
-    const timer = setInterval(async () => {
-      if (JSON.stringify(current.current) !== saved.current) return;
-      try {
-        const result = await getScene(initial.workspace_id, initial.id);
-        if (
-          !active ||
-          JSON.stringify(current.current) !== saved.current ||
-          result.revision === revision.current
-        )
-          return;
-        adoptServerScene(result);
-      } catch {
-        /* Leave the local draft intact while offline. */
-      }
-    }, 3000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [initial.id, initial.workspace_id, adoptServerScene]);
+  const undo = doc.undo;
+  const redo = doc.redo;
   //: 换一个时刻、换一个物体,那段"还没记下来的样子"就作废 —— 回到轨上。
   React.useEffect(() => setPosing(null), [time, selected, shotId]);
   const shot =
@@ -670,8 +594,8 @@ function SceneEditor({
   }
   function shotPatch(patch: Partial<SceneShot>) {
     update({
-      ...current.current.content,
-      shots: current.current.content.shots.map((s) =>
+      ...doc.current().content,
+      shots: doc.current().content.shots.map((s) =>
         s.id === shot.id ? { ...s, ...patch } : s,
       ),
     });
@@ -765,7 +689,7 @@ function SceneEditor({
         // ⇧D 复制一份。别的带 Shift 的单键这一页没有,所以到此为止。
         if (e.code === "KeyD" && selected) {
           e.preventDefault();
-          update(duplicateObject(current.current.content, selected, t));
+          update(duplicateObject(doc.current().content, selected, t));
         }
         return;
       }
@@ -842,8 +766,8 @@ function SceneEditor({
   function placeModel(name: string, modelId: string) {
     const o = makeObject("model", { name, model_id: modelId });
     update({
-      ...current.current.content,
-      objects: [...current.current.content.objects, o],
+      ...doc.current().content,
+      objects: [...doc.current().content.objects, o],
     });
     setSelected(o.id);
   }
@@ -897,7 +821,7 @@ function SceneEditor({
     try {
       await work(t("sceneBusyPrepareGenerate"), async () => {
         //: 服务端渲的是**存着的**那一版:没存完的先存上。
-        if (!(await autosave.flush())) throw new Error(t("sceneGenerateUnsaved"));
+        if (!(await doc.flush())) throw new Error(t("sceneGenerateUnsaved"));
         const board = await createBoard({
           workspace_id: initial.workspace_id,
           name: `${draft.name} · ${shot.name}`,
@@ -947,7 +871,7 @@ function SceneEditor({
   const keyTarget = object;
   /** Every insertion records the selected object pose, including camera poses. */
   function recordKeyframe(id = selected, at = time) {
-    const target = current.current.content.objects.find(o => o.id === id);
+    const target = doc.current().content.objects.find(o => o.id === id);
     if (!target) return;
     const frame = frameForObject(target, shot, at, posing === target.id);
     const track = upsertKey(target.track, frame);
@@ -965,14 +889,14 @@ function SceneEditor({
     return {position: frame.position, target: frame.target, fov: frame.fov};
   }
   function deleteKeys(keys: SceneKey[]) {
-    update({...current.current.content, objects: current.current.content.objects.map(o => ({
+    update({...doc.current().content, objects: doc.current().content.objects.map(o => ({
       ...o, track: o.track.filter(f => !keys.some(key => sameKey(key, {id: o.id, time: f.time}))),
     }))});
     setPosing(null);
     setPlaying(false);
   }
   function moveKeys(keys: SceneKey[], delta: number) {
-    const content = current.current.content;
+    const content = doc.current().content;
     const end = Math.max(shot.duration, ...content.objects.flatMap(o => o.track.map(f => f.time)));
     const next = moveSceneKeys(content, keys, delta, end);
     if (!next) { toast.error(t("sceneKeyMoveBlocked")); return false; }
@@ -1007,7 +931,7 @@ function SceneEditor({
         open={modelLibrary}
         onOpenChange={setModelLibrary}
       />
-      <RenameDialog open={renaming} title={t("sceneRenameTitle")} initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
+      <RenameDialog open={renaming} title={t("sceneRenameTitle")} initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...doc.current(), name }); setRenaming(false); }} />
       <header className="scene-header">
         {/* 「回清单 · 这是哪一个」在顶栏的路径里(3D 场景 / 片场,点名字改名,见 components/layout/pageTrail);
             这里只留保存状态。 */}
@@ -1015,7 +939,7 @@ function SceneEditor({
           <span className="scene-save" role="status">
             {error ? (
               t("sceneUnsaved")
-            ) : autosave.pending ? (
+            ) : doc.pending ? (
               t("sceneSaving")
             ) : (
               <>
@@ -1030,8 +954,8 @@ function SceneEditor({
             label={t("undo")}
             onClick={undo}
             shortcut={formatCombo("Mod+Z")}
-            disabled={!history.length || !!busy}
-            disabledReason={!history.length && t("nothingToUndo")}
+            disabled={!doc.canUndo || !!busy}
+            disabledReason={!doc.canUndo && t("nothingToUndo")}
           >
             <RotateCcw size={16} />
           </Tool>
@@ -1039,8 +963,8 @@ function SceneEditor({
             label={t("redo")}
             onClick={redo}
             shortcut={formatCombo("Mod+Shift+Z")}
-            disabled={!future.length || !!busy}
-            disabledReason={!future.length && t("nothingToRedo")}
+            disabled={!doc.canRedo || !!busy}
+            disabledReason={!doc.canRedo && t("nothingToRedo")}
           >
             <RotateCw size={16} />
           </Tool>
@@ -1058,15 +982,15 @@ function SceneEditor({
           </Button>
           {/* 摆姿势的人偶已经并进场景:选中一个 figure,在视口里点它的关节、拖圆环转;
               这里不再有单独的「人偶」弹窗入口。 */}
-          <SceneBlender scene={initial} pending={autosave.pending || !!error} busy={!!busy} work={work}
+          <SceneBlender scene={initial} pending={doc.pending || !!error} busy={!!busy} work={work}
             //: 和「恢复历史版本」走同一条路(update → change):进撤销栈、由自动保存落库。
             //: 接收因此是一次可撤销的编辑,而不是一次绕过编辑器的写库。
             apply={(content) => { update(content); setSelected(null); setTime(0); setPlaying(false); }}
             //: 只交出「发哪一版」—— GLB 由后端按这个修订生成(domain/scenes/render/gltf),
             //: 所以草稿必须先落库:发的是库里那一份,不是屏幕上这一份。
             prepare={async () => {
-            if (JSON.stringify(current.current) !== saved.current) throw new Error(t("sceneWaitForSave"));
-            return { revision: revision.current, shotId };
+            if (doc.unsaved()) throw new Error(t("sceneWaitForSave"));
+            return { revision: doc.revision(), shotId };
           }} />
           {/* **「生成素材」从一个步骤变成一个入口。**
               它不是"搭完场景之后的第三步" —— 它是随时可以做的一件事:摆好一个画面就能去生成,
@@ -1184,7 +1108,7 @@ function SceneEditor({
           <CircleAlert size={14} aria-hidden="true" />
           <span>{t("sceneSaveFailed").replace("{error}", error)}</span>
           <span className="scene-notice-actions">
-            <Button size="xs" variant="ghost" onClick={() => setDraft({ ...current.current })}>
+            <Button size="xs" variant="ghost" onClick={() => void doc.flush()}>
               {t("retry")}
             </Button>
             <Button
@@ -1702,13 +1626,14 @@ function SceneEditor({
                     object={object && posing !== object.id ? {...object, ...samplePose(object)} : object}
                     objectPatch={(id, patch) => {
                       if (patch.position || patch.rotation || patch.scale || patch.target || patch.fov !== undefined) setPosing(id);
-                      const target = current.current.content.objects.find(o => o.id === id);
+                      const target = doc.current().content.objects.find(o => o.id === id);
                       const transform = patch.position || patch.rotation || patch.scale || patch.target || patch.fov !== undefined;
+                      //: 拖滑块、连着敲数字是一串改动:同一个物体的同一组字段并成撤销栈里的一步。
                       objectPatch(id, target && transform && posing !== id
                         ? {...samplePose(target), ...patch}
-                        : patch);
+                        : patch, `inspector:${id}:${Object.keys(patch).sort().join(",")}`);
                     }}
-                    update={update}
+                    update={(content) => update(content, "inspector:scene")}
                     onRemove={removeSceneObjects}
                     setSelected={setSelected}
                   />
