@@ -10,6 +10,7 @@ from app.domain.agent import host
 from app.domain.feishu import bindings
 from app.integrations.feishu import client as feishu_client
 from app.integrations.feishu import inbound
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import fresh_client
 
 
@@ -157,7 +158,7 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
         db.commit()  # 测试就是入口:兑码只改对象
 
     sent: list[tuple[str, str]] = []
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
     #: 回复现在是**卡片**(见 client.send_markdown);短通知仍是 send_text。两条都接进 sent,
     #: 断言照旧看"发出去的是什么"。
     monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text, **k: sent.append((chat_id, text)))
@@ -186,7 +187,7 @@ def test_handle_incoming_unbound_sender_refused(monkeypatch) -> None:
     ).json()
     ran: list[bool] = []
     sent: list[str] = []
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: ran.append(True))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: ran.append(True))
     monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append(text))
 
     _incoming(bot["id"], "oc_chat_x", "msg-x", "ou_intruder", content_json=json.dumps({"text": "偷偷改点东西"}))
@@ -216,7 +217,7 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
         bindings.redeem_bind_code(db, ws["id"], bot["id"], "ou_sender2", code)
         db.commit()
 
-    monkeypatch.setattr(host, "run_turn", boom)
+    use_fake_turn_runtime(monkeypatch, run=boom)
     monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text, **k: sent.append(text))
     monkeypatch.setattr(feishu_client, "send_markdown", lambda bot, chat_id, text, **k: sent.append(text))
 
@@ -276,7 +277,7 @@ def test_图片消息进素材库_并把素材id带进提示(monkeypatch) -> Non
         prompts.append(kwargs["prompt"])
         return TurnResult(text="看到了")
 
-    monkeypatch.setattr(host, "run_turn", fake_turn)
+    use_fake_turn_runtime(monkeypatch, run=fake_turn)
 
     _incoming(
         bot["id"], "oc_i", "msg-i", "ou_img", message_type="image", content_json=json.dumps({"image_key": "img_k1"})
@@ -300,8 +301,7 @@ def test_富文本消息的文字和内嵌图片都收(monkeypatch) -> None:
     _, bot = _bound_bot(client, monkeypatch, sent)
     monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: b"")
     prompts: list[str] = []
-    monkeypatch.setattr(
-        host, "run_turn", lambda *a, **k: (prompts.append(k["prompt"]), TurnResult(text="收到"))[1]
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: (prompts.append(k["prompt"]), TurnResult(text="收到"))[1]
     )
 
     content = json.dumps(
@@ -336,7 +336,7 @@ def test_被重启打断的飞书会话会收到中断说明(monkeypatch) -> Non
     client = fresh_client()
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="好的"))
     _incoming(bot["id"], "oc_r", "msg-r", "ou_img", content_json=json.dumps({"text": "hi"}))
     sent.clear()
 
@@ -362,7 +362,7 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
     client = fresh_client()
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="好的"))
     _incoming(bot["id"], "oc_once", "msg-o", "ou_img", content_json=json.dumps({"text": "hi"}))
     sent.clear()
 
@@ -399,7 +399,7 @@ def test_发送失败不标记_下次启动重试(monkeypatch) -> None:
     client = fresh_client()
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="好的"))
     _incoming(bot["id"], "oc_fail", "msg-f", "ou_img", content_json=json.dumps({"text": "hi"}))
     sent.clear()
 
@@ -443,7 +443,7 @@ def test_飞书消息走主进程的同一条管线_忙时排队而不是丢掉(
             gate.wait(5)
         return TurnResult(text=f"回复{len(calls)}")
 
-    monkeypatch.setattr(host, "run_turn", slow_turn)
+    use_fake_turn_runtime(monkeypatch, run=slow_turn)
     inbound.handle_incoming(bot["id"], "oc_q", "msg-q1", "ou_img", content_json=json.dumps({"text": "第一条"}))
     inbound.handle_incoming(bot["id"], "oc_q", "msg-q2", "ou_img", content_json=json.dumps({"text": "第二条"}))
     assert sent == [], "第一轮还没跑完,第二条不该被一句「稍等」打发"

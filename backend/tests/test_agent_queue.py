@@ -22,6 +22,7 @@ from app.domain.agent import stream
 from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import fresh_client
 
 
@@ -50,7 +51,7 @@ class _HeldTurn:
 @pytest.fixture
 def held_turn(monkeypatch):
     turn = _HeldTurn()
-    monkeypatch.setattr(host, "run_turn", turn)
+    use_fake_turn_runtime(monkeypatch, run=turn)
     yield turn
     turn.release()  # 测试中途红了也放行,别让那一轮的线程活过这条测试
 
@@ -90,7 +91,7 @@ def _wait_idle(session_id: str, seconds: float = 30) -> str:
 
     只看状态是不够的:一个 turn 结束到队列里下一个 turn 启动之间有一段空隙,状态在那一瞬就是
     idle。在那里返回,排队的 turn 就会在**下一个测试**里才真正跑起来——而下一个测试早已把
-    `host.run_turn` monkeypatch 成了自己的记录器,于是上个测试的提示词串进本测试的断言
+    轮次运行时换成了自己的记录器,于是上个测试的提示词串进本测试的断言
     (曾表现为 prompts == ['two', 'one', 'two', 'three'])。这类失败按测试顺序与机器速度
     概率出现,查起来极贵,所以判据必须一次写对。
     """
@@ -109,7 +110,7 @@ def _wait_idle(session_id: str, seconds: float = 30) -> str:
 def test_a_mid_turn_message_is_queued_not_steered(monkeypatch, held_turn) -> None:
     """The default must not touch the running turn."""
     steers: list[str] = []
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
+    use_fake_turn_runtime(monkeypatch, steer=lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
 
     client = fresh_client()
     sid = _session(client)
@@ -163,7 +164,7 @@ def test_a_queued_message_keeps_hidden_context(held_turn) -> None:
 
 def test_steering_is_opt_in_per_message(monkeypatch, held_turn) -> None:
     steers: list[str] = []
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
+    use_fake_turn_runtime(monkeypatch, steer=lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
 
     client = fresh_client()
     sid = _session(client)
@@ -201,7 +202,7 @@ def test_steer_applied_可以先于插话请求返回_旧payload不会把消息�
         assert host._mark_steer_applied(sid, steer_id) is True
         return True
 
-    monkeypatch.setattr(host, "steer_turn", racy)
+    use_fake_turn_runtime(monkeypatch, steer=racy)
     response = client.post(f"/api/agent/sessions/{sid}/queue/{queued[0]['id']}/steer")
     assert response.json() == {"steered": True}
     assert client.get(f"/api/agent/sessions/{sid}/queue").json() == []
@@ -215,7 +216,7 @@ def test_steer_applied_可以先于插话请求返回_旧payload不会把消息�
 
 def test_steering_when_the_turn_already_ended_leaves_it_queued(monkeypatch, held_turn) -> None:
     """Reporting a failure the user cannot act on is worse than letting it run on its own."""
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": False)
+    use_fake_turn_runtime(monkeypatch, steer=lambda sid, text, mode="steer", steer_id="": False)
 
     client = fresh_client()
     sid = _session(client)
@@ -320,7 +321,7 @@ def test_the_transcript_interleaves_questions_and_answers(monkeypatch) -> None:
     every answer in a row, which is exactly what it looked like.
     """
     turn = _HeldTurn(answer=lambda prompt: f"答:{prompt}")
-    monkeypatch.setattr(host, "run_turn", turn)
+    use_fake_turn_runtime(monkeypatch, run=turn)
 
     client = fresh_client()
     sid = _session(client)
@@ -344,7 +345,7 @@ def test_the_transcript_interleaves_questions_and_answers(monkeypatch) -> None:
 
 def test_a_steered_message_waits_for_the_model_boundary_then_joins_the_transcript(monkeypatch, held_turn) -> None:
     """点击插话只进入 pending；模型真正读到它时才出队、才成为对话消息。"""
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": True)
+    use_fake_turn_runtime(monkeypatch, steer=lambda sid, text, mode="steer", steer_id="": True)
 
     client = fresh_client()
     sid = _session(client)
@@ -410,7 +411,7 @@ def test_另一个智能体发来的通知_不夺标题_且带结构化来源(mo
     """notify_agent_session 的消息走同一个 /messages 端点,但它不是"人提的第一件事":
     「新对话」的自动命名要跳过它,payload 要带 from_agent_session —— 前端徽章、
     以及一切"这条是谁发的"的判断,都以这个结构化字段为准,不做信封文案匹配。"""
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="ok"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="ok"))
 
     client = fresh_client()
     sid = _session(client)
@@ -450,7 +451,7 @@ def test_排队的跨会话通知_重放时也带上信封(monkeypatch) -> None:
     这里直接盯模型收到的那份文本,而不是盯 content —— content 本来就该是干净的。
     """
     turn = _HeldTurn()  # 记下模型收到的那份(run_turn 的第二个参数);第一轮卡着,通知一定排队
-    monkeypatch.setattr(host, "run_turn", turn)
+    use_fake_turn_runtime(monkeypatch, run=turn)
     prompts = turn.prompts
 
     client = fresh_client()

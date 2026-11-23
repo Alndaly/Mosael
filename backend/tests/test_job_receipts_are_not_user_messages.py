@@ -27,6 +27,7 @@ from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, Job, User
 from app.domain import jobs as jobs_domain
 from app.domain.agent import host, receipts
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_queue import _session, _wait_until
 from tests.util import fresh_client
 
@@ -56,7 +57,7 @@ def model(monkeypatch):
     def make(*, hold_first: bool) -> Turns:
         turns = Turns(hold_first=hold_first)
         made.append(turns)
-        monkeypatch.setattr(host, "run_turn", turns)
+        use_fake_turn_runtime(monkeypatch, run=turns)
         return turns
 
     yield make

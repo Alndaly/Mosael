@@ -12,6 +12,7 @@ import pytest
 
 from app.ai.sidecar.pi_client import TurnResult
 from app.domain.agent import host
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_host import _configured
 from tests.util import fresh_client
 
@@ -25,7 +26,7 @@ def _session(client) -> str:
 
 
 def test_带着摘录发出去_落进消息_回看时还在(monkeypatch) -> None:
-    monkeypatch.setattr(host, "run_turn", lambda adapter, *, prompt, **_: TurnResult(text="好"))
+    use_fake_turn_runtime(monkeypatch, run=lambda adapter, *, prompt, **_: TurnResult(text="好"))
     client = fresh_client()
     session_id = _session(client)
 
@@ -49,7 +50,7 @@ def test_排队的那条也带着摘录(monkeypatch) -> None:
         release.wait(5)
         return TurnResult(text="好")
 
-    monkeypatch.setattr(host, "run_turn", slow_turn)
+    use_fake_turn_runtime(monkeypatch, run=slow_turn)
     client = fresh_client()
     session_id = _session(client)
     client.post(f"/api/agent/sessions/{session_id}/messages", json={"content": "先做这个"})

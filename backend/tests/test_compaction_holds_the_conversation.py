@@ -15,7 +15,7 @@ from app.ai.sidecar import pi_client
 from app.ai.sidecar.pi_client import CompactionResult, TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
-from app.domain.agent import host
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_queue import _session, _wait_idle, _wait_until
 from tests.util import fresh_client
 
@@ -35,8 +35,8 @@ def test_压缩期间发的话排在压缩后面_用的是压过的记忆(monkey
         seen_states.append(adapter_state)
         return TurnResult(text=f"答:{prompt[-12:]}", adapter_state=[*(adapter_state or []), {"role": "user", "content": prompt}])
 
-    monkeypatch.setattr(host, "compact_session", slow_compaction)
-    monkeypatch.setattr(host, "run_turn", turn)
+    use_fake_turn_runtime(monkeypatch, compact=slow_compaction)
+    use_fake_turn_runtime(monkeypatch, run=turn)
     client = fresh_client()
     sid = _session(client)
     with SessionLocal() as db:
@@ -84,7 +84,7 @@ def test_正在回答时不压_压完或压失败都放开这段对话(monkeypat
     def broken(**_kwargs):
         raise pi_client.SidecarError("摘要失败")
 
-    monkeypatch.setattr(host, "compact_session", broken)
+    use_fake_turn_runtime(monkeypatch, compact=broken)
     failed = client.post(f"/api/agent/sessions/{sid}/compact")
     assert failed.status_code == 502
     with SessionLocal() as db:
@@ -92,10 +92,7 @@ def test_正在回答时不压_压完或压失败都放开这段对话(monkeypat
 
 
 def test_手动压缩的摘要调用进入现有用量账_一次压缩只记一笔(monkeypatch) -> None:
-    monkeypatch.setattr(
-        host,
-        "compact_session",
-        lambda **_kwargs: CompactionResult(
+    use_fake_turn_runtime(monkeypatch, compact=lambda **_kwargs: CompactionResult(
             adapter_state=[{"role": "user", "content": "【交接说明】早期对话"}],
             context=None,
             compaction={"droppedMessages": 2, "tokensBefore": 900, "tokensAfter": 100, "summary": "早期对话"},

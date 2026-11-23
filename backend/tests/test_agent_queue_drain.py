@@ -23,6 +23,7 @@ from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession
 from app.domain.agent import host
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_queue import _session, _status, _wait_until
 from tests.util import fresh_client
 
@@ -75,7 +76,7 @@ def _set_status(session_id: str, status: str) -> None:
 def test_抢到了却没活干_要把状态放回去(monkeypatch) -> None:
     """抢占之后才发现队列是空的 —— 不放回 idle 的话,这个会话永远停在 running,
     之后每一条消息都会被当成"正忙"排进一个再也不会被 drain 的队列。整个会话就此哑掉。"""
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="ok"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="ok"))
     client = fresh_client()
     sid = _session(client)
     _set_status(sid, "idle")
@@ -119,7 +120,7 @@ def test_排队落库之后自己再_drain_一次(monkeypatch) -> None:
     drained: list[str] = []
     original = host._drain_queue
     monkeypatch.setattr(host, "_drain_queue", lambda sid: drained.append(sid) or original(sid))
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: (time.sleep(0.4), TurnResult(text="ok"))[1])
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: (time.sleep(0.4), TurnResult(text="ok"))[1])
 
     client = fresh_client()
     sid = _session(client)
@@ -141,7 +142,7 @@ def test_排队的消息最终会跑起来(monkeypatch) -> None:
         time.sleep(0.05)
         return TurnResult(text="ok")
 
-    monkeypatch.setattr(host, "run_turn", _capture)
+    use_fake_turn_runtime(monkeypatch, run=_capture)
     client = fresh_client()
     sid = _session(client)
 

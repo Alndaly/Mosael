@@ -13,6 +13,7 @@ from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentSession
 from app.domain.agent import host, titles
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_host import _configured
 from tests.util import fresh_client
 
@@ -56,7 +57,7 @@ class Namer:
 
 
 def _talk(monkeypatch, namer: Namer, *, configured: bool = True):
-    monkeypatch.setattr(host, "run_turn", lambda adapter, *, prompt, **_: TurnResult(text="好的,第二段我改成了三句话。"))
+    use_fake_turn_runtime(monkeypatch, run=lambda adapter, *, prompt, **_: TurnResult(text="好的,第二段我改成了三句话。"))
     monkeypatch.setattr(titles, "_ask", namer)
     client = fresh_client()
     if configured:

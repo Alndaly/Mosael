@@ -227,9 +227,9 @@ def _no_stragglers_from_the_previous_test():
     """上一条测试掉队的后台线程,不许写进这一条的账。
 
     `fresh_client()` 已经会在 drop_all 之前等它们收尾(见 tests/util 里那段说明),但那发生在
-    **测试函数体里** —— 而多数测试是先 `monkeypatch.setattr(host, "run_turn", ...)`、后
-    `fresh_client()`。上一条掉队的那一轮恰好在被等到的前一刻调用 `host.run_turn`,那时它已经
-    指向本条测试打的桩了,于是本条测试凭空多记一轮。
+    **测试函数体里** —— 而多数测试是先换上假的轮次运行时(`use_fake_turn_runtime`)、后
+    `fresh_client()`。上一条掉队的那一轮恰好在被等到的前一刻调用 `turn_runtime().run`,那时它已经
+    指向本条测试的替身了,于是本条测试凭空多记一轮。
 
     CI 上报出来是「跑起来的轮数不对(应为 12):13」,而多出来的那一轮根本不属于那条测试 ——
     本机复现不了(窗口太窄),把 drain 起下一轮的时机推后 0.25 秒就 100% 稳定复现。

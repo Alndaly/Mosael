@@ -24,6 +24,7 @@ from app.domain.agent.skills import catalog, runtime, store
 from mosael_formats import agent_skill
 from app.domain.plugins.manifest import PATH_KEY
 from mosael_formats.agent_skill import SkillDoc
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import add_provider, fresh_client
 
 BUILTINS = ("3d-scene", "creative-board", "episodic-series", "workflow-canvas")
@@ -327,7 +328,7 @@ def test_斜杠点名的技能全文挂到这一轮_落库带着名字(monkeypat
         seen["prompt"] = prompt
         return TurnResult(text="好")
 
-    monkeypatch.setattr(host, "run_turn", fake_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=fake_run_turn)
     client = fresh_client()
     _configured()
     ws = _workspace(client)

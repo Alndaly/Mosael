@@ -15,6 +15,7 @@ from app.db.agent_turn_events import latest_turn_id, turn_events
 from app.db.models import AgentSession
 from app.domain.agent import host
 from app.domain.agent import stream as agent_stream
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import add_provider, fresh_client
 
 
@@ -123,7 +124,7 @@ def test_不中断的正常轮时间线只有一份且进行中的事件被清�
         kwargs["on_tool"]({"type": "tool_end", "toolCallId": "c1", "result": {"items": 2}, "isError": False})
         return TurnResult(text="看完了。")
 
-    monkeypatch.setattr(host, "run_turn", fake_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=fake_run_turn)
     client = fresh_client()
     _configured(client)
     session = _session(client)

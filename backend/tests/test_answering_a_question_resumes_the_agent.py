@@ -17,6 +17,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, User
 from app.domain.agent import host
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import fresh_client
 
 QUESTIONS = [
@@ -170,7 +171,7 @@ def test_那一轮还在跑时答案插进去而不是排队(monkeypatch: pytest
     _set_running(session_id)
 
     sent: list[str] = []
-    monkeypatch.setattr(host, "steer_turn", lambda _sid, prompt, *a, **k: (sent.append(prompt), True)[1])
+    use_fake_turn_runtime(monkeypatch, steer=lambda _sid, prompt, *a, **k: (sent.append(prompt), True)[1])
 
     answered = client.post(
         f"/api/agent/questions/{question_id}/answer",
@@ -222,7 +223,7 @@ def test_插不进去就还是排队__答案不许掉进空里(monkeypatch: pyte
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
     session_id, question_id = _ask(client, workspace["id"])
     _set_running(session_id)
-    monkeypatch.setattr(host, "steer_turn", lambda *a, **k: False)
+    use_fake_turn_runtime(monkeypatch, steer=lambda *a, **k: False)
 
     answered = client.post(
         f"/api/agent/questions/{question_id}/answer",

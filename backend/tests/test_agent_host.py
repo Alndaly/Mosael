@@ -12,6 +12,7 @@ from app.domain.agent import prompt as agent_prompt
 from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.core.config import settings
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import add_provider, fresh_client, create_asset
 
 
@@ -100,7 +101,7 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
         )
         return TurnResult(text=f"echo: {prompt}")
 
-    monkeypatch.setattr(host, "run_turn", fake_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=fake_run_turn)
 
     client = fresh_client()
     _configured(client)
@@ -151,7 +152,7 @@ def test_image_attachment_pixels_reach_the_selected_agent_model(monkeypatch) -> 
         calls["images"] = images
         return TurnResult(text="看到了")
 
-    monkeypatch.setattr(host, "run_turn", fake_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=fake_run_turn)
     client = fresh_client()
     _configured(client)
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -187,7 +188,7 @@ def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypat
         calls["prompt"] = prompt
         return TurnResult(text=f"echo: {prompt}")
 
-    monkeypatch.setattr(host, "run_turn", fake_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=fake_run_turn)
 
     client = fresh_client()
     _configured(client)
@@ -218,7 +219,7 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     def failing_run_turn(*args, **kwargs):
         raise pi_client.SidecarError("boom --api-key sk-secret")
 
-    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=failing_run_turn)
 
     client = fresh_client()
     _configured(client)
@@ -256,7 +257,7 @@ def test_failed_turn_keeps_real_usage_and_context(monkeypatch) -> None:
             code="output_limit",
         )
 
-    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=failing_run_turn)
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -284,7 +285,7 @@ def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
     def slow_run_turn(*args, **kwargs):
         raise pi_client.SidecarError(f"{timed_out}\n[sidecar] boot log", human=timed_out)
 
-    monkeypatch.setattr(host, "run_turn", slow_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=slow_run_turn)
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -309,7 +310,7 @@ def test_只有一段日志时仍然退回那句常量(monkeypatch) -> None:
     def crashed_run_turn(*args, **kwargs):
         raise pi_client.SidecarError("Traceback (most recent call last): ...")
 
-    monkeypatch.setattr(host, "run_turn", crashed_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=crashed_run_turn)
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -334,7 +335,7 @@ def test_empty_turn_surfaces_error_not_blank_bubble(monkeypatch) -> None:
     def empty_run_turn(*args, **kwargs):
         return TurnResult(text="")
 
-    monkeypatch.setattr(host, "run_turn", empty_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=empty_run_turn)
 
     client = fresh_client()
     _configured(client)
@@ -366,7 +367,7 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
         called["ran"] = True
         return TurnResult(text="should not get here")
 
-    monkeypatch.setattr(host, "run_turn", should_not_run)
+    use_fake_turn_runtime(monkeypatch, run=should_not_run)
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -414,8 +415,8 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
         release.wait(30)
         return TurnResult(text="ok")
 
-    monkeypatch.setattr(host, "run_turn", slow_run_turn)
-    monkeypatch.setattr(host, "steer_turn", lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
+    use_fake_turn_runtime(monkeypatch, run=slow_run_turn)
+    use_fake_turn_runtime(monkeypatch, steer=lambda sid, text, mode="steer", steer_id="": steers.append(text) or True)
 
     client = fresh_client()
     _configured(client)
@@ -640,9 +641,7 @@ def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> Non
     from app.ai.sidecar.pi_client import TurnResult
     from tests.util import fresh_client
 
-    monkeypatch.setattr(
-        host, "run_turn",
-        lambda *a, **kw: TurnResult(text="好的", context={"tokens": 1200, "window": 128000}),
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **kw: TurnResult(text="好的", context={"tokens": 1200, "window": 128000}),
     )
     client = fresh_client()
     # 部署得先有一个可用的对话模型:解析供应商发生在 run_turn 之前,没配就走错误分支 ——
@@ -708,7 +707,7 @@ def test_失败的一轮把已经做过的事留在记录里(monkeypatch) -> Non
         kwargs["on_tool"]({"type": "tool_end", "toolCallId": "t1", "result": "ok", "isError": False})
         raise pi_client.SidecarError("Connection error.", human="智能体执行失败，请稍后重试。")
 
-    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=failing_run_turn)
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -730,7 +729,7 @@ def test_没有过程的失败不会凭空多出一条空记录(monkeypatch) -> 
     def failing_run_turn(*args, **kwargs):
         raise pi_client.SidecarError("boom")
 
-    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=failing_run_turn)
     client = fresh_client()
     _configured(client)
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

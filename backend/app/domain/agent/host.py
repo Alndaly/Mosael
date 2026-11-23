@@ -6,15 +6,14 @@ import math
 import threading
 import time
 import uuid
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import and_, exists, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.pi_client import (
-    SidecarError, TurnResult, abort_turn, compact_session, run_turn, set_turn_queue, steer_turn,
-)
+from app.ai.sidecar.pi_client import SidecarError, TurnResult
 from app.domain.agent.prompt import (
     _attached_images,
     _prompt_snapshot,
@@ -43,6 +42,7 @@ from app.domain.agent import card_expiry, computer_use, origins, titles, turn_sc
 from app.domain.agent.places import STUDIO_PLACE, Place
 from app.domain.agent.sessions import writable_session
 from app.domain.agent.textclean import decode_byte_fallback
+from app.domain.agent.turn_runtime import turn_runtime
 from app.domain.providers import (
     models as provider_models,
     credentials as provider_credentials,
@@ -606,7 +606,7 @@ def post_user_message(
         # 回答走插话:抢不到会话说明有一轮在跑,而这条正是它等的东西。插进去成功就当场落库
         # (不带 queued 标),于是它像一条正常的用户消息出现在对话里,而不是队列里那种待办。
         # 插不进去(那一轮刚好结束了)就落回排队 —— 下面那次 drain 会接走它,不会掉进空里。
-        if steer_if_running and steer_turn(session.id, prompt):
+        if steer_if_running and turn_runtime().steer(session.id, prompt):
             message = AgentMessage(
                 session_id=session.id,
                 role="user",
@@ -828,39 +828,70 @@ def _discard_turn_events(session_id: str) -> None:
         logger.warning("could not discard the persisted events of session %s", session_id, exc_info=True)
 
 
-def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str | None = None) -> None:
-    api_base = f"http://{settings.backend_host}:{settings.backend_port}"
-    final_text = ""
-    turn_started = time.monotonic()
+@dataclass
+class _TurnRun:
+    """一轮在三段之间要传的东西:准备(读会话、拼提示词、选连接)→ 运行(不持有数据库会话)→ 落库。"""
+
+    session_id: str
+    prompt: str
+    token: str
+    actor_id: str | None
+    api_base: str = field(default_factory=lambda: f"http://{settings.backend_host}:{settings.backend_port}")
+    turn_started: float = field(default_factory=time.monotonic)
+    final_text: str = ""
+    #: 先记下:收尾时会话可能已被删掉,那时再读它的属性会抛。
+    origin: Any = None
     provider_profile_id: str | None = None
-    provider_vendor = ""
-    provider_model = ""
+    provider_vendor: str = ""
+    provider_model: str = ""
+    system_prompt: str = ""
+    adapter: str = ""
+    turn_kwargs: dict[str, Any] = field(default_factory=dict)
     result: TurnResult | None = None
     assistant_message: Any | None = None
     #: 准备或运行时的失败,留到落库那一段里按原样抛出 —— 和那里自己抛的错走同一组 except。
     failure: BaseException | None = None
     #: 这是这段对话第一轮成功的回答:收尾之后照实际聊的内容给它起个名字(见 titles)。
-    name_it = False
+    name_it: bool = False
     #: 这一轮收尾时,它还在等人的确认卡以什么由头作废(见 card_expiry.expire_session_cards)。缺省是失败;
     #: 落库成功时改成「照常结束」或「被停止」。
-    cards_expire_as = card_expiry.EXPIRY_TURN_FAILED
+    cards_expire_as: str = card_expiry.EXPIRY_TURN_FAILED
     #: 这一轮是**用户按停止**停下的:收尾时把排着的话扣下,不自动接着跑(见 `_hold_queue`)。
-    stopped_by_user = False
+    stopped_by_user: bool = False
+    #: 运行那一段边流边写的草稿:当前段的消息 id、攒着没落库的字、整轮的全文、插话切出来的段数。
+    draft_holder: dict[str, str | None] = field(default_factory=lambda: {"id": None})
+    draft_buffer: dict[str, float | str] = field(default_factory=lambda: {"text": "", "saved": 0.0, "at": 0.0})
+    all_text: dict[str, str] = field(default_factory=lambda: {"value": ""})
+    segments: dict[str, Any] = field(default_factory=lambda: {"count": 0, "last_finished": None})
 
-    # ---- 1. 准备:短会话,读完就还连接 ----
+
+def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str | None = None) -> None:
+    """跑一轮。三段,每段只在需要时拿数据库会话:准备 → 运行(几分钟,不占连接)→ 落库。"""
+    run = _TurnRun(session_id=session_id, prompt=prompt, token=token, actor_id=actor_id)
+    if not _prepare_turn(run):
+        return
+    _stream_turn(run)
+    _persist_turn(run)
+
+
+def _prepare_turn(run: _TurnRun) -> bool:
+    """读会话、拼系统提示词、选对话连接,把这一轮要交给运行时的参数备好。会话没了回 False(什么都不做)。
+
+    这里的失败不抛:记进 `run.failure`,由落库那一段按原样处理(写一条错误消息、把会话状态还原)。
+    """
     # **跑模型的那几分钟不占数据库连接。** 此前整轮包在一个会话里:一轮对话几分钟,连接就被钉几分钟,
     # 而这期间它唯一的用处是最后写一条消息。几个会话同时在想,连接池就空了,别的请求排在它们后面。
     with SessionLocal() as db:
-        session = db.get(AgentSession, session_id)
+        session = db.get(AgentSession, run.session_id)
         if session is None:
-            return
+            return False
         #: 先记下:收尾时会话可能已被删掉,那时再读它的属性会抛。
-        origin = session.origin
+        run.origin = session.origin
         # Everything below is caught: a failure while resolving the provider (or building the
         # prompt) must still write an error message and reset session.status — otherwise the
         # worker dies silently and the session hangs in "running" forever.
         try:
-            system_prompt = build_system_prompt(db, session)
+            run.system_prompt = build_system_prompt(db, session)
             # pi 适配器的对话模型:优先用会话选定的供应商+模型,否则回退第一个启用供应商及其默认模型
             provider_dict: dict | None = None
             agent_model: str | None = None
@@ -868,105 +899,106 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 # 外部渠道的会话(飞书一个群一个)没有主人:用的是**发这条消息的人**的钥匙与默认模型,
                 # 和给这一轮铸令牌的是同一个人。
                 provider_dict, agent_model, profile = resolve_chat_provider(
-                    db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id or actor_id
+                    db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id or run.actor_id
                 )
                 if profile is not None:
-                    provider_profile_id = profile.id
-                    provider_vendor = profile.vendor
-                    provider_model = agent_model or ""
-            turn_kwargs = {
-                "prompt": prompt,
-                "system_prompt": system_prompt,
-                "api_base": api_base,
-                "token": token,
+                    run.provider_profile_id = profile.id
+                    run.provider_vendor = profile.vendor
+                    run.provider_model = agent_model or ""
+            run.turn_kwargs = {
+                "prompt": run.prompt,
+                "system_prompt": run.system_prompt,
+                "api_base": run.api_base,
+                "token": run.token,
                 "thinking_level": session.thinking_level or "off",
                 "provider": provider_dict,
                 "model": agent_model,
                 "workspace_id": session.workspace_id,
                 "adapter_state": session.adapter_state,
                 "session_key": session.id,
-                "images": _attached_images(db, session.workspace_id, prompt),
+                "images": _attached_images(db, session.workspace_id, run.prompt),
             }
-            adapter = session.adapter
+            run.adapter = session.adapter
         except Exception as exc:  # noqa: BLE001 —— 见上
-            failure = exc
+            run.failure = exc
+    return True
 
-    # ---- 2. 运行:不持有任何数据库会话 ----
-    draft_holder: dict[str, str | None] = {"id": None}
-    draft_buffer: dict[str, float | str] = {"text": "", "saved": 0.0, "at": 0.0}
-    all_text = {"value": ""}
-    segments = {"count": 0, "last_finished": None}
-    if failure is None:
+
+def _stream_turn(run: _TurnRun) -> None:
+    """交给运行时跑这一轮:不持有任何数据库会话,边流边把说过的话写进草稿。失败记进 `run.failure`。"""
+    if run.failure is None:
         # 先落一条空草稿:跑的过程中**边流边写**,进程被掐断时已经说过的话还在库里。
-        draft_holder["id"] = _open_assistant_draft(session_id)
+        run.draft_holder["id"] = _open_assistant_draft(run.session_id)
 
         def _persist_delta(delta: str) -> None:
-            _stream_append(session_id, delta)
-            all_text["value"] += delta
-            draft_buffer["text"] = str(draft_buffer["text"]) + delta
-            draft_id = draft_holder["id"]
+            _stream_append(run.session_id, delta)
+            run.all_text["value"] += delta
+            run.draft_buffer["text"] = str(run.draft_buffer["text"]) + delta
+            draft_id = run.draft_holder["id"]
             if draft_id is None:
                 return
             now = time.monotonic()
-            grew = len(str(draft_buffer["text"])) - float(draft_buffer["saved"])
-            if now - float(draft_buffer["at"]) < _DRAFT_FLUSH_SECONDS and grew < _DRAFT_FLUSH_CHARS:
+            grew = len(str(run.draft_buffer["text"])) - float(run.draft_buffer["saved"])
+            if now - float(run.draft_buffer["at"]) < _DRAFT_FLUSH_SECONDS and grew < _DRAFT_FLUSH_CHARS:
                 return
-            draft_buffer["at"] = now
-            draft_buffer["saved"] = float(len(str(draft_buffer["text"])))
-            _flush_assistant_draft(draft_id, str(draft_buffer["text"]))
+            run.draft_buffer["at"] = now
+            run.draft_buffer["saved"] = float(len(str(run.draft_buffer["text"])))
+            _flush_assistant_draft(draft_id, str(run.draft_buffer["text"]))
 
         def _on_steer_applied(steer_id: str) -> None:
             """模型已经读到插话:冻结当前 assistant 段，插入 user，后续写进新段。"""
-            text = str(draft_buffer["text"])
-            snapshot = _stream_segment_snapshot(session_id)
-            finished = _finish_streaming_segment(session_id, draft_holder["id"], text=text, snapshot=snapshot)
+            text = str(run.draft_buffer["text"])
+            snapshot = _stream_segment_snapshot(run.session_id)
+            finished = _finish_streaming_segment(run.session_id, run.draft_holder["id"], text=text, snapshot=snapshot)
             if finished:
-                segments["last_finished"] = finished
-            _mark_steer_applied(session_id, steer_id)
-            _stream_segment_reset(session_id)
-            draft_buffer.update({"text": "", "saved": 0.0, "at": 0.0})
-            draft_holder["id"] = _open_assistant_draft(session_id)
-            segments["count"] += 1
+                run.segments["last_finished"] = finished
+            _mark_steer_applied(run.session_id, steer_id)
+            _stream_segment_reset(run.session_id)
+            run.draft_buffer.update({"text": "", "saved": 0.0, "at": 0.0})
+            run.draft_holder["id"] = _open_assistant_draft(run.session_id)
+            run.segments["count"] += 1
 
         try:
-            result = run_turn(
-                adapter,
+            run.result = turn_runtime().run(
+                run.adapter,
                 on_delta=_persist_delta,
-                on_tool=lambda event: _stream_tool_event(session_id, event),
-                on_thinking=lambda event: _stream_thinking(session_id, event),
-                on_awaiting_user=lambda waiting: origins.waiting_for_user(origin, session_id, waiting),
+                on_tool=lambda event: _stream_tool_event(run.session_id, event),
+                on_thinking=lambda event: _stream_thinking(run.session_id, event),
+                on_awaiting_user=lambda waiting: origins.waiting_for_user(run.origin, run.session_id, waiting),
                 on_steer_applied=_on_steer_applied,
-                **turn_kwargs,
+                **run.turn_kwargs,
             )
         except Exception as exc:  # noqa: BLE001 —— 落库那一段按类型处理
-            failure = exc
+            run.failure = exc
 
-    # ---- 3. 落库:再开一个短会话 ----
+
+def _persist_turn(run: _TurnRun) -> None:
+    """落库:写回答、用量、上下文水位,收尾确认卡与队列;准备或运行时的失败也在这里变成一条错误消息。"""
     with SessionLocal() as db:
-        session = db.get(AgentSession, session_id)
+        session = db.get(AgentSession, run.session_id)
         if session is None:
             # 这一轮跑着的时候会话被删了:没有地方写结果,但令牌照样要收回、流照样要收尾。
-            revoke_session(db, token)
+            revoke_session(db, run.token)
             db.commit()
-            _stream_finish(session_id, final_text)
-            _discard_turn_events(session_id)
+            _stream_finish(run.session_id, run.final_text)
+            _discard_turn_events(run.session_id)
             return
         try:
-            if failure is not None:
-                raise failure
-            assert result is not None
+            if run.failure is not None:
+                raise run.failure
+            assert run.result is not None
             # 本地模型的 byte-fallback token(<0xF0>… 字面串)在落库前重组回 UTF-8。
-            final_text = decode_byte_fallback(result.text)
-            if result.adapter_state is not None:
-                session.adapter_state = result.adapter_state  # pi 多轮记忆:回存序列化消息
-            stream_state = get_stream_state(session_id)
+            run.final_text = decode_byte_fallback(run.result.text)
+            if run.result.adapter_state is not None:
+                session.adapter_state = run.result.adapter_state  # pi 多轮记忆:回存序列化消息
+            stream_state = get_stream_state(run.session_id)
             # 有 steer 边界时，实时流里只剩最后一段；前面各段已经作为独立 assistant 消息落库。
-            segment_text = final_text
-            if segments["count"]:
-                streamed = decode_byte_fallback(all_text["value"])
-                segment_text = decode_byte_fallback(str(draft_buffer["text"]))
-                if final_text.startswith(streamed) and len(final_text) > len(streamed):
-                    segment_text += final_text[len(streamed):]
+            segment_text = run.final_text
+            if run.segments["count"]:
+                streamed = decode_byte_fallback(run.all_text["value"])
+                segment_text = decode_byte_fallback(str(run.draft_buffer["text"]))
+                if run.final_text.startswith(streamed) and len(run.final_text) > len(streamed):
+                    segment_text += run.final_text[len(streamed):]
             timeline = _timeline_for_payload(stream_state, segment_text)
             # Never persist a blank assistant turn: an empty reply with no tool calls means the
             # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
@@ -976,68 +1008,68 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             # `not timeline` 为假，于是 content="" 的助手消息照样落库——用户看到一个空气泡。
             # 只有在真的留下了工具/子智能体结果时，才不需要补这句停止说明。
             has_work = any(item.get("type") in {"tool", "subtool"} for item in timeline)
-            if result.aborted and not segment_text.strip() and not has_work:
+            if run.result.aborted and not segment_text.strip() and not has_work:
                 # 还没出字就被停下:那不是「模型什么都没回」,是用户按了停止 —— 照停止记,不报检查供应商配置。
                 segment_text = tr("agentTurn_stoppedBeforeReply")
             tail_empty = not segment_text.strip() and not timeline
-            if tail_empty and not (segments["count"] and segments["last_finished"]):
+            if tail_empty and not (run.segments["count"] and run.segments["last_finished"]):
                 raise SidecarError("agentErr_emptyReply", human=tr("agentErr_emptyReply"))
-            usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
-            usage["metering"] = _turn_metering(prompt, final_text, result.usage)
-            prompt_snapshot = _prompt_snapshot(db, session.id, system_prompt)
+            usage = _usage_from_started(run.turn_started, stream_state.get("first_token_at"))
+            usage["metering"] = _turn_metering(run.prompt, run.final_text, run.result.usage)
+            prompt_snapshot = _prompt_snapshot(db, session.id, run.system_prompt)
             payload = {
                 "usage": usage,
                 # 系统提示变了才记 —— 轨迹上的每条 SYSTEM 都是一次真实变化。
                 **({"prompt": prompt_snapshot} if prompt_snapshot else {}),
                 # 上下文水位挂在最近一条助手消息上,前端据此画进度条 —— 不另建一张表:
                 # 它天然随对话推进而更新,且历史消息保留着当时的水位,回看时也说得通。
-                **({"context": result.context} if result.context else {}),
+                **({"context": run.result.context} if run.result.context else {}),
                 # 压缩必须被看见:静默压缩会让用户以为模型"忘了"早期内容。
-                **({"compaction": result.compaction} if result.compaction else {}),
+                **({"compaction": run.result.compaction} if run.result.compaction else {}),
                 **({"timeline": timeline} if timeline else {}),
             }
             if tail_empty:
                 # 插话后模型没有产出:删掉空草稿,把本轮的 usage / 水位挂回上一段，不造空气泡。
-                blank = db.get(AgentMessage, draft_holder["id"]) if draft_holder["id"] else None
+                blank = db.get(AgentMessage, run.draft_holder["id"]) if run.draft_holder["id"] else None
                 if blank is not None and (blank.payload or {}).get("streaming"):
                     db.delete(blank)
                     db.flush()
-                assistant_message = db.get(AgentMessage, str(segments["last_finished"]))
-                if assistant_message is None:
+                run.assistant_message = db.get(AgentMessage, str(run.segments["last_finished"]))
+                if run.assistant_message is None:
                     raise SidecarError("agentErr_emptyReply", human=tr("agentErr_emptyReply"))
-                assistant_message.payload = {
-                    **(assistant_message.payload or {}),
+                run.assistant_message.payload = {
+                    **(run.assistant_message.payload or {}),
                     **{key: value for key, value in payload.items() if key != "timeline"},
                 }
             else:
-                assistant_message = _finish_assistant_draft(
+                run.assistant_message = _finish_assistant_draft(
                     db,
-                    draft_holder["id"],
+                    run.draft_holder["id"],
                     session.id,
                     content=segment_text,
                     payload=payload,
                 )
-            cards_expire_as = card_expiry.EXPIRY_TURN_STOPPED if result.aborted else card_expiry.EXPIRY_TURN_ENDED
-            stopped_by_user = result.aborted
-            name_it = titles.wants_a_name(db, session)
-            if provider_vendor or provider_model:
+            run.cards_expire_as = card_expiry.EXPIRY_TURN_STOPPED if run.result.aborted else card_expiry.EXPIRY_TURN_ENDED
+            run.stopped_by_user = run.result.aborted
+            run.name_it = titles.wants_a_name(db, session)
+            if run.provider_vendor or run.provider_model:
                 # 记账的形状交给 billable(归属、耗时、幂等、落库);这里只报计量。
                 # 成本要写进消息 payload,而它是落库时才算出来的 —— 所以在 with 块之后读回。
                 with billable(
                     db,
-                    user_id=session.owner_user_id or actor_id,
+                    user_id=session.owner_user_id or run.actor_id,
                     capability="chat",
                     operation="agent_turn",
                     workspace_id=session.workspace_id,
-                    provider_profile_id=provider_profile_id,
-                    provider=provider_vendor,
-                    model=provider_model,
+                    provider_profile_id=run.provider_profile_id,
+                    provider=run.provider_vendor,
+                    model=run.provider_model,
                     source_type="agent_message",
-                    source_id=assistant_message.id,
-                    agent_message_id=assistant_message.id,
-                    idempotency_key=f"agent-message:{assistant_message.id}",
+                    source_id=run.assistant_message.id,
+                    agent_message_id=run.assistant_message.id,
+                    idempotency_key=f"agent-message:{run.assistant_message.id}",
                 ) as call:
-                    call.meter(usage["metering"], raw=result.usage or {})
+                    call.meter(usage["metering"], raw=run.result.usage or {})
                 event = call.event
                 if event is not None:
                     usage["cost"] = {
@@ -1049,7 +1081,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 # `{"usage": ..., "timeline": ...}` —— 把第一次构造时写进去的 prompt 快照、
                 # 上下文水位、压缩标记整个覆盖丢了。表现是轨迹里永远见不到 SYSTEM/CONTEXT 行,
                 # 而写入代码、读取代码单看都是对的(真机上最近 300 条消息里快照 0 条)。
-                assistant_message.payload = {**(assistant_message.payload or {}), "usage": usage}
+                run.assistant_message.payload = {**(run.assistant_message.payload or {}), "usage": usage}
         except SidecarError as exc:
             # **失败也回存记忆(拿得到的话)。** 这一轮是跑过的:失败点之前的工具调用真的发生了,
             # 它们改过的东西留在库里。不回存的话记忆回滚到上一次成功,模型下次醒来不知道自己
@@ -1059,15 +1091,15 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             memory_saved = getattr(exc, "adapter_state", None) is not None
             if memory_saved:
                 session.adapter_state = exc.adapter_state
-            usage = _usage_from_started(turn_started)
-            usage["metering"] = _turn_metering(prompt, "", getattr(exc, "usage", None))
+            usage = _usage_from_started(run.turn_started)
+            usage["metering"] = _turn_metering(run.prompt, "", getattr(exc, "usage", None))
             # **失败也要留住已经说过的正文。** 原来这里只写一句报错,模型跑一半说过的话(在草稿里)
             # 就被这条新消息取代了 —— 界面上只剩工具步骤。
-            streamed = str(draft_buffer["text"]).strip()
+            streamed = str(run.draft_buffer["text"]).strip()
             failure_text = getattr(exc, "human", "") or tr("agentErr_turnFailed")
-            assistant_message = _finish_assistant_draft(
+            run.assistant_message = _finish_assistant_draft(
                 db,
-                draft_holder["id"],
+                run.draft_holder["id"],
                 session.id,
                 # 正文和失败原因分开存:正文按正常助手回答渲染,错误卡只承担原因。
                 content=streamed or failure_text,
@@ -1084,61 +1116,61 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                     # 真的发生过 —— 记忆回存了,而给人看的记录此前没有:一次跑了三分钟、调了十来次
                     # 工具的对话,只要最后一步断线,用户看到的就只剩一句「执行失败」。模型知道自己
                     # 做过什么,用户不知道,这是最糟的一种不对称。
-                    **_failed_turn_timeline(session_id),
+                    **_failed_turn_timeline(run.session_id),
                     **({"context": exc.context} if getattr(exc, "context", None) else {}),
                 },
             )
-            if provider_vendor or provider_model:
+            if run.provider_vendor or run.provider_model:
                 # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
                     db,
-                    user_id=session.owner_user_id or actor_id,
+                    user_id=session.owner_user_id or run.actor_id,
                     capability="chat",
                     operation="agent_turn",
                     workspace_id=session.workspace_id,
-                    provider_profile_id=provider_profile_id,
-                    provider=provider_vendor,
-                    model=provider_model,
+                    provider_profile_id=run.provider_profile_id,
+                    provider=run.provider_vendor,
+                    model=run.provider_model,
                     source_type="agent_message",
-                    source_id=assistant_message.id,
-                    agent_message_id=assistant_message.id,
-                    idempotency_key=f"agent-message:{assistant_message.id}",
+                    source_id=run.assistant_message.id,
+                    agent_message_id=run.assistant_message.id,
+                    idempotency_key=f"agent-message:{run.assistant_message.id}",
                 ) as call:
                     call.meter(usage["metering"], raw=getattr(exc, "usage", None) or {})
                     call.mark_failed()
         except Exception as exc:  # worker threads must never die silently
             logger.exception("Agent turn crashed")
-            usage = _usage_from_started(turn_started)
-            usage["metering"] = _turn_metering(prompt, "", None)
-            streamed = str(draft_buffer["text"]).strip()
+            usage = _usage_from_started(run.turn_started)
+            usage["metering"] = _turn_metering(run.prompt, "", None)
+            streamed = str(run.draft_buffer["text"]).strip()
             crashed = tr("agentErr_turnCrashed")
-            assistant_message = _finish_assistant_draft(
+            run.assistant_message = _finish_assistant_draft(
                 db,
-                draft_holder["id"],
+                run.draft_holder["id"],
                 session.id,
                 content=streamed or crashed,
                 error=str(exc)[:800],
                 payload={
                     "usage": usage,
                     **({"failure_text": crashed} if streamed else {}),
-                    **_failed_turn_timeline(session_id),
+                    **_failed_turn_timeline(run.session_id),
                 },
             )
-            if provider_vendor or provider_model:
+            if run.provider_vendor or run.provider_model:
                 # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
                     db,
-                    user_id=session.owner_user_id or actor_id,
+                    user_id=session.owner_user_id or run.actor_id,
                     capability="chat",
                     operation="agent_turn",
                     workspace_id=session.workspace_id,
-                    provider_profile_id=provider_profile_id,
-                    provider=provider_vendor,
-                    model=provider_model,
+                    provider_profile_id=run.provider_profile_id,
+                    provider=run.provider_vendor,
+                    model=run.provider_model,
                     source_type="agent_message",
-                    source_id=assistant_message.id,
-                    agent_message_id=assistant_message.id,
-                    idempotency_key=f"agent-message:{assistant_message.id}",
+                    source_id=run.assistant_message.id,
+                    agent_message_id=run.assistant_message.id,
+                    idempotency_key=f"agent-message:{run.assistant_message.id}",
                 ) as call:
                     call.meter(usage["metering"])
                     call.mark_failed()
@@ -1148,13 +1180,13 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             # 作废失败不能连累收尾(会话会永远停在「思考中」):卡留着、记一条带栈的日志 —— 宁可多一张没作废的卡,
             # 也不能让这段对话哑掉。
             try:
-                expired = card_expiry.expire_session_cards(db, session_id, cards_expire_as)
+                expired = card_expiry.expire_session_cards(db, run.session_id, run.cards_expire_as)
             except Exception:  # noqa: BLE001 —— 收尾路径
-                logger.exception("could not expire the pending cards of session %s", session_id)
+                logger.exception("could not expire the pending cards of session %s", run.session_id)
                 expired = 0
             if expired:
-                logger.info("turn of session %s ended; expired %d pending confirmation card(s) (%s)", session_id, expired, cards_expire_as)
-            if stopped_by_user:
+                logger.info("turn of session %s ended; expired %d pending confirmation card(s) (%s)", run.session_id, expired, run.cards_expire_as)
+            if run.stopped_by_user:
                 _hold_queue(db, session)
             session.status = "idle"
             session.updated_at = now()
@@ -1162,18 +1194,18 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             # server can call back into the API, and nothing ever removed it — AuthSession has
             # no expiry, so every chat turn left a permanent full-privilege credential in the
             # database. A long-running install accumulated one per message, forever.
-            revoke_session(db, token)
+            revoke_session(db, run.token)
             try:
                 db.commit()
             except Exception:  # noqa: BLE001
                 # The session can be deleted while its turn is still running. There is then no
                 # row to mark idle, and letting this propagate kills the thread before
                 # _stream_finish — leaving the UI spinning on a conversation that is gone.
-                logger.warning("Could not finalise session %s; it may have been deleted", session_id)
+                logger.warning("Could not finalise session %s; it may have been deleted", run.session_id)
                 db.rollback()
-            _stream_finish(session_id, final_text)
+            _stream_finish(run.session_id, run.final_text)
             # 消息 payload 里已经有折叠好的 timeline;这一轮落库的中间事件到此为止(见 app.db.agent_turn_events)。
-            _discard_turn_events(session_id)
+            _discard_turn_events(run.session_id)
             #: 这一轮用过 Computer Use 的话,桌面壳那边的「被控制中」要跟着灭(不是急停)。
             #: 桥不在(独立后端)时 end_turn 自己静默跳过;收尾路径再兜一层,绝不让它连累回合结束。
             try:
@@ -1181,13 +1213,13 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             except Exception:  # noqa: BLE001 —— 收尾路径
                 logger.debug("could not tell the host to end Computer Use", exc_info=True)
     # 外部渠道(飞书……)把这一轮的结果送回原会话。在 drain 之前:排队的下一轮不该抢在这一轮的回复前面。
-    origins.turn_finished(origin, session_id, getattr(assistant_message, "id", None))
-    if name_it:
+    origins.turn_finished(run.origin, run.session_id, getattr(run.assistant_message, "id", None))
+    if run.name_it:
         # 另起一个线程:会话已经空闲了,排着的下一轮不等它。线程名和这一轮一样 —— 测试收尾时等的是同一类线程。
-        titles.start(session_id, actor_id, thread_name=TURN_THREAD_NAME, resolve_chat_provider=resolve_chat_provider)
+        titles.start(run.session_id, run.actor_id, thread_name=TURN_THREAD_NAME, resolve_chat_provider=resolve_chat_provider)
     # Outside the session block on purpose: the drain opens its own session and starts the
     # next turn, and doing that while this one still held the connection would nest them.
-    _drain_queue(session_id)
+    _drain_queue(run.session_id)
 
 
 def _drain_queue(session_id: str) -> None:
@@ -1460,7 +1492,7 @@ def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -
             for item in _queued_messages(db, session)
             if item.id != message_id and (item.payload or {}).get("steer_pending")
         ]
-        set_turn_queue(session.id, remaining)
+        turn_runtime().set_queue(session.id, remaining)
     db.delete(message)
     db.flush()
     return [item.content for item in _queued_messages(db, session)]
@@ -1559,7 +1591,7 @@ def steer_queued_message(db: Session, session: AgentSession, message_id: str, us
     pending_payload["steer_pending"] = True
     message.payload = pending_payload
     db.commit()
-    if not steer_turn(session.id, prompt, steer_id=message.id):
+    if not turn_runtime().steer(session.id, prompt, steer_id=message.id):
         # 那一轮刚好结束了：撤回 pending，保持 queued，下一轮照常执行。
         message.payload = {key: value for key, value in pending_payload.items() if key != "steer_pending"}
         db.commit()
@@ -1580,7 +1612,7 @@ def stop_turn(db: Session, session: AgentSession) -> bool:
     """
     if session.status != "running":
         return False
-    stopped = abort_turn(session.id)
+    stopped = turn_runtime().abort(session.id)
     if not stopped and turn_scheduler.cancel(session.id):
         #: 还在准入队列里,根本没起 sidecar。把流收掉、会话放回 idle;用户那句消息仍在,
         #: 只是这一轮没有开始 —— 再发一句就是新的一轮。
@@ -1616,7 +1648,7 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
         token = mint_tool_token(db, user)
         db.close()
         compaction_id = uuid.uuid4().hex
-        result = compact_session(
+        result = turn_runtime().compact(
             api_base=f"http://{settings.backend_host}:{settings.backend_port}",
             token=token,
             provider=provider_dict,

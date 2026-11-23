@@ -28,6 +28,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentMessage, AgentSession, ToolConfirmation
 from app.domain.agent import host, stream as agent_stream
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_queue import _session, _wait_idle
 from tests.util import fresh_client, user_id
 
@@ -143,7 +144,7 @@ def test_一轮收尾时它还在等的卡作废_批了回409(monkeypatch, endin
             raise SidecarError("上游断线")
         return TurnResult(text="第1秒…", aborted=ending == "stopped")
 
-    monkeypatch.setattr(host, "run_turn", turn)
+    use_fake_turn_runtime(monkeypatch, run=turn)
     client = fresh_client()
     sid = _session(client)
     assert client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "建一个工作流"}).status_code == 200
@@ -160,7 +161,7 @@ def test_一轮收尾时它还在等的卡作废_批了回409(monkeypatch, endin
 
 
 def test_别的对话的卡和没挂对话的卡不受这一轮收尾影响(monkeypatch) -> None:
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="好"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="好"))
     client = fresh_client()
     sid = _session(client)
     other = client.post(
@@ -234,7 +235,7 @@ def test_后端重启作废的卡和别的作废同一种状态() -> None:
 
 
 def test_还没出字就被停下_记成停止不是模型什么都没回(monkeypatch) -> None:
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="", aborted=True))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="", aborted=True))
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "写一篇长文"})
@@ -253,7 +254,7 @@ def test_只思考就被停下_落成停止而不是空气泡(monkeypatch) -> No
         agent_stream._stream_thinking(sid, {"type": "thinking_delta", "delta": "先想一下"})
         return TurnResult(text="", aborted=True)
 
-    monkeypatch.setattr(host, "run_turn", turn)
+    use_fake_turn_runtime(monkeypatch, run=turn)
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "写一篇长文"})
@@ -269,7 +270,7 @@ def test_失败带回了记忆_落库记下记忆已回存(monkeypatch) -> None:
     def turn(*_args, **_kwargs):
         raise SidecarError("上游断线", [{"role": "user", "content": [{"type": "text", "text": "建工作流"}]}])
 
-    monkeypatch.setattr(host, "run_turn", turn)
+    use_fake_turn_runtime(monkeypatch, run=turn)
     client = fresh_client()
     sid = _session(client)
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "建工作流"})

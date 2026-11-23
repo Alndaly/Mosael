@@ -22,6 +22,7 @@ from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, GenerationJob
 from app.domain import jobs as jobs_domain
 from app.domain.agent import host, receipts
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_queue import _session
 from tests.util import fresh_client, user_id
 
@@ -140,7 +141,7 @@ def test_失败原因按请求方的语言在出口翻_不再冻结中文(monkey
 def test_已送回执被重启掐断_收尾后重新待送_下一轮真读到(monkeypatch) -> None:
     """先红:此前收尾只拨回会话,回执仍算已送,智能体永远读不到那个任务的结果。"""
     turns = Turns()
-    monkeypatch.setattr(host, "run_turn", turns)
+    use_fake_turn_runtime(monkeypatch, run=turns)
     client = fresh_client()
     sid = _session(client)
     owner = user_id()
@@ -193,7 +194,7 @@ def test_已送回执被重启掐断_收尾后重新待送_下一轮真读到(mo
 def test_最后一条不是回执就不动它(monkeypatch) -> None:
     """用户在那条回执之后又说了一句:该重放的是用户那句话(已有机制),不是那条回执。"""
     turns = Turns()
-    monkeypatch.setattr(host, "run_turn", turns)
+    use_fake_turn_runtime(monkeypatch, run=turns)
     client = fresh_client()
     sid = _session(client)
     with SessionLocal() as db:

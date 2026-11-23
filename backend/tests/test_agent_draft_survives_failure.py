@@ -14,6 +14,7 @@ import time
 
 from fastapi.testclient import TestClient
 
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import fresh_client
 
 
@@ -29,7 +30,6 @@ def _wait(client: TestClient, session_id: str) -> list[dict]:
 
 
 def test_a_failed_turn_keeps_what_the_model_already_said(monkeypatch) -> None:
-    from app.domain.agent import host
     from app.ai.sidecar import pi_client
 
     def failing_run_turn(adapter, *, on_delta, **_kwargs):
@@ -38,7 +38,7 @@ def test_a_failed_turn_keeps_what_the_model_already_said(monkeypatch) -> None:
         on_delta("搭好了 4 路并发抓取。")
         raise pi_client.SidecarError("agentErr_turnFailed", human="智能体执行失败，请稍后重试。")
 
-    monkeypatch.setattr(host, "run_turn", failing_run_turn)
+    use_fake_turn_runtime(monkeypatch, run=failing_run_turn)
     client = fresh_client()
     # 这个部署得有一个能对话的模型 —— 复用 test_agent_host 的同一个配置步骤,不重写一份。
     from tests.test_agent_host import _configured

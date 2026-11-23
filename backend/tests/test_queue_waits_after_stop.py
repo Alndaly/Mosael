@@ -18,6 +18,7 @@ from app.ai.sidecar.pi_client import SidecarError, TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentSession
 from app.domain.agent import host
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.test_agent_queue import _session
 from tests.util import fresh_client
 
@@ -59,9 +60,9 @@ class _StoppableTurn:
 @pytest.fixture
 def turn(monkeypatch):
     fake = _StoppableTurn()
-    monkeypatch.setattr(host, "run_turn", fake)
+    use_fake_turn_runtime(monkeypatch, run=fake)
     #: 「停止」走的那条路:宿主叫 sidecar 中止这一轮 —— 这里让替身那一轮以 aborted 收尾。
-    monkeypatch.setattr(host, "abort_turn", fake.stop)
+    use_fake_turn_runtime(monkeypatch, abort=fake.stop)
     yield fake
     fake.finish()
 

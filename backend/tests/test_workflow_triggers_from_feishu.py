@@ -33,6 +33,7 @@ from app.domain.jobs import wait_for_idle_jobs
 from app.domain.triggers import dispatch, matching
 from app.integrations.feishu import client as feishu_client
 from app.integrations.feishu import inbound
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.util import fresh_client
 
 #: 等一次工作流跑完的预算(秒)。
@@ -133,7 +134,7 @@ def test_一条匹配的消息起一次运行(monkeypatch) -> None:
     trigger = _trigger(client, ws, workflow["id"], params={"text": "处理:{{trigger.text}}"})
     sent = _sent_texts(monkeypatch)
     agent_ran: list[object] = []
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: agent_ran.append(a))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: agent_ran.append(a))
 
     _incoming(
         bot["id"], "oc_g", _unique("m"), open_id,
@@ -163,7 +164,7 @@ def test_同名直填_不必配映射(monkeypatch) -> None:
     workflow = _workflow(client, ws, graph=_graph("text"))
     _trigger(client, ws, workflow["id"], params={})
     _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "原文"}))
 
@@ -187,7 +188,7 @@ def test_认不上的消息不起运行_照旧走智能体会话(monkeypatch) ->
     #: 关键词与消息不符。
     trigger = _trigger(client, ws, workflow["id"], keywords=["发布"], params={})
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="我是智能体"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="我是智能体"))
 
     _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "随便聊聊"}))
 
@@ -207,7 +208,7 @@ def test_类型不对的消息也不起(monkeypatch) -> None:
     workflow = _workflow(client, ws)
     trigger = _trigger(client, ws, workflow["id"], message_types=["media"], params={})
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="智能体回的"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: TurnResult(text="智能体回的"))
 
     _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "只是文字"}))
 
@@ -230,7 +231,7 @@ def test_同一条消息重复投递只起一次(monkeypatch) -> None:
     workflow = _workflow(client, ws)
     trigger = _trigger(client, ws, workflow["id"], params={})
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     message_id = _unique("dup")
     for _ in range(2):
@@ -256,7 +257,7 @@ def test_风暴按限流丢掉_而且留痕(monkeypatch) -> None:
     workflow = _workflow(client, ws)
     trigger = _trigger(client, ws, workflow["id"], params={}, max_runs_per_minute=2)
     _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     for index in range(5):
         _incoming(
@@ -278,7 +279,7 @@ def test_一条消息最多认领三条触发器(monkeypatch) -> None:
     workflow = _workflow(client, ws)
     triggers = [_trigger(client, ws, workflow["id"], name=f"t{index}", params={}) for index in range(5)]
     _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     _incoming(bot["id"], "oc_g", _unique("many"), open_id, content_json=json.dumps({"text": "一条消息"}))
 
@@ -298,7 +299,7 @@ def test_删工作流时触发器当场停用(monkeypatch) -> None:
     workflow = _workflow(client, ws)
     trigger = _trigger(client, ws, workflow["id"], params={})
     _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     assert client.delete(f"/api/workflows/{workflow['id']}").status_code == 204
 
@@ -321,7 +322,7 @@ def test_跑不起来时留痕并通知主人_群里不喊(monkeypatch) -> None:
     workflow = _workflow(client, ws, graph=_graph("text", required=["text"]))
     trigger = _trigger(client, ws, workflow["id"], params={"text": ""})
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": ""}))
     #: 空文本的消息本来就被丢掉,换个有文本但映射成空的场景:消息文本有,映射不看它。
@@ -368,7 +369,7 @@ def test_视频消息进素材库_并当入参(monkeypatch) -> None:
         params={"asset_id": "{{trigger.asset_id}}"},
     )
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
     monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: b"fake-mp4-bytes")
 
     class _Asset:
@@ -435,7 +436,7 @@ def test_跑完之后把结果发回群(monkeypatch) -> None:
     workflow = _workflow(client, ws, graph=_graph("text"))
     _trigger(client, ws, workflow["id"], params={"text": "{{trigger.text}}"})
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "写一句话"}))
 
@@ -453,7 +454,7 @@ def test_关掉回群之后只留痕(monkeypatch) -> None:
     workflow = _workflow(client, ws, graph=_graph("text"))
     trigger = _trigger(client, ws, workflow["id"], params={"text": "{{trigger.text}}"}, reply_in_chat=False)
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "安静地跑"}))
     assert wait_for_idle_jobs(_RUN_BUDGET)
@@ -643,7 +644,7 @@ def test_绕过接口删掉工作流时_下一次触发留痕并停用自己(mon
     workflow = _workflow(client, ws)
     trigger = _trigger(client, ws, workflow["id"], params={})
     _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     with SessionLocal() as db:
         db.delete(db.get(Workflow, workflow["id"]))
@@ -667,7 +668,7 @@ def test_会话链路自己的表没被动过(monkeypatch) -> None:
     workflow = _workflow(client, ws)
     _trigger(client, ws, workflow["id"], params={})
     _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "起一条"}))
 
@@ -701,7 +702,7 @@ def test_收不进素材库的文件也要回一句而不是静默(monkeypatch) 
         client, ws, workflow["id"], message_types=["file"], params={"asset_id": "{{trigger.asset_id}}"}
     )
     sent = _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
     #: **不 patch import_binary_asset** —— 让素材库自己判"这不是能收的东西"。
     monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: _zip_bytes())
 
@@ -782,7 +783,7 @@ def test_重投的消息不再重复入库(monkeypatch) -> None:
         client, ws, workflow["id"], message_types=["media"], params={"asset_id": "{{trigger.asset_id}}"}
     )
     _sent_texts(monkeypatch)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
     monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: b"fake-mp4-bytes")
 
     imported: list[str] = []
@@ -828,7 +829,7 @@ def test_被限流的消息回落到智能体会话(monkeypatch) -> None:
         agent_ran.append(args)
         return TurnResult(text="智能体接住了")
 
-    monkeypatch.setattr(host, "run_turn", fake_turn)
+    use_fake_turn_runtime(monkeypatch, run=fake_turn)
 
     _incoming(bot["id"], "oc_g", _unique("ok"), open_id, content_json=json.dumps({"text": "第一条"}))
     _incoming(bot["id"], "oc_g", _unique("over"), open_id, content_json=json.dumps({"text": "第二条"}))
@@ -858,7 +859,7 @@ def test_认领的都限流_落选的不算数(monkeypatch) -> None:
     _sent_texts(monkeypatch)
     agent_ran: list[object] = []
 
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: agent_ran.append(a) or TurnResult(text="接住了"))
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: agent_ran.append(a) or TurnResult(text="接住了"))
 
     _incoming(bot["id"], "oc_g", _unique("many1"), open_id, content_json=json.dumps({"text": "第一条"}))
     _incoming(bot["id"], "oc_g", _unique("many2"), open_id, content_json=json.dumps({"text": "第二条"}))
@@ -900,7 +901,7 @@ def _receipts_survive_a_failing_send(monkeypatch, failure: BaseException) -> Non
         return "om_x"
 
     monkeypatch.setattr(feishu_client, "send_text", flaky)
-    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    use_fake_turn_runtime(monkeypatch, run=lambda *a, **k: None)
 
     _incoming(bot["id"], "oc_g", _unique("m2"), open_id, content_json=json.dumps({"text": "起两条"}))
 

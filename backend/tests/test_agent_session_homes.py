@@ -13,6 +13,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import AgentSession, Note, now
 from app.domain.agent.prompt import build_system_prompt
+from tests.turn_runtime_fake import use_fake_turn_runtime
 from tests.fake_comfyui import FakeComfyUI, comfyui_grants
 from tests.util import fresh_client, second_client
 
@@ -230,7 +231,7 @@ def test_消息带着在哪说的_落进_payload_形状不对是_422(monkeypatch
     from app.domain.agent import host
     from tests.test_agent_host import _configured
 
-    monkeypatch.setattr(host, "run_turn", lambda adapter, *, prompt, **_: TurnResult(text="好"))
+    use_fake_turn_runtime(monkeypatch, run=lambda adapter, *, prompt, **_: TurnResult(text="好"))
     client = fresh_client()
     _configured(client)
     workspace = _workspace(client)
