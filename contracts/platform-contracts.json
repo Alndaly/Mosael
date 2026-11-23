@@ -2,12 +2,14 @@
   "contract": "platform-contracts",
   "version": 1,
   "readme": "contracts/README.md",
-  "description": "每个发布平台的**站点契约**:入口地址、冒烟时要看到的字样、以及已核实的发布上限。适配器里的选择器与这里的上限是同一件事的两面 —— 平台改版时先断在这里,而不是断在「上传完成但按钮点不动」。由 backend/tests/test_platform_contracts.py 与 scripts/platform-smoke.cjs 消费;上限按 ADR 0076 的真机核对(2026-10-22)填写,后端 PUBLISH_PLATFORMS 与它必须一致。",
+  "description": "每个发布平台的**站点契约**:入口地址、冒烟时要看到的字样、以及已核实的发布上限。适配器里的选择器与这里的上限是同一件事的两面 —— 平台改版时先断在这里,而不是断在「上传完成但按钮点不动」。由后端测试(backend/tests/test_platform_contracts.py)、每日冒烟(scripts/platform-smoke.cjs)与发布执行器(electron/browser/publish/platforms.ts 直接读 loginUrl / publishUrl / limits.titleMax)消费;上限按 ADR 0076 的真机核对(2026-10-22)填写,后端 PUBLISH_PLATFORMS 与它必须一致。",
   "notes": [
     "冒烟**不登录**:它只用公开页面判断「站点还认得出来吗」。断言写法是 textAny 或 urlAny 命中其一即通过 —— 未登录时各家会跳到自己家的登录页/信息流,硬写一个文案必然误报。",
     "limits 里的 null = 这个平台没有那种形态(例如 X 没有独立标题栏,titleMax 就是帖子正文上限)。titleMax 必须与后端一致:平台侧超长会让任务在服务端晚失败。",
     "imageMax 是**图文/照片轮播**的上限(抖音 35、小红书 18、视频号 18、TikTok 35、YouTube 社区帖 10);bodyMax 是正文/描述字数上限;null = 未核实或该平台没有。",
-    "未登录时平台会跳自家登录页(B 站跳 passport、TikTok 跳 /login),那次跳转会让最初的 loadURL 以 ERR_ABORTED 失败 —— 冒烟把「失败之后照样读一次页面、再按 textAny/urlAny 判」当作正常路径,不当成站点故障。"
+    "未登录时平台会跳自家登录页(B 站跳 passport、TikTok 跳 /login),那次跳转会让最初的 loadURL 以 ERR_ABORTED 失败 —— 冒烟把「失败之后照样读一次页面、再按 textAny/urlAny 判」当作正常路径,不当成站点故障。",
+    "loginUrl 以真机能用的入口为准,执行器就是从这里读的。YouTube 必须直接开 accounts.google.com/ServiceLogin?service=youtube(flowName=WebLiteSignIn,能正常输账号密码);从 youtube.com / studio.youtube.com 让它自己跳会落到 GlifWebSignIn,填完邮箱就回 signin/rejected(2026-10-23 实测)。",
+    "limits.titleMax 是默认形状(视频)的标题上限;图文 / 文章各自的上限只在后端 PUBLISH_PLATFORMS 的 content 里声明并由后端在创建任务时拦。"
   ],
   "platforms": {
     "douyin": {
@@ -51,7 +53,7 @@
       }
     },
     "weixin-channels": {
-      "loginUrl": "https://channels.weixin.qq.com/login.html",
+      "loginUrl": "https://channels.weixin.qq.com/login.html?from=assistant",
       "publishUrl": "https://channels.weixin.qq.com/platform/post/create",
       "smoke": {
         "url": "https://channels.weixin.qq.com/login.html",
@@ -71,7 +73,7 @@
       }
     },
     "bilibili": {
-      "loginUrl": "https://member.bilibili.com/platform/home",
+      "loginUrl": "https://passport.bilibili.com/login",
       "publishUrl": "https://member.bilibili.com/platform/upload/video/frame",
       "smoke": {
         "url": "https://member.bilibili.com/platform/home",
@@ -111,7 +113,7 @@
       }
     },
     "youtube": {
-      "loginUrl": "https://studio.youtube.com/",
+      "loginUrl": "https://accounts.google.com/ServiceLogin?service=youtube",
       "publishUrl": "https://studio.youtube.com/",
       "smoke": {
         "url": "https://studio.youtube.com/",

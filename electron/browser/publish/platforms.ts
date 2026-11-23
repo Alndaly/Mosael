@@ -1,4 +1,5 @@
 import { t } from "../../i18n.cjs";
+import siteContracts from "../../../contracts/platform-contracts.json";
 
 export type SupportedPlatform =
   | "mock"
@@ -16,10 +17,13 @@ export interface PlatformDefinition {
   nameKey: string;
   /** 认得出的叫法(后端 / 智能体 / 用户输入里可能出现的写法),含中文俗称 —— 是匹配用的,不是显示用的。 */
   aliases: string[];
+  /** 登录入口 —— 读自站点契约(`contracts/platform-contracts.json`)。 */
   loginUrl: string;
   dashboardUrl: string;
+  /** 发布页 —— 读自站点契约。 */
   publishUrl: string;
   manageUrl: string;
+  /** 默认形状(视频)的标题上限 —— 读自站点契约;mock 没有。 */
   titleMaxLength?: number;
   supportsShortTitle: boolean;
   supportsDescription: boolean;
@@ -56,28 +60,37 @@ export interface PlatformDefinition {
   };
 }
 
-export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
-  {
-    id: "mock",
-    nameKey: "platform_mock",
-    aliases: ["mock"],
-    loginUrl: "about:blank",
-    dashboardUrl: "about:blank",
-    publishUrl: "about:blank",
-    manageUrl: "about:blank",
-    supportsShortTitle: false,
-    supportsDescription: false,
-    supportsTags: true,
-  },
+/**
+ * 执行器独有的平台事实。登录入口、发布页、标题上限**不写在这里** —— 它们是站点契约的字段,
+ * 后端测试与每日冒烟读的也是那一份;这里写一遍就会漂(2.6.14 之前视频号 / B 站 / YouTube 的
+ * 登录入口就是两份各说各的)。
+ */
+type ExecutorFacts = Omit<PlatformDefinition, "loginUrl" | "publishUrl" | "titleMaxLength">;
+type ContractPlatform = Exclude<SupportedPlatform, "mock">;
+
+const SITE_CONTRACTS: Record<ContractPlatform, { loginUrl: string; publishUrl: string; limits: { titleMax: number } }> =
+  siteContracts.platforms;
+
+const MOCK: PlatformDefinition = {
+  id: "mock",
+  nameKey: "platform_mock",
+  aliases: ["mock"],
+  loginUrl: "about:blank",
+  dashboardUrl: "about:blank",
+  publishUrl: "about:blank",
+  manageUrl: "about:blank",
+  supportsShortTitle: false,
+  supportsDescription: false,
+  supportsTags: true,
+};
+
+const EXECUTOR_FACTS: (ExecutorFacts & { id: ContractPlatform })[] = [
   {
     id: "douyin",
     nameKey: "platform_douyin",
     aliases: ["douyin", "抖音"], // i18n-ok
-    loginUrl: "https://creator.douyin.com/",
     dashboardUrl: "https://creator.douyin.com/creator-micro/home",
-    publishUrl: "https://creator.douyin.com/creator-micro/content/upload",
     manageUrl: "https://creator.douyin.com/creator-micro/content/manage",
-    titleMaxLength: 30,
     supportsShortTitle: false,
     supportsDescription: true,
     supportsTags: true,
@@ -86,11 +99,8 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     id: "xiaohongshu",
     nameKey: "platform_xiaohongshu",
     aliases: ["xiaohongshu", "xhs", "rednote", "小红书"], // i18n-ok
-    loginUrl: "https://creator.xiaohongshu.com/",
     dashboardUrl: "https://creator.xiaohongshu.com/new/home",
-    publishUrl: "https://creator.xiaohongshu.com/publish/publish",
     manageUrl: "https://creator.xiaohongshu.com/new/notes",
-    titleMaxLength: 20,
     supportsShortTitle: false,
     supportsDescription: true,
     supportsTags: true,
@@ -107,11 +117,8 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
       "视频号", // i18n-ok
       "微信视频号", // i18n-ok
     ],
-    loginUrl: "https://channels.weixin.qq.com/login.html?from=assistant",
     dashboardUrl: "https://channels.weixin.qq.com/platform/post/list",
-    publishUrl: "https://channels.weixin.qq.com/platform/post/create",
     manageUrl: "https://channels.weixin.qq.com/platform/post/list",
-    titleMaxLength: 16,
     supportsShortTitle: true,
     supportsDescription: true,
     supportsTags: true,
@@ -120,11 +127,8 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     id: "bilibili",
     nameKey: "platform_bilibili",
     aliases: ["bilibili", "bili", "b站", "哔哩哔哩"], // i18n-ok
-    loginUrl: "https://passport.bilibili.com/login",
     dashboardUrl: "https://member.bilibili.com/platform/home",
-    publishUrl: "https://member.bilibili.com/platform/upload/video/frame",
     manageUrl: "https://member.bilibili.com/platform/upload-manager/article",
-    titleMaxLength: 80,
     supportsShortTitle: false,
     supportsDescription: true,
     supportsTags: true,
@@ -135,12 +139,9 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     // **别把 tiktok 和 douyin 混成一个** —— 两个平台、两套账号,后端的别名表里曾经把
     // "tiktok" 指向抖音,说"发到 tiktok"会静默发进抖音。
     aliases: ["tiktok", "tk", "抖音国际版"], // i18n-ok
-    loginUrl: "https://www.tiktok.com/login",
     dashboardUrl: "https://www.tiktok.com/tiktokstudio",
-    publishUrl: "https://www.tiktok.com/tiktokstudio/upload",
     manageUrl: "https://www.tiktok.com/tiktokstudio/content",
     // TikTok 没有独立标题栏,这一栏是**文案**(caption)。
-    titleMaxLength: 2200,
     supportsShortTitle: false,
     supportsDescription: false,
     supportsTags: true,
@@ -155,18 +156,9 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     id: "youtube",
     nameKey: "platform_youtube",
     aliases: ["youtube", "yt", "油管"], // i18n-ok
-    //: **入口决定 Google 给你哪一版登录流程,而两版对我们的待遇不同**(2026-10-23 实测):
-    //: - 直接开 `accounts.google.com/ServiceLogin?service=youtube` → `flowName=WebLiteSignIn`,
-    //:   那一版能正常输账号密码(维护者反馈「可以正常登录了」正是这一版);
-    //: - 从 `youtube.com/upload` / `studio.youtube.com` 让它自己跳过去 → `flowName=GlifWebSignIn`,
-    //:   那一版在**填完邮箱点「下一步」的那一刻**就回 `signin/rejected`(「此浏览器或应用可能不安全」),
-    //:   连密码页都到不了(用池会话实测复现)。
-    //: 所以我上一版「从 youtube.com 自己跳」是反的 —— 退回 ServiceLogin 这个入口。
-    loginUrl: "https://accounts.google.com/ServiceLogin?service=youtube",
+    //: 登录入口为什么是 Google 的 ServiceLogin,见站点契约的 notes。
     dashboardUrl: "https://studio.youtube.com/",
-    publishUrl: "https://studio.youtube.com/",
     manageUrl: "https://studio.youtube.com/",
-    titleMaxLength: 100,
     supportsShortTitle: false,
     supportsDescription: true,
     supportsTags: true,
@@ -183,15 +175,10 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     id: "x",
     nameKey: "platform_x",
     aliases: ["x", "twitter", "X", "推特"], // i18n-ok
-    loginUrl: "https://x.com/i/flow/login",
     dashboardUrl: "https://x.com/home",
-    // 发帖框是 x.com 全站共用的撰写组件,/compose/post 是一页只有它的干净落地(信息流那页
-    // 首屏未必挂着输入框)。
-    publishUrl: "https://x.com/compose/post",
     // X 没有「作品管理」页:发出的帖子落在个人主页时间线上。
     manageUrl: "https://x.com/home",
-    // 帖子正文 280 字;「标题」一栏发出去就是帖子文案(和 TikTok 的 caption 同一角色)。
-    titleMaxLength: 280,
+    // 「标题」一栏发出去就是帖子文案(和 TikTok 的 caption 同一角色),上限见契约。
     supportsShortTitle: false,
     // 没有独立描述/标签栏 —— 文案和 #hashtag 都写进正文。
     supportsDescription: false,
@@ -204,6 +191,15 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
       hosts: ["x.com", "twitter.com"],
     },
   },
+];
+
+/** 站点契约 + 执行器独有事实 = 执行器用的平台定义。 */
+export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
+  MOCK,
+  ...EXECUTOR_FACTS.map((facts) => {
+    const site = SITE_CONTRACTS[facts.id];
+    return { ...facts, loginUrl: site.loginUrl, publishUrl: site.publishUrl, titleMaxLength: site.limits.titleMax };
+  }),
 ];
 
 const PLATFORM_BY_ALIAS = new Map(
