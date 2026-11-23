@@ -19,7 +19,7 @@ from app.db.models import Asset, Job
 from app.domain.analysis import service as analysis
 from app.domain.analysis.service import AnalysisError, select_analysis_connection
 from app.domain.billing.usage import billable
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, say, start_job
+from app.domain.jobs import begin_job, complete_job, create_job, dispatch_job, finish_job, RENDER_SLOTS, say
 from app.domain.providers import models as provider_models
 from app.domain.shots import breakdowns, describe, detect
 
@@ -91,10 +91,8 @@ def _body(job_id: str) -> None:
         asset = db.get(Asset, str(payload.get("asset_id") or ""))
         if job is None or asset is None:
             return
-        if not start_job(db, job, progress=0.05):
+        if not begin_job(db, job, "jobMsg_shotsMeasuring", progress=0.05):
             return
-        say(job, "jobMsg_shotsMeasuring")
-        emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
         row = breakdowns.measure_into(db, asset, created_by=job.created_by, lang=str(payload.get("lang") or "zh"),
@@ -125,9 +123,7 @@ def _body(job_id: str) -> None:
 
         result = {"asset_id": asset.id, "breakdown_id": row.id, "shots": len(row.shots),
                   "judged": bool(row.describe.get("judged_batches"))}
-        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-            say(job, "jobMsg_shotsDone", count=len(row.shots))
-            emit_job_event(db, job.id, "job.succeeded", dict(result))
+        complete_job(db, job, result, "jobMsg_shotsDone", count=len(row.shots))
         logger.info("shot breakdown %s: %d shots for asset %s", row.id, len(row.shots), asset.id)
 
 

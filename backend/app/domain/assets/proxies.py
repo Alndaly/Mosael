@@ -26,14 +26,15 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import (
-    JobCancelled,
     blame,
+    complete_job,
     create_job,
     detach_job_child,
     dispatch_job,
     emit_job_event,
     ensure_wanted,
     finish_job,
+    JobCancelled,
     register_background_kind,
     register_job_child,
     say,
@@ -322,9 +323,7 @@ def _transcode(job_id: str, asset_id: str) -> None:
             if failures:
                 _fail_job(db, job, LocalizedError("proxyErr_failed", reasons=failures))
                 return
-            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-                say(job, "jobMsg_proxyDone")
-                emit_job_event(db, job.id, "job.succeeded", result)
+            complete_job(db, job, result, "jobMsg_proxyDone")
         except JobCancelled:
             raise
         except Exception as exc:  # a worker thread must record failure, never die silently

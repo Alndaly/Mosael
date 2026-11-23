@@ -881,6 +881,35 @@ def emit_job_event(db: Session, job_id: str, type: str, payload: dict[str, Any] 
     db.add(TaskEvent(job_id=job_id, type=type, payload=payload or {}))
 
 
+def begin_job(db: Session, job: Job, message: str | None, *, progress: float | None = None,
+              event: dict[str, Any] | None = None, **params: object) -> bool:
+    """执行体起步的那三句:排队 → 在跑(`start_job`)、告诉人在干什么(`say`)、总线上发 `job.running`。
+
+    返回 False = 它在排队时已经被取消,执行体照此直接退出。不提交:要不要先让别的会话看见「在跑」(长活通常要),
+    由执行体自己决定。此前这三句在十几个执行体里逐字抄着(「理由同分离」)。
+    """
+    fields: dict[str, Any] = {} if progress is None else {"progress": progress}
+    if not start_job(db, job, **fields):
+        return False
+    if message:
+        say(job, message, **params)
+    emit_job_event(db, job.id, "job.running", event or {})
+    return True
+
+
+def complete_job(db: Session, job: Job, result: dict[str, Any], message: str, *,
+                 event: dict[str, Any] | None = None, **params: object) -> bool:
+    """执行体收尾的那三句:落成功(`finish_job`,进度 1)、告诉人做完了、总线上发 `job.succeeded`(缺省带上结果)。
+
+    返回 False = 它在干活时已经落了终态(被取消了):什么都不说、不发事件。
+    """
+    if not finish_job(db, job, status="succeeded", progress=1.0, result=result):
+        return False
+    say(job, message, **params)
+    emit_job_event(db, job.id, "job.succeeded", dict(result) if event is None else event)
+    return True
+
+
 def create_job(
     db: Session,
     *,

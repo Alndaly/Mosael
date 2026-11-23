@@ -26,7 +26,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import TRIM, derived
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, ensure_wanted, finish_job, say, start_job
+from app.domain.jobs import begin_job, complete_job, create_job, dispatch_job, ensure_wanted
 from app.media.paths import resolve_key
 
 logger = logging.getLogger(__name__)
@@ -97,10 +97,8 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
         if job is None or asset is None:
             return
         # 状态经总线写:排队时被取消的,不在这里被写回「在跑」。
-        if not start_job(db, job, progress=0.1):
+        if not begin_job(db, job, "jobMsg_trimRunning", progress=0.1):
             return
-        say(job, "jobMsg_trimRunning")
-        emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
         source = resolve_key(asset.file_key)
@@ -136,7 +134,5 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
             )
 
         #: 和语音合成同一个形状(单数)—— 画板的回执两种都读得懂,见 domain/boards。
-        if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": made.id}):
-            say(job, "jobMsg_trimDone")
-            emit_job_event(db, job.id, "job.succeeded", {"asset_id": made.id})
+        complete_job(db, job, {"asset_id": made.id}, "jobMsg_trimDone")
         logger.info("trim %s [%.2f, %.2f] -> asset %s", asset.id, start, end, made.id)

@@ -14,14 +14,12 @@ from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import GIF, derived
 from app.domain.jobs import (
-    RENDER_SLOTS,
+    begin_job,
+    complete_job,
     create_job,
     dispatch_job,
-    emit_job_event,
     ensure_wanted,
-    finish_job,
-    say,
-    start_job,
+    RENDER_SLOTS,
 )
 from app.media.paths import resolve_key
 from app.media.video_gif import encode_video_gif
@@ -87,10 +85,8 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
             return
         # 状态经 finish_job 写:排队时就被取消的不被写回 running,编码完时不盖掉中途的取消
         # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
-        if not start_job(db, job, progress=0.1):
+        if not begin_job(db, job, "jobMsg_videoGifRunning", progress=0.1):
             return
-        say(job, "jobMsg_videoGifRunning")
-        emit_job_event(db, job.id, "job.running", {})
         # 「在跑」先落库:编码要一阵,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
 
@@ -120,9 +116,7 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
             }
 
         result = {"asset_id": made.id, "source_asset_id": asset.id}
-        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-            say(job, "jobMsg_videoGifDone")
-            emit_job_event(db, job.id, "job.succeeded", dict(result))
+        complete_job(db, job, result, "jobMsg_videoGifDone")
         logger.info("video %s -> gif asset %s", asset.id, made.id)
 
 

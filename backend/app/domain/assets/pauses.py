@@ -22,7 +22,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import TIGHTEN, derived
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, ensure_wanted, finish_job, say, start_job
+from app.domain.jobs import begin_job, complete_job, create_job, dispatch_job, ensure_wanted
 from app.media.pauses import MAX_PAUSE_RANGE, PauseError, find_pauses, join_spans, kept_spans
 from app.media.paths import resolve_key
 
@@ -76,10 +76,8 @@ def _tighten_body(job_id: str, asset_id: str, max_pause: float) -> None:
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
             return
-        if not start_job(db, job, progress=0.1):
+        if not begin_job(db, job, "jobMsg_tightenPausesRunning", progress=0.1):
             return
-        say(job, "jobMsg_tightenPausesRunning")
-        emit_job_event(db, job.id, "job.running", {})
         info = asset.media_info or {}
         source = _Source(
             id=asset.id, workspace_id=asset.workspace_id, project_id=asset.project_id, name=asset.name,
@@ -118,9 +116,7 @@ def _tighten_body(job_id: str, asset_id: str, max_pause: float) -> None:
                 move=True,
             )
             result = {"asset_id": made.id, "removed_seconds": removed, "duration": round(source.duration - removed, 3)}
-            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-                say(job, "jobMsg_tightenPausesDone", seconds=removed)
-                emit_job_event(db, job.id, "job.succeeded", {"asset_id": made.id})
+            complete_job(db, job, result, "jobMsg_tightenPausesDone", seconds=removed, event={"asset_id": made.id})
     logger.info("tighten pauses %s (≤%.2fs, removed %.2fs)", source.id, max_pause, removed)
 
 

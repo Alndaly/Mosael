@@ -100,9 +100,9 @@ def test_产出在任务落成功的同一个事务里挂上_不等事后补(spo
             seen.append((job.kind, record.result_asset_id if record is not None else None))
         return real_finish(db, job, **kwargs)
 
-    from app.domain.voices import voices as voices_domain
 
-    monkeypatch.setattr(voices_domain, "finish_job", watching_finish)
+    #: 收尾走 jobs.complete_job(总线里那一处 finish_job),所以盯的是总线的。
+    monkeypatch.setattr(jobs_bus, "finish_job", watching_finish)
     client = fresh_client()
     ws = _workspace(client)
     assert _speak(client, ws).status_code == 200

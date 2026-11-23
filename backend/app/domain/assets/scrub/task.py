@@ -16,7 +16,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import SCRUB, derived
-from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, say, start_job
+from app.domain.jobs import begin_job, complete_job, create_job, dispatch_job, RENDER_SLOTS
 from app.domain.assets.scrub import gates as gates_mod
 from app.domain.assets.scrub.engine import (
     REMOVED_REPORT_SUFFIX,
@@ -198,10 +198,8 @@ def _body(job_id: str) -> None:
         asset = db.get(Asset, str(payload.get("asset_id") or ""))
         if job is None or asset is None:
             return
-        if not start_job(db, job, progress=0.05):
+        if not begin_job(db, job, "jobMsg_scrubRunning", progress=0.05):
             return
-        say(job, "jobMsg_scrubRunning")
-        emit_job_event(db, job.id, "job.running", {})
         source = ScrubSource.of(asset)
         provenance = bool(payload.get("provenance"))
         created_by = job.created_by
@@ -226,9 +224,7 @@ def _body(job_id: str) -> None:
             "provenance": provenance,
             **({"warnings": run.outcome.warnings} if run.outcome.warnings else {}),
         }
-        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-            say(job, "jobMsg_scrubDone")
-            emit_job_event(db, job.id, "job.succeeded", {"asset_id": made.id})
+        complete_job(db, job, result, "jobMsg_scrubDone", event={"asset_id": made.id})
         logger.info("scrubbed asset %s -> %s", source.id, made.id)
 
 

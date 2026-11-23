@@ -35,14 +35,15 @@ from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
 from app.domain.jobs import (
     ASR_SLOTS,
+    begin_job,
     blame,
-    finish_job,
-    lock_active_job,
-    say,
-    start_job,
+    complete_job,
     create_job,
     dispatch_job,
     emit_job_event,
+    finish_job,
+    lock_active_job,
+    say,
 )
 from app.db.models import Asset, Job
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
@@ -427,10 +428,8 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             engine_id = chosen.engine_id
             # 状态经 finish_job 写:排队时就被取消的不被写回 running,转完时不盖掉中途的取消
             # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
-            if not start_job(db, job, progress=0.1):
+            if not begin_job(db, job, "jobMsg_asrRunning", provider=chosen.name, progress=0.1, event={"provider": engine_id}):
                 return
-            say(job, "jobMsg_asrRunning", provider=chosen.name)
-            emit_job_event(db, job.id, "job.running", {"provider": engine_id})
             # 「在转」先落库:转写要一阵,界面要马上看得到;也把 finish_job 拿的写锁放掉。
             db.commit()
             chosen_model = getattr(chosen, "model_id", "")
@@ -473,9 +472,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 source=f"asr:{engine_id}",
             )
             result = {"transcript_id": transcript.id, "segments": len(segments)}
-            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-                say(job, "jobMsg_asrDone")
-                emit_job_event(db, job.id, "job.succeeded", {"transcript_id": transcript.id})
+            complete_job(db, job, result, "jobMsg_asrDone", event={"transcript_id": transcript.id})
             logger.info("transcription job %s succeeded: %d segments (%s)", job_id, len(segments), engine_id)
         except Exception as exc:  # noqa: BLE001 — worker thread must record, not die
             db.rollback()

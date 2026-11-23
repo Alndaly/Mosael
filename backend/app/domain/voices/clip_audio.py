@@ -25,14 +25,12 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.assets.lineage import SEPARATE, made_from
 from app.domain.jobs import (
-    RENDER_SLOTS,
+    begin_job,
+    complete_job,
     create_job,
     dispatch_job,
-    emit_job_event,
-    finish_job,
     lock_active_job,
-    say,
-    start_job,
+    RENDER_SLOTS,
 )
 from app.domain.assets import denoise, separation
 from app.domain.assets.denoise import DENOISABLE_KINDS
@@ -117,10 +115,8 @@ def _body(job_id: str) -> None:
         if clip is None or not clip.asset_id:
             raise ClipAudioError("clipAudioErr_clipNotFound")
         source_asset_id = clip.asset_id
-        if not start_job(db, job, progress=0.1):
+        if not begin_job(db, job, "jobMsg_clipAudioRunning", progress=0.1):
             return
-        say(job, "jobMsg_clipAudioRunning")
-        emit_job_event(db, job.id, "job.running", {})
 
     with unit_of_work() as db:
         asset = db.get(Asset, source_asset_id)
@@ -144,9 +140,7 @@ def _body(job_id: str) -> None:
             return
         changed = _place(db, sequence_id, clip_id, source_asset_id, action, made, created_by)
         result = {"action": action, "assets": made, "clips": changed}
-        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-            say(job, f"jobMsg_clipAudioDone_{action}", n=changed)
-            emit_job_event(db, job.id, "job.succeeded", dict(result))
+        complete_job(db, job, result, f"jobMsg_clipAudioDone_{action}", n=changed)
 
 
 def _place(

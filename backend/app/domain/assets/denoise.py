@@ -33,14 +33,12 @@ from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import DENOISE, derived
 from app.domain.denoise_defaults import clear_default_engine, resolve_denoise_engine
 from app.domain.jobs import (
-    RENDER_SLOTS,
+    begin_job,
+    complete_job,
     create_job,
     dispatch_job,
-    emit_job_event,
     ensure_wanted,
-    finish_job,
-    say,
-    start_job,
+    RENDER_SLOTS,
 )
 from app.media.audio_io import AudioIOError, as_audio, replace_audio
 from app.media.paths import resolve_key
@@ -244,17 +242,13 @@ def _job_body(job_id: str, asset_id: str, engine: str, strength: str) -> None:
         if job is None or asset is None:
             return
         # 状态经 finish_job 写,理由同分离(见 separation._job_body)。
-        if not start_job(db, job, progress=0.1):
+        if not begin_job(db, job, "jobMsg_denoiseRunning", progress=0.1):
             return
-        say(job, "jobMsg_denoiseRunning")
-        emit_job_event(db, job.id, "job.running", {})
         # 「在跑」先落库:降噪要跑一阵,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
 
         made, used = denoise_asset(db, asset, engine=engine, strength=strength, owner_user_id=job.created_by)
 
         result = {"asset_id": made.id, "source_asset_id": asset.id, "engine": used}
-        if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-            say(job, "jobMsg_denoiseDone")
-            emit_job_event(db, job.id, "job.succeeded", dict(result))
+        complete_job(db, job, result, "jobMsg_denoiseDone")
         logger.info("asset %s -> denoised %s (%s)", asset.id, made.id, used)

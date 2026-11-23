@@ -24,16 +24,17 @@ from app.ai.runtime.f5_models import clone_supports
 from app.ai.runtime.tts_language import detect_script
 from app.core.unit_of_work import after_commit, unit_of_work
 from app.domain.jobs import (
-    TTS_SLOTS,
-    JobCancelled,
     blame,
-    ensure_wanted,
-    finish_job,
-    say,
-    start_job,
+    complete_job,
     create_job,
     dispatch_job,
     emit_job_event,
+    ensure_wanted,
+    finish_job,
+    JobCancelled,
+    say,
+    start_job,
+    TTS_SLOTS,
 )
 from app.db.models import Asset, Job, Voice, PluginInstance, Transcript, new_id
 from app.db.model_base import now
@@ -745,9 +746,7 @@ def _run_synthesis_body(
                     on_asset(db, asset.id)
             job = db.get(Job, job_id)
             result = {"asset_id": asset.id, "engine": used}
-            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-                say(job, "jobMsg_ttsDone")
-                emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+            complete_job(db, job, result, "jobMsg_ttsDone", event={"asset_id": asset.id})
         except JobCancelled:
             raise  # 不是「合成失败」:派发处的兜底认得它
         except Exception as exc:  # noqa: BLE001
@@ -1102,9 +1101,7 @@ def _synthesize_remote(
         if on_asset is not None:
             on_asset(db, asset.id)
     job = db.get(Job, job.id)
-    if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": asset.id, "engine": voice.engine}):
-        say(job, "jobMsg_ttsDone")
-        emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+    complete_job(db, job, {"asset_id": asset.id, "engine": voice.engine}, "jobMsg_ttsDone", event={"asset_id": asset.id})
 
 
 def podcast_speakers(speakers: list[str] | None) -> list[str]:
@@ -1306,6 +1303,4 @@ def _run_podcast_body(
         # The dialogue text is returned without timings, and inventing them from character
         # counts would produce subtitles that drift audibly. Callers that need a timed
         # transcript can run the normal 转写 over the generated audio, which measures them.
-        if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": asset.id, "texts": result.texts}):
-            say(job, "jobMsg_podcastDone")
-            emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+        complete_job(db, job, {"asset_id": asset.id, "texts": result.texts}, "jobMsg_podcastDone", event={"asset_id": asset.id})
