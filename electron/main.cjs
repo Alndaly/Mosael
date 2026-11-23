@@ -49,64 +49,8 @@ const { WINDOW_CHROME_HEIGHT, TRAFFIC_LIGHT_POSITION } = require("./window-chrom
 const { bindFullscreenState } = require("./window-state.cjs");
 const {
   IPC,
-  parseAuthToken,
-  parseBrowserLogin,
-  parseComfyNavigation,
-  parseComfyWorkbenchCall,
-  parseComfyWorkbenchOpen,
-  parseBrowserProfile,
-  parseCaptureMode,
-  parseComputerClick,
-  parseComputerClipboardRead,
-  parseComputerClipboardWrite,
-  parseComputerOcr,
-  parseComputerDesktopOcr,
-  parseComputerPointer,
-  parseComputerDesktopAccessibility,
-  parseComputerDrag,
-  parseComputerWait,
-  parseComputerVerify,
-  parseComputerDesktopClick,
-  parseComputerDesktopFullScreenshot,
-  parseComputerDesktopPointer,
-  parseComputerDesktopDrag,
-  parseComputerDesktopWait,
-  parseComputerDesktopVerify,
-  parseComputerDesktopScroll,
-  parseComputerDesktopScreenshot,
-  parseComputerDesktopType,
-  parseComputerDesktopKey,
-  parseComputerDesktopWindows,
-  parseHostLayer,
-  parseComputerScreenshot,
-  parseComputerScroll,
-  parseComputerType,
-  parseComputerKey,
-  parseImageUrls,
-  parseLocale,
-  parseNewPage,
-  parsePageId,
-  parsePageOrder,
-  parseFloatShow,
-  parseFloatHide,
-  parseToastsShow,
-  parsePanelId,
-  parsePanelLayout,
-  parsePanelMuted,
-  parsePanelsHidden,
-  parsePickPath,
-  parsePublishTarget,
-  parseReadMode,
-  parseRegionSelection,
-  parseRestoreStage,
-  parseSaveDownload,
-  parseSaveFileBegin,
-  parseSaveFileChunk,
-  parseSaveFileId,
-  parseSystemStatus,
-  parseTaskNotice,
-  parseTitleOverlay,
-  parseUrlRequest,
+  PAYLOADS,
+  INVOKE_KEY_BY_CHANNEL,
 } = require("./ipc-contract.cjs");
 const { createAppUpdater } = require("./app-updater.cjs");
 const { keychainName, rememberKeychainName } = require("./key-identity.cjs");
@@ -240,24 +184,57 @@ function refusedSender(channel, event) {
   }
   appendMainLogOnce("ipc-refused", `${channel} from ${from}`);
 }
-/** 一问一答的处理器。调用方不是应用自己就拒绝(渲染层收到的是一个错误)。 */
-function handle(channel, listener) {
-  ipcMain.handle(channel, (event, ...args) => {
+/**
+ * 一问一答的处理器。`key` 是 `IPC.invoke` 里的键:调用方不是应用自己就拒绝(渲染层收到的是一个错误),
+ * 载荷按契约表(ipc-contract.cjs 的 PAYLOADS)先解好再交给处理器 —— 处理器不再自己调解析器,也忘不了调。
+ *
+ * 解不过默认抛(渲染层收到一个错误)。`onInvalid` 给那几条**把「参数不对」当成回话一部分**的通道:例如 ComfyUI
+ * 工作台的编辑指令是智能体写的,不对要回 `{ ok: false, error: "invalid", message }` 让它改,而不是让调用直接失败。
+ * @param {keyof typeof IPC.invoke} key
+ * @param {(event: Electron.IpcMainInvokeEvent, payload: any) => unknown} listener
+ * @param {{ onInvalid?: (message: string) => unknown }} [options]
+ */
+function handle(key, listener, options = {}) {
+  const channel = IPC.invoke[key];
+  const parse = PAYLOADS.invoke[key];
+  if (!channel || !parse) throw new Error(`ipc: ${key} is not in the invoke contract`);
+  ipcMain.handle(channel, (event, payload) => {
     if (!fromAppWindow(event)) {
       refusedSender(channel, event);
       throw new Error(`${channel}: refused, the caller is not the Mosael window`);
     }
-    return listener(event, ...args);
+    let parsed;
+    try {
+      parsed = parse(payload);
+    } catch (error) {
+      if (!options.onInvalid) throw error;
+      return options.onInvalid(String(error && error.message ? error.message : error));
+    }
+    return listener(event, parsed);
   });
 }
-/** 单向的消息。调用方不是应用自己就丢掉。 */
-function listen(channel, listener) {
-  ipcMain.on(channel, (event, ...args) => {
+/**
+ * 单向的消息。`key` 是 `IPC.send` 里的键;调用方不是应用自己、或载荷解不过就丢掉(记一行日志)。
+ * @param {keyof typeof IPC.send} key
+ * @param {(event: Electron.IpcMainEvent, payload: any) => void} listener
+ */
+function listen(key, listener) {
+  const channel = IPC.send[key];
+  const parse = PAYLOADS.send[key];
+  if (!channel || !parse) throw new Error(`ipc: ${key} is not in the send contract`);
+  ipcMain.on(channel, (event, payload) => {
     if (!fromAppWindow(event)) {
       refusedSender(channel, event);
       return;
     }
-    listener(event, ...args);
+    let parsed;
+    try {
+      parsed = parse(payload);
+    } catch (error) {
+      appendMainLogOnce("ipc-invalid", `${channel}: ${String(error && error.message ? error.message : error).slice(0, 160)}`);
+      return;
+    }
+    listener(event, parsed);
   });
 }
 
@@ -522,77 +499,66 @@ async function answerHostBridgeRequest(line, socket) {
   //: 通道写死三条(截图 / 点击 / 输入),不是通用 RPC:每多一条都是多一种能对 Mosael 干的事,
   //: 而这里刻意不开「执行任意 JS」「发给任意窗口」那种口子。
   const handlers = {
-    [IPC.invoke.computerScreenshot]: () => computerUseDriver.observe(),
-    [IPC.invoke.computerDesktopWindows]: () => desktopWindows(parseComputerDesktopWindows(request.payload)),
-    [IPC.invoke.computerDesktopScreenshot]: () => desktopObserve(parseComputerDesktopScreenshot(request.payload)),
-    [IPC.invoke.computerDesktopAccessibility]: () => desktopObserve(parseComputerDesktopAccessibility(request.payload)),
-    [IPC.invoke.computerDesktopClick]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "click", replay: true, ...parseComputerDesktopClick(request.payload) })),
-    [IPC.invoke.computerDesktopPointer]: () => {
-      const pointer = parseComputerDesktopPointer(request.payload);
-      return withDesktopAction((driver) => driver.act({
-        kind: pointer.action, ...pointer, replay: false,
-      }));
-    },
-    [IPC.invoke.computerDesktopDrag]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "drag", replay: true, ...parseComputerDesktopDrag(request.payload) })),
-    [IPC.invoke.computerDesktopWait]: () => desktopWait(parseComputerDesktopWait(request.payload)),
-    [IPC.invoke.computerDesktopVerify]: () => desktopVerify(parseComputerDesktopVerify(request.payload)),
-    [IPC.invoke.computerDesktopFullScreenshot]: () => {
-      parseComputerDesktopFullScreenshot(request.payload);
-      return desktopFullScreenshot();
-    },
-    [IPC.invoke.computerOcr]: () => {
-      parseComputerOcr(request.payload);
-      return mainWindowOcr();
-    },
-    [IPC.invoke.computerDesktopOcr]: () => desktopOcr(parseComputerDesktopOcr(request.payload)),
-    [IPC.invoke.computerClipboardRead]: () => {
-      parseComputerClipboardRead(request.payload);
-      return { text: clipboard.readText() };
-    },
-    [IPC.invoke.computerClipboardWrite]: () => {
-      const write = parseComputerClipboardWrite(request.payload);
+    computerScreenshot: () => computerUseDriver.observe(),
+    computerDesktopWindows: (payload) => desktopWindows(payload),
+    computerDesktopScreenshot: (payload) => desktopObserve(payload),
+    computerDesktopAccessibility: (payload) => desktopObserve(payload),
+    computerDesktopClick: (payload) =>
+      withDesktopAction((driver) => driver.act({ kind: "click", replay: true, ...payload })),
+    computerDesktopPointer: (pointer) =>
+      withDesktopAction((driver) => driver.act({ kind: pointer.action, ...pointer, replay: false })),
+    computerDesktopDrag: (payload) =>
+      withDesktopAction((driver) => driver.act({ kind: "drag", replay: true, ...payload })),
+    computerDesktopWait: (payload) => desktopWait(payload),
+    computerDesktopVerify: (payload) => desktopVerify(payload),
+    computerDesktopFullScreenshot: () => desktopFullScreenshot(),
+    computerOcr: () => mainWindowOcr(),
+    computerDesktopOcr: (payload) => desktopOcr(payload),
+    computerClipboardRead: () => ({ text: clipboard.readText() }),
+    computerClipboardWrite: (write) => {
       clipboard.writeText(write.text);
       return { written: write.text.length };
     },
-    [IPC.invoke.computerDesktopType]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...parseComputerDesktopType(request.payload) })),
-    [IPC.invoke.computerDesktopKey]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "key", replay: true, ...parseComputerDesktopKey(request.payload) })),
-    [IPC.invoke.computerDesktopScroll]: () =>
-      withDesktopAction((driver) => driver.act({ kind: "scroll", replay: true, ...parseComputerDesktopScroll(request.payload) })),
-    [IPC.invoke.computerClick]: () =>
-      withComputerUse(() => computerUseDriver.act({ kind: "click", ...parseComputerClick(request.payload), cursor: computerUseCursor })),
-    [IPC.invoke.computerPointer]: () => {
-      const pointer = parseComputerPointer(request.payload);
+    computerDesktopType: (payload) =>
+      withDesktopAction((driver) => driver.act({ kind: "type", replay: true, ...payload })),
+    computerDesktopKey: (payload) =>
+      withDesktopAction((driver) => driver.act({ kind: "key", replay: true, ...payload })),
+    computerDesktopScroll: (payload) =>
+      withDesktopAction((driver) => driver.act({ kind: "scroll", replay: true, ...payload })),
+    computerClick: (payload) =>
+      withComputerUse(() => computerUseDriver.act({ kind: "click", ...payload, cursor: computerUseCursor })),
+    computerPointer: (payload) => {
+      const pointer = payload;
       return withComputerUse(() => computerUseDriver.act({
         ...pointer, kind: pointer.action, cursor: computerUseCursor,
       }));
     },
-    [IPC.invoke.computerDrag]: () =>
-      withComputerUse(() => computerUseDriver.act({ kind: "drag", ...parseComputerDrag(request.payload), cursor: computerUseCursor })),
-    [IPC.invoke.computerWait]: () => {
-      const wait = parseComputerWait(request.payload);
+    computerDrag: (payload) =>
+      withComputerUse(() => computerUseDriver.act({ kind: "drag", ...payload, cursor: computerUseCursor })),
+    computerWait: (payload) => {
+      const wait = payload;
       return computerUseDriver.waitForText(wait.text, wait.timeoutMs);
     },
-    [IPC.invoke.computerVerify]: () => {
-      const check = parseComputerVerify(request.payload);
+    computerVerify: (payload) => {
+      const check = payload;
       return computerUseDriver.verifyText(check.text, check.absent);
     },
-    [IPC.invoke.computerType]: () =>
-      withComputerUse(() => computerUseDriver.act({ kind: "type", ...parseComputerType(request.payload), cursor: computerUseCursor })),
-    [IPC.invoke.computerKey]: () =>
-      withComputerUse(() => computerUseDriver.act({ kind: "key", ...parseComputerKey(request.payload), cursor: computerUseCursor })),
-    [IPC.invoke.computerEnd]: () => {
+    computerType: (payload) =>
+      withComputerUse(() => computerUseDriver.act({ kind: "type", ...payload, cursor: computerUseCursor })),
+    computerKey: (payload) =>
+      withComputerUse(() => computerUseDriver.act({ kind: "key", ...payload, cursor: computerUseCursor })),
+    computerEnd: (payload) => {
       //: 回合结束:熄灭「被控制中」。不是急停 —— 不设 stopped,下一轮还能动。
       computerUseGuard.end();
       return { active: computerUseGuard.isActive(), stopped: computerUseGuard.isStopped() };
     },
-    [IPC.invoke.computerScroll]: () =>
-      withComputerUse(() => computerUseDriver.act({ kind: "scroll", ...parseComputerScroll(request.payload), cursor: computerUseCursor })),
+    computerScroll: (payload) =>
+      withComputerUse(() => computerUseDriver.act({ kind: "scroll", ...payload, cursor: computerUseCursor })),
   };
-  const handler = Object.prototype.hasOwnProperty.call(handlers, request.channel) ? handlers[request.channel] : null;
+  const key = Object.prototype.hasOwnProperty.call(INVOKE_KEY_BY_CHANNEL, request.channel)
+    ? INVOKE_KEY_BY_CHANNEL[request.channel]
+    : null;
+  const handler = key && Object.prototype.hasOwnProperty.call(handlers, key) ? handlers[key] : null;
   if (!handler) {
     return replyHostBridge(socket, {
       ok: false,
@@ -601,7 +567,8 @@ async function answerHostBridgeRequest(line, socket) {
     });
   }
   try {
-    const result = await handler();
+    //: 和渲染层那一路同一张契约表(PAYLOADS)解载荷:解不过是 TypeError,下面回 400。
+    const result = await handler(PAYLOADS.invoke[key](request.payload));
     replyHostBridge(socket, { ok: true, result });
   } catch (error) {
     const message = String(error && error.message ? error.message : error);
@@ -704,7 +671,7 @@ const NET_PROBE_HOSTS = new Set(["channels.weixin.qq.com", "open.weixin.qq.com"]
 function installNetProbeRelay() {
   const { createTrace } = require("./browser/trace.cjs");
   const probeTrace = createTrace({ dir: app.getPath("userData") });
-  listen(IPC.send.netProbe, (_event, payload) => {
+  listen("netProbe", (_event, payload) => {
     try {
       //: `listen` 的回调里 event 是原来的第一个参数(还是 Electron 的 IpcMainEvent)。
       const url = new URL(String(_event?.sender?.getURL?.() || ""));
@@ -1510,147 +1477,145 @@ app.whenReady().then(async () => {
         : t("publisher_missing"),
     );
   };
-  handle(IPC.invoke.publishLogin, (_e, payload) => {
-    const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishLogin);
+  handle("publishLogin", (_e, payload) => {
+    const { accountId, platform } = payload;
     return requirePublish().openLogin(accountId, platform);
   });
-  handle(IPC.invoke.publishOpenPage, (_e, payload) => {
-    const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishOpenPage);
+  handle("publishOpenPage", (_e, payload) => {
+    const { accountId, platform } = payload;
     return requirePublish().openPage(accountId, platform);
   });
-  handle(IPC.invoke.publishSignOut, (_e, payload) => {
-    const { accountId } = parsePublishTarget(payload, IPC.invoke.publishSignOut);
+  handle("publishSignOut", (_e, payload) => {
+    const { accountId } = payload;
     return requirePublish().signOutAccount(accountId);
   });
-  handle(IPC.invoke.browserClearProfile, (_e, payload) => {
-    const { partition } = parseBrowserProfile(payload);
+  handle("browserClearProfile", (_e, payload) => {
+    const { partition } = payload;
     return requirePublish().clearPoolProfile(partition);
   });
-  handle(IPC.invoke.publishInspect, (_e, payload) => {
-    const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishInspect);
+  handle("publishInspect", (_e, payload) => {
+    const { accountId, platform } = payload;
     return requirePublish().inspectAccount(accountId, platform);
   });
-  handle(IPC.invoke.publishNavigate, (_e, payload) => {
-    const { url } = parseUrlRequest(payload, IPC.invoke.publishNavigate);
+  handle("publishNavigate", (_e, payload) => {
+    const { url } = payload;
     return requirePublish().navigateView(url);
   });
-  handle(IPC.invoke.publishBack, () => requirePublish().viewBack());
-  handle(IPC.invoke.publishForward, () => requirePublish().viewForward());
-  handle(IPC.invoke.publishReload, () => requirePublish().viewReload());
-  handle(IPC.invoke.publishHideView, () => requirePublish().hideEmbeddedView());
+  handle("publishBack", () => requirePublish().viewBack());
+  handle("publishForward", () => requirePublish().viewForward());
+  handle("publishReload", () => requirePublish().viewReload());
+  handle("publishHideView", () => requirePublish().hideEmbeddedView());
   // 悬浮面板:渲染层拖动/缩放/关闭。几何由主进程持有(layout() 要用,还要落盘)。
-  handle(IPC.invoke.publishPanelLayout, (_e, payload) =>
-    requirePublish().setPanelLayout(parsePanelLayout(payload)),
+  handle("publishPanelLayout", (_e, payload) =>
+    requirePublish().setPanelLayout(payload),
   );
-  handle(IPC.invoke.publishClosePanel, (_e, payload) => {
-    const { id } = parsePanelId(payload);
+  handle("publishClosePanel", (_e, payload) => {
+    const { id } = payload;
     return requirePublish().closePanel(id);
   });
   // 弹窗开着时收/放悬浮面板(原生视图永远压在渲染层之上,见 AccountViewManager.setPanelsHidden)。
-  handle(IPC.invoke.publishPanelsHidden, (_e, payload) => {
-    return requirePublish().setPanelsHidden(parsePanelsHidden(payload));
+  handle("publishPanelsHidden", (_e, payload) => {
+    return requirePublish().setPanelsHidden(payload);
   });
   // 前台会话的页面列表:切换、关闭、拖动重排、新建、让出左侧那一列。
-  handle(IPC.invoke.publishSwitchPage, (_e, payload) =>
-    requirePublish().switchViewPage(parsePageId(payload, IPC.invoke.publishSwitchPage).id),
+  handle("publishSwitchPage", (_e, payload) =>
+    requirePublish().switchViewPage(payload.id),
   );
-  handle(IPC.invoke.publishClosePage, (_e, payload) =>
-    requirePublish().closeViewPage(parsePageId(payload, IPC.invoke.publishClosePage).id),
+  handle("publishClosePage", (_e, payload) =>
+    requirePublish().closeViewPage(payload.id),
   );
-  handle(IPC.invoke.publishReorderPages, (_e, payload) =>
-    requirePublish().reorderViewPages(parsePageOrder(payload).ids),
+  handle("publishReorderPages", (_e, payload) =>
+    requirePublish().reorderViewPages(payload.ids),
   );
-  handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
-  handle(IPC.invoke.publishSnapshotPage, () => requirePublish().snapshotViewPage());
+  handle("publishNewPage", (_e, payload) => requirePublish().newViewPage(payload.url));
+  handle("publishSnapshotPage", () => requirePublish().snapshotViewPage());
   //: 声明式让位(P2):一条通道承载所有浮层的「请原生视图让开」,见 browser/views/hostLayers。
-  handle(IPC.invoke.publishHostLayer, (_e, payload) => requirePublish().setHostLayer(parseHostLayer(payload)));
-  handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());
-  handle(IPC.invoke.publishFocusHost, () => requirePublish().focusHostWindow());
+  handle("publishHostLayer", (_e, payload) => requirePublish().setHostLayer(payload));
+  handle("publishFocusPage", () => requirePublish().focusViewPage());
+  handle("publishFocusHost", () => requirePublish().focusHostWindow());
   // 内嵌浏览器外壳里的悬停说明:交给浮层视图画在网页上面 / 收起(只收主窗口自己发来的,listen 那一道已经认过)。
-  listen(IPC.send.floatShow, (_event, payload) => {
-    if (publish) void publish.showFloat(parseFloatShow(payload));
+  listen("floatShow", (_event, payload) => {
+    if (publish) void publish.showFloat(payload);
   });
-  listen(IPC.send.floatHide, (_event, payload) => {
-    if (publish) publish.hideFloat(parseFloatHide(payload).id ?? undefined);
+  listen("floatHide", (_event, payload) => {
+    if (publish) publish.hideFloat(payload.id ?? undefined);
   });
   // 原生视图在前台时右下角的提示条:交给提示条那一块浮层视图画在网页上面 / 收起(ADR 0051)。
-  listen(IPC.send.toastsShow, (_event, payload) => {
-    if (publish) void publish.showToasts(parseToastsShow(payload));
+  listen("toastsShow", (_event, payload) => {
+    if (publish) void publish.showToasts(payload);
   });
-  listen(IPC.send.toastsHide, () => {
+  listen("toastsHide", () => {
     if (publish) publish.hideToasts();
   });
-  handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
-    const { id, muted } = parsePanelMuted(payload);
+  handle("publishPanelMuted", (_e, payload) => {
+    const { id, muted } = payload;
     return requirePublish().setPanelMuted(id, muted);
   });
   // 通用池档案登录:复用发布账号那套 app **内嵌视图**(不弹外部系统窗,体验与发布登录一致)。
   // 安全:只放行 persist:pool-* 分区(发布账号走 publish:login),只放行 http(s)。
-  handle(IPC.invoke.browserOpenLogin, async (_e, payload) => {
+  //: 这几条把失败(参数不对也算)写进回话 `{ ok: false, … }`,界面 / 智能体据此提示,而不是让调用直接失败。
+  const failedReply = (message) => ({ ok: false, error: message });
+  const errorText = (err) => String(err && err.message ? err.message : err);
+  handle("browserOpenLogin", async (_e, request) => {
     try {
-      const request = parseBrowserLogin(payload);
       await requirePublish().openPoolLogin(request);
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: String(err && err.message ? err.message : err) };
+      return failedReply(errorText(err));
     }
-  });
+  }, { onInvalid: failedReply });
   // 内嵌 ComfyUI 画布的操控方式(触控板 / 鼠标):写死的脚本经前端的设置仓库设好,写回服务器的那一下只在这个分区上拦下。
   // ComfyUI 工作台(ADR 0038 §3):开 = 亮出视图、注入写死的桥、开始轮询(视图收起就停);面板要桥做的事逐项校验后以 JSON
   // 数据嵌进写死的调用脚本。两条都只认按连接 id 拼出来的分区。
-  handle(IPC.invoke.comfyuiOpenWorkbench, async (_e, payload) => {
+  handle("comfyuiOpenWorkbench", async (_e, request) => {
     try {
-      const request = parseComfyWorkbenchOpen(payload);
       return { ok: true, outcome: await requirePublish().openComfyWorkbench(request) };
     } catch (err) {
-      return { ok: false, error: String(err && err.message ? err.message : err) };
+      return failedReply(errorText(err));
     }
-  });
-  handle(IPC.invoke.comfyuiWorkbenchCall, async (_e, payload) => {
+  }, { onInvalid: failedReply });
+  //: 编辑指令是智能体写的:不对回 `error: "invalid"` 带原因,让它改了再来。
+  const invalidCall = (message) => ({ ok: false, error: "invalid", message });
+  handle("comfyuiWorkbenchCall", async (_e, call) => {
     try {
-      return await requirePublish().comfyWorkbenchCall(parseComfyWorkbenchCall(payload));
+      return await requirePublish().comfyWorkbenchCall(call);
     } catch (err) {
-      return { ok: false, error: "invalid", message: String(err && err.message ? err.message : err) };
+      return invalidCall(errorText(err));
     }
-  });
-  handle(IPC.invoke.comfyuiNavigation, async (_e, payload) => {
+  }, { onInvalid: invalidCall });
+  handle("comfyuiNavigation", async (_e, request) => {
     try {
-      const request = parseComfyNavigation(payload);
       return { ok: true, outcome: await requirePublish().setComfyViewNavigation(request) };
     } catch (err) {
-      return { ok: false, error: String(err && err.message ? err.message : err) };
+      return failedReply(errorText(err));
     }
-  });
+  }, { onInvalid: failedReply });
   // 浏览器会话顶栏的页面工具:载荷先过契约里的解析器,作用对象由主进程认(前台视图)。
-  handle(IPC.invoke.pageToolsCapture, (_e, payload) =>
-    requirePublish().capturePage(parseCaptureMode(payload).mode),
+  handle("pageToolsCapture", (_e, payload) =>
+    requirePublish().capturePage(payload.mode),
   );
-  handle(IPC.invoke.pageToolsRegionStart, () => requirePublish().beginRegionCapture());
-  handle(IPC.invoke.pageToolsRegionFinish, (_e, payload) =>
-    requirePublish().finishRegionCapture(parseRegionSelection(payload).selection),
+  handle("pageToolsRegionStart", () => requirePublish().beginRegionCapture());
+  handle("pageToolsRegionFinish", (_e, payload) =>
+    requirePublish().finishRegionCapture(payload.selection),
   );
-  handle(IPC.invoke.pageToolsVideos, () => requirePublish().probeVideos());
-  handle(IPC.invoke.pageToolsImages, () => requirePublish().listImages());
-  handle(IPC.invoke.pageToolsFetchImages, (_e, payload) =>
-    requirePublish().fetchImages(parseImageUrls(payload).urls),
+  handle("pageToolsVideos", () => requirePublish().probeVideos());
+  handle("pageToolsImages", () => requirePublish().listImages());
+  handle("pageToolsFetchImages", (_e, payload) =>
+    requirePublish().fetchImages(payload.urls),
   );
-  handle(IPC.invoke.pageToolsRead, (_e, payload) => requirePublish().readPage(parseReadMode(payload).mode));
-  handle(IPC.invoke.pageToolsSaveDownload, (_e, payload) =>
-    requirePublish().saveDownload(parseSaveDownload(payload)),
+  handle("pageToolsRead", (_e, payload) => requirePublish().readPage(payload.mode));
+  handle("pageToolsSaveDownload", (_e, payload) =>
+    requirePublish().saveDownload(payload),
   );
   // Computer Use P0(ADR 0075):只读地拍 Mosael 自己的窗口。渲染层这条路今天没有调用者(工具在后端跑,
   // 经下面的宿主桥进来),但它和桥走**同一个** captureMosaelWindow、同一个契约解析器 —— 不多出第二条实现。
-  handle(IPC.invoke.computerScreenshot, (_e, payload) => {
-    //: 渲染层这条路今天没有调用者(工具在后端跑,经宿主桥进来),但契约照旧校验:
-    //: 多一个字段就拒,而不是静默忽略。
-    parseComputerScreenshot(payload);
-    return computerUseDriver.observe();
-  });
+  //: 载荷照旧由契约校验(handle 按表先解):多一个字段就拒,而不是静默忽略。
+  handle("computerScreenshot", () => computerUseDriver.observe());
   // 开发时主进程过期提示:主进程启动时加载的产物(main.cjs、几个 bundle)变了,而正在跑的还是旧的 —— 渲染层
   // 热更新成了新代码,去调旧主进程里没有的处理器就会失败。给界面一条「重启后生效」,能重启时带按钮。
   // 正式打包的应用不起这个(isDev 为假)。
-  handle(IPC.invoke.mainStatus, () => mainStaleStatus());
-  handle(IPC.invoke.restartMain, () => {
+  handle("mainStatus", () => mainStaleStatus());
+  handle("restartMain", () => {
     if (!DEV_RESTART_CODE) throw new Error(t("devMain_cannotRestart"));
     // 由 dev-loop.cjs 拉起:以「要重启」的退出码退出,它再拉一遍 Electron;vite、后端那几栏不动。
     appendMainLog("dev-restart", `stale=${staleMainFiles.join(",")}`);
@@ -1702,7 +1667,7 @@ app.whenReady().then(async () => {
       for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
     },
   });
-  handle(IPC.invoke.checkUpdates, async () => {
+  handle("checkUpdates", async () => {
     try {
       return await updateController.check();
     } catch (error) {
@@ -1710,7 +1675,7 @@ app.whenReady().then(async () => {
       return { error: error.message };
     }
   });
-  handle(IPC.invoke.downloadUpdate, async () => {
+  handle("downloadUpdate", async () => {
     try {
       return await updateController.download();
     } catch (error) {
@@ -1718,13 +1683,13 @@ app.whenReady().then(async () => {
       return { error: error.message };
     }
   });
-  handle(IPC.invoke.installUpdate, () => updateController.install());
-  handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
-  handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
-  handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
+  handle("installUpdate", () => updateController.install());
+  handle("recordingStatus", (_event, kind) => recordingPermissions.getStatus(kind));
+  handle("recordingRequest", (_event, kind) => recordingPermissions.request(kind));
+  handle("recordingOpenSettings", (_event, kind) => recordingPermissions.openSettings(kind));
   //: 屏幕录制没有原生「请求」接口(见 recording-permissions 里 prepareScreen 的说明):问一次
   //: desktopCapturer,把应用登记进系统授权列表并触发系统提示。
-  handle(IPC.invoke.recordingPrepareScreen, () =>
+  handle("recordingPrepareScreen", () =>
     recordingPermissions.prepareScreen({ getSources: (options) => require("electron").desktopCapturer.getSources(options) }),
   );
   // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的位置(见 save-file.cjs)。路径只由保存框产生 ——
@@ -1735,17 +1700,17 @@ app.whenReady().then(async () => {
     title: t("dialog_saveLocal"),
     log: (line) => appendMainLog("save-file", line),
   });
-  handle(IPC.invoke.saveFileBegin, (event, payload) =>
-    saveFiles.begin(parseSaveFileBegin(payload), BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()),
+  handle("saveFileBegin", (event, payload) =>
+    saveFiles.begin(payload, BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()),
   );
-  handle(IPC.invoke.saveFileWrite, (_event, payload) => saveFiles.write(parseSaveFileChunk(payload)));
-  handle(IPC.invoke.saveFileEnd, (_event, payload) => saveFiles.end(parseSaveFileId(payload, IPC.invoke.saveFileEnd)));
-  handle(IPC.invoke.saveFileAbort, (_event, payload) => saveFiles.abort(parseSaveFileId(payload, IPC.invoke.saveFileAbort)));
+  handle("saveFileWrite", (_event, payload) => saveFiles.write(payload));
+  handle("saveFileEnd", (_event, payload) => saveFiles.end(payload));
+  handle("saveFileAbort", (_event, payload) => saveFiles.abort(payload));
   // 路径格旁边的「选择…」:挂在发起的那个窗口上(找不到就用前台窗口),交回选中的路径或 null。
-  handle(IPC.invoke.pickPath, (event, payload) =>
-    pickPath(dialog, BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow(), parsePickPath(payload)),
+  handle("pickPath", (event, payload) =>
+    pickPath(dialog, BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow(), payload),
   );
-  handle(IPC.invoke.dataExportDiagnostics, async () => {
+  handle("dataExportDiagnostics", async () => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const picked = await dialog.showSaveDialog({
       title: t("dialog_exportDiagnostics"),
@@ -1774,8 +1739,8 @@ app.whenReady().then(async () => {
     });
     return { status: "saved", path: picked.filePath };
   });
-  handle(IPC.invoke.dataCreateBackup, async (_event, payload) => {
-    const { token } = parseAuthToken(payload, IPC.invoke.dataCreateBackup);
+  handle("dataCreateBackup", async (_event, payload) => {
+    const { token } = payload;
     const stamp = new Date().toISOString().slice(0, 10);
     const picked = await dialog.showSaveDialog({
       title: t("dialog_createBackup"),
@@ -1806,8 +1771,8 @@ app.whenReady().then(async () => {
       throw error;
     }
   });
-  handle(IPC.invoke.dataApplyRestore, async (_event, payload) => {
-    const { stageId } = parseRestoreStage(payload);
+  handle("dataApplyRestore", async (_event, payload) => {
+    const { stageId } = payload;
     let stopped = false;
     try {
       stopped = await backendSupervisor.stopForRestore().catch(() => {
@@ -1827,7 +1792,7 @@ app.whenReady().then(async () => {
     }
   });
   // 「暂时无法加载 · 重试」:后端连崩被认输了的话,这一下真的去重拉它(正跑着就什么都不做),等它就绪再回话。
-  handle(IPC.invoke.backendRetry, async () => ({ status: (await backendSupervisor.retry()).status }));
+  handle("backendRetry", async () => ({ status: (await backendSupervisor.retry()).status }));
   if (app.isPackaged && !isSmokeTest) {
     // 启动 5 秒后查一次,之后每天查一次;只有发现新版本才提示,下载由用户点「下载并安装」触发。
     updateController.start();
@@ -1835,9 +1800,9 @@ app.whenReady().then(async () => {
 
   buildAppMenu();
   // 渲染层的界面语言(首次加载、以及每次在设置里切换)。变了才重建菜单;托盘由系统能力层自己重建。
-  listen(IPC.send.locale, (_event, payload) => {
+  listen("locale", (_event, payload) => {
     const before = i18n.getLocale();
-    if (applyLocale(parseLocale(payload).locale) !== before) buildAppMenu();
+    if (applyLocale(payload.locale) !== before) buildAppMenu();
   });
   // 关于面板信息(mac 标准关于弹窗)。
   app.setAboutPanelOptions({ applicationName: "Mosael", applicationVersion: app.getVersion() });
@@ -1848,9 +1813,9 @@ app.whenReady().then(async () => {
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
   }
   // Win/Linux:标题栏三键叠层颜色随前端主题(mosaelDesktop.setTitleOverlay)。mac 无叠层。
-  listen(IPC.send.titleOverlay, (event, payload) => {
+  listen("titleOverlay", (event, payload) => {
     if (process.platform === "darwin") return;
-    const colors = parseTitleOverlay(payload);
+    const colors = payload;
     const win = BrowserWindow.fromWebContents(event.sender);
     try {
       win?.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor, height: WINDOW_CHROME_HEIGHT });
@@ -1886,23 +1851,23 @@ app.whenReady().then(async () => {
     }
     //: **先注册渲染层启动时就会调的那几条**(自定义 CSS),再折腾托盘、热键、网络探针 ——
     //: 后面任何一步抛异常都不该让「设置页读不到 CSS」变成「这个功能要重启」。
-    handle(IPC.invoke.customCssRead, () => system.readCustomCss());
-    handle(IPC.invoke.customCssPath, () => system.customCssPath());
-    handle(IPC.invoke.customCssOpen, () => system.openCustomCss());
-    handle(IPC.invoke.customCssReveal, () => system.revealCustomCss());
+    handle("customCssRead", () => system.readCustomCss());
+    handle("customCssPath", () => system.customCssPath());
+    handle("customCssOpen", () => system.openCustomCss());
+    handle("customCssReveal", () => system.revealCustomCss());
     // Computer Use 的急停 / 恢复:界面上的按钮与全局热键走同一条状态机(见 computerUseGuard.cjs)。
-    handle(IPC.invoke.computerStop, () => {
+    handle("computerStop", () => {
       computerUseGuard.stop("manual");
       return { active: computerUseGuard.isActive(), stopped: computerUseGuard.isStopped() };
     });
-    handle(IPC.invoke.computerResume, () => {
+    handle("computerResume", () => {
       computerUseGuard.resume();
       return { active: computerUseGuard.isActive(), stopped: computerUseGuard.isStopped() };
     });
 
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
-    listen(IPC.send.systemStatus, (_e, payload) => {
-      lastSystemStatus = { ...lastSystemStatus, ...parseSystemStatus(payload) };
+    listen("systemStatus", (_e, payload) => {
+      lastSystemStatus = { ...lastSystemStatus, ...payload };
       //: 合并「被控制中」——系统层只认这一份快照(托盘图标据此变色)。
       systemHandle?.pushStatus({ ...lastSystemStatus, computerUseActive: computerUseGuard.isActive() });
     });
@@ -1921,12 +1886,12 @@ app.whenReady().then(async () => {
       appendMainLog("computer-use", `shortcuts not registered: ${String(error).slice(0, 160)}`);
     }
     // 渲染层在任务结束时调用。发不发由主进程判(窗口藏起来时渲染层的 hasFocus 不可靠)。
-    listen(IPC.send.systemNotify, (_e, payload) => system.showTaskNotification(parseTaskNotice(payload)));
+    listen("systemNotify", (_e, payload) => system.showTaskNotification(payload));
     // 开发模式返回 null = 「本环境不支持」,设置页据此隐藏开关。不能只是让它失效:
     // dev 下 process.execPath 是 Electron 二进制,写进登录项等于让开发机开机启动一个裸 Electron。
-    handle(IPC.invoke.getOpenAtLogin, () => (isDev ? null : system.getOpenAtLogin()));
-    handle(IPC.invoke.setOpenAtLogin, (_e, enabled) =>
-      isDev ? null : system.setOpenAtLogin(Boolean(enabled)),
+    handle("getOpenAtLogin", () => (isDev ? null : system.getOpenAtLogin()));
+    handle("setOpenAtLogin", (_e, enabled) =>
+      isDev ? null : system.setOpenAtLogin(enabled),
     );
 
     // 开机自启拉起时静默驻留托盘,不弹窗口。

@@ -512,3 +512,77 @@ describe("Electron IPC contract", () => {
     }
   });
 });
+
+/**
+ * 契约表是**唯一事实源**:加一条通道,要么在这里红,要么哪里都齐了。
+ *
+ * 此前加一条调用要改六七处,`.d.cts` 还留着三个删掉的通道、缺了大半 computer* 通道;处理器自己记得调解析器 ——
+ * `recordingStatus` 没调,`publishPanelsHidden` 调的 `parsePanelsHidden` 契约根本没导出(调的是 undefined,
+ * 那条通道一直是坏的)。现在 main.cjs 的 `handle(key, …)` / `listen(key, …)` 按 PAYLOADS 自动解。
+ */
+describe("IPC contract is the single source of truth", () => {
+  const runtime = contract as unknown as {
+    IPC: Record<"invoke" | "send" | "event", Record<string, string>>;
+    PAYLOADS: Record<"invoke" | "send", Record<string, (value: unknown) => unknown>>;
+    noPayload: (value: unknown, channel: string) => undefined;
+  };
+  const main = fs.readFileSync(path.join(ROOT, "main.cjs"), "utf8");
+  const preload = fs.readFileSync(path.join(ROOT, "preload.cjs"), "utf8");
+
+  it("every invoke / send channel has exactly one payload decoder, and nothing else does", () => {
+    for (const transport of ["invoke", "send"] as const) {
+      expect(Object.keys(runtime.PAYLOADS[transport]).sort()).toEqual(Object.keys(runtime.IPC[transport]).sort());
+      for (const [key, parse] of Object.entries(runtime.PAYLOADS[transport])) {
+        expect(typeof parse, `${transport}.${key}`).toBe("function");
+      }
+    }
+  });
+
+  it("the type declaration lists exactly the runtime channels", () => {
+    const declared = fs.readFileSync(path.join(ROOT, "ipc-contract.d.cts"), "utf8");
+    for (const transport of ["invoke", "send", "event"] as const) {
+      const body = declared.match(new RegExp(`readonly ${transport}: Readonly<\\{([^}]*)\\}>`))?.[1] ?? "";
+      const pairs = Object.fromEntries([...body.matchAll(/^\s*(\w+): "([^"]+)";/gm)].map((m) => [m[1], m[2]]));
+      expect(pairs, `${transport} 在 .d.cts 里和运行时不一致`).toEqual(runtime.IPC[transport]);
+    }
+  });
+
+  it("main.cjs registers every renderer channel once, by key, through handle / listen", () => {
+    const handled = [...main.matchAll(/\bhandle\("(\w+)"/g)].map((m) => m[1]);
+    const listened = [...main.matchAll(/\blisten\("(\w+)"/g)].map((m) => m[1]);
+    const bridgeTable = main.slice(main.indexOf("const handlers = {"), main.indexOf("const key = Object.prototype"));
+    const bridged = [...bridgeTable.matchAll(/^ {4}(\w+): \(/gm)].map((m) => m[1]);
+
+    expect(new Set(handled).size, "同一条通道注册了两次").toBe(handled.length);
+    expect(new Set(listened).size).toBe(listened.length);
+    expect(listened.sort()).toEqual(Object.keys(runtime.IPC.send).sort());
+    const unserved = Object.keys(runtime.IPC.invoke).filter((key) => !handled.includes(key) && !bridged.includes(key));
+    expect(unserved, "契约里有、谁都不接的通道").toEqual([]);
+    for (const key of [...handled, ...bridged]) expect(runtime.IPC.invoke, key).toHaveProperty(key);
+    //: 处理器不再自己调解析器:载荷由 handle / listen 按表解好。
+    expect(main).not.toMatch(/\bparse[A-Z]\w*\((?:payload|request\.payload)/);
+    //: 把「参数不对」写进回话的那几条,解不过仍然是回话,不是一个失败的调用 —— 智能体写的编辑指令靠它改正。
+    expect(main).toMatch(/handle\("comfyuiWorkbenchCall",[\s\S]{0,400}?\{ onInvalid: invalidCall \}\)/);
+    for (const key of ["browserOpenLogin", "comfyuiOpenWorkbench", "comfyuiNavigation"]) {
+      expect(main).toMatch(new RegExp(`handle\\("${key}",[\\s\\S]{0,400}?\\{ onInvalid: failedReply \\}\\)`));
+    }
+  });
+
+  it("preload only uses channels from the table", () => {
+    for (const [, transport, key] of preload.matchAll(/IPC\.(invoke|send|event)\.(\w+)/g)) {
+      expect(runtime.IPC[transport as "invoke" | "send" | "event"], `${transport}.${key}`).toHaveProperty(key);
+    }
+  });
+
+  it("channels without a payload refuse one; the raw-value channels check theirs", () => {
+    const { invoke } = runtime.PAYLOADS;
+    expect(invoke.publishBack(undefined)).toBeUndefined();
+    expect(invoke.computerEnd({})).toBeUndefined();
+    expect(() => invoke.publishBack({ url: "https://x.test" })).toThrow(TypeError);
+    expect(invoke.recordingStatus("camera")).toBe("camera");
+    expect(() => invoke.recordingStatus("keyboard")).toThrow(TypeError);
+    expect(invoke.setOpenAtLogin(true)).toBe(true);
+    expect(() => invoke.setOpenAtLogin("yes")).toThrow(TypeError);
+    expect(invoke.publishPanelsHidden({ hidden: true })).toBeTruthy();
+  });
+});

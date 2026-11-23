@@ -209,19 +209,21 @@ describe("接线:IPC + 回环桥都走同一个拍摄函数", () => {
     //: 渲染层这条路和桥走**同一个**拍摄函数:参数只有主窗口。
     //: 此前重构漏了这一处,仍是旧签名 `captureMosaelWindow(parseComputerScreenshot(payload), …)`,
     //: 于是 `{}` 被当成窗口交给 `computerUseWindow`,永远回「没有 Mosael 窗口」。
-    expect(MAIN).toMatch(/handle\(IPC\.invoke\.computerScreenshot,[\s\S]{0,240}?computerUseDriver\.observe\(\)/);
+    expect(MAIN).toMatch(/handle\("computerScreenshot",[\s\S]{0,240}?computerUseDriver\.observe\(\)/);
     //: 桥的截图 handler 直接把**主窗口**交给驱动 —— 没有"按名字挑窗口"这一步了。
-    expect(MAIN).toMatch(/\[IPC\.invoke\.computerScreenshot\]: \(\) => computerUseDriver\.observe\(\)/);
+    expect(MAIN).toMatch(/\n {4}computerScreenshot: \(\) => computerUseDriver\.observe\(\)/);
   });
 
   it("后端那条桥只认写死的那几条 computer 通道,并复用同一份解析器与动作函数", () => {
     expect(MAIN).toMatch(/function startHostBridge\(/);
     //: 通道是**一张写死的表**(截图 / 点击 / 输入),不是「把 channel 转给任意处理器」。
     expect(MAIN).toMatch(/const handlers = \{/);
-    expect(MAIN).toMatch(/\[IPC\.invoke\.computerScreenshot\]:/);
-    expect(MAIN).toMatch(/\[IPC\.invoke\.computerClick\]:/);
-    expect(MAIN).toMatch(/\[IPC\.invoke\.computerType\]:/);
-    expect(MAIN).toMatch(/Object\.prototype\.hasOwnProperty\.call\(handlers, request\.channel\)/);
+    expect(MAIN).toMatch(/\n {4}computerScreenshot: \(/);
+    expect(MAIN).toMatch(/\n {4}computerClick: \(/);
+    expect(MAIN).toMatch(/\n {4}computerType: \(/);
+    //: 通道名只经契约表认成键;载荷和渲染层那一路同一张表(PAYLOADS)解。
+    expect(MAIN).toMatch(/Object\.prototype\.hasOwnProperty\.call\(INVOKE_KEY_BY_CHANNEL, request\.channel\)/);
+    expect(MAIN).toMatch(/handler\(PAYLOADS\.invoke\[key\]\(request\.payload\)\)/);
     // 桥的地址与令牌落在数据目录的 host-bridge.json(0600),后端按同一个数据目录找它。
     expect(MAIN).toMatch(/const HOST_BRIDGE_FILE = "host-bridge\.json"/);
     expect(MAIN).toMatch(/fs\.writeFileSync\(hostBridgeFile\(\), JSON\.stringify\(\{ port: hostBridge\.port, token \}\), \{ mode: 0o600 \}\)/);
@@ -366,13 +368,8 @@ async function startBridge(options: {
       logs.push(`${scope}: ${String(message)}`);
     },
     IPC: contract.IPC,
-    parseComputerScreenshot: contract.parseComputerScreenshot,
-    parseComputerDesktopAccessibility: contract.parseComputerDesktopAccessibility,
-    parseComputerDesktopClick: contract.parseComputerDesktopClick,
-    parseComputerDesktopScroll: contract.parseComputerDesktopScroll,
-    parseComputerDesktopScreenshot: contract.parseComputerDesktopScreenshot,
-    parseComputerDesktopType: contract.parseComputerDesktopType,
-    parseComputerDesktopWindows: contract.parseComputerDesktopWindows,
+    PAYLOADS: contract.PAYLOADS,
+    INVOKE_KEY_BY_CHANNEL: contract.INVOKE_KEY_BY_CHANNEL,
     desktopUseDriver: options.desktopDriver ?? null,
     withComputerUse: (action: () => unknown) => action(),
     computerUseCursor: cursor,

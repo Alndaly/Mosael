@@ -194,8 +194,8 @@ describe("main.cjs 的接法", () => {
 
   it("所有 IPC 处理器都经 handle / listen 注册,不直接用 ipcMain", () => {
     expect(MAIN.match(/ipcMain\.(handle|on)\(/g)).toEqual(["ipcMain.handle(", "ipcMain.on("]);
-    expect(MAIN).toMatch(/ipcMain\.handle\(channel, \(event, \.\.\.args\) => \{\s*if \(!fromAppWindow\(event\)\)/);
-    expect(MAIN).toMatch(/ipcMain\.on\(channel, \(event, \.\.\.args\) => \{\s*if \(!fromAppWindow\(event\)\)/);
+    expect(MAIN).toMatch(/ipcMain\.handle\(channel, \(event, payload\) => \{\s*if \(!fromAppWindow\(event\)\)/);
+    expect(MAIN).toMatch(/ipcMain\.on\(channel, \(event, payload\) => \{\s*if \(!fromAppWindow\(event\)\)/);
   });
 
   it("主窗口装了导航拦截;壳令牌只加在应用页面发出的请求上", () => {

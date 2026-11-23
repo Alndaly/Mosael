@@ -1375,8 +1375,171 @@ function parseLocale(value) {
   return { locale };
 }
 
+/**
+ * 不收载荷的通道。给了东西就拒(多一个字段就拒,而不是静默忽略);`{}` 算没给 —— 宿主桥的请求总带一个 payload 对象。
+ * @param {unknown} value
+ * @param {string} channel
+ * @returns {undefined}
+ */
+function noPayload(value, channel) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) return undefined;
+  throw new TypeError(`${channel}: takes no payload`);
+}
+
+const RECORDING_KINDS = new Set(["camera", "microphone", "screen"]);
+
+/** 录制权限的种类(载荷是一个裸字符串)。 */
+function parseRecordingKind(value, channel) {
+  if (typeof value !== "string" || !RECORDING_KINDS.has(value)) {
+    throw new TypeError(`${channel}: kind must be one of ${[...RECORDING_KINDS].join(", ")}`);
+  }
+  return value;
+}
+
+/** 开机自启的开关(载荷是一个裸布尔)。 */
+function parseOpenAtLogin(value) {
+  if (typeof value !== "boolean") throw new TypeError(`${IPC.invoke.setOpenAtLogin}: enabled must be a boolean`);
+  return value;
+}
+
+/** 网页里的探针回报(只记前 200 个字;来源由处理器按 sender 的地址认)。 */
+function parseNetProbe(value) {
+  const payload = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    path: String(payload.path || "").slice(0, 200),
+    status: typeof payload.status === "number" ? payload.status : null,
+    body: String(payload.body || "").slice(0, 200),
+  };
+}
+
+/**
+ * **每条进主进程的通道,载荷怎么解。** 键与 `IPC.invoke` / `IPC.send` 一一对应(ipc-contract.test.ts 守着):
+ * main.cjs 的 `handle(key, …)` / `listen(key, …)` 按这张表**自动**先解再交给处理器,处理器拿到的一定是解过的值。
+ * 此前每个处理器自己记得调解析器 —— `recordingStatus` 就没调,`setOpenAtLogin` 收什么都 `Boolean()` 一下。
+ * 解不过抛 TypeError:渲染层收到的是一个错误(preload 的 humanIpcError 整理成人话),宿主桥回 400。
+ *
+ * @type {{ invoke: Record<keyof typeof IPC.invoke, (value: unknown) => unknown>, send: Record<keyof typeof IPC.send, (value: unknown) => unknown> }}
+ */
+const PAYLOADS = (() => {
+  const none = (key, transport = "invoke") => (value) => noPayload(value, IPC[transport][key]);
+  const named = (parse, key) => (value) => parse(value, IPC.invoke[key]);
+  return Object.freeze({
+    invoke: Object.freeze({
+      checkUpdates: none("checkUpdates"),
+      downloadUpdate: none("downloadUpdate"),
+      installUpdate: none("installUpdate"),
+      mainStatus: none("mainStatus"),
+      restartMain: none("restartMain"),
+      recordingStatus: named(parseRecordingKind, "recordingStatus"),
+      recordingRequest: named(parseRecordingKind, "recordingRequest"),
+      recordingOpenSettings: named(parseRecordingKind, "recordingOpenSettings"),
+      recordingPrepareScreen: none("recordingPrepareScreen"),
+      getOpenAtLogin: none("getOpenAtLogin"),
+      setOpenAtLogin: parseOpenAtLogin,
+      customCssRead: none("customCssRead"),
+      customCssPath: none("customCssPath"),
+      customCssOpen: none("customCssOpen"),
+      customCssReveal: none("customCssReveal"),
+      dataExportDiagnostics: none("dataExportDiagnostics"),
+      dataCreateBackup: named(parseAuthToken, "dataCreateBackup"),
+      dataApplyRestore: parseRestoreStage,
+      backendRetry: none("backendRetry"),
+      pickPath: parsePickPath,
+      publishLogin: named(parsePublishTarget, "publishLogin"),
+      publishOpenPage: named(parsePublishTarget, "publishOpenPage"),
+      publishInspect: named(parsePublishTarget, "publishInspect"),
+      publishNavigate: named(parseUrlRequest, "publishNavigate"),
+      publishBack: none("publishBack"),
+      publishForward: none("publishForward"),
+      publishReload: none("publishReload"),
+      publishHideView: none("publishHideView"),
+      publishPanelLayout: parsePanelLayout,
+      publishClosePanel: parsePanelId,
+      publishPanelMuted: parsePanelMuted,
+      publishPanelsHidden: parsePanelsHidden,
+      publishSwitchPage: named(parsePageId, "publishSwitchPage"),
+      publishClosePage: named(parsePageId, "publishClosePage"),
+      publishReorderPages: parsePageOrder,
+      publishNewPage: parseNewPage,
+      publishSnapshotPage: none("publishSnapshotPage"),
+      publishHostLayer: parseHostLayer,
+      publishFocusPage: none("publishFocusPage"),
+      publishFocusHost: none("publishFocusHost"),
+      browserOpenLogin: parseBrowserLogin,
+      publishSignOut: named(parsePublishTarget, "publishSignOut"),
+      browserClearProfile: parseBrowserProfile,
+      comfyuiNavigation: parseComfyNavigation,
+      comfyuiOpenWorkbench: parseComfyWorkbenchOpen,
+      comfyuiWorkbenchCall: parseComfyWorkbenchCall,
+      pageToolsCapture: parseCaptureMode,
+      pageToolsRegionStart: none("pageToolsRegionStart"),
+      pageToolsRegionFinish: parseRegionSelection,
+      pageToolsVideos: none("pageToolsVideos"),
+      pageToolsImages: none("pageToolsImages"),
+      pageToolsFetchImages: parseImageUrls,
+      pageToolsRead: parseReadMode,
+      pageToolsSaveDownload: parseSaveDownload,
+      computerScreenshot: parseComputerScreenshot,
+      computerDesktopWindows: parseComputerDesktopWindows,
+      computerDesktopScreenshot: parseComputerDesktopScreenshot,
+      computerDesktopAccessibility: parseComputerDesktopAccessibility,
+      computerDesktopClick: parseComputerDesktopClick,
+      computerDesktopPointer: parseComputerDesktopPointer,
+      computerDesktopType: parseComputerDesktopType,
+      computerDesktopKey: parseComputerDesktopKey,
+      computerDesktopScroll: parseComputerDesktopScroll,
+      computerDesktopDrag: parseComputerDesktopDrag,
+      computerDesktopWait: parseComputerDesktopWait,
+      computerDesktopVerify: parseComputerDesktopVerify,
+      computerDesktopFullScreenshot: parseComputerDesktopFullScreenshot,
+      computerOcr: parseComputerOcr,
+      computerDesktopOcr: parseComputerDesktopOcr,
+      computerClipboardRead: parseComputerClipboardRead,
+      computerClipboardWrite: parseComputerClipboardWrite,
+      computerClick: parseComputerClick,
+      computerPointer: parseComputerPointer,
+      computerDrag: parseComputerDrag,
+      computerWait: parseComputerWait,
+      computerVerify: parseComputerVerify,
+      computerType: parseComputerType,
+      computerKey: parseComputerKey,
+      computerScroll: parseComputerScroll,
+      computerEnd: none("computerEnd"),
+      computerStop: none("computerStop"),
+      computerResume: none("computerResume"),
+      saveFileBegin: parseSaveFileBegin,
+      saveFileWrite: parseSaveFileChunk,
+      saveFileEnd: named(parseSaveFileId, "saveFileEnd"),
+      saveFileAbort: named(parseSaveFileId, "saveFileAbort"),
+    }),
+    send: Object.freeze({
+      titleOverlay: parseTitleOverlay,
+      systemStatus: parseSystemStatus,
+      systemNotify: parseTaskNotice,
+      locale: parseLocale,
+      floatShow: parseFloatShow,
+      floatHide: parseFloatHide,
+      netProbe: parseNetProbe,
+      toastsShow: parseToastsShow,
+      toastsHide: none("toastsHide", "send"),
+    }),
+  });
+})();
+
+/** 通道名 → 表里的键(宿主桥收的是通道名)。 */
+const INVOKE_KEY_BY_CHANNEL = Object.freeze(
+  Object.fromEntries(Object.entries(IPC.invoke).map(([key, channel]) => [channel, key])),
+);
+
 module.exports = {
   IPC,
+  PAYLOADS,
+  INVOKE_KEY_BY_CHANNEL,
+  noPayload,
+  parseRecordingKind,
+  parseOpenAtLogin,
+  parseNetProbe,
   parseAuthToken,
   parseRestoreStage,
   parseBrowserLogin,

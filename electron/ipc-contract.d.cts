@@ -1,3 +1,4 @@
+/** 通道表。和 ipc-contract.cjs 的 IPC 逐项相同(ipc-contract.test.ts 比对);注释写在 .cjs 那边。 */
 export const IPC: {
   readonly invoke: Readonly<{
     checkUpdates: "mosael:check-updates";
@@ -8,7 +9,6 @@ export const IPC: {
     recordingStatus: "recording-permissions:status";
     recordingRequest: "recording-permissions:request";
     recordingOpenSettings: "recording-permissions:open-settings";
-    /** 屏幕录制没有「主动请求」接口:抓一次源,把应用登记进系统授权列表(macOS)。 */
     recordingPrepareScreen: "recording-permissions:prepare-screen";
     getOpenAtLogin: "system:getOpenAtLogin";
     setOpenAtLogin: "system:setOpenAtLogin";
@@ -16,6 +16,11 @@ export const IPC: {
     customCssPath: "customCss:path";
     customCssOpen: "customCss:open";
     customCssReveal: "customCss:reveal";
+    dataExportDiagnostics: "data:exportDiagnostics";
+    dataCreateBackup: "data:createBackup";
+    dataApplyRestore: "data:applyRestore";
+    backendRetry: "backend:retry";
+    pickPath: "dialog:pickPath";
     publishLogin: "publish:login";
     publishOpenPage: "publish:openPage";
     publishInspect: "publish:inspect";
@@ -32,11 +37,8 @@ export const IPC: {
     publishClosePage: "publish:closePage";
     publishReorderPages: "publish:reorderPages";
     publishNewPage: "publish:newPage";
-    publishPagesInset: "publish:pagesInset";
     publishSnapshotPage: "publish:snapshotPage";
-    publishCoverPage: "publish:coverPage";
     publishHostLayer: "publish:hostLayer";
-    publishOverlay: "publish:overlay";
     publishFocusPage: "publish:focusPage";
     publishFocusHost: "publish:focusHost";
     browserOpenLogin: "browser:openLogin";
@@ -58,10 +60,25 @@ export const IPC: {
     computerDesktopScreenshot: "computer:desktop-screenshot";
     computerDesktopAccessibility: "computer:desktop-accessibility";
     computerDesktopClick: "computer:desktop-click";
+    computerDesktopPointer: "computer:desktop-pointer";
     computerDesktopType: "computer:desktop-type";
+    computerDesktopKey: "computer:desktop-key";
     computerDesktopScroll: "computer:desktop-scroll";
+    computerDesktopDrag: "computer:desktop-drag";
+    computerDesktopWait: "computer:desktop-wait";
+    computerDesktopVerify: "computer:desktop-verify";
+    computerDesktopFullScreenshot: "computer:desktop-full-screenshot";
+    computerOcr: "computer:ocr";
+    computerDesktopOcr: "computer:desktop-ocr";
+    computerClipboardRead: "computer:clipboard-read";
+    computerClipboardWrite: "computer:clipboard-write";
     computerClick: "computer:click";
+    computerPointer: "computer:pointer";
+    computerDrag: "computer:drag";
+    computerWait: "computer:wait";
+    computerVerify: "computer:verify";
     computerType: "computer:type";
+    computerKey: "computer:key";
     computerScroll: "computer:scroll";
     computerEnd: "computer:end";
     computerStop: "computer:stop";
@@ -70,11 +87,6 @@ export const IPC: {
     saveFileWrite: "saveFile:write";
     saveFileEnd: "saveFile:end";
     saveFileAbort: "saveFile:abort";
-    dataExportDiagnostics: "data:exportDiagnostics";
-    dataCreateBackup: "data:createBackup";
-    dataApplyRestore: "data:applyRestore";
-    backendRetry: "backend:retry";
-    pickPath: "dialog:pickPath";
   }>;
   readonly send: Readonly<{
     titleOverlay: "mosael:title-overlay";
@@ -106,6 +118,19 @@ export const IPC: {
     computerUseState: "computer:use-state";
   }>;
 };
+
+type InvokeKey = keyof typeof IPC.invoke;
+type SendKey = keyof typeof IPC.send;
+/** 每条进主进程的通道,载荷怎么解(main.cjs 的 handle / listen 按它自动先解)。 */
+export const PAYLOADS: {
+  readonly invoke: Readonly<Record<InvokeKey, (value: unknown) => unknown>>;
+  readonly send: Readonly<Record<SendKey, (value: unknown) => unknown>>;
+};
+export const INVOKE_KEY_BY_CHANNEL: Readonly<Record<string, InvokeKey>>;
+export function noPayload(value: unknown, channel: string): undefined;
+export function parseRecordingKind(value: unknown, channel: string): "camera" | "microphone" | "screen";
+export function parseOpenAtLogin(value: unknown): boolean;
+export function parseNetProbe(value: unknown): { path: string; status: number | null; body: string };
 
 export function parsePublishTarget(value: unknown, channel: string): { accountId: string; platform: string };
 export function parseAuthToken(value: unknown, channel: string): { token: string };

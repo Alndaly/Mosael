@@ -20,7 +20,7 @@ describe("后端", () => {
   it("连崩认输不用模态的 showErrorBox(那会把整个主进程卡在一个框上),给「再试一次」", () => {
     expect(MAIN).toMatch(/onGiveUp: \(lastExit\) => void askAfterBackendGaveUp\(lastExit\)/);
     expect(MAIN).toMatch(/async function askAfterBackendGaveUp[\s\S]{0,700}backendSupervisor\.retry\(\)/);
-    expect(MAIN).toMatch(/handle\(IPC\.invoke\.backendRetry,/);
+    expect(MAIN).toMatch(/handle\("backendRetry",/);
   });
 
   it("报错框里的日志目录是真的那两处(userData/logs 和数据目录的 logs),不再写死 ~/.mosael/logs", () => {
