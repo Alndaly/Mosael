@@ -1,33 +1,20 @@
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CircleDot, Database, Eye, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Route, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   agentManifest,
-  compactAgentSession,
-  dropQueuedMessage,
-  getAgentSession,
-  listAgentMessages,
-  listAgentQueue,
   listAgentTools,
-  listAgentUsageEvents,
-  resumeQueuedMessage,
-  sendAgentMessage,
-  steerQueuedMessage,
-  stopAgentSession,
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
-import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
-import { markAgentTurnStarted } from "@/features/agent/agentTurnStarts";
-import { useTurnElapsedSeconds } from "@/features/agent/useTurnElapsedSeconds";
-import { sessionPolling, transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
+import { useAgentConversation } from "@/features/agent/useAgentConversation";
 import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerAttachMenu } from "@/features/agent/ComposerAttachMenu";
 import { ComposerChips } from "@/features/agent/ComposerChips";
@@ -35,13 +22,9 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Truncate } from "@/components/ui/truncate";
-import type { JSONContent } from "@tiptap/react";
-
 import { appendText, collectReferences, emptyDocument } from "@/features/agent/ChatComposer";
 import { DraftBlank, DraftComposer, useComposerDraft } from "@/features/agent/composerDraft";
-import { collectSkills } from "@/features/agent/SkillChip";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
-import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { ChatBubble, caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
@@ -56,11 +39,10 @@ import { ModelPicker } from "@/features/agent/ModelPicker";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
 import { AGENT_DRAFT_EVENT, useAgentSessions, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { canGoHome, openedIn } from "@/features/agent/homeLabel";
-import { STUDIO_PLACE, placePayload } from "@/features/agent/places";
+import { STUDIO_PLACE } from "@/features/agent/places";
 import { goHome } from "@/features/ai-studio/goToPlace";
 import { workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
 import { useOpenRequest } from "@/lib/deepLink";
-import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
 import { SessionJobsCard } from "@/components/jobs/SessionJobsCard";
@@ -161,7 +143,6 @@ export function ChatWorkspace({
   switcher?: React.ReactNode;
 }) {
   const t = useI18n();
-  const qc = useQueryClient();
   const writeBlocked = useWriteBlocked(workspace.role);
   // AI Studio 这一处的当前对话、选择、草稿、删后回到草稿:和免提浮标、页面跳转在这一处时读的是同一份(见 currentAgentSession)。
   // 列表列全部(每行写着在哪开的);点开哪段,就是在 AI Studio 接着它,它的家不变(ADR 0044 §5)。
@@ -200,27 +181,11 @@ export function ChatWorkspace({
   //: 贴底跟随。resetKey 用会话 id:换会话该从底部重新开始。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
 
-  const session = useQuery({
-    queryKey: agentKeys.session(activeSession?.id),
-    enabled: Boolean(activeSession),
-    queryFn: () => getAgentSession(activeSession!.id),
-    refetchInterval: (query) => sessionPolling(query.state.data?.status === "running"),
-    refetchOnWindowFocus: true,
-  });
-  const running = session.data?.status === "running";
-  // 连流 → 攒状态 → 收尾失效:**只有一份**,和画布助手共用(见 useAgentTurnStream)。
-  // 此前两个面板各写一遍,而收尾那一步已经分岔 —— 隔壁每答完一句都会闪一下。
-  const { streamText, streamTimeline, turnStartedAt, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null, running);
-  //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)—— 此前每 1.2 秒
-  //: 无条件整段重拉,一段带着工具结果的长对话就是每秒几 MB。
-  const messages = useQuery({
-    queryKey: agentKeys.messages(activeSession?.id),
-    enabled: Boolean(activeSession),
-    queryFn: () => listAgentMessages(activeSession!.id),
-    refetchInterval: transcriptPolling(running),
-    refetchOnWindowFocus: true,
-  });
-  useTranscriptFollowsSession(activeSession?.id ?? "", session.data);
+  //: 会话详情 / 消息 / 排队 / 用量、撤回 / 继续 / 插话 / 停止 / 整理、发送之后的那一串:和各工作区的助手面板共用一份(见 useAgentConversation)。
+  const conversation = useAgentConversation(current, workspace.id);
+  const { session, running, messages, usageEvents, queue, queuedIds, usageByMessage, context, elapsedSeconds } = conversation;
+  const { cancelQueued, resumeQueued, steerQueued, stopTurn, compact: compactContext } = conversation;
+  const { streamText, streamTimeline } = conversation.stream;
   //: 刚发出去的那一小窗:新建会话发送时,消息查询切到刚建出来的会话 id、数据还没回来 ——
   //: 这一刻摆骨架会把整列画面顶成假气泡(用户实测:发送触发 Skeleton)。第一条消息一到就归位;
   //: 发送失败也归位(错误由 toast 说,画面回到发送前的样子)。
@@ -236,84 +201,8 @@ export function ChatWorkspace({
   //: 是「智能体执行失败」这类占位,念它等于什么都没说)。
   
   
-  const usageEvents = useQuery({
-    queryKey: agentKeys.usage(activeSession?.id),
-    enabled: Boolean(activeSession),
-    queryFn: () => listAgentUsageEvents<AgentUsageEvent>(activeSession!.id),
-    refetchInterval: running ? 1200 : false,
-    refetchOnWindowFocus: true,
-  });
-  // What is still waiting behind the current answer. Read from the server rather than counted
-  // locally so it survives a reload and stays right when a turn ends mid-flight.
-  //: **空闲时也要读**:按了停止,排着的那几条被扣下(D63),停在排队条里等人点「继续发送」—— 那时没有一轮在跑。
-  //: 跑着的时候轮询;空闲时跟着会话的状态 / updated_at 重取(见 transcriptFollowsSession),和消息同一个节拍。
-  const queue = useQuery({
-    queryKey: agentKeys.queue(activeSession?.id),
-    enabled: Boolean(activeSession),
-    queryFn: () => listAgentQueue(activeSession!.id),
-    refetchInterval: running ? 1500 : false,
-  });
-  const queuedIds = React.useMemo(() => new Set((queue.data ?? []).map((message) => message.id)), [queue.data]);
-  const refreshQueue = () => {
-    void qc.invalidateQueries({ queryKey: agentKeys.queue(activeSession?.id) });
-    void qc.invalidateQueries({ queryKey: agentKeys.messages(activeSession?.id) });
-  };
-  const cancelQueued = useMutation({
-    mutationFn: (messageId: string) =>
-      dropQueuedMessage(String(activeSession?.id), messageId),
-    onSuccess: refreshQueue,
-  });
-  //: 「继续发送」:按停止时扣下的那条放回队列,空闲就当场开跑。
-  const resumeQueued = useMutation({
-    mutationFn: (messageId: string) => resumeQueuedMessage(String(activeSession?.id), messageId),
-    onSuccess: () => {
-      refreshQueue();
-      void qc.invalidateQueries({ queryKey: agentKeys.session(activeSession?.id) });
-    },
-  });
-  const steerQueued = useMutation({
-    mutationFn: (messageId: string) =>
-      steerQueuedMessage(String(activeSession?.id), messageId),
-    onSuccess: (result) => {
-      // A turn that ended first leaves the message queued; it will run on its own, and saying
-      // "steered" would be a lie about what the agent is doing.
-      if (!result.steered) toast.message(t("chatSteerTooLate"));
-      refreshQueue();
-    },
-  });
-  const stopTurn = useMutation({
-    mutationFn: () => stopAgentSession(String(activeSession?.id)),
-    // Nothing to report either way: a successful stop is visible as the turn ending, and
-    // stopping a turn that just finished is a race the user cannot see.
-    meta: { silentError: true },
-  });
-
-  const elapsedSeconds = useTurnElapsedSeconds(running, turnStartedAt);
-
-  // 发送时没有会话就先建一个(生成页同款「输入框直达」交互)。
-  const sendMessage = useMutation({
-    onMutate: () => setJustSent(true),
-    onError: () => setJustSent(false),
-    mutationFn: async ({ content, references, document }: { content: string; references: AgentReference[]; document: JSONContent }) => {
-      const targetId = (await current.ensure()).id;
-      //: 「/」点名的技能(ADR 0040 §4)跟着这条消息走,后端把全文挂到这一轮。
-      const skills = collectSkills(document);
-      const message = await sendAgentMessage(targetId, {
-        content, references, body_document: document, ...(skills.length ? { skills } : {}),
-        place: placePayload(STUDIO_PLACE),
-      });
-      return { message, targetId };
-    },
-    onSuccess: ({ targetId }, _content, _ctx) => {
-      draft.set(emptyDocument);
-      // 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了(画布助手一直是这样)。
-      attach.clear();
-      markAgentTurnStarted(qc, targetId);
-      void qc.invalidateQueries({ queryKey: agentKeys.sessions(workspace.id) });
-      void attachStream(targetId);
-    },
-  });
-
+  //: 发送时没有会话就先建一个(生成页同款「输入框直达」交互,见 useAgentConversation)。
+  const sendMessage = conversation.send;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -333,11 +222,18 @@ export function ChatWorkspace({
       toast.error(t("composerMessageTooLong"));
       return;
     }
-    sendMessage.mutate({
-      content: full,
-      references: collectReferences(draft.get()),
-      document: draft.get(),
-    });
+    setJustSent(true);
+    sendMessage.mutate(
+      { content: full, references: collectReferences(draft.get()), document: draft.get() },
+      {
+        onError: () => setJustSent(false),
+        onSuccess: () => {
+          draft.set(emptyDocument);
+          //: 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了。
+          attach.clear();
+        },
+      },
+    );
   };
 
   // 一次选择的记录长在**用户那条消息**里(后端的回执,`payload.answers` 带着问的和选的,
@@ -396,38 +292,10 @@ export function ChatWorkspace({
     [transcriptMessages, running, streamTimeline, usageEvents.data],
   );
 
-  /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
-   *  挂在消息上等于"必须先成功跑一轮才看得到" —— 而想知道"还能聊多久"的时刻恰恰在开口之前:
-   *  刚打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数。 */
-  const context = (session.data?.context ?? null) as ContextInfo | null;
-
-  const compactContext = useMutation({
-    mutationFn: () =>
-      compactAgentSession<{ compaction: CompactionInfo | null }>(activeSession!.id),
-    // 压成功了对话里会多一条整理记录,那本身就是反馈;**没得压和压失败必须说出来** ——
-    // 此前两种情况都只是 loading 闪一下就没了,用户无从判断是没生效、还是不需要。
-    onSuccess: (result) => {
-      void messages.refetch();
-      void qc.invalidateQueries({ queryKey: agentKeys.session(activeSession?.id) });
-      if (!result?.compaction) toast.message(t("agentCompactNothing"));
-    },
-    onError: (error) => toast.error(`${t("agentCompactFailed")}:${(error as Error).message}`),
-  });
   // —— 可拉伸分栏(照剪辑页的模式:pointer 拖拽 + localStorage 持久化 + 边界钳制)——
   // clamp 在**读取**时也做:localStorage 里可能躺着旧版本写的越界值。
   const panels = useSidePanels("ai", AI_PANEL_BOUNDS);
   const [sessionListOpen, setSessionListOpen] = useSessionListOpen();
-
-  const usageByMessage = React.useMemo(() => {
-    const byMessage = new Map<string, AgentUsageEvent[]>();
-    for (const event of usageEvents.data ?? []) {
-      if (!event.agent_message_id) continue;
-      const current = byMessage.get(event.agent_message_id) ?? [];
-      current.push(event);
-      byMessage.set(event.agent_message_id, current);
-    }
-    return byMessage;
-  }, [usageEvents.data]);
 
   //: 等你拍板的卡(确认 / 选择)不跟着视图走。对话视图里确认卡摆在发起它的那次工具调用里(对不上任何一行的
   //: 和选择卡在消息流末尾);看轨迹、看子代理时消息流不在屏上,它们就全停在输入框上方 —— 此前两张卡只写在

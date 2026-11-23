@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
   Eye,
@@ -12,9 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
-import { markAgentTurnStarted } from "@/features/agent/agentTurnStarts";
-import { useTurnElapsedSeconds } from "@/features/agent/useTurnElapsedSeconds";
+import { useAgentConversation } from "@/features/agent/useAgentConversation";
 import {
   MAX_CONTEXT_CHARS,
   MAX_MESSAGE_CHARS,
@@ -27,21 +25,11 @@ import { DictateButton } from "@/features/agent/DictateButton";
 
 import {
   type Asset,
-  compactAgentSession,
   deleteAgentSession,
-  dropQueuedMessage,
-  getAgentSession,
-  listAgentMessages,
-  listAgentQueue,
-  listAgentUsageEvents,
-  resumeQueuedMessage,
-  sendAgentMessage,
-  steerQueuedMessage,
-  stopAgentSession,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { UserMessageContent, attachmentToken } from "@/features/agent/userMessage";
-import { MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
+import { MessageUsageFooter } from "@/features/agent/messageUsage";
 import { useI18n } from "@/app/preferences";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { IconButton } from "@/components/ui/icon-button";
@@ -49,7 +37,6 @@ import type { JSONContent } from "@tiptap/react";
 
 import { appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
 import { DraftBlank, DraftComposer, useComposerDraft } from "@/features/agent/composerDraft";
-import { collectSkills } from "@/features/agent/SkillChip";
 import type { AgentReference } from "@/features/agent/references";
 import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
@@ -64,11 +51,10 @@ import { useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useAgentSessions, useCurrentAgentSession } from "@/features/agent/currentAgentSession";
-import { homeOf, placeKey, placePayload, type AgentPlace } from "@/features/agent/places";
+import { homeOf, placeKey, type AgentPlace } from "@/features/agent/places";
 import { readComposerDraft, stashComposerExtras, takeComposerExtras, writeComposerDraft } from "@/features/agent/sessionSelection";
-import { sessionPolling, transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { formatElapsedSeconds } from "@/lib/time";
-import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
+import { CompactionNotice, type CompactionInfo } from "@/features/agent/ContextMeter";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { cn } from "@/lib/utils";
@@ -219,28 +205,11 @@ export function CanvasAgentChat({
     },
   });
 
-  /** 会话详情:运行状态、水位(列表接口不带 —— 那要为每个会话各算一次,而界面只看当前这个)。 */
-  const live = useQuery({
-    queryKey: agentKeys.session(sessionId),
-    enabled: Boolean(sessionId),
-    queryFn: () => getAgentSession(sessionId),
-    refetchInterval: (query) => sessionPolling(query.state.data?.status === "running"),
-    refetchOnWindowFocus: true,
-  });
-  const running = live.data?.status === "running";
-  // 连流 → 攒状态 → 收尾失效:**只有一份**,和 AI 工作台共用(见 useAgentTurnStream)。
-  // 此前这里各写了一遍,而收尾那一步停在没修之前的写法 —— 每答完一句都会闪一下,
-  // 而那个 bug 在隔壁文件里早就被诊断、注释、修好过。
-  const { streamText, streamTimeline, turnStartedAt, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null, running);
-  //: 消息只在跑着的时候轮询;空闲时跟着会话的状态 / updated_at 变化重取一次(见 transcriptFollowsSession)。
-  const messages = useQuery({
-    queryKey: agentKeys.messages(sessionId),
-    enabled: Boolean(sessionId),
-    queryFn: () => listAgentMessages(sessionId),
-    refetchInterval: transcriptPolling(running),
-    refetchOnWindowFocus: true,
-  });
-  useTranscriptFollowsSession(sessionId, live.data);
+  //: 会话详情 / 消息 / 排队 / 用量、撤回 / 继续 / 插话 / 停止 / 整理、发送之后的那一串:和 AI 工作台共用一份(见 useAgentConversation)。
+  const conversation = useAgentConversation(current, workspaceId);
+  const { session: live, running, messages, queue, usageByMessage, queuedIds, context, elapsedSeconds } = conversation;
+  const { compact, cancelQueued, resumeQueued, steerQueued, stopTurn } = conversation;
+  const { streamText, streamTimeline } = conversation.stream;
   //: 「还没读到」不能说成「是空的」:选着一段、它还在路上,或者它的消息还在路上。草稿不用等任何东西。
   const sessionLoading = current.resolving || (Boolean(sessionId) && messages.isPending);
   const isDraft = !activeSession && !current.resolving;
@@ -264,35 +233,6 @@ export function CanvasAgentChat({
   //: 最近一条失败。**语音模式下必须出声** —— 静默的失败会被理解成"它没听见",
   //: 于是你再说一遍,然后再失败一次。
   
-  // Same contract as the studio chat: a message typed mid-turn is a correction, the backend
-  // injects it into the running turn, and one button covers stop-vs-send.
-  // Same source of truth as the studio chat: the server knows what is still waiting.
-  //: 空闲时也读:按了停止,扣下的那几条等人点「继续发送」(D63)。跑着时轮询,空闲时跟着会话状态重取(transcriptFollowsSession)。
-  const queue = useQuery({
-    queryKey: agentKeys.queue(sessionId),
-    enabled: Boolean(sessionId),
-    queryFn: () => listAgentQueue(sessionId),
-    refetchInterval: running ? 1500 : false,
-  });
-  // 计费/用量:与对话页同源,按 agent_message_id 归到各条回复(见 MessageUsageFooter)。
-  const usageEvents = useQuery({
-    queryKey: agentKeys.usage(sessionId),
-    enabled: Boolean(sessionId),
-    queryFn: () => listAgentUsageEvents<AgentUsageEvent>(sessionId),
-    refetchInterval: running ? 1200 : false,
-  });
-  const usageByMessage = React.useMemo(() => {
-    const byMessage = new Map<string, AgentUsageEvent[]>();
-    for (const event of usageEvents.data ?? []) {
-      if (!event.agent_message_id) continue;
-      const current = byMessage.get(event.agent_message_id) ?? [];
-      current.push(event);
-      byMessage.set(event.agent_message_id, current);
-    }
-    return byMessage;
-  }, [usageEvents.data]);
-  const queuedIds = new Set((queue.data ?? []).map((message) => message.id));
-
   // 一次选择的记录长在**用户那条消息**里(后端的回执,`payload.answers` 带着问的和选的,
   // 见 AnsweredChoice):它是用户做过的事。助手那一侧只有它自己那一步的状态(`ask_user`
   // 的结果卡,一行「已选」),不重复记一遍。此前反过来做了 —— 工具结果画整张记录、回执被
@@ -317,107 +257,49 @@ export function CanvasAgentChat({
   //: 装着这段对话的那一块 —— 「有请求等你确认」在它里面找那张卡。
   const threadArea = React.useRef<HTMLDivElement | null>(null);
 
-  /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
-   *  挂在消息上等于"必须先成功跑一轮才看得到" —— 而想知道"还能聊多久"的时刻恰恰在开口之前:
-   *  刚打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数。 */
-  const context = (live.data?.context ?? null) as ContextInfo | null;
-
-  const compact = useMutation({
-    mutationFn: () => compactAgentSession<{ compaction: CompactionInfo | null }>(sessionId),
-    // 压成功了对话里会多一条整理记录;没得压和压失败必须说出来,否则只是 loading 闪一下。
-    onSuccess: (result) => {
-      void messages.refetch();
-      void live.refetch();
-      if (!result?.compaction) toast.message(t("agentCompactNothing"));
-    },
-    onError: (error) => toast.error(`${t("agentCompactFailed")}:${(error as Error).message}`),
-  });
-  const refreshQueue = () => {
-    void qc.invalidateQueries({ queryKey: agentKeys.queue(sessionId) });
-    void qc.invalidateQueries({ queryKey: agentKeys.messages(sessionId) });
+  /**
+   * 发一条:正文与附件拼成消息(文本文件内联为围栏上下文,图片 / 视频 / 音频编码成附件标记,气泡里画成缩略图),
+   * 页面说明与投递来的说明放进 context。`outboxContext` 有值 = 页面投递的那一条(见 PageOutbox),不经输入框。
+   */
+  const sendMessage = ({
+    text, references, document, files, mediaAssets, quote, outboxContext,
+  }: {
+    text: string;
+    references: AgentReference[];
+    document: JSONContent | null;
+    files: { name: string; content: string }[];
+    mediaAssets: Asset[];
+    quote: AgentMessageQuote | null;
+    outboxContext?: string;
+  }) => {
+    const fromPage = outboxContext !== undefined;
+    const fileBlock = textAttachmentBlock(files, t("wfAgentAttached"));
+    let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
+    for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
+    visibleContent = visibleContent.trim();
+    const page = typeof contextLine === "function" ? contextLine() : contextLine;
+    const extra = [page, outboxContext, fileBlock].filter(Boolean).join("\n\n");
+    //: 先在这里说,不等后端回一句英文的「at most 4000 characters」(见 composerAttachments 的 MAX_*_CHARS)。
+    if (visibleContent.length > MAX_MESSAGE_CHARS || extra.length > MAX_CONTEXT_CHARS) {
+      toast.error(t("composerMessageTooLong"));
+      return;
+    }
+    conversation.send.mutate(
+      { content: visibleContent, references, document, context: extra, quote },
+      {
+        onError: (error) => toast.error((error as Error).message),
+        onSuccess: () => {
+          //: 页面投递的那条不经输入框:输入框里正写着的草稿、挂着的附件都不是它的,不动。
+          if (!fromPage) {
+            setDraft(emptyDocument);
+            attach.clear();
+          }
+          onSent?.();
+        },
+      },
+    );
   };
-  const cancelQueued = useMutation({
-    mutationFn: (messageId: string) =>
-      dropQueuedMessage(sessionId, messageId),
-    onSuccess: refreshQueue,
-  });
-  const resumeQueued = useMutation({
-    mutationFn: (messageId: string) => resumeQueuedMessage(sessionId, messageId),
-    onSuccess: () => {
-      refreshQueue();
-      void live.refetch();
-    },
-  });
-  const steerQueued = useMutation({
-    mutationFn: (messageId: string) =>
-      steerQueuedMessage(sessionId, messageId),
-    onSuccess: (result) => {
-      // 和工作台同一句:这一轮先结束了,消息留在队里自己跑 —— 不说的话,人以为已经插进了这一轮。
-      if (!result.steered) toast.message(t("chatSteerTooLate"));
-      refreshQueue();
-    },
-  });
-  const stopTurn = useMutation({
-    mutationFn: () => stopAgentSession(sessionId),
-    meta: { silentError: true },
-  });
-  const elapsedSeconds = useTurnElapsedSeconds(running, turnStartedAt);
-
-  const send = useMutation({
-    mutationFn: async ({
-      text,
-      references,
-      document,
-      files,
-      mediaAssets,
-      quote,
-      outboxContext,
-    }: {
-      text: string;
-      references: AgentReference[];
-      document: JSONContent | null;
-      files: { name: string; content: string }[];
-      mediaAssets: Asset[];
-      quote: AgentMessageQuote | null;
-      /** 页面投递的那一条(见 PageOutbox)带的说明。有它就说明这条不是输入框里的:输入框挂着的附件不跟着走。 */
-      outboxContext?: string;
-    }) => {
-      const fromPage = outboxContext !== undefined;
-      // 文本文件内联为围栏上下文(纯文本智能体可读);图片/视频/音频编码成附件标记,气泡里渲染成缩略图。
-      const fileBlock = textAttachmentBlock(files, t("wfAgentAttached"));
-      let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
-      for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
-      visibleContent = visibleContent.trim();
-      const page = typeof contextLine === "function" ? contextLine() : contextLine;
-      const context = [page, outboxContext, fileBlock].filter(Boolean).join("\n\n");
-      //: 先在这里说,不等后端回一句英文的「at most 4000 characters」(见 composerAttachments 的 MAX_*_CHARS)。
-      if (visibleContent.length > MAX_MESSAGE_CHARS || context.length > MAX_CONTEXT_CHARS) {
-        throw new Error(t("composerMessageTooLong"));
-      }
-      const targetId = (await current.ensure()).id;
-      //: 「/」点名的技能(ADR 0040 §4):全文由后端挂到这一轮。
-      const skills = document ? collectSkills(document) : [];
-      const message = await sendAgentMessage(targetId, {
-        content: visibleContent, context, references, ...(document ? { body_document: document } : {}), ...(quote ? { quote } : {}),
-        ...(skills.length ? { skills } : {}),
-        //: 这一句是在哪说的:决定这一轮发哪些工具(ADR 0044 §8)。
-        place: placePayload(place),
-      });
-      return { message, targetId, fromPage };
-    },
-    onError: (error) => toast.error((error as Error).message),
-    onSuccess: ({ targetId, fromPage }) => {
-      //: 页面投递的那条不经输入框:输入框里正写着的草稿、挂着的附件都不是它的,不动。
-      if (!fromPage) {
-        setDraft(emptyDocument);
-        attach.clear();
-      }
-      onSent?.();
-      markAgentTurnStarted(qc, targetId);
-      void qc.invalidateQueries({ queryKey: agentKeys.sessions(workspaceId) });
-      void attachStream(targetId);
-    },
-  });
+  const send = conversation.send;
 
   //: 页面投递的一条:接到就发(只读的会话发不了,说一声)。依赖只看 id —— 同一条不发第二遍。
   React.useEffect(() => {
@@ -427,7 +309,7 @@ export function CanvasAgentChat({
       toast.message(t("chatSessionReadOnly"));
       return;
     }
-    send.mutate({
+    sendMessage({
       text: outbox.text, references: [], document: null, files: [], mediaAssets: [],
       quote: messageQuote ?? null, outboxContext: outbox.context,
     });
@@ -438,7 +320,7 @@ export function CanvasAgentChat({
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
     const draftText = draft.text().trim();
     if ((!draftText && attach.isEmpty) || send.isPending) return;
-    send.mutate({
+    sendMessage({
       text: draftText,
       references: collectReferences(draft.get()),
       document: draft.get(),
