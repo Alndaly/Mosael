@@ -87,3 +87,13 @@ def test_豁免清单只减不增() -> None:
     for name, reason in NOT_CONSUMED.items():
         assert reason.strip(), f"{name} 的豁免没写理由"
         assert name in _event_types(), f"{name} 已经不是一种事件了,从豁免清单里删掉"
+
+
+def test_turn_cut_short_codes_match_the_contract() -> None:
+    """error 事件的 `code`(这一轮没说完的原因)后端认的那一组,就是契约里的 error_codes —— sidecar 多一种,后端会把它
+    当成「供应商配置写错」去提示人;TS 那侧由 protocol-contract 测试比对。"""
+    import json
+
+    from app.ai.sidecar.pi_client import TURN_CUT_SHORT
+
+    assert set(TURN_CUT_SHORT) == set(json.loads(CONTRACT.read_text(encoding="utf-8"))["error_codes"])

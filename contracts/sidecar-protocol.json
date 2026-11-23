@@ -36,8 +36,15 @@
     "auth_prompt",
     "auth_done"
   ],
+  "error_codes": [
+    "output_limit",
+    "tool_call_lost",
+    "paused",
+    "context_full"
+  ],
   "notes": [
     "backend/app/ai/sidecar/pi_client.py 必须为每个 event 留分支;ready 是启动握手,不进回合事件循环。",
-    "请求字段由 test_sidecar_requests_have_readers 继续钉住;payload 形状变化必须同时改两侧测试。"
+    "请求字段由 test_sidecar_requests_have_readers 继续钉住;payload 形状变化必须同时改两侧测试。",
+    "error 事件的 code 是「这一轮跑起来了、但没说完」的机器可读原因(error_codes):sidecar 的 protocol.ts 与 pi.ts 的 StallCode、后端 pi_client.TURN_CUT_SHORT 必须是同一组 —— 后端靠它把这类失败原样说给人听,而不是误判成供应商配置写错。"
   ]
 }
