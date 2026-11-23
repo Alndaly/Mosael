@@ -778,21 +778,22 @@ def expire_action_leases(db: Session) -> int:
 
     到点意味着认领它的那个执行器不再心跳 —— 它崩了、被杀了、或者网断了。动作停在 running
     上不会自己回来,而调用方那边只会等到一个"执行器未响应"的超时,看不出是谁的问题。
+
+    判定和写入是**同一条带条件的 UPDATE**,由数据库在写的那一刻比对租约:先查出候选、再逐条改,
+    中间那一拍里心跳可能刚把租约续上,这条在跑的动作就会被错判失败、执行器被叫停。
+    续约(renew_action_leases)用的是同一种写法,两条语句在数据库里互斥。
     """
     stamp = now()
-    stale = db.scalars(
-        select(BrowserAction).where(
+    return db.execute(
+        update(BrowserAction)
+        .where(
             BrowserAction.status == "running",
             BrowserAction.lease_expires_at.is_not(None),
             BrowserAction.lease_expires_at <= stamp,
         )
-    ).all()
-    for act in stale:
-        act.status = "failed"
-        act.error = "browserErr_executorLost"
-    if stale:
-        db.flush()
-    return len(stale)
+        .values(status="failed", error="browserErr_executorLost")
+        .execution_options(synchronize_session="fetch")
+    ).rowcount
 
 
 def renew_action_leases(db: Session, *, worker: str, claims: list[dict[str, str]]) -> list[str]:

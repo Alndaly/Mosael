@@ -250,3 +250,63 @@ def test_租约到点的动作判失败_可重试() -> None:
         #: 后端自己记的原因存文案 key(「key 或一句话」,同 jobs.say),等它的那一方按读者语言翻。
         assert row.error == "browserErr_executorLost"
         assert "租约" in t(row.error, "zh")
+
+
+def test_租约过期由数据库在写入那一刻判定_续上了的不判() -> None:
+    """判定与写入是同一条带条件的 UPDATE:手上拿着一份「已过期」的旧快照也不算数,以库里此刻的租约为准。
+
+    先查候选再逐条改的写法,中间那一拍里心跳可能刚续上 —— 在跑的动作被错判失败、执行器被叫停。
+    """
+    from datetime import timedelta
+
+    from app.db.models import now
+
+    _, ws = _workspace()
+    worker = worker_client()
+    with SessionLocal() as db:
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
+        db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
+        db.commit()
+    action = _claim(worker)
+
+    with SessionLocal() as db:
+        stale = db.get(BrowserAction, action["id"])
+        stale.lease_expires_at = now() - timedelta(seconds=1)
+        db.commit()
+        db.refresh(stale)  # 这一份快照说「过期了」
+
+        #: 另一个连接里心跳续上了(执行器还活着)。
+        with SessionLocal() as other:
+            other.get(BrowserAction, action["id"]).lease_expires_at = now() + timedelta(seconds=60)
+            other.commit()
+
+        assert browser.expire_action_leases(db) == 0
+        db.commit()
+
+    with SessionLocal() as db:
+        row = db.get(BrowserAction, action["id"])
+        assert row.status == "running"
+        assert row.error in (None, "")
+
+
+def test_判过期后同一会话里已加载的对象也看到失败() -> None:
+    """一条 UPDATE 改的是库;会话里已经拿着的那个对象也得同步成 failed,别让调用方读到 running。"""
+    from datetime import timedelta
+
+    from app.db.models import now
+
+    _, ws = _workspace()
+    worker = worker_client()
+    with SessionLocal() as db:
+        sid = browser.open_session(db, workspace_id=ws, actor=None).id
+        db.add(BrowserAction(session_id=sid, workspace_id=ws, action="wait", args={}, status="queued"))
+        db.commit()
+    action = _claim(worker)
+
+    with SessionLocal() as db:
+        row = db.get(BrowserAction, action["id"])
+        row.lease_expires_at = now() - timedelta(seconds=1)
+        db.flush()
+        assert browser.expire_action_leases(db) == 1
+        assert row.status == "failed"
+        assert row.error == "browserErr_executorLost"
