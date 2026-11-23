@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.voices.fillers import FILLER_CATEGORIES, filler_category, filler_spans
+from app.domain.transcripts.fillers import FILLER_CATEGORIES, filler_category, filler_spans
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True

@@ -459,7 +459,7 @@ export function detectSilences(
  *
  * 「you know」是两个词,按单个词判永远命中不了 —— 词表里不收它,免得看上去管用。
  *
- * 口播整理模板交给模型的口头禅候选用的是同一张表(backend/app/domain/voices/fillers.py),两份由
+ * 口播整理模板交给模型的口头禅候选用的是同一张表(backend/app/domain/transcripts/fillers.py),两份由
  * contracts/filler-word-cases.json 钉着:面板上认得的,模型那边也带着时间。
  */
 export const FILLER_CATEGORIES = [

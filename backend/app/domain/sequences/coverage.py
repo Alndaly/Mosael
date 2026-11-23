@@ -172,7 +172,7 @@ def remove_time_ranges(
     **从后往前**:先拿掉靠前的一段,后面的区间就全跟着错位了。
     """
     excluded = set(exclude)
-    for start, end in sorted(_merged(ranges), reverse=True):
+    for start, end in sorted(merge_ranges(ranges), reverse=True):
         for other in clips_on_track(journal.db, track_id):
             if other.id in excluded:
                 continue
@@ -240,7 +240,8 @@ def neighbours(db: Session, clip: Clip, *, exclude: Iterable[str] = ()) -> tuple
     return previous_end, next_start
 
 
-def _merged(ranges: Iterable[tuple[float, float]]) -> list[tuple[float, float]]:
+def merge_ranges(ranges: Iterable[tuple[float, float]]) -> list[tuple[float, float]]:
+    """把时间区间按起点排好、并上相交或相接的(差在 EPS 以内也算接上),空的丢掉。剪辑与整理模板共用这一份。"""
     merged: list[list[float]] = []
     for start, end in sorted((float(a), float(b)) for a, b in ranges if b > a):
         if merged and start <= merged[-1][1] + EPS:

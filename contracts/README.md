@@ -346,7 +346,7 @@ payload 形状继续由两侧各写一份测试,但改名/增删协议帧必须�
 | 实现 | 位置 | 测试 |
 | --- | --- | --- |
 | 剪辑台去口癖(前端) | `frontend/src/domain/timeline/transcriptProjection.ts` 的 `FILLER_CATEGORIES` / `fillerCategory` | `fillerWords.parity.test.ts` |
-| 口播整理的口头禅候选(后端) | `backend/app/domain/voices/fillers.py` 的 `FILLER_CATEGORIES` / `filler_category` | `backend/tests/test_filler_word_parity.py` |
+| 口播整理的口头禅候选(后端) | `backend/app/domain/transcripts/fillers.py` 的 `FILLER_CATEGORIES` / `filler_category` | `backend/tests/test_filler_word_parity.py` |
 
 后端多走一步(只在后端,不在语料里):中文的 token 一个字一个,「就是说」是三个 token,按连续几个拼起来认。
 

@@ -19,7 +19,7 @@ import pytest
 from app.core import http_retry
 from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Transcript, TranscriptSegment, TranscriptToken
-from app.domain.workflows.executors.subjobs import _compact_timed_text, _kept_text
+from app.domain.transcripts.text import compact_timed_text as _compact_timed_text, kept_text as _kept_text
 from tests.util import add_provider, fresh_client, wait_status, module_time
 
 #: 一整段连续的口播(没有一处 ≥0.6 秒的停顿),夹着三处口头禅;标点只在正文里,词级 token 不带标点。

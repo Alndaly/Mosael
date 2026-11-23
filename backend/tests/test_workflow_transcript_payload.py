@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.domain.workflows.executors.subjobs import _compact_timed_text
+from app.domain.transcripts.text import compact_timed_text as _compact_timed_text
 
 
 def test_compact_timed_text_gives_paragraphs_and_the_words_around_pauses_only() -> None:
