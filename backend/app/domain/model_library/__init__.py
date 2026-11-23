@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, fragment
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, ModelFileMark, PluginInstance, User
+from app.domain.plugins import reply_fields
 from app.domain import capabilities
 from app.domain.model_library import nsfw_local as model_nsfw_local, previews as model_previews
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
@@ -131,23 +132,13 @@ def _require(db: Session, instance: PluginInstance) -> None:
         raise ModelLibraryError("modelLibErr_notProvided", name=instance.name)
 
 
-def _text(value: Any, limit: int = 500) -> str:
-    return value.strip()[:limit] if isinstance(value, str) else ""
-
-
-def _number(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)
-
-
 #: 能拿来自我核对下载内容的哈希:64 位十六进制的 SHA256(插件下完再算一遍,对不上就删)。
 _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def _http(url: Any) -> str:
     """只认 http(s) 的地址;别的(`file://`、相对路径)当没给。"""
-    text = _text(url, 4000)
+    text = reply_fields.text(url, 4000)
     return text if urlsplit(text).scheme in ("http", "https") and urlsplit(text).hostname else ""
 
 
@@ -155,8 +146,8 @@ def _refs(value: Any) -> list[dict[str, str]]:
     """「哪几张工作流」:`[{id, label}]`。"""
     out: list[dict[str, str]] = []
     for one in value if isinstance(value, list) else []:
-        if isinstance(one, dict) and _text(one.get("id")):
-            out.append({"id": _text(one.get("id")), "label": _text(one.get("label")) or _text(one.get("id"))})
+        if isinstance(one, dict) and reply_fields.text(one.get("id")):
+            out.append({"id": reply_fields.text(one.get("id")), "label": reply_fields.text(one.get("label")) or reply_fields.text(one.get("id"))})
     return out[:_MAX_LIST]
 
 
@@ -170,11 +161,11 @@ def _model(raw: Any, base: str = "") -> tuple[dict[str, Any], str] | None:
     """插件报的一条模型文件 → 给界面的那一份,外加它的预览图地址(不交给界面)。"""
     if not isinstance(raw, dict):
         return None
-    folder, name = _text(raw.get("folder"), 200), _text(raw.get("name"), 1000)
+    folder, name = reply_fields.text(raw.get("folder"), 200), reply_fields.text(raw.get("name"), 1000)
     if not folder or not name:
         return None
-    size = _number(raw.get("size"))
-    triggers = [_text(one, 200) for one in raw.get("triggers") or [] if _text(one, 200)][:_MAX_TRIGGERS]
+    size = reply_fields.number(raw.get("size"))
+    triggers = [reply_fields.text(one, 200) for one in raw.get("triggers") or [] if reply_fields.text(one, 200)][:_MAX_TRIGGERS]
     # 预览地址可以是相对 `preview_base` 的一段(几千个文件时省下回答的体积,插件的一次回答有上限)。
     preview = _http(urljoin(base, raw["preview"]) if base and isinstance(raw.get("preview"), str) else raw.get("preview"))
     return {
@@ -184,13 +175,13 @@ def _model(raw: Any, base: str = "") -> tuple[dict[str, Any], str] | None:
         "folder": folder,
         "name": name,
         "size": int(size) if size is not None else None,
-        "modified": _number(raw.get("modified")),
-        "family": _text(raw.get("family"), 80),
-        "family_source": _text(raw.get("family_source"), 40),
+        "modified": reply_fields.number(raw.get("modified")),
+        "family": reply_fields.text(raw.get("family"), 80),
+        "family_source": reply_fields.text(raw.get("family_source"), 40),
         "encoder": _encoder(raw.get("encoder")),
         "triggers": triggers,
-        "triggers_source": _text(raw.get("triggers_source"), 40) if triggers else "",
-        "title": _text(raw.get("title"), 300),
+        "triggers_source": reply_fields.text(raw.get("triggers_source"), 40) if triggers else "",
+        "title": reply_fields.text(raw.get("title"), 300),
         "has_preview": bool(preview),
         "used_by": _refs(raw.get("used_by")),
         "broken": True if raw.get("broken") is True else None,
@@ -212,12 +203,12 @@ def _encoder(value: Any) -> dict[str, Any] | None:
     从权重认出 / `filename` 按文件名猜的)、`pairs`(常配哪几种底模,家族名)。不是文本编码器的文件没有这一格(None)。"""
     if not isinstance(value, dict):
         return None
-    kind = _text(value.get("kind"), 40)
+    kind = reply_fields.text(value.get("kind"), 40)
     if not _KIND.fullmatch(kind):
         return {"kind": "", "label": "", "source": "", "pairs": []}
-    source = _text(value.get("source"), 20)
-    pairs = [_text(one, 80) for one in value.get("pairs") or [] if _text(one, 80)] if isinstance(value.get("pairs"), list) else []
-    return {"kind": kind, "label": _text(value.get("label"), 80) or kind,
+    source = reply_fields.text(value.get("source"), 20)
+    pairs = [reply_fields.text(one, 80) for one in value.get("pairs") or [] if reply_fields.text(one, 80)] if isinstance(value.get("pairs"), list) else []
+    return {"kind": kind, "label": reply_fields.text(value.get("label"), 80) or kind,
             "source": source if source in ("weights", "filename") else "", "pairs": pairs[:_MAX_PAIRS]}
 
 
@@ -252,16 +243,16 @@ def _source(value: Any) -> dict[str, str] | None:
     `sha256` 按文件哈希对上的、`filename` 按文件名和大小对上的、`metadata` 文件自带的)。没有页就是 None —— 不猜。"""
     if not isinstance(value, dict) or not _http(value.get("page")):
         return None
-    return {"page": _http(value.get("page")), "site": _text(value.get("site"), 40), "how": _text(value.get("how"), 40)}
+    return {"page": _http(value.get("page")), "site": reply_fields.text(value.get("site"), 40), "how": reply_fields.text(value.get("how"), 40)}
 
 
 def _preview_tools(value: Any) -> dict[str, Any]:
     """这台服务器上找预览图、写回预览图的路:`lookup`(`sha256` 能按哈希找 / `filename` 只能按文件名和大小找),`save`
     (能不能写回),`save_note`(写不回时说缺什么)。"""
     raw = value if isinstance(value, dict) else {}
-    lookup = _text(raw.get("lookup"), 20)
+    lookup = reply_fields.text(raw.get("lookup"), 20)
     return {"lookup": lookup if lookup in ("sha256", "filename") else "", "save": bool(raw.get("save")),
-            "save_note": _text(raw.get("save_note"), 1000)}
+            "save_note": reply_fields.text(raw.get("save_note"), 1000)}
 
 
 def _preview_fields(instance_id: str, model: dict[str, Any], server: str, choices: list[model_previews.Elsewhere],
@@ -338,13 +329,13 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
     with _lock:
         _snapshots[instance.id] = snapshot
     folders = [
-        {"name": _text(one.get("name"), 200), "count": int(_number(one.get("count")) or 0)}
-        for one in output.get("folders") or [] if isinstance(one, dict) and _text(one.get("name"), 200)
+        {"name": reply_fields.text(one.get("name"), 200), "count": int(reply_fields.number(one.get("count")) or 0)}
+        for one in output.get("folders") or [] if isinstance(one, dict) and reply_fields.text(one.get("name"), 200)
     ]
     missing = [
-        {"folder": _text(one.get("folder"), 200), "name": _text(one.get("name"), 1000), "url": _http(one.get("url")),
+        {"folder": reply_fields.text(one.get("folder"), 200), "name": reply_fields.text(one.get("name"), 1000), "url": _http(one.get("url")),
          #: 工作流自己声明的哈希(有才带):一键下载时交给插件,下完核对(见 ModelLibrary 的下载框)。
-         "hash": _text(one.get("hash"), 200), "hash_type": _text(one.get("hash_type"), 40),
+         "hash": reply_fields.text(one.get("hash"), 200), "hash_type": reply_fields.text(one.get("hash_type"), 40),
          "workflows": _refs(one.get("workflows"))}
         for one in output.get("missing") or [] if isinstance(one, dict)
     ]
@@ -354,7 +345,7 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
         "models": models,
         #: 没写目录的声明也留着(folder 空着,界面说「不知道放哪个目录」):不能因为不知道目录就把一条声明丢了。
         "missing": [one for one in missing if one["name"] and one["url"]][:_MAX_LIST * 4],
-        "download": {"route": _text(route.get("route"), 40) or "none", "note": _text(route.get("note"), 2000)},
+        "download": {"route": reply_fields.text(route.get("route"), 40) or "none", "note": reply_fields.text(route.get("note"), 2000)},
         "downloads": downloads(db, instance),
         "preview_tools": snapshot.tools,
     }
@@ -377,7 +368,7 @@ def _norm(name: str) -> str:
 
 
 def _words(value: Any) -> list[str]:
-    return [_text(one, 80) for one in value if _text(one, 80)][:_MAX_NSFW_WORDS] if isinstance(value, list) else []
+    return [reply_fields.text(one, 80) for one in value if reply_fields.text(one, 80)][:_MAX_NSFW_WORDS] if isinstance(value, list) else []
 
 
 def _signals(value: Any) -> list[dict[str, Any]]:
@@ -391,7 +382,7 @@ def _signals(value: Any) -> list[dict[str, Any]]:
         for key in ("tags", "words"):
             if _words(raw.get(key)):
                 entry[key] = _words(raw.get(key))
-        level = _number(raw.get("level"))
+        level = reply_fields.number(raw.get("level"))
         if level is not None:
             entry["level"] = int(level)
         if all(one["source"] != entry["source"] for one in out):
@@ -429,7 +420,7 @@ def mark_nsfw(db: Session, user: User, instance: PluginInstance, folder: str, na
 
     自动的那几条依据用最近一次列出来时插件交的(在内存里);重启后还没列过时先替它列一遍。"""
     _require(db, instance)
-    folder, name = _text(folder, 200), _norm(_text(name, 1000))
+    folder, name = reply_fields.text(folder, 200), _norm(reply_fields.text(name, 1000))
     if not folder or not name:
         raise ModelLibraryError("modelLibErr_badFilename", name=name)
     row = db.get(ModelFileMark, (instance.id, folder, name))
@@ -507,8 +498,8 @@ def detail(db: Session, instance: PluginInstance, folder: str, name: str) -> dic
         if isinstance(value, (str, int, float, bool))
     }
     tags = [
-        {"tag": _text(one.get("tag"), 200), "count": int(_number(one.get("count")) or 0)}
-        for one in output.get("tags") or [] if isinstance(one, dict) and _text(one.get("tag"), 200)
+        {"tag": reply_fields.text(one.get("tag"), 200), "count": int(reply_fields.number(one.get("count")) or 0)}
+        for one in output.get("tags") or [] if isinstance(one, dict) and reply_fields.text(one.get("tag"), 200)
     ][:_MAX_TAGS]
     return {"folder": folder, "name": name, "metadata": metadata, "tags": tags}
 
@@ -520,20 +511,20 @@ def resolve(db: Session, instance: PluginInstance, url: str) -> dict[str, Any]:
         raise ModelLibraryError("modelLibErr_badUrl")
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "resolve", "url": url.strip()},
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
-    size = _number(output.get("size"))
+    size = reply_fields.number(output.get("size"))
     return {
-        "source": _text(output.get("source"), 40),
+        "source": reply_fields.text(output.get("source"), 40),
         "url": _http(output.get("url")) or url.strip(),
         "page": _http(output.get("page")),
-        "filename": _text(output.get("filename"), 300),
+        "filename": reply_fields.text(output.get("filename"), 300),
         "size": int(size) if size is not None else None,
-        "folder": _text(output.get("folder"), 200),
-        "family": _text(output.get("family"), 80),
-        "triggers": [_text(one, 200) for one in output.get("triggers") or [] if _text(one, 200)][:_MAX_TRIGGERS],
-        "title": _text(output.get("title"), 300),
+        "folder": reply_fields.text(output.get("folder"), 200),
+        "family": reply_fields.text(output.get("family"), 80),
+        "triggers": [reply_fields.text(one, 200) for one in output.get("triggers") or [] if reply_fields.text(one, 200)][:_MAX_TRIGGERS],
+        "title": reply_fields.text(output.get("title"), 300),
         "exists": bool(output.get("exists")),
         "uses_token": bool(output.get("uses_token")),
-        "note": _text(output.get("note"), 2000),
+        "note": reply_fields.text(output.get("note"), 2000),
     }
 
 
@@ -551,49 +542,49 @@ def search_sources(db: Session, instance: PluginInstance, filename: str, folder:
     `digest` / `hash_type` 是工作流自己声明的哈希:有就可能把候选认到 `confirmed`(只有这一档允许「直接下载」,
     见 ADR 0038 §9);没有的话插件让那台机器算 SHA256。宿主只规整:没有 http(s) 地址或文件名的候选丢掉,长文本截断。"""
     _require(db, instance)
-    name = _text(filename, 300)
-    payload: dict[str, Any] = {"op": "search_sources", "filename": name, "folder": _text(folder, 200)}
+    name = reply_fields.text(filename, 300)
+    payload: dict[str, Any] = {"op": "search_sources", "filename": name, "folder": reply_fields.text(folder, 200)}
     #: 没声明哈希就不带这两个键(调用记录里不写空字段,老插件也不认识它们)。
-    if _text(digest, 200):
-        payload["hash"] = _text(digest, 200)
-        payload["hash_type"] = _text(hash_type, 40)
+    if reply_fields.text(digest, 200):
+        payload["hash"] = reply_fields.text(digest, 200)
+        payload["hash_type"] = reply_fields.text(hash_type, 40)
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, payload,
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
     candidates = []
     for one in output.get("candidates") or []:
-        if not isinstance(one, dict) or not _http(one.get("url")) or not _text(one.get("filename"), 300):
+        if not isinstance(one, dict) or not _http(one.get("url")) or not reply_fields.text(one.get("filename"), 300):
             continue
-        size = _number(one.get("size"))
+        size = reply_fields.number(one.get("size"))
         #: 三档置信度:认不出的按 `exact` 那一档说(旧版插件没有这两个字段)。
-        confidence = _text(one.get("confidence"), 20)
+        confidence = reply_fields.text(one.get("confidence"), 20)
         if confidence not in ("confirmed", "exact", "likely"):
             confidence = "exact" if one.get("exact") else "likely"
         candidates.append({
-            "source": _text(one.get("source"), 40),
-            "repo": _text(one.get("repo"), 300),
-            "title": _text(one.get("title"), 300),
-            "filename": _text(one.get("filename"), 300),
+            "source": reply_fields.text(one.get("source"), 40),
+            "repo": reply_fields.text(one.get("repo"), 300),
+            "title": reply_fields.text(one.get("title"), 300),
+            "filename": reply_fields.text(one.get("filename"), 300),
             "url": _http(one.get("url")),
             "page": _http(one.get("page")),
             "size": int(size) if size is not None else None,
-            "base_model": _text(one.get("base_model"), 120),
+            "base_model": reply_fields.text(one.get("base_model"), 120),
             "exact": bool(one.get("exact")),
             "confidence": confidence,
             #: **只有哈希确认过的候选才允许直接下载** —— 这里不信任插件单方面说的 `direct`:它必须和置信度一致。
             "direct": confidence == "confirmed",
-            "sha256": _text(one.get("sha256"), 64) if confidence == "confirmed" else "",
+            "sha256": reply_fields.text(one.get("sha256"), 64) if confidence == "confirmed" else "",
         })
     failed = [
-        {"source": _text(one.get("source"), 40), "message": _text(one.get("message"), 500)}
-        for one in output.get("failed") or [] if isinstance(one, dict) and _text(one.get("message"), 500)
+        {"source": reply_fields.text(one.get("source"), 40), "message": reply_fields.text(one.get("message"), 500)}
+        for one in output.get("failed") or [] if isinstance(one, dict) and reply_fields.text(one.get("message"), 500)
     ]
     raw_hash = output.get("hash") if isinstance(output.get("hash"), dict) else {}
-    state = _text(raw_hash.get("state"), 20)
-    return {"filename": _text(output.get("filename"), 300) or name, "candidates": candidates[:_MAX_CANDIDATES],
+    state = reply_fields.text(raw_hash.get("state"), 20)
+    return {"filename": reply_fields.text(output.get("filename"), 300) or name, "candidates": candidates[:_MAX_CANDIDATES],
             "failed": failed[:_MAX_FAILED],
             "hash": {"state": state if state in ("matched", "none", "unavailable") else "",
-                     "reason": _text(raw_hash.get("reason"), 20), "sha256": _text(raw_hash.get("sha256"), 64),
-                     "note": _text(raw_hash.get("note"), 500)}}
+                     "reason": reply_fields.text(raw_hash.get("reason"), 20), "sha256": reply_fields.text(raw_hash.get("sha256"), 64),
+                     "note": reply_fields.text(raw_hash.get("note"), 500)}}
 
 
 #: 工作台一次最多问几格(和插件那一侧同一个数)。
@@ -608,7 +599,7 @@ def node_folders(db: Session, instance: PluginInstance, nodes: list[dict[str, An
     _require(db, instance)
     if len(nodes) > MAX_NODE_FOLDERS:
         raise ModelLibraryError("modelLibErr_tooManyNodes", n=str(MAX_NODE_FOLDERS))
-    asked = [{"class_type": _text(one.get("class_type"), 200), "input": _text(one.get("input"), 200)} for one in nodes]
+    asked = [{"class_type": reply_fields.text(one.get("class_type"), 200), "input": reply_fields.text(one.get("input"), 200)} for one in nodes]
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "node_folders", "nodes": asked},
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
     folders = output.get("folders")
@@ -734,9 +725,9 @@ def _download(job_id: str) -> None:
         成功时会被最终结果覆盖。"""
         if event.get("step") != "download":
             return
-        downloaded = _number(event.get("downloaded_bytes"))
-        total = _number(event.get("total_bytes"))
-        speed = _number(event.get("speed_bps"))
+        downloaded = reply_fields.number(event.get("downloaded_bytes"))
+        total = reply_fields.number(event.get("total_bytes"))
+        speed = reply_fields.number(event.get("speed_bps"))
         with unit_of_work() as db:
             job = db.get(Job, job_id)
             if job is None or not finish_job(db, job, status="running"):
@@ -765,12 +756,12 @@ def _download(job_id: str) -> None:
                 say(job, "jobMsg_modelDownloadFailed", name=payload["filename"])
                 emit_job_event(db, job.id, "job.failed", {})
         return
-    size = _number(output.get("size"))
+    size = reply_fields.number(output.get("size"))
     result = {
-        "folder": _text(output.get("folder"), 200) or payload["folder"],
-        "name": _text(output.get("name"), 1000) or payload["filename"],
+        "folder": reply_fields.text(output.get("folder"), 200) or payload["folder"],
+        "name": reply_fields.text(output.get("name"), 1000) or payload["filename"],
         "size": int(size) if size is not None else None,
-        "route": _text(output.get("route"), 40),
+        "route": reply_fields.text(output.get("route"), 40),
     }
     # 先让这个连接的目录(模型、工具)重新问一遍插件,再说「下完了」:任务说能选的时候,生成表单的下拉里就该有它。
     # 刷新失败只记在目录自己的状态里(插件页看得到),不把一次下成了的下载判失败。
@@ -822,16 +813,16 @@ def partial(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS, record=False)
     if not isinstance(output, dict):
         raise ModelLibraryError("modelLibErr_badAnswer", name=instance.name)
-    size, total = _number(output.get("downloaded_bytes")), _number(output.get("total_bytes"))
+    size, total = reply_fields.number(output.get("downloaded_bytes")), reply_fields.number(output.get("total_bytes"))
     return {
-        "folder": _text(output.get("folder"), 200) or folder,
-        "name": _text(output.get("name"), 1000) or name,
+        "folder": reply_fields.text(output.get("folder"), 200) or folder,
+        "name": reply_fields.text(output.get("name"), 1000) or name,
         "partial": bool(output.get("partial")),
         "resumable": bool(output.get("resumable")),
         #: 未知就是 None,不是 0:0 字节和「问不到」在界面上不是一回事。
         "downloaded_bytes": int(size) if size is not None else None,
         "total_bytes": int(total) if total is not None else None,
-        "updated_at": _number(output.get("updated_at")),
+        "updated_at": reply_fields.number(output.get("updated_at")),
         "removed": bool(output.get("removed")),
     }
 
@@ -878,7 +869,7 @@ def start_lookup(
                   if model_previews.server_status(instance.id, folder, name) != "found"]
     else:
         known = set(snapshot.files())
-        wanted = [{"folder": _text(one.get("folder"), 200), "name": _text(one.get("name"), 1000)} for one in files]
+        wanted = [{"folder": reply_fields.text(one.get("folder"), 200), "name": reply_fields.text(one.get("name"), 1000)} for one in files]
         wanted = [one for one in wanted if (one["folder"], one["name"]) in known]
     if not wanted:
         raise ModelLibraryError("modelLibErr_nothingToLookUp")
@@ -975,7 +966,7 @@ def _lookups(job_id: str) -> None:
                                            {"op": "lookup", "folder": folder, "name": name, "refresh": refresh},
                                            timeout=LOOKUP_TIMEOUT_SECONDS, record=False)
             result["looked"] += 1
-            match = _text(output.get("match"), 20)
+            match = reply_fields.text(output.get("match"), 20)
             if match not in ("sha256", "filename", "download"):
                 continue
             result["matched"] += 1
@@ -1018,7 +1009,7 @@ def _remember_lookup(db: Session, instance: PluginInstance, folder: str, name: s
     if snapshot is None or key not in snapshot.elsewhere:
         return None
     choices = model_previews.elsewhere(output.get("remote_previews"))
-    match = _text(output.get("match"), 20)
+    match = reply_fields.text(output.get("match"), 20)
     server = snapshot.previews.get(key) or next(iter(snapshot.sidecars.get(key, [])), "")
     fields, shown = _preview_fields(instance.id, {"folder": folder, "name": name}, server, choices, pick)
     signals = with_elsewhere_signal([one for one in snapshot.signals.get((folder, _norm(name)), [])], shown)
@@ -1071,7 +1062,7 @@ def _save_preview(db: Session, instance: PluginInstance, folder: str, name: str,
                                prepare=prepare, timeout=SAVE_TIMEOUT_SECONDS, record=True)
     # 那台服务器上现在有了:它自己的那张取代别处的这张(列表马上标成「那台服务器上的」,取图时去问它)
     model_previews.note_server(instance.id, folder, name, "found", "video" if suffix == ".mp4" else "image")
-    return {"folder": folder, "name": name, "saved": _text(output.get("saved"), 1000)}
+    return {"folder": folder, "name": name, "saved": reply_fields.text(output.get("saved"), 1000)}
 
 
 def downloads(db: Session, instance: PluginInstance) -> list[Job]:

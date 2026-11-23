@@ -72,6 +72,7 @@ from app.db.models import (
     Workflow,
 )
 from app.db.references import generation_model_key
+from app.domain.plugins import reply_fields
 from app.domain import capabilities, local_services
 from app.domain.agent import places
 from app.domain.boards.producer_ids import node_producer_id
@@ -169,16 +170,6 @@ def _require(db: Session, instance: PluginInstance) -> None:
         raise WorkflowLibraryError("workflowLibErr_notProvided", name=instance.name)
 
 
-def _text(value: Any, limit: int = 500) -> str:
-    return value.strip()[:limit] if isinstance(value, str) else ""
-
-
-def _number(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)
-
-
 def workflow_path(value: str) -> str:
     """`workflows/` 里的一张:相对路径、`.json` 结尾、`/` 分段,每段不空、不是 `.` / `..`、不以点开头(那是隐藏的)、
     没有 Windows 不收的字符。不合格就拒,不交给插件。"""
@@ -209,7 +200,7 @@ def _folders(raw: Any, workflows: list[dict[str, Any]]) -> list[str]:
     found: set[str] = set()
     for one in [*(raw if isinstance(raw, list) else []), *(flow["folder"] for flow in workflows)]:
         try:
-            parts = folder_path(_text(one, 400)).split("/")
+            parts = folder_path(reply_fields.text(one, 400)).split("/")
         except WorkflowLibraryError:
             continue
         found.update("/".join(parts[:depth]) for depth in range(1, len(parts) + 1))
@@ -234,15 +225,15 @@ def _graph(raw: Any) -> dict[str, Any]:
     for one in raw.get("nodes") or []:
         if not isinstance(one, dict) or len(nodes) >= _MAX_GRAPH_NODES:
             continue
-        x, y, w, h = (_number(one.get(key)) for key in ("x", "y", "w", "h"))
+        x, y, w, h = (reply_fields.number(one.get(key)) for key in ("x", "y", "w", "h"))
         if x is None or y is None:
             continue
-        role = _text(one.get("role"), 20)
+        role = reply_fields.text(one.get("role"), 20)
         nodes.append({
             "x": x, "y": y, "w": max(w or 0.0, 20.0), "h": max(h or 0.0, 20.0),
             "role": role if role in _ROLES else "other",
             "muted": one.get("muted") is True,
-            "title": _text(one.get("title"), 120),
+            "title": reply_fields.text(one.get("title"), 120),
         })
     links: list[list[int]] = []
     for one in raw.get("links") or []:
@@ -255,11 +246,11 @@ def _graph(raw: Any) -> dict[str, Any]:
     for one in raw.get("groups") or []:
         if not isinstance(one, dict) or len(groups) >= _MAX_GRAPH_GROUPS:
             continue
-        x, y, w, h = (_number(one.get(key)) for key in ("x", "y", "w", "h"))
+        x, y, w, h = (reply_fields.number(one.get(key)) for key in ("x", "y", "w", "h"))
         if None in (x, y, w, h):
             continue
-        color = _text(one.get("color"), 20)
-        groups.append({"x": x, "y": y, "w": w, "h": h, "title": _text(one.get("title"), 120),
+        color = reply_fields.text(one.get("color"), 20)
+        groups.append({"x": x, "y": y, "w": w, "h": h, "title": reply_fields.text(one.get("title"), 120),
                        "color": color if re.fullmatch(r"#[0-9a-fA-F]{3,8}", color) else ""})
     return {
         "nodes": nodes,
@@ -275,7 +266,7 @@ def _items(value: Any, keys: dict[str, int]) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     for one in value if isinstance(value, list) else []:
         if isinstance(one, dict):
-            item = {key: _text(one.get(key), limit) for key, limit in keys.items()}
+            item = {key: reply_fields.text(one.get(key), limit) for key, limit in keys.items()}
             if any(item.values()):
                 out.append(item)
     return out[:_MAX_LIST]
@@ -284,28 +275,28 @@ def _items(value: Any, keys: dict[str, int]) -> list[dict[str, str]]:
 def _missing_nodes(value: Any) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for one in value if isinstance(value, list) else []:
-        if not isinstance(one, dict) or not _text(one.get("type"), 200):
+        if not isinstance(one, dict) or not reply_fields.text(one.get("type"), 200):
             continue
         packs = [
             {
-                "id": _text(pack.get("id"), 300),
-                "title": _text(pack.get("title"), 200) or _text(pack.get("id"), 300),
+                "id": reply_fields.text(pack.get("id"), 300),
+                "title": reply_fields.text(pack.get("title"), 200) or reply_fields.text(pack.get("id"), 300),
                 "installed": pack.get("installed") is True,
                 #: 装了但被禁用:界面据此说「去 Manager 启用」,不让人再装一遍。
                 "enabled": pack.get("enabled") is True,
                 #: 图上写着的出处 / 要哪一版 / 装的是哪一版(离线归因靠这几项,宿主这一跳丢了界面就说不出来)。
-                "source": _text(pack.get("source"), 20),
-                "page": _text(pack.get("page"), 4000),
-                "repository": _text(pack.get("repository"), 4000),
-                "wanted_version": _text(pack.get("wanted_version"), 100),
+                "source": reply_fields.text(pack.get("source"), 20),
+                "page": reply_fields.text(pack.get("page"), 4000),
+                "repository": reply_fields.text(pack.get("repository"), 4000),
+                "wanted_version": reply_fields.text(pack.get("wanted_version"), 100),
                 "wanted_is_commit": pack.get("wanted_is_commit") is True,
-                "installed_version": _text(pack.get("installed_version"), 100),
+                "installed_version": reply_fields.text(pack.get("installed_version"), 100),
                 #: installed / not_installed / unknown(没有 Manager 时不知道装没装)
-                "state": _text(pack.get("state"), 20),
+                "state": reply_fields.text(pack.get("state"), 20),
             }
-            for pack in one.get("packs") or [] if isinstance(pack, dict) and _text(pack.get("id"), 300)
+            for pack in one.get("packs") or [] if isinstance(pack, dict) and reply_fields.text(pack.get("id"), 300)
         ][:10]
-        out.append({"type": _text(one.get("type"), 200), "count": int(_number(one.get("count")) or 1),
+        out.append({"type": reply_fields.text(one.get("type"), 200), "count": int(reply_fields.number(one.get("count")) or 1),
                     #: 缺的是核心节点(图上写着 comfy-core):这台 ComfyUI 太老,不是装节点包。
                     "core": one.get("core") is True, "packs": packs})
     return out[:_MAX_LIST]
@@ -315,19 +306,19 @@ def _workflow(raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
     try:
-        path = workflow_path(_text(raw.get("path"), 500))
+        path = workflow_path(reply_fields.text(raw.get("path"), 500))
     except WorkflowLibraryError:
         return None
-    size = _number(raw.get("size"))
+    size = reply_fields.number(raw.get("size"))
     return {
         "path": path,
         "label": path[:-5].rsplit("/", 1)[-1],
         "folder": path.rsplit("/", 1)[0] if "/" in path else "",
         "size": int(size) if size is not None else None,
-        "modified": _number(raw.get("modified")),
-        "kind": _text(raw.get("kind"), 20),
-        "problem": _text(raw.get("problem"), 2000),
-        "node_count": int(_number(raw.get("node_count")) or 0),
+        "modified": reply_fields.number(raw.get("modified")),
+        "kind": reply_fields.text(raw.get("kind"), 20),
+        "problem": reply_fields.text(raw.get("problem"), 2000),
+        "node_count": int(reply_fields.number(raw.get("node_count")) or 0),
         "graph": _graph(raw.get("graph")),
         "inputs": _items(raw.get("inputs"), {"node": 40, "title": 200, "media": 20, "role": 40}),
         "parameters": _items(raw.get("parameters"), {"key": 200, "title": 200, "type": 20}),
@@ -337,7 +328,7 @@ def _workflow(raw: Any) -> dict[str, Any] | None:
         "models": [
             {"folder": item["folder"], "name": item["name"], "present": bool(one.get("present"))}
             for one in raw.get("models") or [] if isinstance(one, dict)
-            for item in [{"folder": _text(one.get("folder"), 200), "name": _text(one.get("name"), 1000)}]
+            for item in [{"folder": reply_fields.text(one.get("folder"), 200), "name": reply_fields.text(one.get("name"), 1000)}]
             if item["folder"] and item["name"]
         ][:_MAX_LIST],
         "missing_nodes": _missing_nodes(raw.get("missing_nodes")),
@@ -393,12 +384,12 @@ def _app_items(raw: Any) -> list[dict[str, Any]]:
     for one in raw if isinstance(raw, list) else []:
         if not isinstance(one, dict) or len(items) >= MAX_APP_ITEMS:
             continue
-        node, name = _text(one.get("node"), 20), _text(one.get("input"), 200)
+        node, name = reply_fields.text(one.get("node"), 20), reply_fields.text(one.get("input"), 200)
         if not name or (node and not _ANY_NODE.fullmatch(node)):
             continue
         item: dict[str, Any] = {"key": f"{node}.{name}" if node else name, "node": node, "input": name,
-                                "label": _text(one.get("label"), _MAX_APP_LABEL), "main": one.get("main") is True,
-                                "title": _text(one.get("title"), 200), "problem": _text(one.get("problem"), 500)}
+                                "label": reply_fields.text(one.get("label"), _MAX_APP_LABEL), "main": one.get("main") is True,
+                                "title": reply_fields.text(one.get("title"), 200), "problem": reply_fields.text(one.get("problem"), 500)}
         if isinstance(one.get("choices"), list):
             item["choices"] = [str(choice)[:1000] for choice in one["choices"][:MAX_APP_CHOICES]
                                if isinstance(choice, (str, int, float)) and not isinstance(choice, bool)]
@@ -412,13 +403,13 @@ def _app_form(raw: Any) -> dict[str, Any] | None:
         return None
     return {
         "id": raw["id"],
-        "title": _text(raw.get("title"), _MAX_APP_LABEL),
-        "description": _text(raw.get("description"), _MAX_APP_DESCRIPTION),
+        "title": reply_fields.text(raw.get("title"), _MAX_APP_LABEL),
+        "description": reply_fields.text(raw.get("description"), _MAX_APP_DESCRIPTION),
         "items": _app_items(raw.get("items")),
-        "fields": int(_number(raw.get("fields")) or 0),
-        "invalid": int(_number(raw.get("invalid")) or 0),
-        "model": _text(raw.get("model"), _MAX_FORM_MODEL),
-        "tool": _text(raw.get("tool"), _MAX_FORM_TOOL),
+        "fields": int(reply_fields.number(raw.get("fields")) or 0),
+        "invalid": int(reply_fields.number(raw.get("invalid")) or 0),
+        "model": reply_fields.text(raw.get("model"), _MAX_FORM_MODEL),
+        "tool": reply_fields.text(raw.get("tool"), _MAX_FORM_TOOL),
     }
 
 
@@ -432,7 +423,7 @@ def _app_summary(raw: Any) -> dict[str, Any] | None:
     """
     if not isinstance(raw, dict):
         return None
-    status = _text(raw.get("status"), 20)
+    status = reply_fields.text(raw.get("status"), 20)
     version = raw.get("version")
     forms = [one for one in (_app_form(item) for item in (raw.get("forms") or [])[:MAX_FORMS]
                              if isinstance(raw.get("forms"), list)) if one]
@@ -441,10 +432,10 @@ def _app_summary(raw: Any) -> dict[str, Any] | None:
         "version": str(version)[:20] if isinstance(version, (int, float, str)) and not isinstance(version, bool) else "",
         "upgradable": raw.get("upgradable") is True,
         "forms": [one for index, one in enumerate(forms) if one["id"] not in {other["id"] for other in forms[:index]}],
-        "results": [_text(one, 20) for one in raw.get("results") or []
+        "results": [reply_fields.text(one, 20) for one in raw.get("results") or []
                     if isinstance(one, str) and _ANY_NODE.fullmatch(one)][:MAX_APP_RESULTS],
-        "invalid": int(_number(raw.get("invalid")) or 0),
-        "stray": int(_number(raw.get("stray")) or 0),
+        "invalid": int(reply_fields.number(raw.get("invalid")) or 0),
+        "stray": int(reply_fields.number(raw.get("stray")) or 0),
     }
 
 
@@ -454,12 +445,12 @@ def _trash(value: Any) -> list[dict[str, Any]]:
         if not isinstance(one, dict):
             continue
         try:
-            path = trash_path(_text(one.get("path"), 600))
+            path = trash_path(reply_fields.text(one.get("path"), 600))
         except WorkflowLibraryError:
             continue
         original = _TRASH_PATH.match(path).group("original")  # type: ignore[union-attr]
         out.append({"path": path, "original": original, "label": original[:-5].rsplit("/", 1)[-1],
-                    "deleted_at": _number(one.get("deleted_at"))})
+                    "deleted_at": reply_fields.number(one.get("deleted_at"))})
     return out[:_MAX_WORKFLOWS]
 
 
@@ -546,7 +537,7 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
         "folders": _folders(output.get("folders"), workflows),
         "others": [one for one in _items(output.get("others"), {"path": 500, "reason": 2000}) if one["path"]],
         "trash": _trash(output.get("trash")),
-        "manager": {"version": _text(manager.get("version"), 40)},
+        "manager": {"version": reply_fields.text(manager.get("version"), 40)},
         "editor": _editor(output.get("editor")),
         "installs": node_installs(db, instance),
     }
@@ -783,11 +774,11 @@ def _write(db: Session, instance: PluginInstance, request: dict[str, Any], *, wa
     之后的路径。"""
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS, record=True)
     if output.get("conflict") is True:
-        suggestion = _text(output.get("suggestion"), 500)
+        suggestion = reply_fields.text(output.get("suggestion"), 500)
         raise WorkflowConflict(wanted, suggestion if _fits(suggestion, folder=folder) else "")
     if output.get("not_empty") is True:
-        raise WorkflowFolderNotEmpty(wanted, max(1, int(_number(output.get("count")) or 1)))
-    path = _text(output.get("path"), 600)
+        raise WorkflowFolderNotEmpty(wanted, max(1, int(reply_fields.number(output.get("count")) or 1)))
+    path = reply_fields.text(output.get("path"), 600)
     if not path:
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
     if follow is not None:
@@ -935,7 +926,7 @@ def _picked(value: Any, limit: int) -> str:
     塌成一句。曾经试过让名字带着语言表一路透到前端去挑(宿主原样透出、前端 `lib/pickLabel` 自己挑,好让搜索比得到
     另一种语言里的写法),维护者撤掉了那一套:「为了 ComfyUI 和 Mosael 的语言不匹配问题特地兼容做一套方案是不合理的」。
     """
-    return _text(pick_text(value) if isinstance(value, dict) else value, limit)
+    return reply_fields.text(pick_text(value) if isinstance(value, dict) else value, limit)
 
 
 def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
@@ -955,7 +946,7 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
     """
     if not isinstance(raw, dict):
         return None
-    node, name, kind = _text(raw.get("node"), 40), _text(raw.get("input"), 200), _text(raw.get("kind"), 20)
+    node, name, kind = reply_fields.text(raw.get("node"), 40), reply_fields.text(raw.get("input"), 200), reply_fields.text(raw.get("kind"), 20)
     if not name or kind not in _ITEM_KINDS:
         return None
     key = f"{node}.{name}" if node else name
@@ -965,14 +956,14 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
     item: dict[str, Any] = {
         "key": key, "node": node, "input": name, "kind": kind,
         "title": _picked(title, 200) or key,
-        "node_title": _text(raw.get("node_title"), 200),
+        "node_title": reply_fields.text(raw.get("node_title"), 200),
         "node_label": _picked(raw.get("node_label"), 200),
         "hint": _picked(raw.get("hint"), 500),
-        "class_type": _text(raw.get("class_type"), 200),
+        "class_type": reply_fields.text(raw.get("class_type"), 200),
         "common": raw.get("common") is True,
-        "role": _text(raw.get("role"), 40),
-        "media": _text(raw.get("media"), 20),
-        "folder": _text(raw.get("folder"), 64),
+        "role": reply_fields.text(raw.get("role"), 40),
+        "media": reply_fields.text(raw.get("media"), 20),
+        "folder": reply_fields.text(raw.get("folder"), 64),
         #: 沿 MASK 走出来的第几位(插件按连线上的类型认的,见 graph.mask_property);0 = 不在这条路上
         "mask_property": at if isinstance(at, int) and not isinstance(at, bool) and at > 0 else 0,
         "exposable": exposable,
@@ -1005,8 +996,8 @@ def _app_answer(db: Session, instance: PluginInstance, output: dict[str, Any], p
     items = [one for one in (_app_item(raw, text) for raw in output["items"][:_MAX_APP_FOUND]) if one]
     return {
         "path": path,
-        "modified": _number(output.get("modified")) if path and not live else None,
-        "kind": _text(output.get("kind"), 20),
+        "modified": reply_fields.number(output.get("modified")) if path and not live else None,
+        "kind": reply_fields.text(output.get("kind"), 20),
         "editable": output.get("editable") is True,
         "items": items,
         "outputs": [{**one, "label": _picked(source.get("label"), 200) or one["title"]}
@@ -1025,7 +1016,7 @@ def _node_names(value: Any) -> dict[str, str]:
     """插件报的每个节点给人看的名字(按看的人的语言挑好):节点号 → 名字。工作台「运行与结果」说节点用它。"""
     if not isinstance(value, dict):
         return {}
-    named = ((_text(node, 40), _picked(name, 200)) for node, name in list(value.items())[:_MAX_NAMED_NODES])
+    named = ((reply_fields.text(node, 40), _picked(name, 200)) for node, name in list(value.items())[:_MAX_NAMED_NODES])
     return {node: name for node, name in named if node and name}
 
 
@@ -1073,7 +1064,7 @@ def _form_payload(form: dict[str, Any]) -> dict[str, Any]:
                 node and not _ANY_NODE.fullmatch(node)) or (not node and name not in _GRAPH_ITEMS):
             raise WorkflowLibraryError("workflowLibErr_badAppItem", item=key[:200])
         seen.add(key)
-        item: dict[str, Any] = {"node": node, "input": name, "label": _text(entry.get("label"), _MAX_APP_LABEL)}
+        item: dict[str, Any] = {"node": node, "input": name, "label": reply_fields.text(entry.get("label"), _MAX_APP_LABEL)}
         if node and entry.get("main") is True:
             item["main"] = True
         choices = entry.get("choices")
@@ -1083,8 +1074,8 @@ def _form_payload(form: dict[str, Any]) -> dict[str, Any]:
             item["choices"] = [str(one)[:1000] for one in choices
                                if isinstance(one, (str, int, float)) and not isinstance(one, bool)]
         clean.append(item)
-    return {**({"id": form_id} if form_id else {}), "title": _text(form.get("title"), _MAX_APP_LABEL),
-            "description": _text(form.get("description"), _MAX_APP_DESCRIPTION), "items": clean}
+    return {**({"id": form_id} if form_id else {}), "title": reply_fields.text(form.get("title"), _MAX_APP_LABEL),
+            "description": reply_fields.text(form.get("description"), _MAX_APP_DESCRIPTION), "items": clean}
 
 
 def _forms_payload(forms: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1112,12 +1103,12 @@ def annotate(db: Session, instance: PluginInstance, path: str, *, modified: floa
                                {"op": "annotate", "path": path, "modified": modified, "forms": clean, "results": results},
                                timeout=QUICK_TIMEOUT_SECONDS, record=True)
     if output.get("stale") is True:
-        raise WorkflowStale(path, _number(output.get("modified")))
-    if _text(output.get("path"), 600) != path:
+        raise WorkflowStale(path, reply_fields.number(output.get("modified")))
+    if reply_fields.text(output.get("path"), 600) != path:
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
     # 生成选项、工具清单跟着变(表单入口多了 / 少了、名字换成作者起的),不等那一分钟的指纹
     host_capabilities.notify(db, instance, refresh=True)
-    return {"path": path, "modified": _number(output.get("modified"))}
+    return {"path": path, "modified": reply_fields.number(output.get("modified"))}
 
 
 #: 一次最多改写几张(和插件那一侧同一个数)。
@@ -1139,7 +1130,7 @@ def upgrade_marks(db: Session, instance: PluginInstance, paths: list[dict[str, A
     def listed(key: str) -> list[str]:
         return [one for one in output.get(key) or [] if isinstance(one, str) and one in asked]
 
-    failed = [{"path": one["path"], "reason": _text(one.get("reason"), 2000)} for one in output.get("failed") or []
+    failed = [{"path": one["path"], "reason": reply_fields.text(one.get("reason"), 2000)} for one in output.get("failed") or []
               if isinstance(one, dict) and one.get("path") in asked]
     if listed("upgraded"):
         host_capabilities.notify(db, instance, refresh=True)
@@ -1368,26 +1359,26 @@ def inspect_import(db: Session, instance: PluginInstance, *, text: str = "", dat
     if url:
         request["url"] = url.strip()
     if filename:
-        request["filename"] = _text(filename, 300)
+        request["filename"] = reply_fields.text(filename, 300)
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS, record=False)
     workflow = output.get("workflow")
     if not isinstance(workflow, dict) or not isinstance(workflow.get("nodes"), list):
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
     try:
-        suggested = workflow_path(_text(output.get("suggested_path"), 500))
+        suggested = workflow_path(reply_fields.text(output.get("suggested_path"), 500))
     except WorkflowLibraryError:
         suggested = ""  # 界面自己给一个
     described = _workflow({**output, "path": suggested or "imported.json"}) or {}
     for key in ("path", "label", "folder", "size", "modified"):
         described.pop(key, None)
-    fmt, source = _text(output.get("format"), 10), _text(output.get("source"), 10)
+    fmt, source = reply_fields.text(output.get("format"), 10), reply_fields.text(output.get("source"), 10)
     return {
         **described,
         "format": fmt if fmt in _IMPORT_FORMATS else "ui",
         "source": source if source in _IMPORT_SOURCES else "json",
         "workflow": workflow,
         "suggested_path": suggested,
-        "notes": [_text(one, 1000) for one in (output.get("notes") or []) if isinstance(one, str) and one.strip()][:10],
+        "notes": [reply_fields.text(one, 1000) for one in (output.get("notes") or []) if isinstance(one, str) and one.strip()][:10],
     }
 
 
@@ -1502,7 +1493,7 @@ def _install(job_id: str) -> None:
                 say(job, "jobMsg_nodeInstallFailed", name=subject)
                 emit_job_event(db, job.id, "job.failed", {})
         return
-    installed = [_text(one, 300) for one in output.get("installed") or [] if isinstance(one, str)]
+    installed = [reply_fields.text(one, 300) for one in output.get("installed") or [] if isinstance(one, str)]
     result = {"installed": installed or list(payload["packs"]), "restart": output.get("restart") is not False}
     with unit_of_work() as db:
         job = db.get(Job, job_id)

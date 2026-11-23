@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment, get_current_locale, tr
 from app.db.models import PluginInstance, PluginPackage, User
+from app.domain.plugins import reply_fields
 from app.domain import capabilities
 from app.domain.assets.deletion import delete_asset
 from app.domain.assets.importer import register_file_asset
@@ -56,12 +57,8 @@ def _require(db: Session, instance: PluginInstance) -> None:
         raise ReferenceLibraryError("referenceLibErr_notProvided", name=instance.name)
 
 
-def _text(value: Any, limit: int = 500) -> str:
-    return value.strip()[:limit] if isinstance(value, str) else ""
-
-
 def _http(value: Any) -> str:
-    text = _text(value, 2000)
+    text = reply_fields.text(value, 2000)
     return text if text.startswith(("http://", "https://")) else ""
 
 
@@ -69,31 +66,31 @@ def _pair(value: Any) -> dict[str, str]:
     """`{"zh":…, "en":…}` 或一个字符串 → 两种语言的名称。插件通常已经按 locale 给了一句,
     这里两种都保留,界面按当前语言挑。"""
     if isinstance(value, dict):
-        return {lang: _text(value.get(lang), 300) for lang in ("zh", "en") if _text(value.get(lang), 300)}
-    text = _text(value, 300)
+        return {lang: reply_fields.text(value.get(lang), 300) for lang in ("zh", "en") if reply_fields.text(value.get(lang), 300)}
+    text = reply_fields.text(value, 300)
     return {"zh": text, "en": text} if text else {}
 
 
 def _filters(raw: Any) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for one in raw if isinstance(raw, list) else []:
-        if not isinstance(one, dict) or not _text(one.get("key"), 80):
+        if not isinstance(one, dict) or not reply_fields.text(one.get("key"), 80):
             continue
         values = []
         for value in one.get("values") or []:
             if isinstance(value, dict) and value.get("value") is not None:
-                values.append({"value": _text(value.get("value"), 120), "label": _text(value.get("label"), 200)})
+                values.append({"value": reply_fields.text(value.get("value"), 120), "label": reply_fields.text(value.get("label"), 200)})
             elif isinstance(value, str) and value.strip():
                 values.append({"value": value.strip()[:120], "label": value.strip()[:200]})
-        out.append({"key": _text(one.get("key"), 80), "label": _text(one.get("label"), 200), "values": values})
+        out.append({"key": reply_fields.text(one.get("key"), 80), "label": reply_fields.text(one.get("label"), 200), "values": values})
     return out[:20]
 
 
 def _collection(raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
-    cid = _text(raw.get("id"), 80)
-    kind = _text(raw.get("kind"), 30)
+    cid = reply_fields.text(raw.get("id"), 80)
+    kind = reply_fields.text(raw.get("kind"), 30)
     if not cid or kind not in ITEM_KINDS:
         return None
     return {
@@ -108,7 +105,7 @@ def _collection(raw: Any) -> dict[str, Any] | None:
 def _view(raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
-    role = _text(raw.get("role"), 40)
+    role = reply_fields.text(raw.get("role"), 40)
     thumb = _http(raw.get("thumbnail"))
     original = _http(raw.get("original"))
     return {"role": role, "thumbnail": thumb, "original": original} if thumb or original else None
@@ -117,8 +114,8 @@ def _view(raw: Any) -> dict[str, Any] | None:
 def _item(raw: Any, collection: str = "") -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
-    iid = _text(raw.get("id"), 160)
-    kind = _text(raw.get("kind"), 30)
+    iid = reply_fields.text(raw.get("id"), 160)
+    kind = reply_fields.text(raw.get("kind"), 30)
     if not iid or kind not in ITEM_KINDS:
         return None
     views = [one for one in (_view(v) for v in raw.get("views") or []) if one]
@@ -126,17 +123,17 @@ def _item(raw: Any, collection: str = "") -> dict[str, Any] | None:
     provenance = raw.get("provenance") if isinstance(raw.get("provenance"), dict) else {}
     return {
         "id": iid,
-        "collection": _text(raw.get("collection"), 80) or collection,
+        "collection": reply_fields.text(raw.get("collection"), 80) or collection,
         "kind": kind,
         "name": _pair(raw.get("name")),
-        "tags": [_text(one, 80) for one in raw.get("tags") or [] if _text(one, 80)][:40],
+        "tags": [reply_fields.text(one, 80) for one in raw.get("tags") or [] if reply_fields.text(one, 80)][:40],
         "thumbnail": _http(raw.get("thumbnail")) or first_view.get("thumbnail", ""),
         "views": views,
         "nsfw": raw.get("nsfw") is True,
         "provenance": {
-            "author": _text(provenance.get("author"), 200),
+            "author": reply_fields.text(provenance.get("author"), 200),
             "url": _http(provenance.get("url")),
-            "license": _text(provenance.get("license"), 500),
+            "license": reply_fields.text(provenance.get("license"), 500),
         },
     }
 
@@ -201,7 +198,7 @@ def search(
     )
     output = _output(output)
     items = [one for one in (_item(raw, collection) for raw in (output.get("items") or [])) if one]
-    return {"items": items[:MAX_ITEMS], "next_cursor": _text(output.get("next_cursor"), 500)}
+    return {"items": items[:MAX_ITEMS], "next_cursor": reply_fields.text(output.get("next_cursor"), 500)}
 
 
 def item(db: Session, instance: PluginInstance, *, item_id: str, collection: str = "") -> dict[str, Any]:
