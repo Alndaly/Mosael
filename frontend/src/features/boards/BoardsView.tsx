@@ -3,6 +3,7 @@ import { BoardFailuresProvider } from "@/features/boards/boardFailures";
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
+import { useBatchAction } from "@/lib/batchAction";
 import { BOARD_ITEM_EVENT, OPEN_BOARD_EVENT, parseBoardItem, useHashOpenRequest, useOpenRequest } from "@/lib/deepLink";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
@@ -243,28 +244,17 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   });
 
   // 多选与首页、素材、工作流同一份状态机(见 lib/useMultiSelect):退出即清空、被删掉的自动剔除。
-  const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(list, boardIdOf);
+  const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, exit, clear, keepOnly } = useMultiSelect(list, boardIdOf);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
-  const batchRemove = useMutation({
-    mutationFn: async (ids: string[]) => {
-      // 没有批量接口:逐条发、一次性回报。失败的那几条要单独说出来,不能被"已删除 N 项"盖过去。
-      const results = await Promise.allSettled(ids.map((id) => deleteBoard(id, workspace.id)));
-      return {
-        ok: results.filter((result) => result.status === "fulfilled").length,
-        failed: results.filter((result) => result.status === "rejected").length,
-      };
-    },
-    onSuccess: ({ ok, failed }) => {
+  //: 全删掉了就退出选择模式;有失败的就留在模式里,勾着的正是没删掉的,可以直接再试一次(见 lib/batchAction)。
+  const batchRemove = useBatchAction({
+    run: (id) => deleteBoard(id, workspace.id),
+    selection: { clear, exit, keepOnly },
+    exitOnSuccess: true,
+    doneMessage: (n) => t("bulkDeleteDone").replace("{n}", String(n)),
+    onSettled: () => {
       setBatchDeleting(false);
       refreshList();
-      //: 全删掉了就退出选择模式;有失败的就留在模式里 —— 删掉的那些随列表刷新自动不算数
-      //: (useMultiSelect 会剔掉),剩下仍勾着的正是没删掉的,可以直接再试一次。
-      if (failed) {
-        toast.error(t("bulkPartialFailed").replace("{ok}", String(ok)).replace("{failed}", String(failed)));
-      } else {
-        exit();
-        toast.success(t("bulkDeleteDone").replace("{n}", String(ok)));
-      }
     },
   });
 
@@ -450,7 +440,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
         body={t("boardsDeleteManyBody")}
         onCancel={() => setBatchDeleting(false)}
         pending={batchRemove.isPending}
-        onConfirm={() => batchRemove.mutate([...selectedIds])}
+        onConfirm={() => batchRemove.mutate({ ids: [...selectedIds] })}
       />
     </div>
   );

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { BulkActionBar, BulkSelectTrigger } from "@/components/app/bulkSelection";
+import { useBatchAction } from "@/lib/batchAction";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -331,22 +332,22 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   const selectedRuleIds = () => groups.filter((group) => bulk.isSelected(group.key)).flatMap((group) => group.rules.map((rule) => rule.id));
   const [deletingGroup, setDeletingGroup] = React.useState<RuleGroup | null>(null);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
-  const removeMany = useMutation({
-    mutationFn: async (ids: string[]) => {
-      // 逐条发但一次性回报结果:后端没有批量删接口,而为了一个设置页列表去加一个
-      // 破坏性的批量端点不划算。失败的那几条要单独说出来,不能被"已删除 N 项"盖过去。
-      const results = await Promise.allSettled(
-        ids.map(deletePricingRule),
-      );
-      return { ok: results.filter((r) => r.status === "fulfilled").length, failed: results.filter((r) => r.status === "rejected").length };
+  //: 勾的是**组**,删的是组里的规则:失败的规则留下所在的那几组(见 lib/batchAction)。
+  const removeMany = useBatchAction({
+    run: deletePricingRule,
+    selection: {
+      clear: bulk.clear,
+      exit: bulk.exit,
+      keepOnly: (ruleIds) => {
+        const failed = new Set(ruleIds);
+        bulk.keepOnly(groups.filter((group) => group.rules.some((rule) => failed.has(rule.id))).map((group) => group.key));
+      },
     },
-    onSuccess: ({ ok, failed }) => {
-      bulk.clear();
+    doneMessage: (n) => t("bulkDeleteDone").replace("{n}", String(n)),
+    onSettled: () => {
       setBulkDeleting(false);
       setDeletingGroup(null);
       refresh();
-      if (failed) toast.error(t("bulkPartialFailed").replace("{ok}", String(ok)).replace("{failed}", String(failed)));
-      else toast.success(t("bulkDeleteDone").replace("{n}", String(ok)));
     },
   });
 
@@ -663,7 +664,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         body={t("pricingBulkDeleteBody").replace("{n}", String(bulk.count)).replace("{rules}", String(selectedRuleIds().length))}
         onCancel={() => setBulkDeleting(false)}
         pending={removeMany.isPending}
-        onConfirm={() => removeMany.mutate(selectedRuleIds())}
+        onConfirm={() => removeMany.mutate({ ids: selectedRuleIds() })}
       />
       <ConfirmDialog
         open={deletingGroup !== null}
@@ -674,7 +675,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         confirmLabel={t("delete")}
         onCancel={() => setDeletingGroup(null)}
         pending={removeMany.isPending}
-        onConfirm={() => deletingGroup && removeMany.mutate(deletingGroup.rules.map((rule) => rule.id))}
+        onConfirm={() => deletingGroup && removeMany.mutate({ ids: deletingGroup.rules.map((rule) => rule.id) })}
       />
 
       {rules.data && ruleList.length === 0 ? (

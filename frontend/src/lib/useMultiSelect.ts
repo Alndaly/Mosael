@@ -95,6 +95,12 @@ export function useMultiSelect<T>(items: readonly T[], idOf: (item: T) => string
     lastIndex.current = null;
   }, []);
 
+  /** 只留下这几项(批量动作有失败时:失败的那几项留着勾,直接再试一次)。 */
+  const keepOnly = React.useCallback((ids: Iterable<string>) => {
+    setSelectedIds(new Set(ids));
+    lastIndex.current = null;
+  }, []);
+
   const enter = React.useCallback(() => setSelectMode(true), []);
 
   /** 退出选择模式:**顺带清空**。 */
@@ -116,5 +122,5 @@ export function useMultiSelect<T>(items: readonly T[], idOf: (item: T) => string
     [selectMode, selectedIds],
   );
 
-  return { selectMode, enter, exit, selectedIds, count: selectedIds.size, isSelected, toggle, selectAll, allSelected, clear, menuTargets };
+  return { selectMode, enter, exit, selectedIds, count: selectedIds.size, isSelected, toggle, selectAll, allSelected, clear, keepOnly, menuTargets };
 }

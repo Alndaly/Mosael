@@ -8,6 +8,7 @@ import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import { usePreferences, useI18n } from "@/app/preferences";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger } from "@/components/app/bulkSelection";
+import { useBatchAction } from "@/lib/batchAction";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -93,23 +94,15 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
 
   const rows = memories.data ?? [];
   const bulk = useMultiSelect(rows, (row) => row.id);
-  const removeMany = useMutation({
-    mutationFn: async (ids: string[]) => {
-      // 后端没有批量删接口,逐条发、一次性回报 —— 和计价规则同一个做法,失败的几条单独说出来。
-      const results = await Promise.allSettled(ids.map((id) => api(`/api/agent/memories/${id}`, { method: "DELETE" })));
-      return {
-        ok: results.filter((r) => r.status === "fulfilled").length,
-        failed: results.filter((r) => r.status === "rejected").length,
-      };
-    },
-    onSuccess: ({ ok, failed }) => {
-      bulk.clear();
+  //: 后端没有批量删接口:逐条发、一次性回报(见 lib/batchAction)。
+  const removeMany = useBatchAction({
+    run: (id) => api(`/api/agent/memories/${id}`, { method: "DELETE" }),
+    selection: bulk,
+    doneMessage: (n) => t("bulkDeleteDone").replace("{n}", String(n)),
+    onSettled: () => {
       setBulkDeleting(false);
       void refresh();
-      if (failed) toast.error(t("bulkPartialFailed").replace("{ok}", String(ok)).replace("{failed}", String(failed)));
-      else toast.success(t("bulkDeleteDone").replace("{n}", String(ok)));
     },
-    onError: fail,
   });
 
   const userCount = rows.filter((row) => row.source === "user").length;
@@ -158,7 +151,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
         confirmLabel={t("delete")}
         pending={removeMany.isPending}
         onCancel={() => setBulkDeleting(false)}
-        onConfirm={() => removeMany.mutate([...bulk.selectedIds])}
+        onConfirm={() => removeMany.mutate({ ids: [...bulk.selectedIds] })}
       />
 
       {memories.isError ? (

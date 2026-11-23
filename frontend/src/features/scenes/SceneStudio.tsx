@@ -3,6 +3,7 @@ import { usePageTrail } from "@/components/layout/pageTrail";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
+import { runBatch } from "@/lib/batchAction";
 import { formatBytes } from "@/lib/bytes";
 import { openBoard } from "@/lib/deepLink";
 import { saveBlobToDisk } from "@/lib/download";
@@ -339,8 +340,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
             } catch (e) { toast.error(errorText(e)); return false; }
           }}
           onDelete={async scenes => {
-            const results = await Promise.allSettled(scenes.map(scene => deleteScene(workspace.id, scene.id)));
-            const done = scenes.filter((_, i) => results[i].status === "fulfilled").map(scene => scene.id);
+            const { done, failed } = await runBatch(scenes.map(scene => scene.id), sceneId => deleteScene(workspace.id, sceneId));
             for (const sceneId of done) {
               qc.removeQueries({ queryKey: ["scene", workspace.id, sceneId] });
               localStorage.removeItem(`mosael.scene-draft:${workspace.id}:${sceneId}`);
@@ -348,8 +348,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
             }
             await qc.invalidateQueries({ queryKey: sceneKeys.list(workspace.id) });
             if (done.length) toast.success(t("sceneDeletedCount").replace("{n}", String(done.length)));
-            const failure = results.find(r => r.status === "rejected");
-            if (failure?.status === "rejected") toast.error(t("sceneDeletePartialFailed").replace("{reason}", String(failure.reason)));
+            if (failed.length) toast.error(t("sceneDeletePartialFailed").replace("{reason}", String(failed[0].reason)));
             return done;
           }}
         />

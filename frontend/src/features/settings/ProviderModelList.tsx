@@ -18,6 +18,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { Combobox } from "@/components/app/combobox";
 import { BulkActionBar, BulkCheckbox } from "@/components/app/bulkSelection";
+import { useBatchAction } from "@/lib/batchAction";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModalShell } from "@/components/app/modals";
@@ -152,23 +153,16 @@ export function ProviderModelList({
   /* 一个端点常常一次加进来十几个模型,之后"只留对话的、其余停用"是常见动作。
      逐个点开关的话,这件事要点十几次,中间还会点错行。 */
   const bulk = useMultiSelect(configured, (row) => row.id);
-  const patchMany = useMutation({
-    mutationFn: async ({ ids, body }: { ids: string[]; body: ProviderModelUpdate }) => {
-      await Promise.allSettled(ids.map((id) => updateProviderModel(profileId, id, body)));
-    },
-    onSuccess: () => {
-      bulk.clear();
-      invalidate();
-    },
+  //: 此前这两个把失败吞了(勾选照样清掉,像是全成了);现在失败的留在勾选里并说出来(见 lib/batchAction)。
+  const patchMany = useBatchAction<ProviderModelUpdate>({
+    run: (id, body) => updateProviderModel(profileId, id, body),
+    selection: bulk,
+    onSettled: invalidate,
   });
-  const removeMany = useMutation({
-    mutationFn: async (ids: string[]) => {
-      await Promise.allSettled(ids.map((id) => deleteProviderModel(profileId, id)));
-    },
-    onSuccess: () => {
-      bulk.clear();
-      invalidate();
-    },
+  const removeMany = useBatchAction({
+    run: (id) => deleteProviderModel(profileId, id),
+    selection: bulk,
+    onSettled: invalidate,
   });
   const busy = patchMany.isPending || removeMany.isPending;
 
@@ -215,13 +209,13 @@ export function ProviderModelList({
       )}
 
       <BulkActionBar active={bulk.selectMode} count={bulk.count} allSelected={bulk.allSelected()} onToggleAll={() => bulk.selectAll()} onExit={bulk.exit}>
-        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: [...bulk.selectedIds], body: { enabled: true } })}>
+        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: [...bulk.selectedIds], extra: { enabled: true } })}>
           {t("bulkEnable")}
         </Button>
-        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: [...bulk.selectedIds], body: { enabled: false } })}>
+        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: [...bulk.selectedIds], extra: { enabled: false } })}>
           {t("bulkDisable")}
         </Button>
-        <Button variant="outline" size="sm" disabled={busy} loading={removeMany.isPending} onClick={() => removeMany.mutate([...bulk.selectedIds])}>
+        <Button variant="outline" size="sm" disabled={busy} loading={removeMany.isPending} onClick={() => removeMany.mutate({ ids: [...bulk.selectedIds] })}>
           <Trash2 size={12} /> {t("bulkDelete")}
         </Button>
       </BulkActionBar>

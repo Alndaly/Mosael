@@ -38,6 +38,7 @@ import { PROVIDER_FIX_ATTR, providerProblem, providerRowId } from "@/features/se
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
+import { useBatchAction } from "@/lib/batchAction";
 import { cn } from "@/lib/utils";
 import { gotoRecord, OPEN_PLUGIN_IN_MARKET } from "@/lib/deepLink";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger } from "@/components/app/bulkSelection";
@@ -264,23 +265,16 @@ export function ProviderProfilesSection({
      **删除仍然要过确认**——删连接会连带它的模型行和指向它的能力默认,不是可以顺手做的事。 */
   const bulk = useMultiSelect(visibleProfiles, (profile) => profile.id);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
-  const bulkPatch = useMutation({
-    mutationFn: async ({ ids, enabled }: { ids: string[]; enabled: boolean }) => {
-      await Promise.allSettled(
-        ids.map((id) => updateProviderProfile(id, { enabled })),
-      );
-    },
-    onSuccess: () => {
-      bulk.clear();
-      void refresh();
-    },
+  //: 此前这两个把失败吞了(勾选照样清掉,像是全成了);现在失败的留在勾选里并说出来(见 lib/batchAction)。
+  const bulkPatch = useBatchAction<boolean>({
+    run: (id, enabled) => updateProviderProfile(id, { enabled }),
+    selection: bulk,
+    onSettled: () => void refresh(),
   });
-  const bulkRemove = useMutation({
-    mutationFn: async (ids: string[]) => {
-      await Promise.allSettled(ids.map(deleteProviderProfile));
-    },
-    onSuccess: () => {
-      bulk.clear();
+  const bulkRemove = useBatchAction({
+    run: deleteProviderProfile,
+    selection: bulk,
+    onSettled: () => {
       setBulkDeleting(false);
       void refresh();
     },
@@ -451,7 +445,7 @@ export function ProviderProfilesSection({
         body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
         onCancel={() => setBulkDeleting(false)}
         pending={bulkRemove.isPending}
-        onConfirm={() => bulkRemove.mutate([...bulk.selectedIds])}
+        onConfirm={() => bulkRemove.mutate({ ids: [...bulk.selectedIds] })}
       />
 
       {/* 官方中转排在最前:它不用填密钥,登录 MosaelCloud 就有(ADR 0088)。 */}
@@ -461,10 +455,10 @@ export function ProviderProfilesSection({
         <SettingsListBlock
           toolbar={bulk.selectMode ? (
             <BulkActionBar active={bulk.selectMode} count={bulk.count} allSelected={bulk.allSelected()} onToggleAll={() => bulk.selectAll()} onExit={bulk.exit}>
-              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending && bulkPatch.variables.enabled} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: true })}>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending && bulkPatch.variables.extra === true} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], extra: true })}>
                 {t("bulkEnable")}
               </Button>
-              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending && !bulkPatch.variables.enabled} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: false })}>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending && bulkPatch.variables.extra === false} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], extra: false })}>
                 {t("bulkDisable")}
               </Button>
               <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setBulkDeleting(true)}>
