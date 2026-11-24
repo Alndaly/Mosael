@@ -66,7 +66,8 @@ export function TrimTrack({
     <div
       ref={box}
       //: nodrag/nopan:这东西活在画布上,不挂的话拖把手会变成拖画布。
-      className="nodrag nopan relative h-12 w-full select-none overflow-hidden rounded-md border border-border bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
+      //: 只有选区那一圈框:外面不再描一圈灰边 —— 两圈边说的是同一件事(这是一条轨),选区满着时直角的蓝框还压在圆角里,看着尖。
+      className="nodrag nopan relative h-12 w-full select-none overflow-hidden rounded-md bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)]"
       onPointerMove={move}
       onPointerUp={(event) => {
         event.currentTarget.releasePointerCapture(event.pointerId);
@@ -88,8 +89,9 @@ export function TrimTrack({
       {/* 选区之外压暗 —— 剪掉的那两头要一眼看出来。 */}
       <div className="pointer-events-none absolute inset-y-0 left-0 bg-background/70" style={{ width: `${left}%` }} />
       <div className="pointer-events-none absolute inset-y-0 right-0 bg-background/70" style={{ width: `${100 - right}%` }} />
+      {/* 选区:一整圈圆角的框(和轨道同一个圆角),两头的把手是框边上居中的一小截胶囊。 */}
       <div
-        className="pointer-events-none absolute inset-y-0 border-y-2 border-primary"
+        className="pointer-events-none absolute inset-y-0 rounded-md border-2 border-primary"
         style={{ left: `${left}%`, width: `${right - left}%` }}
       />
 
@@ -105,9 +107,10 @@ export function TrimTrack({
             "absolute inset-y-0 z-10 flex w-3 cursor-ew-resize items-center justify-center",
             grabbing === side && "z-20",
           )}
-          style={{ left: `calc(${side === "start" ? left : right}% - 6px)` }}
+          //: 把手的中线落在框的那条边上(边宽 2px,在框里面):起点往里挪 1px,终点往外挪 1px。
+          style={{ left: `calc(${side === "start" ? left : right}% - ${side === "start" ? 5 : 7}px)` }}
         >
-          <span className="h-full w-1 rounded-full bg-primary" />
+          <span className="h-5 w-1 rounded-full bg-primary" />
         </div>
       ))}
     </div>

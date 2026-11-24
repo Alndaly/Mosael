@@ -251,8 +251,9 @@ function SettingsButton({ attention, children }: { attention: boolean; children:
           {attention ? <span aria-hidden className="absolute right-1 top-1.5 size-1.5 rounded-full bg-primary" /> : null}
         </button>
       </PopoverTrigger>
+      {/* 左边和按钮对齐,往右展开 —— 和底栏左边那几颗(模板、模型)弹出来的一样。此前右边对齐,弹层往左伸出面板外。 */}
       <PopoverContent
-        align="end"
+        align="start"
         side="top"
         tabIndex={-1}
         //: 打开时焦点落在弹层本身,不落在第一个控件上:否则第一个下拉一打开就套着一圈焦点环,看着像已经选中了它。
