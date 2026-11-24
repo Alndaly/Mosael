@@ -27,6 +27,7 @@ import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { hasReference } from "@/features/nodeForms/refDoc";
 import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
 import { StartParamsField } from "@/features/nodeForms/StartParamsField";
+import { isStageEditor, renderStageEditor } from "@/features/nodeForms/stageEditors";
 import { useAllAssetCards } from "@/lib/assetQueries";
 import { entryNamedOptions } from "@/lib/entryNames";
 import { readSourceAssets, writeSourceAssets } from "@/lib/sourceAssetLines";
@@ -566,6 +567,9 @@ export function NodeConfigForm({
                     )
                   }
                 />
+              ) : isStageEditor(spec?.editor) ? (
+                // 主控件类的编辑器(打光的方向球,ADR 0108):一个控件改好几格(那几格都 `edited_by` 这一格),见 stageEditors。
+                renderStageEditor(spec?.editor, config, (values) => onPatchConfig(key, values, false))
               ) : spec?.editor === "asset_grid" ? (
                 // 一次挑一组素材:紧凑的格子(挑、拖排序、直接传、自动引用单独一行),由**后端的字段声明**
                 // 点名(editor: "asset_grid"),不是一个手填引用的文本框。值是逗号分隔的素材 id 串、还是

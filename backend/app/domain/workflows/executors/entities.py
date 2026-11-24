@@ -17,6 +17,7 @@ from app.domain.workflows.errors import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows import run_steps
 from app.domain.workflows.executors.common import wait_for_job
+from app.domain.workflows.executors.reference_models import reference_model
 from app.domain.workflows.id_values import id_list
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
@@ -32,10 +33,9 @@ from app.domain.entities.library import (
     references_of,
     update_entity,
 )
-from app.domain.entities.mentions import REFERENCE_ROLE, generation_profile
+from app.domain.entities.mentions import generation_profile
 from app.domain.generation import (
     operations as generation_operations,
-    resolution as generation_resolution,
     runner as generation_runner,
 )
 from app.domain.generation.operations import GenerationDomainError
@@ -319,42 +319,6 @@ EXPRESSION_PROMPT = ("Close-up portrait of the same character with a {expression
                      "plain light grey background.")
 
 
-def takes_reference_images(option: dict[str, Any]) -> bool:
-    """这个生成选项收不收参考图。不收的只看得到文字描述,画出来是另一个人 —— 「补全」「表情」就没意义了。
-    模型下拉(选项来源 `reference_image_models`)和运行前的检查问的是这同一句。"""
-
-    capabilities = option.get("capabilities") or {}
-    return bool(option.get("adapter_available")) and REFERENCE_ROLE in (capabilities.get("parameter_keys") or ()) \
-        and bool((capabilities.get("source_limits") or {}).get(REFERENCE_ROLE))
-
-
-def automatic_reference_model(options: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """没点名时用哪个图片模型:他设的默认图片模型正好收参考图就用它,否则用第一个收参考图的。
-
-    和说话照片 / 改口型挑模型同一个先后(talking._pick_model)。此前这里只认默认:默认的图片模型只会文生图时,
-    下拉里明明列着能用的,留空却报「不收参考图」。模型下拉标「默认」的也是这一个(field_options)。
-    """
-    usable = [one for one in options if takes_reference_images(one)]
-    return next((one for one in usable if one.get("is_default")), None) or (usable[0] if usable else None)
-
-
-def _reference_model(db: Session, choice: str, actor_id: str | None) -> dict[str, Any]:
-    """用哪个图片模型:点名的那一个(`reference_image_models` 的选项 id),没点名见 automatic_reference_model。"""
-
-    options = generation_resolution.generation_options(db, "image", user_id=actor_id)
-    if not choice:
-        picked = automatic_reference_model(options)
-        if picked is None:
-            raise WorkflowDomainError("wfErr_entityModelNone")
-        return picked
-    picked = next((one for one in options if one["id"] == choice), None)
-    if picked is None:
-        raise WorkflowDomainError("wfErr_entityModelMissing")
-    if not takes_reference_images(picked):
-        raise WorkflowDomainError("wfErr_entityModelNoReferences", params={"model": picked["model_label"]})
-    return picked
-
-
 def expression_list(value: Any) -> list[str]:
     """「微笑, 大笑、惊讶」→ 一种一张,去重,最多 MAX_EXPRESSIONS 种。"""
     import re
@@ -404,7 +368,7 @@ def plan_drawing(db: Session, workspace_id: str, node_type: str, config: dict[st
         raise WorkflowDomainError("wfErr_entityNeedsImage", params={"name": entity.name})
     if not shots:
         raise WorkflowDomainError("wfErr_entityAnglesComplete", params={"name": entity.name})
-    model = _reference_model(db, _text(config.get("model")), actor_id)
+    model = reference_model(db, _text(config.get("model")), actor_id)
     return Drawing(entity.id, entity.name, tuple(shots), model)
 
 

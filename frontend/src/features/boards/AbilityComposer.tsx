@@ -25,6 +25,7 @@ import { boardToolIcon, defaultBindings, firstSentence, givesValue, sourceValue 
 import { composerFields, filled, missingFields, takesMany, type BoardFieldSpec } from "@/features/boards/composerFields";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { emptyOptionsHint, NodeConfigForm, useNodeFieldOptions } from "@/features/nodeForms/NodeConfigForm";
+import { renderStageEditor } from "@/features/nodeForms/stageEditors";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
 import { cn } from "@/lib/utils";
 
@@ -309,6 +310,11 @@ export function AbilityComposer({
       ) : (
         <>
           {ability ? <AbilityHost item={item} tool={tool} /> : null}
+          {fields.stage ? (
+            <div data-field-key={fields.stage[0]} className="px-1 py-1">
+              {renderStageEditor(fields.stage[1].editor, config, patchConfig)}
+            </div>
+          ) : null}
           {fields.body ? (
             <textarea
               data-field-key={fields.body[0]}

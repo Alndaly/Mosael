@@ -124,8 +124,8 @@ def test_画不出同一个的_先说清楚_不花钱(setup) -> None:
     cases = [
         ({"entity_id": video_only}, "wfErr_entityNeedsImage"),
         ({}, "wfErr_entityNeedsTarget"),
-        ({"entity_id": usable, "model": "p1:image:t2i"}, "wfErr_entityModelNoReferences"),
-        ({"entity_id": usable, "model": "gone:image:x"}, "wfErr_entityModelMissing"),
+        ({"entity_id": usable, "model": "p1:image:t2i"}, "wfErr_referenceModelNoReferences"),
+        ({"entity_id": usable, "model": "gone:image:x"}, "wfErr_referenceModelMissing"),
         ({"entity_id": usable, "scope": "some"}, "wfErr_entityAnglesScope"),
     ]
     for config, key in cases:
@@ -261,7 +261,7 @@ def test_默认图片模型不收参考图_留空时用第一个收参考图的_
                         lambda db, kind, user_id=None: [one for one in options if one["id"] == "p1:image:t2i"])
     with unit_of_work() as db, pytest.raises(WorkflowDomainError) as caught:
         executors.entity_angles(db, _scope(ws), {"entity_id": entity_id, "scope": "all"})
-    assert caught.value.key == "wfErr_entityModelNone"
+    assert caught.value.key == "wfErr_referenceModelNone"
 
 
 def test_这一轮在停_几张一起起的都取消_不只是正在等的那一张(setup, monkeypatch) -> None:

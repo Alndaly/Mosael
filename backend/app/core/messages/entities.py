@@ -115,17 +115,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{name}」还没有图片参考图 —— 先传一张正面图,才画得出同一个",
         "en": "“{name}” has no reference image yet — upload a front view first so the new images can match it.",
     },
-    "wfErr_entityModelMissing": {
+    "wfErr_referenceModelMissing": {
         "zh": "选的图片模型已经不在了,换一个收参考图的模型",
         "en": "The chosen image model is no longer available; pick one that takes reference images.",
     },
-    "wfErr_entityModelNone": {
+    "wfErr_referenceModelNone": {
         "zh": "还没有收参考图的图片模型 —— 在设置里接一个能改图的模型(比如 Seedream 4、通义万相图像编辑)",
         "en": "No image model that takes reference images yet — connect an image-editing model in Settings (e.g. Seedream 4).",
     },
-    "wfErr_entityModelNoReferences": {
-        "zh": "「{model}」不收参考图,只看文字画不出同一个 —— 换一个收参考图的模型",
-        "en": "“{model}” doesn't take reference images, so it can't draw the same one from text alone — pick a model that does.",
+    "wfErr_referenceModelNoReferences": {
+        "zh": "「{model}」不收参考图,只看文字照不着这张图画 —— 换一个收参考图的模型",
+        "en": "“{model}” doesn't take reference images, so it can't work from this picture with text alone — pick a model that does.",
     },
     "wfErr_entityAnglesScope": {"zh": "补哪些角度只能是:{options}", "en": "Which angles must be one of: {options}"},
     "wfErr_entityAnglesComplete": {

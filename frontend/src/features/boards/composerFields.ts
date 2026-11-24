@@ -1,6 +1,7 @@
 import type { BoardItem } from "@/api/client";
 import { nodeConfigTiers, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 import { fieldDataType } from "@/features/nodeForms/fieldTypes";
+import { isStageEditor } from "@/features/nodeForms/stageEditors";
 
 /**
  * 节点产出者的面板(一格的能力、空格子上的生成器)把字段分到哪一块。**只看字段声明,不认识任何具体节点** ——
@@ -61,6 +62,8 @@ export interface ComposerFields {
   /** 能接上游、有得接或已经接上的字段:各一组上游芯片。 */
   upstream: Field[];
   /** 正文那一段自由的字;没有就是 undefined。 */
+  /** 主控件类的那一格(声明的 `editor` 在 nodeForms/stageEditors 里):摆在面板主体里,正文的上面。 */
+  stage: Field | undefined;
   body: Field | undefined;
   /** 底栏的设置芯片(挑一个的,必填在前)。 */
   chips: Field[];
@@ -102,15 +105,17 @@ export function composerFields({
   const advanced = (tiers.advanced as Field[]).filter(notHost);
   const active = [...basic, ...advanced];
   const upstream = active.filter(([key, spec]) => bindable(spec) && (fits(key).length > 0 || isBound(key)));
+  //: 主控件(打光的方向球):摆在面板主体里,不收进「参数」(见 nodeForms/stageEditors)。
+  const stage = active.find(([, spec]) => isStageEditor(spec.editor));
   const body = basic.find(([key, spec]) => freeText(spec) && !isBound(key));
   const chips = basic
     .filter(([key, spec]) => picksOne(spec) && !isBound(key) && key !== body?.[0])
     .sort(([, a], [, b]) => Number(Boolean(b.required)) - Number(Boolean(a.required)))
     .slice(0, quietBarWithBody && body ? 0 : BAR_CHIP_LIMIT);
-  const placed = new Set([body?.[0], ...chips.map(([key]) => key)]);
+  const placed = new Set([stage?.[0], body?.[0], ...chips.map(([key]) => key)]);
   const rest = active.filter(([key]) => !placed.has(key) && !isBound(key));
   const attention = rest.some(([key, spec]) => spec.required && !filled(config[key]) && !filled(spec.default));
-  return { upstream, body, chips, rest, attention, active };
+  return { upstream, stage, body, chips, rest, attention, active };
 }
 
 /**

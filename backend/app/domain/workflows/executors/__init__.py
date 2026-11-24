@@ -14,4 +14,4 @@ from __future__ import annotations
 
 
 # 导入即注册:各模块只认 registry,不回头 import 这个包 —— 包和它的子模块之间就没有环了。
-from app.domain.workflows.executors import ai, approval, basic, browser, content, dub_lipsync, entities, feishu, knowledge, loops, media_scrub, scenes, shots, social, subjobs, subworkflow, talking  # noqa: F401
+from app.domain.workflows.executors import ai, approval, basic, browser, content, dub_lipsync, entities, feishu, knowledge, loops, media_scrub, relight, scenes, shots, social, subjobs, subworkflow, talking  # noqa: F401

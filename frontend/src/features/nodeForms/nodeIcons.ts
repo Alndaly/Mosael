@@ -2,6 +2,7 @@ import {
   Grid3x3,
   Quote,
   MessageCircle,
+  Sun,
   FileText,
   Speech,
   ScanBox,
@@ -155,6 +156,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   //: 数字人:说一段话(人物、人像)、对口型(视频)。
   entity_speak: MessageCircle,
   image_speak: MessageCircle,
+  image_relight: Sun,
   //: 长稿分段配音:一段稿子配成几段音频(和配音同一个图标)。
   talking_segments: AudioLines,
   //: 译配对口型:和对口型同一个图标。

@@ -32,7 +32,7 @@ from app.domain.scenes.operations import list_models
 from app.domain.voices import engine_catalog
 from app.domain.voices.speech import CLONE_ENGINE, PODCAST_ENGINE
 from app.domain.workflows.executors import talking
-from app.domain.workflows.executors.entities import automatic_reference_model, takes_reference_images
+from app.domain.workflows.executors.reference_models import automatic_reference_model, works_from_reference_images
 
 logger = logging.getLogger(__name__)
 
@@ -337,9 +337,9 @@ def _entity_roles(db: Session, ctx: OptionContext) -> list[Option]:
 
 
 def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
-    """收参考图的图片模型(资产格的「补全多角度」「生成表情」用):只看得到文字的模型画不出「同一个」。
+    """只给参考图就能跑的图片模型(资产格的「补全多角度」「生成表情」、给一张图重新打光用):只看得到文字的模型画不出「同一个」。
     和生成页同一份清单(generation_options);留空时用的那一个标「默认」—— 和节点跑的时候同一个挑法
-    (executors.entities.automatic_reference_model)。"""
+    (executors.reference_models.automatic_reference_model)。"""
 
     options = generation_resolution.generation_options(db, "image", user_id=ctx.user_id)
     automatic = automatic_reference_model(options)
@@ -347,7 +347,7 @@ def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
         {**generation_option_names(one),
          "label": f"{one['model_label']} · {t('wfOpt_defaultModel', ctx.locale)}" if one is automatic else one["model_label"]}
         for one in options
-        if takes_reference_images(one)
+        if works_from_reference_images(one)
     ]
 
 

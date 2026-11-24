@@ -2592,6 +2592,38 @@ NODE_TYPES: dict[str, NodeSpec] = {
         },
         "outputs": ["asset_id", "asset_ids", "audio_asset_id"],
     },
+    #: 给一张图重新打光(ADR 0108):原图当参考图交给一个收参考图的图片模型,灯位(几个数)由执行器翻成一段打光指令。
+    #: 灯位相对**画面**:方位 0 = 从镜头这边(顺光)、90 = 画面右侧、180 = 背后(逆光)、270 = 左侧;高度 0 = 与视线齐平、90 = 正顶光。
+    #: 方向球、预设和三个滑杆是**一个控件**(`editor: "light_rig"`,前端 nodeForms/LightRigField):另外四格 `edited_by` 它。
+    "image_relight": {
+        "external": False,
+        "spends": True,
+        "effects": "paid",
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["asset_id"],
+        "output_media": {"asset_id": "image"},
+        "board_group": "image", "board_description": "wfNode_image_relight_board",
+        "category": "wfCat_ai",
+        "label": "wfNode_image_relight",
+        "description": "wfNode_image_relight_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "image", "description": "wfNode_image_relight_asset_id"},
+            "light_azimuth": {"type": "number", "label": "wfField_light_azimuth", "default": 315, "editor": "light_rig",
+                              "description": "wfNode_image_relight_azimuth"},
+            "light_elevation": {"type": "number", "label": "wfField_light_elevation", "default": 45, "edited_by": "light_azimuth",
+                                "description": "wfNode_image_relight_elevation"},
+            "light_temperature": {"type": "number", "label": "wfField_light_temperature", "default": 5500, "edited_by": "light_azimuth",
+                                  "description": "wfNode_image_relight_temperature"},
+            "light_softness": {"type": "number", "label": "wfField_light_softness", "default": 0.5, "edited_by": "light_azimuth",
+                               "description": "wfNode_image_relight_softness"},
+            "light_intensity": {"type": "number", "label": "wfField_light_intensity", "default": 60, "edited_by": "light_azimuth",
+                                "description": "wfNode_image_relight_intensity"},
+            "model": {"type": "string", "options_from": "reference_image_models", "description": "wfNode_image_relight_model"},
+            #: 补一句是什么光(「霓虹灯」「黄昏的窗光」),接在打光指令后面。可空。
+            "prompt": {"type": "template", "description": "wfNode_image_relight_prompt"},
+        },
+        "outputs": ["asset_id", "asset_ids"],
+    },
     "video_lipsync": {
         "external": False,
         "spends": True,
