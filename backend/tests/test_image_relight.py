@@ -60,7 +60,10 @@ def test_原图以参考图交出去_要的画幅是原图的宽高(monkeypatch)
         sent.update(kwargs)
         raise _Stop
 
-    monkeypatch.setattr(relight.generation_operations, "create_generation_job", capture)
+    from app.domain.workflows.executors import subjobs
+
+    monkeypatch.setattr(subjobs, "current_actor", lambda _db: None)
+    monkeypatch.setattr(subjobs.generation_operations, "create_generation_job", capture)
     scope = SimpleNamespace(workspace_id=ws, id="board-1", name="画板")
     with SessionLocal() as db, pytest.raises(_Stop):
         relight.image_relight(db, scope, {"asset_id": "photo", "light_azimuth": 90, "prompt": "窗光"})

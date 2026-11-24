@@ -254,16 +254,19 @@ def _sources_to_send(db: Session, config: dict[str, Any], kind: str) -> list[dic
     return keep_sources_that_fit(sources, capabilities, kind)
 
 
-@register("ai_generate")
-def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+def generate_one(db: Session, scope: RunScope, config: dict[str, Any], order: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    """节点里**下一张生成单、等它出结果**:「AI 生成素材」和「重新打光」(executors/relight)共用这一段。
 
-    kind = str(config.get("kind", "image")).strip() or "image"
-    #: 从失败处继续:上回交出去的那张单还在的话接着等它,不下第二次单(见 run_steps)。
+    `order()` 给出这一单交什么(`create_generation_job` 除了归属以外的那几样:供应商、模型、种类、提示词、素材、参数……);
+    只在真要下单时才调 —— 从失败处继续时上回交出去的那张单还在(run_steps),接着等它,不下第二次,也不必再去解析模型和素材。
+    下单失败(没有可用模型、模型不收这种素材)按工作流错误报出来。交回 `asset_id`(封面,下游多数节点只接一份)、
+    `asset_ids`(全部:生成一次可能出多张)和 `generation_id`。
+    """
+
     held = run_steps.held_generation(db, config)
     if held is not None:
         generation_id, child_id = held
     else:
-        # 声明里模型是必填的;错误(包括"没有可用模型")按工作流错误报出来。
         try:
             generation, child = generation_operations.create_generation_job(
                 db,
@@ -271,22 +274,9 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 session_id=None,
                 project_id=None,
                 created_by=current_actor(db),
-                provider=str(config.get("provider", "")),
-                provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
-                model=str(config.get("model", "")),
-                kind=kind,
-                prompt=str(config.get("prompt", "")),
-                negative_prompt=str(config.get("negative_prompt", "")),
-                parameters=provided(dict(config.get("parameters") or {})),
-                source_assets=_sources_to_send(db, config, kind),
-                #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
-                entity_ids=parse_entity_ids(config.get("entity_ids")),
-                pose=_pose_of(config),
-                #: 要几比几:节点上记的是画幅,漏斗按选中的模型翻(换模型不丢,ADR 0094)。
-                frame_aspect=str(config.get("frame_aspect") or "").strip(),
-                digital_human_consent=str(config.get("consent") or "").strip() == "yes",
                 #: 这张工作流(画板上跑的是那块画板、资产详情页上的是那个资产)的那条会话(ADR 0052)
                 origin=of_run_scope(scope.id),
+                **order(),
             )
         except GenerationDomainError as exc:
             raise WorkflowDomainError.from_error(exc) from exc
@@ -297,17 +287,37 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     wait_for_job(child_id, release=db)
     # 等待时交还了会话(release 会 close 它,里面的对象全部脱管)—— 按 id 重新取,不能 refresh 脱管的那两个:
     # 此前这里 refresh,生成跑完之后节点必然炸在「not persistent within this Session」。
-
     generation = db.get(GenerationJob, generation_id)
     child = db.get(Job, child_id)
-    #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是全部 —— 生成一次可能出多张
-    #: (图像接口的 n),只往下游传第一张的话,其余的在工作流里就没人看得见了。
     asset_ids = [str(one) for one in ((child.result or {}).get("asset_ids") or []) if one]
     return {
         "asset_id": generation.result_asset_id or "",
         "asset_ids": asset_ids,
         "generation_id": generation.id,
     }
+
+
+@register("ai_generate")
+def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+
+    kind = str(config.get("kind", "image")).strip() or "image"
+    made = generate_one(db, scope, config, lambda: {
+        "provider": str(config.get("provider", "")),
+        "provider_profile_id": str(config.get("provider_profile_id") or "").strip() or None,
+        "model": str(config.get("model", "")),
+        "kind": kind,
+        "prompt": str(config.get("prompt", "")),
+        "negative_prompt": str(config.get("negative_prompt", "")),
+        "parameters": provided(dict(config.get("parameters") or {})),
+        "source_assets": _sources_to_send(db, config, kind),
+        #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
+        "entity_ids": parse_entity_ids(config.get("entity_ids")),
+        "pose": _pose_of(config),
+        #: 要几比几:节点上记的是画幅,漏斗按选中的模型翻(换模型不丢,ADR 0094)。
+        "frame_aspect": str(config.get("frame_aspect") or "").strip(),
+        "digital_human_consent": str(config.get("consent") or "").strip() == "yes",
+    })
+    return {"asset_id": made["asset_id"], "asset_ids": made["asset_ids"], "generation_id": made["generation_id"]}
 
 
 @register_preflight("ai_generate")

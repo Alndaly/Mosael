@@ -12,17 +12,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, t
-from app.db.models import GenerationJob, Job
-from app.domain.generation import operations as generation_operations, runner as generation_runner
-from app.domain.generation.operations import GenerationDomainError
-from app.domain.generation.origins import of_run_scope
 from app.domain.jobs import current_actor
-from app.domain.workflows import run_steps
-from app.domain.workflows.errors import WorkflowDomainError
-from app.domain.workflows.executors.common import wait_for_job
 from app.domain.workflows.executors.inputs import _asset_in
 from app.domain.workflows.executors.reference_models import reference_model
 from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows.executors.subjobs import generate_one
 
 #: 每一格缺省是多少、能取到多少(和节点声明的 default 同一份数)。超出的按边界夹住 —— 方位按圈取余。
 DEFAULTS = {"light_azimuth": 315.0, "light_elevation": 45.0, "light_temperature": 5500.0,
@@ -87,42 +81,22 @@ def _frame_of(asset: Any) -> str:
 
 @register("image_relight")
 def image_relight(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """给一张图重新打光:一次生成,原图当参考图,交回打好光的那一张。"""
+    """给一张图重新打光:一次生成,原图当参考图,交回打好光的那一张(下单、等结果见 subjobs.generate_one)。"""
 
-    #: 从失败处继续:上回交出去的那张单还在的话接着等它,不下第二次单(见 run_steps)。
-    held = run_steps.held_generation(db, config)
-    if held is not None:
-        generation_id, child_id = held
-    else:
+    def order() -> dict[str, Any]:
         asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
         model = reference_model(db, str(config.get("model") or "").strip(), current_actor(db))
-        try:
-            generation, child = generation_operations.create_generation_job(
-                db,
-                workspace_id=scope.workspace_id,
-                session_id=None,
-                project_id=None,
-                created_by=current_actor(db),
-                provider=model["provider"],
-                provider_profile_id=model["provider_profile_id"],
-                model=model["model"],
-                kind="image",
-                prompt=relight_instruction(config, get_current_locale()),
-                negative_prompt="",
-                parameters={},
-                source_assets=[{"asset_id": asset.id, "role": "reference_image"}],
-                frame_aspect=_frame_of(asset),
-                origin=of_run_scope(scope.id),
-            )
-        except GenerationDomainError as exc:
-            raise WorkflowDomainError.from_error(exc) from exc
-        run_steps.hold(db, config, child.id)
-        db.commit()
-        generation_id, child_id = generation.id, child.id
-        generation_runner.start_generation_thread(generation_id)
-    wait_for_job(child_id, release=db)
-    #: 等待时交还了会话(里面的对象全部脱管)—— 按 id 重新取。
-    generation = db.get(GenerationJob, generation_id)
-    child = db.get(Job, child_id)
-    asset_ids = [str(one) for one in ((child.result or {}).get("asset_ids") or []) if one]
-    return {"asset_id": generation.result_asset_id or (asset_ids[0] if asset_ids else ""), "asset_ids": asset_ids}
+        return {
+            "provider": model["provider"],
+            "provider_profile_id": model["provider_profile_id"],
+            "model": model["model"],
+            "kind": "image",
+            "prompt": relight_instruction(config, get_current_locale()),
+            "negative_prompt": "",
+            "parameters": {},
+            "source_assets": [{"asset_id": asset.id, "role": "reference_image"}],
+            "frame_aspect": _frame_of(asset),
+        }
+
+    made = generate_one(db, scope, config, order)
+    return {"asset_id": made["asset_id"] or (made["asset_ids"][0] if made["asset_ids"] else ""), "asset_ids": made["asset_ids"]}
