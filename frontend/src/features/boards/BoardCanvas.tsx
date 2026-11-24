@@ -680,11 +680,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
 
   const add = React.useCallback(
     (kind: BoardItem["kind"], extra: Partial<BoardItem> = {}, at?: FlowPoint) => {
-      const instance = rf.current;
-      // 没说放哪就放在**视野中心**,不是原点:画板可以拖得很远,放原点等于放到看不见的地方。
-      const center = at ?? (instance
-        ? instance.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
-        : { x: 0, y: 0 });
+      // 没说放哪就放在**看得见的那块正中**,不是原点(画板可以拖得很远,放原点等于放到看不见的地方),也不是整个窗口的
+      // 正中 —— 侧栏和挡在画布上的面板(右边的 AI 对话)占掉的那块要扣掉,不然新的一格落到面板底下,看着像没加上。
+      // 和粘贴、放标记用的是同一个中心(useBoardViewport.visibleCenter)。
+      const center = at ?? visibleCenter() ?? { x: 0, y: 0 };
       const size = DEFAULT_SIZE[kind];
       const item: BoardItem = {
         id: `${kind}-${Date.now().toString(36)}`,
@@ -706,7 +705,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       //: 把建好的那一项交回去 —— 从连线末端长出节点时,调用方还要拿它的 id 接上那条线。
       return item;
     },
-    [setNodes],
+    [setNodes, visibleCenter],
   );
 
   /**
