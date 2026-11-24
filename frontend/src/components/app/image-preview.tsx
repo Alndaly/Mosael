@@ -22,17 +22,29 @@ export { useImagePreview, type ImagePreviewItem } from "@/components/app/imagePr
 
 /** 关闭键的悬停说明往下出,画在大图那一层之上(见 tooltip 的 HintRegion `layer`)。 */
 const LIGHTBOX_REGION = { side: "bottom" as const, layer: "lightbox" as const };
-/** 视频四周留出的边:上面是计数和「打开原图」那一条,下面是标题。留出来的这一圈就是点了关掉的背景。 */
-const VIDEO_MARGIN = { x: 32, y: 64 };
+/** 大图(图片和视频)四周留出的边:上面是计数、「打开原图」和关闭那一条,下面是标题。留出来的这一圈就是点了关掉的背景。 */
+const MEDIA_MARGIN = { x: 32, y: 64 };
 /** 视频的自然尺寸还没读到时先按 16:9 摆。 */
 const VIDEO_FALLBACK = { width: 16, height: 9 };
 
-/** 视频按自己的宽高比收进视口(留出 VIDEO_MARGIN),放大缩小都按比例。 */
+/** 视频按自己的宽高比收进视口(留出 MEDIA_MARGIN),放大缩小都按比例。 */
 export function fitVideo(natural: { width: number; height: number } | undefined, viewport: { width: number; height: number }) {
   const { width, height } = natural && natural.width > 0 && natural.height > 0 ? natural : VIDEO_FALLBACK;
-  const room = { width: Math.max(1, viewport.width - VIDEO_MARGIN.x * 2), height: Math.max(1, viewport.height - VIDEO_MARGIN.y * 2) };
+  const room = { width: Math.max(1, viewport.width - MEDIA_MARGIN.x * 2), height: Math.max(1, viewport.height - MEDIA_MARGIN.y * 2) };
   const scale = Math.min(room.width / width, room.height / height);
   return { width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+
+/**
+ * 图片收进同一圈边距要缩多少。react-photo-view 按**整个视口**摆图片(它自己量 innerWidth / innerHeight,不收边距),铺满高度的
+ * 图于是压住了顶上那一条(计数、打开原图、关闭)和底下的标题 —— 维护者截图。图片元素上加这个 `scale`(CSS 的独立缩放属性,
+ * 和库写在外层的 transform 叠加,绕图片中心):库照旧按视口摆、照旧管缩放和拖动,看到的图收在边距里面。视频走自定义渲染、
+ * 已经按 MEDIA_MARGIN 出盒子(fitVideo),不用它。
+ */
+export function imageFit(viewport: { width: number; height: number }): number {
+  if (viewport.width <= 0 || viewport.height <= 0) return 1;
+  const fit = Math.min((viewport.width - MEDIA_MARGIN.x * 2) / viewport.width, (viewport.height - MEDIA_MARGIN.y * 2) / viewport.height);
+  return Math.max(0.1, Math.min(1, fit));
 }
 
 export function ImagePreviewProvider({ children }: { children: React.ReactNode }) {
@@ -154,7 +166,8 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         ref={portalHostRef}
         data-image-preview-portal-host
         {...APP_CHROME}
-        style={{ pointerEvents: visible ? "auto" : "none" }}
+        //: `--lightbox-fit`:图片收进 MEDIA_MARGIN 要缩多少(imageFit),图片元素上读它(见 photoClassName)。
+        style={{ pointerEvents: visible ? "auto" : "none", ["--lightbox-fit" as string]: String(imageFit(viewport)) }}
       >
         {visible && (
           <HintRegion.Provider value={LIGHTBOX_REGION}>
@@ -261,7 +274,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
           String.raw`z-[220] [&_.PhotoView-Slider\_\_BannerWrap]:h-12 [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)] [&_.PhotoView-Slider\_\_Counter]:font-mono [&_.PhotoView-Slider\_\_Counter]:text-ui-xs [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)] [&_.PhotoView-Slider\_\_toolbarIcon]:h-9 [&_.PhotoView-Slider\_\_toolbarIcon]:w-9 [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)] [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]`,
         )}
         maskClassName="will-change-[opacity]"
-        photoClassName="rounded-lg will-change-[transform,opacity] [outline:1px_solid_rgb(255_255_255/0.12)]"
+        photoClassName="rounded-lg will-change-[transform,opacity] [outline:1px_solid_rgb(255_255_255/0.12)] [scale:var(--lightbox-fit,1)]"
         maskOpacity={0.88}
         toolbarRender={({ images: photoImages, index }) => {
           const photo = photoImages[index];
