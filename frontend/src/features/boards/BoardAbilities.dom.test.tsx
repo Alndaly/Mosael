@@ -123,26 +123,21 @@ describe("操作条上的能力", () => {
     expect(bar()).not.toContain("翻译");
   });
 
-  it("便签:保存到笔记、让 AI 写和翻译;视频格:内置的四项直接摆,插件的那一项收进「⋯」", () => {
+  it("便签:保存到笔记、让 AI 写和翻译;视频格:能力全部直接摆,插件的那一项也在外面,不收进「⋯」(ADR 0109)", () => {
     mount([noteItem, video]);
     select("n1");
     //: 「保存到笔记」和文档格的「转为笔记」同一种挂法,排在这一格的能力前面。
     expect(bar()).toEqual(["保存到笔记", "boardAskAiWrite", "翻译"]);
     select("vi");
     expect(bar()).toEqual([
-      "boardPreview", "boardTrim", "boardReplaceAsset", "素材转写", "视频转 GIF", "分离人声与背景音", "降噪", "boardMoreAbilities",
+      "boardPreview", "boardTrim", "boardReplaceAsset", "素材转写", "视频转 GIF", "分离人声与背景音", "降噪", "放大",
     ]);
-    act(() => abilityButton("boardMoreAbilities").click());
-    const more = screen.getByRole("menu", { name: "boardMoreAbilities" });
-    const row = [...more.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((one) => one.textContent?.includes("放大"))!;
-    expect(row.querySelector("svg"), "「⋯」里每一行都有图标").not.toBeNull();
-    //: 从「⋯」里点开的那一项摆到外面来(按下态看得见是谁的面板)。
-    act(() => row.click());
+    act(() => abilityButton("放大").click());
     expect(abilityButton("放大").getAttribute("aria-pressed")).toBe("true");
     expect(composer()?.dataset.boardComposer).toBe("ability");
   });
 
-  it("「⋯」里有表单的工作流:每个入口一行、写它自己的名字,上面没有一行点不了的工作流名", () => {
+  it("有表单的工作流:每个入口各是一颗、写它自己的名字,悬停说是哪张工作流的哪个入口", () => {
     // 维护者:「一个无法点击的工作流名称下方有几个选项」—— 此前组上一行工作流名,下面写「完整工作流」和表单标题
     const group = { id: "krea2.json", label: "krea2" };
     mount([video], [
@@ -151,13 +146,8 @@ describe("操作条上的能力", () => {
       ability("node:plugin.c.wf_a_app", "工作流 · 快速出图", ["video"], "clip", { plugin_name: "ComfyUI", group: { ...group, entry: "form", order: 1 } }),
     ]);
     select("vi");
-    act(() => abilityButton("boardMoreAbilities").click());
-    const more = screen.getByRole("menu", { name: "boardMoreAbilities" });
-    expect(more.querySelector("[data-menu-group-label]")).toBeNull();
-    const rows = [...more.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((one) => one.textContent);
-    expect(rows, "名字下面一行说是哪个入口、哪个插件").toEqual(expect.arrayContaining([
-      "工作流 · krea2entryFullWorkflow · ComfyUI", "工作流 · 快速出图entryFromGroup · ComfyUI",
-    ]));
+    expect(bar()).toEqual(expect.arrayContaining(["工作流 · krea2", "工作流 · 快速出图"]));
+    expect(bar()).not.toContain("boardMoreAbilities");
   });
 
   it("点一项,它的面板挂在格子下面;点另一项,下面那块换成它的;再点一次收起", () => {

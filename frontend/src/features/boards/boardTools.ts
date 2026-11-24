@@ -102,9 +102,6 @@ export function boardAbilities(
 /** 3D 场景格「按剧本搭」的产出者(工作流节点 scene_from_text,后端 boards.transforms 判成场景格的一种填法)。 */
 export const SCENE_FROM_TEXT = "node:scene_from_text" as const;
 
-/** 操作条上直接摆几项能力;其余收进「⋯」。内置的排在前面,所以常用的那几项总在外面。 */
-export const DIRECT_ABILITIES = 4;
-
 /** 「添加」里的一行:放一格什么(`value` 是 BoardsView 认的那个动作)、在哪一组。 */
 export interface BoardAddOption {
   value: string;

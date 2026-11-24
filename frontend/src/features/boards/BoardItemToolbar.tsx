@@ -22,7 +22,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { SaveToNote } from "@/features/notes/SaveToNote";
-import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence } from "@/features/boards/boardTools";
+import { boardAbilities, boardToolIcon, firstSentence } from "@/features/boards/boardTools";
 import { SequenceToolbarActions } from "@/features/boards/SequenceCell";
 import { canAskWriter, canOpenOnDemand, slotProducers } from "@/features/boards/boardComposers";
 import { NOTE_COLORS, noteColorClass, isMediaKind, type MediaKind, type NoteColor } from "@/features/boards/boardNodes";
@@ -47,8 +47,9 @@ const SEQUENCE_EXPORT_PANEL = "sequence_export";
  *
  * **中间那一段是这一格的能力**(TapNow 那样一排图标):看大图、剪一段、换一份、让 AI 写,再接这一格会的
  * 那几件事 —— 音频格的转写、分离、降噪,视频格的转 GIF,便签的翻译,插件工具按它吃什么内容挂上来
- * (后端 `role: "ability"` + `hosts`,见 boardTools.boardAbilities)。直接摆 DIRECT_ABILITIES 项,内置的在前,
- * 其余收进「⋯」。点一项,它的面板挂在格子下面;点另一项,下面那块换成它的;再点一次收起(BoardCanvas 的 panel)。
+ * (后端 `role: "ability"` + `hosts`,见 boardTools.boardAbilities)。**全部直接摆出来**,内置的在前:插件工具
+ * 要自己声明、ComfyUI 工作流要人勾了才上画板(ADR 0109),一种格子的能力数是有数的,不再收进「⋯」藏一半。
+ * 点一项,它的面板挂在格子下面;点另一项,下面那块换成它的;再点一次收起(BoardCanvas 的 panel)。
  *
  * 位置跟着选中项走 —— 用 NodeToolbar,它渲染在 React Flow 的视口层里,平移缩放时自己跟着动
  * (工作流那边的检查器用的是同一个原语)。
@@ -118,13 +119,8 @@ export function ItemToolbar({
     );
   const open = (name: string) => Boolean(item && panel?.itemId === item.id && panel.name === name);
   const abilities = item && onPanel ? boardAbilities(item, producers, entityKind) : [];
-  //: 直接摆几项;点开的那一项哪怕排在后面也摆出来(不然按下态藏在「⋯」里,看不出下面那块是谁的)。
-  const direct = abilities.filter((one, index) => index < DIRECT_ABILITIES || open(one.id));
-  const overflow = abilities.filter((one) => !direct.includes(one));
   //: 两层名字的副名(ADR 0045):这项能力是哪张工作流的哪个入口(「来自 X」/「完整工作流」),再接是哪个插件
   const formed = formedGroups(abilities);
-  const sourceOf = (ability: BoardProducerInfo) =>
-    [entryOrigin(ability.group, formed, t), ability.plugin_name].filter(Boolean).join(" · ");
   const slots = single && item && !itemIsRunning(item) ? slotProducers(item, producers) : [];
   //: 看大图看的是**选中的这几格**:框选了一排图,灯箱里就左右翻这一排(按画板上的位置排);只选一格就是那一张。
   const previews = boardPreviewGallery(selected.flatMap((node) => (node.data as { item?: BoardItem }).item ?? []));
@@ -270,7 +266,7 @@ export function ItemToolbar({
             />
           )}
           {single && item && onPanel &&
-            direct.map((ability) => (
+            abilities.map((ability) => (
               <ToolbarIcon
                 key={ability.id}
                 name={ability.id}
@@ -282,25 +278,6 @@ export function ItemToolbar({
                 onClick={() => onPanel(item.id, ability.id)}
               />
             ))}
-          {single && item && onPanel && overflow.length > 0 && (
-            <ActionMenu
-              label={t("boardMoreAbilities")}
-              trigger={<MoreButton label={t("boardMoreAbilities")} />}
-              actions={overflow.map((ability) => {
-                const Icon = boardToolIcon(ability);
-                //: 有表单的工作流(ADR 0045 §7):每个入口一行、各自能选,名字是它自己的,悬停说它是哪张工作流的哪个入口;
-                //: 同一张工作流的几个入口用分组线围在一起。此前上面一行点不了的工作流名,下面写「完整工作流」。
-                const group = ability.group && formed.has(ability.group.id) ? ability.group : null;
-                return {
-                  label: ability.label,
-                  icon: <Icon size={14} />,
-                  hint: sourceOf(ability) || undefined,
-                  ...(group ? { group: `entry:${group.id}` } : {}),
-                  onSelect: () => onPanel(item.id, ability.id),
-                };
-              })}
-            />
-          )}
         </ToolbarCluster>
 
         {/* 空槽用什么产出:一种格子有几个能填空槽的产出者时(音频槽:配音 / 生成音乐音效;插件的生成器)给一个切换。

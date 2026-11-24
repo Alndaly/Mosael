@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 
@@ -84,18 +84,15 @@ const select = (id: string) =>
     document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 
-it("工作流在图片格的模型下拉里,「…」里不再有同一张工作流;不是生成模型的那张照旧在「…」里", () => {
+it("工作流在图片格的模型下拉里,操作条上不再有同一张工作流;不是生成模型的那张照旧是操作条上的一项", () => {
   mount([
     { id: "pic", kind: "image", x: 0, y: 0, width: 260, height: 180, asset_id: "a1" },
     { id: "slot", kind: "image", x: 400, y: 0, width: 260, height: 180, form: { producer: "generate" } },
   ]);
   select("pic");
-  act(() => document.querySelector<HTMLButtonElement>('[data-board-abilities] button[aria-label="boardMoreAbilities"]')!.click());
-  const more = screen.getByRole("menu", { name: "boardMoreAbilities" });
-  const rows = [...more.querySelectorAll('[role="menuitem"]')].map((one) => one.textContent ?? "");
-  expect(rows.some((one) => one.includes("工作流 · tagger"))).toBe(true);
-  expect(rows.some((one) => one.includes("古风女孩"))).toBe(false);
-  fireEvent.keyDown(more, { key: "Escape" });
+  const labels = [...document.querySelectorAll<HTMLButtonElement>("[data-board-abilities] button")].map((one) => one.getAttribute("aria-label") ?? "");
+  expect(labels.some((one) => one.includes("工作流 · tagger"))).toBe(true);
+  expect(labels.some((one) => one.includes("古风女孩"))).toBe(false);
 
   select("slot");
   const picker = screen.getAllByRole("combobox").find((one) => one.textContent?.includes("古风女孩.json"));
