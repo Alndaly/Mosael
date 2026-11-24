@@ -10,7 +10,7 @@
     "en": "Make teaching animations with Manim on this computer: derivations, geometry, plots and algorithm steps, at no generation cost."
   },
   "default_locale": "zh",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "homepage": "https://docs.manim.community/",
   "author": {
     "name": "Mosael",
@@ -450,6 +450,28 @@
               "description": {
                 "zh": "默认横屏 16:9;竖屏短视频用 9:16。",
                 "en": "16:9 by default; 9:16 for vertical short video."
+              },
+              "x-enum-labels": {
+                "16:9": {
+                  "zh": "16:9 横屏",
+                  "en": "16:9 landscape"
+                },
+                "9:16": {
+                  "zh": "9:16 竖屏",
+                  "en": "9:16 portrait"
+                },
+                "1:1": {
+                  "zh": "1:1 方形",
+                  "en": "1:1 square"
+                },
+                "4:3": {
+                  "zh": "4:3 横向",
+                  "en": "4:3 landscape"
+                },
+                "3:4": {
+                  "zh": "3:4 竖向",
+                  "en": "3:4 portrait"
+                }
               }
             },
             "quality": {
@@ -468,6 +490,28 @@
               "description": {
                 "zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。越高渲得越久。",
                 "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels. Higher takes longer."
+              },
+              "x-enum-labels": {
+                "low": {
+                  "zh": "低 · 480p",
+                  "en": "Low · 480p"
+                },
+                "medium": {
+                  "zh": "中 · 720p",
+                  "en": "Medium · 720p"
+                },
+                "high": {
+                  "zh": "高 · 1080p",
+                  "en": "High · 1080p"
+                },
+                "production": {
+                  "zh": "制作级 · 1440p",
+                  "en": "Production · 1440p"
+                },
+                "4k": {
+                  "zh": "4K · 2160p",
+                  "en": "4K · 2160p"
+                }
               }
             },
             "fps": {
@@ -502,6 +546,16 @@
               "description": {
                 "zh": "深色(默认)或浅色。",
                 "en": "Dark (default) or light."
+              },
+              "x-enum-labels": {
+                "dark": {
+                  "zh": "深色",
+                  "en": "Dark"
+                },
+                "light": {
+                  "zh": "浅色",
+                  "en": "Light"
+                }
               }
             },
             "accent": {
@@ -673,6 +727,28 @@
               "description": {
                 "zh": "默认 16:9。",
                 "en": "16:9 by default."
+              },
+              "x-enum-labels": {
+                "16:9": {
+                  "zh": "16:9 横屏",
+                  "en": "16:9 landscape"
+                },
+                "9:16": {
+                  "zh": "9:16 竖屏",
+                  "en": "9:16 portrait"
+                },
+                "1:1": {
+                  "zh": "1:1 方形",
+                  "en": "1:1 square"
+                },
+                "4:3": {
+                  "zh": "4:3 横向",
+                  "en": "4:3 landscape"
+                },
+                "3:4": {
+                  "zh": "3:4 竖向",
+                  "en": "3:4 portrait"
+                }
               }
             },
             "quality": {
@@ -691,6 +767,28 @@
               "description": {
                 "zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。",
                 "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."
+              },
+              "x-enum-labels": {
+                "low": {
+                  "zh": "低 · 480p",
+                  "en": "Low · 480p"
+                },
+                "medium": {
+                  "zh": "中 · 720p",
+                  "en": "Medium · 720p"
+                },
+                "high": {
+                  "zh": "高 · 1080p",
+                  "en": "High · 1080p"
+                },
+                "production": {
+                  "zh": "制作级 · 1440p",
+                  "en": "Production · 1440p"
+                },
+                "4k": {
+                  "zh": "4K · 2160p",
+                  "en": "4K · 2160p"
+                }
               }
             },
             "fps": {
@@ -855,6 +953,28 @@
               "description": {
                 "zh": "默认 16:9。",
                 "en": "16:9 by default."
+              },
+              "x-enum-labels": {
+                "16:9": {
+                  "zh": "16:9 横屏",
+                  "en": "16:9 landscape"
+                },
+                "9:16": {
+                  "zh": "9:16 竖屏",
+                  "en": "9:16 portrait"
+                },
+                "1:1": {
+                  "zh": "1:1 方形",
+                  "en": "1:1 square"
+                },
+                "4:3": {
+                  "zh": "4:3 横向",
+                  "en": "4:3 landscape"
+                },
+                "3:4": {
+                  "zh": "3:4 竖向",
+                  "en": "3:4 portrait"
+                }
               }
             },
             "quality": {
@@ -873,6 +993,28 @@
               "description": {
                 "zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。",
                 "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."
+              },
+              "x-enum-labels": {
+                "low": {
+                  "zh": "低 · 480p",
+                  "en": "Low · 480p"
+                },
+                "medium": {
+                  "zh": "中 · 720p",
+                  "en": "Medium · 720p"
+                },
+                "high": {
+                  "zh": "高 · 1080p",
+                  "en": "High · 1080p"
+                },
+                "production": {
+                  "zh": "制作级 · 1440p",
+                  "en": "Production · 1440p"
+                },
+                "4k": {
+                  "zh": "4K · 2160p",
+                  "en": "4K · 2160p"
+                }
               }
             },
             "transparent": {

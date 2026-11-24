@@ -151,12 +151,15 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
         enum = spec.get("enum")
         if isinstance(enum, list) and enum:
             entry["options"] = [str(value) for value in enum]
+            entry["option_labels"] = _declared_option_labels(spec, entry["options"])
         elif entry["type"] == "list" and isinstance(items.get("enum"), list) and items["enum"]:
             # 一串、每一项只能是这几个值之一:表单给多选(挑出来的一排),不是让人一行一行手写还写错
             entry["options"] = [str(value) for value in items["enum"]]
+            entry["option_labels"] = _declared_option_labels(items, entry["options"])
         elif raw_type == "boolean":
-            # 开关给「是 / 否」下拉(选项名由节点目录按语言翻);留空 = 不设
+            # 开关给「是 / 否」下拉(选项名是各字段通用的那一对,由节点目录按语言翻);留空 = 不设
             entry["options"] = ["true", "false"]
+            entry["option_labels"] = {}
         # 默认值当占位提示(告诉用户「留空会用什么」),不替他填
         default = spec.get("default")
         if isinstance(default, bool):
@@ -216,11 +219,12 @@ def _structure_field(spec: dict[str, Any], *, required: bool, depth: int) -> dic
     if kind in ("integer", "number"):
         entry = {"type": "number"}
     elif kind == "boolean":
-        entry = {"type": "boolean", "options": ["true", "false"]}
+        entry = {"type": "boolean", "options": ["true", "false"], "option_labels": {}}
     elif kind == "array" and schema_type(items) not in ("object", "array"):
         entry = {"type": "list", **_item_bounds(spec)}
         if isinstance(items.get("enum"), list) and items["enum"]:
             entry["options"] = [str(value) for value in items["enum"]]
+            entry["option_labels"] = _declared_option_labels(items, entry["options"])
     elif kind == "array":
         fields = _structure_fields(items, depth=depth + 1) if depth < _STRUCTURE_DEPTH else {}
         entry = {"type": "list", "editor": "items", "fields": fields} if fields else {"type": "list", "editor": "json"}
@@ -234,6 +238,7 @@ def _structure_field(spec: dict[str, Any], *, required: bool, depth: int) -> dic
             entry["multiline"] = True
     if entry["type"] in ("text", "number") and isinstance(spec.get("enum"), list) and spec["enum"]:
         entry["options"] = [str(value) for value in spec["enum"]]
+        entry["option_labels"] = _declared_option_labels(spec, entry["options"])
     if required:
         entry["required"] = True
     if spec.get("title"):
@@ -300,6 +305,20 @@ def declared_outputs(tool: dict[str, Any]) -> list[str]:
     declared = tool.get("node") if isinstance(tool.get("node"), dict) else {}
     outputs = declared.get("outputs")
     return [str(name) for name in outputs] if isinstance(outputs, list) and outputs else ["output"]
+
+
+def _declared_option_labels(spec: dict[str, Any], options: list[str]) -> dict[str, str]:
+    """插件给可选值起的名字(`x-enum-labels`:`{可选值: 名字}`,名字可以按语言分),按此刻的语言取;只认 `options` 里有的。
+
+    **插件字段的选项名只从这里来**:设了这一格(哪怕是空的),节点目录就不再拿宿主内置节点那张按字段名登记的表去对
+    (workflows.node_catalog.translated_spec)—— 此前 Manim 的「画质」叫 `quality`,和导出时间线节点同名,`high` 被顺手翻成
+    「高画质」,其余几项对不上露出原值,一个下拉里中英混着(维护者截图)。和生成模型参数的 `x-enum-labels` 同一种写法
+    (plugins.generation)。
+    """
+    labels = spec.get("x-enum-labels")
+    if not isinstance(labels, dict):
+        return {}
+    return {str(value): name for value, label in labels.items() if str(value) in options and (name := text_of(label))}
 
 
 def node_meta(tool: dict[str, Any]) -> dict[str, Any]:

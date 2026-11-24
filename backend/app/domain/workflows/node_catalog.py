@@ -152,7 +152,14 @@ def translated_spec(key: str, spec: dict, locale: str) -> dict:
     #: (几百项的 LoRA / 大模型下拉各把自己那份文件名又抄了一遍),而 587 个带下拉的字段里 431 个
     #: 整张表全是这种恒等项。键照旧在(空表就是「这一格没有要另写的显示名」)。
     if isinstance(out.get("options"), list):
-        labels = {str(option): option_label(key, str(option), locale) for option in out["options"]}
+        declared = out.get("option_labels")
+        #: 插件字段自己说了选项叫什么(`x-enum-labels`,见 plugins.nodes._declared_option_labels):照它的,没说的那几项只认
+        #: 各字段通用的名字(是 / 否)—— 不拿内置节点那张按字段名登记的表去对,同名的字段不是同一件事。
+        labels = (
+            {str(option): declared.get(str(option)) or common_option_label(str(option), locale) for option in out["options"]}
+            if isinstance(declared, dict)
+            else {str(option): option_label(key, str(option), locale) for option in out["options"]}
+        )
         out["option_labels"] = {value: label for value, label in labels.items() if label != value}
     #: 一项一张卡(插件数组里每一项是一块结构)的那几格也是给人看的:名字、下拉同一套规矩,一层层往里翻。
     if isinstance(out.get("fields"), dict):
@@ -170,6 +177,12 @@ LITERAL_OPTION_FIELDS = frozenset({"method"})
 #: 选项名借用别处已有词表的字段:机位和参考图角度是同一份词(entities.shot_angles),名字也只有 `entityRole_*` 那一套。
 #: 「画幅」和别处的画幅选项同一套名字(16:9 横屏、9:16 竖屏……)。
 SHARED_OPTION_KEYS = {"shot_angle": "entityRole_{value}", "frame_aspect": "wfOpt_aspect_{value}"}
+
+
+def common_option_label(value: str, locale: str) -> str:
+    """各字段通用的那几个选项名(`wfOpt__<值>`:是 / 否);没有就是值本身。"""
+    key = f"wfOpt__{value}"
+    return t(key, locale) if key in MESSAGES else value
 
 
 def option_label(field: str, value: str, locale: str) -> str:

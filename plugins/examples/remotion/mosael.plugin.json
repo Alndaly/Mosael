@@ -10,7 +10,7 @@
     "en": "Make animated videos with code: explainers, formulas, code demos and charts, rendered locally at no generation cost."
   },
   "default_locale": "zh",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
   "author": {
     "name": "Mosael",
@@ -277,6 +277,20 @@
               "description": {
                 "zh": "画幅:横屏 16:9(默认)、竖屏 9:16、方形 1:1。",
                 "en": "Aspect: 16:9 (default), 9:16 or 1:1."
+              },
+              "x-enum-labels": {
+                "16:9": {
+                  "zh": "16:9 横屏",
+                  "en": "16:9 landscape"
+                },
+                "9:16": {
+                  "zh": "9:16 竖屏",
+                  "en": "9:16 portrait"
+                },
+                "1:1": {
+                  "zh": "1:1 方形",
+                  "en": "1:1 square"
+                }
               }
             },
             "theme": {
@@ -292,6 +306,16 @@
               "description": {
                 "zh": "深色(默认)或浅色。",
                 "en": "Dark (default) or light."
+              },
+              "x-enum-labels": {
+                "dark": {
+                  "zh": "深色",
+                  "en": "Dark"
+                },
+                "light": {
+                  "zh": "浅色",
+                  "en": "Light"
+                }
               }
             },
             "accent": {
@@ -404,6 +428,20 @@
               "description": {
                 "zh": "画幅,默认 16:9(1920×1080)。",
                 "en": "Aspect, 16:9 by default (1920×1080)."
+              },
+              "x-enum-labels": {
+                "16:9": {
+                  "zh": "16:9 横屏",
+                  "en": "16:9 landscape"
+                },
+                "9:16": {
+                  "zh": "9:16 竖屏",
+                  "en": "9:16 portrait"
+                },
+                "1:1": {
+                  "zh": "1:1 方形",
+                  "en": "1:1 square"
+                }
               }
             },
             "fps": {
