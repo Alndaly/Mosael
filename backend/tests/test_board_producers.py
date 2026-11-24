@@ -473,7 +473,6 @@ BOARD_NODES = {
     "transcribe_asset": ("video", "audio"),
     "translate": ("note", "document"),
     "video_to_gif": ("video",),
-    "media_clip": ("video",),
     "video_frame": ("video",),
     "image_grid_split": ("image",),
     "separate_audio": ("video", "audio"),

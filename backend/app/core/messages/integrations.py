@@ -1471,7 +1471,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_video_seam_previous_asset_id": {"zh": "上一段", "en": "Previous segment"},
     "wfNode_video_seam_asset_id": {"zh": "这一段", "en": "This segment"},
     "wfNode_video_seam_search_seconds": {"zh": "在开头几秒里找", "en": "Seconds to search from the start"},
-    "wfNode_media_clip_board": {"zh": "截一段存成新视频,可以只取末尾几秒", "en": "Cut a stretch into a new video, or just the last few seconds"},
     "wfNode_video_frame_board": {"zh": "取一帧存成图片,默认最后一帧,可以接着往下生成", "en": "Save a frame as an image, the last one by default, to carry on generating from it"},
     "wfNode_media_clip": {"zh": "截取片段", "en": "Clip media"},
     "wfNode_media_clip_desc": {

@@ -1317,13 +1317,12 @@ NODE_TYPES: dict[str, NodeSpec] = {
         "output_types": {"start": "number"},
     },
     #: 截一段出来存成新素材。`last_seconds` 取末尾几秒:逐段续写时把上一段的尾巴交给下一段。
+    #: **只在工作流里。** 画板上截一段是视频格自己的「剪一段」(带时间轴的截取面板,TrimComposer):这个节点此前也声明了
+    #: 画板,于是视频格操作条上出现两把剪刀做同一件事(维护者:「第二个和第七个本质上是一样的能力」)。
     "media_clip": {
         "external": False,
         "spends": False,
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["asset_id"],
         "output_media": {"asset_id": "video"},
-        "board_group": "video", "board_description": "wfNode_media_clip_board",
         "category": "wfCat_asset",
         "label": "wfNode_media_clip",
         "description": "wfNode_media_clip_desc",
