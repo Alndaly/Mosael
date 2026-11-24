@@ -50,6 +50,12 @@ Connections are not decoration. The downstream item reshapes its panel around wh
 
 What flows in **never overwrites what you typed**: it only fills a box that is still empty, or one that still holds the previous auto-filled text.
 
+**Masks are never guessed from connections.** When the chosen model takes a mask (an inpainting ComfyUI workflow or form), the
+generation panel gets a **Mask** slot. Connected images are references by default; **you say which one is the mask**: click the
+mask slot's **+** to *Draw one* (brush the area to change over the reference image — white means change), *Use connected image N*
+(it moves from the reference slot to the mask, and another connected image takes its place), or pick from the media library.
+Click a mask already in the slot to keep painting on it.
+
 **Connecting several at once.** Select two or more items and the selection frame grows a **+** with a count on its right edge. Drag from it: release on an item and every selected item connects to it (each line previews whether it can connect), or release on empty space for "Add a cell linked to the N selected", a new item that takes all of them as upstream — that's how several images become references together. While several are selected, each item's own + only shows on hover and connects just that item. Either way it's one undo step.
 
 ![Three items selected: one action bar above the selection frame and the counted + exit on its right edge](/media/screens/en/board-selection.png)

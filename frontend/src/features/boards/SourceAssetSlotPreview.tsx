@@ -7,6 +7,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { IconButton } from "@/components/ui/icon-button";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
+import { cn } from "@/lib/utils";
 
 /**
  * 生成节点素材槽里的紧凑预览。
@@ -19,17 +20,20 @@ export function SourceAssetSlotPreview({
   assetId,
   kind,
   label,
+  onEdit,
   onRemove,
 }: {
   assetId: string;
   kind: "image" | "video" | "audio";
   label: string;
+  /** 点它是「接着改」而不是看大图(蒙版槽:点开编辑器接着画,见 MaskSlot)。 */
+  onEdit?: () => void;
   onRemove: () => void;
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const [previewing, setPreviewing] = React.useState<string | null>(null);
-  const previewLabel = t("boardPreviewSource").replace("{name}", label);
+  const previewLabel = onEdit ? t("maskEdit") : t("boardPreviewSource").replace("{name}", label);
 
   const preview = kind === "audio" ? (
     <IconButton
@@ -44,15 +48,18 @@ export function SourceAssetSlotPreview({
     <IconButton
       unstyled
       label={previewLabel}
-      onClick={() =>
+      onClick={onEdit ?? (() =>
         openImagePreview({
           src: kind === "video" ? assetFileUrl(assetId) : assetPreviewUrl(assetId),
           title: label,
           assetId,
           ...(kind === "video" ? { video: true } : {}),
-        })
+        }))
       }
-      className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
+      className={cn(
+        "block h-8 w-8 overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong",
+        onEdit ? "cursor-pointer" : "cursor-zoom-in",
+      )}
     >
       <FallbackImage src={assetThumbnailUrl(assetId)} alt="" className="h-full w-full object-cover" />
     </IconButton>

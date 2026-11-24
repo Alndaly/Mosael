@@ -358,3 +358,53 @@ describe("连进来却用不上的素材", () => {
     expect(unusedUpstreamKinds(null, undefined, [img("a")])).toEqual([]);
   });
 });
+
+import { assignUpstreamAsMask, keepMasks } from "./NodeComposer";
+
+describe("蒙版槽(ADR 0107)", () => {
+  const slots = [{ role: "reference_image", limit: 3 }, { role: "mask", limit: 1 }];
+  const up = (assetId: string, itemId: string) => ({ assetId, kind: "image", itemId });
+
+  it("连进来的图不自动进蒙版槽:第二张也是参考,不悄悄当成蒙版", () => {
+    expect(autoAssign(slots, [up("a", "i1"), up("b", "i2")])).toEqual([
+      { role: "reference_image", assetId: "a", from: "i1" },
+      { role: "reference_image", assetId: "b", from: "i2" },
+    ]);
+  });
+
+  it("蒙版槽不并进合并的那一个「+」:它有自己的填法", () => {
+    expect(mergeableSourceSlots([{ role: "mask" }, { role: "reference_video" }])).toBeNull();
+  });
+
+  it("把连进来的一张图指定成蒙版:它挪进蒙版槽,参考那一格由另一张连进来的图补上;手动挂的照留", () => {
+    const one = [{ role: "reference_image", limit: 1 }, { role: "mask", limit: 1 }];
+    const current = autoAssign(one, [up("a", "i1"), up("b", "i2")]);
+    expect(current).toEqual([{ role: "reference_image", assetId: "a", from: "i1" }]);
+    expect(assignUpstreamAsMask(current, one, [up("a", "i1"), up("b", "i2")], { assetId: "a", itemId: "i1" })).toEqual([
+      { role: "reference_image", assetId: "b", from: "i2" },
+      { role: "mask", assetId: "a", from: "i1" },
+    ]);
+    const manual = [{ role: "reference_image", assetId: "picked" }];
+    expect(assignUpstreamAsMask(manual, one, [up("a", "i1"), up("b", "i2")], { assetId: "b", itemId: "i2" }), "手动挂的占着参考那一格").toEqual([
+      { role: "reference_image", assetId: "picked" },
+      { role: "mask", assetId: "b", from: "i2" },
+    ]);
+  });
+
+  it("照上游重挂时人放进蒙版槽的照留;指定的那张连进来的图断了线才摘;这组槽里没有蒙版了就都不留", () => {
+    const current = [
+      { role: "reference_image", assetId: "a", from: "i1" },
+      { role: "mask", assetId: "drawn" },
+      { role: "mask", assetId: "b", from: "i2" },
+    ];
+    expect(keepMasks(current, [{ role: "mask", limit: 2 }], [up("b", "i2")])).toEqual([
+      { role: "mask", assetId: "drawn" },
+      { role: "mask", assetId: "b", from: "i2" },
+    ]);
+    expect(keepMasks(current, [{ role: "mask", limit: 2 }], [up("a", "i1")]), "指定的那根线断了").toEqual([
+      { role: "mask", assetId: "drawn" },
+    ]);
+    expect(keepMasks(current, [{ role: "mask", limit: 1 }], [up("b", "i2")]), "按这组的上限").toHaveLength(1);
+    expect(keepMasks(current, [{ role: "reference_image", limit: 3 }], [up("b", "i2")]), "换了个没有蒙版的模型").toEqual([]);
+  });
+});

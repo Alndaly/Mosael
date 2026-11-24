@@ -71,6 +71,7 @@ import { formedGroups, generationPickerEntry, missingModelLabel } from "@/lib/en
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
+import { MaskSlot } from "@/features/boards/MaskSlot";
 import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
 import { AssetUploadStatus, fileKind, namedFile, useAssetUpload, wrongKindText } from "@/features/boards/assetUpload";
 import { useFileDrop } from "@/lib/useFileDrop";
@@ -313,6 +314,9 @@ export function sourceSlots(
     .map((role) => ({ role, limit: sourceLimit(model, role), names: sourceLabels(model, role) }));
 }
 
+/** 蒙版那一格的角色名(ADR 0107:它不顺着连线自动填、不并进合并的「+」,有自己的填法,见 MaskSlot)。 */
+const MASK_ROLE = "mask";
+
 /**
  * 这一组角色能不能收成**一个**格子。
  *
@@ -330,6 +334,8 @@ export function sourceSlots(
  */
 export function mergeableSourceSlots<T extends { role: string }>(slots: T[]): T[] | null {
   if (slots.length < 2) return null;
+  //: 蒙版槽有自己的填法(画一张、指定连进来的哪张,见 MaskSlot),不并进那一个「+」。
+  if (slots.some((slot) => slot.role === MASK_ROLE)) return null;
   const kinds = slots.map((slot) => roleAccepts(slot.role));
   return new Set(kinds).size === kinds.length ? slots : null;
 }
@@ -358,6 +364,9 @@ export function prioritizeFilledSourceSlots<T extends { role: string }>(
  *
  * 连了线却还要再挂一遍素材,那条线就只是根装饰。类别对不上的跳过(视频挂不进首帧),
  * 装不下的也跳过 —— 宁可少挂一张,也不要把用户没连的东西塞进去。
+ *
+ * **蒙版槽不自动填**(ADR 0107):蒙版和参考图收的都是图片,按顺序填的话第二张连进来的图会悄悄进蒙版槽,
+ * 跑出来的东西完全不同、又看不出为什么。连进来的图默认是参考;哪张是蒙版由人在蒙版槽里指定(见 MaskSlot)。
  */
 export function autoAssign(
   slots: { role: string; limit: number }[],
@@ -366,6 +375,7 @@ export function autoAssign(
   const taken = new Set<string>();
   const out: SlotSource[] = [];
   for (const slot of slots) {
+    if (slot.role === MASK_ROLE) continue;
     for (const one of upstream) {
       if (out.filter((x) => x.role === slot.role).length >= slot.limit) break;
       if (taken.has(one.assetId) || one.kind !== roleAccepts(slot.role)) continue;
@@ -379,6 +389,44 @@ export function autoAssign(
 
 /** 槽位里挂着的一份。`from`:顺着哪一格连过来的线挂上的(手动挂的没有)。 */
 export type SlotSource = { role: string; assetId: string; from?: string };
+
+/**
+ * 换模型、换方式、上游变了,面板照上游重挂一遍时,**蒙版槽里人放进去的那几份照留**(ADR 0107):画一张蒙版要几分钟,
+ * 连一根线就丢掉不合理。现在这组槽里没有蒙版了就都不留;指定的是一张连进来的图(`from`),那根线断了 / 上游换了
+ * 素材就摘掉,和别的槽顺着线挂的同一条规矩。
+ */
+export function keepMasks(
+  current: SlotSource[],
+  slots: { role: string; limit: number }[],
+  upstream: { assetId: string; itemId?: string }[],
+): SlotSource[] {
+  const limit = slots.find((slot) => slot.role === MASK_ROLE)?.limit ?? 0;
+  return current
+    .filter((one) => one.role === MASK_ROLE)
+    .filter((one) => !one.from || upstream.some((up) => up.itemId === one.from && up.assetId === one.assetId))
+    .slice(0, limit);
+}
+
+/**
+ * 把一张连进来的图**指定成蒙版**(ADR 0107,蒙版槽里「用连进来的图」)。它从参考那一格挪到蒙版这一格;参考那一格
+ * 空出来的位置照上游补上(连进来的第二张顶上去)—— 不然指定完蒙版,参考那一格就空着,点生成才发现没给原图。
+ * 手动挂的(没有 `from`)原样留着,补的只是它们没占的那几个位置。
+ */
+export function assignUpstreamAsMask(
+  current: SlotSource[],
+  slots: { role: string; limit: number }[],
+  upstream: { assetId: string; kind: string; itemId?: string }[],
+  picked: { assetId: string; itemId?: string },
+): SlotSource[] {
+  const mask: SlotSource = { role: MASK_ROLE, assetId: picked.assetId, ...(picked.itemId ? { from: picked.itemId } : {}) };
+  const masks = [...current.filter((one) => one.role === MASK_ROLE && one.assetId !== picked.assetId), mask];
+  const asMask = new Set(masks.map((one) => one.assetId));
+  const manual = current.filter((one) => one.role !== MASK_ROLE && !one.from && !asMask.has(one.assetId));
+  const room = slots.map((slot) => ({ ...slot, limit: slot.limit - manual.filter((one) => one.role === slot.role).length }));
+  const taken = new Set(manual.map((one) => one.assetId));
+  const filled = autoAssign(room, upstream.filter((one) => !asMask.has(one.assetId) && !taken.has(one.assetId)));
+  return [...manual, ...filled, ...masks];
+}
 
 /**
  * 连进来、这个模型却**一份都挂不上**的素材种类:现在这种生成方式没有收它的槽(`elsewhere`:换一种生成方式收得下)。
@@ -673,7 +721,13 @@ export function NodeComposer({
   React.useEffect(() => {
     if (lastFeed.current === feedKey) return;
     lastFeed.current = feedKey;
-    setSources(autoAssign(sourceSlots(current, activeMode?.roles), feed));
+    const next = sourceSlots(current, activeMode?.roles);
+    setSources((previous) => {
+      const masks = keepMasks(previous, next, feed);
+      //: 当成蒙版的那张连进来的图不再同时挂进参考那一格。
+      const asMask = new Set(masks.map((one) => one.assetId));
+      return [...autoAssign(next, feed.filter((one) => !asMask.has(one.assetId))), ...masks];
+    });
   }, [feedKey, current, activeMode, feed]);
 
   /**
@@ -757,6 +811,38 @@ export function NodeComposer({
     () => new Map([...referenced.byId.values()].map((asset) => [asset.id, asset.kind])),
     [referenced.byId],
   );
+
+  /**
+   * 「蒙版」那一格(ADR 0107)。画蒙版的底图是这一格挂着的第一张参考图 / 首帧(ADR 0056 决定 2:蒙版和它的源图是一对,
+   * 和 AI Studio 同一条判据);能拿来当蒙版的是连进来、还没当成蒙版的图。两条画槽的路(按槽一行行的、ComfyUI 表单项)都挂它。
+   */
+  const renderMaskSlot = (slot: { role: string; limit: number }) => {
+    const masks = sources.filter((one) => one.role === MASK_ROLE);
+    const baseSource = sources.find(
+      (one) => (one.role === "reference_image" || one.role === "first_frame") && (assetKindById.get(one.assetId) ?? roleAccepts(one.role)) === "image",
+    );
+    return (
+      <MaskSlot
+        label={(index) => slotLabel(t, slot, index)}
+        masks={masks}
+        limit={slot.limit}
+        candidates={feed.filter((one) => one.kind === "image" && !masks.some((mask) => mask.assetId === one.assetId))}
+        base={baseSource ? { assetId: baseSource.assetId, name: referenced.byId.get(baseSource.assetId)?.name ?? "" } : null}
+        workspaceId={workspaceId}
+        drop={(button) => <SlotDrop onFiles={(files) => attachFiles(files, [MASK_ROLE])}>{button}</SlotDrop>}
+        onPickLibrary={() => onPickAsset("image", (assetId) => setSources((all) => [...all, { role: MASK_ROLE, assetId }]))}
+        onUseCandidate={(one) => setSources((all) => assignUpstreamAsMask(all, slots, feed, one))}
+        onSaved={(assetId, replacing) =>
+          setSources((all) =>
+            replacing
+              ? all.map((source) => (source.role === MASK_ROLE && source.assetId === replacing ? { role: MASK_ROLE, assetId } : source))
+              : [...all, { role: MASK_ROLE, assetId }],
+          )
+        }
+        onRemove={(assetId) => setSources((all) => all.filter((source) => !(source.role === MASK_ROLE && source.assetId === assetId)))}
+      />
+    );
+  };
   React.useEffect(() => {
     if (promptDocument || mentioned.length === 0 || !referenced.settled || referenced.byId.size === 0) return;
     const restored = restorePromptDocument(prompt, mentioned, [...referenced.byId.values()]);
@@ -1100,6 +1186,14 @@ export function NodeComposer({
           const groupChanged =
             previous !== undefined &&
             previous.endsWith("_frame") !== slot.role.endsWith("_frame");
+          if (slot.role === MASK_ROLE) {
+            return (
+              <React.Fragment key={slot.role}>
+                {groupChanged && <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />}
+                {renderMaskSlot(slot)}
+              </React.Fragment>
+            );
+          }
           const mine = sources.filter((one) => one.role === slot.role);
           return (
             <React.Fragment key={slot.role}>
@@ -1240,6 +1334,14 @@ export function NodeComposer({
         if (!(SOURCE_ROLES as readonly string[]).includes(formItem.key) || !supportsParameter(current, formItem.key)) return null;
         const slot = sourceSlots(current).find((one) => one.role === formItem.key);
         if (!slot) return null;
+        if (slot.role === MASK_ROLE) {
+          return (
+            <div key={formItem.key} className="grid gap-1.5" data-board-form-source={formItem.key}>
+              <span className="text-ui-xs text-muted-foreground">{label}</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-1">{renderMaskSlot(slot)}</div>
+            </div>
+          );
+        }
         const mine = sources.filter((one) => one.role === slot.role);
         return (
           <div key={formItem.key} className="grid gap-1.5" data-board-form-source={formItem.key}>
