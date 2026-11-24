@@ -147,7 +147,8 @@ def test_探测超时_不抛_降级成连不上(versions, tmp_path: Path) -> Non
     server = _serve({"system": {"comfyui_version": "0.41.0"}}, gate=gate, entered=entered)
     try:
         told = versions.version({"directory": str(root), "url": _url(server), "running": True}, "zh", timeout=0.1)
-        assert entered.is_set(), "插件确实去问那台了"
+        #: 等而不是查:连接在插件超时前就进了内核的队列,但服务端处理线程可能晚起步(定时乱序那一跑会随机推迟线程)。
+        assert entered.wait(2), "插件确实去问那台了"
         assert not gate.is_set(), "那台一直卡着没答:插件按超时降级,没有等它慢慢答"
     finally:
         gate.set()

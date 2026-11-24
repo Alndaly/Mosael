@@ -30,7 +30,8 @@ def test_only_max_active_turns_run_at_once() -> None:
         scheduler.submit(session_id, lambda sid=session_id: body(sid))
 
     _wait_until(lambda: len(started) == 2)
-    assert started == ["s1", "s2"]
+    #: 先来的两轮被放行(FIFO);两条线程谁先跑到 body 不由准入器决定,所以只比「是哪两轮」,不比先后。
+    assert sorted(started) == ["s1", "s2"]
     assert not scheduler.idle()
     release.set()
     assert scheduler.wait_for_idle(2), "排队的两轮没有接着跑"
@@ -57,12 +58,15 @@ def test_cancel_removes_a_queued_turn_before_it_starts() -> None:
 def test_cancel_does_not_pretend_to_stop_an_already_started_turn() -> None:
     scheduler = TurnScheduler(max_active=1)
     release = threading.Event()
+    entered = threading.Event()
 
     def body() -> None:
+        entered.set()
         release.wait(2)
 
     scheduler.submit("s1", body)
-    _wait_until(lambda: not scheduler.idle())
+    #: 要等真进了 body:「不空闲」只说明放行了,线程还没起步时这一轮照样能撤(那是对的),不能拿它当「已经开始」。
+    assert entered.wait(2)
     assert scheduler.cancel("s1") is False
     release.set()
     assert scheduler.wait_for_idle(2)
