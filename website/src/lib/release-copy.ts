@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.6.15": {
+    zh: [
+      "**3D 场景在别处被改过之后还能保存。** 撞上新版本时换成最新那份并提示，不再从此存不上。",
+      "**AI Studio 的图像模型也能选画幅。** 模型声明了的参数就能选，AI Studio、画板、工作流节点一套规则。",
+      "**批量操作不再吞掉失败。** 有失败时说清成功几项、失败几项，勾选里只留失败的那几项。",
+      "**确认卡先核对参数。** 智能体传错参数时当场拒绝并点名，不再悄悄用缺省值。",
+    ],
+    en: [
+      "**3D scenes keep saving after an edit elsewhere.** A conflicting save now switches to the latest version and tells you, instead of failing from then on.",
+      "**Image models in AI Studio can pick an aspect ratio.** Any parameter a model declares is offered, with one rule shared by AI Studio, boards, and workflow nodes.",
+      "**Batch actions no longer hide failures.** You see how many succeeded and failed, and only the failed items stay selected.",
+      "**Confirmation cards check their parameters.** Wrong arguments from the agent are rejected up front with the field named, instead of silently falling back to defaults.",
+    ],
+  },
   "v2.6.14": {
     zh: [
       "**Windows 滚动条不再挤占页面。** 改成悬浮滚动条，滚动条出现时页面不再变窄、跳动。",
