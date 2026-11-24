@@ -150,7 +150,9 @@ jobs:
     runs-on: ubuntu-latest
     # 正常十几分钟。上限是给「挂住」的:没有它,一条死锁的测试要占着 runner 等满默认的 6 小时。
     # 挂住的那条会在 10 分钟时由 faulthandler 打出所有线程的栈(backend/pyproject.toml),日志里看得到卡在哪。
-    timeout-minutes: 45
+    # 带线程起步抖动的那一跑(chaos.yml)每起一条线程多等 0~0.3 秒,整套要四十多分钟:45 分钟的上限在 99% 处
+    # 把它掐掉过(2026-11-24,一条没红),所以抖动时放宽到 75 分钟;平时的门禁仍是 45。
+    timeout-minutes: ${{ inputs.thread-jitter != '' && 75 || 45 }}
     defaults:
       run:
         shell: bash
