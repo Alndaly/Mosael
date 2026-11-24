@@ -121,7 +121,7 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
   差分更新还要发布 macOS `Mosael-VERSION-mac-signed.zip.blockmap` 和 Windows `Mosael-Setup-VERSION.exe.blockmap`。它们由 `write-update-metadata.mjs` 与元数据同时从最终二进制生成;工作流会检查文件存在并上传。旧版本首次升级时会同时取新旧两份 blockmap,之后更新器按 Range 下载变化块,失败才回退完整包。
   本机交接注意:artifact 里的 `latest-mac.yml` / `*.blockmap` 是**公证前** ZIP 生成的;`stapler staple` 会改变 `.app` 字节,拿到最终 ZIP 后要重跑 `scripts/write-update-metadata.mjs`,不要直接上传 artifact 里那两份。
   手动交接时:macOS ZIP 用与公证相同的 `Mosael.app` 经 `scripts/pack-mac-update.mjs` 生成,其中 `Contents/Resources/app.asar` 以 `Copy` 存储,其他成员正常压缩并保留符号链接;不要用普通 `ditto` ZIP 替代,否则压缩流变化会让差分退化成整包下载。Windows 用同一次构建的 NSIS 安装包。`write-update-metadata.mjs` 会把 sha512 写进元数据;不要手抄或从旧版复制。
-  `SHA256SUMS` 也要覆盖这些 `.blockmap`,不能只核对安装包本体。
+  `SHA256SUMS` 也要覆盖这些 `.blockmap`,不能只核对安装包本体;`scripts/write-release-checksums.mjs` 已把它们算在内(`test/release-checksums.test.mjs` 守着)。
   本地最终发布目录 `dist/VERSION/` 也应包含 `latest-mac.yml` / `latest.yml`,Release 的下载地址才能被应用内更新读到。
 
 ### R2 主源与 GitHub 自动兜底
@@ -195,8 +195,7 @@ python3 scripts/sync-plugin-registry.py --release vVERSION --repo Alndaly/Mosael
 
 ```bash
 mkdir -p dist/VERSION && cp /path/to/verified/assets/* dist/VERSION/
-(cd dist/VERSION && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
-  | sort -z | xargs -0 shasum -a 256 > SHA256SUMS)
+node scripts/write-release-checksums.mjs --release dist/VERSION
 ```
 
 这个目录就是这一版交付的全部东西：下面建 Release 传的是它，国内网盘传的也是它。本机留着，以后要核对某一版
