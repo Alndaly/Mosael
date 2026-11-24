@@ -79,24 +79,26 @@ def _frame_of(asset: Any) -> str:
     return f"{int(width)}x{int(height)}" if isinstance(width, (int, float)) and isinstance(height, (int, float)) and width and height else ""
 
 
+def _relight_order(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """这一单交什么:原图当参考图、打光指令当提示词、画幅是原图的宽 × 高,模型是挑好的那个收参考图的图片模型。"""
+    asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
+    model = reference_model(db, str(config.get("model") or "").strip(), current_actor(db))
+    return {
+        "provider": model["provider"],
+        "provider_profile_id": model["provider_profile_id"],
+        "model": model["model"],
+        "kind": "image",
+        "prompt": relight_instruction(config, get_current_locale()),
+        "negative_prompt": "",
+        "parameters": {},
+        "source_assets": [{"asset_id": asset.id, "role": "reference_image"}],
+        "frame_aspect": _frame_of(asset),
+    }
+
+
 @register("image_relight")
 def image_relight(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """给一张图重新打光:一次生成,原图当参考图,交回打好光的那一张(下单、等结果见 subjobs.generate_one)。"""
 
-    def order() -> dict[str, Any]:
-        asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
-        model = reference_model(db, str(config.get("model") or "").strip(), current_actor(db))
-        return {
-            "provider": model["provider"],
-            "provider_profile_id": model["provider_profile_id"],
-            "model": model["model"],
-            "kind": "image",
-            "prompt": relight_instruction(config, get_current_locale()),
-            "negative_prompt": "",
-            "parameters": {},
-            "source_assets": [{"asset_id": asset.id, "role": "reference_image"}],
-            "frame_aspect": _frame_of(asset),
-        }
-
-    made = generate_one(db, scope, config, order)
+    made = generate_one(db, scope, config, lambda: _relight_order(db, scope, config))
     return {"asset_id": made["asset_id"] or (made["asset_ids"][0] if made["asset_ids"] else ""), "asset_ids": made["asset_ids"]}
