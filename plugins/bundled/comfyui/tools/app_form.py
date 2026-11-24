@@ -198,6 +198,8 @@ class Marks:
     results: tuple[str, ...] = ()
     stray: tuple[dict[str, str], ...] = ()
     legacy_forms: tuple[str, ...] = ()
+    #: 「在画板上用」(ADR 0109):这张工作流的入口要不要上创意画板。缺省不上。
+    board: bool = False
 
     @property
     def upgradable(self) -> bool:
@@ -295,7 +297,8 @@ def read(ui_graph: Any) -> Marks:
                                     if name in graph.GRAPH_ITEMS and isinstance(spec, dict)]
         forms.append(FormMarks(form_id, _text(raw.get("title"), MAX_LABEL), _text(raw.get("description"), MAX_DESCRIPTION),
                                _ordered(found)))
-    return Marks(status="ok", version=VERSION, forms=tuple(forms), results=tuple(results), stray=tuple(stray))
+    return Marks(status="ok", version=VERSION, forms=tuple(forms), results=tuple(results), stray=tuple(stray),
+                 board=head.get("board") is True)
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +426,8 @@ def summary(marks: Marks, resolved: Resolved, locale: str = "zh", ids: dict[str,
         "results": list(marks.results),
         "invalid": len(resolved.invalid),
         "stray": len(marks.stray),
+        #: 「在画板上用」(ADR 0109):工作流库的列表和编辑器读它摆开关
+        "board": marks.board,
     }
 
 
@@ -466,11 +471,13 @@ def new_form_id(taken: set[str]) -> str:
             return candidate
 
 
-def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[str], locale: str = "zh") -> dict[str, Any]:
+def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[str], locale: str = "zh", *,
+          board: bool | None = None) -> dict[str, Any]:
     """这张图换上新的标记(返回新图,不改入参):先把每个节点上的 `properties.mosael` 和图上的 `extra.mosael` 摘掉,再按
     `forms`(**全部**表单,`[{id?, title, description, items: [{node, input, label?, main?, choices?}]}]`;顺序就是各处列出来
     的顺序,每张表上 `items` 的顺序就是表单的顺序;没给 id 的是新表单,在这里起 id)和 `results`(标成结果的输出节点)
-    写回。一张表单都没有、也没标结果就不留 `extra.mosael`。**别的一个字都不动** —— 别的扩展写的键、节点的位置、widget 的值
+    写回;`board` 是「在画板上用」(ADR 0109),**没给(None)就照这张图原来的** —— 只改表单的调用方(工作台的 `app_marks`)
+    不该顺手把它抹掉。一张表单都没有、没标结果、也不在画板上用,就不留 `extra.mosael`。**别的一个字都不动** —— 别的扩展写的键、节点的位置、widget 的值
     照原样。
 
     认根图上的节点,也认**子图里面的节点**(`105:9`,写法见模块说明);指着不存在的节点、子图定义用了不止一处所以指不明是哪
@@ -487,6 +494,8 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
     given = [one.get("id") for one in forms if isinstance(one, dict) and one.get("id")]
     if any(not isinstance(one, str) or not FORM_ID_PATTERN.match(one) for one in given) or len(set(given)) != len(given):
         raise _bad(locale, "表单的 id 不合规或重复了", "A form id is malformed or used twice.")
+    if board is None:
+        board = read(ui_graph).board
     out = copy.deepcopy(ui_graph)
     #: 根图和每一层子图定义里的节点:标记跟着节点走,摘和写都要走到每一层
     for node, _ref in nodes_with_refs(out):
@@ -496,7 +505,7 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
     extra = out.get("extra")
     if isinstance(extra, dict):
         extra.pop(KEY, None)
-    if not forms and not results:
+    if not forms and not results and not board:
         return out
 
 
@@ -556,7 +565,7 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
         marks_of(node_id)["result"] = True
     if not isinstance(out.get("extra"), dict):
         out["extra"] = {}
-    out["extra"][KEY] = {"version": VERSION, "forms": heads}
+    out["extra"][KEY] = {"version": VERSION, "forms": heads, **({"board": True} if board else {})}
     return out
 
 

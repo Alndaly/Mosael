@@ -327,12 +327,15 @@ elif tool == "sleep":
 
 #: 工具的声明。shout 吃一段字、写明了输出(summary 是文字、count 不上画板)—— 便签 / 文档的能力;
 #: paint 按提示词交出一张图 —— 图片空格子的一种填法;many 的输出没写类型(按值猜);secret 只给宿主调。
+#: 上画板要声明(ADR 0109):这份清单里的工具都写了 `surfaces`(见下面的 _board),「不是内容变换」的那几个才测得到那个原因。
+_BOARD = {"surfaces": ["workflow", "board"]}
+
 PLUGIN_TOOLS = [
     {
         "name": "shout",
         "read_only": True,
         "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
-        "node": {"outputs": ["summary", "count"], "output_types": {"summary": "text", "count": "number"},
+        "node": {**_BOARD, "outputs": ["summary", "count"], "output_types": {"summary": "text", "count": "number"},
                  "board_outputs": ["summary"]},
     },
     {
@@ -340,25 +343,33 @@ PLUGIN_TOOLS = [
         #: `extra` 是一份原始 JSON(选填):工作流里有编辑器,画板的表单上不出现。
         "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}, "extra": {"type": "object"}}},
         #: `output_media`:交出的那份是一张图 —— 它挂在图片的空格子上。
-        "node": {"outputs": ["caption", "asset_id"], "output_types": {"caption": "text"}, "output_media": {"asset_id": "image"}},
+        "node": {**_BOARD, "outputs": ["caption", "asset_id"], "output_types": {"caption": "text"},
+                 "output_media": {"asset_id": "image"}},
     },
     #: 可能交出一个文件(所以是内容变换),这回交的是一列没声明类型的字:按值猜 —— 一个列表落成好几格。
-    {"name": "many", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["lines", "asset_id"]}},
-    {"name": "boom", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["asset_id"]}},
-    {"name": "sleep", "input_schema": {"type": "object", "properties": {}}, "node": {"outputs": ["asset_id"]}},
+    {"name": "many", "input_schema": {"type": "object", "properties": {}},
+     "node": {**_BOARD, "outputs": ["lines", "asset_id"], "output_media": {"asset_id": "image"}}},
+    {"name": "boom", "input_schema": {"type": "object", "properties": {}},
+     "node": {**_BOARD, "outputs": ["asset_id"], "output_media": {"asset_id": "image"}}},
+    {"name": "sleep", "input_schema": {"type": "object", "properties": {}},
+     "node": {**_BOARD, "outputs": ["asset_id"], "output_media": {"asset_id": "image"}}},
     {"name": "secret", "input_schema": {"type": "object", "properties": {}}},
     #: 下面四个不是内容变换,不上画板(工作流里照样用):
     #: 列清单(缺省的一个 output,类型不明)、看状态(文字没点名落板,是摘要)、
     #: 装环境(点名落板的只有文字,又不吃任何内容 —— 是一份报告)、必填一份 JSON(画板上填不了)。
     {"name": "listing", "read_only": True,
-     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}},
+     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}, "node": dict(_BOARD)},
     {"name": "status", "read_only": True, "input_schema": {"type": "object", "properties": {}},
-     "node": {"outputs": ["summary"], "output_types": {"summary": "text"}}},
+     "node": {**_BOARD, "outputs": ["summary"], "output_types": {"summary": "text"}}},
     {"name": "setup", "input_schema": {"type": "object", "properties": {"reinstall": {"type": "boolean"}}},
-     "node": {"outputs": ["summary"], "output_types": {"summary": "text"}, "board_outputs": ["summary"]}},
+     "node": {**_BOARD, "outputs": ["summary"], "output_types": {"summary": "text"}, "board_outputs": ["summary"]}},
     {"name": "explain",
      "input_schema": {"type": "object", "properties": {"steps": {"type": "array"}}, "required": ["steps"]},
-     "node": {"outputs": ["asset_id"]}},
+     "node": {**_BOARD, "outputs": ["asset_id"], "output_media": {"asset_id": "image"}}},
+    #: 下面两个是内容变换,但不上画板(ADR 0109):没声明上画板的;声明了、却说不清产出哪种素材的。
+    {"name": "plain", "input_schema": {"type": "object", "properties": {}},
+     "node": {"outputs": ["asset_id"], "output_media": {"asset_id": "image"}}},
+    {"name": "vague", "input_schema": {"type": "object", "properties": {}}, "node": {**_BOARD, "outputs": ["asset_id"]}},
 ]
 
 #: 上面这份清单里能上画板的那几个(内容变换)。
@@ -688,9 +699,10 @@ def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
     assert by_id["node:separate_audio"]["output_kinds"] == ["audio", "audio"]
     assert by_id["node:translate"]["output_kinds"] == ["note"]
     assert all(one["output_kinds"] and set(one["output_kinds"]) <= set(OUTPUT_KINDS) for one in tools)
-    #: 插件工具在 node 块里声明 output_media;没声明、又说不清吃哪种素材的,是 asset。
+    #: 插件工具在 node 块里声明 output_media;没声明、又说不清吃哪种素材的生成器不上画板(ADR 0109,见下面那条测试)。
     assert by_id["node:plugin.dev.test.boardtools.paint"]["output_kinds"] == ["image"]
-    assert by_id["node:plugin.dev.test.boardtools.many"]["output_kinds"] == ["asset"]
+    assert by_id["node:plugin.dev.test.boardtools.many"]["output_kinds"] == ["image"]
+    assert "node:plugin.dev.test.boardtools.vague" not in by_id and "node:plugin.dev.test.boardtools.plain" not in by_id
     assert by_id["node:translate"]["board_group"] == "text" and by_id["node:translate"]["board_group_label"] == "处理文字"
     assert by_id["node:plugin.dev.test.boardtools.paint"]["board_group"] == "new"
     assert by_id["node:plugin.dev.test.boardtools.shout"]["board_group"] == "text"
@@ -701,8 +713,8 @@ def test_画板表单只摆创作者看得懂的参数(tmp_path) -> None:
     paint = by_id["node:plugin.dev.test.boardtools.paint"]
     assert paint["role"] == "slot" and paint["hosts"] == ["image"] and paint["host_fields"] == {}
     assert paint["fills_empty_slot"] is True
-    #: 说不清产出哪种素材的生成器:三种媒体的空格子都能挑它。
-    assert by_id["node:plugin.dev.test.boardtools.many"]["hosts"] == ["image", "video", "audio"]
+    #: 生成器只挂在它声明产出的那种空格子上(ADR 0109:说不清的不上画板,不再三种媒体格都挂)。
+    assert by_id["node:plugin.dev.test.boardtools.many"]["hosts"] == ["image"]
     #: 内置的没有分组;顺序是注册表的:内置的、内置节点、插件工具(操作条按它排)。
     everyone = [one["id"] for one in listed.json()]
     assert all(one["board_group"] == "" for one in listed.json() if not one["id"].startswith("node:"))
@@ -1151,3 +1163,23 @@ def test_能力的设置归宿主_它自己再跑一次也带着() -> None:
         "producer": "write",
     }
     assert _with_ability(None, "node:shout", {"config": {}}) == {"abilities": {"node:shout": {"config": {}}}}
+
+
+def test_没声明上画板的_说不清产出哪种素材的_都不上_存着的跑的时候说清楚(tmp_path) -> None:
+    """ADR 0109:上不上画板由声明说;挂在哪种格子只按声明的素材种类。画布上存着的(升级前自动挂上的)跑的时候说清楚怎么办。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    _install_plugin(tmp_path)
+    _connect(_me(client))
+    listed = {one["id"] for one in client.get("/api/boards/producers", params={"workspace_id": ws}).json()}
+    assert "node:plugin.dev.test.boardtools.plain" not in listed, "内容变换,但没声明上画板"
+    assert "node:plugin.dev.test.boardtools.vague" not in listed, "声明了,但只说「一份素材」,不知道挂在哪种格子上"
+
+    #: 说的是哪一种情况、该去哪改 —— 不是笼统的「不是内容变换」。
+    for name, said in (("plain", "在画板上用"), ("vague", "output_media")):
+        producer = f"node:plugin.dev.test.boardtools.{name}"
+        board_id = _slot_board(client, ws, producer)
+        refused = _run(client, board_id, ws, producer, kind="image")
+        assert refused.status_code == 400, refused.text
+        detail = refused.json()["detail"]
+        assert said in detail and "不交出素材" not in detail, detail

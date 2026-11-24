@@ -23,18 +23,21 @@ from tests.util import fresh_client
 PACKAGE = "dev.test.fetchers"
 PRODUCER = f"node:plugin.{PACKAGE}.fetch"
 
+#: 三个都声明了上画板、说清了交回一张图(ADR 0109):`fetch` / `recent` 不上画板的原因才是「按编号取东西」。
+_BOARD = {"surfaces": ["workflow", "board"]}
+
 #: `fetch` 按网盘的 fs_id 取回一个文件(必填编号);`recent` 按任务号取回、不给就取最近几次(选填编号);
 #: `paint` 按提示词出图 —— 凭空产出,照旧上画板。
 TOOLS = [
     {"name": "fetch", "label": {"zh": "从网盘导入", "en": "Import from the drive"},
      "input_schema": {"type": "object", "properties": {"fs_id": {"type": "string", "format": "external_id"}},
                       "required": ["fs_id"]},
-     "node": {"outputs": ["asset_id"], "output_types": {"asset_id": "asset"}}},
+     "node": {**_BOARD, "outputs": ["asset_id"], "output_types": {"asset_id": "asset"}, "output_media": {"asset_id": "image"}}},
     {"name": "recent", "input_schema": {"type": "object", "properties": {
         "prompt_id": {"type": "string", "format": "external_id"}, "last": {"type": "integer"}}},
-     "node": {"outputs": ["asset_id"], "output_types": {"asset_id": "asset"}}},
+     "node": {**_BOARD, "outputs": ["asset_id"], "output_types": {"asset_id": "asset"}, "output_media": {"asset_id": "image"}}},
     {"name": "paint", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}}},
-     "node": {"outputs": ["asset_id"], "output_types": {"asset_id": "asset"}}},
+     "node": {**_BOARD, "outputs": ["asset_id"], "output_types": {"asset_id": "asset"}, "output_media": {"asset_id": "image"}}},
 ]
 
 ENTRY = """

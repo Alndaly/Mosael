@@ -197,7 +197,7 @@ const appData = (overrides: Partial<WorkflowApp> = {}): WorkflowApp => ({
   ],
   outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },
             { node: "17", title: "", label: "PreviewImage", class_type: "PreviewImage", media: "image" }],
-  app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
+  app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0, board: false },
   ...overrides,
 });
 
@@ -257,7 +257,7 @@ describe("ComfyUI 工作台", () => {
     const form = (id: string, title: string) => ({ id, title, description: "", fields: 1, invalid: 0,
                                                    model: `人像/古风.json#${id}`, tool: "", items: [] });
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "2", upgradable: false, results: [], invalid: 0,
-                                                        stray: 0, forms: [form("a1", "全身"), form("b2", "半身")] } }));
+                                                        stray: 0, board: false, forms: [form("a1", "全身"), form("b2", "半身")] } }));
     await mount(state(), null, "人像/古风.json#b2");
     expect(await screen.findByRole("tab", { name: "workbenchTabApp", selected: true })).toBeTruthy();
     expect(await screen.findByRole("tab", { name: "半身", selected: true })).toBeTruthy();
@@ -519,7 +519,7 @@ describe("ComfyUI 工作台", () => {
     fireEvent.click(within(document.querySelector("[data-source-item='3.steps']") as HTMLElement)
       .getByRole("button", { name: "workflowAppAdd" }));
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "2", upgradable: false, results: [], invalid: 0,
-                                                        stray: 0, forms: [{ id: "k3x9a2", title: "调步数", description: "",
+                                                        stray: 0, board: false, forms: [{ id: "k3x9a2", title: "调步数", description: "",
                                                                             fields: 1, invalid: 0, model: "", tool: "",
                                                                             items: [] }] } }));
     fireEvent.click(write);
@@ -576,7 +576,7 @@ describe("ComfyUI 工作台", () => {
   it("表单:删一张存过的表单,确认框压在外壳之上、请画布让开,列出这个工作区里在用它的几处", async () => {
     const bridge = await mount();
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "2", upgradable: false, results: [], invalid: 0,
-                                                        stray: 0, forms: [{ id: "k3x9a2", title: "调步数", description: "",
+                                                        stray: 0, board: false, forms: [{ id: "k3x9a2", title: "调步数", description: "",
                                                                             fields: 1, invalid: 0, model: "古风.json#k3x9a2",
                                                                             tool: "wf_x_k3x9a2", items: [] }] } }));
     api.getFormUsages.mockResolvedValue({ uses: [{ kind: "board", id: "b1", name: "海报", count: 1 }] });
@@ -670,7 +670,7 @@ describe("ComfyUI 工作台", () => {
   it("表单:画布上这张的表单是上一版的 —— 不摆编辑器、不给写,说清楚;「查看并升级」和工作流库同一个弹窗,压在外壳之上", async () => {
     const bridge = await mount(state({ workflow: { ...GUFENG, modified: false } }));
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "1", upgradable: true, forms: [],
-                                                        results: [], invalid: 0, stray: 0 } }));
+                                                        results: [], invalid: 0, stray: 0, board: false } }));
     api.getWorkflowLibrary.mockResolvedValue({
       workflows: [{ path: "人像/古风.json", label: "古风", modified: 12, app: { status: "unsupported", version: "1", upgradable: true } },
                   { path: "别的.json", label: "别的", modified: 3, app: { status: "ok", version: "2", upgradable: false } }],
@@ -698,13 +698,13 @@ describe("ComfyUI 工作台", () => {
   it("表单:更新版插件写的表单 —— 说升级 Mosael,不给升级也不给写;画布上有没存的改动时上一版的也先不给升级", async () => {
     const bridge = await mount();
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "3", upgradable: false, forms: [],
-                                                        results: [], invalid: 0, stray: 0 } }));
+                                                        results: [], invalid: 0, stray: 0, board: false } }));
     tab("workbenchTabApp");
     expect(await screen.findByText("workbenchFormsNewer")).toBeTruthy();
     expect(within(shownPanel()).queryByRole("button", { name: "workflowFormsUpgradeOpen" })).toBeNull();
     expect(within(shownPanel()).queryByRole("button", { name: /workbenchAppWrite/ })).toBeNull();
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "1", upgradable: true, forms: [],
-                                                        results: [], invalid: 0, stray: 0 } }));
+                                                        results: [], invalid: 0, stray: 0, board: false } }));
     bridge.emit(state({ workflow: { ...GUFENG, modified: true, revision: 2 } }));
     fireEvent.click(within(shownPanel()).getByRole("button", { name: /workbenchAppReload/ }));
     const upgrade = await within(shownPanel()).findByRole("button", { name: "workflowFormsUpgradeOpen" });
@@ -716,7 +716,7 @@ describe("ComfyUI 工作台", () => {
     api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
     api.getJob.mockResolvedValue(SUCCEEDED);
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "1", upgradable: true, forms: [],
-                                                        results: [], invalid: 0, stray: 0 } }));
+                                                        results: [], invalid: 0, stray: 0, board: false } }));
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
     const preview = await need<HTMLElement>('[data-output-node="17"]');
     expect(await screen.findByText("workbenchRunFormsOld")).toBeTruthy();
@@ -732,7 +732,7 @@ describe("ComfyUI 工作台", () => {
     api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
     api.getJob.mockResolvedValue(SUCCEEDED);
     api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "1", upgradable: false, forms: [],
-                                                        results: ["9"], invalid: 0, stray: 0 } }));
+                                                        results: ["9"], invalid: 0, stray: 0, board: false } }));
     api.getCanvasMarks.mockResolvedValue({ nodes: { "17": { result: true } }, extra: { version: 1 } });
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
     await waitFor(() => expect(api.runCanvas).toHaveBeenCalledWith("i1", {
@@ -1095,7 +1095,7 @@ describe("运行与结果:节点名和应用表单、「结果取自」同一种
       outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },
                 { node: "17", title: "PreviewImage", label: "预览图像", class_type: "PreviewImage", media: "image" }],
       names: { "4": "Checkpoint 加载器", "9": "高清", "17": "预览图像" },
-      app: { status: "ok", version: "1", upgradable: false, forms: [], results: ["17"], invalid: 0, stray: 0 },
+      app: { status: "ok", version: "1", upgradable: false, forms: [], results: ["17"], invalid: 0, stray: 0, board: false },
     }));
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
     expect(await need<HTMLElement>('[data-result-node="17"]')).toBeTruthy();
@@ -1149,7 +1149,7 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
     api.getJob.mockResolvedValue(SUCCEEDED);
     const marked = (results: string[]) => appData({ app: { status: "ok", version: "2", upgradable: false, forms: [],
-                                                            results, invalid: 0, stray: 0 } });
+                                                            results, invalid: 0, stray: 0, board: false } });
     api.getCanvasApp.mockResolvedValue(marked(["9", "5"]));
     api.getCanvasMarks.mockResolvedValue({ nodes: {}, extra: { version: 1 } });
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));

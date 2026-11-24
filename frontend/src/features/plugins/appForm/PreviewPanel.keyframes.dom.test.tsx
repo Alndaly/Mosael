@@ -140,7 +140,7 @@ function videoData(): WorkflowApp {
         spec: { type: "string", default: "2:3 (Portrait Photo)", enum: ["1:1 (Square)", "2:3 (Portrait Photo)"] } },
     ],
     outputs: [],
-    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
+    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0, board: false },
   } as WorkflowApp;
 }
 

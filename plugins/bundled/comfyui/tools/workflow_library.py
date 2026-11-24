@@ -1082,7 +1082,9 @@ def annotate(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, An
     if not _same_time(_modified(comfy, path), current):
         return {"stale": True, "modified": _modified(comfy, path)}
     #: 小数记着原文的写法读进来:写回去时照写,只有 mosael 那几处变(见 json_style)
-    updated = app_form.apply(json_style.loads(text), forms, results, locale)
+    #: 「在画板上用」(ADR 0109):界面传了布尔就照它写,没传(老界面)就照文件原来的
+    board = payload.get("board") if isinstance(payload.get("board"), bool) else None
+    updated = app_form.apply(json_style.loads(text), forms, results, locale, board=board)
     # 照原来的排版写回:ComfyUI 自己存的是紧凑的 JSON,只改了 `mosael` 那几处,别的字节一个不变(见 json_style)
     info = comfy.overwrite_userdata(f"workflows/{path}", json_style.dumps_like(updated, text))
     written = _seconds(info.get("modified"))

@@ -64,6 +64,7 @@ from app.domain.boards.transforms import (
     SLOT,
     board_config_view,
     board_description,
+    board_gap,
     board_group,
     board_hosts,
     board_role,
@@ -73,7 +74,7 @@ from app.domain.boards.transforms import (
     host_field,
     host_fields,
     host_sink,
-    is_content_transform,
+    on_the_board,
     output_kinds,
     wiring_field,
 )
@@ -644,7 +645,13 @@ def _explain_missing_node(db: Session, node_type: str, actor_id: str | None) -> 
         #: 服务器上的工作流),所以画布上存着一个此刻不合格的产出者是正常的,跑的时候说清楚:叫得出工具的名字,
         #: 按编号取东西的说它是在按编号取东西(它明明交出素材,「它不交出素材」那句是错的)。
         label = str(mine_exposed[0].get("label") or tool_name)
-        if content_transform_gap(node_meta(mine_exposed[0])) == "external_id":
+        gap = board_gap(node_meta(mine_exposed[0]))
+        if gap == "not_declared":
+            #: 没声明上画板(ADR 0109):ComfyUI 的工作流是没开「在画板上用」—— 画布上存着它的,多半是升级前自动挂上的。
+            raise BoardInputError("boardErr_toolNotDeclaredForBoard", tool=label)
+        if gap == "unclear_kinds":
+            raise BoardInputError("boardErr_toolKindsUnclear", tool=label)
+        if gap == "external_id":
             raise BoardInputError("boardErr_toolFetchesByExternalId", tool=label)
         raise BoardInputError("boardErr_toolNotOnBoard", tool=label)
     raise BoardInputError("boardErr_pluginNotConnected", plugin=package.name if package is not None else package_id,
@@ -673,7 +680,7 @@ class NodeForm(_Form):
 
 def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
     """画板上能跑的节点。两个来源,**都从节点注册表里读**,画板这边不列清单;两个来源过**同一条**
-    规矩 —— 画板上只放内容变换(boards.transforms.is_content_transform,ADR 0021 修订)。挂在哪、是能力还是
+    规矩 —— 画板上只放声明了上画板的内容变换(boards.transforms.on_the_board,ADR 0021 修订、ADR 0109)。挂在哪、是能力还是
     填法也从声明推(boards.transforms.board_role / board_hosts):
 
     · 内置节点里声明了 `"surfaces": [..., "board"]` 的(见 workflows.NODE_TYPES 上方的说明);
@@ -686,7 +693,7 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
 
     out: dict[str, Producer] = {}
     for node_type, meta in NODE_TYPES.items():
-        if "board" in (meta.get("surfaces") or ()) and is_content_transform(meta):
+        if on_the_board(meta):
             #: 后果照节点声明(`effects`:资产格那两项是付费生成);没声明的,后果在应用之外的要确认卡,其余在本机做完。
             effects = str(meta.get("effects") or ("external" if meta.get("external") else "none"))
             out[node_producer_id(node_type)] = _node_producer(node_type, meta, effects)
@@ -697,7 +704,7 @@ def _node_producers(db: Session, actor_id: str | None) -> dict[str, Producer]:
         for tool in tools:
             node_type = node_type_id(tool["package_id"], tool["name"])
             meta = node_meta(tool)
-            if node_producer_id(node_type) not in out and is_content_transform(meta, generation_has=generation(tool)):
+            if node_producer_id(node_type) not in out and on_the_board(meta, generation_has=generation(tool)):
                 #: 后果就是插件工具自己那一个(plugins.tools.all_tools 按清单算好的,见 domain/effects)——
                 #: 智能体在对话里直接调它、在画板上替人点运行,问不问人是同一条规矩。
                 out[node_producer_id(node_type)] = _node_producer(node_type, meta, tool["effects"])

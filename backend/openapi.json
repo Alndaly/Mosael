@@ -53541,6 +53541,17 @@
             "type": "array",
             "maxItems": 64,
             "title": "Results"
+          },
+          "board": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Board"
           }
         },
         "type": "object",
@@ -53793,6 +53804,11 @@
             "type": "integer",
             "title": "Stray",
             "default": 0
+          },
+          "board": {
+            "type": "boolean",
+            "title": "Board",
+            "default": false
           }
         },
         "type": "object",

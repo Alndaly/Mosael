@@ -65,7 +65,7 @@ def test_注册表里每一个节点产出者都挂在内容格上() -> None:
 
 
 def test_测试插件和随包插件里能上画板的工具_都挂在内容格上() -> None:
-    from app.domain.boards.transforms import is_content_transform
+    from app.domain.boards.transforms import on_the_board
     from app.domain.plugins.nodes import node_meta
     from tests.test_board_producers import PLUGIN_TOOLS
 
@@ -77,7 +77,7 @@ def test_测试插件和随包插件里能上画板的工具_都挂在内容格�
     checked = 0
     for name, tool in declared:
         meta = node_meta(tool)
-        if not tool.get("internal") and is_content_transform(meta):
+        if not tool.get("internal") and on_the_board(meta):
             _check(name, meta)
             checked += 1
     assert checked >= 5, "扫描面站不住:一个能上画板的插件工具都没找到"

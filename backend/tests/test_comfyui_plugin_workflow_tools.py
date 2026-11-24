@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -646,3 +647,19 @@ def test_一张图两用_工具上的蒙版另起一个LoadImageMask_参考图�
     assert prompt["6"]["inputs"]["mask"] == [added, 0], "蒙版那一路改接给的蒙版"
     assert prompt["5"]["inputs"]["pixels"] == ["1", 0] and prompt["1"]["class_type"] == "LoadImage"
     assert prompt["1"]["inputs"]["image"].endswith("pic.png"), "那张图自己的那一格接的是参考图,不是蒙版"
+
+
+def test_标了在画板上用的工作流才声明上画板_说清交回哪种素材(tmp_path: Path) -> None:
+    """ADR 0109:上不上画板由这张工作流的主人说(`extra.mosael.board`);插件照它在工具的 `node` 块里写 `surfaces`,
+    每个交素材的输出节点写清是哪种(`output_media`),宿主才知道挂在哪种格子上。"""
+    marked = copy.deepcopy(PORTRAIT_UI)
+    marked["extra"] = {"mosael": {"version": 2, "forms": [], "board": True}}
+    with FakeComfyUI() as comfy:
+        comfy.state.workflows = {"portrait.json": marked, "plain.json": copy.deepcopy(PORTRAIT_UI) | {"id": None}}
+        tools = _tools(comfy.url, tmp_path)
+    on_board = tools[PORTRAIT_TOOL]["node"]
+    assert on_board["surfaces"] == ["workflow", "board"]
+    assert on_board["output_media"] == {"image_9": "image"}
+    plain = next(tool for name, tool in tools.items() if tool.get("workflow", {}).get("path") == "plain.json")
+    assert "surfaces" not in plain["node"], "没标的工作流只在工作流和智能体里"
+    assert plain["node"]["output_media"] == {"image_9": "image"}

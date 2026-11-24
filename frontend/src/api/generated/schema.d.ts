@@ -21416,6 +21416,8 @@ export interface components {
             forms?: components["schemas"]["WorkflowFormIn"][];
             /** Results */
             results?: string[];
+            /** Board */
+            board?: boolean | null;
         };
         /**
          * WorkflowAppItemIn
@@ -21574,6 +21576,11 @@ export interface components {
              * @default 0
              */
             stray: number;
+            /**
+             * Board
+             * @default false
+             */
+            board: boolean;
         };
         /** WorkflowBundleInstallRequest */
         WorkflowBundleInstallRequest: {

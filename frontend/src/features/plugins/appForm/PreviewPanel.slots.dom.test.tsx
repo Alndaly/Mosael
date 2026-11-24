@@ -125,7 +125,7 @@ function imageData(): WorkflowApp {
         node_label: "放大", class_type: "Upscale", spec: { type: "number", default: 2 } },
     ],
     outputs: [],
-    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
+    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0, board: false },
   } as WorkflowApp;
 }
 

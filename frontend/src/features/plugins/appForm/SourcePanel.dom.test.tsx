@@ -69,7 +69,7 @@ function data(): WorkflowApp {
       { ...base, key: "runs", node: "", input: "runs", kind: "runs", title: "跑几遍", class_type: "", spec: null },
     ],
     outputs: [],
-    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
+    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0, board: false },
   } as WorkflowApp;
 }
 

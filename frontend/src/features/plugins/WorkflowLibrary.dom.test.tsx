@@ -531,7 +531,7 @@ describe("工作流库", () => {
         flow({
           path: "krea2-text-2-image.json", label: "krea2-text-2-image",
           app: {
-            status: "ok", version: "1", upgradable: false, results: [], invalid: 0, stray: 0,
+            status: "ok", version: "1", upgradable: false, results: [], invalid: 0, stray: 0, board: false,
             forms: [{ id: "f1", title: "快速用krea2生图", description: "", fields: 1, invalid: 0, model: "", tool: "" }],
           },
         }),
@@ -1425,7 +1425,7 @@ describe("工作流库 · 卡片的菜单", () => {
     api.getWorkflowLibrary.mockResolvedValue(library({
       editor: EDITOR,
       workflows: library().workflows!.map((one) => one.path === "sub/sketch.json"
-        ? { ...one, app: { status: "ok", version: "1", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 } }
+        ? { ...one, app: { status: "ok", version: "1", upgradable: false, forms: [], results: [], invalid: 0, stray: 0, board: false } }
         : one),
     }));
     await openLibrary();
@@ -1504,7 +1504,7 @@ describe("工作流库 · 卡片的菜单", () => {
 describe("上一版格式的表单(ADR 0045 §7)", () => {
   const old = (path: string, modified: number) => flow({
     path, label: path.replace(/\.json$/, ""), modified,
-    app: { status: "unsupported", version: "1", upgradable: true, forms: [], results: [], invalid: 0, stray: 0 },
+    app: { status: "unsupported", version: "1", upgradable: true, forms: [], results: [], invalid: 0, stray: 0, board: false },
   });
 
   it("顶上一条横幅说有几张;「查看并升级」列出要改的文件、写明只改 Mosael 的标记;确认一次整台改,报改了几张、跳过的", async () => {
@@ -1548,7 +1548,7 @@ describe("改完表单回到详情页:面板上就是新的", () => {
     path: "换装.json", label: "换装", modified: 1776098690,
     inputs: [{ node: "10", title: "参考图 · 人物", media: "image", role: "reference_image" }],
     app: {
-      status: "ok", version: "2", upgradable: false, results: [], invalid: 0, stray: 0,
+      status: "ok", version: "2", upgradable: false, results: [], invalid: 0, stray: 0, board: false,
       forms: [{ id: "f1", title: "旧标题", description: "", fields: 1, invalid: 0, model: "", tool: "" }],
     },
     ...over,
@@ -1562,7 +1562,7 @@ describe("改完表单回到详情页:面板上就是新的", () => {
         { node: "3", title: "步数", media: "", role: "parameter" },
       ],
       app: {
-        status: "ok", version: "2", upgradable: false, results: [], invalid: 0, stray: 0,
+        status: "ok", version: "2", upgradable: false, results: [], invalid: 0, stray: 0, board: false,
         forms: [
           { id: "f1", title: "快速换装", description: "", fields: 2, invalid: 0, model: "", tool: "" },
           { id: "f2", title: "精调", description: "", fields: 1, invalid: 0, model: "", tool: "" },
@@ -1579,7 +1579,7 @@ describe("改完表单回到详情页:面板上就是新的", () => {
       spec: { type: "string", default: "a girl" },
     }],
     outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" }],
-    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
+    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0, board: false },
   });
   const libraryKey = ["workflow-library", "i1", "w1"] as const;
   const titleLine = () => document.querySelector("[data-workflow-form-title]")?.textContent;

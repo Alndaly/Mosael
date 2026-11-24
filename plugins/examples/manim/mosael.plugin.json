@@ -10,7 +10,7 @@
     "en": "Make teaching animations with Manim on this computer: derivations, geometry, plots and algorithm steps, at no generation cost."
   },
   "default_locale": "zh",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "homepage": "https://docs.manim.community/",
   "author": {
     "name": "Mosael",
@@ -896,6 +896,13 @@
               "zh": "一句话",
               "en": "In one line"
             }
+          },
+          "surfaces": [
+            "workflow",
+            "board"
+          ],
+          "output_media": {
+            "asset_id": "video"
           }
         }
       },
@@ -1079,6 +1086,13 @@
               "zh": "一句话",
               "en": "In one line"
             }
+          },
+          "surfaces": [
+            "workflow",
+            "board"
+          ],
+          "output_media": {
+            "asset_id": "image"
           }
         }
       }

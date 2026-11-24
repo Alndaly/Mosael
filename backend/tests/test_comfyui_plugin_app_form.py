@@ -964,3 +964,23 @@ def test_生成_表单没了说清楚_和工作流不在了分开(comfy, tmp_pat
     with pytest.raises(runtime.PluginRuntimeError, match="已经没有工作流"):
         runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", {**request, "model": "gone.json#app"},
                             {"SERVER_URL": comfy.url}, hooks=hooks, scratch_dir=scratch, timeout=60)
+
+
+def test_在画板上用_读得出_写得进_不传就照原来的(plugin) -> None:
+    """ADR 0109:「在画板上用」存在 `extra.mosael.board`。工作流库的 annotate 传了就照它写;工作台只改表单(`board` 不传)
+    时照这张图原来的 —— 不能顺手把它抹掉。没有表单、没标结果、也不在画板上用,就不留 `extra.mosael`。"""
+    _graph, _convert, app_form = plugin
+    base = copy.deepcopy(PORTRAIT_UI)
+    assert app_form.read(base).board is False
+
+    on = app_form.apply(base, [], [], board=True)
+    assert on["extra"]["mosael"] == {"version": 2, "forms": [], "board": True}
+    assert app_form.read(on).board is True
+    graph = plugin[0]
+    assert app_form.summary(app_form.read(on), app_form.Resolved(full=graph.Form(fields=())))["board"] is True
+
+    kept = app_form.apply(on, [{"title": "步数", "items": [{"node": "3", "input": "steps"}]}], [])
+    assert app_form.read(kept).board is True, "只改表单的调用方没说,照原来的"
+
+    off = app_form.apply(on, [], [], board=False)
+    assert "mosael" not in (off.get("extra") or {}), "什么都没标就不留 extra.mosael"

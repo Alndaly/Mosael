@@ -370,6 +370,10 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     #: boards.transforms 按字段和输出推、取说明的第一句)。
     board_group = str(declared.get("board_group") or "")
     board_description = text_of(declared.get("board_description") or "")
+    #: 在哪几处用得上(ADR 0109):写了 `board` 才上创意画板 —— 和 NODE_TYPES 的 `surfaces` 同一个键、同一个意思。
+    #: 只认认得的两处,别的丢掉;没写就只在工作流(和智能体)里。
+    surfaces = declared.get("surfaces")
+    surfaces = [one for one in ("workflow", "board") if one in surfaces] if isinstance(surfaces, list) else []
     # **给人看的字段一律走 text_of。** 清单里它们可以是 `{"zh": …, "en": …}`,裸 str() 会把
     # 那个字典按 Python 的样子印出来 —— 界面上就是一行 `{'zh': '从百度网盘导入', …}`。
     # 工具的 label/description 在上游已经解过了,而 `node` 这一块是原样透传的,所以解在这里。
@@ -408,6 +412,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         **({"wiring_outputs": wiring_outputs} if wiring_outputs else {}),
         **({"output_media": output_media} if output_media else {}),
         **({"mirrors": mirrors} if mirrors is not None else {}),
+        **({"surfaces": surfaces} if surfaces else {}),
         **({"board_group": board_group} if board_group else {}),
         **({"board_description": board_description} if board_description else {}),
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。是**插件**的名字,不是连接名:

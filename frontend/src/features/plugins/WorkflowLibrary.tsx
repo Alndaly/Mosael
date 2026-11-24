@@ -102,7 +102,7 @@ import { KindIcon, type FieldVisual } from "@/features/plugins/appForm/fieldFact
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
 import { invalidatePluginDependents, refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
-import { WorkflowAppEditor, WorkflowAppSection, type FormFocus } from "@/features/plugins/WorkflowAppEditor";
+import { WorkflowAppEditor, WorkflowAppSection, WorkflowBoardSection, type FormFocus } from "@/features/plugins/WorkflowAppEditor";
 import { FormsUpgradeBanner, FormsUpgradeDialog, upgradableWorkflows } from "@/features/plugins/WorkflowFormsUpgrade";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
 import { WorkflowOutputs } from "@/features/plugins/WorkflowOutputs";
@@ -1044,8 +1044,11 @@ export function WorkflowLibraryDialog({
             restartError={restart.error ? errorText(restart.error) : ""}
             onRestart={() => setRestartAsk(true)}
             onDismissNote={editor.dismiss}
-            app={<WorkflowAppSection instance={instance} flow={detail} onEdit={(focus) => setEditingApp({ flow: detail, focus })}
-                                     onUpgrade={() => setUpgrading(true)} onSaved={changed} />}
+            app={<>
+              <WorkflowAppSection instance={instance} flow={detail} onEdit={(focus) => setEditingApp({ flow: detail, focus })}
+                                  onUpgrade={() => setUpgrading(true)} onSaved={changed} />
+              <WorkflowBoardSection instance={instance} flow={detail} onSaved={changed} />
+            </>}
             outputs={detail.last_output && workspaceId
               ? <WorkflowOutputs instanceId={instance.id} workspaceId={workspaceId} path={detail.path} label={detail.label} />
               : null}

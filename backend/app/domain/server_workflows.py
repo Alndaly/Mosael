@@ -436,6 +436,8 @@ def _app_summary(raw: Any) -> dict[str, Any] | None:
                     if isinstance(one, str) and _ANY_NODE.fullmatch(one)][:MAX_APP_RESULTS],
         "invalid": int(reply_fields.number(raw.get("invalid")) or 0),
         "stray": int(reply_fields.number(raw.get("stray")) or 0),
+        #: 「在画板上用」(ADR 0109)
+        "board": raw.get("board") is True,
     }
 
 
@@ -1090,7 +1092,7 @@ def _forms_payload(forms: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def annotate(db: Session, instance: PluginInstance, path: str, *, modified: float, forms: list[dict[str, Any]],
-             results: list[str]) -> dict[str, Any]:
+             results: list[str], board: bool | None = None) -> dict[str, Any]:
     """改那台服务器上一张工作流的表单和结果标记:**只改 `mosael` 那几处**,带着读到时的改动时间去(`modified`)。
     `forms` 是**全部**表单(按要列出来的顺序;没给 id 的是新表单;空列表 = 一张都不要)。那张在这之间被改过就不写
     (`WorkflowStale`,翻成 409)。成了让这个连接的目录马上重拉一遍(生成表单、工具跟着变),回写完之后的改动时间(接着改
@@ -1099,8 +1101,11 @@ def annotate(db: Session, instance: PluginInstance, path: str, *, modified: floa
     path = workflow_path(path)
     results = _results_payload([str(one) for one in results])
     clean = _forms_payload(forms)
+    #: 「在画板上用」(ADR 0109)只在给了的时候带上:没给,插件照文件原来的写回
+    flag = {"board": board} if board is not None else {}
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY,
-                               {"op": "annotate", "path": path, "modified": modified, "forms": clean, "results": results},
+                               {"op": "annotate", "path": path, "modified": modified, "forms": clean, "results": results,
+                                **flag},
                                timeout=QUICK_TIMEOUT_SECONDS, record=True)
     if output.get("stale") is True:
         raise WorkflowStale(path, reply_fields.number(output.get("modified")))

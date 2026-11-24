@@ -7,7 +7,7 @@
     "en": "Small text tools: word counts, subtitle lines, shortening, cleanup, and pulling out hashtags and links, all on this computer."
   },
   "default_locale": "zh",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -93,6 +93,10 @@
           },
           "board_outputs": [
             "summary"
+          ],
+          "surfaces": [
+            "workflow",
+            "board"
           ]
         }
       },
@@ -231,6 +235,10 @@
           },
           "board_outputs": [
             "text"
+          ],
+          "surfaces": [
+            "workflow",
+            "board"
           ]
         }
       },
@@ -313,6 +321,10 @@
           },
           "board_outputs": [
             "text"
+          ],
+          "surfaces": [
+            "workflow",
+            "board"
           ]
         }
       },
@@ -393,6 +405,10 @@
           },
           "board_outputs": [
             "text"
+          ],
+          "surfaces": [
+            "workflow",
+            "board"
           ]
         }
       },
@@ -457,6 +473,10 @@
           },
           "board_outputs": [
             "text"
+          ],
+          "surfaces": [
+            "workflow",
+            "board"
           ]
         }
       },

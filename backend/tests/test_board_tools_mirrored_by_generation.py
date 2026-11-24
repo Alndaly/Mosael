@@ -38,7 +38,7 @@ REPORTED = [
             "steps_3": {"type": "integer"},
             "width": {"type": "integer"},
         }},
-        "node": {"outputs": ["image_9", "asset_id", "asset_ids", "summary", "prompt_id"],
+        "node": {"surfaces": ["workflow", "board"], "outputs": ["image_9", "asset_id", "asset_ids", "summary", "prompt_id"],
                  "output_types": {"image_9": "asset", "asset_id": "asset", "asset_ids": "json", "summary": "text",
                                   "prompt_id": "text"},
                  "board_outputs": ["image_9"], "wiring_outputs": ["asset_id", "asset_ids", "summary", "prompt_id"]},
@@ -51,7 +51,7 @@ REPORTED = [
         "description": "在 ComfyUI 上原样跑「upscale」这张工作流。",
         "input_schema": {"type": "object", "properties": {
             "image_1": {"type": "string", "format": "asset", "x-media": "image"}}, "required": ["image_1"]},
-        "node": {"outputs": ["image_4", "image_5", "asset_id"],
+        "node": {"surfaces": ["workflow", "board"], "outputs": ["image_4", "image_5", "asset_id"],
                  "output_types": {"image_4": "asset", "image_5": "asset", "asset_id": "asset"},
                  "board_outputs": ["image_4", "image_5"], "wiring_outputs": ["asset_id"]},
     },
@@ -61,7 +61,7 @@ REPORTED = [
         "description": "在 ComfyUI 上原样跑「text」这张工作流。",
         "input_schema": {"type": "object", "properties": {
             "prompt": {"type": "string"}, "steps_3": {"type": "integer"}, "width": {"type": "integer"}}},
-        "node": {"outputs": ["image_9", "asset_id"], "output_types": {"image_9": "asset", "asset_id": "asset"},
+        "node": {"surfaces": ["workflow", "board"], "outputs": ["image_9", "asset_id"], "output_types": {"image_9": "asset", "asset_id": "asset"},
                  "output_media": {"image_9": "image"}, "board_outputs": ["image_9"], "wiring_outputs": ["asset_id"]},
         "mirrors": {"generation_model": "portrait.json", "kind": "image", "prompt": "prompt",
                     "parameters": {"steps_3": "3.steps"}},
@@ -143,7 +143,7 @@ def test_同一件事的规矩() -> None:
     assert content_transform_gap(node_meta(REPORTED[1]), generation_has=lambda mirror: True) is None
     #: 本来就不是内容变换的,说的是原来那个原因。
     report = node_meta({**REPORTED[0], "input_schema": {"type": "object", "properties": {}},
-                        "node": {"outputs": ["summary"], "output_types": {"summary": "text"}}})
+                        "node": {"surfaces": ["workflow", "board"], "outputs": ["summary"], "output_types": {"summary": "text"}}})
     assert content_transform_gap(report, generation_has=lambda mirror: True) == "no_content_output"
 
 
@@ -269,10 +269,17 @@ def test_两个保存节点的工作流_画板上只在模型下拉里(tmp_path:
     from app.domain.plugins.dynamic_tools import clean_mirror
     from app.domain.plugins.tools import refresh_tools
     from app.domain.providers.selection import adopt_plugin_connection
-    from tests.fake_comfyui import TWO_SAVES_API, FakeComfyUI
+    from tests.fake_comfyui import TWO_SAVES_API, FakeComfyUI, conn, widget
 
-    tagger = {"1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
-              "3": {"class_type": "ShowText|pysssss", "inputs": {"text": ["1", 0]}}}
+    #: 只交出一段字的那张(不是生成模型):界面格式,标了「在画板上用」(ADR 0109)—— 没标的工作流不上画板。
+    tagger = {
+        "nodes": [
+            {"id": 1, "type": "LoadImage", "widgets_values": ["a.png", "image"], "inputs": [widget("image")]},
+            {"id": 3, "type": "ShowText|pysssss", "inputs": [conn("text", 1)]},
+        ],
+        "links": [[1, 1, 0, 3, 0, "STRING"]],
+        "extra": {"mosael": {"version": 2, "forms": [], "board": True}},
+    }
     plugin = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
     with FakeComfyUI() as comfy:
         comfy.state.workflows = {"古风女孩.json": TWO_SAVES_API, "tagger.json": tagger}

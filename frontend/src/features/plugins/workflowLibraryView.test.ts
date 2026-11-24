@@ -89,7 +89,7 @@ describe("搜索", () => {
     const form = (id: string, title: string) => ({ id, title, description: "", fields: 1, invalid: 0, model: "", tool: "" });
     const formed = {
       ...flow("krea2-text-2-image.json"),
-      app: { status: "ok", version: "", upgradable: false, invalid: 0, stray: 0, results: [],
+      app: { status: "ok", version: "", upgradable: false, invalid: 0, stray: 0, board: false, results: [],
              forms: [form("app", "快速用krea2生图"), form("k3x9a2", "精调")] },
     } as WorkflowFile;
     const other = flow("girl.json");

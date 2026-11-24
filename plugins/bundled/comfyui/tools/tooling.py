@@ -97,6 +97,9 @@ class Shape:
         self.bindings: dict[str, tuple] = {}
         self.outputs: list[str] = []
         self.output_types: dict[str, str] = {}
+        #: 每个交素材的输出节点交回哪种素材(`image` / `video` / `audio`):宿主据此知道生成器挂在哪种空格子上、能力长出什么
+        #: (ADR 0109:说不清的不上画板)
+        self.output_media: dict[str, str] = {}
         self.output_labels: dict[str, dict[str, str]] = {}
         #: 老的 `run_workflow` 入参 → 这里的键(给宿主迁移存着的节点用;`values.` 开头的两种写法都有:
         #: 「节点 id.输入名」和「节点标题.输入名」)
@@ -269,6 +272,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         shape.outputs.append(key)
         shape.node_outputs.append(key)
         shape.output_types[key] = "text" if node["media"] == "text" else ("asset" if node["media"] != "any" else "any")
+        if node["media"] in ("image", "video", "audio"):
+            shape.output_media[key] = node["media"]
         name = node.get("label") or {"zh": node["title"], "en": node["title"]}
         shape.output_labels[key] = _pair(f"{zh} · {name['zh']}", f"{en} · {name['en']}")
     for key, data_type, zh, en in WIRING_OUTPUTS:
@@ -385,6 +390,9 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
             # 画板上落的是每个输出节点自己的产出;给连线用的那几个不落(见 WIRING_OUTPUTS)
             "board_outputs": shape.node_outputs,
             "wiring_outputs": [key for key, *_ in WIRING_OUTPUTS],
+            **({"output_media": shape.output_media} if shape.output_media else {}),
+            #: 在画板上用不用由这张工作流的主人说(ADR 0109,工作流库里「在画板上用」):见 on_board
+            **({"surfaces": ["workflow", "board"]} if on_board(entry) else {}),
         },
         "replaces": _replaces(entry, name, shape),
         #: 跑的是哪张工作流(宿主据此在工作台那一轮挑工具,见模块说明):一张工作流的几个入口 `path` 相同,`name` 是各自的主名
@@ -393,6 +401,15 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
         **({"agent": False} if entry.formed and not entry.form_id else {}),
         **({"mirrors": shape.mirror} if shape.mirror else {}),
     }
+
+
+def on_board(entry: models.Entry) -> bool:
+    """这个入口上不上创意画板(ADR 0109)。这张工作流标了「在画板上用」(`extra.mosael.board`,app_form)时:有表单的,
+    它的每张表单上板,完整工作流不上 —— 和完整入口不进智能体工具表同一条(ADR 0045);没有表单的,完整入口上板。
+    宿主照它声明的 `surfaces` 认,再过一遍「内容变换」那几条规矩。"""
+    if not entry.workflow.marks.board:
+        return False
+    return bool(entry.form_id) or not entry.formed
 
 
 def _replaces(entry: models.Entry, name: str, shape: Shape) -> list[dict[str, Any]]:

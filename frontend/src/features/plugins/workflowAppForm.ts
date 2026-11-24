@@ -40,6 +40,8 @@ export interface FormsDraft {
   forms: FormDraft[];
   /** 标成结果的输出节点(「以后只要这张」,按工作流记) */
   results: string[];
+  /** 「在画板上用」(ADR 0109):这张工作流的入口上不上创意画板 —— 有表单的是每张表单,没有表单的是完整工作流 */
+  board: boolean;
 }
 
 /** 进参数表的那几种(`<节点 id>.<输入名>`);文字项标了主提示词时进的是宿主的提示词框。 */
@@ -79,7 +81,7 @@ export function formsLock(data: Pick<WorkflowApp, "app">): FormsLock | null {
 /** 从插件读到的那份起草:文件里的每张表单照它(对不上的那几项也留着,标着原因,作者自己决定去不去掉)。 */
 export function initialDraft(data: WorkflowApp): FormsDraft {
   const app = data.app ?? { status: "none" as const };
-  if (app.status !== "ok") return { forms: [], results: [] };
+  if (app.status !== "ok") return { forms: [], results: [], board: false };
   return {
     forms: (app.forms ?? []).map((form) => ({
       id: form.id,
@@ -99,6 +101,7 @@ export function initialDraft(data: WorkflowApp): FormsDraft {
       tool: form.tool ?? "",
     })),
     results: [...(app.results ?? [])],
+    board: app.board === true,
   };
 }
 
@@ -227,7 +230,7 @@ export function dropInvalid(draft: FormDraft): FormDraft {
 
 /** 整张工作流对不上的全去掉(工作流库详情里的「一键去掉」):每张表单里对不上的项,和标在不再交出东西的节点上的结果标记。 */
 export function dropAllInvalid(draft: FormsDraft, outputs: string[]): FormsDraft {
-  return { forms: draft.forms.map(dropInvalid), results: draft.results.filter((node) => outputs.includes(node)) };
+  return { ...draft, forms: draft.forms.map(dropInvalid), results: draft.results.filter((node) => outputs.includes(node)) };
 }
 
 /**
@@ -349,6 +352,7 @@ export function annotatePayload(path: string, modified: number, draft: FormsDraf
       })),
     })),
     results: draft.results,
+    board: draft.board,
   };
 }
 
@@ -363,6 +367,7 @@ export function sameDraft(left: FormsDraft, right: FormsDraft): boolean {
         items: form.items.map(({ key, label, main, choices }) => [key, label.trim(), main, choices]),
       })),
       results: [...draft.results].sort(),
+      board: draft.board,
     });
   return norm(left) === norm(right);
 }

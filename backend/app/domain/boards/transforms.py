@@ -34,9 +34,10 @@
    不再列出它。工作流里两个都在。
    「用得上」要按人、按连接问,规矩本身不查库:调用方(producers._node_producers)把答案递进来。
 
-同一条规矩管内置节点和插件工具:内置节点还要先在 `NODE_TYPES` 上声明 `surfaces: ["board"]`
-(和画板内置的写字 / 生成 / 念重复的、副作用大的,不声明),声明了过不了规矩的由棘轮当场报出来;
-插件工具不用声明,按它清单里 `node` 块声明的输出判。插件工具能不能上画板随它接的连接、清单
+同一条规矩管内置节点和插件工具,而且**上不上画板由声明说**(ADR 0109,修订了「插件工具不用声明」那一句):内置节点在
+`NODE_TYPES` 上声明 `surfaces: ["board"]`(和画板内置的写字 / 生成 / 念重复的、副作用大的,不声明),插件工具在清单的
+`node` 块里写同一个键 —— ComfyUI 的每张工作流由插件按工作流库里「在画板上用」那个标记写。声明了过不了规矩的由棘轮当场报出来,
+挂在哪种格子只按声明的素材种类(说不清的不挂,见 board_gap)。插件工具能不能上画板随它接的连接、清单
 (ComfyUI 每张工作流一个工具)变,所以规矩在每次取注册表时现算(producers._node_producers),
 不缓存;存在画布上、此刻不再合格的能力或生成器,跑的时候说清楚为什么(producers.get_producer)。空格子上
 被生成取代的生成器由对账改挂生成(boards.plugin_references)。
@@ -196,6 +197,27 @@ def is_content_transform(meta: dict[str, Any], *, generation_has: Callable[[dict
     return content_transform_gap(meta, generation_has=generation_has) is None
 
 
+def board_gap(meta: dict[str, Any], *, generation_has: Callable[[dict[str, Any]], bool] | None = None) -> str | None:
+    """这个节点(内置的,或插件工具)**为什么不在画板上**;在的话回 None(ADR 0109)。三样,按先后问:
+
+    - `not_declared`:没声明 `surfaces` 里有 `board`。上不上画板由声明说 —— 内置节点在 NODE_TYPES 上写,插件工具在清单的
+      `node` 块里写;ComfyUI 的每张工作流由插件按「在画板上用」那个标记写;
+    - 内容变换那几条规矩(content_transform_gap 的原因);
+    - `unclear_kinds`:说不清挂在哪种格子上(board_hosts 是空的):生成器没声明产出哪种素材,能力的宿主字段没声明收哪种素材。
+    """
+    if "board" not in (meta.get("surfaces") or ()):
+        return "not_declared"
+    gap = content_transform_gap(meta, generation_has=generation_has)
+    if gap is not None:
+        return gap
+    return None if board_hosts(meta) else "unclear_kinds"
+
+
+def on_the_board(meta: dict[str, Any], *, generation_has: Callable[[dict[str, Any]], bool] | None = None) -> bool:
+    """它在画板上(见 board_gap)。画板的产出者注册表只认这一句。"""
+    return board_gap(meta, generation_has=generation_has) is None
+
+
 #: 一个内容变换在画板上的角色(见模块说明):内容格的能力 / 空格子的一种填法。
 ABILITY = "ability"
 SLOT = "slot"
@@ -215,7 +237,10 @@ def _host_fields(meta: dict[str, Any]) -> list[tuple[str, str]]:
     """
     specs = meta.get("config") or {}
     #: 声明了 `board_host: false` 的字段只从上游接,不当宿主(对口型的音频:这一项挂在视频格上,不挂在音频格上)。
-    sinks = {key: sink for key, sink in _sinks(meta).items() if (specs.get(key) or {}).get("board_host", True)}
+    #: 收素材的字段**要说清收哪种**(`media`,插件是 `x-media`)才当宿主(ADR 0109):没说的话三种媒体格都会挂上这一项 ——
+    #: ComfyUI 一张读图的工作流此前就挂到了视频格、音频格上。它照样能从上游接,只是不因为它出现在哪种格子的操作条上。
+    sinks = {key: sink for key, sink in _sinks(meta).items() if (specs.get(key) or {}).get("board_host", True)
+             and (sink != "asset" or config_media(specs.get(key)))}
     fields = [(key, sink) for key, sink in sinks.items() if sink in ("asset", "scene", "entity")]
     if not fields and not _makes_media(meta):
         fields = list(sinks.items())
@@ -232,8 +257,8 @@ def board_hosts(meta: dict[str, Any]) -> tuple[str, ...]:
 
     · 能力:它吃内容的那几个字段收得下的格子种类(`bindable_kinds`,字段的 `media` 说了只收哪几种素材的,
       就只挂那几种:转写挂音频和视频,转 GIF 只挂视频);
-    · 填法:它产出的那种素材的空格子(output_kinds 里的图片 / 视频 / 音频);说不清产出哪种素材(`asset`)的,
-      三种媒体格都能挑它 —— 回执按素材实际的种类落(见 canvas 的就地填),对不上宿主的新建在右边。
+    · 填法:它声明产出的那种素材的空格子(output_kinds 里的图片 / 视频 / 音频 / 3D 场景);说不清产出哪种素材(`asset`)的
+      不挂(ADR 0109)—— 回不出一种格子,board_gap 报 `unclear_kinds`。
     """
 
     fields = _host_fields(meta)
@@ -241,10 +266,9 @@ def board_hosts(meta: dict[str, Any]) -> tuple[str, ...]:
         specs = meta.get("config") or {}
         kinds = {kind for key, _sink in fields for kind in bindable_kinds(key, specs[key])}
     else:
-        made = output_kinds(meta)
-        kinds = {kind for kind in made if kind in (*_MEDIA_KINDS, "scene")}
-        if not kinds or "asset" in made:
-            kinds = set(_MEDIA_KINDS)
+        #: 生成器只挂在它**声明产出**的那几种空格子上(ADR 0109)。只说「一份素材」(`asset`)的不挂 —— 此前按三种媒体格兜底,
+        #: 空图片格上能选一个出视频的生成器。
+        kinds = {kind for kind in output_kinds(meta) if kind in (*_MEDIA_KINDS, "scene")}
     return tuple(kind for kind in _HOST_ORDER if kind in kinds)
 
 

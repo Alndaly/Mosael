@@ -6,6 +6,8 @@ import { annotateWorkflow, getWorkflowApp, type PluginInstance, type WorkflowFil
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { LibrarySection } from "@/components/app/LibraryBrowser";
+import { FailureCard } from "@/components/failure/FailureCard";
+import { Switch } from "@/components/ui/switch";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { PageLoadError } from "@/components/layout/EmptyState";
@@ -264,6 +266,72 @@ function Notice({ children }: { children: React.ReactNode }) {
  * 和存一样只改 mosael 那几处标记、带着改动时间去)。表单还是上一版的格式时说清楚要升级(工作流库顶上那条横幅里升级)。
  * 插件没报表单(这张转不过来)就不出这一节。
  */
+/**
+ * 详情里「在画板上用」那一节(ADR 0109):这张工作流的入口上不上创意画板。和「表单」并列,说的是整张工作流。
+ *
+ * 写回和「一键去掉」同一个做法:先读一遍这张工作流的标记,只改 `board` 这一格,整份写回(annotate;表单、结果标记原样);
+ * 改的是那台服务器上的文件,先确认。API 格式的图放不了标记,读到时说清楚。
+ */
+export function WorkflowBoardSection({ instance, flow, onSaved }: { instance: PluginInstance; flow: WorkflowFile; onSaved: () => void }) {
+  const t = useI18n();
+  const [asking, setAsking] = React.useState<boolean | null>(null);
+  //: 确认之后开关**当场**拨过去(等写回、再等工作流库重新拉一遍,确认框关了开关还停在原处,容易再点一下);
+  //: 库里读回来的和它对上了就交还给库,写回失败就拨回来。
+  const [wanted, setWanted] = React.useState<boolean | null>(null);
+  const [failure, setFailure] = React.useState("");
+  const save = useMutation({
+    mutationFn: async (board: boolean) => {
+      const data = await getWorkflowApp(instance.id, flow.path);
+      if (!data.editable) throw new Error(t("workflowBoardNotEditable"));
+      return annotateWorkflow(instance.id, annotatePayload(data.path, data.modified ?? 0, { ...initialDraft(data), board }));
+    },
+    onSuccess: () => {
+      setFailure("");
+      onSaved();
+    },
+    onError: (error) => {
+      setWanted(null);
+      setFailure(isStale(error) ? t("workflowAppStale").replace("{name}", flow.label) : errorText(error));
+    },
+  });
+  const app = flow.app;
+  const stored = app?.board === true;
+  React.useEffect(() => {
+    if (wanted !== null && wanted === stored) setWanted(null);
+  }, [wanted, stored]);
+  if (!app || app.status === "unsupported") return null;
+  const on = wanted ?? stored;
+  const formed = app.status === "ok" && (app.forms?.length ?? 0) > 0;
+  const confirm = (board: boolean) => {
+    setAsking(null);
+    setWanted(board);
+    save.mutate(board);
+  };
+  return (
+    <LibrarySection title={t("workflowAppBoard")}>
+      <div className="flex min-w-0 items-start gap-3" data-workflow-board="">
+        <p className="m-0 min-w-0 flex-1 text-ui-xs leading-relaxed text-muted-foreground">
+          {t(formed ? "workflowAppBoardHintForms" : "workflowAppBoardHint")}
+        </p>
+        <Switch checked={on} disabled={wanted !== null} onCheckedChange={(next) => setAsking(next)}
+                aria-label={t("workflowAppBoard")} className="mt-0.5 shrink-0" />
+      </div>
+      {failure && <FailureCard size="inline" status="failed" title={t("workflowAppBoard")} summary={failure} />}
+      {asking !== null && (
+        <ConfirmDialog
+          open
+          title={t(asking ? "workflowBoardOnTitle" : "workflowBoardOffTitle").replace("{server}", instance.name).replace("{path}", flow.path)}
+          body={t("workflowBoardBody")}
+          confirmLabel={t(asking ? "workflowBoardOn" : "workflowBoardOff")}
+          pending={false}
+          onCancel={() => setAsking(null)}
+          onConfirm={() => confirm(asking)}
+        />
+      )}
+    </LibrarySection>
+  );
+}
+
 export function WorkflowAppSection({
   instance,
   flow,

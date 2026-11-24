@@ -10,7 +10,7 @@
     "en": "Make animated videos with code: explainers, formulas, code demos and charts, rendered locally at no generation cost."
   },
   "default_locale": "zh",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
   "author": {
     "name": "Mosael",
@@ -516,6 +516,13 @@
               "zh": "一句话",
               "en": "In one line"
             }
+          },
+          "surfaces": [
+            "workflow",
+            "board"
+          ],
+          "output_media": {
+            "asset_id": "video"
           }
         }
       }

@@ -221,8 +221,8 @@ PreviewImage don't count — they write temporary files) is the same thing as th
 its tool, and the "⋯" at the top of an item doesn't repeat it — add an image (video, audio) item and pick that model; the result
 lands in place. Workflows with several save nodes work the same way: placeholders for runs × images per run are laid out before it runs
 (**Results per run** shows that total, each choice saying how many runs), and **Results from** under Settings narrows it to one
-node. Calling ComfyUI through Generate without choosing runs it once, as the workflow is saved. A workflow that only returns text (tagging, prompt extraction) isn't a model and stays an
-item ability on boards. "Import outputs" fetches by task id, so it is not on boards. Workflows and the agent keep the tools (what they
+node. Calling ComfyUI through Generate without choosing runs it once, as the workflow is saved. A workflow that only returns text (tagging, prompt extraction) isn't a model; turn on
+**Use on boards** for it in the workflow library to make it an action on image items. "Import outputs" fetches by task id, so it is not on boards. Workflows and the agent keep the tools (what they
 do beyond generation — every output node, displayed text, previews — stays there), and the tool's description ends with "If you only
 need the image, use the AI generate node with this model".
 

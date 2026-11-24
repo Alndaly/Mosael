@@ -157,7 +157,7 @@ describe("工作台面板背后的纯函数", () => {
 
   it("「只要这个节点的图」:只标这一个结果;撤销只去掉这一个;每张表单照旧", () => {
     const form = { id: "app", key: "app", title: "人像", description: "", items: [], model: "", tool: "" };
-    const draft = { forms: [form], results: ["9", "17"] };
+    const draft = { forms: [form], results: ["9", "17"], board: false };
     expect(onlyResult(draft, "17")).toEqual({ ...draft, results: ["17"] });
     expect(withoutResult(draft, "9")).toEqual({ ...draft, results: ["17"] });
     expect(withoutResult(draft, "5")).toEqual(draft);

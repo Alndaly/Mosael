@@ -649,7 +649,7 @@ def annotate_workflow(instance_id: str, body: WorkflowAnnotateRequest, db: Tx, u
     try:
         return server_workflows.annotate(
             db, instance, body.path, modified=body.modified, forms=[one.model_dump() for one in body.forms],
-            results=body.results,
+            results=body.results, board=body.board,
         )
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc

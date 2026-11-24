@@ -355,10 +355,11 @@ def test_运行时报出的工具带着后果_写错或打架时按保守那边�
 
 
 def test_画板上的生成器和对话里是同一条规矩() -> None:
-    #: 画板上只放内容变换(ADR 0021 修订):同一批工具各声明交出一份素材,才上得了画板 —— 它们不吃画板上的内容,
-    #: 是空格子的一种填法(ADR 0025 修订「能力住在内容格上」)。
+    #: 画板上只放内容变换(ADR 0021 修订):同一批工具各声明上画板、交出一张图(ADR 0109),才上得了画板 ——
+    #: 它们不吃画板上的内容,是空图片格的一种填法(ADR 0025 修订「能力住在内容格上」)。
     on_board = {**MANIFEST, "tools": {**MANIFEST["tools"], "declare": [
-        {**tool, "node": {"outputs": ["asset_id"]}} for tool in MANIFEST["tools"]["declare"]]}}
+        {**tool, "node": {"outputs": ["asset_id"], "output_media": {"asset_id": "image"}, "surfaces": ["workflow", "board"]}}
+        for tool in MANIFEST["tools"]["declare"]]}}
     setup = Setup(on_board)
     producers = {
         one["id"]: one for one in

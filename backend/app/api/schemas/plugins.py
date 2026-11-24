@@ -1000,6 +1000,8 @@ class WorkflowAppSummaryOut(ApiModel):
     invalid: int = 0
     #: 对不上任何一张表单的标记有几处(节点上指着不在的表单、重复或不合规的表单 id;下次保存时清掉)
     stray: int = 0
+    #: 「在画板上用」(ADR 0109):标了的,它的入口在创意画板上(有表单的是每张表单,没有表单的是完整工作流)
+    board: bool = False
 
 
 class WorkflowFileOut(ApiModel):
@@ -1135,6 +1137,8 @@ class WorkflowAnnotateRequest(ApiModel):
     forms: list[WorkflowFormIn] = Field(default_factory=list, max_length=20)
     #: 标成结果的输出节点
     results: list[str] = Field(default_factory=list, max_length=64)
+    #: 「在画板上用」(ADR 0109):这张工作流的入口要不要上创意画板。没给就照文件原来的
+    board: bool | None = None
 
 
 class WorkflowAnnotateOut(ApiModel):
