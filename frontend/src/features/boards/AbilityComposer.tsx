@@ -312,7 +312,11 @@ export function AbilityComposer({
           {ability ? <AbilityHost item={item} tool={tool} /> : null}
           {fields.stage ? (
             <div data-field-key={fields.stage[0]} className="px-1 py-1">
-              {renderStageEditor(fields.stage[1].editor, config, patchConfig)}
+              {renderStageEditor(fields.stage[1].editor, config, patchConfig, {
+                workspaceId,
+                imageAssetId: item.kind === "image" ? item.asset_id ?? undefined : undefined,
+                imageName: sourceName(t, item),
+              })}
             </div>
           ) : null}
           {fields.body ? (

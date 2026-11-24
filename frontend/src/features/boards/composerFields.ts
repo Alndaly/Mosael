@@ -104,7 +104,10 @@ export function composerFields({
   const basic = (tiers.basic as Field[]).filter(notHost);
   const advanced = (tiers.advanced as Field[]).filter(notHost);
   const active = [...basic, ...advanced];
-  const upstream = active.filter(([key, spec]) => bindable(spec) && (fits(key).length > 0 || isBound(key)));
+  //: 主控件的字段由控件自己填(重绘的蒙版:连进来的图默认是参考,是不是蒙版只由人说,ADR 0107):不给它接上游的芯片。
+  const upstream = active.filter(
+    ([key, spec]) => bindable(spec) && !isStageEditor(spec.editor) && (fits(key).length > 0 || isBound(key)),
+  );
   //: 主控件(打光的方向球):摆在面板主体里,不收进「参数」(见 nodeForms/stageEditors)。
   const stage = active.find(([, spec]) => isStageEditor(spec.editor));
   const body = basic.find(([key, spec]) => freeText(spec) && !isBound(key));

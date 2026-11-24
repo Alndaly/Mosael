@@ -101,6 +101,10 @@ NODE_TO_TOOL: dict[str, str] = {
     #: 重新打光(ADR 0108):智能体用 generate_image 带原图当参考图、一段打光的话就是同一件事;画板上它还是图片格的「灯光」,
     #: 智能体也能经 run_board_item 替人点它。
     "image_relight": "generate_image",
+    #: 裁切 / 局部重绘(ADR 0110)。重绘在智能体那边是 create_mask 或画好的蒙版 + generate_image(带蒙版的模型交蒙版),
+    #: 画板上它是图片格的「重绘」,智能体也能经 run_board_item 替人点它。
+    "image_crop": "crop_image",
+    "image_inpaint": "generate_image",
     "video_lipsync": "generate_video",
     #: 长稿分段配音:智能体逐句 generate_audio,按模型的音频上限自己分段(说明见 generate_video)。
     "talking_segments": "generate_audio",

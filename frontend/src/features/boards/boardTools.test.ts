@@ -4,7 +4,8 @@ import { Languages, Package, ScanText, Sparkles, Wand2, Wrench } from "lucide-re
 import type { BoardItem, BoardProducerInfo } from "@/api/client";
 import { messages, type MessageKey } from "@/app/messages";
 import { kindIcon } from "@/features/boards/boardNodes";
-import { boardAbilities, boardAddCatalog, boardToolIcon, firstSentence, hostHasContent } from "@/features/boards/boardTools";
+import { boardAbilities, boardAddCatalog, boardToolIcon, defaultBindings, firstSentence, hostHasContent } from "@/features/boards/boardTools";
+import { composerFields } from "@/features/boards/composerFields";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 
 /** 形状和 GET /api/boards/producers 发下来的一样(后端按注册表的顺序:内置的、内置节点、插件工具)。 */
@@ -127,5 +128,32 @@ describe("说明的第一句(firstSentence)", () => {
     );
     expect(firstSentence("Pulls one object. Then more.")).toBe("Pulls one object.");
     expect(firstSentence("")).toBe("");
+  });
+});
+
+describe("主控件的字段由控件自己填(ADR 0107 / 0110)", () => {
+  //: 重绘:蒙版是必填的图,但连进来的图默认是参考 —— 不默认接上,也不给它一组上游芯片。
+  const specs = {
+    asset_id: { type: "template", required: true, board_sources: ["image"] },
+    mask_asset_id: { type: "template", required: true, board_sources: ["image"], editor: "mask_paint" },
+    prompt: { type: "template", required: true, board_sources: ["note"] },
+  };
+  const upstream = [{ id: "up", kind: "image", x: 0, y: 0, asset_id: "pic" }] as BoardItem[];
+
+  it("不默认接上游(宿主字段面板自己去掉,见 AbilityComposer)", () => {
+    const { asset_id: _host, ...others } = specs;
+    expect(defaultBindings(others, {}, {}, upstream)).toBeNull();
+  });
+
+  it("摆在面板主体里,不进上游芯片", () => {
+    const fields = composerFields({
+      specs: specs as never,
+      config: {},
+      bindings: {},
+      hostField: "asset_id",
+      fits: () => upstream,
+    });
+    expect(fields.stage?.[0]).toBe("mask_asset_id");
+    expect(fields.upstream.map(([key]) => key)).not.toContain("mask_asset_id");
   });
 });

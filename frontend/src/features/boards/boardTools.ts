@@ -2,6 +2,7 @@ import { Box, FolderOpen, Sparkles, Package, ScanText, Wand2, Wrench, type Lucid
 
 import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
+import { isStageEditor } from "@/features/nodeForms/stageEditors";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { kindIcon, kindText } from "@/features/boards/boardNodes";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
@@ -177,6 +178,8 @@ type Bindings = BoardRunForms["node"]["bindings"];
 /** 产出者清单里一个字段的声明里,默认绑定要读的那几样(节点声明 + 画板多给的 `board_sources`)。 */
 interface ToolFieldSpec {
   required?: boolean;
+  /** 主控件(见 nodeForms/stageEditors):由控件自己填,不默认接上游。 */
+  editor?: string;
   /** 能接哪几种上游格子(后端 boards.tools.bindable_kinds)。 */
   board_sources?: string[];
 }
@@ -220,6 +223,8 @@ export function defaultBindings(
   let next: Bindings | null = null;
   for (const [key, spec] of Object.entries(specs)) {
     if (!spec?.required || !spec.board_sources?.length) continue;
+    //: 主控件的字段由控件自己填,不默认接上游(重绘的蒙版,ADR 0107 / 0110;见 stageEditors)。
+    if (isStageEditor(spec.editor)) continue;
     if (bindings[key]?.length || key in config) continue;
     const first = sources.find((one) => spec.board_sources?.includes(one.kind) && givesValue(one));
     if (!first) continue;

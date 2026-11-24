@@ -20,6 +20,7 @@ from app.domain.assets import denoise, video_gif
 from app.domain.assets.denoise import DENOISABLE_KINDS
 from app.domain.assets.frames import AssetFrameError, last_frame_time, save_frame_as_asset
 from app.domain.assets.from_url import UrlImportError, start_url_import
+from app.domain.assets.image_crop import CropBox, ImageCropError, crop_image
 from app.domain.assets.image_grid import GRIDS, ImageGridError, parse_grid, split_image_grid
 from app.domain.assets.audio_extract import AudioExtractError, extract_audio_asset
 from app.domain.assets.masks import MaskAssetError, make_mask_asset
@@ -523,6 +524,44 @@ def _execute_split_image_grid(db: Session, confirmation: Any, actor: str | None)
     return {"asset_ids": [piece.id for piece in pieces], "source_asset_id": asset.id}
 
 
+def _crop_box(payload: dict[str, Any]) -> CropBox:
+    """卡上那四个比例 → 框(夹进图里)。"""
+    return CropBox(float(payload.get("x") or 0), float(payload.get("y") or 0),
+                   float(payload.get("width") if payload.get("width") is not None else 1),
+                   float(payload.get("height") if payload.get("height") is not None else 1)).clamped()
+
+
+def _validate_crop_image(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    if asset.kind != "image":
+        raise ConfirmationError("confirmErr_cropNeedsImage")
+
+
+def _summarize_crop_image(db: Session, payload: dict[str, Any]) -> Summary:
+
+    box = _crop_box(payload)
+    percent = lambda value: round(value * 100)  # noqa: E731
+    return "confirm_cropImage", {"left": percent(box.x), "top": percent(box.y),
+                                 "width": percent(box.width), "height": percent(box.height)}
+
+
+def _execute_crop_image(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """本机切,一下子的事,不起后台任务:确认完直接交回切出来的那张(ADR 0110)。"""
+    payload = confirmation.payload
+
+    asset = db.get(Asset, str(payload["asset_id"]))
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    try:
+        piece = crop_image(db, asset, _crop_box(payload))
+    except ImageCropError as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
+    return {"asset_id": piece.id, "source_asset_id": asset.id}
+
+
 def _mask_options(payload: dict[str, Any]) -> Any:
     """卡上「切成什么形状」那半句:反选、扩张 / 收缩、羽化,各自是一条文案,连起来说。
 
@@ -970,6 +1009,28 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_split_image_grid,
     execute=_execute_split_image_grid,
     validate=_validate_split_image_grid,
+))
+
+
+class CropImageRequest(CardRequest):
+    """`crop_image` 这张卡收的参数(和工具那侧拼的一致,见 tests/test_card_requests)。"""
+
+    asset_id: str
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
+
+
+confirmable_tool(ConfirmableTool(
+    name="crop_image",
+    request=CropImageRequest,
+    permission="edit",
+    cost="none",
+    writes=("assets",),
+    summarize=_summarize_crop_image,
+    execute=_execute_crop_image,
+    validate=_validate_crop_image,
 ))
 
 

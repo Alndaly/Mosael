@@ -45,8 +45,10 @@ SCRUB = "scrub"  # 清除元数据:画面声音逐字节不变的一份「干净
 TIGHTEN = "tighten"  # 压缩停顿:话不变,句间过长的静音压到上限(见 domain/assets/pauses)
 FIT = "fit"  # 按视频画幅居中裁满的首帧 / 尾帧(见 domain/generation/frame_fit,ADR 0094)
 AUDIO = "audio"  # 从视频里抽出音轨
+CROP = "crop"  # 从一张图里框一块(见 domain/assets/image_crop,ADR 0110)
+INPAINT = "inpaint"  # 局部重绘:生成的那张按蒙版贴回原图(见 domain/assets/inpaint_composite,ADR 0110)
 
-OPS = frozenset({TRIM, FRAME, GRID_SPLIT, GIF, DENOISE, SEPARATE, EXPORT, CONCAT, PAD, MIX, EXTRACT, PLUGIN, MASK, SCRUB, TIGHTEN, FIT, AUDIO})
+OPS = frozenset({TRIM, FRAME, GRID_SPLIT, GIF, DENOISE, SEPARATE, EXPORT, CONCAT, PAD, MIX, EXTRACT, PLUGIN, MASK, SCRUB, TIGHTEN, FIT, AUDIO, CROP, INPAINT})
 
 #: 来源链往上追几级、最多交回多少个节点(界面上的来源链)。导出成片的出处可以有几十份,再往上一级就是几百。
 LINEAGE_DEPTH = 6

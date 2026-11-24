@@ -702,6 +702,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "把这张图按 {rows} 行 {cols} 列切成 {count} 张新图,原图不变",
         "en": "Split this image into {count} new images ({rows} rows × {cols} columns); the original is unchanged",
     },
+    "confirm_cropImage": {
+        "zh": "从这张图里裁出 {width}% × {height}% 的一块(左上角在 {left}%、{top}%),存成一张新图,原图不变",
+        "en": "Crop a {width}% × {height}% region of this image (top-left at {left}%, {top}%) into a new image; the original is unchanged",
+    },
     "confirm_gifClip": {"zh": ",截取 {duration} 秒", "en": ", taking {duration}s"},
     # ---- 蒙版的确认卡(ADR 0056 决定 6):从哪张图、按什么、切出什么形状,原图不变 ----
     "confirm_createMask": {

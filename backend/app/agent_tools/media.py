@@ -404,6 +404,32 @@ def split_image_grid(
 
 
 @tool(effect="confirms")
+def crop_image(
+    asset_id: str,
+    x: float = 0.0,
+    y: float = 0.0,
+    width: float = 1.0,
+    height: float = 1.0,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: crop a region of an EXISTING image into a NEW image; the source is never changed.
+
+    The region is given as FRACTIONS (0-1) of the upright image: x / y are the top-left corner, width / height the
+    size ("keep the middle half" is x=0.25, y=0.25, width=0.5, height=0.5). Values are clamped to the image; each
+    side of the result must be at least 16 pixels. The new asset records lineage back to the source.
+    """
+    confirmation = open_card(
+        {
+            "workspace_id": workspace_id or default_workspace_id(),
+            "tool": "crop_image",
+            "requested_by": REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "x": x, "y": y, "width": width, "height": height},
+        },
+    )
+    return confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def create_mask(
     asset_id: str,
     source: str = "luminance",

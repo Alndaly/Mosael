@@ -2623,6 +2623,56 @@ NODE_TYPES: dict[str, NodeSpec] = {
         },
         "outputs": ["asset_id", "asset_ids"],
     },
+    #: 从一张图里框一块留下来(ADR 0110):框是四个比例(占摆正后原图宽 / 高的几分之几),本机切、不花钱。
+    #: 框是**一个控件**(`editor: "crop_frame"`,前端 nodeForms/CropFrameField):另外三格 `edited_by` 它。
+    "image_crop": {
+        "external": False,
+        "spends": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["asset_id"],
+        "output_media": {"asset_id": "image"},
+        "board_group": "image", "board_description": "wfNode_image_crop_board",
+        "category": "wfCat_asset",
+        "label": "wfNode_image_crop",
+        "description": "wfNode_image_crop_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "image", "description": "wfNode_image_crop_asset_id"},
+            "crop_x": {"type": "number", "label": "wfField_crop_x", "default": 0, "editor": "crop_frame",
+                       "description": "wfNode_image_crop_x"},
+            "crop_y": {"type": "number", "label": "wfField_crop_y", "default": 0, "edited_by": "crop_x",
+                       "description": "wfNode_image_crop_y"},
+            "crop_width": {"type": "number", "label": "wfField_crop_width", "default": 1, "edited_by": "crop_x",
+                           "description": "wfNode_image_crop_width"},
+            "crop_height": {"type": "number", "label": "wfField_crop_height", "default": 1, "edited_by": "crop_x",
+                            "description": "wfNode_image_crop_height"},
+        },
+        "outputs": ["asset_id", "source_asset_id"],
+        "wiring_outputs": ["source_asset_id"],
+    },
+    #: 局部重绘(ADR 0110):画出要改的地方、写一句改成什么;任选能改图的模型(收蒙版的排前面),结果按蒙版贴回原图 ——
+    #: 蒙版外逐像素是原图。蒙版是主控件(`editor: "mask_paint"`):就地打开蒙版编辑器,底图是这一张。
+    "image_inpaint": {
+        "external": False,
+        "spends": True,
+        "effects": "paid",
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["asset_id"],
+        "output_media": {"asset_id": "image"},
+        "board_group": "image", "board_description": "wfNode_image_inpaint_board",
+        "category": "wfCat_ai",
+        "label": "wfNode_image_inpaint",
+        "description": "wfNode_image_inpaint_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "image", "description": "wfNode_image_inpaint_asset_id"},
+            #: 蒙版是参数,不是宿主:这一项只挂在图片格上一次(boards.transforms 的 `board_host`)。
+            "mask_asset_id": {"type": "template", "required": True, "media": "image", "board_host": False,
+                              "label": "wfField_mask_asset_id", "editor": "mask_paint",
+                              "description": "wfNode_image_inpaint_mask"},
+            "prompt": {"type": "template", "required": True, "description": "wfNode_image_inpaint_prompt"},
+            "model": {"type": "string", "options_from": "inpaint_models", "description": "wfNode_image_inpaint_model"},
+        },
+        "outputs": ["asset_id", "asset_ids"],
+    },
     "video_lipsync": {
         "external": False,
         "spends": True,

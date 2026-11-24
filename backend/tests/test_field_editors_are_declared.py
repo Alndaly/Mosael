@@ -18,9 +18,10 @@ RATCHET = True
 #: publish_options:发布节点的平台选项 —— 按所选账号的平台把发布页那一排控件画出来,见 PublishOptionsField。
 #: asset_picker:一份成片 —— 一颗按钮点开挑素材的弹窗(和发布页「成片素材」同一个控件),见 AssetPickerField。
 #: light_rig:打光节点的灯位 —— 方向球 + 预设 + 三个滑杆,一个控件改五格(ADR 0108),见 nodeForms/stageEditors。
+#: crop_frame / mask_paint:裁切框(一个控件改四格)、重绘的蒙版(打开蒙版编辑器)(ADR 0110),同上。
 KNOWN_EDITORS = {
     "map", "json", "scene_models", "note_ref", "id_list", "items", "start_params", "asset_grid",
-    "publish_options", "asset_picker", "light_rig",
+    "publish_options", "asset_picker", "light_rig", "crop_frame", "mask_paint",
 }
 
 

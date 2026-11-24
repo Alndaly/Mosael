@@ -2719,6 +2719,65 @@
     }
   },
   {
+    "type": "image_crop",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "media": "image",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "crop_x": {
+        "type": "number",
+        "editor": "crop_frame",
+        "label": {
+          "zh": "框的左边",
+          "en": "Frame left"
+        }
+      },
+      "crop_y": {
+        "type": "number",
+        "edited_by": "crop_x",
+        "label": {
+          "zh": "框的上边",
+          "en": "Frame top"
+        }
+      },
+      "crop_width": {
+        "type": "number",
+        "edited_by": "crop_x",
+        "label": {
+          "zh": "框的宽",
+          "en": "Frame width"
+        }
+      },
+      "crop_height": {
+        "type": "number",
+        "edited_by": "crop_x",
+        "label": {
+          "zh": "框的高",
+          "en": "Frame height"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "source_asset_id"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "source_asset_id": {
+        "zh": "来源素材",
+        "en": "Source media"
+      }
+    }
+  },
+  {
     "type": "image_grid_split",
     "config": {
       "asset_id": {
@@ -2771,6 +2830,56 @@
       "source_asset_id": {
         "zh": "来源素材",
         "en": "Source media"
+      }
+    }
+  },
+  {
+    "type": "image_inpaint",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "media": "image",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "mask_asset_id": {
+        "type": "template",
+        "editor": "mask_paint",
+        "media": "image",
+        "label": {
+          "zh": "要重绘的地方",
+          "en": "Area to repaint"
+        }
+      },
+      "prompt": {
+        "type": "template",
+        "label": {
+          "zh": "提示词",
+          "en": "Prompt"
+        }
+      },
+      "model": {
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "asset_ids"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
       }
     }
   },

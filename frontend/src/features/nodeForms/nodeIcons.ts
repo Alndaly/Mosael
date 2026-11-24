@@ -3,6 +3,8 @@ import {
   Quote,
   MessageCircle,
   Sun,
+  Crop,
+  Brush,
   FileText,
   Speech,
   ScanBox,
@@ -157,6 +159,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   entity_speak: MessageCircle,
   image_speak: MessageCircle,
   image_relight: Sun,
+  image_crop: Crop,
+  image_inpaint: Brush,
   //: 长稿分段配音:一段稿子配成几段音频(和配音同一个图标)。
   talking_segments: AudioLines,
   //: 译配对口型:和对口型同一个图标。

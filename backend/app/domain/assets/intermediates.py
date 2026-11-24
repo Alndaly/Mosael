@@ -21,4 +21,7 @@ LIPSYNC_CHUNK = "lipsync_chunk"
 #: 按画幅摆正的首帧 / 尾帧:交给视频模型之前按视频的画幅居中裁满的那一张(ADR 0094)。原图在素材库里。
 FITTED_FRAME = "fitted_frame"
 
-INTERMEDIATE_KINDS: tuple[str, ...] = (DUB_LINE, LIPSYNC_CHUNK, FITTED_FRAME)
+#: 局部重绘的底稿:模型交回的整张图,按蒙版贴回原图之前的那一张(ADR 0110)。贴好的那张在素材库里。
+INPAINT_DRAFT = "inpaint_draft"
+
+INTERMEDIATE_KINDS: tuple[str, ...] = (DUB_LINE, LIPSYNC_CHUNK, FITTED_FRAME, INPAINT_DRAFT)

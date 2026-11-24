@@ -106,13 +106,13 @@ Video gets a **filmstrip**, audio gets its **waveform**; drag either end to set 
 
 ## What an item can do with its content
 
-There are **no separate tool items** on a board. Turning an item into something new is **something the item itself does**: the first four abilities sit directly on the action bar, the rest under **⋯ More abilities**:
+There are **no separate tool items** on a board. Turning an item into something new is **something the item itself does**: every ability sits directly on the action bar, one icon each:
 
 | Item | Abilities |
 | --- | --- |
 | Audio, video | Transcribe asset, Separate voice and background, Reduce noise (strength Light / Medium / Strong) |
 | Video | Video to GIF, Lip sync (audio from a connected audio item, or voiced from a script on the spot) |
-| Image | Split grid, Make it talk |
+| Image | Split grid, Relight, Crop, Repaint, Make it talk |
 | Note, document | Translate (English, Simplified / Traditional Chinese, Japanese, Korean, French, German, Spanish, Russian) |
 | Asset | Fill in angles (all kinds), Generate expressions (characters only), Make it talk (characters only) |
 
@@ -123,6 +123,10 @@ There are **no separate tool items** on a board. Turning an item into something 
 Content tools from plugins work the same way, attached to the items whose content they take. Lip sync, Make it talk, Fill in angles and Generate expressions cost money; the two digital-human abilities also need a consent check — see [Digital humans](/docs/guides/digital-humans).
 
 **Split grid** cuts a 3×3, 2×2 or storyboard-strip collage into equal tiles: 2 × 2, 3 × 3 (default), 1 × 2 side by side, 2 × 1 stacked, 1 × 3 in a row, 3 × 1 in a column, 2 rows × 3 columns, 3 rows × 2 columns, 3 rows × 4 columns, 4 rows × 3 columns; **Gutters** can be kept (exact equal split) or removed (up to 6% per side). It runs locally at no cost, and the tiles are laid out to the right in their original grid.
+
+**Crop** keeps a region: drag inside the frame to move it, drag the corners and edges to resize, nudge with the arrow keys. The row of ratios below (Free, Original, 1:1, 4:3, 3:4, 16:9, 9:16) places the largest centered frame of that ratio and keeps it while you drag. The bottom-left corner of the image shows the size of the result in pixels. It runs locally at no cost; the original stays as it is.
+
+**Repaint** changes part of the image: click **Paint the area to repaint**, paint over what should change in the mask editor (the item's own image is underneath), then say what it should become ("a red scarf", "remove the passer-by") and pick a model. Any image model that takes reference images works; **models that take masks (inpainting, such as a ComfyUI workflow that reads a mask) are listed first**. Whatever the model, the result is pasted back through your mask, so every pixel outside the painted area stays the same, with a slightly feathered edge so the seam doesn't show. It costs money.
 
 **Click an icon and its panel opens under the item; click another and the panel below switches to it; click the same one again to close it** (<kbd>Esc</kbd> or selecting another item closes it too). The top of the panel says what happens to which item, and **this item's content is the input**: nothing to pick, nothing to connect.
 

@@ -13,7 +13,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **180** 个工具,其中 **64** 个走确认卡、**1** 个停下来等用户作答。
+共 **181** 个工具,其中 **65** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -97,6 +97,7 @@
 | `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |
 | `create_skill` | 确认卡 | Confirmation required, every time: save a new skill (a reusable procedure) in this workspace. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
+| `crop_image` | 确认卡 | Confirmation required: crop a region of an EXISTING image into a NEW image; the source is never changed. |
 | `delete_assets` | 确认卡 | Confirmation required: PERMANENTLY delete media assets. This cannot be undone. |
 | `delete_projects` | 确认卡 | Confirmation required: PERMANENTLY delete projects and their timelines. |
 | `delete_skill` | 确认卡 | Confirmation required, every time: permanently delete one of this workspace's own skills. |

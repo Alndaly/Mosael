@@ -568,8 +568,12 @@ export function NodeConfigForm({
                   }
                 />
               ) : isStageEditor(spec?.editor) ? (
-                // 主控件类的编辑器(打光的方向球,ADR 0108):一个控件改好几格(那几格都 `edited_by` 这一格),见 stageEditors。
-                renderStageEditor(spec?.editor, config, (values) => onPatchConfig(key, values, false))
+                // 主控件类的编辑器(打光的方向球、裁切框、重绘的蒙版):一个控件改好几格(那几格都 `edited_by` 这一格),见 stageEditors。
+                // 底图是 `asset_id` 那一格填的素材;接的是上游(`{{…}}`)时没有,控件照样能用。
+                renderStageEditor(spec?.editor, config, (values) => onPatchConfig(key, values, false), {
+                  workspaceId,
+                  imageAssetId: plainAssetId(config.asset_id),
+                })
               ) : spec?.editor === "asset_grid" ? (
                 // 一次挑一组素材:紧凑的格子(挑、拖排序、直接传、自动引用单独一行),由**后端的字段声明**
                 // 点名(editor: "asset_grid"),不是一个手填引用的文本框。值是逗号分隔的素材 id 串、还是
@@ -790,4 +794,9 @@ export function NodeConfigForm({
   };
 
   return <>{fields.map(renderField)}</>;
+}
+
+/** 一格里填的是一份素材的 id(不是接上游的 `{{…}}` 模板、也不是空的)就交回它。 */
+function plainAssetId(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() && !value.includes("{{") ? value.trim() : undefined;
 }

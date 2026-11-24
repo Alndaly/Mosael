@@ -218,6 +218,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "只有图片素材可以切宫格",
         "en": "Only image assets can be split into a grid.",
     },
+    "confirmErr_cropNeedsImage": {
+        "zh": "只有图片素材可以裁切",
+        "en": "Only image assets can be cropped.",
+    },
     "confirmErr_maskNeedsImage": {
         "zh": "只有图片素材可以算蒙版",
         "en": "Only image assets can be turned into a mask.",

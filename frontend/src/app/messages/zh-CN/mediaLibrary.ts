@@ -75,6 +75,8 @@ export const mediaLibrary = {
   assetLineageOpScrub: "清除元数据",
   assetLineageOpTighten: "压缩停顿",
   assetLineageOpFit: "按画幅裁",
+  assetLineageOpCrop: "裁切",
+  assetLineageOpInpaint: "局部重绘",
   assetLineageOpPlugin: "插件加工",
   assetLineageOpAudio: "抽取音轨",
   // 清除元数据(ADR 0062):素材详情(视频)的一个动作 —— 点开是一张小确认面板,确认后排一条后台任务。

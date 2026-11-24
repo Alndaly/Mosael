@@ -32,7 +32,12 @@ from app.domain.scenes.operations import list_models
 from app.domain.voices import engine_catalog
 from app.domain.voices.speech import CLONE_ENGINE, PODCAST_ENGINE
 from app.domain.workflows.executors import talking
-from app.domain.workflows.executors.reference_models import automatic_reference_model, works_from_reference_images
+from app.domain.workflows.executors.reference_models import (
+    automatic_inpaint_model,
+    automatic_reference_model,
+    inpaint_candidates,
+    works_from_reference_images,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +356,19 @@ def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
     ]
 
 
+def _inpaint_models(db: Session, ctx: OptionContext) -> list[Option]:
+    """局部重绘能用的图片模型(ADR 0110):收参考图的都行,收蒙版的排前面;留空时用的那一个标「默认」——
+    和节点跑的时候同一个挑法(executors.reference_models.automatic_inpaint_model)。"""
+
+    options = generation_resolution.generation_options(db, "image", user_id=ctx.user_id)
+    automatic = automatic_inpaint_model(options)
+    return [
+        {**generation_option_names(one),
+         "label": f"{one['model_label']} · {t('wfOpt_defaultModel', ctx.locale)}" if one is automatic else one["model_label"]}
+        for one in inpaint_candidates(options)
+    ]
+
+
 def generation_option_names(option: dict[str, Any]) -> dict[str, Any]:
     """一个生成选项做成下拉的一项:值是选项 id,`label` 是主名;两层名字的另外几格(连接名、是哪张工作流的哪个入口,ADR 0045)
     原样带上,界面摆成第二行(frontend lib/entryNames 的 entryNamedOptions)—— 不在这里拼成一句。入口那一格叫 `entry_group`:
@@ -520,6 +538,7 @@ SOURCES: dict[str, Source] = {
     "speech_video_resolutions": _talking_resolutions("speech-to-video"),
     "entities": _entities,
     "reference_image_models": _reference_image_models,
+    "inpaint_models": _inpaint_models,
     "entities.character": lambda db, ctx: _entities(db, ctx, "character"),
     "entities.location": lambda db, ctx: _entities(db, ctx, "location"),
     "entities.prop": lambda db, ctx: _entities(db, ctx, "prop"),

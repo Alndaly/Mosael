@@ -74,6 +74,8 @@ export const mediaLibrary = {
   assetLineageOpScrub: "metadata stripped",
   assetLineageOpTighten: "pauses tightened",
   assetLineageOpFit: "fitted to the video aspect",
+  assetLineageOpCrop: "cropped",
+  assetLineageOpInpaint: "repainted",
   assetLineageOpAudio: "Audio extracted",
   assetLineageOpPlugin: "plugin",
   // Strip metadata (ADR 0062): one action on a video's detail modal — a small confirmation panel, then a background job.
