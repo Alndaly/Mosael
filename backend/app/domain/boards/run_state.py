@@ -61,7 +61,7 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
             # 赢，否则它会把节点重新写活，界面就永远 loading。
             kept = {**item, "run": settled_run}
             # 便签上写字的产出是正文,没有 asset_id 可以充当「结果已到」的证据。服务端已经落下
-            # 正文和清空后的表单时，晚到的 running 自动保存不能把三者一起覆盖回旧快照。
+            # 正文和那一轮的表单时，晚到的 running 自动保存不能把三者一起覆盖回旧快照。
             if settled_run.get("status") == "succeeded" and settled.get("kind") == "note" and not derived:
                 kept["text"] = settled.get("text", "")
                 kept["form"] = settled.get("form", {})

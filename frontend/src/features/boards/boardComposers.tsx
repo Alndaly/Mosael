@@ -98,7 +98,7 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
     />
   ),
 
-  //: 截出来的那一格还没有产出(截挂了、还在截):照表单上记的那份、那段就地再截。不吃上游。
+  //: 截出来的那一格:照表单上记的那份、那段就地再截(截挂了重来,截好了改一改再截就换掉这一段)。不吃上游。
   trim: ({ item, position, run }) => {
     const source = item.form?.trim;
     const kind = item.kind;
@@ -151,7 +151,7 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
     />
   ),
 
-  //: 还没有产出的图片/视频槽:提示词面板 —— 节点本身就是生成单元。
+  //: 图片/视频格的提示词面板 —— 节点本身就是生成单元。有了产出照样挂着做出它的那份表单,再跑就地换掉。
   generate: ({ item, position, workspaceId, feeding, documents, models, onFormChange, onPickAsset, run }) => (
     <NodeComposer
       key={itemFormResetKey(item)}

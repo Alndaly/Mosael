@@ -302,8 +302,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   }, [restores, fitAspect]);
 
   const { documents, pickingDocument, setPickingDocument, refreshingDocument, refreshDocument } = useBoardDocuments({ nodes, setNodes, workspaceId });
-  //: 选中的那个空槽/生成中的槽 —— 只有一个被选中时才挂面板,多选没有单一的作用对象。
-  /** 选中的**还空着**的那一项 —— 空槽就是「等着被填」,面板挂在它下面。 */
   //: 选中的那一格底下挂哪个产出者的面板 —— 规则在 producerOf,这里只认「选中了一格」。
   const composerItem = React.useMemo(() => {
     const picked = nodes.filter((node) => node.selected && node.type !== "marker");
@@ -1151,7 +1149,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       {/* 面板外面这一层只接「人碰没碰过它」(见 writeForm);撤 / 重做之后整块照装回去的表单重挂(`restores`)——
           不重挂的话面板里还是撤之前的字,下一次改动又把撤掉的写回去。面板本身经 NodeToolbar 挂到格子下面。 */}
       <div key={restores} className="contents" onPointerDownCapture={touchPanel} onKeyDownCapture={touchPanel} onDropCapture={touchPanel} onPasteCapture={touchPanel}>
-      {/* 选中的那一格还等着产出:挂它的产出者的面板(一张表,见 boardComposers)。 */}
+      {/* 选中的那一格:挂它的产出者的面板(一张表,见 boardComposers);有了产出照样挂,再跑就地换掉。 */}
       {!feeding.blocked && composerItem && producer && onRun && renderComposer(producer, {
         item: composerView(composerItem),
         position: nodes.find((one) => one.id === composerItem.id)?.position ?? { x: composerItem.x, y: composerItem.y },

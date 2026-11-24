@@ -88,8 +88,13 @@ describe("选中一格时挂哪块面板", () => {
     expect(producerOf({ id: "n", kind: "note", x: 0, y: 0, text: "有字", form: { producer: "write" } })).toBe("write");
   });
 
-  it("有了产出的、分组框这类不挂", () => {
-    expect(producerOf(image({ asset_id: "a1", form: { trim, producer: "trim" } }))).toBeNull();
+  it("有了产出的照样挂做出它的那份表单 —— 改一改再跑,就地换掉这一张", () => {
+    expect(producerOf(image({ asset_id: "a1", form: { prompt: "两只猫", producer: "generate" }, run: { status: "succeeded" } }))).toBe("generate");
+    expect(producerOf(image({ asset_id: "a1", form: { trim, producer: "trim" } }))).toBe("trim");
+  });
+
+  it("贴进来的素材、分组框这类表单上没有产出者,不挂", () => {
+    expect(producerOf(image({ asset_id: "a1" }))).toBeNull();
     expect(producerOf({ id: "f", kind: "frame", x: 0, y: 0 })).toBeNull();
   });
 

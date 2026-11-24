@@ -123,8 +123,8 @@ def test_落回时不多不少(slot) -> None:
     assert [items[one]["asset_id"] for one in ("img-1", "img-1-3", "img-1-4")] == ["a", "b", "c"]
     assert set(items) == {"img-1", "img-1-2", "img-1-3", "img-1-4"}, "没有事后冒出来的格子"
     assert all(one.get("run", {}).get("status") != "running" for one in items.values())
-    assert items["img-1-3"]["run"] == {"status": "succeeded"} and items["img-1-3"]["form"]["prompt"] == "", (
-        "和这一格一样:提示词用掉了,模型留着")
+    assert items["img-1-3"]["run"] == {"status": "succeeded"} and items["img-1-3"]["form"]["prompt"] == "两只猫", (
+        "和这一格一样:做出它的那份表单原样留着,选中照样看得见、改了能再跑")
 
 
 def test_交回的少了_多摆的占位收掉(slot) -> None:

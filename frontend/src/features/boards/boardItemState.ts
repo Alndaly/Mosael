@@ -14,16 +14,14 @@ export function itemJobId(item: BoardItem): string | undefined {
  * 这里按种类推断(便签写字、音频念、图片视频生成,表单记着 trim 的截取),升级时由迁移
  * migrate-board-forms-name-their-producer 照那条推断写进了每一格。
  *
- * 已经有了产出(asset_id)的一格不挂 —— 它的事做完了;便签的产出是它自己的正文,不占 asset_id,
- * 所以有字照样挂(有字就是照我说的改)。产出新建在右边的(3D 场景格渲白模)也照样挂:场景格的
- * asset_id 是缩略图,不是它的产出(api/domains/boards 的 derivesOutputs)。
+ * **有了产出的一格照样挂。** 表单是这一格的,不是一次性的:选中做好的那张图,底下照样是做出它的那份表单 ——
+ * 人看得见它是怎么做的,改一改再跑,产出就地换掉这一张(ADR 0025「修订:有产出的格子照样挂面板,就地重跑」)。
+ * 贴进来、传上来的素材表单上没有产出者,不挂。
  *
  * 这是这一格**自己的**产出者;它的能力(转写、翻译……)从操作条上点开,不在这里(见 boardAbilities)。
  */
 export function producerOf(item: BoardItem): BoardProducer | null {
-  const producer = item.form?.producer;
-  if (!producer || (item.asset_id && !derivesOutputs(producer))) return null;
-  return producer;
+  return item.form?.producer ?? null;
 }
 
 /**

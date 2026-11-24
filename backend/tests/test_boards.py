@@ -520,14 +520,15 @@ def test_任务成功后占位就地变成素材() -> None:
     assert item["asset_id"] == "asset-42"
     assert "job_id" not in item.get("run", {}), "填完素材还留着 job_id,界面会一直显示在生成"
     assert item["form"] == {
-        "prompt": "",
+        "prompt": "画一只猫",
+        "prompt_document": {"type": "doc", "content": []},
         "provider": "evolink",
         "model": "gpt-image-2",
         "parameters": {"size": "1024x1024"},
-        "source_assets": [],
-        "mentioned_asset_ids": [],
+        "source_assets": [{"asset_id": "ref-1", "role": "reference_image"}],
+        "mentioned_asset_ids": ["ref-1"],
         "producer": "generate",
-    }
+    }, "做出这张图的那份表单原样留着:选中照样看得见,改了能就地再跑"
 
 
 def test_任务失败时留着这一项并写上原因() -> None:
@@ -802,7 +803,8 @@ def test_旧自动保存不会覆盖便签写作的成功正文和空表单() ->
     got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": stale}).json()
     item = got["canvas"]["items"][0]
     assert item["text"] == "生成后的正文"
-    assert item["form"] == {"prompt": "", "model": "k3", "mentioned_asset_ids": [], "source_assets": [], "producer": "write"}
+    assert item["form"] == {"prompt": "描述图片", "model": "k3", "mentioned_asset_ids": ["asset-1"], "producer": "write"}, (
+        "写成了,那一轮的表单原样留着(ADR 0025「修订:有产出的格子照样挂面板,就地重跑」)")
     assert item["run"] == {"status": "succeeded"}
 
 
@@ -849,8 +851,9 @@ def test_媒体节点的原始表单和运行态各自存放() -> None:
     assert "text" not in item, "运行时提示词不应覆盖用户表单"
 
 
-def test_表单记着上次自动填进提示词的那段_出了结果一起用掉() -> None:
-    """面板照 `form.prefilled` 认「提示词还是自动填的」(上游改了字就跟着换);它是一段字,出了结果和提示词一起清掉。"""
+def test_表单记着上次自动填进提示词的那段_出了结果原样留着() -> None:
+    """面板照 `form.prefilled` 认「提示词还是自动填的」(上游改了字就跟着换)。出了结果表单原样留着 —— 选中做好的一格,
+    面板还是那份表单,提示词仍是自动填的就照旧跟着上游换。"""
     from app.domain.boards.outputs import _canvas_with_delivered_result
 
     item = {"id": "i", "kind": "image", "x": 0, "y": 0, "run": {"status": "running", "job_id": "j"},
@@ -862,7 +865,8 @@ def test_表单记着上次自动填进提示词的那段_出了结果一起用�
                                          outputs=[{"type": "asset", "asset_id": "a"}], cancelled=False,
                                          succeeded=True)
     form = done["items"][0]["form"]
-    assert form["prompt"] == "" and "prefilled" not in form, form
+    assert form == item["form"], form
+    assert done["items"][0]["asset_id"] == "a" and done["items"][0]["run"] == {"status": "succeeded"}
 
 
 def test_提示词文档必须是_tiptap_doc() -> None:
@@ -898,6 +902,42 @@ def test_音频项和图片视频同一套三状态() -> None:
     )["items"]
     assert "asset_id" not in empty
     assert done["asset_id"] == "snd"
+
+
+def test_做好的一格改了表单再生成_就地换掉这一张() -> None:
+    """生成好的图选中照样挂着做出它的那份表单;改一改再跑,新一轮在**这一格**上:旧图让位给占位,回执填进新图,
+    表单是改过的那一份(ADR 0025「修订:有产出的格子照样挂面板,就地重跑」)。"""
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.domain.boards.receipts import deliver_generated, place_pending, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+    with SessionLocal() as db:
+        deliver_generated(db, SimpleNamespace(id="job-x", status="succeeded", result={"asset_ids": ["first"]}),
+                          receipt_to_item(board_id, item_id))
+    done = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
+    assert done["asset_id"] == "first" and done["form"]["prompt"] == "画一只猫"
+
+    edited = {**done["form"], "prompt": "画两只猫"}
+    with SessionLocal() as db:
+        placed = place_pending(db, workspace_id=ws, board_id=board_id, item={
+            "id": item_id, "kind": "image", "x": 0, "y": 0,
+            "run": {"status": "running", "job_id": "job-y"}, "form": edited,
+        })
+    pending = placed.canvas["items"]
+    assert len(pending) == 1, "就地重跑,没有在旁边新建一格"
+    assert pending[0]["run"] == {"status": "running", "job_id": "job-y"} and "asset_id" not in pending[0], (
+        "旧图让位给这一轮的占位,不会一边转圈一边挂着旧图")
+
+    with SessionLocal() as db:
+        deliver_generated(db, SimpleNamespace(id="job-y", status="succeeded", result={"asset_ids": ["second"]}),
+                          receipt_to_item(board_id, item_id))
+    after = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
+    assert [one["asset_id"] for one in after] == ["second"]
+    assert after[0]["form"]["prompt"] == "画两只猫" and after[0]["run"] == {"status": "succeeded"}
 
 
 def test_失败之后重新生成_画布上是这一轮的占位而不是上一轮的失败() -> None:
@@ -1159,8 +1199,8 @@ def test_分组框记得住联动拖动这件事() -> None:
         )
 
 
-def test_写文案就地落进那张便签_成功后重置一次性表单() -> None:
-    """AI 写完保留节点与稳定模型选择，但提示词和手动引用已经消费完，下一轮应从空表单开始。"""
+def test_写文案就地落进那张便签_成功后表单原样留着() -> None:
+    """AI 写完就地落进那张便签;让它写的那份表单(要求、模型、引用)原样留着,再打开「让 AI 写」还是那一份。"""
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
@@ -1208,11 +1248,10 @@ def test_写文案就地落进那张便签_成功后重置一次性表单() -> N
     assert items[0]["text"] == "城市夜景下的一只白猫"
     assert (items[0]["x"], items[0]["y"], items[0]["color"]) == (40, 80, "green"), "把用户摆好的东西改了"
     assert items[0]["form"] == {
-        "prompt": "",
+        "prompt": "描述图片",
         "provider_profile_id": "profile-1",
         "model": "k3",
-        "mentioned_asset_ids": [],
-        "source_assets": [],
+        "mentioned_asset_ids": ["asset-1"],
         "producer": "write",
     }
     assert items[0]["run"] == {"status": "succeeded"}

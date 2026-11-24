@@ -14,7 +14,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN", t: (key: string) => key }),
 }));
 
-import type { BoardCanvas as Canvas } from "@/api/client";
+import type { BoardCanvas as Canvas, GenerationOption } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { rebaseCanvas } from "@/features/boards/boardRebase";
@@ -629,6 +629,28 @@ describe("选中之后挂什么", () => {
     );
   const writeNote = (id: string, extra: Record<string, unknown> = {}) =>
     ({ ...note(id, "开场白"), form: { producer: "write" as const }, ...extra });
+
+  it("生成好的一格选中照样挂生成面板,里面是做出它的那份表单(ADR 0025「修订:有产出的格子照样挂面板,就地重跑」)", async () => {
+    const model = {
+      id: "m", provider_profile_id: "p", plugin_instance_id: "", profile_name: "T", label: "L", adapter_available: true,
+      is_default: true, capabilities_known: true, provider: "test", model: "img-model", model_label: "img-model", kind: "image",
+      capabilities: { parameter_keys: [] },
+    } as unknown as GenerationOption;
+    const done = {
+      id: "img", kind: "image" as const, x: 0, y: 0, width: 320, height: 200, asset_id: "a1",
+      run: { status: "succeeded" as const },
+      form: { prompt: "one girl", provider: "test", provider_profile_id: "p", model: "img-model", parameters: {},
+              source_assets: [], mentioned_asset_ids: [], producer: "generate" as const },
+    };
+    mount({ items: [done], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined), models: [model] });
+    select("img");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    const composer = document.querySelector('[data-board-composer="generate"]');
+    expect(composer, "生成面板挂出来了").not.toBeNull();
+    expect(composer!.textContent).toContain("one girl");
+  });
 
   it("选中一张便签不弹写作面板 —— 挪一挪它不用先关掉什么;操作条上「让 AI 写」才打开,再点一次收起", () => {
     mount({ items: [writeNote("n1")], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });

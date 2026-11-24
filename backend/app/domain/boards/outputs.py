@@ -229,23 +229,11 @@ def sibling_placeholders(slot: dict[str, Any], count: int, taken: set[str]) -> l
             for one, x in (next(places) for _ in range(count))]
 
 
-def _consumed(item: dict[str, Any], *, text: str | None, note: dict[str, Any] | None) -> dict[str, Any]:
-    """一格就地收下这一轮的产出之后的样子(素材另填):运行态成功,一次性的表单用掉了。"""
+def _settled(item: dict[str, Any], *, text: str | None, note: dict[str, Any] | None) -> dict[str, Any]:
+    """一格就地收下这一轮的产出之后的样子(素材另填):运行态成功。**表单原样留着** —— 它是这一格的表单,
+    不是一次性的:选中做好的一格,面板照它挂出来,人能看见这一张是怎么做的,改一改再跑就换掉这一张
+    (ADR 0025「修订:有产出的格子照样挂面板,就地重跑」)。"""
     settled = dict(item)
-    # 成功结束一次编辑周期：提示词和引用素材已经被消费，保留模型/参数方便继续同风格创作。
-    # 失败/取消不走这里，因此原输入仍完整保留给重试。
-    if isinstance(settled.get("form"), dict):
-        form = dict(settled["form"])
-        form["prompt"] = ""
-        form["source_assets"] = []
-        form["mentioned_asset_ids"] = []
-        #: @ 到的资产随提示词一起被消费了;用过它这件事记在生成记录里(request.entities)。
-        if form.get("mentioned_entity_ids"):
-            form["mentioned_entity_ids"] = []
-        form.pop("prompt_document", None)
-        #: 自动填进来的那段也一起用掉了:下一轮面板照上游重新填。
-        form.pop("prefilled", None)
-        settled["form"] = form
     settled["run"] = {"status": "succeeded"}
     if text is not None:
         settled["text"] = text
@@ -376,7 +364,7 @@ def _canvas_with_delivered_result(
             kept.extend(new_items)
             edges.extend(new_edges)
             continue
-        settled = _consumed(item, text=text, note=note)
+        settled = _settled(item, text=text, note=note)
         if not asset_ids:
             kept.append(settled)
             continue
@@ -386,7 +374,7 @@ def _canvas_with_delivered_result(
         #: 拒掉,产出一张都落不回来,这一格永远在转圈(见 _beside)。
         rest = asset_ids[1:]
         for sibling, extra in zip(siblings, rest):
-            kept.append({**_consumed(sibling, text=None, note=None), "asset_id": extra})
+            kept.append({**_settled(sibling, text=None, note=None), "asset_id": extra})
         places = _beside(settled, {str(one.get("id")) for one in items})
         for extra in rest[len(siblings):]:
             extra_id, x = next(places)
@@ -395,7 +383,7 @@ def _canvas_with_delivered_result(
     #: 这一格不是这一轮(被换掉了):一起摆的占位按先后收下全部素材;没做成就摘掉。
     if not this_round and succeeded:
         for sibling, extra in zip(siblings, asset_ids):
-            kept.append({**_consumed(sibling, text=None, note=None), "asset_id": extra})
+            kept.append({**_settled(sibling, text=None, note=None), "asset_id": extra})
 
     # 连线可能指着刚被摘掉的那一项 —— normalize 会拒绝悬空的线,所以先把它们去掉。
     alive = {item["id"] for item in kept}

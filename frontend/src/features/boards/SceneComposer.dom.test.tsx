@@ -133,8 +133,8 @@ describe("3D 场景格的面板", () => {
     const placed = withSlotProducer(scene("sc", { asset_id: "thumb" }));
     expect(placed.form).toEqual({ producer: "scene_render" });
     expect(producerOf(placed)).toBe("scene_render");
-    //: 媒体格有了产出就不再挂面板 —— 那一条不变。
-    expect(producerOf({ id: "i", kind: "image", x: 0, y: 0, asset_id: "a", form: { producer: "generate" } })).toBeNull();
+    //: 媒体格有了产出也照样挂做出它的那份表单(ADR 0025「修订:有产出的格子照样挂面板,就地重跑」)。
+    expect(producerOf({ id: "i", kind: "image", x: 0, y: 0, asset_id: "a", form: { producer: "generate" } })).toBe("generate");
   });
 
   it("正文是场景名和「编辑场景」;底栏两枚芯片写的是值:镜头按这一格的场景列,渲染内容缺省是首尾静帧", async () => {
