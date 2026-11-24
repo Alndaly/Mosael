@@ -2,7 +2,9 @@ import React from "react";
 import { ImageOff, Paperclip } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
+import { useAssetImage } from "@/components/app/useAssetImage";
 import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
@@ -57,11 +59,14 @@ function boxClasses(className?: string): string {
  * 图标在上、字在下,中间一大片空。所以:尺寸类留下、图片专有的去掉,内容用 `place-content-center`
  * **当一整块居中**,窄的格子里字截断(完整名字在悬停说明里)。
  */
-function MissingImage({ name, label, className, plain }: {
+function MissingImage({ name, label, className, plain, onRetry }: {
   name: string; label: string; className?: string;
   /** 画布节点里由外层容器统一收边(和图片那条路一致):不自己再描一圈。 */
   plain?: boolean;
+  /** 一时取不到(不是被删了):给一颗「重试」。 */
+  onRetry?: () => void;
 }) {
+  const t = useI18n();
   return (
     <Hint label={name}>
       <div
@@ -78,6 +83,12 @@ function MissingImage({ name, label, className, plain }: {
           <ImageOff size={16} aria-hidden />
           {/* 截断走全站那一个(见 components/ui/truncate):真被截断时悬停能看全 */}
           <Truncate>{label}</Truncate>
+          {onRetry && (
+            //: nodrag:画布节点里按下去是点它,不是拖那一格。
+            <Button variant="inline" className="nodrag" onClick={(event) => { event.stopPropagation(); onRetry(); }}>
+              {t("assetPreviewRetry")}
+            </Button>
+          )}
         </span>
       </div>
     </Hint>
@@ -129,9 +140,8 @@ export function AssetInlinePreview({
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
-  const [imageFailure, setImageFailure] = React.useState({ assetId: "", stage: 0 });
-  const stage = imageFailure.assetId === assetId ? imageFailure.stage : 0;
-  const src = kind === "image" && stage === 0 ? assetPreviewUrl(assetId) : assetFileUrl(assetId);
+  const image = useAssetImage(assetId);
+  const src = kind === "image" ? image.src : assetFileUrl(assetId);
   const openPreview = () =>
     openImagePreview({
       src,
@@ -143,16 +153,19 @@ export function AssetInlinePreview({
     });
 
   if (kind === "image") {
-    //: 预览地址和原文件都取不到(素材被删了、或文件不在盘上):给一块正经的占位,不要浏览器那张破图。
-    //: **默认就有**,不靠调用方传 —— 破图不是「一种样式选择」,是界面坏了;要让某个调用方自己画(能力面板那张
-    //: 认脸的小图),用 imageFallback 覆盖。
-    if (stage >= 2) {
+    //: 预览地址和原文件都取不到:给一块正经的占位,不要浏览器那张破图。**默认就有**,不靠调用方传 —— 破图不是
+    //: 「一种样式选择」,是界面坏了;要让某个调用方自己画(能力面板那张认脸的小图),用 imageFallback 覆盖。
+    //: 只有服务端说这份素材不在了才写「已删除」;一时取不到(后端重启、网络抖)写「加载不出来」,给一颗重试(见 useAssetImage)。
+    if (image.state === "gone") {
       return <>{imageFallback ?? <MissingImage name={name} label={t("assetPreviewGone")} className={className} plain={plain} />}</>;
+    }
+    if (image.state === "unavailable") {
+      return <>{imageFallback ?? <MissingImage name={name} label={t("assetPreviewUnavailable")} className={className} plain={plain} onRetry={image.retry} />}</>;
     }
     const picture = (
       <img
         src={src}
-        onError={() => { if (stage < 2) setImageFailure({ assetId, stage: stage + 1 }); }}
+        onError={image.onError}
         alt={name}
         loading={lazy ? "lazy" : "eager"}
         className={className ?? "block max-h-[180px] w-auto max-w-full object-contain"}
