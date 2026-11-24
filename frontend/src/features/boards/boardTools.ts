@@ -1,4 +1,4 @@
-import { Box, FolderOpen, Sparkles, Package, Wrench, type LucideIcon } from "lucide-react";
+import { Box, FolderOpen, Sparkles, Package, ScanText, Wand2, Wrench, type LucideIcon } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -28,12 +28,32 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
 /**
  * 一项能力(或一个生成器)的图标。**操作条上那一枚、「更多」菜单里那一行、面板的名字读的都是它。**
  *
- * 先认节点类型(内置节点在工作流画布上是什么图标,在画板上就是什么 —— 同一份 nodeIcons),
- * 认不出的(插件工具:插件的 node 块不声明图标)按它吃什么内容的那一组;组也没见过的是一把扳手。
+ * 先认节点类型(内置节点在工作流画布上是什么图标,在画板上就是什么 —— 同一份 nodeIcons)。认不出的(插件工具:插件的
+ * node 块不声明图标)**按它把内容变成什么**,不按它吃什么:挂在图片格上的能力吃的都是图片,一颗图片图标等于没说话
+ * (ComfyUI「看图写字」的工作流在图片格上顶着一颗图片,维护者说「不太合适」)。
+ *
+ * - 交回一段字、吃的不是字(看图写字、反推提示词、读出画面里的字):「读出文字」;
+ * - 交回另一种素材(图变视频):那种格子的图标;
+ * - 交回同一种素材(放大、抠图、降噪):「处理」;
+ * - 说不清的(交回好几种、凭空产出):按吃什么的那一组;组也没见过的是一把扳手。
+ *
  * 不在这里按工具名另写一张表。
  */
-export function boardToolIcon(tool: Pick<BoardProducerInfo, "type" | "board_group"> | undefined): LucideIcon {
-  return nodeTypeIcon(tool?.type) ?? GROUP_ICONS[tool?.board_group ?? ""] ?? Wrench;
+export function boardToolIcon(
+  tool: Pick<BoardProducerInfo, "type" | "board_group"> & Partial<Pick<BoardProducerInfo, "output_kinds">> | undefined,
+): LucideIcon {
+  return nodeTypeIcon(tool?.type) ?? (tool && transformIcon(tool)) ?? GROUP_ICONS[tool?.board_group ?? ""] ?? Wrench;
+}
+
+/** 按「吃什么 → 交回什么」认的那颗(见 boardToolIcon);认不出回 null。 */
+function transformIcon(tool: Pick<BoardProducerInfo, "board_group"> & Partial<Pick<BoardProducerInfo, "output_kinds">>): LucideIcon | null {
+  const made = [...new Set(tool.output_kinds ?? [])];
+  const eats = tool.board_group;
+  if (made.length !== 1 || !eats || eats === "new" || eats === "asset") return null;
+  const [kind] = made;
+  if (kind === "note") return eats === "text" ? null : ScanText;
+  if (kind === eats) return Wand2;
+  return GROUP_ICONS[kind] ?? null;
 }
 
 /** 句末:中文的。!?,英文的句点后面跟空白(`v1.5` 里的点不算)—— 和后端 boards.transforms 同一种切法。 */

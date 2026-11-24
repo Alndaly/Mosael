@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Languages, Package, Sparkles, Wrench } from "lucide-react";
+import { Languages, Package, ScanText, Sparkles, Wand2, Wrench } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo } from "@/api/client";
 import { messages, type MessageKey } from "@/app/messages";
@@ -80,6 +80,16 @@ describe("能力的图标(boardToolIcon)", () => {
     //: 没见过的组(后端多了一种)也有图标;原型链上的名字不算节点类型。
     expect(boardToolIcon({ type: "plugin.x.y", board_group: "someday" })).toBe(Wrench);
     expect(boardToolIcon({ type: "constructor", board_group: "" })).toBe(Wrench);
+  });
+
+  it("插件工具按它把内容变成什么:图片格上的能力不都顶着一颗图片(看图写字是「读出文字」)", () => {
+    expect(boardToolIcon({ type: "plugin.comfy.wf_clip", board_group: "image", output_kinds: ["note", "note"] })).toBe(ScanText);
+    expect(boardToolIcon({ type: "plugin.x.upscale", board_group: "image", output_kinds: ["image"] })).toBe(Wand2);
+    expect(boardToolIcon({ type: "plugin.x.animate", board_group: "image", output_kinds: ["video"] })).toBe(kindIcon("video"));
+    //: 吃字吐字(翻译、润色)照旧是便签那颗;交回好几种、凭空产出的照旧按组。
+    expect(boardToolIcon({ type: "plugin.x.text", board_group: "text", output_kinds: ["note"] })).toBe(kindIcon("note"));
+    expect(boardToolIcon({ type: "plugin.x.mix", board_group: "image", output_kinds: ["image", "note"] })).toBe(kindIcon("image"));
+    expect(boardToolIcon({ type: "plugin.comfy.wf_1", board_group: "new", output_kinds: ["image"] })).toBe(Sparkles);
   });
 
   it("操作条上同一格的几项能力不顶着同一颗图标(分离人声和剪一段不都是剪刀)", () => {
