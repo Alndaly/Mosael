@@ -98,6 +98,9 @@ NODE_TO_TOOL: dict[str, str] = {
     #: 数字人:智能体是先配音(synthesize_speech)、再 generate_video 挂首帧 / 源视频 + 驱动音频 —— 同一件事的两步。
     "entity_speak": "generate_video",
     "image_speak": "generate_video",
+    #: 重新打光(ADR 0108):智能体用 generate_image 带原图当参考图、一段打光的话就是同一件事;画板上它还是图片格的「灯光」,
+    #: 智能体也能经 run_board_item 替人点它。
+    "image_relight": "generate_image",
     "video_lipsync": "generate_video",
     #: 长稿分段配音:智能体逐句 generate_audio,按模型的音频上限自己分段(说明见 generate_video)。
     "talking_segments": "generate_audio",

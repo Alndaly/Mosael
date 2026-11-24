@@ -2775,6 +2775,87 @@
     }
   },
   {
+    "type": "image_relight",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "media": "image",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "light_azimuth": {
+        "type": "number",
+        "editor": "light_rig",
+        "label": {
+          "zh": "光的方向",
+          "en": "Light direction"
+        }
+      },
+      "light_elevation": {
+        "type": "number",
+        "edited_by": "light_azimuth",
+        "label": {
+          "zh": "光的高度",
+          "en": "Light height"
+        }
+      },
+      "light_temperature": {
+        "type": "number",
+        "edited_by": "light_azimuth",
+        "label": {
+          "zh": "色温",
+          "en": "Color temperature"
+        }
+      },
+      "light_softness": {
+        "type": "number",
+        "edited_by": "light_azimuth",
+        "label": {
+          "zh": "软硬",
+          "en": "Softness"
+        }
+      },
+      "light_intensity": {
+        "type": "number",
+        "edited_by": "light_azimuth",
+        "label": {
+          "zh": "亮度",
+          "en": "Brightness"
+        }
+      },
+      "model": {
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
+      },
+      "prompt": {
+        "type": "template",
+        "label": {
+          "zh": "提示词",
+          "en": "Prompt"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "asset_ids"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      }
+    }
+  },
+  {
     "type": "image_speak",
     "config": {
       "asset_id": {
