@@ -1084,7 +1084,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onPickAsset={onPickAsset}
         onPickDocument={commentMode || markerMode || !workspaceId ? undefined : setPickingDocument}
         saveToNote={commentMode || markerMode || !workspaceId ? undefined : { workspaceId, boardId }}
-        onSpawn={onRun ? spawnLinked : undefined}
         producers={producers}
         panel={panel}
         onPanel={onRun && !commentMode && !markerMode ? togglePanel : undefined}

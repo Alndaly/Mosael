@@ -855,64 +855,20 @@ describe("选中之后挂什么", () => {
   });
 });
 
-describe("操作条上的「接着做」", () => {
-  const select = (id: string) =>
-    act(() => {
-      document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-  //: 「生成」是一颗按钮开一个菜单:一排「图片 视频 文案 音频」挤在操作条上,视频格上会把操作条撑出画布。
-  const grow = () => {
-    const trigger = document.querySelector<HTMLButtonElement>("[data-board-grow-menu]");
-    if (!trigger) return [];
-    act(() => trigger.click());
-    const menu = screen.getByRole("menu", { name: "boardGrowLabel" });
-    const rows = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-    return rows;
-  };
-
-  it("每一行把这一下说全,图标是要长出来的那种格子;便签不往下长文案", () => {
-    mount({ items: [note("n1", "一只猫")], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
-    select("n1");
-    const rows = grow();
-    //: 便签自己就是文案 —— 改写、翻译是它的能力,不再另长一张便签。
-    expect(rows.map((row) => row.textContent)).toEqual([
-      "boardSpawnImageFromNote", "boardSpawnVideoFromText", "boardSpawnAudio",
-    ]);
-    expect(rows[1].querySelector("svg.lucide-film")).not.toBeNull();
-    expect(rows[2].querySelector("svg.lucide-music")).not.toBeNull();
-  });
-
-  it("有产出的图片往下接视频:拿它当首帧;空槽什么都不长", () => {
+describe("操作条上不再有「接着做」", () => {
+  it("选中有产出的一格,操作条上没有「生成」下拉 —— 往下接什么直接拉线(连到空白处弹的那一个菜单)", () => {
     mount(
-      {
-        items: [
-          { id: "i1", kind: "image", x: 0, y: 0, width: 260, height: 180, asset_id: "a1" },
-          { id: "i2", kind: "image", x: 400, y: 0, width: 260, height: 180, form: { producer: "generate" } },
-        ],
-        edges: [],
-        markers: [],
-      },
+      { items: [{ id: "i1", kind: "image", x: 0, y: 0, width: 260, height: 180, asset_id: "a1" }, note("n1", "一只猫")], edges: [], markers: [] },
       { onRun: vi.fn(async () => undefined) },
     );
-    select("i1");
-    expect(grow().map((row) => row.textContent)).toEqual(["boardSpawnVideoFromImage", "boardSpawnNote"]);
-    select("i2");
-    expect(grow()).toEqual([]);
-  });
-
-  it("3D 场景往下接图片和视频,说的是场景的构图和镜头,不是「这张图当首帧」(用户截图);不长文案", () => {
-    mount(
-      { items: [{ id: "sc", kind: "scene", x: 0, y: 0, width: 320, height: 220, scene_id: "scene-1" }], edges: [], markers: [] },
-      { onRun: vi.fn(async () => undefined) },
-    );
-    select("sc");
-    expect(grow().map((row) => row.textContent)).toEqual(["boardSpawnImageFromScene", "boardSpawnVideoFromScene"]);
+    for (const id of ["i1", "n1"]) {
+      act(() => {
+        document.querySelector(`[data-id="${id}"]`)!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      expect(document.querySelector("[data-board-grow-menu]"), id).toBeNull();
+    }
   });
 });
-
 describe("停止属于运行态的外壳", () => {
   it("在跑的生成格(不只工具格)上有停止,点了交给上层", () => {
     const onStop = vi.fn();

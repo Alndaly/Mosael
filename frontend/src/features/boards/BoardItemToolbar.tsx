@@ -6,7 +6,7 @@ import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { NodeToolbar, Position, type Node } from "@xyflow/react";
-import { BookOpen, BookPlus, ChevronDown, Copy, FileOutput, NotebookPen, ExternalLink, Group, Maximize2, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, BookPlus, Copy, FileOutput, NotebookPen, ExternalLink, Group, Maximize2, MoreHorizontal, PencilLine, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { entityKeys, getEntity, type BoardItem, type BoardProducer, type BoardProducerInfo } from "@/api/client";
 import { noteKeys } from "@/api/queryKeys";
@@ -22,10 +22,10 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { SaveToNote } from "@/features/notes/SaveToNote";
-import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence, hostHasContent } from "@/features/boards/boardTools";
+import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence } from "@/features/boards/boardTools";
 import { SequenceToolbarActions } from "@/features/boards/SequenceCell";
 import { canAskWriter, canOpenOnDemand, slotProducers } from "@/features/boards/boardComposers";
-import { NOTE_COLORS, noteColorClass, isMediaKind, kindIcon, SPAWNABLE_KINDS, type MediaKind, type NoteColor } from "@/features/boards/boardNodes";
+import { NOTE_COLORS, noteColorClass, isMediaKind, type MediaKind, type NoteColor } from "@/features/boards/boardNodes";
 import { itemIsRunning } from "@/features/boards/boardItemState";
 import { boardPreviewGallery } from "@/features/boards/boardPreview";
 import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
@@ -38,31 +38,6 @@ import { cn } from "@/lib/utils";
 export const WRITER_PANEL = "write";
 export const TRIM_PANEL = "trim";
 const SEQUENCE_EXPORT_PANEL = "sequence_export";
-
-type GrowKind = (typeof SPAWNABLE_KINDS)[number];
-
-/** 操作条上「接着做」的按钮按这个顺序排。 */
-const GROW_ORDER: GrowKind[] = ["image", "video", "note", "audio"];
-
-/**
- * 「接着做」:选中一格,能从它长出哪几种格子,悬停时各说什么。**一张表**,按(这一格的种类 → 长出的种类)查。
- *
- * 此前能长出哪几种是一串按种类的判断,悬停说明又另写一处,只分「便签 → 图片」和「其余 → 视频」两句 ——
- * 于是便签往下接视频时说「用这段文字生成图片」,文档往下接图片时说「用这张图当首帧生成视频」。
- * 便签、文档给的是文字:往下接图片、视频、音频(念出来)、文案;图片给首帧、视频给参考、音频给配乐:往下接视频;
- * 谁都能往下接一段文案。
- */
-const GROW: Partial<Record<BoardItem["kind"], Partial<Record<GrowKind, MessageKey>>>> = {
-  //: 便签不往下长「文案」:它自己就是一段文案,改写、翻译是它自己的能力(让 AI 写 / 翻译),再长出一张便签是第三个入口。
-  note: { image: "boardSpawnImageFromNote", video: "boardSpawnVideoFromText", audio: "boardSpawnAudio" },
-  document: { image: "boardSpawnImageFromNote", video: "boardSpawnVideoFromText", note: "boardSpawnNote", audio: "boardSpawnAudio" },
-  image: { video: "boardSpawnVideoFromImage", note: "boardSpawnNote" },
-  video: { video: "boardSpawnVideoFromVideo", note: "boardSpawnNote" },
-  audio: { video: "boardSpawnVideoFromAudio", note: "boardSpawnNote" },
-  //: 3D 场景给的是**场景**,不是一张图(ADR 0029):连进去的那一格面板上挑镜头和用法,生成时现渲。
-  //: 不往下长文案 —— 场景格没有文字可接。
-  scene: { image: "boardSpawnImageFromScene", video: "boardSpawnVideoFromScene" },
-};
 
 /**
  * 选中一项时浮在它上面的操作条。
@@ -87,7 +62,6 @@ export function ItemToolbar({
   onPickAsset,
   onPickDocument,
   saveToNote,
-  onSpawn,
   producers,
   panel,
   onPanel,
@@ -105,13 +79,6 @@ export function ItemToolbar({
   onPickDocument?: (itemId: string) => void;
   /** 便签「保存到笔记」存到哪、出处记哪张画板。评论、标记模式下不给。 */
   saveToNote?: { workspaceId: string; boardId: string };
-  /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
-  onSpawn?: (
-    kind: (typeof SPAWNABLE_KINDS)[number],
-    from: string,
-    at: { x: number; y: number },
-    fromIsSource?: boolean,
-  ) => void;
   /** 产出者清单:这一格有哪些能力、空槽能在哪几个产出者之间切(音频槽:配音 / 生成 / 插件的生成器)。 */
   producers?: BoardProducerInfo[];
   /** 此刻点开的那一块面板(让 AI 写、剪一段、一项能力)—— 按钮据此是按下态,再点一次收起。 */
@@ -342,47 +309,6 @@ export function ItemToolbar({
         {single && item && slots.length > 0 && (
           <ToolbarCluster>
             <SlotSwitch item={item} slots={slots} onSwitch={(producer) => patch(item.id, { form: { ...item.form, producer } })} />
-          </ToolbarCluster>
-        )}
-
-        {/* 从这一项长出下一项:**放一个空节点并连上,不是直接开跑**。空节点一选中它的面板就开着,
-            用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都来不及说。
-            长出哪几种、每一个悬停时说什么,是同一张表(GROW);图标是要长出来的那种格子的图标,
-            一眼看出这一下会多出一张图、一段视频还是一张便签。已经在跑的那一项不给(它还没有产出)。
-            前面一个淡淡的「生成」,后面每一枚只写要长出来的那种东西(图片、视频、文案、音频)。 */}
-        {onSpawn && single && item && !itemIsRunning(item) && hostHasContent(item) && GROW_ORDER.some((kind) => GROW[item.kind]?.[kind]) && (
-          <ToolbarCluster>
-            <ActionMenu
-              label={t("boardGrowLabel")}
-              align="start"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  shape="round"
-                  aria-label={t("boardGrowLabel")}
-                  aria-haspopup="menu"
-                  data-board-grow-menu=""
-                  className="shrink-0 gap-1 text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
-                >
-                  <Plus /> {t("boardGrowLabel")} <ChevronDown className="opacity-60" />
-                </Button>
-              }
-              actions={GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
-                const Icon = kindIcon(kind);
-                return {
-                  //: 每一行把这一下说全(「用这张图当首帧生成视频」),不是光秃秃的「视频」—— 菜单里有地方写,
-                  //: 而同一个「视频」从便签、图片、音频长出来是三件不同的事。
-                  label: t(GROW[item.kind]?.[kind] as MessageKey),
-                  icon: <Icon size={14} />,
-                  onSelect: () =>
-                    onSpawn(kind, item.id, {
-                      x: single.position.x + (single.width ?? 260) + 60,
-                      y: single.position.y + (single.height ?? 180) / 2,
-                    }),
-                };
-              })}
-            />
           </ToolbarCluster>
         )}
 
