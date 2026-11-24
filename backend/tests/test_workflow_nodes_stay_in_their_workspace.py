@@ -35,7 +35,9 @@ EXECUTORS = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "wo
 ID_KEYS = frozenset({"sequence_id", "asset_id", "asset_ids", "clip_id", "board_id", "account_id", "session"})
 
 #: 算作"收进工作区了"的调用。`_speech_params` 经 voices.synthesis_params 核对克隆音色的工作区。
-SCOPING_CALLS = frozenset({"_sequence_in", "_asset_in", "_speech_params", "_session_in"})
+#: `generate_one`(executors/subjobs):节点下生成单的那一段,按 `scope.workspace_id` 交给生成漏斗,点名的素材 / 资产不在
+#: 本工作区当场拒 —— 它就是 ai_generate、重新打光收进工作区的那一步。
+SCOPING_CALLS = frozenset({"_sequence_in", "_asset_in", "_speech_params", "_session_in", "generate_one"})
 
 #: 豁免:这些节点里出现的 id 键不是"去动一个已有实体"。**只减不增**,每条写明理由。
 EXEMPT = {
