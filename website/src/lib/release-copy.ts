@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.8.0": {
+    zh: [
+      "**任务进度出现在 macOS 原生灵动岛。** 独立 NSPanel 浮层显示运行中的进度,完成/失败在原位切换成对勾/叹号;Windows 仍保留任务中心转圈、数量和提示。",
+      "**顶栏只放小元素。** 标题、详情与进度条从刘海下方展开,不再被中间硬件区域遮挡;多条任务超出最大高度时在面板内滚动。",
+      "**形态随内容变化。** 单条约 380×60,多条最多 520 宽;顶部贴屏幕、只有底角圆,没有描边、阴影或第二层卡片。",
+      "**官网支持 mosael.cn。** 与 mosael.com 同一份内容;备案号只在 .cn 显示,www.mosael.com 统一跳到主域。",
+    ],
+    en: [
+      "**Task progress now appears in a native macOS Dynamic Island.** A separate NSPanel shows running progress and flips to a check or alert when a task finishes; Windows keeps the task-center spinner, count and toast.",
+      "**The header only holds small elements.** Titles, details and progress bars expand below the notch instead of being covered by the center hardware area, and long lists scroll inside the panel.",
+      "**The shape follows its content.** One task is about 380×60 and multiple tasks grow to 520 wide; the top is flush with the screen, only the bottom corners are rounded, with no borders, shadow or second card.",
+      "**The website now serves mosael.cn.** It mirrors mosael.com, shows the ICP filing only on .cn, and redirects www.mosael.com to the primary domain.",
+    ],
+  },
   "v2.7.0": {
     zh: [
       "**图片格新能力：灯光、裁切、重绘。** 方向球定打光，拖框裁切，涂一块让模型重画、蒙版外一个像素都不变。",
