@@ -849,9 +849,10 @@ def _generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) ->
     #: 只要它的;「全部」是这一种交回的每一个。
     choice = str((request.get("parameters") or {}).get(graph.OUTPUT_CHOICE) or "")
     if isinstance(resume, dict) and resume.get("prompt_id") and not resume.get("repeat"):
-        # 接着等上一个进程提交过的那个任务。**不再提交**:它可能已经跑了一半,也可能已经跑完。提交的那张图已经按
-        # 「结果取自」摘过了,交回它跑出来的;选了一个节点的照旧只认它的。
-        wanted = {choice} if choice not in ("", graph.ALL_OUTPUTS, graph.FINAL_OUTPUTS) else None
+        # 接着等上一个进程提交过的那个任务。**不再提交**:它可能已经跑了一半,也可能已经跑完。交回哪几个节点的,
+        # 提交时记在回执里(`outputs`,见下面 run_prompt 的 receipt)—— 这里不再读工作流,不能凭「历史里有什么」收:
+        # 提交的图里可能留着只看输入的预览(被别的节点接着用,摘不掉),它们的图也在历史里。
+        wanted = {str(one) for one in resume.get("outputs") or ()} or None
         prompt_id = str(resume["prompt_id"])
         progress(emit, 0.05, say(locale, "接着等 ComfyUI 里的任务", "Resuming the ComfyUI task"))
         entry = follow_poll(comfy, prompt_id, emit, locale)
@@ -880,16 +881,15 @@ def _generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) ->
             # 跑 N 遍:循环提交 N 次(重启时带着循环的回执回来,接着跑)
             return _generate_repeated(request, comfy, locale, emit, kind, wanted, runs,
                                       (object_info, api, titles, values, parameters, form))
-        prompt = graph.fill(api, values, overrides_from(parameters), object_info, form.prompts())
-        if wanted is not None:
-            prompt = graph.keep_outputs(prompt, kind, wanted, object_info, titles)
+        prompt = graph.keep_outputs(graph.fill(api, values, overrides_from(parameters), object_info, form.prompts()),
+                                    kind, wanted, object_info, titles)
         preflight(prompt, object_info, locale)
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None,
                                        object_info)
         required_inputs(prompt, object_info, locale)
-        prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
+        prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles, receipt={"outputs": sorted(wanted)})
     delivered = _delivered(comfy, entry, kind, wanted, prompt_id, locale)
     #: 接着等上一次提交的那个任务时没有「读工作流」这一步(提交是上一个进程做的),不会有复位要报。
     return _with_resets(delivered, api, locale) if resume_ask else delivered
@@ -990,7 +990,7 @@ def _generate_canvas(canvas: dict[str, Any], comfy: Comfy, locale: str, emit: Em
 
 
 def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit, kind: str,
-                       wanted: set[str] | None, runs: int,
+                       wanted: set[str], runs: int,
                        loaded: tuple[dict[str, Any], dict[str, Any], dict[str, str], dict[str, Any], dict[str, Any],
                                      graph.Form],
                        ) -> dict[str, Any]:
@@ -1004,9 +1004,8 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
 
     def build(seed: int) -> dict[str, Any]:
         nonlocal uploaded
-        prompt = graph.fill(api, {**values, "seed": seed}, overrides, object_info, form.prompts())
-        if wanted is not None:
-            prompt = graph.keep_outputs(prompt, kind, wanted, object_info, titles)
+        prompt = graph.keep_outputs(graph.fill(api, {**values, "seed": seed}, overrides, object_info, form.prompts()),
+                                    kind, wanted, object_info, titles)
         if uploaded is None:  # 第一次提交之前查一遍、传一次素材,之后每次都接这一份
             preflight(prompt, object_info, locale)
             uploaded = upload(comfy, request.get("inputs") or [])

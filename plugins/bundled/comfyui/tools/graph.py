@@ -1652,8 +1652,12 @@ def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any],
 
 def chosen_outputs(api: dict[str, Any], kind: str, choice: str, object_info: dict[str, Any] | None = None,
                    titles: dict[str, str] | None = None, locale: str = "zh",
-                   marked: frozenset[str] = frozenset()) -> set[str] | None:
-    """「结果取自」选的那一项 → 这次交回哪几个输出节点的;None 是这一种交回的全部。
+                   marked: frozenset[str] = frozenset()) -> set[str]:
+    """「结果取自」选的那一项 → 这次交回哪几个输出节点的。**总是一份明说的名单**,都在 `generation_nodes` 里。
+
+    「全部」是这一种**交回节点**的全部,不是「ComfyUI 历史里出现的每一张图」:只看读进来的图、裁出来的那块、画上蒙版的
+    那张的预览(`_previews_input`)从来不是产出。此前「全部」(以及「最终结果」恰好等于全部时)交回 None,收产出那一步
+    就把历史里每一张都收了 —— 局部重绘的工作流交回的头一张是「裁出来的那块上画着蓝色蒙版」的预览,宿主贴回原图就是一团蓝。
 
     **没选和选了缺省是同一件事**:宿主只发用户动过的参数(AI 工作台、智能体、工作流节点常常不带这一项),目录里
     `outputs_per_run` 说的是缺省那一项的份数 —— 跑的时候按同一个判据(final_outputs,标过结果的听标记)再判一遍,
@@ -1661,7 +1665,7 @@ def chosen_outputs(api: dict[str, Any], kind: str, choice: str, object_info: dic
     """
     delivering = generation_nodes(api, kind, object_info, titles)
     if choice == ALL_OUTPUTS:
-        return None
+        return {node["node"] for node in delivering}
     if choice and choice != FINAL_OUTPUTS:
         if choice not in {node["node"] for node in delivering}:
             from lines import ComfyError, say
@@ -1670,19 +1674,22 @@ def chosen_outputs(api: dict[str, Any], kind: str, choice: str, object_info: dic
                                  f"The node #{choice} picked in “Results from” is no longer in this workflow. "
                                  "Click Refresh models on the Plugins page and pick again."))
         return {choice}
-    finals = final_outputs(api, delivering, object_info, marked)
-    return {node["node"] for node in finals} if len(finals) < len(delivering) else None
+    return {node["node"] for node in final_outputs(api, delivering, object_info, marked)}
 
 
 def keep_outputs(api: dict[str, Any], kind: str, wanted: set[str], object_info: dict[str, Any] | None = None,
                  titles: dict[str, str] | None = None) -> dict[str, Any]:
-    """只要 `wanted` 那几个节点交回的(见 chosen_outputs):这一种别的交回节点(没人接它的输出的)摘掉 —— ComfyUI
-    只跑产出节点要的那些,放大那一路不要就不跑;中间一步的预览摘掉,它上游照样为最终结果跑。返回新图,不改入参。"""
+    """只要 `wanted` 那几个节点交回的(见 chosen_outputs):这一种别的交回节点、和只看输入的预览(`_previews_input`)
+    —— 没人接它们的输出的 —— 摘掉。ComfyUI 只跑产出节点要的那些:放大那一路不要就不跑,中间一步的预览摘掉、它上游
+    照样为最终结果跑。被别的节点接着用的摘不掉(图会断),它们照跑 —— 所以收产出时总按名单收(`collect_outputs` 的
+    `nodes`,接着等上一次提交的任务时名单记在回执里)。返回新图,不改入参。"""
     used = _consumers(api)
     graph = copy.deepcopy(api)
-    for node in generation_nodes(api, kind, object_info, titles):
-        if node["node"] not in wanted and not used.get(node["node"]):
-            graph.pop(node["node"], None)
+    dropped = {node["node"] for node in generation_nodes(api, kind, object_info, titles)} - wanted
+    dropped |= {node_id for node_id in api if _previews_input(api, node_id)}
+    for node_id in dropped:
+        if not used.get(node_id):
+            graph.pop(node_id, None)
     return graph
 
 

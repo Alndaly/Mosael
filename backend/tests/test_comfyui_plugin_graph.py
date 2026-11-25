@@ -1676,8 +1676,8 @@ def test_只要一个节点时_别的保存节点不跑(graph) -> None:
     assert "9" in TWO_SAVES_API, "不改入参"
     with pytest.raises(Exception, match="结果取自"):
         graph.chosen_outputs(TWO_SAVES_API, "image", "99", OBJECT_INFO)
-    assert graph.chosen_outputs(TWO_SAVES_API, "image", "all", OBJECT_INFO) is None
-    assert graph.chosen_outputs(TWO_SAVES_API, "image", "", OBJECT_INFO) is None, "两个保存节点:缺省照旧是全部"
+    assert graph.chosen_outputs(TWO_SAVES_API, "image", "all", OBJECT_INFO) == {"9", "12"}, "「全部」是明说的名单"
+    assert graph.chosen_outputs(TWO_SAVES_API, "image", "", OBJECT_INFO) == {"9", "12"}, "两个保存节点:缺省照旧是全部"
 
 
 # --- 缺省的「结果取自」是最终结果:中间一步的预览不交回 -----------------------------------------
@@ -1722,7 +1722,7 @@ def test_古风女孩1_没选和选了最终结果一样_全部照旧三张(grap
     api, info, titles = _hand_depth(graph, convert)
     assert graph.chosen_outputs(api, "image", "", info, titles) == {"17"}
     assert graph.chosen_outputs(api, "image", "final", info, titles) == {"17"}
-    assert graph.chosen_outputs(api, "image", "all", info, titles) is None, "明说「全部」:三个都交回"
+    assert graph.chosen_outputs(api, "image", "all", info, titles) == {"8", "17", "18"}, "明说「全部」:三个都交回"
     assert graph.chosen_outputs(api, "image", "18", info, titles) == {"18"}, "要看深度图也挑得到"
     kept = graph.keep_outputs(api, "image", {"17"}, info, titles)
     assert not {"8", "18"} & set(kept), "中间一步的预览不跑"
@@ -2158,3 +2158,40 @@ def test_接在音频驱动上的音频是驱动音频_接了参考也是(graph)
     }
     assert graph._drives_the_video(api, "41")
     assert not graph._drives_the_video({key: value for key, value in api.items() if key != "42"}, "41")
+
+
+def test_局部重绘_裁出来的那块和画着蒙版的预览不是产出_提交的图里也摘掉(graph) -> None:
+    """维护者的「▶▷Qwen-image21-功能流(高分局部编辑&扩图)」:三个预览 —— 裁出来的那块(InpaintCropImproved)、在那块上
+    画着蓝色蒙版的(DrawMaskOnImage)、重绘完缝回整张的(InpaintStitchImproved)。前两个上游没有解码,只是在看输入
+    (`_previews_input`),交回节点里本来就没有它们;但「最终结果」恰好等于全部时 chosen_outputs 交回 None,收产出那一步
+    把历史里每一张都收了,宿主拿到的头一张是那团蓝。"""
+    api = {
+        "674": {"class_type": "LoadImage", "inputs": {"image": "photo.png"}},
+        "720": {"class_type": "InpaintCropImproved", "inputs": {"image": ["674", 0], "mask": ["674", 1]}},
+        "666": {"class_type": "PreviewImage", "inputs": {"images": ["720", 1]}},
+        "706": {"class_type": "DrawMaskOnImage", "inputs": {"image": ["720", 1], "mask": ["720", 2], "color": "0, 0, 255"}},
+        "707": {"class_type": "PreviewImage", "inputs": {"images": ["706", 0]}},
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5.ckpt"}},
+        "697": {"class_type": "VAEEncode", "inputs": {"pixels": ["720", 1], "vae": ["1", 2]}},
+        "698": {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["697", 0], "mask": ["720", 2]}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "red eyes", "clip": ["1", 1]}},
+        "679": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                                                      "scheduler": "normal", "denoise": 1.0, "model": ["1", 0],
+                                                      "positive": ["2", 0], "negative": ["2", 0],
+                                                      "latent_image": ["698", 0]}},
+        "678": {"class_type": "VAEDecode", "inputs": {"samples": ["679", 0], "vae": ["1", 2]}},
+        "668": {"class_type": "InpaintStitchImproved", "inputs": {"stitcher": ["720", 0], "inpainted_image": ["678", 0]}},
+        "930": {"class_type": "PreviewImage", "inputs": {"images": ["668", 0]}},
+    }
+    assert [node["node"] for node in graph.generation_nodes(api, "image")] == ["930"]
+    for choice in ("", "final", "all"):
+        assert graph.chosen_outputs(api, "image", choice) == {"930"}, choice
+    kept = graph.keep_outputs(api, "image", {"930"})
+    assert not {"666", "707"} & set(kept), "只看输入的预览不跑"
+    assert {"720", "679", "678", "668", "930"} <= set(kept), "最终结果的上游照样跑"
+    #: 收产出时只要名单上的:历史里就算还有那几张(接着等别的进程提交的任务),也不收。
+    history = {"outputs": {
+        "707": {"images": [{"filename": "mask_view.png", "subfolder": "", "type": "temp"}]},
+        "930": {"images": [{"filename": "stitched.png", "subfolder": "", "type": "temp"}]},
+    }}
+    assert [one["node"] for one in graph.collect_outputs(history, "image", {"930"})] == ["930"]

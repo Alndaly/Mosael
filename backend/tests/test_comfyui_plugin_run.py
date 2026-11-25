@@ -146,7 +146,7 @@ def test_一次生成_参考图传上去接到LoadImage上_产出取回(comfy, t
     assert (prompt["5"]["inputs"]["width"], prompt["5"]["inputs"]["height"]) == (1024, 1024)
     assert "11" not in prompt, "Note 不进 prompt"
     # 提交之后立刻交回回执 —— 宿主落库,重启后带着它来接着等
-    assert hooks.tasks == [{"prompt_id": "p1", "client_id": submitted["client_id"]}]
+    assert hooks.tasks == [{"prompt_id": "p1", "client_id": submitted["client_id"], "outputs": ["9"]}]
     assert hooks.progress and all(0 <= fraction <= 0.95 for fraction, _ in hooks.progress)
     [produced] = output["outputs"]
     assert (scratch / produced["path"]).read_bytes() == PNG
@@ -445,6 +445,20 @@ def test_重启后带着回执接着等_不再提交(comfy, tmp_path: Path) -> N
     assert comfy.posted("/prompt") == [], "接着等的那一次不能再提交 —— 那会再跑一遍"
     assert hooks.tasks == []
     assert len(output["outputs"]) == 1
+
+
+def test_回执里记着交回哪几个节点_接着等时只收它们_历史里别的预览不收(comfy, tmp_path: Path) -> None:
+    """接着等时不再读工作流:历史里还有别的预览(被别的节点接着用、提交时摘不掉的那种,例如局部重绘工作流里
+    「裁出来的那块上画着蒙版」的预览)也不能收 —— 宿主拿头一张贴回原图,就是一团蓝。"""
+    _, hooks, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    assert hooks.tasks and hooks.tasks[0]["outputs"] == ["9"], "提交时把要交回的节点记进回执"
+    comfy.state.history["p9"] = {
+        "status": {"status_str": "success", "completed": True},
+        "outputs": {"7": {"images": [{"filename": "mask_view.png", "subfolder": "", "type": "temp"}]},
+                    "9": {"images": [{"filename": "done.png", "subfolder": "", "type": "output"}]}},
+    }
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json", "resume": {"prompt_id": "p9", "outputs": ["9"]}})
+    assert [one["parameters"]["source_node"] for one in output["outputs"]] == ["9"]
 
 
 # --- 失败说人话 -----------------------------------------------------------------------
