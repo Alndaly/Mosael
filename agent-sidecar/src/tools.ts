@@ -38,6 +38,15 @@ import { log } from "./protocol.js";
  */
 const TOOL_CALL_TIMEOUT_MS = 180_000;
 
+/** 这些工具不进主工具表;由 tool_search 找到、run_tool 执行。 */
+const ON_DEMAND_PREFIXES = ["computer_", "browser_"];
+
+/** 模型用中文问「截图」「点击」时,英文描述匹配不到;给两族补一组检索词。 */
+const ON_DEMAND_HINTS: Record<string, string> = {
+  computer_: "桌面 电脑 鼠标 键盘 点击 输入 截图 窗口 应用 desktop computer mouse keyboard click screenshot window",
+  browser_: "浏览器 网页 页面 链接 点击 输入 截图 browser web page link click type screenshot",
+};
+
 /**
  * 一张卡最多等多久(人走开了,这一轮不能无限期挂着)。
  *
@@ -368,7 +377,11 @@ export interface ToolHooks {
   onAwaitingUser?: (waiting: boolean) => void;
 }
 
-/** All Mosael tools for a turn, generated from the backend manifest. */
+/** A turn's tools, generated from the backend manifest.
+ *
+ * 主工具表只放每轮真用得上的那一份;桌面控制 / 浏览器这些按需工具由 `tool_search` 找到、
+ * `run_tool` 执行(子智能体用 `run_read_tool`,只放只读的)。这样 43 个定义不必每轮占上下文,
+ * 需要时又够得着。 */
 export async function buildAllTools(
   apiBase: string,
   token: string,
@@ -384,58 +397,163 @@ export async function buildAllTools(
     return [];
   }
 
-  return specs
-    .filter((spec) => spec?.name)
-    .map((spec) => {
-      const properties = (spec.parameters?.properties ?? {}) as Record<string, unknown>;
-      const takesWorkspace = "workspace_id" in properties;
-      return {
-        name: spec.name,
-        label: TOOL_LABELS[spec.name] ?? spec.name,
-        confirmation: Boolean(spec.confirmation),
-        // 子智能体只拿只读工具,判据就是这个标记 —— 名单在后端(唯一工具注册表),
-        // 这边再抄一份名字清单必然漂移(那种漂移让十九个工具静默消失过一次)。
-        // 内置工具的只读 = 没有确认门;插件工具要 manifest 明写,默认不算。
-        readOnly: Boolean(spec.read_only),
-        //: 问用户、等作答的那种(ask_user):子智能体不拿(见 subagent.readOnlyTools)。
-        awaitsAnswer: Boolean(spec.awaits_answer),
-        description: spec.description || spec.name,
-        // The manifest's parameters are already JSON Schema, which is what pi wants.
-        parameters: (spec.parameters ?? { type: "object", properties: {} }) as never,
-        execute: async (toolCallId: string, rawParams: unknown, signal?: AbortSignal) => {
-          const args = { ...((rawParams ?? {}) as Record<string, unknown>) };
-          // Fill in the workspace only for tools that declare it: the model has no reason to
-          // know which workspace this turn belongs to, but the tools are plain Python functions
-          // and an argument they do not accept is a TypeError, not an ignored extra. Injecting
-          // it blindly broke every tool without the parameter — web_search, analyze_asset —
-          // on the first call.
-          if (workspaceId && !args.workspace_id && takesWorkspace) args.workspace_id = workspaceId;
-          const response = (await apiPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
-            arguments: args,
-            requested_by: "pi-agent",
-            // 这是哪一次调用:开卡时记在卡上,对话界面据此把卡摆回这一步(而不是堆在输入框上面)。
-            // 它只管摆位、不管授权,所以由这里报 —— 和下面那条 sessionId 正相反。
-            tool_call_id: toolCallId,
-            // **不再转述 sessionId**:这次调用属于哪次对话,后端从 token 认出来(turn 令牌铸造时
-            // 就带着它)。转述的东西可以被伪造,而确认卡的归属决定它出现在谁面前、以后还决定
-            // 要不要自动放行。
-          }, signal)) as { result?: unknown; error?: string; images?: ToolImage[] };
-          if (response?.error) throw new Error(response.error);
-          if (response?.images?.length) return imageResult(response.result ?? null, response.images);
-          if (spec.awaits_answer) {
-            // 选择卡:调用只立起了卡,这一轮停在这里等用户挑 —— 答案于是作为**工具结果**
-            // 回到它被问的那个位置,不用靠一条伪造的用户消息把模型重新叫醒。
-            const card = (response?.result ?? {}) as { question_id?: string; error?: string };
-            // 没有会话上下文时后端回的是一句 error(飞书 / 外部客户端),照原样给模型。
-            if (!card.question_id) return jsonResult(response?.result ?? null);
-            return answerResult(await awaitAnswer(apiBase, token, card.question_id, signal, hooks), card.question_id);
-          }
-          if (!spec.confirmation) return jsonResult(response?.result ?? null);
-          // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。
-          const card = (response?.result ?? {}) as { confirmation_id?: string };
-          if (!card.confirmation_id) throw new Error("确认卡创建失败(缺 confirmation_id)");
-          return jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal, hooks));
-        },
-      };
-    });
+  const byName = new Map(
+    specs.filter((spec) => Boolean(spec?.name)).map((spec) => [spec.name, spec] as const),
+  );
+
+  //: 模型不直接背这些工具的完整定义;它们由 tool_search 找到、run_tool 执行。
+  //: 这样桌面控制 / 浏览器那 60 多个定义不必每轮占着上下文,而需要时又够得着。
+  const onDemand = (name: string) => ON_DEMAND_PREFIXES.some((prefix) => name.startsWith(prefix));
+
+  async function executeSpec(
+    spec: ToolSpec,
+    rawParams: unknown,
+    toolCallId: string,
+    signal?: AbortSignal,
+  ) {
+    const args = { ...((rawParams ?? {}) as Record<string, unknown>) };
+    // Fill in the workspace only for tools that declare it: the model has no reason to
+    // know which workspace this turn belongs to, but the tools are plain Python functions
+    // and an argument they do not accept is a TypeError, not an ignored extra. Injecting
+    // it blindly broke every tool without the parameter — web_search, analyze_asset —
+    // on the first call.
+    const properties = (spec.parameters?.properties ?? {}) as Record<string, unknown>;
+    if (workspaceId && !args.workspace_id && "workspace_id" in properties) args.workspace_id = workspaceId;
+    const response = (await apiPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
+      arguments: args,
+      requested_by: "pi-agent",
+      // 这是哪一次调用:开卡时记在卡上,对话界面据此把卡摆回这一步(而不是堆在输入框上面)。
+      // 它只管摆位、不管授权,所以由这里报 —— 和下面那条 sessionId 正相反。
+      tool_call_id: toolCallId,
+      // **不再转述 sessionId**:这次调用属于哪次对话,后端从 token 认出来(turn 令牌铸造时
+      // 就带着它)。转述的东西可以被伪造,而确认卡的归属决定它出现在谁面前、以后还决定
+      // 要不要自动放行。
+    }, signal)) as { result?: unknown; error?: string; images?: ToolImage[] };
+    if (response?.error) throw new Error(response.error);
+    if (response?.images?.length) return imageResult(response.result ?? null, response.images);
+    if (spec.awaits_answer) {
+      // 选择卡:调用只立起了卡,这一轮停在这里等用户挑 —— 答案于是作为**工具结果**
+      // 回到它被问的那个位置,不用靠一条伪造的用户消息把模型重新叫醒。
+      const card = (response?.result ?? {}) as { question_id?: string; error?: string };
+      // 没有会话上下文时后端回的是一句 error(飞书 / 外部客户端),照原样给模型。
+      if (!card.question_id) return jsonResult(response?.result ?? null);
+      return answerResult(await awaitAnswer(apiBase, token, card.question_id, signal, hooks), card.question_id);
+    }
+    if (!spec.confirmation) return jsonResult(response?.result ?? null);
+    // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。
+    const card = (response?.result ?? {}) as { confirmation_id?: string };
+    if (!card.confirmation_id) throw new Error("确认卡创建失败(缺 confirmation_id)");
+    return jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal, hooks));
+  }
+
+  const tools: AgentTool[] = specs
+    .filter((spec) => Boolean(spec?.name) && !onDemand(spec.name))
+    .map((spec) => ({
+      name: spec.name,
+      label: TOOL_LABELS[spec.name] ?? spec.name,
+      confirmation: Boolean(spec.confirmation),
+      // 子智能体只拿只读工具,判据就是这个标记 —— 名单在后端(唯一工具注册表),
+      // 这边再抄一份名字清单必然漂移(那种漂移让十九个工具静默消失过一次)。
+      // 内置工具的只读 = 没有确认门;插件工具要 manifest 明写,默认不算。
+      readOnly: Boolean(spec.read_only),
+      //: 问用户、等作答的那种(ask_user):子智能体不拿(见 subagent.readOnlyTools)。
+      awaitsAnswer: Boolean(spec.awaits_answer),
+      description: spec.description || spec.name,
+      // The manifest's parameters are already JSON Schema, which is what pi wants.
+      parameters: (spec.parameters ?? { type: "object", properties: {} }) as never,
+      execute: (toolCallId: string, rawParams: unknown, signal?: AbortSignal) =>
+        executeSpec(spec, rawParams, toolCallId, signal),
+    }));
+
+  const searchTool = {
+    name: "tool_search",
+    label: "搜索工具",
+    readOnly: true,
+    description:
+      "Read-only: search on-demand tools that are not in your current list " +
+      "(desktop control, browser). Returns exact name, description and argument schema. " +
+      "Call this before run_tool when you need one of those capabilities.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What you want to do, e.g. browser, desktop, screenshot." },
+      },
+      required: ["query"],
+    } as never,
+    execute: (async (_toolCallId: string, rawParams: unknown) => {
+      const query = String((rawParams as { query?: unknown } | null)?.query ?? "").trim().toLowerCase();
+      const matches = [...byName.values()]
+        .filter((spec) => onDemand(spec.name))
+        .map((spec) => {
+          const hint = ON_DEMAND_PREFIXES.find((prefix) => spec.name.startsWith(prefix));
+          const haystack = `${spec.name} ${spec.description ?? ""} ${hint ? ON_DEMAND_HINTS[hint] : ""}`.toLowerCase();
+          const score = query && haystack.includes(query) ? 2 : query.split(/\s+/).filter(Boolean).some((word) => haystack.includes(word)) ? 1 : 0;
+          return { spec, score };
+        })
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score || a.spec.name.localeCompare(b.spec.name))
+        .slice(0, 8)
+        .map(({ spec }) => ({
+          name: spec.name,
+          description: spec.description,
+          parameters: spec.parameters,
+          confirmation: Boolean(spec.confirmation),
+          awaits_answer: Boolean(spec.awaits_answer),
+          read_only: Boolean(spec.read_only),
+        }));
+      return jsonResult({ query, tools: matches });
+    }) as AgentTool["execute"],
+  };
+
+  const runTool: AgentTool = {
+    name: "run_tool",
+    label: "运行工具",
+    description:
+      "Run an on-demand tool returned by tool_search. Pass its exact name and an arguments object. " +
+      "Confirmation-gated tools block until the user decides; their result is the executed result.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Exact tool name from tool_search." },
+        arguments: { type: "object", description: "Arguments for that tool.", additionalProperties: true },
+      },
+      required: ["name", "arguments"],
+    } as never,
+    execute: (async (toolCallId: string, rawParams: unknown, signal?: AbortSignal) => {
+      const body = (rawParams ?? {}) as { name?: unknown; arguments?: unknown };
+      const name = String(body.name ?? "").trim();
+      if (!name) throw new Error("run_tool 需要 name(先调用 tool_search 拿准确名字)");
+      if (name === "run_tool" || name === "tool_search") throw new Error("run_tool 不能递归调用自己");
+      const target = byName.get(name);
+      if (!target) throw new Error(`Unknown tool ${name}. Call tool_search first.`);
+      return executeSpec(target, body.arguments ?? {}, toolCallId, signal);
+    }) as AgentTool["execute"],
+  };
+
+  const runReadTool = {
+    name: "run_read_tool",
+    label: "运行只读工具",
+    readOnly: true,
+    description:
+      "Run an on-demand tool returned by tool_search, ONLY when it is read-only. " +
+      "This is the subagent-safe variant: it cannot perform writes, generation or external actions.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Exact tool name from tool_search." },
+        arguments: { type: "object", description: "Arguments for that tool.", additionalProperties: true },
+      },
+      required: ["name", "arguments"],
+    } as never,
+    execute: (async (toolCallId: string, rawParams: unknown, signal?: AbortSignal) => {
+      const body = (rawParams ?? {}) as { name?: unknown; arguments?: unknown };
+      const name = String(body.name ?? "").trim();
+      const target = byName.get(name);
+      if (!target) throw new Error(`Unknown tool ${name}. Call tool_search first.`);
+      if (!target.read_only) throw new Error(`${name} is not read-only; the subagent cannot run it.`);
+      return executeSpec(target, body.arguments ?? {}, toolCallId, signal);
+    }) as AgentTool["execute"],
+  };
+
+  return [...tools, searchTool, runReadTool, runTool];
 }

@@ -66,7 +66,7 @@ from app.db.agent_turn_events import (
 )
 from app.core.token_estimate import estimate_text_tokens
 from app.domain.billing.usage import billable
-from app.domain.agent.tools.manifest import agent_tool_specs
+from app.domain.agent.tools.manifest import agent_tool_specs, visible_tool_specs
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Mosael;
@@ -1723,7 +1723,7 @@ def tool_definition_tokens(db: Session, session: AgentSession) -> int:
     payload = json.dumps(
         [
             {"name": spec.name, "description": spec.description, "parameters": spec.parameters}
-            for spec in agent_tool_specs(db, session.owner_user_id, session)
+            for spec in visible_tool_specs(agent_tool_specs(db, session.owner_user_id, session))
         ],
         ensure_ascii=False,
     )

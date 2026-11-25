@@ -97,6 +97,11 @@ _POINTERS = frozenset({"plugin_tools", "run_plugin_tool"})
 #: 这一轮有没发的插件工具时才发的那两个:够得着它们的路。一个都没有就不背。
 ON_DEMAND_TOOLS = frozenset({"plugin_tools", "run_plugin_tool"})
 
+#: 不进模型主工具表的工具族:桌面前台控制、浏览器。它们由 sidecar 的 `tool_search`
+#: 找到、`run_tool` 执行;这里只让上下文水位按**真正发出去的那份**算。
+#: 改这组前缀时 sidecar/src/tools.ts 的 `ON_DEMAND_PREFIXES` 必须一起改。
+ON_DEMAND_TOOL_PREFIXES = ("computer_", "browser_")
+
 
 @dataclass(frozen=True)
 class Turn:
@@ -372,6 +377,11 @@ def agent_tool_specs(db: Any, user_id: str | None = None, session: Any = None) -
         specs = [spec.model_copy(update={"description": f"{spec.description}\n\nNot in your list now: {where}."})
                  if spec.name == "plugin_tools" else spec for spec in specs]
     return specs + plugin.specs
+
+
+def visible_tool_specs(specs: list[ToolSpec]) -> list[ToolSpec]:
+    """模型这一轮真正看得到的工具 —— 去掉 sidecar 按需搜索的那些族。"""
+    return [spec for spec in specs if not spec.name.startswith(ON_DEMAND_TOOL_PREFIXES)]
 
 
 def _provided_capabilities(db: Any, user_id: str | None) -> set[str] | None:

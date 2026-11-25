@@ -80,7 +80,11 @@ try {
   assert.equal(useSkill.confirmation, false, "读一份说明不该开确认卡");
 
   const forSubagent = readOnlyTools(tools).map((one) => one.name).sort();
-  assert.deepEqual(forSubagent, ["read_skill_file", "use_skill"], "子智能体只拿只读的:两个技能工具在,会改东西的不在");
+  assert.deepEqual(
+    forSubagent,
+    ["read_skill_file", "run_read_tool", "tool_search", "use_skill"],
+    "子智能体只拿只读的:技能工具和按需只读入口在,会改东西的不在",
+  );
 
   const result = await useSkill.execute("call-1", { name: "short-video-ads" });
   assert.equal(bodies.use_skill.arguments.workspace_id, "ws-1", "这一轮的工作区要补上");
