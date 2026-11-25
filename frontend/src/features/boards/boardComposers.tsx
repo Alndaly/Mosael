@@ -224,9 +224,14 @@ export function renderComposer(producer: BoardProducer, host: ComposerHost): Rea
  */
 export function renderAbility(
   ability: BoardProducer,
-  host: Omit<ComposerHost, "onFormChange"> & { item: BoardItem; onSave: (setting: BoardAbilitySetting) => void },
+  host: Omit<ComposerHost, "onFormChange"> & {
+    item: BoardItem;
+    onSave: (setting: BoardAbilitySetting) => void;
+    /** 收起这一项(弹窗那几项关弹窗就是收起,见 stageEditors 的 `opens`)。 */
+    onClose: () => void;
+  },
 ): React.ReactNode {
-  const { item, position, workspaceId, feeding, producers, onSave, run } = host;
+  const { item, position, workspaceId, feeding, producers, onSave, onClose, run } = host;
   const tool = findTool(producers, ability);
   return (
     <AbilityComposer
@@ -240,6 +245,7 @@ export function renderAbility(
       busy={itemIsRunning(item)}
       onFormChange={onSave}
       onRun={(form) => run({ producer: ability as NodeProducer, item_id: item.id, kind: item.kind, ...position, form })}
+      onClose={onClose}
     />
   );
 }

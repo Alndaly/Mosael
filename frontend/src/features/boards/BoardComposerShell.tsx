@@ -4,6 +4,7 @@ import { ArrowUp, Loader2, SlidersHorizontal, type LucideIcon } from "lucide-rea
 
 import { useI18n } from "@/app/preferences";
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { MODAL_SURFACE } from "@/components/ui/floating";
 import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -73,6 +74,7 @@ export function BoardComposerShell({
   trailing,
   send,
   onPaste,
+  dialog,
 }: {
   /** 挂在哪一格下面。 */
   nodeId: string;
@@ -95,48 +97,74 @@ export function BoardComposerShell({
   send?: ComposerSend | null;
   /** 面板里(焦点在面板里任何一处)粘贴:生成面板拿剪贴板里的图片填槽。不管的话 preventDefault 都别调。 */
   onPaste?: (event: React.ClipboardEvent<HTMLDivElement>) => void;
+  /**
+   * 给了就**不挂在格子下面,直接是一个弹窗**:正文是一个要大地方拖的控件(裁切框、打光的方向球)时,
+   * 挂在格子下面的小面板拖不准,再从面板里点开一层弹窗又多一跳(维护者:「有些交互底部弹窗就可以不用了」)。
+   * 里面还是同一个样子:正文滚、底栏钉住、发送键在右下。
+   */
+  dialog?: { title: string; onClose: () => void };
 }) {
   const body = React.useRef<HTMLDivElement | null>(null);
   const frame = React.useRef<HTMLDivElement | null>(null);
   const scrolls = useOverflows(body);
   const fit = useKeepInCanvas(frame);
-  return (
-    <NodeToolbar nodeId={nodeId} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
+  const sections = (
+    <>
       <div
-        ref={frame}
-        data-board-composer={name}
-        data-width={width}
-        style={fit}
-        onPaste={onPaste}
-        className={cn(
-          CANVAS_WINDOW_SURFACE_CLASS,
-          "nodrag nopan grid max-h-[min(560px,70vh)] max-w-[calc(100vw-2rem)] grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden",
-          WIDTH[width],
-        )}
+        ref={body}
+        data-board-composer-body=""
+        className={cn("grid min-h-0 content-start gap-2 overflow-y-auto px-3 pb-2 pt-3", scrolls && "nowheel")}
       >
-        <div
-          ref={body}
-          data-board-composer-body=""
-          className={cn("grid min-h-0 content-start gap-2 overflow-y-auto px-3 pb-2 pt-3", scrolls && "nowheel")}
-        >
-          {upstream ? (
-            <div data-board-composer-upstream="" className="flex min-w-0 flex-wrap items-center gap-1 border-b border-border pb-1.5">
-              {upstream}
-            </div>
-          ) : null}
-          {children}
-        </div>
-        <div data-board-composer-bar="" className="flex min-w-0 items-center gap-1 border-t border-divider px-3 py-2">
-          {bar}
-          {settings ? <SettingsButton attention={Boolean(settings.attention)}>{settings.content}</SettingsButton> : null}
-          {beyondSettings}
-          <span className="ml-auto flex shrink-0 items-center gap-1">
-            {trailing}
-            {send ? <SendButton {...send} /> : null}
-          </span>
-        </div>
+        {upstream ? (
+          <div data-board-composer-upstream="" className="flex min-w-0 flex-wrap items-center gap-1 border-b border-border pb-1.5">
+            {upstream}
+          </div>
+        ) : null}
+        {children}
       </div>
-    </NodeToolbar>
+      <div data-board-composer-bar="" className="flex min-w-0 items-center gap-1 border-t border-divider px-3 py-2">
+        {bar}
+        {settings ? <SettingsButton attention={Boolean(settings.attention)}>{settings.content}</SettingsButton> : null}
+        {beyondSettings}
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {trailing}
+          {send ? <SendButton {...send} /> : null}
+        </span>
+      </div>
+    </>
+  );
+  return (
+    dialog ? (
+      <Dialog open onOpenChange={(open) => !open && dialog.onClose()}>
+        <DialogContent
+          data-board-composer={name}
+          data-presentation="dialog"
+          onPaste={onPaste}
+          className="grid w-[min(48rem,calc(100vw-2rem))] grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 [&_[data-ability-host]]:pr-10"
+        >
+          {/* 标题只给读屏:正文第一行就是「这一下对哪一格做什么」(能力的宿主那一行),再写一遍是同一件事说两次。 */}
+          <DialogTitle className="sr-only">{dialog.title}</DialogTitle>
+          {sections}
+        </DialogContent>
+      </Dialog>
+    ) : (
+      <NodeToolbar nodeId={nodeId} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
+        <div
+          ref={frame}
+          data-board-composer={name}
+          data-width={width}
+          style={fit}
+          onPaste={onPaste}
+          className={cn(
+            CANVAS_WINDOW_SURFACE_CLASS,
+            "nodrag nopan grid max-h-[min(560px,70vh)] max-w-[calc(100vw-2rem)] grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden",
+            WIDTH[width],
+          )}
+        >
+          {sections}
+        </div>
+      </NodeToolbar>
+    )
   );
 }
 

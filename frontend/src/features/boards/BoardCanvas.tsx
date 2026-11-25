@@ -1169,6 +1169,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         documents,
         models: models ?? [],
         onSave: (setting) => writeForm(composerItem.id, withAbility(composerItem.form, ability, setting)),
+        onClose: () => setPanel(null),
         onPickAsset,
         run: runHere,
         producers,

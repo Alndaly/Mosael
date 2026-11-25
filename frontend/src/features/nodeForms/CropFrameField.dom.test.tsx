@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/api/client", () => ({
@@ -24,6 +24,10 @@ vi.mock("@/components/generation/MaskEditor", () => ({
 }));
 
 import { CropFrameField } from "./CropFrameField";
+
+beforeAll(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+});
 import { WHOLE } from "./cropFrame";
 import { MaskPaintField } from "./MaskPaintField";
 
@@ -36,7 +40,7 @@ describe("裁切框控件(ADR 0110)", () => {
     const onChange = vi.fn();
     const box = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
     const { container } = render(wrap(<CropFrameField box={box} onChange={onChange} />));
-    const stage = container.querySelector<HTMLElement>("[data-crop-box]")!.parentElement!;
+    const stage = container.querySelector<HTMLElement>("[data-crop-stage]")!;
     stage.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}) });
     const corner = container.querySelector<HTMLElement>('[data-crop-handle="se"]')!;
     (corner as unknown as { setPointerCapture: () => void }).setPointerCapture = () => undefined;
@@ -47,7 +51,6 @@ describe("裁切框控件(ADR 0110)", () => {
     onChange.mockClear();
     fireEvent.pointerMove(stage, { clientX: 10, clientY: 10, pointerId: 1 });
     expect(onChange).not.toHaveBeenCalled();
-
     fireEvent.keyDown(screen.getByRole("group", { name: "cropFrameLabel" }), { key: "ArrowRight" });
     expect(onChange).toHaveBeenLastCalledWith({ ...box, x: expect.closeTo(0.26) });
   });

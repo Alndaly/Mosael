@@ -111,7 +111,7 @@ There are **no separate tool items** on a board. Turning an item into something 
 | Item | Abilities |
 | --- | --- |
 | Audio, video | Transcribe asset, Separate voice and background, Reduce noise (strength Light / Medium / Strong) |
-| Video | Video to GIF, Lip sync (audio from a connected audio item, or voiced from a script on the spot) |
+| Video | Video to GIF |
 | Image | Split grid, Relight, Crop, Repaint, Make it talk |
 | Note, document | Translate (English, Simplified / Traditional Chinese, Japanese, Korean, French, German, Spanish, Russian) |
 | Asset | Fill in angles (all kinds), Generate expressions (characters only), Make it talk (characters only) |
@@ -120,11 +120,11 @@ There are **no separate tool items** on a board. Turning an item into something 
 
 <Recording src="/media/videos/en/board-cells.mp4" poster="/media/screens/en/board-abilities.png" caption="Live capture: the Add menu, an item’s action bar, the multi-select exit, “Results per run” on a generation panel, the swap picker, a 3D scene item and a timeline item (no generation model is called)" />
 
-Content tools from plugins work the same way, attached to the items whose content they take. Lip sync, Make it talk, Fill in angles and Generate expressions cost money; the two digital-human abilities also need a consent check — see [Digital humans](/docs/guides/digital-humans).
+Content tools from plugins work the same way, attached to the items whose content they take. Make it talk, Fill in angles, Generate expressions, Relight and Repaint cost money; the two digital-human abilities also need a consent check — see [Digital humans](/docs/guides/digital-humans).
 
 **Split grid** cuts a 3×3, 2×2 or storyboard-strip collage into equal tiles: 2 × 2, 3 × 3 (default), 1 × 2 side by side, 2 × 1 stacked, 1 × 3 in a row, 3 × 1 in a column, 2 rows × 3 columns, 3 rows × 2 columns, 3 rows × 4 columns, 4 rows × 3 columns; **Gutters** can be kept (exact equal split) or removed (up to 6% per side). It runs locally at no cost, and the tiles are laid out to the right in their original grid.
 
-**Crop** keeps a region: drag inside the frame to move it, drag the corners and edges to resize, nudge with the arrow keys. The row of ratios below (Free, Original, 1:1, 4:3, 3:4, 16:9, 9:16) places the largest centered frame of that ratio and keeps it while you drag. The bottom-left corner of the image shows the size of the result in pixels. It runs locally at no cost; the original stays as it is.
+**Crop** and **Relight** open straight into a dialog instead of a panel under the item. In Crop, drag inside the frame on the large image to move it, drag the corners and edges to resize, nudge with the arrow keys; the row of ratios (Free, Original, 1:1, 4:3, 3:4, 16:9, 9:16) places the largest centered frame of that ratio and keeps it while you drag, and the size of the result in pixels is shown on the right. Send crops it, locally and at no cost; the original stays as it is. The Relight dialog holds the light orb, presets, three sliders and the line describing the light.
 
 **Repaint** changes part of the image: click **Paint the area to repaint**, paint over what should change in the mask editor (the item's own image is underneath), then say what it should become ("a red scarf", "remove the passer-by") and pick a model. Any image model that takes reference images works; **models that take masks (inpainting, such as a ComfyUI workflow that reads a mask) are listed first**. Whatever the model, the result is pasted back through your mask, so every pixel outside the painted area stays the same, with a slightly feathered edge so the seam doesn't show. It costs money.
 

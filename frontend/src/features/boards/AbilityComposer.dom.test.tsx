@@ -311,7 +311,7 @@ describe("能力的运行、空格子上的生成器", () => {
     const onSave = vi.fn();
     const item = host({ [TOOL.id]: { config: { mode: "b", text: "hi" } } });
     const { onFormChange: _unused, ...rest } = base(item, run);
-    mount(<>{renderAbility(TOOL.id as never, { ...rest, onSave })}</>);
+    mount(<>{renderAbility(TOOL.id as never, { ...rest, onSave, onClose: () => undefined })}</>);
     await waitFor(() => expect(sendButton()).toBeEnabled());
     fireEvent.click(sendButton());
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
@@ -323,6 +323,33 @@ describe("能力的运行、空格子上的生成器", () => {
       y: 10,
       form: { config: { mode: "b", text: "hi" }, bindings: {} },
     });
+  });
+
+  it("主控件要大地方拖的那几项(裁切框、方向球):点开就是一个弹窗,不挂在格子下面;发出去就关", async () => {
+    stubApi([{ value: "i1", label: "我的回声" }]);
+    //: 一项主控件是 `crop_frame` 的能力(声明形状和 image_crop 一样:一个控件改四格)。
+    const cropping = {
+      ...TOOL,
+      config: {
+        clip: TOOL.config.clip,
+        crop_x: { type: "number", editor: "crop_frame", label: "框", board_sources: [] },
+        crop_y: { type: "number", edited_by: "crop_x", board_sources: [] },
+        crop_width: { type: "number", edited_by: "crop_x", board_sources: [] },
+        crop_height: { type: "number", edited_by: "crop_x", board_sources: [] },
+      },
+    } as unknown as BoardProducerInfo;
+    const run = vi.fn(async (_request: BoardRunRequest) => undefined);
+    const onClose = vi.fn();
+    const { onFormChange: _unused, ...rest } = base(host(), run);
+    mount(<>{renderAbility(TOOL.id as never, { ...rest, producers: [cropping], onSave: () => undefined, onClose })}</>);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.dataset.presentation).toBe("dialog");
+    expect(screen.getByRole("dialog", { name: "回声" }), "弹窗叫这一项的名字(给读屏)").toBe(dialog);
+    expect(dialog.querySelector("[data-crop-frame]"), "控件就在弹窗里,不再点一层").not.toBeNull();
+    await waitFor(() => expect(sendButton()).toBeEnabled());
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("空格子上的生成器:面板是它自己的表单(没有宿主那一行),正文是那段提示词,发送键写「运行」", async () => {

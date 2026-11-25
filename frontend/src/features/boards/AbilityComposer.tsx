@@ -25,7 +25,7 @@ import { boardToolIcon, defaultBindings, firstSentence, givesValue, sourceValue 
 import { composerFields, filled, missingFields, takesMany, type BoardFieldSpec } from "@/features/boards/composerFields";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { emptyOptionsHint, NodeConfigForm, useNodeFieldOptions } from "@/features/nodeForms/NodeConfigForm";
-import { renderStageEditor } from "@/features/nodeForms/stageEditors";
+import { renderStageEditor, stageOpensDialog } from "@/features/nodeForms/stageEditors";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +62,7 @@ export function AbilityComposer({
   busy,
   onFormChange,
   onRun,
+  onClose,
 }: {
   /** 挂着它的那一格(一项能力的宿主,或生成器填的那个空格子)。 */
   item: BoardItem;
@@ -77,6 +78,8 @@ export function AbilityComposer({
   busy: boolean;
   onFormChange: (setting: Form) => void;
   onRun: (form: Form) => Promise<unknown>;
+  /** 收起这一项(画布上的面板状态)。主控件要大地方拖的那几项(见 stageEditors 的 `opens`)整块是一个弹窗,关弹窗就是收起。 */
+  onClose?: () => void;
 }) {
   const t = useI18n();
   const ability = hostField !== undefined;
@@ -171,9 +174,11 @@ export function AbilityComposer({
     Boolean(spec.sole_option_default) && (fieldOptions.dynamicOptions(key, spec) ?? []).length === 1;
   const missing = missingFields(fields, config, bindings, soleDefault).map(([key, spec]) => fieldLabel(key, spec));
   const blocked = !tool || missingConnection || missing.length > 0;
+  //: 弹窗那几项:发出去就关,产出照常落在右边(跑的进度在格子上看)。
+  const asDialog = Boolean(onClose && fields.stage && stageOpensDialog(fields.stage[1].editor));
   const send = () => {
     if (blocked || working) return;
-    run(() => onRun({ config, bindings }));
+    run(() => onRun({ config, bindings }).then(() => (asDialog ? onClose?.() : undefined)));
   };
   //: 这一格上一轮跑的就是这一项、而且没跑成:原因写在面板里(格子上只在选中时挂一条)。和别处同一份失败展示。
   const failure = useItemFailure(item);
@@ -183,6 +188,7 @@ export function AbilityComposer({
     <BoardComposerShell
       nodeId={item.id}
       name={ability ? "ability" : "generator"}
+      dialog={asDialog && onClose && tool ? { title: tool.label, onClose } : undefined}
       upstream={
         tool && fields.upstream.length > 0
           ? fields.upstream.map(([key, spec]) => {
