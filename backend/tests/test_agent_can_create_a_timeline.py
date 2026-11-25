@@ -97,3 +97,18 @@ def test_edit_project_改的是项目名(agent) -> None:
     assert renamed["name"] == "新名字"
     with SessionLocal() as db:
         assert db.get(Project, project["id"]).name == "新名字"
+
+
+def test_get_project_和_list_sequences_能发现一个项目的多条时间线(agent) -> None:
+    _client, _ws = agent
+    project = media.create_project(name="多版本", timeline=True)
+    second = media.create_project(name="竖屏版", project_id=project["id"], width=1080, height=1920, fps=25)
+
+    listed = media.list_sequences(project_id=project["id"])
+    assert [one["id"] for one in listed] == [second["sequence_id"], project["sequence_id"]], "最近改过的在前"
+    assert [one["active"] for one in listed] == [False, True], "项目当前那条仍是第一条"
+
+    detail = media.get_project(project_id=project["id"])
+    assert detail["name"] == "多版本"
+    assert detail["active_sequence_id"] == project["sequence_id"]
+    assert {one["name"] for one in detail["sequences"]} == {"多版本", "竖屏版"}

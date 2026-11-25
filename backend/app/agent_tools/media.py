@@ -125,6 +125,61 @@ def list_projects(workspace_id: str = "") -> list[dict[str, Any]]:
     ]
 
 
+def _sequence_summary(sequence: Any, active_id: str | None) -> dict[str, Any]:
+    """项目/时间线发现共用的一份摘要;不展开轨道和片段,那些由 inspect_sequence 按需读。"""
+    return {
+        "id": sequence.id,
+        "name": sequence.name,
+        "active": sequence.id == active_id,
+        "width": sequence.width,
+        "height": sequence.height,
+        "fps": sequence.fps,
+        "revision": sequence.revision,
+        "updated_at": sequence.updated_at.isoformat() if sequence.updated_at else None,
+    }
+
+
+@tool(effect="reads")
+def get_project(project_id: str) -> dict[str, Any]:
+    """Read-only: a video project plus ALL its timelines (id, name, active, size, fps, revision).
+
+    Use when you need to know a project's details or which timelines it contains. A project can
+    have several timelines; `list_projects` only gives the active_sequence_id. Pick the right one
+    before inspect_sequence/edit_timeline. Do NOT use for workflow ids — use list_workflows.
+    """
+
+    def load(db, user) -> dict[str, Any]:
+        project = projects_use_cases.readable(db, user, project_id)
+        timelines = sequences.list_for_project(db, user, project_id)
+        return {
+            "id": project.id,
+            "workspace_id": project.workspace_id,
+            "name": project.name,
+            "active_sequence_id": project.active_sequence_id,
+            "sequences": [_sequence_summary(one, project.active_sequence_id) for one in timelines],
+        }
+
+    return use_case(load)
+
+
+@tool(effect="reads")
+def list_sequences(project_id: str) -> list[dict[str, Any]]:
+    """Read-only: list a project's VIDEO TIMELINES, most recently edited first.
+
+    Use when a project may have more than one timeline and you need the id to inspect or edit.
+    `active` marks the one the editor opens. Do NOT use for pipeline/workflow runs — list_workflows.
+    """
+
+    def load(db, user) -> list[dict[str, Any]]:
+        project = projects_use_cases.readable(db, user, project_id)
+        return [
+            _sequence_summary(one, project.active_sequence_id)
+            for one in sequences.list_for_project(db, user, project_id)
+        ]
+
+    return use_case(load)
+
+
 def _edit_timeline_description() -> str:
     """edit_timeline 的说明:算子清单从入参模型生成(domain/sequences/op_args)—— 校验的和写给模型看的是同一份,
     参数名不会再对不上(审查实测:说明写 split_clip 的 `at`、改画幅的 `fit`,真实参数是 src_time、fill_mode)。

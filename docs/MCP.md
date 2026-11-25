@@ -13,7 +13,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **182** 个工具,其中 **65** 个走确认卡、**1** 个停下来等用户作答。
+共 **184** 个工具,其中 **65** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -123,6 +123,7 @@
 | `get_current_time` | 直接执行 | Read-only: what time is it right now, on the machine running this studio. |
 | `get_entity` | 直接执行 | Read-only: one asset from the asset library — its description, prompt descriptor, reference |
 | `get_job` | 直接执行 | Read-only: poll one background job (transcription, render, generation) by id. |
+| `get_project` | 直接执行 | Read-only: a video project plus ALL its timelines (id, name, active, size, fps, revision). |
 | `get_scene` | 直接执行 | Read the current editable 3D scene, objects, materials, camera shots and revision. |
 | `get_transcript` | 直接执行 | Read-only: read the transcript/subtitles of an asset — timed segments with speakers. |
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
@@ -156,6 +157,7 @@
 | `list_publish_tasks` | 直接执行 | Read-only: recent publish tasks, newest first, with what was published where. |
 | `list_scene_models` | 直接执行 | Read-only: the imported 3D models available in this workspace, with id, name, format and size. |
 | `list_scenes` | 直接执行 | List persistent 3D scenes in the workspace, with object and shot counts. |
+| `list_sequences` | 直接执行 | Read-only: list a project's VIDEO TIMELINES, most recently edited first. |
 | `list_skills` | 直接执行 | Read-only: every skill in this workspace, disabled ones too — name, title, description, source, enabled, editable. |
 | `list_speech_engines` | 直接执行 | Read-only: the speech engines generate_audio / dub_subtitles can speak with, and their voices. |
 | `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, or inspect one type in full. |

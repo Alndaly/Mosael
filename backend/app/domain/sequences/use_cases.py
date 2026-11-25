@@ -59,6 +59,25 @@ def revisions_of_project(db: Session, user: User, project_id: str) -> list[tuple
     ]
 
 
+def list_for_project(db: Session, user: User, project_id: str) -> list[Sequence]:
+    """项目里的时间线,最近改过的在前 —— 给智能体发现「这个项目到底有几条」用。
+
+    只取序列本身的列,不取轨道 / 片段:列表只要 id、名字、画幅和更新时间;要看内容再 `inspect_sequence`。
+    项目看不见就是 404,和 `revisions_of_project` 同一道闸。
+    """
+    project = db.get(Project, project_id)
+    if project is None:
+        raise NotVisible("Not found")
+    ensure_workspace_access(db, user, project.workspace_id)
+    return list(
+        db.scalars(
+            select(Sequence)
+            .where(Sequence.project_id == project_id)
+            .order_by(Sequence.updated_at.desc())
+        )
+    )
+
+
 def create(
     db: Session, user: User, workspace_id: str, project_id: str, *, name: str, width: int, height: int, fps: float
 ) -> Sequence:
