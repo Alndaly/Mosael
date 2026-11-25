@@ -2,8 +2,8 @@ import SwiftUI
 
 /// 灵动岛的外观。
 ///
-/// **一块整体,不是两块药丸拼起来。** 顶部中间是硬件刘海,用 mask 挖掉;黑色面从
-/// 刘海左右两侧的菜单栏一直延伸到展开列表,中间没有描边、没有第二层卡片。
+/// **一块整体,不是两块药丸拼起来。** 顶部中间是硬件区域,黑色面连续覆盖;左右内容
+/// 贴近刘海,展开后长成 NoobX 那种宽面板。没有描边、阴影或第二层卡片。
 struct IslandView: View {
     @ObservedObject var store: IslandStore
     let geometry: NotchGeometry
@@ -19,7 +19,7 @@ struct IslandView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            IslandSurface(bottomRadius: 18)
                 .fill(Color.black.opacity(0.96))
                 .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
                 .animation(.spring(response: 0.32, dampingFraction: 0.90), value: surfaceWidth)
@@ -64,6 +64,7 @@ struct IslandView: View {
     private var leftWing: some View {
         Button { store.open = false; if let id = store.lead?.id { onOpen(id) } } label: {
             HStack(spacing: 7) {
+                Spacer(minLength: 0)
                 Circle()
                     .fill(statusColor)
                     .frame(width: 6, height: 6)
@@ -72,7 +73,6 @@ struct IslandView: View {
                     .foregroundStyle(.white.opacity(0.94))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Spacer(minLength: 0)
             }
             .padding(.horizontal, 11)
             .frame(width: geometry.wingWidth, height: geometry.wingHeight)
@@ -85,7 +85,6 @@ struct IslandView: View {
     private var rightWing: some View {
         Button { store.open = false; if let id = store.lead?.id { onOpen(id) } } label: {
             HStack(spacing: 6) {
-                Spacer(minLength: 0)
                 ActivityMark(activity: store.lead)
                     .scaleEffect(0.92)
                 if let progress = store.lead?.progress, store.lead?.isOngoing == true {
@@ -97,10 +96,8 @@ struct IslandView: View {
                     Text("+\(store.activities.count - 1)")
                         .font(.system(size: 9.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.86))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.white.opacity(0.14)))
                 }
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 11)
             .frame(width: geometry.wingWidth, height: geometry.wingHeight)
@@ -161,6 +158,30 @@ struct IslandView: View {
     }
 }
 
+
+/// 顶部贴住屏幕,只有底角是圆的 —— 参考 NoobX,展开后左上/右上没有药丸式圆弧。
+private struct IslandSurface: Shape {
+    let bottomRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let r = min(bottomRadius, rect.height / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX - r, y: rect.maxY),
+            control: CGPoint(x: rect.maxX, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX, y: rect.maxY - r),
+            control: CGPoint(x: rect.minX, y: rect.maxY)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
 
 private struct ActivityMark: View {
     let activity: IslandActivity?

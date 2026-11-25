@@ -8,19 +8,19 @@ struct NotchGeometry {
     let hasNotch: Bool
     let notchWidth: CGFloat
     let menuBarHeight: CGFloat
-    let wingWidth: CGFloat = 86
+    let wingWidth: CGFloat = 104
     let wingGap: CGFloat = 2
     let wingHeight: CGFloat = 26
-    let panelHeight: CGFloat = 360
+    let panelHeight: CGFloat = 380
 
     var topMargin: CGFloat { max(2, (menuBarHeight - wingHeight) / 2) }
     /// 紧凑态只包住刘海左右两侧;展开时才变宽成 NoobX 那种大面板。
     var compactWidth: CGFloat {
         hasNotch ? notchWidth + (wingWidth + wingGap) * 2 : wingWidth * 2 + 4
     }
-    var expandedWidth: CGFloat { min(500, screenFrame.width - 96) }
+    var expandedWidth: CGFloat { min(520, screenFrame.width - 96) }
     var panelWidth: CGFloat { expandedWidth }
-    func expandedHeight(count: Int) -> CGFloat { min(280, max(180, CGFloat(count) * 52 + 16)) }
+    func expandedHeight(count: Int) -> CGFloat { min(280, max(88, CGFloat(count) * 52 + 8)) }
 
     static func current() -> NotchGeometry {
         // 跟着鼠标所在屏幕走:外接屏没有刘海时,岛就落在那块屏的菜单栏,不能留在内置屏上。
