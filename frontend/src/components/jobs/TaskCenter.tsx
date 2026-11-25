@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ban, CheckCircle2, ChevronDown, CircleAlert, Eraser, ListChecks, X } from "lucide-react";
+import { Activity, Ban, CheckCircle2, ChevronDown, CircleAlert, Eraser, ListChecks, Loader2, X } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { jobSettled } from "@/components/jobs/runStatus";
 import { jobKeys } from "@/api/queryKeys";
-import { flashLiveActivity, useLiveActivity } from "@/components/island/liveActivities";
+import { flashLiveActivity, liveActivityAvailable, useLiveActivity } from "@/components/island/liveActivities";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -217,8 +217,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
           className="relative"
           label={t("taskCenter")}
         >
-          {/* 在跑的几件和进度在灵动岛上(ADR 0111);这颗按钮只是任务列表的入口,不再另画一个转圈和数字。 */}
-          <Activity size={15} />
+          {/* macOS 原生灵动岛接住了在跑的几件;其他平台保留原来的转圈 + 数字。 */}
+          {liveActivityAvailable() ? <Activity size={15} /> : active.length > 0 ? <Loader2 size={15} className="animate-mosael-spin" /> : <Activity size={15} />}
+          {!liveActivityAvailable() && active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-action px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-action-foreground">{active.length}</em>}
         </IconButton>
       </PopoverTrigger>
 
