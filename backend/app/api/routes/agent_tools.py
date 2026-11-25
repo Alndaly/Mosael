@@ -236,7 +236,11 @@ def invoke_agent_tool(
         finally:
             if receipt is not None:
                 reset_receipt(receipt)
-    return _as_payload(result)
+    payload = _as_payload(result)
+    if dropped:
+        # 给模型的这一趟结果里也写一句:只写日志,模型会以为参数生效了。
+        payload["warning"] = f"Ignored unsupported arguments: {', '.join(dropped)}"
+    return payload
 
 
 def _as_payload(result: Any) -> dict[str, Any]:

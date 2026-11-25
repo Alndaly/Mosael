@@ -108,6 +108,16 @@ def test_an_unknown_tool_suggests_registered_names() -> None:
     assert "list_projects" in detail
 
 
+def test_extra_arguments_are_reported_back_to_the_model() -> None:
+    """多传的参数会被收敛掉,但不能只写日志 —— 模型看到 warning 才知道自己传错了。"""
+    client = fresh_client()
+    res = client.post("/api/agent/tools/get_current_time", json={"arguments": {"bogus": 1}})
+
+    assert res.status_code == 200, res.text
+    assert "bogus" in res.json()["warning"]
+    assert res.json()["result"]
+
+
 def test_private_helpers_are_not_callable() -> None:
     """mcp_server's module namespace holds _get/_post/_default_workspace_id too. Dispatching by
     getattr without this would expose them as tools."""

@@ -40,7 +40,7 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       const name = req.url.slice("/api/agent/tools/".length);
       bodies[name] = JSON.parse(raw);
-      json({ result: { name, ok: true } });
+      json({ result: { name, ok: true }, ...(name === "browser_read" ? { warning: "Ignored unsupported arguments: bogus" } : {}) });
     });
     return;
   }
@@ -74,6 +74,7 @@ try {
   const read = tools.find((one) => one.name === "run_read_tool");
   const readResult = await read.execute("c3", { name: "browser_read", arguments: {} });
   assert.deepEqual(JSON.parse(readResult.content[0].text), { name: "browser_read", ok: true });
+  assert(readResult.content.some((block) => block.type === "text" && block.text.includes("Ignored unsupported arguments: bogus")));
   await assert.rejects(
     () => read.execute("c4", { name: "computer_click", arguments: {} }),
     /not read-only/,

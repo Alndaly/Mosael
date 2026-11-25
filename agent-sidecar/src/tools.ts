@@ -330,6 +330,12 @@ function imageResult(data: unknown, images: ToolImage[]): AgentToolResult<{ data
   };
 }
 
+/** 后端收敛了模型多传的参数时,把 warning 放进模型看得到的内容;只写日志模型会以为参数生效了。 */
+function withWarning<T>(result: AgentToolResult<T>, warning?: string): AgentToolResult<T> {
+  if (!warning) return result;
+  return { ...result, content: [...result.content, { type: "text", text: `Warning: ${warning}` }] };
+}
+
 interface ToolSpec {
   name: string;
   description: string;
@@ -428,22 +434,23 @@ export async function buildAllTools(
       // **不再转述 sessionId**:这次调用属于哪次对话,后端从 token 认出来(turn 令牌铸造时
       // 就带着它)。转述的东西可以被伪造,而确认卡的归属决定它出现在谁面前、以后还决定
       // 要不要自动放行。
-    }, signal)) as { result?: unknown; error?: string; images?: ToolImage[] };
+    }, signal)) as { result?: unknown; error?: string; images?: ToolImage[]; warning?: string };
     if (response?.error) throw new Error(response.error);
-    if (response?.images?.length) return imageResult(response.result ?? null, response.images);
+    const warning = typeof response?.warning === "string" ? response.warning : undefined;
+    if (response?.images?.length) return withWarning(imageResult(response.result ?? null, response.images), warning);
     if (spec.awaits_answer) {
       // 选择卡:调用只立起了卡,这一轮停在这里等用户挑 —— 答案于是作为**工具结果**
       // 回到它被问的那个位置,不用靠一条伪造的用户消息把模型重新叫醒。
       const card = (response?.result ?? {}) as { question_id?: string; error?: string };
       // 没有会话上下文时后端回的是一句 error(飞书 / 外部客户端),照原样给模型。
-      if (!card.question_id) return jsonResult(response?.result ?? null);
-      return answerResult(await awaitAnswer(apiBase, token, card.question_id, signal, hooks), card.question_id);
+      if (!card.question_id) return withWarning(jsonResult(response?.result ?? null), warning);
+      return withWarning(answerResult(await awaitAnswer(apiBase, token, card.question_id, signal, hooks), card.question_id), warning);
     }
-    if (!spec.confirmation) return jsonResult(response?.result ?? null);
+    if (!spec.confirmation) return withWarning(jsonResult(response?.result ?? null), warning);
     // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。
     const card = (response?.result ?? {}) as { confirmation_id?: string };
     if (!card.confirmation_id) throw new Error("确认卡创建失败(缺 confirmation_id)");
-    return jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal, hooks));
+    return withWarning(jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal, hooks)), warning);
   }
 
   const tools: AgentTool[] = specs
