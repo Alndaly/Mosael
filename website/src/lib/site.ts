@@ -12,6 +12,8 @@ export const SITE = {
   baiduPan: { url: "https://pan.baidu.com/s/5n5TXJoBkkF61BOyzFqgnjg", code: "" },
   /** R2 人工下载页;自动更新与插件索引用同一域名的 latest/。 */
   r2: { url: "https://dl.mosael.com/mosael/latest/index.html" },
+  /** 工信部备案:中国大陆站点页脚必须展示,链接到工信部查询页。 */
+  icp: { license: "浙ICP备2024137385号-7", url: "https://beian.miit.gov.cn/" },
   /** 官方账号的公开短名;插件详情的作者署名指向它的公开主页。 */
   officialHandle: "mosael",
   authorX: "https://x.com/KindaHuaX",

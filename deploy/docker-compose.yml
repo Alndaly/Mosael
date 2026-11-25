@@ -41,6 +41,8 @@ services:
     environment:
       # 同源:用户实际访问的 Origin。OAuth 回调地址也只由它推出。
       CLOUD_PUBLIC_URL: https://${DOMAIN:?在 .env 里设置 DOMAIN}
+      # 额外的同源入口(逗号分隔);例如同时服务 mosael.cn 时列出它。
+      CLOUD_ALLOWED_ORIGINS: ${CLOUD_ALLOWED_ORIGINS:-}
       # 生产必须 true;不要为了本地 http 方便在 compose 里关掉它。
       CLOUD_COOKIE_SECURE: "true"
       CLOUD_DATABASE_URL: postgresql+psycopg://mosael:${POSTGRES_PASSWORD:?在 .env 里设置 POSTGRES_PASSWORD}@postgres:5432/mosael
