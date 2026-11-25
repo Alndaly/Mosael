@@ -111,3 +111,15 @@ def test_allowed_origins_can_list_several(monkeypatch):
             "http://localhost:8000",
         }
     )
+
+
+def test_额外_origin_不会把主域挤掉(monkeypatch):
+    """多域名时 public_url 必须仍在名单里:不然 mosael.cn 的配置会让 mosael.com 登录被拒。"""
+    from cloud.config import CloudConfig
+
+    monkeypatch.setenv("CLOUD_PUBLIC_URL", "https://mosael.com")
+    monkeypatch.setenv("CLOUD_ALLOWED_ORIGINS", "https://mosael.cn,https://www.mosael.cn")
+    config = CloudConfig.from_env()
+    assert config.allowed_origins == frozenset(
+        {"https://mosael.com", "https://mosael.cn", "https://www.mosael.cn"}
+    )

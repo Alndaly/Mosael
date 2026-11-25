@@ -163,11 +163,11 @@ class CloudConfig:
                 if not value.startswith("__Host-"):
                     object.__setattr__(self, name, f"__Host-{value}")
         object.__setattr__(self, "public_url", public)
+        # public_url 是主入口,永远在名单里;CLOUD_ALLOWED_ORIGINS 只追加第二入口。
         origins = set(self.allowed_origins)
-        if not origins:
-            split = urlsplit(public)
-            if split.scheme and split.netloc:
-                origins.add(f"{split.scheme}://{split.netloc}")
+        split = urlsplit(public)
+        if split.scheme and split.netloc:
+            origins.add(f"{split.scheme}://{split.netloc}")
         expanded = set(origins)
         for origin in origins:
             expanded.update(_loopback_aliases(origin))
