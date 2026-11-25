@@ -106,6 +106,15 @@ def test_重绘能用收参考图的_收蒙版的排前面_必须给蒙版的也
     assert [one["id"] for one in inpaint_candidates([text_only, editor, inpaint, offline])] == ["inpaint", "edit"]
 
 
+def test_同一张工作流_表单入口排在完整工作流前面() -> None:
+    #: 真界面里:完整工作流入口排在「蒙版修图」表单前面、成了留空时的那一个,交回的是中间那张涂蓝的预览。
+    full = {**_option("wf_full", mask=True), "group": {"id": "qwen.json", "entry": "full", "order": 0}}
+    form = {**_option("wf_form", mask=True), "group": {"id": "qwen.json", "entry": "form", "order": 1}}
+    editor = _option("edit", refs=4)
+    assert [one["id"] for one in inpaint_candidates([editor, full, form])] == ["wf_form", "wf_full", "edit"]
+    assert automatic_inpaint_model([full, form, editor]) is form
+
+
 def test_没点名时_够格的默认优先_否则第一个收蒙版的() -> None:
     editor = _option("edit", refs=4, default=True)
     inpaint = _option("inpaint", mask=True)

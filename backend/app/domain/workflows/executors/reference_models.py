@@ -54,11 +54,23 @@ def works_for_inpaint(option: dict[str, Any]) -> bool:
     return bool(option.get("adapter_available")) and reference_limit(option) > 0 and satisfiable
 
 
+def _full_workflow_entry(option: dict[str, Any]) -> bool:
+    """有表单的 ComfyUI 工作流里那个「完整工作流」入口(ADR 0045):它把整张图原样跑一遍,交回的常常是作者没挑过的那一步。"""
+
+    group = option.get("group")
+    return isinstance(group, dict) and group.get("entry") == "full"
+
+
 def inpaint_candidates(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """重绘能用的图片模型,**收蒙版的排前面**(同一组里保持生成目录的先后)。"""
+    """重绘能用的图片模型,**收蒙版的排前面**;同一档里**表单入口排在完整工作流前面**,其余保持生成目录的先后。
+
+    后一条是真界面里踩到的:局部编辑的 ComfyUI 工作流有一张作者做好的表单「蒙版修图」,完整工作流入口排在它前面、
+    又成了留空时的那一个 —— 跑完交回的是工作流中间那张「蒙版区域涂蓝」的预览,贴回原图就是一块蓝。表单是作者给这件事
+    挑好输入和结果的那个入口(ADR 0045),先用它。
+    """
 
     usable = [one for one in options if works_for_inpaint(one)]
-    return [one for one in usable if takes_mask(one)] + [one for one in usable if not takes_mask(one)]
+    return sorted(usable, key=lambda one: (not takes_mask(one), _full_workflow_entry(one)))
 
 
 def automatic_inpaint_model(options: list[dict[str, Any]]) -> dict[str, Any] | None:
