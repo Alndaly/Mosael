@@ -26,6 +26,9 @@ export type PlanStep = { step: string; status: "pending" | "in_progress" | "done
  * 那些是同一份计划的连续快照,不是"第 1 版、第 2 版"—— 把每次调用都陈列出来,得到的是
  * 同样三行、只有勾变了的一摞噪音。所以相邻两次只要**步骤文本有一半以上重合**就算同一份,
  * 只留最后那次(也就是它最终的样子);换了新活儿(清单整体不同)才另起一份。
+ *
+ * **未完成的也留着**:有些计划确实就是没做完(用户换方向、任务中断),它们同样是发生过的事;
+ * 历史里标成「未完成」,而不是当成没出现过。
  */
 export function planHistory(timelines: (AgentTimelineItem[] | undefined)[]): PlanStep[][] {
   const plans: PlanStep[][] = [];
@@ -83,7 +86,9 @@ export function PlanCard({
   const steps = plan ?? [];
   const done = steps.filter((step) => step.status === "done").length;
   const allDone = steps.length > 0 && done === steps.length;
-  const [open, setOpen] = React.useState(true);
+  // 当前计划在进行中,默认展开;做完之后切成「历史」,默认收成一行 —— 计划的用处在进行中。
+  const [planOpen, setPlanOpen] = React.useState(true);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
 
   // 计划的用处在**进行中**。全做完(或压根没有)之后,当前这份就只是上一件事的残留 ——
   // 模型本该 update_plan([]) 清掉,但它常常忘,于是下一轮开口时侧栏还挂着上一件事的清单
@@ -91,6 +96,7 @@ export function PlanCard({
   // 这时卡片改为陈列**历次计划**:默认折叠,想回看再展开。两者都没有才整块不渲染。
   const showingHistory = steps.length === 0 || allDone;
   if (showingHistory && history.length === 0) return null;
+  const open = showingHistory ? historyOpen : planOpen;
 
   return (
     // 外壳与检查器其余各块共用 —— 此前它自己写了一份几乎一样但又不完全一样的标题行。
@@ -98,7 +104,10 @@ export function PlanCard({
       icon={ListChecks}
       title={showingHistory ? t("agentPlanHistory") : t("agentPlan")}
       aside={showingHistory ? String(history.length) : `${done}/${steps.length}`}
-      onToggle={() => setOpen((value) => !value)}
+      onToggle={() => {
+        if (showingHistory) setHistoryOpen((value) => !value);
+        else setPlanOpen((value) => !value);
+      }}
       open={open}
       className={className}
     >
@@ -106,9 +115,10 @@ export function PlanCard({
         // 历次计划,新的在上。每一份就是当时那张清单,原样陈列。
         <div className="grid gap-2">
           {[...history].reverse().map((past, index) => (
-            <div className="grid gap-1" key={index}>
+            <div className="grid gap-1" key={index} data-plan-history="">
               {/* 不编号 —— 它们不是"版本",是先后做过的几件事。标完成度就够了。 */}
-              <span className="text-ui-2xs tabular-nums text-muted-foreground">
+              <span data-plan-progress="" className="text-ui-2xs tabular-nums text-muted-foreground">
+                {past.every((step) => step.status === "done") ? null : `${t("agentPlanUnfinished")} · `}
                 {past.filter((step) => step.status === "done").length}/{past.length}
               </span>
               <PlanSteps steps={past} />

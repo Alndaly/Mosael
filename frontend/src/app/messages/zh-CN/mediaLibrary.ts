@@ -54,6 +54,7 @@ export const mediaLibrary = {
   agentToolNoDetail: "这次调用没有留下参数或结果",
   agentPlan: "任务计划",
   agentPlanHistory: "任务计划 · 历史",
+  agentPlanUnfinished: "未完成",
   // 素材的出处(来源链)与「含 AI」标记,见后端 domain/assets/lineage。
   mediaSourceDerived: "加工",
   mediaSourceContainsAi: "含 AI 生成内容",

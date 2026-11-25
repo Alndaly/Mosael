@@ -53,6 +53,7 @@ export const mediaLibrary = {
   agentToolNoDetail: "This call recorded no arguments or result",
   agentPlan: "Plan",
   agentPlanHistory: "Task plan · history",
+  agentPlanUnfinished: "Unfinished",
   // Where an asset came from (lineage) and whether it contains AI content — see backend domain/assets/lineage.
   mediaSourceDerived: "Processed",
   mediaSourceContainsAi: "Contains AI content",
