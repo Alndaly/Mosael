@@ -13,6 +13,7 @@ struct IslandView: View {
 
     private var expandedWidth: CGFloat { geometry.expandedWidth(count: store.activities.count) }
     private var expandedHeight: CGFloat { geometry.expandedHeight(count: store.activities.count) }
+    private var scrollable: Bool { CGFloat(store.activities.count) * 52 + 8 > expandedHeight }
     private var surfaceWidth: CGFloat { store.open ? expandedWidth : geometry.compactWidth }
     private var surfaceHeight: CGFloat { store.open ? expandedHeight : geometry.menuBarHeight }
 
@@ -26,9 +27,18 @@ struct IslandView: View {
 
             Group {
                 if store.open {
-                    expandedRows
+                    if scrollable {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            expandedRows
+                                .frame(width: expandedWidth)
+                        }
                         .frame(width: expandedWidth, height: expandedHeight)
                         .transition(.opacity)
+                    } else {
+                        expandedRows
+                            .frame(width: expandedWidth, height: expandedHeight)
+                            .transition(.opacity)
+                    }
                 } else {
                     HStack(spacing: 0) {
                         leftWing
