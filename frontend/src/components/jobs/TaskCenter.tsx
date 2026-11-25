@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ban, CheckCircle2, ChevronDown, CircleAlert, Eraser, ListChecks, Loader2, X } from "lucide-react";
+import { Activity, Ban, CheckCircle2, ChevronDown, CircleAlert, Eraser, ListChecks, X } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { jobSettled } from "@/components/jobs/runStatus";
 import { jobKeys } from "@/api/queryKeys";
+import { flashLiveActivity, useLiveActivity } from "@/components/island/liveActivities";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -104,6 +105,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     setDetailJob(job);
     setOpen(false);
   };
+  //: 岛上的那一下点进来也是打开详情;做完提示在 effect 里发,拿最新的这一个。
+  const openJobRef = React.useRef(openJob);
+  openJobRef.current = openJob;
 
   // 详情弹层里「前往对应页面」:去哪一页、打开哪条记录,由任务目录声明。换地方之前先收起前台的原生视图(ADR 0051)。
   const gotoDetailPage = (job: JobSummary) => {
@@ -176,10 +180,23 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       announced.current.add(job.id);
       const outcome = job.status === "succeeded" ? t("jobDone") : t("jobFailed");
       const detail = (job.status === "failed" ? job.error : job.message) ?? undefined;
-      if (job.status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });
-      else toast.error(`${meta.label} · ${outcome}`, { description: detail });
+      //: 在 macOS 原生灵动岛上亮一下(ADR 0111):它跑着的时候就在岛上,做完了在**同一个地方**换成对勾 / 叹号。
+      //: 非 macOS / 原生浮层不可用时仍给应用内提示 —— 不能因为岛不在就没有「做完了」。
+      const shownOnIsland = flashLiveActivity({
+        id: liveActivityId(job),
+        state: job.status === "succeeded" ? "done" : "failed",
+        title: `${meta.label} · ${outcome}`,
+        detail,
+        icon: meta.icon,
+        priority: 1,
+        onOpen: () => openJobRef.current(job),
+      });
+      if (!shownOnIsland) {
+        if (job.status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });
+        else toast.error(`${meta.label} · ${outcome}`, { description: detail });
+      }
       // 同一件事也告诉系统层。这里无条件调用、由主进程决定发不发:窗口收进托盘或切到别的
-      // app 时,上面这个 toast 弹在一个看不见的窗口里等于没弹,那时才需要系统通知。
+      // app 时,岛在一个看不见的窗口里等于没亮,那时才需要系统通知。
       window.mosaelDesktop?.notifyTask?.({ title: `${meta.label} · ${outcome}`, body: detail ?? "" });
     }
   }, [jobs.data, kindsReady, kindOf, t, qc]);
@@ -190,6 +207,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
+      {active.map((job) => (
+        <JobLiveActivity key={job.id} job={job} meta={kindOf(job.kind)} onOpen={() => openJob(job)} />
+      ))}
       <PopoverTrigger asChild>
         <IconButton
           variant="ghost"
@@ -197,8 +217,8 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
           className="relative"
           label={t("taskCenter")}
         >
-          {active.length > 0 ? <Loader2 size={15} className="animate-mosael-spin" /> : <Activity size={15} />}
-          {active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-action px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-action-foreground">{active.length}</em>}
+          {/* 在跑的几件和进度在灵动岛上(ADR 0111);这颗按钮只是任务列表的入口,不再另画一个转圈和数字。 */}
+          <Activity size={15} />
         </IconButton>
       </PopoverTrigger>
 
@@ -367,4 +387,23 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
       </div>
     </div>
   );
+}
+
+/** 岛上一条任务的 id:跑着的那件和做完的那一下是同一个(做完时在原地换成结果)。 */
+function liveActivityId(job: Pick<JobSummary, "id">): string {
+  return `job:${job.id}`;
+}
+
+/** 一条在跑的顶层任务,发布到灵动岛上(ADR 0111):种类的名字、它说的进度、0..1 的进度(还没报就转圈)。 */
+function JobLiveActivity({ job, meta, onOpen }: { job: JobSummary; meta: ReturnType<ReturnType<typeof useJobKinds>["kindOf"]>; onOpen: () => void }) {
+  useLiveActivity({
+    id: liveActivityId(job),
+    state: "ongoing",
+    title: meta.label,
+    detail: job.message ?? undefined,
+    progress: typeof job.progress === "number" && job.progress > 0 ? job.progress : null,
+    icon: meta.icon,
+    onOpen,
+  });
+  return null;
 }

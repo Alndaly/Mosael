@@ -15,6 +15,7 @@ import { adoptSecondInstance, protocol } from "./protocol";
 import { shortcuts } from "./shortcuts";
 import { isQuitting, markQuitting, residency } from "./residency";
 import { tray } from "./tray";
+import { island } from "./island";
 import { setLocale as setMessagesLocale } from "../i18n.cjs";
 import { EMPTY_STATUS, type Capability, type CapabilityHandle, type SystemContext, type SystemStatus } from "./types";
 
@@ -30,7 +31,7 @@ import { EMPTY_STATUS, type Capability, type CapabilityHandle, type SystemContex
  * 始终能被单独测。
  */
 
-const CAPABILITIES: Capability[] = [residency, power, tray, badge, notify, protocol, shortcuts, customCss];
+const CAPABILITIES: Capability[] = [residency, power, tray, badge, notify, protocol, shortcuts, customCss, island];
 
 /** 已注册、还没 dispose 的能力。语言变化要挨个告诉它们(托盘菜单是它自己画的字)。 */
 const live = new Set<CapabilityHandle>();

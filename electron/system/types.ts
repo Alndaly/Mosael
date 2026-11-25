@@ -1,4 +1,5 @@
 import type { BrowserWindow } from "electron";
+import type { MacosIslandActivity } from "../macos-island.cjs";
 
 /**
  * 系统能力层的公共上下文。
@@ -38,6 +39,8 @@ export interface SystemStatus {
   progress?: number | null;
   /** Computer Use 是否正在操作 Mosael(被控制中:托盘图标变色、菜单里给一颗「停止」)。 */
   computerUseActive?: boolean;
+  /** 此刻要摆到 macOS 灵动岛上的事。渲染层推送,原生浮层只负责显示。 */
+  liveActivities?: MacosIslandActivity[];
 }
 
 /** 系统层看到的那一份快照:任务数,以及 Computer Use 是否正在操作(ADR 0075 安全 2 —— 托盘图标据此变色)。 */

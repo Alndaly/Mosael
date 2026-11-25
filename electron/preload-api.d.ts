@@ -1,5 +1,7 @@
 /** The one type contract shared by the privileged preload implementation and renderer. */
 
+import type { MacosIslandActivity as LiveActivityWire } from "./macos-island.cjs";
+
 export type RecordingPermissionKind = "camera" | "microphone" | "screen";
 export type RecordingPermissionStatus = "not-determined" | "granted" | "denied" | "restricted" | "unknown";
 
@@ -380,6 +382,8 @@ export interface MosaelDesktopBridge {
   onUpdateProgress(callback: (info: MosaelUpdateInfo) => void): () => void;
   onUpdateAvailable(callback: (info: MosaelUpdateInfo) => void): () => void;
   reportStatus(status: { runningJobs: number; progress?: number | null }): void;
+  /** 把此刻要摆到 macOS 灵动岛上的事交给主进程;非 macOS 时是 no-op。 */
+  reportLiveActivities(activities: readonly LiveActivityWire[]): void;
   notifyTask(notice: { title: string; body?: string }): void;
   getOpenAtLogin(): Promise<{ enabled: boolean; needsApproval: boolean } | null>;
   setOpenAtLogin(enabled: boolean): Promise<{ enabled: boolean; needsApproval: boolean } | null>;

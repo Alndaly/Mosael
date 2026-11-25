@@ -91,6 +91,7 @@ export const IPC: {
   readonly send: Readonly<{
     titleOverlay: "mosael:title-overlay";
     systemStatus: "system:status";
+    liveActivities: "system:live-activities";
     systemNotify: "system:notify";
     locale: "mosael:locale";
     floatShow: "float:show";
@@ -116,6 +117,7 @@ export const IPC: {
     toastsPointer: "toasts:pointer";
     commandPalette: "mosael:command-palette";
     computerUseState: "computer:use-state";
+    liveActivityOpen: "mosael:live-activity-open";
   }>;
 };
 
@@ -163,6 +165,16 @@ export function parseComfyWorkbenchCall(value: unknown): {
 };
 export function parseTitleOverlay(value: unknown): { color: string; symbolColor: string };
 export function parseSystemStatus(value: unknown): { runningJobs: number; progress?: number | null };
+export function parseLiveActivities(value: unknown): {
+  activities: Array<{
+    id: string;
+    state: "ongoing" | "done" | "failed";
+    title: string;
+    detail?: string;
+    progress?: number;
+    priority?: number;
+  }>;
+};
 export function parseTaskNotice(value: unknown): { title: string; body: string };
 export function parseLocale(value: unknown): { locale: string };
 export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };

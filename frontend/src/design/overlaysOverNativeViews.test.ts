@@ -39,6 +39,11 @@ const NOT_GLOBAL: Record<string, string> = {
   DeleteWorkspaceDialog: "只从侧栏的工作区菜单打开,原生视图在前台时点不到",
 };
 
+/** 壳派的事件,但处理它不等于要登记一个浮层。理由写清楚。 */
+const NON_OVERLAY_EVENTS: Record<string, string> = {
+  "mosael:live-activity-open": "灵动岛点开任务详情:本模块只把 id 交回发布者,真正开详情的是已登记的 TaskCenter",
+};
+
 /** 一个模块看起来会浮起来:Radix 的弹层、portal、`fixed` 加一层 z。 */
 const FLOATS = /<(?:Dialog|AlertDialog|Sheet|Popover|CommandDialog|Toaster|ModalShell|ConfirmDialog)\b|createPortal\(|["'`][^"'`\n]*\bfixed\b[^"'`\n]*\bz-/;
 
@@ -114,7 +119,9 @@ describe("应用级的浮层:原生视图在前台时怎么让", () => {
 
   it("桌面壳从外面派的事件,听它的模块都登记了", () => {
     const preload = readFileSync(join(SRC, "..", "..", "electron", "preload.cjs"), "utf8");
-    const events = [...preload.matchAll(/new CustomEvent\("(mosael:[^"]+)"/g)].map((match) => match[1]);
+    const events = [...preload.matchAll(/new CustomEvent\("(mosael:[^"]+)"/g)]
+      .map((match) => match[1])
+      .filter((event) => !(event in NON_OVERLAY_EVENTS));
     expect(events, "preload 派的事件").toEqual(expect.arrayContaining(["mosael:open-tasks", "mosael:open-cmdk", "mosael:deep-link"]));
     const files = new Set(registered.map(([, entry]) => entry.file));
     const missing = codeFiles(SRC).flatMap((file) => {

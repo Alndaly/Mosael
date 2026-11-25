@@ -68,6 +68,11 @@ ipcRenderer.on(IPC.event.openTasks, () => {
   window.dispatchEvent(new CustomEvent("mosael:open-tasks"));
 });
 
+// 用户点了 macOS 灵动岛上的某一件:交给发布它的组件打开详情(见 lib/liveActivities)。
+ipcRenderer.on(IPC.event.liveActivityOpen, (_event, payload) => {
+  window.dispatchEvent(new CustomEvent("mosael:live-activity-open", { detail: payload?.id }));
+});
+
 // 网页在前台时按的 ⌘K(主进程从内嵌网页里截下来的,ADR 0051)→ 命令面板。CommandPalette 听的同样是 window 事件。
 ipcRenderer.on(IPC.event.commandPalette, () => {
   window.dispatchEvent(new CustomEvent("mosael:open-cmdk"));
@@ -110,6 +115,8 @@ const desktopBridge = {
   // 系统能力:reportStatus 把「有几个任务在跑」推给主进程(托盘文案 + 有任务时阻止系统睡眠)。
   // 只推、不问 —— 系统层不认识后端,业务状态由知道它的这一侧负责告知。
   reportStatus: (status) => ipcRenderer.send(IPC.send.systemStatus, status),
+  // 灵动岛上的事与托盘状态分开推:托盘只要数量,岛要标题 / 进度 / 完成态。
+  reportLiveActivities: (activities) => ipcRenderer.send(IPC.send.liveActivities, { activities }),
   // 任务结束时通知系统层;窗口有焦点时主进程会跳过(应用内已有 toast)。
   notifyTask: (notice) => ipcRenderer.send(IPC.send.systemNotify, notice),
   getOpenAtLogin: () => invoke(IPC.invoke.getOpenAtLogin),

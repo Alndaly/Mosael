@@ -352,10 +352,23 @@ let hostBridge = null;
 let hostBridgeStarting = null;
 /** 最近一次由渲染层推上来的系统状态(任务数等);Computer Use 的开关状态由主进程合并进去。 */
 let lastSystemStatus = { runningJobs: 0 };
+/** 灵动岛上的事和托盘状态分开推:任务中心只更新自己知道的那一份。 */
+let lastLiveActivities = [];
+/** Computer Use 的最新开关状态;由 pushComputerUseState 维护,避免在 guard 初始化前碰它。 */
+let lastComputerUseActive = false;
+
+function pushSystemStatus() {
+  systemHandle?.pushStatus({
+    ...lastSystemStatus,
+    liveActivities: lastLiveActivities,
+    computerUseActive: lastComputerUseActive,
+  });
+}
 
 function pushComputerUseState(state) {
   const running = { active: Boolean(state.active), stopped: Boolean(state.stopped) };
-  systemHandle?.pushStatus({ ...lastSystemStatus, computerUseActive: running.active && !running.stopped });
+  lastComputerUseActive = running.active && !running.stopped;
+  pushSystemStatus();
   const win = mainWindow;
   if (win && !win.isDestroyed()) win.webContents.send(IPC.event.computerUseState, running);
 }
@@ -1870,8 +1883,11 @@ app.whenReady().then(async () => {
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
     listen("systemStatus", (_e, payload) => {
       lastSystemStatus = { ...lastSystemStatus, ...payload };
-      //: 合并「被控制中」——系统层只认这一份快照(托盘图标据此变色)。
-      systemHandle?.pushStatus({ ...lastSystemStatus, computerUseActive: computerUseGuard.isActive() });
+      pushSystemStatus();
+    });
+    listen("liveActivities", (_e, payload) => {
+      lastLiveActivities = payload.activities;
+      pushSystemStatus();
     });
     //: 这两步都碰系统层(webRequest / globalShortcut),失败时只影响它自己 —— 别把后面的
     //: 处理器一起带走(2026-10-23 一次现场:某个更早的异常让自定义 CSS 的处理器没注册上,

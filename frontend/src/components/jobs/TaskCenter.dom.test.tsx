@@ -21,9 +21,28 @@ vi.mock("@/app/preferences", () => ({
 const h = vi.hoisted(() => ({
   apiMock: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() },
+  //: 做完的那一下亮在灵动岛上(ADR 0111):记下每一次 flash;在跑的任务记下 id(「组件确实看到过运行中」的判据)。
+  flash: vi.fn(),
+  ongoing: new Set<string>(),
   state: { jobs: [] as any[] },
 }));
 vi.mock("sonner", () => ({ toast: h.toast }));
+vi.mock("@/components/island/liveActivities", async (original) => {
+  const actual = await original<typeof import("@/components/island/liveActivities")>();
+  return {
+    ...actual,
+    flashLiveActivity: (activity: Parameters<typeof actual.flashLiveActivity>[0]) => {
+      h.flash(activity);
+      return true;
+    },
+    useLiveActivity: (activity: Parameters<typeof actual.useLiveActivity>[0]) => {
+      if (activity) h.ongoing.add(activity.id);
+      actual.useLiveActivity(activity);
+    },
+  };
+});
+/** 岛上亮过的「做完了」/「失败了」那几下。 */
+const flashed = (state: "done" | "failed") => h.flash.mock.calls.map(([one]) => one).filter((one) => one.state === state);
 const entry = (kind: string, label: string, announce: string, affects: string[]) =>
   ({ kind, label, announce, affects, view: null, record_field: null });
 const CATALOG = {
@@ -76,6 +95,8 @@ beforeEach(() => {
   h.toast.success.mockReset();
   h.toast.error.mockReset();
   h.toast.message.mockReset();
+  h.flash.mockReset();
+  h.ongoing.clear();
   h.apiMock.mockImplementation(async () => h.state.jobs);
 });
 
@@ -83,19 +104,17 @@ beforeEach(() => {
  *
  * 不能只 sleep 一下就翻:第一次拉取要是直接拿到 succeeded,组件只会把它记进基线而不认为
  * 「刚刚完成」,于是什么都不刷新 —— 那是测试自己的竞态,不是被测代码的毛病。
- * 判据用运行中图标(active 非空时任务中心按钮转圈),它就是"running 已经进到组件里了"。 */
+ * 判据是它把这条任务发布到了灵动岛上,那就是"running 已经进到组件里了"。 */
 const running = (kind: string) =>
   [{ id: "j1", kind, status: "running", progress: 0.5, message: null, error: null, payload: {} }];
 
 /** 等组件**确实看到过**运行中,再把它翻成完成 —— 这正是真实的那一幕。
  *
  * 不能只 sleep 一下就翻:第一次拉取要是直接拿到终态,组件只会把它记进基线而不认为
- * 「刚刚完成」,于是什么都不刷新 —— 那是测试自己的竞态。判据用任务中心按钮上的转圈图标,
- * 它就是"running 已经进到组件里了"。 */
+ * 「刚刚完成」,于是什么都不刷新 —— 那是测试自己的竞态。判据是它把这条任务发布到了灵动岛上,
+ * 那就是"running 已经进到组件里了"。 */
 async function finish(kind: string, status: "succeeded" | "failed" | "cancelled", error: string | null = null, extra: object = {}) {
-  await waitFor(() => expect(document.querySelector(".animate-mosael-spin")).not.toBeNull(), {
-    timeout: 4000,
-  });
+  await waitFor(() => expect(h.ongoing.size).toBeGreaterThan(0), { timeout: 4000 });
   const stamp = "2026-10-08T03:00:00";
   h.state.jobs = [{ id: "j1", kind, status, progress: 1, message: null, error, payload: {}, created_at: stamp, updated_at: stamp, ...extra }];
 }
@@ -136,29 +155,29 @@ describe("只有任务中心报完成,而且按目录决定报不报", () => {
   it("做完了用目录里的名字说一声,带上任务自己的那句话", async () => {
     mount(running("subtitle_dub"));
     await finish("subtitle_dub", "succeeded");
-    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
-    expect(h.toast.success.mock.calls[0][0]).toBe("字幕配音 · jobDone");
+    await waitFor(() => expect(flashed("done")).toHaveLength(1), { timeout: 4000 });
+    expect(flashed("done")[0].title).toBe("字幕配音 · jobDone");
   });
 
   it("预览代理成功了不说 —— 没人在等它;但照样刷新素材库", async () => {
     const invalidated = mount(running("proxy"));
     await finish("proxy", "succeeded");
     await waitFor(() => expect(invalidated.some((key) => key[0] === "assets")).toBe(true), { timeout: 4000 });
-    expect(h.toast.success).not.toHaveBeenCalled();
+    expect(flashed("done")).toHaveLength(0);
   });
 
   it("预览代理失败了要说", async () => {
     mount(running("proxy"));
     await finish("proxy", "failed", "ffmpeg 退出");
-    await waitFor(() => expect(h.toast.error).toHaveBeenCalledTimes(1), { timeout: 4000 });
-    expect(h.toast.error.mock.calls[0][1]).toEqual({ description: "ffmpeg 退出" });
+    await waitFor(() => expect(flashed("failed")).toHaveLength(1), { timeout: 4000 });
+    expect(flashed("failed")[0].detail).toBe("ffmpeg 退出");
   });
 
   it("目录里没有的种类按兜底那一条说", async () => {
     mount(running("mystery"));
     await finish("mystery", "succeeded");
-    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
-    expect(h.toast.success.mock.calls[0][0]).toBe("任务 · jobDone");
+    await waitFor(() => expect(flashed("done")).toHaveLength(1), { timeout: 4000 });
+    expect(flashed("done")[0].title).toBe("任务 · jobDone");
   });
 });
 
@@ -166,7 +185,7 @@ describe("每个任务最多说一次,历史任务不说", () => {
   const job = (id: string, kind: string, status: string, extra: Record<string, unknown> = {}) =>
     ({ id, kind, status, progress: status === "running" ? 0.5 : 1, message: null, error: null, payload: {}, ...extra });
   const spinning = () =>
-    waitFor(() => expect(document.querySelector(".animate-mosael-spin")).not.toBeNull(), { timeout: 4000 });
+    waitFor(() => expect(h.ongoing.size).toBeGreaterThan(0), { timeout: 4000 });
   /** 让组件把当前缓存看一遍:效果跑在渲染之后,等一小会儿就够了。 */
   const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -174,7 +193,7 @@ describe("每个任务最多说一次,历史任务不说", () => {
     mount([job("old", "subtitle_dub", "succeeded"), job("live", "subtitle_dub", "running")]);
     await spinning();
     await settle();
-    expect(h.toast.success).not.toHaveBeenCalled();
+    expect(flashed("done")).toHaveLength(0);
   });
 
   it("同一份缓存被另一种取法写成「含子任务」时,历史子任务不被当成刚做完", async () => {
@@ -189,13 +208,13 @@ describe("每个任务最多说一次,历史任务不说", () => {
       job("child-2", "url_import", "succeeded", { parent_job_id: "wf" }),
     ]);
     await settle();
-    expect(h.toast.success).not.toHaveBeenCalled();
+    expect(flashed("done")).toHaveLength(0);
   });
 
   it("做完说一次;之后消失又出现、再跑一遍,都不再说", async () => {
     const { client } = mount([job("j1", "subtitle_dub", "running")]);
     await finish("subtitle_dub", "succeeded");
-    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    await waitFor(() => expect(flashed("done")).toHaveLength(1), { timeout: 4000 });
 
     const key = jobKeys.of("w1", "top-level");
     client.setQueryData(key, []);
@@ -206,7 +225,7 @@ describe("每个任务最多说一次,历史任务不说", () => {
     await settle();
     client.setQueryData(key, [job("j1", "subtitle_dub", "succeeded")]);
     await settle();
-    expect(h.toast.success).toHaveBeenCalledTimes(1);
+    expect(flashed("done")).toHaveLength(1);
   });
 
   it("两次轮询之间建出来又做完的新任务,照样说", async () => {
@@ -216,24 +235,24 @@ describe("每个任务最多说一次,历史任务不说", () => {
       jobs: [job("fast", "url_import", "succeeded"), job("j1", "subtitle_dub", "running")],
       cleared_at: null,
     });
-    await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
-    expect(h.toast.success.mock.calls[0][0]).toBe("链接导入 · jobDone");
+    await waitFor(() => expect(flashed("done")).toHaveLength(1), { timeout: 4000 });
+    expect(flashed("done")[0].title).toBe("链接导入 · jobDone");
   });
 });
 
 describe("被停下的任务不是失败", () => {
   //: 被停下是任务自己的终态 `cancelled`(ADR 0049)。停是人自己按的,按的地方已经写着「已停止 / 已取消」:
   //: 任务中心不再弹提示、不发系统通知(决定 10),行上用中性色写「已取消」(这里的按钮是「取消任务」,决定 11)。
-  it("做完总要说的种类:被停下的也不弹提示、不发系统通知,改动的东西照样刷新;行上中性地写已取消", async () => {
+  it("做完总要说的种类:被停下的也不在岛上亮、不发系统通知,改动的东西照样刷新;行上中性地写已取消", async () => {
     const notifyTask = vi.fn();
     (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop = { notifyTask };
     try {
       const invalidated = mount(running("subtitle_dub"));
       await finish("subtitle_dub", "cancelled", null, { message: "已取消" });
       await waitFor(() => expect(invalidated.length).toBeGreaterThan(0), { timeout: 4000 });
-      expect(h.toast.message).not.toHaveBeenCalled();
-      expect(h.toast.error).not.toHaveBeenCalled();
-      expect(h.toast.success).not.toHaveBeenCalled();
+      expect(h.flash).not.toHaveBeenCalled();
+      expect(flashed("failed")).toHaveLength(0);
+      expect(flashed("done")).toHaveLength(0);
       expect(notifyTask).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "taskCenter" }));
       const row = (await screen.findByText("已取消")).closest("[role=button]");
@@ -249,14 +268,14 @@ describe("被停下的任务不是失败", () => {
     const invalidated = mount(running("proxy"));
     await finish("proxy", "cancelled", null, { message: "已取消" });
     await waitFor(() => expect(invalidated.some((key) => key[0] === "assets")).toBe(true), { timeout: 4000 });
-    expect(h.toast.error).not.toHaveBeenCalled();
-    expect(h.toast.message).not.toHaveBeenCalled();
+    expect(flashed("failed")).toHaveLength(0);
+    expect(h.flash).not.toHaveBeenCalled();
   });
 
   it("真失败照旧红色地说,行里是红色的失败原因", async () => {
     mount(running("proxy"));
     await finish("proxy", "failed", "ffmpeg 退出码 1");
-    await waitFor(() => expect(h.toast.error).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    await waitFor(() => expect(flashed("failed")).toHaveLength(1), { timeout: 4000 });
     fireEvent.click(screen.getByRole("button", { name: "taskCenter" }));
     const row = (await screen.findByText("ffmpeg 退出码 1")).closest("[role=button]");
     expect(row!.querySelector(".text-destructive")).not.toBeNull();

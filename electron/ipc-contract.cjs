@@ -120,6 +120,9 @@ const IPC = Object.freeze({
   send: Object.freeze({
     titleOverlay: "mosael:title-overlay",
     systemStatus: "system:status",
+    // 灵动岛上的几件正在发生的事(见 components/island/liveActivities)。和托盘状态分开:
+    // 托盘只要数量,岛要标题 / 进度 / 完成态,而且两者更新频率不同。
+    liveActivities: "system:live-activities",
     systemNotify: "system:notify",
     locale: "mosael:locale",
     // 内嵌浏览器外壳里的悬停说明交给浮层视图画在网页上面 / 收起(见 browser/views/floatLayer.ts)。
@@ -154,6 +157,8 @@ const IPC = Object.freeze({
     commandPalette: "mosael:command-palette",
     // Computer Use 的「被控制中 / 已急停」状态:{active, stopped}(见 computerUseGuard.cjs)。
     computerUseState: "computer:use-state",
+    // 用户点了 macOS 灵动岛上的某一件:id 交回渲染层,由发布它的组件打开详情。
+    liveActivityOpen: "mosael:live-activity-open",
   }),
 });
 
@@ -1268,6 +1273,35 @@ function parseSystemStatus(value) {
   return { runningJobs, ...(progress === undefined ? {} : { progress }) };
 }
 
+function parseLiveActivities(value) {
+  const channel = IPC.send.liveActivities;
+  const payload = record(value, channel);
+  if (!Array.isArray(payload.activities) || payload.activities.length > 8) {
+    throw new TypeError(`${channel}: activities must be an array of at most 8 entries`);
+  }
+  const activities = payload.activities.map((raw) => {
+    const one = record(raw, channel);
+    const id = requiredString(one, "id", channel);
+    const title = requiredString(one, "title", channel);
+    if (id.length > 128 || title.length > 240) throw new TypeError(`${channel}: id/title too long`);
+    const state = one.state;
+    if (state !== "ongoing" && state !== "done" && state !== "failed") {
+      throw new TypeError(`${channel}: state must be ongoing/done/failed`);
+    }
+    const detail = typeof one.detail === "string" ? one.detail.slice(0, 240) : "";
+    const progress = one.progress === undefined || one.progress === null
+      ? undefined
+      : (typeof one.progress === "number" && Number.isFinite(one.progress) && one.progress >= 0 && one.progress <= 1
+        ? one.progress
+        : (() => { throw new TypeError(`${channel}: progress must be between 0 and 1`); })());
+    const priority = one.priority === undefined ? undefined : (Number.isInteger(one.priority) ? one.priority : (() => {
+      throw new TypeError(`${channel}: priority must be an integer`);
+    })());
+    return { id, state, title, ...(detail ? { detail } : {}), ...(progress === undefined ? {} : { progress }), ...(priority === undefined ? {} : { priority }) };
+  });
+  return { activities };
+}
+
 function parseTaskNotice(value) {
   const channel = IPC.send.systemNotify;
   const payload = record(value, channel);
@@ -1517,6 +1551,7 @@ const PAYLOADS = (() => {
     send: Object.freeze({
       titleOverlay: parseTitleOverlay,
       systemStatus: parseSystemStatus,
+      liveActivities: parseLiveActivities,
       systemNotify: parseTaskNotice,
       locale: parseLocale,
       floatShow: parseFloatShow,
