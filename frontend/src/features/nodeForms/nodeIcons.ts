@@ -1,7 +1,7 @@
 import {
+  Funnel,
   Grid3x3,
   Quote,
-  MessageCircle,
   Sun,
   Crop,
   Brush,
@@ -69,7 +69,6 @@ import {
   SlidersHorizontal,
   SmilePlus,
   Sparkles,
-  Split,
   Tags,
   Timer,
   Wand2,
@@ -92,7 +91,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   start: Flag,
   llm: Sparkles,
   plugin_tool: Wrench,
-  transcribe_asset: Mic,
+  //: 把声音转成文字:字幕,不是麦克风(麦克风读作「录音 / 配音」)。
+  transcribe_asset: Captions,
   export_sequence: Download,
   ai_generate: Wand2,
   condition: GitBranch,
@@ -111,9 +111,11 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   synthesize_speech: AudioLines,
   //: 把一条音轨剪成两条 —— 剪刀比音波更能说出"分开"这件事。
   //: 拆成两份(人声 / 背景):画板上它和「剪一段」并排在音频格的操作条上,不能都是剪刀。
-  separate_audio: Split,
+  //: 人声、背景音拆成两层:分层,不是分叉箭头(那读作「分支」)。
+  separate_audio: Layers,
   //: 把一条毛糙的波形理平。
-  denoise_audio: AudioWaveform,
+  //: 把杂音滤掉:漏斗,不是一条普通的波形(那只读作「音频」)。
+  denoise_audio: Funnel,
   //: 3D 白模:搭一个盒子,再从机位上"拍"它。
   scene_props: Shapes,
   scene_create: Box,
@@ -156,8 +158,9 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   entity_angles: Rotate3d,
   entity_expressions: Smile,
   //: 数字人:说一段话(人物、人像)、对口型(视频)。
-  entity_speak: MessageCircle,
-  image_speak: MessageCircle,
+  //: 让图里的人开口:人在说话,不是聊天气泡(气泡读作「评论 / 对话」)。
+  entity_speak: Speech,
+  image_speak: Speech,
   image_relight: Sun,
   image_crop: Crop,
   image_inpaint: Brush,
