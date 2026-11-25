@@ -14,6 +14,7 @@ list_plugin_tools/invoke_plugin_tool 那两个元工具后面。理由是发现�
 
 from __future__ import annotations
 
+import difflib
 import inspect
 import json
 import logging
@@ -66,6 +67,15 @@ def list_agent_tools(db: DbSession, user: CurrentUser, token: PresentedToken) ->
     """
 
     return agent_tool_specs(db, user.id, session_of_token(db, token))
+
+
+def _missing_tool_message(name: str) -> str:
+    """模型猜错工具名时,把相近的登记名摆出来 —— 只说 not found,它下一轮还会猜同一个。"""
+    names = [one.name for one in catalog.definitions()]
+    suggestions = difflib.get_close_matches(name, names, n=3, cutoff=0.6)
+    if not suggestions:
+        return f"Tool {name} not found"
+    return f"Tool {name} not found. Did you mean: {', '.join(suggestions)}?"
 
 
 def _accepted_names(fn: Any) -> list[str]:
@@ -188,7 +198,7 @@ def invoke_agent_tool(
     #: 只认登记过的工具(domain/agent/tools/catalog),不认哪个模块里随便一个公开的可调用对象。
     definition = catalog.get(name)
     if definition is None:
-        raise HTTPException(status_code=404, detail=f"Tool {name} not found")
+        raise HTTPException(status_code=404, detail=_missing_tool_message(name))
     fn = definition.function
 
     # 这次调用属于哪次对话:从**令牌**取,不从参数取。turn 令牌铸造时就带着它

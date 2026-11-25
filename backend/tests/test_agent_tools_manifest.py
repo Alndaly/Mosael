@@ -96,6 +96,18 @@ def test_an_unknown_tool_is_a_404() -> None:
     assert client.post("/api/agent/tools/no_such_tool", json={"arguments": {}}).status_code == 404
 
 
+def test_an_unknown_tool_suggests_registered_names() -> None:
+    """模型猜错名字时不能只收到一句 not found;近似名要摆出来,下一轮才有改对的依据。"""
+    client = fresh_client()
+    res = client.post("/api/agent/tools/list_project", json={"arguments": {}})
+
+    assert res.status_code == 404
+    detail = res.json()["detail"]
+    assert "Tool list_project not found" in detail
+    assert "Did you mean" in detail
+    assert "list_projects" in detail
+
+
 def test_private_helpers_are_not_callable() -> None:
     """mcp_server's module namespace holds _get/_post/_default_workspace_id too. Dispatching by
     getattr without this would expose them as tools."""
