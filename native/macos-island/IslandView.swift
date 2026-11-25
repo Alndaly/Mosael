@@ -11,11 +11,10 @@ struct IslandView: View {
 
     @State private var closeWork: DispatchWorkItem?
 
+    private var expandedWidth: CGFloat { geometry.expandedWidth(count: store.activities.count) }
     private var expandedHeight: CGFloat { geometry.expandedHeight(count: store.activities.count) }
-    private var surfaceWidth: CGFloat { store.open ? geometry.expandedWidth : geometry.compactWidth }
-    private var surfaceHeight: CGFloat {
-        geometry.menuBarHeight + (store.open ? expandedHeight : 0)
-    }
+    private var surfaceWidth: CGFloat { store.open ? expandedWidth : geometry.compactWidth }
+    private var surfaceHeight: CGFloat { store.open ? expandedHeight : geometry.menuBarHeight }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -25,24 +24,23 @@ struct IslandView: View {
                 .animation(.spring(response: 0.32, dampingFraction: 0.90), value: surfaceWidth)
                 .animation(.spring(response: 0.32, dampingFraction: 0.90), value: surfaceHeight)
 
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    leftWing
-                    Spacer().frame(width: geometry.hasNotch ? geometry.notchWidth + geometry.wingGap * 2 : 4)
-                    rightWing
+            Group {
+                if store.open {
+                    expandedRows
+                        .frame(width: expandedWidth, height: expandedHeight)
+                        .transition(.opacity)
+                } else {
+                    HStack(spacing: 0) {
+                        leftWing
+                        Spacer().frame(width: geometry.hasNotch ? geometry.notchWidth + geometry.wingGap * 2 : 4)
+                        rightWing
+                    }
+                    .frame(width: geometry.compactWidth, height: geometry.menuBarHeight)
+                    .frame(width: geometry.panelWidth)
                 }
-                .frame(width: geometry.compactWidth, height: geometry.menuBarHeight)
-                .frame(width: geometry.panelWidth)
-
-                expandedRows
-                    .frame(width: geometry.expandedWidth)
-                    .frame(height: store.open ? expandedHeight : 0, alignment: .top)
-                    .clipped()
-                    .opacity(store.open ? 1 : 0)
-                    .allowsHitTesting(store.open)
-                    .animation(.spring(response: 0.30, dampingFraction: 0.90), value: store.open)
             }
             .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
+            .animation(.spring(response: 0.30, dampingFraction: 0.90), value: store.open)
         }
         .frame(width: geometry.panelWidth, height: geometry.panelHeight, alignment: .top)
         .background(Color.clear)
@@ -150,7 +148,8 @@ struct IslandView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
+        .frame(width: expandedWidth)
     }
 
     private func percent(_ progress: Double) -> String {

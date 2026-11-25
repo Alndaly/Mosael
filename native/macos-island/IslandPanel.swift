@@ -14,13 +14,17 @@ struct NotchGeometry {
     let panelHeight: CGFloat = 380
 
     var topMargin: CGFloat { max(2, (menuBarHeight - wingHeight) / 2) }
-    /// 紧凑态只包住刘海左右两侧;展开时才变宽成 NoobX 那种大面板。
+    /// 紧凑态只包住刘海左右两侧。
     var compactWidth: CGFloat {
         hasNotch ? notchWidth + (wingWidth + wingGap) * 2 : wingWidth * 2 + 4
     }
-    var expandedWidth: CGFloat { min(520, screenFrame.width - 96) }
-    var panelWidth: CGFloat { expandedWidth }
-    func expandedHeight(count: Int) -> CGFloat { min(280, max(88, CGFloat(count) * 52 + 8)) }
+    /// 只有一条时不需要 500 宽;多条才铺开。
+    func expandedWidth(count: Int) -> CGFloat {
+        let maxWidth = min(520, screenFrame.width - 96)
+        return count > 1 ? maxWidth : min(380, maxWidth)
+    }
+    var panelWidth: CGFloat { min(520, screenFrame.width - 96) }
+    func expandedHeight(count: Int) -> CGFloat { min(280, CGFloat(count) * 52 + 8) }
 
     static func current() -> NotchGeometry {
         // 跟着鼠标所在屏幕走:外接屏没有刘海时,岛就落在那块屏的菜单栏,不能留在内置屏上。
@@ -190,10 +194,11 @@ final class IslandPanelController {
         let right = CGRect(x: leftX + geometry.compactWidth - geometry.wingWidth, y: wingY, width: geometry.wingWidth, height: geometry.wingHeight)
         guard store.open, !store.activities.isEmpty else { return [left, right] }
         let height = geometry.expandedHeight(count: store.activities.count)
+        let width = geometry.expandedWidth(count: store.activities.count)
         let expanded = CGRect(
-            x: (geometry.panelWidth - geometry.expandedWidth) / 2,
-            y: geometry.panelHeight - geometry.menuBarHeight - height,
-            width: geometry.expandedWidth,
+            x: (geometry.panelWidth - width) / 2,
+            y: geometry.panelHeight - height,
+            width: width,
             height: height
         )
         return [left, right, expanded]
