@@ -864,6 +864,19 @@
   gap: 16px;
 }
 
+/* 两颗整宽按钮,不给容器间距就贴在一起;8 是段内块间距那一档。 */
+.scene-preview-actions {
+  display: grid;
+  gap: 8px;
+}
+/* 折叠标题和它下面那组按钮之间也要有同一档间距 —— 标题行本身不计入 body 的 padding。 */
+.scene-generate .scene-subsection {
+  display: grid;
+  gap: 8px;
+}
+.scene-generate .scene-subsection-body {
+  padding-top: 0;
+}
 .scene-preview-actions > button {
   width: 100%;
   min-height: 40px;
