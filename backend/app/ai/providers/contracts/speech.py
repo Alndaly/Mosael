@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from typing import Any, Protocol
 
 from app.core.i18n import LocalizedError
+from app.ai.speech_text import EllipsisHandling
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,9 @@ class SpeechAdapter(Protocol):
     #: 按原速念,由宿主在合成之后变速(`media.tempo.stretch_in_place`,音高不变)。语速因此对每个引擎都可调,
     #: 差别只在「怎么调」—— 界面据此标明哪些是后处理变速。
     speed_control: SpeedControl
+    #: `……` 在本引擎里是停顿,还是会被逐字念成「省略号」。`literal` 的适配器由
+    #: `domain.voices.voices` 在送进 `synthesize` 之前换成停顿标点;`pause` 的拿原文。
+    ellipsis: EllipsisHandling
     #: 音色是开放集合、认不出的要手填 id(百炼),还是一定从下拉里选。
     needs_voice_id: bool
     #: 设置页上这一家底下那句说明的文案 key。

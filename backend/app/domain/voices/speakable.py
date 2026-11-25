@@ -14,6 +14,10 @@
 该念的照旧:数字、单位、百分号、中英文标点一个不动。URL 整条跳过 —— 要么念域名、要么不念,
 逐字符念是最糟的那种。洗完什么都不剩(只剩标记)就交回空串,由两扇门按「没话可念」退回去,
 而不是合成一串符号。
+
+**标点的读法不在这一层。** 同一个 `……`,有的引擎把它当停顿,有的会逐字念成「省略号」——
+那是引擎差异(见 `ai/speech_text` 的 `EllipsisHandling`),由各 Adapter / 本地引擎在送进去之前
+按自己的策略处理;这一层把它们原样留给引擎,不替任何一家做决定。
 """
 
 from __future__ import annotations
@@ -57,8 +61,6 @@ _CJK = "\u3400-\u9fff\u3000-\u303f\uff00-\uffef"
 #: 中文之间的破折号是一个停顿,换成逗号;拉丁词之间的是一个空格。
 _EM_DASH_BETWEEN_CJK = re.compile(rf"(?<=[{_CJK}])[—–―]+(?=[{_CJK}])")
 _DASH = re.compile(r"[—–―]+")
-#: 省略号:语气,不是字。不去的话有的引擎会念「省略号」。
-_ELLIPSIS = re.compile(r"…+")
 #: 表格竖线:去符号,格子之间留一个空格。
 _TABLE_PIPE = re.compile(r"[ \t]*\|[ \t]*")
 #: 漏网的标记字符(`*`、`#`、反引号、`~`、`^`):没有任何一个是「话」。
@@ -98,7 +100,6 @@ def speakable_text(text: str) -> str:
     spoken = _TABLE_PIPE.sub(" ", spoken)
     spoken = _EM_DASH_BETWEEN_CJK.sub("，", spoken)
     spoken = _DASH.sub(" ", spoken)
-    spoken = _ELLIPSIS.sub("", spoken)
     spoken = _NOISE.sub("", spoken)
     spoken = _UNDERSCORE.sub(" ", spoken)
     spoken = _SPACE_AROUND_NEWLINE.sub("\n", spoken)

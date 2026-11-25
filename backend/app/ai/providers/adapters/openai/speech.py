@@ -30,6 +30,8 @@ class OpenAISpeechAdapter:
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
     needs_key = True
     speed_control = "native"
+    #: 没在真机上确认它把 `……` 当停顿,按「会念出来」这一侧处理(见 ai/speech_text)。
+    ellipsis = "literal"
     needs_voice_id = False
     note_key = "ttsProviderNote_openai"
 

@@ -60,6 +60,8 @@ class EdgeSpeechAdapter:
     free_of_charge = True
     needs_key = False
     speed_control = "native"
+    #: 实测:省略号在 Edge 里是一个约 0.79 秒的停顿(逗号 0.55s、句号 1.0s),不会被念成三个字。
+    ellipsis = "pause"
     needs_voice_id = False
     note_key = "ttsProviderNote_edge"
 

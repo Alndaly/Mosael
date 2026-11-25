@@ -61,6 +61,7 @@ from app.domain.voices.speech import (
 from mosael_formats.plugin_manifest import SPEECH
 from app.domain.voices.target import speech_target
 from app.ai import providers
+from app.ai.speech_text import text_for_engine
 from app.ai.providers import (
     PodcastAction,
     SpeechSynthesisError,
@@ -680,6 +681,8 @@ def _run_synthesis_body(
             if not ref.is_file():
                 raise VoiceError("voiceErr_referenceMissing")
             engine, weights = clone_runtime_of(voice.model)
+            engine_settings = tts_models.MODELS_BY_ID[engine]
+            spoken_text = text_for_engine(text, engine_settings.ellipsis)
             python = tts_models.resolve_engine_python(engine)
             if python is None:  # 建任务时还在,跑起来时被卸了
                 raise VoiceError("voiceErr_noRuntime", label=engine)
@@ -695,7 +698,7 @@ def _run_synthesis_body(
                     "engine": engine,
                     "reference_wav": str(ref),
                     "reference_text": cloned.reference_text,
-                    "text": text,
+                    "text": spoken_text,
                 }
                 # 按这段文本该用哪份权重 —— 无条件问一句,**这里不需要知道哪个引擎有多份**。
                 # 有多份的引擎自己回答(f5_models.weights_for),没有的返回空,原样跑。
@@ -703,7 +706,7 @@ def _run_synthesis_body(
                 request["output_path"] = str(out_wav)
                 # 语速由谁来调按引擎定(speed_control):F5 的 infer 吃,随请求带过去;fish 的请求结构里没有这一项,
                 # 塞进去只会被忽略 —— 它按原速念,念完由下面的 stretch_in_place 变速。
-                native_speed = tts_models.MODELS_BY_ID[engine].speed_control == "native"
+                native_speed = engine_settings.speed_control == "native"
                 if native_speed:
                     request["speed"] = speed
 
@@ -792,6 +795,7 @@ def _speak_locally(
 
     runtime = LOCAL_SPEECH_ENGINES[engine]
     _require_local_engine(runtime)
+    text = text_for_engine(text, tts_models.MODELS_BY_ID[runtime].ellipsis)
     python = tts_models.resolve_engine_python(runtime)
     if python is None:  # 建任务时还在、跑起来时被卸了
         raise VoiceError("voiceErr_noRuntime", label=runtime)
@@ -905,7 +909,13 @@ def speak_to_file(
             if adapter.free_of_charge:
                 call.mark_free()
             adapter.synthesize(
-                SpeechSynthesisRequest(text=text, voice=spoken, speed=speed if native_speed else 1.0, extra=voice.extra), out,
+                SpeechSynthesisRequest(
+                    text=text_for_engine(text, adapter.ellipsis),
+                    voice=spoken,
+                    speed=speed if native_speed else 1.0,
+                    extra=voice.extra,
+                ),
+                out,
             )
         if not native_speed:
             stretch_in_place(out, speed)

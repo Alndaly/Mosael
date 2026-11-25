@@ -32,6 +32,7 @@ from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
 
 from app.ai.speech_speed import SpeedControl
+from app.ai.speech_text import EllipsisHandling
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
 from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure, with_log
 from app.core.i18n import get_current_locale, t
@@ -70,6 +71,9 @@ class TtsEngine:
     #: fish 的 `ServeTTSRequest`(本机检出与上游 main 都核过)和 Qwen3-TTS 的 generate_custom_voice 都没有这一项,
     #: 是 `stretch` —— 按原速念,宿主合成之后再变速。不再有「不支持语速」:任何一段音频都能在合成之后变速。
     speed_control: SpeedControl = "stretch"
+    #: 同 `SpeechAdapter.ellipsis`:本机引擎也会念符号名。默认按「会念出来」这一侧处理;
+    #: 实测把 `……` 当停顿的引擎再改成 `pause`。
+    ellipsis: EllipsisHandling = "literal"
     #: 能不能拿一段参考音频克隆出一把嗓子(配音库的音色走它)。F5 / Fish 能;Qwen3-TTS 只念自带的预置音色,
     #: 它是另一个念字引擎(`builtin:qwentts`),不是克隆引擎的一种 —— 界面的「克隆引擎」下拉、合成时解析
     #: `VoiceRef.model` 都只认能克隆的这几个。

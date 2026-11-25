@@ -89,6 +89,8 @@ class BailianSpeechAdapter:
     #: qwen-tts 家族没有语速参数:按原速念,宿主再变速。实例上按这次的模型改写(见 __init__)——
     #: 同一个 Adapter 配的是 CosyVoice 模型时,语速由 `rate` 原生生效,宿主不能再变一遍。
     speed_control = "stretch"
+    #: 没在真机上确认它把 `……` 当停顿,按「会念出来」这一侧处理(见 ai/speech_text)。CosyVoice 继承这一条。
+    ellipsis = "literal"
     #: 模型是开放集合(日期快照、instruct / vd / vc 变体),百炼又没有列音色的接口:认得出的模型走下拉,认不出的退回填 id。
     needs_voice_id = True
     note_key = "ttsProviderNote_bailian"

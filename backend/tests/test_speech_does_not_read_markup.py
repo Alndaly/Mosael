@@ -40,7 +40,7 @@ MARKDOWN = (
     "等了 3.5 秒…… 温度 20°C,完成 50% —— 看 https://example.com/x?y=1 这份。\n"
 )
 
-MARKERS = set("*#`~|…—–")
+MARKERS = set("*#`~|—–")
 
 
 def test_去掉标记_字还在_该念的照旧() -> None:
@@ -70,7 +70,9 @@ def test_去掉标记_字还在_该念的照旧() -> None:
         ("`代码`", "代码"),
         ("```python\nprint(1)\n```", "print(1)"),
         ("[文档](https://example.com)", "文档"),
-        ("等等……", "等等"),
+        ("等等……", "等等……"),
+        ("又差一步......是不是，我真的不行", "又差一步......是不是，我真的不行"),
+        ("真的……！", "真的……！"),
         ("一 — 二", None),
         ("50% 的 3.5 秒", "50% 的 3.5 秒"),
         ("", ""),
@@ -190,6 +192,24 @@ def test_试听也是同一条路_标记不会念出来(spoken) -> None:
     assert heard.status_code == 200, heard.text
     assert spoken == ["标题\na b"], spoken
     assert not (MARKERS & set(spoken[0])), spoken
+
+
+def test_省略号对认识的引擎原样送出(spoken) -> None:
+    """省略号是引擎差异:Edge 自己把它当停顿,`speakable_text` 不能替它换成标点。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+
+    heard = client.post(
+        "/api/tts/preview",
+        json={
+            "workspace_id": workspace["id"],
+            "voice": {"engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"},
+            "text": "又差一步......是不是,我真的不行",
+        },
+    )
+
+    assert heard.status_code == 200, heard.text
+    assert spoken[-1] == "又差一步......是不是,我真的不行", spoken
 
 
 def test_朗读笔记选中段_送去合成的文本没有标记(monkeypatch, spoken) -> None:

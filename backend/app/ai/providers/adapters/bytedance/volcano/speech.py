@@ -42,6 +42,8 @@ class VolcanoSpeechAdapter:
     free_of_charge = False
     needs_key = True
     speed_control = "native"
+    #: 没在真机上确认它把 `……` 当停顿,按「会念出来」这一侧处理(见 ai/speech_text)。
+    ellipsis = "literal"
     #: 音色清单随账号变,但总是一张清单:现拉的(配了 AK/SK)或内置的,面板给下拉而不是让人填一串看不懂的 id。
     needs_voice_id = False
     note_key = "ttsProviderNote_volcano"

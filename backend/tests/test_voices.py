@@ -241,6 +241,8 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
     class _Spy:
         free_of_charge = False
         speed_control = "native"
+        #: 真实 Adapter 都声明了;这里按「不额外改写」的 Edge 那侧给,测试只关心 voice/extra 的传递。
+        ellipsis = "pause"
 
         def synthesize(self, request, _out):
             seen.update(voice=request.voice, extra=dict(request.extra))
