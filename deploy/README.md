@@ -111,6 +111,7 @@ curl -fsS https://mosael.example.com/api/cloud/v1/health   # {"status":"ok"}
    之后再到宿主 nginx 这一层验证:改完配置必须 `sudo nginx -t` 通过再 `systemctl reload nginx`。
 9. **第二个正式域名(`deploy/nginx/mosael.cn.conf`)**:`mosael.cn` 与 `mosael.com` 共用同一个官网与 Cloud 上游;
    证书要覆盖 apex 与 www,Cloud 侧还要在 `.env` 的 `CLOUD_ALLOWED_ORIGINS` 列出它们。安装与签发见该文件顶部。
+   `www.mosael.com` 由 `deploy/nginx/mosael-www.conf` 统一 301 到 apex。
 
 9. **nginx 安装 / 证书**:
 
