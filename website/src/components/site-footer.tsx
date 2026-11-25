@@ -107,14 +107,6 @@ export function SiteFooter({ locale }: { locale: Locale }) {
             <span>
               © {COPYRIGHT_YEAR} Mosael. {t.footer.rights}
             </span>
-            <a
-              className="transition-colors hover:text-white"
-              href={SITE.icp.url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {SITE.icp.license}
-            </a>
             <Link href={localePath(locale, "/docs/about/project#media-credits")} className="transition-colors hover:text-white">{t.docs.mediaCredits}</Link>
             <a className="ml-auto transition-colors hover:text-foreground" href={SITE.email}>
               {t.footer.contact}
