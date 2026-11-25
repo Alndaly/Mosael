@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
 
-/** 图最高摆多高(像素):这里只是看一眼画在哪儿(画在编辑器里),比裁切框矮,下面那句「改成什么」才不被挤到面板外。 */
-const STAGE_MAX_HEIGHT = 160;
+/** 图下面还要留多高(那句「改成什么」、按钮、底栏):竖图按「视口高减去它」封顶,弹窗一屏放得下。 */
+const BELOW_STAGE = "24rem";
 
 /**
- * 重绘节点(`image_inpaint`,ADR 0110)的蒙版:**主控件**(后端声明 `editor: "mask_paint"`),摆在画板能力面板的主体里。
+ * 重绘节点(`image_inpaint`,ADR 0110)的蒙版:**主控件**(后端声明 `editor: "mask_paint"`),画板上点「重绘」直接是一个弹窗,它在弹窗主体里。
  *
  * 一张原图,画过的地方压一层主色(蒙版按亮度当遮罩:白 = 要改的地方);下面一颗「画要重绘的地方」(画过了是「接着画」)。
  * 点开就是 ADR 0057 的那个编辑器,底图是这一张 —— 不另写编辑器(ADR 0107 的蒙版槽用的也是它);存下来是一份新的蒙版素材,
@@ -41,7 +41,7 @@ export function MaskPaintField({
       {imageAssetId ? (
         <div
           className="relative overflow-hidden rounded-md bg-secondary/40"
-          style={aspect ? { width: `min(100%, ${Math.round(STAGE_MAX_HEIGHT * aspect)}px)`, aspectRatio: aspect } : { width: "100%" }}
+          style={aspect ? { width: `min(100%, calc((100dvh - ${BELOW_STAGE}) * ${aspect}))`, aspectRatio: aspect } : { width: "100%" }}
         >
           <FallbackImage
             src={assetPreviewUrl(imageAssetId)}
