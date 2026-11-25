@@ -15,7 +15,7 @@ struct IslandView: View {
     private var expandedHeight: CGFloat { geometry.expandedHeight(count: store.activities.count) }
     private var scrollable: Bool { CGFloat(store.activities.count) * 52 + 8 > expandedHeight }
     private var surfaceWidth: CGFloat { store.open ? expandedWidth : geometry.compactWidth }
-    private var surfaceHeight: CGFloat { store.open ? expandedHeight : geometry.menuBarHeight }
+    private var surfaceHeight: CGFloat { geometry.menuBarHeight + (store.open ? expandedHeight : 0) }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -25,7 +25,9 @@ struct IslandView: View {
                 .animation(.spring(response: 0.32, dampingFraction: 0.90), value: surfaceWidth)
                 .animation(.spring(response: 0.32, dampingFraction: 0.90), value: surfaceHeight)
 
-            Group {
+            VStack(spacing: 0) {
+                compactHeader
+                    .frame(width: surfaceWidth, height: geometry.menuBarHeight)
                 if store.open {
                     if scrollable {
                         ScrollView(.vertical, showsIndicators: true) {
@@ -39,14 +41,6 @@ struct IslandView: View {
                             .frame(width: expandedWidth, height: expandedHeight)
                             .transition(.opacity)
                     }
-                } else {
-                    HStack(spacing: 0) {
-                        leftWing
-                        Spacer().frame(width: geometry.hasNotch ? geometry.notchWidth + geometry.wingGap * 2 : 4)
-                        rightWing
-                    }
-                    .frame(width: geometry.compactWidth, height: geometry.menuBarHeight)
-                    .frame(width: geometry.panelWidth)
                 }
             }
             .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
@@ -69,49 +63,30 @@ struct IslandView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + (open ? 0.08 : 0.20), execute: work)
     }
 
-    private var leftWing: some View {
-        Button { store.open = false; if let id = store.lead?.id { onOpen(id) } } label: {
-            HStack(spacing: 7) {
-                Spacer(minLength: 0)
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 6, height: 6)
-                Text(store.lead?.title ?? "")
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.94))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .padding(.horizontal, 11)
-            .frame(width: geometry.wingWidth, height: geometry.wingHeight)
-        }
-        .buttonStyle(.plain)
-        .help(store.lead?.detail ?? store.lead?.title ?? "")
-        .accessibilityLabel(store.lead?.title ?? "")
-    }
-
-    private var rightWing: some View {
-        Button { store.open = false; if let id = store.lead?.id { onOpen(id) } } label: {
-            HStack(spacing: 6) {
+    /// 顶栏只放小元素:状态记号 + 进度 / +N。标题、详情这些核心内容放在刘海下方。
+    private var compactHeader: some View {
+        Button { store.open.toggle() } label: {
+            HStack(spacing: 8) {
                 ActivityMark(activity: store.lead)
                     .scaleEffect(0.92)
-                if let progress = store.lead?.progress, store.lead?.isOngoing == true {
-                    Text(percent(progress))
-                        .font(.system(size: 10.5, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.62))
-                }
                 if store.activities.count > 1 {
                     Text("+\(store.activities.count - 1)")
                         .font(.system(size: 9.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.86))
                 }
                 Spacer(minLength: 0)
+                if let progress = store.lead?.progress, store.lead?.isOngoing == true {
+                    Text(percent(progress))
+                        .font(.system(size: 10.5, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.62))
+                }
             }
-            .padding(.horizontal, 11)
-            .frame(width: geometry.wingWidth, height: geometry.wingHeight)
+            .padding(.horizontal, 14)
+            .frame(width: surfaceWidth, height: geometry.menuBarHeight)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(store.lead?.detail ?? store.lead?.title ?? "")
+        .help(store.lead?.title ?? "")
         .accessibilityLabel(store.lead?.title ?? "")
     }
 

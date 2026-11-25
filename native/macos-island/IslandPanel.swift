@@ -197,7 +197,7 @@ final class IslandPanelController {
         let width = geometry.expandedWidth(count: store.activities.count)
         let expanded = CGRect(
             x: (geometry.panelWidth - width) / 2,
-            y: geometry.panelHeight - height,
+            y: geometry.panelHeight - geometry.menuBarHeight - height,
             width: width,
             height: height
         )
