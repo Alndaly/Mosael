@@ -85,3 +85,15 @@ def test_项目里还没有时间线时_inspect_sequence_指路去建(agent) -> 
     with pytest.raises(ValueError) as caught:
         media.inspect_sequence(project_id=project["id"])
     assert "create_project" in str(caught.value), "只说「没有时间线」,模型不知道怎么建"
+
+
+def test_edit_project_改的是项目名(agent) -> None:
+    _client, _ws = agent
+    project = media.create_project(name="旧名字")
+
+    renamed = media.edit_project(project_id=project["id"], name="新名字")
+
+    assert renamed["id"] == project["id"]
+    assert renamed["name"] == "新名字"
+    with SessionLocal() as db:
+        assert db.get(Project, project["id"]).name == "新名字"

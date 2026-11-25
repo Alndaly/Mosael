@@ -13,7 +13,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **181** 个工具,其中 **65** 个走确认卡、**1** 个停下来等用户作答。
+共 **182** 个工具,其中 **65** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -105,6 +105,7 @@
 | `dub_subtitles` | 确认卡 | Confirmation required: speak subtitle cues aloud onto a new dub track. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
 | `edit_note` | 确认卡 | Confirmation required: change passages of an existing note in place. |
+| `edit_project` | 直接执行 | Runs directly: rename a VIDEO PROJECT. Get project_id from list_projects. |
 | `edit_scene` | 直接执行 | Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first. |
 | `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE (ids from inspect_sequence). |
 | `edit_workflow` | 确认卡 | Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops. |

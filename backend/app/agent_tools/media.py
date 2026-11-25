@@ -23,7 +23,7 @@ from app.agent_tools.registry import (
     with_images,
 )
 from app.agent_tools.workflows import looks_like_workflow_graph_ops
-from app.api.schemas import AssetOut, JobOut, ProjectCreate, ProjectOut, SequenceCreate, TranscriptOut, UrlImportRequest
+from app.api.schemas import AssetOut, JobOut, ProjectCreate, ProjectOut, RenameRequest, SequenceCreate, TranscriptOut, UrlImportRequest
 from app.core.i18n import get_current_locale, t
 from app.domain.agent.analysis_target import agent_session_target
 from app.domain.analysis import use_cases as analysis_use_cases
@@ -140,7 +140,7 @@ def _edit_timeline_description() -> str:
     ])
 
 
-@tool(effect="confirms", description=_edit_timeline_description(), kit="canvas")
+@tool(effect="confirms", description=_edit_timeline_description())
 def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
     if looks_like_workflow_graph_ops(operations):
         raise ValueError(
@@ -682,6 +682,16 @@ def create_project(
         }
 
     return use_case(build)
+
+
+@tool(effect="writes")
+def edit_project(project_id: str, name: str) -> dict[str, Any]:
+    """Runs directly: rename a VIDEO PROJECT. Get project_id from list_projects.
+
+    Do NOT use for timelines — edit_timeline; workflows — edit_workflow; notes — edit_note.
+    """
+    request = RenameRequest(name=name)
+    return use_case(projects_use_cases.rename, project_id, request.name, out=ProjectOut)
 
 
 @tool(effect="writes")

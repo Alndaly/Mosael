@@ -39,6 +39,7 @@ MUTATING = {
     "browser_close",
     # 后面这些写的是本应用的数据,不至于伤及外部,但同样不是"只读"。
     "create_project",
+    "edit_project",
     "remember",
     "forget",
     "update_asset",

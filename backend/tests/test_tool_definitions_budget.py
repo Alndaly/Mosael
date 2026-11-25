@@ -84,7 +84,7 @@ COMFY_TOOLS = {"comfy_canvas_read", "comfy_locate", "comfy_check", "comfy_templa
 #: 这一轮没发的插件工具经它们够得着;一个没发的都没有就不发。
 ON_DEMAND = {"plugin_tools", "run_plugin_tool"}
 #: 改 Mosael 自家画布的那一份里的几样(不必列全:在且只在工作台以外)。
-CANVAS_TOOLS = {"edit_board", "edit_timeline", "edit_scene", "edit_workflow", "blender_execute"}
+CANVAS_TOOLS = {"edit_board", "edit_scene", "edit_workflow", "blender_execute"}
 PLACES = ("studio", "project", "note", "board", "workflow", "scene", "comfyui")
 
 
@@ -234,6 +234,7 @@ def test_comfy_工具在且只在工作台_画布那一份在且只在工作台�
         assert COMFY_TOOLS <= tools and not tools & CANVAS_TOOLS
     else:
         assert CANVAS_TOOLS <= tools and not tools & COMFY_TOOLS
+    assert "edit_timeline" in tools, "时间线编辑跟着 sequence_id 走,哪一处都要有"
     assert {"list_assets", "update_plan", "remember"} <= tools, "通用的哪儿都发"
     assert ON_DEMAND <= tools, "工作台里有没发的工作流工具、别处有没发的通用插件工具:够得着它们的路要在"
 
@@ -320,6 +321,7 @@ def test_这一轮在哪说的说了算_不是家在哪(everywhere) -> None:
     _said(session, {"kind": "studio", "id": ""})
     tools = _turn_tools(client, session)
     assert CANVAS_TOOLS <= tools and not tools & COMFY_TOOLS
+    assert "edit_timeline" in tools, "时间线编辑跟着 sequence_id 走,哪一处都要有"
     assert _context(client, session)["tools"] != with_comfy, "水位跟着这一轮真发出去的那份走"
 
 

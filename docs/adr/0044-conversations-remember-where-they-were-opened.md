@@ -251,11 +251,15 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
     `needs="workflow_library"` 照旧叠在上面:没接 ComfyUI 的人在哪都不发;
     **例外**:一段家是 ComfyUI 的对话被 AI Studio(或别的页面)继续时,这一轮的主集仍是当前地点,但补回 `comfyui` kit。
     否则上下文里会出现 `plugin__…__list_models` 这类名字,工具表里却够不着;补的是**会话的家**对应的那一份,不是把 `comfy_*` 塞进所有新对话。
-  - `kit="canvas"` —— 改 Mosael 自家画布的那一份:`edit_board`、`get_board`、`run_board_item`、`list_board_producers`、`edit_timeline`、`edit_scene`、
+  - `kit="canvas"` —— 改 Mosael 自家画布的那一份:`edit_board`、`get_board`、`run_board_item`、`list_board_producers`、`edit_scene`、
     `view_scene`、`render_scene_references`、`list_scene_models`、`edit_workflow`、`update_workflow`、`list_workflow_node_types`、`blender_*`。
     **工作台以外哪儿都发**,工作台里不发。
-- **为什么这样分**:ComfyUI 工作台是另一个世界,那里要的是 ComfyUI 的图,不是 Mosael 的画板和时间线;反过来,AI Studio 和 Mosael 各页面之间
-  串门是常事(在画板里让它建一条时间线),那几样不按页面拆。按 main 的注册表量,`canvas` 这一份约占工具定义的 27%(约 8K token),
+    **时间线例外**:`edit_timeline` 按 `sequence_id` 编辑已经存在的时间线,不依赖当前画布,所以它是**通用**的 ——
+    在 ComfyUI 工作台里也发。否则在那里提到「改一下时间线」时,模型只能看见 `list_projects` / `inspect_sequence`,
+    连编辑入口都没有(维护者真机报错:`Tool edit_project not found` / 时间线能力全没了)。
+- **为什么这样分**:ComfyUI 工作台是另一个世界,那里要的是 ComfyUI 的图,不是 Mosael 的画板;反过来,AI Studio 和 Mosael 各页面之间
+  串门是常事(在画板里让它建一条时间线),那几样不按页面拆。**时间线编辑是唯一例外** —— 它认 `sequence_id`,和当前画布无关,
+  所以 `edit_timeline` 哪一处都发。按 main 的注册表量,`canvas` 这一份约占工具定义的 27%(约 8K token),
   `comfy_*` 九个约 7K:**工作台里约 31.5K、别处约 32.5K**,都在 38.4K 以内,还给 0042 后两步要加的 `comfy_*` 留了地方。名单以预算测试为准。
 - 在工作台以外问 ComfyUI 的事,它手里没有那份工具:ComfyUI 插件带的技能(`comfyui-workflows`)说明里写一句「在 ComfyUI 工作台里用」;
   要改图,请他到工作台里说。
@@ -344,7 +348,7 @@ Accepted — 2026-10-07。下面「已拍板」的 1–7 条由维护者照推�
 **工具和预算**(`test_tool_definitions_budget.py` 扩写):
 - **接了 ComfyUI + 本机模型,按每一处量**:`studio`、`project`、`note`、`board`、`workflow`、`scene`、`comfyui` 各建一段家在那里的对话,水位里的
   工具 + 系统提示都不超过 64K 的六成;`test_量到的是真东西` 也按每一处跑;
-- `comfy_*` 在且只在 `comfyui` 那一处;`canvas` 那一份在且只在 `comfyui` 以外;
+- `comfy_*` 在且只在 `comfyui` 那一处;`canvas` 那一份在且只在 `comfyui` 以外(时间线编辑 `edit_timeline` 例外,哪一处都有);
 - 家在 AI Studio、最新一条消息在工作台说的 → 这一轮有 `comfy_*`、没有 `canvas`;再在 AI Studio 说一句 → 反过来;
 - 没有对话的调用方(MCP 直连)全给;没接 ComfyUI 的人,在工作台那一处也没有 `comfy_*`。
 

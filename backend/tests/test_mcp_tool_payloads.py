@@ -115,6 +115,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "list_publish_tasks": {},
     "browser_pool_list": {},
     "create_project": {"name": "冒烟项目"},
+    "edit_project": {"project_id": "no-such-project", "name": "改个名"},
     "notify_workspace": {"title": "冒烟通知", "body": "正文"},
     "list_agent_sessions": {},
     "notify_agent_session": {"session_id": "no-such-session", "message": "冒烟通知"},
