@@ -1,7 +1,8 @@
 {
-  "version": 49,
+  "version": 50,
   "steps": [
     "migrate-agent-questions-feishu-message-id",
+    "migrate-agent-sessions-plan-id",
     "migrate-agent-sessions-working-set",
     "migrate-agent-voice-prefs-store-a-voice-ref",
     "migrate-assets-record-their-voices",

@@ -23,7 +23,6 @@ from app.api.schemas import (
     AgentPlanUpdate,
     AgentQuestionCreate,
     AgentQuestionOut,
-    AgentSessionOut,
     ConfirmationOut,
     JobOut,
     NotificationOut,
@@ -39,7 +38,7 @@ from app.domain.notifications import use_cases as notifications
 from app.media.paths import resolve_key
 
 @tool(effect="writes")
-def update_plan(steps: list[Any]) -> dict[str, Any]:
+def update_plan(steps: list[Any], new_plan: bool = False) -> dict[str, Any]:
     """Runs directly: publish/refresh your task plan for the current conversation.
 
     Use for any task that takes more than a couple of steps: write the plan out
@@ -50,15 +49,16 @@ def update_plan(steps: list[Any]) -> dict[str, Any]:
     Each step is {"step": "...", "status": "pending"|"in_progress"|"done"}; a bare
     string is treated as pending. Exactly one step should be in_progress at a
     time. Max 20 steps. Pass an empty list to clear the plan once everything is
-    finished. Do NOT use for single-step requests — a one-item plan is noise.
+    finished. Pass new_plan=true when starting a DIFFERENT task; otherwise
+    rewording/updating the same plan keeps its id and replaces it in history.
+    Do NOT use for single-step requests — a one-item plan is noise.
     """
     session_id = SESSION_ID.get()
     if not session_id:
         return {"error": "update_plan 只能在 Mosael 的对话会话里使用"}
 
     request = AgentPlanUpdate(steps=steps)
-    session = use_case(agent_use_cases.set_plan, session_id, request.steps, out=AgentSessionOut)
-    return {"plan": session.get("plan") or []}
+    return use_case(agent_use_cases.plan_snapshot, session_id, request.steps, new_plan=new_plan)
 
 
 #: show_widget 一次最多这么多字符。一张 Leaflet 地图、一个带几十行数据的小面板几 KB 就够;这条线挡的是把整页

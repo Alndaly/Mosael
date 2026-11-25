@@ -101,6 +101,9 @@ class AgentSession(Base):
     #: 挂在会话上而不是单独建表 —— 一次会话只有一份"现在在做什么",历史进度由 update_plan
     #: 的工具卡在时间线上留痕,不需要第二套版本记录。
     plan: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    #: 当前计划的稳定身份:同一份计划反复 update_plan 时复用,换新计划才换。
+    #: 历史卡上的 plan_id 用它合并重新措辞过的同一份计划(见 PlanCard.planHistory)。
+    plan_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # pi 适配器无 --resume:存 pi 序列化的消息数组做多轮记忆(下轮回灌 initialState.messages)
     adapter_state: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="idle")  # idle | running

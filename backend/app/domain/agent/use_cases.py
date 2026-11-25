@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, defer
@@ -174,15 +175,35 @@ def delete_session(db: Session, user: User, session_id: str) -> None:
     after_commit(db, lambda: agent_replay.clear_session_files(session_id_value))
 
 
-def set_plan(db: Session, user: User, session_id: str, steps: list[Any]) -> AgentSession:
+def set_plan(db: Session, user: User, session_id: str, steps: list[Any], *, new_plan: bool = False) -> AgentSession:
     """写这次会话的任务计划。空 = 清空(事情做完了)—— 没有出口的话,做完的计划会一直挂在面板上。
 
     直接执行、不走确认卡:写计划不改动任何工程状态。步骤不合规时抛 ValueError(说清怎么改)。
+
+    `new_plan`:开始一件**不同的**事。默认沿用当前计划的 id;当前计划已经全部完成、或没有 id 时
+    自动换新 id。这样模型反复推同一份计划(哪怕步骤文字被重写)在历史里仍是一份,不会裂成两段。
     """
     session = writable_session(db, user, session_id)
-    session.plan = agent_plan.normalize(steps) if steps else None
+    normalized = agent_plan.normalize(steps) if steps else None
+    if normalized is None:
+        session.plan = None
+        session.plan_id = None
+    else:
+        current = session.plan if isinstance(session.plan, list) else []
+        finished = bool(current) and all(
+            isinstance(step, dict) and step.get("status") == "done" for step in current
+        )
+        if new_plan or not session.plan_id or finished:
+            session.plan_id = uuid4().hex
+        session.plan = normalized
     db.flush()
     return annotate(db, user, session)
+
+
+def plan_snapshot(db: Session, user: User, session_id: str, steps: list[Any], *, new_plan: bool = False) -> dict[str, Any]:
+    """update_plan 工具的返回值:计划 + 稳定 id。工具结果落进消息,历史据此归并同一份计划。"""
+    session = set_plan(db, user, session_id, steps, new_plan=new_plan)
+    return {"plan": session.plan or [], "plan_id": session.plan_id}
 
 
 def cited_message(db: Session, user: User, workspace_id: str, message_id: str) -> tuple[AgentMessage, str]:

@@ -2,11 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { planHistory } from "./PlanCard";
 
-function updatePlan(steps: { step: string; status: string }[]) {
+function updatePlan(steps: { step: string; status: string }[], planId = "") {
   return [
     {
       type: "tool" as const,
-      tool: { id: "p", name: "update_plan", args: { steps }, status: "done" as const },
+      tool: {
+        id: "p",
+        name: "update_plan",
+        args: { steps },
+        result: planId ? { content: [], details: { data: { plan: steps, plan_id: planId } } } : undefined,
+        status: "done" as const,
+      },
     },
   ];
 }
@@ -23,6 +29,26 @@ describe("计划历史", () => {
     ];
 
     expect(planHistory([updatePlan(abandoned), updatePlan(finished)])).toEqual([abandoned, finished]);
+  });
+
+  it("同一份计划改了措辞但 plan_id 相同,历史只留最新快照", () => {
+    const draft = [
+      { step: "确定方向", status: "pending" },
+      { step: "写脚本", status: "pending" },
+    ];
+    const finished = [
+      { step: "确定方向:潮流运动鞋", status: "done" },
+      { step: "写脚本:12 个镜头", status: "done" },
+    ];
+
+    expect(planHistory([updatePlan(draft, "p1"), updatePlan(finished, "p1")])).toEqual([finished]);
+  });
+
+  it("plan_id 不同时仍是两份计划", () => {
+    const first = [{ step: "旧活", status: "done" }];
+    const second = [{ step: "新活", status: "pending" }];
+
+    expect(planHistory([updatePlan(first, "p1"), updatePlan(second, "p2")])).toEqual([first, second]);
   });
 
   it("两份都做完时都留着", () => {

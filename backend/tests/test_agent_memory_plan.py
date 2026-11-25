@@ -12,6 +12,9 @@ import pytest
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import plan as agent_plan
 from app.core.db import SessionLocal
+from app.core.security import find_session
+from app.db.models import User
+from app.domain.agent import use_cases as agent_use_cases
 from tests.util import fresh_client
 
 
@@ -152,3 +155,25 @@ def test_空数组清空计划() -> None:
     client.put(f"/api/agent/sessions/{session['id']}/plan", json={"steps": ["一步"]})
     cleared = client.put(f"/api/agent/sessions/{session['id']}/plan", json={"steps": []}).json()
     assert cleared["plan"] is None
+
+
+def test_计划有稳定身份_同一件事改措辞沿用_new_plan_才换() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws}).json()
+    with SessionLocal() as db:
+        me = find_session(db, client.headers["Authorization"].removeprefix("Bearer ")).user_id
+        user = db.get(User, me)
+        first = agent_use_cases.set_plan(db, user, session["id"], [{"step": "确定方向", "status": "pending"}])
+        plan_id = first.plan_id
+        assert plan_id
+        same = agent_use_cases.set_plan(db, user, session["id"], [{"step": "确定方向:潮流运动鞋", "status": "done"}])
+        assert same.plan_id == plan_id, "同一件事换措辞不该换 id"
+        fresh_id = agent_use_cases.set_plan(
+            db, user, session["id"], [{"step": "新任务", "status": "pending"}], new_plan=True
+        ).plan_id
+        assert fresh_id != plan_id, "new_plan=true 才是另一份计划"
+        finished_id = agent_use_cases.set_plan(db, user, session["id"], [{"step": "新任务", "status": "done"}]).plan_id
+        after_done = agent_use_cases.set_plan(db, user, session["id"], [{"step": "接着做", "status": "pending"}])
+        assert finished_id == fresh_id
+        assert after_done.plan_id != finished_id, "上一份做完后再写计划是新的"

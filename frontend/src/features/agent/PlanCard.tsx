@@ -17,6 +17,24 @@ export type PlanStep = { step: string; status: "pending" | "in_progress" | "done
  *
  * 全部做完就折叠成一行:计划的用处在**进行中**,做完之后它只是历史。
  */
+function readPlanId(result: unknown): string {
+  let value = result;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return "";
+    }
+  }
+  const root = value as {
+    plan_id?: unknown;
+    data?: { plan_id?: unknown };
+    details?: { data?: { plan_id?: unknown } };
+  } | null | undefined;
+  const id = root?.plan_id ?? root?.data?.plan_id ?? root?.details?.data?.plan_id;
+  return typeof id === "string" ? id : "";
+}
+
 /** 从时间线里的 update_plan 调用还原出「做过的那几件事」。
  *
  * **不为此新开一张表**:每次改计划都会留下一次工具调用,参数里就是当时那张清单 ——
@@ -24,19 +42,31 @@ export type PlanStep = { step: string; status: "pending" | "in_progress" | "done
  *
  * 关键是**归并**:模型在同一件事里会反复调 update_plan 来推进状态(做完一步就报一次),
  * 那些是同一份计划的连续快照,不是"第 1 版、第 2 版"—— 把每次调用都陈列出来,得到的是
- * 同样三行、只有勾变了的一摞噪音。所以相邻两次只要**步骤文本有一半以上重合**就算同一份,
- * 只留最后那次(也就是它最终的样子);换了新活儿(清单整体不同)才另起一份。
+ * 同样三行、只有勾变了的一摞噪音。**新消息按工具结果里的 `plan_id` 归并**;老消息没有 id 时,
+ * 退回「步骤文本重合过半」的旧判据。模型重写步骤文字但仍是同一份计划时,id 让它不会裂成两份。
  *
  * **未完成的也留着**:有些计划确实就是没做完(用户换方向、任务中断),它们同样是发生过的事;
  * 历史里标成「未完成」,而不是当成没出现过。
  */
 export function planHistory(timelines: (AgentTimelineItem[] | undefined)[]): PlanStep[][] {
   const plans: PlanStep[][] = [];
+  const byId = new Map<string, number>();
   for (const timeline of timelines) {
     for (const item of timeline ?? []) {
       if (item.type !== "tool" || item.tool?.name !== "update_plan") continue;
       const steps = readSteps(item.tool.args);
       if (steps.length === 0) continue;
+      const planId = readPlanId(item.tool.result);
+      if (planId) {
+        const index = byId.get(planId);
+        if (index === undefined) {
+          byId.set(planId, plans.length);
+          plans.push(steps);
+        } else {
+          plans[index] = steps;
+        }
+        continue;
+      }
       const last = plans[plans.length - 1];
       if (last && samePlan(last, steps)) plans[plans.length - 1] = steps;
       else plans.push(steps);

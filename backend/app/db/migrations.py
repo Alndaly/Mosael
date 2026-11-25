@@ -84,6 +84,21 @@ def _migrate_agent_questions_feishu_message_id() -> None:
         conn.execute(text("ALTER TABLE agent_questions ADD COLUMN feishu_message_id VARCHAR(128)"))
 
 
+def _migrate_agent_sessions_plan_id() -> None:
+    """agent_sessions 新增 plan_id:当前计划的稳定身份。
+
+    没有它时,计划历史只能按步骤文字的重合度猜「这是不是同一份」;模型换一种措辞就裂成两份。
+    老会话留空,下一次 update_plan 生成。
+    """
+    inspector = inspect(engine)
+    if "agent_sessions" not in set(inspector.get_table_names()):
+        return
+    if "plan_id" in {column["name"] for column in inspector.get_columns("agent_sessions")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN plan_id VARCHAR(64)"))
+
+
 def _migrate_agent_sessions_working_set() -> None:
     """agent_sessions 新增 working_set:这次对话当前操作的项目与面板。
 
@@ -981,6 +996,7 @@ def migration_plan() -> MigrationPlan:
         *_steps(
             MigrationPhase.BEFORE_SCHEMA,
             _migrate_agent_sessions_working_set,
+            _migrate_agent_sessions_plan_id,
             _migrate_update_feed_url,
             _migrate_publish_tasks_get_content_shape,
             _migrate_workflow_publish_nodes_get_content_kind,
