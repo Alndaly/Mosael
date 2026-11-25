@@ -554,7 +554,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "让一张人像说一段话:稿子用挑的嗓子配音,再和这张图做成一段说话的视频。要确认已取得画面中人物的授权。",
         "en": "Make a portrait say something: the chosen voice reads the script, then it becomes a talking video with this image. You must confirm you have the pictured person's consent.",
     },
-    "wfNode_image_speak_board": {"zh": "给这张人像配一段话,做成说话的视频", "en": "Give this portrait a line and make it talk"},
     "wfNode_image_speak_asset_id": {"zh": "人像(清晰、单人、正面)", "en": "Portrait (clear, single person, frontal)"},
     "wfNode_video_lipsync": {"zh": "对口型", "en": "Lip sync"},
     "wfNode_video_lipsync_desc": {

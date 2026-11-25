@@ -2563,22 +2563,21 @@ NODE_TYPES: dict[str, NodeSpec] = {
         "outputs": ["asset_id", "asset_ids", "audio_asset_id", "cues"],
         "output_types": {"cues": "json"},
     },
+    #: 只在工作流和智能体里(维护者 2026-11-25:「图片节点不需要这个让它说话能力吧」)。画板上要让一个人说话,用人物资产格的
+    #: 「让它说话」(entity_speak):嗓子、正面图都是这个人物自己的。
     "image_speak": {
         "external": False,
         "spends": True,
         "effects": "paid",
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["asset_id", "audio_asset_id"],
+        "surfaces": ["workflow"],
         "output_media": {"asset_id": "video", "audio_asset_id": "audio"},
-        "board_group": "image", "board_description": "wfNode_image_speak_board",
         "category": "wfCat_ai",
         "label": "wfNode_image_speak",
         "description": "wfNode_image_speak_desc",
         "config": {
             "asset_id": {"type": "template", "required": True, "media": "image", "description": "wfNode_image_speak_asset_id"},
-            #: 音频接上游的(长稿分段配好的一段、画板上连进来的音频格)—— 参数,不是宿主(和对口型同一条)。
-            "audio_asset_id": {"type": "template", "media": "audio", "board_host": False,
-                                "description": "wfNode_image_speak_audio"},
+            #: 音频接上游的(长稿分段配好的一段)。
+            "audio_asset_id": {"type": "template", "media": "audio", "description": "wfNode_image_speak_audio"},
             "text": {"type": "template", "description": "wfNode_image_speak_text"},
             "engine": {"type": "string", "default": "builtin:clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
             "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
