@@ -11,7 +11,8 @@ struct IslandView: View {
 
     @State private var closeWork: DispatchWorkItem?
 
-    private var expandedHeight: CGFloat { CGFloat(store.activities.count) * 52 + 8 }
+    private var expandedHeight: CGFloat { geometry.expandedHeight(count: store.activities.count) }
+    private var surfaceWidth: CGFloat { store.open ? geometry.expandedWidth : geometry.compactWidth }
     private var surfaceHeight: CGFloat {
         geometry.menuBarHeight + (store.open ? expandedHeight : 0)
     }
@@ -20,8 +21,9 @@ struct IslandView: View {
         ZStack(alignment: .top) {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.black.opacity(0.96))
-                .frame(width: geometry.panelWidth, height: surfaceHeight, alignment: .top)
-                .animation(.spring(response: 0.30, dampingFraction: 0.90), value: surfaceHeight)
+                .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
+                .animation(.spring(response: 0.32, dampingFraction: 0.90), value: surfaceWidth)
+                .animation(.spring(response: 0.32, dampingFraction: 0.90), value: surfaceHeight)
 
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
@@ -29,16 +31,18 @@ struct IslandView: View {
                     Spacer().frame(width: geometry.hasNotch ? geometry.notchWidth + geometry.wingGap * 2 : 4)
                     rightWing
                 }
-                .frame(width: geometry.panelWidth, height: geometry.menuBarHeight)
+                .frame(width: geometry.compactWidth, height: geometry.menuBarHeight)
+                .frame(width: geometry.panelWidth)
 
                 expandedRows
+                    .frame(width: geometry.expandedWidth)
                     .frame(height: store.open ? expandedHeight : 0, alignment: .top)
                     .clipped()
                     .opacity(store.open ? 1 : 0)
                     .allowsHitTesting(store.open)
                     .animation(.spring(response: 0.30, dampingFraction: 0.90), value: store.open)
             }
-            .frame(width: geometry.panelWidth, height: surfaceHeight, alignment: .top)
+            .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
         }
         .frame(width: geometry.panelWidth, height: geometry.panelHeight, alignment: .top)
         .background(Color.clear)

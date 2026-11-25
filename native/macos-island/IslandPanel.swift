@@ -8,17 +8,19 @@ struct NotchGeometry {
     let hasNotch: Bool
     let notchWidth: CGFloat
     let menuBarHeight: CGFloat
-    let wingWidth: CGFloat = 132
-    let wingGap: CGFloat = 4
+    let wingWidth: CGFloat = 86
+    let wingGap: CGFloat = 2
     let wingHeight: CGFloat = 26
-    let panelHeight: CGFloat = 320
+    let panelHeight: CGFloat = 360
 
     var topMargin: CGFloat { max(2, (menuBarHeight - wingHeight) / 2) }
-    var panelWidth: CGFloat {
+    /// 紧凑态只包住刘海左右两侧;展开时才变宽成 NoobX 那种大面板。
+    var compactWidth: CGFloat {
         hasNotch ? notchWidth + (wingWidth + wingGap) * 2 : wingWidth * 2 + 4
     }
-    var expandedWidth: CGFloat { min(390, panelWidth - 24) }
-    func expandedHeight(count: Int) -> CGFloat { CGFloat(count) * 52 + 8 }
+    var expandedWidth: CGFloat { min(500, screenFrame.width - 96) }
+    var panelWidth: CGFloat { expandedWidth }
+    func expandedHeight(count: Int) -> CGFloat { min(280, max(180, CGFloat(count) * 52 + 16)) }
 
     static func current() -> NotchGeometry {
         // 跟着鼠标所在屏幕走:外接屏没有刘海时,岛就落在那块屏的菜单栏,不能留在内置屏上。
@@ -183,15 +185,15 @@ final class IslandPanelController {
 
     private func interactiveRects() -> [CGRect] {
         let wingY = geometry.panelHeight - geometry.menuBarHeight + (geometry.menuBarHeight - geometry.wingHeight) / 2
-        let left = CGRect(x: 0, y: wingY, width: geometry.wingWidth, height: geometry.wingHeight)
-        let rightX = geometry.hasNotch ? geometry.wingWidth + geometry.notchWidth + geometry.wingGap * 2 : geometry.wingWidth + 4
-        let right = CGRect(x: rightX, y: wingY, width: geometry.wingWidth, height: geometry.wingHeight)
+        let leftX = (geometry.panelWidth - geometry.compactWidth) / 2
+        let left = CGRect(x: leftX, y: wingY, width: geometry.wingWidth, height: geometry.wingHeight)
+        let right = CGRect(x: leftX + geometry.compactWidth - geometry.wingWidth, y: wingY, width: geometry.wingWidth, height: geometry.wingHeight)
         guard store.open, !store.activities.isEmpty else { return [left, right] }
-        let height = CGFloat(store.activities.count) * 52 + 8
+        let height = geometry.expandedHeight(count: store.activities.count)
         let expanded = CGRect(
-            x: 0,
+            x: (geometry.panelWidth - geometry.expandedWidth) / 2,
             y: geometry.panelHeight - geometry.menuBarHeight - height,
-            width: geometry.panelWidth,
+            width: geometry.expandedWidth,
             height: height
         )
         return [left, right, expanded]
