@@ -23,7 +23,6 @@ API = pathlib.Path(__file__).resolve().parents[1] / "app" / "api"
 FROZEN = {
     "deps/__init__.py": 1,
     "deps/auth.py": 4,
-    "routes/agent_tools.py": 1,
     "routes/assets.py": 12,
     "routes/auth.py": 3,
     "routes/browser_worker.py": 1,

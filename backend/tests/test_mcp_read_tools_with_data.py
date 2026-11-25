@@ -60,7 +60,7 @@ def _seed(client, monkeypatch) -> dict[str, str]:
     monkeypatch.setattr(registry, "CALLER_ID", contextvars.ContextVar("test_caller", default=me))
 
     ids: dict[str, str] = {"workspace": ws}
-    ids["project"] = media.create_project(name="宣传片")["id"]
+    ids["project"] = media.create_project(name="宣传片", timeline=True)["id"]
     ids["asset"] = insert_asset(ws, kind="video", name="素材.mp4", media_info={"duration": 3.0})
     ids["workflow"] = client.post("/api/workflows", json={"workspace_id": ws, "name": "流", "graph": {
         "nodes": [{"id": "start", "type": "start", "config": {"params": {}}}], "edges": []}}).json()["id"]
@@ -89,6 +89,8 @@ def _seed(client, monkeypatch) -> dict[str, str]:
 READS: dict[str, tuple[Callable[[dict[str, str]], dict[str, Any]], int]] = {
     "list_workspaces": (lambda ids: {}, 1),
     "list_projects": (lambda ids: {}, 1),
+    "list_sequences": (lambda ids: {"project_id": ids["project"]}, 1),
+    "get_project": (lambda ids: {"project_id": ids["project"]}, 1),
     "list_assets": (lambda ids: {}, 1),
     "list_workflows": (lambda ids: {}, 1),
     "list_boards": (lambda ids: {}, 1),
