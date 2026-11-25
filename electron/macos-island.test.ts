@@ -38,6 +38,7 @@ describe("macOS 灵动岛原生桥", () => {
       binaryPath: "/tmp/mosael-island",
       spawn: (() => child) as never,
       exists: () => true,
+      platform: "darwin",
       onOpen: vi.fn(),
     });
     expect(island.start()).toBe(true);

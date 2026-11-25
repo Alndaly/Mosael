@@ -29,6 +29,7 @@
     "typecheck:electron": "pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.json && pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.preload.json",
     "build:system": "pnpm typecheck:electron && esbuild electron/system/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/system.bundle.cjs",
     "build:macos-island": "node scripts/build-macos-island.mjs",
+    "watch:macos-island": "node scripts/watch-macos-island.mjs",
     "watch:system": "esbuild electron/system/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/system.bundle.cjs --watch=forever",
     "watch:sidecar": "pnpm --dir agent-sidecar watch",
     "gen:api": "openapi-typescript backend/openapi.json -o frontend/src/api/generated/schema.d.ts",
