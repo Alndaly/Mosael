@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.8.1": {
+    zh: [
+      "**智能体工具按需检索。** 桌面控制与浏览器工具不再每轮全量发送，需要时由 `tool_search` 找到、`run_tool` 执行；子智能体也能安全地查只读工具。",
+      "**项目与时间线更容易找。** 新增 `get_project` / `list_sequences`，一个项目下有多条时间线时能先列出来再编辑；`edit_timeline` 在 ComfyUI 工作台里也能用。",
+      "**计划不再裂成两份。** 同一份任务计划有稳定 id，模型重写步骤文字时历史只保留最新状态；`new_plan` 才开启另一份计划。",
+      "**工具报错更可恢复。** 未知工具会给出近似名称；被忽略的多余参数会回报给模型。",
+    ],
+    en: [
+      "**Agent tools are loaded on demand.** Desktop-control and browser tools are no longer sent every turn; `tool_search` finds them and `run_tool` executes them, while subagents can still search and run only read-only tools.",
+      "**Projects and timelines are easier to find.** New `get_project` and `list_sequences` tools expose every timeline in a project, and `edit_timeline` now works in the ComfyUI workbench too.",
+      "**Plans no longer split in two.** A task plan keeps a stable id while it is updated; rewording its steps replaces the latest snapshot instead of adding another history entry. `new_plan` starts a different plan.",
+      "**Tool errors are recoverable.** Unknown tool names come back with close matches, and unsupported arguments ignored by the server are reported back to the model.",
+    ],
+  },
   "v2.8.0": {
     zh: [
       "**任务进度出现在 macOS 原生灵动岛。** 独立 NSPanel 浮层显示运行中的进度,完成/失败在原位切换成对勾/叹号;Windows 仍保留任务中心转圈、数量和提示。",
