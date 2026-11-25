@@ -1,5 +1,4 @@
 import {
-  Funnel,
   Grid3x3,
   Quote,
   Sun,
@@ -114,8 +113,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   //: 人声、背景音拆成两层:分层,不是分叉箭头(那读作「分支」)。
   separate_audio: Layers,
   //: 把一条毛糙的波形理平。
-  //: 把杂音滤掉:漏斗,不是一条普通的波形(那只读作「音频」)。
-  denoise_audio: Funnel,
+  denoise_audio: AudioWaveform,
   //: 3D 白模:搭一个盒子,再从机位上"拍"它。
   scene_props: Shapes,
   scene_create: Box,
