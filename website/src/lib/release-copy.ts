@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.7.0": {
+    zh: [
+      "**图片格新能力：灯光、裁切、重绘。** 方向球定打光，拖框裁切，涂一块让模型重画、蒙版外一个像素都不变。",
+      "**大操作直接是弹窗。** 裁切、灯光、重绘点开就是一个弹窗，不再先挂面板、再点开一层。",
+      "**ComfyUI 工作流自己决定上不上画板。** 默认不上，在工作流库里打开「在画板上用」；操作条上的能力全部直接摆出来。",
+      "**ComfyUI 只交回真正的结果。** 局部重绘工作流不再把中间那张「画着蒙版的预览」当成结果。",
+    ],
+    en: [
+      "**New image abilities: Relight, Crop, and Repaint.** Set the light with an orb, drag a crop frame, or paint an area for a model to redraw while every pixel outside the mask stays the same.",
+      "**Big controls open straight into a dialog.** Crop, Relight, and Repaint open one dialog instead of a panel with another dialog inside.",
+      "**ComfyUI workflows opt in to boards.** They stay off by default; turn on Use on boards in the workflow library. Every ability now sits directly on the action bar.",
+      "**ComfyUI returns only real results.** Inpainting workflows no longer hand back the intermediate mask preview as the result.",
+    ],
+  },
   "v2.6.15": {
     zh: [
       "**3D 场景在别处被改过之后还能保存。** 撞上新版本时换成最新那份并提示，不再从此存不上。",
