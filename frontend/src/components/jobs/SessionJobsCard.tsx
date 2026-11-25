@@ -92,6 +92,8 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
   const qc = useQueryClient();
   const { kindOf } = useJobKinds();
   const [detailJob, setDetailJob] = React.useState<JobSummary | null>(null);
+  // 和「任务计划」「最近工具」一样:侧栏三块常驻,不看的时候能收成一行。
+  const [open, setOpen] = React.useState(true);
 
   const jobsQuery = React.useMemo(() => topLevelJobsQuery(workspaceId), [workspaceId]);
   const jobs = useQuery({
@@ -124,7 +126,14 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
   const detailPage = detailJob && detailKind ? jobPage(detailJob, detailKind) : null;
 
   return (
-    <InspectorCard icon={ListChecks} title={t("chatJobsTitle")} aside={String(mine.length)}>
+    <InspectorCard
+      icon={ListChecks}
+      title={t("chatJobsTitle")}
+      aside={String(mine.length)}
+      onToggle={() => setOpen((value) => !value)}
+      open={open}
+    >
+      {open && (
       <div className="grid min-w-0 gap-2" data-session-jobs="">
         <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("chatJobsScope")}</p>
         <ul className="m-0 grid list-none gap-1.5 p-0">
@@ -200,6 +209,7 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
         })}
         </ul>
       </div>
+      )}
       <JobDetailDialog
         job={detailJob}
         onClose={() => setDetailJob(null)}

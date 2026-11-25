@@ -164,6 +164,24 @@ it("只列本对话发起的任务:状态、进度、失败原因各说各的", 
   expect(h.gotoRecord).toHaveBeenCalledWith("/ai?tab=create", "mosael:ai-record", "gen-session-2");
 });
 
+it("和任务计划、最近工具一样能收成一行", async () => {
+  h.jobs = [job({ id: "run", status: "running", progress: 0.4, payload: { subject: "在跑的", receipt: { session_id: "s1" } } })];
+  const { container } = mount();
+  await screen.findByText("在跑的");
+
+  const toggle = screen.getByRole("button", { name: "chatJobsTitle" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(container.querySelector("[data-session-jobs]")).toBeTruthy();
+
+  fireEvent.click(toggle);
+
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(container.querySelector("[data-session-jobs]")).toBeNull();
+  //: 收起来只收起内容:标题行和条数还在,否则用户不知道这里还压着任务。
+  expect(container.textContent).toContain("chatJobsTitle");
+  expect(container.textContent).toContain("1");
+});
+
 it("没有本对话的任务时整块不渲染", async () => {
   h.jobs = [job({ id: "other", payload: { subject: "别的", receipt: { session_id: "s2" } } })];
   const { container } = mount();
