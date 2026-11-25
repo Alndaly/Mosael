@@ -498,8 +498,6 @@ BOARD_NODES = {
     #: 裁切 / 重绘(ADR 0110)。重绘的蒙版是参数(`board_host: false`),只挂在图片格上一次。
     "image_crop": ("image",),
     "image_inpaint": ("image",),
-    #: 音频是从上游接的参数(`board_host: false`),这一项只挂在视频格上。
-    "video_lipsync": ("video",),
 }
 #: 上面这些里是空格子填法(`slot`)而不是内容格能力的那几个。
 SLOT_NODES = {"scene_from_text"}
@@ -549,8 +547,7 @@ def test_画板上的内置变换从节点声明里读_是它吃的那几种格�
         assert (registry[one].role, registry[one].fills_empty_slot) == (("slot", True) if slot else (ABILITY, False)), one
     #: 后果照节点声明:资产格那两项是付费生成(智能体替人点要确认卡),其余都在本机做完
     #: (对外发请求、调别的流程的那两个已经不在画板上了)。
-    paid = {"node:entity_angles", "node:entity_expressions", "node:entity_speak", "node:image_speak", "node:image_relight", "node:image_inpaint",
-            "node:video_lipsync"}
+    paid = {"node:entity_angles", "node:entity_expressions", "node:entity_speak", "node:image_speak", "node:image_relight", "node:image_inpaint"}
     assert {one: registry[one].effects for one in nodes} == {one: "paid" if one in paid else "none" for one in nodes}
 
 

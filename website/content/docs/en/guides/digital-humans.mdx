@@ -43,9 +43,9 @@ documentation; the first time you use one, keep an eye on the error message — 
 
 - **Character assets**: "Make it talk" on the asset page — write a script, it is voiced with the character's own voice, and
   its front view (or the first image in pick order) becomes the talking photo. Character cells on boards have it too.
-- **Boards**: "Make it talk" on image cells (pick a voice in the panel, or wire in an audio cell) and "Lip-sync" on video
-  cells (audio from an upstream audio cell, or voiced from a script on the spot). The panel lets you pick the model;
-  "Resolution" is under advanced options and lists only the tiers the chosen model has.
+- **Boards**: "Make it talk" on image cells (pick a voice in the panel, or wire in an audio cell). The panel lets you pick
+  the model; "Resolution" is under advanced options and lists only the tiers the chosen model has. To lip-sync a video, use
+  the "Lip-sync" workflow node or AI Studio.
 - **AI Studio**: pick a talking-photo or lip-sync model and attach the portrait / source video plus a driving audio.
 - **Agent**: it knows how — voice first, then hand the face and that audio to a talking-photo model (`generate_video`).
 - **Workflows**: the "Make it talk" (character / image), "Lip-sync", "Long script to segments" and "Dub lip-sync" nodes.

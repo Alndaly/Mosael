@@ -147,14 +147,15 @@ def test_没有会这一种的模型_说该去接哪一种(setup, monkeypatch) -
     assert caught.value.key == "wfErr_lipsyncNoModel"
 
 
-def test_画板上_人物格_图片格_视频格各有一项_对口型不挂在音频格上() -> None:
-    from app.domain.boards.transforms import board_hosts, board_role, host_entity_kinds, host_fields
+def test_画板上_人物格_图片格各有一项_对口型不上画板() -> None:
+    from app.domain.boards.transforms import board_hosts, board_role, host_entity_kinds
 
-    expected = {"entity_speak": ("entity",), "image_speak": ("image",), "video_lipsync": ("video",)}
+    expected = {"entity_speak": ("entity",), "image_speak": ("image",)}
     for node_type, hosts in expected.items():
         meta = NODE_TYPES[node_type]
         assert board_role(meta) == "ability" and board_hosts(meta) == hosts, node_type
-    assert host_fields(NODE_TYPES["video_lipsync"]) == {"video": "asset_id"}
+    #: 维护者 2026-11-25:画板上「这个节点对口型能力去掉」—— 只在工作流和智能体里。
+    assert "board" not in NODE_TYPES["video_lipsync"]["surfaces"]
     assert host_entity_kinds(NODE_TYPES["entity_speak"]) == ["character"], "只有人物有「让它说话」"
 
 

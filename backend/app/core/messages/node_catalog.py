@@ -561,7 +561,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "让一段已有视频里的人说新的话,嘴对上:音频接上游的音频,没接就用稿子当场配音。要确认已取得画面中人物的授权。",
         "en": "Make the person in an existing video say something new, lips in sync: audio comes from upstream, or the script is voiced on the spot. You must confirm you have the pictured person's consent.",
     },
-    "wfNode_video_lipsync_board": {"zh": "换一段话,嘴型跟着对上", "en": "Swap in new speech with matching lips"},
     "wfNode_video_lipsync_asset_id": {"zh": "要改口型的视频(单人、正脸清楚)", "en": "The video to re-sync (one person, face clearly visible)"},
     "wfNode_video_lipsync_audio": {"zh": "新的那段话;画板上连一个音频格进来,留空就用下面的稿子配", "en": "The new speech; on a board connect an audio item, or leave empty to voice the script below"},
     "wfNode_video_lipsync_text": {"zh": "稿子(没接音频时用它配音)", "en": "Script (voiced when no audio is connected)"},

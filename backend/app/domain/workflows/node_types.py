@@ -2673,22 +2673,18 @@ NODE_TYPES: dict[str, NodeSpec] = {
         },
         "outputs": ["asset_id", "asset_ids"],
     },
+    #: 只在工作流和智能体里(维护者 2026-11-25:画板上「这个节点对口型能力去掉」)。
     "video_lipsync": {
         "external": False,
         "spends": True,
         "effects": "paid",
-        "surfaces": ["workflow", "board"],
-        "board_outputs": ["asset_id", "audio_asset_id"],
-        "output_media": {"asset_id": "video", "audio_asset_id": "audio"},
-        "board_group": "video", "board_description": "wfNode_video_lipsync_board",
+        "surfaces": ["workflow"],
         "category": "wfCat_ai",
         "label": "wfNode_video_lipsync",
         "description": "wfNode_video_lipsync_desc",
         "config": {
             "asset_id": {"type": "template", "required": True, "media": "video", "description": "wfNode_video_lipsync_asset_id"},
-            #: 音频从上游的音频格接 —— 它是参数,不是宿主:这一项只挂在视频格上(boards.transforms 的 `board_host`)。
-            "audio_asset_id": {"type": "template", "media": "audio", "board_host": False,
-                                "description": "wfNode_video_lipsync_audio"},
+            "audio_asset_id": {"type": "template", "media": "audio", "description": "wfNode_video_lipsync_audio"},
             "text": {"type": "template", "description": "wfNode_video_lipsync_text"},
             "engine": {"type": "string", "default": "builtin:clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
             "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
