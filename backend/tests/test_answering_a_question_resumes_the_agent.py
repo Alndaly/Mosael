@@ -170,15 +170,25 @@ def test_那一轮还在跑时答案插进去而不是排队(monkeypatch: pytest
     session_id, question_id = _ask(client, workspace["id"])
     _set_running(session_id)
 
-    sent: list[str] = []
-    use_fake_turn_runtime(monkeypatch, steer=lambda _sid, prompt, *a, **k: (sent.append(prompt), True)[1])
+    sent: list[tuple[str, str]] = []
+    use_fake_turn_runtime(
+        monkeypatch,
+        steer=lambda _sid, prompt, *a, **k: (sent.append((prompt, str(k.get("steer_id") or ""))), True)[1],
+    )
 
     answered = client.post(
         f"/api/agent/questions/{question_id}/answer",
         json={"answers": {"成片走哪个方向?": ["告白场景"]}},
     )
     assert answered.status_code == 200, answered.text
-    assert len(sent) == 1 and "告白场景" in sent[0], sent
+    assert len(sent) == 1 and "告白场景" in sent[0][0], sent
+    # 答案要带一个 steer_id,sidecar 才能在它真正进入模型上下文时回传边界；否则助手草稿
+    # 会排在答案前面,实时面板也看不到答案。
+    with SessionLocal() as db:
+        answer_id = db.query(AgentMessage.id).filter(
+            AgentMessage.session_id == session_id, AgentMessage.role == "user"
+        ).scalar()
+    assert sent[0][1] == answer_id, (sent, answer_id)
     # 落库了(对话里读得到这句),但**不带 queued 标** —— 它不是待办,是已经说出去的话。
     assert _queued_flags(session_id) == [False]
 

@@ -150,10 +150,12 @@ def _invoke_plugin_tool(
             raise HTTPException(status_code=422, detail=tr("routeErr_pluginToolNeedsWorkspace", name=name))
         # 开卡的闸、自动放行、推送都在 propose 里 —— 和 POST /api/confirmations、内置工具同一份。
         try:
+            session_id = session_for_token(db, token)
             confirmation = propose(
                 db, user, workspace_id=workspace_id, tool=name, payload={"arguments": dict(body.arguments)},
-                requested_by=body.requested_by or "external-agent", session_id=session_for_token(db, token),
+                requested_by=body.requested_by or "external-agent", session_id=session_id,
                 tool_call_id=body.tool_call_id or None,
+                require_live_turn=bool(session_id),
             )
         except ConfirmationError as exc:
             # 参数不对(缺必填、类型错)开卡时就拒:模型据这句话改了重发,而不是等人批准了才炸。

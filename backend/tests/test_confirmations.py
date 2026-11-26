@@ -414,7 +414,8 @@ def test_confirmations_scoped_by_session() -> None:
     """
     from app.core.db import SessionLocal
     from app.core.security import mint_service_session
-    from app.db.models import User
+    from app.db.models import AgentSession, User
+    from app.domain.agent import stream
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -436,6 +437,14 @@ def test_confirmations_scoped_by_session() -> None:
         return client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
     sess_a, sess_b = session(), session()
+    # 真实 turn 牌只在 running 时开卡；这里造的是“那一轮正在跑”的归属。
+    with SessionLocal() as db:
+        for sid in (sess_a, sess_b):
+            db.get(AgentSession, sid).status = "running"
+        db.commit()
+    # 真实 turn 在 POST 返回前已经备好 stream；开卡检查需要这份活动轮。
+    for sid in (sess_a, sess_b):
+        stream._stream_reset(sid)
     a = card_as(sess_a)
     b = card_as(sess_b)
     ext = card_as(None)  # 外部智能体:没有会话

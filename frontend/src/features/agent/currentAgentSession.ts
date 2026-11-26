@@ -111,7 +111,9 @@ async function createHere(qc: QueryClient, workspaceId: string, place: AgentPlac
     created,
     ...(old ?? []).filter((item) => item.id !== created.id),
   ]);
-  adoptAgentSession(workspaceId, place, created.id);
+  // 创建期间用户可能已经手动切到另一段对话。那不是这次创建能覆盖的选择：
+  // 消息仍然发到 created，但它只进清单，不抢当前选中。
+  if (readChoice(workspaceId, place) === "") adoptAgentSession(workspaceId, place, created.id);
   void qc.invalidateQueries({ queryKey: agentSessionsQueryKey(workspaceId) });
   return created;
 }

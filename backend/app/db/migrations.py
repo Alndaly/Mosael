@@ -55,6 +55,21 @@ def _migrate_tool_confirmations_make_tool_calls_idempotent() -> None:
         ))
 
 
+def _migrate_tool_confirmations_turn_id() -> None:
+    """tool_confirmations 新增 turn_id：卡属于哪一轮。
+
+    回合收尾按轮次作废，避免“收尾之后另一个并发调用又开出一张卡，卡还能批”的窗口。
+    旧卡没有轮次：留空，仍由会话级收尾兜底。
+    """
+    inspector = inspect(engine)
+    if "tool_confirmations" not in set(inspector.get_table_names()):
+        return
+    if "turn_id" in {column["name"] for column in inspector.get_columns("tool_confirmations")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN turn_id VARCHAR(64)"))
+
+
 def _migrate_tool_confirmations_feishu_message_id() -> None:
     """tool_confirmations 新增 feishu_message_id:工具确认卡发到飞书后的消息 id。
 
@@ -986,7 +1001,7 @@ def _recurring(phase: MigrationPhase, *operations: Any) -> tuple[MigrationStep, 
 
 
 def migration_plan() -> MigrationPlan:
-    """Startup migration plan inside the rolling v2.6.4+ support window.
+    """Startup migration plan inside the rolling v2.6.11+ support window.
 
     Only migrations added after the oldest supported Release remain one-time steps; older
     shapes are already reached by upgrading through that Release. Recurring reconciliation
@@ -1002,6 +1017,7 @@ def migration_plan() -> MigrationPlan:
             _migrate_workflow_publish_nodes_get_content_kind,
             _migrate_browser_profiles_pin_identity,
             _migrate_tool_confirmations_make_tool_calls_idempotent,
+            _migrate_tool_confirmations_turn_id,
             _migrate_tool_confirmations_feishu_message_id,
             _migrate_agent_questions_feishu_message_id,
             # ADR 0087:ORM 上 agent_voice_prefs / voice_default_config 两张表只有一列 `voice`(VoiceRef),排在 SCHEMA 之前。

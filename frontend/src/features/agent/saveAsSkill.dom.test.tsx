@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   putSkillFile: vi.fn(),
   deleteSkillFile: vi.fn(),
   updateSkill: vi.fn(),
+  removeSessionAllowance: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", async () => {
@@ -35,7 +36,7 @@ vi.mock("@/features/agent/PermissionModePicker", () => ({
 
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
 
-const SESSION = { id: "s-1", workspace_id: "ws-1" } as never;
+const SESSION = { id: "s-1", workspace_id: "ws-1", auto_allow_tools: [] } as never;
 const DRAFT = { name: "long-to-short", title: "长视频切竖屏", description: "把长视频切成竖屏短片", body: "1. 转写\n2. 挑段落\n" };
 
 beforeEach(() => {
@@ -50,11 +51,11 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function mount() {
+function mount(session: typeof SESSION = SESSION) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <SessionSettingsMenu workspaceId="ws-1" place={{ kind: "studio", id: "" }} session={SESSION} />
+      <SessionSettingsMenu workspaceId="ws-1" place={{ kind: "studio", id: "" }} session={session} />
     </QueryClientProvider>,
   );
 }
@@ -78,6 +79,16 @@ describe("存成技能", () => {
       name: "long-to-short", title: "长视频切竖屏", description: "把长视频切成竖屏短片", license: "", compatibility: "",
       body: "1. 转写\n2. 挑能独立成段的几分钟\n3. 裁成 9:16", from_conversation: true,
     }]);
+  });
+
+  it("已放开的工具可见,并且能从会话设置里撤回", async () => {
+    api.removeSessionAllowance.mockResolvedValue({ id: "s-1", auto_allow_tools: [] });
+    mount({ id: "s-1", workspace_id: "ws-1", auto_allow_tools: [{ tool: "edit_timeline", permission: "edit" }] } as never);
+    fireEvent.click(screen.getByRole("button", { name: "会话设置" }));
+
+    expect(await screen.findByText("edit_timeline")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "移除「edit_timeline」的本会话始终允许" }));
+    await waitFor(() => expect(api.removeSessionAllowance).toHaveBeenCalledWith("s-1", "edit_timeline"));
   });
 
   it("没有会话时没有这个按钮(还没聊过,没什么可存)", async () => {

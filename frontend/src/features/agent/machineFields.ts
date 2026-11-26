@@ -14,4 +14,5 @@ export const NOISE_KEYS = new Set([
   "confirmation_id",
   "requested_by",
   "instance_id",
+  "provider_profile_id",
 ]);

@@ -145,6 +145,23 @@ def test_不中断的正常轮时间线只有一份且进行中的事件被清�
         assert turn_events(db, session_id) == []
 
 
+
+def test_分段冻结后只删到边界的事件_重启不会重复工具卡() -> None:
+    """steer 冻结的段已经进了独立消息；它的事件必须删掉，后面段的事件仍留给重启折叠。"""
+    from app.db.agent_turn_events import delete_turn_events_through, record_turn_event
+
+    fresh_client()
+    old = {"type": "tool", "tool": {"id": "old", "name": "list_assets", "status": "done"}}
+    new = {"type": "tool", "tool": {"id": "new", "name": "list_projects", "status": "done"}}
+    record_turn_event(session_id="s-seg", turn_id="t-seg", seq=1, kind="tool_end", payload=old)
+    record_turn_event(session_id="s-seg", turn_id="t-seg", seq=2, kind="tool_end", payload=new)
+
+    delete_turn_events_through("t-seg", 1)
+
+    with SessionLocal() as db:
+        rows = turn_events(db, "s-seg")
+    assert [row["payload"]["tool"]["id"] for row in rows] == ["new"]
+
 def test_同一个事件写两次是覆盖_顺序按seq() -> None:
     """`(turn_id, seq)` 唯一:重写同一个事件是覆盖,不是多一行。顺序就是 seq 的顺序 ——
     事件可能从两条回调路径并发写,提交先后不能当作发生先后。"""

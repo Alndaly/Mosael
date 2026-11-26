@@ -100,6 +100,7 @@ def open_card(request: dict[str, Any]) -> dict[str, Any]:
         requested_by=request.get("requested_by") or "",
         session_id=SESSION_ID.get() or None,
         tool_call_id=TOOL_CALL_ID.get() or None,
+        require_live_turn=bool(SESSION_ID.get()),
         out=ConfirmationOut,
     )
 

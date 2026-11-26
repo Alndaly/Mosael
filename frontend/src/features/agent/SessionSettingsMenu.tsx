@@ -1,9 +1,10 @@
 import React from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Scissors, SlidersHorizontal, Sparkles } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Scissors, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { draftSkillFromSession } from "@/api/client";
+import { agentKeys } from "@/api/queryKeys";
+import { draftSkillFromSession, removeSessionAllowance } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
@@ -16,9 +17,11 @@ import { AutoApprovalTrace } from "@/features/agent/AutoApprovalTrace";
 import { useSessionSettings } from "@/features/agent/currentAgentSession";
 import type { AgentPlace } from "@/features/agent/places";
 import { ACCENT, PERMISSION_MODE_ICON, PermissionModePicker, permissionModeOf } from "@/features/agent/PermissionModePicker";
+import { PermissionBadge } from "@/features/agent/PermissionBadge";
 import { AnalysisModePicker } from "@/features/agent/AnalysisModePicker";
 import { ThinkingLevelPicker } from "@/features/agent/ThinkingLevelPicker";
 import { SkillEditorDialog, type SkillEditorTarget } from "@/features/agent/skills/SkillEditorDialog";
+import { Truncate } from "@/components/ui/truncate";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 
@@ -52,6 +55,7 @@ export function SessionSettingsMenu({
   compacting?: boolean;
 }) {
   const t = useI18n();
+  const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
   // 收起状态下也要看得见现在是哪一档:用户不知道自己此刻授权了什么,就等于没有授权。
   // 默认档不显示 —— 一个"一切正常"的常驻标记只会变成背景噪音。
@@ -64,6 +68,15 @@ export function SessionSettingsMenu({
     onSuccess: (drafted) => {
       setOpen(false);
       setSkillDraft({ kind: "create", draft: drafted, fromConversation: true });
+    },
+    onError: (error) => toast.error(errorText(error)),
+  });
+  //: 「本会话始终允许」不是一次性的隐藏状态:它一直生效到移除或会话结束。给它一个可见、可撤销的入口,
+  //: 否则用户点过之后只能靠新建对话来恢复逐条确认。
+  const removeAllowance = useMutation({
+    mutationFn: (tool: string) => removeSessionAllowance(String(session?.id), tool),
+    onSuccess: () => {
+      if (session) void qc.invalidateQueries({ queryKey: agentKeys.session(session.id) });
     },
     onError: (error) => toast.error(errorText(error)),
   });
@@ -98,6 +111,31 @@ export function SessionSettingsMenu({
           </span>
           <PermissionModePicker workspaceId={workspaceId} place={place} session={session} />
         </div>
+        {session && (session.auto_allow_tools?.length ?? 0) > 0 && (
+          <div className="grid gap-1.5 border-t border-border pt-2.5" data-session-allowances="">
+            <span className="text-ui-xs font-medium text-muted-foreground">{t("permAllowancesTitle")}</span>
+            <p className="m-0 text-ui-2xs leading-snug text-muted-foreground">{t("permAllowancesHint")}</p>
+            <div className="grid max-h-32 gap-1 overflow-y-auto">
+              {(session.auto_allow_tools ?? []).map((entry) => (
+                <div key={entry.tool} className="flex min-w-0 items-center gap-1.5">
+                  <Truncate className="min-w-0 flex-1 font-mono text-ui-xs">{entry.tool}</Truncate>
+                  <PermissionBadge permission={entry.permission} />
+                  <IconButton
+                    variant="ghost"
+                    size="icon-xs"
+                    className="-my-1 shrink-0"
+                    label={t("permAllowancesRemove").replace("{tool}", entry.tool)}
+                    loading={removeAllowance.isPending}
+                    disabled={removeAllowance.isPending}
+                    onClick={() => removeAllowance.mutate(entry.tool)}
+                  >
+                    <X size={12} />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* 自动放行留了痕,而此前人看不到 —— 前端对 /api/confirmations 的两个调用点都写死
             status=pending,于是"决策之后"的那一半在界面上不存在(见 AutoApprovalTrace)。 */}
         {session && <AutoApprovalTrace workspaceId={workspaceId} sessionId={session.id} />}

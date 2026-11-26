@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.unit_of_work import after_commit
@@ -68,21 +68,24 @@ def resolve_interrupted_executions(db: Session) -> int:
     return int(result.rowcount or 0)
 
 
-def expire_session_cards(db: Session, session_id: str, reason: str) -> int:
-    """这段对话还在等人的卡全部作废(一轮收尾时调;不提交,跟随调用方的事务)。返回作废了几张。
+def expire_session_cards(
+    db: Session, session_id: str, reason: str, *, turn_id: str | None = None
+) -> int:
+    """这段对话还在等人的卡作废(一轮收尾时调;不提交,跟随调用方的事务)。
 
-    条件更新,和认领卡(confirmations._claim)同一种写法:用户恰好在这一刻点了批准,谁先落库谁算 —— 批准赢了,这张卡就照常执行。
+    `turn_id` 给了就只作废**这一轮**的卡;没有轮次的老卡/外部卡仍按会话兜底。这样下一轮
+    已经接着跑时，上一轮晚到的收尾不会把新一轮刚开的卡一起作废。
     """
-    ids = list(
-        db.scalars(
-            select(ToolConfirmation.id).where(
-                ToolConfirmation.session_id == session_id, ToolConfirmation.status == "pending"
-            )
-        )
-    )
+    scope = [
+        ToolConfirmation.session_id == session_id,
+        ToolConfirmation.status == "pending",
+    ]
+    if turn_id:
+        scope.append(or_(ToolConfirmation.turn_id == turn_id, ToolConfirmation.turn_id.is_(None)))
+    ids = list(db.scalars(select(ToolConfirmation.id).where(*scope)))
     result = db.execute(
         update(ToolConfirmation)
-        .where(ToolConfirmation.session_id == session_id, ToolConfirmation.status == "pending")
+        .where(*scope)
         .values(status=EXPIRED, error=reason, resolved_at=now())
         .execution_options(synchronize_session=False)
     )

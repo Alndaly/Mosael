@@ -8819,6 +8819,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/sessions/{session_id}/allowances/{tool}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Agent Session Allowance
+         * @description 移除一条「本会话始终允许」。同样在锁里从库里那份合并,不拿调用方过期的整份列表覆盖。
+         */
+        delete: operations["remove_agent_session_allowance_api_agent_sessions__session_id__allowances__tool__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/sessions/{session_id}/replay/{replay_id}/{which}": {
         parameters: {
             query?: never;
@@ -40436,6 +40456,38 @@ export interface operations {
                 "application/json": components["schemas"]["SessionAllowance"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_agent_session_allowance_api_agent_sessions__session_id__allowances__tool__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

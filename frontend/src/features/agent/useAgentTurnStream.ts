@@ -66,6 +66,8 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
   const [turnStartedAt, setTurnStartedAt] = React.useState<Date | null>(null);
   //: 自然结束(不是被掐)的流的个数。它一变,下面那个跟随的 effect 重看一眼:还在跑就再接。
   const [endedStreams, setEndedStreams] = React.useState(0);
+  //: 连续失败次数。流失败时不能每 300ms 重试一次把后端和连接槽位打满；按指数退避到 8s。
+  const [streamFailures, setStreamFailures] = React.useState(0);
   const streamingRef = React.useRef<string | null>(null);
   /**
    * 掐流用。读流的那个循环此前没有任何办法停下来:切会话或者卸载视图之后它**一直读下去**,
@@ -74,10 +76,18 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
    */
   const abortRef = React.useRef<AbortController | null>(null);
   const segmentRef = React.useRef(0);
+  //: 每次 attach/reset 都换一代。旧流的 finally 可能在新的流已经写了几帧之后才等到失效返回 ——
+  //: 没有这个号，它会把新流的正文、时间线、开始时间一起清掉（用户看到一轮空白的“思考中”）。
+  const generationRef = React.useRef(0);
+  const viewedRef = React.useRef(viewedSessionId);
+  viewedRef.current = viewedSessionId;
+  const failedRef = React.useRef(false);
 
   const reset = React.useCallback(() => {
+    generationRef.current += 1;
     abortRef.current?.abort();
     streamingRef.current = null;
+    setStreamFailures(0);
     setStreamText("");
     setStreamTimeline([]);
     setTurnStartedAt(null);
@@ -92,7 +102,12 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
 
   const attach = React.useCallback(
     async (targetSessionId: string) => {
+      //: 发送请求可能在用户已经切到别的会话之后才返回。不要把那条流的帧画到当前面板上，
+      //: 也不要掐掉当前会话正在接的流；真正的接流由下面的跟随 effect 按 viewedSessionId 做。
+      if (viewedRef.current !== targetSessionId) return;
       if (streamingRef.current === targetSessionId) return;
+      const generation = ++generationRef.current;
+      failedRef.current = false;
       abortRef.current?.abort(); // 切会话必须关掉上一条流
       const controller = new AbortController();
       abortRef.current = controller;
@@ -123,13 +138,14 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
           if (payload.done) break;
         }
       } catch {
+        failedRef.current = true;
         // 流断了、被掐了、根本没连上,都不是要报给人看的错:调用方是 `void attach(...)`,而回合的
         // 真实状态由 agent-session 的轮询兜底 —— 没被掐的话,下面照样失效一遍把正式消息取回来。
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         // 被中止的流是被替换或卸载了 —— 接手的那个现在拥有状态,这里再去失效就是给一个
         // 可能已经不存在的视图重新取数。
-        if (streamingRef.current === targetSessionId && !controller.signal.aborted) {
+        if (streamingRef.current === targetSessionId && !controller.signal.aborted && generation === generationRef.current) {
           streamingRef.current = null;
           // 临时流式气泡的显示条件是 running(来自 agent-session 状态)&& streamText。要消除
           // 「回答完成那一刻整页闪烁」,得让 running 转 false(气泡消失)与正式消息出现落在
@@ -142,10 +158,14 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
             qc.invalidateQueries({ queryKey: agentKeys.messages(targetSessionId) }),
             qc.invalidateQueries({ queryKey: agentKeys.session(targetSessionId) }),
           ]);
+          //: 等失效的这段时间里可能又接上了同一会话的新一轮。那时状态归新流所有，旧流只负责
+          //: 它自己那一代的收尾；再清一次会把新流刚到的那一帧擦掉。
+          if (generation !== generationRef.current || streamingRef.current !== null) return;
           setStreamText("");
           setStreamTimeline([]);
           setTurnStartedAt(null);
           setEndedStreams((count) => count + 1);
+          setStreamFailures((count) => (failedRef.current ? count + 1 : 0));
           // 回合结束后计费事件才落库,而 usage-events 只在 running 时轮询 —— 不主动失效,
           // 这条回复的 token / 费用就一直缺。
           void qc.invalidateQueries({ queryKey: agentKeys.usage(targetSessionId) });
@@ -157,9 +177,14 @@ export function useAgentTurnStream(viewedSessionId: string | null, running: bool
 
   React.useEffect(() => {
     if (!running || !viewedSessionId) return;
-    const timer = window.setTimeout(() => void attach(viewedSessionId), endedStreams ? REATTACH_DELAY_MS : 0);
+    const delay = streamFailures
+      ? Math.min(8000, REATTACH_DELAY_MS * 2 ** (streamFailures - 1))
+      : endedStreams
+        ? REATTACH_DELAY_MS
+        : 0;
+    const timer = window.setTimeout(() => void attach(viewedSessionId), delay);
     return () => window.clearTimeout(timer);
-  }, [running, viewedSessionId, endedStreams, attach]);
+  }, [running, viewedSessionId, endedStreams, streamFailures, attach]);
 
   return { streamText, streamTimeline, turnStartedAt, attach };
 }

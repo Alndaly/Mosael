@@ -4,6 +4,7 @@
  * 文档开头是 CSP),复制拿到的是模型原样的源码,展开时对话里那一份先卸下。
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -115,7 +116,11 @@ describe("小界面画在答案里(智能体主动要展示的东西)", () => {
   ];
 
   it("成功的那次画在答案里,失败的不画;过程里不再摆第二份", async () => {
-    render(<AgentTurnContent timeline={timeline} />);
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentTurnContent timeline={timeline} />
+      </QueryClientProvider>,
+    );
     const result = document.querySelector("[data-turn-result]");
     //: show_widget 的契约就是「把这个拿给用户看」—— 它属于答案,不埋在折叠的「已处理」里。
     await waitFor(() => expect(result?.querySelector('[data-agent-widget="s1"]')).not.toBeNull());

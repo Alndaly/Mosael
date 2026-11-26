@@ -10,7 +10,8 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
-import { ConfirmationCard, PREVIEW_LINES } from "@/features/agent/ConfirmationCard";
+import { ConfirmationCard } from "@/features/agent/ConfirmationCard";
+import { PREVIEW_LINES } from "@/features/agent/StructuredFields";
 
 /** 截图里那张:运行 Manim 的「自定义动画」,一段二十行的 Python。 */
 const MANIM = Array.from({ length: 20 }, (_, index) => (index === 0 ? "import numpy as np" : `line_${index} = ${index}`)).join("\n");

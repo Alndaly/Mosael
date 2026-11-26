@@ -17,9 +17,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.unit_of_work import after_commit
-from app.db.models import ToolConfirmation, User
+from app.db.models import AgentSession, ToolConfirmation, User
 from app.domain.agent import autopilot, origins
 from app.domain.agent.confirmations import prepare_confirmation
+from app.domain.agent.stream import _stream_turn_id, get_stream_state
+from app.domain.agent.errors import ConfirmationError
 from app.domain.permissions import ensure_workspace_perm
 
 
@@ -45,6 +47,7 @@ def propose(
     requested_by: str = "",
     session_id: str | None = None,
     tool_call_id: str | None = None,
+    require_live_turn: bool = False,
 ) -> ToolConfirmation:
     """开一张卡。`session_id` 是这次调用**凭据**所属的对话(由入口从令牌取出),不是调用方自己声明的 ——
     声明的话就能把自己的动作挂进别人的对话(三档权限模式下,那等于挂进别人开的自动放行)。
@@ -54,6 +57,15 @@ def propose(
     开卡要 edit 权限:卡批了就会改东西,不能让只读的人借一张卡去改。
     """
     ensure_workspace_perm(db, user, workspace_id, "edit")
+    session = db.get(AgentSession, session_id) if session_id else None
+    turn_id = _stream_turn_id(session_id) if session_id and session is not None and session.status == "running" else None
+    #: 收尾之后流状态还会留一会儿(供界面读最后一份快照);已收尾的 turn 不能再绑到新卡上。
+    if turn_id and get_stream_state(session_id or "").get("done"):
+        turn_id = None
+    #: 真正在跑的一轮里必须绑到它的 turn;会话已经空闲时允许无主开卡(直连工具、测试、
+    #: 外部通道没有轮次上下文),这类卡由会话边界兜底作废,不假装属于下一轮。
+    if require_live_turn and (session is None or (session.status == "running" and not turn_id)):
+        raise ConfirmationError("confirmErr_noActiveTurn")
     existing = _for_tool_call(db, session_id, tool_call_id)
     if existing is not None:
         return existing
@@ -61,7 +73,7 @@ def propose(
     # 只有真正 insert 进保存点,唯一键冲突时回滚这一点,调用方其余事务不受影响。
     confirmation = prepare_confirmation(
         db, workspace_id=workspace_id, tool=tool, payload=payload, actor_id=user.id,
-        requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id,
+        requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id, turn_id=turn_id,
     )
     try:
         with db.begin_nested():

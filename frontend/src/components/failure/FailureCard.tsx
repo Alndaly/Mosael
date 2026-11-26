@@ -326,7 +326,7 @@ function InlineFailure(props: FailureCardProps) {
     <div
       role="group"
       aria-labelledby={titleId}
-      className={cn("flex w-full min-w-0 items-start gap-1.5 text-ui-2xs leading-relaxed", className)}
+      className={cn("flex w-full min-w-0 items-start gap-1.5 text-ui-xs leading-relaxed", className)}
       data-failure=""
       data-failure-status={status}
       data-failure-size="inline"

@@ -132,13 +132,17 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
   const t = useI18n();
   const [media, setMedia] = React.useState<Asset[]>([]);
   const [files, setFiles] = React.useState<TextAttachment[]>([]);
-  const [uploading, setUploading] = React.useState(false);
+  //: 多个上传入口可能重叠(粘贴时正在选文件、拖文件夹时又贴一张)。单个 bool 会被
+  //: 先完成的那一个提前置回 false,于是按钮在上传还没结束时重新可用。用计数。
+  const [pendingUploads, setPendingUploads] = React.useState(0);
+  const beginUpload = React.useCallback(() => setPendingUploads((count) => count + 1), []);
+  const endUpload = React.useCallback(() => setPendingUploads((count) => Math.max(0, count - 1)), []);
   const [notes, setNotes] = React.useState<BundleNote[]>([]);
 
   /** 交给后端解开一个压缩包 / 文件夹:进了素材库的放进附件条,要人看的(技能、没收的文件)放进卡里。 */
   const unpack = React.useCallback(
     async (name: string, run: () => Promise<AgentBundle>) => {
-      setUploading(true);
+      beginUpload();
       try {
         const bundle = await run();
         if (bundle.assets.length) setMedia((current) => [...current, ...bundle.assets]);
@@ -151,10 +155,10 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       } catch (error) {
         toast.error(t("composerFileUnreadable").replace("{name}", name).replace("{reason}", readFailure(error, t)));
       } finally {
-        setUploading(false);
+        endUpload();
       }
     },
-    [t],
+    [t, beginUpload, endUpload],
   );
 
   const acceptFolder = React.useCallback(
@@ -176,7 +180,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       }
       await unpack(folder.name, () => unpackAgentBundleFolder(workspaceId, folder.name, folder.files));
     },
-    [workspaceId, unpack, t],
+    [workspaceId, unpack, t, beginUpload, endUpload],
   );
 
   const accept = React.useCallback(
@@ -187,7 +191,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       const added: TextAttachment[] = [];
       /** 进素材库。失败时报出是哪一个、**为什么**(只说「读不出来」等于没说)。 */
       const importFile = async (file: File) => {
-        setUploading(true);
+        beginUpload();
         try {
           const asset = await importAsset({ workspaceId, file });
           setMedia((current) => [...current, asset]);
@@ -197,7 +201,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
           const cause = (await readable(file)) ? error : new DOMException("", "NotReadableError");
           toast.error(unreadable(file.name || t("composerPastedImage"), cause));
         } finally {
-          setUploading(false);
+          endUpload();
         }
       };
       const unreadable = (name: string, error: unknown) =>
@@ -231,7 +235,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       }
       if (added.length) setFiles((current) => [...current, ...added]);
     },
-    [workspaceId, unpack, t],
+    [workspaceId, unpack, t, beginUpload, endUpload],
   );
 
   const onPaste = React.useCallback(
@@ -317,7 +321,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
   return {
     media,
     files,
-    uploading,
+    uploading: pendingUploads > 0,
     isEmpty: media.length === 0 && files.length === 0,
     accept,
     onPaste,

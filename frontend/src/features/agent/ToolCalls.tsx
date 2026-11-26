@@ -1,8 +1,8 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, CircleAlert, CircleHelp, Loader2, Settings2, Sparkles, X, type LucideIcon } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, CircleHelp, Clock, Loader2, Settings2, Sparkles, X, type LucideIcon } from "lucide-react";
 
-import { getJob, type Confirmation, type JobSummary } from "@/api/client";
+import { getJob, type Confirmation, type Job, type JobSummary } from "@/api/client";
 import { agentReplayImageUrl, clearAgentReplay } from "@/api/domains/sessions";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -20,10 +20,13 @@ import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_
 import { decodeByteFallback } from "@/features/agent/byteFallback";
 import { NOISE_KEYS } from "@/features/agent/machineFields";
 import { gotoSettings } from "@/lib/deepLink";
+import { useJob } from "@/lib/useJob";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
+import { payloadFields } from "@/features/agent/confirmationPayload";
+import { FieldList } from "@/features/agent/StructuredFields";
 import { CitationContext } from "@/components/markdown/CitationLink";
 import { collectCitations } from "@/features/agent/citations";
 import { AgentPageViewsContext } from "@/features/agent/pageViews";
@@ -56,50 +59,6 @@ export type AgentTimelineItem =
   | { type: "subtool"; parent_id?: string; tool: ToolCall }
   /** 思考块。`done=false` 表示正在思考(展开并转圈),结束后默认收起。 */
   | { type: "thinking"; text: string; done?: boolean; duration_seconds?: number };
-
-/** 取一段短摘要塞进折叠态标题(参考 Claude/Codex:折叠时也能看出这步在干嘛)。 */
-
-/**
- * 摘要**按字段名挑**,不按出现顺序。
- *
- * 排在前面的是「一眼看出这一步在干什么」的那些:提示词、地址、要找的东西。挑不到就退回
- * 第一个不是噪音的字符串 —— 那至少比 workspace_id 强。
- */
-const SUMMARY_KEYS = [
-  "prompt",
-  "text",
-  "query",
-  "keyword",
-  "url",
-  "path",
-  "name",
-  "title",
-  "message",
-  "content",
-  "tool_name",
-  "model",
-];
-
-function summarize(args: unknown): string | null {
-  if (args == null) return null;
-  if (typeof args === "string") return args;
-  if (typeof args === "number" || typeof args === "boolean") return String(args);
-  if (Array.isArray(args)) {
-    const first = args.find((item) => typeof item === "string");
-    return typeof first === "string" ? first : null;
-  }
-  if (typeof args !== "object") return null;
-  const record = args as Record<string, unknown>;
-  for (const key of SUMMARY_KEYS) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  for (const [key, value] of Object.entries(record)) {
-    if (NOISE_KEYS.has(key)) continue;
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return null;
-}
 
 /** 展开的明细里也把噪音字段拿掉 —— 它们占的行数常常比真正的参数还多。 */
 function withoutNoise(value: unknown): unknown {
@@ -281,7 +240,13 @@ function DesktopReplay({ replay }: { replay: ReplayEvidence }) {
  * 永远等不到结束事件,`tool.status` 会一直停在 running —— 按它画就是一个永远转着的圈,
  * 右边却写着「这一轮已经结束,卡已作废」。还没结论(没卡 / 等决定 / 批了在跑)才看工具自己的状态。
  */
-function toolMarker(tool: ToolCall, decision: Confirmation | null | undefined): { icon: LucideIcon; className?: string } {
+function toolMarker(
+  tool: ToolCall,
+  decision: Confirmation | null | undefined,
+  job: Job | null | undefined,
+  resultFailed: boolean,
+): { icon: LucideIcon; className?: string } {
+  if (resultFailed) return { icon: CircleAlert, className: "text-destructive" };
   switch (decision?.status) {
     case "rejected":
     case EXPIRED:
@@ -291,83 +256,182 @@ function toolMarker(tool: ToolCall, decision: Confirmation | null | undefined): 
     case "unknown":
       return { icon: CircleHelp, className: "text-warning" };
     case "executed":
+      // 卡的 executed 只说明「卡执行完了」。异步工具在这一步只是把任务交给后台：
+      // 任务 failed / 还在跑时画绿色勾，等于替一个还没跑完（或已经失败）的活宣布成功。
+      if (job?.status === "failed") return { icon: CircleAlert, className: "text-destructive" };
+      if (job?.status === "cancelled") return { icon: X };
+      if (job?.status === "queued" || job?.status === "running") return { icon: Loader2 };
+      if (job?.status === "succeeded") return { icon: Check, className: "text-success" };
+      if (job === null) return { icon: Clock };
       return { icon: Check, className: "text-success" };
   }
-  if (tool.status === "running") return { icon: Loader2 };
+  if (job?.status === "failed") return { icon: CircleAlert, className: "text-destructive" };
+  if (job?.status === "cancelled") return { icon: X };
+  if (tool.status === "running" || job?.status === "queued" || job?.status === "running") return { icon: Loader2 };
   if (tool.status === "error") return { icon: CircleAlert, className: "text-destructive" };
+  if (job === null) return { icon: Clock };
   return { icon: Check, className: "text-success" };
+}
+
+/** 异步工具的结果里通常只有一个 job_id；它是「任务已提交」，不是「任务成功」。 */
+function jobIdOf(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const one = typeof record.job_id === "string" ? record.job_id.trim() : "";
+  if (one) return one;
+  const many = Array.isArray(record.job_ids) ? record.job_ids.find((id) => typeof id === "string" && id.trim()) : null;
+  return typeof many === "string" ? many.trim() : null;
+}
+
+/** 工具明细里的一个区:标题一行,内容一组。输入和输出因此有同一套层级,而不是一串无名块。 */
+function ToolSection({ label, name, children }: { label: string; name: string; children: React.ReactNode }) {
+  return (
+    <section className="grid min-w-0 gap-2" data-tool-section={name}>
+      {/* 横线夹着区名:输入 / 输出是两段,不是两个贴在内容左上角的小标签。 */}
+      <div className="flex min-w-0 items-center gap-2" data-tool-section-heading={name}>
+        <span aria-hidden className="h-px flex-1 bg-border" />
+        <span className="shrink-0 text-ui-sm font-semibold uppercase tracking-[0.08em] text-foreground">{label}</span>
+        <span aria-hidden className="h-px flex-1 bg-border" />
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** 原始 JSON 是兜底,不是主界面:默认收起,需要排查时再展开。 */
+function RawJsonDetails({ label, code, defaultOpen = false }: { label: string; code: string; defaultOpen?: boolean }) {
+  return (
+    <details className="group min-w-0 text-ui-xs" open={defaultOpen || undefined}>
+      <summary className="w-fit cursor-pointer select-none text-muted-foreground hover:text-foreground">{label}</summary>
+      <HighlightedCode
+        code={code}
+        className="mt-1.5 max-h-[220px] rounded-md border border-border bg-panel px-2 py-1.5 text-ui-xs text-foreground"
+      />
+    </details>
+  );
 }
 
 function ToolCallCard({ tool }: { tool: ToolCall }) {
   const t = useI18n();
   //: 这次调用开的确认卡(没有就是 null)。等决定时卡就摆在这一行下面;有了结论只剩行里那一句状态。
   const decision = useToolCallConfirmation(tool.id);
-  //: 用户拒了 / 卡作废了:工具那边是「失败」(sidecar 抛的是「用户拒绝了该操作」),但这不是出了错 ——
-  //: 是他做的决定。不标红、不自动摊开那句错误。
-  const declined = decision?.status === "rejected" || decision?.status === EXPIRED;
-  const failed = tool.status === "error" && !declined;
-  const marker = toolMarker(tool, decision);
-  //: 默认折叠:失败的原因不在明细里,在这一行下面那张失败展示里(不跟着折叠)。
-  const [open, setOpen] = React.useState(false);
-  const preview = summarize(tool.args);
-  // 明细里也去噪:workspace_id 那几个占的行常常比真正的参数还多,而它们对读的人没有任何意义。
-  const cleanArgs = React.useMemo(() => withoutNoise(tool.args), [tool.args]);
-  const argText = format(cleanArgs);
-  // 去噪之后只剩一个字段、而它的值就是摘要里那句 —— 再摆一遍 JSON 是纯重复。
-  const argsAreJustPreview =
-    preview != null &&
-    cleanArgs != null &&
-    typeof cleanArgs === "object" &&
-    !Array.isArray(cleanArgs) &&
-    Object.keys(cleanArgs as Record<string, unknown>).length === 1 &&
-    Object.values(cleanArgs as Record<string, unknown>)[0] === preview;
   // Structure first: the runtimes hand us the result pre-stringified, so without unwrapping
   // there is nothing to render but the string.
   const data = React.useMemo(() => toolResultData(tool.result), [tool.result]);
+  //: 异步工具只把任务 id 交回来;任务本身的成败要另外看。没有 job_id 的工具不查。
+  const jobId = React.useMemo(() => jobIdOf(data), [data]);
+  const job = useJob(jobId, { interval: 1500, enabled: Boolean(jobId) });
+  const jobStatus = job.data?.status;
+  const jobAssetIds = React.useMemo(
+    () => (job.data?.result ? [...collectAssetIds(job.data.result)] : []),
+    [job.data],
+  );
+  const jobFailed = jobStatus === "failed";
+  const jobCancelled = jobStatus === "cancelled";
+  const jobActive = jobStatus === "queued" || jobStatus === "running";
+  //: 有些工具把失败作为**结果**交回来(HTTP 200 + `{error}`),sidecar 那边不是异常。
+  //: 这时只看 tool.status 会画成成功;结果里的 error 才是事实。
+  const resultError =
+    data && typeof data === "object" && !Array.isArray(data) && typeof (data as Record<string, unknown>).error === "string"
+      ? String((data as Record<string, unknown>).error).trim()
+      : "";
+  //: 用户拒了 / 卡作废了:工具那边是「失败」(sidecar 抛的是「用户拒绝了该操作」),但这不是出了错 ——
+  //: 是他做的决定。不标红、不自动摊开那句错误。
+  const declined = decision?.status === "rejected" || decision?.status === EXPIRED;
+  const resultFailed = Boolean(resultError) && !declined;
+  const failed = (tool.status === "error" && !declined) || resultFailed;
+  const marker = toolMarker(tool, decision, jobId ? (job.data ?? null) : undefined, resultFailed);
+  //: 默认折叠:失败的原因不在明细里,在这一行下面那张失败展示里(不跟着折叠)。
+  const [open, setOpen] = React.useState(false);
+  // 明细里也去噪:workspace_id 那几个占的行常常比真正的参数还多,而它们对读的人没有任何意义。
+  const cleanArgs = React.useMemo(() => withoutNoise(tool.args), [tool.args]);
+  const argText = format(cleanArgs);
+  //: 输入不是一块 JSON:按确认卡同一套规则摊成可读字段。原始 JSON 留在折叠里兜底。
+  const inputFields = React.useMemo(() => payloadFields(cleanArgs), [cleanArgs]);
   const replay = React.useMemo(() => replayOf(data), [data]);
   //: 这一页认得这次的结果(工作台「助手」的诊断、新标签页):画这一页给的,但仍属于这次工具调用的明细。
   const pageViews = React.useContext(AgentPageViewsContext);
   const pageCard = tool.status === "error" || !pageViews ? null : pageViews.toolResult(tool.name, data);
   const hasPageCard = pageCard !== null;
-  const card = tool.status === "error" || replay ? null : <ToolResultCard value={data} />;
+  //: 失败已经在输出区用一行说清楚;再摆一张摘要卡会把 status/message/error 说第二遍。
+  const card = tool.status === "error" || replay || failed ? null : <ToolResultCard value={data} />;
   // 富卡认得出这份数据的形状时,**下面那块裸 JSON 就是同一份东西再摆一遍**。
   // 判据用 detectShape 而不是 card:card 是 JSX 元素,恒为真。
   const richShape = !replay && tool.status !== "error" && detectShape(data) !== null;
   const resultText = richShape || failed || Boolean(replay) ? null : format(data ?? tool.result);
+  const rawResult = data == null && tool.result == null ? null : format(data ?? tool.result);
   // 富卡也算"有内容" —— 少了它这一项,一个「参数就是摘要 + 结果是富卡」的调用会算成没内容,
   // 整行不可展开,而那张富卡就永远看不到了。原注释警告过的正是这个陷阱(card 恒为真不能当判据),
   // 现在有了 richShape 这个真正的布尔值。
   const elapsed =
     typeof tool.usage?.duration_seconds === "number" ? formatElapsedSeconds(tool.usage.duration_seconds) : null;
-  // Media the tool touched (an analyzed image, a generated clip, synthesized audio…) — shown as
-  // playable/viewable cards so the agent's media "returns" are visible in chat, not just text.
-  const assetIds = React.useMemo(
-    () => (tool.status === "error" ? [] : [...collectAssetIds(tool.args, collectAssetIds(data))]),
-    [tool.args, data, tool.status],
+  //: 输入素材(引用、原图)和输出素材分开摆:前者属于「输入」,后者才是这一步做出来的东西。
+  const inputAssetIds = React.useMemo(
+    () => (tool.status === "error" ? [] : [...collectAssetIds(tool.args)]),
+    [tool.args, tool.status],
   );
+  const outputAssetIds = React.useMemo(() => {
+    if (tool.status === "error") return [];
+    const input = new Set(inputAssetIds);
+    return [...new Set([...collectAssetIds(data), ...jobAssetIds])].filter((id) => !input.has(id));
+  }, [data, inputAssetIds, jobAssetIds, tool.status]);
 
   // **成功时不写「已完成」** —— 那个 ✓ 已经说过一遍了,再写一次只是在占地方。
   // 运行中和失败时保留:那两个词带的信息,图标传达不了全部(尤其失败,它要把视线拉过去)。
   // 开了确认卡的调用改说卡走到了哪一步:「已批准 · 已执行」比一个 ✓ 多说了一件事 —— 这一步是问过人的。
-  const statusWord = decision ? null : tool.status === "running" ? t("toolRunning") : null;
-  //: 跑挂了的那一步:状态词不写在行里 —— 下面那张失败展示的标题就是它(「失败」「手动 · 执行失败」),写两遍只是重复
+  // **异步任务不能沿用这句话**:卡的 executed 只代表「任务已提交」,任务本身可能还在跑或已经失败。
   const decisionFailed = decision?.status === "failed";
-  const statusText = decision && !decisionFailed ? <span data-decision={decision.status}>{decisionWord(decision, t)}</span> : statusWord;
-  //: 出了什么事:批准后执行失败的看确认卡(后端摘好的那一句和原文),工具自己挂了看它交回的那段话
+  const jobFailure = jobFailed && job.data
+    ? {
+        summary: job.data.error_summary || job.data.error || job.data.message || t("toolFailed"),
+        detail: job.data.error_detail ?? null,
+        fix: job.data.error_hint ?? null,
+        copyText: job.data.error ?? "",
+      }
+    : null;
+  const jobStatusText = jobId && !resultFailed
+    ? jobFailed
+      ? null
+      : jobCancelled
+        ? t("toolJobCancelled")
+        : jobActive
+          ? t("toolRunning")
+          : job.data
+            ? null
+            : t("toolJobSubmitted")
+    : null;
+  const statusWord = jobId
+    ? jobStatusText
+    : resultFailed || decisionFailed
+      ? null
+      : decision
+        ? null
+        : tool.status === "running"
+          ? t("toolRunning")
+          : null;
+  const statusText = jobId
+    ? jobStatusText
+    : decision && !decisionFailed
+      ? <span data-decision={decision.status}>{decisionWord(decision, t)}</span>
+      : statusWord;
+  //: 出了什么事:批准后执行失败的看确认卡(后端摘好的那一句和原文),工具自己挂了看它交回的那段话;
+  //: 异步任务的话,看任务本身的状态。
   const failure = decisionFailed && decision.error
     ? { summary: decision.error_summary || decision.error, detail: decision.error_detail ?? null, fix: decision.error_hint ?? null,
         copyText: decision.error }
-    : failed
-      ? rawFailureFields(format(data ?? tool.result) ?? "", t("toolFailed"))
-      : null;
-  const hasBody = Boolean(
-    (argText && !argsAreJustPreview) || resultText || richShape || hasPageCard || failure || assetIds.length > 0 || replay,
-  );
+    : resultFailed
+      ? rawFailureFields(resultError, t("toolFailed"))
+      : failed
+        ? rawFailureFields(format(data ?? tool.result) ?? "", t("toolFailed"))
+        : jobFailure;
+  const hasInput = Boolean(argText || inputAssetIds.length > 0);
+  const hasOutput = Boolean(resultText || richShape || hasPageCard || failure || outputAssetIds.length > 0 || replay);
+  const hasBody = Boolean(hasInput || hasOutput);
   // 页面专用结果和失败原因原先作为工具行的兄弟卡一直摊开,看起来像第二条消息。
   // 现在它们进这次调用的明细,结果刚到或失败时自动展开,仍然不会把重要回包藏起来。
   //: 做出来的素材不自动摊开这一行(也不进答案区,见 resultDocument):碰过的素材点开明细照样看得到;
   //: `show_widget` 的小界面同理,在明细里,不抢正文的位置。
-  const revealResult = hasPageCard || Boolean(failure);
+  const revealResult = hasPageCard || Boolean(failure) || jobAssetIds.length > 0;
   React.useEffect(() => {
     if (revealResult) setOpen(true);
   }, [revealResult]);
@@ -376,7 +440,13 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
     // 一次工具调用是对话里的**一条行内标记**,不是一张与正文并列的卡片 —— 所以用 Marker:
     // 折叠态就是安静的一行(没有填充、没有整圈边框),不再和旁边的正文抢分量;展开的明细挂在
     // 一条左竖线下面,读起来是"这一步的细节",而不是又一个内容块。
-    <div className="w-full min-w-0" data-tool-call={tool.id}>
+    <div
+      className="w-full min-w-0"
+      data-tool-call={tool.id}
+      data-tool-status={
+        resultFailed || jobFailed ? "error" : jobCancelled ? "cancelled" : jobActive ? "running" : jobId ? "submitted" : tool.status
+      }
+    >
       <Marker
         asChild
         className={cn(
@@ -396,12 +466,9 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <Truncate className="min-w-0 shrink font-mono text-foreground">{tool.name}</Truncate>
-            {preview && !open && <Truncate className="flex-1 font-mono">{preview}</Truncate>}
-            {/* 摘要占中间那一段(它可缩),状态与耗时**永远靠右** —— 但靠的是摘要那一栏的右缘,
-                不是整行的最右。没有摘要时补一个占位,否则这一行的耗时会贴在名字后面,
-                和上下几行对不齐。
-                字号挂在 span 上:根是 button,那条全局 `button{font:inherit}` 会吃掉根上的字号。 */}
-            {!(preview && !open) && <span className="min-w-0 flex-1" aria-hidden />}
+            {/* 折叠态只读工具名。参数摘要是展开后的「输入」区该说的事 ——
+                把模型名、项目名、UUID 挂在名字右边,让一行工具标记看起来像两列数据。 */}
+            <span className="min-w-0 flex-1" aria-hidden />
             <span className="flex-none pl-1.5 text-ui-xs">
               {statusText}
               {statusText && elapsed && " · "}
@@ -432,32 +499,44 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           className={cn(AGENT_ROW_BODY_CLASS, "mt-1 flex min-w-0 flex-col gap-2")}
           data-tool-details=""
         >
-          {failure ? (
-            <FailureCard title={decisionFailed ? decisionWord(decision, t) : t("toolFailed")} {...failure} data-tool-failure={tool.id} />
-          ) : null}
-          {hasPageCard ? pageCard : card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
-          {argText && !argsAreJustPreview && (
-            <div className="flex flex-col gap-1">
-              <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
-              <HighlightedCode
-                code={argText}
-                className="max-h-[220px] rounded-md border border-border bg-panel px-2 py-1.5 text-ui-xs text-foreground"
-              />
-            </div>
+          {/* 输入、输出各占一个区,顺序固定;原始数据只作为兜底折叠在区内。 */}
+          {hasInput && (
+            <ToolSection label={t("toolInput")} name="input">
+              {inputFields.length > 0 ? <FieldList fields={inputFields} /> : null}
+              {inputAssetIds.length > 0 && <MediaPreviewGrid assetIds={inputAssetIds} />}
+              {argText && (
+                inputFields.length > 0 ? (
+                  <RawJsonDetails label={t("toolRawInput")} code={argText} />
+                ) : (
+                  <HighlightedCode
+                    code={argText}
+                    className="max-h-[220px] rounded-md border border-border bg-panel px-2 py-1.5 text-ui-xs text-foreground"
+                  />
+                )
+              )}
+            </ToolSection>
           )}
-          {resultText && (
-            <div className="flex flex-col gap-1">
-              <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolResult")}</span>
-              <HighlightedCode
-                code={resultText}
-                className="max-h-[220px] rounded-md border border-border bg-panel px-2 py-1.5 text-ui-xs text-foreground"
-              />
-            </div>
-          )}
-          {replay ? <DesktopReplay replay={replay} /> : null}
-          {assetIds.length > 0 && (
-            //: `reveal`:每张卡带一颗「在素材库中打开」—— 做出来的图现在只在过程里,这个出口要跟着过来。
-            <MediaPreviewGrid assetIds={assetIds} reveal className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5")} />
+          {hasOutput && (
+            <ToolSection label={t("toolOutput")} name="output">
+              {failure ? (
+                <FailureCard
+                  size="inline"
+                  lines={2}
+                  title={decisionFailed ? decisionWord(decision, t) : t("toolFailed")}
+                  {...failure}
+                  data-tool-failure={tool.id}
+                />
+              ) : null}
+              {hasPageCard ? pageCard : card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
+              {outputAssetIds.length > 0 && (
+                //: `reveal`:每张卡带一颗「在素材库中打开」—— 做出来的东西的出口要跟着过来。
+                <MediaPreviewGrid assetIds={outputAssetIds} reveal />
+              )}
+              {rawResult && (
+                <RawJsonDetails label={t("toolRawResult")} code={rawResult} defaultOpen={Boolean(resultText)} />
+              )}
+              {replay ? <DesktopReplay replay={replay} /> : null}
+            </ToolSection>
           )}
         </div>
       )}

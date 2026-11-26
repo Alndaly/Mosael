@@ -73,6 +73,19 @@ def _set_status(session_id: str, status: str) -> None:
         db.commit()
 
 
+
+def test_drain_拼提示词失败也要把状态放回_idle(monkeypatch) -> None:
+    """排队消息引用的素材/文档在等待期间没了：抢占已经提交，失败不能把会话永久留在 running。"""
+    client = fresh_client()
+    sid = _session(client)
+    _queue_one(sid)
+    _set_status(sid, "idle")
+    monkeypatch.setattr(host, "user_prompt", lambda *a, **k: (_ for _ in ()).throw(ValueError("attachment gone")))
+
+    host._drain_queue(sid)
+
+    assert _status(sid) == "idle", "drain 失败后状态没放回 idle，后续消息会永远排队"
+
 def test_抢到了却没活干_要把状态放回去(monkeypatch) -> None:
     """抢占之后才发现队列是空的 —— 不放回 idle 的话,这个会话永远停在 running,
     之后每一条消息都会被当成"正忙"排进一个再也不会被 drain 的队列。整个会话就此哑掉。"""

@@ -24,9 +24,11 @@ def create_confirmation(
     (登录令牌)开出来的卡就是无主的,由全局确认中心兜底。
     """
     try:
+        session_id = autopilot.session_for_token(db, token)
         return propose(
             db, user, workspace_id=body.workspace_id, tool=body.tool, payload=body.payload,
-            requested_by=body.requested_by, session_id=autopilot.session_for_token(db, token),
+            requested_by=body.requested_by, session_id=session_id,
+            require_live_turn=bool(session_id),
         )
     except ConfirmationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

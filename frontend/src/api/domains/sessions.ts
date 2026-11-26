@@ -95,6 +95,9 @@ export const updateAgentSession = (sessionId: string, body: Record<string, unkno
 /** 「本会话始终允许」加一条:后端在它那一份上合并(界面不再读出整份、加一条、写回去 —— 两张卡同时点会丢一条)。 */
 export const addSessionAllowance = (sessionId: string, body: components["schemas"]["SessionAllowance"]) =>
   api<AgentSession>(`/api/agent/sessions/${sessionId}/allowances`, { method: "POST", body: JSON.stringify(body) });
+/** 移除一条「本会话始终允许」:同样由后端按库里那份合并,避免用过期列表覆盖别的卡刚加的条目。 */
+export const removeSessionAllowance = (sessionId: string, tool: string) =>
+  api<AgentSession>(`/api/agent/sessions/${sessionId}/allowances/${encodeURIComponent(tool)}`, { method: "DELETE" });
 
 export const listAgentMessages = (sessionId: string) =>
   api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/messages`);
@@ -104,7 +107,7 @@ export const sendAgentMessage = (sessionId: string, body: Record<string, unknown
 export const streamAgentTurn = (sessionId: string, signal: AbortSignal) =>
   apiStream(`/api/agent/sessions/${sessionId}/stream`, { signal });
 export const stopAgentSession = (sessionId: string) =>
-  api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" });
+  api<{ stopped: boolean }>(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" });
 export const compactAgentSession = <T>(sessionId: string) =>
   api<T>(`/api/agent/sessions/${sessionId}/compact`, { method: "POST" });
 

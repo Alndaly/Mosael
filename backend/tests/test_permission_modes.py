@@ -326,6 +326,45 @@ def test_session_allow_list_is_server_side_and_recorded_as_such() -> None:
     assert card["decision_mode"] == "session-allow", "白名单放行不该和模式放行混为一谈"
 
 
+def test_removing_a_session_allowance_makes_the_next_card_pending() -> None:
+    """「本会话始终允许」必须能撤回:不然用户只能新建一段对话才能恢复逐条确认。"""
+    chat = _chat()
+    chat.as_person()
+    added = chat.client.post(
+        f"/api/agent/sessions/{chat.session_id}/allowances",
+        json={"tool": "edit_timeline", "permission": "edit"},
+    )
+    assert added.status_code == 200, added.text
+    chat.as_turn()
+    assert chat.edit_card()["status"] == "executed"
+
+    chat.as_person()
+    removed = chat.client.delete(f"/api/agent/sessions/{chat.session_id}/allowances/edit_timeline")
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["auto_allow_tools"] == []
+    chat.as_turn()
+    assert chat.edit_card()["status"] == "pending"
+
+
+def test_session_allowance_still_hits_the_billable_run_limit() -> None:
+    """点「始终允许」是跳过逐条确认,不是让无人值守的回合无限花钱。"""
+    chat = _chat()
+    chat.as_person()
+    added = chat.client.post(
+        f"/api/agent/sessions/{chat.session_id}/allowances",
+        json={"tool": "generate_image", "permission": "ai-cost"},
+    )
+    assert added.status_code == 200, added.text
+    chat.as_turn()
+
+    for index in range(COST_AUTO_LIMIT):
+        card = chat.card("generate_image", {"prompt": f"p{index}"})
+        assert card["status"] in ("executed", "failed"), card
+        assert card["decision_mode"] == "session-allow"
+    blocked = chat.card("generate_image", {"prompt": "再来一张"})
+    assert blocked["status"] == "pending", "白名单把计费连开上限绕过去了"
+
+
 # ---------------- 入口权限 ----------------
 
 
@@ -343,6 +382,53 @@ def test_switching_to_bypass_requires_admin() -> None:
     assert mate.patch(f"/api/agent/sessions/{session_id}", json={"permission_mode": "auto"}).status_code == 200
     denied = mate.patch(f"/api/agent/sessions/{session_id}", json={"permission_mode": "bypass"})
     assert denied.status_code == 403, denied.text
+
+
+def test_bypass_is_rechecked_after_the_admin_is_demoted() -> None:
+    """bypass 是工作区级别的授权:角色降级后不能跟着旧会话继续用。
+
+    只查「开模式那一刻是 admin」不够 —— 会话是长命的,成员关系不是。降成 editor 之后仍有 edit,
+    执行闸不会挡住,所以必须在每次判定时复查。
+    """
+    owner = fresh_client()
+    workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
+    mate = second_client("mate")
+    owner.post(f"/api/workspaces/{workspace['id']}/invitations", json={"username": "mate", "role": "admin"})
+    invitation = mate.get("/api/invitations").json()["invitations"][0]
+    mate.post(f"/api/invitations/{invitation['id']}/accept")
+    with SessionLocal() as db:
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+
+    project = owner.post("/api/projects", json={"workspace_id": workspace["id"], "name": "P"}).json()
+    sequence = owner.post(
+        "/api/sequences",
+        json={"workspace_id": workspace["id"], "project_id": project["id"], "name": "S"},
+    ).json()
+    session_id = mate.post(
+        "/api/agent/sessions",
+        json={"home": {"kind": "studio"}, "workspace_id": workspace["id"], "title": "T"},
+    ).json()["id"]
+    assert mate.patch(f"/api/agent/sessions/{session_id}", json={"permission_mode": "bypass"}).status_code == 200
+    demoted = owner.patch(f"/api/workspaces/{workspace['id']}/members/{mate_id}", json={"role": "editor"})
+    assert demoted.status_code == 200, demoted.text
+
+    with SessionLocal() as db:
+        token = mint_service_session(db, mate_id, agent_session_id=session_id)
+    mate.headers["Authorization"] = f"Bearer {token}"
+    card = mate.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": workspace["id"],
+            "tool": "edit_timeline",
+            "payload": {"sequence_id": sequence["id"], "operations": [{"kind": "add_track", "track_kind": "video"}]},
+        },
+    ).json()
+    wait_for_idle_autopilot()
+
+    with SessionLocal() as db:
+        row = db.get(ToolConfirmation, card["id"])
+        assert row.status == "pending"
+        assert row.decision_detail["reason"] == "bypass-needs-admin"
 
 
 def test_a_shared_session_never_gets_bypass() -> None:

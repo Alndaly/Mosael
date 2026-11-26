@@ -122,6 +122,21 @@ describe("每一处一个当前对话,打开时是草稿", () => {
     expect(window.sessionStorage.getItem(agentSessionSelectionKey("w1", NOTE_B))).toBeNull();
   });
 
+  it("建会话期间用户切到另一段，创建结果不覆盖这次选择", async () => {
+    let release!: (value: unknown) => void;
+    mocks.createAgentSession.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const { client } = setup();
+
+    const pending = ensureAgentSession(client, "w1", NOTE_A);
+    adoptAgentSession("w1", NOTE_A, "s-a");
+    await act(async () => {
+      release(session("s-created"));
+      await pending;
+    });
+
+    expect(window.sessionStorage.getItem(agentSessionSelectionKey("w1", NOTE_A))).toBe("s-a");
+  });
+
   it("不同的地方同时要:各建各的,家各是各的", async () => {
     mocks.createAgentSession.mockImplementation(async (body: { home: AgentPlace }) => session(`s-${body.home.id}`));
     const client = new QueryClient();

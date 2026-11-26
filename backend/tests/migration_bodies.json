@@ -15,6 +15,7 @@
   "migrate-speech-records-store-a-voice-ref": "e85b10b9990883f0",
   "migrate-tool-confirmations-feishu-message-id": "8449e28b6f789c21",
   "migrate-tool-confirmations-make-tool-calls-idempotent": "3caa4e9d573bd279",
+  "migrate-tool-confirmations-turn-id": "f1e7079c7d900010",
   "migrate-update-feed-url": "fa97538573db7b15",
   "migrate-voice-default-stores-a-voice-ref": "33a7b621d77bda54",
   "migrate-workflow-publish-nodes-get-content-kind": "18d27ac78d2251e7"

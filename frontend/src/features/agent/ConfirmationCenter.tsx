@@ -53,9 +53,21 @@ export function ConfirmationCenter({
   });
 
   const settled = useSettledCards(workspaceId);
+  //: 按卡记在飞的请求；mutation.variables 只保留最后一次，先点的卡会失去转圈。
+  const [inflight, setInflight] = React.useState<Record<string, "approve" | "reject">>({});
   const settle = useMutation({
     mutationFn: ({ id, action, choices }: { id: string; action: "approve" | "reject"; choices?: Record<string, boolean> }) =>
       action === "approve" ? approveConfirmation(id, choices) : rejectConfirmation(id),
+    onMutate: (vars) => {
+      setInflight((prev) => ({ ...prev, [vars.id]: vars.action }));
+    },
+    onSettled: (_data, _error, vars) => {
+      setInflight((prev) => {
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+    },
     onSuccess: (card) => {
       // **拍板之后卡就走**,只有一种例外:外部智能体(没有对话)的卡执行失败了。
       //  - 对话里的卡:结果收在那次对话里那次工具调用的一行里(见 ToolCalls),这里再留一张是第二份;
@@ -74,9 +86,8 @@ export function ConfirmationCenter({
   // 旧写法是「只要有任何内联面就整体返回 null」,于是一开聊天面板,外部智能体的卡也跟着被藏掉。
   const handledSessions = useInlineConfirmSessions();
 
-  // 此刻在飞的是哪一张卡的哪一档 —— 同 InlineConfirmations。直接读 `settle.isPending` 的话,
-  // 屏上每张卡的每个按钮会一起转:转圈的意思是"我正在做这件事",而它们没有。
-  const busy = settle.isPending ? settle.variables : null;
+  // 此刻每张卡各自在飞的是哪一档 —— 同 InlineConfirmations。
+  const busyActionFor = (id: string) => inflight[id] ?? null;
 
   const settledIds = new Set(settled.cards.map((card) => card.id));
   const items = (pending.data ?? []).filter(
@@ -170,7 +181,7 @@ export function ConfirmationCenter({
               {item.session_id && <CardHome sessionId={item.session_id} goHome={goHome} />}
               <SettleButtons
                 tool={item.tool}
-                busyAction={busy?.id === item.id ? busy.action : null}
+                busyAction={busyActionFor(item.id)}
                 onSettle={(action, choices) => settle.mutate({ id: item.id, action, choices })}
               />
             </>

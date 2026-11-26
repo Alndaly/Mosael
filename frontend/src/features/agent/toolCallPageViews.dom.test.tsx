@@ -62,6 +62,7 @@ it("工具失败原因也在这次调用的明细内,默认展开", () => {
   const failed = view.container.querySelectorAll<HTMLElement>("[data-tool-call]")[1];
   expect(failed.querySelector("[aria-expanded]")?.getAttribute("aria-expanded")).toBe("true");
   expect(failed.querySelector("[data-tool-details] [data-tool-failure]"), "失败回包不是兄弟卡片").toBeTruthy();
+  expect(failed.querySelector("[data-tool-failure]")?.getAttribute("data-failure-size"), "工具卡里用一行失败,不再套一张卡").toBe("inline");
 });
 
 it("没有这一层(AI 工作台)、或者这一页不认得:只有那一行", () => {

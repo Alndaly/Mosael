@@ -129,6 +129,21 @@ def collapse_timeline(items: list[dict]) -> list[dict]:
     return collapsed
 
 
+def delete_turn_events_through(turn_id: str, seq: int) -> int:
+    """删掉某一轮 `seq` 及之前的已落库事件。用于 steer 把一段冻结进独立消息之后：
+    那一份过程已经进消息 payload，重启时不能再折叠到后面的中断消息里。自己的短事务，
+    和 `record_turn_event` 对称。
+    """
+    if not turn_id:
+        return 0
+    with SessionLocal() as db:
+        rows = db.execute(
+            delete(TURN_EVENTS).where(TURN_EVENTS.c.turn_id == turn_id, TURN_EVENTS.c.seq <= seq)
+        ).rowcount or 0
+        db.commit()
+        return rows
+
+
 def delete_turn_events(db: Session, turn_id: str) -> int:
     """这一轮收尾了(成功、失败、被重启拨回都一样):中间过程删掉,消息 payload 才是唯一的记录。
 

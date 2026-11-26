@@ -7,6 +7,10 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # ---- B1 · 03_confirmable ----
+    "confirmErr_noActiveTurn": {
+        "zh": "这一轮已经结束，不能再发起需要确认的操作。",
+        "en": "This turn has ended; it can no longer propose a confirmation.",
+    },
     "confirmErr_noActor": {"zh": "这张卡没有能替谁做的人(账号已经不在了)", "en": "There's no one to act for on this card (the account is gone)."},
     # ---- 智能体改技能(ADR 0043) ----
     "confirm_createSkill": {"zh": "新建技能「{title}」({name}){warning}", "en": "Create the skill “{title}” ({name}){warning}"},

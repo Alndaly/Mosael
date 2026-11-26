@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # project_id):用 v1.9.3 打开 main 迁过的库,`init_db` 照常通过,智能体页随即报 `no such column`。
 # 靠人记得改的数守不住,所以有测试看着:`tests/test_schema_version_follows_the_migrations.py` 对着
 # `tests/schema_version.json`(这个数当时认得的那几步),多出一步而这个数没动就红。
-DATABASE_SCHEMA_VERSION = 50
+DATABASE_SCHEMA_VERSION = 51
 
 #: 自动升级快照保留最近几份。一次升级只需要最近的前态来回退;更早的自动快照没有恢复价值,
 #: 却每份都接近整个数据库大小。只匹配本模块生成的文件名,目录里的人工备份不参与清理。

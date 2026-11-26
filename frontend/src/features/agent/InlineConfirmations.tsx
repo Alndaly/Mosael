@@ -2,6 +2,7 @@ import React from "react";
 import { confirmationKeys, agentKeys } from "@/api/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCheck, X } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   addSessionAllowance,
@@ -157,6 +158,9 @@ export function ConfirmationsProvider({
    */
   const [decided, setDecided] = React.useState<{ scope: string | null; cards: Confirmation[] }>({ scope: sessionId, cards: [] });
   const mine = decided.scope === sessionId ? decided.cards : NO_CARDS;
+  //: 每张卡各自在飞什么。`useMutation.variables` 只保留**最后一次**调用；两张卡同时批，
+  //: 先点的那张会失去转圈并被重新启用。按卡 id 记，才是「此刻这张卡在做什么」。
+  const [inflight, setInflight] = React.useState<Record<string, Choice>>({});
 
   /**
    * 三档动作走**同一个** mutation —— 因为「谁在转」要由它的变量说了算。
@@ -185,15 +189,33 @@ export function ConfirmationsProvider({
     }) => {
       //: 草稿态没有卡可点(两条查询都关着,待决定列表是空的);类型上把「没有会话」挡在接口之前。
       if (!sessionId) throw new Error("confirmations need an agent session");
+      // **先批准，成功了才写白名单。** 反过来先写后批时，批准失败（卡已被别处处理、断网、409）
+      // 会留下一个已经永久放开的工具，而用户看到的是报错。白名单晚半步落库的代价只是下一张
+      // 同工具卡可能多问一次 —— 这个方向是安全的。
+      const card = choice === "reject" ? await rejectConfirmation(id) : await approveConfirmation(id, choices);
       if (choice === "session") {
-        // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
         // 记的是**(工具, 这张卡的档位)**:以后同一工具不高于这一档的卡才放行(同一工具取最高的那条由后端归并)。
         // 「工具」是卡说的 `allow_tool`:替别的插件工具开卡的 run_plugin_tool 记在它替调的那个名下(只放行同一个)。
-        // **加一条,由后端合并**:此前在这里读出整份、加一条、写回去,两张卡几乎同时点,后写的盖掉先写的。
-        await addSessionAllowance(sessionId, { tool, permission });
-        void qc.invalidateQueries({ queryKey: agentKeys.session(sessionId) });
+        // 加一条，由后端合并：此前这里读出整份、加一条、写回去，两张卡几乎同时点会丢一条。
+        try {
+          await addSessionAllowance(sessionId, { tool, permission });
+          void qc.invalidateQueries({ queryKey: agentKeys.session(sessionId) });
+        } catch (error) {
+          // 动作已经执行了，不能把它报成失败；但白名单没写成，下一张同工具卡照常问人。
+          toast.error((error as Error).message);
+        }
       }
-      return choice === "reject" ? rejectConfirmation(id) : approveConfirmation(id, choices);
+      return card;
+    },
+    onMutate: (vars) => {
+      setInflight((prev) => ({ ...prev, [vars.id]: vars.choice }));
+    },
+    onSettled: (_data, _error, vars) => {
+      setInflight((prev) => {
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
     },
     onSuccess: (card) => {
       setDecided((prev) => ({
@@ -203,8 +225,6 @@ export function ConfirmationsProvider({
       invalidateAfterDecision(qc, workspaceId, card);
     },
   });
-  // 此刻在飞的是哪一张卡的哪一档。没有就是 null。
-  const busy = decide.isPending ? decide.variables : null;
   const { mutate } = decide;
 
   const actionsFor = React.useCallback((item: Confirmation): React.ReactNode =>
@@ -213,10 +233,10 @@ export function ConfirmationsProvider({
     ) : (
       <DecisionButtons
         item={item}
-        busyChoice={busy?.id === item.id ? busy.choice : null}
+        busyChoice={inflight[item.id] ?? null}
         onDecide={(choice, choices) => mutate({ id: item.id, tool: item.allow_tool, permission: item.permission, choice, choices })}
       />
-    ), [busy, mutate, readOnly, t]);
+    ), [inflight, mutate, readOnly, t]);
 
   // 对话里每一次工具调用的那一行都读这一份:面板每秒走一次的计时也会让这里重渲,值不变就别让它们跟着重渲。
   const value = React.useMemo((): Decisions => {

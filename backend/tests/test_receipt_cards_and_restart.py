@@ -191,6 +191,75 @@ def test_已送回执被重启掐断_收尾后重新待送_下一轮真读到(mo
         assert db.get(AgentSession, sid).status == "idle"
 
 
+
+def test_流式草稿不会把没消费的回执藏掉(monkeypatch) -> None:
+    """回执开跑后马上有 streaming 草稿；重启时不能因为最后一条不是回执就不重投。"""
+    turns = Turns()
+    use_fake_turn_runtime(monkeypatch, run=turns)
+    client = fresh_client()
+    sid = _session(client)
+    owner = user_id()
+    with SessionLocal() as db:
+        job = jobs_domain.create_job(
+            db,
+            workspace_id=_workspace(sid),
+            kind="tts",
+            created_by=owner,
+            payload={"subject": "配音 2"},
+        )
+        db.commit()
+        job.status = "succeeded"
+        job.result = {"asset_id": "asset-2"}
+        db.add(AgentMessage(
+            session_id=sid,
+            role=host.JOB_RECEIPT_ROLE,
+            content="「配音 2」已完成,素材 id:asset-2。",
+            payload={
+                "job_id": job.id, "asset_ids": ["asset-2"], "kind": "tts", "status": "succeeded",
+                "subject": "配音 2", "undelivered": False,
+            },
+        ))
+        # 真实状态：回执已交出去，回合刚创建了草稿，模型还没吐出任何 token。
+        db.add(AgentMessage(
+            session_id=sid,
+            role="assistant",
+            content="",
+            payload={"streaming": True},
+        ))
+        session = db.get(AgentSession, sid)
+        session.status = "running"
+        db.commit()
+
+        assert host.reconcile_orphaned_agent_sessions(db) == 1
+        db.commit()
+
+    assert host.wait_for_idle_turns(20)
+    assert turns.prompts, "streaming 草稿把未消费的回执藏掉了"
+    assert "配音 2" in turns.prompts[0]
+
+
+def test_已消费的回执重启后不重复投递(monkeypatch) -> None:
+    """模型已经产出过内容，说明它看过提示词里的回执；重启时不能因为没看到最后一条就再送一遍。"""
+    turns = Turns()
+    use_fake_turn_runtime(monkeypatch, run=turns)
+    client = fresh_client()
+    sid = _session(client)
+    with SessionLocal() as db:
+        db.add(AgentMessage(
+            session_id=sid,
+            role=host.JOB_RECEIPT_ROLE,
+            content="「配音 3」已完成。",
+            payload={"job_id": "job-3", "undelivered": False, "consumed": True, "deliver_as": user_id()},
+        ))
+        db.add(AgentMessage(session_id=sid, role="assistant", content="", payload={"streaming": True}))
+        db.get(AgentSession, sid).status = "running"
+        db.commit()
+        assert host.reconcile_orphaned_agent_sessions(db) == 1
+        db.commit()
+
+    assert host.wait_for_idle_turns(20)
+    assert turns.prompts == []
+
 def test_最后一条不是回执就不动它(monkeypatch) -> None:
     """用户在那条回执之后又说了一句:该重放的是用户那句话(已有机制),不是那条回执。"""
     turns = Turns()

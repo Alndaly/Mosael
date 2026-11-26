@@ -197,11 +197,18 @@ export function ChatWorkspace({
   
   //: 发送时没有会话就先建一个(生成页同款「输入框直达」交互,见 useAgentConversation)。
   const sendMessage = conversation.send;
+  const attachLatest = React.useRef(attach);
+  attachLatest.current = attach;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     // `running` is deliberately NOT a guard any more: a message typed while the agent works
     // is a correction, and the backend injects it into the running turn (pi steering queue).
+    if (attach.uploading) {
+      // 键盘路径也必须和按钮同一个答案：按钮禁用了，回车不能反而发出一条没有附件的消息。
+      toast.message(t("composerUploading"));
+      return;
+    }
     const draftText = draft.text();
     if ((!draftText.trim() && attach.isEmpty) || sendMessage.isPending) return;
     stick.scrollToBottom(); // 自己发的消息一定要看得见
@@ -217,14 +224,27 @@ export function ChatWorkspace({
       return;
     }
     setJustSent(true);
+    //: 发送期间输入框仍然可以继续打字/挂附件。成功回调只能清掉**这一次发出去的那一份**;
+    //: 直接清空当前编辑器会把用户已经写下的下一句一起抹掉。
+    const sentDocumentKey = JSON.stringify(draft.get());
+    const sentFiles = attach.files;
+    const sentMedia = attach.media;
+    const unchanged = () =>
+      JSON.stringify(draft.get()) === sentDocumentKey &&
+      attachLatest.current.files.length === sentFiles.length &&
+      attachLatest.current.files.every((file, index) => file === sentFiles[index]) &&
+      attachLatest.current.media.length === sentMedia.length &&
+      attachLatest.current.media.every((asset, index) => asset === sentMedia[index]);
     sendMessage.mutate(
       { content: full, references: collectReferences(draft.get()), document: draft.get() },
       {
         onError: () => setJustSent(false),
         onSuccess: () => {
-          draft.set(emptyDocument);
-          //: 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了。
-          attach.clear();
+          if (unchanged()) {
+            draft.set(emptyDocument);
+            //: 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了。
+            attachLatest.current.clear();
+          }
         },
       },
     );

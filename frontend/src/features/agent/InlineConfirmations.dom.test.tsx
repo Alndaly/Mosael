@@ -70,6 +70,12 @@ function busyLabels(container: HTMLElement): string[] {
   return [...container.querySelectorAll("button[aria-busy]")].map((node) => node.textContent?.trim() ?? "");
 }
 
+/** 批准请求先落库，白名单在它之后写；测试要先把批准放行，才能看到后一步。 */
+async function releaseApproval() {
+  await waitFor(() => expect(api.mock.calls.some(([path]) => path.endsWith("/approve"))).toBe(true));
+  releaseDecision();
+}
+
 describe("确认卡的等待状态", () => {
   beforeEach(() => {
     api.mockClear();
@@ -107,33 +113,35 @@ describe("确认卡的等待状态", () => {
     releaseDecision();
   });
 
-  it("「本会话始终允许」要写白名单再批准,整段都转它自己那一个", async () => {
+  it("「本会话始终允许」在批准期间只转它自己那一个", async () => {
     const { container } = renderCards();
     (await screen.findAllByText("本会话始终允许"))[0].click();
 
-    // 第一步(写白名单)与第二步(批准)之间不能换一个按钮转 —— 用户看到的是同一个动作。
+    // 批准与白名单是一个动作，不能换一个按钮转。
     await waitFor(() => expect(busyLabels(container).length).toBe(1));
     expect(busyLabels(container)).toEqual(["本会话始终允许"]);
-    releaseDecision();
+    await releaseApproval();
+    await waitFor(() => expect(api.mock.calls.some(([path]) => path.endsWith("/allowances"))).toBe(true));
   });
 
   it("「本会话始终允许」记下的是(工具, 这张卡的档位),不只是工具名", async () => {
     /* 只记工具名时,点过一张 ai-cost 的 run_workflow,之后带 HTTP / 发布节点(external)的 run_workflow 也直接放行。 */
     renderCards();
     (await screen.findAllByText("本会话始终允许"))[1].click();
+    await releaseApproval();
     // 加一条,由后端在它那一份上合并(不再读出整份、加一条、PATCH 整份 —— 两张卡同时点会丢一条)。
     await waitFor(() => expect(api.mock.calls.some(([path]) => path === "/api/agent/sessions/s1/allowances")).toBe(true));
     const [, init] = api.mock.calls.find(([path]) => path === "/api/agent/sessions/s1/allowances")!;
     expect((init as RequestInit).method).toBe("POST");
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({ tool: "render_sequence", permission: "render-cost" });
     expect(api.mock.calls.some(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")).toBe(false);
-    releaseDecision();
   });
 
   it("替别的工具开的卡(run_plugin_tool),「本会话始终允许」记在卡说的那个工具名下 —— 只放行同一张工作流", async () => {
     renderCards();
     // c3 是撤不回的那一档,没有这个按钮:第三个「本会话始终允许」是 c4 的。
     (await screen.findAllByText("本会话始终允许"))[2].click();
+    await releaseApproval();
     await waitFor(() => expect(api.mock.calls.some(([path]) => path === "/api/agent/sessions/s1/allowances")).toBe(true));
     const [, init] = api.mock.calls.find(([path]) => path === "/api/agent/sessions/s1/allowances")!;
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({ tool: "plugin__conn__wf_portrait", permission: "ai-cost" });

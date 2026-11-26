@@ -25912,6 +25912,58 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/allowances/{tool}": {
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Remove Agent Session Allowance",
+        "description": "移除一条「本会话始终允许」。同样在锁里从库里那份合并,不拿调用方过期的整份列表覆盖。",
+        "operationId": "remove_agent_session_allowance_api_agent_sessions__session_id__allowances__tool__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "tool",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions/{session_id}/replay/{replay_id}/{which}": {
       "get": {
         "tags": [

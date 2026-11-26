@@ -111,6 +111,7 @@ def prepare_confirmation(
     requested_by: str = "external-agent",
     session_id: str | None = None,
     tool_call_id: str | None = None,
+    turn_id: str | None = None,
 ) -> ToolConfirmation:
     """完成校验与摘要，但不写入;调用方可在独立的小事务里处理唯一键冲突。"""
     spec = tool_spec(tool)
@@ -136,6 +137,7 @@ def prepare_confirmation(
         requested_by=requested_by,
         session_id=session_id,
         tool_call_id=tool_call_id,
+        turn_id=turn_id,
     )
 
 
@@ -149,11 +151,12 @@ def request_confirmation(
     requested_by: str = "external-agent",
     session_id: str | None = None,
     tool_call_id: str | None = None,
+    turn_id: str | None = None,
 ) -> ToolConfirmation:
     """开一张卡。`actor_id` 是开卡的人(发起这次调用的凭据是谁的),校验里因人而异的事实按他算。"""
     confirmation = prepare_confirmation(
         db, workspace_id=workspace_id, tool=tool, payload=payload, actor_id=actor_id,
-        requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id,
+        requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id, turn_id=turn_id,
     )
     db.add(confirmation)
     db.flush()

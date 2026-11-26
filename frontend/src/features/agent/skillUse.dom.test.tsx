@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -25,6 +26,15 @@ import { ToolCalls, type ToolCall } from "@/features/agent/ToolCalls";
 
 afterEach(cleanup);
 
+function mount(tools: ToolCall[]) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <ToolCalls tools={tools} />
+    </QueryClientProvider>,
+  );
+}
+
 const DONE: ToolCall = {
   id: "t1",
   name: "use_skill",
@@ -45,7 +55,7 @@ const DONE: ToolCall = {
 
 describe("用了技能", () => {
   it("折叠时一句人话,点开是做法和带的文件", () => {
-    const view = render(<ToolCalls tools={[DONE]} />);
+    const view = mount([DONE]);
     const row = screen.getByRole("button", { name: /用了技能:做带货短视频/ });
     expect(row.textContent).toContain("工作区成员写的");
     expect(view.container.textContent).not.toContain("先用 analyze_asset");
@@ -58,14 +68,12 @@ describe("用了技能", () => {
   });
 
   it("还在读的时候说「正在读技能」", () => {
-    render(<ToolCalls tools={[{ ...DONE, status: "running", result: undefined }]} />);
+    mount([{ ...DONE, status: "running", result: undefined }]);
     expect(screen.getByText("正在读技能:short-video-ads")).toBeInTheDocument();
   });
 
   it("失败的照普通工具行画,原因看得见", () => {
-    const view = render(
-      <ToolCalls tools={[{ id: "t2", name: "use_skill", args: { name: "nope" }, status: "error", result: "没有叫「nope」的技能" }]} />,
-    );
+    const view = mount([{ id: "t2", name: "use_skill", args: { name: "nope" }, status: "error", result: "没有叫「nope」的技能" }]);
     expect(view.container.textContent).toContain("use_skill");
     expect(view.container.textContent).toContain("没有叫「nope」的技能");
     expect(view.container.textContent).not.toContain("用了技能");

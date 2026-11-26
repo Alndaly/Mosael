@@ -171,6 +171,8 @@ export function CanvasAgentChat({
   const composerShownFor = React.useRef({ workspaceId, place, key: `${workspaceId}|${here}` });
   const composerLatest = React.useRef({ media: attach.media, files: attach.files });
   composerLatest.current = { media: attach.media, files: attach.files };
+  const attachRef = React.useRef(attach);
+  attachRef.current = attach;
   const { restore: restoreAttachments } = attach;
   React.useEffect(() => {
     const key = `${workspaceId}|${here}`;
@@ -284,15 +286,27 @@ export function CanvasAgentChat({
       toast.error(t("composerMessageTooLong"));
       return;
     }
+    //: 发送期间输入框仍然可以继续打字/挂附件。成功回调只能清掉**这一次发出去的那一份**;
+    //: 直接清空当前编辑器会把用户已经写下的下一句一起抹掉。
+    const sentDocument = document;
+    const sentDocumentKey = JSON.stringify(sentDocument);
+    const sentFiles = files;
+    const sentMedia = mediaAssets;
+    const unchanged = () =>
+      JSON.stringify(draft.get()) === sentDocumentKey &&
+      composerLatest.current.files.length === sentFiles.length &&
+      composerLatest.current.files.every((file, index) => file === sentFiles[index]) &&
+      composerLatest.current.media.length === sentMedia.length &&
+      composerLatest.current.media.every((asset, index) => asset === sentMedia[index]);
     conversation.send.mutate(
       { content: visibleContent, references, document, context: extra, quote },
       {
         onError: (error) => toast.error((error as Error).message),
         onSuccess: () => {
           //: 页面投递的那条不经输入框:输入框里正写着的草稿、挂着的附件都不是它的,不动。
-          if (!fromPage) {
+          if (!fromPage && unchanged()) {
             setDraft(emptyDocument);
-            attach.clear();
+            attachRef.current.clear();
           }
           onSent?.();
         },
@@ -318,6 +332,11 @@ export function CanvasAgentChat({
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
+    if (attach.uploading) {
+      // 键盘路径也必须和按钮同一个答案：按钮禁用了，回车不能反而发出一条没有附件的消息。
+      toast.message(t("composerUploading"));
+      return;
+    }
     const draftText = draft.text().trim();
     if ((!draftText && attach.isEmpty) || send.isPending) return;
     sendMessage({

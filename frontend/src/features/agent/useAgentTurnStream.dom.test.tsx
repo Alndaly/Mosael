@@ -143,6 +143,33 @@ it("看的会话换成了别的:掐掉手上那条流,流态清空", async () =>
   expect(signals[0]?.aborted).toBe(true);
 });
 
+
+/** 发送请求可能在用户切走之后才返回；这个晚到的 attach 不该把别的会话的流接上来。 */
+function LateAttach({ viewed = "s2", target = "s1" }: { viewed?: string; target?: string }) {
+  const { streamText, attach } = useAgentTurnStream(viewed, false);
+  React.useEffect(() => {
+    void attach(target);
+  }, [attach, target]);
+  return <output aria-label="late-text">{streamText}</output>;
+}
+
+it("晚到的 attach 目标不是当前查看的会话：不接那条流", async () => {
+  const fetched = vi.fn(async () => new Response("ok", { status: 200 }));
+  vi.stubGlobal("fetch", fetched);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <LateAttach />
+    </QueryClientProvider>,
+  );
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(fetched).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("late-text").textContent).toBe("");
+});
+
 /** 面板只告诉它「这个会话在跑」,接流由它自己来 —— 和两个面板的用法一样。 */
 function Follower() {
   const { streamText, turnStartedAt } = useAgentTurnStream("s1", true);

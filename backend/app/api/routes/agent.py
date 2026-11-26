@@ -271,6 +271,19 @@ def add_agent_session_allowance(
     return _out(db, user, session)
 
 
+@router.delete("/agent/sessions/{session_id}/allowances/{tool}", response_model=AgentSessionOut)
+def remove_agent_session_allowance(
+    session_id: str, tool: str, db: DbSession, user: CurrentUser
+) -> AgentSession:
+    """移除一条「本会话始终允许」。同样在锁里从库里那份合并,不拿调用方过期的整份列表覆盖。"""
+    session = writable_session(db, user, session_id)
+    with autopilot.ALLOWANCE_LOCK:
+        autopilot.remove_session_allowance(db, user, session, tool)
+        db.commit()
+    db.refresh(session)
+    return _out(db, user, session)
+
+
 @router.delete("/agent/sessions/{session_id}", status_code=204)
 def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
     agent_use_cases.delete_session(db, user, session_id)

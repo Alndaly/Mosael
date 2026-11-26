@@ -151,4 +151,10 @@ describe("common tool and workflow result cards", () => {
   it("uses generic rows for otherwise valid object lists", () => {
     expect(detectShape([{ plugin_id: "p1", tool_name: "t", description: "desc" }])).toBe("records");
   });
+
+  it("renders a named collection instead of only counting its fields", () => {
+    expect(detectShape({ path: "/tmp/out", entries: [{ name: "a.mp4", kind: "file" }] })).toBe("collection");
+    expect(detectShape({ folders: ["/tmp/a", "/tmp/b"] })).toBe("collection");
+    expect(detectShape({ name: "P", sequences: [{ id: "s1", name: "主线" }] })).toBe("collection");
+  });
 });

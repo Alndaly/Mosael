@@ -1,5 +1,5 @@
 {
-  "version": 50,
+  "version": 51,
   "steps": [
     "migrate-agent-questions-feishu-message-id",
     "migrate-agent-sessions-plan-id",
@@ -17,6 +17,7 @@
     "migrate-speech-records-store-a-voice-ref",
     "migrate-tool-confirmations-feishu-message-id",
     "migrate-tool-confirmations-make-tool-calls-idempotent",
+    "migrate-tool-confirmations-turn-id",
     "migrate-update-feed-url",
     "migrate-voice-default-stores-a-voice-ref",
     "migrate-workflow-publish-nodes-get-content-kind"

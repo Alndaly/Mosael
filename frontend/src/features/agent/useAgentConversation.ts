@@ -25,7 +25,7 @@ import {
   steerQueuedMessage,
   stopAgentSession,
 } from "@/api/client";
-import type { AgentMessageQuote } from "@/api/domains/sessions";
+import type { AgentMessageQuote, AgentSession } from "@/api/domains/sessions";
 import { agentKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { markAgentTurnStarted } from "@/features/agent/agentTurnStarts";
@@ -129,6 +129,17 @@ export function useAgentConversation(current: CurrentAgentSession, workspaceId: 
   });
   const stopTurn = useMutation({
     mutationFn: () => stopAgentSession(sessionId),
+    onSuccess: (result) => {
+      //: 停下这一轮之后,状态和 queue/messages 都可能要等下一次轮询才变。先把「正在跑」摘掉，
+      //: 让停止键和「已用」立刻收住；没停到（刚好结束）就不改缓存。
+      if (!result?.stopped) return;
+      qc.setQueryData<AgentSession>(agentKeys.session(sessionId), (current) =>
+        current ? { ...current, status: "idle" } : current,
+      );
+      void qc.invalidateQueries({ queryKey: agentKeys.messages(sessionId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.queue(sessionId) });
+      void qc.invalidateQueries({ queryKey: agentKeys.session(sessionId) });
+    },
     //: 两种结果都不用说:停下了看得见这一轮结束;停一个刚结束的是看不见的竞态。
     meta: { silentError: true },
   });
@@ -167,6 +178,9 @@ export function useAgentConversation(current: CurrentAgentSession, workspaceId: 
       void qc.invalidateQueries({ queryKey: agentKeys.sessions(workspaceId) });
       void attachStream(targetId);
     },
+    //: 两个聊天壳都在 per-call `onError` 里自己报错；全局 fallback 读不到 per-call 回调,
+    //: 不静音就会同一条发送失败弹两次。
+    meta: { silentError: true },
   });
 
   return {

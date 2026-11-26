@@ -45,7 +45,7 @@ def _messages(sid: str) -> list[str]:
 def turns(monkeypatch) -> list[str]:
     """不真的起一轮(要 sidecar):记下「起了」;会话照常被回执那一轮抢成 running。"""
     started: list[str] = []
-    monkeypatch.setattr(host, "_start_turn", lambda session_id, prompt, token, actor_id=None: started.append(session_id))
+    monkeypatch.setattr(host, "_start_turn", lambda session_id, prompt, token, actor_id=None, **_kwargs: started.append(session_id))
     return started
 
 

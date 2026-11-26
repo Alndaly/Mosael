@@ -15,7 +15,8 @@ from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.security import find_session
 from app.db.models import AgentSession, ToolConfirmation, User, Workspace, now
 from app.domain.agent import judge as judge_module, rules, confirmations
-from app.domain.permissions import PermissionDenied, ensure_workspace_role
+from app.domain.permissions import PermissionDenied, ensure_workspace_role, workspace_role
+from app.domain.roles import role_at_least
 from app.core.db import SessionLocal
 from app.domain.agent.confirmable.registry import allowance_name, tool_spec
 
@@ -52,6 +53,10 @@ COST_PERMISSIONS = frozenset({"ai-cost", "render-cost"})
 #: 有判据的那几类,走工作区的放行准则(rules,见 judge / always),要整个放开走 bypass —— 都是比一个按钮更明确的口子。
 #: ai-cost 排在 render-cost 之后:花钱比占本机时间重。
 SESSION_ALLOWABLE = ("edit", "render-cost", "ai-cost")
+
+#: 「本会话始终允许」最多能记多少条。API 的形状上限也是这个数；合并后超过就拒绝，不静默丢弃
+#: 用户刚点过的那一条。
+MAX_SESSION_ALLOWANCES = 40
 
 #: 自动放行的执行线程。起名字是为了让测试能在重建 schema 前排空它 —— 不然就是那种「看机器速度
 #: 和用例顺序随机红」的失败。
@@ -119,6 +124,35 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     if allowed_up_to and _within(permission, allowed_up_to):
         # 用户在一张读过的卡上点了「本会话始终允许」—— 逐个工具、他自己点的,和模式放行是两回事,
         # 所以留痕也分开记。只放行**不高于他当时那一档**的卡(见 SESSION_ALLOWABLE)。
+        #
+        # 计费类仍然受连续上限约束。用户点过「始终允许」不代表愿意让一次无人值守的回合无限花钱;
+        # 到上限后重新问一次,人工批一张自然归零。这样这个安全阀对所有自动放行路径一致,而不是
+        # 只对 auto 档有效、点过一次按钮就从旁边绕过去。
+        if permission in COST_PERMISSIONS:
+            used = _billable_run_length(db, session)
+            if used >= COST_AUTO_LIMIT:
+                return Decision(
+                    approve=False,
+                    detail={
+                        "tool": allowed_as,
+                        "permission": permission,
+                        "allowed_up_to": allowed_up_to,
+                        "reason": "cost-run-limit",
+                        "used": used,
+                        "limit": COST_AUTO_LIMIT,
+                    },
+                )
+            return Decision(
+                approve=True,
+                mode="session-allow",
+                detail={
+                    "tool": allowed_as,
+                    "permission": permission,
+                    "allowed_up_to": allowed_up_to,
+                    "used": used,
+                    "limit": COST_AUTO_LIMIT,
+                },
+            )
         return Decision(
             approve=True,
             mode="session-allow",
@@ -127,6 +161,11 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
 
     mode = session.permission_mode
     if mode == "bypass":
+        # bypass 是在**开模式那一刻**要求 admin 的,但角色会变。降成 editor 之后仍然有 edit、
+        # 会话还在、mode_set_by 也还是他 —— 只看旧决定的话,bypass 会跟着他一起活下来。这里
+        # 按当前角色复查;被移出工作区仍由执行时的 edit 闸挡住,反而不需要另写一条。
+        if not role_at_least(workspace_role(db, user, session.workspace_id) or "", "admin"):
+            return Decision(approve=False, detail={"reason": "bypass-needs-admin", "permission": permission})
         return Decision(approve=True, mode="bypass", detail={"permission": permission})
     if mode != "auto":
         return Decision(approve=False, detail={"reason": "manual"})
@@ -191,7 +230,9 @@ def set_session_allowances(db: Session, user: User, session: AgentSession, entri
             raise PermissionModeError("agentErr_sessionAllowAlwaysAsks", tool=tool)
         if tool not in merged or _within(merged[tool], permission):
             merged[tool] = permission
-    session.auto_allow_tools = [{"tool": tool, "permission": permission} for tool, permission in merged.items()][:40]
+    if len(merged) > MAX_SESSION_ALLOWANCES:
+        raise PermissionModeError("agentErr_sessionAllowTooMany", max=MAX_SESSION_ALLOWANCES)
+    session.auto_allow_tools = [{"tool": tool, "permission": permission} for tool, permission in merged.items()]
     session.mode_set_by = user.id
     if session.mode_set_at is None:
         session.mode_set_at = now()
@@ -213,6 +254,26 @@ def add_session_allowance(db: Session, user: User, session: AgentSession, tool: 
     set_session_allowances(db, user, session, [*current, (tool, permission)])
 
 
+def remove_session_allowance(db: Session, user: User, session: AgentSession, tool: str) -> None:
+    """从「本会话始终允许」里移除一个工具。
+
+    同样先从库里读整份再合并:调用方手里的列表可能已经过期,拿它整份覆盖会把刚点的另一条丢掉。
+    移除是安全操作,不需要工具当前仍登记在册 —— 插件被卸载、工具改名之后,旧条目也必须能清掉。
+    调用方持 `ALLOWANCE_LOCK`、在锁里提交。
+    """
+    db.refresh(session)
+    # 不经过 `set_session_allowances`:它会重新校验每一条的权限档和工具是否还在登记表里。
+    # 移除必须永远可用 —— 插件卸载、工具改名之后,旧条目也不能因此变成删不掉的历史包袱。
+    session.auto_allow_tools = [
+        {"tool": str(entry.get("tool") or ""), "permission": str(entry.get("permission") or "")}
+        for entry in (session.auto_allow_tools or [])
+        if isinstance(entry, dict) and str(entry.get("tool") or "") != tool
+    ]
+    session.mode_set_by = user.id
+    if session.mode_set_at is None:
+        session.mode_set_at = now()
+
+
 def _rules_for(db: Session, confirmation: ToolConfirmation) -> dict:
     workspace = db.get(Workspace, confirmation.workspace_id)
     return rules.normalize(workspace.autopilot_rules if workspace is not None else None)
@@ -221,6 +282,8 @@ def _rules_for(db: Session, confirmation: ToolConfirmation) -> dict:
 def _billable_run_length(db: Session, session: AgentSession) -> int:
     """自上次人工决定(或模式开启)以来,这个会话自动放行过几张计费卡。
 
+    两种自动放行都算:`auto` 档和用户点过的「本会话始终允许」。后者是他们同意跳过**逐条确认**,
+    不是同意让一个无人值守的回合无限花费;上限到了就重新问一次。
     起点取两者中较晚的那个:用户批了一张卡就说明他回到了现场,计数该归零。
     """
     since = session.mode_set_at
@@ -235,7 +298,7 @@ def _billable_run_length(db: Session, session: AgentSession) -> int:
         since = last_human
     stmt = select(func.count()).select_from(ToolConfirmation).where(
         ToolConfirmation.session_id == session.id,
-        ToolConfirmation.decision_mode == "auto",
+        ToolConfirmation.decision_mode.in_(("auto", "session-allow")),
         ToolConfirmation.permission.in_(COST_PERMISSIONS),
     )
     if since is not None:
@@ -387,10 +450,12 @@ __all__ = [
     "COST_AUTO_LIMIT",
     "Decision",
     "ALLOWANCE_LOCK",
+    "MAX_SESSION_ALLOWANCES",
     "SESSION_ALLOWABLE",
     "add_session_allowance",
     "consider",
     "decide",
+    "remove_session_allowance",
     "session_allowance",
     "session_for_token",
     "set_session_allowances",

@@ -242,6 +242,8 @@ class ToolConfirmation(Base):
     #: 把它显示出来,更糟的是会被那边的「本会话始终允许」自动批准(授权范围逃逸)。
     #: 不设外键:会话删除后这张卡的归属仍然有意义(审计),也不该级联删掉历史。
     session_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=False)
+    #: 这张卡属于哪一轮对话。回合收尾只作废本轮的卡；外部/旧调用没有轮次时为空，仍按会话兜底。
+    turn_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=False)
     #: 是那次对话里**哪一次工具调用**开的这张卡(pi 的 toolCallId,sidecar 随调用报上来)。对话界面靠它把卡
     #: 摆回那次调用的位置、决定之后收成那一行里的一句状态 —— 只知道 session_id 时,卡只能统一堆在对话末尾。
     #: **只管摆在哪儿,不管授权**:报错了只是卡摆错了地方,归属与自动放行照旧由 session_id(凭据)决定。

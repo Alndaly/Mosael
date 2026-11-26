@@ -274,7 +274,7 @@ function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
               truncate 连省略号都画不出:节点目录里说明长的那几行左边整个是空的,说明短的那几行
               名字又好好的,看着像随机丢字。现在反过来:名字按内容宽、最多占四成,说明拿剩下的。 */}
           <Truncate className="max-w-[45%] shrink-0 text-foreground">{String(row.name ?? row.label ?? row.type)}</Truncate>
-          <Truncate lines={2} className="flex-1 text-right text-ui-xs leading-[1.45] text-muted-foreground">{String(row.description ?? "")}</Truncate>
+          <Truncate className="flex-1 text-right text-ui-xs leading-[1.45] text-muted-foreground">{String(row.description ?? "")}</Truncate>
         </li>
       ))}
     </ul>
@@ -502,6 +502,36 @@ function LongText({ text }: { text: string }) {
   return <div className="max-h-[260px] overflow-y-auto whitespace-pre-wrap text-xs leading-[1.6] text-foreground">{text}</div>;
 }
 
+/** 一组简单值(tag、文件夹名、id……):没有可点的详情，但也不该只剩「N 个字段」。 */
+function ValueList({ rows }: { rows: unknown[] }) {
+  return (
+    <ul className="m-0 grid list-none gap-1 p-0">
+      {rows.map((row, index) => (
+        <li className="flex min-w-0 items-center gap-2 text-xs" key={index}>
+          <Truncate className="min-w-0 flex-1 text-foreground">{String(row ?? "")}</Truncate>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** 一个对象里最常见的「一组东西」：host 文件夹、搜索结果、项目下的时间线…… */
+const COLLECTION_KEYS = ["entries", "folders", "files", "items", "tools", "models", "voices", "jobs", "sequences"] as const;
+
+function CollectionCard({ value }: { value: Record<string, unknown> }) {
+  const key = COLLECTION_KEYS.find((name) => Array.isArray(value[name]) && (value[name] as unknown[]).length > 0);
+  if (!key) return <SummaryCard value={value} />;
+  const rows = value[key] as unknown[];
+  const heading = [value.name, value.title, value.path, value.workspace_id]
+    .find((one): one is string => typeof one === "string" && one.trim().length > 0);
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      {heading && <Truncate className="text-ui-xs text-muted-foreground">{heading}</Truncate>}
+      {rows.every(isRecord) ? <GenericRecordList rows={rows} /> : <ValueList rows={rows} />}
+    </div>
+  );
+}
+
 function valueLabel(value: unknown, t: (key: MessageKey) => string): string {
   if (value == null) return "—";
   if (typeof value === "boolean") return t(value ? "agentResultYes" : "agentResultNo");
@@ -538,12 +568,14 @@ function keyLabel(key: string, t: (key: MessageKey) => string): string {
 
 function SummaryCard({ value }: { value: Record<string, unknown> }) {
   const t = useI18n();
+  //: 只摊开标量。对象/数组在摘要里只剩「N 个字段」「N 项」——有的展开、有的不展开,
+  //: 读的人分不清这条判断从哪来。结构化的二级内容统一去「原始输出」看。
   const entries = Object.entries(value)
-    .filter(([, item]) => item != null && item !== "")
+    .filter(([, item]) => item != null && item !== "" && typeof item !== "object")
     .slice(0, 8);
   if (entries.length === 0) return <EmptyResult />;
   return (
-    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
+    <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-1 text-ui-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
       {entries.map(([key, item]) => (
         <React.Fragment key={key}>
           <dt>{keyLabel(key, t)}</dt>
@@ -579,6 +611,7 @@ export type ResultShape =
   | "nestedResults"
   | "genModels"
   | "records"
+  | "collection"
   | "empty"
   | "summary"
   | "text"
@@ -659,6 +692,11 @@ export function detectShape(value: unknown): ResultShape {
       const text = value[key];
       if (typeof text === "string" && text.trim()) return "text";
     }
+    // 一组东西比「N 个字段」有用:host 文件夹、搜索结果、项目下的时间线、工具目录……
+    // 放在 text 之后:read_note 同时带正文和 references 时,正文才是这张卡的主体。
+    if (COLLECTION_KEYS.some((key) => Array.isArray(value[key]) && (value[key] as unknown[]).length > 0)) {
+      return "collection";
+    }
     return "summary";
   }
   return null;
@@ -711,6 +749,8 @@ export function ToolResultCard({ value }: { value: unknown }): React.ReactElemen
       return <GenerationModelList rows={value as Record<string, unknown>[]} />;
     case "records":
       return <GenericRecordList rows={value as Record<string, unknown>[]} />;
+    case "collection":
+      return <CollectionCard value={value as Record<string, unknown>} />;
     case "empty":
       return <EmptyResult />;
     case "summary":

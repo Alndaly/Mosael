@@ -30,6 +30,7 @@ from app.domain.agent.stream import (
     _stream_append,
     _stream_finish,
     _stream_reset,
+    _stream_segment_boundary,
     _stream_segment_reset,
     _stream_segment_snapshot,
     _stream_thinking,
@@ -59,6 +60,7 @@ from app.core.security import mint_service_session, revoke_session
 from app.db.models import AgentMessage, AgentSession, Job, ToolConfirmation, User, now
 from app.db.agent_turn_events import (
     delete_turn_events,
+    delete_turn_events_through,
     discard_turn_events,
     latest_turn_id,
     prune_turn_events,
@@ -438,13 +440,16 @@ def _undelivered_receipts(db: Session, session: AgentSession) -> list[AgentMessa
     return [row for row in rows if (row.payload or {}).get("undelivered")]
 
 
-def _hand_over_receipts(db: Session, session: AgentSession, *, before_user: bool) -> str:
-    """把还没送的回执**一次**交出去:标成已送、时间戳改成现在,返回给模型的那一段(没有就是空串)。
+def _hand_over_receipts(db: Session, session: AgentSession, *, before_user: bool) -> tuple[str, list[str]]:
+    """把还没送的回执**一次**交出去:标成已送、时间戳改成现在,返回 (给模型的段落, 回执消息 id)。
 
     时间戳改成交出去的这一刻,和 `_unqueue` 同一个理由:对话按 created_at 排,回执落库时那一轮还在跑,
     它的回答要到这一轮结束才落库 —— 不改的话回执排在那个回答**前面**,读起来像回答之前就收到了。
     界面在这期间把它们画在正在跑的那一轮下面(见前端 CanvasAgentChat / ChatWorkspace),交出去之后
     的位置和那时一致。
+
+    id 要跟着交给 `_start_turn`:模型第一次产生正文/思考/工具事件时才算真正消费了回执;重启时
+    只有没被消费的回执才需要重投。不能只看“是不是最后一条消息”—— 起跑后马上会有一条流式草稿。
     """
     receipts = _undelivered_receipts(db, session)
     for receipt in receipts:
@@ -453,9 +458,12 @@ def _hand_over_receipts(db: Session, session: AgentSession, *, before_user: bool
         payload.pop("deliver_as", None)
         receipt.payload = payload
         receipt.created_at = now()
-    return job_receipts_prompt(
-        [(str((receipt.payload or {}).get("job_id") or ""), receipt.content) for receipt in receipts],
-        before_user=before_user,
+    return (
+        job_receipts_prompt(
+            [(str((receipt.payload or {}).get("job_id") or ""), receipt.content) for receipt in receipts],
+            before_user=before_user,
+        ),
+        [receipt.id for receipt in receipts],
     )
 
 
@@ -490,12 +498,15 @@ def post_job_receipt(
         # 失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过 —— 和用户消息同一处补法。
         unseen = unseen_since_last_success(db, session)
         # 先交出此前没送出去的(如果有),这一条排在它们后面 —— 同一轮里一并交给智能体。
-        earlier = _hand_over_receipts(db, session, before_user=False)
+        earlier, earlier_ids = _hand_over_receipts(db, session, before_user=False)
         prompt = _with_receipts(job_receipts_prompt([(job_id, content)], before_user=False), earlier)
         message = AgentMessage(
             session_id=session.id, role=JOB_RECEIPT_ROLE, content=content, payload=facts,
         )
-        return _start_turn_with(db, session, message, _prompt_with_context(prompt, unseen), owner)
+        return _start_turn_with(
+            db, session, message, _prompt_with_context(prompt, unseen), owner,
+            receipt_ids=[*earlier_ids, message.id],
+        )
     return _wait_for_the_running_turn(
         db,
         session,
@@ -508,12 +519,20 @@ def post_job_receipt(
     )
 
 
-def _start_turn_with(db: Session, session: AgentSession, message: AgentMessage, prompt: str, actor: User) -> AgentMessage:
+def _start_turn_with(
+    db: Session,
+    session: AgentSession,
+    message: AgentMessage,
+    prompt: str,
+    actor: User,
+    *,
+    receipt_ids: list[str] | None = None,
+) -> AgentMessage:
     """落库这一轮的由头(用户消息 / 回执),以 `actor` 的身份起一轮。调用方已经抢到了会话。"""
     db.add(message)
     db.commit()
     token = _mint_service_token(db, actor, session.id)
-    _start_turn(session.id, prompt, token, actor_id=actor.id)
+    _start_turn(session.id, prompt, token, actor_id=actor.id, receipt_ids=receipt_ids)
     db.refresh(message)
     return message
 
@@ -605,18 +624,24 @@ def post_user_message(
     if not _claim_idle_session(db, session.id):
         # 回答走插话:抢不到会话说明有一轮在跑,而这条正是它等的东西。插进去成功就当场落库
         # (不带 queued 标),于是它像一条正常的用户消息出现在对话里,而不是队列里那种待办。
-        # 插不进去(那一轮刚好结束了)就落回排队 —— 下面那次 drain 会接走它,不会掉进空里。
-        if steer_if_running and turn_runtime().steer(session.id, prompt):
-            message = AgentMessage(
-                session_id=session.id,
-                role="user",
-                content=content,
-                payload=dict(stored),
-            )
-            db.add(message)
+        #
+        # **先把消息对象带 id 建好,再把 id 交给 sidecar。** 没有 id 的话,sidecar 不会在
+        # 这条 user 消息真正进入模型上下文时回 `steer_applied`,后端也就不会冻结前一段助手
+        # 正文、插入答案、开启新段。结果是助手草稿(回合开始时就创建了)排在答案之前,实时
+        # 面板也看不到答案已经送达。消息还没提交不影响这件事:`steer_applied` 的清理会按 id
+        # 查库,查不到只表示这不是排队项,段落边界仍然成立。
+        answer = AgentMessage(
+            id=uuid.uuid4().hex,
+            session_id=session.id,
+            role="user",
+            content=content,
+            payload=dict(stored),
+        )
+        if steer_if_running and turn_runtime().steer(session.id, prompt, steer_id=answer.id):
+            db.add(answer)
             db.commit()
-            db.refresh(message)
-            return message
+            db.refresh(answer)
+            return answer
         # Queued, not steered. These are two different things and only one of them should be
         # the default: queuing waits for the whole reason-act loop to finish and then runs as
         # its own turn, which is what someone typing a follow-up almost always means. Steering
@@ -627,16 +652,8 @@ def post_user_message(
         # no request and therefore no user to mint a service token for. The session does not
         # record an owner, so the message has to.
         # **落库之后再 drain 一次**(见 _wait_for_the_running_turn)。
-        return _wait_for_the_running_turn(
-            db,
-            session,
-            AgentMessage(
-                session_id=session.id,
-                role="user",
-                content=content,
-                payload={"queued": True, "queued_by": user.id, **stored},
-            ),
-        )
+        answer.payload = {"queued": True, "queued_by": user.id, **stored}
+        return _wait_for_the_running_turn(db, session, answer)
     # context 也要存:发出去的是 `_prompt_with_context(content, context)`,而 content 只是它的一半。
     # 排队那条路一直存着,直发这条没存 —— 于是同一件事有两种记录,轨迹上看到的提问不是模型
     # 收到的提问。不存的话这段上下文除了当场生效之外不留任何痕迹,事后无从复盘。
@@ -651,8 +668,8 @@ def post_user_message(
         session.title = session_title(content)
     # 还没交给智能体的回执(只会是上一轮收尾和这条消息之间到的)搭这一轮的车,排在这条消息之前。
     # 先交再落这条:交出去的回执时间戳改成现在,这条消息落库在它们之后。
-    receipts = _hand_over_receipts(db, session, before_user=True)
-    return _start_turn_with(db, session, message, _with_receipts(prompt, receipts), user)
+    receipts, receipt_ids = _hand_over_receipts(db, session, before_user=True)
+    return _start_turn_with(db, session, message, _with_receipts(prompt, receipts), user, receipt_ids=receipt_ids)
 
 
 def mint_tool_token(db: Session, user: User) -> str:
@@ -670,7 +687,14 @@ def _mint_service_token(db: Session, user: User, agent_session_id: str | None = 
     return mint_service_session(db, user.id, agent_session_id=agent_session_id)
 
 
-def _start_turn(session_id: str, prompt: str, token: str, *, actor_id: str | None = None) -> None:
+def _start_turn(
+    session_id: str,
+    prompt: str,
+    token: str,
+    *,
+    actor_id: str | None = None,
+    receipt_ids: list[str] | None = None,
+) -> None:
     """开一轮。
 
     **流要在起线程之前备好。** 界面拿到 POST 的回应之后才去连 `/stream`,而这一轮的流状态
@@ -689,7 +713,7 @@ def _start_turn(session_id: str, prompt: str, token: str, *, actor_id: str | Non
 
     def run() -> None:
         set_current_locale(locale)
-        _run_turn_thread(session_id, prompt, token, actor_id=actor_id)
+        _run_turn_thread(session_id, prompt, token, actor_id=actor_id, receipt_ids=receipt_ids)
 
     turn_scheduler.submit(session_id, run)
 
@@ -839,6 +863,12 @@ class _TurnRun:
     api_base: str = field(default_factory=lambda: f"http://{settings.backend_host}:{settings.backend_port}")
     turn_started: float = field(default_factory=time.monotonic)
     final_text: str = ""
+    #: 这一轮对应的流 turn_id。收尾时如果已经有下一轮接上,不能再把新流标成 done。
+    turn_id: str | None = None
+    #: 这一轮交给模型的回执消息 id。第一次产生正文/思考/工具事件时标记为已消费；重启时只有
+    #: 没消费的才重投。
+    receipt_ids: list[str] = field(default_factory=list)
+    receipts_consumed: bool = False
     #: 先记下:收尾时会话可能已被删掉,那时再读它的属性会抛。
     origin: Any = None
     provider_profile_id: str | None = None
@@ -865,12 +895,36 @@ class _TurnRun:
     segments: dict[str, Any] = field(default_factory=lambda: {"count": 0, "last_finished": None})
 
 
-def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str | None = None) -> None:
-    """跑一轮。三段,每段只在需要时拿数据库会话:准备 → 运行(几分钟,不占连接)→ 落库。"""
-    run = _TurnRun(session_id=session_id, prompt=prompt, token=token, actor_id=actor_id)
-    if not _prepare_turn(run):
-        return
-    _stream_turn(run)
+def _run_turn_thread(
+    session_id: str,
+    prompt: str,
+    token: str,
+    *,
+    actor_id: str | None = None,
+    receipt_ids: list[str] | None = None,
+) -> None:
+    """跑一轮。三段,每段只在需要时拿数据库会话:准备 → 运行(几分钟,不占连接)→ 落库。
+
+    **准备和运行的外层也要兜。** 数据库在 `_prepare_turn` 读会话、或在 `_stream_turn` 里开
+    草稿时抛错,原实现会直接跳出线程——不写错误消息、不把 status 放回 idle、也不收尾流。
+    运行时故障必须仍然交给 `_persist_turn`,它会写一条可见的失败消息并完成 finally。
+    """
+    run = _TurnRun(
+        session_id=session_id,
+        prompt=prompt,
+        token=token,
+        actor_id=actor_id,
+        receipt_ids=list(receipt_ids or []),
+    )
+    try:
+        if not _prepare_turn(run):
+            return
+        try:
+            _stream_turn(run)
+        except Exception as exc:  # noqa: BLE001 —— 运行阶段的任何异常都留给下面统一落库
+            run.failure = exc
+    except Exception as exc:  # noqa: BLE001 —— 准备阶段的数据库/解析异常同理
+        run.failure = exc
     _persist_turn(run)
 
 
@@ -924,13 +978,36 @@ def _prepare_turn(run: _TurnRun) -> bool:
     return True
 
 
+def _mark_receipts_consumed(run: _TurnRun) -> None:
+    """模型已经产出正文、思考或工具调用 —— 这一轮交给它的回执确实读到了。
+
+    这是回执重投的确认点。只看“最后一条消息是不是回执”不可靠：回执开跑后马上会有一条流式草稿，
+    重启时最后一条永远不是回执。反过来，一有输出就说明模型已经看到了提示词（回执就在里面）；
+    此时再重投会造成重复行动。
+    """
+    if run.receipts_consumed or not run.receipt_ids:
+        return
+    run.receipts_consumed = True
+    try:
+        with unit_of_work() as db:
+            for receipt_id in run.receipt_ids:
+                row = db.get(AgentMessage, receipt_id)
+                if row is None or row.role != JOB_RECEIPT_ROLE:
+                    continue
+                row.payload = {**(row.payload or {}), "consumed": True}
+    except Exception:  # noqa: BLE001 —— 确认标记失败不能连累这一轮；重启时最多多投一次
+        logger.exception("could not mark receipts as consumed for %s", run.session_id)
+
+
 def _stream_turn(run: _TurnRun) -> None:
     """交给运行时跑这一轮:不持有任何数据库会话,边流边把说过的话写进草稿。失败记进 `run.failure`。"""
+    run.turn_id = _stream_turn_id(run.session_id)
     if run.failure is None:
         # 先落一条空草稿:跑的过程中**边流边写**,进程被掐断时已经说过的话还在库里。
         run.draft_holder["id"] = _open_assistant_draft(run.session_id)
 
         def _persist_delta(delta: str) -> None:
+            _mark_receipts_consumed(run)
             _stream_append(run.session_id, delta)
             run.all_text["value"] += delta
             run.draft_buffer["text"] = str(run.draft_buffer["text"]) + delta
@@ -949,21 +1026,34 @@ def _stream_turn(run: _TurnRun) -> None:
             """模型已经读到插话:冻结当前 assistant 段，插入 user，后续写进新段。"""
             text = str(run.draft_buffer["text"])
             snapshot = _stream_segment_snapshot(run.session_id)
+            boundary = _stream_segment_boundary(run.session_id)
             finished = _finish_streaming_segment(run.session_id, run.draft_holder["id"], text=text, snapshot=snapshot)
             if finished:
                 run.segments["last_finished"] = finished
+            if boundary is not None:
+                # 这一段的 timeline 已经在 finished 消息里；删掉它的过程事件，重启时不会
+                # 再把同一张工具卡折叠进后面的中断消息。
+                delete_turn_events_through(*boundary)
             _mark_steer_applied(run.session_id, steer_id)
             _stream_segment_reset(run.session_id)
             run.draft_buffer.update({"text": "", "saved": 0.0, "at": 0.0})
             run.draft_holder["id"] = _open_assistant_draft(run.session_id)
             run.segments["count"] += 1
 
+        def _on_tool(event: dict) -> None:
+            _mark_receipts_consumed(run)
+            _stream_tool_event(run.session_id, event)
+
+        def _on_thinking(event: dict) -> None:
+            _mark_receipts_consumed(run)
+            _stream_thinking(run.session_id, event)
+
         try:
             run.result = turn_runtime().run(
                 run.adapter,
                 on_delta=_persist_delta,
-                on_tool=lambda event: _stream_tool_event(run.session_id, event),
-                on_thinking=lambda event: _stream_thinking(run.session_id, event),
+                on_tool=_on_tool,
+                on_thinking=_on_thinking,
                 on_awaiting_user=lambda waiting: origins.waiting_for_user(run.origin, run.session_id, waiting),
                 on_steer_applied=_on_steer_applied,
                 **run.turn_kwargs,
@@ -980,13 +1070,14 @@ def _persist_turn(run: _TurnRun) -> None:
             # 这一轮跑着的时候会话被删了:没有地方写结果,但令牌照样要收回、流照样要收尾。
             revoke_session(db, run.token)
             db.commit()
-            _stream_finish(run.session_id, run.final_text)
+            _stream_finish(run.session_id, run.final_text, run.turn_id)
             _discard_turn_events(run.session_id)
             return
         try:
             if run.failure is not None:
                 raise run.failure
             assert run.result is not None
+            _mark_receipts_consumed(run)
             # 本地模型的 byte-fallback token(<0xF0>… 字面串)在落库前重组回 UTF-8。
             run.final_text = decode_byte_fallback(run.result.text)
             if run.result.adapter_state is not None:
@@ -1180,7 +1271,9 @@ def _persist_turn(run: _TurnRun) -> None:
             # 作废失败不能连累收尾(会话会永远停在「思考中」):卡留着、记一条带栈的日志 —— 宁可多一张没作废的卡,
             # 也不能让这段对话哑掉。
             try:
-                expired = card_expiry.expire_session_cards(db, run.session_id, run.cards_expire_as)
+                expired = card_expiry.expire_session_cards(
+                    db, run.session_id, run.cards_expire_as, turn_id=run.turn_id
+                )
             except Exception:  # noqa: BLE001 —— 收尾路径
                 logger.exception("could not expire the pending cards of session %s", run.session_id)
                 expired = 0
@@ -1203,7 +1296,7 @@ def _persist_turn(run: _TurnRun) -> None:
                 # _stream_finish — leaving the UI spinning on a conversation that is gone.
                 logger.warning("Could not finalise session %s; it may have been deleted", run.session_id)
                 db.rollback()
-            _stream_finish(run.session_id, run.final_text)
+            _stream_finish(run.session_id, run.final_text, run.turn_id)
             # 消息 payload 里已经有折叠好的 timeline;这一轮落库的中间事件到此为止(见 app.db.agent_turn_events)。
             _discard_turn_events(run.session_id)
             #: 这一轮用过 Computer Use 的话,桌面壳那边的「被控制中」要跟着灭(不是急停)。
@@ -1237,6 +1330,17 @@ def _drain_queue(session_id: str) -> None:
         logger.exception("Draining the queue for session %s failed", session_id)
 
 
+def _release_draining_session(session_id: str) -> None:
+    """drain 在抢占之后失败时，把会话放回 idle；不让一条排队的坏消息把整段对话永久卡成 running。"""
+    try:
+        with unit_of_work() as recovery:
+            row = recovery.get(AgentSession, session_id)
+            if row is not None and row.status == "running":
+                row.status = "idle"
+    except Exception:  # noqa: BLE001 —— 收尾路径：数据库本身坏了也不能再抛
+        logger.exception("could not release session %s after a failed queue drain", session_id)
+
+
 def _drain_queue_locked(session_id: str) -> None:
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
@@ -1249,49 +1353,56 @@ def _drain_queue_locked(session_id: str) -> None:
         db.commit()
         if not claimed:
             return
-        db.refresh(session)
-        pending = _runnable_queued(db, session)
-        receipts = _undelivered_receipts(db, session)
-        if not pending and not receipts:
-            # 抢的时候队列里还有,读的时候没了(那条刚被取消 / 被引导进了别的轮)。必须把 status
-            # 放回去,否则这个会话永远停在 running,之后每一条消息都会被当成"正忙"排进一个再也
-            # 不会被 drain 的队列。
-            session.status = "idle"
+        try:
+            db.refresh(session)
+            pending = _runnable_queued(db, session)
+            receipts = _undelivered_receipts(db, session)
+            if not pending and not receipts:
+                # 抢的时候队列里还有,读的时候没了(那条刚被取消 / 被引导进了别的轮)。必须把 status
+                # 放回去,否则这个会话永远停在 running,之后每一条消息都会被当成"正忙"排进一个再也
+                # 不会被 drain 的队列。
+                session.status = "idle"
+                db.commit()
+                return
+            # **攒下的回执一次交出去**,不是每条各起一轮:智能体连着提交一串配音时,它们在这一轮里陆续跑完,
+            # 此前每条都在这一轮之后各跑一轮(用户截图:输入框上方排了七八条)。有人排了话,回执就搭那一轮的车
+            # —— 排在他那句话之前交代,智能体回答他的时候已经知道这些任务跑完了;只有回执就自己起一轮。
+            message = pending[0] if pending else None
+            if message is not None:
+                actor_id = (message.payload or {}).get("queued_by")
+            else:
+                actor_id = (receipts[0].payload or {}).get("deliver_as")
+            owner = db.get(User, actor_id) if actor_id else None
+            handed, receipt_ids = _hand_over_receipts(db, session, before_user=message is not None)
+            if message is not None:
+                _unqueue(db, message)
+            if owner is None:
+                # Without a sender there is no credential to run as. Clearing the flag anyway so it
+                # is not retried on every subsequent turn — a message that silently reappears
+                # forever is worse than one that visibly did not run.
+                logger.warning("queued message / receipt in session %s has no sender; not running it", session_id)
+                session.status = "idle"
+                db.commit()
+                return
+            token = _mint_service_token(db, owner, session_id)
+            if message is not None:
+                payload = message.payload or {}
+                content = user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)
+                # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
+                # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
+                content = _with_receipts(with_origin_envelope(content, payload), handed)
+            else:
+                content = handed
+            # 提交排在拼完提示词之后:拼的时候可能为挂着的文档补起一次解析(documents.reading.attachment_context),
+            # 解析任务在提交之后才开跑(jobs.dispatch_job)。
             db.commit()
-            return
-        # **攒下的回执一次交出去**,不是每条各起一轮:智能体连着提交一串配音时,它们在这一轮里陆续跑完,
-        # 此前每条都在这一轮之后各跑一轮(用户截图:输入框上方排了七八条)。有人排了话,回执就搭那一轮的车
-        # —— 排在他那句话之前交代,智能体回答他的时候已经知道这些任务跑完了;只有回执就自己起一轮。
-        message = pending[0] if pending else None
-        if message is not None:
-            actor_id = (message.payload or {}).get("queued_by")
-        else:
-            actor_id = (receipts[0].payload or {}).get("deliver_as")
-        owner = db.get(User, actor_id) if actor_id else None
-        handed = _hand_over_receipts(db, session, before_user=message is not None)
-        if message is not None:
-            _unqueue(db, message)
-        if owner is None:
-            # Without a sender there is no credential to run as. Clearing the flag anyway so it
-            # is not retried on every subsequent turn — a message that silently reappears
-            # forever is worse than one that visibly did not run.
-            logger.warning("queued message / receipt in session %s has no sender; not running it", session_id)
-            session.status = "idle"
-            db.commit()
-            return
-        token = _mint_service_token(db, owner, session_id)
-        if message is not None:
-            payload = message.payload or {}
-            content = user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)
-            # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
-            # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
-            content = _with_receipts(with_origin_envelope(content, payload), handed)
-        else:
-            content = handed
-        # 提交排在拼完提示词之后:拼的时候可能为挂着的文档补起一次解析(documents.reading.attachment_context),
-        # 解析任务在提交之后才开跑(jobs.dispatch_job)。
-        db.commit()
-    _start_turn(session_id, content, token, actor_id=owner.id)
+            _start_turn(session_id, content, token, actor_id=owner.id, receipt_ids=receipt_ids)
+        except Exception:
+            # 抢占已经提交；不改回去的话,这个会话会永远 running。rollback 只撤掉这一段未提交的
+            # 改动(例如 unqueue),状态交给独立会话恢复,避免脏事务再次失败。
+            db.rollback()
+            _release_draining_session(session_id)
+            raise
 
 
 def _interrupted_turn_payload(db: Session, session_id: str) -> dict:
@@ -1384,8 +1495,13 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
     if unknown:
         logger.warning("resolved %d confirmation(s) left approved by the previous run as unknown", unknown)
     #: 被重启打断的不只是回执:会话忙时排队的那条用户消息也没有线程了。此前只有回执会
-    #: 重新 drain,排队的消息会永远躺着,而下一条新消息还会插到它前面。所有飞书会话在这里
-    #: 对一次账 —— 还在 pending 的 queued 消息就是该接着跑的那一轮。
+    #: 重新 drain,排队的消息会永远躺着,而下一条新消息还会插到它前面。**所有 running 被拨回
+    #: idle 的会话**都在这里对账,不只飞书;排队消息就是该接着跑的那一轮。
+    for session in stale:
+        if session.id not in redeliver and _runnable_queued(db, session):
+            redeliver.append(session.id)
+    #: 飞书还有一条独立来源:会话在消息落库后才崩溃时,status 可能已经是 idle;它没有 running
+    #: 可拨,但 queue 里仍有一条。这里保留原来的飞书全量对账。
     for session in db.scalars(select(AgentSession).where(AgentSession.origin == "feishu")).all():
         if session.id not in redeliver and _runnable_queued(db, session):
             redeliver.append(session.id)
@@ -1405,30 +1521,39 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
 
 
 def _redeliver_receipt_if_unread(db: Session, session: AgentSession) -> bool:
-    """这一轮被重启掐断时,**最后一条是已送的任务回执** → 重新标成待送,返回是否改了。
+    """重启时找一个**已交出但模型还没消费**的回执,重新标成待送。
 
-    判据就是「最后一条」:其后没有助手回答,说明模型没来得及读过它。已经标着待送的(会话忙时到的回执)
-    不用动 —— 它本来就会被下一轮取走。任务被清掉了、或没有归属人(起不了一轮)时不动:送也送不到。
+    `consumed=True` 是模型真的产出过正文/思考/工具调用的确认(见 `_mark_receipts_consumed`)。
+    没有这个标记的回执可能是被重启掐在“刚起跑、还没有任何输出”的窗口里，也可能根本没有开始；
+    两者都应当重投。
+
+    扫描而不是只看最后一条：回执开跑后马上会有一条 streaming 草稿，最后一条永远不是回执。
+    遇到它之后**已完成**的助手消息就说明回执被回答过了；streaming 草稿不算回答，继续往前找。
+    已经标着待送的(会话忙时到的回执)不用动 —— 它本来就会被下一轮取走。任务被清掉、或没有
+    归属人时不动：送也送不到。
     """
-    last = db.scalars(
+    rows = db.scalars(
         select(AgentMessage)
         .where(AgentMessage.session_id == session.id)
         .order_by(AgentMessage.created_at.desc())
-        .limit(1)
-    ).first()
-    if last is None or last.role != JOB_RECEIPT_ROLE:
-        return False
-    payload = dict(last.payload or {})
-    if payload.get("undelivered"):
-        return False
-    job = db.get(Job, str(payload.get("job_id") or ""))
-    owner_id = job.created_by if job is not None else None
-    if not owner_id:
-        return False
-    payload["undelivered"] = True
-    payload["deliver_as"] = owner_id
-    last.payload = payload
-    return True
+    ).all()
+    for row in rows:
+        if row.role == JOB_RECEIPT_ROLE:
+            payload = dict(row.payload or {})
+            if payload.get("undelivered") or payload.get("consumed"):
+                return False
+            job = db.get(Job, str(payload.get("job_id") or ""))
+            owner_id = job.created_by if job is not None else None
+            if not owner_id:
+                return False
+            payload["undelivered"] = True
+            payload["deliver_as"] = owner_id
+            row.payload = payload
+            return True
+        if row.role == "assistant" and not (row.payload or {}).get("streaming"):
+            # 回执之后已经有一条完成的回答：模型已经处理过它了。
+            return False
+    return False
 
 
 #: 中断说明的原文。外部渠道(飞书等)要把同一句话发回聊天里 —— 只写进库的话,
@@ -1616,7 +1741,9 @@ def stop_turn(db: Session, session: AgentSession) -> bool:
     if not stopped and turn_scheduler.cancel(session.id):
         #: 还在准入队列里,根本没起 sidecar。把流收掉、会话放回 idle;用户那句消息仍在,
         #: 只是这一轮没有开始 —— 再发一句就是新的一轮。
-        _stream_finish(session.id, "")
+        #: 这时也要扣下**此前排着的**消息(D63):用户按停止说明他不想让这一串继续跑。
+        _hold_queue(db, session)
+        _stream_finish(session.id, "", _stream_turn_id(session.id))
         session.status = "idle"
         session.updated_at = now()
         return True

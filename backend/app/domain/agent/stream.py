@@ -72,6 +72,15 @@ def _stream_turn_id(session_id: str) -> str | None:
         return str(state.get("turn_id") or "") or None
 
 
+def _stream_segment_boundary(session_id: str) -> tuple[str, int] | None:
+    """当前段的 `(turn_id, seq)`；冻结这一段时用来删掉已经写进消息的旧事件。"""
+    with _streams_lock:
+        state = _streams.get(session_id)
+        if not state or not state.get("turn_id"):
+            return None
+        return str(state["turn_id"]), int(state.get("seq") or 0)
+
+
 def _stream_reset(session_id: str) -> None:
     with _streams_lock:
         # first_token_at:这一轮**第一个** token(正文或思考,谁先算谁)到达的 monotonic 时刻。
@@ -324,12 +333,17 @@ def _stream_segment_reset(session_id: str) -> None:
         state["seq"] += 1
 
 
-def _stream_finish(session_id: str, final_text: str) -> None:
+def _stream_finish(session_id: str, final_text: str, turn_id: str | None = None) -> None:
+    """收尾一条流。`turn_id` 给了就只收尾那一轮；新一轮已经接上时，旧线程晚到的收尾不能把它标成 done。"""
     with _streams_lock:
-        state = _streams.setdefault(
-            session_id,
-            {"text": "", "done": False, "seq": 0, "timeline": [], "turn_id": new_id()},
-        )
+        state = _streams.get(session_id)
+        if turn_id is not None and (state is None or str(state.get("turn_id") or "") != turn_id):
+            return
+        if state is None:
+            state = _streams.setdefault(
+                session_id,
+                {"text": "", "done": False, "seq": 0, "timeline": [], "turn_id": new_id()},
+            )
         state["text"] = final_text
         timeline: list[dict] = state.setdefault("timeline", [])
         # 一轮结束时无论如何都不该再有"思考中"——哪怕这轮只思考没说话。
