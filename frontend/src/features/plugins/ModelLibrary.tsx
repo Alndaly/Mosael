@@ -11,9 +11,11 @@ import {
   ImageDown,
   LayoutGrid,
   Library,
+  Loader2,
   ListFilter,
   MoreHorizontal,
   RefreshCcw,
+  Search,
   SearchX,
   TriangleAlert,
   Unplug,
@@ -25,6 +27,7 @@ import {
   cancelJob,
   getJob,
   resolveModelLink,
+  searchModelSources,
   startModelDownload,
   startModelLookup,
   type Job,
@@ -33,6 +36,7 @@ import {
   type ModelLibrary,
   type ModelPreviewTools,
   type ModelResolved,
+  type ModelSearch,
   type PluginInstance,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -69,6 +73,7 @@ import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { Segmented } from "@/components/ui/segmented";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus } from "@/features/plugins/libraryLinks";
@@ -1272,6 +1277,82 @@ function sourceLabel(t: Translate, resolved: ModelResolved): string {
   return t("modelDownloadSourceDirect").replace("{host}", host);
 }
 
+type SearchCandidate = NonNullable<ModelSearch["candidates"]>[number];
+type SearchSource = "all" | "huggingface" | "modelscope" | "civitai";
+
+function candidateSourceLabel(t: Translate, source: string): string {
+  if (source === "huggingface") return t("modelDownloadSourceHuggingface");
+  if (source === "civitai") return t("modelDownloadSourceCivitai");
+  if (source === "modelscope") return t("modelDownloadSourceModelscope");
+  return source;
+}
+
+/** 一个搜索候选:来源、仓库 / 模型、文件名、大小、底模。点整行 = 选用它,下面确认文件名和目录。 */
+function SearchCandidateRow({
+  candidate,
+  pending,
+  onPick,
+}: {
+  candidate: SearchCandidate;
+  pending: boolean;
+  onPick: () => void;
+}) {
+  const t = useI18n();
+  const confidence = candidate.confidence ?? (candidate.exact ? "exact" : "likely");
+  const badge = confidence === "confirmed"
+    ? <CatalogBadge tone="success">{t("workbenchSearchConfirmed")}</CatalogBadge>
+    : confidence === "exact"
+      ? <CatalogBadge tone="muted">{t("workbenchSearchExact")}</CatalogBadge>
+      : <CatalogBadge tone="muted">{t("workbenchSearchSimilar")}</CatalogBadge>;
+  const facts = [
+    candidateSourceLabel(t, candidate.source),
+    candidate.size ? formatBytes(candidate.size) : "",
+    candidate.base_model,
+  ].filter(Boolean);
+  const address = candidate.page || candidate.url;
+  const addressLabel = React.useMemo(() => {
+    try {
+      const parsed = new URL(address);
+      return `${parsed.host}${parsed.pathname}`;
+    } catch {
+      return address;
+    }
+  }, [address]);
+  return (
+    <li className="grid min-w-0 gap-0.5 rounded-md border border-border p-2 text-ui-xs transition-colors hover:bg-secondary/60">
+      <button
+        type="button"
+        disabled={pending}
+        aria-busy={pending || undefined}
+        aria-label={t("modelDownloadSearchPick").replace("{name}", candidate.filename)}
+        className="grid min-w-0 gap-0.5 bg-transparent text-left disabled:opacity-60"
+        onClick={onPick}
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          {pending && <Loader2 size={12} className="shrink-0 animate-mosael-spin" aria-hidden />}
+          <Truncate className="min-w-0 flex-1 font-medium text-foreground">{candidate.filename}</Truncate>
+          {badge}
+        </span>
+        <Truncate className="text-muted-foreground">{candidate.title || candidate.repo}</Truncate>
+        <span className="text-ui-2xs text-muted-foreground">{facts.join(" · ")}</span>
+      </button>
+      {address && (
+        <Truncate as="span" className="text-ui-2xs text-muted-foreground">
+          <a
+            href={address}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={t("modelDownloadSearchPage").replace("{name}", candidate.filename)}
+            className="underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {addressLabel}
+          </a>
+        </Truncate>
+      )}
+    </li>
+  );
+}
+
 function ModelDownloadDialog({
   instance,
   workspaceId,
@@ -1289,14 +1370,22 @@ function ModelDownloadDialog({
 }) {
   const t = useI18n();
   const [url, setUrl] = React.useState(seed.url ?? "");
+  const [query, setQuery] = React.useState("");
+  const [sourceFilter, setSourceFilter] = React.useState<SearchSource>("all");
   const [filename, setFilename] = React.useState(seed.name ?? "");
   const [folder, setFolder] = React.useState(seed.folder ?? "");
+  type ResolveInput = string | { link: string; name?: string };
   const resolve = useMutation({
-    mutationFn: (link: string) => resolveModelLink(instance.id, link),
-    onSuccess: (found) => {
-      setFilename((current) => current || seed.name || found.filename);
-      setFolder((current) => current || seed.folder || found.folder);
+    mutationFn: (input: ResolveInput) => resolveModelLink(instance.id, typeof input === "string" ? input : input.link),
+    onSuccess: (found, input) => {
+      const picked = typeof input === "string" ? null : input;
+      setUrl(picked?.link ?? url);
+      setFilename((current) => picked?.name || found?.filename || current || seed.name || "");
+      setFolder((current) => found?.folder || current || seed.folder || "");
     },
+  });
+  const search = useMutation({
+    mutationFn: () => searchModelSources(instance.id, query.trim(), folder || seed.folder || ""),
   });
   const resolveRef = React.useRef(resolve.mutate);
   resolveRef.current = resolve.mutate;
@@ -1334,6 +1423,20 @@ function ModelDownloadDialog({
   const folderOptions = [...(library.folders ?? [])]
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .map((one) => ({ value: one.name, label: t("modelDownloadFolderOption").replace("{name}", one.name).replace("{n}", String(one.count)) }));
+  const candidates = search.data?.candidates ?? [];
+  const visibleCandidates = candidates.filter((one) => sourceFilter === "all" || one.source === sourceFilter);
+  const sourceCount = (source: SearchSource) => (
+    source === "all" ? candidates.length : candidates.filter((one) => one.source === source).length
+  );
+  const sourceOptions = ([
+    ["all", t("modelDownloadSearchAll")],
+    ["huggingface", t("modelDownloadSourceHuggingface")],
+    ["modelscope", t("modelDownloadSourceModelscope")],
+    ["civitai", t("modelDownloadSourceCivitai")],
+  ] as const).map(([value, label]) => ({
+    value,
+    label: `${label} ${sourceCount(value)}`,
+  }));
 
   return (
     <ModalShell
@@ -1354,6 +1457,82 @@ function ModelDownloadDialog({
       }
     >
       <div className="grid min-w-0 gap-4">
+        <div className="grid min-w-0 gap-1.5">
+          <span className="text-ui-sm font-medium text-foreground">{t("modelDownloadSearchLabel")}</span>
+          <div className="flex min-w-0 gap-2">
+            <Input
+              className="min-w-0 flex-1"
+              value={query}
+              placeholder={t("modelDownloadSearchPlaceholder")}
+              aria-label={t("modelDownloadSearchLabel")}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (isImeKeystroke(event)) return;
+                if (event.key === "Enter" && query.trim()) search.mutate();
+              }}
+            />
+            <Button variant="outline" disabled={!query.trim()} loading={search.isPending} onClick={() => search.mutate()}>
+              <Search size={13} />
+              {t("modelDownloadSearch")}
+            </Button>
+          </div>
+          {search.isError && (
+            <FailureCard
+              size="inline"
+              lines={2}
+              title={t("modelDownloadSearchError")}
+              summary={errorText(search.error)}
+              copyText={errorText(search.error)}
+            />
+          )}
+          {search.data && (
+            <div className="grid min-w-0 gap-1">
+              {candidates.length === 0 ? (
+                <p className="m-0 text-ui-xs text-muted-foreground">
+                  {t("modelDownloadSearchEmpty").replace("{query}", query.trim())}
+                </p>
+              ) : (
+                <>
+                  <p className="m-0 text-ui-2xs text-muted-foreground">{t("modelDownloadSearchHint")}</p>
+                  <Segmented
+                    aria-label={t("modelDownloadSearchFilter")}
+                    size="xs"
+                    value={sourceFilter}
+                    onValueChange={setSourceFilter}
+                    options={sourceOptions}
+                    className="max-w-full flex-wrap"
+                  />
+                  {visibleCandidates.length === 0 ? (
+                    <p className="m-0 text-ui-xs text-muted-foreground">{t("modelDownloadSearchEmptySource")}</p>
+                  ) : (
+                  <ul className="m-0 grid max-h-[240px] list-none gap-1 overflow-y-auto p-0">
+                    {visibleCandidates.map((candidate) => (
+                      <SearchCandidateRow
+                        key={`${candidate.source}:${candidate.url}`}
+                        candidate={candidate}
+                        pending={
+                          resolve.isPending
+                          && typeof resolve.variables === "object"
+                          && resolve.variables?.link === candidate.url
+                        }
+                        onPick={() => resolve.mutate({ link: candidate.url, name: candidate.filename })}
+                      />
+                    ))}
+                  </ul>
+                  )}
+                </>
+              )}
+              {(search.data.failed ?? []).length > 0 && (
+                <p className="m-0 text-ui-2xs text-muted-foreground">
+                  {t("modelDownloadSearchFailed").replace(
+                    "{sources}",
+                    (search.data.failed ?? []).map((one) => candidateSourceLabel(t, one.source)).join("、"),
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
         <label className="grid min-w-0 gap-1.5">
           <span className="text-ui-sm font-medium text-foreground">{t("modelDownloadLink")}</span>
           <div className="flex min-w-0 gap-2">

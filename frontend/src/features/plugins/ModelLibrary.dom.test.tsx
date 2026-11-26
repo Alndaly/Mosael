@@ -30,6 +30,7 @@ const api = vi.hoisted(() => ({
   installLocalNsfw: vi.fn(),
   getModelDetail: vi.fn(),
   resolveModelLink: vi.fn(),
+  searchModelSources: vi.fn(),
   startModelDownload: vi.fn(),
   getJob: vi.fn(),
   cancelJob: vi.fn(),
@@ -1017,6 +1018,117 @@ describe("模型库", () => {
     expect(await screen.findByText(/在那台机器上装 ComfyUI-Manager/)).toBeTruthy();
     expect(screen.getByText("modelDownloadCannot")).toBeTruthy();
     expect((screen.getByRole("button", { name: /modelDownloadConfirm/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("选用一个搜索候选时只有那一行转圈,不是整列一起转", async () => {
+    api.searchModelSources.mockResolvedValue({
+      filename: "flux",
+      candidates: [
+        {
+          source: "huggingface", repo: "a/one", title: "One", filename: "one.safetensors",
+          url: "https://huggingface.co/a/one/resolve/main/one.safetensors",
+          page: "https://huggingface.co/a/one", size: null, base_model: "", exact: false,
+          confidence: "likely", direct: false,
+        },
+        {
+          source: "huggingface", repo: "a/two", title: "Two", filename: "two.safetensors",
+          url: "https://huggingface.co/a/two/resolve/main/two.safetensors",
+          page: "https://huggingface.co/a/two", size: null, base_model: "", exact: false,
+          confidence: "likely", direct: false,
+        },
+      ],
+      failed: [],
+      hash: { state: "unavailable", reason: "no_file", note: "" },
+    });
+    //: 解析一直不返回:看的是点击之后的忙碌范围,不是下载结果。
+    api.resolveModelLink.mockReturnValue(new Promise(() => undefined));
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: /modelLibraryDownload/ }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "modelDownloadSearchLabel" }), { target: { value: "flux" } });
+    fireEvent.click(screen.getByRole("button", { name: "modelDownloadSearch" }));
+    const candidates = await screen.findAllByRole("button", { name: "modelDownloadSearchPick" });
+    expect(candidates).toHaveLength(2);
+    fireEvent.click(candidates[0]);
+    await waitFor(() => expect(candidates.filter((one) => one.getAttribute("aria-busy") === "true")).toHaveLength(1));
+  });
+
+  it("按来源筛选搜索候选:选 ModelScope 后只留下 ModelScope 的文件", async () => {
+    const candidate = (source: string, filename: string, repo: string) => ({
+      source, repo, title: repo, filename,
+      url: `https://${source}.example/${repo}/${filename}`,
+      page: `https://${source}.example/${repo}`,
+      size: null, base_model: "", exact: false, confidence: "likely", direct: false,
+    });
+    api.searchModelSources.mockResolvedValue({
+      filename: "flux",
+      candidates: [
+        candidate("huggingface", "flux-hf.safetensors", "a/hf"),
+        candidate("modelscope", "flux-ms.safetensors", "a/ms"),
+        candidate("civitai", "flux-civitai.safetensors", "a/civitai"),
+      ],
+      failed: [],
+      hash: { state: "unavailable", reason: "no_file", note: "" },
+    });
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: /modelLibraryDownload/ }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "modelDownloadSearchLabel" }), { target: { value: "flux" } });
+    fireEvent.click(screen.getByRole("button", { name: "modelDownloadSearch" }));
+    expect(await screen.findByText("flux-hf.safetensors")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: /modelDownloadSourceModelscope/ }));
+    await waitFor(() => expect(screen.queryByText("flux-hf.safetensors")).toBeNull());
+    expect(screen.getByText("flux-ms.safetensors")).toBeTruthy();
+    expect(screen.queryByText("flux-civitai.safetensors")).toBeNull();
+  });
+
+  it("按名称搜索模型:列出候选,选用一条后带着文件名和目录确认下载", async () => {
+    api.searchModelSources.mockResolvedValue({
+      filename: "flux",
+      candidates: [{
+        source: "huggingface",
+        repo: "black-forest-labs/FLUX.1-dev",
+        title: "FLUX.1-dev",
+        filename: "flux1-dev.safetensors",
+        url: "https://huggingface.co/black-forest-labs/FLUX.1-dev",
+        page: "https://huggingface.co/black-forest-labs/FLUX.1-dev",
+        size: 23_000_000_000,
+        base_model: "FLUX.1",
+        exact: false,
+        confidence: "likely",
+        direct: false,
+      }],
+      failed: [],
+      hash: { state: "unavailable", reason: "no_file", note: "" },
+    });
+    api.resolveModelLink.mockResolvedValue({
+      source: "huggingface",
+      url: "https://huggingface.co/black-forest-labs/FLUX.1-dev",
+      page: "", filename: "flux1-dev.safetensors", size: 23_000_000_000, folder: "checkpoints",
+      family: "FLUX", triggers: [], title: "FLUX.1-dev", exists: false, note: "",
+    });
+    api.startModelDownload.mockResolvedValue(job({ status: "queued", progress: 0, message: "排队" }));
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: /modelLibraryDownload/ }));
+    const search = await screen.findByRole("textbox", { name: "modelDownloadSearchLabel" });
+    fireEvent.change(search, { target: { value: "flux" } });
+    fireEvent.click(screen.getByRole("button", { name: "modelDownloadSearch" }));
+    await waitFor(() => expect(api.searchModelSources).toHaveBeenCalledWith("i1", "flux", ""));
+    expect(await screen.findByText("flux1-dev.safetensors")).toBeTruthy();
+    expect(screen.getByText("FLUX.1-dev")).toBeTruthy();
+    expect(screen.getByText("huggingface.co/black-forest-labs/FLUX.1-dev")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "modelDownloadSearchPick" }));
+    await waitFor(() => expect(api.resolveModelLink).toHaveBeenCalledWith(
+      "i1", "https://huggingface.co/black-forest-labs/FLUX.1-dev"));
+    expect((await screen.findByDisplayValue("flux1-dev.safetensors") as HTMLInputElement).value)
+      .toBe("flux1-dev.safetensors");
+    const confirm = screen.getByRole("button", { name: /modelDownloadConfirm/ });
+    await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(confirm);
+    await waitFor(() => expect(api.startModelDownload).toHaveBeenCalledWith("i1", {
+      workspace_id: "w1",
+      url: "https://huggingface.co/black-forest-labs/FLUX.1-dev",
+      folder: "checkpoints",
+      filename: "flux1-dev.safetensors",
+    }));
   });
 
   it("不撞名的建议:按目录里已有的名字往后数", () => {
