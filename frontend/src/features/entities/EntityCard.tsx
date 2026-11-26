@@ -3,6 +3,7 @@ import React from "react";
 import { assetThumbnailUrl, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Truncate } from "@/components/ui/truncate";
+import { GRID_CARD, GRID_CARD_BODY, GRID_CARD_MEDIA } from "@/components/ui/grid-card";
 import { cn } from "@/lib/utils";
 import { entityKindIcon } from "@/features/entities/entityMeta";
 
@@ -37,16 +38,19 @@ export function EntityCard({
       aria-pressed={selected || undefined}
       onClick={onOpen}
       className={cn(
-        "group grid w-full cursor-pointer rounded-lg border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        tile ? "gap-2" : "gap-3",
+        "w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        tile ? "group grid gap-2 rounded-lg border-0 bg-transparent p-0" : GRID_CARD,
+        !tile && selected && "border-primary shadow-[0_0_0_1px_var(--primary)]",
       )}
       data-entity-card-style={tile ? "tile" : "card"}
     >
       <div
         className={cn(
-          "relative grid place-items-center overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground transition-colors group-hover:border-border-strong",
+          tile
+            ? "relative grid place-items-center overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground transition-colors group-hover:border-border-strong"
+            : GRID_CARD_MEDIA,
           tile ? "aspect-square" : "aspect-[4/5]",
-          selected && "border-primary shadow-[0_0_0_1px_var(--primary)] group-hover:border-primary",
+          tile && selected && "border-primary shadow-[0_0_0_1px_var(--primary)] group-hover:border-primary",
         )}
       >
         {entity.cover_asset_id && !broken ? (
@@ -77,7 +81,7 @@ export function EntityCard({
           {` · ${meta.join(" · ")}`}
         </Truncate>
       ) : (
-        <div className="grid min-w-0 gap-1 px-0.5">
+        <div className={GRID_CARD_BODY}>
           <Truncate as="strong" className="text-ui-md font-semibold">
             {entity.name}
           </Truncate>

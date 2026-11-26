@@ -2,6 +2,7 @@ import { assetKeys } from "@/api/queryKeys";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
+import { GRID_CARD, GRID_CARD_BODY, GRID_CARD_MEDIA } from "@/components/ui/grid-card";
 import { Popover, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
@@ -732,22 +733,24 @@ function AssetTile({ asset, selected = false, list = false }: { asset: AssetCard
   return (
     <article
       className={cn(
-        "cursor-pointer rounded-lg transition-colors",
-        list ? "-mx-3 flex items-center gap-5 px-3 py-4 pr-12 hover:bg-secondary/40" : "grid gap-3",
+        "cursor-pointer rounded-xl transition-colors",
+        list
+          ? "-mx-3 flex items-center gap-5 px-3 py-4 pr-12 hover:bg-secondary/40"
+          : GRID_CARD,
         //: 选中:卡片描一圈主色;**列表行铺一层淡主色底,不描边** —— 连着选几行时,一圈圈描边
         //: 叠在一起(上一行的下沿压着下一行的上沿)很乱,底色连成一片才读得出「这几行选中了」。
         selected && !list && "border-primary shadow-[0_0_0_1px_var(--primary)]",
         selected && list && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_11%,transparent)]",
       )}
     >
-      <div className={cn("relative grid shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground", list ? "h-20 w-32" : "aspect-video")}>
+      <div className={cn("relative grid shrink-0 place-items-center overflow-hidden bg-panel-inset text-muted-foreground", list ? "h-20 w-32 rounded-lg border border-border" : cn(GRID_CARD_MEDIA, "aspect-video"))}>
         {hasThumb ? (
           <img
             src={assetThumbnailUrl(asset.id)}
             alt=""
             loading="lazy"
             decoding="async"
-            className={cn("absolute inset-0 h-full w-full", asset.kind === "image" ? "object-contain" : "object-cover")}
+            className="absolute inset-0 h-full w-full object-cover"
             onError={() => setThumbFailed(true)}
           />
         ) : (
@@ -768,7 +771,7 @@ function AssetTile({ asset, selected = false, list = false }: { asset: AssetCard
         {/* 标签叠在缩略图左下角(而非信息区),这样有无标签的卡片信息区一样高、栅格不错位。 */}
         <TagChips tags={tagsOf(asset)} tone="overlay" className="absolute bottom-1.5 left-1.5 max-w-[70%] flex-wrap" />
       </div>
-      <div className="grid min-w-0 flex-1 gap-1.5 px-0.5">
+      <div className={cn(list ? "grid min-w-0 flex-1 gap-1.5 px-0.5" : GRID_CARD_BODY)}>
         {/* relative z-[2]:浮在整卡那颗透明按钮上面,被截断时悬停看得到全文(点击照样冒泡到卡片)。 */}
         <Truncate as="strong" className="relative z-[2] text-ui-md font-semibold">
           {asset.name}
@@ -821,9 +824,9 @@ function MediaLibrarySkeleton({ list }: { list: boolean }) {
             </div>
           </div>
         ) : (
-          <div key={index} className="grid gap-3" aria-hidden="true">
-            <Skeleton className="aspect-video w-full rounded-lg" />
-            <div className="grid gap-2 px-0.5">
+          <div key={index} className={GRID_CARD} aria-hidden="true">
+            <Skeleton className={cn(GRID_CARD_MEDIA, "aspect-video rounded-none")} />
+            <div className={GRID_CARD_BODY}>
               <Skeleton className="h-4 w-3/5" />
               <Skeleton className="h-3 w-2/5" />
             </div>

@@ -23,10 +23,12 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GRID_CARD, GRID_CARD_BODY, GRID_CARD_MEDIA } from "@/components/ui/grid-card";
 import { Segmented } from "@/components/ui/segmented";
 import { useOpenRequest } from "@/lib/deepLink";
 import { TAG_MATCHES, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { cn } from "@/lib/utils";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { Hint } from "@/components/ui/tooltip";
@@ -264,9 +266,12 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
           <div role="status" aria-busy="true" className={ASSET_CARD_GRID}>
             <span className="sr-only">{t("pageLoading")}</span>
             {Array.from({ length: 6 }, (_, index) => (
-              <div key={index} className="grid gap-3" aria-hidden="true">
-                <Skeleton className="aspect-[4/5] w-full rounded-lg" />
-                <Skeleton className="h-4 w-3/5" />
+              <div key={index} className={GRID_CARD} aria-hidden="true">
+                <Skeleton className={cn(GRID_CARD_MEDIA, "aspect-[4/5] rounded-none")} />
+                <div className={GRID_CARD_BODY}>
+                  <Skeleton className="h-4 w-3/5" />
+                  <Skeleton className="h-3 w-2/5" />
+                </div>
               </div>
             ))}
           </div>

@@ -25,6 +25,7 @@ import {
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { ScenePreview } from "./ScenePreview";
 import { CARD_GRID } from "@/components/layout/StudioPage";
+import { GRID_CARD, GRID_CARD_BODY, GRID_CARD_MEDIA } from "@/components/ui/grid-card";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/app/preferences";
@@ -216,7 +217,12 @@ export function SceneList({
                 data-selected={selected.has(scene.id)}
               >
                 <button
-                  className={cn("scene-card-open", "grid w-full gap-3 rounded-lg text-left")}
+                  className={cn(
+                    "scene-card-open",
+                    GRID_CARD,
+                    "w-full gap-0 p-0 text-left",
+                    selected.has(scene.id) && "border-primary shadow-[0_0_0_1px_var(--primary)]",
+                  )}
                   aria-label={t("sceneListOpenNamed").replace("{name}", scene.name)}
                   aria-pressed={selecting ? selected.has(scene.id) : undefined}
                   disabled={busy}
@@ -237,13 +243,15 @@ export function SceneList({
                       标题还贴着那圈边。 */}
                   {/* 圈画在缩略图**里面**(主色边框 + 内侧 1px):画在外面的话,最左、最右两列会被
                       滚动容器裁掉一截。 */}
-                  <span className="relative block">
-                    <ScenePreview data={scene.preview} className={selected.has(scene.id) ? "border-primary ring-1 ring-inset ring-primary" : undefined} />
+                  <span className={GRID_CARD_MEDIA}>
+                    <ScenePreview data={scene.preview} className="rounded-none !border-0" />
                     {selecting && <SelectionCheck selected={selected.has(scene.id)} />}
                   </span>
-                  <Truncate className="pr-8 text-ui-md font-semibold">{scene.name}</Truncate>
-                  <span className="text-ui-sm text-muted-foreground">
-                    {t("sceneListCounts").replace("{objects}", String(scene.object_count)).replace("{shots}", String(scene.shot_count))}
+                  <span className={GRID_CARD_BODY}>
+                    <Truncate className="pr-8 text-ui-md font-semibold">{scene.name}</Truncate>
+                    <span className="text-ui-sm text-muted-foreground">
+                      {t("sceneListCounts").replace("{objects}", String(scene.object_count)).replace("{shots}", String(scene.shot_count))}
+                    </span>
                   </span>
                 </button>
                 {/* 选择模式下单卡的操作菜单收起来(批量动作在上面的工具条上),右上角让给勾选圈。 */}

@@ -7,6 +7,8 @@ import { useBatchAction } from "@/lib/batchAction";
 import { BOARD_ITEM_EVENT, OPEN_BOARD_EVENT, parseBoardItem, useHashOpenRequest, useOpenRequest } from "@/lib/deepLink";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
+import { GRID_CARD, GRID_CARD_BODY, GRID_CARD_MEDIA } from "@/components/ui/grid-card";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Bot, Check, CheckSquare, Copy, FileOutput, Import, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -538,13 +540,13 @@ function BoardCard({
             onClick={selecting ? onToggle : onOpen}
             aria-label={selecting ? `${t("mediaSelectMode")}: ${board.name}` : board.name}
             aria-pressed={selecting ? selected : undefined}
-            className="grid w-full gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(GRID_CARD, "w-full gap-0 p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", marked && "border-primary shadow-[0_0_0_1px_var(--primary)]")}
           >
             {/* 选中态和首页、素材、场景同一个样子:缩略图一圈主色 + 右上角的勾选圈。圈画在缩略图
                 **里面**(inset):画在外面的话,最左、最右两列会被滚动容器裁掉一截。 */}
-            <span className="relative block">
+            <span className={GRID_CARD_MEDIA}>
               <CanvasPreview
-                className={marked ? "border-primary ring-1 ring-inset ring-primary" : undefined}
+                className="rounded-none !border-0"
                 //: 缩略图上每一格写一行字:起了名写名字,没起名写正文(便签那句话、文档标题),都没有写种类名。
                 items={board.preview.items.map((item) => ({
                   ...item,
@@ -557,8 +559,10 @@ function BoardCard({
               />
               {selecting && <SelectionCheck selected={selected} />}
             </span>
-            <Truncate className="pr-8 text-ui-md font-semibold">{board.name}</Truncate>
-            <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
+            <span className={GRID_CARD_BODY}>
+              <Truncate className="pr-8 text-ui-md font-semibold">{board.name}</Truncate>
+              <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
+            </span>
           </button>
           {!selecting && (
             <div className="absolute right-2 top-2 rounded-lg bg-panel">
