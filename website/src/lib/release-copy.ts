@@ -1,5 +1,21 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.9.0": {
+    zh: [
+      "**ComfyUI 模型可以按名字找。** 下载框直接搜 HuggingFace、ModelScope、Civitai，候选带来源、文件名、大小和底模；只让选中那条转圈。",
+      "**候选可按来源筛选。** 全部、HuggingFace、ModelScope、Civitai 分段切换，各来源数量一眼可见。",
+      "**工具卡输入输出统一。** 展开固定为输入 → 输出，原始参数/原始输出各自收起；失败只出现一行，不再套一张和结果同等分量的卡。",
+      "**插话和确认卡跟随真实轮次。** 模型真正读到插话才切段；确认卡只作废本轮，流式草稿不再藏住后台任务回执。",
+      "**网格卡片是一张完整的卡。** 素材、实体、画板、3D 场景和工作流统一圆角外框，封面通栏铺满，骨架也同步同一套形状；表单输入框、下拉和文本域也统一了圆角与描边。",
+    ],
+    en: [
+      "**ComfyUI models are searchable by name.** The download dialog searches HuggingFace, ModelScope and Civitai, showing source, file name, size and base model, and only the selected candidate spins.",
+      "**Candidates filter by source.** Switch between All, HuggingFace, ModelScope and Civitai; each source shows its count.",
+      "**Tool cards share one input/output layout.** Expanded cards read Input → Output, with raw input and raw output folded away; failures use one line instead of a card as heavy as the result.",
+      "**Steering and confirmation cards follow the real turn.** A steer splits the answer only when the model consumes it, and confirmation cards expire per turn; streaming drafts no longer hide job receipts.",
+      "**Grid cards are one solid card.** Assets, entities, boards, 3D scenes and workflows share a rounded outer frame with a full-width cover, and their loading skeletons use the same shape; form inputs, selects and textareas now share one radius and border too.",
+    ],
+  },
   "v2.8.1": {
     zh: [
       "**智能体工具按需检索。** 桌面控制与浏览器工具不再每轮全量发送，需要时由 `tool_search` 找到、`run_tool` 执行；子智能体也能安全地查只读工具。",

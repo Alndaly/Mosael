@@ -329,7 +329,7 @@ export function ProviderProfilesSection({
         }
       >
         <Form {...form}>
-          <form id={profileFormId} className="grid gap-2 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
+          <form id={profileFormId} className="grid gap-2" onSubmit={submit} noValidate>
             <FormField
               control={form.control}
               name="vendor"

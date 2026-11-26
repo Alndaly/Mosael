@@ -1,6 +1,6 @@
 """模型上加了列,就得有迁移把它加到**已存在的库**上。
 
-支持窗口从 v2.6.10 开始(最新 Release 往前 8 个版本)。`schema_baseline.json` 是这一版
+支持窗口从 v2.6.11 开始(最新 Release 往前 8 个版本)。`schema_baseline.json` 是这一版
 真实启动后的 schema,不再记录每张表的出生形状。升级测试照它建库、跑当前迁移计划,再对照模型:
 窗口内的真实用户都能到达当前形状。
 
@@ -188,6 +188,7 @@ def test_保留迁移都在最早支持版本的库上跑过() -> None:
     assert "identity" in columns["browser_profiles"]
     assert "feishu_message_id" in columns["agent_questions"]
     assert "feishu_message_id" in columns["tool_confirmations"]
+    assert "turn_id" in columns["tool_confirmations"]
     assert "update_feed_url" in columns["deployment_config"]
     assert "uq_tool_confirmations_session_tool_call" in indexes
     assert task == ("video", '["seed-asset_id"]'), "发布任务没有改成唯一的内容形状"

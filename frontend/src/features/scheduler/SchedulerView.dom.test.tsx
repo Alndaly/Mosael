@@ -116,6 +116,18 @@ beforeEach(() => {
 });
 
 describe("新建定时任务", () => {
+  it("任务名称输入框和工作流下拉用同一档圆角与描边", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /createTask/ }));
+    const dialog = await screen.findByRole("dialog");
+    const name = within(dialog).getAllByRole("textbox")[0];
+    const workflow = within(dialog).getAllByRole("combobox")[0];
+    for (const control of [name, workflow]) {
+      expect(control.className.split(/\s+/)).toContain("rounded-md");
+      expect(control.className.split(/\s+/), "表单容器不能再把控件圆角压成 rounded").not.toContain("rounded");
+    }
+  });
+
   it("要填工作流的必填参数:没填不发请求、说出缺哪项;填了带着参数和本地时区建", async () => {
     h.create.mockImplementation(async (body: any) => task({ ...body, id: "t2", webhook_secret: null, trigger_type: body.trigger_type }));
     mount();

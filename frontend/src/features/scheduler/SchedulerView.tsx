@@ -41,7 +41,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { Input } from "@/components/ui/input";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Combobox } from "@/components/app/combobox";
-import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { atLeast } from "@/components/layout/workspaceMenu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -513,12 +513,12 @@ function CreateTaskDialog({
         </>
       }
     >
-      <div className="grid gap-2 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-        <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+      <div className="grid gap-2">
+        <div className={DIALOG_FIELD}>
           <span>{t("taskNameLabel")}</span>
           <Input value={name} placeholder={selectedWorkflow?.name ?? ""} onChange={(event) => setName(event.target.value)} />
         </div>
-        <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <div className={DIALOG_FIELD}>
           <span>{t("wfBoundWorkflow")}</span>
           <Combobox
             value={workflowId ?? ""}
@@ -543,7 +543,7 @@ function CreateTaskDialog({
           )}
         </div>
         <RunParamsForm specs={specs} values={paramValues} onChange={setParamValues} showMissing={attempted} missing={missing} hint={t("taskParamsHint")} />
-        <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <div className={DIALOG_FIELD}>
           <span>{t("taskTriggerLabel")}</span>
           <Select value={trigger} onValueChange={(value) => setTrigger(value as typeof trigger)}>
             <SelectTrigger>
@@ -558,7 +558,7 @@ function CreateTaskDialog({
           {trigger === "webhook" && <small>{t("webhookCreateHint")}</small>}
         </div>
         {trigger === "scheduled" && (
-          <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+          <div className={DIALOG_FIELD}>
             <span>{t("taskSchedFreq")}</span>
             <div className="flex gap-1.5 [&>button]:min-w-0 [&>button]:flex-1">
               <Select value={schedKind} onValueChange={(value) => setSchedKind(value as typeof schedKind)}>
