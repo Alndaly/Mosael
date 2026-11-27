@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Download, FolderOpen, Plus, Search } from "lucide-react";
+import { Download, FolderOpen, Plus } from "lucide-react";
 
 import { type ModelFile } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -8,7 +8,6 @@ import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreview
 import { ModelThumb, NsfwMark, PreviewOriginMark, modelBaseName } from "@/components/generation/ModelThumb";
 import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { useModelLibrary } from "@/components/generation/useModelLibrary";
-import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { GRID_CARD_BODY, GRID_CARD_MEDIA, GridCardButton } from "@/components/ui/grid-card";
 import { IconButton } from "@/components/ui/icon-button";
@@ -78,30 +77,15 @@ export function ModelsPanel({
     setLibraryOpen(true);
   };
 
-  const downloadAction = (
-    <Button variant="outline" size="xs" onClick={openDownload}>
-      <Download size={12} />
-      {t("workbenchModelsDownload")}
-    </Button>
-  );
-
   let body: React.ReactNode;
   if (library.isPending) {
     body = <PanelLoading label={t("workbenchModelsLoading")} />;
   } else if (library.isError) {
     body = <PanelNote tone="error">{library.error.message}</PanelNote>;
   } else if (models.length === 0) {
-    body = (
-      <PanelEmpty icon={FolderOpen} action={downloadAction}>
-        {t("workbenchModelsEmptyAll")}
-      </PanelEmpty>
-    );
+    body = <PanelEmpty icon={FolderOpen}>{t("workbenchModelsEmptyAll")}</PanelEmpty>;
   } else if (shown.length === 0) {
-    body = (
-      <PanelEmpty icon={FolderOpen} action={downloadAction}>
-        {t("workbenchModelsEmpty")}
-      </PanelEmpty>
-    );
+    body = <PanelEmpty icon={FolderOpen}>{t("workbenchModelsEmpty")}</PanelEmpty>;
   } else {
     body = (
       <ul aria-label={t("workbenchModelsTitle")} className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3 p-0">
@@ -191,14 +175,6 @@ export function ModelsPanel({
             {one.name} {one.count}
           </Chip>
         ))}
-      </div>
-      {/* 已安装模型的搜索和在线平台搜索是两件事:这里给出明确的远程入口,走模型库弹窗的搜索/下载页 */}
-      <div className="flex min-w-0 items-center gap-2">
-        <Button variant="outline" size="xs" className="shrink-0" onClick={openDownload}>
-          <Search size={12} />
-          {t("workbenchModelsSearchDownload")}
-        </Button>
-        <span className="min-w-0 truncate text-ui-2xs text-muted-foreground">{t("workbenchModelsSearchDownloadHint")}</span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{body}</div>
       {libraryOpen && (

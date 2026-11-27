@@ -378,10 +378,10 @@ describe("ComfyUI 工作台", () => {
     expect(within(list).getByText(/flux-dev/)).toBeTruthy();
   });
 
-  it("模型页签:在线平台入口打开模型库弹窗的搜索下载,而不是停在已安装列表", async () => {
+  it("模型页签:顶部下载按钮打开模型库弹窗的搜索下载,而不是停在已安装列表", async () => {
     await mount(state({ selection: { count: 0, node: null } }));
     tab("workbenchTabModels");
-    fireEvent.click(await screen.findByRole("button", { name: "workbenchModelsSearchDownload" }));
+    fireEvent.click(await screen.findByRole("button", { name: "workbenchModelsDownload" }));
     expect(await screen.findByText("modelDownloadSearchLabel")).toBeTruthy();
   });
 
