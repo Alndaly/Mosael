@@ -26,7 +26,8 @@ import { cn } from "@/lib/utils";
  * 模型库弹窗按需加载:工作台一进来先画已安装的模型;候选搜索/下载(模型库的大模块)等真正点下载时再取。
  * 这也让模型页签在模型库模块加载失败时仍然能显示已安装列表,不会整块空掉。
  */
-const ModelLibraryDialog = React.lazy(() => import("@/features/plugins/ModelLibrary").then((module) => ({ default: module.ModelLibraryDialog })));
+const loadModelLibrary = () => import("@/features/plugins/ModelLibrary");
+const ModelLibraryDialog = React.lazy(() => loadModelLibrary().then((module) => ({ default: module.ModelLibraryDialog })));
 
 /**
  * 工作台的「模型」页签:全局模型库,不依赖画布上选中了哪个节点。
@@ -62,7 +63,10 @@ export function ModelsPanel({
       .slice(0, 120);
   }, [models, folder, query]);
 
+  //: 先开始取模型库模块,再切弹窗:卡片点击时通常已经取好,不会把下面那块换成加载态
+  const preloadModelLibrary = () => { void loadModelLibrary(); };
   const openModel = (model: ModelFile) => {
+    preloadModelLibrary();
     setFocus({ model: { folder: model.folder, name: model.name }, at: 1 });
     setLibraryOpen(true);
   };
@@ -73,6 +77,7 @@ export function ModelsPanel({
   });
   //: 搜索/下载走模型库弹窗的下载那一页;空的 seed 就是「搜一个新的」,不是停在已安装列表
   const openDownload = () => {
+    preloadModelLibrary();
     setFocus({ download: { folder: "", name: "" }, at: 1 });
     setLibraryOpen(true);
   };
@@ -97,6 +102,8 @@ export function ModelsPanel({
             <li key={`${model.folder}/${model.name}`} className="relative min-w-0">
               <GridCardButton
                 className="group/thumb h-full"
+                onPointerEnter={preloadModelLibrary}
+                onFocus={preloadModelLibrary}
                 onClick={() => openModel(model)}
                 aria-label={t("workbenchModelsOpenNamed").replace("{name}", name)}
               >
@@ -155,6 +162,8 @@ export function ModelsPanel({
           variant="outline"
           size="icon"
           label={t("workbenchModelsDownload")}
+          onPointerEnter={preloadModelLibrary}
+          onFocus={preloadModelLibrary}
           onClick={openDownload}
         >
           <Download size={13} />
@@ -180,7 +189,7 @@ export function ModelsPanel({
       {libraryOpen && (
         //: 工作台右栏是 DOM、外面盖着 ComfyUI 的原生视图:模型库弹窗要抬到外壳之上并让原生视图退开,否则点了像没反应
         <OverChromeModals.Provider value>
-          <React.Suspense fallback={<PanelLoading label={t("workbenchModelsLoading")} />}>
+          <React.Suspense fallback={null}>
             <ModelLibraryDialog
               open={libraryOpen}
               onOpenChange={(open) => {
