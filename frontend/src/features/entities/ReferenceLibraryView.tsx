@@ -29,6 +29,7 @@ import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreview
 import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { useCatalogLabels } from "@/features/entities/entityMeta";
 import { RadioGroup } from "@/components/ui/radio-group";
+import { GRID_CARD, GRID_CARD_BODY, GRID_CARD_MEDIA } from "@/components/ui/grid-card";
 import { cn } from "@/lib/utils";
 
 function localized(value: Record<string, string>, locale: string): string {
@@ -183,6 +184,21 @@ function LibraryFailure({ error }: { error: unknown }) {
   );
 }
 
+function ReferenceGridSkeleton({ count = 12 }: { count?: number }) {
+  return (
+    <div data-reference-grid-loading="" className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className={GRID_CARD} aria-hidden="true">
+          <Skeleton className={cn(GRID_CARD_MEDIA, "aspect-[3/4] rounded-none")} />
+          <div className={GRID_CARD_BODY}>
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** 参考库:只读外部图集;浏览只拉缩略图,点「用作素材 / 存为资产」才把单条原图取进工作区。 */
 export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -317,6 +333,8 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
 
       {collections.isError && <LibraryFailure error={collections.error} />}
 
+      {collections.isPending && <ReferenceGridSkeleton />}
+
       {/* 取失败时上面那一条已经说了;这里只管「取到了,但一本图集都没有」—— 一屏只说一次。 */}
       {collections.isSuccess && !activeCollection && (
         <div className="flex flex-1 items-center justify-center">
@@ -342,17 +360,19 @@ export function ReferenceLibraryView({ workspace }: { workspace: Workspace }) {
                 key={`${item.collection}-${item.id}`}
                 type="button"
                 onClick={() => setSelected(item)}
-                className="group grid min-w-0 gap-1.5 rounded-md border border-border bg-card p-1.5 text-left transition-colors hover:border-primary/50"
+                className={cn(GRID_CARD, "p-0 text-left")}
               >
-                <Thumb item={item} className="aspect-[3/4] rounded-sm" />
-                <Truncate className="text-ui-xs">{itemTitle(item, locale, settings)}</Truncate>
+                <Thumb item={item} className={cn(GRID_CARD_MEDIA, "aspect-[3/4]")} />
+                <span className={GRID_CARD_BODY}>
+                  <Truncate className="text-ui-xs">{itemTitle(item, locale, settings)}</Truncate>
+                </span>
               </button>
             ))}
           </div>
           {items.isFetchingNextPage && (
-            <div role="status" aria-busy="true" className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            <div role="status" aria-busy="true">
               <span className="sr-only">{t("pageLoading")}</span>
-              {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="aspect-[3/4] w-full" />)}
+              <ReferenceGridSkeleton count={6} />
             </div>
           )}
           {items.hasNextPage && <div ref={sentinelRef} className="h-px" aria-hidden />}

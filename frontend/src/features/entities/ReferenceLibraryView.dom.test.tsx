@@ -85,6 +85,20 @@ describe("参考库", () => {
     expect(empty?.parentElement?.className).toContain("items-center");
   });
 
+  it("图集列表加载时先摆卡片骨架,不是一整片空白", async () => {
+    api.listReferenceCollections.mockReturnValue(new Promise(() => undefined));
+    const { container } = renderView();
+    await waitFor(() => expect(container.querySelector("[data-reference-grid-loading]")).not.toBeNull());
+  });
+
+  it("参考库卡片和素材网格一样:整卡圆角、封面通栏、信息区留白", async () => {
+    const { container } = renderView();
+    await screen.findByText("后仰坐・单膝立起");
+    const card = container.querySelector("[data-reference-library] button.group");
+    expect(card?.className).toContain("rounded-xl");
+    expect(card?.querySelector("img")?.closest("span")?.className).toContain("w-full");
+  });
+
   it("条目详情里的机位按资产库词表说,不是插件给的键", async () => {
     renderView();
     fireEvent.click(await screen.findByText("后仰坐・单膝立起"));
