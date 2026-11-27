@@ -207,6 +207,7 @@ export const assetLibrary = {
   referenceLibraryNoItems: "No matching items",
   referenceLibraryFailed: "Couldn't load the reference library. Try again.",
   referenceLibraryViews: "Views",
+  referenceLibraryViewHint: "The view used by “Use as media”; “Save as asset” keeps every view and links them to the asset.",
   referenceLibraryUse: "Use as media",
   referenceLibrarySave: "Save as asset",
   referenceLibraryUsed: "Added to the media library",

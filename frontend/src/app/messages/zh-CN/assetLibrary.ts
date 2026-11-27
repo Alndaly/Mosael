@@ -207,6 +207,7 @@ export const assetLibrary = {
   referenceLibraryNoItems: "没有匹配的条目",
   referenceLibraryFailed: "参考库没有加载出来,请重试。",
   referenceLibraryViews: "视角",
+  referenceLibraryViewHint: "用于「用作素材」的视角；「存为资产」会保存全部视角并建立资产关联。",
   referenceLibraryUse: "用作素材",
   referenceLibrarySave: "存为资产",
   referenceLibraryUsed: "已加入素材库",

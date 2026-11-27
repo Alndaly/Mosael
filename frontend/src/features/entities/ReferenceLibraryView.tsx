@@ -151,6 +151,7 @@ function ItemDetail({
             ),
           }))}
         />
+        <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("referenceLibraryViewHint")}</p>
         {shown.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {shown.tags.map((tag) => <span key={tag} className="rounded-full bg-secondary px-2 py-0.5 text-ui-2xs">{tag}</span>)}
