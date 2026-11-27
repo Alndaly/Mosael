@@ -277,9 +277,11 @@ describe("ComfyUI 工作台", () => {
     expect(within(bar).getByText(TARGET.instanceName)).toBeTruthy();
     expect(within(bar).getByRole("img", { name: "workbenchUnsavedChanges" })).toBeTruthy();
     await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: true, width: COLUMN_DEFAULT }));
-    expect(within(column()).getAllByRole("tab").map((one) => one.textContent)).toEqual([
-      "workbenchTabModels", "workbenchTabWorkflows", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant",
+    const tabs = within(column()).getAllByRole("tab");
+    expect(tabs.map((one) => one.getAttribute("aria-label"))).toEqual([
+      "workbenchTabModels", "workbenchTabNode", "workbenchTabWorkflows", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant",
     ]);
+    expect(tabs.map((one) => one.textContent), "页签只放图标").toEqual(["", "", "", "", "", "", ""]);
     fireEvent.click(within(bar).getByRole("button", { name: "workbenchColumnHide" }));
     await waitFor(() => expect(bridge.mosaelPublish.setHostLayer).toHaveBeenLastCalledWith({ id: "comfy-workbench-column", kind: "inset", side: "right", active: false, width: 0 }));
     expect(screen.queryByRole("complementary", { name: "workbenchColumn" })).toBeNull();
@@ -354,6 +356,41 @@ describe("ComfyUI 工作台", () => {
     expect(saves(), "这版前端没有保存命令:接住,不存").toBe(2);
     expect(underneath).toHaveBeenCalledTimes(1);
     stop();
+  });
+
+  it("模型页签:没有选中节点也列出全部已安装模型,搜索跨目录", async () => {
+    await mount(state({ selection: { count: 0, node: null } }));
+    tab("workbenchTabModels");
+    const list = await screen.findByRole("list", { name: "workbenchModelsTitle" });
+    expect(within(list).getAllByRole("listitem").map((one) => one.textContent)).toEqual([
+      expect.stringContaining("SDXL Base"), expect.stringContaining("flux-dev"), expect.stringContaining("Pony"),
+      expect.stringContaining("style.safetensors"),
+    ]);
+    const thumb = within(list).getAllByRole("listitem")[0].querySelector<HTMLElement>("[data-model-thumb]");
+    expect(thumb, "缩略图占位要有一个定位盒子,不能按 aside 定位盖住整列").not.toBeNull();
+    expect(thumb!.className).toContain("relative");
+    const card = within(list).getAllByRole("listitem")[0].querySelector("button")!;
+    expect(card.className, "卡片按钮撑满网格列,尺寸才一致").toContain("w-full");
+    expect(card.className, "模糊预览悬停要能看清").toContain("group/thumb");
+    expect(screen.getByRole("button", { name: "modelPreviewSettings" })).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "workbenchModelsSearchAll" }), { target: { value: "film" } });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(list).getByText(/flux-dev/)).toBeTruthy();
+  });
+
+  it("模型页签:在线平台入口打开模型库弹窗的搜索下载,而不是停在已安装列表", async () => {
+    await mount(state({ selection: { count: 0, node: null } }));
+    tab("workbenchTabModels");
+    fireEvent.click(await screen.findByRole("button", { name: "workbenchModelsSearchDownload" }));
+    expect(await screen.findByText("modelDownloadSearchLabel")).toBeTruthy();
+  });
+
+  it("模型页签:选中加载节点时,卡片上的加号直接填入当前模型槽", async () => {
+    const bridge = await mount();
+    tab("workbenchTabModels");
+    const [fill] = await screen.findAllByRole("button", { name: "workbenchModelsFillNamed" });
+    fireEvent.click(fill);
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setWidget", node: "4", widget: "ckpt_name", value: "sdxl.safetensors" }));
   });
 
   it("模型库:选中加载节点只列那个目录的模型,点一行经桥填进去;下拉里还没有就给「刷新下拉」", async () => {
@@ -458,7 +495,11 @@ describe("ComfyUI 工作台", () => {
     expect(within(column()).getByText("workbenchModelsPick")).toBeTruthy();
     api.getNodeFolders.mockResolvedValue({ folders: [""] });
     bridge.emit(state({ selection: { count: 1, node: { ...LOADER, id: "3", type: "KSampler", title: "采样" } } }));
-    expect(await within(column()).findByText("workbenchModelsNoSlot")).toBeTruthy();
+    const info = await within(column()).findByText("采样");
+    expect(info).toBeTruthy();
+    expect(within(column()).getByText(/KSampler · #3/)).toBeTruthy();
+    expect(within(column()).getByText("ckpt_name")).toBeTruthy();
+    expect(within(column()).getByText("sdxl.safetensors")).toBeTruthy();
 
     api.getNodeFolders.mockResolvedValue({ folders: ["checkpoints"] });
     bridge.emit(state({ selection: { count: 1, node: { ...LOADER, widgets: [{ ...LOADER.widgets[0], value: "gone.safetensors" }] } } }));
@@ -782,7 +823,7 @@ describe("ComfyUI 工作台", () => {
     expect(screen.getByRole("button", { name: /workbenchRun/ }).hasAttribute("disabled")).toBe(true);
     tab("workbenchTabMissing");
     expect(within(column()).getByText("workbenchUnsupported")).toBeTruthy();
-    tab("workbenchTabModels");
+    tab("workbenchTabNode");
     expect(await within(column()).findByRole("list", { name: "workbenchModelsList" }), "选中、填值还在:模型库照常").toBeTruthy();
   });
 });
@@ -826,7 +867,7 @@ describe("版式:空的、在读的摆在面板正中;每个页签自己滚动;�
 
   it("每个页签是它自己的滚动层,拿得到焦点(键盘滚动、内嵌网页亮着时按键不被吞)", async () => {
     await mount();
-    for (const name of ["workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabModels"]) {
+    for (const name of ["workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabNode"]) {
       tab(name);
       const panel = shownPanel();
       expect(panel.className).toMatch(/\boverflow-y-auto\b/);
@@ -845,8 +886,11 @@ describe("版式:空的、在读的摆在面板正中;每个页签自己滚动;�
       "publishBackToApp", "workbenchRestart", "workbenchSave", "workbenchRun", "workbenchColumnHide",
     ]);
     for (const one of controls) {
-      expect(one.className, `${one.textContent}:32px 高`).toMatch(/\b(h-8|size-8)\b/);
-      expect(one.className, `${one.textContent}:同一个字号`).toMatch(/\btext-ui-sm\b/);
+      expect(one.className, `${one.getAttribute("aria-label") || one.textContent}:32px 高`).toMatch(/\b(h-8|size-8)\b/);
+      expect(one.className, `${one.getAttribute("aria-label") || one.textContent}:同一个字号`).toMatch(/\btext-ui-sm\b/);
+    }
+    for (const name of ["workbenchRestart", "workbenchSave", "workbenchRun"]) {
+      expect(screen.getByRole("button", { name }).textContent, `${name}: 图标按钮不带文案`).toBe("");
     }
     expect(bar.querySelector("[data-publish-back]")!.className, "返回不再手写自己的内边距和字号").not.toMatch(/py-\[5px\]/);
     const crumbs = bar.querySelector<HTMLElement>("h1")!.parentElement!;
@@ -1202,7 +1246,7 @@ describe("画布上换了一张工作流:右边那一列跟着换", () => {
     await waitFor(() => expect(api.inspectWorkflowImport, "缺失项自己重新检查这一张").toHaveBeenCalledTimes(2));
     tab("workbenchTabApp");
     await waitFor(() => expect(api.getCanvasApp, "应用重新读这一张").toHaveBeenCalledTimes(appReads + 1));
-    tab("workbenchTabModels");
+    tab("workbenchTabNode");
     expect((within(column()).getByRole("textbox", { name: "workbenchModelsSearch" }) as HTMLInputElement).value,
            "模型库从头来:上一张的搜索不带过来").toBe("");
   });
@@ -1448,8 +1492,10 @@ describe("助手(ADR 0042):共用的智能体面板停靠在这一列里", () =>
 
   it("第五个页签;面板停靠在列里、不浮也不关,会话在开工作台的那个工作区", async () => {
     await mount();
-    expect(screen.getAllByRole("tab").map((one) => one.textContent)).toEqual(
-      ["workbenchTabModels", "workbenchTabWorkflows", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant"]);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((one) => one.getAttribute("aria-label"))).toEqual(
+      ["workbenchTabModels", "workbenchTabNode", "workbenchTabWorkflows", "workbenchTabMissing", "workbenchTabApp", "workbenchTabRun", "workbenchTabAssistant"]);
+    expect(tabs.map((one) => one.textContent), "页签只放图标").toEqual(["", "", "", "", "", "", ""]);
     expect(agent.props, "没去过的页签不挂").toBeNull();
     tab("workbenchTabAssistant");
     expect(shownPanel().querySelector("[data-agent-chat]")).toBeTruthy();

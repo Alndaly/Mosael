@@ -56,8 +56,8 @@ export function CanvasInputModeMenu({
   descriptions?: Partial<Record<CanvasInputMode, string>>;
   disabledReason?: string | null;
   overNativeView?: boolean;
-  /** 挨着的那排是什么,它就是什么:画布工具条、内嵌浏览器顶栏的图标堆用 ghost(默认);
-      工作台顶栏挨着「保存」「运行」那两颗带框的,用 outline。 */
+  /** 挨着的那排是什么,它就是什么:画布工具条、内嵌浏览器顶栏、工作台顶栏的图标堆用 ghost(默认);
+      真的和带框按钮并排时才用 outline。 */
   variant?: "ghost" | "outline";
   /** 图标旁边写上现在那一种的名字(「触控板 / 鼠标」):挨着「图标+文字」的按钮排时用,
       画布上的图标堆里照旧只给图标。 */

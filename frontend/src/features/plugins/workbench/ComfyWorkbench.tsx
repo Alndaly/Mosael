@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, RefreshCw, Save, TriangleAlert, Workflow } from "lucide-react";
+import { ArrowLeft, Bot, Boxes, ListChecks, PanelRightClose, PanelRightOpen, Play, RefreshCw, Save, SlidersHorizontal, TriangleAlert, Workflow } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { ChromeStatusSlot } from "@/components/app/chromeStatusSlot";
@@ -29,6 +29,7 @@ import { useFollowWorkbenchPlaces } from "@/features/plugins/workbench/followPla
 import { WorkbenchTabs } from "@/features/plugins/workbench/WorkbenchTabs";
 import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
 import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
+import { NodePanel } from "@/features/plugins/workbench/NodePanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
 import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
@@ -40,7 +41,7 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
 
-const TABS = ["models", "workflows", "missing", "app", "run", "assistant"] as const;
+const TABS = ["models", "node", "workflows", "missing", "app", "run", "assistant"] as const;
 type Tab = (typeof TABS)[number];
 const BAR_REGION = { side: "bottom" as const };
 //: 等桥多久才说「连不上」:第一次打开要下整套前端,慢的机器上要好几十秒
@@ -141,7 +142,7 @@ function useSameWorkflowKey(workflowKey: string): string {
 export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const t = useI18n();
   const { target, focus, state, events, runs } = useWorkbench();
-  const [tab, setTab] = usePersistentTab<Tab>("comfy-workbench.tab", "models", TABS);
+  const [tab, setTab] = usePersistentTab<Tab>("comfy-workbench.tab", "node", TABS);
   //: 从某张表单的入口打开的(创作页、画板节点):直接到「表单」页,AppPanel 选中那一张
   React.useEffect(() => {
     if (focus) setTab("app");
@@ -255,6 +256,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   };
   const tabLabel: Record<Tab, string> = {
     models: t("workbenchTabModels"),
+    node: t("workbenchTabNode"),
     workflows: t("workbenchTabWorkflows"),
     missing: t("workbenchTabMissing"),
     app: t("workbenchTabApp"),
@@ -276,7 +278,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
       <HintRegion.Provider value={BAR_REGION}>
         <Hint label={t("publishBackHint")}>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             data-publish-back=""
             data-bar-control=""
@@ -305,33 +307,45 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
         </div>
         {/* 等人拍板的卡、免提浮标:画布在前台时收在这里(ADR 0051,见 ChromeStatusSlot) */}
         <ChromeStatusSlot size="sm" />
-        <Button
-          variant="outline"
-          size="sm"
+        <IconButton
+          variant="ghost"
+          size="icon-sm"
           data-bar-control=""
           className="[-webkit-app-region:no-drag] shrink-0"
+          label={t("workbenchRestart")}
           loading={restart.isPending}
           onClick={() => setRestartAsk(true)}
         >
           <RefreshCw />
-          {t("workbenchRestart")}
-        </Button>
-        <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" variant="outline" labeled />
-        <Hint label={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}
-              shortcut={canSave ? formatCombo(SAVE_KEY) : null}>
-          <Button variant="outline" size="sm" data-bar-control="" className="[-webkit-app-region:no-drag] shrink-0"
-                  disabled={!saveNow} onClick={() => void save()}>
-            <Save />
-            {t("workbenchSave")}
-          </Button>
-        </Hint>
-        <Hint label={t("workbenchRunHintShort")} disabledReason={runBlocked}>
-          <Button size="sm" data-bar-control="" className="[-webkit-app-region:no-drag] shrink-0" disabled={!canRun}
-                  loading={run.isPending} onClick={startRun}>
-            <Play />
-            {t("workbenchRun")}
-          </Button>
-        </Hint>
+        </IconButton>
+        <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" variant="ghost" />
+        <IconButton
+          variant="ghost"
+          size="icon-sm"
+          data-bar-control=""
+          className="[-webkit-app-region:no-drag] shrink-0"
+          label={t("workbenchSave")}
+          hint={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}
+          shortcut={canSave ? formatCombo(SAVE_KEY) : null}
+          disabled={!saveNow}
+          onClick={() => void save()}
+        >
+          <Save />
+        </IconButton>
+        <IconButton
+          variant="ghost"
+          size="icon-sm"
+          data-bar-control=""
+          className="[-webkit-app-region:no-drag] shrink-0 text-primary"
+          label={t("workbenchRun")}
+          hint={t("workbenchRunHintShort")}
+          disabledReason={runBlocked}
+          disabled={!canRun}
+          loading={run.isPending}
+          onClick={startRun}
+        >
+          <Play fill="currentColor" stroke="none" />
+        </IconButton>
         <IconButton
           variant="ghost"
           size="icon-sm"
@@ -387,7 +401,10 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
                  : { tabIndex: 0, "data-workbench-scroll": "", className: TAB_PANEL })}>
             {/* 换了一张工作流(key 变了):模型库、缺失项、应用各自重挂,从头读这一张 */}
             {one === "models" && (
-              <ModelsPanel key={workflowKey} target={target} node={state.selection.node} capabilities={capabilities} />
+              <ModelsPanel target={target} node={state.selection.node} capabilities={capabilities} />
+            )}
+            {one === "node" && (
+              <NodePanel key={workflowKey} target={target} node={state.selection.node} capabilities={capabilities} />
             )}
             {one === "workflows" && (
               <WorkflowsPanel key={workflowKey} target={target} />
@@ -450,6 +467,6 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
 
 /** 页签前面的图标(大小跟着页签那一档,16px)。 */
 function TabIcon({ tab }: { tab: (typeof TABS)[number] }) {
-  const Icon = { models: Boxes, workflows: Workflow, missing: TriangleAlert, app: ListChecks, run: Play, assistant: Bot }[tab];
+  const Icon = { models: Boxes, node: SlidersHorizontal, workflows: Workflow, missing: TriangleAlert, app: ListChecks, run: Play, assistant: Bot }[tab];
   return <Icon aria-hidden />;
 }

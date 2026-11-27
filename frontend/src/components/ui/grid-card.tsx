@@ -1,3 +1,7 @@
+import * as React from "react";
+
+import { cn } from "@/lib/utils";
+
 /**
  * 网格卡片的外壳、封面和信息区。
  *
@@ -13,3 +17,23 @@ export const GRID_CARD_MEDIA = "relative w-full overflow-hidden bg-panel-inset";
 
 /** 封面下面的信息区：内边距、列间距和标题/元信息对齐。 */
 export const GRID_CARD_BODY = "grid min-w-0 gap-1.5 p-3";
+
+/**
+ * 整张卡可点(打开详情、填进画布):外观就是 `GRID_CARD`,但用真正的 `<button>` 承载键盘与读屏语义。
+ * 卡片自己的排版(封面、信息区)由调用方继续用 `GRID_CARD_MEDIA` / `GRID_CARD_BODY` 拼。
+ */
+export const GridCardButton = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
+  ({ className, type = "button", ...props }, ref) => (
+    <button
+      ref={ref}
+      type={type}
+      className={cn(
+        GRID_CARD,
+        "w-full p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        className,
+      )}
+      {...props}
+    />
+  ),
+)
+GridCardButton.displayName = "GridCardButton"

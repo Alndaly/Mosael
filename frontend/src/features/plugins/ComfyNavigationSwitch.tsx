@@ -7,6 +7,7 @@ import { navigationBridge, useComfyNavigation } from "@/features/plugins/comfyNa
  * 样子和交互是画布那一份(CanvasInputModeMenu);存储只对这个连接 —— 说明的第二行写着,免得以为改了那台 ComfyUI 的设置。
  *
  * `size` 和挨着的那一排同高:工作台顶栏 `sm`(32px,和「保存」「运行」一样),内嵌浏览器顶栏 `xs`(28px,和前进后退、地址栏一样)。
+ * 工作台顶栏里的动作按钮是无边框的图标钮,所以那边传 `variant="ghost"`。
  * 这版 ComfyUI 前端没有这个设置时按钮禁用,说明里写为什么。
  */
 export function ComfyNavigationSwitch({

@@ -185,7 +185,7 @@ export function ModelLibraryDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  instance: PluginInstance;
+  instance: Pick<PluginInstance, "id" | "name">;
   workspaceId: string;
   /** 从工作流库跳过来:停到这一项,或者为缺的那个文件打开下载框。 */
   focus?: Focused<ModelFocus> | null;
@@ -1361,7 +1361,7 @@ function ModelDownloadDialog({
   onClose,
   onStarted,
 }: {
-  instance: PluginInstance;
+  instance: Pick<PluginInstance, "id" | "name">;
   workspaceId: string;
   library: ModelLibrary;
   seed: DownloadSeed;

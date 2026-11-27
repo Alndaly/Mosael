@@ -51,7 +51,7 @@ import { ModalShell } from "@/components/app/modals";
 import { APP_CHROME, installAppChromeGuards } from "@/components/ui/appChrome";
 import { NativeViewStandIn, resetNativeViewAside, settleNativeViewAside } from "@/components/ui/nativeViewAside";
 import { HintRegion } from "@/components/ui/tooltip";
-import { ModelsPanel } from "./ModelsPanel";
+import { NodePanel } from "./NodePanel";
 import { openWorkbench, resetWorkbench } from "./workbenchSession";
 
 const TARGET = { instanceId: "i1", instanceName: "ComfyUI · 192.168.3.15", workspaceId: "w1", url: "http://192.168.3.15:8188" };
@@ -109,7 +109,7 @@ async function mount(node = LOADER, below: React.ReactNode = null) {
         {/* 和工作台那一列一样:外壳(APP_CHROME),里面的东西在外壳的区域里(见 ComfyWorkbench 的 COLUMN_REGION) */}
         <aside {...APP_CHROME}>
           <HintRegion.Provider value={{ side: "left" }}>
-            <ModelsPanel target={TARGET} node={node} capabilities={CAPS} />
+            <NodePanel target={TARGET} node={node} capabilities={CAPS} />
           </HintRegion.Provider>
         </aside>
         <NativeViewStandIn />
@@ -344,7 +344,7 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
 
   it("⑤ 行尾独立的徽标列不存在了(源码里没有那个 flex-col items-end 块)", async () => {
     const fs = await import("node:fs");
-    const source = fs.readFileSync("./src/features/plugins/workbench/ModelsPanel.tsx", "utf8");
+    const source = fs.readFileSync("./src/features/plugins/workbench/NodePanel.tsx", "utf8");
     expect(source, "右侧独立徽标列已删").not.toContain("flex-col items-end");
   });
 
@@ -512,7 +512,7 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
 
   it("⑩ 名字与副题的 Truncate 都显式 side=\"bottom\":不跟着工作台那一列默认的「朝左」横到画布上", async () => {
     const fs = await import("node:fs");
-    const source = fs.readFileSync("./src/features/plugins/workbench/ModelsPanel.tsx", "utf8");
+    const source = fs.readFileSync("./src/features/plugins/workbench/NodePanel.tsx", "utf8");
     expect(source, "名字的 Truncate 显式朝下(工作台那一列是 side: left,不显式给就横在卡的左边)").toMatch(
       /<Truncate\b[^>]*\bside="bottom"[^>]*>\{name\}<\/Truncate>/,
     );

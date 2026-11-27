@@ -80,7 +80,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * 一个模型文件的详情页,和它背后的那几样本事(菜单、详情里的按钮要的:在 Civitai 上找、存为预览图、标 NSFW、看大图、
- * 用它生成……)。模型库弹窗(ModelLibrary)和 ComfyUI 工作台的模型库面板(workbench/ModelsPanel)用的是**同一份**:
+ * 用它生成……)。模型库弹窗(ModelLibrary)、ComfyUI 工作台的「模型」页签(workbench/ModelsPanel)和「节点」页签的模型槽(NodePanel)用的是**同一份**:
  * 详情页的骨架是 LibraryDetail,本事由 `useModelActionsHost` 造出来、经 ModelActionsContext 交给卡片、行、详情页。
  * 在哪打开详情由用的那一处定(模型库里是弹窗里换一页,工作台里是一个大弹窗)。
  */

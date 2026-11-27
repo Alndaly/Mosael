@@ -139,7 +139,7 @@ const NATIVE_STOCK: Record<string, number> = {
   //: 「工作流里能填的」那一列标题上的 `#706` 是同一颗(原先长在 AssistantPanel 里,数没变,挪了个文件)。
   "features/plugins/workbench/LocateNodeButton.tsx": 1,
   "features/plugins/workbench/ModelDownload.tsx": 1,
-  "features/plugins/workbench/ModelsPanel.tsx": 2,
+  "features/plugins/workbench/NodePanel.tsx": 2,
   "features/plugins/workbench/RunPanel.tsx": 1,
   "features/plugins/workbench/WorkbenchTabs.tsx": 1,
   "features/plugins/WorkflowAppEditor.tsx": 1,

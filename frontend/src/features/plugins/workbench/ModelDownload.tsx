@@ -79,7 +79,7 @@ function confidenceOf(candidate: Candidate): Confidence {
 }
 
 /**
- * 工作台里「这个模型文件这台 ComfyUI 上没有」的那一块(模型库面板选中的那一格、缺失项面板缺的每个模型共用):
+ * 工作台里「这个模型文件这台 ComfyUI 上没有」的那一块(节点页签选中的那一格、缺失项面板缺的每个模型共用):
  *
  * - 工作流里写了下载地址:一个醒目的「下载」;
  * - 没写:「找下载地址」—— 插件按文件名(先完整的名字,再去掉扩展名)去 Civitai、HuggingFace、ModelScope 搜,列出候选:哪家、
@@ -199,7 +199,7 @@ export function ModelDownload({
       sha256: payloadText(payload.sha256),
     };
   }, [latest, current, filename]);
-  //: 这台服务器下载走哪条路(ComfyUI-Manager / 本机 / 下不了)和那句说明:模型库报的,和模型库面板同一份缓存
+  //: 这台服务器下载走哪条路(ComfyUI-Manager / 本机 / 下不了)和那句说明:模型库报的,和模型页签同一份缓存
   const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
   const route = library.data?.download?.route ?? "";
   //: 离线时**整个多平台都不出现**(不是灰着、也不是拿缓存里的旧候选骗人):本来也连不上平台。

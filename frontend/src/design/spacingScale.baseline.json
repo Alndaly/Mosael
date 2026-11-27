@@ -62,7 +62,7 @@
   "features/plugins/PluginsView.tsx": 6,
   "features/plugins/ToolRowFrame.tsx": 1,
   "features/plugins/workbench/MissingPanel.tsx": 1,
-  "features/plugins/workbench/ModelsPanel.tsx": 1,
+  "features/plugins/workbench/NodePanel.tsx": 1,
   "features/plugins/WorkflowImport.tsx": 2,
   "features/publish/PublishView.tsx": 5,
   "features/scenes/SceneList.tsx": 1,

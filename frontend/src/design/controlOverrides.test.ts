@@ -134,7 +134,7 @@ const STOCK: Record<string, number> = {
   "features/plugins/ConnectionLibraries.tsx": 2,
   "features/plugins/ModelLibrary.tsx": 2,
   "features/plugins/PluginsView.tsx": 3,
-  "features/plugins/workbench/ModelsPanel.tsx": 2,
+  "features/plugins/workbench/NodePanel.tsx": 2,
   "features/plugins/workbench/OpenConnectionWorkbench.tsx": 1,
   "features/plugins/workbench/RunPanel.tsx": 1,
   "features/plugins/WorkflowImport.tsx": 1,
