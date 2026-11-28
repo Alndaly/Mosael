@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.10.0": {
+    zh: [
+      "**模型和节点是两个页签。** 「模型」是全局模型库，没选中节点也能按目录浏览、按名字/标题/触发词搜索、搜索下载和看详情；「节点」只讲当前节点。",
+      "**节点参数可以直接改。** 节点页签与 AI Studio 右栏共用一套参数表单：文本和数字失焦或回车写回，下拉和开关立即写回画布；没有模型槽的自定义节点也能编辑。",
+      "**模型卡是一张完整网格卡。** 3:4 封面撑满列宽，NSFW/来源角标和悬停解锁沿用模型库；缩略图骨架不再在数据回来后盖白整列。",
+      "**打开模型详情不再闪背景。** 模型库按需加载，悬停卡片或下载按钮时先预取；右侧栏在模块到达前保留原来的模型网格。",
+    ],
+    en: [
+      "**Models and nodes are two tabs.** Models is a global library that can browse by folder, search by name, title or trigger words, download and open details without selecting a node; Node only describes the current node.",
+      "**Node parameters are editable.** The node tab uses the same parameter form as AI Studio's right rail: text and numbers commit on blur or Enter, while selects and toggles write back to the canvas immediately. Custom nodes without model slots can edit too.",
+      "**Model cards are full grid cards.** A 3:4 cover fills each column, with the same NSFW and source badges and hover reveal as the model library; thumbnail skeletons no longer wash out the column when data arrives.",
+      "**Opening a model no longer flashes the sidebar.** The model library loads on demand and prefetches on card or download-button hover, keeping the existing model grid until the module arrives.",
+    ],
+  },
   "v2.9.0": {
     zh: [
       "**ComfyUI 模型可以按名字找。** 下载框直接搜 HuggingFace、ModelScope、Civitai，候选带来源、文件名、大小和底模；只让选中那条转圈。",

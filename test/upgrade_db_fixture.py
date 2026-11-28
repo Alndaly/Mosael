@@ -1,8 +1,9 @@
-"""Build and verify the oldest supported (v2.6.11) database for the packaged upgrade smoke.
+"""Build and verify the oldest supported (v2.6.12) database for the packaged upgrade smoke.
 
 The fixture owns only facts required by the remaining rolling-window migrations. Table shapes
-come from the real v2.6.11 schema baseline (same shape as v2.6.8) (a fresh v2.6.8 install; v2.6.8 added agent_sessions.working_set); explicit rows exercise the migrations that still
-transform old data, rather than succeeding only on an empty install.
+come from the real v2.6.12 schema baseline (identical to v2.6.11, which is the same shape as
+v2.6.8; v2.6.8 added agent_sessions.working_set); explicit rows exercise the migrations that
+still transform old data, rather than succeeding only on an empty install.
 """
 
 from __future__ import annotations
