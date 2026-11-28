@@ -59,7 +59,7 @@ const CAPS = { selection: true, setWidget: true, refreshCombos: true, export: tr
                changes: true, locate: true, subgraphs: true, readGraph: true, applyOps: true, openWorkflow: true, toSubgraph: true,
                unpackSubgraph: true };
 const LOADER = { id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint",
-                 widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl.safetensors", combo: true }] };
+                 widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl.safetensors", combo: true, options: [] }] };
 const SAFE: ModelNsfw = { flagged: false, manual: null, reasons: [] };
 const FLAGGED: ModelNsfw = { flagged: true, manual: true, reasons: [] };
 

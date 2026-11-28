@@ -1,22 +1,27 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Info, Loader2, MousePointerClick, RefreshCcw } from "lucide-react";
+import { Boxes, Check, Info, Loader2, MousePointerClick, RefreshCcw, SlidersHorizontal } from "lucide-react";
 
 import { modelLibraryKeys } from "@/api/queryKeys";
 import { modelPreviewUrl, type ModelFile } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
+import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/components/generation/parameterPanel";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreviewSettingsButton";
 import { ModelThumb, NsfwMark, PreviewOriginMark, modelBaseName, modelSubFolder } from "@/components/generation/ModelThumb";
 import { previewPick, previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { useModelLibrary } from "@/components/generation/useModelLibrary";
+import { InspectorCard } from "@/components/layout/InspectorCard";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/icon-button";
+import { Input } from "@/components/ui/input";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { SearchInput } from "@/components/ui/search-input";
+import { Textarea } from "@/components/ui/textarea";
 import { OverChromeModals } from "@/components/ui/overChromeModal";
 import { Truncate } from "@/components/ui/truncate";
 import { EncoderRecipeMark } from "@/features/plugins/ModelEncoder";
@@ -97,7 +102,7 @@ export function NodePanel({
   } else {
     body = (
       <div className={cn(PANEL_ROOT, "gap-4")} data-workbench-node-info="">
-        <NodeSummary node={node} />
+        <NodeForm node={node} slots={slots} />
         {pending ? (
           <PanelLoading label={t("workbenchModelsLoading")} />
         ) : folderError ? (
@@ -146,34 +151,139 @@ export function NodePanel({
 }
 
 /**
- * 选中节点本身的信息:画布上看到的标题、ComfyUI 的节点类型、编号,以及所有参数的当前值。
+ * 节点页签的表单:身份用 InspectorCard,参数用和 AI Studio 右侧「引擎参数」同一套
+ * ParameterSection / ParameterField / 默认档控件。能改的字段直接经桥写回画布。
  *
- * 模型槽(知道目录的那几格)在下面另有更完整的卡片;这里仍把全部参数列全 —— 插件没认出目录的自定义节点(比如 VOSR Model
- * Loader)也不会只剩一句「这个节点不选模型文件」。参数值只读展示:改画布上的值走 ComfyUI 自己,工作台只负责挑模型文件。
+ * 模型槽由下面的 SlotPicker 负责;这里只排其它 widget,避免同一格出现两套控件。
+ * 文本/数字在失焦或回车时提交,不是每敲一个键就改一次画布。
  */
-function NodeSummary({ node }: { node: WorkbenchNode }) {
+function NodeForm({ node, slots }: { node: WorkbenchNode; slots: ModelSlot[] }) {
   const t = useI18n();
+  const [note, setNote] = React.useState<{ tone: "info" | "warning" | "error"; text: string } | null>(null);
+  const edit = useMutation({
+    mutationFn: ({ widget, value }: { widget: string; value: string | number | boolean }) =>
+      workbenchCall({ op: "setWidget", node: node.id, widget, value }),
+    onSuccess: (result) => {
+      if (result.ok) {
+        setNote(null);
+        return;
+      }
+      setNote({
+        tone: "error",
+        text: "error" in result
+          ? t("workbenchCallFailed").replace("{why}", "message" in result && result.message ? result.message : result.error)
+          : t("workbenchCallFailed").replace("{why}", "unknown"),
+      });
+    },
+  });
+  const modelWidgets = new Set(slots.map((slot) => slot.widget));
+  const fields = node.widgets.filter((widget) => !modelWidgets.has(widget.name));
   return (
-    <section aria-label={t("workbenchNodeInfo")} className="grid gap-2" data-node-summary="">
-      <header className="grid gap-0.5">
-        <h3 className="m-0 min-w-0 truncate text-ui-sm font-semibold text-foreground">{node.title || node.type}</h3>
-        <p className="m-0 text-ui-xs text-muted-foreground">
-          {node.type} · #{node.id}
-        </p>
-      </header>
-      {node.widgets.length > 0 ? (
-        <dl className="m-0 grid gap-1.5 text-ui-xs" aria-label={t("workbenchNodeWidgets")}>
-          {node.widgets.map((widget) => (
-            <div key={widget.name} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-start gap-2 border-t border-divider pt-1.5 first:border-t-0 first:pt-0">
-              <dt className="min-w-0 truncate text-muted-foreground" title={widget.name}>{widget.name}</dt>
-              <dd className="m-0 min-w-0 whitespace-pre-wrap break-words text-foreground">{widget.value === null || widget.value === "" ? "—" : String(widget.value)}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
+    <div className="grid gap-3" data-node-form="">
+      <InspectorCard icon={Boxes} title={node.title || node.type} aside={`#${node.id}`}>
+        <p className="m-0 text-ui-xs text-muted-foreground">{node.type} · #{node.id}</p>
+      </InspectorCard>
+      <ParameterSection icon={SlidersHorizontal} title={t("workbenchNodeWidgets")}>
+        {fields.map((widget) => (
+          <NodeWidgetField
+            key={widget.name}
+            node={node}
+            widget={widget}
+            onSave={(value) => edit.mutate({ widget: widget.name, value })}
+          />
+        ))}
+      </ParameterSection>
+      {!fields.length && (
         <p className="m-0 text-ui-xs text-muted-foreground">{t("workbenchNodeNoWidgets")}</p>
       )}
-    </section>
+      {note && <PanelNote tone={note.tone}>{note.text}</PanelNote>}
+    </div>
+  );
+}
+
+/** 一个 widget 的控件:下拉走 OptionPicker,布尔走开/关,数字/短文本走 Input,长文本走 Textarea。 */
+function NodeWidgetField({
+  node,
+  widget,
+  onSave,
+}: {
+  node: WorkbenchNode;
+  widget: WorkbenchNode["widgets"][number];
+  onSave: (value: string | number | boolean) => void;
+}) {
+  const t = useI18n();
+  const current = widget.value;
+  const options = widget.options ?? [];
+  const [draft, setDraft] = React.useState(current === null || current === void 0 ? "" : String(current));
+  React.useEffect(() => {
+    setDraft(current === null || current === void 0 ? "" : String(current));
+  }, [current, widget.name]);
+
+  if (widget.combo && options.length > 0) {
+    const value = current === null || current === void 0 ? "" : String(current);
+    const listed = value && !options.includes(value) ? [value, ...options] : options;
+    return (
+      <ParameterField label={widget.name} title={`${node.type} · ${widget.name}`}>
+        <OptionPicker
+          value={value}
+          onChange={onSave}
+          options={listed.map((one) => ({ value: one, label: one }))}
+          ariaLabel={widget.name}
+          className={PARAMETER_CONTROL_CLASS}
+        />
+      </ParameterField>
+    );
+  }
+  if (typeof current === "boolean") {
+    return (
+      <ParameterField label={widget.name} title={`${node.type} · ${widget.name}`}>
+        <OptionPicker
+          value={current ? "true" : "false"}
+          onChange={(next) => onSave(next === "true")}
+          options={[
+            { value: "true", label: t("wfGenToggleOn") },
+            { value: "false", label: t("wfGenToggleOff") },
+          ]}
+          ariaLabel={widget.name}
+          className={PARAMETER_CONTROL_CLASS}
+        />
+      </ParameterField>
+    );
+  }
+  const numeric = typeof current === "number" || widget.type === "number" || widget.type === "integer";
+  const multiline = typeof current === "string" && (current.includes("\n") || current.length > 80);
+  const commit = () => {
+    if (draft === (current === null || current === void 0 ? "" : String(current))) return;
+    if (numeric) {
+      const parsed = Number(draft);
+      if (Number.isFinite(parsed)) onSave(parsed);
+    } else {
+      onSave(draft);
+    }
+  };
+  return (
+    <ParameterField label={widget.name} title={`${node.type} · ${widget.name}`}>
+      {multiline ? (
+        <Textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) event.currentTarget.blur();
+          }}
+        />
+      ) : (
+        <Input
+          type={numeric ? "number" : "text"}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+        />
+      )}
+    </ParameterField>
   );
 }
 

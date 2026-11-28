@@ -99,7 +99,7 @@ const CAPS = { selection: true, setWidget: true, refreshCombos: true, export: tr
                changes: true, locate: true, subgraphs: true, readGraph: true, applyOps: true, openWorkflow: true, toSubgraph: true,
                unpackSubgraph: true };
 const LOADER = { id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint",
-                 widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl.safetensors", combo: true }] };
+                 widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl.safetensors", combo: true, options: [] }] };
 const EXPORTED = {
   workflow: { nodes: [{ id: 4, type: "CheckpointLoaderSimple", widgets_values: ["sdxl.safetensors"] }, { id: 9, type: "SaveImage", title: "高清" },
                       { id: 17, type: "PreviewImage" }] },
@@ -441,8 +441,8 @@ describe("ComfyUI 工作台", () => {
       } })),
     }));
     const clip = (type: string) => ({ id: "5", type: "CLIPLoader", title: "Load CLIP", widgets: [
-      { name: "clip_name", type: "combo", value: "c_umt5.safetensors", combo: true },
-      { name: "type", type: "combo", value: type, combo: true },
+      { name: "clip_name", type: "combo", value: "c_umt5.safetensors", combo: true, options: [] },
+      { name: "type", type: "combo", value: type, combo: true, options: [] },
     ] });
     const bridge = await mount(state({ selection: { count: 1, node: clip("wan") } }));
     const rows = async () => {
@@ -498,8 +498,11 @@ describe("ComfyUI 工作台", () => {
     const info = await within(column()).findByText("采样");
     expect(info).toBeTruthy();
     expect(within(column()).getByText(/KSampler · #3/)).toBeTruthy();
-    expect(within(column()).getByText("ckpt_name")).toBeTruthy();
-    expect(within(column()).getByText("sdxl.safetensors")).toBeTruthy();
+    const field = within(column()).getByRole("textbox", { name: "ckpt_name" });
+    expect((field as HTMLInputElement).value).toBe("sdxl.safetensors");
+    fireEvent.change(field, { target: { value: "other.safetensors" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setWidget", node: "3", widget: "ckpt_name", value: "other.safetensors" }));
 
     api.getNodeFolders.mockResolvedValue({ folders: ["checkpoints"] });
     bridge.emit(state({ selection: { count: 1, node: { ...LOADER, widgets: [{ ...LOADER.widgets[0], value: "gone.safetensors" }] } } }));

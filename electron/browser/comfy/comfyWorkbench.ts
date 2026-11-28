@@ -61,8 +61,9 @@
  * 7:画布的 2D 上下文丢了又回来、设备像素比变了,替 ComfyUI 把画布重设一次大小(见 healCanvas)。
  * 8:写标记、改图之前核对画布上还是不是读的那一张(`expect`;导出报 `at`、readGraph 报 `revision`)。
  * 9:智能体改图支持 `set_position`,显式排好的新节点不再被自动排位覆盖。10:读取和原子编辑 LiteGraph 空间分组。
+ * 11:选中节点的 widget 一并报下拉选项,工作台节点页签才能画成真正可编辑的表单。
  */
-export const WORKBENCH_VERSION = 10;
+export const WORKBENCH_VERSION = 11;
 
 /** 一批改动最多几条(和 ipc-contract、插件的 canvas_edit 同一个数)。 */
 export const MAX_EDIT_OPS = 200;
@@ -297,6 +298,10 @@ export function workbenchInstallScript(origin: string): string {
       type: text(widget && widget.type, 40),
       value: plainValue(widget && widget.value),
       combo: Array.isArray(valuesOf(widget)),
+      options: (() => {
+        const values = valuesOf(widget);
+        return Array.isArray(values) ? values.slice(0, 500).map((one) => text(one, 400)) : [];
+      })(),
     })),
   });
   const selected = () => {
@@ -1078,6 +1083,8 @@ export interface WorkbenchWidget {
   type: string;
   value: string | number | boolean | null;
   combo: boolean;
+  /** 下拉格子的可选值(最多 500 个);不是下拉是空数组。 */
+  options: string[];
 }
 
 export interface WorkbenchNode {
@@ -1217,6 +1224,9 @@ function parseNode(raw: Record<string, unknown>): WorkbenchNode | null {
       value: typeof value === "string" ? value.slice(0, 4000)
         : (typeof value === "number" && Number.isFinite(value)) || typeof value === "boolean" ? value : null,
       combo: one.combo === true,
+      options: (Array.isArray(one.options) ? one.options : []).slice(0, 500).flatMap((value): string[] => (
+        typeof value === "string" ? [value.slice(0, 400)] : []
+      )),
     }];
   });
   return { id, type: str(raw.type, 200), title: str(raw.title, 200), widgets };

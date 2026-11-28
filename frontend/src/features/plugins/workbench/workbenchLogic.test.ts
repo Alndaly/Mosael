@@ -26,14 +26,14 @@ import {
 
 const loader: WorkbenchNode = {
   id: "4", type: "CheckpointLoaderSimple", title: "Load Checkpoint",
-  widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl\\base.safetensors", combo: true }],
+  widgets: [{ name: "ckpt_name", type: "combo", value: "sdxl\\base.safetensors", combo: true, options: [] }],
 };
 const lora: WorkbenchNode = {
   id: "10", type: "LoraLoader", title: "LoRA",
   widgets: [
-    { name: "lora_name", type: "combo", value: "style.safetensors", combo: true },
-    { name: "strength_model", type: "number", value: 1, combo: false },
-    { name: "mode", type: "combo", value: "x", combo: true },
+    { name: "lora_name", type: "combo", value: "style.safetensors", combo: true, options: [] },
+    { name: "strength_model", type: "number", value: 1, combo: false, options: [] },
+    { name: "mode", type: "combo", value: "x", combo: true, options: [] },
   ],
 };
 
@@ -58,8 +58,8 @@ describe("工作台面板背后的纯函数", () => {
     const clip: WorkbenchNode = {
       id: "3", type: "CLIPLoader", title: "Load CLIP",
       widgets: [
-        { name: "clip_name", type: "combo", value: "umt5_xxl.safetensors", combo: true },
-        { name: "type", type: "combo", value: "wan", combo: true },
+        { name: "clip_name", type: "combo", value: "umt5_xxl.safetensors", combo: true, options: [] },
+        { name: "type", type: "combo", value: "wan", combo: true, options: [] },
       ],
     };
     //: 插件给的是每一种 type 的配方;照节点上 type 那一格现在的值挑
@@ -89,7 +89,7 @@ describe("工作台面板背后的纯函数", () => {
     const table = { type_widget: "type", by_type: { wan: { fits: ["umt5_xxl"], any_type: [] }, flux: { fits: ["clip_l", "t5_xxl"] } } };
     const clip = (type: string): WorkbenchNode => ({
       id: "3", type: "DualCLIPLoader", title: "",
-      widgets: [{ name: "clip_name1", type: "combo", value: "a.safetensors", combo: true }, { name: "type", type: "combo", value: type, combo: true }],
+      widgets: [{ name: "clip_name1", type: "combo", value: "a.safetensors", combo: true, options: [] }, { name: "type", type: "combo", value: type, combo: true, options: [] }],
     });
     expect(pickRecipe(table, clip("wan"))).toEqual({ type: "wan", fits: ["umt5_xxl"], any_type: [] });
     expect(pickRecipe(table, clip("flux"))).toEqual({ type: "flux", fits: ["clip_l", "t5_xxl"] });
