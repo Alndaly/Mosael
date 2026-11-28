@@ -783,7 +783,6 @@ export const plugins = {
   workbenchRunUnmarked: "Removed the result mark from {node} on the canvas; it takes effect once you click Save in the top bar",
   workbenchRunOutputAlt: "Output of {node}",
   workbenchNode: "Node",
-  workbenchNodeInfo: "Node info",
   workbenchNodeWidgets: "Parameters",
   workbenchNodeNoWidgets: "This node has no editable parameters.",
   workflowNew: "New",

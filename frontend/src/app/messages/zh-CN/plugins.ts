@@ -795,7 +795,6 @@ export const plugins = {
   workbenchRunUnmarked: "已经在画布上去掉 {node} 的结果标记;点顶栏的「保存」后生效",
   workbenchRunOutputAlt: "{node} 跑出来的",
   workbenchNode: "节点",
-  workbenchNodeInfo: "节点信息",
   workbenchNodeWidgets: "参数",
   workbenchNodeNoWidgets: "这个节点没有可调参数。",
   workflowNew: "新建",

@@ -134,7 +134,7 @@ export function ModelsPanel({
                   size="icon-2xs"
                   className="absolute right-1.5 top-1.5 z-20 [-webkit-app-region:no-drag]"
                   label={t("workbenchModelsFillNamed").replace("{node}", node.title || node.type).replace("{widget}", slot.widget)}
-                  disabled={fill.isPending}
+                  loading={fill.isPending}
                   onClick={() => fill.mutate({ nodeId: node.id, widget: slot.widget, name: model.name })}
                 >
                   <Plus />

@@ -334,6 +334,11 @@ export const workflowLibraryKeys = {
   outputsAll: () => ["workflow-outputs"] as const,
 };
 
+/** ComfyUI 节点上可选模型目录:按连接与节点输入指纹;同一节点、同样输入只取一次。 */
+export const comfyNodeFolderKeys = {
+  list: (instanceId: string, inputs: string) => ["comfy-node-folders", instanceId, inputs] as const,
+};
+
 /** 插件连接上的模型文件:模型库(按「示例图挑哪一张」分)与单个模型的详情。前两段不变,下完 / 标完按前缀作废。 */
 export const modelLibraryKeys = {
   all: () => ["model-library"] as const,

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getNodeFolders } from "@/api/client";
+import { comfyNodeFolderKeys } from "@/api/queryKeys";
 import {
   comboInputs,
   modelSlots,
@@ -17,7 +18,7 @@ import type { WorkbenchTarget } from "@/features/plugins/workbench/workbenchSess
 export function useNodeModelSlots(target: WorkbenchTarget, node: WorkbenchNode | null) {
   const inputs = useMemo(() => comboInputs(node), [node]);
   const folders = useQuery({
-    queryKey: ["comfy-node-folders", target.instanceId, JSON.stringify(inputs)],
+    queryKey: comfyNodeFolderKeys.list(target.instanceId, JSON.stringify(inputs)),
     queryFn: () => getNodeFolders(target.instanceId, inputs),
     enabled: inputs.length > 0,
     staleTime: Infinity,

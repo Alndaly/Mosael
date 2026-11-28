@@ -23,6 +23,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { SearchInput } from "@/components/ui/search-input";
 import { Textarea } from "@/components/ui/textarea";
 import { OverChromeModals } from "@/components/ui/overChromeModal";
+import { isImeKeystroke } from "@/lib/shortcuts";
 import { Truncate } from "@/components/ui/truncate";
 import { EncoderRecipeMark } from "@/features/plugins/ModelEncoder";
 import { ModelDetail, useModelActionsHost } from "@/features/plugins/ModelDetail";
@@ -269,6 +270,7 @@ function NodeWidgetField({
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
           onKeyDown={(event) => {
+            if (isImeKeystroke(event)) return;
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) event.currentTarget.blur();
           }}
         />
@@ -279,6 +281,7 @@ function NodeWidgetField({
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
           onKeyDown={(event) => {
+            if (isImeKeystroke(event)) return;
             if (event.key === "Enter") event.currentTarget.blur();
           }}
         />
